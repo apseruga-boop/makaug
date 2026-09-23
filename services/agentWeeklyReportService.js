@@ -82,6 +82,18 @@ function percentChange(current, previous) {
   return Math.round(((c - p) / p) * 100);
 }
 
+const SOURCE_LABELS = {
+  direct: 'Typed makaug.com / saved link', google: 'Google search', bing: 'Bing search', facebook: 'Facebook',
+  instagram: 'Instagram', whatsapp: 'WhatsApp', tiktok: 'TikTok', x: 'X (Twitter)', twitter: 'X (Twitter)',
+  youtube: 'YouTube', linkedin: 'LinkedIn', referral: 'Links on other websites', chatgpt: 'ChatGPT', email: 'Email'
+};
+
+function sourceLabel(value) {
+  const key = String(value || 'direct').toLowerCase().replace(/^www\./, '').replace(/\.(com|co\.ug|org|net)$/, '');
+  if (SOURCE_LABELS[key]) return SOURCE_LABELS[key];
+  return key.charAt(0).toUpperCase() + key.slice(1, 28);
+}
+
 function cleanMetrics(input = {}) {
   const out = {};
   METRIC_KEYS.forEach((key) => { out[key] = toInt(input?.[key]); });
@@ -621,31 +633,64 @@ function buildWhatsAppReportMessage(report) {
   const a = r.agent || {};
   const m = r.metrics || {};
   const p = r.previous_metrics || {};
+  const x = r.extras || {};
   const change = (key) => {
-    const pct = percentChange(m[key], p[key]);
-    return pct === null ? '' : ` (${pct > 0 ? '+' : ''}${pct}%)`;
+    const pctChange = percentChange(m[key], p[key]);
+    return pctChange === null ? '' : ` (${pctChange > 0 ? '+' : ''}${pctChange}% vs last week)`;
   };
   const n = (v) => toInt(v).toLocaleString('en-GB');
   const firstName = String(a.full_name || '').trim().split(/\s+/)[0] || 'there';
-  const lines = [];
-  lines.push('*makaug.com — Your Weekly Performance Report*');
-  lines.push(`Hi ${firstName}, here is how your listings did this week.`);
-  lines.push('');
   const company = String(a.company_name || '').trim();
   const showCompany = company && company.toLowerCase() !== String(a.full_name || '').trim().toLowerCase();
+  const enquiries = toInt(m.enquiries) + toInt(m.whatsapp_clicks);
+  const lines = [];
+
+  lines.push('*makaug.com — Your Weekly Performance Report*');
+  lines.push(`Hi ${firstName}, here is everything your listings did this week.`);
+  lines.push('');
   lines.push(`Agent: *${a.full_name || 'makaug agent'}*${showCompany ? ` · ${company}` : ''}`);
   if (a.makaug_agent_number) lines.push(`Agent ID: *${a.makaug_agent_number}*`);
   lines.push(`Week: ${formatWeekRange(r.week_start, r.week_end)}`);
-  lines.push(`Live listings: ${n(m.active_listings)}`);
+  lines.push(`Live listings: ${n(m.active_listings)}${toInt(x.new_listings) ? ` (${n(x.new_listings)} added this week)` : ''}`);
   lines.push('');
+
   lines.push('*Your numbers*');
   METRIC_KEYS.forEach((key) => { lines.push(`• ${METRIC_LABELS[key]}: *${n(m[key])}*${change(key)}`); });
-  const countries = Array.isArray(r.top_countries) ? r.top_countries : [];
+  if (m.visitors) lines.push(`• Visitors who got in touch: *${Math.round((enquiries / toInt(m.visitors)) * 1000) / 10}%*`);
+  if (x.views_per_listing) lines.push(`• Views per listing: *${x.views_per_listing}*`);
+  if (x.rank && x.rank.position) lines.push(`• Your rank on makaug: *#${n(x.rank.position)} of ${n(x.rank.total)} agents* by views`);
+
+  const countries = Array.isArray(r.top_countries) && r.top_countries.length
+    ? r.top_countries
+    : (Array.isArray(x.countries_so_far) ? x.countries_so_far : []);
+  const countryHeading = (Array.isArray(r.top_countries) && r.top_countries.length)
+    ? '*Top countries viewing your listings*'
+    : '*Countries viewing your listings (so far this week)*';
   if (countries.length) {
+    const totalCountry = countries.reduce((sum, c) => sum + toInt(c.visitors), 0) || 1;
     lines.push('');
-    lines.push('*Top countries viewing your listings*');
-    countries.slice(0, 6).forEach((c, i) => lines.push(`${i + 1}. ${c.name} — ${n(c.visitors)} visitor${toInt(c.visitors) === 1 ? '' : 's'}`));
+    lines.push(countryHeading);
+    countries.slice(0, 6).forEach((c, i) => lines.push(`${i + 1}. ${c.name} — ${n(c.visitors)} visitor${toInt(c.visitors) === 1 ? '' : 's'} (${Math.round((toInt(c.visitors) / totalCountry) * 100)}%)`));
   }
+
+  const sources = Array.isArray(x.traffic_sources) ? x.traffic_sources : [];
+  if (sources.length) {
+    const totalSource = sources.reduce((sum, c) => sum + toInt(c.visitors), 0) || 1;
+    lines.push('');
+    lines.push('*How people found your listings*');
+    sources.slice(0, 5).forEach((src) => {
+      const label = sourceLabel(src.source);
+      lines.push(`• ${label} — ${Math.round((toInt(src.visitors) / totalSource) * 100)}% (${n(src.visitors)} visitor${toInt(src.visitors) === 1 ? '' : 's'})`);
+    });
+  }
+
+  if (x.busiest_day || x.peak_hour) {
+    lines.push('');
+    lines.push('*When buyers are looking*');
+    if (x.busiest_day) lines.push(`• Busiest day: ${x.busiest_day.day} (${n(x.busiest_day.views)} views)`);
+    if (x.peak_hour) lines.push(`• Peak time: ${x.peak_hour.label} Uganda time`);
+  }
+
   const listings = Array.isArray(r.top_listings) ? r.top_listings : [];
   if (listings.length) {
     lines.push('');
@@ -657,20 +702,23 @@ function buildWhatsAppReportMessage(report) {
       if (l.url) lines.push(`   ${l.url}`);
     });
   }
+
   if (Array.isArray(r.insights) && r.insights.length) {
     lines.push('');
-    lines.push('*Insights*');
-    r.insights.forEach((s) => lines.push(`• ${s}`));
+    lines.push('*What this means*');
+    r.insights.forEach((line) => lines.push(`• ${line}`));
   }
   if (Array.isArray(r.next_steps) && r.next_steps.length) {
     lines.push('');
     lines.push('*Recommended next steps*');
-    r.next_steps.forEach((s) => lines.push(`• ${s}`));
+    r.next_steps.forEach((line) => lines.push(`• ${line}`));
   }
+
   lines.push('');
-  lines.push('*See your full report* (log in to your makaug broker account):');
-  lines.push(brokerReportUrl());
-  return lines.join('\n');
+  lines.push('Everything above is your full report — nothing to log into.');
+  lines.push(`To edit listings, boost a property or see past weeks, sign in: ${brokerReportUrl()}`);
+  lines.push('Questions? Just reply to this message.');
+  return lines.join('\n').slice(0, 4000);
 }
 
 // Short caption that rides under the report card image on WhatsApp.
@@ -774,6 +822,7 @@ module.exports = {
   recordReportSent,
   resolveReportWeek,
   siteUrl,
+  sourceLabel,
   searchAgents,
   updateReport
 };

@@ -44,9 +44,8 @@ test('WhatsApp message carries agent ID, property links and the logged-in report
   assert.match(text, /Agent ID: \*MKA-AG-1234567\*/);
   assert.match(text, /https:\/\/makaug\.com\/property\/11111111-1111-1111-1111-111111111111/);
   assert.match(text, /makaug\.com\/broker-dashboard#broker-report-panel/);
-  assert.match(text, /log in to your makaug broker account/);
-  assert.match(text, /United Kingdom — 20 visitors/);
-  assert.match(text, /Listing views: \*120\* \(\+20%\)/);
+  assert.match(text, /United Kingdom — 20 visitors \(25%\)/);
+  assert.match(text, /Listing views: \*120\* \(\+20% vs last week\)/);
   const dup = reports.buildWhatsAppReportMessage({ ...sampleReport, agent: { ...sampleReport.agent, company_name: 'Francis Okello' }, top_listings: [{ title: 'Land for sale in Kira', area: 'Kira, Wakiso', url: 'https://makaug.com/property/x', views: 4, enquiries: 0 }] });
   assert.match(dup, /Agent: \*Francis Okello\*\n/);
   assert.match(dup, /1\. Land for sale in Kira — 4 views/);
@@ -247,4 +246,16 @@ test('slow extras queries are skipped instead of holding up the report', async (
     db.query = original;
     delete process.env.AGENT_REPORT_EXTRAS_TIMEOUT_MS;
   }
+});
+
+test('the WhatsApp report stands alone for agents who never open the portal', () => {
+  const rich = { ...sampleReport, extras: { traffic_sources: [{ source: 'google', visitors: 30 }, { source: 'direct', visitors: 10 }], busiest_day: { day: 'Saturday', views: 40 }, peak_hour: { label: '6pm–8pm', views: 20 }, rank: { position: 12, total: 340 }, new_listings: 2, views_per_listing: 17.1, countries_so_far: [] } };
+  const text = reports.buildWhatsAppReportMessage(rich);
+  for (const needle of ['Google search', 'Busiest day: Saturday', 'Peak time: 6pm–8pm', '#12 of 340 agents', 'Views per listing', '2 added this week', 'Visitors who got in touch', 'nothing to log into']) {
+    assert.ok(text.includes(needle), `missing ${needle}`);
+  }
+  assert.ok(text.length < 4096, 'must fit a WhatsApp message');
+  assert.equal(reports.sourceLabel('facebook'), 'Facebook');
+  const admin = fs.readFileSync('routes/admin.js', 'utf8');
+  assert.match(admin, /part: 'full_report'/, 'the full report must follow the card as its own message');
 });

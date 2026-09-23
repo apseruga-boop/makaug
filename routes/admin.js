@@ -12722,6 +12722,8 @@ function agentReportPayload(report) {
   };
 }
 
+// The agent gets the visual first, then the full report as text: most agents
+// read WhatsApp rather than the portal, so the message has to stand alone.
 async function deliverAgentReportWhatsapp({ to, text, actor, reportId, preview, cardUrl = '', videoUrl = '', caption = '' }) {
   const mode = getWhatsappDeliveryMode();
   const source = agentReportWhatsappSource();
@@ -12736,7 +12738,14 @@ async function deliverAgentReportWhatsapp({ to, text, actor, reportId, preview, 
       actorId: actor,
       metadata: { ...metadata, card: Boolean(cardUrl), video: Boolean(videoUrl) }
     });
-    return { sent: false, queued: true, provider: 'whatsapp_web_bridge', id: queued?.id || null };
+    let fullTextId = null;
+    if ((videoUrl || cardUrl) && text) {
+      const queuedText = await queueWhatsappWebBridgeMessage({
+        recipient: to, text, source, actorId: actor, metadata: { ...metadata, part: 'full_report' }
+      });
+      fullTextId = queuedText?.id || null;
+    }
+    return { sent: false, queued: true, provider: 'whatsapp_web_bridge', id: queued?.id || null, full_text_id: fullTextId };
   }
   const delivery = await sendWhatsAppText({ to, body: text });
   if (!delivery.sent && isWhatsappWebBridgeEnabled()) {
