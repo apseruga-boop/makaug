@@ -6095,14 +6095,31 @@ async function handleEmployeeWhatsappIntake({
         };
       }
 
+      // Agents forward several adverts in a row and send the photos afterwards.
+      // Only one caption was ever held, so each new advert silently replaced the
+      // last and those properties vanished. Park the previous one in the queue
+      // instead: every caption survives and is listed in the batch summary.
+      if (pendingCaption && !employeeCaptionLikelySameProperty(pendingCaption, textCaption, data)) {
+        rememberEmployeeQueuedSubmission(data, {
+          caption: pendingCaption,
+          storedMedia: pendingStoredMedia,
+          inboundMessageId: normalizeInput(data.pending_property_media_message_id || '')
+        });
+        clearEmployeePendingMedia(data);
+      }
       data.pending_property_caption = textCaption;
       await replaceEmployeeSession(phone, currentStep, data);
+      const waitingForMedia = employeePendingSubmissionQueue(data).filter((entry) => !entry.media.length).length;
       return {
         handled: true,
         nextStep: currentStep,
-        message: pendingStoredMedia.length
+        message: employeePendingStoredMedia(data).length
           ? employeeIncompletePropertyMessage(textCaption, textOnlyMissing, data)
-          : 'Caption saved. Now send the first property media; it will be stored with that property.'
+          : `Caption saved for ${employeeCaptionLabel(textCaption)}. Now send the first property media; it will be stored with that property.${
+            waitingForMedia
+              ? `\n\n${waitingForMedia} earlier caption${waitingForMedia === 1 ? ' is' : 's are'} also waiting for photos — I have kept ${waitingForMedia === 1 ? 'it' : 'them'}.`
+              : ''
+          }`
       };
     }
 
@@ -8296,7 +8313,11 @@ async function buildEmployeeBatchSummary(phone, since) {
     const missing = entry.caption ? employeePropertyMissing(employeePropertyFacts(entry.caption, data)) : [];
     notSaved.push({
       label: entry.caption ? shortEmployeeLabel(entry.caption) : 'Media sent without a caption',
-      needs: missing.length ? missing.join(', ') : 'a caption with type, exact location and price'
+      needs: !entry.caption
+        ? 'a caption with type, exact location and price'
+        : !entry.media.length
+          ? 'its photos or video'
+          : (missing.length ? missing.join(', ') : 'nothing more — send its photos or reply *OK*')
     });
   }
 
@@ -8313,9 +8334,14 @@ async function buildEmployeeBatchSummary(phone, since) {
   if (notSaved.length) {
     lines.push('', `⚠️ *Not saved yet:*`);
     notSaved.forEach((item) => lines.push(`• "${item.label}"\n   needs: ${item.needs}`));
-    lines.push('', notSaved.length === 1
-      ? 'Reply with just the missing detail (for example "Kira, Wakiso") and I will add it. You do not need to resend the media.'
-      : 'Reply with the missing detail for the first one listed and I will add it, then the next. You do not need to resend the media.');
+    const allNeedMedia = notSaved.every((item) => /photo|video/i.test(item.needs));
+    lines.push('', allNeedMedia
+      ? (notSaved.length === 1
+        ? 'Send its photos or video and I will save it.'
+        : 'Send the photos or video for each one, newest caption first, and I will save them.')
+      : (notSaved.length === 1
+        ? 'Reply with just the missing detail (for example "Kira, Wakiso") and I will add it. You do not need to resend the media.'
+        : 'Reply with the missing detail for the first one listed and I will add it, then the next. You do not need to resend the media.'));
   }
   lines.push('', 'Nothing is live until a moderator approves it. Type *COMPLETE* when the whole batch is done.');
   return lines.join('\n');
