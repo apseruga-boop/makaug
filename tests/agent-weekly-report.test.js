@@ -268,3 +268,10 @@ test('report queries look up the agent’s properties by id array, with indexes 
   assert.match(migration, /idx_analytics_property_open_created/);
   assert.match(migration, /idx_property_inquiries_property_created/);
 });
+
+test('sends are de-duplicated per report, not per identical wording', () => {
+  const admin = fs.readFileSync('routes/admin.js', 'utf8');
+  assert.match(admin, /agent_report:\$\{reportId\}/);
+  assert.match(admin, /reply_dedupe_key: `\$\{dedupeBase\}:media`/);
+  assert.match(admin, /reply_dedupe_key: `\$\{dedupeBase\}:text`/);
+});

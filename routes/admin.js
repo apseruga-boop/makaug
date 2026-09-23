@@ -12727,6 +12727,9 @@ function agentReportPayload(report) {
 async function deliverAgentReportWhatsapp({ to, text, actor, reportId, preview, cardUrl = '', videoUrl = '', caption = '' }) {
   const mode = getWhatsappDeliveryMode();
   const source = agentReportWhatsappSource();
+  // Key the bridge's duplicate guard on the report itself, so a report that has
+  // been edited (or a preview asked for again) is not swallowed as a repeat.
+  const dedupeBase = `agent_report:${reportId}:${preview ? `preview:${Date.now()}` : 'final'}`;
   const metadata = { message_kind: 'agent_weekly_report', agent_weekly_report_id: reportId, preview: Boolean(preview) };
   if (mode === 'web_bridge' || isWhatsappWebBridgeEnabled()) {
     const queued = await queueWhatsappWebBridgeMessage({
@@ -12736,12 +12739,12 @@ async function deliverAgentReportWhatsapp({ to, text, actor, reportId, preview, 
       mediaType: videoUrl ? 'video' : cardUrl ? 'image' : 'text',
       source,
       actorId: actor,
-      metadata: { ...metadata, card: Boolean(cardUrl), video: Boolean(videoUrl) }
+      metadata: { ...metadata, card: Boolean(cardUrl), video: Boolean(videoUrl), reply_dedupe_key: `${dedupeBase}:media` }
     });
     let fullTextId = null;
     if ((videoUrl || cardUrl) && text) {
       const queuedText = await queueWhatsappWebBridgeMessage({
-        recipient: to, text, source, actorId: actor, metadata: { ...metadata, part: 'full_report' }
+        recipient: to, text, source, actorId: actor, metadata: { ...metadata, part: 'full_report', reply_dedupe_key: `${dedupeBase}:text` }
       });
       fullTextId = queuedText?.id || null;
     }
