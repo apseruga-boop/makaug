@@ -4378,6 +4378,19 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
 
 // Replies to a burst of forwarded properties arrive after several captions have
 // gone by, so "send a corrected caption" on its own does not say WHICH property.
+/**
+ * Which property do these photos belong to?
+ *
+ * Its own caption if it has one; otherwise the caption that is WAITING for
+ * photos. Never the property finished a moment ago — that is what attached 44
+ * photos of four different properties (a steel factory, a lodge, a block of
+ * shops and some houses) to one Seeta listing on 23 Sep 2026.
+ */
+function employeeMediaMessageCaption({ cleanBody = '', placeholderBody = false, pendingCaption = '' } = {}) {
+  if (!placeholderBody && normalizeInput(cleanBody)) return normalizeInput(cleanBody);
+  return normalizeInput(pendingCaption) || '';
+}
+
 function employeeCaptionLabel(caption = '') {
   const clean = normalizeInput(stripForwardMarkers(caption)).replace(/\s+/g, ' ').trim();
   if (!clean) return 'this property';
@@ -6107,6 +6120,11 @@ async function handleEmployeeWhatsappIntake({
         });
         clearEmployeePendingMedia(data);
       }
+      // A new property has been announced, so the property finished earlier is
+      // no longer the one that captionless photos belong to.
+      if (!employeeCaptionLikelySameProperty(pendingCaption, textCaption, data)) {
+        data.current_property_id = null;
+      }
       data.pending_property_caption = textCaption;
       await replaceEmployeeSession(phone, currentStep, data);
       const waitingForMedia = employeePendingSubmissionQueue(data).filter((entry) => !entry.media.length).length;
@@ -6128,9 +6146,18 @@ async function handleEmployeeWhatsappIntake({
     }
     const pendingCaptionBeforeMessage = normalizeInput(data.pending_property_caption || '');
     const pendingStoredMediaBeforeMessage = employeePendingStoredMedia(data);
-    const caption = (!placeholderBody && cleanBody)
-      ? cleanBody
-      : (!data.current_property_id ? pendingCaptionBeforeMessage : '');
+    // Photos with no caption of their own belong to the caption that is WAITING
+    // for photos, not to whatever property was finished a moment ago. Preferring
+    // current_property_id here is what put 44 photos of four different
+    // properties — a steel factory, a lodge, a block of shops and some houses —
+    // onto one Seeta listing on 23 Sep 2026: once that first property existed,
+    // every later photo was attached to it and the captions that arrived in
+    // between were left with nothing.
+    const caption = employeeMediaMessageCaption({
+      cleanBody,
+      placeholderBody,
+      pendingCaption: pendingCaptionBeforeMessage
+    });
     const facts = employeePropertyFacts(caption, data);
     const missing = employeePropertyMissing(facts);
     const shouldStartProperty = Boolean(caption) && !missing.length;
@@ -14155,6 +14182,7 @@ router.delete('/reset/:phone', async (req, res) => {
 
 module.exports = router;
 module.exports.__test = {
+  employeeMediaMessageCaption,
   normalizeCaptionPriceNotation,
   buildEmployeeBatchSummary,
   scheduleEmployeeBatchSummary,
