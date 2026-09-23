@@ -923,9 +923,34 @@ const originalGetClient = db.getClient;
       }
     }
   });
-  assert.equal(confirmed.nextStep, 'employee_property_count');
-  assert.match(confirmed.message, /One property/);
-  assert.match(confirmed.message, /Multiple properties/);
+  // Picking the agent no longer jumps straight to the batch question: the name,
+  // the number and the agent profile are confirmed first.
+  assert.equal(confirmed.nextStep, 'employee_intake_confirm');
+  assert.match(confirmed.message, /Please confirm before we start/);
+  assert.match(confirmed.message, /Francis Isabirye/);
+  assert.match(confirmed.message, /\+256768524008/);
+
+  const readyForBatch = await whatsappRoute.handleEmployeeWhatsappIntake({
+    phone: '+447757773202',
+    body: '1',
+    session: {
+      current_step: 'employee_intake_confirm',
+      session_data: {
+        employee_role: 'agent',
+        agent: {
+          id: '11111111-1111-4111-8111-111111111111',
+          full_name: 'Francis Isabirye',
+          phone: '+256768524008',
+          whatsapp: '+256768524008',
+          status: 'approved'
+        },
+        identity_document_url: 'private-media:whatsapp-employee-intake/private-id/test-agent-id.jpg'
+      }
+    }
+  });
+  assert.equal(readyForBatch.nextStep, 'employee_property_count');
+  assert.match(readyForBatch.message, /One property/);
+  assert.match(readyForBatch.message, /Multiple properties/);
 
   const pendingNewAgent = await whatsappRoute.ensurePendingEmployeeAgent({
     fullName: 'New Agent Test',
@@ -1228,7 +1253,7 @@ const originalGetClient = db.getClient;
     duplicatesSkipped: 0,
     propertiesFailed: 0
   });
-  assert.equal(updates.length, 15, 'each state transition, normal and duplicate-only completion, interruption recovery, both media replay orders, acknowledged-message reconciliation, and both session and durable-ledger history recovery should persist immediately');
+  assert.equal(updates.length, 16, 'each state transition (including the details confirmation), normal and duplicate-only completion, interruption recovery, both media replay orders, acknowledged-message reconciliation, and both session and durable-ledger history recovery should persist immediately');
 
   console.log('WhatsApp Agent 007 employee intake contract tests passed.');
 })().catch((error) => {
