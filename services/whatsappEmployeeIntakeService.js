@@ -8,7 +8,9 @@ const EMPLOYEE_INTAKE_STEPS = Object.freeze([
   'employee_new_agent_details',
   'employee_customer_details',
   'employee_identity_photo',
+  'employee_agent_logo',
   'employee_intake_confirm',
+  'employee_intake_fix',
   'employee_property_count',
   'employee_property_media'
 ]);
@@ -193,6 +195,42 @@ function parseIntakeConfirmation(value = '') {
   });
 }
 
+/**
+ * The Quickway batch was loaded against the wrong answer to the very first
+ * question — "agent" was meant, "new customer" was sent — so no agent profile
+ * was ever created, nothing reached the approval queue and nothing could go
+ * live. The confirmation caught it in writing; the only thing missing was a way
+ * to change that answer without starting the batch again.
+ */
+function parseIntakeFixChoice(value = '') {
+  return choice(value, {
+    details: ['1', 'details', 'name', 'phone', 'location', 'district'],
+    role: ['2', 'role', 'agent', 'owner', 'customer', 'private owner', 'who'],
+    logo: ['3', 'logo', 'photo', 'picture', 'profile photo']
+  });
+}
+
+function parseSkipRequest(value = '') {
+  const text = cleanText(value).toLowerCase().replace(/[.!]+$/, '');
+  if (!text) return false;
+  return /^(?:skip|no logo|no photo|none|no|later|skip logo|skip for now|do not have one|dont have one|don't have one|not now)$/.test(text);
+}
+
+function employeeAgentLogoPrompt(agentName = '') {
+  const name = cleanText(agentName) || 'this agent';
+  const possessive = /s$/i.test(name) ? `${name}’` : `${name}’s`;
+  return `🖼 Now send ${possessive} logo or profile photo. It is what people see on their makaug profile and next to their listings.\n\nReply *SKIP* if there is no logo yet — staff can add one from the dashboard later.`;
+}
+
+function employeeIntakeFixPrompt({ role = 'agent', hasLogo = false } = {}) {
+  const lines = ['What needs changing?', '', '1 — The details (name, phone, location)'];
+  lines.push(role === 'agent'
+    ? '2 — This is a *private owner*, not an agent'
+    : '2 — This is an *agent*, not a private owner');
+  if (role === 'agent') lines.push(`3 — The ${hasLogo ? 'logo' : 'logo (none sent yet)'}`);
+  return lines.join('\n');
+}
+
 /** The check an employee sees before any property is sent. */
 function employeeIntakeConfirmPrompt({
   role = 'agent',
@@ -201,7 +239,8 @@ function employeeIntakeConfirmPrompt({
   company = '',
   district = '',
   identityReceived = false,
-  profileLine = ''
+  profileLine = '',
+  logoReceived = null
 } = {}) {
   const lines = [
     '📋 *Please confirm before we start*',
@@ -212,8 +251,11 @@ function employeeIntakeConfirmPrompt({
   if (role === 'agent' && cleanText(company)) lines.push(`🏢 Company: ${cleanText(company)}`);
   if (cleanText(district)) lines.push(`${role === 'agent' ? '📍 Primary district' : '📍 Property location'}: ${cleanText(district)}`);
   lines.push(`🪪 ID: ${identityReceived ? 'received and stored privately' : '*not supplied yet* — staff will chase it before approval'}`);
+  if (logoReceived !== null) {
+    lines.push(`🖼 Logo: ${logoReceived ? 'received — it goes on their profile' : 'none yet — staff can add one later'}`);
+  }
   if (cleanText(profileLine)) lines.push(`📂 ${cleanText(profileLine)}`);
-  lines.push('', 'Is this correct?', '', '1 — Yes, continue', '2 — No, let me send the details again');
+  lines.push('', 'Is this correct?', '', '1 — Yes, continue', '2 — No, something needs changing');
   return lines.join('\n');
 }
 
@@ -272,12 +314,16 @@ module.exports = {
   buildEmployeePublicDescription,
   cleanEmployeePropertyCaption,
   employeeAgentExistingPrompt,
+  employeeAgentLogoPrompt,
   employeeIntakePhoneAllowed,
   employeeIntakeConfirmPrompt,
+  employeeIntakeFixPrompt,
   employeeMediaPrompt,
   employeePropertyCountPrompt,
   parseIdentityLaterRequest,
   parseIntakeConfirmation,
+  parseIntakeFixChoice,
+  parseSkipRequest,
   employeeRolePrompt,
   looksLikePropertyCaption,
   isEmployeeIntakeCancel,
