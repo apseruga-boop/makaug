@@ -91,6 +91,7 @@ const {
   isEmployeeIntakeTrigger,
   parseCustomerDetails,
   parseEmployeeRole,
+  parseAgentLookupChoice,
   parseIdentityLaterRequest,
   parseIntakeConfirmation,
   parseIntakeFixChoice,
@@ -5796,8 +5797,15 @@ async function handleEmployeeWhatsappIntake({
   }
 
   if (currentStep === 'employee_agent_lookup') {
-    if (/^new$/i.test(cleanBody)) {
+    // Answering "yes, already registered" for someone who is not registered used
+    // to be a dead end: the search fails, the employee retypes the name, it
+    // fails again. The way out was the word NEW buried in a sentence. It is a
+    // numbered choice now, offered the moment a search comes back empty.
+    const afterFailedSearch = data.agent_lookup_failed === true;
+    const lookupChoice = afterFailedSearch ? parseAgentLookupChoice(cleanBody) : '';
+    if (/^new$/i.test(cleanBody) || lookupChoice === 'new') {
       data.agent_already_registered = false;
+      delete data.agent_lookup_failed;
       await replaceEmployeeSession(phone, 'employee_new_agent_details', data);
       return {
         handled: true,
@@ -5805,10 +5813,22 @@ async function handleEmployeeWhatsappIntake({
         message: 'Send the new agent details in this format:\n\nFull name | phone number | primary district\n\nCompany is optional. If included, use:\nFull name | phone number | company | primary district'
       };
     }
+    if (lookupChoice === 'search') {
+      delete data.agent_lookup_failed;
+      await replaceEmployeeSession(phone, currentStep, data);
+      return { handled: true, nextStep: currentStep, message: 'Send the agent’s exact name or makaug agent number.' };
+    }
     const matches = await findEmployeeApprovedAgents(cleanBody);
     if (!matches.length) {
-      return { handled: true, nextStep: currentStep, message: 'I could not find an approved agent with that name. Check the exact name/agent number and try again, or type *NEW* to add a new agent.' };
+      data.agent_lookup_failed = true;
+      await replaceEmployeeSession(phone, currentStep, data);
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: `No approved agent on makaug.com matches “${cleanBody}”.\n\n1 — Try the name or agent number again\n2 — Add them as a new agent\n\nMost people who are not found simply have not been added yet — reply *2* and we will set the profile up now.`
+      };
     }
+    delete data.agent_lookup_failed;
     data.agent_candidates = matches.map((agent) => ({
       id: agent.id,
       full_name: agent.full_name,

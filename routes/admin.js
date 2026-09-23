@@ -9169,6 +9169,223 @@ router.post('/agents/:id/public-profile-approval', async (req, res, next) => {
 });
 
 /**
+ * Move listings that came in under a person's own name onto an agent profile.
+ *
+ * WhatsApp intake asks "agent or new customer?" first, and an agent loaded as a
+ * private owner produces listings with no agent profile behind them. Re-sending
+ * the batch does not fix it — the listings are already there, so they come back
+ * as duplicates. Until now the only repair was in the database. This is the
+ * repair as an ordinary staff action: find or create the agent, carry the ID
+ * that was already collected across, and move the listings.
+ */
+router.post('/agents/from-listings', async (req, res, next) => {
+  const client = await db.getClient();
+  try {
+    const body = req.body || {};
+    const propertyIds = asArray(body.property_ids || body.properties)
+      .map((value) => cleanText(value))
+      .filter(Boolean)
+      .slice(0, 50);
+    const requestedAgentId = cleanText(body.agent_id);
+    const fullName = cleanText(body.full_name || body.agent_name).slice(0, 160);
+    const companyName = cleanText(body.company_name).slice(0, 160);
+    const phone = normalizeCountryPhone(body.phone || body.whatsapp);
+    const bio = cleanText(body.bio).slice(0, 1500);
+    const profilePhotoUrl = cleanText(body.profile_photo_url).slice(0, 5 * 1024 * 1024);
+    const districts = asArray(body.districts_covered || body.districts)
+      .flatMap((value) => String(value || '').split(','))
+      .map((value) => cleanText(value))
+      .filter((value) => DISTRICTS.includes(value))
+      .slice(0, 20);
+
+    if (!propertyIds.length) {
+      return res.status(400).json({ ok: false, error: 'At least one property id is required' });
+    }
+    if (!requestedAgentId && !fullName) {
+      return res.status(400).json({ ok: false, error: 'An agent name is required when no existing agent is chosen' });
+    }
+    if (profilePhotoUrl && !(/^data:image\//i.test(profilePhotoUrl) || /^https?:\/\//i.test(profilePhotoUrl))) {
+      return res.status(400).json({ ok: false, error: 'Profile photo must be an image data URL or public HTTPS URL' });
+    }
+
+    await client.query('BEGIN');
+
+    const propertyRows = await client.query(
+      `SELECT id::text AS id, status, lister_type, lister_name, lister_phone,
+              agent_id::text AS agent_id, id_document_url, id_document_name
+         FROM properties
+        WHERE id = ANY($1::uuid[])
+        FOR UPDATE`,
+      [propertyIds]
+    );
+    if (!propertyRows.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'None of those properties were found' });
+    }
+
+    const listingPhone = phone
+      || normalizeCountryPhone(propertyRows.rows.find((row) => row.lister_phone)?.lister_phone || '');
+    const phoneDigits = String(listingPhone || '').replace(/\D/g, '');
+
+    let agent = null;
+    if (requestedAgentId) {
+      const found = await client.query(
+        `SELECT id::text AS id, full_name, company_name, phone, whatsapp, email, status,
+                identity_document_url, profile_photo_url
+           FROM agents WHERE id = $1 FOR UPDATE`,
+        [requestedAgentId]
+      );
+      agent = found.rows[0] || null;
+      if (!agent) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ ok: false, error: 'Agent not found' });
+      }
+    } else if (phoneDigits) {
+      const found = await client.query(
+        `SELECT id::text AS id, full_name, company_name, phone, whatsapp, email, status,
+                identity_document_url, profile_photo_url
+           FROM agents
+          WHERE regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1
+             OR regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $1
+          ORDER BY status = 'approved' DESC, updated_at DESC
+          LIMIT 1
+          FOR UPDATE`,
+        [phoneDigits]
+      );
+      agent = found.rows[0] || null;
+    }
+
+    let created = false;
+    if (!agent) {
+      const licenceNumber = `STAFF-REASSIGN-${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
+      const inserted = await client.query(
+        `INSERT INTO agents (
+           full_name, company_name, licence_number, registration_status, listing_limit,
+           phone, whatsapp, districts_covered, specializations, bio, profile_photo_url,
+           privacy_consent_accepted, data_retention_notice_accepted, status,
+           agent_application_channel, verification_reason
+         ) VALUES (
+           $1,$2,$3,'not_registered',2147483647,$4,$4,$5::text[],'{}'::text[],
+           NULLIF($6::text, ''), NULLIF($7::text, ''),
+           FALSE, FALSE, 'pending', 'staff_listing_reassignment', $8
+         ) RETURNING id::text AS id, full_name, company_name, phone, whatsapp, email, status,
+                     identity_document_url, profile_photo_url`,
+        [
+          fullName,
+          companyName || fullName,
+          licenceNumber,
+          listingPhone || null,
+          districts,
+          bio,
+          profilePhotoUrl,
+          '[STAFF_LISTING_REASSIGNMENT] Listings first taken as a private-owner submission were moved onto this agent profile by staff. Identity, phone and permission to publish still require manual verification before approval.'
+        ]
+      );
+      agent = inserted.rows[0];
+      created = true;
+    } else {
+      const refreshed = await client.query(
+        `UPDATE agents
+            SET full_name = COALESCE(NULLIF($2::text, ''), full_name),
+                company_name = COALESCE(NULLIF($3::text, ''), company_name),
+                bio = COALESCE(NULLIF($4::text, ''), bio),
+                profile_photo_url = COALESCE(NULLIF($5::text, ''), profile_photo_url),
+                districts_covered = CASE
+                  WHEN COALESCE(array_length($6::text[], 1), 0) > 0 THEN $6::text[]
+                  ELSE districts_covered END,
+                updated_at = NOW()
+          WHERE id = $1
+          RETURNING id::text AS id, full_name, company_name, phone, whatsapp, email, status,
+                    identity_document_url, profile_photo_url`,
+        [agent.id, fullName, companyName, bio, profilePhotoUrl, districts]
+      );
+      if (refreshed.rows[0]) agent = refreshed.rows[0];
+    }
+
+    // The ID was collected once already, against the listing. Carrying it to the
+    // agent is what lets staff run the normal public-profile approval instead of
+    // asking the same person for the same document a second time.
+    const listingIdDocument = propertyRows.rows.find((row) => row.id_document_url);
+    let identityCarried = false;
+    if (!agent.identity_document_url && listingIdDocument) {
+      const withIdentity = await client.query(
+        `UPDATE agents
+            SET identity_document_url = $2,
+                identity_document_name = COALESCE(NULLIF($3::text, ''), 'WhatsApp intake ID'),
+                identity_document_uploaded_at = COALESCE(identity_document_uploaded_at, NOW()),
+                verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), $4),
+                updated_at = NOW()
+          WHERE id = $1 AND COALESCE(identity_document_url, '') = ''
+          RETURNING id::text AS id, full_name, company_name, phone, whatsapp, email, status,
+                    identity_document_url, profile_photo_url`,
+        [
+          agent.id,
+          listingIdDocument.id_document_url,
+          listingIdDocument.id_document_name,
+          '[STAFF_LISTING_REASSIGNMENT] Identity document carried over from the listing it was supplied with. Staff must still review it before the public profile is approved.'
+        ]
+      );
+      if (withIdentity.rows[0]) {
+        agent = withIdentity.rows[0];
+        identityCarried = true;
+      }
+    }
+
+    const moved = await client.query(
+      `UPDATE properties
+          SET agent_id = $2::uuid,
+              lister_type = 'agent',
+              lister_name = COALESCE(NULLIF($3::text, ''), lister_name),
+              updated_at = NOW()
+        WHERE id = ANY($1::uuid[])
+        RETURNING id::text AS id, title, status`,
+      [propertyRows.rows.map((row) => row.id), agent.id, agent.full_name]
+    );
+
+    const actorId = adminActorId(req);
+    for (const row of moved.rows) {
+      await client.query(
+        `INSERT INTO property_moderation_events
+           (property_id, actor_id, action, status_from, status_to, reason, notes)
+         VALUES ($1,$2,'listing_reassigned_to_agent',$3,$3,$4,$5)`,
+        [
+          row.id,
+          actorId,
+          row.status,
+          'Listing moved from a private-owner submission to an agent profile by staff.',
+          `Agent ${agent.full_name} (${agent.id}); profile ${created ? 'created' : 'existing'}.`
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    await writeAudit('admin_listings_reassigned_to_agent', {
+      agent_id: agent.id,
+      agent_created: created,
+      identity_carried_from_listing: identityCarried,
+      property_ids: moved.rows.map((row) => row.id)
+    }, actorId);
+
+    return res.json({
+      ok: true,
+      data: {
+        agent,
+        agent_created: created,
+        identity_carried_from_listing: identityCarried,
+        properties_moved: moved.rows,
+        public_profile_still_requires_approval: agent.status !== 'approved'
+      }
+    });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) { /* the transaction is already gone */ }
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+/**
  * An agent with no logo reads as an empty profile on a portal people are being
  * asked to trust. The WhatsApp intake now asks for one, and this is how staff
  * add or replace it for an agent who was onboarded before that, or whose logo
