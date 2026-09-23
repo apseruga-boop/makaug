@@ -25,16 +25,19 @@ const {
 
 const routeSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
 
-test('the confirmation step sits between the ID step and the batch question', () => {
+test('the confirmation step sits after the ID and logo steps and before the batch question', () => {
   const steps = [...EMPLOYEE_INTAKE_STEPS];
-  assert.strictEqual(
-    steps.indexOf('employee_intake_confirm'),
-    steps.indexOf('employee_identity_photo') + 1,
+  assert.ok(
+    steps.indexOf('employee_intake_confirm') > steps.indexOf('employee_identity_photo'),
     'confirmation must follow the ID step'
   );
-  assert.strictEqual(
-    steps.indexOf('employee_property_count'),
-    steps.indexOf('employee_intake_confirm') + 1,
+  assert.ok(
+    steps.indexOf('employee_agent_logo') > steps.indexOf('employee_identity_photo')
+    && steps.indexOf('employee_agent_logo') < steps.indexOf('employee_intake_confirm'),
+    'the logo is asked for after the ID and before the confirmation'
+  );
+  assert.ok(
+    steps.indexOf('employee_property_count') > steps.indexOf('employee_intake_confirm'),
     'the batch question must come after the confirmation'
   );
 });
