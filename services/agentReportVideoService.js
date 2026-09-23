@@ -444,8 +444,9 @@ function lastVideoError(reportId) {
   return lastErrors.get(reportId) || null;
 }
 
-// Welcome film for an agent who has just joined: what makaug is, how big the
-// audience is, who is watching from abroad, and why listings belong here.
+// Welcome film for an agent who has just joined: short lines, big type, and
+// the ambition — Uganda's market online, the diaspora, many languages,
+// investors — rather than a wall of numbers.
 function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
   const firstName = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
   const initials = String(agent.full_name || 'M A').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
@@ -453,103 +454,79 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
   const out = (lt, dur) => (dur - lt < 0.25 ? dur - 0.25 : Infinity);
   const scenes = [];
 
-  scenes.push({ dur: 2.4, title: true, draw: (lt, t, dur) => [
+  // One idea per scene, in the biggest type that fits.
+  const statement = (dur, lines, opts = {}) => scenes.push({ dur, draw: (lt, t, d) => {
+    const e = out(lt, d);
+    const parts = [bubble(360, opts.sub ? 300 : 340, lines, { scale: pop(lt, 0.08, e, 0.42), pad: 32, fill: opts.fill || K.white })];
+    if (opts.sub) parts.push(bubble(360, 470, [{ text: opts.sub, size: 26, weight: 700, fill: K.muted }], { scale: pop(lt, 0.45, e), fill: K.peach, tail: 'right' }));
+    return parts;
+  } });
+
+  scenes.push({ dur: 2.3, title: true, draw: (lt, t, d) => [
     patternBg(t, 'WELCOME'), confetti(t),
-    bubble(360, 310, [{ text: 'Welcome to', size: 34, weight: 600 }, { text: 'makaug.com', size: 60, weight: 900, fill: K.orange }], { scale: pop(lt, 0.15, out(lt, dur), 0.45), pad: 34 }),
-    bubble(360, 460, [{ text: `Hi ${clip(firstName, 16)} — you’re in`, size: 28, weight: 700 }], { scale: pop(lt, 0.6, out(lt, dur)), fill: K.yellow, tail: 'right' })
+    bubble(360, 320, [{ text: 'Welcome to', size: 36, weight: 600 }, { text: 'makaug.com', size: 64, weight: 900, fill: K.orange }], { scale: pop(lt, 0.15, out(lt, d), 0.45), pad: 34 }),
+    bubble(360, 480, [{ text: `You’re in, ${clip(firstName, 14)}`, size: 30, weight: 800 }], { scale: pop(lt, 0.6, out(lt, d)), fill: K.yellow, tail: 'right' })
   ] });
 
-  scenes.push({ dur: 2.8, draw: (lt, t, dur) => {
-    const e = out(lt, dur);
-    const r = [
-      avatar(140, 190, 54, initials, K.orange, pop(lt, 0.05, e)),
-      bubble(420, 175, [{ text: 'Uganda’s property', size: 34, weight: 900 }, { text: 'discovery platform', size: 34, weight: 900, fill: K.orange }], { scale: pop(lt, 0.2, e) })
-    ];
-    const tags = ['Rent', 'Buy', 'Land', 'Commercial', 'Students', 'Off Plan', 'Short stays'];
-    tags.forEach((tag, i) => {
-      const cx = 150 + (i % 3) * 210 + (Math.floor(i / 3) % 2 ? 60 : 0);
-      const cy = 360 + Math.floor(i / 3) * 120;
-      r.push(bubble(cx, cy, [{ text: tag, size: 28, weight: 800 }], { scale: pop(lt, 0.5 + i * 0.14, e), fill: i % 2 ? K.white : K.peach, tail: i % 2 ? 'right' : 'left' }));
-    });
-    return r;
-  } });
+  statement(2.4, [{ text: 'Uganda’s property', size: 46, weight: 900 }, { text: 'market, online', size: 46, weight: 900, fill: K.orange }], { sub: 'homes · land · commercial · off plan' });
 
-  scenes.push({ dur: 3.4, draw: (lt, t, dur) => {
-    const e = out(lt, dur);
+  scenes.push({ dur: 3.0, draw: (lt, t, d) => {
+    const e = out(lt, d);
     const items = [
-      { value: stats.live_listings, label: 'live listings', icon: 'L', color: K.purple },
-      { value: stats.agents, label: 'agents & brokers', icon: 'A', color: K.teal },
-      { value: stats.views_30d, label: 'listing views a month', icon: 'V', color: K.orange },
-      { value: stats.visitors_30d, label: 'people a month', icon: 'P', color: K.green }
+      { value: stats.live_listings, label: 'listings live today', icon: 'L', color: K.purple },
+      { value: stats.visitors_30d, label: 'searchers a month', icon: 'S', color: K.teal }
     ].filter((item) => Number(item.value) > 0);
-    return items.map((item, i) => {
-      const y = 150 + i * (460 / Math.max(1, items.length - 1 || 1));
-      const left = i % 2 === 0;
-      const sc = pop(lt, 0.1 + i * 0.55, e);
-      return [
-        avatar(left ? 80 : 640, y, 32, item.icon, item.color, sc),
-        bubble(left ? 340 : 380, y, [{ text: `${countUp(item.value, lt, 0.1 + i * 0.55).toLocaleString('en-GB')} ${item.label}`, size: 34, weight: 900 }], { scale: sc, tail: left ? 'left' : 'right', minW: 340 })
-      ].join('');
+    const r = [bubble(360, 120, [{ text: 'And growing fast', size: 34, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
+    items.forEach((item, i) => {
+      const cy = 320 + i * 190;
+      const sc = pop(lt, 0.35 + i * 0.6, e);
+      r.push(avatar(i % 2 ? 640 : 85, cy, 36, item.icon, item.color, sc));
+      r.push(bubble(i % 2 ? 390 : 330, cy, [
+        { text: countUp(item.value, lt, 0.35 + i * 0.6).toLocaleString('en-GB'), size: 58, weight: 900 },
+        { text: item.label, size: 26, weight: 700, fill: K.muted }
+      ], { scale: sc, tail: i % 2 ? 'right' : 'left', minW: 330 }));
     });
-  } });
-
-  scenes.push({ dur: 1.2 + Math.max(1, countries.length) * 0.4 + 1.2, draw: (lt, t, dur) => {
-    const e = out(lt, dur);
-    const r = [globe(360, 390, 230, 0.9 * clamp01(lt / 0.4)),
-      bubble(360, 90, [{ text: 'Uganda’s buyers are everywhere', size: 30, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
-    if (countries.length) {
-      const spots = [[340, 230, 'left', 95], [390, 355, 'right', 640], [330, 485, 'left', 90], [400, 610, 'right', 645]];
-      countries.forEach((c, i) => {
-        const [cx, cy, tail, ax] = spots[i];
-        const sc = pop(lt, 0.4 + i * 0.4, e);
-        r.push(avatar(ax, cy, 32, String(c.code || c.name || '?').slice(0, 2).toUpperCase(), AVATAR_COLORS[i % AVATAR_COLORS.length], sc));
-        r.push(bubble(cx, cy, [{ text: clip(SHORT_NAMES[c.name] || c.name, 16), size: 32, weight: 900 }], { scale: sc, tail, minW: 260 }));
-      });
-    } else {
-      r.push(bubble(360, 380, [{ text: 'Diaspora buyers search', size: 32, weight: 900 }, { text: 'from the UK, UAE, USA and beyond', size: 24, weight: 700, fill: K.muted }], { scale: pop(lt, 0.4, e) }));
-    }
     return r;
   } });
 
-  const reasons = [
-    ['Your number, your deal', 'buyers call you direct, no commission'],
-    ['Found by search & AI', 'Google, Ask AI and WhatsApp send buyers'],
-    ['Video-first listings', 'diaspora buyers decide from a video'],
-    ['Free to start', 'first 7 days free on every listing']
-  ];
-  reasons.forEach(([head, sub], i) => {
-    scenes.push({ dur: 1.9, draw: (lt, t, dur) => {
-      const e = out(lt, dur);
-      return [
-        avatar(i % 2 ? 620 : 100, 250, 38, String(i + 1), AVATAR_COLORS[i % AVATAR_COLORS.length], pop(lt, 0.05, e)),
-        bubble(360, 330, [{ text: head, size: 38, weight: 900 }], { scale: pop(lt, 0.1, e), pad: 28 }),
-        bubble(360, 470, [{ text: clip(sub, 40), size: 24, weight: 700, fill: K.muted }], { scale: pop(lt, 0.4, e), fill: K.peach, tail: i % 2 ? 'right' : 'left' })
-      ];
-    } });
-  });
-
-  scenes.push({ dur: 2.6, draw: (lt, t, dur) => {
-    const e = out(lt, dur);
-    const steps = ['Add photos or a video', 'Set a clear price and area', 'Reply here to get help'];
-    const r = [bubble(360, 110, [{ text: 'Your first listing in 3 steps', size: 32, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
-    steps.forEach((step, i) => {
-      const cy = 260 + i * 140;
-      const sc = pop(lt, 0.3 + i * 0.4, e);
-      r.push(avatar(i % 2 ? 640 : 80, cy, 30, String(i + 1), AVATAR_COLORS[(i + 2) % AVATAR_COLORS.length], sc));
-      r.push(bubble(i % 2 ? 380 : 340, cy, [{ text: step, size: 30, weight: 900 }], { scale: sc, tail: i % 2 ? 'right' : 'left', minW: 360 }));
+  scenes.push({ dur: 3.2, draw: (lt, t, d) => {
+    const e = out(lt, d);
+    const r = [globe(360, 400, 240, 0.9 * clamp01(lt / 0.4)),
+      bubble(360, 105, [{ text: 'Built for Ugandans everywhere', size: 30, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
+    const spots = [[330, 250, 'left', 95], [395, 380, 'right', 640], [330, 505, 'left', 90], [400, 630, 'right', 645]];
+    const fallback = [{ code: 'GB', name: 'UK' }, { code: 'AE', name: 'UAE' }, { code: 'US', name: 'USA' }, { code: 'KE', name: 'Kenya' }];
+    (countries.length ? countries : fallback).slice(0, 4).forEach((c, i) => {
+      const [cx, cy, tail, ax] = spots[i];
+      const sc = pop(lt, 0.4 + i * 0.4, e);
+      r.push(avatar(ax, cy, 32, String(c.code || c.name || '?').slice(0, 2).toUpperCase(), AVATAR_COLORS[i % AVATAR_COLORS.length], sc));
+      r.push(bubble(cx, cy, [{ text: clip(SHORT_NAMES[c.name] || c.name, 16), size: 34, weight: 900 }], { scale: sc, tail, minW: 250 }));
     });
+    return r;
+  } });
+
+  statement(2.3, [{ text: 'Diaspora buyers', size: 46, weight: 900 }, { text: 'shop from abroad', size: 40, weight: 900, fill: K.orange }], { sub: 'they buy before they land' });
+  statement(2.2, [{ text: 'In 9 languages', size: 48, weight: 900 }], { sub: 'English · Luganda · Swahili · Arabic…', fill: K.peach });
+  statement(2.3, [{ text: 'Made for investors', size: 44, weight: 900 }], { sub: 'off plan · buy to let · mortgage finder' });
+  statement(2.2, [{ text: 'Your number.', size: 44, weight: 900 }, { text: 'Your deal.', size: 44, weight: 900, fill: K.orange }], { sub: 'buyers call you — no commission' });
+
+  scenes.push({ dur: 2.8, draw: (lt, t, d) => {
+    const e = out(lt, d);
+    const r = [
+      avatar(360, 220, 72, initials, K.orange, pop(lt, 0.05, e)),
+      bubble(360, 380, [{ text: 'Your profile is live', size: 38, weight: 900 }], { scale: pop(lt, 0.3, e), pad: 28 })
+    ];
+    if (agent.makaug_agent_number) r.push(bubble(360, 510, [{ text: agent.makaug_agent_number, size: 32, weight: 900, fill: K.orange }], { scale: pop(lt, 0.6, e), fill: K.peach, tail: 'right' }));
+    r.push(bubble(360, 625, [{ text: 'Share it. Get found.', size: 30, weight: 800 }], { scale: pop(lt, 0.85, e) }));
     return r;
   } });
 
   scenes.push({ dur: 2.2, draw: (lt) => {
     const sc = pop(lt, 0.05, Infinity, 0.45);
-    const r = [
-      `<circle cx="360" cy="300" r="${(150 * sc).toFixed(1)}" fill="${K.orange}" stroke="${K.line}" stroke-width="4"/>`,
-      `<g transform="translate(360 300) scale(${sc.toFixed(3)}) translate(-360 -300)">${textEl(360, 320, 'makaug', { size: 54, weight: 900, fill: K.white, anchor: 'middle' })}</g>`
+    return [
+      `<circle cx="360" cy="320" r="${(160 * sc).toFixed(1)}" fill="${K.orange}" stroke="${K.line}" stroke-width="4"/>`,
+      `<g transform="translate(360 320) scale(${sc.toFixed(3)}) translate(-360 -320)">${textEl(360, 340, 'makaug', { size: 58, weight: 900, fill: K.white, anchor: 'middle' })}</g>`,
+      bubble(360, 560, [{ text: 'Post your first property today', size: 28, weight: 800 }], { scale: pop(lt, 0.35) })
     ];
-    if (agent.makaug_agent_number) r.push(bubble(360, 520, [{ text: 'Your Agent ID', size: 22, weight: 600, fill: K.muted }, { text: agent.makaug_agent_number, size: 34, weight: 900, fill: K.orange }], { scale: pop(lt, 0.3) }));
-    r.push(bubble(360, 640, [{ text: 'makaug.com', size: 28, weight: 800 }], { scale: pop(lt, 0.55), fill: K.peach, tail: 'right' }));
-    return r;
   } });
 
   let at = 0;

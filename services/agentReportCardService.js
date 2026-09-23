@@ -211,6 +211,79 @@ function buildReportCardSvg(report = {}) {
 </svg>`;
 }
 
+// A share card the agent can post on their WhatsApp status: their name, their
+// makaug agent ID, how many properties they have live, and a QR code that
+// opens their public profile.
+function buildAgentShareCardSvg({ agent = {}, listings = 0, qrSvgPath = '', qrModules = 29, profileUrl = '' } = {}) {
+  const W = 1080;
+  const H = 1920;
+  const name = clip(agent.full_name || 'makaug agent', 22);
+  const initials = String(agent.full_name || 'M A').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  const parts = [];
+  parts.push(`<rect width="${W}" height="${H}" fill="${C.ink}"/>`);
+  parts.push(`<circle cx="${W - 60}" cy="180" r="300" fill="#1C2B4A"/>`);
+  parts.push(`<circle cx="40" cy="${H - 220}" r="260" fill="#1C2B4A"/>`);
+
+  parts.push(text(80, 150, 'makaug.com', { size: 44, weight: 800, fill: C.accent }));
+  parts.push(text(80, 200, 'UGANDA’S PROPERTY DISCOVERY PLATFORM', { size: 22, weight: 700, fill: '#93A0B5', spacing: 2 }));
+
+  // Agent identity
+  parts.push(`<circle cx="180" cy="420" r="110" fill="${C.accent}"/>`);
+  parts.push(text(180, 455, initials, { size: 86, weight: 800, fill: '#FFFFFF', anchor: 'middle' }));
+  parts.push(text(320, 400, name, { size: 64, weight: 800, fill: '#FFFFFF' }));
+  if (agent.company_name && String(agent.company_name).trim().toLowerCase() !== String(agent.full_name || '').trim().toLowerCase()) {
+    parts.push(text(320, 456, clip(agent.company_name, 28), { size: 30, fill: '#93A0B5' }));
+  }
+  if (agent.makaug_agent_number) {
+    parts.push(`<rect x="320" y="482" width="${44 + String(agent.makaug_agent_number).length * 17}" height="56" rx="28" fill="#1C2B4A" stroke="${C.accent}" stroke-width="2"/>`);
+    parts.push(text(342, 520, agent.makaug_agent_number, { size: 28, weight: 700, fill: C.accent }));
+  }
+
+  parts.push(text(80, 680, 'Find all my properties', { size: 58, weight: 800, fill: '#FFFFFF' }));
+  parts.push(text(80, 750, 'on makaug.com', { size: 58, weight: 800, fill: C.accent }));
+  if (listings > 0) {
+    parts.push(text(80, 830, `${num(listings)} live listing${listings === 1 ? '' : 's'} · rent · buy · land · commercial`, { size: 28, fill: '#93A0B5' }));
+  }
+
+  // QR panel
+  const qrBox = 520;
+  const qrX = (W - qrBox) / 2;
+  const qrY = 930;
+  parts.push(`<rect x="${qrX - 40}" y="${qrY - 40}" width="${qrBox + 80}" height="${qrBox + 190}" rx="40" fill="#FFFFFF"/>`);
+  if (qrSvgPath) {
+    parts.push(`<g transform="translate(${qrX} ${qrY}) scale(${(qrBox / Math.max(1, qrModules)).toFixed(4)})">${qrSvgPath}</g>`);
+  }
+  parts.push(text(W / 2, qrY + qrBox + 70, 'Scan to see my properties', { size: 34, weight: 800, anchor: 'middle' }));
+  if (profileUrl) parts.push(text(W / 2, qrY + qrBox + 120, clip(profileUrl.replace(/^https?:\/\//, ''), 42), { size: 24, fill: C.muted, anchor: 'middle' }));
+
+  const phone = String(agent.whatsapp || agent.phone || '').trim();
+  if (phone) {
+    parts.push(`<rect x="80" y="${H - 260}" width="${W - 160}" height="96" rx="48" fill="${C.accent}"/>`);
+    parts.push(text(W / 2, H - 198, `Call or WhatsApp ${phone}`, { size: 34, weight: 800, fill: '#FFFFFF', anchor: 'middle' }));
+  }
+  parts.push(text(W / 2, H - 90, 'makaug.com — every home, every plot, one place', { size: 26, fill: '#93A0B5', anchor: 'middle' }));
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${parts.join('\n')}</svg>`;
+}
+
+async function renderAgentShareCardPng({ agent, listings = 0, profileUrl }) {
+  ensureFontconfig();
+  const sharp = require('sharp');
+  let qrSvgPath = '';
+  let qrModules = 29;
+  try {
+    const qrcode = require('qrcode');
+    const svg = await qrcode.toString(profileUrl, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#15213A', light: '#FFFFFF' } });
+    qrSvgPath = (svg.match(/<path[^>]*\/>/g) || []).join('');
+    const box = svg.match(/viewBox="0 0 (\d+) \d+"/);
+    if (box) qrModules = Number(box[1]) || 29;
+  } catch (_) {
+    qrSvgPath = '';
+  }
+  const svg = buildAgentShareCardSvg({ agent, listings, qrSvgPath, qrModules, profileUrl });
+  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+}
+
 async function renderReportCardPng(report) {
   ensureFontconfig();
   const sharp = require('sharp');
@@ -249,6 +322,8 @@ function reportCardUrl(report, baseUrl) {
 }
 
 module.exports = {
+  buildAgentShareCardSvg,
+  renderAgentShareCardPng,
   buildReportCardSvg,
   ensureFontconfig,
   cardToken,

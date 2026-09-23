@@ -12,9 +12,9 @@ const {
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { getAgentFacingReport, getReportById, listAgentReportWeeks, siteUrl } = require('../services/agentWeeklyReportService');
-const { renderReportCardPng, reportCardUrl, verifyCardToken } = require('../services/agentReportCardService');
+const { renderReportCardPng, renderAgentShareCardPng, reportCardUrl, verifyCardToken } = require('../services/agentReportCardService');
 const { ensureReportVideo, ensureWelcomeVideo, reportVideoUrl, isVideoRenderingAvailable } = require('../services/agentReportVideoService');
-const { buildWelcomePack } = require('../services/agentWelcomeService');
+const { agentProfileUrl, buildWelcomePack, countAgentListings } = require('../services/agentWelcomeService');
 
 const router = express.Router();
 const KNOWN_AGENT_SOCIAL_LINKS = [
@@ -336,6 +336,28 @@ router.get('/report-video/:id.mp4', async (req, res, next) => {
     res.set('Cache-Control', 'private, max-age=300');
     res.set('X-Robots-Tag', 'noindex');
     return res.sendFile(file, { headers: { 'Content-Type': 'video/mp4' } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Public (signed) share card: the agent's own poster for WhatsApp status.
+router.get('/share-card/:id.png', async (req, res, next) => {
+  try {
+    const id = cleanText(req.params.id);
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !verifyCardToken(`${id}:share`, cleanText(req.query.v || ''), cleanText(req.query.t || ''))) {
+      return res.status(404).json({ ok: false, error: 'Not found' });
+    }
+    const pack = await buildWelcomePack(id);
+    const png = await renderAgentShareCardPng({
+      agent: pack.agent,
+      listings: pack.listings,
+      profileUrl: agentProfileUrl(pack.agent)
+    });
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'private, max-age=600');
+    res.set('X-Robots-Tag', 'noindex');
+    return res.send(png);
   } catch (error) {
     return next(error);
   }

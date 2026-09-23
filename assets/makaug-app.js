@@ -12287,6 +12287,7 @@ async function previewAgentWelcome() {
           <div>
             <div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Message to ${adminEscape(data.agent?.full_name || "the agent")} (${adminEscape(data.agent?.makaug_agent_number || "no agent ID")})</div>
             <pre class="whitespace-pre-wrap rounded-xl bg-white p-3 text-xs text-gray-800 max-h-96 overflow-auto">${adminEscape(data.message || "")}</pre>
+            ${agentReportSafeUrl(data.share_card_url) ? `<div class="mt-3 flex items-start gap-3"><img src="${adminAttr(data.share_card_url)}" alt="Share card" class="w-32 rounded-lg border border-gray-200"><div class="text-xs text-gray-600"><b>Share card</b><br>Posted to the agent as a third message for their WhatsApp status. The code opens <a href="${adminAttr(data.profile_url || "#")}" target="_blank" rel="noopener" class="font-bold text-green-700">their profile</a>.</div></div>` : ""}
           </div>
         </div>`;
     }

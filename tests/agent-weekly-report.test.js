@@ -283,7 +283,7 @@ test('the new-agent welcome pack explains makaug, the audience and the diaspora'
     stats: { live_listings: 4210, agents: 212, views_30d: 38400, visitors_30d: 15200, countries_count: 9, diaspora_countries: [{ code: 'GB', name: 'United Kingdom' }, { code: 'AE', name: 'United Arab Emirates' }] }
   };
   const message = welcome.buildWelcomeMessage(pack);
-  for (const needle of ['Welcome to makaug.com', 'MKA-AG-7654321', 'discovery platform', '4,210 live listings', '15,200 different people', 'United Kingdom', 'no commission', 'first 7 days free', 'makaug.com/list-property']) {
+  for (const needle of ['Welcome to makaug.com', 'MKA-AG-7654321', 'Uganda’s property market, online', '4,210 live listings', '15,200 different people', 'United Kingdom', 'no commission', 'first 7 days free', 'makaug.com/list-property']) {
     assert.ok(message.includes(needle), `missing ${needle}`);
   }
   assert.ok(message.length < 4096);
@@ -297,7 +297,7 @@ test('the new-agent welcome pack explains makaug, the audience and the diaspora'
   const total = video.welcomeDuration({ ...pack, stats: pack.stats });
   assert.ok(total > 18 && total < 40, `welcome film length ${total}`);
   const frames = Array.from({ length: Math.ceil(total * 3) }, (_, i) => video.frameSvg(scene, i / 3)).join('');
-  for (const needle of ['Welcome to', 'discovery platform', 'Short stays', 'live listings', 'Your number, your deal', 'Your first listing in 3 steps', 'MKA-AG-7654321']) {
+  for (const needle of ['Welcome to', 'market, online', 'In 9 languages', 'listings live today', 'Made for investors', 'Your profile is live', 'MKA-AG-7654321']) {
     assert.ok(frames.includes(needle), `film missing ${needle}`);
   }
 
@@ -308,4 +308,31 @@ test('the new-agent welcome pack explains makaug, the audience and the diaspora'
   assert.match(html, /Welcome pack for a new agent/);
   const app = fs.readFileSync('assets/makaug-app.js', 'utf8');
   assert.match(app, /async function sendAgentWelcome/);
+});
+
+test('welcome pack carries the agent profile link and a share card', async () => {
+  const welcome = require('../services/agentWelcomeService');
+  const cards = require('../services/agentReportCardService');
+  const agent = { id: '5674f6cb-37a0-4e1e-904f-06e03ec401ab', full_name: 'Francis Isabirye', makaug_agent_number: 'MKA-AG-6835341', whatsapp: '+256768524008' };
+  const profileUrl = welcome.agentProfileUrl(agent);
+  assert.equal(profileUrl, `https://makaug.com/agents/${agent.id}`);
+
+  const message = welcome.buildWelcomeMessage({ agent, stats: { live_listings: 3717, visitors_30d: 1329 } });
+  assert.ok(message.includes(profileUrl), 'the profile link must be in the message');
+  assert.ok(message.includes('9 languages'), 'languages are part of the pitch');
+  assert.ok(message.includes('off plan, buy-to-let'), 'investors are part of the pitch');
+  assert.match(welcome.buildShareCardCaption({ agent }), /WhatsApp status/);
+
+  const svg = cards.buildAgentShareCardSvg({ agent, listings: 184, qrSvgPath: '<path d="M0 0h1v1H0z"/>', qrModules: 37, profileUrl });
+  assert.match(svg, /Francis Isabirye/);
+  assert.match(svg, /MKA-AG-6835341/);
+  assert.match(svg, /Scan to see my properties/);
+  assert.match(svg, /184 live listings/);
+  const png = await cards.renderAgentShareCardPng({ agent, listings: 184, profileUrl });
+  assert.equal(png.subarray(1, 4).toString(), 'PNG');
+
+  const admin = fs.readFileSync('routes/admin.js', 'utf8');
+  assert.match(admin, /part: 'share_card'/);
+  const agents = fs.readFileSync('routes/agents.js', 'utf8');
+  assert.match(agents, /router\.get\('\/share-card\/:id\.png'/);
 });

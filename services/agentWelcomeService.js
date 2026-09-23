@@ -7,6 +7,7 @@
 const db = require('../config/database');
 const { countryName } = require('./visitorCountryService');
 const { brokerReportUrl, ensureAgentNumber, siteUrl } = require('./agentWeeklyReportService');
+const { cardToken, cardVersion } = require('./agentReportCardService');
 
 const STATS_TIMEOUT_MS = () => Number(process.env.AGENT_WELCOME_STATS_TIMEOUT_MS || 6000);
 
@@ -78,6 +79,27 @@ async function fetchAgent(agentId) {
   return result.rows[0] || null;
 }
 
+function agentProfileUrl(agent) {
+  return `${siteUrl()}/agents/${encodeURIComponent(agent.id)}`;
+}
+
+function shareCardUrl(agent, version) {
+  const stamp = String(version || new Date().toISOString().slice(0, 10).replace(/\D/g, ''));
+  const token = cardToken(`${agent.id}:share`, stamp);
+  if (!token) return '';
+  return `${siteUrl()}/api/agents/share-card/${encodeURIComponent(agent.id)}.png?v=${stamp}&t=${token}`;
+}
+
+async function countAgentListings(agentId) {
+  const result = await safe(db.query(
+    `SELECT COUNT(*)::int AS total FROM properties p
+     WHERE (p.agent_id = $1 OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text)
+       AND p.status = 'approved'`,
+    [agentId]
+  ), { rows: [] });
+  return toInt(result.rows[0]?.total);
+}
+
 async function buildWelcomePack(agentId) {
   const agent = await ensureAgentNumber(await fetchAgent(agentId));
   if (!agent) {
@@ -85,8 +107,14 @@ async function buildWelcomePack(agentId) {
     error.status = 404;
     throw error;
   }
-  const stats = await computePlatformStats();
-  return { agent, stats };
+  const [stats, listings] = await Promise.all([computePlatformStats(), countAgentListings(agent.id)]);
+  return {
+    agent,
+    stats,
+    listings,
+    profile_url: agentProfileUrl(agent),
+    share_card_url: shareCardUrl(agent)
+  };
 }
 
 const VERTICALS = 'Rent · Buy · Land · Commercial · Students · Off Plan · Short stays';
@@ -103,9 +131,15 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   }
 
   lines.push('');
+  lines.push('*Your profile is live*');
+  lines.push(`${agentProfileUrl(agent)}`);
+  lines.push('Everything you list shows there — send that link to any buyer, or put the picture card below on your WhatsApp status.');
+
+  lines.push('');
   lines.push('*What makaug is*');
-  lines.push('Uganda’s property discovery platform — where people search for a home, land, an office, student digs, an off-plan unit or a short stay:');
+  lines.push('Uganda’s property market, online — and we are building it into the place every Ugandan looks first, at home and abroad:');
   lines.push(VERTICALS);
+  lines.push('The site runs in 9 languages, including Luganda, Swahili and Arabic, because our buyers are not all in Kampala.');
 
   const scale = [];
   if (stats.live_listings) scale.push(`• ${nfmt(stats.live_listings)} live listings`);
@@ -134,6 +168,7 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push('• Buyers arrive from Google, our Ask AI search and our WhatsApp assistant');
   lines.push('• Video-first listings: a walk-through can sell to someone who is 6,000 km away');
   lines.push('• Every listing gets its first 7 days free');
+  lines.push('• Built for investors too: off plan, buy-to-let and a mortgage finder');
   lines.push('• You get a weekly WhatsApp report: views, visitors, enquiries and the countries watching you');
 
   lines.push('');
@@ -147,6 +182,14 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push(`Your dashboard: ${brokerReportUrl()}`);
   lines.push('Welcome aboard — reply to this message any time you need a hand.');
   return lines.join('\n').slice(0, 4000);
+}
+
+function buildShareCardCaption({ agent = {} } = {}) {
+  const lines = ['*Your makaug share card*'];
+  lines.push('Save this picture and put it on your WhatsApp status, or send it to a buyer.');
+  lines.push('Anyone who scans the code lands on your makaug profile and every property you have live.');
+  lines.push(agentProfileUrl(agent));
+  return lines.join('\n');
 }
 
 function buildWelcomeCaption({ agent = {}, stats = {} } = {}) {
@@ -165,6 +208,10 @@ function buildWelcomeCaption({ agent = {}, stats = {} } = {}) {
 
 module.exports = {
   VERTICALS,
+  agentProfileUrl,
+  buildShareCardCaption,
+  countAgentListings,
+  shareCardUrl,
   buildWelcomeCaption,
   buildWelcomeMessage,
   buildWelcomePack,

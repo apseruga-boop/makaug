@@ -12838,8 +12838,12 @@ router.get('/agent-welcome/:agentId', async (req, res, next) => {
       data: {
         agent: pack.agent,
         stats: pack.stats,
+        listings: pack.listings,
+        profile_url: pack.profile_url,
+        share_card_url: pack.share_card_url,
         message: agentWelcome.buildWelcomeMessage(pack),
         caption: agentWelcome.buildWelcomeCaption(pack),
+        share_caption: agentWelcome.buildShareCardCaption(pack),
         video_url: agentReportVideos.isVideoRenderingAvailable()
           ? agentReportVideos.welcomeVideoUrl(pack.agent, agentWeeklyReports.siteUrl(), version)
           : ''
@@ -12887,7 +12891,20 @@ router.post('/agent-welcome/:agentId/send', async (req, res, next) => {
         actorId: actor,
         metadata: { message_kind: 'agent_welcome', agent_id: pack.agent.id, preview, part: 'full_welcome', reply_dedupe_key: `${dedupeBase}:text` }
       });
-      return { media_id: first?.id || null, text_id: full?.id || null };
+      // Third: the share card, ready for the agent's WhatsApp status.
+      let share = null;
+      if (pack.share_card_url) {
+        share = await queueWhatsappWebBridgeMessage({
+          recipient: to,
+          text: agentWelcome.buildShareCardCaption(pack),
+          mediaUrl: pack.share_card_url,
+          mediaType: 'image',
+          source,
+          actorId: actor,
+          metadata: { message_kind: 'agent_welcome', agent_id: pack.agent.id, preview, part: 'share_card', reply_dedupe_key: `${dedupeBase}:share` }
+        });
+      }
+      return { media_id: first?.id || null, text_id: full?.id || null, share_id: share?.id || null };
     };
 
     if (videoUrl) {
