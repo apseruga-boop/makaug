@@ -12718,7 +12718,8 @@ function agentReportPayload(report) {
     whatsapp_text: agentWeeklyReports.buildWhatsAppReportMessage(report),
     whatsapp_caption: agentWeeklyReports.buildWhatsAppCardCaption(report),
     card_url: agentReportCards.reportCardUrl(report, agentWeeklyReports.siteUrl()),
-    video_url: agentReportVideos.isVideoRenderingAvailable() ? agentReportVideos.reportVideoUrl(report, agentWeeklyReports.siteUrl()) : ''
+    video_url: agentReportVideos.isVideoRenderingAvailable() ? agentReportVideos.reportVideoUrl(report, agentWeeklyReports.siteUrl()) : '',
+    video_error: agentReportVideos.lastVideoError(report.id)
   };
 }
 

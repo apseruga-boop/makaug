@@ -15,6 +15,7 @@ const FPS = 15;
 const FONT = "'Noto Sans', 'DejaVu Sans', Arial, sans-serif";
 const CACHE_DIR = path.join(os.tmpdir(), 'makaug-report-videos');
 const inflight = new Map();
+const lastErrors = new Map(); // report id -> last render failure, for the admin desk
 const RENDER_TIMEOUT_MS = Number(process.env.AGENT_REPORT_VIDEO_TIMEOUT_MS || 150000);
 
 const K = {
@@ -428,9 +429,20 @@ async function ensureReportVideo(report, version) {
   if (fs.existsSync(file)) return file;
   const key = file;
   if (!inflight.has(key)) {
-    inflight.set(key, encodeVideo(report, file).finally(() => inflight.delete(key)));
+    inflight.set(key, encodeVideo(report, file)
+      .then((result) => { lastErrors.delete(report.id); return result; })
+      .catch((error) => {
+        lastErrors.set(report.id, `${error.message}`.slice(0, 300));
+        console.error('[agent-report] video render failed', report.id, error);
+        throw error;
+      })
+      .finally(() => inflight.delete(key)));
   }
   return inflight.get(key);
+}
+
+function lastVideoError(reportId) {
+  return lastErrors.get(reportId) || null;
 }
 
 function reportVideoUrl(report, baseUrl) {
@@ -447,5 +459,6 @@ module.exports = {
   ensureReportVideo,
   frameSvg,
   isVideoRenderingAvailable,
+  lastVideoError,
   reportVideoUrl
 };
