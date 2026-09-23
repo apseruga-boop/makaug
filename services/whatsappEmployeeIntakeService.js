@@ -210,6 +210,14 @@ function parseIntakeFixChoice(value = '') {
   });
 }
 
+/** Only read after a search has already come back empty. */
+function parseAgentLookupChoice(value = '') {
+  return choice(value, {
+    search: ['1', 'search', 'search again', 'try again', 'again'],
+    new: ['2', 'new', 'new agent', 'add', 'add them', 'not registered', 'add new']
+  });
+}
+
 function parseSkipRequest(value = '') {
   const text = cleanText(value).toLowerCase().replace(/[.!]+$/, '');
   if (!text) return false;
@@ -320,6 +328,7 @@ module.exports = {
   employeeIntakeFixPrompt,
   employeeMediaPrompt,
   employeePropertyCountPrompt,
+  parseAgentLookupChoice,
   parseIdentityLaterRequest,
   parseIntakeConfirmation,
   parseIntakeFixChoice,
