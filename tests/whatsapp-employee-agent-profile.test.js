@@ -212,6 +212,75 @@ test('the logo is asked for, can be skipped, and is shown on the confirmation', 
   assert.ok(!/Logo:/.test(customer), 'a private owner has no profile, so no logo line');
 });
 
+/**
+ * Answering "yes, already registered" for someone who is not registered was an
+ * infinite loop: the search fails, you retype the name, it fails again. The way
+ * out was the word NEW buried in a sentence, and three separate attempts in one
+ * morning never found it.
+ */
+test('a failed agent search offers adding them, as a numbered choice', async () => {
+  const db = require('../config/database');
+  const originalQuery = db.query;
+  let saved = null;
+  db.query = async (sql, params = []) => {
+    if (/UPDATE whatsapp_sessions/i.test(sql)) { saved = JSON.parse(params[2]); return { rows: [] }; }
+    if (/FROM agents/i.test(sql)) return { rows: [] };
+    return { rows: [] };
+  };
+  try {
+    const route = require('../routes/whatsapp').__test;
+    const at = (currentStep, body, sessionData) => route.handleEmployeeWhatsappIntake({
+      phone: '+447757773202',
+      body,
+      session: { current_step: currentStep, session_data: sessionData }
+    });
+
+    let data = { whatsapp_employee_intake: true, employee_role: 'agent', agent_already_registered: true };
+    const missed = await at('employee_agent_lookup', 'Quick auctioneers', data);
+    assert.strictEqual(missed.nextStep, 'employee_agent_lookup');
+    assert.match(missed.message, /No approved agent on makaug\.com matches/);
+    assert.match(missed.message, /2 — Add them as a new agent/);
+    data = saved;
+    assert.strictEqual(data.agent_lookup_failed, true);
+
+    const adding = await at('employee_agent_lookup', '2', data);
+    assert.strictEqual(adding.nextStep, 'employee_new_agent_details',
+      '"2" after a failed search must start the new agent, not search for an agent called "2"');
+    data = saved;
+    assert.strictEqual(data.agent_already_registered, false);
+    assert.ok(!data.agent_lookup_failed, 'the failed-search state must not persist');
+  } finally {
+    db.query = originalQuery;
+  }
+});
+
+test('"2" is only a menu answer straight after a failed search', () => {
+  const { parseAgentLookupChoice } = require('../services/whatsappEmployeeIntakeService');
+  assert.strictEqual(parseAgentLookupChoice('2'), 'new');
+  assert.strictEqual(parseAgentLookupChoice('1'), 'search');
+  assert.strictEqual(parseAgentLookupChoice('Quickway Auctioneers'), '',
+    'a name is a search term, never a menu answer');
+});
+
+test('staff can move private-owner listings onto an agent profile', () => {
+  assert.ok(
+    adminSource.includes("router.post('/agents/from-listings'"),
+    'the repair must be an ordinary staff action, not a database job'
+  );
+  assert.ok(
+    adminSource.includes("lister_type = 'agent'"),
+    'the moved listings must read as agent listings'
+  );
+  assert.ok(
+    adminSource.includes('Identity document carried over from the listing it was supplied with'),
+    'the ID already collected must follow the person, not be asked for twice'
+  );
+  assert.ok(
+    adminSource.includes("'listing_reassigned_to_agent'"),
+    'every moved listing must leave a moderation trail'
+  );
+});
+
 test('staff can add an agent logo from the dashboard', () => {
   assert.ok(
     adminSource.includes("router.patch('/agents/:id/profile-photo'"),
