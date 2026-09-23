@@ -9168,6 +9168,51 @@ router.post('/agents/:id/public-profile-approval', async (req, res, next) => {
   }
 });
 
+/**
+ * An agent with no logo reads as an empty profile on a portal people are being
+ * asked to trust. The WhatsApp intake now asks for one, and this is how staff
+ * add or replace it for an agent who was onboarded before that, or whose logo
+ * arrives by email afterwards.
+ */
+router.patch('/agents/:id/profile-photo', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const clear = parseBooleanLike(body.clear, false);
+    const profilePhotoUrl = clear ? '' : cleanText(body.profile_photo_url).slice(0, 5 * 1024 * 1024);
+
+    if (!clear) {
+      if (!profilePhotoUrl) {
+        return res.status(400).json({ ok: false, error: 'A profile photo or logo is required' });
+      }
+      if (!(/^data:image\//i.test(profilePhotoUrl) || /^https?:\/\//i.test(profilePhotoUrl))) {
+        return res.status(400).json({ ok: false, error: 'Profile photo must be an image data URL or public HTTPS URL' });
+      }
+    }
+
+    const updated = await db.query(
+      `UPDATE agents
+       SET profile_photo_url = NULLIF($2::text, ''),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, full_name, company_name, profile_photo_url, status, updated_at`,
+      [req.params.id, profilePhotoUrl]
+    );
+    if (!updated.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Agent not found' });
+    }
+
+    await writeAudit('admin_agent_profile_photo_updated', {
+      agent_id: req.params.id,
+      cleared: clear,
+      source: /^data:image\//i.test(profilePhotoUrl) ? 'upload' : 'url'
+    }, adminActorId(req));
+
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.patch('/agents/:id/featured', async (req, res, next) => {
   try {
     const featured = req.body.featured === true || String(req.body.featured || '').toLowerCase() === 'true';

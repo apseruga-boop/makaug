@@ -77,8 +77,10 @@ const {
   buildEmployeePublicDescription,
   cleanEmployeePropertyCaption,
   employeeAgentExistingPrompt,
+  employeeAgentLogoPrompt,
   employeeIntakePhoneAllowed,
   employeeIntakeConfirmPrompt,
+  employeeIntakeFixPrompt,
   employeeMediaPrompt,
   employeePropertyCountPrompt,
   employeeRolePrompt,
@@ -91,8 +93,10 @@ const {
   parseEmployeeRole,
   parseIdentityLaterRequest,
   parseIntakeConfirmation,
+  parseIntakeFixChoice,
   parseNewAgentDetails,
   parsePropertyBatchMode,
+  parseSkipRequest,
   parseYesNo
 } = require('../services/whatsappEmployeeIntakeService');
 const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificationService');
@@ -3520,6 +3524,7 @@ function employeeMediaValidationIsIdentityDocument(validation = {}) {
 
 async function storeEmployeeMediaCandidate(candidate, {
   privateMedia = false,
+  profilePhoto = false,
   phone = '',
   inboundMessageId = '',
   index = 0,
@@ -3577,15 +3582,21 @@ async function storeEmployeeMediaCandidate(candidate, {
       if (employeeMediaValidationIsIdentityDocument(mediaValidation)) {
         throw new Error('Private identity media rejected from property storage');
       }
+      // A logo is not a property photo, so the property-slot verdict says
+      // nothing about it. The identity check above still stands: an ID sent by
+      // mistake is never published.
+      if (profilePhoto) publicEligible = true;
     }
     const keyPrefix = privateMedia ? 'whatsapp-employee-intake/private-id'
-      : (kind === 'image' && !publicEligible ? 'whatsapp-employee-intake/source-evidence' : `whatsapp-employee-intake/${kind}`);
+      : (profilePhoto ? 'whatsapp-employee-intake/agent-profile'
+        : (kind === 'image' && !publicEligible ? 'whatsapp-employee-intake/source-evidence' : `whatsapp-employee-intake/${kind}`));
     storedUrl = await storeDataUrl(candidate.dataUrl, {
       keyPrefix,
       filename,
       label: privateMedia
         ? 'employee intake identity document'
-        : (kind === 'image' && !publicEligible ? 'employee intake source evidence' : `employee intake ${kind}`),
+        : (profilePhoto ? 'employee intake agent profile photo'
+          : (kind === 'image' && !publicEligible ? 'employee intake source evidence' : `employee intake ${kind}`)),
       allowedMimeTypes,
       maxBytes,
       isPrivate: privateMedia
@@ -3652,10 +3663,12 @@ async function storeEmployeeMediaCandidate(candidate, {
       if (employeeMediaValidationIsIdentityDocument(mediaValidation)) {
         throw new Error('Private identity media rejected from property storage');
       }
+      if (profilePhoto) publicEligible = true;
     }
     const keyPrefix = privateMedia
       ? 'whatsapp-employee-intake/private-id'
-      : (kind === 'image' && !publicEligible ? 'whatsapp-employee-intake/source-evidence' : `whatsapp-employee-intake/${kind}`);
+      : (profilePhoto ? 'whatsapp-employee-intake/agent-profile'
+        : (kind === 'image' && !publicEligible ? 'whatsapp-employee-intake/source-evidence' : `whatsapp-employee-intake/${kind}`));
     const key = `${keyPrefix}/${Date.now()}-${crypto.randomUUID()}-${filename}`;
     const stored = await uploadBufferToS3({ bytes, mimeType: responseMime, key });
     storedUrl = privateMedia ? stored.internalRef : (stored.publicUrl || stored.internalRef);
@@ -4018,10 +4031,12 @@ async function findEmployeeApprovedAgents(query = '') {
   return result.rows;
 }
 
-async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}) {
+async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}, options = {}) {
+  const profilePhotoUrl = normalizeInput(options.profilePhotoUrl || '');
   const phoneDigits = String(details.phone || '').replace(/\D/g, '');
   const existing = await db.query(
-    `SELECT id, full_name, company_name, phone, whatsapp, email, status, identity_document_url
+    `SELECT id, full_name, company_name, phone, whatsapp, email, status,
+            identity_document_url, profile_photo_url
        FROM agents
       WHERE regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1
          OR regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $1
@@ -4030,8 +4045,40 @@ async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}) {
     [phoneDigits]
   );
   if (existing.rows[0]) {
-    const existingAgent = existing.rows[0];
-    if (existingAgent.status === 'pending' && !existingAgent.identity_document_url) {
+    let existingAgent = existing.rows[0];
+    // The employee can correct the name, company or logo at the confirmation
+    // step. A pending record that is still waiting for staff has to follow
+    // those corrections, or the profile staff approve is the uncorrected one.
+    if (existingAgent.status === 'pending' && (profilePhotoUrl || normalizeInput(details.fullName))) {
+      const corrected = await db.query(
+        `UPDATE agents
+            SET full_name = COALESCE(NULLIF($2::text, ''), full_name),
+                company_name = COALESCE(NULLIF($3::text, ''), company_name),
+                profile_photo_url = COALESCE(NULLIF($4::text, ''), profile_photo_url),
+                updated_at = NOW()
+          WHERE id = $1 AND status = 'pending'
+          RETURNING id, full_name, company_name, phone, whatsapp, email, status,
+                    identity_document_url, profile_photo_url`,
+        [
+          existingAgent.id,
+          normalizeInput(details.fullName) || null,
+          normalizeInput(details.company) || null,
+          profilePhotoUrl || null
+        ]
+      );
+      if (corrected.rows[0]) existingAgent = corrected.rows[0];
+    } else if (profilePhotoUrl && !existingAgent.profile_photo_url) {
+      const photographed = await db.query(
+        `UPDATE agents
+            SET profile_photo_url = $2, updated_at = NOW()
+          WHERE id = $1 AND COALESCE(profile_photo_url, '') = ''
+          RETURNING id, full_name, company_name, phone, whatsapp, email, status,
+                    identity_document_url, profile_photo_url`,
+        [existingAgent.id, profilePhotoUrl]
+      );
+      if (photographed.rows[0]) existingAgent = photographed.rows[0];
+    }
+    if (existingAgent.status === 'pending' && !existingAgent.identity_document_url && identityDocument.url) {
       const updated = await db.query(
         `UPDATE agents
             SET identity_document_name = $2,
@@ -4062,11 +4109,13 @@ async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}) {
        phone, whatsapp, districts_covered, specializations,
        identity_document_name, identity_document_url, identity_document_type,
        identity_document_uploaded_at, verification_reason,
-       privacy_consent_accepted, data_retention_notice_accepted, status
+       privacy_consent_accepted, data_retention_notice_accepted, status,
+       profile_photo_url
      ) VALUES (
        $1,$2,$3,'not_registered',2147483647,$4,$4,$5::text[],'{}'::text[],
-       $6::text,$7::text,$8::text,NOW(),$9,FALSE,FALSE,'pending'
-     ) RETURNING id, full_name, company_name, phone, whatsapp, email, status`,
+       $6::text,$7::text,$8::text,NOW(),$9,FALSE,FALSE,'pending',
+       NULLIF($10::text, '')
+     ) RETURNING id, full_name, company_name, phone, whatsapp, email, status, profile_photo_url`,
     [
       details.fullName,
       details.company || 'Independent agent',
@@ -4078,7 +4127,8 @@ async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}) {
       identityDocument.url ? identityDocument.mimeType : null,
       identityDocument.url
         ? '[WHATSAPP_EMPLOYEE_AGENT_007] Employee supplied identity media. Agent, ID and phone require manual staff verification; privacy and retention consent are not inferred.'
-        : '[WHATSAPP_EMPLOYEE_AGENT_007] No identity document yet — the agent asked to send it later. The ID must be collected and verified by staff before approval; privacy and retention consent are not inferred.'
+        : '[WHATSAPP_EMPLOYEE_AGENT_007] No identity document yet — the agent asked to send it later. The ID must be collected and verified by staff before approval; privacy and retention consent are not inferred.',
+      profilePhotoUrl || null
     ]
   );
   return { agent: inserted.rows[0], created: true };
@@ -4910,6 +4960,48 @@ function recoverInterruptedEmployeeIntakeStep(session = {}) {
 }
 
 /** The details an employee is asked to confirm before any property is sent. */
+function employeeIntakeSubjectName(data = {}) {
+  const agentRole = data.employee_role === 'agent';
+  const details = agentRole ? (data.new_agent_details || {}) : (data.customer_details || {});
+  return normalizeInput(details.fullName || data.agent?.full_name || '');
+}
+
+function employeeIdentityPhotoPrompt(data = {}) {
+  const who = data.employee_role === 'agent' ? 'the new agent’s' : 'the customer’s';
+  return `Now send one clear photo of ${who} ID. It will be stored privately for staff verification and will never be published.\n\nIf they would rather send it later, reply *LATER* — we will carry on, and staff will chase the ID before anything is approved.`;
+}
+
+/**
+ * Where intake goes once the person's details are in hand. An ID that has
+ * already been stored — or already been deferred — is never asked for twice,
+ * which matters because the employee can come back here to correct a detail
+ * long after the ID was handled.
+ */
+function employeeIntakeStepAfterDetails(data = {}) {
+  const identityHandled = Boolean(data.identity_document_url) || data.identity_followup_required === true;
+  if (!identityHandled) return 'employee_identity_photo';
+  if (data.employee_role === 'agent'
+    && !data.agent_already_registered
+    && !data.agent_profile_photo_url
+    && !data.agent_profile_photo_skipped) {
+    return 'employee_agent_logo';
+  }
+  return 'employee_intake_confirm';
+}
+
+function employeeIntakeStepMessage(step = '', data = {}) {
+  if (step === 'employee_identity_photo') return employeeIdentityPhotoPrompt(data);
+  if (step === 'employee_agent_logo') return employeeAgentLogoPrompt(employeeIntakeSubjectName(data));
+  return employeeIntakeConfirmMessage(data);
+}
+
+async function advanceEmployeeIntakeAfterDetails(phone, data, prefix = '') {
+  const nextStep = employeeIntakeStepAfterDetails(data);
+  await replaceEmployeeSession(phone, nextStep, data);
+  const message = employeeIntakeStepMessage(nextStep, data);
+  return { handled: true, nextStep, message: prefix ? `${prefix}\n\n${message}` : message };
+}
+
 function employeeIntakeConfirmMessage(data = {}) {
   const agentRole = data.employee_role === 'agent';
   const agent = data.agent || {};
@@ -4929,7 +5021,10 @@ function employeeIntakeConfirmMessage(data = {}) {
     company: normalizeInput(details.company || agent.company_name || ''),
     district: normalizeInput(details.district || details.location || ''),
     identityReceived,
-    profileLine
+    profileLine,
+    logoReceived: agentRole && !data.agent_already_registered
+      ? Boolean(data.agent_profile_photo_url)
+      : null
   });
 }
 
@@ -5752,8 +5847,7 @@ async function handleEmployeeWhatsappIntake({
       return { handled: true, nextStep: currentStep, message: 'Please use: Full name | phone number | primary district. Company is optional; add it between the phone number and district if available.' };
     }
     data.new_agent_details = details;
-    await replaceEmployeeSession(phone, 'employee_identity_photo', data);
-    return { handled: true, nextStep: 'employee_identity_photo', message: 'Now send one clear photo of the new agent’s ID. It will be stored privately for staff verification and will never be published.\n\nIf they would rather send it later, reply *LATER* — we will carry on, and staff will chase the ID before anything is approved.' };
+    return advanceEmployeeIntakeAfterDetails(phone, data);
   }
 
   if (currentStep === 'employee_customer_details') {
@@ -5762,8 +5856,7 @@ async function handleEmployeeWhatsappIntake({
       return { handled: true, nextStep: currentStep, message: 'Please use: Full name | phone number | property location' };
     }
     data.customer_details = details;
-    await replaceEmployeeSession(phone, 'employee_identity_photo', data);
-    return { handled: true, nextStep: 'employee_identity_photo', message: 'Now send one clear photo of the customer’s ID. It will be stored privately for staff verification and will never be published.\n\nIf they would rather send it later, reply *LATER* — we will carry on, and staff will chase the ID before anything is approved.' };
+    return advanceEmployeeIntakeAfterDetails(phone, data);
   }
 
   const candidates = employeeMediaCandidates(runtime, mediaUrl);
@@ -5775,22 +5868,11 @@ async function handleEmployeeWhatsappIntake({
     if (!imageCandidates.length && parseIdentityLaterRequest(cleanBody)) {
       data.identity_followup_required = true;
       data.identity_promised_at = new Date().toISOString();
-      if (data.employee_role === 'agent') {
-        try {
-          const ensured = await ensurePendingEmployeeAgent(data.new_agent_details, {});
-          data.agent = ensured.agent;
-          data.new_agent_created = ensured.created;
-        } catch (error) {
-          logger.error('WhatsApp employee pending-agent save without ID failed:', error);
-          return { handled: true, nextStep: currentStep, message: 'I could not create the pending agent record, so intake has paused. Nothing went live. Please try again shortly.' };
-        }
-      }
-      await replaceEmployeeSession(phone, 'employee_intake_confirm', data);
-      return {
-        handled: true,
-        nextStep: 'employee_intake_confirm',
-        message: `🪪 Noted — no ID yet. It is recorded as outstanding on every property in this batch, staff will see it and chase it, and nothing is published until they are satisfied.\n\nSend the ID photo here any time.\n\n${employeeIntakeConfirmMessage(data)}`
-      };
+      return advanceEmployeeIntakeAfterDetails(
+        phone,
+        data,
+        '🪪 Noted — no ID yet. It is recorded as outstanding on every property in this batch, staff will see it and chase it, and nothing is published until they are satisfied.\n\nSend the ID photo here any time.'
+      );
     }
     if (!imageCandidates.length) {
       return { handled: true, nextStep: currentStep, message: 'I need one clear ID photo before property media can be accepted. Please send the ID as a photo, or reply *LATER* to carry on and send it afterwards.' };
@@ -5811,43 +5893,168 @@ async function handleEmployeeWhatsappIntake({
     data.identity_document_mime_type = identityDocument.mimeType;
     data.identity_document_sha256 = identityDocument.sha256 || null;
     data.identity_document_message_id = normalizeEmployeeSourceMessageId(inboundMessageId) || null;
-    if (data.employee_role === 'agent') {
-      try {
-        const ensured = await ensurePendingEmployeeAgent(data.new_agent_details, identityDocument);
-        data.agent = ensured.agent;
-        data.new_agent_created = ensured.created;
-      } catch (error) {
-        logger.error('WhatsApp employee pending-agent save failed:', error);
-        return { handled: true, nextStep: currentStep, message: 'The ID was stored privately, but I could not create the pending agent review record. Property intake has paused; nothing went live.' };
-      }
-    }
     delete data.identity_followup_required;
     delete data.identity_promised_at;
+    return advanceEmployeeIntakeAfterDetails(phone, data);
+  }
+
+  if (currentStep === 'employee_agent_logo') {
+    const logoCandidates = candidates.filter((candidate) => candidate.kind === 'image').slice(0, 1);
+    if (!logoCandidates.length) {
+      if (!parseSkipRequest(cleanBody)) {
+        return {
+          handled: true,
+          nextStep: currentStep,
+          message: `I need the logo as a photo, or reply *SKIP*.\n\n${employeeAgentLogoPrompt(employeeIntakeSubjectName(data))}`
+        };
+      }
+      data.agent_profile_photo_skipped = true;
+      await replaceEmployeeSession(phone, 'employee_intake_confirm', data);
+      return {
+        handled: true,
+        nextStep: 'employee_intake_confirm',
+        message: `No logo for now — staff can add one from the dashboard.\n\n${employeeIntakeConfirmMessage(data)}`
+      };
+    }
+    let logo;
+    try {
+      [logo] = await storeEmployeeMedia(logoCandidates, {
+        profilePhoto: true,
+        phone,
+        inboundMessageId,
+        provider: runtime.provider
+      });
+    } catch (error) {
+      logger.error('WhatsApp employee agent logo storage failed:', error);
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: 'I could not store that logo. Send it again as a photo, or reply *SKIP* and staff will add it from the dashboard.'
+      };
+    }
+    data.agent_profile_photo_url = logo.url;
+    delete data.agent_profile_photo_skipped;
     await replaceEmployeeSession(phone, 'employee_intake_confirm', data);
-    return { handled: true, nextStep: 'employee_intake_confirm', message: employeeIntakeConfirmMessage(data) };
+    return {
+      handled: true,
+      nextStep: 'employee_intake_confirm',
+      message: `🖼 Logo saved — it goes on their makaug profile.\n\n${employeeIntakeConfirmMessage(data)}`
+    };
   }
 
   if (currentStep === 'employee_intake_confirm') {
     const confirmation = parseIntakeConfirmation(cleanBody);
     if (confirmation === 'no') {
-      const backStep = data.employee_role === 'agent' ? 'employee_new_agent_details' : 'employee_customer_details';
       delete data.intake_confirmed;
-      await replaceEmployeeSession(phone, backStep, data);
+      await replaceEmployeeSession(phone, 'employee_intake_fix', data);
       return {
         handled: true,
-        nextStep: backStep,
-        message: data.employee_role === 'agent'
-          ? 'No problem. Send the corrected details in this format:\n\nFull name | phone number | primary district\n\nCompany is optional; add it between the phone number and district.'
-          : 'No problem. Send the corrected details in this format:\n\nFull name | phone number | property location'
+        nextStep: 'employee_intake_fix',
+        message: employeeIntakeFixPrompt({
+          role: data.employee_role === 'agent' ? 'agent' : 'customer',
+          hasLogo: Boolean(data.agent_profile_photo_url)
+        })
       };
     }
     if (confirmation !== 'yes') {
-      return { handled: true, nextStep: currentStep, message: `Reply *1* to confirm these details, or *2* to send them again.\n\n${employeeIntakeConfirmMessage(data)}` };
+      return { handled: true, nextStep: currentStep, message: `Reply *1* to confirm, or *2* if something needs changing.\n\n${employeeIntakeConfirmMessage(data)}` };
+    }
+    // The agent record is created here rather than at the ID step, so nothing is
+    // written until the employee has confirmed who this actually is. Answering
+    // the first question wrong used to leave the batch with no agent profile at
+    // all — nothing in the approval queue, nothing on the website.
+    if (data.employee_role === 'agent' && !data.agent?.id) {
+      try {
+        const ensured = await ensurePendingEmployeeAgent(
+          data.new_agent_details,
+          data.identity_document_url
+            ? { url: data.identity_document_url, mimeType: data.identity_document_mime_type, name: 'whatsapp-agent-id' }
+            : {},
+          { profilePhotoUrl: data.agent_profile_photo_url || '' }
+        );
+        data.agent = ensured.agent;
+        data.new_agent_created = ensured.created;
+      } catch (error) {
+        logger.error('WhatsApp employee pending-agent save failed:', error);
+        return { handled: true, nextStep: currentStep, message: 'I could not create the agent profile, so intake has paused. Nothing went live. Please try again shortly.' };
+      }
+    } else if (data.employee_role === 'agent' && data.agent?.id && data.agent_profile_photo_url) {
+      try {
+        await db.query(
+          `UPDATE agents SET profile_photo_url = $2, updated_at = NOW()
+            WHERE id = $1 AND COALESCE(profile_photo_url, '') = ''`,
+          [data.agent.id, data.agent_profile_photo_url]
+        );
+      } catch (error) {
+        logger.warn('WhatsApp employee agent logo save failed:', error);
+      }
     }
     data.intake_confirmed = true;
     data.intake_confirmed_at = new Date().toISOString();
     await replaceEmployeeSession(phone, 'employee_property_count', data);
     return { handled: true, nextStep: 'employee_property_count', message: employeePropertyCountPrompt() };
+  }
+
+  if (currentStep === 'employee_intake_fix') {
+    const fix = parseIntakeFixChoice(cleanBody);
+    const agentRole = data.employee_role === 'agent';
+    if (fix === 'role') {
+      // Switching sides: the details belong to the old answer, the privately
+      // stored ID belongs to the person and is kept.
+      if (agentRole) {
+        delete data.new_agent_details;
+        delete data.agent;
+        delete data.agent_already_registered;
+        delete data.agent_candidates;
+        delete data.new_agent_created;
+        delete data.agent_profile_photo_url;
+        delete data.agent_profile_photo_skipped;
+        data.employee_role = 'customer';
+        await replaceEmployeeSession(phone, 'employee_customer_details', data);
+        return {
+          handled: true,
+          nextStep: 'employee_customer_details',
+          message: 'Switched to a private owner — no agent profile will be created.\n\nSend the customer details in this format:\n\nFull name | phone number | property location'
+        };
+      }
+      delete data.customer_details;
+      data.employee_role = 'agent';
+      await replaceEmployeeSession(phone, 'employee_agent_existing', data);
+      return {
+        handled: true,
+        nextStep: 'employee_agent_existing',
+        message: `Switched to an agent — an agent profile will be created for staff approval.\n\n${employeeAgentExistingPrompt()}`
+      };
+    }
+    if (fix === 'logo' && agentRole) {
+      delete data.agent_profile_photo_url;
+      delete data.agent_profile_photo_skipped;
+      await replaceEmployeeSession(phone, 'employee_agent_logo', data);
+      return {
+        handled: true,
+        nextStep: 'employee_agent_logo',
+        message: employeeAgentLogoPrompt(employeeIntakeSubjectName(data))
+      };
+    }
+    if (fix === 'details') {
+      const backStep = agentRole ? 'employee_new_agent_details' : 'employee_customer_details';
+      await replaceEmployeeSession(phone, backStep, data);
+      return {
+        handled: true,
+        nextStep: backStep,
+        message: agentRole
+          ? 'Send the corrected details in this format:\n\nFull name | phone number | primary district\n\nCompany is optional; add it between the phone number and district.'
+          : 'Send the corrected details in this format:\n\nFull name | phone number | property location'
+      };
+    }
+    return {
+      handled: true,
+      nextStep: currentStep,
+      message: employeeIntakeFixPrompt({
+        role: agentRole ? 'agent' : 'customer',
+        hasLogo: Boolean(data.agent_profile_photo_url)
+      })
+    };
   }
 
   if (currentStep === 'employee_property_count') {
