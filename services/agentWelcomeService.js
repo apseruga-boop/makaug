@@ -109,7 +109,7 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
 
   const scale = [];
   if (stats.live_listings) scale.push(`• ${nfmt(stats.live_listings)} live listings`);
-  if (stats.agents) scale.push(`• ${nfmt(stats.agents)} agents and brokers already listing`);
+  if (toInt(stats.agents) >= 25) scale.push(`• ${nfmt(stats.agents)} agents and brokers already listing`);
   if (stats.views_30d) scale.push(`• ${nfmt(stats.views_30d)} listing views in the last 30 days`);
   if (stats.visitors_30d) scale.push(`• ${nfmt(stats.visitors_30d)} different people searching in the last 30 days`);
   if (scale.length) {
@@ -122,7 +122,7 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push('');
   lines.push('*Built for the diaspora*');
   if (diaspora.length) {
-    lines.push(`Ugandans abroad are house-hunting from ${diaspora.map((c) => c.name).slice(0, 4).join(', ')} and more — they find your listing before they land.`);
+    lines.push(`We only began recording where visitors browse from this week, and Ugandans abroad are already searching from ${diaspora.map((c) => c.name).slice(0, 4).join(', ')} — they find your listing before they land.`);
   } else {
     lines.push('Ugandans in the UK, UAE, USA and across East Africa buy and build at home — they search first, then send money or fly in.');
   }
@@ -156,7 +156,7 @@ function buildWelcomeCaption({ agent = {}, stats = {} } = {}) {
   const bits = [];
   if (stats.live_listings) bits.push(`${nfmt(stats.live_listings)} live listings`);
   if (stats.visitors_30d) bits.push(`${nfmt(stats.visitors_30d)} searchers a month`);
-  if (stats.countries_count) bits.push(`visitors from ${nfmt(stats.countries_count)} countries`);
+  if (toInt(stats.countries_count) >= 5) bits.push(`visitors from ${nfmt(stats.countries_count)} countries`);
   if (bits.length) lines.push(bits.join(' · '));
   lines.push('');
   lines.push('The full details follow in the next message.');

@@ -288,6 +288,9 @@ test('the new-agent welcome pack explains makaug, the audience and the diaspora'
   }
   assert.ok(message.length < 4096);
   assert.match(welcome.buildWelcomeCaption(pack), /visitors from 9 countries/);
+  const early = welcome.buildWelcomeMessage({ ...pack, stats: { ...pack.stats, agents: 7, countries_count: 4 } });
+  assert.ok(!early.includes('7 agents'), 'a handful of agents is not a selling point');
+  assert.ok(early.includes('began recording where visitors browse from this week'), 'country data is described honestly');
 
   const video = require('../services/agentReportVideoService');
   const scene = video.buildWelcomeScenes({ ...pack, stats: { ...pack.stats, top_countries: pack.stats.diaspora_countries } });
