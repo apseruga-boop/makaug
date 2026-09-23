@@ -275,3 +275,34 @@ test('sends are de-duplicated per report, not per identical wording', () => {
   assert.match(admin, /reply_dedupe_key: `\$\{dedupeBase\}:media`/);
   assert.match(admin, /reply_dedupe_key: `\$\{dedupeBase\}:text`/);
 });
+
+test('the new-agent welcome pack explains makaug, the audience and the diaspora', async () => {
+  const welcome = require('../services/agentWelcomeService');
+  const pack = {
+    agent: { id: 'a1', full_name: 'Grace Nabwire', makaug_agent_number: 'MKA-AG-7654321' },
+    stats: { live_listings: 4210, agents: 212, views_30d: 38400, visitors_30d: 15200, countries_count: 9, diaspora_countries: [{ code: 'GB', name: 'United Kingdom' }, { code: 'AE', name: 'United Arab Emirates' }] }
+  };
+  const message = welcome.buildWelcomeMessage(pack);
+  for (const needle of ['Welcome to makaug.com', 'MKA-AG-7654321', 'discovery platform', '4,210 live listings', '15,200 different people', 'United Kingdom', 'no commission', 'first 7 days free', 'makaug.com/list-property']) {
+    assert.ok(message.includes(needle), `missing ${needle}`);
+  }
+  assert.ok(message.length < 4096);
+  assert.match(welcome.buildWelcomeCaption(pack), /visitors from 9 countries/);
+
+  const video = require('../services/agentReportVideoService');
+  const scene = video.buildWelcomeScenes({ ...pack, stats: { ...pack.stats, top_countries: pack.stats.diaspora_countries } });
+  const total = video.welcomeDuration({ ...pack, stats: pack.stats });
+  assert.ok(total > 18 && total < 40, `welcome film length ${total}`);
+  const frames = Array.from({ length: Math.ceil(total * 3) }, (_, i) => video.frameSvg(scene, i / 3)).join('');
+  for (const needle of ['Welcome to', 'discovery platform', 'Short stays', 'live listings', 'Your number, your deal', 'Your first listing in 3 steps', 'MKA-AG-7654321']) {
+    assert.ok(frames.includes(needle), `film missing ${needle}`);
+  }
+
+  const admin = fs.readFileSync('routes/admin.js', 'utf8');
+  assert.match(admin, /router\.post\('\/agent-welcome\/:agentId\/send'/);
+  assert.match(admin, /message_kind: 'agent_welcome'/);
+  const html = fs.readFileSync('index.html', 'utf8');
+  assert.match(html, /Welcome pack for a new agent/);
+  const app = fs.readFileSync('assets/makaug-app.js', 'utf8');
+  assert.match(app, /async function sendAgentWelcome/);
+});

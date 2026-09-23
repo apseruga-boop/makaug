@@ -12253,6 +12253,76 @@ async function sendAdminAgentReport(preview = false) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Welcome pack for a new agent (admin desk)
+// ---------------------------------------------------------------------------
+
+function selectedAdminAgentId() {
+  const raw = document.getElementById("admin-agent-report-search")?.value.trim() || "";
+  const agent = adminAgentReportAgents[raw];
+  if (agent) return agent.id;
+  if (adminAgentReportCurrent?.agent?.id) return adminAgentReportCurrent.agent.id;
+  return "";
+}
+
+async function previewAgentWelcome() {
+  const agentId = selectedAdminAgentId();
+  const box = document.getElementById("admin-agent-welcome-preview");
+  if (!agentId) {
+    toast("Pick an agent from the list first.");
+    return;
+  }
+  if (box) {
+    box.classList.remove("hidden");
+    box.innerHTML = `<p class="text-sm text-gray-600">Building the welcome pack…</p>`;
+  }
+  try {
+    const res = await apiRequest(`/api/admin/agent-welcome/${encodeURIComponent(agentId)}`, { headers: adminAuthHeaders() });
+    const data = res?.data || {};
+    const videoUrl = agentReportSafeUrl(data.video_url);
+    if (box) {
+      box.innerHTML = `
+        <div class="grid gap-4 lg:grid-cols-[300px_1fr]">
+          ${videoUrl ? `<video src="${adminAttr(videoUrl)}" controls playsinline preload="none" class="w-full rounded-xl border border-gray-200 bg-white"></video>` : `<div class="rounded-xl border border-dashed border-gray-300 p-4 text-xs text-gray-600">Video is not available on this server; the message still sends.</div>`}
+          <div>
+            <div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Message to ${adminEscape(data.agent?.full_name || "the agent")} (${adminEscape(data.agent?.makaug_agent_number || "no agent ID")})</div>
+            <pre class="whitespace-pre-wrap rounded-xl bg-white p-3 text-xs text-gray-800 max-h-96 overflow-auto">${adminEscape(data.message || "")}</pre>
+          </div>
+        </div>`;
+    }
+  } catch (error) {
+    if (box) box.innerHTML = `<p class="text-sm text-red-700">${adminEscape(error?.message || "Couldn't build the welcome pack.")}</p>`;
+  }
+}
+
+async function sendAgentWelcome(preview = false) {
+  const agentId = selectedAdminAgentId();
+  if (!agentId) {
+    toast("Pick an agent from the list first.");
+    return;
+  }
+  const body = {};
+  if (preview) {
+    let stored = "";
+    try { stored = window.localStorage.getItem("makaug_agent_report_preview_to") || ""; } catch (_) {}
+    const to = (window.prompt("Send the welcome pack to which WhatsApp number? (country code, no +)", stored) || "").replace(/\D+/g, "");
+    if (to.length < 9) {
+      toast("Enter a WhatsApp number with its country code.");
+      return;
+    }
+    try { window.localStorage.setItem("makaug_agent_report_preview_to", to); } catch (_) {}
+    body.preview_to = to;
+  } else if (!window.confirm("Send the welcome pack to this agent on WhatsApp?")) {
+    return;
+  }
+  try {
+    const res = await apiRequest(`/api/admin/agent-welcome/${encodeURIComponent(agentId)}/send`, { method: "POST", headers: adminAuthHeaders(), body });
+    toast(preview ? `Welcome pack sent to ${res?.data?.to}.` : "Welcome pack sent to the agent.");
+  } catch (error) {
+    toast(error?.message || "Couldn't send the welcome pack.");
+  }
+}
+
 function wireBrokerDashboardTabs() {
   const tabs = document.getElementById("broker-dashboard-tabs");
   if (!tabs || tabs.dataset.wired === "true") {

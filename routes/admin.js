@@ -223,6 +223,7 @@ const {
 const agentWeeklyReports = require('../services/agentWeeklyReportService');
 const agentReportCards = require('../services/agentReportCardService');
 const agentReportVideos = require('../services/agentReportVideoService');
+const agentWelcome = require('../services/agentWelcomeService');
 
 const router = express.Router();
 
@@ -12823,6 +12824,84 @@ router.patch('/agent-reports/:id', async (req, res, next) => {
       status: cleanText(body.status || '') || undefined
     }, adminActorId(req));
     return res.json({ ok: true, data: agentReportPayload(report) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/agent-welcome/:agentId', async (req, res, next) => {
+  try {
+    const pack = await agentWelcome.buildWelcomePack(cleanText(req.params.agentId));
+    const version = new Date().toISOString().slice(0, 10).replace(/\D/g, '');
+    return res.json({
+      ok: true,
+      data: {
+        agent: pack.agent,
+        stats: pack.stats,
+        message: agentWelcome.buildWelcomeMessage(pack),
+        caption: agentWelcome.buildWelcomeCaption(pack),
+        video_url: agentReportVideos.isVideoRenderingAvailable()
+          ? agentReportVideos.welcomeVideoUrl(pack.agent, agentWeeklyReports.siteUrl(), version)
+          : ''
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/agent-welcome/:agentId/send', async (req, res, next) => {
+  try {
+    const pack = await agentWelcome.buildWelcomePack(cleanText(req.params.agentId));
+    const previewTo = String(req.body?.preview_to || '').replace(/\D+/g, '');
+    const preview = Boolean(previewTo);
+    const to = preview ? previewTo : String(pack.agent.whatsapp || pack.agent.phone || '').replace(/\D+/g, '');
+    if (!to || to.length < 9) return res.status(400).json({ ok: false, error: 'No WhatsApp number to send to' });
+
+    const actor = adminActorId(req);
+    const source = agentReportWhatsappSource();
+    const version = new Date().toISOString().slice(0, 10).replace(/\D/g, '');
+    const dedupeBase = `agent_welcome:${pack.agent.id}:${preview ? `preview:${Date.now()}` : version}`;
+    const message = agentWelcome.buildWelcomeMessage(pack);
+    const caption = agentWelcome.buildWelcomeCaption(pack);
+    const videoUrl = agentReportVideos.isVideoRenderingAvailable()
+      ? agentReportVideos.welcomeVideoUrl(pack.agent, agentWeeklyReports.siteUrl(), version)
+      : '';
+
+    const queueWelcome = async (media) => {
+      const first = media
+        ? await queueWhatsappWebBridgeMessage({
+          recipient: to,
+          text: caption,
+          mediaUrl: media,
+          mediaType: 'video',
+          source,
+          actorId: actor,
+          metadata: { message_kind: 'agent_welcome', agent_id: pack.agent.id, preview, reply_dedupe_key: `${dedupeBase}:media` }
+        })
+        : null;
+      const full = await queueWhatsappWebBridgeMessage({
+        recipient: to,
+        text: message,
+        source,
+        actorId: actor,
+        metadata: { message_kind: 'agent_welcome', agent_id: pack.agent.id, preview, part: 'full_welcome', reply_dedupe_key: `${dedupeBase}:text` }
+      });
+      return { media_id: first?.id || null, text_id: full?.id || null };
+    };
+
+    if (videoUrl) {
+      agentReportVideos.ensureWelcomeVideo(pack, version)
+        .then(() => queueWelcome(videoUrl))
+        .catch((error) => {
+          console.warn('[agent-welcome] video render failed, sending text only:', error.message);
+          return queueWelcome('');
+        })
+        .catch((error) => console.warn('[agent-welcome] WhatsApp queue failed:', error.message));
+      return res.json({ ok: true, data: { to, preview, format: 'video', status: 'rendering' } });
+    }
+    const queued = await queueWelcome('');
+    return res.json({ ok: true, data: { to, preview, format: 'text', queued } });
   } catch (error) {
     return next(error);
   }

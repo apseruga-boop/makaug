@@ -13,7 +13,8 @@ const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride'
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { getAgentFacingReport, getReportById, listAgentReportWeeks, siteUrl } = require('../services/agentWeeklyReportService');
 const { renderReportCardPng, reportCardUrl, verifyCardToken } = require('../services/agentReportCardService');
-const { ensureReportVideo, reportVideoUrl, isVideoRenderingAvailable } = require('../services/agentReportVideoService');
+const { ensureReportVideo, ensureWelcomeVideo, reportVideoUrl, isVideoRenderingAvailable } = require('../services/agentReportVideoService');
+const { buildWelcomePack } = require('../services/agentWelcomeService');
 
 const router = express.Router();
 const KNOWN_AGENT_SOCIAL_LINKS = [
@@ -333,6 +334,24 @@ router.get('/report-video/:id.mp4', async (req, res, next) => {
     if (!report) return res.status(404).json({ ok: false, error: 'Not found' });
     const file = await ensureReportVideo(report, version);
     res.set('Cache-Control', 'private, max-age=300');
+    res.set('X-Robots-Tag', 'noindex');
+    return res.sendFile(file, { headers: { 'Content-Type': 'video/mp4' } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Public (signed) welcome film for a new agent, fetched by WhatsApp on send.
+router.get('/welcome-video/:id.mp4', async (req, res, next) => {
+  try {
+    const id = cleanText(req.params.id);
+    const version = cleanText(req.query.v || '');
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !verifyCardToken(`${id}:welcome`, version, cleanText(req.query.t || ''))) {
+      return res.status(404).json({ ok: false, error: 'Not found' });
+    }
+    const pack = await buildWelcomePack(id);
+    const file = await ensureWelcomeVideo(pack, version);
+    res.set('Cache-Control', 'private, max-age=600');
     res.set('X-Robots-Tag', 'noindex');
     return res.sendFile(file, { headers: { 'Content-Type': 'video/mp4' } });
   } catch (error) {

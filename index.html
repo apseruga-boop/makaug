@@ -8775,6 +8775,21 @@
             </label>
             <button type="button" onclick="generateAdminAgentReport()" class="min-h-[40px] rounded-xl bg-gray-900 px-4 text-sm font-bold text-white">Generate report</button>
           </div>
+          <div class="mb-5 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+            <div class="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h3 class="text-lg font-black text-gray-900">Welcome pack for a new agent</h3>
+                <p class="text-sm text-gray-700">A short film and a full WhatsApp message: what makaug is, the audience, the diaspora, and how to post a first listing. Pick the agent above first.</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" onclick="previewAgentWelcome()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold">Preview pack</button>
+                <button type="button" onclick="sendAgentWelcome(true)" class="rounded-lg border border-green-700 px-4 py-2 text-sm font-bold text-green-800">Send to my WhatsApp</button>
+                <button type="button" onclick="sendAgentWelcome(false)" class="rounded-lg bg-green-700 px-4 py-2 text-sm font-bold text-white">Send to agent</button>
+              </div>
+            </div>
+            <div id="admin-agent-welcome-preview" class="mt-3 hidden"></div>
+          </div>
+
           <div class="grid gap-5 xl:grid-cols-[300px_1fr]">
             <div>
               <div class="flex items-center justify-between mb-2"><div class="text-xs font-bold uppercase tracking-wide text-gray-500">This week's reports</div><button type="button" onclick="loadAdminAgentReports()" class="text-xs font-bold text-green-700">Refresh</button></div>
