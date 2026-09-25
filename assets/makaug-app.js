@@ -54390,6 +54390,22 @@ function publicContactPhoneForProperty(p = {}, broker = null) {
   return publicWhatsappPhoneForProperty(p, broker) || publicCallPhoneForProperty(p, broker);
 }
 
+function formatPublicPhoneDisplay(value) {
+  // "+256772123456" -> "+256 772 123 456" so people can see exactly who they are calling.
+  const raw = normalizePhoneInput(value);
+  const digits = String(raw || "").replace(/[^\d]/g, "");
+  if (!digits) return "";
+  const known = ["256", "250", "254", "255", "243", "211", "257", "27", "44", "971", "1"];
+  const cc = String(raw).startsWith("+") ? (known.find((code) => digits.startsWith(code)) || digits.slice(0, 3)) : "";
+  const rest = cc ? digits.slice(cc.length) : digits;
+  const groups = rest.match(/.{1,3}/g) || [];
+  if (groups.length > 1 && groups[groups.length - 1].length === 1) {
+    const last = groups.pop();
+    groups[groups.length - 1] += last;
+  }
+  return `${cc ? `+${cc} ` : ""}${groups.join(" ")}`.trim();
+}
+
 function detailContactActionButtonsHtml({
   property = {},
   type = "",
@@ -54413,10 +54429,10 @@ function detailContactActionButtonsHtml({
   const whatsappPhoneArg = adminAttr(JSON.stringify(normalizedWhatsappPhone || ""));
   const rows = [];
   if (normalizedCallPhone) {
-    rows.push(`<a href="${adminAttr(`tel:${String(normalizedCallPhone).replace(/\s+/g, "")}`)}" class="block text-center w-full ${theme.primary} py-2.5 rounded-xl font-semibold mb-2" aria-label="${adminAttr(translatePropertyUi("Call"))}"><i class="fas fa-phone mr-1"></i>${translatePropertyUi("Call")}</a>`);
+    rows.push(`<a href="${adminAttr(`tel:${String(normalizedCallPhone).replace(/\s+/g, "")}`)}" class="block text-center w-full ${theme.primary} py-2.5 rounded-xl font-semibold mb-2" aria-label="${adminAttr(translatePropertyUi("Call"))}"><i class="fas fa-phone mr-1"></i>${translatePropertyUi("Call")} <span class="whitespace-nowrap" dir="ltr">${adminEscape(formatPublicPhoneDisplay(normalizedCallPhone))}</span></a>`);
   }
   if (normalizedWhatsappPhone) {
-    rows.push(`<a href="${adminAttr(buildWhatsAppUrl(normalizedWhatsappPhone, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${whatsappPhoneArg}, '${adminAttr(whatsappSource)}')" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2"><i class="fab fa-whatsapp mr-1"></i>${translatePropertyUi("WhatsApp")}</a>`);
+    rows.push(`<a href="${adminAttr(buildWhatsAppUrl(normalizedWhatsappPhone, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${whatsappPhoneArg}, '${adminAttr(whatsappSource)}')" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2"><i class="fab fa-whatsapp mr-1"></i>${translatePropertyUi("WhatsApp")} <span class="whitespace-nowrap" dir="ltr">${adminEscape(formatPublicPhoneDisplay(normalizedWhatsappPhone))}</span></a>`);
   }
   if (sourceHref) {
     rows.push(`<a href="${adminAttr(sourceHref)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50" aria-label="${adminAttr(sourceButtonTitle)}" title="${adminAttr(sourceButtonTitle)}"><i class="fas fa-up-right-from-square mr-1"></i>${translatePropertyUi("Message via social")}</a>`);
@@ -54445,26 +54461,34 @@ function detailMobileContactBarHtml({
   const whatsappPhoneArg = adminAttr(JSON.stringify(normalizedWhatsappPhone || ""));
   const sourceHref = /^https?:\/\//i.test(String(sourceUrl || "")) ? String(sourceUrl).trim() : "";
   const sourceButtonTitle = String(sourceTitle || sourceLabel || translatePropertyUi("Message via social")).trim();
-  const common = "min-h-[44px] min-w-0 rounded-xl px-2 py-2.5 text-[13px] sm:text-sm font-black inline-flex items-center justify-center gap-1.5 text-center leading-tight whitespace-nowrap";
+  const common = "min-h-[48px] min-w-0 rounded-xl px-1.5 py-1.5 text-[13px] sm:text-sm font-black inline-flex items-center justify-center gap-1.5 text-center leading-tight whitespace-nowrap overflow-hidden";
+  // Label on top, the actual number squeezed underneath so people know who they're calling / messaging.
+  const mobileLabelWithNumber = (label, phone) => {
+    const shown = formatPublicPhoneDisplay(phone);
+    return `<span class="flex min-w-0 flex-col items-start leading-none"><span class="truncate">${label}</span>${shown ? `<span class="mt-0.5 font-bold whitespace-nowrap" style="font-size:clamp(8.5px,2.75vw,12px);letter-spacing:-0.02em" dir="ltr">${adminEscape(shown)}</span>` : ""}</span>`;
+  };
   const actions = [];
   if (normalizedCallPhone) {
-    actions.push(`<a href="${adminAttr(`tel:${String(normalizedCallPhone).replace(/\s+/g, "")}`)}" class="${common} ${theme.secondary}" aria-label="${adminAttr(translatePropertyUi("Call"))}"><i class="fas fa-phone ${theme.icon}"></i><span class="truncate">${translatePropertyUi("Call")}</span></a>`);
+    actions.push(`<a href="${adminAttr(`tel:${String(normalizedCallPhone).replace(/\s+/g, "")}`)}" class="${common} ${theme.secondary}" aria-label="${adminAttr(translatePropertyUi("Call"))}"><i class="fas fa-phone ${theme.icon} shrink-0"></i>${mobileLabelWithNumber(translatePropertyUi("Call"), normalizedCallPhone)}</a>`);
   }
   if (normalizedWhatsappPhone) {
     const whatsappClass = sourceHref ? theme.secondary : theme.primary;
-    actions.push(`<a href="${adminAttr(buildWhatsAppUrl(normalizedWhatsappPhone, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${whatsappPhoneArg}, 'listing_detail_mobile_sticky_whatsapp')" class="${common} ${whatsappClass}" aria-label="${adminAttr(translatePropertyUi("WhatsApp"))}"><i class="fab fa-whatsapp"></i><span class="truncate">${translatePropertyUi("WhatsApp")}</span></a>`);
+    actions.push(`<a href="${adminAttr(buildWhatsAppUrl(normalizedWhatsappPhone, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${whatsappPhoneArg}, 'listing_detail_mobile_sticky_whatsapp')" class="${common} ${whatsappClass}" aria-label="${adminAttr(translatePropertyUi("WhatsApp"))}"><i class="fab fa-whatsapp shrink-0"></i>${mobileLabelWithNumber(translatePropertyUi("WhatsApp"), normalizedWhatsappPhone)}</a>`);
   }
   if (sourceHref) {
-    const sourceButtonClass = `${common} ${theme.primary}`;
-    actions.push(`<a href="${adminAttr(sourceHref)}" target="_blank" rel="noopener noreferrer" class="${sourceButtonClass}" aria-label="${adminAttr(sourceButtonTitle)}" title="${adminAttr(sourceButtonTitle)}"><i class="fas fa-envelope"></i><span class="truncate">${translatePropertyUi("Social")}</span></a>`);
+    // Next to Call/WhatsApp the social button is icon-only so the phone numbers get the room.
+    const sourceButtonClass = `${common} ${theme.primary}${(normalizedCallPhone || normalizedWhatsappPhone) ? " px-3" : ""}`;
+    actions.push(`<a href="${adminAttr(sourceHref)}" target="_blank" rel="noopener noreferrer" class="${sourceButtonClass}" aria-label="${adminAttr(sourceButtonTitle)}" title="${adminAttr(sourceButtonTitle)}"><i class="fas fa-envelope"></i>${(normalizedCallPhone || normalizedWhatsappPhone) ? "" : `<span class="truncate">${translatePropertyUi("Social")}</span>`}</a>`);
   }
   if (!actions.length) {
     actions.push(`<a href="${adminAttr(buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, `Hi makaug, I need help with ${property.title || "this property"}. ${getPropertyShareUrl(property)}`))}" target="_blank" rel="noopener noreferrer" class="${common} ${theme.primary} w-full"><i class="fab fa-whatsapp"></i>${translatePropertyUi("Ask makaug")}</a>`);
   }
-  const gridCols = actions.length >= 3 ? "grid-cols-3" : (actions.length === 2 ? "grid-cols-2" : "grid-cols-1");
+  const gridCols = actions.length >= 3 ? "" : (actions.length === 2 ? "grid-cols-2" : "grid-cols-1");
+  // With three buttons, keep "Social" compact so Call and WhatsApp have room for the full number.
+  const gridStyle = actions.length >= 3 ? ` style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto"` : "";
   return `
     <div id="property-detail-mobile-contact-bar" class="lg:hidden fixed inset-x-0 bottom-0 z-[70] border-t ${theme.bar} px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-12px_30px_rgba(15,23,42,0.14)] backdrop-blur">
-      <div class="grid ${gridCols} gap-2">
+      <div class="grid ${gridCols} gap-2"${gridStyle}>
         ${actions.join("")}
       </div>
     </div>`;
