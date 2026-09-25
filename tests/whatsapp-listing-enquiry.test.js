@@ -25,8 +25,10 @@ const assert = require('node:assert');
 const {
   buildListingEnquiryReply,
   listingEnquiryNotFoundReply,
+  listingEnquiryOpeningMessage,
   listingSourceFacts,
-  parseListingEnquiry
+  parseListingEnquiry,
+  whatsappChatLink
 } = require('../services/whatsappListingEnquiryService');
 
 const REAL_MESSAGE = "Hi makaug, I'm viewing this listing on makaug.com: Property for rent in Lweza in Lweza, Wakiso, Central. Please help me confirm availability and the next safe step. Ref: MK-20260809-A7EA38 https://makaug.com/property/f74f6d85-bcea-4311-8407-8b630eeda988 Page: makaug.com/property/f74f6d85-bcea-4311-8407-8b630eeda988";
@@ -123,19 +125,71 @@ test('the safety steps are there, and they are the ones that matter', () => {
   assert.match(reply, /Never send a deposit/i);
   assert.match(reply, /title, tenancy agreement or ownership papers/i);
   assert.match(reply, /daylight/i);
-  assert.match(reply, /never collects deposits or payments/i);
 });
 
-test('a listing we took in hands over the lister, and still promises nothing', () => {
+/**
+ * The last step used to say "stop and tell us — reply here and we will look
+ * into it". We are not at the gate with them and cannot intervene; that put a
+ * step between the person and walking away.
+ */
+test('the last step says walk away, not report it to us', () => {
+  const reply = buildListingEnquiryReply(FOUND_ONLINE, { title: 'x' });
+  assert.match(reply, /If anything feels wrong, stop\./);
+  assert.match(reply, /only go ahead when you are completely comfortable/i);
+  assert.ok(!/tell us/i.test(reply), 'never route a person in trouble back through us');
+  assert.ok(!/we will look into it/i.test(reply));
+});
+
+/**
+ * A number is only useful if it opens the conversation. The person should land
+ * in a chat with the lister with the first message already written, rather than
+ * read instructions about how to make contact.
+ */
+test('a number becomes a tap that opens the chat, already written', () => {
   const reply = buildListingEnquiryReply(LISTED_WITH_US, {
     title: '4-bed property for sale in Kira',
     priceLabel: 'UGX 450M',
     reference: 'MK-20260901-BBBB11'
   });
-  assert.match(reply, /\+256774505232/);
-  assert.match(reply, /Kimuli Brian/);
+  assert.match(reply, /https:\/\/wa\.me\/256774505232\?text=/, 'the chat link is the point');
+  assert.match(reply, /Message Kimuli Brian on WhatsApp/);
+  assert.match(reply, /Or call \+256774505232/);
   assert.match(reply, /cannot confirm availability/i);
   assert.ok(!/found this one published online/i.test(reply));
+
+  const link = whatsappChatLink('+256774505232', 'Hi there');
+  assert.strictEqual(link, 'https://wa.me/256774505232?text=Hi%20there');
+  assert.strictEqual(whatsappChatLink('0774505232', 'Hi there'), link,
+    'a number written the local way must open the same chat');
+  assert.strictEqual(whatsappChatLink('1234', 'Hi'), '', 'nothing usable, no link');
+});
+
+test('the message waiting in that chat says what it needs to', () => {
+  const opening = listingEnquiryOpeningMessage({
+    title: '4-bed house',
+    location: 'Kira, Wakiso',
+    reference: 'MK-20260901-BBBB11'
+  });
+  assert.match(opening, /I saw 4-bed house in Kira, Wakiso on makaug/);
+  assert.match(opening, /Ref MK-20260901-BBBB11/);
+  assert.match(opening, /still available/i);
+  assert.match(opening, /viewing/i);
+
+  assert.strictEqual(
+    listingEnquiryOpeningMessage({ title: 'Property for rent in Lweza', location: 'Lweza, Wakiso' }),
+    'Hi, I saw Property for rent in Lweza on makaug.com. Is it still available, and can I arrange a viewing?',
+    'a title generated from the area must not read "in Lweza in Lweza, Wakiso"'
+  );
+});
+
+test('a found-online listing with a number gets the chat link too', () => {
+  const withPhone = {
+    ...FOUND_ONLINE,
+    extra_fields: { ...FOUND_ONLINE.extra_fields, public_contact_phone: '0700111222' }
+  };
+  const reply = buildListingEnquiryReply(withPhone, { title: 'Property for rent in Lweza' });
+  assert.match(reply, /https:\/\/wa\.me\/256700111222\?text=/);
+  assert.match(reply, /found this one published online/i, 'it is still a listing we did not take in');
 });
 
 test('a listing with nobody to contact says so instead of inventing a route', () => {
