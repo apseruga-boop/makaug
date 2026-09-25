@@ -28,6 +28,18 @@ const { tenantFor } = require('../packages/shared-country-core');
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const ACTIVE_TENANT = tenantFor(ACTIVE_COUNTRY_CODE);
 
+/**
+ * The country's calling code, so a number written the local way (0774505232)
+ * becomes one WhatsApp can open. National numbers here are nine digits, so
+ * whatever sits in front of them in the tenant's own number is the code.
+ */
+const TENANT_CALLING_CODE = (() => {
+  const e164 = String(ACTIVE_TENANT.phoneE164 || '').replace(/\D/g, '');
+  const prefix = e164.length > 9 ? e164.slice(0, e164.length - 9) : '';
+  if (prefix) return prefix;
+  return ACTIVE_COUNTRY_CODE === 'ZA' ? '27' : '256';
+})();
+
 const LISTING_REFERENCE_PATTERN = /\b(MK-\d{8}-[A-Z0-9]{4,12})\b/i;
 const PROPERTY_LINK_PATTERN = /(?:https?:\/\/)?(?:www\.)?[a-z0-9.-]*\/property\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
 const VIEWING_PHRASE_PATTERN = /\b(?:i am|i'm|im)\s+(?:viewing|looking at|on)\s+this\s+listing\b/i;
@@ -104,15 +116,53 @@ function listingSourceFacts(property = {}) {
   };
 }
 
-/** The same five steps whatever the listing is, because the risk is the same. */
+/**
+ * The same five steps whatever the listing is, because the risk is the same.
+ *
+ * The last one tells the person to stop, not to report it to us. We are not
+ * standing next to them at a gate in Lweza and we cannot intervene; telling
+ * them to message us would put a step between them and walking away.
+ */
 function listingSafetySteps() {
   return [
     '1. View the property in person before you pay anything — no exceptions.',
     '2. Never send a deposit, "viewing fee" or booking money to hold a place you have not stood in.',
     '3. Ask to see the title, tenancy agreement or ownership papers, and check the name on them matches who you are talking to.',
     '4. Meet at the property in daylight and take someone with you.',
-    `5. If anything feels wrong, stop and tell us — reply here and we will look into it. ${ACTIVE_TENANT.publicName || ACTIVE_TENANT.brandName} never collects deposits or payments for a listing.`
+    '5. If anything feels wrong, stop. Do not pay and do not continue — only go ahead when you are completely comfortable.'
   ];
+}
+
+/**
+ * A tappable WhatsApp chat with the person holding the listing, with the first
+ * message already written. The point is that the person lands in a normal
+ * conversation with the lister instead of reading instructions about how to
+ * start one.
+ */
+function whatsappChatLink(phone = '', prefilledMessage = '') {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) return '';
+  const international = digits.startsWith('0')
+    ? `${TENANT_CALLING_CODE}${digits.slice(1)}`
+    : digits;
+  const text = cleanText(prefilledMessage);
+  return `https://wa.me/${international}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
+}
+
+function listingEnquiryOpeningMessage({ title = '', location = '', reference = '' } = {}) {
+  const what = cleanText(title) || 'your property';
+  const rawWhere = cleanText(location);
+  // Titles are generated from the area ("Property for rent in Lweza"), so
+  // adding the location again reads as "in Lweza in Lweza, Wakiso".
+  const where = rawWhere && !new RegExp(`\\b${rawWhere.split(',')[0].trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(what)
+    ? rawWhere
+    : '';
+  const ref = cleanText(reference);
+  return [
+    `Hi, I saw ${what}${where ? ` in ${where}` : ''} on ${ACTIVE_TENANT.publicName || ACTIVE_TENANT.brandName}.`,
+    ref ? `(Ref ${ref}.)` : '',
+    'Is it still available, and can I arrange a viewing?'
+  ].filter(Boolean).join(' ');
 }
 
 function buildListingEnquiryReply(property, {
@@ -126,6 +176,14 @@ function buildListingEnquiryReply(property, {
     .filter((value, index, values) => value && values.indexOf(value) === index)
     .join(', ') || ACTIVE_TENANT.countryName;
   const ref = cleanText(reference || property.inquiry_reference);
+  // When there is a number, the useful thing is a tap that opens the chat with
+  // the lister and the first message already written — not an explanation of
+  // how to get in touch.
+  const chatLink = whatsappChatLink(facts.phone, listingEnquiryOpeningMessage({
+    title,
+    location,
+    reference: ref
+  }));
 
   const lines = [];
   lines.push(`🏡 *${cleanText(title) || 'This listing'}*`);
@@ -144,8 +202,10 @@ function buildListingEnquiryReply(property, {
       ? `It was posted by *${facts.posterName}*${facts.platform ? ` on ${facts.platform}` : ''}.`
       : `It was posted${facts.platform ? ` on ${facts.platform}` : ' online'} by the original advertiser.`;
     lines.push(postedBy);
-    if (facts.phone) {
-      lines.push(`📞 The number on the post: ${facts.phone}`);
+    lines.push('');
+    if (chatLink) {
+      lines.push(`💬 Message them on WhatsApp: ${chatLink}`);
+      lines.push(`📞 Or call ${facts.phone}`);
     }
     if (facts.contactUrl) {
       lines.push(`👤 Their page: ${facts.contactUrl}`);
@@ -153,15 +213,17 @@ function buildListingEnquiryReply(property, {
     if (facts.postUrl && facts.postUrl !== facts.contactUrl) {
       lines.push(`📄 The original post: ${facts.postUrl}`);
     }
-    if (!facts.phone && !facts.contactUrl && !facts.postUrl) {
+    if (!chatLink && !facts.contactUrl && !facts.postUrl) {
       lines.push('We do not have a phone number or a page for them. Reply *FIND* and we will try to trace the original post for you.');
-    } else {
-      lines.push('Please contact them there to ask about availability and viewing.');
+    } else if (!chatLink) {
+      lines.push('');
+      lines.push('There is no phone number on the post, so ask them there about availability and viewing.');
     }
-  } else if (facts.phone) {
+  } else if (chatLink) {
     lines.push('This one was listed with us. We cannot confirm availability on the lister\'s behalf — availability changes by the hour and only they know.');
     lines.push('');
-    lines.push(`📞 Contact ${facts.posterName || 'the lister'} directly: ${facts.phone}`);
+    lines.push(`💬 Message ${facts.posterName || 'the lister'} on WhatsApp: ${chatLink}`);
+    lines.push(`📞 Or call ${facts.phone}`);
   } else {
     lines.push('This one was listed with us, but we do not have a contact number on file for it. We cannot confirm availability on the lister\'s behalf.');
     lines.push('');
@@ -190,9 +252,11 @@ function listingEnquiryNotFoundReply(reference = '') {
 module.exports = {
   buildListingEnquiryReply,
   listingEnquiryNotFoundReply,
+  listingEnquiryOpeningMessage,
   listingSafetySteps,
   listingSourceFacts,
   parseListingEnquiry,
+  whatsappChatLink,
   LISTING_REFERENCE_PATTERN,
   PROPERTY_LINK_PATTERN
 };
