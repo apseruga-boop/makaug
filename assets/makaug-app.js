@@ -54463,9 +54463,12 @@ function detailMobileContactBarHtml({
   const sourceButtonTitle = String(sourceTitle || sourceLabel || translatePropertyUi("Message via social")).trim();
   const common = "min-h-[48px] min-w-0 rounded-xl px-1.5 py-1.5 text-[13px] sm:text-sm font-black inline-flex items-center justify-center gap-1.5 text-center leading-tight whitespace-nowrap overflow-hidden";
   // Label on top, the actual number squeezed underneath so people know who they're calling / messaging.
+  // Icon + number only (no "Call"/"WhatsApp" words) so the number gets the room; the label stays for screen readers.
   const mobileLabelWithNumber = (label, phone) => {
     const shown = formatPublicPhoneDisplay(phone);
-    return `<span class="flex min-w-0 flex-col items-start leading-none"><span class="truncate">${label}</span>${shown ? `<span class="mt-0.5 font-bold whitespace-nowrap" style="font-size:clamp(8.5px,2.75vw,12px);letter-spacing:-0.02em" dir="ltr">${adminEscape(shown)}</span>` : ""}</span>`;
+    if (!shown) return `<span class="truncate">${label}</span>`;
+    const size = sourceHref ? "clamp(9px,2.9vw,13px)" : "clamp(10px,3.4vw,15px)";
+    return `<span class="sr-only">${label}</span><span class="min-w-0 font-black whitespace-nowrap" style="font-size:${size};letter-spacing:-0.01em" dir="ltr">${adminEscape(shown)}</span>`;
   };
   const actions = [];
   if (normalizedCallPhone) {
