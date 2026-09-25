@@ -22772,6 +22772,38 @@ function agentPublicProfileState(agent = {}) {
   return { live: blockers.length === 0, blockers };
 }
 
+async function adminUploadAgentIdentityDocument(agentId) {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or set ADMIN_API_KEY first to attach an agent ID.");
+    return;
+  }
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/png,image/jpeg,image/webp,application/pdf";
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (file.size > 6 * 1024 * 1024) {
+      toast("That ID file is over 6MB. Please send a smaller image.");
+      return;
+    }
+    try {
+      const dataUrl = await marketplaceFileDataUrl(file);
+      await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/identity-document`, {
+        method: "PATCH",
+        headers: adminAuthHeaders(),
+        body: { identity_document_url: dataUrl, identity_document_name: file.name }
+      });
+      await refreshBrokersFromApi({ silent: true });
+      await renderAdminDashboard();
+      toast("ID stored privately. Review it, then approve the public profile.");
+    } catch (e) {
+      toast(`ID upload failed: ${e.message || "error"}`);
+    }
+  };
+  input.click();
+}
+
 async function adminUploadAgentProfilePhoto(agentId) {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or set ADMIN_API_KEY first to add an agent logo.");
@@ -22869,6 +22901,7 @@ function renderAdminBrokerRows(agents) {
           ${agent.email ? `<a href="mailto:${adminAttr(agent.email)}?subject=${encodeURIComponent("makaug broker follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
           ${canUseLiveAdminApi() && idDocumentUploaded && !agent.private_id_profile_reviewed ? `<button onclick="adminApproveAgentPublicProfile(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Approve public profile</button>` : ""}
           ${canUseLiveAdminApi() ? `<button onclick="adminUploadAgentProfilePhoto(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${agent.profile_photo_url ? "Replace logo" : "Add logo"}</button>` : ""}
+          ${canUseLiveAdminApi() && !idDocumentUploaded ? `<button onclick="adminUploadAgentIdentityDocument(${idArg})" class="border border-amber-400 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Attach ID photo</button>` : ""}
           ${canUseLiveAdminApi() ? `<button onclick="adminSetAgentStatus(${idArg}, '${status === "approved" ? "pending" : "approved"}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${approveLabel}</button>` : ""}
         </div>
       </div>`;
