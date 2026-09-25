@@ -820,6 +820,8 @@ let failedCount = 0;
 // every send fails, so this — not the session status — is the honest signal.
 let consecutiveSendFailures = 0;
 let lastSendError = null;
+// Times a picture could not be fetched and the words were sent on their own.
+let mediaFallbacksUsed = 0;
 
 function nextSendDelay() {
   const since = Date.now() - lastSendAt;
@@ -839,12 +841,34 @@ async function sendViaWaha(msg) {
 
   if (mediaUrl) {
     const common = { session: cfg.wahaSession, chatId, file: { url: mediaUrl }, caption: caption || undefined };
-    if (mediaType === 'image') return waha('/api/sendImage', { method: 'POST', body: common });
-    if (mediaType === 'video') return waha('/api/sendVideo', { method: 'POST', body: common });
-    if (mediaType === 'audio' || mediaType === 'voice') {
-      return waha('/api/sendVoice', { method: 'POST', body: { session: cfg.wahaSession, chatId, file: { url: mediaUrl } } });
+    const sendMedia = () => {
+      if (mediaType === 'image') return waha('/api/sendImage', { method: 'POST', body: common });
+      if (mediaType === 'video') return waha('/api/sendVideo', { method: 'POST', body: common });
+      if (mediaType === 'audio' || mediaType === 'voice') {
+        return waha('/api/sendVoice', { method: 'POST', body: { session: cfg.wahaSession, chatId, file: { url: mediaUrl } } });
+      }
+      return waha('/api/sendFile', { method: 'POST', body: common });
+    };
+
+    // A picture that cannot be fetched must not swallow the answer.
+    //
+    // On 25 Sep 2026 someone asked for a house in Lweza. The reply was a
+    // property card whose photo was hotlinked from the site it was found on,
+    // that site answered WAHA with 403, the send failed, and the person got
+    // nothing at all — no listings, no text, no explanation. Twice.
+    //
+    // WAHA has to download the file before it can send it, so any media send
+    // can fail for reasons that have nothing to do with the message. When it
+    // does, the words still go out.
+    try {
+      return await sendMedia();
+    } catch (err) {
+      const words = caption || text;
+      if (!words) throw err;
+      log(`media send failed (${err.message.slice(0, 120)}); sending the text instead ->`, chatId);
+      mediaFallbacksUsed += 1;
+      return waha('/api/sendText', { method: 'POST', body: { session: cfg.wahaSession, chatId, text: words } });
     }
-    return waha('/api/sendFile', { method: 'POST', body: common });
   }
 
   if (!text) throw Object.assign(new Error('empty message body'), { notSent: true });
@@ -1106,7 +1130,7 @@ const server = http.createServer(async (req, res) => {
         waha_status: sessionStatusCache,
         bridge_status: effectiveStatus(sessionStatusCache),
         consecutive_send_failures: consecutiveSendFailures,
-        stats: { sent: sentCount, failed: failedCount, inbound: inboundCount, duplicates_ignored: duplicateCount, undelivered_released: lostCount, resends_prevented: resendsPrevented, sent_but_unrecorded: ackRetriesExhausted },
+        stats: { sent: sentCount, failed: failedCount, inbound: inboundCount, duplicates_ignored: duplicateCount, undelivered_released: lostCount, resends_prevented: resendsPrevented, sent_but_unrecorded: ackRetriesExhausted, media_fallbacks: mediaFallbacksUsed },
         last_inbound_ms_ago: stale,
         // Does this service actually reach makaug? WAHA being WORKING says nothing about that.
         makaug_link: {
