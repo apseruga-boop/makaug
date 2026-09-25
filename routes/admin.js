@@ -9293,11 +9293,13 @@ router.post('/agents/from-listings', async (req, res, next) => {
                 districts_covered = CASE
                   WHEN COALESCE(array_length($6::text[], 1), 0) > 0 THEN $6::text[]
                   ELSE districts_covered END,
+                phone = COALESCE(NULLIF($7::text, ''), phone),
+                whatsapp = COALESCE(NULLIF($7::text, ''), whatsapp),
                 updated_at = NOW()
           WHERE id = $1
           RETURNING id::text AS id, full_name, company_name, phone, whatsapp, email, status,
                     identity_document_url, profile_photo_url`,
-        [agent.id, fullName, companyName, bio, profilePhotoUrl, districts]
+        [agent.id, fullName, companyName, bio, profilePhotoUrl, districts, listingPhone || '']
       );
       if (refreshed.rows[0]) agent = refreshed.rows[0];
     }
@@ -9391,6 +9393,60 @@ router.post('/agents/from-listings', async (req, res, next) => {
  * add or replace it for an agent who was onboarded before that, or whose logo
  * arrives by email afterwards.
  */
+/**
+ * The ID an agent promised to send later has to be able to arrive.
+ *
+ * "Approve public profile" refuses without a stored identity document, and
+ * until now nothing in the dashboard could store one — so an agent who said
+ * LATER on WhatsApp could be marked approved and still never appear on the
+ * site, with no way forward at all. Staff can now attach the ID here when it
+ * comes through by any route. It is stored privately and never published.
+ */
+router.patch('/agents/:id/identity-document', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const documentUrl = cleanText(body.identity_document_url || body.document_url).slice(0, 8 * 1024 * 1024);
+    const documentName = cleanText(body.identity_document_name || body.document_name).slice(0, 200);
+
+    if (!documentUrl) {
+      return res.status(400).json({ ok: false, error: 'An identity document is required' });
+    }
+    if (!(/^data:(image\/|application\/pdf)/i.test(documentUrl) || /^https?:\/\//i.test(documentUrl))) {
+      return res.status(400).json({ ok: false, error: 'The identity document must be an image or PDF data URL, or an HTTPS URL' });
+    }
+
+    const updated = await db.query(
+      `UPDATE agents
+       SET identity_document_url = $2,
+           identity_document_name = COALESCE(NULLIF($3::text, ''), 'Staff-supplied agent ID'),
+           identity_document_uploaded_at = NOW(),
+           verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), $4),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, full_name, status, identity_document_name, identity_document_uploaded_at, updated_at`,
+      [
+        req.params.id,
+        documentUrl,
+        documentName,
+        '[STAFF_SUPPLIED_AGENT_ID] Identity document attached by staff after the agent sent it separately. It still has to be reviewed before the public profile is approved.'
+      ]
+    );
+    if (!updated.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Agent not found' });
+    }
+
+    await writeAudit('admin_agent_identity_document_attached', {
+      agent_id: req.params.id,
+      document_name: documentName || null
+    }, adminActorId(req));
+
+    // The document itself is deliberately never echoed back.
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.patch('/agents/:id/profile-photo', async (req, res, next) => {
   try {
     const body = req.body || {};

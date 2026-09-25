@@ -4996,7 +4996,35 @@ function employeeIntakeStepMessage(step = '', data = {}) {
   return employeeIntakeConfirmMessage(data);
 }
 
+/**
+ * Loading an agent as a private owner is the mistake that costs the most: no
+ * profile is created and the listings hang off nobody. The number is the tell —
+ * if it already belongs to an agent on makaug, say so before the batch starts.
+ */
+async function noteEmployeeCustomerPhoneAgentMatch(data = {}) {
+  if (data.employee_role !== 'customer') return;
+  const phoneDigits = String(data.customer_details?.phone || '').replace(/\D/g, '');
+  if (phoneDigits.length < 8) return;
+  try {
+    const result = await db.query(
+      `SELECT full_name, status
+         FROM agents
+        WHERE regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1
+           OR regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $1
+        ORDER BY status = 'approved' DESC, updated_at DESC
+        LIMIT 1`,
+      [phoneDigits]
+    );
+    const match = result.rows[0];
+    if (match) data.customer_phone_agent_name = normalizeInput(match.full_name);
+    else delete data.customer_phone_agent_name;
+  } catch (error) {
+    logger.warn('WhatsApp employee customer/agent phone check failed:', error);
+  }
+}
+
 async function advanceEmployeeIntakeAfterDetails(phone, data, prefix = '') {
+  await noteEmployeeCustomerPhoneAgentMatch(data);
   const nextStep = employeeIntakeStepAfterDetails(data);
   await replaceEmployeeSession(phone, nextStep, data);
   const message = employeeIntakeStepMessage(nextStep, data);
@@ -5025,7 +5053,10 @@ function employeeIntakeConfirmMessage(data = {}) {
     profileLine,
     logoReceived: agentRole && !data.agent_already_registered
       ? Boolean(data.agent_profile_photo_url)
-      : null
+      : null,
+    warningLine: !agentRole && normalizeInput(data.customer_phone_agent_name)
+      ? `This number already belongs to *${normalizeInput(data.customer_phone_agent_name)}*, an agent on makaug. Loaded like this the properties appear under nobody. Reply *2* and choose “This is an agent” if they are theirs.`
+      : ''
   });
 }
 
