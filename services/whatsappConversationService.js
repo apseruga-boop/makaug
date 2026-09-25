@@ -251,7 +251,10 @@ async function updateWhatsappConversationControl(phone, patch = {}, actorId = 'a
     idx += 1;
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'metadata')) {
-    setParts.push(`metadata = COALESCE(metadata, '{}'::jsonb) || $${idx}::jsonb`);
+    // Qualified, because inside ON CONFLICT DO UPDATE a bare `metadata` could
+    // mean the existing row or the one being inserted, and PostgreSQL refuses
+    // to guess. Merging onto the row that is already there is what is meant.
+    setParts.push(`metadata = COALESCE(whatsapp_conversation_state.metadata, '{}'::jsonb) || $${idx}::jsonb`);
     values.push(JSON.stringify(patch.metadata && typeof patch.metadata === 'object' ? patch.metadata : {}));
     idx += 1;
   }
@@ -293,9 +296,13 @@ async function updateWhatsappConversationControl(phone, patch = {}, actorId = 'a
       last_message_at
     ) VALUES (
       $1,
-      $${idx},
-      $${idx + 1},
-      CASE WHEN $${idx + 1} IS NULL OR $${idx + 1} = 'uncategorized' THEN 'auto' ELSE 'manual' END,
+      $${idx}::text,
+      $${idx + 1}::text,
+      -- The category parameter is read twice: once as a column value, once by
+      -- this CASE. Without the cast those two uses deduce different types and
+      -- PostgreSQL rejects the whole statement as an ambiguous parameter, so
+      -- every attempt to change a conversation from the inbox answered 500.
+      CASE WHEN $${idx + 1}::text IS NULL OR $${idx + 1}::text = 'uncategorized' THEN 'auto' ELSE 'manual' END,
       $${idx + 2},
       $${idx + 3},
       $${idx + 4},
