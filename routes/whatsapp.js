@@ -108,8 +108,15 @@ const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const {
   buildWhatsappPropertyCard,
   buildWhatsappPropertySearchReply,
+  cleanWhatsappPropertyTitle,
+  formatWhatsappPropertyPrice,
   propertyIdsFromWhatsappReply
 } = require('../services/whatsappPropertyCardService');
+const {
+  buildListingEnquiryReply,
+  listingEnquiryNotFoundReply,
+  parseListingEnquiry
+} = require('../services/whatsappListingEnquiryService');
 const {
   createOwnerEditToken,
   hashOwnerEditToken,
@@ -2602,6 +2609,59 @@ async function handleWhatsappListingRemovalCommand({ phone, text = '' }) {
     handled: true,
     message: `Done. Listing *${listing.inquiry_reference || reference}* is now off the public site. If this was a mistake, contact makaug support and quote the same reference.`
   };
+}
+
+/**
+ * Load the listing someone is asking about and answer from what it actually
+ * says. A listing we found published online has no lister here to ask, so the
+ * answer is who posted it and where; one listed with us gets the lister's
+ * number. Neither claims the property is still available — only the person
+ * holding it knows that.
+ */
+async function buildWhatsappListingEnquiryResponse(enquiry = {}, { phone = '', lang = 'en' } = {}) {
+  const propertyId = normalizeInput(enquiry.propertyId);
+  const reference = normalizeInput(enquiry.reference);
+  if (!propertyId && !reference) return '';
+  let property = null;
+  try {
+    const result = await db.query(
+      `SELECT id::text AS id, title, listing_type, price, price_period, price_on_application,
+              area, district, status, source, listed_via, inquiry_reference,
+              lister_name, lister_phone, agent_id::text AS agent_id, extra_fields
+         FROM properties
+        WHERE ($1::text <> '' AND id::text = $1)
+           OR ($2::text <> '' AND UPPER(COALESCE(inquiry_reference, '')) = $2)
+        ORDER BY (id::text = $1) DESC
+        LIMIT 1`,
+      [propertyId, reference.toUpperCase()]
+    );
+    property = result.rows[0] || null;
+  } catch (error) {
+    logger.error('WhatsApp listing enquiry lookup failed:', error);
+    return '';
+  }
+
+  captureWhatsappLearningAsync({
+    eventName: 'whatsapp_listing_enquiry_answered',
+    phone,
+    language: lang,
+    inputText: reference || propertyId,
+    responseText: property ? 'listing_enquiry_answer' : 'listing_enquiry_not_found',
+    entities: {
+      property_id: property?.id || null,
+      inquiry_reference: property?.inquiry_reference || reference || null,
+      found_online: /^found_online/i.test(String(property?.source || ''))
+    }
+  });
+
+  if (!property) return listingEnquiryNotFoundReply(reference);
+
+  return buildListingEnquiryReply(property, {
+    title: cleanWhatsappPropertyTitle(property),
+    priceLabel: formatWhatsappPropertyPrice(property),
+    propertyUrl: `${HOME_URL}/property/${property.id}`,
+    reference: property.inquiry_reference || reference
+  });
 }
 
 function listingStartReply(lang, listingType, hints = {}) {
@@ -11195,6 +11255,26 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
     return respond(offPlanWhatsappReply(listingRequest, cleanBody), 'main_menu');
   }
+  // Someone asking about a listing they are looking at, before anything else.
+  // The message our own property pages write contains "listing" and "for rent",
+  // so the listing-intent check used to read a renter's availability question
+  // as an owner wanting to post a property, and asked them whether they were
+  // the owner. A property link or a makaug reference is only ever sent by
+  // someone asking about that listing.
+  const listingEnquiry = parseListingEnquiry(cleanBody);
+  if (listingEnquiry) {
+    const enquiryReply = await buildWhatsappListingEnquiryResponse(listingEnquiry, { phone, lang });
+    if (enquiryReply) {
+      await patchSessionData(phone, {
+        idle_resume_prompt: null,
+        listing_enquiry_property_id: listingEnquiry.propertyId || null,
+        listing_enquiry_reference: listingEnquiry.reference || null,
+        listing_enquiry_at: new Date().toISOString()
+      });
+      return respond(enquiryReply, 'main_menu');
+    }
+  }
+
   const listingStartSteps = ['greeting', 'main_menu', 'search_type', 'search_area', 'agent_area', 'submitted'];
   const explicitListingStart = listingStartSteps.includes(step)
     && isListingStartRequest(cleanBody, intentResult);
@@ -14532,6 +14612,8 @@ router.delete('/reset/:phone', async (req, res) => {
 
 module.exports = router;
 module.exports.__test = {
+  processMessage,
+  buildWhatsappListingEnquiryResponse,
   employeeMediaMessageCaption,
   normalizeCaptionPriceNotation,
   buildEmployeeBatchSummary,
