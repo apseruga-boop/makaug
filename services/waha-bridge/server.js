@@ -78,17 +78,7 @@ if (missing.length) {
 
 // ------------------------------------------------------------- utilities ---
 
-/** Digits-only phone, no leading +. WhatsApp chat ids are `<digits>@c.us`. */
-function toPhone(value) {
-  return String(value || '').replace(/@.*$/, '').replace(/\D+/g, '');
-}
-
-function toChatId(recipient) {
-  const raw = String(recipient || '').trim();
-  if (raw.includes('@')) return raw; // already a chat/group id
-  const phone = toPhone(raw);
-  return phone ? `${phone}@c.us` : '';
-}
+const { hasDeviceSuffix, toChatId, toPhone } = require('./jid');
 
 function sign(value) {
   return crypto.createHmac('sha256', cfg.mediaSecret || 'unset').update(String(value)).digest('hex').slice(0, 32);
@@ -181,8 +171,12 @@ async function senderAddress(p) {
   if (from.endsWith('@g.us')) return from; // groups keep their id
 
   // 1. SenderAlt carries the real JID when addressing is LID-based.
-  const alt = toPhone(p?._data?.Info?.SenderAlt || '');
-  if (alt) return alt;
+  const altRaw = String(p?._data?.Info?.SenderAlt || '');
+  const alt = toPhone(altRaw);
+  if (alt) {
+    if (hasDeviceSuffix(altRaw)) log('inbound from a linked device:', altRaw, '-> phone', alt);
+    return alt;
+  }
 
   // 2. Fall back to WAHA's LID mapping table.
   if (from.endsWith('@lid')) {
