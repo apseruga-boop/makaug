@@ -9315,7 +9315,7 @@ router.post('/agents/from-listings', async (req, res, next) => {
             SET identity_document_url = $2,
                 identity_document_name = COALESCE(NULLIF($3::text, ''), 'WhatsApp intake ID'),
                 identity_document_uploaded_at = COALESCE(identity_document_uploaded_at, NOW()),
-                verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), $4),
+                verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), $4::text),
                 updated_at = NOW()
           WHERE id = $1 AND COALESCE(identity_document_url, '') = ''
           RETURNING id::text AS id, full_name, company_name, phone, whatsapp, email, status,
@@ -9420,7 +9420,7 @@ router.patch('/agents/:id/identity-document', async (req, res, next) => {
        SET identity_document_url = $2,
            identity_document_name = COALESCE(NULLIF($3::text, ''), 'Staff-supplied agent ID'),
            identity_document_uploaded_at = NOW(),
-           verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), $4),
+           verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), $4::text),
            updated_at = NOW()
        WHERE id = $1
        RETURNING id, full_name, status, identity_document_name, identity_document_uploaded_at, updated_at`,
