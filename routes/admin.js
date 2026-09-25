@@ -9241,16 +9241,22 @@ router.post('/agents/from-listings', async (req, res, next) => {
         return res.status(404).json({ ok: false, error: 'Agent not found' });
       }
     } else if (phoneDigits) {
+      // The same number is stored every which way — "+256708020927", "0708020927",
+      // and, after a typed separator survived, "/0708020927". Comparing whole
+      // digit strings misses all but an exact match and quietly creates a second
+      // profile for someone who already has one, so the national part is what is
+      // compared.
+      const phoneSuffix = phoneDigits.slice(-9);
       const found = await client.query(
         `SELECT id::text AS id, full_name, company_name, phone, whatsapp, email, status,
                 identity_document_url, profile_photo_url
            FROM agents
-          WHERE regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1
-             OR regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $1
+          WHERE RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1
+             OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1
           ORDER BY status = 'approved' DESC, updated_at DESC
           LIMIT 1
           FOR UPDATE`,
-        [phoneDigits]
+        [phoneSuffix]
       );
       agent = found.rows[0] || null;
     }
@@ -9381,6 +9387,14 @@ router.post('/agents/from-listings', async (req, res, next) => {
     });
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch (_) { /* the transaction is already gone */ }
+    // A phone number belongs to one agent. Hitting that is a real answer about
+    // the data, not a server fault, so it should read like one.
+    if (error?.code === '23505') {
+      return res.status(409).json({
+        ok: false,
+        error: 'Another agent profile already holds that phone number. Choose that agent instead of creating a second profile for the same person.'
+      });
+    }
     return next(error);
   } finally {
     client.release();
