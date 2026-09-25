@@ -3636,6 +3636,74 @@ function employeeMediaValidationIsIdentityDocument(validation = {}) {
   return /\b(?:identity|identification|passport|national[\s_-]+id|id[\s_-]+document)\b/.test(classifierText);
 }
 
+/**
+ * A dropped connection is not a verdict on the photo.
+ *
+ * On 25 Sep 2026 Ronald forwarded 72 photos and videos of the Queen Elizabeth
+ * Safari Lodge and a block of residential units. Every one had to be downloaded
+ * from the bridge's media proxy before it could be stored, the bridge runs on
+ * half a CPU, and under that burst it started dropping TLS handshakes:
+ *
+ *   TypeError: fetch failed
+ *     [cause]: Error: Client network socket disconnected before secure TLS
+ *              connection was established
+ *
+ * One dropped handshake threw the whole message away, permanently, and told him
+ * "I could not store that media permanently. Please wait before resending."
+ * After eighty minutes nothing had saved and COMPLETE had been refused four
+ * times. A transient network failure must be retried, not treated as a decision.
+ *
+ * Only the transport is retried. An HTTP status, a wrong MIME type or an
+ * oversized file is an answer, and answers are not retried.
+ */
+// Read when used, not when this file loads: a couple of tests evaluate slices
+// of this module inside a bare vm context that has no `process`.
+function employeeMediaFetchEnv(name, fallback, floor) {
+  const raw = typeof process !== 'undefined' && process.env ? process.env[name] : '';
+  return Math.max(floor, Number(raw || fallback) || fallback);
+}
+
+function isTransientMediaFetchError(error) {
+  const cause = error?.cause;
+  const code = String(cause?.code || error?.code || '');
+  if (['ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'ETIMEDOUT', 'EAI_AGAIN', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT'].includes(code)) return true;
+  const text = `${error?.message || ''} ${cause?.message || ''}`.toLowerCase();
+  return text.includes('fetch failed')
+    || text.includes('socket disconnected')
+    || text.includes('socket hang up')
+    || text.includes('network')
+    || text.includes('timeout')
+    || text.includes('terminated');
+}
+
+async function fetchEmployeeMediaWithRetry(url, init = {}) {
+  const attempts = employeeMediaFetchEnv('WHATSAPP_EMPLOYEE_MEDIA_FETCH_ATTEMPTS', 4, 1);
+  const backoffMs = employeeMediaFetchEnv('WHATSAPP_EMPLOYEE_MEDIA_FETCH_BACKOFF_MS', 700, 1);
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, init);
+      // A proxy that is momentarily overloaded answers 502/503/504. That is the
+      // same transient failure wearing a status code.
+      if ([408, 429, 500, 502, 503, 504].includes(response.status) && attempt < attempts) {
+        lastError = new Error(`WhatsApp media download failed (${response.status})`);
+      } else {
+        return response;
+      }
+    } catch (error) {
+      if (!isTransientMediaFetchError(error) || attempt === attempts) throw error;
+      lastError = error;
+    }
+    logger.warn('Employee intake media download retrying', {
+      attempt,
+      of: attempts,
+      reason: String(lastError?.message || '').slice(0, 160)
+    });
+    await new Promise((resolve) => setTimeout(resolve, backoffMs * attempt));
+  }
+  throw lastError || new Error('WhatsApp media download failed');
+}
+
 async function storeEmployeeMediaCandidate(candidate, {
   privateMedia = false,
   profilePhoto = false,
@@ -3720,7 +3788,7 @@ async function storeEmployeeMediaCandidate(candidate, {
       sha256 = crypto.createHash('sha256').update(Buffer.from(encoded, 'base64')).digest('hex');
     }
   } else if (/^https:\/\//i.test(candidate.remoteUrl)) {
-    const response = await fetch(candidate.remoteUrl, {
+    const response = await fetchEmployeeMediaWithRetry(candidate.remoteUrl, {
       headers: {
         Accept: mimeType,
         ...(provider === 'meta' && WHATSAPP_ACCESS_TOKEN
@@ -3805,8 +3873,22 @@ async function storeEmployeeMediaCandidate(candidate, {
   };
 }
 
+/**
+ * Keep what stored. One failure used to discard the rest.
+ *
+ * A single message can carry several photos. Throwing on the first one that
+ * fails meant the ones that had already uploaded were dropped on the floor with
+ * it — the caller catches, stores nothing, and the person is told to resend
+ * everything. Over Ronald's 72-item batch that compounded into an hour and
+ * twenty minutes of work saving nothing at all.
+ *
+ * So each candidate now stands or falls on its own. The message only fails when
+ * nothing at all could be stored, and then the error says how many were lost so
+ * the reply can be honest about it.
+ */
 async function storeEmployeeMedia(candidates = [], options = {}) {
   const stored = [];
+  const failures = [];
   for (let index = 0; index < candidates.length; index += 1) {
     try {
       stored.push(await storeEmployeeMediaCandidate(candidates[index], { ...options, index }));
@@ -3818,8 +3900,25 @@ async function storeEmployeeMedia(candidates = [], options = {}) {
         });
         continue;
       }
-      throw error;
+      failures.push(error);
+      logger.warn('Employee intake media candidate failed; keeping the rest', {
+        candidate_index: index,
+        of: candidates.length,
+        stored_so_far: stored.length,
+        inbound_message_id: normalizeInput(options.inboundMessageId).slice(0, 120),
+        reason: String(error?.message || '').slice(0, 200)
+      });
     }
+  }
+  if (!stored.length && failures.length) {
+    const first = failures[0];
+    throw Object.assign(
+      new Error(first?.message || 'Employee intake media storage failed'),
+      { cause: first, employeeMediaFailures: failures.length }
+    );
+  }
+  if (failures.length) {
+    stored.partialFailureCount = failures.length;
   }
   return stored;
 }
@@ -5879,6 +5978,7 @@ async function handleEmployeeWhatsappIntake({
       properties_failed_count: 0,
       property_attempt_message_ids: []
     };
+    employeeBatchSummaryLastSent.delete(String(phone || ''));
     await replaceEmployeeSession(phone, 'employee_intake_role', freshData);
     return { handled: true, nextStep: 'employee_intake_role', message: employeeRolePrompt() };
   }
@@ -5897,6 +5997,7 @@ async function handleEmployeeWhatsappIntake({
   // staff review stays there; only the unfinished work in hand is dropped.
   if (isEmployeeIntakeCancel(cleanBody)) {
     const confirmedInReview = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
+    employeeBatchSummaryLastSent.delete(String(phone || ''));
     await replaceEmployeeSession(phone, 'main_menu', {});
     return {
       handled: true,
@@ -6286,7 +6387,11 @@ async function handleEmployeeWhatsappIntake({
           handled: true,
           nextStep: currentStep,
           batchComplete: false,
-          message: `I have not completed this batch because one property is still waiting to be matched with its caption and media.${missingLine}${queuedLine} Send the corrected caption or the missing media; nothing has been merged and nothing is live.`
+          // Ronald typed COMPLETE four times in eighty minutes and got this
+          // refusal each time, with no exit named in it. The way out existed —
+          // CANCEL — but nothing here ever said so, so there was no way to know
+          // the batch could be closed at all.
+          message: `I have not completed this batch because one property is still waiting to be matched with its caption and media.${missingLine}${queuedLine} Send the corrected caption or the missing media; nothing has been merged and nothing is live.\n\nIf you would rather stop here, reply *CANCEL* — anything already in staff review stays there.`
         };
       }
       let propertyIds = Array.isArray(data.property_ids) ? data.property_ids : [];
@@ -8754,6 +8859,26 @@ function scheduleEmployeeBatchSummary(phone) {
   employeeBatchBursts.set(key, burst);
 }
 
+/**
+ * The first line of a batch summary.
+ *
+ * It used to read "📋 Saved 0 of 2 — everything except the 2 below", which is
+ * a sentence that says nothing saved and everything saved at once. Ronald got
+ * it eight times while 72 photos failed to store behind it. A count of zero
+ * deserves its own sentence.
+ */
+function employeeBatchSummaryHeadline(savedCount = 0, notSavedCount = 0) {
+  const saved = Math.max(0, Number(savedCount) || 0);
+  const notSaved = Math.max(0, Number(notSavedCount) || 0);
+  if (!notSaved) return `📋 *All ${saved} saved* for staff review.`;
+  if (!saved) {
+    return notSaved === 1
+      ? '📋 *Nothing saved yet* — the property below still needs a detail.'
+      : `📋 *Nothing saved yet* — all ${notSaved} properties below still need a detail.`;
+  }
+  return `📋 *Saved ${saved} of ${saved + notSaved}* — everything except ${notSaved === 1 ? 'the one below' : `the ${notSaved} below`}.`;
+}
+
 function shortEmployeeLabel(text = '', max = 55) {
   const clean = normalizeInput(stripForwardMarkers(text)).replace(/\s+/g, ' ').trim();
   const chars = Array.from(clean);
@@ -8809,11 +8934,8 @@ async function buildEmployeeBatchSummary(phone, since) {
   }
 
   if (!saved.length && !notSaved.length) return '';
-  const total = saved.length + notSaved.length;
   const lines = [];
-  lines.push(notSaved.length
-    ? `📋 *Saved ${saved.length} of ${total}* — everything except ${notSaved.length === 1 ? 'the one below' : `the ${notSaved.length} below`}.`
-    : `📋 *All ${saved.length} saved* for staff review.`);
+  lines.push(employeeBatchSummaryHeadline(saved.length, notSaved.length));
   if (saved.length) {
     lines.push('', '✅ *Saved for staff review:*');
     saved.forEach((row, index) => lines.push(`${index + 1}. ${shortEmployeeLabel(row.title || 'Property', 50)}`));
@@ -8837,9 +8959,22 @@ async function buildEmployeeBatchSummary(phone, since) {
   return lines.join('\n');
 }
 
+// The last summary each phone was sent, so an unchanged one is not sent twice.
+const employeeBatchSummaryLastSent = new Map();
+
 async function sendEmployeeBatchSummary(phone, since) {
   const text = await buildEmployeeBatchSummary(phone, since);
-  if (!text) return null;
+  if (!text) {
+    employeeBatchSummaryLastSent.delete(String(phone || ''));
+    return null;
+  }
+  // Ronald received the same "Saved 0 of 2" wall eight times in eighty minutes.
+  // Nothing about the batch had changed between them, so each repeat only
+  // pushed the one instruction that mattered further up his screen. A summary
+  // is worth sending when it says something new.
+  const key = String(phone || '');
+  if (employeeBatchSummaryLastSent.get(key) === text) return null;
+  employeeBatchSummaryLastSent.set(key, text);
   return queueWhatsappWebBridgeAutoReply({
     phone,
     message: text,
@@ -14668,6 +14803,10 @@ module.exports.__test = {
   processMessage,
   buildWhatsappListingEnquiryResponse,
   detectLanguageFromText,
+  employeeBatchSummaryHeadline,
+  fetchEmployeeMediaWithRetry,
+  isTransientMediaFetchError,
+  storeEmployeeMedia,
   englishTextConfidence,
   resolveDetectedLanguage,
   shouldAdoptDetectedLanguage,
