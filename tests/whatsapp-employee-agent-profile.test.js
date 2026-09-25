@@ -352,6 +352,34 @@ test('staff can move private-owner listings onto an agent profile', () => {
   );
 });
 
+/**
+ * The same number is stored every which way — "+256708020927", "0708020927",
+ * and, after a typed separator survived, "/0708020927". Comparing whole digit
+ * strings matched none of them against each other and silently produced a
+ * second profile for someone who already had one.
+ */
+test('an agent is matched by the national part of their number', () => {
+  assert.ok(
+    adminSource.includes("RIGHT(regexp_replace(COALESCE(phone, ''), '\\\\D', '', 'g'), 9) = $1"),
+    'the lookup must compare the last nine digits, not the whole string'
+  );
+  assert.ok(
+    adminSource.includes('const phoneSuffix = phoneDigits.slice(-9)'),
+    'the request side must be reduced the same way'
+  );
+});
+
+test('a phone number that already belongs to an agent is a clear answer, not a crash', () => {
+  assert.ok(
+    adminSource.includes("error?.code === '23505'"),
+    'a unique-constraint hit must be recognised'
+  );
+  assert.ok(
+    adminSource.includes('Another agent profile already holds that phone number'),
+    'and explained in words staff can act on'
+  );
+});
+
 test('staff can add an agent logo from the dashboard', () => {
   assert.ok(
     adminSource.includes("router.patch('/agents/:id/profile-photo'"),
