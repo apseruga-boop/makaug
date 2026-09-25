@@ -248,7 +248,8 @@ function employeeIntakeConfirmPrompt({
   district = '',
   identityReceived = false,
   profileLine = '',
-  logoReceived = null
+  logoReceived = null,
+  warningLine = ''
 } = {}) {
   const lines = [
     '📋 *Please confirm before we start*',
@@ -263,6 +264,7 @@ function employeeIntakeConfirmPrompt({
     lines.push(`🖼 Logo: ${logoReceived ? 'received — it goes on their profile' : 'none yet — staff can add one later'}`);
   }
   if (cleanText(profileLine)) lines.push(`📂 ${cleanText(profileLine)}`);
+  if (cleanText(warningLine)) lines.push('', `⚠️ ${cleanText(warningLine)}`);
   lines.push('', 'Is this correct?', '', '1 — Yes, continue', '2 — No, something needs changing');
   return lines.join('\n');
 }
@@ -271,12 +273,24 @@ function employeePropertyCountPrompt() {
   return 'How many properties are you sending in this batch?\n\n1 — One property\n2 — Multiple properties';
 }
 
+/**
+ * People type the separator they were shown even when they are already using
+ * new lines, so real submissions arrive as "Kimuli Brian/ ⏎ 0774505232/ ⏎
+ * Kampala" or "Tuyisengye innocent ⏎ /0708020927 ⏎ /Kampala". Keeping those
+ * strays produced an agent literally called "Kimuli Brian/" with the phone
+ * "0774505232/" — a number nothing can dial, match or link a listing by. Any
+ * separator character left clinging to the edge of a field is dropped.
+ */
+function trimFieldEdges(value = '') {
+  return cleanText(value).replace(/^[\s/\\|,;:·•\-–—]+/, '').replace(/[\s/\\|,;:·•\-–—]+$/, '');
+}
+
 function splitDetails(value = '') {
   const raw = String(value || '').trim();
   const parts = raw.includes('|')
     ? raw.split('|')
     : raw.split(/\r?\n/);
-  return parts.map(cleanText).filter(Boolean);
+  return parts.map(trimFieldEdges).filter(Boolean);
 }
 
 function parseNewAgentDetails(value = '') {
@@ -287,21 +301,31 @@ function parseNewAgentDetails(value = '') {
   const district = parts.length === 4 ? parts[3] : parts[2];
   if (!fullName || digits(phone).length < 8 || !district) return null;
   return {
-    fullName,
-    phone: cleanText(phone),
-    company: company || 'Independent agent',
-    district
+    fullName: trimFieldEdges(fullName),
+    phone: trimFieldEdges(phone),
+    company: trimFieldEdges(company) || 'Independent agent',
+    district: trimFieldEdges(district)
   };
 }
 
 function parseCustomerDetails(value = '') {
   const [fullName = '', phone = '', location = ''] = splitDetails(value);
   if (!fullName || digits(phone).length < 8 || !location) return null;
-  return { fullName, phone: cleanText(phone), location };
+  return {
+    fullName: trimFieldEdges(fullName),
+    phone: trimFieldEdges(phone),
+    location: trimFieldEdges(location)
+  };
 }
 
+/**
+ * The single most expensive answer in this flow. "2" here means the listings
+ * belong to the person who owns them, so no agent profile is created and
+ * nothing links the listings to anybody. It was being chosen for agents over
+ * and over, so the question now says what each answer costs.
+ */
 function employeeRolePrompt() {
-  return '🔐 *makaug employee intake*\nWhat are you loading?\n\n1 — Agent\n2 — New customer';
+  return '🔐 *makaug employee intake*\nWho do these properties belong to?\n\n1 — An *agent or broker* (they get a makaug profile, and every property is listed under it)\n2 — A *private owner* selling their own property (no agent profile is created)';
 }
 
 function employeeAgentExistingPrompt() {
@@ -343,5 +367,6 @@ module.exports = {
   parseEmployeeRole,
   parseNewAgentDetails,
   parsePropertyBatchMode,
-  parseYesNo
+  parseYesNo,
+  trimFieldEdges
 };
