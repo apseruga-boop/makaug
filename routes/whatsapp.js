@@ -944,10 +944,55 @@ function detectLanguageFromText(text) {
   ];
 
   for (const rule of rules) {
-    if (rule.re.test(clean)) return { code: rule.code, confidence: rule.confidence };
+    if (rule.re.test(clean)) {
+      // Every other language on this list is matched by words only it uses.
+      // English is matched partly by property words that Luganda, Swahili and
+      // the rest borrow wholesale — "Nfunira agent e Wakiso" is not English —
+      // so how sure we are is measured rather than assumed.
+      if (rule.code === 'en') return { code: 'en', confidence: englishTextConfidence(clean) };
+      return { code: rule.code, confidence: rule.confidence };
+    }
   }
 
+  // The English rule above is a keyword list, so plain English with none of its
+  // nouns in it — "Can you show me plots for sale in Gayaza please", "thanks,
+  // send me the details" — used to come back as nothing at all and leave the
+  // conversation on whatever language it was already stuck on. No other
+  // language claimed a word here, so the small words decide, and they only
+  // decide anything when there are enough of them to be sure.
+  const english = englishTextConfidence(clean);
+  if (english >= 0.92) return { code: 'en', confidence: english };
+
   return { code: '', confidence: 0 };
+}
+
+/**
+ * How sure we are that a message is English, rather than another language
+ * carrying an English noun.
+ *
+ * The small words are the tell: "I want a standard single house in lweza" is
+ * English with a Ugandan place name in it, while "Nfunira agent e Wakiso" is
+ * Luganda with one English noun. Counting the words that only turn up in
+ * English sentences separates the two; a single borrowed keyword cannot.
+ */
+const ENGLISH_FUNCTION_WORDS = /\b(i|im|a|an|the|is|are|am|was|do|does|did|can|could|would|will|want|wanted|need|needed|looking|look|have|has|my|me|you|your|for|in|on|at|of|to|and|with|please|this|that|it|be|get|got|find|show|send|still|about|any|some|thanks|thank|hello|hi|hey)\b/g;
+
+const ENGLISH_GREETING_OPENER = /^\s*(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening|morning|afternoon|evening)\b/;
+
+function englishTextConfidence(clean) {
+  const text = String(clean || '');
+  const greeting = detectGreetingLanguage(text);
+  if (greeting.code === 'en') return 0.97;
+  // The English rule is tried last, so a message only reaches here when no
+  // other language on the list claimed a word in it. An English greeting
+  // opening such a message is therefore a real signal: "hello there",
+  // "hi makaug", "good morning boss".
+  if (ENGLISH_GREETING_OPENER.test(text)) return 0.95;
+  const distinct = new Set(text.match(ENGLISH_FUNCTION_WORDS) || []).size;
+  if (distinct >= 3) return 0.96;
+  if (distinct === 2) return 0.92;
+  if (distinct === 1) return 0.7;
+  return 0.55;
 }
 
 function detectGreetingLanguage(text) {
@@ -991,7 +1036,15 @@ function shouldAdoptDetectedLanguage({ sessionLang = 'en', sessionStep = 'greeti
   const openLanguageSteps = ['greeting', 'main_menu', 'choose_language', 'missed_call_need', 'missed_call_resolved', 'submitted'];
   const canFreelyAdoptLanguage = openLanguageSteps.includes(sessionStep || 'greeting');
   if (!nextLang || nextLang === currentLang) return false;
-  if (nextLang === 'en' && currentLang !== 'en' && detectedLanguage.source !== 'ai_explicit_language') return false;
+  // Going back to English used to be a one-way door: once a session was set to
+  // Luganda, only an explicit "speak English" could undo it, so Ronald wrote
+  // "Hello" and got a wall of Luganda back. The reason for the door was that a
+  // Luganda sentence with one English noun in it reads as English to a keyword
+  // test. Measured confidence is a better guard than a locked door: a sentence
+  // that is really English clears 0.92, "Nfunira agent e Wakiso" does not.
+  if (nextLang === 'en' && currentLang !== 'en'
+    && detectedLanguage.source !== 'ai_explicit_language'
+    && Number(detectedLanguage.confidence || 0) < 0.92) return false;
   if (detectedLanguage.source === 'intent_entity') return true;
   if (detectedLanguage.source === 'ai_explicit_language') return true;
   if (detectedLanguage.source === 'ai_language') {
@@ -14614,6 +14667,10 @@ module.exports = router;
 module.exports.__test = {
   processMessage,
   buildWhatsappListingEnquiryResponse,
+  detectLanguageFromText,
+  englishTextConfidence,
+  resolveDetectedLanguage,
+  shouldAdoptDetectedLanguage,
   employeeMediaMessageCaption,
   normalizeCaptionPriceNotation,
   buildEmployeeBatchSummary,
