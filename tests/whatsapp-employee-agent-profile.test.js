@@ -262,6 +262,77 @@ test('"2" is only a menu answer straight after a failed search', () => {
     'a name is a search term, never a menu answer');
 });
 
+/**
+ * Real submissions from the field, typed with the separator still attached:
+ * these produced an agent called "Kimuli Brian/" with the phone "0774505232/",
+ * which nothing could dial, match or link a listing by.
+ */
+test('separators typed into the fields never reach the agent record', () => {
+  const { parseNewAgentDetails, parseCustomerDetails, trimFieldEdges } =
+    require('../services/whatsappEmployeeIntakeService');
+
+  assert.deepStrictEqual(parseNewAgentDetails('Kimuli Brian/\n0774505232/\nKampala'), {
+    fullName: 'Kimuli Brian',
+    phone: '0774505232',
+    company: 'Independent agent',
+    district: 'Kampala'
+  });
+  assert.deepStrictEqual(parseCustomerDetails('Tuyisengye innocent \n/0708020927\n/Kampala'), {
+    fullName: 'Tuyisengye innocent',
+    phone: '0708020927',
+    location: 'Kampala'
+  });
+  assert.deepStrictEqual(parseNewAgentDetails('Francis Isabirye | +256 768 524008 | Francis Homes | Kampala'), {
+    fullName: 'Francis Isabirye',
+    phone: '+256 768 524008',
+    company: 'Francis Homes',
+    district: 'Kampala'
+  }, 'the ordinary format must be untouched');
+  assert.strictEqual(parseCustomerDetails('Arthur Seruga | +44 7757 773202 | Kira, Wakiso').location, 'Kira, Wakiso',
+    'a comma inside a field is part of the answer, not a separator');
+  assert.strictEqual(trimFieldEdges('  //Kampala-- '), 'Kampala');
+});
+
+test('the role question says what each answer costs', () => {
+  const { employeeRolePrompt } = require('../services/whatsappEmployeeIntakeService');
+  const prompt = employeeRolePrompt();
+  assert.match(prompt, /agent or broker/i);
+  assert.match(prompt, /no agent profile is created/i,
+    'choosing private owner must state the consequence, because that is the answer that keeps being wrong');
+});
+
+test('a private owner whose number is already an agent is flagged before the batch', () => {
+  const { employeeIntakeConfirmPrompt } = require('../services/whatsappEmployeeIntakeService');
+  const warned = employeeIntakeConfirmPrompt({
+    role: 'customer',
+    fullName: 'Tuyisengye innocent',
+    phone: '0708020927',
+    warningLine: 'This number already belongs to *Tuyisengye innocent*, an agent on makaug.'
+  });
+  assert.match(warned, /⚠️ This number already belongs to/);
+  const clean = employeeIntakeConfirmPrompt({ role: 'customer', fullName: 'A', phone: '+256700000000' });
+  assert.ok(!/⚠️/.test(clean), 'no warning when the number is not an agent');
+  assert.ok(
+    routeSource.includes('function noteEmployeeCustomerPhoneAgentMatch'),
+    'the check must run against the agents table, not be a guess'
+  );
+});
+
+test('staff can attach an ID that arrived after the intake', () => {
+  assert.ok(
+    adminSource.includes("router.patch('/agents/:id/identity-document'"),
+    'an agent who said LATER must have a way for the ID to arrive'
+  );
+  assert.ok(
+    adminSource.includes('[STAFF_SUPPLIED_AGENT_ID]'),
+    'a staff-attached ID must be marked as still needing review'
+  );
+  assert.ok(
+    appSource.includes('adminUploadAgentIdentityDocument'),
+    'the dashboard must offer the upload'
+  );
+});
+
 test('staff can move private-owner listings onto an agent profile', () => {
   assert.ok(
     adminSource.includes("router.post('/agents/from-listings'"),
