@@ -121,7 +121,14 @@ const wahaSrv = http.createServer(async (req, res) => {
   }
   if (url.pathname.startsWith('/api/sessions/')) return reply(res, 200, { name: 'default', status: 'WORKING' });
   if (url.pathname.startsWith('/api/send')) {
-    received.sends.push({ endpoint: url.pathname, body: JSON.parse((await body(req)).toString()) });
+    const parsed = JSON.parse((await body(req)).toString());
+    received.sends.push({ endpoint: url.pathname, body: parsed });
+    // Real WAHA downloads the file before it can send it, and answers 500 with
+    // the fetch error inside when that download is refused. A hotlinked CDN
+    // thumbnail is exactly how that happens in production.
+    if (String(parsed?.file?.url || '').includes('unfetchable')) {
+      return reply(res, 500, { message: 'Request failed with status code 403' });
+    }
     return reply(res, 201, { id: 'waha-msg-' + received.sends.length });
   }
   return reply(res, 404, { ok: false });
@@ -527,6 +534,37 @@ async function post(url, obj, headers = {}) {
     assert.strictEqual(imgSend.body.file.url, 'https://makaug.com/p/1.jpg', 'media url passed through');
     assert.strictEqual(imgSend.body.caption, 'Ntinda 3br', 'caption passed through');
     console.log('✓ outbound image sends via WAHA with caption');
+
+    // 8b. a picture that cannot be sent must not take the answer with it.
+    //
+    // On 25 Sep 2026 Ronald asked for "a standard single house in lweza". The
+    // backend built the answer in 5.5 seconds; the card's photo was hotlinked
+    // from the site the listing was found on; WAHA's download of it got 403 and
+    // the whole send failed. He received nothing at all, twice — no listings,
+    // no text, no explanation. The words must survive the picture.
+    const sendsBeforeFallback = received.sends.length;
+    const lwezaCard = '1. Standard single house in Lweza — UGX 400,000/month\nhttps://makaug.com/p/4242';
+    outbox = [{
+      id: 'ob2b',
+      recipient: '256700111222',
+      text: '',
+      caption: lwezaCard,
+      media_url: 'https://makaug.com/p/unfetchable.jpg',
+      media_type: 'image'
+    }];
+    await sleep(2600);
+    const fallbackSends = received.sends.slice(sendsBeforeFallback);
+    const triedImage = fallbackSends.find((s) => s.endpoint === '/api/sendImage');
+    const sentText = fallbackSends.find((s) => s.endpoint === '/api/sendText');
+    assert.ok(triedImage, 'the picture is still attempted first');
+    assert.ok(sentText, 'when the picture fails the words are sent on their own');
+    assert.strictEqual(sentText.body.text, lwezaCard, 'the caption is what gets sent, in full');
+    assert.ok(received.acks.some((a) => a.id === 'ob2b' && a.kind === 'sent'),
+      'and the message counts as sent, because the person did receive the answer');
+    const healthAfterFallback = await fetch(`${adapterUrl}/health`).then((r) => r.json());
+    assert.strictEqual(healthAfterFallback.stats.media_fallbacks, 1,
+      'the fallback is counted, so a listing whose photos never send is visible rather than silent');
+    console.log('✓ a picture that cannot be fetched falls back to sending the words');
 
     // 9. failures are reported, not swallowed
     outbox = [{ id: 'ob3', recipient: '', text: 'nowhere', media_type: 'text' }];
