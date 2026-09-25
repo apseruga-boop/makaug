@@ -135,6 +135,51 @@ function firstImageFromCollection(value) {
   return '';
 }
 
+/**
+ * Only a picture we serve ourselves goes on a WhatsApp card.
+ *
+ * WhatsApp cannot be handed a link; the transport has to download the file
+ * first. A thumbnail hotlinked from the site a listing was found on — a signed
+ * TikTok CDN URL, say — answers that download with 403. The send then fails,
+ * and because the photo and the words travel as one message, the words are
+ * lost with it: on 25 Sep 2026 someone asking for a house in Lweza got nothing
+ * back at all, twice.
+ *
+ * A card with no photo is worth immeasurably more than a card that cannot be
+ * sent, so anything we do not host is not offered as the image.
+ */
+function ownMediaHost(host = '') {
+  const candidate = String(host || '').toLowerCase();
+  if (!candidate) return false;
+  const hosts = new Set();
+  const add = (value) => {
+    try {
+      const parsed = new URL(String(value || '').trim());
+      if (parsed.host) hosts.add(parsed.host.toLowerCase());
+    } catch (_error) { /* not a URL we can learn a host from */ }
+  };
+  add(ACTIVE_TENANT.domain);
+  add(process.env.PUBLIC_BASE_URL);
+  add(process.env.S3_PUBLIC_BASE_URL);
+  for (const known of hosts) {
+    if (candidate === known) return true;
+    // media.makaug.com is ours; p19-common-sign.tiktokcdn-us.com is not.
+    const root = known.replace(/^www\./, '');
+    if (candidate === root || candidate.endsWith(`.${root}`)) return true;
+  }
+  return false;
+}
+
+function servablePropertyImageUrl(value = '') {
+  const url = publicMediaUrl(value);
+  if (!url) return '';
+  try {
+    return ownMediaHost(new URL(url).host) ? url : '';
+  } catch (_error) {
+    return '';
+  }
+}
+
 function whatsappPropertyImageUrl(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   const rawSource = extra.raw_source_post && typeof extra.raw_source_post === 'object' ? extra.raw_source_post : {};
@@ -159,7 +204,7 @@ function whatsappPropertyImageUrl(row = {}) {
     rawSource.thumbnail_url
   ];
   for (const candidate of candidates) {
-    const url = publicMediaUrl(candidate);
+    const url = servablePropertyImageUrl(candidate);
     if (url) return url;
   }
   return '';
@@ -282,6 +327,7 @@ module.exports = {
   propertyIdFromWhatsappReply,
   propertyIdsFromWhatsappReply,
   publicMediaUrl,
+  servablePropertyImageUrl,
   totalWhatsappSearchMatches,
   WHATSAPP_PROPERTY_SEARCH_PREVIEW_LIMIT,
   whatsappListingTypeLabel,
