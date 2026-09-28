@@ -1,3 +1,8 @@
+const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
+const { handOffListingLead, loadListingContact } = require('../services/leadHandoffService');
+const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
+const leadFormLimiter = createLeadFormLimiter();
+const leadClickLimiter = createLeadClickLimiter();
 const express = require('express');
 const jwt = require('jsonwebtoken');
 
@@ -332,19 +337,6 @@ function normalizeListingOrigin(value = '') {
   };
   const normalized = aliases[origin] || origin;
   return ['found_online', 'private', 'agent'].includes(normalized) ? normalized : '';
-}
-
-function foundOnlinePropertySql(alias = 'p') {
-  const a = alias ? `${alias}.` : '';
-  return `(
-    LOWER(COALESCE(${a}source, '')) = 'found_online_property_source_v1'
-    OR LOWER(COALESCE(${a}listed_via, '')) = 'found_online'
-    OR LOWER(COALESCE(${a}extra_fields->>'source_badge', '')) IN ('found_online', 'found online', 'sourced_online', 'sourced online')
-    OR LOWER(COALESCE(${a}extra_fields->>'found_online', 'false')) IN ('true', '1', 'yes')
-    OR LOWER(COALESCE(${a}extra_fields->>'found_online_candidate', 'false')) IN ('true', '1', 'yes')
-    OR LOWER(COALESCE(${a}extra_fields->>'social_search_candidate', 'false')) IN ('true', '1', 'yes')
-    OR LOWER(COALESCE(${a}extra_fields->>'sourced_inventory_candidate', 'false')) IN ('true', '1', 'yes')
-  )`;
 }
 
 function listingOriginSql(alias = 'p') {
@@ -4482,7 +4474,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-router.post('/:id/whatsapp-click', async (req, res, next) => {
+router.post('/:id/whatsapp-click', leadClickLimiter, leadHoneypot, async (req, res, next) => {
   try {
     const propertyId = req.params.id;
     const source = cleanText(req.body.source) || 'listing_detail_whatsapp';
@@ -4491,7 +4483,7 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
     const contactName = cleanText(req.body.contact_name) || 'WhatsApp contact initiated';
     const contactPhone = cleanText(req.body.contact_phone);
     const contactEmail = cleanText(req.body.contact_email);
-    const targetPhone = cleanText(req.body.target_phone);
+    const visitorId = cleanText(req.body.visitor_id).slice(0, 80);
     const language = cleanText(req.body.language) || 'en';
 
     if (contactPhone && !isValidPhone(contactPhone)) {
@@ -4501,55 +4493,19 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'contact_email is invalid' });
     }
 
-    const exists = await db.query(
-      `SELECT
-         p.id,
-         p.agent_id,
-         p.title,
-         p.inquiry_reference,
-         p.status,
-         p.lister_name,
-         p.lister_phone,
-         p.lister_email,
-         a.full_name AS agent_name,
-         a.phone AS agent_phone,
-         a.whatsapp AS agent_whatsapp,
-         a.email AS agent_email
-       FROM properties p
-       LEFT JOIN agents a ON a.id = p.agent_id
-       WHERE p.id = $1
-         AND (${publicLivePropertyStatusSql('p')} OR LOWER(COALESCE(p.status, '')) = 'sold')
-       LIMIT 1`,
-      [propertyId]
-    );
-    if (!exists.rows.length) {
+    const listing = await loadListingContact(db, propertyId);
+    if (!listing || !(listing.is_live || String(listing.status || '').toLowerCase() === 'sold')) {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
 
-    const listingContact = exists.rows[0];
-    const resolvedTargetPhone = targetPhone || listingContact.agent_whatsapp || listingContact.agent_phone || listingContact.lister_phone || null;
-    const resolvedTargetEmail = listingContact.agent_email || listingContact.lister_email || null;
-    const resolvedTargetName = listingContact.agent_name || listingContact.lister_name || null;
-
-    const inserted = await db.query(
-      `INSERT INTO property_inquiries (
-        property_id,
-        contact_name,
-        contact_phone,
-        contact_email,
-        message,
-        channel
-      ) VALUES ($1,$2,$3,$4,$5,$6)
-      RETURNING id, created_at`,
-      [propertyId, contactName, contactPhone || null, contactEmail || null, message, 'whatsapp']
-    );
-
     const lead = await createLead(db, {
       listingId: propertyId,
-      agentId: listingContact.agent_id || null,
-      buyerRef: contactPhone || contactEmail || req.ip || null,
-      billable: Boolean(listingContact.agent_id),
+      agentId: listing.agent_id || null,
+      visitorId,
+      buyerRef: contactPhone || contactEmail || visitorId || null,
+      billable: Boolean(listing.agent_id) && !listing.is_found_online,
       charged: false,
+      channel: 'whatsapp',
       contact: {
         name: contactName,
         phone: contactPhone || null,
@@ -4564,46 +4520,53 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
       activityType: 'whatsapp_contact_initiated',
       metadata: {
         cta_location: ctaLocation,
-        target_phone_present: Boolean(resolvedTargetPhone),
-        agent_id: listingContact.agent_id || null,
-        billable: Boolean(listingContact.agent_id),
-        property_reference: exists.rows[0].inquiry_reference || null,
-        property_inquiry_id: inserted.rows[0].id
+        visitor_id: visitorId || null,
+        target_phone_present: Boolean(listing.agent_whatsapp || listing.agent_phone || listing.lister_phone),
+        property_reference: listing.inquiry_reference || null,
+        found_online: Boolean(listing.is_found_online)
       }
     });
 
-    await logNotification(db, {
-      recipientPhone: resolvedTargetPhone || null,
-      recipientEmail: resolvedTargetEmail || null,
-      channel: 'in_app',
-      type: 'whatsapp_contact_initiated',
-      status: 'logged',
-      payloadSummary: {
-        source,
-        cta_location: ctaLocation,
-        language,
-        property_title: exists.rows[0].title,
-        inquiry_reference: exists.rows[0].inquiry_reference,
-        inquiry_id: inserted.rows[0].id,
-        target_contact_name: resolvedTargetName
-      },
-      relatedListingId: propertyId,
-      relatedLeadId: lead?.id || null
+    // Raw click log (engagement), linked to the one lead it belongs to.
+    const inserted = await db.query(
+      `INSERT INTO property_inquiries (
+        property_id, contact_name, contact_phone, contact_email, message, channel, lead_id, is_repeat
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      RETURNING id, created_at`,
+      [propertyId, contactName, contactPhone || null, contactEmail || null, message, 'whatsapp', lead?.id || null, Boolean(lead?._isRepeat)]
+    );
+
+    const handoff = await handOffListingLead(db, {
+      lead,
+      listing,
+      kind: 'whatsapp_click',
+      seeker: { name: contactName, phone: contactPhone, email: contactEmail },
+      message
     });
 
-    return res.status(201).json({ ok: true, data: inserted.rows[0] });
+    return res.status(201).json({
+      ok: true,
+      data: {
+        ...inserted.rows[0],
+        lead_id: lead?.id || null,
+        repeat: Boolean(lead?._isRepeat),
+        handoff: handoff.status
+      }
+    });
   } catch (error) {
     return next(error);
   }
 });
 
-router.post('/:id/inquiries', async (req, res, next) => {
+router.post('/:id/inquiries', leadFormLimiter, leadHoneypot, async (req, res, next) => {
   try {
     const propertyId = req.params.id;
     const contactName = cleanText(req.body.contact_name);
     const contactPhone = cleanText(req.body.contact_phone);
     const contactEmail = cleanText(req.body.contact_email);
     const message = cleanText(req.body.message);
+    const channel = cleanText(req.body.channel) || 'web';
+    const visitorId = cleanText(req.body.visitor_id).slice(0, 80);
 
     const errors = [];
     if (!contactName) errors.push('contact_name is required');
@@ -4615,98 +4578,67 @@ router.post('/:id/inquiries', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
     }
 
-    const exists = await db.query(
-      `SELECT
-         p.id,
-         p.agent_id,
-         p.title,
-         p.inquiry_reference,
-         p.lister_name,
-         p.lister_phone,
-         p.lister_email,
-         a.full_name AS agent_name,
-         a.phone AS agent_phone,
-         a.whatsapp AS agent_whatsapp,
-         a.email AS agent_email
-       FROM properties p
-       LEFT JOIN agents a ON a.id = p.agent_id
-       WHERE p.id = $1
-         AND p.status = $2`,
-      [propertyId, 'approved']
-    );
-    if (!exists.rows.length) {
+    const listing = await loadListingContact(db, propertyId);
+    if (!listing || !listing.is_live) {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
 
-    const listingContact = exists.rows[0];
-    const targetPhone = listingContact.agent_whatsapp || listingContact.agent_phone || listingContact.lister_phone || null;
-    const targetEmail = listingContact.agent_email || listingContact.lister_email || null;
-    const targetName = listingContact.agent_name || listingContact.lister_name || null;
-
-    const inserted = await db.query(
-      `INSERT INTO property_inquiries (
-        property_id,
-        contact_name,
-        contact_phone,
-        contact_email,
-        message,
-        channel
-      ) VALUES ($1,$2,$3,$4,$5,$6)
-      RETURNING id, created_at`,
-      [
-        propertyId,
-        contactName,
-        contactPhone || null,
-        contactEmail || null,
-        message || null,
-        cleanText(req.body.channel) || 'web'
-      ]
-    );
-
     const lead = await createLead(db, {
       listingId: propertyId,
-      agentId: listingContact.agent_id || null,
-      buyerRef: contactPhone || contactEmail || req.ip || null,
-      billable: Boolean(listingContact.agent_id),
+      agentId: listing.agent_id || null,
+      visitorId,
+      buyerRef: contactPhone || contactEmail || null,
+      billable: Boolean(listing.agent_id) && !listing.is_found_online,
       charged: false,
+      channel,
       contact: {
         name: contactName,
         phone: contactPhone || null,
         email: contactEmail || null,
-        preferredContactChannel: cleanText(req.body.channel) || 'web',
+        preferredContactChannel: channel,
         roleType: 'property_seeker'
       },
-      source: cleanText(req.body.channel) || 'web',
+      source: channel,
       leadType: 'enquiry',
+      explicitContact: true,
       message: message || 'Property enquiry submitted from makaug.',
       activityType: 'property_enquiry_created',
       metadata: {
-        property_inquiry_id: inserted.rows[0].id,
-        agent_id: listingContact.agent_id || null,
-        billable: Boolean(listingContact.agent_id),
-        target_contact_name: targetName,
-        property_reference: listingContact.inquiry_reference || null,
-        property_title: listingContact.title || null
+        agent_id: listing.agent_id || null,
+        property_reference: listing.inquiry_reference || null,
+        property_title: listing.title || null
       }
     });
 
-    await logNotification(db, {
-      recipientPhone: targetPhone || null,
-      recipientEmail: targetEmail || null,
-      channel: 'in_app',
-      type: 'property_enquiry_for_lister',
-      status: 'logged',
-      payloadSummary: {
-        inquiry_id: inserted.rows[0].id,
-        property_title: listingContact.title,
-        inquiry_reference: listingContact.inquiry_reference,
-        target_contact_name: targetName
-      },
-      relatedListingId: propertyId,
-      relatedLeadId: lead?.id || null
+    const inserted = await db.query(
+      `INSERT INTO property_inquiries (
+        property_id, contact_name, contact_phone, contact_email, message, channel, lead_id, is_repeat
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      RETURNING id, created_at`,
+      [propertyId, contactName, contactPhone || null, contactEmail || null, message || null, channel, lead?.id || null, Boolean(lead?._isRepeat)]
+    );
+
+    // A form enquiry after an earlier WhatsApp click (or with a new message)
+    // still reaches the lister; handOffListingLead decides from the repeat flags.
+    const handoff = await handOffListingLead(db, {
+      lead,
+      listing,
+      kind: 'enquiry',
+      seeker: { name: contactName, phone: contactPhone, email: contactEmail },
+      message
     });
 
-    return res.status(201).json({ ok: true, data: inserted.rows[0] });
+    return res.status(201).json({
+      ok: true,
+      data: {
+        ...inserted.rows[0],
+        lead_id: lead?.id || null,
+        repeat: Boolean(lead?._isRepeat),
+        handoff: handoff.status,
+        lister_name: handoff.lister?.name || null,
+        lister_phone: listing.is_found_online ? null : (handoff.lister?.phone || null)
+      }
+    });
   } catch (error) {
     return next(error);
   }

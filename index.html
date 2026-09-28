@@ -8855,6 +8855,28 @@
                 <input name="date_from" type="date" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" aria-label="Lead date from">
                 <input name="date_to" type="date" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" aria-label="Lead date to">
                 <input name="bundle_tag" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" placeholder="Bundle tag">
+                <input name="search" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" placeholder="Name, phone, listing, agent">
+                <select name="status" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" aria-label="Lead status">
+                  <option value="">Any status</option>
+                  <option value="open_all">All open</option>
+                  <option value="open">Open (not handed over)</option>
+                  <option value="handed_over">Handed over</option>
+                  <option value="contacted">Contacted</option>
+                  <option value="qualified">Qualified</option>
+                  <option value="won">Won</option>
+                  <option value="lost">Lost</option>
+                  <option value="spam">Spam</option>
+                  <option value="closed">Closed</option>
+                </select>
+                <select name="handoff" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" aria-label="Handoff">
+                  <option value="">Any handoff</option>
+                  <option value="no_lister_contact">No lister contact — needs staff</option>
+                  <option value="failed">Handoff failed</option>
+                  <option value="sent">Sent to lister</option>
+                  <option value="queued">Queued to lister</option>
+                  <option value="contact_shown">Contact shown</option>
+                  <option value="makaug_team">For makaug team</option>
+                </select>
                 <button class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-3 py-2 text-xs font-black">Apply filters</button>
               </form>
               <div id="admin-crm-filter-status" class="mb-3 text-xs text-gray-500">Showing the latest leads.</div>

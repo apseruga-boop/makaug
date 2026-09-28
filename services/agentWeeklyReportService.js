@@ -200,12 +200,24 @@ async function computePeriodMetrics(ids, startsAt, endsBefore) {
          AND e.payload->>'property_id' = ANY($1::text[])`,
       [ids, startsAt, endsBefore]
     ),
+    // Honest counts: one per person, repeats and test leads excluded.
+    //   enquiries       = people who sent a form enquiry, viewing/callback
+    //                     request, or asked on makaug WhatsApp
+    //   whatsapp_clicks = people who opened WhatsApp to the agent (first
+    //                     click only)
     db.query(
-      `SELECT COUNT(*) FILTER (WHERE pi.channel <> 'whatsapp')::int AS enquiries,
-              COUNT(*) FILTER (WHERE pi.channel = 'whatsapp')::int AS whatsapp_clicks
-       FROM property_inquiries pi
-       WHERE pi.created_at >= $2 AND pi.created_at < $3
-         AND pi.property_id = ANY($1::uuid[])`,
+      `SELECT
+         (SELECT COUNT(*)::int FROM leads l
+           WHERE l.created_at >= $2 AND l.created_at < $3
+             AND l.listing_id = ANY($1::uuid[])
+             AND l.is_test = FALSE
+             AND l.lead_type IN ('enquiry', 'viewing', 'callback')
+             AND NOT (COALESCE(l.channel, '') = 'whatsapp' AND COALESCE(l.source, '') NOT LIKE 'whatsapp_bot%')) AS enquiries,
+         (SELECT COUNT(*)::int FROM property_inquiries pi
+           WHERE pi.created_at >= $2 AND pi.created_at < $3
+             AND pi.property_id = ANY($1::uuid[])
+             AND pi.channel = 'whatsapp'
+             AND pi.is_repeat = FALSE) AS whatsapp_clicks`,
       [ids, startsAt, endsBefore]
     ),
     db.query(
@@ -240,9 +252,12 @@ async function computeTopListings(ids, startsAt, endsBefore, limit = 5) {
        GROUP BY 1
      ),
      q AS (
-       SELECT pi.property_id, COUNT(*)::int AS enquiries
-       FROM property_inquiries pi
-       WHERE pi.created_at >= $2 AND pi.created_at < $3 AND pi.property_id = ANY($1::uuid[])
+       -- Same basis as the summary: one per person per listing.
+       SELECT l.listing_id AS property_id, COUNT(*)::int AS enquiries
+       FROM leads l
+       WHERE l.created_at >= $2 AND l.created_at < $3 AND l.listing_id = ANY($1::uuid[])
+         AND l.is_test = FALSE
+         AND l.lead_type IN ('enquiry', 'viewing', 'callback')
        GROUP BY 1
      )
      SELECT o.id, o.title, o.area, o.district, o.status,
@@ -818,6 +833,7 @@ module.exports = {
   cleanListings,
   cleanTextList,
   computeAgentWeeklyReport,
+  computePeriodMetrics,
   computeExtras,
   hourLabel,
   ensureAgentNumber,

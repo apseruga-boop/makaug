@@ -1,3 +1,4 @@
+const { createLead } = require('../services/leadService');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 
@@ -552,7 +553,28 @@ router.post('/need-request', optionalAuth, async (req, res, next) => {
         asLanguage(req.body.language || req.body.preferred_language)
       ]
     );
-    return res.status(201).json({ ok: true, data: result.rows[0] });
+    // Into the Lead Centre with whatever contact we have for the student.
+    const lead = await createLead(db, {
+      userId: req.userAuth?.id || null,
+      contact: {
+        userId: req.userAuth?.id || null,
+        name: [req.userAuth?.first_name, req.userAuth?.last_name].filter(Boolean).join(' ') || asText(req.body.name) || 'Student',
+        phone: req.userAuth?.phone || asText(req.body.phone) || null,
+        email: req.userAuth?.email || asText(req.body.email) || null,
+        preferredContactChannel: result.rows[0].preferred_contact_channel,
+        roleType: 'student'
+      },
+      source: result.rows[0].source || 'student_dashboard',
+      leadType: 'property_need_request',
+      channel: 'web',
+      category: 'student',
+      location: result.rows[0].location,
+      budget: result.rows[0].budget,
+      message: result.rows[0].message || `Student accommodation near ${result.rows[0].campus || 'campus'}`,
+      metadata: { property_need_request_id: result.rows[0].id, campus: result.rows[0].campus }
+    });
+    if (lead?.id) await db.query('UPDATE property_need_requests SET contact_id = $2 WHERE id = $1', [result.rows[0].id, lead.contact_id]).catch(() => {});
+    return res.status(201).json({ ok: true, data: { ...result.rows[0], lead_id: lead?.id || null } });
   } catch (error) {
     return next(error);
   }

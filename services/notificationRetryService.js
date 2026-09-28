@@ -52,7 +52,9 @@ async function retryNotification(db, { id, adminUserId = null, req = null } = {}
       body: `makaug update: retrying ${item.type || 'notification'}.\nRef: ${id}`
     });
   } else if (channel === 'in_app') {
-    delivery = { sent: true, provider: 'in_app' };
+    // An in-app row is a log entry: there is nothing to deliver, so a retry
+    // must not claim it was sent.
+    delivery = { sent: false, reason: 'in_app_log_only_nothing_to_deliver' };
   }
   const retryStatus = isProviderMissing(delivery) ? 'failed' : notificationStatusFromDelivery(delivery);
   const failureReason = delivery.error || delivery.reason || (isProviderMissing(delivery) ? `${channel}_provider_missing` : null);

@@ -109,7 +109,7 @@ const {
   mergePlacementRowsWithCatalog,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
-const { addLeadActivity, createLead } = require('../services/leadService');
+const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
 const { MONETIZATION_SPINE_MARKER, markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
@@ -3746,7 +3746,7 @@ router.get('/command-centre', async (_req, res, next) => {
       adminCommandCentreMetric('hidden_listings', () => safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'")),
       adminCommandCentreMetric('broker_pending', () => safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending' OR COALESCE(registration_status, 'not_registered') <> 'registered'")),
       adminCommandCentreMetric('broker_approved', () => safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'approved' AND COALESCE(registration_status, 'not_registered') = 'registered'")),
-      adminCommandCentreMetric('open_leads', () => safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE lead_status = 'open'`)),
+      adminCommandCentreMetric('open_leads', () => safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE is_test = FALSE AND lead_status IN ${OPEN_LEAD_STATUS_SQL}`)),
       adminCommandCentreMetric('hot_leads', () => safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE priority IN ('high','urgent') OR lead_score >= 50`)),
       adminCommandCentreMetric('overdue_tasks', () => safeCount("SELECT COUNT(*)::int AS total FROM lead_tasks WHERE status = 'open' AND due_at < NOW()")),
       adminCommandCentreMetric('whatsapp_needs_human', () => safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_conversation_state WHERE status IN ('needs_human','escalated')")),
@@ -10909,10 +10909,10 @@ router.get('/crm/summary', async (_req, res, next) => {
         `${adminLeadUnionSql()}
          SELECT
            COUNT(*)::int AS total_leads,
-           COUNT(*) FILTER (WHERE lead_status = 'open')::int AS open_leads,
+           COUNT(*) FILTER (WHERE lead_status IN ${OPEN_LEAD_STATUS_SQL})::int AS open_leads,
            COUNT(*) FILTER (WHERE assigned_to_user_id IS NULL)::int AS unassigned_leads,
            COUNT(*) FILTER (WHERE priority IN ('high','urgent'))::int AS hot_leads,
-           COUNT(*) FILTER (WHERE next_follow_up_at < NOW() AND lead_status = 'open')::int AS overdue_followups,
+           COUNT(*) FILTER (WHERE next_follow_up_at < NOW() AND lead_status IN ${OPEN_LEAD_STATUS_SQL})::int AS overdue_followups,
            COALESCE(SUM(budget), 0)::bigint AS budget_pipeline
          FROM all_leads`
       ),
@@ -11462,7 +11462,13 @@ function buildAdminLeadFilters(query = {}) {
     values.push(value);
     filters.push(sql.replace('?', `$${values.length}`));
   };
-  if (query.status) addFilter('lead_status = ?', String(query.status).trim());
+  const includeTests = ['1', 'true', 'yes'].includes(String(query.include_tests || '').toLowerCase());
+  if (!includeTests) filters.push('is_test = FALSE');
+  const status = String(query.status || '').trim().toLowerCase();
+  if (status === 'open_all') filters.push(`lead_status IN ${OPEN_LEAD_STATUS_SQL}`);
+  else if (status) addFilter('lead_status = ?', status);
+  if (query.handoff) addFilter('handoff_status = ?', String(query.handoff).trim());
+  if (query.agent_id) addFilter('agent_id = ?', String(query.agent_id).trim());
   if (query.source) addFilter('source = ?', String(query.source).trim());
   if (query.type) addFilter('lead_type = ?', String(query.type).trim());
   if (query.priority) addFilter('priority = ?', String(query.priority).trim());
@@ -11473,7 +11479,7 @@ function buildAdminLeadFilters(query = {}) {
   if (query.date_to) addFilter(`created_at < (?::date + INTERVAL '1 day')`, String(query.date_to).trim());
   if (query.search) {
     values.push(`%${String(query.search).trim()}%`);
-    filters.push(`(message ILIKE $${values.length} OR location ILIKE $${values.length} OR contact_name ILIKE $${values.length} OR contact_phone ILIKE $${values.length} OR contact_email ILIKE $${values.length})`);
+    filters.push(`(message ILIKE $${values.length} OR location ILIKE $${values.length} OR contact_name ILIKE $${values.length} OR contact_phone ILIKE $${values.length} OR contact_email ILIKE $${values.length} OR listing_title ILIKE $${values.length} OR listing_reference ILIKE $${values.length} OR agent_name ILIKE $${values.length})`);
   }
   return {
     values,
@@ -11513,10 +11519,20 @@ function adminLeadUnionSql() {
         c.phone AS contact_phone,
         c.email AS contact_email,
         c.whatsapp AS contact_whatsapp,
-        p.title AS listing_title
+        p.title AS listing_title,
+        p.inquiry_reference AS listing_reference,
+        l.agent_id::text AS agent_id,
+        a.full_name AS agent_name,
+        l.billable,
+        l.channel,
+        l.handoff_status,
+        l.handoff_at,
+        l.repeat_count,
+        l.is_test
       FROM leads l
       LEFT JOIN contacts c ON c.id = l.contact_id
       LEFT JOIN properties p ON p.id = l.listing_id
+      LEFT JOIN agents a ON a.id = l.agent_id
     ),
     mortgage_enquiry_fallback AS (
       SELECT
@@ -11556,7 +11572,16 @@ function adminLeadUnionSql() {
         me.user_phone AS contact_phone,
         NULLIF(me.payload->>'email', '') AS contact_email,
         me.user_phone AS contact_whatsapp,
-        NULL::text AS listing_title
+        NULL::text AS listing_title,
+        NULL::text AS listing_reference,
+        NULL::text AS agent_id,
+        NULL::text AS agent_name,
+        FALSE AS billable,
+        'web'::text AS channel,
+        'makaug_team'::text AS handoff_status,
+        NULL::timestamptz AS handoff_at,
+        0 AS repeat_count,
+        (COALESCE(me.payload->>'launch_proof', '') ~* '^(true|1|yes)$') AS is_test
       FROM mortgage_enquiries me
       WHERE NOT EXISTS (
         SELECT 1
@@ -11627,7 +11652,9 @@ router.get('/leads-export.csv', async (req, res, next) => {
     const columns = [
       'id', 'created_at', 'lead_status', 'lifecycle_stage', 'priority', 'source',
       'lead_type', 'category', 'location', 'budget', 'contact_name', 'contact_phone',
-      'contact_email', 'contact_whatsapp', 'message', 'listing_title', 'bundle_tag'
+      'contact_email', 'contact_whatsapp', 'message', 'listing_title', 'listing_reference',
+      'listing_id', 'agent_name', 'agent_id', 'billable', 'channel', 'handoff_status', 'handoff_at',
+      'repeat_count', 'lead_score', 'assigned_to_user_id', 'bundle_tag'
     ];
     const lines = [columns.map(csvCell).join(',')];
     rows.rows.forEach((row) => {
@@ -11869,7 +11896,36 @@ router.get('/leads/:id', async (req, res, next) => {
 
 router.patch('/leads/:id', async (req, res, next) => {
   try {
-    const leadId = req.params.id;
+    let leadId = String(req.params.id || '');
+    // Mortgage enquiries shown without a CRM lead get one the moment staff act on them.
+    if (leadId.startsWith('mortgage-enquiry:')) {
+      const enquiryId = leadId.slice('mortgage-enquiry:'.length);
+      if (!/^[0-9a-f-]{36}$/i.test(enquiryId)) return res.status(404).json({ ok: false, error: 'Lead not found' });
+      const enquiry = await db.query('SELECT * FROM mortgage_enquiries WHERE id = $1 LIMIT 1', [enquiryId]);
+      if (!enquiry.rows.length) return res.status(404).json({ ok: false, error: 'Lead not found' });
+      const me = enquiry.rows[0];
+      const existingLead = await db.query(`SELECT id FROM leads WHERE metadata->>'mortgage_enquiry_id' = $1 LIMIT 1`, [String(me.id)]);
+      const created = existingLead.rows[0] || await createLead(db, {
+        contact: { name: me.payload?.name || 'Mortgage lead', phone: me.user_phone, email: me.payload?.email || null, roleType: 'mortgage_seeker' },
+        source: me.payload?.source || 'website_mortgage_finder',
+        leadType: 'mortgage',
+        category: me.property_purpose || 'mortgage_help',
+        budget: me.property_price,
+        message: 'Mortgage help requested',
+        dedupe: false,
+        metadata: { mortgage_enquiry_id: me.id, promoted_from_fallback: true }
+      });
+      if (!created?.id) return res.status(500).json({ ok: false, error: 'Could not create CRM lead for this mortgage enquiry' });
+      leadId = created.id;
+    }
+    if (!/^[0-9a-f-]{36}$/i.test(leadId)) return res.status(404).json({ ok: false, error: 'Lead not found' });
+    if (Object.prototype.hasOwnProperty.call(req.body, 'lead_status')) {
+      const normalized = normalizeLeadStatus(req.body.lead_status, null);
+      if (!normalized) {
+        return res.status(400).json({ ok: false, error: `lead_status must be one of: ${LEAD_STATUSES.join(', ')}` });
+      }
+      req.body.lead_status = normalized;
+    }
     const previous = await db.query('SELECT * FROM leads WHERE id = $1 LIMIT 1', [leadId]);
     if (!previous.rows.length) return res.status(404).json({ ok: false, error: 'Lead not found' });
     const updates = [];
@@ -11901,6 +11957,9 @@ router.patch('/leads/:id', async (req, res, next) => {
       updates[updates.length - 1] = `metadata = COALESCE(metadata, '{}'::jsonb) || $${values.length}::jsonb`;
     }
     if (!updates.length) return res.status(400).json({ ok: false, error: 'No lead updates provided' });
+    if (req.body.lead_status) {
+      updates.push(CLOSED_LEAD_STATUSES.includes(req.body.lead_status) ? 'closed_at = COALESCE(closed_at, NOW())' : 'closed_at = NULL');
+    }
     values.push(leadId);
     const updated = await db.query(
       `UPDATE leads

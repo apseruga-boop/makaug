@@ -43,6 +43,8 @@ const {
 } = require('../services/whatsappConversationService');
 const { sendSupportEmail, getSupportEmail } = require('../services/emailService');
 const { createLead, addLeadActivity } = require('../services/leadService');
+const { handOffListingLead, loadListingContact } = require('../services/leadHandoffService');
+const { isPublicLivePropertyStatus } = require('../utils/publicInventoryStatus');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const {
   claimWhatsappWebBridgeMessages,
@@ -2708,12 +2710,68 @@ async function buildWhatsappListingEnquiryResponse(enquiry = {}, { phone = '', l
   });
 
   if (!property) return listingEnquiryNotFoundReply(reference);
+  // Only live listings hand out a lister's number. Pending, rejected or
+  // removed listings answer as "not found", exactly like the website.
+  if (!isPublicLivePropertyStatus(property.status)) return listingEnquiryNotFoundReply(reference || property.inquiry_reference);
+
+  // Log the enquiry as a lead and pass this person's number to the lister.
+  // One indexed lookup decides what the reply can promise; the CRM write and
+  // the lister's WhatsApp are deferred until after the reply is released.
+  let listerNotified = false;
+  try {
+    const listing = await loadListingContact(db, property.id);
+    // Agent listings keep the number on the agent, not the listing.
+    if (listing && !listing.is_found_online) {
+      property.lister_phone = property.lister_phone || listing.agent_whatsapp || listing.agent_phone || null;
+      property.lister_name = property.lister_name || listing.agent_name || null;
+    }
+    const listerNumber = listing?.agent_whatsapp || listing?.agent_phone || listing?.lister_phone || '';
+    const digitsKey = (value) => String(value || '').replace(/\D/g, '').slice(-9);
+    const makaugNumbers = String(process.env.MAKAUG_WHATSAPP_NUMBERS || process.env.WHATSAPP_BUSINESS_NUMBER || '256780863394')
+      .split(',').map(digitsKey);
+    const listerReachable = listerNumber
+      ? digitsKey(listerNumber).length === 9 && digitsKey(listerNumber) !== digitsKey(phone) && !makaugNumbers.includes(digitsKey(listerNumber))
+      : Boolean(listing?.agent_email || listing?.lister_email);
+    listerNotified = Boolean(
+      listing
+      && listing.is_live
+      && !listing.is_found_online
+      && String(process.env.LEAD_HANDOFF_ENABLED || 'true').toLowerCase() !== 'false'
+      && listerReachable
+    );
+    deferWhatsappWork('WhatsApp listing enquiry lead', async () => {
+      const lead = await createLead(db, {
+        listingId: property.id,
+        agentId: listing?.agent_id || null,
+        billable: Boolean(listing?.agent_id) && !listing?.is_found_online,
+        channel: 'whatsapp',
+        contact: {
+          name: 'WhatsApp enquirer',
+          phone,
+          whatsapp: phone,
+          preferredContactChannel: 'whatsapp',
+          preferredLanguage: lang,
+          roleType: 'property_seeker'
+        },
+        source: 'whatsapp_bot_listing_enquiry',
+        leadType: 'enquiry',
+        explicitContact: true,
+        message: `Asked about ${property.inquiry_reference || property.id} on makaug WhatsApp`,
+        activityType: 'whatsapp_bot_listing_enquiry',
+        metadata: { inquiry_reference: property.inquiry_reference || reference || null }
+      });
+      await handOffListingLead(db, { lead, listing, kind: 'whatsapp_bot', seeker: { name: '', phone } });
+    });
+  } catch (error) {
+    logger.error('WhatsApp listing enquiry lead failed:', error);
+  }
 
   return buildListingEnquiryReply(property, {
     title: cleanWhatsappPropertyTitle(property),
     priceLabel: formatWhatsappPropertyPrice(property),
     propertyUrl: `${HOME_URL}/property/${property.id}`,
-    reference: property.inquiry_reference || reference
+    reference: property.inquiry_reference || reference,
+    listerNotified
   });
 }
 
@@ -10766,6 +10824,29 @@ function createNoMatchLead({
       })
     ]
   ));
+  // The CRM lead is what the admin "Message Match" desk works from: when a
+  // matching listing goes live, staff send this person the match.
+  deferWhatsappWork('WhatsApp no-match CRM lead', () => createLead(db, {
+    contact: {
+      name: 'WhatsApp property seeker',
+      phone: userPhone,
+      whatsapp: userPhone,
+      preferredContactChannel: 'whatsapp',
+      roleType: 'property_seeker'
+    },
+    source: 'whatsapp_no_match',
+    leadType: 'property_need_unavailable',
+    channel: 'whatsapp',
+    category: searchType || 'any',
+    location: preferredArea || null,
+    message: notes || 'WhatsApp property request had no exact match.',
+    metadata: {
+      search_type: searchType || 'any',
+      preferred_area: preferredArea || null,
+      original_message: notes || null,
+      match_status: 'waiting_for_listing'
+    }
+  }));
 }
 
 function safePublicPreviewUrl(value) {

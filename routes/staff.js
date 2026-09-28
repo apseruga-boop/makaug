@@ -27,7 +27,7 @@ const {
   regionForDistrict
 } = require('../utils/ugandaLocationHierarchy');
 const { canonicalizeUgandaLocation } = require('../utils/locationRegistry');
-const { addLeadActivity } = require('../services/leadService');
+const { addLeadActivity, CLOSED_LEAD_STATUSES, LEAD_STATUSES, normalizeLeadStatus } = require('../services/leadService');
 const { buildAutomatedListingReview, normalizeReviewChecklist } = require('../services/listingModerationService');
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
 const { getProviderClient, getProviderMeta, getTaskModel } = require('../services/llmProvider');
@@ -107,7 +107,7 @@ const ACTIONABLE_PENDING_REVIEW_STATUSES = [
 ];
 const FINAL_REVIEW_STATUSES = ['approved', 'live', 'published', 'sold', 'hidden', 'deleted', 'rejected', 'declined', 'fraud', 'archived'];
 const STAFF_REMOVED_STATUSES = ['deleted', 'rejected', 'declined', 'fraud', 'archived', 'test_pending_review'];
-const OPEN_LEAD_STATUSES = ['open', 'new', 'contacted', 'qualified'];
+const OPEN_LEAD_STATUSES = ['open', 'handed_over', 'contacted', 'qualified'];
 const OPEN_AD_STATUSES = ['new', 'contacted', 'proposal_sent'];
 const STAFF_CONTACT_EXPORT_LIMIT = 50;
 const STAFF_DASHBOARD_QUEUE_LIMIT = 12;
@@ -1549,7 +1549,7 @@ async function buildDashboardFastPayload(req) {
          COUNT(*) FILTER (WHERE lead_status = ANY($1::text[]))::int AS open,
          COUNT(*) FILTER (WHERE assigned_to_user_id = $2)::int AS assigned_to_me,
          COUNT(*) FILTER (WHERE priority IN ('high','urgent') OR lead_score >= 50)::int AS hot,
-         COUNT(*) FILTER (WHERE next_follow_up_at < NOW() AND lead_status = 'open')::int AS overdue
+         COUNT(*) FILTER (WHERE next_follow_up_at < NOW() AND lead_status IN ('open','handed_over','contacted','qualified'))::int AS overdue
        FROM leads`,
       [OPEN_LEAD_STATUSES, staffId],
       { open: 0, assigned_to_me: 0, hot: 0, overdue: 0 },
@@ -1729,7 +1729,7 @@ async function dashboardPayload(req) {
          COUNT(*) FILTER (WHERE lead_status = ANY($1::text[]))::int AS open,
          COUNT(*) FILTER (WHERE assigned_to_user_id = $2)::int AS assigned_to_me,
          COUNT(*) FILTER (WHERE priority IN ('high','urgent') OR lead_score >= 50)::int AS hot,
-         COUNT(*) FILTER (WHERE next_follow_up_at < NOW() AND lead_status = 'open')::int AS overdue
+         COUNT(*) FILTER (WHERE next_follow_up_at < NOW() AND lead_status IN ('open','handed_over','contacted','qualified'))::int AS overdue
        FROM leads`,
       [OPEN_LEAD_STATUSES, staffId],
       { open: 0, assigned_to_me: 0, hot: 0, overdue: 0 }
@@ -1806,7 +1806,7 @@ async function dashboardPayload(req) {
        FROM leads l
        LEFT JOIN contacts c ON c.id = l.contact_id
        LEFT JOIN properties p ON p.id = l.listing_id
-       WHERE l.assigned_to_user_id = $1 OR l.lead_status = ANY($2::text[])
+       WHERE l.is_test = FALSE AND (l.assigned_to_user_id = $1 OR l.lead_status = ANY($2::text[]))
        ORDER BY CASE WHEN l.assigned_to_user_id = $1 THEN 0 ELSE 1 END, l.created_at DESC
        LIMIT $3`,
       [staffId, OPEN_LEAD_STATUSES, panelLimit]
@@ -4407,6 +4407,11 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
 router.patch('/leads/:id', async (req, res, next) => {
   try {
     const leadId = req.params.id;
+    if (Object.prototype.hasOwnProperty.call(req.body, 'lead_status')) {
+      const normalized = normalizeLeadStatus(req.body.lead_status, null);
+      if (!normalized) return res.status(400).json({ ok: false, error: `lead_status must be one of: ${LEAD_STATUSES.join(', ')}` });
+      req.body.lead_status = normalized;
+    }
     const previous = await db.query('SELECT * FROM leads WHERE id = $1 LIMIT 1', [leadId]);
     if (!previous.rows.length) return res.status(404).json({ ok: false, error: 'Lead not found' });
 
@@ -4431,6 +4436,9 @@ router.patch('/leads/:id', async (req, res, next) => {
     if (Object.prototype.hasOwnProperty.call(req.body, 'next_follow_up_at')) add('next_follow_up_at', cleanText(req.body.next_follow_up_at) || null, '::timestamptz');
     if (Object.prototype.hasOwnProperty.call(req.body, 'last_contacted_at')) add('last_contacted_at', cleanText(req.body.last_contacted_at) || null, '::timestamptz');
     if (!updates.length) return res.status(400).json({ ok: false, error: 'No lead updates provided' });
+    if (req.body.lead_status) {
+      updates.push(CLOSED_LEAD_STATUSES.includes(req.body.lead_status) ? 'closed_at = COALESCE(closed_at, NOW())' : 'closed_at = NULL');
+    }
 
     values.push(leadId);
     const updated = await db.query(
@@ -4556,7 +4564,7 @@ router.post('/assistant/query', async (req, res, next) => {
         `SELECT
            COALESCE(NULLIF(location, ''), metadata->>'preferred_area', 'Unknown') AS location,
            COUNT(*)::int AS lead_count,
-           COUNT(*) FILTER (WHERE lead_status = 'open')::int AS open_count,
+           COUNT(*) FILTER (WHERE lead_status IN ('open','handed_over','contacted','qualified'))::int AS open_count,
            COUNT(*) FILTER (WHERE priority IN ('high','urgent') OR lead_score >= 50)::int AS hot_count,
            COALESCE(AVG(budget), 0)::bigint AS avg_budget
          FROM leads

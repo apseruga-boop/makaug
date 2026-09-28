@@ -79,8 +79,9 @@ contains('services/leadService.js', 'billable');
 contains('services/leadService.js', 'charged');
 contains('services/leadService.js', 'metering');
 
-contains('routes/properties.js', 'agentId: listingContact.agent_id');
-contains('routes/properties.js', 'billable: Boolean(listingContact.agent_id)');
+contains('routes/properties.js', 'agentId: listing.agent_id');
+// Found-online listings are never billable to an agent.
+contains('routes/properties.js', 'billable: Boolean(listing.agent_id) && !listing.is_found_online');
 contains('routes/properties.js', 'charged: false');
 
 contains('index.html', 'monetization-spine-v1-20260715');

@@ -254,10 +254,13 @@ async function fetchBrokerAgentForUser(user) {
          AND p.status = 'pending'
      ) lp ON true
      LEFT JOIN LATERAL (
-       SELECT COUNT(pi.*)::int AS lead_enquiries
+       -- One per person per listing (repeat clicks are one lead), no test leads.
+       SELECT COUNT(l.*)::int AS lead_enquiries
        FROM properties p
-       JOIN property_inquiries pi ON pi.property_id = p.id
-       WHERE p.agent_id = a.id OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = a.id::text
+       JOIN leads l ON l.listing_id = p.id
+       WHERE (p.agent_id = a.id OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = a.id::text)
+         AND l.is_test = FALSE
+         AND l.lead_type IN ('enquiry', 'viewing', 'callback')
      ) li ON true
      WHERE a.user_id = $1
         OR ($2::text <> '' AND LOWER(COALESCE(a.email, '')) = LOWER($2))
@@ -270,6 +273,34 @@ async function fetchBrokerAgentForUser(user) {
   return result.rows[0] || null;
 }
 
+/**
+ * The agent's real leads: who asked, about which listing, how, and when.
+ * One row per person per listing (repeats are counted, not duplicated).
+ */
+async function fetchBrokerLeads(agent, limit = 100) {
+  if (!agent?.id) return [];
+  const result = await db.query(
+    `SELECT l.id, l.created_at, l.lead_type, l.channel, l.source, l.message, l.lead_status,
+            l.handoff_status, l.repeat_count, l.last_repeat_at,
+            p.id AS listing_id, p.title AS listing_title, p.inquiry_reference AS listing_reference,
+            -- Only what the person gave for THIS listing (a form, viewing,
+            -- callback or WhatsApp enquiry) — never details merged from other
+            -- enquiries, and nothing for a bare button click.
+            NULLIF(l.metadata->'submitted_contact'->>'name', '') AS contact_name,
+            NULLIF(l.metadata->'submitted_contact'->>'phone', '') AS contact_phone,
+            NULLIF(l.metadata->'submitted_contact'->>'email', '') AS contact_email
+       FROM leads l
+       JOIN properties p ON p.id = l.listing_id
+      WHERE (p.agent_id = $1 OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text)
+        AND l.is_test = FALSE
+        AND l.lead_type IN ('enquiry', 'viewing', 'callback')
+      ORDER BY COALESCE(l.last_repeat_at, l.created_at) DESC
+      LIMIT $2`,
+    [agent.id, Math.min(Math.max(Number(limit) || 100, 1), 500)]
+  ).catch(() => ({ rows: [] }));
+  return result.rows;
+}
+
 async function fetchBrokerListings({ agent, user }) {
   if (!agent?.id) return [];
   const result = await db.query(
@@ -280,8 +311,10 @@ async function fetchBrokerListings({ agent, user }) {
      FROM properties p
      LEFT JOIN LATERAL (
        SELECT COUNT(*)::int AS inquiry_count
-       FROM property_inquiries pi
-       WHERE pi.property_id = p.id
+       FROM leads l
+       WHERE l.listing_id = p.id
+         AND l.is_test = FALSE
+         AND l.lead_type IN ('enquiry', 'viewing', 'callback')
      ) i ON true
      LEFT JOIN LATERAL (
        SELECT pi.url
@@ -424,12 +457,15 @@ router.get('/me', async (req, res, next) => {
         ).catch(() => ({ rows: [{ total: 0 }] }))
       : { rows: [{ total: 0 }] };
 
+    const leads = await fetchBrokerLeads(agent);
+
     return res.json({
       ok: true,
       data: {
         user,
         agent,
         listings,
+        leads,
         stats: {
           active_listings: listings.filter((item) => item.status === 'approved').length,
           pending_listings: listings.filter((item) => item.status === 'pending').length,

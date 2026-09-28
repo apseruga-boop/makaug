@@ -38,9 +38,9 @@ assert(service.includes('queueFounderApprovalAction'), 'AI CEO must queue risky 
 assert(service.includes('sendSupportEmail'), 'AI CEO must be able to send outgoing email through the existing email service');
 assert(service.includes('sendTelegramMessage'), 'AI CEO service must support Telegram owner replies');
 assert(service.includes('collectCeoMetrics'), 'AI CEO must collect platform metrics for reports');
-assert(service.includes('ceoPendingReviewWhere') && service.includes("lead_status = 'open'"), 'AI CEO metrics must match Command Centre pending/listing/lead definitions');
+assert(service.includes('ceoPendingReviewWhere') && service.includes("lead_status IN ('open','handed_over','contacted','qualified')"), 'AI CEO metrics must match Command Centre pending/listing/lead definitions (open = open, handed_over, contacted, qualified)');
 assert(orchestratorService.includes('ceoPendingReviewWhere') && orchestratorService.includes('ceoPublicLiveWhere'), 'AI CEO orchestrator must use the same listing status definitions as Command Centre');
-assert(orchestratorService.includes("lead_status = 'open'"), 'AI CEO orchestrator must count only live open leads like Command Centre');
+assert(orchestratorService.includes("is_test = FALSE AND lead_status IN ('open','handed_over','contacted','qualified')"), 'AI CEO orchestrator must count only live open leads like Command Centre');
 assert(orchestratorService.includes('current_dashboard_metrics'), 'AI CEO status must expose fresh dashboard metrics, not only saved reports');
 assert(app.includes('data?.current_dashboard_metrics'), 'AI CEO dashboard panel must render fresh status metrics when available');
 assert(app.includes('function adminCeoCurrentDashboardMetrics'), 'AI CEO dashboard panel must normalise fresh metrics before rendering');

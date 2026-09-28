@@ -1,5 +1,7 @@
 'use strict';
 
+const { createLead, recordLeadHandoff } = require('../services/leadService');
+const cleanStText = (value) => String(value ?? '').trim().slice(0, 500);
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 
@@ -381,6 +383,34 @@ router.post('/listings/:id/enquiries', writeLimiter, async (req, res) => {
     if (!listing) return res.status(404).json({ ok: false, error: 'Listing not found' });
 
     const lead = await recordShortTermLead(db, listing.id, req.body || {});
+
+    // Same enquiry in the one Lead Centre, marked contact_shown: the guest has
+    // the host's details and makaug steps out, as above.
+    const crmLead = await createLead(db, {
+      contact: {
+        name: cleanStText(req.body?.guest_name),
+        phone: cleanStText(req.body?.guest_phone),
+        email: cleanStText(req.body?.guest_email),
+        preferredContactChannel: cleanStText(req.body?.channel) || 'whatsapp',
+        roleType: 'short_stay_guest'
+      },
+      source: 'short_term_enquiry',
+      leadType: 'short_term_enquiry',
+      channel: cleanStText(req.body?.channel) || null,
+      category: 'short_term',
+      location: [listing.area, listing.district].filter(Boolean).join(', ') || null,
+      message: cleanStText(req.body?.message) || `Short-stay enquiry: ${listing.title || listing.id}`,
+      metadata: {
+        st_listing_id: listing.id,
+        st_lead_id: lead.id,
+        check_in: req.body?.check_in || null,
+        check_out: req.body?.check_out || null,
+        party_size: req.body?.party_size || null
+      }
+    });
+    if (crmLead?.id && !crmLead._isRepeat) {
+      await recordLeadHandoff(db, crmLead.id, { status: 'contact_shown', detail: { summary: 'Guest shown the host\'s contact details.' } });
+    }
 
     return res.status(201).json({
       ok: true,

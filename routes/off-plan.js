@@ -1,5 +1,8 @@
 'use strict';
 
+const { createLead, recordLeadHandoff } = require('../services/leadService');
+const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
+const leadFormLimiter = createLeadFormLimiter();
 const express = require('express');
 const db = require('../config/database');
 const { requireAdminApiKey, requireStaffAccess } = require('../middleware/auth');
@@ -151,7 +154,7 @@ publicRouter.post('/calculate', (req, res) => {
   return res.json({ ok: true, schedule: buildOffPlanPaymentSchedule(req.body || {}) });
 });
 
-publicRouter.post('/enquiries', asyncRoute(async (req, res) => {
+publicRouter.post('/enquiries', leadFormLimiter, leadHoneypot, asyncRoute(async (req, res) => {
   const requestedDevelopmentId = cleanText(req.body?.development_id, 80);
   let development = null;
   if (requestedDevelopmentId) {
@@ -176,6 +179,34 @@ publicRouter.post('/enquiries', asyncRoute(async (req, res) => {
   });
   const delivery = await notifyOffPlanEnquiry(enquiry, development);
   await updateEnquiryDelivery(db, enquiry.id, delivery);
+  // Every enquiry lives in the one Lead Centre, not only in the off-plan desk.
+  const lead = await createLead(db, {
+    contact: {
+      name: enquiry.name,
+      phone: enquiry.phone,
+      email: enquiry.email,
+      preferredContactChannel: enquiry.preferred_contact_channel,
+      roleType: 'property_seeker'
+    },
+    source: 'off_plan_enquiry',
+    leadType: 'off_plan_enquiry',
+    channel: enquiry.preferred_contact_channel || null,
+    category: 'off_plan',
+    location: development ? [development.area, development.district].filter(Boolean).join(', ') : null,
+    message: enquiry.message || `Off-plan enquiry${development?.name ? `: ${development.name}` : ''}`,
+    metadata: {
+      off_plan_enquiry_id: enquiry.id,
+      development_id: enquiry.development_id || null,
+      development_name: development?.name || null,
+      enquiry_type: enquiry.enquiry_type || null
+    }
+  });
+  if (lead?.id && !lead._isRepeat) {
+    await recordLeadHandoff(db, lead.id, {
+      status: delivery.delivered ? 'sent' : 'makaug_team',
+      detail: { summary: delivery.delivered ? 'Off-plan team emailed.' : 'Off-plan team email not delivered — in Lead Centre.' }
+    });
+  }
   return res.status(201).json({
     ok: true,
     enquiry_id: enquiry.id,

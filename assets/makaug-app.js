@@ -11588,7 +11588,28 @@ function renderBrokerQuickListPanel(broker = {}) {
     <p class="text-xs text-green-800 mt-3">Signed in as ${adminEscape(broker.email || brokerDisplayPhone(broker) || "broker account")}. If you use WhatsApp with the same phone or email, makaug links it to this broker profile.</p>`;
 }
 
-function renderBrokerLeadPanel(broker = {}, listings = [], stats = {}) {
+function brokerLeadWhoHtml(lead = {}) {
+  const name = String(lead.contact_name || "").trim();
+  const phone = String(lead.contact_phone || "").trim();
+  const email = String(lead.contact_email || "").trim();
+  if (!name && !phone && !email) {
+    return `<span class="text-gray-600">Someone opened WhatsApp to you</span><div class="text-xs text-gray-400">They have your number and message you directly</div>`;
+  }
+  const wa = phone.replace(/\D/g, "");
+  return `<div class="font-bold text-gray-900">${adminEscape(name || "Enquirer")}</div>
+    ${phone ? `<a class="text-xs text-green-700 font-bold" href="https://wa.me/${adminAttr(wa.length === 10 && wa.startsWith("0") ? `256${wa.slice(1)}` : wa)}" target="_blank" rel="noopener">${adminEscape(phone)}</a>` : ""}
+    ${email ? `<div class="text-xs"><a class="text-blue-700" href="mailto:${adminAttr(email)}">${adminEscape(email)}</a></div>` : ""}`;
+}
+
+function brokerLeadKindLabel(lead = {}) {
+  if (lead.lead_type === "viewing") return "Viewing request";
+  if (lead.lead_type === "callback") return "Callback request";
+  if (String(lead.source || "").startsWith("whatsapp_bot")) return "Asked on makaug WhatsApp";
+  if (lead.channel === "whatsapp") return "WhatsApp";
+  return "Website enquiry";
+}
+
+function renderBrokerLeadPanel(broker = {}, listings = [], stats = {}, leads = []) {
   const panel = document.getElementById("broker-leads-panel");
   if (!panel) return;
   const leadRows = listings
@@ -11606,7 +11627,7 @@ function renderBrokerLeadPanel(broker = {}, listings = [], stats = {}) {
       <div>
         <div class="text-xs font-black uppercase tracking-wide text-blue-700">Lead centre</div>
         <h2 class="text-xl font-black text-gray-900 mt-1">Enquiries, WhatsApp, and callback follow-up</h2>
-        <p class="text-sm text-gray-600 mt-1">Website enquiries are counted from the backend by listing. WhatsApp AI and missed-call escalations feed the lead-generation workflow and owner notifications.</p>
+        <p class="text-sm text-gray-600 mt-1">Every person who asked about your listings — one line per person per listing. Form enquiries, viewing and callback requests are also sent to your WhatsApp the moment they come in.</p>
       </div>
       <a href="mailto:info@makaug.com?subject=Broker%20lead%20support" class="border border-blue-200 text-blue-800 hover:bg-blue-50 px-3 py-2 rounded-lg text-xs font-bold">Email makaug</a>
     </div>
@@ -11644,6 +11665,30 @@ function renderBrokerLeadPanel(broker = {}, listings = [], stats = {}) {
             </tr>`).join("") : `<tr><td colspan="4" class="py-4 text-gray-500">No listing enquiries yet. As listings go live, enquiries from property cards will appear here.</td></tr>`}
         </tbody>
       </table>
+    </div>
+    <div class="mt-6">
+      <h3 class="text-base font-black text-gray-900">Your leads</h3>
+      <div class="mt-2 overflow-x-auto">
+        <table class="w-full text-sm" id="broker-leads-list">
+          <thead>
+            <tr class="text-left text-gray-500 border-b">
+              <th class="py-2 pr-3">When</th>
+              <th class="py-2 pr-3">Who</th>
+              <th class="py-2 pr-3">Listing</th>
+              <th class="py-2 pr-3">How</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${leads.length ? leads.map((lead) => `
+              <tr class="border-b last:border-b-0 align-top">
+                <td class="py-3 pr-3 whitespace-nowrap text-xs text-gray-600">${adminEscape(new Date(lead.last_repeat_at || lead.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</td>
+                <td class="py-3 pr-3">${brokerLeadWhoHtml(lead)}</td>
+                <td class="py-3 pr-3"><button onclick="openPropertyCardDetail(event, ${propertyIdArg(lead.listing_id)})" class="text-left font-semibold text-gray-900 hover:underline">${adminEscape(lead.listing_title || "Listing")}</button>${lead.listing_reference ? `<div class="text-xs text-gray-400">${adminEscape(lead.listing_reference)}</div>` : ""}</td>
+                <td class="py-3 pr-3 text-xs">${adminEscape(brokerLeadKindLabel(lead))}${Number(lead.repeat_count || 0) ? `<div class="text-gray-400">asked ${Number(lead.repeat_count) + 1} times</div>` : ""}${lead.message && !/^WhatsApp contact initiated|^Asked about /i.test(lead.message) ? `<div class="text-gray-600 mt-1">"${adminEscape(String(lead.message).slice(0, 160))}"</div>` : ""}</td>
+              </tr>`).join("") : `<tr><td colspan="4" class="py-4 text-gray-500">No leads yet. When someone asks about one of your live listings, they appear here.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
     </div>`;
 }
 
@@ -12702,7 +12747,7 @@ async function renderAgentDashboard() {
   renderBrokerQuickListPanel(broker);
   renderBrokerProfilePreview(broker, myListings, { ...stats, lead_enquiries: leadCount });
   renderBrokerWhatsAppCard(broker, { ...stats, lead_enquiries: leadCount });
-  renderBrokerLeadPanel(broker, myListings, { ...stats, lead_enquiries: leadCount });
+  renderBrokerLeadPanel(broker, myListings, { ...stats, lead_enquiries: leadCount }, Array.isArray(payload?.leads) ? payload.leads : []);
   renderBrokerBoostPanel();
   renderBrokerQuickstartPanel();
   renderBrokerResourceGrid();
@@ -19787,7 +19832,7 @@ function adminCrmLeadFiltersQuery() {
   if (!form) return adminCrmLeadFilterQuery;
   const params = new URLSearchParams();
   const data = new FormData(form);
-  ["category", "location", "date_from", "date_to", "bundle_tag"].forEach((key) => {
+  ["category", "location", "date_from", "date_to", "bundle_tag", "status", "handoff", "search"].forEach((key) => {
     const value = String(data.get(key) || "").trim();
     if (value) params.set(key, value);
   });
@@ -19873,7 +19918,7 @@ function renderAdminCrmLeadsRows(leads = []) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No CRM leads in this snapshot yet. New WhatsApp clicks, saved searches, viewings, callbacks, property needs, advertiser signups, and mortgage requests will appear here.</div>`;
     return;
   }
-  wrap.innerHTML = rows.slice(0, 25).map((lead) => {
+  wrap.innerHTML = rows.map((lead) => {
     const score = Number(lead.lead_score || 0);
     const hot = score >= 50 || String(lead.priority || "").toLowerCase() === "urgent";
     const missedCall = String(lead.source || "").toLowerCase() === "whatsapp_missed_call";
@@ -19905,6 +19950,8 @@ function renderAdminCrmLeadsRows(leads = []) {
           <div class="font-bold text-gray-800">${noMatchLead ? "Unavailable WhatsApp property request" : missedCall ? "Missed WhatsApp call" : adminEscape(lead.category || lead.lead_type || "Lead")} ${lead.location ? `• ${adminEscape(lead.location)}` : ""}</div>
           <div class="text-xs text-gray-500 mt-1">${adminEscape(lead.contact_name || "Unknown contact")} • ${adminEscape(lead.contact_phone || lead.contact_email || "-")}</div>
 	          <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(lead.source || "-")} • Stage: ${adminEscape(lead.lifecycle_stage || "-")} • Status: ${adminEscape(lead.lead_status || "-")}</div>
+	          ${lead.listing_title ? `<div class="text-xs text-gray-600 mt-1">Listing: ${adminEscape(lead.listing_title)}${lead.listing_reference ? ` (${adminEscape(lead.listing_reference)})` : ""}${lead.agent_name ? ` • Agent: ${adminEscape(lead.agent_name)}` : ""}</div>` : ""}
+	          ${lead.handoff_status ? `<div class="mt-1 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold ${adminLeadHandoffTone(lead.handoff_status)}">${adminEscape(adminLeadHandoffLabel(lead.handoff_status))}${Number(lead.repeat_count || 0) ? ` • asked ${Number(lead.repeat_count) + 1}×` : ""}</div>` : ""}
 	          ${isMortgageBankLead ? `<div class="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-green-100 bg-green-50 px-2.5 py-1.5 text-xs font-bold text-green-800">Mortgage bank lead: ${adminEscape(mortgageProviderName || mortgageProviderKey || "Selected lender")} ${bankHandoffStatus ? `• ${adminEscape(String(bankHandoffStatus).replace(/_/g, " "))}` : ""}</div>` : ""}
 	          ${missedCall ? `<div class="text-xs font-bold text-red-700 mt-2">Callback path: WhatsApp bot asked for the need, then escalates here if unresolved.</div>` : ""}
           ${noMatchLead ? `<div class="text-xs font-bold text-amber-800 mt-2">No exact match trigger captured. Match status: ${adminEscape(noMatchStatus)}. Lead stays open until customer contact or agent assignment.</div>` : ""}
@@ -19920,9 +19967,68 @@ function renderAdminCrmLeadsRows(leads = []) {
       <div class="mt-3 flex items-center gap-2 flex-wrap border-t border-gray-100 pt-3">
         <input id="${adminAttr(bundleInputId)}" value="${adminAttr(bundleTag)}" class="min-w-[180px] flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" placeholder="Bundle tag, e.g. Kampala-rent-Jul">
         <button type="button" onclick="tagAdminCrmLeadBundle(${leadIdArg}, ${JSON.stringify(bundleInputId).replace(/</g, "\\u003c")})" class="border border-green-300 text-green-800 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">Save bundle</button>
+        <select onchange="setAdminCrmLeadStatus(${leadIdArg}, this.value)" class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-semibold" aria-label="Lead status">
+          ${adminLeadStatusOptions().map(([value, label]) => `<option value="${value}" ${String(lead.lead_status || "open") === value ? "selected" : ""}>${label}</option>`).join("")}
+        </select>
       </div>
     </div>`;
   }).join("");
+}
+
+function adminLeadStatusOptions() {
+  return [
+  ["open", "Open"],
+  ["handed_over", "Handed over"],
+  ["contacted", "Contacted"],
+  ["qualified", "Qualified"],
+  ["won", "Closed — won"],
+  ["lost", "Closed — lost"],
+  ["spam", "Spam"],
+  ["closed", "Closed"]
+  ];
+}
+
+function adminLeadHandoffLabel(status = "") {
+  return ({
+    sent: "Sent to lister",
+    queued: "Queued to lister (WhatsApp)",
+    simulated: "Test send",
+    contact_shown: "Contact shown — seeker contacts lister",
+    makaug_team: "For makaug team",
+    no_lister_contact: "No lister contact — needs staff",
+    failed: "Handoff failed — needs staff",
+    listing_not_live: "Listing not live",
+    not_sent_legacy: "Before handoff existed",
+    test_skipped: "Test lead",
+    disabled: "Handoff switched off"
+  })[String(status)] || String(status).replace(/_/g, " ");
+}
+
+function adminLeadHandoffTone(status = "") {
+  if (["sent", "queued", "contact_shown"].includes(status)) return "bg-green-50 text-green-800 border border-green-100";
+  if (["no_lister_contact", "failed"].includes(status)) return "bg-red-50 text-red-700 border border-red-100";
+  return "bg-gray-50 text-gray-600 border border-gray-200";
+}
+
+async function setAdminCrmLeadStatus(leadId, status) {
+  if (!leadId || !status) return false;
+  try {
+    await apiRequest(`/api/admin/leads/${encodeURIComponent(leadId)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: { lead_status: status, note: `Status set to ${status} in Lead Centre.` }
+    });
+    toast("Lead status saved.");
+    if (String(leadId).startsWith("mortgage-enquiry:")) {
+      await applyAdminCrmLeadFilters();
+    } else {
+      const lead = (adminCrmLeads || []).find((row) => String(row.id) === String(leadId));
+      if (lead) lead.lead_status = status;
+    }
+  } catch (error) {
+    toast(`Could not save status: ${error?.message || "request failed"}`);
+  }
+  return false;
 }
 
 function renderAdminMortgageLeadsRows(leads = []) {
@@ -21503,7 +21609,8 @@ async function recordListingWhatsappClick(propertyId, message = "", targetPhone 
         contact_name: authState?.user ? `${authState.user.first_name || ""} ${authState.user.last_name || ""}`.trim() : "",
         contact_phone: authState?.user?.phone || "",
         contact_email: authState?.user?.email || "",
-        language: currentLang || "en"
+        language: currentLang || "en",
+        visitor_id: getAnalyticsClientId()
       }
     });
   } catch (error) {
@@ -42486,15 +42593,20 @@ async function submitPropertyInquiry(id) {
     toast("Add your name and phone or email to send an enquiry.");
     return;
   }
+  const submitButton = document.getElementById("detail-inquiry-submit");
+  if (submitButton?.disabled) return;
+  if (submitButton) submitButton.disabled = true;
   try {
-    await apiRequest(`/api/properties/${encodeURIComponent(property.backend_id || property.id)}/inquiries`, {
+    const inquiryResponse = await apiRequest(`/api/properties/${encodeURIComponent(property.backend_id || property.id)}/inquiries`, {
       method: "POST",
       body: {
         contact_name: name,
         contact_phone: phone || undefined,
         contact_email: email || undefined,
         message: message || `I am interested in ${property.title}.`,
-        channel: "web"
+        channel: "web",
+        visitor_id: getAnalyticsClientId(),
+        website: (document.getElementById("detail-inquiry-website")?.value || "")
       }
     });
     recordUserPropertyInquiry(property.id);
@@ -42506,10 +42618,22 @@ async function submitPropertyInquiry(id) {
     });
     const msgEl = document.getElementById("detail-inquiry-message");
     if (msgEl) msgEl.value = "";
-    toast("Enquiry sent. The listing contact can follow up with you.");
+    const sentTo = inquiryResponse?.data?.lister_name;
+    const handoff = String(inquiryResponse?.data?.handoff || "");
+    if (["sent", "queued", "simulated", "repeat"].includes(handoff)) {
+      toast(sentTo && sentTo !== "the lister"
+        ? `Enquiry sent to ${sentTo}. Their contact details are on this listing too.`
+        : "Enquiry sent to the listing contact. Their details are on this listing too.");
+    } else if (handoff === "contact_shown") {
+      toast("Enquiry saved. Contact the lister directly using the details on this listing.");
+    } else {
+      toast("Enquiry received. The makaug team will pass it on to the lister.");
+    }
     renderFinderDashboard();
   } catch (error) {
     toast(error.message || "Could not send enquiry.");
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
 }
 
@@ -54853,11 +54977,12 @@ async function openDetail(id, options = {}) {
             <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Send enquiry")}</h4>
             <p class="text-xs text-gray-500 mb-2">${adminEscape(translatePropertyUi("Your enquiry will go to {name}.", { name: inquiryRecipientName }))}</p>
             <div class="space-y-2">
+              <input id="detail-inquiry-website" name="website" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" value="">
               <input id="detail-inquiry-name" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Your name"))}" value="${adminAttr(inquiryNameDefault)}">
               <input id="detail-inquiry-phone" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="+256 7XX XXX XXX" value="${adminAttr(inquiryPhoneDefault)}">
               <input id="detail-inquiry-email" type="email" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Email optional"))}" value="${adminAttr(inquiryEmailDefault)}">
               <textarea id="detail-inquiry-message" rows="3" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Message"))}">${adminEscape(translatePropertyUi("I am interested in {title}.", { title: displayTitle || "this property" }))}</textarea>
-              <button type="button" onclick="submitPropertyInquiry(${detailIdArg})" class="w-full bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold text-sm">${translatePropertyUi("Send enquiry")}</button>
+              <button type="button" id="detail-inquiry-submit" onclick="submitPropertyInquiry(${detailIdArg})" class="w-full disabled:opacity-60 bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold text-sm">${translatePropertyUi("Send enquiry")}</button>
             </div>
           </div>
   ` : "";

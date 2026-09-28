@@ -1,3 +1,7 @@
+const { handOffListingLead, loadListingContact } = require('../services/leadHandoffService');
+const { recordLeadHandoff } = require('../services/leadService');
+const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
+const leadFormLimiter = createLeadFormLimiter();
 const express = require('express');
 const jwt = require('jsonwebtoken');
 
@@ -1979,7 +1983,7 @@ router.get('/viewings', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/viewings', optionalAuth, async (req, res, next) => {
+router.post('/viewings', leadFormLimiter, leadHoneypot, optionalAuth, async (req, res, next) => {
   try {
     const listingId = req.body.listing_id || req.body.listingId;
     if (!isUuid(listingId)) return res.status(400).json({ ok: false, error: 'Valid listing_id is required' });
@@ -1988,13 +1992,44 @@ router.post('/viewings', optionalAuth, async (req, res, next) => {
     if (viewingConfig && (viewingConfig.accepts_viewings === false || viewingConfig.booking_mode === 'disabled' || viewingConfig.booking_mode === 'callback_only')) {
       return res.status(409).json({ ok: false, error: 'This listing is not accepting viewing bookings. Request a callback instead.' });
     }
+    const listing = await loadListingContact(db, listingId);
+    if (!listing || !listing.is_live) return res.status(404).json({ ok: false, error: 'Property not found' });
     const name = asText(req.body.name || [req.userAuth?.first_name, req.userAuth?.last_name].filter(Boolean).join(' '), 'makaug user');
     const phone = asText(req.body.phone || req.userAuth?.phone) || null;
     const email = asText(req.body.email || req.userAuth?.email) || null;
     if (!phone && !email) return res.status(400).json({ ok: false, error: 'phone or email is required' });
+    const preferredDate = asText(req.body.preferred_date || req.body.preferredDate) || null;
+    const preferredTime = asText(req.body.preferred_time || req.body.preferredTime) || null;
+
+    // Booking first, then the lead: a failed booking must not leave an orphan lead.
+    const result = await db.query(
+      `INSERT INTO viewing_bookings (
+         listing_id, user_id, broker_id, name, phone, email, preferred_date, preferred_time,
+         contact_method, message, status, source, language_preference
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'requested',$11,$12)
+       RETURNING *`,
+      [
+        listingId,
+        req.userAuth?.id || null,
+        listing.agent_user_id || null,
+        name,
+        phone,
+        email,
+        preferredDate,
+        preferredTime,
+        asContactChannel(req.body.contact_method || req.body.contactMethod || req.userAuth?.preferred_contact_channel, 'whatsapp'),
+        asText(req.body.message) || null,
+        asText(req.body.source, 'web'),
+        asLanguage(req.body.language_preference || req.body.languagePreference || req.userAuth?.preferred_language)
+      ]
+    );
     const lead = await createLead(db, {
       userId: req.userAuth?.id || null,
       listingId,
+      agentId: listing.agent_id || null,
+      billable: Boolean(listing.agent_id) && !listing.is_found_online,
+      channel: 'web',
       contact: {
         userId: req.userAuth?.id || null,
         name,
@@ -2006,44 +2041,21 @@ router.post('/viewings', optionalAuth, async (req, res, next) => {
       },
       source: req.body.source || 'viewing_booking',
       leadType: 'viewing',
+      explicitContact: true,
       message: req.body.message || 'Viewing requested from makaug dashboard/web.',
-      metadata: { preferred_date: req.body.preferred_date || req.body.preferredDate, preferred_time: req.body.preferred_time || req.body.preferredTime }
+      metadata: { preferred_date: preferredDate, preferred_time: preferredTime, viewing_booking_id: result.rows[0]?.id }
     });
-    const result = await db.query(
-      `INSERT INTO viewing_bookings (
-         listing_id, user_id, name, phone, email, preferred_date, preferred_time,
-         contact_method, message, status, source, language_preference, lead_id
-       )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'requested',$10,$11,$12)
-       RETURNING *`,
-      [
-        listingId,
-        req.userAuth?.id || null,
-        name,
-        phone,
-        email,
-        asText(req.body.preferred_date || req.body.preferredDate) || null,
-        asText(req.body.preferred_time || req.body.preferredTime) || null,
-        asContactChannel(req.body.contact_method || req.body.contactMethod || req.userAuth?.preferred_contact_channel, 'whatsapp'),
-        asText(req.body.message) || null,
-        asText(req.body.source, 'web'),
-        asLanguage(req.body.language_preference || req.body.languagePreference || req.userAuth?.preferred_language),
-        lead?.id || null
-      ]
-    );
+    if (lead?.id) await db.query('UPDATE viewing_bookings SET lead_id = $2 WHERE id = $1', [result.rows[0].id, lead.id]);
     await logActivity(req.userAuth?.id || null, 'book_viewing', { viewing_booking_id: result.rows[0]?.id }, { listingId, leadId: lead?.id || null });
-    await logNotification(db, {
-      userId: req.userAuth?.id || null,
-      recipientPhone: phone,
-      recipientEmail: email,
-      channel: 'in_app',
-      type: 'viewing_requested',
-      status: 'logged',
-      relatedListingId: listingId,
-      relatedLeadId: lead?.id || null,
-      payloadSummary: { viewing_booking_id: result.rows[0]?.id, preferred_date: result.rows[0]?.preferred_date, preferred_time: result.rows[0]?.preferred_time }
+    const handoff = await handOffListingLead(db, {
+      lead,
+      listing,
+      kind: 'viewing',
+      seeker: { name, phone, email },
+      message: req.body.message,
+      extra: { preferred_date: preferredDate, preferred_time: preferredTime }
     });
-    return res.status(201).json({ ok: true, data: result.rows[0] });
+    return res.status(201).json({ ok: true, data: { ...result.rows[0], lead_id: lead?.id || null, handoff: handoff.status } });
   } catch (error) {
     return next(error);
   }
@@ -2066,16 +2078,43 @@ router.get('/callbacks', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/callbacks', optionalAuth, async (req, res, next) => {
+router.post('/callbacks', leadFormLimiter, leadHoneypot, optionalAuth, async (req, res, next) => {
   try {
     const listingId = isUuid(req.body.listing_id || req.body.listingId) ? (req.body.listing_id || req.body.listingId) : null;
+    const listing = listingId ? await loadListingContact(db, listingId) : null;
+    if (listingId && (!listing || !listing.is_live)) return res.status(404).json({ ok: false, error: 'Property not found' });
     const name = asText(req.body.name || [req.userAuth?.first_name, req.userAuth?.last_name].filter(Boolean).join(' '), 'makaug user');
     const phone = asText(req.body.phone || req.userAuth?.phone) || null;
     const email = asText(req.body.email || req.userAuth?.email) || null;
     if (!phone && !email) return res.status(400).json({ ok: false, error: 'phone or email is required' });
+    const preferredCallbackTime = asText(req.body.preferred_callback_time || req.body.preferredCallbackTime) || null;
+    const result = await db.query(
+      `INSERT INTO callback_requests (
+         listing_id, user_id, broker_id, name, phone, email, preferred_callback_time,
+         contact_method, message, status, source, language_preference
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'requested',$10,$11)
+       RETURNING *`,
+      [
+        listingId,
+        req.userAuth?.id || null,
+        listing?.agent_user_id || null,
+        name,
+        phone,
+        email,
+        preferredCallbackTime,
+        asContactChannel(req.body.contact_method || req.body.contactMethod || req.userAuth?.preferred_contact_channel, 'whatsapp'),
+        asText(req.body.message) || null,
+        asText(req.body.source, 'web'),
+        asLanguage(req.body.language_preference || req.body.languagePreference || req.userAuth?.preferred_language)
+      ]
+    );
     const lead = await createLead(db, {
       userId: req.userAuth?.id || null,
       listingId,
+      agentId: listing?.agent_id || null,
+      billable: Boolean(listing?.agent_id) && !listing?.is_found_online,
+      channel: 'web',
       contact: {
         userId: req.userAuth?.id || null,
         name,
@@ -2087,43 +2126,28 @@ router.post('/callbacks', optionalAuth, async (req, res, next) => {
       },
       source: req.body.source || 'callback_request',
       leadType: 'callback',
+      explicitContact: true,
       message: req.body.message || 'Callback requested from makaug dashboard/web.',
-      metadata: { preferred_callback_time: req.body.preferred_callback_time || req.body.preferredCallbackTime }
+      metadata: { preferred_callback_time: preferredCallbackTime, callback_request_id: result.rows[0]?.id }
     });
-    const result = await db.query(
-      `INSERT INTO callback_requests (
-         listing_id, user_id, name, phone, email, preferred_callback_time,
-         contact_method, message, status, source, language_preference, lead_id
-       )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'requested',$9,$10,$11)
-       RETURNING *`,
-      [
-        listingId,
-        req.userAuth?.id || null,
-        name,
-        phone,
-        email,
-        asText(req.body.preferred_callback_time || req.body.preferredCallbackTime) || null,
-        asContactChannel(req.body.contact_method || req.body.contactMethod || req.userAuth?.preferred_contact_channel, 'whatsapp'),
-        asText(req.body.message) || null,
-        asText(req.body.source, 'web'),
-        asLanguage(req.body.language_preference || req.body.languagePreference || req.userAuth?.preferred_language),
-        lead?.id || null
-      ]
-    );
+    if (lead?.id) await db.query('UPDATE callback_requests SET lead_id = $2 WHERE id = $1', [result.rows[0].id, lead.id]);
     await logActivity(req.userAuth?.id || null, 'request_callback', { callback_request_id: result.rows[0]?.id }, { listingId, leadId: lead?.id || null });
-    await logNotification(db, {
-      userId: req.userAuth?.id || null,
-      recipientPhone: phone,
-      recipientEmail: email,
-      channel: 'in_app',
-      type: 'callback_requested',
-      status: 'logged',
-      relatedListingId: listingId,
-      relatedLeadId: lead?.id || null,
-      payloadSummary: { callback_request_id: result.rows[0]?.id, preferred_callback_time: result.rows[0]?.preferred_callback_time }
-    });
-    return res.status(201).json({ ok: true, data: result.rows[0] });
+    let handoffStatus = 'makaug_team';
+    if (listing) {
+      const handoff = await handOffListingLead(db, {
+        lead,
+        listing,
+        kind: 'callback',
+        seeker: { name, phone, email },
+        message: req.body.message,
+        extra: { preferred_callback_time: preferredCallbackTime }
+      });
+      handoffStatus = handoff.status;
+    } else if (lead?.id) {
+      // A general callback (no listing) is for the makaug team: it sits in the Lead Centre.
+      await recordLeadHandoff(db, lead.id, { status: 'makaug_team', detail: { summary: 'General callback request for the makaug team.' } });
+    }
+    return res.status(201).json({ ok: true, data: { ...result.rows[0], lead_id: lead?.id || null, handoff: handoffStatus } });
   } catch (error) {
     return next(error);
   }

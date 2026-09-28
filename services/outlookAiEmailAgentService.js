@@ -387,7 +387,7 @@ async function upsertOutlookThread(db, message = {}) {
          metadata = COALESCE(outlook_email_threads.metadata, '{}'::jsonb) || EXCLUDED.metadata,
          last_synced_at = NOW(),
          updated_at = NOW()
-       RETURNING *`,
+       RETURNING *, (xmax = 0) AS inserted_now`,
       [
         cleanText(message.graphMessageId) || null,
         cleanText(message.internetMessageId) || null,
@@ -410,7 +410,8 @@ async function upsertOutlookThread(db, message = {}) {
       ]
     );
     const thread = result.rows[0] || null;
-    if (thread) {
+    // Only a newly seen email is a new lead; a re-sync of the same message is not.
+    if (thread && thread.inserted_now !== false) {
       await createLead(db, {
         source: 'outlook_email_agent',
         leadType: classification.category,

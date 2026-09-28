@@ -169,7 +169,9 @@ function buildListingEnquiryReply(property, {
   title = '',
   priceLabel = '',
   propertyUrl = '',
-  reference = ''
+  reference = '',
+  // True once the lister has actually been sent this person's number.
+  listerNotified = false
 } = {}) {
   const facts = listingSourceFacts(property);
   const location = [cleanText(property.area), cleanText(property.district)]
@@ -214,7 +216,7 @@ function buildListingEnquiryReply(property, {
       lines.push(`📄 The original post: ${facts.postUrl}`);
     }
     if (!chatLink && !facts.contactUrl && !facts.postUrl) {
-      lines.push('We do not have a phone number or a page for them. Reply *FIND* and we will try to trace the original post for you.');
+      lines.push('We do not have a phone number or a page for them, so we cannot put you in touch with this one.');
     } else if (!chatLink) {
       lines.push('');
       lines.push('There is no phone number on the post, so ask them there about availability and viewing.');
@@ -224,10 +226,16 @@ function buildListingEnquiryReply(property, {
     lines.push('');
     lines.push(`💬 Message ${facts.posterName || 'the lister'} on WhatsApp: ${chatLink}`);
     lines.push(`📞 Or call ${facts.phone}`);
+    if (listerNotified) {
+      lines.push('');
+      lines.push('We have also sent them your number and this listing, so they can reach you too.');
+    }
+  } else if (listerNotified) {
+    lines.push('This one was listed with us. We do not have a phone number for the lister, but we have emailed them your number and this listing so they can contact you.');
   } else {
     lines.push('This one was listed with us, but we do not have a contact number on file for it. We cannot confirm availability on the lister\'s behalf.');
     lines.push('');
-    lines.push('Reply *FIND* and we will chase the lister and come back to you.');
+    lines.push('Your enquiry has been logged with the makaug team.');
   }
 
   lines.push('');

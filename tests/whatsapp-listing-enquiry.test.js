@@ -43,6 +43,7 @@ const FOUND_ONLINE = {
   source: 'found_online_property_source_v1',
   listed_via: 'found_online',
   inquiry_reference: 'MK-20260809-A7EA38',
+  status: 'approved',
   lister_name: 'SWH RENTALS',
   lister_phone: null,
   extra_fields: {
@@ -196,7 +197,9 @@ test('a listing with nobody to contact says so instead of inventing a route', ()
   const orphan = { ...LISTED_WITH_US, lister_phone: null, extra_fields: {} };
   const reply = buildListingEnquiryReply(orphan, { title: 'x' });
   assert.match(reply, /do not have a contact number on file/i);
-  assert.match(reply, /\*FIND\*/);
+  // makaug is a discovery platform: it never promises to chase a lister.
+  assert.doesNotMatch(reply, /\*FIND\*|chase/i);
+  assert.match(reply, /logged with the makaug team/i);
 });
 
 test('a listing that has gone says so rather than going quiet', () => {

@@ -1,3 +1,5 @@
+const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
+const leadFormLimiter = createLeadFormLimiter();
 const express = require('express');
 const jwt = require('jsonwebtoken');
 
@@ -482,7 +484,7 @@ router.post('/payment-webhook/:provider?', async (req, res, next) => {
   }
 });
 
-router.post('/inquiries', async (req, res, next) => {
+router.post('/inquiries', leadFormLimiter, leadHoneypot, async (req, res, next) => {
   try {
     const fullName = cleanText(req.body.full_name || req.body.name);
     const businessName = cleanText(req.body.business_name || req.body.company);
@@ -586,6 +588,30 @@ router.post('/inquiries', async (req, res, next) => {
     const supportEmail = getSupportEmail();
     const whatsappUrl = getSupportWhatsappUrl();
     const labels = packageLabels(productInterests);
+
+    // Advertiser enquiries belong in the one Lead Centre too.
+    await createLead(db, {
+      contact: {
+        name: fullName,
+        phone: phone || null,
+        email: email || null,
+        preferredContactChannel,
+        roleType: 'advertiser'
+      },
+      source: 'advertising_inquiry',
+      leadType: 'advertiser',
+      channel: preferredContactChannel,
+      category: 'advertising',
+      location: targetLocations.join(', ') || null,
+      budget: budgetUgx,
+      message: message || `Advertising enquiry: ${productInterests.join(', ') || 'package'}`,
+      metadata: {
+        advertising_inquiry_id: inquiry.id,
+        business_name: businessName || null,
+        product_interests: productInterests,
+        estimated_value_ugx: estimatedValue || null
+      }
+    });
 
     try {
       await sendSupportEmail({

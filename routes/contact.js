@@ -1,3 +1,6 @@
+const { acknowledgeTeamLead } = require('../services/leadHandoffService');
+const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
+const leadFormLimiter = createLeadFormLimiter();
 const express = require('express');
 
 const db = require('../config/database');
@@ -299,7 +302,9 @@ async function handleLookingForProperty(req, res, next) {
     const request = inserted.rows[0];
     const lead = await createLead(db, {
       source: cleanText(req.body.source) || 'property_need_request',
-      leadType: 'enquiry',
+      leadType: 'property_need',
+      channel: 'web',
+      explicitContact: true,
       category: cleanText(req.body.listing_type) || null,
       location: cleanText(req.body.preferred_locations) || null,
       budget: toNullableInt(req.body.max_budget),
@@ -347,18 +352,36 @@ async function handleLookingForProperty(req, res, next) {
       userAgent: req.get('user-agent')
     });
 
-    await logNotification(db, {
-      recipientPhone: phone,
-      recipientEmail: email || null,
-      channel: 'in_app',
-      type: 'property_need_request_created',
-      status: 'logged',
-      payloadSummary: {
-        property_request_id: request.id,
-        listing_type: cleanText(req.body.listing_type) || null,
-        preferred_locations: cleanText(req.body.preferred_locations) || null
-      },
-      relatedLeadId: lead?.id || null
+    const needSummary = [
+      cleanText(req.body.listing_type) ? `Looking for: ${cleanText(req.body.listing_type)}` : '',
+      cleanText(req.body.preferred_locations) ? `Where: ${cleanText(req.body.preferred_locations)}` : '',
+      toNullableInt(req.body.max_budget) ? `Budget: UGX ${Number(toNullableInt(req.body.max_budget)).toLocaleString('en-UG')}` : ''
+    ].filter(Boolean);
+    await acknowledgeTeamLead(db, {
+      lead,
+      type: 'property_need',
+      seeker: { name: fullName, phone, email },
+      seekerMessage: [
+        `Hi ${fullName.split(' ')[0]},`,
+        '',
+        'makaug.com has your property request.',
+        ...needSummary,
+        '',
+        'When a matching listing goes live on makaug.com we will send it to you here. You can also search everything that is live now at https://makaug.com'
+      ].join('\n'),
+      teamSubject: `[makaug] Property request - ${fullName}`,
+      teamMessage: [
+        'New "tell us what you need" request on makaug.com.',
+        '',
+        `Name: ${fullName}`,
+        `Phone: ${phone}`,
+        `Email: ${email || '-'}`,
+        ...needSummary,
+        '',
+        `Requirements: ${requirements}`,
+        '',
+        'It is in Admin > Lead Centre and the Message Match desk.'
+      ].join('\n')
     });
 
     return res.status(201).json({ ok: true, data: request });
@@ -638,13 +661,13 @@ async function handleCareerInterest(req, res, next) {
   }
 }
 
-router.post('/report-listing', handleReportListing);
-router.post('/report', handleReportListing);
-router.post('/looking-for-property', handleLookingForProperty);
-router.post('/looking', handleLookingForProperty);
-router.post('/help-request', handleHelpRequest);
-router.post('/help', handleHelpRequest);
-router.post('/career-interest', handleCareerInterest);
-router.post('/careers', handleCareerInterest);
+router.post('/report-listing', leadFormLimiter, leadHoneypot, handleReportListing);
+router.post('/report', leadFormLimiter, leadHoneypot, handleReportListing);
+router.post('/looking-for-property', leadFormLimiter, leadHoneypot, handleLookingForProperty);
+router.post('/looking', leadFormLimiter, leadHoneypot, handleLookingForProperty);
+router.post('/help-request', leadFormLimiter, leadHoneypot, handleHelpRequest);
+router.post('/help', leadFormLimiter, leadHoneypot, handleHelpRequest);
+router.post('/career-interest', leadFormLimiter, leadHoneypot, handleCareerInterest);
+router.post('/careers', leadFormLimiter, leadHoneypot, handleCareerInterest);
 
 module.exports = router;
