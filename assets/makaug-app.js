@@ -817,6 +817,7 @@ let adminCrmSummary = {};
 let adminCrmLeads = [];
 let adminCrmTasks = [];
 let adminMortgageLeads = [];
+let adminDemandGaps = { totals: {}, gaps: [], window_days: 90 };
 let adminNotificationLogs = [];
 let adminEmailLogs = [];
 let adminWhatsappLogs = [];
@@ -17257,7 +17258,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   const shouldLoadAds = tabNeeds.ads;
   const shouldLoadWhatsapp = tabNeeds.whatsapp;
   const shouldLoadNotifications = tabNeeds.notifications;
-  const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, actionedRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, monetizationProductsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, mortgageLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
+  const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, actionedRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, monetizationProductsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, mortgageLeadsRes, demandGapsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
     adminSafeSnapshotRequest("summary", () => apiRequest("/api/admin/summary", { headers }), { data: {} }),
     adminSafeSnapshotRequest("command centre", () => apiRequest("/api/admin/command-centre", { headers }), { data: {} }),
     adminSafeSnapshotRequest("recent activity", () => apiRequest("/api/admin/recent", { headers }), { data: {} }),
@@ -17280,6 +17281,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     shouldLoadNotifications ? adminSafeSnapshotRequest("crm summary", () => apiRequest("/api/admin/crm/summary", { headers }), { data: {} }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("crm leads", () => apiRequest("/api/admin/leads?limit=50", { headers }), { data: [] }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("mortgage leads", () => apiRequest("/api/admin/mortgage-leads?limit=20", { headers }), { data: [] }) : null,
+    shouldLoadNotifications ? adminSafeSnapshotRequest("demand gaps", () => apiRequest("/api/admin/demand-gaps?days=90&limit=20", { headers }), { data: { totals: {}, gaps: [] } }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("notifications", () => apiRequest("/api/admin/notifications?limit=50", { headers }), { data: [] }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("emails", () => apiRequest("/api/admin/emails?limit=50", { headers }), { data: [] }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("outlook status", () => apiRequest("/api/admin/outlook-agent/status", { headers }), { data: {} }) : null,
@@ -17342,6 +17344,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   if (crmSummaryRes?.data) adminCrmSummary = crmSummaryRes.data;
   if (Array.isArray(crmLeadsRes?.data)) adminCrmLeads = crmLeadsRes.data;
   if (Array.isArray(mortgageLeadsRes?.data)) adminMortgageLeads = mortgageLeadsRes.data;
+  if (demandGapsRes?.data) adminDemandGaps = demandGapsRes.data;
   if (Array.isArray(crmSummaryRes?.data?.openTasks)) adminCrmTasks = crmSummaryRes.data.openTasks;
   if (Array.isArray(notificationsRes?.data)) adminNotificationLogs = notificationsRes.data;
   if (Array.isArray(emailsRes?.data)) adminEmailLogs = emailsRes.data;
@@ -17402,6 +17405,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     crmSummary: adminCrmSummary,
     crmLeads: adminCrmLeads,
     mortgageLeads: adminMortgageLeads,
+    demandGaps: adminDemandGaps,
     crmTasks: adminCrmTasks,
     notificationLogs: adminNotificationLogs,
     emailLogs: adminEmailLogs,
@@ -19794,6 +19798,88 @@ function renderAdminList(id, items, renderer) {
   el.innerHTML = items.map(renderer).join("");
 }
 
+/**
+ * What people asked for and makaug did not have.
+ *
+ * Every failed WhatsApp search tells the person "I have saved this request so
+ * makaug can follow up when a matching listing appears", then writes a row to
+ * property_leads — a table the admin leads list has never read. So the promise
+ * was made over and over and kept none of the times, and the clearest signal
+ * about what stock to go and find was invisible.
+ *
+ * The column that matters most is the last one: where supply has since appeared
+ * within what they were willing to pay, there are people worth ringing back.
+ */
+function renderAdminDemandGaps(payload = {}) {
+  const wrap = document.getElementById("admin-demand-gaps");
+  if (!wrap) return;
+  const gaps = Array.isArray(payload.gaps) ? payload.gaps : [];
+  const totals = payload.totals || {};
+  const days = Number(payload.window_days || 90);
+
+  if (!gaps.length) {
+    wrap.innerHTML = `<p class="text-sm text-gray-500">No unanswered searches in the last ${adminEscape(days)} days. Every WhatsApp search found something.</p>`;
+    return;
+  }
+
+  const money = (value) => (Number(value) > 0 ? `USh ${formatCompact(Number(value))}` : "—");
+  const when = (value) => {
+    if (!value) return "—";
+    const days_ago = Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
+    return days_ago <= 0 ? "today" : days_ago === 1 ? "yesterday" : `${days_ago}d ago`;
+  };
+
+  const rows = gaps.map((gap) => {
+    const callBack = Number(gap.supply_within_budget) > 0;
+    return `<tr class="border-t border-gray-100 ${callBack ? "bg-emerald-50" : ""}">
+      <td class="py-2 pr-3 font-semibold text-gray-900">${adminEscape(gap.area || "Anywhere")}</td>
+      <td class="py-2 pr-3 capitalize">${adminEscape(gap.search_type || "any")}</td>
+      <td class="py-2 pr-3 text-center font-bold">${adminEscape(gap.people ?? 0)}</td>
+      <td class="py-2 pr-3 text-center">${adminEscape(gap.times_asked ?? 0)}</td>
+      <td class="py-2 pr-3 whitespace-nowrap">${adminEscape(money(gap.lowest_budget))} – ${adminEscape(money(gap.highest_budget))}</td>
+      <td class="py-2 pr-3 text-center">${adminEscape(gap.supply_now ?? 0)}</td>
+      <td class="py-2 pr-3 text-center">${callBack
+        ? `<span class="inline-block rounded-full bg-emerald-600 text-white text-[11px] font-bold px-2 py-0.5">${adminEscape(gap.supply_within_budget)} to call back</span>`
+        : `<span class="text-red-600 font-semibold">0</span>`}</td>
+      <td class="py-2 pr-3 text-gray-500 whitespace-nowrap">${adminEscape(when(gap.last_asked_at))}</td>
+    </tr>`;
+  }).join("");
+
+  wrap.innerHTML = `
+    <div class="flex flex-wrap gap-3 mb-3">
+      <div class="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+        <div class="text-[11px] uppercase tracking-wide font-bold text-gray-500">Unanswered searches</div>
+        <div class="text-xl font-black text-gray-900">${adminEscape(totals.requests ?? 0)}</div>
+      </div>
+      <div class="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+        <div class="text-[11px] uppercase tracking-wide font-bold text-gray-500">People waiting</div>
+        <div class="text-xl font-black text-gray-900">${adminEscape(totals.people ?? 0)}</div>
+      </div>
+      <div class="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+        <div class="text-[11px] uppercase tracking-wide font-bold text-gray-500">Areas</div>
+        <div class="text-xl font-black text-gray-900">${adminEscape(totals.areas ?? 0)}</div>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="text-left text-[11px] uppercase tracking-wide text-gray-500">
+          <tr>
+            <th class="py-2 pr-3">Area</th>
+            <th class="py-2 pr-3">Want</th>
+            <th class="py-2 pr-3 text-center">People</th>
+            <th class="py-2 pr-3 text-center">Asks</th>
+            <th class="py-2 pr-3">Budget range</th>
+            <th class="py-2 pr-3 text-center">Live now</th>
+            <th class="py-2 pr-3 text-center">In their budget</th>
+            <th class="py-2 pr-3">Last asked</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p class="text-xs text-gray-500 mt-3">Last ${adminEscape(days)} days. Green rows already have matching stock \u2014 those people were promised a follow-up.</p>`;
+}
+
 function renderAdminCrmOverview(summary = {}) {
   const wrap = document.getElementById("admin-crm-overview");
   if (!wrap) return;
@@ -20602,6 +20688,7 @@ async function renderAdminDashboard(options = {}) {
   renderAdminCrmOverview(remoteSnap?.crmSummary || {});
   renderAdminCrmLeadsRows(remoteSnap?.crmLeads || []);
   renderAdminMortgageLeadsRows(remoteSnap?.mortgageLeads || []);
+  renderAdminDemandGaps(remoteSnap?.demandGaps || adminDemandGaps);
   renderAdminCrmTasksRows(remoteSnap?.crmTasks || []);
   renderAdminOutlookAgentStatus(remoteSnap?.outlookAgentStatus || {});
   renderAdminOutlookAgentActions(remoteSnap?.outlookAgentActions || [], remoteSnap?.outlookAgentStatus || {});
