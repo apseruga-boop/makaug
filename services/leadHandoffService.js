@@ -53,7 +53,7 @@ function listingUrl(listing = {}) {
 }
 
 function makaugOwnNumbers() {
-  return String(process.env.MAKAUG_WHATSAPP_NUMBERS || process.env.WHATSAPP_BUSINESS_NUMBER || '256780863394')
+  return String([process.env.MAKAUG_WHATSAPP_NUMBERS, process.env.MAKAUG_WHATSAPP_NUMBER, process.env.WHATSAPP_BUSINESS_NUMBER, '256780863394'].filter(Boolean).join(','))
     .split(',')
     .map((value) => phoneKey(value))
     .filter(Boolean);

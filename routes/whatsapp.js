@@ -2727,7 +2727,7 @@ async function buildWhatsappListingEnquiryResponse(enquiry = {}, { phone = '', l
     }
     const listerNumber = listing?.agent_whatsapp || listing?.agent_phone || listing?.lister_phone || '';
     const digitsKey = (value) => String(value || '').replace(/\D/g, '').slice(-9);
-    const makaugNumbers = String(process.env.MAKAUG_WHATSAPP_NUMBERS || process.env.WHATSAPP_BUSINESS_NUMBER || '256780863394')
+    const makaugNumbers = String([process.env.MAKAUG_WHATSAPP_NUMBERS, process.env.MAKAUG_WHATSAPP_NUMBER, process.env.WHATSAPP_BUSINESS_NUMBER, '256780863394'].filter(Boolean).join(','))
       .split(',').map(digitsKey);
     const listerReachable = listerNumber
       ? digitsKey(listerNumber).length === 9 && digitsKey(listerNumber) !== digitsKey(phone) && !makaugNumbers.includes(digitsKey(listerNumber))
