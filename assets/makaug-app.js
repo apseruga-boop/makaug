@@ -40073,6 +40073,19 @@ function badgeLabel(type) {
   }[t] || t;
 }
 
+function isApprovedMakaugAgentListing(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const ids = [p?.agent_id, p?.agent, p?.broker_id, extra.broker_agent_id, extra.agent_id]
+    .map((v) => (v && typeof v === "object" ? v.id : v))
+    .map((v) => String(v || "").trim())
+    .filter((v) => v && v !== "null");
+  for (const id of ids) {
+    const broker = typeof findBrokerByIdIncludingLoadedProfile === "function" ? findBrokerByIdIncludingLoadedProfile(id) : findBrokerById(id);
+    if (broker && String(broker.status || "approved").toLowerCase() === "approved") return true;
+  }
+  return false;
+}
+
 function listingSourceMeta(p) {
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
   const listedBy = String(
@@ -40095,6 +40108,16 @@ function listingSourceMeta(p) {
     || extra.lister_is_agent === true
     || /\b(agent|broker|agency|realtor|company)\b/.test(listedBy)
   );
+  if (byAgent && isApprovedMakaugAgentListing(p)) {
+    // Agents we've screened and hold a profile for get their own gold badge.
+    return {
+      key: "agent",
+      approved: true,
+      label: translateListingLabel("Approved agent"),
+      cls: "bg-amber-400 text-amber-950",
+      icon: "fas fa-shield-halved"
+    };
+  }
   if (byAgent) {
     return {
       key: "agent",
