@@ -1,6 +1,7 @@
 'use strict';
 
 const logger = require('../config/logger');
+const { runBackgroundWork } = require('../config/database');
 const { getPropertySourceRegistry } = require('./propertySourceRegistryService');
 const {
   runSocialPlatformPostSweep,
@@ -613,7 +614,10 @@ async function runYouTubeSourceDripOnce(db, { force = false, actorId = 'system' 
   }
 }
 
-async function tickYouTubeSourceDripScheduler(db, actorId = 'youtube_source_drip_scheduler') {
+// A scheduler scan must never take the connections a waiting person needs. See
+// runBackgroundWork in config/database.js: everything awaited inside is held to
+// a ceiling below the pool size.
+async function tickYouTubeSourceDripSchedulerInner(db, actorId = 'youtube_source_drip_scheduler') {
   if (schedulerRunning) {
     schedulerLastResult = {
       ok: true,
@@ -639,6 +643,10 @@ async function tickYouTubeSourceDripScheduler(db, actorId = 'youtube_source_drip
   } finally {
     schedulerRunning = false;
   }
+}
+
+function tickYouTubeSourceDripScheduler(db, actorId = 'youtube_source_drip_scheduler') {
+  return runBackgroundWork(() => tickYouTubeSourceDripSchedulerInner(db, actorId));
 }
 
 function startYouTubeSourceDripScheduler(db) {

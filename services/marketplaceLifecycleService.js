@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 
 const logger = require('../config/logger');
+const { runBackgroundWork } = require('../config/database');
 const { MARKETPLACE_VERIFIED_PRICE_UGX } = require('../config/marketplacePricing');
 const { sendSupportEmail } = require('./emailService');
 const { logNotification, notificationStatusFromDelivery } = require('./notificationLogService');
@@ -352,7 +353,10 @@ async function notifyMarketplaceLeadOpportunity(db, lead) {
   return { matched: result.rows.length, sent };
 }
 
-async function tickMarketplaceLifecycleScheduler(db) {
+// A scheduler scan must never take the connections a waiting person needs. See
+// runBackgroundWork in config/database.js: everything awaited inside is held to
+// a ceiling below the pool size.
+async function tickMarketplaceLifecycleSchedulerInner(db) {
   if (schedulerRunning) return { skipped: true, reason: 'already_running' };
   schedulerRunning = true;
   try {
@@ -363,6 +367,10 @@ async function tickMarketplaceLifecycleScheduler(db) {
   } finally {
     schedulerRunning = false;
   }
+}
+
+function tickMarketplaceLifecycleScheduler(db) {
+  return runBackgroundWork(() => tickMarketplaceLifecycleSchedulerInner(db));
 }
 
 function startMarketplaceLifecycleScheduler(db) {

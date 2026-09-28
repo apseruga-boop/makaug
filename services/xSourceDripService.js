@@ -1,6 +1,7 @@
 'use strict';
 
 const logger = require('../config/logger');
+const { runBackgroundWork } = require('../config/database');
 const { getPropertySourceRegistry } = require('./propertySourceRegistryService');
 const { runSocialPlatformPostSweep } = require('./socialPlatformPostDiscoveryService');
 const { logNotification } = require('./notificationLogService');
@@ -607,7 +608,10 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
   }
 }
 
-async function tickXSourceDripScheduler(db, actorId = 'x_source_drip_scheduler') {
+// A scheduler scan must never take the connections a waiting person needs. See
+// runBackgroundWork in config/database.js: everything awaited inside is held to
+// a ceiling below the pool size.
+async function tickXSourceDripSchedulerInner(db, actorId = 'x_source_drip_scheduler') {
   if (schedulerRunning) {
     schedulerLastResult = {
       ok: true,
@@ -633,6 +637,10 @@ async function tickXSourceDripScheduler(db, actorId = 'x_source_drip_scheduler')
   } finally {
     schedulerRunning = false;
   }
+}
+
+function tickXSourceDripScheduler(db, actorId = 'x_source_drip_scheduler') {
+  return runBackgroundWork(() => tickXSourceDripSchedulerInner(db, actorId));
 }
 
 function startXSourceDripScheduler(db) {

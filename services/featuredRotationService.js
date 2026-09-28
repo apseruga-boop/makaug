@@ -1,6 +1,7 @@
 'use strict';
 
 const logger = require('../config/logger');
+const { runBackgroundWork } = require('../config/database');
 const {
   canonicalizeUgandaLocation,
   normalizeLocationKey,
@@ -431,7 +432,10 @@ async function runFeaturedRotation(db, options = {}) {
   }
 }
 
-async function tickFeaturedRotationScheduler(db, options = {}) {
+// A scheduler scan must never take the connections a waiting person needs. See
+// runBackgroundWork in config/database.js: everything awaited inside is held to
+// a ceiling below the pool size.
+async function tickFeaturedRotationSchedulerInner(db, options = {}) {
   if (schedulerRunning) return { skipped: true, reason: 'already_running' };
   const timeZone = clean(process.env.FEATURED_ROTATION_TIMEZONE || DEFAULT_TIME_ZONE);
   const hour = Math.max(0, Math.min(23, Number(process.env.FEATURED_ROTATION_HOUR || DEFAULT_HOUR)));
@@ -449,6 +453,10 @@ async function tickFeaturedRotationScheduler(db, options = {}) {
   } finally {
     schedulerRunning = false;
   }
+}
+
+function tickFeaturedRotationScheduler(db, options = {}) {
+  return runBackgroundWork(() => tickFeaturedRotationSchedulerInner(db, options));
 }
 
 function startFeaturedRotationScheduler(db) {

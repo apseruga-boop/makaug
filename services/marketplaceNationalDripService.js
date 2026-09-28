@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 
 const logger = require('../config/logger');
+const { runBackgroundWork } = require('../config/database');
 const {
   DISTRICTS,
   MARKETPLACE_CATEGORIES,
@@ -1264,7 +1265,10 @@ function schedulerStatus() {
   };
 }
 
-async function tickMarketplaceDripScheduler(db) {
+// A scheduler scan must never take the connections a waiting person needs. See
+// runBackgroundWork in config/database.js: everything awaited inside is held to
+// a ceiling below the pool size.
+async function tickMarketplaceDripSchedulerInner(db) {
   if (schedulerRunning) return { skipped: true, reason: 'already_running' };
   schedulerRunning = true;
   schedulerLastTickAt = new Date().toISOString();
@@ -1278,6 +1282,10 @@ async function tickMarketplaceDripScheduler(db) {
   } finally {
     schedulerRunning = false;
   }
+}
+
+function tickMarketplaceDripScheduler(db) {
+  return runBackgroundWork(() => tickMarketplaceDripSchedulerInner(db));
 }
 
 function startMarketplaceDripScheduler(db) {
