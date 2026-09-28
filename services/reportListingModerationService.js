@@ -39,7 +39,9 @@ async function hideReportedProperty({
          reviewed_at = NOW(),
          moderation_stage = $3,
          moderation_reason = $4,
-         moderation_notes = CONCAT_WS(E'\n', NULLIF(moderation_notes, ''), $4),
+         -- Cast for the same reason as everywhere else: CONCAT_WS cannot type a
+         -- bare parameter, and leaving it to luck is how 42P08 keeps returning.
+         moderation_notes = CONCAT_WS(E'\n', NULLIF(moderation_notes, ''), $4::text),
          rejected_at = NOW(),
          extra_fields = COALESCE(extra_fields, '{}'::jsonb)
            || jsonb_build_object(
