@@ -35,6 +35,8 @@ const REAL_MP4 = (() => {
 const received = { inbound: [], heartbeats: [], acks: [], sends: [], lidLookups: [] };
 let outbox = [];
 const failInboundOnce = new Set();
+// Makes every delivery of a message fail, the way a sustained outage does.
+const failInboundAlways = new Set();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -63,6 +65,9 @@ const makaugSrv = http.createServer(async (req, res) => {
     const payload = JSON.parse((await body(req)).toString());
     // Lets a test make the first delivery of a message fail, the way a real
     // outage does, and check the retry is accepted rather than dismissed.
+    if (failInboundAlways.has(payload.message_id)) {
+      return reply(res, 503, { ok: false, error: 'simulated sustained outage' });
+    }
     if (failInboundOnce.has(payload.message_id)) {
       failInboundOnce.delete(payload.message_id);
       return reply(res, 503, { ok: false, error: 'simulated outage' });
@@ -262,23 +267,49 @@ async function post(url, obj, headers = {}) {
     const rRaw = Buffer.from(JSON.stringify(retryEvt));
     const beforeRetry = received.inbound.length;
     await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(rRaw) }, body: rRaw });
-    await sleep(500);
-    assert.strictEqual(received.inbound.length, beforeRetry, 'first attempt failed, as arranged');
-    const lostHealth = await fetch(`${adapterUrl}/health`).then((r) => r.json());
-    assert.ok(lostHealth.stats.undelivered_released >= 1, 'an undelivered message is counted, not hidden');
-    assert.ok(lostHealth.blockers.some((b) => /failed to reach makaug/.test(b)), 'and surfaced as a blocker');
-
-    // WAHA retries; this time it must get through.
-    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(rRaw) }, body: rRaw });
-    await sleep(500);
-    assert.strictEqual(received.inbound.length, beforeRetry + 1, 'retry after a failure is accepted, not dropped');
+    await sleep(2600);
+    // This service now tries again itself rather than waiting for WhatsApp to
+    // redeliver. On 28 Sep 2026 waiting cost Arthur six minutes for a "Hello"
+    // that makaug answered in 905ms once it could take it.
+    assert.strictEqual(received.inbound.length, beforeRetry + 1,
+      'a stalled handover is retried here, without waiting for WhatsApp to send another copy');
     assert.strictEqual(received.inbound[received.inbound.length - 1].body, 'album photo', 'the right message arrived');
+    const retryHealth = await fetch(`${adapterUrl}/health`).then((r) => r.json());
+    assert.ok(retryHealth.stats.inbound_handover_retries >= 1,
+      'the retry is counted, so a makaug that is quietly struggling is visible');
 
     // And once delivered, a further copy is still suppressed.
     await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(rRaw) }, body: rRaw });
     await sleep(400);
     assert.strictEqual(received.inbound.length, beforeRetry + 1, 'still exactly once after success');
-    console.log('\u2713 a failed delivery is retried, not silently lost');
+    console.log('\u2713 a stalled handover is retried here rather than waited out');
+
+    // 4d. When makaug stays down, the message must still not be burned: the
+    //     claim is released so WhatsApp's next copy gets a fresh try. The first
+    //     version of the duplicate guard marked an id as seen up front, and a
+    //     forwarded album of eight photos reached the bridge while only two
+    //     reached makaug.
+    const downEvt = {
+      id: 'evt_down', event: 'message', session: 'default',
+      payload: { id: 'true_256700111222@c.us_DOWN', from: '256700111222@c.us', fromMe: false, body: 'second photo', timestamp: 1789460070, notifyName: 'Sarah' },
+    };
+    failInboundAlways.add('true_256700111222@c.us_DOWN');
+    const dRaw = Buffer.from(JSON.stringify(downEvt));
+    const beforeDown = received.inbound.length;
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(dRaw) }, body: dRaw });
+    // 1.5s + 3s + 4.5s of backoff between four attempts, then the claim is let go.
+    await sleep(13000);
+    assert.strictEqual(received.inbound.length, beforeDown, 'makaug is down, so nothing got through');
+    const lostHealth = await fetch(`${adapterUrl}/health`).then((r) => r.json());
+    assert.ok(lostHealth.stats.undelivered_released >= 1, 'an undelivered message is counted, not hidden');
+    assert.ok(lostHealth.blockers.some((b) => /failed to reach makaug/.test(b)), 'and surfaced as a blocker');
+
+    failInboundAlways.delete('true_256700111222@c.us_DOWN');
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(dRaw) }, body: dRaw });
+    await sleep(600);
+    assert.strictEqual(received.inbound.length, beforeDown + 1,
+      'once makaug is back, WhatsApp\u2019s next copy is accepted rather than dismissed as a duplicate');
+    console.log('\u2713 a message is never burned by an outage that outlasts the retries');
 
     // 5. inbound media -> proxied URL that actually serves bytes
     const mediaEvt = {
