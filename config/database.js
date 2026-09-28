@@ -67,12 +67,122 @@ function repairParams(params) {
   return changed ? next : params;
 }
 
+/**
+ * Keep connections free for someone who is waiting for a reply.
+ *
+ * 28 Sep 2026, 06:30. Arthur sent "Hello" and waited six minutes for the
+ * greeting. The app was not slow — once the message reached it, the reply was
+ * built in 905ms. It could not reach it: three background drip schedulers
+ * reported `code: 'POOL_TIMEOUT'` in the same second, the pool had nothing left
+ * to give, and the bridge's handover timed out over and over.
+ *
+ * Background work has all day. A person on WhatsApp does not. So background
+ * work is held to a ceiling below the pool's size, and the difference is kept
+ * for whoever is actually waiting. Nothing is refused, only queued — a drip
+ * scan that starts a few seconds later costs nobody anything.
+ *
+ * Work marks itself as background by running inside runBackgroundWork(), and
+ * every query underneath inherits that through AsyncLocalStorage, so the
+ * hundreds of call sites did not have to change.
+ */
+const { AsyncLocalStorage } = require('async_hooks');
+
+const workClass = new AsyncLocalStorage();
+const liveReserve = Math.max(0, Math.min(
+  poolMax - 1,
+  parseInt(process.env.DB_LIVE_RESERVE || '6', 10) || 6
+));
+const backgroundCeiling = Math.max(1, poolMax - liveReserve);
+const backgroundWaitMs = Math.max(1000, parseInt(process.env.DB_BACKGROUND_WAIT_MS || '20000', 10) || 20000);
+
+let inFlight = 0;
+const backgroundWaiters = [];
+
+function isBackgroundWork() {
+  return workClass.getStore() === 'background';
+}
+
+function acquireSlot() {
+  if (!isBackgroundWork() || inFlight < backgroundCeiling) {
+    inFlight += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const waiter = {
+      resolve,
+      timer: setTimeout(() => {
+        const at = backgroundWaiters.indexOf(waiter);
+        if (at >= 0) backgroundWaiters.splice(at, 1);
+        const error = new Error('Background database work waited too long behind live traffic');
+        error.code = 'DB_BACKGROUND_BUSY';
+        reject(error);
+      }, backgroundWaitMs)
+    };
+    backgroundWaiters.push(waiter);
+  });
+}
+
+function releaseSlot() {
+  inFlight = Math.max(0, inFlight - 1);
+  while (backgroundWaiters.length && inFlight < backgroundCeiling) {
+    const waiter = backgroundWaiters.shift();
+    clearTimeout(waiter.timer);
+    inFlight += 1;
+    waiter.resolve();
+  }
+}
+
+/** Run fn — and everything it awaits — as background work. */
+function runBackgroundWork(fn) {
+  return workClass.run('background', fn);
+}
+
+function poolPressure() {
+  return {
+    pool_max: poolMax,
+    live_reserve: liveReserve,
+    background_ceiling: backgroundCeiling,
+    in_flight: inFlight,
+    background_waiting: backgroundWaiters.length,
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    queued: pool.waitingCount
+  };
+}
+
 async function query(text, params) {
-  return pool.query(text, repairParams(params));
+  await acquireSlot();
+  try {
+    return await pool.query(text, repairParams(params));
+  } finally {
+    releaseSlot();
+  }
 }
 
 async function getClient() {
-  const client = await pool.connect();
+  await acquireSlot();
+  let client;
+  try {
+    client = await pool.connect();
+  } catch (error) {
+    releaseSlot();
+    throw error;
+  }
+  // pg hands the same client object back on a later checkout, so the wrapper is
+  // rebuilt every time. Remembering it once would leave the "already released"
+  // flag stuck from the previous checkout and leak the slot for good.
+  if (!client.__makaugOriginalRelease) {
+    client.__makaugOriginalRelease = client.release.bind(client);
+  }
+  const originalRelease = client.__makaugOriginalRelease;
+  let slotReleased = false;
+  client.release = (...args) => {
+    if (!slotReleased) {
+      slotReleased = true;
+      releaseSlot();
+    }
+    return originalRelease(...args);
+  };
   if (!client.__makaugParamRepair) {
     const originalQuery = client.query.bind(client);
     client.query = (text, params, ...rest) => (
@@ -110,5 +220,7 @@ module.exports = {
   query,
   getClient,
   healthcheck,
-  warmPool
+  warmPool,
+  runBackgroundWork,
+  poolPressure
 };
