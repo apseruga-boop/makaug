@@ -4298,7 +4298,12 @@ async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}, o
                 identity_document_url = $3,
                 identity_document_type = $4,
                 identity_document_uploaded_at = NOW(),
-                verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), $5),
+                -- CONCAT_WS takes "any", so a bare parameter here has nothing to
+                -- take its type from and PostgreSQL refuses the whole statement
+                -- with 42P08. That is what stopped Jonathan Wassajja's intake on
+                -- 28 Sep 2026: he had been registered without an ID, came back
+                -- with one, and this is the branch that attaches it.
+                verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), $5::text),
                 updated_at = NOW()
           WHERE id = $1 AND status = 'pending' AND identity_document_url IS NULL
           RETURNING id, full_name, company_name, phone, whatsapp, email, status`,
