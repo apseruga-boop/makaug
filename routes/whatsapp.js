@@ -10803,24 +10803,51 @@ function logPropertySearchRequest({
   });
 }
 
+/**
+ * Record a search makaug could not answer.
+ *
+ * The bot tells the person "I have saved this request so makaug can follow up
+ * when a matching listing appears", so this row is a promise. It used to keep
+ * only the area and the type, which makes the promise unkeepable and the demand
+ * unreadable: someone asking for a rental in Bunga at UGX 500K a month was
+ * stored as "rent, Bunga" — indistinguishable from someone with 5 million to
+ * spend, and useless for deciding what stock to go and find.
+ *
+ * The budget is the whole point of a supply gap, and the column was there all
+ * along. It is written now, along with the bedrooms and what they actually
+ * typed, so /api/admin/demand-gaps can say how many people wanted what, and at
+ * what price.
+ */
 function createNoMatchLead({
   userPhone,
   searchType = 'any',
   preferredArea = '',
-  notes = ''
+  notes = '',
+  filters = {},
+  queryText = ''
 }) {
+  const budget = Number(filters.maxBudgetUgx) > 0 ? Number(filters.maxBudgetUgx) : null;
+  const bedsMin = Number(filters.bedsMin) > 0 ? Number(filters.bedsMin) : null;
+  const propertyType = normalizeInput(filters.propertyType || '') || null;
   deferWhatsappWork('WhatsApp no-match lead capture', () => db.query(
-    `INSERT INTO property_leads (phone, preferred_area, purpose, category, notes, payload)
-     VALUES ($1, $2, 'search', $3, $4, $5::jsonb)`,
+    `INSERT INTO property_leads (phone, preferred_area, purpose, category, budget, notes, payload)
+     VALUES ($1, $2, 'search', $3, $4, $5, $6::jsonb)`,
     [
       userPhone,
       preferredArea || null,
       searchType || 'any',
+      budget,
       notes || 'Auto-captured from WhatsApp no-match search.',
       JSON.stringify({
         source: 'whatsapp',
         search_type: searchType || 'any',
-        preferred_area: preferredArea || null
+        preferred_area: preferredArea || null,
+        max_budget_ugx: budget,
+        price_period: normalizeInput(filters.pricePeriod || '') || null,
+        beds_min: bedsMin,
+        property_type: propertyType,
+        canonical_location_id: filters.canonical_location_id || null,
+        query_text: normalizeInput(queryText).slice(0, 400) || null
       })
     ]
   ));
@@ -11146,7 +11173,9 @@ async function formatNoMatchOrFallbackReply({
     userPhone,
     searchType: normalizedSearchType,
     preferredArea,
-    notes
+    notes,
+    filters,
+    queryText
   });
   await patchSessionData(userPhone, {
     last_no_match: {
@@ -15083,6 +15112,7 @@ module.exports.__test = {
   formatAffordabilityAdviceMessage,
   formatPropertySearchMessage,
   findBroaderPropertyFallback,
+  createNoMatchLead,
   lowestPricedFallbackRow,
   whatsappSearchBusyReply,
   isWhatsappPropertySearchRuntime,

@@ -11710,6 +11710,100 @@ async function queryAdminMortgageLeads(req) {
   return { page, limit, total: count.rows[0]?.total || 0, rows: rows.rows };
 }
 
+/**
+ * What people asked makaug for and makaug did not have.
+ *
+ * Every failed WhatsApp search writes a row saying "I have saved this request
+ * so makaug can follow up when a matching listing appears". Those rows were
+ * going into property_leads, which nothing reads — the admin leads list unions
+ * `leads` and `mortgage_enquiries` and has never included them. So the promise
+ * was being made hundreds of times and kept none of them, and the clearest
+ * signal the business has about what stock to go and find was invisible.
+ *
+ * This groups them: what type, where, how many people, what they were willing
+ * to pay, and whether anything matching has been approved since they asked —
+ * which is exactly the list of people worth calling back.
+ */
+router.get('/demand-gaps', async (req, res, next) => {
+  try {
+    const days = Math.max(1, Math.min(365, Number(req.query.days) || 90));
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 25));
+    const rows = await db.query(
+      `WITH unmet AS (
+         SELECT
+           LOWER(COALESCE(NULLIF(category, ''), 'any')) AS search_type,
+           INITCAP(COALESCE(NULLIF(TRIM(preferred_area), ''), 'anywhere')) AS area,
+           phone,
+           budget,
+           created_at
+         FROM property_leads
+         WHERE purpose = 'search'
+           AND created_at >= NOW() - ($1 || ' days')::interval
+       ),
+       grouped AS (
+         SELECT
+           search_type,
+           area,
+           COUNT(*)::int                       AS times_asked,
+           COUNT(DISTINCT phone)::int          AS people,
+           MIN(budget)::bigint                 AS lowest_budget,
+           MAX(budget)::bigint                 AS highest_budget,
+           ROUND(AVG(budget))::bigint          AS typical_budget,
+           MAX(created_at)                     AS last_asked_at,
+           (ARRAY_AGG(DISTINCT phone))[1:10]   AS recent_phones
+         FROM unmet
+         GROUP BY search_type, area
+       )
+       SELECT
+         g.*,
+         supply.total        AS supply_now,
+         supply.within       AS supply_within_budget
+       FROM grouped g
+       LEFT JOIN LATERAL (
+         SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (
+             WHERE g.highest_budget IS NOT NULL
+               AND p.price IS NOT NULL
+               AND p.price <= g.highest_budget
+           )::int AS within
+         FROM properties p
+         WHERE p.status = 'approved'
+           AND (g.search_type = 'any' OR LOWER(COALESCE(p.listing_type, '')) = g.search_type)
+           AND (g.area = 'Anywhere' OR p.area ILIKE g.area OR p.district ILIKE g.area)
+       ) supply ON TRUE
+       ORDER BY g.times_asked DESC, g.people DESC, g.last_asked_at DESC
+       LIMIT $2`,
+      [String(days), limit]
+    );
+
+    const totals = await db.query(
+      `SELECT
+         COUNT(*)::int                  AS requests,
+         COUNT(DISTINCT phone)::int     AS people,
+         COUNT(DISTINCT COALESCE(NULLIF(TRIM(preferred_area), ''), 'anywhere'))::int AS areas
+       FROM property_leads
+       WHERE purpose = 'search'
+         AND created_at >= NOW() - ($1 || ' days')::interval`,
+      [String(days)]
+    );
+
+    return res.json({
+      ok: true,
+      data: {
+        window_days: days,
+        totals: totals.rows[0] || { requests: 0, people: 0, areas: 0 },
+        gaps: rows.rows
+      }
+    });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      return res.json({ ok: true, data: { window_days: 0, totals: { requests: 0, people: 0, areas: 0 }, gaps: [] }, provider_missing: true });
+    }
+    return next(error);
+  }
+});
+
 router.get('/mortgage-leads', async (req, res, next) => {
   try {
     const result = await queryAdminMortgageLeads(req);
