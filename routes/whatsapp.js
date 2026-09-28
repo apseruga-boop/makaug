@@ -10972,28 +10972,82 @@ function listingDraftSavedNote(lang) {
   return messages[code] || messages.en;
 }
 
-async function findBroaderPropertyFallback(filters = {}) {
+/**
+ * Nothing matched — so what do we show instead?
+ *
+ * The order matters enormously, because the first thing that returns rows is
+ * what the person sees. This used to drop the transaction type on the very
+ * first attempt:
+ *
+ *   searchType: 'any'    // before anything else was tried
+ *
+ * On 28 Sep 2026 someone asked for "the ones in Bunga at 500 k per month" and
+ * the top of the reply was a *seven-bedroom house for sale*. There are 41
+ * rentals in Bunga; the cheapest is UGX 1M a month. Their budget was the thing
+ * that did not fit, and their budget is the thing they might stretch. Whether
+ * they are renting or buying is not negotiable at all, and it was the first
+ * thing thrown away.
+ *
+ * So now the budget goes first, then the extras, then the area, and the type is
+ * given up last of all. What was let go is reported back so the reply can say
+ * so rather than quietly showing something else.
+ */
+async function findBroaderPropertyFallback(filters = {}, deps = {}) {
+  // The two finders are injectable so the order below can be tested for what it
+  // is — an order — without a database standing in the way.
+  const byFilters = deps.findPropertiesByNaturalFilters || findPropertiesByNaturalFilters;
+  const byTypeAndArea = deps.findPropertiesForWhatsapp || findPropertiesForWhatsapp;
   const searchType = normalizeListingType(filters.searchType || 'any');
   const area = normalizeInput(filters.area || filters.preferredArea || '');
-  const propertyType = normalizeInput(filters.propertyType || '');
+  const budget = Number(filters.maxBudgetUgx) > 0 ? Number(filters.maxBudgetUgx) : 0;
   const attempts = [];
+  const add = (relaxed, run) => attempts.push({ relaxed, run });
 
-  if (searchType !== 'any' && area) {
-    attempts.push(() => findPropertiesByNaturalFilters({
+  // 1. Everything they asked for except the price.
+  if (budget && area) {
+    add({ budget: true }, () => byFilters({ ...filters, searchType, maxBudgetUgx: null }));
+  }
+  // 2. Their type and their area, without the bedroom count or property type.
+  if (area) {
+    add({ budget: Boolean(budget), extras: true }, () => byFilters({
       ...filters,
-      searchType: 'any',
-      propertyType: propertyType || null
+      searchType,
+      maxBudgetUgx: null,
+      bedsMin: null,
+      propertyType: null
     }));
   }
-  if (area) attempts.push(() => findPropertiesForWhatsapp('any', area));
-  if (searchType !== 'any') attempts.push(() => findPropertiesForWhatsapp(searchType, ''));
-  attempts.push(() => findPropertiesForWhatsapp('any', ''));
+  // 3. Their type, anywhere.
+  if (searchType !== 'any') {
+    add({ budget: Boolean(budget), extras: true, area: Boolean(area) }, () => byTypeAndArea(searchType, ''));
+  }
+  // 4. Only now is renting-versus-buying given up, and only in their area.
+  if (area) {
+    add({ budget: Boolean(budget), extras: true, type: searchType !== 'any' }, () => byTypeAndArea('any', area));
+  }
+  add({ budget: Boolean(budget), extras: true, area: Boolean(area), type: searchType !== 'any' }, () => byTypeAndArea('any', ''));
 
   for (const attempt of attempts) {
-    const rows = await attempt();
-    if (rows.length) return rows;
+    const rows = await attempt.run();
+    if (rows.length) {
+      return {
+        rows,
+        relaxed: attempt.relaxed,
+        // What the rows actually are, so the count above them cannot claim to
+        // have found 67 rentals when 26 of them are for sale.
+        effectiveSearchType: attempt.relaxed.type ? 'any' : searchType,
+        effectiveArea: attempt.relaxed.area ? '' : area
+      };
+    }
   }
-  return [];
+  return { rows: [], relaxed: {}, effectiveSearchType: searchType, effectiveArea: area };
+}
+
+/** The cheapest row we can quote back, so "closest" is a number not a promise. */
+function lowestPricedFallbackRow(rows = []) {
+  return rows
+    .filter((row) => Number(row?.price) > 0)
+    .sort((a, b) => Number(a.price) - Number(b.price))[0] || null;
 }
 
 async function formatNoMatchOrFallbackReply({
@@ -11022,22 +11076,39 @@ async function formatNoMatchOrFallbackReply({
     }
   });
 
-  const fallbackRows = await findBroaderPropertyFallback({
+  const fallback = await findBroaderPropertyFallback({
     ...filters,
     searchType: normalizedSearchType,
     area: preferredArea === 'any' ? '' : preferredArea
   });
+  const fallbackRows = fallback.rows;
 
   if (!fallbackRows.length) return formatNoMatchReply(lang, preferredArea === 'any' ? 'any area' : preferredArea);
 
   const code = resolveLangCode(lang);
   const exactLabel = typeLabel(normalizedSearchType, lang);
   const locationLabel = preferredArea === 'any' ? 'any area' : preferredArea;
+
+  // Name the thing that did not fit, and quote the nearest real price. "No
+  // exact match" on its own left someone asking for a 500K rental staring at a
+  // seven-bedroom house for sale with no idea why.
+  const budgetUgx = Number(filters.maxBudgetUgx) > 0 ? Number(filters.maxBudgetUgx) : 0;
+  const cheapest = fallback.relaxed.budget ? lowestPricedFallbackRow(fallbackRows) : null;
+  const budgetClause = budgetUgx ? ` under *${formatPrice(budgetUgx, filters.pricePeriod || 'mo')}*` : '';
+  const cheapestClause = cheapest
+    ? ` The lowest I have is *${formatPrice(cheapest.price, cheapest.price_period)}*.`
+    : '';
   const copy = {
     en: [
-      `I do not have an approved exact match for *${exactLabel}* in *${locationLabel}* right now.`,
+      `I do not have an approved *${exactLabel}* listing in *${locationLabel}*${budgetClause} right now.${cheapestClause}`,
       'I have saved this request so makaug can follow up when a matching listing appears.',
-      'While we look, here are live makaug listings that may still help:'
+      fallback.relaxed.type
+        ? `Nothing to ${exactLabel.toLowerCase()} there at the moment, so here is what else is live in *${locationLabel}*:`
+        : fallback.relaxed.area
+          ? `Here are the closest *${exactLabel}* listings I have anywhere:`
+          : budgetUgx && fallback.relaxed.budget
+            ? `Here are the closest *${exactLabel}* listings in *${locationLabel}*, just above your budget:`
+            : `Here are the closest *${exactLabel}* listings in *${locationLabel}*:`
     ],
     lg: [
       `Sirina exact match ekakasiddwa ya *${exactLabel}* mu *${locationLabel}* kati.`,
@@ -11077,7 +11148,12 @@ async function formatNoMatchOrFallbackReply({
     '',
     lines[2],
     '',
-    formatPropertySearchMessage(lang, fallbackRows, preferredArea === 'any' ? 'Any area' : preferredArea, 'any')
+    formatPropertySearchMessage(
+      lang,
+      fallbackRows,
+      fallback.effectiveArea || (preferredArea === 'any' ? 'Any area' : preferredArea),
+      fallback.effectiveSearchType
+    )
   ].join('\n');
 }
 
@@ -14925,6 +15001,8 @@ module.exports.__test = {
   inferAffordabilitySearchType,
   formatAffordabilityAdviceMessage,
   formatPropertySearchMessage,
+  findBroaderPropertyFallback,
+  lowestPricedFallbackRow,
   whatsappSearchBusyReply,
   isWhatsappPropertySearchRuntime,
   whatsappSearchResultsUrl,
