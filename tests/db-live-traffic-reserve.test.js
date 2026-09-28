@@ -122,3 +122,14 @@ test('a client checked out twice does not leak its slot the second time', () => 
   assert.ok(!/__makaugSlotRelease\s*=\s*true/.test(source),
     'a once-only wrapper on a reused client object leaks the slot');
 });
+
+test('the pool is sized for the database that actually exists', () => {
+  // makaug-postgres is Basic-256mb: 0.1 CPU, 256 MB. Twenty concurrent queries
+  // against a tenth of a core is how `timeout exceeded when trying to connect`
+  // kept reaching the WhatsApp route.
+  const p = db.poolPressure();
+  assert.ok(p.pool_max <= 10,
+    'a pool larger than a 0.1 CPU database can serve makes every query slower, not faster');
+  assert.ok(p.background_ceiling >= 1, 'background work must still be able to run at all');
+  assert.ok(p.live_reserve >= 1, 'and something must always be held back for a person waiting');
+});
