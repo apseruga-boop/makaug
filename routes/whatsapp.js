@@ -4645,8 +4645,89 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   const exactLocation = locationResolution?.status === 'matched'
     && !['district', 'region'].includes(locationLevel)
     && Number(locationResolution?.confidence || 0) >= 1;
-  const locationPatch = exactLocation ? canonicalWhatsappLocationPatch(locationResolution) : {};
+  let locationPatch = exactLocation ? canonicalWhatsappLocationPatch(locationResolution) : {};
+
+  // A district on its own is too vague to publish, so it used to be refused
+  // outright. That turned our own gaps into the agent's problem: on 28 Sep 2026
+  // Ronald sent "WAKISO -BULABAKULU ROADSIDE ESTATE 100BY50FTS @ 45M", was told
+  // it needed "exact area and district", and answered three times — "Wakiso
+  // district headquarters", "For sale in wakiso district, near district
+  // headquarters", "Wakiso". Every one of them resolves to Wakiso at district
+  // level and was refused again. He had named the area correctly in the first
+  // message; Bulabakulu simply is not in our location registry, and nothing he
+  // could type would ever have worked.
+  //
+  // So when the district is known and the caption names an area we do not
+  // recognise, that area is taken at its word and the match is recorded as
+  // needing confirmation. Nothing is published without a moderator looking at
+  // it, and a listing a moderator has to place is worth immeasurably more than
+  // one that was never taken.
+  if (!exactLocation
+    && locationResolution?.status === 'matched'
+    && locationLevel === 'district'
+    && Number(locationResolution?.confidence || 0) >= 1) {
+    const statedArea = statedAreaBesideDistrict(locationCaption, locationResolution.match);
+    if (statedArea) {
+      locationPatch = {
+        ...canonicalWhatsappLocationPatch(locationResolution, { includeDistrictLevelArea: true }),
+        area: statedArea,
+        canonical_location_match: 'district_with_stated_area',
+        canonical_location_confidence: 0.6
+      };
+    }
+  }
   return { cleanCaption, naturalDraft, hints, listingType, price, priceMetadata, bedroomDraft, locationPatch };
+}
+
+// Words that turn up beside a place name but are not one.
+const AREA_CANDIDATE_STOPWORDS = new Set([
+  'for', 'sale', 'sell', 'selling', 'rent', 'rental', 'rentals', 'renting', 'lease', 'to', 'let',
+  'in', 'at', 'on', 'of', 'the', 'a', 'an', 'and', 'near', 'opposite', 'off', 'along', 'behind',
+  'plot', 'plots', 'land', 'acre', 'acres', 'decimal', 'decimals', 'estate', 'roadside', 'road',
+  'house', 'houses', 'home', 'homes', 'apartment', 'apartments', 'flat', 'flats', 'shop', 'shops',
+  'office', 'offices', 'warehouse', 'mansion', 'bungalow', 'villa', 'townhouse', 'unit', 'units',
+  'bedroom', 'bedrooms', 'bathroom', 'bathrooms', 'title', 'titles', 'landtitle', 'mailo', 'freehold',
+  'private', 'ready', 'quick', 'hot', 'deal', 'price', 'ugx', 'shs', 'million', 'billion',
+  'district', 'region', 'county', 'subcounty', 'parish', 'village', 'headquarters', 'hq',
+  'tarmac', 'metres', 'meters', 'km', 'exactly', 'with', 'is', 'are', 'available', 'negotiable',
+  'call', 'whatsapp', 'contact', 'agent', 'broker', 'owner', 'property', 'properties', 'new', 'big'
+]);
+
+/**
+ * The area an agent named next to a district we recognise.
+ *
+ * Only used when the district matched and nothing finer did. Place names sit at
+ * the front of these captions, before the size and the price, so the search
+ * stops at the first digit. Anything that is a known word, the district itself,
+ * or resolvable on its own is skipped — what is left is the agent's own name
+ * for the place, which staff confirm before anything goes live.
+ */
+function statedAreaBesideDistrict(caption = '', districtMatch = {}) {
+  const districtNames = new Set(
+    [districtMatch?.district, districtMatch?.area, districtMatch?.name]
+      .map((value) => normalizeInput(value).toLowerCase())
+      .filter(Boolean)
+  );
+  const clean = normalizeInput(caption).replace(/[*_~`]+/g, ' ');
+  // Place names usually sit ahead of the size and the price, so that part is
+  // read first; a caption that opens with the price ("45m plot in Wakiso
+  // Bulabakulu") still gets read in full rather than giving up.
+  const scanOrder = [clean.split(/\d/)[0], clean].filter(Boolean);
+
+  for (const segment of scanOrder) {
+    for (const rawToken of segment.split(/[^A-Za-z'’-]+/)) {
+      const token = rawToken.replace(/^-+|-+$/g, '').trim();
+      if (token.length < 4 || token.length > 40) continue;
+      const lower = token.toLowerCase();
+      if (districtNames.has(lower) || AREA_CANDIDATE_STOPWORDS.has(lower)) continue;
+      // A place we already know resolves on its own, so it would not have got here.
+      const known = resolveWhatsappLocation(token, { allowText: true });
+      if (known?.status === 'matched') continue;
+      // Title-case it rather than shouting it back at whoever reads the listing.
+      return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+    }
+  }
+  return '';
 }
 
 // Replies to a burst of forwarded properties arrive after several captions have
