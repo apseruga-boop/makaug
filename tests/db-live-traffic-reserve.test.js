@@ -109,18 +109,22 @@ test('live work releases its slot too, success or failure', async () => {
   assert.strictEqual(db.poolPressure().in_flight, before);
 });
 
-test('a client checked out twice does not leak its slot the second time', () => {
-  // pg hands the same client object back on a later checkout. An earlier draft
-  // remembered the wrapper on the client, so the "already released" flag stayed
-  // set from the previous checkout and the slot was never given back — a leak
-  // that would have recreated the very outage this is meant to prevent.
+test('this file must not be the only thing guarding the release wrapper', () => {
+  // What used to stand here read database.js as a string and asserted that the
+  // variable `__makaugOriginalRelease` was present. It passed while that exact
+  // variable was leaking every connection and taking the WhatsApp assistant
+  // down for an hour on 28 Sep 2026. A name is not a behaviour.
+  //
+  // The real guard now lives in db-client-release-leak.test.js, which checks a
+  // client out of a real pool five times over and insists it comes back. This
+  // only makes sure that file has not quietly disappeared.
   const fs = require('fs');
   const path = require('path');
-  const source = fs.readFileSync(path.join(__dirname, '..', 'config', 'database.js'), 'utf8');
-  assert.match(source, /__makaugOriginalRelease/,
-    'the original release is what gets remembered, never the per-checkout flag');
-  assert.ok(!/__makaugSlotRelease\s*=\s*true/.test(source),
-    'a once-only wrapper on a reused client object leaks the slot');
+  const guard = path.join(__dirname, 'db-client-release-leak.test.js');
+  assert.ok(fs.existsSync(guard), 'the behavioural test for the release wrapper must exist');
+  const source = fs.readFileSync(guard, 'utf8');
+  assert.match(source, /attachSlotRelease/,
+    'and it must exercise the shipped function, not a copy of it pasted into the test');
 });
 
 test('the pool is sized for the database that actually exists', () => {
