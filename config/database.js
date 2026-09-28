@@ -5,7 +5,23 @@ if (!process.env.DATABASE_URL) {
   logger.warn('DATABASE_URL is not set. Database calls will fail until configured.');
 }
 
-const poolMax = Math.max(1, parseInt(process.env.DB_POOL_MAX || '20', 10) || 20);
+/**
+ * A pool bigger than the database can serve makes things slower, not faster.
+ *
+ * makaug-postgres is a Basic-256mb instance: **0.1 CPU** and 256 MB of memory.
+ * A tenth of a core cannot run twenty queries at once. Asking it to means every
+ * query gets a twentieth of a tenth of a core, all of them crawl, and a new
+ * connection cannot be established inside the ten-second budget — which is the
+ * `timeout exceeded when trying to connect` that has been eating WhatsApp
+ * replies all week: Ronald's 72 photos on the 25th, the six-minute "Hello" at
+ * 06:30 on the 28th, and the one that produced this change half an hour later.
+ *
+ * Eight is not a downgrade. Queueing briefly in the application, where waiting
+ * is cheap, beats thrashing a database that has no capacity to give. The real
+ * answer is a larger instance; this keeps the service upright until then, and
+ * DB_POOL_MAX still overrides it the moment that changes.
+ */
+const poolMax = Math.max(1, parseInt(process.env.DB_POOL_MAX || '8', 10) || 8);
 const poolMin = Math.max(
   0,
   Math.min(poolMax, parseInt(process.env.DB_POOL_MIN || '2', 10) || 2)
@@ -88,9 +104,12 @@ function repairParams(params) {
 const { AsyncLocalStorage } = require('async_hooks');
 
 const workClass = new AsyncLocalStorage();
-const liveReserve = Math.max(0, Math.min(
+// Scaled to the pool rather than fixed, so shrinking the pool for a small
+// database does not quietly leave background work with nothing, or with
+// everything. Roughly a third stays background, the rest is held for people.
+const liveReserve = Math.max(1, Math.min(
   poolMax - 1,
-  parseInt(process.env.DB_LIVE_RESERVE || '6', 10) || 6
+  parseInt(process.env.DB_LIVE_RESERVE || '', 10) || Math.ceil(poolMax * 0.6)
 ));
 const backgroundCeiling = Math.max(1, poolMax - liveReserve);
 const backgroundWaitMs = Math.max(1000, parseInt(process.env.DB_BACKGROUND_WAIT_MS || '20000', 10) || 20000);
