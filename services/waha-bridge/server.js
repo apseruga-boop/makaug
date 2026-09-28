@@ -654,6 +654,9 @@ function mediaTypeOf(payload, correctedMime = '') {
 
 let lastInboundAt = 0;
 let inboundCount = 0;
+// Times makaug was too slow to take a message and this service tried again
+// rather than waiting for WhatsApp to redeliver it.
+let inboundHandoverRetries = 0;
 
 async function handleWahaEvent(evt) {
   const event = String(evt?.event || '');
@@ -690,6 +693,62 @@ async function handleWahaEvent(evt) {
     releaseMessage(claim.id, String(err.message || err).slice(0, 160));
     throw err;
   }
+}
+
+/**
+ * Hand the message to makaug, and keep trying for a short while.
+ *
+ * 28 Sep 2026, 06:30. Arthur wrote "Hello" and waited six minutes. WAHA had it
+ * here on time — the log shows his message id at 05:30:31 — but makaug's
+ * database pool was exhausted (three of its schedulers reported POOL_TIMEOUT in
+ * the same second) and it could not answer inside the 30-second budget.
+ *
+ * One failed handover used to end the attempt. The claim was released and this
+ * service then sat and waited for WhatsApp to deliver another copy, which is
+ * not a schedule anyone controls. Meanwhile every copy that did arrive inside
+ * the two-minute claim lease was thrown away as a duplicate. That loop is what
+ * turned a half-minute stall into six minutes; once makaug recovered, the reply
+ * itself took 905ms.
+ *
+ * So the retry belongs here, where the message is already in hand. A stall on
+ * the far side costs seconds now, not minutes.
+ *
+ * A refusal is different from a stall: 4xx means makaug understood and said no,
+ * and repeating it would only be rude.
+ */
+const INBOUND_HANDOVER_ATTEMPTS = clampInt(process.env.INBOUND_HANDOVER_ATTEMPTS, 4, 1, 10);
+const INBOUND_HANDOVER_BACKOFF_MS = clampInt(process.env.INBOUND_HANDOVER_BACKOFF_MS, 1500, 100, 30000);
+// Retrying must finish well inside the claim lease. If it ran past it, the
+// claim would lapse while this attempt was still in flight, WhatsApp's next
+// copy would be claimed as new, and the person would be answered twice.
+const INBOUND_HANDOVER_BUDGET_MS = Math.floor(INFLIGHT_LEASE_MS * 0.6);
+
+async function forwardInboundWithRetry(body, messageId) {
+  const deadline = Date.now() + INBOUND_HANDOVER_BUDGET_MS;
+  let lastError = null;
+  for (let attempt = 1; attempt <= INBOUND_HANDOVER_ATTEMPTS; attempt += 1) {
+    const left = deadline - Date.now();
+    if (attempt > 1 && left <= 0) break;
+    try {
+      return await makaug('/api/whatsapp/web-bridge/inbound', {
+        method: 'POST',
+        body,
+        ...(attempt > 1 ? { timeoutMs: Math.max(5000, Math.min(30000, left)) } : {})
+      });
+    } catch (err) {
+      const status = Number(err.statusCode || 0);
+      const worthRetrying = !status || status === 408 || status === 429 || status >= 500;
+      lastError = err;
+      if (!worthRetrying || attempt === INBOUND_HANDOVER_ATTEMPTS) throw err;
+      const wait = INBOUND_HANDOVER_BACKOFF_MS * attempt;
+      if (Date.now() + wait >= deadline) throw err;
+      log(`inbound handover attempt ${attempt}/${INBOUND_HANDOVER_ATTEMPTS} failed for id=${messageId}; retrying in ${wait}ms -`,
+        String(err.message || err).slice(0, 140));
+      inboundHandoverRetries += 1;
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
+  throw lastError || new Error('inbound handover failed');
 }
 
 /** Everything from here on can fail; the caller settles the claim. */
@@ -803,7 +862,7 @@ async function forwardInbound(p, evt, claimId) {
     },
   };
 
-  const result = await makaug('/api/whatsapp/web-bridge/inbound', { method: 'POST', body });
+  const result = await forwardInboundWithRetry(body, p.id);
   confirmMessage(claimId);
   lastInboundAt = Date.now();
   inboundCount += 1;
@@ -1130,7 +1189,7 @@ const server = http.createServer(async (req, res) => {
         waha_status: sessionStatusCache,
         bridge_status: effectiveStatus(sessionStatusCache),
         consecutive_send_failures: consecutiveSendFailures,
-        stats: { sent: sentCount, failed: failedCount, inbound: inboundCount, duplicates_ignored: duplicateCount, undelivered_released: lostCount, resends_prevented: resendsPrevented, sent_but_unrecorded: ackRetriesExhausted, media_fallbacks: mediaFallbacksUsed },
+        stats: { sent: sentCount, failed: failedCount, inbound: inboundCount, duplicates_ignored: duplicateCount, undelivered_released: lostCount, resends_prevented: resendsPrevented, sent_but_unrecorded: ackRetriesExhausted, media_fallbacks: mediaFallbacksUsed, inbound_handover_retries: inboundHandoverRetries },
         last_inbound_ms_ago: stale,
         // Does this service actually reach makaug? WAHA being WORKING says nothing about that.
         makaug_link: {
