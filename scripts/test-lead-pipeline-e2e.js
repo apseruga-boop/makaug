@@ -79,6 +79,15 @@ async function queuedTo(localPhone, sinceIso) {
   );
 }
 
+async function queuedToRaw(anyPhone, sinceIso) {
+  const key = String(anyPhone).replace(/\D/g, '').slice(-9);
+  return q(
+    `SELECT id, user_phone, payload, metadata, status FROM outbound_message_queue
+      WHERE RIGHT(user_phone, 9) = $1 AND created_at >= $2 ORDER BY created_at`,
+    [key, sinceIso]
+  );
+}
+
 async function notificationsFor(leadId) {
   return q('SELECT channel, type, status, recipient_phone, recipient_email FROM notifications WHERE related_lead_id = $1 ORDER BY created_at', [leadId]);
 }
@@ -129,7 +138,10 @@ async function seed() {
   };
 
   await listing({ key: 'AGENT', agentId: fx.agent.id });
-  await listing({ key: 'OWNER', listerPhone: phone(2) });
+  // LEAD_E2E_OWNER_PHONE: put a real phone (yours) on the private-owner listing
+  // to receive one genuine handoff WhatsApp during a live check.
+  fx.ownerPhone = process.env.LEAD_E2E_OWNER_PHONE || phone(2);
+  await listing({ key: 'OWNER', listerPhone: fx.ownerPhone });
   await listing({ key: 'FOUND', listerPhone: phone(3), foundOnline: true });
   await listing({ key: 'PENDING', status: 'pending', agentId: fx.agent.id });
   await listing({ key: 'NOCONTACT' });
@@ -242,7 +254,7 @@ async function run() {
   const own = await api('POST', `/api/properties/${fx.OWNER.id}/inquiries`, { contact_name: 'Moses', contact_phone: phone(12), message: `Viewing Saturday? ${MARK}` });
   const ownLead = await leadFor(own.json?.data?.lead_id);
   check('201, handoff delivered, not billable (no agent)', own.status === 201 && ['queued', 'sent', 'simulated'].includes(ownLead?.handoff_status) && ownLead?.billable === false, `${own.status} ${ownLead?.handoff_status}`);
-  const ownMsg = (await queuedTo(phone(2), t4)).map((r) => r.payload?.text || '').join('\n');
+  const ownMsg = (await queuedToRaw(fx.ownerPhone, t4)).map((r) => r.payload?.text || '').join('\n');
   check('owner WhatsApp includes Moses and his number', ownMsg.includes('Moses') && ownMsg.includes(phone(12)), ownMsg.slice(0, 300));
 
   group('6. Listing with no lister contact is flagged for staff, not lost');
