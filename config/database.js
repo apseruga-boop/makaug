@@ -178,6 +178,46 @@ async function query(text, params) {
   }
 }
 
+/**
+ * Wrap a checked-out client's release so it also gives back its pool slot.
+ *
+ * node-postgres builds a BRAND NEW release for every checkout —
+ * `client.release = this._releaseOnce(client, idleListener)` in pg-pool — and
+ * each one refuses to run twice:
+ *
+ *   Release called on client which has already been released to the pool.
+ *
+ * An earlier version of this cached the first checkout's release and reused it
+ * forever. From the second checkout on it called a spent function, that threw,
+ * and the connection was never handed back. Eight of those emptied the pool:
+ * makaug answered nothing for an hour on 28 Sep 2026 until it was restarted,
+ * and every WhatsApp message in that hour went unanswered.
+ *
+ * So the current release is read fresh each time, and the wrapper marks itself,
+ * so wrapping a wrapper is impossible however pg changes. This is exported so
+ * the test can run it against a real pool rather than a copy of it — the test
+ * that was supposed to catch the original only read this file for a variable
+ * name, and passed happily while production was down.
+ */
+function attachSlotRelease(client, onRelease = () => {}) {
+  const currentRelease = client.release;
+  const pgRelease = currentRelease && currentRelease.__makaugWrapsPgRelease
+    ? currentRelease.__makaugPgRelease
+    : currentRelease;
+  let slotReleased = false;
+  const wrappedRelease = (...args) => {
+    if (!slotReleased) {
+      slotReleased = true;
+      onRelease();
+    }
+    return pgRelease.apply(client, args);
+  };
+  wrappedRelease.__makaugWrapsPgRelease = true;
+  wrappedRelease.__makaugPgRelease = pgRelease;
+  client.release = wrappedRelease;
+  return client;
+}
+
 async function getClient() {
   await acquireSlot();
   let client;
@@ -187,21 +227,7 @@ async function getClient() {
     releaseSlot();
     throw error;
   }
-  // pg hands the same client object back on a later checkout, so the wrapper is
-  // rebuilt every time. Remembering it once would leave the "already released"
-  // flag stuck from the previous checkout and leak the slot for good.
-  if (!client.__makaugOriginalRelease) {
-    client.__makaugOriginalRelease = client.release.bind(client);
-  }
-  const originalRelease = client.__makaugOriginalRelease;
-  let slotReleased = false;
-  client.release = (...args) => {
-    if (!slotReleased) {
-      slotReleased = true;
-      releaseSlot();
-    }
-    return originalRelease(...args);
-  };
+  attachSlotRelease(client, releaseSlot);
   if (!client.__makaugParamRepair) {
     const originalQuery = client.query.bind(client);
     client.query = (text, params, ...rest) => (
@@ -241,5 +267,6 @@ module.exports = {
   healthcheck,
   warmPool,
   runBackgroundWork,
-  poolPressure
+  poolPressure,
+  attachSlotRelease
 };
