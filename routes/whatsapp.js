@@ -6073,6 +6073,171 @@ async function reconcileEmployeeIdentityEvidence(propertyIds = []) {
   return reconciled;
 }
 
+// ---------------------------------------------------------------------------
+// An agent posting their own property.
+// ---------------------------------------------------------------------------
+/**
+ * 29 Sep 2026, 15:50. Katamba Bonny of Kakx Real Estate had been a makaug agent
+ * for ninety seconds when he asked:
+ *
+ *   him   "So how do I post"
+ *   bot   "🏠 What are you listing? 1️⃣ SALE 2️⃣ RENT 3️⃣ Land…"
+ *   him   "All"
+ *   bot   "I want to keep this quick. Please reply with one of the options above"
+ *   him   [a commercial building in Komamboga, 12 decimals, mailo title, 1.2bn]
+ *   bot   "🟩🟨 makaug.com | Land safety — we do not provide title checks…"
+ *   him   [a 3-bedroom condominium in Kololo, $380,000]
+ *   bot   "🟩🟨 makaug.com | Affordability search — here are the cheapest matches"
+ *
+ * He did exactly what the welcome message told him to do — send the property
+ * here and we will put it up — and the marketplace answered him as a buyer
+ * twice and then tried to sell him a cheaper flat.
+ *
+ * Agent 007 already does all of this properly: it reads a forwarded caption,
+ * works out what is missing, pairs the photos with it, and puts the result in
+ * staff review under the right agent. It was only ever wired to staff numbers,
+ * because staff have to say whose properties these are. An agent sending their
+ * own stock does not: we know who they are from the number they sent it from.
+ *
+ * So an approved agent who forwards a property is dropped straight into that
+ * same flow with themselves as the subject. They never see the "agent or
+ * customer?" questions, and — this is the part that matters — they can never
+ * answer them: the subject is pinned to their own record, so an agent cannot
+ * load stock under someone else's name. *Agent 007* itself stays staff-only.
+ */
+const AGENT_SELF_INTAKE_MARKER = 'whatsapp-agent-self-intake-20260929';
+const agentByPhoneCache = new Map(); // phone key -> { at, agent }
+const AGENT_LOOKUP_TTL_MS = 5 * 60 * 1000;
+
+function agentPhoneKey(phone = '') {
+  const d = String(phone || '').replace(/\D/g, '');
+  if (!d) return '';
+  // 0701895892 and 256701895892 are the same person. Nine significant digits
+  // is what a Ugandan subscriber number comes to once the prefix is off, and
+  // it is the same key the bridge and the lead pipeline compare on.
+  return d.length > 9 ? d.slice(-9) : d;
+}
+
+/** The approved agent who owns this WhatsApp number, if there is one. */
+async function findApprovedAgentByPhone(phone) {
+  const key = agentPhoneKey(phone);
+  if (!key || key.length < 9) return null;
+  const cached = agentByPhoneCache.get(key);
+  if (cached && Date.now() - cached.at < AGENT_LOOKUP_TTL_MS) return cached.agent;
+  let agent = null;
+  try {
+    const result = await db.query(
+      `SELECT id, makaug_agent_number, full_name, company_name, phone, whatsapp, email, status
+         FROM agents
+        WHERE status = 'approved'
+          AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
+            OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1)
+        ORDER BY updated_at DESC
+        LIMIT 1`,
+      [key]
+    );
+    agent = result.rows[0] || null;
+  } catch (error) {
+    logger.warn('Agent lookup by phone failed:', error.message || String(error));
+    return null;
+  }
+  if (agentByPhoneCache.size > 5000) agentByPhoneCache.clear();
+  agentByPhoneCache.set(key, { at: Date.now(), agent });
+  return agent;
+}
+
+/** The session an agent posting their own stock works in. */
+function agentSelfIntakeSessionData(agent) {
+  return {
+    whatsapp_employee_intake: true,
+    whatsapp_agent_self_intake: true,
+    agent_self_intake_marker: AGENT_SELF_INTAKE_MARKER,
+    agent_self_intake_phone_key: agentPhoneKey(agent.whatsapp || agent.phone),
+    employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
+    ordered_batch_marker: WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER,
+    employee_intake_started_at: new Date().toISOString(),
+    // The subject is the sender, fixed. Nothing in the property step can change
+    // it, and the steps that could ask are never reached.
+    employee_role: 'agent',
+    agent_already_registered: true,
+    agent,
+    intake_confirmed: true,
+    property_batch_mode: 'multiple',
+    // An agent's own listing needs no staff ID chase; they were verified when
+    // their profile was approved.
+    identity_followup_required: false,
+    identity_document_url: null,
+    property_ids: [],
+    total_media_count: 0,
+    properties_shared_count: 0,
+    properties_duplicate_count: 0,
+    properties_failed_count: 0,
+    property_attempt_message_ids: []
+  };
+}
+
+/**
+ * Is this session an agent posting their own stock, sent from their own number?
+ *
+ * Checked on the phone, not just the flag, so a session that somehow carried a
+ * self-intake marker could still never be driven from a different handset.
+ */
+function isOwnAgentSelfIntake(session = {}, phone = '') {
+  const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  if (data.whatsapp_agent_self_intake !== true) return false;
+  const sender = agentPhoneKey(phone);
+  if (!sender || sender.length < 9) return false;
+  const agentKey = agentPhoneKey(data.agent?.whatsapp || data.agent?.phone || data.agent_self_intake_phone_key || '');
+  return Boolean(agentKey) && agentKey === sender;
+}
+
+function agentSelfIntakeOpeningLine(agent = {}) {
+  const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || 'there';
+  return `Got it ${first} — I will put this up for you. 👇`;
+}
+
+/**
+ * What an agent hears back when their property reaches staff review.
+ *
+ * Staff get a terse receipt with an ID, because they are loading a batch on
+ * someone else's behalf and need to track it. An agent is posting their own
+ * stock and wants two things: confirmation it is in, and — if anything is
+ * missing — the one line they have to send to finish it. Nothing about
+ * moderation stages, no reference codes to quote.
+ *
+ * Returns null when this is not an agent's own session, so staff copy is
+ * untouched.
+ */
+function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], openedAgentSelfIntake = false } = {}) {
+  if (data.whatsapp_agent_self_intake !== true) return null;
+  const missing = employeePropertyMissing(facts);
+  const what = normalizeInput(facts.locationPatch?.area || facts.locationPatch?.district || '');
+  const label = what ? ` in *${what}*` : '';
+  const photos = storedMedia.filter((item) => item.kind === 'image').length;
+  const videos = storedMedia.filter((item) => item.kind === 'video').length;
+
+  const lines = [];
+  if (openedAgentSelfIntake) lines.push(agentSelfIntakeOpeningLine(data.agent || {}), '');
+  if (missing.length) {
+    lines.push(`📝 I have your property${label}, but I cannot publish it yet.`);
+    lines.push('');
+    lines.push(`*Still needed:* ${missing.join(', ')}`);
+    lines.push('');
+    lines.push('Just send it in one message and I will add it — no need to resend the photos.');
+    return lines.join('\n');
+  }
+  lines.push(`✅ Your property${label} is with our team for review.`);
+  const bits = [];
+  if (photos) bits.push(`${photos} ${photos === 1 ? 'photo' : 'photos'}`);
+  if (videos) bits.push(`${videos} ${videos === 1 ? 'video' : 'videos'}`);
+  if (bits.length) lines.push(bits.join(' · ') + ' saved.');
+  lines.push('');
+  lines.push('As soon as it is approved it goes live under your name and I will send you the link to share.');
+  lines.push('');
+  lines.push('Sending another? Just post it here the same way — one property per message.');
+  return lines.join('\n');
+}
+
 // How long after a batch closes a stray property message is still read as
 // "staff, mid-batch" rather than "a customer asking about property".
 function employeeClosedBatchGraceMs() {
@@ -6136,6 +6301,9 @@ async function handleEmployeeWhatsappIntake({
   const cleanBody = normalizeInput(body);
   const triggered = isEmployeeIntakeTrigger(cleanBody);
   let active = isEmployeeIntakeStep(currentStep);
+  // Set when this message is the one that opened an agent's own posting
+  // session, so the first reply can greet them rather than starting mid-flow.
+  let openedAgentSelfIntake = false;
   const interruptedStep = active ? '' : recoverInterruptedEmployeeIntakeStep(session);
   if (!triggered && !active && interruptedStep) {
     const recoveredData = {
@@ -6157,22 +6325,44 @@ async function handleEmployeeWhatsappIntake({
     // A member of staff sending property photos straight after closing a batch
     // has not become a house-hunter in the meantime. Say plainly that the batch
     // is shut and nothing was saved, rather than selling them the marketplace.
-    const closedBatchReply = recentlyClosedEmployeeBatchReply({
-      phone,
-      session,
-      cleanBody,
-      mediaUrl,
-      runtime
-    });
-    // '' is deliberate: this batch has already been flagged once, so the rest
-    // of the burst is taken quietly rather than answered twenty-five times.
-    if (closedBatchReply !== null) {
-      return { handled: true, nextStep: currentStep, message: closedBatchReply };
+    // An approved agent who has forwarded a property. Open a session with
+    // themselves as the subject and let this very message be the first one.
+    // Tried before the closed-batch notice below, because an agent sending
+    // another property after finishing one has not strayed — they are simply
+    // sending another property, and should get a new batch, not a warning.
+    if (looksLikeForwardedProperty({ cleanBody, mediaUrl, runtime })) {
+      const selfAgent = await findApprovedAgentByPhone(phone);
+      if (selfAgent) {
+        const freshData = agentSelfIntakeSessionData(selfAgent);
+        await replaceEmployeeSession(phone, 'employee_property_media', freshData);
+        // `data` is assembled from session.session_data further down, so
+        // replacing the session here is what carries the new subject through.
+        session = { ...session, current_step: 'employee_property_media', session_data: freshData };
+        currentStep = 'employee_property_media';
+        active = true;
+        openedAgentSelfIntake = true;
+      }
     }
-    return { handled: false };
+
+    if (!active) {
+      const closedBatchReply = recentlyClosedEmployeeBatchReply({
+        phone,
+        session,
+        cleanBody,
+        mediaUrl,
+        runtime
+      });
+      // '' is deliberate: this batch has already been flagged once, so the rest
+      // of the burst is taken quietly rather than answered twenty-five times.
+      if (closedBatchReply !== null) {
+        return { handled: true, nextStep: currentStep, message: closedBatchReply };
+      }
+      return { handled: false };
+    }
   }
 
-  const allowed = employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) });
+  const allowed = isOwnAgentSelfIntake(session, phone)
+    || employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) });
   if (!allowed) {
     logger.warn('Restricted WhatsApp employee intake trigger rejected', { phone_suffix: employeeIntakePhoneSuffix(phone) });
     return {
@@ -7137,9 +7327,10 @@ async function handleEmployeeWhatsappIntake({
           handled: true,
           nextStep: currentStep,
           propertyId,
-          message: (data.property_batch_mode || 'multiple') === 'single'
-            ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
-            : ''
+          message: agentSelfIntakeSavedReply({ data, facts, storedMedia, openedAgentSelfIntake })
+            ?? ((data.property_batch_mode || 'multiple') === 'single'
+              ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
+              : '')
         };
       } catch (error) {
         logger.error('WhatsApp employee review property save failed:', error);
@@ -15303,6 +15494,11 @@ module.exports.__test = {
   logWhatsappMessage,
   looksLikeForwardedProperty,
   recentlyClosedEmployeeBatchReply,
+  agentPhoneKey,
+  agentSelfIntakeSessionData,
+  agentSelfIntakeSavedReply,
+  isOwnAgentSelfIntake,
+  findApprovedAgentByPhone,
   fetchEmployeeMediaWithRetry,
   isTransientMediaFetchError,
   storeEmployeeMedia,
