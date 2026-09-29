@@ -109,6 +109,7 @@ const {
   mergePlacementRowsWithCatalog,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
+const leadHandoff = require('../services/leadHandoffService');
 const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
 const { MONETIZATION_SPINE_MARKER, markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
@@ -13334,6 +13335,45 @@ router.get('/agent-welcome/:agentId', async (req, res, next) => {
           : ''
       }
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Lead handoff preview: send the exact WhatsApp a lister/agent receives for a
+// new lead to a phone of the admin's choosing (their own), using a live listing
+// and sample enquirer details. Goes out on the same bridge source as real
+// handoffs, so it proves the whole path.
+router.post('/lead-handoff/preview', async (req, res, next) => {
+  try {
+    const to = cleanText(req.body.to || req.body.phone);
+    if (!to || to.replace(/\D/g, '').length < 9) return res.status(400).json({ ok: false, error: 'A phone number to send the preview to is required' });
+    const kind = ['enquiry', 'viewing', 'callback', 'whatsapp_bot'].includes(cleanText(req.body.kind)) ? cleanText(req.body.kind) : 'enquiry';
+    let listing = null;
+    if (req.body.listing_id) listing = await leadHandoff.loadListingContact(db, cleanText(req.body.listing_id));
+    if (!listing) {
+      const latest = await db.query(
+        `SELECT id FROM properties WHERE LOWER(COALESCE(status, '')) IN ('approved', 'live', 'published')
+          ORDER BY created_at DESC LIMIT 1`
+      );
+      listing = latest.rows[0] ? await leadHandoff.loadListingContact(db, latest.rows[0].id) : null;
+    }
+    if (!listing) return res.status(404).json({ ok: false, error: 'No live listing to use for the preview' });
+    const seeker = {
+      name: cleanText(req.body.seeker_name) || 'Grace Namata',
+      phone: cleanText(req.body.seeker_phone) || '0772 000 000',
+      email: cleanText(req.body.seeker_email) || 'grace@example.com'
+    };
+    const body = leadHandoff.buildListerMessage({
+      kind,
+      listing,
+      seeker,
+      message: cleanText(req.body.message) || 'Hello, is this still available? Can I view it on Saturday morning?',
+      extra: { preferred_date: cleanText(req.body.preferred_date) || null, preferred_time: cleanText(req.body.preferred_time) || null, preferred_callback_time: cleanText(req.body.preferred_callback_time) || null }
+    });
+    const delivery = await leadHandoff.deliverWhatsapp({ to, body, kind: `preview_${kind}`, leadId: null, nonce: Date.now() });
+    await writeAudit('lead_handoff_preview_sent', { to_masked: `${to.replace(/\D/g, '').slice(0, 4)}***`, kind, listing_id: listing.id, status: delivery.status }, adminActorId(req));
+    return res.json({ ok: ['queued', 'sent', 'simulated'].includes(delivery.status), data: { delivery, text: body } });
   } catch (error) {
     return next(error);
   }

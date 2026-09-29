@@ -420,6 +420,7 @@ async function acknowledgeTeamLead(db, { lead, seeker = {}, seekerMessage = '', 
 module.exports = {
   _resetSendLog: () => sendLog.clear(),
   acknowledgeTeamLead,
+  deliverWhatsapp,
   buildListerMessage,
   buildSeekerMessage,
   handOffListingLead,
