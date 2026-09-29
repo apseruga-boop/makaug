@@ -448,6 +448,9 @@ function lastVideoError(reportId) {
 // the ambition — Uganda's market online, the diaspora, many languages,
 // investors — rather than a wall of numbers.
 function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
+  // Lazily required: the welcome service reaches into the report services, and
+  // pulling it in at module load would close the circle.
+  const network = require('./agentWelcomeService').networkAudience();
   const firstName = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
   const initials = String(agent.full_name || 'M A').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const countries = (Array.isArray(stats.top_countries) ? stats.top_countries : []).slice(0, 4);
@@ -468,15 +471,27 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
     bubble(360, 480, [{ text: `You’re in, ${clip(firstName, 14)}`, size: 30, weight: 800 }], { scale: pop(lt, 0.6, out(lt, d)), fill: K.yellow, tail: 'right' })
   ] });
 
-  statement(2.4, [{ text: 'Uganda’s property', size: 46, weight: 900 }, { text: 'market, online', size: 46, weight: 900, fill: K.orange }], { sub: 'homes · land · commercial · off plan' });
+  statement(2.2, [{ text: 'Uganda’s property', size: 46, weight: 900 }, { text: 'market, online', size: 46, weight: 900, fill: K.orange }], { sub: 'homes · land · commercial · off plan' });
+
+  // The promise an agent joins for, before any number about us.
+  scenes.push({ dur: 3.0, draw: (lt, t, d) => {
+    const e = out(lt, d);
+    return [
+      bubble(360, 140, [{ text: 'We send you', size: 44, weight: 900 }, { text: 'the buyer', size: 52, weight: 900, fill: K.orange }], { scale: pop(lt, 0.05, e, 0.42), pad: 32 }),
+      avatar(110, 400, 40, 'B', K.teal, pop(lt, 0.4, e)),
+      bubble(400, 400, [{ text: 'Name · number · what they asked', size: 26, weight: 800 }], { scale: pop(lt, 0.45, e), tail: 'left', minW: 380 }),
+      bubble(360, 560, [{ text: 'Straight to your WhatsApp', size: 32, weight: 900 }], { scale: pop(lt, 0.7, e), fill: K.yellow, tail: 'right' }),
+      bubble(360, 670, [{ text: 'No commission. Your deal.', size: 26, weight: 700, fill: K.muted }], { scale: pop(lt, 0.85, e), fill: K.peach })
+    ];
+  } });
 
   scenes.push({ dur: 3.0, draw: (lt, t, d) => {
     const e = out(lt, d);
     const items = [
       { value: stats.live_listings, label: 'listings live today', icon: 'L', color: K.purple },
-      { value: stats.visitors_30d, label: 'searchers a month', icon: 'S', color: K.teal }
+      { value: network.monthly, label: 'searchers a month', icon: 'S', color: K.teal }
     ].filter((item) => Number(item.value) > 0);
-    const r = [bubble(360, 120, [{ text: 'And growing fast', size: 34, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
+    const r = [bubble(360, 120, [{ text: 'Across our platforms', size: 34, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
     items.forEach((item, i) => {
       const cy = 320 + i * 190;
       const sc = pop(lt, 0.35 + i * 0.6, e);
@@ -488,6 +503,11 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
     });
     return r;
   } });
+
+  statement(2.3, [
+    { text: `Heading for ${network.target.toLocaleString('en-GB')}`, size: 42, weight: 900 },
+    { text: 'a month', size: 42, weight: 900, fill: K.orange }
+  ], { sub: `by the end of ${network.target_month}` });
 
   scenes.push({ dur: 3.2, draw: (lt, t, d) => {
     const e = out(lt, d);
@@ -504,10 +524,10 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
     return r;
   } });
 
-  statement(2.3, [{ text: 'Diaspora buyers', size: 46, weight: 900 }, { text: 'shop from abroad', size: 40, weight: 900, fill: K.orange }], { sub: 'they buy before they land' });
-  statement(2.2, [{ text: 'In 9 languages', size: 48, weight: 900 }], { sub: 'English · Luganda · Swahili · Arabic…', fill: K.peach });
-  statement(2.3, [{ text: 'Made for investors', size: 44, weight: 900 }], { sub: 'off plan · buy to let · mortgage finder' });
-  statement(2.2, [{ text: 'Your number.', size: 44, weight: 900 }, { text: 'Your deal.', size: 44, weight: 900, fill: K.orange }], { sub: 'buyers call you — no commission' });
+  statement(2.0, [{ text: 'Diaspora buyers', size: 46, weight: 900 }, { text: 'shop from abroad', size: 40, weight: 900, fill: K.orange }], { sub: 'they buy before they land' });
+  statement(2.0, [{ text: 'In 9 languages', size: 48, weight: 900 }], { sub: 'English · Luganda · Swahili · Arabic…', fill: K.peach });
+  statement(2.0, [{ text: 'Made for investors', size: 44, weight: 900 }], { sub: 'off plan · buy to let · mortgage finder' });
+  statement(2.0, [{ text: 'Your number.', size: 44, weight: 900 }, { text: 'Your deal.', size: 44, weight: 900, fill: K.orange }], { sub: 'buyers call you — no commission' });
 
   scenes.push({ dur: 2.8, draw: (lt, t, d) => {
     const e = out(lt, d);

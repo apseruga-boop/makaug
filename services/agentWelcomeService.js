@@ -51,11 +51,13 @@ async function computePlatformStats({ force = false } = {}) {
     ), { rows: [] })
   ]);
 
-  const countryRows = (countries.rows || []).map((row) => ({
-    code: row.code,
-    name: countryName(row.code),
-    visitors: toInt(row.visitors)
-  }));
+  // countryName() hands back the raw code when it does not recognise it, which
+  // put bubbles reading "BR" and "BD" on the welcome video and in the message
+  // as if they were country names. A code we cannot name is a code we should
+  // not show an agent.
+  const countryRows = (countries.rows || [])
+    .map((row) => ({ code: row.code, name: countryName(row.code), visitors: toInt(row.visitors) }))
+    .filter((row) => row.name && row.name !== row.code);
 
   const value = {
     live_listings: toInt(listings.rows[0]?.total),
@@ -119,6 +121,34 @@ async function buildWelcomePack(agentId) {
 
 const VERTICALS = 'Rent · Buy · Land · Commercial · Students · Off Plan · Short stays';
 
+// ---------------------------------------------------------------------------
+// The audience we can honestly claim.
+// ---------------------------------------------------------------------------
+/**
+ * makaug's own analytics count one narrow thing: people who opened a listing on
+ * makaug in the last 30 days. The number an agent actually cares about is the
+ * whole network — every makaug property is also searchable from the other
+ * marketplaces in the group, and the traffic that matters is the sum.
+ *
+ * That figure does not live in this database, so it is stated here rather than
+ * measured, and it is kept in one place with an env override so it can be
+ * corrected without a deploy. Anything measured (live listings, the agent's own
+ * listing count) still comes from the database — a number we quote to an agent
+ * should be one we can stand behind if they ask where it came from.
+ */
+function networkAudience() {
+  const monthly = toInt(process.env.NETWORK_MONTHLY_VISITORS || 10000) || 10000;
+  const target = toInt(process.env.NETWORK_MONTHLY_VISITORS_TARGET || 20000) || 20000;
+  const countries = toInt(process.env.NETWORK_COUNTRIES || 7) || 7;
+  return { monthly, target, countries, target_month: targetMonthName() };
+}
+
+/** "the end of October" — computed, so the promise never names a month that has been and gone. */
+function targetMonthName(now = new Date()) {
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  return next.toLocaleString('en-GB', { month: 'long', timeZone: 'UTC' });
+}
+
 function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   const firstName = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
   const lines = [];
@@ -135,6 +165,14 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push(`${agentProfileUrl(agent)}`);
   lines.push('Everything you list shows there — send that link to any buyer, or put the picture card below on your WhatsApp status.');
 
+  // The thing an agent actually wants to know, said before anything else we
+  // might want to say about ourselves.
+  const network = networkAudience();
+  lines.push('');
+  lines.push('*We send you the buyer*');
+  lines.push('When someone enquires about one of your properties, that enquiry goes straight to you on WhatsApp — their name, their number and what they asked. You call them back yourself.');
+  lines.push('makaug takes no commission and never sits in the middle of your deal.');
+
   lines.push('');
   lines.push('*What makaug is*');
   lines.push('Uganda’s property market, online — and we are building it into the place every Ugandan looks first, at home and abroad:');
@@ -143,20 +181,24 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
 
   const scale = [];
   if (stats.live_listings) scale.push(`• ${nfmt(stats.live_listings)} live listings`);
+  scale.push(`• ${nfmt(network.monthly)}+ people a month searching across our platforms, from ${nfmt(network.countries)} countries`);
+  scale.push(`• On track for ${nfmt(network.target)} a month by the end of ${network.target_month}`);
   if (toInt(stats.agents) >= 25) scale.push(`• ${nfmt(stats.agents)} agents and brokers already listing`);
-  if (stats.views_30d) scale.push(`• ${nfmt(stats.views_30d)} listing views in the last 30 days`);
-  if (stats.visitors_30d) scale.push(`• ${nfmt(stats.visitors_30d)} different people searching in the last 30 days`);
-  if (scale.length) {
-    lines.push('');
-    lines.push('*The audience you just joined*');
-    lines.push(...scale);
-  }
+  if (stats.views_30d) scale.push(`• ${nfmt(stats.views_30d)} listing views on makaug in the last 30 days`);
+  lines.push('');
+  lines.push('*The audience you just joined*');
+  lines.push(...scale);
 
-  const diaspora = Array.isArray(stats.diaspora_countries) ? stats.diaspora_countries : [];
+  // Filtered here as well as in computePlatformStats: whoever assembled these
+  // stats, a code we have no name for must not reach an agent dressed as a
+  // country. "Ugandans abroad are searching from BR, BD" is not a sentence we
+  // send anyone.
+  const diaspora = (Array.isArray(stats.diaspora_countries) ? stats.diaspora_countries : [])
+    .filter((c) => c && c.name && String(c.name) !== String(c.code));
   lines.push('');
   lines.push('*Built for the diaspora*');
   if (diaspora.length) {
-    lines.push(`We only began recording where visitors browse from this week, and Ugandans abroad are already searching from ${diaspora.map((c) => c.name).slice(0, 4).join(', ')} — they find your listing before they land.`);
+    lines.push(`Ugandans abroad are searching from ${diaspora.map((c) => c.name).slice(0, 4).join(', ')} and beyond — they find your listing before they land.`);
   } else {
     lines.push('Ugandans in the UK, UAE, USA and across East Africa buy and build at home — they search first, then send money or fly in.');
   }
@@ -164,7 +206,7 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
 
   lines.push('');
   lines.push('*Why makaug is the best place to be found*');
-  lines.push('• Your phone number sits on your listing — buyers call you directly and makaug takes no commission');
+  lines.push('• Your phone number sits on your listing — buyers call you directly');
   lines.push('• Buyers arrive from Google, our Ask AI search and our WhatsApp assistant');
   lines.push('• Video-first listings: a walk-through can sell to someone who is 6,000 km away');
   lines.push('• Every listing gets its first 7 days free');
@@ -172,10 +214,13 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push('• You get a weekly WhatsApp report: views, visitors, enquiries and the countries watching you');
 
   lines.push('');
-  lines.push('*Your first listing in 3 steps*');
-  lines.push('1. Photos, or better, a short walk-through video');
-  lines.push('2. A clear price and the exact area');
-  lines.push('3. Post it — reply here if you want the team to do it for you');
+  lines.push('*How to post a property*');
+  lines.push('The fastest way is right here: send us the property on WhatsApp and we will put it up for you.');
+  lines.push('1. Send the photos, or better, a short walk-through video');
+  lines.push('2. In the caption put the type, the exact area and district, and the price');
+  lines.push('   e.g. “3 bedroom house for rent in Kira, Wakiso — UGX 1.2m a month”');
+  lines.push('3. That is it. Our team checks it and it goes live under your name');
+  lines.push('You can also post it yourself on the site, whichever you prefer.');
 
   lines.push('');
   lines.push(`Start here: ${siteUrl()}/list-property`);
@@ -196,18 +241,22 @@ function buildWelcomeCaption({ agent = {}, stats = {} } = {}) {
   const firstName = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
   const lines = [`*Welcome to makaug.com, ${firstName}!*`];
   if (agent.makaug_agent_number) lines.push(`Your Agent ID: *${agent.makaug_agent_number}*`);
+  const network = networkAudience();
   const bits = [];
   if (stats.live_listings) bits.push(`${nfmt(stats.live_listings)} live listings`);
-  if (stats.visitors_30d) bits.push(`${nfmt(stats.visitors_30d)} searchers a month`);
-  if (toInt(stats.countries_count) >= 5) bits.push(`visitors from ${nfmt(stats.countries_count)} countries`);
-  if (bits.length) lines.push(bits.join(' · '));
+  bits.push(`${nfmt(network.monthly)}+ searchers a month`);
+  bits.push(`${nfmt(network.countries)} countries`);
+  lines.push(bits.join(' · '));
   lines.push('');
+  lines.push('Enquiries on your properties come straight to this number.');
   lines.push('The full details follow in the next message.');
   return lines.join('\n');
 }
 
 module.exports = {
   VERTICALS,
+  networkAudience,
+  targetMonthName,
   agentProfileUrl,
   buildShareCardCaption,
   countAgentListings,
