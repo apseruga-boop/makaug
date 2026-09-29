@@ -3,6 +3,55 @@ const crypto = require('crypto');
 const { sendSupportEmail, getSupportEmail, getSupportPhone } = require('./emailService');
 const { normalizeUgPhoneForWhatsApp, sendWhatsAppText } = require('./whatsappNotificationService');
 
+/**
+ * Getting the "your listing is live" message to actually arrive.
+ *
+ * This message has been written since the day listings could be approved, and
+ * it has never reached anybody. It went out through sendWhatsAppText, which is
+ * the Meta/Twilio provider path — and neither provider is configured on this
+ * deployment:
+ *
+ *   {"sent":false,"reason":"no_whatsapp_provider_configured",
+ *    "meta":{"reason":"meta_whatsapp_not_configured"},
+ *    "twilio":{"reason":"twilio_whatsapp_not_configured"}}
+ *
+ * Every WhatsApp message makaug really sends goes through the WAHA bridge
+ * outbox. The lead handoff learned this; listing moderation never did, so the
+ * one moment an agent most wants to hear from us — their property going live —
+ * has been silently dropped every time. The provider is still tried first, so
+ * nothing changes for a deployment that has one configured.
+ */
+function whatsappBridge() {
+  return require('./whatsappWebBridgeService');
+}
+
+async function deliverListingWhatsapp({ to, body, kind = 'listing_status', listingId = null }) {
+  const recipient = normalizeUgPhoneForWhatsApp(to);
+  if (!recipient || recipient.length < 9) return { sent: false, reason: 'invalid_phone' };
+  try {
+    const bridge = whatsappBridge();
+    const mode = bridge.getWhatsappDeliveryMode();
+    if (mode !== 'test' && (mode === 'web_bridge' || bridge.isWhatsappWebBridgeEnabled())) {
+      const queued = await bridge.queueWhatsappWebBridgeMessage({
+        recipient,
+        text: body,
+        source: 'whatsapp_runtime',
+        actorId: 'listing_moderation',
+        metadata: {
+          message_kind: `listing_${kind}`,
+          listing_id: listingId,
+          reply_dedupe_key: `listing_${kind}:${listingId || 'none'}`
+        }
+      });
+      return { sent: true, queued: true, provider: 'whatsapp_web_bridge', id: queued?.id || null };
+    }
+  } catch (error) {
+    // Fall through to the provider rather than losing the message outright.
+    return { sent: false, reason: 'bridge_queue_failed', error: error.message || 'queue_failed' };
+  }
+  return sendWhatsAppText({ to: recipient, body });
+}
+
 const REVIEW_CHECKS = [
   { key: 'required_listing_fields', label: 'Required listing fields complete' },
   { key: 'contact_details_verified', label: 'Phone/email details verified' },
@@ -573,6 +622,22 @@ function getMissingApprovalChecks(checklist = {}) {
     .map((key) => REVIEW_CHECKS.find((item) => item.key === key)?.label || key);
 }
 
+/**
+ * The agent's own share card, rebuilt from the listing's agent_id.
+ *
+ * Only the agent id and today's stamp go into the token, so this needs no
+ * database round trip at the moment a moderator clicks approve.
+ */
+function agentShareCardLink(listing = {}) {
+  if (!listing.agent_id) return '';
+  try {
+    const { shareCardUrl } = require('./agentWelcomeService');
+    return shareCardUrl({ id: listing.agent_id }) || '';
+  } catch (_ignored) {
+    return '';
+  }
+}
+
 function statusLabel(status) {
   const safeStatus = String(status || '').toLowerCase();
   if (safeStatus === 'approved') return 'Approved';
@@ -614,12 +679,29 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
         `Need help? ${supportEmail}`
       ].join('\n'),
       html: buildListingLiveEmailHtml({ listing }),
-      whatsapp: [
-        `Great news ${listing?.lister_name || 'there'} - your listing is *live* on makaug \u{1F389}`,
-        `${title} - ${location} - ${price}`,
-        `View & share: ${publicUrl}`,
-        `To remove it, reply REMOVE ${reference} from the WhatsApp number used to submit it.`
-      ].join('\n')
+      whatsapp: listing.agent_id
+        // An agent is not an owner who submitted one property and wants a
+        // receipt. They are stocking a shopfront, so the message is about
+        // sharing it and about the next one.
+        ? [
+          `🎉 *Your property is live on makaug.com*`,
+          '',
+          `${title}`,
+          `${location} · ${price}`,
+          '',
+          `🔗 ${publicUrl}`,
+          '',
+          'Share that link anywhere — WhatsApp status, your groups, Facebook. Anyone who opens it sees the property with your name and number on it.',
+          ...(agentShareCardLink(listing) ? ['', `Your agent card, if you want it again:`, agentShareCardLink(listing)] : []),
+          '',
+          'Got another one? Send it here the same way and I will put it up.'
+        ].filter((line) => line !== null).join('\n')
+        : [
+          `Great news ${listing?.lister_name || 'there'} - your listing is *live* on makaug \u{1F389}`,
+          `${title} - ${location} - ${price}`,
+          `View & share: ${publicUrl}`,
+          `To remove it, reply REMOVE ${reference} from the WhatsApp number used to submit it.`
+        ].join('\n')
     };
   }
 
@@ -736,9 +818,11 @@ async function sendOwnerListingStatusNotifications({ listing = {}, status, reaso
   if (listing.lister_phone) {
     const manualUrl = getDirectWhatsAppUrl(listing.lister_phone, message.whatsapp);
     try {
-      result.whatsapp = await sendWhatsAppText({
+      result.whatsapp = await deliverListingWhatsapp({
         to: listing.lister_phone,
-        body: message.whatsapp
+        body: message.whatsapp,
+        kind: `status_${String(status || 'updated').toLowerCase()}`,
+        listingId: listing.id || null
       });
     } catch (error) {
       result.whatsapp = {
