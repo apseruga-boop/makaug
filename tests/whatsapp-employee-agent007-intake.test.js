@@ -565,7 +565,14 @@ assert(routeSource.includes('primary_image_url: existingPrimaryImageUrl || image
 assert(routeSource.includes("type = 'whatsapp_employee_batch_complete'"), 'recovery must fall back to the durable completion notification when chat session state is replaced');
 assert(routeSource.includes('employee_batch_ordered_replay'), 'authorized history replay must be marked and isolated from normal messages');
 assert(routeSource.includes("? ''\n            : `Already saved to review"), 'multiple batches must not send per-property duplicate acknowledgements');
-assert(/message: \(data\.property_batch_mode \|\| 'multiple'\) === 'single'[\s\S]{0,500}: ''/.test(routeSource), 'multiple batches must wait for one final completion summary');
+// The staff branch is now reached through `agentSelfIntakeSavedReply(...) ?? …`,
+// which returns null for a staff session and so leaves this untouched — the
+// `message:` prefix is no longer adjacent. What matters is unchanged and still
+// asserted: a multiple-property staff batch answers with '' and waits for the
+// one completion summary. The behaviour itself is covered directly by
+// "staff replies are left exactly as they were" in
+// tests/whatsapp-agent-self-intake.test.js.
+assert(/\(data\.property_batch_mode \|\| 'multiple'\) === 'single'[\s\S]{0,500}: ''/.test(routeSource), 'multiple batches must wait for one final completion summary');
 const voiceDetectorBlocks = copilotSource.match(/const hasVoiceNote = \(root, text = ''\) => \{[\s\S]*?\n    \};\n    const hasCallLog/g) || [];
 assert.equal(voiceDetectorBlocks.length, 2, 'both browser snapshot paths must define voice-specific detection');
 assert(voiceDetectorBlocks.every((block) => !block.includes('[aria-label*="Play" i]')), 'generic Play buttons must not classify property videos as voice notes');
