@@ -6073,6 +6073,57 @@ async function reconcileEmployeeIdentityEvidence(propertyIds = []) {
   return reconciled;
 }
 
+// How long after a batch closes a stray property message is still read as
+// "staff, mid-batch" rather than "a customer asking about property".
+function employeeClosedBatchGraceMs() {
+  const raw = typeof process !== 'undefined' ? process.env.WHATSAPP_EMPLOYEE_CLOSED_BATCH_GRACE_MS : '';
+  return Math.max(60000, Number(raw || 1200000) || 1200000);
+}
+// One warning per closed batch. Ronald's twenty-five strays must not become
+// twenty-five replies; after the first, the rest are taken quietly.
+const employeeClosedBatchWarned = new Map();
+
+/** Does this message look like a property being forwarded, rather than a chat? */
+function looksLikeForwardedProperty({ cleanBody = '', mediaUrl = '', runtime = {} } = {}) {
+  if (mediaUrl || Number(runtime.mediaCount || 0) > 0) return true;
+  if (normalizeInput(cleanBody).length < 25) return false;
+  const facts = employeePropertyFacts(cleanBody, {});
+  return Boolean(facts.listingType && Number(facts.price) > 0);
+}
+
+/**
+ * A property message from staff whose batch has just closed.
+ *
+ * Returns the sentence to send, '' to swallow it silently (the batch was
+ * already flagged), or null when this is not that situation at all and the
+ * message should carry on to the normal conversation.
+ */
+function recentlyClosedEmployeeBatchReply({ phone = '', session = {}, cleanBody = '', mediaUrl = '', runtime = {} } = {}) {
+  const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  const completedAtRaw = data.employee_intake_last_completed_at;
+  if (!completedAtRaw) return null;
+  const completedAt = new Date(completedAtRaw);
+  const completedMs = completedAt.getTime();
+  if (!Number.isFinite(completedMs) || completedMs <= 0) return null;
+  if (Date.now() - completedMs > employeeClosedBatchGraceMs()) return null;
+  if (!looksLikeForwardedProperty({ cleanBody, mediaUrl, runtime })) return null;
+
+  const rawKey = phone || session.phone || '';
+  const key = normalizeBridgeInboundKey(rawKey) || String(rawKey);
+  if (employeeClosedBatchWarned.get(key) === completedAt.toISOString()) return '';
+  if (employeeClosedBatchWarned.size > 2000) employeeClosedBatchWarned.clear();
+  employeeClosedBatchWarned.set(key, completedAt.toISOString());
+
+  const subject = normalizeInput(
+    data.employee_intake_last_subject_name
+    || data.employee_intake_pending_agent_notification?.agent_name
+    || ''
+  );
+  const forWhom = subject ? ` for ${subject}` : '';
+  return `⚠️ That batch${forWhom} is already closed, so this has *not* been saved and nothing is live.\n\n`
+    + 'Reply *Agent 007* to start a new batch and send these again. Anything from the closed batch is still in staff review.';
+}
+
 async function handleEmployeeWhatsappIntake({
   phone,
   body = '',
@@ -6096,7 +6147,30 @@ async function handleEmployeeWhatsappIntake({
     currentStep = interruptedStep;
     active = true;
   }
-  if (!triggered && !active) return { handled: false };
+  if (!triggered && !active) {
+    // Ronald typed COMPLETE at 06:22:08, and twenty-five of his property
+    // messages landed seventeen seconds later. The batch had already closed, so
+    // the session was back at the customer menu and the marketplace answered
+    // him: the numbered menu, then a lecture about buying land safely. Nothing
+    // in it said his properties had not been saved.
+    //
+    // A member of staff sending property photos straight after closing a batch
+    // has not become a house-hunter in the meantime. Say plainly that the batch
+    // is shut and nothing was saved, rather than selling them the marketplace.
+    const closedBatchReply = recentlyClosedEmployeeBatchReply({
+      phone,
+      session,
+      cleanBody,
+      mediaUrl,
+      runtime
+    });
+    // '' is deliberate: this batch has already been flagged once, so the rest
+    // of the burst is taken quietly rather than answered twenty-five times.
+    if (closedBatchReply !== null) {
+      return { handled: true, nextStep: currentStep, message: closedBatchReply };
+    }
+    return { handled: false };
+  }
 
   const allowed = employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) });
   if (!allowed) {
@@ -6626,6 +6700,7 @@ async function handleEmployeeWhatsappIntake({
         employee_intake_last_properties_failed: batchCounts.propertiesFailed,
         employee_intake_last_media_count: Number(data.total_media_count || 0),
         employee_intake_last_subject_role: data.employee_role || null,
+        employee_intake_last_subject_name: subjectName || null,
         employee_intake_last_identity_sha256: data.identity_document_sha256 || null,
         employee_intake_last_identity_message_id: data.identity_document_message_id || null,
         ...(pendingAgentNotification ? { employee_intake_pending_agent_notification: pendingAgentNotification } : {})
@@ -8967,9 +9042,123 @@ async function logWhatsappMessage({
   await db.query(
     `INSERT INTO whatsapp_messages (user_phone, wa_message_id, direction, message_type, payload)
      VALUES ($1, NULLIF($2, ''), $3, $4, $5::jsonb)
-     ON CONFLICT (wa_message_id) DO NOTHING`,
+     ON CONFLICT (wa_message_id) DO UPDATE
+        SET message_type = EXCLUDED.message_type,
+            payload = EXCLUDED.payload
+      WHERE whatsapp_messages.payload -> 'claim' ->> 'state' = 'pending'`,
     [userPhone, waMessageId || null, direction, messageType, JSON.stringify(payload || {})]
   );
+}
+
+// ---------------------------------------------------------------------------
+// Inbound idempotency: one WhatsApp message is answered once.
+// ---------------------------------------------------------------------------
+/**
+ * 29 Sep 2026, 06:35. Arthur forwarded 22 properties through Agent 007 and
+ * typed COMPLETE. The batch closed — and then the bot answered seventeen of his
+ * own captions as if he were house-hunting: "Affordability search — here are
+ * the cheapest live makaug.com matches", "12 matching properties found in
+ * Naguru". The intent log shows why: every one of those turns ran at
+ * current_step `main_menu`, after COMPLETE had closed the batch, and several
+ * captions appear in it twice, ten seconds apart.
+ *
+ * The bridge had delivered each message more than once. That part is correct
+ * and deliberate — a handover that stalls is retried rather than left to
+ * WhatsApp's own redelivery schedule, which is what turned a half-minute
+ * database stall into a six-minute wait on 28 Sep. At-least-once delivery is
+ * the right contract. Answering twice is not.
+ *
+ * The guard that was supposed to catch the second copy could not:
+ *
+ *   SELECT 1 FROM whatsapp_messages WHERE wa_message_id = $1   -- nothing yet
+ *   ... enqueue, run the conversation, and only THEN write the row
+ *
+ * The row is written inside the runtime, at the end. So for the whole time a
+ * message is queued or being worked on — which is exactly the window in which a
+ * slow handover gets retried — the message is invisible to its own duplicate
+ * check. The check could only ever catch a copy that arrived after the original
+ * had completely finished, which is the one case that never happens.
+ *
+ * So the id is claimed up front, in one atomic statement, before any work
+ * starts. A second copy loses the race and is acknowledged as a duplicate. The
+ * claim is provisional, as the bridge's own is: it is filled in by the real
+ * message row on success and released on failure, so a genuine retry after a
+ * genuine error still gets through.
+ */
+// Read lazily, not at module scope: whatsapp-natural-seller-conversations
+// evaluates a slice of this file in a bare vm where `process` does not exist,
+// and a top-level process.env here takes that whole suite down.
+function bridgeInboundClaimStaleMs() {
+  const raw = typeof process !== 'undefined' ? process.env.WHATSAPP_INBOUND_CLAIM_STALE_MS : '';
+  return Math.max(60000, Number(raw || 600000) || 600000);
+}
+
+async function claimInboundMessage({ userPhone, waMessageId, messageType = 'text', payload: content = {}, metadata = {} }) {
+  const id = normalizeInput(waMessageId || '');
+  // No id means nothing to be idempotent about; the body/time fingerprint check
+  // is the only guard available and it runs separately.
+  if (!id) return { claimed: true, claimId: '' };
+  const claimedAt = new Date().toISOString();
+  // The claim carries the message itself, not just a marker, so a turn that
+  // answers without reaching the runtime still leaves a truthful inbound row
+  // rather than a blank one.
+  const payload = {
+    ...content,
+    claim: { state: 'pending', at: claimedAt, source: normalizeInput(metadata.source || 'web_bridge_inbound') }
+  };
+  // One statement, so two copies racing in different web instances cannot both
+  // win. The ON CONFLICT arm only fires for a claim that was abandoned long
+  // enough ago to be certain nobody is still working on it.
+  const result = await db.query(
+    `INSERT INTO whatsapp_messages (user_phone, wa_message_id, direction, message_type, payload)
+     VALUES ($1, $2, 'inbound', $3, $4::jsonb)
+     ON CONFLICT (wa_message_id) DO UPDATE
+        SET payload = jsonb_set(whatsapp_messages.payload, '{claim,at}', to_jsonb($5::text))
+      WHERE whatsapp_messages.payload -> 'claim' ->> 'state' = 'pending'
+        AND (whatsapp_messages.payload -> 'claim' ->> 'at')::timestamptz
+            < NOW() - ($6::text || ' milliseconds')::interval
+     RETURNING id`,
+    [userPhone, id, messageType, JSON.stringify(payload), claimedAt, String(bridgeInboundClaimStaleMs())]
+  );
+  return { claimed: result.rows.length > 0, claimId: id };
+}
+
+/**
+ * The turn answered: the id is spent. Most turns fill the row through
+ * logWhatsappMessage, which drops the marker on its own; this covers the
+ * branches that reply without going through the runtime, so every answered
+ * message is idempotent, not just the common one.
+ */
+async function confirmInboundMessageClaim(waMessageId) {
+  const id = normalizeInput(waMessageId || '');
+  if (!id) return;
+  await db.query(
+    `UPDATE whatsapp_messages
+        SET payload = payload - 'claim'
+      WHERE wa_message_id = $1
+        AND payload -> 'claim' ->> 'state' = 'pending'`,
+    [id]
+  ).catch((error) => {
+    logger.warn('WhatsApp inbound claim confirm failed:', error.message || String(error));
+  });
+}
+
+/**
+ * Give the id back, but only while it is still an unfilled claim. A message
+ * that was really handled has a real payload by now and must never be deleted
+ * by a late error somewhere else in the request.
+ */
+async function releaseInboundMessageClaim(waMessageId) {
+  const id = normalizeInput(waMessageId || '');
+  if (!id) return;
+  await db.query(
+    `DELETE FROM whatsapp_messages
+      WHERE wa_message_id = $1
+        AND payload -> 'claim' ->> 'state' = 'pending'`,
+    [id]
+  ).catch((error) => {
+    logger.warn('WhatsApp inbound claim release failed:', error.message || String(error));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -14616,13 +14805,44 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
       || inboundMetadata.suppress_reply === true
     );
 
-  const alreadySeen = await db.query(
-    'SELECT 1 FROM whatsapp_messages WHERE wa_message_id = $1 LIMIT 1',
-    [runtimeInboundMessageId]
-  );
-  if (alreadySeen.rows.length) {
-    return res.json({ ok: true, duplicate: true, inbound_message_id: runtimeInboundMessageId });
+  // Claimed before the work, not after it. The old check read a row that this
+  // very request would not write until the conversation had finished running,
+  // so a retried handover always found nothing and was answered a second time.
+  const inboundClaim = await claimInboundMessage({
+    userPhone: runtimePhone,
+    waMessageId: runtimeInboundMessageId,
+    messageType: bridgeMessageType,
+    payload: {
+      provider: 'web_bridge',
+      body,
+      mediaUrl: mediaUrl || null,
+      mediaType: mediaType || null,
+      sharedLocation,
+      metadata: runtimeMetadata
+    },
+    metadata: runtimeMetadata
+  });
+  if (!inboundClaim.claimed) {
+    return res.json({
+      ok: true,
+      duplicate: true,
+      duplicate_reason: 'inbound_already_handled',
+      inbound_message_id: runtimeInboundMessageId
+    });
   }
+  // A claim only holds while this request is alive. If it fails, or the bridge
+  // hangs up before we answer, the id goes back so a real retry can have it.
+  // Releasing is safe either way: it deletes nothing once the turn has written
+  // its real message row, so a dropped socket after a completed turn still
+  // leaves the message marked as handled.
+  const releaseClaimUnlessHandled = () => {
+    releaseInboundMessageClaim(runtimeInboundMessageId).catch(() => {});
+  };
+  res.on('finish', () => {
+    if (res.statusCode >= 400) releaseClaimUnlessHandled();
+    else confirmInboundMessageClaim(runtimeInboundMessageId).catch(() => {});
+  });
+  res.on('close', () => { if (!res.writableFinished) releaseClaimUnlessHandled(); });
 
   if (
     shouldUseBridgeInboundFingerprintDedupe({ providerMessageId })
@@ -14639,6 +14859,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
       sharedLocation
     });
     if (recentDuplicateId) {
+      await releaseInboundMessageClaim(runtimeInboundMessageId);
       return res.json({
         ok: true,
         duplicate: true,
@@ -15076,6 +15297,12 @@ module.exports.__test = {
   buildWhatsappListingEnquiryResponse,
   detectLanguageFromText,
   employeeBatchSummaryHeadline,
+  claimInboundMessage,
+  confirmInboundMessageClaim,
+  releaseInboundMessageClaim,
+  logWhatsappMessage,
+  looksLikeForwardedProperty,
+  recentlyClosedEmployeeBatchReply,
   fetchEmployeeMediaWithRetry,
   isTransientMediaFetchError,
   storeEmployeeMedia,
