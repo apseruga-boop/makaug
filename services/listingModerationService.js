@@ -785,7 +785,37 @@ function buildOwnerSubmissionMessage({ listing = {}, token = '' }) {
   };
 }
 
+/**
+ * A found-online listing's "lister" never asked to hear from us.
+ *
+ * These are scraped from X, TikTok and Facebook. The phone on them belongs to
+ * whoever posted the advert on their own page — someone who has never signed up
+ * to makaug, never given us permission, and would receive "🎉 Your property is
+ * live on makaug.com" about a listing they did not know we had made. The lead
+ * handoff has always refused to message them; the moment approvals started
+ * sending automatically, this path had to learn the same rule.
+ *
+ * Kept as a JS mirror of utils/foundOnlineSql.js so both agree.
+ */
+function isFoundOnlineListing(listing = {}) {
+  const yes = (value) => ['true', '1', 'yes'].includes(String(value ?? '').trim().toLowerCase());
+  const extra = listing.extra_fields && typeof listing.extra_fields === 'object' ? listing.extra_fields : {};
+  const badge = String(extra.source_badge ?? '').trim().toLowerCase();
+  return String(listing.source ?? '').trim().toLowerCase() === 'found_online_property_source_v1'
+    || String(listing.listed_via ?? '').trim().toLowerCase() === 'found_online'
+    || ['found_online', 'found online', 'sourced_online', 'sourced online'].includes(badge)
+    || yes(extra.found_online)
+    || yes(extra.found_online_candidate)
+    || yes(extra.social_search_candidate)
+    || yes(extra.sourced_inventory_candidate)
+    || yes(listing.is_found_online);
+}
+
 async function sendOwnerListingStatusNotifications({ listing = {}, status, reason }) {
+  if (isFoundOnlineListing(listing)) {
+    const skipped = { sent: false, reason: 'found_online_listing_never_messaged' };
+    return { email: { ...skipped }, whatsapp: { ...skipped, phone: listing.lister_phone || null } };
+  }
   const message = buildOwnerStatusMessage({ listing, status, reason });
   const result = {
     email: { sent: false, reason: 'no_lister_email', subject: message.subject, message: message.text },
@@ -902,6 +932,7 @@ module.exports = {
   getMissingApprovalChecks,
   getOwnerPreviewUrl,
   getPublicListingUrl,
+  isFoundOnlineListing,
   hashOwnerEditToken,
   isOwnerEditTokenValid,
   normalizeReviewChecklist,
