@@ -115,3 +115,40 @@ test('the area is written for a reader, not shouted', () => {
   assert.strictEqual(facts(RONALD_CAPTION).locationPatch.area, 'Bulabakulu');
   assert.notStrictEqual(facts(RONALD_CAPTION).locationPatch.area, 'BULABAKULU');
 });
+
+/**
+ * 30 Sep 2026. The rule above — "the first word that is not a known word" —
+ * held for the way Ronald writes and for nothing else.
+ *
+ * Tuyisengye Innocent sent "This is the biggest property in Northern Uganda, we
+ * found it 😁 8000 acres…". It went live, publicly, as *Land for sale in This*.
+ * Adding "this" to the stopword list produced *Land for sale in Northern*.
+ * Adding the regions produced *Found*. No list of English words wins an
+ * argument with arbitrary prose.
+ *
+ * The signal was always positional: a stated area sits BESIDE the district.
+ */
+test('a caption that opens with a sales pitch yields no area at all', () => {
+  for (const caption of [
+    'This is the biggest property in Northern Uganda, we found it 8000 acres of land for sale in Adjumani at 3m per acre',
+    'Massive 200 acres large on sale in Luweero, mailo land title at 12m each acre',
+    'Most affordable land you will ever see in Mukono at 9m'
+  ]) {
+    const area = facts(caption).locationPatch.area;
+    assert.strictEqual(area, undefined,
+      `"${caption.slice(0, 34)}…" gave the area "${area}", which is a word from the pitch, not a place`);
+  }
+});
+
+test('the area has to be touching the district, not merely present', () => {
+  // Beside it, in either order, with the punctuation agents actually use.
+  assert.strictEqual(facts('*WAKISO -BULABAKULU ROADSIDE ESTATE 45M').locationPatch.area, 'Bulabakulu');
+  assert.strictEqual(facts('45m plot in Wakiso Bulabakulu').locationPatch.area, 'Bulabakulu');
+  assert.strictEqual(facts('Plot for sale Wakiso, Bulabakulu at 45m').locationPatch.area, 'Bulabakulu');
+
+  // The same word, a whole clause away from the district, is not an area.
+  assert.notStrictEqual(
+    facts('Bulabakulu is a lovely place and this plot is for sale in Wakiso at 45m').locationPatch.area,
+    'Bulabakulu'
+  );
+});
