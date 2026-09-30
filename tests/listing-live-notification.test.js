@@ -256,3 +256,16 @@ test('the approval endpoint carries the source through', () => {
   assert.strictEqual(clauses.length, 2,
     'without source and listed_via the guard cannot tell a scraped listing from a real one');
 });
+
+test('the submission message refuses a scraped listing as well', async () => {
+  // Reachable only from the public submit form today, but a scraped listing
+  // must not be one refactor away from being told we received "their"
+  // submission.
+  const result = await moderation.sendOwnerListingSubmissionNotifications({
+    listing: { ...FOUND_ONLINE, source: 'found_online_property_source_v1' },
+    token: 'tok'
+  });
+  assert.strictEqual(result.whatsapp.sent, false);
+  assert.strictEqual(result.whatsapp.reason, 'found_online_listing_never_messaged');
+  assert.strictEqual(result.email.sent, false);
+});
