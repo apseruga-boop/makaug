@@ -5325,7 +5325,21 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         ...listing,
         owner_edit_token: regeneratedOwnerToken
       };
-      if (manualNotificationOnly && ['approved', 'rejected'].includes(nextStatus)) {
+      // "Your listing is live" is sent by makaug, not left to a staff member.
+      //
+      // Every approve button in the dashboard posts manual_notification_only,
+      // which used to mean "build the message but do not send it" — the UI then
+      // opened a wa.me link for the moderator to send by hand. In practice
+      // nobody ever does, so no agent has ever been told their property went
+      // live. Tuyisengye Innocent had four listings approved on 30 Sep and
+      // heard nothing about any of them.
+      //
+      // An approval now always sends. The manual link is still returned, so a
+      // moderator who wants to add something personal still can, and a
+      // rejection is still left to a person: a refusal deserves wording a human
+      // chose, not a template fired automatically.
+      const leaveToAHuman = manualNotificationOnly && nextStatus === 'rejected';
+      if (leaveToAHuman) {
         notification = buildManualOwnerStatusNotification({
           listing: notificationListing,
           status: nextStatus,
@@ -5337,6 +5351,15 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           status: nextStatus,
           reason: moderationReason
         });
+        if (manualNotificationOnly) {
+          // Staff asked for the hand-send link as well; give them both.
+          const manual = buildManualOwnerStatusNotification({
+            listing: notificationListing,
+            status: nextStatus,
+            reason: moderationReason
+          });
+          notification = { ...notification, manual: manual.manual || manual };
+        }
         if (notification.email?.sent || notification.whatsapp?.sent) {
           await db.query(
             'UPDATE properties SET last_moderation_notification_at = NOW() WHERE id = $1',

@@ -4748,41 +4748,83 @@ const AREA_CANDIDATE_STOPWORDS = new Set([
   'private', 'ready', 'quick', 'hot', 'deal', 'price', 'ugx', 'shs', 'million', 'billion',
   'district', 'region', 'county', 'subcounty', 'parish', 'village', 'headquarters', 'hq',
   'tarmac', 'metres', 'meters', 'km', 'exactly', 'with', 'is', 'are', 'available', 'negotiable',
-  'call', 'whatsapp', 'contact', 'agent', 'broker', 'owner', 'property', 'properties', 'new', 'big'
+  'call', 'whatsapp', 'contact', 'agent', 'broker', 'owner', 'property', 'properties', 'new', 'big',
+  // "This is the biggest property in Northern Uganda, we found it 😁 8000
+  // acres…" went live as *Land for sale in This*. Captions open with a pitch far
+  // more often than with a place name, so every word that starts one has to be
+  // ruled out — an area is a place, and none of these is a place.
+  'this', 'that', 'these', 'those', 'here', 'there', 'it', 'we', 'i', 'you', 'our', 'my', 'your',
+  'massive', 'prime', 'luxurious', 'luxury', 'affordable', 'cheap', 'beautiful', 'stunning',
+  'biggest', 'largest', 'best', 'most', 'very', 'super', 'mega', 'great', 'good', 'nice',
+  'urgent', 'distress', 'bargain', 'offer', 'special', 'exclusive', 'rare', 'perfect',
+  'on', 'market', 'now', 'today', 'still', 'just', 'only', 'check', 'look', 'see', 'come',
+  'located', 'location', 'size', 'seated', 'sitting', 'measuring', 'income', 'monthly', 'yearly',
+  'fully', 'occupied', 'vacant', 'brand', 'clean', 'modern', 'spacious', 'secure', 'gated',
+  // A region or the country is not an area either: the same caption then went
+  // live as *Land for sale in Northern*.
+  'northern', 'southern', 'eastern', 'western', 'central', 'uganda', 'ug', 'kampala'
 ]);
 
 /**
  * The area an agent named next to a district we recognise.
  *
- * Only used when the district matched and nothing finer did. Place names sit at
- * the front of these captions, before the size and the price, so the search
- * stops at the first digit. Anything that is a known word, the district itself,
- * or resolvable on its own is skipped — what is left is the agent's own name
- * for the place, which staff confirm before anything goes live.
+ * Only used when the district matched and nothing finer did.
+ *
+ * The first version of this took the first word in the caption that was not a
+ * known word and not a number. That works for "WAKISO -BULABAKULU ROADSIDE
+ * ESTATE", which is how Ronald writes, and not at all for a caption that opens
+ * with a pitch. "This is the biggest property in Northern Uganda, we found it 😁
+ * 8000 acres…" went live as *Land for sale in This*, and widening the stopword
+ * list only moved it on to *Northern*, then *Found*. No list of English words
+ * wins that argument.
+ *
+ * So the rule is positional rather than lexical, and it is the signal that was
+ * really there all along: a stated area sits BESIDE the district. "WAKISO
+ * -BULABAKULU", "Wakiso Bulabakulu", "Kamira- Kikyusa, Luweero". A word forty
+ * characters away in a sentence about how big the property is does not.
  */
-function statedAreaBesideDistrict(caption = '', districtMatch = {}) {
-  const districtNames = new Set(
-    [districtMatch?.district, districtMatch?.area, districtMatch?.name]
-      .map((value) => normalizeInput(value).toLowerCase())
-      .filter(Boolean)
-  );
-  const clean = normalizeInput(caption).replace(/[*_~`]+/g, ' ');
-  // Place names usually sit ahead of the size and the price, so that part is
-  // read first; a caption that opens with the price ("45m plot in Wakiso
-  // Bulabakulu") still gets read in full rather than giving up.
-  const scanOrder = [clean.split(/\d/)[0], clean].filter(Boolean);
+const AREA_ADJACENCY_SEPARATOR = /^[\s,\-–—/|:.()]*$/;
 
-  for (const segment of scanOrder) {
-    for (const rawToken of segment.split(/[^A-Za-z'’-]+/)) {
-      const token = rawToken.replace(/^-+|-+$/g, '').trim();
-      if (token.length < 4 || token.length > 40) continue;
-      const lower = token.toLowerCase();
-      if (districtNames.has(lower) || AREA_CANDIDATE_STOPWORDS.has(lower)) continue;
-      // A place we already know resolves on its own, so it would not have got here.
-      const known = resolveWhatsappLocation(token, { allowText: true });
-      if (known?.status === 'matched') continue;
-      // Title-case it rather than shouting it back at whoever reads the listing.
-      return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+function statedAreaBesideDistrict(caption = '', districtMatch = {}) {
+  const districtNames = [districtMatch?.district, districtMatch?.area, districtMatch?.name]
+    .map((value) => normalizeInput(value).toLowerCase())
+    .filter(Boolean);
+  if (!districtNames.length) return '';
+  const clean = normalizeInput(caption).replace(/[*_~`]+/g, ' ');
+
+  // Split into words, keeping what sat between them so adjacency can be judged.
+  const tokens = [];
+  const wordRe = /[A-Za-z'’-]+/g;
+  let m;
+  while ((m = wordRe.exec(clean)) !== null) {
+    tokens.push({ word: m[0].replace(/^-+|-+$/g, ''), start: m.index, end: m.index + m[0].length });
+  }
+
+  const acceptable = (token) => {
+    const word = token?.word || '';
+    if (word.length < 4 || word.length > 40) return '';
+    const lower = word.toLowerCase();
+    if (districtNames.includes(lower) || AREA_CANDIDATE_STOPWORDS.has(lower)) return '';
+    if (/\d/.test(word)) return '';
+    // A place we already know resolves on its own, so it would not have got here.
+    if (resolveWhatsappLocation(word, { allowText: true })?.status === 'matched') return '';
+    // Title-case it rather than shouting it back at whoever reads the listing.
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  };
+
+  const touching = (left, right) => left && right
+    && AREA_ADJACENCY_SEPARATOR.test(clean.slice(left.end, right.start));
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    if (!districtNames.includes(tokens[i].word.toLowerCase())) continue;
+    // Immediately after the district reads most naturally ("Wakiso Bulabakulu"),
+    // so it is preferred over immediately before ("BULABAKULU ... WAKISO").
+    for (const neighbour of [
+      touching(tokens[i], tokens[i + 1]) ? tokens[i + 1] : null,
+      touching(tokens[i - 1], tokens[i]) ? tokens[i - 1] : null
+    ]) {
+      const area = acceptable(neighbour);
+      if (area) return area;
     }
   }
   return '';
@@ -6191,6 +6233,57 @@ function isOwnAgentSelfIntake(session = {}, phone = '') {
   return Boolean(agentKey) && agentKey === sender;
 }
 
+const AGENT_COURTESY = /^(ok(ay)?|thanks?|thank you|asante|webale|noted|alright|sure|fine|got it|cool|yes|yeah|yep|please|okay please|ok please|good|great|nice|👍|🙏|💪|✅)[\s.!👍🙏😊]*$/i;
+const AGENT_HOW_TO_POST = /\b(how (do|can) i (post|list|upload|add)|how to (post|list|upload|add)|where (do|can) i (post|list)|how does (this|it) work|what (do|should) i (do|send))\b/i;
+const AGENT_IS_IT_DONE = /\b(is it (done|live|up|posted|approved)|did (it|that) (save|go|work)|has it (saved|gone|posted)|any update|is it (in|there)|did you get (it|them))\b/i;
+
+/**
+ * A short, human answer to the things an agent actually says between properties.
+ *
+ * Tuyisengye typed "Okay please" and was told it did not describe a property and
+ * that we had avoided creating an empty one. Katamba asked "So how do I post"
+ * and got a five-option buyer menu. Neither is a conversation; both are the
+ * machine explaining itself to somebody who was being perfectly clear.
+ *
+ * Returns null when this is not one of those, so an unrecognised message falls
+ * through to the existing reply rather than being guessed at.
+ */
+function agentConversationalAside({ data = {}, cleanBody = '' } = {}) {
+  if (data.whatsapp_agent_self_intake !== true) return null;
+  const text = normalizeInput(cleanBody);
+  if (!text) return null;
+  const saved = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
+  const first = normalizeInput(data.agent?.full_name || '').split(/\s+/)[0] || '';
+
+  if (AGENT_HOW_TO_POST.test(text)) {
+    return [
+      `Easiest thing in the world${first ? `, ${first}` : ''} — just send me the property, the same way you would forward it to a buyer.`,
+      '',
+      '📸 The photos or a short video',
+      '📝 And in the caption: what it is, the exact area and district, and the price',
+      '',
+      'Like this:',
+      '_"3 bedroom house for rent in Kira, Wakiso — UGX 1.2m a month"_',
+      '',
+      'One property per message. I will confirm each one, tell you if anything is missing, and send you the link once it is live.'
+    ].join('\n');
+  }
+
+  if (AGENT_IS_IT_DONE.test(text)) {
+    if (!saved) {
+      return 'Nothing from you is with the team yet. Send the property here — photos and a caption with the type, area and price — and I will confirm it straight away.';
+    }
+    return `Yes — ${saved === 1 ? 'it is' : `all ${saved} are`} with our team for review. Nothing is live until they have checked it, and the moment it is I will send you the link to share.`;
+  }
+
+  if (AGENT_COURTESY.test(text)) {
+    return saved
+      ? `👍 ${saved === 1 ? 'That one is' : `All ${saved} are`} with the team. Send the next property whenever you are ready.`
+      : '👍 Send the property whenever you are ready — photos and a caption with the type, area and price.';
+  }
+  return null;
+}
+
 function agentSelfIntakeOpeningLine(agent = {}) {
   const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || 'there';
   return `Got it ${first} — I will put this up for you. 👇`;
@@ -6341,6 +6434,23 @@ async function handleEmployeeWhatsappIntake({
         currentStep = 'employee_property_media';
         active = true;
         openedAgentSelfIntake = true;
+      }
+    }
+
+    // "So how do I post" — Katamba Bonny, ninety seconds after joining, answered
+    // with a five-option buyer menu. An agent asking how to list is asking one
+    // question with one answer, and we know they are an agent from the number.
+    if (!active && AGENT_HOW_TO_POST.test(normalizeInput(cleanBody))) {
+      const askingAgent = await findApprovedAgentByPhone(phone);
+      if (askingAgent) {
+        return {
+          handled: true,
+          nextStep: currentStep,
+          message: agentConversationalAside({
+            data: { whatsapp_agent_self_intake: true, agent: askingAgent, property_ids: [] },
+            cleanBody
+          })
+        };
       }
     }
 
@@ -7078,7 +7188,12 @@ async function handleEmployeeWhatsappIntake({
         return {
           handled: true,
           nextStep: currentStep,
-          message: 'I did not save that, because it does not describe a property and I did not want to create an empty one.\n\nSend a property caption with the type, exact location and price — for example "Selling 5 bedroom house in Kololo @600m UGX" — or send the media first.\n\nType *COMPLETE* when the batch is finished, or *CANCEL* to close it and walk away.'
+          // Tuyisengye said "Okay please" and was told his politeness did not
+          // describe a property and that an empty one had been avoided. A
+          // person being courteous should not be answered with an explanation
+          // of our data model.
+          message: agentConversationalAside({ data, cleanBody })
+            || 'I did not save that, because it does not describe a property and I did not want to create an empty one.\n\nSend a property caption with the type, exact location and price — for example "Selling 5 bedroom house in Kololo @600m UGX" — or send the media first.\n\nType *COMPLETE* when the batch is finished, or *CANCEL* to close it and walk away.'
         };
       }
 
@@ -9478,6 +9593,18 @@ async function buildEmployeeBatchSummary(phone, since) {
   }
   if (data.identity_followup_required === true && !data.identity_document_url) {
     lines.push('', '🪪 ID still outstanding — send the ID photo when you can. Staff will chase it before approval.');
+  }
+  // An agent posting their own stock is not running a batch on anyone's behalf,
+  // so the batch vocabulary means nothing to them. Tuyisengye got "📋 All 1
+  // saved for staff review… Type COMPLETE when the whole batch is done" after
+  // each property, on top of the confirmation he had already been sent — two
+  // messages for one property, the second in a language he never signed up to.
+  if (data.whatsapp_agent_self_intake === true) {
+    // Everything saved and nothing outstanding: he has already been told, once,
+    // per property. Do not say it again.
+    if (!notSaved.length) return '';
+    lines.push('', 'Send the missing detail and I will add it. Nothing goes live until our team has checked it.');
+    return lines.join('\n');
   }
   lines.push('', 'Nothing is live until a moderator approves it. Type *COMPLETE* when the whole batch is done.');
   return lines.join('\n');
@@ -15494,6 +15621,8 @@ module.exports.__test = {
   logWhatsappMessage,
   looksLikeForwardedProperty,
   recentlyClosedEmployeeBatchReply,
+  agentConversationalAside,
+  buildEmployeeBatchSummary,
   agentPhoneKey,
   agentSelfIntakeSessionData,
   agentSelfIntakeSavedReply,
