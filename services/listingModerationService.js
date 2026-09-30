@@ -870,6 +870,14 @@ async function sendOwnerListingStatusNotifications({ listing = {}, status, reaso
 }
 
 async function sendOwnerListingSubmissionNotifications({ listing = {}, token = '' }) {
+  // Same rule as the approval message, for the same reason. This path is only
+  // reachable from the public submit form today, but a scraped listing must not
+  // be one refactor away from telling its poster we have received "their"
+  // submission.
+  if (isFoundOnlineListing(listing)) {
+    const skipped = { sent: false, reason: 'found_online_listing_never_messaged' };
+    return { email: { ...skipped }, whatsapp: { ...skipped, phone: listing.lister_phone || null } };
+  }
   const message = buildOwnerSubmissionMessage({ listing, token });
   const result = {
     email: { sent: false, reason: 'no_lister_email', subject: message.subject, message: message.text },
