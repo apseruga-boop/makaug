@@ -156,7 +156,103 @@ test('the approval endpoint carries the agent through', () => {
   const fs = require('fs');
   const path = require('path');
   const source = fs.readFileSync(path.join(__dirname, '..', 'routes', 'properties.js'), 'utf8');
-  const clauses = source.match(/RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, agent_id, status,/g) || [];
+  const clauses = source.match(/RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, agent_id,/g) || [];
   assert.strictEqual(clauses.length, 2,
     'both approval paths must return agent_id, or an agent silently gets the owner message');
+});
+
+/**
+ * A found-online listing's "lister" never asked to hear from us.
+ *
+ * makaug sources listings from X, TikTok and Facebook. The phone on those
+ * belongs to whoever posted the advert on their own page: somebody who never
+ * signed up, never gave permission, and would receive "🎉 Your property is live
+ * on makaug.com" about a listing they did not know we had made. There are 23
+ * such agencies in the database — Knight Frank Uganda, Broll Uganda and the
+ * rest — and a review queue largely made of their posts.
+ *
+ * The lead handoff has refused to message them since it was written. Making
+ * approvals send automatically put that promise one click away from being
+ * broken at scale, so this path now refuses too.
+ */
+const FOUND_ONLINE = {
+  id: 'ffffffff-0000-1111-2222-333333333333',
+  title: 'SINGLE ROOM FOR RENT – LUZIRA',
+  lister_name: 'SWH RENTALS',
+  lister_phone: '256700111222',
+  lister_email: 'someone@example.com',
+  area: 'Luzira',
+  district: 'Kampala',
+  price: 300000
+};
+
+test('a scraped poster is never messaged, however the listing is marked', async () => {
+  const shapes = [
+    { source: 'found_online_property_source_v1' },
+    { listed_via: 'found_online' },
+    { extra_fields: { source_badge: 'Found Online' } },
+    { extra_fields: { found_online: true } },
+    { extra_fields: { found_online_candidate: 'yes' } },
+    { extra_fields: { social_search_candidate: '1' } },
+    { extra_fields: { sourced_inventory_candidate: true } },
+    { is_found_online: true }
+  ];
+  for (const shape of shapes) {
+    const result = await moderation.sendOwnerListingStatusNotifications({
+      listing: { ...FOUND_ONLINE, ...shape },
+      status: 'approved'
+    });
+    assert.strictEqual(result.whatsapp.sent, false, `${JSON.stringify(shape)} must not be messaged`);
+    assert.strictEqual(result.whatsapp.reason, 'found_online_listing_never_messaged');
+    assert.strictEqual(result.email.sent, false, 'nor emailed');
+  }
+});
+
+test('the guard knows every marker the platform SQL knows', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'utils', 'foundOnlineSql.js'), 'utf8');
+  for (const marker of ['found_online_candidate', 'social_search_candidate', 'sourced_inventory_candidate']) {
+    assert.ok(sql.includes(marker), `${marker} is in the shared SQL`);
+    assert.ok(moderation.isFoundOnlineListing({ extra_fields: { [marker]: true } }),
+      `${marker} must be recognised here too, or the two definitions drift apart`);
+  }
+  assert.ok(moderation.isFoundOnlineListing({ source: 'found_online_property_source_v1' }));
+  assert.ok(moderation.isFoundOnlineListing({ listed_via: 'found_online' }));
+  assert.ok(!moderation.isFoundOnlineListing({ source: 'whatsapp_employee_intake' }),
+    'an agent posting through WhatsApp is not a scraped poster');
+});
+
+test('a real agent listing is still notified', async () => {
+  const queued = [];
+  const bridgePath = require.resolve('../services/whatsappWebBridgeService');
+  const original = require.cache[bridgePath];
+  require.cache[bridgePath] = {
+    id: bridgePath, filename: bridgePath, loaded: true,
+    exports: {
+      getWhatsappDeliveryMode: () => 'web_bridge',
+      isWhatsappWebBridgeEnabled: () => true,
+      queueWhatsappWebBridgeMessage: async (msg) => { queued.push(msg); return { id: 'q' }; }
+    }
+  };
+  try {
+    const result = await moderation.sendOwnerListingStatusNotifications({
+      listing: AGENT_LISTING,
+      status: 'approved'
+    });
+    assert.ok(result.whatsapp.sent, 'the guard must not swallow a genuine agent listing');
+    assert.strictEqual(queued.length, 1);
+  } finally {
+    if (original) require.cache[bridgePath] = original;
+    else delete require.cache[bridgePath];
+  }
+});
+
+test('the approval endpoint carries the source through', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'routes', 'properties.js'), 'utf8');
+  const clauses = source.match(/lister_email, agent_id, source, listed_via, status,/g) || [];
+  assert.strictEqual(clauses.length, 2,
+    'without source and listed_via the guard cannot tell a scraped listing from a real one');
 });
