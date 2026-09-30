@@ -4615,6 +4615,102 @@ function normalizeCaptionPriceNotation(caption = '') {
     .replace(/\b(?:ugx|ush|shs|shillings?)\s*(\d[\d,.]*)/gi, 'UGX $1');
 }
 
+// ---------------------------------------------------------------------------
+// A price per acre is not the price of the property.
+// ---------------------------------------------------------------------------
+/**
+ * 30 Sep 2026. Four land listings went live with a per-unit rate stored as the
+ * whole price:
+ *
+ *   "8000 acres of Fertile Farmland for Sale in Nwoya at 2.5m per acre"
+ *     → UGX 2,500,000
+ *   "20 acres kayunga kitwe each at 8.5m"        → UGX 8,500,000
+ *   "50 ACRES ... Kikyuusa at 13m per acre"      → UGX 13,000,000
+ *   "200 acres ... selling all at once @ 12m each acre" → UGX 12,000,000
+ *
+ * Eight thousand acres of farmland was on the marketplace for two and a half
+ * million shillings, and it turned up in every search with a five-million
+ * ceiling. The parser takes the number next to the price cue and nothing in it
+ * ever looked at the word sitting beside it.
+ *
+ * So: when a caption prices by the unit AND says how many units there are, the
+ * property price is the two multiplied. The rate the agent quoted is kept
+ * alongside it, because that is the number they will talk to a buyer about, and
+ * the listing says both. When the quantity is missing there is nothing to
+ * multiply, so the rate stands and the moderator is told it is a rate — better
+ * an honest flag than an invented total.
+ */
+const PER_UNIT_PRICE_CUE = /(?:\b(?:each|per|a|an|\/)\s*)(acre|acres|decimal|decimals|plot|plots|unit|units|hectare|hectares|square\s*meter|sqm)\b|\b(acre|acres|decimal|decimals|plot|plots|unit|units|hectare|hectares)\s*(?:each|apiece)\b/i;
+const UNIT_QUANTITY = /(\d[\d,.]*)\s*(acres?|decimals?|plots?|units?|hectares?)\b/i;
+
+function singularUnit(word = '') {
+  const w = String(word || '').toLowerCase().replace(/\s+/g, '');
+  if (w.startsWith('acre')) return 'acre';
+  if (w.startsWith('decimal')) return 'decimal';
+  if (w.startsWith('plot')) return 'plot';
+  if (w.startsWith('hectare')) return 'hectare';
+  if (w.startsWith('unit')) return 'unit';
+  if (w === 'sqm' || w.startsWith('squaremeter')) return 'sqm';
+  return '';
+}
+
+// "20 acres kayunga kitwe each at 8.5m" — the word that makes it a rate sits
+// nowhere near the word that names the unit. A bare "each" or "apiece" in a
+// caption that has already counted its acres means the same thing.
+const BARE_PER_UNIT_CUE = /\b(?:each|apiece|a\s?piece)\b/i;
+
+function perUnitPriceFacts(caption = '', unitPrice = 0) {
+  const text = normalizeInput(caption);
+  const rate = Number(unitPrice) || 0;
+  if (rate <= 0) return { perUnit: false };
+
+  const quantityMatch = UNIT_QUANTITY.exec(text);
+  const countedUnit = quantityMatch ? singularUnit(quantityMatch[2]) : '';
+
+  const cue = PER_UNIT_PRICE_CUE.exec(text);
+  const unit = singularUnit(cue ? (cue[1] || cue[2] || '') : '')
+    || (BARE_PER_UNIT_CUE.test(text) ? countedUnit : '');
+  if (!unit) return { perUnit: false };
+
+  const quantity = quantityMatch && countedUnit === unit
+    ? Number(String(quantityMatch[1]).replace(/,/g, '')) || 0
+    : 0;
+
+  // One unit priced per unit is just the price. Nothing to correct.
+  if (quantity === 1) return { perUnit: true, unit, quantity, unitPrice: rate, total: rate };
+  if (quantity > 1) {
+    const total = Math.round(rate * quantity);
+    return { perUnit: true, unit, quantity, unitPrice: rate, total };
+  }
+  return { perUnit: true, unit, quantity: 0, unitPrice: rate, total: 0 };
+}
+
+/**
+ * The district the agent actually wrote.
+ *
+ * "Kamira after kikyuusa Luweero (Bombo rd), mailo land title in luweero
+ * district" was stored as Nakaseke, because Kikyusa resolves to Nakaseke in the
+ * registry and that won. The agent named Luweero twice, once with the word
+ * "district" beside it. When somebody says which district it is, that is not a
+ * hint to be weighed against a lookup — it is the answer.
+ */
+const EXPLICIT_DISTRICT = /\b([A-Za-z][A-Za-z'’\- ]{2,30}?)\s+district\b/gi;
+
+function explicitDistrictInCaption(caption = '') {
+  const text = normalizeInput(caption);
+  EXPLICIT_DISTRICT.lastIndex = 0;
+  let m;
+  while ((m = EXPLICIT_DISTRICT.exec(text)) !== null) {
+    // Take the last word before "district": "in luweero district" → luweero.
+    const words = String(m[1]).trim().split(/\s+/);
+    const candidate = words[words.length - 1];
+    if (!candidate || candidate.length < 3) continue;
+    const resolved = resolveWhatsappLocation(candidate, { allowText: true });
+    if (resolved?.status === 'matched' && resolved.match?.level === 'district') return resolved;
+  }
+  return null;
+}
+
 function employeePropertyFacts(caption = '', sessionData = {}) {
   const cleanCaption = normalizeInput(caption);
   const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
@@ -4734,7 +4830,74 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
       };
     }
   }
-  return { cleanCaption, naturalDraft, hints, listingType, price, priceMetadata, bedroomDraft, locationPatch };
+  // A district we matched but no area we could name. Keep the district rather
+  // than throwing the whole location away: "8000 acres … in Nwoya District"
+  // knows perfectly well which district it is, and dropping it left the listing
+  // with no location at all once the bogus area ("This") stopped being accepted.
+  // The area is still outstanding, so intake will ask for it.
+  if (!Object.keys(locationPatch).length
+    && locationResolution?.status === 'matched'
+    && locationLevel === 'district'
+    && Number(locationResolution?.confidence || 0) >= 1) {
+    const districtOnly = canonicalWhatsappLocationPatch(locationResolution, { includeDistrictLevelArea: false });
+    locationPatch = {
+      ...districtOnly,
+      area: undefined,
+      canonical_location_match: 'district_only_area_outstanding',
+      canonical_location_confidence: 0.5
+    };
+    Object.keys(locationPatch).forEach((key) => {
+      if (locationPatch[key] === undefined) delete locationPatch[key];
+    });
+  }
+
+  // Somebody writing "in luweero district" has told us which district it is.
+  // That beats one inferred from an area name: Kikyusa sits in the registry
+  // under Nakaseke, so two listings the agent had twice labelled Luweero went in
+  // as Nakaseke. The area they named is kept — only the district is corrected,
+  // and the canonical id goes with it, because it no longer describes this place.
+  const statedDistrict = explicitDistrictInCaption(locationCaption);
+  if (statedDistrict?.match) {
+    const named = normalizeInput(statedDistrict.match.district || statedDistrict.match.area || '');
+    const inferred = normalizeInput(locationPatch.district || locationResolution?.match?.district || '');
+    if (named && named.toLowerCase() !== inferred.toLowerCase()) {
+      locationPatch = {
+        ...locationPatch,
+        area: locationPatch.area || statedAreaBesideDistrict(locationCaption, statedDistrict.match) || undefined,
+        district: named,
+        region: statedDistrict.match.region || locationPatch.region,
+        // The district is canonical even when the area beside it is not, so the
+        // id is the district's, never the one belonging to the place we had
+        // wrongly inferred.
+        canonical_location_id: statedDistrict.match.canonical_location_id || null,
+        canonical_location_level: 'district',
+        canonical_location_match: 'district_stated_by_agent',
+        canonical_location_confidence: 0.6,
+        canonical_location_source: locationPatch.canonical_location_source || 'whatsapp_caption'
+      };
+      Object.keys(locationPatch).forEach((key) => {
+        if (locationPatch[key] === undefined) delete locationPatch[key];
+      });
+    }
+  }
+
+  // A rate quoted per acre is not what the property costs. Multiply it out when
+  // the caption says how many acres there are; otherwise keep the rate and say
+  // so, rather than inventing a total nobody quoted.
+  const perUnit = perUnitPriceFacts(cleanCaption, price);
+  const effectivePrice = perUnit.perUnit && perUnit.total > 0 ? perUnit.total : price;
+
+  return {
+    cleanCaption,
+    naturalDraft,
+    hints,
+    listingType,
+    price: effectivePrice,
+    priceMetadata,
+    perUnitPrice: perUnit.perUnit ? perUnit : null,
+    bedroomDraft,
+    locationPatch
+  };
 }
 
 // Words that turn up beside a place name but are not one.
@@ -6235,7 +6398,7 @@ function isOwnAgentSelfIntake(session = {}, phone = '') {
 
 const AGENT_COURTESY = /^(ok(ay)?|thanks?|thank you|asante|webale|noted|alright|sure|fine|got it|cool|yes|yeah|yep|please|okay please|ok please|good|great|nice|👍|🙏|💪|✅)[\s.!👍🙏😊]*$/i;
 const AGENT_HOW_TO_POST = /\b(how (do|can) i (post|list|upload|add)|how to (post|list|upload|add)|where (do|can) i (post|list)|how does (this|it) work|what (do|should) i (do|send))\b/i;
-const AGENT_IS_IT_DONE = /\b(is it (done|live|up|posted|approved)|did (it|that) (save|go|work)|has it (saved|gone|posted)|any update|is it (in|there)|did you get (it|them))\b/i;
+const AGENT_IS_IT_DONE = /\b(status|is it (done|live|up|posted|approved)|did (it|that) (save|go|work)|has it (saved|gone|posted)|any update|is it (in|there)|did you get (it|them))\b/i;
 
 /**
  * A short, human answer to the things an agent actually says between properties.
@@ -6254,6 +6417,15 @@ function agentConversationalAside({ data = {}, cleanBody = '' } = {}) {
   if (!text) return null;
   const saved = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
   const first = normalizeInput(data.agent?.full_name || '').split(/\s+/)[0] || '';
+
+  // The menu points at these two words, so they have to work mid-batch as well.
+  if (AGENT_SHARE_REQUEST.test(text)) {
+    const share = agentShareReply({ agent: data.agent || {} });
+    if (share) return share;
+  }
+  if (AGENT_GREETING.test(text)) {
+    return agentMenuReply({ agent: data.agent || {}, greet: true, savedCount: saved });
+  }
 
   if (AGENT_HOW_TO_POST.test(text)) {
     return [
@@ -6282,6 +6454,73 @@ function agentConversationalAside({ data = {}, cleanBody = '' } = {}) {
       : '👍 Send the property whenever you are ready — photos and a caption with the type, area and price.';
   }
   return null;
+}
+
+const AGENT_GREETING = /^\s*(hi|hii+|hey|hello+|helo|yo|hallo|good\s*(morning|afternoon|evening|day)|morning|afternoon|evening|greetings|start|menu|hi there|gyebale ?ko|oli otya)\b[\s.!,👋😊🙏]*$/i;
+const AGENT_SHARE_REQUEST = /\b(share|my (link|card|profile|page|listings?|properties)|send me (my|the) (link|card|profile)|how do i share|agent card)\b/i;
+
+/**
+ * Everything an agent can do here, in the order they are likely to want it.
+ *
+ * A registered agent who says "hello" used to get the marketplace's customer
+ * menu: list a property, search properties, find an agent. They ARE the agent.
+ * Two of the three options are for somebody else.
+ */
+function agentMenuReply({ agent = {}, greet = true, savedCount = 0 } = {}) {
+  const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || '';
+  const lines = [];
+  if (greet) {
+    lines.push(`👋 Hello ${first || 'there'}!`);
+    lines.push('');
+  }
+  lines.push('What would you like to do?');
+  lines.push('');
+  lines.push('1️⃣ *Post a property* — just send it here with photos and a caption');
+  lines.push('2️⃣ *Share my listings* — reply *SHARE* for your link and card');
+  lines.push('3️⃣ *Check a property* — reply *STATUS* to see where yours are');
+  lines.push('4️⃣ *Talk to a person* — reply *HELP*');
+  if (savedCount) {
+    lines.push('');
+    lines.push(`You have ${savedCount} ${savedCount === 1 ? 'property' : 'properties'} with our team right now.`);
+  }
+  lines.push('');
+  lines.push('_Or just send the property straight away — you do not need the menu._');
+  return lines.join('\n');
+}
+
+/**
+ * The easy way to share, which is one link and one picture.
+ *
+ * An agent's profile carries every listing they have live, so one link does the
+ * work of sending each property separately — and the card is the thing they put
+ * on their WhatsApp status.
+ */
+function agentShareReply({ agent = {} } = {}) {
+  const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || '';
+  let profileUrl = '';
+  let cardUrl = '';
+  try {
+    const welcome = require('../services/agentWelcomeService');
+    profileUrl = welcome.agentProfileUrl(agent) || '';
+    cardUrl = welcome.shareCardUrl(agent) || '';
+  } catch (_ignored) { /* links are best effort */ }
+  if (!profileUrl) return '';
+
+  const pitch = `Looking for property in Uganda? Everything I have is here 👇\n${profileUrl}`;
+  const lines = [
+    `📢 *Your makaug page${first ? `, ${first}` : ''}*`,
+    '',
+    profileUrl,
+    '',
+    'Everything you have live sits on that one page, with your name and number on it. Send it to a buyer, put it on your status, drop it in your groups.',
+    '',
+    '*Tap to share it now:*',
+    `https://wa.me/?text=${encodeURIComponent(pitch)}`
+  ];
+  if (cardUrl) {
+    lines.push('', '🖼️ *Your agent card* — save this and post it on your WhatsApp status:', cardUrl);
+  }
+  return lines.join('\n');
 }
 
 function agentSelfIntakeOpeningLine(agent = {}) {
@@ -6437,19 +6676,35 @@ async function handleEmployeeWhatsappIntake({
       }
     }
 
-    // "So how do I post" — Katamba Bonny, ninety seconds after joining, answered
-    // with a five-option buyer menu. An agent asking how to list is asking one
-    // question with one answer, and we know they are an agent from the number.
-    if (!active && AGENT_HOW_TO_POST.test(normalizeInput(cleanBody))) {
+    // A registered agent said something that is not a property. Answer them as
+    // the agent they are — by name — rather than handing them the marketplace's
+    // customer menu, two thirds of which is for somebody else.
+    //
+    // "So how do I post" — Katamba Bonny, ninety seconds after joining — got
+    // "1️⃣ House for SALE 2️⃣ House for RENT 3️⃣ Land/Plot…". He was not
+    // listing a house OR a plot; he was asking a question.
+    const askedText = normalizeInput(cleanBody);
+    if (!active && (AGENT_HOW_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || AGENT_SHARE_REQUEST.test(askedText))) {
       const askingAgent = await findApprovedAgentByPhone(phone);
       if (askingAgent) {
+        if (AGENT_SHARE_REQUEST.test(askedText)) {
+          const share = agentShareReply({ agent: askingAgent });
+          if (share) return { handled: true, nextStep: currentStep, message: share };
+        }
+        if (AGENT_HOW_TO_POST.test(askedText)) {
+          return {
+            handled: true,
+            nextStep: currentStep,
+            message: agentConversationalAside({
+              data: { whatsapp_agent_self_intake: true, agent: askingAgent, property_ids: [] },
+              cleanBody
+            })
+          };
+        }
         return {
           handled: true,
           nextStep: currentStep,
-          message: agentConversationalAside({
-            data: { whatsapp_agent_self_intake: true, agent: askingAgent, property_ids: [] },
-            cleanBody
-          })
+          message: agentMenuReply({ agent: askingAgent, greet: true })
         };
       }
     }
@@ -15622,6 +15877,10 @@ module.exports.__test = {
   looksLikeForwardedProperty,
   recentlyClosedEmployeeBatchReply,
   agentConversationalAside,
+  agentMenuReply,
+  agentShareReply,
+  perUnitPriceFacts,
+  explicitDistrictInCaption,
   buildEmployeeBatchSummary,
   agentPhoneKey,
   agentSelfIntakeSessionData,
