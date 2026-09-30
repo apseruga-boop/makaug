@@ -5247,7 +5247,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
            ) || jsonb_build_object('review_warning_overrides', $11::jsonb)
              || COALESCE($12::jsonb, '{}'::jsonb)
          WHERE id = $1
-         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, agent_id, status,
+         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, agent_id, source, listed_via, status,
                    price, price_period, area, district, created_at,
                    reviewed_at, approved_at, last_moderation_notification_at, moderation_stage,
                    moderation_checklist, moderation_notes, moderation_reason, extra_fields`,
@@ -5291,7 +5291,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
              )
              || COALESCE($8::jsonb, '{}'::jsonb)
          WHERE id = $1
-         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, agent_id, status,
+         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, agent_id, source, listed_via, status,
                    price, price_period, area, district, created_at, reviewed_at, extra_fields`,
         [
           req.params.id,
