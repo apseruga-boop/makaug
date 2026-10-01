@@ -4762,6 +4762,24 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   if (!listingType && Number(bedroomDraft.bedrooms) >= 1 && /\bstaff quarters?\b/i.test(cleanCaption) && Number(price) >= 50000000) {
     listingType = 'sale';
   }
+  // "50 by 100 at 35m located at nsagu along natete nakawuka road" — 30 Sep
+  // 2026, the seventh advert in Ronald's burst. A plot measured in feet or
+  // decimals, with a price and no building, is a land listing; this caption said
+  // so in the only way a Ugandan agent writes it, and intake asked him for the
+  // type instead. The advert was never created and its video and ten photos
+  // ended up on the property created before it.
+  if (
+    !listingType
+    && Number(price) > 0
+    && !Number(bedroomDraft.bedrooms)
+    && !/\b(?:house|home|villa|bungalow|mansion|apartment|flat|townhouse|shop|office|warehouse|hostel|rent)\b/i.test(cleanCaption)
+    && (
+      /\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\b/i.test(cleanCaption)
+      || /\b\d+(?:\.\d+)?\s*(?:decimals?|acres?|hectares?)\b/i.test(cleanCaption)
+    )
+  ) {
+    listingType = 'land';
+  }
   const locationCaption = cleanCaption.replace(
     /\b(?:private|ready|freehold)?\s*m(?:ailo|olo|ilo)\s+(?:land\s+)?title\b/gi,
     ' '
@@ -5662,6 +5680,16 @@ async function createEmployeeReviewProperty({
 } = {}) {
   const agent = sessionData.agent || null;
   const customer = sessionData.customer_details || null;
+  // Same rule as the attach path: a photo already attached to another review
+  // record in this batch stays there rather than being copied onto a new one.
+  const claimedElsewhere = await employeeMediaClaimedElsewhere({
+    propertyId: '00000000-0000-0000-0000-000000000000',
+    storedMedia
+  });
+  if (claimedElsewhere.size) {
+    storedMedia = (Array.isArray(storedMedia) ? storedMedia : [])
+      .filter((item) => !(item?.sha256 && claimedElsewhere.has(item.sha256)));
+  }
   const listerName = normalizeInput(agent?.full_name || customer?.fullName || 'WhatsApp customer');
   const listerPhone = normalizeInput(agent?.whatsapp || agent?.phone || customer?.phone || '');
   const title = ownerForwardListingTitle({
@@ -5689,7 +5717,11 @@ async function createEmployeeReviewProperty({
     whatsapp_employee_intake: true,
     whatsapp_employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
     whatsapp_employee_trigger: EMPLOYEE_INTAKE_TRIGGER,
-    whatsapp_employee_message_id: inboundMessageId || null,
+    // Stored normalised: the browser worker's ordered replay re-sends the same
+    // message with a `:ordered-replay:<run>` suffix, and the already-processed
+    // guard has to recognise it as the same message.
+    whatsapp_employee_message_id: normalizeEmployeeSourceMessageId(inboundMessageId) || null,
+    whatsapp_employee_message_id_received: inboundMessageId || null,
     whatsapp_employee_sender_phone_suffix: employeeIntakePhoneSuffix(phone),
     whatsapp_employee_subject_role: sessionData.employee_role,
     whatsapp_employee_batch_mode: sessionData.property_batch_mode || 'multiple',
@@ -5857,6 +5889,44 @@ async function createEmployeeReviewProperty({
   return propertyId;
 }
 
+// One photo, one property.
+//
+// 30 Sep 2026, 11:10:03 → 11:13:39: Ronald forwarded seven adverts. Six review
+// records were created correctly, and then six of his photos were attached to a
+// second record as well — the Akright house ended up carrying 28 photos and
+// three videos belonging to a lake-view estate in Bwerenga, a plot in Nakawuka
+// and another in Namulanda.
+//
+// The second attach came from the browser worker's ordered replay, which
+// re-ingests the batch's media after the live pass with a mutated message id
+// (`…:ordered-replay:<run>`). The per-property sha256 set below stops a photo
+// being added to the SAME record twice; nothing stopped it being added to a
+// different one, and by replay time the current property was the last one
+// created. So every replayed photo landed on that record.
+//
+// A media item sent by this agent in this batch belongs to whichever property
+// claimed it first. If another record already holds it, leave it there.
+async function employeeMediaClaimedElsewhere({ propertyId, storedMedia = [] } = {}) {
+  const hashes = [...new Set(
+    (Array.isArray(storedMedia) ? storedMedia : [])
+      .map((item) => normalizeInput(item?.sha256))
+      .filter(Boolean)
+  )];
+  if (!hashes.length) return new Set();
+  const result = await db.query(
+    `SELECT jsonb_array_elements_text(extra_fields -> 'media_sha256') AS sha256
+       FROM properties
+      WHERE source = 'whatsapp_employee_intake'
+        AND id <> $1
+        AND status IN ('pending','approved')
+        AND created_at > NOW() - INTERVAL '7 days'
+        AND extra_fields -> 'media_sha256' ?| $2::text[]`,
+    [propertyId, hashes]
+  );
+  const claimed = new Set(hashes);
+  return new Set(result.rows.map((row) => normalizeInput(row.sha256)).filter((sha) => claimed.has(sha)));
+}
+
 async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inboundMessageId } = {}) {
   const propertyResult = await db.query(
     `SELECT id, extra_fields
@@ -5878,11 +5948,12 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   const existingPrimaryImageUrl = normalizeInput(existingImages.rows[0]?.primary_image_url || '');
   const existingHashes = new Set(Array.isArray(property.extra_fields?.media_sha256) ? property.extra_fields.media_sha256 : []);
   const removedImageUrls = new Set(property.extra_fields?.staff_removed_image_urls || []);
+  const claimedElsewhere = await employeeMediaClaimedElsewhere({ propertyId, storedMedia });
   const uniqueMedia = storedMedia.filter((item) => !removedImageUrls.has(item.url)).filter((item) => (
     !item.sha256
     || !existingHashes.has(item.sha256)
     || (imageOffset === 0 && item.kind === 'image' && item.publicEligible !== false)
-  ));
+  )).filter((item) => !(item.sha256 && claimedElsewhere.has(item.sha256)));
   if (!uniqueMedia.length) {
     if (imageOffset > 0) {
       const retainedVideoBlockers = (Array.isArray(property.extra_fields?.media_quality_blockers)
@@ -5980,7 +6051,8 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
         auto_publish: false,
         whatsapp_employee_intake: true,
         whatsapp_employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
-        whatsapp_employee_last_message_id: inboundMessageId || null,
+        whatsapp_employee_last_message_id: normalizeEmployeeSourceMessageId(inboundMessageId) || null,
+        whatsapp_employee_last_message_id_received: inboundMessageId || null,
         media_count: Number(property.extra_fields?.media_count || 0) + uniqueMedia.length,
         public_image_count: imageOffset + images.length,
         primary_image_url: existingPrimaryImageUrl || images[0]?.url || property.extra_fields?.primary_image_url || null,
@@ -7574,16 +7646,19 @@ async function handleEmployeeWhatsappIntake({
     }
 
     if (inboundMessageId) {
+      // Compared normalised, so an ordered replay of a message that was already
+      // processed live is recognised as the same message rather than treated as
+      // a new one and attached to whatever property is current by then.
       const duplicate = await db.query(
         `SELECT id
            FROM properties
           WHERE status IN ('pending','approved')
             AND (
-              extra_fields->>'whatsapp_employee_message_id' = $1
-              OR extra_fields->>'whatsapp_employee_last_message_id' = $1
+              extra_fields->>'whatsapp_employee_message_id' IN ($1, $2)
+              OR extra_fields->>'whatsapp_employee_last_message_id' IN ($1, $2)
             )
           LIMIT 1`,
-        [inboundMessageId]
+        [inboundMessageId, normalizeEmployeeSourceMessageId(inboundMessageId) || inboundMessageId]
       );
       if (duplicate.rows[0]) {
         return {
@@ -15890,6 +15965,9 @@ module.exports.__test = {
   fetchEmployeeMediaWithRetry,
   isTransientMediaFetchError,
   storeEmployeeMedia,
+  employeeMediaClaimedElsewhere,
+  attachEmployeeReviewMedia,
+  normalizeEmployeeSourceMessageId,
   englishTextConfidence,
   resolveDetectedLanguage,
   shouldAdoptDetectedLanguage,
