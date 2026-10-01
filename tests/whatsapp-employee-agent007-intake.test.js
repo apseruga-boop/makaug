@@ -708,6 +708,11 @@ const originalGetClient = db.getClient;
       };
     }
     if (/INSERT INTO notifications/i.test(sql)) return { rows: [{ id: 'notification-test' }] };
+    // "Has another property in this batch already claimed these photos?" In this
+    // fixture nothing has, so every item is this property's own.
+    if (/jsonb_array_elements_text\(extra_fields -> 'media_sha256'\)/i.test(sql)) {
+      return { rows: [] };
+    }
     throw new Error(`Unexpected test query: ${String(sql).slice(0, 80)}`);
   };
   db.getClient = async () => ({
