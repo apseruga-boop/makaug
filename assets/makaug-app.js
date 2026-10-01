@@ -19842,6 +19842,10 @@ function renderAdminDemandGaps(payload = {}) {
         ? `<span class="inline-block rounded-full bg-emerald-600 text-white text-[11px] font-bold px-2 py-0.5">${adminEscape(gap.supply_within_budget)} to call back</span>`
         : `<span class="text-red-600 font-semibold">0</span>`}</td>
       <td class="py-2 pr-3 text-gray-500 whitespace-nowrap">${adminEscape(when(gap.last_asked_at))}</td>
+      <td class="py-2 pr-3 whitespace-nowrap">
+        <button type="button" onclick='openLeadReferral(${adminLeadReferralArg({ kind: "demand", search_type: gap.search_type || "any", area: gap.area || "Anywhere", days, people: Number(gap.people || 0) })})' class="rounded-lg bg-gray-900 hover:bg-gray-700 text-white text-xs font-bold px-3 py-1.5">Send to agent</button>
+        ${gap.last_referral && gap.last_referral.agent_name ? `<div class="text-[11px] text-emerald-700 font-semibold mt-1">Sent to ${adminEscape(gap.last_referral.agent_name)} · ${adminEscape(when(gap.last_referral.at))}</div>` : ""}
+      </td>
     </tr>`;
   }).join("");
 
@@ -19872,6 +19876,7 @@ function renderAdminDemandGaps(payload = {}) {
             <th class="py-2 pr-3 text-center">Live now</th>
             <th class="py-2 pr-3 text-center">In their budget</th>
             <th class="py-2 pr-3">Last asked</th>
+            <th class="py-2 pr-3">Pass on</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -20053,6 +20058,8 @@ function renderAdminCrmLeadsRows(leads = []) {
       <div class="mt-3 flex items-center gap-2 flex-wrap border-t border-gray-100 pt-3">
         <input id="${adminAttr(bundleInputId)}" value="${adminAttr(bundleTag)}" class="min-w-[180px] flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" placeholder="Bundle tag, e.g. Kampala-rent-Jul">
         <button type="button" onclick="tagAdminCrmLeadBundle(${leadIdArg}, ${JSON.stringify(bundleInputId).replace(/</g, "\\u003c")})" class="border border-green-300 text-green-800 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">Save bundle</button>
+        ${String(lead.id || "").startsWith("mortgage-enquiry:") ? "" : `<button type="button" onclick='openLeadReferral(${adminLeadReferralArg({ kind: "lead", id: String(lead.id || ""), area: lead.location || "", label: lead.contact_name || "" })})' class="rounded-lg bg-gray-900 hover:bg-gray-700 text-white text-xs font-bold px-3 py-1.5">Send to agent</button>`}
+        ${metadata.last_referral && metadata.last_referral.agent_name ? `<span class="text-[11px] text-emerald-700 font-semibold">Sent to ${adminEscape(metadata.last_referral.agent_name)}</span>` : ""}
         <select onchange="setAdminCrmLeadStatus(${leadIdArg}, this.value)" class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-semibold" aria-label="Lead status">
           ${adminLeadStatusOptions().map(([value, label]) => `<option value="${value}" ${String(lead.lead_status || "open") === value ? "selected" : ""}>${label}</option>`).join("")}
         </select>
@@ -20094,6 +20101,176 @@ function adminLeadHandoffTone(status = "") {
   if (["sent", "queued", "contact_shown"].includes(status)) return "bg-green-50 text-green-800 border border-green-100";
   if (["no_lister_contact", "failed"].includes(status)) return "bg-red-50 text-red-700 border border-red-100";
   return "bg-gray-50 text-gray-600 border border-gray-200";
+}
+
+function adminLeadReferralArg(value) {
+  // Safe inside a single-quoted onclick attribute.
+  return JSON.stringify(value).replace(/'/g, "&#39;").replace(/</g, "\\u003c");
+}
+
+let leadReferralState = null;
+
+function leadReferralPreviewNumber() {
+  try { return localStorage.getItem("makaug_referral_preview_to") || ""; } catch (_error) { return ""; }
+}
+
+function rememberLeadReferralPreviewNumber(value) {
+  try { localStorage.setItem("makaug_referral_preview_to", value); } catch (_error) { /* private mode */ }
+}
+
+function ensureLeadReferralModal() {
+  let modal = document.getElementById("lead-referral-modal");
+  if (modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "lead-referral-modal";
+  modal.className = "fixed inset-0 z-[9999] hidden items-center justify-center bg-black/40 p-4";
+  modal.innerHTML = `
+    <div class="w-full max-w-xl rounded-2xl bg-white shadow-xl p-5 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div class="text-[11px] font-black uppercase tracking-wide text-gray-500">Send lead to an agent</div>
+          <h3 id="lead-referral-title" class="text-lg font-black text-gray-900 mt-1">Lead</h3>
+          <p class="text-xs text-gray-500 mt-1">Only approved, registered makaug agents are listed. Agents who cover this area are at the top.</p>
+        </div>
+        <button type="button" onclick="closeLeadReferral()" class="w-8 h-8 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50" aria-label="Close">✕</button>
+      </div>
+      <label class="block text-xs font-bold text-gray-700 mt-4" for="lead-referral-agent">Agent</label>
+      <select id="lead-referral-agent" onchange="refreshLeadReferralMessage()" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"><option value="">Loading agents…</option></select>
+      <label class="block text-xs font-bold text-gray-700 mt-4" for="lead-referral-text">WhatsApp message (you can edit it)</label>
+      <textarea id="lead-referral-text" rows="12" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono leading-snug"></textarea>
+      <div class="mt-4 grid sm:grid-cols-[1fr_auto] gap-2 items-end">
+        <div>
+          <label class="block text-xs font-bold text-gray-700" for="lead-referral-preview-to">Preview to my WhatsApp</label>
+          <input id="lead-referral-preview-to" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="+44 7757 773202">
+        </div>
+        <button type="button" onclick="sendLeadReferral(true)" class="border border-gray-300 text-gray-800 hover:bg-gray-50 rounded-lg px-3 py-2 text-sm font-bold">Send me a preview</button>
+      </div>
+      <div id="lead-referral-status" class="text-xs text-gray-600 mt-3 min-h-[1rem]"></div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button type="button" onclick="closeLeadReferral()" class="border border-gray-200 rounded-lg px-4 py-2 text-sm font-semibold">Cancel</button>
+        <button type="button" id="lead-referral-send" onclick="sendLeadReferral(false)" class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-black disabled:opacity-60">Send to agent</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function closeLeadReferral() {
+  const modal = document.getElementById("lead-referral-modal");
+  if (modal) { modal.classList.add("hidden"); modal.classList.remove("flex"); }
+  leadReferralState = null;
+}
+
+function leadReferralEndpoint(state = leadReferralState) {
+  if (!state) return "";
+  return state.kind === "demand"
+    ? "/api/admin/demand-gaps/referral"
+    : `/api/admin/leads/${encodeURIComponent(state.id)}/referral`;
+}
+
+function leadReferralBody(extra = {}) {
+  const state = leadReferralState || {};
+  const base = state.kind === "demand"
+    ? { search_type: state.search_type, area: state.area, days: state.days }
+    : {};
+  return { ...base, agent_id: document.getElementById("lead-referral-agent")?.value || "", ...extra };
+}
+
+async function openLeadReferral(state = {}) {
+  if (!canUseLiveAdminApi()) { toast("Sign in as admin to send leads to agents."); return; }
+  leadReferralState = { ...state };
+  const modal = ensureLeadReferralModal();
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+  const title = document.getElementById("lead-referral-title");
+  if (title) {
+    title.textContent = state.kind === "demand"
+      ? `${state.people || 0} ${Number(state.people) === 1 ? "person" : "people"} looking: ${String(state.search_type || "any")} in ${state.area || "Anywhere"}`
+      : `Lead${state.label ? `: ${state.label}` : ""}${state.area ? ` — ${state.area}` : ""}`;
+  }
+  const previewInput = document.getElementById("lead-referral-preview-to");
+  if (previewInput && !previewInput.value) previewInput.value = leadReferralPreviewNumber();
+  document.getElementById("lead-referral-text").value = "";
+  document.getElementById("lead-referral-status").textContent = "";
+  const select = document.getElementById("lead-referral-agent");
+  select.innerHTML = `<option value="">Loading agents…</option>`;
+  try {
+    const area = state.area && !/^anywhere$/i.test(state.area) ? state.area : "";
+    const response = await apiRequest(`/api/admin/lead-referrals/agents?area=${encodeURIComponent(area)}`, { headers: adminAuthHeaders() });
+    const agents = Array.isArray(response?.data) ? response.data : [];
+    if (!agents.length) {
+      select.innerHTML = `<option value="">No approved agents with a WhatsApp number yet</option>`;
+      return;
+    }
+    const option = (a) => `<option value="${adminAttr(a.id)}">${adminEscape(a.full_name)}${a.company_name ? ` — ${adminEscape(a.company_name)}` : ""}${a.match ? " ★ covers this area" : ""}${a.live_listings ? ` (${a.live_listings} live)` : ""}</option>`;
+    const matched = agents.filter((a) => a.match);
+    const others = agents.filter((a) => !a.match);
+    select.innerHTML = `<option value="">Choose an agent…</option>`
+      + (matched.length ? `<optgroup label="Covers this area">${matched.map(option).join("")}</optgroup>` : "")
+      + `<optgroup label="${matched.length ? "Other approved agents" : "Approved agents"}">${others.map(option).join("")}</optgroup>`;
+  } catch (error) {
+    select.innerHTML = `<option value="">Could not load agents</option>`;
+    document.getElementById("lead-referral-status").textContent = error?.message || "Could not load agents.";
+  }
+}
+
+async function refreshLeadReferralMessage() {
+  const status = document.getElementById("lead-referral-status");
+  const textArea = document.getElementById("lead-referral-text");
+  const agentId = document.getElementById("lead-referral-agent")?.value;
+  if (!agentId || !leadReferralState) { textArea.value = ""; return; }
+  status.textContent = "Writing the message…";
+  try {
+    const response = await apiRequest(leadReferralEndpoint(), {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: leadReferralBody({ dry_run: true })
+    });
+    textArea.value = response?.data?.text || "";
+    status.textContent = "Check the message, send yourself a preview if you like, then send it to the agent.";
+  } catch (error) {
+    status.textContent = error?.message || "Could not prepare the message.";
+  }
+}
+
+async function sendLeadReferral(preview = false) {
+  const status = document.getElementById("lead-referral-status");
+  const agentId = document.getElementById("lead-referral-agent")?.value;
+  const textValue = document.getElementById("lead-referral-text")?.value || "";
+  if (!agentId) { status.textContent = "Choose an agent first."; return; }
+  if (!textValue.trim()) { status.textContent = "The message is empty."; return; }
+  const previewTo = (document.getElementById("lead-referral-preview-to")?.value || "").trim();
+  if (preview && !previewTo) { status.textContent = "Add your WhatsApp number (with country code) for the preview."; return; }
+  const sendButton = document.getElementById("lead-referral-send");
+  if (!preview && sendButton) sendButton.disabled = true;
+  status.textContent = preview ? "Sending you a preview…" : "Sending to the agent…";
+  try {
+    const response = await apiRequest(leadReferralEndpoint(), {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: leadReferralBody({ text: textValue, ...(preview ? { preview_to: previewTo } : {}) })
+    });
+    if (preview) {
+      rememberLeadReferralPreviewNumber(previewTo);
+      status.textContent = `Preview sent to ${previewTo}. Nothing has gone to the agent yet.`;
+      return;
+    }
+    const agentName = response?.data?.agent?.full_name || "the agent";
+    toast(`Lead sent to ${agentName} on WhatsApp.`);
+    const wasDemand = leadReferralState?.kind === "demand";
+    closeLeadReferral();
+    if (wasDemand) {
+      apiRequest("/api/admin/demand-gaps?days=90&limit=20", { headers: adminAuthHeaders() })
+        .then((fresh) => renderAdminDemandGaps(fresh?.data || {}))
+        .catch(() => {});
+    } else if (typeof applyAdminCrmLeadFilters === "function") {
+      applyAdminCrmLeadFilters();
+    }
+  } catch (error) {
+    status.textContent = error?.message || "Could not send.";
+  } finally {
+    if (sendButton) sendButton.disabled = false;
+  }
 }
 
 async function setAdminCrmLeadStatus(leadId, status) {

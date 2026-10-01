@@ -2732,10 +2732,13 @@ async function buildWhatsappListingEnquiryResponse(enquiry = {}, { phone = '', l
     const listerReachable = listerNumber
       ? digitsKey(listerNumber).length === 9 && digitsKey(listerNumber) !== digitsKey(phone) && !makaugNumbers.includes(digitsKey(listerNumber))
       : Boolean(listing?.agent_email || listing?.lister_email);
+    const agentNotApproved = Boolean(listing?.agent_id)
+      && (listing.agent_is_source_profile || String(listing.agent_status || '').toLowerCase() !== 'approved');
     listerNotified = Boolean(
       listing
       && listing.is_live
       && !listing.is_found_online
+      && !agentNotApproved
       && String(process.env.LEAD_HANDOFF_ENABLED || 'true').toLowerCase() !== 'false'
       && listerReachable
     );

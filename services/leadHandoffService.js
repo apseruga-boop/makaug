@@ -66,6 +66,25 @@ function handoffWhatsappSource() {
 /**
  * Load everything the handoff needs about a listing in one query.
  */
+// An agent row created by the social-source sweeps (not a person who registered
+// with makaug). The same markers migration 057 used to suspend them.
+function sourceAgentProfileSql(alias = 'a') {
+  const a = alias ? `${alias}.` : '';
+  return `(${a}id IS NOT NULL AND ${a}user_id IS NULL AND (
+    COALESCE(${a}licence_number, '') ~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'
+    OR COALESCE(${a}verification_reason, '') ~* '(public social source|source profile|source sweep)'
+  ))`;
+}
+
+// Who makaug may WhatsApp about a lead: a registered agent whose profile is
+// approved or who signed up themselves (has a makaug login), or the private
+// owner who listed with makaug. Never a scraped poster, never a source-sweep
+// agent profile, never a suspended agent.
+function registeredAgentSql(alias = 'a') {
+  const a = alias ? `${alias}.` : '';
+  return `(LOWER(COALESCE(${a}status, '')) = 'approved' AND NOT ${sourceAgentProfileSql(alias)})`;
+}
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function loadListingContact(db, listingId) {
@@ -77,6 +96,7 @@ async function loadListingContact(db, listingId) {
        a.full_name AS agent_name, a.phone AS agent_phone, a.whatsapp AS agent_whatsapp,
        a.email AS agent_email, a.user_id AS agent_user_id, a.status AS agent_status,
        a.makaug_agent_number,
+       ${sourceAgentProfileSql('a')} AS agent_is_source_profile,
        ${foundOnlinePropertySql('p')} AS is_found_online,
        ${publicLivePropertyStatusSql('p')} AS is_live
      FROM properties p
@@ -283,6 +303,15 @@ async function handOffListingLead(db, { lead, listing: listingInput = null, list
       await recordLeadHandoff(db, lead.id, { status: 'test_skipped', detail: { kind } });
       return { status: 'test_skipped', lister };
     }
+    if (listing.agent_id && (listing.agent_is_source_profile || String(listing.agent_status || '').toLowerCase() !== 'approved')) {
+      // Not a registered, approved agent: makaug does not message them. The
+      // lead waits in the Lead Centre for staff to refer to an approved agent.
+      await recordLeadHandoff(db, lead.id, {
+        status: 'agent_not_approved',
+        detail: { kind, summary: `Listing agent is not an approved makaug agent (status ${listing.agent_status || 'unknown'}); not messaged — refer from the Lead Centre.` }
+      });
+      return { status: 'agent_not_approved', lister };
+    }
     if (listing.is_found_online) {
       await recordLeadHandoff(db, lead.id, {
         status: 'contact_shown',
@@ -418,6 +447,8 @@ async function acknowledgeTeamLead(db, { lead, seeker = {}, seekerMessage = '', 
 }
 
 module.exports = {
+  registeredAgentSql,
+  sourceAgentProfileSql,
   _resetSendLog: () => sendLog.clear(),
   acknowledgeTeamLead,
   deliverWhatsapp,

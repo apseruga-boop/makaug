@@ -109,6 +109,7 @@ const {
   mergePlacementRowsWithCatalog,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
+const leadReferral = require('../services/leadReferralService');
 const leadHandoff = require('../services/leadHandoffService');
 const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
@@ -11736,7 +11737,8 @@ router.get('/demand-gaps', async (req, res, next) => {
            INITCAP(COALESCE(NULLIF(TRIM(preferred_area), ''), 'anywhere')) AS area,
            phone,
            budget,
-           created_at
+           created_at,
+           payload->'last_referral' AS last_referral
          FROM property_leads
          WHERE purpose = 'search'
            AND created_at >= NOW() - ($1 || ' days')::interval
@@ -11751,7 +11753,9 @@ router.get('/demand-gaps', async (req, res, next) => {
            MAX(budget)::bigint                 AS highest_budget,
            ROUND(AVG(budget))::bigint          AS typical_budget,
            MAX(created_at)                     AS last_asked_at,
-           (ARRAY_AGG(DISTINCT phone))[1:10]   AS recent_phones
+           (ARRAY_AGG(DISTINCT phone))[1:10]   AS recent_phones,
+           (ARRAY_AGG(last_referral ORDER BY (last_referral->>'at') DESC NULLS LAST))[1] AS last_referral,
+           COUNT(*) FILTER (WHERE last_referral IS NULL)::int AS not_yet_referred
          FROM unmet
          GROUP BY search_type, area
        )
@@ -11801,6 +11805,92 @@ router.get('/demand-gaps', async (req, res, next) => {
     if (['42P01', '42703'].includes(error.code)) {
       return res.json({ ok: true, data: { window_days: 0, totals: { requests: 0, people: 0, areas: 0 }, gaps: [] }, provider_missing: true });
     }
+    return next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Refer a lead to an agent: pick a registered agent, makaug WhatsApps them the
+// lead. Only approved, registered agents are offered (never scraped posters).
+// Every send can be previewed on the admin's own phone first.
+// ---------------------------------------------------------------------------
+
+router.get('/lead-referrals/agents', async (req, res, next) => {
+  try {
+    const agents = await leadReferral.listReferralAgents(db, {
+      area: cleanText(req.query.area || ''),
+      search: cleanText(req.query.q || ''),
+      limit: req.query.limit
+    });
+    return res.json({ ok: true, data: agents });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+async function runReferral(req, res, { need, onSent, relatedLeadId = null, kind }) {
+  const agent = await leadReferral.loadReferralAgent(db, cleanText(req.body.agent_id));
+  if (!agent) return res.status(400).json({ ok: false, error: 'Pick an approved makaug agent with a WhatsApp number' });
+  if (!need.people.length) return res.status(400).json({ ok: false, error: 'This lead has no phone number to pass on' });
+  const generated = leadReferral.buildAgentReferralMessage({ agent, need });
+  const body = String(req.body.text || '').trim().slice(0, 3500) || generated;
+  if (req.body.dry_run === true || req.body.dry_run === 'true') {
+    return res.json({ ok: true, data: { text: generated, agent, people: need.people.length } });
+  }
+  const previewTo = cleanText(req.body.preview_to || '');
+  if (previewTo && previewTo.replace(/\D/g, '').length < 9) {
+    return res.status(400).json({ ok: false, error: 'Preview number looks wrong — include the country code, e.g. +44… or +256…' });
+  }
+  const delivery = await leadReferral.sendReferral(db, {
+    agent, text: body, previewTo, actor: adminActorId(req), relatedLeadId, kind
+  });
+  const delivered = ['queued', 'sent', 'simulated'].includes(delivery.status);
+  if (delivered && !previewTo) {
+    const referral = {
+      agent_id: agent.id,
+      agent_name: agent.full_name,
+      at: new Date().toISOString(),
+      by: adminActorId(req),
+      people: need.people.length
+    };
+    await onSent(referral);
+    await writeAudit('lead_referred_to_agent', { kind, agent_id: agent.id, people: need.people.length, lead_id: relatedLeadId }, adminActorId(req));
+  }
+  return res.status(delivered ? 200 : 502).json({
+    ok: delivered,
+    data: { delivery, text: body, agent: { id: agent.id, full_name: agent.full_name }, preview: Boolean(previewTo) },
+    error: delivered ? undefined : `WhatsApp not sent (${delivery.reason || delivery.status})`
+  });
+}
+
+router.post('/demand-gaps/referral', async (req, res, next) => {
+  try {
+    const group = await leadReferral.loadDemandGroup(db, {
+      searchType: cleanText(req.body.search_type || 'any'),
+      area: cleanText(req.body.area || 'Anywhere'),
+      days: req.body.days
+    });
+    return await runReferral(req, res, {
+      kind: 'demand_gap',
+      need: { type: cleanText(req.body.search_type || 'any'), area: cleanText(req.body.area || ''), people: group.people },
+      onSent: (referral) => leadReferral.markDemandReferred(db, group.ids, referral)
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/leads/:id/referral', async (req, res, next) => {
+  try {
+    const loaded = await leadReferral.loadLeadNeed(db, req.params.id);
+    if (!loaded) return res.status(404).json({ ok: false, error: 'Lead not found' });
+    return await runReferral(req, res, {
+      kind: 'lead',
+      relatedLeadId: loaded.lead.id,
+      need: loaded.need,
+      onSent: (referral) => leadReferral.markLeadReferred(db, loaded.lead, referral)
+    });
+  } catch (error) {
     return next(error);
   }
 });
