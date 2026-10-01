@@ -56,6 +56,15 @@ function ago(value) {
   return `${days} days ago`;
 }
 
+// What the person actually typed, without the bot's own bookkeeping around it.
+function cleanSaid(value = '') {
+  const said = text(value)
+    .replace(/^No approved listings found for (natural )?query( in [a-z_]+)?:\s*/i, '')
+    .replace(/^(Auto-captured[^.]*\.?|WhatsApp property request had no exact match\.?)\s*/i, '')
+    .trim();
+  return said.length >= 3 ? said : '';
+}
+
 function displayPhone(value = '') {
   const digits = String(value).replace(/\D/g, '');
   if (digits.length === 12 && digits.startsWith('256')) return `+256 ${digits.slice(3, 6)} ${digits.slice(6)}`;
@@ -81,7 +90,7 @@ function buildAgentReferralMessage({ agent = {}, need = {} } = {}) {
     if (p.name) lines.push(`Name: ${p.name}`);
     if (p.phone) lines.push(`WhatsApp: ${displayPhone(p.phone)}`);
     if (money(p.budget)) lines.push(`Budget: up to ${money(p.budget)}`);
-    if (p.said) lines.push(`What they said: "${text(p.said).slice(0, 220)}"`);
+    if (cleanSaid(p.said)) lines.push(`What they said: "${cleanSaid(p.said).slice(0, 220)}"`);
     if (p.askedAt) lines.push(`Asked: ${ago(p.askedAt)}`);
   } else {
     lines.push(`We have ${people.length} leads for you: people looking for ${what}${where}.`);
@@ -310,6 +319,7 @@ async function markLeadReferred(db, lead, referral = {}) {
 
 module.exports = {
   buildAgentReferralMessage,
+  cleanSaid,
   listReferralAgents,
   loadDemandGroup,
   loadLeadNeed,
