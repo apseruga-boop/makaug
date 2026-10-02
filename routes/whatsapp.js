@@ -4022,6 +4022,7 @@ function rememberEmployeePendingMedia(sessionData = {}, storedMedia = [], inboun
 }
 
 function clearEmployeePendingMedia(sessionData = {}) {
+  delete sessionData.pending_media_from_burst;
   delete sessionData.pending_property_media;
   delete sessionData.pending_property_media_message_id;
   delete sessionData.pending_property_media_stored_at;
@@ -5694,10 +5695,23 @@ async function createEmployeeReviewProperty({
     propertyId: '00000000-0000-0000-0000-000000000000',
     storedMedia
   });
-  if (claimedElsewhere.size) {
+  // An agent posting their own stock sent this photo WITH this caption, so it is
+  // this property's photo even when the same picture (a company flyer, say) is
+  // on another of their listings. Dropping it left Jonathan's Kiwenda estate
+  // with no photo while he was told "1 photo saved". Keep it and flag it for
+  // the moderator. Staff batches keep the old rule (a photo already on another
+  // record stays there) but it is now reported instead of disappearing.
+  const reusedMedia = (Array.isArray(storedMedia) ? storedMedia : [])
+    .filter((item) => item?.sha256 && claimedElsewhere.has(item.sha256));
+  sessionData.last_create_media_reused = reusedMedia.length;
+  sessionData.last_create_media_dropped = 0;
+  if (claimedElsewhere.size && sessionData.whatsapp_agent_self_intake !== true) {
+    const before = (Array.isArray(storedMedia) ? storedMedia : []).length;
     storedMedia = (Array.isArray(storedMedia) ? storedMedia : [])
       .filter((item) => !(item?.sha256 && claimedElsewhere.has(item.sha256)));
+    sessionData.last_create_media_dropped = before - storedMedia.length;
   }
+  sessionData.last_create_media_kept = (Array.isArray(storedMedia) ? storedMedia : []).length;
   const listerName = normalizeInput(agent?.full_name || customer?.fullName || 'WhatsApp customer');
   const listerPhone = normalizeInput(agent?.whatsapp || agent?.phone || customer?.phone || '');
   const title = ownerForwardListingTitle({
@@ -5722,6 +5736,12 @@ async function createEmployeeReviewProperty({
   const extraFields = {
     review_only: true,
     auto_publish: false,
+    ...(reusedMedia.length ? {
+      media_also_on_other_property: reusedMedia.map((item) => item.sha256),
+      media_reuse_note: sessionData.whatsapp_agent_self_intake === true
+        ? 'The agent sent a photo that is also on another listing (e.g. a shared flyer). Check it shows this property.'
+        : 'A photo sent for this property is already on another listing and was not attached.'
+    } : {}),
     whatsapp_employee_intake: true,
     whatsapp_employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
     whatsapp_employee_trigger: EMPLOYEE_INTAKE_TRIGGER,
@@ -6741,6 +6761,13 @@ function agentPendingNotice(data = {}) {
   if (items.length === 1) {
     const item = items[0];
     if (!item.caption) {
+      if (data.pending_media_from_burst === true) {
+        return [
+          `📸 I got ${mediaWords(item.media) || 'a photo'} with no description while several properties were coming in, so I cannot tell which property ${item.media.length === 1 ? 'it belongs' : 'they belong'} to.`,
+          '',
+          'Please send it again *together with that property\'s caption* (what it is, area, price) and I will add it to the right one.'
+        ].join('\n');
+      }
       return [`📸 Got your ${mediaWords(item.media) || 'photos'} — thank you!`, '', ...askForDetails].join('\n');
     }
     if (!item.media.length) {
@@ -7913,6 +7940,7 @@ async function handleEmployeeWhatsappIntake({
             sessionData: data
           });
           data.current_property_id = propertyId;
+          noteEmployeePropertyCreated(data);
           data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
           data.total_media_count = Number(data.total_media_count || 0) + pendingStoredMedia.length;
           delete data.pending_property_caption;
@@ -7933,7 +7961,7 @@ async function handleEmployeeWhatsappIntake({
               ? `${agentSelfIntakeSavedReply({ data, facts: textOnlyFacts, storedMedia: pendingStoredMedia, caption: textCaption })}${promotedPrompt ? `\n\n${agentPendingNotice(data)}` : ''}`
               : (data.property_batch_mode || 'multiple') === 'single'
               ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${pendingStoredMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
-              : promotedPrompt
+              : [staffDroppedMediaWarning(data, textCaption), promotedPrompt.trim()].filter(Boolean).join('\n\n')
           };
         } catch (error) {
           logger.error('WhatsApp employee pending-media review save failed:', error);
@@ -8043,9 +8071,17 @@ async function handleEmployeeWhatsappIntake({
       && pendingStoredMediaBeforeMessage.length > 0
       && employeeCaptionLikelySameProperty(pendingCaptionBeforeMessage, caption, data);
 
+    // A captionless photo in the middle of a forwarded burst: hold it, do not guess.
+    // A photo that is part of an album (media_count > 1) still follows its
+    // captioned first photo, as WhatsApp sends albums in order.
+    const heldFromBurst = !caption
+      && Boolean(data.current_property_id)
+      && Number(runtime.mediaCount || 0) <= 1
+      && employeeInForwardedBurst(data);
+    if (heldFromBurst) data.pending_media_from_burst = true;
     if (
       !shouldStartProperty
-      && !data.current_property_id
+      && (!data.current_property_id || heldFromBurst)
       && !(
         startsIncompleteNewProperty
         && pendingStoredMediaBeforeMessage.length
@@ -8220,6 +8256,7 @@ async function handleEmployeeWhatsappIntake({
       try {
         const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption, facts, storedMedia, sessionData: data });
         data.current_property_id = propertyId;
+        noteEmployeePropertyCreated(data);
         data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
         if (data.employee_intake_recovery_skip_existing_matches !== true) {
           data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
@@ -8238,7 +8275,7 @@ async function handleEmployeeWhatsappIntake({
           message: agentSelfIntakeSavedReply({ data, facts, storedMedia, openedAgentSelfIntake, caption, albumCount: Number(runtime.mediaCount || 0) })
             ?? ((data.property_batch_mode || 'multiple') === 'single'
               ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
-              : '')
+              : staffDroppedMediaWarning(data, caption))
         };
       } catch (error) {
         logger.error('WhatsApp employee review property save failed:', error);
@@ -10291,6 +10328,32 @@ function scheduleEmployeeBatchSummary(phone) {
   employeeBatchBursts.set(key, burst);
 }
 
+/**
+ * Forwarded bursts. Arthur forwarded ten adverts at once on 2 Oct; they reach
+ * us in the same second and in no reliable order, so a photo with no caption
+ * cannot be pinned to "the property just created" — two house photos landed on
+ * a Naalya plot. When several properties were created in the last few seconds,
+ * a captionless photo is held and asked about instead of guessed.
+ */
+const EMPLOYEE_BURST_WINDOW_MS = 30000;
+function noteEmployeePropertyCreated(data = {}) {
+  const now = Date.now();
+  data.recent_property_created_ms = [...(Array.isArray(data.recent_property_created_ms) ? data.recent_property_created_ms : []), now]
+    .filter((t) => now - Number(t) < 10 * 60000)
+    .slice(-10);
+}
+function employeeInForwardedBurst(data = {}) {
+  const now = Date.now();
+  const recent = (Array.isArray(data.recent_property_created_ms) ? data.recent_property_created_ms : [])
+    .filter((t) => now - Number(t) < EMPLOYEE_BURST_WINDOW_MS);
+  return recent.length >= 2;
+}
+function staffDroppedMediaWarning(data = {}, caption = '') {
+  if (data.whatsapp_agent_self_intake === true) return '';
+  if (!(Number(data.last_create_media_dropped) > 0) || Number(data.last_create_media_kept) > 0) return '';
+  return `⚠️ Saved ${employeeCaptionLabel(caption)} to review, but its photo is already on another listing from the last 7 days, so it was not attached. Send a different photo of this property.`;
+}
+
 function cancelEmployeeBatchSummary(phone) {
   const key = String(phone || '');
   const existing = employeeBatchBursts.get(key);
@@ -10352,7 +10415,9 @@ async function buildEmployeeBatchSummary(phone, since) {
   if (pendingMedia.length || pendingCaption) {
     const missing = pendingCaption ? employeePropertyMissing(employeePropertyFacts(pendingCaption, data)) : [];
     notSaved.push({
-      label: pendingCaption ? shortEmployeeLabel(pendingCaption) : 'Media sent without a caption',
+      label: pendingCaption
+        ? shortEmployeeLabel(pendingCaption)
+        : (data.pending_media_from_burst === true ? 'Photo with no caption, sent in the middle of several properties (held, not guessed)' : 'Media sent without a caption'),
       needs: !pendingMedia.length
         ? 'its photo or video (the caption arrived on its own)'
         : !pendingCaption
@@ -16444,6 +16509,8 @@ module.exports.__test = {
   agentSelfIntakeSessionData,
   agentSelfIntakeSavedReply,
   agentPendingNotice,
+  noteEmployeePropertyCreated,
+  employeeInForwardedBurst,
   agentMissingPhrases,
   applyAgentCorrection,
   isOwnAgentSelfIntake,

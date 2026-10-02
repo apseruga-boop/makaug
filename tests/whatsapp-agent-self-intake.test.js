@@ -237,3 +237,26 @@ test('Luganda and Swahili captions are understood', () => {
   assert.strictEqual(withEnglishPropertyTerms('3 bedroom house in Kira 1.2m'), '3 bedroom house in Kira 1.2m',
     'English is left exactly as it was');
 });
+
+const { noteEmployeePropertyCreated, employeeInForwardedBurst } = require('../routes/whatsapp').__test;
+
+test('a forwarded burst is recognised, a single album is not', () => {
+  const data = {};
+  noteEmployeePropertyCreated(data);
+  assert.strictEqual(employeeInForwardedBurst(data), false, 'one property just created: its album photos follow it');
+  noteEmployeePropertyCreated(data);
+  assert.strictEqual(employeeInForwardedBurst(data), true, 'two created within seconds: a captionless photo cannot be placed');
+  data.recent_property_created_ms = [Date.now() - 120000, Date.now() - 90000];
+  assert.strictEqual(employeeInForwardedBurst(data), false, 'minutes apart is not a burst');
+});
+
+test('a photo held from a burst is asked about, not guessed', () => {
+  const data = {
+    ...agentSelfIntakeSessionData(KATAMBA),
+    pending_media_from_burst: true,
+    pending_property_media: [{ mimeType: 'image/jpeg', url: 'https://x/9.jpg' }]
+  };
+  const notice = agentPendingNotice(data);
+  assert.match(notice, /cannot tell which property/);
+  assert.match(notice, /together with that property's caption/);
+});

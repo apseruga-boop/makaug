@@ -23,6 +23,11 @@ function photoDataUrl() {
   fs.unlinkSync(file);
   return url;
 }
+let fixed = null;
+function fixedPhoto() {
+  if (!fixed) fixed = photoDataUrl();
+  return fixed;
+}
 function fileDataUrl(file, mime) {
   return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
 }
@@ -39,7 +44,7 @@ async function send(phone, { body = '', image = 0, video = false, voice = false,
   seq += 1;
   const payload = { phone, body, message_id: `e2e-${Date.now()}-${seq}`, created_at: new Date().toISOString() };
   payload.metadata = {};
-  if (image) { payload.media_type = 'image/jpeg'; payload.metadata.image_previews = [{ data_url: photoDataUrl(), mime_type: 'image/jpeg', capture_source: 'whatsapp_media_viewer_original_pixels', width: 800, height: 600 }]; }
+  if (image) { payload.media_type = 'image/jpeg'; payload.metadata.image_previews = [{ data_url: image === 'fixed' ? fixedPhoto() : photoDataUrl(), mime_type: 'image/jpeg', capture_source: 'whatsapp_media_viewer_original_pixels', width: 800, height: 600 }]; }
   if (video) { payload.media_type = 'video/mp4'; payload.metadata.media_previews = [{ data_url: fileDataUrl(path.join(MEDIA_DIR, 'clip.mp4'), 'video/mp4'), mime_type: 'video/mp4' }]; }
   if (voice) { payload.media_type = 'audio/ogg'; payload.metadata.voice_audio_data_url = fileDataUrl(path.join(MEDIA_DIR, 'voice.ogg'), 'audio/ogg'); }
   if (count) payload.media_count = count;
@@ -139,6 +144,25 @@ const SCENARIOS = {
     await send(p, { image: 4, count: 4 });
     await send(p, { image: 5, body: 'Plot of land for sale in Matugga, Wakiso 50x100 at 35m', count: 2 });
     await send(p, { image: 6, count: 2 });
+  },
+  async sameFlyerTwoEstates(p) {
+    // Jonathan, 2 Oct 08:39: two estates, the same flyer picture, the first caption short of rent/sale.
+    await send(p, { image: 'fixed', body: '*KIWENDA-LUWUNGA ESTATE 100By50Fts @ 25M With Ready Landtitle*' });
+    await send(p, { image: 'fixed', body: 'Namuseera estate plots 100by50 for sale in Kira, Wakiso @30m ready land title' });
+    await send(p, { body: 'For Sale' });
+  },
+  async forwardedBurst(p) {
+    // Arthur, 2 Oct 07:08: ten adverts forwarded at once; some photos have no caption.
+    await Promise.all([
+      send(p, { image: 1, body: 'BANK SALE Bweyogerere 4 bedrooms house on 13 decimals plot UGX 250 million' }),
+      send(p, { image: 2, body: '34 decimals plot NAGURU UGX 1.6 billion for sale' }),
+      send(p, { image: 3, body: 'Kyanja commercial on 20 decimals plot for sale 900m' })
+    ]);
+    await Promise.all([
+      send(p, { image: 4, body: 'Mbalwa estate Kyaliwajjala road 4 bedroom house for sale 450m' }),
+      send(p, { video: true, body: 'NAALYA 15 decimals plot for sale UGX 230 million' }),
+      send(p, { image: 5 })
+    ]);
   },
   async correctionAfterSave(p) {
     await send(p, { image: 5, body: '3 bedroom house for rent in Kyanja, Kampala 900k' });

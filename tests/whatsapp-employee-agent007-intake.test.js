@@ -572,7 +572,10 @@ assert(routeSource.includes("? ''\n            : `Already saved to review"), 'mu
 // one completion summary. The behaviour itself is covered directly by
 // "staff replies are left exactly as they were" in
 // tests/whatsapp-agent-self-intake.test.js.
-assert(/\(data\.property_batch_mode \|\| 'multiple'\) === 'single'[\s\S]{0,500}: ''/.test(routeSource), 'multiple batches must wait for one final completion summary');
+// The one exception (2 Oct 2026): a property saved without its photo, because
+// that photo is already on another listing, says so rather than staying silent.
+assert(/\(data\.property_batch_mode \|\| 'multiple'\) === 'single'[\s\S]{0,500}: (?:''|staffDroppedMediaWarning\(data, caption\))/.test(routeSource), 'multiple batches must wait for one final completion summary');
+assert(/function staffDroppedMediaWarning[\s\S]{0,400}last_create_media_dropped[\s\S]{0,200}return ''/.test(routeSource), 'the warning is empty unless a photo was actually dropped');
 const voiceDetectorBlocks = copilotSource.match(/const hasVoiceNote = \(root, text = ''\) => \{[\s\S]*?\n    \};\n    const hasCallLog/g) || [];
 assert.equal(voiceDetectorBlocks.length, 2, 'both browser snapshot paths must define voice-specific detection');
 assert(voiceDetectorBlocks.every((block) => !block.includes('[aria-label*="Play" i]')), 'generic Play buttons must not classify property videos as voice notes');
