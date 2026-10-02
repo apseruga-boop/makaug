@@ -277,7 +277,14 @@ function mapRemoteAgentForUi(agent = {}) {
     data_retention_notice_at: agent.data_retention_notice_at || "",
     contact_phone_verified_at: agent.contact_phone_verified_at || "",
     agent_application_channel: agent.agent_application_channel || "",
-    approved_at: agent.approved_at || ""
+    approved_at: agent.approved_at || "",
+    greeting_name: agent.greeting_name || "",
+    removed_at: agent.removed_at || "",
+    removed_reason: agent.removed_reason || "",
+    paid_until: agent.paid_until ? String(agent.paid_until).slice(0, 10) : "",
+    fee_exempt: agent.fee_exempt === true,
+    billing_plan: agent.billing_plan || "",
+    welcome_sent_at: agent.welcome_sent_at || ""
   };
 }
 
@@ -17119,7 +17126,7 @@ function adminVerificationBadge(status) {
 }
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "student-sweep", "youtube-sweep", "actioned", "live", "accounts", "staff", "field-agents", "ads", "whatsapp", "agent-reports", "notifications", "listings"];
+  const allowed = ["review", "student-sweep", "youtube-sweep", "revenue", "actioned", "live", "accounts", "staff", "field-agents", "ads", "whatsapp", "agent-reports", "notifications", "listings"];
   const previousTab = activeAdminWorkflowTab;
   activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
   document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
@@ -17135,6 +17142,7 @@ function setAdminWorkflowTab(tab = "review") {
   if (activeAdminWorkflowTab !== "review") closeAdminReviewPanel();
   if (previousTab !== activeAdminWorkflowTab) adminScheduleDashboardRefreshForTab();
   if (activeAdminWorkflowTab === "agent-reports" && previousTab !== "agent-reports") initAdminAgentReportsTab();
+  if (activeAdminWorkflowTab === "revenue" && previousTab !== "revenue") loadAdminRevenue();
 }
 
 async function fetchAdminPaginatedRows(path, headers, options = {}) {
@@ -23655,13 +23663,19 @@ async function adminUploadAgentProfilePhoto(agentId) {
 
 function renderAdminBrokerRows(agents) {
   const wrap = document.getElementById("admin-broker-accounts-table");
+  adminLastAgentsForUi = Array.isArray(agents) ? agents : [];
   if (!wrap) return;
-  const rows = adminApplyLaunchCleanFilter(agents).slice(0, 50);
+  const all = adminApplyLaunchCleanFilter(agents);
+  const removedCount = all.filter((agent) => agent.removed_at).length;
+  const rows = all.filter((agent) => adminShowRemovedAgents ? agent.removed_at : !agent.removed_at).slice(0, 50);
+  const removedToggle = removedCount || adminShowRemovedAgents
+    ? `<div class="flex justify-end"><button type="button" onclick="adminToggleRemovedAgents()" class="text-xs font-bold text-gray-600 underline">${adminShowRemovedAgents ? "← Back to current agents" : `Show removed agents (${removedCount})`}</button></div>`
+    : "";
   if (!rows.length) {
-    wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No broker profiles found in the current dataset.</div>`;
+    wrap.innerHTML = `${removedToggle}<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">${adminShowRemovedAgents ? "No removed agents." : "No broker profiles found in the current dataset."}</div>`;
     return;
   }
-  wrap.innerHTML = rows.map((agent) => {
+  wrap.innerHTML = removedToggle + rows.map((agent) => {
     const idArg = adminListingIdArg(agent.id);
     const registration = adminVerificationBadge(agent.registration_status);
     const status = String(agent.status || "pending").toLowerCase();
@@ -23705,6 +23719,8 @@ function renderAdminBrokerRows(agents) {
           ? `<div class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs font-black text-emerald-900">🌍 Public profile is live on makaug.com${agent.profile_photo_url ? "" : " — no logo yet"}</div>`
           : `<div class="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs font-black text-amber-900">🌍 Not on the website yet — still needs ${adminEscape(publicProfileState.blockers.join(", then "))}.</div>`}
         ${agent.verification_reason ? `<div class="mt-3 rounded-lg border border-amber-100 bg-amber-50 p-2 text-xs text-amber-900"><strong>Broker reason:</strong> ${adminEscape(agent.verification_reason)}</div>` : ""}
+        ${agent.removed_at ? `<div class="mt-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-900"><strong>Removed ${adminEscape(adminShortDate(agent.removed_at))}:</strong> ${adminEscape(agent.removed_reason || "")}</div>` : ""}
+        <div class="mt-3 text-xs text-gray-700">${adminAgentBillingLine(agent)}</div>
         <div class="grid sm:grid-cols-4 gap-2 mt-3 text-xs">
           <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Live Listings</div><div class="font-black text-gray-900">${adminEscape(agent.live_listings || 0)}</div></div>
           <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Pending</div><div class="font-black text-gray-900">${adminEscape(agent.pending_listings || 0)}</div></div>
@@ -23719,7 +23735,10 @@ function renderAdminBrokerRows(agents) {
           ${canUseLiveAdminApi() && idDocumentUploaded && !agent.private_id_profile_reviewed ? `<button onclick="adminApproveAgentPublicProfile(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Approve public profile</button>` : ""}
           ${canUseLiveAdminApi() ? `<button onclick="adminUploadAgentProfilePhoto(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${agent.profile_photo_url ? "Replace logo" : "Add logo"}</button>` : ""}
           ${canUseLiveAdminApi() && !idDocumentUploaded ? `<button onclick="adminUploadAgentIdentityDocument(${idArg})" class="border border-amber-400 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Attach ID photo</button>` : ""}
-          ${canUseLiveAdminApi() ? `<button onclick="adminSetAgentStatus(${idArg}, '${status === "approved" ? "pending" : "approved"}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${approveLabel}</button>` : ""}
+          ${canUseLiveAdminApi() && !agent.removed_at ? `<button onclick="adminSetAgentStatus(${idArg}, '${status === "approved" ? "pending" : "approved"}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${approveLabel}</button>` : ""}
+          ${canUseLiveAdminApi() && !agent.removed_at && status === "approved" && !agent.fee_exempt ? `<button onclick="adminOpenAgentPayment(${idArg}, 'renew')" class="border border-emerald-600 text-emerald-800 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Record payment</button>` : ""}
+          ${canUseLiveAdminApi() && !agent.removed_at ? `<button onclick="adminRemoveAgent(${idArg})" class="border border-red-300 text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Remove</button>` : ""}
+          ${canUseLiveAdminApi() && agent.removed_at ? `<button onclick="adminRestoreAgent(${idArg})" class="border border-gray-400 text-gray-800 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Restore</button>` : ""}
         </div>
       </div>`;
   }).join("");
@@ -28362,25 +28381,436 @@ async function adminRunFeaturedRotation() {
   }
 }
 
-async function adminSetAgentStatus(agentId, status) {
+async function adminSetAgentStatus(agentId, status, payment = null) {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or set ADMIN_API_KEY first to moderate broker status.");
     return;
   }
   try {
-    const response = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/status`, {
-      method: "PATCH",
-      headers: adminAuthHeaders(),
-      body: { status }
-    });
+    const body = { status };
+    if (payment) body.payment = payment;
+    let response;
+    try {
+      response = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/status`, {
+        method: "PATCH",
+        headers: adminAuthHeaders(),
+        body
+      });
+    } catch (e) {
+      // Approving a new agent needs their first month recorded first.
+      if (status === "approved" && /payment_required|Did they pay/i.test(String(e?.message || ""))) {
+        adminOpenAgentPayment(agentId, "approve");
+        return;
+      }
+      throw e;
+    }
+    adminClosePaymentModal();
+    const welcome = response?.data?.welcome;
+    const paid = response?.data?.payment;
+    if (status === "approved") {
+      toast(`Approved.${paid ? ` Payment recorded — paid until ${paid.period_end}.` : ""}${welcome?.error ? ` Welcome pack NOT sent: ${welcome.error}` : (welcome?.skipped ? " Welcome pack was already sent before." : " Welcome pack and how-to-post film sent on WhatsApp.")}`);
+    }
     await refreshBrokersFromApi({ silent: true });
     await renderAdminDashboard();
     const provisioning = response?.data?.account_provisioning;
     const emailStatus = provisioning?.email_status ? ` Email: ${provisioning.email_status}.` : "";
     const accessNote = provisioning?.temporary_password_issued ? " Temporary password issued." : "";
-    toast(`Broker updated: ${status}.${accessNote}${emailStatus}`);
+    if (status !== "approved") toast(`Broker updated: ${status}.${accessNote}${emailStatus}`);
   } catch (e) {
     toast(`Broker update failed: ${e.message || "error"}`);
+  }
+}
+
+var adminShowRemovedAgents = false;
+var adminLastAgentsForUi = [];
+
+function adminToggleRemovedAgents() {
+  adminShowRemovedAgents = !adminShowRemovedAgents;
+  renderAdminDashboard();
+}
+
+function adminFormatUgx(value) {
+  const n = Number(value || 0);
+  return `UGX ${Math.round(n).toLocaleString("en-US")}`;
+}
+
+function adminAgentBillingLine(agent = {}) {
+  if (agent.fee_exempt) return `💳 <span class="text-gray-500">Free listing (joined before the monthly fee)</span>`;
+  const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+  if (!agent.paid_until) {
+    return String(agent.status || "").toLowerCase() === "approved"
+      ? `💳 <strong class="text-red-700">No payment recorded</strong>`
+      : `💳 <span class="text-gray-600">UGX 50,000 a month — payment is asked for when you approve</span>`;
+  }
+  if (agent.paid_until < today) return `💳 <strong class="text-red-700">Overdue</strong> — paid until ${adminEscape(agent.paid_until)}`;
+  return `💳 <strong class="text-emerald-700">Paid</strong> until ${adminEscape(agent.paid_until)}`;
+}
+
+async function adminRemoveAgent(agentId) {
+  const agent = (adminLastAgentsForUi || []).find((a) => String(a.id) === String(agentId)) || {};
+  const reason = window.prompt(`Remove ${agent.name || "this agent"}?\n\nTheir profile and listings come off makaug. Nothing is deleted — you can Restore them later.\n\nWhy are they being removed?`, "");
+  if (reason === null) return;
+  if (!reason.trim()) { toast("Add a reason to remove an agent."); return; }
+  try {
+    const res = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/remove`, { method: "POST", headers: adminAuthHeaders(), body: { reason: reason.trim() } });
+    toast(`Removed ${res?.data?.full_name || "agent"}${res?.data?.listings_hidden ? ` and hid ${res.data.listings_hidden} listing(s)` : ""}.`);
+    await renderAdminDashboard();
+  } catch (e) {
+    toast(`Remove failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminRestoreAgent(agentId) {
+  if (!window.confirm("Restore this agent and put their listings back as they were?")) return;
+  try {
+    await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/restore`, { method: "POST", headers: adminAuthHeaders() });
+    toast("Agent restored.");
+    await renderAdminDashboard();
+  } catch (e) {
+    toast(`Restore failed: ${e.message || "error"}`);
+  }
+}
+
+function adminClosePaymentModal() {
+  document.getElementById("admin-payment-modal")?.remove();
+}
+
+async function adminReadFileAsDataUrl(file) {
+  if (!file) return "";
+  if (file.size > 5 * 1024 * 1024) throw new Error("Receipt photo is over 5 MB");
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read the receipt photo"));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * "Did they pay?" — the form shown when approving a new agent (mode approve),
+ * renewing an agent (renew) or recording any other money (entry).
+ */
+function adminOpenAgentPayment(agentId, mode = "approve") {
+  adminClosePaymentModal();
+  const agent = (adminLastAgentsForUi || []).find((a) => String(a.id) === String(agentId)) || {};
+  const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+  const title = mode === "approve" ? `Did ${adminEscape(agent.name || "they")} pay?` : `Record a payment — ${adminEscape(agent.name || "agent")}`;
+  const intro = mode === "approve"
+    ? "New agents pay <strong>UGX 50,000 a month</strong>. Approval goes through once the payment is recorded — the welcome pack and how-to-post film are then sent on WhatsApp."
+    : "UGX 50,000 = one month. Paying more adds whole months.";
+  const wrap = document.createElement("div");
+  wrap.id = "admin-payment-modal";
+  wrap.className = "fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4";
+  wrap.setAttribute("role", "dialog");
+  wrap.setAttribute("aria-modal", "true");
+  wrap.setAttribute("aria-labelledby", "admin-payment-title");
+  wrap.innerHTML = `
+    <form id="admin-payment-form" class="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-auto p-5 space-y-3 text-sm">
+      <h3 id="admin-payment-title" class="text-lg font-black text-gray-900">${title}</h3>
+      <p class="text-gray-600">${intro}</p>
+      <label class="block"><span class="font-bold">Amount (UGX)</span>
+        <input name="amount" inputmode="numeric" required value="50000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+      <label class="block"><span class="font-bold">How was it paid?</span>
+        <select name="method" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">
+          <option value="">Choose…</option>
+          <option value="mtn_momo">MTN Mobile Money</option>
+          <option value="airtel_money">Airtel Money</option>
+          <option value="bank_transfer">Bank transfer / deposit</option>
+          <option value="cash">Cash</option>
+        </select></label>
+      <label class="block"><span class="font-bold">Transaction ID / payment code</span>
+        <input name="reference" autocomplete="off" placeholder="From the MoMo SMS or bank slip" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+      <label class="block"><span class="font-bold">Date paid</span>
+        <input name="paid_at" type="date" value="${today}" max="${today}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+      <label class="block"><span class="font-bold">Paid by (name and number)</span>
+        <input name="payer" value="${adminAttr([agent.name, agent.phone].filter(Boolean).join(" · "))}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+      <label class="block"><span class="font-bold">Receipt photo</span> <span class="text-gray-500">(screenshot of the SMS or slip — recommended)</span>
+        <input name="receipt" type="file" accept="image/*" class="mt-1 w-full text-xs"></label>
+      <label class="block"><span class="font-bold">Note</span>
+        <input name="note" placeholder="For cash: who received it and where it is kept" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+      <p id="admin-payment-error" class="hidden rounded-lg bg-red-50 border border-red-200 p-2 text-red-800" role="alert"></p>
+      <div class="flex gap-2 justify-end pt-1">
+        <button type="button" onclick="adminClosePaymentModal()" class="rounded-lg border border-gray-300 px-4 py-2 font-bold">Cancel</button>
+        <button type="submit" class="rounded-lg bg-green-700 px-4 py-2 font-bold text-white">${mode === "approve" ? "Record payment & approve" : "Record payment"}</button>
+      </div>
+    </form>`;
+  document.body.appendChild(wrap);
+  wrap.addEventListener("click", (event) => { if (event.target === wrap) adminClosePaymentModal(); });
+  const form = wrap.querySelector("form");
+  form.querySelector("[name=amount]")?.focus();
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const errorBox = form.querySelector("#admin-payment-error");
+    const data = new FormData(form);
+    const showError = (message) => { errorBox.textContent = message; errorBox.classList.remove("hidden"); };
+    try {
+      const [payerName, payerPhone] = String(data.get("payer") || "").split("·").map((v) => v.trim());
+      const payment = {
+        amount: data.get("amount"),
+        method: data.get("method"),
+        reference: data.get("reference"),
+        paid_at: data.get("paid_at"),
+        payer_name: payerName || "",
+        payer_phone: payerPhone || "",
+        note: data.get("note"),
+        receipt_url: await adminReadFileAsDataUrl(form.querySelector("[name=receipt]")?.files?.[0])
+      };
+      if (!payment.method) return showError("Choose how it was paid.");
+      if (payment.method !== "cash" && String(payment.reference || "").trim().length < 4) return showError("Enter the transaction ID from the receipt.");
+      if (mode === "approve") {
+        await adminSetAgentStatus(agentId, "approved", payment);
+        if (document.getElementById("admin-payment-modal")) showError("Not approved — see the message at the bottom of the screen.");
+        return;
+      }
+      const res = await apiRequest(`/api/admin/revenue/agents/${encodeURIComponent(agentId)}/payment`, { method: "POST", headers: adminAuthHeaders(), body: payment });
+      adminClosePaymentModal();
+      toast(`Payment recorded — paid until ${res?.data?.period_end}.`);
+      await renderAdminDashboard();
+      if (activeAdminWorkflowTab === "revenue") loadAdminRevenue();
+    } catch (e) {
+      showError(e?.message || "Could not record the payment.");
+    }
+  });
+}
+
+function adminShortDate(value) {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// --- Sales & Revenue ---------------------------------------------------------
+var adminRevenueData = null;
+
+const ADMIN_ACCOUNT_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank: "Bank", cash: "Cash" };
+const ADMIN_METHOD_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank_transfer: "Bank", cash: "Cash" };
+
+function adminRevenueStatusBadge(entry) {
+  if (entry.voided_at) return `<span class="rounded bg-gray-200 px-2 py-0.5 text-[11px] font-bold text-gray-700">Voided</span>`;
+  if (entry.verified_status === "verified") return `<span class="rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">✓ ${entry.verification_source === "sms_match" ? "Matched to SMS" : "Verified"}</span>`;
+  if (entry.verified_status === "disputed") return `<span class="rounded bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-800">Disputed</span>`;
+  return `<span class="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">Not yet checked</span>`;
+}
+
+async function loadAdminRevenue() {
+  const box = document.getElementById("admin-revenue-body");
+  if (!box) return;
+  try {
+    const res = await apiRequest("/api/admin/revenue/summary", { headers: adminAuthHeaders() });
+    adminRevenueData = res?.data || {};
+    renderAdminRevenue();
+  } catch (e) {
+    box.innerHTML = `<p class="text-red-700">Couldn't load revenue: ${adminEscape(e?.message || "error")}</p>`;
+  }
+}
+
+function renderAdminRevenue() {
+  const box = document.getElementById("admin-revenue-body");
+  const d = adminRevenueData || {};
+  if (!box) return;
+  const card = (label, value, tone = "text-gray-900", sub = "") => `<div class="rounded-xl border border-gray-200 bg-gray-50 p-3"><div class="text-xs text-gray-500">${label}</div><div class="text-xl font-black ${tone}">${value}</div>${sub ? `<div class="text-[11px] text-gray-500 mt-0.5">${sub}</div>` : ""}</div>`;
+  const month = d.month || {};
+  const unverified = d.unverified || {};
+  const cards = `<div class="grid grid-cols-2 lg:grid-cols-6 gap-2">
+    ${card("Money in this month", adminFormatUgx(month.money_in), "text-emerald-700")}
+    ${card("Agent fees this month", adminFormatUgx(month.subscriptions), "text-gray-900", `${month.subscription_payments || 0} payment(s)`)}
+    ${card("Monthly recurring", adminFormatUgx(d.mrr_ugx), "text-gray-900", `${d.paying_agents || 0} paying agent(s)`)}
+    ${card("Money out this month", adminFormatUgx(month.money_out), "text-gray-900")}
+    ${card("Not yet checked", adminFormatUgx(unverified.amount), Number(unverified.count) ? "text-amber-700" : "text-gray-900", `${unverified.count || 0} entr${Number(unverified.count) === 1 ? "y" : "ies"}`)}
+    ${card("Agents overdue / unpaid", String(d.overdue_agents || 0), Number(d.overdue_agents) ? "text-red-700" : "text-gray-900")}
+  </div>`;
+
+  const accounts = (d.accounts || []).map((a) => {
+    const last = a.last_check;
+    const diff = last ? Number(last.difference) : null;
+    const diffCell = last
+      ? `<span class="${diff === 0 ? "text-emerald-700" : "text-red-700 font-bold"}">${diff === 0 ? "✓ matches" : `${diff > 0 ? "+" : ""}${adminFormatUgx(diff)}`}</span><div class="text-[11px] text-gray-500">${adminFormatUgx(last.actual_balance)} on ${adminEscape(adminShortDate(last.checked_at))} (${adminEscape(last.source)})</div>`
+      : `<span class="text-gray-500">Never checked</span>`;
+    return `<tr class="border-t border-gray-100">
+      <td class="py-2 pr-3 font-bold">${adminEscape(a.name)}${a.number_hint ? `<div class="text-[11px] font-normal text-gray-500">${adminEscape(a.number_hint)}</div>` : ""}</td>
+      <td class="py-2 pr-3 text-emerald-700">${adminFormatUgx(a.money_in)}</td>
+      <td class="py-2 pr-3">${adminFormatUgx(a.money_out)}</td>
+      <td class="py-2 pr-3 font-bold">${adminFormatUgx(a.expected_balance)}<div class="text-[11px] font-normal text-gray-500">from ${adminFormatUgx(a.opening_balance)} on ${adminEscape(String(a.opening_date || "").slice(0, 10))}</div></td>
+      <td class="py-2 pr-3">${diffCell}</td>
+      <td class="py-2"><button type="button" onclick="adminSetOpeningBalance('${adminAttr(a.key)}')" class="text-xs font-bold text-gray-600 underline">Set start balance</button></td>
+    </tr>`;
+  }).join("");
+  const accountsTable = `<div><h4 class="font-black text-gray-900 mb-1">Accounts — what should be there vs what is there</h4>
+    <p class="text-xs text-gray-500 mb-2">“Should hold” = start balance + money in − money out recorded here. Check it against the real MoMo / bank balance; any difference is money nobody recorded.</p>
+    <div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Account</th><th class="py-1 pr-3">In</th><th class="py-1 pr-3">Out</th><th class="py-1 pr-3">Should hold</th><th class="py-1 pr-3">Last real balance</th><th></th></tr></thead><tbody>${accounts}</tbody></table></div></div>`;
+
+  const sms = (d.unrecorded_sms || []);
+  const smsBlock = sms.length ? `<div class="rounded-xl border border-amber-300 bg-amber-50 p-3"><h4 class="font-black text-amber-900">📲 Money that arrived on the phone but nobody has recorded (${sms.length})</h4>
+    <ul class="mt-2 space-y-1">${sms.map((m) => `<li class="flex flex-wrap items-center justify-between gap-2 text-xs"><span><strong>${adminFormatUgx(m.amount_ugx)}</strong> ${m.counterparty ? `from ${adminEscape(m.counterparty)}` : ""} · ${adminEscape(ADMIN_ACCOUNT_LABELS[m.account_key] || m.account_key || "?")} · TxID ${adminEscape(m.reference || "—")} · ${adminEscape(adminShortDate(m.received_at))}</span><button type="button" onclick="adminRecordFromSms('${adminAttr(m.id)}')" class="rounded border border-amber-500 px-2 py-0.5 font-bold text-amber-900">Record who paid</button></li>`).join("")}</ul></div>` : "";
+
+  const billingRows = (d.billing || []).filter((a) => !a.fee_exempt).map((a) => {
+    const tone = { paid: "text-emerald-700", due_soon: "text-amber-700", overdue: "text-red-700", never_paid: "text-red-700" }[a.billing_state] || "text-gray-700";
+    const label = { paid: "Paid", due_soon: "Due soon", overdue: "Overdue", never_paid: "No payment yet" }[a.billing_state] || a.billing_state;
+    return `<tr class="border-t border-gray-100"><td class="py-2 pr-3 font-bold">${adminEscape(a.full_name)}</td><td class="py-2 pr-3 ${tone} font-bold">${label}</td><td class="py-2 pr-3">${adminEscape(a.paid_until || "—")}</td><td class="py-2"><button type="button" onclick="adminOpenAgentPayment('${adminAttr(a.id)}', 'renew')" class="text-xs font-bold text-emerald-800 underline">Record payment</button></td></tr>`;
+  }).join("");
+  const exemptCount = (d.billing || []).filter((a) => a.fee_exempt).length;
+  const billingTable = `<div><h4 class="font-black text-gray-900 mb-1">Agent fees</h4><p class="text-xs text-gray-500 mb-2">${exemptCount} agent(s) who joined before ${adminEscape(d.fee_start_date || "")} list for free.</p>
+    ${billingRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Agent</th><th class="py-1 pr-3">Status</th><th class="py-1 pr-3">Paid until</th><th></th></tr></thead><tbody>${billingRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No paying agents yet.</p>`}</div>`;
+
+  const entries = (d.entries || []).map((e) => {
+    const sign = e.direction === "out" ? "−" : "+";
+    const who = e.agent_name || e.payer_name || (e.kind || "").replace(/_/g, " ");
+    const actions = e.voided_at ? "" : `${e.verified_status !== "verified" ? `<button type="button" onclick="adminVerifyEntry('${adminAttr(e.id)}')" class="underline font-bold text-emerald-800">Verify</button> ` : ""}<button type="button" onclick="adminVoidEntry('${adminAttr(e.id)}')" class="underline text-red-700">Void</button>`;
+    return `<tr class="border-t border-gray-100 ${e.voided_at ? "opacity-50 line-through" : ""}">
+      <td class="py-2 pr-3 whitespace-nowrap">${adminEscape(String(e.paid_at || "").slice(0, 10))}</td>
+      <td class="py-2 pr-3">${adminEscape(who)}${e.note ? `<div class="text-[11px] text-gray-500">${adminEscape(e.note)}</div>` : ""}${e.period_end ? `<div class="text-[11px] text-gray-500">covers to ${adminEscape(String(e.period_end).slice(0, 10))}</div>` : ""}</td>
+      <td class="py-2 pr-3 font-bold ${e.direction === "out" ? "text-gray-800" : "text-emerald-700"} whitespace-nowrap">${sign} ${adminFormatUgx(e.amount_ugx)}</td>
+      <td class="py-2 pr-3">${adminEscape(ADMIN_METHOD_LABELS[e.method] || e.method)}<div class="text-[11px] text-gray-500">TxID ${adminEscape(e.reference || "—")}</div></td>
+      <td class="py-2 pr-3">${adminEscape(e.recorded_by || "")}${e.receipt_url ? ` · <a href="${adminAttr(e.receipt_url)}" target="_blank" rel="noopener" class="underline">receipt</a>` : ""}</td>
+      <td class="py-2 pr-3">${adminRevenueStatusBadge(e)}</td>
+      <td class="py-2 text-xs whitespace-nowrap">${actions}</td>
+    </tr>`;
+  }).join("");
+  const entriesTable = `<div><h4 class="font-black text-gray-900 mb-1">Every entry</h4>
+    ${entries ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Date</th><th class="py-1 pr-3">Who / what</th><th class="py-1 pr-3">Amount</th><th class="py-1 pr-3">How</th><th class="py-1 pr-3">Recorded by</th><th class="py-1 pr-3">Checked?</th><th></th></tr></thead><tbody>${entries}</tbody></table></div>` : `<p class="text-xs text-gray-500">Nothing recorded yet.</p>`}</div>`;
+
+  box.innerHTML = cards + smsBlock + accountsTable + billingTable + entriesTable;
+}
+
+function adminOpenMoneyEntry(direction = "in", prefill = {}) {
+  adminClosePaymentModal();
+  const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+  const agents = (adminLastAgentsForUi || []).filter((a) => !a.removed_at);
+  const wrap = document.createElement("div");
+  wrap.id = "admin-payment-modal";
+  wrap.className = "fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4";
+  wrap.setAttribute("role", "dialog");
+  wrap.setAttribute("aria-modal", "true");
+  wrap.innerHTML = `
+    <form class="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-auto p-5 space-y-3 text-sm">
+      <h3 class="text-lg font-black text-gray-900">${direction === "out" ? "Money out" : "Money in"}</h3>
+      ${direction === "in" ? `<label class="block"><span class="font-bold">From an agent?</span>
+        <select name="agent_id" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"><option value="">No — other income</option>${agents.map((a) => `<option value="${adminAttr(a.id)}">${adminEscape(a.name)}</option>`).join("")}</select></label>`
+      : `<label class="block"><span class="font-bold">What was it?</span>
+        <select name="kind" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"><option value="withdrawal">Withdrawal (cash out)</option><option value="expense">Expense</option><option value="transfer_out">Moved to another account</option><option value="refund">Refund</option></select></label>`}
+      <label class="block"><span class="font-bold">Amount (UGX)</span><input name="amount" inputmode="numeric" required value="${adminAttr(prefill.amount || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+      <label class="block"><span class="font-bold">Account / method</span>
+        <select name="method" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"><option value="">Choose…</option>
+          ${["mtn_momo", "airtel_money", "bank_transfer", "cash"].map((m) => `<option value="${m}" ${prefill.method === m ? "selected" : ""}>${ADMIN_METHOD_LABELS[m]}</option>`).join("")}</select></label>
+      <label class="block"><span class="font-bold">Transaction ID</span><input name="reference" value="${adminAttr(prefill.reference || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+      <label class="block"><span class="font-bold">Date</span><input name="paid_at" type="date" value="${adminAttr(prefill.date || today)}" max="${today}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+      <label class="block"><span class="font-bold">${direction === "out" ? "What for, and who took it" : "Note"}</span><input name="note" value="${adminAttr(prefill.note || "")}" ${direction === "out" ? "required" : ""} class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+      <label class="block"><span class="font-bold">Receipt photo</span><input name="receipt" type="file" accept="image/*" class="mt-1 w-full text-xs"></label>
+      <p class="hidden rounded-lg bg-red-50 border border-red-200 p-2 text-red-800" role="alert" data-error></p>
+      <div class="flex gap-2 justify-end"><button type="button" onclick="adminClosePaymentModal()" class="rounded-lg border border-gray-300 px-4 py-2 font-bold">Cancel</button><button type="submit" class="rounded-lg bg-green-700 px-4 py-2 font-bold text-white">Save</button></div>
+    </form>`;
+  document.body.appendChild(wrap);
+  const form = wrap.querySelector("form");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const errorBox = form.querySelector("[data-error]");
+    try {
+      const receipt = await adminReadFileAsDataUrl(form.querySelector("[name=receipt]")?.files?.[0]);
+      const body = { amount: data.get("amount"), method: data.get("method"), reference: data.get("reference"), paid_at: data.get("paid_at"), note: data.get("note"), receipt_url: receipt };
+      const agentId = data.get("agent_id");
+      if (direction === "in" && agentId) {
+        await apiRequest(`/api/admin/revenue/agents/${encodeURIComponent(agentId)}/payment`, { method: "POST", headers: adminAuthHeaders(), body });
+      } else {
+        await apiRequest("/api/admin/revenue/entries", { method: "POST", headers: adminAuthHeaders(), body: { ...body, direction, kind: direction === "out" ? data.get("kind") : "other_income" } });
+      }
+      adminClosePaymentModal();
+      toast("Saved.");
+      loadAdminRevenue();
+    } catch (e) {
+      errorBox.textContent = e?.message || "Could not save.";
+      errorBox.classList.remove("hidden");
+    }
+  });
+}
+
+function adminRecordFromSms(smsId) {
+  const m = (adminRevenueData?.unrecorded_sms || []).find((x) => String(x.id) === String(smsId));
+  if (!m) return;
+  adminOpenMoneyEntry("in", { amount: m.amount_ugx, method: m.account_key === "airtel_money" ? "airtel_money" : "mtn_momo", reference: m.reference || "", date: String(m.received_at || "").slice(0, 10), note: m.counterparty ? `From ${m.counterparty}` : "" });
+}
+
+async function adminVerifyEntry(entryId) {
+  const choice = window.prompt("Have you seen this money in the MoMo / bank statement?\n\nType YES to mark it verified, or NO to flag it as disputed.", "YES");
+  if (choice === null) return;
+  const disputed = /^n/i.test(choice.trim());
+  try {
+    const res = await apiRequest(`/api/admin/revenue/entries/${encodeURIComponent(entryId)}/verify`, { method: "POST", headers: adminAuthHeaders(), body: { status: disputed ? "disputed" : "verified", source: "statement" } });
+    toast(disputed ? "Flagged as disputed." : (res?.data?.same_person_as_recorder ? "Verified — note: you also recorded it; a second person should check." : "Verified."));
+    loadAdminRevenue();
+  } catch (e) {
+    toast(e?.message || "Could not verify.");
+  }
+}
+
+async function adminVoidEntry(entryId) {
+  const reason = window.prompt("Void this entry? It stays in the history, crossed out.\n\nWhy?", "");
+  if (!reason || !reason.trim()) return;
+  try {
+    await apiRequest(`/api/admin/revenue/entries/${encodeURIComponent(entryId)}/void`, { method: "POST", headers: adminAuthHeaders(), body: { reason: reason.trim() } });
+    toast("Voided.");
+    loadAdminRevenue();
+  } catch (e) {
+    toast(e?.message || "Could not void.");
+  }
+}
+
+async function adminOpenBalanceCheck() {
+  const key = window.prompt("Which account? Type: mtn_momo, airtel_money, bank or cash", "mtn_momo");
+  if (!key) return;
+  const actual = window.prompt(`What balance does ${key} show right now (UGX)?`, "");
+  if (!actual) return;
+  try {
+    const res = await apiRequest("/api/admin/revenue/balance-checks", { method: "POST", headers: adminAuthHeaders(), body: { account_key: key.trim(), actual_balance: actual } });
+    const diff = Number(res?.data?.difference || 0);
+    toast(diff === 0 ? "Balance matches the ledger. ✓" : `Difference of ${adminFormatUgx(diff)} — money ${diff > 0 ? "in" : "out"} that nobody recorded.`);
+    loadAdminRevenue();
+  } catch (e) {
+    toast(e?.message || "Could not save the balance check.");
+  }
+}
+
+async function adminSetOpeningBalance(key) {
+  const amount = window.prompt(`Start balance for ${ADMIN_ACCOUNT_LABELS[key] || key} (UGX), as shown on the statement:`, "0");
+  if (amount === null) return;
+  const date = window.prompt("On which date (YYYY-MM-DD)? Entries from this date on count towards the balance.", new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10));
+  if (!date) return;
+  const hint = window.prompt("Account number / name to show (optional), e.g. MTN 0780 863394 — MAKAUG", "") || "";
+  try {
+    await apiRequest(`/api/admin/revenue/accounts/${encodeURIComponent(key)}`, { method: "PATCH", headers: adminAuthHeaders(), body: { opening_balance: amount, opening_date: date, number_hint: hint } });
+    toast("Saved.");
+    loadAdminRevenue();
+  } catch (e) {
+    toast(e?.message || "Could not save.");
+  }
+}
+
+async function adminPasteMoneySms() {
+  const body = window.prompt("Paste the MoMo / Airtel SMS exactly as received:", "");
+  if (!body || !body.trim()) return;
+  try {
+    const res = await apiRequest("/api/admin/revenue/sms", { method: "POST", headers: adminAuthHeaders(), body: { body } });
+    const d = res?.data || {};
+    toast(d.duplicate ? "That SMS was already in." : (d.matched ? "Matched to a recorded payment ✓" : `Read: ${adminFormatUgx(d.parsed?.amount_ugx)} · TxID ${d.parsed?.reference || "?"}. Not matched to a payment yet.`));
+    loadAdminRevenue();
+  } catch (e) {
+    toast(e?.message || "Could not read that SMS.");
+  }
+}
+
+async function adminDownloadRevenueCsv(event) {
+  event?.preventDefault();
+  try {
+    const response = await fetch("/api/admin/revenue/export.csv", { headers: adminAuthHeaders() });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `makaug-revenue-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (e) {
+    toast(`Export failed: ${e.message || "error"}`);
   }
 }
 
@@ -46129,6 +46559,7 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/review": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
   "/admin/student-sweep": { page: "admin-dashboard", tab: "student-sweep", selector: "#admin-student-sweep-control", label: "Student Sweep" },
   "/admin/youtube-sweep": { page: "admin-dashboard", tab: "youtube-sweep", selector: "#admin-youtube-sweep-control", label: "YouTube Sweep" },
+  "/admin/revenue": { page: "admin-dashboard", tab: "revenue", selector: "#admin-revenue-control", label: "Sales & Revenue" },
   "/admin/rejected": { page: "admin-dashboard", tab: "actioned", selector: "#admin-actioned-listings-control", label: "Rejected / Actioned" },
   "/admin/actioned": { page: "admin-dashboard", tab: "actioned", selector: "#admin-actioned-listings-control", label: "Rejected / Actioned" },
   "/admin/live": { page: "admin-dashboard", tab: "live", selector: "#admin-live-followup-control", label: "Live Listings" },

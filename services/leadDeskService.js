@@ -727,6 +727,18 @@ async function buildDailyReport(db) {
   if (agentQueue && agentQueue.waiting) {
     lines.push('', `Agent properties waiting for review: ${agentQueue.waiting} (oldest ${agentQueue.oldest_hours}h) — approve them in Admin › Listings.`);
   }
+  // Money: what came in yesterday, what nobody has checked, who is behind.
+  const money = await db.query(
+    `SELECT
+       (SELECT COALESCE(SUM(amount_ugx), 0) FROM revenue_entries WHERE direction = 'in' AND voided_at IS NULL AND paid_at >= NOW() - INTERVAL '24 hours')::bigint AS in_24h,
+       (SELECT COUNT(*) FROM revenue_entries WHERE voided_at IS NULL AND verified_status <> 'verified')::int AS unchecked,
+       (SELECT COUNT(*) FROM money_sms_inbox WHERE matched_entry_id IS NULL AND direction = 'in')::int AS unrecorded_sms,
+       (SELECT COUNT(*) FROM agents WHERE status = 'approved' AND removed_at IS NULL AND NOT fee_exempt
+          AND (paid_until IS NULL OR paid_until < (NOW() AT TIME ZONE 'Africa/Kampala')::date))::int AS overdue`
+  ).then((r) => r.rows[0]).catch(() => null);
+  if (money) {
+    lines.push('', `Money in (last 24h): UGX ${Number(money.in_24h).toLocaleString('en-US')} · not yet checked: ${money.unchecked} · MoMo SMS not recorded: ${money.unrecorded_sms} · agents behind on fees: ${money.overdue} — Admin › Sales & Revenue.`);
+  }
   const urgent = desk.groups.filter((g) => g.unsent).slice(0, 10);
   if (urgent.length) {
     lines.push('', 'To send to an agent today:');

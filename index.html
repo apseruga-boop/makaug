@@ -8021,6 +8021,7 @@
             <button type="button" data-admin-tab-button="review" onclick="setAdminWorkflowTab('review')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Review Queue</button>
             <button type="button" data-admin-tab-button="student-sweep" onclick="setAdminWorkflowTab('student-sweep')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Students Sweep</button>
             <button type="button" data-admin-tab-button="youtube-sweep" onclick="setAdminWorkflowTab('youtube-sweep')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">YouTube Sweep</button>
+            <button type="button" data-admin-tab-button="revenue" onclick="setAdminWorkflowTab('revenue')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Sales &amp; Revenue</button>
             <button type="button" data-admin-tab-button="actioned" onclick="setAdminWorkflowTab('actioned')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Rejected / Actioned</button>
             <button type="button" data-admin-tab-button="live" onclick="setAdminWorkflowTab('live')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Live & Featured</button>
             <button type="button" data-admin-tab-button="accounts" onclick="setAdminWorkflowTab('accounts')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Accounts & Outreach</button>
@@ -8756,6 +8757,23 @@
           <div class="bg-white border border-gray-200 rounded-2xl p-4">
             <div id="admin-whatsapp-detail" class="text-sm text-gray-500">Select a conversation to open the full thread, reply with AI help, and control the workflow.</div>
           </div>
+        </div>
+
+        <div id="admin-revenue-control" data-admin-tab-panel="revenue" class="admin-tab-panel hidden bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-lg font-bold text-gray-800"><i class="fas fa-sack-dollar text-emerald-600 mr-1"></i>Sales &amp; Revenue</h3>
+              <p class="text-sm text-gray-600">Every payment in and every shilling out, by account. Agent fees are UGX 50,000 a month from 5 Oct 2026.</p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button type="button" onclick="adminOpenMoneyEntry('in')" class="rounded-lg bg-green-700 px-3 py-2 text-xs font-bold text-white">+ Money in</button>
+              <button type="button" onclick="adminOpenMoneyEntry('out')" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold">− Money out</button>
+              <button type="button" onclick="adminOpenBalanceCheck()" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold">Check a balance</button>
+              <button type="button" onclick="adminPasteMoneySms()" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold">Paste a MoMo SMS</button>
+              <a href="#" onclick="adminDownloadRevenueCsv(event)" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold">Export CSV</a>
+            </div>
+          </div>
+          <div id="admin-revenue-body" class="space-y-5 text-sm"><p class="text-gray-500">Loading…</p></div>
         </div>
 
         <div id="admin-agent-reports-control" data-admin-tab-panel="agent-reports" class="admin-tab-panel hidden bg-white border border-gray-200 rounded-2xl p-5">

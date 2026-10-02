@@ -114,6 +114,7 @@ const leadReferral = require('../services/leadReferralService');
 const leadHandoff = require('../services/leadHandoffService');
 const agentHowToPost = require('../services/agentHowToPostBroadcastService');
 const { agentGreetingName, setCachedGreetingName } = require('../services/agentNameService');
+const revenue = require('../services/revenueService');
 const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
 const { MONETIZATION_SPINE_MARKER, markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
@@ -8575,6 +8576,15 @@ router.get('/agents', async (req, res, next) => {
         a.status,
         a.created_at,
         a.updated_at,
+        a.approved_at,
+        a.greeting_name,
+        a.removed_at,
+        a.removed_reason,
+        a.paid_until,
+        a.fee_exempt,
+        a.billing_plan,
+        a.monthly_fee_ugx,
+        a.welcome_sent_at,
         COALESCE(p.total_listings, 0) AS total_listings,
         COALESCE(p.live_listings, 0) AS live_listings,
         COALESCE(p.pending_listings, 0) AS pending_listings,
@@ -9534,6 +9544,240 @@ router.patch('/agents/:id/featured', async (req, res, next) => {
   }
 });
 
+/** Every payment recorded is announced to the team on WhatsApp — nobody records money quietly. */
+function notifyTeamOfPayment({ entry, agentName = '', actor = 'admin', periodEnd = null } = {}) {
+  if (!entry) return;
+  setImmediate(async () => {
+    try {
+      const desk = require('../services/leadDeskService');
+      const method = revenue.METHODS[entry.method]?.label || entry.method;
+      const body = [
+        `${entry.direction === 'out' ? '💸 *Money out recorded*' : '💰 *Payment recorded*'}${agentName ? ` — ${agentName}` : ''}`,
+        `UGX ${Number(entry.amount_ugx).toLocaleString('en-US')} · ${method} → ${entry.account_key}`,
+        entry.reference ? `Transaction ID: ${entry.reference}` : 'No transaction ID (cash)',
+        periodEnd ? `Paid until ${periodEnd}` : '',
+        entry.note ? `Note: ${entry.note}` : '',
+        `Recorded by ${actor} · ${entry.verified_status === 'verified' ? '✅ matched to the MoMo SMS' : '⏳ not yet matched to a statement or SMS'}`
+      ].filter(Boolean).join('\n');
+      if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'revenue_entry_recorded');
+    } catch (error) {
+      console.warn('[revenue] team notice failed:', error.message);
+    }
+  });
+}
+
+function sendRevenueError(res, error, next) {
+  if (error?.status) return res.status(error.status).json({ ok: false, error: error.message, details: error.details });
+  return next(error);
+}
+
+// Remove an agent: off the admin list, their profile and listings off the site.
+// Nothing is deleted; Restore puts everything back exactly as it was.
+router.post('/agents/:id/remove', async (req, res, next) => {
+  const client = await db.getClient();
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
+    const reason = cleanText(req.body?.reason || '').slice(0, 300);
+    if (!reason) return res.status(400).json({ ok: false, error: 'Say why this agent is being removed' });
+    await client.query('BEGIN');
+    const agent = (await client.query('SELECT id, full_name, status, removed_at FROM agents WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
+    if (!agent) { await client.query('ROLLBACK'); return res.status(404).json({ ok: false, error: 'Agent not found' }); }
+    if (agent.removed_at) { await client.query('ROLLBACK'); return res.status(409).json({ ok: false, error: 'Already removed' }); }
+    const listings = (await client.query(
+      `UPDATE properties p SET status = 'hidden', updated_at = NOW()
+         FROM (SELECT id, status FROM properties WHERE agent_id = $1 AND status IN ('approved', 'pending') FOR UPDATE) old
+        WHERE p.id = old.id
+        RETURNING p.id, old.status AS previous_status`,
+      [req.params.id]
+    )).rows;
+    await client.query(
+      `UPDATE agents
+          SET removed_at = NOW(), removed_reason = $2, removed_by = $3, status = 'suspended',
+              removal_snapshot = $4::jsonb, updated_at = NOW()
+        WHERE id = $1`,
+      [req.params.id, reason, adminActorId(req), JSON.stringify({ previous_status: agent.status, listings })]
+    );
+    await client.query('COMMIT');
+    await writeAudit('admin_agent_removed', { agent_id: req.params.id, reason, listings_hidden: listings.length }, adminActorId(req));
+    return res.json({ ok: true, data: { id: agent.id, full_name: agent.full_name, listings_hidden: listings.length } });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/agents/:id/restore', async (req, res, next) => {
+  const client = await db.getClient();
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
+    await client.query('BEGIN');
+    const agent = (await client.query('SELECT id, full_name, removed_at, removal_snapshot FROM agents WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
+    if (!agent?.removed_at) { await client.query('ROLLBACK'); return res.status(404).json({ ok: false, error: 'No removed agent with that id' }); }
+    const snap = agent.removal_snapshot || {};
+    for (const item of Array.isArray(snap.listings) ? snap.listings : []) {
+      await client.query(`UPDATE properties SET status = $2, updated_at = NOW() WHERE id = $1 AND status = 'hidden'`, [item.id, item.previous_status]);
+    }
+    await client.query(
+      `UPDATE agents SET removed_at = NULL, removed_reason = NULL, removed_by = NULL, removal_snapshot = NULL,
+              status = $2, updated_at = NOW() WHERE id = $1`,
+      [req.params.id, ['pending', 'approved', 'rejected', 'suspended'].includes(snap.previous_status) ? snap.previous_status : 'pending']
+    );
+    await client.query('COMMIT');
+    await writeAudit('admin_agent_restored', { agent_id: req.params.id }, adminActorId(req));
+    return res.json({ ok: true, data: { id: agent.id, full_name: agent.full_name } });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+// --- Sales & revenue ---------------------------------------------------------
+router.get('/revenue/summary', async (req, res, next) => {
+  try {
+    return res.json({ ok: true, data: await revenue.revenueSummary(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/revenue/export.csv', async (req, res, next) => {
+  try {
+    const csv = await revenue.entriesCsv(db);
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="makaug-revenue-${revenue.kampalaDate()}.csv"`);
+    return res.send(csv);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Record a payment from an existing agent (monthly renewal).
+router.post('/revenue/agents/:id/payment', async (req, res, next) => {
+  try {
+    const agent = (await db.query('SELECT id, full_name, phone, whatsapp, paid_until, fee_exempt FROM agents WHERE id = $1', [req.params.id])).rows[0];
+    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    const result = await revenue.recordAgentPayment(db, { agent, payment: req.body || {}, actor: adminActorId(req) });
+    notifyTeamOfPayment({ entry: result.entry, agentName: agent.full_name, actor: adminActorId(req), periodEnd: result.period_end });
+    await writeAudit('revenue_agent_payment_recorded', { agent_id: agent.id, entry_id: result.entry.id, amount_ugx: result.entry.amount_ugx }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+// Any other money in or out (other income, withdrawals, expenses).
+router.post('/revenue/entries', async (req, res, next) => {
+  try {
+    const entry = await revenue.recordEntry(db, req.body || {}, adminActorId(req));
+    notifyTeamOfPayment({ entry, actor: adminActorId(req) });
+    await writeAudit('revenue_entry_recorded', { entry_id: entry.id, direction: entry.direction, amount_ugx: entry.amount_ugx }, adminActorId(req));
+    return res.json({ ok: true, data: entry });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+// A second person confirms the money is really in the account.
+router.post('/revenue/entries/:id/verify', async (req, res, next) => {
+  try {
+    const actor = adminActorId(req);
+    const entry = (await db.query('SELECT id, recorded_by, verified_status, voided_at FROM revenue_entries WHERE id = $1', [req.params.id])).rows[0];
+    if (!entry) return res.status(404).json({ ok: false, error: 'Entry not found' });
+    if (entry.voided_at) return res.status(409).json({ ok: false, error: 'This entry was voided' });
+    const status = req.body?.status === 'disputed' ? 'disputed' : 'verified';
+    const updated = (await db.query(
+      `UPDATE revenue_entries SET verified_status = $2, verified_by = $3, verified_at = NOW(),
+              verification_source = COALESCE($4, 'manual'), note = CASE WHEN $5::text IS NULL THEN note ELSE CONCAT_WS(' · ', note, $5::text) END
+        WHERE id = $1 RETURNING *`,
+      [req.params.id, status, actor, cleanText(req.body?.source || '') || null, cleanText(req.body?.note || '') || null]
+    )).rows[0];
+    await writeAudit('revenue_entry_verified', { entry_id: req.params.id, status, same_person_as_recorder: entry.recorded_by === actor }, actor);
+    return res.json({ ok: true, data: { ...updated, same_person_as_recorder: entry.recorded_by === actor } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Mistakes are voided with a reason, never deleted.
+router.post('/revenue/entries/:id/void', async (req, res, next) => {
+  try {
+    const reason = cleanText(req.body?.reason || '').slice(0, 300);
+    if (!reason) return res.status(400).json({ ok: false, error: 'Say why this entry is being voided' });
+    const updated = (await db.query(
+      `UPDATE revenue_entries SET voided_at = NOW(), void_reason = $2, voided_by = $3 WHERE id = $1 AND voided_at IS NULL RETURNING *`,
+      [req.params.id, reason, adminActorId(req)]
+    )).rows[0];
+    if (!updated) return res.status(404).json({ ok: false, error: 'Entry not found or already voided' });
+    if (updated.kind === 'agent_subscription' && updated.agent_id) {
+      // Move the agent's paid-until date back to the latest payment that still stands.
+      await db.query(
+        `UPDATE agents SET paid_until = (
+            SELECT MAX(period_end) FROM revenue_entries
+             WHERE agent_id = $1 AND kind = 'agent_subscription' AND voided_at IS NULL), updated_at = NOW()
+          WHERE id = $1`,
+        [updated.agent_id]
+      );
+    }
+    await writeAudit('revenue_entry_voided', { entry_id: req.params.id, reason }, adminActorId(req));
+    return res.json({ ok: true, data: updated });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// What the wallet / bank statement actually shows, compared with the ledger.
+router.post('/revenue/balance-checks', async (req, res, next) => {
+  try {
+    const accountKey = cleanText(req.body?.account_key || '');
+    const actual = Math.round(Number(String(req.body?.actual_balance ?? '').replace(/[^\d.-]/g, '')));
+    if (!accountKey || !Number.isFinite(actual)) return res.status(400).json({ ok: false, error: 'Choose the account and enter the balance it shows' });
+    const row = await revenue.recordBalanceCheck(db, {
+      accountKey, actual, source: 'manual', note: cleanText(req.body?.note || '') || null,
+      evidenceUrl: cleanText(req.body?.evidence_url || '') || null, actor: adminActorId(req)
+    });
+    await writeAudit('revenue_balance_checked', { account_key: accountKey, difference: row.difference }, adminActorId(req));
+    return res.json({ ok: true, data: row });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Starting balance of an account, so the ledger can say what it should hold.
+router.patch('/revenue/accounts/:key', async (req, res, next) => {
+  try {
+    const updated = (await db.query(
+      `UPDATE money_accounts
+          SET name = COALESCE(NULLIF($2, ''), name),
+              number_hint = COALESCE(NULLIF($3, ''), number_hint),
+              opening_balance = COALESCE($4::bigint, opening_balance),
+              opening_date = COALESCE($5::date, opening_date)
+        WHERE key = $1 RETURNING *`,
+      [req.params.key, cleanText(req.body?.name || ''), cleanText(req.body?.number_hint || ''),
+        req.body?.opening_balance != null && req.body.opening_balance !== '' ? Math.round(Number(String(req.body.opening_balance).replace(/[^\d.-]/g, ''))) : null,
+        req.body?.opening_date || null]
+    )).rows[0];
+    if (!updated) return res.status(404).json({ ok: false, error: 'Account not found' });
+    await writeAudit('revenue_account_updated', { key: req.params.key, opening_balance: updated.opening_balance }, adminActorId(req));
+    return res.json({ ok: true, data: updated });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Paste a money SMS by hand (when the forwarder app is not set up yet).
+router.post('/revenue/sms', async (req, res, next) => {
+  try {
+    const result = await revenue.ingestMoneySms(db, { body: req.body?.body, sender: req.body?.sender || '', accountKey: req.body?.account_key || null, raw: { pasted_by: adminActorId(req) } });
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
 // The name an agent is greeted by in every WhatsApp message ("Amos", not "Agaba").
 router.patch('/agents/:id/greeting-name', async (req, res, next) => {
   try {
@@ -9559,6 +9803,38 @@ router.patch('/agents/:id/status', async (req, res, next) => {
 
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ ok: false, error: 'Invalid status value' });
+    }
+
+    // From 5 Oct 2026 a new agent is only approved once their first month is paid.
+    let paymentResult = null;
+    let beforeApproval = null;
+    if (status === 'approved') {
+      beforeApproval = (await db.query(
+        `SELECT id, full_name, phone, whatsapp, status, fee_exempt, paid_until, approved_at, removed_at, welcome_sent_at
+           FROM agents WHERE id = $1`,
+        [req.params.id]
+      )).rows[0];
+      if (!beforeApproval) return res.status(404).json({ ok: false, error: 'Agent not found' });
+      if (beforeApproval.removed_at) return res.status(409).json({ ok: false, error: 'This agent was removed. Restore them first.' });
+      if (revenue.agentFeeRequired(beforeApproval)) {
+        const payment = req.body.payment && typeof req.body.payment === 'object' ? req.body.payment : null;
+        if (!payment) {
+          const { feeUgx } = revenue.feeConfig();
+          return res.status(402).json({
+            ok: false,
+            error: 'payment_required',
+            message: `Did they pay? New agents pay UGX ${feeUgx.toLocaleString('en-US')} a month. Record the payment (how it was paid, into which account, and the transaction ID) to approve.`,
+            fee_ugx: feeUgx,
+            methods: revenue.METHODS
+          });
+        }
+        try {
+          paymentResult = await revenue.recordAgentPayment(db, { agent: beforeApproval, payment, actor: adminActorId(req) });
+        } catch (error) {
+          if (error.status) return res.status(error.status).json({ ok: false, error: error.message, details: error.details });
+          throw error;
+        }
+      }
     }
 
     const updated = await db.query(
@@ -9610,15 +9886,35 @@ router.patch('/agents/:id/status', async (req, res, next) => {
     });
 
     let accountProvisioning = null;
+    let welcome = null;
     if (status === 'approved') {
       accountProvisioning = await provisionApprovedBrokerAccount(updated.rows[0], req);
+      // Approval sends the welcome pack and the how-to-post film straight away,
+      // once per agent (resend_welcome: true to send it again).
+      if (req.body.send_welcome !== false && (!beforeApproval?.welcome_sent_at || req.body.resend_welcome === true)) {
+        welcome = await queueAgentWelcomePack({ agentId: req.params.id, actorId: adminActorId(req) })
+          .catch((error) => ({ error: error.message }));
+      } else {
+        welcome = { skipped: beforeApproval?.welcome_sent_at ? 'already_sent' : 'not_requested' };
+      }
     }
+    // Approved before the fee starts: free listing, now and after the start date.
+    if (status === 'approved' && !paymentResult && beforeApproval && !beforeApproval.fee_exempt
+        && revenue.kampalaDate() < revenue.feeConfig().startDate) {
+      await db.query(
+        `UPDATE agents SET fee_exempt = true, fee_exempt_reason = 'Approved before the monthly fee started' WHERE id = $1`,
+        [req.params.id]
+      );
+    }
+    if (paymentResult) notifyTeamOfPayment({ entry: paymentResult.entry, agentName: updated.rows[0].full_name, actor: adminActorId(req), periodEnd: paymentResult.period_end });
 
     return res.json({
       ok: true,
       data: {
         ...updated.rows[0],
-        account_provisioning: accountProvisioning
+        account_provisioning: accountProvisioning,
+        payment: paymentResult,
+        welcome
       }
     });
   } catch (error) {
@@ -13768,15 +14064,19 @@ router.post('/agent-broadcast/how-to-post/send', async (req, res, next) => {
   }
 });
 
-router.post('/agent-welcome/:agentId/send', async (req, res, next) => {
-  try {
-    const pack = await agentWelcome.buildWelcomePack(cleanText(req.params.agentId));
-    const previewTo = String(req.body?.preview_to || '').replace(/\D+/g, '');
+/**
+ * The welcome pack: welcome film, full welcome message, share card, then the
+ * one-minute "how to post on WhatsApp" film. Sent by the admin button and,
+ * since 2 Oct 2026, automatically the moment an agent is approved.
+ */
+async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', actorId = 'admin' } = {}) {
+    const pack = await agentWelcome.buildWelcomePack(cleanText(agentId));
+    const previewTo = String(previewToRaw || '').replace(/\D+/g, '');
     const preview = Boolean(previewTo);
     const to = preview ? previewTo : String(pack.agent.whatsapp || pack.agent.phone || '').replace(/\D+/g, '');
-    if (!to || to.length < 9) return res.status(400).json({ ok: false, error: 'No WhatsApp number to send to' });
+    if (!to || to.length < 9) throw Object.assign(new Error('No WhatsApp number to send to'), { status: 400 });
 
-    const actor = adminActorId(req);
+    const actor = actorId || 'admin';
     const source = agentReportWhatsappSource();
     const version = new Date().toISOString().slice(0, 10).replace(/\D/g, '');
     const dedupeBase = `agent_welcome:${pack.agent.id}:${preview ? `preview:${Date.now()}` : version}`;
@@ -13852,11 +14152,20 @@ router.post('/agent-welcome/:agentId/send', async (req, res, next) => {
           return queueWelcome('');
         })
         .catch((error) => console.warn('[agent-welcome] WhatsApp queue failed:', error.message));
-      return res.json({ ok: true, data: { to, preview, format: 'video', status: 'rendering' } });
+      if (!preview) await db.query('UPDATE agents SET welcome_sent_at = NOW() WHERE id = $1', [pack.agent.id]).catch(() => {});
+      return { to, preview, format: 'video', status: 'rendering' };
     }
     const queued = await queueWelcome('');
-    return res.json({ ok: true, data: { to, preview, format: 'text', queued } });
+    if (!preview) await db.query('UPDATE agents SET welcome_sent_at = NOW() WHERE id = $1', [pack.agent.id]).catch(() => {});
+    return { to, preview, format: 'text', queued };
+}
+
+router.post('/agent-welcome/:agentId/send', async (req, res, next) => {
+  try {
+    const data = await queueAgentWelcomePack({ agentId: req.params.agentId, previewTo: req.body?.preview_to, actorId: adminActorId(req) });
+    return res.json({ ok: true, data });
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
     return next(error);
   }
 });

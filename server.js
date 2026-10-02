@@ -301,6 +301,7 @@ if (ACTIVE_TENANT.publicFeatures?.valuation !== false) app.use('/api/valuation',
 app.use('/api/tiktok-display', tiktokDisplayRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/saved-properties', savedPropertiesRoutes);
+app.use('/api/money-sms', require('./routes/moneySms'));
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/off-plan', offPlanAdminRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
