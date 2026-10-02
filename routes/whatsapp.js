@@ -182,7 +182,7 @@ const WHATSAPP_MIN_LISTING_PHOTOS = 5;
 // Language Translations
 const T = {
   en: {
-    welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nReply with a number",
+    welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nReply with a number",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
@@ -917,15 +917,15 @@ function timeGreetingWithName(lang, sessionData = {}) {
 
 function greetingMenus() {
   return {
-    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
-    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Yingira makaug nga agent\n6️⃣ Obuyambi ku mortgage\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
-    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n5️⃣ Jiunge na makaug kama agent\n6️⃣ Msaada wa mkopo wa nyumba (mortgage)\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
-    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
-    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
-    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nMushobora kwandika bisanzwe.`,
-    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
-    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
-    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
+    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
+    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Yingira makaug nga agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
+    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n5️⃣ Jiunge na makaug kama agent\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
+    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
+    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
+    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nMushobora kwandika bisanzwe.`,
+    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
+    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
+    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
   };
 }
 
@@ -13244,8 +13244,8 @@ async function agentJoinRequestReply({ phone, text = '' }) {
 // Short explainer film, sent once (per 30 days) when someone wants to list a
 // property or join as an agent. Goes before the bot's text reply.
 const EXPLAINER_VIDEOS = {
-  lister: { path: '/assets/marketing/makaug-list-your-property-v1.mp4', caption: '🎬 *How listing on makaug works* — 45 seconds: send photos, confirm it\'s you, agree to the terms, and your property goes live. First 7 days free.' },
-  agent: { path: '/assets/marketing/makaug-join-as-agent-v1.mp4', caption: '🎬 *makaug for agents* — 40 seconds on what you get and how to join.' }
+  lister: { path: '/assets/marketing/makaug-list-your-property-v2.mp4', caption: '🎬 *How listing on makaug works* — under a minute: send photos, confirm it\'s you, agree to the terms, and your property goes live in front of Ugandans at home and abroad (UK, Dubai, Canada, South Africa). First 7 days free.' },
+  agent: { path: '/assets/marketing/makaug-join-as-agent-v2.mp4', caption: '🎬 *makaug for agents* — what you get, who sees your listings (Ugandans at home and abroad) and how to join.' }
 };
 
 function queueExplainerVideoOnce({ phone, kind }) {
@@ -13275,8 +13275,76 @@ function queueExplainerVideoOnce({ phone, kind }) {
   });
 }
 
+// --- Off-plan: Uganda or abroad -------------------------------------------
+// The overseas countries come from the live off-plan projects, so a new
+// country shows up here as soon as its first project is published.
+let offPlanMarketsCache = { at: 0, rows: [] };
+const OFF_PLAN_COUNTRY_LABELS = { AE: 'United Arab Emirates (Dubai)', KE: 'Kenya', GB: 'United Kingdom', ZA: 'South Africa', RW: 'Rwanda', TZ: 'Tanzania', CA: 'Canada', US: 'United States' };
+
+function countryFlag(code = '') {
+  const cc = String(code || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return '🌍';
+  return String.fromCodePoint(...[...cc].map((c) => 0x1F1E6 + c.charCodeAt(0) - 65));
+}
+
+async function offPlanOverseasMarkets() {
+  if (Date.now() - offPlanMarketsCache.at < 10 * 60 * 1000) return offPlanMarketsCache.rows;
+  try {
+    const { isPubliclyVisible, normalizeDevelopmentRow } = require('../services/offPlanService');
+    const result = await db.query(
+      `SELECT * FROM off_plan_developments
+        WHERE country_code ~ '^[A-Z]{2}$' AND country_code <> 'UG' AND status = 'published'
+          AND (verification_status = 'verified' OR (verification_status = 'partially_verified' AND extra_fields->>'public_preview_approved' = 'true'))
+        ORDER BY updated_at DESC LIMIT 500`);
+    const markets = new Map();
+    result.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible).forEach((project) => {
+      const code = String(project.country_code || '').toUpperCase();
+      const name = project.extra_fields?.country_name || OFF_PLAN_COUNTRY_LABELS[code] || code;
+      const slug = String(project.extra_fields?.country_slug || project.extra_fields?.country_name || code).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const entry = markets.get(slug) || { code, name: OFF_PLAN_COUNTRY_LABELS[code] || name, slug, count: 0 };
+      entry.count += 1;
+      markets.set(slug, entry);
+    });
+    offPlanMarketsCache = { at: Date.now(), rows: [...markets.values()].sort((a, b) => b.count - a.count) };
+  } catch (error) {
+    logger.warn('Off-plan markets lookup failed:', error.message || String(error));
+  }
+  return offPlanMarketsCache.rows;
+}
+
+function offPlanWhereQuestion() {
+  return `${whatsappBrandHeader('Off-plan projects')}\nAre you looking in Uganda or abroad?\n1️⃣ In Uganda\n2️⃣ Abroad (outside Uganda)\n\n${t('en', 'menuHint')}`;
+}
+
+function offPlanUgandaReply() {
+  return `${whatsappBrandHeader('Off-plan projects · Uganda')}\nNew developments in Uganda — homes, payment plans, maps and brochures. Anything not yet confirmed is clearly labelled.\n\n🇺🇬 ${HOME_URL}/off-plan\n\n${t('en', 'menuHint')}`;
+}
+
+async function offPlanAbroadReply() {
+  const markets = await offPlanOverseasMarkets();
+  const lines = markets.map((m) => `${countryFlag(m.code)} *${m.name}* — ${m.count} project${m.count === 1 ? '' : 's'}\n${HOME_URL}/off-plan/overseas/${encodeURIComponent(m.slug)}`);
+  return [
+    `${whatsappBrandHeader('Off-plan projects · Abroad')}`,
+    lines.length ? 'Here is where we have projects outside Uganda:' : 'See our projects outside Uganda here:',
+    '',
+    ...(lines.length ? [lines.join('\n\n'), ''] : []),
+    `🌍 All countries: ${HOME_URL}/off-plan/overseas`,
+    '',
+    'Prices are shown in the local currency with an indicative UGX amount. Developer, completion, legal and bank terms must be confirmed before you pay.',
+    '',
+    t('en', 'menuHint')
+  ].join('\n');
+}
+
+function offPlanWhereAnswer(text = '') {
+  const clean = normalizeInput(text).toLowerCase();
+  if (/^1\b|\b(uganda|kampala|wakiso|entebbe|mukono|home|local|in uganda)\b/.test(clean)) return 'uganda';
+  if (/^2\b|\b(abroad|overseas|outside|international|dubai|uae|emirates|kenya|nairobi|diaspora)\b/.test(clean)) return 'abroad';
+  return '';
+}
+
 function menuRouteReply(lang, route) {
-  if (route === 'off_plan') return { message: offPlanWhatsappReply(false), nextStep: 'main_menu' };
+  if (route === 'off_plan') return { message: offPlanWhereQuestion(), nextStep: 'off_plan_where' };
   if (route === 'listing_type') return { message: t(lang, 'askListingType'), nextStep: 'listing_type' };
   if (route === 'search_type') return { message: t(lang, 'askSearchType'), nextStep: 'search_type' };
   if (route === 'agent_area') return { message: t(lang, 'askAgentArea'), nextStep: 'agent_area' };
@@ -13289,7 +13357,11 @@ function menuRouteReply(lang, route) {
     };
   }
   if (route === 'mortgage_help') {
-    return { message: `🏦 Use ${IS_SOUTH_AFRICA ? 'Bond Finder' : 'Mortgage Finder'} here: ${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
+    if (IS_SOUTH_AFRICA) return { message: `🏦 Use Bond Finder here: ${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
+    return {
+      message: `${whatsappBrandHeader('Mortgages')}\nmakaug does not give financial or mortgage advice and does not offer loans. For a mortgage, please speak to a bank directly.\n\nIf it helps, banks' own published mortgage terms are listed here (for information only — always confirm with the bank):\n${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`,
+      nextStep: 'main_menu'
+    };
   }
   if (route === 'account_help') {
     return {
@@ -13450,7 +13522,7 @@ const STEPS = [
   'greeting', 'choose_language', 'main_menu', 'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
   'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract',
   'ask_university', 'ask_distance', 'ask_public_name', 'confirm_whatsapp_contact', 'ask_contact_method', 'ask_contact_value',
-  'ask_id_number', 'ask_selfie', 'ask_terms', 'investment_brief', 'ask_phone', 'search_type', 'search_area', 'agent_area',
+  'ask_id_number', 'ask_selfie', 'ask_terms', 'investment_brief', 'off_plan_where', 'ask_phone', 'search_type', 'search_area', 'agent_area',
   'verify_otp', 'missed_call_need', 'missed_call_resolved', 'submitted', ...EMPLOYEE_INTAKE_STEPS
 ];
 
@@ -13466,6 +13538,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const compactUpper = normalizeOptKeyword(bodyUpper);
 
   const respond = (msg, nextStep) => ({ message: msg, nextStep });
+  if (step === 'off_plan_where' && cleanBody && !['MENU', 'HOME', 'CANCEL', 'STOP', 'BACK'].includes(compactUpper)) {
+    const where = offPlanWhereAnswer(cleanBody);
+    if (where === 'uganda') return respond(offPlanUgandaReply(), 'main_menu');
+    if (where === 'abroad') return respond(await offPlanAbroadReply(), 'main_menu');
+    if (!isOffPlanRequest(cleanBody, intentResult?.intent)) return respond(offPlanWhereQuestion(), 'off_plan_where');
+  }
   if (step === 'investment_brief' && cleanBody && !['MENU', 'HOME', 'CANCEL', 'STOP', 'BACK'].includes(compactUpper)) {
     return respond(await investmentBriefReply({ phone, lang, text: cleanBody }), 'main_menu');
   }
@@ -13488,7 +13566,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         await updateOffPlanEnquiryDelivery(db, enquiry.id, delivery);
       });
     }
-    return respond(offPlanWhatsappReply(listingRequest, cleanBody), 'main_menu');
+    if (listingRequest) return respond(offPlanWhatsappReply(true, cleanBody), 'main_menu');
+    const where = offPlanWhereAnswer(cleanBody.replace(/^\s*\d+\s*/, ''));
+    if (where === 'abroad') return respond(await offPlanAbroadReply(), 'main_menu');
+    if (where === 'uganda') return respond(offPlanUgandaReply(), 'main_menu');
+    return respond(offPlanWhereQuestion(), 'off_plan_where');
   }
   // Someone asking about a listing they are looking at, before anything else.
   // The message our own property pages write contains "listing" and "for rent",
@@ -14083,9 +14165,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '1') { queueExplainerVideoOnce({ phone, kind: 'lister' }); return respond(t(lang, 'askListingType'), 'listing_type'); }
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
-    if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
+    if (cleanBody === '4') return respond(offPlanWhereQuestion(), 'off_plan_where');
     if (cleanBody === '5') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
-    if (cleanBody === '6') { const next = menuRouteReply(lang, 'mortgage_help'); return respond(next.message, next.nextStep); }
     return respond(`${friendlyGreetingReply(lang, sessionData)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 
@@ -14152,9 +14233,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '1') { queueExplainerVideoOnce({ phone, kind: 'lister' }); return respond(t(lang, 'askListingType'), 'listing_type'); }
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
-    if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
+    if (cleanBody === '4') return respond(offPlanWhereQuestion(), 'off_plan_where');
     if (cleanBody === '5') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
-    if (cleanBody === '6') { const next = menuRouteReply(lang, 'mortgage_help'); return respond(next.message, next.nextStep); }
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
 
     if (compactUpper === 'WIDEN' && Number.isFinite(Number(sessionData.search_lat)) && Number.isFinite(Number(sessionData.search_lng))) {

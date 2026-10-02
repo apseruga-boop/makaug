@@ -14,16 +14,16 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
   {
     key: 'stanbic',
     name: 'Stanbic Bank Uganda',
-    residentialRate: 16.5,
-    commercialRate: 16.5,
+    residentialRate: 17.5,
+    commercialRate: 17.5,
     landRate: null,
-    minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
+    minDepositPct: { residential: 10, commercial: 20, land: 20, default: 10 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
-    sourceLabel: 'Stanbic advertised pre-approved mortgage rate',
-    sourceUrl: 'https://www.stanbicbank.co.ug/uganda/personal/about-us/news/Stanbic-Bank-Uganda%E2%80%99s-new-mortgage-solution-breaks-financing-barrier-to-home-ownership',
-    sourceNote: 'Stanbic advertised 16.5% UGX pricing for eligible existing customers in its pre-approved mortgage launch. Its main home-loan page contains conflicting financing and fee wording, so eligibility, deposit, fees, and the final rate require direct confirmation.',
-    sourceVerifiedAt: '2026-09-08'
+    sourceLabel: 'Bank of Uganda bank rates sheet (1 Apr 2026) and Stanbic home loans',
+    sourceUrl: 'https://bou.or.ug/uploads/Commercial_Banks_Interest_Rates_and_Bank_Charges_as_at_01_April_2026_25716d34bb.pdf',
+    sourceNote: 'Bank of Uganda’s 1 April 2026 rates sheet lists Stanbic personal home loans at 17.5%. Stanbic also advertises 16.5% for pre-approved existing customers. House-purchase loans: from a 10% deposit, up to 25 years, 1.5% fee; land loans up to 80% financing (cap UGX 300m), 1% fee. Confirm the final rate with the bank.',
+    sourceVerifiedAt: '2026-10-02'
   },
   {
     key: 'hfb',
@@ -37,7 +37,7 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     sourceLabel: 'Housing Finance mortgage terms and conditions',
     sourceUrl: 'https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/',
     sourceNote: 'Housing Finance publishes up to 80% purchase finance in Kampala, up to 20-year residential/commercial terms, a 1.25% facility fee, and a 35% income guide. Its public page says interest is variable, so the rate requires lender confirmation.',
-    sourceVerifiedAt: '2026-09-08'
+    sourceVerifiedAt: '2026-10-02'
   },
   {
     key: 'dfcu',
@@ -46,12 +46,12 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     commercialRate: null,
     landRate: null,
     minDepositPct: { residential: 15, commercial: 40, land: 40, default: 15 },
-    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
+    maxYears: { residential: 25, commercial: 20, land: 20, default: 25 },
     arrangementFeePct: 2.0,
     sourceLabel: 'dfcu home loans',
     sourceUrl: 'https://www.dfcugroup.com/personal-banking/home-loans/',
-    sourceNote: 'dfcu publishes 16% UGX home-loan guidance, up to 85% open-market-value financing, and UGX tenure guidance. Its 2026 tariff guide lists a 2%-3% arrangement-fee range; this calculator uses the 2% lower bound as an estimate.',
-    sourceVerifiedAt: '2026-09-08'
+    sourceNote: 'dfcu publishes 16% UGX home-loan guidance, up to 85% of open-market value, and up to 25 years for UGX loans (10 years in USD). Its tariff guide lists a 2%-3% arrangement fee; this calculator uses 2%.',
+    sourceVerifiedAt: '2026-10-02'
   },
   {
     key: 'kcb',
@@ -65,7 +65,7 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     sourceLabel: 'KCB mortgage overview',
     sourceUrl: 'https://ug.kcbgroup.com/products/mortgage',
     sourceNote: 'KCB publishes UGX pricing from 17.5%, up to 20-year purchase/construction/refinance terms, and up to 80% financing for Kampala, Entebbe, and Wakiso. Final pricing and approval remain bank-specific.',
-    sourceVerifiedAt: '2026-09-08'
+    sourceVerifiedAt: '2026-10-02'
   },
   {
     key: 'ncba',
@@ -79,7 +79,7 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     sourceLabel: 'NCBA Uganda property loans',
     sourceUrl: 'https://ncbagroup.com/ug/property-loans/',
     sourceNote: 'NCBA publishes property-loan, construction-finance, land-purchase, and equity-release terms: up to 25-year UGX mortgage tenure, up to 90% financing for eligible Kampala/city properties, 70% office-space financing, and up to 60-month land-purchase terms; public rate requires bank confirmation.',
-    sourceVerifiedAt: '2026-09-08'
+    sourceVerifiedAt: '2026-10-02'
   },
   {
     key: 'centenary',
@@ -93,21 +93,21 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     sourceLabel: 'Centenary Bank housing loan pages',
     sourceUrl: 'https://www.centenarybank.co.ug/product/cente-mortgage/4/8',
     sourceNote: 'Centenary publishes Cente Mortgage amounts from UGX 20m to UGX 300m, up to 10-year tenure, and a minimum 30% borrower contribution. The same page also states maximum LTV of 80%, so the calculator uses the more conservative 30% deposit and requires bank confirmation.',
-    sourceVerifiedAt: '2026-09-08'
+    sourceVerifiedAt: '2026-10-02'
   },
   {
     key: 'baroda',
     name: 'Bank of Baroda Uganda',
-    residentialRate: null,
+    residentialRate: 18.0,
     commercialRate: null,
     landRate: null,
     minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 15, commercial: 15, land: 15, default: 15 },
-    arrangementFeePct: 1.0,
+    arrangementFeePct: 0,
     sourceLabel: 'Baroda housing loan and interest rates',
     sourceUrl: 'https://www.bankofbaroda.ug/rates-and-charges/interest-rates',
-    sourceNote: 'Baroda publishes housing-loan pricing as 2% below UGX PLR and a maximum 15-year term. Its displayed 20% PLR is explicitly effective from 2022 and the page directs customers to confirm current rates, so no numeric rate is presented here.',
-    sourceVerifiedAt: '2026-09-08'
+    sourceNote: 'Bank of Baroda prices housing loans at 2% below its UGX prime lending rate (20%), i.e. 18%, for up to 15 years. Bank of Uganda’s April 2026 sheet lists no arrangement fee. Confirm the current rate with the bank.',
+    sourceVerifiedAt: '2026-10-02'
   },
   {
     key: 'absa',
@@ -121,7 +121,7 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     sourceLabel: 'Absa Uganda home loans',
     sourceUrl: 'https://www.absa.co.ug/personal/home-loans/',
     sourceNote: 'Absa publishes up to 85% property finance, up to 25-year terms, and a 2% arrangement fee. It does not publish a fixed public rate on the reviewed page, so a current quote is required.',
-    sourceVerifiedAt: '2026-09-08'
+    sourceVerifiedAt: '2026-10-02'
   }
 ];
 

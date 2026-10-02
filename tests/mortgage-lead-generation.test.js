@@ -204,12 +204,12 @@ assert(mortgageRoutes.includes('mergeAuditedMortgageProviders'), 'API should app
 assert(mortgageRoutes.includes('seenProviderKeys.has(provider.key)'), 'API should avoid duplicated audited providers when merging database rows');
 assert(mortgageRoutes.includes('} catch (error) {'), 'API should fall back to audited public provider data when database reads fail');
 assert(mortgageRoutes.includes("residentialRate: null"), 'Housing Finance variable public rate should render as quote required');
-assert(mortgageRoutes.includes("sourceVerifiedAt: '2026-09-08'"), 'audited mortgage assumptions should carry the current verification date');
-assert(app.includes('const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-09-08"'), 'mortgage fallback verification label should use the current source-review date');
+assert(mortgageRoutes.includes("sourceVerifiedAt: '2026-10-02'"), 'audited mortgage assumptions should carry the current verification date');
+assert(app.includes('const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-10-02"'), 'mortgage fallback verification label should use the current source-review date');
 assert(app.includes('function latestMortgageSourceVerifiedAt'), 'frontend should derive its source-review date from the audited provider records');
 assert(mortgageRoutes.includes('function latestMortgageSourceVerifiedAt'), 'API should derive its source-review date from the audited provider records');
 assert(!app.includes('Rates are checked daily to keep this page up to date.'), 'mortgage copy should not promise unsupported daily source checks');
-assert(app.includes('residentialRate: null') && app.includes('Its displayed 20% PLR is explicitly effective from 2022'), 'Baroda should require a current quote instead of presenting the old derived rate as current');
+assert(app.includes('2% below its UGX prime lending rate (20%), i.e. 18%') && app.includes("April 2026 sheet lists no arrangement fee"), 'Baroda 18% must be derived from a PLR confirmed current by the Bank of Uganda sheet');
 assert(app.includes('minDepositPct: { residential: 30, commercial: 30, land: 10, default: 30 }'), 'Centenary should use its conservative published 30% borrower contribution');
 assert(app.includes('up to 25-year terms, and a 2% arrangement fee'), 'Absa fee guidance should reflect its current public page');
 assert(mortgageRoutes.includes('sourceNote'), 'audited source notes should be returned to the UI');
