@@ -5067,7 +5067,11 @@ function employeePropertyMissing(facts = {}) {
 function isEmployeeNewPropertyCaptionBoundary(caption = '', facts = {}) {
   const clean = normalizeInput(caption);
   if (clean.length < 18) return false;
-  const hasPropertySignal = /\b(?:property|house|home|mansion|bungalow|villa|townhouse|apartments?|flats?|rentals?|units?|land|plots?|acres?|decimals?|commercial|shops?|offices?|warehouses?|bedrooms?|bathrooms?)\b/i.test(clean);
+  // "*KIWENDA-LUWUNGA ESTATE 100By50Fts @ 25M With Ready Landtitle*" is a new
+  // property too: estates, land titles and plot sizes count, or its photo was
+  // attached to whatever property came before it.
+  const hasPropertySignal = /\b(?:property|house|home|mansion|bungalow|villa|townhouse|apartments?|flats?|rentals?|units?|land|plots?|acres?|decimals?|commercial|shops?|offices?|warehouses?|bedrooms?|bathrooms?|estates?|landtitle|land\s+title)\b/i.test(clean)
+    || /\b\d{2,4}\s*(?:by|x)\s*\d{2,4}\s*(?:ft|fts|feet)?\b/i.test(clean);
   if (!hasPropertySignal) return false;
   const parsedSignal = Boolean(
     facts.listingType
@@ -7948,6 +7952,14 @@ async function handleEmployeeWhatsappIntake({
           if (propertyAttemptRecorded) {
             data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
           }
+          const toppedUp = await agentTopUpExistingProperty({ data, existingProperty, storedMedia: pendingStoredMedia, phone, inboundMessageId: propertyInboundMessageId });
+          if (toppedUp) {
+            delete data.pending_property_caption;
+            clearEmployeePendingMedia(data);
+            promoteEmployeeQueuedSubmission(data);
+            await replaceEmployeeSession(phone, currentStep, data);
+            return { handled: true, nextStep: currentStep, propertyId: existingProperty.id, duplicate: true, message: toppedUp };
+          }
           data.current_property_id = null;
           delete data.pending_property_caption;
           clearEmployeePendingMedia(data);
@@ -8234,6 +8246,19 @@ async function handleEmployeeWhatsappIntake({
       propertyAttemptRecorded = recordEmployeePropertyAttempt(data, { inboundMessageId, caption });
       if (existingProperty && !recoveredExistingProperty) {
         if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
+        if (data.whatsapp_agent_self_intake === true && String(existingProperty.status) === 'pending' && candidates.length) {
+          const fresh = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider }).catch(() => []);
+          const toppedUp = await agentTopUpExistingProperty({ data, existingProperty, storedMedia: fresh, phone, inboundMessageId });
+          if (toppedUp) {
+            if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
+              delete data.pending_property_caption;
+              clearEmployeePendingMedia(data);
+              promoteEmployeeQueuedSubmission(data);
+            }
+            await replaceEmployeeSession(phone, currentStep, data);
+            return { handled: true, nextStep: currentStep, propertyId: existingProperty.id, duplicate: true, message: toppedUp };
+          }
+        }
         if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
           delete data.pending_property_caption;
           clearEmployeePendingMedia(data);
@@ -10387,6 +10412,25 @@ function employeeInForwardedBurst(data = {}) {
     .filter((t) => now - Number(t) < EMPLOYEE_BURST_WINDOW_MS);
   return recent.length >= 2;
 }
+/**
+ * An agent re-sending a property we already have — usually because we asked
+ * them to, after its photo was lost. Give the waiting listing the new photos
+ * instead of answering "already with us" and throwing them away.
+ */
+async function agentTopUpExistingProperty({ data = {}, existingProperty = null, storedMedia = [], phone, inboundMessageId } = {}) {
+  if (data.whatsapp_agent_self_intake !== true || !existingProperty?.id || !storedMedia.length) return null;
+  if (String(existingProperty.status) !== 'pending') return null;
+  try {
+    const attachment = await attachEmployeeReviewMedia({ propertyId: existingProperty.id, storedMedia, phone, inboundMessageId });
+    if (!attachment.attached) return null;
+    data.current_property_id = existingProperty.id;
+    return `📸 Thank you — I have added ${attachment.attached} ${attachment.attached === 1 ? 'photo' : 'photos/videos'} to the property you already sent us. It is with our team for review, and I will send you the link when it is live.`;
+  } catch (error) {
+    logger.warn('Agent top-up of existing property failed:', error.message || String(error));
+    return null;
+  }
+}
+
 function staffDroppedMediaWarning(data = {}, caption = '') {
   if (data.whatsapp_agent_self_intake === true) return '';
   if (!(Number(data.last_create_media_dropped) > 0) || Number(data.last_create_media_kept) > 0) return '';

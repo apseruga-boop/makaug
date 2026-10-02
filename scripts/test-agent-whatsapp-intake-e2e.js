@@ -169,6 +169,14 @@ const SCENARIOS = {
     await send(p, { image: 6, body: '*Land For Sale Nakawuka- Koba Estate 100by50fts @ UGX 28,000,000-30,000,000 With Ready Landtitle*' });
     await send(p, { body: 'Correction Over 50 Plots Of Land For Sale' });
   },
+  async resendAfterLostPhoto(p) {
+    // Jonathan is asked to re-send Kiwenda after its photo was lost.
+    await send(p, { image: 7, body: '*KIWENDA-LUWUNGA ESTATE 100By50Fts @ 25M With Ready Landtitle* For Sale' });
+    await pool.query(`DELETE FROM property_images WHERE property_id IN (SELECT p.id FROM properties p JOIN agents a ON a.id = p.agent_id WHERE a.whatsapp = $1)`, [p]);
+    await send(p, { image: 8, body: '*KIWENDA-LUWUNGA ESTATE 100By50Fts @ 25M With Ready Landtitle*' });
+    await send(p, { body: 'For Sale' });
+    await send(p, { image: 9, body: '*KIWENDA-LUWUNGA ESTATE 100By50Fts @ 25M With Ready Landtitle* For Sale' });
+  },
   async correctionAfterSave(p) {
     await send(p, { image: 5, body: '3 bedroom house for rent in Kyanja, Kampala 900k' });
     await send(p, { body: 'price 1.1m' });
