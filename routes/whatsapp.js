@@ -1,3 +1,4 @@
+const { agentGreetingName } = require('../services/agentNameService');
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../config/database');
@@ -6446,7 +6447,7 @@ async function findApprovedAgentByPhone(phone) {
   let agent = null;
   try {
     const result = await db.query(
-      `SELECT id, makaug_agent_number, full_name, company_name, phone, whatsapp, email, status
+      `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, status
          FROM agents
         WHERE status = 'approved'
           AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
@@ -6530,7 +6531,7 @@ function agentConversationalAside({ data = {}, cleanBody = '' } = {}) {
   const text = normalizeInput(cleanBody);
   if (!text) return null;
   const saved = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
-  const first = normalizeInput(data.agent?.full_name || '').split(/\s+/)[0] || '';
+  const first = agentGreetingName(data.agent || {}, '');
 
   // The menu points at these two words, so they have to work mid-batch as well.
   if (AGENT_SHARE_REQUEST.test(text)) {
@@ -6581,7 +6582,7 @@ const AGENT_SHARE_REQUEST = /\b(share|my (link|card|profile|page|listings?|prope
  * Two of the three options are for somebody else.
  */
 function agentMenuReply({ agent = {}, greet = true, savedCount = 0 } = {}) {
-  const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || '';
+  const first = agentGreetingName(agent, '');
   const lines = [];
   if (greet) {
     lines.push(`👋 Hello ${first || 'there'}!`);
@@ -6610,7 +6611,7 @@ function agentMenuReply({ agent = {}, greet = true, savedCount = 0 } = {}) {
  * on their WhatsApp status.
  */
 function agentShareReply({ agent = {} } = {}) {
-  const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || '';
+  const first = agentGreetingName(agent, '');
   let profileUrl = '';
   let cardUrl = '';
   try {
@@ -6638,7 +6639,7 @@ function agentShareReply({ agent = {} } = {}) {
 }
 
 function agentSelfIntakeOpeningLine(agent = {}) {
-  const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || 'there';
+  const first = agentGreetingName(agent, 'there');
   return `Thanks ${first} 👇`;
 }
 
@@ -6825,7 +6826,7 @@ function agentHelpContact() {
 }
 
 function agentHelpReply(agent = {}) {
-  const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || '';
+  const first = agentGreetingName(agent, '');
   const contact = agentHelpContact();
   return [
     `🙋 No problem${first ? ` ${first}` : ''} — help is on the way.`,

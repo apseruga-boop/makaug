@@ -1,5 +1,7 @@
 'use strict';
 
+const { agentGreetingName } = require('./agentNameService');
+
 // Welcome pack for an agent who has just joined makaug: the platform's real
 // numbers, where its audience watches from, and a WhatsApp message that
 // explains makaug without the agent needing to open the site.
@@ -74,7 +76,7 @@ async function computePlatformStats({ force = false } = {}) {
 
 async function fetchAgent(agentId) {
   const result = await db.query(
-    `SELECT id, makaug_agent_number, full_name, company_name, phone, whatsapp, email, status, created_at
+    `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, status, created_at
      FROM agents WHERE id = $1 LIMIT 1`,
     [agentId]
   );
@@ -150,7 +152,7 @@ function targetMonthName(now = new Date()) {
 }
 
 function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
-  const firstName = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
+  const firstName = agentGreetingName(agent, 'there');
   const lines = [];
   lines.push('*Welcome to makaug.com*');
   lines.push(`Hi ${firstName}, your agent account is live. Here is what you have joined.`);
@@ -241,7 +243,7 @@ function buildShareCardCaption({ agent = {} } = {}) {
 }
 
 function buildWelcomeCaption({ agent = {}, stats = {} } = {}) {
-  const firstName = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
+  const firstName = agentGreetingName(agent, 'there');
   const lines = [`*Welcome to makaug.com, ${firstName}!*`];
   if (agent.makaug_agent_number) lines.push(`Your Agent ID: *${agent.makaug_agent_number}*`);
   const network = networkAudience();

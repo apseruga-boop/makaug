@@ -1,5 +1,7 @@
 'use strict';
 
+const { agentGreetingName } = require('./agentNameService');
+
 // Animated "your week on makaug" recap video (720×720 MP4, ~20 s) for an
 // agent's weekly report. Frames are drawn as SVG, rasterised with sharp and
 // piped into ffmpeg. Style: cream ground, outlined chat bubbles with offset
@@ -200,7 +202,7 @@ function buildTimeline(report) {
   const x = report.extras || {};
   const enquiries = (Number(m.enquiries) || 0) + (Number(m.whatsapp_clicks) || 0);
   const prevEnq = (Number(p.enquiries) || 0) + (Number(p.whatsapp_clicks) || 0);
-  const firstName = String(a.full_name || '').trim().split(/\s+/)[0] || 'Agent';
+  const firstName = agentGreetingName(a, 'Agent');
   const initials = String(a.full_name || 'M A').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   let countries = (Array.isArray(report.top_countries) ? report.top_countries : []).slice(0, 4);
   let countryLabel = 'Where your visitors are';
@@ -451,7 +453,7 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
   // Lazily required: the welcome service reaches into the report services, and
   // pulling it in at module load would close the circle.
   const network = require('./agentWelcomeService').networkAudience();
-  const firstName = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
+  const firstName = agentGreetingName(agent, 'there');
   const initials = String(agent.full_name || 'M A').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const countries = (Array.isArray(stats.top_countries) ? stats.top_countries : []).slice(0, 4);
   const out = (lt, dur) => (dur - lt < 0.25 ? dur - 0.25 : Infinity);

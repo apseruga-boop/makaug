@@ -1,5 +1,7 @@
 'use strict';
 
+const { agentGreetingName } = require('./agentNameService');
+
 const db = require('../config/database');
 const { countryName } = require('./visitorCountryService');
 const { generateMakaugAgentNumber } = require('./authFlowService');
@@ -665,7 +667,7 @@ function buildWhatsAppReportMessage(report) {
     return pctChange === null ? '' : ` (${pctChange > 0 ? '+' : ''}${pctChange}% vs last week)`;
   };
   const n = (v) => toInt(v).toLocaleString('en-GB');
-  const firstName = String(a.full_name || '').trim().split(/\s+/)[0] || 'there';
+  const firstName = agentGreetingName(a, 'there');
   const company = String(a.company_name || '').trim();
   const showCompany = company && company.toLowerCase() !== String(a.full_name || '').trim().toLowerCase();
   const enquiries = toInt(m.enquiries) + toInt(m.whatsapp_clicks);
@@ -751,7 +753,7 @@ function buildWhatsAppReportMessage(report) {
 function buildWhatsAppCardCaption(report) {
   const r = report || {};
   const a = r.agent || {};
-  const firstName = String(a.full_name || '').trim().split(/\s+/)[0] || 'there';
+  const firstName = agentGreetingName(a, 'there');
   const lines = [];
   lines.push(`*Hi ${firstName}, your makaug weekly report is here* (${formatWeekRange(r.week_start, r.week_end)})`);
   if (a.makaug_agent_number) lines.push(`Agent ID: *${a.makaug_agent_number}*`);

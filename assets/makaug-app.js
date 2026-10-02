@@ -12332,6 +12332,12 @@ async function previewAgentWelcome() {
           ${videoUrl ? `<video src="${adminAttr(videoUrl)}" controls playsinline preload="none" class="w-full rounded-xl border border-gray-200 bg-white"></video>` : `<div class="rounded-xl border border-dashed border-gray-300 p-4 text-xs text-gray-600">Video is not available on this server; the message still sends.</div>`}
           <div>
             <div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Message to ${adminEscape(data.agent?.full_name || "the agent")} (${adminEscape(data.agent?.makaug_agent_number || "no agent ID")})</div>
+            <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
+              <label for="admin-agent-greeting-name" class="font-bold text-gray-700">Greet as</label>
+              <input id="admin-agent-greeting-name" type="text" maxlength="40" value="${adminAttr(data.greeting_name || "")}" class="rounded-lg border border-gray-300 px-2 py-1 text-sm w-40" aria-describedby="admin-agent-greeting-help">
+              <button type="button" onclick="saveAgentGreetingName()" class="rounded-lg bg-green-700 px-3 py-1 font-bold text-white">Save</button>
+              <span id="admin-agent-greeting-help" class="text-gray-500">The name every WhatsApp message uses — e.g. "Amos" for Agaba Amos.</span>
+            </div>
             <pre class="whitespace-pre-wrap rounded-xl bg-white p-3 text-xs text-gray-800 max-h-96 overflow-auto">${adminEscape(data.message || "")}</pre>
             ${agentReportSafeUrl(data.share_card_url) ? `<div class="mt-3 flex items-start gap-3"><img src="${adminAttr(data.share_card_url)}" alt="Share card" class="w-32 rounded-lg border border-gray-200"><div class="text-xs text-gray-600"><b>Share card</b><br>Posted to the agent as a third message for their WhatsApp status. The code opens <a href="${adminAttr(data.profile_url || "#")}" target="_blank" rel="noopener" class="font-bold text-green-700">their profile</a>.</div></div>` : ""}
           </div>
@@ -12339,6 +12345,19 @@ async function previewAgentWelcome() {
     }
   } catch (error) {
     if (box) box.innerHTML = `<p class="text-sm text-red-700">${adminEscape(error?.message || "Couldn't build the welcome pack.")}</p>`;
+  }
+}
+
+async function saveAgentGreetingName() {
+  const agentId = selectedAdminAgentId();
+  const input = document.getElementById("admin-agent-greeting-name");
+  if (!agentId || !input) return;
+  try {
+    const res = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/greeting-name`, { method: "PATCH", headers: adminAuthHeaders(), body: { greeting_name: input.value.trim() } });
+    toast(`Messages will now greet them as "${res?.data?.greets_as || input.value.trim()}".`);
+    previewAgentWelcome();
+  } catch (error) {
+    toast(error?.message || "Couldn't save the name.");
   }
 }
 

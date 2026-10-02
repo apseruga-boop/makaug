@@ -1,5 +1,7 @@
 'use strict';
 
+const { agentGreetingName } = require('./agentNameService');
+
 /**
  * Lead desk — every person makaug could not serve straight away, in one place.
  *
@@ -549,7 +551,7 @@ async function recordResponse(db, referralId, { response, notes = '' } = {}) {
 }
 
 function buildNudgeMessage({ referral, lead }) {
-  const first = text(referral.agent_name).split(/\s+/)[0] || 'there';
+  const first = agentGreetingName({ id: referral.agent_id, full_name: referral.agent_name }, 'there');
   const when = new Date(referral.sent_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   const where = lead.area ? ` in ${lead.area}` : '';
   return [

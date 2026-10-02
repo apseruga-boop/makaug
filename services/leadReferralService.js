@@ -1,5 +1,7 @@
 'use strict';
 
+const { agentGreetingName } = require('./agentNameService');
+
 /**
  * Referring a lead to an agent.
  *
@@ -78,7 +80,7 @@ function displayPhone(value = '') {
  */
 function buildAgentReferralMessage({ agent = {}, need = {} } = {}) {
   const people = (Array.isArray(need.people) ? need.people : []).filter((p) => p && p.phone).slice(0, 10);
-  const firstName = text(agent.full_name || agent.name).split(/\s+/)[0] || 'there';
+  const firstName = agentGreetingName(agent, 'there');
   const where = text(need.area) && !/^anywhere$/i.test(need.area) ? ` in ${text(need.area)}` : '';
   const what = wantPhrase(need.type);
   const lines = [`Hi ${firstName}, this is makaug.com.`, ''];

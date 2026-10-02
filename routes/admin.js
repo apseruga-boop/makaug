@@ -113,6 +113,7 @@ const leadDesk = require('../services/leadDeskService');
 const leadReferral = require('../services/leadReferralService');
 const leadHandoff = require('../services/leadHandoffService');
 const agentHowToPost = require('../services/agentHowToPostBroadcastService');
+const { agentGreetingName, setCachedGreetingName } = require('../services/agentNameService');
 const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
 const { MONETIZATION_SPINE_MARKER, markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
@@ -9533,6 +9534,24 @@ router.patch('/agents/:id/featured', async (req, res, next) => {
   }
 });
 
+// The name an agent is greeted by in every WhatsApp message ("Amos", not "Agaba").
+router.patch('/agents/:id/greeting-name', async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
+    const name = cleanText(req.body?.greeting_name || '').slice(0, 40) || null;
+    const updated = await db.query(
+      'UPDATE agents SET greeting_name = $2, updated_at = NOW() WHERE id = $1::uuid RETURNING id, full_name, greeting_name',
+      [req.params.id, name]
+    );
+    if (!updated.rows[0]) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    setCachedGreetingName(req.params.id, name);
+    await writeAudit('admin_agent_greeting_name_updated', { agent_id: req.params.id, greeting_name: name }, adminActorId(req));
+    return res.json({ ok: true, data: { ...updated.rows[0], greets_as: agentGreetingName(updated.rows[0]) } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.patch('/agents/:id/status', async (req, res, next) => {
   try {
     const status = String(req.body.status || '').trim().toLowerCase();
@@ -13577,6 +13596,7 @@ router.get('/agent-welcome/:agentId', async (req, res, next) => {
       ok: true,
       data: {
         agent: pack.agent,
+        greeting_name: agentGreetingName(pack.agent),
         stats: pack.stats,
         listings: pack.listings,
         profile_url: pack.profile_url,
@@ -13711,6 +13731,13 @@ router.post('/agent-broadcast/how-to-post/send', async (req, res, next) => {
     const sent = await agentHowToPost.alreadySentAgentIds(db);
     const only = Array.isArray(req.body?.agent_ids) ? new Set(req.body.agent_ids.map(String)) : null;
     const greetNames = req.body?.greet_names && typeof req.body.greet_names === 'object' ? req.body.greet_names : {};
+    // Whatever name we greet them by here is the name the bot uses from now on.
+    for (const [agentId, name] of Object.entries(greetNames)) {
+      const clean = cleanText(name).slice(0, 40);
+      if (!clean || !/^[0-9a-f-]{36}$/i.test(agentId)) continue;
+      await db.query('UPDATE agents SET greeting_name = $2, updated_at = NOW() WHERE id = $1::uuid', [agentId, clean]);
+      setCachedGreetingName(agentId, clean);
+    }
     const targets = all.filter((r) => !sent.has(String(r.id)) && (!only || only.has(String(r.id))));
     const results = [];
     for (const agent of targets) {
@@ -13720,7 +13747,7 @@ router.post('/agent-broadcast/how-to-post/send', async (req, res, next) => {
           to: agent.number,
           // Ugandan names are often written surname first ("Kimuli Brian"), so
           // the sender can say which name each agent should be greeted by.
-          name: cleanText(greetNames[String(agent.id)]) || agent.name,
+          name: cleanText(greetNames[String(agent.id)]) || agentGreetingName({ id: agent.id, full_name: agent.name }),
           agentId: agent.id,
           source: agentReportWhatsappSource(),
           actorId: adminActorId(req)
@@ -13797,7 +13824,7 @@ router.post('/agent-welcome/:agentId/send', async (req, res, next) => {
       try {
         howTo = await queueWhatsappWebBridgeMessage({
           recipient: to,
-          text: agentHowToPost.buildWelcomeFilmCaption({ name: pack.agent.full_name }),
+          text: agentHowToPost.buildWelcomeFilmCaption({ name: agentGreetingName(pack.agent) }),
           mediaUrl: agentHowToPost.videoUrl(),
           mediaType: 'video',
           source,
