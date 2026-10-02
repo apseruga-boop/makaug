@@ -82,13 +82,13 @@ function buildAgentBillingMessage(kind, { agent = {}, settings = {} } = {}) {
     : '';
   switch (kind) {
     case 'pre_due':
-      return [`Hi ${name} 👋`, '', `Your makaug agent subscription renews on *${due}*.`, howToPay, '', 'Your profile and listings stay live without a break. Thank you for being with makaug!'].filter((l) => l !== '').join('\n');
+      return [`Hi ${name} 👋`, '', (due ? `Your makaug agent subscription renews on *${due}*.` : `Your makaug agent subscription (${ugx(fee)} a month) is due.`), howToPay, '', 'Your profile and listings stay live without a break. Thank you for being with makaug!'].filter((l) => l !== '').join('\n');
     case 'due_today':
       return [`Hi ${name} 👋`, '', `Your makaug agent subscription (${ugx(fee)} a month) is due *today*.`, howToPay, '', 'Thank you!'].filter((l) => l !== '').join('\n');
     case 'reminder':
-      return [`Hi ${name},`, '', `A reminder that your makaug subscription was due on *${due}* and we have not received it yet.`, howToPay, '', `Already paid? Just send the transaction ID here and we will check it. Questions: ${help.name} on ${help.pretty}.`].filter((l) => l !== '').join('\n');
+      return [`Hi ${name},`, '', (due ? `A reminder that your makaug subscription was due on *${due}* and we have not received it yet.` : `A reminder that your makaug subscription (${ugx(fee)} a month) is due and we have not received it yet.`), howToPay, '', `Already paid? Just send the transaction ID here and we will check it. Questions: ${help.name} on ${help.pretty}.`].filter((l) => l !== '').join('\n');
     case 'final_reminder':
-      return [`Hi ${name},`, '', `*Final reminder* — your makaug subscription was due on *${due}*.`, howToPay, '', 'If we do not receive it, your listings will be taken off makaug. Nothing is deleted — the moment you pay, everything comes back exactly as it was.', '', `Need to talk? ${help.name}: ${help.pretty}.`].filter((l) => l !== '').join('\n');
+      return [`Hi ${name},`, '', (due ? `*Final reminder* — your makaug subscription was due on *${due}*.` : '*Final reminder* — your makaug subscription has not been paid yet.'), howToPay, '', 'If we do not receive it, your listings will be taken off makaug. Nothing is deleted — the moment you pay, everything comes back exactly as it was.', '', `Need to talk? ${help.name}: ${help.pretty}.`].filter((l) => l !== '').join('\n');
     case 'taken_down':
       return [`Hi ${name},`, '', 'Your makaug profile and listings are *paused* because the monthly subscription has not been paid.', '', 'Nothing has been deleted. As soon as you pay, everything goes back live exactly as it was.', howToPay, '', `Please call or WhatsApp *${help.name}* on *${help.pretty}* and we will help you.`].filter((l) => l !== '').join('\n');
     case 'reinstated':
