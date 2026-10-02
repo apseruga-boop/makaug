@@ -38,8 +38,8 @@ async function run() {
   assert.strictEqual(humanSupportIntent.intent, 'support', 'Explicit human support requests should not be swallowed by account help');
 
   const brokerReply = menuRouteReply('en', 'agent_registration').message;
-  assert(brokerReply.includes('/broker-signup'), 'Broker reply must point to the broker signup route');
-  assert(brokerReply.includes('/login'), 'Broker reply should include the login route for existing users');
+  // Agent sign-ups are handed to a person (Ronald) rather than a self-serve form.
+  assert(/will reach out/i.test(brokerReply) && /\+256 709 402 189|Ronald/.test(brokerReply), 'Broker reply must hand the agent to the team contact');
   assert(!brokerReply.includes('Search for a property'), 'Broker page context must not fall back to the generic property menu');
 
   const loginReply = menuRouteReply('en', 'account_help').message;

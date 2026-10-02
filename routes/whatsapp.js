@@ -182,7 +182,7 @@ const WHATSAPP_MIN_LISTING_PHOTOS = 5;
 // Language Translations
 const T = {
   en: {
-    welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n\nReply with 1, 2, 3, or 4",
+    welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nReply with a number",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
@@ -197,8 +197,8 @@ const T = {
     askContactMethod: '📲 How should serious viewers contact you?\n1️⃣ WhatsApp / phone\n2️⃣ Email',
     askContactValuePhone: '📱 Please send the WhatsApp/phone number for listing enquiries.\nFormat: +256 7XX XXX XXX',
     askContactValueEmail: '✉️ Please send the email address for listing enquiries.',
-    askIDNumber: '🪪 Now type your National ID Number (NIN) here. This is required to prevent fraud and will not be publicly shown.',
-    askSelfie: '🪪 Please send a clear photo of your National ID. Do not send a PDF or document file. Your ID is used only for verification and fraud prevention - it is never shown publicly.',
+    askIDNumber: '🪪 Now type your National ID Number (NIN) here.\n\n🔒 This is only to check that you are the real owner. It is never shown on makaug and never shared with anyone who enquires.',
+    askSelfie: '🪪 Please send a clear photo of your National ID (a photo, not a PDF).\n\n🔒 Don\'t worry — this is only for verification, to protect buyers and tenants from fraud. Your ID is never shown on makaug or shared with anyone; only the makaug review team sees it.',
     askPhone: '📱 What is your mobile phone number (for verification)?\nFormat: +256 7XX XXX XXX',
     otpSent: "📲 We've sent a 6-digit code to your phone via SMS. Please type that code here to verify:",
     otpSentEmail: "✉️ We've sent a 6-digit code to your email. Please type that code here to verify:",
@@ -273,8 +273,8 @@ const T = {
     askBedrooms: "🛏 Eddiini ezingaana? (Okwandika ennamba, oba 0 bw'etaba)",
     askDescription: '📝 Teeka ennukuta ntono ku ensi eno (otuutu, ebintu, embeera...)',
     askPhotos: '📸 Weereza ekifaananyi kya *front/outside* okusooka.',
-    askIDNumber: '🪪 Kwa nteekateeka, tukeetaaga NIN yo (National ID Number). Ejja kutuzikirira bukyamu.',
-    askSelfie: "🤳 Weereza ekifaananyi kyo ekirabika obulungi ng'okutte National ID yo. Tosindika PDF oba document file; kyetaagisa kubeera kifaananyi.",
+    askIDNumber: '🪪 Kwa nteekateeka, tukeetaaga NIN yo (National ID Number).\n\n🔒 Kino kya kukakasa nti ggwe nnannyini yennyini — tekirabikira ku makaug era tekiweebwa muntu yenna.',
+    askSelfie: "🤳 Weereza ekifaananyi kyo ekirabika obulungi ng'okutte National ID yo. Tosindika PDF oba document file; kyetaagisa kubeera kifaananyi.\n\n🔒 ID yo ya kukakasa kwokka — tegirabikira ku makaug era tegiweebwa muntu yenna.",
     askPhone: '📱 Enamba yaffe ya simu (okukakasa)?\nFomati: +256 7XX XXX XXX',
     otpSent: '📲 Tukusindise koodi ku simu yo nga SMS. Wandika koodi eyo eri wano:',
     listingSubmitted: "🎉 *Ensi yo eterekedwa!*\n\nTeemu yaffe eya kulabirira era ejja kuterekebwa mu saawa 24.\n\nReference: #{ref}\n\n✅ Edirirra: teekawo profile yo olabe views, saves n'ebibuuza ku listing yo.\n\nWebale okozesa makaug! 🏠🇺🇬",
@@ -919,15 +919,15 @@ function welcomeMessage(lang, sessionData = {}) {
   const code = resolveLangCode(lang);
   const lead = timeGreetingWithName(code, sessionData);
   const menus = {
-    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
-    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
-    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
-    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n4️⃣ Off-plan projects\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
-    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
-    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n\nMushobora kwandika bisanzwe.`,
-    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
-    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
-    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
+    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
+    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Property ey'okusigamu ssente (investment)\n6️⃣ Yingira makaug nga agent\n7️⃣ Obuyambi ku mortgage\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
+    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n5️⃣ Mali ya uwekezaji\n6️⃣ Jiunge na makaug kama agent\n7️⃣ Msaada wa mkopo wa nyumba (mortgage)\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
+    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
+    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
+    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nMushobora kwandika bisanzwe.`,
+    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
+    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
+    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
   };
   return `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n\n${menus[code] || menus.en}\n\nBrowse makaug anytime: ${HOME_URL}`;
 }
@@ -1145,7 +1145,8 @@ function fastWhatsappRuntimeHints({
 
   if (!intent) {
     const route = contextualPageRouteFromMessage(clean);
-    if (route === 'listing_type' || isListingStartRequest(clean, { intent: 'property_listing', confidence: 0.99 })) {
+    if (route === 'agent_registration') intent = 'agent_registration';
+    else if (route === 'listing_type' || isListingStartRequest(clean, { intent: 'property_listing', confidence: 0.99 })) {
       intent = 'property_listing';
       const listingType = inferListingTypeFromStartRequest(clean, {});
       if (listingType) intentEntities.listing_type = listingType;
@@ -1518,6 +1519,8 @@ function stepPromptFor(lang, step) {
     ask_contact_value: t(code, 'askContactValuePhone'),
     ask_id_number: t(code, 'askIDNumber'),
     ask_selfie: t(code, 'askSelfie'),
+    ask_terms: 'Please reply *AGREE* to accept the makaug listing terms and send your property for review, or *NO* to stop.',
+    investment_brief: 'Tell me the kind of investment (1 rental units, 2 commercial, 3 land, 4 any), the area and your budget.',
     ask_phone: t(code, 'askPhone'),
     search_type: t(code, 'askSearchType'),
     search_area: t(code, 'askSearchArea'),
@@ -2344,6 +2347,26 @@ function fastListingProgressReply(lang, patch = {}, updatedDraft = {}, intro = '
   };
 }
 
+async function sendListerTermsPrompt({ phone, draft = {} }) {
+  const docs = require('../services/listingDocsService');
+  const settings = await require('../services/billingOpsService').getSettings(db).catch(() => ({}));
+  const name = normalizeInput(draft.contact_display_name || draft.lister_name || '').split(/\s+/)[0] || '';
+  try {
+    await queueWhatsappWebBridgeMessage({
+      recipient: phone,
+      text: '📄 makaug — Terms for listing your property',
+      mediaUrl: docs.docUrls('lister_terms').cover,
+      mediaType: 'image',
+      source: 'whatsapp_runtime',
+      actorId: 'system',
+      metadata: { message_kind: 'lister_terms_cover', terms_version: docs.LISTER_TERMS_VERSION, reply_dedupe_key: `lister_terms_cover:${String(phone).replace(/\D/g, '')}:${new Date().toISOString().slice(0, 10)}` }
+    });
+  } catch (error) {
+    logger.warn('Lister terms cover not queued:', error.message || String(error));
+  }
+  return docs.listerTermsMessage(settings, { name });
+}
+
 async function submitWhatsappListingDraft({ phone, lang, draft }) {
   try {
     const rawDraft = draft || {};
@@ -2419,7 +2442,14 @@ async function submitWhatsappListingDraft({ phone, lang, draft }) {
           canonical_location_source: d.canonical_location_source,
           region: d.region,
           resolved_location_label: [d.area, d.district, d.region].filter(Boolean).join(', '),
-          removal_command: `REMOVE ${inquiryReference}`
+          removal_command: `REMOVE ${inquiryReference}`,
+          ...(d.terms_accepted_at ? {
+            lister_terms_version: d.terms_version || null,
+            lister_terms_accepted_at: d.terms_accepted_at,
+            lister_terms_accepted_phone: d.terms_accepted_phone || null,
+            lister_terms_accepted_text: d.terms_accepted_text || null,
+            lister_fee_terms: d.lister_fee_terms || null
+          } : {})
         },
         inquiryReference,
         d.national_id_number || null,
@@ -13078,6 +13108,144 @@ function intentRouteLabel(route) {
   return labels[route] || 'continue';
 }
 
+// --- Investment property requests ------------------------------------------
+const INVESTMENT_TYPES = {
+  '1': { key: 'rental_units', label: 'Rental units / apartments', searchType: 'sale', words: 'rental units apartments' },
+  '2': { key: 'commercial', label: 'Commercial building', searchType: 'commercial', words: 'commercial building' },
+  '3': { key: 'land', label: 'Land to develop', searchType: 'land', words: 'land' },
+  '4': { key: 'any', label: 'Any income-generating property', searchType: 'sale', words: '' }
+};
+
+function isInvestmentPropertyRequest(text = '') {
+  return /\b(invest(?:ment|ing|or)?|income[-\s]?generating|rental income|return on investment|roi|buy[-\s]?to[-\s]?let)\b/i.test(String(text || ''));
+}
+
+function investmentBriefHasDetail(text = '') {
+  const clean = String(text || '');
+  return /\b(\d+\s*(?:m|million|bn|billion|k)|ugx|usd|\$)\b/i.test(clean) || /\b(in|at|around|near)\s+[A-Z][a-z]{2,}/.test(clean);
+}
+
+function investmentIntroReply(lang = 'en') {
+  return [
+    `${whatsappBrandHeader('Investment property')}`,
+    'Great — what kind of investment are you looking for?',
+    '1️⃣ Rental units / apartments',
+    '2️⃣ Commercial building (shops, offices)',
+    '3️⃣ Land to develop',
+    '4️⃣ Any income-generating property',
+    '',
+    'Reply with the number *plus the area and your budget*, e.g. "1, Kira, up to 800M".',
+    t(lang, 'menuHint')
+  ].join('\n');
+}
+
+function inferInvestmentType(text = '') {
+  const clean = normalizeInput(text).toLowerCase();
+  const lead = clean.match(/^\s*([1-4])\b/);
+  if (lead) return INVESTMENT_TYPES[lead[1]];
+  if (/\b(rental|units|apartment|flats|hostel|rooms)\b/.test(clean)) return INVESTMENT_TYPES['1'];
+  if (/\b(commercial|shop|office|warehouse|arcade|plaza)\b/.test(clean)) return INVESTMENT_TYPES['2'];
+  if (/\b(land|plot|acre|acres|develop)\b/.test(clean)) return INVESTMENT_TYPES['3'];
+  return INVESTMENT_TYPES['4'];
+}
+
+async function investmentBriefReply({ phone, lang = 'en', text = '' }) {
+  const kind = inferInvestmentType(text);
+  const detail = normalizeInput(text).replace(/^\s*[1-4]\s*[,.)-]?\s*/, '');
+  let filters = { hasSignal: false };
+  try {
+    filters = await resolveNaturalSearchFilters({ text: `${kind.words} for sale ${detail}`.trim(), entities: {}, fallbackType: kind.searchType, language: lang, sessionData: {} });
+    if (!filters.area) {
+      const fb = fallbackNaturalSearchSentence(`${kind.words} for sale ${detail}`);
+      if (fb.hasSignal && fb.area) filters = { ...filters, ...fb, hasSignal: true };
+    }
+  } catch (_ignored) { filters = { hasSignal: false }; }
+  filters = { ...filters, searchType: kind.searchType };
+  let rows = [];
+  try {
+    rows = filters.area ? await findPropertiesByNaturalFilters(filters) : await findPropertiesForWhatsapp(kind.searchType, '');
+  } catch (_ignored) { rows = []; }
+  const budget = Number(filters.maxBudgetUgx) > 0 ? Number(filters.maxBudgetUgx) : null;
+
+  deferWhatsappWork('WhatsApp investment lead', async () => {
+    await createLead(db, {
+      contact: { name: 'WhatsApp investor', phone, whatsapp: phone, preferredContactChannel: 'whatsapp', preferredLanguage: resolveLangCode(lang), roleType: 'investor', locationInterest: filters.area || '', categoryInterest: 'investment', budgetRange: budget ? String(budget) : '' },
+      source: 'whatsapp_investment_request',
+      leadType: 'property_need',
+      channel: 'whatsapp',
+      category: 'investment',
+      location: filters.area || null,
+      budget,
+      message: `Investment property: ${kind.label}. "${normalizeInput(text).slice(0, 300)}"`,
+      metadata: { investment_type: kind.key, query_text: normalizeInput(text).slice(0, 400), results_shown: rows.length }
+    });
+    const desk = require('../services/leadDeskService');
+    const body = [
+      '💼 *Investor enquiry on WhatsApp*',
+      `+${String(phone).replace(/\D/g, '')}`,
+      `Looking for: ${kind.label}${filters.area ? ` in ${filters.area}` : ''}${budget ? ` · budget about UGX ${budget.toLocaleString('en-US')}` : ''}`,
+      `They said: "${normalizeInput(text).slice(0, 200)}"`,
+      `Shown ${rows.length} listing(s). Call them with options.`
+    ].join('\n');
+    if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'investment_enquiry');
+    const contact = agentHelpContact();
+    const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
+    if (contact.digits && !onList) await require('../services/leadHandoffService').deliverWhatsapp({ to: contact.digits, body, kind: 'investment_enquiry_contact', leadId: null, nonce: `${phone}-${Date.now()}` });
+  });
+
+  const intro = `${whatsappBrandHeader('Investment property')}\n💼 *${kind.label}*${filters.area ? ` in *${filters.area}*` : ''}${budget ? ` · up to UGX ${budget.toLocaleString('en-US')}` : ''}`;
+  const handoff = `A member of our team will also reach out with investment options and the numbers (rent, returns, title). Questions now? Call ${agentHelpContact().name} on ${agentHelpContact().pretty}.`;
+  if (!rows.length) return `${intro}\n\nI don't have a public listing that fits yet — I've saved your request.\n\n${handoff}\n\n${t(lang, 'menuHint')}`;
+  return `${intro}\n\n${formatPropertySearchMessage(lang, rows, filters.area || 'Uganda', kind.searchType)}\n\n${handoff}`;
+}
+
+// --- "I want to list as an agent" → a person (Ronald) takes it from here ----
+async function agentJoinRequestReply({ phone, text = '' }) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const contact = agentHelpContact();
+  let existing = null;
+  try {
+    existing = (await db.query(
+      `SELECT id, full_name, status FROM agents WHERE removed_at IS NULL AND (RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1 OR RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1) ORDER BY created_at DESC LIMIT 1`,
+      [digits.slice(-9)])).rows[0] || null;
+  } catch (_ignored) { existing = null; }
+  let fee = 50000;
+  try { fee = Number((await require('../services/billingOpsService').getSettings(db)).agent_fee?.monthly_ugx || 50000); } catch (_ignored) { /* default */ }
+
+  deferWhatsappWork('WhatsApp agent join request', async () => {
+    const recent = await db.query(
+      `SELECT 1 FROM audit_logs WHERE action = 'agent_join_requested' AND details->>'phone' = $1 AND created_at > NOW() - INTERVAL '12 hours' LIMIT 1`, [digits]).catch(() => ({ rows: [] }));
+    if (recent.rows.length) return;
+    await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'agent_join_requested', $1::jsonb)`, [JSON.stringify({ phone: digits, text: normalizeInput(text).slice(0, 300), existing_status: existing?.status || null })]).catch(() => {});
+    const desk = require('../services/leadDeskService');
+    const body = [
+      '🧑‍💼 *New agent wants to join makaug*',
+      `+${digits}${existing ? ` (${existing.full_name}, application ${existing.status})` : ''}`,
+      `They said: "${normalizeInput(text).slice(0, 200)}"`,
+      `${contact.name}: please call them today, explain the agent plan (UGX ${fee.toLocaleString('en-US')}/month), and approve them in the admin once paid.`
+    ].join('\n');
+    if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'agent_join_request');
+    const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
+    if (contact.digits && !onList) await require('../services/leadHandoffService').deliverWhatsapp({ to: contact.digits, body, kind: 'agent_join_request_contact', leadId: null, nonce: `${digits}-${Date.now()}` });
+  });
+
+  if (existing && existing.status === 'pending') {
+    return `${whatsappBrandHeader('Agent sign-up')}\nThanks — your agent application is already with our team. *${contact.name}* will call you to finish setting you up.\n\nNeed us sooner? Call or WhatsApp ${contact.name} on ${contact.pretty}.`;
+  }
+  return [
+    `${whatsappBrandHeader('Join makaug as an agent')}`,
+    `Great to hear from you! 🙌 A member of our team — *${contact.name}* — will reach out to you shortly to get you set up.`,
+    '',
+    'As a makaug agent you can:',
+    '• Post properties just by sending photos here on WhatsApp',
+    '• Get your own agent page and buyer/tenant enquiries sent straight to you',
+    `• All for UGX ${fee.toLocaleString('en-US')} a month`,
+    '',
+    `Once you're approved, I'll send you a short guide showing exactly how to post.`,
+    `Want to talk now? Call or WhatsApp ${contact.name} on ${contact.pretty}.`
+  ].join('\n');
+}
+
 function menuRouteReply(lang, route) {
   if (route === 'off_plan') return { message: offPlanWhatsappReply(false), nextStep: 'main_menu' };
   if (route === 'listing_type') return { message: t(lang, 'askListingType'), nextStep: 'listing_type' };
@@ -13085,7 +13253,9 @@ function menuRouteReply(lang, route) {
   if (route === 'agent_area') return { message: t(lang, 'askAgentArea'), nextStep: 'agent_area' };
   if (route === 'agent_registration') {
     return {
-      message: `${whatsappBrandHeader('Broker sign-up')}\nIf you want to join ${ACTIVE_BRAND} as an agent or broker, start here:\n${HOME_URL}/broker-signup\n\nAlready have an account? Log in here:\n${HOME_URL}/login\n\nYou can list properties free, receive enquiries, and use ${ACTIVE_TENANT.languages.length} written website languages.\n\n${t(lang, 'menuHint')}`,
+      message: IS_SOUTH_AFRICA
+        ? `${whatsappBrandHeader('Broker sign-up')}\nIf you want to join ${ACTIVE_BRAND} as an agent or broker, start here:\n${HOME_URL}/broker-signup\n\nAlready have an account? Log in here:\n${HOME_URL}/login\n\n${t(lang, 'menuHint')}`
+        : `${whatsappBrandHeader('Join as an agent')}\nGreat — a member of our team (*${agentHelpContact().name}*) will reach out to get you set up. To talk now, call or WhatsApp ${agentHelpContact().pretty}.\n\n${t(lang, 'menuHint')}`,
       nextStep: 'main_menu'
     };
   }
@@ -13208,7 +13378,8 @@ function contextualPageRouteFromMessage(text = '') {
     return 'account_help';
   }
 
-  if (/\b(sign\s*up|signup|register|registration|join|become|create)\b.{0,50}\b(agent|broker)\b/i.test(clean)
+  if (/\b(list|post|advertise)\w*\b.{0,40}\bas an? (?:real estate |property )?(agent|broker)\b/i.test(clean)
+    || /\b(sign\s*up|signup|register|registration|join|become|create)\b.{0,50}\b(agent|broker)\b/i.test(clean)
     || /\b(agent|broker)\b.{0,50}\b(sign\s*up|signup|register|registration|join|profile)\b/i.test(clean)) {
     return 'agent_registration';
   }
@@ -13250,7 +13421,7 @@ const STEPS = [
   'greeting', 'choose_language', 'main_menu', 'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
   'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract',
   'ask_university', 'ask_distance', 'ask_public_name', 'confirm_whatsapp_contact', 'ask_contact_method', 'ask_contact_value',
-  'ask_id_number', 'ask_selfie', 'ask_phone', 'search_type', 'search_area', 'agent_area',
+  'ask_id_number', 'ask_selfie', 'ask_terms', 'investment_brief', 'ask_phone', 'search_type', 'search_area', 'agent_area',
   'verify_otp', 'missed_call_need', 'missed_call_resolved', 'submitted', ...EMPLOYEE_INTAKE_STEPS
 ];
 
@@ -13266,6 +13437,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const compactUpper = normalizeOptKeyword(bodyUpper);
 
   const respond = (msg, nextStep) => ({ message: msg, nextStep });
+  if (step === 'investment_brief' && cleanBody && !['MENU', 'HOME', 'CANCEL', 'STOP', 'BACK'].includes(compactUpper)) {
+    return respond(await investmentBriefReply({ phone, lang, text: cleanBody }), 'main_menu');
+  }
   if (isOffPlanRequest(cleanBody, intentResult?.intent)) {
     const listingRequest = isOffPlanListingRequest(cleanBody, intentResult?.intent);
     if (listingRequest) {
@@ -13309,6 +13483,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const listingStartSteps = ['greeting', 'main_menu', 'search_type', 'search_area', 'agent_area', 'submitted'];
   const explicitListingStart = listingStartSteps.includes(step)
+    && contextualPageRouteFromMessage(cleanBody) !== 'agent_registration'
     && isListingStartRequest(cleanBody, intentResult);
   const contextualRoute = contextualPageRouteFromMessage(cleanBody);
   const globalRoute = contextualRoute || intentMenuRoute(intentResult?.intent);
@@ -13552,7 +13727,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     'listing_type', 'ownership', 'title', 'district',
     'area', 'price', 'bedrooms', 'description', 'ask_deposit', 'ask_contract', 'ask_university',
     'ask_distance', 'ask_public_name', 'confirm_whatsapp_contact', 'ask_contact_method', 'ask_contact_value', 'ask_selfie', 'ask_id_number',
-    'ask_phone', 'verify_otp'
+    'ask_terms', 'ask_phone', 'verify_otp'
   ];
   const hasListingContext = Boolean(
     draft.listing_type
@@ -13705,8 +13880,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const activeFlowOwnsNumericReply = numericOptionReply
     && !['greeting', 'main_menu', 'choose_language', 'search_type', 'search_area', 'agent_area'].includes(step);
   if (['greeting', 'main_menu'].includes(step) && globalRoute === 'agent_registration') {
-    const next = menuRouteReply(lang, globalRoute);
-    return respond(next.message, next.nextStep);
+    return respond(await agentJoinRequestReply({ phone, text: cleanBody }), 'main_menu');
+  }
+
+  if (['greeting', 'main_menu'].includes(step) && isInvestmentPropertyRequest(cleanBody)) {
+    if (investmentBriefHasDetail(cleanBody)) return respond(await investmentBriefReply({ phone, lang, text: cleanBody }), 'main_menu');
+    return respond(investmentIntroReply(lang), 'investment_brief');
   }
 
   if (['greeting', 'main_menu'].includes(step) && /\b(agent|broker|realtor)\b/i.test(cleanBody)) {
@@ -13832,7 +14011,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     && !activeFlowOwnsNumericReply
     && globalRoute !== step
     && !(globalRoute === 'search_type' && ['search_type', 'search_area', 'agent_area'].includes(step))
-    && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
+    && !['verify_otp', 'ask_id_number', 'ask_selfie', 'ask_terms'].includes(step)
     && (
       !['title', 'district', 'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract', 'ask_university', 'ask_distance', 'ask_field_agent', 'ask_field_agent_details'].includes(step)
       && !['ask_public_name', 'ask_contact_method', 'ask_contact_value', 'ask_id_number', 'ask_selfie'].includes(step)
@@ -13841,7 +14020,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     && globalIntentConfidence >= 0.6;
 
   if (canSwitchFlow) {
-    const next = menuRouteReply(lang, globalRoute);
+    const next = globalRoute === 'agent_registration'
+      ? { message: await agentJoinRequestReply({ phone, text: cleanBody }), nextStep: 'main_menu' }
+      : menuRouteReply(lang, globalRoute);
     await patchSessionData(phone, {
       interrupted_step: step,
       interrupted_at: new Date().toISOString(),
@@ -13878,6 +14059,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
+    if (cleanBody === '5') return respond(investmentIntroReply(lang), 'investment_brief');
+    if (cleanBody === '6') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
+    if (cleanBody === '7') { const next = menuRouteReply(lang, 'mortgage_help'); return respond(next.message, next.nextStep); }
     return respond(`${friendlyGreetingReply(lang, sessionData)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 
@@ -13945,6 +14129,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
+    if (cleanBody === '5') return respond(investmentIntroReply(lang), 'investment_brief');
+    if (cleanBody === '6') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
+    if (cleanBody === '7') { const next = menuRouteReply(lang, 'mortgage_help'); return respond(next.message, next.nextStep); }
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
 
     if (compactUpper === 'WIDEN' && Number.isFinite(Number(sessionData.search_lat)) && Number.isFinite(Number(sessionData.search_lng))) {
@@ -14914,8 +15101,40 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       verification_channel: updatedDraft.verification_channel,
       otp_channel: 'not_required'
     });
+    // Private owners (not agents) must see and AGREE to the listing terms first.
+    const brokerMatch = await findBrokerAgentByContact({ phone: updatedDraft.owner_phone || updatedDraft.lister_phone || phone, email: updatedDraft.lister_email || '' }).catch(() => null);
+    if (!brokerMatch?.id && !updatedDraft.terms_accepted_at) {
+      return respond(await sendListerTermsPrompt({ phone, draft: updatedDraft }), 'ask_terms');
+    }
     const result = await submitWhatsappListingDraft({ phone, lang, draft: updatedDraft });
     return respond(result.message, result.nextStep);
+  }
+
+  // TERMS (private owners): AGREE to submit, NO to stop.
+  if (step === 'ask_terms') {
+    const answer = normalizeInput(cleanBody).toLowerCase();
+    if (/^(i\s+)?(agree|accept|agreed|i agree|nzikiriza|nkkiriza|nakubali|nakubaliana|kubali)\b/.test(answer) || compactUpper === 'AGREE' || isAffirmativeReply(cleanBody)) {
+      const settings = await require('../services/billingOpsService').getSettings(db).catch(() => ({}));
+      const docs = require('../services/listingDocsService');
+      const acceptance = {
+        terms_accepted_at: new Date().toISOString(),
+        terms_version: docs.LISTER_TERMS_VERSION,
+        terms_accepted_phone: String(phone).replace(/\D/g, ''),
+        terms_accepted_text: cleanBody.slice(0, 80),
+        lister_fee_terms: { free_days: Number(settings.lister_fee?.free_days ?? 7), monthly_ugx: Number(settings.lister_fee?.monthly_ugx || 20000) }
+      };
+      await patchDraft(phone, acceptance);
+      const result = await submitWhatsappListingDraft({ phone, lang, draft: { ...draft, ...acceptance } });
+      if (!result.propertyId) return respond(result.message, result.nextStep);
+      const fee = acceptance.lister_fee_terms;
+      return respond(`${result.message}\n\n✅ Thank you for agreeing to the terms.\n🗓️ Once approved, your property is live *free for ${fee.free_days} days*. After that it is UGX ${fee.monthly_ugx.toLocaleString('en-US')} a month to stay live — we'll message you before then, with how many people have viewed it.`, result.nextStep);
+    }
+    if (isNegativeReply(cleanBody) || /^(no|cancel|stop)\b/.test(answer)) {
+      await patchSessionData(phone, { lister_terms_declined_at: new Date().toISOString() });
+      return respond(`No problem — nothing has been submitted and your details are not published.\n\nIf you change your mind, reply *AGREE* here. Questions about the terms? Call ${agentHelpContact().name} on ${agentHelpContact().pretty}.`, 'ask_terms');
+    }
+    const docs = require('../services/listingDocsService');
+    return respond(`Please reply *AGREE* to accept the terms and send your property for review, or *NO* to stop.\n\nTerms (PDF): ${docs.docUrls('lister_terms').pdf}\nQuestions about the terms or the fee? Call or WhatsApp ${agentHelpContact().name} on ${agentHelpContact().pretty}.`, 'ask_terms');
   }
 
   // SELFIE

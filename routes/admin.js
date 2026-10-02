@@ -14320,7 +14320,23 @@ async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', ac
       } catch (error) {
         console.warn('[agent-welcome] how-to film queue failed:', error.message);
       }
-      return { media_id: first?.id || null, text_id: full?.id || null, share_id: share?.id || null, how_to_id: howTo?.id || null };
+      // Fifth: the agent guide PDF (cover image + link to the PDF).
+      let guide = null;
+      try {
+        const listingDocs = require('../services/listingDocsService');
+        guide = await queueWhatsappWebBridgeMessage({
+          recipient: to,
+          text: listingDocs.agentGuideCaption({ name: agentGreetingName(pack.agent) }),
+          mediaUrl: listingDocs.docUrls('agent_guide').cover,
+          mediaType: 'image',
+          source,
+          actorId: actor,
+          metadata: { message_kind: 'agent_guide_pdf', agent_id: pack.agent.id, preview, part: 'agent_guide', guide_version: listingDocs.AGENT_GUIDE_VERSION, reply_dedupe_key: `${dedupeBase}:guide` }
+        });
+      } catch (error) {
+        console.warn('[agent-welcome] agent guide queue failed:', error.message);
+      }
+      return { media_id: first?.id || null, text_id: full?.id || null, share_id: share?.id || null, how_to_id: howTo?.id || null, guide_id: guide?.id || null };
     };
 
     if (videoUrl) {

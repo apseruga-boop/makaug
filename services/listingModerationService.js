@@ -648,6 +648,17 @@ function statusLabel(status) {
   return 'Updated';
 }
 
+// Private owners who agreed to the listing terms are told when the free week ends.
+function privateListerFeeLines(listing = {}) {
+  const extra = listing?.extra_fields && typeof listing.extra_fields === 'object' ? listing.extra_fields : {};
+  const fee = extra.lister_fee_terms;
+  if (!extra.lister_terms_accepted_at || !fee) return [];
+  const freeDays = Number(fee.free_days ?? 7);
+  const until = new Date(Date.now() + 3 * 3600 * 1000 + Math.max(0, freeDays - 1) * 86400000);
+  const pretty = until.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return ['', `🗓️ Free until *${pretty}* (${freeDays} days). After that it is UGX ${Number(fee.monthly_ugx || 20000).toLocaleString('en-US')} a month to stay live — we'll message you before then with how many people have viewed it.`, ''];
+}
+
 function buildOwnerStatusMessage({ listing = {}, status, reason }) {
   const reference = getListingReference(listing);
   const label = statusLabel(status);
@@ -700,6 +711,7 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
           `Great news ${listing?.lister_name || 'there'} - your listing is *live* on makaug \u{1F389}`,
           `${title} - ${location} - ${price}`,
           `View & share: ${publicUrl}`,
+          ...privateListerFeeLines(listing),
           `To remove it, reply REMOVE ${reference} from the WhatsApp number used to submit it.`
         ].join('\n')
     };
