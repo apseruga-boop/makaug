@@ -4788,7 +4788,10 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   const locationCaption = cleanCaption.replace(
     /\b(?:private|ready|freehold)?\s*m(?:ailo|olo|ilo)\s+(?:land\s+)?title\b/gi,
     ' '
-  );
+  )
+    // "2.5Km From Namuseera Town And Approximately 14Km (8.5 Miles) From Kampala
+    // CBD" says where the property is NOT. It resolved to an area called "From".
+    .replace(/\b\d+(?:[.,]\d+)?\s*(?:km|kms|kilomet(?:er|re)s?|miles?|mi|minutes?|mins?|hrs?|hours?)\b(?:\s*\([^)]*\))?\s*(?:away\s+)?(?:drive\s+)?from\s+(?:the\s+)?[A-Za-z][A-Za-z'-]*(?:\s+(?:town|cbd|city|centre|center|road|rd))?/gi, ' ');
   let locationResolution = resolveWhatsappLocation(locationCaption, { allowText: true });
   if (!locationResolution || locationResolution.status !== 'matched') {
     const beforeLandmark = locationCaption.split(/\b(?:opposite|near)\b/i)[0].trim();
