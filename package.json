@@ -18,6 +18,8 @@
     "typecheck:bot": "tsc -p tsconfig.json --noEmit",
     "test:bot": "vitest run",
     "test:leads:e2e": "node scripts/test-lead-pipeline-e2e.js",
+    "test:leads:desk": "node scripts/test-lead-desk-e2e.js",
+    "test:leads:referral": "node scripts/test-lead-referral-e2e.js",
     "test:off-plan": "node --test tests/off-plan-service.test.js tests/off-plan-contract.test.js tests/off-plan-route-auth.test.js tests/off-plan-brochure.test.js tests/off-plan-brochure-intake.test.js",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",

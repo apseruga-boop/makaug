@@ -19810,79 +19810,469 @@ function renderAdminList(id, items, renderer) {
  * The column that matters most is the last one: where supply has since appeared
  * within what they were willing to pay, there are people worth ringing back.
  */
-function renderAdminDemandGaps(payload = {}) {
+function renderAdminDemandGaps(_payload = {}) {
+  // The lead desk replaces the old read-only table; it loads its own data.
+  loadLeadDesk();
+}
+
+let leadDeskState = { view: "open", source: "", want: "", data: null, open: new Set(), loading: false };
+let leadDeskTimer = null;
+
+// Quoted keys on purpose: a test reads "<role>: [" blocks from this file.
+const LEAD_DESK_SOURCE_STYLE = {
+  "whatsapp": ["WhatsApp", "bg-green-100 text-green-800"],
+  "website_form": ["Website form", "bg-blue-100 text-blue-800"],
+  "property_finder": ["Property finder", "bg-purple-100 text-purple-800"],
+  "student": ["Student finder", "bg-purple-100 text-purple-800"],
+  "ask_ai": ["Ask AI", "bg-amber-100 text-amber-800"]
+};
+
+const LEAD_DESK_RESPONSES = [
+  ["awaiting", "Waiting for agent"],
+  ["has_property", "Agent has a property"],
+  ["contacted_client", "Agent contacted the client"],
+  ["no_match", "Agent has nothing"],
+  ["no_response", "Agent did not respond"],
+  ["deal_done", "Deal done"]
+];
+
+const LEAD_DESK_WANT_LABEL = { rent: "To rent", sale: "To buy", land: "Land", commercial: "Commercial", student: "Student", short_term: "Short stay", any: "Any property" };
+
+function leadDeskMoney(value) {
+  const n = Number(value);
+  return n > 0 ? `USh ${formatCompact(n)}` : "";
+}
+
+function leadDeskAgo(value) {
+  if (!value) return "";
+  const mins = Math.floor((Date.now() - new Date(value).getTime()) / 60000);
+  if (mins < 60) return `${Math.max(mins, 1)}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "yesterday" : `${days}d ago`;
+}
+
+// "Due in 5h 20m" / "Overdue by 3h" — the 24-hour clock every request runs on.
+function leadDeskCountdown(dueAt) {
+  if (!dueAt) return { label: "", tone: "" };
+  const diff = new Date(dueAt).getTime() - Date.now();
+  const abs = Math.abs(diff);
+  const h = Math.floor(abs / 3600000);
+  const m = Math.floor((abs % 3600000) / 60000);
+  const span = h >= 48 ? `${Math.floor(h / 24)}d` : h ? `${h}h ${m}m` : `${m}m`;
+  if (diff < 0) return { label: `Overdue by ${span}`, tone: "bg-red-600 text-white" };
+  if (diff < 6 * 3600000) return { label: `Due in ${span}`, tone: "bg-amber-500 text-white" };
+  return { label: `Due in ${span}`, tone: "bg-emerald-600 text-white" };
+}
+
+function leadDeskSourceBadges(sources = []) {
+  return sources.map((src) => {
+    const [label, tone] = LEAD_DESK_SOURCE_STYLE[src] || [src, "bg-gray-100 text-gray-700"];
+    return `<span class="inline-block rounded-full ${tone} text-[11px] font-bold px-2 py-0.5 mr-1 mb-1">${adminEscape(label)}</span>`;
+  }).join("");
+}
+
+function leadDeskPhone(phone = "") {
+  const d = String(phone).replace(/\D/g, "");
+  if (d.length === 12 && d.startsWith("256")) return `+256 ${d.slice(3, 6)} ${d.slice(6)}`;
+  if (d.length === 10 && d.startsWith("0")) return `+256 ${d.slice(1, 4)} ${d.slice(4)}`;
+  return phone;
+}
+
+function leadDeskWa(phone = "") {
+  const digits = String(phone).replace(/\D/g, "");
+  if (!digits) return "";
+  const intl = digits.length === 10 && digits.startsWith("0") ? `256${digits.slice(1)}` : digits;
+  return `https://wa.me/${intl}`;
+}
+
+async function loadLeadDesk(options = {}) {
+  const wrap = document.getElementById("admin-demand-gaps");
+  if (!wrap || !canUseLiveAdminApi()) return;
+  if (leadDeskState.loading) { leadDeskState.reloadAfter = options; return; }
+  leadDeskState.loading = true;
+  if (!leadDeskState.data) wrap.innerHTML = `<p class="text-sm text-gray-500">Loading the lead desk…</p>`;
+  try {
+    const params = new URLSearchParams({ view: leadDeskState.view });
+    if (leadDeskState.source) params.set("source", leadDeskState.source);
+    if (leadDeskState.want) params.set("want", leadDeskState.want);
+    if (options.quick) params.set("refresh", "0");
+    if (options.force) params.set("refresh", "force");
+    const response = await apiRequest(`/api/admin/lead-desk?${params}`, { headers: adminAuthHeaders() });
+    leadDeskState.data = response?.data || { summary: {}, groups: [] };
+    renderLeadDesk();
+  } catch (error) {
+    wrap.innerHTML = `<p class="text-sm text-red-700">Could not load the lead desk: ${adminEscape(error?.message || "request failed")}</p>`;
+  } finally {
+    leadDeskState.loading = false;
+    if (leadDeskState.reloadAfter) {
+      const again = leadDeskState.reloadAfter;
+      leadDeskState.reloadAfter = null;
+      loadLeadDesk(again);
+    }
+  }
+  if (!leadDeskTimer) {
+    // Keep the countdowns honest while the page is open.
+    leadDeskTimer = setInterval(() => {
+      document.querySelectorAll("#admin-demand-gaps [data-due]").forEach((el) => {
+        const c = leadDeskCountdown(el.getAttribute("data-due"));
+        el.textContent = c.label;
+        el.className = `inline-block rounded-full ${c.tone} text-[11px] font-bold px-2 py-0.5 whitespace-nowrap`;
+      });
+    }, 60000);
+  }
+}
+
+function setLeadDeskFilter(key, value) {
+  leadDeskState[key] = value;
+  leadDeskState.open = new Set();
+  loadLeadDesk();
+}
+
+function toggleLeadDeskGroup(key) {
+  if (leadDeskState.open.has(key)) leadDeskState.open.delete(key);
+  else leadDeskState.open.add(key);
+  renderLeadDesk();
+}
+
+function renderLeadDesk() {
   const wrap = document.getElementById("admin-demand-gaps");
   if (!wrap) return;
-  const gaps = Array.isArray(payload.gaps) ? payload.gaps : [];
-  const totals = payload.totals || {};
-  const days = Number(payload.window_days || 90);
+  const data = leadDeskState.data || { summary: {}, groups: [] };
+  const s = data.summary || {};
+  const groups = Array.isArray(data.groups) ? data.groups : [];
+  const tile = (label, value, tone = "bg-white border-gray-200 text-gray-900", hint = "") => `
+    <div class="rounded-xl border ${tone} px-3 py-2 min-w-[118px]">
+      <div class="text-[11px] uppercase tracking-wide font-bold opacity-70">${adminEscape(label)}</div>
+      <div class="text-xl font-black">${adminEscape(value ?? 0)}</div>
+      ${hint ? `<div class="text-[11px] opacity-70">${adminEscape(hint)}</div>` : ""}
+    </div>`;
+  const select = (key, options) => `<select onchange="setLeadDeskFilter('${key}', this.value)" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white">${options.map(([v, l]) => `<option value="${adminAttr(v)}" ${leadDeskState[key] === v ? "selected" : ""}>${adminEscape(l)}</option>`).join("")}</select>`;
 
-  if (!gaps.length) {
-    wrap.innerHTML = `<p class="text-sm text-gray-500">No unanswered searches in the last ${adminEscape(days)} days. Every WhatsApp search found something.</p>`;
-    return;
-  }
-
-  const money = (value) => (Number(value) > 0 ? `USh ${formatCompact(Number(value))}` : "—");
-  const when = (value) => {
-    if (!value) return "—";
-    const days_ago = Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
-    return days_ago <= 0 ? "today" : days_ago === 1 ? "yesterday" : `${days_ago}d ago`;
-  };
-
-  const rows = gaps.map((gap) => {
-    const callBack = Number(gap.supply_within_budget) > 0;
-    return `<tr class="border-t border-gray-100 ${callBack ? "bg-emerald-50" : ""}">
-      <td class="py-2 pr-3 font-semibold text-gray-900">${adminEscape(gap.area || "Anywhere")}</td>
-      <td class="py-2 pr-3 capitalize">${adminEscape(gap.search_type || "any")}</td>
-      <td class="py-2 pr-3 text-center font-bold">${adminEscape(gap.people ?? 0)}</td>
-      <td class="py-2 pr-3 text-center">${adminEscape(gap.times_asked ?? 0)}</td>
-      <td class="py-2 pr-3 whitespace-nowrap">${adminEscape(money(gap.lowest_budget))} – ${adminEscape(money(gap.highest_budget))}</td>
-      <td class="py-2 pr-3 text-center">${adminEscape(gap.supply_now ?? 0)}</td>
-      <td class="py-2 pr-3 text-center">${callBack
-        ? `<span class="inline-block rounded-full bg-emerald-600 text-white text-[11px] font-bold px-2 py-0.5">${adminEscape(gap.supply_within_budget)} to call back</span>`
-        : `<span class="text-red-600 font-semibold">0</span>`}</td>
-      <td class="py-2 pr-3 text-gray-500 whitespace-nowrap">${adminEscape(when(gap.last_asked_at))}</td>
-      <td class="py-2 pr-3 whitespace-nowrap">
-        <button type="button" onclick='openLeadReferral(${adminLeadReferralArg({ kind: "demand", search_type: gap.search_type || "any", area: gap.area || "Anywhere", days, people: Number(gap.people || 0) })})' class="rounded-lg bg-gray-900 hover:bg-gray-700 text-white text-xs font-bold px-3 py-1.5">Send to agent</button>
-        ${gap.last_referral && gap.last_referral.agent_name ? `<div class="text-[11px] text-emerald-700 font-semibold mt-1">Sent to ${adminEscape(gap.last_referral.agent_name)} · ${adminEscape(when(gap.last_referral.at))}</div>` : ""}
+  const rows = groups.map((g) => {
+    const key = g.key;
+    const opened = leadDeskState.open.has(key);
+    const latest = g.leads[0] || {};
+    const said = (g.leads.find((l) => l.message) || {}).message || "";
+    const budget = g.budget_max ? (g.budget_min && g.budget_min !== g.budget_max ? `${leadDeskMoney(g.budget_min)} – ${leadDeskMoney(g.budget_max)}` : `up to ${leadDeskMoney(g.budget_max)}`) : "Not given";
+    let due = "";
+    if (g.unsent) {
+      const c = leadDeskCountdown(g.due_at);
+      due = `<span data-due="${adminAttr(g.due_at)}" class="inline-block rounded-full ${c.tone} text-[11px] font-bold px-2 py-0.5 whitespace-nowrap">${adminEscape(c.label)}</span>${g.unsent < g.asks ? `<div class="text-[11px] text-gray-500 mt-1">${g.unsent} not sent yet</div>` : ""}`;
+    } else if (g.last_referral) {
+      due = `<span class="inline-block rounded-full bg-gray-200 text-gray-800 text-[11px] font-bold px-2 py-0.5 whitespace-nowrap">Sent ${adminEscape(leadDeskAgo(g.last_referral.sent_at))}</span>`;
+    }
+    const response = g.last_referral
+      ? `<div class="text-xs font-semibold text-gray-800">${adminEscape(g.last_referral.agent_name || "Agent")}</div><div class="text-[11px] ${g.last_referral.response === "awaiting" ? "text-amber-700" : "text-emerald-700"} font-semibold">${adminEscape((LEAD_DESK_RESPONSES.find(([v]) => v === g.last_referral.response) || [, g.last_referral.response])[1])}</div>`
+      : `<span class="text-[11px] text-gray-400">Not sent yet</span>`;
+    const ids = g.leads.map((l) => String(l.id));
+    const unsentIds = g.leads.filter((l) => !l.first_sent_at).map((l) => String(l.id));
+    const referArg = adminLeadReferralArg({ kind: "desk", lead_ids: unsentIds.length ? unsentIds : ids, area: g.area || "", label: `${g.people} ${g.people === 1 ? "person" : "people"} — ${LEAD_DESK_WANT_LABEL[g.want] || g.want}${g.area ? ` in ${g.area}` : ""}` });
+    const removeArg = adminLeadReferralArg({ ids, label: `${g.asks} request${g.asks === 1 ? "" : "s"} — ${LEAD_DESK_WANT_LABEL[g.want] || g.want}${g.area ? ` in ${g.area}` : ""}` });
+    const rowTone = g.overdue ? "bg-red-50" : g.matches ? "bg-emerald-50" : "";
+    return `<tr class="border-t border-gray-200 align-top ${rowTone}">
+      <td class="py-2 pr-3">
+        <button type="button" onclick='toggleLeadDeskGroup(${adminLeadReferralArg(key)})' class="text-left">
+          <div class="font-bold text-gray-900">${adminEscape(g.area || "Area not given")}</div>
+          <div class="text-[11px] text-blue-700 font-semibold">${opened ? "Hide details ▴" : "Details ▾"}</div>
+        </button>
       </td>
-    </tr>`;
+      <td class="py-2 pr-3 whitespace-nowrap">${adminEscape(LEAD_DESK_WANT_LABEL[g.want] || g.want)}</td>
+      <td class="py-2 pr-3 text-center"><div class="font-black">${adminEscape(g.people)}</div><div class="text-[11px] text-gray-500">${adminEscape(g.asks)} ask${g.asks === 1 ? "" : "s"}</div></td>
+      <td class="py-2 pr-3 whitespace-nowrap text-xs">${adminEscape(budget)}</td>
+      <td class="py-2 pr-3">${leadDeskSourceBadges(g.sources)}</td>
+      <td class="py-2 pr-3 text-xs text-gray-700 max-w-[280px]">${said ? `“${adminEscape(String(said).slice(0, 140))}${String(said).length > 140 ? "…" : ""}”` : `<span class="text-gray-400">No message</span>`}<div class="text-[11px] text-gray-500 mt-1">Last asked ${adminEscape(leadDeskAgo(g.last_asked_at))}</div></td>
+      <td class="py-2 pr-3">${due}${g.matches ? `<div class="mt-1"><span class="inline-block rounded-full bg-emerald-600 text-white text-[11px] font-bold px-2 py-0.5">Property found (${g.matches})</span></div>` : ""}</td>
+      <td class="py-2 pr-3">${response}</td>
+      <td class="py-2 pr-3 whitespace-nowrap">
+        ${leadDeskState.view === "archived"
+          ? `<button type="button" onclick='restoreLeadDesk(${adminLeadReferralArg(ids)})' class="rounded-lg border border-gray-300 text-xs font-bold px-3 py-1.5">Restore</button>`
+          : `<button type="button" onclick='openLeadReferral(${referArg})' class="rounded-lg bg-gray-900 hover:bg-gray-700 text-white text-xs font-bold px-3 py-1.5">${g.unsent ? "Send to agent" : "Send again"}</button>
+             <button type="button" onclick='openLeadDeskRemove(${removeArg})' class="rounded-lg border border-red-200 text-red-700 hover:bg-red-50 text-xs font-bold px-2.5 py-1.5 ml-1" title="Remove from the desk">Remove</button>`}
+      </td>
+    </tr>
+    ${opened ? `<tr class="${rowTone}"><td colspan="9" class="pb-4 pr-3">${renderLeadDeskPeople(g)}</td></tr>` : ""}`;
   }).join("");
 
   wrap.innerHTML = `
-    <div class="flex flex-wrap gap-3 mb-3">
-      <div class="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-        <div class="text-[11px] uppercase tracking-wide font-bold text-gray-500">Unanswered searches</div>
-        <div class="text-xl font-black text-gray-900">${adminEscape(totals.requests ?? 0)}</div>
-      </div>
-      <div class="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-        <div class="text-[11px] uppercase tracking-wide font-bold text-gray-500">People waiting</div>
-        <div class="text-xl font-black text-gray-900">${adminEscape(totals.people ?? 0)}</div>
-      </div>
-      <div class="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-        <div class="text-[11px] uppercase tracking-wide font-bold text-gray-500">Areas</div>
-        <div class="text-xl font-black text-gray-900">${adminEscape(totals.areas ?? 0)}</div>
-      </div>
+    <div class="flex flex-wrap gap-2 mb-3">
+      ${tile("New (24h)", s.new_today)}
+      ${tile("Due today", s.due_soon, "bg-amber-50 border-amber-200 text-amber-900", "not sent yet")}
+      ${tile("Overdue", s.overdue, Number(s.overdue) ? "bg-red-50 border-red-200 text-red-700" : "bg-white border-gray-200 text-gray-900", "over 24h, not sent")}
+      ${tile("Sent (24h)", s.sent_today, "bg-white border-gray-200 text-gray-900")}
+      ${tile("Waiting on agent", s.awaiting_agent, "bg-white border-gray-200 text-gray-900")}
+      ${tile("Property found", s.matches_to_send, Number(s.matches_to_send) ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-white border-gray-200 text-gray-900", "send to client")}
+      ${tile("Open", s.open)}
     </div>
-    <div class="overflow-x-auto">
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+      ${select("view", [["open", "Open"], ["archived", `Removed (${s.removed || 0})`], ["all", "All"]])}
+      ${select("source", [["", "All sources"], ["whatsapp", "WhatsApp"], ["website_form", "Website form"], ["property_finder", "Property finder"], ["student", "Student finder"], ["ask_ai", "Ask AI"]])}
+      ${select("want", [["", "Any want"], ["rent", "To rent"], ["sale", "To buy"], ["land", "Land"], ["commercial", "Commercial"], ["student", "Student"], ["any", "Not specified"]])}
+      <span class="flex-1"></span>
+      <button type="button" onclick="openLeadDeskReport()" class="rounded-lg border border-gray-300 bg-white text-xs font-bold px-3 py-1.5">Daily report</button>
+      <button type="button" onclick="downloadLeadDeskCsv()" class="rounded-lg border border-gray-300 bg-white text-xs font-bold px-3 py-1.5">Download CSV</button>
+      <button type="button" onclick="openLeadDeskRemoveOlder()" class="rounded-lg border border-red-200 bg-white text-red-700 text-xs font-bold px-3 py-1.5">Remove old…</button>
+      <button type="button" onclick="loadLeadDesk({ force: true })" class="rounded-lg border border-gray-300 bg-white text-xs font-bold px-3 py-1.5">Refresh</button>
+    </div>
+    ${groups.length ? `<div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead class="text-left text-[11px] uppercase tracking-wide text-gray-500">
           <tr>
-            <th class="py-2 pr-3">Area</th>
-            <th class="py-2 pr-3">Want</th>
-            <th class="py-2 pr-3 text-center">People</th>
-            <th class="py-2 pr-3 text-center">Asks</th>
-            <th class="py-2 pr-3">Budget range</th>
-            <th class="py-2 pr-3 text-center">Live now</th>
-            <th class="py-2 pr-3 text-center">In their budget</th>
-            <th class="py-2 pr-3">Last asked</th>
-            <th class="py-2 pr-3">Pass on</th>
+            <th class="py-2 pr-3">Area</th><th class="py-2 pr-3">Want</th><th class="py-2 pr-3 text-center">People</th>
+            <th class="py-2 pr-3">Budget</th><th class="py-2 pr-3">Source</th><th class="py-2 pr-3">What they said</th>
+            <th class="py-2 pr-3">24h clock</th><th class="py-2 pr-3">Agent response</th><th class="py-2 pr-3">Action</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
-    </div>
-    <p class="text-xs text-gray-500 mt-3">Last ${adminEscape(days)} days. Green rows already have matching stock \u2014 those people were promised a follow-up.</p>`;
+    </div>` : `<p class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">${leadDeskState.view === "archived" ? "Nothing has been removed." : "Nothing waiting. Every request has been handled."}</p>`}
+    <p class="text-xs text-gray-500 mt-3">Red rows are past the 24-hour mark; green rows have a matching property ready to send to the client. A summary goes out every morning at 07:00 Kampala time.</p>`;
+}
+
+function renderLeadDeskPeople(g) {
+  return `<div class="grid md:grid-cols-2 gap-3 mt-1">${g.leads.map((l) => {
+    const [srcLabel, srcTone] = LEAD_DESK_SOURCE_STYLE[l.source] || [l.source, "bg-gray-100 text-gray-700"];
+    const refs = Array.isArray(l.referrals) ? l.referrals : [];
+    const matches = Array.isArray(l.matches) ? l.matches : [];
+    const c = !l.first_sent_at ? leadDeskCountdown(l.due_at) : null;
+    const wa = leadDeskWa(l.phone);
+    return `<div class="rounded-xl border border-gray-200 bg-white p-3">
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <div class="font-bold text-gray-900">${adminEscape(l.name || "No name given")}</div>
+          <div class="text-xs mt-0.5">${l.phone ? `<a href="${adminAttr(wa)}" target="_blank" rel="noopener" class="text-green-700 font-bold">${adminEscape(leadDeskPhone(l.phone))}</a>` : ""}${l.email ? ` <span class="text-gray-500">· ${adminEscape(l.email)}</span>` : ""}</div>
+        </div>
+        <span class="inline-block rounded-full ${srcTone} text-[11px] font-bold px-2 py-0.5">${adminEscape(srcLabel)}</span>
+      </div>
+      <div class="text-xs text-gray-600 mt-2">Asked ${adminEscape(new Date(l.asked_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}${l.budget ? ` · budget up to ${adminEscape(leadDeskMoney(l.budget))}` : ""}${l.bedrooms ? ` · ${adminEscape(l.bedrooms)} bed` : ""}</div>
+      ${l.message ? `<div class="text-sm text-gray-800 mt-2 bg-gray-50 rounded-lg p-2">“${adminEscape(l.message)}”</div>` : ""}
+      ${c ? `<div class="mt-2"><span data-due="${adminAttr(l.due_at)}" class="inline-block rounded-full ${c.tone} text-[11px] font-bold px-2 py-0.5">${adminEscape(c.label)}</span></div>` : ""}
+      ${refs.length ? `<div class="mt-3 border-t border-gray-100 pt-2 space-y-2">${refs.map((r) => `
+        <div class="text-xs">
+          <div><span class="font-bold">Sent to ${adminEscape(r.agent_name || "agent")}</span> <span class="text-gray-500">${adminEscape(leadDeskAgo(r.sent_at))}${r.nudged_at ? ` · followed up ${adminEscape(leadDeskAgo(r.nudged_at))}` : ""}</span></div>
+          <div class="flex flex-wrap items-center gap-1.5 mt-1">
+            <select onchange="setLeadDeskResponse('${adminAttr(r.id)}', this.value)" class="border border-gray-200 rounded-lg px-2 py-1 text-xs">
+              ${LEAD_DESK_RESPONSES.map(([v, label]) => `<option value="${v}" ${r.response === v ? "selected" : ""}>${label}</option>`).join("")}
+            </select>
+            ${r.response === "awaiting" ? `<button type="button" onclick="openLeadDeskNudge('${adminAttr(r.id)}')" class="rounded-lg border border-gray-300 px-2 py-1 text-xs font-bold">Follow up agent</button>` : ""}
+          </div>
+          ${r.response_notes ? `<div class="text-gray-600 mt-1">${adminEscape(r.response_notes)}</div>` : ""}
+        </div>`).join("")}</div>` : ""}
+      ${matches.length ? `<div class="mt-3 border-t border-gray-100 pt-2">
+        <div class="text-xs font-bold text-emerald-800">Property has come up${l.client_notified_at ? ` — client told ${adminEscape(leadDeskAgo(l.client_notified_at))}` : ""}</div>
+        ${matches.map((m) => `<div class="flex items-center justify-between gap-2 mt-1 text-xs">
+          <a href="/property/${adminAttr(m.id)}" target="_blank" rel="noopener" class="text-blue-700 font-semibold">${adminEscape(m.title || "Listing")}${m.price ? ` — ${adminEscape(leadDeskMoney(m.price))}` : ""}</a>
+          ${String(l.client_notified_listing_id || "") === String(m.id)
+            ? `<span class="text-emerald-700 font-bold whitespace-nowrap">Sent to client</span>`
+            : l.phone ? `<button type="button" onclick="openLeadDeskMatch('${adminAttr(l.id)}', '${adminAttr(m.id)}')" class="rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 font-bold whitespace-nowrap">Send to client</button>` : ""}
+        </div>`).join("")}
+      </div>` : ""}
+      <div class="mt-3 flex justify-end">
+        ${leadDeskState.view === "archived"
+          ? `<span class="text-[11px] text-gray-500">Removed (${adminEscape(l.archived_reason || "")}) · </span><button type="button" onclick='restoreLeadDesk(${adminLeadReferralArg([String(l.id)])})' class="text-xs font-bold text-blue-700 ml-1">Restore</button>`
+          : `<button type="button" onclick='openLeadDeskRemove(${adminLeadReferralArg({ ids: [String(l.id)], label: l.name || l.phone || "this request" })})' class="text-xs font-bold text-red-700">Remove</button>`}
+      </div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+async function setLeadDeskResponse(referralId, response) {
+  try {
+    await apiRequest(`/api/admin/lead-desk/referrals/${encodeURIComponent(referralId)}/response`, { method: "POST", headers: adminAuthHeaders(), body: { response } });
+    toast("Agent response saved.");
+    loadLeadDesk({ quick: true });
+  } catch (error) {
+    toast(error?.message || "Could not save the response.");
+  }
+}
+
+// A small reusable dialog: an editable message, an optional preview to my
+// WhatsApp, and the real send.
+function openLeadDeskCompose({ title, intro = "", endpoint, body = {}, sendLabel = "Send", allowPreview = true, onDone }) {
+  let modal = document.getElementById("lead-desk-compose");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "lead-desk-compose";
+    modal.className = "fixed inset-0 z-[9999] hidden items-center justify-center bg-black/40 p-4";
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="w-full max-w-xl rounded-2xl bg-white shadow-xl p-5 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-start justify-between gap-3">
+        <div><h3 class="text-lg font-black text-gray-900">${adminEscape(title)}</h3>${intro ? `<p class="text-xs text-gray-500 mt-1">${adminEscape(intro)}</p>` : ""}</div>
+        <button type="button" onclick="closeLeadDeskCompose()" class="w-8 h-8 rounded-full border border-gray-200 text-gray-500">✕</button>
+      </div>
+      <textarea id="lead-desk-compose-text" rows="12" class="mt-4 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono leading-snug" placeholder="Writing the message…"></textarea>
+      ${allowPreview ? `<div class="mt-3 grid sm:grid-cols-[1fr_auto] gap-2 items-end">
+        <div><label class="block text-xs font-bold text-gray-700" for="lead-desk-compose-preview">Preview to my WhatsApp</label>
+        <input id="lead-desk-compose-preview" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Your WhatsApp, with country code" value="${adminAttr(leadReferralPreviewNumber())}"></div>
+        <button type="button" id="lead-desk-compose-preview-btn" class="border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold">Send me a preview</button>
+      </div>` : ""}
+      <div id="lead-desk-compose-status" class="text-xs text-gray-600 mt-3 min-h-[1rem]"></div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button type="button" onclick="closeLeadDeskCompose()" class="border border-gray-200 rounded-lg px-4 py-2 text-sm font-semibold">Cancel</button>
+        <button type="button" id="lead-desk-compose-send" class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-black disabled:opacity-60">${adminEscape(sendLabel)}</button>
+      </div>
+    </div>`;
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+  const status = document.getElementById("lead-desk-compose-status");
+  const area = document.getElementById("lead-desk-compose-text");
+  apiRequest(endpoint, { method: "POST", headers: adminAuthHeaders(), body: { ...body, dry_run: true } })
+    .then((r) => { area.value = r?.data?.text || ""; status.textContent = ""; })
+    .catch((error) => { status.textContent = error?.message || "Could not prepare the message."; });
+  const send = async (preview) => {
+    const previewTo = (document.getElementById("lead-desk-compose-preview")?.value || "").trim();
+    if (preview && !previewTo) { status.textContent = "Add your WhatsApp number with the country code."; return; }
+    const button = document.getElementById("lead-desk-compose-send");
+    if (!preview) button.disabled = true;
+    status.textContent = preview ? "Sending you a preview…" : "Sending…";
+    try {
+      const payload = { ...body, text: area.value };
+      if (preview) payload.preview_to = previewTo;
+      if (body.__toField) { payload[body.__toField] = previewTo; delete payload.__toField; }
+      const result = await apiRequest(endpoint, { method: "POST", headers: adminAuthHeaders(), body: payload });
+      if (result && result.ok === false) throw new Error(result.error || "Nothing was sent.");
+      if (preview) { rememberLeadReferralPreviewNumber(previewTo); status.textContent = `Preview sent to ${previewTo}. Nothing else has been sent.`; return; }
+      closeLeadDeskCompose();
+      if (onDone) onDone();
+    } catch (error) {
+      status.textContent = error?.message || "Could not send.";
+    } finally {
+      button.disabled = false;
+    }
+  };
+  document.getElementById("lead-desk-compose-send").onclick = () => send(false);
+  const previewBtn = document.getElementById("lead-desk-compose-preview-btn");
+  if (previewBtn) previewBtn.onclick = () => send(true);
+}
+
+function closeLeadDeskCompose() {
+  const modal = document.getElementById("lead-desk-compose");
+  if (modal) { modal.classList.add("hidden"); modal.classList.remove("flex"); }
+}
+
+function openLeadDeskMatch(leadId, listingId) {
+  openLeadDeskCompose({
+    title: "Tell the client a property has come up",
+    intro: "This goes from the makaug WhatsApp number to the person who asked. Check it, preview it if you like, then send.",
+    endpoint: `/api/admin/lead-desk/${encodeURIComponent(leadId)}/notify-match`,
+    body: { listing_id: listingId },
+    sendLabel: "Send to client",
+    onDone: () => { toast("Sent to the client."); loadLeadDesk(); }
+  });
+}
+
+function openLeadDeskNudge(referralId) {
+  openLeadDeskCompose({
+    title: "Follow up with the agent",
+    intro: "A short reminder to the agent asking whether they reached the client.",
+    endpoint: `/api/admin/lead-desk/referrals/${encodeURIComponent(referralId)}/nudge`,
+    sendLabel: "Send follow-up",
+    onDone: () => { toast("Follow-up sent to the agent."); loadLeadDesk({ quick: true }); }
+  });
+}
+
+function openLeadDeskReport() {
+  openLeadDeskCompose({
+    title: "Lead desk report",
+    intro: "This is the summary that goes out every morning at 07:00 Kampala time. Send it to your WhatsApp now if you like.",
+    endpoint: "/api/admin/lead-desk/report",
+    body: { __toField: "to" },
+    sendLabel: "Send to my WhatsApp",
+    allowPreview: true,
+    onDone: () => toast("Report sent.")
+  });
+  // For the report, the main button sends to the number in the preview box.
+  const previewBtn = document.getElementById("lead-desk-compose-preview-btn");
+  if (previewBtn) previewBtn.classList.add("hidden");
+}
+
+function openLeadDeskRemove({ ids = [], label = "" } = {}) {
+  let modal = document.getElementById("lead-desk-remove");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "lead-desk-remove";
+    modal.className = "fixed inset-0 z-[9999] hidden items-center justify-center bg-black/40 p-4";
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="w-full max-w-md rounded-2xl bg-white shadow-xl p-5">
+      <h3 class="text-lg font-black text-gray-900">Remove from the desk</h3>
+      <p class="text-sm text-gray-600 mt-1">${adminEscape(label)}</p>
+      <label class="block text-xs font-bold text-gray-700 mt-4" for="lead-desk-remove-reason">Why?</label>
+      <select id="lead-desk-remove-reason" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+        <option value="old">Too old</option><option value="fulfilled">Found a place / done</option><option value="duplicate">Duplicate</option>
+        <option value="not_serious">Not a real request</option><option value="spam">Spam</option><option value="other">Other</option>
+      </select>
+      <p class="text-xs text-gray-500 mt-2">Removed requests move to the "Removed" view and can be restored.</p>
+      <div class="mt-4 flex justify-end gap-2">
+        <button type="button" onclick="document.getElementById('lead-desk-remove').classList.add('hidden')" class="border border-gray-200 rounded-lg px-4 py-2 text-sm font-semibold">Cancel</button>
+        <button type="button" id="lead-desk-remove-go" class="bg-red-600 hover:bg-red-500 text-white rounded-lg px-4 py-2 text-sm font-black">Remove</button>
+      </div>
+    </div>`;
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+  document.getElementById("lead-desk-remove-go").onclick = async () => {
+    try {
+      const reason = document.getElementById("lead-desk-remove-reason").value;
+      const r = await apiRequest("/api/admin/lead-desk/remove", { method: "POST", headers: adminAuthHeaders(), body: { lead_ids: ids, reason } });
+      modal.classList.add("hidden");
+      toast(`Removed ${r?.data?.removed ?? ids.length}.`);
+      loadLeadDesk({ quick: true });
+    } catch (error) {
+      toast(error?.message || "Could not remove.");
+    }
+  };
+}
+
+function openLeadDeskRemoveOlder() {
+  let modal = document.getElementById("lead-desk-remove");
+  openLeadDeskRemove({ ids: [], label: "" });
+  modal = document.getElementById("lead-desk-remove");
+  modal.querySelector("h3").textContent = "Remove old requests";
+  modal.querySelector("p").innerHTML = `Remove everything asked more than <select id="lead-desk-remove-days" class="border border-gray-200 rounded px-1 py-0.5 text-sm"><option value="14">14</option><option value="30" selected>30</option><option value="45">45</option><option value="60">60</option><option value="90">90</option></select> days ago.`;
+  modal.querySelector('label[for="lead-desk-remove-reason"]')?.remove();
+  document.getElementById("lead-desk-remove-reason")?.remove();
+  document.getElementById("lead-desk-remove-go").onclick = async () => {
+    try {
+      const days = Number(document.getElementById("lead-desk-remove-days").value || 30);
+      const r = await apiRequest("/api/admin/lead-desk/remove-older", { method: "POST", headers: adminAuthHeaders(), body: { days } });
+      modal.classList.add("hidden");
+      toast(`Removed ${r?.data?.removed ?? 0} requests older than ${days} days.`);
+      loadLeadDesk({ quick: true });
+    } catch (error) {
+      toast(error?.message || "Could not remove.");
+    }
+  };
+}
+
+async function restoreLeadDesk(ids = []) {
+  try {
+    await apiRequest("/api/admin/lead-desk/restore", { method: "POST", headers: adminAuthHeaders(), body: { lead_ids: ids } });
+    toast("Restored.");
+    loadLeadDesk({ quick: true });
+  } catch (error) {
+    toast(error?.message || "Could not restore.");
+  }
+}
+
+async function downloadLeadDeskCsv() {
+  try {
+    const response = await fetch(`/api/admin/lead-desk/export.csv?view=${encodeURIComponent(leadDeskState.view === "open" ? "all" : leadDeskState.view)}`, { headers: adminAuthHeaders(), credentials: "same-origin" });
+    if (!response.ok) throw new Error(`Export failed (${response.status})`);
+    const url = URL.createObjectURL(await response.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `makaug-lead-desk-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    toast(error?.message || "Export failed.");
+  }
 }
 
 function renderAdminCrmOverview(summary = {}) {
@@ -20104,8 +20494,10 @@ function adminLeadHandoffTone(status = "") {
 }
 
 function adminLeadReferralArg(value) {
-  // Safe inside a single-quoted onclick attribute.
-  return JSON.stringify(value).replace(/'/g, "&#39;").replace(/</g, "\\u003c");
+  // JSON for an onclick='…' attribute. Every character the HTML parser would
+  // decode (&, quotes, <, >) is escaped, so a name or area typed into a public
+  // form can never break out of the JavaScript string.
+  return adminAttr(JSON.stringify(value));
 }
 
 let leadReferralState = null;
@@ -20141,7 +20533,7 @@ function ensureLeadReferralModal() {
       <div class="mt-4 grid sm:grid-cols-[1fr_auto] gap-2 items-end">
         <div>
           <label class="block text-xs font-bold text-gray-700" for="lead-referral-preview-to">Preview to my WhatsApp</label>
-          <input id="lead-referral-preview-to" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="+44 7757 773202">
+          <input id="lead-referral-preview-to" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Your WhatsApp, with country code">
         </div>
         <button type="button" onclick="sendLeadReferral(true)" class="border border-gray-300 text-gray-800 hover:bg-gray-50 rounded-lg px-3 py-2 text-sm font-bold">Send me a preview</button>
       </div>
@@ -20163,6 +20555,7 @@ function closeLeadReferral() {
 
 function leadReferralEndpoint(state = leadReferralState) {
   if (!state) return "";
+  if (state.kind === "desk") return "/api/admin/lead-desk/referral";
   return state.kind === "demand"
     ? "/api/admin/demand-gaps/referral"
     : `/api/admin/leads/${encodeURIComponent(state.id)}/referral`;
@@ -20170,9 +20563,11 @@ function leadReferralEndpoint(state = leadReferralState) {
 
 function leadReferralBody(extra = {}) {
   const state = leadReferralState || {};
-  const base = state.kind === "demand"
-    ? { search_type: state.search_type, area: state.area, days: state.days }
-    : {};
+  const base = state.kind === "desk"
+    ? { lead_ids: state.lead_ids || [] }
+    : state.kind === "demand"
+      ? { search_type: state.search_type, area: state.area, days: state.days }
+      : {};
   return { ...base, agent_id: document.getElementById("lead-referral-agent")?.value || "", ...extra };
 }
 
@@ -20184,7 +20579,9 @@ async function openLeadReferral(state = {}) {
   modal.classList.add("flex");
   const title = document.getElementById("lead-referral-title");
   if (title) {
-    title.textContent = state.kind === "demand"
+    title.textContent = state.kind === "desk"
+      ? String(state.label || "Lead")
+      : state.kind === "demand"
       ? `${state.people || 0} ${Number(state.people) === 1 ? "person" : "people"} looking: ${String(state.search_type || "any")} in ${state.area || "Anywhere"}`
       : `Lead${state.label ? `: ${state.label}` : ""}${state.area ? ` — ${state.area}` : ""}`;
   }
@@ -20258,8 +20655,11 @@ async function sendLeadReferral(preview = false) {
     const agentName = response?.data?.agent?.full_name || "the agent";
     toast(`Lead sent to ${agentName} on WhatsApp.`);
     const wasDemand = leadReferralState?.kind === "demand";
+    const wasDesk = leadReferralState?.kind === "desk";
     closeLeadReferral();
-    if (wasDemand) {
+    if (wasDesk) {
+      loadLeadDesk();
+    } else if (wasDemand) {
       apiRequest("/api/admin/demand-gaps?days=90&limit=20", { headers: adminAuthHeaders() })
         .then((fresh) => renderAdminDemandGaps(fresh?.data || {}))
         .catch(() => {});

@@ -109,6 +109,7 @@ const {
   mergePlacementRowsWithCatalog,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
+const leadDesk = require('../services/leadDeskService');
 const leadReferral = require('../services/leadReferralService');
 const leadHandoff = require('../services/leadHandoffService');
 const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
@@ -11890,6 +11891,149 @@ router.post('/leads/:id/referral', async (req, res, next) => {
       need: loaded.need,
       onSent: (referral) => leadReferral.markLeadReferred(db, loaded.lead, referral)
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Lead desk: every unmet request from every source, due to an agent within a
+// day, with agent responses, removals, property matches and a daily report.
+// ---------------------------------------------------------------------------
+
+function deskReply(res, result) {
+  if (result?.error) return res.status(result.status || 400).json({ ok: false, error: result.error });
+  if (result && result.delivered === false) {
+    return res.status(502).json({ ok: false, error: `WhatsApp not sent (${result.data?.delivery?.reason || result.data?.delivery?.status || 'failed'})`, data: result.data });
+  }
+  return res.json({ ok: true, data: result?.data ?? result });
+}
+
+router.get('/lead-desk', async (req, res, next) => {
+  try {
+    // A failed refresh (busy database) must not stop the desk loading.
+    try {
+      if (req.query.refresh === 'force') await leadDesk.refreshIfStale(db, { force: true });
+      else if (req.query.refresh !== '0') await leadDesk.refreshIfStale(db);
+    } catch (refreshError) {
+      logger.warn('Lead desk refresh failed; serving what is stored', { error: refreshError.message });
+    }
+    const data = await leadDesk.loadDesk(db, {
+      view: ['open', 'all', 'archived'].includes(String(req.query.view)) ? String(req.query.view) : 'open',
+      source: cleanText(req.query.source || ''),
+      want: cleanText(req.query.want || '')
+    });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) return res.json({ ok: true, data: { summary: {}, groups: [] }, provider_missing: true });
+    return next(error);
+  }
+});
+
+router.post('/lead-desk/referral', async (req, res, next) => {
+  try {
+    const previewTo = cleanText(req.body.preview_to || '');
+    if (previewTo && previewTo.replace(/\D/g, '').length < 9) return res.status(400).json({ ok: false, error: 'Preview number looks wrong — include the country code' });
+    const result = await leadDesk.referLeads(db, {
+      ids: req.body.lead_ids,
+      agentId: cleanText(req.body.agent_id),
+      text: String(req.body.text || ''),
+      previewTo,
+      dryRun: req.body.dry_run === true || req.body.dry_run === 'true',
+      actor: adminActorId(req)
+    });
+    if (result.delivered && !previewTo) await writeAudit('lead_desk_referral', { agent_id: req.body.agent_id, leads: (req.body.lead_ids || []).length }, adminActorId(req));
+    return deskReply(res, result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/lead-desk/referrals/:id/response', async (req, res, next) => {
+  try {
+    return deskReply(res, await leadDesk.recordResponse(db, req.params.id, { response: cleanText(req.body.response), notes: String(req.body.notes || '') }));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/lead-desk/referrals/:id/nudge', async (req, res, next) => {
+  try {
+    return deskReply(res, await leadDesk.nudgeReferral(db, req.params.id, {
+      previewTo: cleanText(req.body.preview_to || ''),
+      dryRun: req.body.dry_run === true || req.body.dry_run === 'true',
+      actor: adminActorId(req)
+    }));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/lead-desk/remove', async (req, res, next) => {
+  try {
+    const result = await leadDesk.archiveLeads(db, { ids: req.body.lead_ids, reason: cleanText(req.body.reason || 'other'), actor: adminActorId(req) });
+    await writeAudit('lead_desk_removed', { count: result.data.removed, reason: req.body.reason }, adminActorId(req));
+    return deskReply(res, result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/lead-desk/remove-older', async (req, res, next) => {
+  try {
+    const result = await leadDesk.archiveOlderThan(db, { days: req.body.days, actor: adminActorId(req) });
+    await writeAudit('lead_desk_removed_older', result.data, adminActorId(req));
+    return deskReply(res, result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/lead-desk/restore', async (req, res, next) => {
+  try {
+    return deskReply(res, await leadDesk.restoreLeads(db, { ids: req.body.lead_ids }));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/lead-desk/:id/notify-match', async (req, res, next) => {
+  try {
+    const previewTo = cleanText(req.body.preview_to || '');
+    return deskReply(res, await leadDesk.notifyClientOfMatch(db, {
+      leadId: req.params.id,
+      listingId: cleanText(req.body.listing_id),
+      text: String(req.body.text || ''),
+      previewTo,
+      dryRun: req.body.dry_run === true || req.body.dry_run === 'true',
+      actor: adminActorId(req)
+    }));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/lead-desk/report', async (req, res, next) => {
+  try {
+    if (req.body.dry_run === true || req.body.dry_run === 'true') {
+      const report = await leadDesk.buildDailyReport(db);
+      return res.json({ ok: true, data: report });
+    }
+    const to = cleanText(req.body.to || '');
+    if (!to || to.replace(/\D/g, '').length < 9) return res.status(400).json({ ok: false, error: 'Add the WhatsApp number to send the report to' });
+    const result = await leadDesk.sendDailyReport(db, { to, actor: adminActorId(req), text: String(req.body.text || '') });
+    return res.json({ ok: result.results.some((r) => ['queued', 'sent', 'simulated'].includes(r.status)), data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/lead-desk/export.csv', async (req, res, next) => {
+  try {
+    const csv = await leadDesk.deskCsv(db, { view: ['open', 'all', 'archived'].includes(String(req.query.view)) ? String(req.query.view) : 'all' });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="makaug-lead-desk-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return res.send(csv);
   } catch (error) {
     return next(error);
   }

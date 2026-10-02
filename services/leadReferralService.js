@@ -96,9 +96,11 @@ function buildAgentReferralMessage({ agent = {}, need = {} } = {}) {
     lines.push(`We have ${people.length} leads for you: people looking for ${what}${where}.`);
     lines.push('');
     people.forEach((p, index) => {
-      const bits = [displayPhone(p.phone), p.name, money(p.budget) ? `budget up to ${money(p.budget)}` : '', p.askedAt ? `asked ${ago(p.askedAt)}` : '']
+      const bits = [p.name, displayPhone(p.phone), money(p.budget) ? `budget up to ${money(p.budget)}` : '', p.askedAt ? `asked ${ago(p.askedAt)}` : '']
         .filter(Boolean);
       lines.push(`${index + 1}. ${bits.join(' · ')}`);
+      const said = cleanSaid(p.said);
+      if (said) lines.push(`   "${said.slice(0, 160)}"`);
     });
   }
 

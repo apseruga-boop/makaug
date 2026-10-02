@@ -55,6 +55,7 @@ const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDri
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
+const { startLeadDeskScheduler } = require('./services/leadDeskService');
 const { getPublicDevelopment, getPublicMarket, isPubliclyVisible, normalizeDevelopmentRow } = require('./services/offPlanService');
 const {
   applyHarvestPublicSubmissionVisibility,
@@ -1962,6 +1963,9 @@ async function start() {
   if (ACTIVE_TENANT.publicFeatures?.marketplace !== false) {
     startMarketplaceLifecycleScheduler(db);
     startMarketplaceDripScheduler(db);
+  }
+  if (!IS_SOUTH_AFRICA) {
+    startLeadDeskScheduler(db);
   }
   if (!IS_SOUTH_AFRICA || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true') {
     startFeaturedRotationScheduler(db);
