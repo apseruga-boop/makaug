@@ -182,7 +182,7 @@ const WHATSAPP_MIN_LISTING_PHOTOS = 5;
 // Language Translations
 const T = {
   en: {
-    welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nReply with a number",
+    welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nReply with a number",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
@@ -917,15 +917,15 @@ function timeGreetingWithName(lang, sessionData = {}) {
 
 function greetingMenus() {
   return {
-    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
-    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Property ey'okusigamu ssente (investment)\n6️⃣ Yingira makaug nga agent\n7️⃣ Obuyambi ku mortgage\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
-    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n5️⃣ Mali ya uwekezaji\n6️⃣ Jiunge na makaug kama agent\n7️⃣ Msaada wa mkopo wa nyumba (mortgage)\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
-    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
-    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
-    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nMushobora kwandika bisanzwe.`,
-    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
-    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
-    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
+    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
+    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Yingira makaug nga agent\n6️⃣ Obuyambi ku mortgage\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
+    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n5️⃣ Jiunge na makaug kama agent\n6️⃣ Msaada wa mkopo wa nyumba (mortgage)\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
+    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
+    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
+    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nMushobora kwandika bisanzwe.`,
+    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
+    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
+    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Mortgage / financing help\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
   };
 }
 
@@ -13913,11 +13913,6 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond(await agentJoinRequestReply({ phone, text: cleanBody }), 'main_menu');
   }
 
-  if (['greeting', 'main_menu'].includes(step) && isInvestmentPropertyRequest(cleanBody)) {
-    if (investmentBriefHasDetail(cleanBody)) return respond(await investmentBriefReply({ phone, lang, text: cleanBody }), 'main_menu');
-    return respond(investmentIntroReply(lang), 'investment_brief');
-  }
-
   if (['greeting', 'main_menu'].includes(step) && /\b(agent|broker|realtor)\b/i.test(cleanBody)) {
     const primaryArea = extractPrimaryAgentArea(cleanBody, sessionData);
     const keywords = primaryArea
@@ -14089,9 +14084,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
-    if (cleanBody === '5') return respond(investmentIntroReply(lang), 'investment_brief');
-    if (cleanBody === '6') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
-    if (cleanBody === '7') { const next = menuRouteReply(lang, 'mortgage_help'); return respond(next.message, next.nextStep); }
+    if (cleanBody === '5') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
+    if (cleanBody === '6') { const next = menuRouteReply(lang, 'mortgage_help'); return respond(next.message, next.nextStep); }
     return respond(`${friendlyGreetingReply(lang, sessionData)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 
@@ -14159,9 +14153,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
-    if (cleanBody === '5') return respond(investmentIntroReply(lang), 'investment_brief');
-    if (cleanBody === '6') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
-    if (cleanBody === '7') { const next = menuRouteReply(lang, 'mortgage_help'); return respond(next.message, next.nextStep); }
+    if (cleanBody === '5') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
+    if (cleanBody === '6') { const next = menuRouteReply(lang, 'mortgage_help'); return respond(next.message, next.nextStep); }
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
 
     if (compactUpper === 'WIDEN' && Number.isFinite(Number(sessionData.search_lat)) && Number.isFinite(Number(sessionData.search_lng))) {

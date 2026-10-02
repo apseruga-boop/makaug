@@ -10755,7 +10755,7 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
         recipient: phone,
         text,
         mediaUrl,
-        mediaType: mediaUrl ? 'image' : 'text',
+        mediaType: mediaUrl ? (/\.mp4(?:[?#]|$)/i.test(mediaUrl) ? 'video' : 'image') : 'text',
         source: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
         actorId: actor,
         metadata: {
@@ -10778,7 +10778,7 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
           recipient: phone,
           text,
           mediaUrl,
-          mediaType: mediaUrl ? 'image' : 'text',
+          mediaType: mediaUrl ? (/\.mp4(?:[?#]|$)/i.test(mediaUrl) ? 'video' : 'image') : 'text',
           source: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
           actorId: actor,
           metadata: {
