@@ -13,7 +13,7 @@
  */
 
 const BROADCAST_KEY = 'agent_how_to_post_v1';
-const VIDEO_PATH = '/assets/marketing/makaug-agent-how-to-post.mp4';
+const VIDEO_PATH = '/assets/marketing/makaug-agent-how-to-post-v2.mp4';
 
 function siteUrl() {
   return String(process.env.PUBLIC_SITE_URL || process.env.SITE_URL || 'https://makaug.com').replace(/\/+$/, '');
@@ -50,11 +50,11 @@ function buildMessage({ name = '' } = {}) {
     '1️⃣ Say *hello* — you get your agent menu',
     '2️⃣ Send the property: photos or a short video, and a caption with what it is, the exact area and district, and the price',
     '     e.g. _"3 bedroom house for rent in Kira, Wakiso — UGX 1.2m a month"_',
-    '3️⃣ I confirm it straight away, and tell you if anything is missing',
+    '3️⃣ I confirm it straight away and show you what I understood — if anything is missing or wrong, just reply with it (e.g. _price 1.5m_)',
     '4️⃣ Our team reviews it',
     '5️⃣ The moment it is live I send you the link to share — your name and number are on it',
     '',
-    'One property per message.',
+    'One property per message. Sent the photos first? That is fine — I will ask you for the details.',
     '',
     '*Handy words*',
     '*SHARE* — your page link and agent card',
@@ -62,6 +62,16 @@ function buildMessage({ name = '' } = {}) {
     '*HELP* — talk to a person',
     '',
     'Try it now — just say *hello* 👇'
+  ].join('\n');
+}
+
+/** The caption when the film follows a new agent's welcome pack. */
+function buildWelcomeFilmCaption({ name = '' } = {}) {
+  const first = firstName(name);
+  return [
+    `*How to post your properties${first ? `, ${first}` : ''} — in under a minute* 🎬`,
+    'Say *hello* in this chat, then send each property: photos or a short video, with what it is, the area and district, and the price.',
+    'We review it, and I send you the link the moment it is live.'
   ].join('\n');
 }
 
@@ -132,6 +142,7 @@ module.exports = {
   firstName,
   buildCaption,
   buildMessage,
+  buildWelcomeFilmCaption,
   listRecipients,
   alreadySentAgentIds,
   queueFor

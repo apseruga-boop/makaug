@@ -25,7 +25,7 @@ test('first name skips titles and copes with blanks', () => {
 
 test('video is a public asset under the site', () => {
   assert.ok(fs.existsSync(path.join(__dirname, '..', svc.VIDEO_PATH)));
-  assert.match(svc.videoUrl(), /^https:\/\/.+\/assets\/marketing\/makaug-agent-how-to-post\.mp4$/);
+  assert.match(svc.videoUrl(), /^https:\/\/.+\/assets\/marketing\/makaug-agent-how-to-post-v2\.mp4$/);
 });
 
 test('queueFor sends the film first then the text, keyed per agent', async () => {

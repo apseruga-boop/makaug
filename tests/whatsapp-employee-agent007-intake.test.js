@@ -364,7 +364,7 @@ assert.equal(
   'the recent body/time fingerprint remains available only when no message ID exists'
 );
 assert(routeSource.includes('whatsapp-distinct-rapid-replies-20260831') || serverSource.includes('whatsapp-distinct-rapid-replies-20260831'), 'the rapid identical-reply fix should be externally verifiable');
-assert(routeSource.includes("$21,'pending','submitted','whatsapp','whatsapp_employee_intake'"), 'employee properties must enter staff review as pending');
+assert(routeSource.includes("$24,'pending','submitted','whatsapp','whatsapp_employee_intake'"), 'employee properties must enter staff review as pending');
 assert(routeSource.includes('review_only: true') && routeSource.includes('auto_publish: false'), 'review-only and no-autopublish gates are required');
 assert(routeSource.includes("'whatsapp-employee-agent-007','whatsapp_employee_intake_queued','pending','pending'"), 'moderation history must retain pending status');
 assert(routeSource.includes('whatsapp_employee_property_review_queued'), 'each property should create a notification/audit record');

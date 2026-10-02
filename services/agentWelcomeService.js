@@ -214,12 +214,15 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push('• You get a weekly WhatsApp report: views, visitors, enquiries and the countries watching you');
 
   lines.push('');
-  lines.push('*How to post a property*');
-  lines.push('The fastest way is right here: send us the property on WhatsApp and we will put it up for you.');
-  lines.push('1. Send the photos, or better, a short walk-through video');
-  lines.push('2. In the caption put the type, the exact area and district, and the price');
+  lines.push('*How to post a property — right here on WhatsApp*');
+  lines.push('This number knows you are a makaug agent, so there is nothing to log in to. Message from the number you registered with.');
+  lines.push('1. Say *hello* — you get your agent menu');
+  lines.push('2. Send the property: photos, or better, a short walk-through video');
+  lines.push('3. In the caption: what it is, rent or sale, the exact area and district, and the price');
   lines.push('   e.g. “3 bedroom house for rent in Kira, Wakiso — UGX 1.2m a month”');
-  lines.push('3. That is it. Our team checks it and it goes live under your name');
+  lines.push('4. I confirm it straight away and tell you if anything is missing');
+  lines.push('5. Our team reviews it, and I send you the link the moment it is live');
+  lines.push('One property per message. Reply *SHARE* for your link and card, *STATUS* to check your properties, *HELP* for a person.');
   lines.push('You can also post it yourself on the site, whichever you prefer.');
 
   lines.push('');

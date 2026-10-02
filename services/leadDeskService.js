@@ -713,6 +713,18 @@ async function buildDailyReport(db) {
     `Properties found to send to clients: ${s.matches_to_send || 0}`,
     `Open in total: ${s.open || 0}`
   ];
+  // Agents now post by WhatsApp; their properties wait in review until a person approves them.
+  const agentQueue = await db.query(
+    `SELECT COUNT(*)::int AS waiting,
+            COALESCE(EXTRACT(EPOCH FROM (NOW() - MIN(created_at))) / 3600, 0)::int AS oldest_hours
+       FROM properties
+      WHERE status = 'pending' AND agent_id IS NOT NULL
+        AND source = 'whatsapp_employee_intake'
+        AND COALESCE(extra_fields->>'whatsapp_employee_subject_role', '') = 'agent'`
+  ).then((r) => r.rows[0]).catch(() => null);
+  if (agentQueue && agentQueue.waiting) {
+    lines.push('', `Agent properties waiting for review: ${agentQueue.waiting} (oldest ${agentQueue.oldest_hours}h) — approve them in Admin › Listings.`);
+  }
   const urgent = desk.groups.filter((g) => g.unsent).slice(0, 10);
   if (urgent.length) {
     lines.push('', 'To send to an agent today:');
@@ -977,6 +989,8 @@ module.exports = {
   inQuietHours,
   sendNewLeadAlerts,
   sendOverdueReminders,
+  sendToTeam,
+  alertRecipients,
   slaHours,
   internalPhoneKeys,
   RESPONSES,

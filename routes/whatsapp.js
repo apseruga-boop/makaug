@@ -87,6 +87,7 @@ const {
   employeePropertyCountPrompt,
   employeeRolePrompt,
   looksLikePropertyCaption,
+  withEnglishPropertyTerms,
   isEmployeeIntakeCancel,
   isEmployeeIntakeComplete,
   isEmployeeIntakeStep,
@@ -4715,7 +4716,8 @@ function explicitDistrictInCaption(caption = '') {
 }
 
 function employeePropertyFacts(caption = '', sessionData = {}) {
-  const cleanCaption = normalizeInput(caption);
+  // Luganda/Swahili captions are read through their English equivalents.
+  const cleanCaption = normalizeInput(withEnglishPropertyTerms(caption));
   const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
   const hints = extractSellerListingDraftHints(cleanCaption, {});
   let listingType = ownerForwardListingType(cleanCaption, { ...hints, ...naturalDraft });
@@ -5795,8 +5797,9 @@ async function createEmployeeReviewProperty({
         price_currency, price_original_currency, price_original, price_fx_rate_ugx, price_fx_as_of, price_period,
         bedrooms, lister_name, lister_phone, lister_email, lister_type, agent_id,
         id_document_name, id_document_url, extra_fields,
+        property_type, latitude, longitude,
         status, moderation_stage, listed_via, source
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,'pending','submitted','whatsapp','whatsapp_employee_intake')
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'pending','submitted','whatsapp','whatsapp_employee_intake')
       RETURNING id`,
       [
         facts.listingType,
@@ -5819,10 +5822,15 @@ async function createEmployeeReviewProperty({
         agent?.id || null,
         customer && sessionData.identity_document_url ? 'WhatsApp customer ID' : null,
         customer ? sessionData.identity_document_url || null : null,
-        JSON.stringify(extraFields)
+        JSON.stringify(extraFields),
+        // Buyers filter by type; a WhatsApp listing with none never showed under "house".
+        parsePropertyType(withEnglishPropertyTerms(caption)) || null,
+        Number.isFinite(Number(sessionData.pending_property_pin?.lat)) ? Number(sessionData.pending_property_pin.lat) : null,
+        Number.isFinite(Number(sessionData.pending_property_pin?.lng)) ? Number(sessionData.pending_property_pin.lng) : null
       ]
     );
     propertyId = inserted.rows[0].id;
+    delete sessionData.pending_property_pin;
     for (let index = 0; index < imageMedia.length; index += 1) {
       const isVideoKeyFrame = /video-(?:key-frame|still|message-preview|preview)/i.test(String(imageMedia[index].name || ''));
       const keyFrameNumber = videoKeyFrames.indexOf(imageMedia[index]) + 1;
@@ -6600,7 +6608,51 @@ function agentShareReply({ agent = {} } = {}) {
 
 function agentSelfIntakeOpeningLine(agent = {}) {
   const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || 'there';
-  return `Got it ${first} — I will put this up for you. 👇`;
+  return `Thanks ${first} 👇`;
+}
+
+/**
+ * The plain-words version of what is still missing, for an agent.
+ * "sale/rent/land/commercial/student type" means nothing to somebody posting
+ * a house; "is it for rent or for sale" does.
+ */
+function agentMissingPhrases(missing = []) {
+  return missing.map((item) => {
+    if (/type/i.test(item)) return 'is it for *rent* or for *sale*? (and what it is — house, apartment, land, shop…)';
+    if (/price/i.test(item)) return 'the *price*';
+    if (/area|district|location/i.test(item)) return 'the *area and district* — e.g. Kira, Wakiso';
+    return item;
+  });
+}
+
+function agentMoney(amount, currency = 'UGX') {
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return `${String(currency || 'UGX').toUpperCase()} ${Math.round(n).toLocaleString('en-US')}`;
+}
+
+/** What we understood, so the agent can see it and correct it. */
+function agentPropertyDetailLines(facts = {}, caption = '') {
+  const english = withEnglishPropertyTerms(caption);
+  const lines = [];
+  const bedrooms = Number(facts.bedroomDraft?.bedrooms) || 0;
+  const kind = parsePropertyType(english) || (facts.listingType === 'land' ? 'land' : (facts.listingType === 'commercial' ? 'commercial property' : 'property'));
+  const deal = facts.listingType === 'rent' || facts.listingType === 'student'
+    ? 'for rent'
+    : (facts.listingType === 'commercial'
+      ? (/\b(?:for rent|to let|rent)\b/i.test(english) ? 'for rent' : (/\b(?:sale|selling)\b/i.test(english) ? 'for sale' : ''))
+      : (facts.listingType ? 'for sale' : ''));
+  lines.push(`🏠 ${bedrooms ? `${bedrooms} bedroom ` : ''}${kind}${deal ? ` · ${deal}` : ''}`);
+  const area = normalizeInput(facts.locationPatch?.area || '');
+  const district = normalizeInput(facts.locationPatch?.district || '');
+  if (area || district) lines.push(`📍 ${[area, district].filter((v, i, all) => v && all.indexOf(v) === i).join(', ')}`);
+  const meta = facts.priceMetadata || {};
+  const shown = agentMoney(meta.price_original || facts.price, meta.price_original_currency || meta.price_currency || 'UGX');
+  if (shown) {
+    const period = ownerForwardPricePeriod(facts.listingType, english);
+    lines.push(`💰 ${shown}${period === 'month' ? ' a month' : (period === 'semester' ? ' a semester' : '')}`);
+  }
+  return lines;
 }
 
 /**
@@ -6608,14 +6660,14 @@ function agentSelfIntakeOpeningLine(agent = {}) {
  *
  * Staff get a terse receipt with an ID, because they are loading a batch on
  * someone else's behalf and need to track it. An agent is posting their own
- * stock and wants two things: confirmation it is in, and — if anything is
- * missing — the one line they have to send to finish it. Nothing about
- * moderation stages, no reference codes to quote.
+ * stock and wants three things: confirmation it is in, what we understood (so
+ * a wrong price is caught now, not after it is live), and — if anything is
+ * missing — the one line they have to send to finish it.
  *
  * Returns null when this is not an agent's own session, so staff copy is
  * untouched.
  */
-function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], openedAgentSelfIntake = false } = {}) {
+function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], openedAgentSelfIntake = false, caption = '', albumCount = 0 } = {}) {
   if (data.whatsapp_agent_self_intake !== true) return null;
   const missing = employeePropertyMissing(facts);
   const what = normalizeInput(facts.locationPatch?.area || facts.locationPatch?.district || '');
@@ -6626,23 +6678,317 @@ function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], op
   const lines = [];
   if (openedAgentSelfIntake) lines.push(agentSelfIntakeOpeningLine(data.agent || {}), '');
   if (missing.length) {
-    lines.push(`📝 I have your property${label}, but I cannot publish it yet.`);
+    lines.push(`📝 I have your property${label}, but I cannot put it up yet.`);
     lines.push('');
-    lines.push(`*Still needed:* ${missing.join(', ')}`);
+    lines.push('*Still needed:*');
+    agentMissingPhrases(missing).forEach((item) => lines.push(`• ${item}`));
     lines.push('');
-    lines.push('Just send it in one message and I will add it — no need to resend the photos.');
+    lines.push('Just reply with it here — no need to send the photos again.');
     return lines.join('\n');
   }
-  lines.push(`✅ Your property${label} is with our team for review.`);
+  lines.push(`✅ *Saved — your property${what ? ` in ${what}` : ''} is with our team for review.*`);
+  lines.push('');
+  lines.push(...agentPropertyDetailLines(facts, caption || facts.cleanCaption || ''));
   const bits = [];
   if (photos) bits.push(`${photos} ${photos === 1 ? 'photo' : 'photos'}`);
   if (videos) bits.push(`${videos} ${videos === 1 ? 'video' : 'videos'}`);
-  if (bits.length) lines.push(bits.join(' · ') + ' saved.');
+  if (Number(albumCount) > photos + videos) lines.push(`📸 Your ${Number(albumCount)} photos are being added to this property`);
+  else if (bits.length) lines.push(`📸 ${bits.join(' · ')} saved${photos + videos === 1 ? ' — send more and I will add them to this one' : ''}`);
+  lines.push('');
+  lines.push('Anything wrong? Just reply with the correction — e.g. _price 1.5m_ or _area Najjera, Wakiso_.');
   lines.push('');
   lines.push('As soon as it is approved it goes live under your name and I will send you the link to share.');
   lines.push('');
-  lines.push('Sending another? Just post it here the same way — one property per message.');
+  lines.push('Next property? Send it the same way — one property per message.');
   return lines.join('\n');
+}
+
+/**
+ * The note an agent gets when what they sent cannot be saved yet: photos with
+ * no words, words with no photos, or a caption that is missing something.
+ * Built from the session alone, so it can be sent straight away for a text
+ * reply or once a burst of photos has gone quiet.
+ */
+function agentPendingNotice(data = {}) {
+  if (data.whatsapp_agent_self_intake !== true) return '';
+  const items = [];
+  const pendingMedia = employeePendingStoredMedia(data);
+  const pendingCaption = normalizeInput(data.pending_property_caption || '');
+  if (pendingMedia.length || pendingCaption) items.push({ caption: pendingCaption, media: pendingMedia });
+  for (const entry of employeePendingSubmissionQueue(data)) items.push({ caption: normalizeInput(entry.caption || ''), media: entry.media || [] });
+  if (!items.length) return '';
+
+  const mediaWords = (media) => {
+    const photos = media.filter((m) => m.kind === 'image').length;
+    const videos = media.filter((m) => m.kind === 'video').length;
+    return [photos ? `${photos} ${photos === 1 ? 'photo' : 'photos'}` : '', videos ? `${videos} ${videos === 1 ? 'video' : 'videos'}` : ''].filter(Boolean).join(' and ');
+  };
+  const askForDetails = [
+    'Now tell me about this property in one message:',
+    '• What it is — e.g. 3 bedroom house, plot of land, shop',
+    '• For *rent* or for *sale*',
+    '• The *area and district* — e.g. Kira, Wakiso',
+    '• The *price*',
+    '',
+    'Like this: _"3 bedroom house for rent in Kira, Wakiso — UGX 1.2m a month"_',
+    '',
+    'No need to send the photos again.'
+  ];
+
+  if (items.length === 1) {
+    const item = items[0];
+    if (!item.caption) {
+      return [`📸 Got your ${mediaWords(item.media) || 'photos'} — thank you!`, '', ...askForDetails].join('\n');
+    }
+    if (!item.media.length) {
+      return [
+        `📝 Got the details for ${employeeCaptionLabel(item.caption)}.`,
+        '',
+        'Now send the *photos or a short video* of it and I will put it up for review.',
+        '_Every property needs at least one photo._'
+      ].join('\n');
+    }
+    const missing = employeePropertyMissing(employeePropertyFacts(item.caption, data));
+    if (!missing.length) return '';
+    return [
+      `📝 Got your ${mediaWords(item.media) || 'photos'} for ${employeeCaptionLabel(item.caption)}.`,
+      '',
+      'I just need:',
+      ...agentMissingPhrases(missing).map((m) => `• ${m}`),
+      '',
+      'Reply with just that — no need to send the photos again.'
+    ].join('\n');
+  }
+
+  const lines = [`📝 I have ${items.length} properties from you that are not saved yet:`];
+  items.forEach((item, index) => {
+    const label = item.caption ? employeeCaptionLabel(item.caption) : `${mediaWords(item.media) || 'Photos'} with no description`;
+    let needs;
+    if (!item.caption) needs = 'what it is, rent or sale, area and district, price';
+    else if (!item.media.length) needs = 'its photos or a short video';
+    else needs = agentMissingPhrases(employeePropertyMissing(employeePropertyFacts(item.caption, data))).join('; ') || 'nothing — it will save shortly';
+    lines.push('', `${index + 1}. ${label}`, `   needs: ${needs}`);
+  });
+  lines.push('', 'Reply with what the first one needs and I will add it, then the next. No need to send photos again.');
+  return lines.join('\n');
+}
+
+const AGENT_HELP = /^\s*(?:help|help me|i need help|msaada|nsaba obuyambi|obuyambi|nnyamba|nyamba|support|talk to (?:a )?(?:person|human|someone)|call me|4)\s*[.!?]*\s*$/i;
+
+function agentHelpReply(agent = {}) {
+  const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || '';
+  return [
+    `🙋 No problem${first ? ` ${first}` : ''} — I have asked someone from our team to message you here.`,
+    '',
+    'While you wait, you can tell me what you need in this chat. If it is about a property, send it as normal — photos and a caption — and it will be saved.'
+  ].join('\n');
+}
+
+/** Tell the makaug team, on WhatsApp, that an agent asked for a person. */
+function alertTeamAgentNeedsHelp({ agent = {}, phone = '', said = '' } = {}) {
+  deferWhatsappWork('agent help alert', async () => {
+    const desk = require('../services/leadDeskService');
+    if (typeof desk.sendToTeam !== 'function') return;
+    const number = String(agent.whatsapp || agent.phone || phone || '').replace(/\D+/g, '');
+    await desk.sendToTeam(db, [
+      `🙋 *Agent asked for help on WhatsApp*`,
+      `${agent.full_name || 'An agent'}${agent.company_name ? ` (${agent.company_name})` : ''}`,
+      number ? `Reply to them: https://wa.me/${number}` : '',
+      said ? `They said: "${String(said).slice(0, 160)}"` : ''
+    ].filter(Boolean).join('\n'), 'agent_help_request');
+  });
+}
+
+/** Tell the team a new agent property is waiting, so review happens the same day. */
+function alertTeamAgentPropertySubmitted({ agent = {}, propertyId = '', facts = {}, caption = '' } = {}) {
+  deferWhatsappWork('agent property alert', async () => {
+    const desk = require('../services/leadDeskService');
+    if (typeof desk.sendToTeam !== 'function' || desk.inQuietHours()) return;
+    await desk.sendToTeam(db, [
+      `🏠 *New property from ${agent.full_name || 'an agent'} — waiting for review*`,
+      ...agentPropertyDetailLines(facts, caption),
+      `Review: ${HOME_URL}/admin (Listings › pending)`,
+      propertyId ? `Ref ${String(propertyId).slice(0, 8).toUpperCase()}` : ''
+    ].filter(Boolean).join('\n'), 'agent_property_submitted');
+  });
+}
+
+function agentVoiceNoteReply() {
+  return [
+    '🎤 Sorry — I cannot listen to voice notes yet.',
+    '',
+    'Please *type* the details of the property in one message:',
+    'what it is, rent or sale, the area and district, and the price.',
+    '',
+    'Like this: _"3 bedroom house for rent in Kira, Wakiso — UGX 1.2m a month"_'
+  ].join('\n');
+}
+
+/** Where an agent's properties are, from the database rather than the session. */
+async function agentStatusReply(agent = {}) {
+  if (!agent?.id) return '';
+  let rows = [];
+  try {
+    rows = (await db.query(
+      `SELECT id, title, area, status, created_at
+         FROM properties
+        WHERE agent_id = $1::uuid
+          AND LOWER(COALESCE(status, '')) IN ('pending', 'approved', 'live', 'published', 'rejected')
+          AND created_at >= NOW() - INTERVAL '60 days'
+        ORDER BY created_at DESC
+        LIMIT 30`,
+      [agent.id]
+    )).rows;
+  } catch (error) {
+    logger.warn('Agent status lookup failed:', error.message || String(error));
+    return '';
+  }
+  const pending = rows.filter((r) => String(r.status).toLowerCase() === 'pending');
+  const live = rows.filter((r) => ['approved', 'live', 'published'].includes(String(r.status).toLowerCase()));
+  const rejected = rows.filter((r) => String(r.status).toLowerCase() === 'rejected');
+  if (!rows.length) {
+    return 'You have not sent me any properties yet. Send one here — photos and a caption with what it is, rent or sale, the area and the price — and I will confirm it straight away.';
+  }
+  const lines = ['📋 *Your properties (last 60 days)*'];
+  if (pending.length) {
+    lines.push('', `⏳ *${pending.length} with our team for review*`);
+    pending.slice(0, 6).forEach((r) => lines.push(`• ${shortEmployeeLabel(r.title || r.area || 'Property', 50)}`));
+  }
+  if (live.length) {
+    lines.push('', `✅ *${live.length} live*`);
+    live.slice(0, 6).forEach((r) => lines.push(`• ${shortEmployeeLabel(r.title || r.area || 'Property', 50)} — ${HOME_URL}/property/${r.id}`));
+  }
+  if (rejected.length) {
+    lines.push('', `⚠️ *${rejected.length} not approved* — reply *HELP* and we will tell you why.`);
+  }
+  lines.push('', 'I message you the link the moment each one goes live.');
+  return lines.join('\n');
+}
+
+/**
+ * "price 1.5m", "sorry it's in Najjera", "4 bedrooms" — a fix to the property
+ * just saved, not a new one. Applied only while that property is still with
+ * the team, only to the fields the message actually gives, and only for the
+ * agent's own property.
+ */
+async function applyAgentCorrection({ data = {}, cleanBody = '' } = {}) {
+  if (data.whatsapp_agent_self_intake !== true) return null;
+  const propertyId = data.current_property_id || (Array.isArray(data.property_ids) ? data.property_ids[data.property_ids.length - 1] : null);
+  if (!propertyId || !data.agent?.id) return null;
+  if (employeePendingStoredMedia(data).length || normalizeInput(data.pending_property_caption || '')) return null;
+  const text = normalizeInput(cleanBody);
+  if (!text || text.length > 120) return null;
+  // "Sorry its in Kisaasi, Kampala" -> "Kisaasi, Kampala": the filler words
+  // made the place resolver settle for the district alone.
+  let core = text;
+  for (let i = 0; i < 5; i += 1) {
+    const next = core.replace(/^(?:sorry|correction|correct|actually|change|no|not|wrong|the|it'?s|its|it is|is|in|at|area|location|place|district|now|to|should be|price|bedrooms?)\b[\s,:.-]*/i, '');
+    if (next === core) break;
+    core = next;
+  }
+  const facts = employeePropertyFacts(/^(?:price|bedrooms?)\b/i.test(text) ? text : (core || text), data);
+  const looksLikeFix = /^(?:price|area|location|place|district|bedrooms?|rooms?|it'?s|its|it is|sorry|correction|correct|change|actually|not|no[, ]|wrong)\b/i.test(text);
+  // A full new caption (rent/sale + price + place) is a new property waiting for photos, not a fix.
+  if (facts.listingType && !looksLikeFix) return null;
+  const newPrice = Number(facts.price) > 0 ? facts : null;
+  const newPlace = facts.locationPatch?.area && facts.locationPatch?.district && facts.locationPatch?.canonical_location_id ? facts.locationPatch : null;
+  const newBedrooms = /\b(?:bed|bedroom|bedrooms|rooms?)\b/i.test(withEnglishPropertyTerms(text)) ? Number(facts.bedroomDraft?.bedrooms) || null : null;
+  if (!newPrice && !newPlace && !newBedrooms) return null;
+  if (!looksLikeFix && text.split(/\s+/).length > 6) return null;
+
+  const current = (await db.query(
+    `SELECT id, listing_type, area, district, bedrooms, status, extra_fields
+       FROM properties
+      WHERE id = $1::uuid AND agent_id = $2::uuid AND status = 'pending'
+        AND created_at >= NOW() - INTERVAL '48 hours'`,
+    [propertyId, data.agent.id]
+  )).rows[0];
+  if (!current) return null;
+
+  const sets = [];
+  const params = [current.id];
+  const changed = [];
+  const extra = { agent_corrections: [...(Array.isArray(current.extra_fields?.agent_corrections) ? current.extra_fields.agent_corrections : []), { at: new Date().toISOString(), text }].slice(-10) };
+  if (newPrice) {
+    const meta = newPrice.priceMetadata || {};
+    params.push(newPrice.price); sets.push(`price = $${params.length}`);
+    params.push(meta.price_currency || ACTIVE_CURRENCY); sets.push(`price_currency = $${params.length}`);
+    params.push(meta.price_original_currency || ACTIVE_CURRENCY); sets.push(`price_original_currency = $${params.length}`);
+    params.push(meta.price_original || newPrice.price); sets.push(`price_original = $${params.length}`);
+    params.push(meta.price_fx_rate_ugx || null); sets.push(`price_fx_rate_ugx = $${params.length}`);
+    changed.push(`💰 price is now ${agentMoney(meta.price_original || newPrice.price, meta.price_original_currency || 'UGX')}`);
+  }
+  if (newPlace) {
+    params.push(newPlace.area); sets.push(`area = $${params.length}`);
+    params.push(newPlace.district); sets.push(`district = $${params.length}`);
+    extra.canonical_location_id = newPlace.canonical_location_id;
+    changed.push(`📍 area is now ${newPlace.area}, ${newPlace.district}`);
+  }
+  if (newBedrooms) {
+    params.push(newBedrooms); sets.push(`bedrooms = $${params.length}`);
+    changed.push(`🛏 ${newBedrooms} bedrooms`);
+  }
+  const title = ownerForwardListingTitle({
+    listingType: current.listing_type,
+    area: newPlace ? newPlace.area : current.area,
+    bedrooms: newBedrooms || current.bedrooms
+  });
+  if (title) { params.push(title); sets.push(`title = $${params.length}`); }
+  params.push(JSON.stringify(extra));
+  await db.query(
+    `UPDATE properties SET ${sets.join(', ')}, extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${params.length}::jsonb, updated_at = NOW()
+      WHERE id = $1::uuid AND status = 'pending'`,
+    params
+  );
+  return [`✏️ *Updated* — ${changed.join(' · ')}.`, '', 'It is still with our team for review. I will send you the link when it is live.'].join('\n');
+}
+
+/** A dropped pin: keep the coordinates with the property, and use its name if it has one. */
+async function handleAgentLocationPin({ phone, data = {}, sharedLocation = null, currentStep } = {}) {
+  if (data.whatsapp_agent_self_intake !== true || !hasUsableSharedLocation(sharedLocation)) return null;
+  const pin = { lat: Number(sharedLocation.lat), lng: Number(sharedLocation.lng), label: sharedLocationLabel(sharedLocation) || null };
+  let named = normalizeInput(sharedLocation.label || sharedLocation.address || '');
+  let guessedFromNearby = false;
+  if (!named) {
+    // No name on the pin: borrow the area of the nearest listing we already
+    // know, within 2.5 km. A moderator still checks it before anything is live.
+    const near = await db.query(
+      `SELECT area, district
+         FROM properties
+        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+          AND COALESCE(area, '') <> '' AND COALESCE(district, '') <> ''
+          AND ABS(latitude - $1) < 0.012 AND ABS(longitude - $2) < 0.012
+        ORDER BY (latitude - $1) * (latitude - $1) + (longitude - $2) * (longitude - $2)
+        LIMIT 1`,
+      [pin.lat, pin.lng]
+    ).then((r) => r.rows[0]).catch(() => null);
+    if (near) {
+      named = `${near.area}, ${near.district}`;
+      guessedFromNearby = true;
+    }
+  }
+  const pendingCaption = normalizeInput(data.pending_property_caption || '');
+  // The pin belongs to the property being described, or failing that the one just saved.
+  const savedId = data.current_property_id || (Array.isArray(data.property_ids) ? data.property_ids[data.property_ids.length - 1] : null);
+  if ((employeePendingStoredMedia(data).length || pendingCaption)) {
+    data.pending_property_pin = pin;
+    await replaceEmployeeSession(phone, currentStep, data);
+    if (named) return { followText: named, pin, guessed: guessedFromNearby };
+    const notice = agentPendingNotice(data);
+    return notice
+      ? `📍 Thanks for the location pin — I have kept it with this property.\n\n${notice}`
+      : '📍 Thanks for the location pin — I have kept it with this property.';
+  }
+  if (savedId) {
+    await db.query(
+      `UPDATE properties SET latitude = $2, longitude = $3,
+              extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $4::jsonb, updated_at = NOW()
+        WHERE id = $1::uuid AND status = 'pending'`,
+      [savedId, pin.lat, pin.lng, JSON.stringify({ agent_location_pin: pin })]
+    ).catch((error) => logger.warn('Agent pin save failed:', error.message || String(error)));
+    return '📍 Thanks — I have added that location pin to the property you just sent. It helps buyers find it.';
+  }
+  return '📍 Thanks for the pin. Send the property itself too — photos and a caption with what it is, rent or sale, the area and the price — and I will keep the pin with it.';
 }
 
 // How long after a batch closes a stray property message is still read as
@@ -6759,9 +7105,19 @@ async function handleEmployeeWhatsappIntake({
     // "1️⃣ House for SALE 2️⃣ House for RENT 3️⃣ Land/Plot…". He was not
     // listing a house OR a plot; he was asking a question.
     const askedText = normalizeInput(cleanBody);
-    if (!active && (AGENT_HOW_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || AGENT_SHARE_REQUEST.test(askedText))) {
+    const agentVoiceOnly = !askedText && !mediaUrl && /audio|ogg|opus|voice/.test(String(runtime.mediaType || ''));
+    if (!active && (agentVoiceOnly || AGENT_HELP.test(askedText) || AGENT_IS_IT_DONE.test(askedText) || AGENT_HOW_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || AGENT_SHARE_REQUEST.test(askedText))) {
       const askingAgent = await findApprovedAgentByPhone(phone);
       if (askingAgent) {
+        if (agentVoiceOnly) return { handled: true, nextStep: currentStep, message: agentVoiceNoteReply() };
+        if (AGENT_HELP.test(askedText)) {
+          alertTeamAgentNeedsHelp({ agent: askingAgent, phone, said: askedText });
+          return { handled: true, nextStep: currentStep, message: agentHelpReply(askingAgent) };
+        }
+        if (AGENT_IS_IT_DONE.test(askedText)) {
+          const status = await agentStatusReply(askingAgent);
+          if (status) return { handled: true, nextStep: currentStep, message: status };
+        }
         if (AGENT_SHARE_REQUEST.test(askedText)) {
           const share = agentShareReply({ agent: askingAgent });
           if (share) return { handled: true, nextStep: currentStep, message: share };
@@ -7218,6 +7574,32 @@ async function handleEmployeeWhatsappIntake({
   }
 
   if (currentStep === 'employee_property_media') {
+    if (data.whatsapp_agent_self_intake === true) {
+      const hasMediaCandidates = employeeMediaCandidates(runtime, mediaUrl).length > 0;
+      if (runtime.sharedLocation) {
+        const pinReply = await handleAgentLocationPin({ phone, data, sharedLocation: runtime.sharedLocation, currentStep });
+        if (pinReply && typeof pinReply === 'object' && pinReply.followText) {
+          // The pin has a place name: treat it exactly as if they had typed it,
+          // so a property that only lacked its area is saved now.
+          const followed = await handleEmployeeWhatsappIntake({
+            phone,
+            body: pinReply.followText,
+            mediaUrl: '',
+            runtime: { ...runtime, sharedLocation: null, photoCandidates: [], mediaCandidates: [], mediaCount: 0, mediaType: '' },
+            inboundMessageId,
+            session: { ...session, current_step: currentStep, session_data: data }
+          });
+          return {
+            ...followed,
+            message: `📍 Thanks for the location pin — ${pinReply.guessed ? `it looks like *${pinReply.followText}*. If that is wrong, reply with the right area.` : `that is *${pinReply.followText}*.`}${followed?.message ? `\n\n${followed.message}` : ''}`
+          };
+        }
+        if (pinReply) return { handled: true, nextStep: currentStep, message: pinReply };
+      }
+      if (!cleanBody && !hasMediaCandidates && /audio|ogg|opus|voice/.test(String(runtime.mediaType || ''))) {
+        return { handled: true, nextStep: currentStep, message: agentVoiceNoteReply() };
+      }
+    }
     if (isEmployeeIntakeComplete(cleanBody)) {
       const pendingStoredMedia = employeePendingStoredMedia(data);
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
@@ -7466,7 +7848,9 @@ async function handleEmployeeWhatsappIntake({
             nextStep: currentStep,
             propertyId: existingProperty.id,
             duplicate: true,
-            message: (data.property_batch_mode || 'multiple') === 'multiple'
+            message: data.whatsapp_agent_self_intake === true
+              ? `👍 That property is already with us${String(existingProperty.status) === 'pending' ? ' and with our team for review' : ''} — no need to send it again.${promotedPrompt ? `\n\n${agentPendingNotice(data)}` : ''}`
+              : (data.property_batch_mode || 'multiple') === 'multiple'
               ? promotedPrompt
               : `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
           };
@@ -7491,11 +7875,16 @@ async function handleEmployeeWhatsappIntake({
           const promotedPrompt = promotedSubmission
             ? `\n\nThe next separately stored property still needs: ${employeePropertyMissing(employeePropertyFacts(promotedSubmission.caption, data)).join(', ') || 'a corrected caption'}. Send its corrected caption; its media is already safe.`
             : '';
+          if (data.whatsapp_agent_self_intake === true) alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts: textOnlyFacts, caption: textCaption });
           return {
             handled: true,
             nextStep: currentStep,
             propertyId,
-            message: (data.property_batch_mode || 'multiple') === 'single'
+            // An agent who sent photos first and the words after was saved and
+            // told nothing. Confirm it the same way as a captioned photo.
+            message: data.whatsapp_agent_self_intake === true
+              ? `${agentSelfIntakeSavedReply({ data, facts: textOnlyFacts, storedMedia: pendingStoredMedia, caption: textCaption })}${promotedPrompt ? `\n\n${agentPendingNotice(data)}` : ''}`
+              : (data.property_batch_mode || 'multiple') === 'single'
               ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${pendingStoredMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
               : promotedPrompt
           };
@@ -7514,7 +7903,26 @@ async function handleEmployeeWhatsappIntake({
       // no media, which then blocked COMPLETE for the whole batch. When media
       // IS waiting the agent has been asked for a corrected caption, so a bare
       // "Kololo" is a legitimate refinement and still counts.
+      if (data.whatsapp_agent_self_intake === true) {
+        // "price 1.5m" / "it's in Najjera": a fix to the property just saved.
+        const corrected = await applyAgentCorrection({ data, cleanBody }).catch((error) => {
+          logger.warn('Agent correction failed:', error.message || String(error));
+          return null;
+        });
+        if (corrected) return { handled: true, nextStep: currentStep, message: corrected };
+      }
       if (!pendingStoredMedia.length && !looksLikePropertyCaption(cleanBody)) {
+        if (data.whatsapp_agent_self_intake === true) {
+          const said = normalizeInput(cleanBody);
+          if (AGENT_HELP.test(said)) {
+            alertTeamAgentNeedsHelp({ agent: data.agent || {}, phone, said });
+            return { handled: true, nextStep: currentStep, message: agentHelpReply(data.agent || {}) };
+          }
+          if (AGENT_IS_IT_DONE.test(said)) {
+            const status = await agentStatusReply(data.agent || {});
+            if (status) return { handled: true, nextStep: currentStep, message: status };
+          }
+        }
         return {
           handled: true,
           nextStep: currentStep,
@@ -7550,7 +7958,9 @@ async function handleEmployeeWhatsappIntake({
       return {
         handled: true,
         nextStep: currentStep,
-        message: employeePendingStoredMedia(data).length
+        message: data.whatsapp_agent_self_intake === true
+          ? agentPendingNotice(data)
+          : employeePendingStoredMedia(data).length
           ? employeeIncompletePropertyMessage(textCaption, textOnlyMissing, data)
           : `Caption saved for ${employeeCaptionLabel(textCaption)}. Now send the first property media; it will be stored with that property.${
             waitingForMedia
@@ -7713,7 +8123,9 @@ async function handleEmployeeWhatsappIntake({
           nextStep: currentStep,
           propertyId: existingProperty.id,
           duplicate: true,
-          message: (data.property_batch_mode || 'multiple') === 'multiple'
+          message: data.whatsapp_agent_self_intake === true
+            ? `👍 That property is already with us${String(existingProperty.status) === 'pending' ? ' and with our team for review' : ''} — no need to send it again.`
+            : (data.property_batch_mode || 'multiple') === 'multiple'
             ? ''
             : `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
         };
@@ -7770,12 +8182,13 @@ async function handleEmployeeWhatsappIntake({
           clearEmployeePendingMedia(data);
           promoteEmployeeQueuedSubmission(data);
         }
+        if (data.whatsapp_agent_self_intake === true) alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts, caption });
         await replaceEmployeeSession(phone, currentStep, data);
         return {
           handled: true,
           nextStep: currentStep,
           propertyId,
-          message: agentSelfIntakeSavedReply({ data, facts, storedMedia, openedAgentSelfIntake })
+          message: agentSelfIntakeSavedReply({ data, facts, storedMedia, openedAgentSelfIntake, caption, albumCount: Number(runtime.mediaCount || 0) })
             ?? ((data.property_batch_mode || 'multiple') === 'single'
               ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
               : '')
@@ -9831,6 +10244,13 @@ function scheduleEmployeeBatchSummary(phone) {
   employeeBatchBursts.set(key, burst);
 }
 
+function cancelEmployeeBatchSummary(phone) {
+  const key = String(phone || '');
+  const existing = employeeBatchBursts.get(key);
+  if (existing?.timer) clearTimeout(existing.timer);
+  employeeBatchBursts.delete(key);
+}
+
 /**
  * The first line of a batch summary.
  *
@@ -9933,11 +10353,10 @@ async function buildEmployeeBatchSummary(phone, since) {
   // each property, on top of the confirmation he had already been sent — two
   // messages for one property, the second in a language he never signed up to.
   if (data.whatsapp_agent_self_intake === true) {
-    // Everything saved and nothing outstanding: he has already been told, once,
-    // per property. Do not say it again.
+    // Everything saved: he has already been told, once, per property. Anything
+    // outstanding is said in his words, not the staff batch's.
     if (!notSaved.length) return '';
-    lines.push('', 'Send the missing detail and I will add it. Nothing goes live until our team has checked it.');
-    return lines.join('\n');
+    return agentPendingNotice(data);
   }
   lines.push('', 'Nothing is live until a moderator approves it. Type *COMPLETE* when the whole batch is done.');
   return lines.join('\n');
@@ -14514,7 +14933,8 @@ async function processInboundRuntimeUnlocked({
       mediaType: normalizedMediaType,
       mediaCount: inboundMediaCount,
       photoCandidates: inboundPhotoCandidates,
-      mediaCandidates: inboundMediaCandidates
+      mediaCandidates: inboundMediaCandidates,
+      sharedLocation
     },
     inboundMessageId,
     session: sessionForMessage
@@ -14535,7 +14955,20 @@ async function processInboundRuntimeUnlocked({
       && !employeeIntake.batchComplete
       && (employeeIntake.nextStep || sessionStep) === 'employee_property_media'
       && (sessionForMessage.session_data?.property_batch_mode || 'multiple') === 'multiple';
-    if (batchSummaryApplies) {
+    // An agent's typed message is answered there and then, so a summary still
+    // pending from an earlier burst of photos would only repeat it.
+    const inboundCarriedMedia = Boolean(effectiveMediaUrl) || inboundPhotoCandidates.length > 0 || inboundMediaCandidates.length > 0;
+    const agentTypedReply = batchSummaryApplies
+      && !inboundCarriedMedia
+      && String(employeeIntake.message || '').trim()
+      && !String(employeeIntake.message || '').startsWith('⚠️ Not saved yet')
+      && (await db.query(
+        `SELECT 1 FROM whatsapp_sessions WHERE phone = $1 AND session_data->>'whatsapp_agent_self_intake' = 'true'`,
+        [phone]
+      ).then((r) => r.rows.length > 0).catch(() => false));
+    if (agentTypedReply) {
+      cancelEmployeeBatchSummary(phone);
+    } else if (batchSummaryApplies) {
       scheduleEmployeeBatchSummary(phone);
       if (String(employeeIntake.message || '').startsWith('⚠️ Not saved yet')) {
         employeeIntake.message = '';
@@ -15963,6 +16396,9 @@ module.exports.__test = {
   agentPhoneKey,
   agentSelfIntakeSessionData,
   agentSelfIntakeSavedReply,
+  agentPendingNotice,
+  agentMissingPhrases,
+  applyAgentCorrection,
   isOwnAgentSelfIntake,
   findApprovedAgentByPhone,
   fetchEmployeeMediaWithRetry,

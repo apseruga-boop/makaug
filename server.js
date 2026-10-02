@@ -56,6 +56,7 @@ const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLi
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
 const { startLeadDeskScheduler } = require('./services/leadDeskService');
+const { startVideoStillScheduler } = require('./services/videoStillScheduler');
 const { getPublicDevelopment, getPublicMarket, isPubliclyVisible, normalizeDevelopmentRow } = require('./services/offPlanService');
 const {
   applyHarvestPublicSubmissionVisibility,
@@ -1966,6 +1967,7 @@ async function start() {
   }
   if (!IS_SOUTH_AFRICA) {
     startLeadDeskScheduler(db);
+    startVideoStillScheduler(db);
   }
   if (!IS_SOUTH_AFRICA || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true') {
     startFeaturedRotationScheduler(db);

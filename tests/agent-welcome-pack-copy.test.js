@@ -65,9 +65,10 @@ test('the first promise is the one they joined for', () => {
 
 test('it explains how to post, in the channel they are reading it in', () => {
   const body = message();
-  assert.match(body, /\*How to post a property\*/);
-  assert.match(body, /send us the property on WhatsApp and we will put it up for you/,
+  assert.match(body, /\*How to post a property/);
+  assert.match(body, /right here on WhatsApp/,
     'the fastest route is the one they are already in');
+  assert.match(body, /Say \*hello\*/, 'the same first step as the bot and the film');
   assert.match(body, /exact area and district/, 'the two things intake always has to ask for');
   assert.match(body, /3 bedroom house for rent in Kira, Wakiso/, 'shown, not just described');
 });

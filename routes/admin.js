@@ -13761,7 +13761,30 @@ router.post('/agent-welcome/:agentId/send', async (req, res, next) => {
           metadata: { message_kind: 'agent_welcome', agent_id: pack.agent.id, preview, part: 'share_card', reply_dedupe_key: `${dedupeBase}:share` }
         });
       }
-      return { media_id: first?.id || null, text_id: full?.id || null, share_id: share?.id || null };
+      // Fourth: the one-minute "how to post on WhatsApp" film. Marked with the
+      // broadcast key so the all-agents broadcast never sends it to them twice.
+      let howTo = null;
+      try {
+        howTo = await queueWhatsappWebBridgeMessage({
+          recipient: to,
+          text: agentHowToPost.buildWelcomeFilmCaption({ name: pack.agent.full_name }),
+          mediaUrl: agentHowToPost.videoUrl(),
+          mediaType: 'video',
+          source,
+          actorId: actor,
+          metadata: {
+            message_kind: 'agent_how_to_post',
+            broadcast_key: agentHowToPost.BROADCAST_KEY,
+            agent_id: pack.agent.id,
+            preview,
+            part: 'welcome_how_to_film',
+            reply_dedupe_key: `${dedupeBase}:how_to`
+          }
+        });
+      } catch (error) {
+        console.warn('[agent-welcome] how-to film queue failed:', error.message);
+      }
+      return { media_id: first?.id || null, text_id: full?.id || null, share_id: share?.id || null, how_to_id: howTo?.id || null };
     };
 
     if (videoUrl) {

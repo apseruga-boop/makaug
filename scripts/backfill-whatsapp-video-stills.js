@@ -179,14 +179,27 @@ async function extractStill(videoPath, stillPath) {
 
 async function videoDurationSeconds(videoPath) {
   const ffprobe = String(process.env.FFPROBE_PATH || 'ffprobe').trim() || 'ffprobe';
-  const { stdout } = await execFileAsync(ffprobe, [
-    '-v', 'error',
-    '-show_entries', 'format=duration',
-    '-of', 'default=noprint_wrappers=1:nokey=1',
-    videoPath
-  ]);
-  const duration = Number(String(stdout || '').trim());
-  return Number.isFinite(duration) && duration > 0 ? duration : 0;
+  try {
+    const { stdout } = await execFileAsync(ffprobe, [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      videoPath
+    ]);
+    const duration = Number(String(stdout || '').trim());
+    if (Number.isFinite(duration) && duration > 0) return duration;
+  } catch (_noFfprobe) {
+    // The server ships ffmpeg (ffmpeg-static) but not ffprobe: read the
+    // duration from ffmpeg's own banner instead.
+  }
+  const ffmpeg = String(process.env.FFMPEG_PATH || 'ffmpeg').trim() || 'ffmpeg';
+  const banner = await new Promise((resolve) => {
+    execFile(ffmpeg, ['-hide_banner', '-i', videoPath], { maxBuffer: 2 * 1024 * 1024 }, (_error, _stdout, stderr) => resolve(String(stderr || '')));
+  });
+  const match = banner.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!match) return 0;
+  const seconds = Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
 }
 
 function representativeFrameOffsets(durationSeconds, count) {
@@ -846,6 +859,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  makeAndUploadStills,
+  attachStills,
+  videoDurationSeconds,
   BACKFILL_MARKER,
   ORIGINAL_MEDIA_ONLY_MARKER,
   MIN_VIDEO_KEY_FRAMES,

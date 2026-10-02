@@ -124,8 +124,69 @@ function isEmployeeIntakeCancel(value = '') {
  * blocked the batch from ever completing. A caption has to carry at least one
  * property signal: a keyword, a number of rooms, a price, or a size.
  */
+
+/**
+ * The Luganda and Swahili words agents actually write, turned into the English
+ * the caption parser reads. Used for understanding only — the agent's own words
+ * are what get stored and shown to the moderator.
+ *
+ *   "Ennyumba ya kupangisa e Ntinda, ebisenge bisatu, 800k buli mwezi"
+ *     -> "house for rent e Ntinda, 3 bedrooms, 800k per month"
+ *   "Nyumba ya kupangisha Ntinda, vyumba 3, shilingi laki nane kwa mwezi"
+ *     -> "house for rent Ntinda, 3 bedrooms, UGX 800000 per month"
+ */
+const LOCAL_NUMBER_WORDS = {
+  // Swahili
+  moja: 1, mbili: 2, tatu: 3, nne: 4, tano: 5, sita: 6, saba: 7, nane: 8, tisa: 9, kumi: 10,
+  // Luganda
+  emu: 1, kimu: 1, kimú: 1, bibiri: 2, bbiri: 2, bisatu: 3, ssatu: 3, bina: 4, nnya: 4,
+  bitaano: 5, ttaano: 5, mukaaga: 6, musanvu: 7, munaana: 8, mwenda: 9, kkumi: 10
+};
+const LOCAL_NUMBER_RE = `(?:\\d+(?:[.,]\\d+)?|${Object.keys(LOCAL_NUMBER_WORDS).join('|')})`;
+
+function localNumber(token = '') {
+  const t = String(token || '').toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(LOCAL_NUMBER_WORDS, t)) return LOCAL_NUMBER_WORDS[t];
+  const n = Number(t.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+function withEnglishPropertyTerms(value = '') {
+  let text = String(value || '');
+  if (!text) return text;
+  const before = text;
+  // Money first, while the number words are still words.
+  const money = (multiplier) => (_m, n) => {
+    const v = localNumber(n);
+    return v ? ` UGX ${Math.round(v * multiplier)} ` : _m;
+  };
+  text = text
+    .replace(new RegExp(`\\blaki\\s+(${LOCAL_NUMBER_RE})\\b`, 'gi'), money(100000))
+    .replace(new RegExp(`\\b(?:milioni|million[iy]?|obukadde|bukadde)\\s+(${LOCAL_NUMBER_RE})\\b`, 'gi'), money(1000000))
+    .replace(/\b(?:akakadde|kakadde)(?:\s+kamu)?\b/gi, ' UGX 1000000 ')
+    .replace(new RegExp(`\\b(?:emitwalo|mitwalo)\\s+(${LOCAL_NUMBER_RE})\\b`, 'gi'), money(10000))
+    .replace(/\b(?:shilingi|shillingi|ssente|sente)\b(?!\s+UGX)/gi, ' UGX ')
+    .replace(/\bUGX\s+UGX\b/g, 'UGX');
+  // Rooms: "ebisenge bisatu", "vyumba 3", "vyumba vitatu".
+  text = text.replace(
+    new RegExp(`\\b(?:ebisenge|bisenge|ebisenge\\s+by'?okwebakamu|vyumba|vyumba\\s+vya\\s+kulala)\\s+(?:vi|bi)?(${LOCAL_NUMBER_RE})\\b`, 'gi'),
+    (_m, n) => { const v = localNumber(n); return v ? ` ${v} bedrooms ` : _m; }
+  );
+  const swaps = [
+    [/\b(?:ya\s+)?(?:o?ku?pangisa|okupangisa|kupangisha|inapangishwa|ya\s+kodi|eby'?okupangisa|ppangisa)\b/gi, ' for rent '],
+    [/\b(?:ya\s+|ery'?|eky'?|ey'?)?(?:okutunda|kutunda|etundibwa|kitundibwa|kuuza|(?:ki|i|li|zi|vi)nauzwa|ya\s+kuuza)\b/gi, ' for sale '],
+    [/\b(?:ettaka|kiwanja|viwanja|shamba)\b/gi, ' land plot '],
+    [/\b(?:ennyumba|enyumba|nyumba)\b/gi, ' house '],
+    [/\b(?:edduuka|dduuka|duuka|duka|maduka)\b/gi, ' shop '],
+    [/\b(?:buli\s+mwezi|kwa\s+mwezi|omwezi|mwezi)\b/gi, ' per month ']
+  ];
+  for (const [re, english] of swaps) text = text.replace(re, english);
+  if (text === before) return before;
+  return text.replace(/\s+/g, ' ').replace(/\s+([,.])/g, '$1').trim();
+}
+
 function looksLikePropertyCaption(value = '') {
-  const clean = cleanText(value);
+  const clean = cleanText(withEnglishPropertyTerms(value));
   if (!clean) return false;
   if (/\b(?:property|house|home|mansion|bungalow|villa|townhouse|apartments?|flats?|condo|rentals?|units?|land|plots?|acres?|decimals?|commercial|shops?|offices?|warehouses?|hostels?|bedrooms?|bathrooms?|selling|for sale|for rent|to let|rent|sale)\b/i.test(clean)) return true;
   if (/\b\d+\s*(?:bed|bedroom|br|bath|bathroom)\b/i.test(clean)) return true;
@@ -359,6 +420,7 @@ module.exports = {
   parseSkipRequest,
   employeeRolePrompt,
   looksLikePropertyCaption,
+  withEnglishPropertyTerms,
   isEmployeeIntakeCancel,
   isEmployeeIntakeComplete,
   isEmployeeIntakeStep,

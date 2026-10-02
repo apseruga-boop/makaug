@@ -6,7 +6,7 @@ const { spawn } = require('child_process');
 const { chromium } = require('playwright');
 
 const args = process.argv.slice(2);
-const out = args.find((a) => a.endsWith('.mp4') || a.endsWith('.png')) || path.join(__dirname, 'makaug-agent-how-to-post.mp4');
+const out = args.find((a) => a.endsWith('.mp4') || a.endsWith('.png')) || path.join(__dirname, 'makaug-agent-how-to-post-v2.mp4');
 const fps = Number(args[args.indexOf('--fps') + 1]) || 30;
 const stillIdx = args.indexOf('--still');
 

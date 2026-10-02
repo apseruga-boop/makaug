@@ -133,9 +133,13 @@ test('an agent whose property is complete is told it is in, and what happens nex
     storedMedia: [{ kind: 'image' }, { kind: 'image' }, { kind: 'video' }],
     openedAgentSelfIntake: true
   });
-  assert.match(reply, /Got it Katamba/, 'greeted by name on the first one');
+  assert.match(reply, /Thanks Katamba/, 'greeted by name on the first one');
   assert.match(reply, /with our team for review/);
   assert.match(reply, /2 photos · 1 video saved/, 'told what we actually kept');
+  assert.match(reply, /3 bedroom house · for rent/, 'shown what we understood');
+  assert.match(reply, /Kira, Wakiso/);
+  assert.match(reply, /UGX 1,200,000 a month/, 'the price as we read it, so a wrong one is caught now');
+  assert.match(reply, /reply with the correction/);
   assert.match(reply, /I will send you the link to share/, 'and what to expect next');
   assert.doesNotMatch(reply, /COMPLETE/,
     'typing COMPLETE is staff choreography; an agent should never be asked for it');
@@ -151,12 +155,11 @@ test('an agent whose property is missing something is told exactly what', () => 
   assert.ok(missing.length, 'this caption really is short of something');
 
   const reply = agentSelfIntakeSavedReply({ data, facts, storedMedia: [{ kind: 'image' }] });
-  assert.match(reply, /cannot publish it yet/);
+  assert.match(reply, /cannot put it up yet/);
   assert.match(reply, /Still needed:/);
-  for (const item of missing) {
-    assert.ok(reply.includes(item), `the reply must name "${item}" rather than hinting at it`);
-  }
-  assert.match(reply, /no need to resend the photos/,
+  assert.match(reply, /the \*price\*/, 'named in plain words, not our field names');
+  assert.doesNotMatch(reply, /sale\/rent\/land\/commercial\/student type/);
+  assert.match(reply, /no need to send the photos again/,
     'the commonest agent worry when asked for one more detail');
 });
 
@@ -184,4 +187,53 @@ test('the agent’s property carries the details a moderator needs', () => {
   assert.strictEqual(data.agent.id, KATAMBA.id);
   assert.deepStrictEqual(employeePropertyMissing(facts), [],
     'his Komamboga message was complete — it should have gone straight to review');
+});
+
+
+const {
+  agentPendingNotice,
+  agentMissingPhrases
+} = require('../routes/whatsapp').__test;
+const { withEnglishPropertyTerms } = require('../services/whatsappEmployeeIntakeService');
+
+test('photos with no words: thanked, and asked for exactly the four things', () => {
+  const data = {
+    ...agentSelfIntakeSessionData(KATAMBA),
+    pending_property_media: [{ mimeType: 'image/jpeg', url: 'https://x/1.jpg' }, { mimeType: 'image/jpeg', url: 'https://x/2.jpg' }]
+  };
+  const notice = agentPendingNotice(data);
+  assert.match(notice, /Got your 2 photos/);
+  assert.match(notice, /rent\* or for \*sale/);
+  assert.match(notice, /area and district/);
+  assert.match(notice, /price/);
+  assert.match(notice, /No need to send the photos again/);
+  assert.doesNotMatch(notice, /COMPLETE|staff review|batch/i);
+});
+
+test('words with no photos: asked for the photos', () => {
+  const data = { ...agentSelfIntakeSessionData(KATAMBA), pending_property_caption: 'Land for sale in Gayaza, Wakiso 45m' };
+  assert.match(agentPendingNotice(data), /send the \*photos or a short video\*/);
+});
+
+test('missing items are said in plain words', () => {
+  const plain = agentMissingPhrases(['sale/rent/land/commercial/student type', 'price', 'exact area and district']).join(' ');
+  assert.match(plain, /rent\* or for \*sale/);
+  assert.match(plain, /\*price\*/);
+  assert.match(plain, /Kira, Wakiso/);
+});
+
+test('Luganda and Swahili captions are understood', () => {
+  const cases = [
+    ['Ennyumba ya kupangisa e Ntinda, ebisenge bisatu, 800k buli mwezi', 'rent', 800000, 'Ntinda'],
+    ['Nyumba ya kupangisha Ntinda, vyumba 3, shilingi laki nane kwa mwezi', 'rent', 800000, 'Ntinda'],
+    ["Ettaka ery'okutunda e Gayaza, Wakiso obukadde 45", 'land', 45000000, 'Gayaza']
+  ];
+  for (const [caption, type, price, area] of cases) {
+    const facts = employeePropertyFacts(caption, {});
+    assert.strictEqual(facts.listingType, type, caption);
+    assert.strictEqual(Number(facts.price), price, caption);
+    assert.strictEqual(facts.locationPatch.area, area, caption);
+  }
+  assert.strictEqual(withEnglishPropertyTerms('3 bedroom house in Kira 1.2m'), '3 bedroom house in Kira 1.2m',
+    'English is left exactly as it was');
 });
