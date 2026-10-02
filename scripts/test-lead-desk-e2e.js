@@ -68,6 +68,14 @@ async function seed() {
   fx.contactIds.push(c2.id);
   await q(`INSERT INTO leads (contact_id, source, lead_type, category, location, message, lead_status)
     VALUES ($1, 'ask_ai_zero_result', 'property_need', 'commercial', $2, $3, 'open')`, [c2.id, AREA, `Shop space ${MARK}`]);
+  // Sent from the old demand panel before the desk existed.
+  await q(`INSERT INTO property_leads (phone, preferred_area, purpose, category, notes, payload, created_at)
+    VALUES ($1, $2, 'search', 'commercial', $3, $4::jsonb, NOW() - INTERVAL '2 days')`,
+    [intl(phone(16)), AREA, `legacy ${MARK}`, JSON.stringify({ last_referral: { agent_name: 'Old Panel Agent', at: new Date(Date.now() - 86400000).toISOString() } })]);
+  // Bot self-test traffic and makaug's own number: never leads.
+  await q(`INSERT INTO property_leads (phone, preferred_area, purpose, category, notes) VALUES
+    ($1, $2, 'search', 'rent', $3), ('256780863394', $2, 'search', 'rent', $3)`,
+    [`dryrun:sim-selftest-${RUN.toLowerCase()}-1:abc`, AREA, `selftest ${MARK}`]);
   // An old one for "remove older than 30 days"
   await q(`INSERT INTO property_leads (phone, preferred_area, purpose, category, notes, created_at)
     VALUES ($1, $2, 'search', 'rent', $3, NOW() - INTERVAL '45 days')`, [intl(phone(15)), `Oldtown${digits}`, `old one ${MARK}`]);
@@ -76,7 +84,7 @@ async function seed() {
 async function cleanup() {
   const keys = Array.from({ length: 30 }, (_v, i) => phone(i).slice(-9));
   await q(`DELETE FROM demand_leads WHERE phone_key = ANY($1::text[])`, [keys]);
-  await q(`DELETE FROM property_leads WHERE RIGHT(phone, 9) = ANY($1::text[])`, [keys]);
+  await q(`DELETE FROM property_leads WHERE RIGHT(phone, 9) = ANY($1::text[]) OR notes LIKE $2`, [keys, `%${MARK}%`]);
   await q(`DELETE FROM property_requests WHERE RIGHT(phone, 9) = ANY($1::text[])`, [keys]);
   await q(`DELETE FROM property_need_requests WHERE contact_id = ANY($1::uuid[])`, [fx.contactIds || []]);
   await q(`DELETE FROM lead_activities WHERE lead_id IN (SELECT id FROM leads WHERE contact_id = ANY($1::uuid[]))`, [fx.contactIds || []]);
@@ -96,6 +104,11 @@ async function run() {
   const mine = await deskLeads();
   const bySource = mine.reduce((m, l) => ((m[l.source] = (m[l.source] || 0) + 1), m), {});
   check('WhatsApp, website form, property finder and Ask AI all imported', bySource.whatsapp >= 2 && bySource.website_form === 1 && bySource.property_finder === 1 && bySource.ask_ai === 1, JSON.stringify(bySource));
+  const legacy = (await deskLeads()).find((l) => l.phone_key === phone(16).slice(-9));
+  const legacyRef = legacy ? await q('SELECT agent_name FROM demand_lead_referrals WHERE demand_lead_id = $1', [legacy.id]) : [];
+  check('a search sent from the old panel keeps its "sent to" history', legacy?.status === 'sent_to_agent' && legacyRef[0]?.agent_name === 'Old Panel Agent', JSON.stringify({ st: legacy?.status, r: legacyRef }));
+  const junk = await q(`SELECT COUNT(*)::int AS n FROM demand_leads WHERE message LIKE $1`, [`%selftest ${MARK}%`]);
+  check('bot self-tests and makaug\'s own number are not leads', junk[0].n === 0, `found ${junk[0].n}`);
   const again = await api('GET', '/api/admin/lead-desk?refresh=force');
   check('loading again never duplicates', (await deskLeads()).length === mine.length && again.status === 200);
   const sentence = mine.find((l) => l.phone_key === phone(11).slice(-9));

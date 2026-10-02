@@ -92,6 +92,30 @@ const PHONE_KEY_SQL = (col) => `NULLIF(RIGHT(REGEXP_REPLACE(COALESCE(${col}, '')
  * Copy new requests from every source into demand_leads. Safe to run as often
  * as you like.
  */
+// Numbers that are makaug itself or its own team testing the bot — never leads.
+function internalPhoneKeys() {
+  return String([
+    process.env.LEAD_DESK_EXCLUDE_PHONES,
+    process.env.AI_CEO_OWNER_PHONES,
+    process.env.AI_CEO_PHONE_TEST_OWNER,
+    process.env.AI_CEO_REPORT_WHATSAPP_RECIPIENTS,
+    process.env.MAKAUG_WHATSAPP_NUMBER,
+    process.env.MAKAUG_WHATSAPP_NUMBERS,
+    process.env.WHATSAPP_BUSINESS_NUMBER,
+    '256780863394'
+  ].filter(Boolean).join(','))
+    .split(/[,;\s]+/)
+    .map((v) => v.replace(/\D/g, '').slice(-9))
+    .filter((v) => v.length === 9);
+}
+
+// A real person's number: digits only (spaces, + and dashes allowed), 9–15
+// digits, and none of the self-test markers the bot's simulator writes.
+const REAL_PHONE_SQL = (col) => `(COALESCE(${col}, '') !~* '(dryrun|sim-|selftest|self-test|test)'
+  AND COALESCE(${col}, '') !~ '[A-Za-z:]'
+  AND LENGTH(REGEXP_REPLACE(COALESCE(${col}, ''), '\\D', '', 'g')) BETWEEN 9 AND 15)`;
+const NOT_INTERNAL_SQL = (col) => `(COALESCE(${PHONE_KEY_SQL(col)}, '') <> ALL($2::text[]))`;
+
 let fullSyncDone = false;
 
 async function syncDemandLeads(db, { days = 365, full = false } = {}) {
@@ -100,9 +124,10 @@ async function syncDemandLeads(db, { days = 365, full = false } = {}) {
   const effectiveDays = full || !fullSyncDone ? days : Math.min(Number(days) || 3, 3);
   const window = String(Math.max(1, Math.min(730, Number(effectiveDays) || 365)));
   const counts = {};
+  const internal = internalPhoneKeys();
   const run = async (label, sql) => {
     try {
-      const result = await db.query(sql, [window]);
+      const result = await db.query(sql, [window, internal]);
       counts[label] = result.rowCount;
     } catch (error) {
       if (!['42P01', '42703'].includes(error.code)) logger.warn('Lead desk sync failed', { source: label, error: error.message });
@@ -121,7 +146,8 @@ async function syncDemandLeads(db, { days = 365, full = false } = {}) {
       FROM property_leads pl
      WHERE pl.purpose = 'search'
        AND pl.created_at >= NOW() - ($1 || ' days')::interval
-       AND (NULLIF(pl.phone, '') IS NOT NULL OR NULLIF(pl.email, '') IS NOT NULL)
+       AND ${REAL_PHONE_SQL('pl.phone')}
+       AND ${NOT_INTERNAL_SQL('pl.phone')}
     ON CONFLICT (source_ref) DO NOTHING`);
 
   await run('website_form', `
@@ -132,7 +158,9 @@ async function syncDemandLeads(db, { days = 365, full = false } = {}) {
            NULLIF(TRIM(pr.requirements), ''), pr.created_at, pr.created_at + INTERVAL '24 hours'
       FROM property_requests pr
      WHERE pr.created_at >= NOW() - ($1 || ' days')::interval
-       AND (NULLIF(pr.phone, '') IS NOT NULL OR NULLIF(pr.email, '') IS NOT NULL)
+       AND (${REAL_PHONE_SQL('pr.phone')} OR (NULLIF(pr.phone, '') IS NULL AND NULLIF(pr.email, '') IS NOT NULL))
+       AND ${NOT_INTERNAL_SQL('pr.phone')}
+       AND COALESCE(pr.email, '') !~* '(makaug\\.invalid|@example\\.|test@|qa@)'
     ON CONFLICT (source_ref) DO NOTHING`);
 
   await run('property_finder', `
@@ -151,6 +179,9 @@ async function syncDemandLeads(db, { days = 365, full = false } = {}) {
       LEFT JOIN users u ON u.id = nr.user_id
      WHERE nr.created_at >= NOW() - ($1 || ' days')::interval
        AND COALESCE(NULLIF(c.whatsapp, ''), NULLIF(c.phone, ''), u.phone, NULLIF(c.email, ''), u.email) IS NOT NULL
+       AND (${REAL_PHONE_SQL("COALESCE(NULLIF(c.whatsapp, ''), NULLIF(c.phone, ''), u.phone)")}
+            OR COALESCE(NULLIF(c.whatsapp, ''), NULLIF(c.phone, ''), u.phone) IS NULL)
+       AND ${NOT_INTERNAL_SQL("COALESCE(NULLIF(c.whatsapp, ''), NULLIF(c.phone, ''), u.phone)")}
     ON CONFLICT (source_ref) DO NOTHING`);
 
   await run('ask_ai', `
@@ -166,7 +197,19 @@ async function syncDemandLeads(db, { days = 365, full = false } = {}) {
        AND COALESCE(l.is_test, FALSE) = FALSE
        AND l.created_at >= NOW() - ($1 || ' days')::interval
        AND COALESCE(NULLIF(c.whatsapp, ''), NULLIF(c.phone, ''), NULLIF(c.email, '')) IS NOT NULL
+       AND (${REAL_PHONE_SQL("COALESCE(NULLIF(c.whatsapp, ''), c.phone)")} OR COALESCE(NULLIF(c.whatsapp, ''), c.phone) IS NULL)
+       AND ${NOT_INTERNAL_SQL("COALESCE(NULLIF(c.whatsapp, ''), c.phone)")}
     ON CONFLICT (source_ref) DO NOTHING`);
+
+  // Self-test traffic and makaug's own numbers that got in before the filters.
+  await run('purged_test_traffic', `
+    DELETE FROM demand_leads
+     WHERE first_sent_at IS NULL
+       AND $1::text IS NOT NULL
+       AND (
+         (phone IS NOT NULL AND NOT ${REAL_PHONE_SQL('phone')})
+         OR COALESCE(phone_key, '') = ANY($2::text[])
+       )`);
 
   // Searches already sent from the old demand panel keep their history.
   await run('legacy_referrals', `
@@ -192,7 +235,7 @@ async function syncDemandLeads(db, { days = 365, full = false } = {}) {
            last_sent_at = GREATEST(COALESCE(dl.last_sent_at, i.sent_at), i.sent_at)
       FROM inserted i
      WHERE dl.id = i.demand_lead_id
-       AND $1::text IS NOT NULL`);
+       AND $1::text IS NOT NULL AND $2::text[] IS NOT NULL`);
 
   fullSyncDone = true;
   return counts;
@@ -219,14 +262,16 @@ async function refreshMatches(db, { force = false } = {}) {
       SELECT * FROM demand_leads
        WHERE archived_at IS NULL
          AND status NOT IN ('closed', 'client_notified')
-         AND asked_at >= NOW() - INTERVAL '180 days'
-         AND (area IS NOT NULL OR want <> 'any')
+         AND asked_at >= NOW() - INTERVAL '90 days'
+         AND want <> 'any'
+         AND area IS NOT NULL
     ), found AS (
       SELECT o.id,
              ARRAY(
                SELECT p.id FROM properties p
                 WHERE LOWER(COALESCE(p.status, '')) = 'approved'
                   AND p.created_at > o.asked_at
+                  AND p.created_at <= o.asked_at + INTERVAL '60 days'
                   AND (o.want = 'any'
                        OR LOWER(COALESCE(p.listing_type, '')) = o.want
                        OR (o.want = 'student' AND LOWER(COALESCE(p.listing_type, '')) IN ('student', 'students')))
@@ -248,6 +293,13 @@ async function refreshMatches(db, { force = false } = {}) {
      WHERE dl.id = f.id
        AND (dl.matched_listing_ids IS DISTINCT FROM f.ids OR dl.match_checked_at IS NULL)
      RETURNING dl.id`);
+  await db.query(`
+    UPDATE demand_leads
+       SET matched_listing_ids = '{}',
+           status = CASE WHEN status = 'matched' THEN CASE WHEN first_sent_at IS NOT NULL THEN 'sent_to_agent' ELSE 'new' END ELSE status END
+     WHERE CARDINALITY(matched_listing_ids) > 0
+       AND client_notified_at IS NULL
+       AND (want = 'any' OR area IS NULL OR asked_at < NOW() - INTERVAL '90 days')`).catch(() => {});
   return result.rowCount;
 }
 
@@ -758,6 +810,7 @@ async function deskCsv(db, { view = 'all' } = {}) {
 
 module.exports = {
   ARCHIVE_REASONS,
+  internalPhoneKeys,
   RESPONSES,
   SOURCES,
   archiveLeads,
