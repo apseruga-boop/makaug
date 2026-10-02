@@ -6775,27 +6775,58 @@ function agentPendingNotice(data = {}) {
 
 const AGENT_HELP = /^\s*(?:help|help me|i need help|msaada|nsaba obuyambi|obuyambi|nnyamba|nyamba|support|talk to (?:a )?(?:person|human|someone)|call me|4)\s*[.!?]*\s*$/i;
 
+/** Who an agent reaches when they ask for a person (Ronald by default). */
+function agentHelpContact() {
+  const name = normalizeInput(process.env.AGENT_HELP_CONTACT_NAME || 'Ronald');
+  const phone = String(process.env.AGENT_HELP_CONTACT_PHONE || '+256709402189').replace(/[^\d+]/g, '');
+  const digits = phone.replace(/\D+/g, '');
+  const pretty = digits.length === 12 && digits.startsWith('256')
+    ? `+256 ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`
+    : phone;
+  return { name, digits, pretty };
+}
+
 function agentHelpReply(agent = {}) {
   const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || '';
+  const contact = agentHelpContact();
   return [
-    `🙋 No problem${first ? ` ${first}` : ''} — I have asked someone from our team to message you here.`,
+    `🙋 No problem${first ? ` ${first}` : ''} — help is on the way.`,
     '',
-    'While you wait, you can tell me what you need in this chat. If it is about a property, send it as normal — photos and a caption — and it will be saved.'
+    contact.digits
+      ? `I have let *${contact.name}* from our team know, and he will get back to you. If it is urgent, call or WhatsApp ${contact.name} directly on *${contact.pretty}*.`
+      : 'I have let our team know, and someone will get back to you here.',
+    '',
+    'If it is about a property, you can still send it here as normal — photos and a caption — and it will be saved.'
   ].join('\n');
 }
 
-/** Tell the makaug team, on WhatsApp, that an agent asked for a person. */
+/** Tell Ronald (and the team alert list) that an agent asked for a person. */
 function alertTeamAgentNeedsHelp({ agent = {}, phone = '', said = '' } = {}) {
   deferWhatsappWork('agent help alert', async () => {
-    const desk = require('../services/leadDeskService');
-    if (typeof desk.sendToTeam !== 'function') return;
     const number = String(agent.whatsapp || agent.phone || phone || '').replace(/\D+/g, '');
-    await desk.sendToTeam(db, [
+    const body = [
       `🙋 *Agent asked for help on WhatsApp*`,
       `${agent.full_name || 'An agent'}${agent.company_name ? ` (${agent.company_name})` : ''}`,
+      number ? `Their number: +${number}` : '',
       number ? `Reply to them: https://wa.me/${number}` : '',
-      said ? `They said: "${String(said).slice(0, 160)}"` : ''
-    ].filter(Boolean).join('\n'), 'agent_help_request');
+      said ? `They said: "${String(said).slice(0, 160)}"` : '',
+      '',
+      'Please call or WhatsApp them back as soon as you can.'
+    ].filter((line, i, all) => line || (i > 0 && all[i - 1])).join('\n');
+    const handoff = require('../services/leadHandoffService');
+    const desk = require('../services/leadDeskService');
+    const contact = agentHelpContact();
+    const sentTo = new Set();
+    const nonce = Date.now();
+    if (contact.digits) {
+      await handoff.deliverWhatsapp({ to: contact.digits, body, kind: 'agent_help_contact', leadId: null, nonce });
+      sentTo.add(contact.digits.slice(-9));
+    }
+    const others = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : [])
+      .filter((to) => !sentTo.has(String(to).replace(/\D+/g, '').slice(-9)));
+    for (const to of others) {
+      await handoff.deliverWhatsapp({ to, body, kind: 'agent_help_request', leadId: null, nonce });
+    }
   });
 }
 
