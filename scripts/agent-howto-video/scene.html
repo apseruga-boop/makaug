@@ -1,0 +1,237 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: 'Noto Sans'; src: url('../../assets/fonts/NotoSans-Variable.ttf'); font-weight: 100 900; }
+:root { --cream:#FBF6EE; --peach:#FFE7D3; --ink:#15213A; --orange:#E8662A; --green:#15803d; --wa:#1F9D63; --muted:#5b6478; }
+* { box-sizing:border-box; margin:0; padding:0; }
+html,body { width:1080px; height:1920px; overflow:hidden; background:var(--cream); font-family:'Noto Sans','Noto Color Emoji',sans-serif; color:var(--ink); }
+.scene { position:absolute; inset:0; opacity:0; padding:120px 80px 0; }
+.brand { position:absolute; top:64px; left:80px; display:flex; align-items:center; gap:18px; font-weight:800; font-size:40px; letter-spacing:-.5px; }
+.brand img { width:64px; height:64px; }
+.step { display:inline-block; background:var(--orange); color:#fff; font-weight:800; font-size:34px; padding:10px 26px; border-radius:40px; margin-top:70px; }
+h1 { font-size:92px; line-height:1.04; font-weight:900; letter-spacing:-2px; margin-top:26px; }
+h2 { font-size:76px; line-height:1.06; font-weight:900; letter-spacing:-1.5px; margin-top:24px; }
+.lead { font-size:44px; line-height:1.35; color:var(--muted); margin-top:30px; font-weight:500; }
+.orange { color:var(--orange); }
+.green { color:var(--green); }
+.el { will-change:transform,opacity; }
+
+/* phone */
+.phone { position:absolute; left:110px; right:110px; top:600px; height:1220px; background:#0b141a; border-radius:70px; padding:22px; box-shadow:0 40px 80px rgba(21,33,58,.28); }
+.screen { position:relative; width:100%; height:100%; border-radius:52px; overflow:hidden; background:#efe7dd; }
+.wahead { height:140px; background:#075E54; display:flex; align-items:center; gap:22px; padding:30px 34px 0; color:#fff; }
+.wahead img { width:76px; height:76px; border-radius:50%; background:#fff; }
+.wahead b { font-size:36px; display:block; }
+.wahead span { font-size:26px; opacity:.85; }
+.chat { position:absolute; left:0; right:0; top:140px; bottom:0; padding:28px 26px; display:flex; flex-direction:column; gap:18px; justify-content:flex-end; }
+.b { max-width:86%; font-size:31px; line-height:1.38; padding:18px 24px 14px; border-radius:22px; box-shadow:0 2px 2px rgba(0,0,0,.08); white-space:pre-line; }
+.b.me { align-self:flex-end; background:#d9fdd3; border-top-right-radius:6px; }
+.b.bot { align-self:flex-start; background:#fff; border-top-left-radius:6px; }
+.b small { display:block; text-align:right; font-size:20px; color:#8a9199; margin-top:4px; }
+.b.typing { font-size:44px; letter-spacing:6px; padding:8px 26px; color:#8a9199; }
+.photos { display:grid; grid-template-columns:1fr 1fr; gap:6px; width:440px; border-radius:16px; overflow:hidden; margin-bottom:10px; }
+.photos div { height:170px; display:flex; align-items:center; justify-content:center; font-size:80px; }
+.p1 { background:linear-gradient(160deg,#9fd3f5,#f7d9a8); } .p2 { background:linear-gradient(160deg,#f3c8a2,#d98e5b); }
+.p3 { background:linear-gradient(160deg,#c8e6c9,#7fb685); } .p4 { background:linear-gradient(160deg,#e0d4f7,#a48be0); color:#fff; font-size:44px!important; font-weight:800; }
+.link { color:#027eb5; }
+
+/* cards */
+.card { background:#fff; border-radius:40px; padding:50px 56px; box-shadow:0 24px 60px rgba(21,33,58,.12); }
+.chip { display:flex; align-items:center; gap:26px; font-size:42px; font-weight:700; background:#fff; border-radius:30px; padding:28px 36px; box-shadow:0 10px 30px rgba(21,33,58,.08); margin-top:26px; }
+.chip i { font-style:normal; font-size:54px; width:70px; text-align:center; }
+.tick { margin-left:auto; color:var(--wa); font-size:52px; }
+.stamp { position:absolute; right:110px; bottom:300px; transform:rotate(-10deg); border:10px solid var(--wa); color:var(--wa); font-weight:900; font-size:96px; padding:10px 40px; border-radius:24px; letter-spacing:4px; background:rgba(255,255,255,.85); }
+.word { display:flex; align-items:center; gap:34px; background:#fff; border-radius:34px; padding:36px 40px; margin-top:34px; box-shadow:0 10px 30px rgba(21,33,58,.08); }
+.word b { background:var(--ink); color:#fff; font-size:46px; padding:14px 30px; border-radius:20px; min-width:250px; text-align:center; letter-spacing:2px; }
+.word span { font-size:40px; line-height:1.3; font-weight:600; }
+.numchip { margin-top:80px; display:flex; align-items:center; gap:30px; background:#fff; border-radius:40px; padding:40px 46px; box-shadow:0 24px 60px rgba(21,33,58,.12); }
+.numchip .av { width:120px; height:120px; border-radius:50%; background:var(--peach); display:flex; align-items:center; justify-content:center; font-size:64px; }
+.numchip b { font-size:50px; display:block; letter-spacing:1px; }
+.numchip span { font-size:34px; color:var(--wa); font-weight:800; }
+.foot { position:absolute; left:80px; right:80px; bottom:110px; font-size:40px; line-height:1.35; font-weight:600; color:var(--muted); }
+.bigcta { font-size:112px; font-weight:900; line-height:1.02; letter-spacing:-3px; margin-top:420px; }
+.pill { display:inline-block; margin-top:60px; background:var(--wa); color:#fff; font-size:46px; font-weight:800; padding:26px 46px; border-radius:60px; }
+.bg-blob { position:absolute; width:900px; height:900px; border-radius:50%; background:var(--peach); right:-380px; top:-300px; }
+.bg-blob2 { position:absolute; width:700px; height:700px; border-radius:50%; background:#e3f2e6; left:-320px; bottom:-260px; }
+.progress { position:absolute; left:0; bottom:0; height:12px; background:var(--orange); }
+</style></head>
+<body>
+<div class="bg-blob"></div><div class="bg-blob2"></div>
+
+<!-- 1 intro 0-5 -->
+<section class="scene" data-s="0" data-e="5">
+  <div class="brand"><img src="../../assets/icons/makaug-mark.svg">makaug.com</div>
+  <div class="el" data-in="0.2" style="margin-top:520px;font-size:40px;font-weight:800;color:var(--orange);letter-spacing:3px;">FOR MAKAUG AGENTS</div>
+  <h1 class="el" data-in="0.5">Post your properties<br>on <span class="green">WhatsApp</span>.</h1>
+  <p class="lead el" data-in="1.1">Say hello. Send the property. We put it live under your name.</p>
+  <div class="pill el" data-in="1.8">⏱ How it works — in 1 minute</div>
+</section>
+
+<!-- 2 we know you 5-11 -->
+<section class="scene" data-s="5" data-e="11">
+  <div class="brand"><img src="../../assets/icons/makaug-mark.svg">makaug.com</div>
+  <h2 class="el" data-in="5.2" style="margin-top:420px;">It already<br>knows <span class="orange">it's you.</span></h2>
+  <div class="numchip el" data-in="5.9">
+    <div class="av">👤</div>
+    <div><b>Your registered number</b><span>✓ makaug approved agent</span></div>
+  </div>
+  <p class="lead el" data-in="6.8">Message us from the WhatsApp number you registered with. No login. No forms.</p>
+  <p class="lead el" data-in="7.8" style="color:var(--ink);font-weight:700;">Everything you send goes up under your name.</p>
+</section>
+
+<!-- 3 say hello 11-20 -->
+<section class="scene" data-s="11" data-e="20">
+  <span class="step el" data-in="11.1">STEP 1</span>
+  <h2 class="el" data-in="11.3">Say <span class="orange">“Hello”</span></h2>
+  <p class="lead el" data-in="11.6" style="font-size:40px;margin-top:14px;">You get your own agent menu.</p>
+  <div class="phone el" data-in="11.4" data-from="up"><div class="screen">
+    <div class="wahead"><img src="../../assets/icons/makaug-mark.svg"><div><b>makaug</b><span>online</span></div></div>
+    <div class="chat">
+      <div class="b me el" data-in="12.3" data-collapse>Hello<small>09:41 ✓✓</small></div>
+      <div class="b bot typing el" data-in="13.0" data-out="14.2" data-collapse>• • •</div>
+      <div class="b bot el" data-in="14.2" data-collapse>👋 Hello Grace!
+
+What would you like to do?
+
+1️⃣ <b>Post a property</b> — just send it here with photos and a caption
+2️⃣ <b>Share my listings</b> — reply <b>SHARE</b> for your link and card
+3️⃣ <b>Check a property</b> — reply <b>STATUS</b>
+4️⃣ <b>Talk to a person</b> — reply <b>HELP</b>
+
+<i>Or just send the property straight away — you do not need the menu.</i><small>09:41</small></div>
+    </div>
+  </div></div>
+</section>
+
+<!-- 4 send property 20-31 -->
+<section class="scene" data-s="20" data-e="31">
+  <span class="step el" data-in="20.1">STEP 2</span>
+  <h2 class="el" data-in="20.3">Send the property</h2>
+  <p class="lead el" data-in="20.6" style="font-size:40px;margin-top:14px;">Like you would forward it to a buyer.</p>
+  <div class="phone el" data-in="20.4" data-from="up" style="height:760px;"><div class="screen">
+    <div class="wahead"><img src="../../assets/icons/makaug-mark.svg"><div><b>makaug</b><span>online</span></div></div>
+    <div class="chat">
+      <div class="b me el" data-in="21.2" data-collapse><div class="photos"><div class="p1">🏡</div><div class="p2">🛋️</div><div class="p3">🌿</div><div class="p4">+5</div></div>3 bedroom house for rent in Kira, Wakiso — UGX 1.2m a month<small>09:43 ✓✓</small></div>
+    </div>
+  </div></div>
+  <div style="position:absolute;left:80px;right:80px;top:1390px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;">
+      <div class="chip el" data-in="22.8" style="font-size:34px;padding:24px 26px;"><i>📸</i>Photos or a short video</div>
+      <div class="chip el" data-in="23.6" style="font-size:34px;padding:24px 26px;"><i>🏠</i>What it is · rent or sale</div>
+      <div class="chip el" data-in="24.4" style="font-size:34px;padding:24px 26px;"><i>📍</i>Exact area + district</div>
+      <div class="chip el" data-in="25.2" style="font-size:34px;padding:24px 26px;"><i>💰</i>The price</div>
+    </div>
+    <p class="el" data-in="26.4" style="text-align:center;font-size:40px;font-weight:800;margin-top:34px;color:var(--orange);">One property per message.</p>
+  </div>
+</section>
+
+<!-- 5 confirm 31-38 -->
+<section class="scene" data-s="31" data-e="38">
+  <span class="step el" data-in="31.1">STEP 3</span>
+  <h2 class="el" data-in="31.3">It confirms<br>straight away</h2>
+  <div class="phone el" data-in="31.4" data-from="up" style="top:640px;height:900px;"><div class="screen">
+    <div class="wahead"><img src="../../assets/icons/makaug-mark.svg"><div><b>makaug</b><span>online</span></div></div>
+    <div class="chat">
+      <div class="b me el" data-in="31.4" data-collapse style="opacity:.75">📷 8 photos · 3 bedroom house for rent in Kira…<small>09:43 ✓✓</small></div>
+      <div class="b bot el" data-in="32.3" data-collapse>✅ Your property in <b>Kira</b> is with our team for review.
+8 photos saved.
+
+As soon as it is approved it goes live under your name and I will send you the link to share.<small>09:43</small></div>
+    </div>
+  </div></div>
+  <div class="foot el" data-in="33.8" style="bottom:120px;"><span style="color:var(--ink);font-weight:800;">Missed something?</span> It tells you — e.g. <span style="background:#fff;padding:4px 14px;border-radius:12px;color:var(--ink);">Still needed: the price</span> — just reply with it. No need to resend photos.</div>
+</section>
+
+<!-- 6 review 38-44 -->
+<section class="scene" data-s="38" data-e="44">
+  <span class="step el" data-in="38.1">STEP 4</span>
+  <h2 class="el" data-in="38.3">Our team<br>reviews it</h2>
+  <p class="lead el" data-in="38.7">A real person checks every property before it goes on the site.</p>
+  <div style="margin-top:40px;">
+    <div class="chip el" data-in="39.3"><i>📸</i>Photos clear<span class="tick el" data-in="39.6">✓</span></div>
+    <div class="chip el" data-in="39.8"><i>📍</i>Location right<span class="tick el" data-in="40.1">✓</span></div>
+    <div class="chip el" data-in="40.3"><i>💰</i>Price clear<span class="tick el" data-in="40.6">✓</span></div>
+    <div class="chip el" data-in="40.8"><i>👤</i>Your name &amp; number on it<span class="tick el" data-in="41.1">✓</span></div>
+  </div>
+  <div class="stamp el" data-in="41.8" data-from="stamp">APPROVED</div>
+</section>
+
+<!-- 7 live 44-51 -->
+<section class="scene" data-s="44" data-e="51">
+  <span class="step el" data-in="44.1">STEP 5</span>
+  <h2 class="el" data-in="44.3">It goes live —<br><span class="green">and you'll know.</span></h2>
+  <div class="phone el" data-in="44.4" data-from="up" style="top:640px;height:960px;"><div class="screen">
+    <div class="wahead"><img src="../../assets/icons/makaug-mark.svg"><div><b>makaug</b><span>online</span></div></div>
+    <div class="chat">
+      <div class="b bot el" data-in="45.2" data-collapse>🎉 <b>Your property is live on makaug.com</b>
+
+3 bedroom house for rent
+Kira, Wakiso · UGX 1,200,000 / month
+
+🔗 <span class="link">makaug.com/property/…</span>
+
+Share that link anywhere — WhatsApp status, your groups, Facebook. Anyone who opens it sees the property with your name and number on it.
+
+Got another one? Send it here the same way.<small>11:20</small></div>
+    </div>
+  </div></div>
+  <div class="foot el" data-in="46.6" style="bottom:110px;text-align:center;color:var(--ink);font-weight:800;">Buyers call and WhatsApp <span class="orange">you</span> directly.</div>
+</section>
+
+<!-- 8 handy words 51-57 -->
+<section class="scene" data-s="51" data-e="57">
+  <div class="brand"><img src="../../assets/icons/makaug-mark.svg">makaug.com</div>
+  <h2 class="el" data-in="51.2" style="margin-top:300px;">Handy words</h2>
+  <p class="lead el" data-in="51.5">Type any of these in the same chat.</p>
+  <div class="word el" data-in="52.0"><b>HELLO</b><span>Your agent menu</span></div>
+  <div class="word el" data-in="52.5"><b>SHARE</b><span>Your page link and agent card for your status</span></div>
+  <div class="word el" data-in="53.0"><b>STATUS</b><span>Where your properties are</span></div>
+  <div class="word el" data-in="53.5"><b>HELP</b><span>Talk to a person on our team</span></div>
+</section>
+
+<!-- 9 end 57-62 -->
+<section class="scene" data-s="57" data-e="62.5">
+  <div class="brand"><img src="../../assets/icons/makaug-mark.svg">makaug.com</div>
+  <div class="bigcta el" data-in="57.2">Say hello.<br><span class="orange">Send your<br>properties.</span></div>
+  <p class="lead el" data-in="58.0" style="color:var(--ink);font-weight:700;">This WhatsApp chat is all you need.</p>
+  <div class="pill el" data-in="58.6">💬 Save this number as “makaug”</div>
+  <div class="foot el" data-in="59.2">Hello → Send → We review → Live → You get the link.</div>
+</section>
+
+<div class="progress" id="progress"></div>
+
+<script>
+const DUR = 62.5, FADE = 0.4, ANIM = 0.5;
+const ease = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+const scenes = [...document.querySelectorAll('.scene')];
+const els = [...document.querySelectorAll('.el')];
+window.renderAt = (t) => {
+  for (const s of scenes) {
+    const a = +s.dataset.s, b = +s.dataset.e;
+    const last = b >= DUR;
+    let o = 0;
+    if (t >= a && (t < b || last)) {
+      o = a === 0 ? 1 : Math.min(1, (t - a) / FADE);
+      if (!last) o = Math.min(o, (b - t) / FADE);
+    }
+    s.style.opacity = Math.max(0, o);
+  }
+  for (const e of els) {
+    const i = +e.dataset.in, out = e.dataset.out ? +e.dataset.out : null;
+    let p = ease((t - i) / ANIM);
+    if (out !== null && t >= out) p = 0;
+    const from = e.dataset.from;
+    let tr;
+    if (from === 'up') tr = `translateY(${(1 - p) * 140}px)`;
+    else if (from === 'stamp') tr = `rotate(-10deg) scale(${1 + (1 - p) * 1.4})`;
+    else tr = `translateY(${(1 - p) * 40}px)`;
+    e.style.opacity = p;
+    e.style.transform = tr;
+    if (e.hasAttribute('data-collapse')) e.style.display = (t < i || (out !== null && t >= out)) ? 'none' : '';
+  }
+  document.getElementById('progress').style.width = (t / DUR * 100) + '%';
+};
+window.DURATION = DUR;
+renderAt(0);
+</script>
+</body></html>

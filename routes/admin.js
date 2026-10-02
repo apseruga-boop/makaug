@@ -112,6 +112,7 @@ const {
 const leadDesk = require('../services/leadDeskService');
 const leadReferral = require('../services/leadReferralService');
 const leadHandoff = require('../services/leadHandoffService');
+const agentHowToPost = require('../services/agentHowToPostBroadcastService');
 const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
 const { MONETIZATION_SPINE_MARKER, markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
@@ -13627,6 +13628,84 @@ router.post('/lead-handoff/preview', async (req, res, next) => {
     const delivery = await leadHandoff.deliverWhatsapp({ to, body, kind: `preview_${kind}`, leadId: null, nonce: Date.now() });
     await writeAudit('lead_handoff_preview_sent', { to_masked: `${to.replace(/\D/g, '').slice(0, 4)}***`, kind, listing_id: listing.id, status: delivery.status }, adminActorId(req));
     return res.json({ ok: ['queued', 'sent', 'simulated'].includes(delivery.status), data: { delivery, text: body } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// "How to post on WhatsApp" broadcast to approved agents.
+// GET: who it would go to and the exact words. POST preview: one number only.
+// POST send: every approved agent not already sent it; needs confirm=SEND_TO_ALL_AGENTS.
+router.get('/agent-broadcast/how-to-post', async (req, res, next) => {
+  try {
+    const all = await agentHowToPost.listRecipients(db, { excludeKeys: leadHandoff.makaugOwnNumbers() });
+    const sent = await agentHowToPost.alreadySentAgentIds(db);
+    return res.json({
+      ok: true,
+      data: {
+        video_url: agentHowToPost.videoUrl(),
+        caption: agentHowToPost.buildCaption({ name: 'Grace' }),
+        message: agentHowToPost.buildMessage({ name: 'Grace' }),
+        recipients: all.map((r) => ({ id: r.id, name: r.name, number_masked: `${r.number.slice(0, 5)}***${r.number.slice(-2)}`, already_sent: sent.has(String(r.id)) })),
+        to_send: all.filter((r) => !sent.has(String(r.id))).length
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/agent-broadcast/how-to-post/preview', async (req, res, next) => {
+  try {
+    const to = String(req.body?.to || '').replace(/\D+/g, '');
+    if (to.length < 9) return res.status(400).json({ ok: false, error: 'A number to send the preview to is required' });
+    const queued = await agentHowToPost.queueFor({
+      queue: queueWhatsappWebBridgeMessage,
+      to,
+      name: cleanText(req.body?.name) || 'Arthur',
+      preview: true,
+      source: agentReportWhatsappSource(),
+      actorId: adminActorId(req),
+      nonce: Date.now()
+    });
+    await writeAudit('agent_how_to_post_preview_sent', { to_masked: `${to.slice(0, 4)}***`, ...queued }, adminActorId(req));
+    return res.json({ ok: true, data: { to, queued, video_url: agentHowToPost.videoUrl() } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/agent-broadcast/how-to-post/send', async (req, res, next) => {
+  try {
+    if (cleanText(req.body?.confirm) !== 'SEND_TO_ALL_AGENTS') {
+      return res.status(400).json({ ok: false, error: 'Add confirm: "SEND_TO_ALL_AGENTS" to send to every approved agent' });
+    }
+    const all = await agentHowToPost.listRecipients(db, { excludeKeys: leadHandoff.makaugOwnNumbers() });
+    const sent = await agentHowToPost.alreadySentAgentIds(db);
+    const only = Array.isArray(req.body?.agent_ids) ? new Set(req.body.agent_ids.map(String)) : null;
+    const targets = all.filter((r) => !sent.has(String(r.id)) && (!only || only.has(String(r.id))));
+    const results = [];
+    for (const agent of targets) {
+      try {
+        const queued = await agentHowToPost.queueFor({
+          queue: queueWhatsappWebBridgeMessage,
+          to: agent.number,
+          name: agent.name,
+          agentId: agent.id,
+          source: agentReportWhatsappSource(),
+          actorId: adminActorId(req)
+        });
+        results.push({ id: agent.id, name: agent.name, status: 'queued', ...queued });
+      } catch (error) {
+        results.push({ id: agent.id, name: agent.name, status: 'failed', error: error.message });
+      }
+    }
+    await writeAudit('agent_how_to_post_broadcast_sent', {
+      queued: results.filter((r) => r.status === 'queued').length,
+      failed: results.filter((r) => r.status === 'failed').length,
+      skipped_already_sent: all.length - targets.length
+    }, adminActorId(req));
+    return res.json({ ok: true, data: { queued: results.filter((r) => r.status === 'queued').length, skipped_already_sent: all.length - targets.length, results } });
   } catch (error) {
     return next(error);
   }

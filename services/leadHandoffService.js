@@ -452,6 +452,7 @@ module.exports = {
   _resetSendLog: () => sendLog.clear(),
   acknowledgeTeamLead,
   deliverWhatsapp,
+  makaugOwnNumbers,
   buildListerMessage,
   buildSeekerMessage,
   handOffListingLead,
