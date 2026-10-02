@@ -1194,6 +1194,65 @@ async function transcribeAudioFromDataUrl(dataUrl, mediaType = 'audio/ogg', opti
   });
 }
 
+/**
+ * Read a payment screenshot (MoMo / Airtel SMS or app, bank slip) for the
+ * transaction ID and amount. The first of three checks: what it says is only
+ * a claim until the wallet's own SMS and a person agree.
+ */
+async function readPaymentReceipt({ imageDataUrl = '', providerScope = '' } = {}) {
+  const rawImage = String(imageDataUrl || '').trim();
+  if (!/^data:image\/(?:jpeg|jpg|png|webp);base64,/i.test(rawImage)) return { available: false, reason: 'image_missing' };
+  if (Math.floor((rawImage.length * 3) / 4) > 4_000_000) return { available: false, reason: 'image_too_large' };
+  const client = getClient(providerScope);
+  if (!client) return { available: false, reason: 'vision_provider_unavailable' };
+  const model = getTaskModel('whatsapp_photo', process.env.OPENAI_WHATSAPP_PHOTO_MODEL || 'gpt-4.1-mini', providerScope);
+  try {
+    const completion = await createChatCompletionResilient(client, {
+      model,
+      temperature: 0,
+      messages: [
+        {
+          role: 'system',
+          content: 'You read payment receipts from Uganda (MTN Mobile Money, Airtel Money, bank deposit slips and transfer confirmations). Return JSON only: is_payment_receipt (boolean), provider (mtn_momo|airtel_money|bank|other|unknown), transaction_id (string, exactly as printed, empty if none), amount (number, no commas, 0 if unclear), currency (UGX|USD|other), payer (string), recipient (string), date (YYYY-MM-DD or empty), confidence (0..1). Never guess a transaction ID: copy it character by character or leave it empty.'
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Read this payment receipt.' },
+            { type: 'image_url', image_url: { url: rawImage, detail: 'high' } }
+          ]
+        }
+      ]
+    }, { preferJson: true });
+    const parsed = safeJsonParse(completion?.choices?.[0]?.message?.content || '{}', {});
+    const result = {
+      available: true,
+      is_payment_receipt: parsed.is_payment_receipt === true,
+      provider: cleanText(parsed.provider, 20).toLowerCase() || 'unknown',
+      transaction_id: cleanText(parsed.transaction_id, 60).replace(/\s+/g, ''),
+      amount: Math.max(0, Number(parsed.amount) || 0),
+      currency: cleanText(parsed.currency, 5).toUpperCase() || 'UGX',
+      payer: cleanText(parsed.payer, 80),
+      recipient: cleanText(parsed.recipient, 80),
+      date: cleanText(parsed.date, 10),
+      confidence: clamp(parsed.confidence || 0, 0, 1),
+      model
+    };
+    await logAiModelEvent({
+      eventType: 'payment_receipt_reading',
+      source: 'whatsapp',
+      inputPayload: {},
+      outputPayload: { ...result, payer: undefined },
+      modelName: model,
+      qualityScore: result.confidence
+    });
+    return result;
+  } catch (error) {
+    logger.warn('Payment receipt reading failed:', error.message);
+    return { available: false, reason: 'vision_error' };
+  }
+}
+
 async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = '', providerScope = '' } = {}) {
   const rawImage = String(imageDataUrl || '').trim();
   const safeSlot = cleanText(expectedSlot, 80) || 'property photo';
@@ -1957,6 +2016,7 @@ module.exports = {
   transcribeAudioFromUrl,
   transcribeAudioFromDataUrl,
   classifyWhatsappListingPhoto,
+  readPaymentReceipt,
   generateCampaignCopy,
   generateListingIntelligence,
   translateFreeText,

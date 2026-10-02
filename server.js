@@ -58,6 +58,7 @@ const { startFeaturedRotationScheduler } = require('./services/featuredRotationS
 const { startLeadDeskScheduler } = require('./services/leadDeskService');
 const { startVideoStillScheduler } = require('./services/videoStillScheduler');
 const { startGreetingNameCache } = require('./services/agentNameService');
+const { startBillingScheduler } = require('./services/billingOpsService');
 const { getPublicDevelopment, getPublicMarket, isPubliclyVisible, normalizeDevelopmentRow } = require('./services/offPlanService');
 const {
   applyHarvestPublicSubmissionVisibility,
@@ -1971,6 +1972,7 @@ async function start() {
     startLeadDeskScheduler(db);
     startVideoStillScheduler(db);
     startGreetingNameCache(db);
+    startBillingScheduler(db);
   }
   if (!IS_SOUTH_AFRICA || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true') {
     startFeaturedRotationScheduler(db);

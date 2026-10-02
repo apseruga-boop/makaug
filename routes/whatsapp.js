@@ -12,6 +12,7 @@ const {
   transcribeAudioFromUrl,
   transcribeAudioFromDataUrl,
   classifyWhatsappListingPhoto,
+  readPaymentReceipt,
   extractNaturalPropertyQuery
 } = require('../services/aiService');
 const {
@@ -10583,6 +10584,122 @@ async function sendEmployeeBatchSummary(phone, since) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// "I have paid" — payment claims, and agents paused for an unpaid fee.
+// ---------------------------------------------------------------------------
+const STRONG_PAID_WORDS = /\b(?:paid|i have paid|i've paid|transaction id|trans id|txn|tid|financial transaction)\b/i;
+const pausedAgentAlerted = new Map();
+
+/**
+ * A transaction ID (typed or in a pasted MoMo SMS) or a payment screenshot
+ * from someone we are waiting on becomes a payment claim. The claim is check 1
+ * of 3; the wallet SMS and a person still have to agree before it counts.
+ */
+async function handlePaymentClaimMessage({ phone, body = '', photoCandidates = [] } = {}) {
+  const billing = require('../services/billingOpsService');
+  const text = normalizeInput(body);
+  const typed = billing.readReferenceFromText(text);
+  const imageDataUrl = normalizeInput(photoCandidates?.[0]?.data_url || photoCandidates?.[0]?.dataUrl || '');
+  if (!typed && !imageDataUrl) return null; // most messages: nothing to look up
+  const expecting = await billing.expectingPaymentFrom(db, phone).catch(() => null);
+
+  let reading = null;
+  let receiptUrl = null;
+  if (imageDataUrl && (expecting || STRONG_PAID_WORDS.test(text))) {
+    reading = await withTimeout(readPaymentReceipt({ imageDataUrl, providerScope: WHATSAPP_PROVIDER_SCOPE }), 15000, { available: false, reason: 'timeout' }, 'payment receipt reading');
+    const looksLikeReceipt = reading?.is_payment_receipt === true || STRONG_PAID_WORDS.test(text);
+    if (!looksLikeReceipt) return null; // a property photo, not a receipt
+    receiptUrl = await storeDataUrl(imageDataUrl, {
+      keyPrefix: `revenue-receipts/${crypto.randomUUID()}`,
+      filename: 'whatsapp-receipt.jpg',
+      label: 'payment receipt',
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+      maxBytes: 6_000_000
+    }).catch(() => null);
+  } else if (!typed || !(expecting || STRONG_PAID_WORDS.test(text) || typed.source === 'sms_text')) {
+    return null;
+  }
+
+  const reference = typed?.reference || (reading?.transaction_id && reading.transaction_id.length >= 5 ? reading.transaction_id : null);
+  const amount = typed?.amount_ugx || (reading?.currency === 'UGX' && reading?.amount ? Math.round(reading.amount) : null);
+  const { claim, ctx } = await billing.createClaim(db, {
+    phone,
+    reference,
+    amountUgx: amount,
+    receiptUrl,
+    message: text,
+    aiReading: reading && reading.available ? reading : null
+  });
+
+  setImmediate(async () => {
+    try {
+      const desk = require('../services/leadDeskService');
+      const who = ctx.agent?.full_name || ctx.property?.title || `+${String(phone).replace(/\D/g, '')}`;
+      const body = [
+        '🧾 *Payment claim to check*',
+        `From: ${who}`,
+        reference ? `Transaction ID: ${reference}` : 'No transaction ID read — ask them for it',
+        amount ? `Amount: UGX ${Number(amount).toLocaleString('en-US')}` : '',
+        claim.sms_id ? '✅ Matches a MoMo SMS already received' : '⏳ No matching MoMo SMS yet',
+        `Confirm or reject: ${HOME_URL}/admin (Sales & Revenue)`
+      ].filter(Boolean).join('\n');
+      if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'payment_claim_received');
+      const contact = agentHelpContact();
+      const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
+      if (contact.digits && !onList) await require('../services/leadHandoffService').deliverWhatsapp({ to: contact.digits, body, kind: 'payment_claim_contact', leadId: null, nonce: claim.id });
+    } catch (_ignored) { /* best effort */ }
+  });
+
+  if (!reference) {
+    return [
+      '🧾 Thank you — I have your payment receipt.',
+      '',
+      'I could not read the *transaction ID* clearly. Please type it here exactly as it appears on the MoMo / Airtel message or bank slip, so our team can match it.'
+    ].join('\n');
+  }
+  return [
+    `🧾 *Thank you — payment received for checking.*`,
+    '',
+    `Transaction ID: *${reference}*${amount ? `\nAmount: *UGX ${Number(amount).toLocaleString('en-US')}*` : ''}`,
+    '',
+    'Our team is matching it with the MoMo / bank record now. As soon as it is confirmed I will message you, and anything that was paused goes straight back live.',
+    '',
+    'If the ID above is wrong, just send the correct one.'
+  ].join('\n');
+}
+
+/** An agent paused for an unpaid fee messages us: say so kindly, and tell Ronald. */
+async function billingPausedAgentReply({ phone, body = '' } = {}) {
+  const key = String(phone || '').replace(/\D+/g, '').slice(-9);
+  if (key.length < 9) return null;
+  const agent = (await db.query(
+    `SELECT id, full_name, greeting_name, phone, whatsapp FROM agents
+      WHERE billing_suspended_at IS NOT NULL AND removed_at IS NULL
+        AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
+          OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1)
+      LIMIT 1`,
+    [key]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  if (!agent) return null;
+  const billing = require('../services/billingOpsService');
+  const settings = await billing.getSettings(db).catch(() => ({}));
+  const pay = billing.payToLine(settings);
+  const contact = agentHelpContact();
+  const last = pausedAgentAlerted.get(agent.id) || 0;
+  if (Date.now() - last > 12 * 3600 * 1000) {
+    pausedAgentAlerted.set(agent.id, Date.now());
+    alertTeamAgentNeedsHelp({ agent: { ...agent, full_name: `${agent.full_name} (PAUSED — fee unpaid)` }, phone, said: normalizeInput(body).slice(0, 160) });
+  }
+  return [
+    `Hi ${agentGreetingName(agent, 'there')},`,
+    '',
+    'Your makaug account is *paused* at the moment because the monthly subscription has not been paid. Nothing has been deleted.',
+    '',
+    `Please call or WhatsApp *${contact.name}* on *${contact.pretty}* — I have also let him know, and someone from our team will reach out to you.`,
+    pay ? `\nAlready paid, or ready to? Pay to ${pay} and send the *transaction ID* here — everything comes back the moment it is confirmed.` : ''
+  ].filter(Boolean).join('\n');
+}
+
 async function queueWhatsappWebBridgeAutoReply({
   phone,
   message,
@@ -15119,6 +15236,19 @@ async function processInboundRuntimeUnlocked({
       metadata: loggedInboundMetadata
     }
   });
+
+  // Payments first: a transaction ID or receipt must never be read as a property.
+  const paymentReply = await handlePaymentClaimMessage({
+    phone,
+    body: effectiveBody,
+    photoCandidates: inboundPhotoCandidates
+  }).catch((error) => {
+    logger.warn('Payment claim handling failed:', error.message || String(error));
+    return null;
+  });
+  if (paymentReply) return { message: paymentReply, nextStep: sessionStep };
+  const pausedReply = await billingPausedAgentReply({ phone, body: effectiveBody }).catch(() => null);
+  if (pausedReply) return { message: pausedReply, nextStep: sessionStep };
 
   const employeeIntake = await handleEmployeeWhatsappIntake({
     phone,

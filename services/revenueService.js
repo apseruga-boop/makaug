@@ -24,11 +24,13 @@ const crypto = require('crypto');
 const METHODS = {
   mtn_momo: { label: 'MTN Mobile Money', account: 'mtn_momo' },
   airtel_money: { label: 'Airtel Money', account: 'airtel_money' },
-  bank_transfer: { label: 'Bank transfer / deposit', account: 'bank' },
+  bank_transfer: { label: 'Bank transfer / deposit (other bank)', account: 'bank' },
+  absa_ugx: { label: 'Absa — UGX account', account: 'absa_ugx' },
+  absa_usd: { label: 'Absa — USD account', account: 'absa_usd', currency: 'USD' },
   cash: { label: 'Cash', account: 'cash' }
 };
 const OUT_KINDS = new Set(['withdrawal', 'expense', 'transfer_out', 'refund']);
-const IN_KINDS = new Set(['agent_subscription', 'other_income', 'transfer_in', 'opening_adjustment']);
+const IN_KINDS = new Set(['agent_subscription', 'listing_fee', 'other_income', 'transfer_in', 'opening_adjustment']);
 
 function feeConfig() {
   return {
@@ -49,6 +51,16 @@ function addMonths(isoDate, months) {
   return dt.toISOString().slice(0, 10);
 }
 
+// pg returns DATE columns as a Date at local midnight; turn either form into YYYY-MM-DD.
+function isoDay(value) {
+  if (!value) return '';
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+  }
+  return String(value).slice(0, 10);
+}
+
 function addDays(isoDate, days) {
   const dt = new Date(`${isoDate}T00:00:00Z`);
   dt.setUTCDate(dt.getUTCDate() + days);
@@ -60,7 +72,7 @@ function agentFeeRequired(agent = {}, now = new Date()) {
   const { feeUgx, startDate } = feeConfig();
   if (!feeUgx || agent.fee_exempt === true) return false;
   if (kampalaDate(now) < startDate) return false;
-  const paidUntil = agent.paid_until ? String(agent.paid_until).slice(0, 10) : '';
+  const paidUntil = isoDay(agent.paid_until);
   return !(paidUntil && paidUntil >= kampalaDate(now));
 }
 
@@ -83,8 +95,9 @@ function normalizeEntry(input = {}, { direction = 'in', kind = 'agent_subscripti
   const method = cleanText(input.method, 40).toLowerCase();
   const methodInfo = METHODS[method];
   if (!methodInfo) errors.push('How was it paid? Choose MTN Mobile Money, Airtel Money, bank transfer or cash.');
+  const isUsd = methodInfo?.currency === 'USD';
   const amount = parseAmount(input.amount_ugx ?? input.amount);
-  if (!(amount > 0)) errors.push('Enter the amount received in UGX.');
+  if (!isUsd && !(amount > 0)) errors.push('Enter the amount received in UGX.');
   const reference = cleanText(input.reference ?? input.transaction_id ?? input.payment_code, 80).replace(/\s+/g, '');
   if (method && method !== 'cash' && reference.length < 4) {
     errors.push('Enter the transaction ID from the MoMo / Airtel / bank receipt.');
@@ -96,11 +109,30 @@ function normalizeEntry(input = {}, { direction = 'in', kind = 'agent_subscripti
   let paidAt = input.paid_at ? new Date(input.paid_at) : new Date();
   if (Number.isNaN(paidAt.getTime())) paidAt = new Date();
   if (paidAt.getTime() > Date.now() + 36 * 3600 * 1000) errors.push('The payment date is in the future.');
+  // Money into the Absa USD account is kept in dollars and valued in UGX at the rate given.
+  const currency = methodInfo?.currency || 'UGX';
+  let amountUgx = amount;
+  let fxRate = null;
+  let usdAmount = null;
+  if (currency === 'USD') {
+    // A form that has a dollar field must fill it in; only API callers without one may send `amount` in dollars.
+    const hasUsdField = input.amount_original !== undefined || input.amount_usd !== undefined;
+    const usdCandidates = hasUsdField ? [input.amount_original, input.amount_usd] : [input.amount];
+    usdAmount = usdCandidates.map((v) => Number(String(v ?? '').replace(/[^\d.]/g, ''))).find((v) => v > 0) || 0;
+    const usd = usdAmount;
+    fxRate = Number(input.fx_rate_ugx || process.env.USD_UGX_RATE || 3700);
+    if (!(usd > 0)) errors.push('Enter the amount in US dollars.');
+    if (!(fxRate > 1000 && fxRate < 10000)) errors.push('Enter the UGX-per-dollar rate used (e.g. 3700).');
+    amountUgx = Math.round(usd * fxRate);
+  }
   if (errors.length) throw httpError(400, errors[0], errors);
   return {
     direction,
     kind,
-    amount_ugx: amount,
+    currency,
+    amount_original: currency === 'USD' ? usdAmount : null,
+    fx_rate_ugx: fxRate,
+    amount_ugx: amountUgx,
     method,
     account_key: accountKey,
     reference: reference || null,
@@ -133,12 +165,13 @@ async function insertEntry(db, entry, actor) {
     const result = await db.query(
       `INSERT INTO revenue_entries
          (direction, kind, agent_id, amount_ugx, account_key, method, reference, paid_at, period_start, period_end,
-          payer_name, payer_phone, note, receipt_url, recorded_by)
-       VALUES ($1,$2,$3::uuid,$4,$5,$6,$7,$8::timestamptz,$9::date,$10::date,$11,$12,$13,$14,$15)
+          payer_name, payer_phone, note, receipt_url, recorded_by, currency, amount_original, fx_rate_ugx, property_id)
+       VALUES ($1,$2,$3::uuid,$4,$5,$6,$7,$8::timestamptz,$9::date,$10::date,$11,$12,$13,$14,$15,$16,$17,$18,$19::uuid)
        RETURNING *`,
       [entry.direction, entry.kind, entry.agent_id || null, entry.amount_ugx, entry.account_key, entry.method,
         entry.reference, entry.paid_at, entry.period_start || null, entry.period_end || null,
-        entry.payer_name, entry.payer_phone, entry.note, entry.receipt_url, actor || 'admin']
+        entry.payer_name, entry.payer_phone, entry.note, entry.receipt_url, actor || 'admin',
+        entry.currency || 'UGX', entry.amount_original ?? null, entry.fx_rate_ugx ?? null, entry.property_id || null]
     );
     return result.rows[0];
   } catch (error) {
@@ -195,7 +228,7 @@ async function recordAgentPayment(db, { agent, payment: rawPayment, actor }) {
     throw httpError(400, `The monthly fee is UGX ${feeUgx.toLocaleString('en-US')}; UGX ${entry.amount_ugx.toLocaleString('en-US')} is less than one month.`);
   }
   const today = kampalaDate();
-  const current = agent.paid_until ? String(agent.paid_until).slice(0, 10) : '';
+  const current = isoDay(agent.paid_until);
   const periodStart = current && current >= today ? addDays(current, 1) : today;
   const periodEnd = addDays(addMonths(periodStart, months), -1);
   const row = await insertEntry(db, { ...entry, kind: 'agent_subscription', agent_id: agent.id, period_start: periodStart, period_end: periodEnd }, actor);
@@ -319,12 +352,162 @@ async function ingestMoneySms(db, { body, sender = '', receivedAt = null, accoun
       await db.query('UPDATE money_sms_inbox SET matched_entry_id = $2 WHERE id = $1', [inserted.id, entry.id]);
     }
   }
+  let claimsMatched = [];
+  try {
+    claimsMatched = await require('./billingOpsService').matchSmsToClaims(db, inserted) || [];
+  } catch (_ignored) { /* claims are a second chance, not the main path */ }
   let balanceCheck = null;
   if (account && parsed.balance_ugx != null) {
     const exists = (await db.query('SELECT 1 FROM money_accounts WHERE key = $1', [account])).rows[0];
     if (exists) balanceCheck = await recordBalanceCheck(db, { accountKey: account, actual: parsed.balance_ugx, source: 'sms', note: 'Balance line of a forwarded money SMS', actor: 'sms' });
   }
-  return { sms: inserted, parsed, matched, balanceCheck };
+  return { sms: inserted, parsed, matched, balanceCheck, claimsMatched };
+}
+
+// --- Bank / wallet statements ----------------------------------------------
+
+function splitCsvLine(line) {
+  const out = [];
+  let cur = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i += 1; } else if (ch === '"') quoted = false; else cur += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',' || ch === ';' || ch === '\t') { out.push(cur.trim()); cur = ''; } else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function statementNumber(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const negative = /^\(.*\)$/.test(raw) || /^-/.test(raw) || /\bDR\b/i.test(raw);
+  const n = Number(raw.replace(/[^\d.]/g, ''));
+  if (!Number.isFinite(n) || raw.replace(/[^\d]/g, '') === '') return null;
+  return negative ? -n : n;
+}
+
+function statementDate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  let m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = raw.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
+  if (m) { const y = m[3].length === 2 ? `20${m[3]}` : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+/**
+ * Read a statement exported as CSV (Absa, other banks, MoMo statements): finds
+ * the date, description, reference, money in / out (or one signed amount) and
+ * balance columns by their names.
+ */
+function parseStatementCsv(text = '') {
+  const lines = String(text || '').split(/\r?\n/).filter((l) => l.trim());
+  const headerIndex = lines.findIndex((l) => /date/i.test(l) && /(amount|credit|debit|money in|deposit|withdraw)/i.test(l));
+  if (headerIndex < 0) throw httpError(400, 'Could not find the header row (it needs a Date column and Amount or Credit/Debit columns).');
+  const header = splitCsvLine(lines[headerIndex]).map((h) => h.toLowerCase());
+  const col = (re) => header.findIndex((h) => re.test(h));
+  const c = {
+    date: col(/^(?:transaction |trans |value |posting |)date|^date/),
+    desc: col(/desc|narrat|detail|particular|remark|memo/),
+    ref: col(/ref|cheque|transaction id|trans id|txn/),
+    credit: col(/credit|money in|deposit|paid in|^in$/),
+    debit: col(/debit|money out|withdraw|paid out|^out$/),
+    amount: col(/^amount|amount$/),
+    balance: col(/balance/)
+  };
+  const rows = [];
+  for (const line of lines.slice(headerIndex + 1)) {
+    const cells = splitCsvLine(line);
+    const date = statementDate(cells[c.date]);
+    let amount = null;
+    if (c.credit >= 0 || c.debit >= 0) {
+      const credit = c.credit >= 0 ? statementNumber(cells[c.credit]) : null;
+      const debit = c.debit >= 0 ? statementNumber(cells[c.debit]) : null;
+      if (credit) amount = Math.abs(credit);
+      else if (debit) amount = -Math.abs(debit);
+    }
+    if (amount == null && c.amount >= 0) amount = statementNumber(cells[c.amount]);
+    if (!date || !amount) continue;
+    rows.push({
+      line_date: date,
+      description: c.desc >= 0 ? cells[c.desc] || '' : '',
+      reference: c.ref >= 0 ? cells[c.ref] || '' : '',
+      amount,
+      balance: c.balance >= 0 ? statementNumber(cells[c.balance]) : null,
+      raw: line
+    });
+  }
+  if (!rows.length) throw httpError(400, 'No transactions found under the header row.');
+  return rows;
+}
+
+/** Load a statement, match it to the ledger, and report what does not agree. */
+async function importStatement(db, { accountKey, csv, actor = 'admin' }) {
+  const account = (await db.query('SELECT key, currency FROM money_accounts WHERE key = $1', [accountKey])).rows[0];
+  if (!account) throw httpError(400, 'Choose the account this statement is for');
+  const rows = parseStatementCsv(csv);
+  const batchId = crypto.randomUUID();
+  let inserted = 0;
+  for (const r of rows) {
+    const sha = crypto.createHash('sha256').update(`${accountKey}|${r.raw}`).digest('hex');
+    const res = await db.query(
+      `INSERT INTO bank_statement_lines (account_key, uploaded_by, batch_id, line_date, description, reference, amount, balance, line_sha256)
+       VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9) ON CONFLICT (line_sha256) DO NOTHING RETURNING id`,
+      [accountKey, actor, batchId, r.line_date, r.description.slice(0, 500), r.reference.slice(0, 120), r.amount, r.balance, sha]
+    );
+    if (res.rows[0]) inserted += 1;
+  }
+  // Match every unmatched line on this account to an unmatched ledger entry.
+  const lines = (await db.query(
+    `SELECT * FROM bank_statement_lines WHERE account_key = $1 AND matched_entry_id IS NULL ORDER BY line_date`,
+    [accountKey]
+  )).rows;
+  let matched = 0;
+  for (const line of lines) {
+    const amountCol = account.currency === 'USD' ? 'COALESCE(e.amount_original, e.amount_ugx)' : 'e.amount_ugx';
+    const direction = Number(line.amount) >= 0 ? 'in' : 'out';
+    const candidates = (await db.query(
+      `SELECT e.id, e.reference FROM revenue_entries e
+        WHERE e.account_key = $1 AND e.voided_at IS NULL AND e.statement_line_id IS NULL AND e.direction = $2
+          AND ${amountCol} = $3::numeric
+          AND e.paid_at BETWEEN ($4::date - INTERVAL '5 days') AND ($4::date + INTERVAL '6 days')`,
+      [accountKey, direction, Math.abs(Number(line.amount)), line.line_date]
+    )).rows;
+    const text = `${line.description} ${line.reference}`.toLowerCase();
+    const byRef = candidates.find((c) => c.reference && text.includes(String(c.reference).toLowerCase()));
+    const pick = byRef || (candidates.length === 1 ? candidates[0] : null);
+    if (!pick) continue;
+    await db.query('UPDATE bank_statement_lines SET matched_entry_id = $2 WHERE id = $1', [line.id, pick.id]);
+    await db.query(
+      `UPDATE revenue_entries SET statement_line_id = $2,
+              verified_status = CASE WHEN verified_status = 'disputed' THEN verified_status ELSE 'verified' END,
+              verified_by = COALESCE(verified_by, 'statement'), verified_at = COALESCE(verified_at, NOW()),
+              verification_source = CONCAT_WS('+', NULLIF(verification_source, ''), 'statement')
+        WHERE id = $1`,
+      [pick.id, line.id]
+    );
+    matched += 1;
+  }
+  const last = rows.filter((r) => r.balance != null).pop();
+  let balanceCheck = null;
+  if (last && account.currency === 'UGX') {
+    balanceCheck = await recordBalanceCheck(db, { accountKey, actual: Math.round(last.balance), source: 'statement', note: `Closing balance of statement uploaded ${new Date().toISOString().slice(0, 10)}`, actor });
+  }
+  const unmatchedLines = (await db.query(
+    `SELECT line_date::text AS line_date, description, reference, amount FROM bank_statement_lines
+      WHERE account_key = $1 AND matched_entry_id IS NULL ORDER BY line_date DESC LIMIT 100`, [accountKey])).rows;
+  const unmatchedEntries = (await db.query(
+    `SELECT id, paid_at, amount_ugx, amount_original, reference, payer_name FROM revenue_entries
+      WHERE account_key = $1 AND voided_at IS NULL AND statement_line_id IS NULL
+        AND paid_at <= (SELECT MAX(line_date) FROM bank_statement_lines WHERE account_key = $1)
+      ORDER BY paid_at DESC LIMIT 100`, [accountKey])).rows;
+  return { lines_read: rows.length, lines_new: inserted, matched, balance_check: balanceCheck, unmatched_lines: unmatchedLines, unmatched_entries: unmatchedEntries };
 }
 
 // --- Reporting --------------------------------------------------------------
@@ -335,7 +518,9 @@ async function revenueSummary(db) {
   const monthStart = `${today.slice(0, 7)}-01`;
   const [accounts, month, unverified, agents, unmatchedSms, recent] = await Promise.all([
     db.query(
-      `SELECT a.key, a.name, a.kind, a.number_hint, a.opening_balance, a.opening_date,
+      `SELECT a.key, a.name, a.kind, a.number_hint, a.opening_balance, a.opening_date::text AS opening_date, a.currency,
+              COALESCE(SUM(e.amount_original) FILTER (WHERE e.direction = 'in'), 0)::numeric AS usd_in,
+              COALESCE(SUM(e.amount_original) FILTER (WHERE e.direction = 'out'), 0)::numeric AS usd_out,
               COALESCE(SUM(e.amount_ugx) FILTER (WHERE e.direction = 'in'), 0)::bigint AS money_in,
               COALESCE(SUM(e.amount_ugx) FILTER (WHERE e.direction = 'out'), 0)::bigint AS money_out,
               (SELECT row_to_json(c) FROM (
@@ -350,6 +535,7 @@ async function revenueSummary(db) {
       `SELECT COALESCE(SUM(amount_ugx) FILTER (WHERE direction = 'in'), 0)::bigint AS money_in,
               COALESCE(SUM(amount_ugx) FILTER (WHERE direction = 'out'), 0)::bigint AS money_out,
               COALESCE(SUM(amount_ugx) FILTER (WHERE direction = 'in' AND kind = 'agent_subscription'), 0)::bigint AS subscriptions,
+              COALESCE(SUM(amount_ugx) FILTER (WHERE direction = 'in' AND kind = 'listing_fee'), 0)::bigint AS listing_fees,
               COUNT(*) FILTER (WHERE direction = 'in' AND kind = 'agent_subscription')::int AS subscription_payments
          FROM revenue_entries WHERE voided_at IS NULL AND paid_at >= $1::date`,
       [monthStart]
@@ -359,9 +545,10 @@ async function revenueSummary(db) {
          FROM revenue_entries WHERE voided_at IS NULL AND verified_status <> 'verified'`
     ),
     db.query(
-      `SELECT id, full_name, greeting_name, company_name, whatsapp, phone, status, approved_at, paid_until, fee_exempt, monthly_fee_ugx
+      `SELECT id, full_name, greeting_name, company_name, whatsapp, phone, status, approved_at, paid_until, fee_exempt, monthly_fee_ugx,
+              billing_reminder_log, billing_suspended_at
          FROM agents
-        WHERE status = 'approved' AND removed_at IS NULL
+        WHERE (status = 'approved' OR billing_suspended_at IS NOT NULL) AND removed_at IS NULL
         ORDER BY paid_until NULLS FIRST, full_name`
     ),
     db.query(
@@ -377,14 +564,25 @@ async function revenueSummary(db) {
     )
   ]);
   const billing = agents.rows.map((a) => {
-    const paidUntil = a.paid_until ? String(a.paid_until instanceof Date ? a.paid_until.toISOString() : a.paid_until).slice(0, 10) : '';
+    const paidUntil = isoDay(a.paid_until);
     let state;
-    if (a.fee_exempt) state = 'exempt';
+    if (a.billing_suspended_at) state = 'taken_down';
+    else if (a.fee_exempt) state = 'exempt';
     else if (!paidUntil) state = 'never_paid';
     else if (paidUntil < today) state = 'overdue';
     else if (paidUntil <= addDays(today, 5)) state = 'due_soon';
     else state = 'paid';
-    return { ...a, paid_until: paidUntil || null, billing_state: state };
+    const daysOver = paidUntil && paidUntil < today ? Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${paidUntil}T00:00:00Z`)) / 86400000) : 0;
+    const log = a.billing_reminder_log || {};
+    const lastOf = (kind) => Object.entries(log).filter(([k]) => k.startsWith(`${kind}:${paidUntil || 'none'}`)).map(([, v]) => v?.at).sort().pop() || null;
+    return {
+      ...a,
+      paid_until: paidUntil || null,
+      billing_state: state,
+      days_overdue: daysOver,
+      last_reminder_at: lastOf('reminder') || lastOf('due_today') || lastOf('pre_due'),
+      final_reminder_at: lastOf('final_reminder')
+    };
   });
   const paying = billing.filter((a) => ['paid', 'due_soon'].includes(a.billing_state));
   return {
@@ -394,7 +592,7 @@ async function revenueSummary(db) {
     month: month.rows[0],
     mrr_ugx: paying.reduce((sum, a) => sum + Number(a.monthly_fee_ugx || feeUgx), 0),
     paying_agents: paying.length,
-    overdue_agents: billing.filter((a) => ['overdue', 'never_paid'].includes(a.billing_state)).length,
+    overdue_agents: billing.filter((a) => ['overdue', 'never_paid', 'taken_down'].includes(a.billing_state)).length,
     unverified: unverified.rows[0],
     accounts: accounts.rows.map((a) => ({
       ...a,
@@ -430,6 +628,7 @@ async function entriesCsv(db) {
 
 module.exports = {
   METHODS,
+  isoDay,
   feeConfig,
   kampalaDate,
   addMonths,
@@ -443,5 +642,7 @@ module.exports = {
   recordBalanceCheck,
   revenueSummary,
   entriesCsv,
+  parseStatementCsv,
+  importStatement,
   httpError
 };

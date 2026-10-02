@@ -115,6 +115,7 @@ const leadHandoff = require('../services/leadHandoffService');
 const agentHowToPost = require('../services/agentHowToPostBroadcastService');
 const { agentGreetingName, setCachedGreetingName } = require('../services/agentNameService');
 const revenue = require('../services/revenueService');
+const billingOps = require('../services/billingOpsService');
 const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
 const { MONETIZATION_SPINE_MARKER, markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
@@ -9638,7 +9639,31 @@ router.post('/agents/:id/restore', async (req, res, next) => {
 // --- Sales & revenue ---------------------------------------------------------
 router.get('/revenue/summary', async (req, res, next) => {
   try {
-    return res.json({ ok: true, data: await revenue.revenueSummary(db) });
+    const [summary, settings, claims, listers] = await Promise.all([
+      revenue.revenueSummary(db),
+      billingOps.getSettings(db, { fresh: true }),
+      db.query(
+        `SELECT c.*, a.full_name AS agent_name, p.title AS property_title,
+                s.amount_ugx AS sms_amount_ugx, s.account_key AS sms_account_key, s.counterparty AS sms_counterparty, s.received_at AS sms_received_at
+           FROM payment_claims c
+           LEFT JOIN agents a ON a.id = c.agent_id
+           LEFT JOIN properties p ON p.id = c.property_id
+           LEFT JOIN money_sms_inbox s ON s.id = c.sms_id
+          ORDER BY (c.status = 'pending') DESC, c.created_at DESC LIMIT 100`
+      ),
+      billingOps.listerBillingRows(db)
+    ]);
+    return res.json({
+      ok: true,
+      data: {
+        ...summary,
+        settings,
+        pay_to_line: billingOps.payToLine(settings),
+        claims: claims.rows,
+        listers,
+        final_after_days: Number(settings.agent_fee?.final_after_days_overdue || 7)
+      }
+    });
   } catch (error) {
     return next(error);
   }
@@ -9661,6 +9686,8 @@ router.post('/revenue/agents/:id/payment', async (req, res, next) => {
     const agent = (await db.query('SELECT id, full_name, phone, whatsapp, paid_until, fee_exempt FROM agents WHERE id = $1', [req.params.id])).rows[0];
     if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
     const result = await revenue.recordAgentPayment(db, { agent, payment: req.body || {}, actor: adminActorId(req) });
+    // Paying brings a taken-down agent straight back, exactly as they were.
+    result.reinstatement = await billingOps.reinstateAgentAfterPayment(db, { agentId: agent.id, actor: adminActorId(req) }).catch((error) => ({ error: error.message }));
     notifyTeamOfPayment({ entry: result.entry, agentName: agent.full_name, actor: adminActorId(req), periodEnd: result.period_end });
     await writeAudit('revenue_agent_payment_recorded', { agent_id: agent.id, entry_id: result.entry.id, amount_ugx: result.entry.amount_ugx }, adminActorId(req));
     return res.json({ ok: true, data: result });
@@ -9765,6 +9792,155 @@ router.patch('/revenue/accounts/:key', async (req, res, next) => {
     return res.json({ ok: true, data: updated });
   } catch (error) {
     return next(error);
+  }
+});
+
+// Billing settings: pay-to number and name, confirmers, fees, editable messages.
+router.put('/revenue/settings/:key', async (req, res, next) => {
+  try {
+    await billingOps.setSetting(db, req.params.key, req.body?.value, adminActorId(req));
+    await writeAudit('billing_setting_updated', { key: req.params.key }, adminActorId(req));
+    return res.json({ ok: true, data: await billingOps.getSettings(db, { fresh: true }) });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+// Preview any billing message before sending it.
+router.get('/revenue/agents/:id/billing-message/:kind', async (req, res, next) => {
+  try {
+    const agent = (await db.query('SELECT id, full_name, greeting_name, paid_until, monthly_fee_ugx FROM agents WHERE id = $1::uuid', [req.params.id])).rows[0];
+    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    const settings = await billingOps.getSettings(db, { fresh: true });
+    return res.json({ ok: true, data: { text: billingOps.buildAgentBillingMessage(req.params.kind, { agent, settings }), pay_to_set: Boolean(billingOps.payToLine(settings)) } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/revenue/agents/:id/billing-message', async (req, res, next) => {
+  try {
+    const result = await billingOps.sendAgentBillingMessage(db, { agentId: req.params.id, kind: cleanText(req.body?.kind), actor: adminActorId(req) });
+    await writeAudit('agent_billing_message_sent', { agent_id: req.params.id, kind: result.kind, status: result.status }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+router.post('/revenue/agents/:id/take-down', async (req, res, next) => {
+  try {
+    const result = await billingOps.takeDownAgentForBilling(db, { agentId: req.params.id, actor: adminActorId(req) });
+    await writeAudit('agent_billing_taken_down', { agent_id: req.params.id, listings_hidden: result.listings_hidden }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+// Put an agent back without a payment (e.g. paid in another way, or a mistake).
+router.post('/revenue/agents/:id/reinstate', async (req, res, next) => {
+  try {
+    const reason = cleanText(req.body?.reason || '');
+    if (!reason) return res.status(400).json({ ok: false, error: 'Say why they are being put back without a payment' });
+    const result = await billingOps.reinstateAgentAfterPayment(db, { agentId: req.params.id, actor: adminActorId(req) });
+    await writeAudit('agent_billing_reinstated_manually', { agent_id: req.params.id, reason }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+router.post('/revenue/listings/:id/billing-message', async (req, res, next) => {
+  try {
+    const result = await billingOps.sendListerBillingMessage(db, { propertyId: req.params.id, kind: cleanText(req.body?.kind), actor: adminActorId(req), textOverride: req.body?.text || '' });
+    await writeAudit('lister_billing_message_sent', { property_id: req.params.id, kind: result.kind, status: result.status }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+router.get('/revenue/listings/:id/billing-message/:kind', async (req, res, next) => {
+  try {
+    const property = (await db.query(
+      `SELECT id, title, lister_name, lister_phone, created_at, reviewed_at, lister_paid_until FROM properties WHERE id = $1::uuid`, [req.params.id])).rows[0];
+    if (!property) return res.status(404).json({ ok: false, error: 'Listing not found' });
+    const settings = await billingOps.getSettings(db, { fresh: true });
+    return res.json({ ok: true, data: { text: await billingOps.buildListerMessage(db, req.params.kind, property, settings), stats: await billingOps.listingStats(db, property.id) } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/revenue/listings/:id/take-down', async (req, res, next) => {
+  try {
+    const result = await billingOps.takeDownListingForBilling(db, { propertyId: req.params.id, actor: adminActorId(req) });
+    await writeAudit('lister_billing_taken_down', { property_id: req.params.id }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+router.post('/revenue/listings/:id/payment', async (req, res, next) => {
+  try {
+    const result = await billingOps.recordListingPayment(db, { propertyId: req.params.id, payment: req.body || {}, actor: adminActorId(req) });
+    await billingOps.sendListerBillingMessage(db, { propertyId: req.params.id, kind: 'reinstated', actor: adminActorId(req) }).catch(() => {});
+    notifyTeamOfPayment({ entry: result.entry, agentName: 'listing fee', actor: adminActorId(req), periodEnd: result.period_end });
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+// Payment claims ("I have paid") — the third check is a person confirming.
+router.post('/revenue/claims/:id/confirm', async (req, res, next) => {
+  try {
+    const result = await billingOps.confirmClaim(db, {
+      claimId: req.params.id,
+      actor: adminActorId(req),
+      method: cleanText(req.body?.method || ''),
+      accountKey: cleanText(req.body?.account_key || ''),
+      amountUgx: req.body?.amount,
+      amountOriginal: req.body?.amount_original,
+      fxRate: req.body?.fx_rate_ugx,
+      note: cleanText(req.body?.note || '')
+    });
+    if (result.entry && !result.reinstatement && result.entry.kind === 'listing_fee' && result.entry.property_id) {
+      await billingOps.sendListerBillingMessage(db, { propertyId: result.entry.property_id, kind: 'reinstated', actor: adminActorId(req) }).catch(() => {});
+    } else if (result.entry?.agent_id && !result.reinstatement?.reinstated) {
+      // Not taken down, just paid: thank them.
+      await billingOps.sendAgentBillingMessage(db, { agentId: result.entry.agent_id, kind: 'reinstated', actor: adminActorId(req), force: true }).catch(() => {});
+    }
+    notifyTeamOfPayment({ entry: result.entry, agentName: result.entry?.payer_name || '', actor: adminActorId(req), periodEnd: result.period_end });
+    await writeAudit('payment_claim_confirmed', { claim_id: req.params.id, entry_id: result.entry?.id }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+router.post('/revenue/claims/:id/reject', async (req, res, next) => {
+  try {
+    const note = cleanText(req.body?.note || '');
+    if (!note) return res.status(400).json({ ok: false, error: 'Say why the claim is rejected' });
+    const claim = await billingOps.rejectClaim(db, { claimId: req.params.id, actor: adminActorId(req), note });
+    await writeAudit('payment_claim_rejected', { claim_id: req.params.id, note }, adminActorId(req));
+    return res.json({ ok: true, data: claim });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+// Weekly reconciliation: upload a statement (CSV) for an account.
+router.post('/revenue/statements', async (req, res, next) => {
+  try {
+    const result = await revenue.importStatement(db, { accountKey: cleanText(req.body?.account_key || ''), csv: String(req.body?.csv || ''), actor: adminActorId(req) });
+    await writeAudit('revenue_statement_imported', { account_key: req.body?.account_key, lines: result.lines_read, matched: result.matched }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
   }
 });
 
@@ -9905,6 +10081,9 @@ router.patch('/agents/:id/status', async (req, res, next) => {
         `UPDATE agents SET fee_exempt = true, fee_exempt_reason = 'Approved before the monthly fee started' WHERE id = $1`,
         [req.params.id]
       );
+    }
+    if (paymentResult) {
+      paymentResult.reinstatement = await billingOps.reinstateAgentAfterPayment(db, { agentId: req.params.id, actor: adminActorId(req) }).catch((error) => ({ error: error.message }));
     }
     if (paymentResult) notifyTeamOfPayment({ entry: paymentResult.entry, agentName: updated.rows[0].full_name, actor: adminActorId(req), periodEnd: paymentResult.period_end });
 

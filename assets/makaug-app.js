@@ -28515,9 +28515,12 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
           <option value="">Choose…</option>
           <option value="mtn_momo">MTN Mobile Money</option>
           <option value="airtel_money">Airtel Money</option>
-          <option value="bank_transfer">Bank transfer / deposit</option>
+          <option value="absa_ugx">Absa — UGX account</option>
+          <option value="absa_usd">Absa — USD account</option>
+          <option value="bank_transfer">Other bank transfer / deposit</option>
           <option value="cash">Cash</option>
         </select></label>
+      ${adminFxFields()}
       <label class="block"><span class="font-bold">Transaction ID / payment code</span>
         <input name="reference" autocomplete="off" placeholder="From the MoMo SMS or bank slip" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <label class="block"><span class="font-bold">Date paid</span>
@@ -28537,6 +28540,7 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
   document.body.appendChild(wrap);
   wrap.addEventListener("click", (event) => { if (event.target === wrap) adminClosePaymentModal(); });
   const form = wrap.querySelector("form");
+  adminWireFx(form);
   form.querySelector("[name=amount]")?.focus();
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -28548,6 +28552,8 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       const payment = {
         amount: data.get("amount"),
         method: data.get("method"),
+        amount_original: data.get("amount_original"),
+        fx_rate_ugx: data.get("fx_rate_ugx"),
         reference: data.get("reference"),
         paid_at: data.get("paid_at"),
         payer_name: payerName || "",
@@ -28581,8 +28587,20 @@ function adminShortDate(value) {
 // --- Sales & Revenue ---------------------------------------------------------
 var adminRevenueData = null;
 
-const ADMIN_ACCOUNT_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank: "Bank", cash: "Cash" };
-const ADMIN_METHOD_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank_transfer: "Bank", cash: "Cash" };
+const ADMIN_ACCOUNT_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank: "Bank", absa_ugx: "Absa UGX", absa_usd: "Absa USD", cash: "Cash" };
+const ADMIN_METHOD_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank_transfer: "Other bank", absa_ugx: "Absa UGX", absa_usd: "Absa USD ($)", cash: "Cash" };
+const ADMIN_METHOD_KEYS = ["mtn_momo", "airtel_money", "absa_ugx", "absa_usd", "bank_transfer", "cash"];
+const adminFxFields = () => `<div data-fx class="hidden grid grid-cols-2 gap-2"><label class="block"><span class="font-bold">Amount (US$)</span><input name="amount_original" inputmode="decimal" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label><label class="block"><span class="font-bold">UGX per $1</span><input name="fx_rate_ugx" inputmode="decimal" value="3700" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label></div>`;
+function adminWireFx(form) {
+  const sync = () => {
+    const usd = form.querySelector("[name=method]")?.value === "absa_usd";
+    form.querySelector("[data-fx]")?.classList.toggle("hidden", !usd);
+    const ugxInput = form.querySelector("[name=amount]");
+    if (ugxInput) { ugxInput.required = !usd; ugxInput.closest("label")?.classList.toggle("hidden", usd); }
+  };
+  form.querySelector("[name=method]")?.addEventListener("change", sync);
+  sync();
+}
 
 function adminRevenueStatusBadge(entry) {
   if (entry.voided_at) return `<span class="rounded bg-gray-200 px-2 py-0.5 text-[11px] font-bold text-gray-700">Voided</span>`;
@@ -28627,8 +28645,8 @@ function renderAdminRevenue() {
       : `<span class="text-gray-500">Never checked</span>`;
     return `<tr class="border-t border-gray-100">
       <td class="py-2 pr-3 font-bold">${adminEscape(a.name)}${a.number_hint ? `<div class="text-[11px] font-normal text-gray-500">${adminEscape(a.number_hint)}</div>` : ""}</td>
-      <td class="py-2 pr-3 text-emerald-700">${adminFormatUgx(a.money_in)}</td>
-      <td class="py-2 pr-3">${adminFormatUgx(a.money_out)}</td>
+      <td class="py-2 pr-3 text-emerald-700">${adminFormatUgx(a.money_in)}${a.currency === "USD" ? `<div class="text-[11px] text-gray-500">$${adminEscape(Number(a.usd_in || 0).toLocaleString())}</div>` : ""}</td>
+      <td class="py-2 pr-3">${adminFormatUgx(a.money_out)}${a.currency === "USD" ? `<div class="text-[11px] text-gray-500">$${adminEscape(Number(a.usd_out || 0).toLocaleString())}</div>` : ""}</td>
       <td class="py-2 pr-3 font-bold">${adminFormatUgx(a.expected_balance)}<div class="text-[11px] font-normal text-gray-500">from ${adminFormatUgx(a.opening_balance)} on ${adminEscape(String(a.opening_date || "").slice(0, 10))}</div></td>
       <td class="py-2 pr-3">${diffCell}</td>
       <td class="py-2"><button type="button" onclick="adminSetOpeningBalance('${adminAttr(a.key)}')" class="text-xs font-bold text-gray-600 underline">Set start balance</button></td>
@@ -28642,14 +28660,65 @@ function renderAdminRevenue() {
   const smsBlock = sms.length ? `<div class="rounded-xl border border-amber-300 bg-amber-50 p-3"><h4 class="font-black text-amber-900">📲 Money that arrived on the phone but nobody has recorded (${sms.length})</h4>
     <ul class="mt-2 space-y-1">${sms.map((m) => `<li class="flex flex-wrap items-center justify-between gap-2 text-xs"><span><strong>${adminFormatUgx(m.amount_ugx)}</strong> ${m.counterparty ? `from ${adminEscape(m.counterparty)}` : ""} · ${adminEscape(ADMIN_ACCOUNT_LABELS[m.account_key] || m.account_key || "?")} · TxID ${adminEscape(m.reference || "—")} · ${adminEscape(adminShortDate(m.received_at))}</span><button type="button" onclick="adminRecordFromSms('${adminAttr(m.id)}')" class="rounded border border-amber-500 px-2 py-0.5 font-bold text-amber-900">Record who paid</button></li>`).join("")}</ul></div>` : "";
 
-  const billingRows = (d.billing || []).filter((a) => !a.fee_exempt).map((a) => {
-    const tone = { paid: "text-emerald-700", due_soon: "text-amber-700", overdue: "text-red-700", never_paid: "text-red-700" }[a.billing_state] || "text-gray-700";
-    const label = { paid: "Paid", due_soon: "Due soon", overdue: "Overdue", never_paid: "No payment yet" }[a.billing_state] || a.billing_state;
-    return `<tr class="border-t border-gray-100"><td class="py-2 pr-3 font-bold">${adminEscape(a.full_name)}</td><td class="py-2 pr-3 ${tone} font-bold">${label}</td><td class="py-2 pr-3">${adminEscape(a.paid_until || "—")}</td><td class="py-2"><button type="button" onclick="adminOpenAgentPayment('${adminAttr(a.id)}', 'renew')" class="text-xs font-bold text-emerald-800 underline">Record payment</button></td></tr>`;
+  const finalAfter = Number(d.final_after_days || 7);
+  const billingRows = (d.billing || []).filter((a) => !a.fee_exempt || a.billing_state === "taken_down").map((a) => {
+    const tone = { paid: "text-emerald-700", due_soon: "text-amber-700", overdue: "text-red-700", never_paid: "text-red-700", taken_down: "text-gray-900" }[a.billing_state] || "text-gray-700";
+    const label = { paid: "Paid", due_soon: "Due soon", overdue: `Overdue ${a.days_overdue} day(s)`, never_paid: "No payment yet", taken_down: "⛔ Taken down" }[a.billing_state] || a.billing_state;
+    const id = adminAttr(a.id);
+    const remindBtn = ["due_soon", "overdue", "never_paid"].includes(a.billing_state) ? `<button type="button" onclick="adminAgentBillingMessage('${id}', 'reminder')" class="underline font-bold">Send reminder</button>` : "";
+    const finalReady = a.billing_state === "overdue" && Number(a.days_overdue) >= finalAfter;
+    const finalBtn = a.billing_state === "overdue" ? (finalReady ? `<button type="button" onclick="adminAgentBillingMessage('${id}', 'final_reminder')" class="underline font-bold text-red-700">Final reminder</button>` : `<span class="text-gray-400" title="Unlocks ${finalAfter} days after the due date">Final reminder (day ${finalAfter})</span>`) : "";
+    const downBtn = a.billing_state === "overdue" && a.final_reminder_at ? `<button type="button" onclick="adminAgentTakeDown('${id}')" class="underline font-bold text-red-800">Take listings down</button>` : "";
+    const backBtn = a.billing_state === "taken_down" ? `<button type="button" onclick="adminAgentReinstate('${id}')" class="underline">Put back without payment</button>` : "";
+    const sent = [a.last_reminder_at ? `reminded ${adminShortDate(a.last_reminder_at)}` : "", a.final_reminder_at ? `final ${adminShortDate(a.final_reminder_at)}` : ""].filter(Boolean).join(" · ");
+    return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(a.full_name)}</td><td class="py-2 pr-3 ${tone} font-bold">${label}${sent ? `<div class="text-[11px] font-normal text-gray-500">${adminEscape(sent)}</div>` : ""}</td><td class="py-2 pr-3">${adminEscape(a.paid_until || "—")}</td>
+      <td class="py-2 text-xs space-x-2 whitespace-nowrap"><button type="button" onclick="adminOpenAgentPayment('${id}', 'renew')" class="underline font-bold text-emerald-800">Record payment</button> ${remindBtn} ${finalBtn} ${downBtn} ${backBtn}</td></tr>`;
   }).join("");
   const exemptCount = (d.billing || []).filter((a) => a.fee_exempt).length;
-  const billingTable = `<div><h4 class="font-black text-gray-900 mb-1">Agent fees</h4><p class="text-xs text-gray-500 mb-2">${exemptCount} agent(s) who joined before ${adminEscape(d.fee_start_date || "")} list for free.</p>
+  const billingTable = `<div><h4 class="font-black text-gray-900 mb-1">Agent fees</h4><p class="text-xs text-gray-500 mb-2">${exemptCount} agent(s) who joined before ${adminEscape(d.fee_start_date || "")} list for free. Reminders go automatically ${adminEscape(String(d.settings?.agent_fee?.remind_days_before || 3))} days before and on the due date; everything after that is your call. Paying puts a taken-down agent back exactly as they were.</p>
     ${billingRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Agent</th><th class="py-1 pr-3">Status</th><th class="py-1 pr-3">Paid until</th><th></th></tr></thead><tbody>${billingRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No paying agents yet.</p>`}</div>`;
+
+  const listerRows = (d.listers || []).map((p) => {
+    const id = adminAttr(p.id);
+    const label = { free_week: `Free week (to ${adminEscape(p.free_until)})`, paid: `Paid to ${adminEscape(p.lister_paid_until || "")}`, due: `Due — ${p.days_overdue} day(s)`, taken_down: "⛔ Taken down" }[p.billing_state] || p.billing_state;
+    const tone = { free_week: "text-sky-700", paid: "text-emerald-700", due: "text-red-700", taken_down: "text-gray-900" }[p.billing_state] || "";
+    const log = p.lister_billing_log || {};
+    const btns = [
+      `<button type="button" onclick="adminListerMessage('${id}', 'views')" class="underline">Views message${log.views ? " ✓" : ""}</button>`,
+      p.billing_state === "due" ? `<button type="button" onclick="adminListerMessage('${id}', 'reminder')" class="underline font-bold">Reminder${log.reminder ? " ✓" : ""}</button>` : "",
+      p.billing_state === "due" && p.days_overdue >= finalAfter ? `<button type="button" onclick="adminListerMessage('${id}', 'final_reminder')" class="underline font-bold text-red-700">Final reminder${log.final_reminder ? " ✓" : ""}</button>` : "",
+      p.billing_state === "due" && log.final_reminder ? `<button type="button" onclick="adminListerTakeDown('${id}')" class="underline font-bold text-red-800">Take down</button>` : "",
+      `<button type="button" onclick="adminListerPayment('${id}')" class="underline font-bold text-emerald-800">Record payment</button>`
+    ].filter(Boolean).join(" ");
+    return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(p.title || "Listing")}<div class="text-[11px] font-normal text-gray-500">${adminEscape(p.lister_name || "")} ${adminEscape(p.lister_phone || "")}</div></td><td class="py-2 pr-3 font-bold ${tone}">${label}</td><td class="py-2 text-xs space-x-2">${btns}</td></tr>`;
+  }).join("");
+  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — 7 days free, then ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 20000)} a month</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
+    ${listerRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Listing</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${listerRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No private listings since ${adminEscape(d.settings?.lister_fee?.start_date || "")}.</p>`}</div>`;
+
+  const claims = (d.claims || []);
+  const pendingClaims = claims.filter((c) => c.status === "pending");
+  const claimRows = claims.slice(0, 40).map((c) => {
+    const id = adminAttr(c.id);
+    const who = c.agent_name || c.property_title || c.payer_name || `+${c.payer_phone || ""}`;
+    const checks = [
+      c.reference ? `① ID read: <strong>${adminEscape(c.reference)}</strong>${c.ai_reading?.available ? " (AI)" : ""}` : `① <span class="text-red-700">No ID yet</span>`,
+      c.sms_id ? `② <span class="text-emerald-700 font-bold">Matches MoMo SMS</span>${c.sms_amount_ugx ? ` (${adminFormatUgx(c.sms_amount_ugx)})` : ""}` : `② <span class="text-amber-700">No SMS match</span>`,
+      c.status === "confirmed" ? `③ <span class="text-emerald-700 font-bold">Confirmed by ${adminEscape(c.decided_by || "")}</span>` : (c.status === "rejected" ? `③ <span class="text-red-700">Rejected: ${adminEscape(c.decision_note || "")}</span>` : `③ waiting for you`)
+    ].join("<br>");
+    const actions = c.status === "pending" ? `<button type="button" onclick="adminConfirmClaim('${id}')" class="rounded bg-green-700 px-2 py-1 font-bold text-white">Confirm</button> <button type="button" onclick="adminRejectClaim('${id}')" class="underline text-red-700">Reject</button>` : "";
+    return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3">${adminEscape(adminShortDate(c.created_at))}</td><td class="py-2 pr-3 font-bold">${adminEscape(who)}<div class="text-[11px] font-normal text-gray-500">${adminEscape((c.purpose || "").replace(/_/g, " "))}${c.amount_ugx ? ` · ${adminFormatUgx(c.amount_ugx)}` : ""}</div>${c.receipt_url ? `<a href="${adminAttr(c.receipt_url)}" target="_blank" rel="noopener" class="text-[11px] underline">receipt</a>` : ""}</td><td class="py-2 pr-3 text-[11px] leading-5">${checks}</td><td class="py-2 text-xs whitespace-nowrap">${actions}</td></tr>`;
+  }).join("");
+  const claimsBlock = `<div class="${pendingClaims.length ? "rounded-xl border border-emerald-300 bg-emerald-50 p-3" : ""}"><h4 class="font-black text-gray-900 mb-1">🧾 “I have paid” — ${pendingClaims.length} waiting to confirm</h4>
+    <p class="text-xs text-gray-600 mb-2">Three checks: ① the transaction ID is read from their message or screenshot, ② the MoMo SMS shows the same ID, ③ you or Ronald confirm. Only then is it recorded and anything paused goes back live.</p>
+    ${claimRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><tbody>${claimRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">None yet.</p>`}</div>`;
+
+  const settingsBlock = `<div class="rounded-xl border ${d.pay_to_line ? "border-gray-200" : "border-red-300 bg-red-50"} p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">Settings</h4><button type="button" onclick="adminOpenBillingSettings()" class="rounded border border-gray-300 px-2 py-1 text-xs font-bold">Edit settings</button></div>
+    <p class="text-xs mt-1">${d.pay_to_line ? `People are told to pay to: <strong>${adminEscape(d.pay_to_line.replace(/\\*/g, ""))}</strong>` : `<strong class="text-red-800">No pay-to number yet — reminders and payment messages are switched off until you add the number and registered name.</strong>`}</p>
+    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || 50000)}/month · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 20000)}/month after ${adminEscape(String(d.settings?.lister_fee?.free_days || 7))} free days</p></div>`;
+
+  const reconBlock = `<div class="rounded-xl border border-gray-200 p-3"><h4 class="font-black text-gray-900">Weekly reconciliation</h4><p class="text-xs text-gray-600 mb-2">Upload a statement (CSV export from Absa, the bank or MoMo). Lines are matched to the entries above; anything on the statement that nobody recorded — and anything recorded that is not on the statement — is listed.</p>
+    <div class="flex flex-wrap gap-2 items-center text-xs"><select id="admin-recon-account" class="rounded border border-gray-300 px-2 py-1">${(d.accounts || []).map((a) => `<option value="${adminAttr(a.key)}">${adminEscape(a.name)}</option>`).join("")}</select><input id="admin-recon-file" type="file" accept=".csv,text/csv,text/plain" class="text-xs"><button type="button" onclick="adminUploadStatement()" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">Upload & match</button></div>
+    <div id="admin-recon-result" class="mt-2 text-xs"></div></div>`;
 
   const entries = (d.entries || []).map((e) => {
     const sign = e.direction === "out" ? "−" : "+";
@@ -28668,7 +28737,7 @@ function renderAdminRevenue() {
   const entriesTable = `<div><h4 class="font-black text-gray-900 mb-1">Every entry</h4>
     ${entries ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Date</th><th class="py-1 pr-3">Who / what</th><th class="py-1 pr-3">Amount</th><th class="py-1 pr-3">How</th><th class="py-1 pr-3">Recorded by</th><th class="py-1 pr-3">Checked?</th><th></th></tr></thead><tbody>${entries}</tbody></table></div>` : `<p class="text-xs text-gray-500">Nothing recorded yet.</p>`}</div>`;
 
-  box.innerHTML = cards + smsBlock + accountsTable + billingTable + entriesTable;
+  box.innerHTML = settingsBlock + cards + claimsBlock + smsBlock + accountsTable + reconBlock + billingTable + listerTable + entriesTable;
 }
 
 function adminOpenMoneyEntry(direction = "in", prefill = {}) {
@@ -28690,7 +28759,8 @@ function adminOpenMoneyEntry(direction = "in", prefill = {}) {
       <label class="block"><span class="font-bold">Amount (UGX)</span><input name="amount" inputmode="numeric" required value="${adminAttr(prefill.amount || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <label class="block"><span class="font-bold">Account / method</span>
         <select name="method" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"><option value="">Choose…</option>
-          ${["mtn_momo", "airtel_money", "bank_transfer", "cash"].map((m) => `<option value="${m}" ${prefill.method === m ? "selected" : ""}>${ADMIN_METHOD_LABELS[m]}</option>`).join("")}</select></label>
+          ${ADMIN_METHOD_KEYS.map((m) => `<option value="${m}" ${prefill.method === m ? "selected" : ""}>${ADMIN_METHOD_LABELS[m]}</option>`).join("")}</select></label>
+      ${adminFxFields()}
       <label class="block"><span class="font-bold">Transaction ID</span><input name="reference" value="${adminAttr(prefill.reference || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <label class="block"><span class="font-bold">Date</span><input name="paid_at" type="date" value="${adminAttr(prefill.date || today)}" max="${today}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <label class="block"><span class="font-bold">${direction === "out" ? "What for, and who took it" : "Note"}</span><input name="note" value="${adminAttr(prefill.note || "")}" ${direction === "out" ? "required" : ""} class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
@@ -28700,13 +28770,14 @@ function adminOpenMoneyEntry(direction = "in", prefill = {}) {
     </form>`;
   document.body.appendChild(wrap);
   const form = wrap.querySelector("form");
+  adminWireFx(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(form);
     const errorBox = form.querySelector("[data-error]");
     try {
       const receipt = await adminReadFileAsDataUrl(form.querySelector("[name=receipt]")?.files?.[0]);
-      const body = { amount: data.get("amount"), method: data.get("method"), reference: data.get("reference"), paid_at: data.get("paid_at"), note: data.get("note"), receipt_url: receipt };
+      const body = { amount: data.get("amount"), amount_original: data.get("amount_original"), fx_rate_ugx: data.get("fx_rate_ugx"), method: data.get("method"), reference: data.get("reference"), paid_at: data.get("paid_at"), note: data.get("note"), receipt_url: receipt };
       const agentId = data.get("agent_id");
       if (direction === "in" && agentId) {
         await apiRequest(`/api/admin/revenue/agents/${encodeURIComponent(agentId)}/payment`, { method: "POST", headers: adminAuthHeaders(), body });
@@ -28755,7 +28826,7 @@ async function adminVoidEntry(entryId) {
 }
 
 async function adminOpenBalanceCheck() {
-  const key = window.prompt("Which account? Type: mtn_momo, airtel_money, bank or cash", "mtn_momo");
+  const key = window.prompt("Which account? Type: mtn_momo, airtel_money, absa_ugx, bank or cash", "mtn_momo");
   if (!key) return;
   const actual = window.prompt(`What balance does ${key} show right now (UGX)?`, "");
   if (!actual) return;
@@ -28811,6 +28882,275 @@ async function adminDownloadRevenueCsv(event) {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   } catch (e) {
     toast(`Export failed: ${e.message || "error"}`);
+  }
+}
+
+// --- Billing operations (reminders, take-down, claims, settings, statements) --
+function adminBillingModal({ title, bodyHtml, submitLabel = "Send", tone = "bg-green-700", onSubmit }) {
+  adminClosePaymentModal();
+  const wrap = document.createElement("div");
+  wrap.id = "admin-payment-modal";
+  wrap.className = "fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4";
+  wrap.setAttribute("role", "dialog");
+  wrap.setAttribute("aria-modal", "true");
+  wrap.innerHTML = `<form class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-auto p-5 space-y-3 text-sm">
+      <h3 class="text-lg font-black text-gray-900">${title}</h3>${bodyHtml}
+      <p class="hidden rounded-lg bg-red-50 border border-red-200 p-2 text-red-800" role="alert" data-error></p>
+      <div class="flex gap-2 justify-end"><button type="button" onclick="adminClosePaymentModal()" class="rounded-lg border border-gray-300 px-4 py-2 font-bold">Cancel</button><button type="submit" class="rounded-lg ${tone} px-4 py-2 font-bold text-white">${submitLabel}</button></div>
+    </form>`;
+  document.body.appendChild(wrap);
+  wrap.addEventListener("click", (event) => { if (event.target === wrap) adminClosePaymentModal(); });
+  const form = wrap.querySelector("form");
+  adminWireFx(form);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const errorBox = form.querySelector("[data-error]");
+    const button = form.querySelector("button[type=submit]");
+    button.disabled = true;
+    try {
+      await onSubmit(new FormData(form), form);
+      adminClosePaymentModal();
+      loadAdminRevenue();
+    } catch (e) {
+      errorBox.textContent = e?.message || "Something went wrong.";
+      errorBox.classList.remove("hidden");
+    } finally {
+      button.disabled = false;
+    }
+  });
+  return form;
+}
+
+const ADMIN_BILLING_KIND_LABELS = { pre_due: "Reminder before the due date", due_today: "Due today", reminder: "Reminder", final_reminder: "Final reminder", taken_down: "Taken down notice", reinstated: "Back live", views: "People have seen your property" };
+
+function adminMessagePreview(text) {
+  return `<div class="rounded-xl bg-[#e7ffdb] border border-emerald-200 p-3 whitespace-pre-wrap text-[13px] leading-5">${adminEscape(text || "")}</div>`;
+}
+
+async function adminAgentBillingMessage(agentId, kind) {
+  try {
+    const res = await apiRequest(`/api/admin/revenue/agents/${encodeURIComponent(agentId)}/billing-message/${encodeURIComponent(kind)}`, { headers: adminAuthHeaders() });
+    const d = res?.data || {};
+    const agent = (adminRevenueData?.billing || []).find((a) => String(a.id) === String(agentId)) || {};
+    adminBillingModal({
+      title: `${ADMIN_BILLING_KIND_LABELS[kind] || kind} — ${adminEscape(agent.full_name || "agent")}`,
+      bodyHtml: `<p class="text-gray-600">This is exactly what goes to them on WhatsApp:</p>${adminMessagePreview(d.text)}${d.pay_to_set ? "" : `<p class="text-red-800 font-bold">Add the pay-to number and registered name in Settings first — it can't send without them.</p>`}`,
+      submitLabel: "Send on WhatsApp",
+      tone: kind === "final_reminder" ? "bg-red-700" : "bg-green-700",
+      onSubmit: async () => {
+        const r = await apiRequest(`/api/admin/revenue/agents/${encodeURIComponent(agentId)}/billing-message`, { method: "POST", headers: adminAuthHeaders(), body: { kind } });
+        toast(r?.data?.status === "already_sent" ? "Already sent for this due date." : "Sent ✓");
+      }
+    });
+  } catch (e) {
+    toast(e?.message || "Could not load the message.");
+  }
+}
+
+function adminAgentTakeDown(agentId) {
+  const agent = (adminRevenueData?.billing || []).find((a) => String(a.id) === String(agentId)) || {};
+  adminBillingModal({
+    title: `Take ${adminEscape(agent.full_name || "this agent")}'s listings down?`,
+    bodyHtml: `<ul class="list-disc pl-5 text-gray-700 space-y-1"><li>All their live and pending listings are hidden from makaug.com.</li><li>Nothing is deleted: a snapshot is saved, and the moment a payment is confirmed everything goes back exactly as it was.</li><li>They get a WhatsApp telling them why and how to pay. If they message the bot, it tells them to call ${adminEscape(adminRevenueData?.settings?.confirmers?.[0]?.name || "Ronald")} and alerts the team.</li></ul>`,
+    submitLabel: "Take listings down",
+    tone: "bg-red-700",
+    onSubmit: async () => {
+      const r = await apiRequest(`/api/admin/revenue/agents/${encodeURIComponent(agentId)}/take-down`, { method: "POST", headers: adminAuthHeaders(), body: {} });
+      toast(`Taken down — ${r?.data?.listings_hidden || 0} listing(s) hidden and saved.`);
+    }
+  });
+}
+
+function adminAgentReinstate(agentId) {
+  const agent = (adminRevenueData?.billing || []).find((a) => String(a.id) === String(agentId)) || {};
+  adminBillingModal({
+    title: `Put ${adminEscape(agent.full_name || "agent")} back without a payment?`,
+    bodyHtml: `<p class="text-gray-600">Normally they go back by themselves once a payment is confirmed. Use this only for an exception — it's logged.</p>
+      <label class="block"><span class="font-bold">Why?</span><input name="reason" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. paid cash to Ronald, receipt to follow"></label>`,
+    submitLabel: "Put back",
+    onSubmit: async (data) => {
+      const r = await apiRequest(`/api/admin/revenue/agents/${encodeURIComponent(agentId)}/reinstate`, { method: "POST", headers: adminAuthHeaders(), body: { reason: data.get("reason") } });
+      toast(`Back live — ${r?.data?.listings_restored || 0} listing(s) restored.`);
+    }
+  });
+}
+
+async function adminListerMessage(propertyId, kind) {
+  try {
+    const res = await apiRequest(`/api/admin/revenue/listings/${encodeURIComponent(propertyId)}/billing-message/${encodeURIComponent(kind)}`, { headers: adminAuthHeaders() });
+    const d = res?.data || {};
+    const st = d.stats || {};
+    const listing = (adminRevenueData?.listers || []).find((p) => String(p.id) === String(propertyId)) || {};
+    adminBillingModal({
+      title: `${ADMIN_BILLING_KIND_LABELS[kind] || kind} — ${adminEscape(listing.title || "listing")}`,
+      bodyHtml: `<p class="text-xs text-gray-600">makaug.com so far: <strong>${Number(st.views || 0)}</strong> views · ${Number(st.visitors || 0)} people · ${Number(st.whatsapp || 0)} WhatsApp taps · ${Number(st.shares || 0)} shares</p>
+        <label class="block"><span class="font-bold">Message (you can edit it before sending)</span><textarea name="text" rows="11" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-[12px]">${adminEscape(d.text || "")}</textarea></label>
+        <p class="text-[11px] text-gray-500">Goes to ${adminEscape(listing.lister_name || "")} +${adminEscape(String(listing.lister_phone || "").replace(/^\+/, ""))}. To change the standard wording for everyone, use Settings.</p>`,
+      submitLabel: "Send on WhatsApp",
+      tone: kind === "final_reminder" ? "bg-red-700" : "bg-green-700",
+      onSubmit: async (data) => {
+        const text = String(data.get("text") || "");
+        await apiRequest(`/api/admin/revenue/listings/${encodeURIComponent(propertyId)}/billing-message`, { method: "POST", headers: adminAuthHeaders(), body: { kind, text: text.trim() !== String(d.text || "").trim() ? text : "" } });
+        toast("Sent ✓");
+      }
+    });
+  } catch (e) {
+    toast(e?.message || "Could not load the message.");
+  }
+}
+
+function adminListerTakeDown(propertyId) {
+  const listing = (adminRevenueData?.listers || []).find((p) => String(p.id) === String(propertyId)) || {};
+  adminBillingModal({
+    title: `Take “${adminEscape(listing.title || "this listing")}” down?`,
+    bodyHtml: `<p class="text-gray-700">It's hidden from makaug.com, not deleted. When a payment is confirmed it goes straight back live with the same photos and details. The owner gets a WhatsApp explaining why.</p>`,
+    submitLabel: "Take down",
+    tone: "bg-red-700",
+    onSubmit: async () => {
+      await apiRequest(`/api/admin/revenue/listings/${encodeURIComponent(propertyId)}/take-down`, { method: "POST", headers: adminAuthHeaders(), body: {} });
+      toast("Taken down — saved for when they pay.");
+    }
+  });
+}
+
+function adminPaymentFieldsHtml({ amount = "", payer = "" } = {}) {
+  const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+  return `<label class="block"><span class="font-bold">Amount (UGX)</span><input name="amount" inputmode="numeric" value="${adminAttr(amount)}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+    <label class="block"><span class="font-bold">How was it paid?</span><select name="method" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"><option value="">Choose…</option>${ADMIN_METHOD_KEYS.map((m) => `<option value="${m}">${ADMIN_METHOD_LABELS[m]}</option>`).join("")}</select></label>
+    ${adminFxFields()}
+    <label class="block"><span class="font-bold">Transaction ID</span><input name="reference" autocomplete="off" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+    <label class="block"><span class="font-bold">Date paid</span><input name="paid_at" type="date" value="${today}" max="${today}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+    <label class="block"><span class="font-bold">Paid by</span><input name="payer" value="${adminAttr(payer)}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+    <label class="block"><span class="font-bold">Receipt photo</span><input name="receipt" type="file" accept="image/*" class="mt-1 w-full text-xs"></label>
+    <label class="block"><span class="font-bold">Note</span><input name="note" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>`;
+}
+
+function adminListerPayment(propertyId) {
+  const listing = (adminRevenueData?.listers || []).find((p) => String(p.id) === String(propertyId)) || {};
+  const fee = adminRevenueData?.settings?.lister_fee?.monthly_ugx || 20000;
+  adminBillingModal({
+    title: `Listing fee — ${adminEscape(listing.title || "listing")}`,
+    bodyHtml: `<p class="text-gray-600">${adminFormatUgx(fee)} = one month. If the listing was taken down it goes straight back live.</p>${adminPaymentFieldsHtml({ amount: fee, payer: [listing.lister_name, listing.lister_phone].filter(Boolean).join(" · ") })}`,
+    submitLabel: "Record payment",
+    onSubmit: async (data, form) => {
+      const [payerName, payerPhone] = String(data.get("payer") || "").split("·").map((v) => v.trim());
+      const body = {
+        amount: data.get("amount"), amount_original: data.get("amount_original"), fx_rate_ugx: data.get("fx_rate_ugx"),
+        method: data.get("method"), reference: data.get("reference"), paid_at: data.get("paid_at"),
+        payer_name: payerName || "", payer_phone: payerPhone || "", note: data.get("note"),
+        receipt_url: await adminReadFileAsDataUrl(form.querySelector("[name=receipt]")?.files?.[0])
+      };
+      const r = await apiRequest(`/api/admin/revenue/listings/${encodeURIComponent(propertyId)}/payment`, { method: "POST", headers: adminAuthHeaders(), body });
+      toast(`Recorded — paid until ${r?.data?.period_end || ""}.`);
+    }
+  });
+}
+
+function adminConfirmClaim(claimId) {
+  const c = (adminRevenueData?.claims || []).find((x) => String(x.id) === String(claimId)) || {};
+  const smsAccount = c.sms_account_key || "";
+  const suggested = smsAccount === "airtel_money" ? "airtel_money" : (smsAccount || c.method || "mtn_momo");
+  const amount = c.sms_amount_ugx || c.amount_ugx || (c.purpose === "listing_fee" ? adminRevenueData?.settings?.lister_fee?.monthly_ugx : adminRevenueData?.settings?.agent_fee?.monthly_ugx) || "";
+  const who = c.agent_name || c.property_title || c.payer_name || `+${c.payer_phone || ""}`;
+  const form = adminBillingModal({
+    title: `Confirm payment — ${adminEscape(who)}`,
+    bodyHtml: `<div class="rounded-lg border border-gray-200 p-2 text-xs space-y-1">
+        <div>① Transaction ID: <strong>${adminEscape(c.reference || "none read")}</strong>${c.receipt_url ? ` · <a href="${adminAttr(c.receipt_url)}" target="_blank" rel="noopener" class="underline">see receipt</a>` : ""}</div>
+        <div>② ${c.sms_id ? `<span class="text-emerald-700 font-bold">Same ID found in the MoMo SMS${c.sms_amount_ugx ? ` — ${adminFormatUgx(c.sms_amount_ugx)}` : ""}</span>` : `<span class="text-amber-800 font-bold">Not found in the MoMo SMS yet — only confirm if you've seen the money yourself (statement, bank app).</span>`}</div>
+        ${c.message ? `<div class="text-gray-600">Their message: “${adminEscape(String(c.message).slice(0, 240))}”</div>` : ""}</div>
+      <label class="block"><span class="font-bold">Amount received (UGX)</span><input name="amount" inputmode="numeric" value="${adminAttr(amount)}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+      <label class="block"><span class="font-bold">Into which account?</span><select name="method" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">${ADMIN_METHOD_KEYS.filter((m) => m !== "cash").map((m) => `<option value="${m}" ${suggested === m ? "selected" : ""}>${ADMIN_METHOD_LABELS[m]}</option>`).join("")}</select></label>
+      ${adminFxFields()}
+      <label class="block"><span class="font-bold">Note</span><input name="note" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+      <p class="text-xs text-gray-600">Confirming records it in the ledger, extends their paid-until date, puts anything taken down back live, and sends them a thank-you on WhatsApp.</p>`,
+    submitLabel: "③ Confirm",
+    onSubmit: async (data) => {
+      const r = await apiRequest(`/api/admin/revenue/claims/${encodeURIComponent(claimId)}/confirm`, { method: "POST", headers: adminAuthHeaders(), body: { amount: data.get("amount"), method: data.get("method"), amount_original: data.get("amount_original"), fx_rate_ugx: data.get("fx_rate_ugx"), note: data.get("note") } });
+      toast(`Confirmed ✓ — paid until ${r?.data?.period_end || ""}.`);
+      if (typeof renderAdminDashboard === "function") renderAdminDashboard();
+    }
+  });
+  if (!c.sms_id) form.querySelector("button[type=submit]").textContent = "③ Confirm — I've seen the money";
+}
+
+function adminRejectClaim(claimId) {
+  adminBillingModal({
+    title: "Reject this payment claim?",
+    bodyHtml: `<p class="text-gray-600">Nothing is recorded. Ronald should call them to sort it out.</p><label class="block"><span class="font-bold">Why?</span><input name="note" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. ID not in MoMo statement, amount short"></label>`,
+    submitLabel: "Reject",
+    tone: "bg-red-700",
+    onSubmit: async (data) => {
+      await apiRequest(`/api/admin/revenue/claims/${encodeURIComponent(claimId)}/reject`, { method: "POST", headers: adminAuthHeaders(), body: { note: data.get("note") } });
+      toast("Rejected.");
+    }
+  });
+}
+
+function adminOpenBillingSettings() {
+  const s = adminRevenueData?.settings || {};
+  const pay = s.pay_to || {};
+  const agentFee = s.agent_fee || {};
+  const listerFee = s.lister_fee || {};
+  const confirmers = (s.confirmers || []).map((c) => `${c.name || ""}, ${c.phone || ""}`).join("\n");
+  const views = s.lister_views_message?.text || "";
+  adminBillingModal({
+    title: "Billing settings",
+    bodyHtml: `<fieldset class="rounded-xl border border-gray-200 p-3 space-y-2"><legend class="px-1 font-black">Where people pay</legend>
+        <label class="block"><span class="font-bold">Method</span><input name="pay_method" value="${adminAttr(pay.method || "MTN Mobile Money")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+        <label class="block"><span class="font-bold">Number</span><input name="pay_number" value="${adminAttr(pay.number || "")}" placeholder="e.g. 0780 000000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+        <label class="block"><span class="font-bold">Registered name (what the payer sees on MoMo)</span><input name="pay_name" value="${adminAttr(pay.name || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label></fieldset>
+      <label class="block"><span class="font-bold">Who confirms payments</span> <span class="text-xs text-gray-500">(one per line: name, WhatsApp number)</span><textarea name="confirmers" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">${adminEscape(confirmers)}</textarea></label>
+      <div class="grid grid-cols-3 gap-2">
+        <label class="block"><span class="font-bold text-xs">Agent fee / month</span><input name="agent_monthly" inputmode="numeric" value="${adminAttr(agentFee.monthly_ugx || 50000)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Remind days before</span><input name="remind_days" inputmode="numeric" value="${adminAttr(agentFee.remind_days_before ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Final reminder after (days overdue)</span><input name="final_days" inputmode="numeric" value="${adminAttr(agentFee.final_after_days_overdue ?? 7)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Private listing / month</span><input name="lister_monthly" inputmode="numeric" value="${adminAttr(listerFee.monthly_ugx || 20000)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Free days</span><input name="free_days" inputmode="numeric" value="${adminAttr(listerFee.free_days ?? 7)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Views message on day</span><input name="views_day" inputmode="numeric" value="${adminAttr(listerFee.views_message_day ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+      </div>
+      <label class="block"><span class="font-bold">Day-${adminEscape(String(listerFee.views_message_day ?? 3))} “people have seen your property” message</span><textarea name="views_text" rows="9" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-[12px]">${adminEscape(views)}</textarea>
+        <span class="text-[11px] text-gray-500">Fills in: {name} {property} {views} {shares_line} {free_until} {monthly_fee} {pay_to} {link}</span></label>`,
+    submitLabel: "Save settings",
+    onSubmit: async (data) => {
+      const put = (key, value) => apiRequest(`/api/admin/revenue/settings/${key}`, { method: "PUT", headers: adminAuthHeaders(), body: { value } });
+      const num = (v, d) => (Number.isFinite(Number(v)) && String(v).trim() !== "" ? Number(v) : d);
+      const confirmersList = String(data.get("confirmers") || "").split(/\n+/).map((line) => {
+        const [name, phone] = line.split(",").map((v) => (v || "").trim());
+        return name && phone ? { name, phone: phone.replace(/\D/g, "") } : null;
+      }).filter(Boolean);
+      if (!confirmersList.length) throw new Error("Add at least one person who confirms payments.");
+      await put("pay_to", { method: String(data.get("pay_method") || "").trim(), number: String(data.get("pay_number") || "").trim(), name: String(data.get("pay_name") || "").trim() });
+      await put("confirmers", confirmersList);
+      await put("agent_fee", { ...agentFee, monthly_ugx: num(data.get("agent_monthly"), 50000), remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });
+      await put("lister_fee", { ...listerFee, monthly_ugx: num(data.get("lister_monthly"), 20000), free_days: num(data.get("free_days"), 7), views_message_day: num(data.get("views_day"), 3) });
+      await put("lister_views_message", { ...(s.lister_views_message || {}), text: String(data.get("views_text") || "") });
+      toast("Settings saved.");
+    }
+  });
+}
+
+async function adminUploadStatement() {
+  const account = document.getElementById("admin-recon-account")?.value;
+  const file = document.getElementById("admin-recon-file")?.files?.[0];
+  const out = document.getElementById("admin-recon-result");
+  if (!file) return toast("Choose the statement file first (CSV).");
+  if (file.size > 3 * 1024 * 1024) return toast("That file is over 3 MB — export a shorter date range.");
+  if (out) out.innerHTML = `<span class="text-gray-500">Reading ${adminEscape(file.name)}…</span>`;
+  try {
+    const csv = await file.text();
+    const res = await apiRequest("/api/admin/revenue/statements", { method: "POST", headers: adminAuthHeaders(), body: { account_key: account, csv } });
+    const d = res?.data || {};
+    const lines = (d.unmatched_lines || []).map((l) => `<li><strong>${l.amount > 0 ? "+" : ""}${adminEscape(Number(l.amount).toLocaleString())}</strong> · ${adminEscape(String(l.line_date || "").slice(0, 10))} · ${adminEscape(l.description || "")} ${l.reference ? `· ${adminEscape(l.reference)}` : ""}</li>`).join("");
+    const entries = (d.unmatched_entries || []).map((e) => `<li><strong>${adminFormatUgx(e.amount_ugx)}</strong>${e.amount_original ? ` ($${adminEscape(String(e.amount_original))})` : ""} · ${adminEscape(String(e.paid_at || "").slice(0, 10))} · ${adminEscape(e.payer_name || "")} · TxID ${adminEscape(e.reference || "—")}</li>`).join("");
+    const bc = d.balance_check;
+    toast(`${d.lines_read || 0} line(s) read, ${d.matched || 0} matched.`);
+    await loadAdminRevenue();
+    const box = document.getElementById("admin-recon-result");
+    if (box) box.innerHTML = `<div class="space-y-2"><p><strong>${d.lines_read || 0}</strong> line(s) read (${d.lines_new || 0} new) · <strong class="text-emerald-700">${d.matched || 0} matched</strong> to recorded entries.${bc ? ` Closing balance ${adminFormatUgx(bc.actual_balance)} — ${Number(bc.difference) === 0 ? `<span class="text-emerald-700 font-bold">matches the ledger ✓</span>` : `<span class="text-red-700 font-bold">${adminFormatUgx(bc.difference)} different from the ledger</span>`}.` : ""}</p>
+      ${lines ? `<div class="rounded-lg border border-amber-300 bg-amber-50 p-2"><p class="font-bold text-amber-900">On the statement but nobody recorded it (${(d.unmatched_lines || []).length})</p><ul class="mt-1 space-y-0.5">${lines}</ul></div>` : `<p class="text-emerald-700">Every statement line is accounted for.</p>`}
+      ${entries ? `<div class="rounded-lg border border-red-200 bg-red-50 p-2"><p class="font-bold text-red-900">Recorded here but not on the statement (${(d.unmatched_entries || []).length})</p><ul class="mt-1 space-y-0.5">${entries}</ul></div>` : ""}</div>`;
+  } catch (e) {
+    if (out) out.innerHTML = `<span class="text-red-700">${adminEscape(e?.message || "Could not read that statement.")}</span>`;
   }
 }
 
