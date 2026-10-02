@@ -4593,7 +4593,11 @@ function parseEmployeeBedroomDraft(caption = '') {
   const explicit = clean.match(/\b(\d{1,2})\s*(?:bedrooms?|beds?|br)\b/i)
     || clean.match(/\b(?:bedrooms?|beds?|br)\s*[:=-]?\s*(\d{1,2})\b/i);
   if (explicit?.[1]) return { bedrooms: Number(explicit[1]) };
-  return parseBedroomDraft(clean) || {};
+  // "Koba Estate 100by50fts @ UGX 28,000,000" is a plot. The generic parser read
+  // "50" as a bedroom count and a live land listing showed 50 bedrooms. Without
+  // any word for a building or a room there is no bedroom count to find.
+  if (!/\b(?:house|home|apartments?|flats?|villa|bungalow|mansion|duplex|townhouse|rooms?|bedrooms?|beds?|condo|cottage|storey|storeyed)\b/i.test(clean)) return {};
+  return parseBedroomDraft(clean.replace(/\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\s*(?:ft|fts|feet|m)?\b/gi, ' ')) || {};
 }
 
 // Same floor parseListingPriceDraft applies: below this a "price" is a room count, a plot
@@ -6658,7 +6662,7 @@ function agentMoney(amount, currency = 'UGX') {
 function agentPropertyDetailLines(facts = {}, caption = '') {
   const english = withEnglishPropertyTerms(caption);
   const lines = [];
-  const bedrooms = Number(facts.bedroomDraft?.bedrooms) || 0;
+  const bedrooms = facts.listingType === 'land' ? 0 : (Number(facts.bedroomDraft?.bedrooms) || 0);
   const kind = parsePropertyType(english) || (facts.listingType === 'land' ? 'land' : (facts.listingType === 'commercial' ? 'commercial property' : 'property'));
   const deal = facts.listingType === 'rent' || facts.listingType === 'student'
     ? 'for rent'
@@ -6967,7 +6971,35 @@ async function applyAgentCorrection({ data = {}, cleanBody = '' } = {}) {
   const newPrice = Number(facts.price) > 0 ? facts : null;
   const newPlace = facts.locationPatch?.area && facts.locationPatch?.district && facts.locationPatch?.canonical_location_id ? facts.locationPatch : null;
   const newBedrooms = /\b(?:bed|bedroom|bedrooms|rooms?)\b/i.test(withEnglishPropertyTerms(text)) ? Number(facts.bedroomDraft?.bedrooms) || null : null;
-  if (!newPrice && !newPlace && !newBedrooms) return null;
+  if (!newPrice && !newPlace && !newBedrooms) {
+    // "Correction Over 50 Plots Of Land For Sale" — a fix we cannot apply field
+    // by field. It was being stored as a new caption waiting for photos. Pass it
+    // to the team on the property instead, and say so.
+    if (!/^(?:correction|correct|sorry|actually|wrong|change)\b/i.test(text)) return null;
+    const noted = (await db.query(
+      `UPDATE properties
+          SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
+                'agent_corrections',
+                COALESCE(extra_fields->'agent_corrections', '[]'::jsonb) || jsonb_build_array(jsonb_build_object('at', NOW()::text, 'text', $3::text))
+              ),
+              moderation_notes = CONCAT_WS(E'\n', NULLIF(moderation_notes, ''), $4::text),
+              updated_at = NOW()
+        WHERE id = $1::uuid AND agent_id = $2::uuid
+          AND created_at >= NOW() - INTERVAL '48 hours'
+        RETURNING title`,
+      [propertyId, data.agent.id, text, `Agent correction: "${text}"`]
+    )).rows[0];
+    if (!noted) return null;
+    deferWhatsappWork('agent correction alert', async () => {
+      const desk = require('../services/leadDeskService');
+      const body = [`✏️ *Correction from ${data.agent.full_name || 'an agent'}*`, `For: ${noted.title} (Ref ${String(propertyId).slice(0, 8).toUpperCase()})`, `"${text}"`, `Edit it in ${HOME_URL}/admin`].join('\n');
+      if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'agent_correction');
+      const contact = agentHelpContact();
+      const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
+      if (contact.digits && !onList) await require('../services/leadHandoffService').deliverWhatsapp({ to: contact.digits, body, kind: 'agent_correction_contact', leadId: null, nonce: Date.now() });
+    });
+    return [`✏️ *Noted* — I have passed your correction to the team for *${noted.title}*:`, `_"${text}"_`, '', 'They will update the listing before it goes live (or straight away if it is already live).'].join('\n');
+  }
   if (!looksLikeFix && text.split(/\s+/).length > 6) return null;
 
   const current = (await db.query(
@@ -7649,6 +7681,13 @@ async function handleEmployeeWhatsappIntake({
 
   if (currentStep === 'employee_property_media') {
     if (data.whatsapp_agent_self_intake === true) {
+      // A correction stored as a caption before corrections were understood
+      // would otherwise swallow the agent's next photo.
+      if (/^(?:correction|correct|sorry|actually)\b/i.test(normalizeInput(data.pending_property_caption || ''))
+        && !employeePendingStoredMedia(data).length) {
+        delete data.pending_property_caption;
+        await replaceEmployeeSession(phone, currentStep, data);
+      }
       const hasMediaCandidates = employeeMediaCandidates(runtime, mediaUrl).length > 0;
       if (runtime.sharedLocation) {
         const pinReply = await handleAgentLocationPin({ phone, data, sharedLocation: runtime.sharedLocation, currentStep });

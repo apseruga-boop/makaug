@@ -164,6 +164,11 @@ const SCENARIOS = {
       send(p, { image: 5 })
     ]);
   },
+  async freeTextCorrection(p) {
+    // Jonathan, 2 Oct 08:44: saw "50 bedroom land" and wrote a correction in words.
+    await send(p, { image: 6, body: '*Land For Sale Nakawuka- Koba Estate 100by50fts @ UGX 28,000,000-30,000,000 With Ready Landtitle*' });
+    await send(p, { body: 'Correction Over 50 Plots Of Land For Sale' });
+  },
   async correctionAfterSave(p) {
     await send(p, { image: 5, body: '3 bedroom house for rent in Kyanja, Kampala 900k' });
     await send(p, { body: 'price 1.1m' });

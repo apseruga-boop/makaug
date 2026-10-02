@@ -260,3 +260,10 @@ test('a photo held from a burst is asked about, not guessed', () => {
   assert.match(notice, /cannot tell which property/);
   assert.match(notice, /together with that property's caption/);
 });
+
+test('a plot measured "100by50fts" has no bedrooms', () => {
+  const facts = employeePropertyFacts('*Land For Sale Nakawuka- Koba Estate 100by50fts @ UGX 28,000,000-30,000,000 With Ready Landtitle*', {});
+  assert.strictEqual(facts.listingType, 'land');
+  assert.ok(!facts.bedroomDraft.bedrooms, 'a live land listing showed "50 bedrooms" from this caption');
+  assert.strictEqual(employeePropertyFacts('Najeera 4 bedrooms 5 bathrooms staff quarters 650m', {}).bedroomDraft.bedrooms, 4);
+});
