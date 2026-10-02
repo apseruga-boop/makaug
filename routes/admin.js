@@ -13683,6 +13683,7 @@ router.post('/agent-broadcast/how-to-post/send', async (req, res, next) => {
     const all = await agentHowToPost.listRecipients(db, { excludeKeys: leadHandoff.makaugOwnNumbers() });
     const sent = await agentHowToPost.alreadySentAgentIds(db);
     const only = Array.isArray(req.body?.agent_ids) ? new Set(req.body.agent_ids.map(String)) : null;
+    const greetNames = req.body?.greet_names && typeof req.body.greet_names === 'object' ? req.body.greet_names : {};
     const targets = all.filter((r) => !sent.has(String(r.id)) && (!only || only.has(String(r.id))));
     const results = [];
     for (const agent of targets) {
@@ -13690,7 +13691,9 @@ router.post('/agent-broadcast/how-to-post/send', async (req, res, next) => {
         const queued = await agentHowToPost.queueFor({
           queue: queueWhatsappWebBridgeMessage,
           to: agent.number,
-          name: agent.name,
+          // Ugandan names are often written surname first ("Kimuli Brian"), so
+          // the sender can say which name each agent should be greeted by.
+          name: cleanText(greetNames[String(agent.id)]) || agent.name,
           agentId: agent.id,
           source: agentReportWhatsappSource(),
           actorId: adminActorId(req)
