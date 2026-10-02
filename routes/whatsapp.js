@@ -6835,12 +6835,25 @@ function alertTeamAgentPropertySubmitted({ agent = {}, propertyId = '', facts = 
   deferWhatsappWork('agent property alert', async () => {
     const desk = require('../services/leadDeskService');
     if (typeof desk.sendToTeam !== 'function' || desk.inQuietHours()) return;
-    await desk.sendToTeam(db, [
+    const agentNumber = String(agent.whatsapp || agent.phone || '').replace(/\D+/g, '');
+    const body = [
       `🏠 *New property from ${agent.full_name || 'an agent'} — waiting for review*`,
       ...agentPropertyDetailLines(facts, caption),
+      agentNumber ? `Agent: +${agentNumber}` : '',
       `Review: ${HOME_URL}/admin (Listings › pending)`,
       propertyId ? `Ref ${String(propertyId).slice(0, 8).toUpperCase()}` : ''
-    ].filter(Boolean).join('\n'), 'agent_property_submitted');
+    ].filter(Boolean).join('\n');
+    await desk.sendToTeam(db, body, 'agent_property_submitted');
+    // Ronald loads and checks agents' properties on the ground, so he gets
+    // every one of these too, whether or not he is on the alert list.
+    const contact = agentHelpContact();
+    const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : [])
+      .some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
+    if (contact.digits && !onList) {
+      await require('../services/leadHandoffService').deliverWhatsapp({
+        to: contact.digits, body, kind: 'agent_property_submitted_contact', leadId: null, nonce: `${propertyId}`
+      });
+    }
   });
 }
 

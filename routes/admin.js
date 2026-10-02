@@ -13675,6 +13675,33 @@ router.post('/agent-broadcast/how-to-post/preview', async (req, res, next) => {
   }
 });
 
+// Re-send the "new property from an agent" alerts already sent today to one
+// number (e.g. Ronald, when he is added after the first alerts went out).
+router.post('/agent-property-alerts/replay', async (req, res, next) => {
+  try {
+    const to = String(req.body?.to || '').replace(/\D+/g, '');
+    if (to.length < 9) return res.status(400).json({ ok: false, error: 'A number to send to is required' });
+    const hours = Math.min(72, Math.max(1, Number(req.body?.hours) || 24));
+    const rows = (await db.query(
+      `SELECT DISTINCT ON (payload->>'text') payload->>'text' AS text, MIN(created_at) OVER (PARTITION BY payload->>'text') AS first_at
+         FROM outbound_message_queue
+        WHERE metadata->>'message_kind' IN ('lead_handoff_agent_property_submitted', 'lead_handoff_agent_property_submitted_contact')
+          AND created_at >= NOW() - ($1::text || ' hours')::interval
+        ORDER BY payload->>'text', created_at ASC`,
+      [String(hours)]
+    )).rows.sort((a, b) => new Date(a.first_at) - new Date(b.first_at));
+    const results = [];
+    for (let i = 0; i < rows.length; i += 1) {
+      const delivery = await leadHandoff.deliverWhatsapp({ to, body: rows[i].text, kind: 'agent_property_alert_replay', leadId: null, nonce: `${Date.now()}-${i}` });
+      results.push(delivery.status);
+    }
+    await writeAudit('agent_property_alerts_replayed', { to_masked: `${to.slice(0, 5)}***`, count: rows.length }, adminActorId(req));
+    return res.json({ ok: true, data: { sent: results.filter((s) => ['queued', 'sent', 'simulated'].includes(s)).length, total: rows.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/agent-broadcast/how-to-post/send', async (req, res, next) => {
   try {
     if (cleanText(req.body?.confirm) !== 'SEND_TO_ALL_AGENTS') {
