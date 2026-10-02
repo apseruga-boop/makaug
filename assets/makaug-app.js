@@ -19857,12 +19857,13 @@ function leadDeskAgo(value) {
 function leadDeskCountdown(dueAt) {
   if (!dueAt) return { label: "", tone: "" };
   const diff = new Date(dueAt).getTime() - Date.now();
+  const slaMs = Number(leadDeskState?.data?.summary?.sla_hours || 2) * 3600000;
   const abs = Math.abs(diff);
   const h = Math.floor(abs / 3600000);
   const m = Math.floor((abs % 3600000) / 60000);
   const span = h >= 48 ? `${Math.floor(h / 24)}d` : h ? `${h}h ${m}m` : `${m}m`;
   if (diff < 0) return { label: `Overdue by ${span}`, tone: "bg-red-600 text-white" };
-  if (diff < 6 * 3600000) return { label: `Due in ${span}`, tone: "bg-amber-500 text-white" };
+  if (diff < slaMs / 2) return { label: `Due in ${span}`, tone: "bg-amber-500 text-white" };
   return { label: `Due in ${span}`, tone: "bg-emerald-600 text-white" };
 }
 
@@ -19998,8 +19999,8 @@ function renderLeadDesk() {
   wrap.innerHTML = `
     <div class="flex flex-wrap gap-2 mb-3">
       ${tile("New (24h)", s.new_today)}
-      ${tile("Due today", s.due_soon, "bg-amber-50 border-amber-200 text-amber-900", "not sent yet")}
-      ${tile("Overdue", s.overdue, Number(s.overdue) ? "bg-red-50 border-red-200 text-red-700" : "bg-white border-gray-200 text-gray-900", "over 24h, not sent")}
+      ${tile("Due soon", s.due_soon, "bg-amber-50 border-amber-200 text-amber-900", `send within ${s.sla_hours || 2}h`)}
+      ${tile("Overdue", s.overdue, Number(s.overdue) ? "bg-red-50 border-red-200 text-red-700" : "bg-white border-gray-200 text-gray-900", `over ${s.sla_hours || 2}h, not sent`)}
       ${tile("Sent (24h)", s.sent_today, "bg-white border-gray-200 text-gray-900")}
       ${tile("Waiting on agent", s.awaiting_agent, "bg-white border-gray-200 text-gray-900")}
       ${tile("Property found", s.matches_to_send, Number(s.matches_to_send) ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-white border-gray-200 text-gray-900", "send to client")}
@@ -20021,13 +20022,13 @@ function renderLeadDesk() {
           <tr>
             <th class="py-2 pr-3">Area</th><th class="py-2 pr-3">Want</th><th class="py-2 pr-3 text-center">People</th>
             <th class="py-2 pr-3">Budget</th><th class="py-2 pr-3">Source</th><th class="py-2 pr-3">What they said</th>
-            <th class="py-2 pr-3">24h clock</th><th class="py-2 pr-3">Agent response</th><th class="py-2 pr-3">Action</th>
+            <th class="py-2 pr-3">Clock</th><th class="py-2 pr-3">Agent response</th><th class="py-2 pr-3">Action</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
     </div>` : `<p class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">${leadDeskState.view === "archived" ? "Nothing has been removed." : "Nothing waiting. Every request has been handled."}</p>`}
-    <p class="text-xs text-gray-500 mt-3">Red rows are past the 24-hour mark; green rows have a matching property ready to send to the client. A summary goes out every morning at 07:00 Kampala time.</p>`;
+    <p class="text-xs text-gray-500 mt-3">Target: every request to an agent within ${adminEscape(s.sla_hours || 2)} hours. New requests are WhatsApped to the team as they arrive, with a reminder if one passes the target unsent. Red rows are late; green rows have a matching property ready to send to the client. A summary goes out every morning at 07:00 Kampala time.</p>`;
 }
 
 function renderLeadDeskPeople(g) {
@@ -20050,7 +20051,7 @@ function renderLeadDeskPeople(g) {
       ${c ? `<div class="mt-2"><span data-due="${adminAttr(l.due_at)}" class="inline-block rounded-full ${c.tone} text-[11px] font-bold px-2 py-0.5">${adminEscape(c.label)}</span></div>` : ""}
       ${refs.length ? `<div class="mt-3 border-t border-gray-100 pt-2 space-y-2">${refs.map((r) => `
         <div class="text-xs">
-          <div><span class="font-bold">Sent to ${adminEscape(r.agent_name || "agent")}</span> <span class="text-gray-500">${adminEscape(leadDeskAgo(r.sent_at))}${r.nudged_at ? ` · followed up ${adminEscape(leadDeskAgo(r.nudged_at))}` : ""}</span></div>
+          <div><span class="font-bold">Sent to ${adminEscape(r.agent_name || "agent")}</span>${l.metadata && l.metadata.client_told_agent_at ? ` <span class="text-emerald-700 font-semibold">· client told</span>` : ""} <span class="text-gray-500">${adminEscape(leadDeskAgo(r.sent_at))}${r.nudged_at ? ` · followed up ${adminEscape(leadDeskAgo(r.nudged_at))}` : ""}</span></div>
           <div class="flex flex-wrap items-center gap-1.5 mt-1">
             <select onchange="setLeadDeskResponse('${adminAttr(r.id)}', this.value)" class="border border-gray-200 rounded-lg px-2 py-1 text-xs">
               ${LEAD_DESK_RESPONSES.map(([v, label]) => `<option value="${v}" ${r.response === v ? "selected" : ""}>${label}</option>`).join("")}
@@ -20528,8 +20529,14 @@ function ensureLeadReferralModal() {
       </div>
       <label class="block text-xs font-bold text-gray-700 mt-4" for="lead-referral-agent">Agent</label>
       <select id="lead-referral-agent" onchange="refreshLeadReferralMessage()" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"><option value="">Loading agents…</option></select>
-      <label class="block text-xs font-bold text-gray-700 mt-4" for="lead-referral-text">WhatsApp message (you can edit it)</label>
-      <textarea id="lead-referral-text" rows="12" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono leading-snug"></textarea>
+      <label class="block text-xs font-bold text-gray-700 mt-4" for="lead-referral-text">1. Message to the agent (you can edit it)</label>
+      <textarea id="lead-referral-text" rows="10" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono leading-snug"></textarea>
+      <div class="mt-4 flex items-center gap-2">
+        <input id="lead-referral-notify-client" type="checkbox" checked class="w-4 h-4" onchange="document.getElementById('lead-referral-client-text').disabled = !this.checked; document.getElementById('lead-referral-send').textContent = this.checked ? 'Send to agent & client' : 'Send to agent';">
+        <label for="lead-referral-notify-client" class="text-xs font-bold text-gray-700">2. Also tell <span id="lead-referral-client-count">the client</span> it has gone to this agent</label>
+      </div>
+      <textarea id="lead-referral-client-text" rows="10" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono leading-snug disabled:opacity-50"></textarea>
+      <p class="text-[11px] text-gray-500 mt-1">{name} is replaced with each person's first name. Each person gets their own message.</p>
       <div class="mt-4 grid sm:grid-cols-[1fr_auto] gap-2 items-end">
         <div>
           <label class="block text-xs font-bold text-gray-700" for="lead-referral-preview-to">Preview to my WhatsApp</label>
@@ -20540,7 +20547,7 @@ function ensureLeadReferralModal() {
       <div id="lead-referral-status" class="text-xs text-gray-600 mt-3 min-h-[1rem]"></div>
       <div class="mt-4 flex justify-end gap-2">
         <button type="button" onclick="closeLeadReferral()" class="border border-gray-200 rounded-lg px-4 py-2 text-sm font-semibold">Cancel</button>
-        <button type="button" id="lead-referral-send" onclick="sendLeadReferral(false)" class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-black disabled:opacity-60">Send to agent</button>
+        <button type="button" id="lead-referral-send" onclick="sendLeadReferral(false)" class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-black disabled:opacity-60">Send to agent &amp; client</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -20568,7 +20575,15 @@ function leadReferralBody(extra = {}) {
     : state.kind === "demand"
       ? { search_type: state.search_type, area: state.area, days: state.days }
       : {};
-  return { ...base, agent_id: document.getElementById("lead-referral-agent")?.value || "", ...extra };
+  const notify = document.getElementById("lead-referral-notify-client");
+  const clientText = document.getElementById("lead-referral-client-text");
+  return {
+    ...base,
+    agent_id: document.getElementById("lead-referral-agent")?.value || "",
+    notify_clients: notify ? notify.checked : true,
+    client_text: clientText && !extra.dry_run ? clientText.value : "",
+    ...extra
+  };
 }
 
 async function openLeadReferral(state = {}) {
@@ -20588,6 +20603,12 @@ async function openLeadReferral(state = {}) {
   const previewInput = document.getElementById("lead-referral-preview-to");
   if (previewInput && !previewInput.value) previewInput.value = leadReferralPreviewNumber();
   document.getElementById("lead-referral-text").value = "";
+  const clientArea = document.getElementById("lead-referral-client-text");
+  if (clientArea) { clientArea.value = ""; clientArea.disabled = false; }
+  const notifyBox = document.getElementById("lead-referral-notify-client");
+  if (notifyBox) notifyBox.checked = true;
+  const sendBtn = document.getElementById("lead-referral-send");
+  if (sendBtn) sendBtn.textContent = "Send to agent & client";
   document.getElementById("lead-referral-status").textContent = "";
   const select = document.getElementById("lead-referral-agent");
   select.innerHTML = `<option value="">Loading agents…</option>`;
@@ -20599,7 +20620,7 @@ async function openLeadReferral(state = {}) {
       select.innerHTML = `<option value="">No approved agents with a WhatsApp number yet</option>`;
       return;
     }
-    const option = (a) => `<option value="${adminAttr(a.id)}">${adminEscape(a.full_name)}${a.company_name ? ` — ${adminEscape(a.company_name)}` : ""}${a.match ? " ★ covers this area" : ""}${a.live_listings ? ` (${a.live_listings} live)` : ""}</option>`;
+    const option = (a) => `<option value="${adminAttr(a.id)}">${adminEscape(a.full_name)}${a.company_name && String(a.company_name).trim().toLowerCase() !== String(a.full_name).trim().toLowerCase() ? ` — ${adminEscape(a.company_name)}` : ""}${a.match ? " ★ covers this area" : ""}${a.live_listings ? ` (${a.live_listings} live)` : ""}</option>`;
     const matched = agents.filter((a) => a.match);
     const others = agents.filter((a) => !a.match);
     select.innerHTML = `<option value="">Choose an agent…</option>`
@@ -20624,7 +20645,12 @@ async function refreshLeadReferralMessage() {
       body: leadReferralBody({ dry_run: true })
     });
     textArea.value = response?.data?.text || "";
-    status.textContent = "Check the message, send yourself a preview if you like, then send it to the agent.";
+    const clientArea = document.getElementById("lead-referral-client-text");
+    if (clientArea) clientArea.value = response?.data?.client_text || "";
+    const count = Number(response?.data?.client_count || 1);
+    const countEl = document.getElementById("lead-referral-client-count");
+    if (countEl) countEl.textContent = count === 1 ? "the client" : `all ${count} clients`;
+    status.textContent = "Check both messages, send yourself a preview if you like (you get both), then send.";
   } catch (error) {
     status.textContent = error?.message || "Could not prepare the message.";
   }
@@ -20649,11 +20675,12 @@ async function sendLeadReferral(preview = false) {
     });
     if (preview) {
       rememberLeadReferralPreviewNumber(previewTo);
-      status.textContent = `Preview sent to ${previewTo}. Nothing has gone to the agent yet.`;
+      status.textContent = `Preview sent to ${previewTo}${document.getElementById("lead-referral-notify-client")?.checked ? " (agent message and client message)" : ""}. Nothing has gone to the agent or the client yet.`;
       return;
     }
     const agentName = response?.data?.agent?.full_name || "the agent";
-    toast(`Lead sent to ${agentName} on WhatsApp.`);
+    const told = Number(response?.data?.clients_told || 0);
+    toast(`Lead sent to ${agentName} on WhatsApp${told ? ` — ${told} client${told === 1 ? "" : "s"} told` : ""}.`);
     const wasDemand = leadReferralState?.kind === "demand";
     const wasDesk = leadReferralState?.kind === "desk";
     closeLeadReferral();

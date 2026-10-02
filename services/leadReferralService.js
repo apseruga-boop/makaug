@@ -115,6 +115,83 @@ function buildAgentReferralMessage({ agent = {}, need = {} } = {}) {
   return lines.join('\n');
 }
 
+function siteUrl() {
+  return text(process.env.PUBLIC_SITE_URL || process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL, 'https://makaug.com').replace(/\/+$/, '');
+}
+
+const BROWSE_PATHS = Object.freeze({
+  rent: '/to-rent', sale: '/for-sale', buy: '/for-sale', land: '/land', commercial: '/commercial',
+  student: '/student-accommodation', students: '/student-accommodation', short_term: '/short-term', any: '/for-sale'
+});
+
+/** The live listings page for what they asked, filtered to their area and budget. */
+function browseUrl(need = {}, person = {}) {
+  const path = BROWSE_PATHS[text(need.type, 'any').toLowerCase()] || '/for-sale';
+  const params = new URLSearchParams();
+  if (text(need.area) && !/^anywhere$/i.test(need.area)) params.set('area', text(need.area));
+  if (Number(person.budget) > 0) params.set('max_price', String(Math.round(Number(person.budget))));
+  const qs = params.toString();
+  return `${siteUrl()}${path}${qs ? `?${qs}` : ''}`;
+}
+
+function agentProfileUrl(agent = {}) {
+  return agent.id ? `${siteUrl()}/agents/${encodeURIComponent(agent.id)}` : `${siteUrl()}/brokers`;
+}
+
+/**
+ * The WhatsApp the person who asked receives when their request goes to an
+ * agent: who has it, that they cover the area, the agent's profile, and the
+ * live listings for what they want in the meantime.
+ */
+function buildClientReferralMessage({ agent = {}, need = {}, person = {} } = {}) {
+  const first = text(person.name).split(/\s+/)[0];
+  const area = text(need.area) && !/^anywhere$/i.test(need.area) ? text(need.area) : '';
+  const agentName = text(agent.full_name || agent.name, 'one of our approved agents');
+  const company = text(agent.company_name);
+  return [
+    first ? `Hi ${first}, this is makaug.com.` : 'Hi, this is makaug.com.',
+    '',
+    `You asked us about ${wantPhrase(need.type)}${area ? ` in ${area}` : ''}. We have passed your request to ${agentName}${company && company !== agentName ? ` (${company})` : ''}, one of makaug's approved agents${area && agent.covers_area ? `, who covers ${area}` : ''}.`,
+    '',
+    `They will contact you on WhatsApp with properties that fit. You can see their profile here:`,
+    agentProfileUrl(agent),
+    '',
+    'While you wait, everything live on makaug that matches your search is here:',
+    browseUrl(need, person),
+    '',
+    'makaug.com connects you with the agent; any viewing, payment or agreement is between you and them. Never pay before you have seen the property and its documents.'
+  ].join('\n');
+}
+
+/**
+ * Send the "your request has gone to <agent>" message to each person.
+ * overrideText may contain {name}, filled per person. previewTo sends one
+ * sample instead. Returns per-person results.
+ */
+async function notifyClientsOfReferral(db, { agent, need, overrideText = '', previewTo = '', actor = 'admin' } = {}) {
+  const people = (Array.isArray(need.people) ? need.people : []).filter((p) => p && p.phone).slice(0, 10);
+  const results = [];
+  const targets = previewTo ? people.slice(0, 1) : people;
+  for (const person of targets) {
+    const first = text(person.name).split(/\s+/)[0];
+    const body = text(overrideText)
+      ? text(overrideText).replace(/\{name\}/g, first || 'there').slice(0, 3000)
+      : buildClientReferralMessage({ agent, need, person });
+    const to = previewTo || person.phone;
+    const delivery = await deliverWhatsapp({ to, body, kind: previewTo ? 'client_referral_preview' : 'client_referral', leadId: null, nonce: Date.now() });
+    await logNotification(db, {
+      recipientPhone: to,
+      channel: 'whatsapp',
+      type: previewTo ? 'client_referral_preview' : 'client_told_agent_assigned',
+      status: delivery.status,
+      failureReason: ['failed', 'skipped'].includes(delivery.status) ? delivery.reason || null : null,
+      payloadSummary: { agent_id: agent.id, agent_name: agent.full_name, actor }
+    });
+    results.push({ phone: person.phone, status: delivery.status, text: body });
+  }
+  return results;
+}
+
 /**
  * Registered, approved agents with a WhatsApp/phone, best match for the area
  * first (districts covered, then where their live listings are).
@@ -155,6 +232,23 @@ async function listReferralAgents(db, { area = '', search = '', limit = 200 } = 
     ...row,
     match: row.covers_area || row.live_in_area > 0
   }));
+}
+
+/** Does this agent cover the area (districts covered, or live listings there)? */
+async function withAreaCoverage(db, agent, area = '') {
+  const needle = text(area).toLowerCase();
+  if (!agent || !needle || /^anywhere$/i.test(needle)) return { ...agent, covers_area: false };
+  const result = await db.query(
+    `SELECT (
+        EXISTS (SELECT 1 FROM agents a, UNNEST(COALESCE(a.districts_covered, '{}'::text[])) d
+                 WHERE a.id = $1::uuid AND (LOWER(d) = $2 OR $2 LIKE '%' || LOWER(d) || '%' OR LOWER(d) LIKE '%' || $2 || '%'))
+        OR EXISTS (SELECT 1 FROM properties p
+                    WHERE p.agent_id = $1::uuid AND LOWER(COALESCE(p.status, '')) = 'approved'
+                      AND (LOWER(COALESCE(p.area, '')) = $2 OR LOWER(COALESCE(p.district, '')) = $2))
+      ) AS covers`,
+    [agent.id, needle]
+  ).catch(() => ({ rows: [{ covers: false }] }));
+  return { ...agent, covers_area: Boolean(result.rows[0]?.covers) };
 }
 
 async function loadReferralAgent(db, agentId) {
@@ -320,6 +414,11 @@ async function markLeadReferred(db, lead, referral = {}) {
 }
 
 module.exports = {
+  withAreaCoverage,
+  agentProfileUrl,
+  browseUrl,
+  buildClientReferralMessage,
+  notifyClientsOfReferral,
   buildAgentReferralMessage,
   cleanSaid,
   listReferralAgents,

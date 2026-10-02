@@ -26,6 +26,9 @@ const {
   cleanSaid,
   listReferralAgents,
   loadReferralAgent,
+  notifyClientsOfReferral,
+  buildClientReferralMessage,
+  withAreaCoverage,
   wantPhrase
 } = require('./leadReferralService');
 
@@ -115,6 +118,12 @@ const REAL_PHONE_SQL = (col) => `(COALESCE(${col}, '') !~* '(dryrun|sim-|selftes
   AND COALESCE(${col}, '') !~ '[A-Za-z:]'
   AND LENGTH(REGEXP_REPLACE(COALESCE(${col}, ''), '\\D', '', 'g')) BETWEEN 9 AND 15)`;
 const NOT_INTERNAL_SQL = (col) => `(COALESCE(${PHONE_KEY_SQL(col)}, '') <> ALL($2::text[]))`;
+
+// How fast a request must reach an agent. Default 2 hours.
+function slaHours() {
+  const h = Number(process.env.LEAD_DESK_SLA_HOURS || 2);
+  return Number.isFinite(h) && h > 0 ? Math.min(h, 72) : 2;
+}
 
 let fullSyncDone = false;
 
@@ -237,6 +246,17 @@ async function syncDemandLeads(db, { days = 365, full = false } = {}) {
      WHERE dl.id = i.demand_lead_id
        AND $1::text IS NOT NULL AND $2::text[] IS NOT NULL`);
 
+  // Every unsent request runs on the current target (LEAD_DESK_SLA_HOURS).
+  try {
+    await db.query(
+      `UPDATE demand_leads SET due_at = asked_at + make_interval(hours => $1::int)
+        WHERE first_sent_at IS NULL AND archived_at IS NULL
+          AND due_at IS DISTINCT FROM asked_at + make_interval(hours => $1::int)`,
+      [Math.round(slaHours())]
+    );
+  } catch (error) {
+    logger.warn('Lead desk due-time update failed', { error: error.message });
+  }
   fullSyncDone = true;
   return counts;
 }
@@ -399,7 +419,7 @@ async function loadDesk(db, { view = 'open', source = '', want = '', limit = 300
       COUNT(*) FILTER (WHERE archived_at IS NOT NULL)::int AS removed
     FROM demand_leads`);
 
-  return { summary: summary.rows[0], groups: list, sources: SOURCES, responses: RESPONSES };
+  return { summary: { ...summary.rows[0], sla_hours: slaHours() }, groups: list, sources: SOURCES, responses: RESPONSES };
 }
 
 async function loadLeadsByIds(db, ids = []) {
@@ -425,14 +445,33 @@ function needFromLeads(leads = []) {
 /**
  * Send (or preview) one WhatsApp to an agent for a set of desk leads.
  */
-async function referLeads(db, { ids, agentId, text: overrideText = '', previewTo = '', dryRun = false, actor = 'admin' }) {
-  const agent = await loadReferralAgent(db, agentId);
-  if (!agent) return { error: 'Pick an approved makaug agent with a WhatsApp number', status: 400 };
+async function referLeads(db, {
+  ids, agentId, text: overrideText = '', previewTo = '', dryRun = false, actor = 'admin',
+  notifyClients = true, clientText = ''
+}) {
+  const loadedAgent = await loadReferralAgent(db, agentId);
+  if (!loadedAgent) return { error: 'Pick an approved makaug agent with a WhatsApp number', status: 400 };
   const leads = await loadLeadsByIds(db, ids);
   const need = needFromLeads(leads);
   if (!need.people.length) return { error: 'None of these leads has a phone number to pass on', status: 400 };
+  const agent = await withAreaCoverage(db, loadedAgent, need.area);
   const generated = buildAgentReferralMessage({ agent, need });
-  if (dryRun) return { data: { text: generated, agent, people: need.people.length } };
+  if (dryRun) {
+    const sample = need.people[0] || {};
+    const clientSample = buildClientReferralMessage({ agent, need, person: sample });
+    return {
+      data: {
+        text: generated,
+        agent,
+        people: need.people.length,
+        // One template for everyone: {name} is filled in per person.
+        client_text: need.people.length > 1 && text(sample.name)
+          ? clientSample.replace(`Hi ${text(sample.name).split(/\s+/)[0]},`, 'Hi {name},')
+          : clientSample,
+        client_count: Math.min(need.people.length, 10)
+      }
+    };
+  }
   const body = text(overrideText).slice(0, 3500) || generated;
   const to = previewTo || agent.whatsapp;
   const delivery = await deliverWhatsapp({ to, body, kind: previewTo ? 'desk_referral_preview' : 'desk_referral', leadId: null, nonce: Date.now() });
@@ -445,6 +484,12 @@ async function referLeads(db, { ids, agentId, text: overrideText = '', previewTo
     failureReason: delivered ? null : delivery.reason || null,
     payloadSummary: { agent_id: agent.id, agent_name: agent.full_name, actor, desk_leads: leads.length }
   });
+  let clients = [];
+  if (delivered && notifyClients) {
+    // The people who asked are told who has their request (a preview sends
+    // one sample to the preview number instead).
+    clients = await notifyClientsOfReferral(db, { agent, need, overrideText: clientText, previewTo, actor });
+  }
   if (delivered && !previewTo) {
     // Only the people the agent was actually sent (the message lists up to 10).
     const included = new Set(need.people.slice(0, 10).map((p) => String(p.phone || '').replace(/\D/g, '').slice(-9)));
@@ -462,8 +507,23 @@ async function referLeads(db, { ids, agentId, text: overrideText = '', previewTo
         WHERE id = ANY($1::uuid[])`,
       [sentLeads.map((l) => l.id)]
     );
+    const told = new Set(clients.filter((c) => ['queued', 'sent', 'simulated'].includes(c.status)).map((c) => String(c.phone).replace(/\D/g, '').slice(-9)));
+    if (told.size) {
+      await db.query(
+        `UPDATE demand_leads SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('client_told_agent_at', NOW(), 'client_told_agent', $2::text)
+          WHERE id = ANY($1::uuid[])`,
+        [sentLeads.filter((l) => told.has(String(l.phone_key || l.phone).replace(/\D/g, '').slice(-9))).map((l) => l.id), agent.full_name]
+      );
+    }
   }
-  return { data: { delivery, text: body, agent: { id: agent.id, full_name: agent.full_name }, preview: Boolean(previewTo) }, delivered };
+  return {
+    data: {
+      delivery, text: body, agent: { id: agent.id, full_name: agent.full_name }, preview: Boolean(previewTo),
+      clients_told: clients.filter((c) => ['queued', 'sent', 'simulated'].includes(c.status)).length,
+      clients
+    },
+    delivered
+  };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -646,8 +706,8 @@ async function buildDailyReport(db) {
     `makaug lead desk — ${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Kampala' })}`,
     '',
     `New in the last 24h: ${s.new_today || 0}`,
-    `Overdue (not sent to an agent within a day): ${s.overdue || 0}`,
-    `Due today: ${s.due_soon || 0}`,
+    `Overdue (not sent to an agent within ${slaHours()}h): ${s.overdue || 0}`,
+    `Due soon (not sent yet): ${s.due_soon || 0}`,
     `Sent to agents in the last 24h: ${s.sent_today || 0}`,
     `Waiting for an agent's answer: ${s.awaiting_agent || 0}`,
     `Properties found to send to clients: ${s.matches_to_send || 0}`,
@@ -726,6 +786,108 @@ async function autoSendOverdue(db) {
   return { sent };
 }
 
+// --- Keeping on top of it: instant alerts and overdue reminders. ------------
+
+function alertRecipients() {
+  return String(process.env.LEAD_DESK_ALERT_WHATSAPP || process.env.LEAD_DESK_REPORT_WHATSAPP || process.env.AI_CEO_REPORT_WHATSAPP_RECIPIENTS || '')
+    .split(',').map((v) => v.trim()).filter(Boolean);
+}
+
+function inQuietHours(date = new Date()) {
+  const raw = String(process.env.LEAD_DESK_QUIET_HOURS ?? '22-7').trim();
+  if (!raw || raw === 'off') return false;
+  const [start, end] = raw.split('-').map((v) => Number(v));
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+  const h = kampalaHour(date);
+  return start > end ? (h >= start || h < end) : (h >= start && h < end);
+}
+
+const SOURCE_LABEL = SOURCES;
+
+function leadLine(l) {
+  const who = text(l.name) || text(l.phone) || 'Someone';
+  const what = `${wantPhrase(l.want)}${l.area ? ` in ${l.area}` : ''}`;
+  const budget = money(l.budget) ? `, up to ${money(l.budget)}` : '';
+  const said = cleanSaid(l.message);
+  return `• ${who} — ${what}${budget} (${SOURCE_LABEL[l.source] || l.source})${said ? ` — "${said.slice(0, 90)}"` : ''}`;
+}
+
+async function sendToTeam(db, body, type) {
+  const results = [];
+  for (const recipient of alertRecipients()) {
+    const delivery = await deliverWhatsapp({ to: recipient, body, kind: type, leadId: null, nonce: Date.now() });
+    results.push({ to: recipient, status: delivery.status });
+  }
+  if (results.length) {
+    await logNotification(db, { channel: 'whatsapp', type, status: results.some((r) => ['queued', 'sent', 'simulated'].includes(r.status)) ? 'sent' : 'failed', payloadSummary: { results } });
+  }
+  return results;
+}
+
+/** A WhatsApp to the team the moment new requests land (one message per batch). */
+async function sendNewLeadAlerts(db, { force = false } = {}) {
+  if (!alertRecipients().length) return { skipped: 'no_recipients' };
+  if (!force && inQuietHours()) return { skipped: 'quiet_hours' };
+  const fresh = await db.query(
+    `SELECT * FROM demand_leads
+      WHERE archived_at IS NULL AND first_sent_at IS NULL
+        AND asked_at >= NOW() - INTERVAL '2 days'
+        AND NOT (metadata ? 'alerted_at')
+      ORDER BY asked_at ASC
+      LIMIT 25`
+  );
+  if (!fresh.rows.length) return { sent: 0 };
+  const lines = [
+    `New on the makaug lead desk (${fresh.rows.length}):`,
+    '',
+    ...fresh.rows.map(leadLine),
+    '',
+    `Send to an agent within ${slaHours()} hours: ${siteUrl()}/admin (Leads & Notifications)`
+  ];
+  const results = await sendToTeam(db, lines.join('\n'), 'lead_desk_new_alert');
+  if (results.some((r) => ['queued', 'sent', 'simulated'].includes(r.status))) {
+    await db.query(
+      `UPDATE demand_leads SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('alerted_at', NOW()) WHERE id = ANY($1::uuid[])`,
+      [fresh.rows.map((r) => r.id)]
+    );
+  }
+  return { sent: fresh.rows.length, results };
+}
+
+/** One reminder per request that passes the target without going to an agent. */
+async function sendOverdueReminders(db, { force = false } = {}) {
+  if (!alertRecipients().length) return { skipped: 'no_recipients' };
+  if (!force && inQuietHours()) return { skipped: 'quiet_hours' };
+  const late = await db.query(
+    `SELECT * FROM demand_leads
+      WHERE archived_at IS NULL AND first_sent_at IS NULL
+        AND due_at < NOW()
+        AND asked_at >= NOW() - INTERVAL '2 days'
+        AND NOT (metadata ? 'reminded_at')
+      ORDER BY asked_at ASC
+      LIMIT 25`
+  );
+  if (!late.rows.length) return { sent: 0 };
+  const lines = [
+    `Reminder: ${late.rows.length} lead-desk request${late.rows.length === 1 ? ' has' : 's have'} passed the ${slaHours()}-hour mark without going to an agent:`,
+    '',
+    ...late.rows.map((l) => {
+      const hours = Math.max(1, Math.round((Date.now() - new Date(l.asked_at).getTime()) / 3600000));
+      return `${leadLine(l)} — waiting ${hours}h`;
+    }),
+    '',
+    `Open the desk: ${siteUrl()}/admin (Leads & Notifications)`
+  ];
+  const results = await sendToTeam(db, lines.join('\n'), 'lead_desk_overdue_reminder');
+  if (results.some((r) => ['queued', 'sent', 'simulated'].includes(r.status))) {
+    await db.query(
+      `UPDATE demand_leads SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('reminded_at', NOW()) WHERE id = ANY($1::uuid[])`,
+      [late.rows.map((r) => r.id)]
+    );
+  }
+  return { sent: late.rows.length, results };
+}
+
 function kampalaHour(date = new Date()) {
   return Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Africa/Kampala' }).format(date));
 }
@@ -742,6 +904,8 @@ async function tickLeadDesk(db) {
     lastRefreshAt = Date.now();
     await syncDemandLeads(db, { days: 365 });
     await refreshMatches(db);
+    await sendNewLeadAlerts(db).catch((error) => logger.warn('Lead desk new-lead alert failed', { error: error.message }));
+    await sendOverdueReminders(db).catch((error) => logger.warn('Lead desk reminder failed', { error: error.message }));
     const reportHour = Math.max(0, Math.min(23, Number(process.env.LEAD_DESK_REPORT_HOUR || 7)));
     if (kampalaHour() === reportHour) {
       // Claim today's report before sending, so a slow send, a failed log or
@@ -776,7 +940,7 @@ async function tickLeadDesk(db) {
 
 function startLeadDeskScheduler(db) {
   if (schedulerTimer || !process.env.DATABASE_URL || process.env.LEAD_DESK_SCHEDULER_ENABLED === 'false') return;
-  const pollMs = Math.max(5 * 60_000, Number(process.env.LEAD_DESK_POLL_MS || 15 * 60_000));
+  const pollMs = Math.max(2 * 60_000, Number(process.env.LEAD_DESK_POLL_MS || 5 * 60_000));
   schedulerTimer = setInterval(() => {
     tickLeadDesk(db).catch((error) => logger.error('Lead desk tick failed', { error: error.message }));
   }, pollMs);
@@ -784,7 +948,7 @@ function startLeadDeskScheduler(db) {
   setTimeout(() => {
     tickLeadDesk(db).catch((error) => logger.error('Lead desk boot tick failed', { error: error.message }));
   }, 45_000).unref?.();
-  logger.info('Lead desk scheduler armed', { pollMs, reportHourKampala: Number(process.env.LEAD_DESK_REPORT_HOUR || 7) });
+  logger.info('Lead desk scheduler armed', { pollMs, slaHours: slaHours(), alertRecipients: alertRecipients().length, reportHourKampala: Number(process.env.LEAD_DESK_REPORT_HOUR || 7) });
 }
 
 function csvCell(value) {
@@ -810,6 +974,10 @@ async function deskCsv(db, { view = 'all' } = {}) {
 
 module.exports = {
   ARCHIVE_REASONS,
+  inQuietHours,
+  sendNewLeadAlerts,
+  sendOverdueReminders,
+  slaHours,
   internalPhoneKeys,
   RESPONSES,
   SOURCES,

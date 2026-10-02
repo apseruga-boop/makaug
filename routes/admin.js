@@ -11833,10 +11833,18 @@ async function runReferral(req, res, { need, onSent, relatedLeadId = null, kind 
   const agent = await leadReferral.loadReferralAgent(db, cleanText(req.body.agent_id));
   if (!agent) return res.status(400).json({ ok: false, error: 'Pick an approved makaug agent with a WhatsApp number' });
   if (!need.people.length) return res.status(400).json({ ok: false, error: 'This lead has no phone number to pass on' });
-  const generated = leadReferral.buildAgentReferralMessage({ agent, need });
+  const coveredAgent = await leadReferral.withAreaCoverage(db, agent, need.area);
+  const generated = leadReferral.buildAgentReferralMessage({ agent: coveredAgent, need });
   const body = String(req.body.text || '').trim().slice(0, 3500) || generated;
+  const notifyClients = !(req.body.notify_clients === false || req.body.notify_clients === 'false');
   if (req.body.dry_run === true || req.body.dry_run === 'true') {
-    return res.json({ ok: true, data: { text: generated, agent, people: need.people.length } });
+    const sample = need.people[0] || {};
+    const clientText = leadReferral.buildClientReferralMessage({ agent: coveredAgent, need, person: sample });
+    return res.json({ ok: true, data: {
+      text: generated, agent, people: need.people.length,
+      client_text: need.people.length > 1 && sample.name ? clientText.replace(`Hi ${String(sample.name).split(/\s+/)[0]},`, 'Hi {name},') : clientText,
+      client_count: Math.min(need.people.length, 10)
+    } });
   }
   const previewTo = cleanText(req.body.preview_to || '');
   if (previewTo && previewTo.replace(/\D/g, '').length < 9) {
@@ -11846,6 +11854,12 @@ async function runReferral(req, res, { need, onSent, relatedLeadId = null, kind 
     agent, text: body, previewTo, actor: adminActorId(req), relatedLeadId, kind
   });
   const delivered = ['queued', 'sent', 'simulated'].includes(delivery.status);
+  let clients = [];
+  if (delivered && notifyClients) {
+    clients = await leadReferral.notifyClientsOfReferral(db, {
+      agent: coveredAgent, need, overrideText: String(req.body.client_text || ''), previewTo, actor: adminActorId(req)
+    });
+  }
   if (delivered && !previewTo) {
     const referral = {
       agent_id: agent.id,
@@ -11859,7 +11873,10 @@ async function runReferral(req, res, { need, onSent, relatedLeadId = null, kind 
   }
   return res.status(delivered ? 200 : 502).json({
     ok: delivered,
-    data: { delivery, text: body, agent: { id: agent.id, full_name: agent.full_name }, preview: Boolean(previewTo) },
+    data: {
+      delivery, text: body, agent: { id: agent.id, full_name: agent.full_name }, preview: Boolean(previewTo),
+      clients_told: clients.filter((c) => ['queued', 'sent', 'simulated'].includes(c.status)).length
+    },
     error: delivered ? undefined : `WhatsApp not sent (${delivery.reason || delivery.status})`
   });
 }
@@ -11940,7 +11957,9 @@ router.post('/lead-desk/referral', async (req, res, next) => {
       text: String(req.body.text || ''),
       previewTo,
       dryRun: req.body.dry_run === true || req.body.dry_run === 'true',
-      actor: adminActorId(req)
+      actor: adminActorId(req),
+      notifyClients: !(req.body.notify_clients === false || req.body.notify_clients === 'false'),
+      clientText: String(req.body.client_text || '')
     });
     if (result.delivered && !previewTo) await writeAudit('lead_desk_referral', { agent_id: req.body.agent_id, leads: (req.body.lead_ids || []).length }, adminActorId(req));
     return deskReply(res, result);

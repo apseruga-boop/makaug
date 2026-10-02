@@ -106,7 +106,7 @@ async function run() {
   check('dry run sends nothing', (await queued(phone(1), t0)).length === beforeDry);
   const t1 = new Date().toISOString();
   const prev = await api('POST', '/api/admin/demand-gaps/referral', { ...body, text, preview_to: `+${intl(phone(25))}` });
-  check('preview goes to my number, not the agent', prev.status === 200 && (await queued(phone(25), t1)).length === 1 && (await queued(phone(1), t1)).length === 0, JSON.stringify(prev.json).slice(0, 200));
+  check('preview goes to my number (agent + client sample), not the agent', prev.status === 200 && (await queued(phone(25), t1)).length === 2 && (await queued(phone(1), t1)).length === 0, JSON.stringify(prev.json).slice(0, 200));
   const unmarked = await q(`SELECT COUNT(*)::int AS n FROM property_leads WHERE phone = ANY($1) AND payload ? 'last_referral'`, [[intl(phone(10)), intl(phone(11))]]);
   check('preview does not mark the search as referred', unmarked[0].n === 0);
   const edited = `${text}\n\n(edited by admin ${MARK})`;
@@ -114,6 +114,7 @@ async function run() {
   const toAgent = await queued(phone(1), t1);
   check('sent to the agent on the allowed bridge source', send.status === 200 && toAgent.length === 1 && toAgent[0].metadata?.source === 'whatsapp_runtime', JSON.stringify(send.json).slice(0, 200));
   check('the admin\'s edits are what the agent gets', String(toAgent[0]?.payload?.text || '').includes(`edited by admin ${MARK}`));
+  check('both people who searched are told it went to Francis', (await queued(phone(10), t1)).length === 1 && (await queued(phone(11), t1)).length === 1);
   const marked = await q(`SELECT COUNT(*)::int AS n FROM property_leads WHERE phone = ANY($1) AND payload->'last_referral'->>'agent_name' = $2`, [[intl(phone(10)), intl(phone(11))], fx.good.full_name]);
   check('all 3 search rows marked "sent to Francis"', marked[0].n === 3, `marked=${marked[0].n}`);
   const gaps = await api('GET', '/api/admin/demand-gaps?days=90&limit=100');
@@ -130,6 +131,8 @@ async function run() {
   const t2 = new Date().toISOString();
   const sendLead = await api('POST', `/api/admin/leads/${leadId}/referral`, { agent_id: fx.other.id, text: lt });
   const leadRow = (await q('SELECT lead_status, handoff_status, metadata FROM leads WHERE id = $1', [leadId]))[0];
+  const toBen = (await queued(phone(21), t2)).map((m) => m.payload?.text || '').join('\n');
+  check('Ben is told his request went to the agent', /^Hi Ben, this is makaug\.com/.test(toBen) && toBen.includes(fx.other.full_name), toBen.slice(0, 200));
   check('sent, and the lead shows referred + handed over', sendLead.status === 200 && (await queued(phone(2), t2)).length === 1 && leadRow?.handoff_status === 'referred_to_agent' && leadRow?.lead_status === 'handed_over', JSON.stringify({ s: sendLead.status, h: leadRow?.handoff_status, st: leadRow?.lead_status }));
   const activity = await q(`SELECT 1 FROM lead_activities WHERE lead_id = $1 AND activity_type = 'referred_to_agent'`, [leadId]);
   check('referral is in the lead\'s history', activity.length === 1);
