@@ -915,10 +915,8 @@ function timeGreetingWithName(lang, sessionData = {}) {
   return `${timeGreeting(lang)}${firstName ? `, ${firstName}` : ''}`;
 }
 
-function welcomeMessage(lang, sessionData = {}) {
-  const code = resolveLangCode(lang);
-  const lead = timeGreetingWithName(code, sessionData);
-  const menus = {
+function greetingMenus() {
+  return {
     en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
     lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Property ey'okusigamu ssente (investment)\n6️⃣ Yingira makaug nga agent\n7️⃣ Obuyambi ku mortgage\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
     sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n5️⃣ Mali ya uwekezaji\n6️⃣ Jiunge na makaug kama agent\n7️⃣ Msaada wa mkopo wa nyumba (mortgage)\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
@@ -929,6 +927,12 @@ function welcomeMessage(lang, sessionData = {}) {
     am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
     ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n5️⃣ Investment property\n6️⃣ Join makaug as an agent\n7️⃣ Mortgage / financing help\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
   };
+}
+
+function welcomeMessage(lang, sessionData = {}) {
+  const code = resolveLangCode(lang);
+  const lead = timeGreetingWithName(code, sessionData);
+  const menus = greetingMenus();
   return `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n\n${menus[code] || menus.en}\n\nBrowse makaug anytime: ${HOME_URL}`;
 }
 
@@ -1449,18 +1453,8 @@ function friendlyGreetingReply(lang, sessionData = {}) {
   const code = resolveLangCode(lang);
   const lead = timeGreetingWithName(code, sessionData);
   const languageLine = languageComfortLine(code);
-  const messages = {
-    en: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nTell me what you need in your own words. For example:\n• "I want to sell my house in Rubaga"\n• "I need a 2-bedroom rental in Ntinda"\n• "Find me an agent in Wakiso"\n\nYou can also reply LIST, SEARCH or AGENT.`,
-    lg: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nMbuulira ky'oyagala mu bigambo byo. Okugeza:\n• "Njagala okutunda ennyumba yange e Rubaga"\n• "Njagala ennyumba ya bedrooms 2 e Ntinda"\n• "Nfunira agent e Wakiso"\n\nOsobola n'okuddamu LIST, SEARCH oba AGENT.`,
-    sw: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nNiambie unachohitaji kwa maneno yako. Kwa mfano:\n• "Nataka kuuza nyumba yangu Rubaga"\n• "Nahitaji nyumba ya vyumba 2 Ntinda"\n• "Nitafutie agent Wakiso"\n\nUnaweza pia kujibu LIST, SEARCH au AGENT.`,
-    ac: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nCoo gin ma imito ki lok mamegi. Labolle:\n• "Amito cato ot mega i Gulu"\n• "Amito ot me bedroom 2 i Kampala"\n• "Nong agent i Wakiso"\n\nI romo bene dwoko LIST, SEARCH onyo AGENT.`,
-    ny: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nGamba eki orikwenda omu bigambo byawe. Nk'ekyokureeberaho:\n• "Ninyenda kugurisha enju yangye mu Mbarara"\n• "Ninyenda enju ya bedrooms 2 omu Ntinda"\n• "Shaka agent omu Wakiso"\n\nNoobaasa n'okugarukamu LIST, SEARCH nari AGENT.`,
-    rn: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nAndika ico ukeneye mu majambo yawe. Nk'akarorero:\n• "Nshaka kugurisha inzu yanje kuri Kabale"\n• "Nshaka inzu y'ivyumba 2 muri Ntinda"\n• "Nshakira agent muri Wakiso"\n\nUshobora kandi kwishura LIST, SEARCH canke AGENT.`,
-    sm: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nMbuulira ky'oyagala mu bigambo byo. Okugeza:\n• "Nhenda okutunda ennyumba yange e Jinja"\n• "Nhenda ennyumba ya bedrooms 2 e Ntinda"\n• "Nfunira agent e Wakiso"\n\nOsobola n'okuddamu LIST, SEARCH oba AGENT.`,
-    am: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nየሚፈልጉትን በራስዎ ቃላት ይንገሩኝ። ለምሳሌ፦\n• "ቤቴን በ Rubaga መሸጥ ፈልጋለሁ"\n• "በ Ntinda ሁለት መኝታ ቤት እፈልጋለሁ"\n• "በ Wakiso ወኪል ፈልግልኝ"\n\nLIST፣ SEARCH ወይም AGENT ብለውም መመለስ ይችላሉ።`,
-    ar: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nاكتب ما تحتاجه بطريقتك، مثلاً:\n• "أريد بيع منزلي في Rubaga"\n• "أحتاج منزلاً بغرفتين في Ntinda"\n• "ابحث لي عن وكيل في Wakiso"\n\nيمكنك أيضاً الرد LIST أو SEARCH أو AGENT.`
-  };
-  return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
+  const menus = greetingMenus();
+  return `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n${menus[code] || menus.en}\n\n${t(code, 'menuHint')}`;
 }
 
 function whatsappContactConfirmationPrompt(lang, phone) {
