@@ -13212,6 +13212,7 @@ async function agentJoinRequestReply({ phone, text = '' }) {
   let fee = 50000;
   try { fee = Number((await require('../services/billingOpsService').getSettings(db)).agent_fee?.monthly_ugx || 50000); } catch (_ignored) { /* default */ }
 
+  queueExplainerVideoOnce({ phone, kind: 'agent' });
   deferWhatsappWork('WhatsApp agent join request', async () => {
     const recent = await db.query(
       `SELECT 1 FROM audit_logs WHERE action = 'agent_join_requested' AND details->>'phone' = $1 AND created_at > NOW() - INTERVAL '12 hours' LIMIT 1`, [digits]).catch(() => ({ rows: [] }));
@@ -13244,6 +13245,40 @@ async function agentJoinRequestReply({ phone, text = '' }) {
     `Once you're approved, I'll send you a short guide showing exactly how to post.`,
     `Want to talk now? Call or WhatsApp ${contact.name} on ${contact.pretty}.`
   ].join('\n');
+}
+
+// Short explainer film, sent once (per 30 days) when someone wants to list a
+// property or join as an agent. Goes before the bot's text reply.
+const EXPLAINER_VIDEOS = {
+  lister: { path: '/assets/marketing/makaug-list-your-property-v1.mp4', caption: '🎬 *How listing on makaug works* — 45 seconds: send photos, confirm it\'s you, agree to the terms, and your property goes live. First 7 days free.' },
+  agent: { path: '/assets/marketing/makaug-join-as-agent-v1.mp4', caption: '🎬 *makaug for agents* — 40 seconds on what you get and how to join.' }
+};
+
+function queueExplainerVideoOnce({ phone, kind }) {
+  const video = EXPLAINER_VIDEOS[kind];
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!video || digits.length < 9 || IS_SOUTH_AFRICA) return;
+  deferWhatsappWork(`WhatsApp ${kind} explainer video`, async () => {
+    const recent = await db.query(
+      `SELECT 1 FROM audit_logs WHERE action = 'explainer_video_sent' AND details->>'phone' = $1 AND details->>'kind' = $2 AND created_at > NOW() - INTERVAL '30 days' LIMIT 1`,
+      [digits, kind]).catch(() => ({ rows: [] }));
+    if (recent.rows.length) return;
+    if (kind === 'lister') {
+      const agent = await db.query(
+        `SELECT 1 FROM agents WHERE status = 'approved' AND removed_at IS NULL AND RIGHT(regexp_replace(COALESCE(whatsapp, phone, ''), '\\D', '', 'g'), 9) = $1 LIMIT 1`, [digits.slice(-9)]).catch(() => ({ rows: [] }));
+      if (agent.rows.length) return;
+    }
+    await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'explainer_video_sent', $1::jsonb)`, [JSON.stringify({ phone: digits, kind })]);
+    await queueWhatsappWebBridgeMessage({
+      recipient: digits,
+      text: video.caption,
+      mediaUrl: `${HOME_URL}${video.path}`,
+      mediaType: 'video',
+      source: 'whatsapp_runtime',
+      actorId: 'system',
+      metadata: { message_kind: `explainer_video_${kind}`, reply_dedupe_key: `explainer:${kind}:${digits}` }
+    });
+  });
 }
 
 function menuRouteReply(lang, route) {
@@ -13716,6 +13751,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   }
 
   if (explicitListingStart) {
+    queueExplainerVideoOnce({ phone, kind: 'lister' });
     return routeExplicitListingStart();
   }
 
@@ -14055,7 +14091,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // GREETING
   if (step === 'greeting') {
-    if (cleanBody === '1') return respond(t(lang, 'askListingType'), 'listing_type');
+    if (cleanBody === '1') { queueExplainerVideoOnce({ phone, kind: 'lister' }); return respond(t(lang, 'askListingType'), 'listing_type'); }
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
@@ -14125,7 +14161,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       );
     }
 
-    if (cleanBody === '1') return respond(t(lang, 'askListingType'), 'listing_type');
+    if (cleanBody === '1') { queueExplainerVideoOnce({ phone, kind: 'lister' }); return respond(t(lang, 'askListingType'), 'listing_type'); }
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
