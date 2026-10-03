@@ -22,7 +22,7 @@
   if (window.__makaugSiteI18n) return;
 
   var SUPPORTED = { lg: 1, sw: 1, ac: 1, ny: 1, rn: 1, sm: 1, am: 1, ar: 1 };
-  var VERSION = "20261003-site-i18n-v3";
+  var VERSION = "20261003-site-i18n-v4";
   var ATTRS = ["placeholder", "title", "aria-label", "alt", "data-tooltip"];
   var SKIP_SELECTOR = "script,style,noscript,code,pre,[data-no-translate],[contenteditable=true]";
 
@@ -251,7 +251,7 @@
     }
     if (pending.size && !scheduled) {
       scheduled = true;
-      (window.requestAnimationFrame || window.setTimeout)(flush, 16);
+      window.setTimeout(flush, 16);
     }
   }
 
@@ -307,7 +307,7 @@
     pending.add(node);
     if (scheduled) return;
     scheduled = true;
-    (window.requestAnimationFrame || window.setTimeout)(flush, 16);
+    window.setTimeout(flush, 16);
   }
 
   function onMutations(records) {
@@ -318,7 +318,7 @@
         if (record.target === document.documentElement) {
           if (record.attributeName === "lang") {
             pending.clear();
-            if (!scheduled) { scheduled = true; (window.requestAnimationFrame || window.setTimeout)(flush, 16); }
+            if (!scheduled) { scheduled = true; window.setTimeout(flush, 16); }
             activeLang = "__changed__";
           }
           continue;
