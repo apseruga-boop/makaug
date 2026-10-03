@@ -913,9 +913,24 @@ function applyCaptureHelperUsabilityIndexPatch(html) {
   );
 }
 
+// tailwind.css is served with a 7-day immutable cache, so its URL must change
+// whenever its content does, or browsers keep an old copy that lacks new classes.
+let tailwindCssVersion = '';
+function tailwindCssCacheKey() {
+  if (tailwindCssVersion) return tailwindCssVersion;
+  try {
+    const body = require('fs').readFileSync(require('path').join(__dirname, 'assets', 'tailwind.css'));
+    tailwindCssVersion = require('crypto').createHash('sha1').update(body).digest('hex').slice(0, 12);
+  } catch (_error) {
+    tailwindCssVersion = String(runtimeBundleVersion()).slice(0, 12) || 'v1';
+  }
+  return tailwindCssVersion;
+}
+
 function injectRuntimeBundleVersion(html) {
   if (!html) return html;
   const version = JSON.stringify(runtimeBundleVersion());
+  html = html.replace('href="/assets/tailwind.css"', `href="/assets/tailwind.css?v=${tailwindCssCacheKey()}"`);
   return html.replace(
     'window.__makaugAppVersion = "__MAKAUG_BUNDLE_VERSION__";',
     `window.__makaugAppVersion = ${version};\n    document.documentElement.dataset.makaugAppVersion = window.__makaugAppVersion;`

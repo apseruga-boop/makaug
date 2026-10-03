@@ -20124,6 +20124,7 @@ function openLeadDeskCompose({ title, intro = "", endpoint, body = {}, sendLabel
     modal.id = "lead-desk-compose";
     modal.className = "fixed inset-0 z-[9999] hidden items-center justify-center bg-black/40 p-4";
     document.body.appendChild(modal);
+    adminHardenModal(modal);
   }
   modal.innerHTML = `
     <div class="w-full max-w-xl rounded-2xl bg-white shadow-xl p-5 max-h-[92vh] overflow-y-auto">
@@ -20224,6 +20225,7 @@ function openLeadDeskRemove({ ids = [], label = "" } = {}) {
     modal.id = "lead-desk-remove";
     modal.className = "fixed inset-0 z-[9999] hidden items-center justify-center bg-black/40 p-4";
     document.body.appendChild(modal);
+    adminHardenModal(modal);
   }
   modal.innerHTML = `
     <div class="w-full max-w-md rounded-2xl bg-white shadow-xl p-5">
@@ -20542,6 +20544,29 @@ function rememberLeadReferralPreviewNumber(value) {
   try { localStorage.setItem("makaug_referral_preview_to", value); } catch (_error) { /* private mode */ }
 }
 
+// Admin pop-ups must stay usable even if the browser holds an older stylesheet:
+// sit above the sticky header, dim the page, and scroll inside the window.
+function adminHardenModal(el, zIndex = 10050) {
+  if (!el) return el;
+  el.style.position = "fixed";
+  el.style.inset = "0";
+  el.style.padding = "16px";
+  el.style.alignItems = "center";
+  el.style.justifyContent = "center";
+  el.style.zIndex = String(zIndex);
+  el.style.backgroundColor = "rgba(15, 23, 42, 0.55)";
+  el.style.overscrollBehavior = "contain";
+  const box = el.firstElementChild;
+  if (box) {
+    box.style.maxHeight = "calc(100vh - 32px)";
+    box.style.overflowY = "auto";
+    box.style.margin = "auto";
+    box.style.width = "100%";
+    box.style.backgroundColor = box.style.backgroundColor || "#fff";
+  }
+  return el;
+}
+
 function ensureLeadReferralModal() {
   let modal = document.getElementById("lead-referral-modal");
   if (modal) return modal;
@@ -20561,12 +20586,12 @@ function ensureLeadReferralModal() {
       <label class="block text-xs font-bold text-gray-700 mt-4" for="lead-referral-agent">Agent</label>
       <select id="lead-referral-agent" onchange="refreshLeadReferralMessage()" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"><option value="">Loading agents…</option></select>
       <label class="block text-xs font-bold text-gray-700 mt-4" for="lead-referral-text">1. Message to the agent (you can edit it)</label>
-      <textarea id="lead-referral-text" rows="10" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono leading-snug"></textarea>
+      <textarea id="lead-referral-text" rows="7" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono leading-snug"></textarea>
       <div class="mt-4 flex items-center gap-2">
         <input id="lead-referral-notify-client" type="checkbox" checked class="w-4 h-4" onchange="document.getElementById('lead-referral-client-text').disabled = !this.checked; document.getElementById('lead-referral-send').textContent = this.checked ? 'Send to agent & client' : 'Send to agent';">
         <label for="lead-referral-notify-client" class="text-xs font-bold text-gray-700">2. Also tell <span id="lead-referral-client-count">the client</span> it has gone to this agent</label>
       </div>
-      <textarea id="lead-referral-client-text" rows="10" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono leading-snug disabled:opacity-50"></textarea>
+      <textarea id="lead-referral-client-text" rows="7" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono leading-snug disabled:opacity-50"></textarea>
       <p class="text-[11px] text-gray-500 mt-1">{name} is replaced with each person's first name. Each person gets their own message.</p>
       <div class="mt-4 grid sm:grid-cols-[1fr_auto] gap-2 items-end">
         <div>
@@ -20582,6 +20607,7 @@ function ensureLeadReferralModal() {
       </div>
     </div>`;
   document.body.appendChild(modal);
+  adminHardenModal(modal);
   return modal;
 }
 
@@ -28542,6 +28568,7 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       </div>
     </form>`;
   document.body.appendChild(wrap);
+  adminHardenModal(wrap);
   wrap.addEventListener("click", (event) => { if (event.target === wrap) adminClosePaymentModal(); });
   const form = wrap.querySelector("form");
   adminWireFx(form);
@@ -28773,6 +28800,7 @@ function adminOpenMoneyEntry(direction = "in", prefill = {}) {
       <div class="flex gap-2 justify-end"><button type="button" onclick="adminClosePaymentModal()" class="rounded-lg border border-gray-300 px-4 py-2 font-bold">Cancel</button><button type="submit" class="rounded-lg bg-green-700 px-4 py-2 font-bold text-white">Save</button></div>
     </form>`;
   document.body.appendChild(wrap);
+  adminHardenModal(wrap);
   const form = wrap.querySelector("form");
   adminWireFx(form);
   form.addEventListener("submit", async (event) => {
@@ -28903,6 +28931,7 @@ function adminBillingModal({ title, bodyHtml, submitLabel = "Send", tone = "bg-g
       <div class="flex gap-2 justify-end"><button type="button" onclick="adminClosePaymentModal()" class="rounded-lg border border-gray-300 px-4 py-2 font-bold">Cancel</button><button type="submit" class="rounded-lg ${tone} px-4 py-2 font-bold text-white">${submitLabel}</button></div>
     </form>`;
   document.body.appendChild(wrap);
+  adminHardenModal(wrap);
   wrap.addEventListener("click", (event) => { if (event.target === wrap) adminClosePaymentModal(); });
   const form = wrap.querySelector("form");
   adminWireFx(form);
