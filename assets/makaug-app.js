@@ -20306,11 +20306,15 @@ async function downloadLeadDeskCsv() {
 function renderAdminCrmOverview(summary = {}) {
   const wrap = document.getElementById("admin-crm-overview");
   if (!wrap) return;
-  const leadTotal = Number(summary.leads?.total || adminCrmLeads.length || 0);
-  const openLeads = Number(summary.leads?.open || 0);
-  const hotLeads = Number(summary.leads?.hot || 0);
-  const unassigned = Number(summary.leads?.unassigned || 0);
-  const overdueTasks = Number(summary.tasks?.overdue || 0);
+  // /api/admin/crm/summary returns { summary: { total_leads, open_leads, ... }, tasks: [{ status, total }] }.
+  const counts = summary.summary || {};
+  const taskRows = Array.isArray(summary.tasks) ? summary.tasks : [];
+  const leadTotal = Number(summary.leads?.total ?? counts.total_leads ?? adminCrmLeads.length ?? 0);
+  const openLeads = Number(summary.leads?.open ?? counts.open_leads ?? 0);
+  const hotLeads = Number(summary.leads?.hot ?? counts.hot_leads ?? 0);
+  const unassigned = Number(summary.leads?.unassigned ?? counts.unassigned_leads ?? 0);
+  const overdueTasks = Number(summary.tasks?.overdue
+    ?? (Number(counts.overdue_followups || 0) + Number(taskRows.find((row) => String(row.status) === "overdue")?.total || 0)));
   const failedNotifications = Number(summary.notifications?.failed || adminNotificationLogs.filter((row) => String(row.status || "").toLowerCase() === "failed").length || 0);
   const stat = (label, value, tone = "gray") => {
     const tones = {

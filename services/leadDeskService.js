@@ -51,7 +51,7 @@ const RESPONSES = Object.freeze({
   deal_done: 'Deal done'
 });
 
-const ARCHIVE_REASONS = Object.freeze(['old', 'duplicate', 'spam', 'fulfilled', 'not_serious', 'other']);
+const ARCHIVE_REASONS = Object.freeze(['old', 'duplicate', 'spam', 'fulfilled', 'not_serious', 'not_a_request', 'other']);
 
 function text(value, fallback = '') {
   const cleaned = String(value ?? '').trim();
@@ -98,6 +98,7 @@ const PHONE_KEY_SQL = (col) => `NULLIF(RIGHT(REGEXP_REPLACE(COALESCE(${col}, '')
  * as you like.
  */
 // Numbers that are makaug itself or its own team testing the bot — never leads.
+let extraInternalPhones = [];
 function internalPhoneKeys() {
   return String([
     process.env.LEAD_DESK_EXCLUDE_PHONES,
@@ -107,6 +108,8 @@ function internalPhoneKeys() {
     process.env.MAKAUG_WHATSAPP_NUMBER,
     process.env.MAKAUG_WHATSAPP_NUMBERS,
     process.env.WHATSAPP_BUSINESS_NUMBER,
+    process.env.AGENT_HELP_CONTACT_PHONE || '256709402189',
+    ...extraInternalPhones,
     '256780863394'
   ].filter(Boolean).join(','))
     .split(/[,;\s]+/)
@@ -127,6 +130,86 @@ function slaHours() {
   return Number.isFinite(h) && h > 0 ? Math.min(h, 72) : 2;
 }
 
+// --- Is this a real property request? ---------------------------------------
+// The WhatsApp bot logs a "search with no match" whenever it could not find a
+// listing for what someone typed — including "thanks", "please do", "reply in
+// Luganda" or an agency pasting its own advert. Those are not people wanting
+// property, so they are taken off the desk (reason not_a_request, restorable).
+const PROPERTY_WORDS = /\b(house|houses|home|homes|rent|rental|renting|let|lease|buy|buying|sale|sell|selling|land|plot|plots|acre|acres|decimal|apartment|apartments|flat|flats|room|rooms|bedroom|bedrooms|bed|hostel|office|shop|warehouse|commercial|property|properties|bungalow|mansion|villa|condo|estate|nyumba|shamba|chumba|kiwanja|ardhi|kupangisha|kukodisha|kununua|ennyumba|enju|ttaka|okupangisa|okugula|okuguula|ekisenge|amayumba)\b/i;
+const LANGUAGE_REQUEST = /\b(language|languages|luganda|lunganda|rukiga|runyankole|runyankore|swahili|kiswahili|acholi|lusoga|amharic|arabic|respond in|reply in|response in|chat in|speak)\b/i;
+const ADVERT_TEXT = /\b(welcome to|we specialize|we specialise|our services|contact us (on|at)|call us|follow us|#\w+)/i;
+const BOT_BOOKKEEPING = /^(No approved listings found[^:.]*[:.]?\s*|Auto-captured[^.]*\.?\s*|WhatsApp property request had no exact match\.?\s*)/i;
+
+let locationRegistry = null;
+function resolvePlace(textValue) {
+  const value = text(textValue);
+  if (!value) return null;
+  try {
+    locationRegistry = locationRegistry || require('../utils/ugandaLocationRegistry');
+    const direct = locationRegistry.resolveCanonicalUgandaLocation(value);
+    if (direct?.status === 'matched' && direct.match) return direct.match;
+    const fromText = typeof locationRegistry.resolveCanonicalUgandaLocationFromText === 'function'
+      ? locationRegistry.resolveCanonicalUgandaLocationFromText(value) : null;
+    if (fromText?.status === 'matched' && fromText.match) return fromText.match;
+    if (fromText && fromText.name && !fromText.status) return fromText;
+  } catch (_ignored) { /* registry unavailable */ }
+  return null;
+}
+
+function judgeDemandLead(lead = {}) {
+  const raw = lead.metadata || {};
+  const said = text(lead.message).replace(BOT_BOOKKEEPING, '').trim();
+  const areaText = text(lead.area);
+  const all = `${areaText} ${said}`.trim();
+  const place = resolvePlace(areaText) || resolvePlace(said);
+  const hasPropertyWord = PROPERTY_WORDS.test(all);
+  const hasWant = text(lead.want) && lead.want !== 'any';
+  if (ADVERT_TEXT.test(said) && said.length > 60) return { keep: false, why: 'an advert, not a request' };
+  if (LANGUAGE_REQUEST.test(all) && !hasPropertyWord) return { keep: false, why: 'asked about language, not property' };
+  if (!hasPropertyWord && !hasWant && !place) return { keep: false, why: 'no property or place mentioned' };
+  if (!hasPropertyWord && !hasWant && place && said && !resolvePlace(areaText) && said.split(/\s+/).length > 4) {
+    return { keep: false, why: 'conversation, not a request' };
+  }
+  const junkArea = !areaText || /\d{1,2}:\d{2}|^\d+$|\b(am|pm)\b/i.test(areaText) || LANGUAGE_REQUEST.test(areaText);
+  return { keep: true, area: place ? text(place.name) : (junkArea ? null : areaText), clearArea: junkArea && !place, message: said || null };
+}
+
+async function screenWhatsappDemand(db) {
+  const rows = await db.query(
+    `SELECT id, source, want, area, message, metadata
+       FROM demand_leads
+      WHERE source = 'whatsapp' AND archived_at IS NULL AND first_sent_at IS NULL
+        AND COALESCE(metadata->>'screened', '') = ''
+      ORDER BY asked_at DESC LIMIT 500`
+  ).catch(() => ({ rows: [] }));
+  let removed = 0;
+  for (const lead of rows.rows) {
+    const verdict = judgeDemandLead(lead);
+    if (!verdict.keep) {
+      await db.query(
+        `UPDATE demand_leads SET archived_at = NOW(), archived_reason = 'not_a_request', archived_by = 'screening',
+                metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('screened', 'not_a_request', 'screen_reason', $2::text, 'status_before_removal', status),
+                status = 'archived'
+          WHERE id = $1`, [lead.id, verdict.why]);
+      removed += 1;
+    } else {
+      await db.query(
+        `UPDATE demand_leads SET area = CASE WHEN $4::boolean THEN NULL ELSE COALESCE($2, area) END, message = COALESCE($3, message),
+                metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('screened', 'ok')
+          WHERE id = $1`, [lead.id, verdict.area, verdict.message, Boolean(verdict.clearArea)]);
+    }
+  }
+  return removed;
+}
+
+async function loadExtraInternalPhones(db) {
+  try {
+    const rows = await db.query(`SELECT value FROM billing_settings WHERE key = 'confirmers'`);
+    const list = Array.isArray(rows.rows[0]?.value) ? rows.rows[0].value : [];
+    extraInternalPhones = list.map((c) => String(c?.phone || '')).filter(Boolean);
+  } catch (_ignored) { /* table may not exist yet */ }
+}
+
 let fullSyncDone = false;
 
 async function syncDemandLeads(db, { days = 365, full = false } = {}) {
@@ -135,6 +218,7 @@ async function syncDemandLeads(db, { days = 365, full = false } = {}) {
   const effectiveDays = full || !fullSyncDone ? days : Math.min(Number(days) || 3, 3);
   const window = String(Math.max(1, Math.min(730, Number(effectiveDays) || 365)));
   const counts = {};
+  await loadExtraInternalPhones(db);
   const internal = internalPhoneKeys();
   const run = async (label, sql) => {
     try {
@@ -247,6 +331,12 @@ async function syncDemandLeads(db, { days = 365, full = false } = {}) {
       FROM inserted i
      WHERE dl.id = i.demand_lead_id
        AND $1::text IS NOT NULL AND $2::text[] IS NOT NULL`);
+
+  try {
+    counts.screened_out = await screenWhatsappDemand(db);
+  } catch (error) {
+    logger.warn('Lead desk screening failed', { error: error.message });
+  }
 
   // Every unsent request runs on the current target (LEAD_DESK_SLA_HOURS).
   try {
@@ -728,7 +818,7 @@ async function buildDailyReport(db) {
     lines.push('', `Agent properties waiting for review: ${agentQueue.waiting} (oldest ${agentQueue.oldest_hours}h) — approve them in Admin › Listings.`);
   }
   // Money: what came in yesterday, what nobody has checked, who is behind.
-  const money = await db.query(
+  const moneyRow = await db.query(
     `SELECT
        (SELECT COALESCE(SUM(amount_ugx), 0) FROM revenue_entries WHERE direction = 'in' AND voided_at IS NULL AND paid_at >= NOW() - INTERVAL '24 hours')::bigint AS in_24h,
        (SELECT COUNT(*) FROM revenue_entries WHERE voided_at IS NULL AND verified_status <> 'verified')::int AS unchecked,
@@ -736,8 +826,8 @@ async function buildDailyReport(db) {
        (SELECT COUNT(*) FROM agents WHERE status = 'approved' AND removed_at IS NULL AND NOT fee_exempt
           AND (paid_until IS NULL OR paid_until < (NOW() AT TIME ZONE 'Africa/Kampala')::date))::int AS overdue`
   ).then((r) => r.rows[0]).catch(() => null);
-  if (money) {
-    lines.push('', `Money in (last 24h): UGX ${Number(money.in_24h).toLocaleString('en-US')} · not yet checked: ${money.unchecked} · MoMo SMS not recorded: ${money.unrecorded_sms} · agents behind on fees: ${money.overdue} — Admin › Sales & Revenue.`);
+  if (moneyRow) {
+    lines.push('', `Money in (last 24h): UGX ${Number(moneyRow.in_24h).toLocaleString('en-US')} · not yet checked: ${moneyRow.unchecked} · MoMo SMS not recorded: ${moneyRow.unrecorded_sms} · agents behind on fees: ${moneyRow.overdue} — Admin › Sales & Revenue.`);
   }
   const urgent = desk.groups.filter((g) => g.unsent).slice(0, 10);
   if (urgent.length) {
@@ -999,6 +1089,7 @@ async function deskCsv(db, { view = 'all' } = {}) {
 }
 
 module.exports = {
+  judgeDemandLead,
   ARCHIVE_REASONS,
   inQuietHours,
   sendNewLeadAlerts,
