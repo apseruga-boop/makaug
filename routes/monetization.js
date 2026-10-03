@@ -106,7 +106,7 @@ router.post('/listing-boost/checkout', requireAuthenticatedUser, async (req, res
 router.post('/payments/webhook/:provider?', async (req, res, next) => {
   try {
     const payment = await handleGenericPaymentWebhook(db, {
-      provider: req.params.provider || process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'flutterwave',
+      provider: req.params.provider || 'external',
       payload: req.body,
       signature: req.get('verif-hash') || req.get('x-payment-signature') || req.get('x-signature') || '',
       req

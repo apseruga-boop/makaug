@@ -106,19 +106,16 @@ router.get('/packages', (_req, res) => {
 });
 
 router.get('/readiness', (_req, res) => {
-  const provider = cleanText(process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'flutterwave').toLowerCase();
-  const configured = paymentProviderConfigured();
+  const revolut = require('../services/revolutMerchantService');
   return res.json({
     ok: true,
     data: {
-      marker: 'advertising-selfserve-checkout-20260724',
-      provider,
-      provider_configured: configured,
+      marker: 'advertising-pay-links-20261003',
+      provider: 'makaug_pay_link',
+      provider_configured: true,
       hosted_checkout_only: true,
-      supported_methods: provider.includes('flutterwave')
-        ? ['mobile_money', 'card']
-        : [],
-      status: configured ? 'ready' : 'configuration_required'
+      supported_methods: revolut.isConfigured() ? ['mobile_money', 'card'] : ['mobile_money'],
+      status: 'ready'
     }
   });
 });
@@ -388,7 +385,7 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
         amount,
         cleanText(req.body.currency || 'UGX').toUpperCase().slice(0, 8),
         cleanText(req.body.payment_method || 'payment_link') || 'payment_link',
-        cleanText(process.env.PAYMENT_PROVIDER || 'manual'),
+        'makaug_pay_link',
         cleanText(req.body.due_date) || null
       ]
     );
@@ -411,7 +408,7 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
     }, { allowProviderMissing: true });
     const checkoutUrl = hostedPayment.checkoutUrl || buildProviderPaymentUrl(invoice.rows[0].id);
     const providerReference = hostedPayment.payment?.checkout_reference || invoice.rows[0].invoice_number;
-    const paymentProvider = cleanText(process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'flutterwave');
+    const paymentProvider = 'makaug_pay_link';
     const link = await db.query(
       `INSERT INTO payment_links (
         provider, amount, currency, purpose, related_campaign_id, advertiser_id,

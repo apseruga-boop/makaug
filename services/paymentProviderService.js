@@ -12,13 +12,12 @@ function clean(value) {
   return String(value || '').trim();
 }
 
+// Every checkout is a makaug pay link (makaug.com/pay/<code>): MTN MoMo always,
+// card when Revolut is switched on. There is no third-party gateway to configure.
+const PAY_LINK_PROVIDER = 'makaug_pay_link';
+
 function paymentProviderConfigured() {
-  return Boolean(
-    process.env.FLUTTERWAVE_SECRET_KEY
-    || process.env.PAYMENT_LINK_BASE_URL
-    || process.env.PAYMENT_PROVIDER_WEBHOOK_SECRET
-    || process.env.PAYMENT_PROVIDER_API_KEY
-  );
+  return true;
 }
 
 function normalizeCurrency(value = 'UGX') {
@@ -34,8 +33,8 @@ function normalizeAmount(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0;
 }
 
-function providerName(value = process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'flutterwave') {
-  return clean(value || 'flutterwave').toLowerCase();
+function providerName() {
+  return PAY_LINK_PROVIDER;
 }
 
 function buildCheckoutReference(purpose = 'payment') {
@@ -56,73 +55,6 @@ function payerPayload(payer = {}) {
     email: clean(payer.email).toLowerCase() || null,
     phone: clean(payer.phone || payer.whatsapp || payer.msisdn) || null
   };
-}
-
-function buildFlutterwavePaymentPayload({
-  reference,
-  amount,
-  currency,
-  payer,
-  purpose,
-  metadata = {},
-  redirectUrl = ''
-} = {}) {
-  const safePayer = payerPayload(payer);
-  return {
-    tx_ref: reference,
-    amount,
-    currency: normalizeCurrency(currency),
-    redirect_url: redirectUrl || `${publicBaseUrl()}/payment-status?ref=${encodeURIComponent(reference)}`,
-    customer: {
-      email: safePayer.email || 'payments@makaug.com',
-      phonenumber: safePayer.phone || '',
-      name: safePayer.name || 'makaug customer'
-    },
-    customizations: {
-      title: 'makaug.com',
-      description: `${normalizePurpose(purpose).replace(/_/g, ' ')} payment`,
-      logo: `${publicBaseUrl()}/assets/makaug-logo.png`
-    },
-    meta: {
-      purpose: normalizePurpose(purpose),
-      payment_reference: reference,
-      ...metadata
-    }
-  };
-}
-
-async function postFlutterwaveHostedPayment(payload, env = process.env) {
-  const secretKey = clean(env.FLUTTERWAVE_SECRET_KEY || env.PAYMENT_PROVIDER_API_KEY);
-  if (!secretKey) {
-    const error = new Error('Flutterwave secret key is not configured');
-    error.status = 503;
-    error.code = 'payment_provider_missing';
-    throw error;
-  }
-  const response = await fetch('https://api.flutterwave.com/v3/payments', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${secretKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(data?.message || `Flutterwave payment creation failed (${response.status})`);
-    error.status = response.status;
-    error.providerResponse = data;
-    throw error;
-  }
-  return data;
-}
-
-function hostedCheckoutUrlFromProviderResponse(providerResponse = {}) {
-  return providerResponse?.data?.link
-    || providerResponse?.data?.checkout_url
-    || providerResponse?.link
-    || providerResponse?.checkout_url
-    || null;
 }
 
 async function createHostedPayment(db, {
@@ -178,67 +110,84 @@ async function createHostedPayment(db, {
   );
 
   const payment = inserted.rows[0];
-  const requestPayload = buildFlutterwavePaymentPayload({
-    reference,
-    amount: normalizedAmount,
-    currency,
-    payer: safePayer,
-    purpose: normalizedPurpose,
-    metadata: safeMetadata,
-    redirectUrl
-  });
-
-  try {
-    const client = options.providerClient || postFlutterwaveHostedPayment;
-    const providerResponse = await client(requestPayload, options.env || process.env);
-    const checkoutUrl = hostedCheckoutUrlFromProviderResponse(providerResponse);
-    const updated = await db.query(
-      `UPDATE payments
-       SET checkout_url = $2,
-           status = $3,
-           raw_response = $4::jsonb,
-           updated_at = NOW()
-       WHERE id = $1
-       RETURNING *`,
-      [
-        payment.id,
-        checkoutUrl,
-        checkoutUrl ? 'created' : 'pending',
-        JSON.stringify({ request: requestPayload, response: providerResponse })
-      ]
-    );
-    return {
-      ok: true,
-      provider: normalizedGateway,
-      providerConfigured: true,
-      payment: updated.rows[0],
-      checkoutUrl
-    };
-  } catch (error) {
-    await db.query(
-      `UPDATE payments
-       SET status = $2,
-           raw_response = COALESCE(raw_response, '{}'::jsonb) || $3::jsonb,
-           updated_at = NOW()
-       WHERE id = $1`,
-      [
-        payment.id,
-        error.code === 'payment_provider_missing' ? 'provider_missing' : 'failed',
-        JSON.stringify({ request: requestPayload, error: error.message, provider_status: error.status || null })
-      ]
-    ).catch(() => {});
-    if (options.allowProviderMissing && error.code === 'payment_provider_missing') {
-      return {
-        ok: false,
-        provider: normalizedGateway,
-        providerConfigured: false,
-        payment: { ...payment, status: 'provider_missing' },
-        checkoutUrl: null,
-        error: error.message
-      };
-    }
+  if (normalizeCurrency(currency) !== 'UGX') {
+    const error = new Error('Payments are charged in UGX');
+    error.status = 400;
     throw error;
   }
+  const payLinks = require('./payLinkService');
+  const purposeLabel = {
+    advertising_campaign: 'advertising campaign',
+    listing_boost: 'listing boost',
+    agent_pro: 'agent plan',
+    featured_lender: 'featured lender listing'
+  }[normalizedPurpose] || normalizedPurpose.replace(/_/g, ' ');
+  const { link, url } = await payLinks.createPayLink(db, {
+    purpose: 'hosted_payment',
+    payment_id: payment.id,
+    amount_ugx: Math.round(normalizedAmount),
+    description: clean(safeMetadata.description) || `makaug ${purposeLabel}${safeMetadata.invoice_number ? ` · ${safeMetadata.invoice_number}` : ''}`,
+    payer_name: safePayer.name,
+    payer_phone: safePayer.phone
+  }, 'checkout');
+  const updated = await db.query(
+    `UPDATE payments
+     SET checkout_url = $2,
+         status = 'created',
+         raw_response = $3::jsonb,
+         updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [payment.id, url, JSON.stringify({ pay_link: link.code, redirect_url: redirectUrl || null })]
+  );
+  return {
+    ok: true,
+    provider: PAY_LINK_PROVIDER,
+    providerConfigured: true,
+    payment: updated.rows[0],
+    payLink: link,
+    checkoutUrl: url
+  };
+}
+
+/**
+ * A pay link behind a hosted payment was paid (card confirmed by Revolut, or a
+ * MoMo claim confirmed by the team): mark the payment paid and switch on what
+ * was bought — boost, campaign, invoice.
+ */
+async function completeHostedPayment(db, paymentId, { reference = '', method = '' } = {}) {
+  const updated = await db.query(
+    `UPDATE payments
+     SET status = 'paid',
+         gateway_txn_id = COALESCE(NULLIF($2, ''), gateway_txn_id),
+         raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object('paid_method', $3::text),
+         paid_at = COALESCE(paid_at, NOW()),
+         updated_at = NOW()
+     WHERE id = $1 AND status <> 'paid'
+     RETURNING *`,
+    [paymentId, clean(reference), clean(method)]
+  );
+  const payment = updated.rows[0];
+  if (!payment) return null;
+  await grantEntitlementForPayment(db, payment).catch(() => null);
+  const metadata = payment.metadata || {};
+  const campaignId = metadata.campaign_id || metadata.campaignId || null;
+  if (campaignId) await updateCampaignPayment(db, campaignId, 'paid', clean(reference) || payment.checkout_reference).catch(() => null);
+  const invoiceId = metadata.invoice_id || metadata.invoiceId || null;
+  if (invoiceId) {
+    await db.query(
+      `UPDATE invoices SET status = 'paid', payment_method = $2, payment_provider = $3, payment_reference = COALESCE(NULLIF($4, ''), payment_reference),
+              paid_at = COALESCE(paid_at, NOW()), updated_at = NOW()
+        WHERE id = $1`,
+      [invoiceId, clean(method) || 'pay_link', PAY_LINK_PROVIDER, clean(reference)]
+    ).catch(() => {});
+    await db.query(
+      `UPDATE payment_links SET status = 'paid', paid_at = COALESCE(paid_at, NOW()), updated_at = NOW() WHERE invoice_id = $1`,
+      [invoiceId]
+    ).catch(() => {});
+  }
+  paymentEvents.emit('payment.succeeded', payment);
+  return payment;
 }
 
 function normalizePaymentStatus(value) {
@@ -275,12 +224,15 @@ function normalizeGenericPaymentWebhookPayload(payload = {}) {
   return { data, reference, gatewayTxnId, status };
 }
 
-function verifyGenericPaymentWebhook({ provider = 'flutterwave', signature = '', env = process.env } = {}) {
-  const normalizedProvider = providerName(provider);
-  if (!normalizedProvider.includes('flutterwave')) return true;
-  const secret = clean(env.FLUTTERWAVE_WEBHOOK_SECRET || env.PAYMENT_PROVIDER_WEBHOOK_SECRET);
-  if (!secret) return true;
-  return clean(signature) === secret;
+// The old third-party gateway webhook. makaug pay links confirm payments with
+// Revolut (or a team member, for MoMo), so this only works with an explicitly
+// configured shared secret; without one, nothing can be marked paid through it.
+function verifyGenericPaymentWebhook({ signature = '', env = process.env } = {}) {
+  const secret = clean(env.PAYMENT_PROVIDER_WEBHOOK_SECRET);
+  if (!secret) return false;
+  const a = Buffer.from(clean(signature));
+  const b = Buffer.from(secret);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 async function grantEntitlementForPayment(db, payment = {}) {
@@ -326,7 +278,7 @@ async function grantEntitlementForPayment(db, payment = {}) {
 }
 
 async function handleGenericPaymentWebhook(db, {
-  provider = process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'flutterwave',
+  provider = PAY_LINK_PROVIDER,
   payload = {},
   signature = '',
   req = null
@@ -546,9 +498,10 @@ async function getPaymentStatus(db, paymentLinkId) {
 }
 
 module.exports = {
+  completeHostedPayment,
+  PAY_LINK_PROVIDER,
   MONETIZATION_SPINE_MARKER,
   buildCheckoutReference,
-  buildFlutterwavePaymentPayload,
   createHostedPayment,
   getPaymentStatus,
   grantEntitlementForPayment,

@@ -199,6 +199,70 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   const st2Entry = (await pool.query(`SELECT kind, account_key FROM revenue_entries WHERE reference = $1`, [stTx])).rows[0];
   check('confirming it marks the short stay paid and records it under MoMo', stConf.ok && st2Row.listing_fee_status === 'paid' && st2Entry?.kind === 'short_term_fee' && st2Entry?.account_key === 'mtn_momo', stConf.error || JSON.stringify(st2Entry));
 
+  console.log('\n6e. Ronald sets up an agent on WhatsApp');
+  const RONALD = '256709402189';
+  const NEWBIE = '256779000244';
+  async function bridge(fromPhone, body) {
+    const res = await fetch(`${BASE}/api/whatsapp/web-bridge/inbound`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-whatsapp-web-bridge-token': process.env.WHATSAPP_WEB_BRIDGE_TOKEN || 'bridge-test' },
+      body: JSON.stringify({ phone: fromPhone, body, message_id: `paycmd-${Date.now()}-${Math.random()}`, created_at: new Date().toISOString(), metadata: {} })
+    });
+    return (await res.json().catch(() => ({})))?.data?.message || '';
+  }
+  await pool.query(`DELETE FROM agents WHERE whatsapp = $1`, [NEWBIE]);
+  await pool.query(`DELETE FROM outbound_message_queue WHERE user_phone LIKE '%779000244' OR user_phone LIKE '%709402189'`);
+  const help = await bridge(RONALD, 'PAYMENT HELP');
+  check('Ronald can ask for the commands', /NEW AGENT/.test(help) && /APPROVE/.test(help), help.slice(0, 60));
+  const setup = await bridge(RONALD, 'NEW AGENT Grace Nambi 0779 000244');
+  check('NEW AGENT creates the pending agent and returns a pay link', /set up as a pending agent/.test(setup) && /\/pay\/MK/.test(setup), setup.slice(0, 140));
+  const ga = (await pool.query(`SELECT id, full_name, status FROM agents WHERE whatsapp = $1`, [NEWBIE])).rows[0];
+  check('agent record: Grace Nambi, pending', ga?.full_name === 'Grace Nambi' && ga?.status === 'pending', JSON.stringify(ga));
+  const toAgent = (await pool.query(`SELECT payload->>'text' AS t FROM outbound_message_queue WHERE user_phone LIKE '%779000244' ORDER BY created_at DESC LIMIT 1`)).rows[0]?.t || '';
+  check('the agent got the pay link on WhatsApp', /\/pay\/MK/.test(toAgent) && /UGX 50,000/.test(toAgent), toAgent.slice(0, 80));
+  const st1 = await bridge(RONALD, 'STATUS 0779000244');
+  check('STATUS says not paid yet', /not paid yet/.test(st1), st1.slice(0, 120));
+  const early2 = await bridge(RONALD, 'APPROVE 0779000244');
+  check("APPROVE refuses before payment", /hasn't paid/.test(early2), early2.slice(0, 80));
+  const stranger = await bridge('256779000255', 'STATUS 0779000244');
+  check('a non-team number cannot run commands', !/not paid yet|Grace Nambi/.test(stranger), stranger.slice(0, 80));
+  const gLinkCode = (setup.match(/\/pay\/(MK[A-Z0-9]{8})/) || [])[1];
+  const gGo = await page(`/pay/${gLinkCode}/card`, { method: 'POST' });
+  const gOrder = String(gGo.location).split('/').pop();
+  await fetch(`${MOCK}/__complete/${gOrder}`, { method: 'POST' });
+  await webhook(gOrder);
+  const toRonald = (await pool.query(`SELECT payload->>'text' AS t FROM outbound_message_queue WHERE user_phone LIKE '%709402189' AND payload->>'text' LIKE '%ready to approve%' ORDER BY created_at DESC LIMIT 1`)).rows[0]?.t || '';
+  check('Ronald is WhatsApped that Grace paid, with the APPROVE command', /Grace Nambi/.test(toRonald) && /APPROVE/.test(toRonald), toRonald.slice(0, 120));
+  const st2b = await bridge(RONALD, 'STATUS 0779000244');
+  check('STATUS now shows paid and ready to approve', /paid until/.test(st2b) && /APPROVE/.test(st2b), st2b.slice(0, 160));
+  const ok2 = await bridge(RONALD, 'APPROVE 0779000244');
+  const ga2 = (await pool.query(`SELECT status FROM agents WHERE whatsapp = $1`, [NEWBIE])).rows[0];
+  check('APPROVE approves her and sends the welcome pack', /is approved/.test(ok2) && ga2.status === 'approved', ok2.slice(0, 160));
+
+  console.log('\n6f. Advertising checks out with a pay link (no Flutterwave)');
+  const camp = (await pool.query(`INSERT INTO advertising_campaigns (advertiser_name, campaign_name) VALUES ('Paytest Ads Ltd', 'PAYTEST banner') RETURNING id`)).rows[0];
+  const inv = (await pool.query(`INSERT INTO invoices (invoice_number, campaign_id, amount, currency, status) VALUES ($1, $2, 150000, 'UGX', 'issued') RETURNING id`, [`PAYTEST-INV-${Date.now()}`, camp.id])).rows[0];
+  const { createHostedPayment } = require('../services/paymentProviderService');
+  const dbx = require('../config/database');
+  const hosted = await createHostedPayment(dbx, { purpose: 'advertising_campaign', amount: 150000, currency: 'UGX', payer: { name: 'Paytest Ads', phone: '256779000266' }, metadata: { campaign_id: camp.id, invoice_id: inv.id } });
+  check('advertising checkout is a makaug pay link', hosted.provider === 'makaug_pay_link' && /\/pay\/MK/.test(hosted.checkoutUrl || ''), hosted.checkoutUrl);
+  const adCode = hosted.checkoutUrl.split('/pay/')[1];
+  const adPage = await page(`/pay/${adCode}`);
+  check('the page shows UGX 150,000', adPage.text.includes('UGX 150,000'));
+  const adGo = await page(`/pay/${adCode}/card`, { method: 'POST' });
+  const adOrder = String(adGo.location).split('/').pop();
+  await fetch(`${MOCK}/__complete/${adOrder}`, { method: 'POST' });
+  await webhook(adOrder);
+  const campRow = (await pool.query('SELECT payment_status, status FROM advertising_campaigns WHERE id = $1', [camp.id])).rows[0];
+  const invRow = (await pool.query('SELECT status FROM invoices WHERE id = $1', [inv.id])).rows[0];
+  const payRow = (await pool.query('SELECT status FROM payments WHERE id = $1', [hosted.payment.id])).rows[0];
+  const adEntry = (await pool.query(`SELECT kind, account_key FROM revenue_entries WHERE reference = $1`, [adOrder])).rows[0];
+  check('campaign, invoice and payment all marked paid', campRow.payment_status === 'paid' && invRow.status === 'paid' && payRow.status === 'paid', JSON.stringify({ campRow, invRow, payRow }));
+  check('ledger entry kind advertising under Revolut', adEntry?.kind === 'advertising' && adEntry?.account_key === 'revolut_whispers', JSON.stringify(adEntry));
+  const oldHook = await fetch(`${BASE}/api/monetization/payments/webhook/flutterwave`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: { tx_ref: hosted.payment.checkout_reference, status: 'successful' } }) });
+  check('the old gateway webhook can no longer mark anything paid', oldHook.status === 401 || oldHook.status >= 400, String(oldHook.status));
+  await dbx.pool?.end?.().catch?.(() => {});
+
   console.log('\n7. Webhook signing');
   const connect = await api('POST', '/revenue/card-payments/connect');
   check('webhook registered with Revolut', connect.ok && connect.data?.configured && /\/api\/pay\/webhooks\/revolut$/.test(connect.data?.url || ''), connect.error || connect.data?.url);

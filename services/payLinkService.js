@@ -21,7 +21,9 @@ const billingOps = require('./billingOpsService');
 const revolut = require('./revolutMerchantService');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const PURPOSES = new Set(['listing_fee', 'agent_subscription', 'short_term_fee', 'other']);
+const PURPOSES = new Set(['listing_fee', 'agent_subscription', 'short_term_fee', 'hosted_payment', 'other']);
+// What a hosted payment (advertising, boosts…) counts as in the ledger.
+const HOSTED_KINDS = { advertising_campaign: 'advertising', listing_boost: 'listing_boost' };
 
 function site() {
   return billingOps.SITE();
@@ -85,6 +87,7 @@ async function createPayLink(db, input = {}, actor = 'admin') {
   let propertyId = null;
   let agentId = null;
   let stListingId = null;
+  let paymentId = null;
 
   if (purpose === 'listing_fee') {
     const property = (await db.query('SELECT id, title, lister_name, lister_phone, agent_id FROM properties WHERE id = $1::uuid', [input.property_id])).rows[0];
@@ -114,6 +117,14 @@ async function createPayLink(db, input = {}, actor = 'admin') {
     description = description || `makaug short stay — ${Number(st.listing_term_months || 3)} months: ${st.title || st.reference}`.slice(0, 200);
     payerName = payerName || st.host_name || null;
     payerPhone = payerPhone || digits(st.host_phone) || null;
+  } else if (purpose === 'hosted_payment') {
+    const pay = (await db.query('SELECT id, purpose, amount, currency, payer_name, payer_phone FROM payments WHERE id = $1::uuid', [input.payment_id])).rows[0];
+    if (!pay) throw revenue.httpError(404, 'Payment not found');
+    paymentId = pay.id;
+    amountUgx = amountUgx || Math.round(Number(pay.amount));
+    description = description || `makaug ${String(pay.purpose || 'payment').replace(/_/g, ' ')}`;
+    payerName = payerName || pay.payer_name || null;
+    payerPhone = payerPhone || digits(pay.payer_phone) || null;
   } else {
     if (!(amountUgx >= 1000)) throw revenue.httpError(400, 'Enter the amount in UGX (at least 1,000).');
     description = description || 'makaug.com payment';
@@ -138,10 +149,10 @@ async function createPayLink(db, input = {}, actor = 'admin') {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       const link = (await db.query(
-        `INSERT INTO pay_links (code, purpose, property_id, agent_id, st_listing_id, description, amount_ugx, card_currency, card_amount_minor, fx_rate_ugx,
+        `INSERT INTO pay_links (code, purpose, property_id, agent_id, st_listing_id, payment_id, description, amount_ugx, card_currency, card_amount_minor, fx_rate_ugx,
                                 payer_name, payer_phone, created_by)
-         VALUES ($1, $2, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
-        [newCode(), purpose, propertyId, agentId, stListingId, description, amountUgx, card.currency, minor, card.rate, payerName, payerPhone, actor]
+         VALUES ($1, $2, $3::uuid, $4::uuid, $5::uuid, $6::uuid, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+        [newCode(), purpose, propertyId, agentId, stListingId, paymentId, description, amountUgx, card.currency, minor, card.rate, payerName, payerPhone, actor]
       )).rows[0];
       return { link, url: payUrl(link.code), reused: false };
     } catch (error) {
@@ -282,16 +293,21 @@ async function markShortTermPaid(db, { stListingId, method, reference, amountUgx
   return updated;
 }
 
+/** Advertising, boosts…: record the money, then switch on what was bought. */
+async function recordHostedPayment(db, { paymentId, payment, actor }) {
+  const pay = (await db.query('SELECT id, purpose FROM payments WHERE id = $1::uuid', [paymentId])).rows[0];
+  const kind = HOSTED_KINDS[pay?.purpose] || 'other_income';
+  const entry = await revenue.recordEntry(db, { ...payment, direction: 'in', kind, note: [payment.note, pay?.purpose ? `for ${pay.purpose.replace(/_/g, ' ')}` : ''].filter(Boolean).join(' · ') }, actor);
+  const completed = await require('./paymentProviderService').completeHostedPayment(db, paymentId, { reference: payment.reference, method: payment.method });
+  return { entry, completed };
+}
+
 /** Record a short-stay fee in the ledger and mark the listing paid. */
 async function recordShortTermPayment(db, { stListingId, payment, actor }) {
   const entry = await revenue.recordEntry(db, { ...payment, direction: 'in', kind: 'short_term_fee' }, actor);
   await db.query('UPDATE revenue_entries SET st_listing_id = $2::uuid WHERE id = $1', [entry.id, stListingId]);
   const listing = await markShortTermPaid(db, { stListingId, method: payment.method, reference: payment.reference, amountUgx: entry.amount_ugx, actor });
   return { entry, listing };
-}
-
-function teamApproveLine(agentId) {
-  return `${site()}/admin#agents`;
 }
 
 /**
@@ -314,13 +330,20 @@ async function pendingAgentPaid(db, agent, { how = 'card', amountUgx } = {}) {
   }
   try {
     const desk = require('./leadDeskService');
-    if (typeof desk.sendToTeam === 'function') {
-      await desk.sendToTeam(db, [
+    const alertBody = [
         `💳 *New agent has PAID — ready to approve*`,
         `${agent.full_name || 'Agent'} (+${to}) paid ${billingOps.ugx(amountUgx)} by ${how}.`,
-        `Finish their checks and approve them in the admin (Agents). The payment is already recorded, so approving won't ask for it again.`,
-        teamApproveLine(agent.id)
-      ].join('\n'), 'agent_paid_pending');
+        `Finish their checks, then reply *APPROVE +${to}* here (or approve in Admin › Agents). The payment is already recorded.`
+      ].join('\n');
+    if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, alertBody, 'agent_paid_pending');
+    // The people who confirm payments (Ronald, Arthur) always hear, even if not on the alert list.
+    const onList = new Set((typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).map((p) => digits(p).slice(-9)));
+    const settings = await billingOps.getSettings(db).catch(() => ({}));
+    for (const c of Array.isArray(settings.confirmers) ? settings.confirmers : []) {
+      const num = digits(c?.phone);
+      if (num.length >= 9 && !onList.has(num.slice(-9))) {
+        await handoff.deliverWhatsapp({ to: num, body: alertBody, kind: 'agent_paid_pending_confirmer', leadId: null, nonce: `${agent.id}:${num}` }).catch(() => null);
+      }
     }
   } catch (error) {
     logger.warn('Team alert for a paid pending agent failed', { agentId: agent.id, error: error.message });
@@ -374,6 +397,8 @@ async function settleFromOrder(db, link, order) {
       recorded.pendingAgent = await pendingAgentPaid(db, agent, { how: 'card', amountUgx: claimed.amount_ugx });
     } else if (claimed.purpose === 'short_term_fee' && claimed.st_listing_id) {
       recorded = await recordShortTermPayment(db, { stListingId: claimed.st_listing_id, payment, actor: 'revolut' });
+    } else if (claimed.purpose === 'hosted_payment' && claimed.payment_id) {
+      recorded = await recordHostedPayment(db, { paymentId: claimed.payment_id, payment, actor: 'revolut' });
     } else {
       recorded = { entry: await revenue.recordEntry(db, { ...payment, direction: 'in', kind: 'other_income' }, 'revolut') };
     }
@@ -547,6 +572,7 @@ module.exports = {
   createMomoClaim,
   closeLinkForClaim,
   recordShortTermPayment,
+  recordHostedPayment,
   pendingAgentPaid,
   listPayLinks,
   cancelPayLink,

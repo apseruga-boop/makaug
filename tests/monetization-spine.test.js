@@ -35,28 +35,17 @@ contains('services/paymentProviderService.js', 'grantEntitlementForPayment');
 
 const {
   MONETIZATION_SPINE_MARKER,
-  buildFlutterwavePaymentPayload
+  PAY_LINK_PROVIDER,
+  paymentProviderConfigured
 } = require('../services/paymentProviderService');
 
 assert.strictEqual(MONETIZATION_SPINE_MARKER, 'monetization-spine-v1-20260715');
-const hostedPayload = buildFlutterwavePaymentPayload({
-  reference: 'mk-test-ref',
-  amount: 50000,
-  currency: 'UGX',
-  payer: {
-    name: 'QA Buyer',
-    email: 'qa@example.com',
-    phone: '+256760112587'
-  },
-  purpose: 'listing_boost',
-  redirectUrl: 'https://makaug.com/payment/return',
-  metadata: { listing_id: 'listing-1' }
-});
-assert.strictEqual(hostedPayload.tx_ref, 'mk-test-ref');
-assert.strictEqual(hostedPayload.amount, 50000);
-assert.strictEqual(hostedPayload.currency, 'UGX');
-assert.strictEqual(hostedPayload.customer.email, 'qa@example.com');
-assert.ok(!JSON.stringify(hostedPayload).match(/card_number|cvv|pin|mobile_money_number/i), 'hosted payload must not collect sensitive payment details');
+// Checkouts are makaug pay links (card via Revolut, or MTN MoMo); no third-party gateway.
+assert.strictEqual(PAY_LINK_PROVIDER, 'makaug_pay_link');
+assert.strictEqual(paymentProviderConfigured(), true);
+contains('services/paymentProviderService.js', "purpose: 'hosted_payment'");
+contains('services/paymentProviderService.js', 'completeHostedPayment');
+assert.ok(!read('services/paymentProviderService.js').match(/flutterwave/i), 'no Flutterwave left in the payment service');
 
 contains('routes/advertising.js', 'createHostedPayment');
 contains('routes/advertising.js', "purpose: 'advertising_campaign'");

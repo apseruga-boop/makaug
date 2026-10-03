@@ -13221,9 +13221,13 @@ async function agentJoinRequestReply({ phone, text = '' }) {
     let payLine = '';
     if (existing && existing.status === 'pending') {
       const link = await require('../services/payLinkService').createPayLink(db, { purpose: 'agent_subscription', agent_id: existing.id }, 'agent_join').catch(() => null);
-      if (link?.url) payLine = `Their pay link (card or MoMo): ${link.url} — send it from Admin › Agents › 💳 Send pay link, or forward this.`;
+      if (link?.url) payLine = `Their pay link (card or MoMo): ${link.url}\nTo WhatsApp it to them reply *PAY LINK* +${digits}. When they pay you'll hear here; then reply *APPROVE* +${digits}.`;
     } else {
-      payLine = `Once they have registered on makaug.com (Find Brokers › Register as Broker), open them in Admin › Agents and tap *💳 Send pay link*. When they pay you'll get a message here and can approve them.`;
+      payLine = [
+        `Set them up and send their pay link from right here — reply:`,
+        `*NEW AGENT* their name +${digits}`,
+        `You'll get a message here when they pay; then reply *APPROVE* +${digits}. (Type *PAYMENT HELP* for all commands.)`
+      ].join('\n');
     }
     const body = [
       '🧑‍💼 *New agent wants to join makaug*',
@@ -15571,6 +15575,16 @@ async function processInboundRuntimeUnlocked({
       metadata: loggedInboundMetadata
     }
   });
+
+  // Team payment commands (NEW AGENT / PAY LINK / STATUS / APPROVE) from
+  // Ronald or Arthur's numbers come before anything else reads the message.
+  const teamBillingReply = await require('../services/teamBillingCommandService')
+    .handleTeamBillingCommand(db, { phone, body: effectiveBody })
+    .catch((error) => {
+      logger.warn('Team billing command failed:', error.message || String(error));
+      return null;
+    });
+  if (teamBillingReply) return { message: teamBillingReply, nextStep: sessionStep };
 
   // Payments first: a transaction ID or receipt must never be read as a property.
   const paymentReply = await handlePaymentClaimMessage({

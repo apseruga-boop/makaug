@@ -380,6 +380,9 @@ async function confirmClaim(db, { claimId, actor, method, accountKey, amountUgx,
     result = await recordListingPayment(db, { propertyId: claim.property_id, payment, actor });
   } else if (claim.purpose === 'short_term_fee' && claim.st_listing_id) {
     result = await require('./payLinkService').recordShortTermPayment(db, { stListingId: claim.st_listing_id, payment, actor });
+  } else if (claim.purpose === 'hosted_payment' && claim.pay_link_id) {
+    const link = (await db.query('SELECT payment_id FROM pay_links WHERE id = $1', [claim.pay_link_id])).rows[0];
+    result = await require('./payLinkService').recordHostedPayment(db, { paymentId: link?.payment_id, payment, actor });
   } else {
     result = { entry: await revenue.recordEntry(db, { ...payment, direction: 'in', kind: 'other_income' }, actor) };
   }
