@@ -45,8 +45,10 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   await pool.query(`DELETE FROM payment_claims WHERE source = 'pay_link'`);
   await pool.query(`DELETE FROM revenue_entries WHERE account_key = 'revolut_whispers' OR reference LIKE 'PAYTEST%'`);
   await pool.query(`DELETE FROM properties WHERE title LIKE 'PAYTEST %'`);
+  await pool.query(`DELETE FROM revenue_entries WHERE reference LIKE 'PAYTESTMM%'`);
   await pool.query(`DELETE FROM revenue_entries WHERE reference LIKE 'PAYTESTST%'`);
   await pool.query(`DELETE FROM agents WHERE whatsapp = '256779000199'`);
+  await api('PUT', '/revenue/settings/lister_fee', { value: { free_days: 7, monthly_ugx: 25000, views_message_day: 3, start_date: '2026-10-05' } });
   await api('PUT', '/revenue/settings/pay_to', { value: { method: 'MTN Mobile Money', number: '256780863394', name: 'MAKAUG ONLINE REAL ESTATE LTD' } });
 
   const mk = (title) => pool.query(
@@ -62,8 +64,8 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   const created = await api('POST', '/revenue/pay-links', { purpose: 'listing_fee', property_id: p1, send_to: '447757773202' });
   const link = created.data?.link || {};
   check('link created', created.ok && /^MK[A-Z0-9]{8}$/.test(link.code || ''), created.error || link.code);
-  check('amount is the lister fee', Number(link.amount_ugx) === 20000, String(link.amount_ugx));
-  check('card price is UGX / rate, rounded up', link.card_amount_minor === 541 && link.card_currency === 'USD', `${link.card_amount_minor} ${link.card_currency}`);
+  check('amount is the lister fee', Number(link.amount_ugx) === 25000, String(link.amount_ugx));
+  check('card price is UGX / rate, rounded up', link.card_amount_minor === 676 && link.card_currency === 'USD', `${link.card_amount_minor} ${link.card_currency}`);
   check('WhatsApp attempted to the test number', created.data?.sent?.to === '447757773202', JSON.stringify(created.data?.sent));
   const again = await api('POST', '/revenue/pay-links', { purpose: 'listing_fee', property_id: p1 });
   check('second request reuses the open link', again.data?.reused === true && again.data?.link?.code === link.code);
@@ -71,7 +73,7 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   console.log('\n2. Public page');
   const view = await page(`/pay/${link.code}`);
   check('page loads', view.status === 200, String(view.status));
-  check('shows UGX amount, card price and MoMo number', view.text.includes('UGX 20,000') && view.text.includes('$5.41') && view.text.includes('0780 863394'));
+  check('shows UGX amount, card price and MoMo number', view.text.includes('UGX 25,000') && view.text.includes('$6.76') && view.text.includes('0780 863394'));
   check('page is noindex', view.text.includes('noindex'));
   check('unknown code is 404', (await page('/pay/MKZZZZZZZZ')).status === 404);
   check('nonsense code is 404, not an error', (await page('/pay/%27%3Bdrop')).status === 404);
@@ -89,7 +91,7 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   const hook = await webhook(orderId);
   check('webhook after payment records it', hook.status === 200 && hook.json?.result?.paid === true, JSON.stringify(hook.json));
   const entry = (await pool.query(`SELECT * FROM revenue_entries WHERE reference = $1`, [orderId])).rows;
-  check('one ledger entry, Revolut account, verified, USD kept', entry.length === 1 && entry[0].account_key === 'revolut_whispers' && entry[0].verified_status === 'verified' && entry[0].currency === 'USD' && Number(entry[0].amount_original) === 5.41,
+  check('one ledger entry, Revolut account, verified, USD kept', entry.length === 1 && entry[0].account_key === 'revolut_whispers' && entry[0].verified_status === 'verified' && entry[0].currency === 'USD' && Number(entry[0].amount_original) === 6.76,
     JSON.stringify(entry[0] && { a: entry[0].account_key, v: entry[0].verified_status, c: entry[0].currency, o: entry[0].amount_original, u: entry[0].amount_ugx }));
   check('kind listing_fee linked to the listing', entry[0]?.kind === 'listing_fee' && entry[0]?.property_id === p1);
   const prop = (await pool.query('SELECT lister_paid_until FROM properties WHERE id = $1', [p1])).rows[0];
@@ -261,7 +263,60 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   check('ledger entry kind advertising under Revolut', adEntry?.kind === 'advertising' && adEntry?.account_key === 'revolut_whispers', JSON.stringify(adEntry));
   const oldHook = await fetch(`${BASE}/api/monetization/payments/webhook/flutterwave`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: { tx_ref: hosted.payment.checkout_reference, status: 'successful' } }) });
   check('the old gateway webhook can no longer mark anything paid', oldHook.status === 401 || oldHook.status >= 400, String(oldHook.status));
-  await dbx.pool?.end?.().catch?.(() => {});
+
+  console.log('\n6g. Free by rule: old agents and found-online listings are never charged');
+  await pool.query(`DELETE FROM agents WHERE whatsapp = '256779000277'`);
+  const oldAgent = (await pool.query(
+    `INSERT INTO agents (full_name, phone, whatsapp, status, licence_number, fee_exempt, fee_exempt_reason) VALUES ('Old Timer', '256779000277', '256779000277', 'approved', 'OLD-1', true, 'Approved before the monthly fee started') RETURNING id`)).rows[0];
+  const oldLink = await api('POST', '/revenue/pay-links', { purpose: 'agent_subscription', agent_id: oldAgent.id });
+  check('no pay link can be made for an agent who joined before the fee', oldLink.status === 409 && /lists for free/.test(oldLink.error || ''), `${oldLink.status} ${oldLink.error}`);
+  const oldCmd = await bridge(RONALD, 'PAY LINK 0779000277');
+  check('Ronald is told the old agent lists for free', /list for free/.test(oldCmd), oldCmd.slice(0, 100));
+  const fo = (await pool.query(
+    `INSERT INTO properties (listing_type, title, description, district, area, status, lister_name, lister_phone, source, listed_via, created_at)
+     VALUES ('rent', 'PAYTEST found online flat', 'test', 'Kampala', 'Kololo', 'approved', 'TikTok poster', '256779000288', 'found_online_property_source_v1', 'found_online', NOW() - INTERVAL '12 days') RETURNING id`)).rows[0];
+  const foLink = await api('POST', '/revenue/pay-links', { purpose: 'listing_fee', property_id: fo.id });
+  check('no pay link for a found-online listing', foLink.status === 409 && /Found-online/.test(foLink.error || ''), `${foLink.status} ${foLink.error}`);
+  const foMsg = await api('POST', `/revenue/listings/${fo.id}/billing-message`, { kind: 'reminder' });
+  check('no fee reminder can be sent for a found-online listing', foMsg.status === 409, String(foMsg.status));
+  const foSum = await api('GET', '/revenue/summary');
+  check('found-online listings never appear in the fee list', !(foSum.data?.listers || []).some((l) => l.id === fo.id));
+  const foCmd = await bridge(RONALD, 'PAY LINK 0779000288');
+  check('PAY LINK by phone ignores found-online listings', /Nobody on/.test(foCmd), foCmd.slice(0, 80));
+
+  console.log('\n6h. Free week ends: reminder with link goes by itself, once');
+  await api('PUT', '/revenue/settings/lister_fee', { value: { free_days: 7, monthly_ugx: 25000, views_message_day: 3, start_date: '2026-09-01' } });
+  const dueP = (await pool.query(
+    `INSERT INTO properties (listing_type, title, description, district, area, status, lister_name, lister_phone, created_at, reviewed_at)
+     VALUES ('rent', 'PAYTEST due bedsitter', 'test', 'Wakiso', 'Kira', 'approved', 'Due Daisy', '256779000299', NOW() - INTERVAL '8 days', NOW() - INTERVAL '8 days') RETURNING id`)).rows[0];
+  await pool.query(`DELETE FROM outbound_message_queue WHERE user_phone LIKE '%779000299'`);
+  // Run the scheduler the way the server does: messages go to the WhatsApp queue.
+  process.env.WHATSAPP_DELIVERY_MODE = 'web_bridge';
+  process.env.WHATSAPP_WEB_BRIDGE_ENABLED = 'true';
+  const billing = require('../services/billingOpsService');
+  const dbx2 = require('../config/database');
+  const run1 = await billing.runListerDueReminders(dbx2);
+  const dueMsg = (await pool.query(`SELECT payload->>'text' AS t FROM outbound_message_queue WHERE user_phone LIKE '%779000299' ORDER BY created_at DESC LIMIT 1`)).rows[0]?.t || '';
+  check('lister whose free week ended gets the reminder with a pay link and UGX 25,000', /free week/.test(dueMsg) && /\/pay\/MK/.test(dueMsg) && /25,000/.test(dueMsg), dueMsg.slice(0, 160));
+  await billing.runListerDueReminders(dbx2);
+  const dueCount = Number((await pool.query(`SELECT COUNT(*) FROM outbound_message_queue WHERE user_phone LIKE '%779000299'`)).rows[0].count);
+  check('it is only sent once', dueCount === 1, String(dueCount));
+  check('found-online listing was not reminded', !(run1.sent || []).some((x) => x.id === fo.id));
+
+  console.log('\n6i. Confirmations close the loop');
+  const cardTeam = (await pool.query(`SELECT payload->>'text' AS t FROM outbound_message_queue WHERE payload->>'text' LIKE '%Card payment received%' ORDER BY created_at DESC LIMIT 1`)).rows[0]?.t || '';
+  check('team is told about card payments', /Card payment received/.test(cardTeam), cardTeam.slice(0, 80));
+  await pool.query(`DELETE FROM agents WHERE whatsapp = '256779000311'`);
+  const mmAgent = (await pool.query(`INSERT INTO agents (full_name, phone, whatsapp, status, licence_number, fee_exempt) VALUES ('Momo Pending', '256779000311', '256779000311', 'pending', 'MM-1', false) RETURNING id`)).rows[0];
+  const mmL = await api('POST', '/revenue/pay-links', { purpose: 'agent_subscription', agent_id: mmAgent.id });
+  const mmTx = `PAYTESTMM${String(Date.now()).slice(-6)}`;
+  await page(`/pay/${mmL.data.link.code}/momo`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `reference=${mmTx}` });
+  const mmClaim = (await pool.query(`SELECT id FROM payment_claims WHERE reference = $1`, [mmTx])).rows[0];
+  await api('POST', `/revenue/claims/${mmClaim.id}/confirm`, { method: 'mtn_momo' });
+  const mmMsgs = (await pool.query(`SELECT payload->>'text' AS t FROM outbound_message_queue WHERE user_phone LIKE '%779000311' ORDER BY created_at`)).rows.map((r) => r.t).join(' || ');
+  check('pending agent paying by MoMo is told "finishing your checks", never "live again"', /finishing your checks/.test(mmMsgs) && !/live again/.test(mmMsgs), mmMsgs.slice(-160));
+  const stHostMsg = (await pool.query(`SELECT payload->>'text' AS t FROM outbound_message_queue WHERE user_phone LIKE '%779000233' AND payload->>'text' LIKE '%Payment received%' ORDER BY created_at DESC LIMIT 1`)).rows[0]?.t || '';
+  check('short-stay host paying by MoMo gets a payment-received message', /Payment received/.test(stHostMsg), stHostMsg.slice(0, 100) || '(none)');
 
   console.log('\n7. Webhook signing');
   const connect = await api('POST', '/revenue/card-payments/connect');

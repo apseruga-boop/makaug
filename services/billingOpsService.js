@@ -17,6 +17,7 @@
 const logger = require('../config/logger');
 const revenue = require('./revenueService');
 const { agentGreetingName } = require('./agentNameService');
+const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
 const SITE = () => String(process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
 let settingsCache = { at: 0, value: null };
@@ -290,7 +291,8 @@ async function payerContext(db, phone) {
   if (agent) return { agent, purpose: 'agent_subscription' };
   const property = (await db.query(
     `SELECT id, title, lister_paid_until FROM properties
-      WHERE agent_id IS NULL AND RIGHT(REGEXP_REPLACE(COALESCE(lister_phone, ''), '[^0-9]', '', 'g'), 9) = $1
+      WHERE agent_id IS NULL AND NOT ${foundOnlinePropertySql('properties')}
+        AND RIGHT(REGEXP_REPLACE(COALESCE(lister_phone, ''), '[^0-9]', '', 'g'), 9) = $1
         AND status IN ('approved', 'pending', 'hidden')
       ORDER BY updated_at DESC LIMIT 1`,
     [key]
@@ -415,7 +417,7 @@ async function rejectClaim(db, { claimId, actor, note }) {
 
 async function recordListingPayment(db, { propertyId, payment, actor }) {
   const settings = await getSettings(db);
-  const fee = Number(settings.lister_fee?.monthly_ugx || 20000);
+  const fee = Number(settings.lister_fee?.monthly_ugx || 25000);
   const property = (await db.query('SELECT id, title, lister_paid_until, lister_billing_suspended_at, extra_fields FROM properties WHERE id = $1::uuid', [propertyId])).rows[0];
   if (!property) throw revenue.httpError(404, 'Listing not found');
   const entry = revenue.normalizeEntry(payment);
@@ -479,7 +481,7 @@ const LISTER_MESSAGE_KINDS = ['views', 'reminder', 'final_reminder', 'taken_down
 
 async function buildListerMessage(db, kind, property, settings, payLink = '') {
   const name = String(property.lister_name || '').trim().split(/\s+/)[0] || 'there';
-  const fee = Number(settings.lister_fee?.monthly_ugx || 20000);
+  const fee = Number(settings.lister_fee?.monthly_ugx || 25000);
   const pay = payToLine(settings);
   const link = `${SITE()}/property/${property.id}`;
   const title = property.title || 'property';
@@ -524,10 +526,12 @@ async function buildListerMessage(db, kind, property, settings, payLink = '') {
 async function sendListerBillingMessage(db, { propertyId, kind, actor = 'admin', textOverride = '' }) {
   if (!LISTER_MESSAGE_KINDS.includes(kind)) throw revenue.httpError(400, 'Unknown message');
   const property = (await db.query(
-    `SELECT id, title, lister_name, lister_phone, status, created_at, reviewed_at, lister_paid_until, lister_billing_log, agent_id
+    `SELECT id, title, lister_name, lister_phone, status, created_at, reviewed_at, lister_paid_until, lister_billing_log, agent_id,
+            ${foundOnlinePropertySql('properties')} AS found_online
        FROM properties WHERE id = $1::uuid`, [propertyId])).rows[0];
   if (!property) throw revenue.httpError(404, 'Listing not found');
   if (property.agent_id) throw revenue.httpError(409, 'This listing belongs to an agent — use the agent fee instead');
+  if (property.found_online) throw revenue.httpError(409, 'Found-online listings are free — nobody is charged for them');
   const settings = await getSettings(db, { fresh: true });
   if (['views', 'reminder', 'final_reminder'].includes(kind) && !payToLine(settings)) {
     throw revenue.httpError(409, 'Set the pay-to number and registered name first (Sales & Revenue › Settings).');
@@ -568,8 +572,7 @@ async function listerBillingRows(db) {
   const rows = (await db.query(
     `SELECT id, title, lister_name, lister_phone, status, created_at, reviewed_at, lister_paid_until, lister_billing_log, lister_billing_suspended_at
        FROM properties
-      WHERE agent_id IS NULL AND COALESCE(source, '') NOT IN ('found_online_property_source_v1')
-        AND COALESCE(listed_via, '') <> 'found_online'
+      WHERE agent_id IS NULL AND NOT ${foundOnlinePropertySql('properties')}
         AND status IN ('approved', 'hidden') AND created_at >= $1::date
         AND (status = 'approved' OR lister_billing_suspended_at IS NOT NULL)
       ORDER BY created_at DESC LIMIT 300`,
@@ -611,6 +614,27 @@ async function runListerViewsMessages(db) {
   return { sent };
 }
 
+/**
+ * Daily: when a private listing's free week has just ended, send the
+ * reminder with its pay link — once. Taking a listing down stays a person's call.
+ */
+async function runListerDueReminders(db) {
+  const settings = await getSettings(db, { fresh: true });
+  if (!payToLine(settings)) return { skipped: 'pay_to_not_set' };
+  const rows = await listerBillingRows(db);
+  const sent = [];
+  for (const p of rows) {
+    if (p.billing_state !== 'due' || p.lister_billing_log?.reminder || Number(p.days_overdue) > 2) continue;
+    try {
+      const r = await sendListerBillingMessage(db, { propertyId: p.id, kind: 'reminder', actor: 'scheduler' });
+      sent.push({ id: p.id, status: r.status });
+    } catch (error) {
+      logger.warn('Lister due reminder failed', { propertyId: p.id, error: error.message });
+    }
+  }
+  return { sent };
+}
+
 let billingTimer = null;
 let lastBillingRunDay = '';
 function startBillingScheduler(db) {
@@ -623,7 +647,8 @@ function startBillingScheduler(db) {
     try {
       const agents = await runAgentFeeReminders(db);
       const listers = await runListerViewsMessages(db);
-      logger.info('Billing reminders run', { agents, listers });
+      const listersDue = await runListerDueReminders(db);
+      logger.info('Billing reminders run', { agents, listers, listersDue });
     } catch (error) {
       logger.warn('Billing reminders failed', { error: error.message });
     }
@@ -663,6 +688,7 @@ module.exports = {
   takeDownListingForBilling,
   listerBillingRows,
   runListerViewsMessages,
+  runListerDueReminders,
   startBillingScheduler,
   ugx,
   prettyDate,

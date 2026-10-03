@@ -15241,7 +15241,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         terms_version: docs.LISTER_TERMS_VERSION,
         terms_accepted_phone: String(phone).replace(/\D/g, ''),
         terms_accepted_text: cleanBody.slice(0, 80),
-        lister_fee_terms: { free_days: Number(settings.lister_fee?.free_days ?? 7), monthly_ugx: Number(settings.lister_fee?.monthly_ugx || 20000) }
+        lister_fee_terms: { free_days: Number(settings.lister_fee?.free_days ?? 7), monthly_ugx: Number(settings.lister_fee?.monthly_ugx || 25000) }
       };
       await patchDraft(phone, acceptance);
       const result = await submitWhatsappListingDraft({ phone, lang, draft: { ...draft, ...acceptance } });

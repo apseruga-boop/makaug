@@ -19,6 +19,7 @@ const logger = require('../config/logger');
 const revenue = require('./revenueService');
 const billingOps = require('./billingOpsService');
 const revolut = require('./revolutMerchantService');
+const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const PURPOSES = new Set(['listing_fee', 'agent_subscription', 'short_term_fee', 'hosted_payment', 'other']);
@@ -90,16 +91,24 @@ async function createPayLink(db, input = {}, actor = 'admin') {
   let paymentId = null;
 
   if (purpose === 'listing_fee') {
-    const property = (await db.query('SELECT id, title, lister_name, lister_phone, agent_id FROM properties WHERE id = $1::uuid', [input.property_id])).rows[0];
+    const property = (await db.query(
+      `SELECT id, title, lister_name, lister_phone, agent_id, ${foundOnlinePropertySql('properties')} AS found_online FROM properties WHERE id = $1::uuid`,
+      [input.property_id]
+    )).rows[0];
     if (!property) throw revenue.httpError(404, 'Listing not found');
+    // Free by rule: found-online listings and agents' listings (agents pay their own monthly fee).
+    if (property.found_online) throw revenue.httpError(409, 'Found-online listings are free — nobody is charged for them');
+    if (property.agent_id) throw revenue.httpError(409, "This is an agent's listing — it is covered by the agent's monthly fee");
     propertyId = property.id;
-    amountUgx = amountUgx || Number(settings.lister_fee?.monthly_ugx || 20000);
+    amountUgx = amountUgx || Number(settings.lister_fee?.monthly_ugx || 25000);
     description = description || `makaug listing — 1 month: ${property.title || 'your property'}`.slice(0, 200);
     payerName = payerName || property.lister_name || null;
     payerPhone = payerPhone || digits(property.lister_phone) || null;
   } else if (purpose === 'agent_subscription') {
-    const agent = (await db.query('SELECT id, full_name, phone, whatsapp, monthly_fee_ugx FROM agents WHERE id = $1::uuid', [input.agent_id])).rows[0];
+    const agent = (await db.query('SELECT id, full_name, phone, whatsapp, monthly_fee_ugx, fee_exempt, approved_at, status FROM agents WHERE id = $1::uuid', [input.agent_id])).rows[0];
     if (!agent) throw revenue.httpError(404, 'Agent not found');
+    // Agents approved before the fee started list for free, for good.
+    if (agent.fee_exempt) throw revenue.httpError(409, `${agent.full_name} joined before the monthly fee and lists for free — no payment needed`);
     agentId = agent.id;
     amountUgx = amountUgx || Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || revenue.feeConfig().feeUgx);
     description = description || `makaug agent subscription — 1 month (${agent.full_name})`.slice(0, 200);
@@ -351,6 +360,19 @@ async function pendingAgentPaid(db, agent, { how = 'card', amountUgx } = {}) {
   return { pending: true };
 }
 
+/** Everyone who watches the money hears about each card payment, like MoMo ones. */
+async function notifyTeamCardPayment(db, link, recorded, order) {
+  const desk = require('./leadDeskService');
+  if (typeof desk.sendToTeam !== 'function') return;
+  const body = [
+    `💳 *Card payment received* — ${link.payer_name || 'customer'}`,
+    `${billingOps.ugx(link.amount_ugx)} (${money(order.amount || link.card_amount_minor, String(order.currency || link.card_currency).toUpperCase())}) · ${link.description}`,
+    `Revolut order ${order.id} · link ${link.code}`,
+    'Recorded and verified automatically in Sales & Revenue.'
+  ].join('\n');
+  await desk.sendToTeam(db, body, 'card_payment_received');
+}
+
 async function notifyPaid(db, link, recorded) {
   const to = digits(link.payer_phone);
   if (to.length < 9) return null;
@@ -412,6 +434,7 @@ async function settleFromOrder(db, link, order) {
       [claimed.id, recorded.entry.id, order.state]
     );
     logger.info('Card payment recorded', { code: claimed.code, order: order.id, entry: recorded.entry.id });
+    notifyTeamCardPayment(db, claimed, recorded, order).catch(() => null);
     if (!recorded.reinstatement?.reinstated && !recorded.pendingAgent?.pending) await notifyPaid(db, claimed, recorded);
     return { paid: true, entry_id: recorded.entry.id };
   } catch (error) {
@@ -573,6 +596,7 @@ module.exports = {
   closeLinkForClaim,
   recordShortTermPayment,
   recordHostedPayment,
+  notifyPaid,
   pendingAgentPaid,
   listPayLinks,
   cancelPayLink,

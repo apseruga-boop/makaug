@@ -28700,7 +28700,7 @@ function adminCreatePayLink(target = {}) {
     bodyHtml: `${isOther ? `<label class="block"><span class="font-bold">What is it for?</span><input name="description" required maxlength="200" placeholder="e.g. Featured listing — 7 days" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
         <label class="block"><span class="font-bold">Amount (UGX)</span><input name="amount_ugx" inputmode="numeric" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
         <label class="block"><span class="font-bold">Their name</span><input name="payer_name" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>`
-      : `<p class="text-xs text-gray-600">Amount: ${adminFormatUgx(target.purpose === "listing_fee" ? (adminRevenueData?.settings?.lister_fee?.monthly_ugx || 20000) : (adminRevenueData?.settings?.agent_fee?.monthly_ugx || 50000))} for one month. An open link for the same thing is reused.</p>`}
+      : `<p class="text-xs text-gray-600">Amount: ${adminFormatUgx(target.purpose === "listing_fee" ? (adminRevenueData?.settings?.lister_fee?.monthly_ugx || 25000) : (adminRevenueData?.settings?.agent_fee?.monthly_ugx || 50000))} for one month. An open link for the same thing is reused.</p>`}
       <label class="block"><span class="font-bold">Send to WhatsApp number</span><input name="send_to" inputmode="tel" value="${adminAttr(defaultPhone)}" placeholder="2567… or 447…" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <p class="text-[11px] text-gray-500">Leave the number empty to just create the link and copy it.</p>`,
     submitLabel: "Create link",
@@ -28850,7 +28850,7 @@ function renderAdminRevenue() {
     ].filter(Boolean).join(" ");
     return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(p.title || "Listing")}<div class="text-[11px] font-normal text-gray-500">${adminEscape(p.lister_name || "")} ${adminEscape(p.lister_phone || "")}</div></td><td class="py-2 pr-3 font-bold ${tone}">${label}</td><td class="py-2 text-xs space-x-2">${btns}</td></tr>`;
   }).join("");
-  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — 7 days free, then ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 20000)} a month</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
+  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — 7 days free, then ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 25000)} a month</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
     ${listerRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Listing</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${listerRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No private listings since ${adminEscape(d.settings?.lister_fee?.start_date || "")}.</p>`}</div>`;
 
   const claims = (d.claims || []);
@@ -28872,7 +28872,7 @@ function renderAdminRevenue() {
 
   const settingsBlock = `<div class="rounded-xl border ${d.pay_to_line ? "border-gray-200" : "border-red-300 bg-red-50"} p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">Settings</h4><button type="button" onclick="adminOpenBillingSettings()" class="rounded border border-gray-300 px-2 py-1 text-xs font-bold">Edit settings</button></div>
     <p class="text-xs mt-1">${d.pay_to_line ? `People are told to pay to: <strong>${adminEscape(d.pay_to_line.replace(/\\*/g, ""))}</strong>` : `<strong class="text-red-800">No pay-to number yet — reminders and payment messages are switched off until you add the number and registered name.</strong>`}</p>
-    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || 50000)}/month · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 20000)}/month after ${adminEscape(String(d.settings?.lister_fee?.free_days || 7))} free days</p></div>`;
+    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || 50000)}/month · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 25000)}/month after ${adminEscape(String(d.settings?.lister_fee?.free_days || 7))} free days</p></div>`;
 
   const reconBlock = `<div class="rounded-xl border border-gray-200 p-3"><h4 class="font-black text-gray-900">Weekly reconciliation</h4><p class="text-xs text-gray-600 mb-2">Upload a statement (CSV export from Absa, the bank or MoMo). Lines are matched to the entries above; anything on the statement that nobody recorded — and anything recorded that is not on the statement — is listed.</p>
     <div class="flex flex-wrap gap-2 items-center text-xs"><select id="admin-recon-account" class="rounded border border-gray-300 px-2 py-1">${(d.accounts || []).map((a) => `<option value="${adminAttr(a.key)}">${adminEscape(a.name)}</option>`).join("")}</select><input id="admin-recon-file" type="file" accept=".csv,text/csv,text/plain" class="text-xs"><button type="button" onclick="adminUploadStatement()" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">Upload & match</button></div>
@@ -29187,7 +29187,7 @@ function adminPaymentFieldsHtml({ amount = "", payer = "" } = {}) {
 
 function adminListerPayment(propertyId) {
   const listing = (adminRevenueData?.listers || []).find((p) => String(p.id) === String(propertyId)) || {};
-  const fee = adminRevenueData?.settings?.lister_fee?.monthly_ugx || 20000;
+  const fee = adminRevenueData?.settings?.lister_fee?.monthly_ugx || 25000;
   adminBillingModal({
     title: `Listing fee — ${adminEscape(listing.title || "listing")}`,
     bodyHtml: `<p class="text-gray-600">${adminFormatUgx(fee)} = one month. If the listing was taken down it goes straight back live.</p>${adminPaymentFieldsHtml({ amount: fee, payer: [listing.lister_name, listing.lister_phone].filter(Boolean).join(" · ") })}`,
@@ -29264,7 +29264,7 @@ function adminOpenBillingSettings() {
         <label class="block"><span class="font-bold text-xs">Agent fee / month</span><input name="agent_monthly" inputmode="numeric" value="${adminAttr(agentFee.monthly_ugx || 50000)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Remind days before</span><input name="remind_days" inputmode="numeric" value="${adminAttr(agentFee.remind_days_before ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Final reminder after (days overdue)</span><input name="final_days" inputmode="numeric" value="${adminAttr(agentFee.final_after_days_overdue ?? 7)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
-        <label class="block"><span class="font-bold text-xs">Private listing / month</span><input name="lister_monthly" inputmode="numeric" value="${adminAttr(listerFee.monthly_ugx || 20000)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Private listing / month</span><input name="lister_monthly" inputmode="numeric" value="${adminAttr(listerFee.monthly_ugx || 25000)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Free days</span><input name="free_days" inputmode="numeric" value="${adminAttr(listerFee.free_days ?? 7)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Views message on day</span><input name="views_day" inputmode="numeric" value="${adminAttr(listerFee.views_message_day ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
       </div>

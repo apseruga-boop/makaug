@@ -114,7 +114,7 @@ const day = (offset) => new Date(Date.now() + 3 * 3600e3 + offset * 86400e3).toI
   check('edited text is what was sent', /edited by Ronald/.test(await lastOutbound(lphone)));
   const ldown = await api('POST', `/revenue/listings/${lp}/take-down`);
   check('lister listing taken down', ldown.ok && (await pool.query('SELECT status FROM properties WHERE id = $1', [lp])).rows[0].status === 'hidden');
-  const lpay = await api('POST', `/revenue/listings/${lp}/payment`, { amount: 20000, method: 'airtel_money', reference: `AT${txid}`, payer_name: 'Mary Test' });
+  const lpay = await api('POST', `/revenue/listings/${lp}/payment`, { amount: 25000, method: 'airtel_money', reference: `AT${txid}`, payer_name: 'Mary Test' });
   check('lister payment recorded', lpay.ok, lpay.error || lpay.data?.period_end);
   check('listing back live', (await pool.query('SELECT status FROM properties WHERE id = $1', [lp])).rows[0].status === 'approved');
 

@@ -9982,6 +9982,14 @@ router.post('/revenue/claims/:id/confirm', async (req, res, next) => {
     });
     if (result.entry && !result.reinstatement && result.entry.kind === 'listing_fee' && result.entry.property_id) {
       await billingOps.sendListerBillingMessage(db, { propertyId: result.entry.property_id, kind: 'reinstated', actor: adminActorId(req) }).catch(() => {});
+    } else if (result.pendingAgent?.pending) {
+      // A new agent who has paid but is not approved yet was already told
+      // "payment received, finishing your checks" — not "live again".
+    } else if (['short_term_fee', 'advertising', 'listing_boost', 'other_income'].includes(result.entry?.kind)) {
+      const link = (await db.query(
+        `SELECT l.* FROM pay_links l JOIN payment_claims c ON c.pay_link_id = l.id WHERE c.id = $1::uuid`, [req.params.id]
+      ).catch(() => ({ rows: [] }))).rows[0];
+      if (link) await payLinks.notifyPaid(db, link, result).catch(() => {});
     } else if (result.entry?.agent_id && !result.reinstatement?.reinstated) {
       // Not taken down, just paid: thank them.
       await billingOps.sendAgentBillingMessage(db, { agentId: result.entry.agent_id, kind: 'reinstated', actor: adminActorId(req), force: true }).catch(() => {});

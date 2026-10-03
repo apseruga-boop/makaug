@@ -25,6 +25,7 @@ const logger = require('../config/logger');
 const revenue = require('./revenueService');
 const billingOps = require('./billingOpsService');
 const payLinks = require('./payLinkService');
+const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
 const COMMAND = /^\s*(new\s+agent|add\s+agent|pay\s*link|paylink|status|paid\??|approve|payment\s+help|pay\s+help)\b[\s:,-]*(.*)$/is;
 
@@ -88,6 +89,7 @@ async function findPrivateListingByPhone(db, phone) {
     `SELECT id, title, lister_name, lister_phone, lister_paid_until, status
        FROM properties
       WHERE agent_id IS NULL AND status IN ('approved', 'pending', 'hidden')
+        AND NOT ${foundOnlinePropertySql('properties')}
         AND RIGHT(REGEXP_REPLACE(COALESCE(lister_phone, ''), '[^0-9]', '', 'g'), 9) = $1
       ORDER BY updated_at DESC LIMIT 1`,
     [key]
@@ -161,6 +163,7 @@ async function sendLink(db, rest, actor) {
   let created;
   let who;
   if (agent) {
+    if (agent.fee_exempt) return `${agent.full_name} joined before the monthly fee — they list for free, no payment needed.`;
     created = await payLinks.createPayLink(db, { purpose: 'agent_subscription', agent_id: agent.id }, actor);
     who = `${agent.full_name} (agent, ${agent.status})`;
   } else {
