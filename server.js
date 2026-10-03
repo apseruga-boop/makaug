@@ -164,7 +164,7 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(express.json({
   limit: '40mb',
   verify: (req, _res, buffer) => {
-    if (req.originalUrl === '/api/whatsapp/webhook') {
+    if (req.originalUrl === '/api/whatsapp/webhook' || req.originalUrl === '/api/pay/webhooks/revolut') {
       req.rawBody = Buffer.from(buffer);
     }
   }
@@ -303,6 +303,7 @@ app.use('/api/tiktok-display', tiktokDisplayRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/saved-properties', savedPropertiesRoutes);
 app.use('/api/money-sms', require('./routes/moneySms'));
+app.use('/api/pay', require('./routes/pay').api);
 app.use('/legal', require('./routes/legalDocs'));
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/off-plan', offPlanAdminRoutes);
@@ -1438,6 +1439,8 @@ app.get('/assets/makaug-app.js', (req, res, next) => {
   }
 });
 
+app.use('/pay', require('./routes/pay').pages);
+
 app.get('/property/:id', async (req, res, next) => {
   try {
     res.set('X-makaug-Public-Sanitized', '1');
@@ -1989,6 +1992,7 @@ async function start() {
     startVideoStillScheduler(db);
     startGreetingNameCache(db);
     startBillingScheduler(db);
+    require('./services/payLinkService').startPayLinkScheduler(db);
   }
   if (!IS_SOUTH_AFRICA || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true') {
     startFeaturedRotationScheduler(db);

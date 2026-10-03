@@ -30,7 +30,7 @@ async function getSettings(db, { fresh = false } = {}) {
 }
 
 async function setSetting(db, key, value, actor = 'admin') {
-  const allowed = new Set(['pay_to', 'confirmers', 'agent_fee', 'lister_fee', 'lister_views_message']);
+  const allowed = new Set(['pay_to', 'confirmers', 'agent_fee', 'lister_fee', 'lister_views_message', 'card_payments']);
   if (!allowed.has(key)) throw revenue.httpError(400, 'Unknown setting');
   await db.query(
     `INSERT INTO billing_settings (key, value, updated_by, updated_at) VALUES ($1, $2::jsonb, $3, NOW())
@@ -71,15 +71,34 @@ function helpContact() {
 
 const AGENT_MESSAGE_KINDS = ['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down', 'reinstated'];
 
-function buildAgentBillingMessage(kind, { agent = {}, settings = {} } = {}) {
+function payLinkLine(payLink) {
+  return payLink ? `💳 Pay by card, Apple Pay, Google Pay or MoMo here: ${payLink}` : '';
+}
+
+const PAY_LINK_KINDS = new Set(['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down', 'views']);
+
+/** A pay link for this reminder, or '' if one cannot be made right now. */
+async function payLinkFor(db, input) {
+  try {
+    const { createPayLink } = require('./payLinkService');
+    const { url } = await createPayLink(db, input, 'billing');
+    return url;
+  } catch (error) {
+    logger.warn('Could not attach a pay link', { error: error.message });
+    return '';
+  }
+}
+
+function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '' } = {}) {
   const name = agentGreetingName(agent, 'there');
   const fee = Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || 50000);
   const pay = payToLine(settings);
   const due = agent.paid_until ? prettyDate(agent.paid_until) : '';
   const help = helpContact();
-  const howToPay = pay
-    ? `Pay ${ugx(fee)} to ${pay}, then reply here with the *transaction ID* (or a screenshot of the payment).`
-    : '';
+  const howToPay = [
+    pay ? `Pay ${ugx(fee)} to ${pay}, then reply here with the *transaction ID* (or a screenshot of the payment).` : '',
+    payLinkLine(payLink)
+  ].filter(Boolean).join('\n');
   switch (kind) {
     case 'pre_due':
       return [`Hi ${name} 👋`, '', (due ? `Your makaug agent subscription renews on *${due}*.` : `Your makaug agent subscription (${ugx(fee)} a month) is due.`), howToPay, '', 'Your profile and listings stay live without a break. Thank you for being with makaug!'].filter((l) => l !== '').join('\n');
@@ -134,7 +153,8 @@ async function sendAgentBillingMessage(db, { agentId, kind, actor = 'admin', for
   }
   const to = String(agent.whatsapp || agent.phone || '').replace(/\D+/g, '');
   if (to.length < 9) throw revenue.httpError(400, 'This agent has no WhatsApp number');
-  const body = buildAgentBillingMessage(kind, { agent, settings });
+  const payLink = PAY_LINK_KINDS.has(kind) ? await payLinkFor(db, { purpose: 'agent_subscription', agent_id: agent.id }) : '';
+  const body = buildAgentBillingMessage(kind, { agent, settings, payLink });
   const periodKey = `${kind}:${agent.paid_until ? revenue.isoDay(agent.paid_until) : 'none'}`;
   const delivery = await deliver(to, body, `agent_billing_${kind}`, `${agent.id}:${periodKey}:${force ? Date.now() : ''}`);
   await db.query(
@@ -369,6 +389,7 @@ async function confirmClaim(db, { claimId, actor, method, accountKey, amountUgx,
     `UPDATE payment_claims SET status = 'confirmed', decided_by = $2, decided_at = NOW(), decision_note = $3, entry_id = $4 WHERE id = $1`,
     [claim.id, actor, note || null, result.entry.id]
   );
+  if (claim.pay_link_id) await require('./payLinkService').closeLinkForClaim(db, claim.id, result.entry.id).catch(() => null);
   return { claim_id: claim.id, ...result };
 }
 
@@ -448,7 +469,7 @@ function fillTemplate(template = '', values = {}) {
 
 const LISTER_MESSAGE_KINDS = ['views', 'reminder', 'final_reminder', 'taken_down', 'reinstated'];
 
-async function buildListerMessage(db, kind, property, settings) {
+async function buildListerMessage(db, kind, property, settings, payLink = '') {
   const name = String(property.lister_name || '').trim().split(/\s+/)[0] || 'there';
   const fee = Number(settings.lister_fee?.monthly_ugx || 20000);
   const pay = payToLine(settings);
@@ -457,11 +478,14 @@ async function buildListerMessage(db, kind, property, settings) {
   const freeUntil = prettyDate(listerFreeUntil(property, settings));
   const paidUntil = property.lister_paid_until ? prettyDate(property.lister_paid_until) : '';
   const help = helpContact();
-  const howToPay = pay ? `To keep it live for a month it is ${ugx(fee)} — pay to ${pay}, then send me the *transaction ID* (or a screenshot) here.` : '';
+  const howToPay = [
+    pay ? `To keep it live for a month it is ${ugx(fee)} — pay to ${pay}, then send me the *transaction ID* (or a screenshot) here.` : '',
+    payLinkLine(payLink)
+  ].filter(Boolean).join('\n');
   if (kind === 'views') {
     const stats = await listingStats(db, property.id);
     const template = settings.lister_views_message?.text || '';
-    return fillTemplate(template, {
+    const filled = fillTemplate(template, {
       name,
       property: title,
       views: stats.visitors || stats.views,
@@ -469,8 +493,10 @@ async function buildListerMessage(db, kind, property, settings) {
       free_until: freeUntil,
       monthly_fee: Number(fee).toLocaleString('en-US'),
       pay_to: pay || '(payment details to follow)',
-      link
+      link,
+      pay_link: payLink
     });
+    return payLink && !template.includes('{pay_link}') ? `${filled}\n\n${payLinkLine(payLink)}` : filled;
   }
   if (kind === 'reminder') {
     return [`Hi ${name},`, '', `Your free week for *${title}* on makaug has ended${paidUntil ? '' : ` (it ended on ${freeUntil})`}.`, howToPay, '', `See it: ${link}`].filter((l) => l !== '').join('\n');
@@ -500,7 +526,10 @@ async function sendListerBillingMessage(db, { propertyId, kind, actor = 'admin',
   }
   const to = String(property.lister_phone || '').replace(/\D+/g, '');
   if (to.length < 9) throw revenue.httpError(400, 'This listing has no WhatsApp number');
-  const body = String(textOverride || '').trim() || await buildListerMessage(db, kind, property, settings);
+  const payLink = !String(textOverride || '').trim() && PAY_LINK_KINDS.has(kind)
+    ? await payLinkFor(db, { purpose: 'listing_fee', property_id: property.id })
+    : '';
+  const body = String(textOverride || '').trim() || await buildListerMessage(db, kind, property, settings, payLink);
   const delivery = await deliver(to, body, `lister_billing_${kind}`, `${property.id}:${kind}:${Date.now()}`);
   await db.query(
     `UPDATE properties SET lister_billing_log = COALESCE(lister_billing_log, '{}'::jsonb) || jsonb_build_object($2::text, jsonb_build_object('at', NOW()::text, 'by', $3::text, 'status', $4::text))

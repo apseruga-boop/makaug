@@ -27,6 +27,7 @@ const METHODS = {
   bank_transfer: { label: 'Bank transfer / deposit (other bank)', account: 'bank' },
   absa_ugx: { label: 'Absa — UGX account', account: 'absa_ugx' },
   absa_usd: { label: 'Absa — USD account', account: 'absa_usd', currency: 'USD' },
+  revolut_card: { label: 'Card — Revolut (Whispers Global)', account: 'revolut_whispers', currency: 'USD' },
   cash: { label: 'Cash', account: 'cash' }
 };
 const OUT_KINDS = new Set(['withdrawal', 'expense', 'transfer_out', 'refund']);
@@ -94,7 +95,7 @@ function normalizeEntry(input = {}, { direction = 'in', kind = 'agent_subscripti
   const errors = [];
   const method = cleanText(input.method, 40).toLowerCase();
   const methodInfo = METHODS[method];
-  if (!methodInfo) errors.push('How was it paid? Choose MTN Mobile Money, Airtel Money, bank transfer or cash.');
+  if (!methodInfo) errors.push('How was it paid? Choose MTN Mobile Money, Airtel Money, card, bank transfer or cash.');
   const isUsd = methodInfo?.currency === 'USD';
   const amount = parseAmount(input.amount_ugx ?? input.amount);
   if (!isUsd && !(amount > 0)) errors.push('Enter the amount received in UGX.');

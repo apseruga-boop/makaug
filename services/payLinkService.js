@@ -1,0 +1,455 @@
+'use strict';
+
+/**
+ * Payment links: makaug.com/pay/<code>.
+ *
+ * One link per thing owed (a private listing's month, an agent's month, or a
+ * one-off amount). The person chooses how to pay:
+ *   - Card / Apple Pay / Google Pay through Revolut (WHISPERS GLOBAL LTD),
+ *     charged in USD at the UGX price. Revolut confirms it, so the payment is
+ *     recorded, verified and the listing/agent put live without anyone typing.
+ *   - MTN Mobile Money to the usual number, using the link code as the
+ *     reference. "I have paid" becomes a payment claim and goes through the
+ *     usual three checks (ID read, SMS match, Ronald/Arthur confirm).
+ */
+
+const crypto = require('crypto');
+
+const logger = require('../config/logger');
+const revenue = require('./revenueService');
+const billingOps = require('./billingOpsService');
+const revolut = require('./revolutMerchantService');
+
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const PURPOSES = new Set(['listing_fee', 'agent_subscription', 'other']);
+
+function site() {
+  return billingOps.SITE();
+}
+
+function newCode() {
+  const bytes = crypto.randomBytes(8);
+  let out = '';
+  for (let i = 0; i < 8; i += 1) out += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  return `MK${out}`;
+}
+
+function payUrl(code) {
+  return `${site()}/pay/${code}`;
+}
+
+function cardSettings(settings = {}) {
+  const c = settings.card_payments || {};
+  const rate = Number(c.ugx_per_unit || process.env.USD_UGX_RATE || 3700);
+  return {
+    enabled: c.enabled !== false,
+    currency: String(c.currency || 'USD').toUpperCase(),
+    rate: rate > 100 ? rate : 3700
+  };
+}
+
+/** UGX -> card currency cents, always rounded up to the next cent. */
+function cardMinorFor(amountUgx, rate) {
+  return Math.max(50, Math.ceil((Number(amountUgx) / Number(rate)) * 100));
+}
+
+function money(minor, currency) {
+  const symbol = { USD: '$', GBP: '£', EUR: '€' }[currency] || `${currency} `;
+  return `${symbol}${(Number(minor) / 100).toFixed(2)}`;
+}
+
+function digits(value) {
+  return String(value || '').replace(/\D+/g, '');
+}
+
+async function loadLink(db, code) {
+  const clean = String(code || '').trim().toUpperCase();
+  if (!/^MK[A-Z0-9]{6,12}$/.test(clean)) return null;
+  return (await db.query('SELECT * FROM pay_links WHERE code = $1', [clean])).rows[0] || null;
+}
+
+/**
+ * Create (or reuse) a pay link. Reuses an open link for the same listing or
+ * agent and amount from the last 30 days, so a second reminder sends the same
+ * link rather than a new one.
+ */
+async function createPayLink(db, input = {}, actor = 'admin') {
+  const purpose = PURPOSES.has(input.purpose) ? input.purpose : (input.property_id ? 'listing_fee' : (input.agent_id ? 'agent_subscription' : 'other'));
+  const settings = await billingOps.getSettings(db, { fresh: true });
+  let amountUgx = Math.round(Number(String(input.amount_ugx ?? '').replace(/[^\d.]/g, '')) || 0);
+  let description = String(input.description || '').trim().slice(0, 200);
+  let payerName = String(input.payer_name || '').trim().slice(0, 120) || null;
+  let payerPhone = digits(input.payer_phone) || null;
+  let propertyId = null;
+  let agentId = null;
+
+  if (purpose === 'listing_fee') {
+    const property = (await db.query('SELECT id, title, lister_name, lister_phone, agent_id FROM properties WHERE id = $1::uuid', [input.property_id])).rows[0];
+    if (!property) throw revenue.httpError(404, 'Listing not found');
+    propertyId = property.id;
+    amountUgx = amountUgx || Number(settings.lister_fee?.monthly_ugx || 20000);
+    description = description || `makaug listing — 1 month: ${property.title || 'your property'}`.slice(0, 200);
+    payerName = payerName || property.lister_name || null;
+    payerPhone = payerPhone || digits(property.lister_phone) || null;
+  } else if (purpose === 'agent_subscription') {
+    const agent = (await db.query('SELECT id, full_name, phone, whatsapp, monthly_fee_ugx FROM agents WHERE id = $1::uuid', [input.agent_id])).rows[0];
+    if (!agent) throw revenue.httpError(404, 'Agent not found');
+    agentId = agent.id;
+    amountUgx = amountUgx || Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || revenue.feeConfig().feeUgx);
+    description = description || `makaug agent subscription — 1 month (${agent.full_name})`.slice(0, 200);
+    payerName = payerName || agent.full_name || null;
+    payerPhone = payerPhone || digits(agent.whatsapp || agent.phone) || null;
+  } else {
+    if (!(amountUgx >= 1000)) throw revenue.httpError(400, 'Enter the amount in UGX (at least 1,000).');
+    description = description || 'makaug.com payment';
+  }
+  if (!(amountUgx > 0)) throw revenue.httpError(400, 'No amount to charge');
+
+  if (propertyId || agentId) {
+    const existing = (await db.query(
+      `SELECT * FROM pay_links
+        WHERE status = 'open' AND amount_ugx = $3
+          AND (($1::uuid IS NOT NULL AND property_id = $1::uuid) OR ($2::uuid IS NOT NULL AND agent_id = $2::uuid))
+          AND created_at > NOW() - INTERVAL '30 days'
+        ORDER BY created_at DESC LIMIT 1`,
+      [propertyId, agentId, amountUgx]
+    )).rows[0];
+    if (existing) return { link: existing, url: payUrl(existing.code), reused: true };
+  }
+
+  const card = cardSettings(settings);
+  const minor = cardMinorFor(amountUgx, card.rate);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const link = (await db.query(
+        `INSERT INTO pay_links (code, purpose, property_id, agent_id, description, amount_ugx, card_currency, card_amount_minor, fx_rate_ugx,
+                                payer_name, payer_phone, created_by)
+         VALUES ($1, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+        [newCode(), purpose, propertyId, agentId, description, amountUgx, card.currency, minor, card.rate, payerName, payerPhone, actor]
+      )).rows[0];
+      return { link, url: payUrl(link.code), reused: false };
+    } catch (error) {
+      if (String(error.code) !== '23505') throw error;
+    }
+  }
+  throw revenue.httpError(500, 'Could not create a payment link');
+}
+
+function payLinkMessage(link) {
+  const name = String(link.payer_name || '').trim().split(/\s+/)[0] || 'there';
+  return [
+    `Hi ${name} 👋`,
+    '',
+    `Here is your makaug payment link for *${link.description}*:`,
+    `*${billingOps.ugx(link.amount_ugx)}*`,
+    '',
+    payUrl(link.code),
+    '',
+    'Pay by card, Apple Pay or Google Pay, or by MTN Mobile Money — whichever is easier. You get a confirmation here as soon as it is paid.'
+  ].join('\n');
+}
+
+async function sendPayLink(db, { code, to, actor = 'admin' }) {
+  const link = await loadLink(db, code);
+  if (!link) throw revenue.httpError(404, 'Payment link not found');
+  if (link.status !== 'open') throw revenue.httpError(409, `This link is already ${link.status}`);
+  const recipient = digits(to || link.payer_phone);
+  if (recipient.length < 9) throw revenue.httpError(400, 'No WhatsApp number to send it to');
+  const handoff = require('./leadHandoffService');
+  const delivery = await handoff.deliverWhatsapp({ to: recipient, body: payLinkMessage(link), kind: 'pay_link', leadId: null, nonce: `${link.code}:${Date.now()}` });
+  await db.query('UPDATE pay_links SET sent_to = $2, sent_at = NOW(), sent_status = $3, updated_at = NOW() WHERE id = $1', [link.id, recipient, delivery.status || 'unknown']);
+  logger.info('Pay link sent', { code: link.code, to: recipient, status: delivery.status, by: actor });
+  return { code: link.code, url: payUrl(link.code), to: recipient, status: delivery.status, reason: delivery.reason || null };
+}
+
+/** Everything the public page needs. Never includes anything private. */
+async function pageData(db, code) {
+  const link = await loadLink(db, code);
+  if (!link) return null;
+  if (!link.opened_at) db.query('UPDATE pay_links SET opened_at = NOW() WHERE id = $1 AND opened_at IS NULL', [link.id]).catch(() => {});
+  const settings = await billingOps.getSettings(db);
+  const card = cardSettings(settings);
+  return {
+    code: link.code,
+    status: link.status,
+    description: link.description,
+    amount_ugx: Number(link.amount_ugx),
+    amount_ugx_text: billingOps.ugx(link.amount_ugx),
+    card_text: money(link.card_amount_minor, link.card_currency),
+    card_available: card.enabled && revolut.isConfigured(),
+    pay_to: settings.pay_to || {},
+    pay_to_ready: Boolean(billingOps.payToLine(settings)),
+    paid_method: link.paid_method,
+    paid_at: link.paid_at,
+    payer_first_name: String(link.payer_name || '').trim().split(/\s+/)[0] || ''
+  };
+}
+
+/** Start (or resume) the Revolut checkout for this link; returns its URL. */
+async function startCardCheckout(db, code) {
+  const link = await loadLink(db, code);
+  if (!link) throw revenue.httpError(404, 'Payment link not found');
+  if (link.status === 'paid') return { already_paid: true, redirect: `${payUrl(link.code)}?paid=1` };
+  if (link.status !== 'open') throw revenue.httpError(409, 'This payment link is no longer open');
+  if (link.provider_order_id) {
+    const existing = await revolut.getOrder(link.provider_order_id).catch(() => null);
+    if (existing && revolut.orderIsPaid(existing)) {
+      await settleFromOrder(db, link, existing);
+      return { already_paid: true, redirect: `${payUrl(link.code)}?paid=1` };
+    }
+    const state = String(existing?.state || '').toLowerCase();
+    if (existing && ['pending', 'processing', 'authorised'].includes(state) && existing.checkout_url) {
+      return { redirect: existing.checkout_url };
+    }
+  }
+  const order = await revolut.createOrder({
+    amountMinor: link.card_amount_minor,
+    currency: link.card_currency,
+    description: `${link.description} (${billingOps.ugx(link.amount_ugx)})`,
+    reference: link.code,
+    redirectUrl: `${payUrl(link.code)}/return`,
+    customerPhone: link.payer_phone || undefined,
+    customerName: link.payer_name || undefined
+  });
+  await db.query(
+    `UPDATE pay_links SET provider_order_id = $2, provider_checkout_url = $3, provider_state = $4, updated_at = NOW() WHERE id = $1`,
+    [link.id, order.id, order.checkout_url, order.state || 'pending']
+  );
+  return { redirect: order.checkout_url };
+}
+
+function cardPaymentFor(link, order) {
+  const paidMinor = Number(order.amount || link.card_amount_minor);
+  return {
+    method: 'revolut_card',
+    account_key: 'revolut_whispers',
+    amount_original: paidMinor / 100,
+    fx_rate_ugx: Number(link.fx_rate_ugx),
+    reference: String(order.id),
+    payer_name: link.payer_name || undefined,
+    payer_phone: link.payer_phone || undefined,
+    paid_at: order.completed_at || order.updated_at || new Date().toISOString(),
+    note: `Card via Revolut · pay link ${link.code} · ${money(paidMinor, String(order.currency || link.card_currency).toUpperCase())}`
+  };
+}
+
+async function notifyPaid(db, link, recorded) {
+  const to = digits(link.payer_phone);
+  if (to.length < 9) return null;
+  try {
+    if (link.purpose === 'listing_fee' && link.property_id) {
+      return await billingOps.sendListerBillingMessage(db, { propertyId: link.property_id, kind: 'reinstated', actor: 'revolut' });
+    }
+    if (link.purpose === 'agent_subscription' && link.agent_id) {
+      return await billingOps.sendAgentBillingMessage(db, { agentId: link.agent_id, kind: 'reinstated', actor: 'revolut', force: true });
+    }
+    const handoff = require('./leadHandoffService');
+    const body = [`✅ *Payment received — thank you!*`, '', `${link.description}: ${billingOps.ugx(link.amount_ugx)}`, `Reference ${link.code}`].join('\n');
+    return await handoff.deliverWhatsapp({ to, body, kind: 'pay_link_paid', leadId: null, nonce: link.code });
+  } catch (error) {
+    logger.warn('Paid confirmation message failed', { code: link.code, error: error.message });
+    return null;
+  }
+}
+
+/**
+ * Record a completed Revolut order against its link, exactly once.
+ * Claims the link ('settling') so two callbacks cannot record it twice.
+ */
+async function settleFromOrder(db, link, order) {
+  if (!revolut.orderIsPaid(order)) {
+    await db.query('UPDATE pay_links SET provider_state = $2, updated_at = NOW() WHERE id = $1', [link.id, order.state || null]);
+    return { paid: false, state: order.state || null };
+  }
+  const claimed = (await db.query(
+    `UPDATE pay_links SET status = 'settling', updated_at = NOW() WHERE id = $1 AND status = 'open' RETURNING *`,
+    [link.id]
+  )).rows[0];
+  if (!claimed) return { paid: true, already: true };
+  try {
+    const payment = cardPaymentFor(claimed, order);
+    let recorded;
+    if (claimed.purpose === 'listing_fee' && claimed.property_id) {
+      recorded = await billingOps.recordListingPayment(db, { propertyId: claimed.property_id, payment, actor: 'revolut' });
+    } else if (claimed.purpose === 'agent_subscription' && claimed.agent_id) {
+      const agent = (await db.query('SELECT * FROM agents WHERE id = $1::uuid', [claimed.agent_id])).rows[0];
+      recorded = await revenue.recordAgentPayment(db, { agent, payment, actor: 'revolut' });
+      if (agent?.billing_suspended_at) recorded.reinstatement = await billingOps.reinstateAgentAfterPayment(db, { agentId: agent.id, actor: 'revolut' });
+    } else {
+      recorded = { entry: await revenue.recordEntry(db, { ...payment, direction: 'in', kind: 'other_income' }, 'revolut') };
+    }
+    await db.query(
+      `UPDATE revenue_entries SET verified_status = 'verified', verified_by = 'revolut', verified_at = NOW(), verification_source = 'revolut_order'
+        WHERE id = $1`,
+      [recorded.entry.id]
+    );
+    await db.query(
+      `UPDATE pay_links SET status = 'paid', paid_method = 'card', paid_at = NOW(), entry_id = $2, provider_state = $3, updated_at = NOW() WHERE id = $1`,
+      [claimed.id, recorded.entry.id, order.state]
+    );
+    logger.info('Card payment recorded', { code: claimed.code, order: order.id, entry: recorded.entry.id });
+    if (!recorded.reinstatement?.reinstated) await notifyPaid(db, claimed, recorded);
+    return { paid: true, entry_id: recorded.entry.id };
+  } catch (error) {
+    // A duplicate means this order was recorded already: keep the link paid.
+    if (error.status === 409) {
+      await db.query(`UPDATE pay_links SET status = 'paid', paid_method = 'card', paid_at = COALESCE(paid_at, NOW()), updated_at = NOW() WHERE id = $1`, [claimed.id]);
+      return { paid: true, already: true };
+    }
+    await db.query(`UPDATE pay_links SET status = 'open', updated_at = NOW() WHERE id = $1 AND status = 'settling'`, [claimed.id]);
+    logger.error('Recording a card payment failed', { code: claimed.code, order: order.id, error: error.message });
+    throw error;
+  }
+}
+
+/** Ask Revolut how the order behind this link stands, and record it if paid. */
+async function refreshLink(db, code) {
+  const link = await loadLink(db, code);
+  if (!link) throw revenue.httpError(404, 'Payment link not found');
+  if (link.status === 'paid') return { paid: true };
+  if (!link.provider_order_id) return { paid: false, state: null };
+  const order = await revolut.getOrder(link.provider_order_id);
+  return settleFromOrder(db, link, order);
+}
+
+/** Webhook: never trusted on its own — we fetch the order from Revolut. */
+async function handleRevolutEvent(db, event = {}) {
+  const orderId = String(event.order_id || event.orderId || event.id || '').trim();
+  if (!orderId) return { ignored: 'no_order_id' };
+  const link = (await db.query('SELECT * FROM pay_links WHERE provider_order_id = $1', [orderId])).rows[0];
+  if (!link) return { ignored: 'unknown_order' };
+  if (link.status === 'paid') return { paid: true, already: true };
+  const order = await revolut.getOrder(orderId);
+  return settleFromOrder(db, link, order);
+}
+
+/** Mobile money: "I have paid" from the pay page becomes a normal payment claim. */
+async function createMomoClaim(db, code, { reference, phone, name } = {}) {
+  const link = await loadLink(db, code);
+  if (!link) throw revenue.httpError(404, 'Payment link not found');
+  if (link.status === 'paid') throw revenue.httpError(409, 'This has already been paid — thank you!');
+  const txid = String(reference || '').replace(/\s+/g, '').slice(0, 60);
+  if (txid.length < 5) throw revenue.httpError(400, 'Enter the transaction ID from your MoMo message.');
+  const existing = (await db.query(
+    `SELECT id FROM payment_claims WHERE pay_link_id = $1 AND LOWER(reference) = LOWER($2) LIMIT 1`, [link.id, txid])).rows[0];
+  if (existing) return { claim_id: existing.id, duplicate: true };
+  const claim = (await db.query(
+    `INSERT INTO payment_claims (source, payer_phone, payer_name, agent_id, property_id, purpose, reference, amount_ugx, method, message, pay_link_id)
+     VALUES ('pay_link', $1, $2, $3::uuid, $4::uuid, $5, $6, $7, 'mtn_momo', $8, $9) RETURNING *`,
+    [digits(phone) || link.payer_phone, String(name || '').trim().slice(0, 120) || link.payer_name, link.agent_id, link.property_id,
+      link.purpose, txid, link.amount_ugx, `Paid by MoMo from pay link ${link.code}`, link.id]
+  )).rows[0];
+  await db.query('UPDATE pay_links SET claim_id = $2, updated_at = NOW() WHERE id = $1', [link.id, claim.id]);
+  await billingOps.matchClaimToSms(db, claim).catch(() => null);
+  return { claim_id: claim.id };
+}
+
+/** When a MoMo claim from a pay link is confirmed, close the link too. */
+async function closeLinkForClaim(db, claimId, entryId) {
+  await db.query(
+    `UPDATE pay_links SET status = 'paid', paid_method = 'mtn_momo', paid_at = NOW(), entry_id = COALESCE(entry_id, $2), updated_at = NOW()
+      WHERE id = (SELECT pay_link_id FROM payment_claims WHERE id = $1::uuid) AND status = 'open'`,
+    [claimId, entryId || null]
+  );
+}
+
+async function listPayLinks(db, { limit = 100 } = {}) {
+  return (await db.query(
+    `SELECT l.*, p.title AS property_title, a.full_name AS agent_name
+       FROM pay_links l
+       LEFT JOIN properties p ON p.id = l.property_id
+       LEFT JOIN agents a ON a.id = l.agent_id
+      ORDER BY l.created_at DESC LIMIT $1`,
+    [Math.min(300, Math.max(1, Number(limit) || 100))]
+  )).rows.map((l) => ({ ...l, url: payUrl(l.code), card_text: money(l.card_amount_minor, l.card_currency) }));
+}
+
+async function cancelPayLink(db, code, actor = 'admin') {
+  const row = (await db.query(
+    `UPDATE pay_links SET status = 'cancelled', updated_at = NOW(), created_by = COALESCE(created_by, $2) WHERE code = $1 AND status = 'open' RETURNING *`,
+    [String(code || '').toUpperCase(), actor]
+  )).rows[0];
+  if (!row) throw revenue.httpError(409, 'Only an open link can be cancelled');
+  return row;
+}
+
+/** Make sure Revolut sends order events to us, and keep the signing secret. */
+async function ensureRevolutWebhook(db) {
+  if (!revolut.isConfigured()) return { configured: false };
+  const url = `${site()}/api/pay/webhooks/revolut`;
+  const hooks = await revolut.listWebhooks();
+  let hook = (Array.isArray(hooks) ? hooks : []).find((h) => h.url === url);
+  if (!hook) hook = await revolut.createWebhook(url);
+  let secret = hook.signing_secret;
+  if (!secret && hook.id) secret = (await revolut.getWebhook(hook.id).catch(() => ({}))).signing_secret;
+  if (secret) {
+    await db.query(
+      `INSERT INTO billing_settings (key, value, updated_by, updated_at) VALUES ('revolut_webhook', $1::jsonb, 'system', NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [JSON.stringify({ id: hook.id, url, signing_secret: secret })]
+    );
+  }
+  return { configured: true, id: hook.id, url, events: hook.events || [] };
+}
+
+async function webhookSecret(db) {
+  if (process.env.REVOLUT_WEBHOOK_SIGNING_SECRET) return process.env.REVOLUT_WEBHOOK_SIGNING_SECRET;
+  const row = (await db.query(`SELECT value FROM billing_settings WHERE key = 'revolut_webhook'`).catch(() => ({ rows: [] }))).rows[0];
+  return row?.value?.signing_secret || '';
+}
+
+/** Every few minutes: any card checkout still open gets checked with Revolut. */
+async function sweepOpenCardOrders(db) {
+  if (!revolut.isConfigured()) return { skipped: 'not_configured' };
+  const rows = (await db.query(
+    `SELECT * FROM pay_links WHERE status = 'open' AND provider_order_id IS NOT NULL AND updated_at > NOW() - INTERVAL '7 days'
+      ORDER BY updated_at DESC LIMIT 50`
+  )).rows;
+  let paid = 0;
+  for (const link of rows) {
+    try {
+      const order = await revolut.getOrder(link.provider_order_id);
+      const r = await settleFromOrder(db, link, order);
+      if (r.paid && !r.already) paid += 1;
+    } catch (error) {
+      logger.warn('Card order check failed', { code: link.code, error: error.message });
+    }
+  }
+  return { checked: rows.length, paid };
+}
+
+let sweepTimer = null;
+function startPayLinkScheduler(db) {
+  if (sweepTimer || !process.env.DATABASE_URL || process.env.PAY_LINK_SWEEP_ENABLED === 'false') return;
+  const tick = () => sweepOpenCardOrders(db).catch((error) => logger.warn('Pay link sweep failed', { error: error.message }));
+  sweepTimer = setInterval(tick, 5 * 60_000);
+  sweepTimer.unref?.();
+  setTimeout(() => {
+    ensureRevolutWebhook(db).then((r) => logger.info('Revolut webhook', r)).catch((error) => logger.warn('Revolut webhook setup failed', { error: error.message }));
+  }, 30_000).unref?.();
+}
+
+module.exports = {
+  newCode,
+  payUrl,
+  cardSettings,
+  cardMinorFor,
+  money,
+  loadLink,
+  createPayLink,
+  payLinkMessage,
+  sendPayLink,
+  pageData,
+  startCardCheckout,
+  settleFromOrder,
+  refreshLink,
+  handleRevolutEvent,
+  createMomoClaim,
+  closeLinkForClaim,
+  listPayLinks,
+  cancelPayLink,
+  ensureRevolutWebhook,
+  webhookSecret,
+  sweepOpenCardOrders,
+  startPayLinkScheduler
+};

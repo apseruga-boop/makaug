@@ -116,6 +116,8 @@ const agentHowToPost = require('../services/agentHowToPostBroadcastService');
 const { agentGreetingName, setCachedGreetingName } = require('../services/agentNameService');
 const revenue = require('../services/revenueService');
 const billingOps = require('../services/billingOpsService');
+const payLinks = require('../services/payLinkService');
+const revolutMerchant = require('../services/revolutMerchantService');
 const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
 const { MONETIZATION_SPINE_MARKER, markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
@@ -9639,7 +9641,7 @@ router.post('/agents/:id/restore', async (req, res, next) => {
 // --- Sales & revenue ---------------------------------------------------------
 router.get('/revenue/summary', async (req, res, next) => {
   try {
-    const [summary, settings, claims, listers] = await Promise.all([
+    const [summary, settings, claims, listers, links] = await Promise.all([
       revenue.revenueSummary(db),
       billingOps.getSettings(db, { fresh: true }),
       db.query(
@@ -9651,19 +9653,83 @@ router.get('/revenue/summary', async (req, res, next) => {
            LEFT JOIN money_sms_inbox s ON s.id = c.sms_id
           ORDER BY (c.status = 'pending') DESC, c.created_at DESC LIMIT 100`
       ),
-      billingOps.listerBillingRows(db)
+      billingOps.listerBillingRows(db),
+      payLinks.listPayLinks(db, { limit: 60 }).catch(() => [])
     ]);
+    const { revolut_webhook: revolutWebhook, ...publicSettings } = settings || {};
     return res.json({
       ok: true,
       data: {
         ...summary,
-        settings,
+        settings: publicSettings,
+        pay_links: links,
+        card_payments: {
+          ...payLinks.cardSettings(settings),
+          configured: revolutMerchant.isConfigured(),
+          webhook_ready: Boolean(revolutWebhook?.signing_secret)
+        },
         pay_to_line: billingOps.payToLine(settings),
         claims: claims.rows,
         listers,
         final_after_days: Number(settings.agent_fee?.final_after_days_overdue || 7)
       }
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// --- Payment links (card via Revolut, or MoMo) -------------------------------
+router.post('/revenue/pay-links', async (req, res, next) => {
+  try {
+    const actor = adminActorId(req);
+    const created = await payLinks.createPayLink(db, req.body || {}, actor);
+    let sent = null;
+    if (req.body?.send === true || req.body?.send === 'true' || req.body?.send_to) {
+      sent = await payLinks.sendPayLink(db, { code: created.link.code, to: req.body.send_to, actor });
+    }
+    return res.json({ ok: true, data: { ...created, card_text: payLinks.money(created.link.card_amount_minor, created.link.card_currency), sent } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/revenue/pay-links', async (req, res, next) => {
+  try {
+    return res.json({ ok: true, data: await payLinks.listPayLinks(db, { limit: req.query.limit }) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/revenue/pay-links/:code/send', async (req, res, next) => {
+  try {
+    const actor = adminActorId(req);
+    return res.json({ ok: true, data: await payLinks.sendPayLink(db, { code: req.params.code, to: req.body?.to, actor }) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/revenue/pay-links/:code/check', async (req, res, next) => {
+  try {
+    return res.json({ ok: true, data: await payLinks.refreshLink(db, req.params.code) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/revenue/pay-links/:code/cancel', async (req, res, next) => {
+  try {
+    return res.json({ ok: true, data: await payLinks.cancelPayLink(db, req.params.code, adminActorId(req)) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/revenue/card-payments/connect', async (req, res, next) => {
+  try {
+    return res.json({ ok: true, data: await payLinks.ensureRevolutWebhook(db) });
   } catch (error) {
     return next(error);
   }
@@ -9812,7 +9878,10 @@ router.get('/revenue/agents/:id/billing-message/:kind', async (req, res, next) =
     const agent = (await db.query('SELECT id, full_name, greeting_name, paid_until, monthly_fee_ugx FROM agents WHERE id = $1::uuid', [req.params.id])).rows[0];
     if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
     const settings = await billingOps.getSettings(db, { fresh: true });
-    return res.json({ ok: true, data: { text: billingOps.buildAgentBillingMessage(req.params.kind, { agent, settings }), pay_to_set: Boolean(billingOps.payToLine(settings)) } });
+    const payLink = ['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down'].includes(req.params.kind)
+      ? (await payLinks.createPayLink(db, { purpose: 'agent_subscription', agent_id: agent.id }, 'billing').catch(() => ({}))).url || ''
+      : '';
+    return res.json({ ok: true, data: { text: billingOps.buildAgentBillingMessage(req.params.kind, { agent, settings, payLink }), pay_to_set: Boolean(billingOps.payToLine(settings)) } });
   } catch (error) {
     return next(error);
   }
@@ -9867,7 +9936,10 @@ router.get('/revenue/listings/:id/billing-message/:kind', async (req, res, next)
       `SELECT id, title, lister_name, lister_phone, created_at, reviewed_at, lister_paid_until FROM properties WHERE id = $1::uuid`, [req.params.id])).rows[0];
     if (!property) return res.status(404).json({ ok: false, error: 'Listing not found' });
     const settings = await billingOps.getSettings(db, { fresh: true });
-    return res.json({ ok: true, data: { text: await billingOps.buildListerMessage(db, req.params.kind, property, settings), stats: await billingOps.listingStats(db, property.id) } });
+    const payLink = ['views', 'reminder', 'final_reminder', 'taken_down'].includes(req.params.kind)
+      ? (await payLinks.createPayLink(db, { purpose: 'listing_fee', property_id: property.id }, 'billing').catch(() => ({}))).url || ''
+      : '';
+    return res.json({ ok: true, data: { text: await billingOps.buildListerMessage(db, req.params.kind, property, settings, payLink), stats: await billingOps.listingStats(db, property.id) } });
   } catch (error) {
     return next(error);
   }
