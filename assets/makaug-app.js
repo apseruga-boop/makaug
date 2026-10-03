@@ -2874,7 +2874,7 @@ CONTENT_I18N.am = Object.assign({}, CONTENT_I18N.en, {
   "about.searchSourceTitle": "የምንጭ ግልጽነት",
   "about.searchSourceText": "በመስመር ላይ የተገኙ ዝርዝሮች makaug መጀመሪያ መቼ እንዳገኛቸው፣ ከየትኛው ማህበራዊ ምንጭ እንደመጡ እና ዋናውን ፖስት ለመመርመር መንገዱን ያሳያሉ።",
   "about.searchReviewTitle": "የሰው ግምገማ",
-  "about.searchReviewText": "የምንጭ መረጃ በቀጥታ አይታተምም። King dashboard አካባቢ፣ ፎቶዎች፣ እውቂያ፣ ተደጋጋሚነት እና የፈቃድ ምልክቶችን ይመረምራል።",
+  "about.searchReviewText": "የምንጭ መረጃ በቀጥታ አይታተምም። የKing ዳሽቦርድ አካባቢ፣ ፎቶዎች፣ እውቂያ፣ ተደጋጋሚነት እና የፈቃድ ምልክቶችን ይመረምራል።",
   "about.searchRemovalTitle": "ይጠይቁ ወይም ያስወግዱ",
   "about.searchRemovalText": "ባለቤቶች እና ወኪሎች ዝርዝሩን መጠየቅ፣ ማሻሻል፣ መስተካከል ወይም ማስወገድ መጠየቅ ይችላሉ።",
   "safety.eyebrow": "ከመክፈልዎ በፊት ያረጋግጡ",
@@ -2886,7 +2886,7 @@ CONTENT_I18N.am = Object.assign({}, CONTENT_I18N.en, {
   "safety.introTitle": "ደህንነታዊ የንብረት ጉዞ ከእይታ በፊት ይጀምራል",
   "safety.introBody": "እያንዳንዱን ዝርዝር እንደሚፈተሽ ነገር ይውሰዱ። መልእክቶችን ያስቀምጡ፣ ዋጋዎችን ያነፃፅሩ፣ በአካል ይመልከቱ እና የሚያፋጥንዎትን ሰው አይክፈሉ።",
   "safety.reportTitle": "አጠራጣሪ ነገር አይተዋል?",
-  "safety.reportBody": "ውይይቱን ያቁሙ፣ screenshots እና የክፍያ ዝርዝሮችን ያስቀምጡ፣ ከዚያ makaug.com ዝርዝሩን እንዲመረምር ሪፖርት ያድርጉ።"
+  "safety.reportBody": "ውይይቱን ያቁሙ፣ የስክሪን ምስሎች እና የክፍያ ዝርዝሮችን ያስቀምጡ፣ ከዚያ makaug.com ዝርዝሩን እንዲመረምር ሪፖርት ያድርጉ።"
 });
 
 CONTENT_I18N.ar = Object.assign({}, CONTENT_I18N.en, {
@@ -2915,7 +2915,7 @@ CONTENT_I18N.ar = Object.assign({}, CONTENT_I18N.en, {
   "about.searchSourceTitle": "شفافية المصدر",
   "about.searchSourceText": "الإعلانات التي تم العثور عليها على الإنترنت تعرض متى وجدها makaug أول مرة، ومن أي مصدر اجتماعي جاءت، وكيف يمكن مراجعة المنشور الأصلي.",
   "about.searchReviewTitle": "مراجعة بشرية",
-  "about.searchReviewText": "لا يتم نشر بيانات المصدر مباشرة. يراجع King dashboard الموقع والصور وجهات الاتصال والتكرار وإشارات الإذن قبل الموافقة.",
+  "about.searchReviewText": "لا يتم نشر بيانات المصدر مباشرة. يراجع لوحة تحكم King الموقع والصور وجهات الاتصال والتكرار وإشارات الإذن قبل الموافقة.",
   "about.searchRemovalTitle": "المطالبة أو الإزالة",
   "about.searchRemovalText": "يمكن للمالكين والوكلاء المطالبة بالإعلان أو تحديثه أو تصحيح التفاصيل أو طلب الإزالة. يحتفظ makaug بالإسناد وسجل المراجعة.",
   "safety.eyebrow": "تحقق قبل أن تدفع",
@@ -3483,9 +3483,9 @@ Object.assign(CONTENT_I18N.am, {
   "about.landHubPortal": "መሬት ይመልከቱ",
   "about.landHubUgNlis": "የUgNLIS ኦፊሴላዊ ፖርታል",
   "about.landHubOfficialTitle": "ቦታውን በካርታ ያስቀምጡ",
-  "about.landHubOfficialText": "ለማየት ከመጓዝዎ በፊት ትክክለኛውን plot በpin ያመልክቱ።",
+  "about.landHubOfficialText": "ለማየት ከመጓዝዎ በፊት ትክክለኛውን ቦታ በካርታ ምልክት ያመልክቱ።",
   "about.landHubEvidenceTitle": "ሰነዶቹን ያረጋግጡ",
-  "about.landHubEvidenceText": "title ን ከራስዎ ጠበቃ ጋር ይመርምሩ፣ ከሻጩ ጋር ብቻ አይደለም።",
+  "about.landHubEvidenceText": "የይዞታ ማረጋገጫውን ከራስዎ ጠበቃ ጋር ይመርምሩ፣ ከሻጩ ጋር ብቻ አይደለም።",
   "about.landHubProcessTitle": "ግፊትን ያስወግዱ",
   "about.landHubProcessText": "አትቸኩሉ፣ እና ሊከታተሉ የማይችሉ ክፍያዎችን አታድርጉ።",
   "about.finalWhatsapp": "በ WhatsApp ይወያዩ"
@@ -3778,7 +3778,7 @@ const MARKETPLACE_P2_I18N = Object.freeze({
   ny: { directoryLinksTitle: "Rondora obuheereza bw'emitungo omuri Uganda", directoryLinksSubtitle: "Link ez'amangu z'abantu n'ebirikurondora. Orukarara rw'ihanga roona ruri n'omu sitemap y'Akatare.", directorySitemap: "Sitemap y'orukarara rw'ihanga" },
   rn: { directoryLinksTitle: "Rondora obuheereza bw'emitungo omuri Uganda", directoryLinksSubtitle: "Link ez'amangu z'abantu n'ebirikurondora. Orukarara rw'ihanga roona ruri n'omu sitemap y'Akatare.", directorySitemap: "Sitemap y'orukarara rw'ihanga" },
   sm: { directoryLinksTitle: "Noonya obuweereza bw'ebintu mu Uganda", directoryLinksSubtitle: "Enkolagana ez'olwatu eri abantu n'ebintu ebinoonya. Olukalala lw'eggwanga luli ne mu sitemap y'Akatale.", directorySitemap: "Sitemap y'olukalala lw'eggwanga" },
-  am: { directoryLinksTitle: "የኡጋንዳ የንብረት አገልግሎቶችን ያስሱ", directoryLinksSubtitle: "ለሰዎችና ለፍለጋ ሞተሮች ቀጥተኛ አገናኞች። ሙሉው ብሔራዊ ማውጫ በገበያው sitemap ላይም ታትሟል።", directorySitemap: "ብሔራዊ ማውጫ sitemap" },
+  am: { directoryLinksTitle: "የኡጋንዳ የንብረት አገልግሎቶችን ያስሱ", directoryLinksSubtitle: "ለሰዎችና ለፍለጋ ሞተሮች ቀጥተኛ አገናኞች። ሙሉው ብሔራዊ ማውጫ በገበያው የጣቢያ ካርታ ላይም ታትሟል።", directorySitemap: "ብሔራዊ ማውጫ የጣቢያ ካርታ" },
   ar: { directoryLinksTitle: "تصفح خدمات العقارات في أوغندا", directoryLinksSubtitle: "روابط مباشرة للأشخاص ومحركات البحث. ينشر الدليل الوطني الكامل أيضا في خريطة موقع السوق.", directorySitemap: "خريطة الدليل الوطني" }
 });
 
@@ -3813,7 +3813,7 @@ const MARKETPLACE_LIFECYCLE_I18N = Object.freeze({
   },
   am: {
     contactName: "የመገናኛ ሰው ስም", reviewTitle: "ንግድዎ በግምገማ ላይ ነው", reviewCopy: "እናመሰግናለን — አብዛኛው ግምገማ በ24 ሰዓት ውስጥ ይጠናቀቃል። ሲታተም እናሳውቃለን።", acknowledgementWhatsApp: "ማረጋገጫው በWhatsApp ተልኳል።", acknowledgementEmail: "ማረጋገጫው በኢሜይል ተልኳል።", acknowledgementPending: "ማጣቀሻዎ ተቀምጧል። ከግምገማ በኋላ እንገናኛለን።",
-    manageProfile: "የንግድ መገለጫዎን ያስተዳድሩ", manageSubtitle: "ይህ ደህንነቱ የተጠበቀ አገናኝ ያለ የይለፍ ቃል መገለጫዎን ያዘምናል።", loadingProfile: "ደህንነቱ የተጠበቀ መገለጫ በመጫን ላይ...", profileViews: "የመገለጫ እይታዎች", servicesOffered: "የሚሰጡ አገልግሎቶች", servesRegions: "ሌሎች የሚያገለግሉባቸው ዲስትሪክቶች", profilePhotos: "የንግድ ፎቶዎች", profilePhotosHelp: "እስከ አራት JPG፣ PNG ወይም WebP ምስሎች፣ እያንዳንዱ 2.5MB።", saveChanges: "ለውጦችን አስቀምጥ", changesSaved: "የንግድ መገለጫዎ ተዘምኗል።", privateUpsellTitle: "በግል ተዘርዝረዋል", privateUpsellCopy: "Verified ንግዶች በፍለጋ እና leads ቀዳሚ ናቸው። Verified በቅርቡ ይመጣል።", joinWaitlist: "የVerified ዝርዝርን ይቀላቀሉ", verifiedComing: "Verified በቅርቡ", waitlistTitle: "Marketplace Verifiedን ቀድመው ያግኙ", waitlistSubtitle: "ይመዝገቡ። የማስረጃ ግምገማና Flutterwave ክፍያ ሲከፈት እናሳውቃለን።", businessOrOwnerName: "የንግድ ወይም የባለቤት ስም", waitlistSent: "በVerified ዝርዝር ላይ ነዎት። ሲከፈት እናሳውቃለን።"
+    manageProfile: "የንግድ መገለጫዎን ያስተዳድሩ", manageSubtitle: "ይህ ደህንነቱ የተጠበቀ አገናኝ ያለ የይለፍ ቃል መገለጫዎን ያዘምናል።", loadingProfile: "ደህንነቱ የተጠበቀ መገለጫ በመጫን ላይ...", profileViews: "የመገለጫ እይታዎች", servicesOffered: "የሚሰጡ አገልግሎቶች", servesRegions: "ሌሎች የሚያገለግሉባቸው ዲስትሪክቶች", profilePhotos: "የንግድ ፎቶዎች", profilePhotosHelp: "እስከ አራት JPG፣ PNG ወይም WebP ምስሎች፣ እያንዳንዱ 2.5MB።", saveChanges: "ለውጦችን አስቀምጥ", changesSaved: "የንግድ መገለጫዎ ተዘምኗል።", privateUpsellTitle: "በግል ተዘርዝረዋል", privateUpsellCopy: "Verified ንግዶች በፍለጋ እና በደንበኛ ጥያቄዎች ቀዳሚ ናቸው። Verified በቅርቡ ይመጣል።", joinWaitlist: "የVerified ዝርዝርን ይቀላቀሉ", verifiedComing: "Verified በቅርቡ", waitlistTitle: "Marketplace Verifiedን ቀድመው ያግኙ", waitlistSubtitle: "ይመዝገቡ። የማስረጃ ግምገማና Flutterwave ክፍያ ሲከፈት እናሳውቃለን።", businessOrOwnerName: "የንግድ ወይም የባለቤት ስም", waitlistSent: "በVerified ዝርዝር ላይ ነዎት። ሲከፈት እናሳውቃለን።"
   },
   ar: {
     contactName: "اسم مسؤول الاتصال", reviewTitle: "نشاطك قيد المراجعة", reviewCopy: "شكرا — تكتمل معظم المراجعات خلال 24 ساعة. سنراسلك عند النشر.", acknowledgementWhatsApp: "تم إرسال التأكيد عبر WhatsApp.", acknowledgementEmail: "تم إرسال التأكيد عبر البريد الإلكتروني.", acknowledgementPending: "تم حفظ المرجع. سنتواصل معك بعد المراجعة.",
@@ -6247,7 +6247,7 @@ MORTGAGE_I18N.am = Object.assign({}, MORTGAGE_I18N.en, {
   preferredBankLabel: "የሚመርጡት ባንክ",
   genericProviderOption: "አጠቃላይ የmakaug የቤት ብድር አማካሪ",
   providerContextNone: "እስካሁን ባንክ አልተመረጠም። የባንክ የጥሪ አዝራር በመጠቀም መሪውን ወደ ተወሰነ ባንክ ያመሩ።",
-  providerContextSelected: "የተመረጠ ባንክ፦ {bank}። ይህ መሪ በKing dashboard ለባንክ ርክክብ ይሰየማል።",
+  providerContextSelected: "የተመረጠ ባንክ፦ {bank}። ይህ መሪ በKing ዳሽቦርድ ለባንክ ርክክብ ይሰየማል።",
   setUpBankCall: "ጥሪ ያዘጋጁ",
   sourceNoteLabel: "የምንጭ ማስታወሻ",
   publicRecordDisclosure: "መረጃው ከሕዝባዊ የባንክ ገጾች እና ከሕዝባዊ መዝገቦች የተገኘ ነው። ሁኔታዎች ሊለወጡ ይችላሉ፤ ከመጠየቅዎ በፊት ከባንኩ ጋር ያረጋግጡ።",
@@ -6315,7 +6315,7 @@ MORTGAGE_I18N.am = Object.assign({}, MORTGAGE_I18N.en, {
   leadStageNone: "እርግጠኛ አይደለሁም",
   leadStageBudget: "በጀት እያነጻጸርኩ ነው",
   leadStageShortlist: "የተመረጡ ንብረቶች አሉኝ",
-  leadStageAgreed: "ዋጋ ተስማምቷል / የoffer ደረጃ",
+  leadStageAgreed: "ዋጋ ተስማምቷል / የቅናሽ ደረጃ",
   leadStageReady: "አሁን ለማመልከት ዝግጁ ነኝ",
   leadDepositStatusLabel: "የቅድመ ክፍያ ዝግጁነት",
   leadDepositNone: "እርግጠኛ አይደለሁም",
@@ -6407,7 +6407,7 @@ MORTGAGE_I18N.ar = Object.assign({}, MORTGAGE_I18N.en, {
   preferredBankLabel: "البنك المفضل",
   genericProviderOption: "مستشار تمويل عقاري عام من makaug",
   providerContextNone: "لم يتم اختيار بنك بعد. استخدم زر الاتصال في مقارنة البنوك لتوجيه هذا العميل المحتمل إلى مقرض محدد.",
-  providerContextSelected: "المقرض المحدد: {bank}. سيتم وسم هذا العميل المحتمل للتسليم البنكي في King dashboard.",
+  providerContextSelected: "المقرض المحدد: {bank}. سيتم وسم هذا العميل المحتمل للتسليم البنكي في لوحة تحكم King.",
   setUpBankCall: "رتب مكالمة",
   sourceNoteLabel: "ملاحظة المصدر",
   publicRecordDisclosure: "المعلومات مأخوذة من صفحات بنكية عامة وسجلات سوقية عامة. قد تتغير الشروط دون إشعار؛ أكد مع المقرض قبل التقديم.",
@@ -6934,7 +6934,7 @@ AI_CHATBOT_I18N.am = Object.assign({}, AI_CHATBOT_I18N.en, {
   card2Sub: "አካባቢዎን ያጋሩ እና በአቅራቢያ ያሉ ለሽያጭ ወይም ለኪራይ ዝርዝሮችን ያግኙ።",
   card3Title: "የተረጋገጠ ደላል ያግኙ",
   card3Sub: "በዲስትሪክት፣ በልዩነት ወይም በቋንቋ የደላል እውቂያ ይጠይቁ።",
-  flowTitle: "የ chatbot ውይይት እንዴት ይሄዳል",
+  flowTitle: "የቻትቦት ውይይት እንዴት ይሄዳል",
   flow1: "ወደ makaug እንኳን በደህና መጡ። 1 ዘርዝር፣ 2 ፈልግ፣ 3 ደላል ፈልግ ብለው ይመልሱ።",
   flow2: "2 - በአካባቢዬ አቅራቢያ ፈልግ",
   flow3: "አካባቢና በጀት ያጋሩ። ተዛማጅ ዝርዝሮችን ከሊንክ ጋር እልካለሁ።",
@@ -6944,7 +6944,7 @@ AI_CHATBOT_I18N.am = Object.assign({}, AI_CHATBOT_I18N.en, {
   benefit1: "በተመራ ጥያቄዎች እና የፎቶ ዝርዝር ንብረት ዘርዝር።",
   benefit2: "በዲስትሪክት፣ አካባቢ፣ በጀት፣ መኝታ ክፍሎች እና ዓላማ ንብረቶችን ፈልግ።",
   benefit3: "ለተዛማጅ ደላሎች ቀጥተኛ WhatsApp እና የስልክ እውቂያ ያግኙ።",
-  benefit4: "chatbotን በ9 ቋንቋዎች በፈጣን ምላሽ ይጠቀሙ።",
+  benefit4: "ቻትቦቱን በ9 ቋንቋዎች በፈጣን ምላሽ ይጠቀሙ።",
   cta: "Chatbotን በ WhatsApp ጀምር"
 });
 
@@ -6956,7 +6956,7 @@ AI_CHATBOT_I18N.ar = Object.assign({}, AI_CHATBOT_I18N.en, {
   card2Title: "ابحث بالموقع المشترك",
   card2Sub: "شارك موقعك واحصل على إعلانات بيع أو إيجار قريبة بروابط مباشرة.",
   card3Title: "ابحث عن وسيط موثق",
-  card3Sub: "اطلب جهات اتصال الوسطاء حسب district أو التخصص أو اللغة واحصل على خيارات فوراً.",
+  card3Sub: "اطلب جهات اتصال الوسطاء حسب المقاطعة أو التخصص أو اللغة واحصل على خيارات فوراً.",
   flowTitle: "كيف تسير محادثة الروبوت",
   flow1: "مرحباً بك في makaug. أرسل 1 للإدراج، 2 للبحث، 3 للعثور على وسيط.",
   flow2: "2 - ابحث بالقرب من موقعي",
@@ -6965,7 +6965,7 @@ AI_CHATBOT_I18N.ar = Object.assign({}, AI_CHATBOT_I18N.en, {
   flow5: "هذه 5 عقارات مطابقة في منطقتك. اضغط أي رابط لعرض التفاصيل.",
   benefitsTitle: "ما يمكنك فعله الآن",
   benefit1: "إدراج عقار بإرشادات واضحة وقائمة صور.",
-  benefit2: "البحث عن عقارات حسب district والمنطقة والميزانية والغرف والغرض.",
+  benefit2: "البحث عن عقارات حسب المقاطعة والمنطقة والميزانية والغرف والغرض.",
   benefit3: "الحصول على أرقام WhatsApp واتصال مباشرة للوسطاء المناسبين.",
   benefit4: "استخدم الروبوت بتسع لغات مع ردود سريعة.",
   cta: "ابدأ الروبوت على WhatsApp"
@@ -8571,6 +8571,14 @@ function getStartupLanguagePreference(savedLang = "") {
     || "en"
   );
 }
+
+// When the site phrase pack for the chosen language arrives after the page has
+// already rendered, render once more so labels built in script use it too.
+window.addEventListener("makaug:site-i18n-ready", (event) => {
+  const lang = event?.detail?.lang;
+  if (!lang || lang === "en" || lang !== currentLang) return;
+  try { setLang(currentLang, true); } catch (error) {}
+});
 
 function setLang(lang, silent = false, rerender = true) {
   currentLang = normalizeMakaugLanguageCode(lang);
@@ -37940,7 +37948,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     pill: "makaug AI ይጠይቁ",
     title: "የሚፈልጉትን ይግለጹ። ተዛማጅ ንብረቶችን ያግኙ።",
     subtitle: "በማንኛውም ቋንቋ ይፈልጉ። makaug AI መልዕክትዎን ወደ ማጣሪያ ይቀይራል።",
-    placeholder: "ምሳሌ: 2-bed Ntinda under 1.5M",
+    placeholder: "ምሳሌ: ባለ 2 መኝታ Ntinda ከ1.5M በታች",
     ask: "AI ይጠይቁ",
     loading: "makaug AI እየፈለገ ነው...",
     zero: "ትክክለኛ ውጤት አልተገኘም። የሚፈልጉትን ይንገሩን።",
@@ -38297,12 +38305,12 @@ const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
     ],
     sale: [
       { label: "3 መኝታ ቤት ለሽያጭ በMuyenga", prompt: "3-bed house for sale in Muyenga", intent: "search_sale" },
-      { label: "bungalow በKira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
+      { label: "ባንጋሎ በKira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
       { label: "ቤት በNamugongo ከ300M በታች", prompt: "house for sale in Namugongo under 300M", intent: "search_sale" }
     ],
     land: [
       { label: "50x100 ፕሎት በGayaza", prompt: "50x100 plot in Gayaza", intent: "search_land" },
-      { label: "1 acre በMukono", prompt: "acre of land in Mukono", intent: "search_land" },
+      { label: "1 ኤከር በMukono", prompt: "acre of land in Mukono", intent: "search_land" },
       { label: "መሬት ለሽያጭ በMatugga", prompt: "land for sale in Matugga", intent: "search_land" }
     ],
     commercial: [
@@ -38336,7 +38344,7 @@ const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
     ],
     sale: [
       { label: "منزل 3 غرف للبيع في Muyenga", prompt: "3-bed house for sale in Muyenga", intent: "search_sale" },
-      { label: "bungalow في Kira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
+      { label: "بنغالو في Kira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
       { label: "منزل في Namugongo تحت 300M", prompt: "house for sale in Namugongo under 300M", intent: "search_sale" }
     ],
     land: [
@@ -43782,9 +43790,40 @@ function collapseDuplicateTransactionTitle(value = "") {
     .trim();
 }
 
+// One plain-English title per listing, built from its structured fields
+// ("3-bed house for sale in Kira"). Visitors on another language get this
+// instead of the lister's free-text title, and the site language layer
+// (assets/makaug-site-i18n.js) translates it by pattern, so a non-English page
+// never shows an English listing heading.
+function getCanonicalEnglishPropertyTitle(property = {}) {
+  const normalizedType = normalizeType(property?.type || property?.listing_type || property?.category || "");
+  const location = uniqueTextParts([
+    property?.area || property?.neighborhood,
+    property?.city,
+    property?.district
+  ]).slice(0, 2).join(", ") || "Uganda";
+  const beds = Number(property?.beds ?? property?.bedrooms);
+  const transaction = String(property?.transaction_type || property?.period || "").toLowerCase();
+  const rawKind = String(property?.property_type || property?.subtype || "").toLowerCase();
+  const kindNoun = /apartment|flat|condo/.test(rawKind) ? "apartment"
+    : /house|home|bungalow|villa|mansion|maisonette|duplex|townhouse/.test(rawKind) ? "house"
+      : /hostel/.test(rawKind) ? "hostel"
+        : "property";
+  const bedPrefix = Number.isFinite(beds) && beds > 0 ? `${beds}-bed ` : "";
+  if (normalizedType === "land") {
+    return /rent|lease|month/.test(transaction) ? `Land for rent in ${location}` : `Land for sale in ${location}`;
+  }
+  if (normalizedType === "commercial") return `Commercial property in ${location}`;
+  if (normalizedType === "student") return `Student accommodation in ${location}`;
+  if (normalizedType === "rent") return `${bedPrefix}${kindNoun} for rent in ${location}`;
+  if (normalizedType === "sale") return `${bedPrefix}${kindNoun} for sale in ${location}`;
+  return `${bedPrefix}${kindNoun} in ${location}`;
+}
+
 function getLocalizedPropertyTitle(property = {}) {
   const translated = getLocalizedListingText(property, "title", "");
   if (translated) return collapseDuplicateTransactionTitle(translated);
+  if ((currentLang || "en") !== "en") return getCanonicalEnglishPropertyTitle(property);
   if (!isFoundOnlineListing(property)) return collapseDuplicateTransactionTitle(property?.title) || translatePropertyUi("Property");
   const normalizedType = normalizeType(property?.type || property?.listing_type || property?.category || "");
   const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ") || translateListingLabel("Uganda");
@@ -44026,8 +44065,13 @@ function isGeneratedPropertyNarrative(text = "") {
 function buildLocalizedPropertyNarrative(property = {}, nearby = []) {
   const normalizedType = normalizeType(property?.type || property?.listing_type || "sale");
   const location = getPropertyStructuredLocation(property);
-  const title = getLocalizedPropertyTitle(property) || translateListingLabel("Property listing");
-  const subtype = translateListingLabel(property?.subtype || property?.property_type || "Property");
+  const title = siteTranslate(getLocalizedPropertyTitle(property)) || translateListingLabel("Property listing");
+  const rawSubtype = String(property?.subtype || property?.property_type || "Property").trim();
+  // Kind words ("Home", "house", "commercial_land") describe the property, so
+  // look them up as nouns — "Home" must not become the word for the home page.
+  const subtype = /^(home|house|apartment|property|land|office|other|hostel|commercial_land|shop_retail|warehouse_industrial|hospitality|rental property)$/i.test(rawSubtype)
+    ? (siteTranslate(rawSubtype.toLowerCase()) !== rawSubtype.toLowerCase() ? siteTranslate(rawSubtype.toLowerCase()) : translateListingLabel(rawSubtype))
+    : translateListingLabel(rawSubtype);
   const introBits = [title, subtype].filter(Boolean).join(" - ");
   const locationBits = uniqueTextParts([location.street, location.area, location.city, location.district]).join(", ");
   const factBits = [];
@@ -52743,7 +52787,7 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.am ||= {}, {
 	  "More options / Report an issue": "ተጨማሪ አማራጮች / ችግር ሪፖርት ያድርጉ",
   "This property was found from a public third-party source. Makaug provides a search and discovery preview only.": "ይህ ንብረት ከህዝብ የሶስተኛ ወገን ምንጭ ተገኝቷል። makaug የፍለጋ እና የግኝት ቅድመ እይታ ብቻ ይሰጣል።",
   "Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.": "makaug ባለቤትነት፣ መገኘት፣ ዋጋ፣ የመሬት ርዕስ፣ የሻጭ ስልጣን፣ የምስል መብቶች ወይም የእውቂያ ዝርዝሮችን አላረጋገጠም። ክፍያ ወይም እይታ ከማዘጋጀትዎ በፊት ዋናውን ምንጭ ይመልከቱ እና በራስዎ ያረጋግጡ።",
-  "Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.": "makaug የሶስተኛ ወገን ፎቶዎች፣ ቪዲዮዎች፣ captions፣ መግለጫዎች፣ ምልክቶች ወይም የእውቂያ ዝርዝሮች ባለቤትነትን አይጠይቅም። ሁሉም የሶስተኛ ወገን ይዘት የመጀመሪያው የመብት ባለቤት ንብረት ነው። ግንኙነት በዋናው ምንጭ ይካሄዳል።",
+  "Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.": "makaug የሶስተኛ ወገን ፎቶዎች፣ ቪዲዮዎች፣ የምስል መግለጫዎች፣ መግለጫዎች፣ ምልክቶች ወይም የእውቂያ ዝርዝሮች ባለቤትነትን አይጠይቅም። ሁሉም የሶስተኛ ወገን ይዘት የመጀመሪያው የመብት ባለቤት ንብረት ነው። ግንኙነት በዋናው ምንጭ ይካሄዳል።",
 	  "First posted online": "መጀመሪያ በመስመር ላይ የተለጠፈ",
 	  "Source date approx.": "የምንጭ ቀን በማረጋገጥ ላይ ነው",
 	  "First picked up by makaug": "በ makaug መጀመሪያ የተገኘ",
@@ -52762,7 +52806,7 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.am ||= {}, {
   "Open source contact": "የምንጭ እውቂያ ክፈት",
   "Open the public source page for contact details.": "ለእውቂያ ዝርዝሮች የህዝብ ምንጭ ገጹን ይክፈቱ።",
   "No phone number is published. Use the source page to contact the lister.": "ስልክ ቁጥር አልታተመም። ዝርዝሩን ለማግኘት የምንጭ ገጹን ይጠቀሙ።",
-  "Official platform embed. Makaug does not re-host social media photos or videos.": "ኦፊሴላዊ የመድረክ embed። Makaug የማህበራዊ ሚዲያ ፎቶዎችን ወይም ቪዲዮዎችን እንደገና አያስተናግድም።",
+  "Official platform embed. Makaug does not re-host social media photos or videos.": "ኦፊሴላዊ የመድረክ ማሳያ። Makaug የማህበራዊ ሚዲያ ፎቶዎችን ወይም ቪዲዮዎችን እንደገና አያስተናግድም።",
   "Review needed": "ግምገማ ያስፈልጋል",
   "Property": "ንብረት",
   "House": "ቤት",
@@ -53013,7 +53057,7 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
       "Contact via source": "በምንጭ በኩል ያግኙ",
       "Contact through source": "በምንጭ በኩል ያግኙ",
       "This is a third-party property result. Makaug is not the seller, broker, agent, land owner, or payment collector. Contact is handled through the original source.": "ይህ የሶስተኛ ወገን የንብረት ውጤት ነው። makaug ሻጭ፣ ደላል፣ ወኪል፣ የመሬት ባለቤት ወይም የክፍያ ሰብሳቢ አይደለም። እውቂያ በዋናው ምንጭ በኩል ይካሄዳል።",
-      "Source contact is being confirmed by King review.": "የምንጭ እውቂያ በ King review እየተረጋገጠ ነው።",
+      "Source contact is being confirmed by King review.": "የምንጭ እውቂያ በKing ግምገማ እየተረጋገጠ ነው።",
       "Source contact unavailable": "የምንጭ እውቂያ አይገኝም",
       "Original poster": "ዋናው ለጣፊ",
       "Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.": "makaug ጥያቄዎችን ወደዚህ ዝርዝር አቅራቢ አይልክም። መገኘት፣ እውቂያ ዝርዝሮች እና የክፍያ መመሪያዎችን ለመፈተሽ ዋናውን ምንጭ ይጠቀሙ።",
@@ -53214,12 +53258,29 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
   });
 })();
 
+// The site-wide phrase pack (assets/makaug-site-i18n.js) covers strings the
+// hand-written packs above never got, so a label is never left in English (or,
+// for Acholi, borrowed from Swahili) when the chosen language has a translation.
+function siteTranslate(text, lang = currentLang || "en") {
+  if (!text || lang === "en") return text;
+  try {
+    const layer = window.__makaugSiteI18n;
+    return layer && typeof layer.translate === "function" ? layer.translate(String(text), lang) : text;
+  } catch (error) {
+    return text;
+  }
+}
+
 function translateListingLabel(text) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
-  return LISTING_LABEL_I18N[lang]?.[text]
-    || LISTING_LABEL_I18N_SUPPLEMENTAL[lang]?.[text]
-    || LISTING_LABEL_I18N[fallback]?.[text]
+  const own = LISTING_LABEL_I18N[lang]?.[text] || LISTING_LABEL_I18N_SUPPLEMENTAL[lang]?.[text];
+  if (own) return own;
+  if (lang !== "en") {
+    const fromSitePack = siteTranslate(text, lang);
+    if (fromSitePack && fromSitePack !== text) return fromSitePack;
+  }
+  return LISTING_LABEL_I18N[fallback]?.[text]
     || LISTING_LABEL_I18N_SUPPLEMENTAL[fallback]?.[text]
     || LISTING_LABEL_I18N.en?.[text]
     || text;
@@ -53496,11 +53557,11 @@ PROPERTY_UI_I18N.am = Object.assign({}, PROPERTY_UI_I18N.sw, {
   "Sign in or create an account to keep it in your profile.": "በProfileዎ ውስጥ ለማስቀመጥ ይግቡ ወይም መለያ ይፍጠሩ።",
   "Save to your profile": "ወደ Profileዎ አስቀምጥ",
   "Keep this property in your makaug account": "ይህን ንብረት በ makaug መለያዎ ውስጥ ያስቀምጡ",
-  "Create your free account or sign in to save {title}, track updates, and come back to it later.": "{title}ን ለማስቀመጥ፣ updatesን ለመከታተል እና በኋላ ለመመለስ ነፃ መለያ ይፍጠሩ ወይም ይግቡ።",
+  "Create your free account or sign in to save {title}, track updates, and come back to it later.": "{title}ን ለማስቀመጥ፣ ዝማኔዎችን ለመከታተል እና በኋላ ለመመለስ ነፃ መለያ ይፍጠሩ ወይም ይግቡ።",
   "What happens next?": "ቀጥሎ ምን ይሆናል?",
   "The property will be saved straight to your personal profile after you sign in.": "ከገቡ በኋላ ንብረቱ በግል Profileዎ ውስጥ ይቀመጣል።",
   "You can review saved homes, compare options, and track your enquiries in one place.": "የተቀመጡ ቤቶችን ማየት፣ አማራጮችን ማነፃፀር እና ጥያቄዎችን በአንድ ቦታ መከታተል ይችላሉ።",
-  "We will also send a welcome email when your account is created.": "መለያዎ ሲፈጠር የእንኳን ደህና መጡ email እንልካለን።",
+  "We will also send a welcome email when your account is created.": "መለያዎ ሲፈጠር የእንኳን ደህና መጡ ኢሜይል እንልካለን።",
   "Sign In": "ግባ",
   "No property is saved publicly. Saved homes stay inside the signed-in account only.": "ምንም ንብረት በህዝብ አይቀመጥም። የተቀመጡ ቤቶች በገቡበት መለያ ውስጥ ብቻ ይቀመጣሉ።",
   "Mortgage Estimate": "የብድር ግምት",
@@ -53609,8 +53670,10 @@ function translatePropertyUi(text, vars = {}) {
     || translateListingLabel(text)
     || PROPERTY_UI_I18N[fallback]?.[text]
     || text;
+  // Values dropped into a translated sentence (a listing title, a label) are
+  // translated too, so "I am interested in {title}" is one language throughout.
   return Object.entries(vars).reduce((acc, [key, value]) => (
-    acc.replaceAll(`{${key}}`, String(value == null ? "" : value))
+    acc.replaceAll(`{${key}}`, String(value == null ? "" : (lang === "en" ? value : siteTranslate(String(value), lang))))
   ), template);
 }
 
