@@ -135,7 +135,7 @@ function slaHours() {
 // listing for what someone typed — including "thanks", "please do", "reply in
 // Luganda" or an agency pasting its own advert. Those are not people wanting
 // property, so they are taken off the desk (reason not_a_request, restorable).
-const PROPERTY_WORDS = /\b(house|houses|home|homes|rent|rental|renting|let|lease|buy|buying|sale|sell|selling|land|plot|plots|acre|acres|decimal|apartment|apartments|flat|flats|room|rooms|bedroom|bedrooms|bed|hostel|office|shop|warehouse|commercial|property|properties|bungalow|mansion|villa|condo|estate|nyumba|shamba|chumba|kiwanja|ardhi|kupangisha|kukodisha|kununua|ennyumba|enju|ttaka|okupangisa|okugula|okuguula|ekisenge|amayumba)\b/i;
+const PROPERTY_WORDS = /\b(house|houses|home|homes|rent|rental|renting|let|lease|buy|buying|sale|sell|selling|land|plot|plots|acre|acres|decimal|apartment|apartments|flat|flats|room|rooms|bedroom|bedrooms|bed|hostel|office|shop|warehouse|commercial|property|properties|bungalow|mansion|villa|condo|estate|nyumba|shamba|chumba|kiwanja|ardhi|kupangisha|kukodisha|kununua|ennyumba|enyumba|enju|ttaka|okupangisa|okugula|okuguula|ekisenge|amayumba)\b/i;
 const LANGUAGE_REQUEST = /\b(language|languages|luganda|lunganda|rukiga|runyankole|runyankore|swahili|kiswahili|acholi|lusoga|amharic|arabic|respond in|reply in|response in|chat in|speak)\b/i;
 const ADVERT_TEXT = /\b(welcome to|we specialize|we specialise|our services|contact us (on|at)|call us|follow us|#\w+)/i;
 const BOT_BOOKKEEPING = /^(No approved listings found[^:.]*[:.]?\s*|Auto-captured[^.]*\.?\s*|WhatsApp property request had no exact match\.?\s*)/i;
@@ -170,7 +170,9 @@ function judgeDemandLead(lead = {}) {
   if (!hasPropertyWord && !hasWant && place && said && !resolvePlace(areaText) && said.split(/\s+/).length > 4) {
     return { keep: false, why: 'conversation, not a request' };
   }
-  const junkArea = !areaText || /\d{1,2}:\d{2}|^\d+$|\b(am|pm)\b/i.test(areaText) || LANGUAGE_REQUEST.test(areaText);
+  // Not a place: a time stamp, a number, a language, or the request itself ("Natafuta shamba", "To rent").
+  const phraseNotPlace = !resolvePlace(areaText) && (PROPERTY_WORDS.test(areaText) || /\b(natafuta|nahitaji|nyenda|njagala|ninyenda|handika|to rent|for sale|forwarded)\b/i.test(areaText));
+  const junkArea = !areaText || /\d{1,2}:\d{2}|^\d+$|\b(am|pm)\b/i.test(areaText) || LANGUAGE_REQUEST.test(areaText) || phraseNotPlace;
   return { keep: true, area: place ? text(place.name) : (junkArea ? null : areaText), clearArea: junkArea && !place, message: said || null };
 }
 
@@ -179,7 +181,7 @@ async function screenWhatsappDemand(db) {
     `SELECT id, source, want, area, message, metadata
        FROM demand_leads
       WHERE source = 'whatsapp' AND archived_at IS NULL AND first_sent_at IS NULL
-        AND COALESCE(metadata->>'screened', '') = ''
+        AND (COALESCE(metadata->>'screened', '') = '' OR (metadata->>'screened' = 'ok' AND COALESCE(metadata->>'screen_version', '') <> '2'))
       ORDER BY asked_at DESC LIMIT 500`
   ).catch(() => ({ rows: [] }));
   let removed = 0;
@@ -195,7 +197,7 @@ async function screenWhatsappDemand(db) {
     } else {
       await db.query(
         `UPDATE demand_leads SET area = CASE WHEN $4::boolean THEN NULL ELSE COALESCE($2, area) END, message = COALESCE($3, message),
-                metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('screened', 'ok')
+                metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('screened', 'ok', 'screen_version', '2')
           WHERE id = $1`, [lead.id, verdict.area, verdict.message, Boolean(verdict.clearArea)]);
     }
   }
