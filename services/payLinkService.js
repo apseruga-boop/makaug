@@ -21,7 +21,7 @@ const billingOps = require('./billingOpsService');
 const revolut = require('./revolutMerchantService');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const PURPOSES = new Set(['listing_fee', 'agent_subscription', 'other']);
+const PURPOSES = new Set(['listing_fee', 'agent_subscription', 'short_term_fee', 'other']);
 
 function site() {
   return billingOps.SITE();
@@ -74,7 +74,9 @@ async function loadLink(db, code) {
  * link rather than a new one.
  */
 async function createPayLink(db, input = {}, actor = 'admin') {
-  const purpose = PURPOSES.has(input.purpose) ? input.purpose : (input.property_id ? 'listing_fee' : (input.agent_id ? 'agent_subscription' : 'other'));
+  const purpose = PURPOSES.has(input.purpose)
+    ? input.purpose
+    : (input.property_id ? 'listing_fee' : (input.agent_id ? 'agent_subscription' : (input.st_listing_id ? 'short_term_fee' : 'other')));
   const settings = await billingOps.getSettings(db, { fresh: true });
   let amountUgx = Math.round(Number(String(input.amount_ugx ?? '').replace(/[^\d.]/g, '')) || 0);
   let description = String(input.description || '').trim().slice(0, 200);
@@ -82,6 +84,7 @@ async function createPayLink(db, input = {}, actor = 'admin') {
   let payerPhone = digits(input.payer_phone) || null;
   let propertyId = null;
   let agentId = null;
+  let stListingId = null;
 
   if (purpose === 'listing_fee') {
     const property = (await db.query('SELECT id, title, lister_name, lister_phone, agent_id FROM properties WHERE id = $1::uuid', [input.property_id])).rows[0];
@@ -99,20 +102,33 @@ async function createPayLink(db, input = {}, actor = 'admin') {
     description = description || `makaug agent subscription — 1 month (${agent.full_name})`.slice(0, 200);
     payerName = payerName || agent.full_name || null;
     payerPhone = payerPhone || digits(agent.whatsapp || agent.phone) || null;
+  } else if (purpose === 'short_term_fee') {
+    const st = (await db.query(
+      `SELECT id, reference, title, host_name, host_phone, listing_fee_ugx, listing_term_months, listing_fee_status FROM st_listing WHERE id = $1::uuid`,
+      [input.st_listing_id]
+    )).rows[0];
+    if (!st) throw revenue.httpError(404, 'Short-stay listing not found');
+    if (['paid', 'waived'].includes(String(st.listing_fee_status))) throw revenue.httpError(409, `This listing's fee is already ${st.listing_fee_status}`);
+    stListingId = st.id;
+    amountUgx = amountUgx || Number(st.listing_fee_ugx || 50000);
+    description = description || `makaug short stay — ${Number(st.listing_term_months || 3)} months: ${st.title || st.reference}`.slice(0, 200);
+    payerName = payerName || st.host_name || null;
+    payerPhone = payerPhone || digits(st.host_phone) || null;
   } else {
     if (!(amountUgx >= 1000)) throw revenue.httpError(400, 'Enter the amount in UGX (at least 1,000).');
     description = description || 'makaug.com payment';
   }
   if (!(amountUgx > 0)) throw revenue.httpError(400, 'No amount to charge');
 
-  if (propertyId || agentId) {
+  if (propertyId || agentId || stListingId) {
     const existing = (await db.query(
       `SELECT * FROM pay_links
         WHERE status = 'open' AND amount_ugx = $3
-          AND (($1::uuid IS NOT NULL AND property_id = $1::uuid) OR ($2::uuid IS NOT NULL AND agent_id = $2::uuid))
+          AND (($1::uuid IS NOT NULL AND property_id = $1::uuid) OR ($2::uuid IS NOT NULL AND agent_id = $2::uuid)
+               OR ($4::uuid IS NOT NULL AND st_listing_id = $4::uuid))
           AND created_at > NOW() - INTERVAL '30 days'
         ORDER BY created_at DESC LIMIT 1`,
-      [propertyId, agentId, amountUgx]
+      [propertyId, agentId, amountUgx, stListingId]
     )).rows[0];
     if (existing) return { link: existing, url: payUrl(existing.code), reused: true };
   }
@@ -122,10 +138,10 @@ async function createPayLink(db, input = {}, actor = 'admin') {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       const link = (await db.query(
-        `INSERT INTO pay_links (code, purpose, property_id, agent_id, description, amount_ugx, card_currency, card_amount_minor, fx_rate_ugx,
+        `INSERT INTO pay_links (code, purpose, property_id, agent_id, st_listing_id, description, amount_ugx, card_currency, card_amount_minor, fx_rate_ugx,
                                 payer_name, payer_phone, created_by)
-         VALUES ($1, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-        [newCode(), purpose, propertyId, agentId, description, amountUgx, card.currency, minor, card.rate, payerName, payerPhone, actor]
+         VALUES ($1, $2, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+        [newCode(), purpose, propertyId, agentId, stListingId, description, amountUgx, card.currency, minor, card.rate, payerName, payerPhone, actor]
       )).rows[0];
       return { link, url: payUrl(link.code), reused: false };
     } catch (error) {
@@ -233,6 +249,85 @@ function cardPaymentFor(link, order) {
   };
 }
 
+/** A short-stay fee is paid: the listing's 3 months run from today, recorded on the listing too. */
+async function markShortTermPaid(db, { stListingId, method, reference, amountUgx, actor }) {
+  if (!stListingId) return null;
+  const stMethod = { revolut_card: 'card', mtn_momo: 'mtn_mobile_money', airtel_money: 'airtel_money', bank_transfer: 'bank_transfer', absa_ugx: 'bank_transfer', absa_usd: 'bank_transfer', cash: 'cash' }[method] || 'other';
+  const updated = (await db.query(
+    `UPDATE st_listing
+        SET listing_fee_status = 'paid',
+            -- First payment: the paid months run from today. A renewal adds on to what is left.
+            expires_at = CASE WHEN listing_fee_status = 'paid' THEN GREATEST(COALESCE(expires_at, NOW()), NOW()) ELSE NOW() END
+                         + (listing_term_months || ' months')::interval
+      WHERE id = $1::uuid
+      RETURNING id, expires_at, listing_term_months`,
+    [stListingId]
+  )).rows[0];
+  if (!updated) return null;
+  const existing = (await db.query('SELECT id FROM st_listing_payment WHERE listing_id = $1::uuid ORDER BY created_at DESC LIMIT 1', [stListingId])).rows[0];
+  if (existing) {
+    await db.query(
+      `UPDATE st_listing_payment SET status = 'paid', method = $2, provider_reference = $3, amount_ugx = $4, recorded_by = $5,
+              covers_from = CURRENT_DATE, covers_to = $6::date, updated_at = NOW()
+        WHERE id = $1`,
+      [existing.id, stMethod, reference || null, amountUgx, actor || 'payment', updated.expires_at]
+    );
+  } else {
+    await db.query(
+      `INSERT INTO st_listing_payment (listing_id, amount_ugx, method, provider_reference, status, covers_from, covers_to, recorded_by)
+       VALUES ($1::uuid, $2, $3, $4, 'paid', CURRENT_DATE, $5::date, $6)`,
+      [stListingId, amountUgx, stMethod, reference || null, updated.expires_at, actor || 'payment']
+    );
+  }
+  return updated;
+}
+
+/** Record a short-stay fee in the ledger and mark the listing paid. */
+async function recordShortTermPayment(db, { stListingId, payment, actor }) {
+  const entry = await revenue.recordEntry(db, { ...payment, direction: 'in', kind: 'short_term_fee' }, actor);
+  await db.query('UPDATE revenue_entries SET st_listing_id = $2::uuid WHERE id = $1', [entry.id, stListingId]);
+  const listing = await markShortTermPaid(db, { stListingId, method: payment.method, reference: payment.reference, amountUgx: entry.amount_ugx, actor });
+  return { entry, listing };
+}
+
+function teamApproveLine(agentId) {
+  return `${site()}/admin#agents`;
+}
+
+/**
+ * A pending agent (not yet approved) has paid. Approval still needs the team's
+ * checks, so: thank the agent, and tell the team they are ready to approve.
+ */
+async function pendingAgentPaid(db, agent, { how = 'card', amountUgx } = {}) {
+  if (!agent || String(agent.status || '').toLowerCase() !== 'pending') return { pending: false };
+  await db.query('UPDATE agents SET paid_awaiting_approval_at = NOW() WHERE id = $1::uuid', [agent.id]);
+  const handoff = require('./leadHandoffService');
+  const help = billingOps.helpContact();
+  const to = digits(agent.whatsapp || agent.phone);
+  const first = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
+  if (to.length >= 9) {
+    await handoff.deliverWhatsapp({
+      to,
+      body: [`✅ *Payment received — thank you, ${first}!*`, '', `Your first month (${billingOps.ugx(amountUgx)}) is paid.`, `${help.name} is finishing your checks now — as soon as you are approved you'll get your welcome pack and a short guide to posting here on WhatsApp.`].join('\n'),
+      kind: 'agent_paid_pending', leadId: null, nonce: `${agent.id}:paid_pending`
+    }).catch(() => null);
+  }
+  try {
+    const desk = require('./leadDeskService');
+    if (typeof desk.sendToTeam === 'function') {
+      await desk.sendToTeam(db, [
+        `💳 *New agent has PAID — ready to approve*`,
+        `${agent.full_name || 'Agent'} (+${to}) paid ${billingOps.ugx(amountUgx)} by ${how}.`,
+        `Finish their checks and approve them in the admin (Agents). The payment is already recorded, so approving won't ask for it again.`,
+        teamApproveLine(agent.id)
+      ].join('\n'), 'agent_paid_pending');
+    }
+  } catch (error) {
+    logger.warn('Team alert for a paid pending agent failed', { agentId: agent.id, error: error.message });
+  }
+  return { pending: true };
+}
+
 async function notifyPaid(db, link, recorded) {
   const to = digits(link.payer_phone);
   if (to.length < 9) return null;
@@ -244,7 +339,8 @@ async function notifyPaid(db, link, recorded) {
       return await billingOps.sendAgentBillingMessage(db, { agentId: link.agent_id, kind: 'reinstated', actor: 'revolut', force: true });
     }
     const handoff = require('./leadHandoffService');
-    const body = [`✅ *Payment received — thank you!*`, '', `${link.description}: ${billingOps.ugx(link.amount_ugx)}`, `Reference ${link.code}`].join('\n');
+    const until = recorded?.listing?.expires_at ? billingOps.prettyDate(new Date(recorded.listing.expires_at).toISOString()) : '';
+    const body = [`✅ *Payment received — thank you!*`, '', `${link.description}: ${billingOps.ugx(link.amount_ugx)}`, until ? `Your short stay is listed until *${until}*.` : '', `Reference ${link.code}`].filter(Boolean).join('\n');
     return await handoff.deliverWhatsapp({ to, body, kind: 'pay_link_paid', leadId: null, nonce: link.code });
   } catch (error) {
     logger.warn('Paid confirmation message failed', { code: link.code, error: error.message });
@@ -275,6 +371,9 @@ async function settleFromOrder(db, link, order) {
       const agent = (await db.query('SELECT * FROM agents WHERE id = $1::uuid', [claimed.agent_id])).rows[0];
       recorded = await revenue.recordAgentPayment(db, { agent, payment, actor: 'revolut' });
       if (agent?.billing_suspended_at) recorded.reinstatement = await billingOps.reinstateAgentAfterPayment(db, { agentId: agent.id, actor: 'revolut' });
+      recorded.pendingAgent = await pendingAgentPaid(db, agent, { how: 'card', amountUgx: claimed.amount_ugx });
+    } else if (claimed.purpose === 'short_term_fee' && claimed.st_listing_id) {
+      recorded = await recordShortTermPayment(db, { stListingId: claimed.st_listing_id, payment, actor: 'revolut' });
     } else {
       recorded = { entry: await revenue.recordEntry(db, { ...payment, direction: 'in', kind: 'other_income' }, 'revolut') };
     }
@@ -288,7 +387,7 @@ async function settleFromOrder(db, link, order) {
       [claimed.id, recorded.entry.id, order.state]
     );
     logger.info('Card payment recorded', { code: claimed.code, order: order.id, entry: recorded.entry.id });
-    if (!recorded.reinstatement?.reinstated) await notifyPaid(db, claimed, recorded);
+    if (!recorded.reinstatement?.reinstated && !recorded.pendingAgent?.pending) await notifyPaid(db, claimed, recorded);
     return { paid: true, entry_id: recorded.entry.id };
   } catch (error) {
     // A duplicate means this order was recorded already: keep the link paid.
@@ -334,9 +433,9 @@ async function createMomoClaim(db, code, { reference, phone, name } = {}) {
     `SELECT id FROM payment_claims WHERE pay_link_id = $1 AND LOWER(reference) = LOWER($2) LIMIT 1`, [link.id, txid])).rows[0];
   if (existing) return { claim_id: existing.id, duplicate: true };
   const claim = (await db.query(
-    `INSERT INTO payment_claims (source, payer_phone, payer_name, agent_id, property_id, purpose, reference, amount_ugx, method, message, pay_link_id)
-     VALUES ('pay_link', $1, $2, $3::uuid, $4::uuid, $5, $6, $7, 'mtn_momo', $8, $9) RETURNING *`,
-    [digits(phone) || link.payer_phone, String(name || '').trim().slice(0, 120) || link.payer_name, link.agent_id, link.property_id,
+    `INSERT INTO payment_claims (source, payer_phone, payer_name, agent_id, property_id, st_listing_id, purpose, reference, amount_ugx, method, message, pay_link_id)
+     VALUES ('pay_link', $1, $2, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, 'mtn_momo', $9, $10) RETURNING *`,
+    [digits(phone) || link.payer_phone, String(name || '').trim().slice(0, 120) || link.payer_name, link.agent_id, link.property_id, link.st_listing_id,
       link.purpose, txid, link.amount_ugx, `Paid by MoMo from pay link ${link.code}`, link.id]
   )).rows[0];
   await db.query('UPDATE pay_links SET claim_id = $2, updated_at = NOW() WHERE id = $1', [link.id, claim.id]);
@@ -355,9 +454,10 @@ async function closeLinkForClaim(db, claimId, entryId) {
 
 async function listPayLinks(db, { limit = 100 } = {}) {
   return (await db.query(
-    `SELECT l.*, p.title AS property_title, a.full_name AS agent_name
+    `SELECT l.*, COALESCE(p.title, st.title) AS property_title, a.full_name AS agent_name
        FROM pay_links l
        LEFT JOIN properties p ON p.id = l.property_id
+       LEFT JOIN st_listing st ON st.id = l.st_listing_id
        LEFT JOIN agents a ON a.id = l.agent_id
       ORDER BY l.created_at DESC LIMIT $1`,
     [Math.min(300, Math.max(1, Number(limit) || 100))]
@@ -446,6 +546,8 @@ module.exports = {
   handleRevolutEvent,
   createMomoClaim,
   closeLinkForClaim,
+  recordShortTermPayment,
+  pendingAgentPaid,
   listPayLinks,
   cancelPayLink,
   ensureRevolutWebhook,

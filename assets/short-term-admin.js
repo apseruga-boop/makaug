@@ -191,6 +191,9 @@
       + '<h5>Where it is</h5>'
       + '<p class="st-desk-meta"><b>' + esc(l.stage_label || l.moderation_stage) + '</b></p>'
       + '<p class="st-desk-meta">Photos: ' + esc(l.photo_count) + ' &middot; Fee: ' + esc(l.listing_fee_status) + '</p>'
+      + (['paid', 'waived'].indexOf(String(l.listing_fee_status)) === -1
+        ? '<p class="st-desk-meta"><button type="button" class="st-btn" data-st-paylink="' + esc(id) + '"><i class="fas fa-credit-card"></i> Send host a pay link</button></p>'
+        : '')
       + (l.listed_via === 'staff_assisted'
         ? '<p class="st-desk-warn" style="display:block;margin:6px 0"><i class="fas fa-user-pen"></i> '
           + 'Entered by ' + esc(l.entered_by_staff_name || 'a colleague') + ', not by the host. '
@@ -453,6 +456,23 @@
     var chip = e.target.closest('[data-st-desk-stage]');
     if (chip) {
       loadDesk(chip.getAttribute('data-st-desk-which'), chip.getAttribute('data-st-desk-stage'));
+      return;
+    }
+    var payBtn = e.target.closest('[data-st-paylink]');
+    if (payBtn) {
+      var listingId = payBtn.getAttribute('data-st-paylink');
+      payBtn.disabled = true;
+      api('/staff/listings/' + encodeURIComponent(listingId) + '/pay-link', { method: 'POST', body: {} })
+        .then(function (r) {
+          var st = r.sent && r.sent.status;
+          payBtn.outerHTML = '<span class="st-desk-ok"><i class="fas fa-check"></i> '
+            + (st === 'sent' || st === 'queued' || st === 'simulated' ? 'Pay link sent to the host on WhatsApp' : 'Pay link ready — WhatsApp ' + esc(st || 'not sent') + ': ' + esc(r.url))
+            + '</span>';
+        })
+        .catch(function (err) {
+          payBtn.disabled = false;
+          window.alert(err.message || 'Could not send the pay link');
+        });
       return;
     }
     var openBtn = e.target.closest('[data-st-desk-open]');

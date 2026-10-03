@@ -45,6 +45,7 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   await pool.query(`DELETE FROM payment_claims WHERE source = 'pay_link'`);
   await pool.query(`DELETE FROM revenue_entries WHERE account_key = 'revolut_whispers' OR reference LIKE 'PAYTEST%'`);
   await pool.query(`DELETE FROM properties WHERE title LIKE 'PAYTEST %'`);
+  await pool.query(`DELETE FROM revenue_entries WHERE reference LIKE 'PAYTESTST%'`);
   await pool.query(`DELETE FROM agents WHERE whatsapp = '256779000199'`);
   await api('PUT', '/revenue/settings/pay_to', { value: { method: 'MTN Mobile Money', number: '256780863394', name: 'MAKAUG ONLINE REAL ESTATE LTD' } });
 
@@ -140,6 +141,63 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   const sum = await api('GET', '/revenue/summary');
   check('summary lists pay links and card status', Array.isArray(sum.data?.pay_links) && sum.data?.card_payments?.configured === true);
   check('Revolut account shows in accounts', (sum.data?.accounts || []).some((a) => a.key === 'revolut_whispers' && Number(a.money_in) > 0));
+
+  console.log('\n6b. New agent pays before approval (Ronald\'s journey)');
+  await pool.query(`DELETE FROM agents WHERE whatsapp = '256779000211'`);
+  await pool.query(`DELETE FROM outbound_message_queue WHERE user_phone LIKE '%779000211'`);
+  const newAgent = (await pool.query(
+    `INSERT INTO agents (full_name, phone, whatsapp, status, licence_number, fee_exempt) VALUES ('Newbie Agent', '256779000211', '256779000211', 'pending', 'PAY-NEW', false) RETURNING id`)).rows[0];
+  const gate = await api('PATCH', `/agents/${newAgent.id}/status`, { status: 'approved' });
+  check('approving an unpaid new agent asks for payment', gate.status === 402 && gate.error === 'payment_required', `${gate.status} ${gate.error}`);
+  const naLink = await api('POST', '/revenue/pay-links', { purpose: 'agent_subscription', agent_id: newAgent.id, send_to: '256779000211' });
+  check('Ronald can send the new agent a pay link', naLink.ok && /\/pay\/MK/.test(naLink.data?.url || '') && naLink.data?.sent?.to === '256779000211', naLink.error);
+  const naGo = await page(`/pay/${naLink.data.link.code}/card`, { method: 'POST' });
+  const naOrder = String(naGo.location).split('/').pop();
+  await fetch(`${MOCK}/__complete/${naOrder}`, { method: 'POST' });
+  await webhook(naOrder);
+  const na = (await pool.query('SELECT status, paid_until, paid_awaiting_approval_at FROM agents WHERE id = $1', [newAgent.id])).rows[0];
+  check('paid new agent stays pending but is flagged "paid — ready to approve"', na.status === 'pending' && na.paid_until && na.paid_awaiting_approval_at, JSON.stringify(na));
+  const naMsg = (await pool.query(`SELECT payload->>'text' AS t FROM outbound_message_queue WHERE user_phone LIKE '%779000211' ORDER BY created_at DESC LIMIT 1`)).rows[0]?.t || '';
+  check('agent is told payment received and checks are being finished (not "live again")', /Payment received/.test(naMsg) && /finishing your checks/.test(naMsg) && !/live again/.test(naMsg), naMsg.slice(0, 120));
+  const teamMsg = (await pool.query(`SELECT payload->>'text' AS t FROM outbound_message_queue WHERE payload->>'text' LIKE '%ready to approve%' ORDER BY created_at DESC LIMIT 1`)).rows[0]?.t || '';
+  check('team is told the new agent paid and can be approved', /Newbie Agent/.test(teamMsg), teamMsg.slice(0, 80) || '(no team recipients configured in test env)');
+  const approve = await api('PATCH', `/agents/${newAgent.id}/status`, { status: 'approved' });
+  const na2 = (await pool.query('SELECT status, paid_awaiting_approval_at FROM agents WHERE id = $1', [newAgent.id])).rows[0];
+  check('approving now goes straight through without asking for payment again', approve.ok && na2.status === 'approved' && !na2.paid_awaiting_approval_at, approve.error);
+
+  console.log('\n6c. Short stay: fee asked for on approval, card closes the loop');
+  await pool.query(`DELETE FROM st_listing WHERE reference LIKE 'PAYTEST-ST%'`);
+  const st = (await pool.query(
+    `INSERT INTO st_listing (reference, slug, title, description, district, area, base_nightly_ugx, host_name, host_phone)
+     VALUES ('PAYTEST-ST1', 'paytest-st1-${Date.now()}', 'Lakeview cottage', 'test', 'Wakiso', 'Entebbe', 150000, 'Host Harriet', '256779000222') RETURNING id`)).rows[0];
+  const stLink = await api('POST', '/revenue/pay-links', { purpose: 'short_term_fee', st_listing_id: st.id, send_to: '256779000222' });
+  check('short-stay link is UGX 50,000 for the listing', stLink.ok && Number(stLink.data?.link?.amount_ugx) === 50000 && /short stay/.test(stLink.data?.link?.description || ''), stLink.error || stLink.data?.link?.description);
+  const stGo = await page(`/pay/${stLink.data.link.code}/card`, { method: 'POST' });
+  const stOrder = String(stGo.location).split('/').pop();
+  await fetch(`${MOCK}/__complete/${stOrder}`, { method: 'POST' });
+  await webhook(stOrder);
+  const stRow = (await pool.query('SELECT listing_fee_status, expires_at FROM st_listing WHERE id = $1', [st.id])).rows[0];
+  const stPay = (await pool.query(`SELECT status, method FROM st_listing_payment WHERE listing_id = $1`, [st.id])).rows[0];
+  const stEntry = (await pool.query(`SELECT kind, account_key, st_listing_id, verified_status FROM revenue_entries WHERE reference = $1`, [stOrder])).rows[0];
+  check('listing marked paid with 3 months from today', stRow.listing_fee_status === 'paid' && new Date(stRow.expires_at) > new Date(Date.now() + 85 * 86400e3), JSON.stringify(stRow));
+  check('short-stay payment record shows card, paid', stPay?.status === 'paid' && stPay?.method === 'card', JSON.stringify(stPay));
+  check('ledger entry: short_term_fee, Revolut, verified, linked', stEntry?.kind === 'short_term_fee' && stEntry?.account_key === 'revolut_whispers' && stEntry?.st_listing_id === st.id && stEntry?.verified_status === 'verified', JSON.stringify(stEntry));
+  const again3 = await api('POST', '/revenue/pay-links', { purpose: 'short_term_fee', st_listing_id: st.id });
+  check('no second link once the fee is paid', again3.status === 409, String(again3.status));
+
+  console.log('\n6d. Short stay paid by MoMo from the link');
+  const st2 = (await pool.query(
+    `INSERT INTO st_listing (reference, slug, title, description, district, area, base_nightly_ugx, host_name, host_phone)
+     VALUES ('PAYTEST-ST2', 'paytest-st2-${Date.now()}', 'Garden studio', 'test', 'Kampala', 'Muyenga', 90000, 'Host Ivan', '256779000233') RETURNING id`)).rows[0];
+  const st2Link = await api('POST', '/revenue/pay-links', { purpose: 'short_term_fee', st_listing_id: st2.id });
+  const stTx = `PAYTESTST${String(Date.now()).slice(-6)}`;
+  await page(`/pay/${st2Link.data.link.code}/momo`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `reference=${stTx}` });
+  const stClaim = (await pool.query(`SELECT * FROM payment_claims WHERE reference = $1`, [stTx])).rows[0];
+  check('MoMo claim is tied to the short stay', stClaim?.st_listing_id === st2.id && stClaim?.purpose === 'short_term_fee');
+  const stConf = await api('POST', `/revenue/claims/${stClaim.id}/confirm`, { method: 'mtn_momo' });
+  const st2Row = (await pool.query('SELECT listing_fee_status FROM st_listing WHERE id = $1', [st2.id])).rows[0];
+  const st2Entry = (await pool.query(`SELECT kind, account_key FROM revenue_entries WHERE reference = $1`, [stTx])).rows[0];
+  check('confirming it marks the short stay paid and records it under MoMo', stConf.ok && st2Row.listing_fee_status === 'paid' && st2Entry?.kind === 'short_term_fee' && st2Entry?.account_key === 'mtn_momo', stConf.error || JSON.stringify(st2Entry));
 
   console.log('\n7. Webhook signing');
   const connect = await api('POST', '/revenue/card-payments/connect');

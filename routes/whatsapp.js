@@ -10709,6 +10709,10 @@ async function billingPausedAgentReply({ phone, body = '' } = {}) {
   const settings = await billing.getSettings(db).catch(() => ({}));
   const pay = billing.payToLine(settings);
   const contact = agentHelpContact();
+  let payLink = '';
+  try {
+    payLink = (await require('../services/payLinkService').createPayLink(db, { purpose: 'agent_subscription', agent_id: agent.id }, 'whatsapp_paused')).url || '';
+  } catch (_ignored) { payLink = ''; }
   const last = pausedAgentAlerted.get(agent.id) || 0;
   if (Date.now() - last > 12 * 3600 * 1000) {
     pausedAgentAlerted.set(agent.id, Date.now());
@@ -10720,6 +10724,7 @@ async function billingPausedAgentReply({ phone, body = '' } = {}) {
     'Your makaug account is *paused* at the moment because the monthly subscription has not been paid. Nothing has been deleted.',
     '',
     `Please call or WhatsApp *${contact.name}* on *${contact.pretty}* — I have also let him know, and someone from our team will reach out to you.`,
+    payLink ? `\n💳 Pay now by card, Apple Pay, Google Pay or MoMo: ${payLink}\nEverything comes back as soon as it is paid.` : '',
     pay ? `\nAlready paid, or ready to? Pay to ${pay} and send the *transaction ID* here — everything comes back the moment it is confirmed.` : ''
   ].filter(Boolean).join('\n');
 }
@@ -13213,12 +13218,20 @@ async function agentJoinRequestReply({ phone, text = '' }) {
     if (recent.rows.length) return;
     await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'agent_join_requested', $1::jsonb)`, [JSON.stringify({ phone: digits, text: normalizeInput(text).slice(0, 300), existing_status: existing?.status || null })]).catch(() => {});
     const desk = require('../services/leadDeskService');
+    let payLine = '';
+    if (existing && existing.status === 'pending') {
+      const link = await require('../services/payLinkService').createPayLink(db, { purpose: 'agent_subscription', agent_id: existing.id }, 'agent_join').catch(() => null);
+      if (link?.url) payLine = `Their pay link (card or MoMo): ${link.url} — send it from Admin › Agents › 💳 Send pay link, or forward this.`;
+    } else {
+      payLine = `Once they have registered on makaug.com (Find Brokers › Register as Broker), open them in Admin › Agents and tap *💳 Send pay link*. When they pay you'll get a message here and can approve them.`;
+    }
     const body = [
       '🧑‍💼 *New agent wants to join makaug*',
       `+${digits}${existing ? ` (${existing.full_name}, application ${existing.status})` : ''}`,
       `They said: "${normalizeInput(text).slice(0, 200)}"`,
-      `${contact.name}: please call them today, explain the agent plan (UGX ${fee.toLocaleString('en-US')}/month), and approve them in the admin once paid.`
-    ].join('\n');
+      `${contact.name}: please call them today and explain the agent plan (UGX ${fee.toLocaleString('en-US')}/month).`,
+      payLine
+    ].filter(Boolean).join('\n');
     if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'agent_join_request');
     const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
     if (contact.digits && !onList) await require('../services/leadHandoffService').deliverWhatsapp({ to: contact.digits, body, kind: 'agent_join_request_contact', leadId: null, nonce: `${digits}-${Date.now()}` });

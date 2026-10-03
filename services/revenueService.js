@@ -31,7 +31,7 @@ const METHODS = {
   cash: { label: 'Cash', account: 'cash' }
 };
 const OUT_KINDS = new Set(['withdrawal', 'expense', 'transfer_out', 'refund']);
-const IN_KINDS = new Set(['agent_subscription', 'listing_fee', 'other_income', 'transfer_in', 'opening_adjustment']);
+const IN_KINDS = new Set(['agent_subscription', 'listing_fee', 'short_term_fee', 'other_income', 'transfer_in', 'opening_adjustment']);
 
 function feeConfig() {
   return {

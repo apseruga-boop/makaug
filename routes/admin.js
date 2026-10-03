@@ -8584,6 +8584,7 @@ router.get('/agents', async (req, res, next) => {
         a.removed_at,
         a.removed_reason,
         a.paid_until,
+        a.paid_awaiting_approval_at,
         a.fee_exempt,
         a.billing_plan,
         a.monthly_fee_ugx,
@@ -10089,6 +10090,7 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       `UPDATE agents
        SET status = $2,
            approved_at = CASE WHEN $2 = 'approved' THEN COALESCE(approved_at, NOW()) ELSE approved_at END,
+           paid_awaiting_approval_at = CASE WHEN $2 = 'approved' THEN NULL ELSE paid_awaiting_approval_at END,
            updated_at = NOW()
        WHERE id = $1
        RETURNING

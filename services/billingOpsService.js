@@ -373,8 +373,13 @@ async function confirmClaim(db, { claimId, actor, method, accountKey, amountUgx,
     const agent = await loadAgent(db, claim.agent_id);
     result = await revenue.recordAgentPayment(db, { agent, payment, actor });
     if (agent.billing_suspended_at) result.reinstatement = await reinstateAgentAfterPayment(db, { agentId: agent.id, actor });
+    else if (String(agent.status || '').toLowerCase() === 'pending') {
+      result.pendingAgent = await require('./payLinkService').pendingAgentPaid(db, agent, { how: 'mobile money', amountUgx: payment.amount }).catch(() => null);
+    }
   } else if (claim.purpose === 'listing_fee' && claim.property_id) {
     result = await recordListingPayment(db, { propertyId: claim.property_id, payment, actor });
+  } else if (claim.purpose === 'short_term_fee' && claim.st_listing_id) {
+    result = await require('./payLinkService').recordShortTermPayment(db, { stListingId: claim.st_listing_id, payment, actor });
   } else {
     result = { entry: await revenue.recordEntry(db, { ...payment, direction: 'in', kind: 'other_income' }, actor) };
   }

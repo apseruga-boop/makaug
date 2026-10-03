@@ -759,9 +759,41 @@ router.post('/staff/listings/:id/king-decision', requireAdminApiKey, async (req,
         role: req.adminAuth?.role || 'king'
       }
     });
-    return res.json({ ok: true, marker: SHORT_TERM_MARKER, listing });
+    let payLink = null;
+    if (action === 'approve' && listing?.id) {
+      payLink = await sendShortTermPayLink(listing.id, 'king_approval').catch((error) => ({ error: error.message }));
+    }
+    return res.json({ ok: true, marker: SHORT_TERM_MARKER, listing, pay_link: payLink });
   } catch (error) {
     return fail(res, error, 'Decision could not be saved');
+  }
+});
+
+/**
+ * Ask the host for the listing fee: a makaug.com/pay link (card or MoMo) on
+ * WhatsApp. Reuses the open link if one was already sent. Nothing is sent if
+ * the fee is already paid or waived.
+ */
+async function sendShortTermPayLink(listingId, actor, to = '') {
+  const row = (await db.query('SELECT listing_fee_status, host_phone FROM st_listing WHERE id = $1::uuid', [listingId])).rows[0];
+  if (!row) return { skipped: 'not_found' };
+  if (['paid', 'waived'].includes(String(row.listing_fee_status))) return { skipped: `fee_${row.listing_fee_status}` };
+  const payLinks = require('../services/payLinkService');
+  const created = await payLinks.createPayLink(db, { purpose: 'short_term_fee', st_listing_id: listingId }, actor);
+  const recipient = String(to || row.host_phone || '').replace(/\D+/g, '');
+  const sent = recipient.length >= 9 ? await payLinks.sendPayLink(db, { code: created.link.code, to: recipient, actor }) : { status: 'no_number' };
+  await db.query(`UPDATE st_listing SET listing_fee_status = 'pending' WHERE id = $1::uuid AND listing_fee_status = 'unpaid'`, [listingId]).catch(() => null);
+  return { url: created.url, code: created.link.code, reused: created.reused, sent };
+}
+
+router.post('/staff/listings/:id/pay-link', requireStaffAccess, async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) return res.status(400).json({ ok: false, error: 'Unknown listing' });
+    const result = await sendShortTermPayLink(req.params.id, req.staffAuth?.userId || 'staff', req.body?.to);
+    if (result.skipped) return res.status(409).json({ ok: false, error: result.skipped === 'not_found' ? 'Listing not found' : `The fee is already ${result.skipped.replace('fee_', '')}` });
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    return fail(res, error, 'The payment link could not be sent');
   }
 });
 
@@ -868,7 +900,27 @@ router.post('/staff/listings/:id/payment', requireStaffAccess, async (req, res) 
       );
       await client.query('COMMIT');
       if (!updated.rows.length) return res.status(404).json({ ok: false, error: 'Listing not found' });
-      return res.json({ ok: true, listing: updated.rows[0] });
+      // Money recorded by hand goes in the same ledger as everything else.
+      let ledger = null;
+      if (status === 'paid') {
+        const ledgerMethod = { mtn_mobile_money: 'mtn_momo', airtel_money: 'airtel_money', bank_transfer: 'bank_transfer', cash: 'cash' }[method] || '';
+        const fee = (await db.query('SELECT listing_fee_ugx, host_name, host_phone FROM st_listing WHERE id = $1::uuid', [req.params.id])).rows[0] || {};
+        try {
+          const revenue = require('../services/revenueService');
+          const entry = await revenue.recordEntry(db, {
+            direction: 'in', kind: 'short_term_fee', method: ledgerMethod, amount: Number(req.body?.amount_ugx || fee.listing_fee_ugx || 50000),
+            reference, payer_name: fee.host_name, payer_phone: fee.host_phone,
+            note: String(req.body?.note || '').trim() || `Short stay fee recorded by ${req.staffAuth?.userId || 'staff'}`
+          }, req.staffAuth?.userId || 'staff');
+          await db.query('UPDATE revenue_entries SET st_listing_id = $2::uuid WHERE id = $1', [entry.id, req.params.id]);
+          await db.query(`UPDATE pay_links SET status = 'paid', paid_method = $2, paid_at = NOW(), entry_id = $3, updated_at = NOW()
+                            WHERE st_listing_id = $1::uuid AND status = 'open'`, [req.params.id, ledgerMethod || 'manual', entry.id]);
+          ledger = { recorded: true, entry_id: entry.id };
+        } catch (error) {
+          ledger = { recorded: false, error: error.message };
+        }
+      }
+      return res.json({ ok: true, listing: updated.rows[0], ledger });
     } catch (error) {
       try { await client.query('ROLLBACK'); } catch (_) {}
       throw error;

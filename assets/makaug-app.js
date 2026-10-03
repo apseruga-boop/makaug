@@ -284,7 +284,8 @@ function mapRemoteAgentForUi(agent = {}) {
     paid_until: agent.paid_until ? String(agent.paid_until).slice(0, 10) : "",
     fee_exempt: agent.fee_exempt === true,
     billing_plan: agent.billing_plan || "",
-    welcome_sent_at: agent.welcome_sent_at || ""
+    welcome_sent_at: agent.welcome_sent_at || "",
+    paid_awaiting_approval_at: agent.paid_awaiting_approval_at || ""
   };
 }
 
@@ -28475,13 +28476,33 @@ function adminFormatUgx(value) {
 function adminAgentBillingLine(agent = {}) {
   if (agent.fee_exempt) return `💳 <span class="text-gray-500">Free listing (joined before the monthly fee)</span>`;
   const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+  const payBtn = agent.id ? ` <button type="button" onclick="adminSendAgentPayLink('${adminAttr(agent.id)}')" class="ml-1 underline font-bold text-gray-900">💳 Send pay link</button>` : "";
+  if (agent.paid_awaiting_approval_at) {
+    return `💳 <strong class="text-emerald-700">Paid — ready to approve</strong> (paid until ${adminEscape(agent.paid_until || "")})`;
+  }
   if (!agent.paid_until) {
     return String(agent.status || "").toLowerCase() === "approved"
-      ? `💳 <strong class="text-red-700">No payment recorded</strong>`
-      : `💳 <span class="text-gray-600">UGX 50,000 a month — payment is asked for when you approve</span>`;
+      ? `💳 <strong class="text-red-700">No payment recorded</strong>${payBtn}`
+      : `💳 <span class="text-gray-600">UGX 50,000 a month — not paid yet</span>${payBtn}`;
   }
-  if (agent.paid_until < today) return `💳 <strong class="text-red-700">Overdue</strong> — paid until ${adminEscape(agent.paid_until)}`;
+  if (agent.paid_until < today) return `💳 <strong class="text-red-700">Overdue</strong> — paid until ${adminEscape(agent.paid_until)}${payBtn}`;
   return `💳 <strong class="text-emerald-700">Paid</strong> until ${adminEscape(agent.paid_until)}`;
+}
+
+async function adminSendAgentPayLink(agentId) {
+  const agent = (adminLastAgentsForUi || []).find((a) => String(a.id) === String(agentId)) || {};
+  const suggested = String(agent.whatsapp || agent.phone || "").replace(/\D+/g, "");
+  const to = window.prompt(`Send ${agent.name || "this agent"} a payment link (card or MoMo) on WhatsApp.\n\nWhatsApp number:`, suggested);
+  if (to === null) return;
+  try {
+    const res = await apiRequest("/api/admin/revenue/pay-links", { method: "POST", headers: adminAuthHeaders(), body: { purpose: "agent_subscription", agent_id: agentId, send_to: String(to).replace(/\D+/g, "") } });
+    const r = res?.data || {};
+    const ok = ["sent", "queued", "simulated"].includes(r.sent?.status);
+    toast(ok ? `Pay link sent to +${r.sent.to}. You'll get a WhatsApp when they pay.` : `Link ready (${r.url}) but WhatsApp ${r.sent?.status || "not sent"} — copy it and send it yourself.`);
+    adminClosePaymentModal();
+  } catch (e) {
+    toast(e?.message || "Could not send the pay link.");
+  }
 }
 
 async function adminRemoveAgent(agentId) {
@@ -28570,6 +28591,8 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       <label class="block"><span class="font-bold">Note</span>
         <input name="note" placeholder="For cash: who received it and where it is kept" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <p id="admin-payment-error" class="hidden rounded-lg bg-red-50 border border-red-200 p-2 text-red-800" role="alert"></p>
+      ${mode === "approve" ? `<div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700"><strong>Not paid yet?</strong> Send them a payment link instead — they can pay by card, Apple Pay, Google Pay or MoMo. You'll get a WhatsApp when it's paid, and approving then won't ask for payment again.
+        <div class="mt-2"><button type="button" onclick="adminSendAgentPayLink('${adminAttr(agentId)}')" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">💳 Send pay link</button></div></div>` : ""}
       <div class="flex gap-2 justify-end pt-1">
         <button type="button" onclick="adminClosePaymentModal()" class="rounded-lg border border-gray-300 px-4 py-2 font-bold">Cancel</button>
         <button type="submit" class="rounded-lg bg-green-700 px-4 py-2 font-bold text-white">${mode === "approve" ? "Record payment & approve" : "Record payment"}</button>
