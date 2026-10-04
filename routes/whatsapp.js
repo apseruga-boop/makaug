@@ -1,3 +1,4 @@
+const { agentGreetingName } = require('../services/agentNameService');
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../config/database');
@@ -11,6 +12,7 @@ const {
   transcribeAudioFromUrl,
   transcribeAudioFromDataUrl,
   classifyWhatsappListingPhoto,
+  readPaymentReceipt,
   extractNaturalPropertyQuery
 } = require('../services/aiService');
 const {
@@ -87,6 +89,7 @@ const {
   employeePropertyCountPrompt,
   employeeRolePrompt,
   looksLikePropertyCaption,
+  withEnglishPropertyTerms,
   isEmployeeIntakeCancel,
   isEmployeeIntakeComplete,
   isEmployeeIntakeStep,
@@ -179,7 +182,7 @@ const WHATSAPP_MIN_LISTING_PHOTOS = 5;
 // Language Translations
 const T = {
   en: {
-    welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n\nReply with 1, 2, 3, or 4",
+    welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nReply with a number",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
@@ -194,8 +197,8 @@ const T = {
     askContactMethod: '📲 How should serious viewers contact you?\n1️⃣ WhatsApp / phone\n2️⃣ Email',
     askContactValuePhone: '📱 Please send the WhatsApp/phone number for listing enquiries.\nFormat: +256 7XX XXX XXX',
     askContactValueEmail: '✉️ Please send the email address for listing enquiries.',
-    askIDNumber: '🪪 Now type your National ID Number (NIN) here. This is required to prevent fraud and will not be publicly shown.',
-    askSelfie: '🪪 Please send a clear photo of your National ID. Do not send a PDF or document file. Your ID is used only for verification and fraud prevention - it is never shown publicly.',
+    askIDNumber: '🪪 Now type your National ID Number (NIN) here.\n\n🔒 This is only to check that you are the real owner. It is never shown on makaug and never shared with anyone who enquires.',
+    askSelfie: '🪪 Please send a clear photo of your National ID (a photo, not a PDF).\n\n🔒 Don\'t worry — this is only for verification, to protect buyers and tenants from fraud. Your ID is never shown on makaug or shared with anyone; only the makaug review team sees it.',
     askPhone: '📱 What is your mobile phone number (for verification)?\nFormat: +256 7XX XXX XXX',
     otpSent: "📲 We've sent a 6-digit code to your phone via SMS. Please type that code here to verify:",
     otpSentEmail: "✉️ We've sent a 6-digit code to your email. Please type that code here to verify:",
@@ -270,8 +273,8 @@ const T = {
     askBedrooms: "🛏 Eddiini ezingaana? (Okwandika ennamba, oba 0 bw'etaba)",
     askDescription: '📝 Teeka ennukuta ntono ku ensi eno (otuutu, ebintu, embeera...)',
     askPhotos: '📸 Weereza ekifaananyi kya *front/outside* okusooka.',
-    askIDNumber: '🪪 Kwa nteekateeka, tukeetaaga NIN yo (National ID Number). Ejja kutuzikirira bukyamu.',
-    askSelfie: "🤳 Weereza ekifaananyi kyo ekirabika obulungi ng'okutte National ID yo. Tosindika PDF oba document file; kyetaagisa kubeera kifaananyi.",
+    askIDNumber: '🪪 Kwa nteekateeka, tukeetaaga NIN yo (National ID Number).\n\n🔒 Kino kya kukakasa nti ggwe nnannyini yennyini — tekirabikira ku makaug era tekiweebwa muntu yenna.',
+    askSelfie: "🤳 Weereza ekifaananyi kyo ekirabika obulungi ng'okutte National ID yo. Tosindika PDF oba document file; kyetaagisa kubeera kifaananyi.\n\n🔒 ID yo ya kukakasa kwokka — tegirabikira ku makaug era tegiweebwa muntu yenna.",
     askPhone: '📱 Enamba yaffe ya simu (okukakasa)?\nFomati: +256 7XX XXX XXX',
     otpSent: '📲 Tukusindise koodi ku simu yo nga SMS. Wandika koodi eyo eri wano:',
     listingSubmitted: "🎉 *Ensi yo eterekedwa!*\n\nTeemu yaffe eya kulabirira era ejja kuterekebwa mu saawa 24.\n\nReference: #{ref}\n\n✅ Edirirra: teekawo profile yo olabe views, saves n'ebibuuza ku listing yo.\n\nWebale okozesa makaug! 🏠🇺🇬",
@@ -912,20 +915,24 @@ function timeGreetingWithName(lang, sessionData = {}) {
   return `${timeGreeting(lang)}${firstName ? `, ${firstName}` : ''}`;
 }
 
+function greetingMenus() {
+  return {
+    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
+    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Yingira makaug nga agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
+    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n5️⃣ Jiunge na makaug kama agent\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
+    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
+    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
+    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nMushobora kwandika bisanzwe.`,
+    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
+    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
+    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
+  };
+}
+
 function welcomeMessage(lang, sessionData = {}) {
   const code = resolveLangCode(lang);
   const lead = timeGreetingWithName(code, sessionData);
-  const menus = {
-    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
-    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
-    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
-    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n4️⃣ Off-plan projects\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
-    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
-    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n\nMushobora kwandika bisanzwe.`,
-    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
-    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
-    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
-  };
+  const menus = greetingMenus();
   return `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n\n${menus[code] || menus.en}\n\nBrowse makaug anytime: ${HOME_URL}`;
 }
 
@@ -1142,7 +1149,8 @@ function fastWhatsappRuntimeHints({
 
   if (!intent) {
     const route = contextualPageRouteFromMessage(clean);
-    if (route === 'listing_type' || isListingStartRequest(clean, { intent: 'property_listing', confidence: 0.99 })) {
+    if (route === 'agent_registration') intent = 'agent_registration';
+    else if (route === 'listing_type' || isListingStartRequest(clean, { intent: 'property_listing', confidence: 0.99 })) {
       intent = 'property_listing';
       const listingType = inferListingTypeFromStartRequest(clean, {});
       if (listingType) intentEntities.listing_type = listingType;
@@ -1445,18 +1453,8 @@ function friendlyGreetingReply(lang, sessionData = {}) {
   const code = resolveLangCode(lang);
   const lead = timeGreetingWithName(code, sessionData);
   const languageLine = languageComfortLine(code);
-  const messages = {
-    en: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nTell me what you need in your own words. For example:\n• "I want to sell my house in Rubaga"\n• "I need a 2-bedroom rental in Ntinda"\n• "Find me an agent in Wakiso"\n\nYou can also reply LIST, SEARCH or AGENT.`,
-    lg: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nMbuulira ky'oyagala mu bigambo byo. Okugeza:\n• "Njagala okutunda ennyumba yange e Rubaga"\n• "Njagala ennyumba ya bedrooms 2 e Ntinda"\n• "Nfunira agent e Wakiso"\n\nOsobola n'okuddamu LIST, SEARCH oba AGENT.`,
-    sw: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nNiambie unachohitaji kwa maneno yako. Kwa mfano:\n• "Nataka kuuza nyumba yangu Rubaga"\n• "Nahitaji nyumba ya vyumba 2 Ntinda"\n• "Nitafutie agent Wakiso"\n\nUnaweza pia kujibu LIST, SEARCH au AGENT.`,
-    ac: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nCoo gin ma imito ki lok mamegi. Labolle:\n• "Amito cato ot mega i Gulu"\n• "Amito ot me bedroom 2 i Kampala"\n• "Nong agent i Wakiso"\n\nI romo bene dwoko LIST, SEARCH onyo AGENT.`,
-    ny: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nGamba eki orikwenda omu bigambo byawe. Nk'ekyokureeberaho:\n• "Ninyenda kugurisha enju yangye mu Mbarara"\n• "Ninyenda enju ya bedrooms 2 omu Ntinda"\n• "Shaka agent omu Wakiso"\n\nNoobaasa n'okugarukamu LIST, SEARCH nari AGENT.`,
-    rn: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nAndika ico ukeneye mu majambo yawe. Nk'akarorero:\n• "Nshaka kugurisha inzu yanje kuri Kabale"\n• "Nshaka inzu y'ivyumba 2 muri Ntinda"\n• "Nshakira agent muri Wakiso"\n\nUshobora kandi kwishura LIST, SEARCH canke AGENT.`,
-    sm: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nMbuulira ky'oyagala mu bigambo byo. Okugeza:\n• "Nhenda okutunda ennyumba yange e Jinja"\n• "Nhenda ennyumba ya bedrooms 2 e Ntinda"\n• "Nfunira agent e Wakiso"\n\nOsobola n'okuddamu LIST, SEARCH oba AGENT.`,
-    am: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nየሚፈልጉትን በራስዎ ቃላት ይንገሩኝ። ለምሳሌ፦\n• "ቤቴን በ Rubaga መሸጥ ፈልጋለሁ"\n• "በ Ntinda ሁለት መኝታ ቤት እፈልጋለሁ"\n• "በ Wakiso ወኪል ፈልግልኝ"\n\nLIST፣ SEARCH ወይም AGENT ብለውም መመለስ ይችላሉ።`,
-    ar: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nاكتب ما تحتاجه بطريقتك، مثلاً:\n• "أريد بيع منزلي في Rubaga"\n• "أحتاج منزلاً بغرفتين في Ntinda"\n• "ابحث لي عن وكيل في Wakiso"\n\nيمكنك أيضاً الرد LIST أو SEARCH أو AGENT.`
-  };
-  return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
+  const menus = greetingMenus();
+  return `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n${menus[code] || menus.en}\n\n${t(code, 'menuHint')}`;
 }
 
 function whatsappContactConfirmationPrompt(lang, phone) {
@@ -1515,6 +1513,8 @@ function stepPromptFor(lang, step) {
     ask_contact_value: t(code, 'askContactValuePhone'),
     ask_id_number: t(code, 'askIDNumber'),
     ask_selfie: t(code, 'askSelfie'),
+    ask_terms: 'Please reply *AGREE* to accept the makaug listing terms and send your property for review, or *NO* to stop.',
+    investment_brief: 'Tell me the kind of investment (1 rental units, 2 commercial, 3 land, 4 any), the area and your budget.',
     ask_phone: t(code, 'askPhone'),
     search_type: t(code, 'askSearchType'),
     search_area: t(code, 'askSearchArea'),
@@ -2341,6 +2341,26 @@ function fastListingProgressReply(lang, patch = {}, updatedDraft = {}, intro = '
   };
 }
 
+async function sendListerTermsPrompt({ phone, draft = {} }) {
+  const docs = require('../services/listingDocsService');
+  const settings = await require('../services/billingOpsService').getSettings(db).catch(() => ({}));
+  const name = normalizeInput(draft.contact_display_name || draft.lister_name || '').split(/\s+/)[0] || '';
+  try {
+    await queueWhatsappWebBridgeMessage({
+      recipient: phone,
+      text: '📄 makaug — Terms for listing your property',
+      mediaUrl: docs.docUrls('lister_terms').cover,
+      mediaType: 'image',
+      source: 'whatsapp_runtime',
+      actorId: 'system',
+      metadata: { message_kind: 'lister_terms_cover', terms_version: docs.LISTER_TERMS_VERSION, reply_dedupe_key: `lister_terms_cover:${String(phone).replace(/\D/g, '')}:${new Date().toISOString().slice(0, 10)}` }
+    });
+  } catch (error) {
+    logger.warn('Lister terms cover not queued:', error.message || String(error));
+  }
+  return docs.listerTermsMessage(settings, { name });
+}
+
 async function submitWhatsappListingDraft({ phone, lang, draft }) {
   try {
     const rawDraft = draft || {};
@@ -2416,7 +2436,14 @@ async function submitWhatsappListingDraft({ phone, lang, draft }) {
           canonical_location_source: d.canonical_location_source,
           region: d.region,
           resolved_location_label: [d.area, d.district, d.region].filter(Boolean).join(', '),
-          removal_command: `REMOVE ${inquiryReference}`
+          removal_command: `REMOVE ${inquiryReference}`,
+          ...(d.terms_accepted_at ? {
+            lister_terms_version: d.terms_version || null,
+            lister_terms_accepted_at: d.terms_accepted_at,
+            lister_terms_accepted_phone: d.terms_accepted_phone || null,
+            lister_terms_accepted_text: d.terms_accepted_text || null,
+            lister_fee_terms: d.lister_fee_terms || null
+          } : {})
         },
         inquiryReference,
         d.national_id_number || null,
@@ -2732,10 +2759,13 @@ async function buildWhatsappListingEnquiryResponse(enquiry = {}, { phone = '', l
     const listerReachable = listerNumber
       ? digitsKey(listerNumber).length === 9 && digitsKey(listerNumber) !== digitsKey(phone) && !makaugNumbers.includes(digitsKey(listerNumber))
       : Boolean(listing?.agent_email || listing?.lister_email);
+    const agentNotApproved = Boolean(listing?.agent_id)
+      && (listing.agent_is_source_profile || String(listing.agent_status || '').toLowerCase() !== 'approved');
     listerNotified = Boolean(
       listing
       && listing.is_live
       && !listing.is_found_online
+      && !agentNotApproved
       && String(process.env.LEAD_HANDOFF_ENABLED || 'true').toLowerCase() !== 'false'
       && listerReachable
     );
@@ -4018,6 +4048,7 @@ function rememberEmployeePendingMedia(sessionData = {}, storedMedia = [], inboun
 }
 
 function clearEmployeePendingMedia(sessionData = {}) {
+  delete sessionData.pending_media_from_burst;
   delete sessionData.pending_property_media;
   delete sessionData.pending_property_media_message_id;
   delete sessionData.pending_property_media_stored_at;
@@ -4588,7 +4619,11 @@ function parseEmployeeBedroomDraft(caption = '') {
   const explicit = clean.match(/\b(\d{1,2})\s*(?:bedrooms?|beds?|br)\b/i)
     || clean.match(/\b(?:bedrooms?|beds?|br)\s*[:=-]?\s*(\d{1,2})\b/i);
   if (explicit?.[1]) return { bedrooms: Number(explicit[1]) };
-  return parseBedroomDraft(clean) || {};
+  // "Koba Estate 100by50fts @ UGX 28,000,000" is a plot. The generic parser read
+  // "50" as a bedroom count and a live land listing showed 50 bedrooms. Without
+  // any word for a building or a room there is no bedroom count to find.
+  if (!/\b(?:house|home|apartments?|flats?|villa|bungalow|mansion|duplex|townhouse|rooms?|bedrooms?|beds?|condo|cottage|storey|storeyed)\b/i.test(clean)) return {};
+  return parseBedroomDraft(clean.replace(/\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\s*(?:ft|fts|feet|m)?\b/gi, ' ')) || {};
 }
 
 // Same floor parseListingPriceDraft applies: below this a "price" is a room count, a plot
@@ -4712,7 +4747,8 @@ function explicitDistrictInCaption(caption = '') {
 }
 
 function employeePropertyFacts(caption = '', sessionData = {}) {
-  const cleanCaption = normalizeInput(caption);
+  // Luganda/Swahili captions are read through their English equivalents.
+  const cleanCaption = normalizeInput(withEnglishPropertyTerms(caption));
   const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
   const hints = extractSellerListingDraftHints(cleanCaption, {});
   let listingType = ownerForwardListingType(cleanCaption, { ...hints, ...naturalDraft });
@@ -4796,7 +4832,10 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   const locationCaption = cleanCaption.replace(
     /\b(?:private|ready|freehold)?\s*m(?:ailo|olo|ilo)\s+(?:land\s+)?title\b/gi,
     ' '
-  );
+  )
+    // "2.5Km From Namuseera Town And Approximately 14Km (8.5 Miles) From Kampala
+    // CBD" says where the property is NOT. It resolved to an area called "From".
+    .replace(/\b\d+(?:[.,]\d+)?\s*(?:km|kms|kilomet(?:er|re)s?|miles?|mi|minutes?|mins?|hrs?|hours?)\b(?:\s*\([^)]*\))?\s*(?:away\s+)?(?:drive\s+)?from\s+(?:the\s+)?[A-Za-z][A-Za-z'-]*(?:\s+(?:town|cbd|city|centre|center|road|rd))?/gi, ' ');
   let locationResolution = resolveWhatsappLocation(locationCaption, { allowText: true });
   if (!locationResolution || locationResolution.status !== 'matched') {
     const beforeLandmark = locationCaption.split(/\b(?:opposite|near)\b/i)[0].trim();
@@ -5152,7 +5191,11 @@ function employeePropertyMissing(facts = {}) {
 function isEmployeeNewPropertyCaptionBoundary(caption = '', facts = {}) {
   const clean = normalizeInput(caption);
   if (clean.length < 18) return false;
-  const hasPropertySignal = /\b(?:property|house|home|mansion|bungalow|villa|townhouse|apartments?|flats?|rentals?|units?|land|plots?|acres?|decimals?|commercial|shops?|offices?|warehouses?|bedrooms?|bathrooms?)\b/i.test(clean);
+  // "*KIWENDA-LUWUNGA ESTATE 100By50Fts @ 25M With Ready Landtitle*" is a new
+  // property too: estates, land titles and plot sizes count, or its photo was
+  // attached to whatever property came before it.
+  const hasPropertySignal = /\b(?:property|house|home|mansion|bungalow|villa|townhouse|apartments?|flats?|rentals?|units?|land|plots?|acres?|decimals?|commercial|shops?|offices?|warehouses?|bedrooms?|bathrooms?|estates?|landtitle|land\s+title)\b/i.test(clean)
+    || /\b\d{2,4}\s*(?:by|x)\s*\d{2,4}\s*(?:ft|fts|feet)?\b/i.test(clean);
   if (!hasPropertySignal) return false;
   const parsedSignal = Boolean(
     facts.listingType
@@ -5784,10 +5827,23 @@ async function createEmployeeReviewProperty({
     propertyId: '00000000-0000-0000-0000-000000000000',
     storedMedia
   });
-  if (claimedElsewhere.size) {
+  // An agent posting their own stock sent this photo WITH this caption, so it is
+  // this property's photo even when the same picture (a company flyer, say) is
+  // on another of their listings. Dropping it left Jonathan's Kiwenda estate
+  // with no photo while he was told "1 photo saved". Keep it and flag it for
+  // the moderator. Staff batches keep the old rule (a photo already on another
+  // record stays there) but it is now reported instead of disappearing.
+  const reusedMedia = (Array.isArray(storedMedia) ? storedMedia : [])
+    .filter((item) => item?.sha256 && claimedElsewhere.has(item.sha256));
+  sessionData.last_create_media_reused = reusedMedia.length;
+  sessionData.last_create_media_dropped = 0;
+  if (claimedElsewhere.size && sessionData.whatsapp_agent_self_intake !== true) {
+    const before = (Array.isArray(storedMedia) ? storedMedia : []).length;
     storedMedia = (Array.isArray(storedMedia) ? storedMedia : [])
       .filter((item) => !(item?.sha256 && claimedElsewhere.has(item.sha256)));
+    sessionData.last_create_media_dropped = before - storedMedia.length;
   }
+  sessionData.last_create_media_kept = (Array.isArray(storedMedia) ? storedMedia : []).length;
   const listerName = normalizeInput(agent?.full_name || customer?.fullName || 'WhatsApp customer');
   const listerPhone = normalizeInput(agent?.whatsapp || agent?.phone || customer?.phone || '');
   const title = ownerForwardListingTitle({
@@ -5812,6 +5868,12 @@ async function createEmployeeReviewProperty({
   const extraFields = {
     review_only: true,
     auto_publish: false,
+    ...(reusedMedia.length ? {
+      media_also_on_other_property: reusedMedia.map((item) => item.sha256),
+      media_reuse_note: sessionData.whatsapp_agent_self_intake === true
+        ? 'The agent sent a photo that is also on another listing (e.g. a shared flyer). Check it shows this property.'
+        : 'A photo sent for this property is already on another listing and was not attached.'
+    } : {}),
     whatsapp_employee_intake: true,
     whatsapp_employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
     whatsapp_employee_trigger: EMPLOYEE_INTAKE_TRIGGER,
@@ -5890,8 +5952,9 @@ async function createEmployeeReviewProperty({
         price_currency, price_original_currency, price_original, price_fx_rate_ugx, price_fx_as_of, price_period,
         bedrooms, lister_name, lister_phone, lister_email, lister_type, agent_id,
         id_document_name, id_document_url, extra_fields,
+        property_type, latitude, longitude,
         status, moderation_stage, listed_via, source
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,'pending','submitted','whatsapp','whatsapp_employee_intake')
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'pending','submitted','whatsapp','whatsapp_employee_intake')
       RETURNING id`,
       [
         facts.listingType,
@@ -5914,10 +5977,15 @@ async function createEmployeeReviewProperty({
         agent?.id || null,
         customer && sessionData.identity_document_url ? 'WhatsApp customer ID' : null,
         customer ? sessionData.identity_document_url || null : null,
-        JSON.stringify(extraFields)
+        JSON.stringify(extraFields),
+        // Buyers filter by type; a WhatsApp listing with none never showed under "house".
+        parsePropertyType(withEnglishPropertyTerms(caption)) || null,
+        Number.isFinite(Number(sessionData.pending_property_pin?.lat)) ? Number(sessionData.pending_property_pin.lat) : null,
+        Number.isFinite(Number(sessionData.pending_property_pin?.lng)) ? Number(sessionData.pending_property_pin.lng) : null
       ]
     );
     propertyId = inserted.rows[0].id;
+    delete sessionData.pending_property_pin;
     for (let index = 0; index < imageMedia.length; index += 1) {
       const isVideoKeyFrame = /video-(?:key-frame|still|message-preview|preview)/i.test(String(imageMedia[index].name || ''));
       const keyFrameNumber = videoKeyFrames.indexOf(imageMedia[index]) + 1;
@@ -6502,7 +6570,7 @@ async function findApprovedAgentByPhone(phone) {
   let agent = null;
   try {
     const result = await db.query(
-      `SELECT id, makaug_agent_number, full_name, company_name, phone, whatsapp, email, status
+      `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, status
          FROM agents
         WHERE status = 'approved'
           AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
@@ -6586,7 +6654,7 @@ function agentConversationalAside({ data = {}, cleanBody = '' } = {}) {
   const text = normalizeInput(cleanBody);
   if (!text) return null;
   const saved = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
-  const first = normalizeInput(data.agent?.full_name || '').split(/\s+/)[0] || '';
+  const first = agentGreetingName(data.agent || {}, '');
 
   // The menu points at these two words, so they have to work mid-batch as well.
   if (AGENT_SHARE_REQUEST.test(text)) {
@@ -6637,7 +6705,7 @@ const AGENT_SHARE_REQUEST = /\b(share|my (link|card|profile|page|listings?|prope
  * Two of the three options are for somebody else.
  */
 function agentMenuReply({ agent = {}, greet = true, savedCount = 0 } = {}) {
-  const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || '';
+  const first = agentGreetingName(agent, '');
   const lines = [];
   if (greet) {
     lines.push(`👋 Hello ${first || 'there'}!`);
@@ -6666,7 +6734,7 @@ function agentMenuReply({ agent = {}, greet = true, savedCount = 0 } = {}) {
  * on their WhatsApp status.
  */
 function agentShareReply({ agent = {} } = {}) {
-  const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || '';
+  const first = agentGreetingName(agent, '');
   let profileUrl = '';
   let cardUrl = '';
   try {
@@ -6694,8 +6762,52 @@ function agentShareReply({ agent = {} } = {}) {
 }
 
 function agentSelfIntakeOpeningLine(agent = {}) {
-  const first = normalizeInput(agent.full_name || '').split(/\s+/)[0] || 'there';
-  return `Got it ${first} — I will put this up for you. 👇`;
+  const first = agentGreetingName(agent, 'there');
+  return `Thanks ${first} 👇`;
+}
+
+/**
+ * The plain-words version of what is still missing, for an agent.
+ * "sale/rent/land/commercial/student type" means nothing to somebody posting
+ * a house; "is it for rent or for sale" does.
+ */
+function agentMissingPhrases(missing = []) {
+  return missing.map((item) => {
+    if (/type/i.test(item)) return 'is it for *rent* or for *sale*? (and what it is — house, apartment, land, shop…)';
+    if (/price/i.test(item)) return 'the *price*';
+    if (/area|district|location/i.test(item)) return 'the *area and district* — e.g. Kira, Wakiso';
+    return item;
+  });
+}
+
+function agentMoney(amount, currency = 'UGX') {
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return `${String(currency || 'UGX').toUpperCase()} ${Math.round(n).toLocaleString('en-US')}`;
+}
+
+/** What we understood, so the agent can see it and correct it. */
+function agentPropertyDetailLines(facts = {}, caption = '') {
+  const english = withEnglishPropertyTerms(caption);
+  const lines = [];
+  const bedrooms = facts.listingType === 'land' ? 0 : (Number(facts.bedroomDraft?.bedrooms) || 0);
+  const kind = parsePropertyType(english) || (facts.listingType === 'land' ? 'land' : (facts.listingType === 'commercial' ? 'commercial property' : 'property'));
+  const deal = facts.listingType === 'rent' || facts.listingType === 'student'
+    ? 'for rent'
+    : (facts.listingType === 'commercial'
+      ? (/\b(?:for rent|to let|rent)\b/i.test(english) ? 'for rent' : (/\b(?:sale|selling)\b/i.test(english) ? 'for sale' : ''))
+      : (facts.listingType ? 'for sale' : ''));
+  lines.push(`🏠 ${bedrooms ? `${bedrooms} bedroom ` : ''}${kind}${deal ? ` · ${deal}` : ''}`);
+  const area = normalizeInput(facts.locationPatch?.area || '');
+  const district = normalizeInput(facts.locationPatch?.district || '');
+  if (area || district) lines.push(`📍 ${[area, district].filter((v, i, all) => v && all.indexOf(v) === i).join(', ')}`);
+  const meta = facts.priceMetadata || {};
+  const shown = agentMoney(meta.price_original || facts.price, meta.price_original_currency || meta.price_currency || 'UGX');
+  if (shown) {
+    const period = ownerForwardPricePeriod(facts.listingType, english);
+    lines.push(`💰 ${shown}${period === 'month' ? ' a month' : (period === 'semester' ? ' a semester' : '')}`);
+  }
+  return lines;
 }
 
 /**
@@ -6703,14 +6815,14 @@ function agentSelfIntakeOpeningLine(agent = {}) {
  *
  * Staff get a terse receipt with an ID, because they are loading a batch on
  * someone else's behalf and need to track it. An agent is posting their own
- * stock and wants two things: confirmation it is in, and — if anything is
- * missing — the one line they have to send to finish it. Nothing about
- * moderation stages, no reference codes to quote.
+ * stock and wants three things: confirmation it is in, what we understood (so
+ * a wrong price is caught now, not after it is live), and — if anything is
+ * missing — the one line they have to send to finish it.
  *
  * Returns null when this is not an agent's own session, so staff copy is
  * untouched.
  */
-function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], openedAgentSelfIntake = false } = {}) {
+function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], openedAgentSelfIntake = false, caption = '', albumCount = 0 } = {}) {
   if (data.whatsapp_agent_self_intake !== true) return null;
   const missing = employeePropertyMissing(facts);
   const what = normalizeInput(facts.locationPatch?.area || facts.locationPatch?.district || '');
@@ -6721,23 +6833,396 @@ function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], op
   const lines = [];
   if (openedAgentSelfIntake) lines.push(agentSelfIntakeOpeningLine(data.agent || {}), '');
   if (missing.length) {
-    lines.push(`📝 I have your property${label}, but I cannot publish it yet.`);
+    lines.push(`📝 I have your property${label}, but I cannot put it up yet.`);
     lines.push('');
-    lines.push(`*Still needed:* ${missing.join(', ')}`);
+    lines.push('*Still needed:*');
+    agentMissingPhrases(missing).forEach((item) => lines.push(`• ${item}`));
     lines.push('');
-    lines.push('Just send it in one message and I will add it — no need to resend the photos.');
+    lines.push('Just reply with it here — no need to send the photos again.');
     return lines.join('\n');
   }
-  lines.push(`✅ Your property${label} is with our team for review.`);
+  lines.push(`✅ *Saved — your property${what ? ` in ${what}` : ''} is with our team for review.*`);
+  lines.push('');
+  lines.push(...agentPropertyDetailLines(facts, caption || facts.cleanCaption || ''));
   const bits = [];
   if (photos) bits.push(`${photos} ${photos === 1 ? 'photo' : 'photos'}`);
   if (videos) bits.push(`${videos} ${videos === 1 ? 'video' : 'videos'}`);
-  if (bits.length) lines.push(bits.join(' · ') + ' saved.');
+  if (Number(albumCount) > photos + videos) lines.push(`📸 Your ${Number(albumCount)} photos are being added to this property`);
+  else if (bits.length) lines.push(`📸 ${bits.join(' · ')} saved${photos + videos === 1 ? ' — send more and I will add them to this one' : ''}`);
+  lines.push('');
+  lines.push('Anything wrong? Just reply with the correction — e.g. _price 1.5m_ or _area Najjera, Wakiso_.');
   lines.push('');
   lines.push('As soon as it is approved it goes live under your name and I will send you the link to share.');
   lines.push('');
-  lines.push('Sending another? Just post it here the same way — one property per message.');
+  lines.push('Next property? Send it the same way — one property per message.');
   return lines.join('\n');
+}
+
+/**
+ * The note an agent gets when what they sent cannot be saved yet: photos with
+ * no words, words with no photos, or a caption that is missing something.
+ * Built from the session alone, so it can be sent straight away for a text
+ * reply or once a burst of photos has gone quiet.
+ */
+function agentPendingNotice(data = {}) {
+  if (data.whatsapp_agent_self_intake !== true) return '';
+  const items = [];
+  const pendingMedia = employeePendingStoredMedia(data);
+  const pendingCaption = normalizeInput(data.pending_property_caption || '');
+  if (pendingMedia.length || pendingCaption) items.push({ caption: pendingCaption, media: pendingMedia });
+  for (const entry of employeePendingSubmissionQueue(data)) items.push({ caption: normalizeInput(entry.caption || ''), media: entry.media || [] });
+  if (!items.length) return '';
+
+  const mediaWords = (media) => {
+    const photos = media.filter((m) => m.kind === 'image').length;
+    const videos = media.filter((m) => m.kind === 'video').length;
+    return [photos ? `${photos} ${photos === 1 ? 'photo' : 'photos'}` : '', videos ? `${videos} ${videos === 1 ? 'video' : 'videos'}` : ''].filter(Boolean).join(' and ');
+  };
+  const askForDetails = [
+    'Now tell me about this property in one message:',
+    '• What it is — e.g. 3 bedroom house, plot of land, shop',
+    '• For *rent* or for *sale*',
+    '• The *area and district* — e.g. Kira, Wakiso',
+    '• The *price*',
+    '',
+    'Like this: _"3 bedroom house for rent in Kira, Wakiso — UGX 1.2m a month"_',
+    '',
+    'No need to send the photos again.'
+  ];
+
+  if (items.length === 1) {
+    const item = items[0];
+    if (!item.caption) {
+      if (data.pending_media_from_burst === true) {
+        return [
+          `📸 I got ${mediaWords(item.media) || 'a photo'} with no description while several properties were coming in, so I cannot tell which property ${item.media.length === 1 ? 'it belongs' : 'they belong'} to.`,
+          '',
+          'Please send it again *together with that property\'s caption* (what it is, area, price) and I will add it to the right one.'
+        ].join('\n');
+      }
+      return [`📸 Got your ${mediaWords(item.media) || 'photos'} — thank you!`, '', ...askForDetails].join('\n');
+    }
+    if (!item.media.length) {
+      return [
+        `📝 Got the details for ${employeeCaptionLabel(item.caption)}.`,
+        '',
+        'Now send the *photos or a short video* of it and I will put it up for review.',
+        '_Every property needs at least one photo._'
+      ].join('\n');
+    }
+    const missing = employeePropertyMissing(employeePropertyFacts(item.caption, data));
+    if (!missing.length) return '';
+    return [
+      `📝 Got your ${mediaWords(item.media) || 'photos'} for ${employeeCaptionLabel(item.caption)}.`,
+      '',
+      'I just need:',
+      ...agentMissingPhrases(missing).map((m) => `• ${m}`),
+      '',
+      'Reply with just that — no need to send the photos again.'
+    ].join('\n');
+  }
+
+  const lines = [`📝 I have ${items.length} properties from you that are not saved yet:`];
+  items.forEach((item, index) => {
+    const label = item.caption ? employeeCaptionLabel(item.caption) : `${mediaWords(item.media) || 'Photos'} with no description`;
+    let needs;
+    if (!item.caption) needs = 'what it is, rent or sale, area and district, price';
+    else if (!item.media.length) needs = 'its photos or a short video';
+    else needs = agentMissingPhrases(employeePropertyMissing(employeePropertyFacts(item.caption, data))).join('; ') || 'nothing — it will save shortly';
+    lines.push('', `${index + 1}. ${label}`, `   needs: ${needs}`);
+  });
+  lines.push('', 'Reply with what the first one needs and I will add it, then the next. No need to send photos again.');
+  return lines.join('\n');
+}
+
+const AGENT_HELP = /^\s*(?:help|help me|i need help|msaada|nsaba obuyambi|obuyambi|nnyamba|nyamba|support|talk to (?:a )?(?:person|human|someone)|call me|4)\s*[.!?]*\s*$/i;
+
+/** Who an agent reaches when they ask for a person (Ronald by default). */
+function agentHelpContact() {
+  const name = normalizeInput(process.env.AGENT_HELP_CONTACT_NAME || 'Ronald');
+  const phone = String(process.env.AGENT_HELP_CONTACT_PHONE || '+256709402189').replace(/[^\d+]/g, '');
+  const digits = phone.replace(/\D+/g, '');
+  const pretty = digits.length === 12 && digits.startsWith('256')
+    ? `+256 ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`
+    : phone;
+  return { name, digits, pretty };
+}
+
+function agentHelpReply(agent = {}) {
+  const first = agentGreetingName(agent, '');
+  const contact = agentHelpContact();
+  return [
+    `🙋 No problem${first ? ` ${first}` : ''} — help is on the way.`,
+    '',
+    contact.digits
+      ? `I have let *${contact.name}* from our team know, and he will get back to you. If it is urgent, call or WhatsApp ${contact.name} directly on *${contact.pretty}*.`
+      : 'I have let our team know, and someone will get back to you here.',
+    '',
+    'If it is about a property, you can still send it here as normal — photos and a caption — and it will be saved.'
+  ].join('\n');
+}
+
+/** Tell Ronald (and the team alert list) that an agent asked for a person. */
+function alertTeamAgentNeedsHelp({ agent = {}, phone = '', said = '' } = {}) {
+  deferWhatsappWork('agent help alert', async () => {
+    const number = String(agent.whatsapp || agent.phone || phone || '').replace(/\D+/g, '');
+    const body = [
+      `🙋 *Agent asked for help on WhatsApp*`,
+      `${agent.full_name || 'An agent'}${agent.company_name ? ` (${agent.company_name})` : ''}`,
+      number ? `Their number: +${number}` : '',
+      number ? `Reply to them: https://wa.me/${number}` : '',
+      said ? `They said: "${String(said).slice(0, 160)}"` : '',
+      '',
+      'Please call or WhatsApp them back as soon as you can.'
+    ].filter((line, i, all) => line || (i > 0 && all[i - 1])).join('\n');
+    const handoff = require('../services/leadHandoffService');
+    const desk = require('../services/leadDeskService');
+    const contact = agentHelpContact();
+    const sentTo = new Set();
+    const nonce = Date.now();
+    if (contact.digits) {
+      await handoff.deliverWhatsapp({ to: contact.digits, body, kind: 'agent_help_contact', leadId: null, nonce });
+      sentTo.add(contact.digits.slice(-9));
+    }
+    const others = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : [])
+      .filter((to) => !sentTo.has(String(to).replace(/\D+/g, '').slice(-9)));
+    for (const to of others) {
+      await handoff.deliverWhatsapp({ to, body, kind: 'agent_help_request', leadId: null, nonce });
+    }
+  });
+}
+
+/** Tell the team a new agent property is waiting, so review happens the same day. */
+function alertTeamAgentPropertySubmitted({ agent = {}, propertyId = '', facts = {}, caption = '' } = {}) {
+  deferWhatsappWork('agent property alert', async () => {
+    const desk = require('../services/leadDeskService');
+    if (typeof desk.sendToTeam !== 'function' || desk.inQuietHours()) return;
+    const agentNumber = String(agent.whatsapp || agent.phone || '').replace(/\D+/g, '');
+    const body = [
+      `🏠 *New property from ${agent.full_name || 'an agent'} — waiting for review*`,
+      ...agentPropertyDetailLines(facts, caption),
+      agentNumber ? `Agent: +${agentNumber}` : '',
+      `Review: ${HOME_URL}/admin (Listings › pending)`,
+      propertyId ? `Ref ${String(propertyId).slice(0, 8).toUpperCase()}` : ''
+    ].filter(Boolean).join('\n');
+    await desk.sendToTeam(db, body, 'agent_property_submitted');
+    // Ronald loads and checks agents' properties on the ground, so he gets
+    // every one of these too, whether or not he is on the alert list.
+    const contact = agentHelpContact();
+    const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : [])
+      .some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
+    if (contact.digits && !onList) {
+      await require('../services/leadHandoffService').deliverWhatsapp({
+        to: contact.digits, body, kind: 'agent_property_submitted_contact', leadId: null, nonce: `${propertyId}`
+      });
+    }
+  });
+}
+
+function agentVoiceNoteReply() {
+  return [
+    '🎤 Sorry — I cannot listen to voice notes yet.',
+    '',
+    'Please *type* the details of the property in one message:',
+    'what it is, rent or sale, the area and district, and the price.',
+    '',
+    'Like this: _"3 bedroom house for rent in Kira, Wakiso — UGX 1.2m a month"_'
+  ].join('\n');
+}
+
+/** Where an agent's properties are, from the database rather than the session. */
+async function agentStatusReply(agent = {}) {
+  if (!agent?.id) return '';
+  let rows = [];
+  try {
+    rows = (await db.query(
+      `SELECT id, title, area, status, created_at
+         FROM properties
+        WHERE agent_id = $1::uuid
+          AND LOWER(COALESCE(status, '')) IN ('pending', 'approved', 'live', 'published', 'rejected')
+          AND created_at >= NOW() - INTERVAL '60 days'
+        ORDER BY created_at DESC
+        LIMIT 30`,
+      [agent.id]
+    )).rows;
+  } catch (error) {
+    logger.warn('Agent status lookup failed:', error.message || String(error));
+    return '';
+  }
+  const pending = rows.filter((r) => String(r.status).toLowerCase() === 'pending');
+  const live = rows.filter((r) => ['approved', 'live', 'published'].includes(String(r.status).toLowerCase()));
+  const rejected = rows.filter((r) => String(r.status).toLowerCase() === 'rejected');
+  if (!rows.length) {
+    return 'You have not sent me any properties yet. Send one here — photos and a caption with what it is, rent or sale, the area and the price — and I will confirm it straight away.';
+  }
+  const lines = ['📋 *Your properties (last 60 days)*'];
+  if (pending.length) {
+    lines.push('', `⏳ *${pending.length} with our team for review*`);
+    pending.slice(0, 6).forEach((r) => lines.push(`• ${shortEmployeeLabel(r.title || r.area || 'Property', 50)}`));
+  }
+  if (live.length) {
+    lines.push('', `✅ *${live.length} live*`);
+    live.slice(0, 6).forEach((r) => lines.push(`• ${shortEmployeeLabel(r.title || r.area || 'Property', 50)} — ${HOME_URL}/property/${r.id}`));
+  }
+  if (rejected.length) {
+    lines.push('', `⚠️ *${rejected.length} not approved* — reply *HELP* and we will tell you why.`);
+  }
+  lines.push('', 'I message you the link the moment each one goes live.');
+  return lines.join('\n');
+}
+
+/**
+ * "price 1.5m", "sorry it's in Najjera", "4 bedrooms" — a fix to the property
+ * just saved, not a new one. Applied only while that property is still with
+ * the team, only to the fields the message actually gives, and only for the
+ * agent's own property.
+ */
+async function applyAgentCorrection({ data = {}, cleanBody = '' } = {}) {
+  if (data.whatsapp_agent_self_intake !== true) return null;
+  const propertyId = data.current_property_id || (Array.isArray(data.property_ids) ? data.property_ids[data.property_ids.length - 1] : null);
+  if (!propertyId || !data.agent?.id) return null;
+  if (employeePendingStoredMedia(data).length || normalizeInput(data.pending_property_caption || '')) return null;
+  const text = normalizeInput(cleanBody);
+  if (!text || text.length > 120) return null;
+  // "Sorry its in Kisaasi, Kampala" -> "Kisaasi, Kampala": the filler words
+  // made the place resolver settle for the district alone.
+  let core = text;
+  for (let i = 0; i < 5; i += 1) {
+    const next = core.replace(/^(?:sorry|correction|correct|actually|change|no|not|wrong|the|it'?s|its|it is|is|in|at|area|location|place|district|now|to|should be|price|bedrooms?)\b[\s,:.-]*/i, '');
+    if (next === core) break;
+    core = next;
+  }
+  const facts = employeePropertyFacts(/^(?:price|bedrooms?)\b/i.test(text) ? text : (core || text), data);
+  const looksLikeFix = /^(?:price|area|location|place|district|bedrooms?|rooms?|it'?s|its|it is|sorry|correction|correct|change|actually|not|no[, ]|wrong)\b/i.test(text);
+  // A full new caption (rent/sale + price + place) is a new property waiting for photos, not a fix.
+  if (facts.listingType && !looksLikeFix) return null;
+  const newPrice = Number(facts.price) > 0 ? facts : null;
+  const newPlace = facts.locationPatch?.area && facts.locationPatch?.district && facts.locationPatch?.canonical_location_id ? facts.locationPatch : null;
+  const newBedrooms = /\b(?:bed|bedroom|bedrooms|rooms?)\b/i.test(withEnglishPropertyTerms(text)) ? Number(facts.bedroomDraft?.bedrooms) || null : null;
+  if (!newPrice && !newPlace && !newBedrooms) {
+    // "Correction Over 50 Plots Of Land For Sale" — a fix we cannot apply field
+    // by field. It was being stored as a new caption waiting for photos. Pass it
+    // to the team on the property instead, and say so.
+    if (!/^(?:correction|correct|sorry|actually|wrong|change)\b/i.test(text)) return null;
+    const noted = (await db.query(
+      `UPDATE properties
+          SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
+                'agent_corrections',
+                COALESCE(extra_fields->'agent_corrections', '[]'::jsonb) || jsonb_build_array(jsonb_build_object('at', NOW()::text, 'text', $3::text))
+              ),
+              moderation_notes = CONCAT_WS(E'\n', NULLIF(moderation_notes, ''), $4::text),
+              updated_at = NOW()
+        WHERE id = $1::uuid AND agent_id = $2::uuid
+          AND created_at >= NOW() - INTERVAL '48 hours'
+        RETURNING title`,
+      [propertyId, data.agent.id, text, `Agent correction: "${text}"`]
+    )).rows[0];
+    if (!noted) return null;
+    deferWhatsappWork('agent correction alert', async () => {
+      const desk = require('../services/leadDeskService');
+      const body = [`✏️ *Correction from ${data.agent.full_name || 'an agent'}*`, `For: ${noted.title} (Ref ${String(propertyId).slice(0, 8).toUpperCase()})`, `"${text}"`, `Edit it in ${HOME_URL}/admin`].join('\n');
+      if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'agent_correction');
+      const contact = agentHelpContact();
+      const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
+      if (contact.digits && !onList) await require('../services/leadHandoffService').deliverWhatsapp({ to: contact.digits, body, kind: 'agent_correction_contact', leadId: null, nonce: Date.now() });
+    });
+    return [`✏️ *Noted* — I have passed your correction to the team for *${noted.title}*:`, `_"${text}"_`, '', 'They will update the listing before it goes live (or straight away if it is already live).'].join('\n');
+  }
+  if (!looksLikeFix && text.split(/\s+/).length > 6) return null;
+
+  const current = (await db.query(
+    `SELECT id, listing_type, area, district, bedrooms, status, extra_fields
+       FROM properties
+      WHERE id = $1::uuid AND agent_id = $2::uuid AND status = 'pending'
+        AND created_at >= NOW() - INTERVAL '48 hours'`,
+    [propertyId, data.agent.id]
+  )).rows[0];
+  if (!current) return null;
+
+  const sets = [];
+  const params = [current.id];
+  const changed = [];
+  const extra = { agent_corrections: [...(Array.isArray(current.extra_fields?.agent_corrections) ? current.extra_fields.agent_corrections : []), { at: new Date().toISOString(), text }].slice(-10) };
+  if (newPrice) {
+    const meta = newPrice.priceMetadata || {};
+    params.push(newPrice.price); sets.push(`price = $${params.length}`);
+    params.push(meta.price_currency || ACTIVE_CURRENCY); sets.push(`price_currency = $${params.length}`);
+    params.push(meta.price_original_currency || ACTIVE_CURRENCY); sets.push(`price_original_currency = $${params.length}`);
+    params.push(meta.price_original || newPrice.price); sets.push(`price_original = $${params.length}`);
+    params.push(meta.price_fx_rate_ugx || null); sets.push(`price_fx_rate_ugx = $${params.length}`);
+    changed.push(`💰 price is now ${agentMoney(meta.price_original || newPrice.price, meta.price_original_currency || 'UGX')}`);
+  }
+  if (newPlace) {
+    params.push(newPlace.area); sets.push(`area = $${params.length}`);
+    params.push(newPlace.district); sets.push(`district = $${params.length}`);
+    extra.canonical_location_id = newPlace.canonical_location_id;
+    changed.push(`📍 area is now ${newPlace.area}, ${newPlace.district}`);
+  }
+  if (newBedrooms) {
+    params.push(newBedrooms); sets.push(`bedrooms = $${params.length}`);
+    changed.push(`🛏 ${newBedrooms} bedrooms`);
+  }
+  const title = ownerForwardListingTitle({
+    listingType: current.listing_type,
+    area: newPlace ? newPlace.area : current.area,
+    bedrooms: newBedrooms || current.bedrooms
+  });
+  if (title) { params.push(title); sets.push(`title = $${params.length}`); }
+  params.push(JSON.stringify(extra));
+  await db.query(
+    `UPDATE properties SET ${sets.join(', ')}, extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${params.length}::jsonb, updated_at = NOW()
+      WHERE id = $1::uuid AND status = 'pending'`,
+    params
+  );
+  return [`✏️ *Updated* — ${changed.join(' · ')}.`, '', 'It is still with our team for review. I will send you the link when it is live.'].join('\n');
+}
+
+/** A dropped pin: keep the coordinates with the property, and use its name if it has one. */
+async function handleAgentLocationPin({ phone, data = {}, sharedLocation = null, currentStep } = {}) {
+  if (data.whatsapp_agent_self_intake !== true || !hasUsableSharedLocation(sharedLocation)) return null;
+  const pin = { lat: Number(sharedLocation.lat), lng: Number(sharedLocation.lng), label: sharedLocationLabel(sharedLocation) || null };
+  let named = normalizeInput(sharedLocation.label || sharedLocation.address || '');
+  let guessedFromNearby = false;
+  if (!named) {
+    // No name on the pin: borrow the area of the nearest listing we already
+    // know, within 2.5 km. A moderator still checks it before anything is live.
+    const near = await db.query(
+      `SELECT area, district
+         FROM properties
+        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+          AND COALESCE(area, '') <> '' AND COALESCE(district, '') <> ''
+          AND ABS(latitude - $1) < 0.012 AND ABS(longitude - $2) < 0.012
+        ORDER BY (latitude - $1) * (latitude - $1) + (longitude - $2) * (longitude - $2)
+        LIMIT 1`,
+      [pin.lat, pin.lng]
+    ).then((r) => r.rows[0]).catch(() => null);
+    if (near) {
+      named = `${near.area}, ${near.district}`;
+      guessedFromNearby = true;
+    }
+  }
+  const pendingCaption = normalizeInput(data.pending_property_caption || '');
+  // The pin belongs to the property being described, or failing that the one just saved.
+  const savedId = data.current_property_id || (Array.isArray(data.property_ids) ? data.property_ids[data.property_ids.length - 1] : null);
+  if ((employeePendingStoredMedia(data).length || pendingCaption)) {
+    data.pending_property_pin = pin;
+    await replaceEmployeeSession(phone, currentStep, data);
+    if (named) return { followText: named, pin, guessed: guessedFromNearby };
+    const notice = agentPendingNotice(data);
+    return notice
+      ? `📍 Thanks for the location pin — I have kept it with this property.\n\n${notice}`
+      : '📍 Thanks for the location pin — I have kept it with this property.';
+  }
+  if (savedId) {
+    await db.query(
+      `UPDATE properties SET latitude = $2, longitude = $3,
+              extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $4::jsonb, updated_at = NOW()
+        WHERE id = $1::uuid AND status = 'pending'`,
+      [savedId, pin.lat, pin.lng, JSON.stringify({ agent_location_pin: pin })]
+    ).catch((error) => logger.warn('Agent pin save failed:', error.message || String(error)));
+    return '📍 Thanks — I have added that location pin to the property you just sent. It helps buyers find it.';
+  }
+  return '📍 Thanks for the pin. Send the property itself too — photos and a caption with what it is, rent or sale, the area and the price — and I will keep the pin with it.';
 }
 
 // How long after a batch closes a stray property message is still read as
@@ -6765,6 +7250,50 @@ function looksLikeForwardedProperty({ cleanBody = '', mediaUrl = '', runtime = {
  * already flagged), or null when this is not that situation at all and the
  * message should carry on to the normal conversation.
  */
+// Somebody who works here, saying hello.
+//
+// 4 Oct 2026, 09:02. Arthur had spent the morning on this number running staff
+// intake — a batch for Francis Isabirye had closed nine minutes earlier — said
+// "Hello", and got the marketplace's customer greeting: sell my house in
+// Rubaga, find me an agent in Wakiso, reply LIST, SEARCH or AGENT.
+//
+// The agent menu added on 30 Sep only covers rows in the agents table, and the
+// people who run intake are not in it. There was no branch for them at all, so
+// they fell through to the consumer script.
+//
+// Proof comes from the session's own history rather than from the allowlist:
+// WHATSAPP_EMPLOYEE_INTAKE_NUMBERS returns true for everyone when it is unset,
+// so keying off it would hand the staff menu to every customer. A number that
+// has actually run a batch, or the configured owner, is a signal that cannot
+// leak.
+function staffIntakeGreetingReply({ phone = '', session = {}, cleanBody = '' } = {}) {
+  const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  const hasIntakeHistory = Boolean(
+    data.employee_intake_last_completed_at
+    || data.employee_intake_last_subject_name
+    // Set once they have answered who the batch is for, so it means they went
+    // through the staff flow rather than merely having a session open.
+    || data.employee_role
+  );
+  if (!hasIntakeHistory && !isAiCeoOwnerPhone(phone)) return '';
+
+  const lastSubject = normalizeInput(data.employee_intake_last_subject_name || '');
+  const lastCount = Number(data.employee_intake_last_properties_set_up || 0);
+  const lastLine = lastSubject && lastCount > 0
+    ? `\n\nLast batch: ${lastCount} ${lastCount === 1 ? 'property' : 'properties'} for ${lastSubject}, in staff review.`
+    : '';
+
+  if (AGENT_HOW_TO_POST.test(normalizeInput(cleanBody))) {
+    return `To post a property, reply *Agent 007*.\n\nI will ask who it is for, then you send each advert — the caption with the type, exact location and price, then its photos. Type *COMPLETE* when the batch is done.${lastLine}`;
+  }
+
+  return '🟩🟨 *makaug.com* | *Staff intake*\n\n'
+    + 'Reply *Agent 007* to post a property for an agent or an owner.\n'
+    + 'Send each advert as its caption and then its photos, and type *COMPLETE* when the batch is finished.\n\n'
+    + 'Nothing you send here goes live until a moderator approves it.'
+    + lastLine;
+}
+
 function recentlyClosedEmployeeBatchReply({ phone = '', session = {}, cleanBody = '', mediaUrl = '', runtime = {} } = {}) {
   const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
   const completedAtRaw = data.employee_intake_last_completed_at;
@@ -6854,9 +7383,19 @@ async function handleEmployeeWhatsappIntake({
     // "1️⃣ House for SALE 2️⃣ House for RENT 3️⃣ Land/Plot…". He was not
     // listing a house OR a plot; he was asking a question.
     const askedText = normalizeInput(cleanBody);
-    if (!active && (AGENT_HOW_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || AGENT_SHARE_REQUEST.test(askedText))) {
+    const agentVoiceOnly = !askedText && !mediaUrl && /audio|ogg|opus|voice/.test(String(runtime.mediaType || ''));
+    if (!active && (agentVoiceOnly || AGENT_HELP.test(askedText) || AGENT_IS_IT_DONE.test(askedText) || AGENT_HOW_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || AGENT_SHARE_REQUEST.test(askedText))) {
       const askingAgent = await findApprovedAgentByPhone(phone);
       if (askingAgent) {
+        if (agentVoiceOnly) return { handled: true, nextStep: currentStep, message: agentVoiceNoteReply() };
+        if (AGENT_HELP.test(askedText)) {
+          alertTeamAgentNeedsHelp({ agent: askingAgent, phone, said: askedText });
+          return { handled: true, nextStep: currentStep, message: agentHelpReply(askingAgent) };
+        }
+        if (AGENT_IS_IT_DONE.test(askedText)) {
+          const status = await agentStatusReply(askingAgent);
+          if (status) return { handled: true, nextStep: currentStep, message: status };
+        }
         if (AGENT_SHARE_REQUEST.test(askedText)) {
           const share = agentShareReply({ agent: askingAgent });
           if (share) return { handled: true, nextStep: currentStep, message: share };
@@ -6877,6 +7416,9 @@ async function handleEmployeeWhatsappIntake({
           message: agentMenuReply({ agent: askingAgent, greet: true })
         };
       }
+      // Not an agent, but one of ours. The customer menu is for customers.
+      const staffReply = staffIntakeGreetingReply({ phone, session, cleanBody });
+      if (staffReply) return { handled: true, nextStep: currentStep, message: staffReply };
     }
 
     if (!active) {
@@ -7313,6 +7855,39 @@ async function handleEmployeeWhatsappIntake({
   }
 
   if (currentStep === 'employee_property_media') {
+    if (data.whatsapp_agent_self_intake === true) {
+      // A correction stored as a caption before corrections were understood
+      // would otherwise swallow the agent's next photo.
+      if (/^(?:correction|correct|sorry|actually)\b/i.test(normalizeInput(data.pending_property_caption || ''))
+        && !employeePendingStoredMedia(data).length) {
+        delete data.pending_property_caption;
+        await replaceEmployeeSession(phone, currentStep, data);
+      }
+      const hasMediaCandidates = employeeMediaCandidates(runtime, mediaUrl).length > 0;
+      if (runtime.sharedLocation) {
+        const pinReply = await handleAgentLocationPin({ phone, data, sharedLocation: runtime.sharedLocation, currentStep });
+        if (pinReply && typeof pinReply === 'object' && pinReply.followText) {
+          // The pin has a place name: treat it exactly as if they had typed it,
+          // so a property that only lacked its area is saved now.
+          const followed = await handleEmployeeWhatsappIntake({
+            phone,
+            body: pinReply.followText,
+            mediaUrl: '',
+            runtime: { ...runtime, sharedLocation: null, photoCandidates: [], mediaCandidates: [], mediaCount: 0, mediaType: '' },
+            inboundMessageId,
+            session: { ...session, current_step: currentStep, session_data: data }
+          });
+          return {
+            ...followed,
+            message: `📍 Thanks for the location pin — ${pinReply.guessed ? `it looks like *${pinReply.followText}*. If that is wrong, reply with the right area.` : `that is *${pinReply.followText}*.`}${followed?.message ? `\n\n${followed.message}` : ''}`
+          };
+        }
+        if (pinReply) return { handled: true, nextStep: currentStep, message: pinReply };
+      }
+      if (!cleanBody && !hasMediaCandidates && /audio|ogg|opus|voice/.test(String(runtime.mediaType || ''))) {
+        return { handled: true, nextStep: currentStep, message: agentVoiceNoteReply() };
+      }
+    }
     if (isEmployeeIntakeComplete(cleanBody)) {
       const pendingStoredMedia = employeePendingStoredMedia(data);
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
@@ -7548,6 +8123,14 @@ async function handleEmployeeWhatsappIntake({
           if (propertyAttemptRecorded) {
             data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
           }
+          const toppedUp = await agentTopUpExistingProperty({ data, existingProperty, storedMedia: pendingStoredMedia, phone, inboundMessageId: propertyInboundMessageId });
+          if (toppedUp) {
+            delete data.pending_property_caption;
+            clearEmployeePendingMedia(data);
+            promoteEmployeeQueuedSubmission(data);
+            await replaceEmployeeSession(phone, currentStep, data);
+            return { handled: true, nextStep: currentStep, propertyId: existingProperty.id, duplicate: true, message: toppedUp };
+          }
           data.current_property_id = null;
           delete data.pending_property_caption;
           clearEmployeePendingMedia(data);
@@ -7561,7 +8144,9 @@ async function handleEmployeeWhatsappIntake({
             nextStep: currentStep,
             propertyId: existingProperty.id,
             duplicate: true,
-            message: (data.property_batch_mode || 'multiple') === 'multiple'
+            message: data.whatsapp_agent_self_intake === true
+              ? `👍 That property is already with us${String(existingProperty.status) === 'pending' ? ' and with our team for review' : ''} — no need to send it again.${promotedPrompt ? `\n\n${agentPendingNotice(data)}` : ''}`
+              : (data.property_batch_mode || 'multiple') === 'multiple'
               ? promotedPrompt
               : `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
           };
@@ -7577,6 +8162,7 @@ async function handleEmployeeWhatsappIntake({
             sessionData: data
           });
           data.current_property_id = propertyId;
+          noteEmployeePropertyCreated(data);
           data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
           data.total_media_count = Number(data.total_media_count || 0) + pendingStoredMedia.length;
           delete data.pending_property_caption;
@@ -7586,13 +8172,18 @@ async function handleEmployeeWhatsappIntake({
           const promotedPrompt = promotedSubmission
             ? `\n\nThe next separately stored property still needs: ${employeePropertyMissing(employeePropertyFacts(promotedSubmission.caption, data)).join(', ') || 'a corrected caption'}. Send its corrected caption; its media is already safe.`
             : '';
+          if (data.whatsapp_agent_self_intake === true) alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts: textOnlyFacts, caption: textCaption });
           return {
             handled: true,
             nextStep: currentStep,
             propertyId,
-            message: (data.property_batch_mode || 'multiple') === 'single'
+            // An agent who sent photos first and the words after was saved and
+            // told nothing. Confirm it the same way as a captioned photo.
+            message: data.whatsapp_agent_self_intake === true
+              ? `${agentSelfIntakeSavedReply({ data, facts: textOnlyFacts, storedMedia: pendingStoredMedia, caption: textCaption })}${promotedPrompt ? `\n\n${agentPendingNotice(data)}` : ''}`
+              : (data.property_batch_mode || 'multiple') === 'single'
               ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${pendingStoredMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
-              : promotedPrompt
+              : [staffDroppedMediaWarning(data, textCaption), promotedPrompt.trim()].filter(Boolean).join('\n\n')
           };
         } catch (error) {
           logger.error('WhatsApp employee pending-media review save failed:', error);
@@ -7609,7 +8200,26 @@ async function handleEmployeeWhatsappIntake({
       // no media, which then blocked COMPLETE for the whole batch. When media
       // IS waiting the agent has been asked for a corrected caption, so a bare
       // "Kololo" is a legitimate refinement and still counts.
+      if (data.whatsapp_agent_self_intake === true) {
+        // "price 1.5m" / "it's in Najjera": a fix to the property just saved.
+        const corrected = await applyAgentCorrection({ data, cleanBody }).catch((error) => {
+          logger.warn('Agent correction failed:', error.message || String(error));
+          return null;
+        });
+        if (corrected) return { handled: true, nextStep: currentStep, message: corrected };
+      }
       if (!pendingStoredMedia.length && !looksLikePropertyCaption(cleanBody)) {
+        if (data.whatsapp_agent_self_intake === true) {
+          const said = normalizeInput(cleanBody);
+          if (AGENT_HELP.test(said)) {
+            alertTeamAgentNeedsHelp({ agent: data.agent || {}, phone, said });
+            return { handled: true, nextStep: currentStep, message: agentHelpReply(data.agent || {}) };
+          }
+          if (AGENT_IS_IT_DONE.test(said)) {
+            const status = await agentStatusReply(data.agent || {});
+            if (status) return { handled: true, nextStep: currentStep, message: status };
+          }
+        }
         return {
           handled: true,
           nextStep: currentStep,
@@ -7645,7 +8255,9 @@ async function handleEmployeeWhatsappIntake({
       return {
         handled: true,
         nextStep: currentStep,
-        message: employeePendingStoredMedia(data).length
+        message: data.whatsapp_agent_self_intake === true
+          ? agentPendingNotice(data)
+          : employeePendingStoredMedia(data).length
           ? employeeIncompletePropertyMessage(textCaption, textOnlyMissing, data)
           : `Caption saved for ${employeeCaptionLabel(textCaption)}. Now send the first property media; it will be stored with that property.${
             waitingForMedia
@@ -7681,9 +8293,17 @@ async function handleEmployeeWhatsappIntake({
       && pendingStoredMediaBeforeMessage.length > 0
       && employeeCaptionLikelySameProperty(pendingCaptionBeforeMessage, caption, data);
 
+    // A captionless photo in the middle of a forwarded burst: hold it, do not guess.
+    // A photo that is part of an album (media_count > 1) still follows its
+    // captioned first photo, as WhatsApp sends albums in order.
+    const heldFromBurst = !caption
+      && Boolean(data.current_property_id)
+      && Number(runtime.mediaCount || 0) <= 1
+      && employeeInForwardedBurst(data);
+    if (heldFromBurst) data.pending_media_from_burst = true;
     if (
       !shouldStartProperty
-      && !data.current_property_id
+      && (!data.current_property_id || heldFromBurst)
       && !(
         startsIncompleteNewProperty
         && pendingStoredMediaBeforeMessage.length
@@ -7797,6 +8417,19 @@ async function handleEmployeeWhatsappIntake({
       propertyAttemptRecorded = recordEmployeePropertyAttempt(data, { inboundMessageId, caption });
       if (existingProperty && !recoveredExistingProperty) {
         if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
+        if (data.whatsapp_agent_self_intake === true && String(existingProperty.status) === 'pending' && candidates.length) {
+          const fresh = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider }).catch(() => []);
+          const toppedUp = await agentTopUpExistingProperty({ data, existingProperty, storedMedia: fresh, phone, inboundMessageId });
+          if (toppedUp) {
+            if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
+              delete data.pending_property_caption;
+              clearEmployeePendingMedia(data);
+              promoteEmployeeQueuedSubmission(data);
+            }
+            await replaceEmployeeSession(phone, currentStep, data);
+            return { handled: true, nextStep: currentStep, propertyId: existingProperty.id, duplicate: true, message: toppedUp };
+          }
+        }
         if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
           delete data.pending_property_caption;
           clearEmployeePendingMedia(data);
@@ -7808,7 +8441,9 @@ async function handleEmployeeWhatsappIntake({
           nextStep: currentStep,
           propertyId: existingProperty.id,
           duplicate: true,
-          message: (data.property_batch_mode || 'multiple') === 'multiple'
+          message: data.whatsapp_agent_self_intake === true
+            ? `👍 That property is already with us${String(existingProperty.status) === 'pending' ? ' and with our team for review' : ''} — no need to send it again.`
+            : (data.property_batch_mode || 'multiple') === 'multiple'
             ? ''
             : `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
         };
@@ -7856,6 +8491,7 @@ async function handleEmployeeWhatsappIntake({
       try {
         const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption, facts, storedMedia, sessionData: data });
         data.current_property_id = propertyId;
+        noteEmployeePropertyCreated(data);
         data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
         if (data.employee_intake_recovery_skip_existing_matches !== true) {
           data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
@@ -7865,15 +8501,16 @@ async function handleEmployeeWhatsappIntake({
           clearEmployeePendingMedia(data);
           promoteEmployeeQueuedSubmission(data);
         }
+        if (data.whatsapp_agent_self_intake === true) alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts, caption });
         await replaceEmployeeSession(phone, currentStep, data);
         return {
           handled: true,
           nextStep: currentStep,
           propertyId,
-          message: agentSelfIntakeSavedReply({ data, facts, storedMedia, openedAgentSelfIntake })
+          message: agentSelfIntakeSavedReply({ data, facts, storedMedia, openedAgentSelfIntake, caption, albumCount: Number(runtime.mediaCount || 0) })
             ?? ((data.property_batch_mode || 'multiple') === 'single'
               ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
-              : '')
+              : staffDroppedMediaWarning(data, caption))
         };
       } catch (error) {
         logger.error('WhatsApp employee review property save failed:', error);
@@ -9927,6 +10564,58 @@ function scheduleEmployeeBatchSummary(phone) {
 }
 
 /**
+ * Forwarded bursts. Arthur forwarded ten adverts at once on 2 Oct; they reach
+ * us in the same second and in no reliable order, so a photo with no caption
+ * cannot be pinned to "the property just created" — two house photos landed on
+ * a Naalya plot. When several properties were created in the last few seconds,
+ * a captionless photo is held and asked about instead of guessed.
+ */
+const EMPLOYEE_BURST_WINDOW_MS = 30000;
+function noteEmployeePropertyCreated(data = {}) {
+  const now = Date.now();
+  data.recent_property_created_ms = [...(Array.isArray(data.recent_property_created_ms) ? data.recent_property_created_ms : []), now]
+    .filter((t) => now - Number(t) < 10 * 60000)
+    .slice(-10);
+}
+function employeeInForwardedBurst(data = {}) {
+  const now = Date.now();
+  const recent = (Array.isArray(data.recent_property_created_ms) ? data.recent_property_created_ms : [])
+    .filter((t) => now - Number(t) < EMPLOYEE_BURST_WINDOW_MS);
+  return recent.length >= 2;
+}
+/**
+ * An agent re-sending a property we already have — usually because we asked
+ * them to, after its photo was lost. Give the waiting listing the new photos
+ * instead of answering "already with us" and throwing them away.
+ */
+async function agentTopUpExistingProperty({ data = {}, existingProperty = null, storedMedia = [], phone, inboundMessageId } = {}) {
+  if (data.whatsapp_agent_self_intake !== true || !existingProperty?.id || !storedMedia.length) return null;
+  if (String(existingProperty.status) !== 'pending') return null;
+  try {
+    const attachment = await attachEmployeeReviewMedia({ propertyId: existingProperty.id, storedMedia, phone, inboundMessageId });
+    if (!attachment.attached) return null;
+    data.current_property_id = existingProperty.id;
+    return `📸 Thank you — I have added ${attachment.attached} ${attachment.attached === 1 ? 'photo' : 'photos/videos'} to the property you already sent us. It is with our team for review, and I will send you the link when it is live.`;
+  } catch (error) {
+    logger.warn('Agent top-up of existing property failed:', error.message || String(error));
+    return null;
+  }
+}
+
+function staffDroppedMediaWarning(data = {}, caption = '') {
+  if (data.whatsapp_agent_self_intake === true) return '';
+  if (!(Number(data.last_create_media_dropped) > 0) || Number(data.last_create_media_kept) > 0) return '';
+  return `⚠️ Saved ${employeeCaptionLabel(caption)} to review, but its photo is already on another listing from the last 7 days, so it was not attached. Send a different photo of this property.`;
+}
+
+function cancelEmployeeBatchSummary(phone) {
+  const key = String(phone || '');
+  const existing = employeeBatchBursts.get(key);
+  if (existing?.timer) clearTimeout(existing.timer);
+  employeeBatchBursts.delete(key);
+}
+
+/**
  * The first line of a batch summary.
  *
  * It used to read "📋 Saved 0 of 2 — everything except the 2 below", which is
@@ -9980,7 +10669,9 @@ async function buildEmployeeBatchSummary(phone, since) {
   if (pendingMedia.length || pendingCaption) {
     const missing = pendingCaption ? employeePropertyMissing(employeePropertyFacts(pendingCaption, data)) : [];
     notSaved.push({
-      label: pendingCaption ? shortEmployeeLabel(pendingCaption) : 'Media sent without a caption',
+      label: pendingCaption
+        ? shortEmployeeLabel(pendingCaption)
+        : (data.pending_media_from_burst === true ? 'Photo with no caption, sent in the middle of several properties (held, not guessed)' : 'Media sent without a caption'),
       needs: !pendingMedia.length
         ? 'its photo or video (the caption arrived on its own)'
         : !pendingCaption
@@ -10028,11 +10719,10 @@ async function buildEmployeeBatchSummary(phone, since) {
   // each property, on top of the confirmation he had already been sent — two
   // messages for one property, the second in a language he never signed up to.
   if (data.whatsapp_agent_self_intake === true) {
-    // Everything saved and nothing outstanding: he has already been told, once,
-    // per property. Do not say it again.
+    // Everything saved: he has already been told, once, per property. Anything
+    // outstanding is said in his words, not the staff batch's.
     if (!notSaved.length) return '';
-    lines.push('', 'Send the missing detail and I will add it. Nothing goes live until our team has checked it.');
-    return lines.join('\n');
+    return agentPendingNotice(data);
   }
   lines.push('', 'Nothing is live until a moderator approves it. Type *COMPLETE* when the whole batch is done.');
   return lines.join('\n');
@@ -10061,6 +10751,127 @@ async function sendEmployeeBatchSummary(phone, since) {
     source: 'whatsapp_runtime',
     actorId: 'employee_batch_summary'
   });
+}
+
+// ---------------------------------------------------------------------------
+// "I have paid" — payment claims, and agents paused for an unpaid fee.
+// ---------------------------------------------------------------------------
+const STRONG_PAID_WORDS = /\b(?:paid|i have paid|i've paid|transaction id|trans id|txn|tid|financial transaction)\b/i;
+const pausedAgentAlerted = new Map();
+
+/**
+ * A transaction ID (typed or in a pasted MoMo SMS) or a payment screenshot
+ * from someone we are waiting on becomes a payment claim. The claim is check 1
+ * of 3; the wallet SMS and a person still have to agree before it counts.
+ */
+async function handlePaymentClaimMessage({ phone, body = '', photoCandidates = [] } = {}) {
+  const billing = require('../services/billingOpsService');
+  const text = normalizeInput(body);
+  const typed = billing.readReferenceFromText(text);
+  const imageDataUrl = normalizeInput(photoCandidates?.[0]?.data_url || photoCandidates?.[0]?.dataUrl || '');
+  if (!typed && !imageDataUrl) return null; // most messages: nothing to look up
+  const expecting = await billing.expectingPaymentFrom(db, phone).catch(() => null);
+
+  let reading = null;
+  let receiptUrl = null;
+  if (imageDataUrl && (expecting || STRONG_PAID_WORDS.test(text))) {
+    reading = await withTimeout(readPaymentReceipt({ imageDataUrl, providerScope: WHATSAPP_PROVIDER_SCOPE }), 15000, { available: false, reason: 'timeout' }, 'payment receipt reading');
+    const looksLikeReceipt = reading?.is_payment_receipt === true || STRONG_PAID_WORDS.test(text);
+    if (!looksLikeReceipt) return null; // a property photo, not a receipt
+    receiptUrl = await storeDataUrl(imageDataUrl, {
+      keyPrefix: `revenue-receipts/${crypto.randomUUID()}`,
+      filename: 'whatsapp-receipt.jpg',
+      label: 'payment receipt',
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+      maxBytes: 6_000_000
+    }).catch(() => null);
+  } else if (!typed || !(expecting || STRONG_PAID_WORDS.test(text) || typed.source === 'sms_text')) {
+    return null;
+  }
+
+  const reference = typed?.reference || (reading?.transaction_id && reading.transaction_id.length >= 5 ? reading.transaction_id : null);
+  const amount = typed?.amount_ugx || (reading?.currency === 'UGX' && reading?.amount ? Math.round(reading.amount) : null);
+  const { claim, ctx } = await billing.createClaim(db, {
+    phone,
+    reference,
+    amountUgx: amount,
+    receiptUrl,
+    message: text,
+    aiReading: reading && reading.available ? reading : null
+  });
+
+  setImmediate(async () => {
+    try {
+      const desk = require('../services/leadDeskService');
+      const who = ctx.agent?.full_name || ctx.property?.title || `+${String(phone).replace(/\D/g, '')}`;
+      const body = [
+        '🧾 *Payment claim to check*',
+        `From: ${who}`,
+        reference ? `Transaction ID: ${reference}` : 'No transaction ID read — ask them for it',
+        amount ? `Amount: UGX ${Number(amount).toLocaleString('en-US')}` : '',
+        claim.sms_id ? '✅ Matches a MoMo SMS already received' : '⏳ No matching MoMo SMS yet',
+        `Confirm or reject: ${HOME_URL}/admin (Sales & Revenue)`
+      ].filter(Boolean).join('\n');
+      if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'payment_claim_received');
+      const contact = agentHelpContact();
+      const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
+      if (contact.digits && !onList) await require('../services/leadHandoffService').deliverWhatsapp({ to: contact.digits, body, kind: 'payment_claim_contact', leadId: null, nonce: claim.id });
+    } catch (_ignored) { /* best effort */ }
+  });
+
+  if (!reference) {
+    return [
+      '🧾 Thank you — I have your payment receipt.',
+      '',
+      'I could not read the *transaction ID* clearly. Please type it here exactly as it appears on the MoMo / Airtel message or bank slip, so our team can match it.'
+    ].join('\n');
+  }
+  return [
+    `🧾 *Thank you — payment received for checking.*`,
+    '',
+    `Transaction ID: *${reference}*${amount ? `\nAmount: *UGX ${Number(amount).toLocaleString('en-US')}*` : ''}`,
+    '',
+    'Our team is matching it with the MoMo / bank record now. As soon as it is confirmed I will message you, and anything that was paused goes straight back live.',
+    '',
+    'If the ID above is wrong, just send the correct one.'
+  ].join('\n');
+}
+
+/** An agent paused for an unpaid fee messages us: say so kindly, and tell Ronald. */
+async function billingPausedAgentReply({ phone, body = '' } = {}) {
+  const key = String(phone || '').replace(/\D+/g, '').slice(-9);
+  if (key.length < 9) return null;
+  const agent = (await db.query(
+    `SELECT id, full_name, greeting_name, phone, whatsapp FROM agents
+      WHERE billing_suspended_at IS NOT NULL AND removed_at IS NULL
+        AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
+          OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1)
+      LIMIT 1`,
+    [key]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  if (!agent) return null;
+  const billing = require('../services/billingOpsService');
+  const settings = await billing.getSettings(db).catch(() => ({}));
+  const pay = billing.payToLine(settings);
+  const contact = agentHelpContact();
+  let payLink = '';
+  try {
+    payLink = (await require('../services/payLinkService').createPayLink(db, { purpose: 'agent_subscription', agent_id: agent.id }, 'whatsapp_paused')).url || '';
+  } catch (_ignored) { payLink = ''; }
+  const last = pausedAgentAlerted.get(agent.id) || 0;
+  if (Date.now() - last > 12 * 3600 * 1000) {
+    pausedAgentAlerted.set(agent.id, Date.now());
+    alertTeamAgentNeedsHelp({ agent: { ...agent, full_name: `${agent.full_name} (PAUSED — fee unpaid)` }, phone, said: normalizeInput(body).slice(0, 160) });
+  }
+  return [
+    `Hi ${agentGreetingName(agent, 'there')},`,
+    '',
+    'Your makaug account is *paused* at the moment because the monthly subscription has not been paid. Nothing has been deleted.',
+    '',
+    `Please call or WhatsApp *${contact.name}* on *${contact.pretty}* — I have also let him know, and someone from our team will reach out to you.`,
+    payLink ? `\n💳 Pay now by card, Apple Pay, Google Pay or MoMo: ${payLink}\nEverything comes back as soon as it is paid.` : '',
+    pay ? `\nAlready paid, or ready to? Pay to ${pay} and send the *transaction ID* here — everything comes back the moment it is confirmed.` : ''
+  ].filter(Boolean).join('\n');
 }
 
 async function queueWhatsappWebBridgeAutoReply({
@@ -12441,19 +13252,278 @@ function intentRouteLabel(route) {
   return labels[route] || 'continue';
 }
 
+// --- Investment property requests ------------------------------------------
+const INVESTMENT_TYPES = {
+  '1': { key: 'rental_units', label: 'Rental units / apartments', searchType: 'sale', words: 'rental units apartments' },
+  '2': { key: 'commercial', label: 'Commercial building', searchType: 'commercial', words: 'commercial building' },
+  '3': { key: 'land', label: 'Land to develop', searchType: 'land', words: 'land' },
+  '4': { key: 'any', label: 'Any income-generating property', searchType: 'sale', words: '' }
+};
+
+function isInvestmentPropertyRequest(text = '') {
+  return /\b(invest(?:ment|ing|or)?|income[-\s]?generating|rental income|return on investment|roi|buy[-\s]?to[-\s]?let)\b/i.test(String(text || ''));
+}
+
+function investmentBriefHasDetail(text = '') {
+  const clean = String(text || '');
+  return /\b(\d+\s*(?:m|million|bn|billion|k)|ugx|usd|\$)\b/i.test(clean) || /\b(in|at|around|near)\s+[A-Z][a-z]{2,}/.test(clean);
+}
+
+function investmentIntroReply(lang = 'en') {
+  return [
+    `${whatsappBrandHeader('Investment property')}`,
+    'Great — what kind of investment are you looking for?',
+    '1️⃣ Rental units / apartments',
+    '2️⃣ Commercial building (shops, offices)',
+    '3️⃣ Land to develop',
+    '4️⃣ Any income-generating property',
+    '',
+    'Reply with the number *plus the area and your budget*, e.g. "1, Kira, up to 800M".',
+    t(lang, 'menuHint')
+  ].join('\n');
+}
+
+function inferInvestmentType(text = '') {
+  const clean = normalizeInput(text).toLowerCase();
+  const lead = clean.match(/^\s*([1-4])\b/);
+  if (lead) return INVESTMENT_TYPES[lead[1]];
+  if (/\b(rental|units|apartment|flats|hostel|rooms)\b/.test(clean)) return INVESTMENT_TYPES['1'];
+  if (/\b(commercial|shop|office|warehouse|arcade|plaza)\b/.test(clean)) return INVESTMENT_TYPES['2'];
+  if (/\b(land|plot|acre|acres|develop)\b/.test(clean)) return INVESTMENT_TYPES['3'];
+  return INVESTMENT_TYPES['4'];
+}
+
+async function investmentBriefReply({ phone, lang = 'en', text = '' }) {
+  const kind = inferInvestmentType(text);
+  const detail = normalizeInput(text).replace(/^\s*[1-4]\s*[,.)-]?\s*/, '');
+  let filters = { hasSignal: false };
+  try {
+    filters = await resolveNaturalSearchFilters({ text: `${kind.words} for sale ${detail}`.trim(), entities: {}, fallbackType: kind.searchType, language: lang, sessionData: {} });
+    if (!filters.area) {
+      const fb = fallbackNaturalSearchSentence(`${kind.words} for sale ${detail}`);
+      if (fb.hasSignal && fb.area) filters = { ...filters, ...fb, hasSignal: true };
+    }
+  } catch (_ignored) { filters = { hasSignal: false }; }
+  filters = { ...filters, searchType: kind.searchType };
+  let rows = [];
+  try {
+    rows = filters.area ? await findPropertiesByNaturalFilters(filters) : await findPropertiesForWhatsapp(kind.searchType, '');
+  } catch (_ignored) { rows = []; }
+  const budget = Number(filters.maxBudgetUgx) > 0 ? Number(filters.maxBudgetUgx) : null;
+
+  deferWhatsappWork('WhatsApp investment lead', async () => {
+    await createLead(db, {
+      contact: { name: 'WhatsApp investor', phone, whatsapp: phone, preferredContactChannel: 'whatsapp', preferredLanguage: resolveLangCode(lang), roleType: 'investor', locationInterest: filters.area || '', categoryInterest: 'investment', budgetRange: budget ? String(budget) : '' },
+      source: 'whatsapp_investment_request',
+      leadType: 'property_need',
+      channel: 'whatsapp',
+      category: 'investment',
+      location: filters.area || null,
+      budget,
+      message: `Investment property: ${kind.label}. "${normalizeInput(text).slice(0, 300)}"`,
+      metadata: { investment_type: kind.key, query_text: normalizeInput(text).slice(0, 400), results_shown: rows.length }
+    });
+    const desk = require('../services/leadDeskService');
+    const body = [
+      '💼 *Investor enquiry on WhatsApp*',
+      `+${String(phone).replace(/\D/g, '')}`,
+      `Looking for: ${kind.label}${filters.area ? ` in ${filters.area}` : ''}${budget ? ` · budget about UGX ${budget.toLocaleString('en-US')}` : ''}`,
+      `They said: "${normalizeInput(text).slice(0, 200)}"`,
+      `Shown ${rows.length} listing(s). Call them with options.`
+    ].join('\n');
+    if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'investment_enquiry');
+    const contact = agentHelpContact();
+    const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
+    if (contact.digits && !onList) await require('../services/leadHandoffService').deliverWhatsapp({ to: contact.digits, body, kind: 'investment_enquiry_contact', leadId: null, nonce: `${phone}-${Date.now()}` });
+  });
+
+  const intro = `${whatsappBrandHeader('Investment property')}\n💼 *${kind.label}*${filters.area ? ` in *${filters.area}*` : ''}${budget ? ` · up to UGX ${budget.toLocaleString('en-US')}` : ''}`;
+  const handoff = `A member of our team will also reach out with investment options and the numbers (rent, returns, title). Questions now? Call ${agentHelpContact().name} on ${agentHelpContact().pretty}.`;
+  if (!rows.length) return `${intro}\n\nI don't have a public listing that fits yet — I've saved your request.\n\n${handoff}\n\n${t(lang, 'menuHint')}`;
+  return `${intro}\n\n${formatPropertySearchMessage(lang, rows, filters.area || 'Uganda', kind.searchType)}\n\n${handoff}`;
+}
+
+// --- "I want to list as an agent" → a person (Ronald) takes it from here ----
+async function agentJoinRequestReply({ phone, text = '' }) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const contact = agentHelpContact();
+  let existing = null;
+  try {
+    existing = (await db.query(
+      `SELECT id, full_name, status FROM agents WHERE removed_at IS NULL AND (RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1 OR RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1) ORDER BY created_at DESC LIMIT 1`,
+      [digits.slice(-9)])).rows[0] || null;
+  } catch (_ignored) { existing = null; }
+  let fee = 50000;
+  try { fee = Number((await require('../services/billingOpsService').getSettings(db)).agent_fee?.monthly_ugx || 50000); } catch (_ignored) { /* default */ }
+
+  queueExplainerVideoOnce({ phone, kind: 'agent' });
+  deferWhatsappWork('WhatsApp agent join request', async () => {
+    const recent = await db.query(
+      `SELECT 1 FROM audit_logs WHERE action = 'agent_join_requested' AND details->>'phone' = $1 AND created_at > NOW() - INTERVAL '12 hours' LIMIT 1`, [digits]).catch(() => ({ rows: [] }));
+    if (recent.rows.length) return;
+    await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'agent_join_requested', $1::jsonb)`, [JSON.stringify({ phone: digits, text: normalizeInput(text).slice(0, 300), existing_status: existing?.status || null })]).catch(() => {});
+    const desk = require('../services/leadDeskService');
+    let payLine = '';
+    if (existing && existing.status === 'pending') {
+      const link = await require('../services/payLinkService').createPayLink(db, { purpose: 'agent_subscription', agent_id: existing.id }, 'agent_join').catch(() => null);
+      if (link?.url) payLine = `Their pay link (card or MoMo): ${link.url}\nTo WhatsApp it to them reply *PAY LINK* +${digits}. When they pay you'll hear here; then reply *APPROVE* +${digits}.`;
+    } else {
+      payLine = [
+        `Set them up and send their pay link from right here — reply:`,
+        `*NEW AGENT* their name +${digits}`,
+        `You'll get a message here when they pay; then reply *APPROVE* +${digits}. (Type *PAYMENT HELP* for all commands.)`
+      ].join('\n');
+    }
+    const body = [
+      '🧑‍💼 *New agent wants to join makaug*',
+      `+${digits}${existing ? ` (${existing.full_name}, application ${existing.status})` : ''}`,
+      `They said: "${normalizeInput(text).slice(0, 200)}"`,
+      `${contact.name}: please call them today and explain the agent plan (UGX ${fee.toLocaleString('en-US')}/month).`,
+      payLine
+    ].filter(Boolean).join('\n');
+    if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'agent_join_request');
+    const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
+    if (contact.digits && !onList) await require('../services/leadHandoffService').deliverWhatsapp({ to: contact.digits, body, kind: 'agent_join_request_contact', leadId: null, nonce: `${digits}-${Date.now()}` });
+  });
+
+  if (existing && existing.status === 'pending') {
+    return `${whatsappBrandHeader('Agent sign-up')}\nThanks — your agent application is already with our team. *${contact.name}* will call you to finish setting you up.\n\nNeed us sooner? Call or WhatsApp ${contact.name} on ${contact.pretty}.`;
+  }
+  return [
+    `${whatsappBrandHeader('Join makaug as an agent')}`,
+    `Great to hear from you! 🙌 A member of our team — *${contact.name}* — will reach out to you shortly to get you set up.`,
+    '',
+    'As a makaug agent you can:',
+    '• Post properties just by sending photos here on WhatsApp',
+    '• Get your own agent page and buyer/tenant enquiries sent straight to you',
+    `• All for UGX ${fee.toLocaleString('en-US')} a month`,
+    '',
+    `Once you're approved, I'll send you a short guide showing exactly how to post.`,
+    `Want to talk now? Call or WhatsApp ${contact.name} on ${contact.pretty}.`
+  ].join('\n');
+}
+
+// Short explainer film, sent once (per 30 days) when someone wants to list a
+// property or join as an agent. Goes before the bot's text reply.
+const EXPLAINER_VIDEOS = {
+  lister: { path: '/assets/marketing/makaug-list-your-property-v2.mp4', caption: '🎬 *How listing on makaug works* — under a minute: send photos, confirm it\'s you, agree to the terms, and your property goes live in front of Ugandans at home and abroad (UK, Dubai, Canada, South Africa). First 7 days free.' },
+  agent: { path: '/assets/marketing/makaug-join-as-agent-v2.mp4', caption: '🎬 *makaug for agents* — what you get, who sees your listings (Ugandans at home and abroad) and how to join.' }
+};
+
+function queueExplainerVideoOnce({ phone, kind }) {
+  const video = EXPLAINER_VIDEOS[kind];
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!video || digits.length < 9 || IS_SOUTH_AFRICA) return;
+  deferWhatsappWork(`WhatsApp ${kind} explainer video`, async () => {
+    const recent = await db.query(
+      `SELECT 1 FROM audit_logs WHERE action = 'explainer_video_sent' AND details->>'phone' = $1 AND details->>'kind' = $2 AND created_at > NOW() - INTERVAL '30 days' LIMIT 1`,
+      [digits, kind]).catch(() => ({ rows: [] }));
+    if (recent.rows.length) return;
+    if (kind === 'lister') {
+      const agent = await db.query(
+        `SELECT 1 FROM agents WHERE status = 'approved' AND removed_at IS NULL AND RIGHT(regexp_replace(COALESCE(whatsapp, phone, ''), '\\D', '', 'g'), 9) = $1 LIMIT 1`, [digits.slice(-9)]).catch(() => ({ rows: [] }));
+      if (agent.rows.length) return;
+    }
+    await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'explainer_video_sent', $1::jsonb)`, [JSON.stringify({ phone: digits, kind })]);
+    await queueWhatsappWebBridgeMessage({
+      recipient: digits,
+      text: video.caption,
+      mediaUrl: `${HOME_URL}${video.path}`,
+      mediaType: 'video',
+      source: 'whatsapp_runtime',
+      actorId: 'system',
+      metadata: { message_kind: `explainer_video_${kind}`, reply_dedupe_key: `explainer:${kind}:${digits}` }
+    });
+  });
+}
+
+// --- Off-plan: Uganda or abroad -------------------------------------------
+// The overseas countries come from the live off-plan projects, so a new
+// country shows up here as soon as its first project is published.
+let offPlanMarketsCache = { at: 0, rows: [] };
+const OFF_PLAN_COUNTRY_LABELS = { AE: 'United Arab Emirates (Dubai)', KE: 'Kenya', GB: 'United Kingdom', ZA: 'South Africa', RW: 'Rwanda', TZ: 'Tanzania', CA: 'Canada', US: 'United States' };
+
+function countryFlag(code = '') {
+  const cc = String(code || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return '🌍';
+  return String.fromCodePoint(...[...cc].map((c) => 0x1F1E6 + c.charCodeAt(0) - 65));
+}
+
+async function offPlanOverseasMarkets() {
+  if (Date.now() - offPlanMarketsCache.at < 10 * 60 * 1000) return offPlanMarketsCache.rows;
+  try {
+    const { isPubliclyVisible, normalizeDevelopmentRow } = require('../services/offPlanService');
+    const result = await db.query(
+      `SELECT * FROM off_plan_developments
+        WHERE country_code ~ '^[A-Z]{2}$' AND country_code <> 'UG' AND status = 'published'
+          AND (verification_status = 'verified' OR (verification_status = 'partially_verified' AND extra_fields->>'public_preview_approved' = 'true'))
+        ORDER BY updated_at DESC LIMIT 500`);
+    const markets = new Map();
+    result.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible).forEach((project) => {
+      const code = String(project.country_code || '').toUpperCase();
+      const name = project.extra_fields?.country_name || OFF_PLAN_COUNTRY_LABELS[code] || code;
+      const slug = String(project.extra_fields?.country_slug || project.extra_fields?.country_name || code).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const entry = markets.get(slug) || { code, name: OFF_PLAN_COUNTRY_LABELS[code] || name, slug, count: 0 };
+      entry.count += 1;
+      markets.set(slug, entry);
+    });
+    offPlanMarketsCache = { at: Date.now(), rows: [...markets.values()].sort((a, b) => b.count - a.count) };
+  } catch (error) {
+    logger.warn('Off-plan markets lookup failed:', error.message || String(error));
+  }
+  return offPlanMarketsCache.rows;
+}
+
+function offPlanWhereQuestion() {
+  return `${whatsappBrandHeader('Off-plan projects')}\nAre you looking in Uganda or abroad?\n1️⃣ In Uganda\n2️⃣ Abroad (outside Uganda)\n\n${t('en', 'menuHint')}`;
+}
+
+function offPlanUgandaReply() {
+  return `${whatsappBrandHeader('Off-plan projects · Uganda')}\nNew developments in Uganda — homes, payment plans, maps and brochures. Anything not yet confirmed is clearly labelled.\n\n🇺🇬 ${HOME_URL}/off-plan\n\n${t('en', 'menuHint')}`;
+}
+
+async function offPlanAbroadReply() {
+  const markets = await offPlanOverseasMarkets();
+  const lines = markets.map((m) => `${countryFlag(m.code)} *${m.name}* — ${m.count} project${m.count === 1 ? '' : 's'}\n${HOME_URL}/off-plan/overseas/${encodeURIComponent(m.slug)}`);
+  return [
+    `${whatsappBrandHeader('Off-plan projects · Abroad')}`,
+    lines.length ? 'Here is where we have projects outside Uganda:' : 'See our projects outside Uganda here:',
+    '',
+    ...(lines.length ? [lines.join('\n\n'), ''] : []),
+    `🌍 All countries: ${HOME_URL}/off-plan/overseas`,
+    '',
+    'Prices are shown in the local currency with an indicative UGX amount. Developer, completion, legal and bank terms must be confirmed before you pay.',
+    '',
+    t('en', 'menuHint')
+  ].join('\n');
+}
+
+function offPlanWhereAnswer(text = '') {
+  const clean = normalizeInput(text).toLowerCase();
+  if (/^1\b|\b(uganda|kampala|wakiso|entebbe|mukono|home|local|in uganda)\b/.test(clean)) return 'uganda';
+  if (/^2\b|\b(abroad|overseas|outside|international|dubai|uae|emirates|kenya|nairobi|diaspora)\b/.test(clean)) return 'abroad';
+  return '';
+}
+
 function menuRouteReply(lang, route) {
-  if (route === 'off_plan') return { message: offPlanWhatsappReply(false), nextStep: 'main_menu' };
+  if (route === 'off_plan') return { message: offPlanWhereQuestion(), nextStep: 'off_plan_where' };
   if (route === 'listing_type') return { message: t(lang, 'askListingType'), nextStep: 'listing_type' };
   if (route === 'search_type') return { message: t(lang, 'askSearchType'), nextStep: 'search_type' };
   if (route === 'agent_area') return { message: t(lang, 'askAgentArea'), nextStep: 'agent_area' };
   if (route === 'agent_registration') {
     return {
-      message: `${whatsappBrandHeader('Broker sign-up')}\nIf you want to join ${ACTIVE_BRAND} as an agent or broker, start here:\n${HOME_URL}/broker-signup\n\nAlready have an account? Log in here:\n${HOME_URL}/login\n\nYou can list properties free, receive enquiries, and use ${ACTIVE_TENANT.languages.length} written website languages.\n\n${t(lang, 'menuHint')}`,
+      message: IS_SOUTH_AFRICA
+        ? `${whatsappBrandHeader('Broker sign-up')}\nIf you want to join ${ACTIVE_BRAND} as an agent or broker, start here:\n${HOME_URL}/broker-signup\n\nAlready have an account? Log in here:\n${HOME_URL}/login\n\n${t(lang, 'menuHint')}`
+        : `${whatsappBrandHeader('Join as an agent')}\nGreat — a member of our team (*${agentHelpContact().name}*) will reach out to get you set up. To talk now, call or WhatsApp ${agentHelpContact().pretty}.\n\n${t(lang, 'menuHint')}`,
       nextStep: 'main_menu'
     };
   }
   if (route === 'mortgage_help') {
-    return { message: `🏦 Use ${IS_SOUTH_AFRICA ? 'Bond Finder' : 'Mortgage Finder'} here: ${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
+    if (IS_SOUTH_AFRICA) return { message: `🏦 Use Bond Finder here: ${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
+    return {
+      message: `${whatsappBrandHeader('Mortgages')}\nmakaug does not give financial or mortgage advice and does not offer loans. For a mortgage, please speak to a bank directly.\n\nIf it helps, banks' own published mortgage terms are listed here (for information only — always confirm with the bank):\n${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`,
+      nextStep: 'main_menu'
+    };
   }
   if (route === 'account_help') {
     return {
@@ -12571,7 +13641,8 @@ function contextualPageRouteFromMessage(text = '') {
     return 'account_help';
   }
 
-  if (/\b(sign\s*up|signup|register|registration|join|become|create)\b.{0,50}\b(agent|broker)\b/i.test(clean)
+  if (/\b(list|post|advertise)\w*\b.{0,40}\bas an? (?:real estate |property )?(agent|broker)\b/i.test(clean)
+    || /\b(sign\s*up|signup|register|registration|join|become|create)\b.{0,50}\b(agent|broker)\b/i.test(clean)
     || /\b(agent|broker)\b.{0,50}\b(sign\s*up|signup|register|registration|join|profile)\b/i.test(clean)) {
     return 'agent_registration';
   }
@@ -12613,7 +13684,7 @@ const STEPS = [
   'greeting', 'choose_language', 'main_menu', 'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
   'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract',
   'ask_university', 'ask_distance', 'ask_public_name', 'confirm_whatsapp_contact', 'ask_contact_method', 'ask_contact_value',
-  'ask_id_number', 'ask_selfie', 'ask_phone', 'search_type', 'search_area', 'agent_area',
+  'ask_id_number', 'ask_selfie', 'ask_terms', 'investment_brief', 'off_plan_where', 'ask_phone', 'search_type', 'search_area', 'agent_area',
   'verify_otp', 'missed_call_need', 'missed_call_resolved', 'submitted', ...EMPLOYEE_INTAKE_STEPS
 ];
 
@@ -12629,6 +13700,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const compactUpper = normalizeOptKeyword(bodyUpper);
 
   const respond = (msg, nextStep) => ({ message: msg, nextStep });
+  if (step === 'off_plan_where' && cleanBody && !['MENU', 'HOME', 'CANCEL', 'STOP', 'BACK'].includes(compactUpper)) {
+    const where = offPlanWhereAnswer(cleanBody);
+    if (where === 'uganda') return respond(offPlanUgandaReply(), 'main_menu');
+    if (where === 'abroad') return respond(await offPlanAbroadReply(), 'main_menu');
+    if (!isOffPlanRequest(cleanBody, intentResult?.intent)) return respond(offPlanWhereQuestion(), 'off_plan_where');
+  }
+  if (step === 'investment_brief' && cleanBody && !['MENU', 'HOME', 'CANCEL', 'STOP', 'BACK'].includes(compactUpper)) {
+    return respond(await investmentBriefReply({ phone, lang, text: cleanBody }), 'main_menu');
+  }
   if (isOffPlanRequest(cleanBody, intentResult?.intent)) {
     const listingRequest = isOffPlanListingRequest(cleanBody, intentResult?.intent);
     if (listingRequest) {
@@ -12648,7 +13728,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         await updateOffPlanEnquiryDelivery(db, enquiry.id, delivery);
       });
     }
-    return respond(offPlanWhatsappReply(listingRequest, cleanBody), 'main_menu');
+    if (listingRequest) return respond(offPlanWhatsappReply(true, cleanBody), 'main_menu');
+    const where = offPlanWhereAnswer(cleanBody.replace(/^\s*\d+\s*/, ''));
+    if (where === 'abroad') return respond(await offPlanAbroadReply(), 'main_menu');
+    if (where === 'uganda') return respond(offPlanUgandaReply(), 'main_menu');
+    return respond(offPlanWhereQuestion(), 'off_plan_where');
   }
   // Someone asking about a listing they are looking at, before anything else.
   // The message our own property pages write contains "listing" and "for rent",
@@ -12672,6 +13756,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const listingStartSteps = ['greeting', 'main_menu', 'search_type', 'search_area', 'agent_area', 'submitted'];
   const explicitListingStart = listingStartSteps.includes(step)
+    && contextualPageRouteFromMessage(cleanBody) !== 'agent_registration'
     && isListingStartRequest(cleanBody, intentResult);
   const contextualRoute = contextualPageRouteFromMessage(cleanBody);
   const globalRoute = contextualRoute || intentMenuRoute(intentResult?.intent);
@@ -12904,6 +13989,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   }
 
   if (explicitListingStart) {
+    queueExplainerVideoOnce({ phone, kind: 'lister' });
     return routeExplicitListingStart();
   }
 
@@ -12915,7 +14001,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     'listing_type', 'ownership', 'title', 'district',
     'area', 'price', 'bedrooms', 'description', 'ask_deposit', 'ask_contract', 'ask_university',
     'ask_distance', 'ask_public_name', 'confirm_whatsapp_contact', 'ask_contact_method', 'ask_contact_value', 'ask_selfie', 'ask_id_number',
-    'ask_phone', 'verify_otp'
+    'ask_terms', 'ask_phone', 'verify_otp'
   ];
   const hasListingContext = Boolean(
     draft.listing_type
@@ -13068,8 +14154,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const activeFlowOwnsNumericReply = numericOptionReply
     && !['greeting', 'main_menu', 'choose_language', 'search_type', 'search_area', 'agent_area'].includes(step);
   if (['greeting', 'main_menu'].includes(step) && globalRoute === 'agent_registration') {
-    const next = menuRouteReply(lang, globalRoute);
-    return respond(next.message, next.nextStep);
+    return respond(await agentJoinRequestReply({ phone, text: cleanBody }), 'main_menu');
   }
 
   if (['greeting', 'main_menu'].includes(step) && /\b(agent|broker|realtor)\b/i.test(cleanBody)) {
@@ -13195,7 +14280,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     && !activeFlowOwnsNumericReply
     && globalRoute !== step
     && !(globalRoute === 'search_type' && ['search_type', 'search_area', 'agent_area'].includes(step))
-    && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
+    && !['verify_otp', 'ask_id_number', 'ask_selfie', 'ask_terms'].includes(step)
     && (
       !['title', 'district', 'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract', 'ask_university', 'ask_distance', 'ask_field_agent', 'ask_field_agent_details'].includes(step)
       && !['ask_public_name', 'ask_contact_method', 'ask_contact_value', 'ask_id_number', 'ask_selfie'].includes(step)
@@ -13204,7 +14289,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     && globalIntentConfidence >= 0.6;
 
   if (canSwitchFlow) {
-    const next = menuRouteReply(lang, globalRoute);
+    const next = globalRoute === 'agent_registration'
+      ? { message: await agentJoinRequestReply({ phone, text: cleanBody }), nextStep: 'main_menu' }
+      : menuRouteReply(lang, globalRoute);
     await patchSessionData(phone, {
       interrupted_step: step,
       interrupted_at: new Date().toISOString(),
@@ -13237,10 +14324,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // GREETING
   if (step === 'greeting') {
-    if (cleanBody === '1') return respond(t(lang, 'askListingType'), 'listing_type');
+    if (cleanBody === '1') { queueExplainerVideoOnce({ phone, kind: 'lister' }); return respond(t(lang, 'askListingType'), 'listing_type'); }
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
-    if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
+    if (cleanBody === '4') return respond(offPlanWhereQuestion(), 'off_plan_where');
+    if (cleanBody === '5') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
     return respond(`${friendlyGreetingReply(lang, sessionData)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 
@@ -13304,10 +14392,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       );
     }
 
-    if (cleanBody === '1') return respond(t(lang, 'askListingType'), 'listing_type');
+    if (cleanBody === '1') { queueExplainerVideoOnce({ phone, kind: 'lister' }); return respond(t(lang, 'askListingType'), 'listing_type'); }
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
-    if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
+    if (cleanBody === '4') return respond(offPlanWhereQuestion(), 'off_plan_where');
+    if (cleanBody === '5') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
 
     if (compactUpper === 'WIDEN' && Number.isFinite(Number(sessionData.search_lat)) && Number.isFinite(Number(sessionData.search_lng))) {
@@ -14277,8 +15366,40 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       verification_channel: updatedDraft.verification_channel,
       otp_channel: 'not_required'
     });
+    // Private owners (not agents) must see and AGREE to the listing terms first.
+    const brokerMatch = await findBrokerAgentByContact({ phone: updatedDraft.owner_phone || updatedDraft.lister_phone || phone, email: updatedDraft.lister_email || '' }).catch(() => null);
+    if (!brokerMatch?.id && !updatedDraft.terms_accepted_at) {
+      return respond(await sendListerTermsPrompt({ phone, draft: updatedDraft }), 'ask_terms');
+    }
     const result = await submitWhatsappListingDraft({ phone, lang, draft: updatedDraft });
     return respond(result.message, result.nextStep);
+  }
+
+  // TERMS (private owners): AGREE to submit, NO to stop.
+  if (step === 'ask_terms') {
+    const answer = normalizeInput(cleanBody).toLowerCase();
+    if (/^(i\s+)?(agree|accept|agreed|i agree|nzikiriza|nkkiriza|nakubali|nakubaliana|kubali)\b/.test(answer) || compactUpper === 'AGREE' || isAffirmativeReply(cleanBody)) {
+      const settings = await require('../services/billingOpsService').getSettings(db).catch(() => ({}));
+      const docs = require('../services/listingDocsService');
+      const acceptance = {
+        terms_accepted_at: new Date().toISOString(),
+        terms_version: docs.LISTER_TERMS_VERSION,
+        terms_accepted_phone: String(phone).replace(/\D/g, ''),
+        terms_accepted_text: cleanBody.slice(0, 80),
+        lister_fee_terms: { free_days: Number(settings.lister_fee?.free_days ?? 7), monthly_ugx: Number(settings.lister_fee?.monthly_ugx || 25000) }
+      };
+      await patchDraft(phone, acceptance);
+      const result = await submitWhatsappListingDraft({ phone, lang, draft: { ...draft, ...acceptance } });
+      if (!result.propertyId) return respond(result.message, result.nextStep);
+      const fee = acceptance.lister_fee_terms;
+      return respond(`${result.message}\n\n✅ Thank you for agreeing to the terms.\n🗓️ Once approved, your property is live *free for ${fee.free_days} days*. After that it is UGX ${fee.monthly_ugx.toLocaleString('en-US')} a month to stay live — we'll message you before then, with how many people have viewed it.`, result.nextStep);
+    }
+    if (isNegativeReply(cleanBody) || /^(no|cancel|stop)\b/.test(answer)) {
+      await patchSessionData(phone, { lister_terms_declined_at: new Date().toISOString() });
+      return respond(`No problem — nothing has been submitted and your details are not published.\n\nIf you change your mind, reply *AGREE* here. Questions about the terms? Call ${agentHelpContact().name} on ${agentHelpContact().pretty}.`, 'ask_terms');
+    }
+    const docs = require('../services/listingDocsService');
+    return respond(`Please reply *AGREE* to accept the terms and send your property for review, or *NO* to stop.\n\nTerms (PDF): ${docs.docUrls('lister_terms').pdf}\nQuestions about the terms or the fee? Call or WhatsApp ${agentHelpContact().name} on ${agentHelpContact().pretty}.`, 'ask_terms');
   }
 
   // SELFIE
@@ -14600,6 +15721,29 @@ async function processInboundRuntimeUnlocked({
     }
   });
 
+  // Team payment commands (NEW AGENT / PAY LINK / STATUS / APPROVE) from
+  // Ronald or Arthur's numbers come before anything else reads the message.
+  const teamBillingReply = await require('../services/teamBillingCommandService')
+    .handleTeamBillingCommand(db, { phone, body: effectiveBody })
+    .catch((error) => {
+      logger.warn('Team billing command failed:', error.message || String(error));
+      return null;
+    });
+  if (teamBillingReply) return { message: teamBillingReply, nextStep: sessionStep };
+
+  // Payments first: a transaction ID or receipt must never be read as a property.
+  const paymentReply = await handlePaymentClaimMessage({
+    phone,
+    body: effectiveBody,
+    photoCandidates: inboundPhotoCandidates
+  }).catch((error) => {
+    logger.warn('Payment claim handling failed:', error.message || String(error));
+    return null;
+  });
+  if (paymentReply) return { message: paymentReply, nextStep: sessionStep };
+  const pausedReply = await billingPausedAgentReply({ phone, body: effectiveBody }).catch(() => null);
+  if (pausedReply) return { message: pausedReply, nextStep: sessionStep };
+
   const employeeIntake = await handleEmployeeWhatsappIntake({
     phone,
     body: effectiveBody,
@@ -14609,7 +15753,8 @@ async function processInboundRuntimeUnlocked({
       mediaType: normalizedMediaType,
       mediaCount: inboundMediaCount,
       photoCandidates: inboundPhotoCandidates,
-      mediaCandidates: inboundMediaCandidates
+      mediaCandidates: inboundMediaCandidates,
+      sharedLocation
     },
     inboundMessageId,
     session: sessionForMessage
@@ -14630,7 +15775,20 @@ async function processInboundRuntimeUnlocked({
       && !employeeIntake.batchComplete
       && (employeeIntake.nextStep || sessionStep) === 'employee_property_media'
       && (sessionForMessage.session_data?.property_batch_mode || 'multiple') === 'multiple';
-    if (batchSummaryApplies) {
+    // An agent's typed message is answered there and then, so a summary still
+    // pending from an earlier burst of photos would only repeat it.
+    const inboundCarriedMedia = Boolean(effectiveMediaUrl) || inboundPhotoCandidates.length > 0 || inboundMediaCandidates.length > 0;
+    const agentTypedReply = batchSummaryApplies
+      && !inboundCarriedMedia
+      && String(employeeIntake.message || '').trim()
+      && !String(employeeIntake.message || '').startsWith('⚠️ Not saved yet')
+      && (await db.query(
+        `SELECT 1 FROM whatsapp_sessions WHERE phone = $1 AND session_data->>'whatsapp_agent_self_intake' = 'true'`,
+        [phone]
+      ).then((r) => r.rows.length > 0).catch(() => false));
+    if (agentTypedReply) {
+      cancelEmployeeBatchSummary(phone);
+    } else if (batchSummaryApplies) {
       scheduleEmployeeBatchSummary(phone);
       if (String(employeeIntake.message || '').startsWith('⚠️ Not saved yet')) {
         employeeIntake.message = '';
@@ -16051,6 +17209,7 @@ module.exports.__test = {
   recentlyClosedEmployeeBatchReply,
   agentConversationalAside,
   agentMenuReply,
+  staffIntakeGreetingReply,
   agentShareReply,
   perUnitPriceFacts,
   explicitDistrictInCaption,
@@ -16058,6 +17217,11 @@ module.exports.__test = {
   agentPhoneKey,
   agentSelfIntakeSessionData,
   agentSelfIntakeSavedReply,
+  agentPendingNotice,
+  noteEmployeePropertyCreated,
+  employeeInForwardedBurst,
+  agentMissingPhrases,
+  applyAgentCorrection,
   isOwnAgentSelfIntake,
   findApprovedAgentByPhone,
   fetchEmployeeMediaWithRetry,
