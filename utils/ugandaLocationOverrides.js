@@ -30,6 +30,18 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'makaug_verified_location_override'
   },
   {
+    // 4 Oct 2026: "NALYA 4 RENTAL UNITS APARTMENT BLOCK OF 3 BEDROOMS EACH …
+    // SELLING UGX 1.1BILLION" was refused for "exact area and district". Naalya
+    // is a well-known suburb on the Northern Bypass, but the administrative
+    // gazetteer is built from UBOS parish names and carries only Nalyankanja, in
+    // Mityana and Mubende. Agents write it both ways, so both spellings resolve.
+    // Wakiso District, Kira Municipality, per the Naalya article on Wikipedia.
+    name: 'Naalya', district: 'Wakiso', town: 'Kira', level: 'area',
+    aliases: ['Naalya', 'Nalya', 'Naalya Estate', 'Naalya Housing Estate'],
+    lat: 0.37, lng: 32.64,
+    source: 'makaug_verified_location_override'
+  },
+  {
     name: 'Kololo', district: 'Kampala', town: 'Kampala', level: 'area',
     aliases: ['Kololo'], lat: 0.356, lng: 32.612,
     source: 'makaug_verified_location_override'
