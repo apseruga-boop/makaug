@@ -349,7 +349,11 @@ const kaziMailoTitle = whatsappRoute.employeePropertyFacts(
   {}
 );
 assert.notEqual(kaziMailoTitle.locationPatch.area, 'Molo', 'a misspelled mailo-title phrase must not be mistaken for Molo town');
-assert.deepEqual(whatsappRoute.employeePropertyMissing(kaziMailoTitle), ['exact area and district']);
+// The caption names a place ("in Nakayla") that the registry does not have. We
+// cannot tell a place we are missing from one that does not exist, and both get
+// the same question — the district, by name — rather than being asked again for
+// an area the agent already gave. Nothing publishes until the district arrives.
+assert.deepEqual(whatsappRoute.employeePropertyMissing(kaziMailoTitle), ['which district Nakayla is in']);
 
 assert(routeSource.includes("const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829'"));
 assert(routeSource.includes('Company is optional. If included'), 'new-agent instructions must explain the supported three-field format');
@@ -364,7 +368,7 @@ assert.equal(
   'the recent body/time fingerprint remains available only when no message ID exists'
 );
 assert(routeSource.includes('whatsapp-distinct-rapid-replies-20260831') || serverSource.includes('whatsapp-distinct-rapid-replies-20260831'), 'the rapid identical-reply fix should be externally verifiable');
-assert(routeSource.includes("$24,'pending','submitted','whatsapp','whatsapp_employee_intake'"), 'employee properties must enter staff review as pending');
+assert(routeSource.includes("$21,'pending','submitted','whatsapp','whatsapp_employee_intake'"), 'employee properties must enter staff review as pending');
 assert(routeSource.includes('review_only: true') && routeSource.includes('auto_publish: false'), 'review-only and no-autopublish gates are required');
 assert(routeSource.includes("'whatsapp-employee-agent-007','whatsapp_employee_intake_queued','pending','pending'"), 'moderation history must retain pending status');
 assert(routeSource.includes('whatsapp_employee_property_review_queued'), 'each property should create a notification/audit record');
@@ -572,10 +576,7 @@ assert(routeSource.includes("? ''\n            : `Already saved to review"), 'mu
 // one completion summary. The behaviour itself is covered directly by
 // "staff replies are left exactly as they were" in
 // tests/whatsapp-agent-self-intake.test.js.
-// The one exception (2 Oct 2026): a property saved without its photo, because
-// that photo is already on another listing, says so rather than staying silent.
-assert(/\(data\.property_batch_mode \|\| 'multiple'\) === 'single'[\s\S]{0,500}: (?:''|staffDroppedMediaWarning\(data, caption\))/.test(routeSource), 'multiple batches must wait for one final completion summary');
-assert(/function staffDroppedMediaWarning[\s\S]{0,400}last_create_media_dropped[\s\S]{0,200}return ''/.test(routeSource), 'the warning is empty unless a photo was actually dropped');
+assert(/\(data\.property_batch_mode \|\| 'multiple'\) === 'single'[\s\S]{0,500}: ''/.test(routeSource), 'multiple batches must wait for one final completion summary');
 const voiceDetectorBlocks = copilotSource.match(/const hasVoiceNote = \(root, text = ''\) => \{[\s\S]*?\n    \};\n    const hasCallLog/g) || [];
 assert.equal(voiceDetectorBlocks.length, 2, 'both browser snapshot paths must define voice-specific detection');
 assert(voiceDetectorBlocks.every((block) => !block.includes('[aria-label*="Play" i]')), 'generic Play buttons must not classify property videos as voice notes');
