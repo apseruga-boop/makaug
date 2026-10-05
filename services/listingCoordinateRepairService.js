@@ -126,6 +126,10 @@ function classifyListingLocation(row = {}) {
   if (!ref) return placeholder ? { action: 'review', reason: 'placeholder_pin_no_reference' } : { action: 'ok', reason: 'no_reference' };
 
   const distance = km(pin, ref.point);
+  // Only the district is known and the pin is just its centre: right for
+  // "in Kampala", but not a real spot for "near Mulago" searches.
+  const districtOnly = ref.level === 'district';
+  if (!placeholder && districtOnly && distance <= 1) return { action: 'ok', reason: 'district_centre_pin', km: distance, precision: 'district' };
   if (!placeholder && distance <= ref.limit) return { action: 'ok', reason: 'within_limit', km: distance };
 
   // The place the title names, if any.
@@ -201,6 +205,7 @@ async function repairListingCoordinates(db, { apply = false, limit = 20000, stat
       `SELECT id, title, area, district, latitude, longitude, status,
               jsonb_build_object(
                 'canonical_location_id', extra_fields->>'canonical_location_id',
+                'location_precision', extra_fields->>'location_precision',
                 'coords_fix', jsonb_build_object('reviewed_ok', COALESCE((extra_fields->'coords_fix'->>'reviewed_ok')::boolean, false))
               ) AS extra_fields
          FROM properties
@@ -217,10 +222,21 @@ async function repairListingCoordinates(db, { apply = false, limit = 20000, stat
     if (page.length < 500) break;
   }
 
-  const summary = { checked: rows.length, ok: 0, relabel: 0, repin: 0, review: 0, applied: 0, samples: { relabel: [], repin: [], review: [] } };
+  const summary = { checked: rows.length, ok: 0, relabel: 0, repin: 0, review: 0, applied: 0, district_only: 0, district_only_tagged: 0, samples: { relabel: [], repin: [], review: [] } };
   for (const row of rows) {
     const decision = classifyListingLocation(row);
     summary[decision.action] = (summary[decision.action] || 0) + 1;
+    if (decision.precision === 'district') {
+      summary.district_only += 1;
+      if (apply && row.extra_fields?.location_precision !== 'district') {
+        await db.query(
+          `UPDATE properties
+              SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('location_precision', 'district')
+            WHERE id = $1`,
+          [row.id]
+        ).then(() => { summary.district_only_tagged += 1; }).catch(() => {});
+      }
+    }
     if (decision.action === 'ok') continue;
     const sample = { id: row.id, title: row.title, area: row.area, district: row.district, pin: [Number(row.latitude), Number(row.longitude)], ...decision };
     if (summary.samples[decision.action].length < 400) summary.samples[decision.action].push(sample);
@@ -234,10 +250,11 @@ async function repairListingCoordinates(db, { apply = false, limit = 20000, stat
                   extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
                     'coords_fix', $4::jsonb,
                     'geocoding_provider', 'area_centre_fix',
+                    'location_precision', CASE WHEN $5::text = 'district' THEN 'district' ELSE 'area' END,
                     'location_confidence', '0.4'),
                   updated_at = NOW()
             WHERE id = $1`,
-          [row.id, decision.to_point.lat, decision.to_point.lng, JSON.stringify({ ...stamp, to: decision.from })]
+          [row.id, decision.to_point.lat, decision.to_point.lng, JSON.stringify({ ...stamp, to: decision.from }), decision.to_level]
         );
         summary.applied += 1;
       } else if (decision.action === 'relabel') {

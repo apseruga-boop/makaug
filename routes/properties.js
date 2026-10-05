@@ -2804,6 +2804,9 @@ async function listPropertiesHandler(req, res, next) {
       filters.push('p.longitude IS NOT NULL');
       values.push(radiusKm);
       filters.push(`${distanceSql} <= $${values.length}`);
+      // Listings whose only location is "somewhere in Kampala" (pinned at the
+      // district centre) are not "near" a specific place in a short-range search.
+      if (radiusKm <= 8.1) filters.push(`COALESCE(p.extra_fields->>'location_precision', '') <> 'district'`);
     }
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';

@@ -12543,6 +12543,11 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
     }
   }
 
+  if (normalizeRadiusMiles(radiusMiles, DEFAULT_SEARCH_RADIUS_MILES) <= 5) {
+    // A listing pinned only at its district's centre isn't "near" anything specific.
+    where += ` AND COALESCE(p.extra_fields->>'location_precision', '') <> 'district'`;
+  }
+
   {
     // Only listings inside a box around the point, so the LIMIT keeps the nearest, not just the newest.
     const lat0 = Number(sharedLocation.lat);

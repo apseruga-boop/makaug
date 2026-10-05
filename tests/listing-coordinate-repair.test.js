@@ -37,3 +37,9 @@ test('agent ID photos: lists show a marker, never the image itself', () => {
   assert.equal(identity.identityListMarker(''), '');
   assert.equal(identity.isInlineImage('data:application/pdf;base64,AAAA'), true);
 });
+
+test('a listing pinned only at its district centre is marked as district-level', () => {
+  const d = classifyListingLocation({ title: 'House for rent', area: '', district: 'Kampala', latitude: 0.3476, longitude: 32.5825, extra_fields: {} });
+  assert.equal(d.action, 'ok');
+  assert.equal(d.precision, 'district');
+});
