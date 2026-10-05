@@ -1970,6 +1970,65 @@ function mapOwnershipInput(input) {
   return null;
 }
 
+// "We need a restaurant place for rent in KAWEMPE" — 5 Oct 2026, 11:36.
+//
+// The commercial vocabulary here was commercial|office|retail|warehouse|shop|
+// business space. "Restaurant" was not in it, so "for rent" won and we searched
+// residential rentals: the man was offered a single room at UGX 300,000 a month
+// as premises for his restaurant. The SQL that categorises listings has known
+// restaurant was commercial all along (routes/properties.js), so the two halves
+// of the system disagreed about the same word.
+//
+// Everything downstream of this was already right. Had the type been read
+// correctly the search would have found nothing commercial in Kawempe, and
+// formatNoMatchOrFallbackReply would have said so, saved the request as a lead
+// and offered commercial space elsewhere. None of that ran, because three
+// irrelevant results looked like success.
+//
+// Premises, whatever else the message says.
+const COMMERCIAL_USE_STRONG = [
+  'commercial', 'office', 'offices', 'retail', 'warehouse', 'showroom', 'industrial',
+  'duuka', 'stall', 'stalls', 'kiosk', 'arcade', 'lock[- ]?up', 'godown', 'depot', 'factory',
+  'supermarket', 'minimart',
+  'business (?:space|premises|place|room)', 'commercial (?:space|premises|property)'
+].join('|');
+
+// A business when somebody is looking for somewhere to run one, and a room when
+// somebody is describing a home. "A 7 bedrooms mansion in Munyonyo with three
+// sitting rooms, two kitchens, 8 bathrooms and rooftop kitchen, *a bar* and a
+// bathroom going for 580,000 dollars" is a house with a bar in it, and reading
+// that as commercial premises would have been the same mistake in reverse.
+const COMMERCIAL_USE_WEAK = [
+  'shop', 'shops', 'restaurant', 'eatery', 'cafe', 'café', 'canteen', 'bakery', 'butchery',
+  'bar', 'salon', 'saloon', 'barber', 'spa', 'gym',
+  'pharmacy', 'clinic', 'surgery', 'laboratory',
+  'boutique', 'hardware', 'workshop', 'garage'
+].join('|');
+
+// Bedrooms, or a word for a dwelling, means we are being told about a home.
+const DWELLING_IN_SEARCH = /\b\d+\s*(?:bed|beds|bedroom|bedrooms|bdrm)\b|\b(?:mansion|bungalow|villa|house|home|apartment|flat|townhouse|storey(?:ed)?|storied|duplex|maisonette)\b/i;
+
+// A word that merely describes the neighbourhood or a feature of a home is not
+// a request for premises: "a house near a school", "with a garage", "opposite
+// the pharmacy" are all somebody looking for somewhere to live.
+const COMMERCIAL_USE_NOT_A_REQUEST = /\b(?:near|nearby|close to|opposite|behind|beside|next to|walking distance (?:to|from)|with|without|has|have|having|includes?|including|plus|and an?)\s+(?:a|an|the|its|their)?\s*$/i;
+
+function commercialUseInSearch(input = '') {
+  const text = normalizeInput(input).toLowerCase();
+  if (!text) return false;
+  const asksForPremises = (words) => {
+    const pattern = new RegExp(`\\b(?:${words})\\b`, 'gi');
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      if (!COMMERCIAL_USE_NOT_A_REQUEST.test(text.slice(0, match.index))) return true;
+    }
+    return false;
+  };
+  if (asksForPremises(COMMERCIAL_USE_STRONG)) return true;
+  if (DWELLING_IN_SEARCH.test(text)) return false;
+  return asksForPremises(COMMERCIAL_USE_WEAK);
+}
+
 function inferListingTypeFromStartRequest(input, entities = {}) {
   const text = normalizeInput(input).toLowerCase();
   const entityType = normalizeListingType(entities?.listing_type || entities?.listingType || '');
@@ -1977,7 +2036,7 @@ function inferListingTypeFromStartRequest(input, entities = {}) {
   const typeMatch = text.match(/\btype\s*:\s*(student accommodation|commercial|for sale|to rent|for rent|sale|rent|rental|land|plot|hostel)\b/i);
   if (typeMatch) return mapListingTypeInput(typeMatch[1]) || null;
   if (/\b(student accommodation|student rooms?|student housing|hostel|campus)\b/i.test(text)) return 'student';
-  if (/\b(commercial|office|retail|warehouse|shop|business space)\b/i.test(text)) return 'commercial';
+  if (commercialUseInSearch(text)) return 'commercial';
   if (/\b(land|plot|plots|acre|acres|farm)\b/i.test(text)) return 'land';
   if (/\b(to rent|for rent|rent out|rental|lease|letting)\b/i.test(text)) return 'rent';
   if (/\b(?:njagala|nhenda)\s+okupangisa\b/i.test(text)) return 'rent';
@@ -17396,6 +17455,8 @@ module.exports.__test = {
   agentConversationalAside,
   agentMenuReply,
   staffIntakeGreetingReply,
+  commercialUseInSearch,
+  inferListingTypeFromStartRequest,
   sendAgentPitchVideo,
   recoverInterruptedEmployeeIntakeStep,
   agentMonthlyFeeLabel,
