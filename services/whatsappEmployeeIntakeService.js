@@ -2,6 +2,7 @@ const EMPLOYEE_INTAKE_TRIGGER = 'Agent 007';
 
 const EMPLOYEE_INTAKE_STEPS = Object.freeze([
   'employee_intake_role',
+  'employee_pitch_contact',
   'employee_agent_existing',
   'employee_agent_lookup',
   'employee_agent_confirm',
@@ -11,6 +12,7 @@ const EMPLOYEE_INTAKE_STEPS = Object.freeze([
   'employee_agent_logo',
   'employee_intake_confirm',
   'employee_intake_fix',
+  'employee_agent_pay_link',
   'employee_property_count',
   'employee_property_media'
 ]);
@@ -220,8 +222,45 @@ function choice(value, options = {}) {
 function parseEmployeeRole(value = '') {
   return choice(value, {
     agent: ['1', 'agent', 'an agent', 'broker'],
-    customer: ['2', 'customer', 'new customer', 'owner', 'property owner', 'normal person']
+    customer: ['2', 'customer', 'new customer', 'owner', 'property owner', 'normal person'],
+    // Not a property at all: an employee standing in front of somebody who might
+    // become an agent, who needs the pitch film before anything else happens.
+    pitch: ['3', 'video', 'send video', 'agent video', 'pitch', 'send the video', 'invite']
   });
+}
+
+/**
+ * "Name | phone" for the person the film is going to. The same shape as the
+ * other details prompts in this flow, minus everything a prospect does not have
+ * yet — no district, no company, no ID.
+ */
+function parsePitchContact(value = '') {
+  const parts = splitDetails(value).map(trimFieldEdges).filter(Boolean);
+  if (parts.length < 2) return null;
+  const [fullName, phone] = parts;
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!fullName || digits.length < 8) return null;
+  return { fullName, phone };
+}
+
+/**
+ * Asked once, right after a new agent is created, because approval can be days
+ * later and whoever approves will not know what was agreed on the doorstep.
+ */
+function employeeAgentPayLinkPrompt(agentName = '', feeLabel = 'UGX 50,000') {
+  const who = String(agentName || '').trim() || 'this agent';
+  return `\u{1F4B3} *Payment* \u2014 ${who} pays ${feeLabel} a month.\n\nShall I send them the payment link as soon as they are approved?\n\n1 \u2014 Yes, send it on approval\n2 \u2014 No, I will handle the payment myself`;
+}
+
+function parsePayLinkChoice(value = '') {
+  return choice(value, {
+    yes: ['1', 'yes', 'y', 'send', 'send it', 'ok', 'okay', 'yeah'],
+    no: ['2', 'no', 'n', 'later', 'not now', 'skip', 'i will']
+  });
+}
+
+function employeePitchContactPrompt() {
+  return '🎬 *Send the makaug agent video*\n\nWho should it go to?\n\nSend their details like this:\n\n*Name | phone number*\n\nFor example: Kato Brian | 0772123456\n\nType *CANCEL* to stop.';
 }
 
 function parseYesNo(value = '') {
@@ -386,7 +425,7 @@ function parseCustomerDetails(value = '') {
  * and over, so the question now says what each answer costs.
  */
 function employeeRolePrompt() {
-  return '🔐 *makaug employee intake*\nWho do these properties belong to?\n\n1 — An *agent or broker* (they get a makaug profile, and every property is listed under it)\n2 — A *private owner* selling their own property (no agent profile is created)';
+  return '🔐 *makaug employee intake*\nWho do these properties belong to?\n\n1 — An *agent or broker* (they get a makaug profile, and every property is listed under it)\n2 — A *private owner* selling their own property (no agent profile is created)\n\n3 — No properties yet — *send someone the makaug agent video* (what we are, how to list, what it costs)';
 }
 
 function employeeAgentExistingPrompt() {
@@ -419,6 +458,10 @@ module.exports = {
   parseIntakeFixChoice,
   parseSkipRequest,
   employeeRolePrompt,
+  employeePitchContactPrompt,
+  employeeAgentPayLinkPrompt,
+  parsePayLinkChoice,
+  parsePitchContact,
   looksLikePropertyCaption,
   withEnglishPropertyTerms,
   isEmployeeIntakeCancel,
