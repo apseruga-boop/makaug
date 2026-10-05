@@ -487,7 +487,40 @@ async function createMomoClaim(db, code, { reference, phone, name } = {}) {
       link.purpose, txid, link.amount_ugx, `Paid by MoMo from pay link ${link.code}`, link.id]
   )).rows[0];
   await db.query('UPDATE pay_links SET claim_id = $2, updated_at = NOW() WHERE id = $1', [link.id, claim.id]);
-  await billingOps.matchClaimToSms(db, claim).catch(() => null);
+  const matched = await billingOps.matchClaimToSms(db, claim).catch(() => null);
+
+  // Somebody has just told us they paid, and nothing used to say so out loud.
+  // A claim is only money once a human confirms it — matching the wallet SMS
+  // deliberately does not auto-confirm — so a claim nobody is told about sits in
+  // the admin queue until somebody happens to open it. The WhatsApp receipt path
+  // has always alerted the team; this one, the button on the payment page, did
+  // not.
+  try {
+    const desk = require('./leadDeskService');
+    const handoff = require('./leadHandoffService');
+    const who = [claim.payer_name, claim.payer_phone ? `+${digits(claim.payer_phone)}` : '']
+      .filter(Boolean).join(' ') || 'Someone';
+    const forWhat = link.agent_name ? `${link.agent_name}'s subscription` : (link.description || link.purpose || 'a payment');
+    const body = [
+      '🧾 *Payment claim to check*',
+      `${who} says they have paid ${billingOps.ugx(link.amount_ugx)} for ${forWhat}.`,
+      `Transaction ID: ${txid}`,
+      matched?.sms_id ? 'It matches a wallet SMS we received.' : 'No matching wallet SMS yet.',
+      '',
+      'It is NOT counted until someone confirms it in Admin › Sales & Revenue.'
+    ].join('\n');
+    if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'payment_claim_to_check');
+    const onList = new Set((typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).map((p) => digits(p).slice(-9)));
+    const settings = await billingOps.getSettings(db).catch(() => ({}));
+    for (const confirmer of Array.isArray(settings.confirmers) ? settings.confirmers : []) {
+      const num = digits(confirmer?.phone);
+      if (num.length >= 9 && !onList.has(num.slice(-9))) {
+        await handoff.deliverWhatsapp({ to: num, body, kind: 'payment_claim_confirmer', leadId: null, nonce: `${claim.id}:${num}` }).catch(() => null);
+      }
+    }
+  } catch (error) {
+    logger.warn('Team alert for a pay-link payment claim failed', { claimId: claim.id, error: error.message });
+  }
   return { claim_id: claim.id };
 }
 
