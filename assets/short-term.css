@@ -724,3 +724,8 @@
   text-decoration: none; white-space: nowrap;
 }
 #page-short-term .st-booking-cta:hover { filter: brightness(1.12); }
+
+/* Several partners sit side by side; they wrap rather than squeeze on a phone. */
+#page-short-term .st-booking-ctas {
+  display: flex; flex-wrap: wrap; gap: 10px;
+}
