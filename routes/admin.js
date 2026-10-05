@@ -14412,12 +14412,23 @@ async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force =
   const url = link?.url || '';
   if (!url) return { sent: false, reason: 'pay_link_empty' };
 
+  // Say only what the payment page will actually offer them. Card, Apple Pay
+  // and Google Pay appear only when Revolut is configured; promising them when
+  // it is not sends an agent to a page that offers mobile money alone.
+  const page = await payLinks.pageData(db, link.code).catch(() => null);
+  const methods = [];
+  if (page?.card_available) methods.push('card, Apple Pay or Google Pay');
+  if (page?.pay_to_ready) methods.push('MTN Mobile Money');
+  const methodLine = methods.length
+    ? `You can pay by ${methods.join(', or ')}.`
+    : 'The page will show you how to pay.';
+
   const firstName = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
   await queueWhatsappWebBridgeMessage({
     recipient: agentPhone,
     text: `✅ *You are approved, ${firstName}* — your makaug agent account is live.\n\n`
       + `Your subscription is ${feeLabel} a month. You can pay here:\n${url}\n\n`
-      + 'Card, Apple Pay, Google Pay, MTN or Airtel all work. Your listings stay live while you are paid up.',
+      + `${methodLine} Your listings stay live while you are paid up.`,
     source: 'admin',
     actorId: actor,
     metadata: { message_kind: 'agent_fee_link_on_approval', agent_id: agent.id, reply_dedupe_key: `agent_fee_link:${agent.id}` }
