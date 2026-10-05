@@ -211,7 +211,7 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push('• Your phone number sits on your listing — buyers call you directly');
   lines.push('• Buyers arrive from Google, our Ask AI search and our WhatsApp assistant');
   lines.push('• Video-first listings: a walk-through can sell to someone who is 6,000 km away');
-  lines.push('• Every listing gets its first 7 days free');
+  lines.push('• Private-owner listings get their first 7 days free; agent subscriptions are priced separately');
   lines.push('• Built for investors too: off plan, buy-to-let and a mortgage finder');
   lines.push('• You get a weekly WhatsApp report: views, visitors, enquiries and the countries watching you');
 

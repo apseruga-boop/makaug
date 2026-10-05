@@ -4,7 +4,8 @@ const {
   CATEGORY_SEO,
   canonicalLocationRouteSlug,
   canonicalLocationsForSeoRow,
-  facetLocationSlug
+  facetLocationSlug,
+  isPlausibleSeoPrice
 } = require('./publicSeoService');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
 const { SEO_FACET_MIN_LISTINGS, FACET_DEFINITIONS, COMMERCIAL_TRANSACTION_FACETS } = require('../utils/publicSeoFacets');
@@ -265,7 +266,7 @@ function facetPredicate(options, values, alias = 'p') {
 function normalizeSeoListingRow(row = {}) {
   const foundOnline = ['true', '1', 'yes'].includes(String(row.found_online_candidate || '').toLowerCase());
   const canonicalDisplay = canonicalDisplayLocationForRow(row);
-  return {
+  const normalized = {
     id: String(row.id || ''),
     listing_type: String(row.listing_type || ''),
     title: collapseDuplicatePublicTransaction(row.title) || `${ACTIVE_COUNTRY_NAME} property`,
@@ -286,6 +287,8 @@ function normalizeSeoListingRow(row = {}) {
     updated_at: row.updated_at || null,
     seo_total: Number(row.seo_total || 0) || 0
   };
+  if (!isPlausibleSeoPrice(normalized.listing_type, normalized)) normalized.price = 0;
+  return normalized;
 }
 
 async function loadPublicSeoListings(db, options = {}) {
@@ -366,7 +369,7 @@ async function loadPublicSeoListing(db, propertyId) {
 }
 
 function priceLabel(listing = {}) {
-  if (!(Number(listing.price) > 0)) return 'Price on application';
+  if (!isPlausibleSeoPrice(listing.listing_type, listing)) return 'Price on application';
   const numberLocale = ACTIVE_COUNTRY_CODE === 'ZA' ? 'en-ZA' : 'en-UG';
   const currencyLabel = ACTIVE_CURRENCY === 'ZAR' ? 'R' : ACTIVE_CURRENCY === 'UGX' ? 'USh' : ACTIVE_CURRENCY;
   const amount = new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 }).format(Number(listing.price));
@@ -388,7 +391,7 @@ function propertySeoTitle(listing = {}) {
   const bedrooms = Number(listing.bedrooms || 0) > 0 ? `${Number(listing.bedrooms)}bdrm ` : '';
   const intent = transaction === 'rent' ? ' for Rent' : transaction === 'sale' ? ' for Sale' : '';
   const location = [listing.area, listing.district].filter(Boolean).join(', ');
-  const price = Number(listing.price || 0) > 0 ? ` — ${priceLabel(listing)}` : '';
+  const price = isPlausibleSeoPrice(listingType, listing) ? ` — ${priceLabel(listing)}` : '';
   return `${bedrooms}${type}${intent}${location ? ` in ${location}` : ''}${price} | ${ACTIVE_BRAND}`;
 }
 
@@ -716,7 +719,7 @@ function renderPropertySeoHtml(html, listing, options = {}) {
       addressRegion: listing.district || '',
       addressCountry: ACTIVE_COUNTRY_CODE
     },
-    ...(listing.price > 0 ? {
+    ...(isPlausibleSeoPrice(listing.listing_type, listing) ? {
       offers: {
         '@type': 'Offer',
         price: listing.price,

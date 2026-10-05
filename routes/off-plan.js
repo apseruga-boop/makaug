@@ -210,6 +210,7 @@ publicRouter.post('/enquiries', leadFormLimiter, leadHoneypot, asyncRoute(async 
   return res.status(201).json({
     ok: true,
     enquiry_id: enquiry.id,
+    lead_id: lead?.id || null,
     notification_received: true,
     notification_delivery: delivery.delivered ? 'sent' : 'queued_or_unavailable',
     whatsapp_url: enquiry.preferred_contact_channel === 'whatsapp' ? whatsappEnquiryUrl(enquiry, development) : null,

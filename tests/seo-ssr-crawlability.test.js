@@ -9,6 +9,7 @@ const {
   __seoSnapshotCache,
   buildPublicSeoSnapshot,
   categoryPageSeoMeta,
+  isPlausibleSeoPrice,
   loadPublicSeoInventorySnapshot,
   sitemapEntries
 } = require('../services/publicSeoService');
@@ -30,7 +31,9 @@ const {
   areaLinksForCategory,
   loadPublicSeoListings,
   loadPublicSeoListing,
+  normalizeSeoListingRow,
   popularAreaLinks,
+  priceLabel,
   renderAreaLinks,
   renderFooterAreaLinks,
   renderCategorySeoHtml,
@@ -123,10 +126,29 @@ async function run() {
     assert(!output.includes('/land/central-central'), 'global area renderers must reject region routes');
   }
   const meta = categoryPageSeoMeta('/to-rent/ntinda-kampala', snapshot);
+  const najjeraMeta = categoryPageSeoMeta('/for-sale/najjera-wakiso', snapshot);
   const rentCategoryMeta = categoryPageSeoMeta('/to-rent', snapshot);
+  assert.deepEqual(najjeraMeta.routeState, {
+    page: 'sale',
+    locationId: 'wakiso:najjera',
+    area: 'Najjera, Wakiso',
+    nearby: '0'
+  }, 'nested category metadata must hand off an exact canonical location before browser hydration');
+  assert.equal(rentCategoryMeta.routeState, null, 'category roots must not manufacture a location handoff');
+  assert(serverSource.includes('const listingCount = meta.count ?? meta.total;'), 'root category metadata must use its authoritative total instead of coercing a null location count to zero');
   assert(rentCategoryMeta.title.includes('3 Listings, August 2026'), 'category titles must include honest inventory and freshness');
   assert.equal(rentCategoryMeta.priceFloor, 1500000, 'category metadata must carry the live price floor');
   assert(rentCategoryMeta.description.includes('Prices start from USh 1,500,000'), 'category descriptions must expose the live price floor');
+  const pricingSnapshot = buildPublicSeoSnapshot([
+    listingVariant(listing, 90, { listing_type: 'sale', price: 2, price_period: 'once' }),
+    listingVariant(listing, 91, { listing_type: 'sale', price: 350000000, price_period: 'once' })
+  ], '2026-10-05T06:00:00.000Z');
+  const salePricingMeta = categoryPageSeoMeta('/for-sale', pricingSnapshot);
+  assert.equal(salePricingMeta.priceFloor, 350000000, 'implausible tiny sale prices must not become public price-floor claims');
+  assert(!salePricingMeta.description.includes('USh 2'), 'public category copy must not advertise a corrupt USh 2 price floor');
+  assert.equal(isPlausibleSeoPrice('sale', { price: 2, price_period: 'once' }), false);
+  assert.equal(normalizeSeoListingRow({ listing_type: 'sale', price: 2, price_period: 'once' }).price, 0);
+  assert.equal(priceLabel({ listing_type: 'sale', price: 2, price_period: 'once' }), 'Price on application');
   const sanitizedCategory = sanitizePublicHtml(rawHtml, { pathname: '/to-rent/ntinda-kampala' });
   const sanitizedFeatured = sanitizePublicHtml(rawHtml, { pathname: '/featured' });
 
@@ -148,6 +170,9 @@ async function run() {
   assert(category.html.includes('2 bedrooms'), 'the raw card must contain the bedroom count');
   assert(category.html.includes('data-ssr-breadcrumbs="1"'), 'the visible category page must include breadcrumbs');
   assert(category.html.includes('/to-rent/ntinda-kampala'), 'listing and area navigation must expose a crawlable area URL');
+  assert(category.html.includes('id="makaug-seo-route-state"'), 'nested category HTML must preserve its exact route state through hydration');
+  assert(category.html.includes('data-location-id="kampala:ntinda"'), 'nested category HTML must expose its canonical location ID');
+  assert(category.html.includes('data-nearby="0"'), 'nested category HTML must disable automatic nearby broadening');
   assert.deepEqual(structuredTypes(category.structuredData), ['CollectionPage', 'BreadcrumbList', 'ItemList']);
 
   for (const forbidden of PUBLIC_FORBIDDEN_STRINGS) {
@@ -171,6 +196,14 @@ async function run() {
   assert.equal(product.offers.priceCurrency, 'UGX');
   assert.equal(detail.meta.title, '2bdrm House for Rent in Ntinda, Kampala — USh 1,500,000/month | makaug.com');
   assert.equal(detail.meta.description, 'Bright two-bedroom home close to shops and public transport.');
+
+  const implausiblePriceDetail = renderPropertySeoHtml(
+    sanitizePublicHtml(rawHtml, { pathname: `/property/${listing.id}` }),
+    { ...listing, listing_type: 'sale', price: 2, price_period: 'once' },
+    { snapshot, baseUrl: 'https://makaug.com' }
+  );
+  assert(implausiblePriceDetail.html.includes('Price on application'), 'implausible public prices must render a safe label');
+  assert.equal(implausiblePriceDetail.structuredData['@graph'][1].offers, undefined, 'implausible public prices must be omitted from structured offers');
 
   const homepage = renderHomepageSeoHtml(sanitizePublicHtml(rawHtml, { pathname: '/' }), {
     snapshot,

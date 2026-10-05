@@ -7,6 +7,8 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'assets/makaug-app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const whatsappRoute = fs.readFileSync(path.join(root, 'routes', 'whatsapp.js'), 'utf8');
+const agentWelcome = fs.readFileSync(path.join(root, 'services', 'agentWelcomeService.js'), 'utf8');
 
 assert(html.includes('data-listing-path-version="whatsapp-direct-20260910"'), 'the restored listing-path release marker should exist');
 assert(html.includes('id="list-choice-online-btn"'), 'the listing modal must retain the List Online choice');
@@ -16,12 +18,16 @@ assert(html.includes('id="topbar-whatsapp-link" href="https://wa.me/256780863394
 assert(html.includes('id="floating-whatsapp-link" href="https://wa.me/256780863394"'), 'the floating WhatsApp icon must remain a direct link');
 assert(html.includes('List through WhatsApp'), 'the listing choice should use the approved WhatsApp label');
 assert(html.includes('0780 863 394'), 'the listing choice should visibly show the WhatsApp number');
-assert(html.includes('Start with 7 days free.'), 'the listing modal should explain the introductory trial');
-assert(html.includes('one private listing costs UGX 25,000 per month'), 'the listing modal should state the post-trial price');
-assert(html.includes('Every submission stays in staff review until approved.'), 'the listing modal must retain the review boundary');
+assert(html.includes('The first 7 days are free.'), 'the listing modal should explain the introductory trial');
+assert(html.includes('each private property listing costs UGX 25,000 per month'), 'the listing modal should state the post-trial price');
+assert(html.includes('Submissions stay in staff review until approved.'), 'the listing modal must retain the review boundary');
 
 assert(!html.includes('Always 100% Free.'), 'the listing page must not claim listings are always free');
 assert(!app.includes('Always 100% Free.'), 'listing translations must not restore the obsolete always-free claim');
+assert(!whatsappRoute.includes("Uganda's free property platform"), 'the English WhatsApp welcome must not claim the whole platform is free');
+assert(!whatsappRoute.includes('kabedo me free property i Uganda'), 'the Acholi WhatsApp welcome must not claim the whole platform is free');
+assert(!whatsappRoute.includes('free property platform ya Uganda'), 'the Runyankole WhatsApp welcome must not claim the whole platform is free');
+assert(agentWelcome.includes('Private-owner listings get their first 7 days free; agent subscriptions are priced separately'), 'agent welcome must distinguish the private-owner trial from agent pricing');
 assert(!app.includes('MAKAUG_WHATSAPP_AI_WEB_FALLBACK'), 'public WhatsApp must not be controlled by the removed website fallback');
 assert(!app.includes('installTemporaryWebSupportFallback'), 'the app must not intercept WhatsApp clicks and reroute them online');
 assert(!app.includes('whatsapp_support_web_fallback'), 'obsolete fallback analytics must not remain active');

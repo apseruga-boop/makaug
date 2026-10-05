@@ -416,6 +416,7 @@ router.post('/listings/:id/enquiries', writeLimiter, async (req, res) => {
       ok: true,
       marker: SHORT_TERM_MARKER,
       enquiry: lead,
+      lead_id: crmLead?.id || null,
       contact: listing.contact,
       host_name: listing.host_name,
       next_step: 'Contact the host directly using the details above. makaug does not pass messages on, take bookings or hold any money.'

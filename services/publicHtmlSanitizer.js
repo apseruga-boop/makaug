@@ -170,7 +170,7 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>4. Create alerts</strong><span class="block text-sm text-gray-600 mt-1">Get notified when matching listings go live.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>5. WhatsApp contact</strong><span class="block text-sm text-gray-600 mt-1">Contact owners, brokers, or makaug with listing context.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>6. Book viewing</strong><span class="block text-sm text-gray-600 mt-1">Request a viewing or callback when the lister allows it.</span></div>
-        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>7. List property</strong><span class="block text-sm text-gray-600 mt-1">Use the guided free listing form with address, photos, and verification.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>7. List property</strong><span class="block text-sm text-gray-600 mt-1">Use the guided listing form with address, photos, and verification. A private property listing is free for its first 7 days, then costs UGX 25,000 per property/month. Agent plans are priced separately.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>8. Review checks</strong><span class="block text-sm text-gray-600 mt-1">makaug checks details before publishing listings.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>9. Use dashboards</strong><span class="block text-sm text-gray-600 mt-1">Track saved items, leads, bookings, campaigns, and follow-ups.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>10. Report suspicious</strong><span class="block text-sm text-gray-600 mt-1">Flag risky listings quickly so admin can review.</span></div>
@@ -328,7 +328,7 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
         </section>
         <section>
           <h3 class="font-black text-gray-900">Fees, liability, and governing law</h3>
-          <p class="mt-1">Free listings, advertising, featured placements, and other paid services may be subject to separate published or written terms. makaug does not guarantee availability, transaction completion, title validity, seller performance, tenancy performance, or freedom from third-party disputes. These Terms are governed by Ugandan law and disputes are subject to competent Ugandan courts.</p>
+          <p class="mt-1">A private property listing is free for its first 7 days, then costs UGX 25,000 per property/month. Agent plans, advertising, featured placements, and other paid services are priced separately under their published or agreed terms. makaug does not guarantee availability, transaction completion, title validity, seller performance, tenancy performance, or freedom from third-party disputes. These Terms are governed by Ugandan law and disputes are subject to competent Ugandan courts.</p>
         </section>
         <section>
           <h3 class="font-black text-gray-900">Contact</h3>
@@ -341,13 +341,13 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
   '/privacy-policy': {
     title: 'makaug Privacy Policy',
     eyebrow: 'Data protection',
-    body: 'makaug.com is responsible for the personal data processing described here. We use personal data to provide accounts, property discovery, enquiries, alerts, safety, support, advertising operations, approved integrations, and consent-aware analytics in line with Uganda data protection law.',
+    body: 'makaug.com is responsible for the personal data processing described here. Optional analytics and advertising measurement stay off unless a guest makes the relevant choice.',
     extraHtml: `
       <div class="mt-5 space-y-4 text-sm text-gray-700">
-        <p class="text-xs text-gray-500">Last updated: 25 July 2026</p>
+        <p class="text-xs text-gray-500">Last updated: 5 October 2026</p>
         <section>
           <h3 class="font-black text-gray-900">Data we collect</h3>
-          <p class="mt-1">Depending on the service used, we collect account and contact details, property and listing information, verification records, device and security logs, support communications, and limited publicly available source information needed for property discovery and attribution.</p>
+          <p class="mt-1">Depending on the service used, we collect account and contact details, property and listing information, verification records, device and security logs, support communications, and limited publicly available source information needed for property discovery and attribution. When a guest consents, optional measurement data may include first-party usage events, analytics identifiers, performance data, campaign parameters such as <strong>utm_content</strong>, advertising conversion identifiers, and an OpenAI referral identifier (<strong>oppref</strong>) when present in the landing-page URL.</p>
         </section>
         <section>
           <h3 class="font-black text-gray-900">Publicly available source information</h3>
@@ -355,7 +355,7 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
         </section>
         <section>
           <h3 class="font-black text-gray-900">How this information is used</h3>
-          <p class="mt-1">makaug uses this information to help users discover property opportunities, show source attribution, prevent fraud, improve user safety, and direct users back to the original source.</p>
+          <p class="mt-1">makaug uses this information to provide the requested service, help users discover property opportunities, show source attribution, prevent fraud, improve user safety, and direct users back to the original source. Optional analytics is used only with analytics consent to improve usability and performance. Optional advertising measurement is used only with advertising consent to understand which campaigns lead to enquiries and other customer actions.</p>
         </section>
         <section>
           <h3 class="font-black text-gray-900">Correction and removal</h3>
@@ -371,7 +371,7 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
         </section>
         <section>
           <h3 class="font-black text-gray-900">Sharing and international processing</h3>
-          <p class="mt-1">We do not sell personal data. We may use service providers for hosting, messaging, analytics, fraud prevention, and authorised integrations such as TikTok, or disclose data where lawfully required. Some providers may process data outside Uganda; we use reasonable contractual and technical safeguards appropriate to the service and applicable law.</p>
+          <p class="mt-1">We do not sell personal data. We may use service providers for hosting, messaging, consented analytics and advertising measurement, fraud prevention, and authorised integrations such as TikTok, or disclose data where lawfully required. Advertising measurement providers may include Meta, Google, and OpenAI when the relevant tool is configured and the guest has consented. Some providers may process data outside Uganda; we use reasonable contractual and technical safeguards appropriate to the service and applicable law.</p>
         </section>
         <section>
           <h3 class="font-black text-gray-900">Retention and security</h3>
@@ -379,7 +379,7 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
         </section>
         <section>
           <h3 class="font-black text-gray-900">Your rights and choices</h3>
-          <p class="mt-1">You may request access, correction, deletion, restriction, or objection where applicable, update communication preferences, disconnect integrations, and ask for removal of source information. makaug is intended for adults and does not knowingly use its TikTok connection to collect personal data from children.</p>
+          <p class="mt-1">You may request access, correction, deletion, restriction, or objection where applicable, update communication preferences, disconnect integrations, and ask for removal of source information. Use Cookie settings in the site footer to accept, reject, or later change optional analytics and advertising measurement choices. makaug is intended for adults and does not knowingly use its TikTok connection to collect personal data from children.</p>
         </section>
         <section>
           <h3 class="font-black text-gray-900">Contact and policy changes</h3>
@@ -392,9 +392,29 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
   '/cookie-policy': {
     title: 'makaug Cookie Policy',
     eyebrow: 'Cookies and preferences',
-    body: 'makaug uses necessary cookies for security and sessions, plus preference, analytics, and advertising cookies where configured and lawful.',
-    ctas: ['Manage preferences', 'Privacy policy', 'Contact support'],
-    links: ['/login?next=%2Faccount%3Ftab%3Dpreferences', '/privacy-policy', '/help']
+    body: 'makaug uses essential storage for security, sessions, and preferences. Optional analytics and advertising measurement stay off unless a guest makes the relevant choice.',
+    extraHtml: `
+      <div class="mt-5 space-y-4 text-sm text-gray-700">
+        <p class="text-xs text-gray-500">Last updated: 5 October 2026</p>
+        <section>
+          <h3 class="font-black text-gray-900">Essential storage</h3>
+          <p class="mt-1">Essential cookies and similar storage support sign-in, session continuity, fraud controls, language settings, core platform functionality, and your privacy choice. They are always on because the site cannot provide those functions reliably without them.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Optional analytics</h3>
+          <p class="mt-1">Analytics starts only after analytics consent. It may include first-party usage events, Google Analytics, performance measurements, analytics identifiers, and campaign parameters such as <strong>utm_source</strong>, <strong>utm_campaign</strong>, and <strong>utm_content</strong>.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Optional advertising measurement</h3>
+          <p class="mt-1">Advertising measurement starts only after advertising consent. It may use Meta, Google, and OpenAI tools for campaign measurement and conversion tracking. If a visit includes an OpenAI referral parameter (<strong>oppref</strong>), makaug may retain it with a lead for attribution only when advertising consent is granted. Provider cookies or identifiers such as <strong>__oppref</strong>, <strong>__obref</strong>, <strong>_fbp</strong>, or <strong>_fbc</strong> may also be used when the relevant tool is enabled.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Managing your choice</h3>
+          <p class="mt-1">Use Cookie settings in the site footer, or the Manage Cookie settings button on this page, to accept all optional categories, use essential storage only, or choose analytics and advertising measurement separately. You can change or withdraw a choice later. Withdrawal stops future optional measurement and removes supported measurement identifiers where the provider allows it.</p>
+        </section>
+      </div>`,
+    ctas: ['Manage Cookie settings', 'Privacy policy', 'Contact support'],
+    links: ['#cookie-settings', '/privacy-policy', '/help']
   }
 };
 
@@ -547,13 +567,16 @@ function renderSyntheticRouteContent(pathname = '/') {
   const ctaHtml = content.ctas.map((item, index) => {
     const href = (content.links || [])[index] || '/help';
     const external = /^https?:|^mailto:/i.test(href);
+    const cookieSettingsAttrs = href === '#cookie-settings'
+      ? ' onclick="openMakaugCookieSettings(); return false;"'
+      : '';
     const supportWhatsAppAttrs = /^https:\/\/wa\.me\/256780863394/i.test(href)
       ? ` data-public-whatsapp-link data-whatsapp-context="${whatsappContext}"`
       : '';
     const ctaKey = content.i18nPrefix && content.ctaKeys?.[index]
       ? ` data-content-i18n="${content.i18nPrefix}.${content.ctaKeys[index]}"`
       : '';
-    return `<a href="${href}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''} class="inline-flex rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-green-900"${ctaKey}${supportWhatsAppAttrs}>${item}</a>`;
+    return `<a href="${href}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}${cookieSettingsAttrs} class="inline-flex rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-green-900"${ctaKey}${supportWhatsAppAttrs}>${item}</a>`;
   }).join('');
   const videoContext = {
     '/about': 'about',

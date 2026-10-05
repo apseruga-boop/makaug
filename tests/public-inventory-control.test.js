@@ -181,7 +181,8 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.doesNotMatch(appSource, /function schedulePublicCategoryDeepHydration\(/);
   assert.doesNotMatch(appSource, /const backgroundRowsPromise = fetchPublicPaginatedRows/);
   assert.match(appSource, /const firstPageCategoryExactTotal = activeCategory \? exactPublicPaginationTotalValue\(firstPageResponse\) : null;/);
-  assert.match(appSource, /const categoryTotal = activeCategory \? firstPageCategoryExactTotal \?\? \(publicOpportunityStatForCategory\(activeCategory\) \?\? summaryStats\?\.\[activeCategory\] \?\? 0\) : 0;/);
+  assert.match(appSource, /const categoryTotal = activeCategory \? firstPageCategoryExactTotal \?\? \(activeCategory === "students"/);
+  assert.match(appSource, /Math\.max\(firstPageRows\.length, Number\(publicPaginationStateFor\(activeCategory\)\?\.total\) \|\| 0\)/);
   assert.match(appSource, /await featuredRowsPromise;\s*return true;/);
   assert.match(appSource, /function publicOpportunityStatForCategory\(category\)/);
   assert.match(appSource, /function getPublicCategoryDisplayCount\(category, localCount = 0, \{ filtered = false \} = \{\}\)/);

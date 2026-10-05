@@ -43,6 +43,7 @@ const {
   staffRouter: offPlanStaffRoutes
 } = require('./routes/off-plan');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+const { leadAttributionContext } = require('./services/leadAttributionContext');
 const { runMigrations } = require('./scripts/migrate');
 const {
   isProtectedPath,
@@ -169,6 +170,11 @@ app.use(express.json({
     }
   }
 }));
+
+// Preserve first-touch campaign details across every public lead-producing
+// route without relying on each route to remember another metadata field.
+// AsyncLocalStorage keeps concurrent requests isolated from each other.
+app.use(leadAttributionContext);
 
 // Render's process-level health probe must not wait on database work. The
 // existing /api/health route remains the deeper database readiness check.
@@ -423,8 +429,11 @@ app.use('/private-local', (_req, res) => {
 
 app.get('/config.js', (_req, res) => {
   const publicConfig = {
+    countryCode: ACTIVE_TENANT.countryCode,
+    publicName: ACTIVE_TENANT.publicName,
     googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || '',
     apiBase: process.env.PUBLIC_API_BASE || '',
+    openAIAdsPixelId: process.env.OPENAI_ADS_PIXEL_ID || '',
     adsenseClient: process.env.GOOGLE_ADSENSE_CLIENT || '',
     adsenseSlots: {
       default: process.env.GOOGLE_ADSENSE_SLOT_DEFAULT || ''
@@ -437,6 +446,7 @@ app.get('/config.js', (_req, res) => {
     `window.MAKAUG_CONFIG = ${JSON.stringify(publicConfig)};`,
     `window.MAKAUG_GOOGLE_MAPS_API_KEY = ${JSON.stringify(publicConfig.googleMapsApiKey)};`,
     `window.MAKAUG_API_BASE = window.MAKAUG_API_BASE || ${JSON.stringify(publicConfig.apiBase)};`,
+    `window.MAKAUG_OPENAI_ADS_PIXEL_ID = window.MAKAUG_OPENAI_ADS_PIXEL_ID || ${JSON.stringify(publicConfig.openAIAdsPixelId)};`,
     `window.MAKAUG_ADSENSE_CLIENT = window.MAKAUG_ADSENSE_CLIENT || ${JSON.stringify(publicConfig.adsenseClient)};`,
     `window.MAKAUG_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || ${JSON.stringify(publicConfig.adsenseSlots)};`
   ].join('\n'));
@@ -1200,8 +1210,9 @@ function patchStructuredData(html, structuredData) {
 function patchPublicPageSeoMeta(html, meta = {}) {
   let patched = patchDocumentTitle(html, meta.title);
   patched = patchMetaTag(patched, 'description', meta.description);
-  if (Number.isFinite(Number(meta.count))) {
-    patched = patchMetaTag(patched, 'makaug:listing-count', String(meta.count));
+  const listingCount = meta.count ?? meta.total;
+  if (listingCount != null && Number.isFinite(Number(listingCount))) {
+    patched = patchMetaTag(patched, 'makaug:listing-count', String(listingCount));
   }
   patched = patchCanonicalLink(patched, meta.canonical);
   patched = patchMetaTag(patched, 'og:type', meta.ogType || 'website');
@@ -1791,7 +1802,7 @@ function sendPublicIndex(req, res, next) {
     if (/^\/about\/?$/i.test(req.path)) {
       html = patchPublicPageSeoMeta(html, {
         title: 'About makaug — Products, pricing & how it works | makaug.com',
-        description: 'Everything makaug offers: listings from UGX 25,000/month (first week free), agent plans, off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
+        description: 'Everything makaug offers: a private property listing is free for its first 7 days, then UGX 25,000 per property/month; agent plans, off-plan developments, premium visibility, market reports, agency websites and advertising are priced separately.',
         canonical: absolutePublicUrl('/about'),
         image: absolutePublicUrl('/assets/og-cover.jpg'),
         structuredData: { '@context': 'https://schema.org', '@type': 'AboutPage', name: 'About makaug', url: absolutePublicUrl('/about') }

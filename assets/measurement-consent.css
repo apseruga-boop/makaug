@@ -1,0 +1,72 @@
+.makaug-consent-banner[hidden],
+.makaug-consent-dialog[hidden] { display: none !important; }
+
+.makaug-consent-banner {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbdad1;
+  border-radius: 16px;
+  bottom: 16px;
+  box-shadow: 0 18px 55px rgba(15, 61, 46, .22);
+  display: grid;
+  gap: 16px;
+  left: 50%;
+  max-width: 980px;
+  padding: 18px;
+  position: fixed;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  z-index: 10000;
+}
+
+.makaug-consent-copy h2,
+.makaug-consent-panel h2 { color: #16241d; font-size: 20px; font-weight: 900; margin: 0; }
+.makaug-consent-copy p,
+.makaug-consent-panel > p { color: #526159; font-size: 13px; line-height: 1.55; margin: 6px 0 0; }
+.makaug-consent-links { display: flex; gap: 16px; }
+.makaug-consent-links a { color: #15603f; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
+.makaug-consent-actions { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.makaug-consent-actions button,
+.makaug-consent-dialog-actions button {
+  background: #15603f;
+  border: 2px solid #15603f;
+  border-radius: 10px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  min-height: 44px;
+  padding: 9px 12px;
+}
+.makaug-consent-actions button:nth-child(2) { background: #ffffff; color: #15603f; }
+.makaug-consent-actions .makaug-consent-manage { background: transparent; border-color: transparent; color: #15603f; grid-column: 1 / -1; min-height: 32px; text-decoration: underline; }
+
+.makaug-consent-dialog {
+  align-items: center;
+  background: rgba(7, 25, 17, .68);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: fixed;
+  z-index: 10001;
+}
+.makaug-consent-panel { background: #ffffff; border-radius: 16px; box-shadow: 0 24px 70px rgba(0,0,0,.28); max-width: 620px; padding: 24px; width: 100%; }
+.makaug-consent-option { align-items: center; border: 1px solid #dbe8e0; border-radius: 12px; display: flex; gap: 16px; justify-content: space-between; margin-top: 12px; padding: 14px; }
+.makaug-consent-option span { display: grid; gap: 4px; }
+.makaug-consent-option strong { color: #16241d; font-size: 14px; }
+.makaug-consent-option small { color: #647169; line-height: 1.45; }
+.makaug-consent-option input { accent-color: #15603f; height: 22px; min-width: 22px; width: 22px; }
+.makaug-consent-dialog-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+.makaug-consent-dialog-actions .makaug-consent-secondary { background: #ffffff; color: #15603f; }
+
+@media (min-width: 760px) {
+  .makaug-consent-banner { grid-template-columns: minmax(0, 1fr) 330px; }
+}
+
+@media (max-width: 520px) {
+  .makaug-consent-banner { bottom: 8px; padding: 14px; width: calc(100% - 16px); }
+  .makaug-consent-actions { grid-template-columns: 1fr; }
+  .makaug-consent-actions .makaug-consent-manage { grid-column: auto; }
+  .makaug-consent-dialog-actions { flex-direction: column; }
+}

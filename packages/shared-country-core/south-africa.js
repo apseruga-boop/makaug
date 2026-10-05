@@ -93,6 +93,12 @@ function injectBeforeHeadEnd(html, source) {
   return html.includes(source) ? html : html.replace('</head>', `${source}\n</head>`);
 }
 
+function redactUgandaCommercialPricing(source) {
+  return String(source || '')
+    .replace(/\bZAR\s+[1-9][\d,]*(?:\.\d+)?(?:[KMB])?/g, 'local pricing')
+    .replace(/\bguidePrice:\s*\d+/g, 'guidePrice: null');
+}
+
 function applySouthAfricaHtml(html) {
   const tenant = tenantFor('ZA');
   let output = String(html || '');
@@ -201,7 +207,9 @@ function applySouthAfricaHtml(html) {
     marker: SESHAIKHAYA_LAUNCH_MARKER
   }).replace(/</g, '\\u003c');
   output = injectBeforeHeadEnd(output, `  <meta name="seshaikhaya-release-marker" content="${SESHAIKHAYA_LAUNCH_MARKER}">\n  <link rel="stylesheet" href="/assets/seshaikhaya.css?v=${SESHAIKHAYA_LAUNCH_MARKER}">\n  <script>window.__COUNTRY_CONFIG__=${runtimeConfig};</script>`);
-  return output;
+  // Uganda's private-listing and promotion rate card must never be presented
+  // as if the same numeric amounts were approved South Africa prices.
+  return redactUgandaCommercialPricing(output);
 }
 
 function southAfricaLanguagePatch() {
@@ -222,6 +230,9 @@ function southAfricaLanguagePatch() {
 
 function applySouthAfricaJavaScript(source) {
   const tenant = tenantFor('ZA');
+  if (String(source || '').includes('const ABOUT_COMMERCIAL_PRODUCTS = Object.freeze')) {
+    return `'use strict';\n\nconst ABOUT_COMMERCIAL_PRODUCTS = Object.freeze({\n  version: 'za-local-pricing',\n  currency: 'ZAR',\n  products: Object.freeze({}),\n  advertisingPlacements: Object.freeze([])\n});\n\nif (typeof window !== 'undefined') {\n  window.__MAKAUG_ABOUT_COMMERCIAL_PRODUCTS__ = ABOUT_COMMERCIAL_PRODUCTS;\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = ABOUT_COMMERCIAL_PRODUCTS;\n}\n`;
+  }
   const provinceArray = JSON.stringify(SOUTH_AFRICA_PROVINCES);
   const bondProviders = JSON.stringify(SOUTH_AFRICA_BOND_PROVIDERS);
   const writtenLanguageCodes = JSON.stringify(tenant.languages.map((language) => language.code));
@@ -292,6 +303,9 @@ function applySouthAfricaJavaScript(source) {
     .replace(/\bmakaug(?=\s|,|\.|:|!|\?)/gi, 'seshaikhaya')
     .replace(/256(?:760112587|780863394)/g, '');
 
+  // Keep every Uganda commercial amount and boost guide out of the South
+  // Africa runtime until a local rate card has been approved.
+  output = redactUgandaCommercialPricing(output);
   output = `window.__COUNTRY_CONFIG__ = window.__COUNTRY_CONFIG__ || ${JSON.stringify(tenant)};\n${output}`;
   return output;
 }

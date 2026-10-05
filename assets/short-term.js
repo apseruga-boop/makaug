@@ -747,10 +747,15 @@
 
   function api(path, options) {
     var opts = options || {};
+    var method = String(opts.method || 'GET').toUpperCase();
+    var attributionHeaders = opts.body && method !== 'GET' && method !== 'HEAD'
+      && window.makaugMeasurementConsent && window.makaugMeasurementConsent.leadAttributionHeaders
+      ? window.makaugMeasurementConsent.leadAttributionHeaders()
+      : {};
     return fetch(API + path, {
-      method: opts.method || 'GET',
+      method: method,
       credentials: 'same-origin',
-      headers: Object.assign({ Accept: 'application/json' }, opts.body ? { 'Content-Type': 'application/json' } : {}),
+      headers: Object.assign({ Accept: 'application/json' }, opts.body ? { 'Content-Type': 'application/json' } : {}, attributionHeaders),
       body: opts.body ? JSON.stringify(opts.body) : undefined
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (payload) {
@@ -1614,6 +1619,12 @@
               check_out: to ? to.value : null
             }
           }).then(function (payloadOut) {
+            if (typeof window.trackEvent === 'function') {
+              window.trackEvent('short_term_enquiry_submitted', {
+                lead_id: payloadOut.lead_id || null,
+                listing_id: listing.id
+              });
+            }
             var c = payloadOut.contact || {};
             form.innerHTML = '<div class="st-ok"><b>Saved.</b> Now contact '
               + esc(payloadOut.host_name || 'the host') + ' directly:<br><br>'

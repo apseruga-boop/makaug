@@ -207,6 +207,9 @@ test('public category search is canonical-only and includes visible nearby and a
   const repairMigration = read('db/migrations/115_canonical_location_source_of_truth.sql');
 
   assert.match(app, /location_ids/);
+  assert.match(app, /params\.set\("location_ids", locations\)/);
+  assert.match(app, /params\.set\("nearby_km", String\(payload\.nearby \?\? 0\)\)/);
+  assert.match(app, /exactSeoLocation = payload\.source === "seo_facet_route"/);
   assert.match(app, /nearbyParam !== null && nearbyParam !== ""/);
   assert.match(app, /Choose a location from the suggestions before searching/);
   assert.match(app, /canonical-location-chip/);
@@ -218,8 +221,23 @@ test('public category search is canonical-only and includes visible nearby and a
   assert.match(app, /key !== "students" && !publicCategoryActiveSearchPath\(key\)/);
   assert.match(app, /restoredRouteSearchPath = publicInventoryRouteSearchPath\(activeCategory\)/);
   assert.match(app, /activeCategoryPath = restoredRouteSearchPath/);
-  assert.match(app, /currentRouteSearchPath && currentRouteSearchPath !== firstPagePath/);
+  assert.match(app, /firstPageStillCurrent = activeCategory[\s\S]*publicCategoryHydrationStillCurrent\(activeCategory, firstPagePath\)/);
   assert.match(app, /fetchCanonicalAutoWidenedFirstPage/);
+  assert.match(app, /Boolean\(seoRouteStateHandoffPayload\(activeCategory\)\?\.locations\)/);
+  assert.match(app, /activeRouteSearchPath && !exactSeoRoute/);
+  assert.match(app, /resetCanonicalLocationWidening\(activeCategory\)/);
+  assert.match(app, /function publicRouteNeedsFreshFragment/);
+  assert.match(app, /publicRouteNeedsFreshFragment\(page, path, existingPublicRoutePage\)/);
+  assert.match(app, /publicRouteNeedsFreshFragment\(publicRoutePage, path, existingPublicRoutePage\)/);
+  assert.match(app, /markPublicRouteFragmentPath\(page, url\.pathname\)/);
+  assert.match(app, /resetPublicRouteInventoryState\(page\);[\s\S]*markPublicRouteFragmentPath\(page, url\.pathname\)/);
+  assert.match(app, /PUBLIC_CANONICAL_LOCATION_STATE\.delete\(key\)/);
+  assert.match(app, /paginationState\.sourcePath = "";[\s\S]*clearPublicCategoryPageCache\(key\)/);
+  assert.match(app, /publicCategoryHydrationStillCurrent\(activeCategory, activeCategoryPath\)/);
+  assert.match(app, /PUBLIC_CANONICAL_LOCATION_STATE\.get\(normalizePageKey\(config\.key\)\) !== state/);
+  assert.match(app, /firstPageStillCurrent = activeCategory[\s\S]*publicCategoryHydrationStillCurrent\(activeCategory, firstPagePath\)/);
+  assert.match(app, /currentActiveCategory[\s\S]*refreshActivePublicInventoryCategoryFromApi/);
+  assert.match(app, /syncActiveRouteSearchHandoff\(activeRouteSearchPath[\s\S]*clearPublicSearchDelayNotice\(activeCategory\)/);
   assert.match(app, /maximum price was widened by 20%/);
   assert.match(app, /Similar properties nearby/);
   assert.match(app, /Create property alert/);

@@ -4454,6 +4454,7 @@ router.post('/', async (req, res, next) => {
       ok: true,
       data: {
         id: propertyId,
+        lead_id: submissionLead?.id || null,
         status,
         imagesUploaded: imageUrls.length,
         inquiry_reference: inquiryReference,
