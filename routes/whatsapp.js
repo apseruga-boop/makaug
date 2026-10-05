@@ -88,6 +88,10 @@ const {
   employeeMediaPrompt,
   employeePropertyCountPrompt,
   employeeRolePrompt,
+  employeePitchContactPrompt,
+  employeeAgentPayLinkPrompt,
+  parsePitchContact,
+  parsePayLinkChoice,
   looksLikePropertyCaption,
   withEnglishPropertyTerms,
   isEmployeeIntakeCancel,
@@ -5656,6 +5660,8 @@ function recoverInterruptedEmployeeIntakeStep(session = {}) {
   if (!['missed_call_need', 'missed_call_resolved'].includes(currentStep)) return '';
 
   if (!data.employee_role) return 'employee_intake_role';
+  // Interrupted between choosing "send the video" and naming who it is for.
+  if (data.employee_role === 'pitch') return 'employee_pitch_contact';
   if (data.employee_role === 'agent') {
     if (data.agent?.id) {
       if (data.property_batch_mode) return 'employee_property_media';
@@ -5669,6 +5675,7 @@ function recoverInterruptedEmployeeIntakeStep(session = {}) {
     if (data.agent_already_registered === false) {
       if (!data.new_agent_details) return 'employee_new_agent_details';
       if (!data.identity_document_url && data.identity_followup_required !== true) return 'employee_identity_photo';
+      if (data.intake_confirmed === true && data.new_agent_created === true && data.agent_pay_link_on_approval === undefined) return 'employee_agent_pay_link';
       return data.intake_confirmed === true ? 'employee_property_count' : 'employee_intake_confirm';
     }
     return 'employee_agent_existing';
@@ -7501,11 +7508,84 @@ async function handleEmployeeWhatsappIntake({
       await replaceEmployeeSession(phone, 'employee_agent_existing', data);
       return { handled: true, nextStep: 'employee_agent_existing', message: employeeAgentExistingPrompt() };
     }
+    // No properties in hand — this is somebody who might become an agent and
+    // needs the film first.
+    if (role === 'pitch') {
+      await replaceEmployeeSession(phone, 'employee_pitch_contact', data);
+      return { handled: true, nextStep: 'employee_pitch_contact', message: employeePitchContactPrompt() };
+    }
     await replaceEmployeeSession(phone, 'employee_customer_details', data);
     return {
       handled: true,
       nextStep: 'employee_customer_details',
       message: 'Send the customer details in this format:\n\nFull name | phone number | property location'
+    };
+  }
+
+  // Name and phone, the film goes out, and the prospect is remembered so there
+  // is an answer to "who did we pitch, and did any of them sign up".
+  if (currentStep === 'employee_pitch_contact') {
+    const contact = parsePitchContact(cleanBody);
+    if (!contact) {
+      return { handled: true, nextStep: currentStep, message: employeePitchContactPrompt() };
+    }
+    const prospects = require('../services/agentProspectService');
+    if (!prospects.isUsableProspectPhone(contact.phone)) {
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: `That number does not look complete: *${contact.phone}*\n\nSend it with the full nine digits, for example 0772123456.`
+      };
+    }
+    const dialable = prospects.normalizeProspectPhone(contact.phone);
+    const existingAgent = await findApprovedAgentByPhone(dialable).catch(() => null);
+    if (existingAgent) {
+      await replaceEmployeeSession(phone, 'main_menu', {});
+      return {
+        handled: true,
+        nextStep: 'main_menu',
+        message: `${existingAgent.full_name} is already a makaug agent, so I did not send the joining video.\n\nReply *Agent 007* if you want to post properties for them.`
+      };
+    }
+    try {
+      await sendAgentPitchVideo({ phone: dialable, name: contact.fullName, sentBy: phone });
+    } catch (error) {
+      logger.error('Agent pitch video send failed:', error);
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: 'I could not send the video just then and nothing went out. Check the number and send the name and phone again.'
+      };
+    }
+    let repeat = false;
+    try {
+      const recorded = await prospects.recordProspectPitch({
+        fullName: contact.fullName,
+        phone: dialable,
+        pitchedBy: phone,
+        pitchedByName: normalizeInput(data.employee_intake_last_subject_name || ''),
+        metadata: { sent_via: 'agent_007_option_3' }
+      });
+      repeat = recorded.repeat;
+    } catch (error) {
+      // The film is already gone; losing the bookkeeping must not look like a
+      // failed send.
+      logger.warn('Agent prospect not recorded:', error.message || String(error));
+    }
+    await replaceEmployeeSession(phone, 'main_menu', {
+      employee_intake_last_pitch_at: new Date().toISOString(),
+      employee_intake_last_pitch_name: contact.fullName
+    });
+    return {
+      handled: true,
+      nextStep: 'main_menu',
+      prospectPitched: true,
+      message: `✅ *Video sent to ${contact.fullName}* — ${dialable}\n\n`
+        + `They have the joining film, what we do, how listing works and the ${agentMonthlyFeeLabel()} a month.\n\n`
+        + (repeat ? '(They had been sent it before — it has gone again.)\n\n' : '')
+        + 'They have been asked to reply *AGENT* if they want to join.\n\n'
+        + 'When they say yes, reply *Agent 007* and choose *1* to register them.\n\n'
+        + 'I am keeping them on the prospects list until they sign up.'
     };
   }
 
@@ -7741,8 +7821,53 @@ async function handleEmployeeWhatsappIntake({
     }
     data.intake_confirmed = true;
     data.intake_confirmed_at = new Date().toISOString();
+    // A brand-new agent owes the monthly fee. Ask now, while the employee is
+    // still with them, because approval happens later and whoever approves will
+    // not know what was agreed on the doorstep.
+    if (data.employee_role === 'agent' && data.new_agent_created === true && data.agent?.id) {
+      await replaceEmployeeSession(phone, 'employee_agent_pay_link', data);
+      return {
+        handled: true,
+        nextStep: 'employee_agent_pay_link',
+        message: employeeAgentPayLinkPrompt(data.agent.full_name, agentMonthlyFeeLabel())
+      };
+    }
     await replaceEmployeeSession(phone, 'employee_property_count', data);
     return { handled: true, nextStep: 'employee_property_count', message: employeePropertyCountPrompt() };
+  }
+
+  if (currentStep === 'employee_agent_pay_link') {
+    const answer = parsePayLinkChoice(cleanBody);
+    if (!answer) {
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: employeeAgentPayLinkPrompt(data.agent?.full_name, agentMonthlyFeeLabel())
+      };
+    }
+    data.agent_pay_link_on_approval = answer === 'yes';
+    // Stamped on the agent, not just the session, because the session is wiped
+    // by the next batch and approval can be days away. This is also the first
+    // time we record which employee brought an agent in.
+    if (data.agent?.id) {
+      await db.query(
+        `UPDATE agents
+            SET pay_link_on_approval = $2,
+                registered_by_phone = COALESCE(NULLIF($3, ''), registered_by_phone),
+                updated_at = NOW()
+          WHERE id = $1`,
+        [data.agent.id, data.agent_pay_link_on_approval, String(phone || '').replace(/\D/g, '')]
+      ).catch((error) => logger.warn('Agent pay-link preference not saved:', error.message || String(error)));
+    }
+    await replaceEmployeeSession(phone, 'employee_property_count', data);
+    const note = data.agent_pay_link_on_approval
+      ? `Noted — the ${agentMonthlyFeeLabel()} link goes to them the moment a moderator approves them, and I will tell you when it has.`
+      : 'Noted — no payment link will be sent automatically. You are handling it.';
+    return {
+      handled: true,
+      nextStep: 'employee_property_count',
+      message: `${note}\n\n${employeePropertyCountPrompt()}`
+    };
   }
 
   if (currentStep === 'employee_intake_fix') {
@@ -13410,6 +13535,63 @@ const EXPLAINER_VIDEOS = {
   agent: { path: '/assets/marketing/makaug-join-as-agent-v2.mp4', caption: '🎬 *makaug for agents* — what you get, who sees your listings (Ugandans at home and abroad) and how to join.' }
 };
 
+/** The fee, in the words an agent reads — one source, so it cannot drift. */
+function agentMonthlyFeeLabel() {
+  const { feeUgx } = require('../services/revenueService').feeConfig();
+  return `UGX ${Number(feeUgx || 0).toLocaleString('en-GB')}`;
+}
+
+/**
+ * An employee sending the agent film to somebody they are standing in front of.
+ *
+ * Different from queueExplainerVideoOnce below in two ways that matter. It is
+ * deliberate rather than inferred, so the 30-day dedupe does not apply — if
+ * Ronald sends it twice, he meant to. And it waits for the send rather than
+ * deferring it, so he can be told what actually happened instead of a hopeful
+ * "it is on its way".
+ *
+ * The caption carries the three things a prospect asks about before anything
+ * else: what makaug is, how listing works, and what it costs.
+ */
+async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
+  const video = EXPLAINER_VIDEOS.agent;
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) {
+    const error = new Error('That phone number is too short to send to');
+    error.status = 400;
+    throw error;
+  }
+  const firstName = normalizeInput(name).split(/\s+/)[0] || '';
+  const greeting = firstName ? `Hello ${firstName} 👋\n\n` : '';
+  const caption = `${greeting}${video.caption}\n\n`
+    + '• Your listings go in front of Ugandans at home and abroad — UK, Dubai, Canada, South Africa.\n'
+    + '• You post straight from WhatsApp: send the photos and the details, our team checks it, it goes live.\n'
+    + '• You get your own agent page, and every property you list sits under it.\n'
+    + `• It is ${agentMonthlyFeeLabel()} a month.\n\n`
+    + 'Reply *AGENT* here if you would like to join and we will set you up.';
+
+  await db.query(
+    `INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, 'explainer_video_sent', $2::jsonb)`,
+    [normalizeInput(sentBy) || 'whatsapp', JSON.stringify({ phone: digits, kind: 'agent', sent_by: String(sentBy || ''), employee_pitch: true })]
+  ).catch(() => null);
+
+  const queued = await queueWhatsappWebBridgeMessage({
+    recipient: digits,
+    text: caption,
+    mediaUrl: `${HOME_URL}${video.path}`,
+    mediaType: 'video',
+    source: 'whatsapp_runtime',
+    actorId: normalizeInput(sentBy) || 'system',
+    metadata: {
+      message_kind: 'explainer_video_agent',
+      employee_pitch: true,
+      // Intentionally unique: an employee re-sending has decided to re-send.
+      reply_dedupe_key: `pitch:agent:${digits}:${Date.now()}`
+    }
+  });
+  return queued;
+}
+
 function queueExplainerVideoOnce({ phone, kind }) {
   const video = EXPLAINER_VIDEOS[kind];
   const digits = String(phone || '').replace(/\D/g, '');
@@ -17072,6 +17254,9 @@ router.post('/web-bridge/outbox/:id/sent', asyncRoute(async (req, res) => {
 
   const replyText = String(updated.payload?.text || '').trim();
   const replyMediaUrl = String(updated.payload?.media_url || '').trim();
+  // Logged as what it actually was. Videos were recorded as 'image', which hid
+  // the fact that none of them were ever attached.
+  const replyMediaType = String(updated.payload?.media_type || '').trim().toLowerCase();
   const source = String(updated.metadata?.source || '').trim().toLowerCase();
 
   // The message is on the customer's phone and the queue row now says so.
@@ -17084,11 +17269,12 @@ router.post('/web-bridge/outbox/:id/sent', asyncRoute(async (req, res) => {
     userPhone: updated.user_phone,
     waMessageId: req.body.bridge_message_id || null,
     direction: 'outbound',
-    messageType: replyMediaUrl ? 'image' : 'text',
+    messageType: replyMediaUrl ? (replyMediaType === 'video' ? 'video' : 'image') : 'text',
     payload: {
       provider: 'web_bridge',
       reply: replyText,
       media_url: replyMediaUrl || null,
+      media_type: replyMediaType || null,
       media_sent: req.body.media_sent === true || String(req.body.media_sent || '').toLowerCase() === 'true',
       source: source || 'web_bridge',
       bridge_client_id: req.body.client_id || null
@@ -17210,6 +17396,9 @@ module.exports.__test = {
   agentConversationalAside,
   agentMenuReply,
   staffIntakeGreetingReply,
+  sendAgentPitchVideo,
+  recoverInterruptedEmployeeIntakeStep,
+  agentMonthlyFeeLabel,
   agentShareReply,
   perUnitPriceFacts,
   explicitDistrictInCaption,

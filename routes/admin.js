@@ -117,6 +117,7 @@ const { agentGreetingName, setCachedGreetingName } = require('../services/agentN
 const revenue = require('../services/revenueService');
 const billingOps = require('../services/billingOpsService');
 const payLinks = require('../services/payLinkService');
+const aiCeo = require('../services/aiCeoControlService');
 const revolutMerchant = require('../services/revolutMerchantService');
 const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
@@ -8517,6 +8518,31 @@ router.post('/field-agents/broadcast', async (req, res, next) => {
   }
 });
 
+// Who has been pitched the joining film, and what is owed on each of them.
+// This is the list that answers "where is everyone" — a prospect is invisible
+// in every other view until they become an agent row.
+router.get('/agent-prospects', async (req, res, next) => {
+  try {
+    const prospects = require('../services/agentProspectService');
+    const rows = await prospects.listProspects({
+      status: String(req.query.status || '').trim(),
+      pitchedBy: String(req.query.pitched_by || '').trim(),
+      limit: Number(req.query.limit || 200)
+    });
+    const data = rows.map((row) => ({ ...row, next_step: prospects.prospectNextStep(row) }));
+    return res.json({
+      ok: true,
+      data,
+      summary: data.reduce((totals, row) => {
+        totals[row.status] = (totals[row.status] || 0) + 1;
+        return totals;
+      }, {})
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/agents', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
@@ -8589,6 +8615,9 @@ router.get('/agents', async (req, res, next) => {
         a.billing_plan,
         a.monthly_fee_ugx,
         a.welcome_sent_at,
+        a.pay_link_on_approval,
+        a.pay_link_sent_at,
+        a.registered_by_phone,
         COALESCE(p.total_listings, 0) AS total_listings,
         COALESCE(p.live_listings, 0) AS live_listings,
         COALESCE(p.pending_listings, 0) AS pending_listings,
@@ -10130,6 +10159,11 @@ router.patch('/agents/:id/status', async (req, res, next) => {
          contact_phone_verified_at,
          agent_application_channel,
          status,
+         fee_exempt,
+         paid_until,
+         monthly_fee_ugx,
+         pay_link_on_approval,
+         registered_by_phone,
          updated_at`,
       [req.params.id, status]
     );
@@ -10169,13 +10203,28 @@ router.patch('/agents/:id/status', async (req, res, next) => {
     }
     if (paymentResult) notifyTeamOfPayment({ entry: paymentResult.entry, agentName: updated.rows[0].full_name, actor: adminActorId(req), periodEnd: paymentResult.period_end });
 
+    // The welcome pack and the fee have always been two separate errands, and
+    // the second one was nobody's job: no pay link was ever sent by approving an
+    // agent, so an agent could go live having never been asked for money. If the
+    // employee who registered them said to send it, it goes now, and both they
+    // and the owner are told — with the amount, and whether it has been paid.
+    let feeLink = null;
+    if (status === 'approved' && !paymentResult) {
+      feeLink = await sendAgentFeeLinkOnApproval({
+        agent: updated.rows[0],
+        actor: adminActorId(req),
+        force: req.body.send_pay_link === true
+      }).catch((error) => ({ error: error.message || String(error) }));
+    }
+
     return res.json({
       ok: true,
       data: {
         ...updated.rows[0],
         account_provisioning: accountProvisioning,
         payment: paymentResult,
-        welcome
+        welcome,
+        fee_link: feeLink
       }
     });
   } catch (error) {
@@ -14330,6 +14379,74 @@ router.post('/agent-broadcast/how-to-post/send', async (req, res, next) => {
  * one-minute "how to post on WhatsApp" film. Sent by the admin button and,
  * since 2 Oct 2026, automatically the moment an agent is approved.
  */
+/**
+ * The fee link, at the moment of approval.
+ *
+ * Approval already sent the welcome pack. It never sent a pay link, and nothing
+ * else in the Agent 007 path did either, so an agent registered on WhatsApp
+ * could be approved, welcomed and live without once being asked for the monthly
+ * fee. The employee answered "shall I send the link on approval?" when they
+ * registered them; this is where that answer is spent.
+ *
+ * Everyone who needs to know is told in the same breath: the agent gets the
+ * link, and the employee who brought them in and the owner both get the amount
+ * and the fact that it is now outstanding.
+ */
+async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force = false } = {}) {
+  if (!agent?.id) return { sent: false, reason: 'no_agent' };
+  if (agent.pay_link_on_approval === false && !force) return { sent: false, reason: 'employee_declined' };
+  if (!revenue.agentFeeRequired(agent)) {
+    return { sent: false, reason: agent.fee_exempt ? 'fee_exempt' : 'fee_not_due' };
+  }
+  const agentPhone = String(agent.whatsapp || agent.phone || '').replace(/\D/g, '');
+  if (agentPhone.length < 9) return { sent: false, reason: 'no_agent_phone' };
+
+  const { feeUgx } = revenue.feeConfig();
+  const feeLabel = `UGX ${Number(feeUgx || 0).toLocaleString('en-GB')}`;
+  let link;
+  try {
+    link = await payLinks.createPayLink(db, { purpose: 'agent_subscription', agent_id: agent.id }, actor);
+  } catch (error) {
+    return { sent: false, reason: 'pay_link_failed', error: error.message || String(error) };
+  }
+  const url = link?.url || '';
+  if (!url) return { sent: false, reason: 'pay_link_empty' };
+
+  const firstName = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
+  await queueWhatsappWebBridgeMessage({
+    recipient: agentPhone,
+    text: `✅ *You are approved, ${firstName}* — your makaug agent account is live.\n\n`
+      + `Your subscription is ${feeLabel} a month. You can pay here:\n${url}\n\n`
+      + 'Card, Apple Pay, Google Pay, MTN or Airtel all work. Your listings stay live while you are paid up.',
+    source: 'admin',
+    actorId: actor,
+    metadata: { message_kind: 'agent_fee_link_on_approval', agent_id: agent.id, reply_dedupe_key: `agent_fee_link:${agent.id}` }
+  }).catch(() => null);
+
+  await db.query('UPDATE agents SET pay_link_sent_at = NOW() WHERE id = $1', [agent.id]).catch(() => null);
+
+  // The employee who registered them, and the owner.
+  const told = [];
+  const staffNote = `💳 *${agent.full_name} is approved and the payment link has gone to them.*\n\n`
+    + `Amount: ${feeLabel} a month\nNumber: ${agentPhone}\nPaid: not yet\n\n`
+    + 'I will tell you when the payment lands.';
+  const recipients = new Set();
+  if (agent.registered_by_phone) recipients.add(String(agent.registered_by_phone).replace(/\D/g, ''));
+  for (const owner of aiCeo.getConfiguredOwnerPhones()) recipients.add(String(owner).replace(/\D/g, ''));
+  for (const recipient of recipients) {
+    if (recipient.length < 9) continue;
+    await queueWhatsappWebBridgeMessage({
+      recipient,
+      text: staffNote,
+      source: 'admin',
+      actorId: actor,
+      metadata: { message_kind: 'agent_fee_link_notice', agent_id: agent.id, reply_dedupe_key: `agent_fee_notice:${agent.id}:${recipient}` }
+    }).catch(() => null);
+    told.push(recipient);
+  }
+  return { sent: true, url, fee_ugx: feeUgx, agent_phone: agentPhone, notified: told };
+}
+
 async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', actorId = 'admin' } = {}) {
     const pack = await agentWelcome.buildWelcomePack(cleanText(agentId));
     const previewTo = String(previewToRaw || '').replace(/\D+/g, '');
