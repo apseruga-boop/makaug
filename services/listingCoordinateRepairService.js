@@ -192,15 +192,30 @@ function classifyListingLocation(row = {}) {
 }
 
 async function repairListingCoordinates(db, { apply = false, limit = 20000, statuses = ['approved', 'pending'], actor = 'system', logger = console } = {}) {
-  const rows = (await db.query(
-    `SELECT id, title, area, district, latitude, longitude, extra_fields, status
-       FROM properties
-      WHERE status = ANY($1::text[])
-        AND latitude IS NOT NULL AND longitude IS NOT NULL
-      ORDER BY created_at DESC
-      LIMIT $2`,
-    [statuses, limit]
-  )).rows;
+  // Only the few fields the check needs, a page at a time: extra_fields can be
+  // large, and loading every listing's in one go is too much memory.
+  const rows = [];
+  let afterId = null;
+  while (rows.length < limit) {
+    const page = (await db.query(
+      `SELECT id, title, area, district, latitude, longitude, status,
+              jsonb_build_object(
+                'canonical_location_id', extra_fields->>'canonical_location_id',
+                'coords_fix', jsonb_build_object('reviewed_ok', COALESCE((extra_fields->'coords_fix'->>'reviewed_ok')::boolean, false))
+              ) AS extra_fields
+         FROM properties
+        WHERE status = ANY($1::text[])
+          AND latitude IS NOT NULL AND longitude IS NOT NULL
+          AND ($2::uuid IS NULL OR id > $2::uuid)
+        ORDER BY id
+        LIMIT 500`,
+      [statuses, afterId]
+    )).rows;
+    if (!page.length) break;
+    rows.push(...page);
+    afterId = page[page.length - 1].id;
+    if (page.length < 500) break;
+  }
 
   const summary = { checked: rows.length, ok: 0, relabel: 0, repin: 0, review: 0, applied: 0, samples: { relabel: [], repin: [], review: [] } };
   for (const row of rows) {
