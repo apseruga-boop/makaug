@@ -18,7 +18,7 @@ const {
   fetchUgandaProperties,
   shouldOfferPartnerSupply: liteapiShouldOffer
 } = require('../services/liteapiSupplyService');
-const { bookingLinkFor } = require('../services/bookingAffiliateService');
+const { affiliateOffersFor } = require('../services/bookingAffiliateService');
 
 const { requireAdminApiKey, requireStaffAccess } = require('../middleware/auth');
 const {
@@ -271,7 +271,11 @@ router.get('/search', async (req, res) => {
     // nothing from Booking.com is merged into listings or partner_listings, and
     // it is null (so the page shows nothing) until BOOKING_AFFILIATE_ENABLED,
     // CJ_PUBLISHER_PID and BOOKING_CJ_AD_ID are all set.
-    result.booking_link = bookingLinkFor(req.query || {});
+    const offers = affiliateOffersFor(req.query || {});
+      // The list is what the page draws. booking_link stays as the first offer
+      // so anything already reading it keeps working.
+      result.booking_links = offers;
+      result.booking_link = offers[0] || null;
 
     res.set('Cache-Control', 'public, max-age=60');
     res.set('X-makaug-Short-Term-Results', String(result.listings.length));
