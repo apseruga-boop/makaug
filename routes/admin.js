@@ -10887,10 +10887,20 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
         text,
         mediaUrl,
         mediaType: mediaUrl ? (/\.mp4(?:[?#]|$)/i.test(mediaUrl) ? 'video' : 'image') : 'text',
-        source: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
+        // The bridge claims an allow-listed set of sources, and neither
+        // admin_human_reply nor admin_ai_reply was ever on it — so every reply
+        // staff typed in the WhatsApp inbox was written, answered "queued", and
+        // never sent. Two were found sitting there on 4 and 5 Oct 2026, days
+        // old: one to Ronald, one to a customer asking for restaurant premises.
+        //
+        // Queue under the source the bridge actually drains; who wrote it stays
+        // in the metadata, where it was always the more useful place for it.
+        source: whatsappReplyBridgeSource(),
         actorId: actor,
         metadata: {
-          requested_status: requestedStatus || 'awaiting_customer'
+          requested_status: requestedStatus || 'awaiting_customer',
+          reply_kind: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
+          replied_by: actor || null
         }
       });
       queuedForBridge = true;
@@ -10910,11 +10920,13 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
           text,
           mediaUrl,
           mediaType: mediaUrl ? (/\.mp4(?:[?#]|$)/i.test(mediaUrl) ? 'video' : 'image') : 'text',
-          source: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
+          source: whatsappReplyBridgeSource(),
           actorId: actor,
           metadata: {
             fallback_from: delivery.provider || 'provider',
-            requested_status: requestedStatus || 'awaiting_customer'
+            requested_status: requestedStatus || 'awaiting_customer',
+            reply_kind: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
+            replied_by: actor || null
           }
         });
         queuedForBridge = true;
@@ -14074,6 +14086,18 @@ router.post('/whatsapp-message-logs/:id/retry', async (req, res, next) => {
 // bridge only claims whitelisted sources (OUTBOX_ALLOWED_SOURCES, default
 // "whatsapp_runtime,whatsapp_missed_call"), so reports ride the runtime source
 // unless AGENT_REPORT_WHATSAPP_SOURCE names one the bridge has been told to allow.
+/**
+ * The source staff replies are queued under.
+ *
+ * It has to be one the WhatsApp bridge claims from the outbox
+ * (OUTBOX_ALLOWED_SOURCES, default whatsapp_runtime,whatsapp_missed_call),
+ * or the reply is stored, reported as queued, and never delivered.
+ */
+function whatsappReplyBridgeSource() {
+  return String(process.env.WHATSAPP_REPLY_BRIDGE_SOURCE || 'whatsapp_runtime').trim().toLowerCase()
+    || 'whatsapp_runtime';
+}
+
 function agentReportWhatsappSource() {
   return String(process.env.AGENT_REPORT_WHATSAPP_SOURCE || 'whatsapp_runtime').trim().toLowerCase() || 'whatsapp_runtime';
 }
@@ -14429,7 +14453,9 @@ async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force =
     text: `✅ *You are approved, ${firstName}* — your makaug agent account is live.\n\n`
       + `Your subscription is ${feeLabel} a month. You can pay here:\n${url}\n\n`
       + `${methodLine} Your listings stay live while you are paid up.`,
-    source: 'admin',
+    // The browser worker only claims an allow-listed set of sources; 'admin' is
+    // not one of them, so a message queued under it is never sent at all.
+    source: agentReportWhatsappSource(),
     actorId: actor,
     metadata: { message_kind: 'agent_fee_link_on_approval', agent_id: agent.id, reply_dedupe_key: `agent_fee_link:${agent.id}` }
   }).catch(() => null);
@@ -14449,7 +14475,7 @@ async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force =
     await queueWhatsappWebBridgeMessage({
       recipient,
       text: staffNote,
-      source: 'admin',
+      source: agentReportWhatsappSource(),
       actorId: actor,
       metadata: { message_kind: 'agent_fee_link_notice', agent_id: agent.id, reply_dedupe_key: `agent_fee_notice:${agent.id}:${recipient}` }
     }).catch(() => null);
