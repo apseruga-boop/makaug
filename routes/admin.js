@@ -1444,7 +1444,10 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null, options = 
     ? existingUser.profile_data
     : {};
   const alreadyProvisioned = Boolean(existingProfile.broker_account_provisioned_at);
-  const temporaryPassword = alreadyProvisioned ? '' : generateBrokerTemporaryPassword();
+  // Someone who signed up on the website already has a password: never replace
+  // it with a temporary one just because staff approved them.
+  const hasOwnPassword = Boolean(existingUser?.password_hash);
+  const temporaryPassword = alreadyProvisioned || hasOwnPassword ? '' : generateBrokerTemporaryPassword();
   const passwordHash = temporaryPassword ? await bcrypt.hash(temporaryPassword, 12) : null;
   const { firstName, lastName } = splitBrokerName(agent.full_name);
   const nowIso = new Date().toISOString();
@@ -9137,6 +9140,19 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
   }
 });
 
+// Send whatever an approved agent should have had and didn't: the welcome pack
+// and, if they haven't paid, the payment link. Never sends anything twice.
+router.post('/agents/:id/approval-follow-up', async (req, res, next) => {
+  try {
+    const data = await runAgentApprovalFollowUps({ agentId: req.params.id, req, wasApproved: true });
+    if (data.follow_up === 'skipped_not_approved') return res.status(409).json({ ok: false, error: 'This agent is not approved yet.' });
+    await writeAudit('admin_agent_approval_follow_up', { agent_id: req.params.id, welcome: Boolean(data.welcome && !data.welcome.skipped), fee_link: Boolean(data.fee_link?.sent) }, adminActorId(req));
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/agents/:id/public-profile-approval', async (req, res, next) => {
   try {
     const body = req.body || {};
@@ -9211,12 +9227,18 @@ router.post('/agents/:id/public-profile-approval', async (req, res, next) => {
       listing_status_unchanged: true
     }, adminActorId(req));
 
+    // Approving here must do what every approval does: account access, the
+    // welcome pack, and (if they haven't paid) the payment link.
+    const followUp = await runAgentApprovalFollowUps({ agentId: req.params.id, req, wasApproved: agent.status === 'approved' })
+      .catch((error) => ({ error: error.message || String(error) }));
+
     return res.json({
       ok: true,
       data: {
         ...updated.rows[0],
         private_identity_document_stored: true,
-        listings_remain_separately_moderated: true
+        listings_remain_separately_moderated: true,
+        ...followUp
       }
     });
   } catch (error) {
@@ -10280,8 +10302,17 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       // Approval sends the welcome pack and the how-to-post film straight away,
       // once per agent (resend_welcome: true to send it again).
       if (req.body.send_welcome !== false && (!beforeApproval?.welcome_sent_at || req.body.resend_welcome === true)) {
-        welcome = await queueAgentWelcomePack({ agentId: req.params.id, actorId: adminActorId(req) })
+        // The payment link (when one is due) follows the welcome pack, never before it.
+        const feeLinkDue = !paymentResult && !['free_period', 'waive'].includes(req.feeOverrideApplied?.mode);
+        welcome = await queueAgentWelcomePack({
+          agentId: req.params.id,
+          actorId: adminActorId(req),
+          afterQueued: feeLinkDue
+            ? () => sendAgentFeeLinkOnApproval({ agent: updated.rows[0], actor: adminActorId(req), force: req.body.send_pay_link === true })
+            : null
+        })
           .catch((error) => ({ error: error.message }));
+        req.feeLinkAfterWelcome = feeLinkDue && !welcome?.error;
       } else {
         welcome = { skipped: beforeApproval?.welcome_sent_at ? 'already_sent' : 'not_requested' };
       }
@@ -10305,7 +10336,11 @@ router.patch('/agents/:id/status', async (req, res, next) => {
     // employee who registered them said to send it, it goes now, and both they
     // and the owner are told — with the amount, and whether it has been paid.
     let feeLink = null;
-    if (status === 'approved' && !paymentResult && req.feeOverrideApplied?.mode !== 'free_period' && req.feeOverrideApplied?.mode !== 'waive') {
+    if (req.feeLinkAfterWelcome) {
+      feeLink = revenue.agentFeeRequired(updated.rows[0]) && (updated.rows[0].pay_link_on_approval !== false || req.body.send_pay_link === true)
+        ? { sent: true, after_welcome: true }
+        : { sent: false, reason: revenue.agentFeeRequired(updated.rows[0]) ? 'employee_declined' : 'fee_not_due' };
+    } else if (status === 'approved' && !paymentResult && req.feeOverrideApplied?.mode !== 'free_period' && req.feeOverrideApplied?.mode !== 'waive') {
       feeLink = await sendAgentFeeLinkOnApproval({
         agent: updated.rows[0],
         actor: adminActorId(req),
@@ -14581,7 +14616,58 @@ async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force =
   return { sent: true, url, fee_ugx: feeUgx, agent_phone: agentPhone, notified: told };
 }
 
-async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', actorId = 'admin' } = {}) {
+/**
+ * What happens whenever an agent becomes approved, by any route: their account
+ * is switched on, the welcome pack goes once, and if they haven't paid, the
+ * payment link follows (recorded as "pay later"). Safe to call twice.
+ */
+async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = false, actor = '' } = {}) {
+  const actorId = actor || (req ? adminActorId(req) : 'admin');
+  const agent = (await db.query(
+    `SELECT id, makaug_agent_number, full_name, company_name, phone, whatsapp, email, districts_covered, specializations,
+            status, fee_exempt, paid_until, welcome_sent_at, pay_link_sent_at, pay_link_on_approval,
+            registered_by_phone, fee_offer_mode
+       FROM agents WHERE id = $1`,
+    [agentId]
+  )).rows[0];
+  if (!agent || agent.status !== 'approved') return { follow_up: 'skipped_not_approved' };
+
+  const result = {};
+  if (!wasApproved) {
+    result.account_provisioning = await provisionApprovedBrokerAccount(agent, req).catch((error) => ({ error: error.message }));
+  }
+
+  const feeDue = revenue.agentFeeRequired(agent);
+  if (feeDue && !agent.fee_offer_mode) {
+    await db.query(
+      `UPDATE agents SET fee_offer_mode = 'pay_later', fee_offer_reason = COALESCE(fee_offer_reason, 'Approved — payment link sent after the welcome pack'),
+              fee_offer_by = $2, fee_offer_at = NOW() WHERE id = $1`,
+      [agentId, actorId]
+    ).catch(() => null);
+  }
+  const sendFeeLink = () => sendAgentFeeLinkOnApproval({ agent, actor: actorId, force: true });
+  const feeLinkWanted = feeDue && !agent.pay_link_sent_at;
+
+  if (agent.welcome_sent_at) {
+    result.welcome = { skipped: 'already_sent' };
+    result.fee_link = feeLinkWanted
+      ? await sendFeeLink().catch((error) => ({ error: error.message }))
+      : (feeDue ? { sent: false, reason: 'already_sent', sent_at: agent.pay_link_sent_at } : { sent: false, reason: agent.fee_exempt ? 'fee_exempt' : 'already_paid' });
+  } else {
+    // Welcome pack first; the payment link follows once it is queued.
+    result.welcome = await queueAgentWelcomePack({ agentId, actorId, afterQueued: feeLinkWanted ? sendFeeLink : null })
+      .catch(async (error) => {
+        if (feeLinkWanted) await sendFeeLink().catch(() => null);
+        return { error: error.message };
+      });
+    result.fee_link = feeLinkWanted
+      ? { sent: true, after_welcome: true }
+      : (feeDue ? { sent: false, reason: 'already_sent', sent_at: agent.pay_link_sent_at } : { sent: false, reason: agent.fee_exempt ? 'fee_exempt' : 'already_paid' });
+  }
+  return result;
+}
+
+async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', actorId = 'admin', afterQueued = null } = {}) {
     const pack = await agentWelcome.buildWelcomePack(cleanText(agentId));
     const previewTo = String(previewToRaw || '').replace(/\D+/g, '');
     const preview = Boolean(previewTo);
@@ -14672,6 +14758,11 @@ async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', ac
       return { media_id: first?.id || null, text_id: full?.id || null, share_id: share?.id || null, how_to_id: howTo?.id || null, guide_id: guide?.id || null };
     };
 
+    // Whatever must follow the welcome (the payment link) goes after it, not before.
+    const thenFollow = () => {
+      if (preview || typeof afterQueued !== 'function') return null;
+      return Promise.resolve().then(afterQueued).catch((error) => console.warn('[agent-welcome] follow-up failed:', error.message));
+    };
     if (videoUrl) {
       agentReportVideos.ensureWelcomeVideo(pack, version)
         .then(() => queueWelcome(videoUrl))
@@ -14679,12 +14770,14 @@ async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', ac
           console.warn('[agent-welcome] video render failed, sending text only:', error.message);
           return queueWelcome('');
         })
-        .catch((error) => console.warn('[agent-welcome] WhatsApp queue failed:', error.message));
+        .catch((error) => console.warn('[agent-welcome] WhatsApp queue failed:', error.message))
+        .then(thenFollow);
       if (!preview) await db.query('UPDATE agents SET welcome_sent_at = NOW() WHERE id = $1', [pack.agent.id]).catch(() => {});
       return { to, preview, format: 'video', status: 'rendering' };
     }
     const queued = await queueWelcome('');
     if (!preview) await db.query('UPDATE agents SET welcome_sent_at = NOW() WHERE id = $1', [pack.agent.id]).catch(() => {});
+    await thenFollow();
     return { to, preview, format: 'text', queued };
 }
 
@@ -14749,6 +14842,7 @@ router.post('/agent-reports/:id/send', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.runAgentApprovalFollowUps = runAgentApprovalFollowUps;
 module.exports._test = {
   ADMIN_REVIEW_STAGES,
   adminReviewListingPatchFromBody

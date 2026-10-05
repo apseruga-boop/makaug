@@ -31,6 +31,8 @@ async function toPrivateIdentityRef(value, { keyPrefix = 'agents/identity', labe
   const raw = String(value || '').trim();
   if (!isInlineImage(raw) || !cloudMediaStorageConfigured()) return raw;
   const digest = crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16);
+  // If storage is down, keep the photo as it came (the start-up tidy-up moves it
+  // later) rather than failing the person's sign-up.
   const stored = await storeDataUrl(raw, {
     keyPrefix,
     filename: `national-id-${digest}`,
@@ -38,6 +40,9 @@ async function toPrivateIdentityRef(value, { keyPrefix = 'agents/identity', labe
     isPrivate: true,
     allowedMimeTypes: ID_MIME_TYPES,
     maxBytes: 8 * 1024 * 1024
+  }).catch((error) => {
+    console.warn('Private ID photo storage failed; keeping it inline for now:', error.message || String(error));
+    return null;
   });
   return stored || raw;
 }

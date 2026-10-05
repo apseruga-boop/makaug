@@ -28468,7 +28468,7 @@ async function adminSetAgentStatus(agentId, status, payment = null, feeOverride 
         : " Fee waived.")
       : "";
     if (status === "approved") {
-      toast(`Approved.${overrideNote}${paid ? ` Payment recorded — paid until ${paid.period_end}.` : ""}${welcome?.error ? ` Welcome pack NOT sent: ${welcome.error}` : (welcome?.skipped ? " Welcome pack was already sent before." : " Welcome pack and how-to-post film sent on WhatsApp.")}`);
+      toast(`Approved.${overrideNote}${!override && response?.data?.fee_link?.sent ? " Payment link sent." : ""}${paid ? ` Payment recorded — paid until ${paid.period_end}.` : ""}${welcome?.error ? ` Welcome pack NOT sent: ${welcome.error}` : (welcome?.skipped ? " Welcome pack was already sent before." : " Welcome pack and how-to-post film sent on WhatsApp.")}`);
     }
     await refreshBrokersFromApi({ silent: true });
     await renderAdminDashboard();
@@ -28641,7 +28641,9 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       <label class="block"><span class="font-bold">Note</span>
         <input name="note" placeholder="For cash: who received it and where it is kept" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <p id="admin-payment-error" class="hidden rounded-lg bg-red-50 border border-red-200 p-2 text-red-800" role="alert"></p>
-      ${mode === "approve" ? `<div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700"><strong>Not paid yet?</strong> Send them a payment link instead — they can pay by card, Apple Pay, Google Pay or MoMo. You'll get a WhatsApp when it's paid, and approving then won't ask for payment again.
+      ${mode === "approve" ? `<div class="rounded-lg border border-green-300 bg-green-50 p-3 text-xs text-green-950"><strong>Not paid yet? The usual way:</strong> approve now — they get the welcome pack and the how-to-post film straight away, then the payment link (UGX 50,000).
+        <div class="mt-2"><button type="button" data-approve-standard class="rounded bg-green-700 px-3 py-1.5 font-bold text-white">✅ Approve &amp; send welcome pack + pay link</button></div></div>
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700"><strong>Only want to send the link?</strong> Send them a payment link instead — they can pay by card, Apple Pay, Google Pay or MoMo. You'll get a WhatsApp when it's paid, and approving then won't ask for payment again.
         <div class="mt-2"><button type="button" onclick="adminSendAgentPayLink('${adminAttr(agentId)}')" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">💳 Send pay link</button></div></div>
       <details class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
         <summary class="cursor-pointer font-bold">Approve without payment (offer)</summary>
@@ -28666,6 +28668,9 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
   const form = wrap.querySelector("form");
   adminWireFx(form);
   form.querySelector("[name=amount]")?.focus();
+  form.querySelector("[data-approve-standard]")?.addEventListener("click", async () => {
+    await adminSetAgentStatus(agentId, "approved", null, { mode: "pay_later", reason: "Approved — welcome pack, then the payment link" });
+  });
   form.querySelector("[data-approve-offer]")?.addEventListener("click", async () => {
     const errorBox = form.querySelector("#admin-payment-error");
     const mode = form.querySelector("[name=offer_mode]:checked")?.value || "free_period";
@@ -29385,6 +29390,15 @@ async function adminUploadStatement() {
   }
 }
 
+// What the agent was sent when they were approved, in one line for the toast.
+function adminApprovalFollowUpNote(data = {}) {
+  const w = data?.welcome;
+  const f = data?.fee_link;
+  const welcome = w?.error ? ` Welcome pack NOT sent: ${w.error}.` : (w?.skipped === "already_sent" ? " Welcome pack was sent before." : (w ? " Welcome pack sent on WhatsApp." : ""));
+  const pay = f?.sent ? " Payment link sent." : (f?.reason === "already_sent" ? " Payment link was sent before." : (f?.reason === "already_paid" ? " Already paid." : (f?.reason === "fee_exempt" ? " No fee for this agent." : (f?.error || f?.reason ? ` Payment link NOT sent (${f.error || f.reason}).` : ""))));
+  return `${welcome}${pay}`;
+}
+
 async function adminApproveAgentPublicProfile(agentId) {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or set ADMIN_API_KEY first to approve the public profile.");
@@ -29393,7 +29407,7 @@ async function adminApproveAgentPublicProfile(agentId) {
   const confirmed = window.confirm("Confirm that staff reviewed the private ID, the public profile facts, and permission to publish this agent contact route. Linked properties will remain in staff review.");
   if (!confirmed) return;
   try {
-    await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/public-profile-approval`, {
+    const res = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/public-profile-approval`, {
       method: "POST",
       headers: adminAuthHeaders(),
       body: {
@@ -29404,7 +29418,7 @@ async function adminApproveAgentPublicProfile(agentId) {
     });
     await refreshBrokersFromApi({ silent: true });
     await renderAdminDashboard();
-    toast("Public agent profile approved. Linked properties remain in staff review.");
+    toast(`Approved.${adminApprovalFollowUpNote(res?.data)}`);
   } catch (e) {
     toast(`Public profile approval failed: ${e.message || "error"}`);
   }

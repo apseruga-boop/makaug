@@ -220,9 +220,8 @@ async function approve(db, rest, actor) {
   const agent = await findAgentByPhone(db, phone);
   if (!agent) return `No agent on ${pretty(phone)}.`;
   if (agent.status === 'approved') return `${agent.full_name} is already approved.`;
-  if (revenue.agentFeeRequired(agent)) {
-    return [`${agent.full_name} hasn't paid yet, so I can't approve them.`, `Send their link: *PAY LINK ${pretty(phone)}*`].join('\n');
-  }
+  // Not paid yet: approve the usual way — welcome pack first, then the pay link.
+  const unpaid = revenue.agentFeeRequired(agent);
   // Use the admin approval itself, so the account, welcome pack and checks are identical.
   const key = process.env.ADMIN_API_KEY;
   if (!key) return 'Approving from WhatsApp is not set up on the server (no admin key). Please approve in Admin › Agents.';
@@ -230,7 +229,9 @@ async function approve(db, rest, actor) {
   const response = await fetch(`http://127.0.0.1:${port}/api/admin/agents/${agent.id}/status`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json', 'x-api-key': key, 'x-makaug-actor': actor },
-    body: JSON.stringify({ status: 'approved' })
+    body: JSON.stringify(unpaid
+      ? { status: 'approved', fee_override: { mode: 'pay_later', reason: 'Approved on WhatsApp — welcome pack, then the payment link' } }
+      : { status: 'approved' })
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data.ok === false) {
@@ -238,7 +239,12 @@ async function approve(db, rest, actor) {
     return `Couldn't approve ${agent.full_name}: ${data.message || data.error || response.status}. Please do it in Admin › Agents.`;
   }
   const welcome = data.data?.welcome;
-  return [`✅ *${agent.full_name}* is approved.`, welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.'].join('\n');
+  const feeLink = data.data?.fee_link;
+  return [
+    `✅ *${agent.full_name}* is approved.`,
+    welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.',
+    unpaid ? (feeLink?.sent ? 'Payment link sent to them too — I will tell you when it is paid.' : `Payment link NOT sent (${feeLink?.error || feeLink?.reason || 'unknown'}). Send it: *PAY LINK ${pretty(phone)}*`) : ''
+  ].filter(Boolean).join('\n');
 }
 
 /** Returns a reply if this is a team payment command, otherwise null. */

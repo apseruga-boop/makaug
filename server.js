@@ -2031,6 +2031,25 @@ function scheduleStartupDataRepairs() {
     } catch (error) {
       logger.warn('Agent ID photo move skipped:', error.message || String(error));
     }
+    // Agents approved in the last two weeks who never got their welcome pack
+    // (e.g. approved by a route that skipped it): send it, then the pay link.
+    try {
+      const { runAgentApprovalFollowUps } = require('./routes/admin');
+      const missed = (await db.query(
+        `SELECT id, full_name FROM agents
+          WHERE status = 'approved' AND removed_at IS NULL AND welcome_sent_at IS NULL
+            AND approved_at > NOW() - INTERVAL '14 days'
+          ORDER BY approved_at
+          LIMIT 20`
+      )).rows;
+      for (const agent of missed) {
+        const result = await runAgentApprovalFollowUps({ agentId: agent.id, wasApproved: true, actor: 'system:approval_catch_up' })
+          .catch((error) => ({ error: error.message }));
+        logger.info('Sent missed agent welcome pack', { agent_id: agent.id, name: agent.full_name, fee_link: result?.fee_link || null, error: result?.error || result?.welcome?.error || null });
+      }
+    } catch (error) {
+      logger.warn('Agent welcome catch-up skipped:', error.message || String(error));
+    }
   }, 45_000);
   timer.unref?.();
 }
