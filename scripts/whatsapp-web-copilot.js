@@ -5657,7 +5657,35 @@ async function typeAndSendReply(page, text) {
   throw new Error('WhatsApp send was not confirmed in the chat');
 }
 
-async function fetchOutboundPropertyImage(mediaUrl) {
+// Videos were queued for a year and never sent.
+//
+// Every welcome film, every how-to-post film and the join-as-an-agent explainer
+// went into outbound_message_queue with media_type 'video', and the drain loop
+// below only ever attached media when the type was exactly 'image'. Everything
+// else fell to the plain-text branch, so the caption arrived and the film did
+// not. That is the media_sent:false on every one of those rows.
+//
+// WhatsApp's own picker is "Photos & videos" and takes both, so the whole
+// attachment path already worked — it was only ever the type check.
+const OUTBOUND_MEDIA_KINDS = Object.freeze({
+  image: {
+    accept: 'image/jpeg,image/png,image/webp,image/*;q=0.8',
+    prefix: 'image/',
+    label: 'image',
+    fallbackName: 'makaug-property',
+    extensionFor: (mimeType) => (mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg')
+  },
+  video: {
+    accept: 'video/mp4,video/quicktime,video/*;q=0.8',
+    prefix: 'video/',
+    label: 'video',
+    fallbackName: 'makaug-video',
+    extensionFor: (mimeType) => (mimeType === 'video/quicktime' ? 'mov' : 'mp4')
+  }
+});
+
+async function fetchOutboundMedia(mediaUrl, kind = 'image') {
+  const spec = OUTBOUND_MEDIA_KINDS[kind] || OUTBOUND_MEDIA_KINDS.image;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
   try {
@@ -5665,22 +5693,25 @@ async function fetchOutboundPropertyImage(mediaUrl) {
       redirect: 'follow',
       signal: controller.signal,
       headers: {
-        Accept: 'image/jpeg,image/png,image/webp,image/*;q=0.8',
+        Accept: spec.accept,
         'User-Agent': BROWSER_USER_AGENT
       }
     });
-    if (!response.ok) throw new Error(`Property image returned HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`Property ${spec.label} returned HTTP ${response.status}`);
     const mimeType = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-    if (!mimeType.startsWith('image/')) throw new Error(`Property media is not an image (${mimeType || 'unknown type'})`);
+    if (!mimeType.startsWith(spec.prefix)) throw new Error(`Property media is not a ${spec.label} (${mimeType || 'unknown type'})`);
     const declaredLength = Number(response.headers.get('content-length') || 0);
-    if (declaredLength > OUTBOUND_PROPERTY_IMAGE_MAX_BYTES) throw new Error('Property image is too large for WhatsApp');
+    if (declaredLength > OUTBOUND_PROPERTY_IMAGE_MAX_BYTES) throw new Error(`Property ${spec.label} is too large for WhatsApp`);
     const buffer = Buffer.from(await response.arrayBuffer());
-    if (!buffer.length || buffer.length > OUTBOUND_PROPERTY_IMAGE_MAX_BYTES) throw new Error('Property image is empty or too large');
-    const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-    return { buffer, mimeType, fileName: `makaug-property.${extension}` };
+    if (!buffer.length || buffer.length > OUTBOUND_PROPERTY_IMAGE_MAX_BYTES) throw new Error(`Property ${spec.label} is empty or too large`);
+    return { buffer, mimeType, kind, fileName: `${spec.fallbackName}.${spec.extensionFor(mimeType)}` };
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function fetchOutboundPropertyImage(mediaUrl) {
+  return fetchOutboundMedia(mediaUrl, 'image');
 }
 
 async function clickFirstVisible(page, selectors) {
@@ -5997,7 +6028,11 @@ async function waitForMediaCaptionReady(page, timeoutMs = 10000) {
 }
 
 async function typeAndSendImageReply(page, mediaUrl, caption) {
-  const media = await fetchOutboundPropertyImage(mediaUrl);
+  return typeAndSendMediaReply(page, mediaUrl, caption, 'image');
+}
+
+async function typeAndSendMediaReply(page, mediaUrl, caption, kind = 'image') {
+  const media = await fetchOutboundMedia(mediaUrl, kind);
   const beforeState = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
 
   // WhatsApp keeps stale, hidden file inputs mounted in the chat shell. Always
@@ -6026,7 +6061,9 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
       captionReady = await waitForMediaCaptionReady(page);
     }
   }
-  if (!captionReady) {
+  // Pasting works for a still off the clipboard; a video has to go through the
+  // file picker, so there is no second chance for one.
+  if (!captionReady && kind === 'image') {
     const pasted = await pasteImageIntoComposer(page, media);
     if (pasted) captionReady = await waitForMediaCaptionReady(page);
   }
@@ -6035,14 +6072,16 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
     const fileInputs = await describeFileInputs(page);
     log(`media caption controls unavailable: ${JSON.stringify({ ...controls, fileInputs })}`);
     await page.keyboard.press('Escape').catch(() => null);
-    throw new Error('Could not prepare the WhatsApp image caption');
+    throw new Error(`Could not prepare the WhatsApp ${kind} caption`);
   }
 
   if (!await clickFirstVisible(page, MEDIA_SEND_BUTTON_SELECTORS)) {
     throw new Error('Could not find the WhatsApp media send button');
   }
-  const confirmed = await waitForMediaSendConfirmation(page, caption, beforeState, Math.max(10000, SEND_CONFIRM_MS));
-  if (!confirmed) throw new Error('WhatsApp image send was not confirmed in the chat');
+  // A video takes longer to upload before it appears in the thread.
+  const confirmWindow = Math.max(kind === 'video' ? 45000 : 10000, SEND_CONFIRM_MS);
+  const confirmed = await waitForMediaSendConfirmation(page, caption, beforeState, confirmWindow);
+  if (!confirmed) throw new Error(`WhatsApp ${kind} send was not confirmed in the chat`);
   return true;
 }
 
@@ -6111,15 +6150,16 @@ async function processOutboxUnlocked(page, { recipient = '', maxSends = OUTBOX_S
       }
 
       let mediaSent = false;
-      if (item.media_type === 'image' && item.media_url) {
+      const mediaKind = item.media_type === 'image' || item.media_type === 'video' ? item.media_type : '';
+      if (mediaKind && item.media_url) {
         try {
-          await typeAndSendImageReply(page, item.media_url, item.caption || item.text);
+          await typeAndSendMediaReply(page, item.media_url, item.caption || item.text, mediaKind);
           mediaSent = true;
         } catch (mediaError) {
-          log(`property image unavailable for ${item.recipient}; sending the clean text card instead: ${mediaError.message || mediaError}`);
+          log(`property ${mediaKind} unavailable for ${item.recipient}; sending the clean text card instead: ${mediaError.message || mediaError}`);
           const mediaComposerReset = await dismissPendingMediaSelection(page);
           if (!mediaComposerReset) {
-            throw new Error(`Could not reset WhatsApp media composer after image failure: ${mediaError.message || mediaError}`);
+            throw new Error(`Could not reset WhatsApp media composer after ${mediaKind} failure: ${mediaError.message || mediaError}`);
           }
           await typeAndSendReply(page, item.text);
         }
