@@ -4,45 +4,87 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  affiliateOffersFor,
+  agodaSearchUrl,
   bookingLinkFor,
   bookingSearchUrl,
+  fromTemplate,
   isConfigured
 } = require('../services/bookingAffiliateService');
 
-const LIVE = {
+const CJ_LIVE = {
   BOOKING_AFFILIATE_ENABLED: 'true',
   CJ_PUBLISHER_PID: '101885222',
   BOOKING_CJ_AD_ID: '15735418'
 };
 
-test('dark unless all three env vars are set', () => {
+const TP_LIVE = {
+  TRAVELPAYOUTS_BOOKING_TEMPLATE: 'https://tp.media/r?marker=123456&p=4976&campaign_id=101&u={url}',
+  TRAVELPAYOUTS_AGODA_TEMPLATE: 'https://tp.media/r?marker=123456&p=5873&campaign_id=102&u={url}'
+};
+
+const STAY = { q: 'Entebbe', check_in: '2026-11-10', check_out: '2026-11-13', guests: '3' };
+
+test('nothing configured means no click-out at all', () => {
+  assert.deepEqual(affiliateOffersFor(STAY, {}), []);
+  assert.equal(bookingLinkFor(STAY, {}), null);
   assert.equal(isConfigured({}), false);
-  assert.equal(isConfigured({ ...LIVE, BOOKING_AFFILIATE_ENABLED: 'false' }), false);
-  assert.equal(isConfigured({ ...LIVE, BOOKING_CJ_AD_ID: '' }), false);
-  assert.equal(isConfigured({ ...LIVE, CJ_PUBLISHER_PID: 'abc' }), false);
-  assert.equal(bookingLinkFor({ q: 'Kampala' }, {}), null);
-  assert.equal(isConfigured(LIVE), true);
 });
 
-test('builds a CJ tracked deep link to the same Booking.com search', () => {
-  const link = bookingLinkFor({ q: 'Entebbe', check_in: '2026-10-01', check_out: '2026-10-04', guests: '3' }, LIVE);
-  assert.ok(link.url.startsWith('https://www.dpbolvw.net/click-101885222-15735418?url='));
-  assert.ok(link.url.endsWith('&sid=makaug-short-term'));
-  const inner = new URL(decodeURIComponent(link.url.split('?url=')[1].split('&sid=')[0]));
-  assert.equal(inner.hostname, 'www.booking.com');
-  assert.equal(inner.searchParams.get('ss'), 'Entebbe, Uganda');
-  assert.equal(inner.searchParams.get('checkin'), '2026-10-01');
-  assert.equal(inner.searchParams.get('checkout'), '2026-10-04');
-  assert.equal(inner.searchParams.get('group_adults'), '3');
-  assert.equal(link.destination, inner.toString());
+test('a pasted Travelpayouts template carries the visitor stay through', () => {
+  const offers = affiliateOffersFor(STAY, TP_LIVE);
+  assert.deepEqual(offers.map((o) => o.provider), ['booking.com', 'agoda']);
+  offers.forEach((offer) => {
+    assert.equal(offer.network, 'travelpayouts');
+    assert.ok(offer.url.startsWith('https://tp.media/r?marker=123456&'));
+    const inner = new URL(decodeURIComponent(offer.url.split('&u=')[1]));
+    assert.equal(inner.toString(), offer.destination);
+  });
+
+  const booking = new URL(offers[0].destination);
+  assert.equal(booking.hostname, 'www.booking.com');
+  assert.equal(booking.searchParams.get('ss'), 'Entebbe, Uganda');
+  assert.equal(booking.searchParams.get('checkin'), '2026-11-10');
+  assert.equal(booking.searchParams.get('group_adults'), '3');
+
+  const agoda = new URL(offers[1].destination);
+  assert.equal(agoda.hostname, 'www.agoda.com');
+  assert.equal(agoda.searchParams.get('text'), 'Entebbe, Uganda');
+  assert.equal(agoda.searchParams.get('checkIn'), '2026-11-10');
+  assert.equal(agoda.searchParams.get('adults'), '3');
 });
 
-test('drops bad dates and defaults the party and place', () => {
-  const url = new URL(bookingSearchUrl({ checkIn: '2026-10-05', checkOut: '2026-10-01', guests: 'x' }));
+test('a template with no {url} is used as pasted', () => {
+  const offers = affiliateOffersFor(STAY, { TRAVELPAYOUTS_AGODA_TEMPLATE: 'https://tp.media/r?marker=123456&p=5873' });
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].url, 'https://tp.media/r?marker=123456&p=5873');
+});
+
+test('a malformed or insecure template is ignored, never rendered', () => {
+  assert.equal(fromTemplate('tp.media/r?u={url}', 'https://x.test'), null);
+  assert.equal(fromTemplate('http://tp.media/r?u={url}', 'https://x.test'), null);
+  assert.equal(fromTemplate('javascript:alert(1)', 'https://x.test'), null);
+  assert.equal(fromTemplate('   ', 'https://x.test'), null);
+  assert.deepEqual(affiliateOffersFor(STAY, { TRAVELPAYOUTS_BOOKING_TEMPLATE: 'not a url' }), []);
+});
+
+test('CJ fills in for Booking.com only while Travelpayouts does not', () => {
+  const cjOnly = affiliateOffersFor(STAY, CJ_LIVE);
+  assert.deepEqual(cjOnly.map((o) => o.network), ['cj']);
+  assert.ok(cjOnly[0].url.startsWith('https://www.dpbolvw.net/click-101885222-15735418?url='));
+
+  const both = affiliateOffersFor(STAY, Object.assign({}, CJ_LIVE, TP_LIVE));
+  assert.deepEqual(both.map((o) => o.network), ['travelpayouts', 'travelpayouts']);
+  assert.equal(both.filter((o) => o.provider === 'booking.com').length, 1);
+});
+
+test('bad dates and parties are dropped rather than passed on', () => {
+  const url = new URL(bookingSearchUrl({ check_in: '2026-11-13', check_out: '2026-11-10', guests: 'x' }));
   assert.equal(url.searchParams.get('ss'), 'Uganda');
   assert.equal(url.searchParams.get('checkin'), null);
   assert.equal(url.searchParams.get('group_adults'), '2');
-  const again = new URL(bookingSearchUrl({ q: 'Jinja, Uganda', guests: 99 }));
-  assert.equal(again.searchParams.get('ss'), 'Jinja, Uganda');
-  assert.equal(again.searchParams.get('group_adults'), '16');
+
+  const agoda = new URL(agodaSearchUrl({ q: 'Jinja, Uganda', guests: 99 }));
+  assert.equal(agoda.searchParams.get('text'), 'Jinja, Uganda');
+  assert.equal(agoda.searchParams.get('adults'), '16');
 });
