@@ -384,7 +384,13 @@ async function handleLookingForProperty(req, res, next) {
       ].join('\n')
     });
 
-    return res.status(201).json({ ok: true, data: request });
+    return res.status(201).json({
+      ok: true,
+      data: {
+        ...request,
+        lead_id: lead?.id || null
+      }
+    });
   } catch (error) {
     return next(error);
   }

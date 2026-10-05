@@ -34,8 +34,8 @@ assert(app.includes('return Number.isFinite(total) && total >= 0 ? total : null'
 
 assert(app.includes('totalAuthoritative: false'), 'category pagination state should track whether the total came from an exact API response');
 assert(app.includes('state.totalAuthoritative = false'), 'changing source paths should clear stale authoritative totals');
-assert(app.includes('firstCategoryState.totalAuthoritative = firstCategoryExactTotal != null'), 'active category hydration should mark exact API totals authoritative');
-assert(app.includes('firstPageState.totalAuthoritative = exactPublicPaginationTotalValue(firstPageResponse) != null'), 'initial category hydration should mark exact API totals authoritative');
+assert(app.includes('firstCategoryState.totalAuthoritative = firstCategoryExactTotal != null || !firstCategoryHasMore'), 'active category hydration should treat a terminal response as authoritative even without a total field');
+assert(app.includes('firstPageState.totalAuthoritative = firstPageExactTotal != null || !firstPageHasMore'), 'initial category hydration should treat a terminal response as authoritative even without a total field');
 assert(app.includes('publicCategoryStateHasAuthoritativeTotal(category, state)'), 'category total selection should prefer exact category totals over global opportunity stats');
 assert(app.includes('function authoritativePublicCategoryPageRows'), 'renderAll should keep using exact active-route API rows after broader catalogue hydration');
 assert(app.includes('if (key !== "students" && !publicCategoryActiveSearchPath(key)) return null'), 'authoritative cache guard must preserve student rows and active API-search rows without replacing normal category totals');
@@ -47,15 +47,29 @@ assert(app.includes('if (exactAuthoritative && requestedPage !== targetPage)'), 
 
 assert(app.includes('if (publicCategoryStateHasAuthoritativeTotal(category, state)) return stateTotal'), 'global summary counts must not overwrite exact category API totals');
 assert(app.includes('const total = exactTotal ?? publicPaginationLoadedThrough(response, rows.length);\n  state.total = total;\n  state.totalAuthoritative = exactTotal != null || !hasMore'), 'exact zero totals should replace stale page totals while unknown totals retain an explicit lower bound');
-assert(app.includes('const totalPages = Math.max(1, Math.ceil(total / pageSize))'), 'student range rendering should clamp to real page count');
-assert(app.includes('const page = Math.min(Math.max(1, Number(options.page) || 1), totalPages)'), 'student header page number should be clamped');
+assert(app.includes('const totalPages = Math.max(1, Math.ceil(total / pageSize))'), 'student range rendering should calculate a real page count');
+assert(app.includes('const page = options.totalAuthoritative === true'), 'student header should clamp pages only when the API supplied an authoritative total');
 assert(app.includes('const end = total ? Math.max(start, Math.min(total, rowEnd)) : 0'), 'student header range must never reverse start/end');
-assert(app.includes('const showing = total ? `Showing ${start}-${end} of ${total}` : "Showing 0"'), 'student header should use one honest total/range format');
+assert(app.includes('`of at least ${total}`'), 'student header must label non-authoritative totals as a lower bound');
+assert(app.includes('options.totalAuthoritative === true && total === 0'), 'student empty copy must require an authoritative zero total');
+assert(app.includes('options.loading || options.totalAuthoritative !== true'), 'student grid must retain a loading state while the result total is unknown');
+assert(app.includes('el.setAttribute("aria-busy", options.loading ? "true" : "false")'), 'student result accessibility state must stop reporting busy after hydration');
+assert(app.includes('const terminalApiResponse = Boolean(options.response) && state.hasMore === false'), 'a successful terminal API page must end the unknown-total loading state');
+assert(app.includes('const hasServerRenderedRows = Boolean(grid?.querySelector("[data-ssr-property-card]"))'), 'startup rendering must detect server-rendered listing cards');
+assert(app.includes('&& (state.loading === true || isExactNestedSeoRoute)'), 'exact nested SSR cards must survive both startup hydration and an API failure');
+assert(app.includes('renderPublicCategoryPagination(key, { loading: state.loading === true })'), 'SSR preservation must not report perpetual loading after a failed refresh');
+assert(/const refreshed = currentActiveCategory\s*\? await refreshActivePublicInventoryCategoryFromApi\(\{ silent \}\)/.test(app), 'delegated route refresh must expose whether the exact search failed');
+assert(app.includes('return refreshed'), 'delegated route refresh must not report success after an exact search failure');
+assert(!html.includes('Showing 0 properties • Prices per semester'), 'the static shell must not claim zero before live inventory loads');
+assert(html.includes('Loading live student accommodation…'), 'the static shell must expose an honest loading state');
+assert(html.includes('id="student-verified-f" value="0"'), 'student results must not silently default to a narrower verified-only filter');
 
 assert(app.includes('if (normalized === "student") return "/api/properties?status=approved&public_only=1&student_portal=1"'), 'student page should keep using the student portal API');
 assert(app.includes('category=${encodeURIComponent(normalized)}'), 'public category pages must use the category API contract that returns authoritative pagination totals');
 assert(!app.includes('public_only=1&listing_type=${encodeURIComponent(normalized)}'), 'public category page loader must not use listing_type totals that collapse to the current page');
 assert(app.includes('params.set("student_portal", "1")'), 'student searches should keep sending the student portal flag');
+assert(app.includes('includeSummary: Boolean(activeRouteSearchPath) || activeCategory === "students"'), 'student first-page requests must ask for their own authoritative total');
+assert(app.includes('const apiTotal = backendCategory === "student"'), 'the global explicit-student count must not overwrite the broader student-portal total');
 assert(app.includes('`${hasMore ? "+" : ""} properties`') || app.includes('${hasMore ? "+" : ""} properties'), 'unknown totals should be labelled as a lower bound with a plus sign');
 assert(app.includes('renderPublicCategoryPagination(startupCategory, { loading: true })'), 'category routes must immediately replace stale local pagination with a loading count while API totals hydrate');
 assert(app.includes('loading ? "Loading listings..." : unknownTotal ? `Page ${page}`'), 'active category routes should distinguish loading from an unknown total');

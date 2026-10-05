@@ -10,9 +10,11 @@
 
 const PDFDocument = require('pdfkit');
 const sharp = require('sharp');
+const commercialCatalog = require('../config/aboutCommercialProducts');
 
-const LISTER_TERMS_VERSION = '2026-10-v1';
+const LISTER_TERMS_VERSION = '2026-10-v2';
 const AGENT_GUIDE_VERSION = '2026-10-v1';
+const PRIVATE_LISTING = commercialCatalog.products.privateListing;
 
 const INK = '#15213A';
 const ORANGE = '#E8662A';
@@ -45,8 +47,8 @@ function settingsDefaults(settings = {}) {
   const lister = settings.lister_fee || {};
   const agent = settings.agent_fee || {};
   return {
-    freeDays: Number(lister.free_days ?? 7),
-    listerMonthly: Number(lister.monthly_ugx || 25000),
+    freeDays: Number(lister.free_days ?? PRIVATE_LISTING.trialDays),
+    listerMonthly: Number(lister.monthly_ugx || PRIVATE_LISTING.amount),
     agentMonthly: Number(agent.monthly_ugx || 50000),
     finalAfter: Number(agent.final_after_days_overdue ?? 7),
     payTo: settings.pay_to || {}

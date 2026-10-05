@@ -352,8 +352,8 @@ function run() {
   assert(!/id="listing-submit-modal"[^>]*class="[^"]*\bopen\b/i.test(listPropertyHtml), 'listing submit modal should not be open before submission');
   assert(listPropertyText.includes('List Property'), '/list-property should use short page title');
   assert(!listPropertyText.includes('Always 100% Free.'), '/list-property must not claim listings are always free');
-  assert(listPropertyText.includes('Start with 7 days free.'), '/list-property should explain the introductory listing period');
-  assert(listPropertyText.includes('one private listing costs UGX 25,000 per month'), '/list-property should state the current post-trial price');
+  assert(listPropertyText.includes('The first 7 days are free.'), '/list-property should explain the introductory listing period');
+  assert(listPropertyText.includes('each private property listing costs UGX 25,000 per month'), '/list-property should state the current post-trial price');
   assert(!listPropertyText.includes('List Your Property - Free'), '/list-property should not use old long free title');
   assert(listPropertyText.includes('Find address or place'), '/list-property should show address-first location flow');
   assert(listPropertyHtml.includes('id="lp-current-location-btn"'), '/list-property should include share current location button');
@@ -439,9 +439,9 @@ function run() {
   assert(aboutHtml.includes('id="page-about"'), '/about should render the about route');
   assert(aboutText.includes('About makaug'), '/about should show About makaug');
   for (const expected of [
-    'Every property in Uganda, in one place',
-    'All Uganda properties in one place',
-    'Everything you can do',
+    'Property across Uganda, in one searchable place',
+    'Uganda property discovery in one place',
+    'Ways to use makaug',
     'Standard products',
     'Get seen first',
     'Grow your property business',

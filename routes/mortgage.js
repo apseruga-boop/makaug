@@ -653,7 +653,8 @@ router.post('/enquiry', async (req, res, next) => {
     return res.json({
       ok: true,
       data: {
-        reference
+        reference,
+        lead_id: lead?.id || null
       }
     });
   } catch (error) {

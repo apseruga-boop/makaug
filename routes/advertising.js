@@ -297,7 +297,7 @@ router.post('/campaigns', requireAdvertiserAuth, async (req, res, next) => {
       ]
     );
 
-    await createLead(db, {
+    const lead = await createLead(db, {
       userId: req.userAuth.id,
       campaignId: campaign.rows[0].id,
       contact: {
@@ -321,7 +321,10 @@ router.post('/campaigns', requireAdvertiserAuth, async (req, res, next) => {
       metadata: { advertising_inquiry_id: inquiry.rows[0].id, advertising_campaign_id: campaign.rows[0].id }
     });
 
-    return res.status(201).json({ ok: true, data: { inquiry: inquiry.rows[0], campaign: campaign.rows[0] } });
+    return res.status(201).json({
+      ok: true,
+      data: { inquiry: inquiry.rows[0], campaign: campaign.rows[0], lead_id: lead?.id || null }
+    });
   } catch (error) {
     return next(error);
   }
@@ -587,7 +590,7 @@ router.post('/inquiries', leadFormLimiter, leadHoneypot, async (req, res, next) 
     const labels = packageLabels(productInterests);
 
     // Advertiser enquiries belong in the one Lead Centre too.
-    await createLead(db, {
+    const lead = await createLead(db, {
       contact: {
         name: fullName,
         phone: phone || null,
@@ -672,6 +675,7 @@ router.post('/inquiries', leadFormLimiter, leadHoneypot, async (req, res, next) 
       ok: true,
       data: {
         ...inquiry,
+        lead_id: lead?.id || null,
         selected_packages: summarizeAdvertisingPackageKeys(productInterests),
         support_email: supportEmail,
         whatsapp_url: whatsappUrl

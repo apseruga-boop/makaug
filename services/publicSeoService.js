@@ -7,6 +7,11 @@ const {
 } = require('../utils/locationRegistry');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
 const {
+  MAX_CANONICAL_PRICE_UGX,
+  MIN_RECURRING_PRICE_UGX,
+  MIN_WHOLE_PROPERTY_PRICE_UGX
+} = require('../utils/listingDataIntegrity');
+const {
   SEO_FACET_MIN_LISTINGS,
   FACET_DEFINITIONS,
   facetSlugsForRow,
@@ -115,9 +120,25 @@ function incrementMapCount(map, key) {
   map.set(key, Number(map.get(key) || 0) + 1);
 }
 
-function setMinimumPrice(map, key, value) {
+function isPlausibleSeoPrice(category, row = {}) {
+  const price = Number(row.price || 0);
+  if (!(price > 0) || price > MAX_CANONICAL_PRICE_UGX) return false;
+  const normalizedCategory = String(category || '').trim().toLowerCase();
+  if (['sale', 'land'].includes(normalizedCategory)) return price >= MIN_WHOLE_PROPERTY_PRICE_UGX;
+  if (['rent', 'student', 'students'].includes(normalizedCategory)) return price >= MIN_RECURRING_PRICE_UGX;
+  if (normalizedCategory === 'commercial') {
+    const transaction = String(row.transaction_type || '').trim().toLowerCase();
+    const period = String(row.price_period || '').trim().toLowerCase();
+    const isSale = transaction === 'sale' || ['once', 'sale'].includes(period);
+    return price >= (isSale ? MIN_WHOLE_PROPERTY_PRICE_UGX : MIN_RECURRING_PRICE_UGX);
+  }
+  return price >= MIN_RECURRING_PRICE_UGX;
+}
+
+function setMinimumPrice(map, key, row, category) {
+  const value = row?.price;
   const price = Number(value || 0);
-  if (!(price > 0)) return;
+  if (!isPlausibleSeoPrice(category, row)) return;
   const current = Number(map.get(key) || 0);
   if (!(current > 0) || price < current) map.set(key, price);
 }
@@ -191,14 +212,14 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
     for (const category of categories) {
       categoryTotals[category] += 1;
       const price = Number(row.price || 0);
-      if (price > 0 && (!(categoryPriceFloors[category] > 0) || price < categoryPriceFloors[category])) {
+      if (isPlausibleSeoPrice(category, row) && (!(categoryPriceFloors[category] > 0) || price < categoryPriceFloors[category])) {
         categoryPriceFloors[category] = price;
       }
     }
     for (const canonical of locations) {
       for (const category of categories) {
         directCounts[category].set(canonical.key, Number(directCounts[category].get(canonical.key) || 0) + 1);
-        setMinimumPrice(directPriceFloors[category], canonical.key, row.price);
+        setMinimumPrice(directPriceFloors[category], canonical.key, row, category);
         for (const facetSlug of facetSlugsForRow(category, row)) {
           incrementMapCount(facetCounts[category], `${canonical.key}|${facetSlug}`);
         }
@@ -346,7 +367,13 @@ function categoryPageSeoMeta(pathname = '/', snapshot = null, baseUrl = PUBLIC_S
     title,
     description,
     canonical: `${String(baseUrl || PUBLIC_SITE_URL).replace(/\/+$/, '')}${location ? `${config.route}/${canonicalLocationRouteSlug(location)}` : config.route}`,
-    image: `${String(baseUrl || PUBLIC_SITE_URL).replace(/\/+$/, '')}${config.image}`
+    image: `${String(baseUrl || PUBLIC_SITE_URL).replace(/\/+$/, '')}${config.image}`,
+    routeState: location ? {
+      page: key,
+      locationId: location.canonical_key,
+      area: locationLabel,
+      nearby: '0'
+    } : null
   };
 }
 
@@ -442,6 +469,7 @@ module.exports = {
   buildPublicSeoSnapshot,
   loadPublicSeoInventorySnapshot,
   categoryPageSeoMeta,
+  isPlausibleSeoPrice,
   sitemapEntries,
   __seoSnapshotCache: Object.freeze({
     clear: clearPublicSeoSnapshotCache,

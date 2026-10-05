@@ -23,14 +23,17 @@ const message = buildAgentWelcomeWhatsappMessage({
 });
 
 assert.strictEqual(AGENT_WELCOME_WHATSAPP_TEMPLATE_KEY, 'lead_outreach_agent_welcome_free_card');
-assert.strictEqual(AGENT_WELCOME_CARD_PREVIEW_VERSION, 'agent3');
+assert.strictEqual(AGENT_WELCOME_CARD_PREVIEW_VERSION, 'agent4');
 assert(message.startsWith(AGENT_WELCOME_CARD_URL), 'WhatsApp preview card link should be first for rich preview unfurling');
-assert(AGENT_WELCOME_CARD_URL.includes('?v=agent3'), 'WhatsApp card link should include a preview cache-buster');
+assert(AGENT_WELCOME_CARD_URL.includes('?v=agent4'), 'WhatsApp card link should include a preview cache-buster');
 assert(message.includes('hope you are well'), 'Agent welcome message must use a warm opening');
 assert(message.includes('team in Uganda'), 'Agent welcome message must sound Uganda-first');
 assert(message.includes('respectfully'), 'Agent welcome message must sound respectful, not arrogant');
-assert(message.includes('Free to list property'), 'Agent welcome message must call out free listing');
-assert(message.includes('No listing charge'), 'Agent welcome message must make the no-charge promise explicit');
+assert(message.includes('first 7 days are free'), 'Agent welcome message must state the private-listing trial');
+assert(message.includes('UGX 25,000 per property/month'), 'Agent welcome message must state the private-listing monthly price');
+assert(message.includes('Agent and broker plans are priced separately'), 'Agent welcome message must separate agent plans from private-listing pricing');
+assert(!message.includes('Free to list property'), 'Agent welcome message must not promise unlimited free listing');
+assert(!message.includes('No listing charge'), 'Agent welcome message must not promise that no listing charge exists');
 assert(message.includes('English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, Amharic, or Arabic'), 'Agent welcome message must name the nine website languages');
 assert(message.includes('reply LANG to change language'), 'Agent welcome message must explain language switching');
 assert(message.includes('Guide: the link above'), 'Agent welcome message must explain the click-through guide');
@@ -44,15 +47,38 @@ assert(!message.includes('free today'), 'Agent welcome message must not say free
 assert(message.length <= 1200, 'Agent welcome WhatsApp message must fit outreach send limit');
 
 assert(cardHtml.includes('og:image'), 'Welcome page must expose an Open Graph image for WhatsApp preview cards');
-assert(cardHtml.includes('makaug-agent-welcome-card-agent-kind.png'), 'Welcome page must point WhatsApp previews to the cache-busted kind PNG card');
+assert(cardHtml.includes('makaug-agent-welcome-card-agent-kind.png?v=agent4'), 'Welcome page must point WhatsApp previews to the cache-busted kind PNG card');
 assert(cardHtml.includes('Welcome to makaug.com'), 'Welcome page must open with warm makaug.com wording');
-assert(cardHtml.includes('No listing charge'), 'Welcome page must make free listing explicit');
-assert(cardHtml.includes('List free on makaug.com'), 'Welcome page must include a visible website listing CTA');
+assert(cardHtml.includes('A private property listing is free for its first 7 days, then costs UGX 25,000 per property/month.'), 'Welcome page must state the private-listing trial and price');
+assert(cardHtml.includes('Agent and broker plans are priced separately.'), 'Welcome page must separate agent plans from private-listing pricing');
+assert(cardHtml.includes('Start a property listing'), 'Welcome page must include a visible neutral listing CTA');
+assert(!cardHtml.includes('No listing charge'), 'Welcome page must not promise that no listing charge exists');
+assert(!cardHtml.includes('List free on makaug.com'), 'Welcome page must not promise unlimited free listing');
+assert(!cardHtml.includes('at no cost'), 'Welcome page must not promise agent listings at no cost');
 assert(cardHtml.includes('agent-welcome-language'), 'Welcome page must include a visible language selector');
 assert(cardHtml.includes('AGENT_WELCOME_I18N'), 'Welcome page must include local language copy');
 ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar'].forEach((lang) => {
   assert(cardHtml.includes(`${lang}: {`), `Welcome page must include ${lang} translation copy`);
   assert(cardHtml.includes(`value="${lang}"`), `Welcome page must include ${lang} language option`);
+  const localeBlock = cardHtml.match(new RegExp(`\\n\\s+${lang}: \\{([\\s\\S]*?)\\n\\s+\\},?`));
+  assert(localeBlock, `Welcome page must expose the ${lang} locale block for pricing checks`);
+  assert(localeBlock[1].includes('7 days'), `${lang} welcome pricing must state the trial length`);
+  assert(localeBlock[1].includes('UGX 25,000 per property/month'), `${lang} welcome pricing must state the private-listing price`);
+  assert(localeBlock[1].includes('Agent and broker plans are priced separately'), `${lang} welcome pricing must separate agent and broker plans`);
+});
+[
+  'No listing charge',
+  'Post your properties for free',
+  'Agents can add property listings at no cost',
+  'List free on makaug.com',
+  'Tewali ssente za listing',
+  'Hakuna ada ya listing',
+  'Pe tye charge me listing',
+  'Tihariho sente za listing',
+  'የዝርዝር ክፍያ የለም',
+  'لا توجد رسوم إدراج'
+].forEach((obsoleteClaim) => {
+  assert(!cardHtml.includes(obsoleteClaim), `Welcome page must remove obsolete claim: ${obsoleteClaim}`);
 });
 assert(cardHtml.includes("document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'"), 'Welcome page must switch to RTL for Arabic');
 assert(cardHtml.includes('Agent welcome guide'), 'Welcome page must include the agent welcome guide');
@@ -67,9 +93,12 @@ assert(!cardHtml.includes('during launch'), 'Welcome page must not use temporary
 assert(!cardHtml.includes('free today'), 'Welcome page must not say free today');
 
 assert(cardSvg.includes('Uganda agents,'), 'Welcome card must use a Uganda agent headline');
-assert(cardSvg.includes('list property') && cardSvg.includes('for free'), 'Welcome card must include the grammatically correct free-listing promise');
+assert(cardSvg.includes('bring genuine') && cardSvg.includes('property online'), 'Welcome card must invite agents to bring genuine property online');
 assert(cardSvg.includes('Built in Uganda'), 'Welcome card must sound Uganda-first');
-assert(cardSvg.includes('Free to list'), 'Welcome card must use free-list wording');
+assert(cardSvg.includes('Clear pricing'), 'Welcome card must direct agents to clear pricing rather than promise free listings');
+assert(!/free (?:listing|to list)|for free/i.test(cardSvg), 'Welcome card must not promise unlimited free listing');
+assert(cardSvg.includes('7 days free, then UGX 25,000'), 'Welcome card must state the bounded private-listing trial and price');
+assert(cardSvg.includes('Agent plans separate'), 'Welcome card must separate agent pricing from the private-listing price');
 assert(cardSvg.includes('9 languages'), 'Welcome card must include nine-language callout');
 assert(cardSvg.includes('WhatsApp help'), 'Welcome card must include WhatsApp help callout');
 assert(cardSvg.includes('makaug.com'), 'Welcome card must keep the makaug.com brand lowercase');

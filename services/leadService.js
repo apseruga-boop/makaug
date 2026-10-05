@@ -1,6 +1,7 @@
 'use strict';
 
 const logger = require('../config/logger');
+const { currentLeadAttribution, enforceLeadAttributionConsent } = require('./leadAttributionContext');
 
 function text(value, fallback = '') {
   const cleaned = String(value ?? '').trim();
@@ -270,8 +271,18 @@ async function recordRepeatOnLead(db, lead, input = {}, { source, leadType }) {
   const newMessage = Boolean(message) && !isClickMessage && message !== text(lead.message);
   const channel = text(input.channel) || null;
   const submitted = submittedContactOf(input);
+  const incomingMetadata = safeJson(input.metadata, {});
+  const repeatAttribution = safeJson(incomingMetadata.attribution, null);
+  const incomingMetadataWithoutAttribution = { ...incomingMetadata };
+  delete incomingMetadataWithoutAttribution.attribution;
   const metadataPatch = {
-    ...safeJson(input.metadata, {}),
+    ...incomingMetadataWithoutAttribution,
+    ...(repeatAttribution
+      ? {
+          ...(safeJson(lead.metadata, {}).attribution ? {} : { attribution: repeatAttribution }),
+          last_attribution: repeatAttribution
+        }
+      : {}),
     ...(submitted ? { submitted_contact: { ...(safeJson(lead.metadata, {}).submitted_contact || {}), ...Object.fromEntries(Object.entries(submitted).filter(([, v]) => v)) } } : {})
   };
   const updated = await db.query(
@@ -319,6 +330,22 @@ async function createLead(db, input = {}) {
   if (!db) return null;
   try {
     const contactInput = input.contact || input;
+    const inputMetadata = safeJson(input.metadata, {});
+    const requestAttribution = currentLeadAttribution();
+    const explicitAttribution = enforceLeadAttributionConsent(
+      input.attribution || input.lead_attribution || inputMetadata.attribution
+    );
+    const leadAttribution = explicitAttribution || requestAttribution;
+    const sanitizedMetadata = { ...inputMetadata };
+    delete sanitizedMetadata.attribution;
+    delete sanitizedMetadata.last_attribution;
+    const enrichedInput = {
+      ...input,
+      metadata: {
+        ...sanitizedMetadata,
+        ...(leadAttribution ? { attribution: leadAttribution } : {})
+      }
+    };
     const contact = await upsertContact(db, contactInput);
     const leadType = text(input.leadType || input.lead_type, 'enquiry').toLowerCase();
     const source = text(input.source, 'web').toLowerCase();
@@ -345,7 +372,7 @@ async function createLead(db, input = {}) {
 
     const duplicate = await findRecentDuplicateLead(db, dedupeKey);
     if (duplicate) {
-      return recordRepeatOnLead(db, duplicate, { ...input, _contactId: contact?.id || null }, { source, leadType });
+      return recordRepeatOnLead(db, duplicate, { ...enrichedInput, _contactId: contact?.id || null }, { source, leadType });
     }
 
     // Billable means a buyer lead for an agent's listing — never a test, never
@@ -397,7 +424,7 @@ async function createLead(db, input = {}) {
         billable,
         charged,
         JSON.stringify({
-          ...safeJson(input.metadata, {}),
+          ...safeJson(enrichedInput.metadata, {}),
           ...(submittedContactOf(input) ? { submitted_contact: submittedContactOf(input) } : {}),
           metering: {
             source,
@@ -417,7 +444,7 @@ async function createLead(db, input = {}) {
     if (!lead && dedupeKey) {
       // Lost a race with an identical submission a moment ago: that one is the lead.
       const winner = await findRecentDuplicateLead(db, dedupeKey);
-      if (winner) return recordRepeatOnLead(db, winner, { ...input, _contactId: contact?.id || null }, { source, leadType });
+      if (winner) return recordRepeatOnLead(db, winner, { ...enrichedInput, _contactId: contact?.id || null }, { source, leadType });
     }
     if (lead) {
       await addLeadActivity(db, {
@@ -429,7 +456,7 @@ async function createLead(db, input = {}) {
         metadata: {
           source,
           lead_type: leadType,
-          ...(safeJson(input.metadata, {}))
+          ...(safeJson(enrichedInput.metadata, {}))
         }
       });
     }

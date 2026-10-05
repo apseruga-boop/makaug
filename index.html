@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>makaug.com | Uganda Property Portal</title>
-  <meta name="description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
+  <meta name="description" content="Search property for sale and rent across Uganda, find brokers, or list a private property free for its first 7 days, then UGX 25,000 per property/month.">
   <meta name="robots" content="index,follow,max-image-preview:large">
   <meta name="makaug-k24-marker" content="k24-intake-integrity-20260803">
   <meta name="facebook-domain-verification" content="wn68k5n1hmg16xalket31iuwsqwa51">
@@ -12,12 +12,12 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="makaug.com">
   <meta property="og:title" content="makaug.com | Uganda Property Portal">
-  <meta property="og:description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
+  <meta property="og:description" content="Search property for sale and rent across Uganda, find brokers, or list a private property free for its first 7 days, then UGX 25,000 per property/month.">
   <meta property="og:url" content="https://makaug.com/">
   <meta property="og:image" content="https://makaug.com/assets/og-cover.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="makaug.com | Uganda Property Portal">
-  <meta name="twitter:description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
+  <meta name="twitter:description" content="Search property for sale and rent across Uganda, find brokers, or list a private property free for its first 7 days, then UGX 25,000 per property/month.">
   <meta name="twitter:image" content="https://makaug.com/assets/og-cover.jpg">
   <link rel="canonical" href="https://makaug.com/">
   <link rel="icon" href="/favicon.ico" sizes="any">
@@ -26,7 +26,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/makaug-icon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
-  <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1"></script>
+  <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v2"></script>
   <script src="/assets/about-advertise-i18n.js?v=whatsapp-number-20260911"></script>
   <script src="/assets/makaug-site-i18n.js?v=20261003-site-i18n-v4" defer></script>
   <meta name="theme-color" content="#15803d">
@@ -390,37 +390,9 @@
       document.head.appendChild(preload);
     })();
   </script>
-  <script>
-    // meta-pixel-launch1-20260805
-    (function initializeMakaugMetaPixel(windowObject, documentObject) {
-      var pixelId = String(windowObject.__makaugMetaPixelId || "").trim();
-      if (!/^\d{6,24}$/.test(pixelId) || typeof windowObject.fbq === "function") return;
-      var queue = function () {
-        if (queue.callMethod) queue.callMethod.apply(queue, arguments);
-        else queue.queue.push(arguments);
-      };
-      windowObject.fbq = queue;
-      if (!windowObject._fbq) windowObject._fbq = queue;
-      queue.push = queue;
-      queue.loaded = true;
-      queue.version = "2.0";
-      queue.queue = [];
-      var script = documentObject.createElement("script");
-      script.async = true;
-      script.src = "https://connect.facebook.net/en_US/fbevents.js";
-      script.setAttribute("data-meta-pixel-id", pixelId);
-      var firstScript = documentObject.getElementsByTagName("script")[0];
-      firstScript.parentNode.insertBefore(script, firstScript);
-      queue("init", pixelId);
-      queue("track", "PageView", {
-        page_path: windowObject.location.pathname || "/",
-        site_country: "UG"
-      });
-      windowObject.__makaugMetaPixelReady = true;
-    })(window, document);
-  </script>
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high">
   <link rel="stylesheet" href="/assets/tailwind.css">
+  <link rel="stylesheet" href="/assets/measurement-consent.css?v=20261005-v1">
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
   <link rel="stylesheet" href="/assets/short-term.css?v=20260916-short-term-v23">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -428,6 +400,7 @@
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"></noscript>
   <script src="/config.js"></script>
+  <script src="/assets/measurement-consent.js?v=20261005-v1"></script>
   <script>
     window.MAKAUG_ADSENSE_CLIENT = window.MAKAUG_ADSENSE_CLIENT || "";
     window.MAKAUG_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || {
@@ -3704,7 +3677,7 @@
             <button id="student-use-location-btn" type="button" onclick="applyNearMe('students')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Use my location (10 km)</button>
           </div>
           <div class="mt-2 flex justify-end gap-2 flex-wrap">
-            <button id="student-verified-btn" onclick="toggleStudentVerified()" class="h-10 px-4 rounded-lg bg-white text-purple-900 text-sm font-semibold border border-white/30">⚡ Verified</button>
+            <button id="student-verified-btn" onclick="toggleStudentVerified()" class="h-10 px-4 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-semibold border border-white/30">⚡ Verified only</button>
             <input id="student-budget-custom-f" type="number" min="0" step="50000" oninput="filterStudents()" placeholder="Custom max UGX" class="h-10 rounded-lg border border-white/20 bg-purple-950/50 text-white placeholder:text-purple-100/70 px-3 text-sm outline-none focus:ring-2 focus:ring-purple-400/40">
             <select id="student-distance-f" onchange="filterStudents()" class="h-10 rounded-lg border border-white/20 bg-purple-950/50 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-purple-400/40">
               <option value="">Distance to campus</option>
@@ -3726,7 +3699,7 @@
               <option value="distance_asc">Sort: Closest to campus</option>
             </select>
           </div>
-          <input type="hidden" id="student-verified-f" value="1">
+          <input type="hidden" id="student-verified-f" value="0">
           <input type="hidden" id="student-category-f" value="">
         </div>
       </div>
@@ -3759,15 +3732,15 @@
         <div class="lg:col-span-2">
           <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
             <div>
-              <h2 id="student-results-title" class="text-2xl font-bold text-gray-800">Student accommodation near Makerere University</h2>
-              <p id="student-results-subtitle" class="text-gray-500">Showing 0 properties • Prices per semester</p>
+              <h2 id="student-results-title" class="text-2xl font-bold text-gray-800">Student accommodation across Uganda</h2>
+              <p id="student-results-subtitle" class="text-gray-500">Loading live student accommodation…</p>
             </div>
             <button class="text-gray-600 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white hover:bg-gray-50">🔔 Save search</button>
           </div>
-          <div id="student-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div id="student-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5" aria-busy="true">
             <div class="rounded-2xl border border-purple-100 bg-purple-50 p-5 text-purple-950 md:col-span-2">
-              <h2 class="font-black text-lg">No exact matches yet. No student rooms match this search yet.</h2>
-              <p class="text-sm mt-2">Save Search, Create Alert, Ask makaug on WhatsApp, or tell makaug what you need near campus.</p>
+              <h2 class="font-black text-lg">Loading live student accommodation…</h2>
+              <p class="text-sm mt-2">Checking the latest approved student listings and totals.</p>
             </div>
           </div>
         </div>
@@ -4257,7 +4230,7 @@
         <div class="mt-3 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
             <p class="text-xs uppercase tracking-wide font-black text-[#b3134f]" data-marketplace-i18n="eyebrow">Uganda property services</p>
-            <h1 class="mt-2 text-3xl md:text-4xl font-black text-gray-950 serif" data-marketplace-i18n="title">Uganda's largest property services directory</h1>
+            <h1 class="mt-2 text-3xl md:text-4xl font-black text-gray-950 serif" data-marketplace-i18n="title">Uganda property services directory</h1>
             <p class="mt-2 text-sm text-gray-600 max-w-3xl"><span data-marketplace-i18n="subtitle">Surveyors, lawyers, builders, brokers, valuers and practical property services across Uganda.</span> <span aria-hidden="true">&middot;</span> <strong id="marketplace-live-total" class="text-[#b3134f]">0</strong> <span data-marketplace-i18n="liveBusinesses">live businesses</span></p>
           </div>
           <div class="flex items-center gap-3">
@@ -5588,7 +5561,7 @@
     <div id="lp-page-hero" class="lp-page-hero py-8">
       <div class="max-w-4xl mx-auto px-4">
         <h1 id="lp-page-title" class="text-3xl font-black serif">List Property</h1>
-        <p id="lp-page-subtitle" class="text-green-100 text-sm mt-2">Start with 7 days free, then keep one private listing live from UGX 25,000 per month.</p>
+        <p id="lp-page-subtitle" class="text-green-100 text-sm mt-2">The first 7 days are free; after that, each private property listing costs UGX 25,000 per month.</p>
       </div>
     </div>
     <div class="max-w-4xl mx-auto px-4 py-10">
@@ -9037,8 +9010,8 @@
     <div class="about-hero-panel py-14">
       <div class="max-w-6xl mx-auto px-4 about-reveal">
         <p class="about-eyebrow" data-content-i18n="about.heroLabel">About makaug</p>
-        <h1 class="text-4xl md:text-6xl font-black serif mt-2 leading-tight max-w-5xl" data-content-i18n="about.title">Every property in Uganda, in one place</h1>
-        <p class="mt-5 max-w-4xl text-base md:text-lg" data-content-i18n="about.subtitle">makaug is Uganda's property search engine. We find every real listing online, check it, and put it in front of buyers, renters and students in 9 languages, on the web or on WhatsApp, across all 146 districts. Below is everything we offer and what it costs.</p>
+        <h1 class="text-4xl md:text-6xl font-black serif mt-2 leading-tight max-w-5xl" data-content-i18n="about.title">Property across Uganda, in one searchable place</h1>
+        <p class="mt-5 max-w-4xl text-base md:text-lg" data-content-i18n="about.subtitle">makaug is a Uganda-first property search platform. We organise direct listings and reviewed public property information into one searchable experience for buyers, renters and students, with multilingual support on the web and WhatsApp. Below is what we offer and what it costs.</p>
         <div class="flex flex-wrap gap-2 mt-6">
           <a href="/for-sale" class="about-cta about-solid-green-cta rounded-xl px-5 py-3 text-sm font-bold" data-content-i18n="about.ctaSearch">Search property</a>
           <a href="/list-property" class="about-cta about-solid-green-cta rounded-xl px-5 py-3 text-sm font-bold" data-content-i18n="about.ctaList">List a property</a>
@@ -9059,13 +9032,13 @@
         <div class="grid lg:grid-cols-[0.9fr,1.1fr] gap-7 lg:items-start">
           <div>
             <p class="about-eyebrow" data-content-i18n="about.missionLabel">Our mission</p>
-            <h2 id="about-mission-title" class="text-3xl md:text-4xl font-black text-[#16241d] serif mt-2" data-content-i18n="about.missionTitle">All Uganda properties in one place</h2>
+            <h2 id="about-mission-title" class="text-3xl md:text-4xl font-black text-[#16241d] serif mt-2" data-content-i18n="about.missionTitle">Uganda property discovery in one place</h2>
             <p class="text-[#52665b] mt-4 leading-relaxed" data-content-i18n="about.missionText">Our mission is to make genuine property opportunities across Uganda easier to find, understand and act on. We bring information scattered across websites, social platforms, WhatsApp, developers, owners and brokers into one searchable place; organise it clearly in 9 languages; and give buyers, renters and students safer next steps from first search to viewing and decision.</p>
             <p class="text-[#52665b] mt-3 leading-relaxed" data-content-i18n="about.missionPromise">For owners, agents and developers, that means a clear route to present property properly and reach serious people. For property seekers, it means broader choice, visible sources, useful details and a team that reviews what appears on makaug.</p>
           </div>
           <div>
-            <h3 class="text-xl font-black text-[#16241d]" data-content-i18n="about.everythingTitle">Everything you can do</h3>
-            <p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.everythingSub">One platform for every kind of property journey.</p>
+            <h3 class="text-xl font-black text-[#16241d]" data-content-i18n="about.everythingTitle">Ways to use makaug</h3>
+            <p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.everythingSub">One platform for common property journeys.</p>
             <div class="grid sm:grid-cols-2 gap-3 mt-4" data-about-journey-images="20260910">
               <a href="/for-sale" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/sale.webp" alt="Home available for sale in Uganda" data-content-i18n-alt="about.imageSaleJourney" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-house"></i><strong class="block mt-2" data-content-i18n="about.everySaleTitle">Property for sale</strong><span data-content-i18n="about.everySaleText">homes, apartments and property to buy</span></span></a>
               <a href="/to-rent" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/rent.webp" alt="Renter looking across a Ugandan city" data-content-i18n-alt="about.imageRentJourney" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-key"></i><strong class="block mt-2" data-content-i18n="about.everyRentTitle">Property to rent</strong><span data-content-i18n="about.everyRentText">houses, apartments and rooms</span></span></a>
@@ -9082,8 +9055,8 @@
         <h2 id="about-standard-products" class="about-section-title" data-content-i18n="about.standardTitle">Standard products</h2>
         <p class="about-section-sub" data-content-i18n="about.standardSub">Get your property in front of Uganda's buyers and renters</p>
         <div class="about-product-grid about-product-grid-four mt-6" data-about-product-images="20260910">
-          <article id="listings" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/sale.webp" alt="Home promoted for sale on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-house"></i></span><h3 data-content-i18n="about.saleTitle">Private listing — For Sale</h3><p data-content-i18n="about.saleText">List your home, land or commercial property yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template-key="about.privateTrialTemplate">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li data-content-i18n="about.productAiDescription">AI-written description in 9 languages</li><li data-content-i18n="about.productChecked">Checked by our team</li><li data-content-i18n="about.productWhatsappLeads">WhatsApp and phone leads</li><li data-content-i18n="about.productEdit">Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=sale" data-content-i18n="about.saleAction">List for sale</a></article>
-          <article class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/rent.webp" alt="Rental property journey on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-key"></i></span><h3 data-content-i18n="about.rentTitle">Private listing — To Rent</h3><p data-content-i18n="about.rentText">List a rental or student room yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template-key="about.privateTrialTemplate">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li data-content-i18n="about.productAiDescription">AI-written description in 9 languages</li><li data-content-i18n="about.productChecked">Checked by our team</li><li data-content-i18n="about.productWhatsappLeads">WhatsApp and phone leads</li><li data-content-i18n="about.productEdit">Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=rent" data-content-i18n="about.rentAction">List for rent</a></article>
+          <article id="listings" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/sale.webp" alt="Home promoted for sale on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-house"></i></span><h3 data-content-i18n="about.saleTitle">Private listing — For Sale</h3><p data-content-i18n="about.saleText">List your home, land or commercial property yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template-key="about.privateTrialTemplate">First 7 days free · then UGX 25,000 per property/month</strong><ul><li data-content-i18n="about.productAiDescription">AI-written description in 9 languages</li><li data-content-i18n="about.productChecked">Checked by our team</li><li data-content-i18n="about.productWhatsappLeads">WhatsApp and phone leads</li><li data-content-i18n="about.productEdit">Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=sale" data-content-i18n="about.saleAction">List for sale</a></article>
+          <article class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/rent.webp" alt="Rental property journey on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-key"></i></span><h3 data-content-i18n="about.rentTitle">Private listing — To Rent</h3><p data-content-i18n="about.rentText">List a rental or student room yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template-key="about.privateTrialTemplate">First 7 days free · then UGX 25,000 per property/month</strong><ul><li data-content-i18n="about.productAiDescription">AI-written description in 9 languages</li><li data-content-i18n="about.productChecked">Checked by our team</li><li data-content-i18n="about.productWhatsappLeads">WhatsApp and phone leads</li><li data-content-i18n="about.productEdit">Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=rent" data-content-i18n="about.rentAction">List for rent</a></article>
           <article id="agents" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/agents.webp" alt="Property agent helping a customer" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-user-tie"></i></span><h3 data-content-i18n="about.agentTitle">Agent subscription</h3><p data-content-i18n="about.agentText">For brokers and agencies with multiple properties.</p><strong class="about-price" data-about-price="agentSubscription" data-about-price-template-key="about.agentPriceTemplate">{{ABOUT_PRICE:agentSubscription}} · all your listings</strong><ul><li data-content-i18n="about.agentAllListings">All listings on one account</li><li data-content-i18n="about.agentVerified">Verified badge and broker profile</li><li data-content-i18n="about.agentLeadInbox">Lead inbox and CSV export</li><li data-content-i18n="about.agentPriority">Priority review</li></ul><a class="about-product-action" href="/broker-signup" data-content-i18n="about.agentAction">Register as an agent</a></article>
           <article id="developers" class="about-product-card"><span class="about-product-image"><img src="/assets/off-plan/spectre-westlands/arrival.jpg" alt="Off Plan development arrival view" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-city"></i></span><h3 data-content-i18n="about.developerTitle">Off-plan developments</h3><p data-content-i18n="about.developerText">Dedicated project pages for developers and marketing agents.</p><strong class="about-price" data-about-price="offPlanDevelopment">{{ABOUT_PRICE:offPlanDevelopment}}</strong><ul><li data-content-i18n="about.developerUnits">Units, plans, video and payment plans</li><li data-content-i18n="about.developerVisibility">Off Plan and search visibility</li><li data-content-i18n="about.developerEnquiries">Enquiries to your sales team</li><li data-content-i18n="about.developerOverseas">Overseas projects welcome</li></ul><a class="about-product-action" href="/broker-signup" data-content-i18n="about.agentAction">Register as an agent</a></article>
         </div>
@@ -9189,7 +9162,7 @@
 
       <section class="about-card rounded-[14px] bg-[#f0f6f2] text-[#16241d] border border-[#dbe8e0] p-6 mb-8">
         <h2 class="text-3xl font-black serif" data-content-i18n="about.finalTitle">Ready to start?</h2>
-        <p class="mt-2 text-[#5b6b62] font-semibold" data-content-i18n="about.finalSub">List your first property free for 7 days, or talk to our sales team about agent plans, developments and advertising.</p>
+        <p class="mt-2 text-[#5b6b62] font-semibold" data-content-i18n="about.finalSub">List a private property free for its first 7 days, then keep it live for UGX 25,000 per property/month. Agent plans, development pages and paid advertising are priced separately.</p>
         <div class="about-final-cta-actions flex flex-wrap gap-2 mt-5">
           <a href="/for-sale" class="about-cta about-final-cta-primary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaSearch">Search property</a>
           <a href="/list-property" class="about-cta about-final-cta-primary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaList">List a property</a>
@@ -9335,7 +9308,7 @@
         <div>
           <div class="text-2xl font-black serif" id="footer-brand-title">makaug.com</div>
           <p id="footer-brand-copy" class="text-green-200 text-sm mt-3 leading-relaxed">
-            Uganda's property search engine. List your first week free, then keep it live from UGX 25,000 a month. Web or WhatsApp, all 146 districts.
+            Search property across Uganda on the web or WhatsApp. A private property listing is free for its first 7 days, then costs UGX 25,000 per property/month.
           </p>
           <div class="mt-4 space-y-2 text-sm text-green-200">
             <a id="footer-whatsapp-label" href="https://wa.me/256780863394" target="_blank" rel="noopener noreferrer" class="block hover:text-white" data-public-whatsapp-link data-whatsapp-context="auto">📲 WhatsApp: 0780863394</a>
@@ -9378,6 +9351,7 @@
             <a id="footer-link-terms" href="/terms" onclick="showPage('terms')" class="block cursor-pointer hover:text-white">Terms & Conditions</a>
             <a id="footer-link-privacy" href="/privacy-policy" onclick="showPage('privacy-policy')" class="block cursor-pointer hover:text-white">Privacy Policy</a>
             <a id="footer-link-cookies" href="/cookie-policy" onclick="showPage('cookie-policy')" class="block cursor-pointer hover:text-white">Cookie Policy</a>
+            <button id="footer-cookie-settings" type="button" onclick="openMakaugCookieSettings()" class="block cursor-pointer hover:text-white text-left">Cookie settings</button>
             <a id="footer-link-anti-fraud" href="/anti-fraud" onclick="showPage('fraud')" class="block cursor-pointer hover:text-white">Anti-Fraud Policy</a>
             <a id="footer-link-help" href="/help" onclick="showPage('help')" class="block cursor-pointer hover:text-white">Help Centre</a>
             <a id="footer-link-report" href="/report-fraud" onclick="showPage('fraud')" class="block cursor-pointer hover:text-white">Report a Listing</a>
@@ -9582,7 +9556,7 @@
       </div>
 
       <div class="mt-5 bg-green-50 border border-green-100 rounded-xl px-4 py-3 text-sm text-green-800">
-        ✅ <strong id="list-choice-free-title">Start with 7 days free.</strong> <span id="list-choice-free-copy">After that, one private listing costs UGX 25,000 per month. Every submission stays in staff review until approved.</span>
+        ✅ <strong id="list-choice-free-title">The first 7 days are free.</strong> <span id="list-choice-free-copy">After that, each private property listing costs UGX 25,000 per month. Submissions stay in staff review until approved.</span>
       </div>
     </div>
   </div>
@@ -10247,7 +10221,7 @@
         if (window.__makaugShortTermRequested) return;
         window.__makaugShortTermRequested = true;
         var s = document.createElement("script");
-        s.src = "/assets/short-term.js?v=20260916-short-term-v23";
+        s.src = "/assets/short-term.js?v=20261005-short-term-v24";
         document.body.appendChild(s);
       }
       window.__makaugLoadShortTerm = loadShortTermNow;
@@ -10261,7 +10235,7 @@
         script.async = true;
         script.onload = function () {
           var offPlanScript = document.createElement("script");
-          offPlanScript.src = "/assets/off-plan.js?v=20261003-off-plan-v17";
+          offPlanScript.src = "/assets/off-plan.js?v=20261005-off-plan-v18";
           document.body.appendChild(offPlanScript);
           if (window.__makaugShortTerm && window.__makaugShortTerm.enabled === true) {
             // Already requested in parallel above; this is only the safety net

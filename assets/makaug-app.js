@@ -1243,7 +1243,7 @@ const I18N_UI = {
     navMortgage: "Mortgage Finder",
     navAI: "Discover AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Uganda's #1 Free Property Platform",
+    heroBadge: "Uganda property search and listing platform",
     heroTitleHtml: "Find your next home, land, rental, or student room",
     heroSubtitle: "makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising property opportunities in one place.",
     heroSubtitlePrefix: "makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising",
@@ -1410,7 +1410,7 @@ const I18N_UI = {
     navMortgage: "Noonya Mortgage",
     navAI: "Noonya AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Pulatifoomu y'ebintu ey'obwereere mu Uganda",
+    heroBadge: "Pulatifoomu y'ebintu mu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo ennungi",
     heroSubtitle: "Enkola y'okunoonya ebintu mu Uganda: amaka, ez'okupangisa, ettaka, ebisenge by'abayizi, n'ebizuuliddwa ku social media.",
     heroRent: "Pangisa",
@@ -1539,7 +1539,7 @@ const I18N_UI = {
     navMortgage: "Tafuta Rehani",
     navAI: "Gundua AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Jukwaa la bure la mali Uganda",
+    heroBadge: "Jukwaa la mali Uganda",
     heroTitleHtml: "Pata <span class=\"text-green-300\">maka</span> yako bora",
     heroSubtitle: "Search engine ya mali Uganda: nyumba, za kupanga, ardhi, vyumba vya wanafunzi, na listings kutoka mitandao ya kijamii.",
     heroRent: "Kupanga",
@@ -1667,7 +1667,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Dony",
-    heroBadge: "Uganda's #1 free property platform",
+    heroBadge: "Uganda property search and listing platform",
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Yeny",
@@ -1700,7 +1700,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Ingira",
-    heroBadge: "Pulatifoomu ya property y'obwereere #1 omu Uganda",
+    heroBadge: "Pulatifoomu ya property omu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shanga",
@@ -1733,7 +1733,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Injira",
-    heroBadge: "Platform y'obusaare eya property #1 omuri Uganda",
+    heroBadge: "Platform ya property omuri Uganda",
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shaka",
@@ -1766,7 +1766,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Yingira",
-    heroBadge: "Pulatifoomu ya property ey'obwerere #1 mu Uganda",
+    heroBadge: "Pulatifoomu ya property mu Uganda",
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Noonia",
@@ -2259,7 +2259,7 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   navMortgage: "የብድር መፈለጊያ",
   navAI: "AI Chatbot ያግኙ",
   navFraud: "ማጭበርበር",
-  heroBadge: "የኡጋንዳ ነፃ የንብረት መድረክ",
+  heroBadge: "የኡጋንዳ የንብረት መድረክ",
   heroTitleHtml: "ቀጣዩን ቤት፣ መሬት፣ ኪራይ ወይም የተማሪ ክፍል ያግኙ",
   heroSubtitle: "makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ የንብረት እድሎችንም በአንድ ቦታ ያደራጃል።",
   heroSubtitlePrefix: "makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ ያደራጃል",
@@ -2385,7 +2385,7 @@ I18N_UI.ar = Object.assign({}, I18N_UI.en, {
   navMortgage: "حاسبة التمويل",
   navAI: "اكتشف روبوت AI",
   navFraud: "الاحتيال",
-  heroBadge: "منصة عقارات مجانية في أوغندا",
+  heroBadge: "منصة عقارات في أوغندا",
   heroTitleHtml: "اعثر على بيتك أو أرضك أو إيجارك التالي",
   heroSubtitle: "يستخدم makaug بحثاً مدعوماً بالذكاء الاصطناعي لفحص مصادر العقارات العامة على الإنترنت في أوغندا وتنظيم الفرص في مكان واحد.",
   heroSubtitlePrefix: "يستخدم makaug بحثاً مدعوماً بالذكاء الاصطناعي لفحص مصادر العقارات العامة على الإنترنت في أوغندا وتنظيم",
@@ -2512,12 +2512,12 @@ const CONTENT_I18N = {
     "about.ctaWhatsapp": "Ask makaug on WhatsApp",
     "about.valueUgandaTitle": "Uganda-first",
     "about.valueUgandaText": "Built around local places, local language needs, WhatsApp habits, and real listing workflows.",
-    "about.valueFreeTitle": "Free listing",
-    "about.valueFreeText": "Owners and brokers can list property without a listing fee while paid advertising stays separate.",
+    "about.valueFreeTitle": "7-day private-listing trial",
+    "about.valueFreeText": "A private property listing starts with 7 days free, then costs UGX 25,000 per property/month. Paid advertising stays separate.",
     "about.valueWhatsappTitle": "Web + WhatsApp",
     "about.valueWhatsappText": "Designed for mobile web discovery, WhatsApp contact, dashboard follow-up, and safer decisions.",
     "about.whoTitle": "Who we are",
-    "about.whoText": "makaug is a Uganda-first property platform for public website search, mobile web, WhatsApp-first contact, multilingual support, and guided free listings. We are built around the practical realities of Uganda's property market: scattered information, incomplete listings, heavy WhatsApp use, and the need for trust before people view or pay.",
+    "about.whoText": "makaug is a Uganda-first property platform for public website search, mobile web, WhatsApp-first contact, multilingual support, and guided listing support. We are built around the practical realities of Uganda's property market: scattered information, incomplete listings, heavy WhatsApp use, and the need for trust before people view or pay.",
     "about.missionLabel": "Our Mission",
     "about.missionTitle": "Our mission",
     "about.missionText": "Our mission is to make property easier to discover, reduce confusion, improve listing quality, help people move from search to viewing to decision, and support Uganda's property market with better information.",
@@ -2525,7 +2525,7 @@ const CONTENT_I18N = {
     "about.whyTitle": "Why makaug exists",
     "about.whyText": "Property search in Uganda can be scattered across WhatsApp, brokers, social posts, word of mouth, and incomplete listing pages. Fraud risk exists, students and land seekers need clearer information, and many owners need a guided way to list properly. makaug brings structure, search, safety, and communication together.",
     "about.adsLabel": "Advertising revenue",
-    "about.adsTitle": "Paid advertising is transparent and separate from free listing",
+    "about.adsTitle": "Paid advertising is transparent and separate from property listing",
     "about.adsText": "Businesses can buy sponsored homepage, search, property-detail, broker, student, commercial, land, and WhatsApp placements. Prices are published in UGX with USD guide pricing on the Advertise page, and every paid campaign is reviewed before going live.",
     "about.adsRateTitle": "Public rate card",
     "about.adsRateText": "Day, week, month, and CPM options are shown publicly so advertisers can plan spend before contacting makaug.",
@@ -2578,7 +2578,7 @@ const CONTENT_I18N = {
     "about.searchRemovalTitle": "Claim or remove",
     "about.searchRemovalText": "Owners and agents can claim, update, replace photos, correct details, or request removal. makaug keeps attribution and a review trail so listings stay accountable.",
     "about.adSeparationTitle": "Ads stay separate",
-    "about.adSeparationText": "Free listing is open to owners and brokers. Paid advertising is labelled and managed separately from listing moderation.",
+    "about.adSeparationText": "A private property listing starts with 7 days free, then costs UGX 25,000 per property/month. Paid advertising is labelled and managed separately from listing moderation.",
     "about.landHubLabel": "Land marketplace support",
     "about.landHubTitle": "Land safety",
     "about.landHubText": "Browse land listings, compare details, and use safety guidance. Makaug is a marketplace, not an official title-checking or legal-clearance service.",
@@ -2599,7 +2599,7 @@ const CONTENT_I18N = {
     "about.studentsTitle": "Students and parents",
     "about.studentsText": "Search by campus, budget, room type, security, water, Wi-Fi, meals, callbacks, viewings, and student alerts.",
     "about.ownersTitle": "Owners and sellers",
-    "about.ownersText": "List property free with guided fields, map location, photo prompts, OTP/contact verification, review before publishing, enquiries, and callbacks.",
+    "about.ownersText": "List a private property with guided fields, map location, photo prompts, OTP/contact verification, review before publishing, enquiries, and callbacks. The first 7 days are free, then it costs UGX 25,000 per property/month.",
     "about.brokersTitle": "Brokers",
     "about.brokersText": "Build a broker profile, manage listings, track leads, handle WhatsApp enquiries, manage viewings, and strengthen broker trust.",
     "about.commercialTitle": "Commercial users",
@@ -2614,7 +2614,7 @@ const CONTENT_I18N = {
     "about.trustFraudText": "Users can report suspicious listings, land/title concerns, and payment pressure.",
     "about.contactLabel": "Contact and connect",
     "about.contactTitle": "Need help with property information?",
-    "about.contactText": "Search the site, list property for free, ask makaug on WhatsApp, or report suspicious information so the review team can look at it.",
+    "about.contactText": "Search the site, start a property listing, ask makaug on WhatsApp, or report suspicious information so the review team can look at it. Private listings start with 7 days free, then cost UGX 25,000 per property/month; agent plans are priced separately.",
     "about.helpCentreCta": "Help Centre",
     "about.reportCta": "Report a listing",
     "safety.eyebrow": "Verify before paying",
@@ -2663,12 +2663,12 @@ const CONTENT_I18N = {
     "about.ctaWhatsapp": "Buuza makaug ku WhatsApp",
     "about.valueUgandaTitle": "Uganda ku mwanjo",
     "about.valueUgandaText": "Tuzimbiddwa ku bifo bya wano, ennimi za wano, enkozesa ya WhatsApp, n'engeri listing gye zikolebwamu mu ddala.",
-    "about.valueFreeTitle": "Listing ya bwereere",
-    "about.valueFreeText": "Bannannyini property ne brokers basobola okulistinga awatali ssente za listing, nga advertising esasulwa ekyali kyawukana.",
+    "about.valueFreeTitle": "Okugezesa listing okumala ennaku 7",
+    "about.valueFreeText": "Private property listing etandika n'ennaku 7 ez'obwereere; oluvannyuma eba UGX 25,000 buli property buli mwezi. Advertising esasulwa era ya njawulo.",
     "about.valueWhatsappTitle": "Web + WhatsApp",
     "about.valueWhatsappText": "Ekoleddwa ku mobile web, WhatsApp contact, dashboard follow-up, n'okuyamba abantu okusalawo mu ngeri ey'obukuumi.",
     "about.whoTitle": "Ffe baani",
-    "about.whoText": "makaug ye platform ya property eya Uganda esangibwa ku web, mobile, WhatsApp, support mu nnimi eziwerako, ne guided free listings. Tuzimbiddwa ku byetaago by'akatale ka property mu Uganda: amawulire agasaasaanye, listings ezitajjudde, enkozesa ya WhatsApp, n'obwesige nga abantu tebannalaba oba okusasula.",
+    "about.whoText": "makaug ye platform ya property eya Uganda esangibwa ku web, mobile, WhatsApp, support mu nnimi eziwerako, n'obuyambi mu kukola listing. Tuzimbiddwa ku byetaago by'akatale ka property mu Uganda: amawulire agasaasaanye, listings ezitajjudde, enkozesa ya WhatsApp, n'obwesige nga abantu tebannalaba oba okusasula.",
     "about.missionTitle": "Omulamwa gwaffe",
     "about.missionText": "Omulamwa gwaffe kwe kufuula property ennyangu okuzuula, okukendeeza okutabulwa, okulongoosa omutindo gwa listings, n'okuyamba abantu okuva ku search okutuuka ku viewing n'okusalaawo.",
     "about.whyTitle": "Lwaki makaug eriwo",
@@ -2702,7 +2702,7 @@ const CONTENT_I18N = {
     "about.studentsTitle": "Abayizi n'abazadde",
     "about.studentsText": "Noonya okusinziira ku campus, budget, room type, security, amazzi, Wi-Fi, emmere, callbacks, viewings, ne student alerts.",
     "about.ownersTitle": "Bannannyini property n'abatunda",
-    "about.ownersText": "Listinga property ya bwereere n'ebibuuzo ebikulungamya, map location, photos, OTP/contact verification, review nga tennaba published, enquiries, ne callbacks.",
+    "about.ownersText": "Listinga private property n'ebibuuzo ebikulungamya, map location, photos, OTP/contact verification, review nga tennaba published, enquiries, ne callbacks. Ennaku 7 ezisooka za bwereere; oluvannyuma eba UGX 25,000 buli property buli mwezi.",
     "about.brokersTitle": "Brokers",
     "about.brokersText": "Zimba broker profile, ddukanya listings, landirira leads, WhatsApp enquiries, viewings, n'obwesige bwa broker.",
     "about.commercialTitle": "Abakozesa commercial",
@@ -2760,12 +2760,12 @@ const CONTENT_I18N = {
     "about.ctaWhatsapp": "Uliza makaug kwa WhatsApp",
     "about.valueUgandaTitle": "Uganda kwanza",
     "about.valueUgandaText": "Imejengwa kuzunguka maeneo ya ndani, mahitaji ya lugha, matumizi ya WhatsApp, na mtiririko halisi wa listings.",
-    "about.valueFreeTitle": "Listing bure",
-    "about.valueFreeText": "Wamiliki na brokers wanaweza kuorodhesha mali bila ada ya listing huku matangazo ya kulipia yakibaki tofauti.",
+    "about.valueFreeTitle": "Jaribio la siku 7 la tangazo binafsi",
+    "about.valueFreeText": "Tangazo la mali binafsi huanza na siku 7 bila malipo, kisha ni UGX 25,000 kwa kila mali kwa mwezi. Matangazo ya kulipia yanabaki tofauti.",
     "about.valueWhatsappTitle": "Web + WhatsApp",
     "about.valueWhatsappText": "Imetengenezwa kwa mobile web, mawasiliano ya WhatsApp, dashboard follow-up, na maamuzi salama.",
     "about.whoTitle": "Sisi ni nani",
-    "about.whoText": "makaug ni jukwaa la mali la Uganda kwa utafutaji wa web, mobile, mawasiliano ya WhatsApp, msaada wa lugha nyingi, na listings za bure zilizoongozwa. Tumejengwa kuzunguka hali halisi ya soko la mali Uganda.",
+    "about.whoText": "makaug ni jukwaa la mali la Uganda kwa utafutaji wa web, mobile, mawasiliano ya WhatsApp, msaada wa lugha nyingi, na usaidizi wa kuandaa tangazo. Tumejengwa kuzunguka hali halisi ya soko la mali Uganda.",
     "about.missionTitle": "Dhamira yetu",
     "about.missionText": "Dhamira yetu ni kurahisisha ugunduzi wa mali, kupunguza mkanganyiko, kuboresha ubora wa listings, na kusaidia watu kutoka search hadi viewing na uamuzi.",
     "about.whyTitle": "Kwa nini makaug ipo",
@@ -2799,7 +2799,7 @@ const CONTENT_I18N = {
     "about.studentsTitle": "Wanafunzi na wazazi",
     "about.studentsText": "Tafuta kwa campus, budget, room type, security, maji, Wi-Fi, meals, callbacks, viewings, na student alerts.",
     "about.ownersTitle": "Wamiliki na wauzaji",
-    "about.ownersText": "List property bure kwa guided fields, map location, photo prompts, OTP/contact verification, review kabla ya publishing, enquiries, na callbacks.",
+    "about.ownersText": "Orodhesha mali binafsi kwa guided fields, map location, photo prompts, OTP/contact verification, review kabla ya publishing, enquiries, na callbacks. Siku 7 za kwanza ni bila malipo; kisha ni UGX 25,000 kwa kila mali kwa mwezi.",
     "about.brokersTitle": "Brokers",
     "about.brokersText": "Jenga broker profile, simamia listings, fuatilia leads, WhatsApp enquiries, viewings, na broker trust.",
     "about.commercialTitle": "Watumiaji commercial",
@@ -2859,12 +2859,12 @@ CONTENT_I18N.am = Object.assign({}, CONTENT_I18N.en, {
   "about.ctaWhatsapp": "makaugን በ WhatsApp ጠይቅ",
   "about.valueUgandaTitle": "ኡጋንዳ ቀዳሚ",
   "about.valueUgandaText": "በአካባቢ ስሞች፣ ቋንቋ ፍላጎቶች፣ WhatsApp አጠቃቀም እና ተግባራዊ የዝርዝር ሂደቶች ላይ የተገነባ።",
-  "about.valueFreeTitle": "ነፃ ዝርዝር",
-  "about.valueFreeText": "ባለንብረቶች እና ደላሎች የዝርዝር ክፍያ ሳይከፍሉ ንብረት መዘርዘር ይችላሉ።",
+  "about.valueFreeTitle": "የ7 ቀን የግል ዝርዝር ሙከራ",
+  "about.valueFreeText": "የግል ንብረት ዝርዝር የመጀመሪያዎቹ 7 ቀናት ነፃ ነው፤ ከዚያ በኋላ ለእያንዳንዱ ንብረት በወር UGX 25,000 ያስከፍላል።",
   "about.valueWhatsappTitle": "ድር + WhatsApp",
   "about.valueWhatsappText": "ለሞባይል ድር ፍለጋ፣ WhatsApp ግንኙነት፣ ዳሽቦርድ ክትትል እና ደህንነታዊ ውሳኔዎች የተዘጋጀ።",
   "about.whoTitle": "እኛ ማን ነን",
-  "about.whoText": "makaug ለድር ፍለጋ፣ ለሞባይል፣ ለ WhatsApp ግንኙነት፣ ለብዙ ቋንቋ ድጋፍ እና ለተመራ ነፃ ዝርዝር የኡጋንዳ የንብረት መድረክ ነው።",
+  "about.whoText": "makaug ለድር ፍለጋ፣ ለሞባይል፣ ለ WhatsApp ግንኙነት፣ ለብዙ ቋንቋ ድጋፍ እና ለተመራ የዝርዝር ድጋፍ የኡጋንዳ የንብረት መድረክ ነው።",
   "about.missionTitle": "ተልእኮችን",
   "about.missionText": "ተልእኮአችን ንብረትን ቀላል ለማግኘት፣ ግራ መጋባትን ለመቀነስ፣ የዝርዝር ጥራትን ለማሻሻል እና ሰዎችን ከፍለጋ ወደ እይታ እና ውሳኔ ለማገዝ ነው።",
   "about.whyTitle": "makaug ለምን አለ",
@@ -2900,12 +2900,12 @@ CONTENT_I18N.ar = Object.assign({}, CONTENT_I18N.en, {
   "about.ctaWhatsapp": "اسأل makaug على WhatsApp",
   "about.valueUgandaTitle": "أوغندا أولاً",
   "about.valueUgandaText": "مبني حول الأماكن المحلية واحتياجات اللغة المحلية وعادات WhatsApp وسير عمل الإعلانات الحقيقي.",
-  "about.valueFreeTitle": "إدراج مجاني",
-  "about.valueFreeText": "يمكن للمالكين والوسطاء إدراج العقارات دون رسوم إدراج، بينما تبقى الإعلانات المدفوعة منفصلة.",
+  "about.valueFreeTitle": "تجربة إدراج خاص لمدة 7 أيام",
+  "about.valueFreeText": "يبدأ إدراج العقار الخاص بـ7 أيام مجاناً، ثم يكلف 25,000 شلن أوغندي لكل عقار شهرياً. تبقى الإعلانات المدفوعة منفصلة.",
   "about.valueWhatsappTitle": "الويب + WhatsApp",
   "about.valueWhatsappText": "مصمم للاكتشاف عبر الويب المحمول، والتواصل عبر WhatsApp، ومتابعة dashboard، واتخاذ قرارات أكثر أماناً.",
   "about.whoTitle": "من نحن",
-  "about.whoText": "makaug منصة عقارات لأوغندا أولاً للبحث على الموقع، والجوال، والتواصل عبر WhatsApp، والدعم متعدد اللغات، والإدراج المجاني الموجّه.",
+  "about.whoText": "makaug منصة عقارات لأوغندا أولاً للبحث على الموقع، والجوال، والتواصل عبر WhatsApp، والدعم متعدد اللغات، ودعم الإدراج الموجّه.",
   "about.missionTitle": "مهمتنا",
   "about.missionText": "مهمتنا أن نجعل اكتشاف العقارات أسهل، ونقلل الالتباس، ونحسن جودة الإعلانات، ونساعد الناس على الانتقال من البحث إلى المعاينة ثم القرار.",
   "about.whyTitle": "لماذا يوجد makaug",
@@ -2933,9 +2933,9 @@ CONTENT_I18N.ar = Object.assign({}, CONTENT_I18N.en, {
 
 const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.heroLabel": "About makaug",
-  "about.title": "Every property in Uganda, in one place",
-  "about.heroStatement": "Every property in Uganda, in one place",
-  "about.subtitle": "makaug is Uganda's property search engine. We find every real listing online, check it, and put it in front of buyers, renters and students in 9 languages, on the web or on WhatsApp, across all 146 districts. Below is everything we offer and what it costs.",
+  "about.title": "Property across Uganda, in one searchable place",
+  "about.heroStatement": "Property across Uganda, in one searchable place",
+  "about.subtitle": "makaug is a Uganda-first property search platform. We organise direct listings and reviewed public property information into one searchable experience for buyers, renters and students, with multilingual support on the web and WhatsApp. Below is what we offer and what it costs.",
   "about.ctaSearch": "Search property",
   "about.ctaList": "List a property",
   "about.ctaWhatsapp": "Talk to sales on WhatsApp",
@@ -2944,7 +2944,7 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.statLiveListings": "live listings",
   "about.statTrial": "days free to list",
   "about.missionLabel": "Our mission",
-  "about.missionTitle": "All Uganda properties in one place",
+  "about.missionTitle": "Uganda property discovery in one place",
   "about.missionText": "Our mission is to make genuine property opportunities across Uganda easier to find, understand and act on. We bring information scattered across websites, social platforms, WhatsApp, developers, owners and brokers into one searchable place; organise it clearly in 9 languages; and give buyers, renters and students safer next steps from first search to viewing and decision.",
   "about.missionPromise": "For owners, agents and developers, that means a clear route to present property properly and reach serious people. For property seekers, it means broader choice, visible sources, useful details and a team that reviews what appears on makaug.",
   "about.standardTitle": "Standard products",
@@ -2985,7 +2985,7 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.discoveryStepFourText": "Nothing found online is published automatically. Our team reviews the source, property details, contact route, location, images, duplicates and safety concerns first.",
   "about.discoveryNote": "Clear sources: makaug organises public property information; we do not claim ownership of the original post, fill in facts that were not provided or treat an online post as proof of ownership. Owners and agents can claim, correct or request removal of a listing.",
   "about.visionLabel": "Our vision",
-  "about.visionTitle": "We find every property, so you don't have to",
+  "about.visionTitle": "We make property easier to find",
   "about.visionText": "Property in Uganda is scattered across WhatsApp, public online posts, brokers and word of mouth. makaug brings that information into one searchable place and reviews listings before publication.",
   "about.pipelineSources": "Sources",
   "about.pipelineAi": "AI organises",
@@ -2994,13 +2994,13 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.pipelineReviewText": "checked before buyers see it",
   "about.pipelineCaption": "Discovered by AI · checked by our team · live for buyers",
   "about.aiDiscoveryTitle": "AI discovery",
-  "about.aiDiscoveryText": "We find property posted anywhere online, not just what's listed with us — and organise it so it's searchable.",
+  "about.aiDiscoveryText": "We identify property information from supported public online sources, not just what is listed directly with us, and organise it so it is searchable.",
   "about.aiAssistantTitle": "AI assistant",
   "about.aiAssistantText": "Ask makaug anything about property, in any of 9 languages, and get a straight answer.",
   "about.aiToolsTitle": "AI listing tools",
   "about.aiToolsText": "Owners get a description written for them and translated live, so listings look great with no effort.",
-  "about.everythingTitle": "Everything you can do",
-  "about.everythingSub": "One platform for every kind of property journey.",
+  "about.everythingTitle": "Ways to use makaug",
+  "about.everythingSub": "One platform for common property journeys.",
   "about.everySaleTitle": "Property for sale",
   "about.everySaleText": "homes, apartments and property to buy",
   "about.everyRentTitle": "Property to rent",
@@ -3031,7 +3031,7 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.personaStudentsText": "Find student rooms and hostels near a university or campus using area, budget, room type and accommodation filters. Review photos, video, distance information and practical details such as security, water, electricity, Wi-Fi, furnishing, sharing arrangements and payment periods when the provider has supplied them. Students and parents can save options, receive alerts, contact the hostel or owner, arrange a viewing and check the room, route and payment terms before committing.",
   "about.personaStudentsCta": "Find student housing",
   "about.ownersTitle": "Owners and sellers",
-  "about.personaOwnersText": "Create a sale or rental listing on the website or begin through WhatsApp. Add the exact location, price and payment period, property details, photos and video, then provide the identity and contact information needed for review. makaug can help organise the description and present it through the site's language system. Your listing remains under staff review until its evidence is ready, and once approved you can receive enquiries, edit details, remove the property and manage visibility from your account. The first 7 days are free; the published product price applies if you keep a private listing live after that period.",
+  "about.personaOwnersText": "Create a sale or rental listing on the website or begin through WhatsApp. Add the exact location, price and payment period, property details, photos and video, then provide the identity and contact information needed for review. makaug can help organise the description and present it through the site's language system. Your listing remains under staff review until its evidence is ready, and once approved you can receive enquiries, edit details, remove the property and manage visibility from your account. The first 7 days are free; after that, each private property listing costs UGX 25,000 per month.",
   "about.personaOwnersCta": "List your property",
   "about.brokersTitle": "Brokers",
   "about.personaBrokersText": "Register your agency or broker account, submit identity and business details for review, and build a profile that buyers and owners can find in the broker directory. Manage multiple listings from one account, organise leads and viewing requests, respond through phone or WhatsApp, and export lead information where available. The agent plan brings listings together under one subscription, while Featured, Premium and Boosted options can be used for stock that needs extra visibility. Published badges and profiles remain subject to makaug's verification and moderation rules.",
@@ -3078,26 +3078,26 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.trustRecordTitle": "Review trail",
   "about.trustRecordText": "Changes, approvals, and removals are handled through staff review, not hidden shortcuts.",
   "about.whyChooseTitle": "Why people choose makaug",
-  "about.chooseFreeTitle": "Free to start",
-  "about.chooseFreeText": "the first 7 days are free; the current listing price applies after the trial",
+  "about.chooseFreeTitle": "7-day private-listing trial",
+  "about.chooseFreeText": "the first 7 days are free; after that, each private property listing costs UGX 25,000 per month",
   "about.chooseWhatsappTitle": "WhatsApp-first",
   "about.chooseWhatsappText": "built for how Uganda actually communicates",
   "about.chooseLanguagesTitle": "9 languages",
   "about.chooseLanguagesText": "including Luganda, Kiswahili, and more, right across the site",
-  "about.chooseDistrictsTitle": "All 146 districts",
-  "about.chooseDistrictsText": "Kampala to the furthest town",
+  "about.chooseDistrictsTitle": "Search across Uganda",
+  "about.chooseDistrictsText": "use district, town and area filters to narrow your search",
   "about.chooseAiTitle": "AI-powered",
   "about.chooseAiText": "discovery, assistant, and listing tools",
   "about.chooseVerifiedTitle": "Verified listings",
   "about.chooseVerifiedText": "human-reviewed for trust",
   "about.finalTitle": "Ready to start?",
-  "about.finalSub": "List your first property free for 7 days, or talk to our sales team about agent plans, developments and advertising.",
+  "about.finalSub": "List a private property free for its first 7 days, then keep it live for UGX 25,000 per property/month. Agent plans, development pages and paid advertising are priced separately.",
   "about.finalWhatsapp": "WhatsApp sales: 0780 863 394",
   "about.finalEmail": "Email: info@makaug.com",
   "about.finalHow": "How it works",
   "about.finalHelp": "Help centre",
   "about.finalSafety": "Safety tips",
-  "about.privateTrialTemplate": "First week free · then {price}",
+  "about.privateTrialTemplate": "First 7 days free · then {price}",
   "about.agentPriceTemplate": "{price} · all your listings",
   "about.productAiDescription": "AI-written description in 9 languages",
   "about.productChecked": "Checked by our team",
@@ -3508,6 +3508,101 @@ Object.assign(CONTENT_I18N.ar, {
   "about.finalWhatsapp": "تحدث عبر WhatsApp"
 });
 
+// The separately loaded About-page translations predate the current listing price.
+// Keep the claim-sensitive fields aligned with the canonical English copy, then
+// apply localized replacements where they are available.
+const ABOUT_CLAIM_COPY_KEYS = Object.freeze([
+  "about.title",
+  "about.heroStatement",
+  "about.subtitle",
+  "about.missionTitle",
+  "about.visionTitle",
+  "about.aiDiscoveryText",
+  "about.everythingTitle",
+  "about.everythingSub",
+  "about.personaOwnersText",
+  "about.chooseFreeTitle",
+  "about.chooseFreeText",
+  "about.chooseDistrictsTitle",
+  "about.chooseDistrictsText",
+  "about.finalSub",
+  "about.privateTrialTemplate"
+]);
+
+["lg", "sw", "ac", "ny", "rn", "sm", "am", "ar"].forEach((code) => {
+  ABOUT_CLAIM_COPY_KEYS.forEach((key) => {
+    CONTENT_I18N[code][key] = ABOUT_PAGE_I18N_EN[key];
+  });
+});
+
+Object.assign(CONTENT_I18N.lg, {
+  "about.title": "Property mu Uganda, mu kifo kimu eky'okunoonya",
+  "about.heroStatement": "Property mu Uganda, mu kifo kimu eky'okunoonya",
+  "about.subtitle": "makaug ye platform y'okunoonya property mu Uganda. Tugatta listings ezisindikiddwa butereevu n'amawulire ga public property agakeberebwa mu kifo kimu eky'okunoonya, ku web ne WhatsApp.",
+  "about.missionTitle": "Okuzuula property mu Uganda mu kifo kimu",
+  "about.visionTitle": "Tufuula property ennyangu okunoonya",
+  "about.aiDiscoveryText": "Tuzuula amawulire ga property okuva mu nsibuko za public online ze tuwagira, ne tugategeka okusobola okunoonyezebwa.",
+  "about.everythingTitle": "Engeri z'okukozesa makaug",
+  "about.everythingSub": "Platform emu ey'emitendera gya property egy'abulijjo.",
+  "about.personaOwnersText": "Teeka sale oba rental listing ku website oba tandika ku WhatsApp. Listing yo esooka mu staff review nga tennaba public. Ennaku 7 ezisooka za bwereere; oluvannyuma buli private property listing eba UGX 25,000 buli mwezi.",
+  "about.chooseFreeTitle": "Okugezesa private listing okumala ennaku 7",
+  "about.chooseFreeText": "ennaku 7 ezisooka za bwereere; oluvannyuma buli private property listing eba UGX 25,000 buli mwezi",
+  "about.chooseDistrictsTitle": "Noonya property okwetooloola Uganda",
+  "about.chooseDistrictsText": "kozesa district, town n'area filters okukendeeza ku by'onoonya",
+  "about.finalSub": "Teeka private property nga ennaku 7 ezisooka za bwereere; oluvannyuma eba UGX 25,000 buli property buli mwezi. Agent plans, development pages ne paid advertising birina emiwendo egy'enjawulo.",
+  "about.privateTrialTemplate": "Ennaku 7 ezisooka za bwereere · oluvannyuma {price}"
+});
+
+Object.assign(CONTENT_I18N.sw, {
+  "about.title": "Mali kote Uganda, katika sehemu moja inayoweza kutafutwa",
+  "about.heroStatement": "Mali kote Uganda, katika sehemu moja inayoweza kutafutwa",
+  "about.subtitle": "makaug ni jukwaa la utafutaji wa mali linalotanguliza Uganda. Tunapanga matangazo ya moja kwa moja na taarifa za mali za umma zilizokaguliwa katika sehemu moja inayoweza kutafutwa, kwenye tovuti na WhatsApp.",
+  "about.missionTitle": "Ugunduzi wa mali Uganda katika sehemu moja",
+  "about.visionTitle": "Tunarahisisha kutafuta mali",
+  "about.aiDiscoveryText": "Tunatambua taarifa za mali kutoka vyanzo vya umma vya mtandaoni vinavyotumika, kisha tunazipanga ili ziweze kutafutwa.",
+  "about.everythingTitle": "Njia za kutumia makaug",
+  "about.everythingSub": "Jukwaa moja kwa safari za kawaida za mali.",
+  "about.personaOwnersText": "Tengeneza tangazo la kuuza au kukodisha kwenye tovuti au anza kupitia WhatsApp. Tangazo lako hukaguliwa na wafanyakazi kabla ya kuwa wazi. Siku 7 za kwanza ni bila malipo; baada ya hapo kila tangazo la mali binafsi ni UGX 25,000 kwa mwezi.",
+  "about.chooseFreeTitle": "Jaribio la siku 7 la tangazo binafsi",
+  "about.chooseFreeText": "siku 7 za kwanza ni bila malipo; baada ya hapo kila tangazo la mali binafsi ni UGX 25,000 kwa mwezi",
+  "about.chooseDistrictsTitle": "Tafuta mali kote Uganda",
+  "about.chooseDistrictsText": "tumia vichujio vya wilaya, mji na eneo kupunguza matokeo",
+  "about.finalSub": "Orodhesha mali binafsi bila malipo kwa siku 7 za kwanza, kisha ulipe UGX 25,000 kwa kila mali kwa mwezi. Mipango ya mawakala, kurasa za miradi na matangazo ya kulipia yana bei tofauti.",
+  "about.privateTrialTemplate": "Siku 7 za kwanza bila malipo · kisha {price}"
+});
+
+Object.assign(CONTENT_I18N.am, {
+  "about.title": "በመላው ኡጋንዳ ያለ የንብረት መረጃ በአንድ የፍለጋ ቦታ",
+  "about.heroStatement": "በመላው ኡጋንዳ ያለ የንብረት መረጃ በአንድ የፍለጋ ቦታ",
+  "about.subtitle": "makaug ኡጋንዳን ቅድሚያ የሚሰጥ የንብረት ፍለጋ መድረክ ነው። ቀጥታ ዝርዝሮችን እና የተገመገሙ የሕዝብ የንብረት መረጃዎችን በድር እና WhatsApp ላይ በአንድ የፍለጋ ቦታ እናደራጃለን።",
+  "about.missionTitle": "የኡጋንዳ ንብረት ፍለጋ በአንድ ቦታ",
+  "about.visionTitle": "ንብረት ማግኘትን ይበልጥ ቀላል እናደርጋለን",
+  "about.aiDiscoveryText": "ከምንደግፍላቸው የሕዝብ የመስመር ላይ ምንጮች የንብረት መረጃን ነቅሰን እናወጣለን፣ ከዚያም ለፍለጋ እናደራጃለን።",
+  "about.personaOwnersText": "የሽያጭ ወይም የኪራይ ዝርዝርዎችን በድር ወይም WhatsApp ላይ ይተሙ። ዝርዝሩ ለሕዝብ ከመቅረቡ በፊት በሰራተኞች ይገመገማል። የመጀመሪያዎቹ 7 ቀናት ነፃ ናቸው፤ ከዚያ በኋላ ለእያንዳንዱ የግል ንብረት ዝርዝር በወር UGX 25,000 ይከፈላል።",
+  "about.chooseFreeTitle": "የ7 ቀን የግል ዝርዝር ሙከራ",
+  "about.chooseFreeText": "የመጀመሪያዎቹ 7 ቀናት ነፃ ናቸው፤ ከዚያ በኋላ ለእያንዳንዱ የግል ንብረት ዝርዝር በወር UGX 25,000 ይከፈላል",
+  "about.chooseDistrictsTitle": "በመላው ኡጋንዳ ንብረት ይፈልጉ",
+  "about.chooseDistrictsText": "ፍለጋውን ለማጥበብ የዲስትሪክት፣ የከተማ እና የአካባቢ ማጣሪያዎችን ይጠቀሙ",
+  "about.finalSub": "የግል ንብረትዎን ለመጀመሪያዎቹ 7 ቀናት በነፃ ይዘርዝሩ፤ ከዚያ በኋላ ለእያንዳንዱ ንብረት በወር UGX 25,000 ይከፈላሉ። የወኪል እቅዶች፣ የፕሮጀክት ገጾች እና የሚከፈልበት ማስታወቂያ የተለየ ዋጋ አላቸው።",
+  "about.privateTrialTemplate": "የመጀመሪያዎቹ 7 ቀናት ነፃ · ከዚያ {price}"
+});
+
+Object.assign(CONTENT_I18N.ar, {
+  "about.title": "عقارات في أنحاء أوغندا، في مكان واحد قابل للبحث",
+  "about.heroStatement": "عقارات في أنحاء أوغندا، في مكان واحد قابل للبحث",
+  "about.subtitle": "makaug منصة بحث عقاري تركز على أوغندا. ننظم الإعلانات المباشرة ومعلومات العقارات العامة التي تمت مراجعتها في تجربة واحدة قابلة للبحث على الويب وWhatsApp.",
+  "about.missionTitle": "اكتشاف عقارات أوغندا في مكان واحد",
+  "about.visionTitle": "نجعل العثور على العقار أسهل",
+  "about.aiDiscoveryText": "نحدد معلومات العقارات من المصادر العامة المدعومة عبر الإنترنت، ثم ننظمها لتكون قابلة للبحث.",
+  "about.personaOwnersText": "أنشئ إعلان بيع أو إيجار على الموقع أو ابدأ عبر WhatsApp. يخضع إعلانك لمراجعة الفريق قبل نشره. الأيام السبعة الأولى مجانية؛ بعد ذلك يكلف كل إعلان عقار خاص UGX 25,000 شهرياً.",
+  "about.chooseFreeTitle": "تجربة إدراج خاص لمدة 7 أيام",
+  "about.chooseFreeText": "الأيام السبعة الأولى مجانية؛ بعد ذلك يكلف كل إعلان عقار خاص UGX 25,000 شهرياً",
+  "about.chooseDistrictsTitle": "ابحث عن عقارات في أنحاء أوغندا",
+  "about.chooseDistrictsText": "استخدم مرشحات المنطقة والمدينة والحي لتضييق البحث",
+  "about.finalSub": "أدرج عقاراً خاصاً مجاناً لأول 7 أيام، ثم ادفع UGX 25,000 لكل عقار شهرياً. تسعّر خطط الوكلاء وصفحات المشاريع والإعلانات المدفوعة بشكل منفصل.",
+  "about.privateTrialTemplate": "أول 7 أيام مجانية · ثم {price}"
+});
+
 function contentTr(key) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -3565,7 +3660,7 @@ const MARKETPLACE_POLISH_MARKER = "marketplace-polish-20260719";
 const MARKETPLACE_FINAL_TWEAKS_MARKER = "marketplace-final-tweaks-20260719";
 const MARKETPLACE_UI_EN = Object.freeze({
   breadcrumbHome: "Home", breadcrumbMarketplace: "Marketplace", eyebrow: "Uganda property services",
-  title: "Uganda's largest property services directory", subtitle: "Surveyors, lawyers, builders, brokers, valuers and practical property services across Uganda.",
+  title: "Uganda property services directory", subtitle: "Surveyors, lawyers, builders, brokers, valuers and practical property services across Uganda.",
   liveBusinesses: "live businesses", registerCta: "Register your business", aiTitle: "Ask AI for a property service",
   aiSubtitle: "Describe who you need and where. Search in any language.", aiScope: "Searching Marketplace", aiPlaceholder: "Try: surveyor in Wakiso", askAi: "Ask AI",
   filterTitle: "Find a service", clearFilters: "Clear filters", searchPlaceholder: "Business or service", allServices: "All services",
@@ -4849,7 +4944,7 @@ const HOME_ASSISTANT_I18N = {
 
 const FOOTER_I18N = {
   en: {
-    brandCopy: `Uganda's property search engine. List your first week free, then keep it live from UGX 25,000 a month. Web or WhatsApp, all 146 districts.`,
+    brandCopy: `Search property across Uganda on the web or WhatsApp. A private property listing is free for its first 7 days, then costs UGX 25,000 per property/month.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Chat on WhatsApp",
@@ -7362,8 +7457,8 @@ function applyListingWizardLanguageUI() {
     ["list-choice-online-copy", "Open the guided website form."],
     ["list-choice-wa-title", "List through WhatsApp"],
     ["list-choice-wa-copy", "Message 0780 863 394 and let the makaug assistant guide you."],
-    ["list-choice-free-title", "Start with 7 days free."],
-    ["list-choice-free-copy", "After that, one private listing costs UGX 25,000 per month. Every submission stays in staff review until approved."]
+    ["list-choice-free-title", "The first 7 days are free."],
+    ["list-choice-free-copy", "After that, each private property listing costs UGX 25,000 per month. Submissions stay in staff review until approved."]
   ];
   labelPairs.forEach(([id, text]) => {
     const el = document.getElementById(id);
@@ -8180,6 +8275,7 @@ async function fetchAboutPublicListingsTotal() {
 }
 
 function aboutCommercialCatalog() {
+  if (SITE_COUNTRY_CODE !== "UG") return null;
   return window.__MAKAUG_ABOUT_COMMERCIAL_PRODUCTS__ || null;
 }
 
@@ -8635,10 +8731,16 @@ const API_BASE = (window.MAKAUG_API_BASE || "").replace(/\/$/, "");
 const GOOGLE_ADSENSE_CLIENT = (window.MAKAUG_ADSENSE_CLIENT || "").trim();
 const GOOGLE_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || {};
 const GOOGLE_MAPS_API_KEY = (window.MAKAUG_GOOGLE_MAPS_API_KEY || window.MAKAUG_CONFIG?.googleMapsApiKey || "").trim();
+const SITE_COUNTRY_CODE = String(window.MAKAUG_CONFIG?.countryCode || "UG").trim().toUpperCase() || "UG";
 const ANALYTICS_CLIENT_KEY = "makaug_client_id";
+const MEASUREMENT_CONSENT_VERSION = "1";
+const TRAFFIC_ATTRIBUTION_KEY = "makaug_traffic_attribution_v2";
 const AUTH_STORAGE_KEY = "makaug_auth";
 const ADMIN_API_KEY_STORAGE_KEY = "makaug_admin_api_key";
 let gaMeasurementId = null;
+let trafficAttributionCache = null;
+let frontendAnalyticsInitialized = false;
+let webVitalsInitialized = false;
 let googleMapsLoadPromise = null;
 let leafletLoadPromise = null;
 let googleGeocoderInstance = null;
@@ -8655,10 +8757,16 @@ function apiUrl(path) {
 }
 
 async function apiRequest(path, options = {}) {
-  const method = options.method || "GET";
+  const method = String(options.method || "GET").toUpperCase();
   const headers = { ...(options.headers || {}) };
   const body = options.body;
   const skipAuth = options.skipAuth === true;
+  const plainJsonBody = body && Object.prototype.toString.call(body) === "[object Object]";
+  const requestBody = body;
+
+  if (plainJsonBody && !["GET", "HEAD"].includes(method)) {
+    Object.assign(headers, window.makaugMeasurementConsent?.leadAttributionHeaders?.() || {});
+  }
 
   if (body !== undefined && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
@@ -8671,7 +8779,7 @@ async function apiRequest(path, options = {}) {
     method,
     headers,
     credentials: "same-origin",
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: requestBody !== undefined ? JSON.stringify(requestBody) : undefined,
     signal: options.signal,
     cache: options.cache
   });
@@ -8704,7 +8812,23 @@ function isAuthSessionFailure(error = {}) {
     || (status === 401 && /\b(session|jwt|token|auth)\b/.test(message));
 }
 
+function measurementConsentSnapshot() {
+  const snapshot = window.makaugMeasurementConsent?.snapshot?.();
+  return snapshot && typeof snapshot === "object"
+    ? snapshot
+    : { analytics: false, advertising: false, version: MEASUREMENT_CONSENT_VERSION };
+}
+
+function analyticsConsentGranted() {
+  return window.makaugMeasurementConsent?.allowsAnalytics?.() === true;
+}
+
+function advertisingConsentGranted() {
+  return window.makaugMeasurementConsent?.allowsAdvertising?.() === true;
+}
+
 function getAnalyticsClientId() {
+  if (!analyticsConsentGranted()) return "";
   try {
     const existing = localStorage.getItem(ANALYTICS_CLIENT_KEY);
     if (existing) return existing;
@@ -8723,21 +8847,45 @@ function currentAnalyticsPagePath() {
 }
 
 function trafficAttributionParams() {
-  const storageKey = "makaug_traffic_attribution_v1";
   const query = new URLSearchParams(window.location.search || "");
-  const campaignSource = String(query.get("utm_source") || "").trim().toLowerCase();
-  const campaignMedium = String(query.get("utm_medium") || "").trim().toLowerCase();
-  const campaignName = String(query.get("utm_campaign") || "").trim();
-  let current = null;
-  try {
-    current = JSON.parse(window.sessionStorage.getItem(storageKey) || "null");
-  } catch (error) {}
-  if (campaignSource) {
+  const bounded = (value, maxLength) => String(value || "")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .trim()
+    .slice(0, maxLength);
+  const campaignSource = bounded(query.get("utm_source"), 120).toLowerCase();
+  const campaignMedium = bounded(query.get("utm_medium"), 120).toLowerCase();
+  const campaignName = bounded(query.get("utm_campaign"), 240);
+  const campaignContent = bounded(query.get("utm_content"), 240);
+  const campaignTerm = bounded(query.get("utm_term"), 240);
+  const directOppref = bounded(query.get("oppref"), 512);
+  const fallbackOppref = bounded(query.get("click_id"), 512);
+  const oppref = directOppref || fallbackOppref;
+  const mayPersist = analyticsConsentGranted() || advertisingConsentGranted();
+  let current = trafficAttributionCache;
+  if (!current && mayPersist) {
+    try {
+      current = JSON.parse(
+        window.sessionStorage.getItem(TRAFFIC_ATTRIBUTION_KEY)
+          || window.sessionStorage.getItem("makaug_traffic_attribution_v1")
+          || "null"
+      );
+    } catch (error) {}
+  }
+  if (campaignSource || campaignMedium || campaignName || campaignContent || campaignTerm || oppref) {
     current = {
-      traffic_source: campaignSource,
-      traffic_medium: campaignMedium || "campaign",
+      traffic_source: campaignSource || (oppref ? "openai" : "campaign"),
+      traffic_medium: campaignMedium || (oppref ? "paid" : "campaign"),
       traffic_campaign: campaignName || "",
-      landing_page: currentAnalyticsPagePath()
+      traffic_content: campaignContent,
+      traffic_term: campaignTerm,
+      utm_source: campaignSource,
+      utm_medium: campaignMedium,
+      utm_campaign: campaignName,
+      utm_content: campaignContent,
+      utm_term: campaignTerm,
+      oppref,
+      oppref_source_param: directOppref ? "oppref" : (fallbackOppref ? "click_id" : ""),
+      landing_page: bounded(currentAnalyticsPagePath(), 1024)
     };
   } else if (!current) {
     let source = "direct";
@@ -8760,13 +8908,50 @@ function trafficAttributionParams() {
       traffic_source: source,
       traffic_medium: medium,
       traffic_campaign: "",
-      landing_page: currentAnalyticsPagePath()
+      traffic_content: "",
+      traffic_term: "",
+      utm_source: "",
+      utm_medium: "",
+      utm_campaign: "",
+      utm_content: "",
+      utm_term: "",
+      oppref: "",
+      oppref_source_param: "",
+      landing_page: bounded(currentAnalyticsPagePath(), 1024)
     };
   }
+  trafficAttributionCache = current;
   try {
-    window.sessionStorage.setItem(storageKey, JSON.stringify(current));
+    if (mayPersist) window.sessionStorage.setItem(TRAFFIC_ATTRIBUTION_KEY, JSON.stringify(current));
+    else {
+      window.sessionStorage.removeItem(TRAFFIC_ATTRIBUTION_KEY);
+      window.sessionStorage.removeItem("makaug_traffic_attribution_v1");
+    }
   } catch (error) {}
   return current || { traffic_source: "direct", traffic_medium: "none", traffic_campaign: "" };
+}
+
+function leadAttributionPayload() {
+  const consent = measurementConsentSnapshot();
+  const attribution = trafficAttributionParams();
+  const allowCampaign = consent.analytics === true || consent.advertising === true;
+  return {
+    ...(allowCampaign && attribution.utm_source ? { utm_source: attribution.utm_source } : {}),
+    ...(allowCampaign && attribution.utm_medium ? { utm_medium: attribution.utm_medium } : {}),
+    ...(allowCampaign && attribution.utm_campaign ? { utm_campaign: attribution.utm_campaign } : {}),
+    ...(allowCampaign && attribution.utm_content ? { utm_content: attribution.utm_content } : {}),
+    ...(allowCampaign && attribution.utm_term ? { utm_term: attribution.utm_term } : {}),
+    ...(consent.advertising === true && attribution.oppref ? { oppref: attribution.oppref } : {}),
+    ...(consent.advertising === true && attribution.oppref_source_param
+      ? { oppref_source_param: attribution.oppref_source_param }
+      : {}),
+    ...(allowCampaign && attribution.landing_page ? { landing_page: attribution.landing_page } : {}),
+    measurement_consent: {
+      analytics: consent.analytics === true,
+      advertising: consent.advertising === true,
+      version: String(consent.version || MEASUREMENT_CONSENT_VERSION)
+    }
+  };
 }
 
 function analyticsVisitorTimezone() {
@@ -8789,10 +8974,10 @@ function analyticsEventParams(params = {}) {
 }
 
 function fireClientMetaPixelEvent(eventName, params = {}) {
-  if (typeof window.fbq !== "function" || window.__makaugMetaPixelReady !== true) return false;
+  if (!advertisingConsentGranted() || typeof window.fbq !== "function" || window.__makaugMetaPixelReady !== true) return false;
   const common = {
     page_path: currentAnalyticsPagePath(),
-    site_country: "UG"
+    site_country: SITE_COUNTRY_CODE
   };
   if (eventName === "page_view") {
     window.fbq("track", "PageView", { ...common, page_name: params.page || currentPage || "home" });
@@ -8831,10 +9016,30 @@ function fireClientMetaPixelEvent(eventName, params = {}) {
   return false;
 }
 
+function fireClientOpenAILeadEvent(eventName, params = {}) {
+  const leadEvents = new Set([
+    "agent_register_submit",
+    "advertising_selfserve_submitted",
+    "ai_assistant_property_need_captured",
+    "map_assist_request_submit",
+    "mortgage_lead_submit",
+    "off_plan_enquiry_submitted",
+    "property_inquiry_submit",
+    "property_request_submit",
+    "property_submit",
+    "short_term_enquiry_submitted"
+  ]);
+  if (!leadEvents.has(eventName)) return false;
+  const eventId = params.lead_id || params.crm_lead_id || params.event_id || "";
+  return window.makaugMeasurementConsent?.measureOpenAILead?.(eventId) === true;
+}
+
 async function trackEvent(eventName, params = {}) {
   const analyticsParams = analyticsEventParams(params);
-  fireClientGaEvent(eventName, analyticsParams);
   fireClientMetaPixelEvent(eventName, analyticsParams);
+  fireClientOpenAILeadEvent(eventName, analyticsParams);
+  if (!analyticsConsentGranted()) return;
+  fireClientGaEvent(eventName, analyticsParams);
   try {
     await apiRequest("/api/analytics/event", {
       method: "POST",
@@ -8855,7 +9060,7 @@ async function trackEvent(eventName, params = {}) {
 }
 
 function fireClientGaEvent(eventName, params = {}) {
-  if (typeof window.gtag === "function") {
+  if (analyticsConsentGranted() && typeof window.gtag === "function") {
     window.gtag("event", eventName, params);
   }
 }
@@ -8870,14 +9075,22 @@ function loadGaScriptOnce(id) {
 }
 
 async function initFrontendAnalytics() {
+  if (!analyticsConsentGranted() || frontendAnalyticsInitialized) return;
   try {
     const cfg = await apiRequest("/api/analytics/config");
     const id = cfg?.data?.ga4MeasurementId;
     if (!id || cfg?.data?.ga4Enabled === false) return;
+    frontendAnalyticsInitialized = true;
     gaMeasurementId = id;
     loadGaScriptOnce(id);
     window.dataLayer = window.dataLayer || [];
     window.gtag = window.gtag || function gtag() { window.dataLayer.push(arguments); };
+    window.gtag("consent", "update", {
+      analytics_storage: "granted",
+      ad_storage: advertisingConsentGranted() ? "granted" : "denied",
+      ad_user_data: advertisingConsentGranted() ? "granted" : "denied",
+      ad_personalization: advertisingConsentGranted() ? "granted" : "denied"
+    });
     window.gtag("js", new Date());
     window.gtag("config", id, {
       anonymize_ip: true,
@@ -8890,7 +9103,7 @@ async function initFrontendAnalytics() {
 const sentWebVitalMetrics = new Set();
 
 function sendWebVitalMetric(metricName, value, rating = "") {
-  if (!metricName || !Number.isFinite(value)) return;
+  if (!analyticsConsentGranted() || !metricName || !Number.isFinite(value)) return;
   const metricKey = `${metricName}:${window.location.pathname || "/"}`;
   if (sentWebVitalMetrics.has(metricKey)) return;
   sentWebVitalMetrics.add(metricKey);
@@ -8913,7 +9126,8 @@ function sendWebVitalMetric(metricName, value, rating = "") {
 }
 
 function initWebVitalsTracking() {
-  if (!("PerformanceObserver" in window)) return;
+  if (!analyticsConsentGranted() || webVitalsInitialized || !("PerformanceObserver" in window)) return;
+  webVitalsInitialized = true;
   try {
     new PerformanceObserver((list) => {
       const entries = list.getEntries();
@@ -11767,6 +11981,12 @@ function getBrokerBoostFormat(formatKey = "") {
   return BROKER_BOOST_FORMATS.find((item) => item.key === formatKey) || BROKER_BOOST_FORMATS[0];
 }
 
+function brokerBoostGuidePriceLabel(format = {}) {
+  const guidePrice = Number(format.guidePrice || 0);
+  if (SITE_COUNTRY_CODE !== "UG" || !guidePrice) return "Local pricing confirmed before payment";
+  return `UGX ${guidePrice.toLocaleString("en-UG")}`;
+}
+
 function renderListingBoostHook(p = {}, options = {}) {
   const listingId = p?.id || "";
   const status = normalizeModerationStatus(p?.status || p?.moderation_status || "");
@@ -11853,7 +12073,7 @@ function renderBrokerBoostPanel(listingId = "", formatKey = "") {
             <div class="rounded-xl bg-white border border-amber-100 p-3">
               <div class="text-xs font-black text-amber-800">${adminEscape(format.label)}</div>
               <div class="text-sm text-gray-600 mt-1">${adminEscape(format.placement)}</div>
-              <div class="font-black text-amber-950 mt-2">UGX ${Number(format.guidePrice).toLocaleString("en-UG")}</div>
+              <div class="font-black text-amber-950 mt-2">${adminEscape(brokerBoostGuidePriceLabel(format))}</div>
             </div>`).join("")}
         </div>
       </div>`;
@@ -11899,7 +12119,7 @@ function renderBrokerBoostPanel(listingId = "", formatKey = "") {
           </div>
           <div class="rounded-xl bg-white border border-amber-100 p-3">
             <div class="text-xs text-amber-800">Starting guide</div>
-            <div class="font-black text-amber-950">UGX ${Number(selectedFormat.guidePrice).toLocaleString("en-UG")}</div>
+            <div class="font-black text-amber-950">${adminEscape(brokerBoostGuidePriceLabel(selectedFormat))}</div>
           </div>
         </div>
         <div class="mt-4 rounded-2xl bg-white border border-amber-100 p-4">
@@ -29282,7 +29502,7 @@ function adminOpenBillingSettings() {
       await put("pay_to", { method: String(data.get("pay_method") || "").trim(), number: String(data.get("pay_number") || "").trim(), name: String(data.get("pay_name") || "").trim() });
       await put("confirmers", confirmersList);
       await put("agent_fee", { ...agentFee, monthly_ugx: num(data.get("agent_monthly"), 50000), remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });
-      await put("lister_fee", { ...listerFee, monthly_ugx: num(data.get("lister_monthly"), 20000), free_days: num(data.get("free_days"), 7), views_message_day: num(data.get("views_day"), 3) });
+      await put("lister_fee", { ...listerFee, monthly_ugx: num(data.get("lister_monthly"), 25000), free_days: num(data.get("free_days"), 7), views_message_day: num(data.get("views_day"), 3) });
       await put("lister_views_message", { ...(s.lister_views_message || {}), text: String(data.get("views_text") || "") });
       toast("Settings saved.");
     }
@@ -33995,7 +34215,8 @@ async function submitListProperty() {
       listing_type: payload.listing_type,
       district: payload.district,
       area: payload.area,
-      property_id: response?.data?.id || null
+      property_id: response?.data?.id || null,
+      lead_id: response?.data?.lead_id || null
     });
     applySubmittedListingToLocal(payload, response?.data || {});
     const ref = response?.data?.inquiry_reference || payload.inquiry_reference;
@@ -34036,7 +34257,7 @@ async function submitLookingRequest() {
 
   setButtonLoading("looking-submit-btn", true);
   try {
-    await apiRequest("/api/contact/looking-for-property", {
+    const requestResponse = await apiRequest("/api/contact/looking-for-property", {
       method: "POST",
       body: {
         name,
@@ -34059,7 +34280,11 @@ async function submitLookingRequest() {
         source: "looking_modal"
       }
     });
-    await trackEvent("property_request_submit", { preferred_location: preferredLocation || "", tab: currentTab });
+    await trackEvent("property_request_submit", {
+      preferred_location: preferredLocation || "",
+      tab: currentTab,
+      lead_id: requestResponse?.data?.lead_id || ""
+    });
     toast(translateListingLabel("Request submitted. We will contact you shortly."));
     closeModal("looking-modal");
   } catch (error) {
@@ -34203,7 +34428,7 @@ function toggleLookingWhatsappAlt() {
 	        return;
 	      }
 	      try {
-	        await apiRequest("/api/contact/looking-for-property", {
+	        const response = await apiRequest("/api/contact/looking-for-property", {
       method: "POST",
       body: {
 	            name,
@@ -34222,7 +34447,7 @@ function toggleLookingWhatsappAlt() {
 	            source: `map_assist_${normalized}`
 	          }
 	        });
-	        await trackEvent("map_assist_request_submit", { type: listingType, need, preferred_location: locationValue || "", budget: budget || null });
+	        await trackEvent("map_assist_request_submit", { type: listingType, need, preferred_location: locationValue || "", budget: budget || null, lead_id: response?.data?.lead_id || null });
 	        document.querySelectorAll(`[data-map-assist-name="${normalized}"],[data-map-assist-phone="${normalized}"],[data-map-assist-email="${normalized}"],[data-map-assist-location="${normalized}"],[data-map-assist-budget="${normalized}"],[data-map-assist-details="${normalized}"]`).forEach((el) => { el.value = ""; });
 	        toast(translateListingLabel("Request saved. makaug will follow up with matching options."));
 	      } catch (error) {
@@ -37783,7 +38008,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Send request",
     captureSuccess: "Request saved. makaug will follow up when there is a match.",
     captureError: "Could not save the request. Please try again or WhatsApp makaug.",
-    listFree: "List free",
+    listFree: "List property",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "See all matches",
     chips: [
@@ -37812,7 +38037,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Sindika request",
     captureSuccess: "Request eterekeddwa. makaug ejja kukuddamu nga waliwo ekikwatagana.",
     captureError: "Request tesobodde kuterekebwa. Ddamu ogezeeko oba WhatsApp makaug.",
-    listFree: "Listinga free",
+    listFree: "Teka ekintu kyo",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Laba byonna",
     chips: [
@@ -37841,7 +38066,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Tuma request",
     captureSuccess: "Request imehifadhiwa. makaug itafuatilia ikipata mechi.",
     captureError: "Request haikuhifadhiwa. Jaribu tena au WhatsApp makaug.",
-    listFree: "List bure",
+    listFree: "Orodhesha mali",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Ona matokeo yote",
     chips: [
@@ -37870,7 +38095,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Cwal request",
     captureSuccess: "Request ogwoko. makaug bi lubo ka gin ma rwate ononge.",
     captureError: "Pe onongo twero gwoko request. Tem doki onyo WhatsApp makaug.",
-    listFree: "List free",
+    listFree: "Ket Gang",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Nen ducu",
     chips: [
@@ -37899,7 +38124,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Sindika request",
     captureSuccess: "Request ebikire. makaug neija kukugarukamu twabona match.",
     captureError: "Request terabikire. Garuka ogezeho ninga WhatsApp makaug.",
-    listFree: "List free",
+    listFree: "Teka Property",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Reeba byona",
     chips: [
@@ -37928,7 +38153,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Sindika request",
     captureSuccess: "Request ebikire. makaug neija kukugarukamu twabona match.",
     captureError: "Request terabikire. Garuka ogezeho ninga WhatsApp makaug.",
-    listFree: "List free",
+    listFree: "Taho Property",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Reeba byona",
     chips: [
@@ -37957,7 +38182,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Sindika request",
     captureSuccess: "Request eterekeddwa. makaug ejja kukuddamu nga waliwo ekikwatagana.",
     captureError: "Request tesobodde kuterekebwa. Ddamu ogezeeko oba WhatsApp makaug.",
-    listFree: "Listinga free",
+    listFree: "Teka Property",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Laba byonna",
     chips: [
@@ -37986,7 +38211,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "ጥያቄ ላክ",
     captureSuccess: "ጥያቄዎ ተቀምጧል። makaug ተዛማጅ ሲኖር ይከታተላል።",
     captureError: "ጥያቄውን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ ወይም WhatsApp makaug።",
-    listFree: "በነፃ ይዘርዝሩ",
+    listFree: "ንብረት ይዘርዝሩ",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "ሁሉን ይመልከቱ",
     chips: [
@@ -38015,7 +38240,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "إرسال الطلب",
     captureSuccess: "تم حفظ الطلب. سيتابع makaug عند وجود تطابق.",
     captureError: "تعذر حفظ الطلب. حاول مرة أخرى أو تواصل عبر واتساب.",
-    listFree: "أدرج مجاناً",
+    listFree: "أدرج عقاراً",
     whatsappMakaug: "واتساب makaug",
     seeAll: "عرض كل النتائج",
     chips: [
@@ -38927,7 +39152,7 @@ function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
     <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
       <div class="font-black">${adminEscape(copy.zero)}</div>
       <div class="mt-3 flex flex-wrap gap-2">
-        <a href="/list-property" class="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white">${adminEscape(copy.listFree || "List free")}</a>
+        <a href="/list-property" class="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white">${adminEscape(copy.listFree || "List property")}</a>
         <a href="https://wa.me/256780863394?text=Hello%20makaug%2C%20I%20need%20help%20finding%20a%20property" target="_blank" rel="noopener" class="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-black text-blue-700">${adminEscape(copy.whatsappMakaug || "WhatsApp makaug")}</a>
       </div>
     </div>` : "";
@@ -38981,10 +39206,14 @@ async function submitAiAssistantNeedCapture(event) {
     button.textContent = aiAssistantCopyText("loading", "Sending...");
   }
   try {
-    await apiRequest("/api/ai/property-need", { method: "POST", body });
+    const response = await apiRequest("/api/ai/property-need", { method: "POST", body });
     if (status) status.textContent = copy.captureSuccess || "Request saved.";
     form.reset();
-    trackEvent("ai_assistant_property_need_captured", { source_page: currentPage, search_type: body.search_type || "any" });
+    trackEvent("ai_assistant_property_need_captured", {
+      source_page: currentPage,
+      search_type: body.search_type || "any",
+      lead_id: response?.data?.lead_id || null
+    });
   } catch (error) {
     if (status) status.textContent = copy.captureError || "Could not save the request.";
     trackEvent("ai_assistant_property_need_capture_failed", { source_page: currentPage, error: error.message || "request_failed" });
@@ -39149,7 +39378,7 @@ const PAGE_CONTENT = {
     <div class="hidden rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="how-it-works"></div>`,
   terms: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Terms & Conditions</h2>
-    <p class="text-xs text-gray-500 mb-4">Last updated: 25 July 2026</p>
+    <p class="text-xs text-gray-500 mb-4">Last updated: 5 October 2026</p>
     <p class="mb-3">
       These Terms govern your use of makaug.com. By using the platform, you agree to comply with these Terms,
       all applicable Ugandan laws, and any listing or safety standards published on the site.
@@ -39215,8 +39444,9 @@ const PAGE_CONTENT = {
     </ul>
     <h3 class="font-bold text-gray-800 mb-1">7. Fees and Commercial Terms</h3>
     <p class="mb-3 text-sm">
-      Listing may be offered free under current platform policy. Advertising, featured placements, and enterprise tools
-      may be separately priced under written commercial terms.
+      A private property listing is free for its first 7 days. After that, each private property listing costs
+      UGX 25,000 per month. Agent plans, advertising, featured placements, development pages, and enterprise tools
+      are priced separately under their published or agreed commercial terms.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">8. Legal and Regulatory Context (Uganda)</h3>
     <p class="mb-3 text-sm">
@@ -39235,7 +39465,7 @@ const PAGE_CONTENT = {
     </p>`,
   privacy: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Privacy Policy</h2>
-    <p class="text-xs text-gray-500 mb-4">Last updated: 25 July 2026</p>
+    <p class="text-xs text-gray-500 mb-4">Last updated: 5 October 2026</p>
     <p class="mb-3 text-sm">
       makaug.com processes personal data in line with the Data Protection and Privacy Act, 2019 and related Ugandan regulations.
       makaug.com is responsible for the processing described in this policy. This policy explains what we collect,
@@ -39249,6 +39479,7 @@ const PAGE_CONTENT = {
       <li>TikTok connection data, when a user chooses to connect: TikTok open ID, display name, avatar, profile link, approved scopes, public-video metadata such as title, description, cover image, share/embed link and creation time, plus OAuth access and refresh tokens.</li>
       <li>Verification data where applicable: identity information and compliance documents.</li>
       <li>Technical data: device/browser data, IP address, session logs, and fraud-risk signals.</li>
+      <li>Optional measurement data, when a guest consents: first-party usage events, analytics identifiers, performance data, campaign parameters (including utm_content), advertising conversion identifiers, and an OpenAI referral identifier (oppref) when present in the landing-page URL.</li>
     </ul>
     <h3 class="font-bold text-gray-800 mb-1">2. Purpose of Processing</h3>
     <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
@@ -39257,7 +39488,8 @@ const PAGE_CONTENT = {
       <li>Displaying a connected user's public TikTok videos so that user can choose an original source link for a property listing.</li>
       <li>User support, fraud prevention, moderation, and dispute handling.</li>
       <li>Security monitoring and legal/regulatory compliance.</li>
-      <li>Performance analytics to improve usability and listing quality.</li>
+      <li>Optional analytics, when consented to, to improve usability, performance, and listing quality.</li>
+      <li>Optional advertising measurement, when consented to, to understand which campaigns lead to enquiries and other customer actions.</li>
     </ul>
     <h3 class="font-bold text-gray-800 mb-1">3. TikTok Login Kit and Display API</h3>
     <p class="mb-2 text-sm">
@@ -39282,8 +39514,8 @@ const PAGE_CONTENT = {
     </p>
     <h3 class="font-bold text-gray-800 mb-1">5. Data Sharing and International Processing</h3>
     <p class="mb-3 text-sm">
-      We do not sell personal data. Data may be shared with service providers supporting hosting, messaging, analytics,
-      fraud controls, and authorized integrations such as TikTok under confidentiality and security obligations, or with
+      We do not sell personal data. Data may be shared with service providers supporting hosting, messaging, consented analytics
+      and advertising measurement, fraud controls, and authorized integrations such as TikTok under confidentiality and security obligations, or with
       lawful authorities when legally required. Some providers may process data outside Uganda; where this happens, we
       use reasonable contractual and technical safeguards appropriate to the service and applicable law.
     </p>
@@ -39301,6 +39533,7 @@ const PAGE_CONTENT = {
       <li>Request deletion where retention is no longer required by law.</li>
       <li>Object to certain processing or request restrictions where applicable.</li>
       <li>Disconnect TikTok at /tiktok-connect or revoke makaug.com through TikTok account settings.</li>
+      <li>Use Cookie settings in the site footer to accept, reject, or later change optional analytics and advertising measurement choices.</li>
     </ul>
     <h3 class="font-bold text-gray-800 mb-1">8. Children</h3>
     <p class="mb-3 text-sm">
@@ -39319,33 +39552,40 @@ const PAGE_CONTENT = {
     </p>`,
   cookies: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Cookie Policy</h2>
-    <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
+    <p class="text-xs text-gray-500 mb-4">Last updated: 5 October 2026</p>
     <p class="mb-3 text-sm">
-      Cookies and similar technologies help makaug.com run securely, remember your preferences, and improve user experience.
+      Cookies and similar technologies help makaug.com run securely and remember your preferences. For guests, optional
+      analytics and advertising measurement stay off unless the guest makes the relevant choice.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">1. Essential Cookies</h3>
     <p class="mb-3 text-sm">
-      Required for account login, session continuity, fraud controls, and core platform functionality.
-      Disabling these may prevent the site from working correctly.
+      Required for account login, session continuity, fraud controls, language settings, your privacy choice, and core platform
+      functionality. These are always on because disabling them may prevent the site from working correctly.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">2. Preference Cookies</h3>
     <p class="mb-3 text-sm">
-      Remember settings such as language and currency to provide consistent experience across visits.
+      Remember settings such as language and currency to provide a consistent experience across visits. Where a preference is
+      needed for core functionality, it is treated as essential storage.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">3. Analytics Cookies</h3>
     <p class="mb-3 text-sm">
-      Used to understand page performance, search behavior, and feature usage so we can improve site quality.
-      Analytics data is used in aggregated form where possible.
+      Optional analytics starts only after analytics consent. It may include first-party usage events, Google Analytics,
+      performance measurements, and campaign parameters such as utm_source, utm_campaign, and utm_content. We use this data
+      to understand page performance, search behaviour, and feature usage, in aggregated form where possible.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">4. Advertising and Attribution Cookies</h3>
     <p class="mb-3 text-sm">
-      Where advertising features are enabled, cookies may support campaign measurement, conversion tracking,
-      and frequency management.
+      Optional advertising measurement starts only after advertising consent. It may use Meta, OpenAI, and Google advertising
+      tools for campaign measurement and conversion tracking. If a visit includes an OpenAI referral parameter (oppref), makaug
+      may retain it with the lead for attribution only when advertising consent is granted. Provider cookies or identifiers such
+      as __oppref, __obref, _fbp, or _fbc may also be used when the relevant tool is enabled.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">5. Managing Cookies</h3>
     <p class="text-sm">
-      You can manage cookie settings through browser controls. Blocking certain categories may affect functionality,
-      including sign-in and saved search features.
+      Use Cookie settings in the site footer to accept all optional categories, use essential storage only, or choose analytics
+      and advertising measurement separately. You can change or withdraw a choice later. Withdrawal stops future optional
+      measurement and removes supported measurement identifiers where the provider allows it. Browser controls can also block
+      or delete cookies, although blocking essential storage may affect sign-in, saved searches, and other core features.
     </p>`,
   "anti-fraud": `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Anti-Fraud Policy</h2>
@@ -39829,7 +40069,7 @@ function renderGoogleAdsSlots() {
 }
 
 function initGoogleAds() {
-  if (!GOOGLE_ADSENSE_CLIENT) return;
+  if (!advertisingConsentGranted() || !GOOGLE_ADSENSE_CLIENT) return;
   const scriptId = "makaug-adsense-script";
   if (document.getElementById(scriptId)) {
     renderGoogleAdsSlots();
@@ -39843,6 +40083,16 @@ function initGoogleAds() {
   script.onload = () => renderGoogleAdsSlots();
   document.head.appendChild(script);
 }
+
+function initializeConsentedMeasurement() {
+  if (analyticsConsentGranted()) {
+    initFrontendAnalytics();
+    initWebVitalsTracking();
+  }
+  if (advertisingConsentGranted()) initGoogleAds();
+}
+
+window.addEventListener("makaug:measurement-consent-changed", initializeConsentedMeasurement);
 
 const INLINE_REVENUE_PLACEMENTS = [
   { anchorId: "home-grid", slotKey: "home-featured", context: "Featured Properties" },
@@ -40909,11 +41159,14 @@ function seoRouteStateHandoffPayload(page) {
   const propertyType = normalizeInput(stateElement.dataset.propertyType || "");
   const bedrooms = normalizeInput(stateElement.dataset.bedrooms || "");
   const studentCampus = normalizeInput(stateElement.dataset.studentCampus || "");
+  const locationId = normalizeInput(stateElement.dataset.locationId || "");
   const area = normalizeInput(studentCampus || stateElement.dataset.area || "");
   return {
     page: targetPage,
     query: area,
     area,
+    locations: locationId,
+    nearby: normalizeInput(stateElement.dataset.nearby || (locationId ? "0" : "")),
     filters: {
       propertyType,
       commercialType: targetPage === "commercial" ? propertyType : "",
@@ -44290,7 +44543,8 @@ async function submitPropertyInquiry(id) {
       property_id: property.id,
       listing_type: normalizeType(property.type),
       district: property.district || "",
-      area: property.area || ""
+      area: property.area || "",
+      lead_id: inquiryResponse?.data?.lead_id || ""
     });
     const msgEl = document.getElementById("detail-inquiry-message");
     if (msgEl) msgEl.value = "";
@@ -44700,6 +44954,10 @@ function renderGrid(id, list, options = {}) {
   const el = document.getElementById(id);
   if (!el) return;
   if (!list.length) {
+    if (options.loading) {
+      el.innerHTML = loadingPropertyGridHtml(4);
+      return;
+    }
     if (id === "home-grid" && !publicListingsFromApiLoaded) {
       el.innerHTML = loadingPropertyGridHtml(3);
       return;
@@ -44757,10 +45015,15 @@ function studentCard(p, options = {}) {
   return propCard(p, { ...options, student: true });
 }
 
-function renderStudentGrid(list) {
+function renderStudentGrid(list, options = {}) {
   const el = document.getElementById("student-grid");
   if (!el) return;
+  el.setAttribute("aria-busy", options.loading ? "true" : "false");
   if (!list.length) {
+    if (options.loading || options.totalAuthoritative !== true) {
+      el.innerHTML = loadingPropertyGridHtml(4);
+      return;
+    }
     el.innerHTML = `
       <div class="col-span-full rounded-2xl border border-purple-100 bg-purple-50 p-5 text-purple-950">
         <h2 class="font-black text-lg">No exact matches yet. No student rooms match this search yet.</h2>
@@ -44779,17 +45042,34 @@ function updateStudentHeader(list, options = {}) {
     titleEl.textContent = uni ? `Student accommodation near ${uni}` : "Student accommodation across Uganda";
   }
   if (subtitleEl) {
-    const total = Math.max(0, Number(options.total ?? list.length) || 0);
-    const pageSize = Math.max(1, Number(options.pageSize || PUBLIC_RESULTS_PAGE_SIZE) || PUBLIC_RESULTS_PAGE_SIZE);
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const page = Math.min(Math.max(1, Number(options.page) || 1), totalPages);
     const visibleCount = Array.isArray(list) ? list.length : 0;
+    if (options.loading) {
+      subtitleEl.textContent = "Loading live student accommodation…";
+      return;
+    }
+    const pageSize = Math.max(1, Number(options.pageSize || PUBLIC_RESULTS_PAGE_SIZE) || PUBLIC_RESULTS_PAGE_SIZE);
+    const requestedPage = Math.max(1, Number(options.page) || 1);
+    const loadedThrough = ((requestedPage - 1) * pageSize) + visibleCount;
+    const suppliedTotal = Math.max(0, Number(options.total ?? visibleCount) || 0);
+    const total = options.totalAuthoritative === true
+      ? Math.max(visibleCount, suppliedTotal)
+      : Math.max(visibleCount, loadedThrough, suppliedTotal);
+    if (options.totalAuthoritative === true && total === 0) {
+      subtitleEl.textContent = "No matching properties found • Prices per semester";
+      return;
+    }
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = options.totalAuthoritative === true
+      ? Math.min(requestedPage, totalPages)
+      : requestedPage;
     const start = total ? Math.min(total, ((page - 1) * pageSize) + 1) : 0;
     const expectedEnd = page * pageSize;
     const rowEnd = visibleCount ? start + visibleCount - 1 : expectedEnd;
     const end = total ? Math.max(start, Math.min(total, rowEnd)) : 0;
     const suffix = total === 1 ? "property" : "properties";
-    const showing = total ? `Showing ${start}-${end} of ${total}` : "Showing 0";
+    const showing = total
+      ? `Showing ${start}-${end} ${options.totalAuthoritative === true ? `of ${total}` : `of at least ${total}`}`
+      : "Loading";
     subtitleEl.textContent = `${showing} ${suffix} • Prices per semester`;
   }
 }
@@ -46922,20 +47202,23 @@ async function submitAdvertisingSelfServe(event) {
   setAdvertisingStatus(contentTr("advertise.saving"));
   try {
     const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
+    let leadId = null;
     if (authState?.user && ["advertiser", "admin"].includes(mode)) {
       const created = await apiRequest("/api/advertising/campaigns", { method: "POST", body: payload });
       const campaignId = created?.data?.campaign?.id;
+      leadId = created?.data?.lead_id || null;
       if (!campaignId) throw new Error(contentTr("advertise.campaignReferenceMissing"));
       setAdvertisingStatus(contentTemplate("advertise.savedForReview", { reference: `<strong>${adminEscape(campaignId)}</strong>` }), "success");
     } else {
       const inquiry = await apiRequest("/api/advertising/inquiries", { method: "POST", skipAuth: true, body: payload });
+      leadId = inquiry?.data?.lead_id || null;
       setAdvertisingStatus(contentTemplate("advertise.briefSaved", {
         reference: `<strong>${adminEscape(inquiry?.data?.id || contentTr("advertise.pendingReference"))}</strong>`,
         createAccount: `<button type="button" onclick="openAuthSignUp('advertiser')" class="underline font-black">${adminEscape(contentTr("advertise.createAccount"))}</button>`,
         signIn: `<button type="button" onclick="openAuthSignIn('advertiser')" class="underline font-black">${adminEscape(contentTr("advertise.signIn"))}</button>`
       }), "success");
     }
-    trackEvent("advertising_selfserve_submitted", { package_key: selected.key, authenticated: Boolean(authState?.user) });
+    trackEvent("advertising_selfserve_submitted", { package_key: selected.key, authenticated: Boolean(authState?.user), lead_id: leadId });
   } catch (error) {
     setAdvertisingStatus(adminEscape(error?.message || contentTr("advertise.submissionFailed")), "error");
   } finally {
@@ -47441,6 +47724,54 @@ function currentUrlForPublicRoutePage(page) {
   return routeForPage(targetPage) || "/";
 }
 
+function isLocationSensitivePublicRoutePage(page) {
+  return PUBLIC_PAGINATION_CATEGORIES.includes(publicPaginationKey(page));
+}
+
+function markPublicRouteFragmentPath(page, pathname = window.location.pathname || "/") {
+  const element = document.getElementById(`page-${normalizePageKey(page)}`);
+  if (!element) return false;
+  element.dataset.publicRoutePath = normalizeRoutePath(pathname);
+  return true;
+}
+
+function publicRouteNeedsFreshFragment(page, pathname, element = null) {
+  if (!isLocationSensitivePublicRoutePage(page)) return false;
+  const pageElement = element || document.getElementById(`page-${normalizePageKey(page)}`);
+  if (!pageElement) return true;
+  const mountedPath = normalizeRoutePath(
+    pageElement.dataset.publicRoutePath || window.location.pathname || "/"
+  );
+  return mountedPath !== normalizeRoutePath(pathname || "/");
+}
+
+function resetPublicRouteInventoryState(page) {
+  const key = publicPaginationKey(page);
+  if (!key) return false;
+
+  // A same-category fragment can represent a completely different canonical
+  // area. Invalidate the previous area's async work before replacing its
+  // route-scoped selection and cached rows.
+  const canonicalState = PUBLIC_CANONICAL_LOCATION_STATE.get(key);
+  if (canonicalState) {
+    canonicalState.requestSeq = (canonicalState.requestSeq || 0) + 1;
+    window.clearTimeout(canonicalState.suggestionTimer);
+    PUBLIC_CANONICAL_LOCATION_STATE.delete(key);
+  }
+
+  const paginationState = publicPaginationStateFor(key);
+  paginationState.requestSeq = (paginationState.requestSeq || 0) + 1;
+  paginationState.page = 1;
+  paginationState.total = 0;
+  paginationState.loading = true;
+  paginationState.mode = "api";
+  paginationState.sourcePath = "";
+  paginationState.totalAuthoritative = false;
+  paginationState.hasMore = false;
+  clearPublicCategoryPageCache(key);
+  return true;
+}
+
 function mountPublicRouteSkeleton(page) {
   const targetPage = normalizePageKey(page);
   if (!targetPage || document.getElementById(`page-${targetPage}`)) return false;
@@ -47519,6 +47850,8 @@ async function loadPublicRouteFragment(nextUrl, page, options = {}) {
     if (!isCurrentPublicRouteLoad(loadToken, page)) return false;
     if (!mountPublicRouteFragment(doc, page)) throw new Error(`Route fragment missing page-${page}`);
     const url = new URL(nextUrl, window.location.origin);
+    resetPublicRouteInventoryState(page);
+    markPublicRouteFragmentPath(page, url.pathname);
     const nextPath = `${normalizeRoutePath(url.pathname)}${url.search || ""}${url.hash || ""}`;
     if (currentPathWithQueryAndHash() !== nextPath) {
       try { window.history.pushState({ page, source }, "", nextPath); } catch (error) {}
@@ -47599,6 +47932,10 @@ function navigatePublicRoute(target, event, options = {}) {
     if (currentPathWithQueryAndHash() !== nextUrl) {
       try { window.history.pushState({ page, source: options.source || "spa_link_loading" }, "", nextUrl); } catch (error) {}
     }
+    loadPublicRouteFragment(nextUrl, page, { ...options, loadToken });
+    return false;
+  }
+  if (publicRouteNeedsFreshFragment(page, path, existingPublicRoutePage)) {
     loadPublicRouteFragment(nextUrl, page, { ...options, loadToken });
     return false;
   }
@@ -48160,7 +48497,10 @@ function publicCategoryTotalForPagination(category, localCount = 0, response = n
   const state = publicPaginationStateFor(category);
   const stateTotal = Math.max(0, Number(state?.total) || 0);
   if (publicCategoryStateHasAuthoritativeTotal(category, state)) return stateTotal;
-  const apiTotal = publicOpportunityStatForCategory(publicPaginationBackendCategory(category));
+  const backendCategory = publicPaginationBackendCategory(category);
+  const apiTotal = backendCategory === "student"
+    ? null
+    : publicOpportunityStatForCategory(backendCategory);
   return Math.max(
     Math.max(0, Number(localCount) || 0),
     stateTotal,
@@ -48319,6 +48659,17 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
   const state = publicPaginationStateFor(key);
   if (!key || !state) return [];
   ensurePublicResultsHeader(key);
+  const grid = document.getElementById(publicPaginationGridId(key));
+  const hasServerRenderedRows = Boolean(grid?.querySelector("[data-ssr-property-card]"));
+  const isExactNestedSeoRoute = Boolean(seoRouteStateHandoffPayload(key)?.locations);
+  const shouldPreserveServerRows = hasServerRenderedRows
+    && !options.response
+    && !Array.isArray(options.rowsOverride)
+    && (state.loading === true || isExactNestedSeoRoute);
+  if (shouldPreserveServerRows) {
+    renderPublicCategoryPagination(key, { loading: state.loading === true });
+    return [];
+  }
   if (options.mode) state.mode = options.mode;
   if (options.sourcePath !== undefined) syncPublicCategoryPaginationSource(key, options.sourcePath || "");
   if (options.page) state.page = Math.max(1, Number(options.page) || 1);
@@ -48336,7 +48687,8 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
     const responseRowCount = Array.isArray(options.rowsOverride) ? options.rowsOverride.length : list.length;
     state.hasMore = publicPaginationHasMore(options.response, responseRowCount);
   }
-  if (exactResponseTotal != null) {
+  const terminalApiResponse = Boolean(options.response) && state.hasMore === false;
+  if (exactResponseTotal != null || terminalApiResponse) {
     state.totalAuthoritative = true;
   } else if (state.mode === "local" || options.mode === "local" || filtered) {
     state.totalAuthoritative = false;
@@ -48352,10 +48704,20 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
     : (authoritative ? authoritative.rows
     : (Array.isArray(cachedRows) && cachedRows.length ? cachedRows : list.slice((state.page - 1) * PUBLIC_RESULTS_PAGE_SIZE, state.page * PUBLIC_RESULTS_PAGE_SIZE)));
   if (key === "students") {
-    renderStudentGrid(pageRows);
-    updateStudentHeader(pageRows, { total, page: state.page, pageSize: PUBLIC_RESULTS_PAGE_SIZE });
+    const studentRenderOptions = {
+      total,
+      page: state.page,
+      pageSize: PUBLIC_RESULTS_PAGE_SIZE,
+      loading: state.loading === true,
+      totalAuthoritative: state.totalAuthoritative === true
+    };
+    renderStudentGrid(pageRows, studentRenderOptions);
+    updateStudentHeader(pageRows, studentRenderOptions);
   } else {
-    renderGrid(publicPaginationGridId(key), pageRows, { categoryPage: key });
+    renderGrid(publicPaginationGridId(key), pageRows, {
+      categoryPage: key,
+      loading: state.loading === true
+    });
     setPublicCategoryCount(key, total, { filtered: true });
   }
   const mapId = publicPaginationMapId(key);
@@ -48479,6 +48841,7 @@ function publicInventoryRouteSearchPath(category) {
   const query = normalizeInput(payload.query || payload.area || "");
   const area = normalizeInput(payload.area || "");
   const locations = normalizeInput(payload.locations || "");
+  const exactSeoLocation = payload.source === "seo_facet_route" && Boolean(locations);
   const filters = payload.filters || {};
   const hasSearch = Boolean(query || area || locations || Object.values(filters).some(Boolean));
   if (!hasSearch) return "";
@@ -48490,11 +48853,11 @@ function publicInventoryRouteSearchPath(category) {
   } else {
     params.set("listing_type", config.backendCategory);
   }
-  if (query) params.set("query", query);
-  if (area && area !== query) params.set(page === "students" ? "studentCampus" : "area", area);
+  if (query && !exactSeoLocation) params.set("query", query);
+  if (area && area !== query && !exactSeoLocation) params.set(page === "students" ? "studentCampus" : "area", area);
   if (locations) {
-    params.set("locations", locations);
-    params.set("nearby", String(payload.nearby ?? 3));
+    params.set("location_ids", locations);
+    params.set("nearby_km", String(payload.nearby ?? 0));
   }
   if (filters.propertyType) params.set("property_type", filters.propertyType);
   if (filters.minPrice) params.set("min_price", String(filters.minPrice));
@@ -48678,6 +49041,13 @@ function exactPublicPaginationTotal(response) {
   return total != null && total > 0 ? total : 0;
 }
 
+function publicCategoryHydrationStillCurrent(category, expectedPath) {
+  if (category !== activePublicInventoryCategoryFromRoute()) return false;
+  const currentPath = publicInventoryRouteSearchPath(category)
+    || publicInventoryCategoryPath(category);
+  return Boolean(currentPath && currentPath === expectedPath);
+}
+
 async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {}) {
   const activeCategory = activePublicInventoryCategoryFromRoute();
   if (!activeCategory) return false;
@@ -48690,16 +49060,24 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
   }
   const hydrationPromise = (async () => {
     const slowNoticeTimer = activeRouteSearchPath
-      ? window.setTimeout(() => renderPublicSearchDelayNotice(activeCategory, { allowRetry: false }), 3000)
+      ? window.setTimeout(() => {
+          if (publicCategoryHydrationStillCurrent(activeCategory, activeCategoryPath)) {
+            renderPublicSearchDelayNotice(activeCategory, { allowRetry: false });
+          }
+        }, 3000)
       : null;
     const retryNoticeTimer = activeRouteSearchPath
-      ? window.setTimeout(() => renderPublicSearchDelayNotice(activeCategory, { allowRetry: true }), 10000)
+      ? window.setTimeout(() => {
+          if (publicCategoryHydrationStillCurrent(activeCategory, activeCategoryPath)) {
+            renderPublicSearchDelayNotice(activeCategory, { allowRetry: true });
+          }
+        }, 10000)
       : null;
     try {
       let { rows: firstCategoryRows, firstResponse: firstCategoryResponse } = await fetchPublicPaginatedRows(activeCategoryPath, {
         limit: PUBLIC_RESULTS_PAGE_SIZE,
         maxPages: 1,
-        includeSummary: Boolean(activeRouteSearchPath)
+        includeSummary: Boolean(activeRouteSearchPath) || activeCategory === "students"
       });
       const restoredRouteSearchPath = publicInventoryRouteSearchPath(activeCategory);
       if (!activeRouteSearchPath && restoredRouteSearchPath) {
@@ -48711,8 +49089,12 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
           includeSummary: true
         }));
       }
+      if (!publicCategoryHydrationStillCurrent(activeCategory, activeCategoryPath)) return false;
       let resolvedCategoryPath = activeCategoryPath;
-      if (activeRouteSearchPath && (exactPublicPaginationTotalValue(firstCategoryResponse) ?? firstCategoryRows.length) === 0) {
+      const exactSeoRoute = activeRouteSearchPath
+        && Boolean(seoRouteStateHandoffPayload(activeCategory)?.locations);
+      if (exactSeoRoute) resetCanonicalLocationWidening(activeCategory);
+      if (activeRouteSearchPath && !exactSeoRoute && (exactPublicPaginationTotalValue(firstCategoryResponse) ?? firstCategoryRows.length) === 0) {
         const widened = await fetchCanonicalAutoWidenedFirstPage(activeCategory, activeCategoryPath);
         if (widened) {
           firstCategoryRows = widened.rows;
@@ -48720,19 +49102,22 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
           resolvedCategoryPath = widened.path;
         }
       }
-      if (activeCategory !== activePublicInventoryCategoryFromRoute()) return false;
+      if (!publicCategoryHydrationStillCurrent(activeCategory, activeCategoryPath)) return false;
       if (activeRouteSearchPath) {
         syncPublicCategoryPaginationSource(activeCategory, resolvedCategoryPath);
         applyPublicRowsForUi(firstCategoryRows, firstCategoryResponse);
         const firstPageRows = cachePublicCategoryPageRows(activeCategory, 1, firstCategoryRows);
         const firstCategoryState = publicPaginationStateFor(activeCategory);
         const firstCategoryExactTotal = exactPublicPaginationTotalValue(firstCategoryResponse);
-        const firstCategoryTotal = firstCategoryExactTotal ?? firstCategoryRows.length;
+        const firstCategoryHasMore = publicPaginationHasMore(firstCategoryResponse, firstCategoryRows.length);
+        const firstCategoryTotal = firstCategoryExactTotal
+          ?? publicPaginationLoadedThrough(firstCategoryResponse, firstCategoryRows.length);
         if (firstCategoryState) {
           firstCategoryState.page = 1;
           firstCategoryState.total = firstCategoryTotal;
-          firstCategoryState.totalAuthoritative = firstCategoryExactTotal != null;
-          firstCategoryState.hasMore = publicPaginationHasMore(firstCategoryResponse, firstCategoryRows.length);
+          firstCategoryState.totalAuthoritative = firstCategoryExactTotal != null || !firstCategoryHasMore;
+          firstCategoryState.hasMore = firstCategoryHasMore;
+          firstCategoryState.loading = false;
           firstCategoryState.mode = "api";
           firstCategoryState.sourcePath = resolvedCategoryPath;
         }
@@ -48746,18 +49131,24 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
           filtered: true
         });
         syncActiveRouteSearchHandoff(activeRouteSearchPath ? "active_route_search_first_page" : "active_category_first_page");
+        clearPublicSearchDelayNotice(activeCategory);
         return true;
       }
-      if (firstCategoryRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
+      if (activeCategory === activePublicInventoryCategoryFromRoute()) {
         syncPublicCategoryPaginationSource(activeCategory, activeCategoryPath);
         applyPublicRowsForUi(firstCategoryRows, firstCategoryResponse);
         cachePublicCategoryPageRows(activeCategory, 1, firstCategoryRows);
         const firstCategoryState = publicPaginationStateFor(activeCategory);
+        const firstCategoryExactTotal = exactPublicPaginationTotalValue(firstCategoryResponse);
+        const firstCategoryHasMore = publicPaginationHasMore(firstCategoryResponse, firstCategoryRows.length);
         if (firstCategoryState) {
           firstCategoryState.page = 1;
-          firstCategoryState.total = publicCategoryTotalForPagination(activeCategory, firstCategoryRows.length, firstCategoryResponse, { filtered: false });
-          firstCategoryState.totalAuthoritative = exactPublicPaginationTotalValue(firstCategoryResponse) != null;
-          firstCategoryState.hasMore = publicPaginationHasMore(firstCategoryResponse, firstCategoryRows.length);
+          firstCategoryState.total = firstCategoryExactTotal ?? (firstCategoryHasMore
+            ? publicCategoryTotalForPagination(activeCategory, firstCategoryRows.length, firstCategoryResponse, { filtered: false })
+            : publicPaginationLoadedThrough(firstCategoryResponse, firstCategoryRows.length));
+          firstCategoryState.totalAuthoritative = firstCategoryExactTotal != null || !firstCategoryHasMore;
+          firstCategoryState.hasMore = firstCategoryHasMore;
+          firstCategoryState.loading = false;
           firstCategoryState.mode = "api";
           firstCategoryState.sourcePath = activeCategoryPath;
         }
@@ -48773,10 +49164,13 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
           console.warn("Unable to refresh public opportunity summary", summaryError);
           return null;
         });
+      if (!publicCategoryHydrationStillCurrent(activeCategory, activeCategoryPath)) return false;
       const firstCategoryExactTotal = exactPublicPaginationTotalValue(firstCategoryResponse);
-      const categoryTotal = firstCategoryExactTotal ?? (publicOpportunityStatForCategory(activeCategory) ?? stats?.[activeCategory] ?? 0);
+      const categoryTotal = firstCategoryExactTotal ?? (activeCategory === "students"
+        ? Math.max(firstCategoryRows.length, Number(publicPaginationStateFor(activeCategory)?.total) || 0)
+        : (publicOpportunityStatForCategory(activeCategory) ?? stats?.[activeCategory] ?? 0));
       const categoryState = publicPaginationStateFor(activeCategory);
-      if (categoryState && (firstCategoryExactTotal != null || categoryTotal)) {
+      if (categoryState && !categoryState.totalAuthoritative && (firstCategoryExactTotal != null || categoryTotal)) {
         categoryState.total = categoryTotal;
         if (firstCategoryExactTotal != null) categoryState.totalAuthoritative = true;
         categoryState.sourcePath = activeCategoryPath;
@@ -48784,6 +49178,12 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
       clearPublicSearchDelayNotice(activeCategory);
       return firstCategoryRows.length > 0;
     } catch (error) {
+      if (!publicCategoryHydrationStillCurrent(activeCategory, activeCategoryPath)) return false;
+      const failedState = publicPaginationStateFor(activeCategory);
+      if (failedState) {
+        failedState.loading = false;
+        renderPublicCategoryPagination(activeCategory, { loading: false });
+      }
       if (activeRouteSearchPath) renderPublicSearchDelayNotice(activeCategory);
       if (!silent) toast(`Live ${activeCategory} listings refresh failed: ${error.message || "error"}`);
       return false;
@@ -48806,11 +49206,21 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
   const startupCategory = activePublicInventoryCategoryFromRoute();
   const startupState = startupCategory ? publicPaginationStateFor(startupCategory) : null;
   const startupRouteSearchPath = startupCategory ? publicInventoryRouteSearchPath(startupCategory) : "";
+  const startupCategoryPath = startupCategory
+    ? startupRouteSearchPath || publicInventoryCategoryPath(startupCategory)
+    : "";
+  const startupHydrationStillCurrent = () => startupCategory
+    ? publicCategoryHydrationStillCurrent(startupCategory, startupCategoryPath)
+    : !activePublicInventoryCategoryFromRoute();
   const slowNoticeTimer = startupRouteSearchPath
-    ? window.setTimeout(() => renderPublicSearchDelayNotice(startupCategory, { allowRetry: false }), 3000)
+    ? window.setTimeout(() => {
+        if (startupHydrationStillCurrent()) renderPublicSearchDelayNotice(startupCategory, { allowRetry: false });
+      }, 3000)
     : null;
   const retryNoticeTimer = startupRouteSearchPath
-    ? window.setTimeout(() => renderPublicSearchDelayNotice(startupCategory, { allowRetry: true }), 10000)
+    ? window.setTimeout(() => {
+        if (startupHydrationStillCurrent()) renderPublicSearchDelayNotice(startupCategory, { allowRetry: true });
+      }, 10000)
     : null;
   if (startupState) {
     const startupPath = publicInventoryCategoryPath(startupCategory);
@@ -48847,14 +49257,19 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     const firstPageRowsPromise = fetchPublicPaginatedRows(firstPagePath, {
       limit: activeCategory ? PUBLIC_RESULTS_PAGE_SIZE : PUBLIC_LISTINGS_FAST_PAGE_LIMIT,
       maxPages: 1,
-      includeSummary: Boolean(activeRouteSearchPath)
+      includeSummary: Boolean(activeRouteSearchPath) || activeCategory === "students"
     });
     const { rows: firstPageRows, firstResponse: firstPageResponse } = await firstPageRowsPromise;
-    const currentRouteSearchPath = activeCategory ? publicInventoryRouteSearchPath(activeCategory) : "";
-    if (currentRouteSearchPath && currentRouteSearchPath !== firstPagePath) {
-      await refreshActivePublicInventoryCategoryFromApi({ silent });
+    const currentActiveCategory = activePublicInventoryCategoryFromRoute();
+    const firstPageStillCurrent = activeCategory
+      ? publicCategoryHydrationStillCurrent(activeCategory, firstPagePath)
+      : !currentActiveCategory;
+    if (!firstPageStillCurrent) {
+      const refreshed = currentActiveCategory
+        ? await refreshActivePublicInventoryCategoryFromApi({ silent })
+        : false;
       await summaryStatsPromise;
-      return true;
+      return refreshed;
     }
     applyPublicRowsForUi(firstPageRows, firstPageResponse);
     if (activeCategory) {
@@ -48862,10 +49277,14 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       cachePublicCategoryPageRows(activeCategory, 1, firstPageRows);
       const firstPageState = publicPaginationStateFor(activeCategory);
       if (firstPageState) {
+        const firstPageExactTotal = exactPublicPaginationTotalValue(firstPageResponse);
+        const firstPageHasMore = publicPaginationHasMore(firstPageResponse, firstPageRows.length);
         firstPageState.page = 1;
-        firstPageState.total = publicCategoryTotalForPagination(activeCategory, firstPageRows.length, firstPageResponse, { filtered: false });
-        firstPageState.totalAuthoritative = exactPublicPaginationTotalValue(firstPageResponse) != null;
-        firstPageState.hasMore = publicPaginationHasMore(firstPageResponse, firstPageRows.length);
+        firstPageState.total = firstPageExactTotal ?? (firstPageHasMore
+          ? publicCategoryTotalForPagination(activeCategory, firstPageRows.length, firstPageResponse, { filtered: false })
+          : publicPaginationLoadedThrough(firstPageResponse, firstPageRows.length));
+        firstPageState.totalAuthoritative = firstPageExactTotal != null || !firstPageHasMore;
+        firstPageState.hasMore = firstPageHasMore;
         firstPageState.loading = false;
         firstPageState.mode = "api";
         firstPageState.sourcePath = firstPagePath;
@@ -48874,11 +49293,14 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     renderAll();
     if (activeRouteSearchPath) syncActiveRouteSearchHandoff("initial_route_search_first_page");
     const summaryStats = await summaryStatsPromise;
+    if (activeCategory && !publicCategoryHydrationStillCurrent(activeCategory, firstPagePath)) return false;
     const firstPageCategoryExactTotal = activeCategory ? exactPublicPaginationTotalValue(firstPageResponse) : null;
-    const categoryTotal = activeCategory ? firstPageCategoryExactTotal ?? (publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0) : 0;
+    const categoryTotal = activeCategory ? firstPageCategoryExactTotal ?? (activeCategory === "students"
+      ? Math.max(firstPageRows.length, Number(publicPaginationStateFor(activeCategory)?.total) || 0)
+      : (publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0)) : 0;
     if (activeCategory && (firstPageCategoryExactTotal != null || categoryTotal)) {
       const categoryState = publicPaginationStateFor(activeCategory);
-      if (categoryState) {
+      if (categoryState && !categoryState.totalAuthoritative) {
         categoryState.total = categoryTotal;
         if (firstPageCategoryExactTotal != null) categoryState.totalAuthoritative = true;
         categoryState.sourcePath = firstPagePath;
@@ -48891,13 +49313,13 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     await featuredRowsPromise;
     return true;
   } catch (e) {
-    const activeCategory = activePublicInventoryCategoryFromRoute();
-    const activeState = activeCategory ? publicPaginationStateFor(activeCategory) : null;
+    if (!startupHydrationStillCurrent()) return false;
+    const activeState = startupCategory ? publicPaginationStateFor(startupCategory) : null;
     if (activeState) {
       activeState.loading = false;
-      renderPublicCategoryPagination(activeCategory, { loading: false });
+      renderPublicCategoryPagination(startupCategory, { loading: false });
     }
-    if (activeCategory && publicInventoryRouteSearchPath(activeCategory)) renderPublicSearchDelayNotice(activeCategory);
+    if (startupCategory && publicInventoryRouteSearchPath(startupCategory)) renderPublicSearchDelayNotice(startupCategory);
     if (!silent) toast(`Live listings refresh failed: ${e.message || "error"}`);
     return false;
   } finally {
@@ -49106,7 +49528,9 @@ async function parseInitialDeepLink() {
   const publicRoutePage = pageForPublicRoute(path);
   if (publicRoutePage) {
     const existingPublicRoutePage = document.getElementById(`page-${publicRoutePage}`);
-    if (!existingPublicRoutePage || isPublicRouteSkeletonElement(existingPublicRoutePage)) {
+    if (!existingPublicRoutePage
+      || isPublicRouteSkeletonElement(existingPublicRoutePage)
+      || publicRouteNeedsFreshFragment(publicRoutePage, path, existingPublicRoutePage)) {
       await loadPublicRouteFragment(`${path}${window.location.search || ""}${window.location.hash || ""}`, publicRoutePage, {
         source: "popstate_missing_fragment",
         scroll: false
@@ -49472,6 +49896,7 @@ async function hydrateCanonicalLocationSeoRoute(config) {
   else params.set("listing_type", config.backendCategory);
   try {
     const body = await fetchPublicJsonWithRetry(`/api/properties/locations/suggest?${params.toString()}`);
+    if (PUBLIC_CANONICAL_LOCATION_STATE.get(normalizePageKey(config.key)) !== state) return;
     const suggestions = canonicalLocationSuggestionsFromResponse(body);
     const exactSuggestions = Array.isArray(body.data) ? body.data : [];
     const didYouMeanSuggestions = Array.isArray(body.meta?.did_you_mean_suggestions) ? body.meta.did_you_mean_suggestions : [];
@@ -55570,7 +55995,8 @@ async function submitMortgageLead() {
       lead_context: provider ? "bank_provider" : "general_mortgage_callback",
       buying_stage: buyingStage || "not_given",
       deposit_status: depositStatus || "not_given",
-      income_type: incomeType || "not_given"
+      income_type: incomeType || "not_given",
+      lead_id: res?.data?.lead_id || ""
     });
     ["mortgage-lead-name", "mortgage-lead-phone", "mortgage-lead-email", "mortgage-lead-amount", "mortgage-lead-term", "mortgage-lead-monthly-income"].forEach((id) => {
       const el = document.getElementById(id);
@@ -57792,9 +58218,19 @@ function initializeMakaugApp() {
   if (window.__makaugAppInitialized) return;
   window.__makaugAppInitialized = true;
   installPublicRouteInterceptor();
+  const initialPublicCategory = activePublicInventoryCategoryFromRoute();
+  const initialPublicCategoryState = initialPublicCategory
+    ? publicPaginationStateFor(initialPublicCategory)
+    : null;
+  const initialPublicRoutePage = pageForPublicRoute(window.location.pathname || "/");
+  if (initialPublicRoutePage) markPublicRouteFragmentPath(initialPublicRoutePage);
+  if (initialPublicCategoryState) {
+    initialPublicCategoryState.loading = true;
+    initialPublicCategoryState.mode = "api";
+  }
   const savedLang = getStoredMakaugLanguagePreference();
   addAdUnits();
-  initGoogleAds();
+  initializeConsentedMeasurement();
   populateDistricts();
   populateBrokerFilterOptions();
   populateUniversitySelects();
@@ -57804,8 +58240,6 @@ function initializeMakaugApp() {
   hydrateMonetizationConfig();
   handleOAuthReturnFromUrl();
   setLang(getStartupLanguagePreference(savedLang), true, false);
-  initFrontendAnalytics();
-  initWebVitalsTracking();
   setHeroLocationFilter(currentTab);
   setHeroRadiusState(currentTab);
   setHeroContextFilter(currentTab);

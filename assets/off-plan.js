@@ -472,9 +472,13 @@
       bootstrap.used = true;
       return bootstrap.promise;
     }
+    const method = String(options.method || 'GET').toUpperCase();
+    const attributionHeaders = options.body !== undefined && !['GET', 'HEAD'].includes(method)
+      ? (window.makaugMeasurementConsent?.leadAttributionHeaders?.() || {})
+      : {};
     const response = await fetch(path, {
-      method: options.method || 'GET',
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      method,
+      headers: { 'Content-Type': 'application/json', ...attributionHeaders, ...(options.headers || {}) },
       credentials: 'same-origin',
       body: options.body === undefined ? undefined : JSON.stringify(options.body)
     });
@@ -1251,7 +1255,7 @@
       const data = await request('/api/off-plan/enquiries', { method: 'POST', body: { development_id: state.contactDevelopmentId, enquiry_type: state.contactMode, preferred_contact_channel: channel, name: clean(document.getElementById('off-plan-contact-name')?.value), phone: clean(document.getElementById('off-plan-contact-phone')?.value), email: clean(document.getElementById('off-plan-contact-email')?.value), requested_callback_at: channel === 'call' ? clean(document.getElementById('off-plan-contact-callback')?.value) : null, message: state.contactMode === 'project_interest' ? `I would like to enquire about ${state.activeProject?.name || 'this off-plan project'}.` : `I would like to enquire about listing a new off-plan project.${suppliedDetails ? ` Project details supplied: ${suppliedDetails}` : ''}`, source_path: location.pathname, metadata: { truth_confirmed: state.contactMode === 'listing_request' ? Boolean(document.getElementById('off-plan-contact-truth')?.checked) : null, supplied_project_details: suppliedDetails || null, project_contact_name: state.activeProject?.extra_fields?.contact_mode === 'makaug_managed' ? 'makaug.com overseas team' : (state.activeProject?.source_agent_name || null), country_code: state.activeProject?.country_code || state.countryCode } } });
       if (status) { status.className = 'text-sm rounded-xl p-3 bg-green-50 text-green-900'; status.textContent = data.message; }
       if (channel === 'whatsapp' && data.whatsapp_url) window.open(data.whatsapp_url, '_blank', 'noopener,noreferrer');
-      track('off_plan_enquiry_submitted', { channel, mode: state.contactMode, development_id: state.contactDevelopmentId });
+      track('off_plan_enquiry_submitted', { channel, mode: state.contactMode, development_id: state.contactDevelopmentId, lead_id: data.lead_id || null });
       document.getElementById('off-plan-contact-form')?.reset(); selectOffPlanContactChannel(channel);
     } catch (error) { if (status) { status.className = 'text-sm rounded-xl p-3 bg-red-50 text-red-900'; status.textContent = error.message; } }
     finally { if (button) button.disabled = false; }

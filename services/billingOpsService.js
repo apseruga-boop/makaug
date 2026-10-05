@@ -15,11 +15,13 @@
  */
 
 const logger = require('../config/logger');
+const commercialCatalog = require('../config/aboutCommercialProducts');
 const revenue = require('./revenueService');
 const { agentGreetingName } = require('./agentNameService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
 const SITE = () => String(process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+const PRIVATE_LISTING = commercialCatalog.products.privateListing;
 let settingsCache = { at: 0, value: null };
 
 async function getSettings(db, { fresh = false } = {}) {
@@ -468,7 +470,7 @@ async function listingStats(db, propertyId) {
 }
 
 function listerFreeUntil(property = {}, settings = {}) {
-  const freeDays = Number(settings.lister_fee?.free_days || 7);
+  const freeDays = Number(settings.lister_fee?.free_days || PRIVATE_LISTING.trialDays);
   const start = new Date(property.reviewed_at || property.created_at || Date.now());
   return new Date(start.getTime() + (freeDays - 1) * 86400000 + 3 * 3600 * 1000).toISOString().slice(0, 10);
 }
@@ -481,7 +483,7 @@ const LISTER_MESSAGE_KINDS = ['views', 'reminder', 'final_reminder', 'taken_down
 
 async function buildListerMessage(db, kind, property, settings, payLink = '') {
   const name = String(property.lister_name || '').trim().split(/\s+/)[0] || 'there';
-  const fee = Number(settings.lister_fee?.monthly_ugx || 25000);
+  const fee = Number(settings.lister_fee?.monthly_ugx || PRIVATE_LISTING.amount);
   const pay = payToLine(settings);
   const link = `${SITE()}/property/${property.id}`;
   const title = property.title || 'property';
