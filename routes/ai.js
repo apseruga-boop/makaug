@@ -276,6 +276,23 @@ function prepareAssistantParsedQuery({ parsed = {}, intent = '', userMessage = '
 }
 
 function resolveAssistantParsedLocation(parsed = {}, userMessage = '') {
+  const first = resolveAssistantParsedLocationExact(parsed, userMessage);
+  const typo = cleanText(parsed?.area, 120);
+  if (first.resolution?.status === 'matched' || !typo || typo.length < 4) return first;
+  // "ntnda" → Ntinda: a well-known area one letter away is taken as meant.
+  try {
+    const suggestion = canonicalLocationSuggestions(typo)[0];
+    if (suggestion?.did_you_mean && Number(suggestion.confidence || 0) >= 0.8 && suggestion.latitude !== null && Number.isFinite(Number(suggestion.latitude)) && suggestion.location) {
+      const retried = resolveAssistantParsedLocationExact({ ...parsed, area: suggestion.location, district: suggestion.district || null }, userMessage);
+      if (retried.resolution?.status === 'matched') return { ...retried, resolution: { ...retried.resolution, corrected_from: typo } };
+    }
+  } catch (_error) {
+    // fall through to the original answer
+  }
+  return first;
+}
+
+function resolveAssistantParsedLocationExact(parsed = {}, userMessage = '') {
   const rawArea = cleanText(parsed?.area, 120);
   const rawDistrict = cleanText(parsed?.district, 120);
   const hasStructuredLocation = Boolean(rawArea || rawDistrict);
@@ -344,7 +361,29 @@ function assistantHasSearchSignal(parsed = {}, searchType = 'any', userMessage =
   if (Number(parsed?.bedsMin) > 0 || Number(parsed?.maxBudgetUgx) > 0) return true;
   if (cleanText(parsed?.area || parsed?.district || parsed?.propertyType)) return true;
   if (searchType && searchType !== 'any') return true;
+  if (parsed?.sort) return true;
   return ASSISTANT_LISTING_SIGNAL_PATTERN.test(text);
+}
+
+// "newest listings", "cheapest house", "most expensive homes" are searches with an order.
+function assistantSortFromText(text = '') {
+  const t = String(text || '').toLowerCase();
+  if (/\b(?:most expensive|priciest|highest price|luxury|top end)\b/.test(t)) return 'price_desc';
+  if (/\b(?:cheapest|lowest price|least expensive)\b/.test(t)) return 'price_asc';
+  if (/\b(?:newest|latest|most recent|recent|new)\s+(?:listings?|properties|property|houses?|homes?|apartments?|plots?|land)\b/.test(t)) return 'newest';
+  return null;
+}
+
+function assistantNonSearchIntent(lowerText = '') {
+  const t = String(lowerText || '').toLowerCase();
+  if (!t) return '';
+  if (/\b(?:join|register|sign\s*up|signup|become|apply)\b.{0,30}\b(?:agent|broker|realtor)\b|\b(?:agent|broker)\s+(?:registration|sign\s*up|signup)\b/.test(t)) return 'agent_registration';
+  if (/\b(?:find|need|looking for|get|recommend|show)\b.{0,20}\b(?:an?\s+)?(?:agent|broker|realtor)s?\b|^\s*(?:agents?|brokers?)\b/.test(t)) return 'agent_search';
+  if (/\b(?:mortgage|home loan|house loan|property loan|loan to buy)\b/.test(t)) return 'mortgage_help';
+  if (/\b(?:list|post|advertise|upload|add)\s+(?:my|our|a)\s+(?:property|house|home|land|plot|apartment|flat|room|rental|shop|office|building)\b/.test(t)
+    || /\b(?:i|we)\s+(?:want|need|would like|wish)\s+to\s+(?:sell|rent out|let|list|advertise)\s+(?:my|our)\b/.test(t)
+    || /\b(?:sell|selling|rent out|renting out)\s+(?:my|our)\s+(?:property|house|home|land|plot|apartment|flat|room|rental|shop|office|building)\b/.test(t)) return 'property_listing';
+  return '';
 }
 
 function inferAssistantIntentFromMessage(userMessage = '', suppliedIntent = 'unknown') {
@@ -358,6 +397,9 @@ function inferAssistantIntentFromMessage(userMessage = '', suppliedIntent = 'unk
       ? 'off_plan_listing'
       : 'off_plan_search';
   }
+  // The Ask AI bar sends every message as a search; these are not searches.
+  const nonSearchIntent = assistantNonSearchIntent(offPlanText);
+  if (nonSearchIntent) return nonSearchIntent;
   if (explicitIntent && explicitIntent !== 'unknown') return explicitIntent;
   const text = cleanText(userMessage, 1200);
   if (!text || ASSISTANT_GREETING_ONLY_PATTERN.test(text)) return 'unknown';
@@ -458,7 +500,7 @@ function buildAssistantSearchParams(parsed = {}, searchType = 'any', language = 
     page: '1',
     include_summary: '1',
     card_fields: '1',
-    sort: 'newest',
+    sort: ['price_asc', 'price_desc', 'newest'].includes(parsed.sort) ? parsed.sort : 'newest',
     source: 'ai_assistant',
     language
   });
@@ -482,7 +524,77 @@ function buildAssistantSearchParams(parsed = {}, searchType = 'any', language = 
     params.set('transaction_type', cleanText(parsed.transactionType, 20));
   }
   if (Number(parsed.maxBudgetUgx) > 0) params.set('max_price', String(Math.round(Number(parsed.maxBudgetUgx))));
+  if (parsed.near && Number.isFinite(Number(parsed.near.lat)) && Number.isFinite(Number(parsed.near.lng))) {
+    // Distance search: results within the radius, closest first. The area text filter is not used.
+    params.delete('query');
+    params.delete('district');
+    params.set('lat', String(parsed.near.lat));
+    params.set('lng', String(parsed.near.lng));
+    params.set('radius_miles', String(parsed.near.radiusMiles || 2));
+    params.set('radius_unit', 'miles');
+    // "a house near X": fetch extra so plots and offices can be dropped and 8 homes remain.
+    params.set('limit', parsed.near.homesOnly ? '30' : '8');
+  }
   return params;
+}
+
+// "10 miles from Mulago", "near Acacia Mall", "house near a school in Kira".
+function resolveAssistantProximity(extracted = {}, parsed = {}) {
+  const proximity = extracted?.proximity;
+  if (!proximity) return null;
+  const landmarks = require('../services/landmarkService');
+  let center = null;
+  if (proximity.target) center = landmarks.resolveProximityCenter(proximity.target);
+  if (!center && proximity.area) center = landmarks.areaCenter(proximity.area);
+  if (!center && proximity.kind && parsed?.area) center = landmarks.areaCenter(parsed.area);
+  if (!center) {
+    return { unresolved: true, target: proximity.target || proximity.kind || '', kind: proximity.kind || null, radiusMiles: proximity.radiusMiles };
+  }
+  return {
+    center,
+    kind: proximity.kind || null,
+    generic: Boolean(proximity.generic),
+    radiusMiles: proximity.radiusMiles,
+    radiusExplicit: Boolean(proximity.radiusExplicit),
+    label: center.name
+  };
+}
+
+// Each result gets its distance and, when someone asked for a school/hospital/etc., the nearest one.
+function annotateProximityListings(listings = [], proximity = null) {
+  if (!proximity?.center) return listings;
+  const landmarks = require('../services/landmarkService');
+  return (Array.isArray(listings) ? listings : []).map((listing) => {
+    const lat = Number(listing.latitude ?? listing.lat);
+    const lng = Number(listing.longitude ?? listing.lng);
+    let km = Number(listing.distance_km);
+    if (!Number.isFinite(km) && Number.isFinite(lat) && Number.isFinite(lng)) km = landmarks.kmBetween(proximity.center, { lat, lng });
+    const out = { ...listing };
+    if (Number.isFinite(km)) {
+      out.distance_km = Math.round(km * 100) / 100;
+      out.distance_label = `${landmarks.formatDistance(km)} from ${proximity.label}`;
+    }
+    if (proximity.kind && Number.isFinite(lat) && Number.isFinite(lng)) {
+      const nearest = landmarks.nearestOfKind({ lat, lng }, proximity.kind, { limit: 1, withinKm: 10 })[0];
+      if (nearest) {
+        out.nearest_place = { name: nearest.name, kind: nearest.kind, km: Math.round(nearest.km * 100) / 100 };
+        out.nearest_place_label = `Nearest ${landmarks.KIND_LABEL[nearest.kind] || nearest.kind}: ${nearest.name}, ${landmarks.formatDistance(nearest.km)}`;
+      }
+    }
+    return out;
+  });
+}
+
+function proximityLeadText({ total = 0, proximity, searchType = 'any' }) {
+  const miles = Number(proximity.radiusMiles || 2);
+  const radius = `${miles % 1 ? miles.toFixed(1) : miles} mile${miles === 1 ? '' : 's'} (${(miles * 1.609344).toFixed(1)} km)`;
+  const what = { rent: 'rentals', sale: 'properties for sale', land: 'land listings', student: 'student rooms', commercial: 'commercial spaces' }[searchType] || 'properties';
+  const where = proximity.generic && proximity.kind
+    ? `around ${proximity.label}, with the nearest ${proximity.kind} for each`
+    : `within ${radius} of ${proximity.label}`;
+  if (!total) return `No ${what} ${where} yet. Try a wider distance, e.g. "${Math.min(50, Math.max(5, Math.round(miles * 2)))} miles from ${proximity.label}".`;
+  const one = { rentals: 'rental', 'properties for sale': 'property for sale', 'land listings': 'land listing', 'student rooms': 'student room', 'commercial spaces': 'commercial space', properties: 'property' };
+  return `I found ${total} ${total === 1 ? (one[what] || what) : what} ${where}, closest first.`;
 }
 
 function assistantFilterChips(parsed = {}, searchType = 'any') {
@@ -506,7 +618,12 @@ function assistantFilterChips(parsed = {}, searchType = 'any') {
 
 function assistantLeadText({ total = 0, parsed = {}, searchType = 'any', language = 'en', matchQuality = 'exact', needsInput = false } = {}) {
   const place = cleanText(parsed.area || parsed.district || 'Uganda', 120);
-  const type = cleanText(parsed.searchType || searchType || 'property').replace(/_/g, ' ');
+  const rawType = cleanText(parsed.searchType || searchType || 'property').replace(/_/g, ' ');
+  const localizedTypes = {
+    sw: { any: 'mali', rent: 'kupangisha', sale: 'kuuzwa', land: 'ardhi', student: 'wanafunzi', commercial: 'biashara' },
+    lg: { any: 'amayumba', rent: 'okupangisa', sale: 'okutunda', land: 'ttaka', student: 'abayizi', commercial: 'bizinensi' }
+  };
+  const type = localizedTypes[language]?.[rawType] || (rawType === 'any' ? 'property' : rawType);
   const count = Number(total) || 0;
   if (needsInput) {
     if (language === 'sw') return 'Niambie eneo, bei, na aina ya mali unayotafuta, kisha nitakuletea matokeo halisi.';
@@ -536,7 +653,7 @@ function assistantLeadText({ total = 0, parsed = {}, searchType = 'any', languag
       : `لم أجد نتائج دقيقة في ${place}. أخبرنا بما تحتاجه وسنساعدك.`;
   }
   return count > 0
-    ? `I found ${count} matching ${type} result${count === 1 ? '' : 's'} around ${place}.`
+    ? `I found ${count} matching ${type && !['any', 'property'].includes(type) ? `${type} ` : ''}result${count === 1 ? '' : 's'} around ${place}.`
     : `I could not find exact matches around ${place}. Tell us what you need and we can help watch for it.`;
 }
 
@@ -1148,7 +1265,7 @@ router.post('/assistant-reply', async (req, res, next) => {
       || sourceKey.includes('ask_ai');
     const inferredIntent = inferAssistantIntentFromMessage(userMessage, requestedIntent);
     const normalizedInferredIntent = normalizeAssistantIntent(inferredIntent);
-    const cleanBarExplicitActionIntents = ['off_plan_search', 'off_plan_listing', 'property_listing'];
+    const cleanBarExplicitActionIntents = ['off_plan_search', 'off_plan_listing', 'property_listing', 'agent_search', 'agent_registration', 'mortgage_help'];
     const effectiveIntent = cleanBarExplicitActionIntents.includes(normalizedInferredIntent)
       ? normalizedInferredIntent
       : cleanBarSearchOnly && !isAssistantSearchIntent(requestedIntent)
@@ -1173,6 +1290,32 @@ router.post('/assistant-reply', async (req, res, next) => {
         language: 'en',
         action_url: onlineListingUrl,
         action: 'open_online_listing_form'
+      };
+    } else if (['agent_search', 'agent_registration', 'mortgage_help'].includes(normalizedEffectiveIntent)) {
+      const origin = appOriginFromRequest(req);
+      const templates = {
+        agent_search: {
+          text: ['*makaug.com* | *Find an agent*', 'Browse approved makaug agents and brokers, see their live listings and contact them on WhatsApp.', `🔗 ${origin}/brokers`],
+          action_url: `${origin}/brokers`,
+          action: 'open_brokers'
+        },
+        agent_registration: {
+          text: ['*makaug.com* | *Join as an agent*', 'Fill in the short agent sign-up form. Our team checks your details and gets back to you on WhatsApp, usually the same day.', `🔗 ${origin}/broker-signup`],
+          action_url: `${origin}/broker-signup`,
+          action: 'open_broker_signup'
+        },
+        mortgage_help: {
+          text: ['*makaug.com* | *Mortgages*', 'makaug does not give financial or mortgage advice and does not offer loans. For a mortgage, please speak to a bank directly. I can still help you find a property — tell me the area, budget and type.'],
+          action_url: null,
+          action: null
+        }
+      };
+      const tpl = templates[normalizedEffectiveIntent];
+      response = {
+        text: sanitizeAssistantText(tpl.text.join('\n')),
+        model: 'template',
+        language: 'en',
+        ...(tpl.action_url ? { action_url: tpl.action_url, action: tpl.action } : {})
       };
     } else if (assistantIsOffPlan || (!assistantIsSearch && !cleanBarSearchOnly)) {
       response = await suggestWhatsappAssistantReply({
@@ -1240,16 +1383,47 @@ router.post('/assistant-reply', async (req, res, next) => {
           ...heuristicNaturalPropertyQuery({ text: userMessage, fallbackType: rawIntentType }),
           model: 'heuristic-fast'
         };
-      const prepared = prepareAssistantParsedQuery({ parsed: extracted, intent: effectiveIntent, userMessage });
-      const locationPrepared = resolveAssistantParsedLocation(prepared.parsed, userMessage);
+      // "houses within 5 km of Makerere": the landmark name must not turn this into a student search.
+      const proximityTarget = cleanText(extracted?.proximity?.target || '');
+      const typeMessage = proximityTarget
+        ? userMessage.replace(new RegExp(proximityTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), ' ')
+        : userMessage;
+      const prepared = prepareAssistantParsedQuery({ parsed: extracted, intent: effectiveIntent, userMessage: typeMessage });
+      const requestedSort = assistantSortFromText(userMessage);
+      if (requestedSort) prepared.parsed = { ...prepared.parsed, sort: requestedSort };
+      const proximity = resolveAssistantProximity(extracted, prepared.parsed);
+      if (proximity?.center) {
+        prepared.parsed = {
+          ...prepared.parsed,
+          area: null,
+          district: null,
+          // "houses near X" means homes in general; most listings have no property_type set.
+          propertyType: /^(house|houses|home|homes)$/i.test(cleanText(prepared.parsed?.propertyType || '')) ? null : prepared.parsed?.propertyType,
+          near: { homesOnly: prepared.searchType === 'any' && /\b(?:house|houses|home|homes|apartment|apartments|flat|flats|room|rooms|bedroom|bedrooms|ennyumba|nyumba|enju|inzu|maison)\b/i.test(typeMessage), lat: proximity.center.lat, lng: proximity.center.lng, radiusMiles: proximity.generic && !proximity.radiusExplicit ? Math.max(2, proximity.radiusMiles) : proximity.radiusMiles, label: proximity.label }
+        };
+      }
+      const locationPrepared = proximity?.center
+        ? { parsed: prepared.parsed, requested: false, resolution: { status: 'matched', match: 'landmark', confidence: 1, area: proximity.label } }
+        : resolveAssistantParsedLocation(prepared.parsed, userMessage);
       const parsed = locationPrepared.parsed;
       const locationResolution = locationPrepared.resolution;
       const locationConfirmationRequired = locationPrepared.requested && locationResolution.status !== 'matched';
       const searchType = prepared.searchType;
       const publicPath = publicSearchPathForType(searchType);
-      const hasSearchSignal = assistantHasSearchSignal(parsed, searchType, userMessage);
+      const hasSearchSignal = Boolean(proximity?.center) || assistantHasSearchSignal(parsed, searchType, userMessage);
 
-      if (!hasSearchSignal || locationConfirmationRequired) {
+      if (proximity?.unresolved && !proximity.center) {
+        response = assistantFastResponse(
+          proximity.kind && !proximity.target
+            ? `Which area should I look in for a ${proximity.kind}? For example: "house near a ${proximity.kind} in Kira" or "within 3 miles of Mulago Hospital".`
+            : `I couldn't place "${proximity.target}" on the map. Try a known landmark or area, e.g. "within 5 miles of Makerere University" or "near Acacia Mall".`,
+          language,
+          'heuristic-fast'
+        );
+      }
+      if (proximity?.unresolved && !proximity.center) {
+        searchPayload = { search_type: searchType, total_matches: 0, result_count: 0, listings: [], results: [], needs_search_input: true, match_quality: 'needs_input', proximity: { target: proximity.target, kind: proximity.kind, resolved: false } };
+      } else if (!hasSearchSignal || locationConfirmationRequired) {
         response = assistantFastResponse(
           assistantLeadText({ total: 0, parsed, searchType, language, needsInput: true }),
           language,
@@ -1323,8 +1497,21 @@ router.post('/assistant-reply', async (req, res, next) => {
             matchQuality = 'nearby_not_exact';
             relaxedFilters = Array.from(new Set([...relaxedFilters, 'location']));
           }
-          const seeAllUrl = buildAssistantSeeAllUrl(effectiveParsed, searchType);
-          const leadText = assistantLeadText({ total: resultCount, parsed: effectiveParsed, searchType, language, matchQuality });
+          if (proximity?.center) {
+            if (relaxedFilters.includes('location')) relaxedFilters = relaxedFilters.filter((f) => f !== 'location');
+            if (matchQuality === 'nearby_not_exact' && !relaxedFilters.length) matchQuality = 'exact';
+            let nearRows = result.listings || [];
+            if (effectiveParsed?.near?.homesOnly) {
+              nearRows = nearRows.filter((row) => !['land', 'commercial'].includes(String(row.listing_type || '').toLowerCase())).slice(0, 8);
+            }
+            result = { ...result, listings: annotateProximityListings(nearRows, proximity) };
+          }
+          const seeAllUrl = proximity?.center && proximity.center.source === 'area'
+            ? buildAssistantSeeAllUrl({ ...effectiveParsed, area: proximity.label }, searchType)
+            : buildAssistantSeeAllUrl(effectiveParsed, searchType);
+          const leadText = proximity?.center
+            ? proximityLeadText({ total: resultCount, proximity, searchType })
+            : assistantLeadText({ total: resultCount, parsed: effectiveParsed, searchType, language, matchQuality });
           response = assistantFastResponse(leadText, language, extracted?.model || 'heuristic-fast');
           const capturePayload = buildAssistantCapturePayload({
             userMessage,
@@ -1363,6 +1550,15 @@ router.post('/assistant-reply', async (req, res, next) => {
             capture_payload: capturePayload,
             match_quality: matchQuality,
             exact_match: matchQuality === 'exact' && resultCount > 0,
+            ...(proximity?.center ? {
+              proximity: {
+                label: proximity.label,
+                kind: proximity.kind,
+                center: { lat: proximity.center.lat, lng: proximity.center.lng },
+                radius_miles: effectiveParsed.near?.radiusMiles || proximity.radiusMiles,
+                radius_km: Math.round((effectiveParsed.near?.radiusMiles || proximity.radiusMiles) * 1.609344 * 10) / 10
+              }
+            } : {}),
             search_error: null,
             search_prewarm_marker: ASSISTANT_SEARCH_PREWARM_MARKER,
             search_prewarm_broad_marker: ASSISTANT_SEARCH_PREWARM_BROAD_MARKER

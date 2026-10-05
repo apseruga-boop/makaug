@@ -38750,9 +38750,20 @@ function aiAssistantListingCardsHtml(listings = [], searchType = "") {
     : searchType === "student" ? "student"
     : "";
   const cards = rows
-    .map((property) => upsertPropertyForUi(property))
+    .map((raw) => {
+      const property = upsertPropertyForUi(raw);
+      if (!property) return "";
+      const card = propCard(property, { categoryPage, student: searchType === "student" });
+      // Distance searches ("10 miles from Mulago"): how far, and the nearest school/hospital asked about.
+      const notes = [
+        raw?.distance_label ? `<div class="flex items-start gap-1.5"><span aria-hidden="true">📏</span><span>${adminEscape(raw.distance_label)}</span></div>` : "",
+        raw?.nearest_place_label ? `<div class="flex items-start gap-1.5"><span aria-hidden="true">📍</span><span>${adminEscape(raw.nearest_place_label)}</span></div>` : ""
+      ].filter(Boolean).join("");
+      return notes
+        ? `<div class="flex flex-col gap-1.5">${card}<div class="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-900 space-y-1">${notes}</div></div>`
+        : card;
+    })
     .filter(Boolean)
-    .map((property) => propCard(property, { categoryPage, student: searchType === "student" }))
     .join("");
   return `<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">${cards}</div>`;
 }

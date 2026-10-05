@@ -291,24 +291,34 @@ function buildWhatsappPropertySearchReply(rows = [], {
     return `No approved properties are available right now.\n🔎 View all properties: ${browseUrl}`;
   }
   if (safeRows.length === 1) {
-    return buildWhatsappPropertyCard(safeRows[0], {
+    const caption = buildWhatsappPropertyCard(safeRows[0], {
       homeUrl,
       allPropertiesUrl: browseUrl
     }).caption;
+    const extra = [
+      cleanText(safeRows[0].distance_label) ? `📏 ${cleanText(safeRows[0].distance_label)}` : '',
+      cleanText(safeRows[0].nearest_place_label) ? `📍 ${cleanText(safeRows[0].nearest_place_label)}` : ''
+    ].filter(Boolean);
+    return extra.length ? `${caption}\n${extra.join('\n')}` : caption;
   }
 
   const visibleRows = safeRows.slice(0, WHATSAPP_PROPERTY_SEARCH_PREVIEW_LIMIT);
   const totalMatches = totalWhatsappSearchMatches(safeRows);
   const cleanLocation = cleanText(location);
+  const proximityHeader = cleanText(safeRows[0]?.proximity_header);
   const lines = [
-    `🔎 *${totalMatches} matching ${whatsappSearchTypeLabel(searchType)} found${cleanLocation ? ` in ${cleanLocation}` : ''}*`,
-    `Showing the newest ${visibleRows.length}:`,
+    proximityHeader
+      ? `🔎 *${totalMatches} ${whatsappSearchTypeLabel(searchType)} ${proximityHeader}*`
+      : `🔎 *${totalMatches} matching ${whatsappSearchTypeLabel(searchType)} found${cleanLocation ? ` in ${cleanLocation}` : ''}*`,
+    proximityHeader ? `Closest ${visibleRows.length} first:` : `Showing the newest ${visibleRows.length}:`,
     ''
   ];
 
   visibleRows.forEach((row, index) => {
     lines.push(`${index + 1}. 🏡 *${cleanWhatsappPropertyTitle(row)}*`);
     lines.push(`📍 ${[cleanText(row.area), cleanText(row.district)].filter(Boolean).join(', ') || ACTIVE_TENANT.countryName}`);
+    if (cleanText(row.distance_label)) lines.push(`📏 ${cleanText(row.distance_label)}`);
+    if (cleanText(row.nearest_place_label)) lines.push(`📍 ${cleanText(row.nearest_place_label)}`);
     lines.push(`💰 ${formatWhatsappPropertyPrice(row)}`);
     lines.push(`🔗 ${propertyUrlForWhatsapp(row, homeUrl)}`);
     lines.push('');

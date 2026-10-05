@@ -2694,11 +2694,9 @@ async function listPropertiesHandler(req, res, next) {
       addFilter(
         filters,
         values,
-        "(p.property_type ILIKE ? OR p.listing_type ILIKE ? OR COALESCE(p.extra_fields->>'room_type', '') ILIKE ? OR COALESCE(p.extra_fields->>'commercial_type', '') ILIKE ?)",
-        `%${propertyType}%`,
-        `%${propertyType}%`,
-        `%${propertyType}%`,
-        `%${propertyType}%`
+        // Word start match: "house" must not match "warehouse_industrial".
+        "(COALESCE(p.property_type, '') ~* ? OR COALESCE(p.listing_type, '') ~* ? OR COALESCE(p.extra_fields->>'room_type', '') ~* ? OR COALESCE(p.extra_fields->>'commercial_type', '') ~* ?)",
+        ...Array(4).fill(`\\m${String(propertyType).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)
       );
     }
     if (amenities.length) {
@@ -2755,7 +2753,8 @@ async function listPropertiesHandler(req, res, next) {
       );
     }
     if (transactionType) {
-      addFilter(filters, values, 'p.transaction_type = ?', transactionType);
+      // Most land/commercial listings have no transaction type recorded; keep them in.
+      addFilter(filters, values, '(p.transaction_type = ? OR p.transaction_type IS NULL)', transactionType);
     }
     if (commercialType) {
       const normalizedCommercialType = normalizeCommercialPropertyType(commercialType) || commercialType.toLowerCase();

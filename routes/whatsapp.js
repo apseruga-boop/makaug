@@ -8804,9 +8804,11 @@ function typeLabel(type, lang) {
   return t(lang, map[type] || type);
 }
 
-function formatPrice(price, period) {
+function formatPrice(price, rawPeriod) {
   if (!price || Number.isNaN(Number(price))) return 'Price upon application';
   const v = Number(price);
+  // A one-off sale price has no period ("USh 135M", not "USh 135M/once").
+  const period = /^(once|one[_\s-]?time|total|sale|outright)$/i.test(String(rawPeriod || '').trim()) ? '' : rawPeriod;
   if (IS_SOUTH_AFRICA) {
     const amount = v >= 1_000_000
       ? `${(v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1).replace(/\.0$/, '')}M`
@@ -8819,7 +8821,8 @@ function formatPrice(price, period) {
     return `USh ${(v / 1_000_000_000).toFixed(1)}B${period ? `/${period}` : ''}`;
   }
   if (v >= 1_000_000) {
-    return `USh ${(v / 1_000_000).toFixed(0)}M${period ? `/${period}` : ''}`;
+    // 1.5M stays 1.5M (it used to round up to "2M").
+    return `USh ${(v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1).replace(/\.0$/, '')}M${period ? `/${period}` : ''}`;
   }
   return `USh ${v.toLocaleString()}${period ? `/${period}` : ''}`;
 }
@@ -9458,7 +9461,8 @@ const NEAR_ME_PATTERNS = [
   /\bnearby\b/i,
   /\bmy\s+location\b/i,
   /\bclose\s+to\s+me\b/i,
-  /\bwithin\s+\d+(?:\.\d+)?\s*(?:km|kms|kilomet(?:er|re)s?|mi|mile|miles)\b/i
+  // "within 5 km" alone means near me; "within 5 km of Makerere" is a landmark search.
+  /\bwithin\s+\d+(?:\.\d+)?\s*(?:km|kms|kilomet(?:er|re)s?|mi|mile|miles)\b(?!\s+(?:of|from)\s+(?!me\b|here\b)[a-z])/i
 ];
 
 function parseNumberToken(rawNumber, suffix) {
@@ -9689,8 +9693,27 @@ function sanitizeNaturalSearchFilters(filters = {}, originalText = '') {
   return next;
 }
 
+function normalizeWhatsappSearchText(text) {
+  const raw = normalizeInput(text);
+  try {
+    return normalizeInput(require('../services/aiService').normalizeMultilingualSearchText(raw)) || raw;
+  } catch (_error) {
+    return raw;
+  }
+}
+
+function stripWhatsappNonBudgetNumbers(text) {
+  try {
+    return require('../services/aiService').stripNonBudgetNumbers(text);
+  } catch (_error) {
+    return text;
+  }
+}
+
 function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', sessionData = {}) {
-  const clean = normalizeInput(text);
+  // Typos, Luganda/Swahili/French/Arabic words and "e Ntinda" style locatives
+  // are turned into plain English first, so rent/sale, beds and area all parse.
+  const clean = normalizeWhatsappSearchText(text);
   const e = entities && typeof entities === 'object' ? entities : {};
   const parsedSearchType = parseSearchType(clean);
   const entitySearchType = e.listing_type || e.listingType;
@@ -9698,15 +9721,23 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', 
     ? parsedSearchType
     : null;
 
-  const searchType = normalizeListingType(
+  let searchType = normalizeListingType(
     categorySearchType || entitySearchType || parsedSearchType || fallbackType || 'any'
   );
   const area = sanitizeSearchAreaCandidate(e.area || e.location || e.district || parseAreaFromText(clean, sessionData), clean);
   const bedsMin = Number(e.bedrooms || e.beds || parseBedCount(clean) || 0) || 0;
-  const propertyType = normalizeInput(e.property_type || e.propertyType || parsePropertyType(clean)) || null;
-  const budgetParsed = parseBudget(clean);
+  let propertyType = normalizeInput(e.property_type || e.propertyType || parsePropertyType(clean)) || null;
+  // "land back home in Wakiso" is a land search, not a house search.
+  if (searchType === 'land' && propertyType && /^(house|home|houses|homes)$/i.test(propertyType)) propertyType = null;
+  // Distances ("10 miles from"), plot sizes (50x100) and acres are not prices.
+  const budgetParsed = parseBudget(stripWhatsappNonBudgetNumbers(clean));
   const maxBudgetUgx = Number(e.budget_max || e.budget || budgetParsed?.maxBudgetUgx || 0) || 0;
   const budgetPeriod = normalizeInput(e.period || budgetParsed?.period) || null;
+  // "house for 300 million" with no rent words is a purchase budget.
+  if ((!searchType || searchType === 'any') && !entitySearchType && !budgetPeriod
+    && maxBudgetUgx >= 50_000_000 && !/\b(rent|rental|let|lease|per\s*month|monthly)\b/i.test(clean)) {
+    searchType = 'sale';
+  }
   const useSharedLocation = Boolean(
     e.near_me === true
     || e.nearMe === true
@@ -9794,7 +9825,41 @@ function shouldUseAiNaturalSearchExtraction(deterministic = {}, text = '') {
   return !hasActionableSignal;
 }
 
-async function resolveNaturalSearchFilters({
+// "10 miles from Mulago", "near Acacia Mall", "house near a school in Kira":
+// measure from the landmark (or area centre) instead of matching the words as an area.
+function applyProximityToFilters(filters = {}, text = '') {
+  let proximity = null;
+  try {
+    const { normalizeMultilingualSearchText } = require('../services/aiService');
+    proximity = require('../services/landmarkService').parseProximityQuery(normalizeMultilingualSearchText(text));
+  } catch (_error) {
+    proximity = null;
+  }
+  if (!proximity) return filters;
+  const landmarks = require('../services/landmarkService');
+  let center = null;
+  if (proximity.target) center = landmarks.resolveProximityCenter(proximity.target);
+  if (!center && proximity.area) center = landmarks.areaCenter(proximity.area);
+  if (!center && proximity.kind && filters.area) center = landmarks.areaCenter(filters.area);
+  if (!center) return { ...filters, proximity: { ...proximity, unresolved: true } };
+  return {
+    ...filters,
+    area: center.name,
+    district: center.district || null,
+    canonical_location_id: null,
+    location_blocked: false,
+    location_resolution: null,
+    hasSignal: true,
+    proximity: { ...proximity, center, label: center.name }
+  };
+}
+
+async function resolveNaturalSearchFilters(args = {}) {
+  const filters = await resolveNaturalSearchFiltersBase(args);
+  return applyProximityToFilters(filters, args.text || '');
+}
+
+async function resolveNaturalSearchFiltersBase({
   text,
   entities = {},
   fallbackType = 'any',
@@ -9898,7 +9963,29 @@ function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
 }
 
 function resolveWhatsappSearchLocation(filters = {}, originalText = '') {
-  return canonicalizeWhatsappSearchFilters(filters, originalText);
+  if (filters?.proximity?.center) return filters;
+  const resolved = canonicalizeWhatsappSearchFilters(filters, originalText);
+  // One-letter typos of well-known areas ("ntnda", "muyengaa") are corrected
+  // instead of asking the person to retype the area.
+  if (resolved?.location_blocked && resolved.area && String(resolved.area).length >= 4) {
+    try {
+      const suggestion = require('../utils/ugandaLocationRegistry').canonicalLocationSuggestions(resolved.area)[0];
+      if (
+        suggestion
+        && suggestion.did_you_mean
+        && Number(suggestion.confidence || 0) >= 0.8
+        && Number.isFinite(Number(suggestion.latitude))
+        && suggestion.latitude !== null
+        && suggestion.location
+      ) {
+        const retried = canonicalizeWhatsappSearchFilters({ ...filters, area: suggestion.location, district: suggestion.district || null }, originalText.replace(new RegExp(String(resolved.area).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), suggestion.location));
+        if (!retried?.location_blocked) return { ...retried, typo_corrected_from: resolved.area };
+      }
+    } catch (_error) {
+      // keep the original prompt
+    }
+  }
+  return resolved;
 }
 
 function whatsappSearchLocationBlockReply(filters = {}) {
@@ -9956,7 +10043,14 @@ function isAffordabilityAdviceQuestion(value) {
     && /(?:\$|€|£|\bzar\b|\brand\b|\bugx\b|\bush\b|\bshs\b|\bshillings?\b|\bthousand\b|\bthousands\b|\bmillion\b|\bmillions\b|\bbillion\b|\bbillions\b|\b\d+(?:\.\d+)?\s*[kmb]\b)/i.test(clean)
   ) return true;
   if (/\b(?:area|place|neighbourhood|neighborhood|district)\b/i.test(clean) && /\b(?:stay|live|rent|buy|house|room|student|hostel|land|plot)\b/i.test(clean) && /\b(?:budget|price|cost|cheap|afford)\b/i.test(clean)) return true;
-  return AFFORDABILITY_KEYWORDS.some((keyword) => keyword && clean.includes(keyword.toLowerCase()));
+  // Whole words only: "make" (Runyankole for cheap) used to match "Makerere".
+  return AFFORDABILITY_KEYWORDS.some((keyword) => {
+    const k = String(keyword || '').toLowerCase();
+    if (!k) return false;
+    if (!/^[a-z0-9\s'-]+$/.test(k)) return clean.includes(k);
+    const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`, 'i').test(clean);
+  });
 }
 
 function parseBudgetFromQuestion(text) {
@@ -10132,6 +10226,29 @@ function addWhatsappPublicListingFilter(values, alias = 'p') {
   return filters.length ? ` AND ${filters.join(' AND ')}` : '';
 }
 
+// Property type as a whole word ("house" must not match "warehouse"), and no
+// "hostel" text filter on student searches: student listings are already
+// picked out by type and are often titled "Student accommodation".
+function whatsappPropertyTypeFilterSql(values, propertyType, searchType, alias = '') {
+  const clean = normalizeInput(propertyType || '').toLowerCase();
+  if (!clean) return '';
+  if (normalizeListingType(searchType || 'any') === 'student'
+    && /^(hostel|hostels|dorm|dormitory|room|rooms|student|students|single room|double room|accommodation)$/.test(clean)) return '';
+  const prefix = alias && /^[a-z_][a-z0-9_]*$/i.test(String(alias)) ? `${alias}.` : '';
+  const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '[\\s_-]+');
+  values.push(`\\m${escaped}`);
+  const idx = values.length;
+  // A "house" search should not surface a plot whose description says "build your house".
+  const notLand = /^(house|houses|home|homes|apartment|apartments|flat|flats|bungalow|bungalows|villa|villas|condo|condos|maisonette|mansion|duplex|townhouse|studio)$/.test(clean)
+    ? ` AND LOWER(COALESCE(${prefix}listing_type, '')) <> 'land'`
+    : '';
+  return `${notLand} AND (
+      COALESCE(${prefix}property_type, '') ~* $${idx}
+      OR COALESCE(${prefix}title, '') ~* $${idx}
+      OR COALESCE(${prefix}description, '') ~* $${idx}
+    )`;
+}
+
 function whatsappStudentAccommodationSql(alias = 'p') {
   const prefix = alias && /^[a-z_][a-z0-9_]*$/i.test(String(alias)) ? `${alias}.` : '';
   const listingType = `LOWER(COALESCE(${prefix}listing_type, ''))`;
@@ -10256,16 +10373,7 @@ function buildWhatsappAffordableWhere(filters = {}, { includeBudget = true } = {
     where += ` AND COALESCE(p.bedrooms, 0) >= $${values.length}`;
   }
 
-  const propertyType = normalizeInput(filters.propertyType);
-  if (propertyType) {
-    values.push(`%${propertyType}%`);
-    const typeIdx = values.length;
-    where += ` AND (
-      COALESCE(p.property_type, '') ILIKE $${typeIdx}
-      OR p.title ILIKE $${typeIdx}
-      OR p.description ILIKE $${typeIdx}
-    )`;
-  }
+  where += whatsappPropertyTypeFilterSql(values, filters.propertyType, filters.searchType, 'p');
 
   return { where, values };
 }
@@ -10368,7 +10476,37 @@ async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }
   return formatAffordabilityAdviceMessage(lang, rows, areaStats, normalizedFilters, { exactMatch });
 }
 
+async function findPropertiesNearLandmark(filters = {}) {
+  const landmarks = require('../services/landmarkService');
+  const proximity = filters.proximity;
+  const radiusMiles = proximity.generic && !proximity.radiusExplicit ? Math.max(2, proximity.radiusMiles) : proximity.radiusMiles;
+  const near = await findPropertiesNearWhatsappWithFilters(
+    filters.searchType || 'any',
+    { lat: proximity.center.lat, lng: proximity.center.lng },
+    { ...filters, area: null, district: null },
+    radiusMiles
+  );
+  if (near.usedNearestFallback) return [];
+  const header = proximity.generic && proximity.kind
+    ? `around ${proximity.label} (nearest ${proximity.kind} shown for each)`
+    : `within ${radiusMiles % 1 ? radiusMiles.toFixed(1) : radiusMiles} mile${radiusMiles === 1 ? '' : 's'} of ${proximity.label}`;
+  return near.rows.map((row) => {
+    const out = {
+      ...row,
+      distance_label: `${landmarks.formatDistance(row.distance_km)} from ${proximity.label}`,
+      proximity_header: header
+    };
+    if (proximity.kind && Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude))) {
+      const place = landmarks.nearestOfKind({ lat: Number(row.latitude), lng: Number(row.longitude) }, proximity.kind, { limit: 1, withinKm: 10 })[0];
+      if (place) out.nearest_place_label = `Nearest ${landmarks.KIND_LABEL[place.kind] || place.kind}: ${place.name}, ${landmarks.formatDistance(place.km)}`;
+    }
+    return out;
+  });
+}
+
 async function findPropertiesByNaturalFilters(filters = {}) {
+  if (filters.proximity?.center) return findPropertiesNearLandmark(filters);
+  if (filters.proximity?.unresolved) return [];
   const values = ['approved'];
   let where = 'WHERE p.status = $1';
   where += addWhatsappPublicListingFilter(values, 'p');
@@ -10428,16 +10566,7 @@ async function findPropertiesByNaturalFilters(filters = {}) {
     where += ` AND COALESCE(bedrooms, 0) >= $${values.length}`;
   }
 
-  const propertyType = normalizeInput(filters.propertyType);
-  if (propertyType) {
-    values.push(`%${propertyType}%`);
-    const typeIdx = values.length;
-    where += ` AND (
-      COALESCE(property_type, '') ILIKE $${typeIdx}
-      OR title ILIKE $${typeIdx}
-      OR description ILIKE $${typeIdx}
-    )`;
-  }
+  where += whatsappPropertyTypeFilterSql(values, filters.propertyType, filters.searchType, '');
 
   values.push(WHATSAPP_PROPERTY_RESULT_LIMIT);
   const limitIdx = values.length;
@@ -12349,16 +12478,7 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
     where += ` AND COALESCE(bedrooms, 0) >= $${values.length}`;
   }
 
-  const propertyType = normalizeInput(f.propertyType || '');
-  if (propertyType) {
-    values.push(`%${propertyType}%`);
-    const typeIdx = values.length;
-    where += ` AND (
-      COALESCE(property_type, '') ILIKE $${typeIdx}
-      OR title ILIKE $${typeIdx}
-      OR description ILIKE $${typeIdx}
-    )`;
-  }
+  where += whatsappPropertyTypeFilterSql(values, f.propertyType, listingType, '');
 
   const area = normalizeInput(f.area || '');
   if (area) {
@@ -12388,6 +12508,19 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
         OR COALESCE(extra_fields->>'region', '') ILIKE $${areaIdx}
         OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${areaIdx}
       )`;
+    }
+  }
+
+  {
+    // Only listings inside a box around the point, so the LIMIT keeps the nearest, not just the newest.
+    const lat0 = Number(sharedLocation.lat);
+    const lng0 = Number(sharedLocation.lng);
+    const padKm = Math.max(2, normalizeRadiusMiles(radiusMiles, DEFAULT_SEARCH_RADIUS_MILES) * 1.609344 * 1.3);
+    if (Number.isFinite(lat0) && Number.isFinite(lng0)) {
+      const latPad = padKm / 111;
+      const lngPad = padKm / (111 * Math.max(0.2, Math.cos((lat0 * Math.PI) / 180)));
+      values.push(lat0 - latPad, lat0 + latPad, lng0 - lngPad, lng0 + lngPad);
+      where += ` AND p.latitude BETWEEN $${values.length - 3} AND $${values.length - 2} AND p.longitude BETWEEN $${values.length - 1} AND $${values.length}`;
     }
   }
 
@@ -13116,6 +13249,20 @@ async function formatNoMatchOrFallbackReply({
     }
   });
 
+  // Distance searches: say plainly that nothing is that close, and how to widen it.
+  if (filters?.proximity?.center) {
+    const p = filters.proximity;
+    const miles = Number(p.radiusMiles || 2);
+    const wider = Math.min(50, Math.max(5, Math.round(miles * 2.5)));
+    return [
+      `${whatsappBrandHeader('Nothing that close yet')}`,
+      `I don't have ${({ sale: 'for-sale ', rent: 'rental ', land: 'land ', student: 'student ', commercial: 'commercial ' })[normalizedSearchType] || ''}listings within ${miles % 1 ? miles.toFixed(1) : miles} mile${miles === 1 ? '' : 's'} of *${p.label}* right now. I've saved your request and the team will tell you when one comes up.`,
+      '',
+      `Try a wider distance, e.g. *"${wider} miles from ${p.label}"*.`,
+      t(lang, 'menuHint')
+    ].join('\n');
+  }
+
   const fallback = await findBroaderPropertyFallback({
     ...filters,
     searchType: normalizedSearchType,
@@ -13126,15 +13273,22 @@ async function formatNoMatchOrFallbackReply({
   if (!fallbackRows.length) return formatNoMatchReply(lang, preferredArea === 'any' ? 'any area' : preferredArea);
 
   const code = resolveLangCode(lang);
-  const exactLabel = typeLabel(normalizedSearchType, lang);
+  const exactLabel = normalizedSearchType === 'any' && code === 'en'
+    ? 'matching'
+    : typeLabel(normalizedSearchType, lang);
   const locationLabel = preferredArea === 'any' ? 'any area' : preferredArea;
 
   // Name the thing that did not fit, and quote the nearest real price. "No
   // exact match" on its own left someone asking for a 500K rental staring at a
   // seven-bedroom house for sale with no idea why.
   const budgetUgx = Number(filters.maxBudgetUgx) > 0 ? Number(filters.maxBudgetUgx) : 0;
-  const cheapest = fallback.relaxed.budget ? lowestPricedFallbackRow(fallbackRows) : null;
-  const budgetClause = budgetUgx ? ` under *${formatPrice(budgetUgx, filters.pricePeriod || 'mo')}*` : '';
+  const lowest = fallback.relaxed.budget ? lowestPricedFallbackRow(fallbackRows) : null;
+  // Only quote "the lowest I have" when it really is above the budget.
+  const cheapest = lowest && (!budgetUgx || Number(lowest.price) > budgetUgx) ? lowest : null;
+  const budgetPeriodForCopy = filters.pricePeriod
+    || filters.budgetPeriod
+    || (['rent', 'student'].includes(normalizedSearchType) ? 'mo' : null);
+  const budgetClause = budgetUgx ? ` under *${formatPrice(budgetUgx, budgetPeriodForCopy)}*` : '';
   const cheapestClause = cheapest
     ? ` The lowest I have is *${formatPrice(cheapest.price, cheapest.price_period)}*.`
     : '';
@@ -17442,6 +17596,9 @@ router.delete('/reset/:phone', async (req, res) => {
 
 module.exports = router;
 module.exports.__test = {
+  extractNaturalSearchFilters,
+  applyProximityToFilters,
+  isNearMeQuery,
   processMessage,
   buildWhatsappListingEnquiryResponse,
   detectLanguageFromText,

@@ -416,6 +416,16 @@ function heuristicIntent(text) {
   if (/(agent|broker|find agent|realtor|wakala|musomesa)/.test(t)) {
     return { intent: 'agent_search', confidence: 0.65, entities: {} };
   }
+  // "newest listings", "show me properties", "most expensive house" are browsing,
+  // not someone wanting to post a listing.
+  if (/\b(?:newest|latest|recent|new|most expensive|priciest|luxury|top|all|browse|see|show(?: me)?(?: the)?)\s+(?:listings?|properties|property|houses?|homes?|apartments?)\b/.test(t)
+    && !/\b(?:my|our)\s+(?:property|house|home|land|listing)\b/.test(t)) {
+    return {
+      intent: 'property_search',
+      confidence: 0.7,
+      entities: /\b(?:most expensive|priciest|luxury)\b/.test(t) ? { sort: 'price_desc' } : (/\b(?:newest|latest|recent|new)\b/.test(t) ? { sort: 'newest' } : {})
+    };
+  }
   if (
     /(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)
     || /\b(?:i|we)\s+(?:want|need|would like|wish)\s+to\s+(?:sell|sale|list|post|upload)\s+(?:my|our)\s+(?:property|house|home|land|plot|farm|apartment|flat|condo|condos|condominium|room|hostel|shop|office|building)\b/.test(t)
@@ -788,24 +798,133 @@ function mergeNaturalQueryPayloads(primary = {}, secondary = {}, fallbackType = 
   return merged;
 }
 
+
+// --- Make everyday and local-language searches readable by the rules below ---
+// Luganda, Kiswahili, Runyankole/Rukiga, Acholi, Lusoga, Arabic, Amharic and
+// French property words, common misspellings, and Ugandan shorthand are mapped
+// to plain English before parsing. Place names are left as they are.
+const MULTILINGUAL_SEARCH_REPLACEMENTS = [
+  // shorthand and misspellings
+  [/\b(\d+)\s*(?:bdrm|bdrms|bdr|bd|bedrm|bedrms|brm)s?\b/gi, '$1 bedroom'],
+  [/\b(?:hosue|hosuee|hous|huose|hse|hous3)\b/gi, 'house'],
+  [/\b(?:rnt|rnet|retn|rentt)\b/gi, 'rent'],
+  [/\b4\s+sale\b/gi, 'for sale'],
+  [/\b(?:apartmnt|apartmnet|aprtment|appartment|apartmen|apt)\b/gi, 'apartment'],
+  [/\b(?:laand|lnd|lands)\b/gi, 'land'],
+  [/\b(?:plott|plto)\b/gi, 'plot'],
+  [/\b(?:comercial|commerical)\b/gi, 'commercial'],
+  [/\b(?:hostle|hostal)\b/gi, 'hostel'],
+  // Luganda / Lusoga / Runyankole / Rukiga
+  [/\b(?:ey'?okupangisa|y'?okupangisa|okupangisa|okupangisibwa|okukodisa|y'?okukodisa|ey'?okukodisa|okukodisha|kupangisa|pangisa)\b/gi, 'for rent'],
+  [/\b(?:okugula|okuguula|okugura|kugura|okugulibwa|okutunda|ey'?okutunda)\b/gi, 'to buy'],
+  [/\b(?:ennyumba|enyumba|ennyumba|amayumba|enju|inzu|ennju)\b/gi, 'house'],
+  [/\b(?:ekisenge|ebisenge|akasenge)\b/gi, 'room'],
+  [/\b(?:ttaka|itaka|ettaka|ekibanja|ekyalo)\b/gi, 'land'],
+  [/\bbedroom\s+(?:emu)\b/gi, '1 bedroom'],
+  [/\b(?:bedroom|bedrooms|ebisenge)\s+(?:bbiri|ibiri)\b/gi, '2 bedroom'],
+  [/\b(?:bedroom|bedrooms|ebisenge)\s+(?:ssatu|isatu)\b/gi, '3 bedroom'],
+  [/\b(?:bedroom|bedrooms|ebisenge)\s+(?:nnya|ina)\b/gi, '4 bedroom'],
+  [/\b(?:bedroom|bedrooms|ebisenge)\s+(?:ttaano|itaano)\b/gi, '5 bedroom'],
+  // Kiswahili
+  [/\b(?:ya\s+)?kupangisha\b|\bya\s+kukodi\b|\bkukodisha\b|\bkukodi\b|\bupangaji\b/gi, 'for rent'],
+  [/\b(?:kununua|kuuza|ya\s+kuuza)\b/gi, 'to buy'],
+  [/\bnyumba\b/gi, 'house'],
+  [/\b(?:chumba|vyumba\s+vya\s+kulala)\b/gi, 'room'],
+  [/\bvyumba\s+(\d+)\b/gi, '$1 bedroom'],
+  [/\bvyumba\s+(?:viwili|mbili)\b/gi, '2 bedroom'],
+  [/\bvyumba\s+(?:vitatu|tatu)\b/gi, '3 bedroom'],
+  [/\bvyumba\s+(?:vinne|nne)\b/gi, '4 bedroom'],
+  [/\b(?:shamba|kiwanja|ardhi)\b/gi, 'land'],
+  [/\bduka\b/gi, 'shop'],
+  [/\bofisi\b/gi, 'office'],
+  // Acholi
+  [/\bme\s+rent\b/gi, 'for rent'],
+  [/\b(?:ngom)\b/gi, 'land'],
+  // French
+  [/(^|\s)(?:à|a)\s+louer\b|\ben\s+location\b/gi, '$1for rent'],
+  [/(^|\s)(?:à|a)\s+vendre\b/gi, '$1for sale'],
+  [/(^|\s)à\s+(?=[A-Z])/g, '$1in '],
+  [/\bmaison\b/gi, 'house'],
+  [/\bappartement\b/gi, 'apartment'],
+  [/\bterrain\b/gi, 'land'],
+  [/\bchambres?\b/gi, 'bedroom'],
+  // Arabic
+  [/للإيجار|للايجار|إيجار|ايجار/g, ' for rent '],
+  [/للبيع|شراء|أشتري|اشتري/g, ' for sale '],
+  [/شقة|شقه/g, ' apartment '],
+  [/منزل|بيت|فيلا/g, ' house '],
+  [/أرض|ارض/g, ' land '],
+  [/مكتب/g, ' office '],
+  [/ في /g, ' in '],
+  [/كمبالا/g, ' Kampala '], [/كولولو/g, ' Kololo '], [/واكيسو/g, ' Wakiso '], [/عنتيبي/g, ' Entebbe '],
+  [/جينجا/g, ' Jinja '], [/موكونو/g, ' Mukono '], [/نتيندا/g, ' Ntinda '], [/موينغا|مويينغا/g, ' Muyenga '],
+  [/ناكاسيرو/g, ' Nakasero '], [/بوغولوبي/g, ' Bugolobi '], [/كيرا/g, ' Kira '], [/مولاغو|مولاجو/g, ' Mulago '],
+  // Amharic
+  [/የሚከራይ|ለኪራይ|ኪራይ/g, ' for rent '],
+  [/የሚሸጥ|ለሽያጭ|ሽያጭ/g, ' for sale '],
+  [/አፓርትመንት/g, ' apartment '],
+  [/ቤት/g, ' house '],
+  [/መሬት/g, ' land '],
+  [/ቢሮ/g, ' office '],
+  [/ካምፓላ/g, ' Kampala '], [/ኢንቴቤ|እንቴቤ/g, ' Entebbe '], [/ዋኪሶ/g, ' Wakiso '], [/ጂንጃ/g, ' Jinja ']
+];
+
+// "e Ntinda", "omu Mbarara", "mu Kampala", "i Gulu" → "in Ntinda" (only before a capitalised or known word).
+function normalizeLocativePrefixes(text = '') {
+  return String(text || '')
+    .replace(/(^|\s)(?:e|omu|mu|i|ku|kuri)\s+(?=[A-Za-z][a-z]{2,})/g, '$1in ')
+    .replace(/\b(?:okumpi\s+n[e']|karibu\s+na)\s+/gi, 'near ');
+}
+
+function normalizeMultilingualSearchText(text = '') {
+  let out = String(text || '');
+  for (const [re, replacement] of MULTILINGUAL_SEARCH_REPLACEMENTS) out = out.replace(re, replacement);
+  out = normalizeLocativePrefixes(out);
+  return out.replace(/\s+/g, ' ').trim();
+}
+
+// Plot sizes ("50x100", "50 by 100 ft") and distances ("10 miles", "5 km") are not budgets.
+function stripNonBudgetNumbers(text = '') {
+  return String(text || '')
+    .replace(/\b\d+(?:\.\d+)?\s*(?:x|by|\*)\s*\d+(?:\.\d+)?\s*(?:ft|feet|fts|m|metres|meters)?\b/gi, ' ')
+    .replace(/\b\d+(?:\.\d+)?\s*(?:km|kms|kilomet(?:er|re)s?|k\.m\.?|mi|mile|miles|minutes?|mins?)\b/gi, ' ')
+    .replace(/\b\d+(?:\.\d+)?\s*(?:acres?|decimals?|hectares?|ha|sq\.?\s?m|sqm|sqft|square\s+(?:metres?|meters?|feet))\b/gi, ' ');
+}
+
 function heuristicNaturalPropertyQuery({ text = '', fallbackType = 'any' } = {}) {
-  const clean = cleanText(text, 1200);
-  const budget = parseBudgetHeuristic(clean);
-  return normalizeNaturalQueryPayload(
+  const original = cleanText(text, 1200);
+  const clean = normalizeMultilingualSearchText(original);
+  const budget = parseBudgetHeuristic(stripNonBudgetNumbers(clean));
+  let proximity = null;
+  try {
+    proximity = require('./landmarkService').parseProximityQuery(clean);
+  } catch (_error) {
+    proximity = null;
+  }
+  // "near Mulago hospital": the landmark is not an area to filter by text.
+  let area = parseAreaHeuristic(proximity ? clean.replace(/\b(?:near(?:by)?|close to|next to|around|within|from|walking distance (?:to|from)|not far from)\b.*$/i, '') : clean);
+  if (proximity?.area) area = proximity.area.replace(/\b\w/g, (c) => c.toUpperCase());
+  const payload = normalizeNaturalQueryPayload(
     {
       searchType: parseSearchTypeHeuristic(clean, fallbackType),
-      area: parseAreaHeuristic(clean),
+      area,
       bedsMin: parseBedsHeuristic(clean),
       propertyType: parsePropertyTypeHeuristic(clean),
       transactionType: parseTransactionTypeHeuristic(clean, fallbackType),
       maxBudgetUgx: budget.maxBudgetUgx,
       budgetPeriod: budget.budgetPeriod,
       convertedFromUsd: budget.convertedFromUsd,
-      useSharedLocation: isNearMeHeuristic(clean),
+      useSharedLocation: isNearMeHeuristic(clean) && !proximity,
       confidence: 0.65
     },
     fallbackType
   );
+  if (proximity) {
+    payload.proximity = proximity;
+    payload.hasSignal = true;
+  }
+  if (clean !== original) payload.normalizedText = clean;
+  return payload;
 }
 
 async function detectWhatsappLanguage({ text = '', sessionLanguage = 'en', step = '', providerScope = '' } = {}) {
@@ -2013,6 +2132,9 @@ module.exports = {
   detectWhatsappLanguage,
   extractNaturalPropertyQuery,
   heuristicNaturalPropertyQuery,
+  normalizeMultilingualSearchText,
+  heuristicIntent,
+  stripNonBudgetNumbers,
   transcribeAudioFromUrl,
   transcribeAudioFromDataUrl,
   classifyWhatsappListingPhoto,
