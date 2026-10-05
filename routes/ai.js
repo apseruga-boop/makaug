@@ -122,7 +122,7 @@ const ASSISTANT_TYPE_PATTERNS = Object.freeze([
   {
     canonical: 'hostel',
     searchType: 'student',
-    pattern: /\b(hostel|hostels|student\s*(room|rooms|accommodation|housing)|campus|makerere|kyambogo|mubs|ucu|nkumba|university|college|bedsitter|bed\s*sitter|self[-\s]?contained|single\s*room|double\s*room|per\s*semester)\b/i
+    pattern: /\b(hostel|hostels|student\s*(room|rooms|accommodation|housing)|campus|makerere|kyambogo|mubs|ucu|nkumba|university|college|per\s*semester)\b/i
   },
   {
     canonical: 'apartment',
@@ -132,7 +132,7 @@ const ASSISTANT_TYPE_PATTERNS = Object.freeze([
   {
     canonical: 'studio',
     searchType: null,
-    pattern: /\b(studio|bedsitter|bed\s*sitter|single\s*room|self[-\s]?contained)\b/i
+    pattern: /\b(studio|bedsitter|bed\s*sitter|single\s*room|double\s*room|self[-\s]?contained)\b/i
   },
   {
     canonical: 'bungalow',

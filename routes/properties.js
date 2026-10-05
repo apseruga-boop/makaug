@@ -3882,7 +3882,8 @@ router.post('/', async (req, res, next) => {
       .filter((item) => item.url);
     const submittedImages = submittedImageItems.map((item) => item.url);
     const invalidSubmittedImages = submittedImages.filter((url) => !isUsableSubmittedImageUrl(url));
-    const websiteMinImages = 5;
+    // Land needs fewer photos than a building (the online form already asks for 3).
+    const websiteMinImages = listingType === 'land' ? 3 : 5;
     const websiteMaxImages = 20;
 
     if (enforceWebsiteSubmissionRules) {

@@ -1791,7 +1791,7 @@ function sendPublicIndex(req, res, next) {
     if (/^\/about\/?$/i.test(req.path)) {
       html = patchPublicPageSeoMeta(html, {
         title: 'About makaug — Products, pricing & how it works | makaug.com',
-        description: 'Everything makaug offers: listings from UGX 25,000/month (first week free), agent plans, off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
+        description: 'Everything makaug offers: listings from UGX 20,000/month (first week free), agent plans, off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
         canonical: absolutePublicUrl('/about'),
         image: absolutePublicUrl('/assets/og-cover.jpg'),
         structuredData: { '@context': 'https://schema.org', '@type': 'AboutPage', name: 'About makaug', url: absolutePublicUrl('/about') }

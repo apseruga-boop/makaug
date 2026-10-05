@@ -186,7 +186,7 @@ const WHATSAPP_MIN_LISTING_PHOTOS = 5;
 // Language Translations
 const T = {
   en: {
-    welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nReply with a number",
+    welcome: "🏠 Welcome to *makaug* - Uganda's property platform!\n\nWhat would you like to do?\n1️⃣ List my property (first 7 days free)\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nReply with a number",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
@@ -2676,7 +2676,7 @@ async function submitWhatsappListingDraft({ phone, lang, draft }) {
     };
   } catch (err) {
     logger.error('WhatsApp listing save error:', err);
-    return { message: tt(lang, 'genericSaveError', { url: HOME_URL }), nextStep: 'submitted' };
+    return { message: tt(lang, 'genericSaveError', { url: HOME_URL }), nextStep: 'submitted', failed: true };
   }
 }
 
@@ -2967,7 +2967,11 @@ async function validateAndStoreListingPhotos({ phone, lang, draft = {}, runtime 
       'WhatsApp listing photo validation'
     );
 
-    if (!validation?.accepted) {
+    // When the photo checker itself is down (no verdict, not a "this is a
+    // screenshot" verdict), keep the photo and let staff review it, rather than
+    // rejecting every photo and leaving the owner stuck at this step.
+    const checkerUnavailable = validation?.verdict === 'unavailable';
+    if (!validation?.accepted && !checkerUnavailable) {
       outcomes.push({ status: 'rejected', expectedSlot, validation });
       continue;
     }
@@ -3004,6 +3008,7 @@ async function validateAndStoreListingPhotos({ phone, lang, draft = {}, runtime 
       scene_type: validation.scene_type || 'unknown',
       confidence: Number(validation.confidence || 0),
       model: validation.model || null,
+      needs_staff_check: checkerUnavailable || undefined,
       accepted_at: new Date().toISOString()
     });
     outcomes.push({ status: 'accepted', expectedSlot, validation, count: photos.length });
@@ -13971,7 +13976,7 @@ function isActionableStepReply(step, value = '') {
   if (!currentStep || !clean || isResumeControlReply(clean)) return false;
 
   if (currentStep === 'greeting') return ['1', '2', '3', '4'].includes(clean);
-  if (currentStep === 'main_menu') return ['1', '2', '3', '4', '9'].includes(clean);
+  if (currentStep === 'main_menu') return ['1', '2', '3', '4', '5', '9'].includes(clean);
   if (currentStep === 'choose_language') return /^[1-9]$/.test(clean);
   if (currentStep === 'listing_type') return Boolean(mapListingTypeInput(clean));
   if (currentStep === 'ownership') return Boolean(mapOwnershipInput(clean)) || Boolean(mapListingTypeInput(clean));
@@ -15501,6 +15506,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       ...naturalPatch,
       title: naturalPatch.title || cleanBody
     };
+    // "3 bedroom house in Ntinda": if the area in the title is an exact match,
+    // save it properly so we don't ask "what area?" straight afterwards.
+    if (normalizeInput(patch.area) && !normalizeInput(patch.canonical_location_id)) {
+      const titleLocation = resolveWhatsappLocation(normalizeInput(patch.area), { allowText: true });
+      if (titleLocation.status === 'matched' && !['district', 'region'].includes(titleLocation.match?.level)) {
+        Object.assign(patch, canonicalWhatsappLocationPatch(titleLocation), { district: titleLocation.match.district });
+      }
+    }
     if (normalizeInput(patch.title).length < 5) return respond(t(lang, 'titleTooShort'), 'title');
     await patchDraft(phone, patch);
     const mergedDraft = { ...draft, ...patch };
@@ -15543,7 +15556,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       district: naturalPatch.district || draft.district,
       allowText: true
     });
-    if (locationResolution.status !== 'matched' || ['district', 'region'].includes(locationResolution.match?.level)) {
+    if (locationResolution.status === 'matched' && ['district', 'region'].includes(locationResolution.match?.level)) {
+      // They gave the district ("Kampala"); we need the neighbourhood inside it.
+      const districtName = locationResolution.match?.district || locationResolution.match?.name || cleanBody;
+      return respond(`👍 ${districtName} noted. Which area or neighbourhood in ${districtName}? Just send the name, e.g. *Kira* or *Ntinda*.`, 'area');
+    }
+    if (locationResolution.status !== 'matched') {
       return respond(whatsappLocationPrompt(locationResolution), 'area');
     }
     const locationPatch = canonicalWhatsappLocationPatch(locationResolution);
@@ -15781,10 +15799,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         terms_version: docs.LISTER_TERMS_VERSION,
         terms_accepted_phone: String(phone).replace(/\D/g, ''),
         terms_accepted_text: cleanBody.slice(0, 80),
-        lister_fee_terms: { free_days: Number(settings.lister_fee?.free_days ?? 7), monthly_ugx: Number(settings.lister_fee?.monthly_ugx || 25000) }
+        lister_fee_terms: { free_days: Number(settings.lister_fee?.free_days ?? 7), monthly_ugx: Number(settings.lister_fee?.monthly_ugx || 20000) }
       };
       await patchDraft(phone, acceptance);
       const result = await submitWhatsappListingDraft({ phone, lang, draft: { ...draft, ...acceptance } });
+      // A failed save keeps the draft: one more AGREE tries again instead of a dead end.
+      if (result.failed) {
+        return respond(`${result.message}\n\nYour details are kept — reply *AGREE* to try again, or call ${agentHelpContact().name} on ${agentHelpContact().pretty}.`, 'ask_terms');
+      }
       if (!result.propertyId) return respond(result.message, result.nextStep);
       const fee = acceptance.lister_fee_terms;
       return respond(`${result.message}\n\n✅ Thank you for agreeing to the terms.\n🗓️ Once approved, your property is live *free for ${fee.free_days} days*. After that it is UGX ${fee.monthly_ugx.toLocaleString('en-US')} a month to stay live — we'll message you before then, with how many people have viewed it.`, result.nextStep);

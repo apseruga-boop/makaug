@@ -417,7 +417,7 @@ async function rejectClaim(db, { claimId, actor, note }) {
 
 async function recordListingPayment(db, { propertyId, payment, actor }) {
   const settings = await getSettings(db);
-  const fee = Number(settings.lister_fee?.monthly_ugx || 25000);
+  const fee = Number(settings.lister_fee?.monthly_ugx || 20000);
   const property = (await db.query('SELECT id, title, lister_paid_until, lister_billing_suspended_at, extra_fields FROM properties WHERE id = $1::uuid', [propertyId])).rows[0];
   if (!property) throw revenue.httpError(404, 'Listing not found');
   const entry = revenue.normalizeEntry(payment);
@@ -481,7 +481,7 @@ const LISTER_MESSAGE_KINDS = ['views', 'reminder', 'final_reminder', 'taken_down
 
 async function buildListerMessage(db, kind, property, settings, payLink = '') {
   const name = String(property.lister_name || '').trim().split(/\s+/)[0] || 'there';
-  const fee = Number(settings.lister_fee?.monthly_ugx || 25000);
+  const fee = Number(settings.lister_fee?.monthly_ugx || 20000);
   const pay = payToLine(settings);
   const link = `${SITE()}/property/${property.id}`;
   const title = property.title || 'property';

@@ -100,7 +100,7 @@ async function createPayLink(db, input = {}, actor = 'admin') {
     if (property.found_online) throw revenue.httpError(409, 'Found-online listings are free — nobody is charged for them');
     if (property.agent_id) throw revenue.httpError(409, "This is an agent's listing — it is covered by the agent's monthly fee");
     propertyId = property.id;
-    amountUgx = amountUgx || Number(settings.lister_fee?.monthly_ugx || 25000);
+    amountUgx = amountUgx || Number(settings.lister_fee?.monthly_ugx || 20000);
     description = description || `makaug listing — 1 month: ${property.title || 'your property'}`.slice(0, 200);
     payerName = payerName || property.lister_name || null;
     payerPhone = payerPhone || digits(property.lister_phone) || null;

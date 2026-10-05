@@ -353,7 +353,7 @@ function run() {
   assert(listPropertyText.includes('List Property'), '/list-property should use short page title');
   assert(!listPropertyText.includes('Always 100% Free.'), '/list-property must not claim listings are always free');
   assert(listPropertyText.includes('Start with 7 days free.'), '/list-property should explain the introductory listing period');
-  assert(listPropertyText.includes('one private listing costs UGX 25,000 per month'), '/list-property should state the current post-trial price');
+  assert(listPropertyText.includes('one private listing costs UGX 20,000 per month'), '/list-property should state the current post-trial price');
   assert(!listPropertyText.includes('List Your Property - Free'), '/list-property should not use old long free title');
   assert(listPropertyText.includes('Find address or place'), '/list-property should show address-first location flow');
   assert(listPropertyHtml.includes('id="lp-current-location-btn"'), '/list-property should include share current location button');

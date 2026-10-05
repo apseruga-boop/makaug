@@ -46,7 +46,7 @@ function settingsDefaults(settings = {}) {
   const agent = settings.agent_fee || {};
   return {
     freeDays: Number(lister.free_days ?? 7),
-    listerMonthly: Number(lister.monthly_ugx || 25000),
+    listerMonthly: Number(lister.monthly_ugx || 20000),
     agentMonthly: Number(agent.monthly_ugx || 50000),
     finalAfter: Number(agent.final_after_days_overdue ?? 7),
     payTo: settings.pay_to || {}
