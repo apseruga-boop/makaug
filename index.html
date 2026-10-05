@@ -2985,6 +2985,23 @@
       };
     })();
   </script>
+
+  <!-- Travelpayouts Drive (affiliate project 581854, marker 785967).
+       Travelpayouts will not unlock the affiliate dashboard, the programmes or
+       the deeplink generator until this is live on makaug.com, so it is here as
+       their gate, not because makaug needs it. It only loads on the production
+       host: a local or staging page must never report clicks or bookings into
+       the live affiliate account. Removing it is deleting this block. -->
+  <script data-makaug-affiliate="travelpayouts-drive">
+    (function () {
+      if (window.location.hostname !== 'makaug.com' && window.location.hostname !== 'www.makaug.com') return;
+      var script = document.createElement("script");
+      script.async = 1;
+      script.setAttribute("data-cmp-ab", "2");
+      script.src = 'https://emrldtp.cc/NTgxODU0.js?t=581854';
+      document.head.appendChild(script);
+    })();
+  </script>
 </head>
 <body class="bg-gray-50">
   <div class="mk-top-strip bg-green-900 text-white text-sm">
