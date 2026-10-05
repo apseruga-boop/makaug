@@ -5,6 +5,7 @@ const db = require('../config/database');
 const smsService = require('../models/smsService');
 const logger = require('../config/logger');
 const { DISTRICTS } = require('../utils/constants');
+const { searchOrderBySql } = require('../utils/searchRankingSql');
 const {
   classifyWhatsappIntent,
   detectWhatsappLanguage,
@@ -10590,7 +10591,7 @@ async function findPropertiesByNaturalFilters(filters = {}) {
        LIMIT 1
      ) img ON TRUE
      ${where}
-     ORDER BY p.created_at DESC
+     ORDER BY ${searchOrderBySql('p')}
      LIMIT $${limitIdx}`,
     values
   );
@@ -12388,7 +12389,7 @@ async function findPropertiesForWhatsapp(searchType, location) {
        LIMIT 1
      ) img ON TRUE
      ${where}
-     ORDER BY p.created_at DESC
+     ORDER BY ${searchOrderBySql('p')}
      LIMIT $${limitIdx}`,
     values
   );
@@ -12428,7 +12429,11 @@ async function findPropertiesNearWhatsapp(searchType, sharedLocation, radiusMile
        LIMIT 1
      ) img ON TRUE
      ${where}
-     ORDER BY p.created_at DESC
+     -- Which 200 rows distance is then measured against. Ranked, so a registered
+     -- agent's listing is in the pool even when 200 newer found-online rows
+     -- exist; the sort by distance below is unchanged, because somebody who
+     -- shared their location wants the nearest thing first.
+     ORDER BY ${searchOrderBySql('p')}
      LIMIT 200`,
     values
   );
@@ -12542,7 +12547,8 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
        LIMIT 1
      ) img ON TRUE
      ${where}
-     ORDER BY p.created_at DESC
+     -- Same reasoning as the pool above: rank who is in it, then sort by distance.
+     ORDER BY ${searchOrderBySql('p')}
      LIMIT 250`,
     values
   );
