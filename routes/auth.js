@@ -1,3 +1,4 @@
+const { toPrivateIdentityRef } = require('../services/agentIdentityStorageService');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -1052,6 +1053,30 @@ router.post('/verify-signup-otp', async (req, res, next) => {
   }
 });
 
+// Step 1 of sign-up: say straight away if the phone or email already has an
+// account, instead of only at the last step.
+router.post('/signup-check', async (req, res, next) => {
+  try {
+    const phone = normalizeUgPhone(req.body?.phone);
+    const email = normalizeEmail(req.body?.email) || null;
+    if (!phone && !email) return res.status(400).json({ ok: false, error: 'phone or email is required' });
+    const rows = (await db.query(
+      `SELECT phone, email, phone_verified, status, role
+         FROM users
+        WHERE ($1::text IS NOT NULL AND phone = $1)
+           OR ($2::text IS NOT NULL AND LOWER(email) = LOWER($2))
+        LIMIT 5`,
+      [phone || null, email]
+    )).rows;
+    const taken = (row) => row.phone_verified || row.status !== 'active' || row.role === 'agent_broker';
+    const phoneTaken = Boolean(phone) && rows.some((row) => row.phone === phone && taken(row));
+    const emailTaken = Boolean(email) && rows.some((row) => String(row.email || '').toLowerCase() === email.toLowerCase() && taken(row));
+    return res.json({ ok: true, data: { phone_taken: phoneTaken, email_taken: emailTaken } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/register', async (req, res, next) => {
   let client = null;
   try {
@@ -1137,6 +1162,13 @@ router.post('/register', async (req, res, next) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+
+    // The broker's ID photo goes to private storage, not into profile_data as text.
+    if (isBrokerSignup && profileData.broker_identity_document_url) {
+      profileData.broker_identity_document_url = await toPrivateIdentityRef(profileData.broker_identity_document_url, {
+        keyPrefix: 'brokers/signup-identity'
+      });
+    }
 
     await client.query('BEGIN');
 
@@ -1920,6 +1952,11 @@ router.patch('/me', async (req, res, next) => {
       ? preferredLanguageInput
       : (user.preferred_language || 'en');
     const profileDataPatch = sanitizeProfileData(req.body.profile_data);
+    if (profileDataPatch.broker_identity_document_url) {
+      profileDataPatch.broker_identity_document_url = await toPrivateIdentityRef(profileDataPatch.broker_identity_document_url, {
+        keyPrefix: `users/${user.id}/identity`
+      });
+    }
     const phoneChanged = Boolean(nextPhone && nextPhone !== user.phone);
 
     if (emailInput && !isValidEmail(emailInput)) {

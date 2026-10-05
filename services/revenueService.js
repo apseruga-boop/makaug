@@ -632,6 +632,7 @@ module.exports = {
   isoDay,
   feeConfig,
   kampalaDate,
+  addDays,
   addMonths,
   agentFeeRequired,
   normalizeEntry,

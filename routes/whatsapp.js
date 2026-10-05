@@ -182,7 +182,9 @@ const WHATSAPP_AGENT_CACHE_MS = 30 * 1000;
 const whatsappAgentSearchCache = new Map();
 const MIN_PUBLIC_WHATSAPP_PRICE_UGX = IS_SOUTH_AFRICA ? 500 : 10000;
 const WHATSAPP_LISTING_PHOTO_FLOW_MARKER = 'whatsapp-web-modern-media-20260804';
-const WHATSAPP_MIN_LISTING_PHOTOS = 5;
+// At least 2 photos for every listing (same as the website); up to 10 on WhatsApp.
+const WHATSAPP_MIN_LISTING_PHOTOS = 2;
+const WHATSAPP_MAX_LISTING_PHOTOS = 10;
 
 // Language Translations
 const T = {
@@ -236,7 +238,7 @@ const T = {
     invalidPrice: '❌ Please enter a valid price in UGX (numbers only, e.g. 250000000)',
     descriptionTooShort: 'Please write a longer description (at least 10 characters).',
     needAtLeastOnePhoto: '❌ Please send all 5 required photos before typing DONE.',
-    needExactlyFivePhotos: '❌ Please upload exactly 5 photos: front, sitting room, bedroom, kitchen, bathroom.',
+    needExactlyFivePhotos: '❌ Please send at least 2 clear photos of the property first.',
     photosUploaded: "📸 You've uploaded {count} photos. Type *DONE* to continue, or send any extra helpful photos.",
     photoReceived: '✅ Photo {count} received.',
     invalidNin: '❌ Please enter a valid National ID Number (NIN).',
@@ -308,7 +310,7 @@ const T = {
     invalidPrice: '❌ Teeka ebbeeyi entuufu mu UGX (ennamba zokka, ex: 250000000).',
     descriptionTooShort: 'Wandiika ennyinyonnyola empanvu katono (waakiri ennukuta 10).',
     needAtLeastOnePhoto: '❌ Weereza ebifaananyi 5 byonna ebyetaagisa nga tonnawandiika DONE.',
-    needExactlyFivePhotos: '❌ Teeka ebifaananyi 5 byokka: front, sitting room, bedroom, kitchen, bathroom.',
+    needExactlyFivePhotos: '❌ Sooka oweereze waakiri ebifaananyi 2 ebitegeerekeka.',
     photosUploaded: '📸 Ofunye ebifaananyi {count}/5. Wandiika *DONE* nga omaze okutuusa ku 5.',
     photoReceived: '✅ Ekifaananyi {count}/5 kifuniddwa! Weereza ekiddako.',
     invalidNin: '❌ NIN gyotadde si ntuufu. Gezaako nate.',
@@ -366,7 +368,7 @@ const T = {
     invalidPrice: '❌ Tafadhali weka bei sahihi ya UGX (nambari pekee, mfano 250000000).',
     descriptionTooShort: 'Tafadhali andika maelezo marefu kidogo (angalau herufi 10).',
     needAtLeastOnePhoto: '❌ Tafadhali tuma picha 5 zote zinazohitajika kabla ya kuandika DONE.',
-    needExactlyFivePhotos: '❌ Tafadhali pakia picha 5 kamili: mbele, sebuleni, chumba cha kulala, jikoni, bafu.',
+    needExactlyFivePhotos: '❌ Tafadhali tuma kwanza angalau picha 2 wazi za mali.',
     photosUploaded: '📸 Umepakia picha {count}/5. Andika *DONE* ukifika 5.',
     photoReceived: '✅ Picha {count}/5 imepokelewa! Tuma picha inayofuata.',
     invalidNin: '❌ Tafadhali andika NIN sahihi.',
@@ -484,7 +486,7 @@ Object.assign(T.ac, {
   titleTooShort: 'Nying macek tutwal. Coo nying ma nyuto property maber.',
   invalidPrice: '❌ Coo wel ma kakare i UGX (namba keken).',
   descriptionTooShort: 'Coo description ma bor nok (letters 10 onyo makato).',
-  needExactlyFivePhotos: '❌ Cwal photos 5: front, sitting room, bedroom, kitchen, bathroom.',
+  needExactlyFivePhotos: '❌ Cwal photos 2.',
   photosUploaded: '📸 Itye ki photos {count}/5. Coo *DONE* ka oromo 5.',
   photoReceived: '✅ Photo {count}/5 onongo! Cwal ma lubo kore.',
     sendSelfiePhotoOnly: '❌ Cwal photo/selfie only. Pe PDF onyo document file.',
@@ -529,7 +531,7 @@ Object.assign(T.ny, {
   typeAny: 'Byona',
   photoReceived: '✅ Ekishushani {count}/5 kyatunga! Tuma ekirikukurataho.',
   photosUploaded: '📸 Otumire ebishushani {count}/5. Handiika *DONE* waheza 5.',
-  needExactlyFivePhotos: '❌ Tuma ebishushani 5: front, sitting room, bedroom, kitchen, bathroom.',
+  needExactlyFivePhotos: '❌ Tuma ebishushani 2.',
   voiceNotUnderstood: '🎙️ Natunga voice note yaawe, kwonka tindagihurire gye. Tuma kandi n’eiraka eririkwetegyerezibwa nari ohandiike.',
   voiceTranscriptionUnavailable: '🎙️ Natunga voice note yaawe, kwonka transcription terikukora hati. Hati, nyabura ohandiike message yaawe.',
   voiceTranscriptEcho: '🎙️ Nahurira nti: "{transcript}"'
@@ -563,7 +565,7 @@ Object.assign(T.rn, {
   typeAny: 'Vyose',
   photoReceived: '✅ Ifoto {count}/5 yakiriwe! Ohereza ikurikira.',
   photosUploaded: '📸 Wohereje amafoto {count}/5. Andika *DONE* umaze 5.',
-  needExactlyFivePhotos: '❌ Ohereza amafoto 5: front, sitting room, bedroom, kitchen, bathroom.',
+  needExactlyFivePhotos: '❌ Ohereza amafoto 2.',
   voiceNotUnderstood: '🎙️ Nakiriye voice note yawe, ariko sinayumvise neza. Ongera uyohereze uvuga neza canke wandike ubutumwa.',
   voiceTranscriptionUnavailable: '🎙️ Nakiriye voice note yawe, ariko transcription ntirafungurwa. Ubu, ndagusavye wandike ubutumwa bwawe.',
   voiceTranscriptEcho: '🎙️ Numvise uti: "{transcript}"'
@@ -597,7 +599,7 @@ Object.assign(T.sm, {
   typeAny: 'Byonna',
   photoReceived: '✅ Ekifaananyi {count}/5 kifuniddwa! Weereza ekiddako.',
   photosUploaded: '📸 Oweerezza ebifaananyi {count}/5. Wandiika *DONE* bwomala 5.',
-  needExactlyFivePhotos: '❌ Weereza ebifaananyi 5: front, sitting room, bedroom, kitchen, bathroom.',
+  needExactlyFivePhotos: '❌ Weereza ebifaananyi 2.',
   voiceNotUnderstood: '🎙️ Nfunye voice note yo naye sitegedde bulungi. Ddamu ogyogere bulungi oba wandiika message.',
   voiceTranscriptionUnavailable: '🎙️ Nfunye voice note yo, naye transcription tennaba kukoleezebwa. Nkwegayiridde wandiika message yo kati.',
   voiceTranscriptEcho: '🎙️ Mpulidde nti: "{transcript}"'
@@ -657,7 +659,7 @@ T.am = Object.assign({}, T.en, {
   invalidPrice: '❌ ትክክለኛ የ UGX ዋጋ ያስገቡ፣ ቁጥር ብቻ።',
   descriptionTooShort: 'እባክዎ ትንሽ ረዘም ያለ መግለጫ ይጻፉ።',
   needAtLeastOnePhoto: '❌ DONE ከመጻፍዎ በፊት የሚፈለጉትን 5 ፎቶዎች ይላኩ።',
-  needExactlyFivePhotos: '❌ በትክክል 5 ፎቶዎች ይላኩ: front, sitting room, bedroom, kitchen, bathroom.',
+  needExactlyFivePhotos: '❌ ቢያንስ 2 ፎቶዎች ይላኩ።',
   photosUploaded: '📸 {count} ፎቶዎች ተሰቅለዋል። ለመቀጠል *DONE* ይጻፉ፣ ወይም ተጨማሪ ጠቃሚ ፎቶዎች ይላኩ።',
   photoReceived: '✅ ፎቶ {count} ደርሷል።',
   invalidNin: '❌ እባክዎ ትክክለኛ National ID Number (NIN) ያስገቡ።',
@@ -737,7 +739,7 @@ T.ar = Object.assign({}, T.en, {
   invalidPrice: '❌ أدخل سعراً صحيحاً بالـUGX، أرقام فقط.',
   descriptionTooShort: 'يرجى كتابة وصف أطول قليلاً.',
   needAtLeastOnePhoto: '❌ أرسل الصور الخمس المطلوبة قبل كتابة DONE.',
-  needExactlyFivePhotos: '❌ ارفع 5 صور بالضبط: front, sitting room, bedroom, kitchen, bathroom.',
+  needExactlyFivePhotos: '❌ أرسل صورتين على الأقل.',
   photosUploaded: '📸 تم استلام {count} صور. اكتب *DONE* للمتابعة أو أرسل صوراً مفيدة إضافية.',
   photoReceived: '✅ تم استلام صورة {count}.',
   invalidNin: '❌ أدخل National ID Number (NIN) صحيحاً.',
@@ -1327,7 +1329,13 @@ function shouldRunWhatsappLanguageAi({ text = '', sessionStep = 'greeting', prel
   return ['greeting', 'main_menu', 'choose_language', 'submitted'].includes(String(sessionStep || 'greeting'));
 }
 
-function photoRequirementLabel(index, lang = 'en') {
+const LAND_PHOTO_LABELS = ['entrance or front of the plot', 'view across the land', 'boundary or marker stones', 'access road', 'surroundings', 'extra useful photo'];
+const COMMERCIAL_PHOTO_LABELS = ['front/outside', 'main inside space', 'another inside space', 'parking or access', 'washrooms', 'extra useful photo'];
+
+function photoRequirementLabel(index, lang = 'en', listingType = '') {
+  const kind = normalizeInput(listingType).toLowerCase();
+  if (kind === 'land') return LAND_PHOTO_LABELS[index] || LAND_PHOTO_LABELS[5];
+  if (kind === 'commercial') return COMMERCIAL_PHOTO_LABELS[index] || COMMERCIAL_PHOTO_LABELS[5];
   const code = resolveLangCode(lang);
   const labels = {
     en: ['front/outside', 'sitting room or main room', 'bedroom', 'kitchen', 'bathroom', 'extra useful photo'],
@@ -1344,36 +1352,36 @@ function photoRequirementLabel(index, lang = 'en') {
   return row[index] || row[5];
 }
 
-function photoChecklistPrompt(lang, count = 0) {
+function photoChecklistPrompt(lang, count = 0, listingType = '') {
   const code = resolveLangCode(lang);
   const safeCount = Math.max(0, Math.min(WHATSAPP_MIN_LISTING_PHOTOS, Number(count) || 0));
-  const nextLabel = photoRequirementLabel(safeCount, code);
+  const nextLabel = photoRequirementLabel(safeCount, code, listingType);
   const messages = {
-    en: `📸 Please send at least 5 different, clear property photos. You can send them one at a time or together:\n1️⃣ Front/outside\n2️⃣ Sitting room or main room\n3️⃣ Bedroom\n4️⃣ Kitchen\n5️⃣ Bathroom\n\nI will check and confirm each photo. Screenshots, documents and duplicate photos do not count.\n\nStart with the *${nextLabel}* photo.`,
-    lg: `📸 Weereza waakiri ebifaananyi 5 eby'enjawulo era ebitegeerekeka: front/outside, sitting room oba main room, bedroom, kitchen ne bathroom. Osobola okubisindika kimu ku kimu oba wamu. Nja kukakasa buli kifaananyi. Screenshot, document oba ekifaananyi ekiddiddwa tekibalibwa.\n\nTandika n'ekifaananyi kya *${nextLabel}*.`,
-    sw: `📸 Tuma angalau picha 5 tofauti na wazi za mali: mbele/nje, sebule au chumba kikuu, chumba cha kulala, jikoni na bafu. Unaweza kutuma moja moja au pamoja. Nitathibitisha kila picha. Screenshot, hati au picha iliyorudiwa haitahesabiwa.\n\nAnza na picha ya *${nextLabel}*.`,
-    ar: `📸 أرسل 5 صور مختلفة وواضحة للعقار على الأقل: الواجهة/الخارج، غرفة الجلوس، غرفة النوم، المطبخ، والحمام. يمكنك إرسالها واحدة تلو الأخرى أو معاً. سأتحقق من كل صورة. لقطات الشاشة والمستندات والصور المكررة لا تُحتسب.\n\nابدأ بصورة *${nextLabel}*.`
+    en: `📸 Please send at least 2 clear photos of the property (up to 10). One at a time or all together is fine.\nThe best ones to send: ${normalizeInput(listingType).toLowerCase() === 'land' ? 'the entrance of the plot, a view across the land, boundary markers and the access road' : 'front/outside, sitting room, bedroom, kitchen, bathroom'} — more photos get more enquiries.\n\nScreenshots, documents and repeated photos do not count.\n\nStart with the *${nextLabel}* photo.`,
+    lg: `📸 Weereza waakiri ebifaananyi 2 ebitegeerekeka eby'ennyumba (okutuuka ku 10). Osobola okubisindika kimu ku kimu oba wamu. Ebisinga obulungi: front/outside, sitting room, bedroom, kitchen ne bathroom. Screenshot, document oba ekifaananyi ekiddiddwa tekibalibwa.\n\nTandika n'ekifaananyi kya *${nextLabel}*.`,
+    sw: `📸 Tuma angalau picha 2 wazi za mali (hadi 10). Unaweza kutuma moja moja au pamoja. Bora zaidi: mbele/nje, sebule, chumba cha kulala, jikoni na bafu. Screenshot, hati au picha iliyorudiwa haitahesabiwa.\n\nAnza na picha ya *${nextLabel}*.`,
+    ar: `📸 أرسل صورتين واضحتين للعقار على الأقل (حتى 10). يمكنك إرسالها واحدة تلو الأخرى أو معاً. الأفضل: الواجهة، غرفة الجلوس، غرفة النوم، المطبخ، الحمام. لقطات الشاشة والمستندات والصور المكررة لا تُحتسب.\n\nابدأ بصورة *${nextLabel}*.`
   };
   return messages[code] || messages.en;
 }
 
-function photoNextPrompt(lang, count = 0) {
+function photoNextPrompt(lang, count = 0, listingType = '') {
   const code = resolveLangCode(lang);
   const safeCount = Math.max(0, Number(count) || 0);
-  if (safeCount >= 5) {
+  if (safeCount >= WHATSAPP_MIN_LISTING_PHOTOS) {
     const done = {
-      en: `✅ I have the 5 key photos. I will continue with your contact details now.`,
-      lg: `✅ Ebifaananyi 5 ebikulu bifuniddwa. Wandiika *DONE* okugenda mu maaso, oba weereza ebirala bw'oba obirina.`,
-      sw: `✅ Nimepata picha 5 muhimu. Andika *DONE* kuendelea, au tuma picha nyingine kama zipo.`,
-      ac: `✅ Atye ki photos 5 ma pire tek. Coo *DONE* me mede anyim, onyo cwal photos mukene ma konyo.`,
-      ny: `✅ Natunga ebishushani 5 ebikuru. Handiika *DONE* kugumizamu, nari tuma ebindi.`,
-      rn: `✅ Nakiriye amafoto 5 akenewe. Andika *DONE* gukomeza, canke ohereze ayandi.`,
-      sm: `✅ Ebifaananyi 5 ebikulu bifuniddwa. Wandiika *DONE* okugenda mu maaso, oba weereza ebirala.`,
-      am: `✅ 5 ዋና ፎቶዎች ደርሰዋል። ለመቀጠል *DONE* ይጻፉ፣ ወይም ተጨማሪ ጠቃሚ ፎቶዎች ይላኩ።`
+      en: `✅ I have enough photos. Reply *DONE* to continue, or send more.`,
+      lg: `✅ Ebifaananyi 2 ebikulu bifuniddwa. Wandiika *DONE* okugenda mu maaso, oba weereza ebirala bw'oba obirina.`,
+      sw: `✅ Nimepata picha 2 muhimu. Andika *DONE* kuendelea, au tuma picha nyingine kama zipo.`,
+      ac: `✅ Atye ki photos 2 ma pire tek. Coo *DONE* me mede anyim, onyo cwal photos mukene ma konyo.`,
+      ny: `✅ Natunga ebishushani 2 ebikuru. Handiika *DONE* kugumizamu, nari tuma ebindi.`,
+      rn: `✅ Nakiriye amafoto 2 akenewe. Andika *DONE* gukomeza, canke ohereze ayandi.`,
+      sm: `✅ Ebifaananyi 2 ebikulu bifuniddwa. Wandiika *DONE* okugenda mu maaso, oba weereza ebirala.`,
+      am: `✅ 2 ዋና ፎቶዎች ደርሰዋል። ለመቀጠል *DONE* ይጻፉ፣ ወይም ተጨማሪ ጠቃሚ ፎቶዎች ይላኩ።`
     };
     return done[code] || done.en;
   }
-  const label = photoRequirementLabel(safeCount, code);
+  const label = photoRequirementLabel(safeCount, code, listingType);
   const prompts = {
     en: `📸 Next: please send the *${label}* photo.`,
     lg: `📸 Ekiddako: weereza ekifaananyi kya *${label}*.`,
@@ -1387,21 +1395,21 @@ function photoNextPrompt(lang, count = 0) {
   return prompts[code] || prompts.en;
 }
 
-function photoAcceptedPrompt(lang, count = 1) {
+function photoAcceptedPrompt(lang, count = 1, listingType = '') {
   const code = resolveLangCode(lang);
   const safeCount = Math.max(1, Number(count) || 1);
   const remaining = Math.max(0, WHATSAPP_MIN_LISTING_PHOTOS - safeCount);
-  const nextLabel = photoRequirementLabel(safeCount, code);
+  const nextLabel = photoRequirementLabel(safeCount, code, listingType);
   const messages = {
     en: remaining > 0
       ? `✅ Photo ${safeCount} accepted. ${remaining} key photo${remaining === 1 ? '' : 's'} remaining.\n📸 Next: please send the *${nextLabel}* photo.`
-      : `✅ Photo ${safeCount} accepted. I now have the 5 key property photos.`,
+      : `✅ Photo ${safeCount} accepted — that's enough to list it.`,
     lg: remaining > 0
       ? `✅ Ekifaananyi ${safeCount} kikkiriziddwa. Ebifaananyi ebikulu ${remaining} bisigadde.\n📸 Ekiddako: weereza ekifaananyi kya *${nextLabel}*.`
-      : `✅ Ekifaananyi ${safeCount} kikkiriziddwa. Ebifaananyi 5 ebikulu biwedde.`,
+      : `✅ Ekifaananyi ${safeCount} kikkiriziddwa. Ebifaananyi 2 ebikulu biwedde.`,
     sw: remaining > 0
       ? `✅ Picha ${safeCount} imekubaliwa. Picha muhimu ${remaining} zimebaki.\n📸 Inayofuata: tuma picha ya *${nextLabel}*.`
-      : `✅ Picha ${safeCount} imekubaliwa. Sasa nina picha 5 muhimu za mali.`,
+      : `✅ Picha ${safeCount} imekubaliwa. Sasa nina picha 2 muhimu za mali.`,
     ar: remaining > 0
       ? `✅ تم قبول الصورة ${safeCount}. تبقّت ${remaining} صور أساسية.\n📸 التالية: أرسل صورة *${nextLabel}*.`
       : `✅ تم قبول الصورة ${safeCount}. لدي الآن الصور الخمس الأساسية للعقار.`
@@ -1409,9 +1417,9 @@ function photoAcceptedPrompt(lang, count = 1) {
   return messages[code] || messages.en;
 }
 
-function photoRejectedPrompt(lang, count = 0, reason = 'non_property') {
+function photoRejectedPrompt(lang, count = 0, reason = 'non_property', listingType = '') {
   const code = resolveLangCode(lang);
-  const nextLabel = photoRequirementLabel(count, code);
+  const nextLabel = photoRequirementLabel(count, code, listingType);
   const reasonText = reason === 'wrong_property_scene'
     ? 'That looks like a property photo, but it is not the requested room/view.'
     : reason === 'unavailable'
@@ -1426,9 +1434,9 @@ function photoRejectedPrompt(lang, count = 0, reason = 'non_property') {
   return messages[code] || messages.en;
 }
 
-function photoDuplicatePrompt(lang, count = 0) {
+function photoDuplicatePrompt(lang, count = 0, listingType = '') {
   const code = resolveLangCode(lang);
-  const nextLabel = photoRequirementLabel(count, code);
+  const nextLabel = photoRequirementLabel(count, code, listingType);
   const messages = {
     en: `⚠️ That photo has already been received, so I did not count it twice.\n📸 Next: please send a different *${nextLabel}* photo.`,
     lg: `⚠️ Ekifaananyi ekyo wakisindika dda, kale sikibalidde emirundi ebiri.\n📸 Ekiddako: weereza ekifaananyi ekirala kya *${nextLabel}*.`,
@@ -1438,18 +1446,31 @@ function photoDuplicatePrompt(lang, count = 0) {
   return messages[code] || messages.en;
 }
 
-function photoCompletePrompt(lang, count = 5) {
+function photoCompletePrompt(lang, count = WHATSAPP_MIN_LISTING_PHOTOS) {
   const code = resolveLangCode(lang);
-  const safeCount = Math.max(5, Number(count) || 5);
+  const safeCount = Math.max(WHATSAPP_MIN_LISTING_PHOTOS, Number(count) || WHATSAPP_MIN_LISTING_PHOTOS);
   const messages = {
-    en: `📸 ${safeCount} photos received. I have the key listing photos.`,
-    lg: `📸 Ebifaananyi ${safeCount}/5 bifuniddwa. Ebifaananyi ebikulu biriwo.`,
-    sw: `📸 Picha ${safeCount}/5 zimepokelewa. Nina picha muhimu za tangazo.`,
-    ac: `📸 Photos ${safeCount}/5 onongo. Atye ki photos ma pire tek pi listing.`,
-    ny: `📸 Ebishushani ${safeCount}/5 byatunga. Ebishushani bikuru biriho.`,
-    rn: `📸 Amafoto ${safeCount}/5 yakiriwe. Amafoto y'ingenzi arahari.`,
-    sm: `📸 Ebifaananyi ${safeCount}/5 bifuniddwa. Ebifaananyi ebikulu biriwo.`,
-    am: `📸 ${safeCount}/5 ፎቶዎች ደርሰዋል። ዋና የዝርዝር ፎቶዎች አሉኝ።`
+    en: `📸 ${safeCount} photos received — thank you.`,
+    lg: `📸 Ebifaananyi ${safeCount} bifuniddwa — weebale.`,
+    sw: `📸 Picha ${safeCount} zimepokelewa — asante.`,
+    ac: `📸 Photos ${safeCount} onongo — apwoyo.`,
+    ny: `📸 Ebishushani ${safeCount} byatunga — webare.`,
+    rn: `📸 Amafoto ${safeCount} yakiriwe — murakoze.`,
+    sm: `📸 Ebifaananyi ${safeCount} bifuniddwa — weebale.`,
+    am: `📸 ${safeCount} ፎቶዎች ደርሰዋል — እናመሰግናለን።`
+  };
+  return messages[code] || messages.en;
+}
+
+// Minimum reached: more photos are welcome, DONE moves on.
+function photoEnoughPrompt(lang, count = WHATSAPP_MIN_LISTING_PHOTOS) {
+  const code = resolveLangCode(lang);
+  const left = Math.max(0, WHATSAPP_MAX_LISTING_PHOTOS - (Number(count) || 0));
+  const messages = {
+    en: `✅ Photo ${count} accepted — that's enough to list it.\n📸 Send more photos if you have them (up to ${left} more), or reply *DONE* to continue.`,
+    lg: `✅ Ekifaananyi ${count} kikkiriziddwa — bimala okuteeka listing.\n📸 Weereza ebirala bw'oba obirina (okutuuka ku ${left}), oba wandiika *DONE* okugenda mu maaso.`,
+    sw: `✅ Picha ${count} imekubaliwa — zinatosha kuorodhesha.\n📸 Tuma picha zaidi kama unazo (hadi ${left} zaidi), au andika *DONE* kuendelea.`,
+    ar: `✅ تم قبول الصورة ${count} — هذا يكفي لنشر الإعلان.\n📸 أرسل صوراً أخرى إن وُجدت (حتى ${left})، أو اكتب *DONE* للمتابعة.`
   };
   return messages[code] || messages.en;
 }
@@ -2344,7 +2365,8 @@ function nextListingDraftStep(draft = {}) {
   if (draft.listing_type === 'rent' && isDraftMissingValue(draft, 'contract_months')) return 'ask_contract';
   if (draft.listing_type === 'student' && isDraftMissingValue(draft, 'nearest_university')) return 'ask_university';
   if (draft.listing_type === 'student' && isDraftMissingValue(draft, 'distance_to_uni_km')) return 'ask_distance';
-  if (isDraftMissingValue(draft, 'bedrooms')) return 'bedrooms';
+  // Land and commercial premises have no bedrooms — don't ask.
+  if (!['land', 'commercial'].includes(normalizeInput(draft.listing_type)) && isDraftMissingValue(draft, 'bedrooms')) return 'bedrooms';
   if (isDraftMissingValue(draft, 'description')) return 'description';
   if (!Array.isArray(draft.photos) || draft.photos.length < WHATSAPP_MIN_LISTING_PHOTOS) return 'photos';
   if (isDraftMissingValue(draft, 'lister_name') && isDraftMissingValue(draft, 'contact_display_name')) return 'ask_public_name';
@@ -2396,7 +2418,7 @@ function fastListingProgressReply(lang, patch = {}, updatedDraft = {}, intro = '
   if (nextStep === 'photos') {
     return {
       nextStep,
-      message: `✅ ${savedLine}\n\n${photoChecklistPrompt(lang, Array.isArray(updatedDraft.photos) ? updatedDraft.photos.length : 0)}`
+      message: `✅ ${savedLine}\n\n${photoChecklistPrompt(lang, Array.isArray(updatedDraft.photos) ? updatedDraft.photos.length : 0, updatedDraft.listing_type)}`
     };
   }
   return {
@@ -2939,8 +2961,8 @@ async function validateAndStoreListingPhotos({ phone, lang, draft = {}, runtime 
   const outcomes = [];
 
   for (const candidate of candidates) {
-    if (photos.length >= WHATSAPP_MIN_LISTING_PHOTOS) break;
-    const expectedSlot = photoRequirementLabel(photos.length, 'en');
+    if (photos.length >= WHATSAPP_MAX_LISTING_PHOTOS) break;
+    const expectedSlot = photoRequirementLabel(photos.length, 'en', draft.listing_type);
     const isExactDuplicate = candidate.hash && photoHashes.includes(candidate.hash);
     const isVisualDuplicate = candidate.perceptualHash && photoPerceptualHashes.some(
       (existingHash) => perceptualHashDistance(candidate.perceptualHash, existingHash) <= 6
@@ -14220,11 +14242,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
     if (inferredListingType) {
       const photoNote = acceptedMedia.length
-        ? photoAcceptedPrompt(lang, mediaPatch.photos.length)
+        ? photoAcceptedPrompt(lang, mediaPatch.photos.length, inferredListingType)
         : duplicateMedia
-          ? photoDuplicatePrompt(lang, mediaPatch.photos.length)
+          ? photoDuplicatePrompt(lang, mediaPatch.photos.length, inferredListingType)
           : rejectedMedia
-            ? photoRejectedPrompt(lang, mediaPatch.photos.length, rejectedMedia.validation?.verdict || 'non_property')
+            ? photoRejectedPrompt(lang, mediaPatch.photos.length, rejectedMedia.validation?.verdict || 'non_property', inferredListingType)
             : '';
       const reply = [listingStartReply(lang, inferredListingType, draftHints), photoNote].filter(Boolean).join('\n\n');
       captureWhatsappLearningAsync({
@@ -15689,28 +15711,36 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       const accepted = result.outcomes.filter((item) => item.status === 'accepted');
       const duplicate = result.outcomes.find((item) => item.status === 'duplicate');
       const rejected = result.outcomes.find((item) => item.status === 'rejected');
-      if (count >= WHATSAPP_MIN_LISTING_PHOTOS) {
+      if (count >= WHATSAPP_MAX_LISTING_PHOTOS) {
         return respond(`${photoCompletePrompt(lang, count)}\n\n${t(lang, 'askPublicName')}`, 'ask_public_name');
       }
+      if (count >= WHATSAPP_MIN_LISTING_PHOTOS && accepted.length) {
+        return respond(photoEnoughPrompt(lang, count), 'photos');
+      }
       if (accepted.length) {
-        return respond(photoAcceptedPrompt(lang, count), 'photos');
+        return respond(photoAcceptedPrompt(lang, count, draft.listing_type), 'photos');
       }
       if (duplicate) {
-        return respond(photoDuplicatePrompt(lang, count), 'photos');
+        return respond(photoDuplicatePrompt(lang, count, draft.listing_type), 'photos');
       }
       if (rejected) {
-        return respond(photoRejectedPrompt(lang, count, rejected.validation?.verdict || 'non_property'), 'photos');
+        return respond(photoRejectedPrompt(lang, count, rejected.validation?.verdict || 'non_property', draft.listing_type), 'photos');
       }
-      return respond(photoRejectedPrompt(lang, count, 'unavailable'), 'photos');
+      return respond(photoRejectedPrompt(lang, count, 'unavailable', draft.listing_type), 'photos');
     }
 
+    const photoCount = (draft.photos || []).length;
+    // With the minimum in, DONE (or any other reply) moves on to contact details.
+    if (photoCount >= WHATSAPP_MIN_LISTING_PHOTOS) {
+      return respond(`${photoCompletePrompt(lang, photoCount)}\n\n${t(lang, 'askPublicName')}`, 'ask_public_name');
+    }
     if (bodyUpper === 'DONE') {
-      return respond(t(lang, 'needExactlyFivePhotos') + '\n\n' + photoNextPrompt(lang, (draft.photos || []).length), 'photos');
+      return respond(t(lang, 'needExactlyFivePhotos') + '\n\n' + photoNextPrompt(lang, photoCount, draft.listing_type), 'photos');
     }
 
     // An active listing never changes into property search because a caption,
     // screenshot label, or unrelated sentence arrived during photo collection.
-    return respond(photoChecklistPrompt(lang, (draft.photos || []).length), 'photos');
+    return respond(photoChecklistPrompt(lang, (draft.photos || []).length, draft.listing_type), 'photos');
   }
 
   // PUBLIC CONTACT NAME

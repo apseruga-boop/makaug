@@ -1418,7 +1418,7 @@ async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = 
       messages: [
         {
           role: 'system',
-          content: `You validate photos for a Uganda property listing form. Return JSON only with: is_property_photo (boolean), is_screenshot_or_document (boolean), scene_type (exterior|living_room|bedroom|kitchen|bathroom|other_property|non_property), matches_expected_slot (boolean), confidence (0..1), reason (short string). Reject screenshots, documents, app screens, chats, email screens, memes, people-only photos, products, food, and unrelated images. A real building exterior or interior is a property photo. Be conservative.`
+          content: `You validate photos for a Uganda property listing form. Return JSON only with: is_property_photo (boolean), is_screenshot_or_document (boolean), scene_type (exterior|living_room|bedroom|kitchen|bathroom|other_property|non_property), matches_expected_slot (boolean), confidence (0..1), reason (short string). Reject screenshots, documents, app screens, chats, email screens, memes, people-only photos, products, food, and unrelated images. A real building exterior or interior is a property photo, and so is bare land: a plot, garden, field, boundary markers or the access road. matches_expected_slot is only a hint — any real photo of the property counts. Be conservative about screenshots and unrelated images.`
         },
         {
           role: 'user',
@@ -1441,7 +1441,8 @@ async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = 
     const isPropertyPhoto = parsed.is_property_photo === true;
     const isScreenshot = parsed.is_screenshot_or_document === true;
     const matchesExpectedSlot = parsed.matches_expected_slot !== false;
-    const accepted = isPropertyPhoto && !isScreenshot && matchesExpectedSlot && confidence >= 0.62;
+    // The requested view is a suggestion: any real photo of the property counts.
+    const accepted = isPropertyPhoto && !isScreenshot && confidence >= 0.62;
     const result = {
       accepted,
       verdict: accepted ? 'accepted' : (isScreenshot ? 'screenshot_or_document' : (isPropertyPhoto ? 'wrong_property_scene' : 'non_property')),

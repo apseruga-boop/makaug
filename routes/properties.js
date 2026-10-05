@@ -1,3 +1,4 @@
+const { correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 const { handOffListingLead, loadListingContact } = require('../services/leadHandoffService');
 const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
@@ -3841,8 +3842,8 @@ router.post('/', async (req, res, next) => {
     const listingOtpToken = cleanText(body.listing_otp_token);
     const otpChannelInput = cleanText(body.otp_channel || body.extra_fields?.verify?.otp_channel || 'phone').toLowerCase();
     const otpChannel = otpChannelInput === 'email' ? 'email' : 'phone';
-    const latitude = toNullableFloat(body.latitude);
-    const longitude = toNullableFloat(body.longitude);
+    let latitude = toNullableFloat(body.latitude);
+    let longitude = toNullableFloat(body.longitude);
     const studentsWelcome = parseBooleanLike(body.students_welcome, false);
     const verificationTermsAccepted = parseBooleanLike(body.verification_terms_accepted, false);
     const inquiryReference = cleanText(body.inquiry_reference) || buildListingReference();
@@ -3882,8 +3883,8 @@ router.post('/', async (req, res, next) => {
       .filter((item) => item.url);
     const submittedImages = submittedImageItems.map((item) => item.url);
     const invalidSubmittedImages = submittedImages.filter((url) => !isUsableSubmittedImageUrl(url));
-    // Land needs fewer photos than a building (the online form already asks for 3).
-    const websiteMinImages = listingType === 'land' ? 3 : 5;
+    // At least 2 photos for every listing — the same rule as WhatsApp.
+    const websiteMinImages = 2;
     const websiteMaxImages = 20;
 
     if (enforceWebsiteSubmissionRules) {
@@ -3949,6 +3950,23 @@ router.post('/', async (req, res, next) => {
         ...(idDocumentUrl ? { id_document_url: idDocumentUrl } : {}),
         ...(idNumber ? { nin: idNumber, id_number: idNumber } : {})
       };
+    }
+    // A pin far away from the listing's own area (e.g. the middle-of-Uganda
+    // default) goes to the area centre, so distance searches stay right.
+    if (latitude != null && longitude != null && !IS_SOUTH_AFRICA) {
+      const pinFix = correctedPinForNewListing({
+        title,
+        area,
+        district,
+        latitude,
+        longitude,
+        extra_fields: { ...extraFields, canonical_location_id: canonicalLocation?.key || extraFields.canonical_location_id }
+      });
+      if (pinFix) {
+        latitude = pinFix.latitude;
+        longitude = pinFix.longitude;
+        extraFields.coords_fix = pinFix.coords_fix;
+      }
     }
     const storedSubmittedImageItems = [];
     for (const [index, item] of submittedImageItems.entries()) {

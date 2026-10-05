@@ -1,3 +1,4 @@
+const agentIdentityStorage = require('../services/agentIdentityStorageService');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -8586,7 +8587,10 @@ router.get('/agents', async (req, res, next) => {
         a.id_expiry_date,
         a.experience_years,
         a.identity_document_name,
-        a.identity_document_url,
+        CASE WHEN COALESCE(a.identity_document_url, '') = '' THEN NULL
+             WHEN a.identity_document_url ~* '^https://' THEN a.identity_document_url
+             WHEN a.identity_document_url ILIKE 's3://%' THEN 'private'
+             ELSE 'inline' END AS identity_document_url,
         a.identity_document_type,
         a.identity_document_uploaded_at,
         a.profile_photo_url,
@@ -8612,6 +8616,10 @@ router.get('/agents', async (req, res, next) => {
         a.paid_until,
         a.paid_awaiting_approval_at,
         a.fee_exempt,
+        a.fee_exempt_reason,
+        a.fee_offer_mode,
+        a.fee_offer_reason,
+        a.fee_offer_until,
         a.billing_plan,
         a.monthly_fee_ugx,
         a.welcome_sent_at,
@@ -9464,6 +9472,60 @@ router.post('/agents/from-listings', async (req, res, next) => {
  * site, with no way forward at all. Staff can now attach the ID here when it
  * comes through by any route. It is stored privately and never published.
  */
+// Listing pins that don't match the listing's own area: check (apply=false)
+// or fix (apply=true). Returns counts and the listings involved.
+router.post('/maintenance/listing-coordinates', async (req, res, next) => {
+  try {
+    const apply = req.body?.apply === true;
+    const summary = await require('../services/listingCoordinateRepairService').repairListingCoordinates(db, {
+      apply,
+      actor: adminActorId(req)
+    });
+    await writeAudit('admin_listing_coordinates_repair', {
+      apply,
+      checked: summary.checked,
+      relabel: summary.relabel,
+      repin: summary.repin,
+      review: summary.review,
+      applied: summary.applied
+    }, adminActorId(req));
+    return res.json({ ok: true, data: { apply, ...summary } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Listings whose location still needs a person to check it.
+router.get('/maintenance/listing-coordinates/review', async (req, res, next) => {
+  try {
+    const rows = (await db.query(
+      `SELECT id, title, area, district, latitude, longitude, status, extra_fields->'coords_fix' AS coords_fix
+         FROM properties
+        WHERE extra_fields->'coords_fix'->>'needs_review' = 'true'
+          AND COALESCE(extra_fields->'coords_fix'->>'reviewed_ok', 'false') <> 'true'
+        ORDER BY updated_at DESC
+        LIMIT 500`
+    )).rows;
+    return res.json({ ok: true, data: rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// A short-lived link to view an agent's ID photo (it is kept privately).
+router.get('/agents/:id/identity-document', async (req, res, next) => {
+  try {
+    const row = (await db.query('SELECT id, full_name, identity_document_url FROM agents WHERE id = $1', [req.params.id])).rows[0];
+    if (!row) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    const view = agentIdentityStorage.viewableIdentityUrl(row.identity_document_url, { expiresSeconds: 600 });
+    await writeAudit('admin_agent_identity_viewed', { agent_id: row.id, storage: view.storage }, adminActorId(req));
+    if (!view.available) return res.status(404).json({ ok: false, error: 'No ID photo on file for this agent' });
+    return res.json({ ok: true, data: view });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.patch('/agents/:id/identity-document', async (req, res, next) => {
   try {
     const body = req.body || {};
@@ -9477,6 +9539,7 @@ router.patch('/agents/:id/identity-document', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'The identity document must be an image or PDF data URL, or an HTTPS URL' });
     }
 
+    const storedDocumentUrl = await agentIdentityStorage.toPrivateIdentityRef(documentUrl, { keyPrefix: `agents/${req.params.id}/identity` });
     const updated = await db.query(
       `UPDATE agents
        SET identity_document_url = $2,
@@ -9488,7 +9551,7 @@ router.patch('/agents/:id/identity-document', async (req, res, next) => {
        RETURNING id, full_name, status, identity_document_name, identity_document_uploaded_at, updated_at`,
       [
         req.params.id,
-        documentUrl,
+        storedDocumentUrl,
         documentName,
         '[STAFF_SUPPLIED_AGENT_ID] Identity document attached by staff after the agent sent it separately. It still has to be reviewed before the public profile is approved.'
       ]
@@ -10102,7 +10165,40 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       )).rows[0];
       if (!beforeApproval) return res.status(404).json({ ok: false, error: 'Agent not found' });
       if (beforeApproval.removed_at) return res.status(409).json({ ok: false, error: 'This agent was removed. Restore them first.' });
-      if (revenue.agentFeeRequired(beforeApproval)) {
+      const feeOverride = req.body.fee_override && typeof req.body.fee_override === 'object' ? req.body.fee_override : null;
+      if (feeOverride && revenue.agentFeeRequired(beforeApproval)) {
+        // Approve without a payment, on purpose: an offer, pay later, or waived.
+        const mode = String(feeOverride.mode || '').trim().toLowerCase();
+        const reason = String(feeOverride.reason || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+        if (!['free_period', 'pay_later', 'waive'].includes(mode)) {
+          return res.status(400).json({ ok: false, error: 'fee_override.mode must be free_period, pay_later or waive' });
+        }
+        if (reason.length < 3) return res.status(400).json({ ok: false, error: 'Say why (the offer or reason) to approve without payment.' });
+        let offerUntil = null;
+        if (mode === 'free_period') {
+          const days = Math.round(Number(feeOverride.days));
+          if (!Number.isFinite(days) || days < 1 || days > 366) {
+            return res.status(400).json({ ok: false, error: 'Free period must be between 1 and 366 days.' });
+          }
+          offerUntil = revenue.addDays(revenue.kampalaDate(), days - 1);
+        }
+        await db.query(
+          `UPDATE agents
+              SET fee_offer_mode = $2, fee_offer_reason = $3, fee_offer_until = $4::date,
+                  fee_offer_by = $5, fee_offer_at = NOW(),
+                  paid_until = CASE WHEN $2 = 'free_period' THEN GREATEST(COALESCE(paid_until, $4::date), $4::date) ELSE paid_until END,
+                  fee_exempt = CASE WHEN $2 = 'waive' THEN true ELSE fee_exempt END,
+                  fee_exempt_reason = CASE WHEN $2 = 'waive' THEN $3 ELSE fee_exempt_reason END,
+                  updated_at = NOW()
+            WHERE id = $1`,
+          [req.params.id, mode, reason, offerUntil, adminActorId(req)]
+        );
+        await writeAudit('admin_agent_fee_override', { agent_id: req.params.id, mode, reason, offer_until: offerUntil }, adminActorId(req));
+        paymentResult = null;
+        req.feeOverrideApplied = { mode, reason, offer_until: offerUntil };
+        // "Pay later" sends the pay link as part of approving.
+        if (mode === 'pay_later') req.body.send_pay_link = true;
+      } else if (revenue.agentFeeRequired(beforeApproval)) {
         const payment = req.body.payment && typeof req.body.payment === 'object' ? req.body.payment : null;
         if (!payment) {
           const { feeUgx } = revenue.feeConfig();
@@ -10209,7 +10305,7 @@ router.patch('/agents/:id/status', async (req, res, next) => {
     // employee who registered them said to send it, it goes now, and both they
     // and the owner are told — with the amount, and whether it has been paid.
     let feeLink = null;
-    if (status === 'approved' && !paymentResult) {
+    if (status === 'approved' && !paymentResult && req.feeOverrideApplied?.mode !== 'free_period' && req.feeOverrideApplied?.mode !== 'waive') {
       feeLink = await sendAgentFeeLinkOnApproval({
         agent: updated.rows[0],
         actor: adminActorId(req),
@@ -10224,7 +10320,8 @@ router.patch('/agents/:id/status', async (req, res, next) => {
         account_provisioning: accountProvisioning,
         payment: paymentResult,
         welcome,
-        fee_link: feeLink
+        fee_link: feeLink,
+        fee_override: req.feeOverrideApplied || null
       }
     });
   } catch (error) {

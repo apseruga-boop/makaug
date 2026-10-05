@@ -10,9 +10,9 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 
 assert(route.includes("whatsapp-web-modern-media-20260804"), 'Runtime must expose the WhatsApp modern-media release marker');
-assert(route.includes('WHATSAPP_MIN_LISTING_PHOTOS = 5'), 'WhatsApp listings must require five accepted photos');
-assert(route.includes('Front/outside') && route.includes('Sitting room or main room') && route.includes('Bathroom'), 'Photo checklist must name all five required views');
-assert(route.includes('Screenshots, documents and duplicate photos do not count'), 'Photo instructions must state the quality and duplicate rules in one message');
+assert(route.includes('WHATSAPP_MIN_LISTING_PHOTOS = 2'), 'WhatsApp listings must require at least two accepted photos (same as the website)');
+assert(route.includes('front/outside') && route.includes('sitting room') && route.includes('bathroom'), 'Photo instructions must name the most useful views');
+assert(route.includes('Screenshots, documents and repeated photos do not count'), 'Photo instructions must state the quality and duplicate rules in one message');
 assert(route.includes('classifyWhatsappListingPhoto') && ai.includes('is_screenshot_or_document'), 'Images must be visually checked before they count');
 assert(route.includes('perceptualHashDistance') && route.includes('<= 6'), 'Visually duplicate photos must be detected even when the file bytes differ');
 assert(route.includes("keyPrefix: 'whatsapp-listings/photos'"), 'Accepted WhatsApp photos must be persisted to cloud media storage');
@@ -23,7 +23,7 @@ const photosEnd = route.indexOf('// PUBLIC CONTACT NAME', photosStart);
 const photosBlock = route.slice(photosStart, photosEnd);
 assert(!photosBlock.includes('findPropertiesByNaturalFilters'), 'Photo collection must never switch into property search');
 assert(!photosBlock.includes('listing_draft_saved'), 'Photo collection must not abandon the active listing as a draft');
-assert(photosBlock.includes("'ask_public_name'"), 'The fifth accepted photo must advance to listing contact details');
+assert(photosBlock.includes("'ask_public_name'"), 'Enough accepted photos must advance to listing contact details');
 
 assert(bridge.includes('async function hydrateImageSnapshot'), 'WhatsApp Web bridge must capture real image pixels');
 assert(bridge.includes('image_previews:') && bridge.includes('perceptual_hash:'), 'Bridge payload must carry compressed previews and duplicate fingerprints');

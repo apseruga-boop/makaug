@@ -1,3 +1,4 @@
+const { toPrivateIdentityRef } = require('../services/agentIdentityStorageService');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 
@@ -576,6 +577,8 @@ router.post('/me/verification', async (req, res, next) => {
     const phone = normalizeUgPhone(body.phone || body.whatsapp);
     const nin = cleanText(body.nin || body.national_id_number).slice(0, 80);
     const identityDocument = cleanBrokerUpload(body.identity_document || body.national_id_document, 'National ID photo');
+    // Kept in private storage, not as base64 in the database.
+    if (identityDocument?.data_url) identityDocument.data_url = await toPrivateIdentityRef(identityDocument.data_url, { keyPrefix: 'brokers/identity' });
     const privacyConsentAccepted = parseBooleanLike(body.privacy_consent_accepted, false);
     const retentionNoticeAccepted = parseBooleanLike(body.data_retention_notice_accepted, false);
     const errors = [];
@@ -890,6 +893,8 @@ router.post('/register', async (req, res, next) => {
     const nin = cleanText(body.nin || body.national_id_number);
     const verificationReason = cleanText(body.verification_reason || body.reason).slice(0, 1200);
     const identityDocument = cleanBrokerUpload(body.identity_document || body.national_id_document || body.id_document, 'National ID photo');
+    // Kept in private storage, not as base64 in the database.
+    if (identityDocument?.data_url) identityDocument.data_url = await toPrivateIdentityRef(identityDocument.data_url, { keyPrefix: 'brokers/identity' });
     const privacyConsentAccepted = parseBooleanLike(body.privacy_consent_accepted || body.privacy_accepted, false);
     const dataRetentionNoticeAccepted = parseBooleanLike(body.data_retention_notice_accepted || body.data_deletion_notice_accepted, false);
     const districtsCovered = parseCsvList(body.districts_covered);

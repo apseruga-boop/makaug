@@ -2010,6 +2010,29 @@ async function start() {
     renderHeartbeatTimer.unref?.();
   }
   schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
+  scheduleStartupDataRepairs();
+}
+
+// One-off tidy-ups that are safe to repeat on every start: move inline agent ID
+// photos into private storage.
+function scheduleStartupDataRepairs() {
+  if (process.env.NODE_ENV === 'test' || process.env.STARTUP_DATA_REPAIRS === 'off') return;
+  const timer = setTimeout(async () => {
+    try {
+      const { migrateInlineAgentIdentityDocuments } = require('./services/agentIdentityStorageService');
+      let total = { agents_moved: 0, users_moved: 0, failed: 0 };
+      for (let round = 0; round < 20; round += 1) {
+        const r = await migrateInlineAgentIdentityDocuments(db, { limit: 50, logger });
+        if (r.skipped_no_storage) break;
+        total = { agents_moved: total.agents_moved + r.agents_moved, users_moved: total.users_moved + r.users_moved, failed: total.failed + r.failed };
+        if (!r.agents_moved && !r.users_moved) break;
+      }
+      if (total.agents_moved || total.users_moved || total.failed) logger.info('Agent ID photos moved to private storage', total);
+    } catch (error) {
+      logger.warn('Agent ID photo move skipped:', error.message || String(error));
+    }
+  }, 45_000);
+  timer.unref?.();
 }
 
 start().catch((error) => {

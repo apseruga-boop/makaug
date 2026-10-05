@@ -283,6 +283,10 @@ function mapRemoteAgentForUi(agent = {}) {
     removed_reason: agent.removed_reason || "",
     paid_until: agent.paid_until ? String(agent.paid_until).slice(0, 10) : "",
     fee_exempt: agent.fee_exempt === true,
+    fee_exempt_reason: agent.fee_exempt_reason || "",
+    fee_offer_mode: agent.fee_offer_mode || "",
+    fee_offer_reason: agent.fee_offer_reason || "",
+    fee_offer_until: agent.fee_offer_until ? String(agent.fee_offer_until).slice(0, 10) : "",
     billing_plan: agent.billing_plan || "",
     welcome_sent_at: agent.welcome_sent_at || "",
     paid_awaiting_approval_at: agent.paid_awaiting_approval_at || ""
@@ -917,8 +921,9 @@ let lpPreviewMarker = null;
 let lpPreviewMapProvider = "";
 let lpPreviewInfoWindow = null;
 let lpPreviewMapInitPromise = null;
-const LP_MIN_UPLOAD_PHOTOS = 5;
-const LP_LAND_MIN_UPLOAD_PHOTOS = 3;
+// Minimum 2 photos for every listing, on the website and on WhatsApp.
+const LP_MIN_UPLOAD_PHOTOS = 2;
+const LP_LAND_MIN_UPLOAD_PHOTOS = 2;
 const LP_MAX_UPLOAD_PHOTOS = 20;
 const LP_MAX_SUBMITTED_PHOTO_BYTES = 5.5 * 1024 * 1024;
 const LP_OTHER_PHOTO_SLOT = "other";
@@ -7396,7 +7401,7 @@ function applyListingWizardLanguageUI() {
     label.textContent = translateListingLabel(typeChipMap[key]);
   });
   const sub2 = document.getElementById("lp-step2-sub");
-  if (sub2) sub2.textContent = translateListingLabel("Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.");
+  if (sub2) sub2.textContent = translateListingLabel("Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.");
   const sub3 = document.getElementById("lp-step3-sub");
   if (sub3) sub3.textContent = translateListingLabel("Email, phone, and National ID details are required for review. No OTP is needed.");
   const sub4 = document.getElementById("lp-step4-sub");
@@ -23768,7 +23773,7 @@ function renderAdminBrokerRows(agents) {
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
           <button onclick="openBrokerProfile(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Profile</button>
-          ${idDocumentUploaded ? `<a href="${adminAttr(agent.identity_document_url)}" target="_blank" rel="noopener noreferrer" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review ID</a>` : ""}
+          ${idDocumentUploaded ? `<button type="button" onclick="adminViewAgentIdentity('${adminAttr(agent.id)}')" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review ID</button>` : ""}
           ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Broker</a>` : ""}
           ${agent.email ? `<a href="mailto:${adminAttr(agent.email)}?subject=${encodeURIComponent("makaug broker follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
           ${canUseLiveAdminApi() && idDocumentUploaded && !agent.private_id_profile_reviewed ? `<button onclick="adminApproveAgentPublicProfile(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Approve public profile</button>` : ""}
@@ -28429,7 +28434,7 @@ async function adminRunFeaturedRotation() {
   }
 }
 
-async function adminSetAgentStatus(agentId, status, payment = null) {
+async function adminSetAgentStatus(agentId, status, payment = null, feeOverride = null) {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or set ADMIN_API_KEY first to moderate broker status.");
     return;
@@ -28437,6 +28442,7 @@ async function adminSetAgentStatus(agentId, status, payment = null) {
   try {
     const body = { status };
     if (payment) body.payment = payment;
+    if (feeOverride) body.fee_override = feeOverride;
     let response;
     try {
       response = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/status`, {
@@ -28455,8 +28461,14 @@ async function adminSetAgentStatus(agentId, status, payment = null) {
     adminClosePaymentModal();
     const welcome = response?.data?.welcome;
     const paid = response?.data?.payment;
+    const override = response?.data?.fee_override;
+    const overrideNote = override
+      ? (override.mode === "free_period" ? ` Free offer until ${override.offer_until}.`
+        : override.mode === "pay_later" ? (response?.data?.fee_link?.sent ? " Pay link sent on WhatsApp." : " Pay later — send the pay link from their card.")
+        : " Fee waived.")
+      : "";
     if (status === "approved") {
-      toast(`Approved.${paid ? ` Payment recorded — paid until ${paid.period_end}.` : ""}${welcome?.error ? ` Welcome pack NOT sent: ${welcome.error}` : (welcome?.skipped ? " Welcome pack was already sent before." : " Welcome pack and how-to-post film sent on WhatsApp.")}`);
+      toast(`Approved.${overrideNote}${paid ? ` Payment recorded — paid until ${paid.period_end}.` : ""}${welcome?.error ? ` Welcome pack NOT sent: ${welcome.error}` : (welcome?.skipped ? " Welcome pack was already sent before." : " Welcome pack and how-to-post film sent on WhatsApp.")}`);
     }
     await refreshBrokersFromApi({ silent: true });
     await renderAdminDashboard();
@@ -28483,7 +28495,13 @@ function adminFormatUgx(value) {
 }
 
 function adminAgentBillingLine(agent = {}) {
-  if (agent.fee_exempt) return `💳 <span class="text-gray-500">Free listing (joined before the monthly fee)</span>`;
+  if (agent.fee_exempt) return `💳 <span class="text-gray-500">${agent.fee_offer_mode === "waive" ? `No fee — ${adminEscape(agent.fee_exempt_reason || "waived")}` : "Free listing (joined before the monthly fee)"}</span>`;
+  if (agent.fee_offer_mode === "free_period" && agent.fee_offer_until) {
+    const todayOffer = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+    if (String(agent.fee_offer_until).slice(0, 10) >= todayOffer && (!agent.paid_until || String(agent.paid_until).slice(0, 10) <= String(agent.fee_offer_until).slice(0, 10))) {
+      return `💳 <strong class="text-amber-700">Free offer</strong> until ${adminEscape(String(agent.fee_offer_until).slice(0, 10))} — ${adminEscape(agent.fee_offer_reason || "")}`;
+    }
+  }
   const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
   const payBtn = agent.id ? ` <button type="button" onclick="adminSendAgentPayLink('${adminAttr(agent.id)}')" class="ml-1 underline font-bold text-gray-900">💳 Send pay link</button>` : "";
   if (agent.paid_awaiting_approval_at) {
@@ -28496,6 +28514,29 @@ function adminAgentBillingLine(agent = {}) {
   }
   if (agent.paid_until < today) return `💳 <strong class="text-red-700">Overdue</strong> — paid until ${adminEscape(agent.paid_until)}${payBtn}`;
   return `💳 <strong class="text-emerald-700">Paid</strong> until ${adminEscape(agent.paid_until)}`;
+}
+
+// ID photos are stored privately; ask for a short-lived link each time.
+async function adminViewAgentIdentity(agentId) {
+  const tab = window.open("", "_blank");
+  if (tab) tab.opener = null;
+  try {
+    const res = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/identity-document`, { headers: adminAuthHeaders() });
+    const url = res?.data?.url || "";
+    if (!url) throw new Error("No ID photo on file");
+    if (tab) {
+      if (/^data:/i.test(url)) {
+        tab.document.write(`<title>Agent ID</title><img src="${url}" style="max-width:100%">`);
+      } else {
+        tab.location.href = url;
+      }
+    } else {
+      window.location.href = url;
+    }
+  } catch (e) {
+    if (tab) tab.close();
+    toast(e?.message || "Could not open the ID photo.");
+  }
 }
 
 async function adminSendAgentPayLink(agentId) {
@@ -28601,7 +28642,19 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
         <input name="note" placeholder="For cash: who received it and where it is kept" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <p id="admin-payment-error" class="hidden rounded-lg bg-red-50 border border-red-200 p-2 text-red-800" role="alert"></p>
       ${mode === "approve" ? `<div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700"><strong>Not paid yet?</strong> Send them a payment link instead — they can pay by card, Apple Pay, Google Pay or MoMo. You'll get a WhatsApp when it's paid, and approving then won't ask for payment again.
-        <div class="mt-2"><button type="button" onclick="adminSendAgentPayLink('${adminAttr(agentId)}')" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">💳 Send pay link</button></div></div>` : ""}
+        <div class="mt-2"><button type="button" onclick="adminSendAgentPayLink('${adminAttr(agentId)}')" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">💳 Send pay link</button></div></div>
+      <details class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+        <summary class="cursor-pointer font-bold">Approve without payment (offer)</summary>
+        <div class="mt-2 space-y-2">
+          <label class="flex items-start gap-2"><input type="radio" name="offer_mode" value="free_period" checked class="mt-0.5"> <span><strong>Free for a set time</strong> — e.g. a launch offer. The fee starts after.</span></label>
+          <label class="block pl-6"><span class="font-bold">Free days</span> <input name="offer_days" inputmode="numeric" value="30" class="ml-1 w-20 rounded border border-gray-300 px-2 py-1"></label>
+          <label class="flex items-start gap-2"><input type="radio" name="offer_mode" value="pay_later" class="mt-0.5"> <span><strong>Approve now, pay later</strong> — the pay link is sent with the welcome pack.</span></label>
+          <label class="flex items-start gap-2"><input type="radio" name="offer_mode" value="waive" class="mt-0.5"> <span><strong>No fee</strong> — waive it for this agent.</span></label>
+          <label class="block"><span class="font-bold">Why? (offer or reason)</span>
+            <input name="offer_reason" placeholder="e.g. October launch offer — first month free" class="mt-1 w-full rounded border border-gray-300 px-2 py-1"></label>
+          <button type="button" data-approve-offer class="rounded bg-amber-700 px-3 py-1 font-bold text-white">Approve without payment</button>
+        </div>
+      </details>` : ""}
       <div class="flex gap-2 justify-end pt-1">
         <button type="button" onclick="adminClosePaymentModal()" class="rounded-lg border border-gray-300 px-4 py-2 font-bold">Cancel</button>
         <button type="submit" class="rounded-lg bg-green-700 px-4 py-2 font-bold text-white">${mode === "approve" ? "Record payment & approve" : "Record payment"}</button>
@@ -28613,6 +28666,15 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
   const form = wrap.querySelector("form");
   adminWireFx(form);
   form.querySelector("[name=amount]")?.focus();
+  form.querySelector("[data-approve-offer]")?.addEventListener("click", async () => {
+    const errorBox = form.querySelector("#admin-payment-error");
+    const mode = form.querySelector("[name=offer_mode]:checked")?.value || "free_period";
+    const reason = String(form.querySelector("[name=offer_reason]")?.value || "").trim();
+    const days = Number(form.querySelector("[name=offer_days]")?.value || 0);
+    if (reason.length < 3) { errorBox.textContent = "Say why — the offer or the reason."; errorBox.classList.remove("hidden"); return; }
+    if (mode === "free_period" && !(days >= 1 && days <= 366)) { errorBox.textContent = "Free days must be between 1 and 366."; errorBox.classList.remove("hidden"); return; }
+    await adminSetAgentStatus(agentId, "approved", null, { mode, reason, days });
+  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const errorBox = form.querySelector("#admin-payment-error");
@@ -30707,8 +30769,8 @@ function updateLpPhotoRequirements() {
   const checklist = getLpPhotoChecklist(type);
   const minPhotos = getLpMinUploadPhotos(type);
   wrap.innerHTML = `
-    <div class="font-semibold text-gray-800">${translateListingLabel("Required photo coverage")}</div>
-    <p class="text-xs text-gray-500 mt-1">${translateListingLabel(type === "land" ? "Land needs at least 3 clear photos: entry, boundaries, and access road." : "At least 5 photos are required for homes and buildings.")}</p>
+    <div class="font-semibold text-gray-800">${translateListingLabel("Photos")}</div>
+    <p class="text-xs text-gray-500 mt-1">${translateListingLabel(`At least ${minPhotos} clear photos. More photos get more enquiries — these are the ones buyers and tenants look for:`)}</p>
     <ul class="list-disc pl-5 space-y-1">
       ${checklist.map((item) => `<li><strong>${translateListingLabel(item.label)}</strong> - <span class="text-xs text-gray-500">${translateListingLabel(item.hint)}</span></li>`).join("")}
     </ul>
@@ -32825,13 +32887,8 @@ function validateListStep2() {
     toast(`Assign each photo to a category before continuing. Missing: ${unassigned.slice(0, 2).map((x) => x.name).join(", ")}`);
     return false;
   }
-  const assignedKeys = new Set(Object.values(lpPhotoAssignments).map((value) => getLpPhotoAssignmentSelectValue(value)));
-  const pending = checklist.filter((item) => !assignedKeys.has(item.key)).map((item) => item.label);
-  if (pending.length) {
-    markLpFieldError("lp-photo-required-list", "Cover all required photo categories before continuing.");
-    toast(`Cover required photo types: ${pending.slice(0, 3).map((x) => translateListingLabel(x)).join(", ")}${pending.length > 3 ? "..." : ""}`);
-    return false;
-  }
+  // The checklist is a suggestion now (minimum is 2 photos), not a gate.
+  void checklist;
   return true;
 }
 
@@ -37009,6 +37066,7 @@ async function continueAccountAccess() {
 	      if (isAccountAccessBrokerCreateFlow()) {
 	        const details = getAccountAccessContactDetails();
 	        if (!validateAccountAccessContactDetails(details)) return;
+	        if (!(await accountAccessContactIsFree(details))) return;
 	        setAccountAccessCreateStep("preferences");
 	        setTimeout(() => document.querySelector("#account-access-screening select")?.focus(), 30);
 	        return;
@@ -37079,6 +37137,23 @@ function accountAccessOtpChannelCopy(channel = "email", destination = "") {
     return `We sent a verification code by SMS to: ${masked}. Please enter it below.`;
   }
   return `We sent a verification code to your email: ${masked}. Please enter it below.`;
+}
+
+// Catch an already-registered phone or email on the first screen, not the last.
+async function accountAccessContactIsFree({ phone, email } = {}) {
+  try {
+    const res = await apiRequest("/api/auth/signup-check", { method: "POST", skipAuth: true, body: { phone, email } });
+    const r = res?.data || {};
+    if (r.phone_taken || r.email_taken) {
+      const what = r.phone_taken && r.email_taken ? "This phone number and email already have" : (r.phone_taken ? "This phone number already has" : "This email already has");
+      toast(`${what} a makaug account. Sign in instead, or use "Forgot password" if you can't remember it.`);
+      document.getElementById(r.phone_taken ? "account-access-phone" : "account-access-email")?.focus();
+      return false;
+    }
+  } catch (_error) {
+    // If the check itself fails, carry on — the final step still checks.
+  }
+  return true;
 }
 
 function getAccountAccessContactDetails() {
@@ -37398,8 +37473,17 @@ async function submitAccountAccessCreate() {
     accountAccessPendingOtp = null;
     accountAccessContactVerificationToken = "";
     setAccountAccessCreateStatus(accountAccessText("openingDashboard"), "success");
+    const wasBrokerSignup = isAccountAccessBrokerCreateFlow();
+    // Opening the dashboard can load a new page, so the "application received"
+    // screen is remembered and shown once the dashboard is up.
+    if (wasBrokerSignup) {
+      try { sessionStorage.setItem("makaug_broker_application_received", JSON.stringify({ firstName, phone, at: Date.now() })); } catch (_) {}
+    }
     toast(register?.data?.message || "Your makaug.com account has been set up. Opening your dashboard.");
-    await finalizeAuth(register?.data, isAccountAccessBrokerCreateFlow() ? "drawer_broker_signup" : "drawer_verified_signup", accountAccessDrawerAudience);
+    await finalizeAuth(register?.data, wasBrokerSignup ? "drawer_broker_signup" : "drawer_verified_signup", accountAccessDrawerAudience);
+    // If the dashboard opens in this page, show it here; if a new page loads,
+    // that page shows it instead (the timer never fires on the old one).
+    if (wasBrokerSignup) setTimeout(showPendingBrokerApplicationReceived, 1500);
   } catch (error) {
     if (isExistingAccountCreateError(error)) {
       setAccountAccessCreateStatus(accountAccessText("existingAccountTryingSignIn"), "pending");
@@ -37429,6 +37513,57 @@ async function submitAccountAccessCreate() {
       if (!keepStatus) updateAccountAccessCreateFinalState();
     }
   }
+}
+
+function showPendingBrokerApplicationReceived() {
+  let pending = null;
+  try {
+    pending = JSON.parse(sessionStorage.getItem("makaug_broker_application_received") || "null");
+    sessionStorage.removeItem("makaug_broker_application_received");
+  } catch (_) {
+    pending = null;
+  }
+  if (!pending || Date.now() - Number(pending.at || 0) > 10 * 60 * 1000) return;
+  showBrokerApplicationReceived(pending);
+}
+if (typeof document !== "undefined") {
+  const runPendingBrokerNotice = () => setTimeout(showPendingBrokerApplicationReceived, 600);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", runPendingBrokerNotice, { once: true });
+  else runPendingBrokerNotice();
+}
+
+// After an agent signs up on the website: say plainly that the application is
+// in and what happens next, before they land on the dashboard.
+function showBrokerApplicationReceived({ firstName = "", phone = "" } = {}) {
+  document.getElementById("broker-application-received")?.remove();
+  const esc = (v) => String(v || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const wrap = document.createElement("div");
+  wrap.id = "broker-application-received";
+  wrap.setAttribute("role", "dialog");
+  wrap.setAttribute("aria-modal", "true");
+  wrap.setAttribute("aria-labelledby", "broker-application-received-title");
+  wrap.style.cssText = "position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;";
+  wrap.innerHTML = `
+    <div style="background:#fff;border-radius:20px;max-width:440px;width:100%;max-height:90vh;overflow:auto;padding:22px;font-size:14px;color:#1f2937;">
+      <div style="font-size:34px;line-height:1">✅</div>
+      <h2 id="broker-application-received-title" style="margin:8px 0 4px;font-size:20px;font-weight:900;color:#14532d;">Application received${firstName ? `, ${esc(firstName)}` : ""}</h2>
+      <p style="margin:0 0 12px;color:#4b5563;">Your makaug agent account is set up and waiting for our review.</p>
+      <ol style="margin:0 0 14px;padding-left:22px;line-height:1.55;list-style:decimal;">
+        <li><strong>We WhatsApp you</strong>${phone ? ` on ${esc(phone)}` : ""}, usually the same day, to check your details.</li>
+        <li><strong>Pay the first month</strong> — UGX 50,000. We send you a payment link (MTN Mobile Money or card). Nothing is charged automatically.</li>
+        <li><strong>You're approved</strong> — you get your welcome pack and the how-to-post guide, and your listings can go live.</li>
+      </ol>
+      <p style="margin:0 0 16px;font-size:12px;color:#6b7280;">You can already fill in your profile from your dashboard. Questions? WhatsApp us on 0780 863394.</p>
+      <button type="button" data-close style="width:100%;min-height:48px;border:0;border-radius:12px;background:#15803d;color:#fff;font-weight:800;font-size:15px;">Go to my dashboard</button>
+    </div>`;
+  const close = () => wrap.remove();
+  wrap.querySelector("[data-close]")?.addEventListener("click", close);
+  wrap.addEventListener("click", (event) => { if (event.target === wrap) close(); });
+  document.addEventListener("keydown", function onKey(event) {
+    if (event.key === "Escape") { close(); document.removeEventListener("keydown", onKey); }
+  });
+  document.body.appendChild(wrap);
+  setTimeout(() => wrap.querySelector("[data-close]")?.focus(), 30);
 }
 
 async function submitAccountAccessOtp() {
@@ -51176,7 +51311,7 @@ const LISTING_LABEL_I18N = {
     "Continue to Photos →": "Genda ku Bifaananyi →",
     "Photos & Media": "Bifaananyi & Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 5 byonna byetaagisa era birina okulaga ebifo ebikulu. Omutindo omulungi gwongera obwesige n'okubuuza.",
-    "Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 5 oba okusingawo byetaagisa, era osobola okuteeka okutuuka ku 20. Omutindo omulungi gwongera obwesige n'okubuuza.",
+    "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 2 oba okusingawo byetaagisa, era osobola okuteeka okutuuka ku 20. Omutindo omulungi gwongera obwesige n'okubuuza.",
     "Upload Photos (exactly 5 required) *": "Teeka Bifaananyi (5 byokka) *",
     "Upload Photos (min 5, max 20) *": "Teeka Bifaananyi (5 okusinga, 20 obusinga) *",
     "Verify Identity": "Kakasa Endagamuntu",
@@ -51572,7 +51707,7 @@ const LISTING_LABEL_I18N = {
     "Continue to Photos →": "Endelea kwa Picha →",
     "Photos & Media": "Picha na Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Pakia picha zilizo wazi. Picha 5 kamili zinahitajika na zifunike maeneo muhimu. Ubora mzuri huongeza uaminifu na maulizo.",
-    "Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Pakia picha zilizo wazi. Angalau picha 5 zinahitajika, na unaweza kupakia hadi 20. Ubora mzuri huongeza uaminifu na maulizo.",
+    "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Pakia picha zilizo wazi. Angalau picha 2 zinahitajika, na unaweza kupakia hadi 20. Ubora mzuri huongeza uaminifu na maulizo.",
     "Upload Photos (exactly 5 required) *": "Pakia Picha (picha 5 kamili) *",
     "Upload Photos (min 5, max 20) *": "Pakia Picha (angalau 5, hadi 20) *",
     "Verify Identity": "Thibitisha Utambulisho",
@@ -51960,7 +52095,7 @@ const LISTING_LABEL_I18N = {
     "Continue to Photos →": "Dhi i Cal →",
     "Photos & Media": "Cal ki Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Ket cal ma wang. Cal 5 atir mite pi kabedo mapire tek. Quality maber medo geno ki penyo.",
-    "Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Ket cal ma wang. Cal 5 onyo makato mite, i twero ket nyaka 20. Quality maber medo geno ki penyo.",
+    "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Ket cal ma wang. Cal 2 onyo makato mite, i twero ket nyaka 20. Quality maber medo geno ki penyo.",
     "Upload Photos (exactly 5 required) *": "Ket Cal (cal 5 atir) *",
     "Upload Photos (min 5, max 20) *": "Ket Cal (matidi 5, madit 20) *",
     "Verify Identity": "Cik nying",
@@ -52035,7 +52170,7 @@ const LISTING_LABEL_I18N = {
     "Continue to Photos →": "Gyenda aha Bifaananyi →",
     "Photos & Media": "Bifaananyi na Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 5 byonka nibyetagisa kandi birikukwata aha bice bikuru. Quality erungi eyerera obwesige n'okubuuza.",
-    "Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 5 noba okukira nibyetagisa, kandi noobaasa kutaho kugera aha 20. Quality erungi eyerera obwesige n'okubuuza.",
+    "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 2 noba okukira nibyetagisa, kandi noobaasa kutaho kugera aha 20. Quality erungi eyerera obwesige n'okubuuza.",
     "Upload Photos (exactly 5 required) *": "Taho Bifaananyi (5 byonka) *",
     "Upload Photos (min 5, max 20) *": "Taho Bifaananyi (5 min, 20 max) *",
     "Verify Identity": "Kakasa Endangamuntu",
@@ -52110,7 +52245,7 @@ const LISTING_LABEL_I18N = {
     "Continue to Photos →": "Gyenda aha Bifaananyi →",
     "Photos & Media": "Bifaananyi na Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 5 byonka nibyetagisa kandi birikukwata aha bice bikuru. Omutindo murungi guta obwesige n'okubuuza.",
-    "Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 5 noba okukira nibyetagisa kandi nooshobora kutaho kugera aha 20. Omutindo murungi guta obwesige n'okubuuza.",
+    "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 2 noba okukira nibyetagisa kandi nooshobora kutaho kugera aha 20. Omutindo murungi guta obwesige n'okubuuza.",
     "Upload Photos (exactly 5 required) *": "Taho Bifaananyi (5 byonka) *",
     "Upload Photos (min 5, max 20) *": "Taho Bifaananyi (5 min, 20 max) *",
     "Verify Identity": "Kakasa Endangamuntu",
@@ -52185,7 +52320,7 @@ const LISTING_LABEL_I18N = {
     "Continue to Photos →": "Genda ku Bifaananyi →",
     "Photos & Media": "Bifaananyi & Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 5 byokka byetaagisa era birage ebifo ebikulu. Omutindo omulungi gwongera obwesige n'okubuuza.",
-    "Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 5 oba okusinga byetaagisa, era osobola okutuusa ku 20. Omutindo omulungi gwongera obwesige n'okubuuza.",
+    "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 2 oba okusinga byetaagisa, era osobola okutuusa ku 20. Omutindo omulungi gwongera obwesige n'okubuuza.",
     "Upload Photos (exactly 5 required) *": "Teeka Bifaananyi (5 byokka) *",
     "Upload Photos (min 5, max 20) *": "Teeka Bifaananyi (5 min, 20 max) *",
     "Verify Identity": "Kakasa Endagamuntu",

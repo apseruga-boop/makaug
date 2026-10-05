@@ -291,7 +291,7 @@ async function safeRows(sql, params = []) {
 async function runListingQualityGuard({ agent, limit = 40 }) {
   const config = mergeConfig(agent.config, {
     minDescriptionLength: 80,
-    minPhotos: 5
+    minPhotos: 2
   });
 
   const rows = await db.query(
@@ -338,20 +338,20 @@ async function runListingQualityGuard({ agent, limit = 40 }) {
       });
     }
 
-    if (row.photo_count < safeInt(config.minPhotos, 5)) {
+    if (row.photo_count < safeInt(config.minPhotos, 2)) {
       findings.push({
         entity_type: 'property',
         entity_id: row.id,
         severity: 'high',
         finding_type: 'insufficient_photos',
-        message: `Listing "${row.title}" has ${row.photo_count} photos. Minimum is ${safeInt(config.minPhotos, 5)}.`,
+        message: `Listing "${row.title}" has ${row.photo_count} photos. Minimum is ${safeInt(config.minPhotos, 2)}.`,
         recommendation: row.lister_email
           ? {
               action_type: 'send_support_email',
               action_payload: {
                 to: row.lister_email,
                 subject: 'Add required photos to your makaug listing',
-                text: 'Your listing needs at least 5 clear photos (front, living area, bedroom, kitchen, bathroom) before approval.'
+                text: 'Your listing needs at least 2 clear photos before approval. More photos (front, living area, bedroom, kitchen, bathroom) get more enquiries.'
               }
             }
           : {}
