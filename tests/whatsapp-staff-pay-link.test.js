@@ -461,6 +461,35 @@ test('the worklist finds links that went out and were never paid', async () => {
   }
 });
 
+/**
+ * "Opened the page and did not pay" and "it never reached them" are the two
+ * halves of the chase list, and opened_at is the only thing that tells them
+ * apart. Composing the message calls pageData to find out which payment
+ * methods the page can actually offer — and that was stamping opened_at before
+ * the message had even been sent. Every link was born already opened.
+ */
+test('building the message must not mark the link as opened', async () => {
+  const originalQuery = db.query;
+  const writes = [];
+  db.query = async (sql, params) => {
+    if (/UPDATE pay_links SET opened_at/i.test(sql)) writes.push({ sql, params });
+    if (/FROM pay_links WHERE code/i.test(sql)) {
+      return { rows: [{ id: 'link-1', code: 'MKABC123', status: 'open', description: 'x', amount_ugx: 50000, card_amount_minor: 1352, card_currency: 'USD', opened_at: null }] };
+    }
+    if (/FROM billing_settings/i.test(sql)) return { rows: [] };
+    return { rows: [] };
+  };
+  try {
+    await payLinks.pageData(db, 'MKABC123', { track: false });
+    assert.strictEqual(writes.length, 0, 'server-side composition is not somebody opening the page');
+
+    await payLinks.pageData(db, 'MKABC123');
+    assert.strictEqual(writes.length, 1, 'but a real visit to /pay still counts, or the signal is dead the other way');
+  } finally {
+    db.query = originalQuery;
+  }
+});
+
 test('the counts answer "how many have we sent, and how many paid"', async () => {
   const originalQuery = db.query;
   db.query = async () => ({ rows: [{ created: 9, sent: 8, paid: 3, awaiting_payment: 5, never_opened: 2 }] });
