@@ -14064,7 +14064,7 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
  */
 async function payLinkMethodLine(code) {
   const payLinks = require('../services/payLinkService');
-  const page = await payLinks.pageData(db, code).catch(() => null);
+  const page = await payLinks.pageData(db, code, { track: false }).catch(() => null);
   const methods = [];
   if (page?.card_available) methods.push('card, Apple Pay or Google Pay');
   if (page?.pay_to_ready) methods.push('MTN Mobile Money');

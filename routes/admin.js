@@ -14597,7 +14597,7 @@ async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force =
   // Say only what the payment page will actually offer them. Card, Apple Pay
   // and Google Pay appear only when Revolut is configured; promising them when
   // it is not sends an agent to a page that offers mobile money alone.
-  const page = await payLinks.pageData(db, link.code).catch(() => null);
+  const page = await payLinks.pageData(db, link.code, { track: false }).catch(() => null);
   const methods = [];
   if (page?.card_available) methods.push('card, Apple Pay or Google Pay');
   if (page?.pay_to_ready) methods.push('MTN Mobile Money');
