@@ -28763,7 +28763,40 @@ function adminPayLinksBlock(d) {
   return `<div class="rounded-xl border border-gray-200 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">💳 Payment links — card or mobile money</h4><button type="button" onclick="adminCreatePayLink({ purpose: 'other' })" class="rounded bg-gray-900 px-3 py-1 text-xs font-bold text-white">New payment link</button></div>
     <p class="text-xs mt-1">${status}</p>
     <p class="text-xs text-gray-500 mb-2">Reminders now carry a link automatically. Card payments are confirmed by Revolut and recorded + verified on their own; MoMo payments from a link arrive in “I have paid” below for the usual checks.</p>
+    ${adminPayLinkLoopBlock(d)}
     ${rows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Created</th><th class="py-1 pr-3">For</th><th class="py-1 pr-3">Amount</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No links yet.</p>`}</div>`;
+}
+
+/**
+ * Closing the loop.
+ *
+ * A link that went out and was never paid makes no noise at all, so nobody
+ * could answer "who have we asked for money and heard nothing from" — the
+ * table above is sorted newest-first and tells you nothing about who is
+ * waiting. This is the worklist: the counts for the month, then everybody
+ * whose link has been sitting unpaid for three days or more, longest wait
+ * first, each with the next thing to do written out.
+ */
+function adminPayLinkLoopBlock(d) {
+  const stats = d.pay_link_stats || null;
+  const waiting = d.pay_links_awaiting || [];
+  if (!stats && !waiting.length) return "";
+  const counts = stats
+    ? `<p class="text-xs text-gray-600">Last ${stats.since_days} days: <b>${stats.sent}</b> sent · <b class="text-emerald-700">${stats.paid} paid</b> · <b class="text-amber-700">${stats.awaiting_payment} waiting</b>${stats.never_opened ? ` · ${stats.never_opened} never even opened the page` : ""}</p>`
+    : "";
+  if (!waiting.length) {
+    return `<div class="rounded-lg bg-gray-50 p-2 mb-2">${counts}<p class="text-xs text-emerald-700 font-bold">Nothing has been waiting more than three days.</p></div>`;
+  }
+  const rows = waiting.slice(0, 25).map((l) => {
+    const who = l.agent_name || l.payer_name || l.description || l.code;
+    const code = adminAttr(l.code);
+    return `<tr class="border-t border-amber-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(who)}<div class="text-[11px] font-normal text-gray-500">${adminEscape(l.code)}${l.sent_to ? ` · to +${adminEscape(l.sent_to)}` : ""}${l.fee_exempt ? " · lists free, paying by choice" : ""}</div></td><td class="py-2 pr-3 whitespace-nowrap">${adminFormatUgx(l.amount_ugx)}</td><td class="py-2 pr-3 whitespace-nowrap font-bold text-amber-700">${Number(l.days_waiting || 0)} day${Number(l.days_waiting) === 1 ? "" : "s"}</td><td class="py-2 pr-3">${adminEscape(l.next_step || "")}</td><td class="py-2 text-xs space-x-2 whitespace-nowrap"><button type="button" onclick="adminSendPayLink('${code}')" class="underline font-bold">Send again</button> <button type="button" onclick="adminCopyPayLink('${adminAttr(l.url)}')" class="underline">Copy</button></td></tr>`;
+  }).join("");
+  return `<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 mb-3">
+    <h5 class="font-black text-gray-900 text-sm">⏳ Asked for money, nothing back yet — ${waiting.length}</h5>
+    ${counts}
+    <div class="overflow-x-auto mt-2"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Who</th><th class="py-1 pr-3">Amount</th><th class="py-1 pr-3">Waiting</th><th class="py-1 pr-3">Next step</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
 }
 
 function adminCreatePayLink(target = {}) {
