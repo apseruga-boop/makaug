@@ -66,7 +66,8 @@ const {
 } = require('../services/whatsappBridgeReadiness');
 const {
   handleOwnerWhatsappCommand,
-  isAiCeoOwnerPhone
+  isAiCeoOwnerPhone,
+  getConfiguredOwnerPhones
 } = require('../services/aiCeoControlService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
@@ -91,6 +92,10 @@ const {
   employeeRolePrompt,
   employeePitchContactPrompt,
   employeeAgentPayLinkPrompt,
+  employeePayLinkWhoPrompt,
+  employeePayLinkLookupPrompt,
+  employeePayLinkProspectPrompt,
+  parsePayLinkWho,
   parsePitchContact,
   parsePayLinkChoice,
   looksLikePropertyCaption,
@@ -4405,7 +4410,7 @@ async function findEmployeeApprovedAgents(query = '') {
   const clean = normalizeInput(query);
   if (!clean) return [];
   const result = await db.query(
-    `SELECT id, full_name, company_name, phone, whatsapp, email
+    `SELECT id, full_name, company_name, phone, whatsapp, email, fee_exempt, paid_until, pay_link_sent_at
        FROM agents
       WHERE status = 'approved'
         AND (
@@ -5749,6 +5754,16 @@ function recoverInterruptedEmployeeIntakeStep(session = {}) {
   if (!data.employee_role) return 'employee_intake_role';
   // Interrupted between choosing "send the video" and naming who it is for.
   if (data.employee_role === 'pitch') return 'employee_pitch_contact';
+  // Interrupted somewhere inside "send a payment link". Nothing has gone out
+  // until the final confirmation, so resuming at the furthest answered step
+  // cannot send anybody a bill twice.
+  if (data.employee_role === 'pay_link') {
+    if (!data.pay_link_target) return 'employee_pay_link_who';
+    if (data.pay_link_target === 'prospect') return 'employee_pay_link_prospect';
+    return Array.isArray(data.pay_link_candidates) && data.pay_link_candidates.length
+      ? 'employee_pay_link_confirm'
+      : 'employee_pay_link_lookup';
+  }
   if (data.employee_role === 'agent') {
     if (data.agent?.id) {
       if (data.property_batch_mode) return 'employee_property_media';
@@ -6664,7 +6679,7 @@ async function findApprovedAgentByPhone(phone) {
   let agent = null;
   try {
     const result = await db.query(
-      `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, status
+      `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, status, fee_exempt
          FROM agents
         WHERE status = 'approved'
           AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
@@ -7559,7 +7574,7 @@ async function handleEmployeeWhatsappIntake({
     };
     employeeBatchSummaryLastSent.delete(String(phone || ''));
     await replaceEmployeeSession(phone, 'employee_intake_role', freshData);
-    return { handled: true, nextStep: 'employee_intake_role', message: employeeRolePrompt() };
+    return { handled: true, nextStep: 'employee_intake_role', message: employeeRolePrompt(agentMonthlyFeeLabel()) };
   }
 
   const data = {
@@ -7589,7 +7604,7 @@ async function handleEmployeeWhatsappIntake({
 
   if (currentStep === 'employee_intake_role') {
     const role = parseEmployeeRole(cleanBody);
-    if (!role) return { handled: true, nextStep: currentStep, message: employeeRolePrompt() };
+    if (!role) return { handled: true, nextStep: currentStep, message: employeeRolePrompt(agentMonthlyFeeLabel()) };
     data.employee_role = role;
     if (role === 'agent') {
       await replaceEmployeeSession(phone, 'employee_agent_existing', data);
@@ -7600,6 +7615,15 @@ async function handleEmployeeWhatsappIntake({
     if (role === 'pitch') {
       await replaceEmployeeSession(phone, 'employee_pitch_contact', data);
       return { handled: true, nextStep: 'employee_pitch_contact', message: employeePitchContactPrompt() };
+    }
+    // Somebody has agreed to pay and is waiting for the link.
+    if (role === 'pay_link') {
+      await replaceEmployeeSession(phone, 'employee_pay_link_who', data);
+      return {
+        handled: true,
+        nextStep: 'employee_pay_link_who',
+        message: employeePayLinkWhoPrompt(agentMonthlyFeeLabel())
+      };
     }
     await replaceEmployeeSession(phone, 'employee_customer_details', data);
     return {
@@ -7673,6 +7697,193 @@ async function handleEmployeeWhatsappIntake({
         + 'They have been asked to reply *AGENT* if they want to join.\n\n'
         + 'When they say yes, reply *Agent 007* and choose *1* to register them.\n\n'
         + 'I am keeping them on the prospects list until they sign up.'
+    };
+  }
+
+  // ── Agent 007 option 4: send a payment link ────────────────────────────────
+  //
+  // Registered agent or new prospect. The answer decides whether the link hangs
+  // off an agent profile (so the payment settles their subscription) or stands
+  // on its own with the joining film in front of it.
+  if (currentStep === 'employee_pay_link_who') {
+    const who = parsePayLinkWho(cleanBody);
+    if (!who) {
+      return { handled: true, nextStep: currentStep, message: employeePayLinkWhoPrompt(agentMonthlyFeeLabel()) };
+    }
+    data.pay_link_target = who;
+    if (who === 'registered') {
+      await replaceEmployeeSession(phone, 'employee_pay_link_lookup', data);
+      return { handled: true, nextStep: 'employee_pay_link_lookup', message: employeePayLinkLookupPrompt() };
+    }
+    await replaceEmployeeSession(phone, 'employee_pay_link_prospect', data);
+    return {
+      handled: true,
+      nextStep: 'employee_pay_link_prospect',
+      message: employeePayLinkProspectPrompt(agentMonthlyFeeLabel())
+    };
+  }
+
+  // The same shape as confirming an agent before listing a property: say the
+  // name, pick them from the list, and only then does anything go out. Nobody
+  // should be able to send a stranger a bill by mistyping a name.
+  if (currentStep === 'employee_pay_link_lookup') {
+    const matches = await findEmployeeApprovedAgents(cleanBody);
+    if (!matches.length) {
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: `No approved agent on makaug.com matches “${cleanBody}”.\n\n`
+          + 'Send the name or agent number again.\n\n'
+          + 'If they are not registered yet, type *CANCEL*, then *Agent 007* and choose *4* then *2* to send them the link as a new prospect.'
+      };
+    }
+    data.pay_link_candidates = matches.map((agent) => ({
+      id: agent.id,
+      full_name: agent.full_name,
+      company_name: agent.company_name,
+      phone: agent.phone,
+      whatsapp: agent.whatsapp,
+      fee_exempt: agent.fee_exempt === true,
+      paid_until: agent.paid_until || null
+    }));
+    await replaceEmployeeSession(phone, 'employee_pay_link_confirm', data);
+    const options = data.pay_link_candidates
+      .map((agent, index) => `${index + 1} — ${agent.full_name}${agent.company_name ? ` (${agent.company_name})` : ''}${agent.fee_exempt ? ' — lists free (joined before the fee)' : ''}`)
+      .join('\n');
+    return {
+      handled: true,
+      nextStep: 'employee_pay_link_confirm',
+      message: `${options}\n\nReply with the number to send them the payment link, or *NO* to search again.`
+    };
+  }
+
+  if (currentStep === 'employee_pay_link_confirm') {
+    if (/^(?:no|n|search)$/i.test(cleanBody)) {
+      delete data.pay_link_candidates;
+      await replaceEmployeeSession(phone, 'employee_pay_link_lookup', data);
+      return { handled: true, nextStep: 'employee_pay_link_lookup', message: employeePayLinkLookupPrompt() };
+    }
+    const selected = Array.isArray(data.pay_link_candidates)
+      ? data.pay_link_candidates[Number.parseInt(cleanBody, 10) - 1]
+      : null;
+    if (!selected) {
+      return { handled: true, nextStep: currentStep, message: 'Reply with one of the numbers shown, or *NO* to search again.' };
+    }
+    const agentPhone = String(selected.whatsapp || selected.phone || '').replace(/\D/g, '');
+    if (agentPhone.length < 9) {
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: `${selected.full_name} has no usable phone number on their profile, so I could not send the link. Add their number in the Accounts tab first.`
+      };
+    }
+    let sent;
+    try {
+      sent = await sendStaffPayLink({
+        name: selected.full_name,
+        phone: agentPhone,
+        agentId: selected.id,
+        // They list free. Staff choosing them by name is staff saying they
+        // know that and the agent has offered to pay anyway.
+        allowExempt: selected.fee_exempt === true,
+        requestedBy: phone
+      });
+    } catch (error) {
+      logger.error('Staff pay link send failed:', error);
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: `I could not send the link just then and nothing went out: ${error.message || 'unknown error'}\n\nReply with the number again to retry, or *NO* to search again.`
+      };
+    }
+    await replaceEmployeeSession(phone, 'main_menu', {
+      employee_intake_last_pay_link_code: sent.code,
+      employee_intake_last_pay_link_at: new Date().toISOString()
+    });
+    return {
+      handled: true,
+      nextStep: 'main_menu',
+      payLinkSent: sent.code,
+      message: `✅ *Payment link sent* — ${selected.full_name}\n\n`
+        + `Reference: *${sent.code}*\n`
+        + `Amount: ${sent.fee_label} a month\n`
+        + `Number: ${sent.recipient}\n`
+        + `${sent.url}\n\n`
+        + (selected.fee_exempt ? 'They list free because they joined before the fee — this is a voluntary payment and the exemption stays either way.\n\n' : '')
+        + (sent.reused ? 'This is the link they were already sent, not a second one, so one payment settles it.\n\n' : '')
+        + 'Quote that reference if they pay by Mobile Money. I will tell you the moment it is paid, and remind you if it goes quiet.'
+    };
+  }
+
+  // Not registered yet, so there is no profile to hang the link on: name and
+  // number, the joining film, then the link, in that order.
+  if (currentStep === 'employee_pay_link_prospect') {
+    const contact = parsePitchContact(cleanBody);
+    if (!contact) {
+      return { handled: true, nextStep: currentStep, message: employeePayLinkProspectPrompt(agentMonthlyFeeLabel()) };
+    }
+    const prospects = require('../services/agentProspectService');
+    if (!prospects.isUsableProspectPhone(contact.phone)) {
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: `That number does not look complete: *${contact.phone}*\n\nSend it with the full nine digits, for example 0772123456.`
+      };
+    }
+    const dialable = prospects.normalizeProspectPhone(contact.phone);
+    // They may have been registered since. If so the link belongs on their
+    // profile, so the payment settles their subscription rather than floating
+    // free of it.
+    const existingAgent = await findApprovedAgentByPhone(dialable).catch(() => null);
+    let sent;
+    try {
+      sent = await sendStaffPayLink({
+        name: existingAgent?.full_name || contact.fullName,
+        phone: dialable,
+        agentId: existingAgent?.id || null,
+        allowExempt: existingAgent?.fee_exempt === true,
+        includeVideo: !existingAgent,
+        requestedBy: phone
+      });
+    } catch (error) {
+      logger.error('Staff pay link send failed:', error);
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: `I could not send it just then and nothing went out: ${error.message || 'unknown error'}\n\nCheck the number and send the name and phone again.`
+      };
+    }
+    if (!existingAgent) {
+      // The film went out, so this is a pitch like any other — recorded on the
+      // same prospects list, with the link's code on it so the follow-up knows
+      // what they were asked to pay.
+      await prospects.recordProspectPitch({
+        fullName: contact.fullName,
+        phone: dialable,
+        pitchedBy: phone,
+        metadata: { sent_via: 'agent_007_option_4', pay_link_code: sent.code }
+      }).catch((error) => logger.warn('Agent prospect not recorded:', error.message || String(error)));
+    }
+    await replaceEmployeeSession(phone, 'main_menu', {
+      employee_intake_last_pay_link_code: sent.code,
+      employee_intake_last_pay_link_at: new Date().toISOString()
+    });
+    return {
+      handled: true,
+      nextStep: 'main_menu',
+      payLinkSent: sent.code,
+      message: `✅ *Payment link sent* — ${contact.fullName}\n\n`
+        + `Reference: *${sent.code}*\n`
+        + `Amount: ${sent.fee_label} a month\n`
+        + `Number: ${sent.recipient}\n`
+        + `${sent.url}\n\n`
+        + (existingAgent
+          ? `${existingAgent.full_name} is already registered, so the link is against their account and no video was sent.\n\n`
+          : 'The joining video went with it, so they know who is asking.\n\n')
+        + (existingAgent
+          ? ''
+          : 'When they pay, register them with *Agent 007* → option *1* so the money lands against a profile.\n\n')
+        + 'Quote that reference for Mobile Money. I will tell you the moment it is paid, and remind you if it goes quiet.'
     };
   }
 
@@ -13843,6 +14054,155 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
   return queued;
 }
 
+/**
+ * Only promise the payment methods the page will actually offer.
+ *
+ * Card, Apple Pay and Google Pay appear on /pay/<code> only when Revolut is
+ * configured. It is not, in production, today — so saying "pay by card" sends
+ * someone to a page that offers mobile money alone, and they come back asking
+ * where the card button is.
+ */
+async function payLinkMethodLine(code) {
+  const payLinks = require('../services/payLinkService');
+  const page = await payLinks.pageData(db, code).catch(() => null);
+  const methods = [];
+  if (page?.card_available) methods.push('card, Apple Pay or Google Pay');
+  if (page?.pay_to_ready) methods.push('MTN Mobile Money');
+  return methods.length ? `You can pay by ${methods.join(', or ')}.` : 'The page will show you how to pay.';
+}
+
+/**
+ * Agent 007 option 4: a staff member sends somebody the monthly payment link.
+ *
+ * One function for both branches, because everything after "who is it for" is
+ * the same errand: make the link, send it, write down that it was sent, and
+ * tell the people who will be asked about it later.
+ *
+ * Three things here are deliberate.
+ *
+ * `allowExempt` — agents approved before the fee started list for free, and
+ * createPayLink refuses to bill them, on purpose. But several have said they
+ * are happy to pay anyway. Staff choosing them by name is them saying they
+ * meant it; the exemption is untouched either way, so paying buys goodwill and
+ * not paying costs the agent nothing.
+ *
+ * `includeVideo` — a prospect has never heard of us. A payment link on its own
+ * from an unknown number is a scam, so the joining film goes first and the
+ * link follows it in the same minute.
+ *
+ * The reference code going back to whoever asked — Ronald, or Arthur, or
+ * whoever typed Agent 007 — is what makes the loop closable. The code is the
+ * MoMo reference, so when the money arrives with "MKABC12345" against it,
+ * the person holding the phone already knows which link it was.
+ */
+async function sendStaffPayLink({
+  name = '',
+  phone = '',
+  agentId = null,
+  allowExempt = false,
+  includeVideo = false,
+  requestedBy = ''
+} = {}) {
+  const payLinks = require('../services/payLinkService');
+  const recipient = String(phone || '').replace(/\D/g, '');
+  if (recipient.length < 9) {
+    const error = new Error('That phone number is too short to send a payment link to');
+    error.status = 400;
+    throw error;
+  }
+  const actor = `whatsapp_employee:${String(requestedBy || '').replace(/\D/g, '') || 'unknown'}`;
+  const created = await payLinks.createPayLink(db, agentId
+    ? { purpose: 'agent_subscription', agent_id: agentId, allow_exempt: allowExempt === true, payer_phone: recipient }
+    : {
+      purpose: 'other',
+      amount_ugx: require('../services/revenueService').feeConfig().feeUgx,
+      description: `makaug agent subscription — 1 month (${normalizeInput(name) || 'new agent'})`,
+      payer_name: normalizeInput(name),
+      payer_phone: recipient
+    }, actor);
+
+  const url = created?.url || '';
+  if (!url) {
+    const error = new Error('The payment link came back empty and nothing was sent');
+    error.status = 502;
+    throw error;
+  }
+  const feeLabel = agentMonthlyFeeLabel();
+  const methodLine = await payLinkMethodLine(created.link.code);
+  const firstName = normalizeInput(name).split(/\s+/)[0] || 'there';
+
+  // A prospect gets the film first, so the link lands on a conversation that
+  // already knows who we are. It is queued before the link and the bridge
+  // sends in order.
+  if (includeVideo) {
+    await sendAgentPitchVideo({ phone: recipient, name, sentBy: requestedBy });
+  }
+
+  await queueWhatsappWebBridgeMessage({
+    recipient,
+    text: `💳 *makaug agent subscription — ${firstName}*\n\n`
+      + `${feeLabel} a month. You can pay here:\n${url}\n\n`
+      + `${methodLine}\n\nYour reference is *${created.link.code}* — quote it if you pay by Mobile Money.`,
+    source: 'whatsapp_runtime',
+    actorId: actor,
+    metadata: {
+      message_kind: 'agent_pay_link_staff_sent',
+      pay_link_code: created.link.code,
+      agent_id: agentId || null,
+      // Unique per send: a staff member sending it again has decided to.
+      reply_dedupe_key: `pay_link:${created.link.code}:${Date.now()}`
+    }
+  });
+
+  await payLinks.recordPayLinkSent(db, { code: created.link.code, to: recipient, status: 'queued' })
+    .catch((error) => logger.warn('Pay link send not recorded:', error.message || String(error)));
+  if (agentId) {
+    await db.query('UPDATE agents SET pay_link_sent_at = NOW() WHERE id = $1', [agentId]).catch(() => null);
+  }
+
+  // Everyone who will be asked about this money later. The requester is first
+  // because they are standing in front of the person who has to pay.
+  const requester = String(requestedBy || '').replace(/\D/g, '');
+  const told = [];
+  const recipients = new Set();
+  if (requester.length >= 9) recipients.add(requester);
+  for (const owner of getConfiguredOwnerPhones()) {
+    const digits = String(owner || '').replace(/\D/g, '');
+    if (digits.length >= 9) recipients.add(digits);
+  }
+  const note = `💳 *Payment link sent* — ${normalizeInput(name) || recipient}\n\n`
+    + `Reference: *${created.link.code}*\n`
+    + `Amount: ${feeLabel} a month\n`
+    + `Number: ${recipient}\n`
+    + `${agentId ? 'Registered agent' : 'New prospect — joining video sent with it'}\n`
+    + `${allowExempt ? 'Fee-exempt — paying by choice, the exemption stays\n' : ''}`
+    + `Paid: not yet\n\n`
+    + `${url}\n\nI will tell you the moment it is paid, and chase it if it goes quiet.`;
+  for (const target of recipients) {
+    await queueWhatsappWebBridgeMessage({
+      recipient: target,
+      text: note,
+      source: 'whatsapp_runtime',
+      actorId: actor,
+      metadata: {
+        message_kind: 'agent_pay_link_staff_notice',
+        pay_link_code: created.link.code,
+        reply_dedupe_key: `pay_link_notice:${created.link.code}:${target}`
+      }
+    }).catch(() => null);
+    told.push(target);
+  }
+
+  return {
+    code: created.link.code,
+    url,
+    reused: created.reused === true,
+    fee_label: feeLabel,
+    recipient,
+    notified: told
+  };
+}
+
 function queueExplainerVideoOnce({ phone, kind }) {
   const video = EXPLAINER_VIDEOS[kind];
   const digits = String(phone || '').replace(/\D/g, '');
@@ -17678,6 +18038,7 @@ module.exports.__test = {
   commercialUseInSearch,
   inferListingTypeFromStartRequest,
   sendAgentPitchVideo,
+  sendStaffPayLink,
   recoverInterruptedEmployeeIntakeStep,
   agentMonthlyFeeLabel,
   agentShareReply,

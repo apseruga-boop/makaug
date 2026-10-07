@@ -9756,7 +9756,7 @@ router.post('/agents/:id/restore', async (req, res, next) => {
 // --- Sales & revenue ---------------------------------------------------------
 router.get('/revenue/summary', async (req, res, next) => {
   try {
-    const [summary, settings, claims, listers, links] = await Promise.all([
+    const [summary, settings, claims, listers, links, awaiting, linkStats] = await Promise.all([
       revenue.revenueSummary(db),
       billingOps.getSettings(db, { fresh: true }),
       db.query(
@@ -9769,7 +9769,11 @@ router.get('/revenue/summary', async (req, res, next) => {
           ORDER BY (c.status = 'pending') DESC, c.created_at DESC LIMIT 100`
       ),
       billingOps.listerBillingRows(db),
-      payLinks.listPayLinks(db, { limit: 60 }).catch(() => [])
+      payLinks.listPayLinks(db, { limit: 60 }).catch(() => []),
+      // Who has been asked for money and gone quiet. Three days is the point
+      // at which "they have not got round to it" becomes "nobody is chasing".
+      payLinks.payLinksAwaitingPayment(db, { afterDays: 3, limit: 50 }).catch(() => []),
+      payLinks.payLinkSendStats(db, { sinceDays: 30 }).catch(() => null)
     ]);
     const { revolut_webhook: revolutWebhook, ...publicSettings } = settings || {};
     return res.json({
@@ -9778,6 +9782,8 @@ router.get('/revenue/summary', async (req, res, next) => {
         ...summary,
         settings: publicSettings,
         pay_links: links,
+        pay_links_awaiting: awaiting,
+        pay_link_stats: linkStats,
         card_payments: {
           ...payLinks.cardSettings(settings),
           configured: revolutMerchant.isConfigured(),
@@ -9812,6 +9818,26 @@ router.post('/revenue/pay-links', async (req, res, next) => {
 router.get('/revenue/pay-links', async (req, res, next) => {
   try {
     return res.json({ ok: true, data: await payLinks.listPayLinks(db, { limit: req.query.limit }) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * The open loop, as a worklist.
+ *
+ * Links that went out and were never paid make no noise at all, so they were
+ * invisible: nobody could answer "who have we asked for money and heard
+ * nothing from". This is that list — oldest first, with the next step on each
+ * one spelled out, plus the counts for the period.
+ */
+router.get('/revenue/pay-links/awaiting-payment', async (req, res, next) => {
+  try {
+    const [waiting, stats] = await Promise.all([
+      payLinks.payLinksAwaitingPayment(db, { afterDays: req.query.after_days ?? 3, limit: req.query.limit }),
+      payLinks.payLinkSendStats(db, { sinceDays: req.query.since_days ?? 30 })
+    ]);
+    return res.json({ ok: true, data: { stats, waiting, count: waiting.length } });
   } catch (error) {
     return next(error);
   }
