@@ -107,11 +107,24 @@ async function createPayLink(db, input = {}, actor = 'admin') {
   } else if (purpose === 'agent_subscription') {
     const agent = (await db.query('SELECT id, full_name, phone, whatsapp, monthly_fee_ugx, fee_exempt, approved_at, status FROM agents WHERE id = $1::uuid', [input.agent_id])).rows[0];
     if (!agent) throw revenue.httpError(404, 'Agent not found');
-    // Agents approved before the fee started list for free, for good.
-    if (agent.fee_exempt) throw revenue.httpError(409, `${agent.full_name} joined before the monthly fee and lists for free — no payment needed`);
+    // Agents approved before the fee started list for free, for good — so a
+    // link is never created for one by accident.
+    //
+    // But some of them have said they are happy to pay anyway, and refusing
+    // their money is its own kind of silly. allow_exempt is how staff say they
+    // meant it: the link is created, and the exemption is left exactly as it
+    // was. Paying does not end it, and not paying costs them nothing.
+    if (agent.fee_exempt && input.allow_exempt !== true) {
+      throw revenue.httpError(409, `${agent.full_name} joined before the monthly fee and lists for free — no payment needed`);
+    }
     agentId = agent.id;
     amountUgx = amountUgx || Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || revenue.feeConfig().feeUgx);
-    description = description || `makaug agent subscription — 1 month (${agent.full_name})`.slice(0, 200);
+    description = description
+      || (agent.fee_exempt
+        // Says on the link itself why an exempt agent has one, so nobody later
+        // reads the payment as proof the exemption ended.
+        ? `makaug agent subscription — 1 month (${agent.full_name}) — voluntary, stays fee-exempt`.slice(0, 200)
+        : `makaug agent subscription — 1 month (${agent.full_name})`.slice(0, 200));
     payerName = payerName || agent.full_name || null;
     payerPhone = payerPhone || digits(agent.whatsapp || agent.phone) || null;
   } else if (purpose === 'short_term_fee') {
@@ -533,6 +546,90 @@ async function closeLinkForClaim(db, claimId, entryId) {
   );
 }
 
+/**
+ * A link has left the building.
+ *
+ * sendPayLink stamps this itself, but it sends through leadHandoffService. The
+ * WhatsApp staff flow queues on the live bridge instead, and if it did not
+ * stamp the row the link would look as though it had never been sent — which
+ * is precisely the state payLinksAwaitingPayment below is trying to find.
+ */
+async function recordPayLinkSent(db, { code, to, status = 'queued' } = {}) {
+  const clean = String(code || '').trim().toUpperCase();
+  if (!clean) return null;
+  return (await db.query(
+    `UPDATE pay_links
+        SET sent_to = COALESCE(NULLIF($2, ''), sent_to),
+            sent_at = NOW(),
+            sent_status = $3,
+            updated_at = NOW()
+      WHERE code = $1
+      RETURNING *`,
+    [clean, digits(to), String(status || 'queued').slice(0, 40)]
+  )).rows[0] || null;
+}
+
+/**
+ * Closing the loop.
+ *
+ * Sending a payment link is the easy half. The half that was missing is
+ * knowing, days later, which of them nobody ever paid — because an open link
+ * makes no noise. This is the worklist: every link that went out, is still
+ * open, and has been sitting there longer than `afterDays`, oldest first, with
+ * whether the person has even opened the page.
+ *
+ * Opened-but-unpaid and never-opened are different problems (one needs a
+ * nudge about paying, the other needs a nudge about the link arriving at all),
+ * so the caller is given both rather than a single "unpaid" count.
+ */
+async function payLinksAwaitingPayment(db, { afterDays = 3, limit = 100 } = {}) {
+  const days = Math.max(0, Math.min(365, Number(afterDays) || 0));
+  return (await db.query(
+    `SELECT l.code, l.purpose, l.description, l.amount_ugx, l.payer_name, l.payer_phone,
+            l.sent_to, l.sent_at, l.opened_at, l.created_by, l.created_at,
+            a.id AS agent_id, a.full_name AS agent_name, a.status AS agent_status, a.fee_exempt,
+            FLOOR(EXTRACT(EPOCH FROM (NOW() - l.sent_at)) / 86400)::int AS days_waiting
+       FROM pay_links l
+       LEFT JOIN agents a ON a.id = l.agent_id
+      WHERE l.status = 'open'
+        AND l.sent_at IS NOT NULL
+        AND l.sent_at < NOW() - ($1 || ' days')::interval
+      ORDER BY l.sent_at ASC
+      LIMIT $2`,
+    [String(days), Math.min(300, Math.max(1, Number(limit) || 100))]
+  )).rows.map((row) => ({
+    ...row,
+    url: payUrl(row.code),
+    // The two different problems, named, so a worklist reads as a worklist.
+    next_step: row.opened_at
+      ? `Opened the page ${row.days_waiting} day${row.days_waiting === 1 ? '' : 's'} ago and has not paid — ask what is stopping them`
+      : `Sent ${row.days_waiting} day${row.days_waiting === 1 ? '' : 's'} ago, never opened — check the number and send it again`
+  }));
+}
+
+/** How the sending is going, in the four numbers anybody actually asks for. */
+async function payLinkSendStats(db, { sinceDays = 30 } = {}) {
+  const days = Math.max(1, Math.min(365, Number(sinceDays) || 30));
+  const row = (await db.query(
+    `SELECT COUNT(*)::int AS created,
+            COUNT(sent_at)::int AS sent,
+            COUNT(*) FILTER (WHERE status = 'paid')::int AS paid,
+            COUNT(*) FILTER (WHERE status = 'open' AND sent_at IS NOT NULL)::int AS awaiting_payment,
+            COUNT(*) FILTER (WHERE status = 'open' AND sent_at IS NOT NULL AND opened_at IS NULL)::int AS never_opened
+       FROM pay_links
+      WHERE created_at > NOW() - ($1 || ' days')::interval`,
+    [String(days)]
+  )).rows[0] || {};
+  return {
+    since_days: days,
+    created: Number(row.created || 0),
+    sent: Number(row.sent || 0),
+    paid: Number(row.paid || 0),
+    awaiting_payment: Number(row.awaiting_payment || 0),
+    never_opened: Number(row.never_opened || 0)
+  };
+}
+
 async function listPayLinks(db, { limit = 100 } = {}) {
   return (await db.query(
     `SELECT l.*, COALESCE(p.title, st.title) AS property_title, a.full_name AS agent_name
@@ -632,6 +729,9 @@ module.exports = {
   notifyPaid,
   pendingAgentPaid,
   listPayLinks,
+  recordPayLinkSent,
+  payLinksAwaitingPayment,
+  payLinkSendStats,
   cancelPayLink,
   ensureRevolutWebhook,
   webhookSecret,

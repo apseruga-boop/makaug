@@ -3,6 +3,10 @@ const EMPLOYEE_INTAKE_TRIGGER = 'Agent 007';
 const EMPLOYEE_INTAKE_STEPS = Object.freeze([
   'employee_intake_role',
   'employee_pitch_contact',
+  'employee_pay_link_who',
+  'employee_pay_link_lookup',
+  'employee_pay_link_confirm',
+  'employee_pay_link_prospect',
   'employee_agent_existing',
   'employee_agent_lookup',
   'employee_agent_confirm',
@@ -225,8 +229,44 @@ function parseEmployeeRole(value = '') {
     customer: ['2', 'customer', 'new customer', 'owner', 'property owner', 'normal person'],
     // Not a property at all: an employee standing in front of somebody who might
     // become an agent, who needs the pitch film before anything else happens.
-    pitch: ['3', 'video', 'send video', 'agent video', 'pitch', 'send the video', 'invite']
+    pitch: ['3', 'video', 'send video', 'agent video', 'pitch', 'send the video', 'invite'],
+    // No properties and no pitch either: somebody has agreed to pay and is
+    // waiting for the link.
+    pay_link: ['4', 'pay', 'payment', 'pay link', 'payment link', 'send payment link', 'send pay link', 'send the payment link', 'invoice']
   });
+}
+
+/**
+ * Registered agent, or somebody who is not on makaug yet?
+ *
+ * The two answers are genuinely different errands. A registered agent has a
+ * profile, so the link can be attached to it and the payment lands against
+ * their subscription. A prospect has nothing, so they need the joining film in
+ * the same breath as the link — a bare payment link from a number they do not
+ * know is indistinguishable from a scam.
+ */
+function employeePayLinkWhoPrompt(feeLabel = 'UGX 50,000') {
+  return `\u{1F4B3} *Send a payment link* — ${feeLabel} a month.\n\nWho is it for?\n\n`
+    + '1 — An agent *already registered* on makaug.com\n'
+    + '2 — A *new prospect* — not registered yet (they get the joining video with the link)\n\n'
+    + 'Type *CANCEL* to stop.';
+}
+
+function parsePayLinkWho(value = '') {
+  return choice(value, {
+    registered: ['1', 'registered', 'yes', 'existing', 'already registered', 'agent', 'registered agent'],
+    prospect: ['2', 'prospect', 'new', 'new prospect', 'not registered', 'no', 'new agent']
+  });
+}
+
+function employeePayLinkLookupPrompt() {
+  return 'Could you please confirm the name of the agent?\n\nSend their exact name or their makaug agent number.';
+}
+
+function employeePayLinkProspectPrompt(feeLabel = 'UGX 50,000') {
+  return `\u{1F4B3} *New prospect* — they get the joining video and the ${feeLabel} payment link together.\n\n`
+    + 'Send their details like this:\n\n*Name | phone number*\n\n'
+    + 'For example: Kato Brian | 0772123456\n\nType *CANCEL* to stop.';
 }
 
 /**
@@ -424,8 +464,9 @@ function parseCustomerDetails(value = '') {
  * nothing links the listings to anybody. It was being chosen for agents over
  * and over, so the question now says what each answer costs.
  */
-function employeeRolePrompt() {
-  return '🔐 *makaug employee intake*\nWho do these properties belong to?\n\n1 — An *agent or broker* (they get a makaug profile, and every property is listed under it)\n2 — A *private owner* selling their own property (no agent profile is created)\n\n3 — No properties yet — *send someone the makaug agent video* (what we are, how to list, what it costs)';
+function employeeRolePrompt(feeLabel = 'UGX 50,000') {
+  return '🔐 *makaug employee intake*\nWho do these properties belong to?\n\n1 — An *agent or broker* (they get a makaug profile, and every property is listed under it)\n2 — A *private owner* selling their own property (no agent profile is created)\n\n3 — No properties yet — *send someone the makaug agent video* (what we are, how to list, what it costs)'
+    + `\n4 — No properties yet — *send a payment link* (${feeLabel} a month, to a registered agent or a new prospect)`;
 }
 
 function employeeAgentExistingPrompt() {
@@ -460,6 +501,10 @@ module.exports = {
   employeeRolePrompt,
   employeePitchContactPrompt,
   employeeAgentPayLinkPrompt,
+  employeePayLinkWhoPrompt,
+  employeePayLinkLookupPrompt,
+  employeePayLinkProspectPrompt,
+  parsePayLinkWho,
   parsePayLinkChoice,
   parsePitchContact,
   looksLikePropertyCaption,
