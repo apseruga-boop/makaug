@@ -275,13 +275,69 @@ test('an exempt agent can be sent a link, and is still exempt afterwards', async
 
     assert.strictEqual(done.payLinkSent, 'MKTEST1234', 'the link must actually be created');
     assert.strictEqual(payLinkRows.length, 1);
-    assert.match(payLinkRows[0].description, /voluntary, stays fee-exempt/,
-      'the link itself says why an exempt agent has one, so a payment is never read as ending the exemption');
-    assert.match(done.message, /voluntary|exemption stays/i, 'and Ronald is told the same');
+    assert.match(done.message, /voluntary|exemption stays/i, 'and Ronald is told why');
     assert.ok(!agentUpdates.some((u) => /fee_exempt/.test(u.sql)),
       'sending a link must never be what revokes somebody’s exemption');
     assert.ok(sent.length >= 2);
   }, { agents: [{ ...AGENT, fee_exempt: true }], feeExempt: true });
+});
+
+/**
+ * Who is told what.
+ *
+ * That an exempt agent is paying by choice is our business, not theirs to read
+ * on their own invoice. It went out on the staff note, which was right, but
+ * the link's description was also carrying it — and the description is printed
+ * on the /pay page the agent opens. So the wording has to appear on exactly
+ * one side of the line, and this is the test that holds it there.
+ */
+test('the agent never sees a word about being exempt — only the team does', async () => {
+  await withStubbedWorld(async ({ at, sent, payLinkRows }) => {
+    await at('employee_pay_link_confirm', '1', {
+      whatsapp_employee_intake: true,
+      employee_role: 'pay_link',
+      pay_link_target: 'registered',
+      pay_link_candidates: [{ ...AGENT, fee_exempt: true }]
+    });
+
+    // The description is public: it is on the pay page and in the message.
+    assert.strictEqual(payLinkRows[0].description, 'makaug agent subscription — 1 month (Nakato Grace)',
+      'the invoice says what they are paying for and nothing else');
+
+    const forbidden = /exempt|voluntar|paying by choice|lists? free|for free/i;
+    // Split by who it was addressed to, not by what it mentions — the staff
+    // note quotes the agent's number in its body.
+    const toAgent = sent.filter((p) => p[0] === '256772123456');
+    const toStaff = sent.filter((p) => p[0] !== '256772123456');
+    assert.ok(toAgent.length, 'the agent must actually have been sent something');
+    for (const message of toAgent) {
+      assert.ok(!forbidden.test(JSON.stringify(message)),
+        `nothing about the exemption may reach the agent: ${JSON.stringify(message).slice(0, 400)}`);
+    }
+    assert.ok(toStaff.some((m) => forbidden.test(JSON.stringify(m))),
+      'and the team note must still say it, or nobody knows why a free agent got a bill');
+  }, { agents: [{ ...AGENT, fee_exempt: true }], feeExempt: true });
+});
+
+/**
+ * The code is the Mobile Money reference, typed by hand on a phone keypad.
+ * Ten characters was too many — every extra one is another chance to mistype
+ * it and another payment nobody can match to a person.
+ */
+test('the reference is eight characters, and the old longer ones still work', () => {
+  const code = payLinks.newCode();
+  assert.strictEqual(code.length, 8, 'MK plus six');
+  assert.match(code, /^MK[A-Z0-9]{6}$/);
+  // I, O, 0 and 1 are the characters people actually get wrong.
+  assert.ok(!/[IO01]/.test(code.slice(2)), `${code} contains a character that is misread`);
+
+  // 32^6 is 1.07 billion. The /pay page is reachable by anyone holding the
+  // code, so it has to stay too expensive to guess at.
+  assert.ok(Math.pow(32, 6) > 1e9, 'any shorter and the links become enumerable');
+
+  const seen = new Set();
+  for (let i = 0; i < 2000; i += 1) seen.add(payLinks.newCode());
+  assert.strictEqual(seen.size, 2000, 'codes must not repeat');
 });
 
 test('the search list marks an exempt agent, so nobody bills one by accident', async () => {
