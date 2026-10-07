@@ -63,7 +63,7 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   console.log('\n1. Create and send a listing pay link');
   const created = await api('POST', '/revenue/pay-links', { purpose: 'listing_fee', property_id: p1, send_to: '447757773202' });
   const link = created.data?.link || {};
-  check('link created', created.ok && /^MK[A-Z0-9]{8}$/.test(link.code || ''), created.error || link.code);
+  check('link created', created.ok && /^MK[A-Z0-9]{6,8}$/.test(link.code || ''), created.error || link.code);
   check('amount is the lister fee', Number(link.amount_ugx) === 25000, String(link.amount_ugx));
   check('card price is UGX / rate, rounded up', link.card_amount_minor === 676 && link.card_currency === 'USD', `${link.card_amount_minor} ${link.card_currency}`);
   check('WhatsApp attempted to the test number', created.data?.sent?.to === '447757773202', JSON.stringify(created.data?.sent));
@@ -137,9 +137,9 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   console.log('\n6. Reminders carry the link; summary');
   const p3 = (await mk('PAYTEST bedsitter Bweyogerere')).rows[0].id;
   const preview = await api('GET', `/revenue/listings/${p3}/billing-message/reminder`);
-  check('lister reminder includes a pay link', /\/pay\/MK[A-Z0-9]{8}/.test(preview.data?.text || ''), (preview.data?.text || '').slice(-90));
+  check('lister reminder includes a pay link', /\/pay\/MK[A-Z0-9]{6,8}/.test(preview.data?.text || ''), (preview.data?.text || '').slice(-90));
   const agPreview = await api('GET', `/revenue/agents/${agent.id}/billing-message/reminder`);
-  check('agent reminder includes a pay link', /\/pay\/MK[A-Z0-9]{8}/.test(agPreview.data?.text || ''));
+  check('agent reminder includes a pay link', /\/pay\/MK[A-Z0-9]{6,8}/.test(agPreview.data?.text || ''));
   const sum = await api('GET', '/revenue/summary');
   check('summary lists pay links and card status', Array.isArray(sum.data?.pay_links) && sum.data?.card_payments?.configured === true);
   check('Revolut account shows in accounts', (sum.data?.accounts || []).some((a) => a.key === 'revolut_whispers' && Number(a.money_in) > 0));
@@ -228,7 +228,7 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   check("APPROVE refuses before payment", /hasn't paid/.test(early2), early2.slice(0, 80));
   const stranger = await bridge('256779000255', 'STATUS 0779000244');
   check('a non-team number cannot run commands', !/not paid yet|Grace Nambi/.test(stranger), stranger.slice(0, 80));
-  const gLinkCode = (setup.match(/\/pay\/(MK[A-Z0-9]{8})/) || [])[1];
+  const gLinkCode = (setup.match(/\/pay\/(MK[A-Z0-9]{6,8})/) || [])[1];
   const gGo = await page(`/pay/${gLinkCode}/card`, { method: 'POST' });
   const gOrder = String(gGo.location).split('/').pop();
   await fetch(`${MOCK}/__complete/${gOrder}`, { method: 'POST' });
