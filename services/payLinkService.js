@@ -30,10 +30,26 @@ function site() {
   return billingOps.SITE();
 }
 
+/**
+ * Eight characters, including the MK.
+ *
+ * It was ten, and ten is too many: this code is the Mobile Money reference,
+ * typed by hand on a phone keypad by somebody paying in a shop, and every
+ * extra character is another chance to mistype it and another payment nobody
+ * can match. The alphabet already leaves out I, O, 0 and 1, which are the
+ * characters people actually get wrong.
+ *
+ * Six random characters is 1.07 billion codes. That is the floor, not a round
+ * number: the /pay page is reachable by anyone holding the code, so it has to
+ * be too expensive to guess at. Five would be 33 million, which is a weekend's
+ * work for a script.
+ */
+const CODE_LENGTH = 6;
+
 function newCode() {
-  const bytes = crypto.randomBytes(8);
+  const bytes = crypto.randomBytes(CODE_LENGTH);
   let out = '';
-  for (let i = 0; i < 8; i += 1) out += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  for (let i = 0; i < CODE_LENGTH; i += 1) out += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
   return `MK${out}`;
 }
 
@@ -67,7 +83,9 @@ function digits(value) {
 
 async function loadLink(db, code) {
   const clean = String(code || '').trim().toUpperCase();
-  if (!/^MK[A-Z0-9]{6,12}$/.test(clean)) return null;
+  // Accepts the shorter codes we issue now AND every longer one already in the
+  // wild — an old link in somebody's WhatsApp must not stop working.
+  if (!/^MK[A-Z0-9]{4,12}$/.test(clean)) return null;
   return (await db.query('SELECT * FROM pay_links WHERE code = $1', [clean])).rows[0] || null;
 }
 
@@ -119,12 +137,12 @@ async function createPayLink(db, input = {}, actor = 'admin') {
     }
     agentId = agent.id;
     amountUgx = amountUgx || Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || revenue.feeConfig().feeUgx);
-    description = description
-      || (agent.fee_exempt
-        // Says on the link itself why an exempt agent has one, so nobody later
-        // reads the payment as proof the exemption ended.
-        ? `makaug agent subscription — 1 month (${agent.full_name}) — voluntary, stays fee-exempt`.slice(0, 200)
-        : `makaug agent subscription — 1 month (${agent.full_name})`.slice(0, 200));
+    // The description is public: it is on the /pay page the agent opens and in
+    // the message they receive. So it says what they are paying for and
+    // nothing else. That an exempt agent is paying by choice is OUR business,
+    // not theirs to read on their own invoice — the team note carries it, and
+    // the dashboard reads it off the agent's own fee_exempt flag.
+    description = description || `makaug agent subscription — 1 month (${agent.full_name})`.slice(0, 200);
     payerName = payerName || agent.full_name || null;
     payerPhone = payerPhone || digits(agent.whatsapp || agent.phone) || null;
   } else if (purpose === 'short_term_fee') {
