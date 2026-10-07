@@ -229,11 +229,23 @@ async function sendPayLink(db, { code, to, actor = 'admin' }) {
   return { code: link.code, url: payUrl(link.code), to: recipient, status: delivery.status, reason: delivery.reason || null };
 }
 
-/** Everything the public page needs. Never includes anything private. */
-async function pageData(db, code) {
+/**
+ * Everything the public page needs. Never includes anything private.
+ *
+ * `track` is why this has options at all. Opening the page stamps opened_at,
+ * which is how we tell "they have seen the bill and not paid" from "it never
+ * reached them". But the code that composes the WhatsApp message also calls
+ * this, to find out whether the page can offer card payments — and it was
+ * stamping opened_at before the message had even been sent. Every link was
+ * born already opened, so that signal was worthless on every link we have.
+ *
+ * Only a real human request may set it. Everything server-side passes
+ * track: false.
+ */
+async function pageData(db, code, { track = true } = {}) {
   const link = await loadLink(db, code);
   if (!link) return null;
-  if (!link.opened_at) db.query('UPDATE pay_links SET opened_at = NOW() WHERE id = $1 AND opened_at IS NULL', [link.id]).catch(() => {});
+  if (track && !link.opened_at) db.query('UPDATE pay_links SET opened_at = NOW() WHERE id = $1 AND opened_at IS NULL', [link.id]).catch(() => {});
   const settings = await billingOps.getSettings(db);
   const card = cardSettings(settings);
   return {
