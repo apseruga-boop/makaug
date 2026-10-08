@@ -6,6 +6,7 @@ const db = require('../config/database');
 const {
   MARKETPLACE_FINAL_TWEAKS_MARKER,
   MARKETPLACE_POLISH_MARKER,
+  MARKETPLACE_VERIFIED_ACTIVE,
   MARKETPLACE_VERIFIED_BILLING_PERIOD,
   MARKETPLACE_VERIFIED_PRICE_UGX
 } = require('../config/marketplacePricing');
@@ -120,10 +121,11 @@ router.get('/config', async (_req, res) => {
       districts: DISTRICTS,
       paid_verification_enabled: false,
       verified_waitlist_enabled: true,
-      verified_pricing: {
-        amount_ugx: MARKETPLACE_VERIFIED_PRICE_UGX,
-        billing_period: MARKETPLACE_VERIFIED_BILLING_PERIOD
-      },
+      // Marketplace Verified is parked (rate card 2026-10-08): no amount is
+      // published while it is inactive.
+      verified_pricing: MARKETPLACE_VERIFIED_ACTIVE
+        ? { active: true, amount_ugx: MARKETPLACE_VERIFIED_PRICE_UGX, billing_period: MARKETPLACE_VERIFIED_BILLING_PERIOD }
+        : { active: false },
       registration_review_target_hours: 24,
       rejection_reasons: REJECTION_REASONS,
       source_drip_available: true,

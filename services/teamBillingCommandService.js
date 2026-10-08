@@ -1,5 +1,7 @@
 'use strict';
 
+const exemption = require('./agentFeeExemption');
+
 /**
  * Team payment commands on WhatsApp.
  *
@@ -73,7 +75,7 @@ async function isTeamPhone(db, phone) {
 async function findAgentByPhone(db, phone) {
   const key = phoneKey(phone);
   return (await db.query(
-    `SELECT id, full_name, phone, whatsapp, status, paid_until, fee_exempt, removed_at, paid_awaiting_approval_at, billing_suspended_at
+    `SELECT id, full_name, phone, whatsapp, status, paid_until, fee_exempt, fee_exempt_until, removed_at, paid_awaiting_approval_at, billing_suspended_at
        FROM agents
       WHERE removed_at IS NULL
         AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
@@ -136,7 +138,7 @@ async function newAgent(db, rest, actor) {
     agent = (await db.query(
       `INSERT INTO agents (full_name, phone, whatsapp, licence_number, registration_status, status, verification_reason)
        VALUES ($1, $2, $2, $3, 'not_registered', 'pending', $4)
-       RETURNING id, full_name, phone, whatsapp, status, paid_until, fee_exempt, paid_awaiting_approval_at`,
+       RETURNING id, full_name, phone, whatsapp, status, paid_until, fee_exempt, fee_exempt_until, paid_awaiting_approval_at`,
       [name, phone, `PENDING-${Date.now()}`, `Set up on WhatsApp by ${actor}`]
     )).rows[0];
     created = true;
@@ -163,7 +165,7 @@ async function sendLink(db, rest, actor) {
   let created;
   let who;
   if (agent) {
-    if (agent.fee_exempt) return `${agent.full_name} joined before the monthly fee — they list for free, no payment needed.`;
+    if (exemption.isExempt(agent)) return `${agent.full_name} is ${exemption.exemptionLabel(agent)} — no payment needed.`;
     created = await payLinks.createPayLink(db, { purpose: 'agent_subscription', agent_id: agent.id }, actor);
     who = `${agent.full_name} (agent, ${agent.status})`;
   } else {
@@ -187,7 +189,8 @@ async function status(db, rest) {
   if (agent) {
     const paidUntil = revenue.isoDay(agent.paid_until);
     let state;
-    if (agent.fee_exempt) state = 'free listing (joined before the fee)';
+    if (exemption.isExempt(agent)) state = exemption.exemptionLabel(agent);
+    else if (exemption.exemptionState(agent).ended && !agent.paid_until) state = `billing started ${exemption.formatExemptionDate(agent.fee_exempt_until)}`;
     else if (agent.billing_suspended_at) state = '⛔ paused — fee unpaid';
     else if (paidUntil && paidUntil >= today) state = `✅ paid until ${paidUntil}`;
     else if (paidUntil) state = `❗ overdue since ${paidUntil}`;

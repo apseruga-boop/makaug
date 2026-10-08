@@ -78,8 +78,12 @@ contains('index.html', 'admin-monetization-products-grid');
 contains('assets/makaug-app.js', 'hydrateMonetizationConfig');
 contains('assets/makaug-app.js', 'data-monetization-hook="listing-boost"');
 contains('assets/makaug-app.js', 'data-monetization-hook="listing-boost-dashboard"');
-contains('assets/makaug-app.js', 'data-monetization-hook="agent-pro"');
-contains('assets/makaug-app.js', 'data-monetization-hook="featured-lender"');
+// Agent Pro and the featured lender slot are retired (rate card 2026-10-08):
+// the hooks render nothing and the admin route cannot switch them back on.
+contains('assets/makaug-app.js', 'function renderAgentProHook(_options = {}) {\n  return "";\n}');
+contains('assets/makaug-app.js', 'function renderFeaturedLenderHook() {\n  return "";\n}');
+contains('routes/admin.js', "return res.status(410).json({ ok: false, error: 'This product is no longer offered.' });");
+contains('routes/monetization.js', "code: 'product_off_sale'");
 contains('assets/makaug-app.js', 'renderAdminMonetizationProducts');
 
 console.log('monetization spine checks passed');

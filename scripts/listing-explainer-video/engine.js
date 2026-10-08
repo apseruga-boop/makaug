@@ -1,3 +1,10 @@
+// Prices come from the rate card (config/pricing.js, loaded by each scene),
+// never typed into a scene.
+document.querySelectorAll('[data-price]').forEach((el) => {
+  const rateCard = window.__MAKAUG_PRICING__;
+  const line = rateCard && rateCard[el.dataset.price];
+  if (line) el.textContent = rateCard.ugx(line.amount_ugx);
+});
 
 const DUR = window.SCENE_DURATION || 60, FADE = 0.4, ANIM = 0.5;
 const ease = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);

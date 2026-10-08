@@ -7,7 +7,7 @@
 <div class="b bot">📄 <b>One last step, Mary — our terms</b>
 
 • Your first <b>7 days are free</b>.
-• After that it is <b>UGX 20,000 per property, per month</b> to stay live. We'll remind you before the free week ends — nothing is charged automatically.
+• After that it is <b><span data-price="private_listing"></span> per property, per month</b> to stay live. We'll remind you before the free week ends — nothing is charged automatically.
 • Your ID is only for checking — it is <b>never shown</b> to anyone.
 • makaug advertises your property; the deal itself is between you and the buyer or tenant.
 
@@ -17,5 +17,14 @@ Reply <b>AGREE</b> to accept and send your property for review, or <b>NO</b> if 
 <div class="b me">AGREE<small>10:06 ✓✓</small></div>
 <div class="b bot">🎉 <b>Your listing has been submitted!</b> …
 ✅ Thank you for agreeing to the terms.
-🗓️ Once approved, your property is live <b>free for 7 days</b>. After that it is UGX 20,000 a month to stay live — we'll message you before then, with how many people have viewed it.<small>10:06</small></div>
-</div></div></div></body></html>
+🗓️ Once approved, your property is live <b>free for 7 days</b>. After that it is <span data-price="private_listing"></span> a month to stay live — we'll message you before then, with how many people have viewed it.<small>10:06</small></div>
+</div></div></div><script src="../../config/pricing.js"></script>
+<script>
+  // Prices from the rate card (config/pricing.js), never typed here.
+  document.querySelectorAll('[data-price]').forEach((el) => {
+    const rateCard = window.__MAKAUG_PRICING__;
+    const line = rateCard && rateCard[el.dataset.price];
+    if (line) el.textContent = rateCard.ugx(line.amount_ugx);
+  });
+</script>
+</body></html>

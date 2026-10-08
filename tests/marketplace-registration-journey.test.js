@@ -44,7 +44,8 @@ test('magic links hash secrets and all nine message templates are usable', () =>
         views: 4, category: 'surveyors', district: 'Wakiso'
       });
       assert.ok(copy.length > 20, `${language}.${type} is missing`);
-      if (type === 'day7') assert.match(copy, /150,000/, `${language}.${type} is missing the approved price`);
+      // Marketplace Verified is parked (rate card 2026-10-08): no message quotes its price.
+      if (type === 'day7') assert.doesNotMatch(copy, /150,000/, `${language}.${type} must not quote the parked Verified price`);
     }
   }
 });

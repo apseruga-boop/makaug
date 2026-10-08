@@ -2,6 +2,7 @@
 
 const PDFDocument = require('pdfkit');
 const catalog = require('../config/aboutCommercialProducts');
+const PRICING = require('../config/pricing');
 const { formatUgxPrice } = require('./aboutCommercialProductsService');
 
 const BRAND = '#15603f';
@@ -21,12 +22,12 @@ function buildAboutCommercialRateCardPdf() {
     const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     doc.fillColor(BRAND).font('Helvetica-Bold').fontSize(12).text('makaug.com');
     doc.fillColor(INK).font('Helvetica-Bold').fontSize(29).text('Commercial products & rate card', { lineGap: 2 });
-    doc.fillColor(MUTED).font('Helvetica').fontSize(11).text('Uganda property listings, visibility products, business services and advertising. Prices in UGX.', { lineGap: 3 });
+    doc.fillColor(MUTED).font('Helvetica').fontSize(11).text(`Uganda property listings, visibility products, business services and advertising. Prices in UGX. ${PRICING.vat.label}.`, { lineGap: 3 });
     doc.moveDown(1.2);
 
     const productRows = [
-      ['Private listing', 'privateListing', 'First 7 days free'],
-      ['Agent subscription', 'agentSubscription', 'Multiple listings'],
+      ['Private listing', 'privateListing', `First ${PRICING.private_listing.trial_days} days free`],
+      ['Agent subscription', 'agentSubscription', 'All listings, verified badge and broker profile included'],
       ['Off-plan development', 'offPlanDevelopment', 'Dedicated project page'],
       ['Featured listing', 'featuredListing', 'Homepage and category visibility'],
       ['Premium listing', 'premiumListing', 'Prime search position'],
@@ -67,7 +68,7 @@ function buildAboutCommercialRateCardPdf() {
     doc.addPage();
     doc.fillColor(BRAND).font('Helvetica-Bold').fontSize(12).text('makaug.com');
     doc.fillColor(INK).font('Helvetica-Bold').fontSize(23).text('Advertising placements');
-    doc.fillColor(MUTED).font('Helvetica').fontSize(10).text('Sold in 7-day blocks. Monthly bookings (4 weeks) receive 10% off. One advertiser per slot per week.');
+    doc.fillColor(MUTED).font('Helvetica').fontSize(10).text(`Sold in 7-day blocks. Bookings of 4 weeks or more receive ${PRICING.display.four_week_discount_percent}% off. One advertiser per slot per week. ${PRICING.vat.label}.`);
     doc.moveDown(.8);
     row(['Page', 'Placement / format', 'UGX / week'], [115, pageWidth - 230, 115], true);
     catalog.advertisingPlacements.forEach((item, index) => {
@@ -78,14 +79,14 @@ function buildAboutCommercialRateCardPdf() {
         doc.moveDown(.6);
         row(['Page', 'Placement / format', 'UGX / week'], [115, pageWidth - 230, 115], true);
       }
-      row([item.page, `${item.placement}\n${item.format}`, formatUgxPrice(item.amount)], [115, pageWidth - 230, 115]);
+      row([item.page, `${item.placement}\n${item.format}`, item.amount == null ? 'Price on request' : formatUgxPrice(item.amount)], [115, pageWidth - 230, 115]);
     });
 
     ensure(72);
     doc.moveDown(.8).fillColor(PALE).roundedRect(doc.page.margins.left, doc.y, pageWidth, 58, 8).fill();
     doc.fillColor(INK).font('Helvetica-Bold').fontSize(10).text('Book or ask a question', doc.page.margins.left + 12, doc.y + 12);
     doc.fillColor(MUTED).font('Helvetica').fontSize(9).text('WhatsApp 0780 863 394 · info@makaug.com · makaug.com/advertise', { lineGap: 2 });
-    doc.moveDown(2.4).fontSize(8).text('Rate guide dated 10 September 2026. Items marked for commercial confirmation in the source brief remain subject to written quotation. VAT treatment should be confirmed before invoicing.');
+    doc.moveDown(2.4).fontSize(8).text(`Rate card ${PRICING.version}. ${PRICING.vat.label}.`);
     doc.end();
   });
 }

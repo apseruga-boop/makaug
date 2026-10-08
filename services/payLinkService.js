@@ -16,6 +16,8 @@
 const crypto = require('crypto');
 
 const logger = require('../config/logger');
+const PRICING = require('../config/pricing');
+const { exemptionState, exemptionLabel } = require('./agentFeeExemption');
 const revenue = require('./revenueService');
 const billingOps = require('./billingOpsService');
 const revolut = require('./revolutMerchantService');
@@ -94,7 +96,16 @@ async function loadLink(db, code) {
  * agent and amount from the last 30 days, so a second reminder sends the same
  * link rather than a new one.
  */
+// Retired and parked products (config/pricing.js off_sale) can't be paid for.
+const OFF_SALE_KEYS = new Set(Object.keys(PRICING.off_sale));
+function assertNotOffSale(...keys) {
+  if (keys.some((key) => key && OFF_SALE_KEYS.has(String(key)))) {
+    throw revenue.httpError(410, 'This product is no longer offered.');
+  }
+}
+
 async function createPayLink(db, input = {}, actor = 'admin') {
+  assertNotOffSale(input.purpose, input.product_key);
   const purpose = PURPOSES.has(input.purpose)
     ? input.purpose
     : (input.property_id ? 'listing_fee' : (input.agent_id ? 'agent_subscription' : (input.st_listing_id ? 'short_term_fee' : 'other')));
@@ -118,30 +129,32 @@ async function createPayLink(db, input = {}, actor = 'admin') {
     if (property.found_online) throw revenue.httpError(409, 'Found-online listings are free — nobody is charged for them');
     if (property.agent_id) throw revenue.httpError(409, "This is an agent's listing — it is covered by the agent's monthly fee");
     propertyId = property.id;
-    amountUgx = amountUgx || Number(settings.lister_fee?.monthly_ugx || 20000);
+    amountUgx = amountUgx || PRICING.private_listing.amount_ugx;
     description = description || `makaug listing — 1 month: ${property.title || 'your property'}`.slice(0, 200);
     payerName = payerName || property.lister_name || null;
     payerPhone = payerPhone || digits(property.lister_phone) || null;
   } else if (purpose === 'agent_subscription') {
-    const agent = (await db.query('SELECT id, full_name, phone, whatsapp, monthly_fee_ugx, fee_exempt, approved_at, status FROM agents WHERE id = $1::uuid', [input.agent_id])).rows[0];
+    const agent = (await db.query('SELECT id, full_name, phone, whatsapp, monthly_fee_ugx, fee_exempt, fee_exempt_until, approved_at, status FROM agents WHERE id = $1::uuid', [input.agent_id])).rows[0];
     if (!agent) throw revenue.httpError(404, 'Agent not found');
-    // Agents approved before the fee started list for free, for good — so a
-    // link is never created for one by accident.
-    //
-    // But some of them have said they are happy to pay anyway, and refusing
-    // their money is its own kind of silly. allow_exempt is how staff say they
-    // meant it: the link is created, and the exemption is left exactly as it
-    // was. Paying does not end it, and not paying costs them nothing.
-    if (agent.fee_exempt && input.allow_exempt !== true) {
-      throw revenue.httpError(409, `${agent.full_name} joined before the monthly fee and lists for free — no payment needed`);
+    // A still-exempt agent (fee_exempt and before fee_exempt_until) gets no
+    // link by accident. Some have said they are happy to pay anyway:
+    // allow_exempt is staff's explicit, logged override. The exemption is left
+    // exactly as it was. Once the end date arrives they are billable normally.
+    if (exemptionState(agent).exempt) {
+      if (input.allow_exempt !== true) {
+        throw revenue.httpError(409, `${agent.full_name} is ${exemptionLabel(agent)} — no payment needed`);
+      }
+      logger.info('Pay link for a fee-exempt agent created with the staff override', {
+        event: 'pay_link_exempt_override', agentId: agent.id, by: actor, exemption: exemptionLabel(agent)
+      });
     }
     agentId = agent.id;
-    amountUgx = amountUgx || Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || revenue.feeConfig().feeUgx);
+    amountUgx = amountUgx || PRICING.agent_subscription.amount_ugx;
     // The description is public: it is on the /pay page the agent opens and in
     // the message they receive. So it says what they are paying for and
     // nothing else. That an exempt agent is paying by choice is OUR business,
     // not theirs to read on their own invoice — the team note carries it, and
-    // the dashboard reads it off the agent's own fee_exempt flag.
+    // the dashboard reads it off the agent's own exemption.
     description = description || `makaug agent subscription — 1 month (${agent.full_name})`.slice(0, 200);
     payerName = payerName || agent.full_name || null;
     payerPhone = payerPhone || digits(agent.whatsapp || agent.phone) || null;
@@ -153,13 +166,14 @@ async function createPayLink(db, input = {}, actor = 'admin') {
     if (!st) throw revenue.httpError(404, 'Short-stay listing not found');
     if (['paid', 'waived'].includes(String(st.listing_fee_status))) throw revenue.httpError(409, `This listing's fee is already ${st.listing_fee_status}`);
     stListingId = st.id;
-    amountUgx = amountUgx || Number(st.listing_fee_ugx || 50000);
+    amountUgx = amountUgx || Number(st.listing_fee_ugx || PRICING.short_stay_host.amount_ugx);
     description = description || `makaug short stay — ${Number(st.listing_term_months || 3)} months: ${st.title || st.reference}`.slice(0, 200);
     payerName = payerName || st.host_name || null;
     payerPhone = payerPhone || digits(st.host_phone) || null;
   } else if (purpose === 'hosted_payment') {
-    const pay = (await db.query('SELECT id, purpose, amount, currency, payer_name, payer_phone FROM payments WHERE id = $1::uuid', [input.payment_id])).rows[0];
+    const pay = (await db.query('SELECT id, purpose, amount, currency, payer_name, payer_phone, metadata FROM payments WHERE id = $1::uuid', [input.payment_id])).rows[0];
     if (!pay) throw revenue.httpError(404, 'Payment not found');
+    assertNotOffSale(pay.purpose, pay.metadata?.product_key);
     paymentId = pay.id;
     amountUgx = amountUgx || Math.round(Number(pay.amount));
     description = description || `makaug ${String(pay.purpose || 'payment').replace(/_/g, ' ')}`;

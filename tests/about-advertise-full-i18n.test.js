@@ -114,7 +114,9 @@ assert(app.includes('openAdvertisingPlacementPreview(advertisingPlacementPreview
 const packageFields = ['label', 'description', 'copy', 'locations', 'bestFor', 'headline', 'capture'];
 const packageKeys = Array.from(app.matchAll(/^\s{2}([a-z_]+): \{$/gm), (match) => match[1])
   .filter((key) => app.includes(`"advertise.package.${key}.label"`));
-assert(packageKeys.length >= 10, 'all advertising packages should have localized dynamic copy');
+// 9 since the email + WhatsApp blast was removed from sale (rate card 2026-10-08).
+assert(packageKeys.length >= 9, 'all advertising packages should have localized dynamic copy');
+assert(!packageKeys.includes('email_whatsapp_blast'), 'the removed blast package must not come back');
 for (const packageKey of packageKeys) {
   for (const field of packageFields) {
     const key = `advertise.package.${packageKey}.${field}`;

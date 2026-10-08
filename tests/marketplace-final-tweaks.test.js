@@ -25,7 +25,8 @@ test('expanded tier explainer restores three compact bordered cards', () => {
   assert.match(html, /marketplace-tier-card rounded-lg border border-gray-200/);
   assert.match(html, /marketplace-tier-card rounded-lg border border-blue-100/);
   assert.match(html, /marketplace-tier-card rounded-lg border border-blue-200/);
-  assert.match(html, /data-marketplace-i18n="verifiedPrice">UGX 150,000\/month/);
+  // Marketplace Verified is parked (rate card 2026-10-08): the price pill is hidden and empty.
+  assert.match(html, /class="hidden [^"]*" data-marketplace-verified-upsell data-marketplace-i18n="verifiedPrice"><\/span>/);
   assert.match(html, /data-marketplace-i18n="joinWaitlist">Join the Verified waitlist/);
 });
 

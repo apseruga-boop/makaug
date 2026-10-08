@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const db = require('../config/database');
 const smsService = require('../models/smsService');
 const logger = require('../config/logger');
+const PRICING = require('../config/pricing');
+const agentFeeExemption = require('../services/agentFeeExemption');
 const { DISTRICTS } = require('../utils/constants');
 const { searchOrderBySql } = require('../utils/searchRankingSql');
 const {
@@ -343,7 +345,7 @@ const T = {
     genericWebhookError: 'Wabaddewo ensobi. Gezaako nate oba genda ku {url}'
   },
   sw: {
-    welcome: '🏠 Karibu *makaug* - Jukwaa la bure la mali Uganda!\n\nUnataka kufanya nini?\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta mali\n3️⃣ Pata wakala\n\nJibu 1, 2 au 3',
+    welcome: '🏠 Karibu *makaug* - jukwaa la mali la Uganda!\n\nUnataka kufanya nini?\n1️⃣ Orodhesha mali yangu (siku 7 za kwanza bila malipo)\n2️⃣ Tafuta mali\n3️⃣ Pata wakala\n\nJibu 1, 2 au 3',
     askListingType: '🏠 Unaorodhesha nini?\n1️⃣ Nyumba/Mali ya KUUZA\n2️⃣ Nyumba/Mali ya KUKODISHA\n3️⃣ Ardhi/Kiwanja\n4️⃣ Malazi ya wanafunzi\n5️⃣ Mali ya biashara',
     askTitle: '✏️ Toa kichwa kifupi cha mali yako:',
     askDistrict: '📍 Wilaya ipi? (mf. Kampala, Wakiso, Mukono...)',
@@ -399,28 +401,28 @@ const T = {
     genericWebhookError: 'Samahani, hitilafu imetokea. Jaribu tena au tembelea {url}'
   },
   ac: {
-    welcome: "🏠 Itye ber i *makaug* — kabedo me free property i Uganda!\n\nIn mito timo ngo?\n1️⃣ Keto ot megi\n2️⃣ Yeny ot\n3️⃣ Nong agent\n\nDwog 1, 2 onyo 3",
+    welcome: "🏠 Itye ber i *makaug* — kabedo me property pa Uganda!\n\nIn mito timo ngo?\n1️⃣ Keto ot megi (nino 7 mukwongo pe ki culo)\n2️⃣ Yeny ot\n3️⃣ Nong agent\n\nDwog 1, 2 onyo 3",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     invalidInput: '❓ Pe atamo. Tim ber idwog ki namba me ayero.',
     languageUpdated: '✅ Dhok ma idiyo olokke.',
     restarted: '🔄 Session ocake manyen.'
   },
   ny: {
-    welcome: "🏠 Kaza omu *makaug* — ahari free property platform ya Uganda!\n\nNoyenda kukora ki?\n1️⃣ Kuteeka property yangye\n2️⃣ Kushangisa property\n3️⃣ Kushanga agent\n\nGarukamu 1, 2 nari 3",
+    welcome: "🏠 Kaza omu *makaug* — property platform ya Uganda!\n\nNoyenda kukora ki?\n1️⃣ Kuteeka property yangye (ebiro 7 eby'okubanza toshashura)\n2️⃣ Kushangisa property\n3️⃣ Kushanga agent\n\nGarukamu 1, 2 nari 3",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     invalidInput: '❓ Tinkyetegire. Garukamu namba emwe omu zirikurondorwa.',
     languageUpdated: '✅ Orurimi ruhindukire.',
     restarted: '🔄 Session etandikire bupya.'
   },
   rn: {
-    welcome: "🏠 Kaze kuri *makaug* — urubuga rw'ubuntu rw'imitungo muri Uganda!\n\nUshaka gukora iki?\n1️⃣ Kwandikisha umutungo\n2️⃣ Gushaka umutungo\n3️⃣ Gushaka agent\n\nSubiza 1, 2 canke 3",
+    welcome: "🏠 Kaze kuri *makaug* — urubuga rw'imitungo rwa Uganda!\n\nUshaka gukora iki?\n1️⃣ Kwandikisha umutungo (iminsi 7 ya mbere ntiwishyura)\n2️⃣ Gushaka umutungo\n3️⃣ Gushaka agent\n\nSubiza 1, 2 canke 3",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     invalidInput: '❓ Sinabitahura. Subiza nimero iri hejuru.',
     languageUpdated: '✅ Ururimi rwahinduwe.',
     restarted: '🔄 Session yatanguye bundi bushya.'
   },
   sm: {
-    welcome: "🏠 Mirembe ku *makaug* — urubuga rwa property olwa bwerere mu Uganda!\n\nOyagala okukola ki?\n1️⃣ Okuteeka property yange\n2️⃣ Okunoonya property\n3️⃣ Okunoonya agent\n\nDdamu 1, 2 oba 3",
+    welcome: "🏠 Mirembe ku *makaug* — urubuga rwa property olwa Uganda!\n\nOyagala okukola ki?\n1️⃣ Okuteeka property yange (ennaku 7 ezisooka tosasula)\n2️⃣ Okunoonya property\n3️⃣ Okunoonya agent\n\nDdamu 1, 2 oba 3",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     invalidInput: '❓ Tebinnyonnyodde bulungi. Ddamu namba emu ku ziri waggulu.',
     languageUpdated: '✅ Olulimi luhinduddwa.',
@@ -615,7 +617,7 @@ const WHATSAPP_LANGUAGE_MENU = IS_SOUTH_AFRICA
   : 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية';
 
 T.am = Object.assign({}, T.en, {
-  welcome: "🏠 ወደ *makaug* እንኳን በደህና መጡ - የኡጋንዳ ነፃ የንብረት መድረክ!\n\nምን ማድረግ ይፈልጋሉ?\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\n1፣ 2 ወይም 3 ብለው ይመልሱ",
+  welcome: "🏠 ወደ *makaug* እንኳን በደህና መጡ - የኡጋንዳ የንብረት መድረክ!\n\nምን ማድረግ ይፈልጋሉ?\n1️⃣ ንብረቴን ዘርዝር (የመጀመሪያዎቹ 7 ቀናት ያለ ክፍያ)\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\n1፣ 2 ወይም 3 ብለው ይመልሱ",
   chooseLanguage: WHATSAPP_LANGUAGE_MENU,
   askListingType: '🏠 ምን እየዘረዘሩ ነው?\n1️⃣ ለሽያጭ ቤት/ንብረት\n2️⃣ ለኪራይ ቤት/ንብረት\n3️⃣ መሬት/ፕሎት\n4️⃣ የተማሪ መኖሪያ\n5️⃣ የንግድ ንብረት',
   askOwnership: '✅ የዚህ ንብረት ባለቤት ነዎት ወይስ በባለቤት ስም የሚዘረዝር ወኪል?\n1️⃣ ባለቤት ነኝ\n2️⃣ ወኪል ነኝ',
@@ -695,7 +697,7 @@ T.am = Object.assign({}, T.en, {
 });
 
 T.ar = Object.assign({}, T.en, {
-  welcome: "🏠 مرحباً بك في *makaug* - منصة العقارات المجانية في أوغندا!\n\nماذا تريد أن تفعل؟\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n\nأرسل 1 أو 2 أو 3",
+  welcome: "🏠 مرحباً بك في *makaug* - منصة العقارات في أوغندا!\n\nماذا تريد أن تفعل؟\n1️⃣ أدرج عقاري (أول 7 أيام بلا رسوم)\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n\nأرسل 1 أو 2 أو 3",
   chooseLanguage: WHATSAPP_LANGUAGE_MENU,
   askListingType: '🏠 ماذا تريد أن تدرج؟\n1️⃣ بيت/عقار للبيع\n2️⃣ بيت/عقار للإيجار\n3️⃣ أرض/قطعة\n4️⃣ سكن طلاب\n5️⃣ عقار تجاري',
   askOwnership: '✅ هل أنت مالك هذا العقار أم وكيل يدرجه نيابة عن المالك؟\n1️⃣ أنا المالك\n2️⃣ أنا وكيل',
@@ -2001,7 +2003,7 @@ function mapOwnershipInput(input) {
 //
 // The commercial vocabulary here was commercial|office|retail|warehouse|shop|
 // business space. "Restaurant" was not in it, so "for rent" won and we searched
-// residential rentals: the man was offered a single room at UGX 300,000 a month
+// residential rentals: the man was offered a single room at 300k a month
 // as premises for his restaurant. The SQL that categorises listings has known
 // restaurant was commercial all along (routes/properties.js), so the two halves
 // of the system disagreed about the same word.
@@ -2139,6 +2141,7 @@ function isBadSellerAreaHint(candidate) {
   const clean = normalizeInput(candidate).toLowerCase();
   if (!clean || clean.length < 2) return true;
   if (/^(sale|rent|land|plot|property|house|home|uganda|website|whatsapp)$/i.test(clean)) return true;
+  // "free property" stays an input-only intent (people still type it); no reply says it.
   return /\b(makaug|guide me|listing process|whatsapp listing|property platform|free property)\b/i.test(clean);
 }
 
@@ -4410,7 +4413,7 @@ async function findEmployeeApprovedAgents(query = '') {
   const clean = normalizeInput(query);
   if (!clean) return [];
   const result = await db.query(
-    `SELECT id, full_name, company_name, phone, whatsapp, email, fee_exempt, paid_until, pay_link_sent_at
+    `SELECT id, full_name, company_name, phone, whatsapp, email, fee_exempt, fee_exempt_until, paid_until, pay_link_sent_at
        FROM agents
       WHERE status = 'approved'
         AND (
@@ -6854,7 +6857,7 @@ const AGENT_IS_IT_DONE = /\b(status|is it (done|live|up|posted|approved)|did (it
 /**
  * "Can I tap the link" — the question we had no idea how to hear.
  *
- * 8 Oct 2026, 14:38. Migadde Hakim was approved and sent the UGX 50,000
+ * 8 Oct 2026, 14:38. Migadde Hakim was approved and sent the agent-plan
  * payment link. A minute later he asked "What should I do now?" and "Can I tap
  * the link". The first matched the how-to-post pattern and he was told to send
  * a property; the second matched nothing and he got the menu. He had just been
@@ -7968,12 +7971,13 @@ async function handleEmployeeWhatsappIntake({
       company_name: agent.company_name,
       phone: agent.phone,
       whatsapp: agent.whatsapp,
-      fee_exempt: agent.fee_exempt === true,
+      fee_exempt: agentFeeExemption.isExempt(agent),
+      fee_exempt_label: agentFeeExemption.exemptionLabel(agent),
       paid_until: agent.paid_until || null
     }));
     await replaceEmployeeSession(phone, 'employee_pay_link_confirm', data);
     const options = data.pay_link_candidates
-      .map((agent, index) => `${index + 1} — ${agent.full_name}${agent.company_name ? ` (${agent.company_name})` : ''}${agent.fee_exempt ? ' — lists free (joined before the fee)' : ''}`)
+      .map((agent, index) => `${index + 1} — ${agent.full_name}${agent.company_name ? ` (${agent.company_name})` : ''}${agent.fee_exempt ? ` — ${agent.fee_exempt_label}` : ''}`)
       .join('\n');
     return {
       handled: true,
@@ -7988,11 +7992,21 @@ async function handleEmployeeWhatsappIntake({
       await replaceEmployeeSession(phone, 'employee_pay_link_lookup', data);
       return { handled: true, nextStep: 'employee_pay_link_lookup', message: employeePayLinkLookupPrompt() };
     }
+    // A still-exempt agent needs the explicit override: OVERRIDE <number>.
+    const overrideMatch = cleanBody.match(/^override\s+(\d+)$/i);
     const selected = Array.isArray(data.pay_link_candidates)
-      ? data.pay_link_candidates[Number.parseInt(cleanBody, 10) - 1]
+      ? data.pay_link_candidates[Number.parseInt(overrideMatch ? overrideMatch[1] : cleanBody, 10) - 1]
       : null;
     if (!selected) {
       return { handled: true, nextStep: currentStep, message: 'Reply with one of the numbers shown, or *NO* to search again.' };
+    }
+    if (selected.fee_exempt && !overrideMatch) {
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: `${selected.full_name} is ${selected.fee_exempt_label || 'fee-exempt'} — no payment needed.\n\n`
+          + `If they have asked to pay anyway, reply *OVERRIDE ${Number.parseInt(cleanBody, 10)}* and the link goes out (the exemption stays either way). Or *NO* to search again.`
+      };
     }
     const agentPhone = String(selected.whatsapp || selected.phone || '').replace(/\D/g, '');
     if (agentPhone.length < 9) {
@@ -8008,9 +8022,9 @@ async function handleEmployeeWhatsappIntake({
         name: selected.full_name,
         phone: agentPhone,
         agentId: selected.id,
-        // They list free. Staff choosing them by name is staff saying they
-        // know that and the agent has offered to pay anyway.
-        allowExempt: selected.fee_exempt === true,
+        // Only after staff typed OVERRIDE for a still-exempt agent (logged
+        // by createPayLink).
+        allowExempt: Boolean(overrideMatch) && selected.fee_exempt === true,
         requestedBy: phone
       });
     } catch (error) {
@@ -8034,7 +8048,7 @@ async function handleEmployeeWhatsappIntake({
         + `Amount: ${sent.fee_label} a month\n`
         + `Number: ${sent.recipient}\n`
         + `${sent.url}\n\n`
-        + (selected.fee_exempt ? 'They list free because they joined before the fee — this is a voluntary payment and the exemption stays either way.\n\n' : '')
+        + (selected.fee_exempt ? `They are ${selected.fee_exempt_label || 'fee-exempt'} — this is a voluntary payment and the exemption stays either way.\n\n` : '')
         + (sent.reused ? 'This is the link they were already sent, not a second one, so one payment settles it.\n\n' : '')
         + 'Quote that reference if they pay by Mobile Money. I will tell you the moment it is paid, and remind you if it goes quiet.'
     };
@@ -8066,7 +8080,9 @@ async function handleEmployeeWhatsappIntake({
         name: existingAgent?.full_name || contact.fullName,
         phone: dialable,
         agentId: existingAgent?.id || null,
-        allowExempt: existingAgent?.fee_exempt === true,
+        // A registered, still-exempt agent is refused here (createPayLink
+        // 409); the by-name flow has the explicit OVERRIDE for that.
+        allowExempt: false,
         includeVideo: !existingAgent,
         requestedBy: phone
       });
@@ -14166,8 +14182,7 @@ async function agentJoinRequestReply({ phone, text = '' }) {
       `SELECT id, full_name, status FROM agents WHERE removed_at IS NULL AND (RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1 OR RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1) ORDER BY created_at DESC LIMIT 1`,
       [digits.slice(-9)])).rows[0] || null;
   } catch (_ignored) { existing = null; }
-  let fee = 50000;
-  try { fee = Number((await require('../services/billingOpsService').getSettings(db)).agent_fee?.monthly_ugx || 50000); } catch (_ignored) { /* default */ }
+  const fee = PRICING.agent_subscription.amount_ugx;
 
   queueExplainerVideoOnce({ phone, kind: 'agent' });
   deferWhatsappWork('WhatsApp agent join request', async () => {
@@ -14306,11 +14321,10 @@ async function payLinkMethodLine(code) {
  *
  * Three things here are deliberate.
  *
- * `allowExempt` — agents approved before the fee started list for free, and
- * createPayLink refuses to bill them, on purpose. But several have said they
- * are happy to pay anyway. Staff choosing them by name is them saying they
- * meant it; the exemption is untouched either way, so paying buys goodwill and
- * not paying costs the agent nothing.
+ * `allowExempt` — a fee-exempt agent (until their fee_exempt_until date) is
+ * refused by createPayLink on purpose. Some have said they are happy to pay
+ * anyway: staff typing OVERRIDE is them saying they meant it (logged); the
+ * exemption is untouched either way.
  *
  * `includeVideo` — a prospect has never heard of us. A payment link on its own
  * from an unknown number is a scam, so the joining film goes first and the
@@ -16419,14 +16433,13 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   if (step === 'ask_terms') {
     const answer = normalizeInput(cleanBody).toLowerCase();
     if (/^(i\s+)?(agree|accept|agreed|i agree|nzikiriza|nkkiriza|nakubali|nakubaliana|kubali)\b/.test(answer) || compactUpper === 'AGREE' || isAffirmativeReply(cleanBody)) {
-      const settings = await require('../services/billingOpsService').getSettings(db).catch(() => ({}));
       const docs = require('../services/listingDocsService');
       const acceptance = {
         terms_accepted_at: new Date().toISOString(),
         terms_version: docs.LISTER_TERMS_VERSION,
         terms_accepted_phone: String(phone).replace(/\D/g, ''),
         terms_accepted_text: cleanBody.slice(0, 80),
-        lister_fee_terms: { free_days: Number(settings.lister_fee?.free_days ?? 7), monthly_ugx: Number(settings.lister_fee?.monthly_ugx || 20000) }
+        lister_fee_terms: { free_days: PRICING.private_listing.trial_days, monthly_ugx: PRICING.private_listing.amount_ugx, rate_card_version: PRICING.version }
       };
       await patchDraft(phone, acceptance);
       const result = await submitWhatsappListingDraft({ phone, lang, draft: { ...draft, ...acceptance } });
@@ -16436,7 +16449,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
       if (!result.propertyId) return respond(result.message, result.nextStep);
       const fee = acceptance.lister_fee_terms;
-      return respond(`${result.message}\n\n✅ Thank you for agreeing to the terms.\n🗓️ Once approved, your property is live *free for ${fee.free_days} days*. After that it is UGX ${fee.monthly_ugx.toLocaleString('en-US')} a month to stay live — we'll message you before then, with how many people have viewed it.`, result.nextStep);
+      return respond(`${result.message}\n\n✅ Thank you for agreeing to the terms.\n🗓️ Once approved, your property is live *free for ${fee.free_days} days*. After that it is UGX ${fee.monthly_ugx.toLocaleString('en-US')} a month to stay live (${PRICING.vat.label.toLowerCase()}) — we'll message you before then, with how many people have viewed it.`, result.nextStep);
     }
     if (isNegativeReply(cleanBody) || /^(no|cancel|stop)\b/.test(answer)) {
       await patchSessionData(phone, { lister_terms_declined_at: new Date().toISOString() });

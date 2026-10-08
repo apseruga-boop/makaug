@@ -20,6 +20,7 @@ const { agentGreetingName } = require('./agentNameService');
 
 const logger = require('../config/logger');
 const { runBackgroundWork } = require('../config/database');
+const { activeExemptionSql } = require('./agentFeeExemption');
 const { deliverWhatsapp } = require('./leadHandoffService');
 const { sendSupportEmail } = require('./emailService');
 const { logNotification } = require('./notificationLogService');
@@ -825,8 +826,9 @@ async function buildDailyReport(db) {
        (SELECT COALESCE(SUM(amount_ugx), 0) FROM revenue_entries WHERE direction = 'in' AND voided_at IS NULL AND paid_at >= NOW() - INTERVAL '24 hours')::bigint AS in_24h,
        (SELECT COUNT(*) FROM revenue_entries WHERE voided_at IS NULL AND verified_status <> 'verified')::int AS unchecked,
        (SELECT COUNT(*) FROM money_sms_inbox WHERE matched_entry_id IS NULL AND direction = 'in')::int AS unrecorded_sms,
-       (SELECT COUNT(*) FROM agents WHERE status = 'approved' AND removed_at IS NULL AND NOT fee_exempt
-          AND (paid_until IS NULL OR paid_until < (NOW() AT TIME ZONE 'Africa/Kampala')::date))::int AS overdue`
+       (SELECT COUNT(*) FROM agents WHERE status = 'approved' AND removed_at IS NULL
+          AND NOT ${activeExemptionSql('agents', "(NOW() AT TIME ZONE 'Africa/Kampala')::date")}
+          AND COALESCE(paid_until, fee_exempt_until, '1900-01-01'::date) < (NOW() AT TIME ZONE 'Africa/Kampala')::date)::int AS overdue`
   ).then((r) => r.rows[0]).catch(() => null);
   if (moneyRow) {
     lines.push('', `Money in (last 24h): UGX ${Number(moneyRow.in_24h).toLocaleString('en-US')} · not yet checked: ${moneyRow.unchecked} · MoMo SMS not recorded: ${moneyRow.unrecorded_sms} · agents behind on fees: ${moneyRow.overdue} — Admin › Sales & Revenue.`);

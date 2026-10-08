@@ -1,5 +1,7 @@
 'use strict';
 
+const PRICING = require('../config/pricing');
+
 /**
  * The people we have pitched, before they are agents.
  *
@@ -157,7 +159,7 @@ function prospectNextStep(row = {}) {
     case 'signed_up':
       return 'Approve them in the Accounts tab';
     case 'approved':
-      return row.paid_until ? 'Done — paid up' : 'Chase the UGX 50,000 payment';
+      return row.paid_until ? 'Done — paid up' : `Chase the ${PRICING.ugx(PRICING.agent_subscription.amount_ugx)} payment`;
     case 'declined':
       return 'Nothing — they said no';
     default:

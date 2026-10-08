@@ -30,7 +30,6 @@ const CURATED_FALLBACKS = Object.freeze({
     'advertise.contactEmail': 'Cwal email: info@makaug.com',
     'advertise.map': 'Map me kabedo',
     'advertise.package.whatsapp_chatbot_sponsor.label': 'Sponsor pa WhatsApp Chatbot',
-    'advertise.package.email_whatsapp_blast.locations': 'Campaign me Email|Campaign me WhatsApp'
   },
   ny: {
     'advertise.contactEmail': 'Yoherereza email: info@makaug.com',
@@ -48,8 +47,6 @@ const CURATED_FALLBACKS = Object.freeze({
     'advertise.contactEmail': 'Weereza email: info@makaug.com',
     'advertise.browserBrand': 'makaug.com · Property ya Uganda',
     'advertise.package.regional_search_boost.description': 'Teeka property, agent oba business mu maaso g\'abantu abanoonya mu district n\'ebitundu by\'olonze.',
-    'advertise.package.email_whatsapp_blast.locations': 'Campaign ya Email|Campaign ya WhatsApp',
-    'advertise.package.email_whatsapp_blast.capture': 'Campaign ya Email',
     'advertise.package.haymaker_all_platform.locations': 'Homepage|Okunoonya|Map|WhatsApp|Email|Cards za agents'
   }
 });

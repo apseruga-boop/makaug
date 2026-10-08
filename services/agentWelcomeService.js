@@ -1,5 +1,7 @@
 'use strict';
 
+const PRICING = require('../config/pricing');
+
 const { agentGreetingName } = require('./agentNameService');
 
 // Welcome pack for an agent who has just joined makaug: the platform's real
@@ -140,7 +142,7 @@ const VERTICALS = 'Rent · Buy · Land · Commercial · Students · Off Plan · 
  */
 function networkAudience() {
   const monthly = toInt(process.env.NETWORK_MONTHLY_VISITORS || 10000) || 10000;
-  const target = toInt(process.env.NETWORK_MONTHLY_VISITORS_TARGET || 20000) || 20000;
+  const target = toInt(process.env.NETWORK_MONTHLY_VISITORS_TARGET || 20_000) || 20_000; // visitors, not money
   const countries = toInt(process.env.NETWORK_COUNTRIES || 7) || 7;
   return { monthly, target, countries, target_month: targetMonthName() };
 }
@@ -211,7 +213,7 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push('• Your phone number sits on your listing — buyers call you directly');
   lines.push('• Buyers arrive from Google, our Ask AI search and our WhatsApp assistant');
   lines.push('• Video-first listings: a walk-through can sell to someone who is 6,000 km away');
-  lines.push('• Every listing gets its first 7 days free');
+  lines.push(`• Your listings are covered by your ${PRICING.ugx(PRICING.agent_subscription.amount_ugx)} monthly plan`);
   lines.push('• Built for investors too: off plan, buy-to-let and a mortgage finder');
   lines.push('• You get a weekly WhatsApp report: views, visitors, enquiries and the countries watching you');
 

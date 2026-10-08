@@ -5,6 +5,8 @@ const crypto = require('crypto');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
+const PRICING = require('../config/pricing');
+const agentFeeExemption = require('../services/agentFeeExemption');
 const { requireAdminApiKey } = require('../middleware/auth');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
@@ -7261,6 +7263,14 @@ router.get('/monetization/products', async (_req, res, next) => {
 router.patch('/monetization/products/:key', async (req, res, next) => {
   try {
     const productKey = cleanText(req.params.key);
+    // Prices are on the rate card (config/pricing.js); retired and parked
+    // products cannot be switched back on from here.
+    if (Object.prototype.hasOwnProperty.call(req.body, 'price')) {
+      return res.status(409).json({ ok: false, error: 'Product prices come from the rate card (config/pricing.js).' });
+    }
+    if (PRICING.off_sale[productKey] && parseBooleanLike(req.body.active, false)) {
+      return res.status(410).json({ ok: false, error: 'This product is no longer offered.' });
+    }
     const updates = [];
     const values = [];
     const add = (column, value, cast = '') => {
@@ -7333,7 +7343,9 @@ router.patch('/advertising/placements/:key', async (req, res, next) => {
     };
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'is_active')) add('is_active', !!req.body.is_active);
-    if (Object.prototype.hasOwnProperty.call(req.body, 'base_price_ugx')) add('base_price_ugx', Math.max(0, parseInt(req.body.base_price_ugx, 10) || 0));
+    if (Object.prototype.hasOwnProperty.call(req.body, 'base_price_ugx')) {
+      return res.status(409).json({ ok: false, error: 'Placement prices come from the rate card (config/pricing.js).' });
+    }
     if (Object.prototype.hasOwnProperty.call(req.body, 'notes')) add('notes', String(req.body.notes || '').trim() || null);
     if (Object.prototype.hasOwnProperty.call(req.body, 'preview_image_url')) add('preview_image_url', String(req.body.preview_image_url || '').trim() || null);
     if (Object.prototype.hasOwnProperty.call(req.body, 'headline')) add('headline', String(req.body.headline || '').trim() || null);
@@ -8667,6 +8679,7 @@ router.get('/agents', async (req, res, next) => {
         a.paid_until,
         a.paid_awaiting_approval_at,
         a.fee_exempt,
+        a.fee_exempt_until,
         a.fee_exempt_reason,
         a.fee_offer_mode,
         a.fee_offer_reason,
@@ -9938,7 +9951,7 @@ router.get('/revenue/export.csv', async (req, res, next) => {
 // Record a payment from an existing agent (monthly renewal).
 router.post('/revenue/agents/:id/payment', async (req, res, next) => {
   try {
-    const agent = (await db.query('SELECT id, full_name, phone, whatsapp, paid_until, fee_exempt FROM agents WHERE id = $1', [req.params.id])).rows[0];
+    const agent = (await db.query('SELECT id, full_name, phone, whatsapp, paid_until, fee_exempt, fee_exempt_until FROM agents WHERE id = $1', [req.params.id])).rows[0];
     if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
     const result = await revenue.recordAgentPayment(db, { agent, payment: req.body || {}, actor: adminActorId(req) });
     // Paying brings a taken-down agent straight back, exactly as they were.
@@ -10255,7 +10268,7 @@ router.patch('/agents/:id/status', async (req, res, next) => {
     let beforeApproval = null;
     if (status === 'approved') {
       beforeApproval = (await db.query(
-        `SELECT id, full_name, phone, whatsapp, status, fee_exempt, paid_until, approved_at, removed_at, welcome_sent_at
+        `SELECT id, full_name, phone, whatsapp, status, fee_exempt, fee_exempt_until, paid_until, approved_at, removed_at, welcome_sent_at
            FROM agents WHERE id = $1`,
         [req.params.id]
       )).rows[0];
@@ -10271,6 +10284,14 @@ router.patch('/agents/:id/status', async (req, res, next) => {
         }
         if (reason.length < 3) return res.status(400).json({ ok: false, error: 'Say why (the offer or reason) to approve without payment.' });
         let offerUntil = null;
+        // A new exemption always has an end date (rate card 2026-10-08).
+        let exemptUntil = null;
+        if (mode === 'waive') {
+          exemptUntil = String(feeOverride.fee_exempt_until || feeOverride.until || '').trim().slice(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(exemptUntil) || !(exemptUntil > revenue.kampalaDate())) {
+            return res.status(400).json({ ok: false, error: 'Waiving the fee needs an end date in the future (fee_exempt_until, YYYY-MM-DD).' });
+          }
+        }
         if (mode === 'free_period') {
           const days = Math.round(Number(feeOverride.days));
           if (!Number.isFinite(days) || days < 1 || days > 366) {
@@ -10285,11 +10306,12 @@ router.patch('/agents/:id/status', async (req, res, next) => {
                   paid_until = CASE WHEN $2 = 'free_period' THEN GREATEST(COALESCE(paid_until, $4::date), $4::date) ELSE paid_until END,
                   fee_exempt = CASE WHEN $2 = 'waive' THEN true ELSE fee_exempt END,
                   fee_exempt_reason = CASE WHEN $2 = 'waive' THEN $3 ELSE fee_exempt_reason END,
+                  fee_exempt_until = CASE WHEN $2 = 'waive' THEN $6::date ELSE fee_exempt_until END,
                   updated_at = NOW()
             WHERE id = $1`,
-          [req.params.id, mode, reason, offerUntil, adminActorId(req)]
+          [req.params.id, mode, reason, offerUntil, adminActorId(req), exemptUntil]
         );
-        await writeAudit('admin_agent_fee_override', { agent_id: req.params.id, mode, reason, offer_until: offerUntil }, adminActorId(req));
+        await writeAudit('admin_agent_fee_override', { agent_id: req.params.id, mode, reason, offer_until: offerUntil, fee_exempt_until: exemptUntil }, adminActorId(req));
         paymentResult = null;
         req.feeOverrideApplied = { mode, reason, offer_until: offerUntil };
         // "Pay later" sends the pay link as part of approving.
@@ -10391,11 +10413,13 @@ router.patch('/agents/:id/status', async (req, res, next) => {
         welcome = { skipped: beforeApproval?.welcome_sent_at ? 'already_sent' : 'not_requested' };
       }
     }
-    // Approved before the fee starts: free listing, now and after the start date.
+    // Approved before the fee started (dead since 5 Oct 2026): if it ever
+    // fires, the exemption ends on 1 Feb 2027 like everyone else's.
     if (status === 'approved' && !paymentResult && beforeApproval && !beforeApproval.fee_exempt
         && revenue.kampalaDate() < revenue.feeConfig().startDate) {
       await db.query(
-        `UPDATE agents SET fee_exempt = true, fee_exempt_reason = 'Approved before the monthly fee started' WHERE id = $1`,
+        `UPDATE agents SET fee_exempt = true, fee_exempt_until = '2027-02-01'::date,
+                fee_exempt_reason = 'Approved before the monthly fee started' WHERE id = $1`,
         [req.params.id]
       );
     }
@@ -13950,7 +13974,7 @@ router.post('/setup-status/advertising-payment-test', async (req, res, next) => 
         JSON.stringify(['buyers']),
         'brief_needed',
         'Admin-only launch proof campaign.',
-        100000,
+        PRICING.featured.amount_ugx,
         'invoiced',
         'awaiting_payment'
       ]
@@ -13962,7 +13986,7 @@ router.post('/setup-status/advertising-payment-test', async (req, res, next) => 
        )
        VALUES ($1,$2,$3,$4,$5,$6,$7,CURRENT_DATE + INTERVAL '7 days')
        RETURNING *`,
-      [campaign.rows[0].id, invoiceNumber, 100000, 'UGX', 'pending_payment', 'manual', paymentProviderConfigured() ? 'configured_provider' : 'manual']
+      [campaign.rows[0].id, invoiceNumber, PRICING.featured.amount_ugx, 'UGX', 'pending_payment', 'manual', paymentProviderConfigured() ? 'configured_provider' : 'manual']
     );
     const paymentLink = await db.query(
       `INSERT INTO payment_links (
@@ -13973,7 +13997,7 @@ router.post('/setup-status/advertising-payment-test', async (req, res, next) => 
        RETURNING *`,
       [
         paymentProviderConfigured() ? 'configured_provider' : 'manual',
-        100000,
+        PRICING.featured.amount_ugx,
         'UGX',
         'campaign',
         campaign.rows[0].id,
@@ -14626,7 +14650,7 @@ async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force =
   if (!agent?.id) return { sent: false, reason: 'no_agent' };
   if (agent.pay_link_on_approval === false && !force) return { sent: false, reason: 'employee_declined' };
   if (!revenue.agentFeeRequired(agent)) {
-    return { sent: false, reason: agent.fee_exempt ? 'fee_exempt' : 'fee_not_due' };
+    return { sent: false, reason: agentFeeExemption.isExempt(agent) ? 'fee_exempt' : 'fee_not_due' };
   }
   const agentPhone = String(agent.whatsapp || agent.phone || '').replace(/\D/g, '');
   if (agentPhone.length < 9) return { sent: false, reason: 'no_agent_phone' };
@@ -14699,7 +14723,7 @@ async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = fa
   const actorId = actor || (req ? adminActorId(req) : 'admin');
   const agent = (await db.query(
     `SELECT id, makaug_agent_number, full_name, company_name, phone, whatsapp, email, districts_covered, specializations,
-            status, fee_exempt, paid_until, welcome_sent_at, pay_link_sent_at, pay_link_on_approval,
+            status, fee_exempt, fee_exempt_until, paid_until, welcome_sent_at, pay_link_sent_at, pay_link_on_approval,
             registered_by_phone, fee_offer_mode
        FROM agents WHERE id = $1`,
     [agentId]
@@ -14726,7 +14750,7 @@ async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = fa
     result.welcome = { skipped: 'already_sent' };
     result.fee_link = feeLinkWanted
       ? await sendFeeLink().catch((error) => ({ error: error.message }))
-      : (feeDue ? { sent: false, reason: 'already_sent', sent_at: agent.pay_link_sent_at } : { sent: false, reason: agent.fee_exempt ? 'fee_exempt' : 'already_paid' });
+      : (feeDue ? { sent: false, reason: 'already_sent', sent_at: agent.pay_link_sent_at } : { sent: false, reason: agentFeeExemption.isExempt(agent) ? 'fee_exempt' : 'already_paid' });
   } else {
     // Welcome pack first; the payment link follows once it is queued.
     result.welcome = await queueAgentWelcomePack({ agentId, actorId, allowVideoRender, afterQueued: feeLinkWanted ? sendFeeLink : null })
@@ -14736,7 +14760,7 @@ async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = fa
       });
     result.fee_link = feeLinkWanted
       ? { sent: true, after_welcome: true }
-      : (feeDue ? { sent: false, reason: 'already_sent', sent_at: agent.pay_link_sent_at } : { sent: false, reason: agent.fee_exempt ? 'fee_exempt' : 'already_paid' });
+      : (feeDue ? { sent: false, reason: 'already_sent', sent_at: agent.pay_link_sent_at } : { sent: false, reason: agentFeeExemption.isExempt(agent) ? 'fee_exempt' : 'already_paid' });
   }
   return result;
 }

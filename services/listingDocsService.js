@@ -9,10 +9,11 @@
 // send images, not files) and carries the link to the PDF.
 
 const PDFDocument = require('pdfkit');
+const PRICING = require('../config/pricing');
 const sharp = require('sharp');
 
-const LISTER_TERMS_VERSION = '2026-10-v1';
-const AGENT_GUIDE_VERSION = '2026-10-v1';
+const LISTER_TERMS_VERSION = '2026-10-v2';
+const AGENT_GUIDE_VERSION = '2026-10-v2';
 
 const INK = '#15213A';
 const ORANGE = '#E8662A';
@@ -41,13 +42,15 @@ function docUrls(kind) {
   return { pdf: `${base}/legal/makaug-private-lister-terms.pdf?v=${LISTER_TERMS_VERSION}`, cover: `${base}/legal/makaug-private-lister-terms-cover.png?v=${LISTER_TERMS_VERSION}` };
 }
 
+// Amounts and the free period come from the rate card (config/pricing.js);
+// billing_settings only supplies operational knobs (final notice, pay-to).
 function settingsDefaults(settings = {}) {
-  const lister = settings.lister_fee || {};
   const agent = settings.agent_fee || {};
   return {
-    freeDays: Number(lister.free_days ?? 7),
-    listerMonthly: Number(lister.monthly_ugx || 20000),
-    agentMonthly: Number(agent.monthly_ugx || 50000),
+    freeDays: PRICING.private_listing.trial_days,
+    listerMonthly: PRICING.private_listing.amount_ugx,
+    agentMonthly: PRICING.agent_subscription.amount_ugx,
+    vatLabel: PRICING.vat.label,
     finalAfter: Number(agent.final_after_days_overdue ?? 7),
     payTo: settings.pay_to || {}
   };
@@ -142,6 +145,7 @@ async function buildListerTermsPdf(settings = {}) {
   bullets(doc, [
     `Free period: your listing is free for the first ${s.freeDays} days after it goes live.`,
     `After that: ${ugx(s.listerMonthly)} per property, per month, paid in advance to the makaug number we give you on WhatsApp. Send us the transaction ID after paying so we can match it.`,
+    `${s.vatLabel}.`,
     'Payments are confirmed by a member of the makaug team before they are recorded. Keep your MoMo / bank message as proof.',
     'If a month is not paid, we will remind you. If it is still not paid, the listing is hidden from the website. Nothing is deleted: when you pay, it goes back live exactly as it was.',
     'Fees are for advertising time and are not refundable once the month has started, including if the property is sold or let early.',
@@ -225,7 +229,7 @@ async function buildAgentGuidePdf(settings = {}) {
 
   section(doc, '5. Your subscription');
   bullets(doc, [
-    `The makaug agent plan is ${ugx(s.agentMonthly)} per month.`,
+    `The makaug agent plan is ${ugx(s.agentMonthly)} per month, for all your listings, with your verified badge and broker profile included. ${s.vatLabel}.`,
     `Pay to ${payLine}, then send the transaction ID (or a screenshot of the payment message) here on WhatsApp. We match it and confirm it — you will get a thank-you message when it is recorded.`,
     'We remind you 3 days before your renewal date and on the day.',
     `If the month is not paid, we send reminders; after ${s.finalAfter} days overdue a final reminder, and then your listings may be paused. Nothing is deleted — as soon as you pay, everything goes back live exactly as it was.`

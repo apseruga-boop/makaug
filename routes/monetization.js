@@ -9,6 +9,8 @@ const {
   handleGenericPaymentWebhook
 } = require('../services/paymentProviderService');
 
+const PRICING = require('../config/pricing');
+
 const router = express.Router();
 
 function featureEnabled(name, fallback = false) {
@@ -17,25 +19,40 @@ function featureEnabled(name, fallback = false) {
   return ['1', 'true', 'yes', 'on', 'enabled'].includes(value);
 }
 
+// Products come from the rate card (config/pricing.js). Retired products
+// (Agent Pro, the featured lender slot) and parked ones are not listed, and
+// nothing here says listing is free by default.
+const OFF_SALE_PRODUCT_KEYS = new Set(Object.keys(PRICING.off_sale));
+const BOOST_PRODUCT_KEYS = new Set(['listing_boost_basic']);
+
+function boostedProduct() {
+  return {
+    key: 'listing_boost_basic',
+    type: 'listing_boost',
+    name: 'Boosted listing',
+    description: `Ranks above standard listings in results and alerts for a month. ${PRICING.vat.label}.`,
+    price: PRICING.boosted.amount_ugx,
+    currency: PRICING.currency,
+    billing: 'one_time',
+    period: PRICING.boosted.period,
+    unit: PRICING.boosted.unit,
+    duration_days: 30 * (PRICING.boosted.months || 1),
+    rate_card_version: PRICING.version
+  };
+}
+
 router.get('/config', async (_req, res, next) => {
   try {
-    const products = await db.query(
-      `SELECT key, type, name, description, price, currency, billing, active, feature_flag, metadata
-       FROM products
-       WHERE key IN ('listing_boost_basic','agent_pro_monthly','featured_lender_monthly')
-       ORDER BY key ASC`
-    ).catch(() => ({ rows: [] }));
     return res.json({
       ok: true,
       data: {
         marker: MONETIZATION_SPINE_MARKER,
-        free_default: true,
+        rate_card_version: PRICING.version,
+        vat: { included: true, label: PRICING.vat.label },
         flags: {
-          listing_boosts_enabled: featureEnabled('MAKAUG_LISTING_BOOSTS_ENABLED', false),
-          agent_pro_enabled: featureEnabled('MAKAUG_AGENT_PRO_ENABLED', false),
-          featured_lenders_enabled: featureEnabled('MAKAUG_FEATURED_LENDERS_ENABLED', false)
+          listing_boosts_enabled: featureEnabled('MAKAUG_LISTING_BOOSTS_ENABLED', false)
         },
-        products: products.rows
+        products: [boostedProduct()]
       }
     });
   } catch (error) {
@@ -54,6 +71,10 @@ router.post('/listing-boost/checkout', requireAuthenticatedUser, async (req, res
     }
     const listingId = cleanText(req.body.listing_id || req.body.property_id);
     const productKey = cleanText(req.body.product_key || 'listing_boost_basic') || 'listing_boost_basic';
+    if (OFF_SALE_PRODUCT_KEYS.has(productKey)) {
+      return res.status(410).json({ ok: false, error: 'This product is no longer offered.', code: 'product_off_sale' });
+    }
+    if (!BOOST_PRODUCT_KEYS.has(productKey)) return res.status(404).json({ ok: false, error: 'Boost product not found' });
     if (!listingId) return res.status(400).json({ ok: false, error: 'listing_id is required' });
 
     const listingResult = await db.query(
@@ -79,9 +100,10 @@ router.post('/listing-boost/checkout', requireAuthenticatedUser, async (req, res
     const product = productResult.rows[0] || null;
     if (!product) return res.status(404).json({ ok: false, error: 'Boost product is not active yet' });
 
+    const rateCard = boostedProduct();
     const payment = await createHostedPayment(db, {
       purpose: 'listing_boost',
-      amount: product.price,
+      amount: rateCard.price,
       currency: product.currency || 'UGX',
       payer: {
         id: req.userAuth.id,
@@ -92,9 +114,10 @@ router.post('/listing-boost/checkout', requireAuthenticatedUser, async (req, res
       metadata: {
         account_id: req.userAuth.id,
         listing_id: listing.id,
-        product_key: product.key,
+        product_key: rateCard.key,
         boost_tier: product.metadata?.boost_tier || 'basic',
-        duration_days: product.metadata?.duration_days || 7
+        duration_days: rateCard.duration_days,
+        rate_card_version: PRICING.version
       }
     });
     return res.status(201).json({ ok: true, data: payment });

@@ -63,6 +63,9 @@ for (const forbidden of [
   "facebook.com/nyumbake",
   "Uganda's first",
   "146 districts",
+  "districts with live listings",
+  "{{FOOTER_COVERAGE}}",
+  "UGX 20,000",
   "USh (UGX)"
 ]) {
   assert(!kenya.includes(forbidden), `Kenya homepage leaked Uganda value: ${forbidden}`);

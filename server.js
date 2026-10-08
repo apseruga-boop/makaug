@@ -12,6 +12,8 @@ const jwt = require('jsonwebtoken');
 
 const logger = require('./config/logger');
 const db = require('./config/database');
+const PRICING = require('./config/pricing');
+const liveDistricts = require('./services/liveDistrictsService');
 const healthRoutes = require('./routes/health');
 const authRoutes = require('./routes/auth');
 const propertiesRoutes = require('./routes/properties');
@@ -59,7 +61,7 @@ const { startFeaturedRotationScheduler } = require('./services/featuredRotationS
 const { startLeadDeskScheduler } = require('./services/leadDeskService');
 const { startVideoStillScheduler } = require('./services/videoStillScheduler');
 const { startGreetingNameCache } = require('./services/agentNameService');
-const { startBillingScheduler } = require('./services/billingOpsService');
+const { startBillingScheduler, logPricingDriftOnce } = require('./services/billingOpsService');
 const { getPublicDevelopment, getPublicMarket, isPubliclyVisible, normalizeDevelopmentRow } = require('./services/offPlanService');
 const {
   applyHarvestPublicSubmissionVisibility,
@@ -298,6 +300,12 @@ app.use('/api', (req, res, next) => {
     };
   }
   next();
+});
+
+// The public rate card (config/pricing.js): sellable lines, VAT and display.
+app.get('/api/pricing', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  return res.json({ ok: true, data: PRICING.publicPriceList() });
 });
 
 app.get('/api/version', (_req, res) => {
@@ -994,7 +1002,21 @@ function sendBufferResponse(req, res, body, options = {}) {
   return res.end(output);
 }
 
+// Page tokens filled at send time (after the shared-core component check and
+// the page cache): rate-card prices and the live district count.
+function applyLivePageTokens(html) {
+  const text = String(html || '');
+  if (!text.includes('{{')) return text;
+  const districts = liveDistricts.liveDistrictCount(db);
+  return text
+    .replace(/\{\{PRICE:([a-z_]+)\}\}/g, (match, key) => (PRICING.SELLABLE_KEYS.includes(key) ? PRICING.ugx(PRICING[key].amount_ugx) : match))
+    .replaceAll('{{FOOTER_COVERAGE}}', liveDistricts.footerCoverageSentence(districts))
+    .replaceAll('{{LIVE_DISTRICTS_COUNT}}', districts ? String(districts) : '—')
+    .replaceAll('{{LIVE_DISTRICTS_JSON}}', JSON.stringify(districts || null));
+}
+
 function sendTextResponse(req, res, html, options = {}) {
+  html = applyLivePageTokens(html);
   res.setHeader('CDN-Cache-Control', 'no-store');
   res.setHeader('Surrogate-Control', 'no-store');
   res.setHeader('Pragma', 'no-cache');
@@ -1083,9 +1105,18 @@ function injectRuntimeMetaPixelId(html) {
 }
 
 
+// The rate card is inlined into every page shell, so the SPA reads
+// window.__MAKAUG_PRICING__ synchronously and never hard-codes a fee.
+function inlinePricingScript(html) {
+  const tag = '<script src="/config/pricing.js"></script>';
+  if (!String(html || '').includes(tag)) return html;
+  const source = fs.readFileSync(path.join(__dirname, 'config', 'pricing.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
+  return html.replace(tag, () => `<script data-makaug-pricing="${PRICING.version}">\n${source}\n</script>`);
+}
+
 function readIndexHtml() {
   if (isProduction && cachedIndexHtml) return cachedIndexHtml;
-  const patchedHtml = applyCaptureHelperUsabilityIndexPatch(fs.readFileSync(indexPath, 'utf8'));
+  const patchedHtml = inlinePricingScript(applyCaptureHelperUsabilityIndexPatch(fs.readFileSync(indexPath, 'utf8')));
   const html = injectAboutCommercialProducts(injectRuntimeMetaPixelId(injectRuntimeBundleVersion(patchedHtml)));
   if (isProduction) cachedIndexHtml = html;
   return html;
@@ -1649,8 +1680,9 @@ app.get('/short-term/list-your-place', (req, res, next) => {
     res.set('X-makaug-Public-Sanitized', '1');
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
     html = patchPublicPageSeoMeta(html, {
-      title: 'List Your Short Stay on makaug | UGX 50,000 for 3 Months',
-      description: 'Put your Uganda short stay in front of guests for a flat UGX 50,000 for three months. No commission on any booking. Guests contact you directly.',
+      // From the rate card (config/pricing.js short_stay_host).
+      title: `List Your Short Stay on makaug | ${PRICING.ugx(PRICING.short_stay_host.amount_ugx)} for ${PRICING.short_stay_host.months} Months`,
+      description: `Put your Uganda short stay in front of guests for a flat ${PRICING.ugx(PRICING.short_stay_host.amount_ugx)} for ${PRICING.short_stay_host.months} months (${PRICING.vat.label.toLowerCase()}). No commission on any booking. Guests contact you directly.`,
       canonical: absolutePublicUrl('/short-term/list-your-place'),
       image: absolutePublicUrl('/assets/house-ads-v3/rent.webp')
     });
@@ -1965,7 +1997,7 @@ function sendPublicIndex(req, res, next) {
     if (/^\/about\/?$/i.test(req.path)) {
       html = patchPublicPageSeoMeta(html, {
         title: 'About makaug — Products, pricing & how it works | makaug.com',
-        description: 'Everything makaug offers: listings from UGX 20,000/month (first week free), agent plans, off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
+        description: `Everything makaug offers: listings from ${PRICING.ugx(PRICING.private_listing.amount_ugx)}/month (first week free), agent plans, off-plan developments, featured and premium listings, market reports, agency websites and advertising. ${PRICING.vat.label}.`,
         canonical: absolutePublicUrl('/about'),
         image: absolutePublicUrl('/assets/og-cover.jpg'),
         structuredData: { '@context': 'https://schema.org', '@type': 'AboutPage', name: 'About makaug', url: absolutePublicUrl('/about') }
@@ -2038,7 +2070,7 @@ app.get('/about/rate-card.pdf', async (req, res, next) => {
     res.type('application/pdf');
     res.set('Cache-Control', 'public, max-age=3600');
     res.set('Content-Disposition', 'attachment; filename="makaug-commercial-rate-card.pdf"');
-    res.set('X-makaug-Rate-Card-Version', 'about-commercial-products-20260910-v1');
+    res.set('X-makaug-Rate-Card-Version', PRICING.version);
     return res.send(pdf);
   } catch (error) {
     return next(error);
@@ -2078,7 +2110,8 @@ const STATIC_ROOT_FILE_ALLOWLIST = new Set([
   '/site.webmanifest',
   '/seshaikhaya.webmanifest',
   '/google033e19e2016a21c2.html', // Search Console verification: keep
-  '/config/aboutCommercialProducts.js' // loaded by index.html
+  '/config/aboutCommercialProducts.js', // loaded by index.html
+  '/config/pricing.js' // the rate card; also inlined into the page shell
 ]);
 app.use('/assets', express.static(path.join(staticRoot, 'assets'), staticFileOptions));
 app.use((req, res, next) => {
@@ -2210,6 +2243,8 @@ async function start() {
     startVideoStillScheduler(db);
     startGreetingNameCache(db);
     startBillingScheduler(db);
+    if (process.env.DATABASE_URL) liveDistricts.refreshLiveDistricts(db).catch(() => {});
+    if (process.env.DATABASE_URL) logPricingDriftOnce(db).catch(() => {});
     require('./services/payLinkService').startPayLinkScheduler(db);
   }
   if (!IS_SOUTH_AFRICA || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true') {
