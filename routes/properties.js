@@ -82,6 +82,16 @@ const {
   normalizeLandTitleAvailability
 } = require('../utils/landTitleAvailability');
 const {
+  cleanPublicListingCopy,
+  redactThirdPartyPublicText,
+  buildThirdPartyPublicTitle,
+  buildThirdPartyPublicSummary,
+  isFoundOnlinePublicRow,
+  filterPublicAmenities,
+  publicContactLabelFor,
+  publicCopyReviewed
+} = require('../services/publicListingCopy');
+const {
   inferNearestUniversityFromListing,
   normalizeUniversityList,
   normalizeUniversityName
@@ -278,6 +288,12 @@ function setPublicPropertiesCache(key, payload) {
 }
 
 function clearPublicPropertiesCache(reason = 'public_inventory_changed') {
+  // The server-rendered /property/:id page has its own listing cache.
+  try {
+    require('../services/publicSeoRenderService').clearSeoListingCache();
+  } catch (error) {
+    logger.warn('SEO listing cache clear failed', { reason, message: error.message });
+  }
   if (!publicPropertiesResponseCache.size) return;
   const entries = publicPropertiesResponseCache.size;
   publicPropertiesResponseCache.clear();
@@ -870,15 +886,6 @@ function isUsablePublicCoordinate(latitude, longitude) {
   return lat != null && lng != null && isPointInUganda(lat, lng);
 }
 
-function cleanPublicListingCopy(value = '') {
-  return cleanText(value)
-    .replace(/\s*Confirm the exact property pin with the listing agent before approval\.?/gi, '')
-    .replace(/\s*Confirm exact gate or plot pin with the agent before public approval\.?/gi, '')
-    .replace(/\s*Confirm latest availability, exact pin, and ownership authority before featuring\.?/gi, '')
-    .replace(/\s*Pending King review[^.]*\.?/gi, '')
-    .trim();
-}
-
 function listingLooksStudentLike(row = {}) {
   const text = [
     row.listing_type,
@@ -916,16 +923,6 @@ function studentUniversityContextFor(row = {}, safeExtra = null) {
     distance_to_uni_km: distance,
     student_universities: universities
   };
-}
-
-function redactThirdPartyPublicText(value = '') {
-  return cleanPublicListingCopy(value)
-    .replace(/https?:\/\/\S+/gi, '')
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '')
-    .replace(/\+?\d[\d\s().-]{6,}\d/g, '')
-    .replace(/#[\p{L}\p{N}_-]+/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function sourceTextFragments(value, depth = 0) {
@@ -1001,128 +998,6 @@ function buildPublicSourceHoverDescription(extraFields = {}) {
     parts.push(cleaned);
   });
   return collapseRepeatedSourceText(parts.join(' ')).slice(0, 900);
-}
-
-function publicAreaLabelFor(property = {}, extra = {}) {
-  return cleanText(
-    extra.resolved_location_label
-    || property.area
-    || property.district
-    || property.address
-    || ACTIVE_COUNTRY_NAME
-  ) || ACTIVE_COUNTRY_NAME;
-}
-
-function thirdPartyTypeLabel(property = {}) {
-  const type = cleanText(property.listing_type || property.category || '').toLowerCase();
-  if (type === 'land') return 'land';
-  if (type === 'rent') return 'property for rent';
-  if (type === 'commercial') return 'commercial property';
-  if (type === 'student' || type === 'students') return 'student accommodation';
-  return 'property for sale';
-}
-
-function publicPriceLabelFor(property = {}) {
-  const raw = property.price == null ? '' : String(property.price).replace(/[^\d.]/g, '');
-  const amount = Number(raw);
-  if (!Number.isFinite(amount) || amount <= 0) return 'Price on application';
-  const period = cleanText(property.price_period || '').toLowerCase();
-  const currencyLabel = IS_SOUTH_AFRICA ? 'R' : 'USh';
-  const locale = IS_SOUTH_AFRICA ? 'en-ZA' : 'en-US';
-  return `${currencyLabel} ${Math.round(amount).toLocaleString(locale)}${period === 'month' ? '/month' : ''}`;
-}
-
-function stripTransactionFromPublicPropertyType(value = '') {
-  return redactThirdPartyPublicText(value)
-    .replace(/\s+(?:for\s+sale|for\s+rent|to\s+rent)\s*$/i, '')
-    .trim()
-    .toLowerCase();
-}
-
-function collapseDuplicatePublicTransaction(value = '') {
-  return redactThirdPartyPublicText(value)
-    .replace(/\bfor\s+sale\s+for\s+sale\b/gi, 'for sale')
-    .replace(/\bfor\s+rent\s+for\s+rent\b/gi, 'for rent')
-    .replace(/\bto\s+rent\s+for\s+rent\b/gi, 'to rent')
-    .trim();
-}
-
-function buildThirdPartyPublicTitle(property = {}, extra = {}) {
-  const reviewedFields = Array.isArray(extra.king_review_corrected_fields) ? extra.king_review_corrected_fields : [];
-  const reviewedTitle = collapseDuplicatePublicTransaction(property.title || '');
-  const reviewedTitleLooksCopied = String(property.title || '').includes('#')
-    || reviewedTitle.length > 120
-    || reviewedTitle.split(/\s+/).filter(Boolean).length > 14;
-  const typeForReview = cleanText(property.listing_type || property.category || '').toLowerCase();
-  if (
-    reviewedTitle
-    && (extra.king_review_facts_confirmed === true || reviewedFields.includes('title'))
-    && !reviewedTitleLooksCopied
-    && !(typeForReview !== 'land' && /^land\s+in\b/i.test(reviewedTitle))
-  ) {
-    return reviewedTitle;
-  }
-  const area = publicAreaLabelFor(property, extra);
-  const type = thirdPartyTypeLabel(property);
-  const beds = Number(property.bedrooms);
-  const roomLabel = Number.isFinite(beds) && beds > 0 && type !== 'land' ? `${beds}-bed ` : '';
-  const propertyType = stripTransactionFromPublicPropertyType(property.property_type || '');
-  if (type === 'land') {
-    const size = redactThirdPartyPublicText(extra.size_raw || property.land_size || '');
-    return `${size ? `${size} ` : ''}Land in ${area}`.trim();
-  }
-  if (type === 'property for rent') return `${roomLabel}${propertyType || 'Property'} for rent in ${area}`.trim();
-  if (type === 'commercial property') return `${propertyType || 'Commercial property'} in ${area}`.trim();
-  if (type === 'student accommodation') return `Student accommodation in ${area}`.trim();
-  return `${roomLabel}${propertyType || 'Property'} for sale in ${area}`.trim();
-}
-
-function buildThirdPartyPublicSummary(property = {}, extra = {}) {
-  const area = publicAreaLabelFor(property, extra);
-  const type = thirdPartyTypeLabel(property);
-  const sourcePlatform = redactThirdPartyPublicText(extra.source_platform || 'the original source');
-  const sourceName = redactThirdPartyPublicText(extra.source_name || extra.source_agent_name || '');
-  const reviewedFields = Array.isArray(extra.king_review_corrected_fields) ? extra.king_review_corrected_fields : [];
-  const reviewedDescription = redactThirdPartyPublicText(property.description || '');
-  const reviewedDescriptionLooksCopied = !reviewedDescription
-    || reviewedDescription.length > 420
-    || /\boriginal post date\b|\bsource post\b|\bthird-party\b|(?:makaug|seshaikhaya(?:\.com)?) has not verified/i.test(reviewedDescription);
-  const price = publicPriceLabelFor(property);
-  const bedrooms = Number(property.bedrooms);
-  const bathrooms = Number(property.bathrooms);
-  const landTitleAvailable = normalizeLandTitleAvailability(
-    extra.land_title_available
-      ?? extra.landTitleAvailable
-      ?? extra.title_available
-      ?? extra.land_title_status,
-    extra.source_title,
-    extra.source_caption,
-    extra.source_description,
-    extra.source_text,
-    extra.source_visual_text
-  );
-  const landTitleLabel = landTitleAvailabilityLabel(landTitleAvailable);
-  const facts = [
-    area && `Area: ${area}`,
-    type && `Type: ${type}`,
-    price && `Guide price: ${price}`,
-    landTitleLabel && `Land title: ${landTitleLabel}`,
-    Number.isFinite(bedrooms) && bedrooms > 0 ? `Bedrooms: ${bedrooms}` : '',
-    Number.isFinite(bathrooms) && bathrooms > 0 ? `Bathrooms: ${bathrooms}` : ''
-  ].filter(Boolean).join('. ');
-  const source = sourceName ? `${sourceName} on ${sourcePlatform}` : sourcePlatform;
-  if (
-    reviewedDescription
-    && (extra.king_review_facts_confirmed === true || reviewedFields.includes('description'))
-    && !reviewedDescriptionLooksCopied
-  ) {
-    return `${reviewedDescription} Third-party property result found from ${source}. ${ACTIVE_PUBLIC_BRAND_LABEL} provides a search and discovery preview using limited factual information only. ${ACTIVE_PUBLIC_BRAND_LABEL} has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Open the original source before contacting the seller, arranging a viewing, or making any payment.`
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-  return `${buildThirdPartyPublicTitle(property, extra)} is a third-party property result found from ${source}. ${ACTIVE_PUBLIC_BRAND_LABEL} provides a search and discovery preview using limited factual information only. ${facts}. ${ACTIVE_PUBLIC_BRAND_LABEL} has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Open the original source before contacting the seller, arranging a viewing, or making any payment.`
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function normalizePhone(phone) {
@@ -1291,6 +1166,7 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
     listing_type: row.listing_type,
     title: publicTitle,
     description: publicDescription,
+    public_copy_reviewed: publicCopyReviewed(row, safeExtra),
     district: publicDistrict,
     area: canonicalDisplay.area,
     address: row.address,
@@ -1550,7 +1426,8 @@ function publicExtraFields(extraFields = {}) {
   );
   const sourceHoverDescription = buildPublicSourceHoverDescription(extra);
   const sourceDateNeedsConfirmation = publicSourceDateNeedsPlatformConfirmation(extra);
-  const sourceDateConfirmationLabel = 'Original post date is being confirmed from the source platform.';
+  // Public wording only; the internal status stays in source_post_date_status.
+  const sourceDateConfirmationLabel = 'Posted date not confirmed';
   const safeSourceUrls = Array.isArray(extra.source_urls)
     ? extra.source_urls.filter((url) => /^https?:\/\//i.test(String(url || ''))).slice(0, 5)
     : [];
@@ -1581,9 +1458,14 @@ function publicExtraFields(extraFields = {}) {
   const publicContactPhone = publicContactPhoneFromExtra(extra);
   const rawSourceContactMethod = cleanText(extra.source_contact_method || '');
   const sourceContactHasPhoneClaim = /(?:phone|call|whatsapp)/i.test(`${rawSourceContactMethod} ${extra.source_contact_label || ''}`);
-  const sourceContactLabel = publicContactPhone || !sourceContactHasPhoneClaim
-    ? (cleanText(extra.source_contact_label) || (sourceContactUrl ? `Contact via ${sourceContactPlatform || 'source'} source` : null))
-    : (sourceContactUrl ? `Contact via ${sourceContactPlatform || 'source'} source` : null);
+  // Derived from the contact actually shown; the label stored at import
+  // (extra.source_contact_label) can contradict the Call/WhatsApp buttons.
+  const sourceContactLabel = publicContactLabelFor({
+    phone: publicContactPhone,
+    email: extra.public_contact_email || '',
+    platform: sourceContactPlatform,
+    hasSourceUrl: Boolean(sourceContactUrl)
+  });
   const sourceContactMethod = publicContactPhone || !sourceContactHasPhoneClaim
     ? (rawSourceContactMethod || null)
     : (sourceContactUrl ? 'social' : null);
@@ -1802,26 +1684,14 @@ function publicExtraFields(extraFields = {}) {
   };
 }
 
-function isFoundOnlinePublicRow(property = {}, safeExtra = null) {
-  const extra = safeExtra || publicExtraFields(property?.extra_fields || {});
-  const sourceText = [
-    property?.source,
-    property?.listed_via,
-    extra?.source_badge,
-    extra?.source_batch,
-    extra?.source_platform,
-    extra?.source_url,
-    extra?.video_url
-  ].filter(Boolean).join(' ').toLowerCase();
-  return extra?.found_online === true
-    || extra?.social_search_candidate === true
-    || extra?.sourced_inventory_candidate === true
-    || extra?.third_party_discovery_result === true
-    || sourceText.includes('found_online')
-    || sourceText.includes('found online')
-    || sourceText.includes('sourced_online')
-    || sourceText.includes('sourced online')
-    || /tiktok\.com|youtube\.com|youtu\.be|instagram\.com|facebook\.com|fb\.watch|x\.com|twitter\.com/.test(sourceText);
+// The contact line must match the buttons shown (phone → Call/WhatsApp).
+function publicListingContactLabel(safeExtra = {}, publicContactPhone = '', email = '') {
+  return publicContactLabelFor({
+    phone: publicContactPhone,
+    email: email || '',
+    platform: safeExtra.source_contact_platform || safeExtra.source_platform || '',
+    hasSourceUrl: Boolean(safeExtra.source_contact_url)
+  });
 }
 
 function publicPropertyRow(property, images = []) {
@@ -1851,6 +1721,7 @@ function publicPropertyRow(property, images = []) {
   const publicContactPhone = publicContactPhoneForRow(property, safeExtra);
   const extraWithStudentContext = {
     ...safeExtra,
+    source_contact_label: publicListingContactLabel(safeExtra, publicContactPhone, foundOnlinePublic ? '' : safeProperty.lister_email),
     public_contact_phone: publicContactPhone || null,
     contact_phone: publicContactPhone || null,
     ...(studentContext.nearest_university ? {
@@ -1864,6 +1735,8 @@ function publicPropertyRow(property, images = []) {
     ...safeProperty,
     title: publicTitle,
     description: publicDescription,
+    amenities: filterPublicAmenities(safeProperty.amenities),
+    public_copy_reviewed: publicCopyReviewed(property, safeExtra),
     area: canonicalDisplay.area,
     district: canonicalDisplay.district,
     canonical_location_id: canonicalDisplay.canonical?.key || null,
@@ -3245,6 +3118,7 @@ async function listPropertiesHandler(req, res, next) {
         const publicContactPhone = publicContactPhoneForRow(row, safeExtra);
         const publicExtra = {
           ...safeExtra,
+          source_contact_label: publicListingContactLabel(safeExtra, publicContactPhone),
           public_contact_phone: publicContactPhone || null,
           contact_phone: publicContactPhone || null,
           ...(studentContext.nearest_university ? {
@@ -3258,6 +3132,7 @@ async function listPropertiesHandler(req, res, next) {
           ...publicRow,
           title: publicTitle,
           description: publicDescription,
+          public_copy_reviewed: publicCopyReviewed(row, safeExtra),
           area: publicArea,
           district: publicDistrict,
           latitude: publicLatitude,
@@ -3290,6 +3165,7 @@ async function listPropertiesHandler(req, res, next) {
           extra_fields: publicExtra,
           third_party_discovery_result: foundOnlinePublic
         };
+        if (!adminAccess) responseRow.amenities = filterPublicAmenities(publicRow.amenities);
         if (adminAccess) {
           responseRow.source = rowSource || null;
           responseRow.listed_via = rowListedVia || null;

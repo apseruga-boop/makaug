@@ -10,6 +10,15 @@ const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService
 const { SEO_FACET_MIN_LISTINGS, FACET_DEFINITIONS, COMMERCIAL_TRANSACTION_FACETS } = require('../utils/publicSeoFacets');
 const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require('../utils/locationRegistry');
 const { tenantFor } = require('../packages/shared-country-core');
+const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
+const {
+  buildThirdPartyPublicSummary,
+  buildThirdPartyPublicTitle,
+  copyReviewState,
+  isFoundOnlinePublicRow,
+  listingCopyExtraFromRaw,
+  listingCopyExtraSql
+} = require('./publicListingCopy');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const ACTIVE_TENANT = tenantFor(ACTIVE_COUNTRY_CODE);
@@ -262,14 +271,27 @@ function facetPredicate(options, values, alias = 'p') {
   return '';
 }
 
+// Title and description come from services/publicListingCopy.js, the same
+// builders the JSON API uses, so /property/:id and the SPA never disagree.
 function normalizeSeoListingRow(row = {}) {
-  const foundOnline = ['true', '1', 'yes'].includes(String(row.found_online_candidate || '').toLowerCase());
+  const copyExtra = listingCopyExtraFromRaw(row.copy_extra || {});
+  const copyRow = { ...row, extra_fields: copyExtra };
+  const foundOnlinePublic = isFoundOnlinePublicRow(copyRow, copyExtra);
+  const foundOnline = foundOnlinePublic || ['true', '1', 'yes'].includes(String(row.found_online_candidate || '').toLowerCase());
+  const review = copyReviewState(copyRow, copyExtra);
   const canonicalDisplay = canonicalDisplayLocationForRow(row);
+  const title = foundOnlinePublic
+    ? buildThirdPartyPublicTitle(copyRow, copyExtra)
+    : collapseDuplicatePublicTransaction(row.title);
+  const description = foundOnlinePublic
+    ? buildThirdPartyPublicSummary(copyRow, copyExtra)
+    : row.description;
   return {
     id: String(row.id || ''),
     listing_type: String(row.listing_type || ''),
-    title: collapseDuplicatePublicTransaction(row.title) || `${ACTIVE_COUNTRY_NAME} property`,
-    description: plainText(row.description),
+    title: collapseDuplicatePublicTransaction(title) || `${ACTIVE_COUNTRY_NAME} property`,
+    title_reviewed: review.staffTitle || (foundOnlinePublic && review.kingTitle),
+    description: plainText(description),
     area: plainText(canonicalDisplay.area),
     district: plainText(canonicalDisplay.district),
     price: Number(row.price || 0) || 0,
@@ -309,6 +331,8 @@ async function loadPublicSeoListings(db, options = {}) {
        p.extra_fields->>'city' AS city,
        p.extra_fields->>'neighborhood' AS neighborhood,
        COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
+       p.source, p.listed_via,
+       ${listingCopyExtraSql('p')} AS copy_extra,
        p.created_at, p.updated_at, COUNT(*) OVER() AS seo_total,
        image.url AS primary_image_url
      FROM properties p
@@ -345,6 +369,8 @@ async function loadPublicSeoListing(db, propertyId) {
        p.extra_fields->>'city' AS city,
        p.extra_fields->>'neighborhood' AS neighborhood,
        COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
+       p.source, p.listed_via,
+       ${listingCopyExtraSql('p')} AS copy_extra,
        p.created_at, p.updated_at,
        image.url AS primary_image_url
      FROM properties p
@@ -370,12 +396,17 @@ function priceLabel(listing = {}) {
   const numberLocale = ACTIVE_COUNTRY_CODE === 'ZA' ? 'en-ZA' : 'en-UG';
   const currencyLabel = ACTIVE_CURRENCY === 'ZAR' ? 'R' : ACTIVE_CURRENCY === 'UGX' ? 'USh' : ACTIVE_CURRENCY;
   const amount = new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 }).format(Number(listing.price));
-  const period = String(listing.price_period || '').trim().toLowerCase();
-  const suffix = period && !['once', 'sale'].includes(period) ? `/${period}` : '';
+  // One spelling per period: rows store mo / monthly / per_month as well as month.
+  const period = normalizePricePeriodForWrite(String(listing.price_period || '').trim().toLowerCase()) || '';
+  const suffix = period && !['once', 'sale', 'total', 'poa'].includes(period) ? `/${period}` : '';
   return `${currencyLabel} ${amount}${suffix}`;
 }
 
 function propertySeoTitle(listing = {}) {
+  if (listing.title_reviewed && listing.title) {
+    const reviewedPrice = Number(listing.price || 0) > 0 ? ` — ${priceLabel(listing)}` : '';
+    return `${listing.title}${reviewedPrice} | ${ACTIVE_BRAND}`;
+  }
   const listingType = String(listing.listing_type || '').toLowerCase();
   const transaction = String(listing.transaction_type || '').toLowerCase()
     || (listingType === 'rent' ? 'rent' : ['sale', 'land'].includes(listingType) ? 'sale' : '');
@@ -783,6 +814,7 @@ function renderHomepageSeoHtml(html, options = {}) {
 }
 
 module.exports = {
+  clearSeoListingCache,
   SEO_LISTING_CACHE_TTL_MS,
   SEO_LISTING_CACHE_MAX_ENTRIES,
   CATEGORY_GRID_IDS,

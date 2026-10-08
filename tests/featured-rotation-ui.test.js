@@ -30,7 +30,8 @@ test('found-online cards expose category labels and category-correct fallback su
   assert.match(app, /student: "Student accommodation"/);
   assert.match(app, /commercial: "Commercial property"/);
   assert.match(app, /subtype: p\?\.property_type \|\| p\?\.subtype \|\| defaultSubtype/);
-  assert.match(propertiesRoute, /type === 'student' \|\| type === 'students'/);
+  // thirdPartyTypeLabel moved to services/publicListingCopy.js (shared by API and SSR).
+  assert.match(propertiesRoute + fs.readFileSync(path.join(__dirname, '..', 'services', 'publicListingCopy.js'), 'utf8'), /type === 'student' \|\| type === 'students'/);
 });
 
 test('rotation is scheduled, auditable and exposed to protected admin controls', () => {
