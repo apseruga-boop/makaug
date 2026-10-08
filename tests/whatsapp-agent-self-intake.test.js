@@ -267,3 +267,74 @@ test('a plot measured "100by50fts" has no bedrooms', () => {
   assert.ok(!facts.bedroomDraft.bedrooms, 'a live land listing showed "50 bedrooms" from this caption');
   assert.strictEqual(employeePropertyFacts('Najeera 4 bedrooms 5 bathrooms staff quarters 650m', {}).bedroomDraft.bedrooms, 4);
 });
+
+/**
+ * Asking an agent for the one thing he already wrote.
+ *
+ * 8 Oct 2026, 05:20. Tuyisengye Innocent sent two photos, a 28-second video and
+ * "10 acres on sale at watuba electricity available 3 phase on the main marrum
+ * road mairo land title price 17m each acre". Every part of that parsed: land,
+ * UGX 170m (10 × 17m an acre), area Watuba. The only outstanding fact was which
+ * district Watuba is in — and employeePropertyMissing said exactly that.
+ *
+ * Then the phrasing layer matched it on /area|district|location/ and replaced
+ * it with "the area and district — e.g. Kira, Wakiso". So he was asked for the
+ * area he had just given, the listing sat unsaved, and this is the same loop
+ * that made Ronald answer three times and give up in September.
+ *
+ * The narrow question has to survive all the way to the agent's phone.
+ */
+test('a place we know by name is never asked for again — only its district', () => {
+  const WATUBA = '10 acres on sale at watuba electricity available 3 phase on the main marrum road mairo land title price 17m each acre';
+  const data = agentSelfIntakeSessionData(KATAMBA);
+  const facts = employeePropertyFacts(WATUBA, data);
+
+  // Everything except the district was understood, so nothing else may be asked.
+  assert.strictEqual(facts.listingType, 'land');
+  assert.strictEqual(facts.locationPatch.area, 'Watuba');
+  assert.strictEqual(Number(facts.price), 170000000, '17m an acre across 10 acres');
+  assert.deepStrictEqual(employeePropertyMissing(facts), ['which district Watuba is in']);
+
+  const asked = agentMissingPhrases(employeePropertyMissing(facts)).join(' ');
+  assert.match(asked, /which district \*Watuba\* is in/, 'name the place back, so he can see we read it');
+  assert.doesNotMatch(asked, /e\.g\. Kira, Wakiso/,
+    'asking for "the area and district" here asks him for the word he already wrote');
+
+  // And it is the whole message he receives, not just the phrase in isolation.
+  const notice = agentPendingNotice({
+    ...data,
+    pending_property_caption: WATUBA,
+    pending_property_media: [{ mimeType: 'image/jpeg', url: 'https://x/1.jpg' }]
+  });
+  assert.match(notice, /which district \*Watuba\* is in/);
+  assert.doesNotMatch(notice, /area and district/);
+});
+
+test('answering with just the district finishes the property', () => {
+  const data = agentSelfIntakeSessionData(KATAMBA);
+  // What he would type back. Luwero and Luweero are both spelled in the wild.
+  for (const answer of ['Luwero', 'Luweero', 'Watuba, Luwero']) {
+    const facts = employeePropertyFacts(
+      `10 acres on sale at watuba electricity available 3 phase on the main marrum road mairo land title price 17m each acre\n${answer}`,
+      data
+    );
+    assert.strictEqual(facts.locationPatch.area, 'Watuba', `area survives "${answer}"`);
+    assert.strictEqual(facts.locationPatch.district, 'Luwero', `district resolves from "${answer}"`);
+    assert.deepStrictEqual(employeePropertyMissing(facts), [], `"${answer}" must complete it`);
+  }
+});
+
+/**
+ * The generic phrasings still have to work, and the match is now exact rather
+ * than a keyword sweep — so a typo in one of them would silently leak a field
+ * name to an agent instead of plain words.
+ */
+test('the three generic gaps are still said in plain words, exactly', () => {
+  const plain = agentMissingPhrases(['sale/rent/land/commercial/student type', 'price', 'exact area and district']);
+  assert.match(plain[0], /rent\* or for \*sale/);
+  assert.strictEqual(plain[1], 'the *price*');
+  assert.match(plain[2], /Kira, Wakiso/);
+  for (const phrase of plain) {
+    assert.doesNotMatch(phrase, /sale\/rent\/land\/commercial\/student/, 'no field names reach an agent');
+  }
+});
