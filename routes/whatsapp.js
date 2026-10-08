@@ -7413,12 +7413,17 @@ async function applyAgentCorrection({ data = {}, cleanBody = '' } = {}) {
   const extra = { agent_corrections: [...(Array.isArray(current.extra_fields?.agent_corrections) ? current.extra_fields.agent_corrections : []), { at: new Date().toISOString(), text }].slice(-10) };
   if (newPrice) {
     const meta = newPrice.priceMetadata || {};
+    // The original currency only applies with its own original amount; a bare
+    // price is shillings (never save a UGX figure as a USD original).
+    const hasOriginal = Number(meta.price_original) > 0 && Boolean(meta.price_original_currency);
+    const originalCurrency = hasOriginal ? meta.price_original_currency : ACTIVE_CURRENCY;
+    const originalAmount = hasOriginal ? meta.price_original : newPrice.price;
     params.push(newPrice.price); sets.push(`price = $${params.length}`);
     params.push(meta.price_currency || ACTIVE_CURRENCY); sets.push(`price_currency = $${params.length}`);
-    params.push(meta.price_original_currency || ACTIVE_CURRENCY); sets.push(`price_original_currency = $${params.length}`);
-    params.push(meta.price_original || newPrice.price); sets.push(`price_original = $${params.length}`);
-    params.push(meta.price_fx_rate_ugx || null); sets.push(`price_fx_rate_ugx = $${params.length}`);
-    changed.push(`💰 price is now ${agentMoney(meta.price_original || newPrice.price, meta.price_original_currency || 'UGX')}`);
+    params.push(originalCurrency); sets.push(`price_original_currency = $${params.length}`);
+    params.push(originalAmount); sets.push(`price_original = $${params.length}`);
+    params.push(hasOriginal && originalCurrency !== ACTIVE_CURRENCY ? (meta.price_fx_rate_ugx || null) : null); sets.push(`price_fx_rate_ugx = $${params.length}`);
+    changed.push(`💰 price is now ${agentMoney(originalAmount, originalCurrency)}`);
   }
   if (newPlace) {
     params.push(newPlace.area); sets.push(`area = $${params.length}`);

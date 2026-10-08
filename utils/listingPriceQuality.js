@@ -22,6 +22,15 @@ const RECURRING_PERIODS = new Set([
 ]);
 
 const LOW_RECURRING_PRICE_UGX = 30_000;
+// Sensible ranges (UGX). Outside them a person must confirm the price basis.
+const ONE_OFF_MIN_UGX = 1_000_000;
+const ONE_OFF_MAX_UGX = 20_000_000_000;
+const MONTHLY_MIN_UGX = 50_000;
+const MONTHLY_MAX_UGX = 100_000_000;
+// Never possible, and never approvable even with a staff override.
+const IMPOSSIBLE_PRICE_UGX = 1e12;
+const MAX_PLAUSIBLE_USD_ORIGINAL = 3_000_000;
+const MONTHLY_PERIODS = new Set(['month', 'monthly', 'mo', 'per_month']);
 const NIGHTLY_PERIODS = new Set(['night', 'nightly', 'day', 'daily']);
 
 function clean(value = '') {
@@ -91,6 +100,13 @@ function listingPriceQuality(row = {}, options = {}) {
   const confirmedHighMonthly = options.highMonthlyPriceConfirmed === true;
   const reasons = [];
   const warnings = [];
+  const hardReasons = [];
+  const originalCurrency = clean(row.price_original_currency || row.priceOriginalCurrency).toUpperCase();
+  const originalAmount = Number(row.price_original ?? row.priceOriginal);
+  if (Number.isFinite(price) && price > IMPOSSIBLE_PRICE_UGX) hardReasons.push('price_impossible_above_1e12');
+  if (originalCurrency === 'USD' && Number.isFinite(originalAmount) && originalAmount > MAX_PLAUSIBLE_USD_ORIGINAL) {
+    hardReasons.push('usd_original_looks_like_ugx');
+  }
 
   if (!Number.isFinite(price) || price <= 1) {
     reasons.push('missing_or_placeholder_price');
@@ -134,6 +150,21 @@ function listingPriceQuality(row = {}, options = {}) {
     reasons.push('recurring_price_below_30k');
   }
 
+  // Range checks: one-off (sale / land / commercial sale) and monthly prices.
+  const priceBasisConfirmed = confirmedHighMonthly || options.priceBasisConfirmed === true;
+  if (Number.isFinite(price) && price > 1) {
+    const oneOffPrice = !recurring && wholeProperty;
+    if (oneOffPrice && price < ONE_OFF_MIN_UGX) {
+      if (priceBasisConfirmed) warnings.push('low_one_off_price_staff_confirmed'); else reasons.push('one_off_price_below_1m');
+    }
+    if (oneOffPrice && price > ONE_OFF_MAX_UGX) {
+      if (priceBasisConfirmed) warnings.push('high_one_off_price_staff_confirmed'); else reasons.push('one_off_price_above_20bn');
+    }
+    if (MONTHLY_PERIODS.has(period) && price < MONTHLY_MIN_UGX && ['rent', 'commercial'].includes(category)) {
+      if (priceBasisConfirmed) warnings.push('low_monthly_price_staff_confirmed'); else reasons.push('monthly_price_below_50k');
+    }
+  }
+
   if (category === 'student' && recurring && Number.isFinite(price) && price > 5_000_000) {
     reasons.push('student_recurring_price_above_5m');
   }
@@ -142,8 +173,12 @@ function listingPriceQuality(row = {}, options = {}) {
     reasons.push('student_category_contains_sale_asset');
   }
 
+  reasons.push(...hardReasons);
   return {
     ok: reasons.length === 0,
+    // Hard reasons can't be overridden by anyone; the price must be corrected.
+    hard_reasons: [...new Set(hardReasons)],
+    blocked_even_with_override: hardReasons.length > 0,
     category,
     price: Number.isFinite(price) ? price : null,
     period,
@@ -157,6 +192,11 @@ function listingPriceQuality(row = {}, options = {}) {
 }
 
 module.exports = {
+  IMPOSSIBLE_PRICE_UGX,
+  MONTHLY_MAX_UGX,
+  MONTHLY_MIN_UGX,
+  ONE_OFF_MAX_UGX,
+  ONE_OFF_MIN_UGX,
   RECURRING_PERIODS,
   LOW_RECURRING_PRICE_UGX,
   hasExplicitRentEvidence,
