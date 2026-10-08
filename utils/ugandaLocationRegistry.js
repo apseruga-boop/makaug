@@ -65,7 +65,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Kajjansi', district: 'Wakiso', lat: 0.208, lng: 32.552, aliases: ['Kajjansi', 'Kajansi'] },
   { name: 'Bwebajja', district: 'Wakiso', lat: 0.179, lng: 32.541 },
   { name: 'Kigo', district: 'Wakiso', lat: 0.196, lng: 32.615 },
-  { name: 'Lubowa', district: 'Wakiso', lat: 0.237, lng: 32.576, aliases: ['Lubowa', 'Lubowa Estate'] },
+  { name: 'Lubowa', district: 'Wakiso', town: 'Makindye-Ssabagabo', lat: 0.237, lng: 32.576, aliases: ['Lubowa', 'Lubowa Estate'] },
   { name: 'Namasuba', district: 'Wakiso', lat: 0.258, lng: 32.558, aliases: ['Namasuba', 'Namasuba Ndejje', 'Ndejje Namasuba'] },
   { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553 },
   { name: 'Lubugumu', district: 'Wakiso', lat: 0.239, lng: 32.554 },
@@ -79,8 +79,8 @@ const DETAILED_LOCATIONS = [
   { name: 'Najjera', district: 'Wakiso', lat: 0.396, lng: 32.615, aliases: ['Najjera', 'Najjeera', 'Najeera'] },
   { name: 'Bulindo', district: 'Wakiso', lat: 0.418, lng: 32.633 },
   { name: 'Sonde', district: 'Wakiso', lat: 0.378, lng: 32.698 },
-  { name: 'Kira-Mulawa', district: 'Wakiso', lat: 0.412, lng: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
-  { name: 'Kira-Nsasa', district: 'Wakiso', lat: 0.428, lng: 32.665, aliases: ['Kira-Nsasa', 'Kira Nsasa', 'Nsasa'] },
+  { name: 'Kira-Mulawa', district: 'Wakiso', town: 'Kira', lat: 0.412, lng: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
+  { name: 'Kira-Nsasa', district: 'Wakiso', town: 'Kira', lat: 0.428, lng: 32.665, aliases: ['Kira-Nsasa', 'Kira Nsasa', 'Nsasa'] },
   { name: 'Nansana', district: 'Wakiso', level: 'city', lat: 0.364, lng: 32.52, aliases: ['Nansana', 'Nansana Town', 'Nansana Municipality'] },
   { name: 'Nabweru', district: 'Wakiso', lat: 0.378, lng: 32.525 },
   { name: 'Wamala', district: 'Wakiso', lat: 0.373, lng: 32.506 },
@@ -299,6 +299,21 @@ const sourceLocations = [
   ...(administrativeGazetteer.locations || [])
 ];
 
+// Wakiso's municipalities are the towns staff pick. The UBOS county node
+// ("Kira Municipality") and the city node ("Kira") share one town group,
+// using the plain name that overrides and saved listings already use.
+const CANONICAL_TOWN_NAMES = new Map([
+  ['wakiso:kira municipality', 'Kira'],
+  ['wakiso:makindye ssabagabo municipality', 'Makindye-Ssabagabo'],
+  ['wakiso:nansana municipality', 'Nansana'],
+  ['wakiso:entebbe municipality', 'Entebbe']
+]);
+
+function canonicalTownName(district, town) {
+  const cleanTown = String(town || '').trim();
+  return CANONICAL_TOWN_NAMES.get(`${normalizeLocationKey(district)}:${normalizeLocationKey(cleanTown)}`) || cleanTown;
+}
+
 const registryByKey = new Map();
 sourceLocations.forEach((entry, index) => {
   const name = String(entry.name || '').trim();
@@ -314,8 +329,8 @@ sourceLocations.forEach((entry, index) => {
     ...entry,
     name,
     district,
-    town: String(entry.town || '').trim()
-      || (entry.level === 'city' ? name : `${district} Town`),
+    town: canonicalTownName(district, String(entry.town || '').trim()
+      || (entry.level === 'city' ? name : `${district} Town`)),
     level: entry.level || 'area',
     aliases: Array.from(new Set([name, ...(entry.aliases || [])])).filter(Boolean),
     key
@@ -542,7 +557,11 @@ function resolveCanonicalUgandaLocation(value = '', suppliedDistrict = '', optio
 
 const TEXT_LOCATION_ALIAS_STOP_KEYS = new Set([
   'central', 'city', 'district', 'division', 'east', 'home', 'north', 'parish',
-  'region', 'south', 'town', 'uganda', 'ward', 'west'
+  'region', 'south', 'town', 'uganda', 'ward', 'west',
+  // Everyday listing words that are also the name of one parish somewhere:
+  // "Entebbe City, near the police station, Umeme power" was flagged as
+  // pointing to Tororo (parishes "Station" and "Umeme"). 8 Oct 2026.
+  'station', 'umeme', 'church', 'park', 'university'
 ]);
 
 function resolveCanonicalUgandaLocationFromText(value = '', suppliedDistrict = '') {
@@ -649,15 +668,27 @@ function canonicalUgandaDistrictsMentionedInText(value = '', options = {}) {
       aliases.get(row.aliasKey).add(row.entry.district);
     });
 
+  // Longest phrase first, and a matched phrase consumes its words: in
+  // "Lubowa, Makindye-Ssabagabo" the Wakiso municipality must not also count
+  // as the Kampala division "Makindye" (it raised a false "points to Kampala").
   const mentions = [];
-  aliases.forEach((districts, aliasKey) => {
-    // An unqualified alias shared by districts is not safe evidence.
-    if (districts.size !== 1) return;
-    mentions.push({
-      district: Array.from(districts)[0],
-      position: (` ${valueKey} `).indexOf(` ${aliasKey} `)
+  let remaining = ` ${valueKey} `;
+  Array.from(aliases.keys())
+    .sort((a, b) => (b.length - a.length) || a.localeCompare(b))
+    .forEach((aliasKey) => {
+      const needle = ` ${aliasKey} `;
+      let index = remaining.indexOf(needle);
+      if (index < 0) return; // already consumed by a longer phrase
+      const position = index;
+      while (index >= 0) {
+        remaining = `${remaining.slice(0, index + 1)}${'#'.repeat(aliasKey.length)}${remaining.slice(index + 1 + aliasKey.length)}`;
+        index = remaining.indexOf(needle);
+      }
+      const districts = aliases.get(aliasKey);
+      // An unqualified alias shared by districts is not safe evidence.
+      if (districts.size !== 1) return;
+      mentions.push({ district: Array.from(districts)[0], position });
     });
-  });
   return Array.from(new Map(
     mentions
       .sort((a, b) => a.position - b.position)

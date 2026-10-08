@@ -389,3 +389,67 @@ test('release exposes the shared resolver audit marker', () => {
   assert.match(server, /'location-query-normalization-prominence-20260811'/);
   assert.match(server, /'uganda-location-free-text-20260812'/);
 });
+
+// PR D (8 Oct 2026)
+test('Wakiso municipalities are selectable towns, with their areas under them', () => {
+  const { getDistrictLocationTree } = require('../utils/ugandaLocationHierarchy');
+  const tree = getDistrictLocationTree('Wakiso');
+  const towns = tree.map((node) => node.city);
+  for (const town of ['Kira', 'Makindye-Ssabagabo', 'Nansana', 'Entebbe']) assert.ok(towns.includes(town), town);
+  for (const merged of ['Kira Municipality', 'Makindye-Ssabagabo Municipality', 'Nansana Municipality', 'Entebbe Municipality']) {
+    assert.ok(!towns.includes(merged), `${merged} is folded into its plain town name`);
+  }
+  const names = (town) => (tree.find((node) => node.city === town)?.neighborhoods || []).map((item) => item.name);
+  assert.ok(names('Makindye-Ssabagabo').includes('Lubowa'));
+  assert.ok(names('Kira').includes('Kira-Mulawa'));
+  assert.ok(!names('Wakiso Town').includes('Lubowa'));
+});
+
+test('Busiika resolves to Luwero; Lubowa resolves with its point', () => {
+  const busiika = resolveCanonicalUgandaLocation('Busiika');
+  assert.equal(busiika.status, 'matched');
+  assert.equal(busiika.match.district, 'Luwero');
+  const lubowa = resolveCanonicalUgandaLocation('Lubowa');
+  assert.equal(lubowa.match.town, 'Makindye-Ssabagabo');
+  assert.ok(Math.abs(lubowa.match.lat - 0.237) < 0.01 && Math.abs(lubowa.match.lng - 32.576) < 0.01);
+});
+
+test('Find: registry first, external geocoders ignored beyond 15 km ("Lubowa" no longer lands in central Kampala)', () => {
+  const vm = require('node:vm');
+  const app = read('assets/makaug-app.js');
+  const extract = (name) => {
+    const start = app.indexOf(`function ${name}(`);
+    let depth = 0;
+    for (let i = app.indexOf(') {', start) + 2; i < app.length; i += 1) {
+      if (app[i] === '{') depth += 1;
+      if (app[i] === '}') { depth -= 1; if (depth === 0) return app.slice(start, i + 1); }
+    }
+    throw new Error(name);
+  };
+  const sandbox = { ADMIN_REVIEW_FIND_MAX_EXTERNAL_KM: 15 };
+  vm.createContext(sandbox);
+  vm.runInContext(`${extract('haversineKm')}\n${extract('adminReviewChooseFindPoint')}`, sandbox);
+  const lubowa = { name: 'Lubowa', label: 'Lubowa', district: 'Wakiso', latitude: 0.237, longitude: 32.576 };
+  const nominatimCentralKampala = { lat: 0.3068, lng: 32.5945, provider: 'nominatim' };
+  // What Nominatim returned for "Lubowa" (a place-level hit in central Kampala).
+  const choice = sandbox.adminReviewChooseFindPoint(lubowa, nominatimCentralKampala, 15);
+  assert.equal(choice.source, 'registry');
+  assert.ok(sandbox.haversineKm(choice.point.lat, choice.point.lng, 0.237, 32.576) < 3, 'Find for Lubowa is within 3 km of 0.237, 32.576');
+  const noExternal = sandbox.adminReviewChooseFindPoint(lubowa, null, 15);
+  assert.equal(noExternal.source, 'registry');
+  assert.ok(sandbox.haversineKm(noExternal.point.lat, noExternal.point.lng, 0.237, 32.576) < 3);
+  const farAway = sandbox.adminReviewChooseFindPoint(lubowa, { lat: 0.68, lng: 32.69, streetName: 'Zirobwe Road' }, 15);
+  assert.equal(farAway.source, 'registry');
+  assert.ok(farAway.rejected_external_km > 15);
+  const nearby = sandbox.adminReviewChooseFindPoint(lubowa, { lat: 0.24, lng: 32.58, label: 'Lubowa Estate Road', streetName: 'Lubowa Estate Road' }, 15);
+  assert.equal(nearby.source, 'external');
+  // A registry place with no point of its own: the external pin must be in the district area.
+  const busiika = { name: 'Busiika', district: 'Luwero', latitude: null, longitude: null };
+  const gayazaPin = { lat: 0.4528, lng: 32.6136 };
+  assert.equal(sandbox.adminReviewChooseFindPoint(busiika, gayazaPin, 15, { lat: 0.84, lng: 32.5 }).source, 'external_district_checked');
+  assert.equal(sandbox.adminReviewChooseFindPoint(busiika, { lat: 0.3, lng: 32.6 }, 15, { lat: 0.84, lng: 32.5 }).point, null);
+  // The handler resolves the registry before calling any geocoder.
+  const handler = extract('adminReviewFindAddressOrPlace');
+  assert.ok(handler.indexOf('resolveUgandaLocationFromSharedRegistry(query)') < handler.indexOf('geocodeWithGoogle('));
+  assert.match(handler, /adminReviewChooseFindPoint\(registryLocation, externalPoint/);
+});

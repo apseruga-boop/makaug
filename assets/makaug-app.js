@@ -26608,6 +26608,45 @@ function adminReviewAddressSearchKeydown(event) {
   }
 }
 
+const ADMIN_REVIEW_FIND_MAX_EXTERNAL_KM = 15;
+
+// Pick the Find pin: the external geocoder's point only when it is street-level
+// and agrees with the registry place (within 15 km); otherwise the registry
+// place's own point.
+function adminReviewChooseFindPoint(registryLocation = null, externalPoint = null, maxKm = ADMIN_REVIEW_FIND_MAX_EXTERNAL_KM, districtCenter = null) {
+  const canonicalLat = Number(registryLocation?.latitude ?? registryLocation?.lat);
+  const canonicalLng = Number(registryLocation?.longitude ?? registryLocation?.lng);
+  const hasCanonicalPoint = registryLocation && Number.isFinite(canonicalLat) && Number.isFinite(canonicalLng)
+    && registryLocation.latitude !== null && registryLocation.longitude !== null;
+  const hasExternal = externalPoint && Number.isFinite(Number(externalPoint.lat)) && Number.isFinite(Number(externalPoint.lng));
+  if (hasExternal && hasCanonicalPoint) {
+    const km = haversineKm(canonicalLat, canonicalLng, Number(externalPoint.lat), Number(externalPoint.lng));
+    // Only a street-level result adds anything over the registry point.
+    const streetLevel = Boolean(String(externalPoint.streetName || "").trim());
+    if (streetLevel && km <= maxKm) return { point: externalPoint, source: "external", distance_km: km };
+    return {
+      point: { lat: canonicalLat, lng: canonicalLng, label: registryLocation.label || registryLocation.name || "", provider: "makaug_registry", confidence: 0.9 },
+      source: "registry",
+      rejected_external_km: km
+    };
+  }
+  if (hasCanonicalPoint) {
+    return {
+      point: { lat: canonicalLat, lng: canonicalLng, label: registryLocation.label || registryLocation.name || "", provider: "makaug_registry", confidence: 0.9 },
+      source: "registry"
+    };
+  }
+  // Registry place without its own point (e.g. Busiika): the external result
+  // must at least fall in the same district area, or it is not used.
+  if (hasExternal && registryLocation && districtCenter && Number.isFinite(Number(districtCenter.lat))) {
+    const km = haversineKm(Number(districtCenter.lat), Number(districtCenter.lng), Number(externalPoint.lat), Number(externalPoint.lng));
+    if (km > 60) return { point: null, source: "none", rejected_external_km: km };
+    return { point: externalPoint, source: "external_district_checked", distance_km: km };
+  }
+  if (hasExternal) return { point: externalPoint, source: "external_unchecked" };
+  return { point: null, source: "none" };
+}
+
 async function adminReviewFindAddressOrPlace(options = {}) {
   const input = document.getElementById("admin-review-address-search-edit");
   const query = (input?.value || "").trim();
@@ -26618,19 +26657,26 @@ async function adminReviewFindAddressOrPlace(options = {}) {
   const auto = options?.auto === true;
   adminReviewClearCanonicalSuggestions();
   adminReviewSetAddressSearchStatus(auto ? "Auto-filling the closest matching place in Uganda..." : "Finding the nearest matching place in Uganda...", "blue");
-  let point = null;
+  // The makaug registry decides the place; external geocoders only add street
+  // detail and are ignored when they land more than 15 km from that place
+  // ("Lubowa" used to land in central Kampala via Nominatim).
+  const registryFirst = await resolveUgandaLocationFromSharedRegistry(query);
+  const registryLocation = registryFirst.status === "matched" ? registryFirst.location : null;
+  let externalPoint = null;
   try {
-    point = await geocodeWithGoogle(uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", "));
-    if (point) {
-      point.provider = "google";
-      point.confidence = 0.75;
+    externalPoint = await geocodeWithGoogle(uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", "));
+    if (externalPoint) {
+      externalPoint.provider = "google";
+      externalPoint.confidence = 0.75;
     }
   } catch (error) {
-    point = null;
+    externalPoint = null;
   }
-  if (!point) point = await geocodeWithNominatim(query);
+  if (!externalPoint) externalPoint = await geocodeWithNominatim(query);
+  const findChoice = adminReviewChooseFindPoint(registryLocation, externalPoint, ADMIN_REVIEW_FIND_MAX_EXTERNAL_KM, getDistrictCenter(registryLocation?.district || ""));
+  let point = findChoice.point;
   if (!point) {
-    const canonicalResolution = await resolveUgandaLocationFromSharedRegistry(query);
+    const canonicalResolution = registryFirst;
     const canonicalLocation = canonicalResolution.status === "matched" ? canonicalResolution.location : null;
     if (canonicalLocation) applyAdminReviewCanonicalLocation(canonicalLocation);
     else clearAdminReviewCanonicalLocation();
@@ -26646,7 +26692,9 @@ async function adminReviewFindAddressOrPlace(options = {}) {
     if (!canonicalLocation) adminReviewRenderCanonicalSuggestions(canonicalResolution.candidates);
     return false;
   }
-  const canonicalResolution = await resolveUgandaLocationWithLabelFallback(query, point.canonicalQuery || "");
+  const canonicalResolution = registryLocation
+    ? registryFirst
+    : await resolveUgandaLocationWithLabelFallback(query, point.canonicalQuery || "");
   const canonicalLocation = canonicalResolution.status === "matched" ? canonicalResolution.location : null;
   if (input && point.label) input.value = point.label;
   adminSetReviewEditValue("admin-review-address-edit", point.label || query);
