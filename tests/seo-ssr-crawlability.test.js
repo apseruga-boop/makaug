@@ -393,7 +393,9 @@ async function run() {
   assert(serverSource.includes("return res.status(404).send('Property not found')"), 'missing/unpublished details must return a real 404');
   const homepageRouteIndex = serverSource.indexOf("app.get(['/', '/index.html']");
   const spaFallbackIndex = serverSource.indexOf('function shouldServeIndex(req)');
-  const staticHandlerIndex = serverSource.indexOf('app.use(express.static');
+  const staticHandlerIndex = serverSource.indexOf("app.use('/assets', express.static");
+  assert(staticHandlerIndex >= 0, 'static files must be served from /assets only');
+  assert(!serverSource.includes('app.use(express.static(staticRoot'), 'the repository root must never be served as static files');
   assert(homepageRouteIndex >= 0, 'the homepage SSR route must be registered');
   assert(homepageRouteIndex < spaFallbackIndex, 'the homepage SSR route must register before the generic SPA fallback');
   assert(homepageRouteIndex < staticHandlerIndex, 'the homepage SSR route must register before the static file handler');
