@@ -403,6 +403,39 @@ function normalizePath(pathname = '/') {
   return raw.length > 1 ? raw.replace(/\/+$/, '') : raw;
 }
 
+// Paths the public shell is allowed to serve. Anything else gets a real 404
+// (it used to get 200 + the homepage + canonical "/", i.e. a soft 404).
+const KNOWN_PUBLIC_EXTRA_ROUTES = ['/', '/index.html', '/about', '/off-plan', '/short-term', '/pay'];
+const KNOWN_PUBLIC_ROUTE_PATTERNS = [
+  /^\/property\/[a-z0-9-]+$/i,
+  /^\/agents\/[a-z0-9-]+$/i,
+  /^\/broker\/[a-z0-9-]+$/i,
+  /^\/off-plan(?:\/[a-z0-9-]+){1,3}$/i,
+  /^\/hostels\/[a-z0-9-]+$/i,
+  /^\/short-term(?:\/[a-z0-9-]+){1,2}$/i,
+  /^\/pay(?:\/[a-z0-9_-]+){1,3}$/i,
+  /^\/(?:for-sale|to-rent|land|commercial|student-accommodation|students)(?:\/[a-z0-9-]+){1,2}$/i,
+  /^\/student-accommodation\/university\/[a-z0-9-]+$/i
+];
+
+function knownPublicRouteList() {
+  return Array.from(new Set([
+    ...KNOWN_PUBLIC_EXTRA_ROUTES,
+    ...Object.keys(PUBLIC_ROUTE_PAGE_MAP),
+    ...Object.keys(SYNTHETIC_PUBLIC_ROUTE_CONTENT),
+    ...AUTH_ROUTE_PREFIXES
+  ]));
+}
+
+function isKnownPublicRoute(pathname = '/') {
+  const path = normalizePath(pathname);
+  const lower = path.toLowerCase();
+  if (knownPublicRouteList().includes(lower)) return true;
+  if (AUTH_ROUTE_PREFIXES.some((prefix) => lower.startsWith(`${prefix}/`))) return true;
+  if (isProtectedPath(path)) return true;
+  return KNOWN_PUBLIC_ROUTE_PATTERNS.some((pattern) => pattern.test(path));
+}
+
 function isProtectedPath(pathname = '/') {
   const path = normalizePath(pathname).toLowerCase();
   return PROTECTED_ROUTE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
@@ -748,6 +781,11 @@ function renderProtectedLoginShell(pathname = '/', options = {}) {
 
 module.exports = {
   PUBLIC_FORBIDDEN_STRINGS,
+  AUTH_ROUTE_PREFIXES,
+  PUBLIC_ROUTE_PAGE_MAP,
+  SYNTHETIC_PUBLIC_ROUTE_CONTENT,
+  isKnownPublicRoute,
+  knownPublicRouteList,
   isProtectedPath,
   roleCanAccessProtectedPath,
   renderProtectedLoginShell,

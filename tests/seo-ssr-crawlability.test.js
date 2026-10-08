@@ -125,8 +125,10 @@ async function run() {
   const meta = categoryPageSeoMeta('/to-rent/ntinda-kampala', snapshot);
   const rentCategoryMeta = categoryPageSeoMeta('/to-rent', snapshot);
   assert(rentCategoryMeta.title.includes('3 Listings, August 2026'), 'category titles must include honest inventory and freshness');
-  assert.equal(rentCategoryMeta.priceFloor, 1500000, 'category metadata must carry the live price floor');
-  assert(rentCategoryMeta.description.includes('Prices start from USh 1,500,000'), 'category descriptions must expose the live price floor');
+  // PR A (8 Oct 2026): the "from" price is the 10th percentile of valid prices
+  // and needs at least 5 of them; this fixture has 3, so there is no floor.
+  assert.equal(rentCategoryMeta.priceFloor, 0, 'fewer than 5 valid prices: no price floor');
+  assert(!rentCategoryMeta.description.includes('Prices start from'), 'fewer than 5 valid prices: no "from" sentence');
   const sanitizedCategory = sanitizePublicHtml(rawHtml, { pathname: '/to-rent/ntinda-kampala' });
   const sanitizedFeatured = sanitizePublicHtml(rawHtml, { pathname: '/featured' });
 
@@ -246,7 +248,11 @@ async function run() {
   assert(sitemapUrls.includes('https://makaug.com/to-rent/ntinda-kampala/2-bedroom'), 'qualified bedroom facets must enter the sitemap');
   assert(sitemapUrls.includes('https://makaug.com/commercial/for-rent/kampala'), 'qualified commercial transaction pages must enter the sitemap');
   assert(sitemapUrls.includes('https://makaug.com/student-accommodation/university/makerere'), 'qualified university pages must enter the sitemap');
-  assert.equal(sitemapEntries(snapshot).find((entry) => entry.loc.endsWith('/to-rent/ntinda-kampala/2-bedroom'))?.lastmod, '2026-08-09T06:00:00.000Z', 'generated facet URLs must carry lastmod');
+  // PR A: hub/facet URLs carry no lastmod (it was the generation time, so every
+  // hub looked changed on every fetch); listing URLs keep their own updated_at.
+  const facetEntry = sitemapEntries(snapshot).find((entry) => entry.loc.endsWith('/to-rent/ntinda-kampala/2-bedroom'));
+  assert(facetEntry, 'the facet URL is in the sitemap');
+  assert.equal(facetEntry.lastmod, undefined, 'hub/facet URLs carry no generation-time lastmod');
   assert.equal(sitemapEntries(snapshot).find((entry) => entry.loc.endsWith(`/property/${rentListings[0].id}`))?.lastmod, rentListings[0].updated_at, 'detail sitemap URLs must carry listing lastmod');
   const thinSnapshot = buildPublicSeoSnapshot(rentListings.slice(0, 2));
   assert(!sitemapEntries(thinSnapshot).some((entry) => entry.loc.endsWith('/to-rent/ntinda-kampala/2-bedroom')), 'thin facet pages must stay out of the sitemap');

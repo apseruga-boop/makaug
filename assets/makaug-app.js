@@ -55449,7 +55449,9 @@ function canonicalCommercialTypeForProperty(property = {}) {
     warehouse: "warehouse_industrial", industrial: "warehouse_industrial", warehouse_industrial: "warehouse_industrial",
     land: "commercial_land", plot: "commercial_land", commercial_land: "commercial_land",
     hotel: "hospitality", hospitality: "hospitality", restaurant: "hospitality", leisure: "hospitality",
-    other: "other", commercial: "other"
+    other: "other", commercial: "other",
+    // Public API labels (utils/commercialClassification.js humanPropertyTypeLabel)
+    shop_retail_space: "shop_retail", hospitality_property: "hospitality", commercial_property: "other"
   };
   return aliases[value] || value;
 }

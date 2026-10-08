@@ -89,7 +89,8 @@ const {
   isFoundOnlinePublicRow,
   filterPublicAmenities,
   publicContactLabelFor,
-  publicCopyReviewed
+  publicCopyReviewed,
+  cleanListingTitle
 } = require('../services/publicListingCopy');
 const {
   inferNearestUniversityFromListing,
@@ -107,7 +108,8 @@ const {
   COMMERCIAL_PROPERTY_TYPES,
   normalizeCommercialTransactionType,
   normalizeCommercialPropertyType,
-  commercialMisclassificationWarning
+  commercialMisclassificationWarning,
+  humanPropertyTypeLabel
 } = require('../utils/commercialClassification');
 const { listingPriceQuality, IMPOSSIBLE_PRICE_UGX } = require('../utils/listingPriceQuality');
 const { listingRealPhotoCheck, NO_REAL_PHOTO_CODE, NO_REAL_PHOTO_MESSAGE } = require('../utils/realListingPhoto');
@@ -1131,7 +1133,7 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
   const primaryImageUrl = foundOnlinePublic ? null : normalizePublicImageUrl(row.primary_image_url);
   const publicTitle = foundOnlinePublic
     ? buildThirdPartyPublicTitle(row, safeExtra)
-    : cleanPublicListingCopy(row.title || '');
+    : cleanListingTitle(row);
   const publicDescription = foundOnlinePublic
     ? buildThirdPartyPublicSummary(row, safeExtra)
     : cleanPublicListingCopy(row.description || '');
@@ -1181,7 +1183,7 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
     transaction_type: row.transaction_type || null,
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
-    property_type: row.property_type,
+    property_type: humanPropertyTypeLabel(row.property_type) || row.property_type,
     room_type: row.room_type || null,
     title_type: row.title_type || null,
     status: row.status,
@@ -1719,7 +1721,7 @@ function publicPropertyRow(property, images = []) {
   const hasUsablePublicPin = isUsablePublicCoordinate(safeProperty.latitude, safeProperty.longitude);
   const publicTitle = foundOnlinePublic
     ? buildThirdPartyPublicTitle(safeProperty, safeExtra)
-    : cleanPublicListingCopy(safeProperty.title || '');
+    : cleanListingTitle(safeProperty);
   const publicDescription = foundOnlinePublic
     ? buildThirdPartyPublicSummary(safeProperty, safeExtra)
     : cleanPublicListingCopy(safeProperty.description || '');
@@ -1742,6 +1744,8 @@ function publicPropertyRow(property, images = []) {
     title: publicTitle,
     description: publicDescription,
     amenities: filterPublicAmenities(safeProperty.amenities),
+    // Public label, not the stored enum ("shop_retail" → "Shop / retail space").
+    property_type: humanPropertyTypeLabel(safeProperty.property_type) || safeProperty.property_type,
     public_copy_reviewed: publicCopyReviewed(property, safeExtra),
     area: canonicalDisplay.area,
     district: canonicalDisplay.district,
@@ -3116,7 +3120,7 @@ async function listPropertiesHandler(req, res, next) {
         const publicLongitude = !hasUsablePublicPin && locationOverride ? locationOverride.longitude : row.longitude;
         const publicTitle = foundOnlinePublic
           ? buildThirdPartyPublicTitle(row, safeExtra)
-          : cleanPublicListingCopy(publicRow.title || '');
+          : cleanListingTitle(publicRow);
         const publicDescription = foundOnlinePublic
           ? buildThirdPartyPublicSummary(row, safeExtra)
           : cleanPublicListingCopy(publicRow.description || '');
@@ -3171,7 +3175,10 @@ async function listPropertiesHandler(req, res, next) {
           extra_fields: publicExtra,
           third_party_discovery_result: foundOnlinePublic
         };
-        if (!adminAccess) responseRow.amenities = filterPublicAmenities(publicRow.amenities);
+        if (!adminAccess) {
+          responseRow.amenities = filterPublicAmenities(publicRow.amenities);
+          responseRow.property_type = humanPropertyTypeLabel(publicRow.property_type) || publicRow.property_type;
+        }
         if (adminAccess) {
           responseRow.source = rowSource || null;
           responseRow.listed_via = rowListedVia || null;
