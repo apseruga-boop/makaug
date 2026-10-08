@@ -19,6 +19,7 @@ const {
   normalizeCommercialPropertyType,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const { loadRealPhotoSummaries, listingRealPhotoCheck, NO_REAL_PHOTO_CODE, NO_REAL_PHOTO_MESSAGE } = require('../utils/realListingPhoto');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const {
   districtForKnownArea,
@@ -2847,7 +2848,29 @@ function applyStaffBulkInternalDuplicateGate(decisions = [], rows = []) {
   return decisions;
 }
 
+// Approve-decisions for listings without a real hosted photo become holds.
+async function applyStaffBulkRealPhotoGate(decisions = [], queryable = db) {
+  const approveIds = decisions.filter((item) => item.decision === 'approve').map((item) => item.id);
+  if (!approveIds.length) return decisions;
+  const photos = await loadRealPhotoSummaries(queryable, approveIds);
+  return decisions.map((item) => {
+    if (item.decision !== 'approve') return item;
+    const summary = photos.get(String(item.id).toLowerCase());
+    if (summary && summary.ok) return item;
+    return {
+      ...item,
+      decision: 'hold',
+      reason: NO_REAL_PHOTO_CODE,
+      details: [NO_REAL_PHOTO_MESSAGE],
+      photo_check: summary || null
+    };
+  });
+}
+
 async function approveStaffBulkFoundOnlineListing(client, req, row = {}) {
+  // Checked again inside the transaction; the caller skips a null result.
+  const photos = await listingRealPhotoCheck(client, row.id);
+  if (!photos.ok) return null;
   const reason = 'Staff QA - found-online source verified';
   const reviewerUserId = toUuidOrNull(actorId(req));
   const checklist = staffBulkApprovalChecklist();
@@ -3588,10 +3611,10 @@ router.post('/properties/bulk-review', async (req, res, next) => {
       loadStaffBulkReviewCandidates({ ids, allPending }),
       loadApprovedDuplicateIndex()
     ]);
-    const decisions = applyStaffBulkInternalDuplicateGate(
+    const decisions = await applyStaffBulkRealPhotoGate(applyStaffBulkInternalDuplicateGate(
       candidateResult.rows.map((row) => staffBulkModerationDecision(row, approvedIndex)),
       candidateResult.rows
-    );
+    ));
     candidateResult.missing_ids.forEach((id) => {
       decisions.push({ id, title: '', decision: 'hold', reason: 'not_found' });
     });
@@ -3607,7 +3630,7 @@ router.post('/properties/bulk-review', async (req, res, next) => {
           const row = rowsById.get(id);
           if (!row) continue;
           const approved = await approveStaffBulkFoundOnlineListing(client, req, row);
-          approvedRows.push(approved);
+          if (approved) approvedRows.push(approved);
         }
         await client.query('COMMIT');
       } catch (error) {
@@ -3828,6 +3851,18 @@ router.patch('/properties/:id/review', async (req, res, next) => {
       stage: req.body.stage || 'in_review',
       warning_overrides: safeJsonObject(req.body.warning_overrides, {})
     };
+    if (['approved', 'live', 'published'].includes(String(reviewPatch.stage || '').trim().toLowerCase())) {
+      const photos = await listingRealPhotoCheck(db, req.params.id);
+      if (!photos.ok) {
+        return res.status(422).json({
+          ok: false,
+          error: NO_REAL_PHOTO_MESSAGE,
+          code: NO_REAL_PHOTO_CODE,
+          override_available: false,
+          photo_check: photos
+        });
+      }
+    }
     const saved = await updateStaffEditableListing(req, req.params.id, listingPatch, reviewPatch);
     const preview = await loadStaffPropertyPreview(req.params.id);
     return res.json({ ok: true, data: preview, changed_fields: saved.changed_fields || [] });
@@ -4690,4 +4725,4 @@ router.post('/assistant/query', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports._test = { normalizeStaffListingPatch };
+module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate };

@@ -151,6 +151,7 @@ const { buildListingReference } = require('../services/listingReferenceService')
 const { hideReportedProperty } = require('../services/reportListingModerationService');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
+const { listingRealPhotoCheck, NO_REAL_PHOTO_MESSAGE } = require('../utils/realListingPhoto');
 const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const {
   LISTING_EXTRA_TIMESTAMP_FIELDS,
@@ -5779,10 +5780,7 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(403).json({ ok: false, error: 'Direct publication is limited to authorised direct-agent records' });
     }
-    const imageCount = await client.query(
-      'SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1',
-      [req.params.id]
-    );
+    const photoCheck = await listingRealPhotoCheck(client, property.id);
     const extra = property.extra_fields && typeof property.extra_fields === 'object' ? property.extra_fields : {};
     const videoUrls = Array.isArray(extra.video_urls)
       ? extra.video_urls.filter((url) => /^https?:\/\//i.test(String(url || '')))
@@ -5795,7 +5793,7 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
     if (!property.district || !property.area) blockers.push('location');
     if (!property.price || property.price <= 0) blockers.push('price');
     if (!property.lister_phone) blockers.push('agent contact');
-    if (Number(imageCount.rows[0]?.count || 0) < 1) blockers.push('property photo');
+    if (!photoCheck.ok) blockers.push(`property photo: ${NO_REAL_PHOTO_MESSAGE}`);
     if (videoUrls.length < 1) blockers.push('property video');
     const dataIntegrity = listingDataIntegrityReport(property);
     if (!dataIntegrity.ok) blockers.push(...dataIntegrity.issue_codes.map((code) => `data integrity: ${code}`));
@@ -5857,7 +5855,7 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
         JSON.stringify(checklist),
         'Direct agent submission approved after evidence review.',
         'Profile remains unverified and claim-pending until identity evidence is supplied.',
-        JSON.stringify({ image_count: Number(imageCount.rows[0]?.count || 0), video_count: videoUrls.length })
+        JSON.stringify({ image_count: photoCheck.total, real_photo_count: photoCheck.real_photos, video_count: videoUrls.length })
       ]
     );
     await client.query('COMMIT');
@@ -5865,7 +5863,7 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
     await writeAudit('admin_direct_agent_listing_published', {
       property_id: req.params.id,
       agent_id: updated.rows[0].agent_id,
-      image_count: Number(imageCount.rows[0]?.count || 0),
+      image_count: photoCheck.total, real_photo_count: photoCheck.real_photos,
       video_count: videoUrls.length
     }, actorId);
     return res.json({ ok: true, data: updated.rows[0] });
