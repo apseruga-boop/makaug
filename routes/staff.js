@@ -791,6 +791,32 @@ function launchTestListingWhere(alias = 'p') {
   )`;
 }
 
+// THE pending-review predicate for staff. The header count ("Pending Review N"),
+// the dashboard lists, the panel lists and GET /properties/review-queue all use
+// this one, so every listing counted in the header can be reached by paging.
+// (pendingReviewWhere / activePendingReviewWhere remain for reports only.)
+// Broker rows are counted in N and listed only in the broker queue.
+const STAFF_REVIEW_QUEUE_ORDER = 'p.created_at ASC NULLS LAST, p.id ASC'; // oldest first
+const STAFF_REVIEW_QUEUE_SEGMENTS = ['all', 'main', 'broker'];
+
+function staffReviewQueueSegmentWhere(segment = 'all', alias = 'p') {
+  if (segment === 'main') return `NOT ${brokerReviewWhere(alias)}`;
+  if (segment === 'broker') return brokerReviewWhere(alias);
+  return '';
+}
+
+function staffReviewQueueMeta(segment, returnedCount, total, extra = {}) {
+  return {
+    segment,
+    count_filter: segment === 'broker' ? 'staff_actionable_pending_review_and_broker' : (segment === 'main' ? 'staff_actionable_pending_review_not_broker' : 'staff_actionable_pending_review'),
+    order: 'oldest_first',
+    returned_count: returnedCount,
+    total: total === null || total === undefined || total === '' || !Number.isFinite(Number(total)) ? null : Number(total),
+    page_endpoint: `/api/staff/properties/review-queue?segment=${segment}&limit=24`,
+    ...extra
+  };
+}
+
 function actionablePendingReviewWhere(alias = 'p') {
   const prefix = alias ? `${alias}.` : '';
   return `(
@@ -1704,7 +1730,8 @@ async function dashboardPayload(req) {
       `SELECT
          COUNT(*)::int AS database_total,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')})::int AS staff_visible_total,
-         COUNT(*) FILTER (WHERE ${activePendingReviewWhere('p')})::int AS pending_review,
+         COUNT(*) FILTER (WHERE ${actionablePendingReviewWhere('p')})::int AS pending_review,
+         COUNT(*) FILTER (WHERE ${actionablePendingReviewWhere('p')} AND ${brokerReviewWhere('p')})::int AS broker_pending_review,
          COUNT(*) FILTER (WHERE ${sourceQualitySuppressedPendingWhere('p')})::int AS source_quality_suppressed_pending,
          COUNT(*) FILTER (WHERE ${publicCustomerVisiblePropertyWhere('p')})::int AS live,
          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, '')) IN (${sqlList(STAFF_REMOVED_STATUSES)}))::int AS staff_removed,
@@ -1712,7 +1739,7 @@ async function dashboardPayload(req) {
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND LOWER(COALESCE(p.source, p.listed_via, '')) IN ('website','web'))::int AS website_submitted
        FROM properties p`,
       [],
-      { database_total: 0, staff_visible_total: 0, pending_review: 0, source_quality_suppressed_pending: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
+      { database_total: 0, staff_visible_total: 0, pending_review: 0, broker_pending_review: 0, source_quality_suppressed_pending: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
     ),
     safeOne(
       `SELECT
@@ -1777,10 +1804,11 @@ async function dashboardPayload(req) {
        LEFT JOIN LATERAL (
          SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
        ) img ON true
-       WHERE ${pendingReviewWhere('p')}
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       WHERE ${actionablePendingReviewWhere('p')}
+         AND NOT ${brokerReviewWhere('p')}
+       ORDER BY ${STAFF_REVIEW_QUEUE_ORDER}
        LIMIT $1`,
-      [STAFF_DASHBOARD_QUEUE_SCAN_LIMIT]
+      [STAFF_DASHBOARD_QUEUE_LIMIT]
     ),
     safeRows(
       `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
@@ -1796,11 +1824,11 @@ async function dashboardPayload(req) {
        LEFT JOIN LATERAL (
          SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
        ) img ON true
-       WHERE ${pendingReviewWhere('p')}
+       WHERE ${actionablePendingReviewWhere('p')}
          AND ${brokerReviewWhere('p')}
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       ORDER BY ${STAFF_REVIEW_QUEUE_ORDER}
        LIMIT $1`,
-      [STAFF_DASHBOARD_QUEUE_SCAN_LIMIT]
+      [STAFF_DASHBOARD_QUEUE_LIMIT]
     ),
     safeRows(
       `SELECT l.*, c.name AS contact_name, c.phone AS contact_phone, c.email AS contact_email, c.whatsapp AS contact_whatsapp, p.title AS listing_title
@@ -1970,8 +1998,11 @@ async function dashboardPayload(req) {
     )
   ]);
 
-  const activeReviewRows = staffActiveReviewRows(reviewRows, queueLimit);
-  const activeBrokerReviewRows = staffActiveReviewRows(brokerReviewRows, queueLimit);
+  // No JS-side filtering here: the lists must match the header count exactly.
+  const activeReviewRows = staffModerationPanelRows(reviewRows, queueLimit);
+  const activeBrokerReviewRows = staffModerationPanelRows(brokerReviewRows, queueLimit);
+  const pendingTotal = safeNumber(listingSummary, 'pending_review');
+  const brokerPendingTotal = safeNumber(listingSummary, 'broker_pending_review');
   const activeSourceQueueRows = staffActiveReviewRows(sourceQueueRows, panelLimit);
 
   return {
@@ -1989,7 +2020,9 @@ async function dashboardPayload(req) {
       definitions: staffMetricDefinitions()
     },
     review_queue: activeReviewRows,
+    review_queue_meta: staffReviewQueueMeta('main', activeReviewRows.length, Math.max(0, pendingTotal - brokerPendingTotal)),
     broker_review_queue: activeBrokerReviewRows,
+    broker_review_queue_meta: staffReviewQueueMeta('broker', activeBrokerReviewRows.length, brokerPendingTotal),
     leads: leadRows,
     advertising_inquiries: adRows,
     whatsapp_conversations: whatsappRows,
@@ -2047,7 +2080,7 @@ async function buildDashboardPanelsPayload(req) {
          SELECT p.id
          FROM properties p
          WHERE ${actionablePendingReviewWhere('p')}
-         ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+         ORDER BY ${STAFF_REVIEW_QUEUE_ORDER}
          LIMIT $1
        )
        SELECT p.id, p.title, p.listing_type, p.property_type, p.district, p.area,
@@ -2083,13 +2116,14 @@ async function buildDashboardPanelsPayload(req) {
               NULL::text AS primary_image_url
        FROM properties p
        JOIN panel_candidates c ON c.id = p.id
-       ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+       ORDER BY ${STAFF_REVIEW_QUEUE_ORDER}
        LIMIT $1`,
       [STAFF_DASHBOARD_PANEL_SCAN_LIMIT],
       { ...panelQueryOptions, label: 'staff_panel_review_queue' }
     )
   ]);
-  const reviewQueue = staffModerationPanelRows(reviewResult.rows, queueLimit);
+  // Broker rows go only to the broker queue, so no listing renders twice.
+  const reviewQueue = staffModerationPanelRows(reviewResult.rows.filter((row) => !rowIsBrokerReview(row)), queueLimit);
   const brokerReviewQueue = staffModerationPanelRows(reviewResult.rows.filter(rowIsBrokerReview), queueLimit);
   const sourceQueueRows = reviewResult.rows.filter(rowIsFoundOnlineReview);
 
@@ -2098,7 +2132,7 @@ async function buildDashboardPanelsPayload(req) {
     panel_payload: true,
     review_queue: reviewQueue,
     review_queue_meta: {
-      count_filter: 'staff_actionable_pending_review',
+      ...staffReviewQueueMeta('main', reviewQueue.length, null),
       source_quality_filter: 'stored_suppression_flag_only',
       returned_count: reviewQueue.length,
       query_ok: reviewResult.ok,
@@ -2108,7 +2142,7 @@ async function buildDashboardPanelsPayload(req) {
     },
     broker_review_queue: brokerReviewQueue,
     broker_review_queue_meta: {
-      count_filter: 'staff_actionable_pending_review_and_broker',
+      ...staffReviewQueueMeta('broker', brokerReviewQueue.length, null),
       source_quality_filter: 'stored_suppression_flag_only',
       returned_count: brokerReviewQueue.length,
       query_ok: reviewResult.ok,
@@ -3414,7 +3448,11 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const includeImages = boolLike(req.query?.include_images || req.query?.includeImages);
     const search = cleanText(req.query.search || req.query.q);
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
-    const filters = [activePendingReviewWhere('p')];
+    const segmentParam = cleanText(req.query.segment).toLowerCase();
+    const segment = STAFF_REVIEW_QUEUE_SEGMENTS.includes(segmentParam) ? segmentParam : 'all';
+    const filters = [actionablePendingReviewWhere('p')];
+    const segmentWhere = staffReviewQueueSegmentWhere(segment, 'p');
+    if (segmentWhere) filters.push(segmentWhere);
     const values = [];
 
     if (listingType && LISTING_TYPES.includes(listingType)) {
@@ -3452,7 +3490,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
          SELECT p.id
          FROM properties p
          ${where}
-         ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+         ORDER BY ${STAFF_REVIEW_QUEUE_ORDER}
          LIMIT $${values.length + 1}
          OFFSET $${values.length + 2}
        )
@@ -3468,7 +3506,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
        FROM properties p
        JOIN paged_review_queue q ON q.id = p.id
        ${imageJoin}
-       ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC`,
+       ORDER BY ${STAFF_REVIEW_QUEUE_ORDER}`,
       [...values, rowLimit, offset],
       { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS, label: 'staff_review_queue_page' }
     );
@@ -3533,7 +3571,8 @@ router.get('/properties/review-queue', async (req, res, next) => {
         include_images: includeImages,
         has_more: hasMore,
         total_exact: includeTotal,
-        count_filter: 'staff_active_pending_review',
+        ...staffReviewQueueMeta(segment, rows.length, includeTotal ? total : null),
+        search: search || null,
         source_quality_filter: 'stored_suppression_flag_only',
         query_ok: true,
         timed_out: false,

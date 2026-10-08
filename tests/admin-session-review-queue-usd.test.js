@@ -155,3 +155,59 @@ test('USD currency metadata is carried through import, API, moderation, and publ
   assert.match(correction, /ROUND\(a\.original_amount \* 3800\)/);
   assert.match(html, /admin-session-review-queue-usd-20260725/);
 });
+
+// Admin review form, "Original source amount" (8 Oct 2026): it was pre-filled
+// with review.price, so a UGX listing saved with currency USD became price × 3,800.
+test('review form: a UGX row has an empty, disabled original amount; switching to USD never sends the UGX number', () => {
+  const vm = require('node:vm');
+  const app = read('assets/makaug-app.js');
+  const extract = (name) => {
+    const start = app.indexOf(`function ${name}(`);
+    assert.ok(start >= 0, name);
+    let depth = 0;
+    for (let i = app.indexOf(') {', start) + 2; i < app.length; i += 1) {
+      if (app[i] === '{') depth += 1;
+      if (app[i] === '}') { depth -= 1; if (depth === 0) return app.slice(start, i + 1); }
+    }
+    throw new Error(name);
+  };
+  const elements = {
+    'admin-review-price-currency-edit': { value: 'UGX' },
+    'admin-review-price-original-edit': { value: '', disabled: true, placeholder: '' },
+    'admin-review-price-fx-rate-edit': { value: '', disabled: true }
+  };
+  const sandbox = { document: { getElementById: (id) => elements[id] || null } };
+  vm.createContext(sandbox);
+  vm.runInContext(['adminReviewOriginalAmountState', 'adminReviewPricePatchFields', 'adminReviewOnPriceCurrencyChange'].map(extract).join('\n'), sandbox);
+
+  const ugxRow = { price: 450000000, price_original_currency: 'UGX', price_original: null, extra_fields: {} };
+  const state = sandbox.adminReviewOriginalAmountState(ugxRow);
+  assert.equal(state.value, '');
+  assert.equal(state.disabled, true);
+  // Even a UGX row with a stale price_original never shows the canonical price.
+  assert.equal(sandbox.adminReviewOriginalAmountState({ price: 450000000, extra_fields: {} }).value, '');
+
+  // The moderator switches the currency to USD: the field is cleared, nothing is sent until they type a USD amount.
+  elements['admin-review-price-original-edit'].value = '450000000';
+  elements['admin-review-price-currency-edit'].value = 'USD';
+  sandbox.adminReviewOnPriceCurrencyChange();
+  assert.equal(elements['admin-review-price-original-edit'].value, '');
+  assert.equal(elements['admin-review-price-original-edit'].disabled, false);
+  const patch = sandbox.adminReviewPricePatchFields('USD', elements['admin-review-price-original-edit'].value, '3800');
+  assert.equal(patch.price_original_currency, 'USD');
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, 'price_original'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, 'price_fx_rate_ugx'), false);
+
+  // UGX never sends an original amount or FX rate, even if something is typed.
+  const ugxPatch = sandbox.adminReviewPricePatchFields('UGX', '450000000', '3800');
+  assert.equal(JSON.stringify(ugxPatch), JSON.stringify({ price_original_currency: 'UGX' }));
+  // A genuine USD amount is sent with its rate.
+  const usd = sandbox.adminReviewPricePatchFields('USD', '120000', '3800');
+  assert.equal(usd.price_original, '120000');
+  assert.equal(usd.price_fx_rate_ugx, '3800');
+  // USD row pre-fills its real USD original.
+  assert.equal(sandbox.adminReviewOriginalAmountState({ price: 456000000, price_original: 120000, price_original_currency: 'USD', extra_fields: {} }).value, '120000');
+
+  assert.doesNotMatch(app, /review\.price_original \?\? extra\.price_original \?\? review\.price \?\?/);
+  assert.match(app, /\.\.\.adminReviewPricePatchFields\(/);
+});

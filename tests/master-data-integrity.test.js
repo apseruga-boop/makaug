@@ -418,7 +418,7 @@ test('King review edits source currency and POA without changing canonical curre
   const app = read('assets/makaug-app.js');
   const propertyRoute = read('routes/properties.js');
   assert.match(app, /Canonical price \(UGX\)/);
-  assert.match(app, /price_original_currency: get\("admin-review-price-currency-edit"\)/);
+  assert.match(app, /\.\.\.adminReviewPricePatchFields\(\s*get\("admin-review-price-currency-edit"\)/);
   assert.match(app, /admin-review-price-on-application-edit/);
   assert.match(app, /data-data-integrity-review/);
   assert.match(propertyRoute, /price_currency: \(\) => CANONICAL_PROPERTY_CURRENCY/);

@@ -210,7 +210,8 @@ function run() {
   assert(!staffPanelsBody.includes('LEFT JOIN LATERAL'), 'staff panels endpoint should not run per-row image lateral joins');
   assert(!staffPanelsBody.includes('p.description'), 'staff panels moderation queue should not ship full descriptions before preview');
   assert(staffPanelsBody.includes('jsonb_build_object('), 'staff panels moderation queue should ship only minimal broker metadata');
-  assert(staffPanelsBody.includes('staffModerationPanelRows(reviewResult.rows, queueLimit)'), 'staff panels endpoint should render SQL-parity rows directly instead of filtering them to zero in JS');
+  assert(staffPanelsBody.includes('staffModerationPanelRows(reviewResult.rows.filter((row) => !rowIsBrokerReview(row)), queueLimit)'), 'staff panels endpoint should render SQL-parity rows directly (only broker rows move to the broker list) instead of filtering them to zero in JS');
+  assert(!staffPanelsBody.includes('staffActiveReviewRows(reviewResult.rows'), 'staff panels review rows must not be re-filtered in JS');
   assert(staffPanelsBody.includes('WITH panel_candidates AS MATERIALIZED'), 'staff panels endpoint should pre-scan ordered pending IDs through the review queue index');
   assert(staffPanelsBody.includes("WHERE ${actionablePendingReviewWhere('p')}"), 'staff panels endpoint should use the authoritative actionable-review partial index inside the candidate scan');
   assert(staffRoutes.includes('indexedSourceQualitySuppressedFlagSql'), 'staff actionable panels should match the suppression predicate used by the ordered partial index');
@@ -226,7 +227,8 @@ function run() {
   assert(staffPanelsBody.includes('review_queue_meta'), 'staff panels endpoint should expose review queue query metadata for false-empty protection');
   assert(staffPanelsBody.includes('query_ok: reviewResult.ok'), 'staff panels endpoint should expose whether the moderation queue query really succeeded');
   assert(staffPanelsBody.includes('empty_is_authoritative: reviewResult.ok'), 'empty moderation queue should only be authoritative after a successful row query');
-  assert(staffRoutes.includes("count_filter: 'staff_active_pending_review'"), 'staff review queue endpoint should advertise the same active pending filter used by staff counts');
+  assert(staffRoutes.includes("'staff_actionable_pending_review'") && staffRoutes.includes('...staffReviewQueueMeta(segment, rows.length'), 'staff review queue endpoint should advertise the same actionable pending filter used by the header count');
+  assert(staffRoutes.includes("const filters = [actionablePendingReviewWhere('p')];"), 'staff review queue endpoint should page with the same predicate as the header count');
   assert(staffRoutes.includes("source_quality_filter: 'stored_suppression_flag_only'"), 'staff review queue endpoint should use the cheap stored source-quality flag');
   assert(staffRoutes.includes('WITH paged_review_queue AS MATERIALIZED'), 'staff paginated review queue should page through an indexed ID candidate set');
   assert(staffRoutes.includes("error: 'review_queue_query_failed'"), 'staff paginated review queue should not return false-empty rows after a timeout');
@@ -243,7 +245,7 @@ function run() {
   assert(app.includes('Listing moderation rows are still catching up.'), 'staff queue timeout state should be explicit in the dashboard');
   assert(app.includes('function scheduleStaffDashboardPanelRetry'), 'frontend should automatically retry non-authoritative moderation queue panel failures');
   assert(app.includes('staffPanelQueueNeedsRetry'), 'staff queue renderer should detect retryable empty/catching-up states');
-  assert(app.includes('expected_count: data.summary?.listings?.pending_review'), 'staff review queue renderer should compare rows against the live pending count');
+  assert(app.includes('const staffPendingTotal = data.summary?.listings?.pending_review;') && app.includes('expected_count: staffMainPendingTotal'), 'staff review queue renderer should compare rows against the live pending count (main list = pending minus broker)');
   assert(app.includes('async function refreshAuthSession()'), 'frontend should refresh auth sessions explicitly');
   assert(app.includes('const tokenAtStart = authState.token'), 'auth refresh should capture the token it started with');
   assert(app.includes('if (tokenAtStart !== authState?.token) return;'), 'stale auth refreshes should not clear a newer staff login session');

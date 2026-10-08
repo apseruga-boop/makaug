@@ -36,7 +36,7 @@ test.before(async () => {
   });
   let stderr = '';
   child.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-4000); });
-  for (let i = 0; i < 90; i += 1) {
+  for (let i = 0; i < 180; i += 1) { // up to 90 s: the parallel suite can slow start-up
     try {
       const response = await fetch(`${base}/healthz`);
       if (response.ok) return;
