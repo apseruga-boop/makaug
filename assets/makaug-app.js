@@ -13458,8 +13458,35 @@ async function saveStaffProfile(event) {
   }
 }
 
+// Phone shown on queue cards: country code, first digit and the last 3 only
+// (+256 7•• ••• 394). Staff open Preview & edit for the full contact.
+function staffMaskPhone(value = "") {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length < 6) return "";
+  const last3 = digits.slice(-3);
+  if (digits.startsWith("256") && digits.length >= 12) return `+256 ${digits.charAt(3)}•• ••• ${last3}`;
+  if (digits.startsWith("0") && digits.length === 10) return `+256 ${digits.charAt(1)}•• ••• ${last3}`;
+  return `•••• ${last3}`;
+}
+
+function staffKampalaDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    return date.toLocaleString("en-GB", { timeZone: "Africa/Kampala", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) + " EAT";
+  } catch (_) {
+    return date.toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  }
+}
+
 function staffReviewQueueCardHtml(item = {}, options = {}) {
   const location = [item.area, item.district].filter(Boolean).join(", ") || "Location needs checking";
+  const mkRef = String(item.inquiry_reference || "").trim();
+  const submitter = String(item.lister_name || item.source_name || item.extra_fields?.source_name || "").trim() || "Submitter not recorded";
+  const maskedPhone = staffMaskPhone(item.lister_phone);
+  const submittedAt = staffKampalaDateTime(item.created_at);
+  const typeLabel = String(item.listing_type || item.property_type || "property").replace(/_/g, " ");
   const price = item.price ? `UGX ${Number(item.price || 0).toLocaleString("en-UG")}` : "Price not stated";
   const duplicateCount = Number(item.duplicate_count || 0) || 0;
   const sourceUrl = String(item.source_url || "").trim();
@@ -13486,9 +13513,9 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
     <article class="border border-gray-200 rounded-2xl p-4">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
-          <div class="font-black text-gray-900">${adminEscape(item.title || "Untitled listing")} ${brokerBadge}</div>
-          <div class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(item.listing_type || item.property_type || "property")} • ${adminEscape(price)}</div>
-          <div class="text-xs text-gray-500 mt-1">Owner/contact: ${adminEscape(item.lister_name || item.lister_phone || item.lister_email || "not recorded")}</div>
+          <div class="font-black text-gray-900">${mkRef ? `<span class="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-black text-slate-700" data-mk-ref>${adminEscape(mkRef)}</span>` : ""}${adminEscape(item.title || "Untitled listing")} ${brokerBadge}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(typeLabel)} • ${adminEscape(location)} • ${adminEscape(price)}</div>
+          <div class="text-xs text-gray-500 mt-1">Submitted by ${adminEscape(submitter)}${maskedPhone ? ` • ${adminEscape(maskedPhone)}` : ""}${submittedAt ? ` • ${adminEscape(submittedAt)}` : ""}</div>
           <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(item.source_platform || item.source || item.listed_via || "website")}${sourceUrl ? ` • <a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="font-black text-blue-700 underline underline-offset-2">open evidence</a>` : ""}</div>
           ${primaryImageUrl ? `<div class="mt-2 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-2"><img src="${adminAttr(primaryImageUrl)}" alt="Primary property photo" class="h-16 w-20 rounded-lg border border-emerald-100 object-cover"><div class="text-xs font-black text-emerald-900">${staffNumber(imageCount)} clear property photo${imageCount === 1 ? "" : "s"} attached</div></div>` : ""}
           ${queueNote}
@@ -13551,35 +13578,149 @@ function clearStaffDashboardPanelRetry() {
   staffDashboardPanelRetryCount = 0;
 }
 
+// Both moderation lists page through GET /api/staff/properties/review-queue
+// (oldest first). "main" excludes broker rows; broker rows only appear in the
+// broker list. Rows are de-duplicated by id within and across the two lists.
+const STAFF_REVIEW_QUEUE_PAGE_LIMIT = 24;
+const staffReviewQueueState = {
+  main: { rows: [], total: null, page: 0, loading: false },
+  broker: { rows: [], total: null, page: 0, loading: false },
+  search: { term: "", rows: [], total: null, page: 0, loading: false }
+};
+
+function staffDedupeRows(rows = [], excludeIds = new Set()) {
+  const seen = new Set();
+  const out = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const id = String(row?.id || "");
+    if (!id || seen.has(id) || excludeIds.has(id)) continue;
+    seen.add(id);
+    out.push(row);
+  }
+  return out;
+}
+
+function staffReviewQueueFooterHtml(segment, shown, total) {
+  const totalKnown = total !== null && total !== undefined && total !== "" && Number.isFinite(Number(total));
+  const more = totalKnown ? shown < Number(total) : false;
+  return `
+    <div class="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600" data-staff-queue-footer="${adminAttr(segment)}">
+      <span>Showing ${staffNumber(shown)}${totalKnown ? ` of ${staffNumber(total)}` : ""} · oldest first</span>
+      ${more ? `<button type="button" onclick="staffLoadMoreReviewQueue('${adminAttr(segment)}')" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-black text-slate-800 hover:bg-slate-100">${staffReviewQueueState[segment]?.loading ? "Loading…" : "Load more"}</button>` : ""}
+    </div>`;
+}
+
+function staffBrokerQueueIds() {
+  return new Set(staffReviewQueueState.broker.rows.map((row) => String(row?.id || "")).filter(Boolean));
+}
+
+function staffPaintReviewQueue(segment) {
+  const isBroker = segment === "broker";
+  const isSearch = segment === "search";
+  const wrap = document.getElementById(isBroker ? "staff-broker-review-queue" : "staff-review-queue");
+  if (!wrap) return;
+  const state = staffReviewQueueState[segment];
+  const rows = isSearch || isBroker ? staffDedupeRows(state.rows) : staffDedupeRows(state.rows, staffBrokerQueueIds());
+  state.rows = isSearch || isBroker ? rows : staffDedupeRows(state.rows);
+  if (!rows.length) {
+    wrap.innerHTML = isSearch
+      ? staffEmpty(`No pending listing matches “${adminEscape(state.term)}”.`)
+      : staffEmpty(isBroker ? "No broker listings are waiting for review." : "No listings are waiting for staff review.");
+    return;
+  }
+  const heading = isSearch ? `<div class="text-xs font-black text-slate-700">Search results for “${adminEscape(state.term)}” (all pending, brokers included)</div>` : "";
+  wrap.innerHTML = heading
+    + rows.map((item) => staffReviewQueueCardHtml(item, { brokerQueue: isBroker })).join("")
+    + staffReviewQueueFooterHtml(segment, rows.length, state.total);
+}
+
+function staffSetReviewQueue(segment, rows = [], meta = {}) {
+  const state = staffReviewQueueState[segment];
+  state.rows = staffDedupeRows(rows);
+  state.page = 0;
+  const total = meta?.total ?? meta?.expected_count;
+  state.total = total === null || total === undefined || total === "" || !Number.isFinite(Number(total)) ? null : Number(total);
+}
+
 function renderStaffReviewQueue(rows = [], meta = {}) {
   const wrap = document.getElementById("staff-review-queue");
   if (!wrap) return;
-  if (!rows.length) {
-    if (staffPanelQueueNeedsRetry(rows, meta)) {
-      wrap.innerHTML = staffReviewQueueLoadingHtml("Listing moderation rows are still catching up.");
-      scheduleStaffDashboardPanelRetry("listing queue");
-      return;
-    }
-    wrap.innerHTML = staffEmpty("No listings are waiting for staff review.");
+  const searching = !!staffReviewQueueState.search.term; // keep a visible search on screen
+  if (!rows.length && staffPanelQueueNeedsRetry(rows, meta)) {
+    if (!searching) wrap.innerHTML = staffReviewQueueLoadingHtml("Listing moderation rows are still catching up.");
+    scheduleStaffDashboardPanelRetry("listing queue");
     return;
   }
-  clearStaffDashboardPanelRetry();
-  wrap.innerHTML = rows.map((item) => staffReviewQueueCardHtml(item)).join("");
+  if (rows.length) clearStaffDashboardPanelRetry();
+  staffSetReviewQueue("main", rows, meta);
+  if (!searching) staffPaintReviewQueue("main");
 }
 
 function renderStaffBrokerReviewQueue(rows = [], meta = {}) {
   const wrap = document.getElementById("staff-broker-review-queue");
   if (!wrap) return;
-  if (!rows.length) {
-    if (staffPanelQueueNeedsRetry(rows, meta)) {
-      wrap.innerHTML = staffReviewQueueLoadingHtml("Broker review rows are still catching up.");
-      scheduleStaffDashboardPanelRetry("broker queue");
-      return;
-    }
-    wrap.innerHTML = staffEmpty("No broker listings are waiting for review.");
+  if (!rows.length && staffPanelQueueNeedsRetry(rows, meta)) {
+    wrap.innerHTML = staffReviewQueueLoadingHtml("Broker review rows are still catching up.");
+    scheduleStaffDashboardPanelRetry("broker queue");
     return;
   }
-  wrap.innerHTML = rows.map((item) => staffReviewQueueCardHtml(item, { brokerQueue: true })).join("");
+  staffSetReviewQueue("broker", rows, meta);
+  staffPaintReviewQueue("broker");
+  if (!staffReviewQueueState.search.term && staffReviewQueueState.main.rows.length) staffPaintReviewQueue("main");
+}
+
+function staffReviewQueuePageUrl(segment, page, search = "") {
+  const params = new URLSearchParams({
+    segment: segment === "search" ? "all" : segment,
+    page: String(page),
+    limit: String(STAFF_REVIEW_QUEUE_PAGE_LIMIT),
+    include_total: "1"
+  });
+  if (search) params.set("search", search);
+  return `/api/staff/properties/review-queue?${params.toString()}`;
+}
+
+async function staffLoadMoreReviewQueue(segment = "main") {
+  const state = staffReviewQueueState[segment];
+  if (!state || state.loading) return;
+  state.loading = true;
+  staffPaintReviewQueue(segment);
+  try {
+    const nextPage = (state.page || 0) + 1;
+    const res = await apiRequest(staffReviewQueuePageUrl(segment, nextPage, segment === "search" ? state.term : ""));
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    state.rows = staffDedupeRows([...state.rows, ...rows]);
+    state.page = nextPage;
+    const total = res?.pagination?.total ?? res?.meta?.total;
+    if (Number.isFinite(Number(total))) state.total = Number(total);
+    if (!rows.length && state.total !== null) state.total = Math.min(state.total, state.rows.length);
+  } catch (error) {
+    toast(`Could not load more listings: ${error.message || "request failed"}`);
+  } finally {
+    state.loading = false;
+    staffPaintReviewQueue(segment);
+  }
+}
+
+let staffReviewQueueSearchTimer = null;
+function staffSearchReviewQueue(value = "") {
+  const term = String(value || "").trim();
+  if (staffReviewQueueSearchTimer) window.clearTimeout(staffReviewQueueSearchTimer);
+  staffReviewQueueSearchTimer = window.setTimeout(async () => {
+    const search = staffReviewQueueState.search;
+    search.term = term;
+    if (!term) {
+      search.rows = [];
+      search.total = null;
+      search.page = 0;
+      staffPaintReviewQueue("main");
+      return;
+    }
+    search.rows = [];
+    search.total = null;
+    search.page = 0;
+    await staffLoadMoreReviewQueue("search");
+  }, 300);
 }
 
 function renderStaffLeads(rows = []) {
@@ -14154,13 +14295,19 @@ function applyStaffDashboardData(data = {}, user = {}) {
     });
     return;
   }
+  // Header "Pending Review N" = main list total + broker list total.
+  const staffPendingTotal = data.summary?.listings?.pending_review;
+  const staffBrokerPendingTotal = data.summary?.listings?.broker_pending_review;
+  const staffMainPendingTotal = Number.isFinite(Number(staffPendingTotal)) && Number.isFinite(Number(staffBrokerPendingTotal))
+    ? Math.max(0, Number(staffPendingTotal) - Number(staffBrokerPendingTotal))
+    : null;
   renderStaffBrokerReviewQueue(data.broker_review_queue || [], {
     ...(data.broker_review_queue_meta || {}),
-    expected_count: data.summary?.listings?.broker_pending_review
+    expected_count: staffBrokerPendingTotal
   });
   renderStaffReviewQueue(data.review_queue || [], {
     ...(data.review_queue_meta || {}),
-    expected_count: data.summary?.listings?.pending_review
+    expected_count: staffMainPendingTotal
   });
   renderStaffLeads(data.leads || []);
   renderStaffAdvertising(data.advertising_inquiries || []);
@@ -14206,23 +14353,20 @@ async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?pane
 
 async function hydrateStaffReviewQueueFallback(userIdentityAtStart = "") {
   try {
-    const response = await staffApiRequestWithTimeout(
-      staffPanelRetryEndpoint("/api/staff/properties?status=pending&limit=24&include_total=0"),
+    const [mainRes, brokerRes] = await Promise.all(["main", "broker"].map((segment) => staffApiRequestWithTimeout(
+      staffPanelRetryEndpoint(staffReviewQueuePageUrl(segment, 1)),
       {},
       STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
       "Staff moderation queue"
-    );
+    )));
     if (!staffDashboardRequestMatchesUser(userIdentityAtStart)) return false;
-    const rows = Array.isArray(response?.data) ? response.data : [];
-    if (!rows.length) return false;
-    renderStaffReviewQueue(rows, { query_ok: true, returned_count: rows.length, fallback_route: true });
-    const brokerRows = rows.filter((row) => adminIsBrokerSubmissionListing(row));
-    if (brokerRows.length) {
-      renderStaffBrokerReviewQueue(brokerRows, { query_ok: true, returned_count: brokerRows.length, fallback_route: true });
-    } else {
-      const brokerWrap = document.getElementById("staff-broker-review-queue");
-      if (brokerWrap) brokerWrap.innerHTML = staffEmpty("Broker listings remain available in the main moderation queue while the broker-only view catches up.");
-    }
+    const rows = Array.isArray(mainRes?.data) ? mainRes.data : [];
+    const brokerRows = Array.isArray(brokerRes?.data) ? brokerRes.data : [];
+    if (!rows.length && !brokerRows.length) return false;
+    renderStaffBrokerReviewQueue(brokerRows, { query_ok: true, returned_count: brokerRows.length, total: brokerRes?.pagination?.total, fallback_route: true });
+    renderStaffReviewQueue(rows, { query_ok: true, returned_count: rows.length, total: mainRes?.pagination?.total, fallback_route: true });
+    staffReviewQueueState.main.page = 1;
+    staffReviewQueueState.broker.page = 1;
     setTextById("staff-source-monitor-status", "Moderation rows loaded through the protected fast queue.");
     return true;
   } catch (error) {
@@ -26770,6 +26914,45 @@ async function approveActiveHumanOverride() {
   });
 }
 
+// "Original source amount" is only meaningful for USD. It is never pre-filled
+// from the canonical UGX price (a UGX price saved under USD was multiplied by
+// 3,800), stays empty and disabled while the currency is UGX, and is cleared
+// when the currency is switched.
+function adminReviewOriginalAmountState(review = {}) {
+  const extra = review && typeof review.extra_fields === "object" && review.extra_fields ? review.extra_fields : {};
+  const currency = String(review.price_original_currency || extra.price_original_currency || "UGX").toUpperCase() === "USD" ? "USD" : "UGX";
+  if (currency !== "USD") return { currency, value: "", disabled: true };
+  const original = review.price_original ?? extra.price_original;
+  return { currency, value: original === null || original === undefined ? "" : String(original), disabled: false };
+}
+
+function adminReviewPricePatchFields(currency = "UGX", originalValue = "", fxValue = "") {
+  const sourceCurrency = String(currency || "UGX").toUpperCase() === "USD" ? "USD" : "UGX";
+  const fields = { price_original_currency: sourceCurrency };
+  const original = String(originalValue ?? "").trim();
+  if (sourceCurrency === "USD" && original !== "") {
+    fields.price_original = original;
+    const fx = String(fxValue ?? "").trim();
+    if (fx !== "") fields.price_fx_rate_ugx = fx;
+  }
+  return fields;
+}
+
+function adminReviewOnPriceCurrencyChange() {
+  const currency = document.getElementById("admin-review-price-currency-edit")?.value || "UGX";
+  const original = document.getElementById("admin-review-price-original-edit");
+  const fx = document.getElementById("admin-review-price-fx-rate-edit");
+  if (original) {
+    original.value = "";
+    original.disabled = currency !== "USD";
+    original.placeholder = currency === "USD" ? "Amount in USD as advertised" : "Only for USD listings";
+  }
+  if (fx) {
+    fx.disabled = currency !== "USD";
+    if (currency !== "USD") fx.value = "";
+  }
+}
+
 function adminReviewListingEditPanel(review = {}) {
   const facts = adminExtractReviewFacts(review);
   const amenities = Array.isArray(review.amenities) ? review.amenities.join(", ") : "";
@@ -26926,13 +27109,13 @@ function adminReviewListingEditPanel(review = {}) {
           <input id="admin-review-price-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price || "")}">
         </label>
         <label class="block text-xs font-bold text-gray-700">Source currency
-          <select id="admin-review-price-currency-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${priceCurrencyOptions}</select>
+          <select id="admin-review-price-currency-edit" onchange="adminReviewOnPriceCurrencyChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${priceCurrencyOptions}</select>
         </label>
         <label class="block text-xs font-bold text-gray-700">Original source amount
-          <input id="admin-review-price-original-edit" type="number" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price_original ?? extra.price_original ?? review.price ?? "")}">
+          <input id="admin-review-price-original-edit" type="number" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400" value="${adminAttr(adminReviewOriginalAmountState(review).value)}" placeholder="${adminReviewOriginalAmountState(review).disabled ? "Only for USD listings" : "Amount in USD as advertised"}" ${adminReviewOriginalAmountState(review).disabled ? "disabled" : ""}>
         </label>
         <label class="block text-xs font-bold text-gray-700">USD → UGX rate
-          <input id="admin-review-price-fx-rate-edit" type="number" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price_fx_rate_ugx ?? extra.price_fx_rate_ugx ?? (currentPriceCurrency === "USD" ? 3800 : ""))}" placeholder="Only required for USD">
+          <input id="admin-review-price-fx-rate-edit" type="number" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400" value="${adminAttr(currentPriceCurrency === "USD" ? (review.price_fx_rate_ugx ?? extra.price_fx_rate_ugx ?? 3800) : "")}" placeholder="Only required for USD" ${currentPriceCurrency === "USD" ? "" : "disabled"}>
         </label>
         <label class="block text-xs font-bold text-gray-700">Price period
           <select id="admin-review-price-period-edit" onchange="adminReviewOnPricePeriodChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${periodOptions}</select>
@@ -27378,9 +27561,12 @@ function collectAdminReviewListingPatch() {
     address: get("admin-review-address-edit"),
     price: get("admin-review-price-edit"),
     price_currency: "UGX",
-    price_original_currency: get("admin-review-price-currency-edit"),
-    price_original: get("admin-review-price-original-edit"),
-    price_fx_rate_ugx: get("admin-review-price-fx-rate-edit"),
+    // price_original / price_fx_rate_ugx are sent only for USD with a filled amount.
+    ...adminReviewPricePatchFields(
+      get("admin-review-price-currency-edit"),
+      get("admin-review-price-original-edit"),
+      get("admin-review-price-fx-rate-edit")
+    ),
     price_period: get("admin-review-price-period-edit"),
     price_on_application: normalizeListingPricePeriodValue(get("admin-review-price-period-edit")) === "poa"
       || document.getElementById("admin-review-price-on-application-edit")?.checked === true,

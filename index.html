@@ -7234,6 +7234,10 @@
               <h3 class="text-xl font-black text-gray-900">Listing moderation queue</h3>
               <span class="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1">Preview first, approve = goes live</span>
             </div>
+            <label class="mb-4 block">
+              <span class="sr-only">Search pending listings</span>
+              <input id="staff-review-queue-search" type="search" autocomplete="off" oninput="staffSearchReviewQueue(this.value)" placeholder="Search pending: MK ref, title, area, district, phone or source" class="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none">
+            </label>
             <div class="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
               <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
                 <h3 class="text-lg font-black text-emerald-950">Broker listings review</h3>
