@@ -2159,11 +2159,12 @@ router.get('/enquiries', requireAuth, async (req, res, next) => {
       `SELECT pi.*, p.title, p.listing_type, p.district, p.area
        FROM property_inquiries pi
        LEFT JOIN properties p ON p.id = pi.property_id
-       WHERE (pi.contact_email = $2 AND $2::text IS NOT NULL)
-          OR (pi.contact_phone = $3 AND $3::text IS NOT NULL)
+       WHERE (pi.contact_email = $1 AND $1::text IS NOT NULL)
+          OR (pi.contact_phone = $2 AND $2::text IS NOT NULL)
        ORDER BY pi.created_at DESC
        LIMIT 100`,
-      [req.userAuth.id, req.userAuth.email || null, req.userAuth.phone || null]
+      // The user id was passed as $1 but never used, so this always failed (42P08).
+      [req.userAuth.email || null, req.userAuth.phone || null]
     );
     return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });
   } catch (error) {

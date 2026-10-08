@@ -5266,6 +5266,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
                ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
              END
            ) || jsonb_build_object('review_warning_overrides', $11::jsonb)
+             || jsonb_build_object('last_reviewed_by_actor', $6::text)
              || COALESCE($12::jsonb, '{}'::jsonb)
          WHERE id = $1
          RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, agent_id, source, listed_via, status,
@@ -5289,9 +5290,11 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       );
       listing = result.rows[0];
     } catch (error) {
+      // This should never happen now ($6 is used); if it does, the Postgres code says why.
       logger.error('Full listing status update failed; trying compact fallback update', {
         property_id: req.params.id,
         status: nextStatus,
+        pg_code: error.code || null,
         message: error.message
       });
       approvalWarnings.push('Full moderation column update failed; compact status update was used.');
