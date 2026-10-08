@@ -4957,6 +4957,28 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
       const uniqueResolution = resolveWhatsappLocation(uniqueName, { allowText: true });
       if (uniqueResolution?.status === 'matched') locationResolution = uniqueResolution;
     }
+
+    // Still ambiguous, and the caption names somewhere else as well: that other
+    // place is the answer. "Watuba Luwero" used to resolve to Luwero, because
+    // Watuba matched nothing and Luwero did. The moment Watuba became a known
+    // name in three districts, the whole phrase went ambiguous and the district
+    // the agent had actually written was thrown away — so answering the
+    // district question with "Watuba Luwero" asked the same question again.
+    // That is the loop that made Ronald give up on Bulabakulu in September,
+    // rebuilt by accident. Take the ambiguous name out and resolve what is left.
+    if (locationResolution?.status === 'ambiguous') {
+      const districtsNamed = new Map();
+      for (const token of normalizeInput(locationCaption).split(/[^A-Za-z'’-]+/)) {
+        if (token.length < 4) continue;
+        const resolved = resolveWhatsappLocation(token, { allowText: true });
+        if (resolved?.status !== 'matched' || Number(resolved.confidence || 0) < 1) continue;
+        if (normalizeInput(resolved.match?.level || '') !== 'district') continue;
+        districtsNamed.set(normalizeInput(resolved.match.district).toLowerCase(), resolved);
+      }
+      // Only when the caption names exactly one district. Two would be a guess,
+      // and a guess about where a property is is worse than a question.
+      if (districtsNamed.size === 1) locationResolution = [...districtsNamed.values()][0];
+    }
   }
   if ((!locationResolution || locationResolution.status !== 'matched') && sessionData.customer_details?.location) {
     locationResolution = resolveWhatsappLocation(`${cleanCaption} ${sessionData.customer_details.location}`, { allowText: true });
@@ -5036,11 +5058,29 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   if (!Object.keys(locationPatch).length && (!locationResolution || locationResolution.status !== 'matched')) {
     const statedOnly = statedAreaWithoutDistrict(locationCaption);
     if (statedOnly) {
+      // When the place IS in the registry but sits in several districts —
+      // Wattuba is in three, Kasana in two — we know the shortlist. Carrying it
+      // turns an open question ("which district is it in?") into a closed one
+      // with the real answers on it, which is both easier to answer and
+      // impossible to answer wrongly.
+      const statedKey = normalizeInput(statedOnly).toLowerCase();
+      const candidateDistricts = locationResolution?.status === 'ambiguous'
+        ? Array.from(new Set((locationResolution.candidates || [])
+          .filter((candidate) => {
+            const name = normalizeInput(candidate?.name || candidate?.area || '').toLowerCase();
+            // Spelling varies (Watuba/Wattuba), so compare on letters alone.
+            return name.replace(/[^a-z]/g, '') === statedKey.replace(/[^a-z]/g, '')
+              || name.replace(/(.)\1+/g, '$1') === statedKey.replace(/(.)\1+/g, '$1');
+          })
+          .map((candidate) => normalizeInput(candidate?.district || ''))
+          .filter(Boolean)))
+        : [];
       locationPatch = {
         area: statedOnly,
         canonical_location_match: 'area_stated_district_unknown',
         canonical_location_confidence: 0.4,
-        canonical_location_source: 'whatsapp_caption'
+        canonical_location_source: 'whatsapp_caption',
+        ...(candidateDistricts.length > 1 ? { canonical_location_districts: candidateDistricts } : {})
       };
     }
   }
@@ -5275,11 +5315,19 @@ function employeePropertyMissing(facts = {}) {
     // is genuinely outstanding rather than asking again for what they gave us —
     // "exact area and district" is unanswerable when the area was never the
     // problem, and agents reply to it three times and give up.
-    missing.push(
-      facts.locationPatch?.canonical_location_match === 'area_stated_district_unknown'
-        ? `which district ${facts.locationPatch.area} is in`
-        : 'exact area and district'
-    );
+    if (facts.locationPatch?.canonical_location_match === 'area_stated_district_unknown') {
+      // We know the place by name. If the registry puts it in more than one
+      // district, say which ones — the agent picks instead of guessing what we
+      // want, and cannot name a district the place is not in.
+      const options = Array.isArray(facts.locationPatch.canonical_location_districts)
+        ? facts.locationPatch.canonical_location_districts
+        : [];
+      missing.push(options.length > 1
+        ? `which district ${facts.locationPatch.area} is in — ${options.slice(0, -1).join(', ')} or ${options[options.length - 1]}`
+        : `which district ${facts.locationPatch.area} is in`);
+    } else {
+      missing.push('exact area and district');
+    }
   }
   return missing;
 }
@@ -6909,10 +6957,15 @@ function agentMissingPhrases(missing = []) {
   return missing.map((item) => {
     const known = AGENT_MISSING_PHRASES.get(String(item || '').trim());
     if (known) return known;
-    // "which district Watuba is in" — name the place back so it is obvious we
-    // read it, and say that the district alone is a complete answer.
-    const district = /^which district (.+) is in$/i.exec(String(item || '').trim());
-    if (district) return `which district *${district[1]}* is in — just the district name is enough, e.g. Luwero`;
+    // "which district Watuba is in", optionally with the shortlist the registry
+    // knows. Name the place back so it is obvious we read it, and say that the
+    // district alone is a complete answer.
+    const district = /^which district (.+?) is in(?:\s+—\s+(.+))?$/i.exec(String(item || '').trim());
+    if (district) {
+      return district[2]
+        ? `which district *${district[1]}* is in — *${district[2]}*? Just the district name is enough.`
+        : `which district *${district[1]}* is in — just the district name is enough, e.g. Luwero`;
+    }
     return item;
   });
 }
