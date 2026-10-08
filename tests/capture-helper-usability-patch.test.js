@@ -5,17 +5,18 @@ const test = require('node:test');
 
 const root = path.join(__dirname, '..');
 
-test('capture helper usability patch is served and cache-busted by the server', () => {
+// The "capture helper usability" script patch was appended by a second
+// app.get('/assets/makaug-app.js') handler registered after the real one, so it
+// never ran (PR F, 8 Oct 2026, removed that dead handler and the patch). What
+// stays live is the release marker and the quick-paste panel in the app itself.
+test('capture helper: release marker kept, dead patch handler removed', () => {
   const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 
   assert.match(serverSource, /capture-helper-usability-20260607/);
-  assert.match(serverSource, /app\.get\('\/assets\/makaug-app\.js'/);
+  assert.equal((serverSource.match(/app\.get\('\/assets\/makaug-app\.js'/g) || []).length, 1);
   assert.match(serverSource, /applyCaptureHelperUsabilityIndexPatch/);
   assert.match(serverSource, /injectRuntimeBundleVersion/);
-  assert.match(serverSource, /adminPasteSocialCapturedLinks/);
-  assert.match(serverSource, /adminOpenSocialQuickPastePanel/);
-  assert.match(serverSource, /admin-social-capture-bookmarklet-url/);
-  assert.match(serverSource, /Copied means the long bookmark code is in your computer clipboard/);
-  assert.match(serverSource, /Simplest no-bookmark option/);
-  assert.match(serverSource, /Drag to bookmarks: makaug Capture Posts/);
+  assert.doesNotMatch(serverSource, /captureHelperUsabilityScriptPatch/);
+  assert.match(app, /function adminOpenSocialQuickPastePanel\(/);
 });

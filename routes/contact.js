@@ -348,7 +348,7 @@ async function handleLookingForProperty(req, res, next) {
         listing_type: cleanText(req.body.listing_type) || null
       },
       dedupeKey: `property_request:${request.id}`,
-      requestIp: req.ip,
+      requestIp: req.clientIp || req.ip,
       userAgent: req.get('user-agent')
     });
 

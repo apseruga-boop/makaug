@@ -11503,7 +11503,7 @@ router.post('/campaigns/draft', async (req, res, next) => {
         objective || null,
         generated.text,
         JSON.stringify(targetFilter),
-        req.ip || 'admin_api_key'
+        req.clientIp || req.ip || 'admin_api_key'
       ]
     );
 

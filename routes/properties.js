@@ -3630,7 +3630,7 @@ router.post('/listing-intent', async (req, res, next) => {
         location: location || ''
       },
       dedupeKey: `list_property_intent:${mode}:${listingType}:${sourcePage}:${phone || email || 'anonymous'}`,
-      requestIp: req.ip,
+      requestIp: req.clientIp || req.ip,
       userAgent: req.get('user-agent')
     });
 
@@ -4169,7 +4169,7 @@ router.post('/', async (req, res, next) => {
         budget_ugx: price
       },
       dedupeKey: `property_listing:${propertyId}`,
-      requestIp: req.ip,
+      requestIp: req.clientIp || req.ip,
       userAgent: req.get('user-agent')
     });
 

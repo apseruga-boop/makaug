@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { rateLimitClientKey } = require('../utils/clientIp');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
@@ -24,6 +25,7 @@ const {
 const router = express.Router();
 
 const submissionLimiter = rateLimit({
+  keyGenerator: rateLimitClientKey,
   windowMs: 60 * 60 * 1000,
   max: 20,
   standardHeaders: true,
@@ -38,7 +40,7 @@ function clean(value = '', maxLength = 500) {
 function requestFingerprint(req) {
   const secret = String(process.env.REQUEST_FINGERPRINT_SECRET || process.env.JWT_SECRET || 'makaug-harvest');
   return crypto.createHmac('sha256', secret)
-    .update(`${req.ip || ''}|${req.get('user-agent') || ''}`)
+    .update(`${req.clientIp || req.ip || ''}|${req.get('user-agent') || ''}`)
     .digest('hex');
 }
 

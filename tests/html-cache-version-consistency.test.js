@@ -23,3 +23,15 @@ test('runtime version endpoint exposes a non-cacheable build identity', () => {
   assert.match(server, /res\.set\('Cache-Control', 'no-store'\)/);
   assert.match(html, /bundle-version-commit-key-20260719/);
 });
+
+test('static assets: a year immutable only when the URL is versioned, otherwise an hour', () => {
+  assert.match(server, /const VERSIONED_STATIC_CACHE_CONTROL = 'public, max-age=31536000, immutable';/);
+  assert.match(server, /const UNVERSIONED_STATIC_CACHE_CONTROL = 'public, max-age=3600';/);
+  assert.doesNotMatch(server, /max-age=604800/);
+  assert.match(server, /setHeaders\(res, filePath\) \{[\s\S]{0,300}staticCacheControlForUrl\(req\.originalUrl \|\| req\.url\)/);
+  // Every local script/stylesheet the page loads gets ?v= (content hash at
+  // serve time for the static ones, the build version for the app bundles).
+  assert.match(server, /function versionLocalAssetUrls\(html\)/);
+  assert.match(html, /"\/assets\/makaug-app\.js\?v=" \+ encodeURIComponent\(window\.__makaugAppVersion\)/);
+  assert.match(html, /"\/assets\/makaug-admin\.js\?v=" \+ encodeURIComponent\(window\.__makaugAppVersion\)/);
+});

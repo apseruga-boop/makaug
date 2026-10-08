@@ -3,11 +3,9 @@
 const logger = require('../config/logger');
 
 function getIpAddress(req) {
-  return String(
-    req?.headers?.['x-forwarded-for']
-      || req?.socket?.remoteAddress
-      || ''
-  ).split(',')[0].trim() || null;
+  // Real visitor IP (utils/clientIp.js); x-forwarded-for[0] can be spoofed.
+  if (req?.clientIp) return req.clientIp;
+  return String(req?.ip || req?.socket?.remoteAddress || '').trim() || null;
 }
 
 async function writeAdminAudit(db, {

@@ -579,7 +579,7 @@ router.post('/inquiries', leadFormLimiter, leadHoneypot, async (req, res, next) 
         budget_ugx: budgetUgx
       },
       dedupeKey: `advertising_inquiry:${inquiry.id}`,
-      requestIp: req.ip,
+      requestIp: req.clientIp || req.ip,
       userAgent: req.get('user-agent')
     });
     const supportEmail = getSupportEmail();
