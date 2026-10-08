@@ -490,7 +490,7 @@ function renderSeoListingCard(listing, options = {}) {
   const image = absoluteUrl(listing.primary_image_url || CATEGORY_SEO[options.categoryKey]?.image || '/assets/house-ads-v3/home-hero.webp', options.baseUrl);
   return `<article class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card" data-ssr-property-card="${escapeHtml(listing.id)}">
     <a href="${escapeHtml(href)}" class="block h-48 overflow-hidden" aria-label="View ${escapeHtml(listing.title)}">
-      <img src="${escapeHtml(image)}" alt="${escapeHtml(listing.title)}" class="w-full h-full object-cover" loading="${options.eager ? 'eager' : 'lazy'}">
+      <img src="${escapeHtml(image)}" alt="${escapeHtml(listing.title)}" class="w-full h-full object-cover" width="640" height="384" decoding="async" loading="${options.eager ? 'eager' : 'lazy'}">
     </a>
     <div class="p-4">
       <h2 class="font-bold text-gray-900"><a href="${escapeHtml(href)}" class="hover:text-green-700 hover:underline">${escapeHtml(listing.title)}</a></h2>
@@ -770,7 +770,7 @@ function renderPropertySeoHtml(html, listing, options = {}) {
     <div class="lg:col-span-2">
       ${renderBreadcrumbs(items)}
       <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-        <img src="${escapeHtml(image)}" alt="${escapeHtml(listing.title)}" class="h-72 w-full object-cover" fetchpriority="high">
+        <img src="${escapeHtml(image)}" alt="${escapeHtml(listing.title)}" class="h-72 w-full object-cover" width="1200" height="675" decoding="async" fetchpriority="high">
         <div class="p-5">
           <h1 class="text-3xl font-bold text-gray-900 serif">${escapeHtml(listing.title)}</h1>
           <p class="mt-2 text-gray-600">${location ? `<a href="${escapeHtml(areaUrl)}" class="font-semibold text-green-700 hover:underline">${escapeHtml(locationLabel)}</a>` : escapeHtml(locationLabel)}</p>

@@ -39,7 +39,14 @@ const languages = ['lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar'];
 
 assert(packs && typeof packs === 'object', 'generated About/Advertise language pack should load');
 assert(html.includes('/assets/about-advertise-i18n.js?v=whatsapp-number-20260911'), 'page should load the generated language pack');
-assert(html.indexOf('/assets/about-advertise-i18n.js') < html.indexOf('/assets/makaug-app.js'), 'language pack should load before the main app');
+// The pack is injected by the same loader as the main app, first, and both
+// with async=false so it executes before makaug-app.js reads it. It must not
+// be a render-blocking <script src> in <head> (PR F).
+const packAt = html.indexOf('"/assets/about-advertise-i18n.js');
+const appAt = html.indexOf('script.src = "/assets/makaug-app.js');
+assert(packAt > 0 && appAt > packAt, 'language pack should be injected before the main app');
+assert(/aboutAdvertiseI18n\.async = false;/.test(html) && /script\.async = false;/.test(html.slice(appAt)), 'pack and app must execute in insertion order');
+assert(!/<script src="\/assets\/about-advertise-i18n\.js/.test(html), 'language pack must not block rendering');
 
 const placeholderTokens = (value) => Array.from(String(value).matchAll(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g), (match) => match[1]).sort();
 const markupTokens = (value) => Array.from(String(value).matchAll(/<\/?[a-z][^>]*>/gi), (match) => match[0]).sort();

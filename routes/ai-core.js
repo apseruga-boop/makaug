@@ -82,9 +82,8 @@ router.post('/ingest/events', async (req, res, next) => {
     const source = cleanText(body.source, 80) || 'unknown';
     const channel = cleanText(body.channel, 40) || 'web';
     const session = asObject(body.session, {});
-    const requestIp = req.headers['x-forwarded-for']
-      ? String(req.headers['x-forwarded-for']).split(',')[0].trim()
-      : req.ip;
+    // Real visitor IP (utils/clientIp.js); x-forwarded-for[0] can be spoofed.
+    const requestIp = req.clientIp || req.ip;
     const userAgent = req.get('user-agent') || null;
 
     const results = [];

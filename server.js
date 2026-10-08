@@ -99,6 +99,7 @@ const {
   sitemapEntries
 } = require('./services/publicSeoService');
 const { canonicalLocationOptions } = require('./utils/locationRegistry');
+const { clientIpMiddleware, rateLimitClientKey } = require('./utils/clientIp');
 const { buildLandingCopy } = require('./services/publicLandingCopy');
 const {
   loadPublicSeoListings,
@@ -160,7 +161,11 @@ app.use(
       if (!origin || !corsOrigins.length || corsOrigins.includes(origin) || isLocalOrigin || isTenantOrigin) {
         return callback(null, true);
       }
-      return callback(new Error('CORS origin not allowed'));
+      // A rejected origin is a 403, not a 500 (a plain Error reached errorHandler as 500).
+      const corsError = new Error('CORS origin not allowed');
+      corsError.status = 403;
+      corsError.code = 'cors_origin_not_allowed';
+      return callback(corsError);
     },
     credentials: true
   })
@@ -200,6 +205,55 @@ app.get('/healthz', (_req, res) => {
   });
 });
 
+// Real visitor IP (CF-Connecting-IP, trusted only from a Cloudflare hop).
+app.use(clientIpMiddleware);
+
+// Non-makaug hosts (makaug.onrender.com, old domains) 301 to the canonical
+// host for GET/HEAD. Non-GET /api calls are only logged: webhooks don't follow
+// redirects. /healthz above stays reachable on any host. render-start.js
+// forwards the original Host as X-Forwarded-Host (it rewrites Host itself).
+const CANONICAL_PUBLIC_HOST = (() => {
+  try { return new URL(ACTIVE_TENANT.domain).hostname.toLowerCase(); } catch (_) { return 'makaug.com'; }
+})();
+const ALLOWED_REQUEST_HOSTS = new Set([
+  CANONICAL_PUBLIC_HOST,
+  `www.${CANONICAL_PUBLIC_HOST}`,
+  'localhost',
+  '127.0.0.1',
+  '::1',
+  ...String(process.env.ALLOWED_HOSTS || '').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean)
+]);
+function requestHostname(req) {
+  const raw = String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim().toLowerCase();
+  if (raw.startsWith('[')) return raw.slice(1, raw.indexOf(']'));
+  return raw.replace(/:\d+$/, '');
+}
+function isAllowedRequestHost(hostname = '') {
+  return !hostname || ALLOWED_REQUEST_HOSTS.has(hostname) || hostname.endsWith('.localhost');
+}
+const HOST_REDIRECT_EXEMPT_PATHS = new Set(['/api/health', '/api/version']);
+// Machine callers (the WAHA bridge polls with GET; Meta verifies its webhook
+// with a GET challenge) must keep working on whatever host they were given,
+// without a redirect that would route them through Cloudflare.
+const HOST_REDIRECT_EXEMPT_PREFIXES = [
+  '/api/whatsapp/webhook', '/api/whatsapp/web-bridge/', '/api/pay/webhooks/', '/api/money-sms/',
+  '/api/advertising/payment-webhook', '/api/monetization/payments/webhook', '/api/ai-ceo/'
+];
+function isHostRedirectExempt(pathname = '') {
+  return HOST_REDIRECT_EXEMPT_PATHS.has(pathname) || HOST_REDIRECT_EXEMPT_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+app.use((req, res, next) => {
+  const hostname = requestHostname(req);
+  if (isAllowedRequestHost(hostname) || isHostRedirectExempt(req.path)) return next();
+  if (['GET', 'HEAD'].includes(req.method)) {
+    return res.redirect(301, `https://${CANONICAL_PUBLIC_HOST}${req.originalUrl || '/'}`);
+  }
+  if (req.path.startsWith('/api/')) {
+    logger.warn('Non-GET API call on a non-canonical host (not redirected)', { host: hostname, method: req.method, path: req.path });
+  }
+  return next();
+});
+
 app.use((_req, res, next) => {
   if (runtimeReady) return next();
   res.set('Cache-Control', 'no-store');
@@ -214,12 +268,37 @@ app.use((_req, res, next) => {
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
+  keyGenerator: rateLimitClientKey,
   skip: (req) => req.path === '/analytics/config',
   standardHeaders: true,
   legacyHeaders: false
 });
 
 app.use('/api', apiLimiter);
+
+// API responses are not cacheable by default. Routes that deliberately allow
+// public caching (anonymous inventory, off-plan, short-term…) still can, but
+// never for a request that carries auth: that becomes private, no-store.
+function requestCarriesAuth(req) {
+  if (req.get('authorization') || req.get('x-api-key') || req.get('x-admin-api-key')) return true;
+  return /(?:^|;\s*)makaug_auth_token=/.test(String(req.get('cookie') || ''));
+}
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (requestCarriesAuth(req)) {
+    const writeHead = res.writeHead;
+    res.writeHead = function writeHeadPrivate(...args) {
+      if (!/^private, no-store$/.test(String(res.getHeader('Cache-Control') || ''))) {
+        const current = String(res.getHeader('Cache-Control') || '');
+        if (/public|max-age=[1-9]|s-maxage/.test(current) || !current) res.setHeader('Cache-Control', 'private, no-store');
+      }
+      res.removeHeader('CDN-Cache-Control');
+      res.removeHeader('Cloudflare-CDN-Cache-Control');
+      return writeHead.apply(this, args);
+    };
+  }
+  next();
+});
 
 app.get('/api/version', (_req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -765,7 +844,21 @@ function schedulePublicCacheWarmup(baseUrl) {
 const PUBLIC_HTML_CACHE_CONTROL = isProduction
   ? 'no-cache, max-age=0, must-revalidate'
   : 'no-store';
-const LONG_LIVED_STATIC_CACHE_CONTROL = 'public, max-age=604800, immutable';
+// Cloudflare caches on these headers, so "immutable" is only promised when the
+// URL changes with the content: a ?v= query or a content hash in the file name.
+// Everything else may change in place and gets one hour.
+const VERSIONED_STATIC_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+const UNVERSIONED_STATIC_CACHE_CONTROL = 'public, max-age=3600';
+const CONTENT_HASH_FILENAME_PATTERN = /[.-][a-f0-9]{8,}\.[a-z0-9]+$/i;
+function isVersionedStaticUrl(url = '') {
+  const raw = String(url || '');
+  const [pathname, query = ''] = raw.split('?');
+  if (/(?:^|&)v=[^&]+/.test(query)) return true;
+  return CONTENT_HASH_FILENAME_PATTERN.test(pathname || '');
+}
+function staticCacheControlForUrl(url = '') {
+  return isVersionedStaticUrl(url) ? VERSIONED_STATIC_CACHE_CONTROL : UNVERSIONED_STATIC_CACHE_CONTROL;
+}
 
 function appendVaryHeader(res, value) {
   const next = String(value || '').trim();
@@ -924,7 +1017,7 @@ function applyCaptureHelperUsabilityIndexPatch(html) {
   );
 }
 
-// tailwind.css is served with a 7-day immutable cache, so its URL must change
+// tailwind.css is served with a 1-year immutable cache, so its URL must change
 // whenever its content does, or browsers keep an old copy that lacks new classes.
 let tailwindCssVersion = '';
 function tailwindCssCacheKey() {
@@ -938,10 +1031,41 @@ function tailwindCssCacheKey() {
   return tailwindCssVersion;
 }
 
+// Local scripts and stylesheets referenced from index.html are cached for a
+// year once they carry ?v=, so the version is the file's own content hash:
+// a hand-written ?v= label that nobody bumps can never pin a stale file.
+// makaug-app.js keeps its runtime bundle version (set elsewhere).
+const localAssetHashCache = new Map();
+function localAssetContentHash(urlPath = '') {
+  if (localAssetHashCache.has(urlPath)) return localAssetHashCache.get(urlPath);
+  let hash = '';
+  try {
+    const relative = String(urlPath).replace(/^\/+/, '');
+    if (!/^(assets|config)\//.test(relative) || relative.includes('..')) return '';
+    const body = fs.readFileSync(path.join(staticRoot, relative));
+    hash = require('crypto').createHash('sha1').update(body).digest('hex').slice(0, 12);
+  } catch (_error) {
+    hash = '';
+  }
+  localAssetHashCache.set(urlPath, hash);
+  return hash;
+}
+function versionLocalAssetUrls(html) {
+  return String(html || '').replace(
+    /(")(\/(?:assets|config)\/[^"?#\s]+\.(?:js|css))(?:\?v=[^"#\s]*)?(")/g,
+    (match, before, urlPath, after) => {
+      if (/\/assets\/makaug-(app|admin)\.js$/.test(urlPath)) return match;
+      const hash = localAssetContentHash(urlPath);
+      return hash ? `${before}${urlPath}?v=${hash}${after}` : match;
+    }
+  );
+}
+
 function injectRuntimeBundleVersion(html) {
   if (!html) return html;
   const version = JSON.stringify(runtimeBundleVersion());
   html = html.replace('href="/assets/tailwind.css"', `href="/assets/tailwind.css?v=${tailwindCssCacheKey()}"`);
+  html = versionLocalAssetUrls(html);
   return html.replace(
     'window.__makaugAppVersion = "__MAKAUG_BUNDLE_VERSION__";',
     `window.__makaugAppVersion = ${version};\n    document.documentElement.dataset.makaugAppVersion = window.__makaugAppVersion;`
@@ -958,166 +1082,6 @@ function injectRuntimeMetaPixelId(html) {
   );
 }
 
-const captureHelperUsabilityScriptPatch = `
-;(() => {
-  const version = "${captureHelperUsabilityVersion}";
-  const escapeHtml = (value = "") => String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-  const attr = escapeHtml;
-
-  window.adminSocialCaptureHelperScript = function adminSocialCaptureHelperScript() {
-    return \`(async function(){
-  var clean=function(value){return String(value||"").replace(/\\\\s+/g," ").trim();};
-  var normalize=function(href){
-    try {
-      var u=new URL(href,location.href);
-      var host=u.hostname.replace(/^www\\\\./,"").toLowerCase();
-      var path=u.pathname || "";
-      if (host==="youtu.be") {
-        var shortId=path.replace(/^\\\\/+/, "").split("/")[0];
-        return shortId ? "https://www.youtube.com/watch?v="+shortId : "";
-      }
-      if (host.endsWith("youtube.com")) {
-        if (path==="/watch" && u.searchParams.get("v")) return "https://www.youtube.com/watch?v="+u.searchParams.get("v");
-        if (path.indexOf("/shorts/")===0) return "https://www.youtube.com/shorts/"+path.split("/")[2];
-      }
-      if (host.endsWith("tiktok.com")) {
-        var tik=path.match(/^\\\\/@[^/]+\\\\/video\\\\/\\\\d+/);
-        if (tik) return "https://www.tiktok.com"+tik[0];
-      }
-      if (host.endsWith("instagram.com")) {
-        var insta=path.match(/^\\\\/(p|reel|tv)\\\\/[^/]+/);
-        if (insta) return "https://www.instagram.com"+insta[0]+"/";
-      }
-      if (host==="x.com" || host==="twitter.com" || host.endsWith(".x.com") || host.endsWith(".twitter.com")) {
-        var x=path.match(/^\\\\/[^/]+\\\\/status\\\\/\\\\d+/);
-        if (x) return "https://x.com"+x[0];
-      }
-      if (host.endsWith("facebook.com") || host.endsWith("fb.watch")) {
-        if (host.endsWith("fb.watch")) return u.origin+path;
-        if (path.indexOf("/watch/")===0 && u.searchParams.get("v")) return "https://www.facebook.com/watch/?v="+u.searchParams.get("v");
-        if (path.indexOf("/reel/")===0) return "https://www.facebook.com"+path.split("/").slice(0,3).join("/");
-        if (path.indexOf("/groups/")===0 && path.indexOf("/posts/")>0) return "https://www.facebook.com"+path.split("/").slice(0,5).join("/");
-        if (/\\\\/posts\\\\//.test(path)) return "https://www.facebook.com"+path.split("/").slice(0,4).join("/");
-        if (/\\\\/videos\\\\//.test(path)) return "https://www.facebook.com"+path.split("/").slice(0,4).join("/");
-        if (path==="/story.php" && u.searchParams.get("story_fbid")) return u.href;
-        if (path==="/permalink.php" && u.searchParams.get("story_fbid")) return u.href;
-      }
-      return "";
-    } catch (error) {
-      return "";
-    }
-  };
-  var seen={};
-  var rows=[];
-  Array.prototype.slice.call(document.querySelectorAll("a[href]")).forEach(function(anchor){
-    var url=normalize(anchor.href);
-    if (!url || seen[url]) return;
-    seen[url]=true;
-    var card=anchor.closest("article,[data-e2e*=video],[data-testid*=tweet],li,div") || anchor;
-    var text=clean(card.innerText || anchor.innerText || anchor.getAttribute("aria-label") || document.title || "").slice(0,220);
-    rows.push(url+(text ? " | "+text : ""));
-  });
-  if (!rows.length) {
-    alert("No exact social post links found on this visible page. Open a video/post/grid source page first, then run the helper again.");
-    return;
-  }
-  var output=rows.join("\\\\n");
-  try {
-    await navigator.clipboard.writeText(output);
-  } catch (error) {
-    var box=document.createElement("textarea");
-    box.value=output;
-    box.style.position="fixed";
-    box.style.left="8px";
-    box.style.top="8px";
-    box.style.width="80vw";
-    box.style.height="40vh";
-    box.style.zIndex="2147483647";
-    document.body.appendChild(box);
-    box.focus();
-    box.select();
-  }
-  alert("makaug copied "+rows.length+" exact social post link(s). Go back to King, click Paste Captured Links, and paste.");
-})();\`;
-  };
-
-  window.adminSocialCaptureBookmarkletUrl = function adminSocialCaptureBookmarkletUrl() {
-    return \`javascript:\${encodeURIComponent(window.adminSocialCaptureHelperScript())}\`;
-  };
-
-  window.adminPasteSocialCapturedLinks = function adminPasteSocialCapturedLinks(seedText = "") {
-    if (typeof window.adminOpenSocialQuickPastePanel === "function") {
-      return window.adminOpenSocialQuickPastePanel(seedText);
-    }
-    const statusEl = document.getElementById("admin-found-online-status")
-      || document.getElementById("admin-social-source-status");
-    if (statusEl && typeof window.adminSocialQuickPastePanelHtml === "function") {
-      statusEl.classList.remove("hidden");
-      statusEl.innerHTML = window.adminSocialQuickPastePanelHtml({ seedText });
-      if (typeof window.adminScrollTo === "function") {
-        window.adminScrollTo(\`#\${statusEl.id || "admin-found-online-status"}\`);
-      }
-      return;
-    }
-    if (typeof toast === "function") {
-      toast("Paste box is still loading. Use Paste Captured Links at the top of the dashboard.");
-    }
-  };
-
-  window.adminSocialCaptureHelperPanelHtml = function adminSocialCaptureHelperPanelHtml({ copiedLabel = "" } = {}) {
-    const bookmarklet = window.adminSocialCaptureBookmarkletUrl();
-    return \`
-    <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 space-y-3 text-sm text-indigo-950">
-      <div><div class="font-black">Capture helper setup</div><div>Use this once to create a browser bookmark. After that, open TikTok, YouTube, Facebook, Instagram, or X source pages and click the bookmark. It copies visible exact post/video links so you can paste them into makaug.</div>
-        \${copiedLabel ? \`<div class="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-950"><div class="font-black">\${escapeHtml(copiedLabel)}</div><div class="mt-1 text-[11px]">Copied means the long bookmark code is in your computer clipboard. Nothing opens by itself. The next step is to paste it into a new browser bookmark URL field.</div></div>\` : ""}
-      </div>
-      <button type="button" onclick="adminPasteSocialCapturedLinks()" class="bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Open Paste Box</button>
-      <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">
-        <div class="font-black text-violet-950">Simplest no-bookmark option</div>
-        <div class="mt-1 text-xs">If bookmark setup feels annoying, open one exact YouTube, TikTok, Facebook, Instagram, or X post, copy the address bar link, then click Open Paste Box here and paste it. This works one link at a time.</div>
-      </div>
-      <div class="grid md:grid-cols-4 gap-2">
-        <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>1. Show bookmarks bar</b><br><span class="text-xs">Press Cmd+Shift+B in Chrome if you cannot see the bookmarks bar.</span></div>
-        <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>2. Save helper</b><br><span class="text-xs">Drag the purple makaug Capture Posts button to the bookmarks bar. If dragging is blocked, copy the Bookmark URL below into a new bookmark URL field.</span></div>
-        <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>3. Capture links</b><br><span class="text-xs">Open a source page, scroll until useful posts are visible, then click the bookmark. The helper copies exact links.</span></div>
-        <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>4. Paste into King</b><br><span class="text-xs">Return to makaug, click Open Paste Box, preview, then Queue Found Online for King review.</span></div>
-      </div>
-      <div class="rounded-xl border border-indigo-100 bg-white p-3">
-        <div class="flex flex-wrap gap-2">
-          <a href="\${attr(bookmarklet)}" onclick="return false" title="Drag this link to your browser bookmarks bar" class="inline-flex border border-indigo-300 bg-indigo-700 text-white hover:bg-indigo-800 px-3 py-2 rounded-lg text-xs font-bold">Drag to bookmarks: makaug Capture Posts</a>
-          <button type="button" onclick="adminCopySocialCaptureBookmarklet()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Bookmarklet URL</button>
-          <button type="button" onclick="adminSelectSocialCaptureBookmarkletCode()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Select Bookmarklet URL</button>
-          <button type="button" onclick="adminShowSocialCaptureConsoleCode()" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Console Code</button>
-          <button type="button" onclick="adminLoadSocialCaptureExample()" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Load Example</button>
-        </div>
-        <label class="mt-2 block text-[11px] font-black text-indigo-950" for="admin-social-capture-bookmarklet-url">Bookmark URL to paste</label>
-        <textarea id="admin-social-capture-bookmarklet-url" class="mt-1 w-full rounded-lg border border-indigo-100 bg-indigo-50 p-2 text-[11px] font-mono text-indigo-950" rows="3" readonly>\${escapeHtml(bookmarklet)}</textarea>
-        <div class="mt-2 text-xs">Fastest setup: drag the purple makaug Capture Posts button to your browser bookmarks bar. If dragging is blocked, copy the bookmark URL, create a new browser bookmark named makaug Capture Posts, then paste this text into the bookmark URL field.</div>
-      </div>
-      <details class="bg-white rounded-xl border border-indigo-100 p-3"><summary class="font-bold cursor-pointer">Manual console fallback</summary><pre class="mt-2 whitespace-pre-wrap text-xs text-gray-700">\${escapeHtml(window.adminSocialCaptureHelperScript())}</pre></details>
-    </div>\`;
-  };
-
-  window.adminSelectSocialCaptureBookmarkletCode = function adminSelectSocialCaptureBookmarkletCode() {
-    const textarea = document.getElementById("admin-social-capture-bookmarklet-url");
-    if (!textarea) return;
-    textarea.focus();
-    textarea.select();
-    try {
-      document.execCommand("copy");
-      if (typeof toast === "function") toast("Bookmark URL selected and copied");
-    } catch (error) {
-      if (typeof toast === "function") toast("Bookmark URL selected");
-    }
-  };
-
-  window.__makaugCaptureHelperUsabilityPatch = version;
-})();`;
 
 function readIndexHtml() {
   if (isProduction && cachedIndexHtml) return cachedIndexHtml;
@@ -1125,6 +1089,13 @@ function readIndexHtml() {
   const html = injectAboutCommercialProducts(injectRuntimeMetaPixelId(injectRuntimeBundleVersion(patchedHtml)));
   if (isProduction) cachedIndexHtml = html;
   return html;
+}
+
+// The hero photo is only above the fold on the homepage; preloading it with
+// fetchpriority=high on every other page competed with that page's own LCP.
+function applyHomeHeroPreload(html, normalizedPath = '/') {
+  if (normalizedPath === '/' || normalizedPath === '/index.html') return html;
+  return String(html || '').replace(/\s*<link rel="preload" as="image"[^>]*data-home-hero-preload[^>]*>/, '');
 }
 
 function renderPublicHtml(pathname) {
@@ -1145,6 +1116,7 @@ function renderPublicHtml(pathname) {
   }
   rendered = applyHarvestPublicSubmissionVisibility(rendered);
   rendered = injectShortTermRuntimeConfig(applyShortTermVisibility(rendered));
+  rendered = applyHomeHeroPreload(rendered, normalizedBasePath);
   if (isProduction) {
     publicHtmlCache.set(key, rendered);
     while (publicHtmlCache.size > PUBLIC_HTML_CACHE_MAX_ENTRIES) {
@@ -1456,22 +1428,89 @@ app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config
   }
 });
 
+// makaug-app.js is served from the minified public bundle that
+// `npm run build:js` commits under assets/build/, and the staff/admin code from
+// makaug-admin.js (loaded only by the protected shell). If the bundles were
+// built from an older makaug-app.js (someone edited the source without
+// rebuilding), the full source is served and the admin URL is an empty
+// script: slower, never broken. The ZA tenant always gets the adapted source.
+const builtPublicAppPath = path.join(staticRoot, 'assets', 'build', 'makaug-app.min.js');
+const builtAdminAppPath = path.join(staticRoot, 'assets', 'build', 'makaug-admin.min.js');
+let appBundleState = null;
+function builtBundleSourceHash(filePath) {
+  let fd;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const head = Buffer.alloc(300);
+    const bytes = fs.readSync(fd, head, 0, head.length, 0);
+    return (head.slice(0, bytes).toString('utf8').match(/source-sha1:([a-f0-9]+)/) || [])[1] || '';
+  } catch (_error) {
+    return '';
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+function appBundleBuildState() {
+  try {
+    const stat = fs.statSync(appJsPath);
+    const key = `${stat.size}:${stat.mtimeMs}`;
+    if (appBundleState && appBundleState.key === key) return appBundleState;
+    const sourceSha = require('crypto').createHash('sha1').update(fs.readFileSync(appJsPath)).digest('hex').slice(0, 16);
+    const fresh = builtBundleSourceHash(builtPublicAppPath) === sourceSha
+      && builtBundleSourceHash(builtAdminAppPath) === sourceSha;
+    if (!fresh) logger.warn('assets/build bundles are stale or missing; serving the full makaug-app.js source. Run npm run build:js.');
+    appBundleState = { key, fresh };
+  } catch (_error) {
+    appBundleState = { key: '', fresh: false };
+  }
+  return appBundleState;
+}
+function useBuiltAppBundles() {
+  return ACTIVE_COUNTRY_CODE === 'UG' && appBundleBuildState().fresh;
+}
+
+app.get('/assets/makaug-admin.js', (req, res, next) => {
+  try {
+    if (!useBuiltAppBundles()) {
+      res.set('X-makaug-App-Bundle', 'source');
+      return sendBufferResponse(req, res, Buffer.from('/* makaug-app.js already includes the admin code. */\n'), {
+        contentType: 'application/javascript; charset=utf-8',
+        cacheControl: 'no-store',
+        dynamicCompression: false
+      });
+    }
+    const asset = readCachedTextAsset(builtAdminAppPath);
+    res.set('X-makaug-App-Bundle', 'built');
+    return sendBufferResponse(req, res, asset.body, {
+      contentType: 'application/javascript; charset=utf-8',
+      cacheControl: staticCacheControlForUrl(req.originalUrl || req.url),
+      etag: asset.etag,
+      lastModified: asset.lastModified,
+      compressed: asset.compressed
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.get('/assets/makaug-app.js', (req, res, next) => {
   try {
     if (ACTIVE_COUNTRY_CODE !== 'UG') {
       const adapted = readCountryAppAsset();
       return sendBufferResponse(req, res, adapted.body, {
         contentType: 'application/javascript; charset=utf-8',
-        cacheControl: LONG_LIVED_STATIC_CACHE_CONTROL,
+        cacheControl: staticCacheControlForUrl(req.originalUrl || req.url),
         etag: adapted.etag,
         lastModified: adapted.lastModified,
         dynamicCompression: false
       });
     }
-    const asset = readCachedTextAsset(appJsPath);
+    const built = useBuiltAppBundles();
+    const asset = readCachedTextAsset(built ? builtPublicAppPath : appJsPath);
+    res.set('X-makaug-App-Bundle', built ? 'built' : 'source');
     return sendBufferResponse(req, res, asset.body, {
       contentType: 'application/javascript; charset=utf-8',
-      cacheControl: LONG_LIVED_STATIC_CACHE_CONTROL,
+      cacheControl: staticCacheControlForUrl(req.originalUrl || req.url),
       etag: asset.etag,
       lastModified: asset.lastModified,
       compressed: asset.compressed
@@ -1911,7 +1950,7 @@ function sendPublicIndex(req, res, next) {
       // The review desks live on the staff and admin dashboards, which are
       // protected routes and therefore skip renderPublicHtml. They still need
       // the runtime config, or short-term.js will not boot there.
-      const html = injectShortTermRuntimeConfig(readIndexHtml());
+      const html = applyHomeHeroPreload(injectShortTermRuntimeConfig(readIndexHtml()), req.path);
       res.set('Cache-Control', 'no-store');
       return sendTextResponse(req, res, html, {
         cacheControl: 'no-store'
@@ -2018,31 +2057,20 @@ app.use((req, res, next) => {
   return sendPublicIndex(req, res, next);
 });
 
-app.get('/assets/makaug-app.js', (req, res, next) => {
-  const appAssetPath = path.join(staticRoot, 'assets', 'makaug-app.js');
-  fs.readFile(appAssetPath, 'utf8', (error, source) => {
-    if (error) return next(error);
-    const alreadyPatched = source.includes('admin-social-capture-bookmarklet-url')
-      && source.includes('Simplest no-bookmark option');
-    res.type('application/javascript');
-    res.set('Cache-Control', 'no-store');
-    return res.send(alreadyPatched ? source : `${source}\n${captureHelperUsabilityScriptPatch}`);
-  });
-});
-
 // Static files come ONLY from this allowlist. Until 8 Oct 2026 the whole repo
 // root was served, so /server.js, /routes/*, /package.json, /db/** etc. were
 // public. Anything else with a file extension is a 404 (noindex).
 const staticFileOptions = {
   index: false,
   dotfiles: 'ignore',
-  maxAge: '7d',
+  cacheControl: false,
   setHeaders(res, filePath) {
     if (/\.(html?)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'no-store');
       return;
     }
-    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    const req = res.req || {};
+    res.setHeader('Cache-Control', staticCacheControlForUrl(req.originalUrl || req.url));
   }
 };
 const STATIC_ROOT_FILE_ALLOWLIST = new Set([
@@ -2055,7 +2083,7 @@ const STATIC_ROOT_FILE_ALLOWLIST = new Set([
 app.use('/assets', express.static(path.join(staticRoot, 'assets'), staticFileOptions));
 app.use((req, res, next) => {
   if (!['GET', 'HEAD'].includes(req.method) || !STATIC_ROOT_FILE_ALLOWLIST.has(req.path)) return next();
-  res.set('Cache-Control', req.path.endsWith('.html') ? 'no-store' : 'public, max-age=604800');
+  res.set('Cache-Control', req.path.endsWith('.html') ? 'no-store' : staticCacheControlForUrl(req.originalUrl || req.url));
   return res.sendFile(path.join(staticRoot, req.path), (error) => {
     if (error) next(error.status === 404 || error.code === 'ENOENT' ? undefined : error);
   });

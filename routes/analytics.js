@@ -43,7 +43,7 @@ router.post('/event', async (req, res, next) => {
     const body = req.body || {};
 
     const eventName = cleanText(body.event_name || body.eventName);
-    const clientId = cleanText(body.client_id || body.clientId || req.ip);
+    const clientId = cleanText(body.client_id || body.clientId || (req.clientIp || req.ip));
     const pagePath = cleanText(body.page_path || body.pagePath);
     const source = cleanText(body.source || 'web');
     const userPhone = cleanText(body.user_phone);
@@ -107,7 +107,7 @@ router.post('/web-vitals', async (req, res, next) => {
     const metricName = cleanText(body.metricName || body.metric_name || body.name);
     const route = cleanText(body.route || body.page_path || body.pagePath);
     const rating = cleanText(body.rating || '');
-    const sessionId = cleanText(body.sessionId || body.session_id || body.client_id || req.ip);
+    const sessionId = cleanText(body.sessionId || body.session_id || body.client_id || (req.clientIp || req.ip));
     const value = Number(body.value);
 
     if (!metricName || !Number.isFinite(value)) {
@@ -125,7 +125,7 @@ router.post('/web-vitals', async (req, res, next) => {
       RETURNING id, created_at`,
       [
         `web_vital_${metricName.toLowerCase()}`,
-        sessionId || req.ip,
+        sessionId || (req.clientIp || req.ip),
         route || null,
         'web_vitals',
         JSON.stringify({

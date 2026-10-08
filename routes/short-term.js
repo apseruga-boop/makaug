@@ -4,6 +4,7 @@ const { createLead, recordLeadHandoff } = require('../services/leadService');
 const cleanStText = (value) => String(value ?? '').trim().slice(0, 500);
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { rateLimitClientKey } = require('../utils/clientIp');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
@@ -93,6 +94,7 @@ router.use((req, res, next) => {
 // limiter, so a script cannot fill a host's enquiry list or a listing's
 // review wall.
 const writeLimiter = rateLimit({
+  keyGenerator: rateLimitClientKey,
   windowMs: 15 * 60 * 1000,
   max: 20,
   standardHeaders: true,
@@ -101,6 +103,7 @@ const writeLimiter = rateLimit({
 });
 
 const intakeLimiter = rateLimit({
+  keyGenerator: rateLimitClientKey,
   windowMs: 60 * 60 * 1000,
   max: 8,
   standardHeaders: true,
@@ -498,7 +501,7 @@ router.post('/listings', intakeLimiter, async (req, res) => {
       });
     }
     const created = await createShortTermListing(db, req.body || {}, {
-      ip: req.ip,
+      ip: req.clientIp || req.ip,
       hostUserId: req.userAuth?.id || null,
       listedVia: 'website',
       referralCode: req.body?.referral_code || req.query?.ref || null
@@ -546,7 +549,7 @@ router.post('/listings', intakeLimiter, async (req, res) => {
 router.post('/staff/listings', requireStaffAccess, async (req, res) => {
   try {
     const created = await createShortTermListing(db, req.body || {}, {
-      ip: req.ip,
+      ip: req.clientIp || req.ip,
       listedVia: 'staff_assisted',
       enteredByStaffId: req.staffAuth?.userId || null,
       enteredByStaffName: [req.userAuth?.first_name, req.userAuth?.last_name]
@@ -600,6 +603,7 @@ router.post('/staff/listings/validate', requireStaffAccess, (req, res) => {
 // ---------------------------------------------------------------------------
 
 const photoLimiter = rateLimit({
+  keyGenerator: rateLimitClientKey,
   windowMs: 60 * 60 * 1000,
   max: 120,
   standardHeaders: true,

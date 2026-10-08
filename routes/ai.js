@@ -962,7 +962,7 @@ async function recordAssistantBackendTrace(req, { userMessage, intent, language,
     },
     entities: context.entities || {},
     outcome: 'responded',
-    requestIp: req.ip,
+    requestIp: req.clientIp || req.ip,
     userAgent: req.get('user-agent')
   });
 

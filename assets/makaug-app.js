@@ -58216,6 +58216,35 @@ function renderStaticDetailMapFallback(el, p = {}, point = {}) {
     </a>`;
 }
 
+function waitForDetailMapVisible(el) {
+  return new Promise((resolve) => {
+    if (!el || typeof window.IntersectionObserver !== "function") {
+      resolve(true);
+      return;
+    }
+    if (typeof el.__makaugMapWaitCancel === "function") el.__makaugMapWaitCancel();
+    let settled = false;
+    let observer = null;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      if (observer) observer.disconnect();
+      el.removeEventListener("pointerdown", onTap);
+      el.removeEventListener("focusin", onTap);
+      el.__makaugMapWaitCancel = null;
+      resolve(value);
+    };
+    const onTap = () => finish(true);
+    el.__makaugMapWaitCancel = () => finish(false);
+    el.addEventListener("pointerdown", onTap, { once: true });
+    el.addEventListener("focusin", onTap, { once: true });
+    observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) finish(true);
+    }, { rootMargin: "200px 0px" });
+    observer.observe(el);
+  });
+}
+
 async function initDetailMap(p) {
   const el = document.getElementById("map-detail");
   if (!el) return;
@@ -58224,6 +58253,10 @@ async function initDetailMap(p) {
   const lat = point?.lat ?? MAP_DEFAULT_CENTER.lat;
   const lng = point?.lng ?? MAP_DEFAULT_CENTER.lng;
   renderStaticDetailMapFallback(el, p, point);
+  // Google Maps JS (and Leaflet) load only when the map is about to scroll
+  // into view or is tapped, not on every detail page view (Core Web Vitals).
+  if (!(await waitForDetailMapVisible(el))) return;
+  if (lastDetailMapProperty !== p || !el.isConnected) return;
   const useGoogle = await ensureGoogleMapsApi();
   if (useGoogle && window.google?.maps) {
     el.innerHTML = "";
