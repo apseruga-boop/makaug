@@ -345,3 +345,70 @@ test('the three generic gaps are still said in plain words, exactly', () => {
     assert.doesNotMatch(phrase, /sale\/rent\/land\/commercial\/student/, 'no field names reach an agent');
   }
 });
+
+/**
+ * "Can I tap the link" — answering the question he actually asked.
+ *
+ * 8 Oct 2026, 14:38. Migadde Hakim was approved and sent the UGX 50,000
+ * payment link. At 14:39 he asked "What should I do now?" and "Can I tap the
+ * link". The first matched the how-to-post pattern and he was told to send a
+ * property. The second matched nothing and he got the menu.
+ *
+ * He had been handed a bill by a number he had known for two hours and asked
+ * the only two questions anybody asks — is this real, and what do I do — and
+ * we answered a different question twice.
+ */
+const { agentPayLinkAside, AGENT_PAY_LINK_QUESTION } = require('../routes/whatsapp').__test;
+const db = require('../config/database');
+
+function withPayLink(row, run) {
+  const original = db.query;
+  db.query = async (sql) => (/FROM pay_links/i.test(sql) ? { rows: row ? [row] : [] } : { rows: [] });
+  return Promise.resolve(run()).finally(() => { db.query = original; });
+}
+
+test('the two questions Migadde asked are both heard as payment questions', () => {
+  for (const asked of [
+    'Can I tap the link', 'What should I do now?', 'can i click the link',
+    'is this safe', 'how do i pay', 'where do i pay', 'what is this payment',
+    'Is the link genuine?', 'what is this 50,000 for'
+  ]) {
+    assert.ok(AGENT_PAY_LINK_QUESTION.test(asked), `"${asked}" must be heard`);
+  }
+});
+
+test('an agent with no bill is not told about one', async () => {
+  // The guard that matters most: "what should i do now" from somebody who was
+  // never billed still means "how do I post", and must not invent a payment.
+  await withPayLink(null, async () => {
+    assert.strictEqual(
+      await agentPayLinkAside({ agent: { id: KATAMBA.id, full_name: 'Katamba Bonny' }, cleanBody: 'What should I do now?' }),
+      null,
+      'no outstanding link means no payment answer at all'
+    );
+  });
+  // And a property caption is never mistaken for a question about money.
+  await withPayLink({ code: 'MKABC123', amount_ugx: 50000 }, async () => {
+    assert.strictEqual(
+      await agentPayLinkAside({ agent: { id: KATAMBA.id }, cleanBody: '3 bedroom house for rent in Kira, Wakiso — 1.2m' }),
+      null
+    );
+  });
+});
+
+test('he is told yes, what it is, what it costs, and that he can keep working', async () => {
+  await withPayLink({ code: 'MKHJTQH5', amount_ugx: 50000, sent_at: new Date().toISOString() }, async () => {
+    const reply = await agentPayLinkAside({
+      agent: { id: KATAMBA.id, full_name: 'Migadde Hakim' },
+      cleanBody: 'Can I tap the link'
+    });
+    assert.ok(reply, 'this is the whole point');
+    assert.match(reply, /^Yes, Migadde — tap it, it is from us/, 'answer the question first, by name');
+    assert.match(reply, /UGX 50,000 a month/, 'what it is and what it costs');
+    assert.match(reply, /pay\/MKHJTQH5/, 'the link itself, not a description of it');
+    assert.match(reply, /\*MKHJTQH5\* as the reference/, 'what makes a mobile money payment matchable');
+    assert.match(reply, /keep sending me properties now/,
+      'an agent who thinks he cannot work until he has paid simply stops working');
+    assert.doesNotMatch(reply, /Easiest thing in the world/, 'not the how-to-post answer');
+  });
+});
