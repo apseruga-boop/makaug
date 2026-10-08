@@ -5591,6 +5591,23 @@ router.post('/properties/:id/images', async (req, res, next) => {
         image_count: created.length
       })]
     );
+    // The property now has usable photos, so a "no usable property image"
+    // verdict from intake is out of date. Nothing used to rewrite it, and on
+    // 8 Oct 2026 that left Migadde Hakim's Kasanje-Nakawuka plot unapprovable
+    // with four good pictures on the screen — the only way through being
+    // "Approve anyway (human verified)", which is how a gate stops meaning
+    // anything. Only this one status is cleared: a social-source or
+    // video-recovery block is a judgement about the media we hold, not a count,
+    // and is left exactly as it was.
+    await client.query(
+      `UPDATE properties
+          SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+            || jsonb_build_object('media_validation_status', 'passed_automated_image_gate'),
+              updated_at = NOW()
+        WHERE id = $1
+          AND extra_fields->>'media_validation_status' = 'blocked_no_usable_property_image'`,
+      [req.params.id]
+    );
     await client.query(
       `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
        VALUES ($1,$2,$3,$4,$4,$5,$6,$7::jsonb)`,
