@@ -412,3 +412,47 @@ test('he is told yes, what it is, what it costs, and that he can keep working', 
     assert.doesNotMatch(reply, /Easiest thing in the world/, 'not the how-to-post answer');
   });
 });
+
+/**
+ * A real place beats a word we guessed.
+ *
+ * 8 Oct 2026. Migadde's advert headlined "50x100 FT PLOT FOR SALE IN
+ * KASANJE–NAKAWUKA, WAKISO DISTRICT" and closed with "Affordable plots with
+ * ready land titles in established estates are selling fast!". The caption
+ * resolved to Wakiso at district level, the stated-area fallback went hunting
+ * for a word after "in", and the listing went to review as *Land for sale in
+ * Established*.
+ *
+ * Kasanje and Nakawuka are both in the registry, both in Wakiso. We had the
+ * answer in the headline and guessed from the sales pitch instead.
+ */
+test('a marketing word never becomes the area when the caption names a real place', () => {
+  const advert = [
+    '🚨 HOT PROPERTY ALERT – AFFORDABLE PLOT FOR SALE! 🚨',
+    '',
+    '🏡 50x100 FT PLOT FOR SALE IN KASANJE–NAKAWUKA, WAKISO DISTRICT',
+    '',
+    'Own a prime plot in the well-planned Sema Properties Estate.',
+    '✅ Ready Land Title',
+    '💰 Price: ONLY UGX 24 MILLION',
+    '',
+    'Affordable plots with ready land titles in established estates are selling fast!'
+  ].join('\n');
+  const facts = employeePropertyFacts(advert, agentSelfIntakeSessionData(KATAMBA));
+
+  assert.notStrictEqual(facts.locationPatch.area, 'Established',
+    'this is the exact listing that went to review as "Land for sale in Established"');
+  assert.match(facts.locationPatch.area, /^(Kasanje|Nakawuka)$/,
+    'the place is in the headline and in our own registry');
+  assert.strictEqual(facts.locationPatch.district, 'Wakiso');
+  assert.ok(facts.locationPatch.canonical_location_id, 'a real registry entry, not a stated guess');
+  assert.deepStrictEqual(employeePropertyMissing(facts), []);
+});
+
+test('a caption with no recognisable place still falls back rather than refusing', () => {
+  // The fallback has to survive: Bulabakulu is not in the registry and the
+  // agent must still be believed.
+  const facts = employeePropertyFacts('WAKISO -BULABAKULU ROADSIDE ESTATE 100BY50FTS @ 45M', agentSelfIntakeSessionData(KATAMBA));
+  assert.strictEqual(facts.locationPatch.district, 'Wakiso');
+  assert.ok(facts.locationPatch.area, 'an area the registry does not know is still kept, not dropped');
+});
