@@ -8,6 +8,26 @@ const COMMERCIAL_PROPERTY_TYPES = Object.freeze([
   'other'
 ]);
 
+// Public labels for stored enum values (API titles showed "shop_retail in Kampala").
+const COMMERCIAL_PROPERTY_TYPE_LABELS = Object.freeze({
+  office: 'Office',
+  shop_retail: 'Shop / retail space',
+  warehouse_industrial: 'Warehouse / industrial',
+  commercial_land: 'Commercial land',
+  hospitality: 'Hospitality property',
+  other: 'Commercial property'
+});
+
+function humanPropertyTypeLabel(value = '') {
+  const raw = String(value == null ? '' : value).trim();
+  if (!raw) return '';
+  const key = raw.toLowerCase();
+  if (COMMERCIAL_PROPERTY_TYPE_LABELS[key]) return COMMERCIAL_PROPERTY_TYPE_LABELS[key];
+  if (!/_/.test(raw)) return raw;
+  const spaced = raw.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 function compactText(...values) {
   return values
     .flat(Infinity)
@@ -156,6 +176,8 @@ function commercialMisclassificationWarning(record = {}) {
 module.exports = {
   COMMERCIAL_TRANSACTION_TYPES,
   COMMERCIAL_PROPERTY_TYPES,
+  COMMERCIAL_PROPERTY_TYPE_LABELS,
+  humanPropertyTypeLabel,
   normalizeCommercialTransactionType,
   normalizeListingPricePeriod,
   normalizeCommercialPropertyType,

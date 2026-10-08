@@ -254,11 +254,13 @@ test('public Marketplace publishes the P2 marker and crawlable national links', 
   const marketplaceRoute = read('routes/marketplace.js');
   const server = read('server.js');
   assert.match(html, new RegExp(MARKETPLACE_P2_MARKER));
-  assert.match(html, /href="\/marketplace-sitemap\.xml"/);
+  // PR A (8 Oct 2026): marketplace-sitemap.xml is 410 Gone (its ~2,900
+  // "?category=&district=" URLs all canonicalised to /marketplace).
+  assert.doesNotMatch(html, /href="\/marketplace-sitemap\.xml"/);
   assert.match(html, /\/marketplace\?category=surveyors/);
   assert.match(html, /\/marketplace\?district=Kampala/);
   assert.match(marketplaceRoute, /router\.get\('\/seo-links'/);
-  assert.match(server, /app\.get\('\/marketplace-sitemap\.xml'/);
+  assert.match(server, /app\.get\('\/marketplace-sitemap\.xml'[\s\S]{0,200}status\(410\)/);
   assert.match(html, /data-marketplace-i18n="directoryLinksTitle"/);
   assert.match(app, /const MARKETPLACE_P2_I18N = Object\.freeze/);
   for (const language of ['lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']) {

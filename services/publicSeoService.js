@@ -13,9 +13,122 @@ const {
   commercialTransactionSlugsForRow,
   universityLandingForRow
 } = require('../utils/publicSeoFacets');
+const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
+const { isFoundOnlinePublicRow } = require('./publicListingCopy');
+const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
+const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
 
 const PUBLIC_SITE_URL = 'https://makaug.com';
 const PUBLIC_SEO_CACHE_TTL_MS = 5 * 60 * 1000;
+
+// Title, description (≤155 chars), self-canonical and robots for the app pages
+// that used to ship the generic shell (canonical → "/"). Rows 1–6 are
+// Marketing's (8 Oct 2026); the rest are drafts Marketing may edit.
+const PUBLIC_PAGE_SEO = Object.freeze({
+  '/how-it-works': {
+    title: 'How makaug works: every Uganda property in one search',
+    description: 'Search every house, plot and rental we can find online in Uganda, reviewed before it goes live. Contact owners and agents directly, free.'
+  },
+  '/safety': {
+    title: 'Property safety tips for Uganda: renters, buyers, land, diaspora',
+    description: 'How to avoid property scams in Uganda: view before paying, check the land title, use a lawyer and pay only through traceable channels.'
+  },
+  '/mortgage': {
+    title: 'Mortgage calculator Uganda: compare bank repayments',
+    description: 'Estimate monthly mortgage repayments and compare home-loan rates from Ugandan banks, then send an enquiry to the lender.'
+  },
+  '/valuation': {
+    title: "What's my property worth? Uganda price guide from live listings",
+    description: "Estimate a property's value from live asking prices of similar homes, plots and rentals in the same Uganda area."
+  },
+  '/brokers': {
+    title: 'Find a property broker in Uganda',
+    description: 'Browse property brokers and agents across Uganda by area, see their live listings and contact them directly.'
+  },
+  '/list-property': {
+    title: 'List your property in Uganda: 7 days free',
+    description: 'List a house, rental, plot or commercial space on makaug.com. Free for 7 days, then UGX 20,000 a month. Reviewed before it goes live.'
+  },
+  '/help': {
+    title: 'Help centre: makaug.com questions answered',
+    description: 'Answers on searching, listing, fees, safety and your account on makaug.com. WhatsApp help on 0780 863 394.'
+  },
+  '/anti-fraud': {
+    title: 'Report a suspicious property listing | makaug.com',
+    description: 'Spotted a scam, copied photos or a fake listing on makaug.com? Report it and our team will review it.'
+  },
+  '/advertise': {
+    title: 'Advertise on makaug.com: reach Uganda property seekers',
+    description: 'Reach people searching for homes, land and rentals across Uganda with featured listings, banners and WhatsApp sponsorships.'
+  },
+  '/marketplace': {
+    title: 'Property services in Uganda: surveyors, lawyers, builders',
+    description: "Find surveyors, lawyers, valuers, builders, plumbers, solar installers and other property services across Uganda's districts."
+  },
+  '/discover-ai-chatbot': {
+    title: 'Ask makaug AI: find Uganda property in your own words',
+    description: 'Describe the home, plot or rental you want in English, Luganda, Swahili and more, and the makaug assistant finds matching listings.'
+  },
+  '/careers': {
+    title: 'Careers at makaug | makaug.com',
+    description: 'Join makaug and help people across Uganda find, check and list property safely. See the roles we hire for and send your interest.'
+  },
+  '/terms': {
+    title: 'Terms and conditions | makaug.com',
+    description: 'The terms that apply when you search, list, advertise or pay for services on makaug.com.'
+  },
+  '/privacy-policy': {
+    title: 'Privacy policy | makaug.com',
+    description: 'How makaug.com collects, uses, shares and protects your personal information, and the choices you have.'
+  },
+  '/cookie-policy': {
+    title: 'Cookie policy | makaug.com',
+    description: 'Which cookies and similar technologies makaug.com uses, why, and how you can control them.'
+  },
+  '/featured': {
+    title: 'Featured property listings in Uganda | makaug.com',
+    description: 'Featured houses, rentals, plots and commercial property across Uganda, highlighted by the owners and agents who list them.'
+  },
+  // Not for search results: noindex,follow with a self-canonical.
+  '/saved': { title: 'Saved properties | makaug.com', description: 'Your saved properties and searches on makaug.com.', robots: 'noindex,follow' },
+  '/tiktok-connect': { title: 'Connect TikTok | makaug.com', description: 'Connect your TikTok account to link your property videos to makaug.com listings.', robots: 'noindex,follow' },
+  '/login': { title: 'Sign in | makaug.com', description: 'Sign in to your makaug.com account.', robots: 'noindex,follow' },
+  '/signup': { title: 'Create an account | makaug.com', description: 'Create a free makaug.com account to save properties and searches.', robots: 'noindex,follow' },
+  '/student-signup': { title: 'Student sign-up | makaug.com', description: 'Create a makaug.com student account to find hostels and rooms near campus.', robots: 'noindex,follow' },
+  '/broker-signup': { title: 'Broker sign-up | makaug.com', description: 'Register as a property broker or agent on makaug.com.', robots: 'noindex,follow' },
+  '/field-agent-signup': { title: 'Field agent sign-up | makaug.com', description: 'Apply to work as a makaug.com field agent.', robots: 'noindex,follow' },
+  '/advertiser-signup': { title: 'Advertiser sign-up | makaug.com', description: 'Create a makaug.com advertiser account.', robots: 'noindex,follow' },
+  '/forgot-password': { title: 'Reset your password | makaug.com', description: 'Reset the password for your makaug.com account.', robots: 'noindex,follow' },
+  '/verify-email': { title: 'Verify your email | makaug.com', description: 'Confirm the email address on your makaug.com account.', robots: 'noindex,follow' }
+});
+
+// In-app aliases keep working (no redirect) but canonicalise to the primary path.
+const PUBLIC_PAGE_ALIASES = Object.freeze({
+  '/sale': '/for-sale',
+  '/rent': '/to-rent',
+  '/students': '/student-accommodation',
+  '/find-brokers': '/brokers',
+  '/mortgage-finder': '/mortgage',
+  '/property-valuation': '/valuation',
+  '/ai-chatbot': '/discover-ai-chatbot',
+  '/fraud': '/anti-fraud',
+  '/report-fraud': '/anti-fraud'
+});
+
+function publicPageSeoFor(pathname = '/', baseUrl = PUBLIC_SITE_URL) {
+  const clean = String(pathname || '/').split('?')[0].replace(/\/+$/, '').toLowerCase() || '/';
+  const primary = PUBLIC_PAGE_ALIASES[clean] || clean;
+  const entry = PUBLIC_PAGE_SEO[primary];
+  if (!entry) return PUBLIC_PAGE_ALIASES[clean] ? { canonicalPath: primary, canonical: `${String(baseUrl).replace(/\/+$/, '')}${primary}` } : null;
+  return {
+    path: primary,
+    canonicalPath: primary,
+    title: entry.title,
+    description: entry.description,
+    robots: entry.robots || 'index,follow',
+    canonical: `${String(baseUrl).replace(/\/+$/, '')}${primary}`
+  };
+}
 
 const CATEGORY_SEO = Object.freeze({
   sale: {
@@ -122,6 +235,78 @@ function setMinimumPrice(map, key, value) {
   if (!(current > 0) || price < current) map.set(key, price);
 }
 
+// Honest prices for SEO copy. Only prices inside these bounds count; the
+// "from" figure is the 10th percentile and needs at least 5 valid prices
+// (the raw minimum printed "Prices start from USh 2").
+const SEO_PRICE_BOUNDS = Object.freeze({
+  one_off: [1_000_000, 20_000_000_000],
+  monthly: [100_000, 100_000_000],
+  student: [50_000, 20_000_000]
+});
+const SEO_MIN_PRICES_FOR_COPY = 5;
+
+function seoPriceKind(category, row = {}) {
+  if (category === 'students') return 'student';
+  const period = normalizePricePeriodForWrite(String(row.price_period || '').toLowerCase()) || '';
+  const transaction = String(row.transaction_type || row?.extra_fields?.transaction_type || '').toLowerCase();
+  if (category === 'rent') return period === 'month' || !period ? 'monthly' : null;
+  if (category === 'commercial') {
+    if (transaction === 'rent' || period === 'month') return period && period !== 'month' ? null : 'monthly';
+    return 'one_off';
+  }
+  return 'one_off';
+}
+
+function validSeoPrice(category, row = {}) {
+  const kind = seoPriceKind(category, row);
+  if (!kind) return null;
+  const price = Number(row.price || 0);
+  const [min, max] = SEO_PRICE_BOUNDS[kind];
+  return Number.isFinite(price) && price >= min && price <= max ? price : null;
+}
+
+function priceInSeoBounds(row = {}, category = '') {
+  return validSeoPrice(category || (row.listing_type === 'student' ? 'students' : row.listing_type), row) !== null;
+}
+
+function percentile(values = [], fraction = 0.5) {
+  const sorted = values.filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+  if (!sorted.length) return 0;
+  const rank = Math.max(0, Math.ceil(fraction * sorted.length) - 1);
+  return sorted[Math.min(rank, sorted.length - 1)];
+}
+
+function median(values = []) {
+  const sorted = values.filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+  if (!sorted.length) return 0;
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function floorFromPrices(values = []) {
+  return values.length >= SEO_MIN_PRICES_FOR_COPY ? percentile(values, 0.1) : 0;
+}
+
+// Valid prices for a canonical location, including its children for a
+// city/district (same scope as the page and the rolled-up counts).
+function locationValidPrices(snapshot, category, canonicalKey) {
+  const direct = snapshot?.locationValidPrices?.[category];
+  if (!direct || !canonicalKey) return [];
+  const location = canonicalLocationByKey(canonicalKey);
+  if (location?.level !== 'district') return direct.get(canonicalKey) || [];
+  // District: every area in it, the same scope as the district's rolled-up count.
+  const values = [];
+  for (const [key, prices] of direct) {
+    if (canonicalLocationByKey(key)?.district === location.district) values.push(...prices);
+  }
+  return values;
+}
+
+function snapshotMedian(snapshot, category, canonicalKey = null) {
+  const values = canonicalKey ? locationValidPrices(snapshot, category, canonicalKey) : (snapshot?.categoryValidPrices?.[category] || []);
+  return { median: values.length >= SEO_MIN_PRICES_FOR_COPY ? median(values) : 0, count: values.length };
+}
+
 function rollupLocationMinimumPrices(values = new Map()) {
   const direct = values instanceof Map ? values : new Map(Object.entries(values || {}));
   const rolled = new Map(direct);
@@ -170,6 +355,12 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
   const commercialTransactionCounts = new Map();
   const universityCounts = new Map();
   const properties = [];
+  const categoryValidPrices = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, []]));
+  const locationValidPricesByCategory = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, new Map()]));
+  const categoryDistricts = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, new Set()]));
+  const generatedMs = new Date(generatedAt).getTime();
+  let newLast7d = 0;
+  let thinPropertyCount = 0;
   if (!rows.length) {
     return {
       directCounts,
@@ -177,6 +368,11 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
       categoryTotals,
       categoryPriceFloors,
       locationPriceFloors: directPriceFloors,
+      categoryValidPrices,
+      locationValidPrices: locationValidPricesByCategory,
+      categoryDistricts,
+      newLast7d,
+      thinPropertyCount,
       facetCounts,
       commercialTransactionCounts,
       universityCounts,
@@ -188,17 +384,22 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
     const categories = publicCategoryKeysForRow(row);
     if (!categories.length) continue;
     const locations = canonicalLocationsForSeoRow(row);
+    const createdMs = new Date(row.created_at || '').getTime();
+    if (Number.isFinite(createdMs) && Number.isFinite(generatedMs) && generatedMs - createdMs <= 7 * 86400000) newLast7d += 1;
     for (const category of categories) {
       categoryTotals[category] += 1;
-      const price = Number(row.price || 0);
-      if (price > 0 && (!(categoryPriceFloors[category] > 0) || price < categoryPriceFloors[category])) {
-        categoryPriceFloors[category] = price;
-      }
+      const valid = validSeoPrice(category, row);
+      if (valid !== null) categoryValidPrices[category].push(valid);
+      for (const canonical of locations) if (canonical.district) categoryDistricts[category].add(canonical.district);
     }
     for (const canonical of locations) {
       for (const category of categories) {
         directCounts[category].set(canonical.key, Number(directCounts[category].get(canonical.key) || 0) + 1);
-        setMinimumPrice(directPriceFloors[category], canonical.key, row.price);
+        const valid = validSeoPrice(category, row);
+        if (valid !== null) {
+          if (!locationValidPricesByCategory[category].has(canonical.key)) locationValidPricesByCategory[category].set(canonical.key, []);
+          locationValidPricesByCategory[category].get(canonical.key).push(valid);
+        }
         for (const facetSlug of facetSlugsForRow(category, row)) {
           incrementMapCount(facetCounts[category], `${canonical.key}|${facetSlug}`);
         }
@@ -211,19 +412,34 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
     }
     const university = categories.includes('students') ? universityLandingForRow(row) : null;
     if (university) incrementMapCount(universityCounts, university.slug);
+    const thin = isThinListingRow(row);
+    if (thin) thinPropertyCount += 1;
     if (row.id) {
       properties.push({
         id: String(row.id),
-        lastmod: row.updated_at || row.created_at || null
+        lastmod: row.updated_at || row.created_at || null,
+        thin
       });
     }
+  }
+  for (const category of Object.keys(CATEGORY_SEO)) {
+    categoryPriceFloors[category] = floorFromPrices(categoryValidPrices[category]);
   }
   const counts = Object.fromEntries(
     Object.entries(directCounts).map(([key, values]) => [key, canonicalLocationRollupCounts(values)])
   );
-  const locationPriceFloors = Object.fromEntries(
-    Object.entries(directPriceFloors).map(([key, values]) => [key, rollupLocationMinimumPrices(values)])
-  );
+  // 10th percentile of valid prices per location (children included for a
+  // city/district); no floor below 5 valid prices.
+  const locationPriceFloors = Object.fromEntries(Object.keys(CATEGORY_SEO).map((category) => {
+    const floors = new Map();
+    const scratch = { locationValidPrices: locationValidPricesByCategory };
+    for (const location of canonicalLocationOptions()) {
+      const values = locationValidPrices(scratch, category, location.canonical_key);
+      const floor = floorFromPrices(values);
+      if (floor > 0) floors.set(location.canonical_key, floor);
+    }
+    return [category, floors];
+  }));
   const rolledFacetCounts = Object.fromEntries(
     Object.entries(facetCounts).map(([key, values]) => [key, rollupFacetCountMap(values, Object.keys(FACET_DEFINITIONS[key] || {}))])
   );
@@ -238,8 +454,26 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
     commercialTransactionCounts: rolledCommercialTransactionCounts,
     universityCounts,
     properties,
+    categoryValidPrices,
+    locationValidPrices: locationValidPricesByCategory,
+    categoryDistricts,
+    newLast7d,
+    thinPropertyCount,
     generatedAt
   };
+}
+
+// Snapshot rows carry the found-online flags, review flags and a has_real_photo
+// boolean (EXISTS in SQL), never the image rows themselves.
+function isThinListingRow(row = {}) {
+  const flags = row.copy_flags && typeof row.copy_flags === 'object' ? row.copy_flags : {};
+  const foundOnline = isFoundOnlinePublicRow({ source: row.source, listed_via: row.listed_via }, flags);
+  return isThinFoundOnlineListing({
+    foundOnline,
+    hasRealPhoto: row.has_real_photo === true,
+    description: row.description,
+    extra: flags
+  });
 }
 
 async function refreshPublicSeoInventorySnapshot(db) {
@@ -259,6 +493,22 @@ async function refreshPublicSeoInventorySnapshot(db) {
             extra_fields->>'canonical_location_id' AS canonical_location_id,
             extra_fields->>'city' AS city,
             extra_fields->>'neighborhood' AS neighborhood,
+            source, listed_via,
+            jsonb_build_object(
+              'found_online', extra_fields->'found_online',
+              'social_search_candidate', extra_fields->'social_search_candidate',
+              'sourced_inventory_candidate', extra_fields->'sourced_inventory_candidate',
+              'third_party_discovery_result', extra_fields->'third_party_discovery_result',
+              'source_badge', extra_fields->'source_badge',
+              'source_batch', extra_fields->'source_batch',
+              'source_platform', extra_fields->'source_platform',
+              'source_url', COALESCE(extra_fields->'source_url', extra_fields->'source_post_url'),
+              'video_url', extra_fields->'video_url',
+              'staff_corrected_fields', extra_fields->'staff_corrected_fields',
+              'king_review_corrected_fields', extra_fields->'king_review_corrected_fields',
+              'king_review_facts_confirmed', extra_fields->'king_review_facts_confirmed'
+            ) AS copy_flags,
+            ${realHostedPhotoExistsSql('properties')} AS has_real_photo,
             updated_at, created_at
      FROM properties
      WHERE ${publicVisibleInventoryWhere('properties')}
@@ -322,7 +572,10 @@ function categoryPageSeoMeta(pathname = '/', snapshot = null, baseUrl = PUBLIC_S
   const priceFloor = location
     ? Number(snapshot?.locationPriceFloors?.[key]?.get(location.canonical_key) || 0)
     : Number(snapshot?.categoryPriceFloors?.[key] || 0);
-  const locationLabel = location ? `${location.location}, ${location.district}` : 'Uganda';
+  // "Kampala, Kampala" → "Kampala" for district pages.
+  const locationLabel = location
+    ? (String(location.location || '').toLowerCase() === String(location.district || '').toLowerCase() ? location.district : `${location.location}, ${location.district}`)
+    : 'Uganda';
   const countPrefix = Number.isFinite(listingCount) && listingCount > 0 ? `${listingCount} ` : '';
   const freshnessDate = new Date(snapshot?.generatedAt || '');
   const freshness = Number.isNaN(freshnessDate.getTime())
@@ -352,11 +605,17 @@ function categoryPageSeoMeta(pathname = '/', snapshot = null, baseUrl = PUBLIC_S
 
 function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
   const root = String(baseUrl || PUBLIC_SITE_URL).replace(/\/+$/, '');
-  const generatedDate = new Date(snapshot?.generatedAt || '');
-  const inventoryLastmod = Number.isNaN(generatedDate.getTime()) ? '' : generatedDate.toISOString();
   const entries = [
     { loc: `${root}/`, changefreq: 'daily', priority: '1.0' },
-    ...Object.values(CATEGORY_SEO).map((config) => ({ loc: `${root}${config.route}`, lastmod: inventoryLastmod, changefreq: 'hourly', priority: '0.9' })),
+    // Hub URLs carry no lastmod (stamping the generation time on every hub
+    // told crawlers that everything changed on every fetch).
+    ...Object.values(CATEGORY_SEO).map((config) => ({ loc: `${root}${config.route}`, changefreq: 'hourly', priority: '0.9' })),
+    { loc: `${root}/about`, changefreq: 'monthly', priority: '0.6' },
+    { loc: `${root}/how-it-works`, changefreq: 'monthly', priority: '0.6' },
+    { loc: `${root}/help`, changefreq: 'monthly', priority: '0.6' },
+    { loc: `${root}/safety`, changefreq: 'monthly', priority: '0.6' },
+    { loc: `${root}/anti-fraud`, changefreq: 'monthly', priority: '0.5' },
+    { loc: `${root}/advertise`, changefreq: 'monthly', priority: '0.6' },
     { loc: `${root}/marketplace`, changefreq: 'daily', priority: '0.8' },
     { loc: `${root}/valuation`, changefreq: 'weekly', priority: '0.7' },
     { loc: `${root}/mortgage`, changefreq: 'weekly', priority: '0.7' },
@@ -370,7 +629,6 @@ function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
       if (count < SEO_FACET_MIN_LISTINGS) continue;
       entries.push({
         loc: `${root}${config.route}/${canonicalLocationRouteSlug(location)}`,
-        lastmod: inventoryLastmod,
         changefreq: 'daily',
         priority: location.level === 'district' ? '0.8' : '0.7'
       });
@@ -385,7 +643,6 @@ function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
         if (count < SEO_FACET_MIN_LISTINGS) continue;
         entries.push({
           loc: `${root}${config.route}/${locationSlug}/${facetSlug}`,
-          lastmod: inventoryLastmod,
           changefreq: 'daily',
           priority: '0.7'
         });
@@ -398,7 +655,6 @@ function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
       if (count < SEO_FACET_MIN_LISTINGS) continue;
       entries.push({
         loc: `${root}/commercial/${transactionSlug}/${facetLocationSlug(location)}`,
-        lastmod: inventoryLastmod,
         changefreq: 'daily',
         priority: '0.8'
       });
@@ -408,12 +664,12 @@ function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
     if (Number(countValue || 0) < SEO_FACET_MIN_LISTINGS) continue;
     entries.push({
       loc: `${root}/student-accommodation/university/${universitySlug}`,
-      lastmod: inventoryLastmod,
       changefreq: 'daily',
       priority: '0.8'
     });
   }
   for (const property of snapshot?.properties || []) {
+    if (property.thin) continue; // noindex,follow pages stay out of the sitemap
     entries.push({
       loc: `${root}/property/${encodeURIComponent(property.id)}`,
       lastmod: property.lastmod ? new Date(property.lastmod).toISOString() : '',
@@ -431,6 +687,9 @@ function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
 
 module.exports = {
   CATEGORY_SEO,
+  PUBLIC_PAGE_SEO,
+  PUBLIC_PAGE_ALIASES,
+  publicPageSeoFor,
   PUBLIC_SEO_CACHE_TTL_MS,
   slugifySeoPart,
   canonicalLocationRouteSlug,
@@ -443,6 +702,13 @@ module.exports = {
   loadPublicSeoInventorySnapshot,
   categoryPageSeoMeta,
   sitemapEntries,
+  SEO_PRICE_BOUNDS,
+  SEO_MIN_PRICES_FOR_COPY,
+  validSeoPrice,
+  priceInSeoBounds,
+  snapshotMedian,
+  locationValidPrices,
+  isThinListingRow,
   __seoSnapshotCache: Object.freeze({
     clear: clearPublicSeoSnapshotCache,
     hasValue: () => Boolean(snapshotCache?.value),
