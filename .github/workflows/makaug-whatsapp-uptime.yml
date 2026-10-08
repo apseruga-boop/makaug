@@ -15,25 +15,29 @@ concurrency:
 
 jobs:
   verify:
-    name: Hosted worker and AI runtime ready
+    name: WhatsApp bridge ready to reply
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Verify isolated AI runtime and fresh worker heartbeat
+      # The bot runs on WAHA (makaug-waha) + makaug-waha-bridge. The old check
+      # called makaug-whatsapp-ai-runtime /ready, which waits for the suspended
+      # Playwright worker and has failed since 13 Sep 2026 (issue #355).
+      # Don't resume makaug-whatsapp-agent-docker: it would double-reply.
+      - name: Verify the WhatsApp bridge is ready to reply
         shell: bash
         run: |
           set -euo pipefail
           response="$(curl --fail --silent --show-error --max-time 20 \
-            https://makaug-whatsapp-ai-runtime.onrender.com/ready)"
+            https://makaug-waha-bridge.onrender.com/health)"
           node -e '
             const payload = JSON.parse(process.argv[1]);
-            if (payload.ok !== true) throw new Error(`runtime not ready: ${process.argv[1]}`);
-            if (payload.worker?.fresh !== true || payload.worker?.status !== "online") {
-              throw new Error(`hosted WhatsApp worker is not fresh and online: ${process.argv[1]}`);
-            }
-            if (payload.openai_configured !== true) {
-              throw new Error(`isolated OpenAI project is not configured: ${process.argv[1]}`);
-            }
+            const problems = [];
+            if (payload.ready_to_reply !== true) problems.push("ready_to_reply is not true");
+            if (payload.waha_status !== "WORKING") problems.push(`waha_status is ${JSON.stringify(payload.waha_status)}, not "WORKING"`);
+            if (payload.bridge_status !== "online") problems.push(`bridge_status is ${JSON.stringify(payload.bridge_status)}, not "online"`);
+            if (payload.makaug_link?.ok !== true) problems.push("makaug_link.ok is not true");
+            if (problems.length) throw new Error(`WhatsApp bridge not ready: ${problems.join("; ")}`);
+            console.log("WhatsApp bridge ready to reply");
           ' "$response"
 
       - name: Verify production remains available
@@ -57,11 +61,11 @@ jobs:
             });
             const existing = issues.find((issue) => !issue.pull_request && issue.title === title);
             const body = [
-              'The five-minute production check found that the hosted WhatsApp worker or AI runtime is not ready.',
+              'The five-minute production check found that the WhatsApp bridge (makaug-waha-bridge `/health`) is not ready to reply, or makaug.com/api/health is down.',
               '',
               `Failed run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               '',
-              'The bot must not be treated as restored until the worker reports a fresh `online` heartbeat and a real inbound WhatsApp message receives a reply.'
+              'The bot must not be treated as restored until the bridge reports `ready_to_reply: true`, `waha_status: "WORKING"`, `bridge_status: "online"` and `makaug_link.ok: true`, and a real inbound WhatsApp message receives a reply.'
             ].join('\n');
             if (existing) {
               const lastUpdate = new Date(existing.updated_at).getTime();
@@ -100,7 +104,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: existing.number,
-                body: `Recovered in ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}: the hosted worker is fresh and online, the AI runtime is configured, and production health is available.`
+                body: `Recovered in ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}: the WhatsApp bridge is ready to reply (WAHA WORKING, bridge online, makaug link ok) and production health is available.`
               });
               await github.rest.issues.update({
                 owner: context.repo.owner,
