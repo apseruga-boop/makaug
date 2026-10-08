@@ -369,6 +369,8 @@ router.get('/report-video/:id.mp4', async (req, res, next) => {
     const file = await ensureReportVideo(report, version);
     res.set('Cache-Control', 'private, max-age=300');
     res.set('X-Robots-Tag', 'noindex');
+    // Already rendered and kept in storage: send people there, no render here.
+    if (/^https?:\/\//i.test(String(file))) return res.redirect(302, file);
     return res.sendFile(file, { headers: { 'Content-Type': 'video/mp4' } });
   } catch (error) {
     return next(error);
@@ -409,6 +411,8 @@ router.get('/welcome-video/:id.mp4', async (req, res, next) => {
     const file = await ensureWelcomeVideo(pack, version);
     res.set('Cache-Control', 'private, max-age=600');
     res.set('X-Robots-Tag', 'noindex');
+    // Already rendered and kept in storage: send people there, no render here.
+    if (/^https?:\/\//i.test(String(file))) return res.redirect(302, file);
     return res.sendFile(file, { headers: { 'Content-Type': 'video/mp4' } });
   } catch (error) {
     return next(error);

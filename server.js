@@ -161,14 +161,25 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
-app.use(express.json({
-  limit: '40mb',
-  verify: (req, _res, buffer) => {
-    if (req.originalUrl === '/api/whatsapp/webhook' || req.originalUrl === '/api/pay/webhooks/revolut') {
-      req.rawBody = Buffer.from(buffer);
-    }
+// JSON bodies: 1 MB by default. Only the routes that accept photos, ID
+// documents or receipts as data URLs get the large limit, so a stray 40 MB
+// body can't land on any other endpoint (the server has 512 MB in total).
+const keepRawBody = (req, _res, buffer) => {
+  if (req.originalUrl === '/api/whatsapp/webhook' || req.originalUrl === '/api/pay/webhooks/revolut') {
+    req.rawBody = Buffer.from(buffer);
   }
-}));
+};
+const LARGE_JSON_BODY_PREFIXES = [
+  '/api/properties', '/api/admin', '/api/staff', '/api/agents', '/api/auth', '/api/field-agent',
+  '/api/whatsapp', '/api/short-term', '/api/off-plan', '/api/tiktok-display', '/api/harvest',
+  '/api/marketplace', '/api/advertising'
+];
+const largeJsonParser = express.json({ limit: '40mb', verify: keepRawBody });
+const smallJsonParser = express.json({ limit: process.env.DEFAULT_JSON_BODY_LIMIT || '1mb', verify: keepRawBody });
+function needsLargeJsonBody(pathname = '') {
+  return LARGE_JSON_BODY_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+app.use((req, res, next) => (needsLargeJsonBody(req.path) ? largeJsonParser : smallJsonParser)(req, res, next));
 
 // Render's process-level health probe must not wait on database work. The
 // existing /api/health route remains the deeper database readiness check.
@@ -2011,6 +2022,18 @@ async function start() {
   }
   schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
   scheduleStartupDataRepairs();
+  startMemoryLog();
+}
+
+// One "memory" line a minute, so the trend towards the 512 MB limit is in the logs.
+function startMemoryLog() {
+  if (process.env.NODE_ENV === 'test' || process.env.MEMORY_LOG === 'off') return;
+  const mb = (n) => Math.round(n / 1048576);
+  const timer = setInterval(() => {
+    const m = process.memoryUsage();
+    logger.info(`memory rss_mb=${mb(m.rss)} heap_used_mb=${mb(m.heapUsed)} heap_total_mb=${mb(m.heapTotal)} external_mb=${mb(m.external)} limit_mb=${Number(process.env.MEMORY_LIMIT_MB || 512)}`);
+  }, 60_000);
+  timer.unref?.();
 }
 
 // One-off tidy-ups that are safe to repeat on every start: move inline agent ID
@@ -2032,21 +2055,10 @@ function scheduleStartupDataRepairs() {
       logger.warn('Agent ID photo move skipped:', error.message || String(error));
     }
     // Agents approved in the last two weeks who never got their welcome pack
-    // (e.g. approved by a route that skipped it): send it, then the pay link.
+    // (e.g. approved by a route that skipped it): one at a time, no video rendering.
     try {
       const { runAgentApprovalFollowUps } = require('./routes/admin');
-      const missed = (await db.query(
-        `SELECT id, full_name FROM agents
-          WHERE status = 'approved' AND removed_at IS NULL AND welcome_sent_at IS NULL
-            AND approved_at > NOW() - INTERVAL '14 days'
-          ORDER BY approved_at
-          LIMIT 20`
-      )).rows;
-      for (const agent of missed) {
-        const result = await runAgentApprovalFollowUps({ agentId: agent.id, wasApproved: true, actor: 'system:approval_catch_up' })
-          .catch((error) => ({ error: error.message }));
-        logger.info('Sent missed agent welcome pack', { agent_id: agent.id, name: agent.full_name, fee_link: result?.fee_link || null, error: result?.error || result?.welcome?.error || null });
-      }
+      await require('./services/agentWelcomeCatchUpService').runWelcomeCatchUp({ db, runFollowUps: runAgentApprovalFollowUps, logger });
     } catch (error) {
       logger.warn('Agent welcome catch-up skipped:', error.message || String(error));
     }
