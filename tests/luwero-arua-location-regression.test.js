@@ -53,4 +53,19 @@ assert(frontend.includes('data-approval-blocker-host'));
 assert(staffRoute.includes('Source/title/address evidence points to ${evidenceDistrict}, not ${district}'));
 assert(staffRoute.includes('warnings: staffLocationWarnings(property)'));
 
+// PR D (8 Oct 2026): Busiika, Wakiso municipalities, guardrail false positives.
+assert.strictEqual(canonicalizeUgandaLocation('Busiika')?.district, 'Luwero', 'Busiika resolves to Luwero');
+assert.strictEqual(districtForKnownArea('Busiika Town Council'), 'Luwero');
+assert.strictEqual(normalizeReviewLocationHierarchy({ area: 'Busiika', district: 'Luwero' }).errors.length, 0);
+assert.deepStrictEqual(districtsForKnownLocationText('House in Lubowa, Makindye-Ssabagabo'), ['Wakiso'],
+  '"Makindye-Ssabagabo" is the Wakiso municipality, not the Kampala division Makindye');
+assert.deepStrictEqual(districtsForKnownLocationText('Makindye-Ssabagabo'), ['Wakiso']);
+assert.deepStrictEqual(districtsForKnownLocationText('Makindye, Kampala'), ['Kampala'], 'the Kampala division still resolves');
+assert.deepStrictEqual(districtsForKnownLocationText('Entebbe City'), ['Wakiso']);
+assert.deepStrictEqual(districtsForKnownLocationText('Plot in Entebbe City near the police station, Umeme power and water'), ['Wakiso'],
+  '"station" and "Umeme" are Tororo parish names but everyday listing words');
+const lubowa = normalizeReviewLocationHierarchy({ area: 'Lubowa', district: 'Wakiso' });
+assert.strictEqual(lubowa.city, 'Makindye-Ssabagabo', 'Lubowa saves under Makindye-Ssabagabo, not "Wakiso Town"');
+assert.deepStrictEqual(lubowa.errors, []);
+
 console.log('Luwero/Arua location regression tests passed');

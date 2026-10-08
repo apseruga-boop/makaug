@@ -120,6 +120,28 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'wakiso_district_verified_marketplace_override'
   },
   {
+    // 8 Oct 2026: "House in Lubowa, Makindye-Ssabagabo" raised "points to
+    // Kampala" because only the UBOS county "Makindye-Ssabagabo Municipality"
+    // existed, so the bare name fell through to the Kampala division Makindye.
+    // Wakiso District municipality (UBOS NPHC 2024 county layer).
+    name: 'Makindye-Ssabagabo Municipality', district: 'Wakiso', town: 'Makindye-Ssabagabo', level: 'county',
+    aliases: [
+      'Makindye-Ssabagabo Municipality', 'Makindye-Ssabagabo', 'Makindye Ssabagabo', 'Makindye Sabagabo',
+      'Makindye-Sabagabo', 'Makindye Ssabagabo Municipality'
+    ],
+    source: 'ubos_nphc_2024_county_with_verified_aliases'
+  },
+  {
+    // Busiika Town Council, Luweero District (UBOS NPHC 2024 census
+    // dashboard: district 104 Luweero, county 1041 Bamunanika, subcounty
+    // 104102 Busiika Town Council). Missing from the generated gazetteer, so a
+    // typed area did not stick and Find snapped to Gayaza (Wakiso). No
+    // coordinates are recorded until a cited point (e.g. OSM) is added.
+    name: 'Busiika', district: 'Luwero', town: 'Busiika', level: 'area',
+    aliases: ['Busiika', 'Busiika Town', 'Busiika Town Council', 'Busiika TC'],
+    source: 'ubos_nphc_2024_census_dashboard_subcounty_104102'
+  },
+  {
     name: 'Kitiko', district: 'Wakiso', town: 'Makindye-Ssabagabo', level: 'area',
     aliases: ['Kitiko', 'Mutungo Kitiko'],
     source: 'makindye_ssabagabo_verified_marketplace_override'
