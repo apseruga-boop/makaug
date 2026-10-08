@@ -40,7 +40,10 @@ assert(!normalized.includes('Why people choose makaug'), 'obsolete Why people ch
 assert(!normalized.includes('Find and list land'), 'the confusing standalone land proposition should be removed');
 assert(!normalized.includes('no listing fees, ever'), 'obsolete free-listing claim should be removed');
 assert(!html.includes("Uganda's first completely free property platform"), 'the shared footer must not contradict the paid-listing model');
-assert(html.includes("Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month."), 'the shared footer should state the current listing model');
+// PR G: the footer price is a rate-card token filled at send time, and the
+// coverage claim is the live district count (no "all 146 districts").
+assert(html.includes("Uganda's property search engine. List your first week free, then keep it live from {{PRICE:private_listing}} a month. {{FOOTER_COVERAGE}}"), 'the shared footer should state the current listing model');
+assert(!html.includes('146 districts'), 'no fixed district-coverage claim');
 assert(!normalized.includes('1,889'), 'About must not contain a hardcoded live-listing total');
 assert(aboutBlock.includes('id="about-live-listings-stat" class="about-stat-card hidden"'), 'live count should fail closed and stay hidden until the API succeeds');
 assert(frontend.includes('return plausibleTotal || 0'), 'live-count helper should not use a hardcoded fallback');
@@ -53,8 +56,9 @@ assert.strictEqual((aboutBlock.match(/class="about-product-card"/g) || []).lengt
 assert.strictEqual(catalog.advertisingPlacements.length, 22, 'single-source catalog should contain all 22 advertising placements');
 assert.strictEqual(catalog.products.privateListing.amount, 20000);
 assert.strictEqual(catalog.products.featuredListing.amount, 50000);
-assert.strictEqual(catalog.products.offPlanDevelopment.amount, 150000);
-assert.strictEqual(catalog.products.offPlanDevelopment.period, 'post', 'Off Plan should be charged per post, not per month');
+const PRICING = require('../config/pricing');
+assert.strictEqual(catalog.products.offPlanDevelopment.amount, PRICING.off_plan.amount_ugx);
+assert.strictEqual(catalog.products.offPlanDevelopment.period, 'project / 3 months', 'Off Plan is charged per project per 3 months (rate card 2026-10-08)');
 assert(aboutBlock.includes('class="about-advertising-summary"'), 'advertising should use the compact summary treatment');
 assert(!aboutBlock.includes('about-rate-table'), 'the 22-row advertising table should not take up space on About');
 assert(aboutBlock.includes('href="/advertise" data-content-i18n="about.advertisingLearnMore">Learn more</a>'), 'compact advertising summary should link to the detailed advertiser page');
@@ -125,8 +129,9 @@ assert(html.includes('object-fit: cover;'), 'journey photos should fill their ca
 const rendered = injectAboutCommercialProducts(aboutBlock);
 assert(!rendered.includes('{{ABOUT_PRICE:'), 'server rendering should replace every price placeholder');
 assert(!rendered.includes('{{ABOUT_PRICE_ONLY:'), 'server rendering should replace every price-only placeholder');
-assert(rendered.includes('UGX 20,000 / property / month'), 'private listing price should come from the catalog');
-assert(rendered.includes('UGX 150,000 / post'), 'Off Plan price should be presented per post');
+assert(rendered.includes(`${PRICING.ugx(PRICING.private_listing.amount_ugx)} / property / month`), 'private listing price should come from the catalog');
+assert(rendered.includes(`${PRICING.ugx(PRICING.off_plan.amount_ugx)} / project / 3 months`), 'Off Plan price should be presented per project per 3 months');
+assert(!rendered.includes(' / post'), 'no "per post" pricing');
 assert(frontend.includes('window.__MAKAUG_ABOUT_COMMERCIAL_PRODUCTS__'), 'client pricing should read from the shared catalog');
 assert(frontend.includes("fmtP(entry.amount, '')"), 'About prices should use the existing currency conversion helper');
 
@@ -149,7 +154,7 @@ assert(hrefs.filter((href) => href.startsWith('https://wa.me/256780863394?text='
 assert(server.includes("app.get('/about/rate-card.pdf'"), 'existing PDF route should remain available for compatibility');
 assert(server.includes("canonical: absolutePublicUrl('/about')"), 'About should have a self-referencing canonical');
 assert(server.includes('About makaug — Products, pricing & how it works | makaug.com'), 'About should have the approved unique title');
-assert(server.includes('Everything makaug offers: listings from UGX 20,000/month'), 'About should have the approved meta description');
+assert(server.includes('Everything makaug offers: listings from ${PRICING.ugx(PRICING.private_listing.amount_ugx)}/month'), 'About should have the approved meta description');
 assert(pdfService.includes("require('../config/aboutCommercialProducts')"), 'PDF must use the same price catalog as the page');
 
 console.log('about page commercial rebuild checks passed');

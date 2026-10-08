@@ -14,6 +14,7 @@ function aboutCommercialPrice(key) {
 
 function injectAboutCommercialProducts(html) {
   let rendered = String(html || '');
+  rendered = rendered.replaceAll('{{ABOUT_FOUR_WEEK_DISCOUNT}}', `${catalog.fourWeekDiscountPercent}% off 4-week bookings`);
   for (const [key, entry] of Object.entries(catalog.products)) {
     rendered = rendered.replaceAll(`{{ABOUT_PRICE:${key}}}`, `${formatUgxPrice(entry.amount)} / ${entry.period}`);
     rendered = rendered.replaceAll(`{{ABOUT_PRICE_ONLY:${key}}}`, formatUgxPrice(entry.amount));

@@ -171,7 +171,8 @@ router.get('/meta', (_req, res) => {
       term_months: LISTING_TERM_MONTHS,
       // Stated on the API as well as the page, because this is the single
       // fact that keeps makaug out of the transaction.
-      basis: 'Flat listing fee. makaug charges no commission on any stay and never handles guest money.'
+      basis: 'Flat listing fee. makaug charges no commission on any stay and never handles guest money.',
+      vat_label: require('../config/pricing').vat.label
     }
   });
 });
@@ -916,7 +917,7 @@ router.post('/staff/listings/:id/payment', requireStaffAccess, async (req, res) 
         try {
           const revenue = require('../services/revenueService');
           const entry = await revenue.recordEntry(db, {
-            direction: 'in', kind: 'short_term_fee', method: ledgerMethod, amount: Number(req.body?.amount_ugx || fee.listing_fee_ugx || 50000),
+            direction: 'in', kind: 'short_term_fee', method: ledgerMethod, amount: Number(req.body?.amount_ugx || fee.listing_fee_ugx || require('../config/pricing').short_stay_host.amount_ugx),
             reference, payer_name: fee.host_name, payer_phone: fee.host_phone,
             note: String(req.body?.note || '').trim() || `Short stay fee recorded by ${req.staffAuth?.userId || 'staff'}`
           }, req.staffAuth?.userId || 'staff');

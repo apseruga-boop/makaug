@@ -264,13 +264,25 @@ test('an agent with no phone number on file is refused by name, not silently ski
  * silly. Staff picking them by name is staff saying they meant it. The
  * exemption is untouched: paying buys goodwill, not paying costs them nothing.
  */
-test('an exempt agent can be sent a link, and is still exempt afterwards', async () => {
+test('an exempt agent can be sent a link only with OVERRIDE, and is still exempt afterwards', async () => {
   await withStubbedWorld(async ({ at, sent, payLinkRows, agentUpdates }) => {
-    const done = await at('employee_pay_link_confirm', '1', {
+    // PR G4: picking a still-exempt agent asks for the explicit override first.
+    const asked = await at('employee_pay_link_confirm', '1', {
       whatsapp_employee_intake: true,
       employee_role: 'pay_link',
       pay_link_target: 'registered',
-      pay_link_candidates: [{ ...AGENT, fee_exempt: true }]
+      pay_link_candidates: [{ ...AGENT, fee_exempt: true, fee_exempt_label: 'fee-exempt until 1 Feb 2027' }]
+    });
+    assert.ok(!asked.payLinkSent, 'no link without the override');
+    assert.match(asked.message, /fee-exempt until 1 Feb 2027 — no payment needed/);
+    assert.match(asked.message, /OVERRIDE 1/);
+    assert.strictEqual(payLinkRows.length, 0);
+
+    const done = await at('employee_pay_link_confirm', 'OVERRIDE 1', {
+      whatsapp_employee_intake: true,
+      employee_role: 'pay_link',
+      pay_link_target: 'registered',
+      pay_link_candidates: [{ ...AGENT, fee_exempt: true, fee_exempt_label: 'fee-exempt until 1 Feb 2027' }]
     });
 
     assert.strictEqual(done.payLinkSent, 'MKTEST1234', 'the link must actually be created');
@@ -293,7 +305,7 @@ test('an exempt agent can be sent a link, and is still exempt afterwards', async
  */
 test('the agent never sees a word about being exempt — only the team does', async () => {
   await withStubbedWorld(async ({ at, sent, payLinkRows }) => {
-    await at('employee_pay_link_confirm', '1', {
+    await at('employee_pay_link_confirm', 'OVERRIDE 1', {
       whatsapp_employee_intake: true,
       employee_role: 'pay_link',
       pay_link_target: 'registered',
@@ -345,7 +357,7 @@ test('the search list marks an exempt agent, so nobody bills one by accident', a
     const found = await at('employee_pay_link_lookup', 'Nakato Grace', {
       whatsapp_employee_intake: true, employee_role: 'pay_link', pay_link_target: 'registered'
     });
-    assert.match(found.message, /lists free/i);
+    assert.match(found.message, /fee-exempt \(no end date set\)|fee-exempt until/i);
   }, { agents: [{ ...AGENT, fee_exempt: true }], feeExempt: true });
 });
 

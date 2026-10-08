@@ -1,4 +1,5 @@
 const logger = require('../config/logger');
+const PRICING = require('../config/pricing');
 const db = require('../config/database');
 const { DISTRICTS } = require('../utils/constants');
 const {
@@ -1848,6 +1849,8 @@ Current search model:
 - Saved searches and alerts store property type, min/max price, bedrooms, advanced filters, location, and radius.
 - If a location is outside Uganda, tell the user to choose a Ugandan area or search all Uganda.
 - Never invent or hallucinate listings. If no real listing data is present, offer save search, create alert, WhatsApp help, or real nearby alternatives only when context includes them.
+${PRICING.aiPriceBlock()}
+- Only quote a fee from the list above. Never offer a product that is not on it (no email/WhatsApp blasts, no Agent Pro, no lender slots, no Marketplace Verified).
 Requirements:
 - Keep under 420 characters.
 - Be practical and action-oriented.

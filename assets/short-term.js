@@ -1721,13 +1721,20 @@
   function listViewHtml() {
     var meta = state.meta || {};
     var amenities = meta.amenities || [];
-    var fee = meta.fee || { display: 'UGX 50,000', term_months: 3 };
+    // The fee comes from the API, or from the rate card inlined in the page
+    // (window.__MAKAUG_PRICING__); there is no hard-coded amount here.
+    var rateCard = window.__MAKAUG_PRICING__ || null;
+    var stayLine = rateCard && rateCard.short_stay_host;
+    var fee = meta.fee || (stayLine ? { display: rateCard.ugx(stayLine.amount_ugx), term_months: stayLine.months, vat_label: rateCard.vat.label } : null);
+    var vatLabel = (fee && fee.vat_label) || (rateCard && rateCard.vat.label) || '';
 
     return ''
       + '<section class="st-hero"><div class="st-wrap">'
       + '<h1>List your short stay on makaug</h1>'
-      + '<p class="st-hero-sub">Flat fee of <b>' + esc(fee.display) + ' for ' + esc(fee.term_months)
-      + ' months</b>. No commission on any stay, ever. Guests contact you directly on your own number — we never sit in the middle.</p>'
+      + (fee
+        ? '<p class="st-hero-sub">Flat fee of <b>' + esc(fee.display) + ' for ' + esc(fee.term_months)
+          + ' months</b>' + (vatLabel ? ' (' + esc(vatLabel) + ')' : '') + '. No commission on any stay, ever. Guests contact you directly on your own number — we never sit in the middle.</p>'
+        : '<p class="st-hero-sub">No commission on any stay, ever. Guests contact you directly on your own number — we never sit in the middle.</p>')
       + '</div></section>'
 
       + '<div class="st-wrap" style="padding-top:22px;padding-bottom:40px">'
@@ -1838,7 +1845,7 @@
       + '<li>The listing is accurate. The photos are of this property. The price is real.</li>'
       + '<li>You deal with guests directly. makaug is a place to be found, not your agent. We do not take bookings, hold deposits or guarantee guests.</li>'
       + '<li>You are responsible for your own tax and licences, including any local hotel tax on short stay accommodation and any income tax due.</li>'
-      + '<li>The fee is <b>' + esc(fee.display) + ' for ' + esc(fee.term_months) + ' months</b>, payable once we approve the listing. We take no commission on any stay.</li>'
+      + (fee ? '<li>The fee is <b>' + esc(fee.display) + ' for ' + esc(fee.term_months) + ' months</b>' + (vatLabel ? ' (' + esc(vatLabel) + ')' : '') + ', payable once we approve the listing. We take no commission on any stay.</li>' : '<li>The listing fee is shown before you submit, payable once we approve the listing. We take no commission on any stay.</li>')
       + '<li>We can take a listing down if it is reported, inaccurate, or we cannot reach you.</li>'
       + '</ul></div>'
 

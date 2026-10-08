@@ -10,6 +10,7 @@ const { getSupportEmail, getSupportWhatsappUrl, sendSupportEmail } = require('..
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { createLead } = require('../services/leadService');
 const {
+  buildAdvertisingQuoteBreakdown,
   estimateAdvertisingQuote,
   getAdvertisingPlacements,
   getAdvertisingPackages,
@@ -22,6 +23,8 @@ const {
   handlePaymentWebhook,
   paymentProviderConfigured
 } = require('../services/paymentProviderService');
+
+const PRICING = require('../config/pricing');
 
 const router = express.Router();
 
@@ -95,14 +98,32 @@ function normalizeChannel(value) {
 }
 
 function packageLabels(keys = []) {
-  return summarizeAdvertisingPackageKeys(keys).map((item) => `${item.label} (UGX ${Number(item.price_ugx || 0).toLocaleString('en-UG')})`);
+  return summarizeAdvertisingPackageKeys(keys).map((item) => (item.quote_on_request || item.price_ugx == null
+    ? `${item.label} (Price on request)`
+    : `${item.label} (UGX ${Number(item.price_ugx).toLocaleString('en-UG')} / ${item.price_period})`));
 }
 
 router.get('/packages', (_req, res) => {
   return res.json({
     ok: true,
-    data: getAdvertisingPackages()
+    data: getAdvertisingPackages(),
+    meta: {
+      rate_card_version: PRICING.version,
+      vat_label: PRICING.vat.label,
+      four_week_discount_percent: PRICING.display.four_week_discount_percent,
+      min_weekly_ugx: PRICING.display.min_weekly_ugx,
+      max_weekly_ugx: PRICING.display.max_weekly_ugx
+    }
   });
+});
+
+router.post('/quote', (req, res) => {
+  const quote = buildAdvertisingQuoteBreakdown({
+    packageKeys: asArray(req.body?.package_keys || req.body?.product_interests).map((item) => cleanText(item).toLowerCase()).filter(Boolean),
+    placementKeys: asArray(req.body?.placement_keys || req.body?.placements).map((item) => cleanText(item).toLowerCase()).filter(Boolean),
+    durationDays: toNullableInt(req.body?.duration_days) || 7
+  });
+  return res.json({ ok: true, data: quote });
 });
 
 router.get('/readiness', (_req, res) => {
@@ -231,8 +252,14 @@ router.post('/campaigns', requireAdvertiserAuth, async (req, res, next) => {
     const targetLocations = normalizeList(req.body.target_locations || req.body.locations);
     const targetListingTypes = normalizeList(req.body.target_listing_types || req.body.listing_types);
     const budgetUgx = toNullableInt(req.body.budget_ugx || req.body.budget);
+    // Priced items from the rate card, with the 4-week discount for 28+ days.
+    // A price-on-request item is quoted by staff, or the advertiser's budget stands.
+    const quote = buildAdvertisingQuoteBreakdown({
+      packageKeys: productInterests,
+      durationDays: toNullableInt(req.body.duration_days || req.body.desired_duration_days) || 7
+    });
+    const quotedAmount = Math.max(0, budgetUgx || Number(quote.total_ugx) || 0);
     const pkg = summarizeAdvertisingPackageKeys(productInterests).at(0) || null;
-    const quotedAmount = Math.max(0, budgetUgx || Number(pkg?.price_ugx || estimateAdvertisingQuote(productInterests)) || 0);
     const campaignName = cleanText(req.body.campaign_name || req.body.name || `${businessName} makaug campaign`);
 
     if (!email && !phone) return res.status(400).json({ ok: false, error: 'email or phone is required' });

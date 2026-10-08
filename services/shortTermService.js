@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 
 const logger = require('../config/logger');
+const PRICING = require('../config/pricing');
 const { shortTermEnabled } = require('../utils/shortTermFeatureFlags');
 
 // ---------------------------------------------------------------------------
@@ -11,11 +12,12 @@ const { shortTermEnabled } = require('../utils/shortTermFeatureFlags');
 
 const SHORT_TERM_MARKER = 'short-term-discovery-v1';
 
-// UGX 50,000 buys a 3 month run. One flat fee, no commission on any stay.
-// Commission would put makaug inside the transaction, which breaks the
-// intermediary position the whole section is built on.
-const LISTING_FEE_UGX = 50000;
-const LISTING_TERM_MONTHS = 3;
+// One flat fee buys a 3 month run (rate card: config/pricing.js
+// short_stay_host). No commission on any stay: commission would put makaug
+// inside the transaction, which breaks the intermediary position the whole
+// section is built on.
+const LISTING_FEE_UGX = PRICING.short_stay_host.amount_ugx;
+const LISTING_TERM_MONTHS = PRICING.short_stay_host.months;
 
 const MAX_SEARCH_LIMIT = 48;
 const DEFAULT_SEARCH_LIMIT = 24;
@@ -916,7 +918,7 @@ async function createShortTermListing(db, payload = {}, context = {}) {
         listingId,
         LISTING_FEE_UGX,
         value.preferred_payment_method || 'mtn_mobile_money',
-        'Flat listing fee, UGX 50,000 for a 3 month run. No commission on any stay.'
+        `Flat listing fee, ${PRICING.ugx(LISTING_FEE_UGX)} for a ${LISTING_TERM_MONTHS} month run. ${PRICING.vat.label}. No commission on any stay.`
       ]
     );
 

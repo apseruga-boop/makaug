@@ -352,7 +352,7 @@ async function updateMarketplaceDripConfig(db, input = {}) {
   const batchSize = clampInteger(input.batch_size, state.batch_size, 1, 25);
   const cursor = clampInteger(input.cursor_offset, state.cursor_offset, 0, Math.max(0, Number(state.source_count || 0) - 1));
   const target = clampInteger(input.target_businesses, state.target_businesses, 100, 100000);
-  const cap = clampInteger(input.monthly_request_cap, state.monthly_request_cap, 1, 100000);
+  const cap = clampInteger(input.monthly_request_cap, state.monthly_request_cap, 1, 100_000); // requests, not money
   const result = await db.query(
     `UPDATE marketplace_drip_state
         SET base_interval_minutes = $2,

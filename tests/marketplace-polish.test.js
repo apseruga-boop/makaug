@@ -21,12 +21,13 @@ test('Marketplace polish release marker and compact tier strip are present', () 
   assert.doesNotMatch(html, /UGX 150,000\/year/);
 });
 
-test('Verified pricing is one monthly config exposed through the public config endpoint', () => {
-  assert.equal(pricing.MARKETPLACE_VERIFIED_PRICE_UGX, 150000);
+test('Verified pricing is one monthly config; parked, so the public config publishes no amount', () => {
+  assert.equal(pricing.MARKETPLACE_VERIFIED_PRICE_UGX, require('../config/pricing').off_sale.marketplace_verified.amount_ugx);
   assert.equal(pricing.MARKETPLACE_VERIFIED_BILLING_PERIOD, 'month');
-  assert.match(route, /verified_pricing:\s*\{/);
-  assert.match(route, /amount_ugx: MARKETPLACE_VERIFIED_PRICE_UGX/);
-  assert.match(route, /billing_period: MARKETPLACE_VERIFIED_BILLING_PERIOD/);
+  assert.equal(pricing.MARKETPLACE_VERIFIED_ACTIVE, false);
+  assert.match(route, /verified_pricing: MARKETPLACE_VERIFIED_ACTIVE/);
+  assert.match(route, /amount_ugx: MARKETPLACE_VERIFIED_PRICE_UGX, billing_period: MARKETPLACE_VERIFIED_BILLING_PERIOD/);
+  assert.match(route, /: \{ active: false \}/);
   assert.doesNotMatch(lifecycle, /150,000\/year|buli mwaka|kwa mwaka|i mwaka|buri mwaka|سنويا|\/ዓመት/);
 });
 

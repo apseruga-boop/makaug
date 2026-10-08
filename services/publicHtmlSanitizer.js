@@ -1,5 +1,7 @@
 'use strict';
 
+const PRICING = require('../config/pricing');
+
 const PROTECTED_ROUTE_PREFIXES = [
   '/account',
   '/dashboard',
@@ -170,7 +172,7 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>4. Create alerts</strong><span class="block text-sm text-gray-600 mt-1">Get notified when matching listings go live.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>5. WhatsApp contact</strong><span class="block text-sm text-gray-600 mt-1">Contact owners, brokers, or makaug with listing context.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>6. Book viewing</strong><span class="block text-sm text-gray-600 mt-1">Request a viewing or callback when the lister allows it.</span></div>
-        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>7. List property</strong><span class="block text-sm text-gray-600 mt-1">Use the guided free listing form with address, photos, and verification.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>7. List property</strong><span class="block text-sm text-gray-600 mt-1">Use the guided listing form (${PRICING.private_listing.trial_days} days free, then ${PRICING.ugx(PRICING.private_listing.amount_ugx)} a month) with address, photos, and verification.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>8. Review checks</strong><span class="block text-sm text-gray-600 mt-1">makaug checks details before publishing listings.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>9. Use dashboards</strong><span class="block text-sm text-gray-600 mt-1">Track saved items, leads, bookings, campaigns, and follow-ups.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>10. Report suspicious</strong><span class="block text-sm text-gray-600 mt-1">Flag risky listings quickly so admin can review.</span></div>
@@ -328,7 +330,7 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
         </section>
         <section>
           <h3 class="font-black text-gray-900">Fees, liability, and governing law</h3>
-          <p class="mt-1">Free listings, advertising, featured placements, and other paid services may be subject to separate published or written terms. makaug does not guarantee availability, transaction completion, title validity, seller performance, tenancy performance, or freedom from third-party disputes. These Terms are governed by Ugandan law and disputes are subject to competent Ugandan courts.</p>
+          <p class="mt-1">Listing fees, advertising, featured placements and other paid services are set out in the published rate card (makaug.com/about). ${PRICING.vat.label}. makaug does not guarantee availability, transaction completion, title validity, seller performance, tenancy performance, or freedom from third-party disputes. These Terms are governed by Ugandan law and disputes are subject to competent Ugandan courts.</p>
         </section>
         <section>
           <h3 class="font-black text-gray-900">Contact</h3>

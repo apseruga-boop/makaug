@@ -283,6 +283,7 @@ function mapRemoteAgentForUi(agent = {}) {
     removed_reason: agent.removed_reason || "",
     paid_until: agent.paid_until ? String(agent.paid_until).slice(0, 10) : "",
     fee_exempt: agent.fee_exempt === true,
+    fee_exempt_until: agent.fee_exempt_until ? String(agent.fee_exempt_until).slice(0, 10) : "",
     fee_exempt_reason: agent.fee_exempt_reason || "",
     fee_offer_mode: agent.fee_offer_mode || "",
     fee_offer_reason: agent.fee_offer_reason || "",
@@ -716,11 +717,8 @@ let mortgageRateManuallyEdited = false;
 const MONETIZATION_SPINE_MARKER = "monetization-spine-v1-20260715";
 let makaugMonetizationConfig = {
   marker: MONETIZATION_SPINE_MARKER,
-  free_default: true,
   flags: {
-    listing_boosts_enabled: false,
-    agent_pro_enabled: false,
-    featured_lenders_enabled: false
+    listing_boosts_enabled: false
   },
   products: []
 };
@@ -733,25 +731,14 @@ function monetizationProductByType(type) {
   return (makaugMonetizationConfig?.products || []).find((item) => String(item.type || "") === String(type || ""));
 }
 
-function renderAgentProHook(options = {}) {
-  const enabled = monetizationFeatureEnabled("agent_pro_enabled");
-  const product = monetizationProductByType("agent_plan");
-  const price = product?.price ? `UGX ${Number(product.price || 0).toLocaleString("en-UG")}` : "pricing controlled by King";
-  return `
-    <button type="button" data-monetization-hook="agent-pro" onclick="toast('${enabled ? "Agent Pro checkout is being prepared." : "Agent Pro is prepared but not live yet."}')" class="${options.className || "border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50 rounded-xl px-3 py-2 text-xs font-black"}">
-      <i class="ti-shield-check fas fa-shield-alt mr-1"></i>Go Pro${enabled ? ` · ${adminEscape(price)}` : " · prepared"}
-    </button>`;
+// Agent Pro and the featured lender slot are retired (rate card 2026-10-08):
+// no tile, no button. The hooks stay so callers need no change.
+function renderAgentProHook(_options = {}) {
+  return "";
 }
 
 function renderFeaturedLenderHook() {
-  const enabled = monetizationFeatureEnabled("featured_lenders_enabled");
-  const product = monetizationProductByType("featured_lender");
-  const price = product?.price ? `UGX ${Number(product.price || 0).toLocaleString("en-UG")}` : "King-priced";
-  return `
-    <div data-monetization-hook="featured-lender" class="rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-950">
-      <div class="font-black"><i class="ti-building-bank fas fa-university mr-1"></i>Featured lender slot ${enabled ? "available" : "prepared"}</div>
-      <div class="text-xs text-emerald-800 mt-1">${enabled ? `Starts from ${adminEscape(price)}. King approval still controls placement.` : "Lender sponsorship is wired but hidden until Arthur turns on the feature flag."}</div>
-    </div>`;
+  return "";
 }
 
 async function hydrateMonetizationConfig() {
@@ -1248,7 +1235,7 @@ const I18N_UI = {
     navMortgage: "Mortgage Finder",
     navAI: "Discover AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Uganda's #1 Free Property Platform",
+    heroBadge: "A property search engine for Uganda",
     heroTitleHtml: "Find your next home, land, rental, or student room",
     heroSubtitle: "makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising property opportunities in one place.",
     heroSubtitlePrefix: "makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising",
@@ -1415,7 +1402,7 @@ const I18N_UI = {
     navMortgage: "Noonya Mortgage",
     navAI: "Noonya AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Pulatifoomu y'ebintu ey'obwereere mu Uganda",
+    heroBadge: "Ekifo eky'okunoonyezaamu amayumba n'ettaka mu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo ennungi",
     heroSubtitle: "Enkola y'okunoonya ebintu mu Uganda: amaka, ez'okupangisa, ettaka, ebisenge by'abayizi, n'ebizuuliddwa ku social media.",
     heroRent: "Pangisa",
@@ -1544,7 +1531,7 @@ const I18N_UI = {
     navMortgage: "Tafuta Rehani",
     navAI: "Gundua AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Jukwaa la bure la mali Uganda",
+    heroBadge: "Injini ya kutafuta mali nchini Uganda",
     heroTitleHtml: "Pata <span class=\"text-green-300\">maka</span> yako bora",
     heroSubtitle: "Search engine ya mali Uganda: nyumba, za kupanga, ardhi, vyumba vya wanafunzi, na listings kutoka mitandao ya kijamii.",
     heroRent: "Kupanga",
@@ -1672,7 +1659,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Dony",
-    heroBadge: "Uganda's #1 free property platform",
+    heroBadge: "Kabedo me yenyo ot ki ngom i Uganda",
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Yeny",
@@ -1705,7 +1692,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Ingira",
-    heroBadge: "Pulatifoomu ya property y'obwereere #1 omu Uganda",
+    heroBadge: "Ahantu h'okuseerera amaka n'eitaka omuri Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shanga",
@@ -1738,7 +1725,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Injira",
-    heroBadge: "Platform y'obusaare eya property #1 omuri Uganda",
+    heroBadge: "Ahantu h'okuseerera amaka n'eitaka omuri Uganda",
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shaka",
@@ -1771,7 +1758,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Yingira",
-    heroBadge: "Pulatifoomu ya property ey'obwerere #1 mu Uganda",
+    heroBadge: "Ekifo eky'okunoonyezaamu amayumba n'ettaka mu Uganda",
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Noonia",
@@ -2264,7 +2251,7 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   navMortgage: "የብድር መፈለጊያ",
   navAI: "AI Chatbot ያግኙ",
   navFraud: "ማጭበርበር",
-  heroBadge: "የኡጋንዳ ነፃ የንብረት መድረክ",
+  heroBadge: "ለኡጋንዳ የንብረት መፈለጊያ",
   heroTitleHtml: "ቀጣዩን ቤት፣ መሬት፣ ኪራይ ወይም የተማሪ ክፍል ያግኙ",
   heroSubtitle: "makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ የንብረት እድሎችንም በአንድ ቦታ ያደራጃል።",
   heroSubtitlePrefix: "makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ ያደራጃል",
@@ -2390,7 +2377,7 @@ I18N_UI.ar = Object.assign({}, I18N_UI.en, {
   navMortgage: "حاسبة التمويل",
   navAI: "اكتشف روبوت AI",
   navFraud: "الاحتيال",
-  heroBadge: "منصة عقارات مجانية في أوغندا",
+  heroBadge: "محرك بحث عن العقارات في أوغندا",
   heroTitleHtml: "اعثر على بيتك أو أرضك أو إيجارك التالي",
   heroSubtitle: "يستخدم makaug بحثاً مدعوماً بالذكاء الاصطناعي لفحص مصادر العقارات العامة على الإنترنت في أوغندا وتنظيم الفرص في مكان واحد.",
   heroSubtitlePrefix: "يستخدم makaug بحثاً مدعوماً بالذكاء الاصطناعي لفحص مصادر العقارات العامة على الإنترنت في أوغندا وتنظيم",
@@ -2510,118 +2497,25 @@ const CONTENT_I18N = {
   en: {
     "about.heroLabel": "About makaug",
     "about.title": "About makaug",
-    "about.heroStatement": "Property in Uganda should be easier to find, easier to list, and safer to trust.",
     "about.subtitle": "makaug is a Uganda-first property search engine and marketplace. We bring direct listings, public and authorised source signals, AI-assisted organisation, and human moderation into one clearer place.",
     "about.ctaSearch": "Search property",
     "about.ctaList": "List Property",
     "about.ctaWhatsapp": "Ask makaug on WhatsApp",
-    "about.valueUgandaTitle": "Uganda-first",
-    "about.valueUgandaText": "Built around local places, local language needs, WhatsApp habits, and real listing workflows.",
-    "about.valueFreeTitle": "Free listing",
-    "about.valueFreeText": "Owners and brokers can list property without a listing fee while paid advertising stays separate.",
-    "about.valueWhatsappTitle": "Web + WhatsApp",
-    "about.valueWhatsappText": "Designed for mobile web discovery, WhatsApp contact, dashboard follow-up, and safer decisions.",
-    "about.whoTitle": "Who we are",
-    "about.whoText": "makaug is a Uganda-first property platform for public website search, mobile web, WhatsApp-first contact, multilingual support, and guided free listings. We are built around the practical realities of Uganda's property market: scattered information, incomplete listings, heavy WhatsApp use, and the need for trust before people view or pay.",
     "about.missionLabel": "Our Mission",
     "about.missionTitle": "Our mission",
     "about.missionText": "Our mission is to make property easier to discover, reduce confusion, improve listing quality, help people move from search to viewing to decision, and support Uganda's property market with better information.",
-    "about.whyLabel": "Why this matters",
-    "about.whyTitle": "Why makaug exists",
-    "about.whyText": "Property search in Uganda can be scattered across WhatsApp, brokers, social posts, word of mouth, and incomplete listing pages. Fraud risk exists, students and land seekers need clearer information, and many owners need a guided way to list properly. makaug brings structure, search, safety, and communication together.",
-    "about.adsLabel": "Advertising revenue",
-    "about.adsTitle": "Paid advertising is transparent and separate from free listing",
-    "about.adsText": "Businesses can buy sponsored homepage, search, property-detail, broker, student, commercial, land, and WhatsApp placements. Prices are published in UGX with USD guide pricing on the Advertise page, and every paid campaign is reviewed before going live.",
-    "about.adsRateTitle": "Public rate card",
-    "about.adsRateText": "Day, week, month, and CPM options are shown publicly so advertisers can plan spend before contacting makaug.",
-    "about.adsPayTitle": "PayPal launch payments",
-    "about.adsPayText": "After makaug confirms a campaign, the advertiser receives a PayPal payment link. The King dashboard tracks invoice, payment reference, approval, live dates, impressions, clicks, and leads.",
-    "about.adsWhatsappTitle": "WhatsApp advertising",
-    "about.adsWhatsappText": "Sponsored WhatsApp matches and approved opt-in bulk audience campaigns are available, with exact bulk pricing confirmed by segment, template approval, and volume.",
-    "about.adsCta": "View advertising prices",
-    "about.searchEngineLabel": "Property search engine",
-    "about.searchEngineTitle": "How makaug finds property information",
-    "about.searchEngineText": "makaug is becoming a search engine for Uganda property. We combine direct owner and broker listings with reviewed public or authorised online sources, then route every candidate through AI-assisted checks and human review before it can appear as a trusted live listing.",
-    "about.sourceNetworkTitle": "30,000+ source registry",
-    "about.sourceNetworkText": "We monitor a growing registry of property pages, accounts, channels, searches, and partner routes across Uganda.",
-    "about.aiAssistTitle": "AI-assisted organisation",
-    "about.aiAssistText": "AI helps sort categories, locations, duplicates, language signals, and risk flags before review.",
-    "about.humanReviewTitle": "Human moderation",
-    "about.humanReviewText": "People still check source evidence, contact routes, ownership signals, photos, and safety concerns.",
-    "about.statSourcesTitle": "30,000+ sources",
-    "about.statSourcesText": "A source registry for public pages, social channels, discovery feeds, and authorised partner paths.",
-    "about.statAiTitle": "AI + people",
-    "about.statAiText": "AI helps organise information, while human review protects quality before listings go live.",
-    "about.statLanguageTitle": "9 languages",
-    "about.statLanguageText": "Built for multilingual discovery across web, WhatsApp, support, and safety guidance.",
-    "about.challengeScatteredTitle": "Scattered channels",
-    "about.challengeScatteredText": "Useful property information may sit in posts, groups, calls, WhatsApp, pages, and offline networks.",
-    "about.challengeQualityTitle": "Uneven quality",
-    "about.challengeQualityText": "Photos, prices, location, title signals, and contact permission are often incomplete or unclear.",
-    "about.challengeLanguageTitle": "Language and access",
-    "about.challengeLanguageText": "People search in different languages and many prefer mobile web or WhatsApp over long forms.",
-    "about.challengeTrustTitle": "Trust before payment",
-    "about.challengeTrustText": "Searchers need practical checks, traceable contact, and a way to report pressure or suspicious details.",
-    "about.aiCta": "Try AI property help",
-    "about.flowFindTitle": "Find signals",
-    "about.flowFindText": "We monitor direct listings, authorised feeds, public source pages, social posts, and channel updates.",
-    "about.flowOrganiseTitle": "Organise with AI",
-    "about.flowOrganiseText": "AI helps classify property type, area, likely price fields, duplicates, language, and missing details.",
-    "about.flowReviewTitle": "Review carefully",
-    "about.flowReviewText": "Human checks look at source evidence, contact routes, images, permission, location, and risk flags.",
-    "about.flowAttributeTitle": "Attribute clearly",
-    "about.flowAttributeText": "Found-online information keeps source context. Owners and agents can claim, correct, or request removal.",
-    "about.flowConnectTitle": "Connect safely",
-    "about.flowConnectText": "Searchers can save, enquire, use WhatsApp, request callbacks, report issues, and follow safety guidance.",
-    "about.ownershipLabel": "Ownership and attribution",
-    "about.ownershipTitle": "We organise information. We do not pretend to own it.",
-    "about.ownershipText": "Property information belongs to the owners, agents, tenants, publishers, and source channels that created it. makaug aggregates, structures, attributes, reviews, and routes property information so people can find it in one place.",
-    "about.searchSourceTitle": "Source visibility",
-    "about.searchSourceText": "Found-online listings show when makaug first found them, the source they came from, and the route buyers can use to check the original post.",
-    "about.searchReviewTitle": "Human review",
-    "about.searchReviewText": "Source data is not posted blindly. The review desk checks location, photos, contact details, duplicates, ownership signals, and agent permission before approval.",
-    "about.searchRemovalTitle": "Claim or remove",
-    "about.searchRemovalText": "Owners and agents can claim, update, replace photos, correct details, or request removal. makaug keeps attribution and a review trail so listings stay accountable.",
-    "about.adSeparationTitle": "Ads stay separate",
-    "about.adSeparationText": "Free listing is open to owners and brokers. Paid advertising is labelled and managed separately from listing moderation.",
-    "about.landHubLabel": "Land marketplace support",
-    "about.landHubTitle": "Land safety",
-    "about.landHubText": "Browse land listings, compare details, and use safety guidance. Makaug is a marketplace, not an official title-checking or legal-clearance service.",
-    "about.landHubPortal": "Browse land listings",
-    "about.landHubOfficialTitle": "Listing discovery",
-    "about.landHubOfficialText": "Makaug helps people discover land listings, map locations, photos, prices, and seller contact routes.",
-    "about.landHubEvidenceTitle": "Independent checks",
-    "about.landHubEvidenceText": "Buyers should inspect land, review documents with their own lawyer or trusted professional, and avoid untraceable payments.",
-    "about.landHubProcessTitle": "Safety first",
-    "about.landHubProcessText": "Use makaug safety guidance, meet carefully, confirm seller authority independently, and keep records of every step.",
-    "about.helpLabel": "Who we help",
-    "about.helpTitle": "Built for real property journeys",
     "about.ctaSafety": "Learn safety tips",
     "about.rentersTitle": "Renters",
-    "about.rentersText": "Search by area and budget, save properties, create alerts, contact safely, book viewings, request callbacks, and report suspicious listings.",
     "about.buyersTitle": "Buyers",
-    "about.buyersText": "Search homes and land, compare options, understand location, title and verification signals, save searches, and use safety guidance.",
     "about.studentsTitle": "Students and parents",
-    "about.studentsText": "Search by campus, budget, room type, security, water, Wi-Fi, meals, callbacks, viewings, and student alerts.",
     "about.ownersTitle": "Owners and sellers",
-    "about.ownersText": "List property free with guided fields, map location, photo prompts, OTP/contact verification, review before publishing, enquiries, and callbacks.",
     "about.brokersTitle": "Brokers",
-    "about.brokersText": "Build a broker profile, manage listings, track leads, handle WhatsApp enquiries, manage viewings, and strengthen broker trust.",
-    "about.commercialTitle": "Commercial users",
-    "about.commercialText": "Find business space, offices, shops, warehouses, direct enquiries, and saved commercial searches.",
     "about.safetyLabel": "Safety and clarity",
     "about.trustTitle": "How we support trust and safety",
-    "about.trustOtpTitle": "OTP and contact checks",
-    "about.trustOtpText": "Contact verification helps reduce fake submissions and missed follow-up.",
     "about.trustReviewTitle": "Review before publishing",
     "about.trustReviewText": "Listing details, photos, location, and fraud signals are checked before approval.",
     "about.trustFraudTitle": "Fraud reporting",
     "about.trustFraudText": "Users can report suspicious listings, land/title concerns, and payment pressure.",
-    "about.contactLabel": "Contact and connect",
-    "about.contactTitle": "Need help with property information?",
-    "about.contactText": "Search the site, list property for free, ask makaug on WhatsApp, or report suspicious information so the review team can look at it.",
-    "about.helpCentreCta": "Help Centre",
-    "about.reportCta": "Report a listing",
     "safety.eyebrow": "Verify before paying",
     "safety.title": "makaug.com Safety Tips",
     "safety.subtitle": "Simple, practical checks for every property journey: view safely, verify identity, confirm authority, use traceable payments, and report suspicious pressure quickly.",
@@ -2661,60 +2555,19 @@ const CONTENT_I18N = {
   lg: {
     "about.heroLabel": "Ebitukwatako",
     "about.title": "Ebitukwatako ku makaug",
-    "about.heroStatement": "Property mu Uganda erina okuba nnyangu okunoonya, okulistinga, era erina okuba ey'obwesige.",
     "about.subtitle": "makaug ezimbibwa nga platform ya property eya Uganda eyamba abapangisa, abagula, abayizi, abanoonya ettaka, bannannyini property, brokers, n'abasuubuzi.",
     "about.ctaSearch": "Noonya property",
     "about.ctaList": "List Property",
     "about.ctaWhatsapp": "Buuza makaug ku WhatsApp",
-    "about.valueUgandaTitle": "Uganda ku mwanjo",
-    "about.valueUgandaText": "Tuzimbiddwa ku bifo bya wano, ennimi za wano, enkozesa ya WhatsApp, n'engeri listing gye zikolebwamu mu ddala.",
-    "about.valueFreeTitle": "Listing ya bwereere",
-    "about.valueFreeText": "Bannannyini property ne brokers basobola okulistinga awatali ssente za listing, nga advertising esasulwa ekyali kyawukana.",
-    "about.valueWhatsappTitle": "Web + WhatsApp",
-    "about.valueWhatsappText": "Ekoleddwa ku mobile web, WhatsApp contact, dashboard follow-up, n'okuyamba abantu okusalawo mu ngeri ey'obukuumi.",
-    "about.whoTitle": "Ffe baani",
-    "about.whoText": "makaug ye platform ya property eya Uganda esangibwa ku web, mobile, WhatsApp, support mu nnimi eziwerako, ne guided free listings. Tuzimbiddwa ku byetaago by'akatale ka property mu Uganda: amawulire agasaasaanye, listings ezitajjudde, enkozesa ya WhatsApp, n'obwesige nga abantu tebannalaba oba okusasula.",
     "about.missionTitle": "Omulamwa gwaffe",
     "about.missionText": "Omulamwa gwaffe kwe kufuula property ennyangu okuzuula, okukendeeza okutabulwa, okulongoosa omutindo gwa listings, n'okuyamba abantu okuva ku search okutuuka ku viewing n'okusalaawo.",
-    "about.whyTitle": "Lwaki makaug eriwo",
-    "about.whyText": "Okunoonya property mu Uganda kusobola okuba mu WhatsApp, brokers, social posts, n'amawulire agava mu bantu. makaug egatta search, safety, n'empuliziganya mu kifo kimu.",
-    "about.searchEngineLabel": "Property search engine",
-    "about.searchEngineTitle": "Engeri makaug gy'ezulamu amawulire ga property",
-    "about.searchEngineText": "makaug efuuka search engine ya property mu Uganda. Tugatta listings okuva eri owners ne brokers n'ensibuko za online ezikeberebwa oba ezikkiriziddwa, ne tuziyisa mu King review nga tezinnaba listings eziri live.",
-    "about.searchSourceTitle": "Ensibuko eragibwa",
-    "about.searchSourceText": "Listings ezizuuliddwa online ziraga ddi makaug lwe yazisooka okulaba, social source gy'ezivudde, n'ekkubo abantu lye bayitamu okukakasa post eyasooka.",
-    "about.searchReviewTitle": "Okukebera kw'omuntu",
-    "about.searchReviewText": "Awo data eva mu source teteekebwa live butereevu. King dashboard ekebera location, photos, contact details, duplicates, ownership signals, n'okukkiriza kwa agent nga approval tennaba.",
-    "about.searchRemovalTitle": "Claim oba remove",
-    "about.searchRemovalText": "Owners ne agents basobola oku-claim, okulongoosa, okukyusa photos, okutereeza details, oba okusaba listing eggyibweko. makaug ekuuma attribution ne review trail.",
-    "about.landHubLabel": "Obuyambi bwa marketplace y'ettaka",
-    "about.landHubTitle": "Noonya oba listinga ettaka nga tetweyita abakakasa title",
-    "about.landHubText": "Laba listings z'ettaka, geraageranya details, era kozesa safety guidance. Makaug marketplace; si service ya title-checking oba legal clearance entongole.",
-    "about.landHubPortal": "Laba listings z'ettaka",
-    "about.landHubOfficialTitle": "Okuzuula listings",
-    "about.landHubOfficialText": "Makaug eyamba abantu okuzuula listings z'ettaka, map locations, photos, prices, n'amakubo g'okukwatagana n'omutunzi.",
-    "about.landHubEvidenceTitle": "Okukebera okwetongodde",
-    "about.landHubEvidenceText": "Buyers balina okulaba ettaka, okukebera ebiwandiiko n'omuwabuzi wabwe ow'amateeka oba professional gwe beesiga, era beewale payments ezitasobola kulondoolwa.",
-    "about.landHubProcessTitle": "Obukuumi busooka",
-    "about.landHubProcessText": "Kozesa safety guidance ya makaug, sisinkana n'obwegendereza, kakasa obuyinza bw'omutunzi mu ngeri yeetongodde, era kuuma records za buli mutendera.",
-    "about.helpLabel": "Be tuyamba",
-    "about.helpTitle": "Ekoleddwa ku property journeys ez'omu ddala",
     "about.ctaSafety": "Yiga safety tips",
     "about.rentersTitle": "Abapangisa",
-    "about.rentersText": "Noonya ku kitundu ne budget, tereka property, kola alerts, buuza mu bukuumi, bookinga viewing, saba callback, era reportinga ebiteeberezebwa.",
     "about.buyersTitle": "Abagula",
-    "about.buyersText": "Noonya amaka n'ettaka, geraageranya options, tegeera location, title, verification signals, tereka searches, era kozesa safety guidance.",
     "about.studentsTitle": "Abayizi n'abazadde",
-    "about.studentsText": "Noonya okusinziira ku campus, budget, room type, security, amazzi, Wi-Fi, emmere, callbacks, viewings, ne student alerts.",
     "about.ownersTitle": "Bannannyini property n'abatunda",
-    "about.ownersText": "Listinga property ya bwereere n'ebibuuzo ebikulungamya, map location, photos, OTP/contact verification, review nga tennaba published, enquiries, ne callbacks.",
     "about.brokersTitle": "Brokers",
-    "about.brokersText": "Zimba broker profile, ddukanya listings, landirira leads, WhatsApp enquiries, viewings, n'obwesige bwa broker.",
-    "about.commercialTitle": "Abakozesa commercial",
-    "about.commercialText": "Noonya business space, offices, shops, warehouses, direct enquiries, ne saved commercial searches.",
     "about.trustTitle": "Engeri gye tuyamba mu trust ne safety",
-    "about.trustOtpTitle": "OTP ne contact checks",
-    "about.trustOtpText": "Contact verification eyamba okukendeeza fake submissions n'okulemererwa follow-up.",
     "about.trustReviewTitle": "Review nga tennaba publishing",
     "about.trustReviewText": "Details, photos, location, ne fraud signals bikekebejjebwa nga listing tennakkirizibwa.",
     "about.trustFraudTitle": "Fraud reporting",
@@ -2758,60 +2611,19 @@ const CONTENT_I18N = {
   sw: {
     "about.heroLabel": "Kuhusu Sisi",
     "about.title": "Kuhusu makaug",
-    "about.heroStatement": "Mali nchini Uganda inapaswa kuwa rahisi kutafuta, rahisi kuorodhesha, na salama kuamini.",
     "about.subtitle": "makaug inajenga jukwaa la mali la Uganda kwa wapangaji, wanunuzi, wanafunzi, watafuta ardhi, wamiliki, brokers, na biashara.",
     "about.ctaSearch": "Tafuta mali",
     "about.ctaList": "List Property",
     "about.ctaWhatsapp": "Uliza makaug kwa WhatsApp",
-    "about.valueUgandaTitle": "Uganda kwanza",
-    "about.valueUgandaText": "Imejengwa kuzunguka maeneo ya ndani, mahitaji ya lugha, matumizi ya WhatsApp, na mtiririko halisi wa listings.",
-    "about.valueFreeTitle": "Listing bure",
-    "about.valueFreeText": "Wamiliki na brokers wanaweza kuorodhesha mali bila ada ya listing huku matangazo ya kulipia yakibaki tofauti.",
-    "about.valueWhatsappTitle": "Web + WhatsApp",
-    "about.valueWhatsappText": "Imetengenezwa kwa mobile web, mawasiliano ya WhatsApp, dashboard follow-up, na maamuzi salama.",
-    "about.whoTitle": "Sisi ni nani",
-    "about.whoText": "makaug ni jukwaa la mali la Uganda kwa utafutaji wa web, mobile, mawasiliano ya WhatsApp, msaada wa lugha nyingi, na listings za bure zilizoongozwa. Tumejengwa kuzunguka hali halisi ya soko la mali Uganda.",
     "about.missionTitle": "Dhamira yetu",
     "about.missionText": "Dhamira yetu ni kurahisisha ugunduzi wa mali, kupunguza mkanganyiko, kuboresha ubora wa listings, na kusaidia watu kutoka search hadi viewing na uamuzi.",
-    "about.whyTitle": "Kwa nini makaug ipo",
-    "about.whyText": "Utafutaji wa mali Uganda unaweza kutawanyika kwenye WhatsApp, brokers, social posts, na maneno ya watu. makaug huleta muundo, search, safety, na mawasiliano pamoja.",
-    "about.searchEngineLabel": "Property search engine",
-    "about.searchEngineTitle": "Jinsi makaug hupata taarifa za mali",
-    "about.searchEngineText": "makaug inakuwa search engine ya mali Uganda. Tunachanganya listings kutoka kwa wamiliki na brokers pamoja na vyanzo vya mtandaoni vilivyopitiwa au kuidhinishwa, kisha kila candidate hupitia King review kabla ya kuwa live.",
-    "about.searchSourceTitle": "Chanzo kinaonekana",
-    "about.searchSourceText": "Listings zilizopatikana mtandaoni zinaonyesha lini makaug iliziona kwanza, chanzo cha kijamii kilikotoka, na njia ya kukagua chapisho la awali.",
-    "about.searchReviewTitle": "Ukaguzi wa mtu",
-    "about.searchReviewText": "Data ya source haiwekwi live bila ukaguzi. King dashboard hukagua location, photos, contact details, duplicates, ownership signals, na ruhusa ya agent kabla ya approval.",
-    "about.searchRemovalTitle": "Claim au remove",
-    "about.searchRemovalText": "Wamiliki na agents wanaweza claim, update, kubadilisha photos, kusahihisha details, au kuomba removal. makaug huhifadhi attribution na review trail.",
-    "about.landHubLabel": "Msaada wa marketplace ya ardhi",
-    "about.landHubTitle": "Tafuta na orodhesha ardhi bila kujifanya tunakagua hati",
-    "about.landHubText": "Tazama listings za ardhi, linganisha details, na tumia safety guidance. Makaug ni marketplace, si huduma rasmi ya title-checking au legal clearance.",
-    "about.landHubPortal": "Tazama listings za ardhi",
-    "about.landHubOfficialTitle": "Ugunduzi wa listings",
-    "about.landHubOfficialText": "Makaug husaidia watu kugundua listings za ardhi, map locations, photos, prices, na njia za kuwasiliana na seller.",
-    "about.landHubEvidenceTitle": "Ukaguzi huru",
-    "about.landHubEvidenceText": "Buyers wanapaswa kutembelea ardhi, kukagua documents na lawyer wao au professional wanayemwamini, na kuepuka malipo yasiyofuatilika.",
-    "about.landHubProcessTitle": "Usalama kwanza",
-    "about.landHubProcessText": "Tumia makaug safety guidance, kutana kwa uangalifu, thibitisha seller authority kwa njia huru, na hifadhi records za kila hatua.",
-    "about.helpLabel": "Tunasaidia nani",
-    "about.helpTitle": "Imejengwa kwa safari halisi za mali",
     "about.ctaSafety": "Jifunze safety tips",
     "about.rentersTitle": "Wapangaji",
-    "about.rentersText": "Tafuta kwa eneo na budget, hifadhi mali, tengeneza alerts, wasiliana salama, book viewings, omba callbacks, na report suspicious listings.",
     "about.buyersTitle": "Wanunuzi",
-    "about.buyersText": "Tafuta nyumba na ardhi, linganisha options, elewa location, title na verification signals, hifadhi searches, na tumia safety guidance.",
     "about.studentsTitle": "Wanafunzi na wazazi",
-    "about.studentsText": "Tafuta kwa campus, budget, room type, security, maji, Wi-Fi, meals, callbacks, viewings, na student alerts.",
     "about.ownersTitle": "Wamiliki na wauzaji",
-    "about.ownersText": "List property bure kwa guided fields, map location, photo prompts, OTP/contact verification, review kabla ya publishing, enquiries, na callbacks.",
     "about.brokersTitle": "Brokers",
-    "about.brokersText": "Jenga broker profile, simamia listings, fuatilia leads, WhatsApp enquiries, viewings, na broker trust.",
-    "about.commercialTitle": "Watumiaji commercial",
-    "about.commercialText": "Tafuta business space, offices, shops, warehouses, direct enquiries, na saved commercial searches.",
     "about.trustTitle": "Jinsi tunavyosaidia trust na safety",
-    "about.trustOtpTitle": "OTP na contact checks",
-    "about.trustOtpText": "Contact verification husaidia kupunguza fake submissions na missed follow-up.",
     "about.trustReviewTitle": "Review kabla ya publishing",
     "about.trustReviewText": "Listing details, photos, location, na fraud signals hukaguliwa kabla ya approval.",
     "about.trustFraudTitle": "Fraud reporting",
@@ -2857,32 +2669,12 @@ const CONTENT_I18N = {
 CONTENT_I18N.am = Object.assign({}, CONTENT_I18N.en, {
   "about.heroLabel": "ስለ እኛ",
   "about.title": "ስለ makaug",
-  "about.heroStatement": "በኡጋንዳ ንብረት ማግኘት፣ መዘርዘር እና መተማመን ቀላል መሆን አለበት።",
   "about.subtitle": "makaug ለተከራዮች፣ ገዢዎች፣ ተማሪዎች፣ መሬት ፈላጊዎች፣ ባለንብረቶች፣ ደላሎች እና ንግዶች የኡጋንዳ የንብረት መድረክ እየገነባ ነው።",
   "about.ctaSearch": "ንብረት ፈልግ",
   "about.ctaList": "ንብረት ዘርዝር",
   "about.ctaWhatsapp": "makaugን በ WhatsApp ጠይቅ",
-  "about.valueUgandaTitle": "ኡጋንዳ ቀዳሚ",
-  "about.valueUgandaText": "በአካባቢ ስሞች፣ ቋንቋ ፍላጎቶች፣ WhatsApp አጠቃቀም እና ተግባራዊ የዝርዝር ሂደቶች ላይ የተገነባ።",
-  "about.valueFreeTitle": "ነፃ ዝርዝር",
-  "about.valueFreeText": "ባለንብረቶች እና ደላሎች የዝርዝር ክፍያ ሳይከፍሉ ንብረት መዘርዘር ይችላሉ።",
-  "about.valueWhatsappTitle": "ድር + WhatsApp",
-  "about.valueWhatsappText": "ለሞባይል ድር ፍለጋ፣ WhatsApp ግንኙነት፣ ዳሽቦርድ ክትትል እና ደህንነታዊ ውሳኔዎች የተዘጋጀ።",
-  "about.whoTitle": "እኛ ማን ነን",
-  "about.whoText": "makaug ለድር ፍለጋ፣ ለሞባይል፣ ለ WhatsApp ግንኙነት፣ ለብዙ ቋንቋ ድጋፍ እና ለተመራ ነፃ ዝርዝር የኡጋንዳ የንብረት መድረክ ነው።",
   "about.missionTitle": "ተልእኮችን",
   "about.missionText": "ተልእኮአችን ንብረትን ቀላል ለማግኘት፣ ግራ መጋባትን ለመቀነስ፣ የዝርዝር ጥራትን ለማሻሻል እና ሰዎችን ከፍለጋ ወደ እይታ እና ውሳኔ ለማገዝ ነው።",
-  "about.whyTitle": "makaug ለምን አለ",
-  "about.whyText": "በኡጋንዳ የንብረት ፍለጋ በ WhatsApp፣ በደላሎች፣ በማህበራዊ ፖስቶች እና ባልተሟሉ ገጾች ሊበተን ይችላል። makaug መዋቅር፣ ፍለጋ፣ ደህንነት እና ግንኙነትን አንድ ላይ ያመጣል።",
-  "about.searchEngineLabel": "የንብረት መፈለጊያ",
-  "about.searchEngineTitle": "makaug የንብረት መረጃን እንዴት ያገኛል",
-  "about.searchEngineText": "makaug ለኡጋንዳ ንብረት የፍለጋ መሣሪያ እየሆነ ነው። የባለቤትና የደላል ዝርዝሮችን ከተገመገሙ የህዝብ ምንጮች ጋር እናጣምራለን።",
-  "about.searchSourceTitle": "የምንጭ ግልጽነት",
-  "about.searchSourceText": "በመስመር ላይ የተገኙ ዝርዝሮች makaug መጀመሪያ መቼ እንዳገኛቸው፣ ከየትኛው ማህበራዊ ምንጭ እንደመጡ እና ዋናውን ፖስት ለመመርመር መንገዱን ያሳያሉ።",
-  "about.searchReviewTitle": "የሰው ግምገማ",
-  "about.searchReviewText": "የምንጭ መረጃ በቀጥታ አይታተምም። የKing ዳሽቦርድ አካባቢ፣ ፎቶዎች፣ እውቂያ፣ ተደጋጋሚነት እና የፈቃድ ምልክቶችን ይመረምራል።",
-  "about.searchRemovalTitle": "ይጠይቁ ወይም ያስወግዱ",
-  "about.searchRemovalText": "ባለቤቶች እና ወኪሎች ዝርዝሩን መጠየቅ፣ ማሻሻል፣ መስተካከል ወይም ማስወገድ መጠየቅ ይችላሉ።",
   "safety.eyebrow": "ከመክፈልዎ በፊት ያረጋግጡ",
   "safety.title": "የ makaug.com የደህንነት ምክሮች",
   "safety.subtitle": "ለእያንዳንዱ የንብረት ጉዞ ቀላል ምርመራዎች: በደህና ይመልከቱ፣ ማንነትን ያረጋግጡ፣ ተፈቃድን ያረጋግጡ፣ በሚከታተል መንገድ ይክፈሉ።",
@@ -2898,32 +2690,12 @@ CONTENT_I18N.am = Object.assign({}, CONTENT_I18N.en, {
 CONTENT_I18N.ar = Object.assign({}, CONTENT_I18N.en, {
   "about.heroLabel": "من نحن",
   "about.title": "عن makaug",
-  "about.heroStatement": "العقار في أوغندا يجب أن يكون أسهل في البحث، وأسهل في الإدراج، وأكثر أماناً للثقة.",
   "about.subtitle": "makaug يبني منصة عقارات لأوغندا أولاً للمستأجرين والمشترين والطلاب والباحثين عن الأرض والمالكين والوسطاء والشركات.",
   "about.ctaSearch": "ابحث عن عقار",
   "about.ctaList": "أدرج عقاراً",
   "about.ctaWhatsapp": "اسأل makaug على WhatsApp",
-  "about.valueUgandaTitle": "أوغندا أولاً",
-  "about.valueUgandaText": "مبني حول الأماكن المحلية واحتياجات اللغة المحلية وعادات WhatsApp وسير عمل الإعلانات الحقيقي.",
-  "about.valueFreeTitle": "إدراج مجاني",
-  "about.valueFreeText": "يمكن للمالكين والوسطاء إدراج العقارات دون رسوم إدراج، بينما تبقى الإعلانات المدفوعة منفصلة.",
-  "about.valueWhatsappTitle": "الويب + WhatsApp",
-  "about.valueWhatsappText": "مصمم للاكتشاف عبر الويب المحمول، والتواصل عبر WhatsApp، ومتابعة dashboard، واتخاذ قرارات أكثر أماناً.",
-  "about.whoTitle": "من نحن",
-  "about.whoText": "makaug منصة عقارات لأوغندا أولاً للبحث على الموقع، والجوال، والتواصل عبر WhatsApp، والدعم متعدد اللغات، والإدراج المجاني الموجّه.",
   "about.missionTitle": "مهمتنا",
   "about.missionText": "مهمتنا أن نجعل اكتشاف العقارات أسهل، ونقلل الالتباس، ونحسن جودة الإعلانات، ونساعد الناس على الانتقال من البحث إلى المعاينة ثم القرار.",
-  "about.whyTitle": "لماذا يوجد makaug",
-  "about.whyText": "البحث عن العقار في أوغندا قد يكون موزعاً بين WhatsApp والوسطاء والمنشورات الاجتماعية والصفحات غير المكتملة. يجمع makaug البنية والبحث والسلامة والتواصل في مكان واحد.",
-  "about.searchEngineLabel": "محرك بحث عقاري",
-  "about.searchEngineTitle": "كيف يجد makaug معلومات العقارات",
-  "about.searchEngineText": "makaug يصبح أداة بحث للعقارات في أوغندا. نمزج إعلانات المالكين والوسطاء مع مصادر عامة تمت مراجعتها.",
-  "about.searchSourceTitle": "شفافية المصدر",
-  "about.searchSourceText": "الإعلانات التي تم العثور عليها على الإنترنت تعرض متى وجدها makaug أول مرة، ومن أي مصدر اجتماعي جاءت، وكيف يمكن مراجعة المنشور الأصلي.",
-  "about.searchReviewTitle": "مراجعة بشرية",
-  "about.searchReviewText": "لا يتم نشر بيانات المصدر مباشرة. يراجع لوحة تحكم King الموقع والصور وجهات الاتصال والتكرار وإشارات الإذن قبل الموافقة.",
-  "about.searchRemovalTitle": "المطالبة أو الإزالة",
-  "about.searchRemovalText": "يمكن للمالكين والوكلاء المطالبة بالإعلان أو تحديثه أو تصحيح التفاصيل أو طلب الإزالة. يحتفظ makaug بالإسناد وسجل المراجعة.",
   "safety.eyebrow": "تحقق قبل أن تدفع",
   "safety.title": "نصائح السلامة من makaug.com",
   "safety.subtitle": "فحوصات بسيطة لكل رحلة عقارية: عاين بأمان، تحقق من الهوية، أكد الصلاحية، وادفع فقط عبر قنوات قابلة للتتبع.",
@@ -2939,15 +2711,14 @@ CONTENT_I18N.ar = Object.assign({}, CONTENT_I18N.en, {
 const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.heroLabel": "About makaug",
   "about.title": "Every property in Uganda, in one place",
-  "about.heroStatement": "Every property in Uganda, in one place",
   "about.subtitle": "makaug is Uganda's property search engine. We find every real listing online, check it, and put it in front of buyers, renters and students in 9 languages, on the web or on WhatsApp, across all 146 districts. Below is everything we offer and what it costs.",
   "about.ctaSearch": "Search property",
   "about.ctaList": "List a property",
   "about.ctaWhatsapp": "Talk to sales on WhatsApp",
-  "about.statDistricts": "districts",
+  "about.statDistricts": "districts with live listings",
   "about.statLanguages": "languages",
   "about.statLiveListings": "live listings",
-  "about.statTrial": "days free to list",
+  "about.statTrial": "free days for a new listing",
   "about.missionLabel": "Our mission",
   "about.missionTitle": "All Uganda properties in one place",
   "about.missionText": "Our mission is to make genuine property opportunities across Uganda easier to find, understand and act on. We bring information scattered across websites, social platforms, WhatsApp, developers, owners and brokers into one searchable place; organise it clearly in 9 languages; and give buyers, renters and students safer next steps from first search to viewing and decision.",
@@ -2989,21 +2760,6 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.discoveryStepFourTitle": "Human review before publication",
   "about.discoveryStepFourText": "Nothing found online is published automatically. Our team reviews the source, property details, contact route, location, images, duplicates and safety concerns first.",
   "about.discoveryNote": "Clear sources: makaug organises public property information; we do not claim ownership of the original post, fill in facts that were not provided or treat an online post as proof of ownership. Owners and agents can claim, correct or request removal of a listing.",
-  "about.visionLabel": "Our vision",
-  "about.visionTitle": "We find every property, so you don't have to",
-  "about.visionText": "Property in Uganda is scattered across WhatsApp, public online posts, brokers and word of mouth. makaug brings that information into one searchable place and reviews listings before publication.",
-  "about.pipelineSources": "Sources",
-  "about.pipelineAi": "AI organises",
-  "about.pipelineAiText": "location, price, category, duplicates",
-  "about.pipelineReview": "Team review",
-  "about.pipelineReviewText": "checked before buyers see it",
-  "about.pipelineCaption": "Discovered by AI · checked by our team · live for buyers",
-  "about.aiDiscoveryTitle": "AI discovery",
-  "about.aiDiscoveryText": "We find property posted anywhere online, not just what's listed with us — and organise it so it's searchable.",
-  "about.aiAssistantTitle": "AI assistant",
-  "about.aiAssistantText": "Ask makaug anything about property, in any of 9 languages, and get a straight answer.",
-  "about.aiToolsTitle": "AI listing tools",
-  "about.aiToolsText": "Owners get a description written for them and translated live, so listings look great with no effort.",
   "about.everythingTitle": "Everything you can do",
   "about.everythingSub": "One platform for every kind of property journey.",
   "about.everySaleTitle": "Property for sale",
@@ -3018,12 +2774,6 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.everyCommercialText": "offices, shops and warehouses",
   "about.everyOffPlanTitle": "Off Plan",
   "about.everyOffPlanText": "new developments in Uganda and overseas",
-  "about.everyBrokersTitle": "Find brokers",
-  "about.everyBrokersText": "trusted agents near you",
-  "about.everyMortgageTitle": "Mortgage finder",
-  "about.everyMortgageText": "compare bank rates and get help",
-  "about.everyAiTitle": "AI helper",
-  "about.everyAiText": "search and ask, hands-free",
   "about.personaTitle": "Property made simple — whoever you are",
   "about.personaLabel": "What brings you here?",
   "about.rentersTitle": "Renters",
@@ -3051,16 +2801,6 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.stepVerifyText": "Use source, contact, location, price and media information to compare options. makaug reviews listings and flags concerns before publication.",
   "about.stepConnectTitle": "Connect carefully",
   "about.stepConnectText": "Contact the responsible owner, agent or developer, arrange a viewing, and complete independent checks before signing or paying.",
-  "about.landHubTitle": "Land safety",
-  "about.landHubText": "Browse land, compare details, and see seller contact routes. makaug is a marketplace, not a title-checking or legal service — so take three steps to protect yourself before you pay.",
-  "about.landHubPortal": "Browse land",
-  "about.landHubUgNlis": "Official UgNLIS portal",
-  "about.landHubOfficialTitle": "Map the location",
-  "about.landHubOfficialText": "Pin the exact plot before you travel to see it.",
-  "about.landHubEvidenceTitle": "Check the documents",
-  "about.landHubEvidenceText": "Review the title with your own lawyer, not the seller's.",
-  "about.landHubProcessTitle": "Avoid pressure",
-  "about.landHubProcessText": "Never rush, and never make untraceable payments.",
   "about.safetyLabel": "Trust and accountability",
   "about.trustTitle": "How we work to prevent fraud",
   "about.trustIntro": "Property fraud cannot be solved by a badge or one automated check. makaug combines identity and contact checks, structured evidence, duplicate detection, human review, visible sources and a report-and-removal process. We keep a review trail so concerns and decisions can be followed up instead of disappearing.",
@@ -3074,34 +2814,15 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.trustSourceText": "Found-online listings keep a route to the original public source. Review decisions, status changes, corrections, claims and removal requests are handled through recorded workflows so the team can investigate what happened and act consistently.",
   "about.trustSignalsTitle": "Fraud and pressure signals",
   "about.trustSignalsText": "Unclear ownership claims, conflicting locations or prices, copied media, suspicious contacts and pressure to make an urgent or untraceable payment are reasons to pause or escalate a listing. Users can report a concern directly for staff review.",
-  "about.trustClaimTitle": "Claim or remove",
-  "about.trustClaimText": "Owners and agents can claim, update, correct, or remove a listing anytime — with a full review trail.",
   "about.trustFraudTitle": "Claim, correct, report or remove",
   "about.trustFraudText": "Owners and agents can claim a found-online listing, correct inaccurate information or request removal. Anyone can report suspicious behaviour. The team reviews the evidence and can hold, hide, correct or remove content while the concern is investigated.",
   "about.trustBoundary": "Your independent checks still matter: makaug review reduces avoidable risk but does not replace a physical viewing, an independent lawyer, an official title search, a written agreement or a traceable payment method. Never pay because somebody is pressuring you to act immediately.",
   "about.ctaSafety": "Read the safety guide",
-  "about.trustRecordTitle": "Review trail",
-  "about.trustRecordText": "Changes, approvals, and removals are handled through staff review, not hidden shortcuts.",
-  "about.whyChooseTitle": "Why people choose makaug",
-  "about.chooseFreeTitle": "Free to start",
-  "about.chooseFreeText": "the first 7 days are free; the current listing price applies after the trial",
-  "about.chooseWhatsappTitle": "WhatsApp-first",
-  "about.chooseWhatsappText": "built for how Uganda actually communicates",
-  "about.chooseLanguagesTitle": "9 languages",
-  "about.chooseLanguagesText": "including Luganda, Kiswahili, and more, right across the site",
-  "about.chooseDistrictsTitle": "All 146 districts",
-  "about.chooseDistrictsText": "Kampala to the furthest town",
-  "about.chooseAiTitle": "AI-powered",
-  "about.chooseAiText": "discovery, assistant, and listing tools",
-  "about.chooseVerifiedTitle": "Verified listings",
-  "about.chooseVerifiedText": "human-reviewed for trust",
   "about.finalTitle": "Ready to start?",
   "about.finalSub": "List your first property free for 7 days, or talk to our sales team about agent plans, developments and advertising.",
   "about.finalWhatsapp": "WhatsApp sales: 0780 863 394",
   "about.finalEmail": "Email: info@makaug.com",
-  "about.finalHow": "How it works",
   "about.finalHelp": "Help centre",
-  "about.finalSafety": "Safety tips",
   "about.privateTrialTemplate": "First week free · then {price}",
   "about.agentPriceTemplate": "{price} · all your listings",
   "about.productAiDescription": "AI-written description in 9 languages",
@@ -3163,6 +2884,10 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.periodPropertyMonth": "property / month",
   "about.periodMonth": "month",
   "about.periodPost": "post",
+  "about.periodProjectThreeMonths": "project / 3 months",
+  "about.vatIncluded": "Prices include VAT",
+  "about.fourWeekDiscountTemplate": "{percent}% off 4-week bookings",
+  "advertise.priceOnRequest": "Price on request",
   "about.periodSevenDays": "7 days",
   "about.periodListingMonth": "listing / month",
   "about.periodReport": "report",
@@ -3176,17 +2901,6 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.imageLandJourney": "Land and countryside in Uganda",
   "about.imageCommercialJourney": "Ugandan commercial shopfront",
   "about.imageOffPlanJourney": "New Off Plan development amenity",
-  "about.imageSaleProduct": "Home promoted for sale on makaug",
-  "about.imageRentProduct": "Rental property journey on makaug",
-  "about.imageAgentProduct": "Property agent helping a customer",
-  "about.imageOffPlanProduct": "Off Plan development arrival view",
-  "about.imageFeaturedProduct": "Featured property placement on the makaug homepage",
-  "about.imagePremiumProduct": "Premium property detail experience",
-  "about.imageBoostedProduct": "Approved property ready for a visibility boost",
-  "about.imageReportProduct": "Uganda property market viewed by district",
-  "about.imageWebsiteProduct": "Branded property agency website",
-  "about.imageProfessionalProduct": "Professionally photographed property listing",
-  "about.imageAdvertisingProduct": "Business reaching active property customers"
 });
 
 const ADVERTISING_UI_I18N_EN = Object.freeze({
@@ -3367,13 +3081,6 @@ const ADVERTISING_UI_I18N_EN = Object.freeze({
   "advertise.package.whatsapp_chatbot_sponsor.bestFor": "Relevant property or service offers that benefit from a direct conversational enquiry route.",
   "advertise.package.whatsapp_chatbot_sponsor.headline": "A sponsored recommendation inside a matching chat",
   "advertise.package.whatsapp_chatbot_sponsor.capture": "WhatsApp conversation",
-  "advertise.package.email_whatsapp_blast.label": "Email and WhatsApp Campaign",
-  "advertise.package.email_whatsapp_blast.description": "Send an approved offer to an opted-in makaug audience segment.",
-  "advertise.package.email_whatsapp_blast.copy": "makaug prepares an approved one-off message for a relevant opted-in audience segment. The campaign is reviewed before any email or WhatsApp distribution is scheduled.",
-  "advertise.package.email_whatsapp_blast.locations": "Email campaign|WhatsApp campaign",
-  "advertise.package.email_whatsapp_blast.bestFor": "Time-sensitive launches, open days and clearly defined offers with a specific audience and call to action.",
-  "advertise.package.email_whatsapp_blast.headline": "Your approved offer delivered to an opted-in audience",
-  "advertise.package.email_whatsapp_blast.capture": "Email campaign",
   "advertise.package.haymaker_all_platform.label": "All-platform Campaign",
   "advertise.package.haymaker_all_platform.description": "Coordinate approved website, search, map, WhatsApp, email and agent-card placements.",
   "advertise.package.haymaker_all_platform.copy": "A coordinated month-long campaign combines approved website, search, map, WhatsApp, email and agent-card placements. makaug confirms the exact mix and schedule during review.",
@@ -3404,112 +3111,32 @@ Object.assign(CONTENT_I18N.lg, {
   "about.heroLabel": "Ebitukwatako",
   "about.ctaSearch": "Noonya property",
   "about.ctaWhatsapp": "Buuza makaug ku WhatsApp",
-  "about.landHubTitle": "Noonya oba listinga ettaka nga tetweyita abakakasa title",
-  "about.landHubText": "Laba ettaka, geraageranya ebikwata ku listing, era laba amakubo g'okukwatagana n'omutunzi. makaug marketplace; si service ekakasa title oba amateeka — kola emitendera esatu okwekuuma nga tonnasasula.",
-  "about.landHubPortal": "Laba ettaka",
-  "about.landHubUgNlis": "Portal entongole ya UgNLIS",
-  "about.landHubOfficialTitle": "Teeka pin ku kifo",
-  "about.landHubOfficialText": "Kakasa plot entuufu ku map nga tonnagenda kugiraba.",
-  "about.landHubEvidenceTitle": "Kebera ebiwandiiko",
-  "about.landHubEvidenceText": "Kebera title n'omuwabuzi wo ow'amateeka, si n'omutunzi yekka.",
-  "about.landHubProcessTitle": "Weewale pressure",
-  "about.landHubProcessText": "Towanguyiriza, era tosasula mu ngeri etalondoolerwa.",
   "about.finalWhatsapp": "Yogera ku WhatsApp"
 });
 Object.assign(CONTENT_I18N.sw, {
   "about.heroLabel": "Kuhusu makaug",
   "about.ctaSearch": "Tafuta mali",
   "about.ctaWhatsapp": "Uliza makaug kwenye WhatsApp",
-  "about.landHubTitle": "Tafuta na orodhesha ardhi bila kujifanya tunakagua hati",
-  "about.landHubText": "Tazama ardhi, linganisha maelezo, na uone njia za kuwasiliana na muuzaji. makaug ni marketplace, si huduma ya kuhakiki hati au ya kisheria — chukua hatua tatu kujilinda kabla ya kulipa.",
-  "about.landHubPortal": "Tazama ardhi",
-  "about.landHubUgNlis": "Tovuti rasmi ya UgNLIS",
-  "about.landHubOfficialTitle": "Weka eneo kwenye ramani",
-  "about.landHubOfficialText": "Weka pin ya plot halisi kabla ya kusafiri kwenda kuiona.",
-  "about.landHubEvidenceTitle": "Kagua hati",
-  "about.landHubEvidenceText": "Kagua title na lawyer wako mwenyewe, si kwa muuzaji.",
-  "about.landHubProcessTitle": "Epuka shinikizo",
-  "about.landHubProcessText": "Usikimbizwe, na usifanye malipo yasiyofuatilika.",
   "about.finalWhatsapp": "Ongea kwenye WhatsApp"
 });
 Object.assign(CONTENT_I18N.ac, {
-  "about.landHubTitle": "Yeny lobo ki ket listing labongo waco ni wa ngiyo title",
-  "about.landHubText": "Nen lobo, por lok matut, ki nen yoo me kube ki lacat. makaug obedo marketplace, pe tic me ngiyo title onyo cik — kwany yoo adek me gwoko in mapwod pe iculo.",
-  "about.landHubPortal": "Nen lobo",
-  "about.landHubUgNlis": "UgNLIS portal me gamente",
-  "about.landHubOfficialTitle": "Ket kabedo i map",
-  "about.landHubOfficialText": "Ket pin i plot kikome mapwod pe iwoto me neno ne.",
-  "about.landHubEvidenceTitle": "Ngii dokumen",
-  "about.landHubEvidenceText": "Ngii title ki lawyer mamegi, pe ki lacat keken.",
-  "about.landHubProcessTitle": "Geng diro",
-  "about.landHubProcessText": "Pe iring oyot, ki pe icwal cente i yoo ma pe twero lubo kore."
 });
 Object.assign(CONTENT_I18N.ny, {
-  "about.landHubTitle": "Noonya nari listinga eitaka tutarikweyita abarikuhamya title",
-  "about.landHubText": "Reeba eitaka, geragyeranisa ebirikurikwataho, kandi reeba emihanda y'okuhika ku mutunzi. makaug ni marketplace, tikiri service y'okuhamya title nari amateeka — kora emitendera eshatu okwerinda otakashashura.",
-  "about.landHubPortal": "Reeba eitaka",
-  "about.landHubUgNlis": "Portal ya UgNLIS ey'obutongole",
-  "about.landHubOfficialTitle": "Teeka pin aha kifo",
-  "about.landHubOfficialText": "Hamya plot nyakuri aha map otakagiire kugireeba.",
-  "about.landHubEvidenceTitle": "Kebera ebihandiiko",
-  "about.landHubEvidenceText": "Kebera title n'omunyamateeka waawe, hatari omutunzi.",
-  "about.landHubProcessTitle": "Yangira okupirizibwa",
-  "about.landHubProcessText": "Otahutiririzibwa, kandi otakashashura omu buryo obutarikukurikirwa."
 });
 Object.assign(CONTENT_I18N.rn, {
-  "about.landHubTitle": "Noonya nari listinga eitaka tutarikweyita abarikuhamya title",
-  "about.landHubText": "Reeba eitaka, geragyeranisa ebirikwetengyesa, kandi reeba emihanda y'okuhika ku mutunzi. makaug ni marketplace, tikiri service y'okuhamya title nari amateeka — kora emitendera eshatu okwerinda otakashashura.",
-  "about.landHubPortal": "Reeba eitaka",
-  "about.landHubUgNlis": "Portal ya UgNLIS ey'obutongole",
-  "about.landHubOfficialTitle": "Teeka pin aha kifo",
-  "about.landHubOfficialText": "Hamya plot nyakuri aha map otakagiire kugireeba.",
-  "about.landHubEvidenceTitle": "Kebera ebihandiiko",
-  "about.landHubEvidenceText": "Kebera title n'omunyamateeka waawe, hatari omutunzi.",
-  "about.landHubProcessTitle": "Yangira okupirizibwa",
-  "about.landHubProcessText": "Otahutiririzibwa, kandi otakashashura omu buryo obutarikukurikirwa."
 });
 Object.assign(CONTENT_I18N.sm, {
-  "about.landHubTitle": "Noonya oba listinga eitaka nga tetweyita abakakasa title",
-  "about.landHubText": "Bona eitaka, geraageranya ebikwata ku listing, era bona amakubo g'okukwatagana n'omutunzi. makaug marketplace; si service ekakasa title oba amateeka — kola emitendera esatu okwekuuma nga tonnasasula.",
-  "about.landHubPortal": "Bona eitaka",
-  "about.landHubUgNlis": "Portal entongole ya UgNLIS",
-  "about.landHubOfficialTitle": "Teeka pin ku kifo",
-  "about.landHubOfficialText": "Kakasa plot entuufu ku map nga tonnagenda kugiraba.",
-  "about.landHubEvidenceTitle": "Kebera ebiwandiiko",
-  "about.landHubEvidenceText": "Kebera title n'omuwabuzi wo ow'amateeka, si n'omutunzi yekka.",
-  "about.landHubProcessTitle": "Weewale pressure",
-  "about.landHubProcessText": "Towanguyiriza, era tosasula mu ngeri etalondoolerwa."
 });
 Object.assign(CONTENT_I18N.am, {
   "about.heroLabel": "ስለ makaug",
   "about.ctaSearch": "ንብረት ፈልግ",
   "about.ctaWhatsapp": "makaugን በ WhatsApp ጠይቅ",
-  "about.landHubTitle": "የርዕስ ማረጋገጫ እንደምንሰራ ሳንመስል መሬት ይፈልጉ እና ይዘርዝሩ",
-  "about.landHubText": "መሬትን ይመልከቱ፣ ዝርዝሮችን ያነጻጽሩ፣ እና የሻጩን መገናኛ መንገዶች ይመልከቱ። makaug የገበያ መድረክ ነው፣ የርዕስ ማረጋገጫ ወይም የሕግ አገልግሎት አይደለም — ከመክፈልዎ በፊት ራስዎን ለመጠበቅ ሶስት እርምጃዎችን ይውሰዱ።",
-  "about.landHubPortal": "መሬት ይመልከቱ",
-  "about.landHubUgNlis": "የUgNLIS ኦፊሴላዊ ፖርታል",
-  "about.landHubOfficialTitle": "ቦታውን በካርታ ያስቀምጡ",
-  "about.landHubOfficialText": "ለማየት ከመጓዝዎ በፊት ትክክለኛውን ቦታ በካርታ ምልክት ያመልክቱ።",
-  "about.landHubEvidenceTitle": "ሰነዶቹን ያረጋግጡ",
-  "about.landHubEvidenceText": "የይዞታ ማረጋገጫውን ከራስዎ ጠበቃ ጋር ይመርምሩ፣ ከሻጩ ጋር ብቻ አይደለም።",
-  "about.landHubProcessTitle": "ግፊትን ያስወግዱ",
-  "about.landHubProcessText": "አትቸኩሉ፣ እና ሊከታተሉ የማይችሉ ክፍያዎችን አታድርጉ።",
   "about.finalWhatsapp": "በ WhatsApp ይወያዩ"
 });
 Object.assign(CONTENT_I18N.ar, {
   "about.heroLabel": "عن makaug",
   "about.ctaSearch": "ابحث عن عقار",
   "about.ctaWhatsapp": "اسأل makaug على WhatsApp",
-  "about.landHubTitle": "ابحث عن الأرض وأدرجها دون ادعاء فحص سندات الملكية",
-  "about.landHubText": "تصفح الأرض، وقارن التفاصيل، وشاهد طرق التواصل مع البائع. makaug سوق عقاري، وليس خدمة لفحص الملكية أو خدمة قانونية — لذلك اتخذ ثلاث خطوات لحماية نفسك قبل الدفع.",
-  "about.landHubPortal": "تصفح الأرض",
-  "about.landHubUgNlis": "بوابة UgNLIS الرسمية",
-  "about.landHubOfficialTitle": "حدد الموقع على الخريطة",
-  "about.landHubOfficialText": "ثبت موقع قطعة الأرض بالضبط قبل أن تسافر لمعاينتها.",
-  "about.landHubEvidenceTitle": "افحص المستندات",
-  "about.landHubEvidenceText": "راجع سند الملكية مع محاميك أنت، وليس مع البائع فقط.",
-  "about.landHubProcessTitle": "تجنب الضغط",
-  "about.landHubProcessText": "لا تتعجل، ولا تدفع بطرق لا يمكن تتبعها.",
   "about.finalWhatsapp": "تحدث عبر WhatsApp"
 });
 
@@ -3892,7 +3519,9 @@ const marketplaceState = {
   limit: 20,
   activeCategory: "",
   categoryCounts: {},
-  verifiedPricing: { amount_ugx: 150000, billing_period: "month" },
+  // Marketplace Verified is parked (rate card 2026-10-08): no price, no upsell
+  // until /api/marketplace/config says it is active again.
+  verifiedPricing: { active: false },
   profileDetails: {},
   manageToken: "",
   managedBusiness: null,
@@ -3911,9 +3540,19 @@ function marketplaceInterpolate(template, values = {}) {
   return String(template || "").replace(/\{([a-z_]+)\}/gi, (_match, key) => String(values[key] ?? ""));
 }
 
+function marketplaceVerifiedActive() {
+  return marketplaceState.verifiedPricing?.active === true && Number(marketplaceState.verifiedPricing?.amount_ugx) > 0;
+}
+
 function marketplaceVerifiedPriceLabel() {
-  const amount = Number(marketplaceState.verifiedPricing?.amount_ugx || 150000).toLocaleString("en-US");
+  if (!marketplaceVerifiedActive()) return "";
+  const amount = Number(marketplaceState.verifiedPricing.amount_ugx).toLocaleString("en-US");
   return marketplaceInterpolate(marketplaceTr("verifiedPrice"), { price: amount });
+}
+
+function syncMarketplaceVerifiedUpsell() {
+  const active = marketplaceVerifiedActive();
+  document.querySelectorAll("[data-marketplace-verified-upsell]").forEach((el) => el.classList.toggle("hidden", !active));
 }
 
 function marketplaceCategoryTheme(key) {
@@ -4209,6 +3848,7 @@ async function loadMarketplacePage({ force = false } = {}) {
       marketplaceState.categories = configResponse?.data?.categories || [];
       marketplaceState.districts = configResponse?.data?.districts || [];
       marketplaceState.verifiedPricing = configResponse?.data?.verified_pricing || marketplaceState.verifiedPricing;
+      syncMarketplaceVerifiedUpsell();
       marketplaceState.categoryCounts = statsResponse?.data?.by_category || {};
       const total = Number(statsResponse?.data?.total || 0);
       const totalEl = document.getElementById("marketplace-live-total");
@@ -4852,9 +4492,17 @@ const HOME_ASSISTANT_I18N = {
   }
 };
 
+// Coverage from the live count the server inlines (no "all 146 districts").
+function footerCoverageSentence() {
+  const count = Number(window.__MAKAUG_LIVE_DISTRICTS__);
+  return count > 0
+    ? `Web or WhatsApp, from any district — live listings in ${count} so far.`
+    : "Web or WhatsApp, anywhere in Uganda.";
+}
+
 const FOOTER_I18N = {
   en: {
-    brandCopy: `Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month. Web or WhatsApp, all 146 districts.`,
+    brandCopy: `Uganda's property search engine. List your first week free, then keep it live from ${rateCardUgx("private_listing")} a month. ${footerCoverageSentence()}`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Chat on WhatsApp",
@@ -7368,7 +7016,7 @@ function applyListingWizardLanguageUI() {
     ["list-choice-wa-title", "List through WhatsApp"],
     ["list-choice-wa-copy", "Message 0780 863 394 and let the makaug assistant guide you."],
     ["list-choice-free-title", "Start with 7 days free."],
-    ["list-choice-free-copy", "After that, one private listing costs UGX 20,000 per month. Every submission stays in staff review until approved."]
+    ["list-choice-free-copy", `After that, one private listing costs ${rateCardUgx("private_listing")} per month (${(window.__MAKAUG_PRICING__?.vat?.label || "").toLowerCase()}). Every submission stays in staff review until approved.`]
   ];
   labelPairs.forEach(([id, text]) => {
     const el = document.getElementById(id);
@@ -8196,6 +7844,7 @@ function aboutCommercialPriceLabel(key, priceOnly = false) {
     'property / month': 'about.periodPropertyMonth',
     month: 'about.periodMonth',
     post: 'about.periodPost',
+    'project / 3 months': 'about.periodProjectThreeMonths',
     '7 days': 'about.periodSevenDays',
     'listing / month': 'about.periodListingMonth',
     report: 'about.periodReport',
@@ -8210,6 +7859,11 @@ function aboutCommercialPriceLabel(key, priceOnly = false) {
 function updateAboutCommercialPrices() {
   const page = document.getElementById('page-about');
   if (!page || !aboutCommercialCatalog()) return;
+  page.querySelectorAll('[data-about-discount]').forEach((el) => {
+    const percent = aboutCommercialCatalog()?.fourWeekDiscountPercent;
+    if (!percent) return;
+    el.textContent = (contentTr('about.fourWeekDiscountTemplate') || '{percent}% off 4-week bookings').replace('{percent}', String(percent));
+  });
   page.querySelectorAll('[data-about-price]').forEach((el) => {
     const key = el.getAttribute('data-about-price');
     const price = aboutCommercialPriceLabel(key, el.getAttribute('data-about-price-only') === 'true');
@@ -11754,12 +11408,26 @@ function renderBrokerWhatsAppCard(broker = {}, stats = {}) {
     </div>`;
 }
 
+// Guide prices: "Category top" is the Premium line on the rate card; the other
+// formats are below the 50,000 weekly display floor, so they are "Price on
+// request" (rate card 2026-10-08).
+function brokerBoostPriceLabel(format = {}) {
+  const rateCard = window.__MAKAUG_PRICING__ || null;
+  const line = format.rateCardLine && rateCard ? rateCard[format.rateCardLine] : null;
+  if (!line) return "Price on request";
+  return `${rateCard.ugx(line.amount_ugx)} / ${line.period}`;
+}
+
+function brokerBoostVatLabel() {
+  return window.__MAKAUG_PRICING__?.vat?.label || "";
+}
+
 const BROKER_BOOST_FORMATS = [
   {
     key: "category_top",
     label: "Category top placement",
     placement: "Top of matching rent/sale/land/category page",
-    guidePrice: 25000,
+    rateCardLine: "premium",
     reachBase: 420,
     reachMultiplier: 1.1
   },
@@ -11767,7 +11435,7 @@ const BROKER_BOOST_FORMATS = [
     key: "homepage_sponsor",
     label: "Homepage sponsored slot",
     placement: "Homepage sponsor strip + matching category",
-    guidePrice: 35000,
+    guidePrice: null,
     reachBase: 700,
     reachMultiplier: 1.45
   },
@@ -11775,7 +11443,7 @@ const BROKER_BOOST_FORMATS = [
     key: "broker_profile_spotlight",
     label: "Broker profile spotlight",
     placement: "Find Brokers profile spotlight",
-    guidePrice: 20000,
+    guidePrice: null,
     reachBase: 260,
     reachMultiplier: 0.9
   },
@@ -11783,7 +11451,7 @@ const BROKER_BOOST_FORMATS = [
     key: "whatsapp_digest",
     label: "WhatsApp demand digest",
     placement: "Makaug follow-up/support digest",
-    guidePrice: 15000,
+    guidePrice: null,
     reachBase: 180,
     reachMultiplier: 0.7
   }
@@ -11879,7 +11547,7 @@ function renderBrokerBoostPanel(listingId = "", formatKey = "") {
             <div class="rounded-xl bg-white border border-amber-100 p-3">
               <div class="text-xs font-black text-amber-800">${adminEscape(format.label)}</div>
               <div class="text-sm text-gray-600 mt-1">${adminEscape(format.placement)}</div>
-              <div class="font-black text-amber-950 mt-2">UGX ${Number(format.guidePrice).toLocaleString("en-UG")}</div>
+              <div class="font-black text-amber-950 mt-2">${adminEscape(brokerBoostPriceLabel(format))}</div>
             </div>`).join("")}
         </div>
       </div>`;
@@ -11925,7 +11593,8 @@ function renderBrokerBoostPanel(listingId = "", formatKey = "") {
           </div>
           <div class="rounded-xl bg-white border border-amber-100 p-3">
             <div class="text-xs text-amber-800">Starting guide</div>
-            <div class="font-black text-amber-950">UGX ${Number(selectedFormat.guidePrice).toLocaleString("en-UG")}</div>
+            <div class="font-black text-amber-950">${adminEscape(brokerBoostPriceLabel(selectedFormat))}</div>
+            <div class="text-[11px] text-amber-800">${adminEscape(brokerBoostVatLabel())}</div>
           </div>
         </div>
         <div class="mt-4 rounded-2xl bg-white border border-amber-100 p-4">
@@ -13227,7 +12896,7 @@ async function hydrateAdvertiserDashboardPlacements() {
       <div class="rounded-xl border border-gray-200 bg-white p-3">
         <div class="text-xs font-black text-gray-900">${adminEscape(slot.label || slot.key || "Advertising placement")}</div>
         <div class="text-[11px] text-gray-500 mt-1">${adminEscape(slot.page_key || "makaug")} • ${adminEscape(slot.size_label || slot.slot_type || "placement")}</div>
-        <div class="text-sm font-black text-amber-700 mt-2">From ${adminEscape(adMoney(slot.base_price_ugx || 0))}</div>
+        <div class="text-sm font-black text-amber-700 mt-2">${slot.base_price_ugx == null ? "Price on request" : `${adminEscape(adMoney(slot.base_price_ugx))} / week`}</div>
       </div>
     `).join("");
   } catch (error) {
@@ -16333,6 +16002,16 @@ function renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel = "") {
       <div class="mt-1">Last 48h: <strong>${adminAiSnapshot.views48h}</strong> property views, <strong>${adminAiSnapshot.visitors48h}</strong> visitors, <strong>${adminAiSnapshot.routeEvents48h}</strong> direction opens, and <strong>${adminAiSnapshot.inquiries48h}</strong> enquiries.</div>
       <div class="mt-1">Top area: <strong>${adminEscape(adminAiSnapshot.topAreas[0]?.area || "not enough data yet")}</strong>.</div>`;
   }
+}
+
+// The rate card inlined by the server (config/pricing.js).
+function rateCardAmount(key) {
+  return Number(window.__MAKAUG_PRICING__?.[key]?.amount_ugx || 0) || null;
+}
+
+function rateCardUgx(key) {
+  const amount = rateCardAmount(key);
+  return amount ? `UGX ${amount.toLocaleString("en-US")}` : "the rate-card fee";
 }
 
 function adminFormatUgx(value) {
@@ -22752,6 +22431,11 @@ function adMoney(value) {
   return `UGX ${Number(value || 0).toLocaleString("en-UG")}`;
 }
 
+// A placement/package price: null (outside the weekly display range) is "Price on request".
+function adPrice(value) {
+  return value == null || !(Number(value) > 0) ? "Price on request" : adMoney(value);
+}
+
 function adListText(value) {
   const list = Array.isArray(value) ? value : [];
   return list.length ? list.join(", ") : "-";
@@ -22806,16 +22490,14 @@ function renderAdminAdvertisingPlacements(placements) {
   const grid = document.getElementById("admin-ad-placements-grid");
   const builder = document.getElementById("admin-ad-builder-placements");
   adminAdvertisingPlacements = Array.isArray(placements) ? placements : [];
-  const rows = adminAdvertisingPlacements.length ? adminAdvertisingPlacements : [
-    { key: "sitewide_top_leaderboard", label: "Sitewide Top Leaderboard", page_key: "all", slot_type: "leaderboard", size_label: "970x250", is_premium: true, is_active: true, base_price_ugx: 650000 },
-    { key: "sale_inline_native", label: "For Sale Inline Sponsored Card", page_key: "sale", slot_type: "native_card", size_label: "Grid card", is_premium: false, is_active: true, base_price_ugx: 180000 },
-    { key: "whatsapp_sponsored_match", label: "WhatsApp Sponsored Match", page_key: "whatsapp", slot_type: "chatbot_native", size_label: "Assistant card", is_premium: true, is_active: true, base_price_ugx: 200000 }
-  ];
+  // No hard-coded fallback list: placements and prices come only from the API
+  // (the rate card in config/pricing.js).
+  const rows = adminAdvertisingPlacements;
   if (builder) {
     builder.innerHTML = rows.map((slot) => `
       <label class="border border-green-100 bg-white rounded-xl px-3 py-2 flex items-start gap-2">
         <input type="checkbox" name="admin-ad-builder-placement" value="${adminAttr(slot.key)}" class="mt-0.5 accent-green-700" ${slot.is_active ? "" : "disabled"}>
-        <span><strong>${adminEscape(slot.label)}</strong><br><span class="text-gray-500">${adminEscape(slot.page_key)} • ${adminEscape(slot.primary_size || slot.size_label || "")} • ${adminEscape(slot.price_labels?.week || adMoney(slot.base_price_ugx))}/week</span></span>
+        <span><strong>${adminEscape(slot.label)}</strong><br><span class="text-gray-500">${adminEscape(slot.page_key)} • ${adminEscape(slot.primary_size || slot.size_label || "")} • ${adminEscape(slot.price_labels?.week || (slot.base_price_ugx == null ? adPrice(null) : `${adMoney(slot.base_price_ugx)}/week`))}</span></span>
       </label>
     `).join("");
   }
@@ -22833,8 +22515,8 @@ function renderAdminAdvertisingPlacements(placements) {
         </div>
         ${slot.preview_image_url ? `<img src="${adminAttr(slot.preview_image_url)}" alt="${adminAttr(slot.label)}" class="mt-2 w-full h-20 object-cover rounded-lg border border-white">` : ""}
         <div class="grid grid-cols-2 gap-2 mt-3 text-[11px]">
-          <div class="rounded-lg bg-white border border-green-100 p-2"><div class="text-gray-500">Day</div><div class="font-black text-green-800">${adminEscape(slot.price_labels?.day || adMoney(slot.daily_price_ugx || slot.base_price_ugx))}</div></div>
-          <div class="rounded-lg bg-white border border-green-100 p-2"><div class="text-gray-500">Week</div><div class="font-black text-green-800">${adminEscape(slot.price_labels?.week || adMoney(slot.weekly_price_ugx || slot.base_price_ugx))}</div></div>
+          <div class="rounded-lg bg-white border border-green-100 p-2"><div class="text-gray-500">Day</div><div class="font-black text-green-800">${adminEscape(slot.price_labels?.day || adPrice(slot.daily_price_ugx || slot.base_price_ugx))}</div></div>
+          <div class="rounded-lg bg-white border border-green-100 p-2"><div class="text-gray-500">Week</div><div class="font-black text-green-800">${adminEscape(slot.price_labels?.week || adPrice(slot.weekly_price_ugx || slot.base_price_ugx))}</div></div>
           <div class="rounded-lg bg-white border border-amber-100 p-2"><div class="text-gray-500">Month</div><div class="font-black text-amber-800">${adminEscape(slot.price_labels?.month || "-")}</div></div>
           <div class="rounded-lg bg-white border border-gray-200 p-2"><div class="text-gray-500">CPM</div><div class="font-black text-gray-800">${adminEscape(slot.price_labels?.cpm || "-")}</div></div>
         </div>
@@ -23130,22 +22812,9 @@ async function adminCreateAdCampaignFromBuilder() {
   }
 }
 
-async function adminUpdateAdPlacementPrice(placementKey) {
-  const slot = adminAdvertisingPlacements.find((item) => String(item.key) === String(placementKey)) || {};
-  const next = window.prompt(`New price for ${slot.label || placementKey} in UGX`, String(slot.base_price_ugx || 0));
-  if (next == null) return;
-  const amount = Math.max(0, parseInt(next, 10) || 0);
-  try {
-    await apiRequest(`/api/admin/advertising/placements/${encodeURIComponent(placementKey)}`, {
-      method: "PATCH",
-      headers: adminAuthHeaders(),
-      body: { base_price_ugx: amount }
-    });
-    await renderAdminDashboard();
-    toast("Placement price updated.");
-  } catch (e) {
-    toast(`Placement update failed: ${e.message || "error"}`);
-  }
+async function adminUpdateAdPlacementPrice(_placementKey) {
+  // Placement prices are on the rate card (config/pricing.js), not edited here.
+  toast("Placement prices come from the rate card (config/pricing.js). Change them there.");
 }
 
 async function adminUpdateHousePlacementCreative(placementKey) {
@@ -23945,7 +23614,7 @@ function renderAdminBrokerRows(agents) {
           ${canUseLiveAdminApi() ? `<button onclick="adminUploadAgentProfilePhoto(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${agent.profile_photo_url ? "Replace logo" : "Add logo"}</button>` : ""}
           ${canUseLiveAdminApi() && !idDocumentUploaded ? `<button onclick="adminUploadAgentIdentityDocument(${idArg})" class="border border-amber-400 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Attach ID photo</button>` : ""}
           ${canUseLiveAdminApi() && !agent.removed_at ? `<button onclick="adminSetAgentStatus(${idArg}, '${status === "approved" ? "pending" : "approved"}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${approveLabel}</button>` : ""}
-          ${canUseLiveAdminApi() && !agent.removed_at && status === "approved" && !agent.fee_exempt ? `<button onclick="adminOpenAgentPayment(${idArg}, 'renew')" class="border border-emerald-600 text-emerald-800 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Record payment</button>` : ""}
+          ${canUseLiveAdminApi() && !agent.removed_at && status === "approved" && !adminAgentExemption(agent).exempt ? `<button onclick="adminOpenAgentPayment(${idArg}, 'renew')" class="border border-emerald-600 text-emerald-800 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Record payment</button>` : ""}
           ${canUseLiveAdminApi() && !agent.removed_at ? `<button onclick="adminRemoveAgent(${idArg})" class="border border-red-300 text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Remove</button>` : ""}
           ${canUseLiveAdminApi() && agent.removed_at ? `<button onclick="adminRestoreAgent(${idArg})" class="border border-gray-400 text-gray-800 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Restore</button>` : ""}
         </div>
@@ -28749,8 +28418,37 @@ function adminFormatUgx(value) {
   return `UGX ${Math.round(n).toLocaleString("en-US")}`;
 }
 
+// Fee exemption wording comes from the end date (Africa/Kampala calendar):
+// "fee-exempt until 1 Feb 2027", "fee-exempt (no end date set)", and once the
+// date has passed the agent is billable ("billing started …").
+const ADMIN_MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function adminKampalaToday() {
+  return new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function adminExemptionDate(iso = "") {
+  const day = String(iso || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return "";
+  const [y, m, d] = day.split("-").map(Number);
+  return `${d} ${ADMIN_MONTHS_SHORT[m - 1]} ${y}`;
+}
+function adminAgentExemption(agent = {}) {
+  const flagged = agent.fee_exempt === true || agent.fee_exempt_flag === true;
+  const until = String(agent.fee_exempt_until || "").slice(0, 10);
+  const today = adminKampalaToday();
+  const exempt = flagged && (!until || today < until);
+  const ended = flagged && Boolean(until) && today >= until;
+  return {
+    exempt,
+    ended,
+    until,
+    label: exempt ? (until ? `fee-exempt until ${adminExemptionDate(until)}` : "fee-exempt (no end date set)") : "",
+    endedLabel: ended ? `billing started ${adminExemptionDate(until)}` : ""
+  };
+}
+
 function adminAgentBillingLine(agent = {}) {
-  if (agent.fee_exempt) return `💳 <span class="text-gray-500">${agent.fee_offer_mode === "waive" ? `No fee — ${adminEscape(agent.fee_exempt_reason || "waived")}` : "Free listing (joined before the monthly fee)"}</span>`;
+  const exemption = adminAgentExemption(agent);
+  if (exemption.exempt) return `💳 <span class="text-gray-500">${agent.fee_offer_mode === "waive" ? `${adminEscape(exemption.label)} — ${adminEscape(agent.fee_exempt_reason || "waived")}` : adminEscape(exemption.label)}</span>`;
   if (agent.fee_offer_mode === "free_period" && agent.fee_offer_until) {
     const todayOffer = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
     if (String(agent.fee_offer_until).slice(0, 10) >= todayOffer && (!agent.paid_until || String(agent.paid_until).slice(0, 10) <= String(agent.fee_offer_until).slice(0, 10))) {
@@ -28765,7 +28463,7 @@ function adminAgentBillingLine(agent = {}) {
   if (!agent.paid_until) {
     return String(agent.status || "").toLowerCase() === "approved"
       ? `💳 <strong class="text-red-700">No payment recorded</strong>${payBtn}`
-      : `💳 <span class="text-gray-600">UGX 50,000 a month — not paid yet</span>${payBtn}`;
+      : `💳 <span class="text-gray-600">${adminEscape(rateCardUgx("agent_subscription"))} a month — not paid yet</span>${payBtn}`;
   }
   if (agent.paid_until < today) return `💳 <strong class="text-red-700">Overdue</strong> — paid until ${adminEscape(agent.paid_until)}${payBtn}`;
   return `💳 <strong class="text-emerald-700">Paid</strong> until ${adminEscape(agent.paid_until)}`;
@@ -28856,12 +28554,14 @@ async function adminReadFileAsDataUrl(file) {
  */
 function adminOpenAgentPayment(agentId, mode = "approve") {
   adminClosePaymentModal();
+  const agentFee = rateCardAmount("agent_subscription");
+  const agentFeeLabel = rateCardUgx("agent_subscription");
   const agent = (adminLastAgentsForUi || []).find((a) => String(a.id) === String(agentId)) || {};
   const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
   const title = mode === "approve" ? `Did ${adminEscape(agent.name || "they")} pay?` : `Record a payment — ${adminEscape(agent.name || "agent")}`;
   const intro = mode === "approve"
-    ? "New agents pay <strong>UGX 50,000 a month</strong>. Approval goes through once the payment is recorded — the welcome pack and how-to-post film are then sent on WhatsApp."
-    : "UGX 50,000 = one month. Paying more adds whole months.";
+    ? `New agents pay <strong>${adminEscape(agentFeeLabel)} a month</strong>. Approval goes through once the payment is recorded — the welcome pack and how-to-post film are then sent on WhatsApp.`
+    : `${adminEscape(agentFeeLabel)} = one month. Paying more adds whole months.`;
   const wrap = document.createElement("div");
   wrap.id = "admin-payment-modal";
   wrap.className = "fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4";
@@ -28873,7 +28573,7 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       <h3 id="admin-payment-title" class="text-lg font-black text-gray-900">${title}</h3>
       <p class="text-gray-600">${intro}</p>
       <label class="block"><span class="font-bold">Amount (UGX)</span>
-        <input name="amount" inputmode="numeric" required value="50000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+        <input name="amount" inputmode="numeric" required value="${adminAttr(agentFee || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <label class="block"><span class="font-bold">How was it paid?</span>
         <select name="method" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">
           <option value="">Choose…</option>
@@ -28896,7 +28596,7 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       <label class="block"><span class="font-bold">Note</span>
         <input name="note" placeholder="For cash: who received it and where it is kept" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <p id="admin-payment-error" class="hidden rounded-lg bg-red-50 border border-red-200 p-2 text-red-800" role="alert"></p>
-      ${mode === "approve" ? `<div class="rounded-lg border border-green-300 bg-green-50 p-3 text-xs text-green-950"><strong>Not paid yet? The usual way:</strong> approve now — they get the welcome pack and the how-to-post film straight away, then the payment link (UGX 50,000).
+      ${mode === "approve" ? `<div class="rounded-lg border border-green-300 bg-green-50 p-3 text-xs text-green-950"><strong>Not paid yet? The usual way:</strong> approve now — they get the welcome pack and the how-to-post film straight away, then the payment link (${adminEscape(agentFeeLabel)}).
         <div class="mt-2"><button type="button" data-approve-standard class="rounded bg-green-700 px-3 py-1.5 font-bold text-white">✅ Approve &amp; send welcome pack + pay link</button></div></div>
       <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700"><strong>Only want to send the link?</strong> Send them a payment link instead — they can pay by card, Apple Pay, Google Pay or MoMo. You'll get a WhatsApp when it's paid, and approving then won't ask for payment again.
         <div class="mt-2"><button type="button" onclick="adminSendAgentPayLink('${adminAttr(agentId)}')" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">💳 Send pay link</button></div></div>
@@ -28906,7 +28606,8 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
           <label class="flex items-start gap-2"><input type="radio" name="offer_mode" value="free_period" checked class="mt-0.5"> <span><strong>Free for a set time</strong> — e.g. a launch offer. The fee starts after.</span></label>
           <label class="block pl-6"><span class="font-bold">Free days</span> <input name="offer_days" inputmode="numeric" value="30" class="ml-1 w-20 rounded border border-gray-300 px-2 py-1"></label>
           <label class="flex items-start gap-2"><input type="radio" name="offer_mode" value="pay_later" class="mt-0.5"> <span><strong>Approve now, pay later</strong> — the pay link is sent with the welcome pack.</span></label>
-          <label class="flex items-start gap-2"><input type="radio" name="offer_mode" value="waive" class="mt-0.5"> <span><strong>No fee</strong> — waive it for this agent.</span></label>
+          <label class="flex items-start gap-2"><input type="radio" name="offer_mode" value="waive" class="mt-0.5"> <span><strong>No fee until a date</strong> — waive it for this agent until the end date.</span></label>
+          <label class="block pl-6"><span class="font-bold">Fee-exempt until</span> <input name="offer_exempt_until" type="date" min="${today}" class="ml-1 rounded border border-gray-300 px-2 py-1"></label>
           <label class="block"><span class="font-bold">Why? (offer or reason)</span>
             <input name="offer_reason" placeholder="e.g. October launch offer — first month free" class="mt-1 w-full rounded border border-gray-300 px-2 py-1"></label>
           <button type="button" data-approve-offer class="rounded bg-amber-700 px-3 py-1 font-bold text-white">Approve without payment</button>
@@ -28931,9 +28632,11 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
     const mode = form.querySelector("[name=offer_mode]:checked")?.value || "free_period";
     const reason = String(form.querySelector("[name=offer_reason]")?.value || "").trim();
     const days = Number(form.querySelector("[name=offer_days]")?.value || 0);
+    const exemptUntil = String(form.querySelector("[name=offer_exempt_until]")?.value || "").trim();
     if (reason.length < 3) { errorBox.textContent = "Say why — the offer or the reason."; errorBox.classList.remove("hidden"); return; }
     if (mode === "free_period" && !(days >= 1 && days <= 366)) { errorBox.textContent = "Free days must be between 1 and 366."; errorBox.classList.remove("hidden"); return; }
-    await adminSetAgentStatus(agentId, "approved", null, { mode, reason, days });
+    if (mode === "waive" && !(exemptUntil > today)) { errorBox.textContent = "Choose the date the exemption ends."; errorBox.classList.remove("hidden"); return; }
+    await adminSetAgentStatus(agentId, "approved", null, mode === "waive" ? { mode, reason, fee_exempt_until: exemptUntil } : { mode, reason, days });
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -29045,7 +28748,7 @@ function adminPayLinkLoopBlock(d) {
   const rows = waiting.slice(0, 25).map((l) => {
     const who = l.agent_name || l.payer_name || l.description || l.code;
     const code = adminAttr(l.code);
-    return `<tr class="border-t border-amber-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(who)}<div class="text-[11px] font-normal text-gray-500">${adminEscape(l.code)}${l.sent_to ? ` · to +${adminEscape(l.sent_to)}` : ""}${l.fee_exempt ? " · lists free, paying by choice" : ""}</div></td><td class="py-2 pr-3 whitespace-nowrap">${adminFormatUgx(l.amount_ugx)}</td><td class="py-2 pr-3 whitespace-nowrap font-bold text-amber-700">${Number(l.days_waiting || 0)} day${Number(l.days_waiting) === 1 ? "" : "s"}</td><td class="py-2 pr-3">${adminEscape(l.next_step || "")}</td><td class="py-2 text-xs space-x-2 whitespace-nowrap"><button type="button" onclick="adminSendPayLink('${code}')" class="underline font-bold">Send again</button> <button type="button" onclick="adminCopyPayLink('${adminAttr(l.url)}')" class="underline">Copy</button></td></tr>`;
+    return `<tr class="border-t border-amber-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(who)}<div class="text-[11px] font-normal text-gray-500">${adminEscape(l.code)}${l.sent_to ? ` · to +${adminEscape(l.sent_to)}` : ""}${l.fee_exempt ? " · fee-exempt, paying by choice" : ""}</div></td><td class="py-2 pr-3 whitespace-nowrap">${adminFormatUgx(l.amount_ugx)}</td><td class="py-2 pr-3 whitespace-nowrap font-bold text-amber-700">${Number(l.days_waiting || 0)} day${Number(l.days_waiting) === 1 ? "" : "s"}</td><td class="py-2 pr-3">${adminEscape(l.next_step || "")}</td><td class="py-2 text-xs space-x-2 whitespace-nowrap"><button type="button" onclick="adminSendPayLink('${code}')" class="underline font-bold">Send again</button> <button type="button" onclick="adminCopyPayLink('${adminAttr(l.url)}')" class="underline">Copy</button></td></tr>`;
   }).join("");
   return `<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 mb-3">
     <h5 class="font-black text-gray-900 text-sm">⏳ Asked for money, nothing back yet — ${waiting.length}</h5>
@@ -29064,7 +28767,7 @@ function adminCreatePayLink(target = {}) {
     bodyHtml: `${isOther ? `<label class="block"><span class="font-bold">What is it for?</span><input name="description" required maxlength="200" placeholder="e.g. Featured listing — 7 days" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
         <label class="block"><span class="font-bold">Amount (UGX)</span><input name="amount_ugx" inputmode="numeric" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
         <label class="block"><span class="font-bold">Their name</span><input name="payer_name" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>`
-      : `<p class="text-xs text-gray-600">Amount: ${adminFormatUgx(target.purpose === "listing_fee" ? (adminRevenueData?.settings?.lister_fee?.monthly_ugx || 20000) : (adminRevenueData?.settings?.agent_fee?.monthly_ugx || 50000))} for one month. An open link for the same thing is reused.</p>`}
+      : `<p class="text-xs text-gray-600">Amount: ${adminEscape(rateCardUgx(target.purpose === "listing_fee" ? "private_listing" : "agent_subscription"))} for one month. An open link for the same thing is reused.</p>`}
       <label class="block"><span class="font-bold">Send to WhatsApp number</span><input name="send_to" inputmode="tel" value="${adminAttr(defaultPhone)}" placeholder="2567… or 447…" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <p class="text-[11px] text-gray-500">Leave the number empty to just create the link and copy it.</p>`,
     submitLabel: "Create link",
@@ -29183,6 +28886,7 @@ function renderAdminRevenue() {
 
   const finalAfter = Number(d.final_after_days || 7);
   const billingRows = (d.billing || []).filter((a) => !a.fee_exempt || a.billing_state === "taken_down").map((a) => {
+    const exemptionNote = a.exemption_note || "";
     const tone = { paid: "text-emerald-700", due_soon: "text-amber-700", overdue: "text-red-700", never_paid: "text-red-700", taken_down: "text-gray-900" }[a.billing_state] || "text-gray-700";
     const label = { paid: "Paid", due_soon: "Due soon", overdue: `Overdue ${a.days_overdue} day(s)`, never_paid: "No payment yet", taken_down: "⛔ Taken down" }[a.billing_state] || a.billing_state;
     const id = adminAttr(a.id);
@@ -29192,11 +28896,11 @@ function renderAdminRevenue() {
     const downBtn = a.billing_state === "overdue" && a.final_reminder_at ? `<button type="button" onclick="adminAgentTakeDown('${id}')" class="underline font-bold text-red-800">Take listings down</button>` : "";
     const backBtn = a.billing_state === "taken_down" ? `<button type="button" onclick="adminAgentReinstate('${id}')" class="underline">Put back without payment</button>` : "";
     const sent = [a.last_reminder_at ? `reminded ${adminShortDate(a.last_reminder_at)}` : "", a.final_reminder_at ? `final ${adminShortDate(a.final_reminder_at)}` : ""].filter(Boolean).join(" · ");
-    return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(a.full_name)}</td><td class="py-2 pr-3 ${tone} font-bold">${label}${sent ? `<div class="text-[11px] font-normal text-gray-500">${adminEscape(sent)}</div>` : ""}</td><td class="py-2 pr-3">${adminEscape(a.paid_until || "—")}</td>
+    return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(a.full_name)}${exemptionNote ? `<div class="text-[11px] font-normal text-amber-700">${adminEscape(exemptionNote)}</div>` : ""}</td><td class="py-2 pr-3 ${tone} font-bold">${label}${sent ? `<div class="text-[11px] font-normal text-gray-500">${adminEscape(sent)}</div>` : ""}</td><td class="py-2 pr-3">${adminEscape(a.paid_until || (a.due_from ? `due from ${a.due_from}` : "—"))}</td>
       <td class="py-2 text-xs space-x-2 whitespace-nowrap"><button type="button" onclick="adminOpenAgentPayment('${id}', 'renew')" class="underline font-bold text-emerald-800">Record payment</button> <button type="button" onclick="adminCreatePayLink({ purpose: 'agent_subscription', agent_id: '${id}' })" class="underline font-bold">💳 Pay link</button> ${remindBtn} ${finalBtn} ${downBtn} ${backBtn}</td></tr>`;
   }).join("");
   const exemptCount = (d.billing || []).filter((a) => a.fee_exempt).length;
-  const billingTable = `<div><h4 class="font-black text-gray-900 mb-1">Agent fees</h4><p class="text-xs text-gray-500 mb-2">${exemptCount} agent(s) who joined before ${adminEscape(d.fee_start_date || "")} list for free. Reminders go automatically ${adminEscape(String(d.settings?.agent_fee?.remind_days_before || 3))} days before and on the due date; everything after that is your call. Paying puts a taken-down agent back exactly as they were.</p>
+  const billingTable = `<div><h4 class="font-black text-gray-900 mb-1">Agent fees</h4><p class="text-xs text-gray-500 mb-2">${exemptCount} agent(s) are fee-exempt (each until their own end date; billing starts on that date). Reminders go automatically ${adminEscape(String(d.settings?.agent_fee?.remind_days_before || 3))} days before and on the due date; everything after that is your call. Paying puts a taken-down agent back exactly as they were.</p>
     ${billingRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Agent</th><th class="py-1 pr-3">Status</th><th class="py-1 pr-3">Paid until</th><th></th></tr></thead><tbody>${billingRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No paying agents yet.</p>`}</div>`;
 
   const listerRows = (d.listers || []).map((p) => {
@@ -29214,7 +28918,7 @@ function renderAdminRevenue() {
     ].filter(Boolean).join(" ");
     return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(p.title || "Listing")}<div class="text-[11px] font-normal text-gray-500">${adminEscape(p.lister_name || "")} ${adminEscape(p.lister_phone || "")}</div></td><td class="py-2 pr-3 font-bold ${tone}">${label}</td><td class="py-2 text-xs space-x-2">${btns}</td></tr>`;
   }).join("");
-  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — 7 days free, then ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 20000)} a month</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
+  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — ${adminEscape(String(window.__MAKAUG_PRICING__?.private_listing?.trial_days || 7))} days free, then ${adminEscape(rateCardUgx("private_listing"))} a month</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
     ${listerRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Listing</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${listerRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No private listings since ${adminEscape(d.settings?.lister_fee?.start_date || "")}.</p>`}</div>`;
 
   const claims = (d.claims || []);
@@ -29236,7 +28940,7 @@ function renderAdminRevenue() {
 
   const settingsBlock = `<div class="rounded-xl border ${d.pay_to_line ? "border-gray-200" : "border-red-300 bg-red-50"} p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">Settings</h4><button type="button" onclick="adminOpenBillingSettings()" class="rounded border border-gray-300 px-2 py-1 text-xs font-bold">Edit settings</button></div>
     <p class="text-xs mt-1">${d.pay_to_line ? `People are told to pay to: <strong>${adminEscape(d.pay_to_line.replace(/\\*/g, ""))}</strong>` : `<strong class="text-red-800">No pay-to number yet — reminders and payment messages are switched off until you add the number and registered name.</strong>`}</p>
-    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || 50000)}/month · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 20000)}/month after ${adminEscape(String(d.settings?.lister_fee?.free_days || 7))} free days</p></div>`;
+    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminEscape(rateCardUgx("agent_subscription"))}/month · Private listing ${adminEscape(rateCardUgx("private_listing"))}/month after ${adminEscape(String(window.__MAKAUG_PRICING__?.private_listing?.trial_days || 7))} free days · rate card ${adminEscape(window.__MAKAUG_PRICING__?.version || "")}</p></div>`;
 
   const reconBlock = `<div class="rounded-xl border border-gray-200 p-3"><h4 class="font-black text-gray-900">Weekly reconciliation</h4><p class="text-xs text-gray-600 mb-2">Upload a statement (CSV export from Absa, the bank or MoMo). Lines are matched to the entries above; anything on the statement that nobody recorded — and anything recorded that is not on the statement — is listed.</p>
     <div class="flex flex-wrap gap-2 items-center text-xs"><select id="admin-recon-account" class="rounded border border-gray-300 px-2 py-1">${(d.accounts || []).map((a) => `<option value="${adminAttr(a.key)}">${adminEscape(a.name)}</option>`).join("")}</select><input id="admin-recon-file" type="file" accept=".csv,text/csv,text/plain" class="text-xs"><button type="button" onclick="adminUploadStatement()" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">Upload & match</button></div>
@@ -29551,7 +29255,7 @@ function adminPaymentFieldsHtml({ amount = "", payer = "" } = {}) {
 
 function adminListerPayment(propertyId) {
   const listing = (adminRevenueData?.listers || []).find((p) => String(p.id) === String(propertyId)) || {};
-  const fee = adminRevenueData?.settings?.lister_fee?.monthly_ugx || 20000;
+  const fee = rateCardAmount("private_listing");
   adminBillingModal({
     title: `Listing fee — ${adminEscape(listing.title || "listing")}`,
     bodyHtml: `<p class="text-gray-600">${adminFormatUgx(fee)} = one month. If the listing was taken down it goes straight back live.</p>${adminPaymentFieldsHtml({ amount: fee, payer: [listing.lister_name, listing.lister_phone].filter(Boolean).join(" · ") })}`,
@@ -29625,13 +29329,14 @@ function adminOpenBillingSettings() {
         <label class="block"><span class="font-bold">Registered name (what the payer sees on MoMo)</span><input name="pay_name" value="${adminAttr(pay.name || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label></fieldset>
       <label class="block"><span class="font-bold">Who confirms payments</span> <span class="text-xs text-gray-500">(one per line: name, WhatsApp number)</span><textarea name="confirmers" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">${adminEscape(confirmers)}</textarea></label>
       <div class="grid grid-cols-3 gap-2">
-        <label class="block"><span class="font-bold text-xs">Agent fee / month</span><input name="agent_monthly" inputmode="numeric" value="${adminAttr(agentFee.monthly_ugx || 50000)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Agent fee / month</span><input name="agent_monthly" readonly value="${adminAttr(rateCardUgx("agent_subscription"))}" class="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-2 text-gray-600"></label>
         <label class="block"><span class="font-bold text-xs">Remind days before</span><input name="remind_days" inputmode="numeric" value="${adminAttr(agentFee.remind_days_before ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Final reminder after (days overdue)</span><input name="final_days" inputmode="numeric" value="${adminAttr(agentFee.final_after_days_overdue ?? 7)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
-        <label class="block"><span class="font-bold text-xs">Private listing / month</span><input name="lister_monthly" inputmode="numeric" value="${adminAttr(listerFee.monthly_ugx || 20000)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
-        <label class="block"><span class="font-bold text-xs">Free days</span><input name="free_days" inputmode="numeric" value="${adminAttr(listerFee.free_days ?? 7)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Private listing / month</span><input name="lister_monthly" readonly value="${adminAttr(rateCardUgx("private_listing"))}" class="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-2 text-gray-600"></label>
+        <label class="block"><span class="font-bold text-xs">Free days</span><input name="free_days" readonly value="${adminAttr(String(window.__MAKAUG_PRICING__?.private_listing?.trial_days || ""))}" class="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-2 text-gray-600"></label>
         <label class="block"><span class="font-bold text-xs">Views message on day</span><input name="views_day" inputmode="numeric" value="${adminAttr(listerFee.views_message_day ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
       </div>
+      <p class="text-[11px] text-gray-500">Amounts and free days are read-only here: change via the rate card (config/pricing.js).</p>
       <label class="block"><span class="font-bold">Day-${adminEscape(String(listerFee.views_message_day ?? 3))} “people have seen your property” message</span><textarea name="views_text" rows="9" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-[12px]">${adminEscape(views)}</textarea>
         <span class="text-[11px] text-gray-500">Fills in: {name} {property} {views} {shares_line} {free_until} {monthly_fee} {pay_to} {link}</span></label>`,
     submitLabel: "Save settings",
@@ -29645,8 +29350,11 @@ function adminOpenBillingSettings() {
       if (!confirmersList.length) throw new Error("Add at least one person who confirms payments.");
       await put("pay_to", { method: String(data.get("pay_method") || "").trim(), number: String(data.get("pay_number") || "").trim(), name: String(data.get("pay_name") || "").trim() });
       await put("confirmers", confirmersList);
-      await put("agent_fee", { ...agentFee, monthly_ugx: num(data.get("agent_monthly"), 50000), remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });
-      await put("lister_fee", { ...listerFee, monthly_ugx: num(data.get("lister_monthly"), 20000), free_days: num(data.get("free_days"), 7), views_message_day: num(data.get("views_day"), 3) });
+      // Only operational knobs are saved; amounts come from the rate card.
+      const { monthly_ugx: _agentAmount, ...agentKnobs } = agentFee;
+      const { monthly_ugx: _listerAmount, free_days: _freeDays, ...listerKnobs } = listerFee;
+      await put("agent_fee", { ...agentKnobs, remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });
+      await put("lister_fee", { ...listerKnobs, views_message_day: num(data.get("views_day"), 3) });
       await put("lister_views_message", { ...(s.lister_views_message || {}), text: String(data.get("views_text") || "") });
       toast("Settings saved.");
     }
@@ -37023,7 +36731,7 @@ function ensureAccountAccessDrawer() {
                 <p class="mt-1">Add your National ID number and a clear photo. Makaug staff review these details privately; they are never shown publicly.</p>
               </div>
               <div id="account-access-broker-fee-note" class="rounded-2xl border border-amber-200 bg-white p-3 text-xs text-gray-800">
-                <p><strong>Agent plan: UGX 50,000 a month.</strong> Our team will WhatsApp you to check your details and explain how to pay by MTN Mobile Money. Your agent account is approved once the first month is paid. Nothing is charged automatically.</p>
+                <p><strong>Agent plan: ${adminEscape(rateCardUgx("agent_subscription"))} a month, verified badge and broker profile included.</strong> <span class="text-xs">${adminEscape(window.__MAKAUG_PRICING__?.vat?.label || "")}.</span> Our team will WhatsApp you to check your details and explain how to pay by MTN Mobile Money. Your agent account is approved once the first month is paid. Nothing is charged automatically.</p>
               </div>
               <div class="grid sm:grid-cols-2 gap-3">
                 <label class="block">
@@ -37852,7 +37560,7 @@ function showBrokerApplicationReceived({ firstName = "", phone = "" } = {}) {
       <p style="margin:0 0 12px;color:#4b5563;">Your makaug agent account is set up and waiting for our review.</p>
       <ol style="margin:0 0 14px;padding-left:22px;line-height:1.55;list-style:decimal;">
         <li><strong>We WhatsApp you</strong>${phone ? ` on ${esc(phone)}` : ""}, usually the same day, to check your details.</li>
-        <li><strong>Pay the first month</strong> — UGX 50,000. We send you a payment link (MTN Mobile Money or card). Nothing is charged automatically.</li>
+        <li><strong>Pay the first month</strong> — ${adminEscape(rateCardUgx("agent_subscription"))} (${adminEscape((window.__MAKAUG_PRICING__?.vat?.label || "").toLowerCase())}). We send you a payment link (MTN Mobile Money or card). Nothing is charged automatically.</li>
         <li><strong>You're approved</strong> — you get your welcome pack and the how-to-post guide, and your listings can go live.</li>
       </ol>
       <p style="margin:0 0 16px;font-size:12px;color:#6b7280;">You can already fill in your profile from your dashboard. Questions? WhatsApp us on 0780 863394.</p>
@@ -38238,7 +37946,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Send request",
     captureSuccess: "Request saved. makaug will follow up when there is a match.",
     captureError: "Could not save the request. Please try again or WhatsApp makaug.",
-    listFree: "List free",
+    listYourProperty: "List your property",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "See all matches",
     chips: [
@@ -38267,7 +37975,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Sindika request",
     captureSuccess: "Request eterekeddwa. makaug ejja kukuddamu nga waliwo ekikwatagana.",
     captureError: "Request tesobodde kuterekebwa. Ddamu ogezeeko oba WhatsApp makaug.",
-    listFree: "Listinga free",
+    listYourProperty: "Teeka property yo",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Laba byonna",
     chips: [
@@ -38296,7 +38004,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Tuma request",
     captureSuccess: "Request imehifadhiwa. makaug itafuatilia ikipata mechi.",
     captureError: "Request haikuhifadhiwa. Jaribu tena au WhatsApp makaug.",
-    listFree: "List bure",
+    listYourProperty: "Orodhesha mali yako",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Ona matokeo yote",
     chips: [
@@ -38325,7 +38033,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Cwal request",
     captureSuccess: "Request ogwoko. makaug bi lubo ka gin ma rwate ononge.",
     captureError: "Pe onongo twero gwoko request. Tem doki onyo WhatsApp makaug.",
-    listFree: "List free",
+    listYourProperty: "Ket property ni",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Nen ducu",
     chips: [
@@ -38354,7 +38062,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Sindika request",
     captureSuccess: "Request ebikire. makaug neija kukugarukamu twabona match.",
     captureError: "Request terabikire. Garuka ogezeho ninga WhatsApp makaug.",
-    listFree: "List free",
+    listYourProperty: "Ta property yaawe",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Reeba byona",
     chips: [
@@ -38383,7 +38091,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Sindika request",
     captureSuccess: "Request ebikire. makaug neija kukugarukamu twabona match.",
     captureError: "Request terabikire. Garuka ogezeho ninga WhatsApp makaug.",
-    listFree: "List free",
+    listYourProperty: "Ta property yaawe",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Reeba byona",
     chips: [
@@ -38412,7 +38120,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "Sindika request",
     captureSuccess: "Request eterekeddwa. makaug ejja kukuddamu nga waliwo ekikwatagana.",
     captureError: "Request tesobodde kuterekebwa. Ddamu ogezeeko oba WhatsApp makaug.",
-    listFree: "Listinga free",
+    listYourProperty: "Teeka property yo",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "Laba byonna",
     chips: [
@@ -38441,7 +38149,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "ጥያቄ ላክ",
     captureSuccess: "ጥያቄዎ ተቀምጧል። makaug ተዛማጅ ሲኖር ይከታተላል።",
     captureError: "ጥያቄውን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ ወይም WhatsApp makaug።",
-    listFree: "በነፃ ይዘርዝሩ",
+    listYourProperty: "ንብረትዎን ይዘርዝሩ",
     whatsappMakaug: "WhatsApp makaug",
     seeAll: "ሁሉን ይመልከቱ",
     chips: [
@@ -38470,7 +38178,7 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     captureSubmit: "إرسال الطلب",
     captureSuccess: "تم حفظ الطلب. سيتابع makaug عند وجود تطابق.",
     captureError: "تعذر حفظ الطلب. حاول مرة أخرى أو تواصل عبر واتساب.",
-    listFree: "أدرج مجاناً",
+    listYourProperty: "أدرج عقارك",
     whatsappMakaug: "واتساب makaug",
     seeAll: "عرض كل النتائج",
     chips: [
@@ -39393,7 +39101,7 @@ function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
     <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
       <div class="font-black">${adminEscape(copy.zero)}</div>
       <div class="mt-3 flex flex-wrap gap-2">
-        <a href="/list-property" class="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white">${adminEscape(copy.listFree || "List free")}</a>
+        <a href="/list-property" class="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white">${adminEscape(copy.listYourProperty || "List your property")}</a>
         <a href="https://wa.me/256780863394?text=Hello%20makaug%2C%20I%20need%20help%20finding%20a%20property" target="_blank" rel="noopener" class="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-black text-blue-700">${adminEscape(copy.whatsappMakaug || "WhatsApp makaug")}</a>
       </div>
     </div>` : "";
@@ -39681,8 +39389,8 @@ const PAGE_CONTENT = {
     </ul>
     <h3 class="font-bold text-gray-800 mb-1">7. Fees and Commercial Terms</h3>
     <p class="mb-3 text-sm">
-      Listing may be offered free under current platform policy. Advertising, featured placements, and enterprise tools
-      may be separately priced under written commercial terms.
+      Listing fees, advertising, featured placements and other paid services are set out in the published rate card
+      (makaug.com/about). Prices include VAT.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">8. Legal and Regulatory Context (Uganda)</h3>
     <p class="mb-3 text-sm">
@@ -40036,15 +39744,7 @@ const PAGE_CONTENT = {
       <div>
         <label class="block text-sm font-bold text-gray-800 mb-2">What do you want to advertise?</label>
         <div class="grid md:grid-cols-2 gap-2 text-sm">
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="featured_property_boost"> Featured property boost - UGX 75,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="regional_search_boost"> Regional search boost - UGX 150,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="homepage_banner"> Homepage banner - UGX 350,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="agent_spotlight"> Agent spotlight - UGX 160,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="student_accommodation_push"> Student accommodation push - UGX 220,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="commercial_land_sponsor"> Commercial / land sponsor - UGX 240,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="whatsapp_chatbot_sponsor"> WhatsApp chatbot sponsor - UGX 200,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="email_whatsapp_blast"> Opt-in WhatsApp bulk audience campaign - from UGX 300,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="haymaker_all_platform"> Haymaker all-platform package - UGX 950,000</label>
+          <div id="advertising-inquiry-packages" class="md:col-span-2 text-xs text-gray-500">Loading the current makaug advertising options...</div>
         </div>
       </div>
       <div class="grid md:grid-cols-2 gap-3">
@@ -40137,7 +39837,10 @@ function openPageMod(page) {
   if (body) localizePageModalContent(body);
   syncPublicWhatsappLinks(body);
   openModal("page-modal");
-  if (page === "advertise") hydrateAdvertisePricingPreview();
+  if (page === "advertise") {
+    hydrateAdvertisePricingPreview();
+    hydrateAdvertisingInquiryPackages();
+  }
 }
 
 function localizePageModalContent(root) {
@@ -40163,6 +39866,31 @@ function localizePageModalContent(root) {
     const text = (el.textContent || "").trim();
     if (text && text.length < 60) el.textContent = translateListingLabel(text);
   });
+}
+
+// The enquiry form's product list comes from /api/advertising/packages (the
+// rate card), so a price is never typed into the page. Anything outside the
+// weekly display range reads "Price on request".
+function advertisingPackageOptionLabel(pkg = {}) {
+  if (pkg.quote_on_request || pkg.price_ugx == null) return `${pkg.label} - Price on request`;
+  return `${pkg.label} - ${adMoney(pkg.price_ugx)} / ${pkg.price_period || `${pkg.duration_days} days`}`;
+}
+
+async function hydrateAdvertisingInquiryPackages() {
+  const wrap = document.getElementById("advertising-inquiry-packages");
+  if (!wrap) return;
+  try {
+    const res = await apiRequest("/api/advertising/packages");
+    const packages = (Array.isArray(res?.data) ? res.data : []).filter((pkg) => pkg.category !== "creative" || pkg.key === "creative_design_addon");
+    const meta = res?.meta || {};
+    const discount = Number(meta.four_week_discount_percent || 0);
+    wrap.className = "md:col-span-2 grid md:grid-cols-2 gap-2 text-sm";
+    wrap.innerHTML = packages.map((pkg) => `
+      <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="${adminAttr(pkg.key)}"> ${adminEscape(advertisingPackageOptionLabel(pkg))}</label>`).join("")
+      + `<p class="md:col-span-2 text-xs text-gray-500">${adminEscape(meta.vat_label || "")}${discount ? `${meta.vat_label ? " · " : ""}${discount}% off bookings of 4 weeks or more` : ""}</p>`;
+  } catch (_error) {
+    wrap.textContent = "Tell us what you want to advertise in the message box and we will send you the current options.";
+  }
 }
 
 async function hydrateAdvertisePricingPreview() {
@@ -40191,8 +39919,8 @@ async function hydrateAdvertisePricingPreview() {
             <div class="text-xs font-bold text-gray-900">${adminEscape(slot.label)}</div>
             <div class="text-[11px] text-gray-500">${adminEscape(slot.page_key)} • ${adminEscape(slot.size_label || slot.slot_type || "")}</div>
             <div class="grid grid-cols-2 gap-1 mt-2 text-[11px]">
-              <div class="rounded-lg bg-green-50 px-2 py-1"><strong>Day</strong><br>${adminEscape(slot.price_labels?.day || adMoney(slot.daily_price_ugx || slot.base_price_ugx))}</div>
-              <div class="rounded-lg bg-green-50 px-2 py-1"><strong>Week</strong><br>${adminEscape(slot.price_labels?.week || adMoney(slot.weekly_price_ugx || slot.base_price_ugx))}</div>
+              <div class="rounded-lg bg-green-50 px-2 py-1"><strong>Day</strong><br>${adminEscape(slot.price_labels?.day || adPrice(slot.daily_price_ugx || slot.base_price_ugx))}</div>
+              <div class="rounded-lg bg-green-50 px-2 py-1"><strong>Week</strong><br>${adminEscape(slot.price_labels?.week || adPrice(slot.weekly_price_ugx || slot.base_price_ugx))}</div>
               <div class="rounded-lg bg-amber-50 px-2 py-1"><strong>Month</strong><br>${adminEscape(slot.price_labels?.month || "-")}</div>
               <div class="rounded-lg bg-gray-50 px-2 py-1"><strong>CPM</strong><br>${adminEscape(slot.price_labels?.cpm || "-")}</div>
             </div>
@@ -46967,14 +46695,6 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     image: "/assets/house-ads-v3/detail.webp",
     headline: "A sponsored recommendation inside a matching chat"
   },
-  email_whatsapp_blast: {
-    copy: "makaug prepares an approved one-off message for a relevant opted-in audience segment. The campaign is reviewed before any email or WhatsApp distribution is scheduled.",
-    locations: ["Email campaign", "WhatsApp campaign"],
-    bestFor: "Time-sensitive launches, open days and clearly defined offers with a specific audience and call to action.",
-    format: "email-creative",
-    image: "/assets/house-ads-v3/home-hero.webp",
-    headline: "Your approved offer delivered to an opted-in audience"
-  },
   haymaker_all_platform: {
     copy: "A coordinated month-long campaign combines approved website, search, map, WhatsApp, email and agent-card placements. makaug confirms the exact mix and schedule during review.",
     locations: ["Homepage", "Search", "Map", "WhatsApp", "Email", "Agent cards"],
@@ -47030,7 +46750,20 @@ function setAdvertisingStatus(message = "", tone = "info") {
 function updateAdvertisingQuote() {
   const selected = advertisingSelectedPackage();
   setTextById("advertise-quote-label", selected ? advertisingPackageText(selected, "label") : contentTr("advertise.choosePackage"));
-  setTextById("advertise-quote-amount", `UGX ${Number(selected?.price_ugx || 0).toLocaleString("en-UG")}`);
+  setTextById("advertise-quote-amount", selected && (selected.quote_on_request || selected.price_ugx == null)
+    ? contentTr("advertise.priceOnRequest")
+    : `UGX ${Number(selected?.price_ugx || 0).toLocaleString("en-UG")}`);
+  // Bookings of 4 weeks or more: the rate-card discount as its own line.
+  const discountEl = document.getElementById("advertise-quote-discount");
+  const discountPercent = Number(window.__MAKAUG_PRICING__?.display?.four_week_discount_percent || 0);
+  const discountDays = Number(window.__MAKAUG_PRICING__?.display?.four_week_discount_min_days || 28);
+  if (discountEl) {
+    const eligible = Boolean(selected && !selected.quote_on_request && selected.price_ugx != null && discountPercent && Number(selected.duration_days || 0) >= discountDays);
+    discountEl.classList.toggle("hidden", !eligible);
+    discountEl.textContent = eligible
+      ? `${discountPercent}% off 4-week booking: −UGX ${Math.round(Number(selected.price_ugx) * discountPercent / 100).toLocaleString("en-UG")}`
+      : "";
+  }
   setTextById(
     "advertise-quote-duration",
     selected
@@ -47330,7 +47063,7 @@ function renderAdvertisingPackageOptions() {
         <span class="min-w-0 flex-1">
           <strong class="block text-sm text-[#16241d]">${adminEscape(advertisingPackageText(item, "label"))}</strong>
           <span class="mt-1 block text-xs leading-relaxed text-[#5b6b62]">${adminEscape(advertisingPackageText(item, "description") || item.description || "")}</span>
-          <span class="mt-2 block text-sm font-black text-[#15603f]">UGX ${Number(item.price_ugx || 0).toLocaleString("en-UG")} · ${advertisingPackageDurationLabel(item)}</span>
+          <span class="mt-2 block text-sm font-black text-[#15603f]">${item.quote_on_request || item.price_ugx == null ? adminEscape(contentTr("advertise.priceOnRequest")) : `UGX ${Number(item.price_ugx).toLocaleString("en-UG")} · ${advertisingPackageDurationLabel(item)}`}</span>
           <button type="button" onclick="return openAdvertisingPlacementPreview('${adminAttr(item.key)}', event)" class="advertise-package-preview-button"><i class="fas fa-eye" aria-hidden="true"></i> ${adminEscape(contentTr("advertise.previewButton"))}</button>
         </span>
       </div>

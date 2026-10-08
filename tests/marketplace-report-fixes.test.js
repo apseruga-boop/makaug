@@ -55,7 +55,8 @@ test('public Marketplace exposes provenance, claim UI, disclaimer and full tier 
   assert.match(html, /data-marketplace-i18n="tierPrivate">Privately listed/);
   assert.match(html, /data-marketplace-i18n="tierVerified">Verified/);
   assert.match(app, /tierPrivate: "Privately listed"/);
-  assert.match(html, /UGX 150,000\/month/);
+  // Marketplace Verified is parked (rate card 2026-10-08): no price on the page.
+  assert.doesNotMatch(html, /UGX 150,000\/month/);
   assert.match(html, /id="marketplace-claim-form"/);
   assert.match(html, /onsubmit="submitMarketplaceClaim\(event\)"/);
   assert.match(app, /marketplaceOpenClaimForm/);

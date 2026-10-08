@@ -10,6 +10,7 @@
 const express = require('express');
 
 const db = require('../config/database');
+const PRICING = require('../config/pricing');
 const logger = require('../config/logger');
 const payLinks = require('../services/payLinkService');
 const revolut = require('../services/revolutMerchantService');
@@ -130,6 +131,7 @@ function openView(d, { error = '', claimed = false, cardCancelled = false } = {}
   <small>Payment for</small>
   <h1>${esc(d.description)}</h1>
   <div class="amount">${esc(d.amount_ugx_text)}</div>
+  <div class="ref">${esc(PRICING.vat.label)}</div>
   <div class="ref">Reference ${esc(d.code)}</div>
 </section>
 ${error ? `<div class="err">${esc(error)}</div>` : ''}

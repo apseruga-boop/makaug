@@ -17,6 +17,7 @@ const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency
 const { isFoundOnlinePublicRow } = require('./publicListingCopy');
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
+const PRICING = require('../config/pricing');
 
 const PUBLIC_SITE_URL = 'https://makaug.com';
 const PUBLIC_SEO_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -46,8 +47,9 @@ const PUBLIC_PAGE_SEO = Object.freeze({
     description: 'Browse property brokers and agents across Uganda by area, see their live listings and contact them directly.'
   },
   '/list-property': {
-    title: 'List your property in Uganda: 7 days free',
-    description: 'List a house, rental, plot or commercial space on makaug.com. Free for 7 days, then UGX 20,000 a month. Reviewed before it goes live.'
+    // Fee from the rate card (config/pricing.js).
+    title: `List your property in Uganda: ${PRICING.private_listing.trial_days} days free`,
+    description: `List a house, rental, plot or commercial space on makaug.com. Free for ${PRICING.private_listing.trial_days} days, then ${PRICING.ugx(PRICING.private_listing.amount_ugx)} a month. Reviewed before it goes live.`
   },
   '/help': {
     title: 'Help centre: makaug.com questions answered',

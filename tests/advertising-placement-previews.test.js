@@ -39,7 +39,9 @@ assert(app.includes('${pageHead}${miniResults}${slotLabel}${banner()}'), 'homepa
 
 const packageCatalog = catalog.slice(0, catalog.indexOf('const ADVERTISING_PLACEMENTS'));
 const packageKeys = Array.from(packageCatalog.matchAll(/\n\s{4}key: '([^']+)'/g), (match) => match[1]);
-assert(packageKeys.length >= 10, 'advertising catalogue should expose the expected package range');
+// 9 since the email + WhatsApp blast was removed (rate card 2026-10-08).
+assert(packageKeys.length >= 9, 'advertising catalogue should expose the expected package range');
+assert(!packageKeys.includes('email_whatsapp_blast'), 'the removed blast must not come back');
 for (const key of packageKeys) {
   assert(app.includes(`${key}: {`), `preview content should cover advertising package ${key}`);
 }

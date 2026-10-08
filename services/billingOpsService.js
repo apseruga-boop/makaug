@@ -15,7 +15,9 @@
  */
 
 const logger = require('../config/logger');
+const PRICING = require('../config/pricing');
 const revenue = require('./revenueService');
+const exemption = require('./agentFeeExemption');
 const { agentGreetingName } = require('./agentNameService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
@@ -30,9 +32,57 @@ async function getSettings(db, { fresh = false } = {}) {
   return value;
 }
 
+// Amounts and the free period are on the rate card (config/pricing.js), never
+// in billing_settings: a saved fee setting keeps only its operational knobs.
+const RATE_CARD_SETTING_FIELDS = ['monthly_ugx', 'free_days'];
+
+function operationalSettingValue(key, value) {
+  if (!['agent_fee', 'lister_fee'].includes(key) || !value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const out = { ...value };
+  for (const field of RATE_CARD_SETTING_FIELDS) delete out[field];
+  return out;
+}
+
+/** billing_settings amounts that disagree with the rate card (they are never used). */
+function pricingDrift(settings = {}) {
+  const drift = [];
+  const expected = { lister_fee: PRICING.private_listing.amount_ugx, agent_fee: PRICING.agent_subscription.amount_ugx };
+  for (const [key, amount] of Object.entries(expected)) {
+    const stored = settings?.[key]?.monthly_ugx;
+    if (stored !== undefined && stored !== null && stored !== '' && Number(stored) !== amount) {
+      drift.push({ key, field: 'monthly_ugx', stored: Number(stored), rate_card: amount });
+    }
+  }
+  const storedFreeDays = settings?.lister_fee?.free_days;
+  if (storedFreeDays !== undefined && storedFreeDays !== null && Number(storedFreeDays) !== PRICING.private_listing.trial_days) {
+    drift.push({ key: 'lister_fee', field: 'free_days', stored: Number(storedFreeDays), rate_card: PRICING.private_listing.trial_days });
+  }
+  return drift;
+}
+
+let pricingDriftLogged = false;
+/** At boot: say once, loudly, if the database disagrees with the rate card. */
+async function logPricingDriftOnce(db, { force = false } = {}) {
+  if (pricingDriftLogged && !force) return null;
+  pricingDriftLogged = true;
+  try {
+    const drift = pricingDrift(await getSettings(db, { fresh: true }));
+    if (drift.length) {
+      logger.error('pricing_drift: billing_settings amounts differ from config/pricing.js; the rate card is used', {
+        event: 'pricing_drift', rate_card_version: PRICING.version, drift
+      });
+    }
+    return drift;
+  } catch (error) {
+    logger.warn('pricing_drift check failed', { error: error.message });
+    return null;
+  }
+}
+
 async function setSetting(db, key, value, actor = 'admin') {
-  const allowed = new Set(['pay_to', 'confirmers', 'agent_fee', 'lister_fee', 'lister_views_message', 'card_payments']);
+  const allowed = new Set(['pay_to', 'confirmers', 'agent_fee', 'lister_fee', 'lister_views_message', 'card_payments', 'exempt_end_notices_enabled']);
   if (!allowed.has(key)) throw revenue.httpError(400, 'Unknown setting');
+  value = operationalSettingValue(key, value);
   await db.query(
     `INSERT INTO billing_settings (key, value, updated_by, updated_at) VALUES ($1, $2::jsonb, $3, NOW())
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
@@ -92,7 +142,7 @@ async function payLinkFor(db, input) {
 
 function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '' } = {}) {
   const name = agentGreetingName(agent, 'there');
-  const fee = Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || 50000);
+  const fee = PRICING.agent_subscription.amount_ugx;
   const pay = payToLine(settings);
   const due = agent.paid_until ? prettyDate(agent.paid_until) : '';
   const help = helpContact();
@@ -125,7 +175,7 @@ async function deliver(to, body, kind, nonce) {
 
 async function loadAgent(db, agentId) {
   return (await db.query(
-    `SELECT id, full_name, greeting_name, phone, whatsapp, status, paid_until, fee_exempt, monthly_fee_ugx,
+    `SELECT id, full_name, greeting_name, phone, whatsapp, status, paid_until, fee_exempt, fee_exempt_until, monthly_fee_ugx,
             billing_reminder_log, billing_suspended_at, billing_snapshot, removed_at
        FROM agents WHERE id = $1::uuid`,
     [agentId]
@@ -145,6 +195,12 @@ async function sendAgentBillingMessage(db, { agentId, kind, actor = 'admin', for
   const agent = await loadAgent(db, agentId);
   if (!agent) throw revenue.httpError(404, 'Agent not found');
   const settings = await getSettings(db, { fresh: true });
+  if (kind !== 'reinstated' && exemption.isExempt(agent)) {
+    throw revenue.httpError(409, `This agent is ${exemption.exemptionLabel(agent)}.`);
+  }
+  if (kind !== 'reinstated' && exemption.noticesHeld(agent, settings)) {
+    throw revenue.httpError(409, `Billing for this agent started ${exemption.formatExemptionDate(agent.fee_exempt_until)}, but notices to agents whose exemption ended are held until Arthur turns them on.`);
+  }
   if (['pre_due', 'due_today', 'reminder', 'final_reminder'].includes(kind) && !payToLine(settings)) {
     throw revenue.httpError(409, 'Set the pay-to number and registered name first (Sales & Revenue › Settings). Reminders tell agents where to pay.');
   }
@@ -173,10 +229,13 @@ async function takeDownAgentForBilling(db, { agentId, actor = 'admin' }) {
   let hidden = [];
   try {
     await client.query('BEGIN');
-    agent = (await client.query('SELECT id, status, billing_suspended_at, fee_exempt FROM agents WHERE id = $1::uuid FOR UPDATE', [agentId])).rows[0];
+    agent = (await client.query('SELECT id, status, billing_suspended_at, fee_exempt, fee_exempt_until FROM agents WHERE id = $1::uuid FOR UPDATE', [agentId])).rows[0];
     if (!agent) throw revenue.httpError(404, 'Agent not found');
     if (agent.billing_suspended_at) throw revenue.httpError(409, 'Already taken down');
-    if (agent.fee_exempt) throw revenue.httpError(409, 'This agent lists for free');
+    if (exemption.isExempt(agent)) throw revenue.httpError(409, `This agent is ${exemption.exemptionLabel(agent)}.`);
+    if (exemption.noticesHeld(agent, await getSettings(db, { fresh: true }))) {
+      throw revenue.httpError(409, `Billing for this agent started ${exemption.formatExemptionDate(agent.fee_exempt_until)} · notices held. Nothing is taken down until notices are turned on.`);
+    }
     hidden = (await client.query(
       `UPDATE properties p SET status = 'hidden', updated_at = NOW()
          FROM (SELECT id, status FROM properties WHERE agent_id = $1::uuid AND status IN ('approved', 'pending') FOR UPDATE) old
@@ -234,15 +293,20 @@ async function runAgentFeeReminders(db) {
   const days = Math.max(1, Number(settings.agent_fee?.remind_days_before || 3));
   const today = revenue.kampalaDate();
   const ahead = new Date(Date.parse(`${today}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+  // Exempt agents are skipped. An agent whose exemption ended is due from the
+  // end date, but is only reminded once exempt_end_notices_enabled is on.
+  const notices = exemption.noticesEnabled(settings);
   const due = (await db.query(
-    `SELECT id, paid_until, billing_reminder_log FROM agents
-      WHERE status = 'approved' AND removed_at IS NULL AND billing_suspended_at IS NULL AND NOT fee_exempt
-        AND paid_until IN ($1::date, $2::date)`,
+    `SELECT id, paid_until, fee_exempt, fee_exempt_until, billing_reminder_log FROM agents
+      WHERE status = 'approved' AND removed_at IS NULL AND billing_suspended_at IS NULL
+        AND NOT ${exemption.activeExemptionSql('agents', '$2')}
+        AND (${notices ? 'TRUE' : `NOT ${exemption.endedExemptionSql('agents', '$2')}`})
+        AND COALESCE(paid_until, CASE WHEN ${exemption.endedExemptionSql('agents', '$2')} THEN fee_exempt_until END) IN ($1::date, $2::date)`,
     [ahead, today]
   )).rows;
   const sent = [];
   for (const row of due) {
-    const paid = revenue.isoDay(row.paid_until);
+    const paid = revenue.isoDay(row.paid_until) || exemption.firstDueDate(row, today);
     const kind = paid === today ? 'due_today' : 'pre_due';
     if (row.billing_reminder_log?.[`${kind}:${paid}`]) continue;
     try {
@@ -281,7 +345,7 @@ async function payerContext(db, phone) {
   const key = String(phone || '').replace(/\D+/g, '').slice(-9);
   if (key.length < 9) return {};
   const agent = (await db.query(
-    `SELECT id, full_name, greeting_name, status, paid_until, fee_exempt, billing_suspended_at, removed_at
+    `SELECT id, full_name, greeting_name, status, paid_until, fee_exempt, fee_exempt_until, billing_suspended_at, removed_at
        FROM agents
       WHERE RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
          OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1
@@ -306,7 +370,7 @@ async function expectingPaymentFrom(db, phone) {
   const ctx = await payerContext(db, phone);
   if (ctx.agent) {
     const a = ctx.agent;
-    if (a.fee_exempt) return null;
+    if (exemption.isExempt(a)) return null;
     if (a.billing_suspended_at || a.status === 'pending') return ctx;
     const overdue = daysOverdue(a) > 0;
     const soon = a.paid_until && revenue.isoDay(a.paid_until) <= new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
@@ -416,8 +480,7 @@ async function rejectClaim(db, { claimId, actor, note }) {
 // --- Private listers --------------------------------------------------------
 
 async function recordListingPayment(db, { propertyId, payment, actor }) {
-  const settings = await getSettings(db);
-  const fee = Number(settings.lister_fee?.monthly_ugx || 20000);
+  const fee = PRICING.private_listing.amount_ugx;
   const property = (await db.query('SELECT id, title, lister_paid_until, lister_billing_suspended_at, extra_fields FROM properties WHERE id = $1::uuid', [propertyId])).rows[0];
   if (!property) throw revenue.httpError(404, 'Listing not found');
   const entry = revenue.normalizeEntry(payment);
@@ -467,8 +530,8 @@ async function listingStats(db, propertyId) {
   return { views: Number(r.views || 0), visitors: Number(r.visitors || 0), whatsapp_clicks: Number(r.whatsapp_clicks || 0), shares: Number(r.shares || 0) };
 }
 
-function listerFreeUntil(property = {}, settings = {}) {
-  const freeDays = Number(settings.lister_fee?.free_days || 7);
+function listerFreeUntil(property = {}, _settings = {}) {
+  const freeDays = PRICING.private_listing.trial_days;
   const start = new Date(property.reviewed_at || property.created_at || Date.now());
   return new Date(start.getTime() + (freeDays - 1) * 86400000 + 3 * 3600 * 1000).toISOString().slice(0, 10);
 }
@@ -481,7 +544,7 @@ const LISTER_MESSAGE_KINDS = ['views', 'reminder', 'final_reminder', 'taken_down
 
 async function buildListerMessage(db, kind, property, settings, payLink = '') {
   const name = String(property.lister_name || '').trim().split(/\s+/)[0] || 'there';
-  const fee = Number(settings.lister_fee?.monthly_ugx || 20000);
+  const fee = PRICING.private_listing.amount_ugx;
   const pay = payToLine(settings);
   const link = `${SITE()}/property/${property.id}`;
   const title = property.title || 'property';
@@ -662,6 +725,9 @@ module.exports = {
   AGENT_MESSAGE_KINDS,
   getSettings,
   setSetting,
+  operationalSettingValue,
+  pricingDrift,
+  logPricingDriftOnce,
   payToLine,
   buildAgentBillingMessage,
   sendAgentBillingMessage,

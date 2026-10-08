@@ -20,6 +20,8 @@
  */
 
 const crypto = require('crypto');
+const PRICING = require('../config/pricing');
+const exemption = require('./agentFeeExemption');
 
 const METHODS = {
   mtn_momo: { label: 'MTN Mobile Money', account: 'mtn_momo' },
@@ -33,9 +35,11 @@ const METHODS = {
 const OUT_KINDS = new Set(['withdrawal', 'expense', 'transfer_out', 'refund']);
 const IN_KINDS = new Set(['agent_subscription', 'listing_fee', 'short_term_fee', 'advertising', 'listing_boost', 'other_income', 'transfer_in', 'opening_adjustment']);
 
+// The agent fee comes from the rate card (config/pricing.js) only; the old
+// AGENT_MONTHLY_FEE_UGX env fallback is gone (Arthur deletes the variable).
 function feeConfig() {
   return {
-    feeUgx: Math.max(0, Number(process.env.AGENT_MONTHLY_FEE_UGX || 50000) || 50000),
+    feeUgx: PRICING.agent_subscription.amount_ugx,
     startDate: String(process.env.AGENT_FEE_START_DATE || '2026-10-05').slice(0, 10)
   };
 }
@@ -71,7 +75,7 @@ function addDays(isoDate, days) {
 /** Does approving this agent need a payment first? */
 function agentFeeRequired(agent = {}, now = new Date()) {
   const { feeUgx, startDate } = feeConfig();
-  if (!feeUgx || agent.fee_exempt === true) return false;
+  if (!feeUgx || exemption.isExempt(agent, kampalaDate(now))) return false;
   if (kampalaDate(now) < startDate) return false;
   const paidUntil = isoDay(agent.paid_until);
   return !(paidUntil && paidUntil >= kampalaDate(now));
@@ -213,7 +217,7 @@ async function matchEntryToSms(db, entry) {
 
 /**
  * Record an agent's subscription payment and move their paid-until date on.
- * UGX 50,000 buys one month; 150,000 buys three.
+ * One monthly fee (config/pricing.js) buys one month; three buy three.
  */
 async function recordAgentPayment(db, { agent, payment: rawPayment, actor }) {
   const { feeUgx } = feeConfig();
@@ -230,7 +234,11 @@ async function recordAgentPayment(db, { agent, payment: rawPayment, actor }) {
   }
   const today = kampalaDate();
   const current = isoDay(agent.paid_until);
-  const periodStart = current && current >= today ? addDays(current, 1) : today;
+  // Paying while still fee-exempt: the paid month starts when the exemption ends.
+  const { exempt, until } = exemption.exemptionState(agent, today);
+  const periodStart = current && current >= today
+    ? addDays(current, 1)
+    : (!current && exempt && until && until > today ? until : today);
   const periodEnd = addDays(addMonths(periodStart, months), -1);
   const row = await insertEntry(db, { ...entry, kind: 'agent_subscription', agent_id: agent.id, period_start: periodStart, period_end: periodEnd }, actor);
   await db.query(
@@ -516,6 +524,9 @@ async function importStatement(db, { accountKey, csv, actor = 'admin' }) {
 async function revenueSummary(db) {
   const { feeUgx, startDate } = feeConfig();
   const today = kampalaDate();
+  const billingSettings = await db.query('SELECT key, value FROM billing_settings')
+    .then((r) => Object.fromEntries(r.rows.map((row) => [row.key, row.value])))
+    .catch(() => ({}));
   const monthStart = `${today.slice(0, 7)}-01`;
   const [accounts, month, unverified, agents, unmatchedSms, recent] = await Promise.all([
     db.query(
@@ -546,8 +557,8 @@ async function revenueSummary(db) {
          FROM revenue_entries WHERE voided_at IS NULL AND verified_status <> 'verified'`
     ),
     db.query(
-      `SELECT id, full_name, greeting_name, company_name, whatsapp, phone, status, approved_at, paid_until, fee_exempt, monthly_fee_ugx,
-              billing_reminder_log, billing_suspended_at
+      `SELECT id, full_name, greeting_name, company_name, whatsapp, phone, status, approved_at, paid_until, fee_exempt, fee_exempt_until,
+              monthly_fee_ugx, billing_reminder_log, billing_suspended_at
          FROM agents
         WHERE (status = 'approved' OR billing_suspended_at IS NOT NULL) AND removed_at IS NULL
         ORDER BY paid_until NULLS FIRST, full_name`
@@ -565,10 +576,12 @@ async function revenueSummary(db) {
     )
   ]);
   const billing = agents.rows.map((a) => {
-    const paidUntil = isoDay(a.paid_until);
+    // An agent whose exemption ended is due from the end date, not from approval.
+    const paidUntil = isoDay(a.paid_until) || exemption.firstDueDate(a, today);
+    const exemptNow = exemption.exemptionState(a, today);
     let state;
     if (a.billing_suspended_at) state = 'taken_down';
-    else if (a.fee_exempt) state = 'exempt';
+    else if (exemptNow.exempt) state = 'exempt';
     else if (!paidUntil) state = 'never_paid';
     else if (paidUntil < today) state = 'overdue';
     else if (paidUntil <= addDays(today, 5)) state = 'due_soon';
@@ -578,7 +591,14 @@ async function revenueSummary(db) {
     const lastOf = (kind) => Object.entries(log).filter(([k]) => k.startsWith(`${kind}:${paidUntil || 'none'}`)).map(([, v]) => v?.at).sort().pop() || null;
     return {
       ...a,
-      paid_until: paidUntil || null,
+      paid_until: isoDay(a.paid_until) || null,
+      due_from: paidUntil || null,
+      fee_exempt: exemptNow.exempt,
+      fee_exempt_flag: a.fee_exempt === true,
+      fee_exempt_until: exemptNow.until,
+      fee_exempt_label: exemption.exemptionLabel(a, today),
+      exemption_ended: exemptNow.ended,
+      exemption_note: exemption.endedExemptionNote(a, billingSettings, today),
       billing_state: state,
       days_overdue: daysOver,
       last_reminder_at: lastOf('reminder') || lastOf('due_today') || lastOf('pre_due'),
@@ -591,7 +611,7 @@ async function revenueSummary(db) {
     fee_start_date: startDate,
     today,
     month: month.rows[0],
-    mrr_ugx: paying.reduce((sum, a) => sum + Number(a.monthly_fee_ugx || feeUgx), 0),
+    mrr_ugx: paying.length * feeUgx,
     paying_agents: paying.length,
     overdue_agents: billing.filter((a) => ['overdue', 'never_paid', 'taken_down'].includes(a.billing_state)).length,
     unverified: unverified.rows[0],

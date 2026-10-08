@@ -1,7 +1,9 @@
+const PRICING = require('../config/pricing');
+
 const AGENT_WELCOME_CARD_PATH = '/assets/marketing/makaug-agent-welcome.html';
-const AGENT_WELCOME_CARD_PREVIEW_VERSION = 'agent3';
+const AGENT_WELCOME_CARD_PREVIEW_VERSION = 'agent4';
 const AGENT_WELCOME_CARD_URL = `https://makaug.com${AGENT_WELCOME_CARD_PATH}?v=${AGENT_WELCOME_CARD_PREVIEW_VERSION}`;
-const AGENT_WELCOME_WHATSAPP_TEMPLATE_KEY = 'lead_outreach_agent_welcome_free_card';
+const AGENT_WELCOME_WHATSAPP_TEMPLATE_KEY = 'lead_outreach_agent_welcome_card';
 
 function cleanName(value) {
   return String(value || '')
@@ -34,12 +36,12 @@ function buildAgentWelcomeWhatsappMessage({
     cardUrl,
     '',
     `Hi ${firstName}, hope you are well. This is the makaug.com team in Uganda.`,
-    `${sourceLine} We wanted to introduce ourselves respectfully and invite Uganda agents, brokers, agencies, caretakers, and owners to list genuine property for free on makaug.com.`,
+    `${sourceLine} We wanted to introduce ourselves respectfully and invite Uganda agents, brokers, agencies, caretakers, and owners to list genuine property on makaug.com.`,
     '',
-    'Agents do the hard work every day. We want to help buyers, renters, students, and land seekers find your listings online and contact you clearly.',
+    'Agents do the hard work every day. We help buyers, renters, students and land seekers find your listings and reach you.',
     '',
     'On makaug.com:',
-    '- Free to list property. No listing charge.',
+    `- Owners: first ${PRICING.private_listing.trial_days} days free, then ${PRICING.ugx(PRICING.private_listing.amount_ugx)} a month per property. Agents: ${PRICING.ugx(PRICING.agent_subscription.amount_ugx)} a month for all your listings, verified badge included. ${PRICING.vat.label}.`,
     '- Add homes, rentals, land, commercial spaces, and student accommodation.',
     '- Receive enquiries by phone, WhatsApp, or website form.',
     '- Works in English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, Amharic, or Arabic. On WhatsApp, reply LANG to change language.',
