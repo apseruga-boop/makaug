@@ -126,7 +126,24 @@ const { MONETIZATION_SPINE_MARKER, markInvoicePaidManually, paymentProviderConfi
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
-const { prepareMediaUrlForStorage, prepareUploadObjectForStorage, uploadBufferToS3 } = require('../services/cloudMediaStorageService');
+const { prepareMediaUrlForStorage, prepareUploadObjectForStorage, uploadBufferToS3, storeRemoteImageUrl } = require('../services/cloudMediaStorageService');
+
+/**
+ * Hosts whose images we will copy onto makaug storage.
+ *
+ * A listing photo has to be served by us: approval refuses anything that is
+ * not "uploaded to MakaUg", and a picture hosted on somebody else's server
+ * disappears from a live listing the day they clear it. prepareMediaUrlForStorage
+ * only ever re-hosted data: URLs, so a photo attached by URL was stored as that
+ * URL and stayed unapprovable for ever — which is what happened to Migadde
+ * Hakim's plot on 8 Oct 2026 after its photos were recovered from the chat.
+ *
+ * Deliberately a short allow-list and not "any https URL": this makes the
+ * server fetch what it is given, so it may only be pointed at our own WhatsApp
+ * media bridge.
+ */
+const ADMIN_IMAGE_REHOST_HOSTS = String(process.env.ADMIN_IMAGE_REHOST_HOSTS || 'makaug-waha-bridge.onrender.com')
+  .split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
 const {
   PUBLIC_INVENTORY_METRICS_MARKER,
   invalidatePublicInventoryMetricsCache,
@@ -5542,14 +5559,30 @@ router.post('/properties/:id/images', async (req, res, next) => {
     for (const [index, image] of uploads.entries()) {
       storedUploads.push({
         ...image,
-        url: await prepareMediaUrlForStorage(image.url, {
-          keyPrefix: `properties/${req.params.id}/admin-images`,
-          filename: image.room_label || image.slot_key || `admin-photo-${index + 1}`,
-          isPrivate: false,
-          allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
-          maxBytes: ADMIN_LISTING_IMAGE_MAX_BYTES,
-          label: 'Admin listing image'
-        })
+        url: await (async () => {
+          const storageOptions = {
+            keyPrefix: `properties/${req.params.id}/admin-images`,
+            filename: image.room_label || image.slot_key || `admin-photo-${index + 1}`,
+            isPrivate: false,
+            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+            maxBytes: ADMIN_LISTING_IMAGE_MAX_BYTES,
+            label: 'Admin listing image'
+          };
+          // A photo recovered from the WhatsApp bridge arrives as a link. Copy
+          // it onto our own storage, or the listing points at a relay that will
+          // drop it, and approval refuses it for not being uploaded to makaug.
+          if (/^https:\/\//i.test(String(image.url || ''))) {
+            const cached = await storeRemoteImageUrl(image.url, {
+              ...storageOptions,
+              allowedHosts: ADMIN_IMAGE_REHOST_HOSTS
+            }).catch((error) => {
+              console.warn('[admin-images] remote image could not be cached:', error.message);
+              return null;
+            });
+            if (cached) return cached;
+          }
+          return prepareMediaUrlForStorage(image.url, storageOptions);
+        })()
       });
     }
     const requestedPrimaryIndex = uploads.findIndex((image) => image.is_primary);
