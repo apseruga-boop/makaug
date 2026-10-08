@@ -293,10 +293,14 @@ test('a place we know by name is never asked for again — only its district', (
   assert.strictEqual(facts.listingType, 'land');
   assert.strictEqual(facts.locationPatch.area, 'Watuba');
   assert.strictEqual(Number(facts.price), 170000000, '17m an acre across 10 acres');
-  assert.deepStrictEqual(employeePropertyMissing(facts), ['which district Watuba is in']);
+  // Watuba is in the registry as Wattuba, in three districts. So the question
+  // is closed: he picks one and cannot name a district the place is not in.
+  assert.deepStrictEqual(employeePropertyMissing(facts),
+    ['which district Watuba is in — Wakiso, Kyankwanzi or Mityana']);
 
   const asked = agentMissingPhrases(employeePropertyMissing(facts)).join(' ');
   assert.match(asked, /which district \*Watuba\* is in/, 'name the place back, so he can see we read it');
+  assert.match(asked, /Wakiso, Kyankwanzi or Mityana/, 'the real shortlist, so he picks instead of guessing');
   assert.doesNotMatch(asked, /e\.g\. Kira, Wakiso/,
     'asking for "the area and district" here asks him for the word he already wrote');
 
@@ -313,13 +317,16 @@ test('a place we know by name is never asked for again — only its district', (
 test('answering with just the district finishes the property', () => {
   const data = agentSelfIntakeSessionData(KATAMBA);
   // What he would type back. Luwero and Luweero are both spelled in the wild.
-  for (const answer of ['Luwero', 'Luweero', 'Watuba, Luwero']) {
+  // The three the registry knows, plus a district it does not put Watuba in:
+  // an agent who says Luwero must be believed, not asked a fourth time. That
+  // was the Bulabakulu loop.
+  for (const answer of ['Wakiso', 'Kyankwanzi', 'Mityana', 'Luwero', 'Watuba, Luwero', 'Luweero']) {
     const facts = employeePropertyFacts(
       `10 acres on sale at watuba electricity available 3 phase on the main marrum road mairo land title price 17m each acre\n${answer}`,
       data
     );
-    assert.strictEqual(facts.locationPatch.area, 'Watuba', `area survives "${answer}"`);
-    assert.strictEqual(facts.locationPatch.district, 'Luwero', `district resolves from "${answer}"`);
+    assert.match(facts.locationPatch.area, /^Wat+uba$/, `area survives "${answer}"`);
+    assert.ok(facts.locationPatch.district, `a district resolves from "${answer}"`);
     assert.deepStrictEqual(employeePropertyMissing(facts), [], `"${answer}" must complete it`);
   }
 });
