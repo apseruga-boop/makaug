@@ -6880,11 +6880,39 @@ function agentSelfIntakeOpeningLine(agent = {}) {
  * "sale/rent/land/commercial/student type" means nothing to somebody posting
  * a house; "is it for rent or for sale" does.
  */
+/**
+ * The outstanding details, in words an agent can answer.
+ *
+ * This layer used to match on keywords, and that quietly undid the work done
+ * upstream. employeePropertyMissing already distinguishes "we have no idea
+ * where this is" from "you told us the place, we just do not know its
+ * district", and asks the narrow question in the second case. But
+ * /area|district|location/ matched that narrow question too, so "which
+ * district Watuba is in" was rewritten as "the area and district — e.g. Kira,
+ * Wakiso".
+ *
+ * On 8 Oct 2026 an agent sent "10 acres on sale at watuba … 17m each acre"
+ * with two photos and a video. Everything parsed: land, 170m, area Watuba. He
+ * was asked for the area and district anyway — for the one thing he had
+ * already written — and the listing sat unsaved.
+ *
+ * So the generic strings are matched exactly, and anything else is a question
+ * somebody composed deliberately: it passes through untouched.
+ */
+const AGENT_MISSING_PHRASES = new Map([
+  ['sale/rent/land/commercial/student type', 'is it for *rent* or for *sale*? (and what it is — house, apartment, land, shop…)'],
+  ['price', 'the *price*'],
+  ['exact area and district', 'the *area and district* — e.g. Kira, Wakiso']
+]);
+
 function agentMissingPhrases(missing = []) {
   return missing.map((item) => {
-    if (/type/i.test(item)) return 'is it for *rent* or for *sale*? (and what it is — house, apartment, land, shop…)';
-    if (/price/i.test(item)) return 'the *price*';
-    if (/area|district|location/i.test(item)) return 'the *area and district* — e.g. Kira, Wakiso';
+    const known = AGENT_MISSING_PHRASES.get(String(item || '').trim());
+    if (known) return known;
+    // "which district Watuba is in" — name the place back so it is obvious we
+    // read it, and say that the district alone is a complete answer.
+    const district = /^which district (.+) is in$/i.exec(String(item || '').trim());
+    if (district) return `which district *${district[1]}* is in — just the district name is enough, e.g. Luwero`;
     return item;
   });
 }
