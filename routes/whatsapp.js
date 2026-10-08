@@ -6796,6 +6796,84 @@ const AGENT_HOW_TO_POST = /\b(how (do|can) i (post|list|upload|add)|how to (post
 const AGENT_IS_IT_DONE = /\b(status|is it (done|live|up|posted|approved)|did (it|that) (save|go|work)|has it (saved|gone|posted)|any update|is it (in|there)|did you get (it|them))\b/i;
 
 /**
+ * "Can I tap the link" — the question we had no idea how to hear.
+ *
+ * 8 Oct 2026, 14:38. Migadde Hakim was approved and sent the UGX 50,000
+ * payment link. A minute later he asked "What should I do now?" and "Can I tap
+ * the link". The first matched the how-to-post pattern and he was told to send
+ * a property; the second matched nothing and he got the menu. He had just been
+ * handed a bill by a number he had known for two hours, and asked the only two
+ * questions anybody asks — is this real, and what do I do — and we answered a
+ * different question twice.
+ *
+ * A question asked minutes after we sent somebody a payment link is about the
+ * payment link. Nothing else is remotely as likely.
+ */
+const AGENT_PAY_LINK_QUESTION = /\b(tap|click|open|press|follow)\b.*\blink\b|\blink\b.*\b(safe|real|genuine|work|working|ok|okay)\b|\b(how|where|when)\b.*\b(do i |can i |to )?pay\b|\bpay(ing|ment)?\b.*\b(how|what|where|safe|link)\b|\bwhat('?s| is)\b.*\b(this|the)\b.*\b(payment|link|money|charge|fee|50,?000)\b|\bis (this|it) (safe|real|genuine|a scam)\b|\bwhat should i do now\b/i;
+
+/** The bill this agent has been sent and has not paid. */
+async function outstandingAgentPayLink(agent = {}) {
+  if (!agent?.id) return null;
+  try {
+    const row = (await db.query(
+      `SELECT code, amount_ugx, sent_at
+         FROM pay_links
+        WHERE agent_id = $1::uuid
+          AND status = 'open'
+          AND sent_at IS NOT NULL
+          AND sent_at > NOW() - INTERVAL '14 days'
+        ORDER BY sent_at DESC
+        LIMIT 1`,
+      [agent.id]
+    )).rows[0];
+    return row || null;
+  } catch (error) {
+    logger.warn('Pay link lookup failed:', error.message || String(error));
+    return null;
+  }
+}
+
+/**
+ * Yes, tap it — and everything he needs to act, in the order he needs it.
+ *
+ * It says the amount before the instruction, because the first thing somebody
+ * asks about an unexpected bill is how much. It gives the reference, because
+ * that is what makes a mobile money payment matchable. And it says listing is
+ * not blocked, because an agent who thinks he cannot work until he has paid
+ * simply stops working.
+ */
+function agentPayLinkAnswer({ agent = {}, link = {} } = {}) {
+  const first = agentGreetingName(agent, '');
+  const amount = Number(link.amount_ugx) > 0
+    ? `UGX ${Math.round(Number(link.amount_ugx)).toLocaleString('en-GB')}`
+    : agentMonthlyFeeLabel();
+  return [
+    `Yes${first ? `, ${first}` : ''} — tap it, it is from us. 👍`,
+    '',
+    `It is your makaug agent subscription: *${amount} a month*.`,
+    `${HOME_URL}/pay/${link.code}`,
+    '',
+    `The page shows you how to pay. If you pay by Mobile Money, quote *${link.code}* as the reference so we can match it to you.`,
+    '',
+    'You do not have to wait for it — keep sending me properties now and I will put them up. I will confirm here the moment the payment lands.'
+  ].join('\n');
+}
+
+/**
+ * The payment answer, or nothing at all.
+ *
+ * Only speaks when the agent asked something payment-shaped AND there really is
+ * an unpaid link sitting with them. No link, no answer — an agent who has paid,
+ * or was never billed, must never be told about a bill that does not exist.
+ */
+async function agentPayLinkAside({ agent = {}, cleanBody = '' } = {}) {
+  const text = normalizeInput(cleanBody);
+  if (!text || !AGENT_PAY_LINK_QUESTION.test(text)) return null;
+  const link = await outstandingAgentPayLink(agent);
+  return link ? agentPayLinkAnswer({ agent, link }) : null;
+}
+
+/**
  * A short, human answer to the things an agent actually says between properties.
  *
  * Tuyisengye typed "Okay please" and was told it did not describe a property and
@@ -7590,6 +7668,11 @@ async function handleEmployeeWhatsappIntake({
           const share = agentShareReply({ agent: askingAgent });
           if (share) return { handled: true, nextStep: currentStep, message: share };
         }
+        // Before anything else: has he just been sent a bill? "What should I
+        // do now?" means something different when a payment link landed a
+        // minute ago, and it is not "how do I post a property".
+        const payLinkAnswer = await agentPayLinkAside({ agent: askingAgent, cleanBody: askedText });
+        if (payLinkAnswer) return { handled: true, nextStep: currentStep, message: payLinkAnswer };
         if (AGENT_HOW_TO_POST.test(askedText)) {
           return {
             handled: true,
@@ -8731,7 +8814,8 @@ async function handleEmployeeWhatsappIntake({
           // describe a property and that an empty one had been avoided. A
           // person being courteous should not be answered with an explanation
           // of our data model.
-          message: agentConversationalAside({ data, cleanBody })
+          message: await agentPayLinkAside({ agent: data.agent || {}, cleanBody })
+            || agentConversationalAside({ data, cleanBody })
             || 'I did not save that, because it does not describe a property and I did not want to create an empty one.\n\nSend a property caption with the type, exact location and price — for example "Selling 5 bedroom house in Kololo @600m UGX" — or send the media first.\n\nType *COMPLETE* when the batch is finished, or *CANCEL* to close it and walk away.'
         };
       }
@@ -18114,6 +18198,10 @@ module.exports.__test = {
   looksLikeForwardedProperty,
   recentlyClosedEmployeeBatchReply,
   agentConversationalAside,
+  agentPayLinkAside,
+  agentPayLinkAnswer,
+  outstandingAgentPayLink,
+  AGENT_PAY_LINK_QUESTION,
   agentMenuReply,
   staffIntakeGreetingReply,
   commercialUseInSearch,
