@@ -303,7 +303,42 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
   ...rows(['Sidok'], 'Kaabong'),
   ...rows(['Lotuke'], 'Abim'),
   ...rows(['Kitholhu'], 'Kasese'),
-  ...rows(['Rwentobo'], 'Ntungamo')
+  ...rows(['Rwentobo'], 'Ntungamo'),
+
+  // 8 Oct 2026: "10 acres on sale at watuba … 17m each acre" was held because
+  // "watuba" matched nothing. The place was never missing — the registry
+  // carries it as *Wattuba*, in three districts, and agents write it with one
+  // t as often as two. Nothing resolved, so the listing sat unsaved.
+  //
+  // These rows add the one-t spelling to the Wattuba entries that already
+  // exist. They deliberately do NOT pick a district: there really are several
+  // Wattubas, and the right behaviour is for intake to ask which one, not for
+  // us to decide on an agent's behalf and put a property in the wrong part of
+  // the country.
+  //
+  //   Wakiso    — Nangabo, Kyadondo; on Bombo road, ~2.5km from Kawanda and
+  //               3km from Matugga. Coordinates verified against mapcarta and
+  //               mindat; the gazetteer row had none.
+  //   Kyankwanzi— the one older maps file under Kiboga, which Kyankwanzi was
+  //               carved out of in 2010. Left without coordinates rather than
+  //               borrowing Kiboga's, since the boundary is the whole question.
+  //   Mityana   — Wattuba parish, Kikandwa.
+  {
+    name: 'Wattuba', district: 'Wakiso', town: 'Kasangati', level: 'neighborhood',
+    aliases: ['Wattuba', 'Watuba', 'Watuuba', 'WATTUBA WARD'],
+    lat: 0.43999, lng: 32.54015,
+    source: 'makaug_verified_location_override'
+  },
+  {
+    name: 'Wattuba', district: 'Kyankwanzi', town: 'Wattuba', level: 'neighborhood',
+    aliases: ['Wattuba', 'Watuba', 'Watuuba', 'WATTUBA WARD'],
+    source: 'makaug_verified_location_override'
+  },
+  {
+    name: 'Wattuba', district: 'Mityana', town: 'Kikandwa', level: 'parish',
+    aliases: ['Wattuba', 'Watuba', 'Watuuba', 'WATTUBA'],
+    source: 'makaug_verified_location_override'
+  }
 ];
 
 module.exports = {
