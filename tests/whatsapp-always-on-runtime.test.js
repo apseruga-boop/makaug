@@ -94,12 +94,14 @@ async function run() {
 
   assert(renderYaml.includes('name: makaug-whatsapp-ai-runtime') && renderYaml.includes('plan: starter'), 'blueprint must declare the paid always-on Uganda AI runtime');
   assert(renderYaml.includes('OPENAI_PROJECT') && renderYaml.includes('OPENAI_API_KEY') && renderYaml.includes('sync: false'), 'dedicated project/key must remain private Render configuration');
-  assert(workerSource.includes('WHATSAPP_WEB_COPILOT_MAX_SESSION_MS') && workerSource.includes('planned browser recycle'), 'worker must recycle Chromium before memory grows without bound');
+  assert(workerSource.includes('WHATSAPP_WEB_COPILOT_MAX_SESSION_MS') && workerSource.includes('planned in-place page recycle'), 'worker must recycle Chromium before memory grows without bound');
   assert(workerSource.includes('OUTBOX_POLL_MS') && !workerSource.includes('const sentAtLoopEnd = await processOutbox'), 'outbox polling must not busy-loop twice per scan');
   assert(serverSource.includes('PUBLIC_HTML_CACHE_MAX_ENTRIES') && serverSource.includes('while (publicHtmlCache.size > PUBLIC_HTML_CACHE_MAX_ENTRIES)'), 'large rendered HTML cache must be bounded');
   assert(serverSource.includes("...(!IS_SOUTH_AFRICA ? ['makaug-always-on-whatsapp-runtime-20260814'] : [])"), 'release marker must remain Uganda-only');
   assert(routeSource.includes("const WHATSAPP_PROVIDER_SCOPE = 'whatsapp'") && routeSource.includes('providerScope: WHATSAPP_PROVIDER_SCOPE'), 'all WhatsApp AI calls must opt into the isolated provider scope');
-  assert(uptimeWorkflow.includes('cron: "*/5 * * * *"') && uptimeWorkflow.includes('makaug-whatsapp-ai-runtime.onrender.com/ready'), 'an external five-minute monitor must verify both AI runtime and transport-worker readiness');
+  assert(uptimeWorkflow.includes('cron: "*/5 * * * *"') && uptimeWorkflow.includes('https://makaug-waha-bridge.onrender.com/health'), 'an external five-minute monitor must verify the WhatsApp bridge is ready to reply');
+  assert(!uptimeWorkflow.includes('makaug-whatsapp-ai-runtime.onrender.com/ready'), 'the monitor must not call the orphaned AI runtime /ready (it waits for the suspended worker)');
+  assert(uptimeWorkflow.includes('https://makaug.com/api/health'), 'the monitor must keep checking production health');
   assert(uptimeWorkflow.includes('issues: write') && uptimeWorkflow.includes('[Incident] MakaUG WhatsApp bot is offline'), 'a failed uptime check must create a visible, deduplicated incident');
   assert(uptimeWorkflow.includes('if: success()') && uptimeWorkflow.includes("state: 'closed'"), 'a recovered uptime check must close the WhatsApp incident');
 
