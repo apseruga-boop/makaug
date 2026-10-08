@@ -1548,6 +1548,12 @@ function landSizeDiagramDataUrl(item = {}) {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 }
 
+function internalReviewTagsFor(item = {}, agent = {}) {
+  return item.listingType === 'land'
+    ? ['Found online', 'Road access to verify', 'Title to verify', 'Agent follow-up required']
+    : ['Found online', `${sourcePlatformFor(agent, item)} source evidence`, 'Agent follow-up required', 'HD photos to verify'];
+}
+
 function landVisualStrategy(item = {}) {
   if (item.listingType !== 'land') return '';
   return 'For found-online land, public pages should use source links or official embeds rather than copied social photos. Store any evidence cards for King review only, then ask the source/agent for authorised HD plot photos before showing photos publicly.';
@@ -2198,11 +2204,13 @@ function buildSocialSearchListing(item, agentId = null) {
     id_document_name: null,
     id_document_url: null,
     new_until: new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)),
-    amenities: postgresSafeJsonStringify(item.listingType === 'land'
-      ? ['Found online', 'Road access to verify', 'Title to verify', 'Agent follow-up required']
-      : ['Found online', `${sourcePlatformFor(agent, item)} source evidence`, 'Agent follow-up required', 'HD photos to verify']),
+    // Moderation reminders are not amenities: they used to be stored in
+    // amenities and showed on the public page. Real amenities stay empty until
+    // the agent confirms them.
+    amenities: postgresSafeJsonStringify([]),
     extra_fields: postgresSafeJsonStringify({
       ...extraFieldsFor(item, agentId),
+      internal_review_tags: internalReviewTagsFor(item, agent),
       price_quality: priceQuality,
       data_integrity_review: dataIntegrity
     }),

@@ -2354,6 +2354,23 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     add(key, value);
   });
 
+  // Title/description typed by staff must reach the public page. Found-online
+  // rows otherwise get a generated title/summary (services/publicListingCopy.js).
+  const existingExtra = safeJsonObject(existing.extra_fields, {});
+  const correctedCopyFields = ['title', 'description'].filter((key) => {
+    if (!Object.prototype.hasOwnProperty.call(patch, key)) return false;
+    const next = cleanText(patch[key]);
+    return Boolean(next) && next !== cleanText(existing[key]);
+  });
+  const copyPatch = correctedCopyFields.length ? {
+    staff_corrected_fields: [...new Set([
+      ...(Array.isArray(existingExtra.staff_corrected_fields) ? existingExtra.staff_corrected_fields : []),
+      ...correctedCopyFields
+    ])],
+    staff_corrected_at: new Date().toISOString(),
+    staff_corrected_by: actorId(req)
+  } : null;
+
   const extraPatch = {};
   [
     'region',
@@ -2449,7 +2466,12 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
       extraPatch.map_pin_source = cleanText(extraPatch.map_pin_source) || 'staff_review';
       extraPatch.map_pin_confirmed_at = new Date().toISOString();
     }
+    if (copyPatch) Object.assign(extraPatch, copyPatch);
     values.push(JSON.stringify(extraPatch));
+    setParts.push(`extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${values.length}::jsonb`);
+    changed.push('extra_fields');
+  } else if (copyPatch) {
+    values.push(JSON.stringify(copyPatch));
     setParts.push(`extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${values.length}::jsonb`);
     changed.push('extra_fields');
   }
@@ -2880,6 +2902,16 @@ function applyStaffBulkInternalDuplicateGate(decisions = [], rows = []) {
     });
   });
   return decisions;
+}
+
+// Public JSON and server-rendered listing caches; both must drop a listing
+// after staff edit it, or the public keeps the old title for the cache TTL.
+function clearPublicListingCaches(reason = 'staff_listing_changed') {
+  try {
+    require('./properties').clearPublicPropertiesCache(reason);
+  } catch (error) {
+    logger.warn('Public properties cache clear failed', { message: error.message });
+  }
 }
 
 // Approve-decisions for listings without a real hosted photo become holds.
@@ -3903,6 +3935,7 @@ router.patch('/properties/:id/review', async (req, res, next) => {
       }
     }
     const saved = await updateStaffEditableListing(req, req.params.id, listingPatch, reviewPatch);
+    if ((saved.changed_fields || []).length) clearPublicListingCaches('staff_listing_preview_saved');
     const preview = await loadStaffPropertyPreview(req.params.id);
     return res.json({ ok: true, data: preview, changed_fields: saved.changed_fields || [] });
   } catch (error) {

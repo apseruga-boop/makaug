@@ -8455,10 +8455,31 @@ function applyMapAssistLanguageUI() {
   });
 }
 
+// Same rules as utils/compactUgx.js: up to 2 decimals, trailing zeros trimmed,
+// never more than 1% off (2,300,000 → "2.3M", not "2M"; 850,000 → "850k").
 function formatCompact(v) {
-  if (v >= 1000000000) return (v / 1000000000).toFixed(1) + "B";
-  if (v >= 1000000) return Math.round(v / 1000000) + "M";
-  return v.toLocaleString();
+  const amount = Number(v);
+  if (!Number.isFinite(amount)) return "";
+  const units = [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "k"]];
+  const sign = amount < 0 ? "-" : "";
+  const abs = Math.abs(amount);
+  for (let index = 0; index < units.length; index += 1) {
+    const [size, suffix] = units[index];
+    if (abs < size) continue;
+    const scaled = abs / size;
+    let text = "";
+    for (let decimals = 0; decimals <= 2; decimals += 1) {
+      const rounded = Number(scaled.toFixed(decimals));
+      text = String(rounded);
+      if (Math.abs(rounded - scaled) / scaled <= 0.01) break;
+    }
+    if (Number(text) >= 1000 && index > 0) {
+      const [biggerSize, biggerSuffix] = units[index - 1];
+      return `${sign}${String(Number((abs / biggerSize).toFixed(2)))}${biggerSuffix}`;
+    }
+    return `${sign}${text}${suffix}`;
+  }
+  return `${sign}${Math.round(abs).toLocaleString("en-US")}`;
 }
 
 function localizePricePeriod(period = "") {
@@ -42790,10 +42811,18 @@ function foundOnlineSourceMeta(p = {}) {
       || ""
   ).trim();
   const sourceContactPlatform = String(extra.source_contact_platform || p.source_contact_platform || platform || inferPlatformFromUrl(sourceContactUrl) || "").trim();
+  // Derived from the contact shown, never the label frozen at import (it said
+  // "Contact through the public TikTok source" next to Call/WhatsApp buttons).
+  const shownContactPhone = String(p.public_contact_phone || extra.public_contact_phone || p.contact_phone || extra.contact_phone || "").trim();
+  const shownContactEmail = String(p.lister_email || p.contact_email || "").trim();
   const sourceContactLabel = String(
-    extra.source_contact_label
-      || p.source_contact_label
-      || (sourceContactUrl ? `Contact via ${sourceContactPlatform || platform || "source"} source` : "")
+    shownContactPhone
+      ? "Call or WhatsApp the agent"
+      : shownContactEmail
+        ? "Email the agent"
+        : (extra.source_contact_label
+          || p.source_contact_label
+          || (sourceContactUrl ? `Contact via ${sourceContactPlatform || platform || "source"} source` : ""))
   ).trim();
   const unavailableMeta = foundOnlineSourceUnavailableMeta(p);
   const sourceContactMethod = String(extra.source_contact_method || p.source_contact_method || "").trim();
@@ -42836,7 +42865,7 @@ function foundOnlineSourceMeta(p = {}) {
     sourceDateOutOfOrder
       ? "Source date conflicts with first pickup, so makaug is confirming it from the platform."
       : dateNeedsConfirmation
-      ? (extra.original_publish_date_status || "Original post date is being confirmed from the source platform.")
+      ? "Posted date not confirmed"
       : (extra.first_posted_online_label || extra.source_published_label || extra.youtube_source_published_label || extra.original_publish_date_status || "")
   ).trim();
   const firstSeen = formatListingDate(safeFirstSeenRaw);
@@ -43160,7 +43189,7 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
         <div class="rounded-xl border border-slate-100 bg-slate-50 p-3"><strong>${translateListingLabel("Contact route")}</strong><br>${adminEscape(contactCopy)}</div>
       </div>
       ${foundOnlineSourceActionLinksHtml(p, meta)}
-      ${!meta.firstPosted ? `<div class="mt-2 text-xs text-slate-500">${adminEscape(translateListingLabel(meta.firstPostedLabel || "Original post date is being confirmed from the source platform."))}</div>` : ""}
+      ${!meta.firstPosted ? `<div class="mt-2 text-xs text-slate-500">${adminEscape(translateListingLabel(meta.firstPostedLabel || "Posted date not confirmed"))}</div>` : ""}
       ${meta.sourceUnavailable ? `<div class="mt-2 text-xs font-bold text-amber-800">${translateListingLabel("This source video or account is no longer available. Use the listing facts with care while makaug re-checks it.")}</div>` : ""}
     </section>`;
 }
@@ -44244,6 +44273,11 @@ function getLocalizedPropertyTitle(property = {}) {
   const translated = getLocalizedListingText(property, "title", "");
   if (translated) return collapseDuplicateTransactionTitle(translated);
   if ((currentLang || "en") !== "en") return getCanonicalEnglishPropertyTitle(property);
+  // A title corrected by staff or King review is shown as written (the API
+  // flags it); otherwise found-online rows get a generic factual title.
+  if (property?.public_copy_reviewed?.title === true && String(property?.title || "").trim()) {
+    return collapseDuplicateTransactionTitle(property.title);
+  }
   if (!isFoundOnlineListing(property)) return collapseDuplicateTransactionTitle(property?.title) || translatePropertyUi("Property");
   const normalizedType = normalizeType(property?.type || property?.listing_type || property?.category || "");
   const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ") || translateListingLabel("Uganda");
@@ -44456,15 +44490,42 @@ function brokerOffPlanProjectsHtml(projects = []) {
     </section>`;
 }
 
+// Only known amenities are shown. Moderation reminders ("Found online", "TikTok
+// source evidence", "Agent follow-up required", "... to verify") were stored as
+// amenities by imports and must never render. Mirrors services/publicListingCopy.js.
+const INTERNAL_AMENITY_TAG_PATTERN = /^found online$|source evidence$|follow[- ]?up required|\bverify\b|^hd photos/i;
+const COMMON_PUBLIC_AMENITY_LABELS = [
+  "Swimming Pool", "Pool", "Gym", "Lift", "Elevator", "Air Conditioning", "AC", "Backup Generator",
+  "Electricity", "Power", "Internet", "TV", "DSTV", "Kitchen", "Fitted Kitchen", "Wardrobes", "Built-in Wardrobes",
+  "Gated Community", "Gate", "Compound", "Garage", "Boys Quarters", "Servant Quarter", "Store", "Staff Quarters",
+  "Playground", "Water Heater", "Hot Water", "Shower", "Bathtub", "En-suite", "Ensuite", "Self-contained",
+  "Tiled Floors", "Electric Fence", "Guard", "Askari", "Lake View", "View", "Rooftop", "Terrace", "Veranda",
+  "Pet Friendly", "Cleaning", "Housekeeping", "Reception", "Conference Room", "Office Space", "Shops",
+  "Tarmac Road", "Murram Road", "Title", "Land Title", "Mailo Title", "Freehold Title", "Leasehold Title",
+  "Water Connected", "Power Connected", "Electricity Connected", "Near School", "Near Hospital", "Near Market"
+];
+function publicAmenityKey(value = "") {
+  return String(value || "").normalize("NFKD").replace(/[^\p{L}\p{N}/&+-]+/gu, " ").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function getAmenityDisplayLabel(value, listingType = "sale") {
   const raw = String(value || "").trim();
-  if (!raw) return "";
+  if (!raw || INTERNAL_AMENITY_TAG_PATTERN.test(raw)) return "";
+  const key = publicAmenityKey(raw);
   const configs = Object.values(LP_CONFIG || {});
   for (const cfg of configs) {
-    const found = (cfg.amenities || []).find((item) => item.value === raw || item.label === raw);
+    const found = (cfg.amenities || []).find((item) => item.value === raw
+      || item.label === raw
+      || publicAmenityKey(item.value.replace(/_/g, " ")) === key
+      || publicAmenityKey(item.label) === key);
     if (found?.label) return translateListingLabel(found.label);
   }
-  return raw.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  const common = COMMON_PUBLIC_AMENITY_LABELS.find((label) => publicAmenityKey(label) === key);
+  return common ? translateListingLabel(common) : "";
+}
+
+function isPublicAmenityValue(value) {
+  return Boolean(getAmenityDisplayLabel(value));
 }
 
 function isGeneratedPropertyNarrative(text = "") {
@@ -44954,7 +45015,7 @@ function studentCardExtraHtml(p = {}, theme = publicCardTheme("student", { stude
     ...(Array.isArray(p.student_universities) ? p.student_universities : []),
     nearestUniversity
   ]).slice(0, 3);
-  const amenities = (p.amenities || []).slice(0, 3);
+  const amenities = (p.amenities || []).filter((a) => isPublicAmenityValue(a)).slice(0, 3);
   const tagHtml = uniTags.length
     ? `<div class="flex flex-wrap gap-1.5 mt-3">${uniTags.map((u) => `<span class="${theme.tagBg} text-white text-xs font-semibold px-2 py-1 rounded">${adminEscape(u)}</span>`).join("")}</div>`
     : "";
@@ -52596,6 +52657,11 @@ const LISTING_LABEL_I18N = {
   }
 };
 
+// Luganda labels borrowed for Acholi, Runyankole, Rukiga/Runyoro and Lusoga
+// when nothing better exists. Checked AFTER the language's own site pack
+// (assets/i18n/site-<lang>.json): copying them into the language itself made
+// Acholi show the Luganda "omulundi gumu" for "once" (moderator report, 8 Oct).
+const LISTING_LABEL_I18N_BORROWED = {};
 const LISTING_LABEL_I18N_SUPPLEMENTAL = {
   lg: {
     "Drag & Drop Photos or Click to Browse": "Sika ebifaananyi oba koona okulonda",
@@ -53167,7 +53233,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
     Object.assign(extraListingLabels[lang] ||= {}, { Nearby: label });
   });
   ["ac", "ny", "rn", "sm"].forEach((lang) => {
-    sharedLabels[lang] = { ...(sharedLabels[lang] || {}), ...sharedLabels.lg };
+    Object.assign(LISTING_LABEL_I18N_BORROWED[lang] ||= {}, sharedLabels.lg);
   });
   Object.entries(sharedLabels).forEach(([lang, labels]) => {
     Object.assign(extraListingLabels[lang] ||= {}, labels);
@@ -53512,7 +53578,7 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
     }
   };
   ["ac", "ny", "rn", "sm"].forEach((lang) => {
-    sourceAndDetailLabels[lang] = { ...sourceAndDetailLabels.lg, ...(sourceAndDetailLabels[lang] || {}) };
+    Object.assign(LISTING_LABEL_I18N_BORROWED[lang] ||= {}, sourceAndDetailLabels.lg);
   });
   Object.entries(sourceAndDetailLabels).forEach(([lang, labels]) => {
     Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels);
@@ -53543,7 +53609,7 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
     }
   };
   ["ac", "ny", "rn", "sm"].forEach((lang) => {
-    contactIdLabels[lang] = { ...contactIdLabels.lg, ...(contactIdLabels[lang] || {}) };
+    Object.assign(LISTING_LABEL_I18N_BORROWED[lang] ||= {}, contactIdLabels.lg);
   });
   Object.entries(contactIdLabels).forEach(([lang, labels]) => {
     Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels);
@@ -53700,6 +53766,8 @@ function translateListingLabel(text) {
     const fromSitePack = siteTranslate(text, lang);
     if (fromSitePack && fromSitePack !== text) return fromSitePack;
   }
+  const borrowed = LISTING_LABEL_I18N_BORROWED[lang]?.[text];
+  if (borrowed) return borrowed;
   return LISTING_LABEL_I18N[fallback]?.[text]
     || LISTING_LABEL_I18N_SUPPLEMENTAL[fallback]?.[text]
     || LISTING_LABEL_I18N.en?.[text]
@@ -57450,10 +57518,61 @@ function getBrokerMapPoint(broker) {
   return { ...MAP_DEFAULT_CENTER, listingsCount: 0 };
 }
 
+// Google calls window.gm_authFailure when the key or billing is rejected (the
+// script still loads, so the old check resolved true and Google painted its
+// "can't load Google Maps correctly" overlay). After that we never use Google
+// again in this page view, and open maps re-render through Leaflet or the card.
+let googleMapsAuthFailed = false;
+let lastDetailMapProperty = null;
+
+function shouldUseGoogleMaps({ hasKey = false, authFailed = false, loaded = false } = {}) {
+  return Boolean(hasKey) && !authFailed && Boolean(loaded);
+}
+
+function rerenderMapsWithoutGoogle() {
+  try {
+    Object.keys(maps || {}).forEach((mapId) => {
+      if (mapProviders[mapId] === "google") destroyMapInstance(mapId);
+    });
+    if (document.querySelector("#map-home, #map-sale, #map-rent, #map-students, #map-commercial, #map-land")) initMaps();
+  } catch (error) {
+    console.warn("Map fallback (listings) failed", error?.message || error);
+  }
+  try {
+    if (document.getElementById("map-detail") && lastDetailMapProperty) initDetailMap(lastDetailMapProperty);
+  } catch (error) {
+    console.warn("Map fallback (detail) failed", error?.message || error);
+  }
+  try {
+    if (lpPinMapProvider === "google") {
+      lpPinMap = null; lpPinMarker = null; lpPinMapProvider = ""; lpPinMapInitPromise = null;
+      const el = document.getElementById("lp-pin-map");
+      if (el) { el.innerHTML = ""; ensureListPinMap(); }
+    }
+    if (lpPreviewMapProvider === "google") {
+      lpPreviewMap = null; lpPreviewMarker = null; lpPreviewMapProvider = ""; lpPreviewMapInitPromise = null;
+      const el = document.getElementById("lp-preview-map");
+      if (el) { el.innerHTML = ""; ensureListPreviewMap(); }
+    }
+    if (document.getElementById("admin-review-location-map") && typeof adminActiveReview !== "undefined" && adminActiveReview) {
+      initAdminReviewLocationMap(adminActiveReview);
+    }
+  } catch (error) {
+    console.warn("Map fallback (forms) failed", error?.message || error);
+  }
+}
+
+window.gm_authFailure = function makaugGoogleMapsAuthFailure() {
+  if (googleMapsAuthFailed) return;
+  googleMapsAuthFailed = true;
+  googleMapsLoadPromise = Promise.resolve(false);
+  rerenderMapsWithoutGoogle();
+};
+
 function ensureGoogleMapsApi() {
-  if (!GOOGLE_MAPS_API_KEY) return Promise.resolve(false);
-  if (window.google?.maps) return Promise.resolve(true);
-  if (googleMapsLoadPromise) return googleMapsLoadPromise;
+  if (!shouldUseGoogleMaps({ hasKey: !!GOOGLE_MAPS_API_KEY, authFailed: googleMapsAuthFailed, loaded: true })) return Promise.resolve(false);
+  if (window.google?.maps) return Promise.resolve(shouldUseGoogleMaps({ hasKey: true, authFailed: googleMapsAuthFailed, loaded: true }));
+  if (googleMapsLoadPromise) return googleMapsLoadPromise.then((ok) => shouldUseGoogleMaps({ hasKey: true, authFailed: googleMapsAuthFailed, loaded: ok }));
 
   googleMapsLoadPromise = new Promise((resolve) => {
     const scriptId = "makaug-google-maps-script";
@@ -58035,20 +58154,14 @@ function renderStaticDetailMapFallback(el, p = {}, point = {}) {
   const title = getLocalizedPropertyTitle(p) || p.title || translatePropertyUi("Property");
   const location = getPropertyLocationDisplay(p) || [p.area, p.district].filter(Boolean).join(", ") || translatePropertyUi("Location");
   const mapUrl = `https://www.openstreetmap.org/?mlat=${encodeURIComponent(lat)}&mlon=${encodeURIComponent(lng)}#map=${encodeURIComponent(zoom)}/${encodeURIComponent(lat)}/${encodeURIComponent(lng)}`;
-  const staticUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${encodeURIComponent(`${lat},${lng}`)}&zoom=${encodeURIComponent(zoom)}&size=900x280&markers=${encodeURIComponent(`${lat},${lng},red-pushpin`)}`;
+  // Area card only: the staticmap.openstreetmap.de image host no longer resolves.
   el.innerHTML = `
-    <a href="${adminAttr(mapUrl)}" target="_blank" rel="noopener noreferrer" class="relative block h-full min-h-[220px] overflow-hidden bg-emerald-50 text-left">
-      <img src="${adminAttr(staticUrl)}" alt="${adminAttr(`${title} map location`)}" class="h-full w-full object-cover" loading="lazy" onerror="this.classList.add('hidden'); var fallback=this.nextElementSibling; if (fallback) fallback.classList.remove('hidden');">
-      <div class="hidden absolute inset-0 grid place-items-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 p-5 text-center">
-        <div>
-          <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full border border-emerald-100 bg-white text-emerald-700 shadow-sm"><i class="fas fa-map-location-dot text-xl"></i></div>
-          <div class="text-xs font-black uppercase tracking-wide text-emerald-800">${translatePropertyUi("Location")}</div>
-          <div class="mt-1 text-sm font-bold text-slate-700">${adminEscape(location)}</div>
-        </div>
-      </div>
-      <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 via-slate-950/40 to-transparent p-3 text-white">
-        <div class="text-sm font-black">${adminEscape(title)}</div>
-        <div class="text-xs">${adminEscape(location)}</div>
+    <a href="${adminAttr(mapUrl)}" target="_blank" rel="noopener noreferrer" class="relative grid h-full min-h-[220px] place-items-center overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-blue-50 p-5 text-center" data-map-area-card="true">
+      <div>
+        <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full border border-emerald-100 bg-white text-emerald-700 shadow-sm"><i class="fas fa-map-location-dot text-xl"></i></div>
+        <div class="text-xs font-black uppercase tracking-wide text-emerald-800">${translatePropertyUi("Location")}</div>
+        <div class="mt-1 text-sm font-bold text-slate-700">${adminEscape(location)}</div>
+        <div class="mt-1 text-xs text-slate-500">${adminEscape(title)}</div>
       </div>
     </a>`;
 }
@@ -58056,6 +58169,7 @@ function renderStaticDetailMapFallback(el, p = {}, point = {}) {
 async function initDetailMap(p) {
   const el = document.getElementById("map-detail");
   if (!el) return;
+  lastDetailMapProperty = p;
   const point = getListingMapPoint(p);
   const lat = point?.lat ?? MAP_DEFAULT_CENTER.lat;
   const lng = point?.lng ?? MAP_DEFAULT_CENTER.lng;
