@@ -54,3 +54,31 @@ test('attaching photos clears the stale flag at the source', () => {
     'and must only ever rewrite that one status, never a real judgement'
   );
 });
+
+/**
+ * A listing photo has to be served by us.
+ *
+ * Approval refuses any photo that is not "uploaded to MakaUg", and rightly so:
+ * a picture hosted on somebody else's server vanishes from a live listing the
+ * day they clear it. But prepareMediaUrlForStorage only ever re-hosted data:
+ * URLs — a photo attached by URL was stored as that URL and could never be
+ * approved. That is what still blocked Migadde Hakim's plot after its photos
+ * were recovered from the chat and attached.
+ */
+test('a photo attached by link is copied onto makaug storage', () => {
+  const admin = fs.readFileSync(require.resolve('../routes/admin'), 'utf8');
+  assert.match(admin, /storeRemoteImageUrl/, 'a remote photo must be fetched and re-hosted, not linked');
+  assert.match(admin, /allowedHosts: ADMIN_IMAGE_REHOST_HOSTS/,
+    'and only from hosts we trust, since this makes the server fetch what it is given');
+});
+
+test('the re-host allow-list is a list, not "any https URL"', () => {
+  const admin = fs.readFileSync(require.resolve('../routes/admin'), 'utf8');
+  assert.match(admin, /ADMIN_IMAGE_REHOST_HOSTS = String\(process\.env\.ADMIN_IMAGE_REHOST_HOSTS \|\| 'makaug-waha-bridge\.onrender\.com'\)/,
+    'defaults to our own WhatsApp media bridge and nothing else');
+  // storeRemoteImageUrl enforces HTTPS and the host list itself; this is the
+  // caller's half of that contract.
+  const storage = fs.readFileSync(require.resolve('../services/cloudMediaStorageService'), 'utf8');
+  assert.match(storage, /parsedUrl\.protocol !== 'https:'/, 'HTTPS only');
+  assert.match(storage, /host is not allowed for remote caching/, 'the host list is enforced, not advisory');
+});
