@@ -4828,7 +4828,25 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       const usableImageCount = Number(usableImageResult.rows[0]?.total || 0);
       const mediaValidationStatus = cleanText(mediaQuality.media_validation_status);
       const videoRecoveryRequired = mediaQuality.video_recovery_required === true;
-      if (mediaValidationStatus.startsWith('blocked_') || videoRecoveryRequired || usableImageCount < 1) {
+      // blocked_no_usable_property_image is a COUNT, not a verdict: intake
+      // writes it when a property arrived with zero usable photos. Nothing ever
+      // rewrites it, so a listing that gets its photos afterwards — an admin
+      // attaching them, or the agent sending them a minute later — stayed
+      // blocked for ever with four good pictures on screen, and the only way
+      // through was "Approve anyway (human verified)". A gate that is wrong
+      // this often teaches moderators to click the override, which is worse
+      // than having no gate.
+      //
+      // 8 Oct 2026: Migadde Hakim's Kasanje-Nakawuka plot, photos attached and
+      // visible, approval refused for a missing image.
+      //
+      // Every other blocked_ status says something about the media we DO hold
+      // (a social source, a video that needs recovering) and still blocks. Only
+      // this one is a statement about a count, and the count is right here.
+      const staleNoImageBlock = mediaValidationStatus === 'blocked_no_usable_property_image'
+        && usableImageCount >= 1;
+      const blockingValidationStatus = mediaValidationStatus.startsWith('blocked_') && !staleNoImageBlock;
+      if (blockingValidationStatus || videoRecoveryRequired || usableImageCount < 1) {
         if (!handleApprovalBlocker({
           code: 'employee_media_quality',
           error: videoRecoveryRequired
