@@ -1428,6 +1428,12 @@ function publicExtraFields(extraFields = {}) {
   const sourceDateNeedsConfirmation = publicSourceDateNeedsPlatformConfirmation(extra);
   // Public wording only; the internal status stays in source_post_date_status.
   const sourceDateConfirmationLabel = 'Posted date not confirmed';
+  // Imports also stored the internal sentence itself in these labels.
+  const publicDateLabel = (value) => (
+    /original post date is being confirmed|being confirmed from the source platform/i.test(String(value || ''))
+      ? sourceDateConfirmationLabel
+      : (value || null)
+  );
   const safeSourceUrls = Array.isArray(extra.source_urls)
     ? extra.source_urls.filter((url) => /^https?:\/\//i.test(String(url || ''))).slice(0, 5)
     : [];
@@ -1647,18 +1653,18 @@ function publicExtraFields(extraFields = {}) {
     first_posted_online_at: sourceDateOutOfOrder ? null : firstPostedOnlineAt,
     first_posted_online_label: sourceDateNeedsConfirmation
       ? sourceDateConfirmationLabel
-      : (sourceDateOutOfOrder ? sourceDateConflictLabel : (extra.first_posted_online_label || null)),
+      : (sourceDateOutOfOrder ? sourceDateConflictLabel : publicDateLabel(extra.first_posted_online_label)),
     source_published_at: sourceDateOutOfOrder ? null : sourcePublishedAt,
     source_published_label: sourceDateNeedsConfirmation
       ? sourceDateConfirmationLabel
-      : (sourceDateOutOfOrder ? sourceDateConflictLabel : (extra.source_published_label || null)),
+      : (sourceDateOutOfOrder ? sourceDateConflictLabel : publicDateLabel(extra.source_published_label)),
     source_post_date_confidence: publicSourceDateConfidence(extra) || null,
     source_post_date_status: sourceDateNeedsConfirmation
       ? 'needs_source_platform_date_confirmation'
       : (sourceDateOutOfOrder ? 'source_date_conflicts_with_first_pickup' : (extra.source_post_date_status || null)),
     original_publish_date_status: sourceDateNeedsConfirmation
       ? sourceDateConfirmationLabel
-      : (sourceDateOutOfOrder ? sourceDateConflictLabel : (extra.original_publish_date_status || null)),
+      : (sourceDateOutOfOrder ? sourceDateConflictLabel : publicDateLabel(extra.original_publish_date_status)),
     added_to_makaug_at: addedToMakaugAt,
     added_to_makaug_label: extra.added_to_makaug_label || null,
     source_followers_label: extra.source_followers_label || null,

@@ -246,6 +246,22 @@ test('B3: the internal "original post date" sentence is not public', async () =>
   assert.doesNotMatch(JSON.stringify(api.body.data), /Original post date is being confirmed/);
 });
 
+test('B3: the internal date sentence stored by imports is replaced too (live 662e6f08 / dfc9d41c)', async () => {
+  const sentence = 'Original post date is being confirmed from the source platform.';
+  const id = await foundOnlineFixture({ extra: {
+    original_publish_date_status: sentence,
+    first_posted_online_label: sentence,
+    source_published_label: `${sentence.replace(/\.$/, '')} for the 2026+ found-online window.`
+  } });
+  await db.query("UPDATE properties SET status = 'approved' WHERE id = $1", [id]);
+  const api = await request(app).get(`/api/properties/${id}`);
+  const extra = api.body.data.extra_fields;
+  assert.doesNotMatch(JSON.stringify(api.body.data), /being confirmed from the source platform/);
+  assert.equal(extra.original_publish_date_status, 'Posted date not confirmed');
+  assert.equal(extra.first_posted_online_label, 'Posted date not confirmed');
+  assert.equal(extra.source_published_label, 'Posted date not confirmed');
+});
+
 // ---- B4 ---------------------------------------------------------------------
 
 test('B4: a row with a phone and a stale TikTok label says "Call or WhatsApp the agent"', async () => {
