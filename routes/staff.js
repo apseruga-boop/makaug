@@ -2193,14 +2193,29 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     }
     normalized.price_currency = 'UGX';
   }
-  const effectiveCurrency = normalized.price_original_currency || existing.price_original_currency || 'UGX';
-  if (effectiveCurrency === 'USD' && Object.prototype.hasOwnProperty.call(normalized, 'price_original')) {
+  // Convert from USD only when this edit gives both the currency and the USD
+  // amount. A price on its own is shillings and is never saved as a USD
+  // original (that is how UGX figures got multiplied by 3,800 again).
+  const currencyGivenNow = sourceCurrencyInput != null;
+  const originalGivenNow = Object.prototype.hasOwnProperty.call(normalized, 'price_original');
+  let effectiveCurrency = normalized.price_original_currency || existing.price_original_currency || 'UGX';
+  if (effectiveCurrency === 'USD' && !(currencyGivenNow && originalGivenNow)) {
+    if (Object.prototype.hasOwnProperty.call(normalized, 'price')) {
+      normalized.price_original_currency = 'UGX';
+      effectiveCurrency = 'UGX';
+    } else if (originalGivenNow || currencyGivenNow) {
+      errors.push('Give the USD amount and the currency together to convert a USD price');
+    }
+  }
+  if (effectiveCurrency === 'USD' && currencyGivenNow && originalGivenNow) {
     const originalAmount = toNullableFloat(normalized.price_original);
-    const fxRate = toNullableFloat(normalized.price_fx_rate_ugx ?? existing.price_fx_rate_ugx);
+    const fxRate = toNullableFloat(normalized.price_fx_rate_ugx ?? existing.price_fx_rate_ugx) || require('../utils/propertyPriceCurrency').configuredUsdToUgxRate();
     if (originalAmount == null || originalAmount <= 0) errors.push('price_original must be a positive USD amount');
+    if (originalAmount > 3_000_000) errors.push('A USD amount above 3,000,000 looks like a shilling price; enter it as UGX');
     if (fxRate == null || fxRate <= 0) errors.push('price_fx_rate_ugx must be positive for USD prices');
-    if (originalAmount > 0 && fxRate > 0) {
+    if (originalAmount > 0 && originalAmount <= 3_000_000 && fxRate > 0) {
       normalized.price = Math.round(originalAmount * fxRate);
+      normalized.price_fx_rate_ugx = fxRate;
       normalized.price_fx_as_of = cleanText(normalized.price_fx_as_of || existing.price_fx_as_of || new Date().toISOString());
     }
   }
@@ -2208,6 +2223,12 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     normalized.price_original = toNullableFloat(normalized.price);
     normalized.price_fx_rate_ugx = null;
     normalized.price_fx_as_of = null;
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, 'price') && Number(normalized.price) > 1e12) {
+    errors.push('price is over UGX 1 trillion; please check the number');
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, 'price_period')) {
+    normalized.price_period = require('../utils/propertyPriceCurrency').normalizePricePeriodForWrite(normalized.price_period);
   }
   if (Object.prototype.hasOwnProperty.call(normalized, 'price_on_application')) {
     normalized.price_on_application = boolLike(normalized.price_on_application);

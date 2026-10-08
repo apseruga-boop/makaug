@@ -99,9 +99,9 @@ const {
   normalizeCommercialPropertyType,
   commercialMisclassificationWarning
 } = require('../utils/commercialClassification');
-const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const { listingPriceQuality, IMPOSSIBLE_PRICE_UGX } = require('../utils/listingPriceQuality');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
-const { CANONICAL_PROPERTY_CURRENCY, propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
+const { CANONICAL_PROPERTY_CURRENCY, propertyPriceMetadata, configuredRateToCanonicalCurrency, normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
 const {
   HUMAN_APPROVAL_OVERRIDE_MARKER,
   HUMAN_INTEGRITY_OVERRIDE_MARKER,
@@ -546,9 +546,27 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
     }
     patch.price_currency = CANONICAL_PROPERTY_CURRENCY;
     patch.price_original_currency = sourceCurrency;
-    if (sourceCurrency !== CANONICAL_PROPERTY_CURRENCY) {
-      const originalAmount = toNullableFloat(patch.price_original ?? existing.price_original);
-      const fxRate = toNullableFloat(patch.price_fx_rate_ugx ?? existing.price_fx_rate_ugx);
+    // Only convert when this request gives both the currency and the original
+    // amount. Re-deriving from a stored "original" turned UGX figures saved as
+    // USD into trillions (e.g. USh 3,230,000,000,000,000,000).
+    const originalSuppliedNow = Object.prototype.hasOwnProperty.call(patch, 'price_original')
+      && toNullableFloat(patch.price_original) > 0;
+    if (sourceCurrency !== CANONICAL_PROPERTY_CURRENCY && !originalSuppliedNow) {
+      if (Object.prototype.hasOwnProperty.call(patch, 'price')) {
+        // A price on its own is a shilling figure: never store it as a USD original.
+        patch.price_original_currency = CANONICAL_PROPERTY_CURRENCY;
+        patch.price_original = toNullableFloat(patch.price);
+        patch.price_fx_rate_ugx = null;
+        patch.price_fx_as_of = null;
+      } else {
+        throw validateError(`Give the original ${sourceCurrency} amount together with the currency to convert it`);
+      }
+    } else if (sourceCurrency !== CANONICAL_PROPERTY_CURRENCY) {
+      const originalAmount = toNullableFloat(patch.price_original);
+      if (sourceCurrency === 'USD' && CANONICAL_PROPERTY_CURRENCY === 'UGX' && originalAmount > 3_000_000) {
+        throw validateError('A USD amount above 3,000,000 looks like a shilling price. Enter it as UGX instead.');
+      }
+      const fxRate = toNullableFloat(patch.price_fx_rate_ugx ?? existing.price_fx_rate_ugx) || configuredRateToCanonicalCurrency(sourceCurrency);
       if (!(originalAmount > 0) || !(fxRate > 0)) {
         throw validateError(`A positive original ${sourceCurrency} amount and ${CANONICAL_PROPERTY_CURRENCY} FX rate are required`);
       }
@@ -564,6 +582,12 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
       patch.price_fx_rate_ugx = null;
       patch.price_fx_as_of = null;
     }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'price') && toNullableFloat(patch.price) > IMPOSSIBLE_PRICE_UGX) {
+    throw validateError('That price is over UGX 1 trillion. Please check the number.');
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'price_period')) {
+    patch.price_period = normalizePricePeriodForWrite(patch.price_period);
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'price_on_application')) {
     patch.price_on_application = parseBooleanLike(patch.price_on_application, false);
@@ -3432,7 +3456,7 @@ router.patch('/:id/preview', async (req, res, next) => {
       area: { column: 'area', value: cleanText(patch.area), required: true },
       address: { column: 'address', value: cleanText(patch.address) || null },
       price: { column: 'price', value: toNullableInt(patch.price) },
-      price_period: { column: 'price_period', value: cleanText(patch.price_period) || null },
+      price_period: { column: 'price_period', value: normalizePricePeriodForWrite(cleanText(patch.price_period)) || null },
       transaction_type: {
         column: 'transaction_type',
         value: normalizeCommercialTransactionType(
@@ -3799,6 +3823,7 @@ router.post('/', async (req, res, next) => {
       errors.push(`price must use ${ACTIVE_PRICE_CURRENCIES.join('/')} and convert to at least ${CANONICAL_PROPERTY_CURRENCY} ${minimumCanonicalPrice.toLocaleString()}`);
     }
     if (priceOnApplication && price != null && price > 0) errors.push('price and price_on_application cannot both be set');
+    if (price != null && price > IMPOSSIBLE_PRICE_UGX) errors.push('price is over UGX 1 trillion; please check the number');
     if (listingType === 'commercial' && !transactionType) {
       errors.push('transaction_type is required for commercial listings and must be rent or sale');
     }
@@ -4155,7 +4180,7 @@ router.post('/', async (req, res, next) => {
         priceMetadata.price_original,
         priceMetadata.price_fx_rate_ugx,
         priceMetadata.price_fx_as_of,
-        cleanText(body.price_period) || null,
+        normalizePricePeriodForWrite(cleanText(body.price_period)) || null,
         priceOnApplication,
         toNullableInt(body.bedrooms),
         toNullableInt(body.bathrooms),
@@ -4868,6 +4893,22 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         || req.body.priceBasisConfirmed,
       false
     );
+    if (nextStatus === 'approved') {
+      // Impossible prices (over UGX 1 trillion, or a "USD" original that is
+      // really a shilling figure) block approval for everyone: no override,
+      // no sourced-listing exemption. The price has to be corrected.
+      const hardPrice = listingPriceQuality(current, { highMonthlyPriceConfirmed });
+      if (hardPrice.hard_reasons.length) {
+        return res.status(422).json({
+          ok: false,
+          error: 'This price is impossible and must be corrected before approval (it cannot be overridden).',
+          code: 'price_impossible',
+          details: hardPrice.hard_reasons,
+          override_available: false,
+          price_quality: hardPrice
+        });
+      }
+    }
     if (nextStatus === 'approved' && !sourcedApprovalPolicy.usesExemption) {
       const priceQuality = listingPriceQuality(current, { highMonthlyPriceConfirmed });
       if (!priceQuality.ok) {

@@ -47,26 +47,70 @@ function sourceCurrencyForValue(value, explicitCurrency = '') {
   return /(?:^|\s)(?:USD|US\$)\s*[\d.]|\$\s*[\d.]/i.test(raw) ? 'USD' : 'UGX';
 }
 
-function sourcePriceAmount(value) {
+// Above this a "USD" original is almost certainly a shilling figure that was
+// tagged USD (and would be multiplied by ~3,800 again).
+const MAX_PLAUSIBLE_USD_ORIGINAL = 3_000_000;
+
+const MULTIPLIERS = { b: 1e9, bn: 1e9, billion: 1e9, billions: 1e9, m: 1e6, mn: 1e6, million: 1e6, millions: 1e6, k: 1e3, thousand: 1e3, thousands: 1e3 };
+
+/**
+ * Find the price in free text. It prefers the number next to a currency or a
+ * price word ("UGX 9,500,000", "$2000/mo", "price 650m"), reads b/bn/m/k, and
+ * for "X or Y" takes the first. Numbers that are bedrooms, plot sizes,
+ * distances or phone numbers are skipped. Returns { amount, currency } where
+ * currency is 'UGX' / 'USD' when the text says so next to the number, else ''.
+ */
+function parseSourcePrice(value) {
   if (value == null || value === '') return null;
-  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
-  const raw = String(value || '').toLowerCase().replace(/,/g, '').trim();
-  const match = raw.match(/(\d+(?:\.\d+)?)/);
-  if (!match) return null;
-  const amount = Number(match[1]);
-  if (!Number.isFinite(amount)) return null;
-  const multiplier = /\d(?:\.\d+)?\s*(b|bn|billions?)(?=\s*(?:ugx|ush|shs?)\b|\b|$)/.test(raw)
-    ? 1000000000
-    : /\d(?:\.\d+)?\s*(m|mn|millions?)(?=\s*(?:ugx|ush|shs?)\b|\b|$)/.test(raw)
-      ? 1000000
-      : /\d(?:\.\d+)?\s*(k|thousands?)(?=\s*(?:ugx|ush|shs?)\b|\b|$)/.test(raw)
-        ? 1000
-        : 1;
-  return Math.round(amount * multiplier);
+  if (typeof value === 'number' && Number.isFinite(value)) return { amount: Math.round(value), currency: '' };
+  const raw = String(value || '').toLowerCase()
+    .replace(/(\d),(?=\d{3}\b)/g, '$1') // 9,500,000 -> 9500000
+    .replace(/(\d)\s(?=\d{3}\b)/g, '$1'); // 9 500 000 -> 9500000
+  const rx = /(ugx|ush|shs?|usd|us\$|\$)?\s*(\d+(?:\.\d+)?)\s*(bn|billions?|b|mn|millions?|m|k|thousands?)?(?=ugx|ush|shs|usd|[^a-z0-9]|$)\s*(ugx|ush|shs?|usd|\/=|\/-)?/g;
+  const candidates = [];
+  let m;
+  while ((m = rx.exec(raw))) {
+    if (!m[2]) continue;
+    const start = m.index;
+    const end = m.index + m[0].length;
+    const before = raw.slice(Math.max(0, start - 24), start);
+    const after = raw.slice(end, end + 18);
+    const near = raw.slice(Math.max(0, start - 2), Math.min(raw.length, end + 3));
+    const suffix = m[3] || '';
+    const amount = Number(m[2]) * (MULTIPLIERS[suffix] || 1);
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    const curToken = m[1] || m[4] || '';
+    const currency = /usd|\$/.test(curToken) ? 'USD' : (/ugx|ush|shs?|\/=|\/-/.test(curToken) ? 'UGX' : '');
+    let score = 0;
+    if (curToken) score += 4;
+    if (suffix) score += 2;
+    if (/(price|cost|asking|selling at|sale price|going for|rent|@|\bat\b|for\b|only|negotiable|nego)\W*$/.test(before)) score += 2;
+    if (/^\s*(per|\/|a)\s*(month|mo|year|yr|semester|sem|night)/.test(after)) score += 2;
+    if (/^\s*(bed|bedroom|br\b|bath|toilet|acre|decimal|ft|feet|sqm|sq|m2|km|miles?|minutes?|mins?|%|units?|rooms?|storey|floors?|plots?\b)/.test(after)) score -= 8;
+    if (/x\s*$/.test(before) || /^\s*x\s*\d/.test(after) || /\d\s*x\s*\d/.test(near)) score -= 8; // 50x100
+    if (/^(?:0|256)7\d{8}$/.test(m[2]) || m[2].length >= 10 && !suffix) score -= 8; // phone numbers
+    if (amount < 1000 && !suffix && !curToken) score -= 3;
+    candidates.push({ amount: Math.round(amount), currency, score, start });
+  }
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => (b.score - a.score) || (a.start - b.start));
+  const best = candidates[0];
+  if (best.score < -2) return null;
+  return { amount: best.amount, currency: best.currency };
+}
+
+function sourcePriceAmount(value) {
+  const parsed = parseSourcePrice(value);
+  return parsed ? parsed.amount : null;
 }
 
 function propertyPriceMetadata(value, options = {}) {
-  const currency = sourceCurrencyForValue(value, options.currency);
+  const parsed = parseSourcePrice(value);
+  // The currency written next to the chosen number wins over a "$" elsewhere in
+  // the text ("USh 9,500,000 … $" was read as USD and multiplied by 3,800).
+  const currency = options.currency
+    ? normalizePropertyPriceCurrency(options.currency)
+    : (ACTIVE_COUNTRY_CODE !== 'ZA' && parsed?.currency ? parsed.currency : sourceCurrencyForValue(value, ''));
   if (!currency) {
     return {
       price: null,
@@ -79,7 +123,19 @@ function propertyPriceMetadata(value, options = {}) {
       rejection_reason: 'unsupported_property_price_currency'
     };
   }
-  const originalAmount = sourcePriceAmount(value);
+  const originalAmount = parsed ? parsed.amount : null;
+  if (currency === 'USD' && CANONICAL_PROPERTY_CURRENCY === 'UGX' && Number(originalAmount) > MAX_PLAUSIBLE_USD_ORIGINAL) {
+    return {
+      price: null,
+      price_currency: CANONICAL_PROPERTY_CURRENCY,
+      price_original_currency: null,
+      price_original: null,
+      price_fx_rate_ugx: null,
+      price_fx_as_of: null,
+      supported: false,
+      rejection_reason: 'usd_original_looks_like_ugx'
+    };
+  }
   if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
     return {
       price: null,
@@ -116,7 +172,26 @@ function propertyPriceMetadata(value, options = {}) {
   };
 }
 
+// One spelling per price period when saving: once | month | semester | year | night.
+const PRICE_PERIOD_ALIASES = {
+  mo: 'month', month: 'month', monthly: 'month', per_month: 'month', pm: 'month', 'p/m': 'month', '/month': 'month',
+  sem: 'semester', semester: 'semester', per_semester: 'semester', term: 'semester',
+  yr: 'year', year: 'year', yearly: 'year', annual: 'year', annually: 'year', per_year: 'year', pa: 'year',
+  night: 'night', nightly: 'night', per_night: 'night',
+  once: 'once', one_off: 'once', 'one-off': 'once', total: 'once', sale: 'once', cash: 'once', outright: 'once'
+};
+
+function normalizePricePeriodForWrite(value) {
+  if (value == null) return value;
+  const key = String(value).trim().toLowerCase().replace(/\s+/g, '_');
+  if (!key) return null;
+  return PRICE_PERIOD_ALIASES[key] || String(value).trim();
+}
+
 module.exports = {
+  MAX_PLAUSIBLE_USD_ORIGINAL,
+  normalizePricePeriodForWrite,
+  parseSourcePrice,
   DEFAULT_USD_TO_UGX_RATE,
   DEFAULT_USD_TO_ZAR_RATE,
   CANONICAL_PROPERTY_CURRENCY,
