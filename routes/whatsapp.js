@@ -5008,7 +5008,15 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     && locationResolution?.status === 'matched'
     && locationLevel === 'district'
     && Number(locationResolution?.confidence || 0) >= 1) {
-    const statedArea = statedAreaBesideDistrict(locationCaption, locationResolution.match);
+    // A real place named anywhere in the caption beats a word we guessed from
+    // beside the district. "KASANJE–NAKAWUKA, WAKISO DISTRICT" knows exactly
+    // where it is.
+    const known = recognisedAreaInDistrict(locationCaption, locationResolution.match?.district);
+    if (known) {
+      locationResolution = known;
+      locationPatch = canonicalWhatsappLocationPatch(known);
+    }
+    const statedArea = locationPatch.area ? '' : statedAreaBesideDistrict(locationCaption, locationResolution.match);
     if (statedArea) {
       locationPatch = {
         ...canonicalWhatsappLocationPatch(locationResolution, { includeDistrictLevelArea: true }),
@@ -5033,8 +5041,14 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     // with the agent's one-word answer appended. Asking "which district is Konge
     // in", being told "Wakiso", and then replying that we still need "exact area
     // and district" is the loop that made Ronald give up after three tries.
-    const carriedArea = statedAreaWithoutDistrict(locationCaption, { allowLeadingToken: false });
-    locationPatch = carriedArea
+    // Same here: a place we know, inside the district we matched, before a guess.
+    const knownHere = recognisedAreaInDistrict(locationCaption, locationResolution.match?.district);
+    if (knownHere) {
+      locationResolution = knownHere;
+      locationPatch = canonicalWhatsappLocationPatch(knownHere);
+    }
+    const carriedArea = locationPatch.area ? '' : statedAreaWithoutDistrict(locationCaption, { allowLeadingToken: false });
+    if (!locationPatch.area) locationPatch = carriedArea
       ? {
         ...canonicalWhatsappLocationPatch(locationResolution, { includeDistrictLevelArea: true }),
         area: carriedArea,
@@ -5135,6 +5149,48 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
 }
 
 // Words that turn up beside a place name but are not one.
+/**
+ * A place we actually know, named anywhere in the caption.
+ *
+ * 8 Oct 2026. Migadde's advert said "50x100 FT PLOT FOR SALE IN
+ * KASANJE–NAKAWUKA, WAKISO DISTRICT" in its headline, and closed with the
+ * marketing line "Affordable plots with ready land titles in established
+ * estates are selling fast!". The whole caption resolved to Wakiso at district
+ * level, so the stated-area fallback went looking for a word after "in" and
+ * came back with *established*. It went to review as "Land for sale in
+ * Established".
+ *
+ * Both Kasanje and Nakawuka are in the registry, in Wakiso. We had the answer
+ * the entire time and guessed instead. So before any guessing: read every word
+ * of the caption, keep the ones that resolve to a real area inside the district
+ * we matched, and take the one that appears earliest — a headline is written
+ * before a sales pitch.
+ */
+function recognisedAreaInDistrict(caption = '', district = '') {
+  const wanted = normalizeInput(district).toLowerCase();
+  if (!wanted) return null;
+  const clean = normalizeInput(caption).replace(/[*_~`]+/g, ' ');
+  const seen = new Set();
+  const words = clean.match(/[A-Za-z'’]+(?:[-–—][A-Za-z'’]+)*/g) || [];
+  for (const raw of words) {
+    // "KASANJE–NAKAWUKA" is two places joined by a dash; try the pair and each half.
+    for (const candidate of [raw, ...raw.split(/[-–—]/)]) {
+      const word = candidate.replace(/^[-–—]+|[-–—]+$/g, '');
+      const lower = word.toLowerCase();
+      if (word.length < 4 || word.length > 40 || seen.has(lower)) continue;
+      seen.add(lower);
+      if (AREA_CANDIDATE_STOPWORDS.has(lower)) continue;
+      const resolved = resolveWhatsappLocation(word, { allowText: true });
+      if (resolved?.status !== 'matched' || Number(resolved.confidence || 0) < 1) continue;
+      const level = normalizeInput(resolved.match?.level || '').toLowerCase();
+      if (['district', 'region'].includes(level)) continue;
+      if (normalizeInput(resolved.match?.district || '').toLowerCase() !== wanted) continue;
+      return resolved;
+    }
+  }
+  return null;
+}
+
 const AREA_CANDIDATE_STOPWORDS = new Set([
   'for', 'sale', 'sell', 'selling', 'rent', 'rental', 'rentals', 'renting', 'lease', 'to', 'let',
   'in', 'at', 'on', 'of', 'the', 'a', 'an', 'and', 'near', 'opposite', 'off', 'along', 'behind',
