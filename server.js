@@ -1877,8 +1877,12 @@ app.get('/assets/makaug-app.js', (req, res, next) => {
   });
 });
 
-app.use(express.static(staticRoot, {
+// Static files come ONLY from this allowlist. Until 8 Oct 2026 the whole repo
+// root was served, so /server.js, /routes/*, /package.json, /db/** etc. were
+// public. Anything else with a file extension is a 404 (noindex).
+const staticFileOptions = {
   index: false,
+  dotfiles: 'ignore',
   maxAge: '7d',
   setHeaders(res, filePath) {
     if (/\.(html?)$/i.test(filePath)) {
@@ -1887,7 +1891,29 @@ app.use(express.static(staticRoot, {
     }
     res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
   }
-}));
+};
+const STATIC_ROOT_FILE_ALLOWLIST = new Set([
+  '/favicon.ico',
+  '/site.webmanifest',
+  '/seshaikhaya.webmanifest',
+  '/google033e19e2016a21c2.html', // Search Console verification: keep
+  '/config/aboutCommercialProducts.js' // loaded by index.html
+]);
+app.use('/assets', express.static(path.join(staticRoot, 'assets'), staticFileOptions));
+app.use((req, res, next) => {
+  if (!['GET', 'HEAD'].includes(req.method) || !STATIC_ROOT_FILE_ALLOWLIST.has(req.path)) return next();
+  res.set('Cache-Control', req.path.endsWith('.html') ? 'no-store' : 'public, max-age=604800');
+  return res.sendFile(path.join(staticRoot, req.path), (error) => {
+    if (error) next(error.status === 404 || error.code === 'ENOENT' ? undefined : error);
+  });
+});
+app.use((req, res, next) => {
+  if (!['GET', 'HEAD'].includes(req.method) || req.path.startsWith('/api/')) return next();
+  if (!path.extname(req.path)) return next();
+  res.set('X-Robots-Tag', 'noindex');
+  res.set('Cache-Control', 'no-store');
+  return res.status(404).type('text/plain').send('Not found');
+});
 
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
