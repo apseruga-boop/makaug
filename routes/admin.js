@@ -14647,7 +14647,7 @@ async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force =
  * is switched on, the welcome pack goes once, and if they haven't paid, the
  * payment link follows (recorded as "pay later"). Safe to call twice.
  */
-async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = false, actor = '' } = {}) {
+async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = false, actor = '', allowVideoRender = true } = {}) {
   const actorId = actor || (req ? adminActorId(req) : 'admin');
   const agent = (await db.query(
     `SELECT id, makaug_agent_number, full_name, company_name, phone, whatsapp, email, districts_covered, specializations,
@@ -14681,7 +14681,7 @@ async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = fa
       : (feeDue ? { sent: false, reason: 'already_sent', sent_at: agent.pay_link_sent_at } : { sent: false, reason: agent.fee_exempt ? 'fee_exempt' : 'already_paid' });
   } else {
     // Welcome pack first; the payment link follows once it is queued.
-    result.welcome = await queueAgentWelcomePack({ agentId, actorId, afterQueued: feeLinkWanted ? sendFeeLink : null })
+    result.welcome = await queueAgentWelcomePack({ agentId, actorId, allowVideoRender, afterQueued: feeLinkWanted ? sendFeeLink : null })
       .catch(async (error) => {
         if (feeLinkWanted) await sendFeeLink().catch(() => null);
         return { error: error.message };
@@ -14693,7 +14693,7 @@ async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = fa
   return result;
 }
 
-async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', actorId = 'admin', afterQueued = null } = {}) {
+async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', actorId = 'admin', afterQueued = null, allowVideoRender = true } = {}) {
     const pack = await agentWelcome.buildWelcomePack(cleanText(agentId));
     const previewTo = String(previewToRaw || '').replace(/\D+/g, '');
     const preview = Boolean(previewTo);
@@ -14789,6 +14789,27 @@ async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', ac
       if (preview || typeof afterQueued !== 'function') return null;
       return Promise.resolve().then(afterQueued).catch((error) => console.warn('[agent-welcome] follow-up failed:', error.message));
     };
+    // An agent counts as welcomed only once the messages are actually in the
+    // queue. If the render or the process dies first, welcome_sent_at stays
+    // empty, so the start-up catch-up tries them again.
+    const markWelcomedThenFollow = async (queuedIds) => {
+      const queuedAny = Boolean(queuedIds && Object.values(queuedIds).some(Boolean));
+      if (!queuedAny) {
+        console.warn('[agent-welcome] nothing was queued; agent left un-welcomed', pack.agent.id);
+        return queuedIds;
+      }
+      if (!preview) await db.query('UPDATE agents SET welcome_sent_at = NOW() WHERE id = $1', [pack.agent.id]).catch(() => {});
+      await thenFollow();
+      return queuedIds;
+    };
+    if (videoUrl && !allowVideoRender) {
+      // No rendering here (e.g. the start-up catch-up): use the film only if it
+      // already exists, otherwise send the welcome without it.
+      const existing = await agentReportVideos.ensureWelcomeVideo(pack, version, { allowRender: false }).catch(() => '');
+      const queued = await queueWelcome(existing ? videoUrl : '');
+      await markWelcomedThenFollow(queued);
+      return { to, preview, format: existing ? 'video' : 'text', queued };
+    }
     if (videoUrl) {
       agentReportVideos.ensureWelcomeVideo(pack, version)
         .then(() => queueWelcome(videoUrl))
@@ -14796,14 +14817,12 @@ async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', ac
           console.warn('[agent-welcome] video render failed, sending text only:', error.message);
           return queueWelcome('');
         })
-        .catch((error) => console.warn('[agent-welcome] WhatsApp queue failed:', error.message))
-        .then(thenFollow);
-      if (!preview) await db.query('UPDATE agents SET welcome_sent_at = NOW() WHERE id = $1', [pack.agent.id]).catch(() => {});
+        .then(markWelcomedThenFollow)
+        .catch((error) => console.warn('[agent-welcome] WhatsApp queue failed:', error.message));
       return { to, preview, format: 'video', status: 'rendering' };
     }
     const queued = await queueWelcome('');
-    if (!preview) await db.query('UPDATE agents SET welcome_sent_at = NOW() WHERE id = $1', [pack.agent.id]).catch(() => {});
-    await thenFollow();
+    await markWelcomedThenFollow(queued);
     return { to, preview, format: 'text', queued };
 }
 
@@ -14869,6 +14888,7 @@ router.post('/agent-reports/:id/send', async (req, res, next) => {
 
 module.exports = router;
 module.exports.runAgentApprovalFollowUps = runAgentApprovalFollowUps;
+module.exports.queueAgentWelcomePack = queueAgentWelcomePack;
 module.exports._test = {
   ADMIN_REVIEW_STAGES,
   adminReviewListingPatchFromBody

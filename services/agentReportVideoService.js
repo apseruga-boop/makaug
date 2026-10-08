@@ -17,6 +17,131 @@ const FPS = 15;
 const FONT = "'Noto Sans', 'DejaVu Sans', Arial, sans-serif";
 const CACHE_DIR = path.join(os.tmpdir(), 'makaug-report-videos');
 const inflight = new Map();
+const crypto = require('crypto');
+
+// ---------------------------------------------------------------------------
+// One render at a time, for the whole process. Each render rasterises hundreds
+// of 720×720 frames and runs ffmpeg; several at once took the 512 MB server
+// down (5 Oct). Jobs wait their turn, and a job that would start while memory
+// is already high is refused, so callers fall back to the text/card welcome.
+// ---------------------------------------------------------------------------
+const renderQueue = [];
+const renderStats = { running: 0, maxConcurrent: 0, started: 0, deferredForMemory: 0 };
+let encodeImpl = null; // tests can swap the encoder
+
+function memoryLimitMb() {
+  return Math.max(128, Number(process.env.MEMORY_LIMIT_MB || 512) || 512);
+}
+
+function memoryTooHighForRender(rssBytes = process.memoryUsage().rss) {
+  const ratio = Number(process.env.VIDEO_RENDER_MAX_RSS_RATIO || 0.7) || 0.7;
+  return rssBytes > memoryLimitMb() * 1048576 * ratio;
+}
+
+function pumpRenderQueue() {
+  if (renderStats.running > 0) return;
+  const next = renderQueue.shift();
+  if (!next) return;
+  if (memoryTooHighForRender()) {
+    renderStats.deferredForMemory += 1;
+    console.warn(`[agent-report] video render deferred: memory high (${Math.round(process.memoryUsage().rss / 1048576)} MB) ${next.label}`);
+    next.reject(Object.assign(new Error('Server memory is high; the video was not rendered this time'), { code: 'VIDEO_MEMORY_GUARD' }));
+    setImmediate(pumpRenderQueue);
+    return;
+  }
+  renderStats.running += 1;
+  renderStats.started += 1;
+  renderStats.maxConcurrent = Math.max(renderStats.maxConcurrent, renderStats.running);
+  // A stuck render must never hold the queue for good.
+  const jobTimeoutMs = Number(process.env.VIDEO_RENDER_JOB_TIMEOUT_MS || (RENDER_TIMEOUT_MS + 60000));
+  let timer = null;
+  Promise.race([
+    Promise.resolve().then(next.job),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Video render timed out in the queue')), jobTimeoutMs); timer.unref?.(); })
+  ])
+    .then(next.resolve, next.reject)
+    .finally(() => clearTimeout(timer))
+    .finally(() => {
+      renderStats.running -= 1;
+      setImmediate(pumpRenderQueue);
+    });
+}
+
+function queueRender(label, job) {
+  return new Promise((resolve, reject) => {
+    renderQueue.push({ label, job, resolve, reject });
+    pumpRenderQueue();
+  });
+}
+
+function runEncode(spec, file) {
+  return (encodeImpl || encodeVideo)(spec, file);
+}
+
+// ---------------------------------------------------------------------------
+// Rendered films are kept in R2 under a fixed, unguessable key, so a deploy
+// (which wipes the local cache) doesn't mean rendering them all again.
+// ---------------------------------------------------------------------------
+function remoteVideoKey(file) {
+  const base = path.basename(String(file)).replace(/\.mp4$/i, '');
+  const secret = String(process.env.AGENT_CARD_SECRET || process.env.JWT_SECRET || 'makaug');
+  const tag = crypto.createHmac('sha256', secret).update(base).digest('hex').slice(0, 20);
+  return `agent-videos/${base}-${tag}.mp4`;
+}
+
+function remoteVideoUrl(file) {
+  const base = String(process.env.S3_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+  return base ? `${base}/${remoteVideoKey(file)}` : '';
+}
+
+let remoteLookup = async (url) => {
+  try {
+    const res = await fetch(url, { method: 'HEAD' });
+    return res.ok;
+  } catch (_error) {
+    return false;
+  }
+};
+
+async function findStoredVideo(file) {
+  const storage = require('./cloudMediaStorageService');
+  if (!storage.cloudMediaStorageConfigured()) return '';
+  const url = remoteVideoUrl(file);
+  if (!url) return '';
+  return (await remoteLookup(url)) ? url : '';
+}
+
+async function storeRenderedVideo(file) {
+  const storage = require('./cloudMediaStorageService');
+  if (!storage.cloudMediaStorageConfigured() || !remoteVideoUrl(file)) return '';
+  try {
+    const stored = await storage.uploadBufferToS3({ bytes: fs.readFileSync(file), mimeType: 'video/mp4', key: remoteVideoKey(file) });
+    return stored.publicUrl || '';
+  } catch (error) {
+    console.warn('[agent-report] could not keep the rendered video in storage:', error.message);
+    return '';
+  }
+}
+
+/**
+ * The local file, else the stored copy's URL, else render it (one at a time)
+ * and keep it. `allowRender: false` returns '' instead of rendering.
+ */
+async function locateOrRender(file, spec, { allowRender = true } = {}) {
+  if (fs.existsSync(file)) return file;
+  const stored = await findStoredVideo(file);
+  if (stored) return stored;
+  if (!allowRender) return '';
+  if (!inflight.has(file)) {
+    inflight.set(file, queueRender(spec.label, async () => {
+      if (fs.existsSync(file)) return file;
+      await runEncode(spec, file);
+      await storeRenderedVideo(file);
+      return file;
+    }).finally(() => inflight.delete(file)));
+  }
+  return inflight.get(file);
+}
 const lastErrors = new Map(); // report id -> last render failure, for the admin desk
 const RENDER_TIMEOUT_MS = Number(process.env.AGENT_REPORT_VIDEO_TIMEOUT_MS || 150000);
 
@@ -370,6 +495,9 @@ async function encodeVideo({ scene, duration, label }, outFile) {
   if (!bin) throw new Error('Video rendering is not available on this server');
   require('./agentReportCardService').ensureFontconfig();
   const sharp = require('sharp');
+  // No pixel cache and one libvips thread: frames are rendered once each.
+  sharp.cache(false);
+  sharp.concurrency(1);
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   const tmp = `${outFile}.${process.pid}.tmp.mp4`;
   const ff = spawn(bin, [
@@ -425,21 +553,19 @@ async function encodeVideo({ scene, duration, label }, outFile) {
 }
 
 // Returns a path to the MP4 for this report version, rendering once and caching.
-async function ensureReportVideo(report, version) {
+// A local path or a stored-copy URL for this report version, rendering (one
+// render at a time across the server) only when neither exists.
+async function ensureReportVideo(report, version, options = {}) {
   const file = cachePath(report.id, version);
-  if (fs.existsSync(file)) return file;
-  const key = file;
-  if (!inflight.has(key)) {
-    inflight.set(key, encodeVideo({ scene: buildScenes(report), duration: videoDuration(report), label: `report=${report.id}` }, file)
-      .then((result) => { lastErrors.delete(report.id); return result; })
-      .catch((error) => {
-        lastErrors.set(report.id, `${error.message}`.slice(0, 300));
-        console.error('[agent-report] video render failed', report.id, error);
-        throw error;
-      })
-      .finally(() => inflight.delete(key)));
+  try {
+    const result = await locateOrRender(file, { scene: buildScenes(report), duration: videoDuration(report), label: `report=${report.id}` }, options);
+    if (result) lastErrors.delete(report.id);
+    return result;
+  } catch (error) {
+    lastErrors.set(report.id, `${error.message}`.slice(0, 300));
+    console.error('[agent-report] video render failed', report.id, error.message || error);
+    throw error;
   }
-  return inflight.get(key);
 }
 
 function lastVideoError(reportId) {
@@ -569,17 +695,13 @@ function welcomeDuration(payload) {
   return buildWelcomeTimeline(payload).duration;
 }
 
-async function ensureWelcomeVideo(payload, version) {
+async function ensureWelcomeVideo(payload, version, options = {}) {
   const file = cachePath(payload.agent?.id || 'agent', version, 'welcome-');
-  if (fs.existsSync(file)) return file;
-  if (!inflight.has(file)) {
-    inflight.set(file, encodeVideo({
-      scene: buildWelcomeScenes(payload),
-      duration: welcomeDuration(payload),
-      label: `welcome=${payload.agent?.id || 'agent'}`
-    }, file).finally(() => inflight.delete(file)));
-  }
-  return inflight.get(file);
+  return locateOrRender(file, {
+    scene: buildWelcomeScenes(payload),
+    duration: welcomeDuration(payload),
+    label: `welcome=${payload.agent?.id || 'agent'}`
+  }, options);
 }
 
 function welcomeVideoUrl(agent, baseUrl, version) {
@@ -599,6 +721,15 @@ function reportVideoUrl(report, baseUrl) {
 }
 
 module.exports = {
+  _test: {
+    setEncoder(fn) { encodeImpl = fn; },
+    setRemoteLookup(fn) { remoteLookup = fn; },
+    renderStats,
+    resetStats() { Object.assign(renderStats, { running: 0, maxConcurrent: 0, started: 0, deferredForMemory: 0 }); },
+    memoryTooHighForRender,
+    remoteVideoKey,
+    cachePath
+  },
   buildWelcomeScenes,
   ensureWelcomeVideo,
   welcomeDuration,
