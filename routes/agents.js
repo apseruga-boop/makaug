@@ -17,6 +17,7 @@ const { getAgentFacingReport, getReportById, listAgentReportWeeks, siteUrl } = r
 const { renderReportCardPng, renderAgentShareCardPng, reportCardUrl, verifyCardToken } = require('../services/agentReportCardService');
 const { ensureReportVideo, ensureWelcomeVideo, reportVideoUrl, isVideoRenderingAvailable } = require('../services/agentReportVideoService');
 const { agentProfileUrl, buildWelcomePack, countAgentListings } = require('../services/agentWelcomeService');
+const { publicAgentPayload, publicAgentListingPayload } = require('../utils/publicListingPayload');
 
 const router = express.Router();
 const KNOWN_AGENT_SOCIAL_LINKS = [
@@ -770,7 +771,7 @@ router.get('/', async (req, res, next) => {
 
     return res.json({
       ok: true,
-      data: rows.rows,
+      data: rows.rows.map(publicAgentPayload),
       pagination: toPagination(total, page, limit)
     });
   } catch (error) {
@@ -891,9 +892,9 @@ router.get('/:id', async (req, res, next) => {
     return res.json({
       ok: true,
       data: {
-        ...agent.rows[0],
+        ...publicAgentPayload(agent.rows[0]),
         public_summary: publicSummary,
-        listings: listings.rows
+        listings: listings.rows.map(publicAgentListingPayload)
       }
     });
   } catch (error) {
