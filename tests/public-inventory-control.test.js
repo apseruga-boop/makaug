@@ -635,7 +635,10 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&listing_type=sale&limit=8&page=1&include_summary=0/);
   assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&listing_type=rent&limit=8&page=1&include_summary=0/);
   assert.match(serverSource, /\/api\/properties\?status=approved&featured=true&limit=12&page=1&public_only=1&sort=featured&include_summary=0/);
-  assert.match(propertiesRouteSource, /clearPublicPropertiesCache\(`listing_status_\$\{current\.status \|\| 'unknown'\}_to_\$\{nextStatus\}`\)/);
+  // Since 9 Oct the status route clears the staff dashboard too, through
+  // clearModerationDecisionCaches(), which still clears the public cache.
+  assert.match(propertiesRouteSource, /clearModerationDecisionCaches\(`listing_status_\$\{current\.status \|\| 'unknown'\}_to_\$\{nextStatus\}`\)/);
+  assert.match(propertiesRouteSource, /function clearModerationDecisionCaches\(reason\) \{\s*clearPublicPropertiesCache\(reason\);/);
   assert.match(propertiesRouteSource, /fast_manual_notification_response/);
   assert.match(propertiesRouteSource, /runPublicInventoryFollowup\(\s*\(\) => matchListingToSavedSearches/);
   assert.doesNotMatch(propertiesRouteSource, /const opportunityBucketSql = publicOpportunityBucketSql\('p'\)/);

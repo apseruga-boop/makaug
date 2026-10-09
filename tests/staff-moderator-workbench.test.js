@@ -221,7 +221,11 @@ function run() {
   assert(html.includes('staff-dashboard-fast-counts-k21-20260726'), 'staff fast-count deployment should expose a live release marker');
   assert(staffPanelsBody.includes('[STAFF_DASHBOARD_PANEL_SCAN_LIMIT]'), 'staff panels endpoint should bound its single candidate scan');
   assert(staffPanelsBody.includes('reviewResult.rows.filter(rowIsBrokerReview)'), 'staff panels endpoint should derive broker rows from the shared candidate set');
-  assert(staffPanelsBody.includes('reviewResult.rows.filter(rowIsFoundOnlineReview)'), 'staff panels endpoint should derive found-online rows from the shared candidate set');
+  // 9 Oct: the found-online panel now pages its own oldest-first segment (the
+  // same set /properties/review-queue?segment=found_online pages), with a
+  // total, instead of the first 8 of the shared scan.
+  assert(staffPanelsBody.includes('foundOnlineReviewWhere(\'p\')'), 'staff panels found-online rows should come from the found_online review segment');
+  assert(staffPanelsBody.includes('queued_found_online_meta: staffFoundOnlinePanelMeta('), 'staff panels found-online rows should carry a total for "Showing X of N"');
   assert(!staffPanelsBody.includes('staff_panel_broker_review_queue'), 'staff panels endpoint should not repeat the properties scan for broker rows');
   assert(!staffPanelsBody.includes("WHERE NOT ${sourceQualitySuppressedFlagSql('p')}"), 'staff panels endpoint should not re-filter source quality outside the indexed candidate scan');
   assert(staffPanelsBody.includes('review_queue_meta'), 'staff panels endpoint should expose review queue query metadata for false-empty protection');

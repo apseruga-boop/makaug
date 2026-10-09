@@ -798,18 +798,51 @@ function launchTestListingWhere(alias = 'p') {
 // (pendingReviewWhere / activePendingReviewWhere remain for reports only.)
 // Broker rows are counted in N and listed only in the broker queue.
 const STAFF_REVIEW_QUEUE_ORDER = 'p.created_at ASC NULLS LAST, p.id ASC'; // oldest first
-const STAFF_REVIEW_QUEUE_SEGMENTS = ['all', 'main', 'broker'];
+const STAFF_REVIEW_QUEUE_SEGMENTS = ['all', 'main', 'broker', 'found_online'];
+
+// SQL twin of rowIsFoundOnlineReview(), minus stored-suppressed rows, so the
+// found-online panel's count and its "Load more" pages are the same set.
+function foundOnlineReviewWhere(alias = 'p') {
+  const prefix = alias ? `${alias}.` : '';
+  return `(
+    (
+      COALESCE(${prefix}extra_fields->>'found_online', ${prefix}extra_fields->>'found_online_candidate', ${prefix}extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'
+      OR COALESCE(${prefix}extra_fields->>'source_url', ${prefix}extra_fields->>'source_post_url', ${prefix}extra_fields->>'tiktok_url', ${prefix}extra_fields->>'youtube_url', ${prefix}extra_fields->>'video_url', '') <> ''
+    )
+    AND NOT ${sourceQualitySuppressedFlagSql(alias)}
+  )`;
+}
 
 function staffReviewQueueSegmentWhere(segment = 'all', alias = 'p') {
   if (segment === 'main') return `NOT ${brokerReviewWhere(alias)}`;
   if (segment === 'broker') return brokerReviewWhere(alias);
+  if (segment === 'found_online') return foundOnlineReviewWhere(alias);
   return '';
+}
+
+// "Showing X of N" for the found-online panel, and where "Load more" pages.
+function staffFoundOnlinePanelMeta(returned, total, limit = STAFF_DASHBOARD_PANEL_LIMIT) {
+  const shown = Array.isArray(returned) ? returned.length : Number(returned) || 0;
+  const n = Number.isFinite(Number(total)) && total !== null ? Number(total) : null;
+  return {
+    segment: 'found_online',
+    order: 'oldest_first',
+    returned_count: shown,
+    total: n,
+    label: n === null ? `Showing ${shown}` : `Showing ${shown} of ${n}`,
+    has_more: n === null ? shown >= limit : n > shown,
+    page_limit: limit,
+    page_endpoint: `/api/staff/properties/review-queue?segment=found_online&limit=${limit}`
+  };
 }
 
 function staffReviewQueueMeta(segment, returnedCount, total, extra = {}) {
   return {
     segment,
-    count_filter: segment === 'broker' ? 'staff_actionable_pending_review_and_broker' : (segment === 'main' ? 'staff_actionable_pending_review_not_broker' : 'staff_actionable_pending_review'),
+    count_filter: segment === 'broker' ? 'staff_actionable_pending_review_and_broker'
+      : segment === 'main' ? 'staff_actionable_pending_review_not_broker'
+        : segment === 'found_online' ? 'staff_actionable_pending_review_found_online'
+          : 'staff_actionable_pending_review',
     order: 'oldest_first',
     returned_count: returnedCount,
     total: total === null || total === undefined || total === '' || !Number.isFinite(Number(total)) ? null : Number(total),
@@ -1347,6 +1380,8 @@ function clearStaffFastDashboardCache() {
   staffFastDashboardRefreshBackoff.clear();
   staffDashboardPanelsCache.clear();
 }
+// routes/properties.js calls this after a moderation decision.
+router.clearStaffFastDashboardCache = clearStaffFastDashboardCache;
 
 function staffFastDashboardFallbackReasons(payload = {}) {
   const reasons = new Set();
@@ -1705,6 +1740,106 @@ async function buildDashboardFastPayload(req) {
   };
 }
 
+// Panel lists shared by the full dashboard and the deferred panels payload
+// (?panels=1). The panels payload lost these in cce22a3 (6 Jul), so a
+// dashboard loaded the fast way showed empty leads, WhatsApp and source
+// registry lists, and a bridge stuck on "loading".
+function staffPanelLeadRows(staffId, panelLimit, options = {}) {
+  return safeRows(
+    `SELECT l.*, c.name AS contact_name, c.phone AS contact_phone, c.email AS contact_email, c.whatsapp AS contact_whatsapp, p.title AS listing_title
+     FROM leads l
+     LEFT JOIN contacts c ON c.id = l.contact_id
+     LEFT JOIN properties p ON p.id = l.listing_id
+     WHERE l.is_test = FALSE AND (l.assigned_to_user_id = $1 OR l.lead_status = ANY($2::text[]))
+     ORDER BY CASE WHEN l.assigned_to_user_id = $1 THEN 0 ELSE 1 END, l.created_at DESC
+     LIMIT $3`,
+    [staffId, OPEN_LEAD_STATUSES, panelLimit],
+    options
+  );
+}
+
+function staffPanelWhatsappConversationRows(staffId, panelLimit, options = {}) {
+  return safeRows(
+    `WITH latest_message AS (
+       SELECT DISTINCT ON (m.user_phone)
+              m.user_phone,
+              m.message_type,
+              m.payload,
+              m.created_at
+       FROM whatsapp_messages m
+       ORDER BY m.user_phone, m.created_at DESC
+     ),
+     latest_intent AS (
+       SELECT DISTINCT ON (i.user_phone)
+              i.user_phone,
+              i.detected_intent,
+              i.language,
+              i.created_at
+       FROM whatsapp_intent_logs i
+       ORDER BY i.user_phone, i.created_at DESC
+     )
+     SELECT c.phone::text AS phone,
+            c.status::text AS status,
+            c.category::text AS category,
+            c.priority::text AS priority,
+            c.assigned_to::text AS assigned_to,
+            LEFT(COALESCE(
+              lm.payload->>'effectiveBody',
+              lm.payload->>'body',
+              lm.payload->>'text',
+              lm.payload->>'reply',
+              c.last_summary,
+              lm.message_type,
+              'WhatsApp conversation'
+            ), 240) AS latest_preview,
+            li.detected_intent::text AS last_intent,
+            COALESCE(li.language, 'en')::text AS preferred_language,
+            c.last_message_at,
+            c.last_inbound_at,
+            c.last_outbound_at,
+            c.last_ai_reply_at,
+            c.last_human_reply_at,
+            c.metadata,
+            c.updated_at
+     FROM whatsapp_conversation_state c
+     LEFT JOIN latest_message lm ON lm.user_phone = c.phone
+     LEFT JOIN latest_intent li ON li.user_phone = c.phone
+     WHERE c.assigned_to::text = $1::text
+        OR c.status IN ('needs_human','escalated','open','ai_active','awaiting_customer')
+     ORDER BY COALESCE(c.last_message_at, lm.created_at, c.updated_at) DESC
+     LIMIT $2`,
+    [staffId, panelLimit],
+    options
+  );
+}
+
+function staffPanelWhatsappBridgeStatus(options = {}) {
+  return safeOne(
+    `SELECT status, operator_name, unread_count, last_error, last_seen_at,
+            EXTRACT(EPOCH FROM (NOW() - last_seen_at))::int AS age_seconds
+     FROM whatsapp_web_bridge_clients
+     ORDER BY last_seen_at DESC
+     LIMIT 1`,
+    [],
+    { status: 'unknown', operator_name: '', unread_count: 0, last_error: '', last_seen_at: null, age_seconds: null },
+    options
+  );
+}
+
+function staffPanelSourceRegistryRows(panelLimit, options = {}) {
+  return safeRows(
+    `SELECT id, source_name, platform, source_type, source_url, handle, contact_phone, contact_phone_alt,
+            contact_email, districts, listing_types, status, trust_level, consent_status, scrape_policy,
+            can_contact_directly, last_seen_at, last_checked_at, notes
+     FROM property_source_registry
+     WHERE status IN ('active','candidate','review_needed')
+     ORDER BY COALESCE(last_seen_at, last_checked_at, created_at) DESC
+     LIMIT $1`,
+    [panelLimit],
+    options
+  );
+}
+
 async function dashboardPayload(req) {
   const staffId = actorId(req);
   const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
@@ -1834,16 +1969,7 @@ async function dashboardPayload(req) {
        LIMIT $1`,
       [STAFF_DASHBOARD_QUEUE_LIMIT]
     ),
-    safeRows(
-      `SELECT l.*, c.name AS contact_name, c.phone AS contact_phone, c.email AS contact_email, c.whatsapp AS contact_whatsapp, p.title AS listing_title
-       FROM leads l
-       LEFT JOIN contacts c ON c.id = l.contact_id
-       LEFT JOIN properties p ON p.id = l.listing_id
-       WHERE l.is_test = FALSE AND (l.assigned_to_user_id = $1 OR l.lead_status = ANY($2::text[]))
-       ORDER BY CASE WHEN l.assigned_to_user_id = $1 THEN 0 ELSE 1 END, l.created_at DESC
-       LIMIT $3`,
-      [staffId, OPEN_LEAD_STATUSES, panelLimit]
-    ),
+    staffPanelLeadRows(staffId, panelLimit),
     safeRows(
       `SELECT id, full_name, business_name, email, phone, product_interests, target_locations,
               target_listing_types, budget_ugx, status, estimated_value_ugx, assigned_to_user_id,
@@ -1854,66 +1980,8 @@ async function dashboardPayload(req) {
        LIMIT $3`,
       [staffId, OPEN_AD_STATUSES, panelLimit]
     ),
-    safeRows(
-      `WITH latest_message AS (
-         SELECT DISTINCT ON (m.user_phone)
-                m.user_phone,
-                m.message_type,
-                m.payload,
-                m.created_at
-         FROM whatsapp_messages m
-         ORDER BY m.user_phone, m.created_at DESC
-       ),
-       latest_intent AS (
-         SELECT DISTINCT ON (i.user_phone)
-                i.user_phone,
-                i.detected_intent,
-                i.language,
-                i.created_at
-         FROM whatsapp_intent_logs i
-         ORDER BY i.user_phone, i.created_at DESC
-       )
-       SELECT c.phone::text AS phone,
-              c.status::text AS status,
-              c.category::text AS category,
-              c.priority::text AS priority,
-              c.assigned_to::text AS assigned_to,
-              LEFT(COALESCE(
-                lm.payload->>'effectiveBody',
-                lm.payload->>'body',
-                lm.payload->>'text',
-                lm.payload->>'reply',
-                c.last_summary,
-                lm.message_type,
-                'WhatsApp conversation'
-              ), 240) AS latest_preview,
-              li.detected_intent::text AS last_intent,
-              COALESCE(li.language, 'en')::text AS preferred_language,
-              c.last_message_at,
-              c.last_inbound_at,
-              c.last_outbound_at,
-              c.last_ai_reply_at,
-              c.last_human_reply_at,
-              c.metadata,
-              c.updated_at
-       FROM whatsapp_conversation_state c
-       LEFT JOIN latest_message lm ON lm.user_phone = c.phone
-       LEFT JOIN latest_intent li ON li.user_phone = c.phone
-       WHERE c.assigned_to::text = $1::text
-          OR c.status IN ('needs_human','escalated','open','ai_active','awaiting_customer')
-       ORDER BY COALESCE(c.last_message_at, lm.created_at, c.updated_at) DESC
-       LIMIT $2`,
-      [staffId, panelLimit]
-    ),
-    safeOne(
-      `SELECT status, operator_name, unread_count, last_error, last_seen_at,
-              EXTRACT(EPOCH FROM (NOW() - last_seen_at))::int AS age_seconds
-       FROM whatsapp_web_bridge_clients
-       ORDER BY last_seen_at DESC
-       LIMIT 1`,
-      [],
-      { status: 'unknown', operator_name: '', unread_count: 0, last_error: '', last_seen_at: null, age_seconds: null }
-    ),
+    staffPanelWhatsappConversationRows(staffId, panelLimit),
+    staffPanelWhatsappBridgeStatus(),
     safeOne(
       `SELECT
          COUNT(*)::int AS total_sources,
@@ -1948,16 +2016,7 @@ async function dashboardPayload(req) {
       [],
       { possible_duplicates: 0 }
     ),
-    safeRows(
-      `SELECT id, source_name, platform, source_type, source_url, handle, contact_phone, contact_phone_alt,
-              contact_email, districts, listing_types, status, trust_level, consent_status, scrape_policy,
-              can_contact_directly, last_seen_at, last_checked_at, notes
-       FROM property_source_registry
-       WHERE status IN ('active','candidate','review_needed')
-       ORDER BY COALESCE(last_seen_at, last_checked_at, created_at) DESC
-       LIMIT $1`,
-      [panelLimit]
-    ),
+    staffPanelSourceRegistryRows(panelLimit),
     safeRows(
       `SELECT p.id, p.title, p.area, p.district, p.status, p.updated_at,
               COALESCE(p.extra_fields->>'source_platform', p.source, p.listed_via) AS platform,
@@ -2069,6 +2128,32 @@ async function buildDashboardPanelsPayload(req) {
   const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
   const panelLimit = STAFF_DASHBOARD_PANEL_LIMIT;
   const panelQueryOptions = { timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS };
+  // Each with its own statement timeout, so one slow list cannot blank the rest.
+  const foundOnlineWhere = `${actionablePendingReviewWhere('p')} AND ${foundOnlineReviewWhere('p')}`;
+  const [leadRows, whatsappRows, whatsappBridge, sourceRegistryRows, foundOnlineRows, foundOnlineCount] = await Promise.all([
+    staffPanelLeadRows(staffId, panelLimit, { ...panelQueryOptions, label: 'staff_panel_leads' }),
+    staffPanelWhatsappConversationRows(staffId, panelLimit, { ...panelQueryOptions, label: 'staff_panel_whatsapp' }),
+    staffPanelWhatsappBridgeStatus({ ...panelQueryOptions, label: 'staff_panel_bridge' }),
+    staffPanelSourceRegistryRows(panelLimit, { ...panelQueryOptions, label: 'staff_panel_source_registry' }),
+    safeRows(
+      `SELECT p.id, p.title, p.area, p.district, p.status, p.created_at, p.updated_at,
+              COALESCE(p.extra_fields->>'source_platform', p.source, p.listed_via) AS platform,
+              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'youtube_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'video_url') AS source_url,
+              COALESCE(p.extra_fields->>'source_name', p.lister_name, 'Found online') AS source_name
+       FROM properties p
+       WHERE ${foundOnlineWhere}
+       ORDER BY ${STAFF_REVIEW_QUEUE_ORDER}
+       LIMIT $1`,
+      [panelLimit],
+      { ...panelQueryOptions, label: 'staff_panel_found_online' }
+    ),
+    safeOne(
+      `SELECT COUNT(*)::int AS total FROM properties p WHERE ${foundOnlineWhere}`,
+      [],
+      { total: null },
+      { ...panelQueryOptions, label: 'staff_panel_found_online_count' }
+    )
+  ]);
   const [recentActivity, reviewResult] = await Promise.all([
     safeRows(
       `SELECT id, action, target_type, target_id, metadata, created_at
@@ -2129,7 +2214,6 @@ async function buildDashboardPanelsPayload(req) {
   // Broker rows go only to the broker queue, so no listing renders twice.
   const reviewQueue = staffModerationPanelRows(reviewResult.rows.filter((row) => !rowIsBrokerReview(row)), queueLimit);
   const brokerReviewQueue = staffModerationPanelRows(reviewResult.rows.filter(rowIsBrokerReview), queueLimit);
-  const sourceQueueRows = reviewResult.rows.filter(rowIsFoundOnlineReview);
 
   return {
     staff: publicStaffUser(req.userAuth),
@@ -2155,8 +2239,16 @@ async function buildDashboardPanelsPayload(req) {
       empty_is_authoritative: reviewResult.ok
     },
     recent_activity: recentActivity,
+    leads: leadRows,
+    whatsapp_conversations: whatsappRows,
+    whatsapp_bridge: whatsappBridge,
     source_intake: {
-      queued_found_online: staffActiveReviewRows(sourceQueueRows, panelLimit)
+      source_registry: sourceRegistryRows,
+      // Oldest first, from the same set the review queue's found_online
+      // segment pages through, so "Load more" continues exactly where this
+      // stops. (It used to be the first 8 of a scan, with no total.)
+      queued_found_online: foundOnlineRows,
+      queued_found_online_meta: staffFoundOnlinePanelMeta(foundOnlineRows, foundOnlineCount?.total, panelLimit)
     }
   };
 }
