@@ -438,6 +438,22 @@ app.get('/marketplace-sitemap.xml', (_req, res) => {
   return res.status(410).type('text/plain').set('Cache-Control', 'public, max-age=3600').send('Gone');
 });
 
+// In-process HTML for the busiest public pages (120 s, cleared whenever
+// inventory changes). Anonymous, cookie-less GETs without a query string only.
+app.use((req, res, next) => {
+  if (!isProduction || req.method !== 'GET') return next();
+  const key = publicHtmlResponseCache.cacheKeyFor(req);
+  if (!key || publicHtmlResponseCache.cacheDecision(req) !== 'edge') return next();
+  const hit = publicHtmlResponseCache.get(key);
+  if (hit) {
+    for (const [name, value] of Object.entries(hit.headers || {})) res.setHeader(name, value);
+    res.setHeader('X-makaug-Html-Cache', 'hit');
+    return sendTextResponse(req, res, hit.html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
+  }
+  req.publicHtmlCacheKey = key;
+  return next();
+});
+
 app.get('/badge', (req, res) => {
   res.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=600');
   return res.type('html').send(require('./services/agentBadge').renderBadgePage());
@@ -564,6 +580,7 @@ app.get('/config.js', (_req, res) => {
 });
 
 const staticRoot = __dirname;
+const publicHtmlResponseCache = require('./services/publicHtmlResponseCache');
 const indexPath = path.join(staticRoot, 'index.html');
 const appJsPath = path.join(staticRoot, 'assets', 'makaug-app.js');
 const isProduction = process.env.NODE_ENV === 'production';
@@ -1027,14 +1044,40 @@ function sendBufferResponse(req, res, body, options = {}) {
 }
 
 function sendTextResponse(req, res, html, options = {}) {
-  res.setHeader('CDN-Cache-Control', 'no-store');
-  res.setHeader('Surrogate-Control', 'no-store');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
+  let cacheControl = options.cacheControl;
+  let edgeCacheable = false;
+  if (cacheControl === PUBLIC_HTML_CACHE_CONTROL && isProduction && res.statusCode === 200 && !res.locals?.publicHtmlDegraded) {
+    // Public SSR pages: shared caches may keep an anonymous, cookie-less GET
+    // for 5 minutes. Anything carrying auth is private; other cookies keep the
+    // default (revalidate every time).
+    const decision = publicHtmlResponseCache.cacheDecision(req);
+    if (decision === 'private') cacheControl = publicHtmlResponseCache.PRIVATE_CACHE_CONTROL;
+    if (decision === 'edge') {
+      cacheControl = publicHtmlResponseCache.EDGE_CACHE_CONTROL;
+      edgeCacheable = true;
+    }
+  }
+  if (edgeCacheable) {
+    res.setHeader('CDN-Cache-Control', publicHtmlResponseCache.EDGE_CACHE_CONTROL);
+    res.removeHeader('Surrogate-Control');
+    if (req.publicHtmlCacheKey) {
+      const extra = {};
+      for (const [name, value] of Object.entries(res.getHeaders())) {
+        if (/^x-(?:robots-tag|makaug-)/i.test(name)) extra[name] = value;
+      }
+      publicHtmlResponseCache.set(req.publicHtmlCacheKey, { html: String(html || ''), headers: extra });
+    }
+  } else {
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.setHeader('Surrogate-Control', 'no-store');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
   return sendBufferResponse(req, res, Buffer.from(String(html || ''), 'utf8'), {
     contentType: 'text/html; charset=utf-8',
     dynamicCompression: false,
-    ...options
+    ...options,
+    cacheControl
   });
 }
 
@@ -1354,6 +1397,7 @@ app.get([
     try {
       snapshot = await loadPublicSeoInventorySnapshot(db);
     } catch (error) {
+      res.locals.publicHtmlDegraded = true; // never share-cache a degraded page
       logger.warn('Facet SEO is continuing without its cached inventory snapshot', { path: req.path, message: error.message });
     }
     let listings = [];
@@ -1367,6 +1411,7 @@ app.get([
         limit: 24
       });
     } catch (error) {
+      res.locals.publicHtmlDegraded = true; // never share-cache a degraded page
       logger.warn('Facet SEO is continuing without server-rendered cards', { path: req.path, message: error.message });
     }
     const count = listings.length ? Number(listings[0].seo_total || listings.length) : 0;
@@ -1414,6 +1459,7 @@ app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config
     try {
       snapshot = await loadPublicSeoInventorySnapshot(db);
     } catch (error) {
+      res.locals.publicHtmlDegraded = true; // never share-cache a degraded page
       logger.warn('Category SEO is continuing without an inventory count', { path: req.path, message: error.message });
     }
     let meta = categoryPageSeoMeta(req.path, snapshot, absolutePublicUrl('/'));
@@ -1453,6 +1499,7 @@ app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config
           landingRank: Boolean(landing)
         });
       } catch (error) {
+        res.locals.publicHtmlDegraded = true; // never share-cache a degraded page
         logger.warn('Category SEO is continuing without server-rendered cards', { path: req.path, message: error.message });
       }
       const renderedSeo = renderCategorySeoHtml(html, {
@@ -1619,6 +1666,7 @@ app.get(['/', '/index.html'], async (req, res, next) => {
         loadPublicSeoListings(db, { limit: 6 })
       ]);
     } catch (error) {
+      res.locals.publicHtmlDegraded = true; // never share-cache a degraded page
       logger.warn('Homepage SEO is continuing with the available server-rendered data', { message: error.message });
     }
     const renderedSeo = renderHomepageSeoHtml(renderPublicHtml(req.originalUrl || req.url || req.path), {
@@ -1958,7 +2006,7 @@ function sendPublicNotFound(req, res) {
   return res.status(404).type('html').send(req.method === 'HEAD' ? '' : renderPublicNotFoundPage());
 }
 
-function sendPublicIndex(req, res, next) {
+async function sendPublicIndex(req, res, next) {
   if (req.path.startsWith('/api/')) return next();
   const aliasTarget = publicAliasRedirectTarget(req.path);
   if (aliasTarget) {
@@ -2073,6 +2121,15 @@ function sendPublicIndex(req, res, next) {
       } else {
         html = patchCanonicalLink(html, pageSeo?.canonical || absolutePublicUrl(selfPath));
         html = patchMetaTag(html, 'og:url', pageSeo?.canonical || absolutePublicUrl(selfPath));
+      }
+    }
+    if (/^\/brokers\/?$/i.test(req.path)) {
+      try {
+        const brokersSsr = require('./services/publicBrokersSsr');
+        html = brokersSsr.injectBrokerCards(html, await brokersSsr.loadBrokerCards(db));
+      } catch (error) {
+        res.locals.publicHtmlDegraded = true; // never share-cache a degraded page
+        logger.warn('Brokers page is serving without server-rendered agents', { message: error.message });
       }
     }
     return sendTextResponse(req, res, html, {
