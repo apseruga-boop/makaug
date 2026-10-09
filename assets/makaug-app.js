@@ -217,7 +217,15 @@ const OFFICIAL_AGENT_PORTRAITS = new Map([
 
 function mapRemoteAgentForUi(agent = {}) {
   const covered = Array.isArray(agent.districts_covered) ? agent.districts_covered.filter(Boolean) : [];
-  const area = covered.length ? covered.slice(0, 3).join(" • ") : (agent.area || "Uganda");
+  // Districts the agent actually has live listings in come first, then the
+  // districts they told us they cover.
+  const summaryDistricts = Array.isArray(agent.public_summary?.districts) ? agent.public_summary.districts : [];
+  const listingDistricts = Array.isArray(agent.listing_districts) ? agent.listing_districts : [];
+  const serviceDistricts = [...new Map([...summaryDistricts, ...listingDistricts, ...covered]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .map((value) => [value.toLowerCase(), value])).values()];
+  const area = serviceDistricts.length ? serviceDistricts.slice(0, 3).join(" • ") : (agent.area || "Uganda");
   const specializations = Array.isArray(agent.specializations) ? agent.specializations.filter(Boolean) : [];
   const socials = normalizeBrokerSocialLinks(agent);
   const directAgentAuthorised = String(agent.verification_reason || "").includes("[DIRECT_AGENT_AUTHORISED]");
@@ -249,6 +257,8 @@ function mapRemoteAgentForUi(agent = {}) {
     languages: Array.isArray(agent.languages) ? agent.languages.filter(Boolean) : ["English"],
     specialties: specializations,
     bio: agent.bio || "Professional makaug agent profile.",
+    public_summary: agent.public_summary && typeof agent.public_summary === "object" ? agent.public_summary : null,
+    service_districts: serviceDistricts,
     featured_homepage: agent.featured_homepage === true,
     featured_at: agent.featured_at || null,
     status: agent.status || "approved",
@@ -45331,6 +45341,37 @@ function brokerCompanyLineHtml(b, classes = "text-center text-gray-500 text-sm")
   return `<p class="${classes}">${adminEscape(company)}</p>`;
 }
 
+// makaug's own reference numbers for agents created by staff or intake (not a
+// licence the agent holds), so they never show on the public profile.
+function isInternalAgentReference(value) {
+  return /^(DIRECT|EMPLOYEE-INTAKE|STAFF-REASSIGN|PENDING|SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|QA|TEST)-/i.test(String(value || "").trim());
+}
+
+// About paragraphs: the agent's own bio (if any) followed by the write-up the
+// server builds from their live listings; the old one-line bio otherwise.
+function brokerAboutParagraphs(broker = {}) {
+  const about = Array.isArray(broker?.public_summary?.about)
+    ? broker.public_summary.about.map((text) => String(text || "").trim()).filter(Boolean)
+    : [];
+  return about.length ? about : [publicBrokerBio(broker)];
+}
+
+function brokerAreasCoveredHtml(broker = {}) {
+  const summary = broker?.public_summary || {};
+  const areas = Array.isArray(summary.areas) ? summary.areas.filter((area) => area?.name) : [];
+  const nearby = Array.isArray(summary.nearby_areas) ? summary.nearby_areas.filter((area) => area?.name) : [];
+  const districts = Array.isArray(broker?.service_districts) ? broker.service_districts : [];
+  if (!areas.length && !nearby.length && !districts.length) return "";
+  const chip = (label, extraClass) => `<span class="${extraClass} text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(label)}</span>`;
+  return `
+    <section class="mt-5" aria-labelledby="broker-areas-heading">
+      <div id="broker-areas-heading" class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Areas covered</div>
+      ${areas.length ? `<div class="flex flex-wrap gap-2">${areas.map((area) => chip(`${area.name}${Number(area.listings) > 0 ? ` · ${Number(area.listings)}` : ""}`, "bg-green-50 text-green-800 border border-green-100")).join("")}</div>` : ""}
+      ${nearby.length ? `<div class="mt-3 text-xs text-gray-500 mb-1.5">Also works nearby</div><div class="flex flex-wrap gap-2">${nearby.map((area) => chip(area.name, "bg-white text-gray-700 border border-gray-200")).join("")}</div>` : ""}
+      ${districts.length ? `<div class="mt-3 text-xs text-gray-500">Districts: <span class="font-semibold text-gray-700">${adminEscape(districts.join(", "))}</span></div>` : ""}
+    </section>`;
+}
+
 function publicBrokerBio(broker = {}) {
   const fallback = "Professional real estate broker helping clients buy, rent, and invest with confidence.";
   let bio = String(broker?.bio || fallback).trim();
@@ -57553,7 +57594,7 @@ async function openBrokerProfile(id) {
   const list = remoteListings.length ? remoteListings : getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
   const offPlanProjects = Array.isArray(b.remote_off_plan_projects) ? b.remote_off_plan_projects : [];
   const photoSrc = publicImageSrc(b.photo || b.profile_photo_url, `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`);
-  const publicLicence = /^DIRECT-/i.test(String(b.licence || "").trim()) ? "" : String(b.licence || "").trim();
+  const publicLicence = isInternalAgentReference(b.licence) ? "" : String(b.licence || "").trim();
   const totalVideoTours = list.reduce((sum, property) => sum + propertyVideoUrls(property).length, 0);
   content.innerHTML = `
     <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
@@ -57581,8 +57622,9 @@ async function openBrokerProfile(id) {
           <div>
             <section aria-labelledby="broker-about-heading">
               <h2 id="broker-about-heading" class="text-lg font-bold text-gray-900">About</h2>
-              <p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(publicBrokerBio(b))}</p>
+              ${brokerAboutParagraphs(b).map((text) => `<p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(text)}</p>`).join("")}
             </section>
+            ${brokerAreasCoveredHtml(b)}
 
             ${(b.specialties || []).length ? `<div class="mt-5"><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Specialities</div><div class="flex flex-wrap gap-2">${(b.specialties || []).map((s) => `<span class="bg-gray-100 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(s)}</span>`).join("")}</div></div>` : ""}
             ${(b.languages || []).length ? `<div class="mt-4"><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Languages</div><div class="flex flex-wrap gap-2">${(b.languages || []).map((l) => `<span class="bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(l)}</span>`).join("")}</div></div>` : ""}
@@ -57593,7 +57635,7 @@ async function openBrokerProfile(id) {
             <h2 class="font-bold text-gray-900">Profile overview</h2>
             <div class="mt-3 grid grid-cols-2 gap-3">
               <div class="rounded-xl bg-white border border-gray-100 p-3 text-center">
-                <div class="text-2xl font-black text-gray-900">${list.length}</div>
+                <div class="text-2xl font-black text-gray-900">${Math.max(list.length, Number(b.public_summary?.listings_counted) || 0)}</div>
                 <div class="text-xs text-gray-500">Active Listings</div>
               </div>
               <div class="rounded-xl bg-white border border-gray-100 p-3 text-center">

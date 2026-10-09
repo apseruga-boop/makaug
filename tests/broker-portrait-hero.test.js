@@ -34,7 +34,10 @@ assert(profile.includes('items-center justify-center gap-x-4') && profile.includ
 assert(!profile.includes('w-64 h-64') && !profile.includes('lg:grid-cols-[300px,1fr]'), 'broker profile must not stretch the portrait into the old oversized photo block');
 assert(profile.includes('aria-labelledby="broker-about-heading"') && profile.includes('Profile overview'), 'broker profile should clearly explain who the agent is');
 assert(frontend.includes('function publicBrokerBio(broker = {})'), 'public broker biographies should use a shared cleanup policy');
-assert(profile.includes('${adminEscape(publicBrokerBio(b))}'), 'public profiles should render the cleaned biography');
+// The About section now renders brokerAboutParagraphs(b): the agent's own
+// bio (cleaned by publicBrokerBio as before) plus the listing write-up.
+assert(profile.includes('brokerAboutParagraphs(b).map((text) => `<p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(text)}</p>`)'), 'public profiles should render the cleaned biography');
+assert(/function brokerAboutParagraphs[\s\S]*?\[publicBrokerBio\(broker\)\]/.test(frontend), 'without a listing write-up the cleaned biography still shows');
 
 const publicBioStart = frontend.indexOf('function publicBrokerBio(broker = {})');
 const publicBioEnd = frontend.indexOf('function brokerIconActionsHtml', publicBioStart);
