@@ -454,6 +454,14 @@ app.get('/robots.txt', (_req, res) => {
   res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send(lines.join('\n'));
 });
 
+// IndexNow key file: served only at /<INDEXNOW_KEY>.txt, any other .txt path
+// falls through untouched.
+app.get(/^\/[A-Za-z0-9-]{8,128}\.txt$/, (req, res, next) => {
+  const key = require('./services/indexNowService').keyFileFor(req.path);
+  if (!key) return next();
+  return res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send(key);
+});
+
 app.get('/sitemap.xml', async (_req, res, next) => {
   try {
     const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');

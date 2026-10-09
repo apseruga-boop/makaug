@@ -303,6 +303,14 @@ function clearModerationDecisionCaches(reason) {
   }
 }
 
+// A listing going live, or leaving the live set, is worth an IndexNow ping.
+// Fire-and-forget: it never throws and never delays the moderation response.
+function notifyIndexNowOnStatusChange(current = {}, listing = {}, nextStatus = '') {
+  if (nextStatus !== 'approved' && current.status !== 'approved') return;
+  if (nextStatus === current.status) return;
+  require('../services/indexNowService').notifyListing({ ...current, ...listing });
+}
+
 function clearPublicPropertiesCache(reason = 'public_inventory_changed') {
   // The server-rendered /property/:id page has its own listing cache.
   try {
@@ -5544,6 +5552,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     if (fastAdminRender && manualNotificationOnly && ['approved', 'rejected', 'pending'].includes(nextStatus)) {
       clearModerationDecisionCaches(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
       invalidatePublicInventoryMetricsCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
+      notifyIndexNowOnStatusChange(current, listing, nextStatus);
       if (humanApprovalOverride || humanIntegrityOverride) {
         await writeModerationAuditEvents();
       } else {
@@ -5573,6 +5582,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
     clearModerationDecisionCaches(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
     invalidatePublicInventoryMetricsCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
+    notifyIndexNowOnStatusChange(current, listing, nextStatus);
 
     return res.json(buildStatusResponse(alertMatching));
   } catch (error) {

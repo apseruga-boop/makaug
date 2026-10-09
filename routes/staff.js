@@ -3825,6 +3825,7 @@ router.post('/properties/bulk-review', async (req, res, next) => {
       }
       clearStaffFastDashboardCache();
       invalidatePublicInventoryMetricsCache('staff_bulk_found_online_review');
+      for (const approved of approvedRows) require('../services/indexNowService').notifyListing(approved);
       logStaffActivityInBackground(req, 'staff_bulk_found_online_review', {
         targetType: 'property',
         metadata: {

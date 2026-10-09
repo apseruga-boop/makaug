@@ -6065,6 +6065,7 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
     );
     await client.query('COMMIT');
     invalidatePublicInventoryMetricsCache('admin_direct_agent_listing_published');
+    require('../services/indexNowService').notifyListing(updated.rows[0]);
     await writeAudit('admin_direct_agent_listing_published', {
       property_id: req.params.id,
       agent_id: updated.rows[0].agent_id,
