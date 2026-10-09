@@ -15,6 +15,7 @@ const {
   normalizeLandTitleAvailability
 } = require('../utils/landTitleAvailability');
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
+const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
@@ -170,13 +171,16 @@ function buildThirdPartyPublicTitle(property = {}, extra = {}) {
   const type = thirdPartyTypeLabel(property);
   const beds = Number(property.bedrooms);
   const roomLabel = Number.isFinite(beds) && beds > 0 && type !== 'land' ? `${beds}-bed ` : '';
-  const propertyType = stripTransactionFromPublicPropertyType(property.property_type || '');
+  const propertyType = stripTransactionFromPublicPropertyType(humanPropertyTypeLabel(property.property_type || ''));
   if (type === 'land') {
     const size = redactThirdPartyPublicText(extra.size_raw || property.land_size || '');
     return `${size ? `${size} ` : ''}Land in ${area}`.trim();
   }
   if (type === 'property for rent') return `${roomLabel}${propertyType || 'Property'} for rent in ${area}`.trim();
-  if (type === 'commercial property') return `${propertyType || 'Commercial property'} in ${area}`.trim();
+  if (type === 'commercial property') {
+    const label = propertyType || 'commercial property';
+    return `${label.charAt(0).toUpperCase()}${label.slice(1)} in ${area}`.trim();
+  }
   if (type === 'student accommodation') return `Student accommodation in ${area}`.trim();
   return `${roomLabel}${propertyType || 'Property'} for sale in ${area}`.trim();
 }
@@ -253,6 +257,99 @@ function isFoundOnlinePublicRow(property = {}, safeExtra = null) {
     || sourceText.includes('sourced_online')
     || sourceText.includes('sourced online')
     || /tiktok\.com|youtube\.com|youtu\.be|instagram\.com|facebook\.com|fb\.watch|x\.com|twitter\.com/.test(sourceText);
+}
+
+// ---- Titles for owner/agent listings ---------------------------------------
+// Captions were used as titles: "Land on sale!! Location: Gayaza Road … 120m
+// per acre…", "NEW APARTMENT ALERT – KIWATULE! Looking for a modern…",
+// "Plotforsale 50x100ft@15m team". Strip noise, sentence-case ALL CAPS, cut at
+// a word boundary (≤ 60 chars), else fall back to a factual title.
+const TITLE_MAX_CHARS = 60;
+const DANGLING_WORDS = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'in', 'at', 'on', 'for', 'to', 'with', 'near', 'from', 'by', 'off', 'along', 'opposite', 'behind', 'per', 'via', '&']);
+
+function sentenceCaseSegment(segment = '') {
+  const letters = segment.replace(/[^\p{L}]/gu, '');
+  if (letters.length < 2 || letters !== letters.toUpperCase()) return segment;
+  const lower = segment.toLowerCase();
+  return lower.replace(/\p{L}/u, (char) => char.toUpperCase());
+}
+
+function stripTitleNoise(value = '') {
+  return String(value || '')
+    .replace(/https?:\/\/\S+|www\.\S+/gi, ' ')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, ' ')
+    .replace(/(^|\s|\S)@[\p{L}\p{N}_.]+/gu, '$1 ')
+    .replace(/#[\p{L}\p{N}_-]+/gu, ' ')
+    .replace(/\+?\d[\d\s().-]{7,}\d/g, ' ')
+    .replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}️︎‍⃣]/gu, ' ')
+    .replace(/([!?.,:;\-–—*_~])\1+/g, '$1')
+    .replace(/\s*([!?.,:;])\s*(?=[!?.,:;])/g, '')
+    .replace(/[\s|•·]+/g, ' ')
+    .replace(/\s+([!?.,:;])/g, '$1')
+    .trim();
+}
+
+function cutTitleAtWord(value = '', max = TITLE_MAX_CHARS) {
+  let text = value;
+  if (text.length > max) {
+    const slice = text.slice(0, max + 1);
+    // Prefer a whole first sentence when one ends after 20 characters.
+    const sentenceEnd = Math.max(slice.lastIndexOf('! '), slice.lastIndexOf('? '), slice.lastIndexOf('. '));
+    const lastSpace = slice.lastIndexOf(' ');
+    text = sentenceEnd >= 20
+      ? slice.slice(0, sentenceEnd + 1).trim()
+      : (lastSpace > 0 ? slice.slice(0, lastSpace) : slice.slice(0, max)).trim();
+  }
+  // Drop an unclosed "(" left by the cut, then never end on "(", punctuation
+  // or a dangling preposition/article.
+  if ((text.match(/\(/g) || []).length > (text.match(/\)/g) || []).length) {
+    text = text.slice(0, text.lastIndexOf('(')).trim();
+  }
+  for (let guard = 0; guard < 8; guard += 1) {
+    const before = text;
+    text = text.replace(/[\s(\[{"'“‘\-–—:;,/&]+$/u, '').trim();
+    if (/[!?.]$/.test(text) && text.length >= 20) break;
+    const words = text.split(/\s+/);
+    if (words.length > 1 && DANGLING_WORDS.has(words[words.length - 1].toLowerCase().replace(/[^\p{L}&]/gu, ''))) {
+      words.pop();
+      text = words.join(' ');
+    }
+    if (text === before) break;
+  }
+  return text;
+}
+
+function factualListingTitle(row = {}) {
+  const listingType = String(row.listing_type || row.category || '').toLowerCase();
+  const isLand = listingType === 'land';
+  const period = normalizePricePeriodForWrite(String(row.price_period || '').toLowerCase()) || '';
+  const transaction = String(row.transaction_type || row?.extra_fields?.transaction_type || '').toLowerCase();
+  const forRent = listingType === 'rent' || listingType === 'student' || listingType === 'students' || transaction === 'rent' || period === 'month';
+  const typeLabel = humanPropertyTypeLabel(row.property_type || '')
+    || (isLand ? 'Land' : listingType === 'commercial' ? 'Commercial property' : (listingType === 'student' || listingType === 'students') ? 'Student room' : 'Property');
+  const beds = Number(row.bedrooms);
+  const bedPrefix = !isLand && Number.isFinite(beds) && beds > 0 ? `${beds}-bed ` : '';
+  const area = String(row.area || row.district || '').trim() || ACTIVE_COUNTRY_NAME;
+  const type = bedPrefix ? typeLabel.toLowerCase() : typeLabel;
+  const title = `${bedPrefix}${type} for ${forRent ? 'rent' : 'sale'} in ${area}`;
+  return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
+function cleanListingTitle(row = {}) {
+  const original = String(row.title || '').replace(/\s+/g, ' ').trim();
+  // Stored enums in titles ("shop_retail in Kampala") read as labels.
+  const humanised = original.replace(/\b[a-z]+(?:_[a-z]+)+\b/gi, (word) => humanPropertyTypeLabel(word.toLowerCase()));
+  const stripped = stripTitleNoise(cleanPublicListingCopy(humanised))
+    .split(/(\s[–—-]\s|[!?.]\s)/)
+    .map((part) => sentenceCaseSegment(part))
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const cleaned = cutTitleAtWord(stripped);
+  const hasLetters = /\p{L}/u.test(cleaned);
+  const lostTooMuch = original.length > 0 && stripped.length < original.length / 2;
+  if (!cleaned || cleaned.length < 12 || !hasLetters || lostTooMuch) return factualListingTitle(row);
+  return cleaned.replace(/\p{L}/u, (char) => char.toUpperCase());
 }
 
 // ---- Amenities -------------------------------------------------------------
@@ -432,6 +529,9 @@ module.exports = {
   isPublicAmenity,
   filterPublicAmenities,
   publicContactLabelFor,
+  cleanListingTitle,
+  factualListingTitle,
+  TITLE_MAX_CHARS,
   LISTING_COPY_EXTRA_KEYS,
   listingCopyExtraSql,
   listingCopyExtraFromRaw

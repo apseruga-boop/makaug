@@ -4,16 +4,21 @@ const {
   CATEGORY_SEO,
   canonicalLocationRouteSlug,
   canonicalLocationsForSeoRow,
-  facetLocationSlug
+  facetLocationSlug,
+  priceInSeoBounds
 } = require('./publicSeoService');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
 const { SEO_FACET_MIN_LISTINGS, FACET_DEFINITIONS, COMMERCIAL_TRANSACTION_FACETS } = require('../utils/publicSeoFacets');
 const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require('../utils/locationRegistry');
 const { tenantFor } = require('../packages/shared-country-core');
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
+const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
+const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
+const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
 const {
   buildThirdPartyPublicSummary,
   buildThirdPartyPublicTitle,
+  cleanListingTitle,
   copyReviewState,
   isFoundOnlinePublicRow,
   listingCopyExtraFromRaw,
@@ -203,12 +208,33 @@ function categoryPredicate(key, alias = 'p') {
   return type ? `LOWER(COALESCE(${alias}.listing_type, '')) = '${type}'` : 'TRUE';
 }
 
+// Same scope as the snapshot (canonicalLocationsForSeoRow): a row without a
+// canonical_location_id counts under its district, so a district page and the
+// sitemap agree (pages in sitemap.xml rendered "0 Listings" before).
 function locationPredicate(location, values, alias = 'p') {
   if (!location) return '';
   const scope = canonicalLocationSearchScope([location.canonical_key], 0);
   const canonicalKeys = scope.exact.map((item) => item.key);
   values.push(canonicalKeys.length ? canonicalKeys : [location.canonical_key]);
-  return `AND LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) = ANY($${values.length}::text[])`;
+  const keysRef = `$${values.length}`;
+  if (location.level !== 'district') {
+    return `AND LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) = ANY(${keysRef}::text[])`;
+  }
+  // A district page counts every canonical area in the district (as the
+  // snapshot's canonicalLocationRollupCounts does), plus rows without a
+  // canonical id whose district matches.
+  const { canonicalizeUgandaLocation } = require('../utils/locationRegistry');
+  values.push(`${String(location.canonical_key || '').split(':')[0]}:%`);
+  const prefixRef = `$${values.length}`;
+  const districtNames = Array.from(new Set([location.district, location.location, ...(location.aliases || [])]
+    .map((name) => String(name || '').trim().toLowerCase())
+    .filter((name) => name && canonicalizeUgandaLocation('', name)?.district === location.district)));
+  values.push(districtNames.length ? districtNames : [String(location.district || '').toLowerCase()]);
+  return `AND (
+    LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) = ANY(${keysRef}::text[])
+    OR LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) LIKE ${prefixRef}
+    OR (COALESCE(${alias}.extra_fields->>'canonical_location_id', '') = '' AND LOWER(TRIM(COALESCE(${alias}.district, ''))) = ANY($${values.length}::text[]))
+  )`;
 }
 
 function facetPredicate(options, values, alias = 'p') {
@@ -282,7 +308,7 @@ function normalizeSeoListingRow(row = {}) {
   const canonicalDisplay = canonicalDisplayLocationForRow(row);
   const title = foundOnlinePublic
     ? buildThirdPartyPublicTitle(copyRow, copyExtra)
-    : collapseDuplicatePublicTransaction(row.title);
+    : (review.staffTitle ? collapseDuplicatePublicTransaction(row.title) : cleanListingTitle(row));
   const description = foundOnlinePublic
     ? buildThirdPartyPublicSummary(copyRow, copyExtra)
     : row.description;
@@ -291,6 +317,12 @@ function normalizeSeoListingRow(row = {}) {
     listing_type: String(row.listing_type || ''),
     title: collapseDuplicatePublicTransaction(title) || `${ACTIVE_COUNTRY_NAME} property`,
     title_reviewed: review.staffTitle || (foundOnlinePublic && review.kingTitle),
+    thin: row.has_real_photo === undefined ? false : isThinFoundOnlineListing({
+      foundOnline: foundOnlinePublic,
+      hasRealPhoto: row.has_real_photo === true,
+      description: row.description,
+      extra: copyExtra
+    }),
     description: plainText(description),
     area: plainText(canonicalDisplay.area),
     district: plainText(canonicalDisplay.district),
@@ -299,7 +331,7 @@ function normalizeSeoListingRow(row = {}) {
     transaction_type: plainText(row.transaction_type),
     bedrooms: Number(row.bedrooms || 0) || 0,
     bathrooms: Number(row.bathrooms || 0) || 0,
-    property_type: plainText(row.property_type),
+    property_type: humanPropertyTypeLabel(plainText(row.property_type)),
     primary_image_url: foundOnline ? '' : String(row.primary_image_url || '').trim(),
     canonical_location_id: String(row.canonical_location_id || '').trim(),
     city: plainText(row.city),
@@ -372,6 +404,7 @@ async function loadPublicSeoListing(db, propertyId) {
        p.source, p.listed_via,
        ${listingCopyExtraSql('p')} AS copy_extra,
        p.created_at, p.updated_at,
+       ${realHostedPhotoExistsSql('p')} AS has_real_photo,
        image.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
@@ -402,9 +435,16 @@ function priceLabel(listing = {}) {
   return `${currencyLabel} ${amount}${suffix}`;
 }
 
+// The price is left out of <title> when it is outside the honest bounds
+// (50ce7080 showed "— USh 2").
+function titlePriceSuffix(listing = {}) {
+  const category = ['student', 'students'].includes(String(listing.listing_type || '').toLowerCase()) ? 'students' : String(listing.listing_type || '').toLowerCase();
+  return Number(listing.price || 0) > 0 && priceInSeoBounds(listing, category) ? ` — ${priceLabel(listing)}` : '';
+}
+
 function propertySeoTitle(listing = {}) {
   if (listing.title_reviewed && listing.title) {
-    const reviewedPrice = Number(listing.price || 0) > 0 ? ` — ${priceLabel(listing)}` : '';
+    const reviewedPrice = titlePriceSuffix(listing);
     return `${listing.title}${reviewedPrice} | ${ACTIVE_BRAND}`;
   }
   const listingType = String(listing.listing_type || '').toLowerCase();
@@ -419,7 +459,7 @@ function propertySeoTitle(listing = {}) {
   const bedrooms = Number(listing.bedrooms || 0) > 0 ? `${Number(listing.bedrooms)}bdrm ` : '';
   const intent = transaction === 'rent' ? ' for Rent' : transaction === 'sale' ? ' for Sale' : '';
   const location = [listing.area, listing.district].filter(Boolean).join(', ');
-  const price = Number(listing.price || 0) > 0 ? ` — ${priceLabel(listing)}` : '';
+  const price = titlePriceSuffix(listing);
   return `${bedrooms}${type}${intent}${location ? ` in ${location}` : ''}${price} | ${ACTIVE_BRAND}`;
 }
 
@@ -505,6 +545,12 @@ function insertBeforeElement(html, id, content) {
   const bounds = findElementBoundsById(html, id);
   if (!bounds) return html;
   return `${String(html).slice(0, bounds.openStart)}${content}${String(html).slice(bounds.openStart)}`;
+}
+
+function insertAfterElement(html, id, content) {
+  const bounds = findElementBoundsById(html, id);
+  if (!bounds || !content) return html;
+  return `${String(html).slice(0, bounds.end)}${content}${String(html).slice(bounds.end)}`;
 }
 
 function appendElementInnerHtml(html, id, content) {
@@ -662,13 +708,18 @@ function renderCategorySeoHtml(html, options = {}) {
   const items = breadcrumbItems(meta, options.baseUrl);
   const areaLinks = areaLinksForCategory(options.snapshot, meta.key, meta.location, 12);
   const facetLinks = options.siblingLinks || facetLinksForArea(options.snapshot, meta);
-  const intro = `${renderRouteState(meta.routeState)}${renderBreadcrumbs(items)}<p class="mb-4 text-gray-700" data-ssr-category-summary="1">${escapeHtml(meta.description)}</p>${renderAreaLinks(facetLinks, 'Refine this area')}${renderAreaLinks(areaLinks, meta.location ? 'Nearby and popular areas' : 'Popular areas')}`;
+  // Marketing's intro (when the page has landing copy) replaces the summary.
+  const summary = meta.landingIntroHtml || `<p class="mb-4 text-gray-700" data-ssr-category-summary="1">${escapeHtml(meta.description)}</p>`;
+  const intro = `${renderRouteState(meta.routeState)}${renderBreadcrumbs(items)}${summary}${renderAreaLinks(facetLinks, 'Refine this area')}${renderAreaLinks(areaLinks, meta.location ? 'Nearby and popular areas' : 'Popular areas')}`;
   const cards = listings.length
     ? listings.map((listing, index) => renderSeoListingCard(listing, { categoryKey: meta.key, baseUrl: options.baseUrl, eager: index < 2 })).join('')
     : `<div class="col-span-full rounded-2xl border border-gray-200 bg-gray-50 p-5"><h2 class="font-black">No live listings in this exact area yet</h2><p class="mt-2 text-sm text-gray-600">Browse nearby areas or return to ${escapeHtml(meta.config.label)} across ${escapeHtml(ACTIVE_COUNTRY_NAME)}.</p></div>`;
   let rendered = replacePageH1(html, pageId, h1);
   rendered = replaceElementInnerHtml(rendered, gridId, cards);
   rendered = insertBeforeElement(rendered, gridId, intro);
+  // Landing body + FAQ go after the grid, outside it, so SPA hydration (which
+  // rewrites the grid) cannot wipe them.
+  if (meta.landingBodyHtml) rendered = insertAfterElement(rendered, gridId, meta.landingBodyHtml);
   rendered = insertBeforeClosingTag(rendered, 'footer', renderFooterAreaLinks(popularAreaLinks(options.snapshot, 15)));
   const itemList = {
     '@type': 'ItemList',
@@ -694,7 +745,8 @@ function renderCategorySeoHtml(html, options = {}) {
           isPartOf: { '@type': 'WebSite', name: ACTIVE_BRAND, url: absoluteUrl('/', options.baseUrl) }
         },
         breadcrumbStructuredData(items),
-        itemList
+        itemList,
+        ...(meta.landingFaq ? [meta.landingFaq] : [])
       ]
     }
   };

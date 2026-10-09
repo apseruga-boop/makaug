@@ -91,6 +91,20 @@ async function loadRealPhotoSummaries(queryable, propertyIds = []) {
   return out;
 }
 
+// SQL twin of realPhotoRejection() for set-based queries (no image rows are
+// loaded): true when the listing has at least one real hosted photo.
+function realHostedPhotoExistsSql(alias = 'p') {
+  const host = mediaHost().replace(/[^a-z0-9.-]/gi, '');
+  return `EXISTS (
+    SELECT 1 FROM property_images rhp
+     WHERE rhp.property_id = ${alias}.id
+       AND rhp.url ~* '^https?://${host.replace(/\./g, '\\.')}/.+'
+       AND rhp.url !~* '${STOCK_PHOTO_ID}|image[ _-]*pending|tiktokcdn|byteimg'
+       AND COALESCE(rhp.room_label, '') !~* 'image[ _-]*pending'
+       AND COALESCE(rhp.slot_key, '') <> 'source_evidence_card'
+  )`;
+}
+
 async function listingRealPhotoCheck(queryable, propertyId) {
   const map = await loadRealPhotoSummaries(queryable, [propertyId]);
   return map.get(String(propertyId || '').toLowerCase()) || summariseListingPhotos([]);
@@ -106,5 +120,6 @@ module.exports = {
   isRealHostedPhoto,
   summariseListingPhotos,
   loadRealPhotoSummaries,
-  listingRealPhotoCheck
+  listingRealPhotoCheck,
+  realHostedPhotoExistsSql
 };

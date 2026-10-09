@@ -45,6 +45,7 @@ const {
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { runMigrations } = require('./scripts/migrate');
 const {
+  isKnownPublicRoute,
   isProtectedPath,
   roleCanAccessProtectedPath,
   renderProtectedLoginShell,
@@ -92,8 +93,13 @@ const {
   CATEGORY_SEO,
   loadPublicSeoInventorySnapshot,
   categoryPageSeoMeta,
+  publicPageSeoFor,
+  slugifySeoPart,
+  canonicalLocationRouteSlug,
   sitemapEntries
 } = require('./services/publicSeoService');
+const { canonicalLocationOptions } = require('./utils/locationRegistry');
+const { buildLandingCopy } = require('./services/publicLandingCopy');
 const {
   loadPublicSeoListings,
   loadPublicSeoListing,
@@ -332,17 +338,11 @@ app.use('/api/staff/off-plan', offPlanStaffRoutes);
 app.use('/api/harvest', harvestRoutes);
 app.use('/api/short-term', shortTermRoutes);
 
+// 410 Gone: it listed ~2,900 "?category=&district=" URLs that all
+// canonicalised to /marketplace (8 Oct 2026). One sitemap.xml remains.
 app.get('/marketplace-sitemap.xml', (_req, res) => {
-  if (ACTIVE_TENANT.publicFeatures?.marketplace === false) return res.status(404).type('text/plain').send('Not found');
-  const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');
-  const urls = [`${baseUrl}/marketplace`];
-  for (const category of MARKETPLACE_CATEGORIES) {
-    for (const district of MARKETPLACE_DISTRICTS) {
-      urls.push(`${baseUrl}/marketplace?category=${encodeURIComponent(category.key)}&district=${encodeURIComponent(district)}`);
-    }
-  }
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((url) => `  <url><loc>${escapeXml(url)}</loc><changefreq>weekly</changefreq></url>`).join('\n')}\n</urlset>`;
-  res.type('application/xml').set('Cache-Control', 'public, max-age=3600').send(xml);
+  res.set('X-Robots-Tag', 'noindex');
+  return res.status(410).type('text/plain').set('Cache-Control', 'public, max-age=3600').send('Gone');
 });
 
 app.get('/robots.txt', (_req, res) => {
@@ -357,7 +357,6 @@ app.get('/robots.txt', (_req, res) => {
     'Disallow: /api/',
     `Sitemap: ${baseUrl}/sitemap.xml`
   ];
-  if (ACTIVE_TENANT.publicFeatures?.marketplace !== false) lines.push(`Sitemap: ${baseUrl}/marketplace-sitemap.xml`);
   lines.push('');
   res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send(lines.join('\n'));
 });
@@ -1375,6 +1374,18 @@ app.get([
   }
 });
 
+function uniqueLocationForBareSlug(slug = '') {
+  const normalized = slugifySeoPart(slug);
+  if (!normalized) return null;
+  const matches = canonicalLocationOptions().filter((location) => (
+    slugifySeoPart(location.location) === normalized
+    || (location.level === 'district' && slugifySeoPart(location.district) === normalized)
+  ));
+  const district = matches.find((location) => location.level === 'district');
+  if (district) return district;
+  return matches.length === 1 ? matches[0] : null;
+}
+
 app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config.route}/:locationSlug`]), async (req, res, next) => {
   try {
     res.set('X-makaug-Public-Sanitized', '1');
@@ -1384,13 +1395,33 @@ app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config
     } catch (error) {
       logger.warn('Category SEO is continuing without an inventory count', { path: req.path, message: error.message });
     }
-    const meta = categoryPageSeoMeta(req.path, snapshot, absolutePublicUrl('/'));
+    let meta = categoryPageSeoMeta(req.path, snapshot, absolutePublicUrl('/'));
     if (req.params.locationSlug && !meta?.location) {
+      // /to-rent/kampala → 301 /to-rent/kampala-kampala when the bare slug is a
+      // district or exactly one place; otherwise a real 404.
+      const redirectLocation = uniqueLocationForBareSlug(req.params.locationSlug);
+      if (redirectLocation && meta?.config?.route) {
+        const query = String(req.originalUrl || '').includes('?') ? String(req.originalUrl).slice(String(req.originalUrl).indexOf('?')) : '';
+        return res.redirect(301, `${meta.config.route}/${canonicalLocationRouteSlug(redirectLocation)}${query}`);
+      }
       res.set('X-Robots-Tag', 'noindex, noarchive');
       return res.status(404).send('Property area not found');
     }
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
     if (meta) {
+      // Marketing's landing copy for /for-sale, /land and /to-rent/kampala-kampala.
+      const landing = buildLandingCopy(meta.key, meta.location, snapshot, { page: req.query.page });
+      if (landing) {
+        meta = {
+          ...meta,
+          title: landing.title || meta.title,
+          description: landing.description || meta.description,
+          h1: landing.h1,
+          landingIntroHtml: landing.introHtml,
+          landingBodyHtml: landing.bodyHtml,
+          landingFaq: landing.faqStructuredData
+        };
+      }
       let listings = [];
       try {
         listings = await loadPublicSeoListings(db, {
@@ -1472,6 +1503,11 @@ app.get('/property/:id', async (req, res, next) => {
       ...renderedSeo.meta,
       structuredData: renderedSeo.structuredData
     });
+    if (listing.thin) {
+      // Thin found-online page: stays live, but noindex,follow and out of the sitemap.
+      html = patchMetaTag(html, 'robots', 'noindex,follow');
+      res.set('X-Robots-Tag', 'noindex, follow');
+    }
     res.set('X-makaug-Listing-OG', '1');
     res.set('X-makaug-Listing-SSR', '1');
     return sendTextResponse(req, res, html, {
@@ -1642,6 +1678,19 @@ app.get('/agents/:id', async (req, res, next) => {
     const isSupportedPreview = previewVersion === AGENT_SHARE_PREVIEW_VERSION
       || previewVersion === AGENT_SHARE_PREMIUM_PREVIEW_VERSION
       || previewVersion === AGENT_SHARE_BRAND_PREVIEW_VERSION;
+    if (!isSupportedPreview && !isApprovedFrancisProfile) {
+      // Every public agent gets a self-canonical and their name in the title;
+      // a profile that isn't public is a 404 (it used to be the homepage).
+      let meta = null;
+      try {
+        meta = await loadPublicAgentOpenGraphMeta(req.params.id, {});
+      } catch (error) {
+        logger.warn('Agent profile SEO is continuing without its meta', { message: error.message });
+        meta = { canonical: absolutePublicUrl(`/agents/${encodeURIComponent(req.params.id)}`) };
+      }
+      if (!meta) return sendPublicNotFound(req, res);
+      html = patchPublicPageSeoMeta(html, meta);
+    }
     if (isSupportedPreview || isApprovedFrancisProfile) {
       const meta = await loadPublicAgentOpenGraphMeta(req.params.id, {
         previewVersion,
@@ -1746,12 +1795,87 @@ app.get('/off-plan/overseas/:countrySlug/:slug', async (req, res, next) => {
 });
 
 app.get('/off-plan/overseas', sendPublicIndex);
-app.get('/off-plan/overseas/:countrySlug', sendPublicIndex);
+app.get('/off-plan/overseas/:countrySlug', async (req, res, next) => {
+  // Kenya has its own copy in sendPublicIndex; other countries need a market.
+  if (String(req.params.countrySlug || '').toLowerCase() === 'kenya') return sendPublicIndex(req, res, next);
+  let market = null;
+  try {
+    market = await getPublicMarket(db, req.params.countrySlug);
+  } catch (error) {
+    logger.warn('Overseas market lookup failed', { message: error.message });
+    return sendPublicIndex(req, res, next);
+  }
+  if (!market) return sendPublicNotFound(req, res);
+  req.offPlanMarket = market;
+  return sendPublicIndex(req, res, next);
+});
 
 app.get('/off-plan/:slug', (req, res, next) => renderOffPlanProjectPage(req, res, next, 'UG'));
 
+// Five obvious aliases people (and old links) use. Everything else unknown is a
+// real 404: it used to be 200 + the homepage + canonical "/" (a soft 404).
+const PUBLIC_ALIAS_REDIRECTS = Object.freeze({
+  '/contact': '/help',
+  '/faq': '/help',
+  '/privacy': '/privacy-policy',
+  '/legal/terms': '/terms',
+  '/pricing': '/about'
+});
+
+function publicAliasRedirectTarget(pathname = '') {
+  const clean = String(pathname || '').replace(/\/+$/, '').toLowerCase();
+  return PUBLIC_ALIAS_REDIRECTS[clean] || '';
+}
+
+function renderPublicNotFoundPage() {
+  const brand = escapeMetaContent(ACTIVE_TENANT.publicName || ACTIVE_TENANT.brandName || 'makaug.com');
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Page not found | ${brand}</title>
+  <link rel="icon" href="/favicon.ico">
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f8faf9;color:#14251b}
+    main{max-width:560px;margin:12vh auto;padding:0 20px}
+    h1{font-size:28px;margin:0 0 8px} p{color:#4b5d52;line-height:1.5}
+    nav{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+    a{color:#fff;background:#166534;text-decoration:none;padding:10px 14px;border-radius:10px;font-weight:700}
+    a.secondary{background:#fff;color:#166534;border:1px solid #bbf7d0}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Page not found</h1>
+    <p>We couldn't find that page. It may have moved, or the link may be wrong.</p>
+    <nav>
+      <a href="/">Home</a>
+      <a class="secondary" href="/for-sale">For sale</a>
+      <a class="secondary" href="/to-rent">To rent</a>
+      <a class="secondary" href="/land">Land</a>
+      <a class="secondary" href="/help">Help</a>
+    </nav>
+  </main>
+</body>
+</html>`;
+}
+
+function sendPublicNotFound(req, res) {
+  res.set('X-Robots-Tag', 'noindex');
+  res.set('Cache-Control', 'no-store');
+  return res.status(404).type('html').send(req.method === 'HEAD' ? '' : renderPublicNotFoundPage());
+}
+
 function sendPublicIndex(req, res, next) {
   if (req.path.startsWith('/api/')) return next();
+  const aliasTarget = publicAliasRedirectTarget(req.path);
+  if (aliasTarget) {
+    const query = String(req.originalUrl || '').includes('?') ? String(req.originalUrl).slice(String(req.originalUrl).indexOf('?')) : '';
+    return res.redirect(301, `${aliasTarget}${query}`);
+  }
+  if (!isKnownPublicRoute(req.path)) return sendPublicNotFound(req, res);
   if (ACTIVE_TENANT.publicFeatures?.marketplace === false && /^\/marketplace(?:\/|$)/i.test(req.path)) {
     return res.status(404).type('text/plain').send('Not found');
   }
@@ -1823,6 +1947,15 @@ function sendPublicIndex(req, res, next) {
         image: absolutePublicUrl('/assets/off-plan/spectre-westlands/nairobi-skyline.jpg'),
         structuredData: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Overseas Off Plan Property', url: absolutePublicUrl('/off-plan/overseas') }
       });
+    } else if (req.offPlanMarket) {
+      const marketPath = `/off-plan/overseas/${encodeURIComponent(req.offPlanMarket.country_slug)}`;
+      html = patchPublicPageSeoMeta(html, {
+        title: `Off Plan Property in ${req.offPlanMarket.country_name} | makaug.com Overseas`,
+        description: `Overseas off-plan property in ${req.offPlanMarket.country_name}, with makaug.com document review, payment guidance and currency information.`.slice(0, 155),
+        canonical: absolutePublicUrl(marketPath),
+        image: absolutePublicUrl('/assets/off-plan/spectre-westlands/nairobi-skyline.jpg'),
+        structuredData: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: `Off Plan Property in ${req.offPlanMarket.country_name}`, url: absolutePublicUrl(marketPath) }
+      });
     } else if (/^\/off-plan\/?$/i.test(req.path)) {
       html = patchPublicPageSeoMeta(html, {
         title: 'Off Plan Property and New Developments in Uganda | makaug.com',
@@ -1831,6 +1964,26 @@ function sendPublicIndex(req, res, next) {
         image: absolutePublicUrl('/assets/off-plan/entebbe-victoria-palms/residents-lounge-render.jpg'),
         structuredData: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Off Plan Property in Uganda', url: absolutePublicUrl('/off-plan') }
       });
+    }
+    // App pages: own title, description and self-canonical (they used to ship
+    // the generic shell with canonical "/"). Unlisted known routes still get a
+    // self-canonical so that no page but "/" claims to be the homepage.
+    if (!/^\/(?:about|off-plan)(?:\/|$)/i.test(req.path) && req.path !== '/' && !/^\/index\.html$/i.test(req.path)) {
+      const pageSeo = ACTIVE_COUNTRY_CODE === 'UG' ? publicPageSeoFor(req.path, absolutePublicUrl('/')) : null;
+      const selfPath = (String(req.path || '/').replace(/\/+$/, '') || '/').toLowerCase();
+      if (pageSeo && pageSeo.title) {
+        html = patchPublicPageSeoMeta(html, {
+          title: pageSeo.title,
+          description: pageSeo.description,
+          canonical: pageSeo.canonical,
+          image: absolutePublicUrl('/assets/og-cover.jpg')
+        });
+        html = patchMetaTag(html, 'robots', pageSeo.robots);
+        if (pageSeo.robots.startsWith('noindex')) res.set('X-Robots-Tag', 'noindex, follow');
+      } else {
+        html = patchCanonicalLink(html, pageSeo?.canonical || absolutePublicUrl(selfPath));
+        html = patchMetaTag(html, 'og:url', pageSeo?.canonical || absolutePublicUrl(selfPath));
+      }
     }
     return sendTextResponse(req, res, html, {
       cacheControl: PUBLIC_HTML_CACHE_CONTROL
