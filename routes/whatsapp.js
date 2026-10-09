@@ -6279,9 +6279,19 @@ async function createEmployeeReviewProperty({
   sessionData.last_create_media_dropped = 0;
   if (claimedElsewhere.size && sessionData.whatsapp_agent_self_intake !== true) {
     const before = (Array.isArray(storedMedia) ? storedMedia : []).length;
-    storedMedia = (Array.isArray(storedMedia) ? storedMedia : [])
+    const remaining = (Array.isArray(storedMedia) ? storedMedia : [])
       .filter((item) => !(item?.sha256 && claimedElsewhere.has(item.sha256)));
-    sessionData.last_create_media_dropped = before - storedMedia.length;
+    // Never strip a listing down to nothing. On 9 Oct a whole batch was sent
+    // twice; the second copy's video matched the first, was dropped as "already
+    // on another listing", and Mbalwa and Kira Shimoni reached review with no
+    // photo and no video at all. A duplicate is worth reporting, not worth an
+    // empty listing: when dropping would leave nothing, keep it and let the
+    // reuse note below flag it for the moderator.
+    const keepsSomething = remaining.some((item) => item?.kind === 'image' || item?.kind === 'video');
+    if (keepsSomething) {
+      storedMedia = remaining;
+      sessionData.last_create_media_dropped = before - storedMedia.length;
+    }
   }
   sessionData.last_create_media_kept = (Array.isArray(storedMedia) ? storedMedia : []).length;
   const listerName = normalizeInput(agent?.full_name || customer?.fullName || 'WhatsApp customer');
@@ -6555,11 +6565,20 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   const existingHashes = new Set(Array.isArray(property.extra_fields?.media_sha256) ? property.extra_fields.media_sha256 : []);
   const removedImageUrls = new Set(property.extra_fields?.staff_removed_image_urls || []);
   const claimedElsewhere = await employeeMediaClaimedElsewhere({ propertyId, storedMedia });
-  const uniqueMedia = storedMedia.filter((item) => !removedImageUrls.has(item.url)).filter((item) => (
+  const notYetHeld = storedMedia.filter((item) => !removedImageUrls.has(item.url)).filter((item) => (
     !item.sha256
     || !existingHashes.has(item.sha256)
     || (imageOffset === 0 && item.kind === 'image' && item.publicEligible !== false)
-  )).filter((item) => !(item.sha256 && claimedElsewhere.has(item.sha256)));
+  ));
+  let uniqueMedia = notYetHeld.filter((item) => !(item.sha256 && claimedElsewhere.has(item.sha256)));
+  // The same rule as at creation: a duplicate is reported, never allowed to
+  // leave a listing with nothing. Only when the property has no media of its
+  // own yet and the guard would drop every file.
+  const hasOwnMedia = imageOffset > 0
+    || (Array.isArray(property.extra_fields?.video_urls) && property.extra_fields.video_urls.length > 0);
+  if (!uniqueMedia.length && !hasOwnMedia && notYetHeld.some((item) => item.kind === 'image' || item.kind === 'video')) {
+    uniqueMedia = notYetHeld;
+  }
   if (!uniqueMedia.length) {
     if (imageOffset > 0) {
       const retainedVideoBlockers = (Array.isArray(property.extra_fields?.media_quality_blockers)

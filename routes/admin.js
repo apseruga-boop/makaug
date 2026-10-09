@@ -5824,6 +5824,110 @@ router.post('/properties/:id/videos', async (req, res, next) => {
   }
 });
 
+/**
+ * Re-pull a listing's own video from the WhatsApp message it arrived in.
+ *
+ * 9 Oct 2026: two of Francis's listings (Mbalwa, Kira Shimoni) reached review
+ * with no media because the duplicate-photo guard dropped their only file. The
+ * original is still on the WhatsApp bridge, referenced by the message row, so
+ * this fetches it, stores it, and records it on the listing. The cover-photo
+ * scheduler then makes stills from it. Only the listing's own source message is
+ * used; no URL is accepted from the caller.
+ */
+const RECOVERY_BRIDGE_HOSTS = () => new Set([
+  'makaug-waha-bridge.onrender.com',
+  ...[process.env.WHATSAPP_WEB_BRIDGE_URL, process.env.WAHA_BRIDGE_URL, process.env.WHATSAPP_BRIDGE_URL]
+    .map((value) => { try { return new URL(String(value || '')).hostname; } catch (_e) { return ''; } })
+    .filter(Boolean)
+]);
+
+router.post('/properties/:id/reattach-whatsapp-video', async (req, res, next) => {
+  const actorId = adminActorId(req);
+  try {
+    if (!parseBooleanLike(req.body?.confirm_rights || req.body?.video_rights_confirmed, false)) {
+      return res.status(400).json({ ok: false, error: 'Re-attaching a video requires video rights confirmation' });
+    }
+    const found = await db.query(
+      `SELECT id, status, source, extra_fields FROM properties WHERE id = $1 LIMIT 1`,
+      [req.params.id]
+    );
+    const property = found.rows[0];
+    if (!property) return res.status(404).json({ ok: false, error: 'Property not found' });
+    if (property.source !== 'whatsapp_employee_intake') {
+      return res.status(400).json({ ok: false, error: 'Only WhatsApp employee-intake listings can be recovered this way' });
+    }
+    const extra = property.extra_fields && typeof property.extra_fields === 'object' ? property.extra_fields : {};
+    const messageIds = [...new Set([extra.whatsapp_employee_message_id, extra.whatsapp_employee_message_id_received]
+      .map((value) => String(value || '').trim()).filter(Boolean))];
+    if (!messageIds.length) {
+      return res.status(409).json({ ok: false, error: 'This listing does not record its source message' });
+    }
+    const message = await db.query(
+      `SELECT payload FROM whatsapp_messages
+        WHERE wa_message_id = ANY($1::text[]) AND direction = 'inbound'
+        ORDER BY created_at DESC LIMIT 1`,
+      [messageIds]
+    );
+    const payload = message.rows[0]?.payload || {};
+    const mediaUrl = String(payload.mediaUrl || '').trim();
+    if (!mediaUrl) return res.status(404).json({ ok: false, error: 'The source message has no media on record' });
+    let parsed;
+    try { parsed = new URL(mediaUrl); } catch (_e) { parsed = null; }
+    if (!parsed || parsed.protocol !== 'https:' || !RECOVERY_BRIDGE_HOSTS().has(parsed.hostname)) {
+      return res.status(400).json({ ok: false, error: 'The recorded media is not on the WhatsApp bridge' });
+    }
+    const response = await fetch(parsed.toString(), { signal: AbortSignal.timeout(90000) });
+    if (!response.ok) {
+      return res.status(502).json({ ok: false, error: `The bridge no longer has this file (${response.status})` });
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    const MAX_RECOVERY_BYTES = 100 * 1024 * 1024;
+    if (!bytes.length || bytes.length > MAX_RECOVERY_BYTES) {
+      return res.status(400).json({ ok: false, error: 'The recovered file is empty or larger than 100MB' });
+    }
+    if (bytes.subarray(4, 8).toString('latin1') !== 'ftyp') {
+      return res.status(400).json({ ok: false, error: 'The recovered file is not an MP4 video' });
+    }
+    const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+    const key = `whatsapp-employee-intake/video/${Date.now()}-${crypto.randomUUID()}-recovered.mp4`;
+    const stored = await uploadBufferToS3({ bytes, mimeType: 'video/mp4', key });
+    const url = stored.publicUrl || stored.internalRef;
+    const existingUrls = Array.isArray(extra.video_urls) ? extra.video_urls.filter(Boolean) : [];
+    const mergedUrls = [...new Set([...existingUrls, url])];
+    const hashes = [...new Set([...(Array.isArray(extra.media_sha256) ? extra.media_sha256 : []), sha256])];
+    await db.query(
+      `UPDATE properties
+          SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [req.params.id, JSON.stringify({
+        video_url: mergedUrls[0],
+        video_urls: mergedUrls,
+        video_tours: mergedUrls.map((item, index) => ({ url: item, label: `Property video ${index + 1}`, sort_order: index })),
+        video_count: mergedUrls.length,
+        media_sha256: hashes,
+        media_count: Math.max(Number(extra.media_count) || 0, 0) + 1,
+        listing_media_pending: false,
+        video_still_auto_attempted_at: null,
+        media_recovered_from_whatsapp: { at: new Date().toISOString(), actor_id: actorId, bytes: bytes.length, sha256 }
+      })]
+    );
+    await db.query(
+      `INSERT INTO property_moderation_events (
+         property_id, actor_id, action, status_from, status_to, reason, notes, delivery
+       ) VALUES ($1,$2,'admin_whatsapp_video_reattached',$3,$3,$4,$5,$6::jsonb)`,
+      [req.params.id, actorId, property.status, 'Admin confirmed video rights.',
+        'Original video re-pulled from the WhatsApp message it arrived in.',
+        JSON.stringify({ bytes: bytes.length, sha256 })]
+    ).catch(() => {});
+    await writeAudit('admin_whatsapp_video_reattached', { property_id: req.params.id, bytes: bytes.length }, actorId);
+    return res.json({ ok: true, data: { property_id: req.params.id, video_count: mergedUrls.length, bytes: bytes.length } });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
 router.post('/properties/:id/direct-publish', async (req, res, next) => {
   const actorId = adminActorId(req);
   const client = await db.pool.connect();
