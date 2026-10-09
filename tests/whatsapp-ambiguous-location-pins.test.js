@@ -44,6 +44,11 @@ const SEETA = 'SEETA_BAJJO RD NEW TARMAC ACCESS🔥🔥 3 RENTAL UNITS OF #2 BED
   + 'SELF CONTAINED AT 85M';
 const NAKASAJJA = 'Nakasajja 11 decimals plot near Orevine international school at 40m';
 
+// The two captions exactly as they were sent, 9 Oct 2026.
+const SEETA_FULL = 'SEETA_BAJJO RD NEW TARMAC ACCESS🔥🔥 3 RENTAL UNITS OF #2BEDROOMS '
+  + 'AND BATHROOM SEATED ON #12DECIMALS MAKING 1.8M UGX TITLED SELLING AT 170M UGX';
+const NAKASAJJA_FULL = 'Nakasajja 11 decimals plot near Orevine international school UGX 45 million';
+
 // ---------------------------------------------------------------------------
 // Two names, one district
 // ---------------------------------------------------------------------------
@@ -80,6 +85,14 @@ test('so the plot saves instead of asking a question it was already told', () =>
   assert.deepStrictEqual(where(NAKASAJJA), { area: 'Nakasajja', district: 'Wakiso' });
 });
 
+test('both captions from the stuck batch now save, exactly as sent', () => {
+  for (const caption of [SEETA_FULL, NAKASAJJA_FULL]) {
+    assert.deepStrictEqual(missing(caption), [], caption.slice(0, 40));
+  }
+  assert.deepStrictEqual(where(SEETA_FULL), { area: 'Seeta', district: 'Mukono' });
+  assert.deepStrictEqual(where(NAKASAJJA_FULL), { area: 'Nakasajja', district: 'Wakiso' });
+});
+
 test('any place we recognise can settle it — no landmark entry needed', () => {
   // The general rule, and the one that will carry most captions: agents write
   // the road far more often than they write a school.
@@ -108,6 +121,39 @@ test('the Watuba loop stays shut', () => {
   // Watuba is in three districts and Luwero is named: the district the agent
   // wrote must survive, or answering the question asks it again.
   assert.deepStrictEqual(missing('10 acres at Watuba Luwero for sale at 200m'), []);
+});
+
+// ---------------------------------------------------------------------------
+// What it earns is not what it costs
+// ---------------------------------------------------------------------------
+
+test('the asking price beats the monthly income in the same caption', () => {
+  // The Seeta caption carries both: "MAKING 1.8M UGX … SELLING AT 170M UGX".
+  // Price notation is normalised before the scan, which turned "1.8M UGX" into a
+  // currency-led amount and let it match ahead of "SELLING AT". Once the location
+  // stopped blocking it, this would have gone live as a 1.8m rental.
+  const f = facts(SEETA_FULL);
+  assert.strictEqual(f.price, 170000000, 'the asking price, not the rent roll');
+  assert.strictEqual(f.listingType, 'sale', 'a block of rentals being sold is a sale');
+});
+
+test('the NALYA block still reads the same way', () => {
+  const f = facts('NALYA 4 RENTAL UNITS APARTMENT BLOCK OF 3 BEDROOMS EACH '
+    + 'MAKING 10MILLION MONTHLY SELLING UGX 1.1BILLION');
+  assert.strictEqual(f.price, 1100000000);
+  assert.strictEqual(f.listingType, 'sale');
+});
+
+test('an income with no asking price beside it is still the figure we have', () => {
+  // Nothing else is stated, so dropping it would lose the only number in the
+  // caption and send intake asking for a price the agent already gave.
+  const f = facts('Rental block in Kireka making UGX 3m monthly');
+  assert.strictEqual(f.price, 3000000);
+});
+
+test('an ordinary price led by its currency is untouched', () => {
+  assert.strictEqual(facts('House for sale in Kololo UGX 600m').price, 600000000);
+  assert.strictEqual(facts('2 bedroom apartment in Ntinda for rent at UGX 1.2m monthly').price, 1200000);
 });
 
 test('two ambiguous names that settle nothing are never silently picked', () => {
