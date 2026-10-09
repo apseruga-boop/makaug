@@ -13864,6 +13864,77 @@ function renderStaffWhatsapp(rows = [], whatsapp = {}) {
   }).join("")}`;
 }
 
+// The shared found-online queue: the first page comes with the dashboard
+// panels; "Load more" pages /api/staff/properties/review-queue?segment=found_online
+// (oldest first, the same set and order), so every row is reachable and the
+// count says how many there are. It used to stop silently at 8.
+let staffFoundOnlineState = { data: {}, extra: [], page: 1, loading: false, moreHint: false };
+
+function staffFoundOnlineCardHtml(row = {}) {
+  return `
+      <article class="rounded-xl border border-gray-200 p-3">
+        <div class="font-black text-gray-900">${adminEscape(row.title || "Found-online row")}</div>
+        <div class="text-xs text-gray-500 mt-1">${adminEscape([row.platform || row.source_platform, row.area, row.district, row.status].filter(Boolean).join(" • "))}</div>
+        <div class="mt-2 flex gap-2 flex-wrap">
+          <button type="button" onclick="openStaffListingPreview(${propertyIdArg(row.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-xs font-black">Preview</button>
+          ${row.source_url ? `<a href="${adminAttr(row.source_url)}" target="_blank" rel="noopener noreferrer" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-black">Source</a>` : ""}
+        </div>
+      </article>
+    `;
+}
+
+function staffFoundOnlineQueueView(state = staffFoundOnlineState) {
+  const data = state?.data || {};
+  const seen = new Set();
+  const rows = [...(Array.isArray(data.queued_found_online) ? data.queued_found_online : []), ...(state?.extra || [])]
+    .filter((row) => row && row.id && !seen.has(String(row.id)) && seen.add(String(row.id)));
+  const meta = data.queued_found_online_meta || null;
+  const total = meta && meta.total !== null && meta.total !== undefined && Number.isFinite(Number(meta.total)) ? Number(meta.total) : null;
+  const label = !meta || !rows.length ? "" : (total === null ? `Showing ${rows.length}` : `Showing ${rows.length} of ${total}`);
+  const hasMore = Boolean(meta) && (total === null ? Boolean(state?.page === 1 ? meta.has_more : state?.moreHint) : rows.length < total);
+  return { rows, label, hasMore, limit: Number(meta?.page_limit) || 8 };
+}
+
+function renderStaffFoundOnlineQueue() {
+  const queue = document.getElementById("staff-source-queue-list");
+  if (!queue) return;
+  const view = staffFoundOnlineQueueView();
+  const cards = view.rows.length
+    ? view.rows.map(staffFoundOnlineCardHtml).join("")
+    : staffEmpty("No found-online source rows are waiting in this panel.");
+  const footer = view.label ? `
+      <div class="flex items-center justify-between gap-2 pt-1">
+        <span id="staff-source-queue-count" class="text-[11px] font-black text-gray-600">${adminEscape(view.label)}</span>
+        ${view.hasMore ? `<button type="button" onclick="staffLoadMoreFoundOnline()" class="border border-emerald-200 text-emerald-800 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-black"${staffFoundOnlineState.loading ? " disabled" : ""}>${staffFoundOnlineState.loading ? "Loading…" : "Load more"}</button>` : ""}
+      </div>` : "";
+  queue.innerHTML = cards + footer;
+}
+
+async function staffLoadMoreFoundOnline() {
+  if (staffFoundOnlineState.loading) return;
+  const { limit } = staffFoundOnlineQueueView();
+  const nextPage = staffFoundOnlineState.page + 1;
+  staffFoundOnlineState.loading = true;
+  renderStaffFoundOnlineQueue();
+  try {
+    const res = await staffApiRequestWithTimeout(
+      `/api/staff/properties/review-queue?segment=found_online&page=${nextPage}&limit=${limit}&include_total=0`,
+      {},
+      STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
+      "Found-online queue"
+    );
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    staffFoundOnlineState.extra.push(...rows);
+    staffFoundOnlineState.page = nextPage;
+    staffFoundOnlineState.moreHint = Boolean(res?.meta?.has_more);
+  } catch (error) {
+    setTextById("staff-source-monitor-status", "Could not load more found-online rows. Try again in a moment.");
+  } finally {
+    staffFoundOnlineState.loading = false;
+    renderStaffFoundOnlineQueue();
+  }
+}
+
 function renderStaffSourceIntake(data = {}) {
   const status = document.getElementById("staff-source-intake-status");
   if (status) {
@@ -13929,20 +14000,9 @@ function renderStaffSourceIntake(data = {}) {
       <button type="button" onclick="staffUseSourcePreset(${adminListingIdArg(preset.value || "")})" class="rounded-full border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-900 px-3 py-1.5 text-[11px] font-black" title="${adminAttr(`${preset.language || "Search"}: ${preset.value || ""}`)}">${adminEscape(preset.label || "Search preset")}</button>
     `).join("") : `<span class="text-[11px] text-gray-500">No search presets returned.</span>`;
   }
-  const queue = document.getElementById("staff-source-queue-list");
-  if (queue) {
-    const rows = Array.isArray(data.queued_found_online) ? data.queued_found_online : [];
-    queue.innerHTML = rows.length ? rows.map((row) => `
-      <article class="rounded-xl border border-gray-200 p-3">
-        <div class="font-black text-gray-900">${adminEscape(row.title || "Found-online row")}</div>
-        <div class="text-xs text-gray-500 mt-1">${adminEscape([row.platform, row.area, row.district, row.status].filter(Boolean).join(" • "))}</div>
-        <div class="mt-2 flex gap-2 flex-wrap">
-          <button type="button" onclick="openStaffListingPreview(${propertyIdArg(row.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-xs font-black">Preview</button>
-          ${row.source_url ? `<a href="${adminAttr(row.source_url)}" target="_blank" rel="noopener noreferrer" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-black">Source</a>` : ""}
-        </div>
-      </article>
-    `).join("") : staffEmpty("No found-online source rows are waiting in this panel.");
-  }
+  // A new dashboard payload starts the found-online list again from page 1.
+  staffFoundOnlineState = { data, extra: [], page: 1, loading: false, moreHint: false };
+  renderStaffFoundOnlineQueue();
   const registry = document.getElementById("staff-source-registry-list");
   if (registry) {
     const rows = Array.isArray(data.source_registry) ? data.source_registry : [];
@@ -14293,7 +14353,14 @@ function mergeStaffDashboardPanelData(base = {}, panels = {}) {
     ...panels,
     summary: {
       ...(base?.summary || {}),
-      ...(panels.summary || {})
+      ...(panels.summary || {}),
+      // The panels bring the live bridge status; keep the fast payload's
+      // WhatsApp counts beside it rather than replacing them.
+      whatsapp: {
+        ...(base?.summary?.whatsapp || {}),
+        ...(panels.summary?.whatsapp || {}),
+        ...(panels.whatsapp_bridge ? { bridge: panels.whatsapp_bridge } : {})
+      }
     },
     source_intake: {
       ...(base?.source_intake || {}),
@@ -14907,13 +14974,14 @@ async function renderStaffDashboard() {
     const data = res?.data || {};
     applyStaffDashboardData(data, user);
     refreshMarketplaceModerationQueue("staff", { silent: true });
-    if (data.partial) {
-      window.setTimeout(() => {
-        if (currentPage === "staff-dashboard") {
-          hydrateStaffDashboardPanels(data.deferred_dashboard_endpoint || "/api/staff/dashboard?panels=1", userIdentityAtStart);
-        }
-      }, 50);
-    }
+    // Always: the fast payload carries counts only, and its lists (leads,
+    // WhatsApp, source registry, found-online queue) are empty until the
+    // panels arrive. Asking only when it was `partial` left them looking empty.
+    window.setTimeout(() => {
+      if (currentPage === "staff-dashboard") {
+        hydrateStaffDashboardPanels(data.deferred_dashboard_endpoint || "/api/staff/dashboard?panels=1", userIdentityAtStart);
+      }
+    }, 50);
   } catch (error) {
     const staleAuthRequest = !staffDashboardRequestMatchesUser(userIdentityAtStart);
     const authSessionFailure = isAuthSessionFailure(error);

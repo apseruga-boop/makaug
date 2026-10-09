@@ -336,13 +336,19 @@ async function resetMonthlyReadWindowIfNeeded(db, state) {
   const stateWindow = new Date(state.monthly_window_started_at || 0);
   if (stateWindow && !Number.isNaN(stateWindow.getTime()) && stateWindow.getTime() === currentWindow.getTime()) return state;
   const result = await db.query(
+    // A new month: the read count starts again, and a drip that the monthly
+    // cap switched off switches back on. One paused by a person stays paused.
     `UPDATE source_drip_state
      SET monthly_read_count = 0,
          monthly_window_started_at = $2,
+         enabled = CASE WHEN pause_reason = $3 THEN TRUE ELSE enabled END,
+         status = CASE WHEN pause_reason = $3 THEN 'scheduled' ELSE status END,
+         next_run_at = CASE WHEN pause_reason = $3 THEN NULL ELSE next_run_at END,
+         pause_reason = CASE WHEN pause_reason = $3 THEN NULL ELSE pause_reason END,
          updated_at = NOW()
      WHERE drip_key = $1
      RETURNING *`,
-    [YOUTUBE_SOURCE_DRIP_KEY, currentWindow.toISOString()]
+    [YOUTUBE_SOURCE_DRIP_KEY, currentWindow.toISOString(), 'youtube_monthly_read_cap_reached']
   );
   return normalizeStateRow(result.rows[0]);
 }
@@ -440,11 +446,13 @@ async function runYouTubeSourceDripOnce(db, { force = false, actorId = 'system' 
     const stateResult = await db.query('SELECT * FROM source_drip_state WHERE drip_key = $1', [YOUTUBE_SOURCE_DRIP_KEY]);
     let state = normalizeStateRow(stateResult.rows[0]);
     const now = new Date();
+    // Before the paused check: in a new month the cap pause lifts itself.
+    // It used to run after it, so a drip the cap had paused never got here.
+    state = await resetMonthlyReadWindowIfNeeded(db, state);
     if (!force) {
       if (!state.enabled) return { ok: true, skipped: true, reason: 'youtube_source_drip_paused', state };
       if (state.next_run_at && new Date(state.next_run_at) > now) return { ok: true, skipped: true, reason: 'youtube_source_drip_not_due', state };
     }
-    state = await resetMonthlyReadWindowIfNeeded(db, state);
     const sourceCount = youtubeSourceCount();
     const offset = sourceCount ? state.cursor_offset % sourceCount : 0;
     const batchSize = numberInRange(state.batch_size, DEFAULT_BATCH_SIZE, 1, MAX_BATCH_SIZE);
@@ -666,6 +674,7 @@ function startYouTubeSourceDripScheduler(db) {
 }
 
 module.exports = {
+  resetMonthlyReadWindowIfNeeded,
   YOUTUBE_DRIP_MARKER,
   YOUTUBE_SOURCE_DRIP_KEY,
   firstQuotaLimitedSourceOffset,

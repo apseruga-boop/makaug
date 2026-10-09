@@ -290,6 +290,18 @@ function setPublicPropertiesCache(key, payload) {
   if (oldestKey) publicPropertiesResponseCache.delete(oldestKey);
 }
 
+// After a moderation decision: the public inventory, the SSR listing cache, and
+// the staff dashboard (its header count and lists are cached per moderator, so
+// an approval left "Pending Review 22" on screen until the cache expired).
+function clearModerationDecisionCaches(reason) {
+  clearPublicPropertiesCache(reason);
+  try {
+    require('./staff').clearStaffFastDashboardCache();
+  } catch (error) {
+    logger.warn('Staff dashboard cache clear failed', { reason, message: error.message });
+  }
+}
+
 function clearPublicPropertiesCache(reason = 'public_inventory_changed') {
   // The server-rendered /property/:id page has its own listing cache.
   try {
@@ -5526,7 +5538,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     });
 
     if (fastAdminRender && manualNotificationOnly && ['approved', 'rejected', 'pending'].includes(nextStatus)) {
-      clearPublicPropertiesCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
+      clearModerationDecisionCaches(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
       invalidatePublicInventoryMetricsCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
       if (humanApprovalOverride || humanIntegrityOverride) {
         await writeModerationAuditEvents();
@@ -5555,7 +5567,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     if (nextStatus === 'approved' && current.status !== 'approved') {
       alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
     }
-    clearPublicPropertiesCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
+    clearModerationDecisionCaches(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
     invalidatePublicInventoryMetricsCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
 
     return res.json(buildStatusResponse(alertMatching));
