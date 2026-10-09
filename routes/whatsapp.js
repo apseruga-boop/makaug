@@ -5623,6 +5623,92 @@ function promoteEmployeeQueuedSubmission(data = {}) {
   return next;
 }
 
+/**
+ * Save every held property that is already complete.
+ *
+ * 9 Oct 2026, 09:16. Two properties sat in a batch reading "needs: nothing more",
+ * and COMPLETE answered that one of them was still waiting to be matched with its
+ * caption and media — of a property that had both. It refused on the mere
+ * PRESENCE of anything pending and never
+ * asked whether it was actually finished, so a batch with nothing outstanding
+ * could not be closed by the one keyword we tell agents to use. The summary then
+ * offered "reply OK", which no handler in this step implements. Three dead ends
+ * in one exchange.
+ *
+ * So COMPLETE now saves what is ready before it decides there is a problem, and
+ * only reports what genuinely still needs something.
+ *
+ * Order is preserved and nothing is skipped: each promotion moves the next queued
+ * submission into the pending slot, and the moment the head is not ready the pass
+ * stops rather than reaching past it. An item that still needs a detail therefore
+ * blocks only itself and the ones behind it, exactly as it does today.
+ */
+async function flushReadyEmployeeSubmissions({ phone, currentStep, data, inboundMessageId } = {}) {
+  const savedIds = [];
+  // Bounded, in case a promotion ever fails to consume its own entry.
+  for (let pass = 0; pass < 25; pass += 1) {
+    const caption = normalizeInput(data.pending_property_caption || '');
+    const storedMedia = employeePendingStoredMedia(data);
+    if (!caption || !storedMedia.length) break;
+    const facts = employeePropertyFacts(caption, data);
+    if (employeePropertyMissing(facts).length) break;
+
+    // Same duplicate guard the ordinary save path uses, so closing a batch can
+    // never put a property on the site twice.
+    let duplicate = null;
+    try {
+      duplicate = await findEmployeeDuplicateProperty({ caption, facts, sessionData: data });
+    } catch (error) {
+      logger.error('employee batch flush could not check for a duplicate', { error: error.message });
+      break;
+    }
+    if (duplicate) {
+      delete data.pending_property_caption;
+      clearEmployeePendingMedia(data);
+      if (!promoteEmployeeQueuedSubmission(data)) break;
+      continue;
+    }
+
+    let propertyId = '';
+    try {
+      propertyId = await createEmployeeReviewProperty({
+        phone,
+        inboundMessageId,
+        caption,
+        facts,
+        storedMedia,
+        sessionData: data
+      });
+    } catch (error) {
+      // Leave it pending and let the caller report it. Half-saving a batch
+      // silently is how media ends up on the wrong property.
+      logger.error('employee batch flush could not save a ready property', { error: error.message });
+      break;
+    }
+    if (!propertyId) break;
+
+    data.current_property_id = propertyId;
+    noteEmployeePropertyCreated(data);
+    data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
+    data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
+    delete data.pending_property_caption;
+    clearEmployeePendingMedia(data);
+    savedIds.push(propertyId);
+    if (data.whatsapp_agent_self_intake === true) {
+      alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts, caption });
+    }
+    if (!promoteEmployeeQueuedSubmission(data)) break;
+  }
+  if (savedIds.length && phone) {
+    try {
+      await replaceEmployeeSession(phone, currentStep, data);
+    } catch (error) {
+      logger.error('employee batch flush could not persist the session', { error: error.message });
+    }
+  }
+  return savedIds;
+}
+
 // WhatsApp stamps "Forwarded" onto a forwarded message. That word is not part of the
 // property, so it must not change the caption's identity: leaving it in gave a forwarded
 // copy a different hash from the direct send, which slipped it past the duplicate guard
@@ -8728,14 +8814,36 @@ async function handleEmployeeWhatsappIntake({
       }
     }
     if (isEmployeeIntakeComplete(cleanBody)) {
+      // Save anything that is already finished before deciding the batch cannot
+      // be closed. Without this, a property needing nothing still counted as an
+      // obstacle and COMPLETE refused itself in a loop.
+      const flushedIds = await flushReadyEmployeeSubmissions({
+        phone,
+        currentStep,
+        data,
+        inboundMessageId
+      });
       const pendingStoredMedia = employeePendingStoredMedia(data);
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
       const queuedSubmissions = employeePendingSubmissionQueue(data);
       if (pendingStoredMedia.length || pendingCaption || queuedSubmissions.length) {
         const pendingFacts = employeePropertyFacts(pendingCaption, data);
         const pendingMissing = employeePropertyMissing(pendingFacts);
+        // Name the real obstacle. "Waiting to be matched with its caption and
+        // media" was printed even when the property had both and needed nothing,
+        // which sent agents hunting for a problem that did not exist.
+        const blocker = !pendingCaption
+          ? 'one property has media but no caption yet'
+          : !pendingStoredMedia.length
+            ? 'one property has a caption but no photo or video yet'
+            : pendingMissing.length
+              ? 'one property still needs a detail'
+              : 'one property is still waiting to be matched with its caption and media';
         const missingLine = pendingMissing.length
           ? ` Still needed: ${pendingMissing.join(', ')}.`
+          : '';
+        const savedLine = flushedIds.length
+          ? ` ${flushedIds.length} ${flushedIds.length === 1 ? 'property was' : 'properties were'} saved for staff review just now.`
           : '';
         const queuedLine = queuedSubmissions.length
           ? ` ${queuedSubmissions.length} more separate ${queuedSubmissions.length === 1 ? 'property is' : 'properties are'} stored behind it.`
@@ -8748,7 +8856,7 @@ async function handleEmployeeWhatsappIntake({
           // refusal each time, with no exit named in it. The way out existed —
           // CANCEL — but nothing here ever said so, so there was no way to know
           // the batch could be closed at all.
-          message: `I have not completed this batch because one property is still waiting to be matched with its caption and media.${missingLine}${queuedLine} Send the corrected caption or the missing media; nothing has been merged and nothing is live.\n\nIf you would rather stop here, reply *CANCEL* — anything already in staff review stays there.`
+          message: `I have not completed this batch because ${blocker}.${missingLine}${savedLine}${queuedLine} Send the corrected caption or the missing media; nothing has been merged and nothing is live.\n\nIf you would rather stop here, reply *CANCEL* — anything already in staff review stays there.`
         };
       }
       let propertyIds = Array.isArray(data.property_ids) ? data.property_ids : [];
@@ -11592,10 +11700,17 @@ function cancelEmployeeBatchSummary(phone) {
  * it eight times while 72 photos failed to store behind it. A count of zero
  * deserves its own sentence.
  */
-function employeeBatchSummaryHeadline(savedCount = 0, notSavedCount = 0) {
+function employeeBatchSummaryHeadline(savedCount = 0, notSavedCount = 0, allReady = false) {
   const saved = Math.max(0, Number(savedCount) || 0);
   const notSaved = Math.max(0, Number(notSavedCount) || 0);
   if (!notSaved) return `📋 *All ${saved} saved* for staff review.`;
+  // "still needs a detail" over a list that reads "needs: nothing more" is the
+  // contradiction an agent cannot act on.
+  if (allReady) {
+    return notSaved === 1
+      ? '📋 *Not saved yet* — the property below is ready and waiting on you.'
+      : `📋 *Not saved yet* — all ${notSaved} properties below are ready and waiting on you.`;
+  }
   if (!saved) {
     return notSaved === 1
       ? '📋 *Nothing saved yet* — the property below still needs a detail.'
@@ -11645,7 +11760,10 @@ async function buildEmployeeBatchSummary(phone, since) {
         ? 'its photo or video (the caption arrived on its own)'
         : !pendingCaption
           ? 'a caption with type, exact location and price'
-          : (missing.length ? missing.join(', ') : 'nothing more — reply *OK* and I will save it')
+          // "reply *OK*" was offered here for months; no handler in this step
+          // has ever implemented OK, so it was a dead end. COMPLETE now saves
+          // anything that is ready, so point at the keyword that works.
+          : (missing.length ? missing.join(', ') : 'nothing more — reply *COMPLETE* and I will save it')
     });
   }
   for (const entry of employeePendingSubmissionQueue(data)) {
@@ -11656,13 +11774,15 @@ async function buildEmployeeBatchSummary(phone, since) {
         ? 'a caption with type, exact location and price'
         : !entry.media.length
           ? 'its photos or video'
-          : (missing.length ? missing.join(', ') : 'nothing more — send its photos or reply *OK*')
+          : (missing.length ? missing.join(', ') : 'nothing more — reply *COMPLETE* and I will save it')
     });
   }
 
   if (!saved.length && !notSaved.length) return '';
   const lines = [];
-  lines.push(employeeBatchSummaryHeadline(saved.length, notSaved.length));
+  const everythingReady = notSaved.length > 0
+    && notSaved.every((item) => /^nothing more\b/i.test(item.needs));
+  lines.push(employeeBatchSummaryHeadline(saved.length, notSaved.length, everythingReady));
   if (saved.length) {
     lines.push('', '✅ *Saved for staff review:*');
     saved.forEach((row, index) => lines.push(`${index + 1}. ${shortEmployeeLabel(row.title || 'Property', 50)}`));
@@ -11671,13 +11791,21 @@ async function buildEmployeeBatchSummary(phone, since) {
     lines.push('', `⚠️ *Not saved yet:*`);
     notSaved.forEach((item) => lines.push(`• "${item.label}"\n   needs: ${item.needs}`));
     const allNeedMedia = notSaved.every((item) => /photo|video/i.test(item.needs));
-    lines.push('', allNeedMedia
+    // Everything listed is finished and simply has not been written yet. Asking
+    // for "the missing detail" here is what sent an agent looking for a detail
+    // the caption already carried.
+    const allReady = everythingReady;
+    lines.push('', allReady
       ? (notSaved.length === 1
-        ? 'Send its photos or video and I will save it.'
-        : 'Send the photos or video for each one, newest caption first, and I will save them.')
-      : (notSaved.length === 1
-        ? 'Reply with just the missing detail (for example "Kira, Wakiso") and I will add it. You do not need to resend the media.'
-        : 'Reply with the missing detail for the first one listed and I will add it, then the next. You do not need to resend the media.'));
+        ? 'Reply *COMPLETE* and I will save it.'
+        : 'Reply *COMPLETE* and I will save them.')
+      : allNeedMedia
+        ? (notSaved.length === 1
+          ? 'Send its photos or video and I will save it.'
+          : 'Send the photos or video for each one, newest caption first, and I will save them.')
+        : (notSaved.length === 1
+          ? 'Reply with just the missing detail (for example "Kira, Wakiso") and I will add it. You do not need to resend the media.'
+          : 'Reply with the missing detail for the first one listed and I will add it, then the next. You do not need to resend the media.'));
   }
   if (data.identity_followup_required === true && !data.identity_document_url) {
     lines.push('', '🪪 ID still outstanding — send the ID photo when you can. Staff will chase it before approval.');
