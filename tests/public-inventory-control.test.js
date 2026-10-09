@@ -520,8 +520,12 @@ test('public shell uses precompiled Tailwind CSS instead of the runtime Play CDN
   assert.match(serverSource, /tailwindStaticCssVersion = 'tailwind-static-css-20260710'/);
   assert.match(packageSource, /"build:css": "(?:BROWSERSLIST_IGNORE_OLD_DATA=true )?tailwindcss -c tailwind\.config\.cjs -i assets\/tailwind\.input\.css -o assets\/tailwind\.css --minify"/);
   assert.match(packageSource, /"build:bot": "npm run build:css && tsc -p tsconfig\.json"/);
-  assert.match(tailwindConfigSource, /content: \['\.\/index\.html', '\.\/assets\/makaug-app\.js'\]/);
-  assert.ok(tailwindCssSource.length > 100000, 'compiled Tailwind CSS should be present, not an empty placeholder');
+  // PR F (#370) widened the content globs so purging keeps every class the
+  // server and app emit; the page and the app source must still be scanned.
+  assert.match(tailwindConfigSource, /content: \[[\s\S]*?'\.\/index\.html'[\s\S]*?\]/);
+  assert.match(tailwindConfigSource, /content: \[[\s\S]*?'\.\/assets\/\*\.js'[\s\S]*?\]/);
+  // ~96 KB since PR F purged unused classes (1.56 MB before); still far from a placeholder.
+  assert.ok(tailwindCssSource.length > 50000, 'compiled Tailwind CSS should be present, not an empty placeholder');
   assert.match(tailwindCssSource, /\.bg-green-700/);
   assert.match(tailwindCssSource, /\.text-green-700/);
   assert.match(tailwindCssSource, /\.md\\:grid-cols-2/);
@@ -783,7 +787,9 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /window\.__makaugReleaseMarkersArchive \+= "-public-scale-fast-path-20260704"/);
   assert.match(htmlSource, /window\.__makaugPublicSummaryPath = "\/api\/properties\?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1"/);
   assert.match(htmlSource, /window\.__makaugPublicSummaryPromise = fetch\(window\.__makaugPublicSummaryPath, \{ credentials: "same-origin" \}\)/);
-  assert.match(htmlSource, /preload\.href = "\/assets\/makaug-app\.js\?v=" \+ encodeURIComponent\(window\.__makaugAppVersion\)/);
+  // PR F (#370) removed the <head> preload of the app; the end-of-body loader
+  // still fetches it with the commit version.
+  assert.match(htmlSource, /script\.src = "\/assets\/makaug-app\.js\?v=" \+ encodeURIComponent\(window\.__makaugAppVersion\)/);
   assert.match(htmlSource, /script\.src = "\/assets\/makaug-app\.js\?v=" \+ encodeURIComponent\(window\.__makaugAppVersion\)/);
   assert.doesNotMatch(htmlSource, /<link rel="preload" href="\/assets\/makaug-app\.js\?v=/);
   const scaleMarkerCount = (htmlSource.match(/public-scale-fast-path-20260704/g) || []).length;

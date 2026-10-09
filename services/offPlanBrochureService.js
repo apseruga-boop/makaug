@@ -122,6 +122,8 @@ async function safeRemoteImageBuffer(url) {
 }
 
 async function googleStaticMapBuffer(project = {}) {
+  // Google's static map is paid; it is only used when MAP_PROVIDER=google.
+  if (String(process.env.MAP_PROVIDER || '').trim().toLowerCase() !== 'google') return null;
   const key = cleanText(process.env.GOOGLE_MAPS_STATIC_API_KEY || process.env.GOOGLE_MAPS_API_KEY, 500);
   const lat = Number(project.latitude);
   const lng = Number(project.longitude);
