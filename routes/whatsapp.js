@@ -3569,15 +3569,16 @@ async function handleOwnerReviewForward({
 
   const client = await db.getClient();
   let propertyId = '';
+  let forwardInquiryReference = '';
   try {
     await client.query('BEGIN');
     const inserted = await client.query(
       `INSERT INTO properties (
         listing_type, title, description, district, area, price, price_period,
         bedrooms, lister_name, lister_phone, lister_email, lister_type, agent_id,
-        extra_fields, status, listed_via, source
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending','whatsapp','whatsapp_forward_review')
-      RETURNING id`,
+        extra_fields, status, listed_via, source, inquiry_reference
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending','whatsapp','whatsapp_forward_review',$15)
+      RETURNING id, inquiry_reference`,
       [
         listingType,
         title,
@@ -3592,10 +3593,12 @@ async function handleOwnerReviewForward({
         agent?.email || null,
         'agent',
         agent?.id || null,
-        JSON.stringify(extraFields)
+        JSON.stringify(extraFields),
+        buildListingReference()
       ]
     );
     propertyId = inserted.rows[0].id;
+    forwardInquiryReference = inserted.rows[0].inquiry_reference || '';
     for (let index = 0; index < storedPhotos.length; index += 1) {
       await client.query(
         `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
@@ -3664,7 +3667,7 @@ async function handleOwnerReviewForward({
     propertyId,
     action: 'created',
     mediaAttached: storedPhotos.length,
-    message: `✅ Saved to review — ${String(propertyId).slice(0, 8).toUpperCase()}\nSource: ${listerName}${contact ? ` • phone ending ${contact.replace(/\D/g, '').slice(-4)}` : ' • contact needs confirmation'}\nMedia stored: ${storedPhotos.length}\nStatus: pending, not live.`
+    message: `✅ Saved to review — ${forwardInquiryReference || String(propertyId).slice(0, 8).toUpperCase()}\nSource: ${listerName}${contact ? ` • phone ending ${contact.replace(/\D/g, '').slice(-4)}` : ' • contact needs confirmation'}\nMedia stored: ${storedPhotos.length}\nStatus: pending, not live.`
   };
 }
 
@@ -6403,9 +6406,9 @@ async function createEmployeeReviewProperty({
         bedrooms, lister_name, lister_phone, lister_email, lister_type, agent_id,
         id_document_name, id_document_url, extra_fields,
         property_type, latitude, longitude,
-        status, moderation_stage, listed_via, source
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'pending','submitted','whatsapp','whatsapp_employee_intake')
-      RETURNING id`,
+        status, moderation_stage, listed_via, source, inquiry_reference
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'pending','submitted','whatsapp','whatsapp_employee_intake',$25)
+      RETURNING id, inquiry_reference`,
       [
         facts.listingType,
         title,
@@ -6431,7 +6434,10 @@ async function createEmployeeReviewProperty({
         // Buyers filter by type; a WhatsApp listing with none never showed under "house".
         parsePropertyType(withEnglishPropertyTerms(caption)) || null,
         Number.isFinite(Number(sessionData.pending_property_pin?.lat)) ? Number(sessionData.pending_property_pin.lat) : null,
-        Number.isFinite(Number(sessionData.pending_property_pin?.lng)) ? Number(sessionData.pending_property_pin.lng) : null
+        Number.isFinite(Number(sessionData.pending_property_pin?.lng)) ? Number(sessionData.pending_property_pin.lng) : null,
+        // Every listing gets an MK reference when it is created. 424 Agent 007
+        // listings had none, so staff and agents had nothing short to quote.
+        buildListingReference()
       ]
     );
     propertyId = inserted.rows[0].id;
@@ -11757,7 +11763,7 @@ async function buildEmployeeBatchSummary(phone, since) {
   const propertyIds = (Array.isArray(data.property_ids) ? data.property_ids : []).map(String);
   const saved = propertyIds.length
     ? (await db.query(
-      `SELECT id::text AS id, title
+      `SELECT id::text AS id, title, inquiry_reference
          FROM properties
         WHERE id::text = ANY($1::text[])
           AND created_at >= $2
@@ -11804,7 +11810,7 @@ async function buildEmployeeBatchSummary(phone, since) {
   lines.push(employeeBatchSummaryHeadline(saved.length, notSaved.length, everythingReady));
   if (saved.length) {
     lines.push('', '✅ *Saved for staff review:*');
-    saved.forEach((row, index) => lines.push(`${index + 1}. ${shortEmployeeLabel(row.title || 'Property', 50)}`));
+    saved.forEach((row, index) => lines.push(`${index + 1}. ${shortEmployeeLabel(row.title || 'Property', 50)}${row.inquiry_reference ? ` — ref *${row.inquiry_reference}*` : ''}`));
   }
   if (notSaved.length) {
     lines.push('', `⚠️ *Not saved yet:*`);
@@ -16844,8 +16850,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           deposit_amount, contract_months, bedrooms,
           nearest_university, distance_to_uni_km,
           lister_name, lister_phone, lister_email, lister_type, extra_fields,
-          status, listed_via, source, expires_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending','whatsapp','whatsapp',$17)
+          status, listed_via, source, expires_at, inquiry_reference
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending','whatsapp','whatsapp',$17,$18)
         RETURNING id`,
         [
           d.listing_type, d.title, d.description, d.district, d.area, d.price,
@@ -16873,7 +16879,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
             region: d.region,
             resolved_location_label: [d.area, d.district, d.region].filter(Boolean).join(', ')
           },
-          expiresAt
+          expiresAt,
+          buildListingReference()
         ]
       );
 
