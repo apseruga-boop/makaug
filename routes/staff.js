@@ -2161,6 +2161,23 @@ async function buildDashboardPanelsPayload(req) {
   };
 }
 
+/**
+ * A timestamp as an ISO string, or null when it is not one.
+ *
+ * pg hands back timestamptz columns as JavaScript Dates, and cleanText(Date)
+ * turns one into "Tue Oct 06 2026 12:55:57 GMT+0100 (British Summer Time)",
+ * which Postgres rejects as a timestamptz. A moderator saving a USD preview hit
+ * that on every row whose price_fx_as_of already had a value.
+ */
+function toIsoTimestampOrNull(value) {
+  if (value == null || value === '') return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  const text = String(value).trim();
+  if (!text) return null;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 function normalizeStaffListingPatch(existing = {}, patch = {}) {
   const normalized = safeJsonObject(patch, {});
   if (!Object.prototype.hasOwnProperty.call(normalized, 'listing_type')) {
@@ -2255,7 +2272,7 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     if (originalAmount > 0 && originalAmount <= 3_000_000 && fxRate > 0) {
       normalized.price = Math.round(originalAmount * fxRate);
       normalized.price_fx_rate_ugx = fxRate;
-      normalized.price_fx_as_of = cleanText(normalized.price_fx_as_of || existing.price_fx_as_of || new Date().toISOString());
+      normalized.price_fx_as_of = toIsoTimestampOrNull(normalized.price_fx_as_of) || toIsoTimestampOrNull(existing.price_fx_as_of) || new Date().toISOString();
     }
   }
   if (effectiveCurrency === 'UGX' && Object.prototype.hasOwnProperty.call(normalized, 'price')) {
@@ -2332,7 +2349,7 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     price_original_currency: (value) => cleanText(value).toUpperCase(),
     price_original: (value) => toNullableFloat(value),
     price_fx_rate_ugx: (value) => toNullableFloat(value),
-    price_fx_as_of: (value) => cleanText(value) || null,
+    price_fx_as_of: (value) => toIsoTimestampOrNull(value),
     price_on_application: (value) => boolLike(value),
     price_period: (value) => cleanText(value) || null,
     transaction_type: (value) => normalizeCommercialTransactionType(value) || null,
@@ -4824,4 +4841,4 @@ router.post('/assistant/query', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate };
+module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull };
