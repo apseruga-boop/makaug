@@ -674,6 +674,7 @@ function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
     { loc: `${root}/valuation`, changefreq: 'weekly', priority: '0.7' },
     { loc: `${root}/mortgage`, changefreq: 'weekly', priority: '0.7' },
     { loc: `${root}/brokers`, changefreq: 'daily', priority: '0.7' },
+    { loc: `${root}/badge`, changefreq: 'monthly', priority: '0.4' },
     { loc: `${root}/list-property`, changefreq: 'weekly', priority: '0.7' }
   ];
   for (const [key, config] of Object.entries(CATEGORY_SEO)) {

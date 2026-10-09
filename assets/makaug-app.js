@@ -11775,8 +11775,60 @@ function renderBrokerWhatsAppCard(broker = {}, stats = {}) {
       <button onclick="shareBrokerCard('linkedin')" class="border border-blue-200 text-blue-800 hover:bg-blue-50 rounded-xl px-4 py-2 font-bold">LinkedIn</button>
       <button onclick="shareBrokerCard('x')" class="border border-gray-200 text-gray-800 hover:bg-gray-50 rounded-xl px-4 py-2 font-bold">X</button>
       <button onclick="shareBrokerCard('link')" class="border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-2 font-bold">Copy profile link</button>
+    </div>
+    ${renderBrokerBadgeCard(broker, stats)}`;
+}
+
+// "Listed on makaug.com" badge. The HTML must stay identical to
+// services/agentBadge.js (tests/agent-badge.test.js compares them).
+function brokerBadgeEscape(value = "") {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function brokerBadgeSnippet(agentId, agencyName, variant = "light") {
+  const kind = variant === "dark" ? "dark" : "light";
+  const base = `https://makaug.com/assets/badge/makaug-listed-badge-${kind}`;
+  const name = brokerBadgeEscape(String(agencyName || "").trim() || "This agent");
+  return `<a href="https://makaug.com/agents/${encodeURIComponent(String(agentId || ""))}?utm_source=agent_badge&utm_medium=referral&utm_campaign=badge" title="${name} on makaug.com"><img src="${base}.png" srcset="${base}@2x.png 2x, ${base}@3x.png 3x" width="239" height="64" alt="Listed on makaug.com" style="border:0;max-width:100%;height:auto"></a>`;
+}
+
+function renderBrokerBadgeCard(broker = {}, stats = {}) {
+  const status = String(broker?.status || "").toLowerCase();
+  const liveCount = Number(stats?.active_listings ?? stats?.listing_count ?? 0);
+  // Only approved agents who have a public profile (an approved listing).
+  if (status !== "approved" || !broker?.id || !(liveCount > 0)) return "";
+  const agencyName = broker.company || broker.name || "";
+  const light = brokerBadgeSnippet(broker.id, agencyName, "light");
+  const dark = brokerBadgeSnippet(broker.id, agencyName, "dark");
+  return `
+    <div id="broker-badge-card" class="mt-6 rounded-2xl border border-green-100 bg-white p-4">
+      <div class="text-xs font-black uppercase tracking-wide text-green-700">Get your badge</div>
+      <h3 class="text-lg font-black text-gray-900 mt-1">Show “Listed on makaug.com” on your website</h3>
+      <p class="text-sm text-gray-600 mt-1">Paste this on your website, footer or contact page. It links to your makaug.com profile and live listings.</p>
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+        <div class="rounded-xl border border-gray-200 p-3"><div class="rounded-lg bg-white p-2">${light}</div>
+          <textarea id="broker-badge-light-code" readonly rows="4" class="mt-2 w-full rounded-lg border border-gray-200 bg-gray-50 p-2 font-mono text-[11px]">${brokerBadgeEscape(light)}</textarea>
+          <button type="button" onclick="copyBrokerBadgeSnippet('light')" class="mt-2 w-full border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-2 font-bold">Copy light badge code</button></div>
+        <div class="rounded-xl border border-gray-200 p-3"><div class="rounded-lg p-2" style="background:#14532d">${dark}</div>
+          <textarea id="broker-badge-dark-code" readonly rows="4" class="mt-2 w-full rounded-lg border border-gray-200 bg-gray-50 p-2 font-mono text-[11px]">${brokerBadgeEscape(dark)}</textarea>
+          <button type="button" onclick="copyBrokerBadgeSnippet('dark')" class="mt-2 w-full border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-2 font-bold">Copy dark badge code</button></div>
+      </div>
     </div>`;
 }
+
+async function copyBrokerBadgeSnippet(variant = "light") {
+  const el = document.getElementById(variant === "dark" ? "broker-badge-dark-code" : "broker-badge-light-code");
+  if (!el) return;
+  try {
+    await navigator.clipboard.writeText(el.value);
+  } catch (_) {
+    el.focus();
+    el.select();
+    try { document.execCommand("copy"); } catch (__) { /* user can copy the selected text */ }
+  }
+  if (typeof toast === "function") toast("Badge code copied.");
+}
+window.copyBrokerBadgeSnippet = copyBrokerBadgeSnippet;
 
 const BROKER_BOOST_FORMATS = [
   {
