@@ -8,6 +8,7 @@ const {
   slugifySeoPart
 } = require('./publicSeoService');
 const { canonicalLocationOptions } = require('../utils/locationRegistry');
+const { compactUgx } = require('../utils/compactUgx');
 const {
   SEO_FACET_MIN_LISTINGS,
   FACET_DEFINITIONS,
@@ -115,9 +116,9 @@ function uniqueLandingIntro(landing, count) {
   const detail = landing.facet.kind === 'bedrooms'
     ? `with exactly ${landing.facet.value} bedrooms`
     : landing.facet.kind === 'max_price'
-      ? `priced up to USh ${new Intl.NumberFormat('en-UG').format(landing.facet.value)}`
+      ? `priced up to UGX ${compactUgx(landing.facet.value)}`
       : landing.facet.kind === 'min_price'
-        ? `priced from USh ${new Intl.NumberFormat('en-UG').format(landing.facet.value)}`
+        ? `priced from UGX ${compactUgx(landing.facet.value)}`
         : landing.facet.kind === 'title_type'
           ? `with ${landing.facet.value} title information`
           : landing.facet.kind === 'transaction_type'

@@ -16,6 +16,7 @@ const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
+const { compactUgx } = require('../utils/compactUgx');
 const {
   buildThirdPartyPublicSummary,
   buildThirdPartyPublicTitle,
@@ -429,22 +430,39 @@ async function loadPublicSeoListing(db, propertyId) {
   return cached.row;
 }
 
+// One currency spelling site-wide: UGX (it was USh in titles and cards but UGX in
+// descriptions). South Africa keeps R.
+function currencyLabelForSeo() {
+  return ACTIVE_CURRENCY === 'ZAR' ? 'R' : ACTIVE_CURRENCY;
+}
+
+// "/month" for rent rows. Rows store mo / monthly / per_month as well as month.
+function pricePeriodSuffix(listing = {}) {
+  const period = normalizePricePeriodForWrite(String(listing.price_period || '').trim().toLowerCase()) || '';
+  return period && !['once', 'sale', 'total', 'poa'].includes(period) ? `/${period}` : '';
+}
+
+// Full price for cards, detail pages and descriptions: UGX 80,000,000/month.
 function priceLabel(listing = {}) {
   if (!(Number(listing.price) > 0)) return 'Price on application';
   const numberLocale = ACTIVE_COUNTRY_CODE === 'ZA' ? 'en-ZA' : 'en-UG';
-  const currencyLabel = ACTIVE_CURRENCY === 'ZAR' ? 'R' : ACTIVE_CURRENCY === 'UGX' ? 'USh' : ACTIVE_CURRENCY;
   const amount = new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 }).format(Number(listing.price));
-  // One spelling per period: rows store mo / monthly / per_month as well as month.
-  const period = normalizePricePeriodForWrite(String(listing.price_period || '').trim().toLowerCase()) || '';
-  const suffix = period && !['once', 'sale', 'total', 'poa'].includes(period) ? `/${period}` : '';
-  return `${currencyLabel} ${amount}${suffix}`;
+  return `${currencyLabelForSeo()} ${amount}${pricePeriodSuffix(listing)}`;
+}
+
+// Short price for <title> and og:title, where long numbers get cut off in search
+// results: UGX 30M, UGX 1.55B, UGX 1.8M/month. Never an ungrouped long number.
+function titlePriceLabel(listing = {}) {
+  if (!(Number(listing.price) > 0)) return 'Price on application';
+  if (ACTIVE_CURRENCY !== 'UGX') return priceLabel(listing);
+  return `${currencyLabelForSeo()} ${compactUgx(Number(listing.price))}${pricePeriodSuffix(listing)}`;
 }
 
 // The price is left out of <title> when it is outside the honest bounds
 // (50ce7080 showed "— USh 2").
 function titlePriceSuffix(listing = {}) {
   const category = ['student', 'students'].includes(String(listing.listing_type || '').toLowerCase()) ? 'students' : String(listing.listing_type || '').toLowerCase();
-  return Number(listing.price || 0) > 0 && priceInSeoBounds(listing, category) ? ` — ${priceLabel(listing)}` : '';
+  return Number(listing.price || 0) > 0 && priceInSeoBounds(listing, category) ? ` — ${titlePriceLabel(listing)}` : '';
 }
 
 function propertySeoTitle(listing = {}) {

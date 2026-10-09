@@ -192,9 +192,9 @@ test('B2: compact price never more than 1% off (server and frontend agree)', () 
 
 test('B2: "/month" for mo, monthly and per_month', () => {
   for (const period of ['month', 'mo', 'monthly', 'per_month']) {
-    assert.equal(copy.publicPriceLabelFor({ price: 2300000, price_period: period }), 'USh 2,300,000/month', period);
+    assert.equal(copy.publicPriceLabelFor({ price: 2300000, price_period: period }), 'UGX 2,300,000/month', period);
   }
-  assert.equal(copy.publicPriceLabelFor({ price: 350000000, price_period: 'once' }), 'USh 350,000,000');
+  assert.equal(copy.publicPriceLabelFor({ price: 350000000, price_period: 'once' }), 'UGX 350,000,000');
 });
 
 // ---- B3 ---------------------------------------------------------------------
