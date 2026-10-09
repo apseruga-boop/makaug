@@ -160,7 +160,11 @@ test('a refused COMPLETE names the way out', () => {
   const fs = require('fs');
   const path = require('path');
   const source = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
-  const refusal = source.slice(source.indexOf('I have not completed this batch because one property'));
-  assert.match(refusal.slice(0, 600), /reply \*CANCEL\*/,
+  // The reason is now built from the actual state (9 Oct 2026) rather than
+  // asserting one property is unmatched regardless, so anchor on the sentence
+  // rather than on the old fixed wording.
+  const at = source.indexOf('I have not completed this batch because ${blocker}');
+  assert.ok(at > 0, 'the refusal should still exist');
+  assert.match(source.slice(at, at + 600), /reply \*CANCEL\*/,
     'the refusal must offer an exit, or COMPLETE is a locked door');
 });

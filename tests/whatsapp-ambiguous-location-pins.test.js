@@ -30,6 +30,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
+const fs = require('node:fs');
+const path = require('node:path');
+
 const route = require('../routes/whatsapp').__test;
 const { landmarkDistrictsInText } = require('../utils/ugandaLandmarkPins');
 
@@ -165,4 +168,53 @@ test('two ambiguous names that settle nothing are never silently picked', () => 
   assert.ok(!locationPatch.district,
     'no district may be recorded when nothing in the caption chose one');
   assert.ok(missing(caption).length > 0, 'and it must still be asked about');
+});
+
+// ---------------------------------------------------------------------------
+// A batch with nothing outstanding must be closeable
+// ---------------------------------------------------------------------------
+
+/**
+ * 9 Oct 2026, 09:16. With the location fixed, the batch summary read "needs:
+ * nothing more" against both properties — and COMPLETE still answered "I have
+ * not completed this batch because one property is still waiting to be matched
+ * with its caption and media", of a property that had both. The summary offered
+ * "reply OK", which no handler in this step implements.
+ *
+ * Neither property reached staff review. The batch could not be closed by any
+ * word the agent was given.
+ */
+
+test('the headline does not claim a detail is missing when none is', () => {
+  const ready = route.employeeBatchSummaryHeadline(0, 2, true);
+  assert.doesNotMatch(ready, /still need a detail/,
+    'the list underneath says "needs: nothing more" — the headline must not contradict it');
+  assert.match(ready, /ready and waiting/);
+  assert.match(route.employeeBatchSummaryHeadline(0, 1, true), /is ready and waiting/);
+});
+
+test('the old headline is unchanged when something really is missing', () => {
+  assert.match(route.employeeBatchSummaryHeadline(0, 2), /all 2 properties below still need a detail/);
+  assert.match(route.employeeBatchSummaryHeadline(0, 1), /the property below still needs a detail/);
+  assert.match(route.employeeBatchSummaryHeadline(3, 0), /All 3 saved/);
+});
+
+test('this step never offers OK again, because nothing implements it', () => {
+  // A keyword we print but do not handle is a dead end, and this flow has cost
+  // us several. If OK is ever offered here again it must be implemented first.
+  const source = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
+  assert.doesNotMatch(source, /nothing more — reply \*OK\*/,
+    'offer COMPLETE, which saves, or implement OK');
+  assert.doesNotMatch(source, /nothing more — send its photos or reply \*OK\*/,
+    'the property already has its photos at this point');
+});
+
+test('COMPLETE saves what is ready before it refuses anything', () => {
+  // The guard that matters: the refusal must come after the save attempt, not
+  // instead of it. Reordering these two would restore the loop exactly.
+  const source = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
+  const flush = source.indexOf('flushReadyEmployeeSubmissions({');
+  const refusal = source.indexOf('I have not completed this batch because ${blocker}');
+  assert.ok(flush > 0 && refusal > 0, 'both the flush and the refusal should exist');
+  assert.ok(flush < refusal, 'COMPLETE must try to save before it reports an obstacle');
 });
