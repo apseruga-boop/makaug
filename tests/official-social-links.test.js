@@ -12,7 +12,8 @@ const officialLinks = {
   LinkedIn: 'https://www.linkedin.com/company/makaug-com/',
   YouTube: 'https://www.youtube.com/@makaugproperty',
   TikTok: 'https://www.tiktok.com/@makaug.com',
-  Facebook: 'https://www.facebook.com/61592577775941/'
+  Facebook: 'https://www.facebook.com/61592577775941/',
+  X: 'https://x.com/makauganda'
 };
 
 for (const [platform, href] of Object.entries(officialLinks)) {

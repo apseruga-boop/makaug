@@ -864,26 +864,59 @@ function renderHomepageSeoHtml(html, options = {}) {
     html: rendered,
     structuredData: {
       '@context': 'https://schema.org',
-      '@graph': [
-        {
-          '@type': 'Organization',
-          name: ACTIVE_BRAND,
-          url: absoluteUrl('/', options.baseUrl),
-          areaServed: { '@type': 'Country', name: ACTIVE_COUNTRY_NAME }
-        },
-        {
-          '@type': 'WebSite',
-          name: ACTIVE_BRAND,
-          url: absoluteUrl('/', options.baseUrl),
-          potentialAction: {
-            '@type': 'SearchAction',
-            target: `${absoluteUrl('/for-sale', options.baseUrl)}?area={search_term_string}`,
-            'query-input': 'required name=search_term_string'
-          }
-        }
-      ]
+      '@graph': homepageBrandGraph(options.baseUrl)
     }
   };
+}
+
+// Organization + WebSite for the homepage. A tenant with `schemaOrg` config
+// (Uganda) gets the full brand entity (name, alternate names, logo, sameAs,
+// contactPoint); any other tenant keeps the plain name/url nodes.
+function homepageBrandGraph(baseUrl) {
+  const home = absoluteUrl('/', baseUrl);
+  const config = ACTIVE_TENANT.schemaOrg;
+  const organization = {
+    '@type': 'Organization',
+    name: ACTIVE_BRAND,
+    url: home,
+    areaServed: { '@type': 'Country', name: ACTIVE_COUNTRY_NAME }
+  };
+  const website = {
+    '@type': 'WebSite',
+    name: ACTIVE_BRAND,
+    url: home,
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: `${absoluteUrl('/for-sale', baseUrl)}?area={search_term_string}`,
+      'query-input': 'required name=search_term_string'
+    }
+  };
+  if (!config) return [organization, website];
+  const organizationId = `${home}#organization`;
+  Object.assign(organization, {
+    '@id': organizationId,
+    name: config.name,
+    alternateName: [...config.alternateName],
+    logo: absoluteUrl(config.logoPath, baseUrl),
+    sameAs: [...config.sameAs],
+    areaServed: { '@type': 'Country', name: ACTIVE_COUNTRY_NAME, identifier: ACTIVE_COUNTRY_CODE }
+  });
+  if (ACTIVE_TENANT.phoneE164) {
+    organization.contactPoint = {
+      '@type': 'ContactPoint',
+      telephone: ACTIVE_TENANT.phoneE164,
+      contactType: config.contactPoint.contactType,
+      areaServed: config.contactPoint.areaServed,
+      availableLanguage: [...config.contactPoint.availableLanguage]
+    };
+  }
+  Object.assign(website, {
+    '@id': `${home}#website`,
+    name: config.name,
+    alternateName: [...config.alternateName],
+    publisher: { '@id': organizationId }
+  });
+  return [organization, website];
 }
 
 module.exports = {
@@ -915,6 +948,7 @@ module.exports = {
   renderPropertySeoHtml,
   renderHomepageSeoHtml,
   renderPopularSearches,
+  homepageBrandGraph,
   breadcrumbStructuredData,
   __seoListingCache: Object.freeze({
     clear: clearSeoListingCache,

@@ -1616,7 +1616,7 @@ app.get(['/', '/index.html'], async (req, res, next) => {
     const html = patchPublicPageSeoMeta(renderedSeo.html, {
       title: IS_SOUTH_AFRICA
         ? 'seshaikhaya.com | Property for Sale and Rent in South Africa'
-        : 'makaug.com | Houses for Rent and Sale in Uganda',
+        : 'makaug: Houses for Sale & Rent and Land in Uganda | makaug.com',
       description: IS_SOUTH_AFRICA
         ? "Find reviewed homes for sale, rentals, land, commercial property and student accommodation across South Africa on seshaikhaya.com."
         : "Find houses for rent, homes for sale, land, commercial property and student accommodation across Uganda on makaug.com.",
