@@ -75,7 +75,12 @@ function selectionQuery(backfill) {
                      ELSE INTERVAL '30 minutes' END
               )
        )
-     ORDER BY candidates.created_at ASC
+     -- Newest first. Opening this up to approved listings uncovered a backlog of
+     -- twenty-odd old ones with no cover at all; oldest-first put the properties
+     -- that broke this morning behind all of them, which is the opposite of what
+     -- anyone watching a fresh batch needs. The backlog still drains, because a
+     -- property leaves this list as soon as it has a picture.
+     ORDER BY candidates.created_at DESC
      LIMIT 1`;
 }
 
@@ -143,6 +148,14 @@ function startVideoStillScheduler(db) {
   const pollMs = Math.max(60_000, Number(process.env.VIDEO_STILL_POLL_MS || 4 * 60_000));
   timer = setInterval(() => { tickVideoStills(db); }, pollMs);
   timer.unref?.();
+
+  // setInterval does not fire until a whole interval has passed, so every deploy
+  // restarted the wait from zero. On 9 Oct three deploys inside half an hour
+  // meant this job never once ran, which looked exactly like it being broken.
+  // One kick shortly after boot, far enough in not to compete with start-up.
+  const kick = setTimeout(() => { tickVideoStills(db); }, 60_000);
+  kick.unref?.();
+
   logger.info('Video still scheduler armed', { pollMs });
 }
 

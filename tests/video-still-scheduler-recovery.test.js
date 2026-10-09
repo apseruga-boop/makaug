@@ -161,3 +161,36 @@ test('the query is exported so it can be run from the admin API', () => {
   assert.match(sql, /IN \('pending', 'approved'\)/);
   assert.match(sql, /LIMIT 1\s*$/, 'the admin endpoint widens this limit by replacing it');
 });
+
+test('a deploy does not reset the wait to zero', async () => {
+  // setInterval fires only after a whole interval, so three deploys inside half
+  // an hour meant this job never ran once — indistinguishable from broken.
+  installBackfillStub({ makeAndUploadStills: async () => [], attachStills: async () => ({ attached: 0 }) });
+  const scheduler = freshScheduler();
+  const timers = [];
+  const realInterval = global.setInterval;
+  const realTimeout = global.setTimeout;
+  global.setInterval = (fn, ms) => { timers.push(['interval', ms]); return { unref() {} }; };
+  global.setTimeout = (fn, ms) => { timers.push(['timeout', ms]); return { unref() {} }; };
+  const hadUrl = process.env.DATABASE_URL;
+  process.env.DATABASE_URL = hadUrl || 'postgres://test';
+  try {
+    scheduler.startVideoStillScheduler(fakeDb(null));
+  } finally {
+    global.setInterval = realInterval;
+    global.setTimeout = realTimeout;
+    if (!hadUrl) delete process.env.DATABASE_URL;
+  }
+  assert.ok(timers.some(([kind]) => kind === 'interval'), 'the repeating poll should still be armed');
+  assert.ok(timers.some(([kind, ms]) => kind === 'timeout' && ms <= 120000),
+    'and one kick soon after boot, so a restart does not mean another idle interval');
+});
+
+test('the newest coverless property is repaired first', () => {
+  const { selectionQuery } = freshScheduler();
+  const sql = selectionQuery({
+    SELECTION_SQL: "SELECT p.id FROM properties p WHERE p.source = 'x' AND p.status = 'pending'"
+  });
+  assert.match(sql, /ORDER BY candidates\.created_at DESC/,
+    'a backlog of old listings must not bury the batch that broke this morning');
+});
