@@ -5620,6 +5620,16 @@ router.post('/properties/:id/images', async (req, res, next) => {
         })()
       });
     }
+    // prepareMediaUrlForStorage hands back the original data: URL when storage
+    // fails. Saving that leaves a "photo" approval refuses as a generated
+    // image, so stop and say the upload failed instead.
+    if (storedUploads.some((image) => /^data:/i.test(String(image.url || '')))) {
+      await client.query('ROLLBACK');
+      return res.status(502).json({
+        ok: false,
+        error: 'The photo could not be saved to makaug media storage, so nothing was added. Try again in a minute; if it keeps failing, media storage needs checking.'
+      });
+    }
     const requestedPrimaryIndex = uploads.findIndex((image) => image.is_primary);
     const created = [];
     for (const [index, image] of storedUploads.entries()) {

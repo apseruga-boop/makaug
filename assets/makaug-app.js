@@ -14999,8 +14999,91 @@ function staffPreviewImagesHtml(images = [], propertyId = "", removedImages = []
       ${propertyId && image.id ? `<button type="button" data-staff-photo-action onclick="staffChangePreviewPhoto(${propertyIdArg(propertyId)}, ${propertyIdArg(image.id)}, ${restoring})" class="w-full border-t border-gray-200 bg-white px-2 py-2 text-xs font-black ${restoring ? "text-emerald-800 hover:bg-emerald-50" : "text-red-700 hover:bg-red-50"}">${restoring ? "Restore photo" : "Remove photo"}</button>` : ""}
     </div>`;
   return `<p class="mb-3 text-xs text-gray-600">Remove any photo that belongs to another property. Changes save immediately; removed photos can be restored below.</p>
-    ${list.length ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2">${list.map((image) => card(image)).join("")}</div>` : staffEmpty("No property photos are attached. A signed-in reviewer can use the human approval override after checking this listing.")}
+    ${list.length ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2">${list.map((image) => card(image)).join("")}</div>` : `<div class="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950" data-staff-no-photos>This listing has no photos yet. It can't be approved until at least one real photo of the property is added below (there is no override).</div>`}
+    ${propertyId ? staffPreviewPhotoUploadHtml(propertyId, list.length) : ""}
     ${removed.length ? `<details class="mt-3 rounded-xl border border-gray-200 p-3"><summary class="cursor-pointer text-sm font-bold">Removed photos (${removed.length})</summary><div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">${removed.map((image) => card(image, true)).join("")}</div></details>` : ""}`;
+}
+
+function staffPreviewPhotoUploadHtml(propertyId, existingCount = 0) {
+  return `
+    <div class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3" data-staff-photo-upload>
+      <div class="text-sm font-black text-emerald-950">${existingCount ? "Add more photos" : "Add the property's photos"}</div>
+      <p class="mt-1 text-xs text-emerald-900">Use photos the owner or agent sent for this property (WhatsApp, email or the source post). They are saved to makaug straight away.</p>
+      <input id="staff-preview-photo-upload" type="file" accept="image/jpeg,image/png,image/webp" multiple class="mt-2 block w-full text-xs">
+      <label class="mt-2 flex items-start gap-2 text-xs font-semibold text-emerald-950"><input id="staff-preview-photo-rights" type="checkbox" class="mt-0.5"> These photos are of this property and the owner or agent gave them to us to use.</label>
+      <button type="button" data-staff-photo-action onclick="staffUploadPreviewPhotos(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-black text-white hover:bg-emerald-600">Upload photos</button>
+    </div>`;
+}
+
+async function staffUploadPreviewPhotos(propertyId) {
+  if (staffPhotoChangePending || String(adminActiveReview?.id || "") !== String(propertyId)) return;
+  const input = document.getElementById("staff-preview-photo-upload");
+  const files = Array.from(input?.files || []);
+  if (!files.length) {
+    toast("Choose one or more photos first.");
+    input?.click();
+    return;
+  }
+  if (!document.getElementById("staff-preview-photo-rights")?.checked) {
+    toast("Tick the box to confirm these photos are of this property and were given to us to use.");
+    return;
+  }
+  staffPhotoChangePending = true;
+  document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = true; });
+  setStaffPreviewDecisionBusy(true);
+  try {
+    toast("Preparing photos...");
+    const images = [];
+    for (const [index, file] of files.slice(0, 12).entries()) {
+      if (!String(file.type || "").startsWith("image/")) throw new Error(`${file.name || "A file"} is not a photo.`);
+      const dataUrl = await compressPhotoForSubmission(file, { maxSide: 2200, quality: 0.86 });
+      if (!dataUrl) throw new Error(`${file.name || "A photo"} could not be prepared.`);
+      images.push({ data_url: dataUrl, room_label: index === 0 ? "Property photo" : `Property photo ${index + 1}` });
+    }
+    const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/images`, {
+      method: "POST",
+      body: { confirm_rights: true, images }
+    }, STAFF_MODERATION_WRITE_TIMEOUT_MS * 2, "Photo upload");
+    if (String(adminActiveReview?.id || "") === String(propertyId)) {
+      adminActiveReview.images = response.data.images;
+      adminActiveReview.extra_fields = response.data.extra_fields;
+      const gallery = document.getElementById("staff-preview-photo-gallery");
+      if (gallery) gallery.innerHTML = staffPreviewImagesHtml(response.data.images, propertyId, response.data.extra_fields.staff_removed_images || []);
+      dismissApprovalBlockerBanner();
+    }
+    queueStaffDashboardRefreshAfterModeration();
+    toast(`${response.data.added} photo${response.data.added === 1 ? "" : "s"} added. You can approve now.`);
+  } catch (error) {
+    toast(`Photo upload failed: ${error.message || "request failed"}`);
+  } finally {
+    staffPhotoChangePending = false;
+    document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = false; });
+    setStaffPreviewDecisionBusy(false);
+  }
+}
+
+// Plain-language reasons for the real-photo gate's detail codes.
+const REAL_PHOTO_BLOCK_REASONS = {
+  no_photos: "This listing has no photos at all.",
+  generated_data_image: "Its only images are generated cards (not photos of the property).",
+  stock_photo: "Its only image is the stock house photo.",
+  image_pending_card: "Its only image is the \"image pending\" card.",
+  tiktok_cdn: "Its only images are TikTok links, which expire and aren't stored on makaug.",
+  not_hosted_on_media: "Its photos are links to other websites, not copies stored on makaug.",
+  empty: "One of its photo records is empty."
+};
+
+function focusListingPhotoUpload() {
+  const staffInput = document.querySelector("#staff-listing-preview-modal #staff-preview-photo-upload");
+  const adminInput = document.getElementById("admin-listing-photo-upload");
+  const input = staffInput || adminInput;
+  if (!input) {
+    toast("Open the Photos section of this listing to add photos.");
+    return;
+  }
+  input.closest("[data-staff-photo-upload]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (!staffInput) input.scrollIntoView({ behavior: "smooth", block: "center" });
+  input.click();
 }
 
 let staffPhotoChangePending = false;
@@ -26904,6 +26987,10 @@ function showApprovalBlockerBanner(response = {}, propertyId = "") {
     ? response.missing_fields.map((item) => String(item || "").trim()).filter(Boolean)
     : [];
   const overrideAvailable = response?.human_approval_override_available === true;
+  const photoBlocked = response?.code === "no_real_hosted_photo";
+  const shownDetails = photoBlocked
+    ? details.map((detail) => REAL_PHOTO_BLOCK_REASONS[detail] || detail)
+    : details;
   activeHumanApprovalBlocker = {
     propertyId: String(propertyId || adminActiveReview?.id || "").trim(),
     response
@@ -26925,7 +27012,8 @@ function showApprovalBlockerBanner(response = {}, propertyId = "") {
         </div>
         <button type="button" onclick="dismissApprovalBlockerBanner()" class="shrink-0 rounded-lg border border-red-300 bg-white px-2 py-1 text-xs font-black text-red-900">Dismiss</button>
       </div>
-      ${details.length ? `<ul class="mt-3 list-disc space-y-1 pl-5 text-xs font-semibold" data-approval-blocker-details>${details.map((detail) => `<li>${adminEscape(detail)}</li>`).join("")}</ul>` : ""}
+      ${shownDetails.length ? `<ul class="mt-3 list-disc space-y-1 pl-5 text-xs font-semibold" data-approval-blocker-details>${shownDetails.map((detail) => `<li>${adminEscape(detail)}</li>`).join("")}</ul>` : ""}
+      ${photoBlocked ? `<button type="button" onclick="focusListingPhotoUpload()" class="mt-3 w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-black text-white hover:bg-emerald-600" data-approval-blocker-add-photo>Add photos now</button>` : ""}
       ${proposed.length ? `<div class="mt-3 rounded-lg border border-red-200 bg-white p-2 text-xs font-bold">${Array.from(new Set(proposed)).map(adminEscape).join(" · ")}</div>` : ""}
       ${missingFields.length ? `<div class="mt-3 text-xs font-black">Fields needing attention: ${missingFields.map((field) => adminEscape(field.replace(/_/g, " "))).join(", ")}.</div>` : ""}
       ${overrideAvailable ? `<button type="button" onclick="approveActiveHumanOverride()" class="mt-3 w-full rounded-lg bg-red-800 px-3 py-2 text-sm font-black text-white hover:bg-red-700">Approve anyway (human verified)</button>` : ""}
