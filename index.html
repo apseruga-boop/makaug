@@ -1672,6 +1672,54 @@
       margin-bottom: 20px;
     }
     #page-brokers .section-search-inner { padding: 10px; }
+    /* Compact search bar: once the visitor scrolls into the results on a
+       desktop listing page, only the location box, Nearby and Search stay
+       pinned; the filters come back at the top of the page or from the
+       Filters button. Driven by updateSectionSearchCompactState(). */
+    .section-search-compact-filters { display: none; }
+    @media (min-width: 1024px) {
+      .section-search-shell.is-compact .section-search-inner {
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .section-search-shell.is-compact .section-search-filter-row,
+      .section-search-shell.is-compact .canonical-location-status,
+      .section-search-shell.is-compact .canonical-location-chips {
+        display: none;
+      }
+      .section-search-shell.is-compact .section-search-form {
+        grid-template-columns: minmax(220px, 2fr) auto auto auto;
+      }
+      .section-search-shell.is-compact .section-search-compact-filters {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        border-radius: 8px;
+        background: #ffffff;
+        color: #16241d;
+        font-size: 14px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+      .section-search-compact-filters:hover { background: #f0fdf4; }
+      .section-search-compact-count:empty { display: none; }
+      .section-search-compact-count {
+        min-width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 6px;
+        border-radius: 999px;
+        background: #15603f;
+        color: #ffffff;
+        font-size: 11px;
+      }
+    }
     @media (max-width: 1023px) {
       .section-search-shell {
         position: relative;
@@ -2126,12 +2174,15 @@
     }
     .listing-map-shell {
       position: sticky;
-      top: 5.75rem;
+      /* Just under the pinned search bar (its height is published as
+         --makaug-section-search-bottom); 5.75rem when there is none. */
+      top: calc(var(--makaug-section-search-bottom, 4.75rem) + 1rem);
       z-index: 2;
       background: #ffffff;
       border-radius: 0.75rem;
       isolation: isolate;
-      max-height: calc(100vh - 6.75rem);
+      max-height: calc(100vh - var(--makaug-section-search-bottom, 4.75rem) - 2rem);
+      transition: top .18s ease;
       overflow-y: auto;
       overscroll-behavior: contain;
       scrollbar-gutter: stable;
