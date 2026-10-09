@@ -8,11 +8,18 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { execFile } = require('child_process');
+// Looked up at call time (childProcess.execFile) so tests can count spawns.
+const childProcess = require('child_process');
 const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 const sharp = require('sharp');
 const db = require('../config/database');
+
+// This runs inside the 0.5-CPU web container (services/videoStillScheduler.js).
+// sharp's default cache and thread-per-core pool are memory and CPU the live
+// site needs more. Same settings as the welcome-video service.
+sharp.cache(false);
+sharp.concurrency(1);
 const { uploadBufferToS3 } = require('../services/cloudMediaStorageService');
 const {
   buildEmployeePublicDescription,
@@ -24,7 +31,12 @@ const ORIGINAL_MEDIA_ONLY_MARKER = 'whatsapp-original-media-only-20260908';
 const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_VIDEOS_PER_PROPERTY = 10;
 const MIN_VIDEO_KEY_FRAMES = 5;
-const FRAME_CANDIDATE_COUNT = 30;
+// Candidate frames decoded per property (each is one ffmpeg decode plus a sharp
+// pass). 30 per video pinned the CPU on 9 Oct; 8 still finds 5 distinct frames.
+const FRAME_CANDIDATE_COUNT = (() => {
+  const n = parseInt(process.env.VIDEO_STILL_FRAME_CANDIDATES || '8', 10);
+  return Number.isInteger(n) && n > 0 ? Math.min(n, 30) : 8;
+})();
 const FRAME_HASH_SIZE = 16;
 const MIN_FRAME_HASH_DISTANCE = 0.2;
 
@@ -119,9 +131,52 @@ function extractVideoUrls(extraFields = {}) {
     }))].slice(0, MAX_VIDEOS_PER_PROPERTY);
 }
 
+// ffmpeg runs at the lowest CPU priority, on one thread, so a repair can never
+// starve the web server it shares a container with. `nice` is used where it
+// exists; if it does not, ffmpeg runs directly.
+let niceAvailable = null;
+function niceBinary() {
+  if (niceAvailable === null) {
+    niceAvailable = ['/usr/bin/nice', '/bin/nice'].find((candidate) => {
+      try { fs.accessSync(candidate, fs.constants.X_OK); return true; } catch (_) { return false; }
+    }) || '';
+  }
+  return niceAvailable;
+}
+
+function isFfmpegBinary(file) {
+  return /ffmpeg(?:\.exe)?$/i.test(path.basename(String(file || '')));
+}
+
+// Child processes still running, so a tick that runs out of time can kill them.
+const liveChildren = new Set();
+
+function killLiveChildren() {
+  for (const child of liveChildren) {
+    try { child.kill('SIGKILL'); } catch (_) {}
+  }
+  liveChildren.clear();
+}
+
+function lowPriorityCommand(file, args) {
+  const ffmpegArgs = isFfmpegBinary(file) && !args.includes('-threads') ? ['-threads', '1', ...args] : args;
+  const nice = niceBinary();
+  return nice ? { file: nice, args: ['-n', '19', file, ...ffmpegArgs] } : { file, args: ffmpegArgs };
+}
+
+function spawnLowPriority(file, args, callback) {
+  const command = lowPriorityCommand(file, args);
+  const child = childProcess.execFile(command.file, command.args, { maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+    liveChildren.delete(child);
+    callback(error, stdout, stderr);
+  });
+  if (child) liveChildren.add(child);
+  return child;
+}
+
 function execFileAsync(file, args) {
   return new Promise((resolve, reject) => {
-    execFile(file, args, { maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+    spawnLowPriority(file, args, (error, stdout, stderr) => {
       if (error) {
         error.message = `${error.message}${stderr ? `: ${String(stderr).trim()}` : ''}`;
         reject(error);
@@ -132,8 +187,19 @@ function execFileAsync(file, args) {
   });
 }
 
-async function downloadVideo(url, outputPath, fetchImpl = fetch) {
-  const response = await fetchImpl(url, { redirect: 'follow' });
+class TimeBudgetExceeded extends Error {
+  constructor(message = 'video still repair ran out of time') {
+    super(message);
+    this.code = 'VIDEO_STILL_TIME_BUDGET';
+  }
+}
+
+function checkDeadline(deadline, signal = null) {
+  if (signal?.aborted || (deadline && Date.now() > deadline)) throw new TimeBudgetExceeded();
+}
+
+async function downloadVideo(url, outputPath, fetchImpl = fetch, { signal } = {}) {
+  const response = await fetchImpl(url, { redirect: 'follow', ...(signal ? { signal } : {}) });
   if (!response.ok || !response.body) {
     throw new Error(`video download failed with HTTP ${response.status}`);
   }
@@ -194,7 +260,7 @@ async function videoDurationSeconds(videoPath) {
   }
   const ffmpeg = String(process.env.FFMPEG_PATH || 'ffmpeg').trim() || 'ffmpeg';
   const banner = await new Promise((resolve) => {
-    execFile(ffmpeg, ['-hide_banner', '-i', videoPath], { maxBuffer: 2 * 1024 * 1024 }, (_error, _stdout, stderr) => resolve(String(stderr || '')));
+    spawnLowPriority(ffmpeg, ['-hide_banner', '-i', videoPath], (_error, _stdout, stderr) => resolve(String(stderr || '')));
   });
   const match = banner.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
   if (!match) return 0;
@@ -293,8 +359,11 @@ async function normalizeSelectedFrame(inputPath, outputPath) {
   return stat.size;
 }
 
-async function extractStillAt(videoPath, stillPath, seconds) {
+async function extractStillAt(videoPath, stillPath, seconds, { deadline = 0, signal = null } = {}) {
   const ffmpeg = String(process.env.FFMPEG_PATH || 'ffmpeg').trim() || 'ffmpeg';
+  // Checked with no await between it and the spawn, so nothing can start after
+  // the time budget has killed the running ffmpeg.
+  checkDeadline(deadline, signal);
   await execFileAsync(ffmpeg, [
     '-hide_banner', '-loglevel', 'error', '-y',
     '-i', videoPath,
@@ -310,16 +379,23 @@ async function extractStillAt(videoPath, stillPath, seconds) {
   return stat.size;
 }
 
-async function extractStillWithFallback(videoPath, stillPath, requestedSeconds) {
+async function extractStillWithFallback(videoPath, stillPath, requestedSeconds, { budget = null, deadline = 0, signal = null } = {}) {
   const requested = Math.max(0, Number(requestedSeconds || 0));
   const attempts = fallbackFrameOffsets(requested);
   let lastError = null;
   for (const seconds of attempts) {
+    checkDeadline(deadline, signal);
+    // budget: { left } decoding spawns for this video, shared across frames.
+    if (budget) {
+      if (budget.left <= 0) throw lastError || new Error('frame decode budget for this video is used up');
+      budget.left -= 1;
+    }
     await fsp.rm(stillPath, { force: true }).catch(() => {});
     try {
-      await extractStillAt(videoPath, stillPath, seconds);
+      await extractStillAt(videoPath, stillPath, seconds, { deadline, signal });
       return seconds;
     } catch (error) {
+      if (error?.code === 'VIDEO_STILL_TIME_BUDGET') throw error;
       lastError = error;
     }
   }
@@ -343,8 +419,23 @@ function keyFramesNeeded(property = {}, { replaceExisting = false } = {}) {
   return Math.max(0, MIN_VIDEO_KEY_FRAMES - Number(property.video_still_count || 0));
 }
 
-async function makeAndUploadStills(property, { replaceExisting = false } = {}) {
-  const urls = extractVideoUrls(property.extra_fields);
+/**
+ * Options used by the in-process scheduler to keep a repair small:
+ *   frameCandidates  decoding spawns allowed per video (default FRAME_CANDIDATE_COUNT)
+ *   maxVideos        videos looked at per property (default MAX_VIDEOS_PER_PROPERTY)
+ *   deadline         epoch ms; past it the repair stops, kills its ffmpeg and
+ *                    throws code VIDEO_STILL_TIME_BUDGET
+ *   signal           AbortSignal for the downloads
+ */
+async function makeAndUploadStills(property, {
+  replaceExisting = false,
+  frameCandidates = FRAME_CANDIDATE_COUNT,
+  maxVideos = MAX_VIDEOS_PER_PROPERTY,
+  deadline = 0,
+  signal = null
+} = {}) {
+  const urls = extractVideoUrls(property.extra_fields).slice(0, Math.max(1, maxVideos));
+  const perVideoBudget = Math.max(1, Number(frameCandidates) || FRAME_CANDIDATE_COUNT);
   if (!urls.length) throw new Error('no valid HTTPS video URL');
   const required = keyFramesNeeded(property, { replaceExisting });
   if (!required) return [];
@@ -355,13 +446,17 @@ async function makeAndUploadStills(property, { replaceExisting = false } = {}) {
     for (let index = 0; index < urls.length; index += 1) {
       const videoPath = path.join(tempDir, `video-${index + 1}.bin`);
       try {
-        await downloadVideo(urls[index], videoPath);
+        checkDeadline(deadline, signal);
+        await downloadVideo(urls[index], videoPath, fetch, { signal });
+        checkDeadline(deadline, signal);
         const duration = await videoDurationSeconds(videoPath);
-        const perVideoCandidates = Math.max(MIN_VIDEO_KEY_FRAMES, Math.ceil(FRAME_CANDIDATE_COUNT / urls.length));
-        const offsets = candidateFrameOffsets(duration, perVideoCandidates);
-        for (let frameIndex = 0; frameIndex < offsets.length; frameIndex += 1) {
+        const perVideoCandidates = Math.min(perVideoBudget, Math.max(MIN_VIDEO_KEY_FRAMES, Math.ceil(perVideoBudget / urls.length)));
+        const offsets = candidateFrameOffsets(duration, perVideoCandidates).slice(0, perVideoBudget);
+        const budget = { left: perVideoBudget };
+        for (let frameIndex = 0; frameIndex < offsets.length && budget.left > 0; frameIndex += 1) {
+          checkDeadline(deadline, signal);
           const stillPath = path.join(tempDir, `candidate-${index + 1}-${frameIndex + 1}.jpg`);
-          const actualTimestampSeconds = await extractStillWithFallback(videoPath, stillPath, offsets[frameIndex]);
+          const actualTimestampSeconds = await extractStillWithFallback(videoPath, stillPath, offsets[frameIndex], { budget, deadline, signal });
           const metrics = await frameCandidateMetrics(stillPath);
           candidates.push({
             path: stillPath,
@@ -372,10 +467,12 @@ async function makeAndUploadStills(property, { replaceExisting = false } = {}) {
           });
         }
       } catch (error) {
+        if (error?.code === 'VIDEO_STILL_TIME_BUDGET' || signal?.aborted) throw error.code ? error : new TimeBudgetExceeded();
         process.stderr.write(`WARN ${property.id} video ${index + 1}: ${error.message || error}\n`);
       }
     }
 
+    checkDeadline(deadline, signal);
     const selected = selectDistinctFrameCandidates(candidates, required);
     if (!selected.length) throw new Error('no clear, visually distinct frame could be extracted');
     for (let index = 0; index < selected.length; index += 1) {
@@ -399,6 +496,9 @@ async function makeAndUploadStills(property, { replaceExisting = false } = {}) {
         bytes: stored.bytes
       });
     }
+  } catch (error) {
+    if (error?.code === 'VIDEO_STILL_TIME_BUDGET') killLiveChildren();
+    throw error;
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true });
   }
@@ -859,6 +959,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  FRAME_CANDIDATE_COUNT,
+  TimeBudgetExceeded,
+  killLiveChildren,
+  lowPriorityCommand,
   makeAndUploadStills,
   attachStills,
   videoDurationSeconds,

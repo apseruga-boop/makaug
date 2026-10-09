@@ -4352,6 +4352,7 @@ router.get('/properties/video-still-candidates', async (req, res) => {
           status: row.status,
           created_at: row.created_at,
           attempted_at: row.extra_fields?.video_still_auto_attempted_at || null,
+          attempts: Number(row.extra_fields?.video_still_auto_attempts || 0),
           last_error: row.extra_fields?.video_still_auto_error || null
         }))
       }
@@ -5705,6 +5706,8 @@ router.post('/properties/:id/images', async (req, res, next) => {
       image_count: created.length,
       replace_all: replaceAll
     }, actorId);
+    // Admin added photos: the cover-photo job's failure count starts afresh.
+    await require('../services/videoStillScheduler').clearVideoStillAttempts(db, req.params.id);
     const review = await loadPropertyReview(req.params.id);
     return res.json({ ok: true, data: review });
   } catch (error) {
@@ -5919,6 +5922,9 @@ router.post('/properties/:id/reattach-whatsapp-video', async (req, res, next) =>
         media_count: Math.max(Number(extra.media_count) || 0, 0) + 1,
         listing_media_pending: false,
         video_still_auto_attempted_at: null,
+        // A staff re-pull starts the cover-photo job's failure count afresh.
+        video_still_auto_attempts: 0,
+        video_still_auto_gave_up_at: null,
         media_recovered_from_whatsapp: { at: new Date().toISOString(), actor_id: actorId, bytes: bytes.length, sha256 }
       })]
     );
