@@ -29,6 +29,7 @@ const {
 } = require('../services/locationSearchService');
 const { canonicalLocationSearchScope } = require('../utils/locationRegistry');
 const { regionForDistrict } = require('../utils/ugandaLocationHierarchy');
+const { landmarkDistrictsInText } = require('../utils/ugandaLandmarkPins');
 const {
   canonicalizeWhatsappSearchFilters,
   canonicalWhatsappLocationPatch,
@@ -4979,6 +4980,88 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
       if (landmarkFallback?.status === 'matched') locationResolution = landmarkFallback;
     }
   }
+  // "SEETA_BAJJO RD NEW TARMAC ACCESS 3 RENTAL UNITS…" — 9 Oct 2026. Seeta and
+  // Bajjo are two different places, so the caption came back ambiguous and intake
+  // asked for "exact area and district". But both of them are in Mukono. The
+  // agent was never unclear about the district; the only open question was which
+  // of two neighbouring names to file it under, and that is not a question worth
+  // blocking a listing over. When every candidate agrees on the district, there
+  // is no district to ask about: take the name the agent wrote first, because the
+  // ones after it are normally the road or the neighbour used to place it.
+  if (locationResolution?.status === 'ambiguous' && Array.isArray(locationResolution.candidates)) {
+    const districtsAgreed = new Set(
+      locationResolution.candidates
+        .map((candidate) => normalizeInput(candidate?.district || '').toLowerCase())
+        .filter(Boolean)
+    );
+    if (districtsAgreed.size === 1) {
+      const haystack = normalizeInput(locationCaption).toLowerCase();
+      const firstNamed = locationResolution.candidates
+        .map((candidate) => ({
+          candidate,
+          at: haystack.indexOf(normalizeInput(candidate?.name || candidate?.area || '').toLowerCase())
+        }))
+        .filter((entry) => entry.at >= 0)
+        .sort((a, b) => a.at - b.at)[0]?.candidate;
+      if (firstNamed) {
+        const picked = resolveWhatsappLocation(
+          `${normalizeInput(firstNamed.name || firstNamed.area)} ${normalizeInput(firstNamed.district)}`,
+          { allowText: true }
+        );
+        if (picked?.status === 'matched') locationResolution = picked;
+      }
+    }
+  }
+
+  // "Nakasajja 11 decimals plot near Orevine international school" — 9 Oct 2026.
+  // Nakasajja really is in two districts (Wakiso, on Gayaza Road, and Kyampisi in
+  // Mukono), so the shortlist question was honest. But the agent had already
+  // answered it: Orel-Vine's campus is the Nakasajja on Gayaza Road. Anything
+  // else the caption names that we recognise — a neighbouring village, the road,
+  // a landmark we have written down — can pick between the districts already on
+  // the shortlist.
+  //
+  // It can only ever PICK one of those. Nothing here introduces a district the
+  // registry did not already offer, so the failure mode is the question we are
+  // asking today, never a listing filed in the wrong district.
+  if (locationResolution?.status === 'ambiguous' && Array.isArray(locationResolution.candidates)) {
+    const byDistrict = new Map();
+    for (const candidate of locationResolution.candidates) {
+      const district = normalizeInput(candidate?.district || '').toLowerCase();
+      if (district && !byDistrict.has(district)) byDistrict.set(district, candidate);
+    }
+    if (byDistrict.size > 1) {
+      // The ambiguous names themselves cannot vote on their own district.
+      const ambiguousNames = new Set(
+        locationResolution.candidates
+          .map((candidate) => normalizeInput(candidate?.name || candidate?.area || '').toLowerCase())
+          .filter(Boolean)
+      );
+      const pinned = new Set();
+      for (const district of landmarkDistrictsInText(locationCaption)) {
+        const key = normalizeInput(district).toLowerCase();
+        if (byDistrict.has(key)) pinned.add(key);
+      }
+      for (const token of normalizeInput(locationCaption).split(/[^A-Za-z'’-]+/)) {
+        if (token.length < 4) continue;
+        if (ambiguousNames.has(token.toLowerCase())) continue;
+        const resolved = resolveWhatsappLocation(token, { allowText: true });
+        if (resolved?.status !== 'matched' || Number(resolved.confidence || 0) < 1) continue;
+        const key = normalizeInput(resolved.match?.district || '').toLowerCase();
+        if (key && byDistrict.has(key)) pinned.add(key);
+      }
+      // Exactly one. Two landmarks disagreeing is not something to guess at.
+      if (pinned.size === 1) {
+        const chosen = byDistrict.get([...pinned][0]);
+        const picked = resolveWhatsappLocation(
+          `${normalizeInput(chosen.name || chosen.area)} ${normalizeInput(chosen.district)}`,
+          { allowText: true }
+        );
+        if (picked?.status === 'matched') locationResolution = picked;
+      }
+    }
+  }
+
   // "Seguku Katale": Seguku is one place (Wakiso), but Katale exists in two other
   // districts, so the whole caption resolved as ambiguous and the property was held
   // back for "exact area and district" even though the agent had given it. When
