@@ -139,7 +139,7 @@ function forSaleCopy(snapshot) {
     : 'Najjera (**{najjera_count}**), Nansana (**{nansana_count}**)';
   return {
     title: fill('Houses for Sale in Uganda: {count} Listings, One Search | makaug.com', tokens),
-    description: fill('Every house for sale in Uganda in one place: {count} homes from agents, owners and TikTok, YouTube & X posts. Search free, then contact the lister direct.', tokens),
+    description: fill('Houses for sale in Uganda: {count} homes from agents, owners and TikTok, YouTube & X posts in one search. Search free, contact the lister direct.', tokens),
     h1: 'Houses for sale in Uganda',
     intro: ["Instead of scrolling dozens of agents' pages, TikTok accounts and WhatsApp groups, search every house for sale in Uganda we can find online, in one place.", 'makaug.com brings together **{count}** homes for sale, from Kira and Kyanja to Entebbe and Mbarara, and checks each one before it goes live.'],
     body: [
@@ -153,7 +153,7 @@ function forSaleCopy(snapshot) {
       { heading: 'Where the houses are', sentences: [
         'Most homes for sale are around Kampala and Wakiso.',
         `Kira has the most (**{kira_count}**), followed by Kyanja (**{kyanja_count}**), Entebbe (**{entebbe_count}**), ${najjeraPhrase} and Kitende (**{kitende_count}**).`,
-        'Browse by area: [Kira](/for-sale/kira-wakiso) · [Kyanja](/for-sale/kyanja-kampala) · [Entebbe](/for-sale/entebbe-wakiso) · [Najjera](/for-sale/najjera-wakiso) · [Kitende](/for-sale/kitende-wakiso) · [Namugongo](/for-sale/namugongo-wakiso) · [Ntinda](/for-sale/ntinda-kampala) · [Munyonyo](/for-sale/munyonyo-kampala) · [All of Kampala](/for-sale/kampala-kampala).'
+        'Browse by area: [Kira](/for-sale/kira-wakiso) · [Kyanja](/for-sale/kyanja-kampala) · [Entebbe](/for-sale/entebbe-wakiso) · [Najjera](/for-sale/najjera-wakiso) · [Kitende](/for-sale/kitende-wakiso) · [Namugongo](/for-sale/namugongo-wakiso) · [Ntinda](/for-sale/ntinda-kampala) · [Munyonyo](/for-sale/munyonyo-kampala) · [All of Kampala](/for-sale/kampala-kampala) · [All of Wakiso](/for-sale/wakiso-wakiso) · [Mukono](/for-sale/mukono-mukono).'
       ] },
       { heading: 'What houses cost', sentences: [
         'The middle asking price of a house for sale on makaug is about **UGX {median_sale}**.',
@@ -192,7 +192,7 @@ function landCopy(snapshot) {
   };
   return {
     title: fill('Land for Sale in Uganda: {count} Plots & Acres in One Search | makaug.com', tokens),
-    description: fill('Every plot and acre for sale in Uganda in one place: {count} listings from Wakiso to Mbarara. Compare prices by area, check titles, contact sellers direct.', tokens),
+    description: fill('Land for sale in Uganda: {count} plots and acres from Wakiso to Mbarara. Compare prices by area, check titles, contact sellers direct.', tokens),
     h1: 'Land for sale in Uganda',
     intro: ['Every plot of land for sale in Uganda we can find online, in one search.', 'makaug.com gathers **{count}** land listings from agents, owners, estate developers and public TikTok, YouTube and X posts, so you can compare plots across **{districts}** districts without chasing each seller.'],
     body: [
@@ -200,7 +200,7 @@ function landCopy(snapshot) {
         'The middle asking price for land on makaug is about **UGX {median_land}**, but the spread is huge.',
         'Typical asking prices: Namayumba around UGX {namayumba_med}, Kakiri {kakiri_med}, Gayaza {gayaza_med}, Namugongo {namugongo_med}, Entebbe {entebbe_med}, Kira {kira_med} and Kyanja {kyanja_med}.',
         '**{under50}** priced plots are under UGX 50M.',
-        'Browse by area: [Kira](/land/kira-wakiso) · [Gayaza](/land/gayaza-wakiso) · [Kakiri](/land/kakiri-wakiso) · [Entebbe](/land/entebbe-wakiso) · [Namugongo](/land/namugongo-wakiso) · [Kyanja](/land/kyanja-kampala) · [All of Wakiso](/land/wakiso-wakiso) · [Mukono](/land/mukono-mukono).'
+        'Browse by area: [Kira](/land/kira-wakiso) · [Gayaza](/land/gayaza-wakiso) · [Kakiri](/land/kakiri-wakiso) · [Entebbe](/land/entebbe-wakiso) · [Namugongo](/land/namugongo-wakiso) · [Kyanja](/land/kyanja-kampala) · [All of Wakiso](/land/wakiso-wakiso) · [Mukono](/land/mukono-mukono) · [Kampala](/land/kampala-kampala).'
       ] },
       { heading: 'Check the title before you pay', sentences: [
         'Use the title filter to see plots whose sellers say a title is available, then confirm it yourself: do an official search at the land registry (through a lawyer or the MLHUD system), visit the plot, meet the neighbours and the LC1, and pay only through a traceable channel.',
@@ -246,14 +246,14 @@ function kampalaRentCopy(snapshot) {
   };
   return {
     title: fill('Houses for Rent in Kampala: {count} Rentals in One Search | makaug.com', tokens),
-    description: fill('Every house and apartment for rent in Kampala in one place: {count} rentals from Muyenga to Ntinda. Filter by budget and bedrooms, contact landlords direct.', tokens),
+    description: fill('Houses for rent in Kampala: {count} houses and apartments from Muyenga to Ntinda. Filter by budget and bedrooms, contact landlords direct.', tokens),
     h1: 'Houses for rent in Kampala',
     intro: ["Stop jumping between TikTok tours, Facebook groups and agents' WhatsApp statuses.", 'makaug.com puts **{count}** houses and apartments for rent in Kampala in one place, found across the web and listed by landlords and agents, and checked before they go live.'],
     body: [
       { heading: 'Rentals by area', sentences: [
         'The most rentals are in Muyenga (**{muyenga}**), Munyonyo (**{munyonyo}**), Bunga (**{bunga}**), Kyanja (**{kyanja}**), Kololo (**{kololo}**), Ntinda (**{ntinda}**) and Kisaasi (**{kisaasi}**).',
         'Browse: [Muyenga](/to-rent/muyenga-kampala) · [Munyonyo](/to-rent/munyonyo-kampala) · [Kyanja](/to-rent/kyanja-kampala) · [Kololo](/to-rent/kololo-kampala) · [Ntinda](/to-rent/ntinda-kampala) · [Kisaasi](/to-rent/kisaasi-kampala) · [Bugolobi](/to-rent/bugolobi-kampala).',
-        'Looking just outside the city? [Kira](/to-rent/kira-wakiso) has the most rentals of anywhere in Uganda.'
+        'Looking just outside the city? [Kira](/to-rent/kira-wakiso) has the most rentals of anywhere in Uganda. Also browse [Entebbe](/to-rent/entebbe-wakiso) · [All of Wakiso](/to-rent/wakiso-wakiso) · [Mukono](/to-rent/mukono-mukono).'
       ] },
       { heading: 'What rent costs in Kampala', sentences: [
         'The middle asking rent in Kampala is about **UGX {median_rent}** a month.',

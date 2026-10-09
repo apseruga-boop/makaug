@@ -1,5 +1,6 @@
 const { correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
+const { agentFirstOrderSql } = require('../utils/agentFirstRank');
 const { publicListingPayload } = require('../utils/publicListingPayload');
 const { handOffListingLead, loadListingContact } = require('../services/leadHandoffService');
 const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
@@ -2846,7 +2847,10 @@ async function listPropertiesHandler(req, res, next) {
       newest: 'p.created_at DESC, p.id DESC',
       oldest: 'p.created_at ASC, p.id ASC',
       price_asc: `${priceSortRankSql} ASC, p.price ASC NULLS LAST, p.created_at DESC, p.id DESC`,
-      price_desc: `${priceSortRankSql} ASC, p.price DESC NULLS LAST, p.created_at DESC, p.id DESC`
+      price_desc: `${priceSortRankSql} ASC, p.price DESC NULLS LAST, p.created_at DESC, p.id DESC`,
+      // The money pages' server-rendered order (utils/agentFirstRank), so hydration keeps it.
+      agent_first: agentFirstOrderSql('p'),
+      agent_first_homes: agentFirstOrderSql('p', { homesBeforeLand: true })
     };
 
     const defaultSort = featuredFilterRequested && featuredOnly ? 'featured' : 'newest';

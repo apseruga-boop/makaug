@@ -15,6 +15,7 @@ const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency
 const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
+const { agentFirstOrderSql } = require('../utils/agentFirstRank');
 const {
   buildThirdPartyPublicSummary,
   buildThirdPartyPublicTitle,
@@ -347,7 +348,9 @@ async function loadPublicSeoListings(db, options = {}) {
   const location = options.location || null;
   const limit = Math.max(1, Math.min(24, Number(options.limit || 12) || 12));
   const facetCacheKey = options.university?.slug || options.facetSlug || options.facet?.label || 'all';
-  const cacheKey = `${key || 'all'}:${location?.canonical_key || 'uganda'}:${facetCacheKey}:${limit}`;
+  // landingRank: the money pages list agent-listed rows first (see utils/agentFirstRank).
+  const landingRank = options.landingRank === true;
+  const cacheKey = `${key || 'all'}:${location?.canonical_key || 'uganda'}:${facetCacheKey}:${limit}${landingRank ? ':agent_first' : ''}`;
   const cached = await loadSeoListingCacheEntry(cacheKey, async () => {
     const values = [];
     const categoryWhere = categoryPredicate(key, 'p');
@@ -379,7 +382,9 @@ async function loadPublicSeoListings(db, options = {}) {
        AND ${categoryWhere}
        ${locationWhere}
        ${facetWhere}
-     ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC
+     ORDER BY ${landingRank
+    ? agentFirstOrderSql('p', { homesBeforeLand: key === 'sale' })
+    : 'p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC'}
        LIMIT ${limitRef}`,
       values
     );
@@ -827,6 +832,22 @@ function renderPropertySeoHtml(html, listing, options = {}) {
   };
 }
 
+// The three money-page searches, as plain anchors in the homepage HTML.
+// Uganda only: these hub routes exist for the Uganda tenant.
+const POPULAR_SEARCHES = Object.freeze([
+  { href: '/for-sale', label: 'Houses for Sale in Uganda' },
+  { href: '/land', label: 'Land for Sale in Uganda' },
+  { href: '/to-rent/kampala-kampala', label: 'Houses for Rent in Kampala' }
+]);
+
+function renderPopularSearches() {
+  if (String(ACTIVE_COUNTRY_CODE || '').toUpperCase() !== 'UG') return '';
+  return `<nav aria-label="Popular searches" class="mb-6 rounded-2xl border border-green-100 bg-green-50 p-4" data-ssr-popular-searches="1">
+    <h2 class="font-black text-green-950">Popular searches</h2>
+    <div class="mt-3 flex flex-wrap gap-2">${POPULAR_SEARCHES.map((item) => `<a href="${escapeHtml(item.href)}" class="rounded-full border border-green-200 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-100">${escapeHtml(item.label)}</a>`).join('')}</div>
+  </nav>`;
+}
+
 function renderHomepageSeoHtml(html, options = {}) {
   const listings = options.listings || [];
   const areaLinks = popularAreaLinks(options.snapshot, 15);
@@ -837,7 +858,7 @@ function renderHomepageSeoHtml(html, options = {}) {
   })).join('');
   let rendered = cards ? replaceElementInnerHtml(html, 'home-grid', cards) : html;
   const popularAreas = renderAreaLinks(areaLinks, `Popular property areas in ${ACTIVE_COUNTRY_NAME}`);
-  rendered = insertBeforeElement(rendered, 'home-grid', popularAreas);
+  rendered = insertBeforeElement(rendered, 'home-grid', renderPopularSearches() + popularAreas);
   rendered = insertBeforeClosingTag(rendered, 'footer', renderFooterAreaLinks(areaLinks));
   return {
     html: rendered,
@@ -893,6 +914,7 @@ module.exports = {
   renderCategorySeoHtml,
   renderPropertySeoHtml,
   renderHomepageSeoHtml,
+  renderPopularSearches,
   breadcrumbStructuredData,
   __seoListingCache: Object.freeze({
     clear: clearSeoListingCache,

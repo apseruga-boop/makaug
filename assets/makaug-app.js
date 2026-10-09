@@ -4870,11 +4870,12 @@ const FOOTER_I18N = {
     chatWhatsapp: "Chat on WhatsApp",
     location: "Kampala, Uganda",
     properties: "Properties",
-    sale: "Houses for Sale",
+    sale: "Houses for Sale in Uganda",
     rent: "Houses for Rent",
+    rentKampala: "Houses for Rent in Kampala",
     students: "Student Housing",
     commercial: "Commercial",
-    land: "Land for Sale",
+    land: "Land for Sale in Uganda",
     mortgage: "Mortgage Finder",
     list: "List Property",
     looking: "Looking For...",
@@ -5161,6 +5162,7 @@ function applyFooterLanguageUI() {
   setTextById("footer-col-properties", footerTr("properties"));
   setTextById("footer-link-sale", footerTr("sale"));
   setTextById("footer-link-rent", footerTr("rent"));
+  setTextById("footer-link-rent-kampala", footerTr("rentKampala"));
   setTextById("footer-link-students", footerTr("students"));
   setTextById("footer-link-commercial", footerTr("commercial"));
   setTextById("footer-link-land", footerTr("land"));
@@ -43841,6 +43843,37 @@ function listingTimeValue(p) {
   return parseDateSafe(p?.created_at || p?.createdAt || p?.updated_at || p?.updatedAt)?.getTime() || 0;
 }
 
+// The three money pages (/for-sale, /land, /to-rent/kampala-kampala) list
+// agent-listed rows first, the same order the server renders for Google
+// (utils/agentFirstRank.js), so hydration does not reshuffle the cards.
+function publicMoneyPageSort(category) {
+  const path = String(window.location?.pathname || "/").replace(/\/+$/, "") || "/";
+  if (category === "sale" && path === "/for-sale") return "agent_first_homes";
+  if (category === "land" && path === "/land") return "agent_first";
+  if (category === "rent" && path === "/to-rent/kampala-kampala") return "agent_first";
+  return "";
+}
+
+function publicAgentFirstRank(property = {}) {
+  const origin = publicListingOrigin(property);
+  if (origin === "agent" || property.agent_id || String(property.lister_type || "").toLowerCase() === "agent") return 0;
+  if (origin === "found_online") return 2;
+  return 1;
+}
+
+function publicIsLandRow(property = {}) {
+  return /(^|[^a-z])(land|plot|plots)([^a-z]|$)/.test(String(property.property_type || property.subtype || "").toLowerCase())
+    || String(property.listing_type || "").toLowerCase() === "land";
+}
+
+function publicDefaultListingComparator(category) {
+  const mode = publicMoneyPageSort(category);
+  if (!mode) return sortListingsByNewest;
+  return (a, b) => (publicAgentFirstRank(a) - publicAgentFirstRank(b))
+    || (mode === "agent_first_homes" ? (Number(publicIsLandRow(a)) - Number(publicIsLandRow(b))) : 0)
+    || sortListingsByNewest(a, b);
+}
+
 function sortListingsByNewest(a, b) {
   const delta = listingTimeValue(b) - listingTimeValue(a);
   if (delta) return delta;
@@ -48702,7 +48735,8 @@ function publicInventoryCategoryPath(category) {
   const normalized = category === "students" ? "student" : normalizeType(category);
   if (normalized === "student") return "/api/properties?status=approved&public_only=1&student_portal=1";
   if (["sale", "rent", "commercial", "land"].includes(normalized)) {
-    return `/api/properties?status=approved&public_only=1&category=${encodeURIComponent(normalized)}`;
+    const moneySort = publicMoneyPageSort(normalized);
+    return `/api/properties?status=approved&public_only=1&category=${encodeURIComponent(normalized)}${moneySort ? `&sort=${moneySort}` : ""}`;
   }
   return "";
 }
@@ -49225,6 +49259,7 @@ function publicInventoryRouteSearchPath(category) {
   if (filters.landTitleType) params.set("land_title_type", String(filters.landTitleType));
   if (filters.listingOrigin) params.set("listing_origin", String(filters.listingOrigin));
   if (filters.sort) params.set("sort", String(filters.sort));
+  else if (publicMoneyPageSort(page)) params.set("sort", publicMoneyPageSort(page));
   return `/api/properties/search?${params.toString()}`;
 }
 
@@ -51486,7 +51521,7 @@ function filterListings(page, options = {}) {
     });
     if (sort === "price_asc") list.sort(comparePublicPriceAsc);
     if (sort === "price_desc") list.sort(comparePublicPriceDesc);
-    if (sort === "newest") list.sort(sortListingsByNewest);
+    if (sort === "newest") list.sort(publicDefaultListingComparator("sale"));
     list = decorateAndSortNearMeResults(list, nearState);
     const filtered = hasActivePublicCategoryFilter("sale");
     const routeSearch = publicCategoryHasRouteSearch("sale");
@@ -51532,7 +51567,7 @@ function filterListings(page, options = {}) {
     });
     if (sort === "price_asc") list.sort(comparePublicPriceAsc);
     if (sort === "price_desc") list.sort(comparePublicPriceDesc);
-    if (sort === "newest") list.sort(sortListingsByNewest);
+    if (sort === "newest") list.sort(publicDefaultListingComparator("rent"));
     if (nearState) list = decorateAndSortNearMeResults(list, nearState);
     const filtered = hasActivePublicCategoryFilter("rent");
     const routeSearch = publicCategoryHasRouteSearch("rent");
@@ -55750,7 +55785,7 @@ function filterLand(options = {}) {
   if (sort === "price_asc") list.sort(comparePublicPriceAsc);
   if (sort === "price_desc") list.sort(comparePublicPriceDesc);
   if (sort === "size_desc") list.sort((a, b) => numericValue(b.size) - numericValue(a.size));
-  if (sort === "newest") list.sort(sortListingsByNewest);
+  if (sort === "newest") list.sort(publicDefaultListingComparator("land"));
   if (nearState) list = decorateAndSortNearMeResults(list, nearState);
   const filtered = hasActivePublicCategoryFilter("land");
   const routeSearch = publicCategoryHasRouteSearch("land");
