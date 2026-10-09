@@ -511,12 +511,8 @@ app.use('/private-local', (_req, res) => {
 });
 
 app.get('/config.js', (_req, res) => {
-  // Free maps (Leaflet + OpenStreetMap) unless MAP_PROVIDER=google. The Google
-  // key is only handed to browsers when Google is the chosen provider.
-  const mapProvider = String(process.env.MAP_PROVIDER || '').trim().toLowerCase() === 'google' ? 'google' : 'osm';
   const publicConfig = {
-    mapProvider,
-    googleMapsApiKey: mapProvider === 'google' ? (process.env.GOOGLE_MAPS_API_KEY || '') : '',
+    googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || '',
     apiBase: process.env.PUBLIC_API_BASE || '',
     adsenseClient: process.env.GOOGLE_ADSENSE_CLIENT || '',
     adsenseSlots: {
@@ -528,7 +524,6 @@ app.get('/config.js', (_req, res) => {
   res.set('Cache-Control', 'no-store');
   return res.send([
     `window.MAKAUG_CONFIG = ${JSON.stringify(publicConfig)};`,
-    `window.MAKAUG_MAP_PROVIDER = ${JSON.stringify(publicConfig.mapProvider)};`,
     `window.MAKAUG_GOOGLE_MAPS_API_KEY = ${JSON.stringify(publicConfig.googleMapsApiKey)};`,
     `window.MAKAUG_API_BASE = window.MAKAUG_API_BASE || ${JSON.stringify(publicConfig.apiBase)};`,
     `window.MAKAUG_ADSENSE_CLIENT = window.MAKAUG_ADSENSE_CLIENT || ${JSON.stringify(publicConfig.adsenseClient)};`,
