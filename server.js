@@ -438,6 +438,11 @@ app.get('/marketplace-sitemap.xml', (_req, res) => {
   return res.status(410).type('text/plain').set('Cache-Control', 'public, max-age=3600').send('Gone');
 });
 
+app.get('/badge', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=600');
+  return res.type('html').send(require('./services/agentBadge').renderBadgePage());
+});
+
 app.get('/robots.txt', (_req, res) => {
   const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');
   const lines = [
