@@ -29,6 +29,56 @@ function ffmpegReady() {
   return true;
 }
 
+/**
+ * The one property to repair next, or none.
+ *
+ * Kept as a named query, and exported, for a reason learned the hard way: when
+ * this SELECT fails there is no property to record the failure against, so the
+ * catch below has nothing to write to and the job goes quiet in exactly the way
+ * it is supposed to stop doing. /api/admin/properties/video-still-candidates
+ * runs this same query so the error, or the empty result, can be read instead
+ * of guessed at.
+ *
+ * A correlated EXISTS rather than a join: it keeps the surrounding query simple
+ * enough to reason about, and the subquery that feeds it already groups rows.
+ */
+function selectionQuery(backfill) {
+  // Approved listings used to be excluded on the reasoning that a moderator had
+  // already passed them. In practice that meant a listing approved without a
+  // cover photo could never get one: three of Segawa's went live in October
+  // with a video and no picture, were never even attempted, and nothing would
+  // ever have attempted them. A listing with NO image at all is the one case
+  // worth revisiting, because adding its first cover photo cannot overwrite a
+  // moderator's choice — there was nothing there to overwrite.
+  const withApproved = backfill.SELECTION_SQL
+    .replace("AND p.status = 'pending'", "AND p.status IN ('pending', 'approved')");
+  return `
+    SELECT * FROM (${withApproved}) candidates
+     WHERE candidates.created_at >= NOW() - INTERVAL '21 days'
+       AND (
+         candidates.status = 'pending'
+         OR NOT EXISTS (
+           SELECT 1 FROM property_images pi WHERE pi.property_id = candidates.id
+         )
+       )
+       AND (
+         candidates.extra_fields->>'video_still_auto_attempted_at' IS NULL
+         -- A property with no cover at all is worth retrying sooner than one
+         -- that already has pictures; the old twelve hours meant a single
+         -- transient failure left a listing bare for half a day.
+         OR (candidates.extra_fields->>'video_still_auto_attempted_at')::timestamptz
+              < NOW() - (
+                CASE WHEN EXISTS (
+                       SELECT 1 FROM property_images pi WHERE pi.property_id = candidates.id
+                     )
+                     THEN INTERVAL '12 hours'
+                     ELSE INTERVAL '30 minutes' END
+              )
+       )
+     ORDER BY candidates.created_at ASC
+     LIMIT 1`;
+}
+
 async function tickVideoStills(db) {
   if (running) return { skipped: 'busy' };
   running = true;
@@ -42,30 +92,7 @@ async function tickVideoStills(db) {
     // ever have attempted them. A listing with NO image at all is the one case
     // worth revisiting, because adding its first cover photo cannot overwrite a
     // moderator's choice — there was nothing there to overwrite.
-    const result = await db.query(
-      `SELECT candidates.*,
-              COALESCE(img.image_count, 0) AS image_count
-         FROM (${backfill.SELECTION_SQL.replace("AND p.status = 'pending'", "AND p.status IN ('pending', 'approved')")}) candidates
-         LEFT JOIN (
-           SELECT property_id, COUNT(*)::int AS image_count
-             FROM property_images
-            GROUP BY property_id
-         ) img ON img.property_id = candidates.id
-        WHERE candidates.created_at >= NOW() - INTERVAL '21 days'
-          AND (candidates.status = 'pending' OR COALESCE(img.image_count, 0) = 0)
-          AND (
-            candidates.extra_fields->>'video_still_auto_attempted_at' IS NULL
-            -- A property with no cover at all is worth retrying sooner than one
-            -- that already has pictures; the old twelve hours meant a single
-            -- transient failure left a listing bare for half a day.
-            OR (candidates.extra_fields->>'video_still_auto_attempted_at')::timestamptz
-                 < NOW() - (CASE WHEN COALESCE(img.image_count, 0) = 0
-                                 THEN INTERVAL '30 minutes'
-                                 ELSE INTERVAL '12 hours' END)
-          )
-        ORDER BY COALESCE(img.image_count, 0) ASC, candidates.created_at ASC
-        LIMIT 1`
-    );
+    const result = await db.query(selectionQuery(backfill));
     const property = result.rows[0];
     if (!property) return { skipped: 'nothing_to_do' };
     attemptedId = property.id;
@@ -119,4 +146,4 @@ function startVideoStillScheduler(db) {
   logger.info('Video still scheduler armed', { pollMs });
 }
 
-module.exports = { tickVideoStills, startVideoStillScheduler };
+module.exports = { tickVideoStills, startVideoStillScheduler, selectionQuery };

@@ -4328,6 +4328,41 @@ router.get('/properties/actioned', async (req, res, next) => {
   }
 });
 
+// GET /api/admin/properties/video-still-candidates
+//
+// What the cover-photo job would pick up next, and why it is not picking
+// anything up. On 9 Oct 2026 eight WhatsApp properties sat with no usable
+// image; the job had either never looked at them or looked and failed, and
+// both cases were invisible from the outside because a failure to SELECT has
+// no property to attach itself to. This runs the scheduler's own query and
+// returns the rows, or the database error, so the next one is read rather
+// than guessed at.
+router.get('/properties/video-still-candidates', async (req, res) => {
+  try {
+    const backfill = require('../scripts/backfill-whatsapp-video-stills');
+    const { selectionQuery } = require('../services/videoStillScheduler');
+    const sql = selectionQuery(backfill);
+    const result = await db.query(sql.replace(/LIMIT 1\s*$/, 'LIMIT 20'));
+    return res.json({
+      ok: true,
+      data: {
+        count: result.rows.length,
+        candidates: result.rows.map((row) => ({
+          id: row.id,
+          status: row.status,
+          created_at: row.created_at,
+          attempted_at: row.extra_fields?.video_still_auto_attempted_at || null,
+          last_error: row.extra_fields?.video_still_auto_error || null
+        }))
+      }
+    });
+  } catch (error) {
+    // Deliberately returned rather than passed to next(): the error IS the
+    // answer this endpoint exists to give.
+    return res.json({ ok: false, error: String(error?.message || error).slice(0, 500) });
+  }
+});
+
 router.get('/properties/live', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);

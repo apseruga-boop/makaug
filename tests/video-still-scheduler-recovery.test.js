@@ -84,8 +84,10 @@ test('an approved listing is only revisited when it has no image at all', async 
   const db = fakeDb(PROPERTY);
   await freshScheduler().tickVideoStills(db);
   const select = db.calls.find((c) => /^\s*SELECT/i.test(c.text));
-  assert.match(select.text, /candidates\.status = 'pending' OR COALESCE\(img\.image_count, 0\) = 0/,
+  assert.match(select.text, /candidates\.status = 'pending'\s*\n?\s*OR NOT EXISTS/,
     'adding a first cover cannot overwrite a moderator choice; replacing existing images could');
+  assert.match(select.text, /INTERVAL '30 minutes'/,
+    'a coverless listing should be retried sooner than the old twelve hours');
 });
 
 test('a failure is recorded on the property, not just the log', async () => {
@@ -127,4 +129,35 @@ test('nothing to do is not an error', async () => {
 test.after(() => {
   delete require.cache[BACKFILL_PATH];
   delete require.cache[SCHEDULER_PATH];
+});
+
+// ---------------------------------------------------------------------------
+// The failure with no property to blame
+// ---------------------------------------------------------------------------
+
+test('a selection that throws is still reported to the caller', async () => {
+  // The blind spot behind the blind spot. When the SELECT itself fails there is
+  // no property to write the reason onto, so the job went quiet in exactly the
+  // way the error-recording above was meant to stop. It must at least say so.
+  installBackfillStub({ makeAndUploadStills: async () => [], attachStills: async () => ({ attached: 0 }) });
+  const db = {
+    calls: [],
+    async query(text) {
+      this.calls.push({ text });
+      if (/^\s*\n?\s*SELECT/i.test(text)) throw new Error('column "image_count" does not exist');
+      return { rows: [] };
+    }
+  };
+  const result = await freshScheduler().tickVideoStills(db);
+  assert.match(result.error, /image_count/, 'the caller must learn why nothing was picked up');
+  assert.strictEqual(result.propertyId, null, 'and that no property was involved');
+});
+
+test('the query is exported so it can be run from the admin API', () => {
+  const { selectionQuery } = freshScheduler();
+  const sql = selectionQuery({
+    SELECTION_SQL: "SELECT p.id FROM properties p WHERE p.source = 'x' AND p.status = 'pending'"
+  });
+  assert.match(sql, /IN \('pending', 'approved'\)/);
+  assert.match(sql, /LIMIT 1\s*$/, 'the admin endpoint widens this limit by replacing it');
 });
