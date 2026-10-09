@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const { asArray, cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { logNotification } = require('../services/notificationLogService');
+const { loadAgentPublicSummary } = require('../services/agentPublicProfileService');
 const { ensurePostVerificationRecords } = require('../services/authFlowService');
 const {
   DIRECT_AGENT_PROFILE_MARKER,
@@ -743,13 +744,23 @@ router.get('/', async (req, res, next) => {
         a.districts_covered,
         a.specializations,
         ${knownAgentSocialSelect('a')},
-        COALESCE(p.active_listings, 0) AS listings_count
+        COALESCE(p.active_listings, 0) AS listings_count,
+        COALESCE(ld.districts, ARRAY[]::text[]) AS listing_districts
       FROM agents a
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS active_listings
         FROM properties p
         WHERE p.agent_id = a.id AND p.status = 'approved'
       ) p ON true
+      LEFT JOIN LATERAL (
+        SELECT ARRAY_AGG(d.district ORDER BY d.n DESC, d.district) AS districts
+        FROM (
+          SELECT INITCAP(TRIM(p2.district)) AS district, COUNT(*) AS n
+          FROM properties p2
+          WHERE p2.agent_id = a.id AND p2.status = 'approved' AND NULLIF(TRIM(p2.district), '') IS NOT NULL
+          GROUP BY 1
+        ) d
+      ) ld ON true
       ${where}
       ORDER BY a.created_at DESC
       LIMIT $${values.length + 1}
@@ -868,10 +879,20 @@ router.get('/:id', async (req, res, next) => {
       [req.params.id]
     );
 
+    // About text and areas covered, written from all of the agent's live
+    // listings (never stored; an agent's own bio stays first).
+    let publicSummary = null;
+    try {
+      publicSummary = await loadAgentPublicSummary(db, agent.rows[0]);
+    } catch (error) {
+      console.warn('[agents] public summary unavailable', { agentId: req.params.id, message: error.message });
+    }
+
     return res.json({
       ok: true,
       data: {
         ...agent.rows[0],
+        public_summary: publicSummary,
         listings: listings.rows
       }
     });

@@ -1212,6 +1212,8 @@ const AGENT_SHARE_PREVIEW_VERSION = 'preview-v2';
 const AGENT_SHARE_PREMIUM_PREVIEW_VERSION = 'preview-v3';
 const AGENT_SHARE_BRAND_PREVIEW_VERSION = 'preview-v4';
 
+const agentPublicProfile = require('./services/agentPublicProfileService');
+
 async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
   const safeId = String(agentId || '').trim();
   if (!safeId) return null;
@@ -1222,7 +1224,9 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
        a.company_name,
        a.bio,
        a.profile_photo_url,
-       a.specializations
+       a.specializations,
+       a.districts_covered,
+       a.verification_reason
      FROM agents a
      WHERE a.id::text = $1
        AND LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
@@ -1242,9 +1246,20 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
   const specializations = Array.isArray(row.specializations)
     ? row.specializations.map((value) => String(value || '').trim()).filter(Boolean).slice(0, 3)
     : [];
-  const description = specializations.length
-    ? `${specializations.join(' - ')}. Review my property profile on makaug.com.`
-    : 'Review my property profile on makaug.com.';
+  const isSharePreview = Boolean(options.previewVersion) || options.approvedShare === true;
+  let publicSummary = null;
+  if (!isSharePreview) {
+    try {
+      publicSummary = await agentPublicProfile.loadAgentPublicSummary(db, row);
+    } catch (error) {
+      logger.warn('Agent profile summary unavailable for meta', { message: error.message });
+    }
+  }
+  const description = publicSummary?.listings_counted
+    ? agentPublicProfile.agentSummaryDescription(publicSummary, name)
+    : specializations.length
+      ? `${specializations.join(' - ')}. Review my property profile on makaug.com.`
+      : 'Review my property profile on makaug.com.';
   const isFrancis = String(row.id) === FRANCIS_ISABIRYE_AGENT_ID;
   const isBrandFrancisPreview = isFrancis
     && options.previewVersion === AGENT_SHARE_BRAND_PREVIEW_VERSION;
@@ -1279,10 +1294,12 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
       '@context': 'https://schema.org',
       '@type': 'RealEstateAgent',
       name,
-      description: String(row.bio || shareDescription).trim(),
+      description: String(publicSummary?.about_text || row.bio || shareDescription).trim(),
       url: absolutePublicUrl(profilePath),
       image,
-      areaServed: 'Uganda'
+      areaServed: publicSummary?.districts?.length
+        ? publicSummary.districts.map((district) => ({ '@type': 'AdministrativeArea', name: `${district}, Uganda` }))
+        : 'Uganda'
     }
   };
 }
