@@ -38,10 +38,13 @@ function proxyHeaders(headers = {}, { request = false } = {}) {
   }
   if (request) {
     // The app sees Host 127.0.0.1; keep the visitor's host for the
-    // non-canonical-host redirect in server.js.
-    if (!forwarded['x-forwarded-host'] && !forwarded['X-Forwarded-Host'] && headers.host) {
-      forwarded['x-forwarded-host'] = headers.host;
+    // non-canonical-host redirect in server.js. Always the real Host: a
+    // client-sent X-Forwarded-Host is dropped, or anyone could claim to be on
+    // makaug.com and skip the redirect.
+    for (const name of Object.keys(forwarded)) {
+      if (name.toLowerCase() === 'x-forwarded-host') delete forwarded[name];
     }
+    if (headers.host) forwarded['x-forwarded-host'] = headers.host;
     forwarded.host = `127.0.0.1:${appPort}`;
   }
   return forwarded;

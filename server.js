@@ -211,7 +211,8 @@ app.use(clientIpMiddleware);
 // Non-makaug hosts (makaug.onrender.com, old domains) 301 to the canonical
 // host for GET/HEAD. Non-GET /api calls are only logged: webhooks don't follow
 // redirects. /healthz above stays reachable on any host. render-start.js
-// forwards the original Host as X-Forwarded-Host (it rewrites Host itself).
+// forwards the original Host as X-Forwarded-Host (it rewrites Host itself);
+// see requestHostname() for when that header is believed.
 const CANONICAL_PUBLIC_HOST = (() => {
   try { return new URL(ACTIVE_TENANT.domain).hostname.toLowerCase(); } catch (_) { return 'makaug.com'; }
 })();
@@ -223,8 +224,21 @@ const ALLOWED_REQUEST_HOSTS = new Set([
   '::1',
   ...String(process.env.ALLOWED_HOSTS || '').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean)
 ]);
+// The host the visitor asked for. X-Forwarded-Host is client-controlled, so it
+// is trusted only from scripts/render-start.js: that proxy runs this process as
+// its child (RENDER_INTERNAL_APP=true), rewrites Host to 127.0.0.1, and always
+// overwrites X-Forwarded-Host with the visitor's real Host. Any other request
+// is judged by Host alone. Before 9 Oct, X-Forwarded-Host was read first from
+// anyone, so `curl -H 'X-Forwarded-Host: makaug.com' https://makaug.onrender.com/help`
+// got a 200 instead of the 301.
+function fromLocalProxy(req) {
+  if (process.env.RENDER_INTERNAL_APP !== 'true') return false;
+  const remote = String(req.socket?.remoteAddress || '');
+  return remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+}
 function requestHostname(req) {
-  const raw = String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim().toLowerCase();
+  const header = fromLocalProxy(req) ? (req.get('x-forwarded-host') || req.get('host')) : req.get('host');
+  const raw = String(header || '').split(',')[0].trim().toLowerCase();
   if (raw.startsWith('[')) return raw.slice(1, raw.indexOf(']'));
   return raw.replace(/:\d+$/, '');
 }
