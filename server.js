@@ -1435,7 +1435,9 @@ app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config
         listings = await loadPublicSeoListings(db, {
           categoryKey: meta.key,
           location: meta.location,
-          limit: 12
+          // The three money pages get 24 cards, agent-listed first.
+          limit: landing ? 24 : 12,
+          landingRank: Boolean(landing)
         });
       } catch (error) {
         logger.warn('Category SEO is continuing without server-rendered cards', { path: req.path, message: error.message });
