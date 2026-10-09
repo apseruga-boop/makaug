@@ -31,6 +31,7 @@ const publicInventoryMetricsCache = new Map();
 function invalidatePublicInventoryMetricsCache(reason = 'public_inventory_changed') {
   const cleared = publicInventoryMetricsCache.size;
   publicInventoryMetricsCache.clear();
+  require('./publicHtmlResponseCache').clear();
   logger.info('Public inventory metrics cache invalidated', {
     marker: PUBLIC_INVENTORY_METRICS_MARKER,
     reason,

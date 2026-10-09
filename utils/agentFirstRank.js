@@ -8,17 +8,18 @@ const { foundOnlinePropertySql } = require('./foundOnlineSql');
  * client's `sort=agent_first`, so hydration does not reshuffle what Google saw.
  *
  *   1. agent-listed (agent_id set or lister_type 'agent'), same test as the
- *      listed_by CASE in routes/properties.js
+ *      listed_by CASE in routes/properties.js, but never a found-online row
+ *      (those can carry an agent_id and used to rank as agent-listed)
  *   2. owner-listed
- *   3. found online
+ *   3. found online (checked first, so it always lands here)
  * then, on /for-sale only, houses and apartments before land,
  * then the most recently updated.
  */
 function agentFirstRankSql(alias = 'p') {
   const a = alias ? `${alias}.` : '';
   return `(CASE
-    WHEN ${a}agent_id IS NOT NULL OR LOWER(COALESCE(${a}lister_type, '')) = 'agent' THEN 0
     WHEN ${foundOnlinePropertySql(alias)} THEN 2
+    WHEN ${a}agent_id IS NOT NULL OR LOWER(COALESCE(${a}lister_type, '')) = 'agent' THEN 0
     ELSE 1
   END)`;
 }

@@ -43908,8 +43908,9 @@ function publicMoneyPageSort(category) {
 
 function publicAgentFirstRank(property = {}) {
   const origin = publicListingOrigin(property);
-  if (origin === "agent" || property.agent_id || String(property.lister_type || "").toLowerCase() === "agent") return 0;
+  // Found-online rows can carry an agent_id; they still rank last (same as the server).
   if (origin === "found_online") return 2;
+  if (origin === "agent" || property.agent_id || String(property.lister_type || "").toLowerCase() === "agent") return 0;
   return 1;
 }
 
