@@ -495,8 +495,10 @@ test('public result pages keep the map shell sticky without trapping it in a sho
   assert.doesNotMatch(mapColumnCss, /overflow-y:\s*auto;/, 'the right rail must not trap the map in an internal scroll area');
   assert.doesNotMatch(mapColumnCss, /max-height:/, 'the right rail must not end before the listing results section');
   assert.match(mapShellCss, /position:\s*sticky;/, 'the map shell itself should be sticky');
-  assert.match(mapShellCss, /top:\s*5\.75rem;/, 'the map should pin below the public header/search chrome');
-  assert.match(mapShellCss, /max-height:\s*calc\(100vh - 6\.75rem\);/, 'the sticky stack should fit below the public header');
+  // The map pins just under the pinned search bar, whose height the app
+  // publishes as --makaug-section-search-bottom (4.75rem + 1rem = 5.75rem without it).
+  assert.match(mapShellCss, /top:\s*calc\(var\(--makaug-section-search-bottom, 4\.75rem\) \+ 1rem\);/, 'the map should pin below the public header/search chrome');
+  assert.match(mapShellCss, /max-height:\s*calc\(100vh - var\(--makaug-section-search-bottom, 4\.75rem\) - 2rem\);/, 'the sticky stack should fit below the public header and search bar');
   assert.match(mapShellCss, /overflow-y:\s*auto;/, 'the combined map and assist form should scroll as one pinned panel when needed');
   assert.match(mapHeightCss, /height:\s*min\(52vh,\s*calc\(100vh - 22rem\),\s*430px\);/, 'the sticky map should leave space for the pinned assist form');
   assert.match(mapHeightCss, /min-height:\s*340px;/, 'desktop maps should not collapse while sharing the sticky rail');

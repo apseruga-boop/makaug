@@ -50789,6 +50789,7 @@ function mountSectionSearchShell(page) {
   if (existing) {
     syncSectionSearchShell(config.key);
     wireSectionSearchShell(config);
+    initSectionSearchCompactMode();
     return true;
   }
   restoreCanonicalLocationRouteState(config);
@@ -50827,6 +50828,7 @@ function mountSectionSearchShell(page) {
       <form class="section-search-form">
         ${queryControl}
         ${locationButton}
+        <button type="button" class="section-search-compact-filters" data-section-compact-filters aria-label="Show all filters"><i class="fas fa-sliders-h" aria-hidden="true"></i><span>Filters</span><span class="section-search-compact-count" data-section-compact-filter-count></span></button>
         <button type="submit" class="section-search-submit"><i class="fas fa-search"></i>Search</button>
       </form>
       ${canonicalSearch ? `
@@ -50850,7 +50852,119 @@ function mountSectionSearchShell(page) {
   }
   syncSectionSearchShell(config.key);
   wireSectionSearchShell(config);
+  initSectionSearchCompactMode();
   return true;
+}
+
+// Compact search bar on desktop listing pages. The full shell (location,
+// Nearby, Search, chips, hint and every filter) shows at the top of the page.
+// Once the visitor has scrolled into the results, only the location box,
+// Nearby, a Filters button and Search stay pinned, so the cards and the map
+// get the screen. Back near the top, or after tapping Filters, the full shell
+// returns. The pinned height is published as --makaug-section-search-bottom so
+// the sticky map rail always sits just under it.
+const SECTION_SEARCH_COMPACT_EXIT_PX = 24;
+const SECTION_SEARCH_COMPACT_MARGIN_PX = 40;
+const SECTION_SEARCH_MANUAL_OPEN_SCROLL_PX = 240;
+let sectionSearchCompactFrame = 0;
+let sectionSearchCompactObserver = null;
+
+function activeSectionSearchShell() {
+  return Array.from(document.querySelectorAll(".section-search-shell"))
+    .find((shell) => shell.offsetParent !== null && shell.getAttribute("data-section-search-shell") !== "brokers") || null;
+}
+
+function sectionSearchShellSentinel(shell) {
+  const previous = shell.previousElementSibling;
+  if (previous?.hasAttribute?.("data-section-search-sentinel")) return previous;
+  const sentinel = document.createElement("div");
+  sentinel.setAttribute("data-section-search-sentinel", "");
+  sentinel.setAttribute("aria-hidden", "true");
+  shell.parentNode?.insertBefore(sentinel, shell);
+  return sentinel;
+}
+
+function sectionSearchActiveFilterCount(shell) {
+  return Array.from(shell.querySelectorAll("select[data-section-search-field]"))
+    .filter((select) => select.selectedIndex > 0).length;
+}
+
+function updateSectionSearchCompactState() {
+  sectionSearchCompactFrame = 0;
+  const root = document.documentElement;
+  const shell = activeSectionSearchShell();
+  document.querySelectorAll(".section-search-shell.is-compact").forEach((other) => {
+    if (other !== shell) other.classList.remove("is-compact");
+  });
+  const style = shell ? window.getComputedStyle(shell) : null;
+  if (!shell || style.position !== "sticky") {
+    shell?.classList.remove("is-compact");
+    root.style.removeProperty("--makaug-section-search-bottom");
+    return;
+  }
+  const pinnedTop = Number.parseFloat(style.top) || 0;
+  const stickAt = sectionSearchShellSentinel(shell).getBoundingClientRect().top + window.scrollY - pinnedTop;
+  const y = window.scrollY;
+  const compact = shell.classList.contains("is-compact");
+  if (!compact) shell.dataset.fullHeight = String(shell.offsetHeight);
+  const fullHeight = Number(shell.dataset.fullHeight) || shell.offsetHeight;
+  // Enter well past the point where collapsing the shell (and the browser's
+  // scroll anchoring) could bring the page back under the exit line: no flicker.
+  const enterAt = stickAt + fullHeight + SECTION_SEARCH_COMPACT_MARGIN_PX;
+  const exitAt = stickAt + SECTION_SEARCH_COMPACT_EXIT_PX;
+  const busy = shell.matches(":focus-within");
+  if (shell.dataset.compactManualOpen === "1") {
+    const openedAt = Number(shell.dataset.compactManualOpenY) || 0;
+    if (y < exitAt) {
+      delete shell.dataset.compactManualOpen;
+    } else if (!busy && Math.abs(y - openedAt) > SECTION_SEARCH_MANUAL_OPEN_SCROLL_PX) {
+      delete shell.dataset.compactManualOpen;
+      shell.classList.add("is-compact");
+    }
+  } else if (!compact && !busy && y > enterAt) {
+    shell.classList.add("is-compact");
+  } else if (compact && y < exitAt) {
+    shell.classList.remove("is-compact");
+  }
+  const count = shell.querySelector("[data-section-compact-filter-count]");
+  if (count) {
+    const active = sectionSearchActiveFilterCount(shell);
+    count.textContent = active ? String(active) : "";
+  }
+  root.style.setProperty("--makaug-section-search-bottom", `${Math.round(pinnedTop + shell.offsetHeight)}px`);
+}
+
+function scheduleSectionSearchCompactState() {
+  if (!sectionSearchCompactFrame) sectionSearchCompactFrame = window.requestAnimationFrame(updateSectionSearchCompactState);
+}
+
+function initSectionSearchCompactMode() {
+  document.querySelectorAll(".section-search-shell").forEach((shell) => {
+    if (typeof ResizeObserver === "function") {
+      if (!sectionSearchCompactObserver) sectionSearchCompactObserver = new ResizeObserver(scheduleSectionSearchCompactState);
+      if (shell.dataset.compactObserved !== "1") {
+        shell.dataset.compactObserved = "1";
+        sectionSearchCompactObserver.observe(shell);
+      }
+    }
+    const button = shell.querySelector("[data-section-compact-filters]");
+    if (button && button.dataset.compactWired !== "1") {
+      button.dataset.compactWired = "1";
+      button.addEventListener("click", () => {
+        shell.classList.remove("is-compact");
+        shell.dataset.compactManualOpen = "1";
+        shell.dataset.compactManualOpenY = String(window.scrollY);
+        shell.querySelector("select[data-section-search-field]")?.focus({ preventScroll: true });
+        scheduleSectionSearchCompactState();
+      });
+    }
+  });
+  if (!window.__makaugSectionSearchCompactWired) {
+    window.__makaugSectionSearchCompactWired = true;
+    window.addEventListener("scroll", scheduleSectionSearchCompactState, { passive: true });
+    window.addEventListener("resize", scheduleSectionSearchCompactState);
+  }
+  scheduleSectionSearchCompactState();
 }
 
 function doSearch() {
