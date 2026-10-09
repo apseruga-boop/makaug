@@ -12403,6 +12403,65 @@ router.post('/outlook-agent/actions/:id/send', async (req, res, next) => {
   }
 });
 
+// Read-only look at the WhatsApp send queue: what is waiting, for whom, since
+// when, and why it has not gone. Changes nothing and sends nothing.
+router.get('/whatsapp/outbox-health', async (req, res, next) => {
+  try {
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 60));
+    const status = cleanText(req.query.status || '');
+    const statuses = status ? [status] : ['pending', 'retry'];
+    const rows = await db.query(
+      `SELECT id, status, attempts, created_at, next_attempt_at, sent_at, last_error,
+              regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g') AS digits,
+              COALESCE(metadata->>'source', '') AS source,
+              COALESCE(metadata->>'message_kind', '') AS kind,
+              COALESCE(metadata->>'delivery_mode', '') AS delivery_mode,
+              COALESCE(NULLIF(metadata->>'claim_count', ''), '0')::int AS claim_count,
+              metadata->>'claimed_at' AS claimed_at,
+              COALESCE(metadata->>'retry_suppressed', '') AS retry_suppressed,
+              (payload->>'media_type') AS media_type,
+              LEFT(COALESCE(payload->>'text', ''), 90) AS preview,
+              campaign_id
+         FROM outbound_message_queue
+        WHERE channel = 'whatsapp'
+          AND status = ANY($1::text[])
+        ORDER BY created_at ASC
+        LIMIT $2`,
+      [statuses, limit]
+    );
+    const mask = (digits) => (digits.length > 6 ? `${digits.slice(0, 5)}***${digits.slice(-3)}` : digits);
+    const data = rows.rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      to: mask(row.digits),
+      source: row.source,
+      kind: row.kind,
+      delivery_mode: row.delivery_mode,
+      media_type: row.media_type,
+      attempts: row.attempts,
+      claim_count: row.claim_count,
+      age_minutes: Math.round((Date.now() - new Date(row.created_at).getTime()) / 60000),
+      next_attempt_in_minutes: Math.round((new Date(row.next_attempt_at).getTime() - Date.now()) / 60000),
+      claimed_at: row.claimed_at,
+      retry_suppressed: row.retry_suppressed,
+      last_error: row.last_error ? String(row.last_error).slice(0, 160) : null,
+      campaign: Boolean(row.campaign_id),
+      preview: row.preview
+    }));
+    const summary = await db.query(
+      `SELECT status, COALESCE(metadata->>'delivery_mode', '') AS delivery_mode,
+              COALESCE(metadata->>'source', '') AS source, COUNT(*)::int AS total
+         FROM outbound_message_queue
+        WHERE channel = 'whatsapp' AND status IN ('pending','retry','failed')
+          AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1,2,3 ORDER BY total DESC LIMIT 30`
+    );
+    return res.json({ ok: true, data, summary: summary.rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/whatsapp-message-logs', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
