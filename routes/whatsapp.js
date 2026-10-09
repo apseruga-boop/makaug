@@ -857,6 +857,10 @@ function getUgandaDayPart(date = new Date()) {
 }
 
 function timeGreeting(lang, date = new Date()) {
+  // On 9 October the national day leads instead of the time of day. Everything
+  // after the greeting is untouched.
+  const independence = ugandaIndependenceGreeting(lang, date);
+  if (independence) return independence;
   const code = resolveLangCode(lang);
   const part = getUgandaDayPart(date);
   const greetings = {
@@ -870,6 +874,41 @@ function timeGreeting(lang, date = new Date()) {
     am: { morning: 'እንደምን አደሩ', afternoon: 'እንደምን ዋሉ', evening: 'እንደምን አመሹ' }
   };
   return (greetings[code] || greetings.en)[part] || greetings.en[part];
+}
+
+/**
+ * Independence Day, in the language the person is already being spoken to.
+ *
+ * 9 October, Uganda's national day. On that date the greeting leads with it and
+ * the rest of the reply is unchanged, so somebody saying hello gets "Hello,
+ * happy Independence Day" and then the usual menu.
+ *
+ * Gated on the Kampala date rather than switched on by hand, so it turns itself
+ * off at midnight Uganda time. Nobody has to remember to take it down, and
+ * there is no deploy tomorrow to undo it — which is the only version of a
+ * seasonal greeting that does not end up still running in March.
+ */
+const UGANDA_INDEPENDENCE_MMDD = '10-09';
+
+function ugandaIndependenceGreeting(lang, date = new Date()) {
+  const kampalaMonthDay = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ACTIVE_TENANT.timezone || 'Africa/Kampala',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+  if (kampalaMonthDay !== UGANDA_INDEPENDENCE_MMDD) return '';
+  const code = resolveLangCode(lang);
+  const lines = {
+    en: 'Hello, happy Independence Day 🇺🇬',
+    lg: 'Gyebale ko, tusanyukidde Olunaku lw\'Obwetwaze 🇺🇬',
+    sw: 'Hujambo, heri ya Siku ya Uhuru 🇺🇬',
+    ac: 'Apwoyo, wot maber me Nino me Thwon 🇺🇬',
+    ny: 'Agandi, tukusiima Ekiro ky\'Obugabe 🇺🇬',
+    rn: 'Muraho, tukwifurije Umunsi w\'Ubwigenge 🇺🇬',
+    sm: 'Gyebale ko, tusanyukidde Olunaku lw\'Obwetwaze 🇺🇬',
+    am: 'ሰላም፣ መልካም የነጻነት ቀን 🇺🇬'
+  };
+  return lines[code] || lines.en;
 }
 
 function assistantIntro(lang) {
