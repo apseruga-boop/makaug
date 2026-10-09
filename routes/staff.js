@@ -120,6 +120,7 @@ const STAFF_DASHBOARD_PANEL_CACHE_TTL_MS = Math.max(500, parseInt(process.env.ST
 const STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS || '4000', 10) || 4000);
 const STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS = Math.max(250, parseInt(process.env.STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS || '700', 10) || 700);
 const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS || '4000', 10) || 4000);
+const STAFF_REVIEW_QUEUE_ACQUIRE_TIMEOUT_MS = Math.max(250, parseInt(process.env.STAFF_REVIEW_QUEUE_ACQUIRE_TIMEOUT_MS || '3000', 10) || 3000);
 const STAFF_PREVIEW_QUERY_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_PREVIEW_QUERY_TIMEOUT_MS || '900', 10) || 900);
 const STAFF_MODERATION_WRITE_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_MODERATION_WRITE_TIMEOUT_MS || '5000', 10) || 5000);
 const STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS = Math.max(5000, parseInt(process.env.STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS || '15000', 10) || 15000);
@@ -1185,7 +1186,10 @@ async function staffQuery(sql, params = [], options = {}) {
   if (!timeoutMs) return db.query(sql, params);
   let acquireTimedOut = false;
   let acquireTimer = null;
-  const acquireTimeoutMs = Math.max(250, Math.min(timeoutMs, 900));
+  // How long to wait for a free database connection. 900 ms by default; the
+  // review queue asks for more (STAFF_REVIEW_QUEUE_ACQUIRE_TIMEOUT_MS) so
+  // moderators are not the first to be turned away when the pool is busy.
+  const acquireTimeoutMs = Math.max(250, Math.min(timeoutMs, Number(options.acquireTimeoutMs) || 900));
   const clientPromise = db.getClient().then((client) => {
     if (acquireTimedOut) {
       client.release();
@@ -3540,13 +3544,13 @@ router.get('/properties/review-queue', async (req, res, next) => {
        ${imageJoin}
        ORDER BY ${STAFF_REVIEW_QUEUE_ORDER}`,
       [...values, rowLimit, offset],
-      { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS, label: 'staff_review_queue_page' }
+      { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS, acquireTimeoutMs: STAFF_REVIEW_QUEUE_ACQUIRE_TIMEOUT_MS, label: 'staff_review_queue_page' }
     );
     const countPromise = includeTotal
       ? staffQuery(
         `SELECT COUNT(*)::int AS total FROM properties p ${where}`,
         values,
-        { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+        { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS, acquireTimeoutMs: STAFF_REVIEW_QUEUE_ACQUIRE_TIMEOUT_MS }
       )
         .then((result) => ({ ok: true, row: result.rows[0] || { total: 0 } }))
         .catch((error) => ({ ok: false, error }))
@@ -3571,39 +3575,37 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const rows = rawRows.slice(0, limit);
     const hasMore = rawRows.length > limit;
     const countRow = countResult.row;
-    if (includeTotal && !countResult.ok) {
-        const error = countResult.error || {};
-        logger.warn('Staff review queue count failed', { code: error.code, message: error.message });
-        return res.status(503).json({
-          ok: false,
-          error: 'review_queue_count_failed',
-          details: [error.code || error.message || 'count_failed'],
-          meta: {
-            status: 'active_review_queue',
-            query_ok: false,
-            query_error: error.code || error.message || 'count_failed',
-            timed_out: error.code === '57014',
-            empty_is_authoritative: false
-          }
-        });
+    // When only the count fails (a busy pool, a slow COUNT), moderators still
+    // get the list: the count comes back null and marked stale instead of the
+    // whole queue answering 503.
+    const countStale = includeTotal && !countResult.ok;
+    if (countStale) {
+      const error = countResult.error || {};
+      logger.warn('Staff review queue count failed; returning the list with a stale count', { code: error.code, message: error.message });
     }
-    const total = includeTotal
+    const exactTotal = includeTotal && !countStale;
+    const total = exactTotal
       ? safeNumber(countRow, 'total')
       : offset + rows.length + (hasMore ? 1 : 0);
     const pagination = toPagination(total, page, limit);
-    if (!includeTotal) pagination.totalPages = page + (hasMore ? 1 : 0);
+    if (!exactTotal) pagination.totalPages = page + (hasMore ? 1 : 0);
+    if (countStale) pagination.total = null;
 
     return res.json({
       ok: true,
       data: rows,
       pagination,
+      count: countStale ? null : (includeTotal ? total : null),
+      count_status: countStale ? 'stale' : (includeTotal ? 'exact' : 'not_requested'),
       meta: {
+        count_status: countStale ? 'stale' : (includeTotal ? 'exact' : 'not_requested'),
+        count_error: countStale ? (countResult.error?.code || countResult.error?.message || 'count_failed') : undefined,
         status: 'active_review_queue',
         include_total: includeTotal,
         include_images: includeImages,
         has_more: hasMore,
-        total_exact: includeTotal,
-        ...staffReviewQueueMeta(segment, rows.length, includeTotal ? total : null),
+        total_exact: exactTotal,
+        ...staffReviewQueueMeta(segment, rows.length, exactTotal ? total : null),
         search: search || null,
         source_quality_filter: 'stored_suppression_flag_only',
         query_ok: true,
@@ -3920,6 +3922,8 @@ router.post('/properties/:id/images', async (req, res, next) => {
       images: Array.isArray(req.body?.images) ? req.body.images : [],
       confirmRights: req.body?.confirm_rights === true || String(req.body?.confirm_rights || '').toLowerCase() === 'true'
     });
+    // Staff added photos: the cover-photo job's failure count starts afresh.
+    await require('../services/videoStillScheduler').clearVideoStillAttempts(db, req.params.id);
     clearStaffFastDashboardCache();
     require('./properties').clearPublicPropertiesCache(data.action);
     invalidatePublicInventoryMetricsCache(data.action);
