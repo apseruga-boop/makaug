@@ -2,7 +2,7 @@ const express = require('express');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { changeStaffPropertyImage } = require('../services/staffPropertyMediaService');
+const { changeStaffPropertyImage, addStaffPropertyImages } = require('../services/staffPropertyMediaService');
 const { requireStaffAccess } = require('../middleware/auth');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
@@ -3908,6 +3908,29 @@ async function staffChangePropertyImage(req, res, next) {
     return next(error);
   }
 }
+
+// Reviewers add the property's own photos from the review screen, so a
+// listing that arrived without any can still be approved.
+router.post('/properties/:id/images', async (req, res, next) => {
+  try {
+    if (!toUuidOrNull(req.params.id)) return res.status(400).json({ ok: false, error: 'Invalid listing id' });
+    const data = await addStaffPropertyImages({
+      propertyId: req.params.id,
+      actorId: actorId(req),
+      images: Array.isArray(req.body?.images) ? req.body.images : [],
+      confirmRights: req.body?.confirm_rights === true || String(req.body?.confirm_rights || '').toLowerCase() === 'true'
+    });
+    clearStaffFastDashboardCache();
+    require('./properties').clearPublicPropertiesCache(data.action);
+    invalidatePublicInventoryMetricsCache(data.action);
+    logStaffActivityInBackground(req, data.action, { targetType: 'property', targetId: req.params.id, metadata: { image_count: data.added } });
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, data });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
 
 router.delete('/properties/:id/images/:imageId', staffChangePropertyImage);
 router.post('/properties/:id/images/:imageId/restore', staffChangePropertyImage);

@@ -56,7 +56,12 @@ test('photo controls render every image and preserve a restore action', () => {
   const html = context.staffPreviewImagesHtml(Array.from({ length: 20 }, (_, index) => ({ id: String(index), url: `photo-${index}` })), 'property', [{ id: 'old', url: 'old' }]);
   assert.equal((html.match(/>Remove photo</g) || []).length, 20);
   assert.equal((html.match(/>Restore photo</g) || []).length, 1);
-  assert.match(context.staffPreviewImagesHtml([], 'property'), /No property photos are attached/);
+  // A listing with no photos says it can't be approved yet and offers the
+  // upload right there (the old text promised an override that no longer exists).
+  const empty = context.staffPreviewImagesHtml([], 'property');
+  assert.match(empty, /This listing has no photos yet\. It can't be approved until at least one real photo/);
+  assert.match(empty, /id="staff-preview-photo-upload"/);
+  assert.doesNotMatch(empty, /human approval override/);
 });
 
 test('photo removal and restoration endpoints require an authenticated staff session', async () => {
@@ -65,7 +70,8 @@ test('photo removal and restoration endpoints require an authenticated staff ses
   const app = express();
   app.use('/api/staff', require('../routes/staff'));
   const path = '/api/staff/properties/00000000-0000-4000-8000-000000000001/images/10000000-0000-4000-8000-000000000001';
-  for (const response of [await request(app).delete(path), await request(app).post(`${path}/restore`)]) {
+  const uploadPath = '/api/staff/properties/00000000-0000-4000-8000-000000000001/images';
+  for (const response of [await request(app).delete(path), await request(app).post(`${path}/restore`), await request(app).post(uploadPath).send({ confirm_rights: true, images: [] })]) {
     assert([401, 403].includes(response.status));
     assert.equal(response.body.ok, false);
   }
