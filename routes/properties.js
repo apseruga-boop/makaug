@@ -1,5 +1,6 @@
 const { correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
+const { publicListingPayload } = require('../utils/publicListingPayload');
 const { handOffListingLead, loadListingContact } = require('../services/leadHandoffService');
 const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
 const leadFormLimiter = createLeadFormLimiter();
@@ -1702,7 +1703,7 @@ function publicListingContactLabel(safeExtra = {}, publicContactPhone = '', emai
   });
 }
 
-function publicPropertyRow(property, images = []) {
+function publicPropertyRow(property, images = [], { privileged = false } = {}) {
   const {
     owner_edit_token_hash: _ownerEditTokenHash,
     id_number: _idNumber,
@@ -1739,7 +1740,7 @@ function publicPropertyRow(property, images = []) {
     } : {}),
     ...(studentContext.distance_to_uni_km != null ? { distance_to_uni_km: studentContext.distance_to_uni_km } : {})
   };
-  return {
+  const row = {
     ...safeProperty,
     title: publicTitle,
     description: publicDescription,
@@ -1772,6 +1773,7 @@ function publicPropertyRow(property, images = []) {
     third_party_discovery_result: foundOnlinePublic,
     listing_origin: foundOnlinePublic ? 'found_online' : (safeProperty.listed_by || (safeProperty.agent_id || safeProperty.lister_type === 'agent' ? 'agent' : 'private'))
   };
+  return publicListingPayload(row, { privileged });
 }
 
 async function loadPropertyWithImages(propertyId) {
@@ -3285,7 +3287,9 @@ router.get('/:id', async (req, res, next) => {
 
     return res.json({
       ok: true,
-      data: publicPropertyRow(property, images)
+      // Staff and an owner holding a valid edit token see the whole row;
+      // everyone else gets the allow-listed public fields only.
+      data: publicPropertyRow(property, images, { privileged: adminAccess || ownerCanPreview })
     });
   } catch (error) {
     return next(error);
@@ -3308,7 +3312,7 @@ router.get('/:id/preview', async (req, res, next) => {
     return res.json({
       ok: true,
       data: {
-        ...publicPropertyRow(property, images),
+        ...publicPropertyRow(property, images, { privileged: true }),
         owner_can_edit: ['pending', 'rejected'].includes(String(property.status || '').toLowerCase()),
         moderation_reason: property.moderation_reason || property.extra_fields?.moderation_reason || null
       }

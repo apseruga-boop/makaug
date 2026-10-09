@@ -228,7 +228,7 @@ function mapRemoteAgentForUi(agent = {}) {
   const area = serviceDistricts.length ? serviceDistricts.slice(0, 3).join(" • ") : (agent.area || "Uganda");
   const specializations = Array.isArray(agent.specializations) ? agent.specializations.filter(Boolean) : [];
   const socials = normalizeBrokerSocialLinks(agent);
-  const directAgentAuthorised = String(agent.verification_reason || "").includes("[DIRECT_AGENT_AUTHORISED]");
+  const directAgentAuthorised = agent.direct_agent_authorised === true || String(agent.verification_reason || "").includes("[DIRECT_AGENT_AUTHORISED]");
   const fullName = agent.full_name || agent.name || "makaug agent";
   const profilePhotoUrl = agent.profile_photo_url || OFFICIAL_AGENT_PORTRAITS.get(String(fullName).trim().toLowerCase()) || "";
   return {
@@ -279,8 +279,8 @@ function mapRemoteAgentForUi(agent = {}) {
     identity_document_uploaded_at: agent.identity_document_uploaded_at || "",
     verification_reason: agent.verification_reason || "",
     direct_agent_authorised: directAgentAuthorised,
-    private_id_profile_reviewed: String(agent.verification_reason || "").includes("[STAFF_REVIEWED_PRIVATE_ID_PROFILE]"),
-    profile_claim_pending: directAgentAuthorised && !agent.user_id,
+    private_id_profile_reviewed: agent.private_id_profile_reviewed === true || String(agent.verification_reason || "").includes("[STAFF_REVIEWED_PRIVATE_ID_PROFILE]"),
+    profile_claim_pending: typeof agent.profile_claim_pending === "boolean" ? agent.profile_claim_pending : (directAgentAuthorised && !agent.user_id),
     privacy_consent_accepted: agent.privacy_consent_accepted === true,
     privacy_consent_at: agent.privacy_consent_at || "",
     data_retention_notice_accepted: agent.data_retention_notice_accepted === true,
