@@ -360,12 +360,25 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
   const locationValidPricesByCategory = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, new Map()]));
   const categoryDistricts = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, new Set()]));
   const generatedMs = new Date(generatedAt).getTime();
+  // Honest hub lastmod: newest listing timestamp shown on that hub (ms).
+  const categoryLastmod = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, 0]));
+  const locationLastmod = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, new Map()]));
+  const districtKeyByDistrict = new Map();
+  for (const option of canonicalLocationOptions()) {
+    if (option.level === 'district' && option.district) districtKeyByDistrict.set(option.district, option.canonical_key);
+  }
+  const agentLastmod = new Map();
+  let overallLastmod = 0;
   let newLast7d = 0;
   let thinPropertyCount = 0;
   if (!rows.length) {
     return {
       directCounts,
       counts: emptyCounts(),
+      categoryLastmod,
+      locationLastmod,
+      agentLastmod,
+      overallLastmod,
       categoryTotals,
       categoryPriceFloors,
       locationPriceFloors: directPriceFloors,
@@ -386,6 +399,25 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
     if (!categories.length) continue;
     const locations = canonicalLocationsForSeoRow(row);
     const createdMs = new Date(row.created_at || '').getTime();
+    const rowMs = new Date(row.updated_at || row.created_at || '').getTime();
+    if (Number.isFinite(rowMs)) {
+      overallLastmod = Math.max(overallLastmod, rowMs);
+      for (const category of categories) {
+        categoryLastmod[category] = Math.max(categoryLastmod[category], rowMs);
+        for (const canonical of locations) {
+          const keys = [canonical.key];
+          const districtKey = districtKeyByDistrict.get(canonical.district);
+          if (districtKey && districtKey !== canonical.key) keys.push(districtKey);
+          for (const key of keys) {
+            locationLastmod[category].set(key, Math.max(locationLastmod[category].get(key) || 0, rowMs));
+          }
+        }
+      }
+      if (row.agent_id && row.agent_public) {
+        const agentKey = String(row.agent_id);
+        agentLastmod.set(agentKey, Math.max(agentLastmod.get(agentKey) || 0, rowMs));
+      }
+    }
     if (Number.isFinite(createdMs) && Number.isFinite(generatedMs) && generatedMs - createdMs <= 7 * 86400000) newLast7d += 1;
     for (const category of categories) {
       categoryTotals[category] += 1;
@@ -448,6 +480,10 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
   return {
     directCounts,
     counts,
+    categoryLastmod,
+    locationLastmod,
+    agentLastmod,
+    overallLastmod,
     categoryTotals,
     categoryPriceFloors,
     locationPriceFloors,
@@ -510,6 +546,12 @@ async function refreshPublicSeoInventorySnapshot(db) {
               'king_review_facts_confirmed', extra_fields->'king_review_facts_confirmed'
             ) AS copy_flags,
             ${realHostedPhotoExistsSql('properties')} AS has_real_photo,
+            agent_id,
+            EXISTS (
+              SELECT 1 FROM agents a
+              WHERE a.id = properties.agent_id
+                AND LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
+            ) AS agent_public,
             updated_at, created_at
      FROM properties
      WHERE ${publicVisibleInventoryWhere('properties')}
@@ -604,13 +646,24 @@ function categoryPageSeoMeta(pathname = '/', snapshot = null, baseUrl = PUBLIC_S
   };
 }
 
+function isoFromMs(ms) {
+  const value = Number(ms);
+  return Number.isFinite(value) && value > 0 ? new Date(value).toISOString() : '';
+}
+
 function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
   const root = String(baseUrl || PUBLIC_SITE_URL).replace(/\/+$/, '');
+  // Hub lastmod = newest updated_at among the listings on that hub, never the
+  // generation time (that told crawlers everything changed on every fetch).
+  // No listings, no lastmod.
   const entries = [
-    { loc: `${root}/`, changefreq: 'daily', priority: '1.0' },
-    // Hub URLs carry no lastmod (stamping the generation time on every hub
-    // told crawlers that everything changed on every fetch).
-    ...Object.values(CATEGORY_SEO).map((config) => ({ loc: `${root}${config.route}`, changefreq: 'hourly', priority: '0.9' })),
+    { loc: `${root}/`, lastmod: isoFromMs(snapshot?.overallLastmod), changefreq: 'daily', priority: '1.0' },
+    ...Object.entries(CATEGORY_SEO).map(([key, config]) => ({
+      loc: `${root}${config.route}`,
+      lastmod: isoFromMs(snapshot?.categoryLastmod?.[key]),
+      changefreq: 'hourly',
+      priority: '0.9'
+    })),
     { loc: `${root}/about`, changefreq: 'monthly', priority: '0.6' },
     { loc: `${root}/how-it-works`, changefreq: 'monthly', priority: '0.6' },
     { loc: `${root}/help`, changefreq: 'monthly', priority: '0.6' },
@@ -630,6 +683,7 @@ function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
       if (count < SEO_FACET_MIN_LISTINGS) continue;
       entries.push({
         loc: `${root}${config.route}/${canonicalLocationRouteSlug(location)}`,
+        lastmod: isoFromMs(snapshot?.locationLastmod?.[key]?.get(location.canonical_key)),
         changefreq: 'daily',
         priority: location.level === 'district' ? '0.8' : '0.7'
       });
@@ -676,6 +730,14 @@ function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
       lastmod: property.lastmod ? new Date(property.lastmod).toISOString() : '',
       changefreq: 'weekly',
       priority: '0.6'
+    });
+  }
+  for (const [agentId, ms] of snapshot?.agentLastmod || new Map()) {
+    entries.push({
+      loc: `${root}/agents/${encodeURIComponent(agentId)}`,
+      lastmod: isoFromMs(ms),
+      changefreq: 'weekly',
+      priority: '0.5'
     });
   }
   const seen = new Set();
