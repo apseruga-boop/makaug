@@ -211,3 +211,46 @@ test('review form: a UGX row has an empty, disabled original amount; switching t
   assert.doesNotMatch(app, /review\.price_original \?\? extra\.price_original \?\? review\.price \?\?/);
   assert.match(app, /\.\.\.adminReviewPricePatchFields\(/);
 });
+
+// ---------------------------------------------------------------------------
+// price_fx_as_of arrives from pg as a Date
+// ---------------------------------------------------------------------------
+
+test('a Date price_fx_as_of from the database is saved as an ISO string, not a locale string', () => {
+  const { normalizeStaffListingPatch, toIsoTimestampOrNull } = require('../routes/staff')._test;
+  const existing = {
+    price_original_currency: 'USD',
+    price_fx_rate_ugx: 3800,
+    // What pg returns for a timestamptz column.
+    price_fx_as_of: new Date('2026-10-06T11:55:57.000Z')
+  };
+  const { patch, errors } = normalizeStaffListingPatch(existing, {
+    price_original_currency: 'USD',
+    price_original: 270000
+  });
+  assert.deepEqual(errors, []);
+  assert.equal(patch.price, 1026000000);
+  assert.equal(patch.price_fx_as_of, '2026-10-06T11:55:57.000Z');
+  assert.doesNotMatch(String(patch.price_fx_as_of), /GMT|British Summer Time/);
+  assert.ok(!Number.isNaN(Date.parse(patch.price_fx_as_of)));
+  assert.equal(toIsoTimestampOrNull(existing.price_fx_as_of), '2026-10-06T11:55:57.000Z');
+});
+
+test('timestamps from the form, a Date or nothing are all handled', () => {
+  const { toIsoTimestampOrNull } = require('../routes/staff')._test;
+  assert.equal(toIsoTimestampOrNull('2026-07-25'), '2026-07-25T00:00:00.000Z');
+  assert.equal(toIsoTimestampOrNull(new Date('2026-07-25T00:00:00Z')), '2026-07-25T00:00:00.000Z');
+  assert.equal(toIsoTimestampOrNull(''), null);
+  assert.equal(toIsoTimestampOrNull(null), null);
+  assert.equal(toIsoTimestampOrNull('not a date'), null);
+  assert.equal(toIsoTimestampOrNull(new Date('nope')), null);
+});
+
+test('with no earlier rate date, a USD save stamps now', () => {
+  const { normalizeStaffListingPatch } = require('../routes/staff')._test;
+  const { patch } = normalizeStaffListingPatch({ price_original_currency: 'UGX' }, {
+    price_original_currency: 'USD',
+    price_original: 1000
+  });
+  assert.ok(!Number.isNaN(Date.parse(patch.price_fx_as_of)));
+});
