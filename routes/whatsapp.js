@@ -2205,12 +2205,31 @@ function firstDistrictFromText(input = '') {
   return DISTRICTS.find((d) => new RegExp(`\\b${d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(clean)) || '';
 }
 
+// What a block EARNS, written just before the figure. "Making 1.8m", "earning
+// 900k monthly", "bringing in 2m". An income is never an asking price.
+const LISTING_INCOME_CUE = /(?:mak(?:ing|es)|earn(?:ing|s)?|collect(?:ing|s)?|generat(?:ing|es)|bring(?:ing|s)?(?:\s+in)?|fetch(?:ing|es)?|income|returns?|profits?)\s*(?:of|at)?\s*$/i;
+
 function listingPriceSourceFragment(input = '') {
   const clean = normalizeInput(input).toLowerCase().replace(/,/g, '');
   if (!clean) return '';
-  const explicitCurrency = clean.match(/\b(?:ugx|ush|usd|us\$)\s*\d+(?:\.\d+)?\s*(?:b|bn|bil|billion|m|mn|mil|million|k|thousand)?\b/i);
-  if (explicitCurrency?.[0]) return explicitCurrency[0];
   const explicitSalePrice = clean.match(/\b(?:price|asking|selling|on sale(?: for)?|for sale(?: at)?|rent(?:ed)? at)\D{0,20}(\d+(?:\.\d+)?\s*(?:b|bn|bil|billion|m|mn|mil|million|k|thousand)?)\b/i);
+  const explicitCurrency = clean.match(/\b(?:ugx|ush|usd|us\$)\s*\d+(?:\.\d+)?\s*(?:b|bn|bil|billion|m|mn|mil|million|k|thousand)?\b/i);
+
+  // "…3 RENTAL UNITS … MAKING 1.8M UGX TITLED SELLING AT 170M UGX" — 9 Oct 2026.
+  // The caption carries two figures: what the block earns a month, and what it
+  // costs to buy. Price notation is normalised before this runs, so "1.8M UGX"
+  // became a currency-led amount and matched here first — ahead of the "SELLING
+  // AT" that says which number is the asking price. The property was about to be
+  // published as a 1.8 million shilling rental instead of a 170 million sale.
+  //
+  // So when a figure is introduced as income, the asking price stated elsewhere
+  // in the same caption wins. This is the same rule as the NALYA block, applied
+  // where the amounts are too small for the sanity floor to have caught it.
+  if (explicitCurrency?.[0]) {
+    const before = clean.slice(0, explicitCurrency.index).slice(-40);
+    const isIncome = LISTING_INCOME_CUE.test(before);
+    if (!isIncome || !explicitSalePrice?.[1]) return explicitCurrency[0];
+  }
   return explicitSalePrice?.[1] || '';
 }
 
