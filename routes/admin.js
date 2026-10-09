@@ -12472,6 +12472,37 @@ router.get('/whatsapp/outbox-health', async (req, res, next) => {
   }
 });
 
+// Cancel specific queued WhatsApp messages so they never go out. Takes explicit
+// ids only, touches only rows still waiting (never one already sent), and marks
+// them failed with a reason rather than deleting them, so the record stays.
+router.post('/whatsapp/outbox-cancel', async (req, res, next) => {
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : [])
+      .map((value) => String(value || '').trim())
+      .filter((value) => /^[0-9a-f-]{36}$/i.test(value)))].slice(0, 100);
+    if (!ids.length) return res.status(400).json({ ok: false, error: 'Provide the ids of the messages to cancel' });
+    const actorId = adminActorId(req);
+    const result = await db.query(
+      `UPDATE outbound_message_queue
+          SET status = 'failed',
+              last_error = 'cancelled_by_admin',
+              next_attempt_at = NOW(),
+              metadata = COALESCE(metadata, '{}'::jsonb)
+                || jsonb_build_object('cancelled_by_admin', TRUE, 'cancelled_at', NOW()::text, 'cancelled_by', $2::text),
+              updated_at = NOW()
+        WHERE id = ANY($1::uuid[])
+          AND channel = 'whatsapp'
+          AND status IN ('pending', 'retry')
+        RETURNING id`,
+      [ids, String(actorId || 'admin')]
+    );
+    await writeAudit('whatsapp_outbox_cancelled', { requested: ids.length, cancelled: result.rowCount }, actorId);
+    return res.json({ ok: true, data: { requested: ids.length, cancelled: result.rowCount } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/whatsapp-message-logs', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
