@@ -8252,7 +8252,34 @@ async function handleEmployeeWhatsappIntake({
   }
 
   if (currentStep === 'employee_agent_logo') {
-    const logoCandidates = candidates.filter((candidate) => candidate.kind === 'image').slice(0, 1);
+    // 8 Oct 2026: Migadde Hakim's national ID card — his face, his NIN, his
+    // date of birth, his signature — was his public agent profile picture on
+    // makaug.com. He had been asked for his ID a moment earlier, and when the
+    // next question asked for a logo the same photo was sent again. This step
+    // published it without a single check.
+    //
+    // The guard already existed. employeePropertyMediaCandidates has kept the
+    // ID out of property photos for weeks using exactly these two signals, and
+    // nobody applied it to the one image that becomes the agent's public face.
+    //
+    // A profile photo is the most public thing we hold about a person, so this
+    // is the strict direction: if there is any chance the image is the ID, it
+    // is refused and the employee is asked for a real photo. Refusing a genuine
+    // logo costs one more message; publishing an ID card cannot be undone.
+    const identityFreeLogoCandidates = employeePropertyMediaCandidates(
+      candidates.filter((candidate) => candidate.kind === 'image'),
+      data,
+      inboundMessageId
+    );
+    if (candidates.some((candidate) => candidate.kind === 'image') && !identityFreeLogoCandidates.length) {
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: '🛑 That is the ID photo, and an ID can never go on a public profile.\n\n'
+          + 'Send a different picture — their own photo, or their company logo — or reply *SKIP* and staff will add one later.'
+      };
+    }
+    const logoCandidates = identityFreeLogoCandidates.slice(0, 1);
     if (!logoCandidates.length) {
       if (!parseSkipRequest(cleanBody)) {
         return {
@@ -8283,6 +8310,29 @@ async function handleEmployeeWhatsappIntake({
         handled: true,
         nextStep: currentStep,
         message: 'I could not store that logo. Send it again as a photo, or reply *SKIP* and staff will add it from the dashboard.'
+      };
+    }
+    // The second guard, and the one that would have caught this on its own.
+    //
+    // storeEmployeeMedia already runs every public image past the photo
+    // classifier, which returns is_screenshot_or_document and sets
+    // publicEligible from it. A photograph of a national ID is a document, and
+    // the classifier says so — but this step took logo.url and threw the
+    // verdict away, so the answer was computed and discarded.
+    //
+    // Nothing a classifier calls a document or a screenshot goes on a public
+    // profile now. When it cannot reach a verdict at all the photo is held
+    // back too: the cost is one more message and staff adding a logo later,
+    // against publishing somebody's ID, which cannot be taken back.
+    if (logo.publicEligible !== true) {
+      const verdict = normalizeInput(logo.mediaValidation?.verdict || '');
+      logger.warn('Agent logo refused for public use', { verdict, phone });
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: verdict === 'screenshot_or_document'
+          ? '🛑 That looks like a document or a screenshot, not a logo — and a document can never go on a public profile.\n\nSend their own photo or their company logo, or reply *SKIP* and staff will add one later.'
+          : 'I could not confirm that picture is safe to show publicly, so I have not used it.\n\nSend a clear photo of them or their company logo, or reply *SKIP* and staff will add one from the dashboard.'
       };
     }
     data.agent_profile_photo_url = logo.url;
