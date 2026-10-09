@@ -49,7 +49,29 @@ test.after(() => {
   if (child && child.exitCode === null) child.kill('SIGTERM');
 });
 
-const get = (p, headers = {}) => fetch(base + p, { redirect: 'manual', headers });
+// fetch() cannot set Host, so this uses http.request and returns a
+// fetch-like { status, headers.get() } object. The host redirect reads Host
+// (X-Forwarded-Host is believed only from scripts/render-start.js).
+const http = require('http');
+const get = (p, headers = {}) => new Promise((resolve, reject) => {
+  const url = new URL(base + p);
+  const req = http.request({ hostname: url.hostname, port: url.port, path: url.pathname + url.search, method: 'GET', headers }, (res) => {
+    const chunks = [];
+    res.on('data', (chunk) => chunks.push(chunk));
+    res.on('end', () => {
+      const body = Buffer.concat(chunks).toString('utf8');
+      resolve({
+        status: res.statusCode,
+        ok: res.statusCode < 400,
+        headers: { get: (name) => res.headers[String(name).toLowerCase()] ?? null },
+        text: async () => body,
+        json: async () => JSON.parse(body)
+      });
+    });
+  });
+  req.on('error', reject);
+  req.end();
+});
 
 // ---- 1. cache headers ------------------------------------------------------------
 test('a versioned asset is immutable for a year; an unversioned one gets an hour', async () => {
@@ -112,26 +134,32 @@ test('the dead duplicate makaug-app.js handler and its patch are gone', () => {
 
 // ---- 2. host redirect --------------------------------------------------------------
 test('other hosts 301 to makaug.com for GET/HEAD; webhooks, /healthz and /api/health are not redirected', async () => {
-  const onrender = await get('/for-sale?x=1', { 'X-Forwarded-Host': 'makaug.onrender.com' });
+  const onrender = await get('/for-sale?x=1', { Host: 'makaug.onrender.com' });
   assert.equal(onrender.status, 301);
   assert.equal(onrender.headers.get('location'), 'https://makaug.com/for-sale?x=1');
 
   for (const host of ['makaug.com', 'www.makaug.com', 'makaug-staging.onrender.com', 'localhost:3000']) {
-    const ok = await get('/help', { 'X-Forwarded-Host': host });
+    const ok = await get('/help', { Host: host });
     assert.equal(ok.status, 200, host);
   }
-  assert.equal((await get('/healthz', { 'X-Forwarded-Host': 'makaug.onrender.com' })).status, 200);
-  assert.equal((await get('/api/health', { 'X-Forwarded-Host': 'makaug.onrender.com' })).status, 200);
+  assert.equal((await get('/healthz', { Host: 'makaug.onrender.com' })).status, 200);
+  assert.equal((await get('/api/health', { Host: 'makaug.onrender.com' })).status, 200);
   // The WAHA bridge polls with GET and Meta verifies with GET: never redirected.
-  assert.notEqual((await get('/api/whatsapp/web-bridge/status', { 'X-Forwarded-Host': 'makaug.onrender.com' })).status, 301);
-  assert.notEqual((await get('/api/whatsapp/webhook?hub.mode=subscribe', { 'X-Forwarded-Host': 'makaug.onrender.com' })).status, 301);
-  const post = await fetch(`${base}/api/pay/webhooks/revolut`, { method: 'POST', redirect: 'manual', headers: { 'X-Forwarded-Host': 'makaug.onrender.com', 'Content-Type': 'application/json' }, body: '{}' });
+  assert.notEqual((await get('/api/whatsapp/web-bridge/status', { Host: 'makaug.onrender.com' })).status, 301);
+  assert.notEqual((await get('/api/whatsapp/webhook?hub.mode=subscribe', { Host: 'makaug.onrender.com' })).status, 301);
+  const post = await new Promise((resolve, reject) => {
+    const url = new URL(`${base}/api/pay/webhooks/revolut`);
+    const req = http.request({ hostname: url.hostname, port: url.port, path: url.pathname, method: 'POST', headers: { Host: 'makaug.onrender.com', 'Content-Type': 'application/json' } }, (res) => { res.resume(); res.on('end', () => resolve({ status: res.statusCode })); });
+    req.on('error', reject);
+    req.end('{}');
+  });
   assert.notEqual(post.status, 301);
 });
 
 test('render-start forwards the visitor host so the app can see it', () => {
   const source = read('scripts/render-start.js');
-  assert.match(source, /forwarded\['x-forwarded-host'\] = headers\.host/);
+  assert.match(source, /if \(headers\.host\) forwarded\['x-forwarded-host'\] = headers\.host;/);
+  assert.match(source, /name\.toLowerCase\(\) === 'x-forwarded-host'\) delete forwarded\[name\]/, 'a client-sent X-Forwarded-Host is dropped');
 });
 
 // ---- 3. client IP -------------------------------------------------------------------
