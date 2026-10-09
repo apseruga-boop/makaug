@@ -8661,6 +8661,12 @@ const API_BASE = (window.MAKAUG_API_BASE || "").replace(/\/$/, "");
 const GOOGLE_ADSENSE_CLIENT = (window.MAKAUG_ADSENSE_CLIENT || "").trim();
 const GOOGLE_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || {};
 const GOOGLE_MAPS_API_KEY = (window.MAKAUG_GOOGLE_MAPS_API_KEY || window.MAKAUG_CONFIG?.googleMapsApiKey || "").trim();
+// Maps are free by default: Leaflet with OpenStreetMap tiles, registry-first
+// location lookups and Nominatim for one-off "find on map" searches. Google
+// Maps (paid) is used only when the server sets MAP_PROVIDER=google.
+const MAP_PROVIDER = String(window.MAKAUG_MAP_PROVIDER || window.MAKAUG_CONFIG?.mapProvider || "osm").toLowerCase() === "google" ? "google" : "osm";
+const OSM_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const OSM_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
 const ANALYTICS_CLIENT_KEY = "makaug_client_id";
 const AUTH_STORAGE_KEY = "makaug_auth";
 const ADMIN_API_KEY_STORAGE_KEY = "makaug_admin_api_key";
@@ -27532,8 +27538,8 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
     return;
   }
   const map = L.map(el).setView([lat, lng], point?.exact ? MAP_PROPERTY_ZOOM : MAP_DISTRICT_ZOOM);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
+  L.tileLayer(OSM_TILE_URL, {
+    attribution: OSM_TILE_ATTRIBUTION,
     maxZoom: 19
   }).addTo(map);
   const marker = L.marker([lat, lng], { draggable: true }).addTo(map).bindPopup("Review location pin");
@@ -32374,8 +32380,8 @@ function initLeafletListPinMap() {
     maxBounds: [[-1.7, 29.2], [4.5, 35.2]],
     maxBoundsViscosity: 0.65
   }).setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
+  L.tileLayer(OSM_TILE_URL, {
+    attribution: OSM_TILE_ATTRIBUTION,
     maxZoom: 18
   }).addTo(lpPinMap);
   lpPinMapProvider = "leaflet";
@@ -32451,8 +32457,8 @@ function initLeafletListPreviewMap() {
     maxBounds: [[-1.7, 29.2], [4.5, 35.2]],
     maxBoundsViscosity: 0.65
   }).setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
+  L.tileLayer(OSM_TILE_URL, {
+    attribution: OSM_TILE_ATTRIBUTION,
     maxZoom: 18
   }).addTo(lpPreviewMap);
   lpPreviewMapProvider = "leaflet";
@@ -57734,6 +57740,7 @@ window.gm_authFailure = function makaugGoogleMapsAuthFailure() {
 };
 
 function ensureGoogleMapsApi() {
+  if (MAP_PROVIDER !== "google") return Promise.resolve(false);
   if (!shouldUseGoogleMaps({ hasKey: !!GOOGLE_MAPS_API_KEY, authFailed: googleMapsAuthFailed, loaded: true })) return Promise.resolve(false);
   if (window.google?.maps) return Promise.resolve(shouldUseGoogleMaps({ hasKey: true, authFailed: googleMapsAuthFailed, loaded: true }));
   if (googleMapsLoadPromise) return googleMapsLoadPromise.then((ok) => shouldUseGoogleMaps({ hasKey: true, authFailed: googleMapsAuthFailed, loaded: ok }));
@@ -58145,8 +58152,8 @@ async function initMaps() {
     }
     el.innerHTML = "";
     const map = L.map(spec.id).setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors",
+    L.tileLayer(OSM_TILE_URL, {
+      attribution: OSM_TILE_ATTRIBUTION,
       maxZoom: 18
     }).addTo(map);
     maps[spec.id] = map;
@@ -58170,8 +58177,8 @@ async function initMaps() {
     }
     brokerMapEl.innerHTML = "";
     const brokerMap = L.map("map-brokers").setView([1.3733, 32.2903], MAP_BROKER_DEFAULT_ZOOM);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors",
+    L.tileLayer(OSM_TILE_URL, {
+      attribution: OSM_TILE_ATTRIBUTION,
       maxZoom: 18
     }).addTo(brokerMap);
     maps["map-brokers"] = brokerMap;
@@ -58399,8 +58406,8 @@ async function initDetailMap(p) {
   }
   el.innerHTML = "";
   const map = L.map("map-detail").setView([lat, lng], MAP_PROPERTY_ZOOM);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
+  L.tileLayer(OSM_TILE_URL, {
+    attribution: OSM_TILE_ATTRIBUTION,
     maxZoom: 19
   }).addTo(map);
   L.marker([lat, lng]).addTo(map).bindPopup(p.title).openPopup();
