@@ -1,48 +1,3 @@
-const themeColors = [
-  'amber',
-  'blue',
-  'cyan',
-  'emerald',
-  'fuchsia',
-  'gray',
-  'green',
-  'indigo',
-  'orange',
-  'pink',
-  'purple',
-  'red',
-  'sky',
-  'slate',
-  'violet',
-  'white',
-  'yellow'
-];
-
-const themeShades = [
-  '50',
-  '100',
-  '200',
-  '300',
-  '400',
-  '500',
-  '600',
-  '700',
-  '800',
-  '900',
-  '950'
-];
-
-const colourUtilityPrefixes = [
-  'bg',
-  'text',
-  'border',
-  'ring',
-  'from',
-  'via',
-  'to',
-  'placeholder'
-];
-
 const responsivePrefixes = ['', 'sm:', 'md:', 'lg:', 'xl:', '2xl:'];
 
 const layoutSafelist = [
@@ -106,18 +61,24 @@ for (const prefix of responsivePrefixes) {
   }
 }
 
+// Every file that writes class names into the page must be listed here, or
+// its classes are missing from the build. The old colour × shade × variant
+// safelist made tailwind.css 1.5 MB; with full content coverage it isn't
+// needed. Class names are never assembled from pieces (no `bg-${colour}`), so
+// a scan of whole strings finds them all.
 module.exports = {
-  content: ['./index.html', './assets/makaug-app.js'],
+  content: [
+    './index.html',
+    './assets/*.js',
+    './server.js',
+    './config/**/*.js',
+    './routes/**/*.js',
+    './services/**/*.js',
+    './utils/**/*.js',
+    './packages/shared-country-core/**/*.{html,js}'
+  ],
   safelist: [
     ...new Set(layoutSafelist),
-    {
-      pattern: new RegExp(`^(${colourUtilityPrefixes.join('|')})-(${themeColors.filter((color) => color !== 'white').join('|')})-(${themeShades.join('|')})$`),
-      variants: ['hover', 'focus', 'focus-visible', 'active', 'disabled', 'group-hover']
-    },
-    {
-      pattern: /^(bg|text|border|ring)-(white|black)$/,
-      variants: ['hover', 'focus', 'focus-visible', 'active', 'disabled', 'group-hover']
-    },
     {
       pattern: /^(rounded|rounded-t|rounded-b|rounded-l|rounded-r|rounded-tl|rounded-tr|rounded-bl|rounded-br)-(sm|md|lg|xl|2xl|3xl|full)$/
     },

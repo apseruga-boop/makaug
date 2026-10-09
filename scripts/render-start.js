@@ -36,7 +36,14 @@ function proxyHeaders(headers = {}, { request = false } = {}) {
       forwarded[name] = value;
     }
   }
-  if (request) forwarded.host = `127.0.0.1:${appPort}`;
+  if (request) {
+    // The app sees Host 127.0.0.1; keep the visitor's host for the
+    // non-canonical-host redirect in server.js.
+    if (!forwarded['x-forwarded-host'] && !forwarded['X-Forwarded-Host'] && headers.host) {
+      forwarded['x-forwarded-host'] = headers.host;
+    }
+    forwarded.host = `127.0.0.1:${appPort}`;
+  }
   return forwarded;
 }
 

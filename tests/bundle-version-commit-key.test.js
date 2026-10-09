@@ -18,7 +18,10 @@ test('bundle version is injected from the deployed commit identity', () => {
 test('both app asset references share one version and no marker chain mutates it', () => {
   assert.equal((html.match(/window\.__makaugAppVersion\s*=/g) || []).length, 1);
   assert.equal((html.match(/window\.__makaugAppVersion\s*\+=/g) || []).length, 0);
-  assert.equal((html.match(/makaug-app\.js\?v=/g) || []).length, 2);
+  // PR F removed the <head> preload of makaug-app.js; the loader's script tag
+  // and the admin bundle (makaug-admin.js) both use the same build version.
+  assert.equal((html.match(/makaug-app\.js\?v=/g) || []).length, 1);
+  assert.equal((html.match(/makaug-admin\.js\?v=/g) || []).length, 1);
   assert.equal((html.match(/encodeURIComponent\(window\.__makaugAppVersion\)/g) || []).length, 2);
   assert.match(html, /window\.__makaugAppVersion = "__MAKAUG_BUNDLE_VERSION__"/);
   assert.match(html, /bundle-version-commit-key-20260719/);

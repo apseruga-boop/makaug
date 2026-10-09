@@ -27,7 +27,6 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1"></script>
-  <script src="/assets/about-advertise-i18n.js?v=whatsapp-number-20260911"></script>
   <script src="/assets/makaug-site-i18n.js?v=20261003-site-i18n-v4" defer></script>
   <meta name="theme-color" content="#15803d">
   <script>
@@ -55,7 +54,6 @@
       window.__releaseMakaugBoot();
     })();
   </script>
-  <link rel="preconnect" href="https://images.unsplash.com">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com">
@@ -382,13 +380,6 @@
         .then(function (response) { return response.ok ? response.json() : null; })
         .catch(function () { return null; });
     }
-    (function () {
-      var preload = document.createElement("link");
-      preload.rel = "preload";
-      preload.as = "script";
-      preload.href = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
-      document.head.appendChild(preload);
-    })();
   </script>
   <script>
     // meta-pixel-launch1-20260805
@@ -419,14 +410,14 @@
       windowObject.__makaugMetaPixelReady = true;
     })(window, document);
   </script>
-  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high">
+  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high" data-home-hero-preload>
   <link rel="stylesheet" href="/assets/tailwind.css">
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
   <link rel="stylesheet" href="/assets/short-term.css?v=20260916-short-term-v23">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
-  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"></noscript>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
   <script src="/config.js"></script>
   <script>
     window.MAKAUG_ADSENSE_CLIENT = window.MAKAUG_ADSENSE_CLIENT || "";
@@ -10327,9 +10318,26 @@
       function loadMakaugApp() {
         if (window.__makaugAppLoading) return;
         window.__makaugAppLoading = true;
+        // The About/Advertise language pack (391 KB) used to block rendering
+        // in <head> on every page. Both scripts now download in parallel
+        // without blocking, and async=false keeps them in insertion order:
+        // makaug-app.js reads window.__MAKAUG_ABOUT_ADVERTISE_I18N__ when it runs.
+        var aboutAdvertiseI18n = document.createElement("script");
+        aboutAdvertiseI18n.src = "/assets/about-advertise-i18n.js?v=whatsapp-number-20260911";
+        aboutAdvertiseI18n.async = false;
+        document.body.appendChild(aboutAdvertiseI18n);
+        // Staff/admin/King code ships separately (npm run build:js) and only
+        // the protected shell carries those pages, so only it loads the file.
+        // It holds function declarations only, so running first is safe.
+        if (document.getElementById("page-staff-dashboard") || document.getElementById("page-admin-dashboard")) {
+          var adminScript = document.createElement("script");
+          adminScript.src = "/assets/makaug-admin.js?v=" + encodeURIComponent(window.__makaugAppVersion);
+          adminScript.async = false;
+          document.body.appendChild(adminScript);
+        }
         var script = document.createElement("script");
         script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
-        script.async = true;
+        script.async = false;
         script.onload = function () {
           var offPlanScript = document.createElement("script");
           offPlanScript.src = "/assets/off-plan.js?v=20261003-off-plan-v17";

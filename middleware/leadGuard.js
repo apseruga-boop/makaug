@@ -12,6 +12,7 @@
  */
 
 const rateLimit = require('express-rate-limit');
+const { rateLimitClientKey } = require('../utils/clientIp');
 
 const HONEYPOT_FIELDS = ['website', 'company_website', 'hp_field'];
 
@@ -21,6 +22,8 @@ function limiter(max, envName, windowMinutes = 15) {
     max: Number(process.env[envName] || 0) || max,
     standardHeaders: true,
     legacyHeaders: false,
+    // One bucket per visitor, not per Cloudflare edge (utils/clientIp.js).
+    keyGenerator: rateLimitClientKey,
     message: { ok: false, error: 'Too many submissions. Please try again in a few minutes.' }
   });
 }
