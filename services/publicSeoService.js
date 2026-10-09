@@ -14,6 +14,7 @@ const {
   universityLandingForRow
 } = require('../utils/publicSeoFacets');
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
+const { compactUgx } = require('../utils/compactUgx');
 const { isFoundOnlinePublicRow } = require('./publicListingCopy');
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
@@ -586,7 +587,7 @@ function categoryPageSeoMeta(pathname = '/', snapshot = null, baseUrl = PUBLIC_S
     ? `${config.subject} in ${locationLabel}${listingLabel ? ` — ${listingLabel}` : ''} | makaug.com`
     : (listingLabel && freshness ? `${config.subject} in Uganda — ${listingLabel}, ${freshness} | makaug.com` : config.title);
   const floorCopy = priceFloor > 0
-    ? ` Prices start from USh ${new Intl.NumberFormat('en-UG', { maximumFractionDigits: 0 }).format(priceFloor)}.`
+    ? ` Prices start from UGX ${compactUgx(priceFloor)}.`
     : '';
   const description = `Browse ${countPrefix}${config.subject.toLowerCase()} ${location ? `in ${locationLabel}` : 'across Uganda'}.${floorCopy} Compare reviewed listings, photos, maps and source information on makaug.com.`;
   return {

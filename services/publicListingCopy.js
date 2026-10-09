@@ -126,7 +126,7 @@ function publicPriceLabelFor(property = {}) {
   const amount = Number(raw);
   if (!Number.isFinite(amount) || amount <= 0) return 'Price on application';
   const period = cleanText(property.price_period || '').toLowerCase();
-  const currencyLabel = IS_SOUTH_AFRICA ? 'R' : 'USh';
+  const currencyLabel = IS_SOUTH_AFRICA ? 'R' : 'UGX';
   const locale = IS_SOUTH_AFRICA ? 'en-ZA' : 'en-US';
   // Rows store mo / monthly / per_month as well as month.
   return `${currencyLabel} ${Math.round(amount).toLocaleString(locale)}${normalizePricePeriodForWrite(period) === 'month' ? '/month' : ''}`;

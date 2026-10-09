@@ -146,7 +146,7 @@ async function run() {
   assert(category.html.includes('Houses for rent in Ntinda, Kampala'), 'the category H1 must carry location and intent');
   assert(category.html.includes(`href="/property/${listing.id}"`), 'the raw card must contain a real property anchor');
   assert(category.html.includes(listing.title), 'the raw card must contain the listing title');
-  assert(category.html.includes('USh 1,500,000/month'), 'the raw card must contain the listing price');
+  assert(category.html.includes('UGX 1,500,000/month'), 'the raw card must contain the listing price');
   assert(category.html.includes('2 bedrooms'), 'the raw card must contain the bedroom count');
   assert(category.html.includes('data-ssr-breadcrumbs="1"'), 'the visible category page must include breadcrumbs');
   assert(category.html.includes('/to-rent/ntinda-kampala'), 'listing and area navigation must expose a crawlable area URL');
@@ -171,7 +171,7 @@ async function run() {
   const product = detail.structuredData['@graph'][1];
   assert.equal(product.offers['@type'], 'Offer');
   assert.equal(product.offers.priceCurrency, 'UGX');
-  assert.equal(detail.meta.title, '2bdrm House for Rent in Ntinda, Kampala — USh 1,500,000/month | makaug.com');
+  assert.equal(detail.meta.title, '2bdrm House for Rent in Ntinda, Kampala — UGX 1.5M/month | makaug.com');
   assert.equal(detail.meta.description, 'Bright two-bedroom home close to shops and public transport.');
 
   const homepage = renderHomepageSeoHtml(sanitizePublicHtml(rawHtml, { pathname: '/' }), {
