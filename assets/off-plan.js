@@ -657,14 +657,23 @@
     window.setTimeout(() => { const input = document.getElementById('off-plan-q'); if (input && heroQuery) { clearSelectedOffPlanLocation(); input.value = heroQuery; fetchOffPlanLocationSuggestions(heroQuery); loadProjects(); } }, 0);
   }
 
-  async function ensureOffPlanGoogleMaps() {
-    if (window.google?.maps) return true;
-    if (typeof window.ensureGoogleMapsApi !== 'function') return false;
-    return Boolean(await window.ensureGoogleMapsApi());
+  // C18 (10 Oct 2026): Google Maps is gone. Maps use Leaflet with the
+  // OpenStreetMap tiles the rest of the site uses (the loader is in the main
+  // bundle; tiles send the site origin as the referrer, as OSM requires).
+  const OFF_PLAN_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const OFF_PLAN_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+  async function ensureOffPlanMaps() {
+    if (window.L?.map) return true;
+    if (typeof window.ensureLeafletApi !== 'function') return false;
+    return Boolean(await window.ensureLeafletApi()) && Boolean(window.L?.map);
+  }
+
+  function offPlanTileLayer() {
+    return window.L.tileLayer(OFF_PLAN_TILE_URL, { attribution: OFF_PLAN_TILE_ATTRIBUTION, referrerPolicy: 'strict-origin-when-cross-origin', maxZoom: 19 });
   }
 
   function clearOffPlanMarkers() {
-    state.mapMarkers.forEach((marker) => marker?.setMap?.(null));
+    state.mapMarkers.forEach((marker) => marker?.remove?.());
     state.mapMarkers = [];
   }
 
@@ -680,31 +689,31 @@
     if (!shell || !container || shell.classList.contains('is-hidden')) return;
     const projects = state.projects.filter((project) => number(project.latitude) != null && number(project.longitude) != null);
     try {
-      const ready = await ensureOffPlanGoogleMaps();
-      if (!ready || !document.body.contains(container)) throw new Error('Google Maps unavailable');
+      const ready = await ensureOffPlanMaps();
+      if (!ready || !document.body.contains(container)) throw new Error('Map unavailable');
       clearOffPlanMarkers();
+      if (state.map?.remove) { try { state.map.remove(); } catch (_error) { /* already gone */ } }
       container.innerHTML = '';
-      const fallbackCenter = state.countryCode === 'UG' ? { lat: 1.3733, lng: 32.2903 } : { lat: 0, lng: 25 };
-      const map = new window.google.maps.Map(container, { center: fallbackCenter, zoom: state.countryCode === 'UG' ? 7 : 3, mapTypeControl: true, streetViewControl: true, fullscreenControl: true, clickableIcons: true, scrollwheel: false });
+      const fallbackCenter = state.countryCode === 'UG' ? [1.3733, 32.2903] : [0, 25];
+      const map = window.L.map(container, { scrollWheelZoom: false }).setView(fallbackCenter, state.countryCode === 'UG' ? 7 : 3);
+      offPlanTileLayer().addTo(map);
       state.map = map;
       if (projects.length) {
-        const bounds = new window.google.maps.LatLngBounds();
-        const infoWindow = new window.google.maps.InfoWindow();
+        const points = [];
         projects.forEach((project) => {
-          const lat = number(project.latitude); const lng = number(project.longitude);
-          const position = { lat, lng };
-          bounds.extend(position);
-          const marker = new window.google.maps.Marker({ map, position, title: project.name, icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png' });
+          const point = [number(project.latitude), number(project.longitude)];
+          points.push(point);
           const content = `<div class="off-plan-map-popup"><strong>${escapeHtml(project.name)}</strong><span>${escapeHtml(projectLocation(project))}</span><a href="${escapeHtml(projectPublicPath(project))}">${escapeHtml(offPlanExperienceText('viewProject'))}</a></div>`;
-          marker.addListener('click', () => { infoWindow.setContent(content); infoWindow.open({ map, anchor: marker }); });
-          marker.addListener('mouseover', () => { infoWindow.setContent(content); infoWindow.open({ map, anchor: marker }); });
+          const marker = window.L.marker(point, { title: project.name }).addTo(map).bindPopup(content);
+          marker.on('mouseover', () => marker.openPopup());
           state.mapMarkers.push(marker);
         });
-        if (projects.length === 1) map.setOptions({ center: { lat: number(projects[0].latitude), lng: number(projects[0].longitude) }, zoom: 12 });
-        else { map.fitBounds(bounds, 32); window.google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 12) map.setZoom(12); }); }
+        if (points.length === 1) map.setView(points[0], 12);
+        else map.fitBounds(points, { padding: [32, 32], maxZoom: 12 });
       }
+      window.setTimeout(() => { try { map.invalidateSize(); } catch (_error) { /* map removed */ } }, 150);
     } catch (_error) {
-      container.innerHTML = `<div class="h-full grid place-items-center px-6 text-center text-sm text-gray-600"><span><i class="fas fa-map-location-dot text-2xl text-red-600 block mb-2"></i>${escapeHtml(offPlanText('mapUnavailable'))}<a class="block mt-2 font-black text-green-800 underline" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(state.activeMarket?.country_name || (state.countryCode === 'UG' ? 'Uganda' : state.countryCode))}" target="_blank" rel="noopener noreferrer">${escapeHtml(offPlanText('openMaps'))}</a></span></div>`;
+      container.innerHTML = `<div class="h-full grid place-items-center px-6 text-center text-sm text-gray-600"><span><i class="fas fa-map-location-dot text-2xl text-red-600 block mb-2"></i>${escapeHtml(offPlanText('mapUnavailable'))}<a class="block mt-2 font-black text-green-800 underline" href="https://www.openstreetmap.org/search?query=${encodeURIComponent(state.activeMarket?.country_name || (state.countryCode === 'UG' ? 'Uganda' : state.countryCode))}" target="_blank" rel="noopener noreferrer">${escapeHtml(offPlanText('openMaps'))}</a></span></div>`;
     }
   }
 
@@ -1021,41 +1030,22 @@
     const lat = number(project.latitude); const lng = number(project.longitude);
     if (!container || lat == null || lng == null) { renderStoredNearbyPlaces(project); return; }
     try {
-      const ready = await ensureOffPlanGoogleMaps();
-      if (!ready || !document.body.contains(container)) throw new Error('Google Maps unavailable');
-      const position = { lat, lng };
-      const map = new window.google.maps.Map(container, { center: position, zoom: project.extra_fields?.map_precision === 'area_centroid' ? 13 : 16, mapTypeControl: true, streetViewControl: true, fullscreenControl: true, clickableIcons: true, scrollwheel: false });
-      const marker = new window.google.maps.Marker({ map, position, title: project.name, icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png' });
+      const ready = await ensureOffPlanMaps();
+      if (!ready || !document.body.contains(container)) throw new Error('Map unavailable');
+      if (state.detailMap?.remove) { try { state.detailMap.remove(); } catch (_error) { /* already gone */ } }
+      container.innerHTML = '';
+      const position = [lat, lng];
+      const map = window.L.map(container, { scrollWheelZoom: false }).setView(position, project.extra_fields?.map_precision === 'area_centroid' ? 13 : 16);
+      offPlanTileLayer().addTo(map);
       const sourceId = clean(project.source_agent_public_path || project.source_agent_profile_id || project.source_agent_id);
       const mapPrice = primaryProjectPrice(project);
       const popupContent = `<div class="off-plan-map-popup" data-map-marker-popup="listing"><span class="off-plan-map-popup-label">${escapeHtml(offPlanExperienceText('offPlanProjectLabel'))}</span><a class="off-plan-map-popup-title" href="${escapeHtml(projectPublicPath(project))}">${escapeHtml(project.name)}</a><span>${escapeHtml(projectLocation(project))}</span><strong>${escapeHtml(formatMoney(mapPrice.amount, mapPrice.currency))}</strong>${sourceId && project.extra_fields?.contact_mode !== 'makaug_managed' ? `<a class="off-plan-map-popup-contact" href="${escapeHtml(agentProfileHref(sourceId))}">${escapeHtml(project.source_agent_name || project.source_display_name || offPlanText('projectContact'))}</a>` : `<span class="off-plan-map-popup-contact">${escapeHtml(overseasText('managedBy'))}</span>`}<a class="off-plan-map-popup-button" href="${escapeHtml(projectPublicPath(project))}">${escapeHtml(offPlanExperienceText('viewProject'))}</a></div>`;
-      const info = new window.google.maps.InfoWindow({ content: popupContent });
-      const openInfo = (centerMarker = false) => {
-        if (centerMarker) map.panTo(marker.getPosition());
-        window.setTimeout(() => {
-          info.open({ map, anchor: marker });
-          window.setTimeout(() => {
-            const popup = container.querySelector('[data-map-marker-popup="listing"]');
-            const scrollFrame = popup?.closest('.gm-style-iw-d');
-            if (scrollFrame) scrollFrame.style.overflow = 'hidden';
-          }, 0);
-        }, centerMarker ? 250 : 0);
-      };
-      marker.addListener('mouseover', () => openInfo(false));
-      marker.addListener('click', () => openInfo(true));
+      const marker = window.L.marker(position, { title: project.name }).addTo(map).bindPopup(popupContent, { maxWidth: 260 });
+      marker.on('mouseover', () => marker.openPopup());
       state.detailMap = map;
-      if (window.google.maps.places?.PlacesService) {
-        const service = new window.google.maps.places.PlacesService(map);
-        const queries = nearbyGroupDefinitions.map(async (definition) => {
-          const rows = await Promise.all(definition.types.map((type) => new Promise((resolve) => service.nearbySearch({ location: position, radius: 8000, type }, (places, status) => resolve(status === window.google.maps.places.PlacesServiceStatus.OK ? places : [])))));
-          const places = rows.flat()
-            .filter((place) => place.business_status !== 'CLOSED_PERMANENTLY' && !/\bpermanently closed\b/i.test(clean(place.name)))
-            .filter((place, index, all) => all.findIndex((item) => item.place_id === place.place_id) === index)
-            .slice(0, 4);
-          return { ...definition, places };
-        });
-        renderLiveNearbyPlaces(await Promise.all(queries), project);
-      } else renderStoredNearbyPlaces(project);
+      window.setTimeout(() => { try { map.invalidateSize(); } catch (_error) { /* map removed */ } }, 150);
+      // Nearby places come from the project's stored list (Google Places is no longer used).
+      renderStoredNearbyPlaces(project);
     } catch (_error) {
       container.innerHTML = `<div class="h-full grid place-items-center px-6 text-center text-sm text-gray-600"><span><i class="fas fa-map-location-dot text-3xl text-red-600 block mb-2"></i>${escapeHtml(offPlanText('mapUnavailable'))}</span></div>`;
       renderStoredNearbyPlaces(project);

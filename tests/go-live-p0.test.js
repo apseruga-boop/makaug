@@ -361,8 +361,9 @@ function run() {
   assert(frontendSource.includes('Location captured. Please move the pin if needed'), 'current-location flow should tell users to adjust and confirm the pin');
   assert(frontendSource.includes('Location permission was denied. Search for an address or place instead.'), 'current-location flow should handle denied permission');
   assert(frontendSource.includes('The location appears outside Uganda. Search for a Ugandan address or place instead.'), 'current-location flow should block overseas listing pins');
-  assert(frontendSource.includes('&libraries=places'), 'Google Maps loader should include Places library for typed address autocomplete');
-  assert(frontendSource.includes('getGooglePlacePredictions'), 'typed address flow should request Google Places predictions when configured');
+  // C18 (10 Oct 2026): Google Maps is gone; the typed address flow uses the Uganda place catalogue and OSM.
+  assert(!frontendSource.includes('&libraries=places'), 'no Google Maps loader may ship (C18)');
+  assert(frontendSource.includes('function ensureGoogleMapsApi(){return Promise.resolve(false)}') || /function ensureGoogleMapsApi\(\)\s*\{\s*return Promise\.resolve\(false\);?\s*\}/.test(frontendSource), 'the Google loader is a no-op (C18)');
   assert(/<details\s+id="lp-location-advanced"[^>]*>/i.test(listPropertyHtml), '/list-property should keep advanced location details collapsed');
   assert(!/<details\s+id="lp-location-advanced"[^>]*\sopen\b/i.test(listPropertyHtml), 'advanced location details should be collapsed by default');
   assert(listPropertyHtml.includes('data-listing-translation-preview="1"'), 'listing description translation preview should exist');

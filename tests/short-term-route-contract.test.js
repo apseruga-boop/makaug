@@ -1405,26 +1405,15 @@ test('the section is laid out like every other one', () => {
   );
 });
 
-test('the map does not use OpenStreetMap tiles', () => {
-  // OSM was returning 403 for every tile - "App is not following the tile
-  // usage policy of OpenStreetMap's volunteer-run servers" - so the map showed
-  // a grid of error images. Their tiles are a volunteer service and a
-  // commercial marketplace pulling from them is what that policy forbids.
-  assert.ok(
-    !/tile\.openstreetmap\.org/.test(clientSource),
-    'short-term must not pull OpenStreetMap tiles'
-  );
-  assert.ok(!/unpkg\.com\/leaflet/.test(clientSource), 'Leaflet is still being loaded');
-  assert.ok(clientSource.includes('function loadGoogleMaps'), 'no Google Maps loader');
-  assert.ok(
-    /window\.ensureGoogleMapsApi/.test(clientSource),
-    'it must reuse the bundle loader rather than injecting a second Maps script'
-  );
-  // The bundle may not be in yet, since this file loads in parallel with it.
-  assert.ok(
-    /tries > 40/.test(clientSource),
-    'the Maps loader must wait for the bundle rather than give up immediately'
-  );
+test('the map uses Leaflet with OpenStreetMap tiles that send the site origin (C18: no Google)', () => {
+  // OSM returned 403 for every tile while requests carried no referrer ("App
+  // is not following the tile usage policy"). The site sends Referrer-Policy:
+  // no-referrer, so the tile layer sets referrerPolicy explicitly, like the
+  // main bundle. Google Maps is no longer used anywhere (C18, 10 Oct 2026).
+  assert.match(clientSource, /var ST_TILE_URL = 'https:\/\/tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png';/);
+  assert.match(clientSource, /referrerPolicy: 'strict-origin-when-cross-origin'/);
+  assert.match(clientSource, /window\.ensureLeafletApi/);
+  assert.ok(!/google\.maps|loadGoogleMaps|ensureGoogleMapsApi/.test(clientSource), 'no Google Maps code');
 });
 
 test('the banner uses the site house-ad format and its own artwork', () => {

@@ -559,12 +559,12 @@ app.use('/private-local', (_req, res) => {
 });
 
 app.get('/config.js', (_req, res) => {
-  // Free maps (Leaflet + OpenStreetMap) unless MAP_PROVIDER=google. The Google
-  // key is only handed to browsers when Google is the chosen provider.
-  const mapProvider = String(process.env.MAP_PROVIDER || '').trim().toLowerCase() === 'google' ? 'google' : 'osm';
+  // Free maps only (Leaflet + OpenStreetMap). C18, 10 Oct 2026: Google Maps is
+  // no longer used and no Google key is ever sent to browsers.
+  const mapProvider = 'osm';
   const publicConfig = {
     mapProvider,
-    googleMapsApiKey: mapProvider === 'google' ? (process.env.GOOGLE_MAPS_API_KEY || '') : '',
+    googleMapsApiKey: '',
     apiBase: process.env.PUBLIC_API_BASE || '',
     adsenseClient: process.env.GOOGLE_ADSENSE_CLIENT || '',
     adsenseSlots: {
@@ -2316,6 +2316,7 @@ async function start() {
   }
   if (ACTIVE_TENANT.publicFeatures?.marketplace !== false) {
     startMarketplaceLifecycleScheduler(db);
+    // The drip's Google source is off unless GOOGLE_PLACES_ALLOWED=true (C18).
     startMarketplaceDripScheduler(db);
   }
   if (!IS_SOUTH_AFRICA) {

@@ -257,6 +257,10 @@ function emptyCounts() {
 }
 
 async function run() {
+  // C18: Google Places is off unless GOOGLE_PLACES_ALLOWED=true.
+  if (String(process.env.GOOGLE_PLACES_ALLOWED || '').trim().toLowerCase() !== 'true') {
+    throw new Error('Google Places is switched off (set GOOGLE_PLACES_ALLOWED=true to run this deliberately).');
+  }
   const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.PUBLIC_GOOGLE_MAPS_API_KEY;
   if (!apiKey) throw new Error('GOOGLE_MAPS_API_KEY or PUBLIC_GOOGLE_MAPS_API_KEY is required.');
   const options = parseArgs();
