@@ -875,6 +875,9 @@ let adminPendingQueueTotals = { all: null, found_online: null };
 const ADMIN_PENDING_QUEUE_RENDER_STEP = 24;
 const ADMIN_REVIEW_QUEUE_PAGE_SIZE = 24;
 const ADMIN_SNAPSHOT_PANEL_TIMEOUT_MS = 8000;
+// Live & Featured is one paginated server query (C19); give it longer than the
+// 8 s used for the small panels.
+const ADMIN_LIVE_LISTINGS_TIMEOUT_MS = 25000;
 let adminPendingQueueVisibleLimit = ADMIN_PENDING_QUEUE_RENDER_STEP;
 let adminPendingQueueRemotePagination = null;
 let adminReviewEvidence = {};
@@ -15585,6 +15588,7 @@ function renderStaffListingPreviewModal(preview = {}) {
           <div class="text-xs uppercase tracking-wide text-emerald-200 font-black">Preview before publishing</div>
           <h3 class="text-2xl font-black mt-1">${adminEscape(preview.title || "Untitled listing")}</h3>
           <p class="text-sm text-slate-300 mt-1">${adminEscape([preview.area, preview.district].filter(Boolean).join(", ") || "Location needs checking")} • ${adminEscape(preview.status || "pending")}</p>
+          ${["approved", "live", "published", "sold"].includes(String(preview.status || "").toLowerCase()) ? `<p class="mt-2 inline-block rounded-lg bg-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-100" data-live-listing-edit="1">Live listing: saving changes keeps it live. Every change is recorded.</p>` : ""}
         </div>
         <div class="flex items-center gap-2">
           ${currentPage === "staff-review" ? "" : `<a href="/staff-dashboard/review/${adminAttr(encodeURIComponent(String(preview.id || "")))}" target="_blank" rel="noopener" class="hidden sm:inline-flex items-center rounded-full bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-black text-white">Open on its own page</a>`}
@@ -15726,7 +15730,8 @@ function ensureStaffDirectReviewPage() {
 }
 
 async function staffReloadDirectReview(propertyId = staffDirectReviewState.id) {
-  const id = String(propertyId || "").trim().toLowerCase();
+  const raw = String(propertyId || "").trim();
+  const id = /^mk-/i.test(raw) ? raw.toUpperCase() : raw.toLowerCase();
   if (!id) return;
   staffDirectReviewState.id = id;
   const status = document.getElementById("staff-direct-review-status");
@@ -15736,6 +15741,8 @@ async function staffReloadDirectReview(propertyId = staffDirectReviewState.id) {
   try {
     const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(id)}/preview`);
     if (currentPage !== "staff-review" || staffDirectReviewState.id !== id) return;
+    // Later reloads (after a save or decision) use the listing's id.
+    if (response?.data?.id) staffDirectReviewState.id = String(response.data.id);
     renderStaffListingPreviewModal(response?.data || {});
     const preview = response?.data || {};
     if (status) status.textContent = `${preview.title || "Listing"} • ${preview.status || "pending"}.`;
@@ -17757,17 +17764,17 @@ function hydrateAdminAllListingsInBackground(headers) {
     });
 }
 
-async function adminSafeSnapshotRequest(label, requestFn, fallback) {
+async function adminSafeSnapshotRequest(label, requestFn, fallback, timeoutMs = ADMIN_SNAPSHOT_PANEL_TIMEOUT_MS) {
   let timeoutId = null;
   try {
     return await Promise.race([
       requestFn(),
       new Promise((_, reject) => {
         timeoutId = window.setTimeout(() => {
-          const error = new Error(`${label} timed out after ${Math.round(ADMIN_SNAPSHOT_PANEL_TIMEOUT_MS / 1000)} seconds`);
+          const error = new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)} seconds`);
           error.code = "ADMIN_SNAPSHOT_TIMEOUT";
           reject(error);
-        }, ADMIN_SNAPSHOT_PANEL_TIMEOUT_MS);
+        }, timeoutMs);
       })
     ]);
   } catch (error) {
@@ -17860,7 +17867,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     adminSafeSnapshotRequest("command centre", () => apiRequest("/api/admin/command-centre", { headers }), { data: {} }),
     adminSafeSnapshotRequest("recent activity", () => apiRequest("/api/admin/recent", { headers }), { data: {} }),
     shouldLoadReviewQueue ? adminSafeSnapshotRequest("review queue", () => fetchAdminPaginatedRows(reviewQueuePath, headers, { limit: ADMIN_REVIEW_QUEUE_PAGE_SIZE, maxPages: 1 }), []) : null,
-    shouldLoadLiveListings ? adminSafeSnapshotRequest("live listings", () => fetchAdminPaginatedRows("/api/admin/properties/live", headers, { limit: 100, maxPages: 1 }), []) : null,
+    shouldLoadLiveListings ? adminSafeSnapshotRequest("live listings", () => fetchAdminPaginatedRows("/api/admin/properties/live", headers, { limit: 50, maxPages: 1 }), [], ADMIN_LIVE_LISTINGS_TIMEOUT_MS) : null,
     shouldLoadActionedListings ? adminSafeSnapshotRequest("actioned listings", () => fetchAdminPaginatedRows("/api/admin/properties/actioned?include_total=0", headers, { limit: 100, maxPages: 1 }), []) : null,
     shouldLoadAccounts ? adminSafeSnapshotRequest("users", () => apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }), { data: [] }) : null,
     shouldLoadAgents ? adminSafeSnapshotRequest("agents", () => apiRequest("/api/admin/agents?limit=100", { headers }), { data: [] }) : null,
@@ -20182,12 +20189,55 @@ function renderAdminFeaturedRows(listings) {
   }).join("");
 }
 
+// Edit a live listing: the staff direct review page (C19 / C17b). Saving there
+// keeps the listing live.
+function adminOpenLiveListingEditor(listingId = "") {
+  const id = String(listingId || "").trim();
+  if (!id) return;
+  window.open(`/staff-dashboard/review/${encodeURIComponent(id)}`, "_blank", "noopener");
+}
+
+function ensureAdminLiveSearchControls(wrap) {
+  if (!wrap || document.getElementById("admin-live-search")) return;
+  const bar = document.createElement("form");
+  bar.id = "admin-live-search";
+  bar.className = "mb-3 flex flex-wrap gap-2";
+  bar.setAttribute("onsubmit", "event.preventDefault(); adminSearchLiveListings(document.getElementById('admin-live-search-q')?.value || '');");
+  bar.innerHTML = `
+    <input id="admin-live-search-q" type="search" placeholder="Search live listings by MK ref, id or title" class="flex-1 min-w-[16rem] border border-gray-300 rounded-lg px-3 py-2 text-sm">
+    <button type="submit" class="bg-gray-900 text-white rounded-lg px-4 py-2 text-sm font-bold">Search</button>
+    <button type="button" onclick="document.getElementById('admin-live-search-q').value=''; adminSearchLiveListings('');" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">Clear</button>
+    <span id="admin-live-search-status" class="w-full text-xs text-gray-500"></span>`;
+  wrap.parentNode.insertBefore(bar, wrap);
+}
+
+async function adminSearchLiveListings(query = "") {
+  const status = document.getElementById("admin-live-search-status");
+  const q = String(query || "").trim();
+  if (status) status.textContent = q ? `Searching live listings for "${q}"…` : "Loading live listings…";
+  const started = Date.now();
+  try {
+    const params = new URLSearchParams({ limit: "50" });
+    if (q) params.set("q", q);
+    const response = await adminSafeSnapshotRequest("live listings search", () => apiRequest(`/api/admin/properties/live?${params}`, { headers: adminAuthHeaders() }), null, ADMIN_LIVE_LISTINGS_TIMEOUT_MS);
+    if (!response || response.__adminUnavailable) throw new Error("live listings did not load");
+    const rows = (Array.isArray(response.data) ? response.data : []).map((row) => ({ ...normalizeRemoteAdminListing(row), admin_live_endpoint: true }));
+    renderAdminLiveListingsRows(rows);
+    if (status) status.textContent = `${rows.length} of ${Number(response.pagination?.total ?? rows.length)} live listing${rows.length === 1 ? "" : "s"}${q ? ` matching "${q}"` : ""} (${((Date.now() - started) / 1000).toFixed(1)} s).`;
+    return rows;
+  } catch (error) {
+    if (status) status.textContent = `Live listings search failed: ${error?.message || "error"}`;
+    return [];
+  }
+}
+
 function renderAdminLiveListingsRows(listings) {
   const wrap = document.getElementById("admin-live-listings-table");
   if (!wrap) return;
+  ensureAdminLiveSearchControls(wrap);
   const view = adminLiveEndpointRows(listings).slice(0, 50);
   if (!view.length) {
-    wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listings found yet.</div>`;
+    wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listings found.</div>`;
     return;
   }
   wrap.innerHTML = view.map((p) => {
@@ -20215,7 +20265,7 @@ function renderAdminLiveListingsRows(listings) {
           <button onclick="adminSetListingFeatured(${idArg}, ${featured ? "false" : "true"})" class="${featured ? "bg-gray-800 hover:bg-gray-700" : "bg-emerald-700 hover:bg-emerald-600"} text-white px-3 py-1.5 rounded-lg text-xs font-semibold">${featured ? "Remove Featured" : "Feature"}</button>
           <button onclick="adminSetListingStatus(${idArg}, 'hidden', ${idArg})" class="bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Hide</button>
           <button onclick="adminSetListingStatus(${idArg}, 'deleted', ${idArg})" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Remove from Site</button>
-          <button onclick="openAdminListingReview(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review Record</button>
+          <button onclick="adminOpenLiveListingEditor(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review &amp; edit</button>
         </div>
       </div>`;
   }).join("");
@@ -20243,7 +20293,7 @@ function renderAdminAllListingsRows(listings) {
       ].filter(Boolean).join(" ").toLowerCase();
       return hay.includes(q);
     });
-    if (!view.length && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(q)) {
+    if (!view.length && (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(q) || /^mk-[0-9a-z-]{4,}$/i.test(q))) {
       hydrateAdminListingsForExactIdInBackground(q, adminAuthHeaders());
     }
   }
@@ -20273,7 +20323,7 @@ function renderAdminAllListingsRows(listings) {
           <span class="text-xs font-semibold px-2 py-1 rounded ${meta.cls}">${meta.label}</span>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
-          <button onclick="openAdminListingReview(${reviewArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review</button>
+          <button onclick="${["approved", "sold", "live", "published"].includes(status) ? "adminOpenLiveListingEditor" : "openAdminListingReview"}(${reviewArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review</button>
           ${status !== "pending" ? `<button onclick="adminSetListingStatus(${reviewArg}, 'pending', ${reviewArg})" class="bg-amber-500 hover:bg-amber-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Set Pending</button>` : ""}
           ${status === "approved" ? `<button onclick="adminSetListingFeatured(${reviewArg}, ${featured ? "false" : "true"})" class="${featured ? "bg-gray-800 hover:bg-gray-700" : "bg-emerald-700 hover:bg-emerald-600"} text-white px-3 py-1.5 rounded-lg text-xs font-semibold">${featured ? "Remove Featured" : "Feature"}</button>` : ""}
           ${status !== "hidden" ? `<button onclick="adminSetListingStatus(${reviewArg}, 'hidden', ${reviewArg})" class="bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Hide</button>` : ""}
@@ -20291,10 +20341,22 @@ function hydrateAdminListingsForExactIdInBackground(propertyId, headers) {
   const key = String(propertyId || "").trim().toLowerCase();
   if (!key || adminExactIdHydrationInFlight || adminExactIdHydrationKey === key || !canUseLiveAdminApi()) return;
   adminExactIdHydrationKey = key;
-  adminExactIdHydrationInFlight = apiRequest(`/api/properties/${encodeURIComponent(key)}`, { headers })
+  // Live rows (and MK refs) come from the admin live search (C19); other ids
+  // from the property API as before.
+  adminExactIdHydrationInFlight = apiRequest(`/api/admin/properties/live?limit=5&include_test_like=1&q=${encodeURIComponent(key)}`, { headers })
+    .then((live) => {
+      const row = Array.isArray(live?.data) ? live.data[0] : null;
+      if (row) return { data: row };
+      if (/^mk-/i.test(key)) return { data: null };
+      return apiRequest(`/api/properties/${encodeURIComponent(key)}`, { headers });
+    })
     .then((response) => {
       const listing = response?.data ? normalizeRemoteAdminListing(response.data) : null;
-      if (!listing?.id) return;
+      if (!listing?.id) {
+        const wrap = document.getElementById("admin-all-listings-table");
+        if (wrap) wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listing matches ${adminEscape(key)}.</div>`;
+        return;
+      }
       adminRemoteListings = adminUniqueSeedItems([listing, ...adminRemoteListings]);
       renderAdminAllListingsRows(adminRemoteListings);
     })
@@ -31133,7 +31195,7 @@ function directReviewNextPathAfterAuth() {
     if (normalizeRoutePath(window.location.pathname || "/") !== "/login") return "";
     const next = new URLSearchParams(window.location.search || "").get("next") || "";
     const nextPath = new URL(next, window.location.origin).pathname;
-    return /^\/staff-dashboard\/review\/[0-9a-f-]{36}\/?$/i.test(nextPath) ? nextPath : "";
+    return /^\/staff-dashboard\/review\/(?:[0-9a-f-]{36}|MK-[0-9A-Z-]{4,})\/?$/i.test(nextPath) ? nextPath : "";
   } catch (error) {
     return "";
   }
@@ -50221,10 +50283,11 @@ async function parseInitialDeepLink() {
     return true;
   }
 
-  const directReviewMatch = String(path || "").match(/^\/staff-dashboard\/review\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
+  const directReviewMatch = String(path || "").match(/^\/staff-dashboard\/review\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|MK-[0-9A-Z-]{4,})\/?$/i);
   if (directReviewMatch) {
     if (authState?.user && ["moderator", "admin"].includes(derivePortalMode(authState.user, authState.user.portal_mode))) {
-      openStaffDirectReview(directReviewMatch[1].toLowerCase());
+      const ref = directReviewMatch[1];
+      openStaffDirectReview(/^mk-/i.test(ref) ? ref.toUpperCase() : ref.toLowerCase());
     } else {
       openAuthSignIn("moderator");
     }

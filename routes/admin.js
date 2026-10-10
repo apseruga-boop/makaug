@@ -4364,32 +4364,68 @@ router.get('/properties/video-still-candidates', async (req, res) => {
   }
 });
 
+// Admin > Live & Featured (C19, 10 Oct 2026). It timed out after 8 s on every
+// refresh ("Rows loaded here 0 / 4353"): two whole-table counts with ILIKE on
+// every description, then 100 rows with their full extra_fields. Now: one count
+// (cached for 60 s when there is no search), 50 rows a page by default, a small
+// extra_fields subset, and a server-side search by id, MK ref or title.
+const ADMIN_LIVE_COUNT_CACHE_MS = 60 * 1000;
+const adminLiveCountCache = new Map();
+const ADMIN_LIVE_EXTRA_KEYS = [
+  'featured', 'featured_at', 'found_online', 'found_online_candidate', 'sourced_inventory_candidate',
+  'social_search_candidate', 'source_platform', 'source_url', 'price_on_application',
+  'is_test', 'qa_test_delete', 'soft_launch_test', 'launch_proof', 'non_public_test'
+];
+const UUID_SEARCH_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function adminLiveSearchClause(q, values, alias = 'p') {
+  const term = cleanText(q).slice(0, 120);
+  if (!term) return '';
+  if (UUID_SEARCH_RE.test(term)) {
+    values.push(term.toLowerCase());
+    return `AND ${alias}.id = $${values.length}::uuid`;
+  }
+  if (/^MK-[0-9A-Z-]{4,}$/i.test(term)) {
+    values.push(term.toUpperCase());
+    return `AND UPPER(${alias}.inquiry_reference) = $${values.length}`;
+  }
+  values.push(`%${term.replace(/[\\%_]/g, (char) => `\\${char}`)}%`);
+  return `AND (${alias}.title ILIKE $${values.length} OR ${alias}.inquiry_reference ILIKE $${values.length} OR ${alias}.area ILIKE $${values.length})`;
+}
+
+async function adminLiveCounts(publicLiveCondition, cacheKey, { search = '', values = [] } = {}) {
+  const cached = !search ? adminLiveCountCache.get(cacheKey) : null;
+  if (cached && Date.now() - cached.at < ADMIN_LIVE_COUNT_CACHE_MS) return cached.counts;
+  const result = await db.query(
+    `SELECT COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE ${adminFeaturedListingCondition('p')})::int AS featured_total
+       FROM properties p
+      WHERE ${publicLiveCondition} ${search}`,
+    values
+  );
+  const counts = { total: Number(result.rows[0]?.total || 0), featured_total: Number(result.rows[0]?.featured_total || 0) };
+  if (!search) adminLiveCountCache.set(cacheKey, { at: Date.now(), counts });
+  return counts;
+}
+
 router.get('/properties/live', async (req, res, next) => {
   try {
-    const { page, limit, offset } = parsePagination(req.query);
-    const values = [limit, offset];
+    const { page } = parsePagination(req.query);
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 100);
+    const offset = (page - 1) * limit;
     const includeTestLike = parseBooleanLike(req.query.include_test_like || req.query.includeTestLike, false);
     const publicLiveCondition = includeTestLike ? publicLivePropertyStatusSql('p') : adminPublicLiveListingWhere('p');
-    const featuredCondition = adminFeaturedListingCondition('p');
+    const searchValues = [];
+    const search = adminLiveSearchClause(req.query.q || req.query.search || '', searchValues);
 
-    const countResult = await db.query(
-      `SELECT
-         COUNT(*)::int AS total,
-         COUNT(*) FILTER (WHERE ${featuredCondition})::int AS featured_total
-       FROM properties p
-       WHERE ${publicLiveCondition}`
-    );
-    const total = countResult.rows[0]?.total || 0;
-    const parityResult = await db.query(
-      `SELECT
-        COUNT(*) FILTER (WHERE ${adminPublicLiveListingWhere('p')})::int AS public_visible_total,
-        COUNT(*) FILTER (WHERE ${adminPublicLiveListingWhere('p')} AND ${adminFeaturedListingCondition('p')})::int AS featured_total
-       FROM properties p`
-    );
-    const publicInventory = {
-      public_visible_total: Number(parityResult.rows[0]?.public_visible_total || 0),
-      featured_total: Number(parityResult.rows[0]?.featured_total || 0)
-    };
+    const counts = await adminLiveCounts(publicLiveCondition, includeTestLike ? 'all' : 'public', { search, values: searchValues });
+    // Without a search the public total is the same query as the page total
+    // (no second whole-table scan); with include_test_like it is counted once.
+    const publicInventory = includeTestLike
+      ? await adminLiveCounts(adminPublicLiveListingWhere('p'), 'public')
+      : (search ? await adminLiveCounts(publicLiveCondition, 'public') : counts);
+    const total = counts.total;
+    const values = [...searchValues, limit, offset];
     const rows = await db.query(
       `SELECT
         p.id,
@@ -4400,6 +4436,8 @@ router.get('/properties/live', async (req, res, next) => {
         p.price,
         p.price_period,
         p.status,
+        p.source,
+        p.listed_via,
         p.sold_at,
         p.inquiry_reference,
         p.lister_name,
@@ -4410,7 +4448,7 @@ router.get('/properties/live', async (req, res, next) => {
         p.reviewed_at,
         p.approved_at,
         p.last_moderation_notification_at,
-        p.extra_fields,
+        jsonb_strip_nulls(jsonb_build_object(${ADMIN_LIVE_EXTRA_KEYS.map((key) => `'${key}', p.extra_fields->'${key}'`).join(', ')})) AS extra_fields,
         CONCAT('/property/', p.id::text) AS property_url,
         TRUE AS public_visible,
         (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
@@ -4427,20 +4465,24 @@ router.get('/properties/live', async (req, res, next) => {
          ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
          LIMIT 1
        ) img ON true
-       WHERE ${publicLiveCondition}
-       ORDER BY live_at DESC
-       LIMIT $1
-       OFFSET $2`,
+       WHERE ${publicLiveCondition} ${search}
+       ORDER BY live_at DESC, p.id DESC
+       LIMIT $${values.length - 1}
+       OFFSET $${values.length}`,
       values
     );
 
+    const parity = {
+      public_visible_total: publicInventory.total,
+      featured_total: publicInventory.featured_total
+    };
     return res.json({
       ok: true,
       data: rows.rows,
       pagination: toPagination(total, page, limit),
       summary: {
         public_inventory: {
-          ...publicInventory,
+          ...parity,
           page_rows: rows.rows.length,
           total_rows: total
         }
@@ -4448,15 +4490,17 @@ router.get('/properties/live', async (req, res, next) => {
       meta: {
         status: 'live',
         include_test_like: includeTestLike,
+        search: search ? cleanText(req.query.q || req.query.search || '').slice(0, 120) : null,
         public_parity: {
-          ...publicInventory,
+          ...parity,
           page_rows: rows.rows.length,
           total_rows: total,
-          same_as_public_api: !includeTestLike && total === publicInventory.public_visible_total,
+          same_as_public_api: Boolean(search) || (!includeTestLike && total === parity.public_visible_total),
           public_api_endpoint: '/api/properties?status=approved&public_only=1',
           featured_api_endpoint: '/api/properties?status=approved&featured=true&public_only=1&sort=featured'
         }
-      }    });
+      }
+    });
   } catch (error) {
     return next(error);
   }

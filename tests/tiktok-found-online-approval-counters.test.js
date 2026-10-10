@@ -71,7 +71,8 @@ test('K25 moderation queues recover without poisoned cache or catalogue flooding
   assert.doesNotMatch(app, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ maxPages: 500 \}\)/);
   assert.match(app, /const ADMIN_SNAPSHOT_PANEL_TIMEOUT_MS = 8000/);
   assert.match(app, /Promise\.race\(\[\s*requestFn\(\)/);
-  assert.match(app, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ limit: 100, maxPages: 1 \}\)/);
+  // C19: live listings are 50 a page with a longer timeout.
+  assert.match(app, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ limit: 50, maxPages: 1 \}\), \[\], ADMIN_LIVE_LISTINGS_TIMEOUT_MS\)/);
   assert.match(app, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/actioned\?include_total=0", headers, \{ limit: 100, maxPages: 1 \}\)/);
   assert.match(app, /hydrateStaffReviewQueueFallback\(userIdentityAtStart\)/);
   assert.match(app, /mergedData\?\.review_queue_meta\?\.query_ok !== true/);
