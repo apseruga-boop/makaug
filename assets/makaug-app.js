@@ -26738,15 +26738,38 @@ function adminReviewSetAreaFromNeighborhood() {
   }
 }
 
+// The town for a neighbourhood from the district's tree: the saved town when
+// it holds that neighbourhood, else the town that does (e.g. Luzira, saved as
+// "Kampala", is in Nakawa division).
+function adminReviewTownForNeighborhood(district = "", city = "", neighborhood = "") {
+  const tree = getDistrictLocationTree(district);
+  const name = String(neighborhood || "").trim();
+  if (!name || !tree.length) return city;
+  if (tree.some((node) => node.city === city && (node.neighborhoods || []).some((item) => item.name === name))) return city;
+  const home = tree.find((node) => (node.neighborhoods || []).some((item) => item.name === name));
+  return home ? home.city : city;
+}
+
 function adminReviewRefreshHierarchyControls(options = {}) {
   const { syncMap = true } = options;
   const fields = adminReviewCurrentLocationFields();
   const region = fields.district ? regionForDistrict(fields.district) : fields.region;
   if (region) adminSetReviewEditValue("admin-review-region-edit", region);
   const district = adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(region, fields.district), fields.district);
-  const city = adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, fields.city), fields.city);
-  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, fields.neighborhood), fields.neighborhood);
+  const neighborhoodName = fields.neighborhood || fields.area || "";
+  const townValue = adminReviewTownForNeighborhood(district, fields.city, neighborhoodName);
+  const city = adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, townValue), townValue);
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, fields.neighborhood || (townValue !== fields.city ? neighborhoodName : "")), fields.neighborhood || (townValue !== fields.city ? neighborhoodName : ""));
   if (syncMap) adminReviewScheduleLocationSync();
+  // P7: the review screen opened before the district's towns were loaded, so the
+  // Town dropdown only offered the saved value ("Kampala"). Load them once and redraw.
+  if (district && !options.catalogLoaded && !getDistrictLocationTree(district).length) {
+    loadSharedLocationCatalogForDistrict(district)
+      .then(() => {
+        if (document.getElementById("admin-review-city-edit")) adminReviewRefreshHierarchyControls({ ...options, syncMap: false, catalogLoaded: true });
+      })
+      .catch(() => {});
+  }
 }
 
 function adminReviewOnRegionChange() {

@@ -251,7 +251,8 @@ test('suggestions retain the canonical town needed to populate the full form cas
   const expected = {
     Sentema: ['Wakiso', 'Wakiso'],
     Namasuba: ['Wakiso', 'Makindye-Ssabagabo'],
-    MUBS: ['Kampala', 'Kampala']
+    // P7: Kampala's divisions are its towns; MUBS is in Nakawa division.
+    MUBS: ['Kampala', 'Nakawa']
   };
   Object.entries(expected).forEach(([query, [district, town]]) => {
     const exact = canonicalLocationSuggestions(query, new Map(), 8)
