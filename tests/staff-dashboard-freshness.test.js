@@ -62,7 +62,8 @@ test('the panel merge keeps WhatsApp counts and takes the live bridge status', (
 test('the found-online panel says "Showing 8 of 12" and offers Load more', () => {
   const start = APP.indexOf('function staffFoundOnlineQueueView(');
   const end = APP.indexOf('\nfunction ', start + 10);
-  const sandbox = {};
+  // P6 caps "Load more" at STAFF_FOUND_ONLINE_MAX_ROWS (see staff-dashboard-memory.test.js).
+  const sandbox = { STAFF_FOUND_ONLINE_MAX_ROWS: 200 };
   vm.runInNewContext(`${APP.slice(start, end)}; this.view = staffFoundOnlineQueueView;`, sandbox);
   const rows = Array.from({ length: 8 }, (_, i) => ({ id: `r${i}` }));
   const first = sandbox.view({ data: { queued_found_online: rows, queued_found_online_meta: { total: 12, page_limit: 8 } }, extra: [], page: 1 });

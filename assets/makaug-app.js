@@ -881,6 +881,8 @@ let adminReviewEvidence = {};
 let adminReviewEvidenceViewed = {};
 let adminReviewWarningOverrides = {};
 let adminReviewLocationMap = null;
+// The one Google review map, reused across review screens (see initAdminReviewLocationMap).
+const reviewGoogleMapCache = { map: null, marker: null, host: null };
 let adminReviewLocationMarker = null;
 let adminReviewLocationProvider = "";
 let adminReviewCanonicalLocationResolution = null;
@@ -13035,6 +13037,7 @@ async function downloadFieldAgentPayoutSlip(period = "week") {
     document.body.appendChild(link);
     link.click();
     link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
     URL.revokeObjectURL(url);
     toast("Payout slip downloaded.");
   } catch (error) {
@@ -13355,8 +13358,51 @@ async function renderAdvertiserDashboard() {
   await hydrateAdvertiserDashboardPlacements();
 }
 
+// One background-refresh timer for the staff and admin dashboards (P6, 10 Oct
+// 2026). Retries, post-moderation refreshes and tab refreshes used to each keep
+// their own setTimeout, so they stacked up and kept re-rendering while the tab
+// sat in the background. Scheduling again replaces the pending refresh, leaving
+// the dashboard clears it, and a hidden tab defers it until the tab is visible.
+const dashboardRefreshScheduler = { timer: null, kind: "", deferred: null, page: "" };
+function clearDashboardRefresh() {
+  if (dashboardRefreshScheduler.timer) window.clearTimeout(dashboardRefreshScheduler.timer);
+  dashboardRefreshScheduler.timer = null;
+  dashboardRefreshScheduler.kind = "";
+  dashboardRefreshScheduler.deferred = null;
+  dashboardRefreshScheduler.page = "";
+}
+function scheduleDashboardRefresh(kind, delayMs, run, options = {}) {
+  if (typeof run !== "function") return;
+  clearDashboardRefresh();
+  const page = options.page || currentPage;
+  dashboardRefreshScheduler.kind = String(kind || "refresh");
+  dashboardRefreshScheduler.page = page;
+  dashboardRefreshScheduler.timer = window.setTimeout(() => {
+    dashboardRefreshScheduler.timer = null;
+    if (currentPage !== page) { clearDashboardRefresh(); return; }
+    if (document.hidden) { dashboardRefreshScheduler.deferred = run; return; }
+    dashboardRefreshScheduler.kind = "";
+    dashboardRefreshScheduler.page = "";
+    run();
+  }, Math.max(0, Number(delayMs) || 0));
+}
+function dashboardRefreshPending() {
+  return !!(dashboardRefreshScheduler.timer || dashboardRefreshScheduler.deferred);
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !dashboardRefreshScheduler.deferred) return;
+  const run = dashboardRefreshScheduler.deferred;
+  const kind = dashboardRefreshScheduler.kind;
+  const page = dashboardRefreshScheduler.page;
+  dashboardRefreshScheduler.deferred = null;
+  scheduleDashboardRefresh(kind, 400, run, { page });
+});
+
+let lpGalleryObjectUrls = [];
 let staffDashboardData = null;
 let staffDashboardRenderSeq = 0;
+let staffDashboardRenderInFlight = false;
+let staffDashboardRenderQueued = false;
 let staffDashboardHasLiveData = false;
 let staffDashboardAuthRetryCount = 0;
 let staffDashboardPanelHydrationSeq = 0;
@@ -13656,20 +13702,21 @@ function scheduleStaffDashboardPanelRetry(reason = "review_queue") {
   if (currentPage !== "staff-dashboard" || !authState?.token) return;
   staffDashboardPanelRetryCount += 1;
   const delay = Math.min(15000, 1800 * staffDashboardPanelRetryCount);
-  staffDashboardPanelRetryTimer = window.setTimeout(() => {
+  staffDashboardPanelRetryTimer = true;
+  scheduleDashboardRefresh("staff_panels_retry", delay, () => {
     staffDashboardPanelRetryTimer = null;
     if (currentPage !== "staff-dashboard" || !authState?.token) return;
     hydrateStaffDashboardPanels(
       "/api/staff/dashboard?panels=1",
       String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "")
     );
-  }, delay);
+  }, { page: "staff-dashboard" });
   setTextById("staff-source-monitor-status", `Moderation queue is retrying (${reason}, attempt ${staffDashboardPanelRetryCount}/${STAFF_DASHBOARD_PANEL_RETRY_LIMIT})...`);
 }
 
 function clearStaffDashboardPanelRetry() {
   if (staffDashboardPanelRetryTimer) {
-    window.clearTimeout(staffDashboardPanelRetryTimer);
+    if (dashboardRefreshScheduler.kind === "staff_panels_retry") clearDashboardRefresh();
     staffDashboardPanelRetryTimer = null;
   }
   staffDashboardPanelRetryCount = 0;
@@ -13923,6 +13970,8 @@ function renderStaffWhatsapp(rows = [], whatsapp = {}) {
 // (oldest first, the same set and order), so every row is reachable and the
 // count says how many there are. It used to stop silently at 8.
 let staffFoundOnlineState = { data: {}, extra: [], page: 1, loading: false, moreHint: false };
+// "Load more" stops here; past this the review queue search is the way in.
+const STAFF_FOUND_ONLINE_MAX_ROWS = 200;
 
 function staffFoundOnlineCardHtml(row = {}) {
   return `
@@ -13944,8 +13993,10 @@ function staffFoundOnlineQueueView(state = staffFoundOnlineState) {
     .filter((row) => row && row.id && !seen.has(String(row.id)) && seen.add(String(row.id)));
   const meta = data.queued_found_online_meta || null;
   const total = meta && meta.total !== null && meta.total !== undefined && Number.isFinite(Number(meta.total)) ? Number(meta.total) : null;
-  const label = !meta || !rows.length ? "" : (total === null ? `Showing ${rows.length}` : `Showing ${rows.length} of ${total}`);
-  const hasMore = Boolean(meta) && (total === null ? Boolean(state?.page === 1 ? meta.has_more : state?.moreHint) : rows.length < total);
+  const capped = rows.length >= STAFF_FOUND_ONLINE_MAX_ROWS;
+  const baseLabel = !meta || !rows.length ? "" : (total === null ? `Showing ${rows.length}` : `Showing ${rows.length} of ${total}`);
+  const label = baseLabel && capped ? `${baseLabel} (search the review queue for the rest)` : baseLabel;
+  const hasMore = !capped && Boolean(meta) && (total === null ? Boolean(state?.page === 1 ? meta.has_more : state?.moreHint) : rows.length < total);
   return { rows, label, hasMore, limit: Number(meta?.page_limit) || 8 };
 }
 
@@ -13966,6 +14017,7 @@ function renderStaffFoundOnlineQueue() {
 
 async function staffLoadMoreFoundOnline() {
   if (staffFoundOnlineState.loading) return;
+  if (staffFoundOnlineQueueView().rows.length >= STAFF_FOUND_ONLINE_MAX_ROWS) return;
   const { limit } = staffFoundOnlineQueueView();
   const nextPage = staffFoundOnlineState.page + 1;
   staffFoundOnlineState.loading = true;
@@ -14995,6 +15047,26 @@ async function copyStaffTrainingScript(index) {
 }
 
 async function renderStaffDashboard() {
+  // The direct review page (/staff-dashboard/review/<id>) never loads the dashboard.
+  if (currentPage === "staff-review") return;
+  // One render at a time; a call while one is running re-runs once afterwards.
+  if (staffDashboardRenderInFlight) {
+    staffDashboardRenderQueued = true;
+    return;
+  }
+  staffDashboardRenderInFlight = true;
+  try {
+    await renderStaffDashboardOnce();
+  } finally {
+    staffDashboardRenderInFlight = false;
+    if (staffDashboardRenderQueued) {
+      staffDashboardRenderQueued = false;
+      if (currentPage === "staff-dashboard") scheduleDashboardRefresh("staff_render_queued", 250, () => renderStaffDashboard(), { page: "staff-dashboard" });
+    }
+  }
+}
+
+async function renderStaffDashboardOnce() {
   staffDashboardRenderSeq += 1;
   const gate = document.getElementById("staff-auth-gate");
   const body = document.getElementById("staff-body");
@@ -15062,9 +15134,7 @@ async function renderStaffDashboard() {
     const retryLimit = signInRequired ? 3 : 8;
     if (transientStaffRequest && staffDashboardAuthRetryCount < retryLimit) {
       staffDashboardAuthRetryCount += 1;
-      window.setTimeout(() => {
-        if (currentPage === "staff-dashboard") renderStaffDashboard();
-      }, Math.min(10000, 1200 * staffDashboardAuthRetryCount));
+      scheduleDashboardRefresh("staff_dashboard_retry", Math.min(10000, 1200 * staffDashboardAuthRetryCount), () => renderStaffDashboard(), { page: "staff-dashboard" });
       return;
     }
     if (signInRequired) {
@@ -15078,9 +15148,8 @@ async function renderStaffDashboard() {
     if (transientStaffRequest) {
       setStaffDashboardLoadingState("Staff dashboard is still loading. Retrying live data...");
       staffDashboardAuthRetryCount = 0;
-      window.setTimeout(() => {
-        if (currentPage === "staff-dashboard") renderStaffDashboard();
-      }, 10000);
+      // Slower retry from here on (it never stops while the page is open and visible).
+      scheduleDashboardRefresh("staff_dashboard_retry", 30000, () => renderStaffDashboard(), { page: "staff-dashboard" });
       return;
     }
     staffDashboardData = null;
@@ -15492,7 +15561,7 @@ function staffPreviewField(id, label, value = "", type = "text", extra = "") {
 function renderStaffListingPreviewModal(preview = {}) {
   const existing = document.getElementById("staff-listing-preview-modal");
   if (existing) {
-    existing.remove();
+    releaseReviewModal(existing);
   } else {
     staffPreviewPreviousAdminReview = adminActiveReview || null;
   }
@@ -15517,7 +15586,10 @@ function renderStaffListingPreviewModal(preview = {}) {
           <h3 class="text-2xl font-black mt-1">${adminEscape(preview.title || "Untitled listing")}</h3>
           <p class="text-sm text-slate-300 mt-1">${adminEscape([preview.area, preview.district].filter(Boolean).join(", ") || "Location needs checking")} • ${adminEscape(preview.status || "pending")}</p>
         </div>
-        <button type="button" onclick="closeStaffListingPreview()" class="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20"><i class="fas fa-xmark"></i></button>
+        <div class="flex items-center gap-2">
+          ${currentPage === "staff-review" ? "" : `<a href="/staff-dashboard/review/${adminAttr(encodeURIComponent(String(preview.id || "")))}" target="_blank" rel="noopener" class="hidden sm:inline-flex items-center rounded-full bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-black text-white">Open on its own page</a>`}
+          <button type="button" onclick="closeStaffListingPreview()" class="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20"><i class="fas fa-xmark"></i></button>
+        </div>
       </div>
       <div class="p-5 grid xl:grid-cols-[1.55fr,0.75fr] gap-5">
         <div class="space-y-4">
@@ -15583,16 +15655,102 @@ function renderStaffListingPreviewModal(preview = {}) {
   }, 120);
 }
 
-function closeStaffListingPreview() {
-  if (adminReviewLocationMap?.remove) {
+// Removing the review screen: stop embedded players (a TikTok embed keeps
+// running and holding memory while it is referenced), keep the shared Google
+// map for the next screen, and remove a Leaflet map properly.
+function releaseReviewModal(modal) {
+  if (!modal) return;
+  modal.querySelectorAll("iframe").forEach((frame) => {
+    try { frame.src = "about:blank"; } catch (e) {}
+    frame.remove();
+  });
+  modal.querySelectorAll("video").forEach((video) => {
+    try { video.pause(); video.removeAttribute("src"); video.load(); } catch (e) {}
+  });
+  if (reviewGoogleMapCache.host && modal.contains(reviewGoogleMapCache.host)) {
+    reviewGoogleMapCache.host.parentNode.removeChild(reviewGoogleMapCache.host);
+  }
+  if (adminReviewLocationProvider !== "google" && adminReviewLocationMap?.remove) {
     try { adminReviewLocationMap.remove(); } catch (e) {}
   }
   adminReviewLocationMap = null;
   adminReviewLocationMarker = null;
   adminReviewLocationProvider = "";
+  modal.remove();
+}
+
+function closeStaffListingPreview() {
+  const modal = document.getElementById("staff-listing-preview-modal");
+  if (!modal) {
+    adminReviewLocationMap = null;
+    adminReviewLocationMarker = null;
+    adminReviewLocationProvider = "";
+  }
   adminActiveReview = staffPreviewPreviousAdminReview || null;
   staffPreviewPreviousAdminReview = null;
-  document.getElementById("staff-listing-preview-modal")?.remove();
+  releaseReviewModal(modal);
+  if (currentPage === "staff-review") {
+    // Stay on the light page: "Reopen the review" or "Open the staff dashboard".
+    setTextById("staff-direct-review-status", "Review closed. Reopen it, or open the staff dashboard for the full queue.");
+    document.getElementById("staff-direct-review-reopen")?.classList.remove("hidden");
+  }
+}
+
+// /staff-dashboard/review/<property-id>: one listing's Preview & edit on its own
+// page. It loads only that listing's review payload (no dashboard panels, queues
+// or polling) and keeps the same save, approve, reject and photo-upload actions.
+const staffDirectReviewState = { id: "" };
+
+function ensureStaffDirectReviewPage() {
+  let page = document.getElementById("page-staff-review");
+  if (page) return page;
+  const dashboard = document.getElementById("page-staff-dashboard");
+  page = document.createElement("div");
+  page.id = "page-staff-review";
+  page.className = "page";
+  page.innerHTML = `
+    <div class="max-w-5xl mx-auto px-4 py-8">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <div class="text-xs uppercase tracking-wide text-emerald-700 font-black">Staff review</div>
+          <h1 class="text-2xl font-black text-gray-900">Listing Preview &amp; edit</h1>
+        </div>
+        <a href="/staff-dashboard" class="border border-slate-300 text-slate-800 hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-black">Open the staff dashboard</a>
+      </div>
+      <div id="staff-direct-review-status" class="mt-4 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700">Loading this listing's review…</div>
+      <button type="button" id="staff-direct-review-reopen" onclick="staffReloadDirectReview(staffDirectReviewState.id)" class="hidden mt-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl px-4 py-2 text-sm font-black">Reopen the review</button>
+    </div>`;
+  if (dashboard?.parentNode) dashboard.parentNode.insertBefore(page, dashboard.nextSibling);
+  else document.body.appendChild(page);
+  return page;
+}
+
+async function staffReloadDirectReview(propertyId = staffDirectReviewState.id) {
+  const id = String(propertyId || "").trim().toLowerCase();
+  if (!id) return;
+  staffDirectReviewState.id = id;
+  const status = document.getElementById("staff-direct-review-status");
+  const reopen = document.getElementById("staff-direct-review-reopen");
+  if (status) status.textContent = "Loading this listing's review…";
+  if (reopen) reopen.classList.add("hidden");
+  try {
+    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(id)}/preview`);
+    if (currentPage !== "staff-review" || staffDirectReviewState.id !== id) return;
+    renderStaffListingPreviewModal(response?.data || {});
+    const preview = response?.data || {};
+    if (status) status.textContent = `${preview.title || "Listing"} • ${preview.status || "pending"}.`;
+    if (reopen) reopen.classList.remove("hidden");
+  } catch (error) {
+    if (status) status.textContent = error?.status === 404 ? "This listing wasn't found." : `The review didn't load: ${error?.message || "request failed"}. Try again.`;
+    if (reopen) reopen.classList.remove("hidden");
+  }
+}
+
+async function openStaffDirectReview(propertyId) {
+  ensureStaffDirectReviewPage();
+  showPage("staff-review", { history: false, source: "staff_direct_review" });
+  ensureStaffModerationActionDelegates();
+  await staffReloadDirectReview(propertyId);
 }
 
 function ensureStaffModerationActionDelegates() {
@@ -15918,8 +16076,14 @@ function staffVerifyApprovedListingInBackground(propertyId) {
 
 function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = false } = {}) {
   if (staffModerationRefreshTimer) window.clearTimeout(staffModerationRefreshTimer);
+  staffModerationRefreshTimer = null;
+  // Direct review page: reload just this listing's review, not the dashboard.
+  if (currentPage === "staff-review") {
+    const reviewId = staffDirectReviewState.id;
+    if (reviewId) scheduleDashboardRefresh("staff_direct_review", 700, () => staffReloadDirectReview(reviewId), { page: "staff-review" });
+    return;
+  }
   const run = async () => {
-    staffModerationRefreshTimer = null;
     try {
       if (refreshPublicSummary) await refreshPublicOpportunitySummary({ silent: true });
       await renderStaffDashboard();
@@ -15927,13 +16091,13 @@ function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = fals
       toast(`Dashboard refresh failed: ${error.message || "error"}`);
     }
   };
-  staffModerationRefreshTimer = window.setTimeout(() => {
+  scheduleDashboardRefresh("staff_after_moderation", 700, () => {
     if ("requestIdleCallback" in window) {
       window.requestIdleCallback(() => run(), { timeout: 2500 });
     } else {
       run();
     }
-  }, 700);
+  }, { page: "staff-dashboard" });
 }
 
 async function staffApprovePreviewListing(propertyId, options = {}) {
@@ -17498,12 +17662,12 @@ function adminScheduleDashboardRefreshForTab() {
   const body = document.getElementById("admin-body");
   if (!body || body.classList.contains("hidden")) return;
   if (adminDashboardTabRefreshTimer) clearTimeout(adminDashboardTabRefreshTimer);
-  adminDashboardTabRefreshTimer = setTimeout(() => {
-    adminDashboardTabRefreshTimer = null;
+  adminDashboardTabRefreshTimer = null;
+  scheduleDashboardRefresh("admin_tab", 80, () => {
     renderAdminDashboard({ source: "tab_switch" }).catch((error) => {
       console.warn("Unable to refresh admin tab", error?.message || error);
     });
-  }, 80);
+  });
 }
 
 function adminListingIdArg(value) {
@@ -20349,6 +20513,7 @@ async function loadLeadDesk(options = {}) {
   if (!leadDeskTimer) {
     // Keep the countdowns honest while the page is open.
     leadDeskTimer = setInterval(() => {
+      if (document.hidden) return;
       document.querySelectorAll("#admin-demand-gaps [data-due]").forEach((el) => {
         const c = leadDeskCountdown(el.getAttribute("data-due"));
         el.textContent = c.label;
@@ -20705,6 +20870,7 @@ async function downloadLeadDeskCsv() {
     document.body.appendChild(a);
     a.click();
     a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
     URL.revokeObjectURL(url);
   } catch (error) {
     toast(error?.message || "Export failed.");
@@ -21966,7 +22132,14 @@ async function saveAdminApiKeyAndRefresh() {
 function closeAdminReviewPanel() {
   adminActiveReview = null;
   const panel = document.getElementById("admin-review-panel");
-  if (panel) panel.classList.add("hidden");
+  if (panel) {
+    panel.classList.add("hidden");
+    // A hidden panel kept its TikTok/YouTube players running.
+    panel.querySelectorAll("iframe").forEach((frame) => {
+      try { frame.src = "about:blank"; } catch (e) {}
+      frame.remove();
+    });
+  }
 }
 
 function getAdminReviewChecklistFromDom() {
@@ -27718,11 +27891,35 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
   if (el._leaflet_id) {
     try { el._leaflet_id = null; } catch (e) {}
   }
+  if (reviewGoogleMapCache.host?.parentNode) reviewGoogleMapCache.host.parentNode.removeChild(reviewGoogleMapCache.host);
   el.innerHTML = "";
   const useGoogle = await ensureGoogleMapsApi();
   if (useGoogle && window.google?.maps) {
     const center = { lat, lng };
-    const map = new google.maps.Map(el, {
+    // A Google map can't be destroyed, so one satellite map is created once and
+    // moved into each new review screen. Making a new one per preview kept every
+    // old map (tiles, Street View, listeners) alive until the tab ran out of memory.
+    const reused = reviewGoogleMapCache.map && reviewGoogleMapCache.host;
+    if (reused) {
+      el.appendChild(reviewGoogleMapCache.host);
+      reviewGoogleMapCache.map.setCenter(center);
+      reviewGoogleMapCache.map.setZoom(point?.exact ? MAP_PROPERTY_ZOOM : MAP_DISTRICT_ZOOM);
+      reviewGoogleMapCache.marker.setPosition(center);
+      adminReviewLocationMap = reviewGoogleMapCache.map;
+      adminReviewLocationMarker = reviewGoogleMapCache.marker;
+      adminReviewLocationProvider = "google";
+      adminReviewLocationStatus(point?.exact ? "Google exact pin loaded" : "Google approximate area pin", point?.exact ? "green" : "amber");
+      setTimeout(() => {
+        try { google.maps.event.trigger(reviewGoogleMapCache.map, "resize"); reviewGoogleMapCache.map.setCenter(center); } catch (e) {}
+      }, 150);
+      return;
+    }
+    const host = document.createElement("div");
+    host.style.width = "100%";
+    host.style.height = "100%";
+    host.style.minHeight = "inherit";
+    el.appendChild(host);
+    const map = new google.maps.Map(host, {
       center,
       zoom: point?.exact ? MAP_PROPERTY_ZOOM : MAP_DISTRICT_ZOOM,
       mapTypeId: "satellite",
@@ -27748,6 +27945,9 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
       adminReviewSetLocationInputs(event.latLng.lat(), event.latLng.lng(), "Exact pin set");
     });
     marker.addListener("click", () => info.open({ anchor: marker, map }));
+    reviewGoogleMapCache.map = map;
+    reviewGoogleMapCache.marker = marker;
+    reviewGoogleMapCache.host = host;
     adminReviewLocationMap = map;
     adminReviewLocationMarker = marker;
     adminReviewLocationProvider = "google";
@@ -30878,6 +31078,18 @@ function pendingAdminControlAfterAuth() {
   return control ? { path, control } : null;
 }
 
+// Signing in from /login?next=/staff-dashboard/review/<id> goes back to that listing.
+function directReviewNextPathAfterAuth() {
+  try {
+    if (normalizeRoutePath(window.location.pathname || "/") !== "/login") return "";
+    const next = new URLSearchParams(window.location.search || "").get("next") || "";
+    const nextPath = new URL(next, window.location.origin).pathname;
+    return /^\/staff-dashboard\/review\/[0-9a-f-]{36}\/?$/i.test(nextPath) ? nextPath : "";
+  } catch (error) {
+    return "";
+  }
+}
+
 function preferredAudienceForResolvedUser(user, preferredAudience = "") {
   const preferred = String(preferredAudience || "").toLowerCase();
   if (preferred && preferred !== "finder") return preferred;
@@ -30914,7 +31126,10 @@ async function finalizeAuth(data, source, preferredAudience = "") {
 		      closeAccountAccessDrawer();
 		      toast(data?.message || `Welcome, ${user.first_name || "user"}`);
 		      const pendingAdmin = resolvedUser.portal_mode === "admin" ? pendingAdminControlAfterAuth() : null;
-		      if (pendingAdmin) {
+		      const directReviewNext = ["moderator", "admin"].includes(resolvedUser.portal_mode) ? directReviewNextPathAfterAuth() : "";
+		      if (directReviewNext) {
+		        window.location.assign(directReviewNext);
+		      } else if (pendingAdmin) {
 		        try { window.history.replaceState({ page: "admin", source: "auth_admin_return", adminPath: pendingAdmin.path }, "", pendingAdmin.path); } catch (error) {}
 		        await openAdminControl(pendingAdmin.control, { source: "auth_admin_return" });
 		      } else {
@@ -31437,11 +31652,15 @@ function renderLpPhotoFeedback() {
         .concat(checklist.map((item) => `<option value="${item.key}">${translateListingLabel(item.label)}</option>`))
         .concat([`<option value="${LP_OTHER_PHOTO_SLOT}">${translateListingLabel("Other / custom")}</option>`])
         .join("");
+      // Each re-render made a new object URL per photo and never released the old ones.
+      lpGalleryObjectUrls.forEach((url) => { try { URL.revokeObjectURL(url); } catch (e) {} });
+      lpGalleryObjectUrls = [];
       galleryEl.innerHTML = lpSelectedPhotos.map((file, index) => {
         const assigned = lpPhotoAssignments[index] || "";
         const assignedLabel = getLpPhotoSlotLabel(assigned, getListType());
         const isOtherAssigned = getLpPhotoAssignmentSelectValue(assigned) === LP_OTHER_PHOTO_SLOT;
         const src = URL.createObjectURL(file);
+        lpGalleryObjectUrls.push(src);
         const isMain = index === lpMainPhotoIndex;
         return `
           <div class="border border-gray-200 rounded-xl p-3 bg-white">
@@ -36028,7 +36247,7 @@ function authAudienceFromLoginParams(params = new URLSearchParams()) {
   if (normalizedNext === "/student-dashboard") return "student";
   if (normalizedNext === "/broker-dashboard") return "agent";
   if (normalizedNext === "/field-agent-dashboard") return "field_agent";
-  if (normalizedNext === "/staff-dashboard") return "moderator";
+  if (normalizedNext === "/staff-dashboard" || normalizedNext.startsWith("/staff-dashboard/")) return "moderator";
   if (normalizedNext === "/advertiser-dashboard") return "advertiser";
   return "finder";
 }
@@ -39380,6 +39599,9 @@ function updateAiAssistantRotatingPlaceholders({ force = false } = {}) {
 function startAiAssistantPlaceholderRotation() {
   if (aiAssistantPlaceholderTimer) return;
   aiAssistantPlaceholderTimer = window.setInterval(() => {
+    // On the dashboards these inputs are hidden and the rotation was rewriting
+    // the DOM every 2.8 s for nothing; a hidden tab doesn't need it either.
+    if (document.hidden || /dashboard$/.test(String(currentPage || "")) || currentPage === "staff-review") return;
     aiAssistantPlaceholderIndex += 1;
     updateAiAssistantRotatingPlaceholders();
   }, 2800);
@@ -48122,6 +48344,7 @@ function showPage(page, options = {}) {
     if (options.scroll !== false) window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     lastPage = currentPage;
     currentPage = targetPage;
+    if (targetPage !== previousPage) clearDashboardRefresh();
     closeRouteTransientModals(targetPage, previousPage);
     mountSectionSearchShell(targetPage);
     updateHomeAskAiLanguageCopy();
@@ -49926,6 +50149,16 @@ async function parseInitialDeepLink() {
   if (path === "/field-agent-dashboard") {
     showPage("home", { history: false, source: "retired_field_agent_route" });
     window.history.replaceState({ page: "home" }, "", "/");
+    return true;
+  }
+
+  const directReviewMatch = String(path || "").match(/^\/staff-dashboard\/review\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
+  if (directReviewMatch) {
+    if (authState?.user && ["moderator", "admin"].includes(derivePortalMode(authState.user, authState.user.portal_mode))) {
+      openStaffDirectReview(directReviewMatch[1].toLowerCase());
+    } else {
+      openAuthSignIn("moderator");
+    }
     return true;
   }
 
@@ -55214,6 +55447,7 @@ function startLpTitleExampleRotation(type = getListType()) {
   if (lpTitleExampleTimer) clearInterval(lpTitleExampleTimer);
   const examples = getLpTitleExamples(type);
   lpTitleExampleTimer = window.setInterval(() => {
+    if (document.hidden || currentPage !== "list-property") return;
     lpTitleExampleIndex = (lpTitleExampleIndex + 1) % examples.length;
     renderLpTitleExample(examples[lpTitleExampleIndex]);
   }, 2800);
