@@ -16,6 +16,7 @@ const {
 } = require('../utils/landTitleAvailability');
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
 const { pricePeriodSuffix: sharedPricePeriodSuffix } = require('../config/pricePeriods');
+const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
@@ -140,6 +141,11 @@ function publicPriceLabelFor(property = {}) {
   const raw = property.price == null ? '' : String(property.price).replace(/[^\d.]/g, '');
   const amount = Number(raw);
   if (!Number.isFinite(amount) || amount <= 0) return 'Price on application';
+  // C17: the found-online summary ("Guide price: …") printed the impossible
+  // figure; a price outside the plausibility bounds reads Price on application.
+  const extra = property.extra_fields && typeof property.extra_fields === 'object' ? property.extra_fields : {};
+  if (property.price_on_application === true || extra.price_review === 'implausible'
+    || isPriceImplausible({ ...property, price: amount })) return 'Price on application';
   const period = cleanText(property.price_period || '').toLowerCase();
   const currencyLabel = IS_SOUTH_AFRICA ? 'R' : 'UGX';
   const locale = IS_SOUTH_AFRICA ? 'en-ZA' : 'en-US';

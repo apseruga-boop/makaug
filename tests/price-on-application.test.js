@@ -198,3 +198,16 @@ test('scripts/fix-implausible-prices.js: dry run lists and writes nothing; --app
 test.after(async () => {
   try { await require('../config/database').pool.end(); } catch (_) {}
 });
+
+test('the found-online summary never prints an implausible "Guide price" (live check, 10 Oct)', () => {
+  const { buildThirdPartyPublicSummary, publicPriceLabelFor } = require('../services/publicListingCopy');
+  const land = { listing_type: 'land', area: 'Nakasero', district: 'Kampala', price: '3230000000000000000', price_period: 'once', source: 'found_online_property_source_v1' };
+  assert.equal(publicPriceLabelFor(land), 'Price on application');
+  const summary = buildThirdPartyPublicSummary(land, { found_online: true, source_name: 'agent', source_platform: 'x' });
+  assert.doesNotMatch(summary, /3,230,000|\d{13,}/);
+  assert.match(summary, /Guide price: Price on application/);
+  assert.equal(publicPriceLabelFor({ listing_type: 'rent', price: 1000000, price_period: 'month' }), 'UGX 1,000,000/month');
+  const seo = require('../services/publicSeoRenderService');
+  const row = seo.normalizeSeoListingRow({ id: '8e25bf4a-230b-4577-a424-70bf19d8664f', listing_type: 'land', title: 'Land in Nakasero', area: 'Nakasero', district: 'Kampala', price: '3230000000000000000', price_period: 'once', source: 'found_online_property_source_v1', copy_extra: { found_online: true, source_name: 'agent', source_platform: 'x', source_url: 'https://x.com/agent/status/1' } });
+  assert.doesNotMatch(JSON.stringify(row), /3,230,000|3230000000000/);
+});
