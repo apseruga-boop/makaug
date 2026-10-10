@@ -14,8 +14,12 @@ function rows(names, district, town = '') {
 // generated administrative gazetteer, not from hand-maintained UI lists.
 const CURATED_UGANDA_LOCATION_OVERRIDES = [
   {
-    name: 'Bujjuko', district: 'Wakiso', town: 'Wakiso', level: 'area',
-    aliases: ['Bujjuko', 'Bujuuko', 'Bujuko'], lat: 0.374, lng: 32.389,
+    // 10 Oct 2026: the place is spelled Bujuuko. Bujjuko and Bujuko stay as
+    // aliases so captions and rows already saved under the old spelling still
+    // resolve. Bare "Akright" stays on the Akright City node.
+    name: 'Bujuuko', district: 'Wakiso', town: 'Wakiso', level: 'area',
+    aliases: ['Bujuuko', 'Bujjuko', 'Bujuko', 'Bujuuko Akright', 'Bujjuko Akright'],
+    lat: 0.374, lng: 32.389,
     source: 'makaug_verified_location_override'
   },
   {
@@ -120,6 +124,14 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'wakiso_district_verified_marketplace_override'
   },
   {
+    // 10 Oct 2026: staff pick the plain town "Makindye-Ssabagabo". The county
+    // node below keeps the long municipality name. This city node wins an
+    // exact lookup of the plain name (city outranks county).
+    name: 'Makindye-Ssabagabo', district: 'Wakiso', town: 'Makindye-Ssabagabo', level: 'city',
+    aliases: ['Makindye-Ssabagabo', 'Makindye Ssabagabo', 'Makindye Sabagabo', 'Makindye-Sabagabo'],
+    source: 'makaug_verified_location_override_20261010'
+  },
+  {
     // 8 Oct 2026: "House in Lubowa, Makindye-Ssabagabo" raised "points to
     // Kampala" because only the UBOS county "Makindye-Ssabagabo Municipality"
     // existed, so the bare name fell through to the Kampala division Makindye.
@@ -174,7 +186,40 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     aliases: ['Lweza', 'Lweeza', 'Upper Lweza'],
     source: 'makaug_verified_spelling_alias'
   },
-  ...rows(['Mbalwa', 'Nakwero', 'Nsaggu'], 'Wakiso', 'Wakiso'),
+  ...rows(['Nakwero', 'Nsaggu'], 'Wakiso', 'Wakiso'),
+  {
+    // Mbalwa sits on the Namugongo side of Kira Municipality. Staff save it
+    // under Kira, not the Wakiso town-council fallback.
+    name: 'Mbalwa', district: 'Wakiso', town: 'Kira', level: 'area',
+    aliases: ['Mbalwa'],
+    source: 'makaug_verified_location_override_20261010'
+  },
+  {
+    // Not a UBOS ward. Hoima Road / Nabweru side of Nansana Municipality.
+    // No coordinates until a cited point is added.
+    name: 'Nkoowe', district: 'Wakiso', town: 'Nansana', level: 'area',
+    aliases: ['Nkoowe', 'Nkowe'],
+    source: 'makaug_verified_location_override_20261010'
+  },
+  {
+    // Housing estate in Kira, not a parish. No coordinates until a cited point.
+    name: 'Shimoni Estate', district: 'Wakiso', town: 'Kira', level: 'area',
+    aliases: ['Shimoni Estate', 'Shimoni', 'Kira Shimoni'],
+    source: 'makaug_verified_location_override_20261010'
+  },
+  {
+    // North of Gayaza. Not in the UBOS gazetteer. No coordinates until cited.
+    name: 'Manyangwa', district: 'Wakiso', town: 'Gayaza', level: 'area',
+    aliases: ['Manyangwa'],
+    source: 'makaug_verified_location_override_20261010'
+  },
+  {
+    // UBOS files Masooli as a Kasangati Town Council ward. Staff listings for
+    // this corridor are under Gayaza, so the override parents it there.
+    name: 'Masooli', district: 'Wakiso', town: 'Gayaza', level: 'area',
+    aliases: ['Masooli', 'Masoli'],
+    source: 'makaug_verified_location_override_20261010'
+  },
   ...rows(['Mayangayanga'], 'Mukono', 'Mukono'),
 
   // These names have more than one verified Uganda parent. Keeping one node

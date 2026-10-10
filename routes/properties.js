@@ -19,6 +19,8 @@ const {
 } = require('../services/emailService');
 const {
   buildOwnerStatusMessage,
+  STAFF_SOURCED_OWNER_CHECKLIST_NOTE,
+  isWhatsappEmployeeIntakeListing,
   buildAutomatedListingReview,
   createOwnerEditToken,
   getDirectWhatsAppUrl,
@@ -137,6 +139,7 @@ const {
 } = require('../utils/listingTimestamp');
 const {
   PROVINCES,
+  areaTextMatchesCanonicalLocation,
   canonicalLocationByKey,
   canonicalDisplayLocationForRow,
   canonicalLocationForRow,
@@ -151,6 +154,7 @@ const {
   normalizeLocationKey
 } = require('../utils/locationRegistry');
 const { regionForDistrict } = require('../utils/ugandaLocationHierarchy');
+const { kampalaTownsForArea } = require('../utils/kampalaDivisions');
 
 const router = express.Router();
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
@@ -2210,7 +2214,7 @@ function canonicalApprovalLocationForRecord(row = {}, options = {}) {
   if (!IS_SOUTH_AFRICA && candidate.level === 'district' && !allowDistrictNode) return null;
   if (exact && stored && exact.key !== stored.key) return null;
   if (normalizeDistrict(row.district) !== candidate.district) return null;
-  if (normalizeLocationKey(row.area) !== normalizeLocationKey(candidate.name)) return null;
+  if (!areaTextMatchesCanonicalLocation(row.area, candidate)) return null;
   return candidate;
 }
 
@@ -2273,7 +2277,14 @@ router.get('/locations/catalog', (req, res) => {
   const locations = canonicalLocationOptions()
     .filter((item) => (IS_SOUTH_AFRICA ? item.province === district : item.district === district))
     .filter((item) => !['district', 'region', 'province'].includes(item.level))
-    .map((item) => publicCanonicalLocationPayload({ ...item, match: 'exact_alias', confidence: 1, auto_resolvable: true }));
+    .flatMap((item) => {
+      const payload = publicCanonicalLocationPayload({ ...item, match: 'exact_alias', confidence: 1, auto_resolvable: true });
+      const towns = !IS_SOUTH_AFRICA && item.district === 'Kampala'
+        ? kampalaTownsForArea(item.location || item.name)
+        : [];
+      if (towns.length < 2) return [payload];
+      return towns.map((town) => ({ ...payload, town, city: town }));
+    });
   return res.json({
     ok: true,
     data: locations,
@@ -5052,7 +5063,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           : confirmedCanonicalLocation.level !== 'region'
             && (confirmedCanonicalLocation.level !== 'district' || humanLocationConfirmed));
       const canonicalLocationMatchesStoredFields = canonicalLocationIsSpecific
-        && normalizeLocationKey(current.area) === normalizeLocationKey(confirmedCanonicalLocation.name)
+        && areaTextMatchesCanonicalLocation(current.area, confirmedCanonicalLocation)
         && normalizeDistrict(current.district) === normalizeDistrict(confirmedCanonicalLocation.district);
       if (!canonicalLocationMatchesStoredFields) {
         if (!handleApprovalBlocker({
@@ -5288,6 +5299,13 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       };
       approvalWarnings.push('Found-online approval used; staff/admin confirmed location and overrode non-location review checks.');
     }
+    const staffSourcedOwnerChecklistWaived = nextStatus === 'approved' && isWhatsappEmployeeIntakeListing(current);
+    if (staffSourcedOwnerChecklistWaived) {
+      const note = STAFF_SOURCED_OWNER_CHECKLIST_NOTE;
+      const existingNotes = cleanText(reviewNotes);
+      reviewNotes = existingNotes.includes(note) ? existingNotes : [existingNotes, note].filter(Boolean).join('\n');
+      approvalWarnings.push(note);
+    }
     const sourcedCandidateExtraFields = sourcedCandidateDispensation
       ? {
         sourced_candidate_special_dispensation: sourcedCandidateDispensation,
@@ -5316,6 +5334,10 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       }
       : null;
     const moderationExtraFields = {
+      ...(staffSourcedOwnerChecklistWaived ? {
+        staff_sourced_owner_checklist_waived: true,
+        staff_sourced_owner_checklist_note: STAFF_SOURCED_OWNER_CHECKLIST_NOTE
+      } : {}),
       ...(sourcedCandidateExtraFields || {}),
       ...(identityVerificationExtraFields || {}),
       ...(structuredRejectionExtraFields || {}),
@@ -5518,6 +5540,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           ...(locationReclassificationExtraFields ? { location_reclassification_confirmation: locationReclassificationExtraFields } : {}),
           ...(humanIntegrityOverride ? { human_integrity_override: humanIntegrityOverride } : {}),
           ...(humanApprovalOverride ? { human_approval_override: humanApprovalOverride } : {}),
+          ...(staffSourcedOwnerChecklistWaived ? { staff_sourced_owner_checklist_note: STAFF_SOURCED_OWNER_CHECKLIST_NOTE } : {}),
           ...(structuredRejectionReasons.length ? { structured_rejection_reasons: structuredRejectionReasons } : {}),
           ...(nextStatus === 'rejected' ? {
             rejection_ui_control: rejectionUiControl || 'not_sent',

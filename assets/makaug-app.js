@@ -15580,6 +15580,7 @@ function moderationSourceUrl(review = {}) {
 
 function moderationRequiresIdentity(review = {}) {
   const extra = moderationExtra(review);
+  if (cleanText(review.source || extra.source || extra.intake_source || "").toLowerCase() === "whatsapp_employee_intake") return false;
   if (extra.identity_verification?.required === true) return true;
   if (extra.identity_verification?.verified === true) return false;
   if (review.id_number || review.id_document_url || extra.verify?.nin || extra.verify?.id_document_url) return true;
@@ -27163,6 +27164,23 @@ function adminReviewSetAreaFromNeighborhood() {
 // The town for a neighbourhood from the district's tree: the saved town when
 // it holds that neighbourhood, else the town that does (e.g. Luzira, saved as
 // "Kampala", is in Nakawa division).
+function adminReviewCityToSave(dropdownCity = "", canonicalTown = "") {
+  return String(dropdownCity || "").trim() || String(canonicalTown || "").trim();
+}
+
+function adminReviewTownAfterCanonicalResolve(currentCity = "", canonicalTown = "", tree = [], neighbourhood = "") {
+  const city = String(currentCity || "").trim();
+  const name = String(neighbourhood || "").trim();
+  const holds = Array.isArray(tree) && tree.some((node) => (
+    node.city === city && (node.neighborhoods || []).some((item) => item.name === name)
+  ));
+  return holds ? city : (String(canonicalTown || "").trim() || city);
+}
+
+function adminReviewShouldClearUnmatchedLocation(fields = {}) {
+  return !String(fields.area || fields.district || fields.neighborhood || "").trim();
+}
+
 function adminReviewTownForNeighborhood(district = "", city = "", neighborhood = "") {
   const tree = getDistrictLocationTree(district);
   const name = String(neighborhood || "").trim();
@@ -27294,11 +27312,18 @@ function applyAdminReviewCanonicalLocation(location = {}) {
   adminReviewCanonicalLocationResolution = location;
   const canonicalDistrict = location.province || location.district;
   const canonicalTown = location.city || canonicalTownForLocation(location);
+  const currentCity = document.getElementById("admin-review-city-edit")?.value || "";
+  const town = adminReviewTownAfterCanonicalResolve(
+    currentCity,
+    canonicalTown,
+    getDistrictLocationTree(canonicalDistrict),
+    location.name
+  );
   adminSetReviewEditValue("admin-review-region-edit", location.region || regionForDistrict(canonicalDistrict));
   adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(location.region, canonicalDistrict), canonicalDistrict);
-  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(canonicalDistrict, canonicalTown), canonicalTown);
-  ensureSelectHasValue("admin-review-city-edit", canonicalTown, canonicalTown);
-  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(canonicalDistrict, canonicalTown, location.name), location.name);
+  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(canonicalDistrict, town), town);
+  ensureSelectHasValue("admin-review-city-edit", town, town);
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(canonicalDistrict, town, location.name), location.name);
   ensureSelectHasValue("admin-review-neighborhood-edit", location.name, location.name);
   const areaEl = document.getElementById("admin-review-area-edit");
   if (areaEl) {
@@ -27604,8 +27629,11 @@ async function adminReviewAutoPopulateLocationFromSource(review = {}) {
   if (resolution.status === "matched") {
     applyAdminReviewCanonicalLocation(resolution.location);
     adminReviewSetAddressSearchStatus("Stored area resolved through the shared canonical registry. Confirm the pin before approval.", "green");
-  } else {
+  } else if (adminReviewShouldClearUnmatchedLocation(adminReviewCurrentLocationFields())) {
     clearAdminReviewCanonicalLocation();
+    adminReviewSetAddressSearchStatus("Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
+  } else {
+    adminReviewCanonicalLocationResolution = null;
     adminReviewSetAddressSearchStatus("Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
   }
   adminReviewScheduleLocationSync();
@@ -28512,7 +28540,7 @@ function collectAdminReviewListingPatch() {
     : null;
   const district = canonical?.province || canonical?.district || get("admin-review-district-edit");
   const region = canonical?.region || (district ? regionForDistrict(district) : get("admin-review-region-edit"));
-  const city = canonical?.town || get("admin-review-city-edit");
+  const city = adminReviewCityToSave(get("admin-review-city-edit"), canonical?.town || canonical?.city || "");
   const neighborhood = canonical?.name || get("admin-review-neighborhood-edit");
   const area = canonical?.name || get("admin-review-area-edit");
   const coordinates = adminReviewNormalizeCoordinateInputs(

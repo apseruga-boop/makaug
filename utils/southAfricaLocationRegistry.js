@@ -180,6 +180,14 @@ function canonicalLocationByKey(value = '') {
   return clone(registryByKey.get(String(value || '').trim().toLowerCase()));
 }
 
+function areaTextMatchesCanonicalLocation(area = '', candidate = null) {
+  if (!candidate) return false;
+  const areaKey = normalizeLocationKey(area);
+  if (!areaKey) return false;
+  if (areaKey === normalizeLocationKey(candidate.name || candidate.suburb)) return true;
+  return (candidate.aliases || []).some((alias) => normalizeLocationKey(alias) === areaKey);
+}
+
 const prominentExactDefaults = new Map([
   ['gqeberha', entryKey('Eastern Cape', 'Gqeberha')],
   ['port elizabeth', entryKey('Eastern Cape', 'Gqeberha')],
@@ -505,6 +513,7 @@ module.exports = {
   aliasesForCanonicalLocation,
   aliasesForDistrict,
   canonicalDisplayLocationForRow,
+  areaTextMatchesCanonicalLocation,
   canonicalLocationByKey,
   canonicalLocationForRow,
   canonicalLocationOptions,

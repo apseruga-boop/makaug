@@ -75,11 +75,30 @@ function kampalaDivisionForArea(name = '') {
   return DIVISION_BY_AREA.get(key(name)) || DIVISION_BY_AREA.get(baseAreaKey(name)) || '';
 }
 
+// Kisaasi sits on the Kawempe/Nakawa boundary. The registry keeps one node
+// (default town Nakawa, last in this list). Staff may save either division.
+const BOUNDARY_AREAS = new Map([
+  ['kisaasi', ['Kawempe', 'Nakawa']],
+  ['kisasi', ['Kawempe', 'Nakawa']]
+]);
+
+function kampalaTownsForArea(name = '') {
+  const boundary = BOUNDARY_AREAS.get(key(name)) || BOUNDARY_AREAS.get(baseAreaKey(name));
+  if (boundary) return boundary.slice();
+  const division = kampalaDivisionForArea(name);
+  return division ? [division] : [];
+}
+
 // The town to file a Kampala location under: a division where known, else
-// "Kampala".
+// "Kampala". A boundary area keeps the division already stored in currentTown
+// when that division is one of its parents; otherwise the default (Nakawa for
+// Kisaasi) so an empty or "Kampala" town does not flip to Kawempe.
 function kampalaTownFor(name = '', currentTown = '') {
   const aliased = DIVISION_TOWN_ALIASES.get(key(currentTown));
-  if (aliased) return aliased;
+  const boundary = BOUNDARY_AREAS.get(key(name)) || BOUNDARY_AREAS.get(baseAreaKey(name));
+  if (aliased && boundary && boundary.includes(aliased)) return aliased;
+  if (aliased && !boundary) return aliased;
+  if (boundary) return boundary[boundary.length - 1];
   return kampalaDivisionForArea(name) || 'Kampala';
 }
 
@@ -87,5 +106,6 @@ module.exports = {
   KAMPALA_DIVISIONS,
   AREAS_BY_DIVISION,
   kampalaDivisionForArea,
-  kampalaTownFor
+  kampalaTownFor,
+  kampalaTownsForArea
 };

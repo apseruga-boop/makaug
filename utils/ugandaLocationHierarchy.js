@@ -1,4 +1,5 @@
 const { DISTRICTS } = require('./constants');
+const { kampalaTownsForArea } = require('./kampalaDivisions');
 const {
   canonicalLocationByKey,
   canonicalLocationOptions,
@@ -68,14 +69,24 @@ function getDistrictLocationTree(district) {
     .filter((item) => item.district === cleanDistrict && !['district', 'region'].includes(item.level));
   if (!locations.length) return [];
   const groups = new Map();
-  locations.forEach((item) => {
-    const town = clean(item.town) || (['city', 'town'].includes(item.level) ? item.location : `${cleanDistrict} Town`);
+  const addToTown = (town, item) => {
+    if (!town) return;
     if (!groups.has(town)) groups.set(town, new Map());
+    if (groups.get(town).has(item.location)) return;
     groups.get(town).set(item.location, {
       name: item.location,
       ...(Number.isFinite(item.latitude) ? { lat: item.latitude } : {}),
       ...(Number.isFinite(item.longitude) ? { lng: item.longitude } : {})
     });
+  };
+  locations.forEach((item) => {
+    const town = clean(item.town) || (['city', 'town'].includes(item.level) ? item.location : `${cleanDistrict} Town`);
+    addToTown(town, item);
+    if (cleanDistrict === 'Kampala') {
+      kampalaTownsForArea(item.location)
+        .filter((extraTown) => extraTown && extraTown !== town)
+        .forEach((extraTown) => addToTown(extraTown, item));
+    }
   });
   return Array.from(groups.entries())
     .map(([city, neighborhoods]) => ({
@@ -146,9 +157,26 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
     errors.push('area/neighbourhood must be more specific than a district');
   }
 
+  const staffCity = clean(fields.city);
+  const fallbackTown = !clean(canonical?.town) || clean(canonical?.town) === `${district} Town`;
+  let staffCityKeptOverFallback = false;
   if (canonical && canonical.level !== 'region' && (canonical.level !== 'district' || allowDistrictNode)) {
-    city = canonical.town || city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
     neighborhood = canonical.name;
+    const boundaryTowns = canonical.district === 'Kampala' ? kampalaTownsForArea(canonical.name) : [];
+    const allowedTowns = boundaryTowns.length
+      ? boundaryTowns
+      : (clean(canonical.town) ? [clean(canonical.town)] : []);
+    if (!staffCity) {
+      city = clean(canonical.town) || (canonical.level === 'district' ? `${canonical.name} Town` : '');
+    } else if (allowedTowns.includes(staffCity)) {
+      city = staffCity;
+    } else if (fallbackTown) {
+      // A town the moderator picked must not be replaced by "Wakiso Town".
+      city = staffCity;
+      staffCityKeptOverFallback = true;
+    } else {
+      city = clean(canonical.town) || staffCity;
+    }
   }
 
   const tree = getDistrictLocationTree(district);
@@ -167,7 +195,10 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
       ? (cityNode.neighborhoods || []).some((n) => n.name === neighborhood)
       : false;
     if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name)) {
-      errors.push('neighbourhood must belong to the selected district and town/city');
+      const staffCityInTree = staffCityKeptOverFallback && tree.some((item) => item.city === city);
+      if (!staffCityInTree) {
+        errors.push('neighbourhood must belong to the selected district and town/city');
+      }
     }
   }
 
