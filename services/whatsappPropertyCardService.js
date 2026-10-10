@@ -1,5 +1,7 @@
 'use strict';
 
+const { isPriceImplausible } = require('../utils/pricePlausibility');
+
 const { tenantFor } = require('../packages/shared-country-core');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
@@ -102,7 +104,9 @@ function meaningfulWhatsappPeriod(row = {}) {
 function formatWhatsappPropertyPrice(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   const amount = Number(row.price);
-  if (extra.price_on_application === true || !Number.isFinite(amount) || amount <= 0) {
+  // C17: an implausible price is never sent as a number.
+  if (row.price_on_application === true || extra.price_on_application === true || extra.price_review === 'implausible'
+    || !Number.isFinite(amount) || amount <= 0 || isPriceImplausible(row)) {
     return 'Price on application (POA)';
   }
   let amountText = '';

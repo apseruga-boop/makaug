@@ -13,6 +13,7 @@ const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require
 const { tenantFor } = require('../packages/shared-country-core');
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
 const { pricePeriodSuffix: sharedPricePeriodSuffix } = require('../config/pricePeriods');
+const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
@@ -311,6 +312,7 @@ function normalizeSeoListingRow(row = {}) {
   const foundOnline = foundOnlinePublic || ['true', '1', 'yes'].includes(String(row.found_online_candidate || '').toLowerCase());
   const review = copyReviewState(copyRow, copyExtra);
   const canonicalDisplay = canonicalDisplayLocationForRow(row);
+  const priceImplausible = isPriceImplausible(row) || copyExtra.price_review === 'implausible';
   const title = foundOnlinePublic
     ? buildThirdPartyPublicTitle(copyRow, copyExtra)
     : (review.staffTitle ? collapseDuplicatePublicTransaction(row.title) : cleanListingTitle(row));
@@ -332,7 +334,10 @@ function normalizeSeoListingRow(row = {}) {
     found_online_notice: foundOnlinePublic ? plainText(foundOnlinePublicNotice(copyRow, copyExtra)) : '',
     area: plainText(canonicalDisplay.area),
     district: plainText(canonicalDisplay.district),
-    price: Number(row.price || 0) || 0,
+    // C17: an implausible price is shown as "Price on application" and the page is noindexed.
+    price: priceImplausible ? 0 : (Number(row.price || 0) || 0),
+    price_implausible: priceImplausible,
+    price_on_application: row.price_on_application === true || priceImplausible,
     price_period: plainText(row.price_period),
     transaction_type: plainText(row.transaction_type),
     bedrooms: Number(row.bedrooms || 0) || 0,
@@ -367,7 +372,7 @@ async function loadPublicSeoListings(db, options = {}) {
     const result = await db.query(
       `SELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
-       p.price, p.price_period, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.price, p.price_period, p.price_on_application, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
        p.extra_fields->>'city' AS city,
        p.extra_fields->>'neighborhood' AS neighborhood,
@@ -409,7 +414,7 @@ async function loadPublicSeoListing(db, propertyId) {
     const result = await db.query(
       `SELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
-       p.price, p.price_period, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.price, p.price_period, p.price_on_application, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
        p.extra_fields->>'city' AS city,
        p.extra_fields->>'neighborhood' AS neighborhood,
@@ -472,6 +477,8 @@ function titlePriceLabel(listing = {}) {
 // (50ce7080 showed "— USh 2").
 function titlePriceSuffix(listing = {}) {
   const category = ['student', 'students'].includes(String(listing.listing_type || '').toLowerCase()) ? 'students' : String(listing.listing_type || '').toLowerCase();
+  // C17: a POA or implausible price reads "Price on application" in the title.
+  if (listing.price_implausible || (listing.price_on_application && !(Number(listing.price) > 0))) return ' — Price on application';
   return Number(listing.price || 0) > 0 && priceInSeoBounds(listing, category) ? ` — ${titlePriceLabel(listing)}` : '';
 }
 

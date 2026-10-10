@@ -177,7 +177,7 @@ test('the browser price label: no "/neg" or "/poa" codes', () => {
 test('every write path turns the POA period into price_on_application and drops the number', () => {
   const properties = read('routes/properties.js');
   assert.match(properties, /if \(patch\.price_period === 'poa'\) patch\.price_on_application = true;/);
-  assert.match(properties, /const priceOnApplication = parseBooleanLike\(body\.price_on_application \|\| body\.priceOnApplication, false\) \|\| submittedPricePeriod === 'poa';/);
+  assert.match(properties, /(?:const|let) priceOnApplication = parseBooleanLike\(body\.price_on_application \|\| body\.priceOnApplication, false\) \|\| submittedPricePeriod === 'poa';/);
   assert.match(read('routes/staff.js'), /if \(normalized\.price_period === 'poa'\) normalized\.price_on_application = true;/);
   assert.match(read('routes/admin.js'), /if \(\(!property\.price \|\| property\.price <= 0\) && !isPriceOnApplication\(property\)\) blockers\.push\('price'\);/);
 });

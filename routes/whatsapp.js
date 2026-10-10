@@ -1,3 +1,4 @@
+const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { agentGreetingName } = require('../services/agentNameService');
 const express = require('express');
 const crypto = require('crypto');
@@ -9614,6 +9615,16 @@ function typeLabel(type, lang) {
   return t(lang, map[type] || type);
 }
 
+// C17: a listing row's price for WhatsApp. POA, or a price outside the
+// plausibility bounds, is "Price upon application", never the raw number.
+function formatListingPrice(row = {}) {
+  const extra = row && row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  if (row?.price_on_application === true || extra.price_on_application === true || extra.price_review === 'implausible' || isPriceImplausible(row || {})) {
+    return 'Price upon application';
+  }
+  return formatPrice(row?.price, row?.price_period);
+}
+
 function formatPrice(price, rawPeriod) {
   if (!price || Number.isNaN(Number(price))) return 'Price upon application';
   const v = Number(price);
@@ -14130,7 +14141,7 @@ async function formatNoMatchOrFallbackReply({
     || (['rent', 'student'].includes(normalizedSearchType) ? 'mo' : null);
   const budgetClause = budgetUgx ? ` under *${formatPrice(budgetUgx, budgetPeriodForCopy)}*` : '';
   const cheapestClause = cheapest
-    ? ` The lowest I have is *${formatPrice(cheapest.price, cheapest.price_period)}*.`
+    ? ` The lowest I have is *${formatListingPrice(cheapest)}*.`
     : '';
   const copy = {
     en: [
@@ -14331,7 +14342,7 @@ function formatPropertySearchMessageLegacy(lang, rows, location, searchType) {
     const studentUniversityLine = studentUniversityLineForWhatsapp(r);
     if (studentUniversityLine) lines.push(`   🎓 ${studentUniversityLine}`);
     lines.push(`   🏷️ ${typeLabel(r.listing_type, lang)}${meta ? ` • ${meta}` : ''}`);
-    lines.push(`   💰 ${formatPrice(r.price, r.price_period)}`);
+    lines.push(`   💰 ${formatListingPrice(r)}`);
     const availability = normalizeInput(getExtraField(r, 'available_from') || getExtraField(r, 'availability'));
     if (availability) lines.push(`   📅 ${copy.available || cardCopy.en.available}: ${availability}`);
     const sourceLine = formatFoundOnlineSourceLine(r, lang);

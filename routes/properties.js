@@ -120,6 +120,7 @@ const {
   humanPropertyTypeLabel
 } = require('../utils/commercialClassification');
 const { listingPriceQuality, IMPOSSIBLE_PRICE_UGX } = require('../utils/listingPriceQuality');
+const { pricePlausibility } = require('../utils/pricePlausibility');
 const { listingRealPhotoCheck, NO_REAL_PHOTO_CODE, NO_REAL_PHOTO_MESSAGE } = require('../utils/realListingPhoto');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const { CANONICAL_PROPERTY_CURRENCY, propertyPriceMetadata, configuredRateToCanonicalCurrency, normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
@@ -645,6 +646,19 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
       patch.price_original = null;
       patch.price_fx_rate_ugx = null;
       patch.price_fx_as_of = null;
+    }
+  }
+  // C17: a price above the plausibility bounds can't be saved; fix the number
+  // or choose Price on application.
+  if (Object.prototype.hasOwnProperty.call(patch, 'price') && patch.price != null && patch.price_on_application !== true) {
+    const plausibility = pricePlausibility({
+      listing_type: patch.listing_type || existing.listing_type,
+      transaction_type: patch.transaction_type || existing.transaction_type,
+      price_period: patch.price_period || existing.price_period,
+      price: toNullableFloat(patch.price)
+    });
+    if (plausibility.reason === 'price_above_plausible_bounds') {
+      throw validateError(`That price is outside the plausible range for this listing (up to UGX ${plausibility.bounds[1].toLocaleString('en-UG')}${plausibility.kind.includes('monthly') ? ' a month' : ''}). Check the number, or choose Price on application.`);
     }
   }
 
@@ -3757,14 +3771,13 @@ router.post('/', async (req, res, next) => {
     });
     // C20: the POA period means Price on application; any typed number is dropped.
     const submittedPricePeriod = normalizePricePeriodForWrite(cleanText(body.price_period)) || null;
-    const priceOnApplication = parseBooleanLike(body.price_on_application || body.priceOnApplication, false) || submittedPricePeriod === 'poa';
+    let priceOnApplication = parseBooleanLike(body.price_on_application || body.priceOnApplication, false) || submittedPricePeriod === 'poa';
     if (priceOnApplication) {
       priceMetadata.price = null;
       priceMetadata.price_original = null;
       priceMetadata.price_fx_rate_ugx = null;
       priceMetadata.price_fx_as_of = null;
     }
-    const price = priceMetadata.price;
     const transactionType = normalizeCommercialTransactionType(
       body.transaction_type || body.transactionType || body.commercial_mode || body.commercial_intent,
       {
@@ -3773,6 +3786,28 @@ router.post('/', async (req, res, next) => {
         description
       }
     ) || (listingType === 'land' ? 'sale' : null);
+    // C17: a price outside the plausibility bounds is stored as Price on
+    // application with price_review 'implausible' (the form warns first and
+    // offers POA). Don't guess a corrected number; keep the typed figure.
+    let implausibleSubmittedPrice = null;
+    if (!priceOnApplication && priceMetadata.price != null) {
+      const plausibility = pricePlausibility({ listing_type: listingType, transaction_type: transactionType, price_period: submittedPricePeriod, price: priceMetadata.price });
+      if (!plausibility.plausible) {
+        implausibleSubmittedPrice = {
+          price: priceMetadata.price,
+          price_original: priceMetadata.price_original,
+          price_original_currency: priceMetadata.price_original_currency,
+          price_period: submittedPricePeriod,
+          bounds_ugx: plausibility.bounds
+        };
+        priceOnApplication = true;
+        priceMetadata.price = null;
+        priceMetadata.price_original = null;
+        priceMetadata.price_fx_rate_ugx = null;
+        priceMetadata.price_fx_as_of = null;
+      }
+    }
+    const price = priceMetadata.price;
     const commercialPropertyType = listingType === 'commercial'
       ? normalizeCommercialPropertyType(body.property_type || body.commercial_type, { title, description })
       : cleanText(body.property_type);
@@ -4006,6 +4041,11 @@ router.post('/', async (req, res, next) => {
     extraFields.price_fx_rate_ugx = priceMetadata.price_fx_rate_ugx;
     extraFields.price_fx_as_of = priceMetadata.price_fx_as_of;
     extraFields.price_on_application = priceOnApplication;
+    if (implausibleSubmittedPrice) {
+      extraFields.price_review = 'implausible';
+      extraFields.price_review_reason = 'submitted_price_outside_plausible_bounds';
+      extraFields.implausible_price_raw = implausibleSubmittedPrice;
+    }
     extraFields.price_conversion_basis = priceMetadata.price_original_currency !== CANONICAL_PROPERTY_CURRENCY
       ? `Original submitted ${priceMetadata.price_original_currency} guide converted to canonical ${CANONICAL_PROPERTY_CURRENCY} for search and sorting.`
       : `Original submitted ${CANONICAL_PROPERTY_CURRENCY} guide stored without conversion.`;
@@ -4470,6 +4510,7 @@ router.post('/', async (req, res, next) => {
         imagesUploaded: imageUrls.length,
         inquiry_reference: inquiryReference,
         new_until: newUntil,
+        ...(implausibleSubmittedPrice ? { price_saved_as_poa: true, price_warning: 'That price looks outside the normal range, so the listing was saved as Price on application. Our team will check it with you.' } : {}),
         owner_preview_url: getOwnerPreviewUrl(ownerNotificationListing, ownerEditToken),
         owner_edit_token_expires_at: ownerEditTokenExpiresAt,
         support_notified: !!supportEmailNotification.sent,

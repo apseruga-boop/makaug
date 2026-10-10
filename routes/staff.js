@@ -2412,6 +2412,20 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
       normalized.price_fx_as_of = null;
     }
   }
+  // C17: staff can't save a price outside the plausibility bounds; they fix
+  // the number or tick Price on application.
+  if (Object.prototype.hasOwnProperty.call(normalized, 'price') && normalized.price != null && normalized.price_on_application !== true) {
+    const plausibility = require('../utils/pricePlausibility').pricePlausibility({
+      listing_type: normalized.listing_type || existing.listing_type,
+      transaction_type: normalized.transaction_type || existing.transaction_type,
+      price_period: normalized.price_period || existing.price_period,
+      price: normalized.price
+    });
+    if (plausibility.reason === 'price_above_plausible_bounds') {
+      const [min, max] = plausibility.bounds;
+      errors.push(`That price is outside the plausible range for this listing (UGX ${min.toLocaleString('en-UG')} to ${max.toLocaleString('en-UG')}${plausibility.kind.includes('monthly') ? ' a month' : ''}). Check the number, or tick Price on application.`);
+    }
+  }
 
   return {
     patch: normalized,

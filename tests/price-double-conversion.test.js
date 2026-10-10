@@ -55,7 +55,8 @@ test('metadata: a shilling figure is never converted as USD', () => {
 test('quality: hard limits that no override can pass', () => {
   const impossible = listingPriceQuality({ listing_type: 'sale', price: 3_230_000_000_000_000_000, price_period: 'once' }, { highMonthlyPriceConfirmed: true, priceBasisConfirmed: true });
   assert.equal(impossible.ok, false);
-  assert.deepEqual(impossible.hard_reasons, ['price_impossible_above_1e12']);
+  // C17 adds the plausibility bound as a second hard reason.
+  assert.deepEqual(impossible.hard_reasons, ['price_impossible_above_1e12', 'price_above_plausible_bounds']);
   assert.equal(impossible.blocked_even_with_override, true);
   const usdLooksUgx = listingPriceQuality({ listing_type: 'sale', price: 9_500_000 * 3800, price_original: 9_500_000, price_original_currency: 'USD' }, { highMonthlyPriceConfirmed: true });
   assert.ok(usdLooksUgx.hard_reasons.includes('usd_original_looks_like_ugx'));

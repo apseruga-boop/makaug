@@ -8539,6 +8539,43 @@ function fmtP(v, p) {
   return period === "neg" || period === "negotiable" ? `${formatted} · ${translateListingLabel("Negotiable")}` : formatted;
 }
 
+// C17: a listing's price for display. POA, or a price outside the
+// plausibility bounds, is "Price upon application", never the raw number.
+function listingPriceNeedsCheck(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  if (extra.price_review === "implausible") return true;
+  const transaction = p?.transaction_type || extra.transaction_type || "";
+  return !listingPriceIsPlausible(p?.price, p?.listing_type || p?.type || "", p?.price_period || p?.period || "", transaction);
+}
+
+// C17: the listing form warns about a price outside the plausible range and
+// offers Price on application (the server stores such a price as POA).
+function updateLpPricePlausibilityWarning(type = "", priceNum = 0, periodRaw = "") {
+  const warning = document.getElementById("lp-price-plausibility-warning");
+  if (!warning) return;
+  const transaction = document.getElementById("lp-transaction-type")?.value || document.getElementById("lp-commercial-mode")?.value || "";
+  const implausible = periodRaw !== "poa" && Number(priceNum) > 0 && !listingPriceIsPlausible(priceNum, type, periodRaw, transaction);
+  warning.classList.toggle("hidden", !implausible);
+  if (!implausible) { warning.textContent = ""; return; }
+  warning.innerHTML = `${adminEscape(translateListingLabel("That price looks outside the normal range for this kind of listing. Check the number (and whether it is per month), or list it as Price on application."))} <button type="button" onclick="useLpPriceOnApplication()" class="ml-1 underline font-black">${adminEscape(translateListingLabel("Use Price on application"))}</button>`;
+}
+
+function useLpPriceOnApplication() {
+  const select = document.getElementById("lp-period");
+  const priceInput = document.getElementById("lp-price");
+  if (select && [...select.options].some((option) => option.value === "poa")) select.value = "poa";
+  else if (priceInput) priceInput.value = "";
+  if (typeof updateListPreview === "function") updateListPreview();
+}
+
+function fmtListingPrice(p = {}, periodOverride = null) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  if (p?.price_on_application === true || extra.price_on_application === true || listingPriceNeedsCheck(p)) {
+    return translateListingLabel("Price upon application");
+  }
+  return fmtP(p?.price || 0, periodOverride ?? (p?.period || p?.price_period || ""));
+}
+
 function propertyOriginalCurrencyGuide(p = {}) {
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
   const currency = String(p?.price_original_currency || extra.price_original_currency || "UGX").trim().toUpperCase();
@@ -10578,7 +10615,7 @@ function resolveCurrentAgentProfile() {
 	        <div class="border border-gray-200 rounded-xl p-3 bg-white">
 	          <button onclick="openPropertyCardDetail(event, ${idArg})" class="text-left font-bold text-gray-800 line-clamp-1 hover:text-green-700">${p.title}</button>
 	          <p class="text-xs text-gray-500 mt-1">${p.area}, ${p.district}</p>
-	          <div class="text-sm font-bold text-green-700 mt-1">${fmtP(p.price, p.period)}</div>
+	          <div class="text-sm font-bold text-green-700 mt-1">${fmtListingPrice(p)}</div>
 	          ${reason ? `<div class="mt-2 inline-flex rounded-full bg-green-50 border border-green-100 px-2 py-1 text-[11px] font-semibold text-green-800">${adminEscape(reason)}</div>` : ""}
 	          <div class="mt-2 text-xs text-gray-500 flex gap-3">
 	            <span>👁 ${getPropertyViewCount(p.id)} views</span>
@@ -11460,7 +11497,7 @@ function renderBrokerDashboardListingCard(p) {
             <span class="shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${statusMeta.className}">${adminEscape(statusMeta.label)}</span>
           </div>
           <p class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(p.subtype || p.type || "Property")}</p>
-          <div class="text-sm font-bold text-green-700 mt-2">${fmtP(p.price || 0, p.period || p.price_period || "")}</div>
+          <div class="text-sm font-bold text-green-700 mt-2">${fmtListingPrice(p)}</div>
           <div class="mt-3 grid grid-cols-4 gap-2 text-xs text-gray-600">
             <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1"><strong>${brokerMetric(views)}</strong><br>Views</span>
             <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1"><strong>${brokerMetric(saves)}</strong><br>Saves</span>
@@ -12555,7 +12592,7 @@ async function shareBrokerListing(id) {
     toast("Listing not found.");
     return;
   }
-  const text = `${listing.title || "makaug property"}\n${[listing.area, listing.district].filter(Boolean).join(", ")}\n${fmtP(listing.price || 0, listing.period || listing.price_period || "")}\n${getPropertyShareUrl(listing)}`;
+  const text = `${listing.title || "makaug property"}\n${[listing.area, listing.district].filter(Boolean).join(", ")}\n${fmtListingPrice(listing)}\n${getPropertyShareUrl(listing)}`;
   try {
     if (navigator.share) {
       await navigator.share({ title: listing.title || "makaug property", text, url: getPropertyShareUrl(listing) });
@@ -13198,7 +13235,7 @@ async function renderFieldDashboard() {
             <span class="text-xs font-semibold px-2 py-1 rounded ${badgeClass}">${badgeLabel}</span>
           </div>
           <p class="text-xs text-gray-500 mt-1">${p.area || "-"}, ${p.district || "-"}</p>
-          <p class="text-sm font-bold text-green-700 mt-1">${fmtP(p.price, p.period)}</p>
+          <p class="text-sm font-bold text-green-700 mt-1">${fmtListingPrice(p)}</p>
           <div class="mt-2 text-xs text-gray-500 flex gap-3">
             <span>👁 ${getPropertyViewCount(p.id)} views</span>
             <span>❤️ ${getPropertySaveCount(p.id)} saves</span>
@@ -13642,7 +13679,13 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
   const maskedPhone = staffMaskPhone(item.lister_phone);
   const submittedAt = staffKampalaDateTime(item.created_at);
   const typeLabel = String(item.listing_type || item.property_type || "property").replace(/_/g, " ");
-  const price = item.price ? `UGX ${Number(item.price || 0).toLocaleString("en-UG")}` : "Price not stated";
+  const priceNeedsCheck = item.price ? listingPriceNeedsCheck(item) : (item.extra_fields?.price_review === "implausible");
+  const price = priceNeedsCheck || item.price_on_application === true
+    ? "Price on application"
+    : (item.price ? `UGX ${Number(item.price || 0).toLocaleString("en-UG")}` : "Price not stated");
+  const checkPriceTag = priceNeedsCheck
+    ? `<span class="inline-flex rounded-full bg-red-600 text-white px-2 py-0.5 text-[11px] font-black" data-check-price="1" title="The stored price is outside the plausible range. Check the source and set the price or POA.">check price</span>`
+    : "";
   const duplicateCount = Number(item.duplicate_count || 0) || 0;
   const sourceUrl = String(item.source_url || "").trim();
   const brokerBadge = adminIsBrokerSubmissionListing(item)
@@ -13668,7 +13711,7 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
     <article class="border border-gray-200 rounded-2xl p-4">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
-          <div class="font-black text-gray-900">${mkRef ? `<span class="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-black text-slate-700" data-mk-ref>${adminEscape(mkRef)}</span>` : ""}${adminEscape(item.title || "Untitled listing")} ${brokerBadge}</div>
+          <div class="font-black text-gray-900">${mkRef ? `<span class="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-black text-slate-700" data-mk-ref>${adminEscape(mkRef)}</span>` : ""}${adminEscape(item.title || "Untitled listing")} ${brokerBadge} ${checkPriceTag}</div>
           <div class="text-xs text-gray-500 mt-1">${adminEscape(typeLabel)} • ${adminEscape(location)} • ${adminEscape(price)}</div>
           <div class="text-xs text-gray-500 mt-1">Submitted by ${adminEscape(submitter)}${maskedPhone ? ` • ${adminEscape(maskedPhone)}` : ""}${submittedAt ? ` • ${adminEscape(submittedAt)}` : ""}</div>
           <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(item.source_platform || item.source || item.listed_via || "website")}${sourceUrl ? ` • <a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="font-black text-blue-700 underline underline-offset-2">open evidence</a>` : ""}</div>
@@ -22984,7 +23027,7 @@ function buildListingWhatsappMessageForUi(p = {}) {
   const category = getListingWhatsappCategory(p);
   const location = getListingWhatsappLocation(p);
   const url = getPropertyShareUrl(p);
-  const price = fmtP(p.price || 0, p.period || p.price_period || "");
+  const price = fmtListingPrice(p);
   const nextKey = category === "land" ? "landNext" : (category === "student" ? "studentNext" : "next");
   return [
     listingWhatsappContactText(category, { title }),
@@ -26378,11 +26421,28 @@ function adminReviewSourceText(review = {}) {
   ].filter(Boolean).join(" ");
 }
 
+// C17 addendum (MK-20261009-D2F081 showed "USh 407B/month"): the listing's
+// own id 7918f050-f8f3-407b-… sits in its staff photo URLs, and "407b" was read
+// as 407 billion. URLs, ids and hex strings are removed first, a number must
+// stand on its own (not inside a word or an id), the suffix must end the word,
+// and a figure outside the plausibility bounds is "couldn't read a price"
+// rather than an absurd number (same bounds as utils/pricePlausibility.js).
+function adminReviewPriceTextForParsing(text = "") {
+  return String(text || "")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, " ")
+    .replace(/\b(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{12,}\b/gi, " ")
+    .replace(/\bMK-\d{8}-[0-9A-F]{6}\b/gi, " ")
+    .replace(/(?:\+?256|\b0)\s*7\d{2}\s*\d{3}\s*\d{3}\b/g, " ")
+    .replace(/,/g, "");
+}
+
 function adminReviewMoneyFromText(text = "") {
-  const raw = String(text || "").replace(/,/g, "");
-  const billion = raw.match(/(?:ugx|ush|ugshs|shs)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:b|bn|billion)\b/i);
+  const raw = adminReviewPriceTextForParsing(text);
+  const NUM = "(?<![\\w.\\-/])([0-9]+(?:\\.[0-9]+)?)";
+  const billion = raw.match(new RegExp(`(?:ugx|ush|ugshs|shs)?\\s*${NUM}\\s*(?:b|bn|billion)(?![a-z0-9-])`, "i"));
   if (billion) return Math.round(Number(billion[1]) * 1000000000);
-  const million = raw.match(/(?:ugx|ush|ugshs|shs)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:m|million|millions)\b/i);
+  const million = raw.match(new RegExp(`(?:ugx|ush|ugshs|shs)?\\s*${NUM}\\s*(?:m|mn|million|millions)(?![a-z0-9-])`, "i"));
   if (million) return Math.round(Number(million[1]) * 1000000);
   const currency = raw.match(/\b(?:ugx|ush|ugshs|shs)\s*([0-9][0-9.]*)\b/i);
   if (currency) return Math.round(Number(currency[1]));
@@ -26390,6 +26450,28 @@ function adminReviewMoneyFromText(text = "") {
     || raw.match(/\b(?:usd|us\$)\s*([0-9]+(?:\.[0-9]+)?)(?:\s*(?:\/|per)\s*(?:month|mo|monthly))?/i);
   if (usd) return Math.round(Number(usd[1]) * REVIEW_USD_TO_UGX_GUIDE_RATE);
   return null;
+}
+
+// Same bounds as utils/pricePlausibility.js (served in /config.js).
+const PRICE_PLAUSIBILITY_BOUNDS_FALLBACK = { sale: [5000000, 50000000000], land: [1000000, 50000000000], monthly: [50000, 100000000], commercial_monthly: [50000, 2000000000] };
+function listingPriceIsPlausible(price, listingType = "", pricePeriod = "", transactionType = "") {
+  const value = Number(price);
+  if (!Number.isFinite(value) || value <= 0) return true;
+  // false: this market doesn't use the Uganda-shilling bounds.
+  if (typeof window !== "undefined" && window.MAKAUG_PRICE_BOUNDS === false) return true;
+  const bounds = (typeof window !== "undefined" && window.MAKAUG_PRICE_BOUNDS) || PRICE_PLAUSIBILITY_BOUNDS_FALLBACK;
+  const type = normalizeType(listingType) || "sale";
+  const period = normalizeListingPricePeriodValue(pricePeriod);
+  const transaction = String(transactionType || "").toLowerCase();
+  const recurring = ["mo", "wk", "yr", "sem", "acre_yr", "night"].includes(period);
+  const kind = ["rent", "student"].includes(type) ? "monthly"
+    : type === "land" ? (recurring && transaction !== "sale" ? "monthly" : "land")
+      : type === "commercial" ? (transaction === "rent" || recurring ? "commercial_monthly" : "sale")
+        : (recurring ? "monthly" : "sale");
+  const factor = { wk: 52 / 12, yr: 1 / 12, sem: 1 / 4, acre_yr: 1 / 12, night: 30 }[period] || 1;
+  const compared = kind === "monthly" || kind === "commercial_monthly" ? value * factor : value;
+  const [min, max] = bounds[kind] || [0, Infinity];
+  return compared >= min && compared <= max;
 }
 
 function adminReviewFirstNumber(text = "", pattern) {
@@ -26681,6 +26763,11 @@ function adminExtractReviewFacts(review = {}) {
   const partial = { price, bedrooms, bathrooms, balconies, property_type: propertyType, ...location };
   const listingType = adminReviewListingTypeFromText(text, partial, review);
   const pricePeriod = listingType === "rent" ? "month" : (review.price_period || "once");
+  // C17: never offer an implausible extracted price.
+  if (partial.price && !listingPriceIsPlausible(partial.price, listingType, pricePeriod, review.transaction_type || "")) {
+    partial.price = null;
+    partial.price_unreadable = true;
+  }
   const amenities = adminReviewExtractedAmenities(text, partial);
   const facts = { ...partial, listing_type: listingType, price_period: pricePeriod, amenities, contact_phone: contactPhone, title: "", land_title_available: getLandTitleAvailabilityValue({ ...review, description: text }) };
   const titleParts = [];
@@ -26699,7 +26786,7 @@ function adminExtractReviewFacts(review = {}) {
 function adminReviewFactBadgesHtml(facts = {}) {
   const parts = [
     facts.listing_type ? `Type: ${facts.listing_type}` : "",
-    facts.price ? `Price: ${fmtP(facts.price, facts.price_period || "")}` : "",
+    facts.price_unreadable ? "Price: couldn't read a price" : (facts.price ? `Price: ${fmtP(facts.price, facts.price_period || "")}` : ""),
     facts.area ? `Area: ${facts.area}` : "",
     facts.district ? `District: ${facts.district}` : "",
     facts.property_type ? `Property: ${facts.property_type}` : "",
@@ -28270,7 +28357,7 @@ function adminBuildFallbackSocialTrustReview(review = {}) {
     ? ""
     : String(extra.first_posted_online_at || extra.source_published_at || extra.video_published_at || "").trim();
   const location = [review.area, review.district, review.address].filter(Boolean).join(", ");
-  const priceEvidence = review.price ? fmtP(review.price, review.price_period || "") : (extra.price_upon_application ? "Price upon application" : "");
+  const priceEvidence = review.price ? fmtListingPrice(review) : (extra.price_upon_application ? "Price upon application" : "");
   const contactPath = [review.lister_phone, review.lister_email, sourceContactUrl, sourceUrl].find((item) => String(item || "").trim()) || "";
   const audience = String(extra.source_followers_label || extra.source_audience_label || "").trim();
   const accountAge = String(extra.source_account_age_label || extra.source_account_created_at || extra.account_created_at || extra.channel_created_at || "").trim();
@@ -28468,7 +28555,7 @@ function renderAdminReviewPanel(review) {
           </div>
           <div class="grid sm:grid-cols-2 gap-2 mt-4 text-sm text-gray-700">
             <div><span class="text-gray-500">Type:</span> ${adminEscape(review.listing_type || "-")}</div>
-            <div><span class="text-gray-500">Price:</span> ${fmtP(review.price || 0, review.price_period || "")}${propertyOriginalCurrencyGuideHtml(review, "mt-1 text-[11px] font-semibold text-sky-700")}</div>
+            <div><span class="text-gray-500">Price:</span> ${fmtListingPrice(review)}${listingPriceNeedsCheck(review) && Number(review.price) > 0 ? ` <span class="inline-flex rounded-full bg-red-600 text-white px-2 py-0.5 text-[11px] font-black" data-check-price="1">check price</span> <span class="text-[11px] text-red-700">stored ${adminEscape(Number(review.price).toLocaleString("en-UG"))} is outside the plausible range</span>` : ""}${propertyOriginalCurrencyGuideHtml(review, "mt-1 text-[11px] font-semibold text-sky-700")}</div>
             <div><span class="text-gray-500">Lister:</span> ${adminEscape(review.lister_name || "-")}</div>
             <div><span class="text-gray-500">Phone:</span> ${adminEscape(review.lister_phone || "-")}</div>
             <div><span class="text-gray-500">Email:</span> ${adminEscape(review.lister_email || "-")}</div>
@@ -44371,7 +44458,7 @@ function buildPropertyShareText(property = {}, channel = "share") {
   const shareUrl = getTrackedPropertyShareUrl(property, channel);
   const title = buildPropertyShareTitle(property);
   const location = [property?.area, property?.district].filter(Boolean).join(", ");
-  const price = fmtP(property?.price || 0, property?.period || property?.price_period || "");
+  const price = fmtListingPrice(property || {});
   const headline = [title, location, price].filter(Boolean).join(" • ");
   return [`Look at this on makaug.com: ${headline}`, shareUrl].filter(Boolean).join("\n");
 }
@@ -45305,7 +45392,7 @@ function buildLocalizedPropertyNarrative(property = {}, nearby = []) {
     commercial: translateListingLabel("positioned for business operations and growth"),
     student: translateListingLabel("tailored for students and guardians seeking safe accommodation")
   };
-  const priceText = fmtP(property?.price || 0, property?.period || property?.price_period || "");
+  const priceText = fmtListingPrice(property || {});
   return [
     introBits,
     locationBits ? `${translateListingLabel("Located in")} ${locationBits}.` : "",
@@ -45789,7 +45876,7 @@ function studentCardFooterText(p = {}) {
         <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
           <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
         </button>
-        <div class="absolute bottom-2 right-2 ${theme.priceBg} text-white px-2 py-1 rounded text-sm font-bold">${fmtP(p.price, studentMode ? (p.period || "sem") : p.period)}</div>
+        <div class="absolute bottom-2 right-2 ${theme.priceBg} text-white px-2 py-1 rounded text-sm font-bold">${fmtListingPrice(p, studentMode ? (p.period || "sem") : p.period)}</div>
       </div>
       <div class="p-4">
         <h3 class="font-bold text-gray-800 line-clamp-1"><a href="${adminAttr(detailPath)}" onclick="return openPropertyLinkDetail(event, ${idArg}, 'property_card_title')" class="hover:text-green-700 hover:underline">${adminEscape(displayTitle)}</a></h3>
@@ -55841,6 +55928,7 @@ function updateListPreview() {
 	      const periodRaw = normalizeListingPricePeriodValue(lpVal("lp-period"));
 	      const periodVal = ["once", "neg", "poa"].includes(periodRaw) ? "" : periodRaw;
 	      if (priceEl) priceEl.textContent = periodRaw === "poa" || !priceNum ? translateListingLabel("Price upon application") : fmtP(priceNum, periodVal);
+	      updateLpPricePlausibilityWarning(type, priceNum, periodRaw);
 
   const metaParts = [];
   const subtype = document.getElementById("lp-subtype")?.selectedOptions?.[0]?.textContent || cfg.badge;
@@ -58087,7 +58175,7 @@ async function openDetail(id, options = {}) {
 	                    </div>
               </div>
               <div class="text-right">
-                <div class="text-3xl font-black text-green-700">${fmtP(p.price, p.period)}</div>
+                <div class="text-3xl font-black text-green-700">${fmtListingPrice(p)}</div>
                 ${propertyOriginalCurrencyGuideHtml(p, "mt-1 text-xs font-semibold text-sky-700")}
               </div>
             </div>
