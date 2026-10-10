@@ -9068,10 +9068,73 @@ async function trackEvent(eventName, params = {}) {
   } catch (e) {}
 }
 
+// C16: staff and admin traffic never reaches GA (and is marked internal).
+const GA_INTERNAL_ROLES = ["moderator", "admin", "super_admin", "staff", "king"];
+function gaInternalTraffic() {
+  const path = typeof window !== "undefined" ? String(window.location?.pathname || "") : "";
+  if (/^\/(?:admin|staff-dashboard|staff|king)(?:\/|$)/.test(path)) return true;
+  const role = String(authState?.user?.role || "").toLowerCase();
+  const portal = String(authState?.user?.portal_mode || "").toLowerCase();
+  return GA_INTERNAL_ROLES.includes(role) || ["admin", "moderator"].includes(portal);
+}
+
+function gaListingType(value = "") {
+  const type = normalizeType(value) || String(value || "").toLowerCase();
+  if (type === "students") return "student";
+  if (/short/.test(type)) return "short_term";
+  return type;
+}
+
+// listing_id, listing_type (sale/rent/land/student/short_term/commercial), area (town or district).
+function gaListingParams(p = {}) {
+  return {
+    listing_id: String(p?.backend_id || p?.id || p?.listing_id || "") || undefined,
+    listing_type: gaListingType(p?.listing_type || p?.type || ""),
+    area: String(p?.district || p?.city || p?.area || "").trim() || undefined
+  };
+}
+
 function fireClientGaEvent(eventName, params = {}) {
-  if (typeof window.gtag === "function") {
-    window.gtag("event", eventName, params);
+  if (typeof window.gtag !== "function") return;
+  if (gaInternalTraffic()) {
+    try { window.gtag("set", { traffic_type: "internal" }); } catch (_) {}
+    return;
   }
+  window.gtag("event", eventName, params);
+}
+
+// C16: every WhatsApp or phone link for a listing or an agent fires
+// whatsapp_click / call_click with the listing (or agent) it belongs to.
+function gaContactContextForElement(element) {
+  const holder = element?.closest ? element.closest("[data-property-id],[data-listing-id],[data-agent-id],[data-broker-id]") : null;
+  const propertyId = holder?.getAttribute?.("data-property-id") || holder?.getAttribute?.("data-listing-id")
+    || (currentPage === "detail" ? activeDetailPropertyId : "");
+  if (propertyId) {
+    const property = typeof findPropertyForUi === "function" ? findPropertyForUi(propertyId) : null;
+    return { kind: "listing", params: gaListingParams(property || { id: propertyId }) };
+  }
+  const agentId = holder?.getAttribute?.("data-agent-id") || holder?.getAttribute?.("data-broker-id")
+    || (/^\/(?:agents|brokers)\//.test(String(window.location?.pathname || "")) ? String(window.location.pathname).split("/")[2] : "");
+  if (agentId) return { kind: "agent", params: { agent_id: String(agentId) } };
+  return null;
+}
+
+function gaHandleContactClick(event) {
+  const link = event?.target?.closest ? event.target.closest("a[href]") : null;
+  if (!link) return null;
+  const href = String(link.getAttribute("href") || "");
+  const isWhatsapp = /^(?:https?:\/\/)?(?:wa\.me|api\.whatsapp\.com|web\.whatsapp\.com)\b|^whatsapp:/i.test(href);
+  const isCall = /^tel:/i.test(href);
+  if (!isWhatsapp && !isCall) return null;
+  const context = gaContactContextForElement(link);
+  if (!context) return null;
+  const name = isWhatsapp ? "whatsapp_click" : "call_click";
+  trackEvent(name, { ...context.params, contact_for: context.kind });
+  return name;
+}
+
+if (typeof document !== "undefined" && document.addEventListener) {
+  document.addEventListener("click", (event) => { try { gaHandleContactClick(event); } catch (_) {} }, true);
 }
 
 function loadGaScriptOnce(id) {
@@ -9085,6 +9148,13 @@ function loadGaScriptOnce(id) {
 
 async function initFrontendAnalytics() {
   try {
+    // C16: the server already put the tag and its page_view in <head>.
+    if (typeof window !== "undefined" && window.__MAKAUG_GA_SSR) {
+      gaMeasurementId = window.__MAKAUG_GA_SSR;
+      if (gaInternalTraffic()) window.gtag?.("set", { traffic_type: "internal" });
+      return;
+    }
+    if (gaInternalTraffic()) return;
     const cfg = await apiRequest("/api/analytics/config");
     const id = cfg?.data?.ga4MeasurementId;
     if (!id || cfg?.data?.ga4Enabled === false) return;
@@ -31701,6 +31771,8 @@ async function finalizeAuth(data, source, preferredAudience = "") {
 		        toast("Please change your temporary password in Account Settings.");
 		      }
 		      trackEvent("auth_success", { source, role: user.role || "" }).catch(() => {});
+		      // C16: a new account (the signup OTP paths), not a login.
+		      if (/signup/i.test(String(source || ""))) trackEvent("sign_up", { method: /email/i.test(String(source)) ? "email" : "phone", source, role: user.role || "" }).catch(() => {});
 		    }
 
 function socialProviderSetupMessage(provider) {
@@ -35403,6 +35475,7 @@ async function submitListProperty() {
       area: payload.area,
       property_id: response?.data?.id || null
     });
+    trackEvent("listing_submitted", gaListingParams({ id: response?.data?.id || null, listing_type: payload.listing_type, district: payload.district, area: payload.area }));
     applySubmittedListingToLocal(payload, response?.data || {});
     const ref = response?.data?.inquiry_reference || payload.inquiry_reference;
     showListSubmissionSuccess(ref, payload, { offline: false, ...(response?.data || {}) });
@@ -36535,6 +36608,8 @@ function chooseListPropertyOnline(options = {}) {
   const type = getListChoiceType();
   setListChoiceType(type);
   logListPropertyIntent("online", { source: options.source || "list_property_choice" });
+  // C16: opening the list-a-property form.
+  if (currentPage === "list-property") trackEvent("listing_started", { listing_type: gaListingType(type), source: options.source || "list_property_choice" });
   if (currentPage !== "list-property") {
     window.location.href = `/list-property?mode=online&type=${encodeURIComponent(type)}`;
     return;
@@ -45937,6 +46012,7 @@ async function submitPropertyInquiry(id) {
       district: property.district || "",
       area: property.area || ""
     });
+    trackEvent("enquiry", gaListingParams(property));
     const msgEl = document.getElementById("detail-inquiry-message");
     if (msgEl) msgEl.value = "";
     const sentTo = inquiryResponse?.data?.lister_name;

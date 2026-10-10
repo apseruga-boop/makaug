@@ -1190,6 +1190,26 @@ function applyHomeHeroPreload(html, normalizedPath = '/') {
   return String(html || '').replace(/\s*<link rel="preload" as="image"[^>]*data-home-hero-preload[^>]*>/, '');
 }
 
+// C16: GA4 is in the server HTML <head> on every public page (it used to load
+// only after /api/analytics/config answered, so early bounces were lost). One
+// loader, anonymize_ip, one page_view; the SPA sees window.__MAKAUG_GA_SSR and
+// doesn't load a second copy. Never on /admin or /staff pages.
+const GA4_ID_PATTERN = /^G-[A-Z0-9]{4,20}$/;
+function ga4HeadSnippet(measurementId) {
+  const id = String(measurementId || '').trim();
+  if (!GA4_ID_PATTERN.test(id)) return '';
+  return `<script async src="https://www.googletagmanager.com/gtag/js?id=${id}" data-ga-id="${id}"></script>`
+    + `<script data-ga-ssr="1">window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}window.gtag=gtag;`
+    + `window.__MAKAUG_GA_SSR=${JSON.stringify(id)};gtag('js',new Date());gtag('config',${JSON.stringify(id)},{anonymize_ip:true});</script>`;
+}
+
+function injectGa4HeadTag(html, basePath = '/') {
+  const snippet = ga4HeadSnippet(process.env.GA4_MEASUREMENT_ID);
+  if (!snippet || /^\/(?:admin|staff-dashboard|staff|king)(?:\/|$)/.test(String(basePath || '/'))) return html;
+  if (String(html).includes('data-ga-ssr="1"')) return html;
+  return String(html).replace(/<\/head>/i, `${snippet}</head>`);
+}
+
 function renderPublicHtml(pathname) {
   const rawPath = pathname || '/';
   const basePath = String(rawPath).split('?')[0].split('#')[0] || '/';
@@ -1209,6 +1229,7 @@ function renderPublicHtml(pathname) {
   rendered = applyHarvestPublicSubmissionVisibility(rendered);
   rendered = injectShortTermRuntimeConfig(applyShortTermVisibility(rendered));
   rendered = applyHomeHeroPreload(rendered, normalizedBasePath);
+  rendered = injectGa4HeadTag(rendered, normalizedBasePath);
   if (isProduction) {
     publicHtmlCache.set(key, rendered);
     while (publicHtmlCache.size > PUBLIC_HTML_CACHE_MAX_ENTRIES) {
