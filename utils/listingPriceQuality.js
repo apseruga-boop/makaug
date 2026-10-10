@@ -1,5 +1,7 @@
 'use strict';
 
+const { monthlyFactor, normalizePricePeriod } = require('../config/pricePeriods');
+
 const RECURRING_PERIODS = new Set([
   'month',
   'monthly',
@@ -87,12 +89,30 @@ function hasPriceFigureEvidence(text = '') {
   return /(?:\b(?:ugx|ush|shs?|usd|us\$)\s*\d|\$\s*\d|\b\d+(?:\.\d+)?\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands)\b)/i.test(text);
 }
 
+function isPriceOnApplication(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  return row.price_on_application === true
+    || row.priceOnApplication === true
+    || extra.price_on_application === true
+    || extra.price_upon_application === true
+    || normalizePricePeriod(normalizedPeriod(row)) === 'poa';
+}
+
 function listingPriceQuality(row = {}, options = {}) {
   const category = normalizedCategory(row);
-  const period = normalizedPeriod(row);
+  const rawPeriod = normalizedPeriod(row);
+  // C20: compare canonical spellings (wk -> week, yr -> year, sem -> semester).
+  const period = normalizePricePeriod(rawPeriod) || '';
   const price = Number(row.price);
+  const priceOnApplication = isPriceOnApplication(row);
+  const transaction = clean(row.transaction_type || row.transactionType).toLowerCase();
+  // Land let by the year or month (or per acre per year) is a recurring price.
+  const landRent = category === 'land' && transaction === 'rent';
   const evidence = sourceEvidenceText(row);
-  const recurring = RECURRING_PERIODS.has(period);
+  const recurring = RECURRING_PERIODS.has(period) || period === 'acre_yr';
+  const factor = monthlyFactor(period);
+  // Monthly equivalent for range checks: a yearly rent of UGX 120M is 10M a month.
+  const monthlyEquivalent = Number.isFinite(price) && factor ? price * factor : null;
   const oneOff = ['once', 'one_off', 'total', 'sale', 'cash'].includes(period);
   const explicitSale = hasExplicitSaleEvidence(evidence);
   const explicitRent = hasExplicitRentEvidence(evidence);
@@ -108,7 +128,9 @@ function listingPriceQuality(row = {}, options = {}) {
     hardReasons.push('usd_original_looks_like_ugx');
   }
 
-  if (!Number.isFinite(price) || price <= 1) {
+  if ((!Number.isFinite(price) || price <= 1) && priceOnApplication) {
+    // C20: Price on application with no number is a valid listing.
+  } else if (!Number.isFinite(price) || price <= 1) {
     reasons.push('missing_or_placeholder_price');
   } else if (wholeProperty && price < 100_000) {
     reasons.push('whole_property_price_below_100k');
@@ -119,7 +141,7 @@ function listingPriceQuality(row = {}, options = {}) {
   }
 
   if (category === 'sale' && recurring) reasons.push('sale_price_marked_recurring');
-  if (category === 'land' && recurring) reasons.push('land_price_marked_recurring');
+  if (category === 'land' && recurring && !landRent) reasons.push('land_price_marked_recurring');
   if (category === 'rent' && oneOff) reasons.push('rent_price_marked_one_off');
   if (category === 'student' && oneOff) reasons.push('student_price_marked_one_off');
 
@@ -131,7 +153,7 @@ function listingPriceQuality(row = {}, options = {}) {
     }
   }
 
-  if (recurring && Number.isFinite(price) && price >= 100_000_000) {
+  if (recurring && !NIGHTLY_PERIODS.has(period) && Number.isFinite(monthlyEquivalent ?? price) && (monthlyEquivalent ?? price) >= 100_000_000) {
     if (confirmedHighMonthly) {
       warnings.push('high_monthly_price_staff_confirmed');
     } else {
@@ -144,7 +166,7 @@ function listingPriceQuality(row = {}, options = {}) {
     && !NIGHTLY_PERIODS.has(period)
     && Number.isFinite(price)
     && price > 1
-    && price < LOW_RECURRING_PRICE_UGX
+    && (monthlyEquivalent ?? price) < LOW_RECURRING_PRICE_UGX
     && ['rent', 'student'].includes(category)
   ) {
     reasons.push('recurring_price_below_30k');
@@ -165,7 +187,7 @@ function listingPriceQuality(row = {}, options = {}) {
     }
   }
 
-  if (category === 'student' && recurring && Number.isFinite(price) && price > 5_000_000) {
+  if (category === 'student' && recurring && Number.isFinite(monthlyEquivalent ?? price) && (monthlyEquivalent ?? price) > 5_000_000) {
     reasons.push('student_recurring_price_above_5m');
   }
 
@@ -182,6 +204,8 @@ function listingPriceQuality(row = {}, options = {}) {
     category,
     price: Number.isFinite(price) ? price : null,
     period,
+    price_on_application: priceOnApplication,
+    monthly_equivalent: monthlyEquivalent,
     recurring,
     explicit_sale_evidence: explicitSale,
     explicit_rent_evidence: explicitRent,
@@ -202,6 +226,7 @@ module.exports = {
   hasExplicitRentEvidence,
   hasExplicitSaleEvidence,
   hasPriceFigureEvidence,
+  isPriceOnApplication,
   listingPriceQuality,
   normalizedCategory,
   normalizedPeriod,

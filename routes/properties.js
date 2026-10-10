@@ -635,6 +635,8 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'price_period')) {
     patch.price_period = normalizePricePeriodForWrite(patch.price_period);
+    // C20: choosing "Price on application" as the period is a POA listing.
+    if (patch.price_period === 'poa') patch.price_on_application = true;
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'price_on_application')) {
     patch.price_on_application = parseBooleanLike(patch.price_on_application, false);
@@ -3753,8 +3755,16 @@ router.post('/', async (req, res, next) => {
       currency: body.price_currency || body.currency,
       fxAsOf: body.price_fx_as_of || undefined
     });
+    // C20: the POA period means Price on application; any typed number is dropped.
+    const submittedPricePeriod = normalizePricePeriodForWrite(cleanText(body.price_period)) || null;
+    const priceOnApplication = parseBooleanLike(body.price_on_application || body.priceOnApplication, false) || submittedPricePeriod === 'poa';
+    if (priceOnApplication) {
+      priceMetadata.price = null;
+      priceMetadata.price_original = null;
+      priceMetadata.price_fx_rate_ugx = null;
+      priceMetadata.price_fx_as_of = null;
+    }
     const price = priceMetadata.price;
-    const priceOnApplication = parseBooleanLike(body.price_on_application || body.priceOnApplication, false);
     const transactionType = normalizeCommercialTransactionType(
       body.transaction_type || body.transactionType || body.commercial_mode || body.commercial_intent,
       {
@@ -4136,7 +4146,7 @@ router.post('/', async (req, res, next) => {
         priceMetadata.price_original,
         priceMetadata.price_fx_rate_ugx,
         priceMetadata.price_fx_as_of,
-        normalizePricePeriodForWrite(cleanText(body.price_period)) || null,
+        submittedPricePeriod,
         priceOnApplication,
         toNullableInt(body.bedrooms),
         toNullableInt(body.bathrooms),

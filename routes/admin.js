@@ -168,6 +168,7 @@ const { buildListingReference } = require('../services/listingReferenceService')
 const { hideReportedProperty } = require('../services/reportListingModerationService');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
+const { isPriceOnApplication } = require('../utils/listingPriceQuality');
 const { listingRealPhotoCheck, NO_REAL_PHOTO_MESSAGE } = require('../utils/realListingPhoto');
 const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const {
@@ -6040,7 +6041,8 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
     }
     if (!property.agent_id) blockers.push('agent profile');
     if (!property.district || !property.area) blockers.push('location');
-    if (!property.price || property.price <= 0) blockers.push('price');
+    // C20: a Price on application listing has no number and is still publishable.
+    if ((!property.price || property.price <= 0) && !isPriceOnApplication(property)) blockers.push('price');
     if (!property.lister_phone) blockers.push('agent contact');
     if (!photoCheck.ok) blockers.push(`property photo: ${NO_REAL_PHOTO_MESSAGE}`);
     if (videoUrls.length < 1) blockers.push('property video');

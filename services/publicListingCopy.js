@@ -15,6 +15,7 @@ const {
   normalizeLandTitleAvailability
 } = require('../utils/landTitleAvailability');
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
+const { pricePeriodSuffix: sharedPricePeriodSuffix } = require('../config/pricePeriods');
 const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
@@ -143,7 +144,7 @@ function publicPriceLabelFor(property = {}) {
   const currencyLabel = IS_SOUTH_AFRICA ? 'R' : 'UGX';
   const locale = IS_SOUTH_AFRICA ? 'en-ZA' : 'en-US';
   // Rows store mo / monthly / per_month as well as month.
-  return `${currencyLabel} ${Math.round(amount).toLocaleString(locale)}${normalizePricePeriodForWrite(period) === 'month' ? '/month' : ''}`;
+  return `${currencyLabel} ${Math.round(amount).toLocaleString(locale)}${sharedPricePeriodSuffix(normalizePricePeriodForWrite(period))}`;
 }
 
 function stripTransactionFromPublicPropertyType(value = '') {
@@ -345,7 +346,7 @@ function factualListingTitle(row = {}) {
   const isLand = listingType === 'land';
   const period = normalizePricePeriodForWrite(String(row.price_period || '').toLowerCase()) || '';
   const transaction = String(row.transaction_type || row?.extra_fields?.transaction_type || '').toLowerCase();
-  const forRent = listingType === 'rent' || listingType === 'student' || listingType === 'students' || transaction === 'rent' || period === 'month';
+  const forRent = listingType === 'rent' || listingType === 'student' || listingType === 'students' || transaction === 'rent' || ['month', 'week', 'year'].includes(period);
   const typeLabel = humanPropertyTypeLabel(row.property_type || '')
     || (isLand ? 'Land' : listingType === 'commercial' ? 'Commercial property' : (listingType === 'student' || listingType === 'students') ? 'Student room' : 'Property');
   const beds = Number(row.bedrooms);

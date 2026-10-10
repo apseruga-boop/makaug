@@ -172,24 +172,18 @@ function propertyPriceMetadata(value, options = {}) {
   };
 }
 
-// One spelling per price period when saving: once | month | semester | year | night.
-const PRICE_PERIOD_ALIASES = {
-  mo: 'month', month: 'month', monthly: 'month', per_month: 'month', pm: 'month', 'p/m': 'month', '/month': 'month',
-  sem: 'semester', semester: 'semester', per_semester: 'semester', term: 'semester',
-  yr: 'year', year: 'year', yearly: 'year', annual: 'year', annually: 'year', per_year: 'year', pa: 'year',
-  night: 'night', nightly: 'night', per_night: 'night',
-  once: 'once', one_off: 'once', 'one-off': 'once', total: 'once', sale: 'once', cash: 'once', outright: 'once'
-};
+// One spelling per price period when saving (C20): the shared table in
+// config/pricePeriods.js covers every value the forms send (mo, yr, wk, sem,
+// neg, poa, acre, plot, acre_yr) plus older spellings.
+const { PRICE_PERIOD_ALIASES, normalizePricePeriod } = require('../config/pricePeriods');
 
 function normalizePricePeriodForWrite(value) {
-  if (value == null) return value;
-  const key = String(value).trim().toLowerCase().replace(/\s+/g, '_');
-  if (!key) return null;
-  return PRICE_PERIOD_ALIASES[key] || String(value).trim();
+  return normalizePricePeriod(value);
 }
 
 module.exports = {
   MAX_PLAUSIBLE_USD_ORIGINAL,
+  PRICE_PERIOD_ALIASES,
   normalizePricePeriodForWrite,
   parseSourcePrice,
   DEFAULT_USD_TO_UGX_RATE,
