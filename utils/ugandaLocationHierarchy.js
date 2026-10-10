@@ -1,4 +1,5 @@
 const { DISTRICTS } = require('./constants');
+const { kampalaTownsForArea } = require('./kampalaDivisions');
 const {
   canonicalLocationByKey,
   canonicalLocationOptions,
@@ -69,14 +70,24 @@ function getDistrictLocationTree(district) {
     .filter((item) => item.district === cleanDistrict && !['district', 'region'].includes(item.level));
   if (!locations.length) return [];
   const groups = new Map();
-  locations.forEach((item) => {
-    const town = clean(item.town) || (['city', 'town'].includes(item.level) ? item.location : `${cleanDistrict} Town`);
+  const addToTown = (town, item) => {
+    if (!town) return;
     if (!groups.has(town)) groups.set(town, new Map());
+    if (groups.get(town).has(item.location)) return;
     groups.get(town).set(item.location, {
       name: item.location,
       ...(Number.isFinite(item.latitude) ? { lat: item.latitude } : {}),
       ...(Number.isFinite(item.longitude) ? { lng: item.longitude } : {})
     });
+  };
+  locations.forEach((item) => {
+    const town = clean(item.town) || (['city', 'town'].includes(item.level) ? item.location : `${cleanDistrict} Town`);
+    addToTown(town, item);
+    if (cleanDistrict === 'Kampala') {
+      kampalaTownsForArea(item.location)
+        .filter((extraTown) => extraTown && extraTown !== town)
+        .forEach((extraTown) => addToTown(extraTown, item));
+    }
   });
   return Array.from(groups.entries())
     .map(([city, neighborhoods]) => ({
@@ -151,15 +162,20 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
   // reverted to "Wakiso Town" on reload, because the area's catalogue town
   // always replaced the town staff chose. Old town spellings are mapped to the
   // current names first ("Wakiso Town" -> "Wakiso", "Nakawa Division" ->
-  // "Nakawa"); a town that exists in the district now wins over the area's
-  // default town.
+  // "Nakawa"); a town chosen in this save that exists in the district wins
+  // over the area's default town. A stored town still follows the catalogue.
+  // Kisaasi is the exception that does not need the flag: Kawempe and Nakawa
+  // are both real parents, so either staff choice is kept.
   const tree = getDistrictLocationTree(district);
   if (city) city = canonicalTownName(district, city, area || neighborhood) || city;
-  // Only a town chosen in this save wins; a stored one keeps following the catalogue.
+  const boundaryTowns = canonical && canonical.district === 'Kampala' ? kampalaTownsForArea(canonical.name) : [];
+  const staffCityOnBoundary = Boolean(city) && boundaryTowns.includes(city);
   const chosenCityIsKnown = options.preferChosenCity === true && Boolean(city) && tree.some((item) => item.city === city);
   if (canonical && canonical.level !== 'region' && (canonical.level !== 'district' || allowDistrictNode)) {
-    city = (chosenCityIsKnown ? city : '') || canonical.town || city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
     neighborhood = canonical.name;
+    if (!(chosenCityIsKnown || staffCityOnBoundary)) {
+      city = clean(canonical.town) || city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
+    }
   }
 
   let cityNode = city ? tree.find((item) => item.city === city) : null;
@@ -177,7 +193,7 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
     const neighborhoodMatchesCity = cityNode
       ? (cityNode.neighborhoods || []).some((n) => n.name === neighborhood)
       : false;
-    if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name) && !staffTownForCanonical) {
+    if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name) && !staffTownForCanonical && !staffCityOnBoundary) {
       errors.push('neighbourhood must belong to the selected district and town/city');
     }
   }

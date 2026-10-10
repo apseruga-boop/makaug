@@ -72,6 +72,37 @@ const REVIEW_CHECKS = [
 
 const REQUIRED_REVIEW_CHECK_KEYS = REVIEW_CHECKS.map((item) => item.key);
 
+const STAFF_SOURCED_OWNER_CHECKLIST_NOTE = 'staff-sourced: owner checklist waived';
+const STAFF_SOURCED_OWNER_CHECK_KEYS = [
+  'contact_details_verified',
+  'identity_number_supplied',
+  'identity_number_format',
+  'identity_document_available',
+  'identity_number_not_reused',
+  'image_count_checked',
+  'image_quality_checked',
+  'otp_verified',
+  'terms_accepted'
+];
+
+function isWhatsappEmployeeIntakeListing(listing = {}) {
+  const extra = listing?.extra_fields && typeof listing.extra_fields === 'object' ? listing.extra_fields : {};
+  const source = String(listing?.source || extra.source || extra.intake_source || '').trim().toLowerCase();
+  return source === 'whatsapp_employee_intake';
+}
+
+function waiveStaffSourcedOwnerChecks(checks = []) {
+  return checks.map((item) => {
+    if (!STAFF_SOURCED_OWNER_CHECK_KEYS.includes(item.key)) return item;
+    return {
+      ...item,
+      status: 'pass',
+      blocking: false,
+      message: `${STAFF_SOURCED_OWNER_CHECKLIST_NOTE}.`
+    };
+  });
+}
+
 function createOwnerEditToken() {
   return crypto.randomBytes(32).toString('base64url');
 }
@@ -588,23 +619,27 @@ function buildAutomatedListingReview({
     )
   ];
 
-  const blockingFailures = checks.filter((item) => item.status === 'fail' && item.blocking && item.overrideable !== true);
-  const warnings = checks.filter((item) => {
+  const reviewedChecks = isWhatsappEmployeeIntakeListing(listing)
+    ? waiveStaffSourcedOwnerChecks(checks)
+    : checks;
+  const blockingFailures = reviewedChecks.filter((item) => item.status === 'fail' && item.blocking && item.overrideable !== true);
+  const warnings = reviewedChecks.filter((item) => {
     const status = String(item.status || '').toLowerCase();
     return status === 'warning' || ((status === 'fail' || status === 'error') && item.overrideable === true);
   });
   const checklist = {};
-  checks.forEach((item) => {
+  reviewedChecks.forEach((item) => {
     checklist[item.key] = item.status !== 'fail';
   });
 
   return {
     status: blockingFailures.length ? 'fail' : (warnings.length ? 'warning' : 'pass'),
     can_approve: blockingFailures.length === 0,
-    checks,
+    checks: reviewedChecks,
     checklist,
     blocking_failures: blockingFailures,
-    warnings
+    warnings,
+    staff_sourced_owner_checklist_waived: isWhatsappEmployeeIntakeListing(listing)
   };
 }
 
@@ -946,6 +981,9 @@ async function sendOwnerListingSubmissionNotifications({ listing = {}, token = '
 module.exports = {
   REVIEW_CHECKS,
   REQUIRED_REVIEW_CHECK_KEYS,
+  STAFF_SOURCED_OWNER_CHECKLIST_NOTE,
+  STAFF_SOURCED_OWNER_CHECK_KEYS,
+  isWhatsappEmployeeIntakeListing,
   buildOwnerSubmissionMessage,
   buildOwnerStatusMessage,
   buildAutomatedListingReview,

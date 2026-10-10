@@ -3320,8 +3320,8 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
       if (canonical && canonical.level !== 'region') {
         normalizedPatch.area = canonical.name;
         normalizedPatch.district = canonical.district;
-        normalizedPatch.city = canonical.town || normalizedPatch.city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
-        normalizedPatch.neighborhood = canonical.name;
+        normalizedPatch.city = hierarchy.city || normalizedPatch.city || '';
+        normalizedPatch.neighborhood = hierarchy.neighborhood || canonical.name;
         fieldMap.area.value = canonical.name;
         extraPatch.moderator_area_input_raw = sourceAreaRaw || canonical.name;
         extraPatch.canonical_location_id = canonical.key;

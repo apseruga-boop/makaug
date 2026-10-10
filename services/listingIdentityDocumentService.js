@@ -36,7 +36,14 @@ function isOwnerWebsiteSubmission(listing = {}) {
   return ownerish && websiteish && !sourceUrl;
 }
 
+function isWhatsappEmployeeIntakeListing(listing = {}) {
+  const extra = safeJsonObject(listing.extra_fields, {});
+  const source = cleanText(listing.source || extra.source || extra.intake_source).toLowerCase();
+  return source === 'whatsapp_employee_intake';
+}
+
 function listingRequiresIdentityVerification(listing = {}) {
+  if (isWhatsappEmployeeIntakeListing(listing)) return false;
   const extra = safeJsonObject(listing.extra_fields, {});
   if (extra.identity_verification?.required === true) return true;
   if (extra.identity_verification?.verified === true) return false;

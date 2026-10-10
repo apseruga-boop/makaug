@@ -39,7 +39,7 @@ const bujukoRows = buildExactSocialPostImportRows({
 });
 const bujuko = normalizeFoundOnlineSourcePost(bujukoRows[0]);
 const intake = sourcePostMeetsLaunchIntakeRule(bujuko, bujuko.sourceAgent);
-assert.strictEqual(bujuko.area, 'Bujjuko');
+assert.strictEqual(bujuko.area, 'Bujuuko');
 assert.strictEqual(bujuko.district, 'Wakiso');
 assert.strictEqual(bujuko.sourceAgent.phone, '+256774120320');
 assert.strictEqual(intake.date_status, 'before_2026_source_window');

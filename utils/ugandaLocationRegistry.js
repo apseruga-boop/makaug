@@ -64,8 +64,8 @@ const DETAILED_LOCATIONS = [
   { name: 'Abayita Ababiri', district: 'Wakiso', lat: 0.106, lng: 32.525, aliases: ['Abayita Ababiri', 'Abaita Ababiri'] },
   { name: 'Kitende', district: 'Wakiso', lat: 0.198, lng: 32.533 },
   { name: 'Kajjansi', district: 'Wakiso', lat: 0.208, lng: 32.552, aliases: ['Kajjansi', 'Kajansi'] },
-  { name: 'Bwebajja', district: 'Wakiso', lat: 0.179, lng: 32.541 },
-  { name: 'Kigo', district: 'Wakiso', lat: 0.196, lng: 32.615 },
+  { name: 'Bwebajja', district: 'Wakiso', town: 'Makindye-Ssabagabo', lat: 0.179, lng: 32.541 },
+  { name: 'Kigo', district: 'Wakiso', town: 'Makindye-Ssabagabo', lat: 0.196, lng: 32.615 },
   { name: 'Lubowa', district: 'Wakiso', town: 'Makindye-Ssabagabo', lat: 0.237, lng: 32.576, aliases: ['Lubowa', 'Lubowa Estate'] },
   { name: 'Namasuba', district: 'Wakiso', lat: 0.258, lng: 32.558, aliases: ['Namasuba', 'Namasuba Ndejje', 'Ndejje Namasuba'] },
   { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553 },
@@ -75,9 +75,9 @@ const DETAILED_LOCATIONS = [
   { name: 'Namugongo', district: 'Wakiso', lat: 0.363, lng: 32.636 },
   { name: 'Kireka', district: 'Wakiso', lat: 0.347, lng: 32.649 },
   { name: 'Bweyogerere', district: 'Wakiso', lat: 0.351, lng: 32.676 },
-  { name: 'Kyaliwajjala', district: 'Wakiso', lat: 0.377, lng: 32.639 },
+  { name: 'Kyaliwajjala', district: 'Wakiso', town: 'Kira', lat: 0.377, lng: 32.639 },
   { name: 'Naalya', district: 'Wakiso', lat: 0.366, lng: 32.636, aliases: ['Naalya', 'Naalya Estate'] },
-  { name: 'Najjera', district: 'Wakiso', lat: 0.396, lng: 32.615, aliases: ['Najjera', 'Najjeera', 'Najeera'] },
+  { name: 'Najjera', district: 'Wakiso', town: 'Kira', lat: 0.396, lng: 32.615, aliases: ['Najjera', 'Najjeera', 'Najeera'] },
   { name: 'Bulindo', district: 'Wakiso', lat: 0.418, lng: 32.633 },
   { name: 'Sonde', district: 'Wakiso', lat: 0.378, lng: 32.698 },
   { name: 'Kira-Mulawa', district: 'Wakiso', town: 'Kira', lat: 0.412, lng: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
@@ -85,19 +85,19 @@ const DETAILED_LOCATIONS = [
   { name: 'Nansana', district: 'Wakiso', level: 'city', lat: 0.364, lng: 32.52, aliases: ['Nansana', 'Nansana Town', 'Nansana Municipality'] },
   { name: 'Nabweru', district: 'Wakiso', lat: 0.378, lng: 32.525 },
   { name: 'Wamala', district: 'Wakiso', lat: 0.373, lng: 32.506 },
-  { name: 'Gganda', district: 'Wakiso', lat: 0.352, lng: 32.536 },
+  { name: 'Gganda', district: 'Wakiso', town: 'Nansana', lat: 0.352, lng: 32.536 },
   { name: 'Wakiso Central', district: 'Wakiso', lat: 0.404, lng: 32.459 },
   { name: 'Kakiri', district: 'Wakiso', lat: 0.409, lng: 32.38 },
-  { name: 'Bujjuko', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko', 'Bujuuko', 'Bujjuko Akright', 'Bujuuko Akright', 'Akright'] },
+  { name: 'Bujuuko', district: 'Wakiso', town: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujuuko', 'Bujjuko', 'Bujuko', 'Bujuuko Akright', 'Bujjuko Akright'] },
   { name: 'Masulita', district: 'Wakiso', lat: 0.51, lng: 32.46 },
   { name: 'Kasanje', district: 'Wakiso', lat: 0.217, lng: 32.383 },
   { name: 'Kasangati', district: 'Wakiso', lat: 0.434, lng: 32.61, aliases: ['Kasangati', 'Kasangati-Nangabo', 'Kasangati Nangabo', 'Nangabo'] },
-  { name: 'Gayaza', district: 'Wakiso', lat: 0.452, lng: 32.606, aliases: ['Gayaza', 'Gayaza Town'] },
-  { name: 'Matugga', district: 'Wakiso', lat: 0.463, lng: 32.525 },
-  { name: 'Maya', district: 'Wakiso', lat: 0.253, lng: 32.418 },
+  { name: 'Gayaza', district: 'Wakiso', level: 'city', lat: 0.452, lng: 32.606, aliases: ['Gayaza', 'Gayaza Town'] },
+  { name: 'Matugga', district: 'Wakiso', town: 'Gombe', lat: 0.463, lng: 32.525 },
+  { name: 'Maya', district: 'Wakiso', town: 'Nsangi', lat: 0.253, lng: 32.418 },
   { name: 'Garuga', district: 'Wakiso', lat: 0.09, lng: 32.543 },
-  { name: 'Buloba', district: 'Wakiso', lat: 0.328, lng: 32.444 },
-  { name: 'Nsangi', district: 'Wakiso', lat: 0.24, lng: 32.456 },
+  { name: 'Buloba', district: 'Wakiso', level: 'city', lat: 0.328, lng: 32.444, aliases: ['Buloba', 'Buloba Town'] },
+  { name: 'Nsangi', district: 'Wakiso', town: 'Nsangi', level: 'town', lat: 0.24, lng: 32.456 },
   { name: 'Zana', district: 'Wakiso', lat: 0.251, lng: 32.56 },
   { name: 'Kisubi', district: 'Wakiso', lat: 0.119, lng: 32.533 },
   { name: 'Nabbingo', district: 'Wakiso', lat: 0.295, lng: 32.477 },
@@ -792,11 +792,26 @@ function canonicalLocationOptions() {
   }));
 }
 
+// Rows saved before the Bujuuko spelling correction store the old key.
+// Lookups follow the new entry; nothing rewrites those rows.
+const LEGACY_CANONICAL_LOCATION_KEYS = new Map([
+  ['wakiso:bujjuko', 'wakiso:bujuuko']
+]);
+
 function canonicalLocationByKey(value = '') {
   const key = String(value || '').trim().toLowerCase();
   if (!key) return null;
-  const matched = registry.find((entry) => entry.key === key);
+  const resolvedKey = LEGACY_CANONICAL_LOCATION_KEYS.get(key) || key;
+  const matched = registry.find((entry) => entry.key === resolvedKey);
   return matched ? { ...matched, aliases: [...matched.aliases] } : null;
+}
+
+function areaTextMatchesCanonicalLocation(area = '', candidate = null) {
+  if (!candidate) return false;
+  const areaKey = normalizeLocationKey(area);
+  if (!areaKey) return false;
+  if (areaKey === normalizeLocationKey(candidate.name)) return true;
+  return (candidate.aliases || []).some((alias) => normalizeLocationKey(alias) === areaKey);
 }
 
 function canonicalLocationForRow(row = {}) {
@@ -1042,6 +1057,7 @@ module.exports = {
   CANONICAL_LOCATION_COUNT: registry.length,
   canonicalTownName,
   canonicalLocationByKey,
+  areaTextMatchesCanonicalLocation,
   canonicalLocationForRow,
   canonicalDisplayLocationForRow,
   canonicalizeUgandaLocation,
