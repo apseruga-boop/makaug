@@ -92,6 +92,7 @@ test('found-online intake stores an implausible price as POA with price_review i
 });
 
 test('read-time guard: the public API never sends an implausible number', () => {
+  assert.match(read('routes/properties.js'), /payload\.data = payload\.data\.map\(\(out, index\) => \{/);
   const out = publicListingPayload({ id: 'x', listing_type: 'land', title: 'Land in Nakasero', price: 3.23e18, price_period: 'once', price_original: 8.5e14, price_original_currency: 'USD' });
   assert.equal(out.price, null);
   assert.equal(out.price_original, null);
@@ -193,6 +194,37 @@ test('scripts/fix-implausible-prices.js: dry run lists and writes nothing; --app
   assert.match(update.sql, /price_on_application = TRUE/);
   assert.equal(JSON.parse(update.values[1]).price_review, 'implausible');
   assert.ok(writes.some((write) => /property_moderation_events/.test(write.sql)));
+});
+
+test('the list and search API send an implausible price as Price on application', { skip: !process.env.TEST_DATABASE_URL && !process.env.DATABASE_URL }, async () => {
+  const db = require('../config/database');
+  const express = require('express');
+  const request = require('supertest');
+  const app = express();
+  app.use('/api/properties', require('../routes/properties'));
+  const tag = `POAGUARD${Date.now().toString(36)}`;
+  const ids = [];
+  try {
+    for (const [title, price] of [[`${tag} flat a billion a month`, 1_000_000_000], [`${tag} flat one million a month`, 1_000_000]]) {
+      ids.push((await db.query(
+        `INSERT INTO properties (listing_type, title, description, district, area, price, price_period, status, moderation_stage, source, listed_via)
+         VALUES ('rent', $1, 'Two-bedroom flat for rent in Ntinda with parking and water.', 'Kampala', 'Ntinda', $2, 'month', 'approved', 'approved', 'website', 'website') RETURNING id`,
+        [title, price]
+      )).rows[0].id);
+    }
+    for (const url of [`/api/properties?limit=100`, `/api/properties/search?status=approved&public_only=1&listing_type=rent&limit=100&page=1`]) {
+      const res = await request(app).get(url);
+      assert.equal(res.status, 200, url);
+      const rows = (res.body.data || []).filter((row) => ids.includes(row.id));
+      assert.ok(rows.some((row) => /a billion/.test(row.title)), `${url}: ${JSON.stringify((res.body.data || []).map((row) => row.title))}`);
+      for (const row of rows) {
+        if (/a billion/.test(row.title)) { assert.equal(row.price, null, url); assert.equal(row.price_on_application, true, url); }
+        else assert.equal(Number(row.price), 1_000_000, url);
+      }
+    }
+  } finally {
+    if (ids.length) await db.query('DELETE FROM properties WHERE id = ANY($1::uuid[])', [ids]).catch(() => {});
+  }
 });
 
 test.after(async () => {
