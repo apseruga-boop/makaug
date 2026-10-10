@@ -87,23 +87,27 @@ function publicListingPayload(row, { privileged = false } = {}) {
 }
 
 const DIRECT_AGENT_MARKER = '[DIRECT_AGENT_AUTHORISED]';
-const STAFF_REVIEWED_ID_MARKER = '[STAFF_REVIEWED_PRIVATE_ID_PROFILE]';
 
 /**
  * An agent as the public may see them. The user id and the free-text
- * verification note stay server-side; the three facts the profile page derives
- * from them are sent as plain booleans instead.
+ * verification note stay server-side; the one fact the public profile shows
+ * (direct_agent_authorised) is sent as a plain boolean instead. The internal
+ * review flags private_id_profile_reviewed and profile_claim_pending are
+ * staff-only (C3, 10 Oct 2026).
  */
 function publicAgentPayload(row) {
   if (!row || typeof row !== 'object') return row;
-  const { user_id: userId, verification_reason: reason, ...rest } = row;
+  const {
+    user_id: _userId,
+    verification_reason: reason,
+    private_id_profile_reviewed: _idReviewed,
+    profile_claim_pending: _claimPending,
+    ...rest
+  } = row;
   const note = String(reason || '');
-  const directAuthorised = note.includes(DIRECT_AGENT_MARKER);
   return {
     ...rest,
-    direct_agent_authorised: directAuthorised,
-    private_id_profile_reviewed: note.includes(STAFF_REVIEWED_ID_MARKER),
-    profile_claim_pending: directAuthorised && !userId
+    direct_agent_authorised: note.includes(DIRECT_AGENT_MARKER)
   };
 }
 

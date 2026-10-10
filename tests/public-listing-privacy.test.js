@@ -94,9 +94,10 @@ test('a public agent has no user id and no verification note, but the profile pa
   assert.ok(!('user_id' in out));
   assert.ok(!('verification_reason' in out));
   assert.strictEqual(out.direct_agent_authorised, true);
-  assert.strictEqual(out.private_id_profile_reviewed, true);
-  assert.strictEqual(out.profile_claim_pending, false, 'the agent has an account');
-  assert.strictEqual(publicAgentPayload({ id: 'a', verification_reason: '[DIRECT_AGENT_AUTHORISED]' }).profile_claim_pending, true);
+  // C3: the internal review flags are staff-only.
+  assert.ok(!('private_id_profile_reviewed' in out));
+  assert.ok(!('profile_claim_pending' in out));
+  assert.ok(!('profile_claim_pending' in publicAgentPayload({ id: 'a', verification_reason: '[DIRECT_AGENT_AUTHORISED]', profile_claim_pending: true })));
 });
 
 test('an agent listing exposes only public extra_fields', () => {

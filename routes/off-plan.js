@@ -4,6 +4,7 @@ const { createLead, recordLeadHandoff } = require('../services/leadService');
 const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
 const leadFormLimiter = createLeadFormLimiter();
 const express = require('express');
+const { publicOffPlanPayload } = require('../utils/publicOffPlanPayload');
 const db = require('../config/database');
 const { requireAdminApiKey, requireStaffAccess } = require('../middleware/auth');
 const {
@@ -112,7 +113,7 @@ function whatsappEnquiryUrl(enquiry = {}, development = null) {
 }
 
 publicRouter.get('/', asyncRoute(async (req, res) => {
-  const developments = await listPublicDevelopments(db, req.query);
+  const developments = (await listPublicDevelopments(db, req.query)).map(publicOffPlanPayload);
   res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
   return res.json({ ok: true, developments, count: developments.length });
 }));
@@ -238,7 +239,7 @@ publicRouter.get('/:slug', asyncRoute(async (req, res) => {
   const development = await getPublicDevelopment(db, req.params.slug, publicCountryCode(req.query.country));
   if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
   res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-  return res.json({ ok: true, development });
+  return res.json({ ok: true, development: publicOffPlanPayload(development) });
 }));
 
 function mountManagementRoutes(router, authMiddleware, { allowPermanentDelete = false } = {}) {
