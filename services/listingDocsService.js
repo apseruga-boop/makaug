@@ -12,7 +12,8 @@ const PDFDocument = require('pdfkit');
 const sharp = require('sharp');
 
 const LISTER_TERMS_VERSION = '2026-10-v1';
-const AGENT_GUIDE_VERSION = '2026-10-v1';
+const AGENT_GUIDE_VERSION = '2026-10-v2';
+const AGENT_TERMS_VERSION = '2026-10-v1';
 
 const INK = '#15213A';
 const ORANGE = '#E8662A';
@@ -38,6 +39,9 @@ function docUrls(kind) {
   if (kind === 'agent_guide') {
     return { pdf: `${base}/legal/makaug-agent-guide.pdf?v=${AGENT_GUIDE_VERSION}`, cover: `${base}/legal/makaug-agent-guide-cover.png?v=${AGENT_GUIDE_VERSION}` };
   }
+  if (kind === 'agent_terms') {
+    return { pdf: `${base}/legal/makaug-agent-terms.pdf?v=${AGENT_TERMS_VERSION}`, cover: `${base}/legal/makaug-agent-terms-cover.png?v=${AGENT_TERMS_VERSION}` };
+  }
   return { pdf: `${base}/legal/makaug-private-lister-terms.pdf?v=${LISTER_TERMS_VERSION}`, cover: `${base}/legal/makaug-private-lister-terms-cover.png?v=${LISTER_TERMS_VERSION}` };
 }
 
@@ -49,6 +53,7 @@ function settingsDefaults(settings = {}) {
     listerMonthly: Number(lister.monthly_ugx || 20000),
     agentMonthly: Number(agent.monthly_ugx || 50000),
     finalAfter: Number(agent.final_after_days_overdue ?? 7),
+    agentFreeDays: Number(process.env.AGENT_TRIAL_DAYS || 14) || 14,
     payTo: settings.pay_to || {}
   };
 }
@@ -225,7 +230,8 @@ async function buildAgentGuidePdf(settings = {}) {
 
   section(doc, '5. Your subscription');
   bullets(doc, [
-    `The makaug agent plan is ${ugx(s.agentMonthly)} per month.`,
+    `New agents start with ${s.agentFreeDays} days free. We tell you the date it ends and remind you before it does, so there are no surprises.`,
+    `After the free days, the makaug agent plan is ${ugx(s.agentMonthly)} per month.`,
     `Pay to ${payLine}, then send the transaction ID (or a screenshot of the payment message) here on WhatsApp. We match it and confirm it — you will get a thank-you message when it is recorded.`,
     'We remind you 3 days before your renewal date and on the day.',
     `If the month is not paid, we send reminders; after ${s.finalAfter} days overdue a final reminder, and then your listings may be paused. Nothing is deleted — as soon as you pay, everything goes back live exactly as it was.`
@@ -249,15 +255,91 @@ async function buildAgentGuidePdf(settings = {}) {
 
 // ---------------------------------------------------------------------------
 // Cover card PNG (what WhatsApp shows) — 1080x1350
+async function buildAgentTermsPdf(settings = {}) {
+  const s = settingsDefaults(settings);
+  const help = helpContact();
+  const { doc, done } = newDoc('makaug — Agent terms');
+  header(doc, 'Terms for agents on makaug', `For estate agents and brokers listing properties on makaug.com. Version ${AGENT_TERMS_VERSION}.`);
+
+  doc.roundedRect(60, doc.y, doc.page.width - 120, 74, 8).fill('#FFF3E8');
+  const boxTop = doc.y + 12;
+  doc.fillColor(INK).font('Helvetica-Bold').fontSize(11).text('In short', 76, boxTop);
+  doc.font('Helvetica').fontSize(10).fillColor('#222').text(
+    `Your first ${s.agentFreeDays} days are free. After that the agent plan is ${ugx(s.agentMonthly)} per month. makaug advertises your properties; we take no commission and are not part of any deal. Reply AGREE on WhatsApp to accept these terms.`,
+    76, boxTop + 16, { width: doc.page.width - 152, lineGap: 1.5 }
+  );
+  doc.x = 60;
+  doc.y = boxTop + 74;
+  doc.moveDown(0.6);
+
+  section(doc, '1. Who we are');
+  para(doc, 'makaug.com is an online property marketplace for Uganda, operated by Makaug Online Real Estate Ltd ("makaug", "we"). These terms are between makaug and you, the agent or broker named in your makaug agent account ("you").');
+
+  section(doc, '2. The free period and the agent plan');
+  bullets(doc, [
+    `Your first ${s.agentFreeDays} days on makaug are free, counted from the day your agent account is switched on. We tell you the date it ends.`,
+    `After that, the agent plan is ${ugx(s.agentMonthly)} per month, for as long as you want your agent page and listings live.`,
+    'Nothing is charged automatically. We send you a payment link before the free period ends and before each renewal; you pay by Mobile Money (or card where offered).',
+    `If a payment is not made, we send reminders, and after ${s.finalAfter} days overdue your listings may be paused. Nothing is deleted: when you pay, everything goes back live exactly as it was.`,
+    'You can stop at any time by telling us on WhatsApp (reply HELP). You will not be charged for a period you did not use after you have told us to stop.',
+    'We may change the price with at least 30 days\' notice by WhatsApp; the new price applies from your next renewal after that.'
+  ]);
+
+  section(doc, '3. What you get');
+  bullets(doc, [
+    'Your own agent page on makaug.com and an agent ID, showing your listings.',
+    'Posting by WhatsApp: send photos and details, we write the listing, our team checks it, and you get the link when it is live.',
+    'Enquiries sent straight to your WhatsApp number with the enquirer\'s name, number and message, and a weekly report of views and enquiries.',
+    'Exposure to buyers and tenants in Uganda and Ugandans abroad. We do not promise a particular number of views, enquiries or sales.'
+  ]);
+
+  section(doc, '4. Your listings');
+  bullets(doc, [
+    'List only properties you are instructed to market, with true prices, true descriptions and real photos of that property.',
+    'Do not post another agent\'s or owner\'s property without permission, and do not use photos with other agents\' watermarks.',
+    'Tell us when a property is sold or let so that it comes down (reply REMOVE).',
+    'You give makaug permission to display, edit for clarity, share and promote your listings, photos and videos on makaug.com and on our social channels.',
+    'We may decline, pause or remove a listing, or suspend an account, if details cannot be confirmed, we receive a credible complaint, or these terms are broken.'
+  ]);
+
+  section(doc, '5. Deals and commissions');
+  para(doc, 'makaug is an advertising platform. Any deal, commission, deposit or payment between you, the owner and the client is your responsibility. makaug takes no commission, is not a party to those deals, and is not liable for them. Never ask a client to pay a deposit to makaug.');
+
+  section(doc, '6. Your information');
+  bullets(doc, [
+    'We keep your identity details only to confirm who you are. They are never shown to buyers.',
+    'Your name, agent ID, agent number, photo and listings are shown publicly on your agent page. Your phone number is shown on your listings so buyers can call you.',
+    'We message you on WhatsApp about enquiries, reports, payments and important changes.'
+  ]);
+
+  section(doc, '7. General');
+  bullets(doc, [
+    'These terms are governed by the laws of the Republic of Uganda, and the courts of Uganda have jurisdiction.',
+    'We may update these terms. The version in force is the one at the link we send you; we will message you about important changes. Continuing to list after a change means you accept it.',
+    'If any part of these terms cannot be enforced, the rest still applies.'
+  ]);
+
+  section(doc, '8. Accepting these terms');
+  para(doc, 'When you reply AGREE on WhatsApp, we record the date, time and the number you replied from as your acceptance of this version of the terms.');
+  para(doc, `Questions? Call or WhatsApp ${help.name} on ${help.pretty}.`);
+
+  footer(doc, `makaug — Agent terms — ${AGENT_TERMS_VERSION}`);
+  doc.end();
+  return done;
+}
+
 function esc(s) {
   return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
 async function buildCoverPng(kind, settings = {}) {
   const s = settingsDefaults(settings);
-  const isAgent = kind === 'agent_guide';
-  const title = isAgent ? ['Your makaug', 'agent guide'] : ['Terms for listing', 'your property'];
-  const lines = isAgent
+  const isTerms = kind === 'agent_terms';
+  const isAgent = kind === 'agent_guide' || isTerms;
+  const title = isTerms ? ['Agent terms', 'for makaug'] : isAgent ? ['Your makaug', 'agent guide'] : ['Terms for listing', 'your property'];
+  const lines = isTerms
+    ? [`First ${s.agentFreeDays} days free`, `Then ${ugx(s.agentMonthly)} a month`, 'No commission. Your deal is yours', 'Reply AGREE to accept']
+    : isAgent
     ? ['Post by sending photos on WhatsApp', 'Enquiries come straight to you', `${ugx(s.agentMonthly)} a month`, 'Help: reply HELP any time']
     : [`First ${s.freeDays} days free`, `Then ${ugx(s.listerMonthly)} / month per property`, 'Your ID stays private — never shown', 'makaug advertises; your deal is yours'];
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350">
@@ -267,13 +349,13 @@ async function buildCoverPng(kind, settings = {}) {
   <rect x="0" y="0" width="1080" height="16" fill="${ORANGE}"/>
   <text x="80" y="140" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="46" font-weight="800" fill="${INK}">makaug.com</text>
   <rect x="80" y="210" rx="34" ry="34" width="330" height="68" fill="${ORANGE}"/>
-  <text x="245" y="256" text-anchor="middle" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="32" font-weight="800" fill="#fff">${isAgent ? 'PDF · GUIDE' : 'PDF · TERMS'}</text>
+  <text x="245" y="256" text-anchor="middle" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="32" font-weight="800" fill="#fff">${isTerms ? 'PDF · TERMS' : isAgent ? 'PDF · GUIDE' : 'PDF · TERMS'}</text>
   <text x="80" y="410" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="96" font-weight="900" fill="${INK}">${esc(title[0])}</text>
   <text x="80" y="520" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="96" font-weight="900" fill="${ORANGE}">${esc(title[1])}</text>
   ${lines.map((l, i) => `<rect x="80" y="${620 + i * 130}" rx="28" ry="28" width="920" height="104" fill="#fff"/>
   <circle cx="140" cy="${672 + i * 130}" r="22" fill="#1F9D63"/>
   <text x="190" y="${686 + i * 130}" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="34" font-weight="700" fill="${INK}">${esc(l)}</text>`).join('\n')}
-  <text x="80" y="1250" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="34" font-weight="600" fill="${MUTED}">${isAgent ? 'Tap the link below to open the full guide' : 'Tap the link to read · reply AGREE to accept'}</text>
+  <text x="80" y="1250" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="34" font-weight="600" fill="${MUTED}">${isTerms ? 'Tap the link to read · reply AGREE to accept' : isAgent ? 'Tap the link below to open the full guide' : 'Tap the link to read · reply AGREE to accept'}</text>
 </svg>`;
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
@@ -287,6 +369,8 @@ async function getDocument(name, settings = {}) {
   let out;
   if (name === 'lister_terms_pdf') out = { type: 'application/pdf', body: await buildListerTermsPdf(settings) };
   else if (name === 'agent_guide_pdf') out = { type: 'application/pdf', body: await buildAgentGuidePdf(settings) };
+  else if (name === 'agent_terms_pdf') out = { type: 'application/pdf', body: await buildAgentTermsPdf(settings) };
+  else if (name === 'agent_terms_cover') out = { type: 'image/png', body: await buildCoverPng('agent_terms', settings) };
   else if (name === 'lister_terms_cover') out = { type: 'image/png', body: await buildCoverPng('lister_terms', settings) };
   else if (name === 'agent_guide_cover') out = { type: 'image/png', body: await buildCoverPng('agent_guide', settings) };
   else return null;
@@ -314,6 +398,21 @@ function listerTermsMessage(settings = {}, { name = '' } = {}) {
   ].join('\n');
 }
 
+function agentTermsCaption({ name = '' } = {}) {
+  const urls = docUrls('agent_terms');
+  return [
+    `📄 *One last step${name ? `, ${name}` : ''} — your agent terms*`,
+    '',
+    '• It covers how makaug works for agents, the plan and your listings.',
+    '• makaug takes no commission and is never part of your deal.',
+    '• Your ID is only for checking — it is never shown to anyone.',
+    '',
+    `Read the full terms (PDF): ${urls.pdf}`,
+    '',
+    'Reply *AGREE* to accept them.'
+  ].join('\n');
+}
+
 function agentGuideCaption({ name = '' } = {}) {
   const urls = docUrls('agent_guide');
   return [
@@ -327,10 +426,13 @@ function agentGuideCaption({ name = '' } = {}) {
 module.exports = {
   LISTER_TERMS_VERSION,
   AGENT_GUIDE_VERSION,
+  AGENT_TERMS_VERSION,
+  agentTermsCaption,
   docUrls,
   getDocument,
   buildListerTermsPdf,
   buildAgentGuidePdf,
+  buildAgentTermsPdf,
   buildCoverPng,
   listerTermsMessage,
   agentGuideCaption

@@ -7239,6 +7239,7 @@ function agentConversationalAside({ data = {}, cleanBody = '' } = {}) {
 }
 
 const AGENT_GREETING = /^\s*(hi|hii+|hey|hello+|helo|yo|hallo|good\s*(morning|afternoon|evening|day)|morning|afternoon|evening|greetings|start|menu|hi there|gyebale ?ko|oli otya)\b[\s.!,👋😊🙏]*$/i;
+const AGENT_TERMS_AGREE = require('../services/agentTermsService');
 const AGENT_SHARE_REQUEST = /\b(share|my (link|card|profile|page|listings?|properties)|send me (my|the) (link|card|profile)|how do i share|agent card)\b/i;
 
 /**
@@ -7966,9 +7967,18 @@ async function handleEmployeeWhatsappIntake({
     // listing a house OR a plot; he was asking a question.
     const askedText = normalizeInput(cleanBody);
     const agentVoiceOnly = !askedText && !mediaUrl && /audio|ogg|opus|voice/.test(String(runtime.mediaType || ''));
-    if (!active && (agentVoiceOnly || AGENT_HELP.test(askedText) || AGENT_IS_IT_DONE.test(askedText) || AGENT_HOW_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || AGENT_SHARE_REQUEST.test(askedText))) {
+    if (!active && (agentVoiceOnly || AGENT_HELP.test(askedText) || AGENT_IS_IT_DONE.test(askedText) || AGENT_HOW_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || AGENT_SHARE_REQUEST.test(askedText) || AGENT_TERMS_AGREE.isAgreeReply(askedText))) {
       const askingAgent = await findApprovedAgentByPhone(phone);
       if (askingAgent) {
+        if (AGENT_TERMS_AGREE.isAgreeReply(askedText)) {
+          const accepted = await AGENT_TERMS_AGREE.recordAcceptance(db, { agent: askingAgent, phone }).catch(() => null);
+          if (accepted) {
+            if (accepted.recorded) {
+              require('../services/leadDeskService').sendToTeam(db, `✅ *${askingAgent.full_name} accepted the agent terms* (${phone}).`, 'agent_terms_accepted').catch(() => null);
+            }
+            return { handled: true, nextStep: currentStep, message: AGENT_TERMS_AGREE.thanksMessage({ name: agentGreetingName(askingAgent, ''), repeat: !accepted.recorded }) };
+          }
+        }
         if (agentVoiceOnly) return { handled: true, nextStep: currentStep, message: agentVoiceNoteReply() };
         if (AGENT_HELP.test(askedText)) {
           alertTeamAgentNeedsHelp({ agent: askingAgent, phone, said: askedText });
@@ -8170,7 +8180,7 @@ async function handleEmployeeWhatsappIntake({
       nextStep: 'main_menu',
       prospectPitched: true,
       message: `✅ *Video sent to ${contact.fullName}* — ${dialable}\n\n`
-        + `They have the joining film, what we do, how listing works and the ${agentMonthlyFeeLabel()} a month.\n\n`
+        + `They have the joining film: what we do, who sees their listings, how listing works and the 14 days free.\n\n`
         + (repeat ? '(They had been sent it before — it has gone again.)\n\n' : '')
         + 'They have been asked to reply *AGENT* if they want to join.\n\n'
         + 'When they say yes, reply *Agent 007* and choose *1* to register them.\n\n'
@@ -14575,7 +14585,7 @@ async function agentJoinRequestReply({ phone, text = '' }) {
 // property or join as an agent. Goes before the bot's text reply.
 const EXPLAINER_VIDEOS = {
   lister: { path: '/assets/marketing/makaug-list-your-property-v2.mp4', caption: '🎬 *How listing on makaug works* — under a minute: send photos, confirm it\'s you, agree to the terms, and your property goes live in front of Ugandans at home and abroad (UK, Dubai, Canada, South Africa). First 7 days free.' },
-  agent: { path: '/assets/marketing/makaug-join-as-agent-v2.mp4', caption: '🎬 *makaug for agents* — what you get, who sees your listings (Ugandans at home and abroad) and how to join.' }
+  agent: { path: '/assets/marketing/makaug-join-as-agent-v3.mp4', caption: '🎬 *makaug for agents* — what you get, who sees your listings (Ugandans at home and abroad) and how to join.' }
 };
 
 /** The fee, in the words an agent reads — one source, so it cannot drift. */
@@ -14607,10 +14617,10 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
   const firstName = normalizeInput(name).split(/\s+/)[0] || '';
   const greeting = firstName ? `Hello ${firstName} 👋\n\n` : '';
   const caption = `${greeting}${video.caption}\n\n`
-    + '• Your listings go in front of Ugandans at home and abroad — UK, Dubai, Canada, South Africa.\n'
+    + '• Most of our visitors are in Uganda, and Ugandans abroad find us from the UK, USA, Canada, Dubai, Germany, Sweden, Switzerland, South Africa and more.\n'
+    + '• The site speaks 9 languages, including Luganda and Swahili.\n'
     + '• You post straight from WhatsApp: send the photos and the details, our team checks it, it goes live.\n'
-    + '• You get your own agent page, and every property you list sits under it.\n'
-    + `• It is ${agentMonthlyFeeLabel()} a month.\n\n`
+    + '• You get your own agent page, and every property you list sits under it.\n\n'
     + 'Reply *AGENT* here if you would like to join and we will set you up.';
 
   await db.query(

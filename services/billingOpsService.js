@@ -682,6 +682,11 @@ async function listAgentTrials(db, { includeClosed = false } = {}) {
       WHERE fee_offer_mode = 'free_period' AND removed_at IS NULL AND NOT COALESCE(fee_exempt, false)
       ORDER BY fee_offer_until ASC, full_name ASC`
   )).rows;
+  const termsSigned = new Map();
+  try {
+    const signed = await db.query(`SELECT details->>'agent_id' AS agent_id, MIN(created_at) AS at FROM audit_logs WHERE action = 'agent_terms_accepted' GROUP BY 1`);
+    for (const r of signed.rows || []) termsSigned.set(String(r.agent_id), r.at);
+  } catch (error) { /* the tracker still works without it */ }
   const out = rows.map((row) => {
     const ends = revenue.isoDay(row.fee_offer_until);
     const state = trialState(row, today, remindDays);
@@ -696,6 +701,7 @@ async function listAgentTrials(db, { includeClosed = false } = {}) {
       remind_on: ends ? revenue.addDays(ends, -remindDays) : '',
       days_left: Math.round((Date.parse(`${ends}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000),
       paid_until: revenue.isoDay(row.paid_until),
+      terms_accepted_at: termsSigned.get(String(row.id)) || null,
       state,
       closed: state === 'paid'
     };
@@ -716,7 +722,8 @@ function formatTrialLine(row) {
   const when = row.state === 'overdue' || row.state === 'taken_down'
     ? `ended ${prettyDate(row.ends)} (${Math.abs(left)} day${Math.abs(left) === 1 ? '' : 's'} ago)`
     : `ends ${prettyDate(row.ends)} (${left} day${left === 1 ? '' : 's'} left)`;
-  return `• *${row.name}* ${row.phone ? `(${row.phone})` : ''} — ${TRIAL_STATE_LABEL[row.state] || row.state}, ${when}`;
+  const terms = row.terms_accepted_at ? '' : ' · terms not signed yet';
+  return `• *${row.name}* ${row.phone ? `(${row.phone})` : ''} — ${TRIAL_STATE_LABEL[row.state] || row.state}, ${when}${terms}`;
 }
 
 function buildTrialDigest(rows = []) {

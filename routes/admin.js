@@ -15093,7 +15093,23 @@ async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', ac
       } catch (error) {
         console.warn('[agent-welcome] agent guide queue failed:', error.message);
       }
-      return { media_id: first?.id || null, text_id: full?.id || null, share_id: share?.id || null, how_to_id: howTo?.id || null, guide_id: guide?.id || null };
+      // Sixth: the agent terms (cover + PDF link). Reply AGREE is recorded.
+      let terms = null;
+      try {
+        const listingDocs = require('../services/listingDocsService');
+        terms = await queueWhatsappWebBridgeMessage({
+          recipient: to,
+          text: listingDocs.agentTermsCaption({ name: agentGreetingName(pack.agent) }),
+          mediaUrl: listingDocs.docUrls('agent_terms').cover,
+          mediaType: 'image',
+          source,
+          actorId: actor,
+          metadata: { message_kind: 'agent_terms_pdf', agent_id: pack.agent.id, preview, part: 'agent_terms', terms_version: listingDocs.AGENT_TERMS_VERSION, reply_dedupe_key: `${dedupeBase}:terms` }
+        });
+      } catch (error) {
+        console.warn('[agent-welcome] agent terms queue failed:', error.message);
+      }
+      return { media_id: first?.id || null, text_id: full?.id || null, share_id: share?.id || null, how_to_id: howTo?.id || null, guide_id: guide?.id || null, terms_id: terms?.id || null };
     };
 
     // Whatever must follow the welcome (the payment link) goes after it, not before.
