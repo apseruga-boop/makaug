@@ -4227,6 +4227,11 @@ router.patch('/properties/:id/review', async (req, res, next) => {
       stage: req.body.stage || 'in_review',
       warning_overrides: safeJsonObject(req.body.warning_overrides, {})
     };
+    // C2 addendum: Save never rejects. Rejecting goes through Reject, with a
+    // typed reason and a confirmation (PATCH /api/properties/:id/status).
+    if (['rejected', 'declined', 'fraud', 'deleted', 'archived'].includes(String(reviewPatch.stage || '').trim().toLowerCase())) {
+      return res.status(400).json({ ok: false, code: 'reject_via_decision_panel', error: 'Saving can\'t reject a listing. Use Reject in the Decision panel, type the reason and confirm.' });
+    }
     if (['approved', 'live', 'published'].includes(String(reviewPatch.stage || '').trim().toLowerCase())) {
       const photos = await listingPhotoOrVideoCheck(db, req.params.id);
       if (!photos.ok) {
