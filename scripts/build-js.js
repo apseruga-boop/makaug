@@ -57,7 +57,7 @@ const KEEP_PUBLIC = new Set([
 
 const ASYNC_ENTRY_POINTS = new Set([
   'renderStaffDashboard', 'renderAdminDashboard', 'renderAdminSetupStatus', 'initAdminReviewLocationMap',
-  'refreshMarketplaceModerationQueue', 'openAdminControl', 'staffApprovePreviewListing'
+  'refreshMarketplaceModerationQueue', 'openAdminControl', 'staffApprovePreviewListing', 'openStaffDirectReview'
 ]);
 
 const PUBLIC_TEXT_FILES = () => [
