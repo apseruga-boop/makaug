@@ -42721,11 +42721,37 @@ function renderBrokerRegistrationBadge(broker, textSize = "text-xs") {
   return `<span class="inline-flex items-center gap-1 ${meta.cls} ${textSize} font-semibold px-2.5 py-1 rounded-full"><i class="${meta.icon} text-[10px]"></i>${meta.label}</span>`;
 }
 
+// Found-online listings never show source media (TikTok covers, byteimg links,
+// source_* slots). The one exception is photos staff uploaded from the review
+// screen with the owner's/agent's consent (slot staff_upload, stored under
+// .../staff-images/ on makaug media). The API only sends those; this is the
+// client-side guard.
+const FOUND_ONLINE_SOURCE_MEDIA_RE = /tiktokcdn|byteimg|tiktok\.com/i;
+function isFoundOnlineConsentedPhotoUrl(url = "") {
+  const value = String(url || "").trim();
+  return !!value && !FOUND_ONLINE_SOURCE_MEDIA_RE.test(value) && /\/staff-images\//i.test(value);
+}
+function foundOnlineConsentedPhotos(images = []) {
+  return (Array.isArray(images) ? images : []).filter((item) => {
+    if (!item || typeof item !== "object") return false;
+    const url = String(item.url || item.img || item.src || "").trim();
+    if (!url || FOUND_ONLINE_SOURCE_MEDIA_RE.test(url)) return false;
+    const slot = String(item.slot_key || item.slot || "").trim();
+    return slot ? slot === "staff_upload" : isFoundOnlineConsentedPhotoUrl(url);
+  });
+}
+function foundOnlineConsentedPhotoUrl(p = {}) {
+  const first = foundOnlineConsentedPhotos(p?.images)[0];
+  if (first) return String(first.url || first.img || first.src || "").trim();
+  return [p?.primary_image_url, p?.image, p?.img].map((value) => String(value || "").trim()).find(isFoundOnlineConsentedPhotoUrl) || "";
+}
+
 function getPropertyGalleryPhotos(property) {
   if (!property) return [];
-  if (isFoundOnlineListing(property)) return [];
+  const foundOnline = isFoundOnlineListing(property);
+  if (foundOnline && !foundOnlineConsentedPhotoUrl(property)) return [];
   const baseLocation = [property.area, property.district].filter(Boolean).join(", ");
-  const list = Array.isArray(property.images) ? property.images : [];
+  const list = foundOnline ? foundOnlineConsentedPhotos(property.images) : (Array.isArray(property.images) ? property.images : []);
   const normalized = list.map((item, idx) => {
     const url = item?.url || item?.img || item?.src || "";
     if (!url) return null;
@@ -42743,9 +42769,10 @@ function getPropertyGalleryPhotos(property) {
     };
   }).filter(Boolean);
   if (normalized.length) return normalized;
-  if (property.img) {
+  const fallbackImg = foundOnline ? foundOnlineConsentedPhotoUrl(property) : property.img;
+  if (fallbackImg) {
     return [{
-      url: property.img,
+      url: fallbackImg,
       name: property.title || "Property photo",
       room_label: "",
       slot: "",
@@ -43762,7 +43789,8 @@ function socialImportTileMediaHtml(p = {}, idArg = "''") {
   const platform = socialImportPlatformMeta(p);
   const mediaType = socialImportMediaType(p);
   const sourceUrl = socialImportSourceUrl(p);
-  const coverUrl = foundOnlineSourceThumbnailUrl(p, sourceUrl);
+  // A consented staff photo is the cover; otherwise the static source preview.
+  const coverUrl = foundOnlineConsentedPhotoUrl(p) || foundOnlineSourceThumbnailUrl(p, sourceUrl);
   const encodedUrl = encodeURIComponent(sourceUrl || "");
   const encodedPlatform = encodeURIComponent(platform.label || "Source");
   const canPlay = mediaType === "video" && sourceUrl;
@@ -48490,7 +48518,7 @@ function mapRemotePropertyForUi(p, options = {}) {
   })).filter((item) => item.url);
   const id = String(p?.id || "");
   const thirdPartyDiscovery = isFoundOnlineListing(p);
-  const publicImageItems = thirdPartyDiscovery ? [] : imageItems;
+  const publicImageItems = thirdPartyDiscovery ? foundOnlineConsentedPhotos(imageItems) : imageItems;
   // No photo of its own but a video tour is stored: the video's first frame is the cover.
   const videoFirstMedia = thirdPartyDiscovery ? null : propertyVideoFirstMedia({ ...p, images: publicImageItems });
   const normalizedListingType = normalizeType(p?.listing_type || p?.type);
@@ -48533,7 +48561,7 @@ function mapRemotePropertyForUi(p, options = {}) {
     baths: p?.bathrooms,
     price: Number(p?.price || 0),
     period: p?.price_period || p?.period || "",
-    img: thirdPartyDiscovery ? "" : (firstRealListingPhotoUrl({ ...p, images: publicImageItems }) || (videoFirstMedia ? "" : "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80")),
+    img: thirdPartyDiscovery ? foundOnlineConsentedPhotoUrl({ ...p, images: publicImageItems }) : (firstRealListingPhotoUrl({ ...p, images: publicImageItems }) || (videoFirstMedia ? "" : "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80")),
     desc: p?.description || p?.desc || "",
     area: canonicalDisplay.area,
     district: canonicalDisplay.district,
@@ -48602,8 +48630,9 @@ function upsertPropertyForUi(property) {
     const existing = PROPERTIES[idx];
     const next = { ...existing, ...mapped };
     if (isFoundOnlineListing(mapped)) {
-      next.images = [];
-      next.img = "";
+      const staffImages = foundOnlineConsentedPhotos(mapped.images);
+      next.images = staffImages.length ? staffImages : foundOnlineConsentedPhotos(existing.images);
+      next.img = foundOnlineConsentedPhotoUrl(mapped) || foundOnlineConsentedPhotoUrl({ images: next.images }) || "";
     } else if ((!Array.isArray(mapped.images) || mapped.images.length === 0) && Array.isArray(existing.images) && existing.images.length) {
       next.images = existing.images;
     }
@@ -57498,8 +57527,11 @@ async function openDetail(id, options = {}) {
 	      const landTitleLabel = normalizedType === "land" ? landTitleAvailabilityLabel(getLandTitleAvailabilityValue(p) || "unknown") : "";
 	      const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
   const thirdPartyDetail = isFoundOnlineListing(p);
+  // Found online with consented staff photos: the gallery shows them and the
+  // source preview card isn't the main image.
+  const thirdPartySourceVisual = thirdPartyDetail && !foundOnlineConsentedPhotoUrl(p);
   const detailVideoFirstMedia = thirdPartyDetail ? null : propertyVideoFirstMedia(p);
-  const hidePhotoGallery = thirdPartyDetail || !!detailVideoFirstMedia;
+  const hidePhotoGallery = thirdPartySourceVisual || !!detailVideoFirstMedia;
   const detailPhotos = hidePhotoGallery ? [] : getPropertyGalleryPhotos(p);
   const primaryPhoto = hidePhotoGallery ? null : (detailPhotos.find((item) => item.is_main) || detailPhotos[0] || { url: p.img, slot: "", room_label: "", location_label: [p.area, p.district].filter(Boolean).join(", ") });
   detailGalleryPhotos = hidePhotoGallery ? [] : (detailPhotos.length ? detailPhotos : [primaryPhoto]);
@@ -57615,7 +57647,7 @@ async function openDetail(id, options = {}) {
     <div class="grid lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2">
         <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-          ${thirdPartyDetail ? `
+          ${thirdPartySourceVisual ? `
             <div class="p-4 pb-0">
               ${foundOnlineSourceVisualHtml(p, { detail: true })}
             </div>

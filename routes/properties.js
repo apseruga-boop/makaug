@@ -95,6 +95,11 @@ const {
   cleanListingTitle
 } = require('../services/publicListingCopy');
 const {
+  foundOnlinePublicImages,
+  foundOnlinePrimaryImageUrl,
+  consentedStaffPrimaryImageLateralSql
+} = require('../utils/foundOnlinePublicImages');
+const {
   inferNearestUniversityFromListing,
   normalizeUniversityList,
   normalizeUniversityName
@@ -1152,7 +1157,10 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
   const publicDistrict = canonicalDisplay.district;
   const publicLatitude = !hasUsablePublicPin && locationOverride ? locationOverride.latitude : row.latitude;
   const publicLongitude = !hasUsablePublicPin && locationOverride ? locationOverride.longitude : row.longitude;
-  const primaryImageUrl = foundOnlinePublic ? null : normalizePublicImageUrl(row.primary_image_url);
+  // Found online: only photos staff uploaded with the owner's/agent's consent.
+  const primaryImageUrl = foundOnlinePublic
+    ? normalizePublicImageUrl(foundOnlinePrimaryImageUrl(row))
+    : normalizePublicImageUrl(row.primary_image_url);
   const publicTitle = foundOnlinePublic
     ? buildThirdPartyPublicTitle(row, safeExtra)
     : cleanListingTitle(row);
@@ -1739,6 +1747,8 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
     extra_fields: safeExtra
   });
   const foundOnlinePublic = isFoundOnlinePublicRow(property, safeExtra);
+  // Found online: source media stays hidden; consented staff uploads are public.
+  const foundOnlineImages = foundOnlinePublic ? foundOnlinePublicImages(images, property?.extra_fields) : null;
   const locationOverride = publicLocationOverrideForListing(safeProperty, safeExtra);
   const hasUsablePublicPin = isUsablePublicCoordinate(safeProperty.latitude, safeProperty.longitude);
   const publicTitle = foundOnlinePublic
@@ -1788,9 +1798,9 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
     agent_id: foundOnlinePublic ? null : safeProperty.agent_id,
     lister_phone: foundOnlinePublic ? null : safeProperty.lister_phone,
     lister_email: foundOnlinePublic ? null : safeProperty.lister_email,
-    primary_image_url: foundOnlinePublic ? null : safeProperty.primary_image_url,
-    image: foundOnlinePublic ? null : safeProperty.image,
-    images: foundOnlinePublic ? [] : images,
+    primary_image_url: foundOnlinePublic ? (foundOnlineImages[0]?.url || null) : safeProperty.primary_image_url,
+    image: foundOnlinePublic ? (foundOnlineImages[0]?.url || null) : safeProperty.image,
+    images: foundOnlinePublic ? foundOnlineImages : images,
     third_party_discovery_result: foundOnlinePublic,
     listing_origin: foundOnlinePublic ? 'found_online' : (safeProperty.listed_by || (safeProperty.agent_id || safeProperty.lister_type === 'agent' ? 'agent' : 'private'))
   };
@@ -2952,7 +2962,8 @@ async function listPropertiesHandler(req, res, next) {
           END AS listed_by,
           ${listingOriginSql('p')} AS listing_origin,
           COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered') AS registration_status,
-          img.url AS primary_image_url
+          img.url AS primary_image_url,
+          staff_img.url AS staff_primary_image_url
         FROM public_page
         JOIN properties p ON p.id = public_page.id
         LEFT JOIN LATERAL (
@@ -2962,6 +2973,7 @@ async function listPropertiesHandler(req, res, next) {
           ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
           LIMIT 1
         ) img ON true
+        ${consentedStaffPrimaryImageLateralSql('p')}
         ORDER BY public_page.__page_order`
       : `WITH public_page_source AS (
         SELECT
@@ -3044,7 +3056,8 @@ async function listPropertiesHandler(req, res, next) {
       )
       SELECT
         public_page.*,
-        img.url AS primary_image_url
+        img.url AS primary_image_url,
+        staff_img.url AS staff_primary_image_url
       FROM public_page
       LEFT JOIN LATERAL (
         SELECT i.url
@@ -3053,6 +3066,7 @@ async function listPropertiesHandler(req, res, next) {
         ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
         LIMIT 1
       ) img ON true
+      ${consentedStaffPrimaryImageLateralSql('public_page')}
       ORDER BY public_page.__page_order`;
     const listResult = await withPublicPropertyDatabaseRetry(() => db.query(listSql, listValues));
     const hasMoreRows = !hasOpportunitySummary && listResult.rows.length > limit;
@@ -3127,6 +3141,7 @@ async function listPropertiesHandler(req, res, next) {
           moderation_reason: rowModerationReason,
           found_online_candidate: rowFoundOnlineCandidate,
           __page_order: rowPageOrder,
+          staff_primary_image_url: _rowStaffPrimaryImageUrl,
           ...publicRow
         } = row;
         const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
@@ -3137,7 +3152,9 @@ async function listPropertiesHandler(req, res, next) {
           extra_fields: safeExtra
         });
         const foundOnlinePublic = isFoundOnlinePublicRow(row, safeExtra);
-        const primaryImageUrl = foundOnlinePublic ? null : normalizePublicImageUrl(row.primary_image_url);
+        const primaryImageUrl = foundOnlinePublic
+          ? normalizePublicImageUrl(foundOnlinePrimaryImageUrl(row))
+          : normalizePublicImageUrl(row.primary_image_url);
         const locationOverride = publicLocationOverrideForListing(row, safeExtra);
         const hasUsablePublicPin = isUsablePublicCoordinate(row.latitude, row.longitude);
         const publicDistrict = canonicalDisplay.district;

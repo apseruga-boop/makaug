@@ -17,6 +17,7 @@ const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
 const { compactUgx } = require('../utils/compactUgx');
+const { foundOnlinePrimaryImageUrl, consentedStaffPrimaryImageLateralSql } = require('../utils/foundOnlinePublicImages');
 const {
   buildThirdPartyPublicSummary,
   buildThirdPartyPublicTitle,
@@ -334,7 +335,8 @@ function normalizeSeoListingRow(row = {}) {
     bedrooms: Number(row.bedrooms || 0) || 0,
     bathrooms: Number(row.bathrooms || 0) || 0,
     property_type: humanPropertyTypeLabel(plainText(row.property_type)),
-    primary_image_url: foundOnline ? '' : String(row.primary_image_url || '').trim(),
+    // Found online: only a photo staff uploaded with consent, never source media.
+    primary_image_url: foundOnline ? String(foundOnlinePrimaryImageUrl(row) || '') : String(row.primary_image_url || '').trim(),
     canonical_location_id: String(row.canonical_location_id || '').trim(),
     city: plainText(row.city),
     neighborhood: plainText(row.neighborhood),
@@ -370,7 +372,8 @@ async function loadPublicSeoListings(db, options = {}) {
        p.source, p.listed_via,
        ${listingCopyExtraSql('p')} AS copy_extra,
        p.created_at, p.updated_at, COUNT(*) OVER() AS seo_total,
-       image.url AS primary_image_url
+       image.url AS primary_image_url,
+       staff_img.url AS staff_primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
        SELECT i.url
@@ -379,6 +382,7 @@ async function loadPublicSeoListings(db, options = {}) {
        ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
        LIMIT 1
      ) image ON TRUE
+     ${consentedStaffPrimaryImageLateralSql('p')}
      WHERE ${publicVisibleInventoryWhere('p')}
        AND ${categoryWhere}
        ${locationWhere}
@@ -411,7 +415,8 @@ async function loadPublicSeoListing(db, propertyId) {
        ${listingCopyExtraSql('p')} AS copy_extra,
        p.created_at, p.updated_at,
        ${realHostedPhotoExistsSql('p')} AS has_real_photo,
-       image.url AS primary_image_url
+       image.url AS primary_image_url,
+       staff_img.url AS staff_primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
        SELECT i.url
@@ -420,6 +425,7 @@ async function loadPublicSeoListing(db, propertyId) {
        ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
        LIMIT 1
      ) image ON TRUE
+     ${consentedStaffPrimaryImageLateralSql('p')}
      WHERE p.id::text = $1
        AND ${publicVisibleInventoryWhere('p')}
        LIMIT 1`,
