@@ -13901,7 +13901,7 @@ function formatFoundOnlineSourceLine(row = {}, lang = 'en') {
       || getExtraField(row, 'original_posted_at')
       || getExtraField(row, 'source_posted_at');
   const firstPosted = firstPostedRaw ? String(firstPostedRaw).slice(0, 10) : '';
-  const addedRaw = getExtraField(row, 'added_to_makaug_at') || row.created_at;
+  const addedRaw = row.created_at || getExtraField(row, 'added_to_makaug_at');
   const added = addedRaw ? String(addedRaw).slice(0, 10) : '';
   const hasDirectContact = Boolean(row.lister_phone || row.contact_phone || row.phone || getExtraField(row, 'contact_phone') || getExtraField(row, 'phone') || getExtraField(row, 'contact_phone_alt'));
   const hasSourceContact = Boolean(getExtraField(row, 'source_contact_url') || getExtraField(row, 'source_channel_url') || getExtraField(row, 'youtube_channel_url') || getExtraField(row, 'source_url'));

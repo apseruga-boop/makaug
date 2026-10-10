@@ -1763,6 +1763,10 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
   const publicContactPhone = publicContactPhoneForRow(property, safeExtra);
   const extraWithStudentContext = {
     ...safeExtra,
+    // "Added to makaug" is when the listing was created here (P3), not a date
+    // copied from the source record.
+    added_to_makaug_at: safeProperty.created_at || safeExtra.added_to_makaug_at || null,
+    added_to_makaug_label: null,
     source_contact_label: publicListingContactLabel(safeExtra, publicContactPhone, foundOnlinePublic ? '' : safeProperty.lister_email),
     public_contact_phone: publicContactPhone || null,
     contact_phone: publicContactPhone || null,
@@ -3174,6 +3178,8 @@ async function listPropertiesHandler(req, res, next) {
         const publicContactPhone = publicContactPhoneForRow(row, safeExtra);
         const publicExtra = {
           ...safeExtra,
+          added_to_makaug_at: row.created_at || safeExtra.added_to_makaug_at || null,
+          added_to_makaug_label: null,
           source_contact_label: publicListingContactLabel(safeExtra, publicContactPhone),
           public_contact_phone: publicContactPhone || null,
           contact_phone: publicContactPhone || null,
