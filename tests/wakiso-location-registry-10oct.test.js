@@ -120,10 +120,14 @@ test('a staff-picked town is not rewritten to Wakiso Town', () => {
 
   const zana = normalizeReviewLocationHierarchy({
     area: 'Zana', district: 'Wakiso', city: 'Nansana', neighborhood: 'Zana'
-  });
+  }, { preferChosenCity: true });
   assert.deepEqual(zana.errors, [], zana.errors.join('; '));
   assert.equal(zana.city, 'Nansana');
   assert.equal(zana.neighborhood, 'Zana');
+  const storedZana = normalizeReviewLocationHierarchy({
+    area: 'Zana', district: 'Wakiso', city: 'Wakiso Town', neighborhood: 'Zana'
+  });
+  assert.equal(storedZana.city, 'Wakiso', 'a stored Wakiso Town follows the catalogue');
 });
 
 test('Kisaasi can be saved under Kawempe or Nakawa, and defaults to Nakawa', () => {

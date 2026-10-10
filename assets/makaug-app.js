@@ -1293,7 +1293,7 @@ const I18N_UI = {
     navMortgage: "Mortgage Finder",
     navAI: "Discover AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Uganda's #1 Free Property Platform",
+    heroBadge: "Every property in Uganda, in one place",
     heroTitleHtml: "Find your next home, land, rental, or student room",
     heroSubtitle: "makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising property opportunities in one place.",
     heroSubtitlePrefix: "makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising",
@@ -1460,7 +1460,7 @@ const I18N_UI = {
     navMortgage: "Noonya Mortgage",
     navAI: "Noonya AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Pulatifoomu y'ebintu ey'obwereere mu Uganda",
+    heroBadge: "Buli property mu Uganda, mu kifo kimu", // REVIEW: Luganda, confirm with a native speaker
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo ennungi",
     heroSubtitle: "Enkola y'okunoonya ebintu mu Uganda: amaka, ez'okupangisa, ettaka, ebisenge by'abayizi, n'ebizuuliddwa ku social media.",
     heroRent: "Pangisa",
@@ -1589,7 +1589,7 @@ const I18N_UI = {
     navMortgage: "Tafuta Rehani",
     navAI: "Gundua AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Jukwaa la bure la mali Uganda",
+    heroBadge: "Kila mali nchini Uganda, mahali pamoja", // REVIEW: Swahili, confirm with a native speaker
     heroTitleHtml: "Pata <span class=\"text-green-300\">maka</span> yako bora",
     heroSubtitle: "Search engine ya mali Uganda: nyumba, za kupanga, ardhi, vyumba vya wanafunzi, na listings kutoka mitandao ya kijamii.",
     heroRent: "Kupanga",
@@ -1717,7 +1717,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Dony",
-    heroBadge: "Uganda's #1 free property platform",
+    heroBadge: "Property ducu i Uganda, i kabedo acel", // REVIEW: Acholi, confirm with a native speaker
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Yeny",
@@ -1750,7 +1750,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Ingira",
-    heroBadge: "Pulatifoomu ya property y'obwereere #1 omu Uganda",
+    heroBadge: "Buri property omuri Uganda, omu mwanya gumwe", // REVIEW: Runyankole, confirm with a native speaker
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shanga",
@@ -1783,7 +1783,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Injira",
-    heroBadge: "Platform y'obusaare eya property #1 omuri Uganda",
+    heroBadge: "Buri property omuri Uganda, omu mwanya gumwe", // REVIEW: Rukiga, confirm with a native speaker
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shaka",
@@ -1816,7 +1816,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Yingira",
-    heroBadge: "Pulatifoomu ya property ey'obwerere #1 mu Uganda",
+    heroBadge: "Buli property mu Uganda, mu kifo kimu", // REVIEW: Lusoga, confirm with a native speaker
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Noonia",
@@ -2309,7 +2309,7 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   navMortgage: "የብድር መፈለጊያ",
   navAI: "AI Chatbot ያግኙ",
   navFraud: "ማጭበርበር",
-  heroBadge: "የኡጋንዳ ነፃ የንብረት መድረክ",
+  heroBadge: "በኡጋንዳ ያለ እያንዳንዱ ንብረት፣ በአንድ ቦታ", // REVIEW: Amharic, confirm with a native speaker
   heroTitleHtml: "ቀጣዩን ቤት፣ መሬት፣ ኪራይ ወይም የተማሪ ክፍል ያግኙ",
   heroSubtitle: "makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ የንብረት እድሎችንም በአንድ ቦታ ያደራጃል።",
   heroSubtitlePrefix: "makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ ያደራጃል",
@@ -2435,7 +2435,7 @@ I18N_UI.ar = Object.assign({}, I18N_UI.en, {
   navMortgage: "حاسبة التمويل",
   navAI: "اكتشف روبوت AI",
   navFraud: "الاحتيال",
-  heroBadge: "منصة عقارات مجانية في أوغندا",
+  heroBadge: "كل عقار في أوغندا، في مكان واحد", // REVIEW: Arabic, confirm with a native speaker
   heroTitleHtml: "اعثر على بيتك أو أرضك أو إيجارك التالي",
   heroSubtitle: "يستخدم makaug بحثاً مدعوماً بالذكاء الاصطناعي لفحص مصادر العقارات العامة على الإنترنت في أوغندا وتنظيم الفرص في مكان واحد.",
   heroSubtitlePrefix: "يستخدم makaug بحثاً مدعوماً بالذكاء الاصطناعي لفحص مصادر العقارات العامة على الإنترنت في أوغندا وتنظيم",
@@ -15868,7 +15868,8 @@ function renderStaffListingPreviewModal(preview = {}) {
             <div class="mt-3 space-y-2 max-h-52 overflow-auto">
               ${(duplicates.rows || []).slice(0, 8).map((row) => `<div class="rounded-lg bg-white border border-gray-200 p-2 text-xs">
                 <div class="font-black text-gray-900">${adminEscape(row.title || "Duplicate candidate")}</div>
-                <div class="text-gray-500">${adminEscape([row.area, row.district, row.status].filter(Boolean).join(" • "))}</div>
+                ${row.duplicate_reason ? `<div class="mt-0.5 inline-block rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-black text-red-800" data-duplicate-reason="${adminAttr(row.duplicate_reason_code || "")}">${adminEscape(row.duplicate_reason)}</div>` : ""}
+                <div class="text-gray-500">${adminEscape([row.inquiry_reference, row.area, row.district, row.status].filter(Boolean).join(" • "))}</div>
               </div>`).join("") || ""}
             </div>
           </section>
@@ -27203,7 +27204,7 @@ function adminReviewRefreshHierarchyControls(options = {}) {
   if (syncMap) adminReviewScheduleLocationSync();
   // P7: the review screen opened before the district's towns were loaded, so the
   // Town dropdown only offered the saved value ("Kampala"). Load them once and redraw.
-  if (district && !options.catalogLoaded && !getDistrictLocationTree(district).length) {
+  if (district && !options.catalogLoaded && !serverLocationCatalogDistricts.has(district)) {
     loadSharedLocationCatalogForDistrict(district)
       .then(() => {
         if (document.getElementById("admin-review-city-edit")) adminReviewRefreshHierarchyControls({ ...options, syncMap: false, catalogLoaded: true });
@@ -41665,36 +41666,65 @@ function getDistrictLocationTree(district) {
 }
 
 const sharedLocationCatalogRequests = new Map();
+// C11 (Fisher, 10 Oct 2026): the server catalogue is the single source for the
+// Town and Neighbourhood dropdowns. It used to be asked only when the
+// in-browser tree had nothing for the district, so towns and places added on
+// the server (Kira, Nsangi, Busiika, Kiwologoma, Kampala's five divisions…)
+// never appeared. Now it is always loaded once per district and merged: the
+// server's town for a place wins, and in-browser places the server doesn't
+// know are kept under their own town.
+const serverLocationCatalogDistricts = new Set();
+
+function mergeLocationTreeWithServerRows(district = "", rows = [], browserTree = []) {
+  const groups = new Map();
+  const placed = new Set();
+  const add = (town, item) => {
+    if (!town || !item?.name) return;
+    const key = String(item.name).trim().toLowerCase();
+    if (placed.has(key)) return;
+    placed.add(key);
+    if (!groups.has(town)) groups.set(town, new Map());
+    groups.get(town).set(item.name, item);
+  };
+  (Array.isArray(rows) ? rows : []).forEach((item) => {
+    if (!item?.name || (item.province || item.district) !== district) return;
+    add(item.town || district, {
+      name: item.name,
+      ...(Number.isFinite(item.latitude) ? { lat: item.latitude } : {}),
+      ...(Number.isFinite(item.longitude) ? { lng: item.longitude } : {})
+    });
+  });
+  const serverTowns = new Set(groups.keys());
+  (Array.isArray(browserTree) ? browserTree : []).forEach((cityNode) => {
+    // An old town spelling ("Wakiso Town", "Nakawa Division") isn't offered when
+    // the server has the current one; its places join the server's towns.
+    const town = serverTowns.size && !serverTowns.has(cityNode.city) ? "" : cityNode.city;
+    (cityNode.neighborhoods || []).forEach((item) => add(town || district, item));
+  });
+  return Array.from(groups.entries())
+    .map(([city, neighborhoods]) => ({
+      city,
+      neighborhoods: Array.from(neighborhoods.values()).sort((a, b) => a.name.localeCompare(b.name))
+    }))
+    .sort((a, b) => a.city.localeCompare(b.city));
+}
 
 async function loadSharedLocationCatalogForDistrict(district = "") {
   const cleanDistrict = String(district || "").trim();
   if (!cleanDistrict) return [];
-  if (Array.isArray(UG_LOCATION_TREE[cleanDistrict]) && UG_LOCATION_TREE[cleanDistrict].length) {
+  if (serverLocationCatalogDistricts.has(cleanDistrict) && Array.isArray(UG_LOCATION_TREE[cleanDistrict])) {
     return UG_LOCATION_TREE[cleanDistrict];
   }
   if (sharedLocationCatalogRequests.has(cleanDistrict)) return sharedLocationCatalogRequests.get(cleanDistrict);
   const request = apiRequest(`/api/properties/locations/catalog?district=${encodeURIComponent(cleanDistrict)}`, { skipAuth: true })
     .then((response) => {
-      const groups = new Map();
-      (Array.isArray(response?.data) ? response.data : []).forEach((item) => {
-        if (!item?.name || (item.province || item.district) !== cleanDistrict) return;
-        const town = item.town || `${cleanDistrict} Town`;
-        if (!groups.has(town)) groups.set(town, new Map());
-        groups.get(town).set(item.name, {
-          name: item.name,
-          ...(Number.isFinite(item.latitude) ? { lat: item.latitude } : {}),
-          ...(Number.isFinite(item.longitude) ? { lng: item.longitude } : {})
-        });
-      });
-      UG_LOCATION_TREE[cleanDistrict] = Array.from(groups.entries())
-        .map(([city, neighborhoods]) => ({
-          city,
-          neighborhoods: Array.from(neighborhoods.values()).sort((a, b) => a.name.localeCompare(b.name))
-        }))
-        .sort((a, b) => a.city.localeCompare(b.city));
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      if (!rows.length) return UG_LOCATION_TREE[cleanDistrict] || [];
+      UG_LOCATION_TREE[cleanDistrict] = mergeLocationTreeWithServerRows(cleanDistrict, rows, UG_LOCATION_TREE[cleanDistrict] || []);
+      serverLocationCatalogDistricts.add(cleanDistrict);
       return UG_LOCATION_TREE[cleanDistrict];
     })
-    .catch(() => [])
+    .catch(() => UG_LOCATION_TREE[cleanDistrict] || [])
     .finally(() => sharedLocationCatalogRequests.delete(cleanDistrict));
   sharedLocationCatalogRequests.set(cleanDistrict, request);
   return request;

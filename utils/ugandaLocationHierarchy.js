@@ -7,6 +7,7 @@ const {
   canonicalizeUgandaLocation,
   isExcludedLocationOnly,
   normalizeDistrict,
+  canonicalTownName,
 } = require('./ugandaLocationRegistry');
 
 const UG_REGION_DISTRICTS = {
@@ -157,30 +158,28 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
     errors.push('area/neighbourhood must be more specific than a district');
   }
 
-  const staffCity = clean(fields.city);
-  const fallbackTown = !clean(canonical?.town) || clean(canonical?.town) === `${district} Town`;
-  let staffCityKeptOverFallback = false;
+  // C11 (Fisher, 10 Oct): staff picked "Kira" for MK-20261009-71C398 and it
+  // reverted to "Wakiso Town" on reload, because the area's catalogue town
+  // always replaced the town staff chose. Old town spellings are mapped to the
+  // current names first ("Wakiso Town" -> "Wakiso", "Nakawa Division" ->
+  // "Nakawa"); a town chosen in this save that exists in the district wins
+  // over the area's default town. A stored town still follows the catalogue.
+  // Kisaasi is the exception that does not need the flag: Kawempe and Nakawa
+  // are both real parents, so either staff choice is kept.
+  const tree = getDistrictLocationTree(district);
+  if (city) city = canonicalTownName(district, city, area || neighborhood) || city;
+  const boundaryTowns = canonical && canonical.district === 'Kampala' ? kampalaTownsForArea(canonical.name) : [];
+  const staffCityOnBoundary = Boolean(city) && boundaryTowns.includes(city);
+  const chosenCityIsKnown = options.preferChosenCity === true && Boolean(city) && tree.some((item) => item.city === city);
   if (canonical && canonical.level !== 'region' && (canonical.level !== 'district' || allowDistrictNode)) {
     neighborhood = canonical.name;
-    const boundaryTowns = canonical.district === 'Kampala' ? kampalaTownsForArea(canonical.name) : [];
-    const allowedTowns = boundaryTowns.length
-      ? boundaryTowns
-      : (clean(canonical.town) ? [clean(canonical.town)] : []);
-    if (!staffCity) {
-      city = clean(canonical.town) || (canonical.level === 'district' ? `${canonical.name} Town` : '');
-    } else if (allowedTowns.includes(staffCity)) {
-      city = staffCity;
-    } else if (fallbackTown) {
-      // A town the moderator picked must not be replaced by "Wakiso Town".
-      city = staffCity;
-      staffCityKeptOverFallback = true;
-    } else {
-      city = clean(canonical.town) || staffCity;
+    if (!(chosenCityIsKnown || staffCityOnBoundary)) {
+      city = clean(canonical.town) || city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
     }
   }
 
-  const tree = getDistrictLocationTree(district);
   let cityNode = city ? tree.find((item) => item.city === city) : null;
+  const staffTownForCanonical = chosenCityIsKnown && canonical && canonical.district === district && neighborhood === canonical.name;
   const explicitCanonicalHierarchy = allowCanonicalHierarchy && explicitCanonical && explicitCanonical.district === district;
   if (city && !cityNode && !explicitCanonicalHierarchy) {
     errors.push('city/town must belong to the selected district');
@@ -194,11 +193,8 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
     const neighborhoodMatchesCity = cityNode
       ? (cityNode.neighborhoods || []).some((n) => n.name === neighborhood)
       : false;
-    if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name)) {
-      const staffCityInTree = staffCityKeptOverFallback && tree.some((item) => item.city === city);
-      if (!staffCityInTree) {
-        errors.push('neighbourhood must belong to the selected district and town/city');
-      }
+    if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name) && !staffTownForCanonical && !staffCityOnBoundary) {
+      errors.push('neighbourhood must belong to the selected district and town/city');
     }
   }
 

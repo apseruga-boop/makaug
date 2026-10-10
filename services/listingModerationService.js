@@ -555,7 +555,9 @@ function buildAutomatedListingReview({
     checkResult(
       'makaug_duplicate_checked',
       likelyDuplicates.length ? 'fail' : 'pass',
-      likelyDuplicates.length ? 'Possible duplicate listing found on makaug.' : 'No likely makaug duplicate found.',
+      likelyDuplicates.length
+        ? `Possible duplicate listing found on makaug: ${[...new Set(likelyDuplicates.map((row) => row.duplicate_reason).filter(Boolean))].join('; ') || 'strong match'}.`
+        : 'No likely makaug duplicate found.',
       { count: likelyDuplicates.length, rows: likelyDuplicates.slice(0, 5) }
     ),
     checkResult(

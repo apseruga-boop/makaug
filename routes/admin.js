@@ -256,6 +256,7 @@ const agentReportCards = require('../services/agentReportCardService');
 const agentReportVideos = require('../services/agentReportVideoService');
 const agentWelcome = require('../services/agentWelcomeService');
 
+const { DUPLICATE_CANDIDATES_SQL, classifyDuplicates, duplicateCandidateParams } = require('../utils/duplicateEvidence');
 const router = express.Router();
 
 router.use(requireAdminApiKey);
@@ -3121,35 +3122,8 @@ async function loadPropertyReview(propertyId) {
        LIMIT 20`,
       [resolvedPropertyId, listing.lister_phone || null, listing.lister_email || null]
     ),
-    db.query(
-      `SELECT id, title, listing_type, district, area, address, price, status, created_at
-       FROM properties
-       WHERE id <> $1
-         AND (
-           LOWER(title) = LOWER($2)
-           OR (
-             COALESCE(address, '') <> ''
-             AND LOWER(COALESCE(address, '')) = LOWER(COALESCE($3::text, ''))
-           )
-           OR (
-             listing_type = $4
-             AND district = $5
-             AND LOWER(area) = LOWER($6)
-             AND COALESCE(price, 0) = COALESCE($7::bigint, 0)
-           )
-         )
-       ORDER BY created_at DESC
-       LIMIT 20`,
-      [
-        resolvedPropertyId,
-        listing.title || '',
-        listing.address || null,
-        listing.listing_type,
-        listing.district,
-        listing.area,
-        listing.price
-      ]
-    ),
+    // C10: strong-evidence candidates only (utils/duplicateEvidence.js).
+    db.query(DUPLICATE_CANDIDATES_SQL, duplicateCandidateParams({ ...listing, id: resolvedPropertyId })),
     db.query(
       `SELECT DISTINCT p.id, p.title, p.status, i.url
        FROM property_images current_i
@@ -3195,7 +3169,7 @@ async function loadPropertyReview(propertyId) {
     listing,
     images: images.rows,
     previousListerListings: previousListerListings.rows,
-    likelyDuplicates: likelyDuplicates.rows,
+    likelyDuplicates: classifyDuplicates({ ...listing, id: resolvedPropertyId }, likelyDuplicates.rows, reusedImages.rows),
     reusedImages: reusedImages.rows,
     idNumberMatches: idNumberMatches.rows,
     matchingUsers: matchingUsers.rows,
@@ -3219,8 +3193,8 @@ async function loadPropertyReview(propertyId) {
     quality_signals: {
       previous_lister_listing_count: previousListerListings.rows.length,
       previous_lister_listings: previousListerListings.rows,
-      likely_duplicate_count: likelyDuplicates.rows.length,
-      likely_duplicates: likelyDuplicates.rows,
+      likely_duplicate_count: classifyDuplicates({ ...listing, id: resolvedPropertyId }, likelyDuplicates.rows, reusedImages.rows).length,
+      likely_duplicates: classifyDuplicates({ ...listing, id: resolvedPropertyId }, likelyDuplicates.rows, reusedImages.rows),
       reused_image_count: reusedImages.rows.length,
       reused_images: reusedImages.rows,
       id_number_match_count: idNumberMatches.rows.length,
@@ -3323,7 +3297,9 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     } else {
       const hierarchy = normalizeReviewLocationHierarchy(normalizedPatch, {
         allowDistrictNode: true,
-        allowCanonicalHierarchy: true
+        allowCanonicalHierarchy: true,
+        // C11: the town the moderator picks in this save is kept.
+        preferChosenCity: Boolean(String(normalizedPatch.city || '').trim())
       });
       errors.push(...hierarchy.errors);
       if (hierarchy.region) normalizedPatch.region = hierarchy.region;

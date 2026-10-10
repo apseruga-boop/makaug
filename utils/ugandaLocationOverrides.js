@@ -163,7 +163,7 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     'Najjanankumbi', 'Mutundwe', 'Bukasa', 'Kitintale', 'Mbuya', 'Luzira',
     'Kyambogo', 'Kibuli', 'Nsooba', 'Kabuusu', 'Salaama', 'Kawaala',
     'Nakulabye', 'Kavule', 'Namungoona', 'Kitebi', 'Lubya', 'Nabulagala',
-    'Wankulukuku', 'Gangu', 'Kigowa', 'Kulambiro', 'Kisugu', 'Namuwongo',
+    'Wankulukuku', 'Gangu', 'Kulambiro', 'Kisugu', 'Namuwongo',
     'Wabigalo', 'Kagugube', 'Bakuli', 'Lusaze', 'Kabusu', 'Katanga', 'Kivulu',
     'Kisenyi', 'Nakivubo', 'Kinawataka', 'Butabika', 'Kalinabiri', 'Kikaya'
   ], 'Kampala', 'Kampala'),
@@ -187,9 +187,11 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'makaug_verified_spelling_alias'
   },
   ...rows(['Nakwero', 'Nsaggu'], 'Wakiso', 'Wakiso'),
+  // C11 (10 Oct 2026, Fisher): places staff couldn't find in the Town and
+  // Neighbourhood dropdowns. Kyaliwajjala and Mbalwa are in Kira Municipality.
+  ...rows(['Kungu', 'Kiwologoma', 'Kitukutwe', 'Kyaliwajjala'], 'Wakiso', 'Kira'),
   {
-    // Mbalwa sits on the Namugongo side of Kira Municipality. Staff save it
-    // under Kira, not the Wakiso town-council fallback.
+    // Mbalwa sits on the Namugongo side of Kira Municipality.
     name: 'Mbalwa', district: 'Wakiso', town: 'Kira', level: 'area',
     aliases: ['Mbalwa'],
     source: 'makaug_verified_location_override_20261010'
@@ -220,6 +222,16 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     aliases: ['Masooli', 'Masoli'],
     source: 'makaug_verified_location_override_20261010'
   },
+  {
+    name: 'Maya', district: 'Wakiso', town: 'Nsangi', level: 'area',
+    aliases: ['Maya', 'Maya Nsangi'], source: 'makaug_verified_location_override'
+  },
+  {
+    // Keeps the existing kampala:kigowa key; "Kigoowa" is the common spelling.
+    name: 'Kigowa', district: 'Kampala', town: 'Nakawa', level: 'area',
+    aliases: ['Kigowa', 'Kigoowa'], source: 'makaug_verified_location_override'
+  },
+  ...rows(['Kigunga'], 'Mukono', 'Mukono'),
   ...rows(['Mayangayanga'], 'Mukono', 'Mukono'),
 
   // These names have more than one verified Uganda parent. Keeping one node

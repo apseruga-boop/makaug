@@ -156,6 +156,7 @@ const {
 const { regionForDistrict } = require('../utils/ugandaLocationHierarchy');
 const { kampalaTownsForArea } = require('../utils/kampalaDivisions');
 
+const { DUPLICATE_CANDIDATES_SQL, classifyDuplicates, duplicateCandidateParams } = require('../utils/duplicateEvidence');
 const router = express.Router();
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
@@ -1894,35 +1895,8 @@ async function loadAutomatedReviewForProperty(propertyId) {
        LIMIT 20`,
       [propertyId, property.lister_phone || null, property.lister_email || null]
     ),
-    db.query(
-      `SELECT id, title, listing_type, district, area, address, price, status, created_at
-       FROM properties
-       WHERE id <> $1
-         AND (
-           LOWER(title) = LOWER($2)
-           OR (
-             COALESCE(address, '') <> ''
-             AND LOWER(COALESCE(address, '')) = LOWER(COALESCE($3::text, ''))
-           )
-           OR (
-             listing_type = $4
-             AND district = $5
-             AND LOWER(area) = LOWER($6)
-             AND COALESCE(price, 0) = COALESCE($7::bigint, 0)
-           )
-         )
-       ORDER BY created_at DESC
-       LIMIT 20`,
-      [
-        propertyId,
-        property.title || '',
-        property.address || null,
-        property.listing_type,
-        property.district,
-        property.area,
-        property.price
-      ]
-    ),
+    // C10: strong-evidence candidates only (utils/duplicateEvidence.js).
+    db.query(DUPLICATE_CANDIDATES_SQL, duplicateCandidateParams({ ...property, id: propertyId })),
     db.query(
       `SELECT DISTINCT p.id, p.title, p.status, i.url
        FROM property_images current_i
@@ -1960,7 +1934,7 @@ async function loadAutomatedReviewForProperty(propertyId) {
     listing: property,
     images,
     previousListerListings: previousListerListings.rows,
-    likelyDuplicates: likelyDuplicates.rows,
+    likelyDuplicates: classifyDuplicates({ ...property, id: propertyId }, likelyDuplicates.rows, reusedImages.rows),
     reusedImages: reusedImages.rows,
     idNumberMatches: idNumberMatches.rows,
     matchingUsers: matchingUsers.rows,

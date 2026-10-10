@@ -33,26 +33,36 @@ const DIVISION_TOWN_ALIASES = new Map([
 const AREAS_BY_DIVISION = {
   Central: [
     'Bukesa', 'Civic Centre', 'Industrial Area', 'Kagugube', 'Kamwokya', 'Kanjokya',
-    'Kikuubo', 'Kisenyi', 'Kololo', 'Nakasero', 'Nakivubo', 'Old Kampala'
+    'Kikuubo', 'Kisenyi', 'Kololo', 'Nakasero', 'Nakivubo', 'Old Kampala',
+    // C11 (10 Oct 2026): the last gazetteer areas still filed under "Kampala".
+    'Kivulu'
   ],
   Kawempe: [
     'Bwaise', 'Kalerwe', 'Kanyanya', 'Kawempe', 'Kazo-Angola', 'Kikaya', 'Kikoni',
-    'Komamboga', 'Kyebando', 'Makerere', 'Mpererwe', 'Mulago', 'Tula', 'Wandegeya'
+    'Komamboga', 'Kyebando', 'Makerere', 'Mpererwe', 'Mulago', 'Tula', 'Wandegeya',
+    // C11 (10 Oct 2026): the last gazetteer areas still filed under "Kampala".
+    'Katanga', 'Kavule', 'Nsooba'
   ],
   Makindye: [
     'Bukasa', 'Bunga', 'Buziga', 'Ggaba', 'Kabalagala', 'Kansanga', 'Katwe', 'Kibuli',
     'Kibuye', 'Kisugu', 'Lukuli', 'Luwafu', 'Makindye', 'Munyonyo', 'Muyenga',
-    'Namuwongo', 'Nsambya', 'Salaama', 'Wabigalo'
+    'Namuwongo', 'Nsambya', 'Salaama', 'Wabigalo',
+    // C11 (10 Oct 2026): the last gazetteer areas still filed under "Kampala".
+    'Gangu'
   ],
   Nakawa: [
     'Banda', 'Bugolobi', 'Bugoloobi', 'Bukoto', 'Butabika', 'Kalinabiri', 'Kinawataka',
     'Kisaasi', 'Kitintale', 'Kiwatule', 'Kulambiro', 'Kyambogo', 'Kyanja', 'Lugogo',
-    'Luzira', 'Mbuya', 'Mutungo', 'Naguru', 'Nakawa', 'Ntinda'
+    'Luzira', 'Mbuya', 'Mutungo', 'Naguru', 'Nakawa', 'Ntinda',
+    // C11 (10 Oct 2026): the last gazetteer areas still filed under "Kampala".
+    'Kigowa', 'Kigoowa'
   ],
   Rubaga: [
     'Busega', 'Kabowa', 'Kabusu', 'Kabuusu', 'Kasubi', 'Kitebi', 'Lubya', 'Lungujja',
     'Lusaze', 'Mengo', 'Mutundwe', 'Nabulagala', 'Najjanankumbi', 'Nakulabye',
-    'Namirembe', 'Namungoona', 'Nateete', 'Ndeeba', 'Rubaga', 'Wankulukuku'
+    'Namirembe', 'Namungoona', 'Nateete', 'Ndeeba', 'Rubaga', 'Wankulukuku',
+    // C11 (10 Oct 2026): the last gazetteer areas still filed under "Kampala".
+    'Bakuli', 'Kabega', 'Kawaala'
   ]
 };
 
