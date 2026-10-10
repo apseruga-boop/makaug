@@ -151,7 +151,7 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     'Najjanankumbi', 'Mutundwe', 'Bukasa', 'Kitintale', 'Mbuya', 'Luzira',
     'Kyambogo', 'Kibuli', 'Nsooba', 'Kabuusu', 'Salaama', 'Kawaala',
     'Nakulabye', 'Kavule', 'Namungoona', 'Kitebi', 'Lubya', 'Nabulagala',
-    'Wankulukuku', 'Gangu', 'Kigowa', 'Kulambiro', 'Kisugu', 'Namuwongo',
+    'Wankulukuku', 'Gangu', 'Kulambiro', 'Kisugu', 'Namuwongo',
     'Wabigalo', 'Kagugube', 'Bakuli', 'Lusaze', 'Kabusu', 'Katanga', 'Kivulu',
     'Kisenyi', 'Nakivubo', 'Kinawataka', 'Butabika', 'Kalinabiri', 'Kikaya'
   ], 'Kampala', 'Kampala'),
@@ -174,7 +174,22 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     aliases: ['Lweza', 'Lweeza', 'Upper Lweza'],
     source: 'makaug_verified_spelling_alias'
   },
-  ...rows(['Mbalwa', 'Nakwero', 'Nsaggu'], 'Wakiso', 'Wakiso'),
+  ...rows(['Nakwero', 'Nsaggu'], 'Wakiso', 'Wakiso'),
+
+  // C11 (10 Oct 2026, Fisher): places staff couldn't find in the Town and
+  // Neighbourhood dropdowns, and towns that reverted on save (Kyaliwajjala
+  // and Mbalwa are in Kira Municipality, Maya is in Nsangi).
+  ...rows(['Mbalwa', 'Kungu', 'Kiwologoma', 'Kitukutwe', 'Kyaliwajjala'], 'Wakiso', 'Kira'),
+  {
+    name: 'Maya', district: 'Wakiso', town: 'Nsangi', level: 'area',
+    aliases: ['Maya', 'Maya Nsangi'], source: 'makaug_verified_location_override'
+  },
+  {
+    // Keeps the existing kampala:kigowa key; "Kigoowa" is the common spelling.
+    name: 'Kigowa', district: 'Kampala', town: 'Nakawa', level: 'area',
+    aliases: ['Kigowa', 'Kigoowa'], source: 'makaug_verified_location_override'
+  },
+  ...rows(['Kigunga'], 'Mukono', 'Mukono'),
   ...rows(['Mayangayanga'], 'Mukono', 'Mukono'),
 
   // These names have more than one verified Uganda parent. Keeping one node

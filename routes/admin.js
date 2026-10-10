@@ -3297,7 +3297,9 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     } else {
       const hierarchy = normalizeReviewLocationHierarchy(normalizedPatch, {
         allowDistrictNode: true,
-        allowCanonicalHierarchy: true
+        allowCanonicalHierarchy: true,
+        // C11: the town the moderator picks in this save is kept.
+        preferChosenCity: Boolean(String(normalizedPatch.city || '').trim())
       });
       errors.push(...hierarchy.errors);
       if (hierarchy.region) normalizedPatch.region = hierarchy.region;
