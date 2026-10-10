@@ -5,8 +5,10 @@ const ABOUT_COMMERCIAL_PRODUCTS = Object.freeze({
   currency: 'UGX',
   monthlyDiscountPercent: 10,
   products: Object.freeze({
-    privateListing: { amount: 20000, period: 'property / month', trialDays: 7 },
-    agentSubscription: { amount: 50000, period: 'month' },
+    // C21: these two are Admin's fees (billing_settings), filled in at runtime
+    // (server: services/pricingCopy.js; page: window.MAKAUG_PRICING).
+    privateListing: { amount: null, adminFee: 'lister', period: 'listing / month', trialDays: null },
+    agentSubscription: { amount: null, adminFee: 'agent', period: 'month' },
     offPlanDevelopment: { amount: 150000, period: 'post' },
     featuredListing: { amount: 50000, period: '7 days' },
     premiumListing: { amount: 25000, period: '7 days' },

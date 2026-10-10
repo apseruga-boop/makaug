@@ -27,18 +27,63 @@ async function getSettings(db, { fresh = false } = {}) {
   const rows = (await db.query('SELECT key, value FROM billing_settings')).rows;
   const value = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   settingsCache = { at: Date.now(), value };
+  revenue.setAdminFees(feesFromSettings(value));
   return value;
+}
+
+// C21 (10 Oct 2026): the fees, from Admin › Revenue › Billing settings. The
+// defaults are used only when a key is missing. Prices are fixed in UGX and
+// VAT-inclusive; the owner fee is per listing, per month.
+function wholeNumber(value, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  if (value === null || value === undefined || value === '') return fallback;
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
+}
+
+function feesFromSettings(settings = {}) {
+  const d = revenue.FEE_DEFAULTS;
+  const agent = settings.agent_fee && typeof settings.agent_fee === 'object' ? settings.agent_fee : {};
+  const lister = settings.lister_fee && typeof settings.lister_fee === 'object' ? settings.lister_fee : {};
+  return {
+    currency: 'UGX',
+    vat_inclusive: true,
+    agent: {
+      monthly_ugx: wholeNumber(agent.monthly_ugx, d.agent_monthly_ugx),
+      trial_days: wholeNumber(agent.agent_trial_days, d.agent_trial_days, { max: 90 }),
+      start_date: /^\d{4}-\d{2}-\d{2}$/.test(String(agent.start_date || '')) ? String(agent.start_date) : d.agent_start_date,
+      remind_days_before: wholeNumber(agent.remind_days_before, 3, { min: 1, max: 30 }),
+      per: 'month'
+    },
+    lister: {
+      monthly_ugx: wholeNumber(lister.monthly_ugx, d.lister_monthly_ugx),
+      free_days: wholeNumber(lister.free_days, d.lister_free_days, { max: 90 }),
+      per: 'listing'
+    }
+  };
+}
+
+async function currentFees(db) {
+  const settings = await getSettings(db).catch(() => null);
+  const fees = feesFromSettings(settings || {});
+  if (settings) revenue.setAdminFees(fees);
+  return fees;
 }
 
 async function setSetting(db, key, value, actor = 'admin') {
   const allowed = new Set(['pay_to', 'confirmers', 'agent_fee', 'lister_fee', 'lister_views_message', 'card_payments']);
   if (!allowed.has(key)) throw revenue.httpError(400, 'Unknown setting');
+  if (key === 'agent_fee' && value && value.agent_trial_days !== undefined && value.agent_trial_days !== null && value.agent_trial_days !== '') {
+    const days = Number(value.agent_trial_days);
+    if (!Number.isInteger(days) || days < 0 || days > 90) throw revenue.httpError(400, 'Free days for new agents must be a whole number from 0 to 90.');
+  }
   await db.query(
     `INSERT INTO billing_settings (key, value, updated_by, updated_at) VALUES ($1, $2::jsonb, $3, NOW())
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
     [key, JSON.stringify(value), actor]
   );
   settingsCache = { at: 0, value: null };
+  // The new fees apply straight away, everywhere (no deploy).
+  await getSettings(db, { fresh: true }).catch(() => {});
 }
 
 /** "MTN Mobile Money 0780 863394 (MAKAUG ONLINE REAL ESTATE LTD)", or '' until it is set. */
@@ -92,7 +137,7 @@ async function payLinkFor(db, input) {
 
 /** Still inside the free trial the team gave them, and nothing paid beyond it. */
 function onFreeTrial(agent = {}) {
-  if (agent.fee_offer_mode !== 'free_period' || !agent.fee_offer_until) return false;
+  if (!['trial', 'free_period'].includes(agent.fee_offer_mode) || !agent.fee_offer_until) return false;
   const until = revenue.isoDay(agent.fee_offer_until);
   const paid = revenue.isoDay(agent.paid_until);
   return Boolean(until) && (!paid || paid <= until);
@@ -100,7 +145,7 @@ function onFreeTrial(agent = {}) {
 
 function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '' } = {}) {
   const name = agentGreetingName(agent, 'there');
-  const fee = Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || 50000);
+  const fee = feesFromSettings(settings).agent.monthly_ugx;
   const pay = payToLine(settings);
   const due = agent.paid_until ? prettyDate(agent.paid_until) : '';
   const help = helpContact();
@@ -112,8 +157,8 @@ function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '
     const end = prettyDate(agent.fee_offer_until);
     return [
       `Hi ${name} 👋`, '',
-      kind === 'due_today' ? 'Your 2 free weeks on makaug end *today*.' : `Your 2 free weeks on makaug end on *${end}*.`,
-      `To keep your profile and listings live, the subscription is ${ugx(fee)} a month.`,
+      kind === 'due_today' ? 'Your free days on makaug end *today*.' : `Your free days on makaug end on *${end}*.`,
+      `To keep your profile and listings live, the subscription is ${ugx(fee)} a month (VAT incl.).`,
       howToPay, '',
       `Questions? ${help.name} on ${help.pretty}.`
     ].filter((l, i, all) => l !== '' || all[i - 1] !== '').join('\n');
@@ -177,12 +222,60 @@ async function sendAgentBillingMessage(db, { agentId, kind, actor = 'admin', for
   const body = buildAgentBillingMessage(kind, { agent, settings, payLink });
   const periodKey = `${kind}:${agent.paid_until ? revenue.isoDay(agent.paid_until) : 'none'}`;
   const delivery = await deliver(to, body, `agent_billing_${kind}`, `${agent.id}:${periodKey}:${force ? Date.now() : ''}`);
+  // C21 (Finance): when WhatsApp can't send it, the message waits in the staff
+  // dashboard as a "send pay link" task with a one-click wa.me link, so it can
+  // be sent from the makaug WhatsApp by hand.
+  const manual = !['sent', 'queued', 'simulated'].includes(String(delivery.status || ''));
+  const manualTask = manual ? { needs_manual_send: true, wa_me: waMeLink(to, body) } : {};
   await db.query(
-    `UPDATE agents SET billing_reminder_log = COALESCE(billing_reminder_log, '{}'::jsonb) || jsonb_build_object($2::text, jsonb_build_object('at', NOW()::text, 'by', $3::text, 'status', $4::text))
+    `UPDATE agents SET billing_reminder_log = COALESCE(billing_reminder_log, '{}'::jsonb) || jsonb_build_object($2::text, jsonb_build_object('at', NOW()::text, 'by', $3::text, 'status', $4::text) || $5::jsonb)
       WHERE id = $1::uuid`,
-    [agent.id, periodKey, actor, delivery.status || 'unknown']
+    [agent.id, periodKey, actor, delivery.status || 'unknown', JSON.stringify(manualTask)]
   );
-  return { kind, to, status: delivery.status, text: body };
+  return { kind, to, status: delivery.status, text: body, ...(manual ? { manual_send_task: true } : {}) };
+}
+
+function waMeLink(to, body) {
+  const digits = String(to || '').replace(/\D+/g, '');
+  return `https://wa.me/${digits}?text=${encodeURIComponent(String(body || ''))}`;
+}
+
+/** C21: billing messages WhatsApp could not send, for staff to send by hand. */
+async function listManualPayLinkTasks(db, { days = 14 } = {}) {
+  const rows = (await db.query(
+    `SELECT a.id, a.full_name, a.whatsapp, a.phone, e.key AS period_key, e.value AS entry
+       FROM agents a, jsonb_each(COALESCE(a.billing_reminder_log, '{}'::jsonb)) e
+      WHERE a.removed_at IS NULL
+        AND jsonb_typeof(e.value) = 'object'
+        AND e.value->>'needs_manual_send' = 'true'
+        AND COALESCE(e.value->>'manual_sent_at', '') = ''
+        AND (e.value->>'at')::timestamptz > NOW() - ($1::int * INTERVAL '1 day')
+      ORDER BY (e.value->>'at')::timestamptz DESC
+      LIMIT 50`,
+    [Math.max(1, Math.min(60, Number(days) || 14))]
+  )).rows;
+  return rows.map((row) => ({
+    agent_id: row.id,
+    name: row.full_name,
+    phone: row.whatsapp || row.phone,
+    period_key: row.period_key,
+    kind: String(row.period_key).split(':')[0],
+    at: row.entry?.at || null,
+    wa_me: row.entry?.wa_me || ''
+  }));
+}
+
+async function markManualPayLinkSent(db, { agentId, periodKey, actor = 'staff' }) {
+  const result = await db.query(
+    `UPDATE agents
+        SET billing_reminder_log = jsonb_set(billing_reminder_log, ARRAY[$2::text],
+              (billing_reminder_log->$2::text) || jsonb_build_object('manual_sent_at', NOW()::text, 'manual_sent_by', $3::text, 'status', 'sent_by_staff'))
+      WHERE id = $1::uuid AND billing_reminder_log ? $2::text
+      RETURNING id`,
+    [agentId, periodKey, actor]
+  );
+  if (!result.rows.length) throw revenue.httpError(404, 'Task not found');
+  return { agent_id: agentId, period_key: periodKey, done: true };
 }
 
 /** Take an overdue agent's listings down. Remembered, so paying puts it all back. */
@@ -436,7 +529,7 @@ async function rejectClaim(db, { claimId, actor, note }) {
 
 async function recordListingPayment(db, { propertyId, payment, actor }) {
   const settings = await getSettings(db);
-  const fee = Number(settings.lister_fee?.monthly_ugx || 20000);
+  const fee = feesFromSettings(settings).lister.monthly_ugx;
   const property = (await db.query('SELECT id, title, lister_paid_until, lister_billing_suspended_at, extra_fields FROM properties WHERE id = $1::uuid', [propertyId])).rows[0];
   if (!property) throw revenue.httpError(404, 'Listing not found');
   const entry = revenue.normalizeEntry(payment);
@@ -487,7 +580,7 @@ async function listingStats(db, propertyId) {
 }
 
 function listerFreeUntil(property = {}, settings = {}) {
-  const freeDays = Number(settings.lister_fee?.free_days || 7);
+  const freeDays = feesFromSettings(settings).lister.free_days || 7;
   const start = new Date(property.reviewed_at || property.created_at || Date.now());
   return new Date(start.getTime() + (freeDays - 1) * 86400000 + 3 * 3600 * 1000).toISOString().slice(0, 10);
 }
@@ -500,7 +593,7 @@ const LISTER_MESSAGE_KINDS = ['views', 'reminder', 'final_reminder', 'taken_down
 
 async function buildListerMessage(db, kind, property, settings, payLink = '') {
   const name = String(property.lister_name || '').trim().split(/\s+/)[0] || 'there';
-  const fee = Number(settings.lister_fee?.monthly_ugx || 20000);
+  const fee = feesFromSettings(settings).lister.monthly_ugx;
   const pay = payToLine(settings);
   const link = `${SITE()}/property/${property.id}`;
   const title = property.title || 'property';
@@ -508,7 +601,7 @@ async function buildListerMessage(db, kind, property, settings, payLink = '') {
   const paidUntil = property.lister_paid_until ? prettyDate(property.lister_paid_until) : '';
   const help = helpContact();
   const howToPay = [
-    pay ? `To keep it live for a month it is ${ugx(fee)} — pay to ${pay}, then send me the *transaction ID* (or a screenshot) here.` : '',
+    pay ? `To keep it live for a month it is ${ugx(fee)} per listing, per month (VAT incl.) — pay to ${pay}, then send me the *transaction ID* (or a screenshot) here.` : '',
     payLinkLine(payLink)
   ].filter(Boolean).join('\n');
   if (kind === 'views') {
@@ -679,7 +772,7 @@ async function listAgentTrials(db, { includeClosed = false } = {}) {
     `SELECT id, full_name, phone, whatsapp, status, paid_until, fee_exempt, fee_offer_until, fee_offer_at, fee_offer_by,
             fee_offer_reason, billing_suspended_at, billing_reminder_log
        FROM agents
-      WHERE fee_offer_mode = 'free_period' AND removed_at IS NULL AND NOT COALESCE(fee_exempt, false)
+      WHERE fee_offer_mode IN ('trial', 'free_period') AND removed_at IS NULL AND NOT COALESCE(fee_exempt, false)
       ORDER BY fee_offer_until ASC, full_name ASC`
   )).rows;
   const termsSigned = new Map();
@@ -750,6 +843,61 @@ async function runTrialDigest(db) {
   return { sent: true, agents: rows.length };
 }
 
+// --- C21: staff actions on an agent's billing row -----------------------------
+
+/**
+ * "Start {n}-day trial from today": for an approved agent who hasn't paid
+ * (e.g. the two "pay later" agents of 5 and 8 Oct). The trial runs from today
+ * for Admin's agent_trial_days; the normal reminders then charge the fee.
+ */
+async function startAgentTrialFromToday(db, { agentId, actor = 'admin', today = revenue.kampalaDate() }) {
+  await currentFees(db);
+  const days = revenue.agentTrialDays();
+  if (days < 1) throw revenue.httpError(409, 'Free days for new agents is 0 in Admin › Billing settings, so there is no trial to start.');
+  const agent = (await db.query(
+    `SELECT id, full_name, status, paid_until, fee_exempt, fee_exempt_until, removed_at FROM agents WHERE id = $1::uuid`,
+    [agentId]
+  )).rows[0];
+  if (!agent) throw revenue.httpError(404, 'Agent not found');
+  if (agent.removed_at) throw revenue.httpError(409, 'This agent was removed.');
+  if (!revenue.agentFeeRequired(agent, new Date(`${today}T09:00:00Z`))) {
+    throw revenue.httpError(409, `${agent.full_name} has nothing to pay right now (paid up or fee-exempt), so no trial is needed.`);
+  }
+  const ends = revenue.addDays(today, days - 1);
+  const reason = `Trial started from ${today} by ${actor}: ${days} days free`;
+  await db.query(
+    `UPDATE agents
+        SET fee_offer_mode = 'trial', fee_offer_reason = $2, fee_offer_until = $3::date, fee_offer_by = $4, fee_offer_at = NOW(),
+            trial_ends_at = $3::date, paid_until = $3::date, updated_at = NOW()
+      WHERE id = $1::uuid`,
+    [agentId, reason, ends, actor]
+  );
+  return { agent_id: agentId, days, trial_ends_at: ends, first_payment_due: revenue.addDays(ends, 1) };
+}
+
+/** Set (or clear, with null) the date a fee-exempt agent stays free until. */
+async function setAgentFeeExemptUntil(db, { agentId, until, actor = 'admin', today = revenue.kampalaDate() }) {
+  const date = until === null || until === '' ? null : String(until || '').slice(0, 10);
+  if (date !== null) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`)) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date) {
+      throw revenue.httpError(400, 'Use a real date (YYYY-MM-DD).');
+    }
+    if (date <= today) throw revenue.httpError(400, 'The free-until date must be after today.');
+  }
+  const updated = (await db.query(
+    `UPDATE agents
+        SET fee_exempt_until = $2::date,
+            fee_exempt = CASE WHEN $2::date IS NOT NULL THEN true ELSE fee_exempt END,
+            fee_exempt_reason = CASE WHEN $2::date IS NOT NULL AND NOT COALESCE(fee_exempt, false) THEN $3 ELSE fee_exempt_reason END,
+            updated_at = NOW()
+      WHERE id = $1::uuid
+      RETURNING id, full_name, fee_exempt, fee_exempt_until`,
+    [agentId, date, `Fee-exempt until ${date} (set by ${actor})`]
+  )).rows[0];
+  if (!updated) throw revenue.httpError(404, 'Agent not found');
+  return { agent_id: updated.id, fee_exempt: updated.fee_exempt, fee_exempt_until: date };
+}
+
 let billingTimer = null;
 let lastBillingRunDay = '';
 function startBillingScheduler(db) {
@@ -775,6 +923,13 @@ function startBillingScheduler(db) {
 }
 
 module.exports = {
+  listManualPayLinkTasks,
+  markManualPayLinkSent,
+  waMeLink,
+  startAgentTrialFromToday,
+  setAgentFeeExemptUntil,
+  currentFees,
+  feesFromSettings,
   AGENT_MESSAGE_KINDS,
   getSettings,
   setSetting,

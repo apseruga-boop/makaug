@@ -656,7 +656,8 @@ function privateListerFeeLines(listing = {}) {
   const freeDays = Number(fee.free_days ?? 7);
   const until = new Date(Date.now() + 3 * 3600 * 1000 + Math.max(0, freeDays - 1) * 86400000);
   const pretty = until.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-  return ['', `🗓️ Free until *${pretty}* (${freeDays} days). After that it is UGX ${Number(fee.monthly_ugx || 20000).toLocaleString('en-US')} a month to stay live — we'll message you before then with how many people have viewed it.`, ''];
+  const monthly = Number(fee.monthly_ugx) > 0 ? Number(fee.monthly_ugx) : require('./revenueService').FEE_DEFAULTS.lister_monthly_ugx;
+  return ['', `🗓️ Free until *${pretty}* (${freeDays} days). After that it is UGX ${monthly.toLocaleString('en-US')} per listing, per month (VAT incl.) to stay live — we'll message you before then with how many people have viewed it.`, ''];
 }
 
 function buildOwnerStatusMessage({ listing = {}, status, reason }) {

@@ -245,7 +245,12 @@ function parseEmployeeRole(value = '') {
  * the same breath as the link — a bare payment link from a number they do not
  * know is indistinguishable from a scam.
  */
-function employeePayLinkWhoPrompt(feeLabel = 'UGX 50,000') {
+// C21: the agent fee shown to employees is Admin's (last value read).
+function defaultAgentFeeLabel() {
+  return require('./pricingCopy').feeLabels().agent_ugx;
+}
+
+function employeePayLinkWhoPrompt(feeLabel = defaultAgentFeeLabel()) {
   return `\u{1F4B3} *Send a payment link* — ${feeLabel} a month.\n\nWho is it for?\n\n`
     + '1 — An agent *already registered* on makaug.com\n'
     + '2 — A *new prospect* — not registered yet (they get the joining video with the link)\n\n'
@@ -263,7 +268,7 @@ function employeePayLinkLookupPrompt() {
   return 'Could you please confirm the name of the agent?\n\nSend their exact name or their makaug agent number.';
 }
 
-function employeePayLinkProspectPrompt(feeLabel = 'UGX 50,000') {
+function employeePayLinkProspectPrompt(feeLabel = defaultAgentFeeLabel()) {
   return `\u{1F4B3} *New prospect* — they get the joining video and the ${feeLabel} payment link together.\n\n`
     + 'Send their details like this:\n\n*Name | phone number*\n\n'
     + 'For example: Kato Brian | 0772123456\n\nType *CANCEL* to stop.';
@@ -287,7 +292,7 @@ function parsePitchContact(value = '') {
  * Asked once, right after a new agent is created, because approval can be days
  * later and whoever approves will not know what was agreed on the doorstep.
  */
-function employeeAgentPayLinkPrompt(agentName = '', feeLabel = 'UGX 50,000') {
+function employeeAgentPayLinkPrompt(agentName = '', feeLabel = defaultAgentFeeLabel()) {
   const who = String(agentName || '').trim() || 'this agent';
   return `\u{1F4B3} *Payment* \u2014 ${who} pays ${feeLabel} a month.\n\nShall I send them the payment link as soon as they are approved?\n\n1 \u2014 Yes, send it on approval\n2 \u2014 No, I will handle the payment myself`;
 }
@@ -296,7 +301,7 @@ function employeeAgentPayLinkPrompt(agentName = '', feeLabel = 'UGX 50,000') {
  * Since 10 Oct 2026 a new agent starts with a free trial, so there is nothing to
  * ask on the doorstep any more. This is the note that replaces the question.
  */
-function employeeAgentTrialNotice(agentName = '', days = 14, feeLabel = 'UGX 50,000') {
+function employeeAgentTrialNotice(agentName = '', days = require('./revenueService').agentTrialDays(), feeLabel = defaultAgentFeeLabel()) {
   const who = String(agentName || '').trim() || 'This agent';
   return `\u{1F381} *${who}* gets ${days} days free. They go live on the free trial as soon as a moderator approves them, and pay ${feeLabel} a month after that. I will remind them before it ends and tell you when they pay.`;
 }
@@ -473,7 +478,7 @@ function parseCustomerDetails(value = '') {
  * nothing links the listings to anybody. It was being chosen for agents over
  * and over, so the question now says what each answer costs.
  */
-function employeeRolePrompt(feeLabel = 'UGX 50,000') {
+function employeeRolePrompt(feeLabel = defaultAgentFeeLabel()) {
   return '🔐 *makaug employee intake*\nWho do these properties belong to?\n\n1 — An *agent or broker* (they get a makaug profile, and every property is listed under it)\n2 — A *private owner* selling their own property (no agent profile is created)\n\n3 — No properties yet — *send someone the makaug agent video* (what we are, how to list, what it costs)'
     + `\n4 — No properties yet — *send a payment link* (${feeLabel} a month, to a registered agent or a new prospect)`;
 }

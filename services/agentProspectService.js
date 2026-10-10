@@ -157,7 +157,7 @@ function prospectNextStep(row = {}) {
     case 'signed_up':
       return 'Approve them in the Accounts tab';
     case 'approved':
-      return row.paid_until ? 'Done — paid up' : 'Chase the UGX 50,000 payment';
+      return row.paid_until ? 'Done — paid up' : `Chase the ${require('./pricingCopy').feeLabels().agent_ugx} payment`;
     case 'declined':
       return 'Nothing — they said no';
     default:

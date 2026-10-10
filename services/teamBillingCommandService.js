@@ -113,7 +113,9 @@ function help() {
     '💳 *Payment commands* (team only)',
     '',
     '*NEW AGENT* Jane Nakato 0772123456',
-    `→ makes them a live agent on a ${revenue.agentTrialDays()}-day free trial, sends their welcome pack, then follows up for payment`,
+    revenue.agentTrialDays() > 0
+      ? `→ makes them a live agent on a ${revenue.agentTrialDays()}-day free trial, sends their welcome pack, then follows up for payment`
+      : '→ approves them and sends their welcome pack with the pay link (new agents pay first)',
     '',
     '*TRIALS*',
     '→ every agent on a free trial: who ends soon, who has not paid',
@@ -176,10 +178,14 @@ async function newAgent(db, rest, actor) {
   if (agent.fee_exempt) return `${agent.full_name} joined before the monthly fee, so they list for free. Approve them with *APPROVE ${pretty(phone)}*.`;
 
   // New agents go live straight away on a free trial; the money follows.
+  await billingOps.currentFees(db);
   const days = revenue.agentTrialDays();
-  const ends = revenue.addDays(revenue.kampalaDate(), days - 1);
+  const ends = revenue.addDays(revenue.kampalaDate(), Math.max(1, days) - 1);
+  // Admin's free days for new agents; 0 means pay first (approve, then the pay link).
   const result = await approveThroughAdmin(agent, actor, revenue.agentFeeRequired(agent)
-    ? { mode: 'free_period', days, reason: `New agent ${days}-day free trial — signed up by ${actor}` }
+    ? (days > 0
+      ? { mode: 'trial', days, reason: `New agent: ${days} days free — signed up by ${actor}` }
+      : { mode: 'pay_later', reason: `Signed up on WhatsApp by ${actor} — pay link with the welcome pack` })
     : null);
   if (!result.ok) {
     return `${created ? `Set up ${agent.full_name} (${pretty(phone)}) but` : `Couldn't go live for ${agent.full_name}:`} ${result.error}`;
@@ -188,10 +194,14 @@ async function newAgent(db, rest, actor) {
   const settings = await billingOps.getSettings(db).catch(() => ({}));
   const remindOn = revenue.addDays(ends, -Math.max(1, Number(settings.agent_fee?.remind_days_before || 3)));
   return [
-    `✅ *${agent.full_name}* (${pretty(phone)}) is live on a ${days}-day free trial, ending ${dayLabel(ends)}.`,
+    days > 0
+      ? `✅ *${agent.full_name}* (${pretty(phone)}) is live on a ${days}-day free trial, ending ${dayLabel(ends)}.`
+      : `✅ *${agent.full_name}* (${pretty(phone)}) is approved. New agents pay first (no free days are set in Admin), so their pay link goes with the welcome pack.`,
     welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.',
     '',
-    `I'll remind them on ${dayLabel(remindOn)}, WhatsApp you the moment they pay, and list them under *TRIALS* if they are still unpaid after ${dayLabel(ends)}.`
+    days > 0
+      ? `I'll remind them on ${dayLabel(remindOn)}, WhatsApp you the moment they pay, and list them under *TRIALS* if they are still unpaid after ${dayLabel(ends)}.`
+      : "I'll WhatsApp you the moment they pay."
   ].join('\n');
 }
 
@@ -269,17 +279,20 @@ async function approve(db, rest, actor) {
   if (!agent) return `No agent on ${pretty(phone)}.`;
   if (agent.status === 'approved') return `${agent.full_name} is already approved.`;
   // Not paid yet: approve the usual way — welcome pack first, then the pay link.
+  await billingOps.currentFees(db);
   const unpaid = revenue.agentFeeRequired(agent);
   const days = revenue.agentTrialDays();
   const result = await approveThroughAdmin(agent, actor, unpaid
-    ? { mode: 'free_period', days, reason: `New agent ${days}-day free trial — approved on WhatsApp by ${actor}` }
+    ? (days > 0
+      ? { mode: 'trial', days, reason: `New agent: ${days} days free — approved on WhatsApp by ${actor}` }
+      : { mode: 'pay_later', reason: `Approved on WhatsApp by ${actor} — welcome pack, then the payment link` })
     : null);
   if (!result.ok) return `Couldn't approve ${agent.full_name}: ${result.error}. Please do it in Admin › Agents.`;
   const welcome = result.data.welcome;
   return [
     `✅ *${agent.full_name}* is approved.`,
     welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.',
-    unpaid ? `On a ${days}-day free trial. I'll remind them before it ends and tell you when they pay (*TRIALS* shows the list).` : ''
+    unpaid ? (days > 0 ? `On a ${days}-day free trial. I'll remind them before it ends and tell you when they pay (*TRIALS* shows the list).` : 'The pay link goes with the welcome pack.') : ''
   ].filter(Boolean).join('\n');
 }
 

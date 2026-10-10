@@ -710,7 +710,7 @@ function trialVariant(payload) {
   const today = revenue.kampalaDate();
   return {
     ...payload,
-    agent: { ...(payload.agent || {}), fee_offer_mode: 'free_period', fee_offer_until: revenue.addDays(today, revenue.agentTrialDays() - 1), fee_offer_at: new Date().toISOString() }
+    agent: { ...(payload.agent || {}), fee_offer_mode: 'trial', fee_offer_until: revenue.addDays(today, Math.max(1, revenue.agentTrialDays() || 14) - 1), fee_offer_at: new Date().toISOString() }
   };
 }
 

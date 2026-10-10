@@ -567,6 +567,16 @@ app.get('/api/fx', (_req, res) => {
   return res.json({ ok: true, data: publicDisplayFx() });
 });
 
+// C21 (10 Oct 2026): the fees, from Admin (billing_settings). Public, cached
+// for 5 minutes. Prices are fixed in UGX and VAT-inclusive.
+app.get('/api/pricing', async (_req, res) => {
+  const fees = process.env.DATABASE_URL
+    ? await require('./services/billingOpsService').currentFees(db).catch(() => null)
+    : null;
+  res.set('Cache-Control', 'public, max-age=300');
+  return res.json({ ok: true, data: require('./services/pricingCopy').publicPricing(fees ? { agent: fees.agent, lister: fees.lister } : undefined) });
+});
+
 app.get('/config.js', (_req, res) => {
   // Free maps only (Leaflet + OpenStreetMap). C18, 10 Oct 2026: Google Maps is
   // no longer used and no Google key is ever sent to browsers.
@@ -587,6 +597,7 @@ app.get('/config.js', (_req, res) => {
     `window.MAKAUG_CONFIG = ${JSON.stringify(publicConfig)};`,
     `window.MAKAUG_PRICE_PERIOD_OPTIONS = ${JSON.stringify(PRICE_PERIOD_FORM_OPTIONS)};`,
     `window.MAKAUG_FX = ${JSON.stringify(publicDisplayFx())};`,
+    `window.MAKAUG_PRICING = ${JSON.stringify(require('./services/pricingCopy').publicPricing())};`,
     `window.MAKAUG_PRICE_BOUNDS = ${String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase() === 'UG' ? JSON.stringify(PRICE_BOUNDS_UGX) : 'false'};`,
     `window.MAKAUG_MAP_PROVIDER = ${JSON.stringify(publicConfig.mapProvider)};`,
     `window.MAKAUG_GOOGLE_MAPS_API_KEY = ${JSON.stringify(publicConfig.googleMapsApiKey)};`,
@@ -1061,6 +1072,8 @@ function sendBufferResponse(req, res, body, options = {}) {
 }
 
 function sendTextResponse(req, res, html, options = {}) {
+  // C21: fee tokens are filled from the Admin fees at send time.
+  html = require('./services/pricingCopy').applyFeeTokens(html);
   let cacheControl = options.cacheControl;
   let edgeCacheable = false;
   if (cacheControl === PUBLIC_HTML_CACHE_CONTROL && isProduction && res.statusCode === 200 && !res.locals?.publicHtmlDegraded) {
@@ -2082,7 +2095,7 @@ async function sendPublicIndex(req, res, next) {
     if (/^\/about\/?$/i.test(req.path)) {
       html = patchPublicPageSeoMeta(html, {
         title: 'About makaug — Products, pricing & how it works | makaug.com',
-        description: 'Everything makaug offers: listings from UGX 20,000/month (first week free), agent plans, off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
+        description: 'Everything makaug offers: listings from {{PRICE:lister}} per listing, per month (first {{FREE:lister}} days free), agent plans ({{FEE:agent_offer}}), off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
         canonical: absolutePublicUrl('/about'),
         image: absolutePublicUrl('/assets/og-cover.jpg'),
         structuredData: { '@context': 'https://schema.org', '@type': 'AboutPage', name: 'About makaug', url: absolutePublicUrl('/about') }
@@ -2273,6 +2286,13 @@ async function start() {
         message: error?.message
       });
     }
+  }
+  if (process.env.DATABASE_URL) {
+    // C21: read the Admin fees before the first page, then keep them fresh, so
+    // a change in Admin reaches every page within a minute (plus edge caches).
+    const billingOps = require('./services/billingOpsService');
+    await billingOps.currentFees(db).catch((error) => logger.warn('Admin fees not read at startup', { message: error?.message }));
+    setInterval(() => { billingOps.currentFees(db).catch(() => {}); }, 60_000).unref();
   }
   if (process.env.DATABASE_URL) {
     try {

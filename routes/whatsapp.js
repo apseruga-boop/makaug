@@ -197,7 +197,7 @@ const WHATSAPP_MAX_LISTING_PHOTOS = 10;
 // Language Translations
 const T = {
   en: {
-    welcome: "🏠 Welcome to *makaug* - Uganda's property platform!\n\nWhat would you like to do?\n1️⃣ List my property (first 7 days free)\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nReply with a number",
+    welcome: "🏠 Welcome to *makaug* - Uganda's property platform!\n\nWhat would you like to do?\n1️⃣ List my property (first {lister_free_days} days free)\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nReply with a number",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
@@ -828,9 +828,18 @@ function resolveLangCode(lang) {
   return 'en';
 }
 
+// C21: fee placeholders in the menus ({lister_free_days}, {agent_ugx}, …)
+// are filled from the Admin fees.
+function fillFeePlaceholders(text) {
+  const value = String(text ?? '');
+  if (!/\{(?:agent|lister)_[a-z_]+\}/.test(value)) return value;
+  const labels = require('../services/pricingCopy').feeLabels();
+  return value.replace(/\{((?:agent|lister)_[a-z_]+)\}/g, (all, key) => (Object.prototype.hasOwnProperty.call(labels, key) ? labels[key] : all));
+}
+
 function t(lang, key) {
   const code = resolveLangCode(lang);
-  return (T[code] && T[code][key]) || T.en[key] || key;
+  return fillFeePlaceholders((T[code] && T[code][key]) || T.en[key] || key);
 }
 
 function tt(lang, key, vars = {}) {
@@ -14542,8 +14551,8 @@ async function agentJoinRequestReply({ phone, text = '' }) {
       `SELECT id, full_name, status FROM agents WHERE removed_at IS NULL AND (RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1 OR RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1) ORDER BY created_at DESC LIMIT 1`,
       [digits.slice(-9)])).rows[0] || null;
   } catch (_ignored) { existing = null; }
-  let fee = 50000;
-  try { fee = Number((await require('../services/billingOpsService').getSettings(db)).agent_fee?.monthly_ugx || 50000); } catch (_ignored) { /* default */ }
+  let fee = require('../services/revenueService').feeConfig().feeUgx;
+  try { fee = (await require('../services/billingOpsService').currentFees(db)).agent.monthly_ugx; } catch (_ignored) { /* last known Admin value */ }
 
   queueExplainerVideoOnce({ phone, kind: 'agent' });
   deferWhatsappWork('WhatsApp agent join request', async () => {
@@ -16802,7 +16811,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         terms_version: docs.LISTER_TERMS_VERSION,
         terms_accepted_phone: String(phone).replace(/\D/g, ''),
         terms_accepted_text: cleanBody.slice(0, 80),
-        lister_fee_terms: { free_days: Number(settings.lister_fee?.free_days ?? 7), monthly_ugx: Number(settings.lister_fee?.monthly_ugx || 20000) }
+        lister_fee_terms: (() => { const fees = require('../services/billingOpsService').feesFromSettings(settings); return { free_days: fees.lister.free_days, monthly_ugx: fees.lister.monthly_ugx, per: 'listing' }; })()
       };
       await patchDraft(phone, acceptance);
       const result = await submitWhatsappListingDraft({ phone, lang, draft: { ...draft, ...acceptance } });
@@ -16812,7 +16821,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
       if (!result.propertyId) return respond(result.message, result.nextStep);
       const fee = acceptance.lister_fee_terms;
-      return respond(`${result.message}\n\n✅ Thank you for agreeing to the terms.\n🗓️ Once approved, your property is live *free for ${fee.free_days} days*. After that it is UGX ${fee.monthly_ugx.toLocaleString('en-US')} a month to stay live — we'll message you before then, with how many people have viewed it.`, result.nextStep);
+      return respond(`${result.message}\n\n✅ Thank you for agreeing to the terms.\n🗓️ Once approved, your property is live *free for ${fee.free_days} days*. After that it is UGX ${fee.monthly_ugx.toLocaleString('en-US')} per listing, per month (VAT incl.) to stay live — we'll message you before then, with how many people have viewed it.`, result.nextStep);
     }
     if (isNegativeReply(cleanBody) || /^(no|cancel|stop)\b/.test(answer)) {
       await patchSessionData(phone, { lister_terms_declined_at: new Date().toISOString() });

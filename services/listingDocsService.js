@@ -11,9 +11,9 @@
 const PDFDocument = require('pdfkit');
 const sharp = require('sharp');
 
-const LISTER_TERMS_VERSION = '2026-10-v1';
+const LISTER_TERMS_VERSION = '2026-10-v2'; // C21: per listing, VAT incl.
 const AGENT_GUIDE_VERSION = '2026-10-v2';
-const AGENT_TERMS_VERSION = '2026-10-v1';
+const AGENT_TERMS_VERSION = '2026-10-v2'; // C21: VAT incl., Admin trial days
 
 const INK = '#15213A';
 const ORANGE = '#E8662A';
@@ -46,14 +46,15 @@ function docUrls(kind) {
 }
 
 function settingsDefaults(settings = {}) {
-  const lister = settings.lister_fee || {};
+  // C21: the fees and free days are Admin's (billing_settings), never env.
+  const fees = require('./billingOpsService').feesFromSettings(settings);
   const agent = settings.agent_fee || {};
   return {
-    freeDays: Number(lister.free_days ?? 7),
-    listerMonthly: Number(lister.monthly_ugx || 20000),
-    agentMonthly: Number(agent.monthly_ugx || 50000),
+    freeDays: fees.lister.free_days,
+    listerMonthly: fees.lister.monthly_ugx,
+    agentMonthly: fees.agent.monthly_ugx,
     finalAfter: Number(agent.final_after_days_overdue ?? 7),
-    agentFreeDays: Number(process.env.AGENT_TRIAL_DAYS || 14) || 14,
+    agentFreeDays: fees.agent.trial_days,
     payTo: settings.pay_to || {}
   };
 }
@@ -122,7 +123,7 @@ async function buildListerTermsPdf(settings = {}) {
   const boxTop = doc.y + 12;
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(11).text('In short', 76, boxTop);
   doc.font('Helvetica').fontSize(10).fillColor('#222').text(
-    `Your first ${s.freeDays} days are free. To stay live after that it is ${ugx(s.listerMonthly)} per property, per month. makaug advertises your property; we are not part of any sale or rent, and you remain responsible for your listing and your deal. Reply AGREE on WhatsApp to accept these terms.`,
+    `Your first ${s.freeDays} days are free. To stay live after that it is ${ugx(s.listerMonthly)} per listing, per month (VAT incl.). makaug advertises your property; we are not part of any sale or rent, and you remain responsible for your listing and your deal. Reply AGREE on WhatsApp to accept these terms.`,
     76, boxTop + 16, { width: doc.page.width - 152, lineGap: 1.5 }
   );
   doc.x = 60;
@@ -146,7 +147,7 @@ async function buildListerTermsPdf(settings = {}) {
   section(doc, '4. Fees');
   bullets(doc, [
     `Free period: your listing is free for the first ${s.freeDays} days after it goes live.`,
-    `After that: ${ugx(s.listerMonthly)} per property, per month, paid in advance to the makaug number we give you on WhatsApp. Send us the transaction ID after paying so we can match it.`,
+    `After that: ${ugx(s.listerMonthly)} per listing, per month (VAT incl.), paid in advance to the makaug number we give you on WhatsApp. Send us the transaction ID after paying so we can match it.`,
     'Payments are confirmed by a member of the makaug team before they are recorded. Keep your MoMo / bank message as proof.',
     'If a month is not paid, we will remind you. If it is still not paid, the listing is hidden from the website. Nothing is deleted: when you pay, it goes back live exactly as it was.',
     'Fees are for advertising time and are not refundable once the month has started, including if the property is sold or let early.',
@@ -231,7 +232,7 @@ async function buildAgentGuidePdf(settings = {}) {
   section(doc, '5. Your subscription');
   bullets(doc, [
     `New agents start with ${s.agentFreeDays} days free. We tell you the date it ends and remind you before it does, so there are no surprises.`,
-    `After the free days, the makaug agent plan is ${ugx(s.agentMonthly)} per month.`,
+    `After the free days, the makaug agent plan is ${ugx(s.agentMonthly)} per month (VAT incl.).`,
     `Pay to ${payLine}, then send the transaction ID (or a screenshot of the payment message) here on WhatsApp. We match it and confirm it — you will get a thank-you message when it is recorded.`,
     'We remind you 3 days before your renewal date and on the day.',
     `If the month is not paid, we send reminders; after ${s.finalAfter} days overdue a final reminder, and then your listings may be paused. Nothing is deleted — as soon as you pay, everything goes back live exactly as it was.`
@@ -265,7 +266,7 @@ async function buildAgentTermsPdf(settings = {}) {
   const boxTop = doc.y + 12;
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(11).text('In short', 76, boxTop);
   doc.font('Helvetica').fontSize(10).fillColor('#222').text(
-    `Your first ${s.agentFreeDays} days are free. After that the agent plan is ${ugx(s.agentMonthly)} per month. makaug advertises your properties; we take no commission and are not part of any deal. Reply AGREE on WhatsApp to accept these terms.`,
+    `Your first ${s.agentFreeDays} days are free. After that the agent plan is ${ugx(s.agentMonthly)} per month (VAT incl.). makaug advertises your properties; we take no commission and are not part of any deal. Reply AGREE on WhatsApp to accept these terms.`,
     76, boxTop + 16, { width: doc.page.width - 152, lineGap: 1.5 }
   );
   doc.x = 60;
@@ -278,7 +279,7 @@ async function buildAgentTermsPdf(settings = {}) {
   section(doc, '2. The free period and the agent plan');
   bullets(doc, [
     `Your first ${s.agentFreeDays} days on makaug are free, counted from the day your agent account is switched on. We tell you the date it ends.`,
-    `After that, the agent plan is ${ugx(s.agentMonthly)} per month, for as long as you want your agent page and listings live.`,
+    `After that, the agent plan is ${ugx(s.agentMonthly)} per month (VAT incl.), for as long as you want your agent page and listings live.`,
     'Nothing is charged automatically. We send you a payment link before the free period ends and before each renewal; you pay by Mobile Money (or card where offered).',
     `If a payment is not made, we send reminders, and after ${s.finalAfter} days overdue your listings may be paused. Nothing is deleted: when you pay, everything goes back live exactly as it was.`,
     'You can stop at any time by telling us on WhatsApp (reply HELP). You will not be charged for a period you did not use after you have told us to stop.',
@@ -338,9 +339,9 @@ async function buildCoverPng(kind, settings = {}) {
   const isAgent = kind === 'agent_guide' || isTerms;
   const title = isTerms ? ['Agent terms', 'for makaug'] : isAgent ? ['Your makaug', 'agent guide'] : ['Terms for listing', 'your property'];
   const lines = isTerms
-    ? [`First ${s.agentFreeDays} days free`, `Then ${ugx(s.agentMonthly)} a month`, 'No commission. Your deal is yours', 'Reply AGREE to accept']
+    ? [`First ${s.agentFreeDays} days free`, `Then ${ugx(s.agentMonthly)}/month (VAT incl.)`, 'No commission. Your deal is yours', 'Reply AGREE to accept']
     : isAgent
-    ? ['Post by sending photos on WhatsApp', 'Enquiries come straight to you', `${ugx(s.agentMonthly)} a month`, 'Help: reply HELP any time']
+    ? ['Post by sending photos on WhatsApp', 'Enquiries come straight to you', `${ugx(s.agentMonthly)}/month (VAT incl.)`, 'Help: reply HELP any time']
     : [`First ${s.freeDays} days free`, `Then ${ugx(s.listerMonthly)} / month per property`, 'Your ID stays private — never shown', 'makaug advertises; your deal is yours'];
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350">
   <rect width="1080" height="1350" fill="#FBF6EE"/>
@@ -388,7 +389,7 @@ function listerTermsMessage(settings = {}, { name = '' } = {}) {
     `📄 *One last step${name ? `, ${name}` : ''} — our terms*`,
     '',
     `• Your first *${s.freeDays} days are free*.`,
-    `• After that it is *${ugx(s.listerMonthly)} per property, per month* to stay live. We'll remind you before the free week ends — nothing is charged automatically.`,
+    `• After that it is *${ugx(s.listerMonthly)} per listing, per month (VAT incl.)* to stay live. We'll remind you before the free week ends — nothing is charged automatically.`,
     '• Your ID is only for checking — it is *never shown* to anyone.',
     '• makaug advertises your property; the deal itself is between you and the buyer or tenant.',
     '',

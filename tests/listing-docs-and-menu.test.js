@@ -18,7 +18,7 @@ test('private lister terms PDF, agent guide PDF and cover cards are generated', 
 test('terms WhatsApp message states the free week, the fee, ID privacy and asks for AGREE', () => {
   const text = docs.listerTermsMessage({ lister_fee: { free_days: 7, monthly_ugx: 20000 } }, { name: 'Mary' });
   assert.match(text, /7 days are free/);
-  assert.match(text, /UGX 20,000 per property, per month/);
+  assert.match(text, /UGX 20,000 per listing, per month \(VAT incl\.\)/);
   assert.match(text, /never shown/);
   assert.match(text, /AGREE/);
   assert.match(text, /\/legal\/makaug-private-lister-terms\.pdf/);

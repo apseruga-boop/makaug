@@ -6,7 +6,8 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'assets/makaug-app.js'), 'utf8');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+// C21: fee tokens are filled from the Admin fees when the page is sent.
+const html = require('../services/pricingCopy').applyFeeTokens(fs.readFileSync(path.join(root, 'index.html'), 'utf8'));
 
 assert(html.includes('data-listing-path-version="whatsapp-direct-20260910"'), 'the restored listing-path release marker should exist');
 assert(html.includes('id="list-choice-online-btn"'), 'the listing modal must retain the List Online choice');
@@ -17,7 +18,7 @@ assert(html.includes('id="floating-whatsapp-link" href="https://wa.me/2567808633
 assert(html.includes('List through WhatsApp'), 'the listing choice should use the approved WhatsApp label');
 assert(html.includes('0780 863 394'), 'the listing choice should visibly show the WhatsApp number');
 assert(html.includes('Start with 7 days free.'), 'the listing modal should explain the introductory trial');
-assert(html.includes('one private listing costs UGX 20,000 per month'), 'the listing modal should state the post-trial price');
+assert(html.includes('After that, UGX 20,000 per listing, per month (VAT incl.).'), 'the listing modal should state the post-trial price, per listing');
 assert(html.includes('Every submission stays in staff review until approved.'), 'the listing modal must retain the review boundary');
 
 assert(!html.includes('Always 100% Free.'), 'the listing page must not claim listings are always free');

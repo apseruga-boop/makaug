@@ -8874,6 +8874,8 @@ router.get('/agents', async (req, res, next) => {
         a.fee_offer_mode,
         a.fee_offer_reason,
         a.fee_offer_until,
+        a.fee_exempt_until,
+        a.trial_ends_at,
         a.billing_plan,
         a.monthly_fee_ugx,
         a.welcome_sent_at,
@@ -10309,6 +10311,28 @@ router.post('/revenue/agents/:id/take-down', async (req, res, next) => {
   }
 });
 
+// C21: "Start 14-day trial from today" on an agent's billing row.
+router.post('/revenue/agents/:id/start-trial', async (req, res, next) => {
+  try {
+    const result = await billingOps.startAgentTrialFromToday(db, { agentId: req.params.id, actor: adminActorId(req) });
+    await writeAudit('admin_agent_fee_trial', { agent_id: req.params.id, mode: 'trial', started: 'today', trial_ends_at: result.trial_ends_at }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
+// C21: the date a fee-exempt agent stays free until (null clears it).
+router.patch('/revenue/agents/:id/fee-exempt-until', async (req, res, next) => {
+  try {
+    const result = await billingOps.setAgentFeeExemptUntil(db, { agentId: req.params.id, until: req.body?.fee_exempt_until ?? null, actor: adminActorId(req) });
+    await writeAudit('admin_agent_fee_exempt_until', { agent_id: req.params.id, fee_exempt_until: result.fee_exempt_until }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return sendRevenueError(res, error, next);
+  }
+});
+
 // Put an agent back without a payment (e.g. paid in another way, or a mistake).
 router.post('/revenue/agents/:id/reinstate', async (req, res, next) => {
   try {
@@ -10467,8 +10491,10 @@ router.patch('/agents/:id/status', async (req, res, next) => {
     let paymentResult = null;
     let beforeApproval = null;
     if (status === 'approved') {
+      // The fees and the trial length come from Admin (C21).
+      await billingOps.currentFees(db);
       beforeApproval = (await db.query(
-        `SELECT id, full_name, phone, whatsapp, status, fee_exempt, paid_until, approved_at, removed_at, welcome_sent_at
+        `SELECT id, full_name, phone, whatsapp, status, fee_exempt, fee_exempt_until, paid_until, approved_at, removed_at, welcome_sent_at
            FROM agents WHERE id = $1`,
         [req.params.id]
       )).rows[0];
@@ -10478,21 +10504,24 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       // From 10 Oct 2026 a new agent with no payment recorded starts on the free
       // trial (14 days) instead of being refused. Someone who pays up front still
       // goes the payment route, and `require_payment: true` keeps the old rule.
+      // C21: the length is Admin's agent_fee.agent_trial_days (0 = pay first, the
+      // 402 below). Only a NEW agent gets it: never approved before, nothing paid.
+      const newAgentTrialDays = revenue.agentTrialDays();
       if (!feeOverride && !(req.body.payment && typeof req.body.payment === 'object') && req.body.require_payment !== true
+        && newAgentTrialDays > 0 && !beforeApproval.approved_at && !beforeApproval.paid_until
         && revenue.agentFeeRequired(beforeApproval)) {
-        const days = revenue.agentTrialDays();
-        feeOverride = { mode: 'free_period', days, reason: `New agent ${days}-day free trial` };
+        feeOverride = { mode: 'trial', days: newAgentTrialDays, reason: `New agent: ${newAgentTrialDays} days free` };
       }
       if (feeOverride && revenue.agentFeeRequired(beforeApproval)) {
         // Approve without a payment, on purpose: an offer, pay later, or waived.
         const mode = String(feeOverride.mode || '').trim().toLowerCase();
         const reason = String(feeOverride.reason || '').replace(/\s+/g, ' ').trim().slice(0, 300);
-        if (!['free_period', 'pay_later', 'waive'].includes(mode)) {
-          return res.status(400).json({ ok: false, error: 'fee_override.mode must be free_period, pay_later or waive' });
+        if (!['trial', 'free_period', 'pay_later', 'waive'].includes(mode)) {
+          return res.status(400).json({ ok: false, error: 'fee_override.mode must be trial, free_period, pay_later or waive' });
         }
         if (reason.length < 3) return res.status(400).json({ ok: false, error: 'Say why (the offer or reason) to approve without payment.' });
         let offerUntil = null;
-        if (mode === 'free_period') {
+        if (mode === 'free_period' || mode === 'trial') {
           const days = Math.round(Number(feeOverride.days));
           if (!Number.isFinite(days) || days < 1 || days > 366) {
             return res.status(400).json({ ok: false, error: 'Free period must be between 1 and 366 days.' });
@@ -10503,14 +10532,15 @@ router.patch('/agents/:id/status', async (req, res, next) => {
           `UPDATE agents
               SET fee_offer_mode = $2, fee_offer_reason = $3, fee_offer_until = $4::date,
                   fee_offer_by = $5, fee_offer_at = NOW(),
-                  paid_until = CASE WHEN $2 = 'free_period' THEN GREATEST(COALESCE(paid_until, $4::date), $4::date) ELSE paid_until END,
+                  paid_until = CASE WHEN $2 IN ('free_period', 'trial') THEN GREATEST(COALESCE(paid_until, $4::date), $4::date) ELSE paid_until END,
+                  trial_ends_at = CASE WHEN $2 = 'trial' THEN $4::date ELSE trial_ends_at END,
                   fee_exempt = CASE WHEN $2 = 'waive' THEN true ELSE fee_exempt END,
                   fee_exempt_reason = CASE WHEN $2 = 'waive' THEN $3 ELSE fee_exempt_reason END,
                   updated_at = NOW()
             WHERE id = $1`,
           [req.params.id, mode, reason, offerUntil, adminActorId(req)]
         );
-        await writeAudit('admin_agent_fee_override', { agent_id: req.params.id, mode, reason, offer_until: offerUntil }, adminActorId(req));
+        await writeAudit(mode === 'trial' ? 'admin_agent_fee_trial' : 'admin_agent_fee_override', { agent_id: req.params.id, mode, reason, offer_until: offerUntil }, adminActorId(req));
         paymentResult = null;
         req.feeOverrideApplied = { mode, reason, offer_until: offerUntil };
         // "Pay later" sends the pay link as part of approving.
@@ -10598,7 +10628,7 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       // once per agent (resend_welcome: true to send it again).
       if (req.body.send_welcome !== false && (!beforeApproval?.welcome_sent_at || req.body.resend_welcome === true)) {
         // The payment link (when one is due) follows the welcome pack, never before it.
-        const feeLinkDue = !paymentResult && !['free_period', 'waive'].includes(req.feeOverrideApplied?.mode);
+        const feeLinkDue = !paymentResult && !['trial', 'free_period', 'waive'].includes(req.feeOverrideApplied?.mode);
         welcome = await queueAgentWelcomePack({
           agentId: req.params.id,
           actorId: adminActorId(req),
@@ -10635,7 +10665,7 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       feeLink = revenue.agentFeeRequired(updated.rows[0]) && (updated.rows[0].pay_link_on_approval !== false || req.body.send_pay_link === true)
         ? { sent: true, after_welcome: true }
         : { sent: false, reason: revenue.agentFeeRequired(updated.rows[0]) ? 'employee_declined' : 'fee_not_due' };
-    } else if (status === 'approved' && !paymentResult && req.feeOverrideApplied?.mode !== 'free_period' && req.feeOverrideApplied?.mode !== 'waive') {
+    } else if (status === 'approved' && !paymentResult && !['trial', 'free_period', 'waive'].includes(req.feeOverrideApplied?.mode)) {
       feeLink = await sendAgentFeeLinkOnApproval({
         agent: updated.rows[0],
         actor: adminActorId(req),

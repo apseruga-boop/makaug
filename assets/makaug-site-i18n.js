@@ -22,7 +22,7 @@
   if (window.__makaugSiteI18n) return;
 
   var SUPPORTED = { lg: 1, sw: 1, ac: 1, ny: 1, rn: 1, sm: 1, am: 1, ar: 1 };
-  var VERSION = "20261003-site-i18n-v4";
+  var VERSION = "20261010-site-i18n-v5";
   var ATTRS = ["placeholder", "title", "aria-label", "alt", "data-tooltip"];
   var SKIP_SELECTOR = "script,style,noscript,code,pre,[data-no-translate],[contenteditable=true]";
 
@@ -44,14 +44,40 @@
     return SUPPORTED[lang] ? lang : "en";
   }
 
+  // C21: fee phrases are templates ("{agent_ush} / month · …") filled from the
+  // Admin fees (window.MAKAUG_PRICING), so a price change needs no new
+  // translation and the page text (built from the same fees) still matches.
+  function feeValues() {
+    var pricing = window.MAKAUG_PRICING || null;
+    if (!pricing || !pricing.agent || !pricing.lister) return null;
+    var fmt = function (n) { return Math.round(Number(n || 0)).toLocaleString("en-US"); };
+    return {
+      agent_ush: "USh " + fmt(pricing.agent.monthly_ugx),
+      lister_ush: "USh " + fmt(pricing.lister.monthly_ugx),
+      agent_ugx: "UGX " + fmt(pricing.agent.monthly_ugx),
+      lister_ugx: "UGX " + fmt(pricing.lister.monthly_ugx),
+      agent_trial_days: String(Math.round(Number(pricing.agent.trial_days || 0))),
+      lister_free_days: String(Math.round(Number(pricing.lister.free_days || 0)))
+    };
+  }
+
+  function fillFees(text, values) {
+    if (!values || String(text).indexOf("{") < 0) return text;
+    return String(text).replace(/\{((?:agent|lister)_[a-z_]+)\}/g, function (all, key) {
+      return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : all;
+    });
+  }
+
   function compilePack(raw) {
     var pack = { phrases: Object.create(null), lower: Object.create(null), patterns: [] };
     var phrases = raw && raw.phrases ? raw.phrases : {};
-    Object.keys(phrases).forEach(function (key) {
-      var k = norm(key);
-      if (!k || !phrases[key]) return;
-      pack.phrases[k] = phrases[key];
-      pack.lower[k.toLowerCase()] = phrases[key];
+    var fees = feeValues();
+    Object.keys(phrases).forEach(function (rawKey) {
+      var k = norm(fillFees(rawKey, fees));
+      var value = fillFees(phrases[rawKey], fees);
+      if (!k || !value) return;
+      pack.phrases[k] = value;
+      pack.lower[k.toLowerCase()] = value;
     });
     (raw && raw.patterns ? raw.patterns : []).forEach(function (entry) {
       try {

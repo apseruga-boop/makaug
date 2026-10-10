@@ -27,7 +27,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1"></script>
-  <script src="/assets/makaug-site-i18n.js?v=20261003-site-i18n-v4" defer></script>
+  <script src="/assets/makaug-site-i18n.js?v=20261010-site-i18n-v5" defer></script>
   <meta name="theme-color" content="#15803d">
   <script>
     (function () {
@@ -5647,7 +5647,7 @@
     <div id="lp-page-hero" class="lp-page-hero py-8">
       <div class="max-w-4xl mx-auto px-4">
         <h1 id="lp-page-title" class="text-3xl font-black serif">List Property</h1>
-        <p id="lp-page-subtitle" class="text-green-100 text-sm mt-2">Start with 7 days free, then keep one private listing live from UGX 20,000 per month.</p>
+        <p id="lp-page-subtitle" class="text-green-100 text-sm mt-2">Start with {{FREE:lister}} days free, then {{FEE:lister_price}}.</p>
       </div>
     </div>
     <div class="max-w-4xl mx-auto px-4 py-10">
@@ -6137,7 +6137,7 @@
             <span id="lp-verify-terms-label">I agree to the Terms, Anti-Fraud Policy, and lawful data use for listing review.</span>
             <span title="You authorize makaug to process your data for fraud screening, listing moderation, and compliance checks under applicable Ugandan law." class="text-xs text-green-700 cursor-help">ⓘ</span>
           </label>
-          <p id="lp-verify-fee-note" class="mt-1 ml-6 text-xs text-gray-600">Private owners: your listing is free for 7 days once it is live, then UGX 20,000 a month to stay live. We message you before anything is due — nothing is charged automatically. <a href="/legal/makaug-private-lister-terms.pdf" target="_blank" rel="noopener" class="font-bold text-green-700 underline">Read the terms (PDF)</a></p>
+          <p id="lp-verify-fee-note" class="mt-1 ml-6 text-xs text-gray-600">Private owners: your listing is free for {{FREE:lister}} days once it is live, then {{FEE:lister_price}} to stay live. We message you before anything is due — nothing is charged automatically. <a href="/legal/makaug-private-lister-terms.pdf" target="_blank" rel="noopener" class="font-bold text-green-700 underline">Read the terms (PDF)</a></p>
           <label class="mt-2 flex items-start gap-2 text-sm text-gray-700">
             <input id="lp-verify-fraud" type="checkbox" class="mt-1 accent-green-700">
             <span id="lp-verify-fraud-label">I understand false or fraudulent listings may be escalated to police authorities.</span>
@@ -7159,6 +7159,7 @@
               <h2 id="staff-dashboard-name" class="text-2xl font-black text-gray-900">Moderator Dashboard</h2>
               <p id="staff-dashboard-status" class="text-sm text-gray-500 mt-1">Restricted operations access</p>
               <p id="staff-dashboard-freshness" class="text-[11px] text-gray-400 mt-1" aria-live="polite"></p>
+              <div id="staff-pay-link-tasks" class="hidden mt-2" aria-live="polite"></div>
             </div>
             <div class="flex gap-2 flex-wrap">
               <button onclick="renderStaffDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-rotate-right mr-1"></i>Refresh</button>
@@ -8830,7 +8831,7 @@
           <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-lg font-bold text-gray-800"><i class="fas fa-sack-dollar text-emerald-600 mr-1"></i>Sales &amp; Revenue</h3>
-              <p class="text-sm text-gray-600">Every payment in and every shilling out, by account. Agent fees are UGX 50,000 a month from 5 Oct 2026.</p>
+              <p class="text-sm text-gray-600">Every payment in and every shilling out, by account. {{FEE:admin_agent_line}}</p>
             </div>
             <div class="flex gap-2 flex-wrap">
               <button type="button" onclick="adminOpenMoneyEntry('in')" class="rounded-lg bg-green-700 px-3 py-2 text-xs font-bold text-white">+ Money in</button>
@@ -9402,7 +9403,7 @@
         <div>
           <div class="text-2xl font-black serif" id="footer-brand-title">makaug.com</div>
           <p id="footer-brand-copy" class="text-green-200 text-sm mt-3 leading-relaxed">
-            Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month. Web or WhatsApp, all 146 districts.
+            Uganda's property search engine. List your first {{FREE:lister}} days free, then keep it live from {{PRICE:lister}} per listing, per month. Web or WhatsApp, all 146 districts.
           </p>
           <div class="mt-4 space-y-2 text-sm text-green-200">
             <a id="footer-whatsapp-label" href="https://wa.me/256780863394" target="_blank" rel="noopener noreferrer" class="block hover:text-white" data-public-whatsapp-link data-whatsapp-context="auto">📲 WhatsApp: 0780863394</a>
@@ -9653,7 +9654,7 @@
       </div>
 
       <div class="mt-5 bg-green-50 border border-green-100 rounded-xl px-4 py-3 text-sm text-green-800">
-        ✅ <strong id="list-choice-free-title">Start with 7 days free.</strong> <span id="list-choice-free-copy">After that, one private listing costs UGX 20,000 per month. Every submission stays in staff review until approved.</span>
+        ✅ <strong id="list-choice-free-title">Start with {{FREE:lister}} days free.</strong> <span id="list-choice-free-copy">After that, {{FEE:lister_price}}. Every submission stays in staff review until approved.</span>
       </div>
     </div>
   </div>
