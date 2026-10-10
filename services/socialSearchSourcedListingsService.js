@@ -75,8 +75,6 @@ const SOCIAL_SEARCH_SOURCE = 'found_online_property_source_v1';
 const DAILY_FOUND_ONLINE_PROPERTY_TARGET = 200;
 const LAUNCH_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
 const FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID = 'found_online_source_post_import';
-const SOCIAL_SEARCH_FIRST_SEEN_AT = '2026-05-20T00:00:00.000Z';
-const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
 const PRICE_UPON_APPLICATION_LABEL = 'Price upon application';
 const USD_TO_UGX_GUIDE_RATE = configuredUsdToUgxRate();
 const USD_TO_CANONICAL_GUIDE_RATE = IS_SOUTH_AFRICA
@@ -1923,8 +1921,8 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     manual_exact_social_intake: manualExactSocialIntake,
     older_exact_source_requires_availability_review: olderExactSourceRequiresAvailabilityReview,
     original_poster_comment_required: false,
-    first_seen_online_at: SOCIAL_SEARCH_FIRST_SEEN_AT,
-    first_seen_online_label: 'First picked up by makaug source watch on 20 May 2026',
+    first_seen_online_at: item.firstSeenOnlineAt || item.first_seen_online_at || new Date().toISOString(),
+    first_seen_online_label: '',
     first_posted_online_at: sourcePublishedAt || null,
     source_published_at: sourcePublishedAt || null,
     video_published_at: sourcePublishedAt || null,
@@ -1948,8 +1946,8 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     auto_live_review_score: autoLive.review_score,
     auto_live_source_is_hashtag: autoLive.source_is_hashtag,
     auto_live_source_is_youtube_api: autoLive.source_is_youtube_api,
-    added_to_makaug_at: SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT,
-    added_to_makaug_label: 'Added to makaug source review on 20 May 2026',
+    // "Added to makaug" is the listing's created_at (P3); the harvest no longer
+    // stamps the fixed 20 May 2026 seed date on every new row.
     source_followers_label: agent.audienceLabel || 'Audience count to confirm from source',
     source_audience_label: agent.audienceLabel || 'Audience count to confirm from source',
     source_contact_url: sourceContactUrl,

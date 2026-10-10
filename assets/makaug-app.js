@@ -43378,7 +43378,9 @@ function foundOnlineSourceMeta(p = {}) {
     || extra.last_checked_at
     || p.created_at
     || p.createdAt;
-  const addedToMakaugRaw = extra.added_to_makaug_at || p.created_at || p.createdAt || firstSeenRaw;
+  // The listing's own created_at (P3). extra.added_to_makaug_at used to carry a
+  // fixed 20 May 2026 harvest date on every found-online row.
+  const addedToMakaugRaw = p.created_at || p.createdAt || extra.added_to_makaug_at || firstSeenRaw;
   const firstPostedDate = dateNeedsConfirmation ? null : parseDateSafe(firstPostedRaw);
   const firstSeenDate = parseDateSafe(firstSeenRaw);
   const addedToMakaugDate = parseDateSafe(addedToMakaugRaw);
@@ -43402,7 +43404,7 @@ function foundOnlineSourceMeta(p = {}) {
   ).trim();
   const firstSeen = formatListingDate(safeFirstSeenRaw);
   const firstSeenLabel = String(extra.first_seen_online_label || "").trim();
-  const addedToMakaug = formatListingDate(addedToMakaugRaw);
+  const addedToMakaug = formatAddedToMakaugDate(addedToMakaugRaw);
   const addedToMakaugLabel = String(extra.added_to_makaug_label || "").trim();
   const hasDirectContact = Boolean(
     p.lister_phone
@@ -43694,9 +43696,10 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
       ? translateListingLabel("Contact through the public social channel")
       : translateListingLabel("Open the public source page for contact details."));
   const audienceLabel = translateFoundOnlineSourceText(meta.followersLabel);
+  // "Posted on TikTok" (the source's own date), shown apart from "Added to makaug".
   const firstPostedTitle = meta.sourceDateOutOfOrder || !meta.firstPosted
     ? translateListingLabel("Source date approx.")
-    : translateListingLabel("First posted online");
+    : (meta.platform ? `${translateListingLabel("Posted on")} ${meta.platform}` : translateListingLabel("First posted online"));
   return `
     <section id="detail-source-verification" class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-800">
       <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -44117,6 +44120,17 @@ function foundOnlineSourceVisualHtml(p = {}, options = {}) {
       </div>
       ${foundOnlineSourcePlayControlsHtml(sourceUrl, platform)}
     </div>`;
+}
+
+// "9 Oct 2026", on the UK calendar day (BST/GMT), as the moderators read it.
+function formatAddedToMakaugDate(dateValue) {
+  const date = parseDateSafe(dateValue);
+  if (!date) return "";
+  try {
+    return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
+  } catch (error) {
+    return formatListingDate(dateValue);
+  }
 }
 
 function formatListingDate(dateValue) {
