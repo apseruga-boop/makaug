@@ -22,7 +22,7 @@ const { publicListingPayload } = require('../utils/publicListingPayload');
 
 const TITLE = 'House for sale in Akright City';
 const DESCRIPTION = '6-bedroom, 7-bathroom house for sale in Akright City (Akright Estate), Bwebajja, off Entebbe Road. Two living rooms, air conditioning, self-contained staff quarters.\nSits on 25 decimals with a private mailo land title.';
-const NOTICE = 'Found on TikTok from tiktok.com. Check the original post before paying.';
+const NOTICE = 'Found on TikTok. Check the original post before paying.' /* C15c: no bare-domain name */;
 
 const reviewed = {
   id: '56ec3ed3-3962-4aa1-aea1-4bf333279083',
