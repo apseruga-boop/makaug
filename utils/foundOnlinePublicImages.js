@@ -8,7 +8,7 @@
 // extra_fields.staff_image_upload / image_rights_confirmed. Only those photos are
 // published for a found-online row, primary first.
 
-const { realPhotoRejection } = require('./realListingPhoto');
+const { mediaHost, realPhotoRejection } = require('./realListingPhoto');
 
 const STAFF_UPLOAD_SLOT = 'staff_upload';
 const SOURCE_MEDIA_URL_PATTERN = 'tiktokcdn|byteimg|tiktok\\.com';
@@ -41,11 +41,31 @@ function isConsentedStaffImage(image, extraFields) {
   return staffImageConsentGiven(extraFields);
 }
 
-// Consented staff photos only, the stored primary first (else upload order),
-// with is_primary set on exactly the first one.
+// C1 (10 Oct 2026, Arthur): stills taken from the listing's own source video
+// and stored on our media host count as its photos and are published too. The
+// agent's branding stays on them (never cropped or blurred). YouTube i.ytimg
+// thumbnails (source_video_*_still) are not ours and stay hidden until Arthur
+// decides otherwise.
+const VIDEO_STILL_SLOT_RE = /^(?:video_key_frame_|video_still_|video_recovery_still_)/i;
+const VIDEO_STILL_SLOT_SQL = '^(video_key_frame_|video_still_|video_recovery_still_)';
+
+function isOwnVideoStillImage(image) {
+  if (!image || typeof image !== 'object') return false;
+  if (!VIDEO_STILL_SLOT_RE.test(String(image.slot_key || '').trim())) return false;
+  const url = String(image.url || '').trim();
+  if (!url || SOURCE_MEDIA_URL_RE.test(url)) return false;
+  return realPhotoRejection(image) === null;
+}
+
+// Consented staff photos, then stills from the listing's own video, the stored
+// primary first (else staff photos first, in upload order), with is_primary on
+// exactly the first one.
 function foundOnlinePublicImages(images = [], extraFields = {}) {
-  const list = (Array.isArray(images) ? images : []).filter((image) => isConsentedStaffImage(image, extraFields));
-  const primaryIndex = list.findIndex((image) => image.is_primary === true);
+  const all = Array.isArray(images) ? images : [];
+  const staff = all.filter((image) => isConsentedStaffImage(image, extraFields));
+  const stills = all.filter((image) => isOwnVideoStillImage(image));
+  const list = [...staff, ...stills];
+  const primaryIndex = staff.findIndex((image) => image.is_primary === true);
   const ordered = primaryIndex > 0 ? [list[primaryIndex], ...list.slice(0, primaryIndex), ...list.slice(primaryIndex + 1)] : list;
   return ordered.map((image, index) => ({ ...image, is_primary: index === 0 }));
 }
@@ -60,13 +80,21 @@ function consentedStaffPrimaryImageLateralSql(alias = 'p') {
           FROM property_images si
           JOIN properties sp ON sp.id = si.property_id
           WHERE si.property_id = ${alias}.id
-            AND si.slot_key = '${STAFF_UPLOAD_SLOT}'
             AND si.url !~* '${SOURCE_MEDIA_URL_PATTERN}'
             AND (
-              jsonb_typeof(sp.extra_fields->'staff_image_upload') = 'object'
-              OR LOWER(COALESCE(sp.extra_fields->>'image_rights_confirmed', '')) IN ('true', '1', 'yes')
+              (
+                si.slot_key = '${STAFF_UPLOAD_SLOT}'
+                AND (
+                  jsonb_typeof(sp.extra_fields->'staff_image_upload') = 'object'
+                  OR LOWER(COALESCE(sp.extra_fields->>'image_rights_confirmed', '')) IN ('true', '1', 'yes')
+                )
+              )
+              OR (
+                COALESCE(si.slot_key, '') ~* '${VIDEO_STILL_SLOT_SQL}'
+                AND si.url ~* '^https?://${mediaHost().replace(/[^a-z0-9.-]/gi, '').replace(/\./g, '\\.')}/.+'
+              )
             )
-          ORDER BY si.is_primary DESC, si.sort_order ASC, si.created_at ASC
+          ORDER BY (COALESCE(si.slot_key, '') = '${STAFF_UPLOAD_SLOT}') DESC, si.is_primary DESC, si.sort_order ASC, si.created_at ASC
           LIMIT 1
         ) staff_img ON true`;
 }
@@ -81,6 +109,8 @@ function foundOnlinePrimaryImageUrl(row = {}) {
 
 module.exports = {
   STAFF_UPLOAD_SLOT,
+  VIDEO_STILL_SLOT_RE,
+  isOwnVideoStillImage,
   staffImageConsentGiven,
   isConsentedStaffImage,
   foundOnlinePublicImages,

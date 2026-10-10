@@ -51,7 +51,7 @@ test('photo controls render every image and preserve a restore action', () => {
   const source = fs.readFileSync(require.resolve('../assets/makaug-app.js'), 'utf8');
   const start = source.indexOf('function staffPreviewImagesHtml(');
   const end = source.indexOf('let staffPhotoChangePending', start);
-  const context = { adminAttr: String, adminEscape: String, propertyIdArg: JSON.stringify, staffEmpty: String };
+  const context = { adminAttr: String, adminEscape: String, propertyIdArg: JSON.stringify, staffEmpty: String, adminActiveReview: null };
   vm.runInNewContext(source.slice(start, end), context);
   const html = context.staffPreviewImagesHtml(Array.from({ length: 20 }, (_, index) => ({ id: String(index), url: `photo-${index}` })), 'property', [{ id: 'old', url: 'old' }]);
   assert.equal((html.match(/>Remove photo</g) || []).length, 20);
@@ -59,7 +59,9 @@ test('photo controls render every image and preserve a restore action', () => {
   // A listing with no photos says it can't be approved yet and offers the
   // upload right there (the old text promised an override that no longer exists).
   const empty = context.staffPreviewImagesHtml([], 'property');
-  assert.match(empty, /This listing has no photos yet\. It can't be approved until at least one real photo/);
+  // C1: a photo or the listing's own video; the cover button is offered.
+  assert.match(empty, /This listing has no photos yet\. It needs a photo or its own property video before it can be approved/);
+  assert.match(empty, /Make a cover from the video/);
   assert.match(empty, /id="staff-preview-photo-upload"/);
   assert.doesNotMatch(empty, /human approval override/);
 });

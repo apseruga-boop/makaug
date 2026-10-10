@@ -105,12 +105,118 @@ function realHostedPhotoExistsSql(alias = 'p') {
   )`;
 }
 
+// C1 (10 Oct 2026, Arthur): a still from the listing's own source video counts
+// as its photo, and a listing with only its own playable video may go live.
+// 152 of the 160 pending listings had no media.makaug.com photo, and every one
+// had a source video. TikTok CDN/byteimg covers, stock photos, data: images
+// and "image pending" cards still never count.
+const NO_PHOTO_OR_VIDEO_MESSAGE = 'This listing needs a photo or its own property video before it can be approved.';
+const VIDEO_STILL_SLOT_RE = /^(?:video_key_frame_|video_still_|video_recovery_still_)/i;
+
+function isVideoStillImage(image) {
+  return image && typeof image === 'object' && VIDEO_STILL_SLOT_RE.test(String(image.slot_key || ''));
+}
+
+function playableVideoUrl(value) {
+  const url = String(value || '').trim();
+  if (!/^https?:\/\//i.test(url)) return '';
+  if (/tiktokcdn|byteimg/i.test(url) && !/\.mp4(\?|$)/i.test(url)) return '';
+  return url;
+}
+
+// The listing's own source videos (http(s), not marked unavailable).
+function listingSourceVideoUrls(extra = {}) {
+  const fields = extra && typeof extra === 'object' ? extra : {};
+  const unavailable = fields.source_unavailable === true
+    || /unavailable|removed|deleted|private/i.test(String(fields.source_url_status || fields.source_status || ''));
+  if (unavailable) return [];
+  const tours = Array.isArray(fields.video_tours) ? fields.video_tours : [];
+  const candidates = [
+    fields.video_url,
+    ...(Array.isArray(fields.video_urls) ? fields.video_urls : []),
+    fields.tiktok_url,
+    fields.youtube_url,
+    ...tours.map((tour) => (tour && typeof tour === 'object' ? (tour.url || tour.video_url) : tour)).filter((url) => /\.mp4(\?|$)/i.test(String(url || '')) || /youtu|tiktok/i.test(String(url || '')))
+  ];
+  return [...new Set(candidates.map(playableVideoUrl).filter(Boolean))];
+}
+
+// { ok, basis: 'photo' | 'video_still' | 'source_video' | null, ... }
+function summariseListingMedia(images = [], extra = {}) {
+  const photos = summariseListingPhotos(images);
+  const realImages = (Array.isArray(images) ? images : []).filter((image) => realPhotoRejection(image) === null);
+  const stills = realImages.filter(isVideoStillImage).length;
+  const realPhotos = realImages.length - stills;
+  const videos = listingSourceVideoUrls(extra);
+  let basis = null;
+  if (realPhotos > 0) basis = 'photo';
+  else if (stills > 0) basis = 'video_still';
+  else if (videos.length > 0) basis = 'source_video';
+  return {
+    ...photos,
+    ok: basis !== null,
+    basis,
+    real_photos: realPhotos,
+    video_stills: stills,
+    source_videos: videos.length
+  };
+}
+
+async function loadListingMediaSummaries(queryable, propertyIds = []) {
+  const photos = await loadRealPhotoSummaries(queryable, propertyIds);
+  const ids = [...photos.keys()];
+  const out = new Map(ids.map((id) => [id, summariseListingMedia([], {})]));
+  if (!ids.length) return out;
+  const [images, extras] = await Promise.all([
+    queryable.query(
+      `SELECT property_id::text AS property_id, url, slot_key, room_label
+         FROM property_images
+        WHERE property_id = ANY($1::uuid[])`,
+      [ids]
+    ),
+    queryable.query(
+      `SELECT id::text AS id,
+              jsonb_build_object(
+                'video_url', extra_fields->'video_url', 'video_urls', extra_fields->'video_urls',
+                'tiktok_url', extra_fields->'tiktok_url', 'youtube_url', extra_fields->'youtube_url',
+                'video_tours', extra_fields->'video_tours', 'source_unavailable', extra_fields->'source_unavailable',
+                'source_url_status', extra_fields->'source_url_status', 'source_status', extra_fields->'source_status'
+              ) AS media_extra
+         FROM properties
+        WHERE id = ANY($1::uuid[])`,
+      [ids]
+    )
+  ]);
+  const imagesById = new Map();
+  for (const row of images.rows || []) {
+    if (!imagesById.has(row.property_id)) imagesById.set(row.property_id, []);
+    imagesById.get(row.property_id).push(row);
+  }
+  const extraById = new Map((extras.rows || []).map((row) => [row.id, row.media_extra || {}]));
+  for (const id of ids) out.set(id, summariseListingMedia(imagesById.get(id) || [], extraById.get(id) || {}));
+  return out;
+}
+
+// The approval gate: a real photo, a still from the listing's own video, or the
+// listing's own playable source video. Not overridable.
+async function listingPhotoOrVideoCheck(queryable, propertyId) {
+  const map = await loadListingMediaSummaries(queryable, [propertyId]);
+  return map.get(String(propertyId || '').toLowerCase()) || summariseListingMedia([], {});
+}
+
 async function listingRealPhotoCheck(queryable, propertyId) {
   const map = await loadRealPhotoSummaries(queryable, [propertyId]);
   return map.get(String(propertyId || '').toLowerCase()) || summariseListingPhotos([]);
 }
 
 module.exports = {
+  NO_PHOTO_OR_VIDEO_MESSAGE,
+  VIDEO_STILL_SLOT_RE,
+  isVideoStillImage,
+  listingPhotoOrVideoCheck,
+  listingSourceVideoUrls,
+  loadListingMediaSummaries,
+  summariseListingMedia,
   DEFAULT_MEDIA_HOST,
   STOCK_PHOTO_ID,
   NO_REAL_PHOTO_CODE,

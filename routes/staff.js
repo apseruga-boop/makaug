@@ -19,7 +19,7 @@ const {
   normalizeCommercialPropertyType,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
-const { loadRealPhotoSummaries, listingRealPhotoCheck, NO_REAL_PHOTO_CODE, NO_REAL_PHOTO_MESSAGE } = require('../utils/realListingPhoto');
+const { loadListingMediaSummaries, listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const {
   districtForKnownArea,
@@ -3163,7 +3163,7 @@ function clearPublicListingCaches(reason = 'staff_listing_changed') {
 async function applyStaffBulkRealPhotoGate(decisions = [], queryable = db) {
   const approveIds = decisions.filter((item) => item.decision === 'approve').map((item) => item.id);
   if (!approveIds.length) return decisions;
-  const photos = await loadRealPhotoSummaries(queryable, approveIds);
+  const photos = await loadListingMediaSummaries(queryable, approveIds);
   return decisions.map((item) => {
     if (item.decision !== 'approve') return item;
     const summary = photos.get(String(item.id).toLowerCase());
@@ -3172,7 +3172,7 @@ async function applyStaffBulkRealPhotoGate(decisions = [], queryable = db) {
       ...item,
       decision: 'hold',
       reason: NO_REAL_PHOTO_CODE,
-      details: [NO_REAL_PHOTO_MESSAGE],
+      details: [NO_PHOTO_OR_VIDEO_MESSAGE],
       photo_check: summary || null
     };
   });
@@ -3180,7 +3180,7 @@ async function applyStaffBulkRealPhotoGate(decisions = [], queryable = db) {
 
 async function approveStaffBulkFoundOnlineListing(client, req, row = {}) {
   // Checked again inside the transaction; the caller skips a null result.
-  const photos = await listingRealPhotoCheck(client, row.id);
+  const photos = await listingPhotoOrVideoCheck(client, row.id);
   if (!photos.ok) return null;
   const reason = 'Staff QA - found-online source verified';
   const reviewerUserId = toUuidOrNull(actorId(req));
@@ -4094,6 +4094,8 @@ router.get('/properties/:id/preview', async (req, res, next) => {
   try {
     const preview = await loadStaffPropertyPreview(req.params.id);
     if (!preview) return res.status(404).json({ ok: false, error: 'Property not found' });
+    // C1: what the approval gate counts as this listing's picture.
+    preview.media_check = await listingPhotoOrVideoCheck(db, preview.id).catch(() => null);
     logStaffActivityInBackground(req, 'staff_listing_preview_opened', {
       targetType: 'property',
       targetId: preview.id,
@@ -4178,6 +4180,40 @@ router.post('/properties/:id/images', async (req, res, next) => {
   }
 });
 
+// C1: "Make a cover from the video" — stills from this listing's own video,
+// uncropped, under the cover job's limits. One listing per click.
+router.post('/properties/:id/video-cover', async (req, res, next) => {
+  try {
+    if (!toUuidOrNull(req.params.id)) return res.status(400).json({ ok: false, error: 'Invalid listing id' });
+    const result = await require('../services/videoStillScheduler').makeVideoCoverForListing(db, req.params.id, { actorId: String(actorId(req) || 'staff') });
+    res.set('Cache-Control', 'no-store');
+    if (!result.ok) return res.status(result.status || 422).json({ ok: false, error: result.error });
+    const [images, property] = await Promise.all([
+      db.query(
+        `SELECT id, url, is_primary, sort_order, slot_key, room_label
+           FROM property_images WHERE property_id = $1
+          ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
+        [req.params.id]
+      ),
+      db.query('SELECT extra_fields FROM properties WHERE id = $1', [req.params.id])
+    ]);
+    clearStaffFastDashboardCache();
+    logStaffActivityInBackground(req, 'staff_video_cover_made', { targetType: 'property', targetId: req.params.id, metadata: { stills: result.attached } });
+    return res.json({
+      ok: true,
+      data: {
+        added: result.attached,
+        note: result.note || null,
+        images: images.rows,
+        extra_fields: property.rows[0]?.extra_fields || {},
+        media_check: await listingPhotoOrVideoCheck(db, req.params.id).catch(() => null)
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.delete('/properties/:id/images/:imageId', staffChangePropertyImage);
 router.post('/properties/:id/images/:imageId/restore', staffChangePropertyImage);
 
@@ -4192,11 +4228,11 @@ router.patch('/properties/:id/review', async (req, res, next) => {
       warning_overrides: safeJsonObject(req.body.warning_overrides, {})
     };
     if (['approved', 'live', 'published'].includes(String(reviewPatch.stage || '').trim().toLowerCase())) {
-      const photos = await listingRealPhotoCheck(db, req.params.id);
+      const photos = await listingPhotoOrVideoCheck(db, req.params.id);
       if (!photos.ok) {
         return res.status(422).json({
           ok: false,
-          error: NO_REAL_PHOTO_MESSAGE,
+          error: NO_PHOTO_OR_VIDEO_MESSAGE,
           code: NO_REAL_PHOTO_CODE,
           override_available: false,
           photo_check: photos
