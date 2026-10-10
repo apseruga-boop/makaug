@@ -336,7 +336,8 @@ function run() {
   assert(whatsappRoutes.includes("shouldUseEnglishFallback(raw)"), 'WhatsApp language resolver should apply registry fallback rules');
 
   const listPropertyHtml = sanitizePublicHtml(sourceHtml, { pathname: '/list-property' });
-  const listPropertyText = normalizeText(listPropertyHtml);
+  // C21: fee tokens are filled from the Admin fees when the page is sent.
+  const listPropertyText = normalizeText(require('../services/pricingCopy').applyFeeTokens(listPropertyHtml));
   assert(listPropertyHtml.includes('id="page-list-property"'), '/list-property should render the listing form route');
   assert(listPropertyHtml.includes('id="list-choice-modal"'), '/list-property should include the listing path choice modal');
   assert(listPropertyHtml.includes('Choose the listing type, then pick List Online or List through WhatsApp.'), '/list-property choice modal should explain both listing paths');
@@ -353,7 +354,7 @@ function run() {
   assert(listPropertyText.includes('List Property'), '/list-property should use short page title');
   assert(!listPropertyText.includes('Always 100% Free.'), '/list-property must not claim listings are always free');
   assert(listPropertyText.includes('Start with 7 days free.'), '/list-property should explain the introductory listing period');
-  assert(listPropertyText.includes('one private listing costs UGX 20,000 per month'), '/list-property should state the current post-trial price');
+  assert(listPropertyText.includes('After that, UGX 20,000 per listing, per month (VAT incl.).'), '/list-property should state the current post-trial price, per listing');
   assert(!listPropertyText.includes('List Your Property - Free'), '/list-property should not use old long free title');
   assert(listPropertyText.includes('Find address or place'), '/list-property should show address-first location flow');
   assert(listPropertyHtml.includes('id="lp-current-location-btn"'), '/list-property should include share current location button');

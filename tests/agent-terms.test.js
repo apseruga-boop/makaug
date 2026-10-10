@@ -72,6 +72,6 @@ test('staff can preview the welcome pack as a trial agent sees it, without touch
   assert.match(admin, /if \(preview && previewTrial\) pack = agentReportVideos\.trialVariant\(pack\)/);
   const video = require('../services/agentReportVideoService');
   const v = video.trialVariant({ agent: { id: 'a2', full_name: 'Old Agent' } });
-  assert.strictEqual(v.agent.fee_offer_mode, 'free_period');
+  assert.strictEqual(v.agent.fee_offer_mode, 'trial', 'C21: new-agent trials use the trial mode');
   assert.ok(video.welcomeDuration(v) > video.welcomeDuration({ agent: { id: 'a2' } }));
 });
