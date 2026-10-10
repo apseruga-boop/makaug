@@ -12,6 +12,7 @@ const { SEO_FACET_MIN_LISTINGS, FACET_DEFINITIONS, COMMERCIAL_TRANSACTION_FACETS
 const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require('../utils/locationRegistry');
 const { tenantFor } = require('../packages/shared-country-core');
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
+const { pricePeriodSuffix: sharedPricePeriodSuffix } = require('../config/pricePeriods');
 const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
@@ -444,10 +445,11 @@ function currencyLabelForSeo() {
   return ACTIVE_CURRENCY === 'ZAR' ? 'R' : ACTIVE_CURRENCY;
 }
 
-// "/month" for rent rows. Rows store mo / monthly / per_month as well as month.
+// "/month", "/week", "/year", "/acre", "/plot" in words, never the stored
+// code (C20: it printed "UGX 700,000/wk"). One-off, negotiable and POA have no
+// suffix. Shared table: config/pricePeriods.js.
 function pricePeriodSuffix(listing = {}) {
-  const period = normalizePricePeriodForWrite(String(listing.price_period || '').trim().toLowerCase()) || '';
-  return period && !['once', 'sale', 'total', 'poa'].includes(period) ? `/${period}` : '';
+  return sharedPricePeriodSuffix(normalizePricePeriodForWrite(String(listing.price_period || '').trim().toLowerCase()) || '');
 }
 
 // Full price for cards, detail pages and descriptions: UGX 80,000,000/month.

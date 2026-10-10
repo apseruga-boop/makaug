@@ -2400,6 +2400,8 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(normalized, 'price_period')) {
     normalized.price_period = require('../utils/propertyPriceCurrency').normalizePricePeriodForWrite(normalized.price_period);
+    // C20: choosing "Price on application" as the period is a POA listing.
+    if (normalized.price_period === 'poa') normalized.price_on_application = true;
   }
   if (Object.prototype.hasOwnProperty.call(normalized, 'price_on_application')) {
     normalized.price_on_application = boolLike(normalized.price_on_application);

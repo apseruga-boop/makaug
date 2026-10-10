@@ -14,6 +14,9 @@ const {
   STUDENT_PATTERN,
   detectPropertyTypeEvidence,
 } = require('./propertyTypeVocabulary');
+const { allowedPricePeriods, normalizePricePeriod } = require('../config/pricePeriods');
+
+const HOSPITALITY_SHORT_TERM_MESSAGE = 'Nightly and short-stay places go in Short Term stays (/short-term), not the main listings.';
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const CANONICAL_CURRENCY = ACTIVE_COUNTRY_CODE === 'ZA' ? 'ZAR' : 'UGX';
@@ -183,8 +186,14 @@ function deriveListingClassification(record = {}, options = {}) {
   const evidenceSale = SALE_PATTERN.test(classificationText);
   const evidenceDirectRent = DIRECT_RENT_PATTERN.test(classificationText);
   const evidencePeriodicRent = PERIODIC_RENT_PATTERN.test(classificationText) && !YIELD_PATTERN.test(classificationText);
-  const hospitality = HOSPITALITY_PATTERN.test(text)
-    || ['night', 'nightly', 'day', 'daily'].includes(compact(record.price_period || record.pricePeriod).toLowerCase());
+  // C20: a nightly/daily price is hospitality. "Airbnb" or "short stay" in the
+  // text only counts when there is no monthly/weekly/yearly/semester price, so
+  // a furnished flat let by the month that mentions Airbnb isn't blocked.
+  const canonicalPeriod = normalizePricePeriod(compact(record.price_period || record.pricePeriod)) || '';
+  const nightlyPeriod = canonicalPeriod === 'night';
+  const longStayPrice = ['month', 'week', 'year', 'semester'].includes(canonicalPeriod) && Number(record.price) > 0;
+  const nightlyText = /\b(?:per\s+night|nightly|a\s+night|per\s+day|daily\s+rate)\b|\/\s*night\b/i.test(text);
+  const hospitality = nightlyPeriod || nightlyText || (HOSPITALITY_PATTERN.test(text) && !longStayPrice);
   const hasPrimaryPhysicalEvidence = bedroomBathroomEvidence
     || primaryStrongLand
     || primaryLand
@@ -325,7 +334,7 @@ function listingDataIntegrityReport(record = {}, options = {}) {
   const add = (code, message, details = {}) => issues.push({ code, message, ...details });
 
   if (classification.hospitality) {
-    add('unsupported_hospitality_or_nightly', 'Nightly, Airbnb, short-stay, hotel-room and hospitality inventory is not supported.');
+    add('unsupported_hospitality_or_nightly', HOSPITALITY_SHORT_TERM_MESSAGE, { proposed_destination: '/short-term' });
   }
   if (options.requireCompleteEvidence === true && !classification.has_specific_property) {
     add('not_a_specific_property_listing', 'A specific property type or asset is required.');
@@ -351,10 +360,13 @@ function listingDataIntegrityReport(record = {}, options = {}) {
   }
   if (Number.isFinite(price) && price > 0) {
     const commercialSale = category === 'commercial' && (transactionType === 'sale' || classification.transaction_type === 'sale');
-    if ((['sale', 'land'].includes(category) || commercialSale) && price < MIN_WHOLE_PROPERTY_PRICE_UGX) {
+    // C20: land let by the month or year is a recurring price, not a sale price.
+    const recurringLandRent = category === 'land' && transactionType === 'rent'
+      && ['month', 'year', 'acre_yr', 'week'].includes(normalizePricePeriod(period) || '');
+    if ((['sale', 'land'].includes(category) || commercialSale) && !recurringLandRent && price < MIN_WHOLE_PROPERTY_PRICE_UGX) {
       add('whole_property_price_below_sanity_floor', `Whole-property sale/land prices below the ${CANONICAL_CURRENCY} sanity floor require review.`);
     }
-    if (['rent', 'student'].includes(category) && price < MIN_RECURRING_PRICE_UGX) {
+    if ((['rent', 'student'].includes(category) || recurringLandRent) && price < MIN_RECURRING_PRICE_UGX) {
       add('recurring_price_below_sanity_floor', `Recurring residential/student prices below the ${CANONICAL_CURRENCY} sanity floor require review.`);
     }
   }
@@ -396,24 +408,22 @@ function listingDataIntegrityReport(record = {}, options = {}) {
     add('bedrooms_on_non_residential_commercial_category', 'Commercial land, office and warehouse listings cannot carry residential bedroom counts.');
   }
 
-  const allowedPeriods = {
-    sale: new Set(['once', 'one_off', 'total', 'sale', 'cash']),
-    land: new Set(['once', 'one_off', 'total', 'sale', 'cash']),
-    rent: new Set(['month', 'monthly', 'mo', 'per_month']),
-    student: new Set(['month', 'monthly', 'mo', 'per_month', 'sem', 'semester', 'term']),
-  };
-  if (allowedPeriods[category] && period && !allowedPeriods[category].has(period)) {
+  // C20: allowed periods are exactly what the forms offer (config/pricePeriods.js).
+  const canonicalPeriod = normalizePricePeriod(period) || '';
+  const effectiveCommercialTransaction = category === 'commercial' ? (transactionType || classification.transaction_type) : transactionType;
+  const allowed = allowedPricePeriods(category, effectiveCommercialTransaction);
+  if (category !== 'commercial' && allowed && canonicalPeriod && !allowed.has(canonicalPeriod)) {
     add('price_period_conflicts_with_category', `${category} listings cannot use the ${period} price period.`, {
       proposed_price_period: classification.price_period,
     });
   }
   if (category === 'commercial') {
-    const effectiveTransaction = transactionType || classification.transaction_type;
-    if (effectiveTransaction === 'sale' && period && !allowedPeriods.sale.has(period)) {
-      add('commercial_sale_period_conflict', 'Commercial sales require a one-off price period.', { proposed_price_period: 'once' });
+    const effectiveTransaction = effectiveCommercialTransaction;
+    if (effectiveTransaction === 'sale' && canonicalPeriod && !allowedPricePeriods('commercial', 'sale').has(canonicalPeriod)) {
+      add('commercial_sale_period_conflict', 'Commercial sales need a one-off, negotiable or POA price.', { proposed_price_period: 'once' });
     }
-    if (effectiveTransaction === 'rent' && period && !allowedPeriods.rent.has(period)) {
-      add('commercial_rent_period_conflict', 'Commercial rentals require a monthly price period.', { proposed_price_period: 'month' });
+    if (effectiveTransaction === 'rent' && canonicalPeriod && !allowedPricePeriods('commercial', 'rent').has(canonicalPeriod)) {
+      add('commercial_rent_period_conflict', 'Commercial rentals need a price per month, week or year.', { proposed_price_period: 'month' });
     }
     if (!commercialType) add('commercial_subtype_missing', 'Commercial listings require a canonical subtype.');
     if (!effectiveTransaction) add('commercial_transaction_missing', 'Commercial listings require rent or sale.');
@@ -439,6 +449,7 @@ function listingDataIntegrityReport(record = {}, options = {}) {
 
 module.exports = {
   HOSPITALITY_PATTERN,
+  HOSPITALITY_SHORT_TERM_MESSAGE,
   MAX_CANONICAL_PRICE_UGX,
   MIN_RECURRING_PRICE_UGX,
   MIN_WHOLE_PROPERTY_PRICE_UGX,

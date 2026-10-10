@@ -242,7 +242,11 @@ function setMinimumPrice(map, key, value) {
 const SEO_PRICE_BOUNDS = Object.freeze({
   one_off: [1_000_000, 20_000_000_000],
   monthly: [100_000, 100_000_000],
-  student: [50_000, 20_000_000]
+  student: [50_000, 20_000_000],
+  // C20: weekly and yearly rents get their own honest bounds so the price can
+  // show in the title.
+  weekly: [20_000, 25_000_000],
+  yearly: [1_000_000, 1_200_000_000]
 });
 const SEO_MIN_PRICES_FOR_COPY = 5;
 
@@ -250,9 +254,10 @@ function seoPriceKind(category, row = {}) {
   if (category === 'students') return 'student';
   const period = normalizePricePeriodForWrite(String(row.price_period || '').toLowerCase()) || '';
   const transaction = String(row.transaction_type || row?.extra_fields?.transaction_type || '').toLowerCase();
-  if (category === 'rent') return period === 'month' || !period ? 'monthly' : null;
+  const recurringKind = { month: 'monthly', week: 'weekly', year: 'yearly' };
+  if (category === 'rent') return !period ? 'monthly' : (recurringKind[period] || null);
   if (category === 'commercial') {
-    if (transaction === 'rent' || period === 'month') return period && period !== 'month' ? null : 'monthly';
+    if (transaction === 'rent' || recurringKind[period]) return !period ? 'monthly' : (recurringKind[period] || null);
     return 'one_off';
   }
   return 'one_off';
