@@ -118,12 +118,12 @@ async function createPayLink(db, input = {}, actor = 'admin') {
     if (property.found_online) throw revenue.httpError(409, 'Found-online listings are free — nobody is charged for them');
     if (property.agent_id) throw revenue.httpError(409, "This is an agent's listing — it is covered by the agent's monthly fee");
     propertyId = property.id;
-    amountUgx = amountUgx || Number(settings.lister_fee?.monthly_ugx || 20000);
+    amountUgx = amountUgx || billingOps.feesFromSettings(settings).lister.monthly_ugx;
     description = description || `makaug listing — 1 month: ${property.title || 'your property'}`.slice(0, 200);
     payerName = payerName || property.lister_name || null;
     payerPhone = payerPhone || digits(property.lister_phone) || null;
   } else if (purpose === 'agent_subscription') {
-    const agent = (await db.query('SELECT id, full_name, phone, whatsapp, monthly_fee_ugx, fee_exempt, approved_at, status FROM agents WHERE id = $1::uuid', [input.agent_id])).rows[0];
+    const agent = (await db.query('SELECT id, full_name, phone, whatsapp, monthly_fee_ugx, fee_exempt, fee_exempt_until, approved_at, status FROM agents WHERE id = $1::uuid', [input.agent_id])).rows[0];
     if (!agent) throw revenue.httpError(404, 'Agent not found');
     // Agents approved before the fee started list for free, for good — so a
     // link is never created for one by accident.
@@ -132,11 +132,15 @@ async function createPayLink(db, input = {}, actor = 'admin') {
     // their money is its own kind of silly. allow_exempt is how staff say they
     // meant it: the link is created, and the exemption is left exactly as it
     // was. Paying does not end it, and not paying costs them nothing.
-    if (agent.fee_exempt && input.allow_exempt !== true) {
-      throw revenue.httpError(409, `${agent.full_name} joined before the monthly fee and lists for free — no payment needed`);
+    // C21: an exemption with an end date (fee_exempt_until) holds until that date.
+    const exemption = require('./agentFeeExemption').exemptionState(agent, revenue.kampalaDate());
+    if (exemption.exempt && input.allow_exempt !== true) {
+      throw revenue.httpError(409, exemption.until
+        ? `${agent.full_name} is fee-exempt until ${require('./agentFeeExemption').formatExemptionDate(exemption.until)} — no payment needed`
+        : `${agent.full_name} joined before the monthly fee and lists for free — no payment needed`);
     }
     agentId = agent.id;
-    amountUgx = amountUgx || Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || revenue.feeConfig().feeUgx);
+    amountUgx = amountUgx || billingOps.feesFromSettings(settings).agent.monthly_ugx;
     // The description is public: it is on the /pay page the agent opens and in
     // the message they receive. So it says what they are paying for and
     // nothing else. That an exempt agent is paying by choice is OUR business,

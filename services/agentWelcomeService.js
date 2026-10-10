@@ -168,7 +168,7 @@ function shortDay(iso) {
 // 2026). Null for everyone else, so the welcome for an agent who is not on a
 // trial reads exactly as before.
 function trialTerms(agent = {}) {
-  if (agent.fee_offer_mode !== 'free_period' || !agent.fee_offer_until) return null;
+  if (!['trial', 'free_period'].includes(agent.fee_offer_mode) || !agent.fee_offer_until) return null;
   const revenue = require('./revenueService');
   const ends = revenue.isoDay(agent.fee_offer_until);
   if (!ends) return null;
@@ -177,7 +177,7 @@ function trialTerms(agent = {}) {
     start: shortDay(start),
     ends: shortDay(ends),
     first_due: shortDay(revenue.addDays(ends, 1)),
-    fee: Number(revenue.feeConfig().feeUgx || 50000).toLocaleString('en-US')
+    fee: Number(revenue.feeConfig().feeUgx).toLocaleString('en-US')
   };
 }
 
@@ -250,7 +250,7 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   // The free trial is told in the welcome video only; the message says nothing
   // about fees or free periods (Arthur, 10 Oct 2026). Agents who are not on a
   // trial still read the 7-day line they always did.
-  if (!trialTerms(agent)) lines.push('• Every listing gets its first 7 days free');
+  if (!trialTerms(agent)) lines.push(`• Every listing gets its first ${require('./pricingCopy').feeLabels().lister_free_days} days free`);
   lines.push('• Built for investors too: off plan, buy-to-let and a mortgage finder');
   lines.push('• You get a weekly WhatsApp report: views, visitors, enquiries and the countries watching you');
 

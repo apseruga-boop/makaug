@@ -33,17 +33,40 @@ const METHODS = {
 const OUT_KINDS = new Set(['withdrawal', 'expense', 'transfer_out', 'refund']);
 const IN_KINDS = new Set(['agent_subscription', 'listing_fee', 'short_term_fee', 'advertising', 'listing_boost', 'other_income', 'transfer_in', 'opening_adjustment']);
 
+// C21 (10 Oct 2026, Arthur): Admin (billing_settings) is the single source of
+// the fees. billingOpsService.currentFees() reads them (60 s cache) and hands
+// them here, so the synchronous callers below see the Admin values. The
+// numbers in FEE_DEFAULTS are used only until the first read, or when a key is
+// missing. AGENT_MONTHLY_FEE_UGX / AGENT_TRIAL_DAYS are no longer read.
+const FEE_DEFAULTS = Object.freeze({
+  agent_monthly_ugx: 50000,
+  agent_trial_days: 14,
+  agent_start_date: '2026-10-05',
+  lister_monthly_ugx: 20000,
+  lister_free_days: 7
+});
+let adminFees = null;
+
+function setAdminFees(fees) {
+  adminFees = fees && typeof fees === 'object' ? fees : null;
+}
+
+function currentAdminFees() {
+  return adminFees;
+}
+
 function feeConfig() {
+  const agent = adminFees?.agent || {};
   return {
-    feeUgx: Math.max(0, Number(process.env.AGENT_MONTHLY_FEE_UGX || 50000) || 50000),
-    startDate: String(process.env.AGENT_FEE_START_DATE || '2026-10-05').slice(0, 10)
+    feeUgx: Number.isFinite(Number(agent.monthly_ugx)) && Number(agent.monthly_ugx) >= 0 && agent.monthly_ugx !== null && agent.monthly_ugx !== undefined ? Number(agent.monthly_ugx) : FEE_DEFAULTS.agent_monthly_ugx,
+    startDate: /^\d{4}-\d{2}-\d{2}$/.test(String(agent.start_date || '')) ? String(agent.start_date) : FEE_DEFAULTS.agent_start_date
   };
 }
 
-/** Free days a new agent gets before the monthly fee starts (decision of 10 Oct 2026). */
+/** Free days a new agent gets from approval (Admin: agent_fee.agent_trial_days, 0 = pay first). */
 function agentTrialDays() {
-  const days = Math.round(Number(process.env.AGENT_TRIAL_DAYS || 14));
-  return Number.isFinite(days) && days >= 1 && days <= 366 ? days : 14;
+  const days = Math.round(Number(adminFees?.agent?.trial_days ?? FEE_DEFAULTS.agent_trial_days));
+  return Number.isFinite(days) && days >= 0 && days <= 90 ? days : FEE_DEFAULTS.agent_trial_days;
 }
 
 function kampalaDate(date = new Date()) {
@@ -77,7 +100,9 @@ function addDays(isoDate, days) {
 /** Does approving this agent need a payment first? */
 function agentFeeRequired(agent = {}, now = new Date()) {
   const { feeUgx, startDate } = feeConfig();
-  if (!feeUgx || agent.fee_exempt === true) return false;
+  if (!feeUgx) return false;
+  // fee_exempt_until: exempt only while that date is in the future (C21).
+  if (agent.fee_exempt === true && require('./agentFeeExemption').isExempt(agent, kampalaDate(now))) return false;
   if (kampalaDate(now) < startDate) return false;
   const paidUntil = isoDay(agent.paid_until);
   return !(paidUntil && paidUntil >= kampalaDate(now));
@@ -219,7 +244,7 @@ async function matchEntryToSms(db, entry) {
 
 /**
  * Record an agent's subscription payment and move their paid-until date on.
- * UGX 50,000 buys one month; 150,000 buys three.
+ * One monthly fee (Admin's agent_fee.monthly_ugx) buys one month; three buy three.
  */
 async function recordAgentPayment(db, { agent, payment: rawPayment, actor }) {
   const { feeUgx } = feeConfig();
@@ -553,7 +578,8 @@ async function revenueSummary(db) {
     ),
     db.query(
       `SELECT id, full_name, greeting_name, company_name, whatsapp, phone, status, approved_at, paid_until, fee_exempt, monthly_fee_ugx,
-              billing_reminder_log, billing_suspended_at
+              billing_reminder_log, billing_suspended_at, fee_exempt_until::text AS fee_exempt_until, trial_ends_at::text AS trial_ends_at,
+              fee_offer_mode, fee_offer_until::text AS fee_offer_until
          FROM agents
         WHERE (status = 'approved' OR billing_suspended_at IS NOT NULL) AND removed_at IS NULL
         ORDER BY paid_until NULLS FIRST, full_name`
@@ -574,7 +600,8 @@ async function revenueSummary(db) {
     const paidUntil = isoDay(a.paid_until);
     let state;
     if (a.billing_suspended_at) state = 'taken_down';
-    else if (a.fee_exempt) state = 'exempt';
+    else if (a.fee_exempt && require('./agentFeeExemption').isExempt(a, today)) state = 'exempt';
+    else if (['trial', 'free_period'].includes(a.fee_offer_mode) && isoDay(a.fee_offer_until) >= today && (!paidUntil || paidUntil <= isoDay(a.fee_offer_until))) state = 'trial';
     else if (!paidUntil) state = 'never_paid';
     else if (paidUntil < today) state = 'overdue';
     else if (paidUntil <= addDays(today, 5)) state = 'due_soon';
@@ -642,6 +669,9 @@ module.exports = {
   addMonths,
   agentFeeRequired,
   agentTrialDays,
+  FEE_DEFAULTS,
+  setAdminFees,
+  currentAdminFees,
   normalizeEntry,
   recordAgentPayment,
   recordEntry,

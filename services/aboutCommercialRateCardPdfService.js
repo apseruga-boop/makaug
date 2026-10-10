@@ -25,8 +25,8 @@ function buildAboutCommercialRateCardPdf() {
     doc.moveDown(1.2);
 
     const productRows = [
-      ['Private listing', 'privateListing', 'First 7 days free'],
-      ['Agent subscription', 'agentSubscription', 'Multiple listings'],
+      ['Private listing', 'privateListing', `First ${require('./pricingCopy').feeLabels().lister_free_days} days free · VAT incl.`],
+      ['Agent subscription', 'agentSubscription', `Multiple listings · ${require('./pricingCopy').feeLabels().agent_offer} · VAT incl.`],
       ['Off-plan development', 'offPlanDevelopment', 'Dedicated project page'],
       ['Featured listing', 'featuredListing', 'Homepage and category visibility'],
       ['Premium listing', 'premiumListing', 'Prime search position'],
@@ -61,7 +61,7 @@ function buildAboutCommercialRateCardPdf() {
     row(['Product', 'Price', 'Best for'], [182, 160, pageWidth - 342], true);
     productRows.forEach(([name, key, note]) => {
       const item = catalog.products[key];
-      row([name, `${formatUgxPrice(item.amount)} / ${item.period}`, note], [182, 160, pageWidth - 342]);
+      row([name, `${formatUgxPrice(require('./aboutCommercialProductsService').productAmount(item))} / ${item.period}`, note], [182, 160, pageWidth - 342]);
     });
 
     doc.addPage();

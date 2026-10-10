@@ -297,6 +297,8 @@ function mapRemoteAgentForUi(agent = {}) {
     fee_offer_mode: agent.fee_offer_mode || "",
     fee_offer_reason: agent.fee_offer_reason || "",
     fee_offer_until: agent.fee_offer_until ? String(agent.fee_offer_until).slice(0, 10) : "",
+    fee_exempt_until: agent.fee_exempt_until ? String(agent.fee_exempt_until).slice(0, 10) : "",
+    trial_ends_at: agent.trial_ends_at ? String(agent.trial_ends_at).slice(0, 10) : "",
     billing_plan: agent.billing_plan || "",
     welcome_sent_at: agent.welcome_sent_at || "",
     paid_awaiting_approval_at: agent.paid_awaiting_approval_at || ""
@@ -494,6 +496,53 @@ function getListingMapPoint(property = {}) {
 // an "as of" date; these are only the fallback. UGX stays the stored value;
 // other currencies are shown as an approximate conversion ("≈").
 const FX_FALLBACK = { base: "UGX", as_of: "2026-10-01", rates: { USD: 3800, GBP: 4900, EUR: 4100 } };
+
+// C21 (10 Oct 2026): the fees come from Admin (window.MAKAUG_PRICING from
+// /config.js, the same as GET /api/pricing). PRICING_FALLBACK is used only if
+// /config.js could not load; it mirrors the server defaults.
+const PRICING_FALLBACK = { agent: { monthly_ugx: 50000, trial_days: 14 }, lister: { monthly_ugx: 20000, free_days: 7 } };
+
+function sitePricing() {
+  const live = typeof window !== "undefined" ? window.MAKAUG_PRICING : null;
+  return live && live.agent && live.lister ? live : PRICING_FALLBACK;
+}
+
+function feeUgxText(kind = "agent") {
+  return `UGX ${Math.round(Number(sitePricing()[kind]?.monthly_ugx || 0)).toLocaleString("en-US")}`;
+}
+
+function feeAmount(kind = "agent") {
+  return Math.round(Number(sitePricing()[kind]?.monthly_ugx || 0));
+}
+
+// The same sentences as services/pricingCopy.js (server labels win when present).
+function feeCopy(key) {
+  const pricing = sitePricing();
+  if (pricing.labels && pricing.labels[key]) return pricing.labels[key];
+  const agent = feeUgxText("agent");
+  const lister = feeUgxText("lister");
+  const trial = Math.max(0, Math.round(Number(pricing.agent?.trial_days || 0)));
+  const free = Math.max(0, Math.round(Number(pricing.lister?.free_days || 0)));
+  const labels = {
+    agent_ugx: agent,
+    lister_ugx: lister,
+    agent_trial_days: String(trial),
+    lister_free_days: String(free),
+    agent_price: `${agent}/month (VAT incl.)`,
+    lister_price: `${lister} per listing, per month (VAT incl.)`,
+    agent_offer: trial > 0 ? `${trial} days free from approval` : "first month paid before approval",
+    agent_plan: trial > 0
+      ? `Agent plan: ${agent} a month (VAT incl.). New agents get the first ${trial} days free from approval; we send a payment link before it ends. Nothing is charged automatically.`
+      : `Agent plan: ${agent} a month (VAT incl.). Your account is approved once the first month is paid.`,
+    lister_plan: free > 0
+      ? `Your first ${free} days are free, then ${lister} per listing, per month (VAT incl.).`
+      : `${lister} per listing, per month (VAT incl.).`,
+    admin_agent_line: trial > 0
+      ? `Agent fees are ${agent} a month (new agents: ${trial} days free).`
+      : `Agent fees are ${agent} a month (new agents pay first).`
+  };
+  return labels[key] || "";
+}
 const CURRENCY_SYMBOLS = { USD: "$", GBP: "£", EUR: "€" };
 const SUPPORTED_DISPLAY_CURRENCIES = ["UGX", "USD", "GBP", "EUR"];
 function publicFx() {
@@ -4899,7 +4948,7 @@ const HOME_ASSISTANT_I18N = {
 
 const FOOTER_I18N = {
   en: {
-    brandCopy: `Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month. Web or WhatsApp, all 146 districts.`,
+    get brandCopy() { return `Uganda's property search engine. List your first ${feeCopy("lister_free_days")} days free, then keep it live from ${feeCopy("lister_ugx")} per listing, per month. Web or WhatsApp, all 146 districts.`; },
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Chat on WhatsApp",
@@ -7414,8 +7463,8 @@ function applyListingWizardLanguageUI() {
     ["list-choice-online-copy", "Open the guided website form."],
     ["list-choice-wa-title", "List through WhatsApp"],
     ["list-choice-wa-copy", "Message 0780 863 394 and let the makaug assistant guide you."],
-    ["list-choice-free-title", "Start with 7 days free."],
-    ["list-choice-free-copy", "After that, one private listing costs UGX 20,000 per month. Every submission stays in staff review until approved."]
+    ["list-choice-free-title", `Start with ${feeCopy("lister_free_days")} days free.`],
+    ["list-choice-free-copy", `After that, ${feeCopy("lister_price")}. Every submission stays in staff review until approved.`]
   ];
   labelPairs.forEach(([id, text]) => {
     const el = document.getElementById(id);
@@ -8238,7 +8287,8 @@ function aboutCommercialCatalog() {
 function aboutCommercialPriceLabel(key, priceOnly = false) {
   const entry = aboutCommercialCatalog()?.products?.[key];
   if (!entry) return '';
-  const value = fmtP(entry.amount, '');
+  // C21: the private listing and agent prices are Admin's fees.
+  const value = fmtP(entry.adminFee ? feeAmount(entry.adminFee) : entry.amount, '');
   const periodKeys = {
     'property / month': 'about.periodPropertyMonth',
     month: 'about.periodMonth',
@@ -13777,6 +13827,38 @@ function staffMaskPhone(value = "") {
 // C5: show when the counts were read, and which ones are older because their
 // query was slow this time (they keep their last good value).
 const STAFF_WIDGET_LABELS = { listings: "listings", my_moderation: "my moderation", leads: "leads", advertising: "advertising", whatsapp: "WhatsApp", sources: "sources", bank_leads: "bank leads", payments: "payments" };
+// C21 (Finance): pay links WhatsApp couldn't send wait here, one click each.
+let staffPayLinkTasksLoadedAt = 0;
+function staffPayLinkTasksHtml(tasks = []) {
+  if (!tasks.length) return "";
+  const label = { pre_due: "Pay link before the free days end", due_today: "Due today", reminder: "Reminder", final_reminder: "Final reminder" };
+  return `<div class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950" data-staff-pay-link-tasks>
+    <div class="font-black">💳 Send pay link (${tasks.length}) — WhatsApp couldn't send these</div>
+    <ul class="mt-2 space-y-1">${tasks.map((task) => `<li class="flex flex-wrap items-center justify-between gap-2"><span><strong>${adminEscape(task.name || "Agent")}</strong> ${adminEscape(task.phone || "")} · ${adminEscape(label[task.kind] || task.kind)}</span><span class="space-x-2"><a href="${adminAttr(task.wa_me)}" target="_blank" rel="noopener" class="font-bold underline" data-pay-link-wa>Open in WhatsApp</a><button type="button" onclick="staffMarkPayLinkTaskDone(${propertyIdArg(task.agent_id)}, ${propertyIdArg(task.period_key)})" class="underline">Mark sent</button></span></li>`).join("")}</ul>
+  </div>`;
+}
+
+async function staffLoadPayLinkTasks({ force = false } = {}) {
+  const host = document.getElementById("staff-pay-link-tasks");
+  if (!host) return;
+  if (!force && Date.now() - staffPayLinkTasksLoadedAt < 120000) return;
+  staffPayLinkTasksLoadedAt = Date.now();
+  const response = await staffApiRequestWithTimeout("/api/staff/billing/pay-link-tasks", {}, 15000, "Pay link tasks");
+  const html = staffPayLinkTasksHtml(response?.data?.tasks || []);
+  host.innerHTML = html;
+  host.classList.toggle("hidden", !html);
+}
+
+async function staffMarkPayLinkTaskDone(agentId, periodKey) {
+  try {
+    await staffApiRequestWithTimeout(`/api/staff/billing/pay-link-tasks/${encodeURIComponent(agentId)}/done`, { method: "POST", body: { period_key: periodKey } }, 15000, "Pay link task");
+    toast("Marked as sent.");
+    await staffLoadPayLinkTasks({ force: true });
+  } catch (error) {
+    toast(`Couldn't mark it: ${error.message || "request failed"}`);
+  }
+}
+
 function staffRenderDashboardFreshness(data = {}) {
   const node = document.getElementById("staff-dashboard-freshness");
   if (!node) return;
@@ -14685,6 +14767,7 @@ function applyStaffDashboardData(data = {}, user = {}) {
   staffDashboardAuthRetryCount = 0;
   const definitions = data.summary?.definitions || {};
   staffRenderDashboardFreshness(data);
+  staffLoadPayLinkTasks().catch(() => {});
   setStaffStat("staff-stat-total", data.summary?.listings?.live, definitions, "total_properties");
   setStaffStat("staff-stat-pending", data.summary?.listings?.pending_review, definitions, "pending_review");
   setStaffStat("staff-stat-broker-pending", data.summary?.listings?.broker_pending_review, definitions, "broker_pending_review");
@@ -29680,11 +29763,14 @@ function adminFormatUgx(value) {
 }
 
 function adminAgentBillingLine(agent = {}) {
-  if (agent.fee_exempt) return `💳 <span class="text-gray-500">${agent.fee_offer_mode === "waive" ? `No fee — ${adminEscape(agent.fee_exempt_reason || "waived")}` : "Free listing (joined before the monthly fee)"}</span>`;
-  if (agent.fee_offer_mode === "free_period" && agent.fee_offer_until) {
+  if (agent.fee_exempt) return `💳 <span class="text-gray-500">${agent.fee_offer_mode === "waive" ? `No fee — ${adminEscape(agent.fee_exempt_reason || "waived")}` : "Free listing (joined before the monthly fee)"}${agent.fee_exempt_until ? ` · free until ${adminEscape(agent.fee_exempt_until)}` : ""}</span>`;
+  if (["trial", "free_period"].includes(agent.fee_offer_mode) && agent.fee_offer_until) {
     const todayOffer = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
     if (String(agent.fee_offer_until).slice(0, 10) >= todayOffer && (!agent.paid_until || String(agent.paid_until).slice(0, 10) <= String(agent.fee_offer_until).slice(0, 10))) {
-      return `💳 <strong class="text-amber-700">Free offer</strong> until ${adminEscape(String(agent.fee_offer_until).slice(0, 10))} — ${adminEscape(agent.fee_offer_reason || "")}`;
+      // C21: "Free trial until {date}" for a new agent's trial.
+      return agent.fee_offer_mode === "trial"
+        ? `💳 <strong class="text-amber-700">Free trial until ${adminEscape(String(agent.trial_ends_at || agent.fee_offer_until).slice(0, 10))}</strong> — then ${feeUgxText("agent")} a month`
+        : `💳 <strong class="text-amber-700">Free offer</strong> until ${adminEscape(String(agent.fee_offer_until).slice(0, 10))} — ${adminEscape(agent.fee_offer_reason || "")}`;
     }
   }
   const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
@@ -29695,7 +29781,7 @@ function adminAgentBillingLine(agent = {}) {
   if (!agent.paid_until) {
     return String(agent.status || "").toLowerCase() === "approved"
       ? `💳 <strong class="text-red-700">No payment recorded</strong>${payBtn}`
-      : `💳 <span class="text-gray-600">UGX 50,000 a month — not paid yet</span>${payBtn}`;
+      : `💳 <span class="text-gray-600">${feeUgxText("agent")} a month — not paid yet</span>${payBtn}`;
   }
   if (agent.paid_until < today) return `💳 <strong class="text-red-700">Overdue</strong> — paid until ${adminEscape(agent.paid_until)}${payBtn}`;
   return `💳 <strong class="text-emerald-700">Paid</strong> until ${adminEscape(agent.paid_until)}`;
@@ -29790,8 +29876,8 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
   const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
   const title = mode === "approve" ? `Did ${adminEscape(agent.name || "they")} pay?` : `Record a payment — ${adminEscape(agent.name || "agent")}`;
   const intro = mode === "approve"
-    ? "New agents pay <strong>UGX 50,000 a month</strong>. Approval goes through once the payment is recorded — the welcome pack and how-to-post film are then sent on WhatsApp."
-    : "UGX 50,000 = one month. Paying more adds whole months.";
+    ? `New agents pay <strong>${feeUgxText("agent")} a month</strong>. Approval goes through once the payment is recorded — the welcome pack and how-to-post film are then sent on WhatsApp.`
+    : `${feeUgxText("agent")} = one month. Paying more adds whole months.`;
   const wrap = document.createElement("div");
   wrap.id = "admin-payment-modal";
   wrap.className = "fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4";
@@ -29803,7 +29889,7 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       <h3 id="admin-payment-title" class="text-lg font-black text-gray-900">${title}</h3>
       <p class="text-gray-600">${intro}</p>
       <label class="block"><span class="font-bold">Amount (UGX)</span>
-        <input name="amount" inputmode="numeric" required value="50000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+        <input name="amount" inputmode="numeric" required value="${feeAmount("agent")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <label class="block"><span class="font-bold">How was it paid?</span>
         <select name="method" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">
           <option value="">Choose…</option>
@@ -29826,7 +29912,7 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       <label class="block"><span class="font-bold">Note</span>
         <input name="note" placeholder="For cash: who received it and where it is kept" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <p id="admin-payment-error" class="hidden rounded-lg bg-red-50 border border-red-200 p-2 text-red-800" role="alert"></p>
-      ${mode === "approve" ? `<div class="rounded-lg border border-green-300 bg-green-50 p-3 text-xs text-green-950"><strong>Not paid yet? The usual way:</strong> approve now — they get the welcome pack and the how-to-post film straight away, then the payment link (UGX 50,000).
+      ${mode === "approve" ? `<div class="rounded-lg border border-green-300 bg-green-50 p-3 text-xs text-green-950"><strong>Not paid yet? The usual way:</strong> approve now — they get the welcome pack and the how-to-post film straight away, then the payment link (${feeUgxText("agent")}).
         <div class="mt-2"><button type="button" data-approve-standard class="rounded bg-green-700 px-3 py-1.5 font-bold text-white">✅ Approve &amp; send welcome pack + pay link</button></div></div>
       <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700"><strong>Only want to send the link?</strong> Send them a payment link instead — they can pay by card, Apple Pay, Google Pay or MoMo. You'll get a WhatsApp when it's paid, and approving then won't ask for payment again.
         <div class="mt-2"><button type="button" onclick="adminSendAgentPayLink('${adminAttr(agentId)}')" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">💳 Send pay link</button></div></div>
@@ -29994,7 +30080,7 @@ function adminCreatePayLink(target = {}) {
     bodyHtml: `${isOther ? `<label class="block"><span class="font-bold">What is it for?</span><input name="description" required maxlength="200" placeholder="e.g. Featured listing — 7 days" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
         <label class="block"><span class="font-bold">Amount (UGX)</span><input name="amount_ugx" inputmode="numeric" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
         <label class="block"><span class="font-bold">Their name</span><input name="payer_name" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>`
-      : `<p class="text-xs text-gray-600">Amount: ${adminFormatUgx(target.purpose === "listing_fee" ? (adminRevenueData?.settings?.lister_fee?.monthly_ugx || 20000) : (adminRevenueData?.settings?.agent_fee?.monthly_ugx || 50000))} for one month. An open link for the same thing is reused.</p>`}
+      : `<p class="text-xs text-gray-600">Amount: ${adminFormatUgx(target.purpose === "listing_fee" ? (adminRevenueData?.settings?.lister_fee?.monthly_ugx || feeAmount("lister")) : (adminRevenueData?.settings?.agent_fee?.monthly_ugx || feeAmount("agent")))} for one month. An open link for the same thing is reused.</p>`}
       <label class="block"><span class="font-bold">Send to WhatsApp number</span><input name="send_to" inputmode="tel" value="${adminAttr(defaultPhone)}" placeholder="2567… or 447…" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <p class="text-[11px] text-gray-500">Leave the number empty to just create the link and copy it.</p>`,
     submitLabel: "Create link",
@@ -30112,22 +30198,31 @@ function renderAdminRevenue() {
     <ul class="mt-2 space-y-1">${sms.map((m) => `<li class="flex flex-wrap items-center justify-between gap-2 text-xs"><span><strong>${adminFormatUgx(m.amount_ugx)}</strong> ${m.counterparty ? `from ${adminEscape(m.counterparty)}` : ""} · ${adminEscape(ADMIN_ACCOUNT_LABELS[m.account_key] || m.account_key || "?")} · TxID ${adminEscape(m.reference || "—")} · ${adminEscape(adminShortDate(m.received_at))}</span><button type="button" onclick="adminRecordFromSms('${adminAttr(m.id)}')" class="rounded border border-amber-500 px-2 py-0.5 font-bold text-amber-900">Record who paid</button></li>`).join("")}</ul></div>` : "";
 
   const finalAfter = Number(d.final_after_days || 7);
-  const billingRows = (d.billing || []).filter((a) => !a.fee_exempt || a.billing_state === "taken_down").map((a) => {
-    const tone = { paid: "text-emerald-700", due_soon: "text-amber-700", overdue: "text-red-700", never_paid: "text-red-700", taken_down: "text-gray-900" }[a.billing_state] || "text-gray-700";
-    const label = { paid: "Paid", due_soon: "Due soon", overdue: `Overdue ${a.days_overdue} day(s)`, never_paid: "No payment yet", taken_down: "⛔ Taken down" }[a.billing_state] || a.billing_state;
+  const billingRows = (d.billing || []).filter((a) => a.billing_state !== "exempt").map((a) => {
+    const tone = { paid: "text-emerald-700", due_soon: "text-amber-700", overdue: "text-red-700", never_paid: "text-red-700", taken_down: "text-gray-900", trial: "text-sky-700" }[a.billing_state] || "text-gray-700";
+    const label = { paid: "Paid", due_soon: "Due soon", overdue: `Overdue ${a.days_overdue} day(s)`, never_paid: "No payment yet", taken_down: "⛔ Taken down", trial: `Free trial until ${adminEscape(String(a.trial_ends_at || a.fee_offer_until || "").slice(0, 10))}` }[a.billing_state] || a.billing_state;
     const id = adminAttr(a.id);
     const remindBtn = ["due_soon", "overdue", "never_paid"].includes(a.billing_state) ? `<button type="button" onclick="adminAgentBillingMessage('${id}', 'reminder')" class="underline font-bold">Send reminder</button>` : "";
     const finalReady = a.billing_state === "overdue" && Number(a.days_overdue) >= finalAfter;
     const finalBtn = a.billing_state === "overdue" ? (finalReady ? `<button type="button" onclick="adminAgentBillingMessage('${id}', 'final_reminder')" class="underline font-bold text-red-700">Final reminder</button>` : `<span class="text-gray-400" title="Unlocks ${finalAfter} days after the due date">Final reminder (day ${finalAfter})</span>`) : "";
     const downBtn = a.billing_state === "overdue" && a.final_reminder_at ? `<button type="button" onclick="adminAgentTakeDown('${id}')" class="underline font-bold text-red-800">Take listings down</button>` : "";
     const backBtn = a.billing_state === "taken_down" ? `<button type="button" onclick="adminAgentReinstate('${id}')" class="underline">Put back without payment</button>` : "";
+    // C21: for an unpaid agent (e.g. "pay later"), start the new-agent trial from today.
+    const trialDays = Number(d.settings?.agent_fee?.agent_trial_days ?? sitePricing().agent.trial_days);
+    const trialBtn = trialDays > 0 && ["never_paid", "overdue", "due_soon"].includes(a.billing_state) ? `<button type="button" data-start-trial onclick="adminAgentStartTrial('${id}')" class="underline font-bold text-sky-800">Start ${adminEscape(String(trialDays))}-day trial from today</button>` : "";
     const sent = [a.last_reminder_at ? `reminded ${adminShortDate(a.last_reminder_at)}` : "", a.final_reminder_at ? `final ${adminShortDate(a.final_reminder_at)}` : ""].filter(Boolean).join(" · ");
     return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(a.full_name)}</td><td class="py-2 pr-3 ${tone} font-bold">${label}${sent ? `<div class="text-[11px] font-normal text-gray-500">${adminEscape(sent)}</div>` : ""}</td><td class="py-2 pr-3">${adminEscape(a.paid_until || "—")}</td>
-      <td class="py-2 text-xs space-x-2 whitespace-nowrap"><button type="button" onclick="adminOpenAgentPayment('${id}', 'renew')" class="underline font-bold text-emerald-800">Record payment</button> <button type="button" onclick="adminCreatePayLink({ purpose: 'agent_subscription', agent_id: '${id}' })" class="underline font-bold">💳 Pay link</button> ${remindBtn} ${finalBtn} ${downBtn} ${backBtn}</td></tr>`;
+      <td class="py-2 text-xs space-x-2 whitespace-nowrap"><button type="button" onclick="adminOpenAgentPayment('${id}', 'renew')" class="underline font-bold text-emerald-800">Record payment</button> <button type="button" onclick="adminCreatePayLink({ purpose: 'agent_subscription', agent_id: '${id}' })" class="underline font-bold">💳 Pay link</button> ${remindBtn} ${finalBtn} ${downBtn} ${backBtn} ${trialBtn}</td></tr>`;
   }).join("");
   const exemptCount = (d.billing || []).filter((a) => a.fee_exempt).length;
+  // C21: fee-exempt agents and the date they stay free until.
+  const exemptRows = (d.billing || []).filter((a) => a.billing_state === "exempt").map((a) => {
+    const id = adminAttr(a.id);
+    return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(a.full_name)}</td><td class="py-2 pr-3">${a.fee_exempt_until ? `Free until ${adminEscape(String(a.fee_exempt_until).slice(0, 10))}` : "Free (no end date)"}</td><td class="py-2 text-xs"><button type="button" data-fee-exempt-until onclick="adminAgentFeeExemptUntil('${id}')" class="underline font-bold">Set free-until date</button></td></tr>`;
+  }).join("");
+  const exemptTable = exemptRows ? `<details class="mt-2"><summary class="cursor-pointer text-xs font-bold text-gray-700">Fee-exempt agents (${exemptCount}) — free-until dates</summary><div class="overflow-x-auto"><table class="w-full text-left text-xs"><tbody>${exemptRows}</tbody></table></div></details>` : "";
   const billingTable = `<div><h4 class="font-black text-gray-900 mb-1">Agent fees</h4><p class="text-xs text-gray-500 mb-2">${exemptCount} agent(s) who joined before ${adminEscape(d.fee_start_date || "")} list for free. Reminders go automatically ${adminEscape(String(d.settings?.agent_fee?.remind_days_before || 3))} days before and on the due date; everything after that is your call. Paying puts a taken-down agent back exactly as they were.</p>
-    ${billingRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Agent</th><th class="py-1 pr-3">Status</th><th class="py-1 pr-3">Paid until</th><th></th></tr></thead><tbody>${billingRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No paying agents yet.</p>`}</div>`;
+    ${billingRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Agent</th><th class="py-1 pr-3">Status</th><th class="py-1 pr-3">Paid until</th><th></th></tr></thead><tbody>${billingRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No paying agents yet.</p>`}${exemptTable}</div>`;
 
   const listerRows = (d.listers || []).map((p) => {
     const id = adminAttr(p.id);
@@ -30144,7 +30239,7 @@ function renderAdminRevenue() {
     ].filter(Boolean).join(" ");
     return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(p.title || "Listing")}<div class="text-[11px] font-normal text-gray-500">${adminEscape(p.lister_name || "")} ${adminEscape(p.lister_phone || "")}</div></td><td class="py-2 pr-3 font-bold ${tone}">${label}</td><td class="py-2 text-xs space-x-2">${btns}</td></tr>`;
   }).join("");
-  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — 7 days free, then ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 20000)} a month</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
+  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — ${adminEscape(String(d.settings?.lister_fee?.free_days ?? sitePricing().lister.free_days))} days free, then ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || feeAmount("lister"))} per listing, per month</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
     ${listerRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Listing</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${listerRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No private listings since ${adminEscape(d.settings?.lister_fee?.start_date || "")}.</p>`}</div>`;
 
   const claims = (d.claims || []);
@@ -30166,7 +30261,7 @@ function renderAdminRevenue() {
 
   const settingsBlock = `<div class="rounded-xl border ${d.pay_to_line ? "border-gray-200" : "border-red-300 bg-red-50"} p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">Settings</h4><button type="button" onclick="adminOpenBillingSettings()" class="rounded border border-gray-300 px-2 py-1 text-xs font-bold">Edit settings</button></div>
     <p class="text-xs mt-1">${d.pay_to_line ? `People are told to pay to: <strong>${adminEscape(d.pay_to_line.replace(/\\*/g, ""))}</strong>` : `<strong class="text-red-800">No pay-to number yet — reminders and payment messages are switched off until you add the number and registered name.</strong>`}</p>
-    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || 50000)}/month · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 20000)}/month after ${adminEscape(String(d.settings?.lister_fee?.free_days || 7))} free days</p></div>`;
+    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || feeAmount("agent"))}/month (VAT incl.; new agents ${adminEscape(String(d.settings?.agent_fee?.agent_trial_days ?? sitePricing().agent.trial_days))} days free) · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || feeAmount("lister"))} per listing, per month after ${adminEscape(String(d.settings?.lister_fee?.free_days || 7))} free days</p></div>`;
 
   const reconBlock = `<div class="rounded-xl border border-gray-200 p-3"><h4 class="font-black text-gray-900">Weekly reconciliation</h4><p class="text-xs text-gray-600 mb-2">Upload a statement (CSV export from Absa, the bank or MoMo). Lines are matched to the entries above; anything on the statement that nobody recorded — and anything recorded that is not on the statement — is listed.</p>
     <div class="flex flex-wrap gap-2 items-center text-xs"><select id="admin-recon-account" class="rounded border border-gray-300 px-2 py-1">${(d.accounts || []).map((a) => `<option value="${adminAttr(a.key)}">${adminEscape(a.name)}</option>`).join("")}</select><input id="admin-recon-file" type="file" accept=".csv,text/csv,text/plain" class="text-xs"><button type="button" onclick="adminUploadStatement()" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">Upload & match</button></div>
@@ -30415,6 +30510,35 @@ function adminAgentTakeDown(agentId) {
   });
 }
 
+function adminAgentStartTrial(agentId) {
+  const agent = (adminRevenueData?.billing || []).find((a) => String(a.id) === String(agentId)) || {};
+  const days = Number(adminRevenueData?.settings?.agent_fee?.agent_trial_days ?? sitePricing().agent.trial_days);
+  adminBillingModal({
+    title: `Start a ${adminEscape(String(days))}-day free trial for ${adminEscape(agent.full_name || "this agent")}?`,
+    bodyHtml: `<ul class="list-disc pl-5 text-gray-700 space-y-1"><li>The ${adminEscape(String(days))} free days count from today.</li><li>The usual reminders then follow: the pay link ${adminEscape(String(adminRevenueData?.settings?.agent_fee?.remind_days_before ?? 3))} days before the end, then on the due date.</li><li>Nothing is sent to them now.</li></ul>`,
+    submitLabel: "Start the trial",
+    tone: "bg-sky-700",
+    onSubmit: async () => {
+      const r = await apiRequest(`/api/admin/revenue/agents/${encodeURIComponent(agentId)}/start-trial`, { method: "POST", headers: adminAuthHeaders(), body: {} });
+      toast(`Free trial until ${r?.data?.trial_ends_at || ""}; first payment due ${r?.data?.first_payment_due || ""}.`);
+    }
+  });
+}
+
+function adminAgentFeeExemptUntil(agentId) {
+  const agent = (adminRevenueData?.billing || []).find((a) => String(a.id) === String(agentId)) || {};
+  adminBillingModal({
+    title: `${adminEscape(agent.full_name || "This agent")} stays free until…`,
+    bodyHtml: `<label class="block"><span class="font-bold">Free until</span><input type="date" name="fee_exempt_until" value="${adminAttr(String(agent.fee_exempt_until || "").slice(0, 10))}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label><p class="text-xs text-gray-500">Leave empty for no end date. Reminders and pay links skip them until then.</p>`,
+    submitLabel: "Save",
+    onSubmit: async (data) => {
+      const value = String(data.get("fee_exempt_until") || "").trim();
+      await apiRequest(`/api/admin/revenue/agents/${encodeURIComponent(agentId)}/fee-exempt-until`, { method: "PATCH", headers: adminAuthHeaders(), body: { fee_exempt_until: value || null } });
+      toast(value ? `Free until ${value}.` : "End date cleared.");
+    }
+  });
+}
+
 function adminAgentReinstate(agentId) {
   const agent = (adminRevenueData?.billing || []).find((a) => String(a.id) === String(agentId)) || {};
   adminBillingModal({
@@ -30481,7 +30605,7 @@ function adminPaymentFieldsHtml({ amount = "", payer = "" } = {}) {
 
 function adminListerPayment(propertyId) {
   const listing = (adminRevenueData?.listers || []).find((p) => String(p.id) === String(propertyId)) || {};
-  const fee = adminRevenueData?.settings?.lister_fee?.monthly_ugx || 20000;
+  const fee = adminRevenueData?.settings?.lister_fee?.monthly_ugx || feeAmount("lister");
   adminBillingModal({
     title: `Listing fee — ${adminEscape(listing.title || "listing")}`,
     bodyHtml: `<p class="text-gray-600">${adminFormatUgx(fee)} = one month. If the listing was taken down it goes straight back live.</p>${adminPaymentFieldsHtml({ amount: fee, payer: [listing.lister_name, listing.lister_phone].filter(Boolean).join(" · ") })}`,
@@ -30555,10 +30679,11 @@ function adminOpenBillingSettings() {
         <label class="block"><span class="font-bold">Registered name (what the payer sees on MoMo)</span><input name="pay_name" value="${adminAttr(pay.name || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label></fieldset>
       <label class="block"><span class="font-bold">Who confirms payments</span> <span class="text-xs text-gray-500">(one per line: name, WhatsApp number)</span><textarea name="confirmers" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">${adminEscape(confirmers)}</textarea></label>
       <div class="grid grid-cols-3 gap-2">
-        <label class="block"><span class="font-bold text-xs">Agent fee / month</span><input name="agent_monthly" inputmode="numeric" value="${adminAttr(agentFee.monthly_ugx || 50000)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Agent fee / month</span><input name="agent_monthly" inputmode="numeric" value="${adminAttr(agentFee.monthly_ugx || feeAmount("agent"))}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Free days for new agents (0 = pay first)</span><input name="agent_trial_days" inputmode="numeric" value="${adminAttr(agentFee.agent_trial_days ?? 14)}" data-agent-trial-days class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Remind days before</span><input name="remind_days" inputmode="numeric" value="${adminAttr(agentFee.remind_days_before ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Final reminder after (days overdue)</span><input name="final_days" inputmode="numeric" value="${adminAttr(agentFee.final_after_days_overdue ?? 7)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
-        <label class="block"><span class="font-bold text-xs">Private listing / month</span><input name="lister_monthly" inputmode="numeric" value="${adminAttr(listerFee.monthly_ugx || 20000)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Private listing, per listing / month</span><input name="lister_monthly" inputmode="numeric" value="${adminAttr(listerFee.monthly_ugx || feeAmount("lister"))}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Free days</span><input name="free_days" inputmode="numeric" value="${adminAttr(listerFee.free_days ?? 7)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Views message on day</span><input name="views_day" inputmode="numeric" value="${adminAttr(listerFee.views_message_day ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
       </div>
@@ -30575,8 +30700,8 @@ function adminOpenBillingSettings() {
       if (!confirmersList.length) throw new Error("Add at least one person who confirms payments.");
       await put("pay_to", { method: String(data.get("pay_method") || "").trim(), number: String(data.get("pay_number") || "").trim(), name: String(data.get("pay_name") || "").trim() });
       await put("confirmers", confirmersList);
-      await put("agent_fee", { ...agentFee, monthly_ugx: num(data.get("agent_monthly"), 50000), remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });
-      await put("lister_fee", { ...listerFee, monthly_ugx: num(data.get("lister_monthly"), 20000), free_days: num(data.get("free_days"), 7), views_message_day: num(data.get("views_day"), 3) });
+      await put("agent_fee", { ...agentFee, monthly_ugx: num(data.get("agent_monthly"), feeAmount("agent")), agent_trial_days: num(data.get("agent_trial_days"), 14), remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });
+      await put("lister_fee", { ...listerFee, monthly_ugx: num(data.get("lister_monthly"), feeAmount("lister")), free_days: num(data.get("free_days"), 7), views_message_day: num(data.get("views_day"), 3) });
       await put("lister_views_message", { ...(s.lister_views_message || {}), text: String(data.get("views_text") || "") });
       toast("Settings saved.");
     }
@@ -38003,7 +38128,7 @@ function ensureAccountAccessDrawer() {
                 <p class="mt-1">Add your National ID number and a clear photo. Makaug staff review these details privately; they are never shown publicly.</p>
               </div>
               <div id="account-access-broker-fee-note" class="rounded-2xl border border-amber-200 bg-white p-3 text-xs text-gray-800">
-                <p><strong>Agent plan: UGX 50,000 a month.</strong> Our team will WhatsApp you to check your details and explain how to pay by MTN Mobile Money. Your agent account is approved once the first month is paid. Nothing is charged automatically.</p>
+                <p><strong>${feeCopy("agent_plan")}</strong> Our team will WhatsApp you to check your details and explain how to pay by MTN Mobile Money.</p>
               </div>
               <div class="grid sm:grid-cols-2 gap-3">
                 <label class="block">
@@ -38832,7 +38957,9 @@ function showBrokerApplicationReceived({ firstName = "", phone = "" } = {}) {
       <p style="margin:0 0 12px;color:#4b5563;">Your makaug agent account is set up and waiting for our review.</p>
       <ol style="margin:0 0 14px;padding-left:22px;line-height:1.55;list-style:decimal;">
         <li><strong>We WhatsApp you</strong>${phone ? ` on ${esc(phone)}` : ""}, usually the same day, to check your details.</li>
-        <li><strong>Pay the first month</strong> — UGX 50,000. We send you a payment link (MTN Mobile Money or card). Nothing is charged automatically.</li>
+        ${Number(sitePricing().agent?.trial_days || 0) > 0
+          ? `<li><strong>Free for the first ${feeCopy("agent_trial_days")} days from approval</strong> — then ${feeCopy("agent_price")}. We send you a payment link before the free days end (MTN Mobile Money or card). Nothing is charged automatically.</li>`
+          : `<li><strong>Pay the first month</strong> — ${feeCopy("agent_price")}. We send you a payment link (MTN Mobile Money or card). Nothing is charged automatically.</li>`}
         <li><strong>You're approved</strong> — you get your welcome pack and the how-to-post guide, and your listings can go live.</li>
       </ol>
       <p style="margin:0 0 16px;font-size:12px;color:#6b7280;">You can already fill in your profile from your dashboard. Questions? WhatsApp us on 0780 863394.</p>

@@ -48,7 +48,7 @@ const PUBLIC_PAGE_SEO = Object.freeze({
   },
   '/list-property': {
     title: 'List your property in Uganda: 7 days free',
-    description: 'List a house, rental, plot or commercial space on makaug.com. Free for 7 days, then UGX 20,000 a month. Reviewed before it goes live.'
+    description: 'List a house, rental, plot or commercial space on makaug.com. Free for {{FREE:lister}} days, then {{PRICE:lister}} per listing, per month. Reviewed before it goes live.'
   },
   '/help': {
     title: 'Help centre: makaug.com questions answered',

@@ -27,12 +27,15 @@ const trialAgent = {
   paid_until: '2026-10-23'
 };
 
-test('the trial is 14 days unless the environment says otherwise', () => {
-  delete process.env.AGENT_TRIAL_DAYS;
+test('the trial is 14 days unless Admin says otherwise (C21: the environment is no longer read)', () => {
+  revenue.setAdminFees(null);
   assert.strictEqual(revenue.agentTrialDays(), 14);
-  process.env.AGENT_TRIAL_DAYS = 'nonsense';
-  assert.strictEqual(revenue.agentTrialDays(), 14);
+  process.env.AGENT_TRIAL_DAYS = '3';
+  assert.strictEqual(revenue.agentTrialDays(), 14, 'env ignored');
   delete process.env.AGENT_TRIAL_DAYS;
+  revenue.setAdminFees(billing.feesFromSettings({ agent_fee: { agent_trial_days: 0 } }));
+  assert.strictEqual(revenue.agentTrialDays(), 0, '0 = pay first');
+  revenue.setAdminFees(null);
   assert.strictEqual(revenue.addDays('2026-10-10', 14 - 1), '2026-10-23', 'free through 23 Oct, first payment 24 Oct');
 });
 
@@ -56,7 +59,7 @@ test('an agent who is not on a trial gets the welcome exactly as before', () => 
 test('the reminder 3 days before names the end date, the fee and Ronald', () => {
   const settings = { agent_fee: { monthly_ugx: 50000 }, pay_to: { number: '0780863394', name: 'MAKAUG' } };
   const pre = billing.buildAgentBillingMessage('pre_due', { agent: trialAgent, settings, payLink: 'https://makaug.com/pay/abc' });
-  assert.match(pre, /Your 2 free weeks on makaug end on \*.*23 Oct.*\*/);
+  assert.match(pre, /Your free days on makaug end on \*.*23 Oct.*\*/);
   assert.match(pre, /UGX 50,000 a month/);
   assert.match(pre, /https:\/\/makaug\.com\/pay\/abc/);
   assert.match(pre, /Ronald/);
@@ -68,7 +71,7 @@ test('once they have paid past the trial, the reminders are the ordinary ones', 
   const paid = { ...trialAgent, paid_until: '2026-11-22' };
   assert.strictEqual(billing.onFreeTrial(paid), false);
   const msg = billing.buildAgentBillingMessage('pre_due', { agent: paid, settings: {} });
-  assert.ok(!/free weeks/.test(msg));
+  assert.ok(!/free days on makaug/.test(msg));
 });
 
 test('trial states: on trial, ending soon, unpaid after, paused, paid', () => {
@@ -115,7 +118,7 @@ test('the team digest chases unpaid and ending agents, and stays quiet otherwise
 
 test('team commands: NEW AGENT goes live on the trial, TRIALS lists, plain "trial" chat is untouched', async () => {
   const src = read('services/teamBillingCommandService.js');
-  assert.match(src, /mode: 'free_period', days/);
+  assert.match(src, /\{ mode: 'trial', days, reason: `New agent: \$\{days\} days free/);
   assert.match(src, /trials\?/);
   assert.match(team.help(), /14-day free trial/);
   assert.match(team.help(), /\*TRIALS\*/);
@@ -125,7 +128,7 @@ test('team commands: NEW AGENT goes live on the trial, TRIALS lists, plain "tria
 
 test('approving without a payment now starts the free trial, unless payment is required', () => {
   const admin = read('routes/admin.js');
-  assert.match(admin, /feeOverride = \{ mode: 'free_period', days, reason: `New agent \$\{days\}-day free trial` \}/);
+  assert.match(admin, /feeOverride = \{ mode: 'trial', days: newAgentTrialDays, reason: `New agent: \$\{newAgentTrialDays\} days free` \}/);
   assert.match(admin, /req\.body\.require_payment !== true/);
   assert.match(admin, /req\.body\.payment && typeof req\.body\.payment === 'object'/);
 });

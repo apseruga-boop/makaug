@@ -3501,6 +3501,31 @@ async function collectStaffContactRows(question = '') {
   return { rows, filter };
 }
 
+// C21 (Finance): billing messages WhatsApp couldn't send (e.g. the day-11 pay
+// link), as "send pay link" tasks with a one-click wa.me link.
+router.get('/billing/pay-link-tasks', async (req, res, next) => {
+  try {
+    const tasks = await require('../services/billingOpsService').listManualPayLinkTasks(db);
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, data: { tasks } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/billing/pay-link-tasks/:agentId/done', async (req, res, next) => {
+  try {
+    const periodKey = String(req.body?.period_key || '').slice(0, 80);
+    if (!toUuidOrNull(req.params.agentId) || !periodKey) return res.status(400).json({ ok: false, error: 'agent and period_key are required' });
+    const data = await require('../services/billingOpsService').markManualPayLinkSent(db, { agentId: req.params.agentId, periodKey, actor: String(actorId(req) || 'staff') });
+    logStaffActivityInBackground(req, 'staff_pay_link_sent_by_hand', { targetType: 'agent', targetId: req.params.agentId, metadata: { period_key: periodKey } });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
 router.get('/dashboard', async (req, res, next) => {
   try {
     logStaffActivity(req, 'staff_dashboard_opened', { metadata: { role: req.userAuth?.role } })
