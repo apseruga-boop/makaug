@@ -559,7 +559,14 @@ app.use('/private-local', (_req, res) => {
 });
 
 const { PRICE_PERIOD_FORM_OPTIONS } = require('./config/pricePeriods');
+const { publicDisplayFx } = require('./utils/displayFx');
 const { PRICE_BOUNDS_UGX } = require('./utils/pricePlausibility');
+// C6: display exchange rates (UGX per unit) with their "as of" date.
+app.get('/api/fx', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  return res.json({ ok: true, data: publicDisplayFx() });
+});
+
 app.get('/config.js', (_req, res) => {
   // Free maps only (Leaflet + OpenStreetMap). C18, 10 Oct 2026: Google Maps is
   // no longer used and no Google key is ever sent to browsers.
@@ -579,6 +586,7 @@ app.get('/config.js', (_req, res) => {
   return res.send([
     `window.MAKAUG_CONFIG = ${JSON.stringify(publicConfig)};`,
     `window.MAKAUG_PRICE_PERIOD_OPTIONS = ${JSON.stringify(PRICE_PERIOD_FORM_OPTIONS)};`,
+    `window.MAKAUG_FX = ${JSON.stringify(publicDisplayFx())};`,
     `window.MAKAUG_PRICE_BOUNDS = ${String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase() === 'UG' ? JSON.stringify(PRICE_BOUNDS_UGX) : 'false'};`,
     `window.MAKAUG_MAP_PROVIDER = ${JSON.stringify(publicConfig.mapProvider)};`,
     `window.MAKAUG_GOOGLE_MAPS_API_KEY = ${JSON.stringify(publicConfig.googleMapsApiKey)};`,

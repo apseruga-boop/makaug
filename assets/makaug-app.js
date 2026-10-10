@@ -489,11 +489,31 @@ function getListingMapPoint(property = {}) {
   return { ...MAP_DEFAULT_CENTER, exact: false };
 }
 
+// C6 (10 Oct 2026, Marketing): one place for display exchange rates. The
+// server publishes them in /config.js (window.MAKAUG_FX, also GET /api/fx) with
+// an "as of" date; these are only the fallback. UGX stays the stored value;
+// other currencies are shown as an approximate conversion ("≈").
+const FX_FALLBACK = { base: "UGX", as_of: "2026-10-01", rates: { USD: 3800, GBP: 4900, EUR: 4100 } };
+const CURRENCY_SYMBOLS = { USD: "$", GBP: "£", EUR: "€" };
+const SUPPORTED_DISPLAY_CURRENCIES = ["UGX", "USD", "GBP", "EUR"];
+function publicFx() {
+  const fx = typeof window !== "undefined" ? window.MAKAUG_FX : null;
+  return fx && fx.rates && typeof fx.rates === "object" ? fx : FX_FALLBACK;
+}
+function fxRateToUgx(cur) {
+  const rate = Number(publicFx().rates?.[cur]);
+  return Number.isFinite(rate) && rate > 0 ? rate : FX_FALLBACK.rates[cur];
+}
+function convertedPriceText(cur, v, p) {
+  if (!v) return "Price upon application";
+  const amount = Math.round(Number(v) / fxRateToUgx(cur));
+  return `≈ ${CURRENCY_SYMBOLS[cur] || ""}${amount.toLocaleString("en-US")}${p ? "/" + p : ""}`;
+}
 const CURRENCIES = {
   UGX: { fmt: (v, p) => v ? `USh ${formatCompact(v)}${p ? "/" + p : ""}` : "Price upon application" },
-  USD: { fmt: (v, p) => v ? `$${Math.round(v / 3800).toLocaleString()}${p ? "/" + p : ""}` : "Price upon application" },
-  GBP: { fmt: (v, p) => v ? `£${Math.round(v / 4900).toLocaleString()}${p ? "/" + p : ""}` : "Price upon application" },
-  EUR: { fmt: (v, p) => v ? `€${Math.round(v / 4100).toLocaleString()}${p ? "/" + p : ""}` : "Price upon application" }
+  USD: { fmt: (v, p) => convertedPriceText("USD", v, p) },
+  GBP: { fmt: (v, p) => convertedPriceText("GBP", v, p) },
+  EUR: { fmt: (v, p) => convertedPriceText("EUR", v, p) }
 };
 const REVIEW_USD_TO_UGX_GUIDE_RATE = 3800;
 
@@ -802,7 +822,16 @@ const HOW_TO_VIDEO_SLOTS = [
   { key: "ai-fraud-handoff", title: "How to report fraud or request human help", description: "Escalate suspicious listings, payment pressure, or complex property questions.", category: "ai", youtubeVideoId: "", ctaLabel: "Report suspicious activity", ctaUrl: "/anti-fraud" }
 ];
 
-let activeCur = "UGX";
+// C6: the currency choice survives navigation and reloads.
+function readStoredDisplayCurrency() {
+  try {
+    const stored = typeof localStorage !== "undefined" ? String(localStorage.getItem("makaug_display_currency") || "").toUpperCase() : "";
+    return ["UGX", "USD", "GBP", "EUR"].includes(stored) ? stored : "UGX";
+  } catch (_) {
+    return "UGX";
+  }
+}
+let activeCur = readStoredDisplayCurrency();
 let currentLang = "en";
 let currentPage = "home";
 let lastPage = "home";
@@ -8574,7 +8603,75 @@ function fmtListingPrice(p = {}, periodOverride = null) {
   if (p?.price_on_application === true || extra.price_on_application === true || listingPriceNeedsCheck(p)) {
     return translateListingLabel("Price upon application");
   }
-  return fmtP(p?.price || 0, periodOverride ?? (p?.period || p?.price_period || ""));
+  const period = periodOverride ?? (p?.period || p?.price_period || "");
+  // C6: a listing priced in USD shows its exact original when USD is chosen.
+  const originalCurrency = String(p?.price_original_currency || extra.price_original_currency || "").toUpperCase();
+  const original = Number(p?.price_original ?? extra.price_original);
+  if (activeCur === "USD" && originalCurrency === "USD" && Number.isFinite(original) && original > 0) {
+    const suffix = localizePricePeriod(period);
+    return `$${Math.round(original).toLocaleString("en-US")}${suffix ? "/" + suffix : ""}`;
+  }
+  return fmtP(p?.price || 0, period);
+}
+
+// C6: a price that setCurrency() can update in place (cards, detail, similar
+// listings, map popups and the server-rendered page all use these attributes).
+function listingPriceHtml(p = {}, periodOverride = null) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const attrs = {
+    "data-listing-price": "1",
+    "data-price-ugx": Number(p?.price) > 0 ? String(Math.round(Number(p.price))) : "",
+    "data-price-period": String(periodOverride ?? (p?.period || p?.price_period || "")),
+    "data-listing-type": String(p?.listing_type || p?.type || ""),
+    "data-transaction-type": String(p?.transaction_type || extra.transaction_type || ""),
+    "data-price-original": Number(p?.price_original ?? extra.price_original) > 0 ? String(p?.price_original ?? extra.price_original) : "",
+    "data-price-original-currency": String(p?.price_original_currency || extra.price_original_currency || ""),
+    "data-poa": p?.price_on_application === true || extra.price_on_application === true || extra.price_review === "implausible" ? "1" : ""
+  };
+  const attrText = Object.entries(attrs).map(([key, value]) => `${key}="${String(value).replace(/[&"<>]/g, (ch) => ({ "&": "&amp;", '"': "&quot;", "<": "&lt;", ">": "&gt;" })[ch])}"`).join(" ");
+  const text = fmtListingPrice(p, periodOverride).replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[ch]);
+  return `<span ${attrText}>${text}</span>`;
+}
+
+function listingFromPriceElement(node) {
+  const data = node?.dataset || {};
+  return {
+    price: Number(data.priceUgx) || 0,
+    period: data.pricePeriod || "",
+    listing_type: data.listingType || "",
+    transaction_type: data.transactionType || "",
+    price_original: data.priceOriginal ? Number(data.priceOriginal) : null,
+    price_original_currency: data.priceOriginalCurrency || "",
+    price_on_application: data.poa === "1"
+  };
+}
+
+function fxNoteText(cur = activeCur) {
+  if (!cur || cur === "UGX") return "";
+  const fx = publicFx();
+  const rate = fxRateToUgx(cur);
+  const asOf = fx.as_of ? new Date(fx.as_of) : null;
+  const asOfText = asOf && !Number.isNaN(asOf.getTime()) ? asOf.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+  return `Approximate: ${CURRENCY_SYMBOLS[cur] || cur}1 = USh ${Math.round(rate).toLocaleString("en-US")}${asOfText ? ` (rates as of ${asOfText})` : ""}. Prices are set in Uganda shillings.`;
+}
+
+function refreshDisplayedPrices(root = typeof document !== "undefined" ? document : null) {
+  if (!root?.querySelectorAll) return 0;
+  let updated = 0;
+  root.querySelectorAll("[data-price-ugx]").forEach((node) => {
+    node.textContent = fmtListingPrice(listingFromPriceElement(node));
+    updated += 1;
+  });
+  root.querySelectorAll("[data-fx-note]").forEach((node) => {
+    node.textContent = fxNoteText();
+    if (node.classList) node.classList.toggle("hidden", activeCur === "UGX");
+  });
+  return updated;
+}
+
+function syncCurrencySelect() {
+  const select = typeof document !== "undefined" ? document.getElementById("cur-sel") : null;
+  if (select && select.value !== activeCur) select.value = activeCur;
 }
 
 function propertyOriginalCurrencyGuide(p = {}) {
@@ -8599,10 +8696,25 @@ function propertyOriginalCurrencyGuideHtml(p = {}, className = "mt-1 text-[11px]
 }
 
 function setCurrency(cur) {
-  activeCur = cur;
+  activeCur = SUPPORTED_DISPLAY_CURRENCIES.includes(String(cur || "").toUpperCase()) ? String(cur).toUpperCase() : "UGX";
+  try { localStorage.setItem("makaug_display_currency", activeCur); } catch (_) { /* private mode: this page only */ }
+  syncCurrencySelect();
   renderAll();
   resetMaps();
-  toast("Currency changed to " + cur);
+  // The open property page, its similar listings and the server-rendered text
+  // were baked in once; re-render the detail and update every price in place.
+  if (currentPage === "detail" && activeDetailPropertyId && typeof openDetail === "function") {
+    openDetail(activeDetailPropertyId);
+  }
+  refreshDisplayedPrices();
+  toast("Currency changed to " + activeCur);
+}
+
+// Restore the saved choice in the header select and in server-rendered prices.
+if (typeof document !== "undefined" && document.addEventListener) {
+  const applyStoredCurrency = () => { syncCurrencySelect(); if (activeCur !== "UGX") refreshDisplayedPrices(); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", applyStoredCurrency, { once: true });
+  else setTimeout(applyStoredCurrency, 0);
 }
 
 function normalizeMakaugLanguageCode(lang) {
@@ -10616,7 +10728,7 @@ function resolveCurrentAgentProfile() {
 	        <div class="border border-gray-200 rounded-xl p-3 bg-white">
 	          <button onclick="openPropertyCardDetail(event, ${idArg})" class="text-left font-bold text-gray-800 line-clamp-1 hover:text-green-700">${p.title}</button>
 	          <p class="text-xs text-gray-500 mt-1">${p.area}, ${p.district}</p>
-	          <div class="text-sm font-bold text-green-700 mt-1">${fmtListingPrice(p)}</div>
+	          <div class="text-sm font-bold text-green-700 mt-1">${listingPriceHtml(p)}</div>
 	          ${reason ? `<div class="mt-2 inline-flex rounded-full bg-green-50 border border-green-100 px-2 py-1 text-[11px] font-semibold text-green-800">${adminEscape(reason)}</div>` : ""}
 	          <div class="mt-2 text-xs text-gray-500 flex gap-3">
 	            <span>👁 ${getPropertyViewCount(p.id)} views</span>
@@ -11498,7 +11610,7 @@ function renderBrokerDashboardListingCard(p) {
             <span class="shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${statusMeta.className}">${adminEscape(statusMeta.label)}</span>
           </div>
           <p class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(p.subtype || p.type || "Property")}</p>
-          <div class="text-sm font-bold text-green-700 mt-2">${fmtListingPrice(p)}</div>
+          <div class="text-sm font-bold text-green-700 mt-2">${listingPriceHtml(p)}</div>
           <div class="mt-3 grid grid-cols-4 gap-2 text-xs text-gray-600">
             <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1"><strong>${brokerMetric(views)}</strong><br>Views</span>
             <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1"><strong>${brokerMetric(saves)}</strong><br>Saves</span>
@@ -13236,7 +13348,7 @@ async function renderFieldDashboard() {
             <span class="text-xs font-semibold px-2 py-1 rounded ${badgeClass}">${badgeLabel}</span>
           </div>
           <p class="text-xs text-gray-500 mt-1">${p.area || "-"}, ${p.district || "-"}</p>
-          <p class="text-sm font-bold text-green-700 mt-1">${fmtListingPrice(p)}</p>
+          <p class="text-sm font-bold text-green-700 mt-1">${listingPriceHtml(p)}</p>
           <div class="mt-2 text-xs text-gray-500 flex gap-3">
             <span>👁 ${getPropertyViewCount(p.id)} views</span>
             <span>❤️ ${getPropertySaveCount(p.id)} saves</span>
@@ -44266,9 +44378,8 @@ function socialImportPriceHtml(p = {}, { student = false } = {}) {
   const type = normalizeType(p?.type || p?.listing_type || p?.category);
   const period = String(p?.period || p?.price_period || "").trim().toLowerCase();
   const rental = type === "rent" || period === "mo" || period === "month" || period === "monthly";
-  const base = (CURRENCIES[activeCur] || CURRENCIES.UGX).fmt(value, "");
   const suffix = rental ? `<span class="social-import-card-price-period">/mo</span>` : (student ? `<span class="social-import-card-price-period">/sem</span>` : "");
-  return `<div class="social-import-card-price">${adminEscape(base)}${suffix}</div>`;
+  return `<div class="social-import-card-price">${listingPriceHtml({ ...p, period: "", price_period: "" }, "")}${suffix}</div>`;
 }
 
 function socialImportProvenanceHtml(p = {}) {
@@ -45195,7 +45306,7 @@ function buildMapListingPopupHtml(property = {}) {
         ${adminEscape(title)}
       </a>
       <div style="font-size:12px;color:#6b7280;margin-bottom:6px;">${adminEscape(location)}</div>
-      <div style="font-weight:700;color:#166534;margin-bottom:8px;">${adminEscape(fmtP(property?.price, property?.period))}</div>
+      <div style="font-weight:700;color:#166534;margin-bottom:8px;">${listingPriceHtml(property || {})}</div>
       <a href="${adminAttr(detailPath)}" data-map-property-link="1" data-property-id="${adminAttr(property.id)}" onclick="return openMapPropertyDetail(event, ${idArg});" style="display:block;width:100%;box-sizing:border-box;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;">
         ${adminEscape(translatePropertyUi("View Property"))}
       </a>
@@ -45926,7 +46037,7 @@ function studentCardFooterText(p = {}) {
         <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
           <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
         </button>
-        <div class="absolute bottom-2 right-2 ${theme.priceBg} text-white px-2 py-1 rounded text-sm font-bold">${fmtListingPrice(p, studentMode ? (p.period || "sem") : p.period)}</div>
+        <div class="absolute bottom-2 right-2 ${theme.priceBg} text-white px-2 py-1 rounded text-sm font-bold">${listingPriceHtml(p, studentMode ? (p.period || "sem") : p.period)}</div>
       </div>
       <div class="p-4">
         <h3 class="font-bold text-gray-800 line-clamp-1"><a href="${adminAttr(detailPath)}" onclick="return openPropertyLinkDetail(event, ${idArg}, 'property_card_title')" class="hover:text-green-700 hover:underline">${adminEscape(displayTitle)}</a></h3>
@@ -58248,7 +58359,8 @@ async function openDetail(id, options = {}) {
 	                    </div>
               </div>
               <div class="text-right">
-                <div class="text-3xl font-black text-green-700">${fmtListingPrice(p)}</div>
+                <div class="text-3xl font-black text-green-700">${listingPriceHtml(p)}</div>
+                <div data-fx-note class="mt-1 text-[11px] text-gray-500 ${activeCur === "UGX" ? "hidden" : ""}">${adminEscape(fxNoteText())}</div>
                 ${propertyOriginalCurrencyGuideHtml(p, "mt-1 text-xs font-semibold text-sky-700")}
               </div>
             </div>

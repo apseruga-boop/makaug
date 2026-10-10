@@ -457,6 +457,12 @@ function pricePeriodSuffix(listing = {}) {
   return sharedPricePeriodSuffix(normalizePricePeriodForWrite(String(listing.price_period || '').trim().toLowerCase()) || '');
 }
 
+// C6: the browser's currency switch updates server-rendered prices in place.
+function seoPriceDataAttributes(listing = {}) {
+  if (!(Number(listing.price) > 0)) return '';
+  return ` data-price-ugx="${escapeHtml(String(Math.round(Number(listing.price))))}" data-price-period="${escapeHtml(String(listing.price_period || ''))}" data-listing-type="${escapeHtml(String(listing.listing_type || ''))}" data-transaction-type="${escapeHtml(String(listing.transaction_type || ''))}"`;
+}
+
 // Full price for cards, detail pages and descriptions: UGX 80,000,000/month.
 function priceLabel(listing = {}) {
   if (!(Number(listing.price) > 0)) return 'Price on application';
@@ -535,7 +541,7 @@ function renderSeoListingCard(listing, options = {}) {
     <div class="p-4">
       <h2 class="font-bold text-gray-900"><a href="${escapeHtml(href)}" class="hover:text-green-700 hover:underline">${escapeHtml(listing.title)}</a></h2>
       <p class="mt-1 text-sm text-gray-600">${renderListingLocationLink(listing, options.categoryKey)}</p>
-      <p class="mt-3 text-lg font-black text-green-700">${escapeHtml(priceLabel(listing))}</p>
+      <p class="mt-3 text-lg font-black text-green-700"${seoPriceDataAttributes(listing)}>${escapeHtml(priceLabel(listing))}</p>
       <p class="mt-2 text-sm text-gray-600">${[
         listing.bedrooms ? `${listing.bedrooms} ${listing.bedrooms === 1 ? 'bedroom' : 'bedrooms'}` : '',
         listing.bathrooms ? `${listing.bathrooms} ${listing.bathrooms === 1 ? 'bathroom' : 'bathrooms'}` : '',
@@ -814,7 +820,7 @@ function renderPropertySeoHtml(html, listing, options = {}) {
         <div class="p-5">
           <h1 class="text-3xl font-bold text-gray-900 serif">${escapeHtml(listing.title)}</h1>
           <p class="mt-2 text-gray-600">${location ? `<a href="${escapeHtml(areaUrl)}" class="font-semibold text-green-700 hover:underline">${escapeHtml(locationLabel)}</a>` : escapeHtml(locationLabel)}</p>
-          <p class="mt-4 text-3xl font-black text-green-700">${escapeHtml(priceLabel(listing))}</p>
+          <p class="mt-4 text-3xl font-black text-green-700"${seoPriceDataAttributes(listing)}>${escapeHtml(priceLabel(listing))}</p>
           <p class="mt-3 text-gray-700">${[
             listing.bedrooms ? `${listing.bedrooms} ${listing.bedrooms === 1 ? 'bedroom' : 'bedrooms'}` : '',
             listing.bathrooms ? `${listing.bathrooms} ${listing.bathrooms === 1 ? 'bathroom' : 'bathrooms'}` : '',
