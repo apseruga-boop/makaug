@@ -28019,6 +28019,7 @@ function adminReviewListingEditPanel(review = {}) {
         <label class="block text-xs font-bold text-gray-700">Listing type
           <select id="admin-review-listing-type-edit" onchange="adminReviewOnListingTypeChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${typeOptions}</select>
         </label>
+        ${adminReviewSourcePostDateFieldHtml(review)}
         <label class="block text-xs font-bold text-gray-700">WhatsApp / phone number
           <input id="admin-review-lister-phone-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(extractedPhone || review.lister_phone || "")}" placeholder="+2567XXXXXXXX">
         </label>
@@ -28532,6 +28533,24 @@ function adminNormalizeReviewListingTimestamps(patch = {}, original = {}) {
   return normalized;
 }
 
+// C12 (Fisher): staff record when the source post was published.
+function adminReviewSourcePostDateFieldHtml(review = {}) {
+  if (!isFoundOnlineListing(review)) return "";
+  const extra = review.extra_fields && typeof review.extra_fields === "object" ? review.extra_fields : {};
+  const platform = String(extra.source_platform || review.source_platform || "").trim() || "the source";
+  const stored = String(extra.source_published_at || extra.first_posted_online_at || "").trim();
+  const confirmed = String(extra.source_post_date_status || "") === "staff_confirmed";
+  const storedDate = /^\d{4}-\d{2}-\d{2}/.test(stored) ? stored.slice(0, 10) : "";
+  // Only a date staff confirmed is pre-filled, so saving never "confirms" an imported guess.
+  const value = confirmed ? storedDate : "";
+  const imported = !confirmed && storedDate && !sourcePostDateNeedsPlatformConfirmation(extra) ? storedDate : "";
+  const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+  return `<label class="block text-xs font-bold text-gray-700">Posted on ${adminEscape(platform)} on
+          <input id="admin-review-source-post-date-edit" type="date" min="2015-01-01" max="${adminAttr(today)}" data-confirmed-date="${adminAttr(value)}" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(value)}">
+          <span class="mt-1 block text-[11px] font-semibold text-gray-500">${confirmed ? "Confirmed by staff." : `Check the date on the original post${imported ? ` (the import says ${adminEscape(imported)})` : ""}. Leave empty if you can't see it.`}</span>
+        </label>`;
+}
+
 function collectAdminReviewListingPatch() {
   const get = (id) => document.getElementById(id)?.value ?? "";
   const listingType = normalizeType(get("admin-review-listing-type-edit"));
@@ -28613,7 +28632,11 @@ function collectAdminReviewListingPatch() {
     gender_pref: listingType === "student" ? get("admin-review-gender-pref-edit") : "",
     student_universities: listingType === "student" && nearestUniversity ? [nearestUniversity] : [],
     student_room_label: listingType === "student" ? roomArrangement : "",
-    students_welcome: listingType === "student"
+    students_welcome: listingType === "student",
+    // C12: sent only when staff entered a post date (YYYY-MM-DD).
+    ...(get("admin-review-source-post-date-edit") && get("admin-review-source-post-date-edit") !== (document.getElementById("admin-review-source-post-date-edit")?.dataset?.confirmedDate || "")
+      ? { source_post_date: get("admin-review-source-post-date-edit") }
+      : {})
   }, adminActiveReview || {});
 }
 
