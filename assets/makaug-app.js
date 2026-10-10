@@ -15385,9 +15385,65 @@ function staffPreviewImagesHtml(images = [], propertyId = "", removedImages = []
       ${propertyId && image.id ? `<button type="button" data-staff-photo-action onclick="staffChangePreviewPhoto(${propertyIdArg(propertyId)}, ${propertyIdArg(image.id)}, ${restoring})" class="w-full border-t border-gray-200 bg-white px-2 py-2 text-xs font-black ${restoring ? "text-emerald-800 hover:bg-emerald-50" : "text-red-700 hover:bg-red-50"}">${restoring ? "Restore photo" : "Remove photo"}</button>` : ""}
     </div>`;
   return `<p class="mb-3 text-xs text-gray-600">Remove any photo that belongs to another property. Changes save immediately; removed photos can be restored below.</p>
-    ${list.length ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2">${list.map((image) => card(image)).join("")}</div>` : `<div class="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950" data-staff-no-photos>This listing has no photos yet. It can't be approved until at least one real photo of the property is added below (there is no override).</div>`}
+    ${staffPreviewMediaBasisHtml(propertyId)}
+    ${list.length ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2">${list.map((image) => card(image)).join("")}</div>` : `<div class="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950" data-staff-no-photos>This listing has no photos yet. It needs a photo or its own property video before it can be approved (there is no override). Add photos below, or make a cover from the listing's video.</div>`}
+    ${propertyId ? staffPreviewVideoCoverHtml(propertyId) : ""}
     ${propertyId ? staffPreviewPhotoUploadHtml(propertyId, list.length) : ""}
     ${removed.length ? `<details class="mt-3 rounded-xl border border-gray-200 p-3"><summary class="cursor-pointer text-sm font-bold">Removed photos (${removed.length})</summary><div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">${removed.map((image) => card(image, true)).join("")}</div></details>` : ""}`;
+}
+
+// C1: what the approval gate will count as this listing's picture.
+const STAFF_MEDIA_BASIS_LABELS = {
+  photo: "Approves on: a real photo of the property.",
+  video_still: "Approves on: a still from the listing's own video.",
+  source_video: "Approves on: the listing's own video (no photo yet)."
+};
+
+function staffPreviewMediaBasisHtml(propertyId = "") {
+  const check = String(adminActiveReview?.id || "") === String(propertyId || "") ? adminActiveReview?.media_check : null;
+  if (!check || typeof check !== "object") return "";
+  const label = STAFF_MEDIA_BASIS_LABELS[check.basis] || "Can't approve yet: no photo and no video of its own.";
+  const tone = check.ok ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-red-200 bg-red-50 text-red-900";
+  return `<p class="mb-3 rounded-lg border px-3 py-2 text-xs font-bold ${tone}" data-staff-media-basis="${adminAttr(check.basis || "none")}">${adminEscape(label)}</p>`;
+}
+
+function staffPreviewVideoCoverHtml(propertyId) {
+  return `
+    <div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3" data-staff-video-cover>
+      <div class="text-sm font-black text-blue-950">Make a cover from the video</div>
+      <p class="mt-1 text-xs text-blue-900">Takes clear stills from this listing's own video and adds them as photos. Nothing is cropped or blurred, so the agent's branding stays.</p>
+      <button type="button" data-staff-photo-action onclick="staffMakeVideoCover(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg bg-blue-700 px-3 py-2 text-sm font-black text-white hover:bg-blue-600">Make a cover from the video</button>
+    </div>`;
+}
+
+async function staffMakeVideoCover(propertyId) {
+  if (staffPhotoChangePending || String(adminActiveReview?.id || "") !== String(propertyId)) return;
+  staffPhotoChangePending = true;
+  document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = true; });
+  setStaffPreviewDecisionBusy(true);
+  try {
+    toast("Making a cover from the video. This can take a minute...");
+    const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/video-cover`, {
+      method: "POST",
+      body: {}
+    }, Math.max(STAFF_MODERATION_WRITE_TIMEOUT_MS * 4, 120000), "Video cover");
+    if (String(adminActiveReview?.id || "") === String(propertyId)) {
+      adminActiveReview.images = response.data.images;
+      adminActiveReview.extra_fields = response.data.extra_fields;
+      adminActiveReview.media_check = response.data.media_check || adminActiveReview.media_check;
+      const gallery = document.getElementById("staff-preview-photo-gallery");
+      if (gallery) gallery.innerHTML = staffPreviewImagesHtml(response.data.images, propertyId, response.data.extra_fields?.staff_removed_images || []);
+      if (adminActiveReview.media_check?.ok) dismissApprovalBlockerBanner();
+    }
+    queueStaffDashboardRefreshAfterModeration();
+    toast(response.data.added ? `${response.data.added} still${response.data.added === 1 ? "" : "s"} from the video added.` : (response.data.note || "No new stills were needed."));
+  } catch (error) {
+    toast(error.message || "We couldn't make a cover from this video. Upload a photo instead.");
+  } finally {
+    staffPhotoChangePending = false;
+    document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = false; });
+    setStaffPreviewDecisionBusy(false);
+  }
 }
 
 function staffPreviewPhotoUploadHtml(propertyId, existingCount = 0) {
@@ -15396,7 +15452,7 @@ function staffPreviewPhotoUploadHtml(propertyId, existingCount = 0) {
       <div class="text-sm font-black text-emerald-950">${existingCount ? "Add more photos" : "Add the property's photos"}</div>
       <p class="mt-1 text-xs text-emerald-900">Use photos the owner or agent sent for this property (WhatsApp, email or the source post). They are saved to makaug straight away.</p>
       <input id="staff-preview-photo-upload" type="file" accept="image/jpeg,image/png,image/webp" multiple class="mt-2 block w-full text-xs">
-      <label class="mt-2 flex items-start gap-2 text-xs font-semibold text-emerald-950"><input id="staff-preview-photo-rights" type="checkbox" class="mt-0.5"> These photos are of this property and the owner or agent gave them to us to use.</label>
+      <label class="mt-2 flex items-start gap-2 text-xs font-semibold text-emerald-950"><input id="staff-preview-photo-rights" type="checkbox" class="mt-0.5"> These are photos of this property, or frames captured from this listing's own source video, and we are allowed to use them.</label>
       <button type="button" data-staff-photo-action onclick="staffUploadPreviewPhotos(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-black text-white hover:bg-emerald-600">Upload photos</button>
     </div>`;
 }
@@ -15411,7 +15467,7 @@ async function staffUploadPreviewPhotos(propertyId) {
     return;
   }
   if (!document.getElementById("staff-preview-photo-rights")?.checked) {
-    toast("Tick the box to confirm these photos are of this property and were given to us to use.");
+    toast("Tick the box to confirm these are photos of this property, or frames from this listing's own video, and we are allowed to use them.");
     return;
   }
   staffPhotoChangePending = true;
@@ -15450,7 +15506,7 @@ async function staffUploadPreviewPhotos(propertyId) {
 
 // Plain-language reasons for the real-photo gate's detail codes.
 const REAL_PHOTO_BLOCK_REASONS = {
-  no_photos: "This listing has no photos at all.",
+  no_photos: "This listing has no photos and no video of its own.",
   generated_data_image: "Its only images are generated cards (not photos of the property).",
   stock_photo: "Its only image is the stock house photo.",
   image_pending_card: "Its only image is the \"image pending\" card.",
@@ -27652,6 +27708,7 @@ function showApprovalBlockerBanner(response = {}, propertyId = "") {
       </div>
       ${shownDetails.length ? `<ul class="mt-3 list-disc space-y-1 pl-5 text-xs font-semibold" data-approval-blocker-details>${shownDetails.map((detail) => `<li>${adminEscape(detail)}</li>`).join("")}</ul>` : ""}
       ${photoBlocked ? `<button type="button" onclick="focusListingPhotoUpload()" class="mt-3 w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-black text-white hover:bg-emerald-600" data-approval-blocker-add-photo>Add photos now</button>` : ""}
+      ${photoBlocked && activeHumanApprovalBlocker.propertyId && document.querySelector("#staff-listing-preview-modal [data-staff-video-cover]") ? `<button type="button" onclick="staffMakeVideoCover(${propertyIdArg(activeHumanApprovalBlocker.propertyId)})" class="mt-2 w-full rounded-lg bg-blue-700 px-3 py-2 text-sm font-black text-white hover:bg-blue-600" data-approval-blocker-video-cover>Make a cover from the video</button>` : ""}
       ${proposed.length ? `<div class="mt-3 rounded-lg border border-red-200 bg-white p-2 text-xs font-bold">${Array.from(new Set(proposed)).map(adminEscape).join(" · ")}</div>` : ""}
       ${missingFields.length ? `<div class="mt-3 text-xs font-black">Fields needing attention: ${missingFields.map((field) => adminEscape(field.replace(/_/g, " "))).join(", ")}.</div>` : ""}
       ${overrideAvailable ? `<button type="button" onclick="approveActiveHumanOverride()" class="mt-3 w-full rounded-lg bg-red-800 px-3 py-2 text-sm font-black text-white hover:bg-red-700">Approve anyway (human verified)</button>` : ""}

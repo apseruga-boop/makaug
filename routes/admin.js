@@ -170,7 +170,7 @@ const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const { isPriceOnApplication } = require('../utils/listingPriceQuality');
 const { FAILED_WHATSAPP_SQL, listWhatsappActivity, whatsappActivityFreshness } = require('../services/whatsappActivityService');
-const { listingRealPhotoCheck, NO_REAL_PHOTO_MESSAGE } = require('../utils/realListingPhoto');
+const { listingPhotoOrVideoCheck, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
 const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const {
   LISTING_EXTRA_TIMESTAMP_FIELDS,
@@ -6031,7 +6031,7 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(403).json({ ok: false, error: 'Direct publication is limited to authorised direct-agent records' });
     }
-    const photoCheck = await listingRealPhotoCheck(client, property.id);
+    const photoCheck = await listingPhotoOrVideoCheck(client, property.id);
     const extra = property.extra_fields && typeof property.extra_fields === 'object' ? property.extra_fields : {};
     const videoUrls = Array.isArray(extra.video_urls)
       ? extra.video_urls.filter((url) => /^https?:\/\//i.test(String(url || '')))
@@ -6045,7 +6045,7 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
     // C20: a Price on application listing has no number and is still publishable.
     if ((!property.price || property.price <= 0) && !isPriceOnApplication(property)) blockers.push('price');
     if (!property.lister_phone) blockers.push('agent contact');
-    if (!photoCheck.ok) blockers.push(`property photo: ${NO_REAL_PHOTO_MESSAGE}`);
+    if (!photoCheck.ok) blockers.push(`property photo: ${NO_PHOTO_OR_VIDEO_MESSAGE}`);
     if (videoUrls.length < 1) blockers.push('property video');
     const dataIntegrity = listingDataIntegrityReport(property);
     if (!dataIntegrity.ok) blockers.push(...dataIntegrity.issue_codes.map((code) => `data integrity: ${code}`));

@@ -147,12 +147,12 @@ test('every approval path calls the gate', () => {
   const read = (file) => fs.readFileSync(path.join(__dirname, '..', 'routes', file), 'utf8');
   const staff = read('staff.js');
   assert.match(staff, /applyStaffBulkRealPhotoGate\(applyStaffBulkInternalDuplicateGate\(/, 'bulk review');
-  assert.match(staff, /async function approveStaffBulkFoundOnlineListing[\s\S]{0,200}listingRealPhotoCheck\(client, row\.id\)/, 'bulk approve (inside the transaction)');
-  assert.match(staff, /\['approved', 'live', 'published'\][\s\S]{0,120}listingRealPhotoCheck\(db, req\.params\.id\)/, 'staff review stage');
+  assert.match(staff, /async function approveStaffBulkFoundOnlineListing[\s\S]{0,200}listingPhotoOrVideoCheck\(client, row\.id\)/, 'bulk approve (inside the transaction)');
+  assert.match(staff, /\['approved', 'live', 'published'\][\s\S]{0,120}listingPhotoOrVideoCheck\(db, req\.params\.id\)/, 'staff review stage');
   const props = read('properties.js');
-  assert.match(props, /listingRealPhotoCheck\(db, current\.id \|\| req\.params\.id\)/, 'status route');
+  assert.match(props, /listingPhotoOrVideoCheck\(db, current\.id \|\| req\.params\.id\)/, 'status route');
   const admin = read('admin.js');
-  assert.match(admin, /listingRealPhotoCheck\(client, property\.id\)/, 'direct publish');
+  assert.match(admin, /listingPhotoOrVideoCheck\(client, property\.id\)/, 'direct publish');
 });
 
 test.after(async () => {

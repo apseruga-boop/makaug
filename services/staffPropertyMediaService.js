@@ -94,7 +94,7 @@ function dataUrlBytes(value = '') {
 // stored copy passes the same real-photo rule approval uses, so a failed
 // upload can never leave a photo that approval then refuses.
 async function addStaffPropertyImages({ propertyId, actorId, images = [], confirmRights = false }, database = db, deps = {}) {
-  if (!confirmRights) throw mediaError(400, 'Confirm the listing owner or agent gave these photos for this listing before uploading.');
+  if (!confirmRights) throw mediaError(400, 'Confirm these are photos of this property, or frames captured from this listing\'s own source video, and we are allowed to use them.');
   const list = (Array.isArray(images) ? images : []).filter(Boolean);
   if (!list.length) throw mediaError(400, 'Choose at least one photo to upload.');
   if (list.length > STAFF_PHOTO_MAX_COUNT) throw mediaError(400, `Upload no more than ${STAFF_PHOTO_MAX_COUNT} photos at once.`);

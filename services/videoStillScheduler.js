@@ -240,6 +240,73 @@ async function tickVideoStills(db, { eventLoopP95Ms, budgetMs = TICK_BUDGET_MS }
   }
 }
 
+// C1 (10 Oct 2026): staff "Make a cover from the video" for one listing.
+// The same limits as the scheduler (#378): one at a time, skipped when the
+// site is busy, at most MAX_VIDEOS_PER_TICK videos and TICK_BUDGET_MS, ffmpeg
+// niced on one thread. Frames are resized to fit, never cropped or blurred, so
+// the agent's branding stays. The description and video fields are untouched.
+const DIRECT_VIDEO_FILE_RE = /\.(?:mp4|mov|m4v|webm)(?:[?#]|$)/i;
+
+function coverVideoUrls(extra = {}, { mediaHost = '' } = {}) {
+  const { listingSourceVideoUrls } = require('../utils/realListingPhoto');
+  return listingSourceVideoUrls(extra)
+    .filter((url) => /^https:\/\//i.test(url))
+    .filter((url) => DIRECT_VIDEO_FILE_RE.test(url) || (mediaHost && url.toLowerCase().startsWith(`https://${mediaHost.toLowerCase()}/`)));
+}
+
+function coverErrorMessage(error) {
+  const raw = String(error?.message || error || '');
+  if (error?.code === 'VIDEO_STILL_TIME_BUDGET' || /time budget|aborted/i.test(raw)) return 'The video took too long to read, so no cover was made. Try again later or upload a photo.';
+  if (/exceeds .* byte/i.test(raw)) return 'The video is too large to read here (over 100 MB). Upload a photo instead.';
+  if (/HTTP \d{3}|fetch failed|ENOTFOUND|ECONNRE|status/i.test(raw)) return 'We couldn\'t fetch the video file, so no cover was made. Upload a photo instead.';
+  return 'We couldn\'t get a clear picture from this video, so no cover was made. Upload a photo instead.';
+}
+
+async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', budgetMs = TICK_BUDGET_MS, backfill: injected = null } = {}) {
+  if (running) return { ok: false, status: 409, error: 'A cover is already being made. Try again in a minute.' };
+  const busy = siteBusyReason(db);
+  if (busy) return { ok: false, status: 503, error: 'The site is busy right now. Try again in a few minutes.', ...busy };
+  const found = await db.query(
+    `SELECT p.id, p.status, p.extra_fields,
+            (SELECT COUNT(*)::int FROM property_images pi
+              WHERE pi.property_id = p.id AND COALESCE(pi.slot_key, '') ~* '^video_key_frame_') AS video_still_count
+       FROM properties p
+      WHERE p.id = $1`,
+    [propertyId]
+  );
+  const property = found.rows[0];
+  if (!property) return { ok: false, status: 404, error: 'Listing not found.' };
+  if (property.status !== 'pending') return { ok: false, status: 409, error: 'Covers can only be made for listings still in review.' };
+  const { mediaHost } = require('../utils/realListingPhoto');
+  const urls = coverVideoUrls(property.extra_fields || {}, { mediaHost: mediaHost() });
+  if (!urls.length) {
+    return { ok: false, status: 422, error: 'This listing\'s video is a TikTok, YouTube or Facebook page, not a video file we can open, so a cover can\'t be made from it. Upload a photo instead.' };
+  }
+  running = true;
+  const controller = new AbortController();
+  const budgetTimer = setTimeout(() => controller.abort(), budgetMs);
+  const backfill = injected || require('../scripts/backfill-whatsapp-video-stills');
+  try {
+    controller.signal.addEventListener('abort', () => { try { backfill.killLiveChildren?.(); } catch (_) {} }, { once: true });
+    ffmpegReady();
+    const uploaded = await backfill.makeAndUploadStills(
+      { ...property, extra_fields: { ...(property.extra_fields || {}), video_urls: urls } },
+      { frameCandidates: backfill.FRAME_CANDIDATE_COUNT, maxVideos: MAX_VIDEOS_PER_TICK, deadline: Date.now() + budgetMs, signal: controller.signal }
+    );
+    if (!uploaded.length) return { ok: true, attached: 0, note: 'This listing already has stills from its video.' };
+    const attached = await backfill.attachStills(property.id, uploaded, { keepListingText: true, actorId });
+    if (attached.skipped === 'status_changed') return { ok: false, status: 409, error: 'The listing changed while the cover was being made. Reload and try again.' };
+    return { ok: true, attached: attached.attached || 0 };
+  } catch (error) {
+    try { backfill.killLiveChildren?.(); } catch (_) {}
+    logger.warn('Staff video cover failed', { propertyId: property.id, error: String(error?.message || error).slice(0, 300) });
+    return { ok: false, status: 422, error: coverErrorMessage(error) };
+  } finally {
+    clearTimeout(budgetTimer);
+    running = false;
+  }
+}
+
 /** For staff actions that re-pull a listing's media: start the count afresh. */
 async function clearVideoStillAttempts(db, propertyId) {
   if (!propertyId) return;
@@ -286,6 +353,9 @@ module.exports = {
   BOOT_DELAY_MS,
   MAX_ATTEMPTS,
   clearVideoStillAttempts,
+  coverErrorMessage,
+  coverVideoUrls,
+  makeVideoCoverForListing,
   selectionQuery,
   siteBusyReason,
   startVideoStillScheduler,

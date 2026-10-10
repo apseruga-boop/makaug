@@ -75,7 +75,7 @@ test('the review screen offers the upload, explains the block, and no longer pro
   assert.match(app, /\$\{propertyId \? staffPreviewPhotoUploadHtml\(propertyId, list\.length\) : ""\}/);
   assert.match(app, /\/api\/staff\/properties\/\$\{encodeURIComponent\(propertyId\)\}\/images`, \{\n      method: "POST"/);
   assert.doesNotMatch(app, /No property photos are attached\. A signed-in reviewer can use the human approval override/);
-  assert.match(app, /no_photos: "This listing has no photos at all\."/);
+  assert.match(app, /no_photos: "This listing has no photos and no video of its own\."/);
   assert.match(app, /photoBlocked \? `<button type="button" onclick="focusListingPhotoUpload\(\)"/);
   assert.match(admin, /storedUploads\.some\(\(image\) => \/\^data:\/i\.test/, 'the admin upload refuses an unstored data: URL too');
 });

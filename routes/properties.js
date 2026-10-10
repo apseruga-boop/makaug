@@ -121,7 +121,7 @@ const {
 } = require('../utils/commercialClassification');
 const { listingPriceQuality, IMPOSSIBLE_PRICE_UGX } = require('../utils/listingPriceQuality');
 const { pricePlausibility } = require('../utils/pricePlausibility');
-const { listingRealPhotoCheck, NO_REAL_PHOTO_CODE, NO_REAL_PHOTO_MESSAGE } = require('../utils/realListingPhoto');
+const { listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const { CANONICAL_PROPERTY_CURRENCY, propertyPriceMetadata, configuredRateToCanonicalCurrency, normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
 const {
@@ -4943,11 +4943,11 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         });
       }
       // At least one real photo on our media host. No override, no exemption.
-      const photos = await listingRealPhotoCheck(db, current.id || req.params.id);
+      const photos = await listingPhotoOrVideoCheck(db, current.id || req.params.id);
       if (!photos.ok) {
         return res.status(422).json({
           ok: false,
-          error: NO_REAL_PHOTO_MESSAGE,
+          error: NO_PHOTO_OR_VIDEO_MESSAGE,
           code: NO_REAL_PHOTO_CODE,
           details: Object.keys(photos.rejected).length ? Object.keys(photos.rejected) : ['no_photos'],
           override_available: false,

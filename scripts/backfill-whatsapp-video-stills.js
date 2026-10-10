@@ -509,7 +509,11 @@ async function makeAndUploadStills(property, {
 async function attachStills(propertyId, uploaded, {
   replaceExisting = false,
   reopenApproved = false,
-  quarantinePrimary = false
+  quarantinePrimary = false,
+  // C1 staff "Make a cover from the video": add the stills only. The listing's
+  // description and video fields are left exactly as staff saved them.
+  keepListingText = false,
+  actorId = 'whatsapp-video-still-backfill'
 } = {}) {
   const client = await db.getClient();
   try {
@@ -568,7 +572,7 @@ async function attachStills(propertyId, uploaded, {
     const required = Math.max(0, MIN_VIDEO_KEY_FRAMES - existingVideoCount);
     const selectedUploads = uploaded.slice(0, required);
     const cleanCaption = cleanEmployeePropertyCaption(property.extra_fields?.source_caption || property.description || '');
-    const publicDescription = buildEmployeePublicDescription({
+    const publicDescription = keepListingText ? property.description : buildEmployeePublicDescription({
       caption: property.extra_fields?.source_caption || property.description || '',
       facts: {
         listingType: property.listing_type,
@@ -609,7 +613,7 @@ async function attachStills(propertyId, uploaded, {
       ? property.extra_fields
       : {};
     const hashes = Array.isArray(currentExtra.media_sha256) ? currentExtra.media_sha256 : [];
-    const nextExtra = {
+    const textExtra = keepListingText ? {} : {
       source_caption_display: cleanCaption.slice(0, 2000),
       video_url: extractVideoUrls(property.extra_fields)[0] || null,
       video_urls: extractVideoUrls(property.extra_fields),
@@ -618,7 +622,10 @@ async function attachStills(propertyId, uploaded, {
         label: `WhatsApp property video ${index + 1}`,
         sort_order: index
       })),
-      video_count: extractVideoUrls(property.extra_fields).length,
+      video_count: extractVideoUrls(property.extra_fields).length
+    };
+    const nextExtra = {
+      ...textExtra,
       video_still_urls: [...new Set([
         ...(Array.isArray(currentExtra.video_still_urls) ? currentExtra.video_still_urls : []),
         ...selectedUploads.map((item) => item.url)
@@ -640,8 +647,10 @@ async function attachStills(propertyId, uploaded, {
         ...(Array.isArray(currentExtra.source_evidence_urls) ? currentExtra.source_evidence_urls : []),
         ...(quarantinedPrimaryUrl ? [quarantinedPrimaryUrl] : [])
       ])],
-      media_quality_blockers: [],
-      media_validation_status: selectedUploads.length ? 'passed_repair_image_gate' : 'blocked_no_usable_property_image',
+      ...(keepListingText ? {} : {
+        media_quality_blockers: [],
+        media_validation_status: selectedUploads.length ? 'passed_repair_image_gate' : 'blocked_no_usable_property_image'
+      }),
       review_only: true,
       auto_publish: false
     };
@@ -661,12 +670,15 @@ async function attachStills(propertyId, uploaded, {
     await client.query(
       `INSERT INTO property_moderation_events
         (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
-       VALUES ($1, 'whatsapp-video-still-backfill', 'whatsapp_video_still_backfilled',
-               $5, 'pending', $2, $3, $4::jsonb)`,
+       VALUES ($1, $6, $7, $5, 'pending', $2, $3, $4::jsonb)`,
       [
         propertyId,
-        'Prepared five representative key images and retained the playable WhatsApp property video.',
-        `${selectedUploads.length} key image(s) attached and the public description was cleaned. Listing remained in staff review.`,
+        keepListingText
+          ? 'Staff made a cover from the listing\'s own video.'
+          : 'Prepared five representative key images and retained the playable WhatsApp property video.',
+        keepListingText
+          ? `${selectedUploads.length} still(s) from the listing's own video attached, uncropped. Description unchanged. Listing remained in staff review.`
+          : `${selectedUploads.length} key image(s) attached and the public description was cleaned. Listing remained in staff review.`,
         JSON.stringify({
           marker: BACKFILL_MARKER,
           stills_attached: selectedUploads.length,
@@ -680,7 +692,9 @@ async function attachStills(propertyId, uploaded, {
           description_cleaned: publicDescription !== property.description,
           auto_publish: false
         }),
-        property.status
+        property.status,
+        String(actorId || 'whatsapp-video-still-backfill'),
+        keepListingText ? 'staff_video_cover_made' : 'whatsapp_video_still_backfilled'
       ]
     );
     await client.query('COMMIT');
