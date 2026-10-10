@@ -193,7 +193,7 @@ test('an approval through the status route empties the staff dashboard caches', 
     const res = await auth(request(app).patch(`/api/properties/${id}/status`)).send({ status: 'approved', manual_notification_only: true });
     if (res.status !== 200) {
       // Some local copies trip an approval gate; a rejection exercises the same cache path.
-      const rej = await auth(request(app).patch(`/api/properties/${id}/status`)).send({ status: 'rejected', reason: 'cache test', manual_notification_only: true });
+      const rej = await auth(request(app).patch(`/api/properties/${id}/status`)).send({ status: 'rejected', reason: 'cache test', manual_notification_only: true, reject_confirmed: true, ui_control: 'test' });
       assert.equal(rej.status, 200, JSON.stringify(rej.body).slice(0, 300));
     }
     assert.ok(cleared >= 1, 'the status route must clear the staff dashboard cache');

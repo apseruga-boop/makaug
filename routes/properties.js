@@ -4706,6 +4706,19 @@ router.post('/:id/inquiries', leadFormLimiter, leadHoneypot, async (req, res, ne
   }
 });
 
+// The listing's own status note ("Pending King review of …", or whatever
+// moderation_reason it already has) is not a reason a moderator typed.
+const DEFAULT_STATUS_NOTE_RE = /^\s*(pending\s+(king\s+)?review\b|awaiting\s+(king\s+|staff\s+)?review\b|submitted for review\b)/i;
+function isDefaultStatusNoteReason(reason, property = {}) {
+  const typed = String(reason || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!typed) return true;
+  if (DEFAULT_STATUS_NOTE_RE.test(typed)) return true;
+  const stored = [property.moderation_reason, property.extra_fields?.moderation_reason]
+    .map((value) => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase())
+    .filter(Boolean);
+  return stored.includes(typed) && String(property.status || '').toLowerCase() !== 'rejected';
+}
+
 router.patch('/:id/status', requireListingModerationAccess, async (req, res, next) => {
   try {
     const nextStatus = cleanText(req.body.status).toLowerCase();
@@ -4760,6 +4773,16 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     if (nextStatus === 'rejected' && !moderationReason) {
       return res.status(400).json({ ok: false, error: 'reason is required when rejecting a listing' });
     }
+    // C2 addendum (10 Oct 2026): ten found-online listings were rejected
+    // through a moderator session with their own default status note as the
+    // "reason". A moderator's reject must be confirmed in the review panel.
+    const rejectionUiControl = nextStatus === 'rejected'
+      ? (cleanText(req.body.ui_control || req.body.uiControl).slice(0, 80) || null)
+      : null;
+    if (nextStatus === 'rejected' && actorRole === 'moderator'
+      && !parseBooleanLike(req.body.reject_confirmed || req.body.rejectConfirmed, false)) {
+      return res.status(400).json({ ok: false, code: 'reject_not_confirmed', error: 'Confirm the rejection in the review panel: click Reject, type the reason, then confirm.' });
+    }
     const structuredRejectionReasons = normalizeStructuredRejectionReasons(req.body);
 
     const currentResult = await db.query(
@@ -4775,6 +4798,9 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
 
     let current = currentResult.rows[0];
+    if (nextStatus === 'rejected' && isDefaultStatusNoteReason(moderationReason, current)) {
+      return res.status(400).json({ ok: false, code: 'reject_reason_not_typed', error: 'Type the reason for rejecting this listing. Its own status note isn\'t a rejection reason.' });
+    }
     const approvalWarnings = [];
     const listingPatchResult = await applyStatusListingPatchBeforeModeration(
       req,
@@ -5492,7 +5518,11 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           ...(locationReclassificationExtraFields ? { location_reclassification_confirmation: locationReclassificationExtraFields } : {}),
           ...(humanIntegrityOverride ? { human_integrity_override: humanIntegrityOverride } : {}),
           ...(humanApprovalOverride ? { human_approval_override: humanApprovalOverride } : {}),
-          ...(structuredRejectionReasons.length ? { structured_rejection_reasons: structuredRejectionReasons } : {})
+          ...(structuredRejectionReasons.length ? { structured_rejection_reasons: structuredRejectionReasons } : {}),
+          ...(nextStatus === 'rejected' ? {
+            rejection_ui_control: rejectionUiControl || 'not_sent',
+            rejection_confirmed: parseBooleanLike(req.body.reject_confirmed || req.body.rejectConfirmed, false)
+          } : {})
         };
         await db.query(
           `INSERT INTO property_moderation_events (
@@ -5702,6 +5732,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 module.exports = router;
 module.exports.clearPublicPropertiesCache = clearPublicPropertiesCache;
 module.exports._test = {
+  isDefaultStatusNoteReason,
   addCanonicalLocationSearchFilter,
   approximatePublicPagination,
   compactPublicCardRow,

@@ -15367,6 +15367,7 @@ function staffPreviewVideosHtml(preview = {}) {
   if (!urls.length) return staffEmpty("No property video is attached.");
   return `<div class="mb-4 grid lg:grid-cols-2 gap-3" data-staff-review-video-gallery="true">
     ${urls.map((url, index) => renderVideoEmbedCard(url, {
+      clickToPlay: true,
       title: `Property video ${index + 1}`,
       sub: "Play the complete walkthrough here before approving it for the public listing."
     })).join("")}
@@ -15880,7 +15881,8 @@ function renderStaffListingPreviewModal(preview = {}) {
             <textarea id="admin-review-notes" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[90px]" placeholder="What did you verify?">${adminEscape(preview.review?.notes || preview.moderation_notes || "")}</textarea>
             ${moderationPriceBasisConfirmationHtml(preview, "staff-preview")}
             ${moderationStructuredReasonControlsHtml("staff-preview")}
-            <textarea id="admin-review-reason" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[80px]" placeholder="Approval/rejection reason">${adminEscape(preview.review?.reason || preview.moderation_reason || "")}</textarea>
+            <textarea id="admin-review-reason" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[80px]" placeholder="Type the reason (required to reject)">${adminEscape(typedDecisionReasonForPrefill(preview))}</textarea>
+            ${preview.moderation_reason ? `<p class="mt-1 text-[11px] text-gray-500" data-staff-status-note>Current status note (not a rejection reason): ${adminEscape(preview.moderation_reason)}</p>` : ""}
           </section>
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900">Decision</h4>
@@ -15889,7 +15891,7 @@ function renderStaffListingPreviewModal(preview = {}) {
               <button type="button" onclick="saveStaffListingPreview(${propertyIdArg(preview.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-black">Save preview changes</button>
               <button type="button" data-staff-approve-id="${adminAttr(String(preview.id || ""))}" data-identity-approve-prefix="staff-preview" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
               <div class="hidden" data-approval-blocker-host></div>
-              <button type="button" onclick="staffRejectPreviewListing(${propertyIdArg(preview.id)})" class="bg-red-600 hover:bg-red-500 text-white rounded-xl px-4 py-2 text-sm font-black">Reject with reason</button>
+              <button type="button" data-reject-button="staff-preview" onclick="staffRejectPreviewListing(${propertyIdArg(preview.id)})" class="bg-red-600 hover:bg-red-500 text-white rounded-xl px-4 py-2 text-sm font-black">Reject with reason</button>
               <button type="button" onclick="staffModerateListing(${propertyIdArg(preview.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-black">Keep pending</button>
             </div>
             <p class="text-xs text-gray-500 mt-3">Approve uses the same live publish API as King moderation. If checklist warnings remain, the backend will block approval.</p>
@@ -16424,15 +16426,68 @@ async function staffApprovePreviewListing(propertyId, options = {}) {
   }
 }
 
+// C2 addendum (10 Oct 2026): ten found-online listings were rejected from a
+// moderator session with their own default status note as the "reason". A
+// reject now needs a real click on Reject, a typed reason (not the status
+// note) and a second click to confirm; the control is recorded on the event.
+const REJECT_CONFIRM_WINDOW_MS = 10000;
+const DEFAULT_STATUS_NOTE_RE = /^\s*(pending\s+(king\s+)?review\b|awaiting\s+(king\s+|staff\s+)?review\b|submitted for review\b)/i;
+let pendingRejectConfirmation = null;
+
+function isDefaultStatusNoteText(reason = "", property = {}) {
+  const typed = String(reason || "").replace(/\s+/g, " ").trim().toLowerCase();
+  if (!typed) return true;
+  if (DEFAULT_STATUS_NOTE_RE.test(typed)) return true;
+  const stored = [property?.moderation_reason, property?.extra_fields?.moderation_reason]
+    .map((value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase())
+    .filter(Boolean);
+  return stored.includes(typed);
+}
+
+function typedDecisionReasonForPrefill(review = {}) {
+  const saved = String(review?.review?.reason || "").trim();
+  return saved && !isDefaultStatusNoteText(saved, review) ? saved : "";
+}
+
+function rejectClickIsExplicit(clickEvent = (typeof window !== "undefined" ? window.event : null)) {
+  return Boolean(clickEvent && clickEvent.type === "click" && clickEvent.isTrusted !== false);
+}
+
+// First click arms the button; a second click within 10 s confirms.
+function confirmRejectClick(key, buttonSelector) {
+  const now = Date.now();
+  if (pendingRejectConfirmation && pendingRejectConfirmation.key === key && now - pendingRejectConfirmation.at < REJECT_CONFIRM_WINDOW_MS) {
+    pendingRejectConfirmation = null;
+    return true;
+  }
+  pendingRejectConfirmation = { key, at: now };
+  const button = typeof document !== "undefined" ? document.querySelector(buttonSelector) : null;
+  if (button) {
+    const original = button.dataset.rejectLabel || button.textContent;
+    button.dataset.rejectLabel = original;
+    button.textContent = "Click again to confirm reject";
+    setTimeout(() => {
+      if (button.isConnected !== false && button.dataset.rejectLabel) button.textContent = button.dataset.rejectLabel;
+    }, REJECT_CONFIRM_WINDOW_MS);
+  }
+  toast("Check the reason, then click Reject again within 10 seconds to confirm.");
+  return false;
+}
+
 async function staffRejectPreviewListing(propertyId) {
+  if (!rejectClickIsExplicit()) {
+    toast("Reject needs a click on the Reject button.");
+    return;
+  }
   moderationApplyRejectionReasonPreset("staff-preview");
   const review = staffReviewPatch();
   const reason = String(review.reason || "").trim();
-  if (!reason) {
-    toast("Choose a rejection reason or add a rejection message first.");
+  if (!reason || isDefaultStatusNoteText(reason, adminActiveReview || {})) {
+    toast("Type the reason for rejecting this listing (its status note isn't a rejection reason), or choose one above.");
     document.getElementById("admin-review-reason")?.focus();
     return;
   }
+  if (!confirmRejectClick(`staff:${propertyId}`, '#staff-listing-preview-modal [data-reject-button="staff-preview"]')) return;
   try {
     setStaffPreviewDecisionBusy(true);
     const statusRes = await staffApiRequestWithTimeout(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
@@ -16444,7 +16499,9 @@ async function staffRejectPreviewListing(propertyId) {
         checklist: review.checklist,
         structured_rejection_reasons: review.structured_rejection_reasons || moderationSelectedRejectionReasons("staff-preview"),
         fast_admin_render: true,
-        manual_notification_only: true
+        manual_notification_only: true,
+        reject_confirmed: true,
+        ui_control: "staff_preview_reject_button"
       }
     }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Staff moderation write");
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, "rejected", reason);
@@ -28654,7 +28711,7 @@ function renderAdminReviewPanel(review) {
   const checklistItems = automated?.checks || review?.review?.checklist_items || [];
   const canApprove = automated?.can_approve !== false;
   const generatedDecisionReason = buildAdminGeneratedDecisionReason(review);
-  const decisionReason = review?.review?.reason || review?.moderation_reason || review?.extra_fields?.moderation_reason || generatedDecisionReason || "";
+  const decisionReason = typedDecisionReasonForPrefill(review) || generatedDecisionReason || "";
   const reviewOverrideKey = String(review.id || "");
   const warningOverrides = getAdminReviewWarningOverrides(review);
   if (reviewOverrideKey) adminReviewWarningOverrides[reviewOverrideKey] = warningOverrides;
@@ -28904,7 +28961,7 @@ function renderAdminReviewPanel(review) {
             ${generatedDecisionReason ? `<button onclick="useAdminGeneratedDecisionReason()" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Use Suggested Reason</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" data-identity-approve-prefix="admin-review" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
             ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" data-price-approve-prefix="admin-review" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" ${sourcedCandidateOverrideReady && (!priceConfirmationRequired || priceConfirmationOpen) ? "" : "disabled"} class="${sourcedCandidateOverrideReady && (!priceConfirmationRequired || priceConfirmationOpen) ? "bg-blue-700 hover:bg-blue-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Found Online</button>` : ""}
-            <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
+            <button data-reject-button="admin-review" onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg}, { ui_control: 'admin_review_reject_button' })" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
           </div>
           <div class="hidden mt-3" data-approval-blocker-host></div>
           ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">${isSourcedCandidate ? (sourcedCandidateOverrideReady ? "Standard approval has unresolved owner-flow checks. Use Approve Found Online after source review, or use the human-verified override shown if the server blocks approval." : "Found-online approval needs a reviewed location. If the server blocks approval, the full reason and human-verified override will appear here.") : "Approval checks are advisory for authenticated human reviewers. If the server blocks approval, the full reason and human-verified override will appear here."}</div>`}
@@ -29250,7 +29307,8 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   const locationReclassificationConfirmed = document.getElementById("admin-review-location-reclassification-confirm")?.checked === true;
   const locationConfirmation = adminReviewHumanLocationConfirmation();
   if (normalizedStatus === "rejected") moderationApplyRejectionReasonPreset("admin-review");
-  let moderationReason = (document.getElementById("admin-review-reason")?.value || listing?.extra_fields?.moderation_reason || "").trim();
+  // C2 addendum: a reject never falls back to the listing's stored status note.
+  let moderationReason = (document.getElementById("admin-review-reason")?.value || (normalizedStatus === "rejected" ? "" : listing?.extra_fields?.moderation_reason) || "").trim();
   const reviewNotes = (document.getElementById("admin-review-notes")?.value || "").trim();
   const checklist = getAdminReviewChecklistFromDom();
   const structuredRejectionReasons = moderationSelectedRejectionReasons("admin-review");
@@ -29274,6 +29332,18 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
       toast("Rejection reason is required.");
       return;
     }
+  }
+  if (normalizedStatus === "rejected") {
+    if (!rejectClickIsExplicit()) {
+      toast("Reject needs a click on the Reject button.");
+      return;
+    }
+    if (isDefaultStatusNoteText(moderationReason, adminActiveReview || listing || {})) {
+      toast("Type the reason for rejecting this listing. Its status note isn't a rejection reason.");
+      document.getElementById("admin-review-reason")?.focus();
+      return;
+    }
+    if (!confirmRejectClick(`admin:${backendId || localId}`, '[data-reject-button="admin-review"]')) return;
   }
 
   listing.status = normalizedStatus;
@@ -29318,6 +29388,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
         headers: adminAuthHeaders(),
 	        body: {
 	          ...statusOptions,
+	          ...(normalizedStatus === "rejected" ? { reject_confirmed: true, ui_control: options.ui_control || "admin_listing_status" } : {}),
 	          fast_admin_render: true,
 	          manual_notification_only: ["approved", "rejected"].includes(normalizedStatus),
 	          status: normalizedStatus,
@@ -34298,6 +34369,22 @@ function openFoundOnlineSourceVideoPlayer(encodedUrl = "", encodedPlatform = "")
   return false;
 }
 
+// C2: with clickToPlay the card shows a Play button and the player is only
+// created on click (TikTok/YouTube iframes are heavy; the staff preview used
+// to create every one on each render). Closing the modal destroys it.
+function videoPlayerSlotHtml(playerHtml, options = {}) {
+  if (!options.clickToPlay) return playerHtml;
+  return `<button type="button" data-video-click-to-play="true" data-player="${adminAttr(playerHtml)}" onclick="playVideoEmbed(this)" class="flex h-full min-h-[220px] w-full flex-col items-center justify-center gap-2 bg-slate-900 text-white hover:bg-slate-800"><i class="fas fa-play-circle text-4xl"></i><span class="text-sm font-black">${translateListingLabel("Play video")}</span></button>`;
+}
+
+function playVideoEmbed(button) {
+  const slot = button?.parentElement;
+  const html = button?.getAttribute("data-player") || "";
+  if (!slot || !html) return false;
+  slot.innerHTML = html;
+  return true;
+}
+
 function renderVideoEmbedCard(url, options = {}) {
   const safeUrl = String(url || "").trim();
   if (!/^https?:\/\//i.test(safeUrl)) return "";
@@ -34317,7 +34404,7 @@ function renderVideoEmbedCard(url, options = {}) {
           <a href="${adminAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-red-700 hover:underline">${translateListingLabel("Open YouTube")}</a>
         </div>
         <div class="aspect-video bg-black">
-          <iframe src="${adminAttr(embedUrl)}" title="Property video tour" class="w-full h-full" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+          ${videoPlayerSlotHtml(`<iframe src="${adminAttr(embedUrl)}" title="Property video tour" class="w-full h-full" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`, options)}
         </div>
       </div>
     `;
@@ -34332,8 +34419,8 @@ function renderVideoEmbedCard(url, options = {}) {
           </div>
           <a href="${adminAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-pink-700 hover:underline">${translateListingLabel("Open TikTok")}</a>
         </div>
-        <div class="bg-black min-h-[520px]">
-          <iframe src="${adminAttr(tiktokEmbedUrl)}" title="TikTok property source video" class="w-full min-h-[520px]" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        <div class="bg-black ${options.clickToPlay ? "" : "min-h-[520px]"}">
+          ${videoPlayerSlotHtml(`<iframe src="${adminAttr(tiktokEmbedUrl)}" title="TikTok property source video" class="w-full min-h-[520px]" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`, options)}
         </div>
       </div>
     `;
@@ -34349,9 +34436,9 @@ function renderVideoEmbedCard(url, options = {}) {
           <a href="${adminAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-sky-700 hover:underline">${translateListingLabel("Open video")}</a>
         </div>
         <div class="aspect-video bg-black">
-          <video controls preload="metadata" playsinline class="w-full h-full object-contain" aria-label="${adminAttr(title)}">
+          ${videoPlayerSlotHtml(`<video controls ${options.clickToPlay ? "autoplay" : ""} preload="metadata" playsinline class="w-full h-full object-contain" aria-label="${adminAttr(title)}">
             <source src="${adminAttr(safeUrl)}" type="video/mp4">
-          </video>
+          </video>`, options)}
         </div>
       </div>
     `;

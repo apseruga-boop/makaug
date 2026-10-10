@@ -90,7 +90,7 @@ test('the refresh path caches the merged payload instead of throwing on a partia
 test('PATCH /review and every other successful staff write clear the staff caches', () => {
   const src = read('routes/staff.js');
   const start = src.indexOf("router.patch('/properties/:id/review'");
-  assert.match(src.slice(start, start + 1600), /clearStaffFastDashboardCache\(\);/);
+  assert.match(src.slice(start, start + 2400), /clearStaffFastDashboardCache\(\);/);
   assert.match(src, /if \(\['GET', 'HEAD', 'OPTIONS'\]\.includes\(req\.method\) \|\| STAFF_WRITE_CACHE_EXEMPT\.test\(req\.path\)\) return next\(\);/);
 });
 

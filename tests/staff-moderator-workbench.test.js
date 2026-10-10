@@ -353,7 +353,7 @@ function run() {
   assert(staffApproveBody.includes('staffApiRequestWithTimeout(statusPath'), 'staff status writes should use the bounded request helper');
   assert(app.includes('queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary: true })'), 'staff approval should defer dashboard refresh after the write');
   assert(app.includes('async function refreshPublicOpportunitySummary'), 'staff approval refresh should not throw a missing public summary helper');
-  assert(app.includes('Choose a rejection reason or add a rejection message first.'), 'staff rejection should require a structured reason or visible decision message');
+  assert(app.includes("Type the reason for rejecting this listing (its status note isn't a rejection reason), or choose one above."), 'staff rejection should require a typed reason or a chosen one (C2 addendum)');
   assert(app.includes('moderationStructuredReasonControlsHtml("staff-preview")'), 'staff rejection should expose structured rejection reasons in the preview panel');
   assert(app.includes('Add a Decision reason in the review panel before rejecting.'), 'queue-card rejection should open the review panel instead of prompting');
   assert(!app.includes('window.prompt("Why is this listing being rejected?"'), 'staff rejection should not use a blocking native prompt');
