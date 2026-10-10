@@ -8874,6 +8874,8 @@ router.get('/agents', async (req, res, next) => {
         a.fee_offer_mode,
         a.fee_offer_reason,
         a.fee_offer_until,
+        a.fee_exempt_until,
+        a.trial_ends_at,
         a.billing_plan,
         a.monthly_fee_ugx,
         a.welcome_sent_at,
