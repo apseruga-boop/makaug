@@ -578,7 +578,9 @@ function lastVideoError(reportId) {
 function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
   // Lazily required: the welcome service reaches into the report services, and
   // pulling it in at module load would close the circle.
-  const network = require('./agentWelcomeService').networkAudience();
+  const welcome = require('./agentWelcomeService');
+  const network = welcome.networkAudience();
+  const onTrial = !!welcome.trialTerms(agent);
   const firstName = agentGreetingName(agent, 'there');
   const initials = String(agent.full_name || 'M A').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const countries = (Array.isArray(stats.top_countries) ? stats.top_countries : []).slice(0, 4);
@@ -632,7 +634,7 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
     return r;
   } });
 
-  statement(2.3, [
+  statement(2.0, [
     { text: `Heading for ${network.target.toLocaleString('en-GB')}`, size: 42, weight: 900 },
     { text: 'a month', size: 42, weight: 900, fill: K.orange }
   ], { sub: `by the end of ${network.target_month}` });
@@ -640,7 +642,7 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
   scenes.push({ dur: 3.2, draw: (lt, t, d) => {
     const e = out(lt, d);
     const r = [globe(360, 400, 240, 0.9 * clamp01(lt / 0.4)),
-      bubble(360, 105, [{ text: 'Built for Ugandans everywhere', size: 30, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
+      bubble(360, 105, [{ text: `${network.countries}+ countries and growing`, size: 30, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
     const spots = [[330, 250, 'left', 95], [395, 380, 'right', 640], [330, 505, 'left', 90], [400, 630, 'right', 645]];
     const fallback = [{ code: 'GB', name: 'UK' }, { code: 'AE', name: 'UAE' }, { code: 'US', name: 'USA' }, { code: 'KE', name: 'Kenya' }];
     (countries.length ? countries : fallback).slice(0, 4).forEach((c, i) => {
@@ -652,12 +654,12 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
     return r;
   } });
 
-  statement(2.0, [{ text: 'Diaspora buyers', size: 46, weight: 900 }, { text: 'shop from abroad', size: 40, weight: 900, fill: K.orange }], { sub: 'they buy before they land' });
-  statement(2.0, [{ text: 'In 9 languages', size: 48, weight: 900 }], { sub: 'English · Luganda · Swahili · Arabic…', fill: K.peach });
-  statement(2.0, [{ text: 'Made for investors', size: 44, weight: 900 }], { sub: 'off plan · buy to let · mortgage finder' });
-  statement(2.0, [{ text: 'Your number.', size: 44, weight: 900 }, { text: 'Your deal.', size: 44, weight: 900, fill: K.orange }], { sub: 'buyers call you — no commission' });
+  statement(1.8, [{ text: 'Diaspora buyers', size: 46, weight: 900 }, { text: 'shop from abroad', size: 40, weight: 900, fill: K.orange }], { sub: 'they buy before they land' });
+  statement(1.8, [{ text: 'In 9 languages', size: 48, weight: 900 }], { sub: 'English · Luganda · Swahili · Arabic…', fill: K.peach });
+  statement(1.6, [{ text: 'Made for investors', size: 44, weight: 900 }], { sub: 'off plan · buy to let · mortgage finder' });
+  statement(1.8, [{ text: 'Your number.', size: 44, weight: 900 }, { text: 'Your deal.', size: 44, weight: 900, fill: K.orange }], { sub: 'buyers call you — no commission' });
 
-  scenes.push({ dur: 2.8, draw: (lt, t, d) => {
+  scenes.push({ dur: 2.6, draw: (lt, t, d) => {
     const e = out(lt, d);
     const r = [
       avatar(360, 220, 72, initials, K.orange, pop(lt, 0.05, e)),
@@ -667,6 +669,9 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
     r.push(bubble(360, 625, [{ text: 'Share it. Get found.', size: 30, weight: 800 }], { scale: pop(lt, 0.85, e) }));
     return r;
   } });
+
+  // The free period is told here, in the film, and nowhere in the written message.
+  if (onTrial) statement(2.2, [{ text: 'Your first 14 days', size: 44, weight: 900 }, { text: 'are free', size: 52, weight: 900, fill: K.orange }], { sub: 'post, get found, get buyers', fill: K.yellow });
 
   scenes.push({ dur: 2.2, draw: (lt) => {
     const sc = pop(lt, 0.05, Infinity, 0.45);

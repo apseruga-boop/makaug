@@ -40,6 +40,12 @@ function feeConfig() {
   };
 }
 
+/** Free days a new agent gets before the monthly fee starts (decision of 10 Oct 2026). */
+function agentTrialDays() {
+  const days = Math.round(Number(process.env.AGENT_TRIAL_DAYS || 14));
+  return Number.isFinite(days) && days >= 1 && days <= 366 ? days : 14;
+}
+
 function kampalaDate(date = new Date()) {
   return new Date(date.getTime() + 3 * 3600 * 1000).toISOString().slice(0, 10);
 }
@@ -635,6 +641,7 @@ module.exports = {
   addDays,
   addMonths,
   agentFeeRequired,
+  agentTrialDays,
   normalizeEntry,
   recordAgentPayment,
   recordEntry,

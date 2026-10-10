@@ -7,14 +7,17 @@
  * From a team number, a message to the makaug WhatsApp starting with one of
  * these words is a command, not a customer message:
  *
- *   NEW AGENT Jane Nakato 0772123456   → creates the pending agent (if new),
- *                                         WhatsApps them a pay link, and
- *                                         replies with the link to forward
+ *   NEW AGENT Jane Nakato 0772123456   → creates the agent (if new) and takes them
+ *                                         live on a 14-day free trial: welcome
+ *                                         pack out, reminders and follow-up
+ *                                         scheduled (from 10 Oct 2026; before
+ *                                         that it sent a pay link first)
  *   PAY LINK 0772123456                → sends that agent or private lister
  *                                         their pay link
  *   STATUS 0772123456                  → paid? link opened? waiting?
  *   APPROVE 0772123456                 → approves a pending agent once paid
  *                                         (welcome pack goes out as usual)
+ *   TRIALS                             → agents on the free trial: ending soon, unpaid
  *   PAYMENT HELP                       → this list
  *
  * Team numbers are the billing "confirmers" (Sales & Revenue › Settings) plus
@@ -27,7 +30,7 @@ const billingOps = require('./billingOpsService');
 const payLinks = require('./payLinkService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
-const COMMAND = /^\s*(new\s+agent|add\s+agent|pay\s*link|paylink|status|paid\??|approve|payment\s+help|pay\s+help)\b[\s:,-]*(.*)$/is;
+const COMMAND = /^\s*(new\s+agent|add\s+agent|pay\s*link|paylink|status|paid\??|approve|trials?|payment\s+help|pay\s+help)\b[\s:,-]*(.*)$/is;
 
 function digits(value) {
   return String(value || '').replace(/\D+/g, '');
@@ -110,7 +113,10 @@ function help() {
     '💳 *Payment commands* (team only)',
     '',
     '*NEW AGENT* Jane Nakato 0772123456',
-    '→ sets them up as a pending agent and WhatsApps them their pay link',
+    `→ makes them a live agent on a ${revenue.agentTrialDays()}-day free trial, sends their welcome pack, then follows up for payment`,
+    '',
+    '*TRIALS*',
+    '→ every agent on a free trial: who ends soon, who has not paid',
     '',
     '*PAY LINK* 0772123456',
     '→ sends an agent or private lister their pay link again',
@@ -125,6 +131,29 @@ function help() {
   ].join('\n');
 }
 
+/** Approve through the admin route itself, so the account, welcome pack and checks are identical. */
+async function approveThroughAdmin(agent, actor, feeOverride) {
+  const key = process.env.ADMIN_API_KEY;
+  if (!key) return { ok: false, error: 'Approving from WhatsApp is not set up on the server (no admin key). Please approve in Admin › Agents.' };
+  const port = process.env.PORT || '8080';
+  const response = await fetch(`http://127.0.0.1:${port}/api/admin/agents/${agent.id}/status`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', 'x-api-key': key, 'x-makaug-actor': actor },
+    body: JSON.stringify(feeOverride ? { status: 'approved', fee_override: feeOverride } : { status: 'approved' })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.ok === false) {
+    logger.warn('WhatsApp approve failed', { agentId: agent.id, status: response.status, error: data.error || data.message });
+    return { ok: false, error: data.message || data.error || String(response.status) };
+  }
+  return { ok: true, data: data.data || {} };
+}
+
+function dayLabel(iso) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
 async function newAgent(db, rest, actor) {
   const phone = findPhoneInText(rest);
   if (!phone) return 'Send it like this: *NEW AGENT* Jane Nakato 0772123456';
@@ -134,26 +163,45 @@ async function newAgent(db, rest, actor) {
   if (!agent) {
     if (name.length < 2) return `I don't have an agent on ${pretty(phone)} yet. Add their name: *NEW AGENT* Jane Nakato ${pretty(phone)}`;
     agent = (await db.query(
-      `INSERT INTO agents (full_name, phone, whatsapp, licence_number, registration_status, status, verification_reason)
-       VALUES ($1, $2, $2, $3, 'not_registered', 'pending', $4)
+      `INSERT INTO agents (full_name, phone, whatsapp, licence_number, registration_status, status, verification_reason, registered_by_phone)
+       VALUES ($1, $2, $2, $3, 'not_registered', 'pending', $4, $5)
        RETURNING id, full_name, phone, whatsapp, status, paid_until, fee_exempt, paid_awaiting_approval_at`,
-      [name, phone, `PENDING-${Date.now()}`, `Set up on WhatsApp by ${actor}`]
+      [name, phone, `PENDING-${Date.now()}`, `Set up on WhatsApp by ${actor}`, digits(actor)]
     )).rows[0];
     created = true;
   }
   if (String(agent.status) === 'approved' && !agent.billing_suspended_at) {
     return `${agent.full_name} (${pretty(phone)}) is already an approved agent. To send their monthly link: *PAY LINK* ${pretty(phone)}`;
   }
-  const { url, link } = await payLinks.createPayLink(db, { purpose: 'agent_subscription', agent_id: agent.id }, actor);
-  const sent = await payLinks.sendPayLink(db, { code: link.code, to: phone, actor }).catch((error) => ({ status: 'failed', reason: error.message }));
+  if (agent.fee_exempt) return `${agent.full_name} joined before the monthly fee, so they list for free. Approve them with *APPROVE ${pretty(phone)}*.`;
+
+  // New agents go live straight away on a free trial; the money follows.
+  const days = revenue.agentTrialDays();
+  const ends = revenue.addDays(revenue.kampalaDate(), days - 1);
+  const result = await approveThroughAdmin(agent, actor, revenue.agentFeeRequired(agent)
+    ? { mode: 'free_period', days, reason: `New agent ${days}-day free trial — signed up by ${actor}` }
+    : null);
+  if (!result.ok) {
+    return `${created ? `Set up ${agent.full_name} (${pretty(phone)}) but` : `Couldn't go live for ${agent.full_name}:`} ${result.error}`;
+  }
+  const welcome = result.data.welcome;
+  const settings = await billingOps.getSettings(db).catch(() => ({}));
+  const remindOn = revenue.addDays(ends, -Math.max(1, Number(settings.agent_fee?.remind_days_before || 3)));
   return [
-    created ? `✅ *${agent.full_name}* set up as a pending agent (${pretty(phone)}).` : `*${agent.full_name}* (${pretty(phone)}) is already on file — ${agent.status}.`,
+    `✅ *${agent.full_name}* (${pretty(phone)}) is live on a ${days}-day free trial, ending ${dayLabel(ends)}.`,
+    welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.',
     '',
-    `Pay link (${billingOps.ugx(link.amount_ugx)}, card or MoMo): ${sentWord(sent)}`,
-    url,
-    '',
-    `I'll message you here when they pay. Then finish their checks and reply *APPROVE ${pretty(phone)}*.`
+    `I'll remind them on ${dayLabel(remindOn)}, WhatsApp you the moment they pay, and list them under *TRIALS* if they are still unpaid after ${dayLabel(ends)}.`
   ].join('\n');
+}
+
+async function trials(db) {
+  const rows = await billingOps.listAgentTrials(db);
+  if (!rows.length) return 'No agents are on a free trial right now.';
+  const order = { overdue: 0, taken_down: 0, ending_soon: 1, on_trial: 2 };
+  const sorted = [...rows].sort((a, b) => (order[a.state] ?? 3) - (order[b.state] ?? 3) || a.ends.localeCompare(b.ends));
+  return ['📋 *Agents on a free trial*', '', ...sorted.slice(0, 30).map(billingOps.formatTrialLine), '',
+    'To chase one: *PAY LINK* 0772123456. Paid agents drop off this list.'].join('\n');
 }
 
 async function sendLink(db, rest, actor) {
@@ -222,28 +270,16 @@ async function approve(db, rest, actor) {
   if (agent.status === 'approved') return `${agent.full_name} is already approved.`;
   // Not paid yet: approve the usual way — welcome pack first, then the pay link.
   const unpaid = revenue.agentFeeRequired(agent);
-  // Use the admin approval itself, so the account, welcome pack and checks are identical.
-  const key = process.env.ADMIN_API_KEY;
-  if (!key) return 'Approving from WhatsApp is not set up on the server (no admin key). Please approve in Admin › Agents.';
-  const port = process.env.PORT || '8080';
-  const response = await fetch(`http://127.0.0.1:${port}/api/admin/agents/${agent.id}/status`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json', 'x-api-key': key, 'x-makaug-actor': actor },
-    body: JSON.stringify(unpaid
-      ? { status: 'approved', fee_override: { mode: 'pay_later', reason: 'Approved on WhatsApp — welcome pack, then the payment link' } }
-      : { status: 'approved' })
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.ok === false) {
-    logger.warn('WhatsApp approve failed', { agentId: agent.id, status: response.status, error: data.error || data.message });
-    return `Couldn't approve ${agent.full_name}: ${data.message || data.error || response.status}. Please do it in Admin › Agents.`;
-  }
-  const welcome = data.data?.welcome;
-  const feeLink = data.data?.fee_link;
+  const days = revenue.agentTrialDays();
+  const result = await approveThroughAdmin(agent, actor, unpaid
+    ? { mode: 'free_period', days, reason: `New agent ${days}-day free trial — approved on WhatsApp by ${actor}` }
+    : null);
+  if (!result.ok) return `Couldn't approve ${agent.full_name}: ${result.error}. Please do it in Admin › Agents.`;
+  const welcome = result.data.welcome;
   return [
     `✅ *${agent.full_name}* is approved.`,
     welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.',
-    unpaid ? (feeLink?.sent ? 'Payment link sent to them too — I will tell you when it is paid.' : `Payment link NOT sent (${feeLink?.error || feeLink?.reason || 'unknown'}). Send it: *PAY LINK ${pretty(phone)}*`) : ''
+    unpaid ? `On a ${days}-day free trial. I'll remind them before it ends and tell you when they pay (*TRIALS* shows the list).` : ''
   ].filter(Boolean).join('\n');
 }
 
@@ -257,12 +293,14 @@ async function handleTeamBillingCommand(db, { phone, body = '' } = {}) {
   // "status" and "approve" are ordinary words: only treat them as commands
   // when a phone number follows, so other team conversations are untouched.
   if (/^(status|paid|approve)/.test(word) && !findPhoneInText(rest)) return null;
+  if (/^trial/.test(word) && rest) return null; // only the bare word TRIALS is a command
   const actor = `whatsapp:${digits(phone)}`;
   try {
     if (word.startsWith('new') || word.startsWith('add')) return await newAgent(db, rest, actor);
     if (word.startsWith('pay link') || word.startsWith('paylink')) return await sendLink(db, rest, actor);
     if (word.startsWith('status') || word.startsWith('paid')) return await status(db, rest);
     if (word === 'approve') return await approve(db, rest, actor);
+    if (word.startsWith('trial')) return await trials(db);
     return help();
   } catch (error) {
     logger.warn('Team billing command failed', { word, error: error.message });

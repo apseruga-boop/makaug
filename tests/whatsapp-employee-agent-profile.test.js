@@ -157,22 +157,17 @@ test('the Quickway mistake can be corrected without restarting the batch', async
     data = saved;
 
     const ready = await at('employee_intake_confirm', '1', data);
-    // A brand-new agent owes the monthly fee, so the employee is asked once —
-    // here, while they are still with them — whether the payment link should go
-    // out on approval. Approval can be days later, and whoever approves will not
-    // know what was agreed on the doorstep.
-    assert.strictEqual(ready.nextStep, 'employee_agent_pay_link');
+    // From 10 Oct 2026 a brand-new agent starts on a free trial, so there is no
+    // payment question on the doorstep: the employee is told, and the batch
+    // carries on straight to the property count.
+    assert.strictEqual(ready.nextStep, 'employee_property_count');
+    assert.match(ready.message, /gets 14 days free/);
     assert.match(ready.message, /UGX 50,000 a month/);
     assert.deepStrictEqual(insertedAgents, [{
       fullName: 'Quickway Auctioneers',
       company: 'Quickway Auctioneers & Court Bailiffs',
       phone: '+256750925959'
     }], 'confirming must leave exactly one pending agent for staff to approve');
-
-    data = saved;
-    const priced = await at('employee_agent_pay_link', '1', data);
-    assert.strictEqual(priced.nextStep, 'employee_property_count',
-      'and then the batch carries on exactly where it used to');
   } finally {
     db.query = originalQuery;
     db.getClient = originalGetClient;

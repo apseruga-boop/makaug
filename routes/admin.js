@@ -9958,6 +9958,16 @@ router.post('/agents/:id/restore', async (req, res, next) => {
 });
 
 // --- Sales & revenue ---------------------------------------------------------
+// New agents on the free trial: who ends when, who has not paid, who is closed.
+router.get('/revenue/agent-trials', async (req, res, next) => {
+  try {
+    const rows = await billingOps.listAgentTrials(db, { includeClosed: req.query.include_closed === 'true' });
+    return res.json({ ok: true, data: { trial_days: revenue.agentTrialDays(), agents: rows } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/revenue/summary', async (req, res, next) => {
   try {
     const [summary, settings, claims, listers, links, awaiting, linkStats] = await Promise.all([
@@ -10417,7 +10427,15 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       )).rows[0];
       if (!beforeApproval) return res.status(404).json({ ok: false, error: 'Agent not found' });
       if (beforeApproval.removed_at) return res.status(409).json({ ok: false, error: 'This agent was removed. Restore them first.' });
-      const feeOverride = req.body.fee_override && typeof req.body.fee_override === 'object' ? req.body.fee_override : null;
+      let feeOverride = req.body.fee_override && typeof req.body.fee_override === 'object' ? req.body.fee_override : null;
+      // From 10 Oct 2026 a new agent with no payment recorded starts on the free
+      // trial (14 days) instead of being refused. Someone who pays up front still
+      // goes the payment route, and `require_payment: true` keeps the old rule.
+      if (!feeOverride && !(req.body.payment && typeof req.body.payment === 'object') && req.body.require_payment !== true
+        && revenue.agentFeeRequired(beforeApproval)) {
+        const days = revenue.agentTrialDays();
+        feeOverride = { mode: 'free_period', days, reason: `New agent ${days}-day free trial` };
+      }
       if (feeOverride && revenue.agentFeeRequired(beforeApproval)) {
         // Approve without a payment, on purpose: an offer, pay later, or waived.
         const mode = String(feeOverride.mode || '').trim().toLowerCase();

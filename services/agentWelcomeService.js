@@ -49,7 +49,7 @@ async function computePlatformStats({ force = false } = {}) {
        FROM analytics_events
        WHERE event_name = 'property_open' AND country_code IS NOT NULL
          AND created_at >= NOW() - INTERVAL '30 days'
-       GROUP BY 1 ORDER BY 2 DESC LIMIT 8`
+       GROUP BY 1 ORDER BY 2 DESC LIMIT 20`
     ), { rows: [] })
   ]);
 
@@ -67,8 +67,8 @@ async function computePlatformStats({ force = false } = {}) {
     views_30d: toInt(traffic.rows[0]?.views),
     visitors_30d: toInt(traffic.rows[0]?.visitors),
     countries_count: countryRows.length,
-    top_countries: countryRows.slice(0, 6),
-    diaspora_countries: countryRows.filter((c) => c.code !== 'UG').slice(0, 5)
+    top_countries: countryRows.slice(0, 12),
+    diaspora_countries: countryRows.filter((c) => c.code !== 'UG').slice(0, 10)
   };
   statsCache = { at: Date.now(), value };
   return value;
@@ -76,7 +76,8 @@ async function computePlatformStats({ force = false } = {}) {
 
 async function fetchAgent(agentId) {
   const result = await db.query(
-    `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, status, created_at
+    `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, status, created_at,
+            fee_offer_mode, fee_offer_until, fee_offer_at, paid_until, fee_exempt
      FROM agents WHERE id = $1 LIMIT 1`,
     [agentId]
   );
@@ -141,14 +142,43 @@ const VERTICALS = 'Rent · Buy · Land · Commercial · Students · Off Plan · 
 function networkAudience() {
   const monthly = toInt(process.env.NETWORK_MONTHLY_VISITORS || 10000) || 10000;
   const target = toInt(process.env.NETWORK_MONTHLY_VISITORS_TARGET || 20000) || 20000;
-  const countries = toInt(process.env.NETWORK_COUNTRIES || 7) || 7;
+  const countries = toInt(process.env.NETWORK_COUNTRIES || 30) || 30;
   return { monthly, target, countries, target_month: targetMonthName() };
 }
 
 /** "the end of October" — computed, so the promise never names a month that has been and gone. */
+// Countries our social channels are reaching beyond what the site's own
+// analytics has counted yet. Arthur's list, 10 Oct 2026; override without a deploy.
+function networkExtraCountries() {
+  return String(process.env.NETWORK_EXTRA_COUNTRIES || 'Canada, South Africa, Germany, Sweden, Switzerland')
+    .split(',').map((n) => n.trim()).filter(Boolean);
+}
+
 function targetMonthName(now = new Date()) {
   const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   return next.toLocaleString('en-GB', { month: 'long', timeZone: 'UTC' });
+}
+
+function shortDay(iso) {
+  const d = new Date(`${String(iso || '').slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+// An agent approved with a free period (new agents get 14 days, decided 10 Oct
+// 2026). Null for everyone else, so the welcome for an agent who is not on a
+// trial reads exactly as before.
+function trialTerms(agent = {}) {
+  if (agent.fee_offer_mode !== 'free_period' || !agent.fee_offer_until) return null;
+  const revenue = require('./revenueService');
+  const ends = revenue.isoDay(agent.fee_offer_until);
+  if (!ends) return null;
+  const start = agent.fee_offer_at ? revenue.kampalaDate(new Date(agent.fee_offer_at)) : revenue.kampalaDate();
+  return {
+    start: shortDay(start),
+    ends: shortDay(ends),
+    first_due: shortDay(revenue.addDays(ends, 1)),
+    fee: Number(revenue.feeConfig().feeUgx || 50000).toLocaleString('en-US')
+  };
 }
 
 function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
@@ -183,10 +213,13 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
 
   const scale = [];
   if (stats.live_listings) scale.push(`• ${nfmt(stats.live_listings)} live listings`);
-  scale.push(`• ${nfmt(network.monthly)}+ people a month searching across our platforms, from ${nfmt(network.countries)} countries`);
-  scale.push(`• On track for ${nfmt(network.target)} a month by the end of ${network.target_month}`);
-  if (toInt(stats.agents) >= 25) scale.push(`• ${nfmt(stats.agents)} agents and brokers already listing`);
+  scale.push(`• ${nfmt(network.monthly)}+ people a month searching across our platforms`);
+  scale.push(`• Visitors from ${nfmt(network.countries)}+ countries, and the list grows every month`);
+  // visitors_30d is deliberately not listed: a makaug-only head count next to the
+  // network figure reads as two answers to the same question.
   if (stats.views_30d) scale.push(`• ${nfmt(stats.views_30d)} listing views on makaug in the last 30 days`);
+  if (toInt(stats.agents) >= 25) scale.push(`• ${nfmt(stats.agents)} agents and brokers already listing`);
+  scale.push(`• On track for ${nfmt(network.target)} a month by the end of ${network.target_month}`);
   lines.push('');
   lines.push('*The audience you just joined*');
   lines.push(...scale);
@@ -195,12 +228,15 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   // stats, a code we have no name for must not reach an agent dressed as a
   // country. "Ugandans abroad are searching from BR, BD" is not a sentence we
   // send anyone.
-  const diaspora = (Array.isArray(stats.diaspora_countries) ? stats.diaspora_countries : [])
-    .filter((c) => c && c.name && String(c.name) !== String(c.code));
+  const live = (Array.isArray(stats.diaspora_countries) ? stats.diaspora_countries : [])
+    .filter((c) => c && c.name && String(c.name) !== String(c.code))
+    .map((c) => c.name);
+  const seen = new Set(live.map((n) => n.toLowerCase()));
+  const where = [...live, ...networkExtraCountries().filter((n) => !seen.has(n.toLowerCase()))].slice(0, 12);
   lines.push('');
   lines.push('*Built for the diaspora*');
-  if (diaspora.length) {
-    lines.push(`Ugandans abroad are searching from ${diaspora.map((c) => c.name).slice(0, 4).join(', ')} and beyond — they find your listing before they land.`);
+  if (where.length) {
+    lines.push(`People are finding makaug from ${where.join(', ')} and more — across the site and our social channels (TikTok, Instagram, X, YouTube and LinkedIn). They find your listing before they land.`);
   } else {
     lines.push('Ugandans in the UK, UAE, USA and across East Africa buy and build at home — they search first, then send money or fly in.');
   }
@@ -211,7 +247,10 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push('• Your phone number sits on your listing — buyers call you directly');
   lines.push('• Buyers arrive from Google, our Ask AI search and our WhatsApp assistant');
   lines.push('• Video-first listings: a walk-through can sell to someone who is 6,000 km away');
-  lines.push('• Every listing gets its first 7 days free');
+  // The free trial is told in the welcome video only; the message says nothing
+  // about fees or free periods (Arthur, 10 Oct 2026). Agents who are not on a
+  // trial still read the 7-day line they always did.
+  if (!trialTerms(agent)) lines.push('• Every listing gets its first 7 days free');
   lines.push('• Built for investors too: off plan, buy-to-let and a mortgage finder');
   lines.push('• You get a weekly WhatsApp report: views, visitors, enquiries and the countries watching you');
 
@@ -250,7 +289,7 @@ function buildWelcomeCaption({ agent = {}, stats = {} } = {}) {
   const bits = [];
   if (stats.live_listings) bits.push(`${nfmt(stats.live_listings)} live listings`);
   bits.push(`${nfmt(network.monthly)}+ searchers a month`);
-  bits.push(`${nfmt(network.countries)} countries`);
+  bits.push(`${nfmt(network.countries)}+ countries`);
   lines.push(bits.join(' · '));
   lines.push('');
   lines.push('Enquiries on your properties come straight to this number.');
@@ -261,6 +300,7 @@ function buildWelcomeCaption({ agent = {}, stats = {} } = {}) {
 module.exports = {
   VERTICALS,
   networkAudience,
+  networkExtraCountries,
   targetMonthName,
   agentProfileUrl,
   buildShareCardCaption,
@@ -268,6 +308,7 @@ module.exports = {
   shareCardUrl,
   buildWelcomeCaption,
   buildWelcomeMessage,
+  trialTerms,
   buildWelcomePack,
   computePlatformStats
 };

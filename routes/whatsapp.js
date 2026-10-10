@@ -93,6 +93,7 @@ const {
   employeeRolePrompt,
   employeePitchContactPrompt,
   employeeAgentPayLinkPrompt,
+  employeeAgentTrialNotice,
   employeePayLinkWhoPrompt,
   employeePayLinkLookupPrompt,
   employeePayLinkProspectPrompt,
@@ -8650,11 +8651,21 @@ async function handleEmployeeWhatsappIntake({
     // still with them, because approval happens later and whoever approves will
     // not know what was agreed on the doorstep.
     if (data.employee_role === 'agent' && data.new_agent_created === true && data.agent?.id) {
-      await replaceEmployeeSession(phone, 'employee_agent_pay_link', data);
+      // New agents start on a free trial (10 Oct 2026), so there is no payment
+      // question any more. Record who brought them in, tell the employee, and
+      // carry on. Approval applies the trial by default.
+      await db.query(
+        `UPDATE agents
+            SET registered_by_phone = COALESCE(NULLIF($2, ''), registered_by_phone), updated_at = NOW()
+          WHERE id = $1`,
+        [data.agent.id, String(phone || '').replace(/\D/g, '')]
+      ).catch((error) => logger.warn('Agent sign-up employee not saved:', error.message || String(error)));
+      data.agent_pay_link_on_approval = null; // answered by policy: nothing to ask
+      await replaceEmployeeSession(phone, 'employee_property_count', data);
       return {
         handled: true,
-        nextStep: 'employee_agent_pay_link',
-        message: employeeAgentPayLinkPrompt(data.agent.full_name, agentMonthlyFeeLabel())
+        nextStep: 'employee_property_count',
+        message: `${employeeAgentTrialNotice(data.agent.full_name, require('../services/revenueService').agentTrialDays(), agentMonthlyFeeLabel())}\n\n${employeePropertyCountPrompt()}`
       };
     }
     await replaceEmployeeSession(phone, 'employee_property_count', data);
