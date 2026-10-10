@@ -90,6 +90,14 @@ async function payLinkFor(db, input) {
   }
 }
 
+/** Still inside the free trial the team gave them, and nothing paid beyond it. */
+function onFreeTrial(agent = {}) {
+  if (agent.fee_offer_mode !== 'free_period' || !agent.fee_offer_until) return false;
+  const until = revenue.isoDay(agent.fee_offer_until);
+  const paid = revenue.isoDay(agent.paid_until);
+  return Boolean(until) && (!paid || paid <= until);
+}
+
 function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '' } = {}) {
   const name = agentGreetingName(agent, 'there');
   const fee = Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || 50000);
@@ -100,6 +108,16 @@ function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '
     pay ? `Pay ${ugx(fee)} to ${pay}, then reply here with the *transaction ID* (or a screenshot of the payment).` : '',
     payLinkLine(payLink)
   ].filter(Boolean).join('\n');
+  if (onFreeTrial(agent) && (kind === 'pre_due' || kind === 'due_today')) {
+    const end = prettyDate(agent.fee_offer_until);
+    return [
+      `Hi ${name} 👋`, '',
+      kind === 'due_today' ? 'Your 2 free weeks on makaug end *today*.' : `Your 2 free weeks on makaug end on *${end}*.`,
+      `To keep your profile and listings live, the subscription is ${ugx(fee)} a month.`,
+      howToPay, '',
+      `Questions? ${help.name} on ${help.pretty}.`
+    ].filter((l, i, all) => l !== '' || all[i - 1] !== '').join('\n');
+  }
   switch (kind) {
     case 'pre_due':
       return [`Hi ${name} 👋`, '', (due ? `Your makaug agent subscription renews on *${due}*.` : `Your makaug agent subscription (${ugx(fee)} a month) is due.`), howToPay, '', 'Your profile and listings stay live without a break. Thank you for being with makaug!'].filter((l) => l !== '').join('\n');
@@ -126,7 +144,8 @@ async function deliver(to, body, kind, nonce) {
 async function loadAgent(db, agentId) {
   return (await db.query(
     `SELECT id, full_name, greeting_name, phone, whatsapp, status, paid_until, fee_exempt, monthly_fee_ugx,
-            billing_reminder_log, billing_suspended_at, billing_snapshot, removed_at
+            billing_reminder_log, billing_suspended_at, billing_snapshot, removed_at,
+            fee_offer_mode, fee_offer_until, fee_offer_at
        FROM agents WHERE id = $1::uuid`,
     [agentId]
   )).rows[0];
@@ -635,6 +654,95 @@ async function runListerDueReminders(db) {
   return { sent };
 }
 
+// --- Free-trial tracking -----------------------------------------------------
+// A new agent is approved with a free period (fee_offer_mode = 'free_period').
+// Their paid_until is the last free day, so the ordinary reminder, overdue,
+// final-reminder and take-down loop applies unchanged. A payment moves
+// paid_until past the trial end, and that is what "closed" means here.
+
+function trialState(row, today = revenue.kampalaDate(), remindDays = 3) {
+  const until = revenue.isoDay(row.fee_offer_until);
+  const paid = revenue.isoDay(row.paid_until);
+  if (row.billing_suspended_at) return 'taken_down';
+  if (paid && until && paid > until) return 'paid';
+  const left = Math.round((Date.parse(`${until}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+  if (left < 0) return 'overdue';
+  if (left <= remindDays) return 'ending_soon';
+  return 'on_trial';
+}
+
+async function listAgentTrials(db, { includeClosed = false } = {}) {
+  const settings = await getSettings(db).catch(() => ({}));
+  const remindDays = Math.max(1, Number(settings.agent_fee?.remind_days_before || 3));
+  const today = revenue.kampalaDate();
+  const rows = (await db.query(
+    `SELECT id, full_name, phone, whatsapp, status, paid_until, fee_exempt, fee_offer_until, fee_offer_at, fee_offer_by,
+            fee_offer_reason, billing_suspended_at, billing_reminder_log
+       FROM agents
+      WHERE fee_offer_mode = 'free_period' AND removed_at IS NULL AND NOT COALESCE(fee_exempt, false)
+      ORDER BY fee_offer_until ASC, full_name ASC`
+  )).rows;
+  const out = rows.map((row) => {
+    const ends = revenue.isoDay(row.fee_offer_until);
+    const state = trialState(row, today, remindDays);
+    return {
+      id: row.id,
+      name: row.full_name,
+      phone: row.whatsapp || row.phone,
+      signed_up_by: row.fee_offer_by || '',
+      started: row.fee_offer_at ? revenue.kampalaDate(new Date(row.fee_offer_at)) : '',
+      ends,
+      first_payment_due: ends ? revenue.addDays(ends, 1) : '',
+      remind_on: ends ? revenue.addDays(ends, -remindDays) : '',
+      days_left: Math.round((Date.parse(`${ends}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000),
+      paid_until: revenue.isoDay(row.paid_until),
+      state,
+      closed: state === 'paid'
+    };
+  });
+  return includeClosed ? out : out.filter((row) => !row.closed);
+}
+
+const TRIAL_STATE_LABEL = {
+  on_trial: 'on free trial',
+  ending_soon: 'trial ending soon',
+  overdue: '❗ unpaid after trial',
+  taken_down: '⛔ paused (unpaid)',
+  paid: '✅ paid'
+};
+
+function formatTrialLine(row) {
+  const left = row.days_left;
+  const when = row.state === 'overdue' || row.state === 'taken_down'
+    ? `ended ${prettyDate(row.ends)} (${Math.abs(left)} day${Math.abs(left) === 1 ? '' : 's'} ago)`
+    : `ends ${prettyDate(row.ends)} (${left} day${left === 1 ? '' : 's'} left)`;
+  return `• *${row.name}* ${row.phone ? `(${row.phone})` : ''} — ${TRIAL_STATE_LABEL[row.state] || row.state}, ${when}`;
+}
+
+function buildTrialDigest(rows = []) {
+  const urgent = rows.filter((row) => ['overdue', 'taken_down', 'ending_soon'].includes(row.state));
+  if (!urgent.length) return '';
+  const lines = ['📋 *Free-trial follow-ups*', ''];
+  const group = (title, list) => { if (list.length) lines.push(`*${title}*`, ...list.map(formatTrialLine), ''); };
+  group('Unpaid after the trial — chase today', urgent.filter((row) => ['overdue', 'taken_down'].includes(row.state)));
+  group('Trial ending in the next few days', urgent.filter((row) => row.state === 'ending_soon'));
+  const waiting = rows.filter((row) => row.state === 'on_trial').length;
+  if (waiting) lines.push(`${waiting} more agent${waiting === 1 ? ' is' : 's are'} still comfortably inside the free period.`);
+  lines.push('Reply *TRIALS* any time for the full list. A payment closes the loop and I will tell you here.');
+  return lines.join('\n').trim();
+}
+
+/** Daily, to the team: who is about to end, and who has not paid. */
+async function runTrialDigest(db) {
+  const rows = await listAgentTrials(db);
+  const body = buildTrialDigest(rows);
+  if (!body) return { sent: false, reason: 'nothing_to_follow_up' };
+  const desk = require('./leadDeskService');
+  if (typeof desk.sendToTeam !== 'function') return { sent: false, reason: 'no_team_channel' };
+  await desk.sendToTeam(db, body, 'agent_trial_follow_up');
+  return { sent: true, agents: rows.length };
+}
+
 let billingTimer = null;
 let lastBillingRunDay = '';
 function startBillingScheduler(db) {
@@ -646,9 +754,10 @@ function startBillingScheduler(db) {
     lastBillingRunDay = day;
     try {
       const agents = await runAgentFeeReminders(db);
+      const trials = await runTrialDigest(db).catch((error) => ({ error: error.message }));
       const listers = await runListerViewsMessages(db);
       const listersDue = await runListerDueReminders(db);
-      logger.info('Billing reminders run', { agents, listers, listersDue });
+      logger.info('Billing reminders run', { agents, trials, listers, listersDue });
     } catch (error) {
       logger.warn('Billing reminders failed', { error: error.message });
     }
@@ -668,6 +777,12 @@ module.exports = {
   takeDownAgentForBilling,
   reinstateAgentAfterPayment,
   runAgentFeeReminders,
+  onFreeTrial,
+  trialState,
+  listAgentTrials,
+  buildTrialDigest,
+  formatTrialLine,
+  runTrialDigest,
   daysOverdue,
   helpContact,
   readReferenceFromText,

@@ -292,6 +292,15 @@ function employeeAgentPayLinkPrompt(agentName = '', feeLabel = 'UGX 50,000') {
   return `\u{1F4B3} *Payment* \u2014 ${who} pays ${feeLabel} a month.\n\nShall I send them the payment link as soon as they are approved?\n\n1 \u2014 Yes, send it on approval\n2 \u2014 No, I will handle the payment myself`;
 }
 
+/**
+ * Since 10 Oct 2026 a new agent starts with a free trial, so there is nothing to
+ * ask on the doorstep any more. This is the note that replaces the question.
+ */
+function employeeAgentTrialNotice(agentName = '', days = 14, feeLabel = 'UGX 50,000') {
+  const who = String(agentName || '').trim() || 'This agent';
+  return `\u{1F381} *${who}* gets ${days} days free. They go live on the free trial as soon as a moderator approves them, and pay ${feeLabel} a month after that. I will remind them before it ends and tell you when they pay.`;
+}
+
 function parsePayLinkChoice(value = '') {
   return choice(value, {
     yes: ['1', 'yes', 'y', 'send', 'send it', 'ok', 'okay', 'yeah'],
@@ -501,6 +510,7 @@ module.exports = {
   employeeRolePrompt,
   employeePitchContactPrompt,
   employeeAgentPayLinkPrompt,
+  employeeAgentTrialNotice,
   employeePayLinkWhoPrompt,
   employeePayLinkLookupPrompt,
   employeePayLinkProspectPrompt,

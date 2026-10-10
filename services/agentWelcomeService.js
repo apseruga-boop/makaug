@@ -76,7 +76,8 @@ async function computePlatformStats({ force = false } = {}) {
 
 async function fetchAgent(agentId) {
   const result = await db.query(
-    `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, status, created_at
+    `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, status, created_at,
+            fee_offer_mode, fee_offer_until, fee_offer_at, paid_until, fee_exempt
      FROM agents WHERE id = $1 LIMIT 1`,
     [agentId]
   );
@@ -151,15 +152,50 @@ function targetMonthName(now = new Date()) {
   return next.toLocaleString('en-GB', { month: 'long', timeZone: 'UTC' });
 }
 
+function shortDay(iso) {
+  const d = new Date(`${String(iso || '').slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+// An agent approved with a free period (new agents get 14 days, decided 10 Oct
+// 2026). Null for everyone else, so the welcome for an agent who is not on a
+// trial reads exactly as before.
+function trialTerms(agent = {}) {
+  if (agent.fee_offer_mode !== 'free_period' || !agent.fee_offer_until) return null;
+  const revenue = require('./revenueService');
+  const ends = revenue.isoDay(agent.fee_offer_until);
+  if (!ends) return null;
+  const start = agent.fee_offer_at ? revenue.kampalaDate(new Date(agent.fee_offer_at)) : revenue.kampalaDate();
+  return {
+    start: shortDay(start),
+    ends: shortDay(ends),
+    first_due: shortDay(revenue.addDays(ends, 1)),
+    fee: Number(revenue.feeConfig().feeUgx || 50000).toLocaleString('en-US')
+  };
+}
+
 function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   const firstName = agentGreetingName(agent, 'there');
   const lines = [];
   lines.push('*Welcome to makaug.com*');
-  lines.push(`Hi ${firstName}, your agent account is live. Here is what you have joined.`);
+  lines.push(trialTerms(agent)
+    ? `Hi ${firstName}, your agent account is live, and your first 14 days are free.`
+    : `Hi ${firstName}, your agent account is live. Here is what you have joined.`);
   if (agent.makaug_agent_number) {
     lines.push('');
     lines.push(`Your Agent ID: *${agent.makaug_agent_number}*`);
     lines.push('Quote it whenever you contact the makaug team.');
+  }
+
+  const trial = trialTerms(agent);
+  if (trial) {
+    lines.push('');
+    lines.push('*Your 2 weeks free*');
+    lines.push(`• Free from today (${trial.start}) until ${trial.ends}`);
+    lines.push('• Post as many properties as you like; every buyer enquiry comes straight to your WhatsApp');
+    lines.push('• Nothing to pay today, no card needed');
+    lines.push(`• From ${trial.first_due} makaug is UGX ${trial.fee} a month. We will message you 3 days before with a simple link to pay by MoMo or card`);
+    lines.push('• If you decide not to continue, nothing is deleted and you can come back any time');
   }
 
   lines.push('');
@@ -211,7 +247,7 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push('• Your phone number sits on your listing — buyers call you directly');
   lines.push('• Buyers arrive from Google, our Ask AI search and our WhatsApp assistant');
   lines.push('• Video-first listings: a walk-through can sell to someone who is 6,000 km away');
-  lines.push('• Every listing gets its first 7 days free');
+  lines.push(trial ? '• Your first 14 days are completely free' : '• Every listing gets its first 7 days free');
   lines.push('• Built for investors too: off plan, buy-to-let and a mortgage finder');
   lines.push('• You get a weekly WhatsApp report: views, visitors, enquiries and the countries watching you');
 
@@ -268,6 +304,7 @@ module.exports = {
   shareCardUrl,
   buildWelcomeCaption,
   buildWelcomeMessage,
+  trialTerms,
   buildWelcomePack,
   computePlatformStats
 };
