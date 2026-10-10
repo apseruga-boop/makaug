@@ -16265,10 +16265,10 @@ async function openStaffListingPreview(propertyId) {
 }
 
 async function saveStaffListingPreview(propertyId, options = {}) {
-  const warningOverrides = options.prepareApproval === true
-    ? staffBuildReviewWarningOverrides(adminActiveReview)
-    : getAdminReviewWarningOverrides(adminActiveReview);
   try {
+    const warningOverrides = options.prepareApproval === true
+      ? staffBuildReviewWarningOverrides(adminActiveReview)
+      : getAdminReviewWarningOverrides(adminActiveReview);
     const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/review`, {
       method: "PATCH",
       body: {
@@ -27035,10 +27035,63 @@ function adminReviewSyncPricePeriods(preferredValue = "") {
   syncListingPricePeriodSelect("admin-review-price-period-edit", type, transaction, preferredValue);
 }
 
+function adminReviewEditRoot() {
+  return document.getElementById("staff-listing-preview-modal")
+    || document.getElementById("admin-review-content")
+    || document;
+}
+
+function adminReviewField(id) {
+  const root = document.getElementById("staff-listing-preview-modal")
+    || document.getElementById("admin-review-content");
+  return (root && root.querySelector(`[id="${id}"]`)) || document.getElementById(id);
+}
+
+function adminReviewCanonicalPriceDigits(value = "") {
+  return String(value ?? "").replace(/[^\d.]/g, "");
+}
+
+function adminReviewHasTypedCanonicalPrice(value = "") {
+  const n = Number(adminReviewCanonicalPriceDigits(value));
+  return Number.isFinite(n) && n > 1;
+}
+
+// A number input swallows the next click while its text is not a valid number,
+// so Save can look like it sent nothing. The canonical price is plain text.
+function adminReviewOnCanonicalPriceInput() {
+  const input = adminReviewField("admin-review-price-edit");
+  if (!adminReviewHasTypedCanonicalPrice(input?.value || "")) return;
+  const poa = adminReviewField("admin-review-price-on-application-edit");
+  if (poa) poa.checked = false;
+  const periodEl = adminReviewField("admin-review-price-period-edit");
+  if (periodEl && normalizeListingPricePeriodValue(periodEl.value) === "poa") {
+    const fallback = Array.from(periodEl.options || []).find((option) => normalizeListingPricePeriodValue(option.value) !== "poa");
+    if (fallback) periodEl.value = fallback.value;
+  }
+}
+
+function adminReviewOnPriceOnApplicationChange() {
+  const poa = adminReviewField("admin-review-price-on-application-edit");
+  if (!poa?.checked) return;
+  const input = adminReviewField("admin-review-price-edit");
+  if (input) input.value = "";
+  const periodEl = adminReviewField("admin-review-price-period-edit");
+  const poaOption = Array.from(periodEl?.options || []).find((option) => normalizeListingPricePeriodValue(option.value) === "poa");
+  if (poaOption && periodEl) periodEl.value = poaOption.value;
+}
+
 function adminReviewOnPricePeriodChange() {
-  const period = normalizeListingPricePeriodValue(document.getElementById("admin-review-price-period-edit")?.value || "");
-  const poa = document.getElementById("admin-review-price-on-application-edit");
-  if (poa) poa.checked = period === "poa";
+  const period = normalizeListingPricePeriodValue(adminReviewField("admin-review-price-period-edit")?.value || "");
+  const poa = adminReviewField("admin-review-price-on-application-edit");
+  if (period === "poa") {
+    if (poa) poa.checked = true;
+    const input = adminReviewField("admin-review-price-edit");
+    if (input) input.value = "";
+    return;
+  }
+  if (poa && adminReviewHasTypedCanonicalPrice(adminReviewField("admin-review-price-edit")?.value || "")) {
+    poa.checked = false;
+  }
 }
 
 function adminReviewOnListingTypeChange() {
@@ -28139,7 +28192,7 @@ function adminReviewListingEditPanel(review = {}) {
           <select id="admin-review-land-title-available-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${landTitleAvailabilityOptions}</select>
         </label>
         <label class="block text-xs font-bold text-gray-700">Canonical price (UGX)
-          <input id="admin-review-price-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price || "")}">
+          <input id="admin-review-price-edit" type="text" inputmode="decimal" autocomplete="off" oninput="adminReviewOnCanonicalPriceInput()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price || "")}" placeholder="Amount in Uganda shillings">
         </label>
         <label class="block text-xs font-bold text-gray-700">Source currency
           <select id="admin-review-price-currency-edit" onchange="adminReviewOnPriceCurrencyChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${priceCurrencyOptions}</select>
@@ -28154,7 +28207,7 @@ function adminReviewListingEditPanel(review = {}) {
           <select id="admin-review-price-period-edit" onchange="adminReviewOnPricePeriodChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${periodOptions}</select>
         </label>
         <label class="flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-gray-700">
-          <input id="admin-review-price-on-application-edit" type="checkbox" ${review.price_on_application === true || extra.price_on_application === true || extra.price_upon_application === true || initialPeriod === "poa" ? "checked" : ""}>
+          <input id="admin-review-price-on-application-edit" type="checkbox" onchange="adminReviewOnPriceOnApplicationChange()" ${review.price_on_application === true || extra.price_on_application === true || extra.price_upon_application === true || initialPeriod === "poa" ? "checked" : ""}>
           Price on application (no numeric price)
         </label>
         <label class="block text-xs font-bold text-gray-700">Bedrooms
@@ -28622,7 +28675,7 @@ function adminReviewSourcePostDateFieldHtml(review = {}) {
 }
 
 function collectAdminReviewListingPatch() {
-  const get = (id) => document.getElementById(id)?.value ?? "";
+  const get = (id) => adminReviewField(id)?.value ?? "";
   const listingType = normalizeType(get("admin-review-listing-type-edit"));
   const canonical = adminReviewCanonicalLocationResolution?.match === "exact_alias"
     && Number(adminReviewCanonicalLocationResolution?.confidence) === 1
@@ -28642,7 +28695,7 @@ function collectAdminReviewListingPatch() {
     .map((item) => item.trim())
     .filter(Boolean);
   const studentAmenities = listingType === "student"
-    ? Array.from(document.querySelectorAll("#admin-review-student-amenities input[type='checkbox']:checked"))
+    ? Array.from(adminReviewEditRoot().querySelectorAll("#admin-review-student-amenities input[type='checkbox']:checked"))
       .map((box) => {
         const option = adminReviewStudentAmenityOptions().find((item) => item.value === box.value);
         return option?.label || box.value;
@@ -28673,8 +28726,13 @@ function collectAdminReviewListingPatch() {
       get("admin-review-price-fx-rate-edit")
     ),
     price_period: get("admin-review-price-period-edit"),
+    // A typed amount is the price. The checkbox stays ticked on null-price
+    // rows; sending it as well used to wipe the number on save.
     price_on_application: normalizeListingPricePeriodValue(get("admin-review-price-period-edit")) === "poa"
-      || document.getElementById("admin-review-price-on-application-edit")?.checked === true,
+      || (
+        !adminReviewHasTypedCanonicalPrice(get("admin-review-price-edit"))
+        && adminReviewField("admin-review-price-on-application-edit")?.checked === true
+      ),
     transaction_type: listingType === "commercial"
       ? get("admin-review-transaction-type-edit")
       : listingType === "land"
@@ -28704,7 +28762,7 @@ function collectAdminReviewListingPatch() {
     student_room_label: listingType === "student" ? roomArrangement : "",
     students_welcome: listingType === "student",
     // C12: sent only when staff entered a post date (YYYY-MM-DD).
-    ...(get("admin-review-source-post-date-edit") && get("admin-review-source-post-date-edit") !== (document.getElementById("admin-review-source-post-date-edit")?.dataset?.confirmedDate || "")
+    ...(get("admin-review-source-post-date-edit") && get("admin-review-source-post-date-edit") !== (adminReviewField("admin-review-source-post-date-edit")?.dataset?.confirmedDate || "")
       ? { source_post_date: get("admin-review-source-post-date-edit") }
       : {})
   }, adminActiveReview || {});
