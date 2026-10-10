@@ -170,6 +170,7 @@ const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const { isPriceOnApplication } = require('../utils/listingPriceQuality');
 const { FAILED_WHATSAPP_SQL, listWhatsappActivity, whatsappActivityFreshness } = require('../services/whatsappActivityService');
+const { normalizeStaffSourcePostDate, staffSourcePostDateExtra } = require('../utils/sourcePostDate');
 const { listingPhotoOrVideoCheck, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
 const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const {
@@ -3265,6 +3266,14 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   const correctedFields = [];
   const extraPatch = {};
   let idx = 2;
+
+  // C12: "Posted on <platform> on" date confirmed by a moderator.
+  const sourcePostDateInput = normalizedPatch.source_post_date ?? normalizedPatch.source_published_at;
+  if (sourcePostDateInput != null && String(sourcePostDateInput).trim() !== '') {
+    const sourcePostDate = normalizeStaffSourcePostDate(sourcePostDateInput);
+    if (sourcePostDate.ok) Object.assign(extraPatch, staffSourcePostDateExtra(sourcePostDate, { actorId: normalizedPatch.__actor_id || null }));
+    else errors.push(sourcePostDate.error);
+  }
 
   const hasLocationHierarchyPatch = ['region', 'province', 'district', 'city', 'suburb', 'neighborhood', 'area'].some((key) => (
     Object.prototype.hasOwnProperty.call(normalizedPatch, key)

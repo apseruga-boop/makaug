@@ -1163,7 +1163,7 @@ function publicContactPhoneForRow(row = {}, safeExtra = null) {
 }
 
 function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, locationScope = {}) {
-  const safeExtra = publicExtraFields(row.admin_extra_fields || row.extra_fields || {});
+  const safeExtra = publicExtraFields(row.admin_extra_fields || row.extra_fields || {}, { createdAt: row.created_at || null });
   const canonicalDisplay = canonicalDisplayLocationForRow({
     ...row,
     canonical_location_id: row.canonical_location_id || safeExtra.canonical_location_id,
@@ -1459,7 +1459,7 @@ function publicSourceDateOutOfOrder(firstPostedRaw, firstSeenRaw, addedToMakaugR
     || (addedMs != null && firstPostedMs > addedMs);
 }
 
-function publicExtraFields(extraFields = {}) {
+function publicExtraFields(extraFields = {}, { createdAt = null } = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
   const rawSourcePost = extra.raw_source_post && typeof extra.raw_source_post === 'object' ? extra.raw_source_post : {};
   const landTitleAvailable = normalizeLandTitleAvailability(
@@ -1642,7 +1642,9 @@ function publicExtraFields(extraFields = {}) {
     || extra.original_posted_at
     || extra.source_posted_at;
   const firstSeenOnlineAt = extra.first_seen_online_at || extra.source_first_seen_at || null;
-  const addedToMakaugAt = extra.added_to_makaug_at || null;
+  // C12: "Added to makaug" is when the row was created; the import metadata
+  // (e.g. a hard-coded 20 May 2026) made a real post date look out of order.
+  const addedToMakaugAt = createdAt || extra.added_to_makaug_at || null;
   const sourceDateOutOfOrder = publicSourceDateOutOfOrder(firstPostedRawForOrder, firstSeenOnlineAt, addedToMakaugAt);
   const sourceDateConflictLabel = 'Source date conflicts with first pickup, so makaug is confirming it from the platform.';
   return {
@@ -1759,7 +1761,7 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
     id_document_url: _idDocumentUrl,
     ...safeProperty
   } = property || {};
-  const safeExtra = publicExtraFields(property?.extra_fields);
+  const safeExtra = publicExtraFields(property?.extra_fields, { createdAt: property?.created_at || null });
   const canonicalDisplay = canonicalDisplayLocationForRow({
     ...safeProperty,
     canonical_location_id: safeProperty.canonical_location_id || safeExtra.canonical_location_id,
@@ -3153,7 +3155,7 @@ async function listPropertiesHandler(req, res, next) {
           ...publicRow
         } = row;
         const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
-        const safeExtra = publicExtraFields(adminExtraFields || {});
+        const safeExtra = publicExtraFields(adminExtraFields || {}, { createdAt: row.created_at || null });
         const canonicalDisplay = canonicalDisplayLocationForRow({
           ...row,
           canonical_location_id: row.canonical_location_id || safeExtra.canonical_location_id,
