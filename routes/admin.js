@@ -15005,16 +15005,18 @@ async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = fa
   return result;
 }
 
-async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', actorId = 'admin', afterQueued = null, allowVideoRender = true } = {}) {
-    const pack = await agentWelcome.buildWelcomePack(cleanText(agentId));
+async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', previewTrial = false, actorId = 'admin', afterQueued = null, allowVideoRender = true } = {}) {
+    let pack = await agentWelcome.buildWelcomePack(cleanText(agentId));
     const previewTo = String(previewToRaw || '').replace(/\D+/g, '');
     const preview = Boolean(previewTo);
+    // Staff preview only: show the pack as a new agent on the free period sees it.
+    if (preview && previewTrial) pack = agentReportVideos.trialVariant(pack);
     const to = preview ? previewTo : String(pack.agent.whatsapp || pack.agent.phone || '').replace(/\D+/g, '');
     if (!to || to.length < 9) throw Object.assign(new Error('No WhatsApp number to send to'), { status: 400 });
 
     const actor = actorId || 'admin';
     const source = agentReportWhatsappSource();
-    const version = new Date().toISOString().slice(0, 10).replace(/\D/g, '');
+    const version = `${preview && previewTrial ? 't' : ''}${new Date().toISOString().slice(0, 10).replace(/\D/g, '')}`;
     const dedupeBase = `agent_welcome:${pack.agent.id}:${preview ? `preview:${Date.now()}` : version}`;
     const message = agentWelcome.buildWelcomeMessage(pack);
     const caption = agentWelcome.buildWelcomeCaption(pack);
@@ -15156,7 +15158,7 @@ async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', ac
 
 router.post('/agent-welcome/:agentId/send', async (req, res, next) => {
   try {
-    const data = await queueAgentWelcomePack({ agentId: req.params.agentId, previewTo: req.body?.preview_to, actorId: adminActorId(req) });
+    const data = await queueAgentWelcomePack({ agentId: req.params.agentId, previewTo: req.body?.preview_to, previewTrial: Boolean(req.body?.preview_trial), actorId: adminActorId(req) });
     return res.json({ ok: true, data });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
