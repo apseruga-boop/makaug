@@ -2270,6 +2270,18 @@ function toIsoTimestampOrNull(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+// True for a 0,0 pin, or a longitude of 0 (nowhere near Uganda). A latitude of
+// about 0 is real here (the equator crosses Uganda), so it is kept when the
+// longitude is real. Only applies when a coordinate was sent at all.
+function isMissingPin(latitude, longitude) {
+  const sent = (value) => value !== undefined && value !== null && String(value).trim() !== '';
+  if (!sent(latitude) && !sent(longitude)) return false;
+  const lat = toNullableFloat(latitude);
+  const lng = toNullableFloat(longitude);
+  const zero = (value) => value != null && Math.abs(value) < 1e-9;
+  return (zero(lat) && (lng == null || zero(lng))) || zero(lng);
+}
+
 function normalizeStaffListingPatch(existing = {}, patch = {}) {
   const normalized = safeJsonObject(patch, {});
   if (!Object.prototype.hasOwnProperty.call(normalized, 'listing_type')) {
@@ -2283,6 +2295,17 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
   if (!Object.prototype.hasOwnProperty.call(normalized, 'longitude')) {
     const lngAlias = normalized.lng ?? normalized.lon ?? normalized.long;
     if (lngAlias != null) normalized.longitude = lngAlias;
+  }
+  // A 0,0 pin (Null Island, in the Gulf of Guinea) is never a real listing
+  // location; "Use current pin" saved one when the map pin wasn't ready (P5).
+  // Treat it as missing: neither coordinate is saved and the stored pin stays.
+  if (isMissingPin(normalized.latitude, normalized.longitude)) {
+    delete normalized.latitude;
+    delete normalized.longitude;
+    delete normalized.lat;
+    delete normalized.lng;
+    delete normalized.lon;
+    delete normalized.long;
   }
   if (!Object.prototype.hasOwnProperty.call(normalized, 'land_title_available')) {
     const landTitleAlias = normalized.landTitleAvailable ?? normalized.title_available ?? normalized.titleAvailable;
@@ -4934,4 +4957,4 @@ router.post('/assistant/query', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull };
+module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin };

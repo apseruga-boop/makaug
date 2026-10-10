@@ -27856,23 +27856,48 @@ function adminReviewSyncLocationMapFromInputs() {
   }
 }
 
+// The map marker's position as { lat, lng }, for a Leaflet or a Google marker
+// (read from the marker itself, not from the provider flag), else null.
+function reviewMarkerPoint(marker) {
+  if (!marker) return null;
+  try {
+    if (typeof marker.getLatLng === "function") {
+      const pos = marker.getLatLng();
+      return pos ? { lat: Number(pos.lat), lng: Number(pos.lng) } : null;
+    }
+    if (typeof marker.getPosition === "function") {
+      const pos = marker.getPosition();
+      if (!pos) return null;
+      return { lat: Number(typeof pos.lat === "function" ? pos.lat() : pos.lat), lng: Number(typeof pos.lng === "function" ? pos.lng() : pos.lng) };
+    }
+  } catch (error) {}
+  return null;
+}
+
+function isRealReviewPin(point) {
+  return !!point
+    && Number.isFinite(point.lat)
+    && Number.isFinite(point.lng)
+    && !(Math.abs(point.lat) < 1e-9 && Math.abs(point.lng) < 1e-9)
+    && isLikelyUgandaCoordinate(point.lat, point.lng);
+}
+
+// "Use current pin" (P5): copies the map marker into the latitude/longitude
+// fields. It used to read the marker only when the provider flag matched, and
+// the Leaflet map never set the flag, so the fields kept the stored 0,0.
+// Falls back to the geocoded/area pin; never writes 0,0.
 function adminReviewUseMapPin() {
-  if (!adminReviewLocationMarker) {
-    adminReviewLocationStatus("Map pin not ready", "amber");
-    return;
-  }
-  let point = null;
-  if (adminReviewLocationProvider === "leaflet" && adminReviewLocationMarker.getLatLng) {
-    point = adminReviewLocationMarker.getLatLng();
-  } else if (adminReviewLocationProvider === "google" && adminReviewLocationMarker.getPosition) {
-    const pos = adminReviewLocationMarker.getPosition();
-    point = pos ? { lat: pos.lat(), lng: pos.lng() } : null;
-  }
+  const fromMarker = reviewMarkerPoint(adminReviewLocationMarker);
+  const fallback = adminReviewLocationPoint(adminActiveReview);
+  const point = isRealReviewPin(fromMarker)
+    ? fromMarker
+    : (isRealReviewPin(fallback) ? { lat: Number(fallback.lat), lng: Number(fallback.lng) } : null);
   if (!point) {
-    adminReviewLocationStatus("Map pin not ready", "amber");
+    adminReviewLocationStatus("Map pin not ready: move the pin onto the property first", "amber");
+    toast("The map pin isn't ready yet. Move the pin onto the property, then press Use current pin.");
     return;
   }
-  adminReviewSetLocationInputs(point.lat, point.lng, "Exact pin saved to fields");
+  adminReviewSetLocationInputs(point.lat, point.lng, point === fromMarker ? "Exact pin saved to fields" : "Area pin saved to fields: move the pin to the exact spot if you can");
   toast("Review location updated from the map pin.");
 }
 
@@ -27981,6 +28006,7 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
   });
   adminReviewLocationMap = map;
   adminReviewLocationMarker = marker;
+  adminReviewLocationProvider = "leaflet";
   adminReviewLocationStatus(point?.exact ? "Exact pin loaded" : "Approximate area pin", point?.exact ? "green" : "amber");
   setTimeout(() => {
     try { map.invalidateSize(); marker.openPopup(); } catch (e) {}
