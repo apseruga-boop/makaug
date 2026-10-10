@@ -8,6 +8,9 @@ const logger = require('../config/logger');
 const { requireAdminApiKey } = require('../middleware/auth');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
+const { listingReferenceQuery, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
+const { priceEvidenceNote, resolveStaffPriceChoice } = require('../utils/staffPriceChoice');
+const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const { DISTRICTS: UGANDA_DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const {
   normalizeReviewLocationHierarchy,
@@ -3238,12 +3241,23 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     });
   }
 
+  if (['price', 'price_on_application', 'price_period'].some((key) => Object.prototype.hasOwnProperty.call(normalizedPatch, key))) {
+    if (normalizedPatch.price_period) {
+      normalizedPatch.price_period = require('../utils/propertyPriceCurrency').normalizePricePeriodForWrite(normalizedPatch.price_period);
+      if (normalizedPatch.price_period === 'poa') normalizedPatch.price_on_application = true;
+    }
+    const priceChoice = resolveStaffPriceChoice(normalizedPatch);
+    Object.assign(normalizedPatch, priceChoice.patch);
+    normalizedPatch.__priceChoice = priceChoice.mode;
+  }
+
   const fieldMap = {
     title: { column: 'title', value: cleanText(normalizedPatch.title), required: true },
     description: { column: 'description', value: cleanText(normalizedPatch.description), required: true },
     area: { column: 'area', value: cleanText(normalizedPatch.area), required: true },
     address: { column: 'address', value: cleanText(normalizedPatch.address) || null },
     price: { column: 'price', value: toNullableInt(normalizedPatch.price) },
+    price_on_application: { column: 'price_on_application', value: normalizedPatch.price_on_application === true },
     price_fx_as_of: { column: 'price_fx_as_of', value: normalizedPatch.price_fx_as_of || null },
     price_period: { column: 'price_period', value: cleanText(normalizedPatch.price_period) || null },
     transaction_type: { column: 'transaction_type', value: normalizeCommercialTransactionType(normalizedPatch.transaction_type) || null },
@@ -3471,6 +3485,21 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'student_universities')) {
     extraPatch.student_universities = asArray(normalizedPatch.student_universities).map((item) => cleanText(item)).filter(Boolean);
     correctedFields.push('student_universities');
+  }
+
+  if (normalizedPatch.__priceChoice === 'amount' || normalizedPatch.__priceChoice === 'poa') {
+    const poa = normalizedPatch.__priceChoice === 'poa';
+    extraPatch.price_on_application = poa;
+    extraPatch.price_upon_application = poa;
+    if (!poa) extraPatch.price_review = null;
+    extraPatch.price_quality = listingPriceQuality({
+      price: normalizedPatch.price,
+      price_period: normalizedPatch.price_period,
+      price_on_application: poa,
+      listing_type: normalizedPatch.listing_type,
+      transaction_type: normalizedPatch.transaction_type,
+      extra_fields: { price_on_application: poa, price_upon_application: poa }
+    });
   }
 
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'land_title_available')) {
@@ -4016,19 +4045,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
       values.push(listingType);
       filters.push(`p.listing_type = $${values.length}`);
     }
-    if (search) {
-      values.push(`%${search}%`);
-      const idx = values.length;
-      filters.push(`(
-        p.title ILIKE $${idx}
-        OR p.area ILIKE $${idx}
-        OR p.district ILIKE $${idx}
-        OR COALESCE(p.inquiry_reference, '') ILIKE $${idx}
-        OR COALESCE(p.lister_phone, '') ILIKE $${idx}
-        OR COALESCE(p.extra_fields->>'source_name', '') ILIKE $${idx}
-        OR COALESCE(p.extra_fields->>'source_platform', '') ILIKE $${idx}
-      )`);
-    }
+    if (search) filters.push(propertyListingSearchClause('p', search, values));
 
     const where = `WHERE ${filters.join(' AND ')}`;
     const cacheKey = JSON.stringify({
@@ -4175,19 +4192,7 @@ router.get('/properties/actioned', async (req, res, next) => {
       values.push(listingType);
       filters.push(`p.listing_type = $${values.length}`);
     }
-    if (search) {
-      values.push(`%${search}%`);
-      const idx = values.length;
-      filters.push(`(
-        p.title ILIKE $${idx}
-        OR p.area ILIKE $${idx}
-        OR p.district ILIKE $${idx}
-        OR COALESCE(p.inquiry_reference, '') ILIKE $${idx}
-        OR COALESCE(p.lister_phone, '') ILIKE $${idx}
-        OR COALESCE(p.extra_fields->>'source_name', '') ILIKE $${idx}
-        OR COALESCE(p.extra_fields->>'source_platform', '') ILIKE $${idx}
-      )`);
-    }
+    if (search) filters.push(propertyListingSearchClause('p', search, values));
 
     const where = `WHERE ${filters.join(' AND ')}`;
     const cacheKey = JSON.stringify({
@@ -4372,9 +4377,10 @@ function adminLiveSearchClause(q, values, alias = 'p') {
     values.push(term.toLowerCase());
     return `AND ${alias}.id = $${values.length}::uuid`;
   }
-  if (/^MK-[0-9A-Z-]{4,}$/i.test(term)) {
-    values.push(term.toUpperCase());
-    return `AND UPPER(${alias}.inquiry_reference) = $${values.length}`;
+  const reference = listingReferenceQuery(term);
+  if (reference) {
+    values.push(reference);
+    return `AND ${alias}.inquiry_reference = $${values.length}`;
   }
   values.push(`%${term.replace(/[\\%_]/g, (char) => `\\${char}`)}%`);
   return `AND (${alias}.title ILIKE $${values.length} OR ${alias}.inquiry_reference ILIKE $${values.length} OR ${alias}.area ILIKE $${values.length})`;
@@ -6337,7 +6343,7 @@ router.post('/properties/:id/external-duplicate-scan', async (req, res, next) =>
 
 router.patch('/properties/:id/review', async (req, res, next) => {
   try {
-    const existing = await db.query('SELECT id, status, moderation_checklist, extra_fields FROM properties WHERE id = $1 LIMIT 1', [req.params.id]);
+    const existing = await db.query('SELECT id, status, moderation_checklist, moderation_reason, extra_fields, listing_type, transaction_type, price_period FROM properties WHERE id = $1 LIMIT 1', [req.params.id]);
     if (!existing.rows.length) {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
@@ -6351,7 +6357,32 @@ router.patch('/properties/:id/review', async (req, res, next) => {
       ? normalizeReviewChecklist(req.body.checklist)
       : normalizeReviewChecklist(existing.rows[0].moderation_checklist);
     const notes = cleanText(req.body.notes || req.body.review_notes) || null;
-    const reason = cleanText(req.body.reason) || null;
+    let reason = cleanText(req.body.reason) || null;
+    let replaceReason = false;
+    if (!reason && listingPatch && ['price', 'price_on_application', 'price_period'].some((key) => Object.prototype.hasOwnProperty.call(listingPatch, key))) {
+      const choiceInput = { ...listingPatch };
+      if (choiceInput.price_period) {
+        choiceInput.price_period = require('../utils/propertyPriceCurrency').normalizePricePeriodForWrite(choiceInput.price_period);
+        if (choiceInput.price_period === 'poa') choiceInput.price_on_application = true;
+      }
+      const choice = resolveStaffPriceChoice(choiceInput);
+      if (choice.mode === 'amount' || choice.mode === 'poa') {
+        const poa = choice.mode === 'poa';
+        const row = existing.rows[0];
+        const quality = listingPriceQuality({
+          ...row,
+          price: choice.patch.price,
+          price_period: choice.patch.price_period || row.price_period,
+          price_on_application: poa,
+          extra_fields: { ...(row.extra_fields || {}), price_on_application: poa, price_upon_application: poa }
+        });
+        const nextNote = priceEvidenceNote(row.moderation_reason, quality);
+        if (nextNote !== cleanText(row.moderation_reason)) {
+          reason = nextNote || null;
+          replaceReason = true;
+        }
+      }
+    }
     const stage = cleanText(req.body.stage) || 'in_review';
     if (!ADMIN_REVIEW_STAGES.has(stage)) {
       return res.status(400).json({
@@ -6372,7 +6403,7 @@ router.patch('/properties/:id/review', async (req, res, next) => {
          moderation_stage = $2,
          moderation_checklist = $3::jsonb,
          moderation_notes = COALESCE($4::text, moderation_notes),
-         moderation_reason = COALESCE($5::text, moderation_reason),
+         moderation_reason = CASE WHEN $8::boolean THEN $5::text ELSE COALESCE($5::text, moderation_reason) END,
          reviewed_by = COALESCE($6::uuid, reviewed_by),
          extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('review_warning_overrides', $7::jsonb),
          updated_at = NOW()
@@ -6387,7 +6418,8 @@ router.patch('/properties/:id/review', async (req, res, next) => {
         notes,
         reason,
         reviewerUserId,
-        JSON.stringify(warningOverrides)
+        JSON.stringify(warningOverrides),
+        replaceReason
       ]
     );
 

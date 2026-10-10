@@ -19,6 +19,8 @@ const {
   normalizeCommercialPropertyType,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const { priceEvidenceNote, resolveStaffPriceChoice } = require('../utils/staffPriceChoice');
+const { propertyListingSearchClause } = require('../utils/listingReferenceSearch');
 const { loadListingMediaSummaries, listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const {
@@ -2472,14 +2474,21 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     // C20: choosing "Price on application" as the period is a POA listing.
     if (normalized.price_period === 'poa') normalized.price_on_application = true;
   }
-  if (Object.prototype.hasOwnProperty.call(normalized, 'price_on_application')) {
-    normalized.price_on_application = boolLike(normalized.price_on_application);
-    if (normalized.price_on_application) {
-      normalized.price = null;
-      normalized.price_original = null;
-      normalized.price_fx_rate_ugx = null;
-      normalized.price_fx_as_of = null;
-    }
+  // A canonical amount typed into Preview & edit wins over the POA checkbox
+  // that was already on because the stored price was null. The POA period, or
+  // the checkbox with the price left blank, still saves Price on application.
+  const priceChoice = resolveStaffPriceChoice(normalized);
+  Object.assign(normalized, priceChoice.patch);
+  normalized.__priceChoice = priceChoice.mode;
+  // Thousand separators ("1,000,000,000") are a real amount. The UGX original
+  // has to follow the resolved number, not parseFloat of the commas.
+  if (effectiveCurrency === 'UGX' && priceChoice.mode === 'amount') {
+    normalized.price_original = normalized.price;
+    normalized.price_fx_rate_ugx = null;
+    normalized.price_fx_as_of = null;
+  }
+  if (priceChoice.mode === 'amount' && Number(normalized.price) > 1e12) {
+    errors.push('price is over UGX 1 trillion; please check the number');
   }
   // C17: staff can't save a price outside the plausibility bounds; they fix
   // the number or tick Price on application.
@@ -2522,6 +2531,8 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   }
   const existing = existingResult.rows[0];
   const { patch, hierarchy, errors } = normalizeStaffListingPatch(existing, listingPatch);
+  const priceChoiceMode = patch.__priceChoice || 'unchanged';
+  delete patch.__priceChoice;
   if (!Object.prototype.hasOwnProperty.call(patch, 'transaction_type')) {
     const alias = patch.transactionType ?? patch.commercial_mode ?? patch.commercial_intent;
     if (alias != null) patch.transaction_type = alias;
@@ -2597,6 +2608,7 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   // Title/description typed by staff must reach the public page. Found-online
   // rows otherwise get a generated title/summary (services/publicListingCopy.js).
   const existingExtra = safeJsonObject(existing.extra_fields, {});
+  let resolvedPriceQuality = null;
   const correctedCopyFields = ['title', 'description'].filter((key) => {
     if (!Object.prototype.hasOwnProperty.call(patch, key)) return false;
     const next = cleanText(patch[key]);
@@ -2612,6 +2624,29 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   } : null;
 
   const extraPatch = {};
+  if (priceChoiceMode === 'amount' || priceChoiceMode === 'poa') {
+    const poa = priceChoiceMode === 'poa';
+    extraPatch.price_on_application = poa;
+    extraPatch.price_upon_application = poa;
+    if (!poa) extraPatch.price_review = null;
+    resolvedPriceQuality = listingPriceQuality({
+      ...existing,
+      price: patch.price,
+      price_period: patch.price_period || existing.price_period,
+      price_on_application: poa,
+      listing_type: patch.listing_type || existing.listing_type,
+      transaction_type: patch.transaction_type || existing.transaction_type,
+      price_original: patch.price_original,
+      price_original_currency: patch.price_original_currency || existing.price_original_currency,
+      extra_fields: {
+        ...existingExtra,
+        price_on_application: poa,
+        price_upon_application: poa,
+        price_review: poa ? existingExtra.price_review : null
+      }
+    });
+    extraPatch.price_quality = resolvedPriceQuality;
+  }
   [
     'region',
     'city',
@@ -2725,6 +2760,10 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   if (notes) add('moderation_notes', notes);
   const reason = cleanText(reviewPatch.reason);
   if (reason) add('moderation_reason', reason);
+  else if (resolvedPriceQuality) {
+    const nextNote = priceEvidenceNote(existing.moderation_reason, resolvedPriceQuality);
+    if (nextNote !== cleanText(existing.moderation_reason)) add('moderation_reason', nextNote || null);
+  }
   // C17b: editing a LIVE listing keeps it exactly as live. The stage stays as it
   // is (it used to become 'in_review', which put live rows back in the queues),
   // and the event records the before/after values of what changed.
@@ -3612,17 +3651,7 @@ router.get('/properties', async (req, res, next) => {
       values.push(listingType);
       filters.push(`p.listing_type = $${values.length}`);
     }
-    if (search) {
-      values.push(`%${search}%`);
-      const idx = values.length;
-      filters.push(`(
-        p.title ILIKE $${idx}
-        OR p.area ILIKE $${idx}
-        OR p.district ILIKE $${idx}
-        OR COALESCE(p.inquiry_reference, '') ILIKE $${idx}
-        OR COALESCE(p.lister_phone, '') ILIKE $${idx}
-      )`);
-    }
+    if (search) filters.push(propertyListingSearchClause('p', search, values));
 
     const where = `WHERE ${filters.join(' AND ')}`;
     const rowLimit = limit + 1;
@@ -3703,19 +3732,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
       values.push(listingType);
       filters.push(`p.listing_type = $${values.length}`);
     }
-    if (search) {
-      values.push(`%${search}%`);
-      const idx = values.length;
-      filters.push(`(
-        p.title ILIKE $${idx}
-        OR p.area ILIKE $${idx}
-        OR p.district ILIKE $${idx}
-        OR COALESCE(p.inquiry_reference, '') ILIKE $${idx}
-        OR COALESCE(p.lister_phone, '') ILIKE $${idx}
-        OR COALESCE(p.extra_fields->>'source_name', '') ILIKE $${idx}
-        OR COALESCE(p.extra_fields->>'source_platform', '') ILIKE $${idx}
-      )`);
-    }
+    if (search) filters.push(propertyListingSearchClause('p', search, values));
 
     const where = `WHERE ${filters.join(' AND ')}`;
     const imageSelect = includeImages ? 'img.url AS primary_image_url' : 'NULL::text AS primary_image_url';
