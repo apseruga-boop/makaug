@@ -863,9 +863,29 @@ function editSimilarity(left = '', right = '') {
   return longest ? 1 - (levenshteinDistance(a, b) / longest) : 0;
 }
 
-function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8) {
+const SUGGESTION_FUZZY_MAX_CHARS = 60;
+const SUGGESTION_TYPED_MAX_CHARS = 120;
+const entryAliasKeyCache = new WeakMap();
+// Normalised aliases of a registry entry, computed once.
+function entryAliasKeys(entry) {
+  let keys = entryAliasKeyCache.get(entry);
+  if (!keys) {
+    keys = entry.aliases.map(normalizeLocationKey).filter(Boolean);
+    entryAliasKeyCache.set(entry, keys);
+  }
+  return keys;
+}
+const SUGGESTION_QUERY_MAX_CHARS = 2000;
+
+function canonicalLocationSuggestions(rawQuery = '', counts = new Map(), limit = 8) {
+  const query = String(rawQuery || '').slice(0, SUGGESTION_QUERY_MAX_CHARS);
   const attempts = locationQueryAttempts(query);
   const freeTextAttempts = freeTextLocationQueryAttempts(query);
+  const freeTextByNormalized = new Map();
+  freeTextAttempts.forEach((attempt) => {
+    if (!freeTextByNormalized.has(attempt.normalized)) freeTextByNormalized.set(attempt.normalized, []);
+    freeTextByNormalized.get(attempt.normalized).push(attempt);
+  });
   if (!attempts.length && !freeTextAttempts.length) return [];
   const exactResolution = resolveCanonicalUgandaLocation(query, '', { counts });
   const meaningfulRoadTokens = normalizeLocationKey(query)
@@ -879,8 +899,9 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
     !isExcludedLocationOnly(attempt.value)
     && !(attempt.noise_stripped && normalizeDistrict(attempt.value))
   ));
+  const typedQuery = query.length <= SUGGESTION_TYPED_MAX_CHARS;
   const scoreEntry = (entry) => {
-    const aliasKeys = entry.aliases.map(normalizeLocationKey).filter(Boolean);
+    const aliasKeys = entryAliasKeys(entry);
     const exactAttemptIndex = attempts.findIndex((attempt) => (
       aliasKeys.includes(attempt.normalized)
       && !(attempt.noise_stripped && normalizeDistrict(attempt.value))
@@ -890,26 +911,33 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
     const resolutionExact = exactResolution.status === 'matched'
       && resolutionCandidateKeys.has(entry.key);
     const exact = exactAttemptIndex >= 0 || resolutionExact;
-    const freeTextMatches = freeTextAttempts
-      .map((attempt) => ({ attempt, aliasIndex: aliasKeys.indexOf(attempt.normalized) }))
-      .filter((match) => match.aliasIndex >= 0)
+    const freeTextMatches = aliasKeys
+      .flatMap((alias, aliasIndex) => (freeTextByNormalized.get(alias) || []).map((attempt) => ({ attempt, aliasIndex })))
       .sort((left, right) => (
         right.attempt.token_count - left.attempt.token_count
         || left.attempt.position - right.attempt.position
       ));
     const freeTextMatch = !exact ? freeTextMatches[0] : null;
-    const comparableNeedles = searchableAttempts.map((attempt) => attempt.normalized);
+    // Prefix/contains/fuzzy only for something that looks like a typed place
+    // (up to SUGGESTION_TYPED_MAX_CHARS); a long message only matches exactly
+    // or as free text.
+    const comparableNeedles = typedQuery ? searchableAttempts.map((attempt) => attempt.normalized) : [];
     const prefix = !exact && !freeTextMatch && comparableNeedles.some((needle) => aliasKeys.some((alias) => alias.startsWith(needle)));
     const contains = !exact && !freeTextMatch && comparableNeedles.some((needle) => aliasKeys.some((alias) => alias.includes(needle)));
-    const fuzzyPairs = comparableNeedles.flatMap((needle) => aliasKeys.map((alias) => ({
+    // Fuzzy matching is for a typed place name. A whole message (2,000
+    // characters of an agent bot's greeting) used to be edit-distanced against
+    // every alias of all 11,400 places: 260 s of CPU on the only web core, the
+    // 10 Oct 09:24 stall (C4). Long needles only match exactly / as free text.
+    const fuzzyNeedles = comparableNeedles.filter((needle) => needle.length <= SUGGESTION_FUZZY_MAX_CHARS);
+    const fuzzyPairs = fuzzyNeedles.flatMap((needle) => aliasKeys.map((alias) => ({
       alias,
       score: Math.max(trigramSimilarity(needle, alias), editSimilarity(needle, alias))
     })));
     const bestFuzzy = fuzzyPairs.sort((left, right) => right.score - left.score)[0];
-    const fuzzy = comparableNeedles.length
+    const fuzzy = fuzzyNeedles.length
       ? bestFuzzy?.score || 0
       : 0;
-    const fuzzyEligible = comparableNeedles.some((needle) => needle.length >= 5);
+    const fuzzyEligible = fuzzyNeedles.some((needle) => needle.length >= 5);
     const matchRank = exact ? 5 : freeTextMatch ? 4 : prefix ? 3 : contains ? 2 : (fuzzyEligible && fuzzy >= 0.72) ? 1 : 0;
     if (!matchRank) return null;
     const alternativeExact = resolutionExact && !selectedExact;

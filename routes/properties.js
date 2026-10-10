@@ -2241,10 +2241,21 @@ function publicCanonicalLocationPayload(item = {}) {
 }
 
 router.get('/locations/catalog', (req, res) => {
-  setPublicPropertiesCacheHeaders(res, true);
+  // One district at a time (C4): "?district=Entebbe" (a town, not a district)
+  // or no district used to return all ~11,400 places in one answer.
   const district = normalizeDistrict(req.query.district);
+  if (!district) {
+    res.set('Cache-Control', 'public, max-age=300');
+    return res.status(400).json({
+      ok: false,
+      error: 'Pass a known district, for example ?district=Kampala.',
+      data: [],
+      meta: { canonical: true, district: null, count: 0, requested: String(req.query.district || '').slice(0, 80) || null }
+    });
+  }
+  setPublicPropertiesCacheHeaders(res, true);
   const locations = canonicalLocationOptions()
-    .filter((item) => !district || (IS_SOUTH_AFRICA ? item.province === district : item.district === district))
+    .filter((item) => (IS_SOUTH_AFRICA ? item.province === district : item.district === district))
     .filter((item) => !['district', 'region', 'province'].includes(item.level))
     .map((item) => publicCanonicalLocationPayload({ ...item, match: 'exact_alias', confidence: 1, auto_resolvable: true }));
   return res.json({
