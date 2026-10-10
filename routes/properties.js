@@ -92,6 +92,7 @@ const {
   filterPublicAmenities,
   publicContactLabelFor,
   publicCopyReviewed,
+  foundOnlinePublicNotice,
   cleanListingTitle
 } = require('../services/publicListingCopy');
 const {
@@ -1198,6 +1199,7 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
     listing_type: row.listing_type,
     title: publicTitle,
     description: publicDescription,
+    found_online_notice: foundOnlinePublic ? foundOnlinePublicNotice(row, safeExtra) : null,
     public_copy_reviewed: publicCopyReviewed(row, safeExtra),
     district: publicDistrict,
     area: canonicalDisplay.area,
@@ -1775,6 +1777,7 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
     ...safeProperty,
     title: publicTitle,
     description: publicDescription,
+    found_online_notice: foundOnlinePublic ? foundOnlinePublicNotice(property, safeExtra) : null,
     amenities: filterPublicAmenities(safeProperty.amenities),
     // Public label, not the stored enum ("shop_retail" → "Shop / retail space").
     property_type: humanPropertyTypeLabel(safeProperty.property_type) || safeProperty.property_type,
@@ -3185,6 +3188,7 @@ async function listPropertiesHandler(req, res, next) {
           ...publicRow,
           title: publicTitle,
           description: publicDescription,
+          found_online_notice: foundOnlinePublic ? foundOnlinePublicNotice(row, safeExtra) : null,
           public_copy_reviewed: publicCopyReviewed(row, safeExtra),
           area: publicArea,
           district: publicDistrict,

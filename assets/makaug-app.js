@@ -43709,6 +43709,7 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
         </div>
         <span class="rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-xs font-black text-amber-800">${translateListingLabel("Third-party - unverified")}</span>
       </div>
+      ${p.found_online_notice ? `<div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-900" data-found-online-notice="1"><i class="fas fa-triangle-exclamation"></i> ${adminEscape(translateFoundOnlineSourceText(p.found_online_notice))}</div>` : ""}
       <div class="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
         ${translateListingLabel("makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. Check the original source and verify independently before paying or viewing.")}
       </div>
@@ -45180,12 +45181,13 @@ function getLocalizedPropertyDescription(property = {}, nearby = []) {
   return raw || buildLocalizedPropertyNarrative(property, nearby);
 }
 
+// Same patterns as services/publicListingCopy.js STAFF_INSTRUCTION_PATTERNS:
+// any "Confirm … before (public) approval." sentence and "Pending King review …".
 function sanitizePublicListingCopyForUi(value = "") {
   return String(value || "")
-    .replace(/\s*Confirm the exact property pin with the listing agent before approval\.?/gi, "")
-    .replace(/\s*Confirm exact gate or plot pin with the agent before public approval\.?/gi, "")
-    .replace(/\s*Confirm latest availability, exact pin, and ownership authority before featuring\.?/gi, "")
-    .replace(/\s*Pending King review[^.]*\.?/gi, "")
+    .replace(/\s*\bConfirm\b[^.!?]*?\bbefore\s+(?:public\s+)?approval\b[^.!?]*[.!?]?/gi, "")
+    .replace(/\s*\bConfirm latest availability, exact pin, and ownership authority before featuring\.?/gi, "")
+    .replace(/\s*\bPending King review\b[^.!?]*[.!?]?/gi, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -45461,7 +45463,11 @@ function landTitleAvailabilityBadgeHtml(property = {}, options = {}) {
 function propertyCardDescriptionText(p = {}) {
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
   const sourceDescription = propertyCardSourceDescriptionText(extra);
-  const localized = currentLang === "en" && isFoundOnlineListing(p) && sourceDescription
+  // Staff-reviewed copy wins on cards too (P2).
+  const reviewedDescription = p?.public_copy_reviewed?.description === true ? String(p?.description || p?.desc || "").trim() : "";
+  const localized = reviewedDescription && currentLang === "en"
+    ? reviewedDescription
+    : currentLang === "en" && isFoundOnlineListing(p) && sourceDescription
     ? sourceDescription
     : getLocalizedPropertyDescription(p, Array.isArray(p.nearby_places) ? p.nearby_places : []);
   return sanitizePublicListingCopyForUi(localized)

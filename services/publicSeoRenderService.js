@@ -24,6 +24,7 @@ const {
   cleanListingTitle,
   copyReviewState,
   isFoundOnlinePublicRow,
+  foundOnlinePublicNotice,
   listingCopyExtraFromRaw,
   listingCopyExtraSql
 } = require('./publicListingCopy');
@@ -327,6 +328,7 @@ function normalizeSeoListingRow(row = {}) {
       extra: copyExtra
     }),
     description: plainText(description),
+    found_online_notice: foundOnlinePublic ? plainText(foundOnlinePublicNotice(copyRow, copyExtra)) : '',
     area: plainText(canonicalDisplay.area),
     district: plainText(canonicalDisplay.district),
     price: Number(row.price || 0) || 0,
@@ -810,6 +812,7 @@ function renderPropertySeoHtml(html, listing, options = {}) {
             listing.property_type
           ].filter(Boolean).map(escapeHtml).join(' · ')}</p>
           <section class="mt-6"><h2 class="text-xl font-black text-gray-900">Property description</h2><p class="mt-2 whitespace-pre-line text-gray-700">${escapeHtml(listing.description || `View this property in ${locationLabel} on ${ACTIVE_BRAND}.`)}</p></section>
+          ${listing.found_online_notice ? `<section class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900" data-found-online-notice>${escapeHtml(listing.found_online_notice)}</section>` : ''}
         </div>
       </div>
     </div>
