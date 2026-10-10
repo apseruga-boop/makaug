@@ -77,6 +77,9 @@ function sanitizeStaffCopy(value = '') {
     .trim();
 }
 
+// The "Found on TikTok … check the original post before paying" safety line.
+// It is shown as its own notice in the source panel (found_online_notice on the
+// API row), never appended to the description (P2, 10 Oct 2026).
 function foundOnlineSourceLine(extra = {}) {
   const platform = redactThirdPartyPublicText(extra.source_platform || '') || 'the original source';
   const sourceName = redactThirdPartyPublicText(extra.source_name || extra.source_agent_name || '');
@@ -189,7 +192,8 @@ function buildThirdPartyPublicSummary(property = {}, extra = {}) {
   const review = copyReviewState(property, extra);
   if (review.staffDescription) {
     const staffDescription = sanitizeStaffCopy(property.description || '');
-    if (staffDescription) return `${staffDescription}\n\n${foundOnlineSourceLine(extra)}`;
+    // Staff's saved copy, unchanged; the safety line is found_online_notice.
+    if (staffDescription) return staffDescription;
   }
   const area = publicAreaLabelFor(property, extra);
   const type = thirdPartyTypeLabel(property);
@@ -235,6 +239,12 @@ function buildThirdPartyPublicSummary(property = {}, extra = {}) {
   return `${buildThirdPartyPublicTitle(property, extra)} is a third-party property result found from ${source}. ${ACTIVE_PUBLIC_BRAND_LABEL} provides a search and discovery preview using limited factual information only. ${facts}. ${ACTIVE_PUBLIC_BRAND_LABEL} has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Open the original source before contacting the seller, arranging a viewing, or making any payment.`
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+// Separate safety notice for found-online rows (null for everything else).
+function foundOnlinePublicNotice(property = {}, extra = {}) {
+  if (!isFoundOnlinePublicRow(property, extra)) return null;
+  return foundOnlineSourceLine(extra || {});
 }
 
 function isFoundOnlinePublicRow(property = {}, safeExtra = null) {
@@ -522,6 +532,7 @@ module.exports = {
   publicCopyReviewed,
   sanitizeStaffCopy,
   foundOnlineSourceLine,
+  foundOnlinePublicNotice,
   buildThirdPartyPublicTitle,
   buildThirdPartyPublicSummary,
   isFoundOnlinePublicRow,

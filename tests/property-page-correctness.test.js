@@ -124,7 +124,8 @@ test('B1: staff-edited title and description reach the API and the server-render
   assert.match(api.body.data.description, /^Three bedrooms, two bathrooms and a fenced garden/);
   assert.doesNotMatch(api.body.data.description, /#tiktok/);
   assert.doesNotMatch(api.body.data.description, /third-party property result/);
-  assert.match(api.body.data.description, /Found on TikTok from Kitende Homes\. Check the original post before paying\./);
+  assert.doesNotMatch(api.body.data.description, /Check the original post before paying/, 'P2: the safety line is not in the description');
+  assert.equal(api.body.data.found_online_notice, 'Found on TikTok from Kitende Homes. Check the original post before paying.');
 
   const listing = await seo.loadPublicSeoListing(db, id);
   assert.equal(listing.title, title);
@@ -132,7 +133,7 @@ test('B1: staff-edited title and description reach the API and the server-render
   assert.match(rendered.html, new RegExp(`<h1[^>]*>${title}</h1>`));
   assert.ok(rendered.meta.title.startsWith(title), rendered.meta.title);
   assert.match(rendered.meta.description, /^Three bedrooms, two bathrooms and a fenced garden/);
-  assert.match(rendered.html, /Found on TikTok from Kitende Homes/);
+  assert.match(rendered.html, /data-found-online-notice>Found on TikTok from Kitende Homes/);
 });
 
 test('B1: editing a live listing clears the cached API and server-rendered copy', async () => {
