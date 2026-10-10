@@ -843,6 +843,7 @@ let adminDemandGaps = { totals: {}, gaps: [], window_days: 90 };
 let adminNotificationLogs = [];
 let adminEmailLogs = [];
 let adminWhatsappLogs = [];
+let adminWhatsappLogsFreshness = null;
 let adminWhatsappActivePhone = "";
 let adminWhatsappActiveConversation = null;
 let adminWhatsappReplyDraft = "";
@@ -13661,6 +13662,29 @@ function staffMaskPhone(value = "") {
   return `•••• ${last3}`;
 }
 
+// C5: show when the counts were read, and which ones are older because their
+// query was slow this time (they keep their last good value).
+const STAFF_WIDGET_LABELS = { listings: "listings", my_moderation: "my moderation", leads: "leads", advertising: "advertising", whatsapp: "WhatsApp", sources: "sources", bank_leads: "bank leads", payments: "payments" };
+function staffRenderDashboardFreshness(data = {}) {
+  const node = document.getElementById("staff-dashboard-freshness");
+  if (!node) return;
+  const asOf = data?.meta?.as_of || null;
+  const stale = data?.stale_widgets && typeof data.stale_widgets === "object" ? data.stale_widgets : {};
+  const staleParts = Object.entries(stale).map(([key, info]) => {
+    const label = STAFF_WIDGET_LABELS[key] || key;
+    return info?.as_of ? `${label} from ${staffKampalaDateTime(info.as_of)}` : `${label} unavailable`;
+  });
+  const readAt = asOf ? staffKampalaDateTime(asOf) : "";
+  const queueAt = data?.panels_as_of ? staffKampalaDateTime(data.panels_as_of) : "";
+  if (!readAt && !queueAt) return;
+  node.textContent = [
+    readAt ? `Counts as of ${readAt}` : "",
+    queueAt ? `queue as of ${queueAt}` : "",
+    staleParts.length ? `older (slow query): ${staleParts.join(", ")}` : ""
+  ].filter(Boolean).join(" · ");
+  node.classList.toggle("text-amber-700", staleParts.length > 0);
+}
+
 function staffKampalaDateTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -14535,6 +14559,9 @@ function mergeStaffDashboardPanelData(base = {}, panels = {}) {
       ...(base?.payments || {}),
       ...(panels.payments || {})
     },
+    // C5: keep the counts' read time and stale markers from the fast payload.
+    meta: { ...(panels.meta || {}), ...(base?.meta || {}) },
+    stale_widgets: base?.stale_widgets || panels.stale_widgets || {},
     partial: false,
     panel_payload: false
   };
@@ -14545,6 +14572,7 @@ function applyStaffDashboardData(data = {}, user = {}) {
   staffDashboardHasLiveData = true;
   staffDashboardAuthRetryCount = 0;
   const definitions = data.summary?.definitions || {};
+  staffRenderDashboardFreshness(data);
   setStaffStat("staff-stat-total", data.summary?.listings?.live, definitions, "total_properties");
   setStaffStat("staff-stat-pending", data.summary?.listings?.pending_review, definitions, "pending_review");
   setStaffStat("staff-stat-broker-pending", data.summary?.listings?.broker_pending_review, definitions, "broker_pending_review");
@@ -18005,6 +18033,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   if (Array.isArray(notificationsRes?.data)) adminNotificationLogs = notificationsRes.data;
   if (Array.isArray(emailsRes?.data)) adminEmailLogs = emailsRes.data;
   if (Array.isArray(whatsappLogsRes?.data)) adminWhatsappLogs = whatsappLogsRes.data;
+  if (whatsappLogsRes?.freshness) adminWhatsappLogsFreshness = { ...whatsappLogsRes.freshness, as_of: whatsappLogsRes.as_of || null };
   const outlookAgentStatus = outlookStatusRes?.data || {};
   const outlookAgentActions = Array.isArray(outlookActionsRes?.data) ? outlookActionsRes.data : [];
   const unavailablePanels = adminUnavailablePanelsFromSnapshotParts([
@@ -21564,6 +21593,15 @@ function adminLogStatusClass(status) {
   return "bg-gray-100 text-gray-700";
 }
 
+// C5: each panel says how fresh it is.
+function adminRenderWhatsappLogFreshness(freshness = null) {
+  const node = document.getElementById("admin-whatsapp-log-as-of");
+  if (!node) return;
+  if (!freshness) { node.textContent = ""; return; }
+  const when = (value) => value ? (staffKampalaDateTime(value) || formatListingDate(value)) : "never";
+  node.textContent = `Source: WhatsApp bridge (whatsapp_messages) · last received ${when(freshness.last_inbound_at)} · last sent ${when(freshness.last_outbound_at)} · ${Number(freshness.messages_24h || 0)} in 24 h · as of ${when(freshness.as_of)}`;
+}
+
 function renderAdminLogRows(id, logs = [], options = {}) {
   const wrap = document.getElementById(id);
   if (!wrap) return;
@@ -22041,7 +22079,8 @@ async function renderAdminDashboard(options = {}) {
   renderAdminOutlookAgentActions(remoteSnap?.outlookAgentActions || [], remoteSnap?.outlookAgentStatus || {});
   renderAdminLogRows("admin-notification-log", remoteSnap?.notificationLogs || [], { empty: "No notification records yet. Failed sends and safe provider-missing logs will appear here." });
   renderAdminLogRows("admin-email-log", remoteSnap?.emailLogs || [], { empty: "No email log records yet. Listing submissions, OTPs, account events, and failure logs will appear here." });
-  renderAdminLogRows("admin-whatsapp-log", remoteSnap?.whatsappLogs || [], { empty: "No WhatsApp message log records yet. Template/freeform send attempts will appear here." });
+  renderAdminLogRows("admin-whatsapp-log", remoteSnap?.whatsappLogs || [], { empty: "No WhatsApp messages yet. Messages the bridge receives and sends will appear here." });
+  adminRenderWhatsappLogFreshness(adminWhatsappLogsFreshness);
   setAdminWorkflowTab(activeAdminWorkflowTab);
   await ensureAdminWhatsappConversationLoaded();
   renderAdminList("admin-recent-users", remoteSnap?.recent?.recentUsers || localSnap.recentUsers, (u) => `
@@ -29009,19 +29048,14 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   const isSourcedCandidateOverride = normalizedStatus === "approved" && statusOptions.sourced_candidate_override === true;
   const humanApprovalOverride = normalizedStatus === "approved"
     && (statusOptions.human_approval_override === true || statusOptions.integrity_override === true);
-  const listing = PROPERTIES.find(
-    (p) => String(p.id) === String(localId)
-      || (backendId && String(p.backend_id || "") === String(backendId))
-  ) || adminRemoteListings.find(
-    (p) => String(p.id) === String(localId)
-      || (backendId && String(p.backend_id || "") === String(backendId))
-  ) || adminCurrentPendingListings.find(
-    (p) => String(p.id) === String(localId)
-      || (backendId && String(p.backend_id || "") === String(backendId))
-  ) || adminLiveListings.find(
-    (p) => String(p.id) === String(localId)
-      || (backendId && String(p.backend_id || "") === String(backendId))
-  );
+  // C5 addendum: match the listing being moderated by its backend id first, so
+  // a local id shared with another object can't pick the wrong listing (whose
+  // title and price were then copied onto this id in the public list).
+  const listingLists = [PROPERTIES, adminRemoteListings, adminCurrentPendingListings, adminLiveListings];
+  const byBackend = (p) => backendId && (String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
+  const byLocal = (p) => String(p.id) === String(localId);
+  const listing = listingLists.reduce((found, list) => found || (Array.isArray(list) ? list.find(byBackend) : null), null)
+    || listingLists.reduce((found, list) => found || (Array.isArray(list) ? list.find(byLocal) : null), null);
   if (!listing) {
     toast("Listing not found in current snapshot.");
     return;
@@ -29159,12 +29193,15 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
           const liveProperty = upsertPropertyForUi(mapRemotePropertyForUi(detail?.data || {}));
           if (liveProperty) liveProperty.status = "approved";
         } catch (e) {
-          upsertPropertyForUi({
-            ...listing,
-            id: backendId,
-            status: "approved",
-            remote_source: "api"
-          });
+          // Only copy this listing's own fields onto its id (C5 addendum).
+          if (!listing.backend_id || String(listing.backend_id) === String(backendId) || String(listing.id) === String(backendId)) {
+            upsertPropertyForUi({
+              ...listing,
+              id: backendId,
+              status: "approved",
+              remote_source: "api"
+            });
+          }
         }
       } else if (normalizedStatus !== "approved") {
         const existingPublic = PROPERTIES.find((p) => String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
@@ -30584,6 +30621,18 @@ function marketplaceDripRunHtml(run = {}) {
   </div>`;
 }
 
+// C5: say plainly whether the drip is working, with the last good run and the last error.
+function marketplaceDripHealthHtml(health = null) {
+  if (!health || typeof health !== "object") return "";
+  const tone = { running: "border-emerald-200 bg-emerald-50 text-emerald-900", not_running: "border-red-300 bg-red-50 text-red-900", stale: "border-amber-200 bg-amber-50 text-amber-900", paused: "border-gray-200 bg-gray-50 text-gray-800", off: "border-gray-200 bg-gray-50 text-gray-800" }[health.status] || "border-gray-200 bg-gray-50 text-gray-800";
+  const when = (value) => value ? (staffKampalaDateTime(value) || value) : "none recorded";
+  return `<div class="mt-3 rounded-lg border ${tone} p-2 text-xs" data-marketplace-drip-health="${adminAttr(health.status || "")}">
+    <div class="font-black">${adminEscape(health.status === "not_running" ? "Not running" : health.status === "running" ? "Running" : health.status === "off" ? "Off" : health.status === "paused" ? "Paused" : "No recent run")}</div>
+    <div class="mt-0.5">${adminEscape(health.label || "")}</div>
+    <div class="mt-1 text-[11px]">Last successful run: ${adminEscape(when(health.last_success_at))} • Last error: ${adminEscape(health.last_error_at ? `${when(health.last_error_at)} — ${health.last_error || "error"}` : "none")} • As of ${adminEscape(when(health.as_of))}</div>
+  </div>`;
+}
+
 function marketplaceDripHtml(data = {}) {
   const state = data.state || {};
   const inventory = data.inventory || {};
@@ -30603,6 +30652,7 @@ function marketplaceDripHtml(data = {}) {
       </div>
       <button type="button" onclick="adminLoadMarketplaceDrip()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold">Refresh</button>
     </div>
+    ${marketplaceDripHealthHtml(data.health)}
     <div class="mt-3 grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
       <label class="rounded-lg border border-gray-200 p-2"><span class="block text-[10px] uppercase font-black text-gray-500">Interval min</span><input id="admin-marketplace-drip-interval" type="number" min="1" max="1440" value="${adminAttr(state.base_interval_minutes || 30)}" class="mt-1 w-full border border-gray-200 rounded px-2 py-1 text-xs"></label>
       <label class="rounded-lg border border-gray-200 p-2"><span class="block text-[10px] uppercase font-black text-gray-500">Batch</span><input id="admin-marketplace-drip-batch" type="number" min="1" max="25" value="${adminAttr(state.batch_size || 5)}" class="mt-1 w-full border border-gray-200 rounded px-2 py-1 text-xs"></label>
@@ -49080,15 +49130,29 @@ function mapRemotePropertyForUi(p, options = {}) {
   };
 }
 
+// C5 addendum (Fisher, 10 Oct): a Kyanja search showed "Apartment block for
+// sale in Kisaasi, USh 2.5B" on three cards that linked to three other listings.
+// A card must always show the row it links to: look a listing up by its own
+// id first, and only then by backend_id, and never reuse an object whose
+// identity differs from the row being shown.
+function propertyIdentityForUi(p = {}) {
+  return String(p?.backend_id || p?.id || "");
+}
+
 function findPropertyForUi(id) {
-  return PROPERTIES.find((p) => String(p.id) === String(id) || String(p.backend_id || "") === String(id));
+  const key = String(id || "");
+  if (!key) return undefined;
+  return PROPERTIES.find((p) => String(p.id) === key)
+    || PROPERTIES.find((p) => String(p.backend_id || "") === key);
 }
 
 function upsertPropertyForUi(property) {
   if (!property?.id) return null;
   const mapped = property.type ? property : mapRemotePropertyForUi(property);
   mapped.remote_source = mapped.remote_source || "api";
-  const idx = PROPERTIES.findIndex((p) => String(p.id) === String(mapped.id) || String(p.backend_id || "") === String(mapped.id));
+  let idx = PROPERTIES.findIndex((p) => String(p.id) === String(mapped.id));
+  if (idx < 0) idx = PROPERTIES.findIndex((p) => String(p.backend_id || "") === String(mapped.id));
+  if (idx >= 0 && mapped.backend_id && PROPERTIES[idx].backend_id && String(PROPERTIES[idx].backend_id) !== String(mapped.backend_id)) idx = -1;
   if (idx >= 0) {
     const existing = PROPERTIES[idx];
     const next = { ...existing, ...mapped };
@@ -49362,10 +49426,19 @@ function cachePublicCategoryPageRows(category, page, rows = []) {
   const mappedRows = (Array.isArray(rows) ? rows : [])
     .map((row) => {
       if (!row) return null;
+      const rowKey = String(row.backend_id || row.id || "");
+      const found = findPropertyForUi(row.id || row.backend_id);
+      // Never show another listing's object for this row, and never let an
+      // older client object's title or price win over the row just fetched.
+      const sameListing = found && propertyIdentityForUi(found) === rowKey;
+      const rowHasContent = Object.prototype.hasOwnProperty.call(row, "title");
       if (row.remote_source === "api" || row.backend_id || row.type) {
-        return findPropertyForUi(row.id || row.backend_id) || row;
+        if (!sameListing) return row;
+        return rowHasContent ? { ...found, ...row } : found;
       }
-      return findPropertyForUi(row.id) || mapRemotePropertyForUi(row);
+      const mapped = mapRemotePropertyForUi(row);
+      if (!sameListing) return mapped;
+      return rowHasContent ? { ...found, ...mapped } : found;
     })
     .filter(Boolean);
   cache[safePage] = mappedRows;

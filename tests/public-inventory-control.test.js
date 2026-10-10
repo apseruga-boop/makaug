@@ -115,7 +115,8 @@ test('admin live controls use paginated backend snapshots', () => {
 });
 
 test('remove and status actions can target listings loaded only through the live endpoint', () => {
-  assert.match(appSource, /adminLiveListings\.find\(\s*\(p\) => String\(p\.id\) === String\(localId\)/);
+  // C5: the lookup searches every list (live included) by backend id first, then by local id.
+  assert.match(appSource, /const listingLists = \[PROPERTIES, adminRemoteListings, adminCurrentPendingListings, adminLiveListings\];/);
   assert.match(appSource, /const liveIdx = adminLiveListings\.findIndex/);
   assert.match(appSource, /if \(liveIdx >= 0\) adminLiveListings\[liveIdx\]/);
 });

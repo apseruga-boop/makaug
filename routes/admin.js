@@ -169,6 +169,7 @@ const { hideReportedProperty } = require('../services/reportListingModerationSer
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const { isPriceOnApplication } = require('../utils/listingPriceQuality');
+const { FAILED_WHATSAPP_SQL, listWhatsappActivity, whatsappActivityFreshness } = require('../services/whatsappActivityService');
 const { listingRealPhotoCheck, NO_REAL_PHOTO_MESSAGE } = require('../utils/realListingPhoto');
 const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const {
@@ -3784,7 +3785,7 @@ router.get('/command-centre', async (_req, res, next) => {
       adminCommandCentreMetric('overdue_tasks', () => safeCount("SELECT COUNT(*)::int AS total FROM lead_tasks WHERE status = 'open' AND due_at < NOW()")),
       adminCommandCentreMetric('whatsapp_needs_human', () => safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_conversation_state WHERE status IN ('needs_human','escalated')")),
       adminCommandCentreMetric('failed_emails', () => safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing','bounced','error')")),
-      adminCommandCentreMetric('failed_whatsapp', () => safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing','error')")),
+      adminCommandCentreMetric('failed_whatsapp', () => safeCount(FAILED_WHATSAPP_SQL)),
       adminCommandCentreMetric('advertising_open_leads', () => safeCount("SELECT COUNT(*)::int AS total FROM advertising_inquiries WHERE status IN ('new','contacted','proposal_sent')")),
       adminCommandCentreMetric('live_ads', () => safeCount("SELECT COUNT(*)::int AS total FROM advertising_campaigns WHERE status = 'live'")),
       adminCommandCentreMetric('paid_revenue_ugx', () => safeOne("SELECT COALESCE(SUM(paid_amount_ugx), 0)::bigint AS total FROM advertising_campaigns WHERE payment_status = 'paid'", [], { total: 0 }).then((row) => Number(row.total || 0))),
@@ -12574,39 +12575,26 @@ router.post('/whatsapp/outbox-cancel', async (req, res, next) => {
   }
 });
 
+// C5: the panel reads what the web bridge actually writes (whatsapp_messages)
+// plus failed outbox sends; whatsapp_message_logs stopped on 12 Sep 2026.
 router.get('/whatsapp-message-logs', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
-    const status = cleanText(req.query.status);
-    const values = [];
-    const filters = [];
-    if (status) {
-      values.push(status);
-      filters.push(`status = $${values.length}`);
-    }
-    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-    const count = await db.query(`SELECT COUNT(*)::int AS total FROM whatsapp_message_logs ${where}`, values);
-    const total = count.rows[0]?.total || 0;
-    const rows = await db.query(
-      `SELECT *
-       FROM whatsapp_message_logs
-       ${where}
-       ORDER BY created_at DESC
-       LIMIT $${values.length + 1}
-       OFFSET $${values.length + 2}`,
-      [...values, limit, offset]
-    );
-    return res.json({ ok: true, data: rows.rows, pagination: toPagination(total, page, limit) });
+    const [activity, freshness] = await Promise.all([
+      listWhatsappActivity(db, { limit, offset, status: cleanText(req.query.status) }),
+      whatsappActivityFreshness(db).catch(() => null)
+    ]);
+    return res.json({
+      ok: true,
+      data: activity.rows,
+      pagination: toPagination(activity.total, page, limit),
+      source: 'whatsapp_messages+outbound_message_queue',
+      as_of: new Date().toISOString(),
+      freshness
+    });
   } catch (error) {
     if (['42P01', '42703'].includes(error.code)) {
-      const fallback = await db.query(
-        `SELECT id, user_phone AS recipient_phone_masked, status, channel AS message_type,
-                last_error AS failure_reason, created_at, sent_at
-         FROM outbound_message_queue
-         ORDER BY created_at DESC
-         LIMIT 100`
-      ).catch(() => ({ rows: [] }));
-      return res.json({ ok: true, data: fallback.rows, pagination: toPagination(fallback.rows.length, 1, 100), fallback: true });
+      return res.json({ ok: true, data: [], pagination: toPagination(0, 1, 50), fallback: true });
     }
     return next(error);
   }
@@ -13710,7 +13698,7 @@ async function buildSetupStatus() {
     listingsPending: await safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPendingReviewWhere('p')}`),
     listingsApproved: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'"),    listingTests: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE source = 'admin_test'"),
     failedEmails: await safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing')"),
-    failedWhatsApp: await safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing')"),
+    failedWhatsApp: await safeCount(FAILED_WHATSAPP_SQL),
     failedSms: await safeCount("SELECT COUNT(*)::int AS total FROM notifications WHERE channel = 'sms' AND status IN ('failed','provider_missing')"),
     savedSearches: await safeCount("SELECT COUNT(*)::int AS total FROM saved_searches WHERE status = 'active'"),
     propertyNeedRequests: await safeCount("SELECT COUNT(*)::int AS total FROM property_need_requests"),
