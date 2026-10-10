@@ -150,6 +150,8 @@ function applyKenyaTenant(html) {
     .replace(/UGANDA PROPERTY/g, "KENYA PROPERTY")
     .replace(/Use makaug in 9 languages/g, "Use Nyumba KE in English or Kiswahili")
     .replace(/A property search engine for Uganda/g, "A property search engine for Kenya")
+    // C8: the Uganda badge is now "Every property in Uganda, in one place"; Kenya keeps its own line.
+    .replace(/Every property in Uganda, in one place/g, "A property search engine for Kenya")
     .replace(/makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising/g, "Nyumba KE uses AI-powered search to organise reviewed property opportunities across Kenya, bringing")
     .replace(/Search in any language — makaug AI finds real listings\./g, "Search in English or Kiswahili — Nyumba KE AI finds real listings.")
     .replace(/Ask makaug AI/g, "Ask Nyumba KE AI")
