@@ -1,6 +1,7 @@
 const { DISTRICTS } = require('./constants');
 const administrativeGazetteer = require('./ugandaLocationGazetteer.generated.json');
 const { CURATED_UGANDA_LOCATION_OVERRIDES } = require('./ugandaLocationOverrides');
+const { kampalaTownFor } = require('./kampalaDivisions');
 const {
   freeTextLocationQueryAttempts: sharedFreeTextLocationQueryAttempts,
   locationQueryAttempts: sharedLocationQueryAttempts,
@@ -309,8 +310,10 @@ const CANONICAL_TOWN_NAMES = new Map([
   ['wakiso:entebbe municipality', 'Entebbe']
 ]);
 
-function canonicalTownName(district, town) {
+function canonicalTownName(district, town, name = '') {
   const cleanTown = String(town || '').trim();
+  // Kampala: the five divisions are the towns (utils/kampalaDivisions.js).
+  if (district === 'Kampala') return kampalaTownFor(name, cleanTown);
   return CANONICAL_TOWN_NAMES.get(`${normalizeLocationKey(district)}:${normalizeLocationKey(cleanTown)}`) || cleanTown;
 }
 
@@ -330,7 +333,7 @@ sourceLocations.forEach((entry, index) => {
     name,
     district,
     town: canonicalTownName(district, String(entry.town || '').trim()
-      || (entry.level === 'city' ? name : `${district} Town`)),
+      || (entry.level === 'city' ? name : `${district} Town`), name),
     level: entry.level || 'area',
     aliases: Array.from(new Set([name, ...(entry.aliases || [])])).filter(Boolean),
     key
