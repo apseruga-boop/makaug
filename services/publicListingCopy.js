@@ -86,13 +86,24 @@ function foundOnlineSourceLine(extra = {}) {
   return `Found on ${platform}${sourceName ? ` from ${sourceName}` : ''}. Check the original post before paying.`;
 }
 
+// Staff instructions that harvest and import code used to write into public
+// copy: any "Confirm … before (public) approval." sentence (e.g. "Confirm the
+// exact property pin and local amenities with the listing agent before
+// approval."), "… before featuring.", and "Pending King review …" (P4).
+// The same patterns are in assets/makaug-app.js sanitizePublicListingCopyForUi
+// and scripts/report-staff-wording-in-public-copy.js.
+const STAFF_INSTRUCTION_PATTERNS = [
+  /\s*\bConfirm\b[^.!?]*?\bbefore\s+(?:public\s+)?approval\b[^.!?]*[.!?]?/gi,
+  /\s*\bConfirm latest availability, exact pin, and ownership authority before featuring\.?/gi,
+  /\s*\bPending King review\b[^.!?]*[.!?]?/gi
+];
+
+function stripStaffInstructions(value = '') {
+  return STAFF_INSTRUCTION_PATTERNS.reduce((text, pattern) => text.replace(pattern, ''), String(value || ''));
+}
+
 function cleanPublicListingCopy(value = '') {
-  return cleanText(value)
-    .replace(/\s*Confirm the exact property pin with the listing agent before approval\.?/gi, '')
-    .replace(/\s*Confirm exact gate or plot pin with the agent before public approval\.?/gi, '')
-    .replace(/\s*Confirm latest availability, exact pin, and ownership authority before featuring\.?/gi, '')
-    .replace(/\s*Pending King review[^.]*\.?/gi, '')
-    .trim();
+  return stripStaffInstructions(cleanText(value)).trim();
 }
 
 function redactThirdPartyPublicText(value = '') {
@@ -533,6 +544,8 @@ module.exports = {
   sanitizeStaffCopy,
   foundOnlineSourceLine,
   foundOnlinePublicNotice,
+  STAFF_INSTRUCTION_PATTERNS,
+  stripStaffInstructions,
   buildThirdPartyPublicTitle,
   buildThirdPartyPublicSummary,
   isFoundOnlinePublicRow,

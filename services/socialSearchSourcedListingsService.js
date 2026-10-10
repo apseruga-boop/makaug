@@ -2026,7 +2026,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     map_pin_confirmed: false,
     latitude_source: 'manual_public_source_area_pin',
     longitude_source: 'manual_public_source_area_pin',
-    area_highlights: `${item.area} is a ${TARGET_COUNTRY_NAME} property search area. Confirm the exact property pin and local amenities with the listing agent before approval.`,
+    // Public copy only; the reviewer instruction is staff-only (P4).
+    area_highlights: `${item.area} is a ${TARGET_COUNTRY_NAME} property search area.`,
+    staff_review_notes: ['Confirm the exact property pin and local amenities with the listing agent before approval.'],
     nearby_facilities: nearby.map(([name, type, distanceKm]) => ({ name, type, distanceKm })),
     source_labels: [
       'found online',

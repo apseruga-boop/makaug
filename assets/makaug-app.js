@@ -45181,12 +45181,13 @@ function getLocalizedPropertyDescription(property = {}, nearby = []) {
   return raw || buildLocalizedPropertyNarrative(property, nearby);
 }
 
+// Same patterns as services/publicListingCopy.js STAFF_INSTRUCTION_PATTERNS:
+// any "Confirm … before (public) approval." sentence and "Pending King review …".
 function sanitizePublicListingCopyForUi(value = "") {
   return String(value || "")
-    .replace(/\s*Confirm the exact property pin with the listing agent before approval\.?/gi, "")
-    .replace(/\s*Confirm exact gate or plot pin with the agent before public approval\.?/gi, "")
-    .replace(/\s*Confirm latest availability, exact pin, and ownership authority before featuring\.?/gi, "")
-    .replace(/\s*Pending King review[^.]*\.?/gi, "")
+    .replace(/\s*\bConfirm\b[^.!?]*?\bbefore\s+(?:public\s+)?approval\b[^.!?]*[.!?]?/gi, "")
+    .replace(/\s*\bConfirm latest availability, exact pin, and ownership authority before featuring\.?/gi, "")
+    .replace(/\s*\bPending King review\b[^.!?]*[.!?]?/gi, "")
     .replace(/\s+/g, " ")
     .trim();
 }
