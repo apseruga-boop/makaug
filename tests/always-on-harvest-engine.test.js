@@ -130,10 +130,14 @@ async function run() {
     source_page_url: 'https://x.com/agent',
     first_posted_at: '2026-08-01T00:00:00.000Z',
   });
-  assert.strictEqual(normalizedUsd.priceCurrency, 'UGX');
-  assert.strictEqual(normalizedUsd.priceOriginalCurrency, 'USD');
-  assert.strictEqual(normalizedUsd.priceOriginal, 800);
-  assert.strictEqual(normalizedUsd.price, 800 * normalizedUsd.priceFxRateUgx);
+  // The construction cost is still ignored and $800 is the price read...
+  assert.strictEqual(normalizedUsd.implausiblePriceRaw.price_original_currency, 'USD');
+  assert.strictEqual(normalizedUsd.implausiblePriceRaw.price_original, 800);
+  assert.strictEqual(normalizedUsd.implausiblePriceRaw.price, 800 * 3800);
+  // ...but C17: a house for sale at UGX 3.04M is below the UGX 5M floor, so it
+  // is stored as Price on application rather than as that number.
+  assert.strictEqual(normalizedUsd.price, null);
+  assert.strictEqual(normalizedUsd.sourcePriceRejectionReason, 'implausible_price');
   assert.strictEqual(normalizedUsd.area, 'Kalagi');
   const intakeGate = sourcePostMeetsLaunchIntakeRule(normalizedUsd, normalizedUsd.sourceAgent);
   assert.strictEqual(intakeGate.eligible, true);

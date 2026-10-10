@@ -51,6 +51,7 @@ function sourceCurrencyForValue(value, explicitCurrency = '') {
 // tagged USD (and would be multiplied by ~3,800 again).
 const MAX_PLAUSIBLE_USD_ORIGINAL = 3_000_000;
 
+const GROUPED = '\u2063';
 const MULTIPLIERS = { b: 1e9, bn: 1e9, billion: 1e9, billions: 1e9, m: 1e6, mn: 1e6, million: 1e6, millions: 1e6, k: 1e3, thousand: 1e3, thousands: 1e3 };
 
 /**
@@ -63,10 +64,13 @@ const MULTIPLIERS = { b: 1e9, bn: 1e9, billion: 1e9, billions: 1e9, m: 1e6, mn: 
 function parseSourcePrice(value) {
   if (value == null || value === '') return null;
   if (typeof value === 'number' && Number.isFinite(value)) return { amount: Math.round(value), currency: '' };
+  // A figure written with thousands separators ("1,000,000,000") is marked
+  // with GROUPED so a 10-digit grouped price isn't mistaken for a phone number.
   const raw = String(value || '').toLowerCase()
+    .replace(/\b\d{1,3}(?:[, ]\d{3})+\b/g, (figure) => `${figure}${GROUPED}`)
     .replace(/(\d),(?=\d{3}\b)/g, '$1') // 9,500,000 -> 9500000
     .replace(/(\d)\s(?=\d{3}\b)/g, '$1'); // 9 500 000 -> 9500000
-  const rx = /(ugx|ush|shs?|usd|us\$|\$)?\s*(\d+(?:\.\d+)?)\s*(bn|billions?|b|mn|millions?|m|k|thousands?)?(?=ugx|ush|shs|usd|[^a-z0-9]|$)\s*(ugx|ush|shs?|usd|\/=|\/-)?/g;
+  const rx = /(ugx|ush|shs?|usd|us\$|\$)?\s*(\d+(?:\.\d+)?)\u2063?\s*(bn|billions?|b|mn|millions?|m|k|thousands?)?(?=ugx|ush|shs|usd|[^a-z0-9]|$)\s*(ugx|ush|shs?|usd|\/=|\/-)?/g;
   const candidates = [];
   let m;
   while ((m = rx.exec(raw))) {
@@ -88,7 +92,19 @@ function parseSourcePrice(value) {
     if (/^\s*(per|\/|a)\s*(month|mo|year|yr|semester|sem|night)/.test(after)) score += 2;
     if (/^\s*(bed|bedroom|br\b|bath|toilet|acre|decimal|ft|feet|sqm|sq|m2|km|miles?|minutes?|mins?|%|units?|rooms?|storey|floors?|plots?\b)/.test(after)) score -= 8;
     if (/x\s*$/.test(before) || /^\s*x\s*\d/.test(after) || /\d\s*x\s*\d/.test(near)) score -= 8; // 50x100
-    if (/^(?:0|256)7\d{8}$/.test(m[2]) || m[2].length >= 10 && !suffix) score -= 8; // phone numbers
+    const integerDigits = m[2].split('.')[0].length;
+    const numberEnd = m.index + m[0].indexOf(m[2]) + m[2].length;
+    const grouped = raw.charAt(numberEnd) === GROUPED;
+    if (/^(?:0|256)7\d{8}$/.test(m[2]) || (m[2].length >= 10 && !suffix && !grouped)) score -= 8; // phone numbers
+    // C17: "+2567507535461.2K views" is a phone number run into a view count
+    // (it was read as UGX 2.57 quadrillion). An ungrouped 10+ digit figure with
+    // a k/m/b suffix, a "+" in front, or a views/followers/likes count after is
+    // never a price.
+    if ((integerDigits >= 10 && !grouped && suffix) || /\+\s*$/.test(before)) score -= 12;
+    if (/^\s*(views?|followers?|likes?|comments?|shares?|subscribers?|plays?|watching|reposts?)\b/.test(after)) score -= 12;
+    // A shorthand suffix on an already-long figure ("1300000m") is a typo, not
+    // a price: don't multiply it again.
+    if (suffix && integerDigits >= 5) score -= 12;
     if (amount < 1000 && !suffix && !curToken) score -= 3;
     candidates.push({ amount: Math.round(amount), currency, score, start });
   }

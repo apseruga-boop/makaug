@@ -1,5 +1,7 @@
 'use strict';
 
+const { isPriceImplausible } = require('./pricePlausibility');
+
 /**
  * What an anonymous visitor may be sent about a listing or an agent.
  *
@@ -77,9 +79,25 @@ function pickPublicExtra(extra) {
  * The listing as an anonymous visitor may see it. `privileged` (staff, or an
  * owner with a valid edit token) returns the row untouched.
  */
+// C17 read-time guard: a price outside the plausibility bounds (or one staff
+// marked price_review 'implausible') is never published as a number; the
+// public sees "Price on application". The stored row is unchanged.
+function hideImplausiblePrice(out, row) {
+  const extra = row && row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  if (!(isPriceImplausible(row) || extra.price_review === 'implausible')) return out;
+  return {
+    ...out,
+    price: null,
+    price_original: null,
+    price_fx_rate_ugx: null,
+    price_fx_as_of: null,
+    price_on_application: true
+  };
+}
+
 function publicListingPayload(row, { privileged = false } = {}) {
   if (privileged || !row || typeof row !== 'object') return row;
-  const out = pick(row, PUBLIC_LISTING_KEYS);
+  const out = hideImplausiblePrice(pick(row, PUBLIC_LISTING_KEYS), row);
   // The approval time is what the "new" badge counts from, so it is exposed as
   // a date of publication rather than as a moderation field.
   if (out.published_at == null && row.approved_at) out.published_at = row.approved_at;
@@ -114,10 +132,11 @@ function publicAgentPayload(row) {
 /** A listing on a public agent profile: allow-listed columns, filtered extras. */
 function publicAgentListingPayload(row) {
   if (!row || typeof row !== 'object') return row;
-  return { ...row, extra_fields: pickPublicExtra(row.extra_fields) };
+  return hideImplausiblePrice({ ...row, extra_fields: pickPublicExtra(row.extra_fields) }, row);
 }
 
 module.exports = {
+  hideImplausiblePrice,
   PUBLIC_LISTING_KEYS,
   PUBLIC_EXTRA_KEYS,
   pickPublicExtra,

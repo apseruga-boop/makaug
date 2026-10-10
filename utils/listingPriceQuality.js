@@ -1,6 +1,7 @@
 'use strict';
 
 const { monthlyFactor, normalizePricePeriod } = require('../config/pricePeriods');
+const { pricePlausibility } = require('./pricePlausibility');
 
 const RECURRING_PERIODS = new Set([
   'month',
@@ -195,6 +196,16 @@ function listingPriceQuality(row = {}, options = {}) {
     reasons.push('student_category_contains_sale_asset');
   }
 
+  // C17: plausibility bounds (utils/pricePlausibility.js). Above the bound the
+  // price can't be approved as a number by anyone: set the right price or POA.
+  // Below the bound it needs a person to confirm the basis.
+  const plausibility = pricePlausibility(row);
+  if (!plausibility.plausible && !priceOnApplication && Number.isFinite(price) && price > 1) {
+    if (plausibility.reason === 'price_above_plausible_bounds') hardReasons.push('price_above_plausible_bounds');
+    else if (priceBasisConfirmed) warnings.push('low_price_below_plausible_bounds_staff_confirmed');
+    else reasons.push('price_below_plausible_bounds');
+  }
+
   reasons.push(...hardReasons);
   return {
     ok: reasons.length === 0,
@@ -210,6 +221,7 @@ function listingPriceQuality(row = {}, options = {}) {
     explicit_sale_evidence: explicitSale,
     explicit_rent_evidence: explicitRent,
     price_figure_evidence: hasPriceFigureEvidence(evidence),
+    plausibility,
     reasons: [...new Set(reasons)],
     warnings: [...new Set(warnings)]
   };

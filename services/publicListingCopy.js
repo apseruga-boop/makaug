@@ -469,6 +469,7 @@ function publicContactLabelFor({ phone = '', email = '', platform = '', hasSourc
 // (LISTING_COPY_EXTRA_KEYS) and turns them into the same "safe extra" shape
 // the JSON API passes to the builders, so both render identical copy.
 const LISTING_COPY_EXTRA_KEYS = [
+  'price_review',
   'found_online', 'social_search_candidate', 'sourced_inventory_candidate', 'found_online_candidate',
   'source_badge', 'source_batch', 'source_platform', 'source_url', 'source_post_url', 'post_url',
   'platform_url', 'original_url', 'source_contact_url', 'video_url', 'source_name', 'source_agent_name',
@@ -506,6 +507,7 @@ function listingCopyExtraFromRaw(raw = {}) {
     extra.frame_ocr_text
   );
   return {
+    price_review: cleanText(extra.price_review) || '',
     found_online: extra.found_online === true,
     social_search_candidate: extra.social_search_candidate === true,
     sourced_inventory_candidate: extra.sourced_inventory_candidate === true,

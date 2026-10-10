@@ -43,6 +43,7 @@ const {
   safeSourcePriceCandidate,
   ugandanPhoneFromSourceText,
 } = require('../utils/sourceIntakeIntegrity');
+const { pricePlausibility } = require('../utils/pricePlausibility');
 const {
   resolveCanonicalUgandaLocation,
   resolveCanonicalUgandaLocationFromText,
@@ -691,15 +692,17 @@ function sourceTextForRawPost(raw = {}) {
   ].map((value) => compactText(value)).filter(Boolean).join(' ');
 }
 
+// C17: a shorthand suffix must end the word. "$2,000 Month" was read as
+// "$2,000 M" (USD 2 billion), so the real price was then rejected.
 function explicitSourcePriceTextsFromEvidence(text = '') {
   const sourceText = maskConstructionCostsForPriceExtraction(compactText(text));
   const patterns = IS_SOUTH_AFRICA
     ? [
-      /(?:\b(?:ZAR|R|USD|US\$|EUR|GBP)\s*|[R$€£]\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ZAR|USD|EUR|GBP))?/gi,
+      /(?:\b(?:ZAR|R|USD|US\$|EUR|GBP)\s*|[R$€£]\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)(?=ugx|ush|shs|usd|zar|[^a-z]|$))?(?:\s*(?:ZAR|USD|EUR|GBP))?/gi,
       /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:ZAR|R))?/gi
     ]
     : [
-      /(?:\b(?:UGX|USh|Shs?|USD|US\$)\s*|\$\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:UGX|USh|Shs?))?/gi,
+      /(?:\b(?:UGX|USh|Shs?|USD|US\$)\s*|\$\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)(?=ugx|ush|shs|usd|zar|[^a-z]|$))?(?:\s*(?:UGX|USh|Shs?))?/gi,
       /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:UGX|USh|Shs?))?/gi
     ];
   const matches = [];
@@ -1890,6 +1893,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     raw_location: item.rawLocation || item.raw_location || null,
     country_gate: item.countryGate || item.country_gate || null,
     source_price_rejection_reason: item.sourcePriceRejectionReason || item.source_price_rejection_reason || null,
+    ...((item.sourcePriceRejectionReason || item.source_price_rejection_reason) === 'implausible_price'
+      ? { price_review: 'implausible', implausible_price_raw: item.implausiblePriceRaw || null }
+      : {}),
     source_platform: sourcePlatform,
     source_type: item.sourceType || item.source_type || 'found_online_source_post',
     transaction_type: item.transactionType || item.transaction_type || null,
@@ -2669,13 +2675,28 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     ? priceCandidate
     : { value: null, reason: countryGate.reason };
   const ingestedAt = raw.ingested_at || raw.imported_at || raw.first_seen_at || new Date().toISOString();
-  const sourcePriceMetadata = propertyPriceMetadata(safePrice.value, {
+  let sourcePriceMetadata = propertyPriceMetadata(safePrice.value, {
     currency: raw.price_currency || raw.currency || raw.source_currency,
     ...(IS_SOUTH_AFRICA
       ? { usdToZarRate: USD_TO_CANONICAL_GUIDE_RATE }
       : { usdToUgxRate: USD_TO_CANONICAL_GUIDE_RATE }),
     fxAsOf: raw.price_fx_as_of || ingestedAt
   });
+  // C17: a price outside the plausibility bounds is stored as Price on
+  // application with price_review 'implausible'; the raw figure is kept.
+  const pricePlausibilityCheck = pricePlausibility({ listing_type: listingType, transaction_type: transactionType, price_period: pricePeriod, price: sourcePriceMetadata.price });
+  let implausiblePriceRaw = null;
+  if (!pricePlausibilityCheck.plausible) {
+    implausiblePriceRaw = {
+      price: sourcePriceMetadata.price,
+      price_original: sourcePriceMetadata.price_original,
+      price_original_currency: sourcePriceMetadata.price_original_currency,
+      price_period: pricePeriod,
+      source_price_text: safePrice.value == null ? null : String(safePrice.value).slice(0, 200),
+      bounds_ugx: pricePlausibilityCheck.bounds
+    };
+    sourcePriceMetadata = { ...sourcePriceMetadata, price: null, price_original: null, price_fx_rate_ugx: null, price_fx_as_of: null, rejection_reason: 'implausible_price' };
+  }
   const sourceAgent = {
     key: sourceKey,
     name: sourceName,
@@ -2781,6 +2802,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     address,
     countryGate,
     sourcePriceRejectionReason: safePrice.reason || sourcePriceMetadata.rejection_reason || '',
+    implausiblePriceRaw,
     price: sourcePriceMetadata.price,
     priceCurrency: sourcePriceMetadata.price_currency,
     priceOriginalCurrency: sourcePriceMetadata.price_original_currency,

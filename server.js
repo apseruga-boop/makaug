@@ -559,6 +559,7 @@ app.use('/private-local', (_req, res) => {
 });
 
 const { PRICE_PERIOD_FORM_OPTIONS } = require('./config/pricePeriods');
+const { PRICE_BOUNDS_UGX } = require('./utils/pricePlausibility');
 app.get('/config.js', (_req, res) => {
   // Free maps only (Leaflet + OpenStreetMap). C18, 10 Oct 2026: Google Maps is
   // no longer used and no Google key is ever sent to browsers.
@@ -578,6 +579,7 @@ app.get('/config.js', (_req, res) => {
   return res.send([
     `window.MAKAUG_CONFIG = ${JSON.stringify(publicConfig)};`,
     `window.MAKAUG_PRICE_PERIOD_OPTIONS = ${JSON.stringify(PRICE_PERIOD_FORM_OPTIONS)};`,
+    `window.MAKAUG_PRICE_BOUNDS = ${String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase() === 'UG' ? JSON.stringify(PRICE_BOUNDS_UGX) : 'false'};`,
     `window.MAKAUG_MAP_PROVIDER = ${JSON.stringify(publicConfig.mapProvider)};`,
     `window.MAKAUG_GOOGLE_MAPS_API_KEY = ${JSON.stringify(publicConfig.googleMapsApiKey)};`,
     `window.MAKAUG_API_BASE = window.MAKAUG_API_BASE || ${JSON.stringify(publicConfig.apiBase)};`,
@@ -1647,8 +1649,9 @@ app.get('/property/:id', async (req, res, next) => {
       ...renderedSeo.meta,
       structuredData: renderedSeo.structuredData
     });
-    if (listing.thin) {
-      // Thin found-online page: stays live, but noindex,follow and out of the sitemap.
+    if (listing.thin || listing.price_implausible) {
+      // Thin found-online page, or (C17) a price outside the plausibility
+      // bounds shown as "Price on application": stays live, but noindex,follow.
       html = patchMetaTag(html, 'robots', 'noindex,follow');
       res.set('X-Robots-Tag', 'noindex, follow');
     }
