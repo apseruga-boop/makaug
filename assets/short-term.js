@@ -798,28 +798,25 @@
     return d.toISOString().slice(0, 10);
   }
 
-  // ------------------------------------------------------------ google maps
-  // This used OpenStreetMap tiles and they were being refused outright - 403,
-  // "App is not following the tile usage policy of OpenStreetMap's
-  // volunteer-run servers" - so every tile came back as an error image. Their
-  // tile servers are a volunteer service and a commercial marketplace pulling
-  // from them is what that policy exists to stop.
-  //
-  // Google Maps is already configured on this site (window.MAKAUG_CONFIG) and
-  // the bundle already has a loader, so this waits for that rather than
-  // injecting a second Maps script that would race it.
-  function loadGoogleMaps(attempt) {
-    if (window.google && window.google.maps) return Promise.resolve(true);
-    if (typeof window.ensureGoogleMapsApi === 'function') {
-      return window.ensureGoogleMapsApi().then(function (ok) {
-        return !!(ok && window.google && window.google.maps);
+  // ------------------------------------------------------------ map
+  // C18 (10 Oct 2026): Google Maps is gone. Leaflet + OpenStreetMap tiles,
+  // using the main bundle's loader. OSM refuses tile requests with no referrer
+  // (the 403 "not following the tile usage policy" seen here before), so the
+  // tile layer sends the site origin.
+  var ST_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  var ST_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+  function loadMapLibrary(attempt) {
+    if (window.L && window.L.map) return Promise.resolve(true);
+    if (typeof window.ensureLeafletApi === 'function') {
+      return window.ensureLeafletApi().then(function (ok) {
+        return !!(ok && window.L && window.L.map);
       });
     }
     // The bundle may not be in yet; this file loads in parallel with it.
     var tries = (attempt || 0) + 1;
     if (tries > 40) return Promise.resolve(false);
     return new Promise(function (resolve) {
-      window.setTimeout(function () { resolve(loadGoogleMaps(tries)); }, 250);
+      window.setTimeout(function () { resolve(loadMapLibrary(tries)); }, 250);
     });
   }
 
@@ -834,27 +831,20 @@
   function paintMap() {
     var host = document.getElementById('st-map');
     if (!host) return;
-    loadGoogleMaps().then(function (ok) {
+    loadMapLibrary().then(function (ok) {
       if (!ok) {
         host.innerHTML = '<div class="st-empty"><i class="fas fa-map"></i>' + esc(t('mapFail')) + '</div>';
         return;
       }
-      var g = window.google.maps;
-
-      if (!state.map) {
-        state.map = new g.Map(host, {
-          center: { lat: 0.3476, lng: 32.5825 },
-          zoom: 11,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: false,
-          scrollwheel: false,
-          gestureHandling: 'cooperative'
-        });
-        state.infoWindow = new g.InfoWindow();
+      var L = window.L;
+      if (!state.map || !document.body.contains(host) || state.mapHost !== host) {
+        if (state.map && state.map.remove) { try { state.map.remove(); } catch (e) { /* gone */ } }
+        state.map = L.map(host, { scrollWheelZoom: false }).setView([0.3476, 32.5825], 11);
+        state.mapHost = host;
+        L.tileLayer(ST_TILE_URL, { attribution: ST_TILE_ATTRIBUTION, referrerPolicy: 'strict-origin-when-cross-origin', maxZoom: 19 }).addTo(state.map);
       }
 
-      (state.markers || []).forEach(function (m) { m.setMap(null); });
+      (state.markers || []).forEach(function (m) { m.remove(); });
       state.markers = [];
 
       var placed = (state.listings || []).filter(function (l) {
@@ -863,53 +853,37 @@
 
       if (!placed.length) {
         // Nothing to pin yet, so show the country rather than an empty grey square.
-        state.map.setCenter({ lat: 1.3733, lng: 32.2903 });
-        state.map.setZoom(7);
+        state.map.setView([1.3733, 32.2903], 7);
         return;
       }
 
-      var bounds = new g.LatLngBounds();
+      var points = [];
       placed.forEach(function (listing) {
-        var position = { lat: Number(listing.latitude), lng: Number(listing.longitude) };
+        var point = [Number(listing.latitude), Number(listing.longitude)];
+        points.push(point);
         // The price IS the pin. That is the thing people scan a map for.
-        var marker = new g.Marker({
-          position: position,
-          map: state.map,
-          title: listing.title || '',
-          label: priceLabel(listing)
-            ? { text: priceLabel(listing), fontSize: '11px', fontWeight: '700', color: '#ffffff' }
-            : undefined,
-          icon: {
-            path: 'M -22 -11 H 22 A 8 8 0 0 1 22 11 H -22 A 8 8 0 0 1 -22 -11 Z',
-            fillColor: '#8a3a12',
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 1.5,
-            scale: 1,
-            labelOrigin: new g.Point(0, 0)
-          }
+        var label = priceLabel(listing);
+        var icon = L.divIcon({
+          className: 'st-price-pin',
+          html: '<span style="display:inline-block;background:#8a3a12;color:#fff;border:1.5px solid #fff;border-radius:11px;padding:3px 8px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.3)">' + esc(label || '•') + '</span>',
+          iconSize: null,
+          iconAnchor: [22, 11]
         });
-        marker.addListener('click', function () {
-          state.infoWindow.setContent(
-            '<div style="font-family:inherit;max-width:220px">'
-            + '<strong>' + esc(listing.title || '') + '</strong><br>'
-            + esc([listing.area, listing.district].filter(Boolean).join(', '))
-            + (priceLabel(listing) ? '<br>UGX ' + esc(String(listing.price_per_night)) + ' ' + esc(t('perNight')) : '')
-            + '<br><a href="' + esc(listing.url || '#') + '" data-st-link>' + esc(t('search')) + '</a>'
-            + '</div>'
-          );
-          state.infoWindow.open({ anchor: marker, map: state.map });
-        });
+        var marker = L.marker(point, { title: listing.title || '', icon: icon }).addTo(state.map);
+        marker.bindPopup(
+          '<div style="font-family:inherit;max-width:220px">'
+          + '<strong>' + esc(listing.title || '') + '</strong><br>'
+          + esc([listing.area, listing.district].filter(Boolean).join(', '))
+          + (label ? '<br>UGX ' + esc(String(listing.price_per_night)) + ' ' + esc(t('perNight')) : '')
+          + '<br><a href="' + esc(listing.url || '#') + '" data-st-link>' + esc(t('search')) + '</a>'
+          + '</div>'
+        );
         state.markers.push(marker);
-        bounds.extend(position);
       });
 
-      if (placed.length === 1) {
-        state.map.setCenter(bounds.getCenter());
-        state.map.setZoom(14);
-      } else {
-        state.map.fitBounds(bounds, 40);
-      }
+      if (points.length === 1) state.map.setView(points[0], 14);
+      else state.map.fitBounds(points, { padding: [40, 40] });
+      window.setTimeout(function () { try { state.map.invalidateSize(); } catch (e) { /* gone */ } }, 150);
     });
   }
 

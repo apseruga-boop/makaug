@@ -1,5 +1,7 @@
 'use strict';
 
+const { googlePlacesApiKey } = require('../utils/googlePlacesAllowed');
+
 const crypto = require('crypto');
 
 const logger = require('../config/logger');
@@ -142,8 +144,9 @@ function currentMonth() {
   return new Date().toISOString().slice(0, 7);
 }
 
+// Off unless GOOGLE_PLACES_ALLOWED=true (C18): no key, no Google calls.
 function googleApiKey() {
-  return clean(process.env.GOOGLE_MAPS_API_KEY || process.env.PUBLIC_GOOGLE_MAPS_API_KEY);
+  return clean(googlePlacesApiKey());
 }
 
 function sourceEnabled(definition) {

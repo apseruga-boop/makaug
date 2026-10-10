@@ -8677,11 +8677,13 @@ function setLang(lang, silent = false, rerender = true) {
 const API_BASE = (window.MAKAUG_API_BASE || "").replace(/\/$/, "");
 const GOOGLE_ADSENSE_CLIENT = (window.MAKAUG_ADSENSE_CLIENT || "").trim();
 const GOOGLE_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || {};
-const GOOGLE_MAPS_API_KEY = (window.MAKAUG_GOOGLE_MAPS_API_KEY || window.MAKAUG_CONFIG?.googleMapsApiKey || "").trim();
+// C18: no Google Maps key on the client.
+const GOOGLE_MAPS_API_KEY = "";
 // Maps are free by default: Leaflet with OpenStreetMap tiles, registry-first
 // location lookups and Nominatim for one-off "find on map" searches. Google
 // Maps (paid) is used only when the server sets MAP_PROVIDER=google.
-const MAP_PROVIDER = String(window.MAKAUG_MAP_PROVIDER || window.MAKAUG_CONFIG?.mapProvider || "osm").toLowerCase() === "google" ? "google" : "osm";
+// C18: OpenStreetMap only.
+const MAP_PROVIDER = "osm";
 const OSM_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 // makaug sends Referrer-Policy: no-referrer, but OpenStreetMap's tile and
 // Nominatim servers block requests that carry no referrer ("Access blocked:
@@ -58432,31 +58434,10 @@ window.gm_authFailure = function makaugGoogleMapsAuthFailure() {
   rerenderMapsWithoutGoogle();
 };
 
+// C18 (10 Oct 2026): Google Maps is no longer used. Every map is Leaflet +
+// OpenStreetMap; this always answers "no Google" so the Google branches never run.
 function ensureGoogleMapsApi() {
-  if (MAP_PROVIDER !== "google") return Promise.resolve(false);
-  if (!shouldUseGoogleMaps({ hasKey: !!GOOGLE_MAPS_API_KEY, authFailed: googleMapsAuthFailed, loaded: true })) return Promise.resolve(false);
-  if (window.google?.maps) return Promise.resolve(shouldUseGoogleMaps({ hasKey: true, authFailed: googleMapsAuthFailed, loaded: true }));
-  if (googleMapsLoadPromise) return googleMapsLoadPromise.then((ok) => shouldUseGoogleMaps({ hasKey: true, authFailed: googleMapsAuthFailed, loaded: ok }));
-
-  googleMapsLoadPromise = new Promise((resolve) => {
-    const scriptId = "makaug-google-maps-script";
-    const existing = document.getElementById(scriptId);
-    if (existing) {
-      existing.addEventListener("load", () => resolve(!!window.google?.maps), { once: true });
-      existing.addEventListener("error", () => resolve(false), { once: true });
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = scriptId;
-    script.async = true;
-    script.defer = true;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&libraries=places`;
-    script.onload = () => resolve(!!window.google?.maps);
-    script.onerror = () => resolve(false);
-    document.head.appendChild(script);
-  });
-
-  return googleMapsLoadPromise;
+  return Promise.resolve(false);
 }
 
 function ensureLeafletApi() {

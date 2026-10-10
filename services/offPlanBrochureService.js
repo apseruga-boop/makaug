@@ -122,7 +122,10 @@ async function safeRemoteImageBuffer(url) {
 }
 
 async function googleStaticMapBuffer(project = {}) {
-  // Google's static map is paid; it is only used when MAP_PROVIDER=google.
+  // C18: Google's static map is no longer used (no paid Google APIs). The
+  // brochure uses its area card instead. Kept as a no-op unless
+  // GOOGLE_PLACES_ALLOWED=true and MAP_PROVIDER=google are both set on purpose.
+  if (String(process.env.GOOGLE_PLACES_ALLOWED || '').trim().toLowerCase() !== 'true') return null;
   if (String(process.env.MAP_PROVIDER || '').trim().toLowerCase() !== 'google') return null;
   const key = cleanText(process.env.GOOGLE_MAPS_STATIC_API_KEY || process.env.GOOGLE_MAPS_API_KEY, 500);
   const lat = Number(project.latitude);

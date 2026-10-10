@@ -107,7 +107,8 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
   assert.match(html, /off-plan\.js\?v=20261003-off-plan-v17/);
   assert.match(html, /off-plan\.css\?v=20260910-off-plan-v4/);
-  assert.match(client, /CLOSED_PERMANENTLY/);
+  // C18: nearby places come from the project's stored list (no Google Places).
+  assert.match(client, /renderStoredNearbyPlaces\(project\)/);
   assert.match(client, /Archive this private project\?/);
   assert.match(client, /setOffPlanProjectStatus/);
   assert.match(client, /Publish sourced preview/);
@@ -115,8 +116,9 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /off-plan-detail-grid/);
   assert.match(css, /\.off-plan-detail-grid\s*\{/);
   assert.match(css, /width: min\(1120px,calc\(100vw - 28px\)\)/);
-  assert.match(client, /ensureOffPlanGoogleMaps/);
-  assert.match(client, /maps\.google\.com\/mapfiles\/ms\/icons\/red-dot\.png/);
+  // C18: Leaflet + OpenStreetMap, no Google Maps.
+  assert.match(client, /async function ensureOffPlanMaps\(\)/);
+  assert.doesNotMatch(client, /google\.maps|maps\.google\.com\/mapfiles/);
   assert.match(client, /shareOffPlan\('whatsapp'\)/);
   assert.match(client, /projectVideo/);
   assert.match(client, /off-plan-mortgage-panel/);
@@ -315,10 +317,9 @@ test('Off Plan family maps, contact and payment builder expose the requested int
   assert.match(client, /provider\.logoUrl \|\| provider\.logo_url/);
   assert.match(client, /source_agent_whatsapp \|\| project\.source_agent_phone/);
   for (const type of ['school', 'hospital', 'university', 'shopping_mall', 'supermarket', 'restaurant', 'park', 'tourist_attraction', 'airport']) assert.match(client, new RegExp(`'${type}'`));
-  assert.match(client, /mapTypeControl: true, streetViewControl: true, fullscreenControl: true/);
-  assert.match(client, /marker\.addListener\('mouseover'/);
+  assert.match(client, /window\.L\.map\(container, \{ scrollWheelZoom: false \}\)/);
+  assert.match(client, /marker\.on\('mouseover'/);
   assert.match(client, /data-map-marker-popup="listing"/);
-  assert.match(client, /scrollFrame\.style\.overflow = 'hidden'/);
   assert.match(client, /distanceKmBetween/);
   assert.match(client, /formatDistanceLabel\(distanceFromProject/);
   assert.match(client, /id="off-plan-mortgage-amount"/);

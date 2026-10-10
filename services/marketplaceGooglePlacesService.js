@@ -1,5 +1,7 @@
 'use strict';
 
+const { googlePlacesAllowed, googlePlacesApiKey } = require('../utils/googlePlacesAllowed');
+
 const DETAILS_ENDPOINT = 'https://places.googleapis.com/v1/places';
 const DEFAULT_REFERER = 'https://makaug.com/';
 const DETAILS_FIELD_MASK = [
@@ -91,7 +93,8 @@ function normalizeGooglePlaceDetails(payload = {}) {
 }
 
 async function fetchGooglePlaceDetails(placeId, options = {}) {
-  const apiKey = options.apiKey || process.env.GOOGLE_MAPS_API_KEY || process.env.PUBLIC_GOOGLE_MAPS_API_KEY;
+  // Off unless GOOGLE_PLACES_ALLOWED=true (C18).
+  const apiKey = googlePlacesAllowed() ? (options.apiKey || googlePlacesApiKey()) : '';
   if (!apiKey) {
     const error = new Error('Google Place Details is not configured.');
     error.code = 'MARKETPLACE_GOOGLE_DETAILS_UNCONFIGURED';

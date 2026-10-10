@@ -1,5 +1,9 @@
 'use strict';
 
+// C18: Google Places is off unless GOOGLE_PLACES_ALLOWED=true; these tests
+// cover the mechanism when it is deliberately allowed.
+process.env.GOOGLE_PLACES_ALLOWED = 'true';
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
