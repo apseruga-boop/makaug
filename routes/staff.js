@@ -2418,6 +2418,16 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
   };
 }
 
+const STAFF_LIVE_EDIT_STATUSES = ['approved', 'live', 'published', 'sold'];
+const LIVE_EDIT_AUDIT_COLUMNS = ['title', 'description', 'price', 'price_period', 'price_on_application', 'listing_type', 'property_type', 'area', 'district', 'address', 'latitude', 'longitude', 'bedrooms', 'bathrooms'];
+
+// Before/after values of the plain columns a live edit changed (for the audit trail).
+function liveEditSnapshot(row = {}, changed = []) {
+  return Object.fromEntries(LIVE_EDIT_AUDIT_COLUMNS
+    .filter((column) => changed.includes(column))
+    .map((column) => [column, column === 'description' ? String(row[column] ?? '').slice(0, 500) : (row[column] ?? null)]));
+}
+
 async function updateStaffEditableListing(req, propertyId, listingPatch = {}, reviewPatch = {}) {
   const existingResult = await db.query('SELECT * FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
   if (!existingResult.rows.length) {
@@ -2620,8 +2630,13 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   if (notes) add('moderation_notes', notes);
   const reason = cleanText(reviewPatch.reason);
   if (reason) add('moderation_reason', reason);
-  const stage = cleanText(reviewPatch.stage) || 'in_review';
-  add('moderation_stage', stage);
+  // C17b: editing a LIVE listing keeps it exactly as live. The stage stays as it
+  // is (it used to become 'in_review', which put live rows back in the queues),
+  // and the event records the before/after values of what changed.
+  const existingStatus = cleanText(existing.status).toLowerCase();
+  const liveEdit = STAFF_LIVE_EDIT_STATUSES.includes(existingStatus);
+  const stage = liveEdit ? (cleanText(existing.moderation_stage) || 'approved') : (cleanText(reviewPatch.stage) || 'in_review');
+  if (!liveEdit) add('moderation_stage', stage);
 
   if (!setParts.length) return { changed_fields: [], property: existing };
 
@@ -2638,11 +2653,16 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     [
       propertyId,
       actorId(req),
-      'staff_listing_preview_saved',
+      liveEdit ? 'staff_live_listing_edited' : 'staff_listing_preview_saved',
       reason || null,
       notes || null,
       JSON.stringify(checklist || {}),
-      JSON.stringify({ changed_fields: changed, hierarchy, warning_override_count: warningOverrides ? Object.keys(warningOverrides).length : 0 })
+      JSON.stringify({
+        changed_fields: changed,
+        hierarchy,
+        warning_override_count: warningOverrides ? Object.keys(warningOverrides).length : 0,
+        ...(liveEdit ? { status_kept: existingStatus, before: liveEditSnapshot(existing, changed), after: liveEditSnapshot(updated.rows[0] || {}, changed) } : {})
+      })
     ]
   ).catch(() => {});
   await logStaffActivity(req, 'staff_listing_preview_saved', {
@@ -4957,4 +4977,4 @@ router.post('/assistant/query', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin };
+module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, liveEditSnapshot };
