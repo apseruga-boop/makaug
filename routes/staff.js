@@ -87,6 +87,20 @@ const router = express.Router();
 
 router.use(requireStaffAccess);
 
+// C5: every successful staff write clears the staff dashboard caches, so the
+// queue and counts reflect it on the next load (only the assistant, which
+// writes nothing to listings, is left out).
+const STAFF_WRITE_CACHE_EXEMPT = /^\/(?:assistant)(?:\/|$)/;
+router.use((req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || STAFF_WRITE_CACHE_EXEMPT.test(req.path)) return next();
+  res.on('finish', () => {
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      try { clearStaffFastDashboardCache(); } catch (_) { /* cache clearing is best-effort */ }
+    }
+  });
+  return next();
+});
+
 const PENDING_REVIEW_STATUSES = ['pending', 'pending_review', 'submitted', 'in_review', 'under_review'];
 const ACTIONABLE_PENDING_REVIEW_STATUSES = [
   'pending',
@@ -1382,6 +1396,7 @@ function clearStaffFastDashboardCache() {
 }
 // routes/properties.js calls this after a moderation decision.
 router.clearStaffFastDashboardCache = clearStaffFastDashboardCache;
+router.__mergeStaffFastDashboardPayload = mergeStaffFastDashboardPayload;
 
 function staffFastDashboardFallbackReasons(payload = {}) {
   const reasons = new Set();
@@ -1405,18 +1420,68 @@ function recordStaffFastDashboardRefreshFailure(cacheKey) {
   staffFastDashboardRefreshBackoff.set(cacheKey, { failures, nextRetryAt: Date.now() + delayMs });
 }
 
+// C5 (10 Oct 2026): a refresh where one widget timed out used to throw and keep
+// the WHOLE old snapshot, so one slow count froze every number until a restart
+// (9 Oct 13:47 and 10 Oct 06:42, staff_dashboard_partial:pool_timeout). Now each
+// widget is merged on its own: a widget that failed keeps its last good value,
+// marked stale with its age; every other widget takes the fresh value.
+const STAFF_FAST_WIDGET_KEYS = ['listings', 'my_moderation', 'leads', 'advertising', 'whatsapp', 'sources', 'bank_leads', 'payments'];
+
+function staffWidgetFailed(widget) {
+  return staffFastDashboardFallbackReasons(widget || {}).length > 0;
+}
+
+function mergeStaffFastDashboardPayload(previous, fresh, { previousAt = Date.now(), now = Date.now() } = {}) {
+  const out = cloneDashboardPayload(fresh);
+  out.summary = out.summary || {};
+  const previousAsOf = previous?.widget_as_of || {};
+  const asOf = {};
+  const stale = {};
+  const unavailable = [];
+  for (const key of STAFF_FAST_WIDGET_KEYS) {
+    const freshWidget = fresh?.summary?.[key];
+    if (freshWidget === undefined) continue;
+    if (!staffWidgetFailed(freshWidget)) {
+      asOf[key] = new Date(now).toISOString();
+      continue;
+    }
+    const reasons = staffFastDashboardFallbackReasons(freshWidget).join(',');
+    const previousWidget = previous?.summary?.[key];
+    if (previousWidget && !staffWidgetFailed(previousWidget)) {
+      out.summary[key] = cloneDashboardPayload(previousWidget);
+      if (key === 'whatsapp' && freshWidget.bridge) out.summary[key].bridge = freshWidget.bridge;
+      asOf[key] = previousAsOf[key] || new Date(previousAt).toISOString();
+      stale[key] = { reason: reasons, as_of: asOf[key], age_ms: Math.max(0, now - Date.parse(asOf[key])) };
+    } else {
+      asOf[key] = null;
+      stale[key] = { reason: reasons, as_of: null, age_ms: null };
+      unavailable.push(key);
+    }
+  }
+  if (out.source_intake && out.summary.sources) out.source_intake.summary = out.summary.sources;
+  if (out.bank_leads && out.summary.bank_leads) out.bank_leads.summary = out.summary.bank_leads;
+  if (out.payments && out.summary.payments) out.payments.summary = out.summary.payments;
+  out.widget_as_of = asOf;
+  out.stale_widgets = stale;
+  out.partial = unavailable.length > 0;
+  out.meta = { ...(out.meta || {}), partial: unavailable.length > 0, stale_widgets: Object.keys(stale), unavailable_widgets: unavailable, as_of: new Date(now).toISOString() };
+  return out;
+}
+
 function refreshStaffFastDashboardCache(req, cacheKey) {
   if (staffFastDashboardRefreshes.has(cacheKey) || staffFastDashboardRefreshIsBackedOff(cacheKey)) return;
   const refresh = buildDashboardFastPayload(req)
     .then((payload) => {
-      const fallbackReasons = staffFastDashboardFallbackReasons(payload);
-      if (fallbackReasons.length) {
-        const error = new Error(`staff_dashboard_partial:${fallbackReasons.join(',')}`);
-        error.code = fallbackReasons[0];
-        throw error;
+      const previous = staffFastDashboardCache.get(cacheKey);
+      const now = Date.now();
+      const merged = mergeStaffFastDashboardPayload(previous?.payload, payload, { previousAt: previous?.at || now, now });
+      staffFastDashboardCache.set(cacheKey, { at: now, payload: merged });
+      if (Object.keys(merged.stale_widgets || {}).length) {
+        recordStaffFastDashboardRefreshFailure(cacheKey);
+        logger.warn('Staff fast dashboard refreshed with stale widgets', { stale: Object.keys(merged.stale_widgets) });
+      } else {
+        staffFastDashboardRefreshBackoff.delete(cacheKey);
       }
-      staffFastDashboardCache.set(cacheKey, { at: Date.now(), payload: cloneDashboardPayload(payload) });
-      staffFastDashboardRefreshBackoff.delete(cacheKey);
     })
     .catch((error) => {
       recordStaffFastDashboardRefreshFailure(cacheKey);
@@ -1445,12 +1510,17 @@ async function dashboardFastPayload(req) {
       }
     };
   }
-  const payload = await buildDashboardFastPayload(req);
-  const fallbackReasons = staffFastDashboardFallbackReasons(payload);
+  const built = await buildDashboardFastPayload(req);
+  const fallbackReasons = staffFastDashboardFallbackReasons(built);
+  const builtAt = Date.now();
+  const payload = mergeStaffFastDashboardPayload(null, built, { now: builtAt });
   if (!fallbackReasons.length) {
-    staffFastDashboardCache.set(cacheKey, { at: Date.now(), payload: cloneDashboardPayload(payload) });
+    staffFastDashboardCache.set(cacheKey, { at: builtAt, payload: cloneDashboardPayload(payload) });
     staffFastDashboardRefreshBackoff.delete(cacheKey);
   } else {
+    // Keep the good widgets, but mark the entry expired so the next request
+    // refreshes the failed ones in the background.
+    staffFastDashboardCache.set(cacheKey, { at: builtAt - STAFF_FAST_DASHBOARD_CACHE_TTL_MS - 1, payload: cloneDashboardPayload(payload) });
     recordStaffFastDashboardRefreshFailure(cacheKey);
   }
   return {
@@ -1475,6 +1545,7 @@ async function dashboardPanelsPayload(req) {
   if (cached?.payload && now - cached.at <= STAFF_DASHBOARD_PANEL_CACHE_TTL_MS) {
     return {
       ...cloneDashboardPayload(cached.payload),
+      panels_as_of: new Date(cached.at).toISOString(),
       cache: { status: 'hit', age_ms: now - cached.at, ttl_ms: STAFF_DASHBOARD_PANEL_CACHE_TTL_MS }
     };
   }
@@ -1482,6 +1553,7 @@ async function dashboardPanelsPayload(req) {
     const payload = await cached.promise;
     return {
       ...cloneDashboardPayload(payload),
+      panels_as_of: new Date().toISOString(),
       cache: { status: 'shared_inflight', age_ms: 0, ttl_ms: STAFF_DASHBOARD_PANEL_CACHE_TTL_MS }
     };
   }
@@ -1506,6 +1578,7 @@ async function dashboardPanelsPayload(req) {
     && payload?.broker_review_queue_meta?.query_ok === true;
   return {
     ...payload,
+    panels_as_of: new Date().toISOString(),
     cache: {
       status: queryOk ? 'miss' : 'miss_degraded_not_cached',
       age_ms: 0,
@@ -4132,6 +4205,8 @@ router.patch('/properties/:id/review', async (req, res, next) => {
     }
     const saved = await updateStaffEditableListing(req, req.params.id, listingPatch, reviewPatch);
     if ((saved.changed_fields || []).length) clearPublicListingCaches('staff_listing_preview_saved');
+    // C5: the queue showed the old title after Preview & edit saved a new one.
+    clearStaffFastDashboardCache();
     const preview = await loadStaffPropertyPreview(req.params.id);
     return res.json({ ok: true, data: preview, changed_fields: saved.changed_fields || [] });
   } catch (error) {

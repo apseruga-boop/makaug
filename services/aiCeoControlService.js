@@ -306,7 +306,7 @@ async function collectCeoMetrics() {
     safeCount("SELECT COUNT(*)::int AS total FROM lead_tasks WHERE status = 'open' AND due_at < NOW()"),
     safeCount('SELECT COUNT(*)::int AS total FROM property_requests'),
     safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing','bounced','error')"),
-    safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing','error')"),
+    safeCount(require('./whatsappActivityService').FAILED_WHATSAPP_SQL),
     safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_messages WHERE direction = 'inbound' AND created_at >= NOW() - INTERVAL '24 hours'"),
     safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_messages WHERE direction = 'outbound' AND created_at >= NOW() - INTERVAL '24 hours'"),
     safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_conversation_state WHERE status IN ('needs_human','escalated')"),

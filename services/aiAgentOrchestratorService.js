@@ -597,7 +597,7 @@ async function collectCeoOperatingMetrics() {
     safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'approved' AND COALESCE(registration_status, 'not_registered') = 'registered'"),
     safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing','bounced','error')"),
     safeCount("SELECT COUNT(*)::int AS total FROM notifications WHERE status IN ('failed','provider_missing','bounced','error')"),
-    safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing','error')"),
+    safeCount(require('./whatsappActivityService').FAILED_WHATSAPP_SQL),
     safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE is_test = FALSE AND lead_status IN ('open','handed_over','contacted','qualified')"),
     safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE is_test = FALSE AND lead_status IN ('open','handed_over','contacted','qualified') AND (priority IN ('high','urgent') OR lead_score >= 50)"),
     safeCount("SELECT COUNT(*)::int AS total FROM lead_tasks WHERE status = 'open' AND due_at < NOW()"),

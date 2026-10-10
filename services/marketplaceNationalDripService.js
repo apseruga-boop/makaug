@@ -43,6 +43,11 @@ let schedulerRunning = false;
 let schedulerArmedAt = null;
 let schedulerLastTickAt = null;
 let schedulerLastResult = null;
+// C5: the panel says plainly whether the drip is working.
+let schedulerLastSuccessAt = null;
+let schedulerLastErrorAt = null;
+let schedulerLastError = null;
+let schedulerFailingSince = null;
 
 async function warmMarketplacePublicCache(db) {
   try {
@@ -1222,6 +1227,7 @@ async function getMarketplaceDripStatus(db) {
         : 0
     },
     scheduler: schedulerStatus(),
+    health: marketplaceDripHealth({ runs: runs.rows, scheduler: schedulerStatus(), state }),
     sources: sourceDefinitions(),
     registry: coverage,
     inventory: {
@@ -1264,7 +1270,57 @@ function schedulerStatus() {
     running: schedulerRunning,
     armed_at: schedulerArmedAt,
     last_tick_at: schedulerLastTickAt,
-    last_result: schedulerLastResult
+    last_result: schedulerLastResult,
+    last_success_at: schedulerLastSuccessAt,
+    last_error_at: schedulerLastErrorAt,
+    last_error: schedulerLastError,
+    failing_since: schedulerFailingSince
+  };
+}
+
+const DRIP_NOT_RUNNING_AFTER_MS = 60 * 60 * 1000;
+
+// C5: one plain status for the monitor panel: the last successful run, the
+// last error and its time, and "not running" when it has failed (or produced
+// nothing) for more than an hour.
+function marketplaceDripHealth({ runs = [], scheduler = {}, state = {}, now = Date.now() } = {}) {
+  const okRun = runs.find((run) => ['completed', 'partial'].includes(String(run.status || '')));
+  const errorRun = runs.find((run) => ['blocked', 'failed', 'error'].includes(String(run.status || '')) || Number(run.errors || 0) > 0);
+  const lastSuccessAt = [okRun?.created_at, scheduler.last_success_at].filter(Boolean).map((value) => new Date(value).toISOString()).sort().pop() || null;
+  const runErrorAt = errorRun?.created_at ? new Date(errorRun.created_at).toISOString() : null;
+  const lastErrorAt = [runErrorAt, scheduler.last_error_at].filter(Boolean).sort().pop() || null;
+  const lastError = lastErrorAt && lastErrorAt === scheduler.last_error_at
+    ? scheduler.last_error
+    : (errorRun ? (errorRun.result_summary?.pause_reason || state.pause_reason || `${errorRun.status} run`) : null);
+  const ago = (iso) => (iso ? Math.max(0, now - Date.parse(iso)) : null);
+  let status = 'running';
+  let label = '';
+  if (scheduler.disabled_by_env) {
+    status = 'off';
+    label = 'Off: MARKETPLACE_DRIP_SCHEDULER_ENABLED is not set to true.';
+  } else if (!state.enabled) {
+    status = 'paused';
+    label = `Paused${state.pause_reason ? `: ${state.pause_reason}` : ''}.`;
+  } else if ((scheduler.failing_since && ago(scheduler.failing_since) > DRIP_NOT_RUNNING_AFTER_MS)
+    || (lastErrorAt
+      && Date.parse(lastErrorAt) > Date.parse(lastSuccessAt || 0)
+      && (!lastSuccessAt || ago(lastSuccessAt) > DRIP_NOT_RUNNING_AFTER_MS))) {
+    status = 'not_running';
+    label = `Not running: no successful run${lastSuccessAt ? ` since ${lastSuccessAt}` : ' recorded'}${lastError ? `; last error ${lastErrorAt}: ${lastError}` : ''}.`;
+  } else if (!lastSuccessAt || ago(lastSuccessAt) > DRIP_NOT_RUNNING_AFTER_MS * 24) {
+    status = 'stale';
+    label = `No successful run${lastSuccessAt ? ` since ${lastSuccessAt}` : ' recorded'}.`;
+  } else {
+    label = `Running: last successful run ${lastSuccessAt}.`;
+  }
+  return {
+    status,
+    label,
+    last_success_at: lastSuccessAt,
+    last_error_at: lastErrorAt,
+    last_error: lastError,
+    failing_since: scheduler.failing_since || null,
+    as_of: new Date(now).toISOString()
   };
 }
 
@@ -1277,9 +1333,16 @@ async function tickMarketplaceDripSchedulerInner(db) {
   schedulerLastTickAt = new Date().toISOString();
   try {
     schedulerLastResult = await runMarketplaceDripOnce(db, { force: false, actorId: 'marketplace_drip_scheduler' });
+    if (schedulerLastResult?.ok !== false) {
+      schedulerLastSuccessAt = new Date().toISOString();
+      schedulerFailingSince = null;
+    }
     return schedulerLastResult;
   } catch (error) {
     schedulerLastResult = { ok: false, error: error.message };
+    schedulerLastErrorAt = new Date().toISOString();
+    schedulerLastError = String(error.message || 'error').slice(0, 300);
+    if (!schedulerFailingSince) schedulerFailingSince = schedulerLastErrorAt;
     logger.warn('Marketplace national drip scheduler tick failed', { error: error.message });
     return schedulerLastResult;
   } finally {
@@ -1313,6 +1376,7 @@ module.exports = {
   getMarketplaceDripStatus,
   getRegistryCoverage,
   importMarketplaceSourceCandidates,
+  marketplaceDripHealth,
   pauseMarketplaceDrip,
   registryRows,
   runMarketplaceDripOnce,
