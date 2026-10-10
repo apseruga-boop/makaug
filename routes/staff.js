@@ -91,6 +91,7 @@ const {
   duplicateReason,
   sourcePostKey
 } = require('../utils/duplicateEvidence');
+const { normalizeStaffSourcePostDate, staffSourcePostDateExtra } = require('../utils/sourcePostDate');
 
 const router = express.Router();
 
@@ -2531,6 +2532,15 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
       description: patch.description || existing.description
     });
   }
+  // C12: "Posted on <platform> on" date, confirmed by staff (found-online rows).
+  let sourcePostDate = null;
+  const sourcePostDateInput = patch.source_published_at ?? patch.source_post_date;
+  delete patch.source_published_at;
+  delete patch.source_post_date;
+  if (sourcePostDateInput != null && String(sourcePostDateInput).trim() !== '') {
+    sourcePostDate = normalizeStaffSourcePostDate(sourcePostDateInput);
+    if (!sourcePostDate.ok) errors.push(sourcePostDate.error);
+  }
   if (errors.length) {
     const error = new Error(errors[0]);
     error.status = 400;
@@ -2632,6 +2642,7 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   if (Object.prototype.hasOwnProperty.call(patch, 'students_welcome')) {
     extraPatch.students_welcome = boolField(patch.students_welcome);
   }
+  if (sourcePostDate?.ok) Object.assign(extraPatch, staffSourcePostDateExtra(sourcePostDate, { actorId: actorId(req) }));
   if (hierarchy.region) extraPatch.region = hierarchy.region;
   if (hierarchy.city) extraPatch.city = hierarchy.city;
   if (hierarchy.neighborhood) extraPatch.neighborhood = hierarchy.neighborhood;
