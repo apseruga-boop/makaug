@@ -76,7 +76,7 @@ test('it explains how to post, in the channel they are reading it in', () => {
 test('the audience figures say which is which', () => {
   const body = message();
   assert.match(body, /4,056 live listings/, 'measured: straight from the properties table');
-  assert.match(body, /10,000\+ people a month searching across our platforms, from 7 countries/,
+  assert.match(body, /10,000\+ people a month searching across our platforms[\s\S]*Visitors from 30\+ countries/,
     'stated: the whole group, and labelled as such rather than passed off as makaug alone');
   assert.match(body, /1,857 listing views on makaug in the last 30 days/,
     'a makaug-only number must say it is makaug-only');

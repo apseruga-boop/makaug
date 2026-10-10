@@ -36,21 +36,20 @@ test('the trial is 14 days unless the environment says otherwise', () => {
   assert.strictEqual(revenue.addDays('2026-10-10', 14 - 1), '2026-10-23', 'free through 23 Oct, first payment 24 Oct');
 });
 
-test('the welcome message tells a trial agent their dates and the fee', () => {
-  const body = welcome.buildWelcomeMessage({ agent: trialAgent, stats: {} });
-  assert.match(body, /your first 14 days are free/);
-  assert.match(body, /\*Your 2 weeks free\*/);
-  assert.match(body, /Free from today \(10 Oct\) until 23 Oct/);
-  assert.match(body, /Nothing to pay today, no card needed/);
-  assert.match(body, /From 24 Oct makaug is UGX 50,000 a month/);
-  assert.match(body, /nothing is deleted and you can come back any time/);
-  assert.match(body, /Your first 14 days are completely free/);
-  assert.ok(!body.includes('first 7 days free'));
+test('the welcome message never mentions the trial, the fee or payment; the video does', () => {
+  const body = welcome.buildWelcomeMessage({ agent: trialAgent, stats: { live_listings: 120, views_30d: 4000, visitors_30d: 900, top_countries: [{ name: 'Canada' }] } });
+  assert.ok(!/free|14 days|2 weeks|50,000|trial|payment|UGX 50/i.test(body), 'no free/fee wording in the written message');
+  assert.match(body, /30\+ countries/);
+  assert.match(body, /Canada/);
+  assert.match(body, /South Africa/);
+  const video = fs.readFileSync(path.join(__dirname, '..', 'services', 'agentReportVideoService.js'), 'utf8');
+  assert.match(video, /if \(onTrial\) statement\([^\n]*Your first 14 days/);
+  const timeline = require('../services/agentReportVideoService');
+  assert.ok(timeline.welcomeDuration({ agent: trialAgent, stats: {} }) > timeline.welcomeDuration({ agent: { id: 'a2' }, stats: {} }), 'trial agents get the extra scene');
 });
 
 test('an agent who is not on a trial gets the welcome exactly as before', () => {
   const body = welcome.buildWelcomeMessage({ agent: { id: 'a2', full_name: 'Old Agent' }, stats: {} });
-  assert.ok(!body.includes('Your 2 weeks free'));
   assert.match(body, /Every listing gets its first 7 days free/);
 });
 
