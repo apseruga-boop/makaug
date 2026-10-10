@@ -15867,7 +15867,8 @@ function renderStaffListingPreviewModal(preview = {}) {
             <div class="mt-3 space-y-2 max-h-52 overflow-auto">
               ${(duplicates.rows || []).slice(0, 8).map((row) => `<div class="rounded-lg bg-white border border-gray-200 p-2 text-xs">
                 <div class="font-black text-gray-900">${adminEscape(row.title || "Duplicate candidate")}</div>
-                <div class="text-gray-500">${adminEscape([row.area, row.district, row.status].filter(Boolean).join(" • "))}</div>
+                ${row.duplicate_reason ? `<div class="mt-0.5 inline-block rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-black text-red-800" data-duplicate-reason="${adminAttr(row.duplicate_reason_code || "")}">${adminEscape(row.duplicate_reason)}</div>` : ""}
+                <div class="text-gray-500">${adminEscape([row.inquiry_reference, row.area, row.district, row.status].filter(Boolean).join(" • "))}</div>
               </div>`).join("") || ""}
             </div>
           </section>

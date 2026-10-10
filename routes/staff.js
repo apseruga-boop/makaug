@@ -83,6 +83,15 @@ const {
   markHarvestCreatorChecked,
 } = require('../services/propertyHarvestCreatorRotationService');
 
+const {
+  DUPLICATE_CANDIDATES_SQL,
+  classifyDuplicates,
+  duplicateCandidateParams,
+  duplicateGroupsCountSql,
+  duplicateReason,
+  sourcePostKey
+} = require('../utils/duplicateEvidence');
+
 const router = express.Router();
 
 router.use(requireStaffAccess);
@@ -2068,24 +2077,9 @@ async function dashboardPayload(req) {
       [],
       { total_sources: 0, active_sources: 0, tiktok_sources: 0, youtube_sources: 0, facebook_sources: 0, x_sources: 0, direct_contact_sources: 0 }
     ),
+    // C10: groups of pending listings with strong evidence only.
     safeOne(
-      `WITH pending AS (
-         SELECT
-           NULLIF(lister_phone, '') AS lister_phone,
-           NULLIF(LOWER(COALESCE(title, '')), '') AS normalized_title,
-           NULLIF(COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', ''), '') AS source_url
-         FROM properties p
-         WHERE ${activePendingReviewWhere('p')}
-       ),
-       duplicate_keys AS (
-         SELECT lister_phone AS duplicate_key FROM pending WHERE lister_phone IS NOT NULL GROUP BY lister_phone HAVING COUNT(*) > 1
-         UNION
-         SELECT normalized_title AS duplicate_key FROM pending WHERE normalized_title IS NOT NULL GROUP BY normalized_title HAVING COUNT(*) > 1
-         UNION
-         SELECT source_url AS duplicate_key FROM pending WHERE source_url IS NOT NULL GROUP BY source_url HAVING COUNT(*) > 1
-       )
-       SELECT COUNT(*)::int AS possible_duplicates
-       FROM duplicate_keys`,
+      duplicateGroupsCountSql(activePendingReviewWhere('p')),
       [],
       { possible_duplicates: 0 }
     ),
@@ -2775,7 +2769,7 @@ async function loadStaffPropertyPreview(propertyId) {
     previewQueryOptions
   );
   if (!property) return null;
-  const [images, duplicates, events, previousListerListings, reusedImages, idNumberMatches, matchingUsers] = await Promise.all([
+  const [images, duplicateCandidates, events, previousListerListings, reusedImages, idNumberMatches, matchingUsers] = await Promise.all([
     safeRows(
       `SELECT id, url, is_primary, sort_order, slot_key, room_label, created_at
        FROM property_images
@@ -2784,43 +2778,8 @@ async function loadStaffPropertyPreview(propertyId) {
       [property.id],
       previewQueryOptions
     ),
-    safeRows(
-      `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.address, p.price, p.status, p.lister_phone,
-              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', '') AS source_url,
-              p.created_at
-       FROM properties p
-       WHERE p.id <> $1
-         AND LOWER(COALESCE(p.status, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
-         AND LOWER(COALESCE(p.moderation_stage, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
-         AND NOT ${sourceQualitySuppressedFlagSql('p')}
-         AND (
-           (COALESCE($2::text, '') <> '' AND p.lister_phone = $2)
-           OR LOWER(COALESCE(p.title, '')) = LOWER(COALESCE($3::text, ''))
-           OR (
-             COALESCE($4::text, '') <> ''
-             AND COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', '') = $4
-           )
-           OR (
-             COALESCE($5::text, '') <> ''
-             AND COALESCE($6::text, '') <> ''
-             AND LOWER(COALESCE(p.area, '')) = LOWER($5)
-             AND p.district = $6
-             AND COALESCE(p.price, 0) = COALESCE($7::bigint, 0)
-           )
-         )
-       ORDER BY p.created_at DESC
-       LIMIT 20`,
-      [
-        property.id,
-        property.lister_phone || null,
-        property.title || '',
-        firstNonEmpty(property.extra_fields?.source_url, property.extra_fields?.source_post_url),
-        property.area || '',
-        property.district || '',
-        property.price || 0
-      ],
-      previewQueryOptions
-    ),
+    // C10: strong-evidence candidates only (utils/duplicateEvidence.js).
+    safeRows(DUPLICATE_CANDIDATES_SQL, duplicateCandidateParams(property), previewQueryOptions),
     safeRows(
       `SELECT id, actor_id, action, status_from, status_to, reason, notes, created_at
        FROM property_moderation_events
@@ -2882,6 +2841,7 @@ async function loadStaffPropertyPreview(propertyId) {
   ]);
   const extra = safeJsonObject(property.extra_fields, {});
   const sourceUrl = firstNonEmpty(extra.source_url, extra.source_post_url, extra.tiktok_url, extra.youtube_url, extra.video_url);
+  const duplicates = classifyDuplicates(property, duplicateCandidates, reusedImages);
   const automatedReview = buildAutomatedListingReview({
     listing: property,
     images,
@@ -2988,7 +2948,7 @@ async function loadStaffBulkReviewCandidates({ ids = [], allPending = false } = 
 
 async function loadApprovedDuplicateIndex() {
   const result = await staffQuery(
-    `SELECT p.id, p.title, p.lister_phone, p.status,
+    `SELECT p.id, p.title, p.lister_phone, p.status, p.area, p.listing_type, p.bedrooms, p.price,
             COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url
      FROM properties p
      WHERE LOWER(COALESCE(p.status, '')) = 'approved'
@@ -2997,47 +2957,42 @@ async function loadApprovedDuplicateIndex() {
     [],
     { timeoutMs: STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS }
   );
-  const byPhone = new Map();
-  const bySourceUrl = new Map();
-  const byTitlePrefix = new Map();
-  result.rows.forEach((row) => {
-    const phone = normalizePhoneLite(row.lister_phone);
-    const sourceUrl = cleanText(row.source_url).toLowerCase();
-    const prefix = duplicateTitlePrefix(row.title);
-    if (phone && !byPhone.has(phone)) byPhone.set(phone, row);
-    if (sourceUrl && !bySourceUrl.has(sourceUrl)) bySourceUrl.set(sourceUrl, row);
-    if (prefix && !byTitlePrefix.has(prefix)) byTitlePrefix.set(prefix, row);
-  });
-  return { byPhone, bySourceUrl, byTitlePrefix };
+  return buildApprovedDuplicateIndex(result.rows);
 }
 
-function approvedDuplicateIndexFromRows(rows = []) {
-  const byPhone = new Map();
-  const bySourceUrl = new Map();
-  const byTitlePrefix = new Map();
+function buildApprovedDuplicateIndex(rows = []) {
+  const bySourceKey = new Map();
+  const byPhoneRows = new Map();
   (Array.isArray(rows) ? rows : [])
     .filter((row) => ['approved', 'live', 'published'].includes(String(row.status || '').toLowerCase()))
     .forEach((row) => {
+      const post = sourcePostKey(row.source_url);
+      if (post && !bySourceKey.has(post.key)) bySourceKey.set(post.key, row);
       const phone = normalizePhoneLite(row.lister_phone);
-      const sourceUrl = cleanText(row.source_url).toLowerCase();
-      const prefix = duplicateTitlePrefix(row.title);
-      if (phone && !byPhone.has(phone)) byPhone.set(phone, row);
-      if (sourceUrl && !bySourceUrl.has(sourceUrl)) bySourceUrl.set(sourceUrl, row);
-      if (prefix && !byTitlePrefix.has(prefix)) byTitlePrefix.set(prefix, row);
+      if (phone) byPhoneRows.set(phone, [...(byPhoneRows.get(phone) || []), row]);
     });
-  return { byPhone, bySourceUrl, byTitlePrefix };
+  return { bySourceKey, byPhoneRows };
 }
 
+function approvedDuplicateIndexFromRows(rows = []) {
+  return buildApprovedDuplicateIndex(rows);
+}
+
+// C10: bulk approval holds a row only for strong evidence against an approved
+// listing (same source post, or same agent + area + type + bedrooms + price
+// within 5%); the same phone or a similar title alone no longer holds it.
 function staffBulkDuplicateMatch(row = {}, approvedIndex = {}) {
+  const listing = { ...row, source_url: staffListingSourceUrl(row) };
+  const post = sourcePostKey(listing.source_url);
+  const bySource = post ? approvedIndex.bySourceKey?.get(post.key) : null;
+  if (bySource && String(bySource.id) !== String(row.id)) return { ...bySource, duplicate_reason: post.label };
   const phone = normalizePhoneLite(row.lister_phone);
-  const sourceUrl = cleanText(staffListingSourceUrl(row)).toLowerCase();
-  const prefix = duplicateTitlePrefix(row.title);
-  const matches = [
-    phone ? approvedIndex.byPhone?.get(phone) : null,
-    sourceUrl ? approvedIndex.bySourceUrl?.get(sourceUrl) : null,
-    prefix ? approvedIndex.byTitlePrefix?.get(prefix) : null
-  ].filter((match) => match && String(match.id) !== String(row.id));
-  return matches[0] || null;
+  const sameAgent = phone ? (approvedIndex.byPhoneRows?.get(phone) || []) : [];
+  for (const candidate of sameAgent) {
+    const reason = duplicateReason(listing, candidate);
+    if (reason) return { ...candidate, duplicate_reason: reason.label };
+  }
+  return null;
 }
 
 function staffBulkModerationDecision(row = {}, approvedIndex = {}) {
