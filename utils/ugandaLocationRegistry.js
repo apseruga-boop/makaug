@@ -307,14 +307,20 @@ const CANONICAL_TOWN_NAMES = new Map([
   ['wakiso:kira municipality', 'Kira'],
   ['wakiso:makindye ssabagabo municipality', 'Makindye-Ssabagabo'],
   ['wakiso:nansana municipality', 'Nansana'],
-  ['wakiso:entebbe municipality', 'Entebbe']
+  ['wakiso:entebbe municipality', 'Entebbe'],
+  // C11: "Wakiso Town" / "Mukono Town" was the generated bucket for places with
+  // no town, a twin of the "Wakiso" / "Mukono" town groups. One name each.
+  ['wakiso:wakiso town', 'Wakiso'],
+  ['mukono:mukono town', 'Mukono']
 ]);
 
 function canonicalTownName(district, town, name = '') {
   const cleanTown = String(town || '').trim();
   // Kampala: the five divisions are the towns (utils/kampalaDivisions.js).
   if (district === 'Kampala') return kampalaTownFor(name, cleanTown);
-  return CANONICAL_TOWN_NAMES.get(`${normalizeLocationKey(district)}:${normalizeLocationKey(cleanTown)}`) || cleanTown;
+  const mapped = CANONICAL_TOWN_NAMES.get(`${normalizeLocationKey(district)}:${normalizeLocationKey(cleanTown)}`);
+  if (mapped) return mapped;
+  return cleanTown;
 }
 
 const registryByKey = new Map();
@@ -1034,6 +1040,7 @@ function haversineKm(a = {}, b = {}) {
 
 module.exports = {
   CANONICAL_LOCATION_COUNT: registry.length,
+  canonicalTownName,
   canonicalLocationByKey,
   canonicalLocationForRow,
   canonicalDisplayLocationForRow,

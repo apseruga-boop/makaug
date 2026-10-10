@@ -6,6 +6,7 @@ const {
   canonicalizeUgandaLocation,
   isExcludedLocationOnly,
   normalizeDistrict,
+  canonicalTownName,
 } = require('./ugandaLocationRegistry');
 
 const UG_REGION_DISTRICTS = {
@@ -146,13 +147,23 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
     errors.push('area/neighbourhood must be more specific than a district');
   }
 
+  // C11 (Fisher, 10 Oct): staff picked "Kira" for MK-20261009-71C398 and it
+  // reverted to "Wakiso Town" on reload, because the area's catalogue town
+  // always replaced the town staff chose. Old town spellings are mapped to the
+  // current names first ("Wakiso Town" -> "Wakiso", "Nakawa Division" ->
+  // "Nakawa"); a town that exists in the district now wins over the area's
+  // default town.
+  const tree = getDistrictLocationTree(district);
+  if (city) city = canonicalTownName(district, city, area || neighborhood) || city;
+  // Only a town chosen in this save wins; a stored one keeps following the catalogue.
+  const chosenCityIsKnown = options.preferChosenCity === true && Boolean(city) && tree.some((item) => item.city === city);
   if (canonical && canonical.level !== 'region' && (canonical.level !== 'district' || allowDistrictNode)) {
-    city = canonical.town || city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
+    city = (chosenCityIsKnown ? city : '') || canonical.town || city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
     neighborhood = canonical.name;
   }
 
-  const tree = getDistrictLocationTree(district);
   let cityNode = city ? tree.find((item) => item.city === city) : null;
+  const staffTownForCanonical = chosenCityIsKnown && canonical && canonical.district === district && neighborhood === canonical.name;
   const explicitCanonicalHierarchy = allowCanonicalHierarchy && explicitCanonical && explicitCanonical.district === district;
   if (city && !cityNode && !explicitCanonicalHierarchy) {
     errors.push('city/town must belong to the selected district');
@@ -166,7 +177,7 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
     const neighborhoodMatchesCity = cityNode
       ? (cityNode.neighborhoods || []).some((n) => n.name === neighborhood)
       : false;
-    if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name)) {
+    if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name) && !staffTownForCanonical) {
       errors.push('neighbourhood must belong to the selected district and town/city');
     }
   }

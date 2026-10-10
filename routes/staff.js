@@ -2400,7 +2400,8 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     normalized.region = regionForDistrict(base.district);
     base.region = normalized.region;
   }
-  const hierarchy = normalizeReviewLocationHierarchy(base);
+  // C11: a town staff pick in this save is kept (it used to revert to the area's default town).
+  const hierarchy = normalizeReviewLocationHierarchy(base, { preferChosenCity: Object.prototype.hasOwnProperty.call(normalized, 'city') && Boolean(cleanText(normalized.city)) });
   errors.push(...hierarchy.errors);
   const canonical = hierarchy.canonical || canonicalizeUgandaLocation(base.area, base.district);
   if (canonical && !['district', 'region'].includes(canonical.level)) {
