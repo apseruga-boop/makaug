@@ -65,3 +65,13 @@ test('the tracker flags agents who have not signed', () => {
   assert.match(billing.formatTrialLine(base), /terms not signed yet/);
   assert.ok(!/terms not signed/.test(billing.formatTrialLine({ ...base, terms_accepted_at: new Date() })));
 });
+
+test('staff can preview the welcome pack as a trial agent sees it, without touching a real agent', () => {
+  const admin = read('routes/admin.js');
+  assert.match(admin, /preview_trial/);
+  assert.match(admin, /if \(preview && previewTrial\) pack = agentReportVideos\.trialVariant\(pack\)/);
+  const video = require('../services/agentReportVideoService');
+  const v = video.trialVariant({ agent: { id: 'a2', full_name: 'Old Agent' } });
+  assert.strictEqual(v.agent.fee_offer_mode, 'free_period');
+  assert.ok(video.welcomeDuration(v) > video.welcomeDuration({ agent: { id: 'a2' } }));
+});

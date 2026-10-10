@@ -701,12 +701,27 @@ function welcomeDuration(payload) {
   return buildWelcomeTimeline(payload).duration;
 }
 
+// A version starting with "t" asks for the trial variant of the film whatever
+// the agent's own record says. Used only by the staff preview (so the free
+// period scene can be reviewed before any real agent is on a trial); it has its
+// own cache file, so it never stands in for a real agent's film.
+function trialVariant(payload) {
+  const revenue = require('./revenueService');
+  const today = revenue.kampalaDate();
+  return {
+    ...payload,
+    agent: { ...(payload.agent || {}), fee_offer_mode: 'free_period', fee_offer_until: revenue.addDays(today, revenue.agentTrialDays() - 1), fee_offer_at: new Date().toISOString() }
+  };
+}
+
 async function ensureWelcomeVideo(payload, version, options = {}) {
-  const file = cachePath(payload.agent?.id || 'agent', version, 'welcome-');
+  const asTrial = /^t/.test(String(version || ''));
+  const use = asTrial ? trialVariant(payload) : payload;
+  const file = cachePath(use.agent?.id || 'agent', version, asTrial ? 'welcome-trial-' : 'welcome-');
   return locateOrRender(file, {
-    scene: buildWelcomeScenes(payload),
-    duration: welcomeDuration(payload),
-    label: `welcome=${payload.agent?.id || 'agent'}`
+    scene: buildWelcomeScenes(use),
+    duration: welcomeDuration(use),
+    label: `welcome=${use.agent?.id || 'agent'}`
   }, options);
 }
 
@@ -740,6 +755,7 @@ module.exports = {
   ensureWelcomeVideo,
   welcomeDuration,
   welcomeVideoUrl,
+  trialVariant,
   videoDuration,
   buildScenes,
   ensureReportVideo,
