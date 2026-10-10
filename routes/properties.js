@@ -2,6 +2,7 @@ const { correctedPinForNewListing } = require('../services/listingCoordinateRepa
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
 const { publicListingPayload, hideImplausiblePrice } = require('../utils/publicListingPayload');
+const { publicSourceAccountName } = require('../utils/sourceAccountName');
 const { handOffListingLead, loadListingContact } = require('../services/leadHandoffService');
 const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
 const leadFormLimiter = createLeadFormLimiter();
@@ -1701,8 +1702,8 @@ function publicExtraFields(extraFields = {}, { createdAt = null } = {}) {
     location_resolution_confidence: toNullableFloat(extra.location_resolution_confidence),
     source_platform: sourcePlatform || null,
     source_type: extra.source_type || null,
-    source_name: extra.source_name || null,
-    source_agent_name: extra.source_agent_name || extra.source_name || null,
+    source_name: extra.source_name ? publicSourceAccountName(extra.source_name, extra) : null,
+    source_agent_name: (extra.source_agent_name || extra.source_name) ? publicSourceAccountName(extra.source_agent_name || extra.source_name, extra) : null,
     source_url: sourceUrl || null,
     source_urls: safeSourceUrls,
     first_seen_online_at: firstSeenOnlineAt,
@@ -1828,6 +1829,8 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
     agent_id: foundOnlinePublic ? null : safeProperty.agent_id,
     lister_phone: foundOnlinePublic ? null : safeProperty.lister_phone,
     lister_email: foundOnlinePublic ? null : safeProperty.lister_email,
+    // C15c: never a bare domain ("tiktok.com") for a found-online source.
+    ...(foundOnlinePublic ? { lister_name: publicSourceAccountName(safeProperty.lister_name || safeExtra.source_name, safeExtra, safeProperty) } : {}),
     primary_image_url: foundOnlinePublic ? (foundOnlineImages[0]?.url || null) : safeProperty.primary_image_url,
     image: foundOnlinePublic ? (foundOnlineImages[0]?.url || null) : safeProperty.image,
     images: foundOnlinePublic ? foundOnlineImages : images,

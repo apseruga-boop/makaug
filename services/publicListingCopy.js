@@ -1,5 +1,7 @@
 'use strict';
 
+const { publicSourceAccountName } = require('../utils/sourceAccountName');
+
 // Public listing copy shared by the JSON API (routes/properties.js) and the
 // server-rendered pages (services/publicSeoRenderService.js), so both show the
 // same title, description, price label, amenities and contact line.
@@ -84,7 +86,11 @@ function sanitizeStaffCopy(value = '') {
 // API row), never appended to the description (P2, 10 Oct 2026).
 function foundOnlineSourceLine(extra = {}) {
   const platform = redactThirdPartyPublicText(extra.source_platform || '') || 'the original source';
-  const sourceName = redactThirdPartyPublicText(extra.source_name || extra.source_agent_name || '');
+  // C15c: never "from tiktok.com"; the account handle or "<Platform> account".
+  const rawSourceName = extra.source_name || extra.source_agent_name || '';
+  const accountName = rawSourceName ? publicSourceAccountName(rawSourceName, extra) : '';
+  // "Found on TikTok from TikTok account" says nothing; leave the name out.
+  const sourceName = accountName && !/ account$|^Online source$/.test(accountName) ? redactThirdPartyPublicText(accountName) : '';
   return `Found on ${platform}${sourceName ? ` from ${sourceName}` : ''}. Check the original post before paying.`;
 }
 
