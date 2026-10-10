@@ -99,7 +99,9 @@ const {
   sitemapEntries
 } = require('./services/publicSeoService');
 const { canonicalLocationOptions } = require('./utils/locationRegistry');
-const { clientIpMiddleware, rateLimitClientKey } = require('./utils/clientIp');
+const { clientIpMiddleware } = require('./utils/clientIp');
+const { apiRateLimitKey, apiRateLimitMax, WINDOW_MS: API_RATE_LIMIT_WINDOW_MS } = require('./utils/apiRateLimit');
+const { lagTrackingMiddleware, startEventLoopLagMonitor } = require('./utils/eventLoopLagMonitor');
 const { buildLandingCopy } = require('./services/publicLandingCopy');
 const {
   loadPublicSeoListings,
@@ -279,10 +281,13 @@ app.use((_req, res, next) => {
   });
 });
 
+// Per signed-in staff user (5,000 / 15 min), per IP for everyone else (C4).
+app.use(lagTrackingMiddleware);
+
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1000,
-  keyGenerator: rateLimitClientKey,
+  windowMs: API_RATE_LIMIT_WINDOW_MS,
+  max: apiRateLimitMax,
+  keyGenerator: apiRateLimitKey,
   skip: (req) => req.path === '/analytics/config',
   standardHeaders: true,
   legacyHeaders: false
@@ -2338,6 +2343,7 @@ async function start() {
   schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
   scheduleStartupDataRepairs();
   startMemoryLog();
+  if (process.env.NODE_ENV !== 'test' && process.env.EVENT_LOOP_LAG_LOG !== 'off') startEventLoopLagMonitor({ logger });
 }
 
 // One "memory" line a minute, so the trend towards the 512 MB limit is in the logs.
