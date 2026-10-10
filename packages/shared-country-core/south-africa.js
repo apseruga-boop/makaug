@@ -255,7 +255,7 @@ function applySouthAfricaJavaScript(source) {
     .replace(/makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising/g,
       'seshaikhaya uses AI-assisted search and human review to organise')
     .replace(/Use makaug in 9 languages/g, 'Use seshaikhaya in 11 written languages')
-    .replace(/Uganda's #1 Free Property Platform/gi, "South Africa's home for property")
+    .replace(/Every property in Uganda, in one place/gi, "South Africa's home for property")
     .replace(/Uganda's first completely free property platform\./gi, 'A property platform built for South Africa.')
     .replace(/📧 Email: info@makaug\.com/g, '📧 Email: hello@seshaikhaya.com')
     .replace(/\bUSh\b/g, 'R')

@@ -1293,7 +1293,7 @@ const I18N_UI = {
     navMortgage: "Mortgage Finder",
     navAI: "Discover AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Uganda's #1 Free Property Platform",
+    heroBadge: "Every property in Uganda, in one place",
     heroTitleHtml: "Find your next home, land, rental, or student room",
     heroSubtitle: "makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising property opportunities in one place.",
     heroSubtitlePrefix: "makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising",
@@ -1460,7 +1460,7 @@ const I18N_UI = {
     navMortgage: "Noonya Mortgage",
     navAI: "Noonya AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Pulatifoomu y'ebintu ey'obwereere mu Uganda",
+    heroBadge: "Buli property mu Uganda, mu kifo kimu", // REVIEW: Luganda, confirm with a native speaker
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo ennungi",
     heroSubtitle: "Enkola y'okunoonya ebintu mu Uganda: amaka, ez'okupangisa, ettaka, ebisenge by'abayizi, n'ebizuuliddwa ku social media.",
     heroRent: "Pangisa",
@@ -1589,7 +1589,7 @@ const I18N_UI = {
     navMortgage: "Tafuta Rehani",
     navAI: "Gundua AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Jukwaa la bure la mali Uganda",
+    heroBadge: "Kila mali nchini Uganda, mahali pamoja", // REVIEW: Swahili, confirm with a native speaker
     heroTitleHtml: "Pata <span class=\"text-green-300\">maka</span> yako bora",
     heroSubtitle: "Search engine ya mali Uganda: nyumba, za kupanga, ardhi, vyumba vya wanafunzi, na listings kutoka mitandao ya kijamii.",
     heroRent: "Kupanga",
@@ -1717,7 +1717,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Dony",
-    heroBadge: "Uganda's #1 free property platform",
+    heroBadge: "Property ducu i Uganda, i kabedo acel", // REVIEW: Acholi, confirm with a native speaker
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Yeny",
@@ -1750,7 +1750,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Ingira",
-    heroBadge: "Pulatifoomu ya property y'obwereere #1 omu Uganda",
+    heroBadge: "Buri property omuri Uganda, omu mwanya gumwe", // REVIEW: Runyankole, confirm with a native speaker
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shanga",
@@ -1783,7 +1783,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Injira",
-    heroBadge: "Platform y'obusaare eya property #1 omuri Uganda",
+    heroBadge: "Buri property omuri Uganda, omu mwanya gumwe", // REVIEW: Rukiga, confirm with a native speaker
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shaka",
@@ -1816,7 +1816,7 @@ const I18N_UI = {
     pageMortgage: "Mortgage",
     pageAI: "AI Chatbot",
     signIn: "Yingira",
-    heroBadge: "Pulatifoomu ya property ey'obwerere #1 mu Uganda",
+    heroBadge: "Buli property mu Uganda, mu kifo kimu", // REVIEW: Lusoga, confirm with a native speaker
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Noonia",
@@ -2309,7 +2309,7 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   navMortgage: "የብድር መፈለጊያ",
   navAI: "AI Chatbot ያግኙ",
   navFraud: "ማጭበርበር",
-  heroBadge: "የኡጋንዳ ነፃ የንብረት መድረክ",
+  heroBadge: "በኡጋንዳ ያለ እያንዳንዱ ንብረት፣ በአንድ ቦታ", // REVIEW: Amharic, confirm with a native speaker
   heroTitleHtml: "ቀጣዩን ቤት፣ መሬት፣ ኪራይ ወይም የተማሪ ክፍል ያግኙ",
   heroSubtitle: "makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ የንብረት እድሎችንም በአንድ ቦታ ያደራጃል።",
   heroSubtitlePrefix: "makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ ያደራጃል",
@@ -2435,7 +2435,7 @@ I18N_UI.ar = Object.assign({}, I18N_UI.en, {
   navMortgage: "حاسبة التمويل",
   navAI: "اكتشف روبوت AI",
   navFraud: "الاحتيال",
-  heroBadge: "منصة عقارات مجانية في أوغندا",
+  heroBadge: "كل عقار في أوغندا، في مكان واحد", // REVIEW: Arabic, confirm with a native speaker
   heroTitleHtml: "اعثر على بيتك أو أرضك أو إيجارك التالي",
   heroSubtitle: "يستخدم makaug بحثاً مدعوماً بالذكاء الاصطناعي لفحص مصادر العقارات العامة على الإنترنت في أوغندا وتنظيم الفرص في مكان واحد.",
   heroSubtitlePrefix: "يستخدم makaug بحثاً مدعوماً بالذكاء الاصطناعي لفحص مصادر العقارات العامة على الإنترنت في أوغندا وتنظيم",
