@@ -241,8 +241,11 @@ function run() {
   assert(staffRoutes.includes('if (panels) return res.json({ ok: true, data: await dashboardPanelsPayload(req) });'), 'staff dashboard panels query should not call the full heavy dashboard payload');
   assert(staffRoutes.includes('source_quality_suppressed_pending'), 'staff dashboard should count hidden source-quality rows separately');
   assert(staffRoutes.includes('source_quality_suppressed'), 'staff source intake should expose source-quality suppression status');
-  assert(staffRoutes.includes('FROM properties p\n       WHERE p.id <> $1'), 'staff duplicate preview query should use a property alias for source-quality filtering');
-  assert(staffRoutes.includes("AND NOT ${sourceQualitySuppressedFlagSql('p')}"), 'staff duplicate preview query should hide stored source-quality suppressed rows without full regex scans');
+  // C10: the duplicate preview query lives in utils/duplicateEvidence.js.
+  const duplicateSql = require('../utils/duplicateEvidence').DUPLICATE_CANDIDATES_SQL;
+  assert(duplicateSql.includes('FROM properties p\n   WHERE p.id <> $1'), 'staff duplicate preview query should use a property alias for source-quality filtering');
+  assert(duplicateSql.includes("p.extra_fields->>'source_quality_suppressed'"), 'staff duplicate preview query should hide stored source-quality suppressed rows without full regex scans');
+  assert(staffRoutes.includes('safeRows(DUPLICATE_CANDIDATES_SQL, duplicateCandidateParams(property), previewQueryOptions)'), 'staff preview uses the shared duplicate helper');
   assert(app.includes('STAFF_DASHBOARD_PANEL_TIMEOUT_MS'), 'frontend should timeout stuck staff panel hydration requests');
   assert(app.includes('Staff dashboard panels'), 'staff panel timeout should clearly identify the stuck request');
   assert(app.includes('function mergeStaffDashboardPanelData'), 'frontend should merge queue-first panel payloads into existing fast dashboard data');
