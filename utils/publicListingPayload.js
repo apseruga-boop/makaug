@@ -29,7 +29,7 @@ const PUBLIC_LISTING_KEYS = new Set([
   'longitude', 'nearest_university', 'new_until', 'parking_bays', 'price', 'price_currency',
   'price_fx_as_of', 'price_fx_rate_ugx', 'price_on_application', 'price_original',
   'price_original_currency', 'price_period', 'primary_image_url', 'property_type',
-  'public_contact_phone', 'public_copy_reviewed', 'published_at', 'room_arrangement', 'room_type',
+  'public_contact_phone', 'public_copy_reviewed', 'found_online_notice', 'published_at', 'room_arrangement', 'room_type',
   'sold_at', 'source', 'status', 'student_universities', 'students_welcome',
   'third_party_discovery_result', 'title', 'title_type', 'transaction_type', 'updated_at',
   'usable_size_sqm', 'year_built'
