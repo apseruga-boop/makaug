@@ -7,6 +7,7 @@ const { captureLearningEvent } = require('../services/aiLearningCaptureService')
 const { createLead } = require('../services/leadService');
 const { logNotification } = require('../services/notificationLogService');
 const { listPublicDevelopments } = require('../services/offPlanService');
+const { publicOffPlanPayload } = require('../utils/publicOffPlanPayload');
 const {
   normalizeCommercialTransactionType,
   normalizeCommercialPropertyType,
@@ -435,7 +436,7 @@ function offPlanAssistantSearchTerms(userMessage = '') {
 
 async function buildOffPlanAssistantSearchPayload(userMessage = '', origin = '') {
   const terms = offPlanAssistantSearchTerms(userMessage);
-  const projects = await listPublicDevelopments(db, terms.query);
+  const projects = (await listPublicDevelopments(db, terms.query)).map(publicOffPlanPayload);
   const params = new URLSearchParams();
   if (terms.area) params.set('area', terms.area);
   if (terms.district) params.set('district', terms.district);
