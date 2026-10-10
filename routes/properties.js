@@ -1,7 +1,7 @@
 const { correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
-const { publicListingPayload } = require('../utils/publicListingPayload');
+const { publicListingPayload, hideImplausiblePrice } = require('../utils/publicListingPayload');
 const { handOffListingLead, loadListingContact } = require('../services/leadHandoffService');
 const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
 const leadFormLimiter = createLeadFormLimiter();
@@ -3314,6 +3314,15 @@ async function listPropertiesHandler(req, res, next) {
         ...(opportunitySummaryMeta?.fallback_reason ? { count_fallback_reason: opportunitySummaryMeta.fallback_reason } : {})
       }
     };
+    // C17 read-time guard on the list and search results too (the live check
+    // after #407 found rentals at UGX 1B a month in /api/properties): a price
+    // outside the plausibility bounds is sent as Price on application.
+    if (!adminAccess) {
+      payload.data = payload.data.map((out, index) => {
+        const source = responseRows[index] || {};
+        return hideImplausiblePrice(out, { ...source, extra_fields: source.admin_extra_fields || source.extra_fields || {} });
+      });
+    }
     if (canUsePublicResponseCache) setPublicPropertiesCache(publicCache.key, payload);
     setPublicPropertiesCacheHeaders(res, canUsePublicResponseCache);
     res.set('X-Makaug-Properties-Cache', canUsePublicResponseCache ? (forcePublicCacheRefresh ? 'REFRESH' : 'MISS') : 'BYPASS');
