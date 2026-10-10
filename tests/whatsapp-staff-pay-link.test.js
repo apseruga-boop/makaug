@@ -221,7 +221,7 @@ test('4 → 1 → a name → confirm, and the link goes with the reference back 
     assert.match(payload, /MKTEST1234/);
     assert.match(payload, /256772123456/, 'it went to the agent');
     assert.match(payload, /Payment link sent/i, 'the staff notice');
-    assert.ok(!/makaug-join-as-agent-v2\.mp4/.test(payload),
+    assert.ok(!/makaug-join-as-agent-v3\.mp4/.test(payload),
       'a registered agent does not need the joining film again');
 
     // Sent, and written down as sent — without that the loop cannot be closed.
@@ -369,9 +369,9 @@ test('4 → 2 → name and number, and the film and the link go out together', a
     // Both, in that order: a bare payment link from an unknown number is
     // indistinguishable from a scam.
     const payload = sent.map((p) => JSON.stringify(p)).join(' ');
-    assert.match(payload, /makaug-join-as-agent-v2\.mp4/, 'the joining film');
+    assert.match(payload, /makaug-join-as-agent-v3\.mp4/, 'the joining film');
     assert.match(payload, /MKTEST1234/, 'and the link');
-    const filmIndex = sent.findIndex((p) => JSON.stringify(p).includes('makaug-join-as-agent-v2'));
+    const filmIndex = sent.findIndex((p) => JSON.stringify(p).includes('makaug-join-as-agent-v3'));
     const linkIndex = sent.findIndex((p) => /pay\/MKTEST1234/.test(JSON.stringify(p)));
     assert.ok(filmIndex > -1 && linkIndex > filmIndex, 'the film has to arrive before the bill');
 

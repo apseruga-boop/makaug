@@ -639,6 +639,8 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
     { text: 'a month', size: 42, weight: 900, fill: K.orange }
   ], { sub: `by the end of ${network.target_month}` });
 
+  statement(2.0, [{ text: 'Most visitors are', size: 44, weight: 900 }, { text: 'right here in Uganda', size: 42, weight: 900, fill: K.orange }], { sub: 'and Ugandans abroad buy before they land' });
+
   scenes.push({ dur: 3.2, draw: (lt, t, d) => {
     const e = out(lt, d);
     const r = [globe(360, 400, 240, 0.9 * clamp01(lt / 0.4)),
@@ -654,7 +656,6 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
     return r;
   } });
 
-  statement(1.8, [{ text: 'Diaspora buyers', size: 46, weight: 900 }, { text: 'shop from abroad', size: 40, weight: 900, fill: K.orange }], { sub: 'they buy before they land' });
   statement(1.8, [{ text: 'In 9 languages', size: 48, weight: 900 }], { sub: 'English · Luganda · Swahili · Arabic…', fill: K.peach });
   statement(1.6, [{ text: 'Made for investors', size: 44, weight: 900 }], { sub: 'off plan · buy to let · mortgage finder' });
   statement(1.8, [{ text: 'Your number.', size: 44, weight: 900 }, { text: 'Your deal.', size: 44, weight: 900, fill: K.orange }], { sub: 'buyers call you — no commission' });
