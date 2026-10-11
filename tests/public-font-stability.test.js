@@ -58,6 +58,7 @@ function publicRenderer() {
     applyHarvestPublicSubmissionVisibility: (html) => html,
     applyShortTermVisibility: (html) => html,
     injectShortTermRuntimeConfig: (html) => html,
+    inlinePublicCoreStylesheets: require('../services/publicCoreStylesheets'),
     injectGa4HeadTag: (html) => html
   });
   for (const name of ['applyHomeHeroPreload', 'applyShortTermStylesheetLoading', 'applyPublicFontDisplayOptional', 'renderPublicHtml']) {

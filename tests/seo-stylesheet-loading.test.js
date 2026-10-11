@@ -117,6 +117,7 @@ test('public HTML invokes route-aware CSS loading after the homepage-image decis
     applyHarvestPublicSubmissionVisibility(html) { return html; },
     applyShortTermVisibility(html) { return html; },
     injectShortTermRuntimeConfig(html) { return html; },
+    inlinePublicCoreStylesheets(html) { return html; },
     applyHomeHeroPreload(html, pathname) { calls.push(['hero', pathname]); return html; },
     injectGa4HeadTag(html, pathname) { calls.push(['analytics', pathname]); return html; }
   });
