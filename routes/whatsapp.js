@@ -7264,17 +7264,20 @@ function isAgentProfilePhotoRequest(text = '') {
 
 const AGENT_PHOTO_AWAIT_MINUTES = 60;
 
+// The one phrase the follow-up detector looks for in our own earlier message.
+const AGENT_PHOTO_ASK_PHRASE = 'image you would like on your makaug profile';
+
 function agentProfilePhotoPrompt(agent = {}, { retry = false } = {}) {
   const first = agentGreetingName(agent, '');
   if (retry) {
     return `I could not use that picture${first ? `, ${first}` : ''}. 📸\n\n`
-      + 'Send one clear photo of *yourself* — face and shoulders, good light, taken with your phone. '
-      + 'Not an ID, a screenshot, a logo or a house.\n\nReply *CANCEL* to leave it for now.';
+      + `Please send the ${AGENT_PHOTO_ASK_PHRASE}: a clear photo of *you*, or your company *logo*. `
+      + 'Not an ID or a screenshot of a chat.\n\nReply *CANCEL* to leave it for now.';
   }
   return `Sorry about that${first ? `, ${first}` : ''}. Let us fix it now. 📸\n\n`
-    + 'Send me one clear photo of *yourself* (face and shoulders, good light) right here in this chat. '
-    + 'I will put it on your makaug profile and message you the moment it is live.\n\n'
-    + 'Please do not send an ID, a screenshot or a house photo — those can never go on a public profile.\n'
+    + `Please send the ${AGENT_PHOTO_ASK_PHRASE} — a clear photo of *you*, or your company *logo*, whichever you want buyers to see.\n\n`
+    + 'Just send the picture here in this chat. I will tidy it up, put it on your profile, and message you again the moment it is live.\n\n'
+    + 'Please do not send an ID card — it can never go on a public profile.\n'
     + 'Reply *CANCEL* to leave it for now.';
 }
 
@@ -7289,6 +7292,69 @@ async function startAgentProfilePhotoRequest({ phone, agent = {}, session = {} }
   };
   await replaceEmployeeSession(phone, 'employee_property_media', data);
   return agentProfilePhotoPrompt(agent);
+}
+
+async function loadEmployeeCandidateBytes(candidate = {}) {
+  if (candidate.dataUrl) {
+    const encoded = String(candidate.dataUrl).split(',')[1] || '';
+    const bytes = Buffer.from(encoded, 'base64');
+    if (bytes.length) return bytes;
+  }
+  if (/^https:\/\//i.test(candidate.remoteUrl || '')) {
+    const response = await fetchEmployeeMediaWithRetry(candidate.remoteUrl, { headers: { Accept: 'image/*' } });
+    if (!response.ok) throw new Error(`Image download failed (${response.status})`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length && bytes.length <= 12_000_000) return bytes;
+  }
+  throw new Error('No image bytes available');
+}
+
+/**
+ * An agent answering OUR request for a profile image, with no session open.
+ *
+ * When staff ask an agent for a photo or logo from the dashboard or by hand,
+ * the agent simply replies with a picture. If our own earlier message asked
+ * for it, and nothing has confirmed a photo since, a captionless image from
+ * that agent is the profile image. A property advert (a caption with a price
+ * or bedrooms) never is.
+ */
+async function maybeAcceptRequestedProfilePhoto({ phone, cleanBody = '', mediaUrl = '', runtime = {}, inboundMessageId = '' } = {}) {
+  const candidates = employeeMediaCandidates(runtime, mediaUrl);
+  if (!candidates.some((candidate) => candidate.kind === 'image')) return null;
+  if (cleanBody.length > 60 || /\b(ugx|usd|million|bedroom|decimals?|plots?|acres?|for sale|for rent|to rent)\b/i.test(cleanBody)) return null;
+  const agent = await findApprovedAgentByPhone(phone);
+  if (!agent) return null;
+  let asked = false;
+  try {
+    const result = await db.query(
+      `SELECT 1 FROM whatsapp_messages a
+        WHERE a.user_phone = $1
+          AND a.direction = 'outbound'
+          AND a.created_at > NOW() - INTERVAL '72 hours'
+          AND a.payload::text ILIKE $2
+          AND NOT EXISTS (
+            SELECT 1 FROM whatsapp_messages b
+             WHERE b.user_phone = $1
+               AND b.direction = 'outbound'
+               AND b.created_at > a.created_at
+               AND b.payload::text ILIKE '%your new photo is live%'
+          )
+        LIMIT 1`,
+      [phone, `%${AGENT_PHOTO_ASK_PHRASE}%`]
+    );
+    asked = result.rows.length > 0;
+  } catch (error) {
+    logger.warn('Profile photo follow-up check failed:', error.message || String(error));
+  }
+  if (!asked) return null;
+  const data = {
+    ...agentSelfIntakeSessionData(agent),
+    awaiting_profile_photo: true,
+    awaiting_profile_photo_at: new Date().toISOString(),
+    profile_photo_attempts: 0
+  };
+  await replaceEmployeeSession(phone, 'employee_property_media', data);
+  return handleAgentProfilePhotoReply({ phone, data, candidates, cleanBody, inboundMessageId, runtime, currentStep: 'employee_property_media' });
 }
 
 /**
@@ -7345,9 +7411,34 @@ async function handleAgentProfilePhotoReply({ phone, data = {}, candidates = [],
   if (!safeImages.length) {
     return refuse('🛑 That looks like an ID photo, and an ID can never go on a public profile.\n\n' + agentProfilePhotoPrompt(agent, { retry: true }));
   }
+  // Tidy it first: upright, square, brightened — or a logo set whole on white.
+  let toStore = safeImages.slice(0, 1);
+  let tidied = false;
+  try {
+    const original = await loadEmployeeCandidateBytes(toStore[0]);
+    const cleaned = await require('../services/agentProfileImageService').cleanProfileImage(original);
+    if (cleaned.tooSmall) {
+      return refuse(`That picture is too small to look good on your page (${cleaned.width}×${cleaned.height}).\n\n${agentProfilePhotoPrompt(agent, { retry: true })}`);
+    }
+    toStore = [{
+      ...toStore[0],
+      dataUrl: `data:${cleaned.mimeType};base64,${cleaned.bytes.toString('base64')}`,
+      remoteUrl: '',
+      mimeType: cleaned.mimeType,
+      kind: 'image',
+      sha256: '',
+      name: 'profile.jpg',
+      width: 0,
+      height: 0
+    }];
+    tidied = true;
+  } catch (error) {
+    // The original is better than nothing; staff can see it was not tidied.
+    logger.warn('Agent profile image clean-up skipped:', error.message || String(error));
+  }
   let stored;
   try {
-    [stored] = await storeEmployeeMedia(safeImages.slice(0, 1), { profilePhoto: true, phone, inboundMessageId, provider: runtime.provider });
+    [stored] = await storeEmployeeMedia(toStore, { profilePhoto: true, phone, inboundMessageId, provider: runtime.provider });
   } catch (error) {
     logger.error('Agent profile photo storage failed:', error);
     return refuse('I could not store that picture. Please send it again as a photo.');
@@ -7375,7 +7466,7 @@ async function handleAgentProfilePhotoReply({ phone, data = {}, candidates = [],
     logger.error('Agent profile photo save failed:', error);
     return { handled: true, nextStep: currentStep, message: 'I could not save your photo just now, nothing has changed. Please send it again in a few minutes.' };
   }
-  logger.info('Agent profile photo updated by the agent on WhatsApp', { agent_id: agent.id, previous_had_photo: Boolean(agent.profile_photo_url) });
+  logger.info('Agent profile photo updated by the agent on WhatsApp', { agent_id: agent.id, previous_had_photo: Boolean(agent.profile_photo_url), tidied });
   require('../services/leadDeskService').sendToTeam(
     db,
     `📸 *${agent.full_name || 'An agent'} updated their profile photo on WhatsApp.*\nPage: ${(() => { try { return require('../services/agentWelcomeService').agentProfileUrl(agent); } catch (_e) { return ''; } })()}\nIf it is wrong, replace it from the agent's profile in the dashboard.`,
@@ -8103,6 +8194,8 @@ async function handleEmployeeWhatsappIntake({
     // Tried before the closed-batch notice below, because an agent sending
     // another property after finishing one has not strayed — they are simply
     // sending another property, and should get a new batch, not a warning.
+    const requestedPhoto = await maybeAcceptRequestedProfilePhoto({ phone, cleanBody, mediaUrl, runtime, inboundMessageId });
+    if (requestedPhoto) return requestedPhoto;
     if (looksLikeForwardedProperty({ cleanBody, mediaUrl, runtime })) {
       const selfAgent = await findApprovedAgentByPhone(phone);
       if (selfAgent) {
@@ -18905,6 +18998,8 @@ module.exports.__test = {
   isAgentProfilePhotoRequest,
   agentProfilePhotoPrompt,
   handleAgentProfilePhotoReply,
+  maybeAcceptRequestedProfilePhoto,
+  AGENT_PHOTO_ASK_PHRASE,
   perUnitPriceFacts,
   explicitDistrictInCaption,
   buildEmployeeBatchSummary,

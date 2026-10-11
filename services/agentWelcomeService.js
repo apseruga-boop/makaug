@@ -77,7 +77,7 @@ async function computePlatformStats({ force = false } = {}) {
 async function fetchAgent(agentId) {
   const result = await db.query(
     `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, status, created_at,
-            fee_offer_mode, fee_offer_until, fee_offer_at, paid_until, fee_exempt
+            fee_offer_mode, fee_offer_until, fee_offer_at, paid_until, fee_exempt, profile_photo_url
      FROM agents WHERE id = $1 LIMIT 1`,
     [agentId]
   );
@@ -196,6 +196,12 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push('*Your profile is live*');
   lines.push(`${agentProfileUrl(agent)}`);
   lines.push('Everything you list shows there — send that link to any buyer, or put the picture card below on your WhatsApp status.');
+  // Agents who already have a picture on their page are not asked for one.
+  if (!agent.profile_photo_url) {
+    lines.push('');
+    lines.push('*Add your profile picture*');
+    lines.push('Reply *MY PHOTO* and send a clear photo of you, or your company logo. I tidy it up, put it on your profile and message you the moment it is live. Pages with a face or a logo get more enquiries.');
+  }
 
   // The thing an agent actually wants to know, said before anything else we
   // might want to say about ourselves.
