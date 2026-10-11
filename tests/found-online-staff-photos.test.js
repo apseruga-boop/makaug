@@ -66,6 +66,22 @@ test('a source image copied to our media host (source_* slot) still stays hidden
   assert.deepEqual(row.images.map((image) => image.url), [STAFF_2]);
 });
 
+test('a hosted X post photo is published, and a raw twimg URL with that slot stays hidden', () => {
+  const X_HOSTED = `https://media.makaug.com/x-post-photos/${ID}.jpg`;
+  const X_RAW = 'https://pbs.twimg.com/media/AbC123.jpg';
+  const hosted = { id: 'x1', url: X_HOSTED, is_primary: true, sort_order: 0, slot_key: 'x_post_photo', room_label: 'Photo from the X post' };
+  const rawSlot = { id: 'x2', url: X_RAW, is_primary: true, sort_order: 0, slot_key: 'x_post_photo', room_label: 'Photo from the X post' };
+  const onlyHosted = publicPropertyRow(foundOnlineProperty({ source_platform: 'X' }), [sourceImage, sourceCopy, hosted]);
+  assert.deepEqual(onlyHosted.images.map((image) => image.url), [X_HOSTED]);
+  assert.equal(onlyHosted.primary_image_url, X_HOSTED);
+  const raw = publicPropertyRow(foundOnlineProperty({ source_platform: 'X' }), [rawSlot, sourceCopy]);
+  assert.deepEqual(raw.images, []);
+  assert.equal(raw.primary_image_url, null);
+  const withStaff = publicPropertyRow(foundOnlineProperty(consent), [hosted, staff1]);
+  assert.deepEqual(withStaff.images.map((image) => image.url), [STAFF_1, X_HOSTED]);
+  assert.equal(withStaff.images[0].is_primary, true);
+});
+
 test('found online with only source images still returns []', () => {
   const row = publicPropertyRow(foundOnlineProperty(consent), [sourceImage, sourceCopy]);
   assert.deepEqual(row.images, []);
@@ -125,6 +141,9 @@ test('the list, card and SSR queries all select the consented staff primary', ()
   assert.match(sql, /staff_image_upload/);
   assert.match(sql, /image_rights_confirmed/);
   assert.match(sql, /tiktokcdn\|byteimg/);
+  assert.match(sql, /si\.slot_key = 'x_post_photo'/);
+  assert.match(sql, /\/x-post-photos\//);
+  assert.match(sql, /ORDER BY \(COALESCE\(si\.slot_key, ''\) = 'staff_upload'\) DESC, \(COALESCE\(si\.slot_key, ''\) = 'x_post_photo'\) DESC/);
   const routes = fs.readFileSync(path.join(__dirname, '../routes/properties.js'), 'utf8');
   assert.equal((routes.match(/staff_img\.url AS staff_primary_image_url/g) || []).length, 2, 'both list queries');
   const ssr = fs.readFileSync(path.join(__dirname, '../services/publicSeoRenderService.js'), 'utf8');
@@ -140,6 +159,11 @@ test('the SPA shows consented staff photos for found online and keeps source med
   // eslint-disable-next-line no-new-func
   const helpers = new Function(`${app.slice(start, end)}; return { foundOnlineConsentedPhotos, foundOnlineConsentedPhotoUrl };`)();
   assert.deepEqual(helpers.foundOnlineConsentedPhotos([sourceImage, sourceCopy, staff1, staff2]).map((image) => image.url), [STAFF_1, STAFF_2]);
+  const xHosted = { url: `https://media.makaug.com/x-post-photos/${ID}.jpg`, slot_key: 'x_post_photo' };
+  const xRaw = { url: 'https://pbs.twimg.com/media/AbC123.jpg', slot_key: 'x_post_photo' };
+  assert.deepEqual(helpers.foundOnlineConsentedPhotos([xHosted, sourceCopy, xRaw, staff1]).map((image) => image.url), [STAFF_1, xHosted.url]);
+  assert.equal(helpers.foundOnlineConsentedPhotoUrl({ images: [], primary_image_url: xHosted.url }), xHosted.url);
+  assert.equal(helpers.foundOnlineConsentedPhotoUrl({ images: [], primary_image_url: xRaw.url }), '');
   assert.equal(helpers.foundOnlineConsentedPhotoUrl({ images: [], primary_image_url: STAFF_1 }), STAFF_1);
   assert.equal(helpers.foundOnlineConsentedPhotoUrl({ images: [], primary_image_url: TIKTOK }), '');
   assert.equal(helpers.foundOnlineConsentedPhotoUrl({ images: [sourceImage] }), '');

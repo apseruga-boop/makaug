@@ -360,12 +360,12 @@ async function storeRemoteImageUrl(remoteUrl, options = {}) {
   const allowedMimeTypes = options.allowedMimeTypes || ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
   const maxBytes = options.maxBytes || (4 * 1024 * 1024);
   const fetchImpl = options.fetchImpl || fetch;
-  const response = await fetchImpl(raw, {
-    headers: {
-      Accept: allowedMimeTypes.join(', '),
-      'User-Agent': options.userAgent || 'makaug-source-preview-cache/1.0',
-    },
-  });
+  const headers = {
+    Accept: allowedMimeTypes.join(', '),
+    'User-Agent': options.userAgent || 'makaug-source-preview-cache/1.0',
+  };
+  if (options.referer) headers.Referer = String(options.referer);
+  const response = await fetchImpl(raw, { headers });
   if (!response.ok) {
     throw storageError(`${options.label || 'remote image'} download failed: ${response.status}`, 502);
   }
