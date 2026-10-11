@@ -49,10 +49,11 @@ test('the photo request is tested before the share request', () => {
   assert(photo > 0 && share > 0 && photo < share);
 });
 
-test('the prompt asks for a face, refuses IDs, and promises a message when live', () => {
+test('the prompt asks for a photo or a logo, refuses IDs, and promises a message when live', () => {
   const text = t.agentProfilePhotoPrompt({ full_name: 'Kimuli Brian' });
-  assert(/photo of \*yourself\*/.test(text));
-  assert(/ID/.test(text) && /live/.test(text) && /CANCEL/.test(text));
+  assert(text.includes(t.AGENT_PHOTO_ASK_PHRASE), 'the follow-up detector keys on this phrase');
+  assert(/photo of \*you\*, or your company \*logo\*/.test(text));
+  assert(/ID card/.test(text) && /live/.test(text) && /CANCEL/.test(text));
 });
 
 test('cancel and unrelated text leave the photo step cleanly', async () => {
@@ -94,4 +95,44 @@ test('"MY PHOTO" works, and an agent with no photo is nudged once per posting se
   assert(source.includes('Reply *MY PHOTO* and send one'));
   assert(source.includes('openedAgentSelfIntake && data.agent && !data.agent.profile_photo_url'));
   assert(/SELECT id, makaug_agent_number[^`]*profile_photo_url\n\s+FROM agents/.test(source), 'the agent lookup must carry the photo');
+});
+
+test('the image is tidied: photos cropped square, logos kept whole, tiny images refused', async () => {
+  const sharp = require('sharp');
+  const { cleanProfileImage } = require('../services/agentProfileImageService');
+  const photo = await sharp({ create: { width: 1200, height: 900, channels: 3, background: { r: 120, g: 90, b: 70 } } }).jpeg().toBuffer();
+  const logo = await sharp({ create: { width: 900, height: 200, channels: 4, background: { r: 0, g: 100, b: 0, alpha: 0.5 } } }).png().toBuffer();
+  const tiny = await sharp({ create: { width: 100, height: 100, channels: 3, background: '#999' } }).jpeg().toBuffer();
+  const cleanedPhoto = await cleanProfileImage(photo);
+  const photoMeta = await sharp(cleanedPhoto.bytes).metadata();
+  assert.strictEqual(cleanedPhoto.mode, 'photo');
+  assert.strictEqual(photoMeta.width, photoMeta.height);
+  assert.strictEqual(photoMeta.format, 'jpeg');
+  const cleanedLogo = await cleanProfileImage(logo);
+  const logoMeta = await sharp(cleanedLogo.bytes).metadata();
+  assert.strictEqual(cleanedLogo.mode, 'logo');
+  assert.strictEqual(logoMeta.width, logoMeta.height);
+  assert.strictEqual((await cleanProfileImage(tiny)).tooSmall, true);
+});
+
+test('a picture sent after our own request is accepted with no session open', () => {
+  assert(source.includes('async function maybeAcceptRequestedProfilePhoto'));
+  assert(source.includes("b.payload::text ILIKE '%your new photo is live%'"), 'a confirmed photo ends the request');
+  const early = source.indexOf('await maybeAcceptRequestedProfilePhoto({ phone, cleanBody');
+  const forwarded = source.indexOf('if (looksLikeForwardedProperty({ cleanBody, mediaUrl, runtime })) {\n      const selfAgent');
+  assert(early > 0 && forwarded > early, 'it runs before a captionless image is read as a property');
+});
+
+test('the saved image is the tidied one, and a failed tidy falls back to the original', () => {
+  assert(source.includes("require('../services/agentProfileImageService').cleanProfileImage"));
+  assert(source.includes('Agent profile image clean-up skipped'));
+});
+
+test('the welcome message asks for a profile picture, but not from agents who have one', () => {
+  const welcome = require('../services/agentWelcomeService');
+  const without = welcome.buildWelcomeMessage({ agent: { id: 'a1', full_name: 'Kimuli Brian' }, stats: {} });
+  assert(without.includes('*Add your profile picture*') && without.includes('MY PHOTO'));
+  assert(without.length < 4000);
+  const withPhoto = welcome.buildWelcomeMessage({ agent: { id: 'a1', full_name: 'Kimuli Brian', profile_photo_url: 'https://x/y.jpg' }, stats: {} });
+  assert(!withPhoto.includes('*Add your profile picture*'));
 });
