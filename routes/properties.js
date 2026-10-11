@@ -84,7 +84,8 @@ const {
 } = require('../services/ugnlisLandVerificationService');
 const {
   landTitleAvailabilityLabel,
-  normalizeLandTitleAvailability
+  normalizeLandTitleAvailability,
+  publicLandTitleAvailabilityLabel
 } = require('../utils/landTitleAvailability');
 const {
   cleanPublicListingCopy,
@@ -123,6 +124,8 @@ const {
   humanPropertyTypeLabel
 } = require('../utils/commercialClassification');
 const { listingPriceQuality, IMPOSSIBLE_PRICE_UGX } = require('../utils/listingPriceQuality');
+const { resolveStaffPriceChoice } = require('../utils/staffPriceChoice');
+const { listingReferenceQuery } = require('../utils/listingReferenceSearch');
 const { pricePlausibility } = require('../utils/pricePlausibility');
 const { listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
@@ -645,14 +648,13 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
     // C20: choosing "Price on application" as the period is a POA listing.
     if (patch.price_period === 'poa') patch.price_on_application = true;
   }
-  if (Object.prototype.hasOwnProperty.call(patch, 'price_on_application')) {
-    patch.price_on_application = parseBooleanLike(patch.price_on_application, false);
-    if (patch.price_on_application) {
-      patch.price = null;
-      patch.price_original = null;
-      patch.price_fx_rate_ugx = null;
-      patch.price_fx_as_of = null;
-    }
+  // A typed canonical amount wins over a POA checkbox left on from a null price.
+  const priceChoice = resolveStaffPriceChoice(patch);
+  Object.assign(patch, priceChoice.patch);
+  if (priceChoice.mode === 'amount' && (patch.price_original_currency || CANONICAL_PROPERTY_CURRENCY) === CANONICAL_PROPERTY_CURRENCY) {
+    patch.price_original = patch.price;
+    patch.price_fx_rate_ugx = null;
+    patch.price_fx_as_of = null;
   }
   // C17: a price above the plausibility bounds can't be saved; fix the number
   // or choose Price on application.
@@ -737,6 +739,22 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
   });
 
   const extraPatch = {};
+  if (priceChoice.mode === 'amount' || priceChoice.mode === 'poa') {
+    const poa = priceChoice.mode === 'poa';
+    const existingExtra = existing.extra_fields && typeof existing.extra_fields === 'object' ? existing.extra_fields : {};
+    extraPatch.price_on_application = poa;
+    extraPatch.price_upon_application = poa;
+    if (!poa) extraPatch.price_review = null;
+    extraPatch.price_quality = listingPriceQuality({
+      ...existing,
+      price: patch.price,
+      price_period: patch.price_period || existing.price_period,
+      price_on_application: poa,
+      listing_type: patch.listing_type || existing.listing_type,
+      transaction_type: patch.transaction_type || existing.transaction_type,
+      extra_fields: { ...existingExtra, price_on_application: poa, price_upon_application: poa }
+    });
+  }
   [
     'region',
     'city',
@@ -1134,8 +1152,6 @@ function publicContactPhoneFromExtra(extra = {}) {
     raw.lister_whatsapp,
     raw.source_phone,
     raw.source_whatsapp,
-    raw.contact_phone_alt,
-    raw.phone_alt,
     rawSourcePost.public_contact_phone,
     rawSourcePost.contact_phone,
     rawSourcePost.phone,
@@ -1210,6 +1226,9 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
     third_party_discovery_result: foundOnlinePublic,
     public_contact_phone: publicContactPhone || null,
     contact_phone: publicContactPhone || null,
+    ...(publicContactPhone && cleanText(row?.extra_fields?.contact_phone_alt)
+      ? { contact_phone_alt: cleanText(row.extra_fields.contact_phone_alt) }
+      : {}),
     nearest_university: studentContext.nearest_university || null,
     student_campus: studentContext.nearest_university || null,
     student_universities: studentContext.student_universities || [],
@@ -1665,7 +1684,7 @@ function publicExtraFields(extraFields = {}, { createdAt = null } = {}) {
     student_campus: nearestUniversity || extra.student_campus || null,
     student_universities: studentUniversities,
     land_title_available: landTitleAvailable || null,
-    land_title_available_label: landTitleAvailabilityLabel(landTitleAvailable) || null,
+    land_title_available_label: publicLandTitleAvailabilityLabel(landTitleAvailable) || null,
     video_url: videoUrl || null,
     video_urls: safeVideoUrls,
     video_tours: safeVideoTours,
@@ -1799,7 +1818,10 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
       student_campus: studentContext.nearest_university,
       student_universities: studentContext.student_universities
     } : {}),
-    ...(studentContext.distance_to_uni_km != null ? { distance_to_uni_km: studentContext.distance_to_uni_km } : {})
+    ...(studentContext.distance_to_uni_km != null ? { distance_to_uni_km: studentContext.distance_to_uni_km } : {}),
+    ...(publicContactPhone && cleanText(property?.extra_fields?.contact_phone_alt)
+      ? { contact_phone_alt: cleanText(property.extra_fields.contact_phone_alt) }
+      : {})
   };
   const row = {
     ...safeProperty,
@@ -2500,8 +2522,9 @@ async function listPropertiesHandler(req, res, next) {
     const studentPortal = parseBooleanLike(req.query.student_portal, false);
     const district = cleanText(req.query.district);
     const area = cleanText(req.query.area || req.query.search || req.query.query);
+    const referenceLookup = listingReferenceQuery(area);
     let canonicalLocationKeys = parseCanonicalLocationKeys(req.query);
-    if (!canonicalLocationKeys.length && (area || district)) {
+    if (!canonicalLocationKeys.length && (area || district) && !referenceLookup) {
       const legacyCanonicalLocation = canonicalizeUgandaLocation(area, district);
       if (legacyCanonicalLocation) canonicalLocationKeys = [legacyCanonicalLocation.key];
     }
@@ -2607,7 +2630,9 @@ async function listPropertiesHandler(req, res, next) {
       else addFilter(filters, values, 'p.district = ?', district);
     }
 
-    if (canonicalLocationScope.selected.length) {
+    if (referenceLookup && !canonicalLocationScope.selected.length) {
+      addFilter(filters, values, 'p.inquiry_reference = ?', referenceLookup);
+    } else if (canonicalLocationScope.selected.length) {
       addCanonicalLocationSearchFilter(filters, values, canonicalLocationScope);
     } else if (area) {
       if (publicOnly || !adminAccess) {

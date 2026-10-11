@@ -56,7 +56,7 @@ test('each missing Wakiso place saves under its town and survives reload', () =>
     ['Kira Municipality', 'Kira', 'Kira'],
     ['Gayaza', 'Gayaza', 'Gayaza'],
     ['Buloba', 'Buloba', 'Buloba'],
-    ['Nkoowe', 'Nansana', 'Nkoowe'],
+    ['Nkoowe', 'Wakiso', 'Nkoowe'],
     ['Gganda', 'Nansana', 'Gganda'],
     ['Shimoni Estate', 'Kira', 'Shimoni Estate'],
     ['Kigo', 'Makindye-Ssabagabo', 'Kigo'],
@@ -64,7 +64,7 @@ test('each missing Wakiso place saves under its town and survives reload', () =>
     ['Kyaliwajjala', 'Kira', 'Kyaliwajjala'],
     ['Mbalwa', 'Kira', 'Mbalwa'],
     ['Manyangwa', 'Gayaza', 'Manyangwa'],
-    ['Masooli', 'Gayaza', 'Masooli'],
+    ['Masooli', 'Kasangati', 'Masooli'],
     ['Matugga', 'Gombe', 'Matugga'],
     ['Bwebajja', 'Makindye-Ssabagabo', 'Bwebajja'],
     ['Maya', 'Nsangi', 'Maya']
@@ -189,6 +189,7 @@ test('the review screen keeps a chosen town and does not wipe a loaded place', (
   assert.equal(context.keep('Kawempe', 'Nakawa', tree, 'Kisaasi'), 'Kawempe');
   assert.equal(context.keep('', 'Nakawa', tree, 'Kisaasi'), 'Nakawa');
   assert.equal(context.keep('Kampala', 'Nakawa', tree, 'Kisaasi'), 'Nakawa');
+  assert.equal(context.keep('Kawempe', 'Nakawa', tree, 'Luzira'), 'Kawempe');
   assert.equal(context.clear({ area: 'Nkoowe', district: 'Wakiso' }), false);
   assert.equal(context.clear({ area: '', district: '', neighborhood: '' }), true);
 });

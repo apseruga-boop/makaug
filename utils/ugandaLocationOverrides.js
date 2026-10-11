@@ -197,9 +197,9 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'makaug_verified_location_override_20261010'
   },
   {
-    // Not a UBOS ward. Hoima Road / Nabweru side of Nansana Municipality.
+    // Hoima Road, inside Wakiso Town Council. Not a Nansana ward.
     // No coordinates until a cited point is added.
-    name: 'Nkoowe', district: 'Wakiso', town: 'Nansana', level: 'area',
+    name: 'Nkoowe', district: 'Wakiso', town: 'Wakiso', level: 'area',
     aliases: ['Nkoowe', 'Nkowe'],
     source: 'makaug_verified_location_override_20261010'
   },
@@ -216,9 +216,8 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'makaug_verified_location_override_20261010'
   },
   {
-    // UBOS files Masooli as a Kasangati Town Council ward. Staff listings for
-    // this corridor are under Gayaza, so the override parents it there.
-    name: 'Masooli', district: 'Wakiso', town: 'Gayaza', level: 'area',
+    // UBOS files Masooli as a Kasangati Town Council ward.
+    name: 'Masooli', district: 'Wakiso', town: 'Kasangati', level: 'area',
     aliases: ['Masooli', 'Masoli'],
     source: 'makaug_verified_location_override_20261010'
   },

@@ -39,10 +39,17 @@ function landTitleAvailabilityLabel(value) {
   return '';
 }
 
+// Public pages only say the title is available once it is verified. "Pending"
+// and other internal checks stay on the staff form.
+function publicLandTitleAvailabilityLabel(value) {
+  return landTitleAvailabilityValue(value) === 'yes' ? landTitleAvailabilityLabel('yes') : '';
+}
+
 module.exports = {
   cleanLandTitleText,
   inferLandTitleAvailabilityFromText,
   landTitleAvailabilityLabel,
   landTitleAvailabilityValue,
-  normalizeLandTitleAvailability
+  normalizeLandTitleAvailability,
+  publicLandTitleAvailabilityLabel
 };

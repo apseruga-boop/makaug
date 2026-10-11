@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 
 const { sendSupportEmail, getSupportEmail, getSupportPhone } = require('./emailService');
+const { isPriceOnApplication } = require('../utils/listingPriceQuality');
 const { normalizeUgPhoneForWhatsApp, sendWhatsAppText } = require('./whatsappNotificationService');
 
 /**
@@ -489,7 +490,8 @@ function buildAutomatedListingReview({
     ? !!listing.lister_phone
     : !!listing.lister_phone && !!listing.lister_email;
   const hasRequiredCore = !!(listing.title && listing.description && listing.district && listing.area && listing.listing_type);
-  const priceUponApplication = !!(extra.price_upon_application || /price\s+upon\s+application/i.test(String(extra.price_label || extra.source_price_label || '')));
+  const priceUponApplication = isPriceOnApplication(listing)
+    || /price\s+upon\s+application/i.test(String(extra.price_label || extra.source_price_label || ''));
   const hasPrice = String(listing.listing_type || '').toLowerCase() === 'student'
     ? (listing.price != null || priceUponApplication)
     : (Number(listing.price || 0) > 0 || priceUponApplication);

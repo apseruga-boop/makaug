@@ -19,6 +19,9 @@ const {
   normalizeCommercialPropertyType,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const { priceEvidenceNote, resolveStaffPriceChoice } = require('../utils/staffPriceChoice');
+const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
+const { propertyListingSearchClause } = require('../utils/listingReferenceSearch');
 const { loadListingMediaSummaries, listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const {
@@ -549,14 +552,16 @@ function staffInternalDuplicateCompletenessScore(row = {}) {
   return score;
 }
 
-function staffLocationWarnings(row = {}) {
-  const warnings = [];
-  const area = cleanText(row.area);
-  const district = cleanText(row.district);
-  const knownDistrict = districtForKnownArea(area);
-  if (knownDistrict && knownDistrict !== district) warnings.push(`${area} belongs to ${knownDistrict}, not ${district}`);
+function districtNameMentioned(text = '', district = '') {
+  const name = cleanText(district);
+  if (!name) return false;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^A-Za-z0-9])${escaped}([^A-Za-z0-9]|$)`, 'i').test(String(text || ''));
+}
+
+function staffLocationEvidenceText(row = {}) {
   const extra = safeJsonObject(row.extra_fields, {});
-  const evidenceText = [
+  return [
     row.title,
     row.description,
     row.address,
@@ -566,6 +571,16 @@ function staffLocationWarnings(row = {}) {
     extra.source_text,
     extra.source_location
   ].map((value) => cleanText(value)).filter(Boolean).join(' | ');
+}
+
+function staffLocationWarnings(row = {}) {
+  const warnings = [];
+  const area = cleanText(row.area);
+  const district = cleanText(row.district);
+  const knownDistrict = districtForKnownArea(area);
+  if (knownDistrict && knownDistrict !== district) warnings.push(`${area} belongs to ${knownDistrict}, not ${district}`);
+  const extra = safeJsonObject(row.extra_fields, {});
+  const evidenceText = staffLocationEvidenceText(row);
   const identityTerms = [
     row.lister_name,
     extra.source_name,
@@ -573,12 +588,34 @@ function staffLocationWarnings(row = {}) {
     extra.agent_name,
     extra.broker_name
   ].map((value) => cleanText(value)).filter(Boolean);
+  const staffConfirmed = boolLike(extra.staff_location_confirmed);
   districtsForKnownLocationText(evidenceText, { excludedTerms: identityTerms })
     .filter((evidenceDistrict) => district && evidenceDistrict !== district)
     .forEach((evidenceDistrict) => {
+      // The district's own name is strong evidence. A shorter place token
+      // (for example the Kalungu parish "Kiti" inside a Kasangati title) is
+      // weak: a location staff have already confirmed overrides it.
+      const strong = districtNameMentioned(evidenceText, evidenceDistrict);
+      if (!strong && staffConfirmed) return;
       warnings.push(`Source/title/address evidence points to ${evidenceDistrict}, not ${district}`);
     });
   return warnings;
+}
+
+function staffWeakEvidenceDistricts(row = {}) {
+  const district = cleanText(row.district);
+  const extra = safeJsonObject(row.extra_fields, {});
+  const evidenceText = staffLocationEvidenceText(row);
+  const identityTerms = [
+    row.lister_name,
+    extra.source_name,
+    extra.public_display_name,
+    extra.agent_name,
+    extra.broker_name
+  ].map((value) => cleanText(value)).filter(Boolean);
+  return districtsForKnownLocationText(evidenceText, { excludedTerms: identityTerms })
+    .filter((evidenceDistrict) => district && evidenceDistrict !== district)
+    .filter((evidenceDistrict) => !districtNameMentioned(evidenceText, evidenceDistrict));
 }
 
 function staffTitleSpamReason(title = '') {
@@ -1669,6 +1706,65 @@ async function runStaffDashboardTasks(tasks = [], concurrency = 3) {
   return results;
 }
 
+const STAFF_SOURCE_PLATFORM_VARIANTS = {
+  tiktok: ['tiktok', 'TikTok', 'TIKTOK'],
+  youtube: ['youtube', 'YouTube', 'YOUTUBE'],
+  facebook: ['facebook', 'Facebook', 'FACEBOOK'],
+  x: ['x', 'X', 'twitter', 'Twitter', 'TWITTER']
+};
+const STAFF_SOURCE_COUNT_FALLBACK = {
+  total_sources: 0,
+  active_sources: 0,
+  tiktok_sources: 0,
+  youtube_sources: 0,
+  facebook_sources: 0,
+  x_sources: 0,
+  direct_contact_sources: 0
+};
+
+// The fast dashboard used ILIKE on platform, which cannot use
+// idx_property_source_registry_platform_status and timed out at 700ms. Equality
+// can use that index. If the count still fails, reltuples keeps the widget
+// from rendering as "sources unavailable".
+async function staffFastSourceSummary() {
+  const variants = STAFF_SOURCE_PLATFORM_VARIANTS;
+  const counted = await safeOne(
+    `SELECT
+       COUNT(*)::int AS total_sources,
+       COUNT(*) FILTER (WHERE status = 'active')::int AS active_sources,
+       COUNT(*) FILTER (WHERE platform = ANY($1::text[]))::int AS tiktok_sources,
+       COUNT(*) FILTER (WHERE platform = ANY($2::text[]))::int AS youtube_sources,
+       COUNT(*) FILTER (WHERE platform = ANY($3::text[]))::int AS facebook_sources,
+       COUNT(*) FILTER (WHERE platform = ANY($4::text[]))::int AS x_sources,
+       COUNT(*) FILTER (WHERE can_contact_directly = true)::int AS direct_contact_sources
+     FROM property_source_registry`,
+    [variants.tiktok, variants.youtube, variants.facebook, variants.x],
+    STAFF_SOURCE_COUNT_FALLBACK,
+    { timeoutMs: STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS }
+  );
+  if (!counted?._fallback_reason) return counted;
+  const estimate = await safeOne(
+    `SELECT GREATEST(COALESCE(reltuples::bigint, 0), 0)::int AS total_sources
+     FROM pg_class
+     WHERE oid = 'property_source_registry'::regclass`,
+    [],
+    { total_sources: 0 },
+    { timeoutMs: STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS }
+  );
+  if (estimate?._fallback_reason) return counted;
+  const total = Number(estimate.total_sources) || 0;
+  return {
+    total_sources: total,
+    active_sources: total,
+    tiktok_sources: null,
+    youtube_sources: null,
+    facebook_sources: null,
+    x_sources: null,
+    direct_contact_sources: null,
+    count_source: 'pg_class_reltuples'
+  };
+}
+
 async function buildDashboardFastPayload(req) {
   const staffId = actorId(req);
   const listingSummary = await buildStaffFastListingSummary();
@@ -1726,20 +1822,7 @@ async function buildDashboardFastPayload(req) {
       { needs_human: 0, open: 0, active_7d: 0, assigned_to_me: 0 },
       { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
-    () => safeOne(
-      `SELECT
-         COUNT(*)::int AS total_sources,
-         COUNT(*) FILTER (WHERE status = 'active')::int AS active_sources,
-         COUNT(*) FILTER (WHERE platform ILIKE 'tiktok')::int AS tiktok_sources,
-         COUNT(*) FILTER (WHERE platform ILIKE 'youtube')::int AS youtube_sources,
-         COUNT(*) FILTER (WHERE platform ILIKE 'facebook')::int AS facebook_sources,
-         COUNT(*) FILTER (WHERE platform ILIKE 'x' OR platform ILIKE 'twitter')::int AS x_sources,
-         COUNT(*) FILTER (WHERE can_contact_directly = true)::int AS direct_contact_sources
-       FROM property_source_registry`,
-      [],
-      { total_sources: 0, active_sources: 0, tiktok_sources: 0, youtube_sources: 0, facebook_sources: 0, x_sources: 0, direct_contact_sources: 0 },
-      { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
-    ),
+    () => staffFastSourceSummary(),
     () => safeOne(
       `SELECT
          COUNT(*)::int AS total,
@@ -2065,19 +2148,7 @@ async function dashboardPayload(req) {
     ),
     staffPanelWhatsappConversationRows(staffId, panelLimit),
     staffPanelWhatsappBridgeStatus(),
-    safeOne(
-      `SELECT
-         COUNT(*)::int AS total_sources,
-         COUNT(*) FILTER (WHERE status = 'active')::int AS active_sources,
-         COUNT(*) FILTER (WHERE platform ILIKE 'tiktok')::int AS tiktok_sources,
-         COUNT(*) FILTER (WHERE platform ILIKE 'youtube')::int AS youtube_sources,
-         COUNT(*) FILTER (WHERE platform ILIKE 'facebook')::int AS facebook_sources,
-         COUNT(*) FILTER (WHERE platform ILIKE 'x' OR platform ILIKE 'twitter')::int AS x_sources,
-         COUNT(*) FILTER (WHERE can_contact_directly = true)::int AS direct_contact_sources
-       FROM property_source_registry`,
-      [],
-      { total_sources: 0, active_sources: 0, tiktok_sources: 0, youtube_sources: 0, facebook_sources: 0, x_sources: 0, direct_contact_sources: 0 }
-    ),
+    staffFastSourceSummary(),
     // C10: groups of pending listings with strong evidence only.
     safeOne(
       duplicateGroupsCountSql(activePendingReviewWhere('p')),
@@ -2401,6 +2472,25 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     normalized.region = regionForDistrict(base.district);
     base.region = normalized.region;
   }
+  // Saving the town alone used to send the district name as the area (the
+  // neighbourhood dropdown had been cleared) and fail with "must be more
+  // specific than a district". Keep the specific place already on the listing.
+  const neighborhoodProvided = Object.prototype.hasOwnProperty.call(normalized, 'neighborhood');
+  const neighborhoodText = neighborhoodProvided ? cleanText(normalized.neighborhood) : cleanText(currentExtra.neighborhood);
+  const areaNode = base.area ? canonicalizeUgandaLocation(base.area, base.district) : null;
+  const areaIsBroad = !base.area
+    || (base.district && base.area.toLowerCase() === base.district.toLowerCase())
+    || Boolean(areaNode && ['district', 'region'].includes(areaNode.level));
+  if (areaIsBroad) {
+    const keptRaw = neighborhoodText || cleanText(currentExtra.neighborhood) || cleanText(existing.area);
+    const keptNode = keptRaw ? canonicalizeUgandaLocation(keptRaw, base.district) : null;
+    if (keptNode && !['district', 'region'].includes(keptNode.level)) {
+      normalized.area = keptNode.name;
+      if (!neighborhoodText) normalized.neighborhood = keptNode.name;
+      base.area = keptNode.name;
+      base.neighborhood = neighborhoodText || keptNode.name;
+    }
+  }
   // C11: a town staff pick in this save is kept (it used to revert to the area's default town).
   const hierarchy = normalizeReviewLocationHierarchy(base, { preferChosenCity: Object.prototype.hasOwnProperty.call(normalized, 'city') && Boolean(cleanText(normalized.city)) });
   errors.push(...hierarchy.errors);
@@ -2472,14 +2562,21 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     // C20: choosing "Price on application" as the period is a POA listing.
     if (normalized.price_period === 'poa') normalized.price_on_application = true;
   }
-  if (Object.prototype.hasOwnProperty.call(normalized, 'price_on_application')) {
-    normalized.price_on_application = boolLike(normalized.price_on_application);
-    if (normalized.price_on_application) {
-      normalized.price = null;
-      normalized.price_original = null;
-      normalized.price_fx_rate_ugx = null;
-      normalized.price_fx_as_of = null;
-    }
+  // A canonical amount typed into Preview & edit wins over the POA checkbox
+  // that was already on because the stored price was null. The POA period, or
+  // the checkbox with the price left blank, still saves Price on application.
+  const priceChoice = resolveStaffPriceChoice(normalized, existing);
+  Object.assign(normalized, priceChoice.patch);
+  normalized.__priceChoice = priceChoice.mode;
+  // Thousand separators ("1,000,000,000") are a real amount. The UGX original
+  // has to follow the resolved number, not parseFloat of the commas.
+  if (effectiveCurrency === 'UGX' && priceChoice.mode === 'amount') {
+    normalized.price_original = normalized.price;
+    normalized.price_fx_rate_ugx = null;
+    normalized.price_fx_as_of = null;
+  }
+  if (priceChoice.mode === 'amount' && Number(normalized.price) > 1e12) {
+    errors.push('price is over UGX 1 trillion; please check the number');
   }
   // C17: staff can't save a price outside the plausibility bounds; they fix
   // the number or tick Price on application.
@@ -2522,6 +2619,8 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   }
   const existing = existingResult.rows[0];
   const { patch, hierarchy, errors } = normalizeStaffListingPatch(existing, listingPatch);
+  const priceChoiceMode = patch.__priceChoice || 'unchanged';
+  delete patch.__priceChoice;
   if (!Object.prototype.hasOwnProperty.call(patch, 'transaction_type')) {
     const alias = patch.transactionType ?? patch.commercial_mode ?? patch.commercial_intent;
     if (alias != null) patch.transaction_type = alias;
@@ -2597,6 +2696,7 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   // Title/description typed by staff must reach the public page. Found-online
   // rows otherwise get a generated title/summary (services/publicListingCopy.js).
   const existingExtra = safeJsonObject(existing.extra_fields, {});
+  let resolvedPriceQuality = null;
   const correctedCopyFields = ['title', 'description'].filter((key) => {
     if (!Object.prototype.hasOwnProperty.call(patch, key)) return false;
     const next = cleanText(patch[key]);
@@ -2612,6 +2712,29 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   } : null;
 
   const extraPatch = {};
+  if (priceChoiceMode === 'amount' || priceChoiceMode === 'poa') {
+    const poa = priceChoiceMode === 'poa';
+    extraPatch.price_on_application = poa;
+    extraPatch.price_upon_application = poa;
+    if (!poa) extraPatch.price_review = null;
+    resolvedPriceQuality = listingPriceQuality({
+      ...existing,
+      price: patch.price,
+      price_period: patch.price_period || existing.price_period,
+      price_on_application: poa,
+      listing_type: patch.listing_type || existing.listing_type,
+      transaction_type: patch.transaction_type || existing.transaction_type,
+      price_original: patch.price_original,
+      price_original_currency: patch.price_original_currency || existing.price_original_currency,
+      extra_fields: {
+        ...existingExtra,
+        price_on_application: poa,
+        price_upon_application: poa,
+        price_review: poa ? existingExtra.price_review : null
+      }
+    });
+    extraPatch.price_quality = resolvedPriceQuality;
+  }
   [
     'region',
     'city',
@@ -2635,6 +2758,30 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   });
   if (Object.prototype.hasOwnProperty.call(patch, 'land_title_available')) {
     extraPatch.land_title_available = cleanText(patch.land_title_available) || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'contact_phone_alt')) {
+    extraPatch.contact_phone_alt = normalizePhoneLite(patch.contact_phone_alt) || null;
+  }
+  let locationConfirmNote = '';
+  const locationFieldsTouched = ['city', 'area', 'district', 'neighborhood'].some((key) => Object.prototype.hasOwnProperty.call(listingPatch, key));
+  if (locationFieldsTouched) {
+    const evidenceRow = {
+      ...existing,
+      title: Object.prototype.hasOwnProperty.call(patch, 'title') ? patch.title : existing.title,
+      description: Object.prototype.hasOwnProperty.call(patch, 'description') ? patch.description : existing.description,
+      address: Object.prototype.hasOwnProperty.call(patch, 'address') ? patch.address : existing.address,
+      district: patch.district || existing.district,
+      area: patch.area || existing.area,
+      extra_fields: existingExtra
+    };
+    const weakDistricts = staffWeakEvidenceDistricts(evidenceRow);
+    if (weakDistricts.length) {
+      const place = [patch.area || existing.area, extraPatch.city || patch.city || existingExtra.city, patch.district || existing.district].filter(Boolean).join(', ');
+      extraPatch.staff_location_confirmed = true;
+      extraPatch.staff_location_confirmed_at = new Date().toISOString();
+      extraPatch.staff_location_confirmed_by = actorId(req);
+      locationConfirmNote = `Staff confirmed location ${place}. Text evidence mentioned ${weakDistricts.join(', ')} as a place-name token, not as that district.`;
+    }
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'student_universities')) {
     extraPatch.student_universities = cleanArray(patch.student_universities);
@@ -2721,10 +2868,20 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   if (checklist) {
     add('moderation_checklist', JSON.stringify(checklist), '::jsonb');
   }
-  const notes = cleanText(reviewPatch.notes || reviewPatch.review_notes);
-  if (notes) add('moderation_notes', notes);
+  const incomingNotes = cleanText(reviewPatch.notes || reviewPatch.review_notes);
+  const noteBody = [incomingNotes, locationConfirmNote].filter(Boolean).join(' ');
+  if (noteBody) {
+    add('moderation_notes', appendModerationNote(existing.moderation_notes, noteBody, {
+      author: moderationActorLabel(req.userAuth),
+      at: new Date()
+    }));
+  }
   const reason = cleanText(reviewPatch.reason);
   if (reason) add('moderation_reason', reason);
+  else if (resolvedPriceQuality) {
+    const nextNote = priceEvidenceNote(existing.moderation_reason, resolvedPriceQuality);
+    if (nextNote !== cleanText(existing.moderation_reason)) add('moderation_reason', nextNote || null);
+  }
   // C17b: editing a LIVE listing keeps it exactly as live. The stage stays as it
   // is (it used to become 'in_review', which put live rows back in the queues),
   // and the event records the before/after values of what changed.
@@ -3612,17 +3769,7 @@ router.get('/properties', async (req, res, next) => {
       values.push(listingType);
       filters.push(`p.listing_type = $${values.length}`);
     }
-    if (search) {
-      values.push(`%${search}%`);
-      const idx = values.length;
-      filters.push(`(
-        p.title ILIKE $${idx}
-        OR p.area ILIKE $${idx}
-        OR p.district ILIKE $${idx}
-        OR COALESCE(p.inquiry_reference, '') ILIKE $${idx}
-        OR COALESCE(p.lister_phone, '') ILIKE $${idx}
-      )`);
-    }
+    if (search) filters.push(propertyListingSearchClause('p', search, values));
 
     const where = `WHERE ${filters.join(' AND ')}`;
     const rowLimit = limit + 1;
@@ -3703,19 +3850,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
       values.push(listingType);
       filters.push(`p.listing_type = $${values.length}`);
     }
-    if (search) {
-      values.push(`%${search}%`);
-      const idx = values.length;
-      filters.push(`(
-        p.title ILIKE $${idx}
-        OR p.area ILIKE $${idx}
-        OR p.district ILIKE $${idx}
-        OR COALESCE(p.inquiry_reference, '') ILIKE $${idx}
-        OR COALESCE(p.lister_phone, '') ILIKE $${idx}
-        OR COALESCE(p.extra_fields->>'source_name', '') ILIKE $${idx}
-        OR COALESCE(p.extra_fields->>'source_platform', '') ILIKE $${idx}
-      )`);
-    }
+    if (search) filters.push(propertyListingSearchClause('p', search, values));
 
     const where = `WHERE ${filters.join(' AND ')}`;
     const imageSelect = includeImages ? 'img.url AS primary_image_url' : 'NULL::text AS primary_image_url';
@@ -5076,4 +5211,4 @@ router.post('/assistant/query', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, liveEditSnapshot };
+module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, liveEditSnapshot, staffLocationWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary };

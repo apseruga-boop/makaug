@@ -91,7 +91,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Bujuuko', district: 'Wakiso', town: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujuuko', 'Bujjuko', 'Bujuko', 'Bujuuko Akright', 'Bujjuko Akright'] },
   { name: 'Masulita', district: 'Wakiso', lat: 0.51, lng: 32.46 },
   { name: 'Kasanje', district: 'Wakiso', lat: 0.217, lng: 32.383 },
-  { name: 'Kasangati', district: 'Wakiso', lat: 0.434, lng: 32.61, aliases: ['Kasangati', 'Kasangati-Nangabo', 'Kasangati Nangabo', 'Nangabo'] },
+  { name: 'Kasangati', district: 'Wakiso', town: 'Kasangati', level: 'town', lat: 0.434, lng: 32.61, aliases: ['Kasangati', 'Kasangati Town', 'Kasangati Town Council'] },
   { name: 'Gayaza', district: 'Wakiso', level: 'city', lat: 0.452, lng: 32.606, aliases: ['Gayaza', 'Gayaza Town'] },
   { name: 'Matugga', district: 'Wakiso', town: 'Gombe', lat: 0.463, lng: 32.525 },
   { name: 'Maya', district: 'Wakiso', town: 'Nsangi', lat: 0.253, lng: 32.418 },

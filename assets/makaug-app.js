@@ -14019,6 +14019,11 @@ function staffBrokerQueueIds() {
   return new Set(staffReviewQueueState.broker.rows.map((row) => String(row?.id || "")).filter(Boolean));
 }
 
+function staffHeaderPendingReviewCount() {
+  const pending = Number(staffDashboardData?.summary?.listings?.pending_review);
+  return Number.isFinite(pending) ? pending : 0;
+}
+
 function staffPaintReviewQueue(segment) {
   const isBroker = segment === "broker";
   const isSearch = segment === "search";
@@ -14028,6 +14033,10 @@ function staffPaintReviewQueue(segment) {
   const rows = isSearch || isBroker ? staffDedupeRows(state.rows) : staffDedupeRows(state.rows, staffBrokerQueueIds());
   state.rows = isSearch || isBroker ? rows : staffDedupeRows(state.rows);
   if (!rows.length) {
+    if (!isSearch && !isBroker && staffHeaderPendingReviewCount() > 0 && staffReviewQueueState.broker.rows.length) {
+      wrap.innerHTML = staffEmpty("Pending listings in this count are in Broker listings review above.");
+      return;
+    }
     wrap.innerHTML = isSearch
       ? staffEmpty(`No pending listing matches “${adminEscape(state.term)}”.`)
       : staffEmpty(isBroker ? "No broker listings are waiting for review." : "No listings are waiting for staff review.");
@@ -14051,13 +14060,22 @@ function renderStaffReviewQueue(rows = [], meta = {}) {
   const wrap = document.getElementById("staff-review-queue");
   if (!wrap) return;
   const searching = !!staffReviewQueueState.search.term; // keep a visible search on screen
-  if (!rows.length && staffPanelQueueNeedsRetry(rows, meta)) {
+  const guardedMeta = { ...(meta || {}) };
+  // The header counts every actionable pending row, including brokers. The
+  // main list excludes them. An empty main list is not "nothing waiting"
+  // while that counter is above zero and the broker list is also empty
+  // (a timed-out panel used to paint the empty sentence).
+  if (!rows.length && !staffReviewQueueState.broker.rows.length && staffHeaderPendingReviewCount() > 0 && !(Number(guardedMeta.expected_count) > 0)) {
+    guardedMeta.expected_count = staffHeaderPendingReviewCount();
+    guardedMeta.empty_is_authoritative = false;
+  }
+  if (!rows.length && staffPanelQueueNeedsRetry(rows, guardedMeta)) {
     if (!searching) wrap.innerHTML = staffReviewQueueLoadingHtml("Listing moderation rows are still catching up.");
     scheduleStaffDashboardPanelRetry("listing queue");
     return;
   }
   if (rows.length) clearStaffDashboardPanelRetry();
-  staffSetReviewQueue("main", rows, meta);
+  staffSetReviewQueue("main", rows, guardedMeta);
   if (!searching) staffPaintReviewQueue("main");
 }
 
@@ -15881,7 +15899,15 @@ function staffPreviewField(id, label, value = "", type = "text", extra = "") {
   return `<label class="block text-sm font-bold text-gray-800">${adminEscape(label)}${tag}</label>`;
 }
 
+let staffPreviewTitleDraft = null;
+
+function staffPreviewRememberTitle(value) {
+  if (!document.getElementById("staff-listing-preview-modal")) return;
+  staffPreviewTitleDraft = value == null ? "" : String(value);
+}
+
 function renderStaffListingPreviewModal(preview = {}) {
+  staffPreviewTitleDraft = String(preview.title || "");
   const existing = document.getElementById("staff-listing-preview-modal");
   if (existing) {
     releaseReviewModal(existing);
@@ -15950,7 +15976,8 @@ function renderStaffListingPreviewModal(preview = {}) {
           </section>
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900">Internal review notes</h4>
-            <textarea id="admin-review-notes" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[90px]" placeholder="What did you verify?">${adminEscape(preview.review?.notes || preview.moderation_notes || "")}</textarea>
+            ${String(preview.review?.notes || preview.moderation_notes || "").trim() ? `<pre class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-2 text-xs text-gray-700" data-staff-note-history>${adminEscape(String(preview.review?.notes || preview.moderation_notes || "").trim())}</pre>` : ""}
+            <textarea id="admin-review-notes" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[90px]" placeholder="Add a note. It is kept with your name and the time."></textarea>
             ${moderationPriceBasisConfirmationHtml(preview, "staff-preview")}
             ${moderationStructuredReasonControlsHtml("staff-preview")}
             <textarea id="admin-review-reason" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[80px]" placeholder="Type the reason (required to reject)">${adminEscape(typedDecisionReasonForPrefill(preview))}</textarea>
@@ -16006,6 +16033,7 @@ function releaseReviewModal(modal) {
 }
 
 function closeStaffListingPreview() {
+  staffPreviewTitleDraft = null;
   const modal = document.getElementById("staff-listing-preview-modal");
   if (!modal) {
     adminReviewLocationMap = null;
@@ -16139,7 +16167,7 @@ function staffReviewPatch() {
     checklist.identity_verified = true;
   }
   return {
-    notes: document.getElementById("admin-review-notes")?.value || document.getElementById("staff-preview-review-notes")?.value || "",
+    notes: (document.getElementById("staff-listing-preview-modal")?.querySelector("#admin-review-notes")?.value) || document.getElementById("admin-review-notes")?.value || document.getElementById("staff-preview-review-notes")?.value || "",
     reason: document.getElementById("admin-review-reason")?.value || document.getElementById("staff-preview-reason")?.value || "",
     checklist,
     identity_verified: identityChecked,
@@ -16265,10 +16293,10 @@ async function openStaffListingPreview(propertyId) {
 }
 
 async function saveStaffListingPreview(propertyId, options = {}) {
-  const warningOverrides = options.prepareApproval === true
-    ? staffBuildReviewWarningOverrides(adminActiveReview)
-    : getAdminReviewWarningOverrides(adminActiveReview);
   try {
+    const warningOverrides = options.prepareApproval === true
+      ? staffBuildReviewWarningOverrides(adminActiveReview)
+      : getAdminReviewWarningOverrides(adminActiveReview);
     const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/review`, {
       method: "PATCH",
       body: {
@@ -26880,7 +26908,6 @@ function adminReviewExtractedPhone(review = {}) {
     extra.whatsapp,
     extra.source_phone,
     extra.source_whatsapp,
-    extra.contact_phone_alt,
     extra.public_contact_phone
   ];
   for (const value of direct) {
@@ -27035,10 +27062,63 @@ function adminReviewSyncPricePeriods(preferredValue = "") {
   syncListingPricePeriodSelect("admin-review-price-period-edit", type, transaction, preferredValue);
 }
 
+function adminReviewEditRoot() {
+  return document.getElementById("staff-listing-preview-modal")
+    || document.getElementById("admin-review-content")
+    || document;
+}
+
+function adminReviewField(id) {
+  const root = document.getElementById("staff-listing-preview-modal")
+    || document.getElementById("admin-review-content");
+  return (root && root.querySelector(`[id="${id}"]`)) || document.getElementById(id);
+}
+
+function adminReviewCanonicalPriceDigits(value = "") {
+  return String(value ?? "").replace(/[^\d.]/g, "");
+}
+
+function adminReviewHasTypedCanonicalPrice(value = "") {
+  const n = Number(adminReviewCanonicalPriceDigits(value));
+  return Number.isFinite(n) && n > 1;
+}
+
+// A number input swallows the next click while its text is not a valid number,
+// so Save can look like it sent nothing. The canonical price is plain text.
+function adminReviewOnCanonicalPriceInput() {
+  const input = adminReviewField("admin-review-price-edit");
+  if (!adminReviewHasTypedCanonicalPrice(input?.value || "")) return;
+  const poa = adminReviewField("admin-review-price-on-application-edit");
+  if (poa) poa.checked = false;
+  const periodEl = adminReviewField("admin-review-price-period-edit");
+  if (periodEl && normalizeListingPricePeriodValue(periodEl.value) === "poa") {
+    const fallback = Array.from(periodEl.options || []).find((option) => normalizeListingPricePeriodValue(option.value) !== "poa");
+    if (fallback) periodEl.value = fallback.value;
+  }
+}
+
+function adminReviewOnPriceOnApplicationChange() {
+  const poa = adminReviewField("admin-review-price-on-application-edit");
+  if (!poa?.checked) return;
+  const input = adminReviewField("admin-review-price-edit");
+  if (input) input.value = "";
+  const periodEl = adminReviewField("admin-review-price-period-edit");
+  const poaOption = Array.from(periodEl?.options || []).find((option) => normalizeListingPricePeriodValue(option.value) === "poa");
+  if (poaOption && periodEl) periodEl.value = poaOption.value;
+}
+
 function adminReviewOnPricePeriodChange() {
-  const period = normalizeListingPricePeriodValue(document.getElementById("admin-review-price-period-edit")?.value || "");
-  const poa = document.getElementById("admin-review-price-on-application-edit");
-  if (poa) poa.checked = period === "poa";
+  const period = normalizeListingPricePeriodValue(adminReviewField("admin-review-price-period-edit")?.value || "");
+  const poa = adminReviewField("admin-review-price-on-application-edit");
+  if (period === "poa") {
+    if (poa) poa.checked = true;
+    const input = adminReviewField("admin-review-price-edit");
+    if (input) input.value = "";
+    return;
+  }
+  if (poa && adminReviewHasTypedCanonicalPrice(adminReviewField("admin-review-price-edit")?.value || "")) {
+    poa.checked = false;
+  }
 }
 
 function adminReviewOnListingTypeChange() {
@@ -27203,7 +27283,7 @@ function adminReviewNeighborhoodBelongsToCity(district = "", city = "", neighbor
 }
 
 function adminReviewSetOptions(id, html, value = "") {
-  const el = document.getElementById(id);
+  const el = adminReviewField(id);
   if (!el) return "";
   el.innerHTML = html;
   const values = Array.from(el.options || []).map((option) => option.value);
@@ -27242,6 +27322,9 @@ function adminReviewCityToSave(dropdownCity = "", canonicalTown = "") {
 function adminReviewTownAfterCanonicalResolve(currentCity = "", canonicalTown = "", tree = [], neighbourhood = "") {
   const city = String(currentCity || "").trim();
   const name = String(neighbourhood || "").trim();
+  // A town staff already picked that exists in this district stays, even when
+  // the catalogue parent of the neighbourhood is a different town.
+  if (city && Array.isArray(tree) && tree.some((node) => node.city === city)) return city;
   const holds = Array.isArray(tree) && tree.some((node) => (
     node.city === city && (node.neighborhoods || []).some((item) => item.name === name)
   ));
@@ -27255,10 +27338,11 @@ function adminReviewShouldClearUnmatchedLocation(fields = {}) {
 function adminReviewTownForNeighborhood(district = "", city = "", neighborhood = "") {
   const tree = getDistrictLocationTree(district);
   const name = String(neighborhood || "").trim();
-  if (!name || !tree.length) return city;
-  if (tree.some((node) => node.city === city && (node.neighborhoods || []).some((item) => item.name === name))) return city;
+  const chosen = String(city || "").trim();
+  if (!name || !tree.length) return chosen;
+  if (tree.some((node) => node.city === chosen)) return chosen;
   const home = tree.find((node) => (node.neighborhoods || []).some((item) => item.name === name));
-  return home ? home.city : city;
+  return home ? home.city : chosen;
 }
 
 function adminReviewRefreshHierarchyControls(options = {}) {
@@ -27307,7 +27391,8 @@ function adminReviewOnCityChange() {
   adminReviewCanonicalLocationResolution = null;
   const district = document.getElementById("admin-review-district-edit")?.value || "";
   const city = document.getElementById("admin-review-city-edit")?.value || "";
-  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, ""), "");
+  const neighborhood = document.getElementById("admin-review-neighborhood-edit")?.value || "";
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, neighborhood), neighborhood);
   adminReviewScheduleLocationSync();
 }
 
@@ -28045,6 +28130,9 @@ function adminReviewListingEditPanel(review = {}) {
     : String(review.transaction_type || extra.transaction_type || "").toLowerCase()
       || (initialListingType === "land" && ["mo", "yr", "wk", "acre_yr"].includes(normalizeListingPricePeriodValue(review.price_period)) ? "rent" : "sale");
   const initialPeriod = normalizeListingPricePeriodValue(review.price_period || "");
+  const poaChecked = initialPeriod === "poa"
+    || review.price_on_application === true
+    || ((extra.price_on_application === true || extra.price_upon_application === true) && !adminReviewHasTypedCanonicalPrice(review.price));
   const periodOptions = listingPricePeriodOptions(initialListingType, initialTransactionType)
     .map(({ value, label }) => `<option value="${value}" ${initialPeriod === value ? "selected" : ""}>${label}</option>`).join("");
   const currentPriceCurrency = String(review.price_original_currency || extra.price_original_currency || "UGX").toUpperCase() === "USD" ? "USD" : "UGX";
@@ -28084,7 +28172,7 @@ function adminReviewListingEditPanel(review = {}) {
       ${adminDataIntegrityReviewHtml(extra)}
       <div class="mt-3 grid md:grid-cols-2 gap-3">
         <label class="block text-xs font-bold text-gray-700">Public title
-          <input id="admin-review-title-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.title || "")}">
+          <input id="admin-review-title-edit" oninput="staffPreviewRememberTitle(this.value)" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.title || "")}">
         </label>
         <label class="block text-xs font-bold text-gray-700">Listing type
           <select id="admin-review-listing-type-edit" onchange="adminReviewOnListingTypeChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${typeOptions}</select>
@@ -28092,6 +28180,9 @@ function adminReviewListingEditPanel(review = {}) {
         ${adminReviewSourcePostDateFieldHtml(review)}
         <label class="block text-xs font-bold text-gray-700">WhatsApp / phone number
           <input id="admin-review-lister-phone-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(extractedPhone || review.lister_phone || "")}" placeholder="+2567XXXXXXXX">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Alternate contact (optional)
+          <input id="admin-review-alt-phone-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(extra.contact_phone_alt || "")}" placeholder="+2567XXXXXXXX">
         </label>
         <label class="block text-xs font-bold text-gray-700">Area / neighbourhood
           <input id="admin-review-area-edit" oninput="adminReviewOnAreaInput()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(initialArea)}" placeholder="e.g. Kololo, Kira, Kampala">
@@ -28139,7 +28230,7 @@ function adminReviewListingEditPanel(review = {}) {
           <select id="admin-review-land-title-available-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${landTitleAvailabilityOptions}</select>
         </label>
         <label class="block text-xs font-bold text-gray-700">Canonical price (UGX)
-          <input id="admin-review-price-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price || "")}">
+          <input id="admin-review-price-edit" type="text" inputmode="decimal" autocomplete="off" oninput="adminReviewOnCanonicalPriceInput()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price || "")}" placeholder="Amount in Uganda shillings">
         </label>
         <label class="block text-xs font-bold text-gray-700">Source currency
           <select id="admin-review-price-currency-edit" onchange="adminReviewOnPriceCurrencyChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${priceCurrencyOptions}</select>
@@ -28154,7 +28245,7 @@ function adminReviewListingEditPanel(review = {}) {
           <select id="admin-review-price-period-edit" onchange="adminReviewOnPricePeriodChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${periodOptions}</select>
         </label>
         <label class="flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-gray-700">
-          <input id="admin-review-price-on-application-edit" type="checkbox" ${review.price_on_application === true || extra.price_on_application === true || extra.price_upon_application === true || initialPeriod === "poa" ? "checked" : ""}>
+          <input id="admin-review-price-on-application-edit" type="checkbox" onchange="adminReviewOnPriceOnApplicationChange()" ${poaChecked ? "checked" : ""}>
           Price on application (no numeric price)
         </label>
         <label class="block text-xs font-bold text-gray-700">Bedrooms
@@ -28195,9 +28286,11 @@ function adminReviewListingEditPanel(review = {}) {
 }
 
 function adminSetReviewEditValue(id, value) {
-  const el = document.getElementById(id);
+  const el = adminReviewField(id);
   if (!el) return;
-  el.value = value == null ? "" : String(value);
+  const next = value == null ? "" : String(value);
+  el.value = next;
+  if (id === "admin-review-title-edit" && document.getElementById("staff-listing-preview-modal")) staffPreviewTitleDraft = next;
 }
 
 async function adminApplyExtractedReviewFacts() {
@@ -28622,7 +28715,7 @@ function adminReviewSourcePostDateFieldHtml(review = {}) {
 }
 
 function collectAdminReviewListingPatch() {
-  const get = (id) => document.getElementById(id)?.value ?? "";
+  const get = (id) => adminReviewField(id)?.value ?? "";
   const listingType = normalizeType(get("admin-review-listing-type-edit"));
   const canonical = adminReviewCanonicalLocationResolution?.match === "exact_alias"
     && Number(adminReviewCanonicalLocationResolution?.confidence) === 1
@@ -28642,7 +28735,7 @@ function collectAdminReviewListingPatch() {
     .map((item) => item.trim())
     .filter(Boolean);
   const studentAmenities = listingType === "student"
-    ? Array.from(document.querySelectorAll("#admin-review-student-amenities input[type='checkbox']:checked"))
+    ? Array.from(adminReviewEditRoot().querySelectorAll("#admin-review-student-amenities input[type='checkbox']:checked"))
       .map((box) => {
         const option = adminReviewStudentAmenityOptions().find((item) => item.value === box.value);
         return option?.label || box.value;
@@ -28653,10 +28746,13 @@ function collectAdminReviewListingPatch() {
   const nearestUniversity = get("admin-review-nearest-uni-edit");
   const roomArrangement = get("admin-review-room-arrangement-edit");
   return adminNormalizeReviewListingTimestamps({
-    title: get("admin-review-title-edit"),
+    title: (document.getElementById("staff-listing-preview-modal") && staffPreviewTitleDraft != null)
+      ? staffPreviewTitleDraft
+      : get("admin-review-title-edit"),
     description: get("admin-review-description-edit"),
     listing_type: listingType,
     lister_phone: adminReviewNormalizeUgandaPhone(get("admin-review-lister-phone-edit")),
+    contact_phone_alt: adminReviewNormalizeUgandaPhone(get("admin-review-alt-phone-edit")),
     region,
     district,
     city,
@@ -28673,8 +28769,13 @@ function collectAdminReviewListingPatch() {
       get("admin-review-price-fx-rate-edit")
     ),
     price_period: get("admin-review-price-period-edit"),
+    // A typed amount is the price. The checkbox stays ticked on null-price
+    // rows; sending it as well used to wipe the number on save.
     price_on_application: normalizeListingPricePeriodValue(get("admin-review-price-period-edit")) === "poa"
-      || document.getElementById("admin-review-price-on-application-edit")?.checked === true,
+      || (
+        !adminReviewHasTypedCanonicalPrice(get("admin-review-price-edit"))
+        && adminReviewField("admin-review-price-on-application-edit")?.checked === true
+      ),
     transaction_type: listingType === "commercial"
       ? get("admin-review-transaction-type-edit")
       : listingType === "land"
@@ -28704,7 +28805,7 @@ function collectAdminReviewListingPatch() {
     student_room_label: listingType === "student" ? roomArrangement : "",
     students_welcome: listingType === "student",
     // C12: sent only when staff entered a post date (YYYY-MM-DD).
-    ...(get("admin-review-source-post-date-edit") && get("admin-review-source-post-date-edit") !== (document.getElementById("admin-review-source-post-date-edit")?.dataset?.confirmedDate || "")
+    ...(get("admin-review-source-post-date-edit") && get("admin-review-source-post-date-edit") !== (adminReviewField("admin-review-source-post-date-edit")?.dataset?.confirmedDate || "")
       ? { source_post_date: get("admin-review-source-post-date-edit") }
       : {})
   }, adminActiveReview || {});
@@ -44098,7 +44199,6 @@ function foundOnlineSourceMeta(p = {}) {
     || extra.whatsapp_phone
     || extra.whatsapp
     || extra.source_contact_phone
-    || extra.contact_phone_alt
   );
   return {
     sourceName,
@@ -44660,7 +44760,7 @@ function socialImportSpecsHtml(p = {}) {
   };
   if (type === "land") {
     addSpec("ti-ruler-2 fas fa-ruler-combined", p.size || p.extra_fields?.size_raw || p.extra_fields?.land_size_label);
-    addSpec("ti-file-check fas fa-file-signature", p.title_type || p.extra_fields?.title_type || landTitleAvailabilityLabel(getLandTitleAvailabilityValue(p)));
+    addSpec("ti-file-check fas fa-file-signature", p.title_type || p.extra_fields?.title_type || publicLandTitleBadgeLabel(getLandTitleAvailabilityValue(p)));
   } else {
     if (p.subtype || p.property_type) addSpec("ti-building fas fa-building", p.subtype || p.property_type);
     if (p.beds) addSpec("ti-bed fas fa-bed", `${p.beds} ${countLabel(p.beds, "bed", "beds")}`);
@@ -45824,7 +45924,7 @@ function buildLocalizedPropertyNarrative(property = {}, nearby = []) {
   if (baths) factBits.push(`${baths} ${countLabel(baths, "bath", "baths")}`);
   if (extra.year_built) factBits.push(`${translateListingLabel("Built in")} ${extra.year_built}`);
   if (property?.title_type || extra.title_type) factBits.push(`${translateListingLabel("Title Type")}: ${translateListingLabel(property.title_type || extra.title_type)}`);
-  const landTitleLabel = landTitleAvailabilityLabel(getLandTitleAvailabilityValue(property));
+  const landTitleLabel = publicLandTitleBadgeLabel(getLandTitleAvailabilityValue(property));
   if (landTitleLabel) factBits.push(`${translateListingLabel("Land title")}: ${landTitleLabel}`);
   if (extra.furnished) factBits.push(`${translateListingLabel("Furnishing")}: ${translateListingLabel(extra.furnished)}`);
   if (extra.contract_months) factBits.push(`${translateListingLabel("Minimum Contract")}: ${extra.contract_months} ${translateListingLabel("months")}`);
@@ -46134,10 +46234,14 @@ function landTitleAvailabilityLabel(value) {
   return "";
 }
 
+function publicLandTitleBadgeLabel(value) {
+  return normalizeLandTitleAvailabilityValue(value) === "yes" ? landTitleAvailabilityLabel("yes") : "";
+}
+
 function landTitleAvailabilityBadgeHtml(property = {}, options = {}) {
   if (normalizeType(property?.type || property?.listing_type || property?.category) !== "land") return "";
-  const value = getLandTitleAvailabilityValue(property) || "unknown";
-  const label = landTitleAvailabilityLabel(value);
+  const value = getLandTitleAvailabilityValue(property);
+  const label = publicLandTitleBadgeLabel(value);
   if (!label) return "";
   const tone = value === "yes"
     ? "bg-emerald-700 text-white"
@@ -58196,6 +58300,10 @@ function detailContactActionButtonsHtml({
   const rows = [];
   if (normalizedCallPhone) {
     rows.push(`<a href="${adminAttr(`tel:${String(normalizedCallPhone).replace(/\s+/g, "")}`)}" class="block text-center w-full ${theme.primary} py-2.5 rounded-xl font-semibold mb-2" aria-label="${adminAttr(translatePropertyUi("Call"))}"><i class="fas fa-phone mr-1.5"></i><span class="sr-only">${translatePropertyUi("Call")}</span><span class="whitespace-nowrap" dir="ltr">${adminEscape(formatPublicPhoneDisplay(normalizedCallPhone))}</span></a>`);
+    const altPhone = normalizePhoneInput(property?.extra_fields?.contact_phone_alt || "");
+    if (altPhone && altPhone !== normalizedCallPhone) {
+      rows.push(`<a href="${adminAttr(`tel:${String(altPhone).replace(/\s+/g, "")}`)}" class="block text-center w-full border border-green-700 text-green-800 py-2.5 rounded-xl font-semibold mb-2" aria-label="${adminAttr(translatePropertyUi("Call"))}"><i class="fas fa-phone mr-1.5"></i><span class="sr-only">${translatePropertyUi("Call")}</span><span class="whitespace-nowrap" dir="ltr">${adminEscape(formatPublicPhoneDisplay(altPhone))}</span></a>`);
+    }
   }
   if (normalizedWhatsappPhone) {
     rows.push(`<a href="${adminAttr(buildWhatsAppUrl(normalizedWhatsappPhone, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${whatsappPhoneArg}, '${adminAttr(whatsappSource)}')" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2"><i class="fab fa-whatsapp mr-1.5"></i><span class="sr-only">${translatePropertyUi("WhatsApp")}</span><span class="whitespace-nowrap" dir="ltr">${adminEscape(formatPublicPhoneDisplay(normalizedWhatsappPhone))}</span></a>`);
@@ -58489,7 +58597,7 @@ async function openDetail(id, options = {}) {
   const localizedHighlights = getLocalizedPropertyHighlights(p, detailNearby);
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
-	      const landTitleLabel = normalizedType === "land" ? landTitleAvailabilityLabel(getLandTitleAvailabilityValue(p) || "unknown") : "";
+	      const landTitleLabel = normalizedType === "land" ? publicLandTitleBadgeLabel(getLandTitleAvailabilityValue(p)) : "";
 	      const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
   const thirdPartyDetail = isFoundOnlineListing(p);
   // Found online with consented staff photos: the gallery shows them and the
