@@ -59,6 +59,7 @@ function publicRenderer() {
     applyShortTermVisibility: (html) => html,
     injectShortTermRuntimeConfig: (html) => html,
     inlinePublicCoreStylesheets: require('../services/publicCoreStylesheets'),
+    inlinePublicFontFaces: require('../services/publicFontFaces'),
     injectGa4HeadTag: (html) => html
   });
   for (const name of ['applyHomeHeroPreload', 'applyShortTermStylesheetLoading', 'applyPublicFontDisplayOptional', 'renderPublicHtml']) {
@@ -71,9 +72,12 @@ test('the actual public renderer applies the policy per route without exposing p
   const render = publicRenderer();
   for (const route of ['/', '/mortgage', '/student-accommodation', '/student-accommodation/university/makerere/?page=2', '/to-rent/kireka-wakiso', '/to-rent/kyanja-kampala/apartments']) {
     const output = render(route);
-    const jakarta = [...output.matchAll(/<link\b[^>]*fonts\.googleapis\.com\/css2\?[^>]*>/g)].map((match) => match[0]);
-    assert.equal(jakarta.length, 2, `${route}: preload plus no-JS fallback`);
-    assert.ok(jakarta.every((link) => link.includes('display=optional')), route);
+    const faces = output.match(/<style data-public-font-faces="jakarta"[^>]*>([\s\S]*?)<\/style>/)?.[1];
+    assert.ok(faces, `${route}: faces are defined in server HTML`);
+    assert.equal((faces.match(/@font-face/g) || []).length, 20);
+    assert.equal((faces.match(/font-display: optional/g) || []).length, 20);
+    assert.doesNotMatch(output, /<link\b[^>]*fonts\.googleapis\.com\/css2\?/);
+    assert.ok(output.indexOf('data-public-font-faces="jakarta"') < output.indexOf('<body'), 'definition precedes initial text layout');
     assert.doesNotMatch(output, /id="page-(?:admin-dashboard|staff-dashboard|account|finder-dashboard)"/);
     for (const forbidden of PUBLIC_FORBIDDEN_STRINGS) assert.ok(!output.includes(forbidden), `${route}: ${forbidden}`);
   }

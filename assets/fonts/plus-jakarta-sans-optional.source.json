@@ -1,0 +1,23 @@
+{
+  "sourceUrl": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=optional",
+  "retrievedAt": "2026-10-11T19:58:34.917Z",
+  "userAgent": "Mozilla/5.0 (Linux; Android 10; moto g power) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+  "sha256": "e3b78a8349a330601f794eb53d7479ab2c011345279c1fdf0d1c45564f2256ab",
+  "bytes": 8540,
+  "faceCount": 20,
+  "weights": [
+    400,
+    500,
+    600,
+    700,
+    800
+  ],
+  "uniqueFonts": [
+    "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko70yygg_vbd-E.woff2",
+    "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko50yygg_vbd-E.woff2",
+    "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko40yygg_vbd-E.woff2",
+    "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yygg_vb.woff2"
+  ],
+  "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/plusjakartasans/OFL.txt",
+  "note": "Exact unmodified Google CSS API response; existing font binaries remain hosted at original gstatic URLs. Public renderer pins this CSS with font-display optional; protected loader remains unchanged."
+}

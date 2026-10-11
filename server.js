@@ -52,6 +52,7 @@ const {
   sanitizePublicHtml
 } = require('./services/publicHtmlSanitizer');
 const inlinePublicCoreStylesheets = require('./services/publicCoreStylesheets');
+const inlinePublicFontFaces = require('./services/publicFontFaces');
 const { startXSourceDripScheduler } = require('./services/xSourceDripService');
 const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDripService');
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
@@ -1263,6 +1264,7 @@ function renderPublicHtml(pathname) {
   rendered = applyHomeHeroPreload(rendered, normalizedBasePath);
   rendered = applyShortTermStylesheetLoading(rendered, normalizedBasePath);
   rendered = applyPublicFontDisplayOptional(rendered);
+  rendered = inlinePublicFontFaces(rendered);
   rendered = inlinePublicCoreStylesheets(rendered);
   rendered = injectGa4HeadTag(rendered, normalizedBasePath);
   if (isProduction) {

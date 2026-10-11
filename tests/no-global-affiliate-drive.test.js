@@ -25,7 +25,8 @@ function publicRenderer() {
     isProduction: false, publicHtmlCache: new Map(), readIndexHtml: () => index, sanitizePublicHtml,
     applyHarvestPublicSubmissionVisibility: (html) => html, applyShortTermVisibility: (html) => html,
     injectShortTermRuntimeConfig: (html) => html,
-    inlinePublicCoreStylesheets: require('../services/publicCoreStylesheets')
+    inlinePublicCoreStylesheets: require('../services/publicCoreStylesheets'),
+    inlinePublicFontFaces: require('../services/publicFontFaces')
   });
   vm.runInContext(`const GA4_ID_PATTERN=/^G-[A-Z0-9]{4,20}$/;
     ${['applyHomeHeroPreload','applyShortTermStylesheetLoading','applyPublicFontDisplayOptional','ga4HeadSnippet','injectGa4HeadTag','renderPublicHtml'].map((name) => declaration(server, name)).join('\n')}`, context);

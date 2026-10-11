@@ -118,6 +118,7 @@ test('public HTML invokes route-aware CSS loading after the homepage-image decis
     applyShortTermVisibility(html) { return html; },
     injectShortTermRuntimeConfig(html) { return html; },
     inlinePublicCoreStylesheets(html) { return html; },
+    inlinePublicFontFaces(html) { return html; },
     applyHomeHeroPreload(html, pathname) { calls.push(['hero', pathname]); return html; },
     injectGa4HeadTag(html, pathname) { calls.push(['analytics', pathname]); return html; }
   });
