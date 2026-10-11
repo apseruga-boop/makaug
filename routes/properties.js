@@ -84,7 +84,8 @@ const {
 } = require('../services/ugnlisLandVerificationService');
 const {
   landTitleAvailabilityLabel,
-  normalizeLandTitleAvailability
+  normalizeLandTitleAvailability,
+  publicLandTitleAvailabilityLabel
 } = require('../utils/landTitleAvailability');
 const {
   cleanPublicListingCopy,
@@ -1151,8 +1152,6 @@ function publicContactPhoneFromExtra(extra = {}) {
     raw.lister_whatsapp,
     raw.source_phone,
     raw.source_whatsapp,
-    raw.contact_phone_alt,
-    raw.phone_alt,
     rawSourcePost.public_contact_phone,
     rawSourcePost.contact_phone,
     rawSourcePost.phone,
@@ -1227,6 +1226,9 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
     third_party_discovery_result: foundOnlinePublic,
     public_contact_phone: publicContactPhone || null,
     contact_phone: publicContactPhone || null,
+    ...(publicContactPhone && cleanText(row?.extra_fields?.contact_phone_alt)
+      ? { contact_phone_alt: cleanText(row.extra_fields.contact_phone_alt) }
+      : {}),
     nearest_university: studentContext.nearest_university || null,
     student_campus: studentContext.nearest_university || null,
     student_universities: studentContext.student_universities || [],
@@ -1682,7 +1684,7 @@ function publicExtraFields(extraFields = {}, { createdAt = null } = {}) {
     student_campus: nearestUniversity || extra.student_campus || null,
     student_universities: studentUniversities,
     land_title_available: landTitleAvailable || null,
-    land_title_available_label: landTitleAvailabilityLabel(landTitleAvailable) || null,
+    land_title_available_label: publicLandTitleAvailabilityLabel(landTitleAvailable) || null,
     video_url: videoUrl || null,
     video_urls: safeVideoUrls,
     video_tours: safeVideoTours,
@@ -1816,7 +1818,10 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
       student_campus: studentContext.nearest_university,
       student_universities: studentContext.student_universities
     } : {}),
-    ...(studentContext.distance_to_uni_km != null ? { distance_to_uni_km: studentContext.distance_to_uni_km } : {})
+    ...(studentContext.distance_to_uni_km != null ? { distance_to_uni_km: studentContext.distance_to_uni_km } : {}),
+    ...(publicContactPhone && cleanText(property?.extra_fields?.contact_phone_alt)
+      ? { contact_phone_alt: cleanText(property.extra_fields.contact_phone_alt) }
+      : {})
   };
   const row = {
     ...safeProperty,

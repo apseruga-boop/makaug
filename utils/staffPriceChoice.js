@@ -18,15 +18,17 @@ function poaFlag(value) {
   return value === true || ['true', '1', 'yes', 'y', 'on'].includes(String(value ?? '').trim().toLowerCase());
 }
 
-function resolveStaffPriceChoice(patch = {}) {
+function resolveStaffPriceChoice(patch = {}, existing = {}) {
   const next = { ...patch };
   const period = String(next.price_period || '').trim().toLowerCase();
   const explicitPoaPeriod = period === 'poa';
   const hasPriceKey = Object.prototype.hasOwnProperty.call(next, 'price');
   const numeric = hasPriceKey ? positiveCanonicalPrice(next.price) : null;
-  const flagged = Object.prototype.hasOwnProperty.call(next, 'price_on_application') && poaFlag(next.price_on_application);
+  const hasPoaKey = Object.prototype.hasOwnProperty.call(next, 'price_on_application');
+  const flagged = hasPoaKey && poaFlag(next.price_on_application);
+  const explicitUntick = hasPoaKey && !flagged && !explicitPoaPeriod;
 
-  if (explicitPoaPeriod || (flagged && numeric == null)) {
+  if (explicitPoaPeriod || (flagged && numeric == null && !explicitUntick)) {
     next.price_on_application = true;
     next.price = null;
     next.price_original = null;
@@ -34,14 +36,17 @@ function resolveStaffPriceChoice(patch = {}) {
     next.price_fx_as_of = null;
     return { patch: next, mode: 'poa' };
   }
-  if (numeric != null) {
-    next.price = numeric;
+  // Unticking Price on application on a row that already has a number must
+  // clear the column and the extra POA flags. A blank price in this save is a
+  // clear, so the stored number is kept only when the price key was omitted.
+  const stored = !hasPriceKey ? positiveCanonicalPrice(existing.price) : null;
+  const amount = numeric != null ? numeric : (explicitUntick ? stored : null);
+  if (amount != null) {
+    next.price = amount;
     next.price_on_application = false;
     return { patch: next, mode: 'amount' };
   }
-  if (Object.prototype.hasOwnProperty.call(next, 'price_on_application')) {
-    next.price_on_application = false;
-  }
+  if (hasPoaKey) next.price_on_application = false;
   return { patch: next, mode: 'unchanged' };
 }
 

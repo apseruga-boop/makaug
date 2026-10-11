@@ -13,8 +13,8 @@ const { publicSourceAccountName } = require('../utils/sourceAccountName');
 
 const { cleanText } = require('../middleware/validation');
 const {
-  landTitleAvailabilityLabel,
-  normalizeLandTitleAvailability
+  normalizeLandTitleAvailability,
+  publicLandTitleAvailabilityLabel
 } = require('../utils/landTitleAvailability');
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
 const { pricePeriodSuffix: sharedPricePeriodSuffix } = require('../config/pricePeriods');
@@ -241,7 +241,7 @@ function buildThirdPartyPublicSummary(property = {}, extra = {}) {
     extra.source_text,
     extra.source_visual_text
   );
-  const landTitleLabel = landTitleAvailabilityLabel(landTitleAvailable);
+  const landTitleLabel = publicLandTitleAvailabilityLabel(landTitleAvailable);
   const facts = [
     area && `Area: ${area}`,
     type && `Type: ${type}`,

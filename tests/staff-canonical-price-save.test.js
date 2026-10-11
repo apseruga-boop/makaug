@@ -175,7 +175,7 @@ test('staff, admin and public search use the reference lookup, and the price cho
   assert.match(admin, /propertyListingSearchClause\('p', search, values\)/);
   assert.match(admin, /inquiry_reference = \$\$\{values\.length\}/);
   assert.match(properties, /p\.inquiry_reference = \?/);
-  assert.match(staff, /resolveStaffPriceChoice\(normalized\)/);
+  assert.match(staff, /resolveStaffPriceChoice\(normalized, existing\)/);
   assert.match(admin, /resolveStaffPriceChoice\(normalizedPatch\)/);
   assert.match(properties, /resolveStaffPriceChoice\(patch\)/);
   assert.match(staff, /priceEvidenceNote\(existing\.moderation_reason, resolvedPriceQuality\)/);

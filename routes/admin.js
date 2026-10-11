@@ -10,6 +10,7 @@ const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isVali
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { listingReferenceQuery, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
 const { priceEvidenceNote, resolveStaffPriceChoice } = require('../utils/staffPriceChoice');
+const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const { DISTRICTS: UGANDA_DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const {
@@ -6343,7 +6344,7 @@ router.post('/properties/:id/external-duplicate-scan', async (req, res, next) =>
 
 router.patch('/properties/:id/review', async (req, res, next) => {
   try {
-    const existing = await db.query('SELECT id, status, moderation_checklist, moderation_reason, extra_fields, listing_type, transaction_type, price_period FROM properties WHERE id = $1 LIMIT 1', [req.params.id]);
+    const existing = await db.query('SELECT id, status, moderation_checklist, moderation_notes, moderation_reason, extra_fields, listing_type, transaction_type, price_period FROM properties WHERE id = $1 LIMIT 1', [req.params.id]);
     if (!existing.rows.length) {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
@@ -6356,7 +6357,13 @@ router.patch('/properties/:id/review', async (req, res, next) => {
     const checklist = req.body.checklist && typeof req.body.checklist === 'object'
       ? normalizeReviewChecklist(req.body.checklist)
       : normalizeReviewChecklist(existing.rows[0].moderation_checklist);
-    const notes = cleanText(req.body.notes || req.body.review_notes) || null;
+    const incomingNotes = cleanText(req.body.notes || req.body.review_notes);
+    const notes = incomingNotes
+      ? appendModerationNote(existing.rows[0].moderation_notes, incomingNotes, {
+        author: moderationActorLabel(req.adminAuth?.user || { name: 'admin' }),
+        at: new Date()
+      })
+      : null;
     let reason = cleanText(req.body.reason) || null;
     let replaceReason = false;
     if (!reason && listingPatch && ['price', 'price_on_application', 'price_period'].some((key) => Object.prototype.hasOwnProperty.call(listingPatch, key))) {
