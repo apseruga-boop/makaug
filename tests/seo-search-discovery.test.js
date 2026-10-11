@@ -68,7 +68,7 @@ const apartment = (price, period = 'month', extra = {}) => ({ price, price_perio
 const kyanjaRoute = '/to-rent/kyanja-kampala/apartments';
 const kyanjaLanding = resolvePublicSeoLanding(kyanjaRoute);
 
-test('Kyanja apartment copy labels the exact inventory and a monthly asking-price sample', () => {
+test('Kyanja apartment copy keeps exact inventory and practical guidance without frozen card statistics', () => {
   const listings = [apartment(900000), apartment(1200000), apartment(1600000), apartment(100, 'week'), apartment(90000000, 'year'), apartment(2000000, 'month', { price_on_application: true }), apartment(3000000, 'month', { price_implausible: true })];
   const meta = publicSeoLandingMeta(kyanjaLanding, null, 'https://makaug.com', { count: 21, listings });
   assert.equal(meta.canonical, `https://makaug.com${kyanjaRoute}`);
@@ -77,10 +77,7 @@ test('Kyanja apartment copy labels the exact inventory and a monthly asking-pric
   assert.match(meta.landingIntroHtml, /Compare 21 apartment rental listings in Kyanja, Kampala/);
   assert.ok(meta.description.startsWith('Apartments for rent in Kyanja'));
   assert.ok(meta.description.length <= 160);
-  assert.match(meta.landingBodyHtml, /3 cards shown here/);
-  assert.match(meta.landingBodyHtml, /UGX 900k to UGX 1\.6M per month/);
-  assert.match(meta.landingBodyHtml, /rather than an estimate of all Kyanja rents/);
-  assert.doesNotMatch(meta.landingBodyHtml, /90M|3M|2M per month/);
+  assert.doesNotMatch(meta.landingBodyHtml, /cards shown here|asking rent range|900k|1\.6M|90M/);
   const { html } = render(meta, kyanjaRoute);
   assert.match(html, /data-landing-copy="1"/);
   assert.ok(html.indexOf('data-landing-copy="1"') > html.indexOf('id="rent-grid"'), 'body survives grid replacement');

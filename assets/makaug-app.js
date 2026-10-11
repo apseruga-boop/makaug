@@ -7350,7 +7350,17 @@ function setText(id, text) {
 
 function setPageHeading(pageId, text) {
   const h = document.querySelector(`#${pageId} h1`);
+  if (preserveServerRenderedSeoHeading(h)) {
+    h.textContent = h.dataset.ssrSeoHeading || h.textContent;
+    return;
+  }
   if (h && text) h.textContent = text;
+}
+
+function preserveServerRenderedSeoHeading(heading) {
+  if (currentLang !== 'en' || heading?.dataset?.ssrSeoH1 !== '1') return false;
+  const sourcePath = heading.dataset.ssrSeoPath;
+  return Boolean(sourcePath && normalizeRoutePath(sourcePath) === normalizeRoutePath(window.location.pathname || '/'));
 }
 
 function applyListingWizardLanguageUI() {
@@ -8344,7 +8354,13 @@ function applyLanguageUI() {
   const hasCanonicalAreaSeoTitle = /^\/(?:for-sale|to-rent|land|commercial|student-accommodation)(?:\/[a-z0-9-]+)+$/i.test(pathname)
     || /^\/hostels\/[a-z0-9-]+$/i.test(pathname);
   const hasCanonicalPropertySeoTitle = /^\/property\/[^/?#]+$/i.test(pathname);
-  if (!hasCanonicalAreaSeoTitle && !hasCanonicalPropertySeoTitle) document.title = tr("siteTitle");
+  const serverRenderedSeoHeading = document.querySelector('.page.active [data-ssr-seo-h1="1"]');
+  const hasServerRenderedSeoTitle = preserveServerRenderedSeoHeading(serverRenderedSeoHeading);
+  if (hasServerRenderedSeoTitle && serverRenderedSeoHeading.dataset.ssrSeoTitle) {
+    document.title = serverRenderedSeoHeading.dataset.ssrSeoTitle;
+  } else if (!hasCanonicalAreaSeoTitle && !hasCanonicalPropertySeoTitle) {
+    document.title = tr("siteTitle");
+  }
   setTextById("brand-subtitle", tr("brandSubtitle"));
 
   const savedEl = document.getElementById("top-saved-link");

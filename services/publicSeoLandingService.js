@@ -134,19 +134,9 @@ function kyanjaApartmentCopy(landing, count, options = {}) {
   const description = 'Apartments for rent in Kyanja, Kampala. Compare current asking prices, bedroom counts and photos, then confirm availability and arrange a viewing.';
   const introHtml = `<p class="mb-4 text-gray-700" data-landing-intro="1">Compare ${count} apartment rental ${count === 1 ? 'listing' : 'listings'} in Kyanja, Kampala. Open a property to check its stated rent, bedroom count, photos and contact details before arranging a viewing.</p>`;
   if (Number(options.page || 1) > 1) return { description, introHtml, bodyHtml: '' };
-  // This is a sample of the cards on this page, never a neighbourhood average.
-  // Weekly, annual and unspecified rents cannot be compared as monthly rents.
-  const monthlyPrices = (options.listings || [])
-    .filter((listing) => !listing.price_on_application && !listing.price_implausible
-      && ['mo', 'month', 'monthly', 'per_month'].includes(String(listing.price_period || '').toLowerCase()))
-    .map((listing) => Number(listing.price))
-    .filter((price) => Number.isFinite(price) && price > 0);
-  const prices = monthlyPrices.length >= 3
-    ? `<p class="mt-3 text-gray-700">The ${monthlyPrices.length} cards shown here with a stated monthly asking rent range from UGX ${compactUgx(Math.min(...monthlyPrices))} to UGX ${compactUgx(Math.max(...monthlyPrices))} per month. This is the range in these advertised listings, rather than an estimate of all Kyanja rents; availability and the final agreed rent need confirmation.</p>`
-    : '';
   const bodyHtml = `<section class="mt-8 rounded-2xl border border-green-100 bg-white p-5" data-landing-copy="1">
     <h2 class="text-xl font-black text-green-950">Comparing apartments for rent in Kyanja</h2>
-    <p class="mt-3 text-gray-700">Compare the exact apartment, rather than the headline rent alone. Check which photos belong to the available unit, the bedroom and bathroom counts, and the property's stated location.</p>${prices}
+    <p class="mt-3 text-gray-700">Compare the exact apartment, rather than the headline rent alone. Check which photos belong to the available unit, the bedroom and bathroom counts, and the property's stated location.</p>
     <h3 class="mt-5 font-black text-green-950">Before arranging a viewing</h3>
     <ul class="mt-3 list-disc space-y-2 pl-5 text-gray-700">
       <li>Confirm that the apartment is still available and ask for its exact address and viewing arrangements.</li>
