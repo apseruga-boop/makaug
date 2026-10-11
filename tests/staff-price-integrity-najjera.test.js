@@ -17,6 +17,8 @@ const { normalizeStaffListingPatch, updateStaffEditableListing } = require('../r
 
 const app = fs.readFileSync(path.join(__dirname, '../assets/makaug-app.js'), 'utf8');
 const staff = fs.readFileSync(path.join(__dirname, '../routes/staff.js'), 'utf8');
+const admin = fs.readFileSync(path.join(__dirname, '../routes/admin.js'), 'utf8');
+const page = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 
 const SAVED_NUMERIC = {
   title: 'House in Najjera',
@@ -240,4 +242,98 @@ test('a database lock or statement timeout on preview save is retryable', async 
   } finally {
     db.query = original;
   }
+});
+
+test('an internal note plus a map pin saves without ReferenceError notes is not defined', async () => {
+  const db = require('../config/database');
+  const original = db.query;
+  const calls = [];
+  const row = {
+    id: '2e0560f3-31f9-466d-9aba-8fdae3b75403',
+    status: 'pending',
+    title: 'Commercial plot in Namugongo',
+    area: 'Namugongo',
+    district: 'Wakiso',
+    address: 'Nsasa Road, near the trading centre, 12 decimals',
+    listing_type: 'land',
+    price: 100000000,
+    price_on_application: false,
+    price_period: 'once',
+    moderation_notes: '',
+    moderation_reason: '',
+    latitude: null,
+    longitude: null,
+    extra_fields: { city: 'Kira', neighborhood: 'Namugongo', region: 'Central' }
+  };
+  db.query = async (sql, params) => {
+    const text = String(sql);
+    calls.push({ text, params });
+    if (text.includes('SELECT * FROM properties')) return { rows: [row] };
+    if (text.includes('UPDATE properties')) return { rows: [{ ...row, latitude: 0.37, longitude: 32.66 }] };
+    return { rows: [] };
+  };
+  try {
+    const saved = await updateStaffEditableListing(
+      { userAuth: { id: null, email: 'moderator@makaug.com' } },
+      row.id,
+      {
+        title: row.title,
+        area: 'Namugongo',
+        district: 'Wakiso',
+        city: 'Kira',
+        neighborhood: 'Namugongo',
+        address: row.address,
+        latitude: 0.37,
+        longitude: 32.66,
+        listing_type: 'land',
+        price: '100000000',
+        price_on_application: false,
+        price_period: 'once'
+      },
+      { notes: 'Pin confirmed on Nsasa Road. Internal note only.' }
+    );
+    assert.equal(saved.property.id, row.id);
+    const event = calls.find((call) => call.text.includes('INSERT INTO property_moderation_events'));
+    assert.ok(event, 'the moderation event is written after the listing update');
+    assert.equal(event.params[4], 'Pin confirmed on Nsasa Road. Internal note only.');
+    const update = calls.find((call) => call.text.includes('UPDATE properties'));
+    assert.ok(update.params.includes(0.37));
+    assert.ok(update.params.includes(32.66));
+    const notesValue = update.params.find((value) => typeof value === 'string' && value.includes('Pin confirmed on Nsasa Road'));
+    assert.ok(notesValue, 'the internal note is stored on the listing, not only on the event');
+  } finally {
+    db.query = original;
+  }
+});
+
+test('admin review declares notes before the moderation insert', () => {
+  const start = admin.indexOf("router.patch('/properties/:id/review'");
+  const handler = admin.slice(start, admin.indexOf("router.patch('/properties/:id/land-verification'", start));
+  assert.ok(start > 0, 'admin review route exists');
+  const declaredAt = handler.indexOf('const notes = incomingNotes');
+  const insertAt = handler.indexOf('INSERT INTO property_moderation_events');
+  assert.ok(declaredAt > 0 && declaredAt < insertAt, 'admin review binds notes before the insert arguments run');
+  const staffFn = staff.slice(staff.indexOf('async function updateStaffEditableListing'), staff.indexOf('async function loadStaffPropertyPreview'));
+  assert.match(staffFn, /noteBody \|\| null/);
+  assert.doesNotMatch(staffFn, /\bnotes \|\| null/);
+});
+
+test('Find shows suggestions and does not rewrite the address note', () => {
+  const findStart = app.indexOf('async function adminReviewFindAddressOrPlace');
+  const findBody = app.slice(findStart, app.indexOf('function adminReviewLocationAutofillText', findStart));
+  assert.match(findBody, /adminReviewRenderAddressSuggestions/);
+  assert.doesNotMatch(findBody, /adminSetReviewEditValue\("admin-review-address-edit"/);
+  assert.match(app, /function adminReviewChooseAddressSuggestion/);
+  assert.match(app, /adminReviewRestoreAddressNote/);
+  assert.match(app, /Choose a match\. This does not change the address note\./);
+  assert.match(app, /id="admin-review-address-suggestions"/);
+});
+
+test('owner WhatsApp popup sits above the preview and Done closes it', () => {
+  assert.match(page, /#admin-whatsapp-modal\.modal-overlay \{ z-index: 12000; \}/);
+  assert.match(page, /onclick="closeAdminOwnerWhatsApp\(\)"/);
+  assert.match(app, /function closeAdminOwnerWhatsApp\(\)/);
+  assert.match(app, /modalEl\.style\.zIndex = "12000"/);
+  assert.match(app, /preservePreviewDraft && document\.getElementById\("staff-listing-preview-modal"\)/);
+  assert.match(app, /preservePreviewDraft: true/);
 });

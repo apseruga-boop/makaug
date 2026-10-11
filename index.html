@@ -1935,6 +1935,7 @@
       padding: 16px;
     }
     .modal-overlay.open { display: flex; }
+    #admin-whatsapp-modal.modal-overlay { z-index: 12000; }
     .modal-box {
       width: 100%;
       max-width: 560px;
@@ -9571,7 +9572,7 @@
 
   <div id="admin-whatsapp-modal" class="modal-overlay">
     <div class="modal-box" style="max-width:720px">
-      <button onclick="closeModal('admin-whatsapp-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
+      <button type="button" onclick="closeAdminOwnerWhatsApp()" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
       <div class="inline-flex items-center gap-2 bg-green-100 text-green-800 text-xs font-bold rounded-full px-3 py-1 mb-3">
         <i class="fab fa-whatsapp"></i>
         <span>Owner Notification</span>
@@ -9593,7 +9594,7 @@
       <div class="mt-4 flex flex-wrap gap-2">
         <button onclick="openAdminWhatsAppFromModal()" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Open WhatsApp</button>
         <button onclick="copyAdminWhatsAppMessage()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Copy Message</button>
-        <button onclick="closeModal('admin-whatsapp-modal')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Done</button>
+        <button type="button" onclick="closeAdminOwnerWhatsApp()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Done</button>
       </div>
     </div>
   </div>
