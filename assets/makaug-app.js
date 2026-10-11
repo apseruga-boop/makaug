@@ -14020,10 +14020,12 @@ function staffReviewQueueLoadingHtml(label = "Moderation queue is still loading.
 
 function staffPanelQueueNeedsRetry(rows = [], meta = {}) {
   if (Array.isArray(rows) && rows.length) return false;
-  return meta?.query_ok === false
-    || meta?.timed_out
-    || !!meta?.query_error
-    || Number(meta?.expected_count || 0) > 0;
+  // A positive pending count with no cards is "catching up" only when the row
+  // query failed. A successful empty result is empty (or it lives in the
+  // broker list), not a second counter.
+  if (meta?.query_ok === false || meta?.timed_out || !!meta?.query_error) return true;
+  if (meta?.empty_is_authoritative === true) return false;
+  return Number(meta?.expected_count || 0) > 0 && meta?.query_ok !== true;
 }
 
 function staffPanelRetryEndpoint(endpoint = "/api/staff/dashboard?panels=1") {
@@ -14054,7 +14056,7 @@ function clearStaffDashboardPanelRetry() {
 // Both moderation lists page through GET /api/staff/properties/review-queue
 // (oldest first). "main" excludes broker rows; broker rows only appear in the
 // broker list. Rows are de-duplicated by id within and across the two lists.
-const STAFF_REVIEW_QUEUE_PAGE_LIMIT = 24;
+const STAFF_REVIEW_QUEUE_PAGE_LIMIT = 50;
 const staffReviewQueueState = {
   main: { rows: [], total: null, page: 0, loading: false },
   broker: { rows: [], total: null, page: 0, loading: false },
@@ -14074,11 +14076,13 @@ function staffDedupeRows(rows = [], excludeIds = new Set()) {
 }
 
 function staffReviewQueueFooterHtml(segment, shown, total) {
+  const state = staffReviewQueueState[segment] || {};
   const totalKnown = total !== null && total !== undefined && total !== "" && Number.isFinite(Number(total));
-  const more = totalKnown ? shown < Number(total) : false;
+  const more = state.hasMore === true || (totalKnown && shown < Number(total));
+  const listName = segment === "broker" ? "Broker review" : (segment === "search" && state.term ? `Matching ${state.term}` : "Pending review");
   return `
     <div class="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600" data-staff-queue-footer="${adminAttr(segment)}">
-      <span>Showing ${staffNumber(shown)}${totalKnown ? ` of ${staffNumber(total)}` : ""} · oldest first</span>
+      <span>${adminEscape(listName)} · Showing ${staffNumber(shown)}${totalKnown ? ` of ${staffNumber(total)}` : ""} · oldest first</span>
       ${more ? `<button type="button" onclick="staffLoadMoreReviewQueue('${adminAttr(segment)}')" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-black text-slate-800 hover:bg-slate-100">${staffReviewQueueState[segment]?.loading ? "Loading…" : "Load more"}</button>` : ""}
     </div>`;
 }
@@ -14110,16 +14114,16 @@ function staffPaintReviewQueue(segment) {
       : staffEmpty(isBroker ? "No broker listings are waiting for review." : "No listings are waiting for staff review.");
     return;
   }
-  const heading = isSearch ? `<div class="text-xs font-black text-slate-700">Search results for “${adminEscape(state.term)}” (all pending, brokers included)</div>` : "";
-  wrap.innerHTML = heading
-    + rows.map((item) => staffReviewQueueCardHtml(item, { brokerQueue: isBroker })).join("")
+  wrap.innerHTML = rows.map((item) => staffReviewQueueCardHtml(item, { brokerQueue: isBroker })).join("")
     + staffReviewQueueFooterHtml(segment, rows.length, state.total);
 }
 
 function staffSetReviewQueue(segment, rows = [], meta = {}) {
   const state = staffReviewQueueState[segment];
   state.rows = staffDedupeRows(rows);
-  state.page = 0;
+  state.page = Number(meta?.page) > 0 ? Number(meta.page) : 0;
+  state.hasMore = meta?.has_more === true;
+  state.filling = false;
   const total = meta?.total ?? meta?.expected_count;
   state.total = total === null || total === undefined || total === "" || !Number.isFinite(Number(total)) ? null : Number(total);
 }
@@ -14145,6 +14149,7 @@ function renderStaffReviewQueue(rows = [], meta = {}) {
   if (rows.length) clearStaffDashboardPanelRetry();
   staffSetReviewQueue("main", rows, guardedMeta);
   if (!searching) staffPaintReviewQueue("main");
+  if (!searching && rows.length) staffFillReviewQueue("main");
 }
 
 function renderStaffBrokerReviewQueue(rows = [], meta = {}) {
@@ -14158,6 +14163,7 @@ function renderStaffBrokerReviewQueue(rows = [], meta = {}) {
   staffSetReviewQueue("broker", rows, meta);
   staffPaintReviewQueue("broker");
   if (!staffReviewQueueState.search.term && staffReviewQueueState.main.rows.length) staffPaintReviewQueue("main");
+  if (rows.length) staffFillReviewQueue("broker");
 }
 
 function staffReviewQueuePageUrl(segment, page, search = "") {
@@ -14165,7 +14171,10 @@ function staffReviewQueuePageUrl(segment, page, search = "") {
     segment: segment === "search" ? "all" : segment,
     page: String(page),
     limit: String(STAFF_REVIEW_QUEUE_PAGE_LIMIT),
-    include_total: "1"
+    // The header already counted pending rows. Paging asks only for the next
+    // slice (has_more), so a decision refresh does not run a second COUNT.
+    // A search still asks for its own total.
+    include_total: search ? "1" : "0"
   });
   if (search) params.set("search", search);
   return `/api/staff/properties/review-queue?${params.toString()}`;
@@ -14182,15 +14191,143 @@ async function staffLoadMoreReviewQueue(segment = "main") {
     const rows = Array.isArray(res?.data) ? res.data : [];
     state.rows = staffDedupeRows([...state.rows, ...rows]);
     state.page = nextPage;
+    state.hasMore = res?.meta?.has_more === true;
+    const exact = res?.meta?.total_exact === true;
     const total = res?.pagination?.total ?? res?.meta?.total;
-    if (Number.isFinite(Number(total))) state.total = Number(total);
-    if (!rows.length && state.total !== null) state.total = Math.min(state.total, state.rows.length);
+    if (exact && Number.isFinite(Number(total))) state.total = Number(total);
+    else if (state.total == null && Number.isFinite(Number(total))) state.total = Number(total);
+    if (!rows.length || state.hasMore !== true) {
+      state.hasMore = false;
+      if (!rows.length || state.rows.length < Number(state.total || 0)) state.total = state.rows.length;
+    }
   } catch (error) {
     toast(`Could not load more listings: ${error.message || "request failed"}`);
   } finally {
     state.loading = false;
     staffPaintReviewQueue(segment);
   }
+}
+
+function staffReviewQueueHasMoreRows(segment) {
+  const state = staffReviewQueueState[segment];
+  if (!state || !state.rows.length) return false;
+  if (state.hasMore === true) return true;
+  const total = Number(state.total);
+  return Number.isFinite(total) && state.rows.length < total;
+}
+
+// The panel paints the first slice. Keep paging until that slice is the whole
+// pending set (or a few pages, whichever comes first).
+async function staffFillReviewQueue(segment) {
+  const state = staffReviewQueueState[segment];
+  if (!state || state.filling || state.loading) return;
+  if (!staffReviewQueueHasMoreRows(segment)) return;
+  state.filling = true;
+  try {
+    let guard = 0;
+    while (guard < 6 && staffReviewQueueHasMoreRows(segment)) {
+      guard += 1;
+      const before = state.rows.length;
+      await staffLoadMoreReviewQueue(segment);
+      if (state.rows.length <= before) break;
+    }
+  } finally {
+    state.filling = false;
+  }
+}
+
+function staffDecisionQueueSnapshot() {
+  const listings = staffDashboardData?.summary?.listings || {};
+  return {
+    pending: listings.pending_review,
+    broker: listings.broker_pending_review,
+    queues: {
+      main: staffReviewQueueState.main.rows.slice(),
+      broker: staffReviewQueueState.broker.rows.slice(),
+      search: staffReviewQueueState.search.rows.slice()
+    },
+    totals: {
+      main: staffReviewQueueState.main.total,
+      broker: staffReviewQueueState.broker.total,
+      search: staffReviewQueueState.search.total
+    },
+    foundOnline: {
+      queued: (staffFoundOnlineState?.data?.queued_found_online || []).slice(),
+      extra: (staffFoundOnlineState?.extra || []).slice(),
+      total: staffFoundOnlineState?.data?.queued_found_online_meta?.total
+    }
+  };
+}
+
+function staffRestoreDecisionQueueSnapshot(snapshot) {
+  if (!snapshot) return;
+  const listings = staffDashboardData?.summary?.listings;
+  if (listings) {
+    listings.pending_review = snapshot.pending;
+    listings.broker_pending_review = snapshot.broker;
+    const definitions = staffDashboardData?.summary?.definitions || {};
+    setStaffStat("staff-stat-pending", listings.pending_review, definitions, "pending_review");
+    setStaffStat("staff-stat-broker-pending", listings.broker_pending_review, definitions, "broker_pending_review");
+  }
+  ["main", "broker", "search"].forEach((segment) => {
+    staffReviewQueueState[segment].rows = snapshot.queues[segment] || [];
+    staffReviewQueueState[segment].total = snapshot.totals[segment];
+    staffPaintReviewQueue(segment === "search" && !staffReviewQueueState.search.term ? "main" : segment);
+  });
+  if (snapshot.foundOnline && staffFoundOnlineState?.data) {
+    staffFoundOnlineState.data.queued_found_online = snapshot.foundOnline.queued || [];
+    staffFoundOnlineState.extra = snapshot.foundOnline.extra || [];
+    if (staffFoundOnlineState.data.queued_found_online_meta) {
+      staffFoundOnlineState.data.queued_found_online_meta.total = snapshot.foundOnline.total;
+    }
+    renderStaffFoundOnlineQueue();
+  }
+}
+
+function staffOptimisticallyRemoveFoundOnline(propertyId) {
+  const id = String(propertyId || "");
+  const data = staffFoundOnlineState?.data || {};
+  const before = staffFoundOnlineQueueView().rows.length;
+  if (Array.isArray(data.queued_found_online)) {
+    data.queued_found_online = data.queued_found_online.filter((row) => String(row?.id || "") !== id);
+  }
+  staffFoundOnlineState.extra = (staffFoundOnlineState.extra || []).filter((row) => String(row?.id || "") !== id);
+  if (staffFoundOnlineQueueView().rows.length === before) return false;
+  const meta = data.queued_found_online_meta;
+  if (meta && Number(meta.total) > 0) meta.total -= 1;
+  renderStaffFoundOnlineQueue();
+  return true;
+}
+
+// Drop the card and the pending counter before the status request returns.
+function staffOptimisticallyApplyDecision(propertyId, nextStatus) {
+  const snapshot = staffDecisionQueueSnapshot();
+  const id = String(propertyId || "");
+  const status = String(nextStatus || "").toLowerCase();
+  let removedBroker = false;
+  ["main", "broker", "search"].forEach((segment) => {
+    const state = staffReviewQueueState[segment];
+    const next = state.rows.filter((row) => String(row?.id || "") !== id);
+    if (next.length === state.rows.length) return;
+    if (segment === "broker") removedBroker = true;
+    state.rows = next;
+    if (Number.isFinite(Number(state.total)) && state.total > 0) state.total -= 1;
+    staffPaintReviewQueue(segment === "search" && !state.term ? "main" : segment);
+  });
+  staffOptimisticallyRemoveFoundOnline(id);
+  if (["approved", "rejected"].includes(status)) {
+    const listings = staffDashboardData?.summary?.listings;
+    if (listings) {
+      if (Number.isFinite(Number(listings.pending_review)) && listings.pending_review > 0) listings.pending_review -= 1;
+      if (removedBroker && Number.isFinite(Number(listings.broker_pending_review)) && listings.broker_pending_review > 0) {
+        listings.broker_pending_review -= 1;
+      }
+      const definitions = staffDashboardData?.summary?.definitions || {};
+      setStaffStat("staff-stat-pending", listings.pending_review, definitions, "pending_review");
+      setStaffStat("staff-stat-broker-pending", listings.broker_pending_review, definitions, "broker_pending_review");
+    }
+  }
+  return snapshot;
 }
 
 let staffReviewQueueSearchTimer = null;
@@ -14341,7 +14478,7 @@ function staffFoundOnlineQueueView(state = staffFoundOnlineState) {
   const meta = data.queued_found_online_meta || null;
   const total = meta && meta.total !== null && meta.total !== undefined && Number.isFinite(Number(meta.total)) ? Number(meta.total) : null;
   const capped = rows.length >= STAFF_FOUND_ONLINE_MAX_ROWS;
-  const baseLabel = !meta || !rows.length ? "" : (total === null ? `Showing ${rows.length}` : `Showing ${rows.length} of ${total}`);
+  const baseLabel = !meta || !rows.length ? "" : (total === null ? `Found online · Showing ${rows.length}` : `Found online · Showing ${rows.length} of ${total}`);
   const label = baseLabel && capped ? `${baseLabel} (search the review queue for the rest)` : baseLabel;
   const hasMore = !capped && Boolean(meta) && (total === null ? Boolean(state?.page === 1 ? meta.has_more : state?.moreHint) : rows.length < total);
   return { rows, label, hasMore, limit: Number(meta?.page_limit) || 8 };
@@ -14362,11 +14499,29 @@ function renderStaffFoundOnlineQueue() {
   queue.innerHTML = cards + footer;
 }
 
+async function staffFillFoundOnlineQueue() {
+  if (staffFoundOnlineState.filling || staffFoundOnlineState.loading) return;
+  if (!staffFoundOnlineQueueView().hasMore) return;
+  staffFoundOnlineState.filling = true;
+  try {
+    let guard = 0;
+    while (guard < 8 && staffFoundOnlineQueueView().hasMore) {
+      guard += 1;
+      const before = staffFoundOnlineQueueView().rows.length;
+      await staffLoadMoreFoundOnline();
+      if (staffFoundOnlineQueueView().rows.length <= before) break;
+    }
+  } finally {
+    staffFoundOnlineState.filling = false;
+  }
+}
+
 async function staffLoadMoreFoundOnline() {
   if (staffFoundOnlineState.loading) return;
   if (staffFoundOnlineQueueView().rows.length >= STAFF_FOUND_ONLINE_MAX_ROWS) return;
-  const { limit } = staffFoundOnlineQueueView();
-  const nextPage = staffFoundOnlineState.page + 1;
+  const limit = 50;
+  const shown = staffFoundOnlineQueueView().rows.length;
+  const nextPage = Math.floor(shown / limit) + 1;
   staffFoundOnlineState.loading = true;
   renderStaffFoundOnlineQueue();
   try {
@@ -14454,8 +14609,9 @@ function renderStaffSourceIntake(data = {}) {
     `).join("") : `<span class="text-[11px] text-gray-500">No search presets returned.</span>`;
   }
   // A new dashboard payload starts the found-online list again from page 1.
-  staffFoundOnlineState = { data, extra: [], page: 1, loading: false, moreHint: false };
+  staffFoundOnlineState = { data, extra: [], page: 1, loading: false, moreHint: false, filling: false };
   renderStaffFoundOnlineQueue();
+  staffFillFoundOnlineQueue();
   const registry = document.getElementById("staff-source-registry-list");
   if (registry) {
     const rows = Array.isArray(data.source_registry) ? data.source_registry : [];
@@ -16572,10 +16728,17 @@ async function staffApprovePreviewListing(propertyId, options = {}) {
       ...(humanApprovalOverride ? { human_approval_override: true, integrity_override: true } : {})
     };
     staffApprovalDiagnostic("requesting", { propertyId: propertyIdForRequest, foundOnlineApproval, path: statusPath });
-    const statusRes = await staffApiRequestWithTimeout(statusPath, {
+    const decisionSnapshot = staffOptimisticallyApplyDecision(propertyIdForRequest, "approved");
+    let statusRes;
+    try {
+      statusRes = await staffApiRequestWithTimeout(statusPath, {
       method: "PATCH",
       body: statusBody
     }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Staff moderation write");
+    } catch (requestError) {
+      staffRestoreDecisionQueueSnapshot(decisionSnapshot);
+      throw requestError;
+    }
     staffApprovalDiagnostic("completed", { propertyId: propertyIdForRequest, status: statusRes?.data?.status || "unknown" });
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, "approved");
     closeStaffListingPreview();
@@ -16661,7 +16824,10 @@ async function staffRejectPreviewListing(propertyId) {
   if (!confirmRejectClick(`staff:${propertyId}`, '#staff-listing-preview-modal [data-reject-button="staff-preview"]')) return;
   try {
     setStaffPreviewDecisionBusy(true);
-    const statusRes = await staffApiRequestWithTimeout(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+    const decisionSnapshot = staffOptimisticallyApplyDecision(propertyId, "rejected");
+    let statusRes;
+    try {
+      statusRes = await staffApiRequestWithTimeout(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
       body: {
         status: "rejected",
@@ -16675,6 +16841,10 @@ async function staffRejectPreviewListing(propertyId) {
         ui_control: "staff_preview_reject_button"
       }
     }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Staff moderation write");
+    } catch (requestError) {
+      staffRestoreDecisionQueueSnapshot(decisionSnapshot);
+      throw requestError;
+    }
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, "rejected", reason);
     closeStaffListingPreview();
     toast(messageOpened ? "Listing rejected. WhatsApp message is ready." : "Listing rejected.");
@@ -16702,7 +16872,12 @@ async function staffModerateListing(propertyId, status) {
     : "Staff moderation update";
   try {
     if (document.getElementById("staff-listing-preview-modal")) setStaffPreviewDecisionBusy(true);
-    const statusRes = await staffApiRequestWithTimeout(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+    const decisionSnapshot = ["approved", "rejected"].includes(cleanStatus)
+      ? staffOptimisticallyApplyDecision(propertyId, cleanStatus)
+      : null;
+    let statusRes;
+    try {
+      statusRes = await staffApiRequestWithTimeout(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
       body: {
         status: cleanStatus,
@@ -16711,6 +16886,10 @@ async function staffModerateListing(propertyId, status) {
         manual_notification_only: ["approved", "rejected"].includes(cleanStatus)
       }
     }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Staff moderation write");
+    } catch (requestError) {
+      if (decisionSnapshot) staffRestoreDecisionQueueSnapshot(decisionSnapshot);
+      throw requestError;
+    }
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, cleanStatus, reason);
     toast(messageOpened ? "WhatsApp message is ready." : (cleanStatus === "approved" ? "Listing approved and sent live." : `Listing updated: ${cleanStatus}.`));
     if (cleanStatus === "approved") staffVerifyApprovedListingInBackground(propertyId);

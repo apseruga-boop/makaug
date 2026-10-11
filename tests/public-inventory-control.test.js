@@ -640,8 +640,8 @@ test('public properties API is cacheable and uses the fast public summary path',
   // clearModerationDecisionCaches(), which still clears the public cache.
   assert.match(propertiesRouteSource, /clearModerationDecisionCaches\(`listing_status_\$\{current\.status \|\| 'unknown'\}_to_\$\{nextStatus\}`\)/);
   assert.match(propertiesRouteSource, /function clearModerationDecisionCaches\(reason\) \{\s*clearPublicPropertiesCache\(reason\);/);
-  assert.match(propertiesRouteSource, /fast_manual_notification_response/);
-  assert.match(propertiesRouteSource, /runPublicInventoryFollowup\(\s*\(\) => matchListingToSavedSearches/);
+  assert.match(propertiesRouteSource, /reason: 'decision_committed'/);
+  assert.match(propertiesRouteSource, /runPublicInventoryFollowup\(\s*deliverDeferredDecisionWork/);
   assert.doesNotMatch(propertiesRouteSource, /const opportunityBucketSql = publicOpportunityBucketSql\('p'\)/);
   assert.match(propertiesRouteSource, /setPublicPropertiesCacheHeaders\(res, canUsePublicResponseCache\)/);
 });
