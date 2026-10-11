@@ -11907,6 +11907,87 @@ async function sendEmployeeBatchSummary(phone, since) {
   });
 }
 
+/**
+ * The summary must survive a restart.
+ *
+ * On 11 Oct 2026 Arthur forwarded 27 adverts to Agent 007 and typed COMPLETE.
+ * All 27 were saved, and then the web service died with an out-of-memory exit
+ * (status 134) seconds after the last video. The "everything saved" summary was
+ * only a setTimeout in that process, so it died with it, and COMPLETE arrived
+ * while the service was restarting and was never recorded. He heard nothing.
+ *
+ * The timer stays as the fast path. This sweeper is the safety net: any
+ * Agent 007 batch where the person has sent something and the bot has said
+ * nothing since gets the same summary, from the database, after a restart too.
+ */
+const EMPLOYEE_SUMMARY_SWEEP_QUIET_SECONDS = Math.max(
+  30,
+  Number(process.env.WHATSAPP_EMPLOYEE_BATCH_SUMMARY_SWEEP_QUIET_SECONDS || 45)
+);
+const EMPLOYEE_SUMMARY_SWEEP_WINDOW_HOURS = 3;
+let employeeSummarySweepTimer = null;
+let employeeSummarySweepRunning = false;
+
+async function sweepEmployeeBatchSummaries() {
+  if (employeeSummarySweepRunning) return [];
+  employeeSummarySweepRunning = true;
+  const sent = [];
+  try {
+    const waiting = await db.query(
+      `SELECT s.phone, li.first_at, li.last_at
+         FROM whatsapp_sessions s
+         CROSS JOIN LATERAL (
+           SELECT MAX(created_at) AS last_out
+             FROM whatsapp_messages
+            WHERE user_phone = s.phone
+              AND direction = 'outbound'
+              AND created_at > NOW() - ($1 || ' hours')::interval
+         ) lo
+         CROSS JOIN LATERAL (
+           SELECT MIN(created_at) AS first_at, MAX(created_at) AS last_at
+             FROM whatsapp_messages
+            WHERE user_phone = s.phone
+              AND direction = 'inbound'
+              AND created_at > COALESCE(lo.last_out, NOW() - ($1 || ' hours')::interval)
+         ) li
+        WHERE s.current_step = 'employee_property_media'
+          AND li.last_at IS NOT NULL
+          AND li.last_at < NOW() - ($2 || ' seconds')::interval
+          AND NOT EXISTS (
+            SELECT 1 FROM outbound_message_queue q
+             WHERE q.user_phone = s.phone AND q.created_at > li.last_at
+          )
+        LIMIT 20`,
+      [String(EMPLOYEE_SUMMARY_SWEEP_WINDOW_HOURS), String(EMPLOYEE_SUMMARY_SWEEP_QUIET_SECONDS)]
+    );
+    for (const row of waiting.rows) {
+      const phone = String(row.phone || '');
+      if (!phone || employeeBatchBursts.has(phone)) continue;
+      try {
+        const queued = await sendEmployeeBatchSummary(phone, new Date(new Date(row.first_at).getTime() - 5000));
+        if (queued) sent.push(phone);
+      } catch (error) {
+        logger.warn('Agent 007 batch summary sweep failed:', error.message || String(error));
+      }
+    }
+    if (sent.length) logger.info(`Agent 007 batch summary sweep sent ${sent.length} missed summaries`);
+  } catch (error) {
+    logger.warn('Agent 007 batch summary sweep skipped:', error.message || String(error));
+  } finally {
+    employeeSummarySweepRunning = false;
+  }
+  return sent;
+}
+
+function startEmployeeBatchSummarySweeper() {
+  if (process.env.NODE_ENV === 'test' || employeeSummarySweepTimer) return null;
+  const first = setTimeout(() => { sweepEmployeeBatchSummaries().catch(() => {}); }, 20_000);
+  first.unref?.();
+  employeeSummarySweepTimer = setInterval(() => { sweepEmployeeBatchSummaries().catch(() => {}); }, 60_000);
+  employeeSummarySweepTimer.unref?.();
+  return employeeSummarySweepTimer;
+}
+
 // ---------------------------------------------------------------------------
 // "I have paid" — payment claims, and agents paused for an unpaid fee.
 // ---------------------------------------------------------------------------
@@ -18621,6 +18702,7 @@ router.delete('/reset/:phone', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.startEmployeeBatchSummarySweeper = startEmployeeBatchSummarySweeper;
 module.exports.__test = {
   extractNaturalSearchFilters,
   applyProximityToFilters,
@@ -18675,6 +18757,8 @@ module.exports.__test = {
   normalizeCaptionPriceNotation,
   buildEmployeeBatchSummary,
   scheduleEmployeeBatchSummary,
+  sweepEmployeeBatchSummaries,
+  startEmployeeBatchSummarySweeper,
   ACTIVE_COUNTRY_CODE,
   ACTIVE_CURRENCY,
   addWhatsappCanonicalLocationFilter,
