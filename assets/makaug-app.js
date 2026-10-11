@@ -15524,7 +15524,7 @@ async function staffMakeVideoCover(propertyId) {
       if (gallery) gallery.innerHTML = staffPreviewImagesHtml(response.data.images, propertyId, response.data.extra_fields?.staff_removed_images || []);
       if (adminActiveReview.media_check?.ok) dismissApprovalBlockerBanner();
     }
-    queueStaffDashboardRefreshAfterModeration();
+    queueStaffDashboardRefreshAfterModeration({ preservePreviewDraft: true });
     toast(response.data.added ? `${response.data.added} still${response.data.added === 1 ? "" : "s"} from the video added.` : (response.data.note || "No new stills were needed."));
   } catch (error) {
     toast(error.message || "We couldn't make a cover from this video. Upload a photo instead.");
@@ -15582,7 +15582,7 @@ async function staffUploadPreviewPhotos(propertyId) {
       if (gallery) gallery.innerHTML = staffPreviewImagesHtml(response.data.images, propertyId, response.data.extra_fields.staff_removed_images || []);
       dismissApprovalBlockerBanner();
     }
-    queueStaffDashboardRefreshAfterModeration();
+    queueStaffDashboardRefreshAfterModeration({ preservePreviewDraft: true });
     toast(`${response.data.added} photo${response.data.added === 1 ? "" : "s"} added. You can approve now.`);
   } catch (error) {
     toast(`Photo upload failed: ${error.message || "request failed"}`);
@@ -15634,7 +15634,7 @@ async function staffChangePreviewPhoto(propertyId, imageId, restore = false) {
       if (gallery) gallery.innerHTML = staffPreviewImagesHtml(response.data.images, propertyId, response.data.extra_fields.staff_removed_images);
       dismissApprovalBlockerBanner();
     }
-    queueStaffDashboardRefreshAfterModeration();
+    queueStaffDashboardRefreshAfterModeration({ preservePreviewDraft: true });
     toast(restore ? "Photo restored." : "Photo removed from this listing. You can restore it under Removed photos.");
   } catch (error) {
     toast(`Photo update failed: ${error.message || "request failed"}`);
@@ -16431,9 +16431,12 @@ function staffVerifyApprovedListingInBackground(propertyId) {
     });
 }
 
-function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = false } = {}) {
+function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = false, preservePreviewDraft = false } = {}) {
   if (staffModerationRefreshTimer) window.clearTimeout(staffModerationRefreshTimer);
   staffModerationRefreshTimer = null;
+  // Photo upload already patched the gallery in place. Reloading the review
+  // here would throw away price, note, and pin edits that are not saved yet.
+  if (preservePreviewDraft && document.getElementById("staff-listing-preview-modal")) return;
   // Direct review page: reload just this listing's review, not the dashboard.
   if (currentPage === "staff-review") {
     const reviewId = staffDirectReviewState.id;
@@ -23441,7 +23444,17 @@ function openAdminWhatsAppMessageModal({ title = "Send WhatsApp message", listin
   if (phoneEl) phoneEl.textContent = resolvedPhone || "-";
   if (listingEl) listingEl.textContent = listingLabel || "-";
   if (messageEl) messageEl.value = resolvedMessage;
+  const modalEl = document.getElementById("admin-whatsapp-modal");
+  // The preview editor is z-[11000]. This popup used to sit at 7000, behind it,
+  // so Done never received the click.
+  if (modalEl) modalEl.style.zIndex = "12000";
   openModal("admin-whatsapp-modal");
+}
+
+function closeAdminOwnerWhatsApp() {
+  const modalEl = document.getElementById("admin-whatsapp-modal");
+  if (modalEl) modalEl.style.zIndex = "";
+  closeModal("admin-whatsapp-modal");
 }
 
 function openAdminWhatsAppFromModal() {
@@ -27306,7 +27319,12 @@ function adminReviewCurrentLocationFields() {
 function adminReviewSetAreaFromNeighborhood() {
   const areaEl = document.getElementById("admin-review-area-edit");
   const neighborhood = document.getElementById("admin-review-neighborhood-edit")?.value || "";
-  if (areaEl && neighborhood && (!areaEl.value.trim() || areaEl.dataset.auto === "1")) {
+  if (!areaEl || !neighborhood) return;
+  const current = areaEl.value.trim();
+  const town = document.getElementById("admin-review-city-edit")?.value.trim() || "";
+  // The area box often still holds the town (Kira) when staff pick Najjera.
+  const areaIsTown = !current || areaEl.dataset.auto === "1" || (town && current === town);
+  if (areaIsTown) {
     areaEl.value = neighborhood;
     areaEl.dataset.auto = "1";
   }
@@ -27397,6 +27415,7 @@ function adminReviewOnCityChange() {
 }
 
 async function adminReviewOnNeighborhoodChange() {
+  adminReviewCanonicalLocationResolution = null;
   adminReviewSetAreaFromNeighborhood();
   const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
     document.getElementById("admin-review-neighborhood-edit")?.value,
@@ -27673,6 +27692,172 @@ function adminReviewChooseFindPoint(registryLocation = null, externalPoint = nul
   return { point: null, source: "none" };
 }
 
+function adminReviewClearAddressSuggestions() {
+  const host = document.getElementById("admin-review-address-suggestions");
+  window.__adminReviewAddressSuggestions = [];
+  if (host) {
+    host.innerHTML = "";
+    host.classList.add("hidden");
+  }
+}
+
+function adminReviewRememberAddressNote() {
+  return document.getElementById("admin-review-address-edit")?.value || "";
+}
+
+function adminReviewRestoreAddressNote(previous = "") {
+  const el = document.getElementById("admin-review-address-edit");
+  if (!el) return;
+  if (el.value !== previous) el.value = previous;
+}
+
+async function adminReviewGoogleGeocodeHits(query) {
+  const geocoder = await getGoogleGeocoder();
+  if (!geocoder || !query) return [];
+  return new Promise((resolve) => {
+    geocoder.geocode({
+      address: query,
+      componentRestrictions: { country: ACTIVE_LOCATION_COUNTRY.countryCode }
+    }, (results, status) => {
+      if (status !== "OK" || !Array.isArray(results)) {
+        resolve([]);
+        return;
+      }
+      resolve(results.slice(0, 5).map((result) => {
+        const loc = result?.geometry?.location;
+        if (!loc) return null;
+        return {
+          lat: loc.lat(),
+          lng: loc.lng(),
+          label: result.formatted_address || query,
+          canonicalQuery: extractCanonicalLocationQueryFromGoogleResult(result),
+          placeId: result.place_id || "",
+          streetName: extractStreetNameFromGoogleResult(result) || "",
+          provider: "google",
+          confidence: 0.75,
+          kind: "Google"
+        };
+      }).filter(Boolean));
+    });
+  });
+}
+
+async function adminReviewNominatimHits(query) {
+  const q = uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(q)}`;
+    const response = await fetch(url, OSM_FETCH_OPTIONS);
+    if (!response.ok) return [];
+    const rows = await response.json();
+    return (Array.isArray(rows) ? rows : []).slice(0, 5).map((row) => {
+      const lat = Number(row?.lat);
+      const lng = Number(row?.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return {
+        lat,
+        lng,
+        label: row?.display_name || query,
+        canonicalQuery: String(
+          row?.address?.neighbourhood
+          || row?.address?.suburb
+          || row?.address?.quarter
+          || row?.address?.village
+          || row?.address?.town
+          || row?.address?.city
+          || ""
+        ).trim(),
+        placeId: row?.place_id ? `osm:${row.place_id}` : "",
+        streetName: extractStreetNameFromNominatimAddress(row?.address || {}) || "",
+        provider: "nominatim",
+        confidence: row?.importance ? Math.min(0.95, Math.max(0.35, Number(row.importance))) : 0.45,
+        kind: "Map"
+      };
+    }).filter(Boolean);
+  } catch (error) {
+    return [];
+  }
+}
+
+function adminReviewAddressSuggestionList({ registryLocation = null, googleHits = [], nominatimHits = [] } = {}) {
+  const items = [];
+  const seen = new Set();
+  const push = (item) => {
+    const lat = Number(item?.lat);
+    const lng = Number(item?.lng);
+    const label = String(item?.label || "").trim();
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !label) return;
+    const key = `${lat.toFixed(4)},${lng.toFixed(4)}|${label.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    items.push({ ...item, lat, lng, label });
+  };
+  const registryLat = Number(registryLocation?.latitude ?? registryLocation?.lat);
+  const registryLng = Number(registryLocation?.longitude ?? registryLocation?.lng);
+  if (registryLocation && Number.isFinite(registryLat) && Number.isFinite(registryLng)) {
+    push({
+      lat: registryLat,
+      lng: registryLng,
+      label: [registryLocation.name, registryLocation.town, registryLocation.district].filter(Boolean).join(", "),
+      provider: "makaug_registry",
+      confidence: 0.9,
+      kind: "Registry place",
+      registryLocation
+    });
+  }
+  googleHits.forEach((hit) => push(hit));
+  nominatimHits.forEach((hit) => push(hit));
+  return items.slice(0, 6);
+}
+
+function adminReviewRenderAddressSuggestions(suggestions = []) {
+  const host = document.getElementById("admin-review-address-suggestions");
+  window.__adminReviewAddressSuggestions = suggestions;
+  if (!host) return;
+  if (!suggestions.length) {
+    adminReviewClearAddressSuggestions();
+    return;
+  }
+  host.innerHTML = `
+    <div class="font-black text-green-950">Choose a match. This does not change the address note.</div>
+    <div class="mt-2 grid gap-2">
+      ${suggestions.map((item, index) => `<button type="button" onclick="adminReviewChooseAddressSuggestion(${index})" class="rounded-lg border border-green-300 bg-white px-3 py-2 text-left hover:bg-green-50">
+        <strong class="block text-green-950">${adminEscape(item.label)}</strong>
+        <span class="block text-[11px] text-green-800">${adminEscape(item.kind || "Match")} · ${adminEscape(item.provider || "")}</span>
+      </button>`).join("")}
+    </div>`;
+  host.classList.remove("hidden");
+}
+
+async function adminReviewChooseAddressSuggestion(index = 0) {
+  const point = window.__adminReviewAddressSuggestions?.[Number(index)];
+  if (!point || !Number.isFinite(Number(point.lat)) || !Number.isFinite(Number(point.lng))) return false;
+  const addressNote = adminReviewRememberAddressNote();
+  const input = document.getElementById("admin-review-address-search-edit");
+  const query = (input?.value || point.label || "").trim();
+  if (input && point.label) input.value = point.label;
+  if (point.streetName && !document.getElementById("admin-review-street-edit")?.value?.trim()) {
+    adminSetReviewEditValue("admin-review-street-edit", point.streetName);
+  }
+  adminSetReviewEditValue("admin-review-geocoding-provider-edit", point.provider || "");
+  adminSetReviewEditValue("admin-review-location-confidence-edit", point.confidence != null ? String(point.confidence) : "0.65");
+  adminSetReviewEditValue("admin-review-place-id-edit", point.placeId || "");
+  let canonicalLocation = point.registryLocation || null;
+  let canonicalResolution = { status: canonicalLocation ? "matched" : "unmatched", candidates: [] };
+  if (!canonicalLocation) {
+    canonicalResolution = await resolveUgandaLocationWithLabelFallback(query, point.canonicalQuery || "");
+    canonicalLocation = canonicalResolution.status === "matched" ? canonicalResolution.location : null;
+  }
+  if (canonicalLocation) applyAdminReviewCanonicalLocation(canonicalLocation);
+  adminReviewSetLocationInputs(point.lat, point.lng, "Address pin found");
+  adminReviewMoveLocationPin(point.lat, point.lng, { zoom: MAP_PROPERTY_ZOOM });
+  adminReviewRestoreAddressNote(addressNote);
+  adminReviewSetAddressSearchStatus(canonicalLocation
+    ? "Pin set from the match you chose. The address note was left as you typed it."
+    : "Pin set from the match you chose. The address note was left as you typed it. Confirm the place below if needed.", canonicalLocation ? "green" : "amber");
+  if (!canonicalLocation) adminReviewRenderCanonicalSuggestions(canonicalResolution.candidates || []);
+  return true;
+}
+
 async function adminReviewFindAddressOrPlace(options = {}) {
   const input = document.getElementById("admin-review-address-search-edit");
   const query = (input?.value || "").trim();
@@ -27681,66 +27866,66 @@ async function adminReviewFindAddressOrPlace(options = {}) {
     return false;
   }
   const auto = options?.auto === true;
+  const addressNote = adminReviewRememberAddressNote();
   adminReviewClearCanonicalSuggestions();
-  adminReviewSetAddressSearchStatus(auto ? "Auto-filling the closest matching place in Uganda..." : "Finding the nearest matching place in Uganda...", "blue");
+  adminReviewClearAddressSuggestions();
+  adminReviewSetAddressSearchStatus(auto ? "Looking up places in Uganda. Choose one from the list." : "Finding matches in Uganda. Choose one from the list. The address note stays as you typed it.", "blue");
   // The makaug registry decides the place; external geocoders only add street
   // detail and are ignored when they land more than 15 km from that place
   // ("Lubowa" used to land in central Kampala via Nominatim).
   const registryFirst = await resolveUgandaLocationFromSharedRegistry(query);
   const registryLocation = registryFirst.status === "matched" ? registryFirst.location : null;
+  const googleQuery = uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
   let externalPoint = null;
+  let googleHits = [];
   try {
-    externalPoint = await geocodeWithGoogle(uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", "));
+    googleHits = await adminReviewGoogleGeocodeHits(googleQuery);
+    externalPoint = googleHits[0] || await geocodeWithGoogle(googleQuery);
     if (externalPoint) {
-      externalPoint.provider = "google";
-      externalPoint.confidence = 0.75;
+      externalPoint.provider = externalPoint.provider || "google";
+      externalPoint.confidence = externalPoint.confidence || 0.75;
     }
   } catch (error) {
     externalPoint = null;
   }
-  if (!externalPoint) externalPoint = await geocodeWithNominatim(query);
+  const nominatimHits = await adminReviewNominatimHits(query);
+  if (!externalPoint) externalPoint = nominatimHits[0] || await geocodeWithNominatim(query);
   const findChoice = adminReviewChooseFindPoint(registryLocation, externalPoint, ADMIN_REVIEW_FIND_MAX_EXTERNAL_KM, getDistrictCenter(registryLocation?.district || ""));
-  let point = findChoice.point;
-  if (!point) {
-    const canonicalResolution = registryFirst;
-    const canonicalLocation = canonicalResolution.status === "matched" ? canonicalResolution.location : null;
+  const suggestions = adminReviewAddressSuggestionList({
+    registryLocation,
+    googleHits: googleHits.length ? googleHits : (externalPoint && externalPoint.provider === "google" ? [externalPoint] : []),
+    nominatimHits: nominatimHits.length ? nominatimHits : (externalPoint && externalPoint.provider === "nominatim" ? [externalPoint] : [])
+  });
+  if (findChoice.point && findChoice.source === "registry" && !suggestions.some((item) => item.provider === "makaug_registry")) {
+    suggestions.unshift({
+      ...findChoice.point,
+      lat: findChoice.point.lat,
+      lng: findChoice.point.lng,
+      label: findChoice.point.label || registryLocation?.name || query,
+      provider: "makaug_registry",
+      kind: "Registry place",
+      registryLocation
+    });
+  }
+  adminReviewRenderAddressSuggestions(suggestions.slice(0, 6));
+  adminReviewRestoreAddressNote(addressNote);
+  if (!suggestions.length && !findChoice.point) {
+    const labelFallback = await resolveUgandaLocationWithLabelFallback(query, externalPoint?.canonicalQuery || "");
+    const canonicalLocation = registryFirst.status === "matched"
+      ? registryFirst.location
+      : (labelFallback.status === "matched" ? labelFallback.location : null);
     if (canonicalLocation) applyAdminReviewCanonicalLocation(canonicalLocation);
-    else clearAdminReviewCanonicalLocation();
-    const fallback = getDistrictCenter(canonicalLocation?.district || "") || MAP_DEFAULT_CENTER;
-    adminReviewSetLocationInputs(fallback.lat, fallback.lng, "Approximate fallback pin");
-    adminReviewMoveLocationPin(fallback.lat, fallback.lng, { zoom: MAP_DISTRICT_ZOOM });
-    adminSetReviewEditValue("admin-review-address-edit", query);
     adminReviewSetAddressSearchStatus(canonicalLocation
-      ? "Location resolved, but the exact address pin was not found. Move and confirm the pin before approval."
-      : canonicalResolution.candidates.length
-        ? "Canonical location needs your confirmation. Choose the correct suggestion below; nothing was auto-filled."
-        : "Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
-    if (!canonicalLocation) adminReviewRenderCanonicalSuggestions(canonicalResolution.candidates);
+      ? "Location resolved, but no map matches were found. Move and confirm the pin before approval."
+      : registryFirst.candidates?.length
+        ? "Canonical location needs your confirmation. Choose the correct suggestion below; the address note was not changed."
+        : "Location not recognised — the address note was not changed.", "amber");
+    if (!canonicalLocation) adminReviewRenderCanonicalSuggestions(registryFirst.candidates || []);
     return false;
   }
-  const canonicalResolution = registryLocation
-    ? registryFirst
-    : await resolveUgandaLocationWithLabelFallback(query, point.canonicalQuery || "");
-  const canonicalLocation = canonicalResolution.status === "matched" ? canonicalResolution.location : null;
-  if (input && point.label) input.value = point.label;
-  adminSetReviewEditValue("admin-review-address-edit", point.label || query);
-  if (point.streetName && !document.getElementById("admin-review-street-edit")?.value?.trim()) {
-    adminSetReviewEditValue("admin-review-street-edit", point.streetName);
-  }
-  adminSetReviewEditValue("admin-review-geocoding-provider-edit", point.provider || "google");
-  adminSetReviewEditValue("admin-review-location-confidence-edit", point.confidence != null ? String(point.confidence) : "0.65");
-  adminSetReviewEditValue("admin-review-place-id-edit", point.placeId || "");
-  if (canonicalLocation) applyAdminReviewCanonicalLocation(canonicalLocation);
-  else clearAdminReviewCanonicalLocation();
-  adminReviewSetLocationInputs(point.lat, point.lng, "Address pin found");
-  adminReviewMoveLocationPin(point.lat, point.lng, { zoom: MAP_PROPERTY_ZOOM });
-  adminReviewSetAddressSearchStatus(canonicalLocation
-    ? "Address and canonical location found. Check the full cascade and pin before approval."
-    : canonicalResolution.candidates.length
-      ? "Address pin found, but the canonical place needs your confirmation. Choose below; nothing was auto-filled."
-      : "Location not recognised — pin set but region/district/area could NOT be auto-filled.", canonicalLocation ? "green" : "amber");
-  if (!canonicalLocation) adminReviewRenderCanonicalSuggestions(canonicalResolution.candidates);
-  return Boolean(canonicalLocation);
+  adminReviewSetAddressSearchStatus("Choose a match below. Searching does not replace or shorten the address note.", "blue");
+  if (!registryLocation && registryFirst.candidates?.length) adminReviewRenderCanonicalSuggestions(registryFirst.candidates);
+  return false;
 }
 
 function adminReviewLocationAutofillText(review = {}, facts = {}) {
@@ -28213,6 +28398,7 @@ function adminReviewListingEditPanel(review = {}) {
             </div>
           </label>
           <div id="admin-review-address-search-status" class="mt-2 text-xs font-semibold text-blue-900">Search a place, road, estate, town, or landmark, then confirm the pin.</div>
+          <div id="admin-review-address-suggestions" class="hidden mt-2 rounded-lg border border-green-300 bg-green-50 p-3 text-xs" aria-live="polite"></div>
           <div id="admin-review-canonical-suggestions" class="hidden mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs" aria-live="polite"></div>
           <input id="admin-review-place-id-edit" type="hidden" value="${adminAttr(extra.place_id || "")}">
           <input id="admin-review-geocoding-provider-edit" type="hidden" value="${adminAttr(extra.geocoding_provider || "")}">
@@ -28724,8 +28910,10 @@ function collectAdminReviewListingPatch() {
   const district = canonical?.province || canonical?.district || get("admin-review-district-edit");
   const region = canonical?.region || (district ? regionForDistrict(district) : get("admin-review-region-edit"));
   const city = adminReviewCityToSave(get("admin-review-city-edit"), canonical?.town || canonical?.city || "");
-  const neighborhood = canonical?.name || get("admin-review-neighborhood-edit");
-  const area = canonical?.name || get("admin-review-area-edit");
+  // The dropdowns are what staff just chose. A previous canonical match (the
+  // parent town) must not put that choice back.
+  const neighborhood = String(get("admin-review-neighborhood-edit") || "").trim() || canonical?.name || "";
+  const area = String(get("admin-review-area-edit") || "").trim() || canonical?.name || "";
   const coordinates = adminReviewNormalizeCoordinateInputs(
     get("admin-review-latitude-edit"),
     get("admin-review-longitude-edit")

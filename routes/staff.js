@@ -19,7 +19,7 @@ const {
   normalizeCommercialPropertyType,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
-const { priceEvidenceNote, resolveStaffPriceChoice } = require('../utils/staffPriceChoice');
+const { priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
 const { propertyListingSearchClause } = require('../utils/listingReferenceSearch');
 const { loadListingMediaSummaries, listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
@@ -2494,6 +2494,16 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
   // C11: a town staff pick in this save is kept (it used to revert to the area's default town).
   const hierarchy = normalizeReviewLocationHierarchy(base, { preferChosenCity: Object.prototype.hasOwnProperty.call(normalized, 'city') && Boolean(cleanText(normalized.city)) });
   errors.push(...hierarchy.errors);
+  // Neighbourhood Najjera under town Kira: the area text may still be the
+  // town. Keep the child as the saved place instead of rewriting it to Kira.
+  const childPlace = hierarchy.neighborhood && hierarchy.canonical && hierarchy.neighborhood !== hierarchy.canonical.name
+    ? canonicalizeUgandaLocation(hierarchy.neighborhood, hierarchy.district || base.district)
+    : null;
+  if (childPlace && !['district', 'region', 'city'].includes(childPlace.level)) {
+    hierarchy.canonical = childPlace;
+    hierarchy.neighborhood = childPlace.name;
+    if (childPlace.town && !hierarchy.city) hierarchy.city = childPlace.town;
+  }
   const canonical = hierarchy.canonical || canonicalizeUgandaLocation(base.area, base.district);
   if (canonical && !['district', 'region'].includes(canonical.level)) {
     normalized.area = canonical.name;
@@ -2712,28 +2722,27 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   } : null;
 
   const extraPatch = {};
-  if (priceChoiceMode === 'amount' || priceChoiceMode === 'poa') {
+  const priceExtra = staffPriceExtraPatch({ mode: priceChoiceMode, existing, existingExtra });
+  if (priceExtra) {
+    Object.assign(extraPatch, priceExtra);
     const poa = priceChoiceMode === 'poa';
-    extraPatch.price_on_application = poa;
-    extraPatch.price_upon_application = poa;
-    if (!poa) extraPatch.price_review = null;
-    resolvedPriceQuality = listingPriceQuality({
-      ...existing,
-      price: patch.price,
-      price_period: patch.price_period || existing.price_period,
-      price_on_application: poa,
-      listing_type: patch.listing_type || existing.listing_type,
-      transaction_type: patch.transaction_type || existing.transaction_type,
-      price_original: patch.price_original,
-      price_original_currency: patch.price_original_currency || existing.price_original_currency,
-      extra_fields: {
-        ...existingExtra,
+    if (priceChoiceMode === 'amount' || priceChoiceMode === 'poa') {
+      resolvedPriceQuality = listingPriceQuality({
+        ...existing,
+        price: patch.price,
+        price_period: patch.price_period || existing.price_period,
         price_on_application: poa,
-        price_upon_application: poa,
-        price_review: poa ? existingExtra.price_review : null
-      }
-    });
-    extraPatch.price_quality = resolvedPriceQuality;
+        listing_type: patch.listing_type || existing.listing_type,
+        transaction_type: patch.transaction_type || existing.transaction_type,
+        price_original: patch.price_original,
+        price_original_currency: patch.price_original_currency || existing.price_original_currency,
+        extra_fields: {
+          ...existingExtra,
+          ...priceExtra
+        }
+      });
+      extraPatch.price_quality = resolvedPriceQuality;
+    }
   }
   [
     'region',
@@ -2892,22 +2901,41 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
 
   if (!setParts.length) return { changed_fields: [], property: existing };
 
-  const updated = await db.query(
-    `UPDATE properties
-     SET ${setParts.join(', ')}, reviewed_by = COALESCE($${values.length + 1}::uuid, reviewed_by), updated_at = NOW()
-     WHERE id = $1
-     RETURNING *`,
-    [...values, actorId(req)]
-  );
+  const reviewerId = toUuidOrNull(actorId(req));
+  let updated;
+  try {
+    updated = await db.query(
+      `UPDATE properties
+       SET ${setParts.join(', ')}, reviewed_by = COALESCE($${values.length + 1}::uuid, reviewed_by), updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [...values, reviewerId]
+    );
+  } catch (error) {
+    if (['57014', '55P03', '40P01', '40001', 'POOL_TIMEOUT'].includes(error.code)) {
+      logger.warn('Staff preview save waiting on the database', {
+        property_id: propertyId,
+        code: error.code,
+        message: error.message
+      });
+      const busy = new Error('Preview save is busy. Wait a moment and try again.');
+      busy.status = 503;
+      busy.code = error.code;
+      throw busy;
+    }
+    throw error;
+  }
+  // The listing row is already saved. A missing note binding, or a lock on
+  // the activity log, must not turn that into Internal Server Error.
   await db.query(
     `INSERT INTO property_moderation_events (property_id, actor_id, action, reason, notes, checklist, delivery)
      VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)`,
     [
       propertyId,
-      actorId(req),
+      reviewerId,
       liveEdit ? 'staff_live_listing_edited' : 'staff_listing_preview_saved',
       reason || null,
-      notes || null,
+      noteBody || null,
       JSON.stringify(checklist || {}),
       JSON.stringify({
         changed_fields: changed,
@@ -2916,8 +2944,14 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
         ...(liveEdit ? { status_kept: existingStatus, before: liveEditSnapshot(existing, changed), after: liveEditSnapshot(updated.rows[0] || {}, changed) } : {})
       })
     ]
-  ).catch(() => {});
-  await logStaffActivity(req, 'staff_listing_preview_saved', {
+  ).catch((error) => {
+    logger.warn('Staff preview moderation event failed', {
+      property_id: propertyId,
+      code: error.code || null,
+      message: error.message
+    });
+  });
+  logStaffActivityInBackground(req, 'staff_listing_preview_saved', {
     targetType: 'property',
     targetId: propertyId,
     metadata: { changed_fields: changed, hierarchy }

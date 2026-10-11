@@ -97,6 +97,18 @@ function getDistrictLocationTree(district) {
     .sort((a, b) => a.city.localeCompare(b.city));
 }
 
+function neighborhoodIsChildOfTown(district, town, neighborhood, parentCanonical = null) {
+  const name = clean(neighborhood);
+  const city = clean(town);
+  if (!name || !city || name.toLowerCase() === city.toLowerCase()) return false;
+  const child = canonicalizeUgandaLocation(name, district);
+  // "Kira Municipality" is an alias of the Kira town, not a child place.
+  if (!child || ['district', 'region', 'city'].includes(child.level)) return false;
+  if (parentCanonical && child.key === parentCanonical.key) return false;
+  const node = getDistrictLocationTree(district).find((item) => item.city === city);
+  return Boolean(node && (node.neighborhoods || []).some((item) => item.name === child.name));
+}
+
 function districtForKnownArea(area) {
   const needle = clean(area).toLowerCase();
   if (!needle) return '';
@@ -172,7 +184,12 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
   const staffCityOnBoundary = Boolean(city) && boundaryTowns.includes(city);
   const chosenCityIsKnown = options.preferChosenCity === true && Boolean(city) && tree.some((item) => item.city === city);
   if (canonical && canonical.level !== 'region' && (canonical.level !== 'district' || allowDistrictNode)) {
-    neighborhood = canonical.name;
+    // Area "Kira" is the town. An explicit child such as Najjera must stay
+    // the neighbourhood; the town's own name used to replace it.
+    const parentTown = clean(canonical.town) || (['city', 'town'].includes(canonical.level) ? canonical.name : '');
+    const keepExplicitChild = neighborhoodIsChildOfTown(district, city || parentTown, neighborhood, canonical)
+      || neighborhoodIsChildOfTown(district, parentTown, neighborhood, canonical);
+    if (!keepExplicitChild) neighborhood = canonical.name;
     if (!(chosenCityIsKnown || staffCityOnBoundary)) {
       city = clean(canonical.town) || city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
     }

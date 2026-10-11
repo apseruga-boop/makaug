@@ -18,6 +18,56 @@ function poaFlag(value) {
   return value === true || ['true', '1', 'yes', 'y', 'on'].includes(String(value ?? '').trim().toLowerCase());
 }
 
+const POA_TEXT = /\b(?:price\s*)?(?:upon\s+application|on\s+request|poa)\b/i;
+
+function extraObject(record = {}) {
+  const extra = record.extra_fields;
+  return extra && typeof extra === 'object' && !Array.isArray(extra) ? extra : {};
+}
+
+function poaHistoryText(value) {
+  return POA_TEXT.test(String(value || '').replace(/_/g, ' '));
+}
+
+// A numeric price staff already saved (column and extra POA flags explicitly
+// false) is the price. Leftover harvest labels are history, not a second price.
+function staffConfirmedNumericPrice(record = {}) {
+  const extra = extraObject(record);
+  const price = Number(record.price);
+  if (!Number.isFinite(price) || price <= 0) return false;
+  if (record.price_on_application === true || record.priceOnApplication === true) return false;
+  if (extra.price_on_application === true || extra.price_upon_application === true) return false;
+  return record.price_on_application === false
+    && extra.price_on_application === false
+    && extra.price_upon_application === false;
+}
+
+// Resets the live price_status / price_label. source_price_label and
+// source_price_rejection_reason stay as harvest history.
+function staffPriceExtraPatch({ mode = 'unchanged', existing = {}, existingExtra = {} } = {}) {
+  if (mode === 'poa') {
+    return {
+      price_on_application: true,
+      price_upon_application: true
+    };
+  }
+  const leftoverPoaLabel = poaHistoryText(existingExtra.price_status)
+    || String(existingExtra.price_status || '') === 'price_upon_application'
+    || poaHistoryText(existingExtra.price_label);
+  const alreadyConfirmed = staffConfirmedNumericPrice({ ...existing, extra_fields: existingExtra });
+  if (mode !== 'amount' && !(alreadyConfirmed && leftoverPoaLabel)) return null;
+  const patch = {
+    price_status: 'published_price_or_guide_price',
+    price_label: null
+  };
+  if (mode === 'amount') {
+    patch.price_on_application = false;
+    patch.price_upon_application = false;
+    patch.price_review = null;
+  }
+  return patch;
+}
+
 function resolveStaffPriceChoice(patch = {}, existing = {}) {
   const next = { ...patch };
   const period = String(next.price_period || '').trim().toLowerCase();
@@ -74,5 +124,7 @@ function priceEvidenceNote(reason, quality) {
 module.exports = {
   positiveCanonicalPrice,
   priceEvidenceNote,
-  resolveStaffPriceChoice
+  resolveStaffPriceChoice,
+  staffConfirmedNumericPrice,
+  staffPriceExtraPatch
 };

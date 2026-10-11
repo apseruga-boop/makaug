@@ -51,7 +51,7 @@ test('unticking Price on application keeps a stored canonical amount and clears 
 
   assert.match(app, /adminReviewHasTypedCanonicalPrice\(review\.price\)/);
   assert.match(staff, /resolveStaffPriceChoice\(normalized, existing\)/);
-  assert.match(staff, /extraPatch\.price_on_application = poa/);
+  assert.match(staff, /staffPriceExtraPatch\(/);
 });
 
 test('a new internal note is appended with the author and time', () => {

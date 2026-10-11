@@ -15,6 +15,7 @@ const {
   detectPropertyTypeEvidence,
 } = require('./propertyTypeVocabulary');
 const { allowedPricePeriods, normalizePricePeriod } = require('../config/pricePeriods');
+const { staffConfirmedNumericPrice } = require('./staffPriceChoice');
 
 const HOSPITALITY_SHORT_TERM_MESSAGE = 'Nightly and short-stay places go in Short Term stays (/short-term), not the main listings.';
 
@@ -119,12 +120,16 @@ function hasLandAssetEvidence(value = '') {
 
 function hasPriceOnApplication(record = {}) {
   const extra = object(record.extra_fields);
+  // Staff typed a number and cleared Price on application. That price wins
+  // over harvest leftovers (price_status, price_label, source_price_label).
+  if (staffConfirmedNumericPrice(record)) return false;
+  const status = compact(extra.price_status).replace(/_/g, ' ');
   return record.price_on_application === true
     || record.priceOnApplication === true
     || extra.price_on_application === true
     || extra.price_upon_application === true
     || /\b(?:price\s*)?(?:upon\s+application|on\s+request|poa)\b/i.test(compact(
-      record.price_label || extra.price_label || extra.source_price_label
+      record.price_label || extra.price_label || extra.source_price_label || status
     ));
 }
 

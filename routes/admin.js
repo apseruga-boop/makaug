@@ -9,7 +9,7 @@ const { requireAdminApiKey } = require('../middleware/auth');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { listingReferenceQuery, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
-const { priceEvidenceNote, resolveStaffPriceChoice } = require('../utils/staffPriceChoice');
+const { priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const { DISTRICTS: UGANDA_DISTRICTS, LISTING_TYPES } = require('../utils/constants');
@@ -3490,16 +3490,19 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
 
   if (normalizedPatch.__priceChoice === 'amount' || normalizedPatch.__priceChoice === 'poa') {
     const poa = normalizedPatch.__priceChoice === 'poa';
-    extraPatch.price_on_application = poa;
-    extraPatch.price_upon_application = poa;
-    if (!poa) extraPatch.price_review = null;
+    const priceExtra = staffPriceExtraPatch({
+      mode: normalizedPatch.__priceChoice,
+      existing: { price: normalizedPatch.price, price_on_application: poa },
+      existingExtra: {}
+    }) || {};
+    Object.assign(extraPatch, priceExtra);
     extraPatch.price_quality = listingPriceQuality({
       price: normalizedPatch.price,
       price_period: normalizedPatch.price_period,
       price_on_application: poa,
       listing_type: normalizedPatch.listing_type,
       transaction_type: normalizedPatch.transaction_type,
-      extra_fields: { price_on_application: poa, price_upon_application: poa }
+      extra_fields: { ...priceExtra }
     });
   }
 
