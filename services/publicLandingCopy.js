@@ -284,10 +284,67 @@ function kampalaRentCopy(snapshot) {
   };
 }
 
+// Existing Kireka area page: practical rental guidance, with the count from
+// the same inventory scope as its metadata. Rent snapshots contain unconverted
+// monthly, weekly and annual asking prices, so they do not support a monthly
+// median here.
+function kirekaRentCopy(snapshot) {
+  const count = areaCount(snapshot, 'rent', 'kireka-wakiso');
+  const tokens = {
+    count: formatCount(count),
+    listing_label: count === 1 ? 'listing' : 'listings'
+  };
+  return {
+    // Keep the existing area's title and self-canonical from categoryPageSeoMeta.
+    title: null,
+    description: 'Houses for rent in Kireka, Wakiso. Compare rental listings, check asking rent and contact the owner or agent to arrange a viewing.',
+    h1: 'Houses for rent in Kireka, Wakiso',
+    intro: [
+      'Looking for a house for rent in Kireka? Compare rental listings for Kireka, Wakiso, and confirm the details with the owner or agent.',
+      'This page currently has **{count}** public rental {listing_label}.',
+      'Availability can change, so ask whether a property is still available before travelling.'
+    ],
+    body: [
+      { heading: 'Compare the full rental cost', sentences: [
+        'Check whether each asking rent is quoted per month, week or year before comparing listings.',
+        'Ask for the total amount needed to move in, including any deposit, advance rent and agent fee, and confirm which utility or service charges are included.',
+        'Use the budget, bedroom and property-type filters to narrow your Kireka rental search.'
+      ] },
+      { heading: 'Arrange a viewing in Kireka', sentences: [
+        'Confirm the exact location and viewing arrangements with the lister before travelling.',
+        'Compare the rooms and condition with the listing photos, and ask about water, power, metering and any shared facilities.',
+        'View before paying, check the authority of the person offering the rental, and get agreed charges, tenancy terms and receipts in writing.',
+        'Read the [property safety guide](/safety) and report suspicious details from the listing page.'
+      ] },
+      { heading: 'Widen your rental search', sentences: [
+        'If the current Kireka listings do not fit, compare [rentals across Wakiso](/to-rent/wakiso-wakiso), [houses for rent in Kampala](/to-rent/kampala-kampala) or [all rental listings](/to-rent).',
+        'Keep the same budget and bedroom requirements when comparing areas.'
+      ] }
+    ],
+    faq: [
+      { q: 'How many rental listings are in Kireka on makaug?', a: [
+        'The current Kireka inventory has **{count}** public rental {listing_label}.',
+        'This is a listing count across rental property types; confirm availability directly with the lister.'
+      ] },
+      { q: 'How do I compare asking rents in Kireka?', a: [
+        'First confirm the rent period, then compare listings with the same period and similar bedroom requirements.',
+        'Ask about deposits, advance rent, agent fees and charges excluded from the advertised amount before agreeing a budget.'
+      ] },
+      { q: 'What should I check before paying for a Kireka rental?', a: [
+        'View the property, confirm who is authorised to let it, and agree the tenancy terms and total charges in writing.',
+        'Get receipts for any payment and use the [property safety guide](/safety) for further checks.'
+      ] }
+    ],
+    tokens
+  };
+}
+
 function landingCopyForPage(categoryKey, location) {
   if (categoryKey === 'sale' && !location) return forSaleCopy;
   if (categoryKey === 'land' && !location) return landCopy;
   if (categoryKey === 'rent' && location?.canonical_key === 'kampala:kampala') return kampalaRentCopy;
+  if (categoryKey === 'rent' && location?.canonical_key === 'wakiso:kireka'
+    && String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase() === 'UG') return kirekaRentCopy;
   return null;
 }
 
@@ -301,6 +358,7 @@ function buildLandingCopy(categoryKey, location, snapshot, options = {}) {
   const faq = renderFaq(copy.faq, copy.tokens);
   const firstPage = !(Number(options.page) > 1);
   return {
+    rankListings: builder !== kirekaRentCopy,
     title: copy.title,
     description: copy.description,
     h1: copy.h1,

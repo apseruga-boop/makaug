@@ -127,6 +127,37 @@ function uniqueLandingIntro(landing, count) {
   return `Explore ${count || 'current'} reviewed makaug.com opportunities in ${place} ${detail}, with live prices, property facts and direct detail links.`;
 }
 
+function kyanjaApartmentCopy(landing, count, options = {}) {
+  if (String(process.env.COUNTRY_CODE || 'UG').toUpperCase() !== 'UG'
+    || landing.canonicalPath !== '/to-rent/kyanja-kampala/apartments'
+    || count < SEO_FACET_MIN_LISTINGS) return null;
+  const description = 'Apartments for rent in Kyanja, Kampala. Compare current asking prices, bedroom counts and photos, then confirm availability and arrange a viewing.';
+  const introHtml = `<p class="mb-4 text-gray-700" data-landing-intro="1">Compare ${count} apartment rental ${count === 1 ? 'listing' : 'listings'} in Kyanja, Kampala. Open a property to check its stated rent, bedroom count, photos and contact details before arranging a viewing.</p>`;
+  if (Number(options.page || 1) > 1) return { description, introHtml, bodyHtml: '' };
+  // This is a sample of the cards on this page, never a neighbourhood average.
+  // Weekly, annual and unspecified rents cannot be compared as monthly rents.
+  const monthlyPrices = (options.listings || [])
+    .filter((listing) => !listing.price_on_application && !listing.price_implausible
+      && ['mo', 'month', 'monthly', 'per_month'].includes(String(listing.price_period || '').toLowerCase()))
+    .map((listing) => Number(listing.price))
+    .filter((price) => Number.isFinite(price) && price > 0);
+  const prices = monthlyPrices.length >= 3
+    ? `<p class="mt-3 text-gray-700">The ${monthlyPrices.length} cards shown here with a stated monthly asking rent range from UGX ${compactUgx(Math.min(...monthlyPrices))} to UGX ${compactUgx(Math.max(...monthlyPrices))} per month. This is the range in these advertised listings, rather than an estimate of all Kyanja rents; availability and the final agreed rent need confirmation.</p>`
+    : '';
+  const bodyHtml = `<section class="mt-8 rounded-2xl border border-green-100 bg-white p-5" data-landing-copy="1">
+    <h2 class="text-xl font-black text-green-950">Comparing apartments for rent in Kyanja</h2>
+    <p class="mt-3 text-gray-700">Compare the exact apartment, rather than the headline rent alone. Check which photos belong to the available unit, the bedroom and bathroom counts, and the property's stated location.</p>${prices}
+    <h3 class="mt-5 font-black text-green-950">Before arranging a viewing</h3>
+    <ul class="mt-3 list-disc space-y-2 pl-5 text-gray-700">
+      <li>Confirm that the apartment is still available and ask for its exact address and viewing arrangements.</li>
+      <li>Check whether the advertised amount is monthly, weekly or annual, and ask about advance rent, deposits, utilities and any agent fee.</li>
+      <li>Inspect the unit and confirm the person offering it is authorised to rent it before paying. Keep a written record of the agreed terms.</li>
+    </ul>
+    <p class="mt-4 text-gray-700">For other property types, <a href="/to-rent/kyanja-kampala" class="font-semibold text-green-800 underline">browse all rentals in Kyanja</a>. Read the <a href="/safety" class="font-semibold text-green-800 underline">property safety guidance</a> before making a payment.</p>
+  </section>`;
+  return { description, introHtml, bodyHtml };
+}
+
 function publicSeoLandingMeta(landing, snapshot, baseUrl = 'https://makaug.com', options = {}) {
   const root = String(baseUrl || 'https://makaug.com').replace(/\/+$/, '');
   const snapshotCount = landingCount(snapshot, landing);
@@ -139,6 +170,7 @@ function publicSeoLandingMeta(landing, snapshot, baseUrl = 'https://makaug.com',
     : `${landing.facet.label} in ${place}`;
   const title = `${h1} — ${count} ${count === 1 ? 'Listing' : 'Listings'} | makaug.com`;
   const description = uniqueLandingIntro(landing, count);
+  const copy = kyanjaApartmentCopy(landing, count, options);
   const state = {
     page: landing.categoryKey,
     locationId: landing.location?.canonical_key || '',
@@ -158,7 +190,9 @@ function publicSeoLandingMeta(landing, snapshot, baseUrl = 'https://makaug.com',
     count,
     h1,
     title,
-    description,
+    description: copy?.description || description,
+    universitySlug: universityLanding ? landing.university.slug : '',
+    ...(copy ? { landingIntroHtml: copy.introHtml, landingBodyHtml: copy.bodyHtml } : {}),
     canonical: `${root}${landing.canonicalPath}`,
     image: `${root}${config.image}`,
     routeState: state,
