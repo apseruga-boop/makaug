@@ -26,7 +26,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/makaug-icon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
-  <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1"></script>
+  <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1" defer></script>
   <script src="/assets/makaug-site-i18n.js?v=20261003-site-i18n-v4" defer></script>
   <meta name="theme-color" content="#15803d">
   <script>
@@ -418,13 +418,7 @@
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-  <script src="/config.js"></script>
-  <script>
-    window.MAKAUG_ADSENSE_CLIENT = window.MAKAUG_ADSENSE_CLIENT || "";
-    window.MAKAUG_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || {
-      default: ""
-    };
-  </script>
+  <script src="/config.js" defer></script>
   <style>
     body { font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     html.app-ready body { opacity: 1; }
@@ -3028,22 +3022,6 @@
     })();
   </script>
 
-  <!-- Travelpayouts Drive (affiliate project 581854, marker 785967).
-       Travelpayouts will not unlock the affiliate dashboard, the programmes or
-       the deeplink generator until this is live on makaug.com, so it is here as
-       their gate, not because makaug needs it. It only loads on the production
-       host: a local or staging page must never report clicks or bookings into
-       the live affiliate account. Removing it is deleting this block. -->
-  <script data-makaug-affiliate="travelpayouts-drive">
-    (function () {
-      if (window.location.hostname !== 'makaug.com' && window.location.hostname !== 'www.makaug.com') return;
-      var script = document.createElement("script");
-      script.async = 1;
-      script.setAttribute("data-cmp-ab", "2");
-      script.src = 'https://emrldtp.cc/NTgxODU0.js?t=581854';
-      document.head.appendChild(script);
-    })();
-  </script>
 </head>
 <body class="bg-gray-50">
   <div class="mk-top-strip bg-green-900 text-white text-sm">
@@ -10345,6 +10323,7 @@
       }
       window.__makaugLoadAboutAdvertiseI18n = loadAboutAdvertiseI18n;
 
+      var makaugAppSrc = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
       function loadMakaugApp() {
         if (window.__makaugAppLoading) return;
         window.__makaugAppLoading = true;
@@ -10362,7 +10341,7 @@
           document.body.appendChild(adminScript);
         }
         var script = document.createElement("script");
-        script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
+        script.src = makaugAppSrc;
         script.async = false;
         script.onload = function () {
           var offPlanScript = document.createElement("script");
@@ -10399,7 +10378,19 @@
         };
         document.body.appendChild(script);
       }
-      loadMakaugApp();
+      // Start the same bundle download now, while deferred public config no
+      // longer blocks parsing or SSR paint. DOMContentLoaded runs after those
+      // config scripts finish (or fail), before the app captures their values.
+      var appPreload = document.createElement("link");
+      appPreload.rel = "preload";
+      appPreload.as = "script";
+      appPreload.href = makaugAppSrc;
+      document.head.appendChild(appPreload);
+      if (document.readyState !== "complete") {
+        document.addEventListener("DOMContentLoaded", loadMakaugApp, { once: true });
+      } else {
+        loadMakaugApp();
+      }
     })();
   </script>
 </body>
