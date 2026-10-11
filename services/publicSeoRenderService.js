@@ -579,11 +579,11 @@ function replaceElementInnerHtml(html, id, content) {
   return `${String(html).slice(0, bounds.contentStart)}${content}${String(html).slice(bounds.contentEnd)}`;
 }
 
-function replacePageH1(html, pageId, h1) {
+function replacePageH1(html, pageId, h1, canonicalPath = '', seoTitle = '') {
   const bounds = findElementBoundsById(html, pageId);
   if (!bounds) return html;
   const page = String(html).slice(bounds.contentStart, bounds.contentEnd);
-  const nextPage = page.replace(/<h1\b([^>]*)>[\s\S]*?<\/h1>/i, `<h1$1 data-ssr-seo-h1="1">${escapeHtml(h1)}</h1>`);
+  const nextPage = page.replace(/<h1\b([^>]*)>[\s\S]*?<\/h1>/i, `<h1$1 data-ssr-seo-h1="1" data-ssr-seo-path="${escapeHtml(canonicalPath)}" data-ssr-seo-heading="${escapeHtml(h1)}" data-ssr-seo-title="${escapeHtml(seoTitle)}">${escapeHtml(h1)}</h1>`);
   return `${String(html).slice(0, bounds.contentStart)}${nextPage}${String(html).slice(bounds.contentEnd)}`;
 }
 
@@ -726,7 +726,7 @@ function renderUniversityLinks(links = [], heading = 'Hostels by university') {
   if (!links.length) return '';
   return `<nav aria-label="${escapeHtml(heading)}" class="mb-6 rounded-2xl border border-green-100 bg-green-50 p-4" data-ssr-university-links="1">
     <h2 class="font-black text-green-950">${escapeHtml(heading)}</h2>
-    <div class="mt-3 flex flex-wrap gap-2">${links.map((link) => `<a href="${escapeHtml(link.href)}" class="rounded-full border border-green-200 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-100">${escapeHtml(link.label)} <span aria-label="${link.count} listings">(${link.count})</span></a>`).join('')}</div>
+    <div class="mt-3 flex flex-wrap gap-2">${links.map((link) => `<a href="${escapeHtml(link.href)}" data-no-spa="true" class="rounded-full border border-green-200 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-100">${escapeHtml(link.label)} <span aria-label="${link.count} listings">(${link.count})</span></a>`).join('')}</div>
   </nav>`;
 }
 
@@ -784,7 +784,7 @@ function renderCategorySeoHtml(html, options = {}) {
   const cards = listings.length
     ? listings.map((listing, index) => renderSeoListingCard(listing, { categoryKey: meta.key, baseUrl: options.baseUrl, eager: index < 2 })).join('')
     : `<div class="col-span-full rounded-2xl border border-gray-200 bg-gray-50 p-5"><h2 class="font-black">No live listings in this exact area yet</h2><p class="mt-2 text-sm text-gray-600">Browse nearby areas or return to ${escapeHtml(meta.config.label)} across ${escapeHtml(ACTIVE_COUNTRY_NAME)}.</p></div>`;
-  let rendered = replacePageH1(html, pageId, h1);
+  let rendered = replacePageH1(html, pageId, h1, new URL(meta.canonical, options.baseUrl || 'https://makaug.com').pathname, meta.title);
   rendered = replaceElementInnerHtml(rendered, gridId, cards);
   rendered = insertBeforeElement(rendered, gridId, intro);
   // Landing body + FAQ go after the grid, outside it, so SPA hydration (which
