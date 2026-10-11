@@ -46365,10 +46365,12 @@ function renderBrokerRegistrationBadge(broker, textSize = "text-xs") {
 }
 
 // Found-online listings never show source media (TikTok covers, YouTube
-// i.ytimg thumbnails, byteimg links, source_* slots). Published pictures are
-// consented staff uploads and stills from the listing's own video that we host.
-// The API already sends them in editor order (primary, then sort order). This
-// is the client-side guard, and it keeps that order.
+// i.ytimg thumbnails, byteimg links, source_* slots, raw pbs.twimg.com links).
+// Published pictures are consented staff uploads, photos copied from the X
+// post onto our media host (/x-post-photos/), and stills from the listing's
+// own video that we host. The API already sends them in editor order
+// (primary, then sort order). This is the client-side guard, and it keeps
+// that order.
 const FOUND_ONLINE_SOURCE_MEDIA_RE = /tiktokcdn|byteimg|tiktok\.com/i;
 const FOUND_ONLINE_YOUTUBE_THUMB_RE = /i\.ytimg\.com|img\.youtube\.com|(?:^|\/\/)(?:www\.)?youtube\.com\/vi\//i;
 const FOUND_ONLINE_OWN_STILL_SLOT_RE = /^(?:video_key_frame_|video_still_|video_recovery_still_)/i;
@@ -46381,14 +46383,19 @@ function isFoundOnlineHostedStillUrl(url = "") {
   const value = String(url || "").trim();
   return !!value && !FOUND_ONLINE_SOURCE_MEDIA_RE.test(value) && !FOUND_ONLINE_YOUTUBE_THUMB_RE.test(value) && FOUND_ONLINE_HOSTED_STILL_URL_RE.test(value);
 }
+function isHostedXPostPhotoUrl(url = "") {
+  const value = String(url || "").trim();
+  return !!value && !FOUND_ONLINE_SOURCE_MEDIA_RE.test(value) && !FOUND_ONLINE_YOUTUBE_THUMB_RE.test(value) && /\/x-post-photos\//i.test(value);
+}
 function isFoundOnlinePublishablePhoto(item) {
   if (!item || typeof item !== "object") return false;
   const url = String(item.url || item.img || item.src || "").trim();
   if (!url || FOUND_ONLINE_SOURCE_MEDIA_RE.test(url) || FOUND_ONLINE_YOUTUBE_THUMB_RE.test(url)) return false;
   const slot = String(item.slot_key || item.slot || "").trim();
   if (/^source_/i.test(slot)) return false;
+  if (slot === "x_post_photo") return isHostedXPostPhotoUrl(url);
   if (slot === "staff_upload" || FOUND_ONLINE_OWN_STILL_SLOT_RE.test(slot)) return true;
-  if (!slot) return isFoundOnlineConsentedPhotoUrl(url) || isFoundOnlineHostedStillUrl(url);
+  if (!slot) return isFoundOnlineConsentedPhotoUrl(url) || isFoundOnlineHostedStillUrl(url) || isHostedXPostPhotoUrl(url);
   return false;
 }
 function foundOnlineConsentedPhotos(images = []) {
@@ -46410,7 +46417,7 @@ function foundOnlineConsentedPhotos(images = []) {
 function foundOnlineConsentedPhotoUrl(p = {}) {
   const first = foundOnlineConsentedPhotos(p?.images)[0];
   if (first) return String(first.url || first.img || first.src || "").trim();
-  return [p?.primary_image_url, p?.image, p?.img].map((value) => String(value || "").trim()).find((value) => isFoundOnlineConsentedPhotoUrl(value) || isFoundOnlineHostedStillUrl(value)) || "";
+  return [p?.primary_image_url, p?.image, p?.img].map((value) => String(value || "").trim()).find((value) => isFoundOnlineConsentedPhotoUrl(value) || isFoundOnlineHostedStillUrl(value) || isHostedXPostPhotoUrl(value)) || "";
 }
 
 function getPropertyGalleryPhotos(property) {
