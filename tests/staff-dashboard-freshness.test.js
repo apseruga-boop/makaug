@@ -67,14 +67,14 @@ test('the found-online panel says "Showing 8 of 12" and offers Load more', () =>
   vm.runInNewContext(`${APP.slice(start, end)}; this.view = staffFoundOnlineQueueView;`, sandbox);
   const rows = Array.from({ length: 8 }, (_, i) => ({ id: `r${i}` }));
   const first = sandbox.view({ data: { queued_found_online: rows, queued_found_online_meta: { total: 12, page_limit: 8 } }, extra: [], page: 1 });
-  assert.equal(first.label, 'Showing 8 of 12');
+  assert.equal(first.label, 'Found online · Showing 8 of 12');
   assert.equal(first.hasMore, true);
   const all = sandbox.view({
     data: { queued_found_online: rows, queued_found_online_meta: { total: 12, page_limit: 8 } },
     extra: [{ id: 'r8' }, { id: 'r9' }, { id: 'r10' }, { id: 'r11' }, { id: 'r7' }], // r7 repeated: shown once
     page: 2
   });
-  assert.equal(all.label, 'Showing 12 of 12');
+  assert.equal(all.label, 'Found online · Showing 12 of 12');
   assert.equal(all.hasMore, false);
   assert.match(APP, /review-queue\?segment=found_online&page=\$\{nextPage\}&limit=\$\{limit\}/);
 });
