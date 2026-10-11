@@ -8,7 +8,7 @@ const {
   priceInSeoBounds
 } = require('./publicSeoService');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
-const { SEO_FACET_MIN_LISTINGS, FACET_DEFINITIONS, COMMERCIAL_TRANSACTION_FACETS } = require('../utils/publicSeoFacets');
+const { SEO_FACET_MIN_LISTINGS, FACET_DEFINITIONS, COMMERCIAL_TRANSACTION_FACETS, UNIVERSITY_LANDINGS } = require('../utils/publicSeoFacets');
 const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require('../utils/locationRegistry');
 const { tenantFor } = require('../packages/shared-country-core');
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
@@ -709,6 +709,27 @@ function renderFooterAreaLinks(links = []) {
   return `<section class="max-w-7xl mx-auto px-4 pb-6" data-ssr-footer-area-links="1"><h2 class="font-black text-white">Popular property areas</h2><div class="mt-3 flex flex-wrap gap-3">${safeLinks.map((link) => `<a href="${escapeHtml(link.href)}" data-canonical-location-id="${escapeHtml(link.canonicalKey || '')}" title="${escapeHtml([link.area || link.label, link.district].filter(Boolean).join(', '))}" class="text-sm text-green-100 hover:text-white hover:underline">${escapeHtml(link.label)}</a>`).join('')}</div></section>`;
 }
 
+function universityLinks(snapshot, currentSlug = '') {
+  if (ACTIVE_COUNTRY_CODE !== 'UG') return [];
+  return UNIVERSITY_LANDINGS
+    .map((university) => ({
+      href: `/student-accommodation/university/${university.slug}`,
+      label: university.name,
+      slug: university.slug,
+      count: Number(snapshot?.universityCounts?.get(university.slug) || 0)
+    }))
+    .filter((university) => university.count >= SEO_FACET_MIN_LISTINGS && university.slug !== currentSlug)
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+}
+
+function renderUniversityLinks(links = [], heading = 'Hostels by university') {
+  if (!links.length) return '';
+  return `<nav aria-label="${escapeHtml(heading)}" class="mb-6 rounded-2xl border border-green-100 bg-green-50 p-4" data-ssr-university-links="1">
+    <h2 class="font-black text-green-950">${escapeHtml(heading)}</h2>
+    <div class="mt-3 flex flex-wrap gap-2">${links.map((link) => `<a href="${escapeHtml(link.href)}" class="rounded-full border border-green-200 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-100">${escapeHtml(link.label)} <span aria-label="${link.count} listings">(${link.count})</span></a>`).join('')}</div>
+  </nav>`;
+}
+
 function breadcrumbItems(meta, baseUrl) {
   if (Array.isArray(meta.breadcrumbs) && meta.breadcrumbs.length) return meta.breadcrumbs;
   const items = [
@@ -756,7 +777,10 @@ function renderCategorySeoHtml(html, options = {}) {
   const facetLinks = options.siblingLinks || facetLinksForArea(options.snapshot, meta);
   // Marketing's intro (when the page has landing copy) replaces the summary.
   const summary = meta.landingIntroHtml || `<p class="mb-4 text-gray-700" data-ssr-category-summary="1">${escapeHtml(meta.description)}</p>`;
-  const intro = `${renderRouteState(meta.routeState)}${renderBreadcrumbs(items)}${summary}${renderAreaLinks(facetLinks, 'Refine this area')}${renderAreaLinks(areaLinks, meta.location ? 'Nearby and popular areas' : 'Popular areas')}`;
+  const universityNav = meta.key === 'students' && (!meta.location || meta.universitySlug)
+    ? renderUniversityLinks(universityLinks(options.snapshot, meta.universitySlug), meta.universitySlug ? 'Browse other universities' : 'Hostels by university')
+    : '';
+  const intro = `${renderRouteState(meta.routeState)}${renderBreadcrumbs(items)}${summary}${universityNav}${renderAreaLinks(facetLinks, 'Refine this area')}${renderAreaLinks(areaLinks, meta.location ? 'Nearby and popular areas' : 'Popular areas')}`;
   const cards = listings.length
     ? listings.map((listing, index) => renderSeoListingCard(listing, { categoryKey: meta.key, baseUrl: options.baseUrl, eager: index < 2 })).join('')
     : `<div class="col-span-full rounded-2xl border border-gray-200 bg-gray-50 p-5"><h2 class="font-black">No live listings in this exact area yet</h2><p class="mt-2 text-sm text-gray-600">Browse nearby areas or return to ${escapeHtml(meta.config.label)} across ${escapeHtml(ACTIVE_COUNTRY_NAME)}.</p></div>`;
@@ -982,6 +1006,8 @@ module.exports = {
   neighborhoodAreaLinks,
   renderAreaLinks,
   renderFooterAreaLinks,
+  universityLinks,
+  renderUniversityLinks,
   renderSeoListingCard,
   replaceElementInnerHtml,
   appendElementInnerHtml,

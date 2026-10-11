@@ -1453,7 +1453,7 @@ app.get([
       logger.warn('Facet SEO is continuing without server-rendered cards', { path: req.path, message: error.message });
     }
     const count = listings.length ? Number(listings[0].seo_total || listings.length) : 0;
-    const meta = publicSeoLandingMeta(landing, snapshot, absolutePublicUrl('/'), { count });
+    const meta = publicSeoLandingMeta(landing, snapshot, absolutePublicUrl('/'), { count, listings, page: req.query.page });
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
     const renderedSeo = renderCategorySeoHtml(html, {
       meta,
@@ -1529,12 +1529,13 @@ app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config
       }
       let listings = [];
       try {
+        const landingRank = Boolean(landing?.rankListings);
         listings = await loadPublicSeoListings(db, {
           categoryKey: meta.key,
           location: meta.location,
           // The three money pages get 24 cards, agent-listed first.
-          limit: landing ? 24 : 12,
-          landingRank: Boolean(landing)
+          limit: landingRank ? 24 : 12,
+          landingRank
         });
       } catch (error) {
         res.locals.publicHtmlDegraded = true; // never share-cache a degraded page

@@ -32,6 +32,7 @@ const snapshot = { categoryTotals: { sale: 12345, land: 12345, rent: 12345 }, co
 function landing(page) {
   const copy = buildLandingCopy(page.key, page.location, snapshot, {});
   assert.ok(copy, `${page.route} has landing copy`);
+  assert.equal(copy.rankListings, true, `${page.route} retains agent-first sorting`);
   return copy;
 }
 
@@ -92,7 +93,8 @@ test('land and rent landing pages rank agents first but do not demote land (that
 
 test('server.js asks for 24 ranked cards on the landing pages only', () => {
   const server = read('server.js');
-  assert.match(server, /limit: landing \? 24 : 12,\s*landingRank: Boolean\(landing\)/);
+  assert.match(server, /const landingRank = Boolean\(landing\?\.rankListings\)/);
+  assert.match(server, /limit: landingRank \? 24 : 12,\s*landingRank/);
 });
 
 test('agent_first sorts exist on the API and use the shared SQL', () => {
