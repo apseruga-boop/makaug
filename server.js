@@ -1190,6 +1190,24 @@ function applyHomeHeroPreload(html, normalizedPath = '/') {
   return String(html || '').replace(/\s*<link rel="preload" as="image"[^>]*data-home-hero-preload[^>]*>/, '');
 }
 
+// Short Term's scoped styles do not affect other public pages. Keep fetching
+// them for later SPA navigation without holding those pages' first paint.
+function applyShortTermStylesheetLoading(html, pathname = '/') {
+  const normalizedPath = String(pathname || '/').split(/[?#]/)[0].replace(/\/+$/, '') || '/';
+  if (/^\/short-term(?:\/|$)/i.test(normalizedPath)) return html;
+  const source = String(html || '');
+  if (source.includes('data-short-term-style-deferred')) return source;
+  return source.replace(
+    /<link\b(?=[^>]*\brel=["']stylesheet["'])(?=[^>]*\bhref=["']\/assets\/short-term\.css(?:\?[^"']*)?["'])[^>]*>/i,
+    (stylesheet) => {
+      const preload = stylesheet
+        .replace(/\brel=(["'])stylesheet\1/i, 'rel="preload"')
+        .replace(/\s*\/?>$/, ' as="style" onload="this.onload=null;this.rel=\'stylesheet\'" data-short-term-style-deferred="1">');
+      return `${preload}<noscript>${stylesheet}</noscript>`;
+    }
+  );
+}
+
 // C16: GA4 is in the server HTML <head> on every public page (it used to load
 // only after /api/analytics/config answered, so early bounces were lost). One
 // loader, anonymize_ip, one page_view; the SPA sees window.__MAKAUG_GA_SSR and
@@ -1229,6 +1247,7 @@ function renderPublicHtml(pathname) {
   rendered = applyHarvestPublicSubmissionVisibility(rendered);
   rendered = injectShortTermRuntimeConfig(applyShortTermVisibility(rendered));
   rendered = applyHomeHeroPreload(rendered, normalizedBasePath);
+  rendered = applyShortTermStylesheetLoading(rendered, normalizedBasePath);
   rendered = injectGa4HeadTag(rendered, normalizedBasePath);
   if (isProduction) {
     publicHtmlCache.set(key, rendered);
