@@ -43,7 +43,9 @@ assert(html.includes('/assets/about-advertise-i18n.js?v=whatsapp-number-20260911
 // the on-demand loader; execution fixtures cover SPA entry and late merging.
 // The pack must not be a render-blocking <script src> in <head>.
 const packAt = html.indexOf('"/assets/about-advertise-i18n.js');
-const appAt = html.indexOf('script.src = "/assets/makaug-app.js');
+// Match the script assignment, not the shared URL/preload declaration: the
+// latter intentionally starts downloading before ordered pack/app execution.
+const appAt = html.indexOf('script.src = makaugAppSrc;');
 assert(packAt > 0 && appAt > packAt, 'language pack should be injected before the main app');
 assert(/pack\.async = false;/.test(html) && /script\.async = false;/.test(html.slice(appAt)), 'pack and app must execute in insertion order');
 assert(!/<script src="\/assets\/about-advertise-i18n\.js/.test(html), 'language pack must not block rendering');
