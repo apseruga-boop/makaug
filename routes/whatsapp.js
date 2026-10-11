@@ -7318,7 +7318,7 @@ async function loadEmployeeCandidateBytes(candidate = {}) {
  * that agent is the profile image. A property advert (a caption with a price
  * or bedrooms) never is.
  */
-async function maybeAcceptRequestedProfilePhoto({ phone, cleanBody = '', mediaUrl = '', runtime = {}, inboundMessageId = '' } = {}) {
+async function maybeAcceptRequestedProfilePhoto({ phone, cleanBody = '', mediaUrl = '', runtime = {}, inboundMessageId = '', existingData = null } = {}) {
   const candidates = employeeMediaCandidates(runtime, mediaUrl);
   if (!candidates.some((candidate) => candidate.kind === 'image')) return null;
   if (cleanBody.length > 60 || /\b(ugx|usd|million|bedroom|decimals?|plots?|acres?|for sale|for rent|to rent)\b/i.test(cleanBody)) return null;
@@ -7347,8 +7347,9 @@ async function maybeAcceptRequestedProfilePhoto({ phone, cleanBody = '', mediaUr
     logger.warn('Profile photo follow-up check failed:', error.message || String(error));
   }
   if (!asked) return null;
+  // An agent who was already posting properties has an open session; keep it.
   const data = {
-    ...agentSelfIntakeSessionData(agent),
+    ...(existingData && existingData.whatsapp_agent_self_intake === true ? existingData : agentSelfIntakeSessionData(agent)),
     awaiting_profile_photo: true,
     awaiting_profile_photo_at: new Date().toISOString(),
     profile_photo_attempts: 0
@@ -8739,6 +8740,18 @@ async function handleEmployeeWhatsappIntake({
     } else if (!candidates.length && isAgentProfilePhotoRequest(cleanBody)) {
       const prompt = await startAgentProfilePhotoRequest({ phone, agent: data.agent || {}, session: { session_data: data } });
       return { handled: true, nextStep: currentStep, message: prompt };
+    }
+    // 11 Oct 2026: Brian was asked for a profile image while his posting session
+    // was still open. His picture reached this step, was read as property media
+    // and answered "I could not attach that media to the pending property".
+    // A captionless image after OUR request, with no property waiting for its
+    // media, is the profile image — in an open session as much as a closed one.
+    if (data.awaiting_profile_photo !== true
+      && candidates.some((candidate) => candidate.kind === 'image')
+      && !normalizeInput(data.pending_property_caption || '')
+      && !employeePendingStoredMedia(data).length) {
+      const requested = await maybeAcceptRequestedProfilePhoto({ phone, cleanBody, mediaUrl, runtime, inboundMessageId, existingData: data });
+      if (requested) return requested;
     }
   }
   if (currentStep === 'employee_identity_photo') {

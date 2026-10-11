@@ -136,3 +136,10 @@ test('the welcome message asks for a profile picture, but not from agents who ha
   const withPhoto = welcome.buildWelcomeMessage({ agent: { id: 'a1', full_name: 'Kimuli Brian', profile_photo_url: 'https://x/y.jpg' }, stats: {} });
   assert(!withPhoto.includes('*Add your profile picture*'));
 });
+
+test('a picture sent after our request is the profile image even while a posting session is open', () => {
+  const branch = source.slice(source.indexOf("if (currentStep === 'employee_property_media' && data.whatsapp_agent_self_intake === true && isOwnAgentSelfIntake"));
+  assert(branch.includes('existingData: data'), 'the open session is kept, not replaced');
+  assert(branch.indexOf('maybeAcceptRequestedProfilePhoto') < branch.indexOf("if (currentStep === 'employee_identity_photo')"));
+  assert(branch.includes('!employeePendingStoredMedia(data).length'), 'a property still waiting for its media keeps its photo');
+});
