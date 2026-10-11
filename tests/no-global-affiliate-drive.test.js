@@ -24,7 +24,8 @@ function publicRenderer() {
     process: { env: { SHARED_CORE_PHASE1_ENABLED: 'false', GA4_MEASUREMENT_ID: 'G-FIXTURE123' } },
     isProduction: false, publicHtmlCache: new Map(), readIndexHtml: () => index, sanitizePublicHtml,
     applyHarvestPublicSubmissionVisibility: (html) => html, applyShortTermVisibility: (html) => html,
-    injectShortTermRuntimeConfig: (html) => html
+    injectShortTermRuntimeConfig: (html) => html,
+    inlinePublicCoreStylesheets: require('../services/publicCoreStylesheets')
   });
   vm.runInContext(`const GA4_ID_PATTERN=/^G-[A-Z0-9]{4,20}$/;
     ${['applyHomeHeroPreload','applyShortTermStylesheetLoading','applyPublicFontDisplayOptional','ga4HeadSnippet','injectGa4HeadTag','renderPublicHtml'].map((name) => declaration(server, name)).join('\n')}`, context);

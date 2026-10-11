@@ -51,6 +51,7 @@ const {
   renderProtectedLoginShell,
   sanitizePublicHtml
 } = require('./services/publicHtmlSanitizer');
+const inlinePublicCoreStylesheets = require('./services/publicCoreStylesheets');
 const { startXSourceDripScheduler } = require('./services/xSourceDripService');
 const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDripService');
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
@@ -1262,6 +1263,7 @@ function renderPublicHtml(pathname) {
   rendered = applyHomeHeroPreload(rendered, normalizedBasePath);
   rendered = applyShortTermStylesheetLoading(rendered, normalizedBasePath);
   rendered = applyPublicFontDisplayOptional(rendered);
+  rendered = inlinePublicCoreStylesheets(rendered);
   rendered = injectGa4HeadTag(rendered, normalizedBasePath);
   if (isProduction) {
     publicHtmlCache.set(key, rendered);
