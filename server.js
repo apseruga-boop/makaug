@@ -1208,6 +1208,19 @@ function applyShortTermStylesheetLoading(html, pathname = '/') {
   );
 }
 
+// Keep the first public layout when the font arrives late on a slow connection.
+// Fast/cached loads can still use Jakarta; review desks retain the index policy.
+function applyPublicFontDisplayOptional(html) {
+  return String(html || '').replace(/<link\b[^>]*>/gi, (link) => link.replace(
+    /\bhref=(["'])(https:\/\/fonts\.googleapis\.com\/css2\?[^"']+)\1/i,
+    (attribute, quote, url) => {
+      if (!/[?&](?:amp;)?family=Plus\+Jakarta\+Sans(?=[:&]|$)/i.test(url)) return attribute;
+      const stableUrl = url.replace(/([?&](?:amp;)?display=)swap(?=&|#|$)/i, '$1optional');
+      return `href=${quote}${stableUrl}${quote}`;
+    }
+  ));
+}
+
 // C16: GA4 is in the server HTML <head> on every public page (it used to load
 // only after /api/analytics/config answered, so early bounces were lost). One
 // loader, anonymize_ip, one page_view; the SPA sees window.__MAKAUG_GA_SSR and
@@ -1248,6 +1261,7 @@ function renderPublicHtml(pathname) {
   rendered = injectShortTermRuntimeConfig(applyShortTermVisibility(rendered));
   rendered = applyHomeHeroPreload(rendered, normalizedBasePath);
   rendered = applyShortTermStylesheetLoading(rendered, normalizedBasePath);
+  rendered = applyPublicFontDisplayOptional(rendered);
   rendered = injectGa4HeadTag(rendered, normalizedBasePath);
   if (isProduction) {
     publicHtmlCache.set(key, rendered);

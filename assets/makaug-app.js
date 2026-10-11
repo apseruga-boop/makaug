@@ -3441,10 +3441,10 @@ Object.assign(CONTENT_I18N.en, ABOUT_PAGE_I18N_EN, ADVERTISING_UI_I18N_EN);
     {},
     ABOUT_PAGE_I18N_EN,
     ADVERTISING_UI_I18N_EN,
-    CONTENT_I18N[code] || {},
-    window.__MAKAUG_ABOUT_ADVERTISE_I18N__?.[code] || {}
+    CONTENT_I18N[code] || {}
   );
 });
+function applyAboutAdvertiseLocalOverrides() {
 Object.assign(CONTENT_I18N.lg, {
   "about.heroLabel": "Ebitukwatako",
   "about.ctaSearch": "Noonya property",
@@ -3557,6 +3557,35 @@ Object.assign(CONTENT_I18N.ar, {
   "about.landHubProcessText": "لا تتعجل، ولا تدفع بطرق لا يمكن تتبعها.",
   "about.finalWhatsapp": "تحدث عبر WhatsApp"
 });
+
+}
+
+function mergeAboutAdvertiseLanguagePack(pack = window.__MAKAUG_ABOUT_ADVERTISE_I18N__) {
+  ["lg", "sw", "ac", "ny", "rn", "sm", "am", "ar"].forEach((code) => {
+    Object.assign(CONTENT_I18N[code], pack?.[code] || {});
+  });
+  applyAboutAdvertiseLocalOverrides();
+}
+
+mergeAboutAdvertiseLanguagePack();
+
+let aboutAdvertiseTranslationsPromise = null;
+function ensureAboutAdvertiseTranslations(page = currentPage) {
+  if (!["about", "advertise"].includes(page)) return Promise.resolve(false);
+  if (aboutAdvertiseTranslationsPromise) return aboutAdvertiseTranslationsPromise;
+  const load = window.__makaugLoadAboutAdvertiseI18n;
+  if (typeof load !== "function") return Promise.resolve(false);
+  aboutAdvertiseTranslationsPromise = load().then((pack) => {
+    if (!pack) { aboutAdvertiseTranslationsPromise = null; return false; }
+    mergeAboutAdvertiseLanguagePack(pack);
+    // Language may have changed during the download. Apply its current value
+    // without rerendering listings or resetting an unrelated SPA route.
+    applyAboutLanguageUI();
+    applyAdvertisingLanguageUI();
+    return true;
+  }).catch(() => { aboutAdvertiseTranslationsPromise = null; return false; });
+  return aboutAdvertiseTranslationsPromise;
+}
 
 function contentTr(key) {
   const lang = currentLang || "en";
@@ -8448,6 +8477,7 @@ function applyLanguageUI() {
   setPageHeading("page-about", tr("pageAbout"));
   setPageHeading("page-saved", tr("pageSaved"));
   setPageHeading("page-account", tr("pageAccount"));
+  ensureAboutAdvertiseTranslations(document.querySelector(".page.active")?.id?.replace(/^page-/, "") || currentPage);
   applyContentLanguageUI(document);
   updateAboutPageUi();
   applyAdvertisingLanguageUI();
@@ -46639,7 +46669,7 @@ function studentCardFooterText(p = {}) {
       <div class="h-48 relative overflow-hidden bg-gray-100">
         ${cardVideoFirstMedia
           ? videoFirstTileHtml(cardVideoFirstMedia, { alt: displayTitle })
-          : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover">`}
+          : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover" loading="${options.imageLoading === "lazy" ? "lazy" : "eager"}" decoding="async">`}
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           ${badgeRow}
         </div>
@@ -46740,7 +46770,7 @@ function renderGrid(id, list, options = {}) {
     el.innerHTML = noResultsCardForGrid(id);
     return;
   }
-  el.innerHTML = list.map((p) => propCard(p, options.cardOptions || options)).join("");
+  el.innerHTML = list.map((p, index) => propCard(p, { ...(options.cardOptions || options), imageLoading: index === 0 ? "eager" : "lazy" })).join("");
 }
 
 function studentTypeKey(p) {
@@ -46801,7 +46831,7 @@ function renderStudentGrid(list) {
       </div>`;
     return;
   }
-  el.innerHTML = list.map((p) => studentCard(p, { categoryPage: "students" })).join("");
+  el.innerHTML = list.map((p, index) => studentCard(p, { categoryPage: "students", imageLoading: index === 0 ? "eager" : "lazy" })).join("");
 }
 
 function updateStudentHeader(list, options = {}) {
@@ -49333,6 +49363,7 @@ function closeRouteTransientModals(nextPage, previousPage) {
 
 function showPage(page, options = {}) {
   const targetPage = normalizePageKey(page);
+  if (initialSsrCategoryGrid && initialSsrCategoryGrid.key !== targetPage) invalidateInitialSsrCategoryGrid();
   beginPublicRouteIntent(targetPage);
   const previousPage = currentPage;
   const el = document.getElementById("page-" + targetPage);
@@ -49354,6 +49385,8 @@ function showPage(page, options = {}) {
     if (options.scroll !== false) window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     lastPage = currentPage;
     currentPage = targetPage;
+    ensureAboutAdvertiseTranslations(targetPage);
+    if (targetPage === "mortgage") loadMortgageRates();
     if (targetPage !== previousPage) clearDashboardRefresh();
     closeRouteTransientModals(targetPage, previousPage);
     mountSectionSearchShell(targetPage);
@@ -50404,10 +50437,78 @@ function renderPublicCategoryPagination(category, options = {}) {
     </div>`;
 }
 
+// Keep the initial server-rendered cards until this category/route has its own
+// successful response. Summary or broker requests are not listing responses.
+let initialSsrCategoryGrid = null;
+
+function captureInitialSsrCategoryGrid() {
+  const key = publicPaginationKey(activePublicInventoryCategoryFromRoute());
+  const page = key ? document.getElementById(`page-${key}`) : null;
+  const grid = key ? document.getElementById(publicPaginationGridId(key)) : null;
+  const heading = page?.querySelector('[data-ssr-seo-h1="1"]');
+  const path = normalizeRoutePath(window.location.pathname);
+  const params = new URLSearchParams(window.location.search || "");
+  const canonicalQuery = Array.from(params.entries()).every(([name, value]) =>
+    /^(utm_.+|gclid|fbclid|lang|language)$/i.test(name) || (name === "page" && value === "1"));
+  const controlsUntouched = Array.from(page?.querySelectorAll('input[id$="-f"], select[id$="-f"]') || []).every((control) =>
+    control.tagName === "SELECT"
+      ? control.selectedIndex === Math.max(0, Array.from(control.options || []).findIndex((option) => option.defaultSelected))
+      : control.value === control.defaultValue);
+  if (!key || !page?.classList.contains("active") || !grid?.querySelector("[data-ssr-property-card]")
+      || normalizeRoutePath(heading?.dataset.ssrSeoPath || "") !== path || !canonicalQuery || !controlsUntouched) return false;
+  initialSsrCategoryGrid = { key, path, search: window.location.search || "", grid, preparing: true, sourcePath: "" };
+  const invalidateForInteraction = (event) => {
+    if (!initialSsrCategoryGrid || !page.contains(event.target)) return;
+    const control = event.target.closest?.('input[id$="-f"], select[id$="-f"], .section-search-form, .section-search-legacy-hidden');
+    if (control) invalidateInitialSsrCategoryGrid(key);
+  };
+  ["input", "change", "submit"].forEach((type) => document.addEventListener(type, invalidateForInteraction, true));
+  return true;
+}
+
+function finishInitialSsrCategoryGridSetup() {
+  if (!initialSsrCategoryGrid) return false;
+  const key = initialSsrCategoryGrid.key;
+  initialSsrCategoryGrid.sourcePath = publicCategoryApiPathForPagination(initialSsrCategoryGrid.key);
+  initialSsrCategoryGrid.preparing = false;
+  return !shouldPreserveInitialSsrCategoryGrid(key);
+}
+
+function invalidateInitialSsrCategoryGrid(category = "") {
+  if (!category || initialSsrCategoryGrid?.key === publicPaginationKey(category)) initialSsrCategoryGrid = null;
+}
+
+function shouldPreserveInitialSsrCategoryGrid(category, options = {}) {
+  const key = publicPaginationKey(category);
+  const initial = initialSsrCategoryGrid;
+  if (!initial || initial.key !== key) return false;
+  const page = document.getElementById(`page-${key}`);
+  const state = publicPaginationStateFor(key);
+  const activePath = publicCategoryApiPathForPagination(key);
+  const routeMatches = initial.path === normalizeRoutePath(window.location.pathname)
+    && initial.search === (window.location.search || "") && page?.classList.contains("active")
+    && initial.grid === document.getElementById(publicPaginationGridId(key));
+  if (!routeMatches || Number(options.page || state?.page || 1) !== 1
+      || (!initial.preparing && initial.sourcePath !== activePath)) {
+    invalidateInitialSsrCategoryGrid(key);
+    return false;
+  }
+  // Empty rows are a successful authoritative answer too. Do not retain old
+  // cards for a search that has genuinely returned no matches.
+  const matchingRows = state?.mode === "api" && state.sourcePath === activePath
+    ? publicPaginationCacheFor(key)?.[1] : null;
+  if (!initial.preparing && Array.isArray(matchingRows)) {
+    invalidateInitialSsrCategoryGrid(key);
+    return false;
+  }
+  return true;
+}
+
 function renderPublicCategoryPage(category, list = [], options = {}) {
   const key = publicPaginationKey(category);
   const state = publicPaginationStateFor(key);
   if (!key || !state) return [];
+  if (shouldPreserveInitialSsrCategoryGrid(key, options)) return [];
   ensurePublicResultsHeader(key);
   if (options.mode) state.mode = options.mode;
   if (options.sourcePath !== undefined) syncPublicCategoryPaginationSource(key, options.sourcePath || "");
@@ -50440,7 +50541,7 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
   const pageRows = Array.isArray(options.rowsOverride)
     ? options.rowsOverride
     : (authoritative ? authoritative.rows
-    : (Array.isArray(cachedRows) && cachedRows.length ? cachedRows : list.slice((state.page - 1) * PUBLIC_RESULTS_PAGE_SIZE, state.page * PUBLIC_RESULTS_PAGE_SIZE)));
+    : (Array.isArray(cachedRows) ? cachedRows : list.slice((state.page - 1) * PUBLIC_RESULTS_PAGE_SIZE, state.page * PUBLIC_RESULTS_PAGE_SIZE)));
   if (key === "students") {
     renderStudentGrid(pageRows);
     updateStudentHeader(pageRows, { total, page: state.page, pageSize: PUBLIC_RESULTS_PAGE_SIZE });
@@ -50493,6 +50594,7 @@ function renderLocalPublicCategoryPage(category, page = 1) {
 }
 
 async function goToPublicCategoryPage(category, page = 1) {
+  invalidateInitialSsrCategoryGrid(category);
   const key = publicPaginationKey(category);
   const state = publicPaginationStateFor(key);
   if (!key || !state) return false;
@@ -59388,6 +59490,45 @@ function getActivePublicMapIds() {
   return PUBLIC_MAP_IDS.filter((id) => activePage.querySelector(`#${id}`));
 }
 
+function publicMapIsVisible(mapId, { inViewport = true } = {}) {
+  const el = document.getElementById(mapId);
+  if (!el || !el.getClientRects().length) return false;
+  const style = window.getComputedStyle(el);
+  if (style.visibility === "hidden" || style.visibility === "collapse") return false;
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  return !inViewport || (rect.bottom > 0 && rect.right > 0
+    && rect.top < window.innerHeight && rect.left < window.innerWidth);
+}
+
+function getReadyPublicMapIds() {
+  return getActivePublicMapIds().filter((id) => publicMapIsVisible(id));
+}
+
+let publicMapVisibilityObserver = null;
+let publicMapVisibilityElements = [];
+let publicMapVisibilityListenersInstalled = false;
+
+function watchActivePublicMapVisibility() {
+  if (!publicMapVisibilityListenersInstalled) {
+    publicMapVisibilityListenersInstalled = true;
+    window.addEventListener("resize", () => scheduleMapsInit(), { passive: true });
+    if (typeof IntersectionObserver !== "function") {
+      window.addEventListener("scroll", () => scheduleMapsInit(), { passive: true });
+    }
+  }
+  if (typeof IntersectionObserver !== "function") return;
+  const elements = getActivePublicMapIds().map((id) => document.getElementById(id)).filter(Boolean);
+  if (elements.length === publicMapVisibilityElements.length
+      && elements.every((el, index) => el === publicMapVisibilityElements[index])) return;
+  publicMapVisibilityObserver?.disconnect();
+  publicMapVisibilityElements = elements;
+  publicMapVisibilityObserver = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) scheduleMapsInit();
+  });
+  elements.forEach((el) => publicMapVisibilityObserver.observe(el));
+}
+
 function mapInstanceMatchesDom(mapId) {
   const el = document.getElementById(mapId);
   const map = maps[mapId];
@@ -59433,7 +59574,7 @@ function publicMapNeedsInit(mapId) {
 
 function activePublicMapsNeedInit() {
   clearStaleMapRegistry();
-  return getActivePublicMapIds().some((id) => publicMapNeedsInit(id));
+  return getReadyPublicMapIds().some((id) => publicMapNeedsInit(id));
 }
 
 function resizePublicMap(mapId, delay = 80) {
@@ -59452,7 +59593,8 @@ function resizePublicMap(mapId, delay = 80) {
 
 function refreshActivePublicMapsAfterRoute() {
   clearStaleMapRegistry();
-  const activeMapIds = getActivePublicMapIds();
+  watchActivePublicMapVisibility();
+  const activeMapIds = getReadyPublicMapIds();
   if (!activeMapIds.length) return;
   if (activeMapIds.some((id) => publicMapNeedsInit(id))) {
     scheduleMapsInit({ force: true });
@@ -59658,6 +59800,7 @@ function setBrokerMapMarkers(list) {
 }
 
 async function initMaps() {
+  if (!getReadyPublicMapIds().length) return;
   const mapSpecs = [
     { id: "map-home", filter: () => getPublicListings() },
     { id: "map-sale", filter: () => getPublicListings().filter((p) => normalizeType(p.type) === "sale") },
@@ -59671,7 +59814,7 @@ async function initMaps() {
   if (useGoogle && window.google?.maps) {
     mapSpecs.forEach((spec) => {
       const el = document.getElementById(spec.id);
-      if (!el) return;
+      if (!el || !getReadyPublicMapIds().includes(spec.id)) return;
       const initialList = spec.filter();
       if (maps[spec.id] && mapProviders[spec.id] === "google" && mapInstanceMatchesDom(spec.id)) {
         setMapMarkers(spec.id, initialList);
@@ -59696,7 +59839,7 @@ async function initMaps() {
     });
 
     const brokerMapEl = document.getElementById("map-brokers");
-    if (brokerMapEl) {
+    if (brokerMapEl && getReadyPublicMapIds().includes("map-brokers")) {
       if (maps["map-brokers"] && mapProviders["map-brokers"] === "google" && mapInstanceMatchesDom("map-brokers")) {
         setBrokerMapMarkers(getBrokerDirectory());
         resizePublicMap("map-brokers", 80);
@@ -59720,10 +59863,10 @@ async function initMaps() {
     return;
   }
 
-  if (!(await ensureLeafletApi())) return;
+  if (!getReadyPublicMapIds().length || !(await ensureLeafletApi())) return;
   mapSpecs.forEach((spec) => {
     const el = document.getElementById(spec.id);
-    if (!el) return;
+    if (!el || !getReadyPublicMapIds().includes(spec.id)) return;
     const initialList = spec.filter();
     if (maps[spec.id] && mapProviders[spec.id] === "leaflet" && mapInstanceMatchesDom(spec.id)) {
       setMapMarkers(spec.id, initialList);
@@ -59750,7 +59893,7 @@ async function initMaps() {
   });
 
   const brokerMapEl = document.getElementById("map-brokers");
-  if (brokerMapEl) {
+  if (brokerMapEl && getReadyPublicMapIds().includes("map-brokers")) {
     if (maps["map-brokers"] && mapProviders["map-brokers"] === "leaflet" && mapInstanceMatchesDom("map-brokers")) {
       setBrokerMapMarkers(getBrokerDirectory());
       resizePublicMap("map-brokers", 80);
@@ -59780,6 +59923,8 @@ let mapsInitStarted = false;
 let mapsInitPromise = null;
 
 function scheduleMapsInit(options = {}) {
+  watchActivePublicMapVisibility();
+  if (!getReadyPublicMapIds().length) return;
   const activePage = document.querySelector(".page.active");
   const hasActiveMap = !!activePage?.querySelector(PUBLIC_MAP_SELECTOR);
   if (!hasActiveMap) return;
@@ -59788,17 +59933,17 @@ function scheduleMapsInit(options = {}) {
     refreshActivePublicMapsAfterRoute();
     return;
   }
-  if (mapsInitScheduled && !options.force) return;
+  if (mapsInitScheduled) return;
   mapsInitScheduled = true;
   const onHomeOnly = activePage?.id === "page-home";
   const delay = hasActiveMap && !onHomeOnly ? 300 : 2500;
   const start = () => {
     mapsInitScheduled = false;
-    if (mapsInitPromise) return;
+    if (mapsInitPromise || !getReadyPublicMapIds().length) return;
     mapsInitStarted = true;
     mapsInitPromise = initMaps()
       .then(() => {
-        getActivePublicMapIds().forEach((id) => {
+        getReadyPublicMapIds().forEach((id) => {
           resizePublicMap(id, 80);
           resizePublicMap(id, 300);
         });
@@ -60094,6 +60239,7 @@ function initializeMakaugApp() {
   if (window.__makaugAppInitialized) return;
   window.__makaugAppInitialized = true;
   installPublicRouteInterceptor();
+  captureInitialSsrCategoryGrid();
   const savedLang = getStoredMakaugLanguagePreference();
   addAdUnits();
   initGoogleAds();
@@ -60134,7 +60280,6 @@ function initializeMakaugApp() {
     }
   });
   renderMortgageFinder();
-  loadMortgageRates();
   scheduleMapsInit();
   refreshBrokersFromApi({ silent: true }).then((loaded) => {
     if (loaded) {
@@ -60146,7 +60291,9 @@ function initializeMakaugApp() {
   filterCommercial();
   filterLand();
   wireSearchTypeahead();
-  parseInitialDeepLink();
+  Promise.resolve(parseInitialDeepLink()).catch((error) => console.warn("Initial route setup failed", error)).finally(() => {
+    if (finishInitialSsrCategoryGridSetup()) renderAll();
+  });
   window.setTimeout(() => syncActiveRouteSearchHandoff("startup_route_query_retry"), 250);
   syncAgentRegistrationForm();
   toggleAgentFieldIdInput();
