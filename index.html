@@ -10325,17 +10325,33 @@
       window.__makaugLoadShortTerm = loadShortTermNow;
       loadShortTermNow();
 
+      var aboutAdvertiseI18nPromise = null;
+      function loadAboutAdvertiseI18n() {
+        if (window.__MAKAUG_ABOUT_ADVERTISE_I18N__) return Promise.resolve(window.__MAKAUG_ABOUT_ADVERTISE_I18N__);
+        if (aboutAdvertiseI18nPromise) return aboutAdvertiseI18nPromise;
+        aboutAdvertiseI18nPromise = new Promise(function (resolve) {
+          var pack = document.createElement("script");
+          pack.src = "/assets/about-advertise-i18n.js?v=whatsapp-number-20260911";
+          pack.async = false;
+          pack.onload = function () {
+            var data = window.__MAKAUG_ABOUT_ADVERTISE_I18N__ || null;
+            if (!data) { aboutAdvertiseI18nPromise = null; pack.remove(); }
+            resolve(data);
+          };
+          pack.onerror = function () { aboutAdvertiseI18nPromise = null; pack.remove(); resolve(null); };
+          document.body.appendChild(pack);
+        });
+        return aboutAdvertiseI18nPromise;
+      }
+      window.__makaugLoadAboutAdvertiseI18n = loadAboutAdvertiseI18n;
+
       function loadMakaugApp() {
         if (window.__makaugAppLoading) return;
         window.__makaugAppLoading = true;
-        // The About/Advertise language pack (391 KB) used to block rendering
-        // in <head> on every page. Both scripts now download in parallel
-        // without blocking, and async=false keeps them in insertion order:
-        // makaug-app.js reads window.__MAKAUG_ABOUT_ADVERTISE_I18N__ when it runs.
-        var aboutAdvertiseI18n = document.createElement("script");
-        aboutAdvertiseI18n.src = "/assets/about-advertise-i18n.js?v=whatsapp-number-20260911";
-        aboutAdvertiseI18n.async = false;
-        document.body.appendChild(aboutAdvertiseI18n);
+        // Only About/Advertise need this pack. Direct loads retain ordered
+        // execution; other pages request it when their SPA route needs it.
+        var activePage = document.querySelector(".page.active");
+        if (activePage && /^(page-about|page-advertise)$/.test(activePage.id)) loadAboutAdvertiseI18n();
         // Staff/admin/King code ships separately (npm run build:js) and only
         // the protected shell carries those pages, so only it loads the file.
         // It holds function declarations only, so running first is safe.

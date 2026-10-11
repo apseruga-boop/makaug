@@ -121,6 +121,7 @@ test('public HTML invokes route-aware CSS loading after the homepage-image decis
     injectGa4HeadTag(html, pathname) { calls.push(['analytics', pathname]); return html; }
   });
   vm.runInContext(functionSource('applyShortTermStylesheetLoading'), context);
+  vm.runInContext(functionSource('applyPublicFontDisplayOptional'), context);
   const realApply = context.applyShortTermStylesheetLoading;
   context.applyShortTermStylesheetLoading = (html, pathname) => { calls.push(['style', pathname]); return realApply(html, pathname); };
   vm.runInContext(functionSource('renderPublicHtml'), context);

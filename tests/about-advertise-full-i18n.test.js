@@ -39,13 +39,13 @@ const languages = ['lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar'];
 
 assert(packs && typeof packs === 'object', 'generated About/Advertise language pack should load');
 assert(html.includes('/assets/about-advertise-i18n.js?v=whatsapp-number-20260911'), 'page should load the generated language pack');
-// The pack is injected by the same loader as the main app, first, and both
-// with async=false so it executes before makaug-app.js reads it. It must not
-// be a render-blocking <script src> in <head> (PR F).
+// Relevant direct routes keep ordered pack/app execution. Other routes use
+// the on-demand loader; execution fixtures cover SPA entry and late merging.
+// The pack must not be a render-blocking <script src> in <head>.
 const packAt = html.indexOf('"/assets/about-advertise-i18n.js');
 const appAt = html.indexOf('script.src = "/assets/makaug-app.js');
 assert(packAt > 0 && appAt > packAt, 'language pack should be injected before the main app');
-assert(/aboutAdvertiseI18n\.async = false;/.test(html) && /script\.async = false;/.test(html.slice(appAt)), 'pack and app must execute in insertion order');
+assert(/pack\.async = false;/.test(html) && /script\.async = false;/.test(html.slice(appAt)), 'pack and app must execute in insertion order');
 assert(!/<script src="\/assets\/about-advertise-i18n\.js/.test(html), 'language pack must not block rendering');
 
 const placeholderTokens = (value) => Array.from(String(value).matchAll(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g), (match) => match[1]).sort();
@@ -101,7 +101,7 @@ for (const key of new Set(markupKeys)) {
   }
 }
 
-assert(app.includes('window.__MAKAUG_ABOUT_ADVERTISE_I18N__?.[code] || {}'), 'generated language pack should be merged for every supported language');
+assert(app.includes('Object.assign(CONTENT_I18N[code], pack?.[code] || {})'), 'generated language pack should be merged for every supported language');
 assert(!app.includes('Object.assign({}, CONTENT_I18N[code] || {}, ABOUT_PAGE_I18N_EN)'), 'English defaults must not overwrite a selected language');
 assert(app.includes('[data-content-i18n-placeholder]'), 'translated placeholders should be applied');
 assert(app.includes('[data-content-i18n-aria]'), 'translated accessibility labels should be applied');
