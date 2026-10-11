@@ -91,7 +91,8 @@ function publicRenderer({ inliner = createPublicCoreStylesheetInliner(), product
     readIndexHtml: () => index, sanitizePublicHtml,
     applyHarvestPublicSubmissionVisibility: (html) => html, applyShortTermVisibility: (html) => html,
     injectShortTermRuntimeConfig: (html) => html, injectGa4HeadTag: (html) => html,
-    inlinePublicCoreStylesheets: inliner
+    inlinePublicCoreStylesheets: inliner,
+    inlinePublicFontFaces: require('../services/publicFontFaces')
   });
   vm.runInContext(['applyHomeHeroPreload', 'applyShortTermStylesheetLoading', 'applyPublicFontDisplayOptional', 'renderPublicHtml'].map(declaration).join('\n'), context);
   return context;
