@@ -124,7 +124,7 @@ const {
   humanPropertyTypeLabel
 } = require('../utils/commercialClassification');
 const { listingPriceQuality, IMPOSSIBLE_PRICE_UGX } = require('../utils/listingPriceQuality');
-const { resolveStaffPriceChoice } = require('../utils/staffPriceChoice');
+const { resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { listingReferenceQuery } = require('../utils/listingReferenceSearch');
 const { pricePlausibility } = require('../utils/pricePlausibility');
 const { listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
@@ -742,9 +742,8 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
   if (priceChoice.mode === 'amount' || priceChoice.mode === 'poa') {
     const poa = priceChoice.mode === 'poa';
     const existingExtra = existing.extra_fields && typeof existing.extra_fields === 'object' ? existing.extra_fields : {};
-    extraPatch.price_on_application = poa;
-    extraPatch.price_upon_application = poa;
-    if (!poa) extraPatch.price_review = null;
+    const priceExtra = staffPriceExtraPatch({ mode: priceChoice.mode, existing, existingExtra }) || {};
+    Object.assign(extraPatch, priceExtra);
     extraPatch.price_quality = listingPriceQuality({
       ...existing,
       price: patch.price,
@@ -752,7 +751,7 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
       price_on_application: poa,
       listing_type: patch.listing_type || existing.listing_type,
       transaction_type: patch.transaction_type || existing.transaction_type,
-      extra_fields: { ...existingExtra, price_on_application: poa, price_upon_application: poa }
+      extra_fields: { ...existingExtra, ...priceExtra }
     });
   }
   [

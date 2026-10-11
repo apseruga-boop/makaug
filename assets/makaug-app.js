@@ -27306,7 +27306,12 @@ function adminReviewCurrentLocationFields() {
 function adminReviewSetAreaFromNeighborhood() {
   const areaEl = document.getElementById("admin-review-area-edit");
   const neighborhood = document.getElementById("admin-review-neighborhood-edit")?.value || "";
-  if (areaEl && neighborhood && (!areaEl.value.trim() || areaEl.dataset.auto === "1")) {
+  if (!areaEl || !neighborhood) return;
+  const current = areaEl.value.trim();
+  const town = document.getElementById("admin-review-city-edit")?.value.trim() || "";
+  // The area box often still holds the town (Kira) when staff pick Najjera.
+  const areaIsTown = !current || areaEl.dataset.auto === "1" || (town && current === town);
+  if (areaIsTown) {
     areaEl.value = neighborhood;
     areaEl.dataset.auto = "1";
   }
@@ -27397,6 +27402,7 @@ function adminReviewOnCityChange() {
 }
 
 async function adminReviewOnNeighborhoodChange() {
+  adminReviewCanonicalLocationResolution = null;
   adminReviewSetAreaFromNeighborhood();
   const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
     document.getElementById("admin-review-neighborhood-edit")?.value,
@@ -28724,8 +28730,10 @@ function collectAdminReviewListingPatch() {
   const district = canonical?.province || canonical?.district || get("admin-review-district-edit");
   const region = canonical?.region || (district ? regionForDistrict(district) : get("admin-review-region-edit"));
   const city = adminReviewCityToSave(get("admin-review-city-edit"), canonical?.town || canonical?.city || "");
-  const neighborhood = canonical?.name || get("admin-review-neighborhood-edit");
-  const area = canonical?.name || get("admin-review-area-edit");
+  // The dropdowns are what staff just chose. A previous canonical match (the
+  // parent town) must not put that choice back.
+  const neighborhood = String(get("admin-review-neighborhood-edit") || "").trim() || canonical?.name || "";
+  const area = String(get("admin-review-area-edit") || "").trim() || canonical?.name || "";
   const coordinates = adminReviewNormalizeCoordinateInputs(
     get("admin-review-latitude-edit"),
     get("admin-review-longitude-edit")

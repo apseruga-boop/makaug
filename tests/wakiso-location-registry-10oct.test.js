@@ -104,7 +104,26 @@ test('a staff-picked town is not rewritten to Wakiso Town', () => {
   });
   assert.deepEqual(najjera.errors, []);
   assert.equal(najjera.city, 'Kira');
+  assert.equal(najjera.neighborhood, 'Najjera');
   assert.notEqual(najjera.city, 'Wakiso Town');
+
+  const najjeraUnderKira = normalizeReviewLocationHierarchy({
+    area: 'Kira', district: 'Wakiso', city: 'Kira', neighborhood: 'Najjera'
+  });
+  assert.deepEqual(najjeraUnderKira.errors, [], najjeraUnderKira.errors.join('; '));
+  assert.equal(najjeraUnderKira.city, 'Kira');
+  assert.equal(najjeraUnderKira.neighborhood, 'Najjera');
+  const savedNajjera = normalizeStaffListingPatch({
+    area: 'Kira',
+    district: 'Wakiso',
+    extra_fields: { city: 'Kira', neighborhood: 'Kira', region: 'Central' }
+  }, {
+    area: 'Kira', district: 'Wakiso', city: 'Kira', neighborhood: 'Najjera'
+  });
+  assert.deepEqual(savedNajjera.errors, [], savedNajjera.errors.join('; '));
+  assert.equal(savedNajjera.hierarchy.city, 'Kira');
+  assert.equal(savedNajjera.hierarchy.neighborhood, 'Najjera');
+  assert.equal(savedNajjera.patch.area, 'Najjera');
 
   const gayaza = normalizeReviewLocationHierarchy({
     area: 'Gayaza', district: 'Wakiso', city: 'Gayaza'
