@@ -5693,7 +5693,7 @@ async function flushReadyEmployeeSubmissions({ phone, currentStep, data, inbound
     if (!propertyId) break;
 
     data.current_property_id = propertyId;
-    noteEmployeePropertyCreated(data);
+    noteEmployeePropertyCreated(data, propertyId, storedMedia, caption);
     data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
     data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
     delete data.pending_property_caption;
@@ -9147,6 +9147,19 @@ async function handleEmployeeWhatsappIntake({
         data,
         inboundMessageId
       });
+      // Photos that arrived before (or apart from) their caption: place them on
+      // the right property now instead of refusing to close the batch.
+      const placedLeftovers = await settleEmployeeOrphanMedia({ phone, data, currentStep, inboundMessageId, final: true });
+      if (placedLeftovers.length) {
+        const total = placedLeftovers.reduce((sum, entry) => sum + entry.count, 0);
+        queueWhatsappWebBridgeAutoReply({
+          phone,
+          message: `📎 ${total} photo${total === 1 ? '' : 's'}/video${total === 1 ? ' that arrived' : 's that arrived'} without a caption ${total === 1 ? 'was' : 'were'} added to: ${placedLeftovers.map((entry) => `${entry.label} (${entry.count})`).join('; ')}. Staff will check them against the listing before anything goes live.`,
+          nextStep: currentStep,
+          source: 'whatsapp_runtime',
+          actorId: 'employee_orphan_media'
+        }).catch(() => {});
+      }
       const pendingStoredMedia = employeePendingStoredMedia(data);
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
       const queuedSubmissions = employeePendingSubmissionQueue(data);
@@ -9433,7 +9446,7 @@ async function handleEmployeeWhatsappIntake({
             sessionData: data
           });
           data.current_property_id = propertyId;
-          noteEmployeePropertyCreated(data);
+          noteEmployeePropertyCreated(data, propertyId, pendingStoredMedia, textCaption);
           data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
           data.total_media_count = Number(data.total_media_count || 0) + pendingStoredMedia.length;
           delete data.pending_property_caption;
@@ -9593,6 +9606,7 @@ async function handleEmployeeWhatsappIntake({
         rememberEmployeePendingMedia(data, pendingStoredMedia, inboundMessageId);
         if (caption) data.pending_property_caption = caption;
         await replaceEmployeeSession(phone, currentStep, data);
+        if (!caption) await settleEmployeeOrphanMedia({ phone, data, currentStep, inboundMessageId });
       } catch (error) {
         logger.error('WhatsApp employee pending property-media storage failed:', error);
         return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
@@ -9763,7 +9777,7 @@ async function handleEmployeeWhatsappIntake({
       try {
         const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption, facts, storedMedia, sessionData: data });
         data.current_property_id = propertyId;
-        noteEmployeePropertyCreated(data);
+        noteEmployeePropertyCreated(data, propertyId, storedMedia, caption);
         data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
         if (data.employee_intake_recovery_skip_existing_matches !== true) {
           data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
@@ -9772,6 +9786,10 @@ async function handleEmployeeWhatsappIntake({
           delete data.pending_property_caption;
           clearEmployeePendingMedia(data);
           promoteEmployeeQueuedSubmission(data);
+        } else {
+          // Photos parked before this caption arrived: give them to the property
+          // from this burst they belong with, rather than leaving them stranded.
+          await settleEmployeeOrphanMedia({ phone, data, currentStep, inboundMessageId });
         }
         if (data.whatsapp_agent_self_intake === true) alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts, caption });
         await replaceEmployeeSession(phone, currentStep, data);
@@ -11982,8 +12000,22 @@ function scheduleEmployeeBatchSummary(phone) {
  * a captionless photo is held and asked about instead of guessed.
  */
 const EMPLOYEE_BURST_WINDOW_MS = 30000;
-function noteEmployeePropertyCreated(data = {}) {
+function noteEmployeePropertyCreated(data = {}, propertyId = '', storedMedia = [], caption = '') {
   const now = Date.now();
+  if (propertyId) {
+    const media = Array.isArray(storedMedia) ? storedMedia : [];
+    data.property_media_meta = {
+      ...(data.property_media_meta && typeof data.property_media_meta === 'object' ? data.property_media_meta : {}),
+      [String(propertyId)]: {
+        at: now,
+        family: media.some((item) => employeeMediaFamily(item) === 'image') ? 'image'
+          : media.some((item) => employeeMediaFamily(item) === 'video') ? 'video' : 'image',
+        label: shortEmployeeLabel(caption || 'Property', 50)
+      }
+    };
+    const keep = Object.entries(data.property_media_meta).sort((a, b) => Number(b[1]?.at || 0) - Number(a[1]?.at || 0)).slice(0, 60);
+    data.property_media_meta = Object.fromEntries(keep);
+  }
   data.recent_property_created_ms = [...(Array.isArray(data.recent_property_created_ms) ? data.recent_property_created_ms : []), now]
     .filter((t) => now - Number(t) < 10 * 60000)
     .slice(-10);
@@ -11994,6 +12026,81 @@ function employeeInForwardedBurst(data = {}) {
     .filter((t) => now - Number(t) < EMPLOYEE_BURST_WINDOW_MS);
   return recent.length >= 2;
 }
+/** Photo or video, ignoring the still frames WhatsApp makes from a video. */
+function employeeMediaFamily(item = {}) {
+  if (item.kind === 'video') return 'video';
+  if (item.kind === 'image' && (
+    item.degradedFromVideo === true
+    || /video-(?:key-frame|still|message-preview|preview)/i.test(String(item.name || ''))
+  )) return 'video';
+  return item.kind === 'document' ? 'document' : 'image';
+}
+
+/**
+ * Photos with no caption that nobody claimed.
+ *
+ * 11 Oct 2026, Arthur forwarded a Kira Nakwero house (a captioned photo and two
+ * more) and a Nabusugwe video. WhatsApp delivered the two captionless photos
+ * FIRST, then the captions, in no fixed order. The photos were parked, the
+ * Nabusugwe video created its listing without them, and the Kira listing was
+ * saved with one picture. The parked photos stayed behind, then blocked COMPLETE
+ * ("media but no caption").
+ *
+ * Parked photos with no caption pending are now placed on a property from the
+ * same burst: the one whose own media is the same kind (photos go with the
+ * photo-captioned house, a clip goes with the video-captioned one). While the
+ * match is not unique we wait; when the batch is being closed we place what is
+ * left on the closest match and say so, because a listing with all of its
+ * photos, checked by a moderator, beats photos thrown away.
+ */
+const EMPLOYEE_ORPHAN_MEDIA_WINDOW_MS = 45000;
+async function settleEmployeeOrphanMedia({ phone, data = {}, currentStep = 'employee_property_media', inboundMessageId = '', final = false } = {}) {
+  const placed = [];
+  if (normalizeInput(data.pending_property_caption || '')) return placed;
+  const pending = employeePendingStoredMedia(data);
+  if (!pending.length) return placed;
+  const meta = data.property_media_meta && typeof data.property_media_meta === 'object' ? data.property_media_meta : {};
+  const now = Date.now();
+  const all = (Array.isArray(data.property_ids) ? data.property_ids : [])
+    .map(String)
+    .filter((id) => meta[id])
+    .map((id, index) => ({ id, index, ...meta[id] }))
+    .sort((a, b) => (Number(b.at) - Number(a.at)) || (b.index - a.index));
+  if (!all.length) return placed;
+  const recent = final ? all : all.filter((entry) => now - Number(entry.at) < EMPLOYEE_ORPHAN_MEDIA_WINDOW_MS);
+  if (!recent.length) return placed;
+
+  const groups = new Map();
+  for (const item of pending) {
+    const family = employeeMediaFamily(item);
+    const sameKind = recent.filter((entry) => entry.family === family);
+    let target = null;
+    if (sameKind.length === 1) target = sameKind[0];
+    else if (final) target = sameKind[0] || recent[0];
+    if (!target) continue;
+    if (!groups.has(target.id)) groups.set(target.id, { target, items: [] });
+    groups.get(target.id).items.push(item);
+  }
+  const remaining = new Set(pending.map((item) => normalizeInput(item.sha256 || item.url)));
+  for (const { target, items } of groups.values()) {
+    try {
+      const attachment = await attachEmployeeReviewMedia({ propertyId: target.id, storedMedia: items, phone, inboundMessageId });
+      if (!attachment.duplicate) data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
+      items.forEach((item) => remaining.delete(normalizeInput(item.sha256 || item.url)));
+      placed.push({ propertyId: target.id, label: target.label, count: items.length });
+    } catch (error) {
+      logger.warn('Agent 007 could not place parked media on its property:', error.message || String(error));
+    }
+  }
+  if (placed.length) {
+    const left = pending.filter((item) => remaining.has(normalizeInput(item.sha256 || item.url)));
+    if (left.length) data.pending_property_media = left;
+    else clearEmployeePendingMedia(data);
+    if (phone) await replaceEmployeeSession(phone, currentStep, data);
+  }
+  return placed;
+}
+
 /**
  * An agent re-sending a property we already have — usually because we asked
  * them to, after its photo was lost. Give the waiting listing the new photos
@@ -12068,6 +12175,13 @@ async function buildEmployeeBatchSummary(phone, since) {
   // Finished, cancelled or moved on: COMPLETE sends its own summary.
   if (!session || session.current_step !== 'employee_property_media') return '';
   const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  // The batch has gone quiet: parked captionless photos belong with a property
+  // by now, so place them rather than report them as unsaved.
+  try {
+    await settleEmployeeOrphanMedia({ phone, data, final: true });
+  } catch (error) {
+    logger.warn('Agent 007 summary could not settle parked media:', error.message || String(error));
+  }
 
   const propertyIds = (Array.isArray(data.property_ids) ? data.property_ids : []).map(String);
   const saved = propertyIds.length
@@ -19022,6 +19136,9 @@ module.exports.__test = {
   agentPendingNotice,
   noteEmployeePropertyCreated,
   employeeInForwardedBurst,
+  settleEmployeeOrphanMedia,
+  employeeMediaFamily,
+  noteEmployeePropertyCreated,
   agentMissingPhrases,
   applyAgentCorrection,
   isOwnAgentSelfIntake,
