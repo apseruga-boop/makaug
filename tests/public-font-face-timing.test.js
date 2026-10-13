@@ -14,6 +14,7 @@ const index = fs.readFileSync(require.resolve('../index.html'), 'utf8');
 const server = fs.readFileSync(require.resolve('../server.js'), 'utf8');
 const ast = acorn.parse(server, { ecmaVersion: 'latest' });
 const url = sourceMetadata.sourceUrl;
+const latinFontUrl = sourceMetadata.uniqueFonts.find((font) => /CoOg4Ko20yygg_vb\.woff2$/.test(font));
 const links = `<link rel="preload" href="${url}" as="style" onload="this.onload=null;this.rel='stylesheet'"><noscript><link href="${url}" rel="stylesheet"></noscript>`;
 const content = '<h1>Student accommodation in Uganda</h1><p lang="lg">Ennyumba</p><p lang="ar">السكن</p><p lang="am">መኖሪያ</p><article data-ssr-property-card="a">Current listing</article>';
 const fixture = `<html><head><meta charset="UTF-8"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>${links}<style>body{font-family:"Plus Jakarta Sans",system-ui,sans-serif}</style></head><body>${content}</body></html>`;
@@ -37,18 +38,26 @@ test('pinned official response preserves all weights, unicode subsets, optional 
   assert.ok(sourceMetadata.uniqueFonts.every((font) => font.startsWith('https://fonts.gstatic.com/s/plusjakartasans/v12/')));
 });
 
-test('faces exist before any body font use; charset stays first and duplicate async/no-JS definitions are removed', () => {
+test('one verified Latin preload and all faces precede body use; charset stays first and duplicate definitions are removed', () => {
   const output = createPublicFontFaceInliner()(fixture);
-  assert.equal(faces(output), css); assert.match(output, /<head><meta charset="UTF-8">\s*<style data-public-font-faces/);
+  assert.equal(faces(output), css); assert.match(output, /<head><meta charset="UTF-8">\s*<link rel="preload" as="font"/);
+  const preload = output.match(/<link\b[^>]*data-public-font-preload="jakarta-latin"[^>]*>/)?.[0];
+  assert.ok(preload); assert.ok(preload.includes(`href="${latinFontUrl}"`));
+  assert.match(preload, /type="font\/woff2"/); assert.match(preload, /crossorigin="anonymous"/);
+  assert.ok(output.indexOf(preload) < output.indexOf('data-public-font-faces'));
   assert.ok(output.indexOf('data-public-font-faces') < output.indexOf('<body'));
   assert.ok(output.includes(content)); assert.ok(output.includes('href="https://fonts.gstatic.com" crossorigin'));
-  assert.doesNotMatch(output, /fonts\.googleapis\.com\/css2|<noscript>|as="font"|rel="preload"/);
+  assert.doesNotMatch(output, /fonts\.googleapis\.com\/css2|<noscript>/);
+  assert.equal((output.match(/as="font"/g) || []).length, 1, 'only the shared Latin file is prioritized');
+  const latinFaces = [...css.matchAll(/@font-face\s*\{([^}]+)\}/g)].map((match) => match[1]).filter((block) => block.includes(`url(${latinFontUrl})`));
+  assert.equal(latinFaces.length, 5); assert.ok(latinFaces.every((block) => block.includes('U+0000-00FF')));
 });
 
 test('exact face content is cached once and a repeated transform is idempotent', () => {
   let reads = 0; const apply = createPublicFontFaceInliner((filename, encoding) => { reads += 1; assert.equal(path.basename(filename), 'plus-jakarta-sans-optional.css'); assert.equal(encoding, 'utf8'); return css; });
   const once = apply(fixture); assert.equal(apply(once), once);
   apply(fixture); assert.equal(reads, 1); assert.equal((once.match(/data-public-font-faces="jakarta"/g) || []).length, 1);
+  assert.equal((once.match(/data-public-font-preload="jakarta-latin"/g) || []).length, 1);
 });
 
 test('read or validation failure keeps the original optional loader and allows recovery on a later render', () => {
@@ -85,9 +94,11 @@ function renderer(inliner = createPublicFontFaceInliner()) {
 
 test('actual public renderer has early faces while keeping full CSS, text, language fallback and privacy boundaries', () => {
   const render = renderer();
-  for(const route of ['/student-accommodation','/student-accommodation/university/makerere','/to-rent/kireka-wakiso','/to-rent/kyanja-kampala/apartments','/short-term','/about','/advertise']) {
+  for(const route of ['/','/property/7918f050-f8f3-407b-aabe-718de3deb2c8','/student-accommodation','/student-accommodation/university/makerere','/to-rent/kireka-wakiso','/to-rent/kyanja-kampala/apartments','/short-term','/about','/advertise']) {
     const output=render(route);assert.equal(faces(output),css);assert.equal((output.match(/data-public-core-css=/g)||[]).length,2);
     assert.ok(output.indexOf('data-public-font-faces')<output.indexOf('<body'));assert.doesNotMatch(output,/<link[^>]*fonts\.googleapis\.com\/css2/);
+    assert.equal((output.match(/data-public-font-preload="jakarta-latin"/g)||[]).length,1);
+    assert.ok(output.includes(`href="${latinFontUrl}" crossorigin="anonymous"`));
     assert.ok(output.includes('system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'));
     for(const language of ['en','lg','sw','ac','ny','rn','sm','am','ar']) assert.ok(output.includes(`value="${language}"`));
     for(const forbidden of PUBLIC_FORBIDDEN_STRINGS) assert.ok(!output.includes(forbidden),`${route}: ${forbidden}`);
@@ -97,6 +108,7 @@ test('actual public renderer has early faces while keeping full CSS, text, langu
 test('actual public renderer fallback retains optional Google loading and full core CSS', () => {
   const output=renderer(createPublicFontFaceInliner(()=>{throw new Error('asset missing');}))('/student-accommodation');
   assert.equal(faces(output),undefined);const google=[...output.matchAll(/<link\b[^>]*fonts\.googleapis\.com\/css2[^>]*>/g)];assert.equal(google.length,2);
+  assert.doesNotMatch(output,/data-public-font-preload|as="font"/);
   assert.ok(google.every((match)=>match[0].includes('display=optional')));assert.equal((output.match(/data-public-core-css=/g)||[]).length,2);
 });
 
@@ -107,6 +119,6 @@ test('protected admin/staff/King HTML bypasses font inlining and keeps its origi
       injectShortTermRuntimeConfig:(html)=>html,applyHomeHeroPreload:(html)=>html,renderPublicHtml:()=>{throw new Error('protected entered public renderer');},
       sendTextResponse:(_req,_res,html)=>{delivered=html;return html;}});
     vm.runInContext(declaration('sendPublicIndex'),context);await context.sendPublicIndex({path:route,originalUrl:route},{set(){}},error=>{throw error||new Error('unexpected next');});
-    assert.equal(delivered,index);assert.match(delivered,/display=swap/);assert.doesNotMatch(delivered,/data-public-font-faces/);
+    assert.equal(delivered,index);assert.match(delivered,/display=swap/);assert.doesNotMatch(delivered,/data-public-font-faces|data-public-font-preload/);
   }
 });

@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const source = require('../assets/fonts/plus-jakarta-sans-optional.source.json');
 const cssPath = path.join(__dirname, '..', 'assets', 'fonts', 'plus-jakarta-sans-optional.css');
+const latinFontUrl = 'https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yygg_vb.woff2';
 
 function isJakartaStylesheet(link) {
   const href = link.match(/(?:^|\s)href\s*=\s*(["'])(.*?)\1/i)?.[2];
@@ -33,7 +34,8 @@ function createPublicFontFaceInliner(readFile = fs.readFileSync) {
       try {
         const css = readFile(cssPath, 'utf8');
         if (typeof css !== 'string' || /<\/style\b/i.test(css)
-          || crypto.createHash('sha256').update(css).digest('hex') !== source.sha256) return input;
+          || crypto.createHash('sha256').update(css).digest('hex') !== source.sha256
+          || !source.uniqueFonts.includes(latinFontUrl) || !css.includes(`url(${latinFontUrl})`)) return input;
         cachedCss = css;
       } catch (_error) {
         // Retain the current optional Google loader and retry on a later render.
@@ -42,7 +44,9 @@ function createPublicFontFaceInliner(readFile = fs.readFileSync) {
     }
     // Defining faces before body layout avoids adding a new font family after
     // fallback text has painted. Keep the UTF-8 declaration first in the head.
-    const marker = `${charset[0]}\n<style data-public-font-faces="jakarta" data-source-sha256="${source.sha256}">${cachedCss}</style>`;
+    // All five Latin weights share this verified font file. Discover it while
+    // parsing the head instead of waiting for the first body text layout.
+    const marker = `${charset[0]}\n<link rel="preload" as="font" type="font/woff2" href="${latinFontUrl}" crossorigin="anonymous" data-public-font-preload="jakarta-latin">\n<style data-public-font-faces="jakarta" data-source-sha256="${source.sha256}">${cachedCss}</style>`;
     let output = input.replace(charset[0], marker);
     output = output.replace(/<noscript>\s*(<link\b(?:[^"'<>]|"[^"]*"|'[^']*')*>)\s*<\/noscript>/gi,
       (block, link) => isJakartaStylesheet(link) ? '' : block);
