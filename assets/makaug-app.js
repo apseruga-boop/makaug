@@ -57076,6 +57076,40 @@ function shiftPreviewPhoto(direction = 1) {
   renderPreviewPhotoLightbox();
 }
 
+function ensureDetailGalleryLightbox() {
+  let modal = document.getElementById("detail-photo-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "detail-photo-modal";
+    modal.className = "modal-overlay";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-labelledby", "detail-photo-title");
+    modal.innerHTML = `
+      <div class="modal-box" style="max-width:980px">
+        <button type="button" onclick="closeDetailGalleryLightbox()" aria-label="Close" class="absolute top-3 right-3 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <h3 id="detail-photo-title" class="text-lg font-bold text-gray-800"></h3>
+          <div id="detail-photo-caption" class="text-xs text-gray-500"></div>
+        </div>
+        <div class="flex items-center gap-3">
+          <button type="button" onclick="shiftDetailGalleryPhoto(-1)" aria-label="Previous photo" class="w-10 h-10 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50">‹</button>
+          <div class="flex-1 bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
+            <img id="detail-photo-image" class="w-full max-h-[70vh] object-contain bg-gray-100">
+          </div>
+          <button type="button" onclick="shiftDetailGalleryPhoto(1)" aria-label="Next photo" class="w-10 h-10 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50">›</button>
+        </div>
+        <div id="detail-photo-thumbs" class="mt-3 grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2"></div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  const heading = modal.querySelector("h3");
+  if (heading) heading.textContent = translatePropertyUi("Gallery");
+  const image = document.getElementById("detail-photo-image");
+  if (image) image.alt = translateListingLabel("Photo");
+  return modal;
+}
+
 function closeDetailGalleryLightbox() {
   closeModal("detail-photo-modal");
 }
@@ -57143,6 +57177,7 @@ function openDetailGalleryLightbox(index = 0) {
   } else {
     detailGalleryPhotoIndex = 0;
   }
+  ensureDetailGalleryLightbox();
   renderDetailGalleryLightbox();
   openModal("detail-photo-modal");
 }
