@@ -410,7 +410,8 @@
       windowObject.__makaugMetaPixelReady = true;
     })(window, document);
   </script>
-  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high" data-home-hero-preload>
+  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=640&q=50" media="(max-width: 767px)" fetchpriority="high" data-home-hero-preload>
+  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" media="(min-width: 768px)" fetchpriority="high" data-home-hero-preload>
   <link rel="stylesheet" href="/assets/tailwind.css">
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
   <link rel="stylesheet" href="/assets/short-term.css?v=20260916-short-term-v23">
@@ -2789,6 +2790,8 @@
       .hero-bg {
         min-height: auto;
         background-position: center top;
+        background-image: linear-gradient(180deg, rgba(4, 21, 33, 0.35) 0%, rgba(3, 20, 31, 0.62) 100%),
+          url("https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=640&q=50");
       }
       .hero-tab {
         font-size: 12px;
@@ -10289,19 +10292,47 @@
 
   <script>
     (function () {
-      // Short Term paints without waiting for the main bundle. Chaining it
-      // behind makaug-app.js meant the section sat as a bare Ask AI box until
-      // 571KB had downloaded and 3MB had parsed, and only then filled in.
+      var publicSectionScriptPromises = {};
+      function loadPublicSectionScript(key, src, ready) {
+        if (ready()) return Promise.resolve(true);
+        if (publicSectionScriptPromises[key]) return publicSectionScriptPromises[key];
+        var flight = new Promise(function (resolve) {
+          var script = document.createElement("script");
+          var settled = false;
+          script.src = src;
+          script.async = true;
+          function finish(loaded) {
+            if (settled) return;
+            settled = true;
+            if (!loaded) script.remove();
+            resolve(loaded);
+          }
+          script.onload = function () { finish(ready()); };
+          script.onerror = function () { finish(false); };
+          try { document.body.appendChild(script); }
+          catch (_error) { finish(false); }
+        });
+        publicSectionScriptPromises[key] = flight;
+        flight.then(function (loaded) {
+          if (!loaded && publicSectionScriptPromises[key] === flight) publicSectionScriptPromises[key] = null;
+        });
+        return flight;
+      }
       function loadShortTermNow() {
-        if (!window.__makaugShortTerm || window.__makaugShortTerm.enabled !== true) return;
-        if (window.__makaugShortTermRequested) return;
-        window.__makaugShortTermRequested = true;
-        var s = document.createElement("script");
-        s.src = "/assets/short-term.js?v=20260916-short-term-v23";
-        document.body.appendChild(s);
+        if (!window.__makaugShortTerm || window.__makaugShortTerm.enabled !== true) return Promise.resolve(false);
+        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20260916-short-term-v23", function () {
+          return !!(window.makaugShortTerm && typeof window.makaugShortTerm.route === "function");
+        });
+      }
+      function loadOffPlanNow() {
+        return loadPublicSectionScript("off-plan", "/assets/off-plan.js?v=20261003-off-plan-v17", function () {
+          return typeof window.initializeOffPlanPage === "function";
+        });
       }
       window.__makaugLoadShortTerm = loadShortTermNow;
-      loadShortTermNow();
+      window.__makaugLoadOffPlan = loadOffPlanNow;
+      // The standalone section can paint in parallel on its own route.
+      if (document.querySelector(".page.active")?.id === "page-short-term") loadShortTermNow();
 
       var aboutAdvertiseI18nPromise = null;
       function loadAboutAdvertiseI18n() {
@@ -10344,12 +10375,11 @@
         script.src = makaugAppSrc;
         script.async = false;
         script.onload = function () {
-          var offPlanScript = document.createElement("script");
-          offPlanScript.src = "/assets/off-plan.js?v=20261003-off-plan-v17";
-          document.body.appendChild(offPlanScript);
-          if (window.__makaugShortTerm && window.__makaugShortTerm.enabled === true) {
-            // Already requested in parallel above; this is only the safety net
-            // for the case where the runtime config arrived after that ran.
+          var activePage = document.querySelector(".page.active");
+          if (activePage?.id === "page-off-plan"
+            || document.getElementById("page-staff-dashboard") || document.getElementById("page-admin-dashboard")) loadOffPlanNow();
+          if (window.__makaugShortTerm && window.__makaugShortTerm.enabled === true && activePage?.id === "page-short-term") {
+            // Retry if runtime config arrived later; successful loads share a flight.
             loadShortTermNow();
 
             // The bundle has just finished, which is when it may have replaced
@@ -10365,15 +10395,14 @@
               }, delay);
             });
 
-            // The review desks only exist in the DOM on the staff and admin
-            // dashboards; publicHtmlSanitizer strips those containers out of
-            // every public response. So a guest never downloads this file.
-            if (document.getElementById("staff-short-term-queue")
-              || document.getElementById("admin-short-term-king-queue")) {
-              var shortTermDeskScript = document.createElement("script");
-              shortTermDeskScript.src = "/assets/short-term-admin.js?v=20260916-short-term-v4";
-              document.body.appendChild(shortTermDeskScript);
-            }
+          }
+          // Protected desks own their separate module; ordinary public pages
+          // have no desk containers and never request it.
+          if (window.__makaugShortTerm && window.__makaugShortTerm.enabled === true
+            && (document.getElementById("staff-short-term-queue") || document.getElementById("admin-short-term-king-queue"))) {
+            var shortTermDeskScript = document.createElement("script");
+            shortTermDeskScript.src = "/assets/short-term-admin.js?v=20260916-short-term-v4";
+            document.body.appendChild(shortTermDeskScript);
           }
         };
         document.body.appendChild(script);

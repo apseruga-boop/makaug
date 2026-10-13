@@ -361,7 +361,8 @@ async function loadPublicSeoListings(db, options = {}) {
   const facetCacheKey = options.university?.slug || options.facetSlug || options.facet?.label || 'all';
   // landingRank: the money pages list agent-listed rows first (see utils/agentFirstRank).
   const landingRank = options.landingRank === true;
-  const cacheKey = `${key || 'all'}:${location?.canonical_key || 'uganda'}:${facetCacheKey}:${limit}${landingRank ? ':agent_first' : ''}`;
+  const homepage = options.homepage === true && !key && !location && !options.facet && !options.facetSlug && !options.university && !landingRank;
+  const cacheKey = `${key || 'all'}:${location?.canonical_key || 'uganda'}:${facetCacheKey}:${limit}${landingRank ? ':agent_first' : ''}${homepage ? ':homepage' : ''}`;
   const cached = await loadSeoListingCacheEntry(cacheKey, async () => {
     const values = [];
     const categoryWhere = categoryPredicate(key, 'p');
@@ -369,8 +370,16 @@ async function loadPublicSeoListings(db, options = {}) {
     const facetWhere = facetPredicate(options, values, 'p');
     values.push(limit);
     const limitRef = `$${values.length}`;
+    const orderBy = landingRank
+      ? agentFirstOrderSql('p', { homesBeforeLand: key === 'sale' })
+      : 'p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC';
     const result = await db.query(
-      `SELECT
+      `${homepage ? `WITH homepage_candidates AS MATERIALIZED (
+       SELECT p.id FROM properties p
+       WHERE ${publicVisibleInventoryWhere('p')}
+       ORDER BY ${orderBy}
+       LIMIT ${limitRef}
+     )\n` : ''}SELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
        p.price, p.price_period, p.price_on_application, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
@@ -379,10 +388,11 @@ async function loadPublicSeoListings(db, options = {}) {
        COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
        p.source, p.listed_via,
        ${listingCopyExtraSql('p')} AS copy_extra,
-       p.created_at, p.updated_at, COUNT(*) OVER() AS seo_total,
+       p.created_at, p.updated_at${homepage ? '' : ', COUNT(*) OVER() AS seo_total'},
        image.url AS primary_image_url,
        staff_img.url AS staff_primary_image_url
      FROM properties p
+     ${homepage ? 'JOIN homepage_candidates home ON home.id = p.id' : ''}
      LEFT JOIN LATERAL (
        SELECT i.url
        FROM property_images i
@@ -391,17 +401,18 @@ async function loadPublicSeoListings(db, options = {}) {
        LIMIT 1
      ) image ON TRUE
      ${consentedStaffPrimaryImageLateralSql('p')}
-     WHERE ${publicVisibleInventoryWhere('p')}
+     ${homepage ? '' : `WHERE ${publicVisibleInventoryWhere('p')}
        AND ${categoryWhere}
        ${locationWhere}
-       ${facetWhere}
-     ORDER BY ${landingRank
-    ? agentFirstOrderSql('p', { homesBeforeLand: key === 'sale' })
-    : 'p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC'}
-       LIMIT ${limitRef}`,
+       ${facetWhere}`}
+     ORDER BY ${orderBy}
+       ${homepage ? '' : `LIMIT ${limitRef}`}`,
       values
     );
-    return { rows: result.rows.map(normalizeSeoListingRow) };
+    const rows = result.rows.map(normalizeSeoListingRow);
+    // Homepage cards never consume a total; facets retain their exact count.
+    if (homepage) for (const row of rows) delete row.seo_total;
+    return { rows };
   }, { force: options.force });
   return cached.rows;
 }
@@ -836,11 +847,13 @@ function renderPropertySeoHtml(html, listing, options = {}) {
     ...(location ? [{ name: location.name, url: areaUrl }] : []),
     { name: listing.title, url: propertyUrl }
   ];
-  const content = `<article class="grid lg:grid-cols-3 gap-6" data-ssr-property-detail="${escapeHtml(listing.id)}">
-    <div class="lg:col-span-2">
+  const content = `<article class="grid lg:grid-cols-3 gap-6" data-ssr-property-detail="${escapeHtml(listing.id)}" data-detail-layout>
+    <div class="lg:col-span-2" data-detail-main>
       ${renderBreadcrumbs(items)}
-      <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-        <img src="${escapeHtml(image)}" alt="${escapeHtml(listing.title)}" class="h-72 w-full object-cover" width="1200" height="675" decoding="async" fetchpriority="high">
+      <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white" data-detail-card>
+        <button type="button" class="block w-full property-gallery-hero relative overflow-hidden group" data-detail-hero onclick="if(typeof openDetailGalleryLightbox==='function')openDetailGalleryLightbox(detailGalleryPhotoIndex)">
+          <img id="detail-gallery-hero-img" data-ssr-detail-hero="${escapeHtml(listing.id)}" src="${escapeHtml(image)}" alt="${escapeHtml(listing.title)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform" width="1200" height="675" loading="eager" decoding="async" fetchpriority="high">
+        </button>
         <div class="p-5">
           <h1 class="text-3xl font-bold text-gray-900 serif">${escapeHtml(listing.title)}</h1>
           <p class="mt-2 text-gray-600">${location ? `<a href="${escapeHtml(areaUrl)}" class="font-semibold text-green-700 hover:underline">${escapeHtml(locationLabel)}</a>` : escapeHtml(locationLabel)}</p>

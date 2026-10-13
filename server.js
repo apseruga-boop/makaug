@@ -1189,7 +1189,7 @@ function readIndexHtml() {
 // fetchpriority=high on every other page competed with that page's own LCP.
 function applyHomeHeroPreload(html, normalizedPath = '/') {
   if (normalizedPath === '/' || normalizedPath === '/index.html') return html;
-  return String(html || '').replace(/\s*<link rel="preload" as="image"[^>]*data-home-hero-preload[^>]*>/, '');
+  return String(html || '').replace(/\s*<link rel="preload" as="image"[^>]*data-home-hero-preload[^>]*>/g, '');
 }
 
 // Short Term's scoped styles do not affect other public pages. Keep fetching
@@ -1740,7 +1740,7 @@ app.get(['/', '/index.html'], async (req, res, next) => {
     try {
       [snapshot, listings] = await Promise.all([
         loadPublicSeoInventorySnapshot(db),
-        loadPublicSeoListings(db, { limit: 6 })
+        loadPublicSeoListings(db, { limit: 6, homepage: true })
       ]);
     } catch (error) {
       res.locals.publicHtmlDegraded = true; // never share-cache a degraded page
@@ -2351,7 +2351,7 @@ async function start() {
     try {
       const [seoSnapshot, homepageListings] = await Promise.all([
         loadPublicSeoInventorySnapshot(db),
-        loadPublicSeoListings(db, { limit: 6 })
+        loadPublicSeoListings(db, { limit: 6, homepage: true })
       ]);
       logger.info('Public homepage SEO cache warmed before accepting traffic', {
         listings: homepageListings.length,

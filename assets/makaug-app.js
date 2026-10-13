@@ -9238,7 +9238,7 @@ function sendWebVitalMetric(metricName, value, rating = "") {
         device: window.innerWidth < 768 ? "mobile" : "desktop",
         connection: navigator.connection?.effectiveType || ""
       })
-    }).catch(() => {});
+    }).then((response) => response.text()).catch(() => {});
   } catch (e) {}
 }
 
@@ -49356,6 +49356,35 @@ function closeRouteTransientModals(nextPage, previousPage) {
   if (modalIds.length) syncModalOpenState();
 }
 
+function ensurePublicPageModule(page, previousPage = "") {
+  if (page === "off-plan" || page === "staff-dashboard" || page === "admin-dashboard") {
+    if (typeof window.initializeOffPlanPage === "function") {
+      if (page === "off-plan") window.initializeOffPlanPage();
+      else if (typeof window.loadOffPlanManagement === "function") window.loadOffPlanManagement(page === "staff-dashboard" ? "staff" : "admin");
+      return Promise.resolve(true);
+    }
+    // Each module initializes the currently active route on its first load.
+    // Do not invoke it again after loading or revive a route the user left.
+    return typeof window.__makaugLoadOffPlan === "function" ? window.__makaugLoadOffPlan() : Promise.resolve(false);
+  }
+  if (page === "short-term") {
+    if (window.__makaugShortTerm?.enabled !== true) return Promise.resolve(false);
+    if (window.makaugShortTerm && typeof window.makaugShortTerm.route === "function") {
+      if (page !== previousPage) window.makaugShortTerm.rehydrate?.();
+      return Promise.resolve(true);
+    }
+    return typeof window.__makaugLoadShortTerm === "function" ? window.__makaugLoadShortTerm() : Promise.resolve(false);
+  }
+  return Promise.resolve(false);
+}
+
+// The hero entry exists before the optional Off Plan module is downloaded.
+// Keep its query in the route so first-load initialization can restore it.
+function openOffPlanFromHero() {
+  const query = String(document.getElementById("hero-q")?.value || "").trim();
+  return navigatePublicRoute(`/off-plan${query ? `?q=${encodeURIComponent(query)}` : ""}`, null, { source: "off_plan_hero" });
+}
+
 function showPage(page, options = {}) {
   const targetPage = normalizePageKey(page);
   if (initialSsrCategoryGrid && initialSsrCategoryGrid.key !== targetPage) invalidateInitialSsrCategoryGrid();
@@ -49387,6 +49416,7 @@ function showPage(page, options = {}) {
     mountSectionSearchShell(targetPage);
     updateHomeAskAiLanguageCopy();
     if (options.history !== false) updateRouteHistoryForPage(targetPage, options.source || "show_page");
+    ensurePublicPageModule(targetPage, previousPage);
   } else {
     const route = routeForPage(targetPage);
     if (route && window.location.pathname !== route) {
@@ -49407,16 +49437,13 @@ function showPage(page, options = {}) {
   if (targetPage === "field-dashboard") renderFieldDashboard();
   if (targetPage === "staff-dashboard") {
     renderStaffDashboard();
-    if (typeof window.loadOffPlanManagement === "function") window.loadOffPlanManagement("staff");
   }
   if (targetPage === "advertiser-dashboard") renderAdvertiserDashboard();
   if (targetPage === "admin-dashboard") {
     renderAdminDashboard();
-    if (typeof window.loadOffPlanManagement === "function") window.loadOffPlanManagement("admin");
   }
   if (targetPage === "admin-setup-status") renderAdminSetupStatus();
   if (targetPage === "marketplace") loadMarketplacePage();
-  if (targetPage === "off-plan" && typeof window.initializeOffPlanPage === "function") window.initializeOffPlanPage();
   if (targetPage === "advertise") initializeAdvertisingSelfServe();
   if (targetPage === "valuation") initializeValuationPage();
   if (targetPage === "tiktok-connect") initializeTikTokDisplayPage();
@@ -58861,6 +58888,70 @@ function setPropertyDetailDocumentTitle(property = {}, displayTitle = "") {
   document.title = `${title} | makaug.com`;
 }
 
+function syncRetainedDetailAttributes(existing, next, keepImageSource = false) {
+  for (const attribute of Array.from(existing.attributes)) {
+    if (keepImageSource && attribute.name === "src") continue;
+    if (!next.hasAttribute(attribute.name)) existing.removeAttribute(attribute.name);
+  }
+  for (const attribute of Array.from(next.attributes)) {
+    if (keepImageSource && attribute.name === "src") continue;
+    if (existing.getAttribute(attribute.name) !== attribute.value) existing.setAttribute(attribute.name, attribute.value);
+  }
+}
+
+function replaceDetailSiblings(existing, next, retained, replacement) {
+  for (const child of Array.from(existing.childNodes)) {
+    if (child !== retained) existing.removeChild(child);
+  }
+  let beforeRetained = true;
+  for (const child of Array.from(next.childNodes)) {
+    if (child === replacement) { beforeRetained = false; continue; }
+    if (beforeRetained) existing.insertBefore(child, retained);
+    else existing.appendChild(child);
+  }
+}
+
+function renderPropertyDetailContent(html, { propertyId, selectedPhotoSrc, preserveInitialHero = false } = {}) {
+  const content = document.getElementById("detail-content");
+  if (!content) return false;
+  const replaceNormally = () => { content.innerHTML = html; return false; };
+  const id = String(propertyId || "");
+  if (!preserveInitialHero || currentLang !== "en" || !id || !selectedPhotoSrc
+    || normalizeRoutePath(window.location.pathname) !== `/property/${encodeURIComponent(id)}`) return replaceNormally();
+  const oldLayout = content.querySelector("[data-detail-layout]");
+  const oldMain = oldLayout?.querySelector("[data-detail-main]");
+  const oldCard = oldMain?.querySelector("[data-detail-card]");
+  const oldHero = oldCard?.querySelector("[data-detail-hero]");
+  const oldImage = oldHero?.querySelector("img[data-ssr-detail-hero]");
+  if (oldLayout?.getAttribute("data-ssr-property-detail") !== id
+    || oldImage?.getAttribute("data-ssr-detail-hero") !== id) return replaceNormally();
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const nextLayout = template.content.querySelector("[data-detail-layout]");
+  const nextMain = nextLayout?.querySelector("[data-detail-main]");
+  const nextCard = nextMain?.querySelector("[data-detail-card]");
+  const nextHero = nextCard?.querySelector("[data-detail-hero]");
+  const nextImage = nextHero?.querySelector("#detail-gallery-hero-img");
+  const oldChain = [content, oldLayout, oldMain, oldCard, oldHero, oldImage];
+  const nextChain = [template.content, nextLayout, nextMain, nextCard, nextHero, nextImage];
+  if (oldHero?.tagName !== "BUTTON" || nextHero?.tagName !== "BUTTON" || nextImage?.tagName !== "IMG"
+    || oldChain.some((node, index) => !node || (index && node.parentNode !== oldChain[index - 1]))
+    || nextChain.some((node, index) => !node || (index && node.parentNode !== nextChain[index - 1]))) return replaceNormally();
+  try {
+    const expected = new URL(selectedPhotoSrc, window.location.origin).href;
+    if (new URL(oldImage.getAttribute("src"), window.location.origin).href !== expected
+      || new URL(nextImage.getAttribute("src"), window.location.origin).href !== expected) return replaceNormally();
+  } catch (_error) { return replaceNormally(); }
+  // Preserve the complete connected image ancestry. Detaching and reusing only
+  // the image after innerHTML replacement can create a late LCP candidate.
+  syncRetainedDetailAttributes(oldImage, nextImage, true);
+  for (let index = oldChain.length - 2; index >= 0; index--) {
+    if (index) syncRetainedDetailAttributes(oldChain[index], nextChain[index]);
+    replaceDetailSiblings(oldChain[index], nextChain[index], oldChain[index + 1], nextChain[index + 1]);
+  }
+  return true;
+}
+
 async function openDetail(id, options = {}) {
   let p = id && typeof id === "object" ? id : findPropertyForUi(id);
   if (p?.id) upsertPropertyForUi(p);
@@ -59017,10 +59108,10 @@ async function openDetail(id, options = {}) {
             </div>
           </div>
   ` : "";
-  document.getElementById("detail-content").innerHTML = `
-    <div class="grid lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2">
-        <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+  const detailHtml = `
+    <div class="grid lg:grid-cols-3 gap-6" data-detail-layout>
+      <div class="lg:col-span-2" data-detail-main>
+        <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden" data-detail-card>
           ${thirdPartySourceVisual ? `
             <div class="p-4 pb-0">
               ${foundOnlineSourceVisualHtml(p, { detail: true })}
@@ -59037,8 +59128,8 @@ async function openDetail(id, options = {}) {
               </div>
             </div>
           ` : `
-	              <button type="button" onclick="openDetailGalleryLightbox(detailGalleryPhotoIndex)" class="block w-full property-gallery-hero relative overflow-hidden group">
-            <img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}" alt="${adminAttr(getDisplayPhotoLabel(selectedPhoto, detailGalleryPhotoIndex, p) || displayTitle)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform">
+	              <button type="button" onclick="openDetailGalleryLightbox(detailGalleryPhotoIndex)" class="block w-full property-gallery-hero relative overflow-hidden group" data-detail-hero>
+            <img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}" alt="${adminAttr(getDisplayPhotoLabel(selectedPhoto, detailGalleryPhotoIndex, p) || displayTitle)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform" loading="eager" decoding="async" fetchpriority="high">
             <div class="absolute bottom-3 right-3 bg-black/60 text-white text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1">
               <i class="fas fa-images"></i> <span id="detail-gallery-count-label">${detailGalleryPhotoIndex + 1}/${detailGalleryPhotos.length} ${photoCountLabel}</span>
             </div>
@@ -59048,7 +59139,7 @@ async function openDetail(id, options = {}) {
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
               ${detailGalleryPhotos.map((photo, idx) => `
                 <button type="button" onclick="selectDetailGalleryPhoto(${idx})" data-detail-gallery-thumb="${idx}" aria-current="${idx === detailGalleryPhotoIndex ? "true" : "false"}" class="border ${idx === detailGalleryPhotoIndex ? "border-green-500" : "border-gray-200"} rounded-lg overflow-hidden bg-gray-50 text-left hover:border-green-400 transition-colors">
-                  <img src="${adminAttr(publicImageSrc(photo.url))}" alt="${adminAttr(photo.name || `Photo ${idx + 1}`)}" class="w-full h-20 object-cover">
+                  <img src="${adminAttr(publicImageSrc(photo.url))}" alt="${adminAttr(photo.name || `Photo ${idx + 1}`)}" class="w-full h-20 object-cover" loading="lazy" decoding="async">
                   <div class="px-2 py-1.5 text-[11px] text-gray-600 truncate">${getDisplayPhotoLabel(photo, idx, p)}</div>
                 </button>
               `).join("")}
@@ -59187,6 +59278,11 @@ async function openDetail(id, options = {}) {
     </div>
     ${mobileContactBarHtml}
     <div class="lg:hidden h-24" aria-hidden="true"></div>`;
+  renderPropertyDetailContent(detailHtml, {
+    propertyId: p.backend_id || p.id,
+    selectedPhotoSrc,
+    preserveInitialHero: !hidePhotoGallery && !isOwnerPreviewViewer && !isAdminViewer
+  });
   document.getElementById("detail-price-range-btn")?.addEventListener("click", () => {
     openValuationForProperty(p.id);
   });

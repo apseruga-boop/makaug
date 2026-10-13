@@ -1614,7 +1614,7 @@ test('a nav click is never swallowed on a page this section is not on', () => {
   );
 });
 
-test('the section paints without waiting for the main bundle', () => {
+test('the section starts on its own route without waiting for the main bundle', () => {
   // THE BUG THIS EXISTS FOR, measured on the live site: arriving at
   // /short-term showed the Ask AI box alone for seconds, then the rest
   // appeared. short-term.js was requested inside makaug-app.js's onload, so
@@ -1626,25 +1626,36 @@ test('the section paints without waiting for the main bundle', () => {
   // It passed while the section was still queued behind the bundle, because
   // "not lazy" and "not blocked" are different claims.
   const indexSource = read('index.html');
-
-  const requestAt = indexSource.indexOf('loadShortTermNow();');
-  const appOnloadAt = indexSource.indexOf('script.onload = function ()');
-  assert.ok(requestAt > -1, 'the short-term loader is never called');
-  assert.ok(appOnloadAt > -1, 'the main bundle loader changed shape');
-  assert.ok(
-    requestAt < appOnloadAt,
-    'short-term.js must be requested before the bundle onload, not from inside it'
-  );
-
-  // It must also not be gated on the visitor already being on a short-term URL.
-  const loaderBlock = indexSource.slice(
-    indexSource.indexOf('function loadShortTermNow()'),
-    appOnloadAt
-  );
-  assert.ok(
-    !/\/\^\\\/short-term/.test(loaderBlock),
-    'the load must not be gated on the current pathname'
-  );
+  const bootstrap = [...indexSource.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)]
+    .map(match => match[1]).find(script => script.includes('function loadMakaugApp()'));
+  assert.ok(bootstrap, 'actual main bootstrap exists');
+  function execute(page) {
+    const requests = [], listeners = {};
+    const window = { __makaugAppVersion: 'contract-release', __makaugShortTerm: { enabled: true }, setTimeout() {} };
+    const document = {
+      readyState: 'loading', querySelector() { return { id: page }; }, getElementById() { return null; },
+      createElement(tagName) { return { tagName, remove() {} }; },
+      addEventListener(type, callback) { listeners[type] = callback; },
+      head: { appendChild() {} }, body: { appendChild(node) { requests.push(node); } }
+    };
+    require('node:vm').runInNewContext(bootstrap, { window, document, Promise });
+    return { requests, startApp() {
+      listeners.DOMContentLoaded();
+      const app = requests.find(node => node.src.includes('/makaug-app.js'));
+      assert.ok(app, 'main app requested after DOMContentLoaded');
+      app.onload();
+    } };
+  }
+  const direct = execute('page-short-term');
+  assert.deepStrictEqual(direct.requests.map(node => node.src), ['/assets/short-term.js?v=20260916-short-term-v23'],
+    'direct section starts before the main bundle is even requested');
+  direct.startApp();
+  assert.strictEqual(direct.requests.filter(node => node.src.includes('/short-term.js')).length, 1);
+  for (const page of ['page-home', 'page-detail']) {
+    const unrelated = execute(page);
+    unrelated.startApp();
+    assert.ok(!unrelated.requests.some(node => node.src.includes('/short-term.js')), `${page} downloads no unrelated section code`);
+  }
 
   // Loading first means the bundle's helpers may be missing when fields are
   // wired, so the typeahead has to wait for them rather than give up.
