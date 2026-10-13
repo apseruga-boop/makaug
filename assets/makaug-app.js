@@ -8353,6 +8353,12 @@ function renderHeroPropertyOpportunityCounter() {
   const countLabelText = tr(totalLabelKey);
   if (prefix && prefix.textContent !== prefixText) prefix.textContent = prefixText;
   if (suffix && suffix.textContent !== suffixText) suffix.textContent = suffixText;
+  const awaitingInitialTotal = Number(stats.total || 0) === 0
+    && !publicListingsFromApiLoaded && !publicListingsApiStats
+    && !(publicListingsApiTotal != null && Number.isFinite(Number(publicListingsApiTotal)));
+  // Zero before any catalogue/summary response is still unknown. Keep the SSR
+  // count and loading breakdown until public data confirms a real total.
+  if (awaitingInitialTotal) return;
   if (count && count.textContent !== countText) count.textContent = countText;
   if (countLabel && countLabel.textContent !== countLabelText) countLabel.textContent = countLabelText;
   const tooltipText = [
@@ -60474,4 +60480,39 @@ function initializeMakaugApp() {
   window.addEventListener("scroll", closeHeroSuggestions, true);
 }
 
-initializeMakaugApp();
+let makaugAppStartupQueued = false;
+
+function shouldYieldMobileHomepageStartup() {
+  try {
+    return isActiveUgandaHomepage()
+      && window.location.pathname === "/"
+      && !window.location.search && !window.location.hash
+      && typeof window.matchMedia === "function"
+      && window.matchMedia("(max-width: 767px)").matches
+      && !authState?.token && !authState?.user
+      && !document.getElementById("page-account")
+      && !document.getElementById("page-staff-dashboard")
+      && !document.getElementById("page-admin-dashboard")
+      && !localStorage.getItem(AUTH_STORAGE_KEY)
+      && !localStorage.getItem(ADMIN_API_KEY_STORAGE_KEY);
+  } catch (error) {
+    return false;
+  }
+}
+
+function startMakaugApp() {
+  if (window.__makaugAppInitialized || makaugAppStartupQueued) return;
+  if (!shouldYieldMobileHomepageStartup()) {
+    initializeMakaugApp();
+    return;
+  }
+  // Keep early navigation usable while separating bootstrap from script evaluation.
+  installPublicRouteInterceptor();
+  makaugAppStartupQueued = true;
+  window.setTimeout(() => {
+    makaugAppStartupQueued = false;
+    initializeMakaugApp();
+  }, 0);
+}
+
+startMakaugApp();
