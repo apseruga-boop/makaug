@@ -46764,6 +46764,7 @@ function renderGrid(id, list, options = {}) {
   if (!el) return;
   if (!list.length) {
     if (id === "home-grid" && !publicListingsFromApiLoaded) {
+      if (el.querySelector("[data-ssr-property-card]")) return;
       el.innerHTML = loadingPropertyGridHtml(3);
       return;
     }
