@@ -13685,7 +13685,6 @@ let staffDashboardHasLiveData = false;
 let staffDashboardAuthRetryCount = 0;
 let staffDashboardPanelHydrationSeq = 0;
 let staffDashboardPanelHydrating = false;
-let staffDashboardPanelRetryTimer = null;
 let staffDashboardPanelRetryCount = 0;
 const STAFF_DASHBOARD_PANEL_RETRY_LIMIT = 4;
 let staffAiLastCsv = "";
@@ -14005,13 +14004,11 @@ function staffPanelRetryEndpoint(endpoint = "/api/staff/dashboard?panels=1") {
 }
 
 function scheduleStaffDashboardPanelRetry(reason = "review_queue") {
-  if (staffDashboardPanelRetryTimer || staffDashboardPanelRetryCount >= STAFF_DASHBOARD_PANEL_RETRY_LIMIT) return;
+  if (dashboardRefreshPending() || staffDashboardPanelRetryCount >= STAFF_DASHBOARD_PANEL_RETRY_LIMIT) return;
   if (currentPage !== "staff-dashboard" || !authState?.token) return;
   staffDashboardPanelRetryCount += 1;
   const delay = Math.min(15000, 1800 * staffDashboardPanelRetryCount);
-  staffDashboardPanelRetryTimer = true;
   scheduleDashboardRefresh("staff_panels_retry", delay, () => {
-    staffDashboardPanelRetryTimer = null;
     if (currentPage !== "staff-dashboard" || !authState?.token) return;
     hydrateStaffDashboardPanels(
       "/api/staff/dashboard?panels=1",
@@ -14022,10 +14019,7 @@ function scheduleStaffDashboardPanelRetry(reason = "review_queue") {
 }
 
 function clearStaffDashboardPanelRetry() {
-  if (staffDashboardPanelRetryTimer) {
-    if (dashboardRefreshScheduler.kind === "staff_panels_retry") clearDashboardRefresh();
-    staffDashboardPanelRetryTimer = null;
-  }
+  if (dashboardRefreshScheduler.kind === "staff_panels_retry") clearDashboardRefresh();
   staffDashboardPanelRetryCount = 0;
 }
 
