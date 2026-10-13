@@ -2294,14 +2294,24 @@ async function buildDashboardPanelsPayload(req) {
     staffPanelWhatsappBridgeStatus({ ...panelQueryOptions, label: 'staff_panel_bridge' }),
     staffPanelSourceRegistryRows(panelLimit, { ...panelQueryOptions, label: 'staff_panel_source_registry' }),
     safeRows(
-      `SELECT p.id, p.title, p.area, p.district, p.status, p.created_at, p.updated_at,
+      `WITH found_online_candidates AS MATERIALIZED (
+         SELECT p.id, p.created_at
+         FROM properties p
+         WHERE ${foundOnlineWhere}
+       ),
+       paged_found_online AS MATERIALIZED (
+         SELECT p.id
+         FROM found_online_candidates p
+         ORDER BY ${STAFF_REVIEW_QUEUE_ORDER}
+         LIMIT $1
+       )
+       SELECT p.id, p.title, p.area, p.district, p.status, p.created_at, p.updated_at,
               COALESCE(p.extra_fields->>'source_platform', p.source, p.listed_via) AS platform,
               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'youtube_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'video_url') AS source_url,
               COALESCE(p.extra_fields->>'source_name', p.lister_name, 'Found online') AS source_name
        FROM properties p
-       WHERE ${foundOnlineWhere}
-       ORDER BY ${STAFF_REVIEW_QUEUE_ORDER}
-       LIMIT $1`,
+       JOIN paged_found_online q ON q.id = p.id
+       ORDER BY ${STAFF_REVIEW_QUEUE_ORDER}`,
       [panelLimit],
       { ...panelQueryOptions, label: 'staff_panel_found_online' }
     ),
