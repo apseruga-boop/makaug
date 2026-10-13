@@ -8347,10 +8347,14 @@ function renderHeroPropertyOpportunityCounter() {
   const countLabel = document.getElementById("hero-property-count-label");
   const tooltip = document.getElementById("hero-property-counter-tooltip");
   const totalLabelKey = stats.total === 1 ? "heroSubtitleCountLabelSingular" : "heroSubtitleCountLabelPlural";
-  if (prefix) prefix.textContent = tr("heroSubtitlePrefix");
-  if (suffix) suffix.textContent = tr("heroSubtitleSuffix");
-  if (count) count.textContent = Number(stats.total || 0).toLocaleString();
-  if (countLabel) countLabel.textContent = tr(totalLabelKey);
+  const prefixText = tr("heroSubtitlePrefix");
+  const suffixText = tr("heroSubtitleSuffix");
+  const countText = Number(stats.total || 0).toLocaleString();
+  const countLabelText = tr(totalLabelKey);
+  if (prefix && prefix.textContent !== prefixText) prefix.textContent = prefixText;
+  if (suffix && suffix.textContent !== suffixText) suffix.textContent = suffixText;
+  if (count && count.textContent !== countText) count.textContent = countText;
+  if (countLabel && countLabel.textContent !== countLabelText) countLabel.textContent = countLabelText;
   const tooltipText = [
     `${tr("heroCounterForSale")}: ${stats.sale}`,
     `${tr("heroCounterToRent")}: ${stats.rent}`,
@@ -8360,11 +8364,12 @@ function renderHeroPropertyOpportunityCounter() {
     ...(stats.other ? [`${tr("heroCounterOther")}: ${stats.other}`] : [])
   ].join(" · ");
   if (counter) {
-    counter.setAttribute("title", tooltipText);
-    counter.setAttribute("aria-label", `${Number(stats.total || 0).toLocaleString()} ${tr(totalLabelKey)}. ${tooltipText}`);
+    if (counter.getAttribute("title") !== tooltipText) counter.setAttribute("title", tooltipText);
+    const ariaLabel = `${countText} ${countLabelText}. ${tooltipText}`;
+    if (counter.getAttribute("aria-label") !== ariaLabel) counter.setAttribute("aria-label", ariaLabel);
   }
   if (tooltip) {
-    tooltip.innerHTML = `
+    const tooltipHtml = `
       <div class="font-black text-green-100">${adminEscape(tr("heroCounterBreakdownTitle"))}</div>
       <div class="mt-2 grid gap-1.5">
         ${heroOpportunityStatRow("heroCounterForSale", stats.sale)}
@@ -8375,6 +8380,13 @@ function renderHeroPropertyOpportunityCounter() {
         ${stats.other ? heroOpportunityStatRow("heroCounterOther", stats.other) : ""}
       </div>
       <div class="mt-2 text-[11px] text-white/65">${adminEscape(tr("heroCounterTooltipNote"))}</div>`;
+    // DOM serialization can normalize escaped translation text. Remember both
+    // forms on this node, and still restore content changed by another renderer.
+    const previousTooltipHtml = tooltip.__makaugHeroCounterHtml;
+    if (previousTooltipHtml?.source !== tooltipHtml || previousTooltipHtml?.rendered !== tooltip.innerHTML) {
+      tooltip.innerHTML = tooltipHtml;
+      tooltip.__makaugHeroCounterHtml = { source: tooltipHtml, rendered: tooltip.innerHTML };
+    }
   }
 }
 
@@ -8434,9 +8446,11 @@ function applyLanguageUI() {
   applyFinderDashboardLanguageUI();
 
   const heroBadge = document.getElementById("hero-badge");
-  if (heroBadge) heroBadge.innerHTML = `<i class="fas fa-check-circle text-green-300"></i> ${tr("heroBadge")}`;
+  const heroBadgeHtml = `<i class="fas fa-check-circle text-green-300"></i> ${tr("heroBadge")}`;
+  if (heroBadge && heroBadge.innerHTML !== heroBadgeHtml) heroBadge.innerHTML = heroBadgeHtml;
   const heroTitle = document.getElementById("hero-title");
-  if (heroTitle) heroTitle.innerHTML = tr("heroTitleHtml");
+  const heroTitleHtml = tr("heroTitleHtml");
+  if (heroTitle && heroTitle.innerHTML !== heroTitleHtml) heroTitle.innerHTML = heroTitleHtml;
   renderHeroPropertyOpportunityCounter();
   setTextById("hero-tab-rent", tr("heroRent"));
   setTextById("hero-tab-buy", tr("heroBuy"));
@@ -8445,7 +8459,8 @@ function applyLanguageUI() {
   setTextById("hero-tab-land", tr("heroLand"));
   setTextById("hero-tab-off-plan", translateListingLabel("Off Plan"));
   const heroListBtn = document.getElementById("hero-list-free-btn");
-  if (heroListBtn) heroListBtn.innerHTML = `<i class="fas fa-plus"></i> ${tr("heroListFree")}`;
+  const heroListHtml = `<i class="fas fa-plus"></i> ${tr("heroListFree")}`;
+  if (heroListBtn && heroListBtn.innerHTML !== heroListHtml) heroListBtn.innerHTML = heroListHtml;
   setTextById("hero-search-btn", tr("heroSearch"));
   const heroLocationLabel = document.getElementById("hero-location-label");
   if (heroLocationLabel) heroLocationLabel.textContent = tr("heroLocationLabel");
@@ -8839,7 +8854,7 @@ function setLang(lang, silent = false, rerender = true) {
   if (langSelReview && langSelReview.value !== currentLang) langSelReview.value = currentLang;
   persistMakaugLanguagePreference(currentLang);
 
-  applyLanguageUI();
+  if (rerender) applyLanguageUI();
   addAdUnits();
   const keepRegion = lpVal("lp-region");
   const keepDistrict = lpVal("list-district-sel");
@@ -49141,6 +49156,14 @@ function normalizeRoutePath(path = "/") {
   return clean || "/";
 }
 
+function isActiveUgandaHomepage() {
+  const path = normalizeRoutePath(window.location.pathname || "/");
+  return ACTIVE_LOCATION_COUNTRY.countryCode === "UG"
+    && currentPage === "home"
+    && (path === "/" || path === "/index.html")
+    && document.getElementById("page-home")?.classList.contains("active") === true;
+}
+
 function routeForPage(page) {
   return PAGE_ROUTE_MAP[normalizePageKey(page)] || "";
 }
@@ -51049,7 +51072,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       });
     const summaryStatsPromise = fetchPublicOpportunityStatsFromApi()
       .then((stats) => {
-        if (applyPublicOpportunityStats(stats)) renderAll();
+        if (applyPublicOpportunityStats(stats) && !isActiveUgandaHomepage()) renderAll();
         return stats;
       })
       .catch((summaryError) => {
@@ -60049,6 +60072,14 @@ let mapsInitScheduled = false;
 let mapsInitStarted = false;
 let mapsInitPromise = null;
 
+function scheduleInitialPublicMaps() {
+  if (isActiveUgandaHomepage() && typeof IntersectionObserver === "function") {
+    watchActivePublicMapVisibility();
+    return;
+  }
+  scheduleMapsInit();
+}
+
 function scheduleMapsInit(options = {}) {
   watchActivePublicMapVisibility();
   if (!getReadyPublicMapIds().length) return;
@@ -60407,13 +60438,8 @@ function initializeMakaugApp() {
     }
   });
   renderMortgageFinder();
-  scheduleMapsInit();
-  refreshBrokersFromApi({ silent: true }).then((loaded) => {
-    if (loaded) {
-      renderAll();
-      setBrokerMapMarkers(getBrokerDirectory());
-    }
-  });
+  scheduleInitialPublicMaps();
+  refreshBrokersFromApi({ silent: true });
   filterStudents();
   filterCommercial();
   filterLand();

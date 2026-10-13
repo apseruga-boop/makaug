@@ -12,6 +12,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+const acorn = require('acorn');
+const walk = require('acorn-walk');
 
 const ROOT = path.join(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
@@ -28,7 +31,31 @@ test('every locale in the app has the new heroBadge, and none claims #1 or a fre
   assert.ok(badges.includes('Buli property mu Uganda, mu kifo kimu'), 'Luganda');
   assert.ok(badges.includes('Kila mali nchini Uganda, mahali pamoja'), 'Swahili');
   assert.doesNotMatch(APP, /Uganda's #1 Free Property Platform/i);
-  assert.match(APP, /if \(heroBadge\) heroBadge\.innerHTML = `<i class="fas fa-check-circle text-green-300"><\/i> \$\{tr\("heroBadge"\)\}`;/);
+});
+
+test('actual language UI renders all nine badges and preserves unchanged icon/text markup', () => {
+  const ast = acorn.parse(APP, { ecmaVersion: 'latest' });
+  const declaration = (name) => {
+    const node = ast.body.find((item) => item.type === 'FunctionDeclaration' && item.id.name === name);
+    assert.ok(node, name); return APP.slice(node.start, node.end);
+  };
+  let markup = ''; let writes = 0;
+  const badge = { get innerHTML() { return markup; }, set innerHTML(value) { markup = value; writes += 1; } };
+  const context = vm.createContext({ document: { getElementById: (id) => id === 'hero-badge' ? badge : null, querySelector: () => null },
+    window: { location: { pathname: '/' } }, currentLang: 'en', currentPage: 'home', currentTab: 'sale', authState: null });
+  const apply = ast.body.find((item) => item.type === 'FunctionDeclaration' && item.id.name === 'applyLanguageUI');
+  walk.simple(apply, { CallExpression(node) {
+    if (node.callee.type === 'Identifier' && node.callee.name !== 'tr') context[node.callee.name] = (value) => value;
+  } });
+  context.preserveServerRenderedSeoHeading = () => false;
+  vm.runInContext(APP.slice(APP.indexOf('const I18N_UI ='), APP.indexOf('const CONTENT_I18N =')) + '\n'
+    + declaration('tr') + '\n' + declaration('applyLanguageUI'), context);
+  for (const lang of ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar', 'en']) {
+    context.currentLang = lang; context.applyLanguageUI();
+    assert.equal(markup, `<i class="fas fa-check-circle text-green-300"></i> ${context.tr('heroBadge')}`);
+    assert.doesNotMatch(markup, CLAIM, lang);
+    const previousWrites = writes; context.applyLanguageUI(); assert.equal(writes, previousWrites, lang);
+  }
 });
 
 test('every language pack has the new key, translated, and not the old one', () => {

@@ -12,7 +12,8 @@ const ast = acorn.parse(source, { ecmaVersion: 'latest', sourceType: 'script' })
 const functions = [
   'getPublicListings', 'getHomepageFeaturedListings', 'renderGrid', 'renderAll',
   'loadingPropertyGridHtml', 'noResultsCardForGrid', 'applyPublicFeaturedRows',
-  'applyPublicRowsForUi', 'applyPublicOpportunityStats', 'refreshPublicListingsFromApi'
+  'applyPublicRowsForUi', 'applyPublicOpportunityStats', 'refreshPublicListingsFromApi',
+  'normalizeRoutePath', 'isActiveUgandaHomepage'
 ].map((name) => {
   const node = ast.body.find((item) => item.type === 'FunctionDeclaration' && item.id.name === name);
   assert.ok(node, `${name} exists in the actual application`);
@@ -40,7 +41,9 @@ function fixture({ ssr = true } = {}) {
       return html.includes('data-ssr-property-card') ? {} : null;
     }
   };
-  const grids = { 'home-grid': grid, 'rent-grid': { innerHTML: '' } };
+  const grids = { 'home-grid': grid, 'rent-grid': { innerHTML: '' },
+    'page-home': { classList: { contains: (name) => name === 'active' } } };
+  const warnings = [];
   const featured = deferred();
   const summary = deferred();
   const primary = deferred();
@@ -53,9 +56,11 @@ function fixture({ ssr = true } = {}) {
     publicListingsApiStats: null,
     publicListingsApiTotal: 0,
     PUBLIC_LISTINGS_FAST_PAGE_LIMIT: 40,
+    currentPage: 'home',
+    ACTIVE_LOCATION_COUNTRY: { countryCode: 'UG' },
     document: { getElementById: (id) => grids[id] || null },
-    window: {},
-    console: { warn() {} },
+    window: { location: { pathname: '/' } },
+    console: { warn: (...args) => warnings.push(args) },
     normalizeType: (type) => type,
     isListingPublicVisible: () => true,
     isPublicDemoTrainingListing: () => false,
@@ -90,7 +95,7 @@ function fixture({ ssr = true } = {}) {
     }
   });
   vm.runInContext(functions, context);
-  return { context, grid, grids, initialHtml, writes, featured, summary, primary };
+  return { context, grid, grids, initialHtml, writes, featured, summary, primary, warnings };
 }
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -103,7 +108,9 @@ test('startup and repeated summary/broker renders leave all six server-delivered
   const refresh = f.context.refreshPublicListingsFromApi();
   f.summary.resolve({ total: 80 });
   await flush();
-  f.context.renderAll(); // The broker completion callback invokes this same renderer.
+  assert.equal(f.context.publicListingsApiStats.total, 80);
+  assert.deepEqual(f.warnings, [], 'metadata callbacks execute real dependencies without swallowed errors');
+  f.context.renderAll(); // The broker API itself invokes this same renderer.
   assert.equal(f.grid.innerHTML, f.initialHtml);
   assert.deepEqual(f.writes, [], 'independent metadata and broker results do not remove visible listings');
   f.featured.resolve([]);
