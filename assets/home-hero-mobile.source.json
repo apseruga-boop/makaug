@@ -1,0 +1,14 @@
+{
+  "downloadedAt": "2026-10-13T20:40:23.576103+00:00",
+  "sourceUrl": "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=640&q=50",
+  "sourceFormatRequest": "image/webp",
+  "httpStatus": 200,
+  "contentType": "image/webp",
+  "bytes": 21280,
+  "sha256": "306cd8edb8f0afbc78858655f11487dd366d955126b03e112ab07b437cba38d0",
+  "path": "assets/home-hero-mobile-640-q50.306cd8edb8f0.webp",
+  "modification": "No local image transformation; saved response for existing mobile640/q50 photo. Desktop image untouched.",
+  "licenseSource": "https://unsplash.com/license",
+  "licenseVerifiedAt": "2026-10-13T20:40:23.576127+00:00",
+  "licenseFacts": "The Unsplash license permits downloading, copying, distributing and commercially using this existing photo. No local image transformation or Unsplash API was used."
+}
