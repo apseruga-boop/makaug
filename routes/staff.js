@@ -1070,7 +1070,11 @@ async function safeOne(sql, params = [], fallback = {}, options = {}) {
     return result.rows[0] || fallback;
   } catch (error) {
     if (!['42P01', '42703'].includes(error.code)) {
-      logger.warn('Staff dashboard query failed', { message: error.message });
+      logger.warn('Staff dashboard query failed', {
+        label: options.label || 'staff_one',
+        code: error.code || null,
+        message: error.message
+      });
     }
     return {
       ...fallback,
@@ -1089,7 +1093,11 @@ async function safeRows(sql, params = [], options = {}) {
     return result.rows;
   } catch (error) {
     if (!['42P01', '42703'].includes(error.code)) {
-      logger.warn('Staff dashboard rows query failed', { message: error.message });
+      logger.warn('Staff dashboard rows query failed', {
+        label: options.label || 'staff_rows',
+        code: error.code || null,
+        message: error.message
+      });
     }
     return [];
   }
@@ -1925,24 +1933,26 @@ function staffPanelLeadRows(staffId, panelLimit, options = {}) {
 }
 
 function staffPanelWhatsappConversationRows(staffId, panelLimit, options = {}) {
+  // Pick the visible conversations before reading their message/intent payloads.
+  // The timestamp-only fallback keeps the existing order for imported rows
+  // without last_message_at, using the same per-phone history index.
   return safeRows(
-    `WITH latest_message AS (
-       SELECT DISTINCT ON (m.user_phone)
-              m.user_phone,
-              m.message_type,
-              m.payload,
-              m.created_at
-       FROM whatsapp_messages m
-       ORDER BY m.user_phone, m.created_at DESC
-     ),
-     latest_intent AS (
-       SELECT DISTINCT ON (i.user_phone)
-              i.user_phone,
-              i.detected_intent,
-              i.language,
-              i.created_at
-       FROM whatsapp_intent_logs i
-       ORDER BY i.user_phone, i.created_at DESC
+    `WITH candidate_conversations AS MATERIALIZED (
+       SELECT c.phone, c.status, c.category, c.priority, c.assigned_to,
+              c.last_summary, c.last_message_at, c.last_inbound_at, c.last_outbound_at,
+              c.last_ai_reply_at, c.last_human_reply_at, c.metadata, c.updated_at,
+              COALESCE(c.last_message_at, (
+                SELECT m.created_at
+                FROM whatsapp_messages m
+                WHERE m.user_phone = c.phone
+                ORDER BY m.created_at DESC
+                LIMIT 1
+              ), c.updated_at) AS panel_sort_at
+       FROM whatsapp_conversation_state c
+       WHERE c.assigned_to::text = $1::text
+          OR c.status IN ('needs_human','escalated','open','ai_active','awaiting_customer')
+       ORDER BY panel_sort_at DESC
+       LIMIT $2
      )
      SELECT c.phone::text AS phone,
             c.status::text AS status,
@@ -1967,13 +1977,22 @@ function staffPanelWhatsappConversationRows(staffId, panelLimit, options = {}) {
             c.last_human_reply_at,
             c.metadata,
             c.updated_at
-     FROM whatsapp_conversation_state c
-     LEFT JOIN latest_message lm ON lm.user_phone = c.phone
-     LEFT JOIN latest_intent li ON li.user_phone = c.phone
-     WHERE c.assigned_to::text = $1::text
-        OR c.status IN ('needs_human','escalated','open','ai_active','awaiting_customer')
-     ORDER BY COALESCE(c.last_message_at, lm.created_at, c.updated_at) DESC
-     LIMIT $2`,
+     FROM candidate_conversations c
+     LEFT JOIN LATERAL (
+       SELECT m.message_type, m.payload
+       FROM whatsapp_messages m
+       WHERE m.user_phone = c.phone
+       ORDER BY m.created_at DESC
+       LIMIT 1
+     ) lm ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT i.detected_intent, i.language
+       FROM whatsapp_intent_logs i
+       WHERE i.user_phone = c.phone
+       ORDER BY i.created_at DESC
+       LIMIT 1
+     ) li ON TRUE
+     ORDER BY c.panel_sort_at DESC`,
     [staffId, panelLimit],
     options
   );
