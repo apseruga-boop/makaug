@@ -4,7 +4,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const crypto = require('node:crypto');
 const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
@@ -28,24 +27,15 @@ test('mobile and desktop hero preload exactly their matching CSS source with mut
   }
 });
 
-test('mobile hero uses the pinned same-origin WebP bytes in both preload and CSS', () => {
-  const mobileSource = imageUrl(mobileCss);
-  assert.equal(mobileSource, '/assets/home-hero-mobile-640-q50.306cd8edb8f0.webp');
-  const file = path.join(__dirname, '..', mobileSource.slice(1));
-  assert(fs.existsSync(file), 'the referenced image is shipped with the site');
-  const image = fs.readFileSync(file);
-  assert.equal(image.subarray(0, 4).toString('ascii'), 'RIFF');
-  assert.equal(image.subarray(8, 12).toString('ascii'), 'WEBP', 'image/webp format');
-  assert.equal(image.readUInt32LE(4) + 8, image.length, 'complete WebP container');
-  assert(image.length < 25000, 'mobile critical image stays below 25 KB');
-  const hash = crypto.createHash('sha256').update(image).digest('hex');
-  assert.equal(hash, '306cd8edb8f0afbc78858655f11487dd366d955126b03e112ab07b437cba38d0', 'unchanged downloaded source bytes');
-  assert(mobileSource.includes(`.${hash.slice(0, 12)}.`), 'immutable filename matches content');
-});
-
-test('desktop retains the original photo source and both viewport crops and overlays remain', () => {
+test('same photo, crop and overlay remain; only mobile resolution/quality changes', () => {
+  const mobile = new URL(imageUrl(mobileCss));
   const desktop = new URL(imageUrl(desktopCss));
-  assert.equal(desktop.href, 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60');
+  assert.equal(mobile.origin, desktop.origin);
+  assert.equal(mobile.pathname, '/photo-1560518883-ce09059eeffa');
+  assert.equal(mobile.pathname, desktop.pathname);
+  for (const key of ['auto', 'fit']) assert.equal(mobile.searchParams.get(key), desktop.searchParams.get(key));
+  assert.equal(mobile.searchParams.get('w'), '640');
+  assert.equal(mobile.searchParams.get('q'), '50');
   assert.equal(desktop.searchParams.get('w'), '1200');
   assert.equal(desktop.searchParams.get('q'), '60');
   assert.match(desktopCss, /linear-gradient\(180deg, rgba\(4, 21, 33, 0\.35\)/);
