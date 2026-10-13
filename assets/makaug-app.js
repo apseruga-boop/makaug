@@ -46852,11 +46852,12 @@ function updateStudentHeader(list, options = {}) {
   }
 }
 
-function brokerAvatarHtml(b, classes = "w-14 h-14") {
+function brokerAvatarHtml(b, classes = "w-14 h-14", options = {}) {
   const photo = b?.photo || b?.profile_photo_url || "";
   const wrapperClass = `${classes} rounded-full bg-green-50 border border-green-100 mx-auto overflow-hidden flex items-center justify-center text-2xl`;
   if (photo) {
-    return `<div class="${wrapperClass}"><img src="${adminAttr(photo)}" alt="${adminAttr(b?.name || "Broker")}" class="w-full h-full object-cover" onerror="this.remove(); this.parentElement.textContent='${adminAttr(b?.emoji || "👔")}'"></div>`;
+    const loadingHints = options.imageLoading === "lazy" ? ' loading="lazy" decoding="async"' : "";
+    return `<div class="${wrapperClass}"><img${loadingHints} src="${adminAttr(photo)}" alt="${adminAttr(b?.name || "Broker")}" class="w-full h-full object-cover" onerror="this.remove(); this.parentElement.textContent='${adminAttr(b?.emoji || "👔")}'"></div>`;
   }
   return `<div class="${wrapperClass}">${b?.emoji || "👔"}</div>`;
 }
@@ -46941,7 +46942,7 @@ function renderBrokers(id, list) {
   if (id === "brokers-grid") {
     el.innerHTML = list.map((b) => `
       <div class="broker-grid-card bg-white rounded-2xl border border-green-100 p-4 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
-        <div class="mb-3">${brokerAvatarHtml(b, "w-28 h-28 border-4 shadow-sm")}</div>
+        <div class="mb-3">${brokerAvatarHtml(b, "w-28 h-28 border-4 shadow-sm", { imageLoading: "lazy" })}</div>
         <h3 class="text-xl font-black text-gray-900 text-center leading-tight">${adminEscape(b.name)}</h3>
         ${brokerCompanyLineHtml(b)}
         ${renderBrokerRegistrationBadge(b) ? `<div class="mt-3 text-center">${renderBrokerRegistrationBadge(b)}</div>` : ""}
@@ -46963,7 +46964,7 @@ function renderBrokers(id, list) {
 
   el.innerHTML = list.map((b) => `
     <div class="broker-grid-card bg-white rounded-2xl border border-gray-100 p-4 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
-      <div class="mb-3">${brokerAvatarHtml(b, "w-28 h-28 border-4 shadow-sm")}</div>
+      <div class="mb-3">${brokerAvatarHtml(b, "w-28 h-28 border-4 shadow-sm", { imageLoading: "lazy" })}</div>
       <h3 class="text-xl font-black text-gray-900 text-center">${adminEscape(b.name)}</h3>
       ${brokerCompanyLineHtml(b)}
       ${renderBrokerRegistrationBadge(b, "text-[11px]") ? `<div class="mt-2 text-center">${renderBrokerRegistrationBadge(b, "text-[11px]")}</div>` : ""}
