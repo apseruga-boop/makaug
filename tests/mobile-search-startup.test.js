@@ -157,7 +157,7 @@ test('mortgage rates are fetched on route entry once and explicit refresh still 
     hydrateMortgageProvidersFromApi() {}, renderMortgageFinder() { renders += 1; }, toast() {}, mortgageTr(x) { return x; }, Date
   });
   vm.runInContext(`let mortgageRatesHydrating=false, mortgageRatesHydratedOnce=false, MORTGAGE_RATE_LAST_CHECKED_RAW='';
-    ${code('loadMortgageRates')} ${code('showPage')}`, context);
+    ${code('loadMortgageRates')} ${code('ensurePublicPageModule')} ${code('showPage')}`, context);
   vm.runInContext('showPage("rent", {history:false})', context); await new Promise((resolve) => setImmediate(resolve)); assert.equal(requests, 0);
   vm.runInContext('showPage("mortgage", {history:false})', context); await new Promise((resolve) => setImmediate(resolve)); assert.equal(requests, 1);
   vm.runInContext('showPage("mortgage", {history:false})', context); await new Promise((resolve) => setImmediate(resolve)); assert.equal(requests, 1, 'returning to loaded route reuses existing rates');

@@ -18,7 +18,7 @@ for (const expected of [
   'translateNearbyAmenityName',
   'if (lang === "en" && translations.en?.[key])',
   'function shouldRegenerateLocalizedListingCopy',
-  'const popupDescription = propertyCardDescriptionText(property);',
+  'const title = getLocalizedPropertyTitle(property) || translatePropertyUi("Property");',
   'translateListingLabel(p.subtype || p.property_type || "Property")'
 ]) {
   assert(appSource.includes(expected), `missing detail-page i18n regression marker: ${expected}`);
