@@ -127,8 +127,12 @@ test('the real initializer builds usable hero controls once and preserves select
   assert.equal(fixture.calls.filter((call) => call[0] === 'initWebVitalsTracking').length, 1);
 });
 
-const refreshStatement = fn('initializeMakaugApp').body.body.find((node) =>
-  node.type === 'ExpressionStatement' && source.slice(node.start, node.end).startsWith('refreshPublicListingsFromApi('));
+let refreshStatement;
+walk(fn('initializeMakaugApp'), (node) => {
+  if (node.type === 'ExpressionStatement' && source.slice(node.start, node.end).startsWith('refreshPublicListingsFromApi(')) {
+    refreshStatement = node;
+  }
+});
 assert.ok(refreshStatement, 'actual startup inventory refresh callback');
 
 test('completed inventory startup keeps maps and route handoff without an extra active-home render', async () => {

@@ -21,8 +21,10 @@ function walk(node, callback) {
   }
 }
 function startupExpression(names) {
-  const statement = fn('initializeMakaugApp').body.body.find((n) =>
-    n.type === 'ExpressionStatement' && names.some((name) => source.slice(n.start, n.end).startsWith(name + '(')));
+  let statement;
+  walk(fn('initializeMakaugApp'), (n) => {
+    if (n.type === 'ExpressionStatement' && names.some((name) => source.slice(n.start, n.end).startsWith(name + '('))) statement = n;
+  });
   assert(statement, names.join('/'));
   return source.slice(statement.start, statement.end);
 }

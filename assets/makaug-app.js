@@ -9291,13 +9291,18 @@ function initWebVitalsTracking() {
       }
     }).observe({ type: "event", buffered: true, durationThreshold: 40 });
   } catch (e) {}
-  window.addEventListener("load", () => {
+  const recordNavigationMetrics = () => {
     const nav = performance.getEntriesByType("navigation")[0];
     if (nav) {
       sendWebVitalMetric("TTFB", nav.responseStart, nav.responseStart <= 800 ? "good" : "needs_improvement");
       sendWebVitalMetric("FCP", performance.getEntriesByName("first-contentful-paint")[0]?.startTime || 0, "observed");
     }
-  }, { once: true });
+  };
+  if (document.readyState === "complete") {
+    recordNavigationMetrics();
+  } else {
+    window.addEventListener("load", recordNavigationMetrics, { once: true });
+  }
 }
 
 function normalizePhoneInput(value) {
@@ -60401,82 +60406,103 @@ function toast(message, duration = 2400) {
   el._timer = setTimeout(() => el.classList.remove("show"), duration);
 }
 
-function initializeMakaugApp() {
+function initializeMakaugApp({ yieldBetweenStages = false } = {}) {
   if (window.__makaugAppInitialized) return;
   window.__makaugAppInitialized = true;
   installPublicRouteInterceptor();
   captureInitialSsrCategoryGrid();
   const savedLang = getStoredMakaugLanguagePreference();
-  addAdUnits();
-  initGoogleAds();
-  populateDistricts();
-  populateBrokerFilterOptions();
-  populateUniversitySelects();
-  populateListAddressSuggestions();
-  loadDashboardState();
-  loadAuthState();
-  hydrateMonetizationConfig();
-  handleOAuthReturnFromUrl();
-  setLang(getStartupLanguagePreference(savedLang), true, false);
-  initFrontendAnalytics();
-  initWebVitalsTracking();
-  populateLpRegionOptions();
-  onLpRegionChange();
-  setListType(getListType());
-  setListWizardStep(1);
-  setLpOtpChannel(lpVal("lp-otp-channel") || "phone");
-  toggleLpFieldAgentId();
-  updateLpPhotoRequirements();
-  updateListPreview();
-  renderLpPhotoFeedback();
-  onLpVerifyPhoneInput();
-  onLpVerifyEmailInput();
-  onLpVerifyNinInput();
-  renderAll();
-  hydrateRevenuePlacementCatalog();
-  renderHowToVideoSections();
-  refreshPublicListingsFromApi({ silent: true }).then((loaded) => {
-    if (loaded) {
-      if (!isActiveUgandaHomepage()) renderAll();
-      resetMaps();
-      syncActiveRouteSearchHandoff("public_inventory_route_query");
-    }
-  });
-  renderMortgageFinder();
-  scheduleInitialPublicMaps();
-  refreshBrokersFromApi({ silent: true });
-  filterStudents();
-  filterCommercial();
-  filterLand();
-  wireSearchTypeahead();
-  Promise.resolve(parseInitialDeepLink()).catch((error) => console.warn("Initial route setup failed", error)).finally(() => {
-    if (finishInitialSsrCategoryGridSetup()) renderAll();
-  });
-  window.setTimeout(() => syncActiveRouteSearchHandoff("startup_route_query_retry"), 250);
-  syncAgentRegistrationForm();
-  toggleAgentFieldIdInput();
-  setAuthSignInAudience(authSignInAudience);
-  updateAdminAccessEntrypoints();
-  document.addEventListener("keydown", (event) => {
-    const key = String(event.key || "").toLowerCase();
-    if (key === "a" && event.ctrlKey && event.altKey) {
-      event.preventDefault();
-      unlockAdminAccess({ open: true, silent: true });
-    }
-  });
-  setAuthSignUpAudience(authSignUpAudience);
-  setAuthSignUpOtpChannel(authSignUpOtpChannel);
+  const stages = [
+    () => {
+      addAdUnits();
+      initGoogleAds();
+      populateDistricts();
+      populateBrokerFilterOptions();
+      populateUniversitySelects();
+      populateListAddressSuggestions();
+      loadDashboardState();
+      loadAuthState();
+      hydrateMonetizationConfig();
+      handleOAuthReturnFromUrl();
+    },
+    () => {
+      setLang(getStartupLanguagePreference(savedLang), true, false);
+      initFrontendAnalytics();
+      initWebVitalsTracking();
+    },
+    () => {
+      populateLpRegionOptions();
+      onLpRegionChange();
+      setListType(getListType());
+      setListWizardStep(1);
+      setLpOtpChannel(lpVal("lp-otp-channel") || "phone");
+      toggleLpFieldAgentId();
+      updateLpPhotoRequirements();
+      updateListPreview();
+      renderLpPhotoFeedback();
+      onLpVerifyPhoneInput();
+      onLpVerifyEmailInput();
+      onLpVerifyNinInput();
+      renderAll();
+      hydrateRevenuePlacementCatalog();
+      renderHowToVideoSections();
+      refreshPublicListingsFromApi({ silent: true }).then((loaded) => {
+        if (loaded) {
+          if (!isActiveUgandaHomepage()) renderAll();
+          resetMaps();
+          syncActiveRouteSearchHandoff("public_inventory_route_query");
+        }
+      });
+    },
+    () => {
+      renderMortgageFinder();
+      scheduleInitialPublicMaps();
+      refreshBrokersFromApi({ silent: true });
+      filterStudents();
+      filterCommercial();
+      filterLand();
+      wireSearchTypeahead();
+      Promise.resolve(parseInitialDeepLink()).catch((error) => console.warn("Initial route setup failed", error)).finally(() => {
+        if (finishInitialSsrCategoryGridSetup()) renderAll();
+      });
+      window.setTimeout(() => syncActiveRouteSearchHandoff("startup_route_query_retry"), 250);
+      syncAgentRegistrationForm();
+      toggleAgentFieldIdInput();
+      setAuthSignInAudience(authSignInAudience);
+      updateAdminAccessEntrypoints();
+      document.addEventListener("keydown", (event) => {
+        const key = String(event.key || "").toLowerCase();
+        if (key === "a" && event.ctrlKey && event.altKey) {
+          event.preventDefault();
+          unlockAdminAccess({ open: true, silent: true });
+        }
+      });
+      setAuthSignUpAudience(authSignUpAudience);
+      setAuthSignUpOtpChannel(authSignUpOtpChannel);
 
-  document.addEventListener("click", (e) => {
-    const panel = document.getElementById("rm-sugg-panel");
-    const activeInput = typeaheadState.input;
-    const clickedPanel = panel && e.target.closest("#rm-sugg-panel");
-    const clickedActiveInput = activeInput && e.target === activeInput;
-    if (!clickedPanel && !clickedActiveInput) closeHeroSuggestions();
-  });
+      document.addEventListener("click", (e) => {
+        const panel = document.getElementById("rm-sugg-panel");
+        const activeInput = typeaheadState.input;
+        const clickedPanel = panel && e.target.closest("#rm-sugg-panel");
+        const clickedActiveInput = activeInput && e.target === activeInput;
+        if (!clickedPanel && !clickedActiveInput) closeHeroSuggestions();
+      });
 
-  window.addEventListener("resize", closeHeroSuggestions);
-  window.addEventListener("scroll", closeHeroSuggestions, true);
+      window.addEventListener("resize", closeHeroSuggestions);
+      window.addEventListener("scroll", closeHeroSuggestions, true);
+    }
+  ];
+  let nextStage = 0;
+  const runNextStage = () => {
+    stages[nextStage++]();
+    if (nextStage === stages.length) return;
+    if (yieldBetweenStages && shouldYieldMobileHomepageStartup()) {
+      window.setTimeout(runNextStage, 0);
+    } else {
+      runNextStage();
+    }
+  };
+  runNextStage();
 }
 
 let makaugAppStartupQueued = false;
@@ -60510,7 +60536,7 @@ function startMakaugApp() {
   makaugAppStartupQueued = true;
   window.setTimeout(() => {
     makaugAppStartupQueued = false;
-    initializeMakaugApp();
+    initializeMakaugApp({ yieldBetweenStages: true });
   }, 0);
 }
 
