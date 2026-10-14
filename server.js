@@ -1264,7 +1264,11 @@ function renderPublicHtml(pathname) {
   rendered = applyHomeHeroPreload(rendered, normalizedBasePath);
   rendered = applyShortTermStylesheetLoading(rendered, normalizedBasePath);
   rendered = applyPublicFontDisplayOptional(rendered);
-  rendered = inlinePublicFontFaces(rendered);
+  rendered = inlinePublicFontFaces(rendered, {
+    preloadMedia: ACTIVE_COUNTRY_CODE === 'UG'
+      && (normalizedBasePath === '/' || normalizedBasePath === '/index.html')
+      ? '(min-width: 768px)' : ''
+  });
   rendered = inlinePublicCoreStylesheets(rendered);
   rendered = injectGa4HeadTag(rendered, normalizedBasePath);
   if (isProduction) {

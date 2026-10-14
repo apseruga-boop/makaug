@@ -50,6 +50,7 @@ test('single quotes and HTML-escaped queries retain their attributes; applying t
 
 function publicRenderer() {
   const context = vm.createContext({
+    ACTIVE_COUNTRY_CODE: 'UG',
     process: { env: { SHARED_CORE_PHASE1_ENABLED: 'false' } },
     isProduction: false,
     publicHtmlCache: new Map(),
