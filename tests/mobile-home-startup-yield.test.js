@@ -91,7 +91,18 @@ function fixture(options = {}) {
     + optional('shouldYieldMobileHomepageStartup') + optional('startMakaugApp'), context);
   return { context, calls, timers, location, documentListeners, windowListeners,
     start() { vm.runInContext(source.slice(startup.start, startup.end), context); },
-    flush() { const task = timers.shift(); assert(task, 'queued task'); task.callback(); return task.delay; },
+    flush() {
+      const initial = timers.findIndex((task) => task.delay === 0);
+      assert(initial >= 0, 'queued startup task');
+      let index = initial;
+      let count = 0;
+      while (index >= 0) {
+        assert.ok(++count <= 8, 'startup must finish rather than queue an endless continuation');
+        timers.splice(index, 1)[0].callback();
+        index = timers.findIndex((task) => task.delay === 0);
+      }
+      return 0;
+    },
     click(href, extra = {}) {
       const event = { button: 0, target: { closest: () => ({ target: '', dataset: {}, hasAttribute: () => false,
         getAttribute: () => href }) }, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {}, ...extra };

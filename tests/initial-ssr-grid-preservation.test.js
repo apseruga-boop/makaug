@@ -6,8 +6,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const acorn = require('acorn');
+const walk = require('acorn-walk');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'assets/makaug-app.js'), 'utf8');
+const source = fs.readFileSync(process.env.MAKAUG_BOOT_TEST_SOURCE || path.join(__dirname, '..', 'assets/makaug-app.js'), 'utf8');
 const ast = acorn.parse(source, { ecmaVersion: 'latest', sourceType: 'script' });
 const helpers = ['captureInitialSsrCategoryGrid', 'finishInitialSsrCategoryGridSetup', 'invalidateInitialSsrCategoryGrid', 'shouldPreserveInitialSsrCategoryGrid', 'renderPublicCategoryPage'];
 const declarations = helpers.map((name) => {
@@ -212,8 +213,10 @@ test('pages without a preserved SSR grid continue rendering their regular empty 
 test('the actual initial deep-link promise finishes setup before a fast route response can replace SSR', async () => {
   const deepLink = ast.body.find((node) => node.type === 'FunctionDeclaration' && node.id.name === 'parseInitialDeepLink');
   const initialize = ast.body.find((node) => node.type === 'FunctionDeclaration' && node.id.name === 'initializeMakaugApp');
-  const setup = initialize.body.body.find((node) => node.type === 'ExpressionStatement'
-    && source.slice(node.start, node.end).startsWith('Promise.resolve(parseInitialDeepLink())'));
+  let setup;
+  walk.simple(initialize, { ExpressionStatement(node) {
+    if (source.slice(node.start, node.end).startsWith('Promise.resolve(parseInitialDeepLink())')) setup = node;
+  } });
   assert.ok(setup, 'the real startup pipeline awaits deep-link setup before finishing preservation');
   for (const options of [
     { category: 'student', pathname: '/student-accommodation/university/makerere' },
