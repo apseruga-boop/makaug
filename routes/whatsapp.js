@@ -9842,6 +9842,28 @@ async function handleEmployeeWhatsappIntake({
             : `✅ ${attachment.attached} media item(s) attached to property ${Array.isArray(data.property_ids) ? data.property_ids.length : 1}. Send more media, start the next property with a full caption, or type *COMPLETE* only when the whole batch is finished.`
       };
     } catch (error) {
+      // 13 Oct 2026: an agent's video went to the property he had finished earlier,
+      // which a moderator had since approved. That listing is no longer pending, so
+      // the attach failed, the video was thrown away, and he was told it could not
+      // be attached even though his next message was the caption that belonged to
+      // it. A finished property is no longer "current": keep the media waiting for
+      // the caption that is about to arrive.
+      if (/no longer pending|changed status/i.test(String(error?.message || '')) && Array.isArray(storedMedia) && storedMedia.length) {
+        try {
+          data.current_property_id = null;
+          rememberEmployeePendingMedia(data, storedMedia, inboundMessageId);
+          await replaceEmployeeSession(phone, currentStep, data);
+          return {
+            handled: true,
+            nextStep: currentStep,
+            message: data.whatsapp_agent_self_intake === true
+              ? 'Got it — I have your photo/video safe. Now send the caption with the type, exact location and price, and I will put it up for review.'
+              : employeeIncompletePropertyMessage('', employeePropertyMissing(employeePropertyFacts('', data)), data)
+          };
+        } catch (holdError) {
+          logger.error('WhatsApp employee media could not be held after its property closed:', holdError);
+        }
+      }
       logger.error('WhatsApp employee media attachment failed:', error);
       return { handled: true, nextStep: currentStep, message: 'I could not attach that media to the pending property. Nothing changed and nothing went live.' };
     }
