@@ -7,21 +7,14 @@ const crypto = require('node:crypto');
 const vm = require('node:vm');
 const acorn = require('acorn');
 const { sanitizePublicHtml, PUBLIC_FORBIDDEN_STRINGS } = require('../services/publicHtmlSanitizer');
-const { createPublicFontFaceInliner: createInliner } = require('../services/publicFontFaces');
-const localMetadata = require('../assets/fonts/plus-jakarta-sans-latin.source.json');
-const localBytes = fs.readFileSync(require.resolve('../assets/fonts/plus-jakarta-sans-latin.woff2'));
-function createPublicFontFaceInliner(cssReader) {
-  return createInliner(cssReader ? (filename, encoding) => filename.endsWith('.woff2') ? localBytes : cssReader(filename, encoding) : undefined);
-}
+const { createPublicFontFaceInliner } = require('../services/publicFontFaces');
 const sourceMetadata = require('../assets/fonts/plus-jakarta-sans-optional.source.json');
 const css = fs.readFileSync(require.resolve('../assets/fonts/plus-jakarta-sans-optional.css'), 'utf8');
 const index = fs.readFileSync(require.resolve('../index.html'), 'utf8');
 const server = fs.readFileSync(require.resolve('../server.js'), 'utf8');
 const ast = acorn.parse(server, { ecmaVersion: 'latest' });
 const url = sourceMetadata.sourceUrl;
-const originalLatinFontUrl = sourceMetadata.uniqueFonts.find((font) => /CoOg4Ko20yygg_vb\.woff2$/.test(font));
-const latinFontUrl = `/assets/fonts/plus-jakarta-sans-latin.woff2?v=${localMetadata.sha256.slice(0,12)}`;
-const renderedCss = css.replaceAll(`url(${originalLatinFontUrl})`, `url(${latinFontUrl})`);
+const latinFontUrl = sourceMetadata.uniqueFonts.find((font) => /CoOg4Ko20yygg_vb\.woff2$/.test(font));
 const links = `<link rel="preload" href="${url}" as="style" onload="this.onload=null;this.rel='stylesheet'"><noscript><link href="${url}" rel="stylesheet"></noscript>`;
 const content = '<h1>Student accommodation in Uganda</h1><p lang="lg">Ennyumba</p><p lang="ar">السكن</p><p lang="am">መኖሪያ</p><article data-ssr-property-card="a">Current listing</article>';
 const fixture = `<html><head><meta charset="UTF-8"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>${links}<style>body{font-family:"Plus Jakarta Sans",system-ui,sans-serif}</style></head><body>${content}</body></html>`;
@@ -47,7 +40,7 @@ test('pinned official response preserves all weights, unicode subsets, optional 
 
 test('one verified Latin preload and all faces precede body use; charset stays first and duplicate definitions are removed', () => {
   const output = createPublicFontFaceInliner()(fixture);
-  assert.equal(faces(output), renderedCss); assert.match(output, /<head><meta charset="UTF-8">\s*<link rel="preload" as="font"/);
+  assert.equal(faces(output), css); assert.match(output, /<head><meta charset="UTF-8">\s*<link rel="preload" as="font"/);
   const preload = output.match(/<link\b[^>]*data-public-font-preload="jakarta-latin"[^>]*>/)?.[0];
   assert.ok(preload); assert.ok(preload.includes(`href="${latinFontUrl}"`));
   assert.match(preload, /type="font\/woff2"/); assert.match(preload, /crossorigin="anonymous"/);
@@ -56,7 +49,7 @@ test('one verified Latin preload and all faces precede body use; charset stays f
   assert.ok(output.includes(content)); assert.ok(output.includes('href="https://fonts.gstatic.com" crossorigin'));
   assert.doesNotMatch(output, /fonts\.googleapis\.com\/css2|<noscript>/);
   assert.equal((output.match(/as="font"/g) || []).length, 1, 'only the shared Latin file is prioritized');
-  const latinFaces = [...css.matchAll(/@font-face\s*\{([^}]+)\}/g)].map((match) => match[1]).filter((block) => block.includes(`url(${originalLatinFontUrl})`));
+  const latinFaces = [...css.matchAll(/@font-face\s*\{([^}]+)\}/g)].map((match) => match[1]).filter((block) => block.includes(`url(${latinFontUrl})`));
   assert.equal(latinFaces.length, 5); assert.ok(latinFaces.every((block) => block.includes('U+0000-00FF')));
 });
 
@@ -70,7 +63,7 @@ test('exact face content is cached once and a repeated transform is idempotent',
 test('read or validation failure keeps the original optional loader and allows recovery on a later render', () => {
   for (const failure of [null, '', css.replaceAll('font-display: optional', 'font-display: swap'), css + '</style><script>bad()</script>']) {
     let first = true; const apply = createPublicFontFaceInliner(() => { if (first) { if (failure === null) throw new Error('missing asset'); return failure; } return css; });
-    assert.equal(apply(fixture), fixture); first = false; assert.equal(faces(apply(fixture)), renderedCss);
+    assert.equal(apply(fixture), fixture); first = false; assert.equal(faces(apply(fixture)), css);
   }
 });
 
@@ -87,7 +80,7 @@ test('only the single exact Jakarta family/weights are selected; unrelated fonts
 
 test('single-quoted and HTML-escaped existing optional links still receive exactly one early definition', () => {
   const alternate = fixture.replaceAll('href="'+url+'"', "href='"+url.replaceAll('&','&amp;')+"'");
-  const output = createPublicFontFaceInliner()(alternate); assert.equal(faces(output),renderedCss); assert.doesNotMatch(output,/fonts\.googleapis\.com\/css2/);
+  const output = createPublicFontFaceInliner()(alternate); assert.equal(faces(output),css); assert.doesNotMatch(output,/fonts\.googleapis\.com\/css2/);
 });
 
 function renderer(inliner = createPublicFontFaceInliner()) {
@@ -102,7 +95,7 @@ function renderer(inliner = createPublicFontFaceInliner()) {
 test('actual public renderer has early faces while keeping full CSS, text, language fallback and privacy boundaries', () => {
   const render = renderer();
   for(const route of ['/','/property/7918f050-f8f3-407b-aabe-718de3deb2c8','/student-accommodation','/student-accommodation/university/makerere','/to-rent/kireka-wakiso','/to-rent/kyanja-kampala/apartments','/short-term','/about','/advertise']) {
-    const output=render(route);assert.equal(faces(output),renderedCss);assert.equal((output.match(/data-public-core-css=/g)||[]).length,2);
+    const output=render(route);assert.equal(faces(output),css);assert.equal((output.match(/data-public-core-css=/g)||[]).length,2);
     assert.ok(output.indexOf('data-public-font-faces')<output.indexOf('<body'));assert.doesNotMatch(output,/<link[^>]*fonts\.googleapis\.com\/css2/);
     assert.equal((output.match(/data-public-font-preload="jakarta-latin"/g)||[]).length,1);
     assert.ok(output.includes(`href="${latinFontUrl}" crossorigin="anonymous"`));
