@@ -5,7 +5,10 @@ const path = require('path');
 const crypto = require('crypto');
 const source = require('../assets/fonts/plus-jakarta-sans-optional.source.json');
 const cssPath = path.join(__dirname, '..', 'assets', 'fonts', 'plus-jakarta-sans-optional.css');
-const latinFontUrl = 'https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yygg_vb.woff2';
+const latinFont = require('../assets/fonts/plus-jakarta-sans-latin.source.json');
+const latinFontPath = path.join(__dirname, '..', 'assets', 'fonts', 'plus-jakarta-sans-latin.woff2');
+const latinFontUrl = latinFont.sourceUrl;
+const localLatinFontUrl = `/assets/fonts/plus-jakarta-sans-latin.woff2?v=${latinFont.sha256.slice(0, 12)}`;
 
 function isJakartaStylesheet(link) {
   const href = link.match(/(?:^|\s)href\s*=\s*(["'])(.*?)\1/i)?.[2];
@@ -36,7 +39,11 @@ function createPublicFontFaceInliner(readFile = fs.readFileSync) {
         if (typeof css !== 'string' || /<\/style\b/i.test(css)
           || crypto.createHash('sha256').update(css).digest('hex') !== source.sha256
           || !source.uniqueFonts.includes(latinFontUrl) || !css.includes(`url(${latinFontUrl})`)) return input;
-        cachedCss = css;
+        const bytes = readFile(latinFontPath);
+        if (!Buffer.isBuffer(bytes) || bytes.length !== latinFont.bytes
+          || bytes.subarray(0, 4).toString() !== 'wOF2'
+          || crypto.createHash('sha256').update(bytes).digest('hex') !== latinFont.sha256) return input;
+        cachedCss = css.replaceAll(`url(${latinFontUrl})`, `url(${localLatinFontUrl})`);
       } catch (_error) {
         // Retain the current optional Google loader and retry on a later render.
         return input;
@@ -46,7 +53,8 @@ function createPublicFontFaceInliner(readFile = fs.readFileSync) {
     // fallback text has painted. Keep the UTF-8 declaration first in the head.
     // All five Latin weights share this verified font file. Discover it while
     // parsing the head instead of waiting for the first body text layout.
-    const marker = `${charset[0]}\n<link rel="preload" as="font" type="font/woff2" href="${latinFontUrl}" crossorigin="anonymous" data-public-font-preload="jakarta-latin">\n<style data-public-font-faces="jakarta" data-source-sha256="${source.sha256}">${cachedCss}</style>`;
+    // Exact local bytes reuse the document connection; other subsets stay pinned.
+    const marker = `${charset[0]}\n<link rel="preload" as="font" type="font/woff2" href="${localLatinFontUrl}" crossorigin="anonymous" data-public-font-preload="jakarta-latin">\n<style data-public-font-faces="jakarta" data-source-sha256="${source.sha256}">${cachedCss}</style>`;
     let output = input.replace(charset[0], marker);
     output = output.replace(/<noscript>\s*(<link\b(?:[^"'<>]|"[^"]*"|'[^']*')*>)\s*<\/noscript>/gi,
       (block, link) => isJakartaStylesheet(link) ? '' : block);
