@@ -8850,8 +8850,10 @@ window.addEventListener("makaug:site-i18n-ready", (event) => {
 
 function setLang(lang, silent = false, rerender = true) {
   currentLang = normalizeMakaugLanguageCode(lang);
-  document.documentElement.lang = currentLang;
-  document.documentElement.dir = currentLang === "ar" ? "rtl" : "ltr";
+  if (document.documentElement.lang !== currentLang) document.documentElement.lang = currentLang;
+  if (document.documentElement.dir !== (currentLang === "ar" ? "rtl" : "ltr")) {
+    document.documentElement.dir = currentLang === "ar" ? "rtl" : "ltr";
+  }
   const langSel = document.getElementById("lang-sel");
   if (langSel && langSel.value !== currentLang) langSel.value = currentLang;
   const langSelSpotlight = document.getElementById("lang-sel-spotlight");
@@ -60418,9 +60420,6 @@ function initializeMakaugApp() {
   setLang(getStartupLanguagePreference(savedLang), true, false);
   initFrontendAnalytics();
   initWebVitalsTracking();
-  setHeroLocationFilter(currentTab);
-  setHeroRadiusState(currentTab);
-  setHeroContextFilter(currentTab);
   populateLpRegionOptions();
   onLpRegionChange();
   setListType(getListType());
@@ -60438,7 +60437,7 @@ function initializeMakaugApp() {
   renderHowToVideoSections();
   refreshPublicListingsFromApi({ silent: true }).then((loaded) => {
     if (loaded) {
-      renderAll();
+      if (!isActiveUgandaHomepage()) renderAll();
       resetMaps();
       syncActiveRouteSearchHandoff("public_inventory_route_query");
     }
