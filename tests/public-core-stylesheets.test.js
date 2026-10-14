@@ -86,7 +86,7 @@ test('media and escaped source metadata remain valid; reapplying cannot duplicat
 });
 
 function publicRenderer({ inliner = createPublicCoreStylesheetInliner(), production = false } = {}) {
-  const context = vm.createContext({ process: { env: { SHARED_CORE_PHASE1_ENABLED: 'false' } },
+  const context = vm.createContext({ ACTIVE_COUNTRY_CODE: 'UG', process: { env: { SHARED_CORE_PHASE1_ENABLED: 'false' } },
     isProduction: production, publicHtmlCache: new Map(), PUBLIC_HTML_CACHE_MAX_ENTRIES: 32,
     readIndexHtml: () => index, sanitizePublicHtml,
     applyHarvestPublicSubmissionVisibility: (html) => html, applyShortTermVisibility: (html) => html,

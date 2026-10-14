@@ -84,7 +84,7 @@ test('single-quoted and HTML-escaped existing optional links still receive exact
 });
 
 function renderer(inliner = createPublicFontFaceInliner()) {
-  const context = vm.createContext({ process:{env:{SHARED_CORE_PHASE1_ENABLED:'false'}},isProduction:false,publicHtmlCache:new Map(),
+  const context = vm.createContext({ ACTIVE_COUNTRY_CODE:'UG',process:{env:{SHARED_CORE_PHASE1_ENABLED:'false'}},isProduction:false,publicHtmlCache:new Map(),
     readIndexHtml:()=>index,sanitizePublicHtml,applyHarvestPublicSubmissionVisibility:(html)=>html,applyShortTermVisibility:(html)=>html,
     injectShortTermRuntimeConfig:(html)=>html,injectGa4HeadTag:(html)=>html,
     inlinePublicFontFaces:inliner,inlinePublicCoreStylesheets:require('../services/publicCoreStylesheets')

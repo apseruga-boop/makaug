@@ -23,7 +23,7 @@ function isJakartaStylesheet(link) {
 
 function createPublicFontFaceInliner(readFile = fs.readFileSync) {
   let cachedCss;
-  return function inlinePublicFontFaces(html) {
+  return function inlinePublicFontFaces(html, { preloadMedia = '' } = {}) {
     const input = String(html || '');
     if (input.includes('data-public-font-faces="jakarta"')) return input;
     const head = input.match(/<head\b[^>]*>[\s\S]*?<\/head>/i);
@@ -44,10 +44,14 @@ function createPublicFontFaceInliner(readFile = fs.readFileSync) {
     }
     // Defining faces before body layout avoids adding a new font family after
     // fallback text has painted. Keep the UTF-8 declaration first in the head.
-    // All five Latin weights share this verified font file. Discover it while
-    // parsing the head instead of waiting for the first body text layout.
-    const marker = `${charset[0]}\n<link rel="preload" as="font" type="font/woff2" href="${latinFontUrl}" crossorigin="anonymous" data-public-font-preload="jakarta-latin">\n<style data-public-font-faces="jakarta" data-source-sha256="${source.sha256}">${cachedCss}</style>`;
-    let output = input.replace(charset[0], marker);
+    // Mobile's initial layout viewport can be wider than the device. Expose a
+    // conditional preload only after viewport metadata has established it.
+    const viewport = preloadMedia && head[0].match(/<meta\b[^>]*\bname\s*=\s*(["'])viewport\1[^>]*>/i);
+    const preloadMediaAttribute = viewport ? ` media="${preloadMedia}"` : '';
+    const preload = `<link rel="preload" as="font" type="font/woff2" href="${latinFontUrl}" crossorigin="anonymous"${preloadMediaAttribute} data-public-font-preload="jakarta-latin">`;
+    const faces = `<style data-public-font-faces="jakarta" data-source-sha256="${source.sha256}">${cachedCss}</style>`;
+    let output = input.replace(charset[0], `${charset[0]}\n${viewport ? faces : `${preload}\n${faces}`}`);
+    if (viewport) output = output.replace(viewport[0], `${viewport[0]}\n${preload}`);
     output = output.replace(/<noscript>\s*(<link\b(?:[^"'<>]|"[^"]*"|'[^']*')*>)\s*<\/noscript>/gi,
       (block, link) => isJakartaStylesheet(link) ? '' : block);
     return output.replace(linkPattern, (link) => isJakartaStylesheet(link) ? '' : link);

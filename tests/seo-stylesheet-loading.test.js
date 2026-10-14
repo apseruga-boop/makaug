@@ -109,6 +109,7 @@ test('reapplying the transform is idempotent and unrelated CSS is never selected
 test('public HTML invokes route-aware CSS loading after the homepage-image decision', () => {
   const calls = [];
   const context = vm.createContext({
+    ACTIVE_COUNTRY_CODE: 'UG',
     process: { env: { SHARED_CORE_PHASE1_ENABLED: 'false' } },
     isProduction: false,
     publicHtmlCache: new Map(),
