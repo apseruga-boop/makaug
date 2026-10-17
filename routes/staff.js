@@ -21,7 +21,7 @@ const {
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const { priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
-const { propertyListingSearchClause } = require('../utils/listingReferenceSearch');
+const { listingDirectLookup, listingDirectLookupClause, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
 const { loadListingMediaSummaries, listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const {
@@ -3950,6 +3950,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const includeTotal = includeTotalParam == null ? true : boolLike(includeTotalParam);
     const includeImages = boolLike(req.query?.include_images || req.query?.includeImages);
     const search = cleanText(req.query.search || req.query.q);
+    const directLookup = listingDirectLookup(search);
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
     const segmentParam = cleanText(req.query.segment).toLowerCase();
     const segment = STAFF_REVIEW_QUEUE_SEGMENTS.includes(segmentParam) ? segmentParam : 'all';
@@ -3958,11 +3959,19 @@ router.get('/properties/review-queue', async (req, res, next) => {
     if (segmentWhere) filters.push(segmentWhere);
     const values = [];
 
+    if (directLookup) {
+      // An MK ref, its 6-character suffix, or a property id is that listing,
+      // including one that is already live. Title and area searches stay on
+      // the pending queue. Same staff sign-in as the rest of this router.
+      filters.length = 0;
+      filters.push(listingDirectLookupClause('p', directLookup, values));
+    } else if (search) {
+      filters.push(propertyListingSearchClause('p', search, values));
+    }
     if (listingType && LISTING_TYPES.includes(listingType)) {
       values.push(listingType);
       filters.push(`p.listing_type = $${values.length}`);
     }
-    if (search) filters.push(propertyListingSearchClause('p', search, values));
 
     const where = `WHERE ${filters.join(' AND ')}`;
     const imageSelect = includeImages ? 'img.url AS primary_image_url' : 'NULL::text AS primary_image_url';
@@ -4060,7 +4069,11 @@ router.get('/properties/review-queue', async (req, res, next) => {
         include_images: includeImages,
         has_more: hasMore,
         total_exact: exactTotal,
-        ...staffReviewQueueMeta(segment, rows.length, exactTotal ? total : null),
+        ...staffReviewQueueMeta(segment, rows.length, exactTotal ? total : null, directLookup ? {
+          count_filter: 'staff_listing_lookup_any_status',
+          status_scope: 'any',
+          lookup: directLookup.kind
+        } : { status_scope: 'pending' }),
         search: search || null,
         source_quality_filter: 'stored_suppression_flag_only',
         query_ok: true,

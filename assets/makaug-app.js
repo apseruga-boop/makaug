@@ -13951,9 +13951,27 @@ function staffKampalaDateTime(value) {
   }
 }
 
+function staffListingIsLive(status = "") {
+  return ["approved", "live", "published", "sold"].includes(String(status || "").toLowerCase());
+}
+
+function staffLiveListingBadgeHtml() {
+  return `<span class="inline-flex rounded-full bg-emerald-600 text-white px-2.5 py-1 text-[11px] font-black" data-live-listing-badge>Live listing</span>`;
+}
+
+// Same shapes the review-queue lookup accepts: full MK ref, its 6-hex suffix, or a property id.
+function staffListingDirectLookup(term = "") {
+  const clean = String(term || "").trim();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) return "id";
+  if (/^MK-[0-9A-Z-]{4,}$/i.test(clean)) return "reference";
+  if (/^[0-9A-F]{6}$/i.test(clean)) return "suffix";
+  return "";
+}
+
 function staffReviewQueueCardHtml(item = {}, options = {}) {
   const location = [item.area, item.district].filter(Boolean).join(", ") || "Location needs checking";
   const mkRef = String(item.inquiry_reference || "").trim();
+  const liveListing = staffListingIsLive(item.status);
   const submitter = String(item.lister_name || item.source_name || item.extra_fields?.source_name || "").trim() || "Submitter not recorded";
   const maskedPhone = staffMaskPhone(item.lister_phone);
   const submittedAt = staffKampalaDateTime(item.created_at);
@@ -13990,7 +14008,7 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
     <article class="border border-gray-200 rounded-2xl p-4">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
-          <div class="font-black text-gray-900">${mkRef ? `<span class="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-black text-slate-700" data-mk-ref>${adminEscape(mkRef)}</span>` : ""}${adminEscape(item.title || "Untitled listing")} ${brokerBadge} ${checkPriceTag}</div>
+          <div class="font-black text-gray-900">${mkRef ? `<span class="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-black text-slate-700" data-mk-ref>${adminEscape(mkRef)}</span>` : ""}${adminEscape(item.title || "Untitled listing")} ${liveListing ? staffLiveListingBadgeHtml() : ""} ${brokerBadge} ${checkPriceTag}</div>
           <div class="text-xs text-gray-500 mt-1">${adminEscape(typeLabel)} • ${adminEscape(location)} • ${adminEscape(price)}</div>
           <div class="text-xs text-gray-500 mt-1">Submitted by ${adminEscape(submitter)}${maskedPhone ? ` • ${adminEscape(maskedPhone)}` : ""}${submittedAt ? ` • ${adminEscape(submittedAt)}` : ""}</div>
           <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(item.source_platform || item.source || item.listed_via || "website")}${sourceUrl ? ` • <a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="font-black text-blue-700 underline underline-offset-2">open evidence</a>` : ""}</div>
@@ -14004,8 +14022,8 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
       </div>
       <div class="mt-3 flex flex-wrap gap-2">
         <button type="button" onclick="openStaffListingPreview(${propertyIdArg(item.id)})" class="bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-eye mr-1"></i>Preview & edit</button>
-        <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-xmark mr-1"></i>Reject with reason</button>
-        <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-rotate-left mr-1"></i>Keep pending</button>
+        ${liveListing ? "" : `<button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-xmark mr-1"></i>Reject with reason</button>
+        <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-rotate-left mr-1"></i>Keep pending</button>`}
       </div>
     </article>`;
 }
@@ -14058,7 +14076,7 @@ const STAFF_REVIEW_QUEUE_PAGE_LIMIT = 24;
 const staffReviewQueueState = {
   main: { rows: [], total: null, page: 0, loading: false },
   broker: { rows: [], total: null, page: 0, loading: false },
-  search: { term: "", rows: [], total: null, page: 0, loading: false }
+  search: { term: "", rows: [], total: null, page: 0, loading: false, statusScope: "pending" }
 };
 
 function staffDedupeRows(rows = [], excludeIds = new Set()) {
@@ -14101,16 +14119,23 @@ function staffPaintReviewQueue(segment) {
   const rows = isSearch || isBroker ? staffDedupeRows(state.rows) : staffDedupeRows(state.rows, staffBrokerQueueIds());
   state.rows = isSearch || isBroker ? rows : staffDedupeRows(state.rows);
   if (!rows.length) {
+    if (isSearch && state.loading) {
+      wrap.innerHTML = staffEmpty(`Searching for “${adminEscape(state.term)}”…`);
+      return;
+    }
     if (!isSearch && !isBroker && staffHeaderPendingReviewCount() > 0 && staffReviewQueueState.broker.rows.length) {
       wrap.innerHTML = staffEmpty("Pending listings in this count are in Broker listings review above.");
       return;
     }
     wrap.innerHTML = isSearch
-      ? staffEmpty(`No pending listing matches “${adminEscape(state.term)}”.`)
+      ? staffEmpty(state.statusScope === "any"
+        ? `No listing matches “${adminEscape(state.term)}”.`
+        : `No pending listing matches “${adminEscape(state.term)}”.`)
       : staffEmpty(isBroker ? "No broker listings are waiting for review." : "No listings are waiting for staff review.");
     return;
   }
-  const heading = isSearch ? `<div class="text-xs font-black text-slate-700">Search results for “${adminEscape(state.term)}” (all pending, brokers included)</div>` : "";
+  const scopeNote = isSearch && state.statusScope === "any" ? "any status" : "all pending, brokers included";
+  const heading = isSearch ? `<div class="text-xs font-black text-slate-700" data-staff-search-results>Search results for “${adminEscape(state.term)}” (${scopeNote})</div>` : "";
   wrap.innerHTML = heading
     + rows.map((item) => staffReviewQueueCardHtml(item, { brokerQueue: isBroker })).join("")
     + staffReviewQueueFooterHtml(segment, rows.length, state.total);
@@ -14171,46 +14196,63 @@ function staffReviewQueuePageUrl(segment, page, search = "") {
   return `/api/staff/properties/review-queue?${params.toString()}`;
 }
 
-async function staffLoadMoreReviewQueue(segment = "main") {
+async function staffLoadMoreReviewQueue(segment = "main", searchSeq = 0) {
   const state = staffReviewQueueState[segment];
   if (!state || state.loading) return;
   state.loading = true;
   staffPaintReviewQueue(segment);
+  let openId = "";
   try {
     const nextPage = (state.page || 0) + 1;
     const res = await apiRequest(staffReviewQueuePageUrl(segment, nextPage, segment === "search" ? state.term : ""));
+    if (segment === "search" && searchSeq && searchSeq !== staffReviewQueueSearchSeq) return;
     const rows = Array.isArray(res?.data) ? res.data : [];
     state.rows = staffDedupeRows([...state.rows, ...rows]);
     state.page = nextPage;
+    if (segment === "search" && res?.meta?.status_scope) state.statusScope = res.meta.status_scope;
     const total = res?.pagination?.total ?? res?.meta?.total;
     if (Number.isFinite(Number(total))) state.total = Number(total);
     if (!rows.length && state.total !== null) state.total = Math.min(state.total, state.rows.length);
+    // One MK ref, suffix, or property id: open the same editor. A title search stays a list.
+    if (segment === "search" && nextPage === 1 && rows.length === 1 && staffListingDirectLookup(state.term)) {
+      openId = String(rows[0]?.id || "");
+    }
   } catch (error) {
+    if (segment === "search" && searchSeq && searchSeq !== staffReviewQueueSearchSeq) return;
     toast(`Could not load more listings: ${error.message || "request failed"}`);
   } finally {
-    state.loading = false;
-    staffPaintReviewQueue(segment);
+    if (!(segment === "search" && searchSeq && searchSeq !== staffReviewQueueSearchSeq)) {
+      state.loading = false;
+      staffPaintReviewQueue(segment);
+    }
   }
+  if (openId && (!searchSeq || searchSeq === staffReviewQueueSearchSeq)) openStaffListingPreview(openId);
 }
 
 let staffReviewQueueSearchTimer = null;
+let staffReviewQueueSearchSeq = 0;
 function staffSearchReviewQueue(value = "") {
   const term = String(value || "").trim();
   if (staffReviewQueueSearchTimer) window.clearTimeout(staffReviewQueueSearchTimer);
+  const seq = ++staffReviewQueueSearchSeq;
   staffReviewQueueSearchTimer = window.setTimeout(async () => {
+    if (seq !== staffReviewQueueSearchSeq) return;
     const search = staffReviewQueueState.search;
     search.term = term;
+    search.statusScope = staffListingDirectLookup(term) ? "any" : "pending";
     if (!term) {
       search.rows = [];
       search.total = null;
       search.page = 0;
+      search.loading = false;
       staffPaintReviewQueue("main");
       return;
     }
     search.rows = [];
     search.total = null;
     search.page = 0;
-    await staffLoadMoreReviewQueue("search");
+    search.loading = false;
+    await staffLoadMoreReviewQueue("search", seq);
   }, 300);
 }
 
@@ -16026,10 +16068,10 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
     <div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
       <div class="bg-slate-900 text-white p-5 flex justify-between gap-4">
         <div>
-          <div class="text-xs uppercase tracking-wide text-emerald-200 font-black">Preview before publishing</div>
+          <div class="text-xs uppercase tracking-wide text-emerald-200 font-black">${staffListingIsLive(preview.status) ? "Live listing" : "Preview before publishing"}</div>
           <h3 class="text-2xl font-black mt-1">${adminEscape(preview.title || "Untitled listing")}</h3>
           <p class="text-sm text-slate-300 mt-1">${adminEscape([preview.area, preview.district].filter(Boolean).join(", ") || "Location needs checking")} • ${adminEscape(preview.status || "pending")}</p>
-          ${["approved", "live", "published", "sold"].includes(String(preview.status || "").toLowerCase()) ? `<p class="mt-2 inline-block rounded-lg bg-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-100" data-live-listing-edit="1">Live listing: saving changes keeps it live. Every change is recorded.</p>` : ""}
+          ${staffListingIsLive(preview.status) ? `<div class="mt-2 flex flex-wrap items-center gap-2" data-live-listing-edit="1">${staffLiveListingBadgeHtml()}<span class="text-xs font-bold text-emerald-100">Saving changes keeps this listing live. Every change is recorded.</span></div>` : ""}
         </div>
         <div class="flex items-center gap-2">
           ${currentPage === "staff-review" ? "" : `<a href="/staff-dashboard/review/${adminAttr(encodeURIComponent(String(preview.id || "")))}" target="_blank" rel="noopener" class="hidden sm:inline-flex items-center rounded-full bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-black text-white">Open on its own page</a>`}
