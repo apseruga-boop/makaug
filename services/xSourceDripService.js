@@ -2,6 +2,8 @@
 
 const logger = require('../config/logger');
 const { runBackgroundWork } = require('../config/database');
+const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
+const { observeJob } = require('../utils/memoryLog');
 const { getPropertySourceRegistry } = require('./propertySourceRegistryService');
 const { runSocialPlatformPostSweep } = require('./socialPlatformPostDiscoveryService');
 const { logNotification } = require('./notificationLogService');
@@ -681,15 +683,15 @@ function startXSourceDripScheduler(db) {
   }
   schedulerArmedAt = new Date().toISOString();
   schedulerTimer = setInterval(() => {
-    tickXSourceDripScheduler(db).catch((error) => {
+    observeJob('x_source_drip', () => tickXSourceDripScheduler(db)).catch((error) => {
       logger.warn('X source drip scheduler interval failed', error.message);
     });
   }, SCHEDULER_POLL_MS);
   setTimeout(() => {
-    tickXSourceDripScheduler(db, 'x_source_drip_scheduler_boot').catch((error) => {
+    observeJob('x_source_drip', () => tickXSourceDripScheduler(db, 'x_source_drip_scheduler_boot')).catch((error) => {
       logger.warn('X source drip scheduler boot tick failed', error.message);
     });
-  }, 5000);
+  }, BOOT_DELAY_MS.x_source_drip);
   logger.info('X source drip scheduler armed');
 }
 

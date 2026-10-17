@@ -2,6 +2,7 @@ const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { agentGreetingName } = require('../services/agentNameService');
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs');
 const db = require('../config/database');
 const smsService = require('../models/smsService');
 const logger = require('../config/logger');
@@ -77,8 +78,21 @@ const {
   deleteStoredS3Object,
   parseStoredS3ObjectRef,
   storeDataUrl,
-  uploadBufferToS3
+  uploadBufferToS3,
+  uploadFileToS3
 } = require('../services/cloudMediaStorageService');
+const {
+  writeResponseBodyToFile,
+  readFilePrefix,
+  smallJpegDataUrl,
+  spillInboundMetadata,
+  removeSpillFile,
+  hashFile
+} = require('../utils/inboundMediaBytes');
+const {
+  enqueueWhatsappMediaWork,
+  deferForSenderBurst
+} = require('../services/whatsappMediaQueue');
 const {
   EMPLOYEE_INTAKE_STEPS,
   EMPLOYEE_INTAKE_TRIGGER,
@@ -2990,12 +3004,13 @@ function listingPhotoCandidates(runtime = {}, mediaUrl = '') {
       : '');
     return {
       dataUrl,
+      mediaFile: normalizeInput(item?.media_file || item?.mediaFile || ''),
       hash,
       perceptualHash: normalizeInput(item?.perceptual_hash || item?.perceptualHash || '').toLowerCase(),
       mediaUrl: normalizeInput(item?.media_url || item?.mediaUrl || '') || (index === 0 ? mediaUrl : ''),
       mimeType: normalizeInput(item?.mime_type || item?.mimeType || '') || 'image/jpeg'
     };
-  }).filter((item) => item.dataUrl || item.mediaUrl);
+  }).filter((item) => item.dataUrl || item.mediaFile || item.mediaUrl);
 
   if (normalized.length) return normalized;
   return mediaUrl ? [{ dataUrl: '', hash: '', mediaUrl, mimeType: 'image/jpeg' }] : [];
@@ -3168,11 +3183,22 @@ function ownerForwardPricePeriod(listingType = '', caption = '') {
 }
 
 async function storeOwnerReviewForwardPhotos({ sourceKey, inboundMessageId, runtime = {}, mediaUrl = '' } = {}) {
-  const candidates = listingPhotoCandidates(runtime, mediaUrl).filter((candidate) => candidate.dataUrl).slice(0, 10);
+  const candidates = listingPhotoCandidates(runtime, mediaUrl).filter((candidate) => candidate.dataUrl || candidate.mediaFile).slice(0, 10);
   const stored = [];
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index];
-    const url = await storeDataUrl(candidate.dataUrl, {
+    const url = candidate.mediaFile
+      ? await uploadFileToS3({
+        filePath: candidate.mediaFile,
+        mimeType: candidate.mimeType || 'image/jpeg',
+        key: `whatsapp-forward-review/photos/${Date.now()}-${crypto.randomUUID()}.jpg`,
+        byteLength: (await fs.promises.stat(candidate.mediaFile)).size,
+        sha256: candidate.hash || await hashFile(candidate.mediaFile)
+      }).then((stored) => stored.publicUrl || stored.internalRef).catch((error) => {
+        logger.warn('WhatsApp forwarded property photo upload failed:', error.message || String(error));
+        return '';
+      })
+      : await storeDataUrl(candidate.dataUrl, {
       keyPrefix: 'whatsapp-forward-review/photos',
       filename: `${sourceKey || 'source'}-${normalizeInput(inboundMessageId || crypto.randomUUID()).replace(/[^a-z0-9_-]+/gi, '-').slice(-80)}-${index + 1}.jpg`,
       label: `WhatsApp forwarded property photo ${index + 1}`,
@@ -3777,11 +3803,13 @@ function employeeMediaCandidates(runtime = {}, mediaUrl = '') {
   const collected = [];
   const append = (candidate = {}, fallbackMime = '') => {
     const dataUrl = normalizeInput(candidate.data_url || candidate.dataUrl || '');
+    const mediaFile = normalizeInput(candidate.media_file || candidate.mediaFile || '');
     const remoteUrl = normalizeInput(candidate.url || candidate.media_url || candidate.mediaUrl || '');
     const mimeType = employeeMediaMimeType(candidate, fallbackMime);
-    if (!dataUrl && !/^https:\/\//i.test(remoteUrl)) return;
+    if (!dataUrl && !mediaFile && !/^https:\/\//i.test(remoteUrl)) return;
     collected.push({
       dataUrl,
+      mediaFile: normalizeInput(candidate.media_file || candidate.mediaFile || ''),
       remoteUrl,
       mimeType,
       kind: employeeMediaKind(mimeType),
@@ -4047,13 +4075,27 @@ async function storeEmployeeMediaCandidate(candidate, {
     if (!response.ok) throw new Error(`WhatsApp media download failed (${response.status})`);
     const responseMime = normalizeInput(response.headers.get('content-type')).split(';')[0].toLowerCase() || mimeType;
     if (!allowedMimeTypes.includes(responseMime)) throw new Error(`Unsupported downloaded media type: ${responseMime}`);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (!bytes.length || bytes.length > maxBytes) throw new Error(`WhatsApp ${kind} exceeds the ${Math.floor(maxBytes / 1_000_000)}MB intake limit`);
-    if (kind === 'video' && !employeeVideoBytesPlayable(bytes, responseMime)) {
+    let spillPath = '';
+    try {
+    let spilled;
+    try {
+      spilled = await writeResponseBodyToFile(response, { maxBytes });
+    } catch (error) {
+      if (error?.code === 'BOUNDED_BODY_TOO_LARGE') {
+        throw new Error(`WhatsApp ${kind} exceeds the ${Math.floor(maxBytes / 1_000_000)}MB intake limit`);
+      }
+      throw error;
+    }
+    spillPath = spilled.filePath;
+    if (!spilled.bytes) throw new Error(`WhatsApp ${kind} exceeds the ${Math.floor(maxBytes / 1_000_000)}MB intake limit`);
+    const prefix = await readFilePrefix(spillPath);
+    if (kind === 'video' && !employeeVideoBytesPlayable(prefix, responseMime)) {
       throw new Error('Downloaded employee intake video is encrypted or not a playable media container');
     }
     if (kind === 'image' && !privateMedia) {
-      const validationDataUrl = `data:${responseMime};base64,${bytes.toString('base64')}`;
+      const validationDataUrl = spilled.bytes <= 800 * 1024
+        ? `data:${responseMime};base64,${(await fs.promises.readFile(spillPath)).toString('base64')}`
+        : await smallJpegDataUrl(spillPath);
       mediaValidation = await validateEmployeeImageCandidate(candidate, validationDataUrl);
       publicEligible = mediaValidation?.accepted === true;
 
@@ -4072,7 +4114,7 @@ async function storeEmployeeMediaCandidate(candidate, {
       //
       // A genuine rejection is untouched: if vision ran and said this is not a
       // property photo, it stays evidence-only.
-      const downloadedSize = imagePixelSize(bytes, responseMime);
+      const downloadedSize = imagePixelSize(prefix, responseMime);
       const usefulDimensions = downloadedSize.width >= 240 && downloadedSize.height >= 180;
       if (!publicEligible && mediaValidation?.verdict === 'unavailable' && usefulDimensions) {
         publicEligible = true;
@@ -4100,9 +4142,65 @@ async function storeEmployeeMediaCandidate(candidate, {
       : (profilePhoto ? 'whatsapp-employee-intake/agent-profile'
         : (kind === 'image' && !publicEligible ? 'whatsapp-employee-intake/source-evidence' : `whatsapp-employee-intake/${kind}`));
     const key = `${keyPrefix}/${Date.now()}-${crypto.randomUUID()}-${filename}`;
-    const stored = await uploadBufferToS3({ bytes, mimeType: responseMime, key });
+    const stored = await uploadFileToS3({
+      filePath: spillPath,
+      mimeType: responseMime,
+      key,
+      byteLength: spilled.bytes,
+      sha256: spilled.sha256
+    });
     storedUrl = privateMedia ? stored.internalRef : (stored.publicUrl || stored.internalRef);
     sha256 = stored.sha256;
+    } finally {
+      if (spillPath) await removeSpillFile(spillPath);
+    }
+  } else if (candidate.mediaFile) {
+    const filePath = candidate.mediaFile;
+    const stat = await fs.promises.stat(filePath);
+    if (!stat.size || stat.size > maxBytes) throw new Error(`WhatsApp ${kind} exceeds the ${Math.floor(maxBytes / 1_000_000)}MB intake limit`);
+    const prefix = await readFilePrefix(filePath);
+    if (kind === 'video' && !employeeVideoBytesPlayable(prefix, mimeType)) {
+      throw new Error('Downloaded employee intake video is encrypted or not a playable media container');
+    }
+    if (kind === 'image' && !privateMedia) {
+      const validationDataUrl = stat.size <= 800 * 1024
+        ? `data:${mimeType};base64,${(await fs.promises.readFile(filePath)).toString('base64')}`
+        : await smallJpegDataUrl(filePath);
+      mediaValidation = validationDataUrl
+        ? await validateEmployeeImageCandidate(candidate, validationDataUrl)
+        : { accepted: false, verdict: 'unavailable', reason: 'preview_unavailable' };
+      publicEligible = mediaValidation?.accepted === true;
+      const downloadedSize = imagePixelSize(prefix, mimeType);
+      const usefulDimensions = downloadedSize.width >= 240 && downloadedSize.height >= 180;
+      if (!publicEligible && mediaValidation?.verdict === 'unavailable' && usefulDimensions) {
+        publicEligible = true;
+        mediaValidation = {
+          ...mediaValidation,
+          accepted: true,
+          verdict: 'accepted_pending_review_original_whatsapp_media',
+          matches_expected_slot: true,
+          reason: 'vision_unavailable_original_whatsapp_media_pending_review'
+        };
+      }
+      if (employeeMediaValidationIsIdentityDocument(mediaValidation)) {
+        throw new Error('Private identity media rejected from property storage');
+      }
+      if (profilePhoto) publicEligible = true;
+    }
+    const keyPrefix = privateMedia
+      ? 'whatsapp-employee-intake/private-id'
+      : (profilePhoto ? 'whatsapp-employee-intake/agent-profile'
+        : (kind === 'image' && !publicEligible ? 'whatsapp-employee-intake/source-evidence' : `whatsapp-employee-intake/${kind}`));
+    const stored = await uploadFileToS3({
+      filePath,
+      mimeType,
+      key: `${keyPrefix}/${Date.now()}-${crypto.randomUUID()}-${filename}`,
+      byteLength: stat.size,
+      sha256: sha256 || await hashFile(filePath)
+    });
+    storedUrl = privateMedia ? stored.internalRef : (stored.publicUrl || stored.internalRef);
+    sha256 = stored.sha256;
+    await removeSpillFile(filePath);
   }
 
   if (!storedUrl) throw new Error('Permanent media storage is unavailable');
@@ -4139,7 +4237,7 @@ async function storeEmployeeMedia(candidates = [], options = {}) {
   const failures = [];
   for (let index = 0; index < candidates.length; index += 1) {
     try {
-      stored.push(await storeEmployeeMediaCandidate(candidates[index], { ...options, index }));
+      stored.push(await enqueueWhatsappMediaWork(() => storeEmployeeMediaCandidate(candidates[index], { ...options, index })));
     } catch (error) {
       if (error?.message === 'Private identity media rejected from property storage') {
         logger.warn('Identity-classified employee property candidate discarded before storage', {
@@ -18080,8 +18178,17 @@ function queueWhatsappRuntimeForPhone(phone, task) {
   return current;
 }
 
-function processInboundRuntime(input = {}) {
-  return queueWhatsappRuntimeForPhone(input.phone, () => processInboundRuntimeUnlocked(input));
+async function processInboundRuntime(input = {}) {
+  if (input.metadata) await spillInboundMetadata(input.metadata);
+  const hasMedia = Boolean(
+    input.mediaUrl
+    || input.metadata?.image_previews?.length
+    || input.metadata?.media_previews?.length
+  );
+  return queueWhatsappRuntimeForPhone(input.phone, async () => {
+    if (hasMedia) await deferForSenderBurst(input.phone);
+    return processInboundRuntimeUnlocked(input);
+  });
 }
 
 function processWhatsappCallEvent(input = {}) {

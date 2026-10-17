@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const { Readable } = require('stream');
 
 const SERVICE = 's3';
 const DATA_URL_RE = /^data:([^;,]+)(?:;charset=[^;,]+)?;base64,([a-z0-9+/=\s]+)$/i;
@@ -262,6 +264,61 @@ async function uploadBufferToS3({ bytes, mimeType, key, bucket: bucketOverride, 
   };
 }
 
+async function uploadFileToS3({ filePath, mimeType, key, byteLength, sha256, bucket: bucketOverride, fetchImpl = fetch } = {}) {
+  assertCloudMediaStorageConfigured();
+  const endpoint = new URL(process.env.S3_ENDPOINT);
+  const bucket = String(bucketOverride || process.env.S3_BUCKET || '').trim();
+  if (!bucket) throw storageError('Cloud media upload bucket is missing.', 503);
+  const region = String(process.env.S3_REGION || 'auto').trim() || 'auto';
+  const accessKey = String(process.env.S3_ACCESS_KEY_ID || '').trim();
+  const secret = String(process.env.S3_SECRET_ACCESS_KEY || '').trim();
+  const objectKey = normalizeObjectKey(key);
+  const payloadHash = String(sha256 || '').trim();
+  const length = Number(byteLength);
+  if (!payloadHash || !Number.isFinite(length) || length < 0) {
+    throw storageError('Cloud media file upload needs a size and a sha256.', 400);
+  }
+  const { dateStamp, amzDate } = dateParts();
+  const canonicalUri = canonicalUriFor(endpoint, bucket, objectKey);
+  const uploadUrl = `${endpoint.origin}${canonicalUri}`;
+  const headers = {
+    host: endpoint.host,
+    'content-length': String(length),
+    'content-type': mimeType,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate
+  };
+  const { canonicalHeaders, signedHeaderNames } = signedHeaders(headers);
+  const canonicalRequest = ['PUT', canonicalUri, '', canonicalHeaders, signedHeaderNames, payloadHash].join('\n');
+  const credentialScope = `${dateStamp}/${region}/${SERVICE}/aws4_request`;
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, sha256Hex(canonicalRequest)].join('\n');
+  const signature = crypto.createHmac('sha256', signingKey(secret, dateStamp, region)).update(stringToSign).digest('hex');
+  const response = await fetchImpl(uploadUrl, {
+    method: 'PUT',
+    duplex: 'half',
+    headers: {
+      'Content-Length': String(length),
+      'Content-Type': mimeType,
+      'X-Amz-Content-Sha256': payloadHash,
+      'X-Amz-Date': amzDate,
+      Authorization: `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaderNames}, Signature=${signature}`
+    },
+    body: Readable.toWeb(fs.createReadStream(filePath))
+  });
+  if (!response.ok) {
+    throw storageError(`Cloud media upload failed: ${response.status} ${await response.text()}`, 502);
+  }
+  return {
+    provider: 's3',
+    key: objectKey,
+    internalRef: `s3://${bucket}/${objectKey}`,
+    publicUrl: publicUrlFor(objectKey),
+    bytes: length,
+    sha256: payloadHash,
+    mimeType
+  };
+}
+
 async function deleteStoredS3Object(value, { fetchImpl = fetch } = {}) {
   assertCloudMediaStorageConfigured();
   const parsed = parseStoredS3ObjectRef(value);
@@ -469,6 +526,7 @@ module.exports = {
   createSignedS3GetUrl,
   deleteStoredS3Object,
   uploadBufferToS3,
+  uploadFileToS3,
   storeDataUrl,
   storeBuffer,
   storeRemoteImageUrl

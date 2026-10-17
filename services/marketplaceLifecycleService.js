@@ -4,6 +4,8 @@ const crypto = require('crypto');
 
 const logger = require('../config/logger');
 const { runBackgroundWork } = require('../config/database');
+const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
+const { observeJob } = require('../utils/memoryLog');
 const { MARKETPLACE_VERIFIED_PRICE_UGX } = require('../config/marketplacePricing');
 const { sendSupportEmail } = require('./emailService');
 const { logNotification, notificationStatusFromDelivery } = require('./notificationLogService');
@@ -291,7 +293,7 @@ async function runMarketplaceDay7Followups(db, { limit = 25 } = {}) {
        AND day7_followup_sent_at IS NULL
      ORDER BY reviewed_at ASC
      LIMIT $1`,
-    [Math.max(1, Math.min(100, Number(limit) || 25))]
+    [Math.max(1, Math.min(25, Number(limit) || 25))]
   );
   let sent = 0;
   for (const business of result.rows) {
@@ -378,7 +380,7 @@ function startMarketplaceLifecycleScheduler(db) {
   const intervalMs = Math.max(60_000, parseInt(process.env.MARKETPLACE_LIFECYCLE_INTERVAL_MS || '900000', 10) || 900_000);
   schedulerTimer = setInterval(() => tickMarketplaceLifecycleScheduler(db), intervalMs);
   schedulerTimer.unref?.();
-  setTimeout(() => tickMarketplaceLifecycleScheduler(db), 10_000).unref?.();
+  setTimeout(() => observeJob('marketplace_lifecycle', () => tickMarketplaceLifecycleScheduler(db)), BOOT_DELAY_MS.marketplace_lifecycle).unref?.();
   logger.info('Marketplace lifecycle scheduler armed', { intervalMs });
 }
 
