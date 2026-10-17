@@ -233,6 +233,38 @@ function runPublicInventoryFollowup(task, label, context = {}) {
     });
 }
 
+// One log line per decision, with the milliseconds spent in each step, so a
+// slow Approve/Reject can be read from the Render logs afterwards.
+function createDecisionTiming(context = {}) {
+  const started = Date.now();
+  const steps = [];
+  let last = started;
+  let finished = false;
+  const state = { ...context };
+  return {
+    mark(step) {
+      const now = Date.now();
+      steps.push({ step, ms: now - last });
+      last = now;
+    },
+    annotate(extra = {}) {
+      Object.assign(state, extra);
+    },
+    finish(extra = {}) {
+      if (finished) return null;
+      finished = true;
+      const payload = {
+        ...state,
+        ...extra,
+        total_ms: Date.now() - started,
+        steps
+      };
+      logger.info('Listing decision timing', payload);
+      return payload;
+    }
+  };
+}
+
 function publicPropertiesCacheControl() {
   return `public, max-age=${PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS}, stale-while-revalidate=${PUBLIC_PROPERTIES_CACHE_STALE_SECONDS}`;
 }
@@ -4736,6 +4768,13 @@ function isDefaultStatusNoteReason(reason, property = {}) {
 router.patch('/:id/status', requireListingModerationAccess, async (req, res, next) => {
   try {
     const nextStatus = cleanText(req.body.status).toLowerCase();
+    const decisionTiming = createDecisionTiming({
+      property_id: req.params.id,
+      status: nextStatus
+    });
+    res.on('finish', () => {
+      decisionTiming.finish({ http_status: res.statusCode });
+    });
     let moderationReason = cleanText(req.body.reason) || null;
     let reviewNotes = cleanText(req.body.review_notes || req.body.notes) || null;
     const warningOverrides = req.body.warning_overrides && typeof req.body.warning_overrides === 'object'
@@ -4812,6 +4851,11 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
 
     let current = currentResult.rows[0];
+    decisionTiming.mark('load_row');
+    decisionTiming.annotate({
+      inquiry_reference: current.inquiry_reference || null,
+      status_from: current.status || null
+    });
     if (nextStatus === 'rejected' && isDefaultStatusNoteReason(moderationReason, current)) {
       return res.status(400).json({ ok: false, code: 'reject_reason_not_typed', error: 'Type the reason for rejecting this listing. Its own status note isn\'t a rejection reason.' });
     }
@@ -4826,6 +4870,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       current = listingPatchResult.property || current;
       approvalWarnings.push(`Listing facts updated before moderation status change: ${listingPatchResult.changed_fields.join(', ')}`);
     }
+    decisionTiming.mark('listing_patch');
     const currentLocationExtra = propertyExtraFieldsObject(current);
     const humanLocationConfirmed = nextStatus === 'approved'
       && humanApprovalAccess.human_session
@@ -5141,6 +5186,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
 
     const sourcedCandidateOverride = sourcedApprovalPolicy.usesExemption;
+    decisionTiming.mark('approval_gates');
     let automatedReview = null;
     const canSkipAutomatedReviewForSourcedOverride = nextStatus === 'approved'
       && sourcedCandidateOverride
@@ -5158,6 +5204,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     } else if (canSkipAutomatedReviewForSourcedOverride) {
       approvalWarnings.push('Found-online source override used saved checklist data for fast moderation write.');
     }
+    decisionTiming.mark('automated_review');
     const checklistSource = automatedReview?.checklist
       || (req.body.checklist && typeof req.body.checklist === 'object' ? req.body.checklist : current.moderation_checklist);
     const checklist = { ...normalizeReviewChecklist(checklistSource) };
@@ -5474,64 +5521,54 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         moderation_reason: moderationReason
       };
     }
-    if (nextStatus === 'approved') {
-      listing.primary_image_url = await getPrimaryImageUrlForProperty(listing.id);
-    }
+    decisionTiming.mark('status_committed');
     let notification = {
       email: { sent: false, reason: 'not_attempted' },
       whatsapp: { sent: false, reason: 'not_attempted' }
     };
 
-    try {
-      const notificationListing = {
-        ...listing,
-        owner_edit_token: regeneratedOwnerToken
+    const notificationListing = {
+      ...listing,
+      owner_edit_token: regeneratedOwnerToken
+    };
+    // "Your listing is live" is sent by makaug, not left to a staff member.
+    //
+    // Every approve button in the dashboard posts manual_notification_only,
+    // which used to mean "build the message but do not send it" — the UI then
+    // opened a wa.me link for the moderator to send by hand. In practice
+    // nobody ever does, so no agent has ever been told their property went
+    // live. Tuyisengye Innocent had four listings approved on 30 Sep and
+    // heard nothing about any of them.
+    //
+    // An approval now always sends. The send used to run on this request, so
+    // Reject sat on "Saving decision…" for more than 50s after the row had
+    // already left the queue (MK-20261010-FBF852). The manual message is
+    // returned as soon as the status UPDATE commits. Email, WhatsApp, the
+    // audit row, saved-search matching and IndexNow run after the response.
+    // A rejection is still left to a person: a refusal deserves wording a
+    // human chose, not a template fired automatically.
+    const leaveToAHuman = manualNotificationOnly && nextStatus === 'rejected';
+    const manualNotification = buildManualOwnerStatusNotification({
+      listing: notificationListing,
+      status: nextStatus,
+      reason: moderationReason
+    });
+    if (leaveToAHuman) {
+      notification = manualNotification;
+    } else {
+      notification = {
+        email: { ...manualNotification.email, sent: false, reason: 'deferred_after_commit', deferred: true },
+        whatsapp: { ...manualNotification.whatsapp, sent: false, reason: 'deferred_after_commit', deferred: true },
+        manual: manualNotification,
+        deferred: true
       };
-      // "Your listing is live" is sent by makaug, not left to a staff member.
-      //
-      // Every approve button in the dashboard posts manual_notification_only,
-      // which used to mean "build the message but do not send it" — the UI then
-      // opened a wa.me link for the moderator to send by hand. In practice
-      // nobody ever does, so no agent has ever been told their property went
-      // live. Tuyisengye Innocent had four listings approved on 30 Sep and
-      // heard nothing about any of them.
-      //
-      // An approval now always sends. The manual link is still returned, so a
-      // moderator who wants to add something personal still can, and a
-      // rejection is still left to a person: a refusal deserves wording a human
-      // chose, not a template fired automatically.
-      const leaveToAHuman = manualNotificationOnly && nextStatus === 'rejected';
-      if (leaveToAHuman) {
-        notification = buildManualOwnerStatusNotification({
-          listing: notificationListing,
-          status: nextStatus,
-          reason: moderationReason
-        });
-      } else {
-        notification = await sendOwnerListingStatusNotifications({
-          listing: notificationListing,
-          status: nextStatus,
-          reason: moderationReason
-        });
-        if (manualNotificationOnly) {
-          // Staff asked for the hand-send link as well; give them both.
-          const manual = buildManualOwnerStatusNotification({
-            listing: notificationListing,
-            status: nextStatus,
-            reason: moderationReason
-          });
-          notification = { ...notification, manual: manual.manual || manual };
-        }
-        if (notification.email?.sent || notification.whatsapp?.sent) {
-          await db.query(
-            'UPDATE properties SET last_moderation_notification_at = NOW() WHERE id = $1',
-            [listing.id]
-          );
-        }
-      }
-    } catch (error) {
-      notification = { sent: false, reason: 'notification_failed', error: error.message || 'send_failed' };
     }
+    decisionTiming.mark('notification_payload');
+    decisionTiming.annotate({
+      fast_admin_render: fastAdminRender,
+      manual_notification_only: manualNotificationOnly,
+      notification_deferred: !leaveToAHuman
+    });
 
     const writeModerationAuditEvents = async () => {
       try {
@@ -5653,7 +5690,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           );
         }
       } catch (error) {
-        logger.error('Listing moderation event write failed after status update', {
+        logger.error('Deferred fast moderation audit failed', {
           property_id: listing.id,
           status: nextStatus,
           message: error.message
@@ -5703,42 +5740,85 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       }
     });
 
-    if (fastAdminRender && manualNotificationOnly && ['approved', 'rejected', 'pending'].includes(nextStatus)) {
-      clearModerationDecisionCaches(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
-      invalidatePublicInventoryMetricsCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
-      notifyIndexNowOnStatusChange(current, listing, nextStatus);
-      if (humanApprovalOverride || humanIntegrityOverride) {
+    const deliverDeferredDecisionWork = async () => {
+      const followStarted = Date.now();
+      const followSteps = [];
+      let followLast = followStarted;
+      const markFollow = (step) => {
+        const now = Date.now();
+        followSteps.push({ step, ms: now - followLast });
+        followLast = now;
+      };
+      try {
+        if (!leaveToAHuman) {
+          try {
+            if (nextStatus === 'approved') {
+              listing.primary_image_url = await getPrimaryImageUrlForProperty(listing.id);
+              markFollow('primary_image');
+            }
+            const sent = await sendOwnerListingStatusNotifications({
+              listing: {
+                ...notificationListing,
+                primary_image_url: listing.primary_image_url || ''
+              },
+              status: nextStatus,
+              reason: moderationReason
+            });
+            notification = manualNotificationOnly ? { ...sent, manual: manualNotification } : sent;
+            if (notification.email?.sent || notification.whatsapp?.sent) {
+              await db.query(
+                'UPDATE properties SET last_moderation_notification_at = NOW() WHERE id = $1',
+                [listing.id]
+              );
+            }
+          } catch (error) {
+            logger.error('Deferred owner listing notification failed', {
+              property_id: listing.id,
+              status: nextStatus,
+              message: error.message
+            });
+            notification = {
+              sent: false,
+              reason: 'notification_failed',
+              error: error.message || 'send_failed',
+              deferred: true
+            };
+          }
+          markFollow('owner_notification');
+        }
         await writeModerationAuditEvents();
-      } else {
-        runPublicInventoryFollowup(
-          writeModerationAuditEvents,
-          'Deferred fast moderation audit failed',
-          { property_id: listing.id, status: nextStatus }
-        );
+        markFollow('moderation_audit');
+        if (nextStatus === 'approved' && current.status !== 'approved') {
+          await matchListingToSavedSearches(db, { ...current, ...listing });
+          markFollow('saved_search');
+        }
+        notifyIndexNowOnStatusChange(current, listing, nextStatus);
+        markFollow('indexnow');
+      } finally {
+        logger.info('Listing decision follow-up timing', {
+          property_id: listing.id,
+          inquiry_reference: listing.inquiry_reference || null,
+          status: nextStatus,
+          fast_admin_render: fastAdminRender,
+          total_ms: Date.now() - followStarted,
+          steps: followSteps
+        });
       }
-      let fastAlertMatching = null;
-      if (nextStatus === 'approved' && current.status !== 'approved') {
-        fastAlertMatching = { deferred: true, reason: 'fast_manual_notification_response' };
-        runPublicInventoryFollowup(
-          () => matchListingToSavedSearches(db, { ...current, ...listing }),
-          'Deferred listing saved-search matching failed',
-          { property_id: listing.id }
-        );
-      }
-      return res.json(buildStatusResponse(fastAlertMatching));
-    }
+    };
 
-    await writeModerationAuditEvents();
-
-    let alertMatching = null;
-    if (nextStatus === 'approved' && current.status !== 'approved') {
-      alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
-    }
     clearModerationDecisionCaches(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
     invalidatePublicInventoryMetricsCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
-    notifyIndexNowOnStatusChange(current, listing, nextStatus);
-
-    return res.json(buildStatusResponse(alertMatching));
+    decisionTiming.mark('caches_cleared');
+    runPublicInventoryFollowup(
+      deliverDeferredDecisionWork,
+      'Deferred listing decision follow-up failed',
+      { property_id: listing.id, status: nextStatus }
+    );
+    const fastAlertMatching = nextStatus === 'approved' && current.status !== 'approved'
+      ? { deferred: true, reason: 'decision_committed' }
+      : null;
+    decisionTiming.mark('response');
+    return res.json(buildStatusResponse(fastAlertMatching));
   } catch (error) {
     logger.error('Listing status update failed', {
       property_id: req.params.id,
@@ -5771,5 +5851,6 @@ module.exports._test = {
   isSourcedInventoryCandidateRecord,
   sourcedCandidateRecordHasApprovalLocation,
   sourcedInventoryApprovalPolicy,
-  buildThirdPartyPublicSummary
+  buildThirdPartyPublicSummary,
+  createDecisionTiming
 };
