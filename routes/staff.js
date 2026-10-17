@@ -3688,15 +3688,31 @@ async function collectStaffContactRows(question = '') {
   return { rows, filter };
 }
 
+const staffDashboardFlights = new Map();
+
+function shareDashboard(key, factory) {
+  const existing = staffDashboardFlights.get(key);
+  if (existing) {
+    logger.info('Staff dashboard request joined an in-flight payload', { key });
+    return existing;
+  }
+  const flight = Promise.resolve().then(factory).finally(() => {
+    if (staffDashboardFlights.get(key) === flight) staffDashboardFlights.delete(key);
+  });
+  staffDashboardFlights.set(key, flight);
+  return flight;
+}
+
 router.get('/dashboard', async (req, res, next) => {
   try {
     logStaffActivity(req, 'staff_dashboard_opened', { metadata: { role: req.userAuth?.role } })
       .catch((error) => logger.warn('Staff dashboard activity log failed', { message: error.message }));
     const fast = boolLike(req.query?.fast || req.query?.light);
     const panels = boolLike(req.query?.panels);
-    if (fast) return res.json({ ok: true, data: await dashboardFastPayload(req) });
-    if (panels) return res.json({ ok: true, data: await dashboardPanelsPayload(req) });
-    return res.json({ ok: true, data: await dashboardPayload(req) });
+    const staffId = actorId(req) || 'anonymous';
+    if (fast) return res.json({ ok: true, data: await shareDashboard(`fast:${staffId}`, () => dashboardFastPayload(req)) });
+    if (panels) return res.json({ ok: true, data: await shareDashboard(`panels:${staffId}`, () => dashboardPanelsPayload(req)) });
+    return res.json({ ok: true, data: await shareDashboard(`full:${staffId}`, () => dashboardPayload(req)) });
   } catch (error) {
     return next(error);
   }

@@ -2,6 +2,8 @@
 
 const logger = require('../config/logger');
 const { runBackgroundWork } = require('../config/database');
+const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
+const { observeJob } = require('../utils/memoryLog');
 const {
   canonicalizeUgandaLocation,
   normalizeLocationKey,
@@ -14,7 +16,7 @@ const FEATURED_CATEGORIES = Object.freeze(['sale', 'rent', 'land', 'commercial',
 const DEFAULT_TIME_ZONE = 'Africa/Kampala';
 const DEFAULT_HOUR = 7;
 const DEFAULT_PER_CATEGORY = 2;
-const DEFAULT_CANDIDATE_LIMIT = 250;
+const DEFAULT_CANDIDATE_LIMIT = 40;
 const ADVISORY_LOCK_KEY = 716250725;
 
 let schedulerTimer = null;
@@ -233,7 +235,7 @@ async function runFeaturedRotation(db, options = {}) {
   const { dateKey } = timeZoneParts(now, timeZone);
   const actorId = clean(options.actorId || 'featured_rotation_scheduler');
   const perCategory = Math.max(1, Math.min(5, Number(options.perCategory || DEFAULT_PER_CATEGORY)));
-  const candidateLimit = Math.max(30, Math.min(1000, Number(options.candidateLimit || DEFAULT_CANDIDATE_LIMIT)));
+  const candidateLimit = Math.max(20, Math.min(80, Number(options.candidateLimit || DEFAULT_CANDIDATE_LIMIT)));
   const force = options.force === true;
   const client = await db.getClient();
   let lockHeld = false;
@@ -254,9 +256,16 @@ async function runFeaturedRotation(db, options = {}) {
       if (prior.rows[0]) {
         const currentFeatured = await client.query(
           `SELECT
-             p.id, p.listing_type, p.title, p.description, p.district, p.area,
+             p.id, p.listing_type, p.title, LEFT(p.description, 400) AS description, p.district, p.area,
              p.price, p.price_period, p.property_type, p.transaction_type,
-             p.extra_fields, p.created_at
+             jsonb_build_object(
+               'source_title', LEFT(COALESCE(p.extra_fields->>'source_title', ''), 400),
+               'source_caption', LEFT(COALESCE(p.extra_fields->>'source_caption', ''), 400),
+               'source_text', LEFT(COALESCE(p.extra_fields->>'source_text', ''), 400),
+               'source_visual_text', LEFT(COALESCE(p.extra_fields->>'source_visual_text', ''), 400),
+               'source_card_description', LEFT(COALESCE(p.extra_fields->>'source_card_description', ''), 400)
+             ) AS extra_fields,
+             p.created_at
            FROM properties p
            WHERE ${publicVisibleInventoryWhere('p')}
              AND COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')`
@@ -283,9 +292,16 @@ async function runFeaturedRotation(db, options = {}) {
     const candidates = await client.query(
       `WITH ranked AS (
          SELECT
-           p.id, p.listing_type, p.title, p.description, p.district, p.area,
+           p.id, p.listing_type, p.title, LEFT(p.description, 400) AS description, p.district, p.area,
            p.price, p.price_period, p.property_type, p.transaction_type,
-           p.extra_fields, p.created_at,
+           jsonb_build_object(
+             'source_title', LEFT(COALESCE(p.extra_fields->>'source_title', ''), 400),
+             'source_caption', LEFT(COALESCE(p.extra_fields->>'source_caption', ''), 400),
+             'source_text', LEFT(COALESCE(p.extra_fields->>'source_text', ''), 400),
+             'source_visual_text', LEFT(COALESCE(p.extra_fields->>'source_visual_text', ''), 400),
+             'source_card_description', LEFT(COALESCE(p.extra_fields->>'source_card_description', ''), 400)
+           ) AS extra_fields,
+           p.created_at,
            ROW_NUMBER() OVER (
              PARTITION BY CASE WHEN p.listing_type IN ('student', 'students') THEN 'student' ELSE p.listing_type END
              ORDER BY p.created_at DESC, p.id DESC
@@ -467,7 +483,7 @@ function startFeaturedRotationScheduler(db) {
   ) return;
   const pollMs = Math.max(60_000, Number(process.env.FEATURED_ROTATION_POLL_MS || 60_000));
   schedulerTimer = setInterval(() => {
-    tickFeaturedRotationScheduler(db).catch((error) => {
+    observeJob('featured_rotation', () => tickFeaturedRotationScheduler(db)).catch((error) => {
       logger.error('Featured rotation scheduler tick failed', { error: error.message });
     });
   }, pollMs);
@@ -476,7 +492,7 @@ function startFeaturedRotationScheduler(db) {
     tickFeaturedRotationScheduler(db, { actorId: 'featured_rotation_scheduler_boot' }).catch((error) => {
       logger.error('Featured rotation boot tick failed', { error: error.message });
     });
-  }, 15_000).unref?.();
+  }, BOOT_DELAY_MS.featured_rotation).unref?.();
   logger.info('Featured rotation scheduler armed', {
     marker: FEATURED_ROTATION_MARKER,
     timeZone: clean(process.env.FEATURED_ROTATION_TIMEZONE || DEFAULT_TIME_ZONE),

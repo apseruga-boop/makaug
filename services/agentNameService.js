@@ -34,7 +34,7 @@ function agentGreetingName(agent = {}, fallback = '') {
 
 async function refreshGreetingNames(db) {
   if (loading) return loading;
-  loading = db.query(`SELECT id, greeting_name FROM agents WHERE COALESCE(greeting_name, '') <> ''`)
+  loading = db.query(`SELECT id, greeting_name FROM agents WHERE COALESCE(greeting_name, '') <> '' LIMIT 2000`)
     .then((result) => {
       cache.clear();
       for (const row of result.rows) cache.set(String(row.id), String(row.greeting_name).trim());
@@ -46,7 +46,8 @@ async function refreshGreetingNames(db) {
 }
 
 function startGreetingNameCache(db, { everyMs = 5 * 60_000 } = {}) {
-  refreshGreetingNames(db);
+  const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
+  setTimeout(() => refreshGreetingNames(db), BOOT_DELAY_MS.greeting_names).unref?.();
   const timer = setInterval(() => refreshGreetingNames(db), everyMs);
   timer.unref?.();
   return timer;

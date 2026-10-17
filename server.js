@@ -2434,7 +2434,7 @@ function startMemoryLog() {
     // with status 134: it sits near half the container unless NODE_OPTIONS says otherwise.
     const heapLimit = require('v8').getHeapStatistics().heap_size_limit;
     const heapPct = Math.round((m.heapUsed / heapLimit) * 100);
-    logger.info(`memory rss_mb=${mb(m.rss)} heap_used_mb=${mb(m.heapUsed)} heap_total_mb=${mb(m.heapTotal)} external_mb=${mb(m.external)} limit_mb=${Number(process.env.MEMORY_LIMIT_MB || 512)} heap_limit_mb=${mb(heapLimit)} heap_pct=${heapPct}`);
+    logger.info(`memory phase=minute rss_mb=${mb(m.rss)} heap_used_mb=${mb(m.heapUsed)} heap_total_mb=${mb(m.heapTotal)} external_mb=${mb(m.external)} limit_mb=${Number(process.env.MEMORY_LIMIT_MB || 512)} heap_limit_mb=${mb(heapLimit)} heap_pct=${heapPct}`);
     if (heapPct >= 85) logger.warn(`memory heap at ${heapPct}% of its ${mb(heapLimit)} MB ceiling; the process will abort (exit 134) if this keeps rising`);
   }, 60_000);
   timer.unref?.();

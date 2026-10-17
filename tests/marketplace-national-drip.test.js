@@ -157,7 +157,7 @@ test('scheduled run uses a typed interval and re-warms public caches after inser
   assert.match(service, /make_interval\(mins => \$6::int\)/);
   assert.doesNotMatch(service, /\(\$6 \|\| ' minutes'\)::interval/);
   assert.match(service, /invalidateMarketplaceStats\(\);\s*await warmMarketplacePublicCache\(db\);/);
-  assert.match(service, /setTimeout\(\(\) => warmMarketplacePublicCache\(db\), 2000\)/);
+  assert.match(service, /setTimeout\(\(\) => warmMarketplacePublicCache\(db\), BOOT_DELAY_MS\.marketplace_cache\)/);
 });
 
 function sourceRow(overrides = {}) {
