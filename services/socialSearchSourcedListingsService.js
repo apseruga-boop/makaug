@@ -28,6 +28,7 @@ const {
   commercialMisclassificationWarning,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const { isApartmentBlockText, modestPriceDrop, videoIdFromText } = require('../utils/listingIntakeQuality');
 const { blockedSocialSourceMatch } = require('./socialSourceBlocklistService');
 const {
   CANONICAL_PROPERTY_CURRENCY,
@@ -2518,6 +2519,10 @@ function publicEmailFromText(text = '') {
 
 function normalizeFoundOnlineListingType(value = '', options = {}) {
   const raw = String(value || '').toLowerCase();
+  if (isApartmentBlockText(raw)) {
+    if (/\b(for rent|to rent|to let)\b/.test(raw) && !/\b(for sale|on sale|selling)\b/.test(raw)) return 'rent';
+    return 'sale';
+  }
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room)\b/.test(raw);
   if (/\b(rental|income|investment)\s+(property|building|block)\s+(?:available\s+)?for sale\b/.test(raw)) return 'sale';
   if (raw.includes('commercial') || raw.includes('shop') || raw.includes('office') || raw.includes('warehouse')) return 'commercial';
@@ -2863,7 +2868,13 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
   const imagePHashes = [...new Set(harvestFingerprints.map((item) => item.primary_image_phash).filter(Boolean))];
   const compositeKeys = [...new Set(harvestFingerprints.map((item) => item.composite_listing_key).filter(Boolean))];
   const contactKeys = [...new Set(harvestFingerprints.map((item) => item.contact_cluster_key).filter(Boolean))];
-  if (!keys.length && !urls.length && !fingerprints.length && !platformIds.length && !captionHashes.length && !imageHashes.length && !imagePHashes.length && !compositeKeys.length && !contactKeys.length) return new Map();
+  const videoIds = [...new Set(items.flatMap((item) => [
+    sourceVideoIdForItem(item),
+    videoIdFromText(sourceUrlForItem(item)),
+    videoIdFromText(item.videoUrl || item.video_url || ''),
+    videoIdFromText(item.caption || item.sourceText || ''),
+  ]).filter((id) => String(id || '').length >= 6))];
+  if (!keys.length && !urls.length && !fingerprints.length && !platformIds.length && !captionHashes.length && !imageHashes.length && !imagePHashes.length && !compositeKeys.length && !contactKeys.length && !videoIds.length) return new Map();
   const lookupUrls = uniqueUrls([...urls, ...normalizedUrls]);
   const selectExisting = `SELECT
        properties.id::text AS id,
@@ -2883,6 +2894,9 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
        extra_fields->>'primary_image_phash' AS primary_image_phash,
        extra_fields->>'contact_cluster_key' AS contact_cluster_key,
        extra_fields->>'composite_listing_key' AS composite_listing_key,
+       extra_fields->>'youtube_video_id' AS youtube_video_id,
+       extra_fields->>'tiktok_video_id' AS tiktok_video_id,
+       extra_fields->>'video_url' AS video_url,
        extra_fields->>'source_post_url' AS source_post_url,
        COALESCE(
          extra_fields->>'source_url',
@@ -2938,10 +2952,22 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
        WHERE COALESCE(status, '') <> 'deleted'
          AND COALESCE(extra_fields->>'contact_cluster_key', '') <> ''
          AND extra_fields->>'contact_cluster_key' = ANY($9::text[])
+       UNION
+       SELECT p.id
+         FROM properties p
+         JOIN unnest($10::text[]) AS video_id ON video_id <> ''
+        WHERE COALESCE(p.status, '') <> 'deleted'
+          AND (
+            p.extra_fields->>'youtube_video_id' = video_id
+            OR p.extra_fields->>'tiktok_video_id' = video_id
+            OR p.extra_fields->>'source_video_id' = video_id
+            OR COALESCE(p.extra_fields->>'video_url', '') ILIKE '%' || video_id || '%'
+            OR COALESCE(p.extra_fields->>'source_url', '') ILIKE '%' || video_id || '%'
+          )
      )
      ${selectExisting}
      INNER JOIN matching_property_ids ON matching_property_ids.id = properties.id`,
-    [lookupUrls, keys, fingerprints, platformIds, captionHashes, imageHashes, imagePHashes, compositeKeys, contactKeys]
+    [lookupUrls, keys, fingerprints, platformIds, captionHashes, imageHashes, imagePHashes, compositeKeys, contactKeys, videoIds.length ? videoIds : ['']]
   );
   const existing = new Map();
   for (const row of result.rows) {
@@ -2962,6 +2988,8 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
       const candidateKey = `contact-candidates:${row.contact_cluster_key}`;
       existing.set(candidateKey, [...(existing.get(candidateKey) || []), payload]);
     }
+    const storedVideoId = String(row.youtube_video_id || row.tiktok_video_id || videoIdFromText(row.video_url || row.source_url || '') || '').trim();
+    if (storedVideoId) existing.set(`video:${storedVideoId}`, payload);
     const normalized = normalizeSourceUrl(row.source_post_url) || normalizeSourceUrl(row.source_url);
     if (normalized) existing.set(normalized, payload);
   }
@@ -3009,7 +3037,9 @@ function existingFoundOnlineRowForItem(existing = new Map(), item = {}) {
       return distance != null && distance <= 16;
     })
     : null;
+  const itemVideoId = sourceVideoIdForItem(item) || videoIdFromText(sourceUrlForItem(item)) || videoIdFromText(item.caption || item.sourceText || '');
   const matches = [
+    ['source_video_duplicate', itemVideoId && existing.get(`video:${itemVideoId}`)],
     ['stable_platform_id_duplicate', harvest.source_platform_id && existing.get(`platform:${harvest.source_platform_id}`)],
     ['composite_listing_duplicate', harvest.composite_listing_key && existing.get(`composite:${harvest.composite_listing_key}`)],
     ['primary_image_dhash_duplicate', harvest.primary_image_dhash && existing.get(`image:${harvest.primary_image_dhash}`)],
@@ -3051,6 +3081,27 @@ function registerExistingFoundOnlineItem(existing = new Map(), item = {}, row = 
     existing.set(candidateKey, [...(existing.get(candidateKey) || []), payload]);
   }
   return payload;
+}
+
+async function applyFoundOnlinePriceDrop(client, existingRow = {}, item = {}) {
+  const next = Number(item.price) || 0;
+  const current = Number(existingRow.price) || 0;
+  if (!client || !existingRow.id || !modestPriceDrop(next, current)) return false;
+  await client.query(
+    `UPDATE properties
+        SET price = $2,
+            updated_at = NOW(),
+            extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
+              'previous_price', $3::text,
+              'price_updated_from_repeat_post', true,
+              'price_updated_at', $4
+            )
+      WHERE id = $1
+        AND status IN ('pending','approved')
+        AND price > $2`,
+    [existingRow.id, next, String(current), new Date().toISOString()]
+  );
+  return true;
 }
 
 function alreadyPresentFoundOnlineRow(item = {}, agent = {}, existingRow = {}) {
@@ -3469,6 +3520,9 @@ async function queueFoundOnlineSourcePostListings({
     for (const { item, agent, intake } of evaluated) {
       let existingRow = existingFoundOnlineRowForItem(existing, item);
       if (existingRow) {
+        if (await applyFoundOnlinePriceDrop(client, existingRow, item)) {
+          existingRow = { ...existingRow, price: item.price, duplicate_match_type: 'price_update' };
+        }
         alreadyPresent.push(alreadyPresentFoundOnlineRow(item, agent, existingRow));
         continue;
       }
@@ -3479,6 +3533,9 @@ async function queueFoundOnlineSourcePostListings({
         const lockedExisting = await existingFoundOnlineSourcePostListings(client, [item]);
         existingRow = existingFoundOnlineRowForItem(lockedExisting, item);
         if (existingRow) {
+          if (await applyFoundOnlinePriceDrop(client, existingRow, item)) {
+            existingRow = { ...existingRow, price: item.price, duplicate_match_type: 'price_update' };
+          }
           alreadyPresent.push(alreadyPresentFoundOnlineRow(item, agent, existingRow));
           registerExistingFoundOnlineItem(existing, item, existingRow);
           continue;

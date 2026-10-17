@@ -1,4 +1,12 @@
 const { isPriceImplausible } = require('../utils/pricePlausibility');
+const {
+  isApartmentBlockText,
+  decideIntakeRepeat,
+  videoIdFromText,
+  localPhone,
+  stripPlotDimensions,
+  pricePeriodForUnitQuote,
+} = require('../utils/listingIntakeQuality');
 const { agentGreetingName } = require('../services/agentNameService');
 const express = require('express');
 const crypto = require('crypto');
@@ -3154,9 +3162,14 @@ function isReviewableOwnerForwardCaption(caption = '') {
 }
 
 function ownerForwardListingType(caption = '', parsed = {}) {
+  const clean = normalizeInput(caption).toLowerCase();
+  // An apartment block that also mentions its plot size is still the building.
+  if (isApartmentBlockText(clean)) {
+    if (/\b(?:for rent|to let|to rent)\b/i.test(clean) && !/\b(?:for sale|on sale|selling)\b/i.test(clean)) return 'rent';
+    return 'sale';
+  }
   const inferred = normalizeListingType(parsed.listing_type || '');
   if (inferred && inferred !== 'any') return inferred;
-  const clean = normalizeInput(caption).toLowerCase();
   if (/\b(?:land|plot|plots|acre|acres|decimal|decimals|kibanja|bibanja)\b/i.test(clean)) return 'land';
   if (/\b(?:commercial|office|shop|retail|warehouse|industrial|showroom)\b/i.test(clean)) return 'commercial';
   if (/\b(?:hostel|student accommodation|campus room)\b/i.test(clean)) return 'student';
@@ -3177,6 +3190,9 @@ function ownerForwardListingTitle({ listingType = '', area = '', bedrooms = null
 
 function ownerForwardPricePeriod(listingType = '', caption = '') {
   const clean = normalizeInput(caption).toLowerCase();
+  const quotedUnit = pricePeriodForUnitQuote(clean);
+  if (quotedUnit === 'acre' && /\b(?:per\s+year|a\s+year|yearly|annually|per\s+annum)\b/i.test(clean)) return 'acre_yr';
+  if (quotedUnit === 'acre' || quotedUnit === 'plot') return quotedUnit;
   if (listingType === 'student') return /\bsemester\b/i.test(clean) ? 'semester' : 'month';
   if (listingType === 'rent' || (listingType === 'commercial' && /\b(?:for rent|to rent|per month|monthly rent)\b/i.test(clean))) return 'month';
   return 'once';
@@ -4926,12 +4942,9 @@ function normalizeCaptionPriceNotation(caption = '') {
  * ceiling. The parser takes the number next to the price cue and nothing in it
  * ever looked at the word sitting beside it.
  *
- * So: when a caption prices by the unit AND says how many units there are, the
- * property price is the two multiplied. The rate the agent quoted is kept
- * alongside it, because that is the number they will talk to a buyer about, and
- * the listing says both. When the quantity is missing there is nothing to
- * multiply, so the rate stands and the moderator is told it is a rate — better
- * an honest flag than an invented total.
+ * The rate is the listing price, and the unit is the price period (`/acre`,
+ * `/plot`). The acreage or the plot count stays on the listing as size. It is
+ * not multiplied into a total.
  */
 const PER_UNIT_PRICE_CUE = /(?:\b(?:each|per|a|an|\/)\s*)(acre|acres|decimal|decimals|plot|plots|unit|units|hectare|hectares|square\s*meter|sqm)\b|\b(acre|acres|decimal|decimals|plot|plots|unit|units|hectare|hectares)\s*(?:each|apiece)\b/i;
 const UNIT_QUANTITY = /(\d[\d,.]*)\s*(acres?|decimals?|plots?|units?|hectares?)\b/i;
@@ -4957,7 +4970,9 @@ function perUnitPriceFacts(caption = '', unitPrice = 0) {
   const rate = Number(unitPrice) || 0;
   if (rate <= 0) return { perUnit: false };
 
-  const quantityMatch = UNIT_QUANTITY.exec(text);
+  // "50x100 plots" is one plot's size, not 100 plots. 11 Oct 2026: that
+  // dimension was multiplied into 35m → 3.5bn and 120m → 12bn.
+  const quantityMatch = UNIT_QUANTITY.exec(stripPlotDimensions(text));
   const countedUnit = quantityMatch ? singularUnit(quantityMatch[2]) : '';
 
   const cue = PER_UNIT_PRICE_CUE.exec(text);
@@ -4969,13 +4984,18 @@ function perUnitPriceFacts(caption = '', unitPrice = 0) {
     ? Number(String(quantityMatch[1]).replace(/,/g, '')) || 0
     : 0;
 
-  // One unit priced per unit is just the price. Nothing to correct.
-  if (quantity === 1) return { perUnit: true, unit, quantity, unitPrice: rate, total: rate };
-  if (quantity > 1) {
-    const total = Math.round(rate * quantity);
-    return { perUnit: true, unit, quantity, unitPrice: rate, total };
-  }
-  return { perUnit: true, unit, quantity: 0, unitPrice: rate, total: 0 };
+  // The quoted rate is the price. Acreage and plot counts are size, not a
+  // multiplier. pricePeriod is what the card prints after the figure.
+  const pricePeriod = unit === 'acre' ? 'acre' : ((unit === 'plot' || unit === 'unit') ? 'plot' : '');
+  return {
+    perUnit: true,
+    unit,
+    quantity,
+    unitPrice: rate,
+    total: rate,
+    pricePeriod,
+    eachNotTotal: true,
+  };
 }
 
 /**
@@ -5086,6 +5106,14 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     && /\b(?:selling|for sale|on sale|sale price|sell)\b/i.test(cleanCaption)
   ) {
     listingType = 'sale';
+  }
+  // A block of apartments that also names its plot was filed as land, with the
+  // unit bedroom count left on the land row.
+  if (isApartmentBlockText(cleanCaption)) {
+    listingType = /\b(?:for rent|to let|to rent)\b/i.test(cleanCaption)
+      && !/\b(?:for sale|on sale|selling|sell)\b/i.test(cleanCaption)
+      ? 'rent'
+      : 'sale';
   }
   const locationCaption = cleanCaption.replace(
     /\b(?:private|ready|freehold)?\s*m(?:ailo|olo|ilo)\s+(?:land\s+)?title\b/gi,
@@ -5373,9 +5401,8 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     }
   }
 
-  // A rate quoted per acre is not what the property costs. Multiply it out when
-  // the caption says how many acres there are; otherwise keep the rate and say
-  // so, rather than inventing a total nobody quoted.
+  // "UGX X per acre" and "plots each UGX X" are stored as that rate. The
+  // period is what shows the unit. The count of acres or plots is not applied.
   const perUnit = perUnitPriceFacts(cleanCaption, price);
   const effectivePrice = perUnit.perUnit && perUnit.total > 0 ? perUnit.total : price;
 
@@ -5385,6 +5412,7 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     hints,
     listingType,
     price: effectivePrice,
+    pricePeriod: perUnit.pricePeriod || pricePeriodForUnitQuote(cleanCaption) || ownerForwardPricePeriod(listingType, cleanCaption),
     priceMetadata,
     perUnitPrice: perUnit.perUnit ? perUnit : null,
     bedroomDraft,
@@ -6325,7 +6353,6 @@ function employeeIntakeConfirmMessage(data = {}) {
 
 async function findEmployeeDuplicateProperty({ caption = '', facts = {}, sessionData = {} } = {}) {
   const captionHash = employeeCaptionHash(caption);
-  if (!captionHash) return null;
   const agentId = sessionData.agent?.id || '';
   const contactDigits = String(
     sessionData.agent?.whatsapp
@@ -6333,25 +6360,92 @@ async function findEmployeeDuplicateProperty({ caption = '', facts = {}, session
     || sessionData.customer_details?.phone
     || ''
   ).replace(/\D/g, '');
+  const phoneKey = localPhone(contactDigits);
+  const area = facts.locationPatch?.area || '';
+  const videoId = videoIdFromText([
+    caption,
+    sessionData.pending_property_video_url,
+    ...(Array.isArray(sessionData.pending_property_media) ? sessionData.pending_property_media.map((item) => item?.url || '') : []),
+  ].filter(Boolean).join(' '));
+  if (!captionHash && !phoneKey && !videoId) return null;
   const result = await db.query(
-    `SELECT id, status
+    `SELECT id, status, price, area, district,
+            extra_fields->>'source_caption_sha256' AS caption_hash,
+            LEFT(COALESCE(extra_fields->>'source_caption', ''), 800) AS source_caption,
+            COALESCE(extra_fields->>'video_url', '') AS video_url,
+            COALESCE(extra_fields->>'youtube_video_id', '') AS youtube_video_id,
+            COALESCE(extra_fields->>'tiktok_video_id', '') AS tiktok_video_id,
+            regexp_replace(COALESCE(lister_phone, ''), '\\D', '', 'g') AS phone_digits
        FROM properties
-      WHERE source = 'whatsapp_employee_intake'
-        AND status IN ('pending','approved')
-        AND listing_type = $1
-        AND LOWER(TRIM(area)) = LOWER(TRIM($2))
-        AND LOWER(TRIM(district)) = LOWER(TRIM($3))
-        AND price = $4
-        AND extra_fields->>'source_caption_sha256' = $5
+      WHERE status IN ('pending','approved')
         AND (
-          ($6::text <> '' AND agent_id::text = $6)
-          OR ($7::text <> '' AND regexp_replace(COALESCE(lister_phone, ''), '\\D', '', 'g') = $7)
+          (
+            source = 'whatsapp_employee_intake'
+            AND extra_fields->>'source_caption_sha256' = $1
+            AND listing_type = $2
+            AND LOWER(TRIM(COALESCE(area, ''))) = LOWER(TRIM($3))
+            AND LOWER(TRIM(COALESCE(district, ''))) = LOWER(TRIM($4))
+            AND price = $5
+            AND (
+              ($6::text <> '' AND agent_id::text = $6)
+              OR ($7::text <> '' AND regexp_replace(COALESCE(lister_phone, ''), '\\D', '', 'g') = $7)
+            )
+          )
+          OR (
+            $8::text <> ''
+            AND LOWER(TRIM(COALESCE(area, ''))) = LOWER(TRIM($3))
+            AND regexp_replace(COALESCE(lister_phone, ''), '\\D', '', 'g') LIKE '%' || $8
+          )
+          OR (
+            $9::text <> ''
+            AND (
+              extra_fields->>'youtube_video_id' = $9
+              OR extra_fields->>'tiktok_video_id' = $9
+              OR COALESCE(extra_fields->>'video_url', '') ILIKE '%' || $9 || '%'
+              OR COALESCE(extra_fields->>'source_url', '') ILIKE '%' || $9 || '%'
+            )
+          )
         )
       ORDER BY created_at DESC
-      LIMIT 1`,
-    [facts.listingType, facts.locationPatch.area, facts.locationPatch.district, facts.price, captionHash, agentId, contactDigits]
+      LIMIT 20`,
+    [
+      captionHash,
+      facts.listingType,
+      area,
+      facts.locationPatch?.district || '',
+      facts.price,
+      agentId,
+      contactDigits,
+      phoneKey,
+      videoId,
+    ]
   );
-  return result.rows[0] || null;
+  return decideIntakeRepeat({
+    caption,
+    captionHash,
+    phoneDigits: phoneKey,
+    area,
+    price: facts.price,
+    videoId,
+  }, result.rows);
+}
+
+async function applyEmployeePriceDrop(existing, facts) {
+  const next = Number(facts?.price) || 0;
+  if (!existing?.id || !(next > 0)) return;
+  await db.query(
+    `UPDATE properties
+        SET price = $2,
+            updated_at = NOW(),
+            extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
+              'previous_price', $3::text,
+              'price_updated_from_repeat_intake', true,
+              'price_updated_at', $4
+            )
+      WHERE id = $1
+        AND status IN ('pending','approved')`,
+    [existing.id, next, String(existing.price ?? ''), new Date().toISOString()]
+  );
 }
 
 async function createEmployeeReviewProperty({
@@ -6443,6 +6537,8 @@ async function createEmployeeReviewProperty({
     source_caption: caption.slice(0, 2000),
     source_caption_display: cleanPublicCaption.slice(0, 2000),
     source_caption_sha256: employeeCaptionHash(caption),
+    youtube_video_id: videoIdFromText(caption) && /youtu/.test(String(caption)) ? videoIdFromText(caption) : null,
+    tiktok_video_id: videoIdFromText(caption) && /tiktok/.test(String(caption)) ? videoIdFromText(caption) : null,
     price_currency: facts.priceMetadata?.price_currency || ACTIVE_CURRENCY,
     price_original_currency: facts.priceMetadata?.price_original_currency || ACTIVE_CURRENCY,
     price_original: facts.priceMetadata?.price_original || facts.price,
@@ -9510,6 +9606,11 @@ async function handleEmployeeWhatsappIntake({
           }
         }
         if (existingProperty) {
+          if (existingProperty.match_type === 'price_update') {
+            await applyEmployeePriceDrop(existingProperty, textOnlyFacts).catch((error) => {
+              logger.error('employee price drop update failed', { error: error.message });
+            });
+          }
           if (propertyAttemptRecorded) {
             data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
           }
@@ -9535,7 +9636,7 @@ async function handleEmployeeWhatsappIntake({
             propertyId: existingProperty.id,
             duplicate: true,
             message: data.whatsapp_agent_self_intake === true
-              ? `👍 That property is already with us${String(existingProperty.status) === 'pending' ? ' and with our team for review' : ''} — no need to send it again.${promotedPrompt ? `\n\n${agentPendingNotice(data)}` : ''}`
+              ? `👍 That property is already with us${String(existingProperty.status) === 'pending' ? ' and with our team for review' : ''}${existingProperty.match_type === 'price_update' ? ' I updated its price.' : ''} — no need to send it again.${promotedPrompt ? `\n\n${agentPendingNotice(data)}` : ''}`
               : (data.property_batch_mode || 'multiple') === 'multiple'
               ? promotedPrompt
               : `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
@@ -9808,6 +9909,11 @@ async function handleEmployeeWhatsappIntake({
       }
       propertyAttemptRecorded = recordEmployeePropertyAttempt(data, { inboundMessageId, caption });
       if (existingProperty && !recoveredExistingProperty) {
+        if (existingProperty.match_type === 'price_update') {
+          await applyEmployeePriceDrop(existingProperty, facts).catch((error) => {
+            logger.error('employee price drop update failed', { error: error.message });
+          });
+        }
         if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
         if (data.whatsapp_agent_self_intake === true && String(existingProperty.status) === 'pending' && candidates.length) {
           const fresh = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider }).catch(() => []);
@@ -9834,7 +9940,7 @@ async function handleEmployeeWhatsappIntake({
           propertyId: existingProperty.id,
           duplicate: true,
           message: data.whatsapp_agent_self_intake === true
-            ? `👍 That property is already with us${String(existingProperty.status) === 'pending' ? ' and with our team for review' : ''} — no need to send it again.`
+            ? `👍 That property is already with us${String(existingProperty.status) === 'pending' ? ' and with our team for review' : ''}${existingProperty.match_type === 'price_update' ? ' I updated its price.' : ''} — no need to send it again.`
             : (data.property_batch_mode || 'multiple') === 'multiple'
             ? ''
             : `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
