@@ -16,7 +16,7 @@ const {
 } = require('./propertyTypeVocabulary');
 const { allowedPricePeriods, normalizePricePeriod } = require('../config/pricePeriods');
 const { staffConfirmedNumericPrice } = require('./staffPriceChoice');
-const { isApartmentBlockText } = require('./listingIntakeQuality');
+const { isApartmentBlockText, pricePeriodForUnitQuote } = require('./listingIntakeQuality');
 
 const HOSPITALITY_SHORT_TERM_MESSAGE = 'Nightly and short-stay places go in Short Term stays (/short-term), not the main listings.';
 
@@ -277,10 +277,11 @@ function deriveListingClassification(record = {}, options = {}) {
   const commercialType = listingType === 'commercial'
     ? normalizeCommercialPropertyType(record.property_type || record.commercial_type, { text })
     : '';
-  const pricePeriod = normalizeListingPricePeriod('', {
-    listingType,
-    text,
-  }) || (listingType === 'student' ? 'sem' : (listingType === 'rent' ? 'month' : 'once'));
+  const pricePeriod = pricePeriodForUnitQuote(text)
+    || normalizeListingPricePeriod('', {
+      listingType,
+      text,
+    }) || (listingType === 'student' ? 'sem' : (listingType === 'rent' ? 'month' : 'once'));
 
   return {
     listing_type: listingType,

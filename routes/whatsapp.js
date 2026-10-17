@@ -5,6 +5,7 @@ const {
   videoIdFromText,
   localPhone,
   stripPlotDimensions,
+  pricePeriodForUnitQuote,
 } = require('../utils/listingIntakeQuality');
 const { agentGreetingName } = require('../services/agentNameService');
 const express = require('express');
@@ -3174,6 +3175,9 @@ function ownerForwardListingTitle({ listingType = '', area = '', bedrooms = null
 
 function ownerForwardPricePeriod(listingType = '', caption = '') {
   const clean = normalizeInput(caption).toLowerCase();
+  const quotedUnit = pricePeriodForUnitQuote(clean);
+  if (quotedUnit === 'acre' && /\b(?:per\s+year|a\s+year|yearly|annually|per\s+annum)\b/i.test(clean)) return 'acre_yr';
+  if (quotedUnit === 'acre' || quotedUnit === 'plot') return quotedUnit;
   if (listingType === 'student') return /\bsemester\b/i.test(clean) ? 'semester' : 'month';
   if (listingType === 'rent' || (listingType === 'commercial' && /\b(?:for rent|to rent|per month|monthly rent)\b/i.test(clean))) return 'month';
   return 'once';
@@ -4840,12 +4844,9 @@ function normalizeCaptionPriceNotation(caption = '') {
  * ceiling. The parser takes the number next to the price cue and nothing in it
  * ever looked at the word sitting beside it.
  *
- * So: when a caption prices by the unit AND says how many units there are, the
- * property price is the two multiplied. The rate the agent quoted is kept
- * alongside it, because that is the number they will talk to a buyer about, and
- * the listing says both. When the quantity is missing there is nothing to
- * multiply, so the rate stands and the moderator is told it is a rate — better
- * an honest flag than an invented total.
+ * The rate is the listing price, and the unit is the price period (`/acre`,
+ * `/plot`). The acreage or the plot count stays on the listing as size. It is
+ * not multiplied into a total.
  */
 const PER_UNIT_PRICE_CUE = /(?:\b(?:each|per|a|an|\/)\s*)(acre|acres|decimal|decimals|plot|plots|unit|units|hectare|hectares|square\s*meter|sqm)\b|\b(acre|acres|decimal|decimals|plot|plots|unit|units|hectare|hectares)\s*(?:each|apiece)\b/i;
 const UNIT_QUANTITY = /(\d[\d,.]*)\s*(acres?|decimals?|plots?|units?|hectares?)\b/i;
@@ -4885,19 +4886,18 @@ function perUnitPriceFacts(caption = '', unitPrice = 0) {
     ? Number(String(quantityMatch[1]).replace(/,/g, '')) || 0
     : 0;
 
-  // One unit priced per unit is just the price. Nothing to correct.
-  if (quantity === 1) return { perUnit: true, unit, quantity, unitPrice: rate, total: rate };
-  if (quantity > 1) {
-    // Plots and units quoted "each" are the price of one plot. Multiplying
-    // by the count (or by the 100 in 50x100) stored 110m for 55m each.
-    // Acre and hectare holdings sold as one farm still multiply.
-    if (unit === 'plot' || unit === 'unit' || unit === 'sqm') {
-      return { perUnit: true, unit, quantity, unitPrice: rate, total: rate, eachNotTotal: true };
-    }
-    const total = Math.round(rate * quantity);
-    return { perUnit: true, unit, quantity, unitPrice: rate, total };
-  }
-  return { perUnit: true, unit, quantity: 0, unitPrice: rate, total: 0 };
+  // The quoted rate is the price. Acreage and plot counts are size, not a
+  // multiplier. pricePeriod is what the card prints after the figure.
+  const pricePeriod = unit === 'acre' ? 'acre' : ((unit === 'plot' || unit === 'unit') ? 'plot' : '');
+  return {
+    perUnit: true,
+    unit,
+    quantity,
+    unitPrice: rate,
+    total: rate,
+    pricePeriod,
+    eachNotTotal: true,
+  };
 }
 
 /**
@@ -5303,9 +5303,8 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     }
   }
 
-  // A rate quoted per acre is not what the property costs. Multiply it out when
-  // the caption says how many acres there are; otherwise keep the rate and say
-  // so, rather than inventing a total nobody quoted.
+  // "UGX X per acre" and "plots each UGX X" are stored as that rate. The
+  // period is what shows the unit. The count of acres or plots is not applied.
   const perUnit = perUnitPriceFacts(cleanCaption, price);
   const effectivePrice = perUnit.perUnit && perUnit.total > 0 ? perUnit.total : price;
 
@@ -5315,6 +5314,7 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     hints,
     listingType,
     price: effectivePrice,
+    pricePeriod: perUnit.pricePeriod || pricePeriodForUnitQuote(cleanCaption) || ownerForwardPricePeriod(listingType, cleanCaption),
     priceMetadata,
     perUnitPrice: perUnit.perUnit ? perUnit : null,
     bedroomDraft,

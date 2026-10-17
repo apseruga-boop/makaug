@@ -23,7 +23,7 @@ const QUERIES = {
       FROM properties
      WHERE COALESCE(status, '') <> 'deleted'
        AND price > 0
-       AND COALESCE(description, extra_fields->>'source_caption', '') ~* '\\m(each|apiece|per plot)\\M'
+       AND COALESCE(description, extra_fields->>'source_caption', '') ~* '\\m(each|apiece|per plot|per acre)\\M'
        AND COALESCE(description, extra_fields->>'source_caption', '') ~* '\\m(plots?|units?)\\M'
      ORDER BY created_at DESC
      LIMIT 200`,

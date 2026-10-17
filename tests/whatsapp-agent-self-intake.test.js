@@ -292,7 +292,8 @@ test('a place we know by name is never asked for again — only its district', (
   // Everything except the district was understood, so nothing else may be asked.
   assert.strictEqual(facts.listingType, 'land');
   assert.strictEqual(facts.locationPatch.area, 'Watuba');
-  assert.strictEqual(Number(facts.price), 170000000, '17m an acre across 10 acres');
+  assert.strictEqual(Number(facts.price), 17000000, '17m per acre, not 10 times that');
+  assert.strictEqual(facts.pricePeriod, 'acre');
   // Watuba is in the registry as Wattuba, in three districts. So the question
   // is closed: he picks one and cannot name a district the place is not in.
   assert.deepStrictEqual(employeePropertyMissing(facts),

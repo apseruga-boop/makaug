@@ -24,7 +24,9 @@ test('a per-plot each price is the price of one plot', () => {
     ['100 plots at Namugongo each 120m', 120_000_000],
   ];
   for (const [caption, expected] of cases) {
-    assert.equal(Number(employeePropertyFacts(caption, {}).price), expected, caption);
+    const parsed = employeePropertyFacts(caption, {});
+    assert.equal(Number(parsed.price), expected, caption);
+    assert.equal(parsed.pricePeriod, 'plot', caption);
   }
   const perPlot = perUnitPriceFacts('100 plots each at 35m', 35_000_000);
   assert.equal(perPlot.unit, 'plot');
@@ -33,13 +35,15 @@ test('a per-plot each price is the price of one plot', () => {
   assert.equal(perPlot.eachNotTotal, true);
 });
 
-test('an acre holding sold as one farm is still the total', () => {
-  assert.equal(
-    Number(employeePropertyFacts('20 acres kayunga kitwe each at 8.5m with power', {}).price),
-    170_000_000
-  );
+test('a per-acre rate is stored per acre, and a multiplied total is brought back to that rate', () => {
+  const parsed = employeePropertyFacts('20 acres kayunga kitwe each at 8.5m with power', {});
+  assert.equal(Number(parsed.price), 8_500_000);
+  assert.equal(parsed.pricePeriod, 'acre');
   assert.equal(quotedEachPlotAmount('20 acres kayunga kitwe each at 8.5m'), null);
-  assert.equal(preferEachPlotPrice('20 acres each at 8.5m', 170_000_000), 170_000_000);
+  assert.equal(preferEachPlotPrice('8000 acres for sale in Nwoya at 2.5m per acre', 20_000_000_000), 2_500_000);
+  const safe = safeSourcePriceCandidate('20bn', '8000 acres of farmland for sale in Nwoya at 2.5m per acre (20bn if someone multiplies it)');
+  assert.equal(Number(safe.value), 2_500_000);
+  assert.equal(safe.reason, 'quoted_unit_price');
 });
 
 test('a social each-plot figure beats a multiplied total in the same caption', () => {
@@ -48,7 +52,7 @@ test('a social each-plot figure beats a multiplied total in the same caption', (
   assert.equal(preferEachPlotPrice(text, 3_500_000_000), 35_000_000);
   const safe = safeSourcePriceCandidate('3.5bn', text);
   assert.equal(Number(safe.value), 35_000_000);
-  assert.equal(safe.reason, 'each_plot_price');
+  assert.equal(safe.reason, 'quoted_unit_price');
 });
 
 test('an apartment block on a plot is not land', () => {

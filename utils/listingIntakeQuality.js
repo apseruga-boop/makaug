@@ -53,8 +53,42 @@ function quotedEachPlotAmount(text = '') {
 }
 
 function preferEachPlotPrice(text = '', amount = 0) {
+  return preferQuotedUnitPrice(text, amount);
+}
+
+/**
+ * A caption that prices land by the acre or the plot. The stored price is
+ * that rate, and the period is what the listing prints after it (`/acre`,
+ * `/plot`). Acreage in the same caption is the size, not a multiplier.
+ */
+function unitPriceQuote(text = '') {
+  const raw = String(text || '');
+  const perAcre = /\b(?:per|each|an|a|\/)\s*acres?\b|\bacres?\s+(?:each|apiece)\b|\/acre\b/i.test(raw);
+  const perPlot = /\b(?:per|each)\s+plots?\b|\bplots?\s+(?:each|apiece)\b|\/plot\b|\bper\s+unit\b/i.test(raw);
+  const bareEach = /\b(?:each|apiece|a\s?piece)\b/i.test(raw);
+  const acreCount = /\b\d[\d,.]*\s*acres?\b/i.test(raw);
+  const plotEach = perPlot || (bareEach && /\bplots?\b/i.test(raw) && !perAcre);
+  const acreEach = perAcre || (bareEach && acreCount && !plotEach);
+  const pricePeriod = acreEach ? 'acre' : (plotEach ? 'plot' : '');
+  if (!pricePeriod) return null;
+  const unitWord = pricePeriod === 'acre' ? 'acres?' : 'plots?';
+  const before = raw.match(new RegExp(`${EACH_AMOUNT}\\s*(?:per|each|an|a|/)\\s*${unitWord}\\b`, 'i'))
+    || raw.match(new RegExp(`${EACH_AMOUNT}\\s*${unitWord}\\s*(?:each|apiece)\\b`, 'i'));
+  const after = raw.match(new RegExp(`\\b(?:per|each|an|a|/)\\s*${unitWord}\\s*(?:at|of|@|ugx|ush|shs)?\\s*${EACH_AMOUNT}\\b`, 'i'))
+    || (bareEach ? raw.match(new RegExp(`\\beach(?:\\s+at|\\s+of|\\s+@)?\\s*(?:ugx|ush|shs)?\\s*${EACH_AMOUNT}\\b`, 'i')) : null);
+  const match = before || after;
+  const amount = match ? amountFromEachMatch(match[1], match[2]) : 0;
+  return { amount: amount || null, unit: pricePeriod, pricePeriod };
+}
+
+function pricePeriodForUnitQuote(text = '') {
+  return unitPriceQuote(text)?.pricePeriod || '';
+}
+
+function preferQuotedUnitPrice(text = '', amount = 0) {
   const numeric = Number(amount);
-  const each = quotedEachPlotAmount(text);
+  const quote = unitPriceQuote(text);
+  const each = quote?.amount || quotedEachPlotAmount(text);
   if (!each || !Number.isFinite(numeric) || numeric <= 0) return Number.isFinite(numeric) ? numeric : null;
   if (Math.abs(numeric - each) / each <= 0.02) return numeric;
   const ratio = numeric / each;
@@ -168,8 +202,11 @@ module.exports = {
   localPhone,
   modestPriceDrop,
   preferEachPlotPrice,
+  preferQuotedUnitPrice,
+  pricePeriodForUnitQuote,
   priceStrippedCaption,
   quotedEachPlotAmount,
   stripPlotDimensions,
+  unitPriceQuote,
   videoIdFromText,
 };

@@ -188,7 +188,7 @@ function safeSourcePriceCandidate(value, text = '') {
   }
   const eachPlot = preferEachPlotPrice(sourceText, numericValue);
   if (eachPlot && eachPlot !== numericValue) {
-    return { value: eachPlot, reason: 'each_plot_price' };
+    return { value: eachPlot, reason: 'quoted_unit_price' };
   }
   return { value, reason: '' };
 }
