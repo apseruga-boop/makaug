@@ -42,16 +42,18 @@ const ugx = (n) => Number(n).toLocaleString('en-GB');
 // The price
 // ---------------------------------------------------------------------------
 
-test('a rate per acre becomes the price of all the acres', () => {
+test('a rate per acre is stored as that rate, with the acre unit', () => {
   const cases = [
-    ['8000 acres of Fertile Farmland for Sale in Nwoya District at 2.5m per acre', 20000000000],
-    ['20 acres kayunga kitwe each at 8.5m last 8m with power available', 170000000],
-    ['50 ACRES OF MAILO LAND FOR SALE Kayonza, Kikyuusa - Luweero District at 13m per acre', 650000000],
-    ['Massive 200 acres on sale in Kamira- Kikyusa, in luweero district, selling all at once @ 12m each acre', 2400000000]
+    ['8000 acres of Fertile Farmland for Sale in Nwoya District at 2.5m per acre', 2500000],
+    ['20 acres kayunga kitwe each at 8.5m last 8m with power available', 8500000],
+    ['50 ACRES OF MAILO LAND FOR SALE Kayonza, Kikyuusa - Luweero District at 13m per acre', 13000000],
+    ['Massive 200 acres on sale in Kamira- Kikyusa, in luweero district, selling all at once @ 12m each acre', 12000000]
   ];
   for (const [caption, expected] of cases) {
-    assert.strictEqual(Number(facts(caption).price), expected,
-      `"${caption.slice(0, 40)}…" should be UGX ${ugx(expected)}, not the per-acre rate`);
+    const parsed = facts(caption);
+    assert.strictEqual(Number(parsed.price), expected,
+      `"${caption.slice(0, 40)}…" should be UGX ${ugx(expected)} per acre, not the acreage times the rate`);
+    assert.strictEqual(parsed.pricePeriod, 'acre');
   }
 });
 
@@ -61,13 +63,16 @@ test('the rate the agent quoted is kept, not thrown away', () => {
   assert.strictEqual(perUnit.unit, 'acre');
   assert.strictEqual(perUnit.quantity, 20);
   assert.strictEqual(perUnit.unitPrice, 8500000, 'the number the agent will quote to a buyer');
-  assert.strictEqual(perUnit.total, 170000000);
+  assert.strictEqual(perUnit.total, 8500000);
+  assert.strictEqual(perUnit.pricePeriod, 'acre');
 });
 
 test('"each" and "per acre" are the same claim written differently', () => {
   for (const phrase of ['at 12m per acre', 'each at 12m', '@ 12m each acre', 'at 12m an acre', 'at 12m/acre']) {
     const caption = `10 acres for sale in Mukono ${phrase}`;
-    assert.strictEqual(Number(facts(caption).price), 120000000, `"${phrase}" was not read as a rate`);
+    const parsed = facts(caption);
+    assert.strictEqual(Number(parsed.price), 12000000, `"${phrase}" was not read as a per-acre rate`);
+    assert.strictEqual(parsed.pricePeriod, 'acre', `"${phrase}" must show the acre unit`);
   }
 });
 
