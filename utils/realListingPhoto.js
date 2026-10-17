@@ -124,6 +124,17 @@ function playableVideoUrl(value) {
   return url;
 }
 
+// Compare video URLs without a #fragment (a preview may append #t=0.1).
+function videoUrlKey(value) {
+  return String(value || '').trim().replace(/#.*$/, '');
+}
+
+function sameVideoUrl(left, right) {
+  const a = videoUrlKey(left);
+  const b = videoUrlKey(right);
+  return Boolean(a) && a === b;
+}
+
 // The listing's own source videos (http(s), not marked unavailable).
 function listingSourceVideoUrls(extra = {}) {
   const fields = extra && typeof extra === 'object' ? extra : {};
@@ -215,6 +226,9 @@ module.exports = {
   isVideoStillImage,
   listingPhotoOrVideoCheck,
   listingSourceVideoUrls,
+  playableVideoUrl,
+  sameVideoUrl,
+  videoUrlKey,
   loadListingMediaSummaries,
   summariseListingMedia,
   DEFAULT_MEDIA_HOST,

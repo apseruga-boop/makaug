@@ -638,8 +638,17 @@ async function attachStills(propertyId, uploaded, {
         frame: existingVideoCount + index + 1,
         timestamp_seconds: Number(item.timestampSeconds || 0),
         sharpness: Number(Number(item.sharpness || 0).toFixed(4)),
-        entropy: Number(Number(item.entropy || 0).toFixed(4))
+        entropy: Number(Number(item.entropy || 0).toFixed(4)),
+        source_video_url: item.sourceVideoUrl || null,
+        still_url: item.url
       })),
+      video_still_sources: [
+        ...(Array.isArray(currentExtra.video_still_sources) ? currentExtra.video_still_sources : []),
+        ...selectedUploads.map((item) => ({
+          still_url: item.url,
+          source_video_url: item.sourceVideoUrl || null
+        }))
+      ],
       video_key_frame_count: existingVideoCount + selectedUploads.length,
       media_count: Number(currentExtra.media_count || 0) + selectedUploads.length,
       media_sha256: [...new Set([...hashes, ...selectedUploads.map((item) => item.sha256).filter(Boolean)])],
