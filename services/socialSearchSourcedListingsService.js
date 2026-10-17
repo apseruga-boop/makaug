@@ -60,6 +60,11 @@ const {
   postgresSafeJsonStringify,
   truncateUnicode,
 } = require('../utils/postgresJson');
+const logger = require('../config/logger');
+const {
+  isXPlatform,
+  replaceTwimgRowsWithHostedCopies,
+} = require('../utils/xPostPhoto');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
@@ -2401,8 +2406,23 @@ async function insertListing(client, listing, agentId) {
   const propertyId = inserted.rows[0].id;
   const propertyUrl = `${publicBaseUrl()}/property/${propertyId}`;
   const ownerPreviewUrl = getOwnerPreviewUrl({ id: propertyId }, ownerPreviewToken);
+  const sourceItem = listing.source_item || {};
+  const platform = sourcePlatformFor(sourceAgentForItem(sourceItem), sourceItem);
+  let imagesToStore = Array.isArray(listing.images) ? listing.images : [];
+  let xPostPhotoSourceUrls = [];
+  if (isXPlatform(platform)) {
+    const hosted = await replaceTwimgRowsWithHostedCopies(imagesToStore);
+    imagesToStore = hosted.images;
+    xPostPhotoSourceUrls = hosted.copiedSources;
+    if (hosted.failures.length) {
+      logger.error('X post photo cache failed', {
+        inquiry_reference: listing.inquiry_reference || '',
+        failures: hosted.failures,
+      });
+    }
+  }
 
-  for (const image of listing.images) {
+  for (const image of imagesToStore) {
     await client.query(
       `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
        VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -2415,7 +2435,10 @@ async function insertListing(client, listing, agentId) {
      SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
        || $2::jsonb
      WHERE id = $1`,
-    [propertyId, postgresSafeJsonStringify(extraFieldsFor(listing.source_item, agentId, propertyUrl, ownerPreviewUrl))]
+    [propertyId, postgresSafeJsonStringify({
+      ...extraFieldsFor(listing.source_item, agentId, propertyUrl, ownerPreviewUrl),
+      ...(xPostPhotoSourceUrls.length ? { x_post_photo_source_urls: xPostPhotoSourceUrls } : {}),
+    })]
   );
 
   await client.query(

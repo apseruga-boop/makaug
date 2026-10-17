@@ -43983,28 +43983,38 @@ function renderBrokerRegistrationBadge(broker, textSize = "text-xs") {
 }
 
 // Found-online listings never show source media (TikTok covers, byteimg links,
-// source_* slots). The one exception is photos staff uploaded from the review
-// screen with the owner's/agent's consent (slot staff_upload, stored under
-// .../staff-images/ on makaug media). The API only sends those; this is the
-// client-side guard.
+// source_* slots, raw pbs.twimg.com links). Photos that do show: staff uploads
+// with the owner's/agent's consent (slot staff_upload, under .../staff-images/)
+// and photos copied from the X post (slot x_post_photo, under .../x-post-photos/).
+// Staff photos stay first. The API already filters; this is the client-side guard.
 const FOUND_ONLINE_SOURCE_MEDIA_RE = /tiktokcdn|byteimg|tiktok\.com/i;
 function isFoundOnlineConsentedPhotoUrl(url = "") {
   const value = String(url || "").trim();
   return !!value && !FOUND_ONLINE_SOURCE_MEDIA_RE.test(value) && /\/staff-images\//i.test(value);
 }
+function isHostedXPostPhotoUrl(url = "") {
+  const value = String(url || "").trim();
+  return !!value && !FOUND_ONLINE_SOURCE_MEDIA_RE.test(value) && /\/x-post-photos\//i.test(value);
+}
 function foundOnlineConsentedPhotos(images = []) {
-  return (Array.isArray(images) ? images : []).filter((item) => {
+  const kept = (Array.isArray(images) ? images : []).filter((item) => {
     if (!item || typeof item !== "object") return false;
     const url = String(item.url || item.img || item.src || "").trim();
     if (!url || FOUND_ONLINE_SOURCE_MEDIA_RE.test(url)) return false;
     const slot = String(item.slot_key || item.slot || "").trim();
-    return slot ? slot === "staff_upload" : isFoundOnlineConsentedPhotoUrl(url);
+    if (slot === "x_post_photo") return isHostedXPostPhotoUrl(url);
+    if (slot) return slot === "staff_upload";
+    return isFoundOnlineConsentedPhotoUrl(url) || isHostedXPostPhotoUrl(url);
+  });
+  return kept.sort((a, b) => {
+    const rank = (item) => (String(item.slot_key || item.slot || "").trim() === "staff_upload" ? 0 : 1);
+    return rank(a) - rank(b);
   });
 }
 function foundOnlineConsentedPhotoUrl(p = {}) {
   const first = foundOnlineConsentedPhotos(p?.images)[0];
   if (first) return String(first.url || first.img || first.src || "").trim();
-  return [p?.primary_image_url, p?.image, p?.img].map((value) => String(value || "").trim()).find(isFoundOnlineConsentedPhotoUrl) || "";
+  return [p?.primary_image_url, p?.image, p?.img].map((value) => String(value || "").trim()).find((value) => isFoundOnlineConsentedPhotoUrl(value) || isHostedXPostPhotoUrl(value)) || "";
 }
 
 function getPropertyGalleryPhotos(property) {

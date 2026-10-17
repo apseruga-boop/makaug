@@ -1,12 +1,12 @@
 'use strict';
 
 // Found-online listings never republish the source's media (TikTok covers,
-// byteimg links, source_* slots, evidence cards): that rule stays. The one
-// exception is photos staff uploaded from the review screen after ticking the
-// owner/agent consent box (#377). Those are stored with slot_key 'staff_upload'
-// on makaug's media host, and the upload also writes
-// extra_fields.staff_image_upload / image_rights_confirmed. Only those photos are
-// published for a found-online row, primary first.
+// byteimg links, source_* slots, evidence cards, raw pbs.twimg.com links):
+// that rule stays. Two kinds of photo on our own media host are published:
+// photos staff uploaded from the review screen after ticking the owner/agent
+// consent box (#377, slot_key staff_upload), and photos copied from the X
+// post itself (slot_key x_post_photo, path /x-post-photos/). Staff photos
+// stay first. A twimg URL stored under x_post_photo is not published.
 
 const { mediaHost, realPhotoRejection } = require('./realListingPhoto');
 
@@ -48,6 +48,8 @@ function isConsentedStaffImage(image, extraFields) {
 // decides otherwise.
 const VIDEO_STILL_SLOT_RE = /^(?:video_key_frame_|video_still_|video_recovery_still_)/i;
 const VIDEO_STILL_SLOT_SQL = '^(video_key_frame_|video_still_|video_recovery_still_)';
+const X_POST_PHOTO_SLOT = 'x_post_photo';
+const X_POST_PHOTO_PATH_SQL = '/x-post-photos/';
 
 function isOwnVideoStillImage(image) {
   if (!image || typeof image !== 'object') return false;
@@ -57,14 +59,23 @@ function isOwnVideoStillImage(image) {
   return realPhotoRejection(image) === null;
 }
 
-// Consented staff photos, then stills from the listing's own video, the stored
-// primary first (else staff photos first, in upload order), with is_primary on
-// exactly the first one.
+function isHostedXPostPhoto(image) {
+  if (!image || typeof image !== 'object') return false;
+  if (String(image.slot_key || '').trim() !== X_POST_PHOTO_SLOT) return false;
+  const url = String(image.url || '').trim();
+  if (!url || SOURCE_MEDIA_URL_RE.test(url) || !/\/x-post-photos\//i.test(url)) return false;
+  return realPhotoRejection(image) === null;
+}
+
+// Consented staff photos, then photos copied from the X post, then stills from
+// the listing's own video. A staff photo marked primary stays first. Otherwise
+// staff photos lead, and is_primary is on exactly the first published photo.
 function foundOnlinePublicImages(images = [], extraFields = {}) {
   const all = Array.isArray(images) ? images : [];
   const staff = all.filter((image) => isConsentedStaffImage(image, extraFields));
+  const xPhotos = all.filter((image) => isHostedXPostPhoto(image));
   const stills = all.filter((image) => isOwnVideoStillImage(image));
-  const list = [...staff, ...stills];
+  const list = [...staff, ...xPhotos, ...stills];
   const primaryIndex = staff.findIndex((image) => image.is_primary === true);
   const ordered = primaryIndex > 0 ? [list[primaryIndex], ...list.slice(0, primaryIndex), ...list.slice(primaryIndex + 1)] : list;
   return ordered.map((image, index) => ({ ...image, is_primary: index === 0 }));
@@ -75,6 +86,7 @@ function foundOnlinePublicImages(images = [], extraFields = {}) {
 // listing's own extra_fields through the image's property_id, so it works for
 // any outer alias (properties p, or a CTE that only carries id).
 function consentedStaffPrimaryImageLateralSql(alias = 'p') {
+  const hostedUrlSql = `^https?://${mediaHost().replace(/[^a-z0-9.-]/gi, '').replace(/\./g, '\\.')}/.+`;
   return `LEFT JOIN LATERAL (
           SELECT si.url
           FROM property_images si
@@ -90,11 +102,16 @@ function consentedStaffPrimaryImageLateralSql(alias = 'p') {
                 )
               )
               OR (
+                si.slot_key = '${X_POST_PHOTO_SLOT}'
+                AND si.url ~* '${X_POST_PHOTO_PATH_SQL}'
+                AND si.url ~* '${hostedUrlSql}'
+              )
+              OR (
                 COALESCE(si.slot_key, '') ~* '${VIDEO_STILL_SLOT_SQL}'
-                AND si.url ~* '^https?://${mediaHost().replace(/[^a-z0-9.-]/gi, '').replace(/\./g, '\\.')}/.+'
+                AND si.url ~* '${hostedUrlSql}'
               )
             )
-          ORDER BY (COALESCE(si.slot_key, '') = '${STAFF_UPLOAD_SLOT}') DESC, si.is_primary DESC, si.sort_order ASC, si.created_at ASC
+          ORDER BY (COALESCE(si.slot_key, '') = '${STAFF_UPLOAD_SLOT}') DESC, (COALESCE(si.slot_key, '') = '${X_POST_PHOTO_SLOT}') DESC, si.is_primary DESC, si.sort_order ASC, si.created_at ASC
           LIMIT 1
         ) staff_img ON true`;
 }
@@ -111,6 +128,7 @@ module.exports = {
   STAFF_UPLOAD_SLOT,
   VIDEO_STILL_SLOT_RE,
   isOwnVideoStillImage,
+  isHostedXPostPhoto,
   staffImageConsentGiven,
   isConsentedStaffImage,
   foundOnlinePublicImages,
