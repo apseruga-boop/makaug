@@ -14409,7 +14409,10 @@ function renderStaffSourceIntake(data = {}) {
   }
   const monitorWindow = document.getElementById("staff-source-monitor-window");
   if (monitorWindow) {
-    monitorWindow.textContent = `${staffNumber(monitor.source_registry_target_count || 0)} sources • ${monitor.published_after || "2026+"}`;
+    const lookback = monitor.published_after ? staffKampalaDateTime(monitor.published_after) : "";
+    monitorWindow.textContent = lookback
+      ? `${staffNumber(monitor.source_registry_target_count || 0)} sources • posts since ${lookback} (30-day lookback, not the last sweep)`
+      : `${staffNumber(monitor.source_registry_target_count || 0)} sources`;
   }
   const monitorCadence = document.getElementById("staff-source-monitor-cadence");
   if (monitorCadence) {
@@ -15569,7 +15572,7 @@ function staffPreviewVideoCoverHtml(propertyId) {
     <div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3" data-staff-video-cover>
       <div class="text-sm font-black text-blue-950">Make a cover from the video</div>
       <p class="mt-1 text-xs text-blue-900">Takes clear stills from this listing's own video and adds them as photos. Nothing is cropped or blurred, so the agent's branding stays.</p>
-      <button type="button" data-staff-photo-action onclick="staffMakeVideoCover(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg bg-blue-700 px-3 py-2 text-sm font-black text-white hover:bg-blue-600">Make a cover from the video</button>
+      <button type="button" id="staff-preview-video-cover-button" data-staff-photo-action disabled onclick="staffMakeVideoCover(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg bg-blue-700 px-3 py-2 text-sm font-black text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50">Make a cover from the video</button>
     </div>`;
 }
 
@@ -15599,8 +15602,23 @@ async function staffMakeVideoCover(propertyId) {
   } finally {
     staffPhotoChangePending = false;
     document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = false; });
+    staffSyncPreviewPhotoActions();
     setStaffPreviewDecisionBusy(false);
   }
+}
+
+function staffSyncPreviewPhotoActions() {
+  const consent = document.getElementById("staff-preview-photo-rights")?.checked === true;
+  const fileCount = document.getElementById("staff-preview-photo-upload")?.files?.length || 0;
+  const cover = document.getElementById("staff-preview-video-cover-button");
+  const upload = document.getElementById("staff-preview-photo-upload-button");
+  if (staffPhotoChangePending) {
+    if (cover) cover.disabled = true;
+    if (upload) upload.disabled = true;
+    return;
+  }
+  if (cover) cover.disabled = !consent;
+  if (upload) upload.disabled = !(consent && fileCount > 0);
 }
 
 function staffPreviewPhotoUploadHtml(propertyId, existingCount = 0) {
@@ -15608,9 +15626,9 @@ function staffPreviewPhotoUploadHtml(propertyId, existingCount = 0) {
     <div class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3" data-staff-photo-upload>
       <div class="text-sm font-black text-emerald-950">${existingCount ? "Add more photos" : "Add the property's photos"}</div>
       <p class="mt-1 text-xs text-emerald-900">Use photos the owner or agent sent for this property (WhatsApp, email or the source post). They are saved to makaug straight away.</p>
-      <input id="staff-preview-photo-upload" type="file" accept="image/jpeg,image/png,image/webp" multiple class="mt-2 block w-full text-xs">
-      <label class="mt-2 flex items-start gap-2 text-xs font-semibold text-emerald-950"><input id="staff-preview-photo-rights" type="checkbox" class="mt-0.5"> These are photos of this property, or frames captured from this listing's own source video, and we are allowed to use them.</label>
-      <button type="button" data-staff-photo-action onclick="staffUploadPreviewPhotos(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-black text-white hover:bg-emerald-600">Upload photos</button>
+      <input id="staff-preview-photo-upload" type="file" accept="image/jpeg,image/png,image/webp" multiple class="mt-2 block w-full text-xs" onchange="staffSyncPreviewPhotoActions()">
+      <label class="mt-2 flex items-start gap-2 text-xs font-semibold text-emerald-950"><input id="staff-preview-photo-rights" type="checkbox" class="mt-0.5" onchange="staffSyncPreviewPhotoActions()"> These are photos of this property, or frames captured from this listing's own source video, and we are allowed to use them.</label>
+      <button type="button" id="staff-preview-photo-upload-button" data-staff-photo-action disabled onclick="staffUploadPreviewPhotos(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-black text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50">Upload photos</button>
     </div>`;
 }
 
@@ -15657,6 +15675,7 @@ async function staffUploadPreviewPhotos(propertyId) {
   } finally {
     staffPhotoChangePending = false;
     document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = false; });
+    staffSyncPreviewPhotoActions();
     setStaffPreviewDecisionBusy(false);
   }
 }
@@ -15709,6 +15728,7 @@ async function staffChangePreviewPhoto(propertyId, imageId, restore = false) {
   } finally {
     staffPhotoChangePending = false;
     document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = false; });
+    staffSyncPreviewPhotoActions();
     setStaffPreviewDecisionBusy(false);
   }
 }
@@ -15974,9 +15994,15 @@ function staffPreviewRememberTitle(value) {
   staffPreviewTitleDraft = value == null ? "" : String(value);
 }
 
-function renderStaffListingPreviewModal(preview = {}) {
-  staffPreviewTitleDraft = String(preview.title || "");
+function renderStaffListingPreviewModal(preview = {}, options = {}) {
+  const nextId = String(preview?.id || "");
   const existing = document.getElementById("staff-listing-preview-modal");
+  const openId = String(existing?.dataset?.propertyId || "");
+  if (existing && openId && nextId && openId !== nextId && options.allowSwitch !== true) {
+    toast("Kept this listing open. A different listing was not applied.");
+    return;
+  }
+  staffPreviewTitleDraft = String(preview.title || "");
   if (existing) {
     releaseReviewModal(existing);
   } else {
@@ -15994,6 +16020,7 @@ function renderStaffListingPreviewModal(preview = {}) {
   adminActiveReview = preview;
   const modal = document.createElement("div");
   modal.id = "staff-listing-preview-modal";
+  modal.dataset.propertyId = String(preview.id || "");
   modal.className = "fixed inset-0 z-[11000] bg-slate-950/70 overflow-y-auto p-4";
   modal.innerHTML = `
     <div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
@@ -16041,6 +16068,7 @@ function renderStaffListingPreviewModal(preview = {}) {
             <h4 class="font-black text-amber-950">Location guardrail</h4>
             <p class="text-xs text-amber-900 mt-1">Location is non-negotiable. Known hierarchy warnings block staff save/approval until corrected.</p>
             ${(location.warnings || []).length ? `<div class="mt-2 rounded-lg bg-white border border-red-100 p-2 text-xs text-red-800">${(location.warnings || []).map((w) => adminEscape(w)).join("<br>")}</div>` : `<div class="mt-2 text-xs text-emerald-800 font-bold">No known area/district mismatch detected.</div>`}
+            ${(location.soft_warnings || []).length ? `<div class="mt-2 rounded-lg border border-amber-200 bg-white p-2 text-xs text-amber-950" data-staff-location-soft-warning>${(location.soft_warnings || []).map((w) => adminEscape(w)).join("<br>")}</div>` : ""}
           </section>
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900">Internal review notes</h4>
@@ -16160,8 +16188,14 @@ async function staffReloadDirectReview(propertyId = staffDirectReviewState.id) {
     const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(id)}/preview`);
     if (currentPage !== "staff-review" || staffDirectReviewState.id !== id) return;
     // Later reloads (after a save or decision) use the listing's id.
-    if (response?.data?.id) staffDirectReviewState.id = String(response.data.id);
-    renderStaffListingPreviewModal(response?.data || {});
+    const data = response?.data || {};
+    if (!staffPreviewResponseMatches(id, data)) {
+      if (status) status.textContent = "The review response was a different listing, so it was not opened.";
+      if (reopen) reopen.classList.remove("hidden");
+      return;
+    }
+    if (data.id) staffDirectReviewState.id = String(data.id);
+    renderStaffListingPreviewModal(data, { allowSwitch: true });
     const preview = response?.data || {};
     if (status) status.textContent = `${preview.title || "Listing"} • ${preview.status || "pending"}.`;
     if (reopen) reopen.classList.remove("hidden");
@@ -16351,21 +16385,56 @@ function staffApprovalDiagnostic(stage, detail = {}) {
   console.info("Staff approval", window.__makaugLastStaffApproval);
 }
 
+function staffOpenPreviewPropertyId() {
+  const modal = document.getElementById("staff-listing-preview-modal");
+  return String(modal?.dataset?.propertyId || adminActiveReview?.id || "").trim();
+}
+
+function staffPreviewResponseMatches(requestedId, data = {}) {
+  const wanted = String(requestedId || "").trim();
+  const returned = String(data?.id || "").trim();
+  const reference = String(data?.inquiry_reference || "").trim();
+  if (!wanted || !returned) return !returned;
+  return returned === wanted || reference.toLowerCase() === wanted.toLowerCase();
+}
+
+let staffPreviewOpenSeq = 0;
+
 async function openStaffListingPreview(propertyId) {
+  const requested = String(propertyId || "").trim();
+  const seq = ++staffPreviewOpenSeq;
   try {
-    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/preview`);
-    renderStaffListingPreviewModal(response?.data || {});
+    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(requested)}/preview`);
+    if (seq !== staffPreviewOpenSeq) return;
+    const data = response?.data || {};
+    if (!staffPreviewResponseMatches(requested, data)) {
+      toast("That preview belonged to a different listing, so it was not opened.");
+      return;
+    }
+    renderStaffListingPreviewModal(data, { allowSwitch: true });
   } catch (error) {
+    if (seq !== staffPreviewOpenSeq) return;
     toast(`Preview failed: ${error.message || "request failed"}`);
   }
 }
 
 async function saveStaffListingPreview(propertyId, options = {}) {
+  staffPreviewOpenSeq += 1;
+  const openId = staffOpenPreviewPropertyId();
+  const requested = String(propertyId || "").trim();
+  const targetId = openId || requested;
+  if (!targetId) {
+    toast("Open a listing before saving.");
+    return null;
+  }
+  if (openId && requested && openId !== requested) {
+    toast("Save stayed on the listing that is open.");
+  }
   try {
     const warningOverrides = options.prepareApproval === true
       ? staffBuildReviewWarningOverrides(adminActiveReview)
       : getAdminReviewWarningOverrides(adminActiveReview);
-    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/review`, {
+    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(targetId)}/review`, {
       method: "PATCH",
       body: {
         listing: staffListingPreviewPatch(),
@@ -16373,17 +16442,23 @@ async function saveStaffListingPreview(propertyId, options = {}) {
         warning_overrides: warningOverrides
       }
     });
+    const saved = response?.data || {};
+    if (!staffPreviewResponseMatches(targetId, saved)) {
+      toast("The save response was a different listing, so this editor was left unchanged.");
+      return null;
+    }
     if (options.deferUi) {
       adminActiveReview = {
         ...(adminActiveReview || {}),
-        ...(response?.data || {})
+        ...saved,
+        id: targetId
       };
     } else {
-      renderStaffListingPreviewModal(response?.data || {});
+      renderStaffListingPreviewModal(saved.id ? saved : { ...(adminActiveReview || {}), id: targetId });
       await renderStaffDashboard();
     }
     if (!options.silent) toast("Preview changes saved.");
-    return response?.data || null;
+    return saved.id ? saved : null;
   } catch (error) {
     toast(`Preview save failed: ${error.message || "request failed"}`);
     throw error;
@@ -23513,16 +23588,18 @@ function openAdminWhatsAppMessageModal({ title = "Send WhatsApp message", listin
   if (listingEl) listingEl.textContent = listingLabel || "-";
   if (messageEl) messageEl.value = resolvedMessage;
   const modalEl = document.getElementById("admin-whatsapp-modal");
-  // The preview editor is z-[11000]. This popup used to sit at 7000, behind it,
-  // so Done never received the click.
-  if (modalEl) modalEl.style.zIndex = "12000";
-  openModal("admin-whatsapp-modal");
+  // A side panel, not a full-screen dialog: the page stays clickable and
+  // Done is only how you dismiss the send link.
+  if (modalEl) {
+    modalEl.classList.remove("modal-overlay");
+    modalEl.classList.add("admin-whatsapp-panel", "open");
+    modalEl.style.zIndex = "12000";
+  }
 }
 
 function closeAdminOwnerWhatsApp() {
   const modalEl = document.getElementById("admin-whatsapp-modal");
-  if (modalEl) modalEl.style.zIndex = "";
-  closeModal("admin-whatsapp-modal");
+  if (modalEl) modalEl.classList.remove("open");
 }
 
 function openAdminWhatsAppFromModal() {

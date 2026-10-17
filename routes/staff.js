@@ -559,6 +559,19 @@ function districtNameMentioned(text = '', district = '') {
   return new RegExp(`(^|[^A-Za-z0-9])${escaped}([^A-Za-z0-9]|$)`, 'i').test(String(text || ''));
 }
 
+// "<Place> Road" and "<A> - <B> Road" name the street, not the district.
+// "Gulu - Kampala Road" at Matugga must not read as Gulu district.
+function stripRoadNamePhrases(value = '') {
+  const place = '[\\p{L}][\\p{L}0-9\'’.-]{0,40}';
+  const road = '(?:road|rd|street|st|avenue|ave|highway|bypass|expressway)';
+  return String(value || '')
+    .replace(new RegExp(`\\b${place}(?:\\s+${place}){0,2}\\s*[-–—/]\\s*${place}(?:\\s+${place}){0,2}\\s+${road}\\b`, 'giu'), ' ')
+    .replace(new RegExp(`\\b${place}(?:\\s+${place})?\\s+${road}\\b`, 'giu'), ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,;|/:-]+|[\s,;|/:-]+$/g, '')
+    .trim();
+}
+
 function staffLocationEvidenceText(row = {}) {
   const extra = safeJsonObject(row.extra_fields, {});
   return [
@@ -570,7 +583,7 @@ function staffLocationEvidenceText(row = {}) {
     extra.source_description,
     extra.source_text,
     extra.source_location
-  ].map((value) => cleanText(value)).filter(Boolean).join(' | ');
+  ].map((value) => stripRoadNamePhrases(cleanText(value))).filter(Boolean).join(' | ');
 }
 
 function staffLocationWarnings(row = {}) {
@@ -600,6 +613,41 @@ function staffLocationWarnings(row = {}) {
       warnings.push(`Source/title/address evidence points to ${evidenceDistrict}, not ${district}`);
     });
   return warnings;
+}
+
+// Same-district title vs town (Gombe town, title says Nansana Municipality)
+// is a check for the moderator, not a reason to block save or approval.
+function staffLocationSoftWarnings(row = {}) {
+  const extra = safeJsonObject(row.extra_fields, {});
+  const district = cleanText(row.district);
+  const city = cleanText(extra.city || row.city);
+  const title = stripRoadNamePhrases(cleanText(row.title));
+  if (!district || !city || !title) return [];
+  return staffTitleTownMismatches(title, district, city);
+}
+
+function staffTitleTownMismatches(title = '', district = '', city = '') {
+  let options = [];
+  try {
+    options = require('../utils/ugandaLocationRegistry').canonicalLocationOptions();
+  } catch (_) {
+    options = [];
+  }
+  const wanted = cleanText(city).toLowerCase();
+  const hits = [];
+  options
+    .filter((item) => item.district === district && ['city', 'town'].includes(item.level))
+    .filter((item) => cleanText(item.location).toLowerCase() !== wanted)
+    .forEach((item) => {
+      const aliases = [item.location, ...(item.aliases || [])].map((alias) => cleanText(alias)).filter((alias) => alias.length >= 4);
+      const mentioned = aliases.find((alias) => {
+        const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`(^|[^A-Za-z0-9])${escaped}([^A-Za-z0-9]|$)`, 'i').test(title);
+      });
+      if (!mentioned || hits.some((hit) => hit.location === item.location)) return;
+      hits.push(item);
+    });
+  return hits.map((item) => `Title mentions ${item.location}, while the town is ${city}. Check they are the same place. This does not block saving or approval.`);
 }
 
 function staffWeakEvidenceDistricts(row = {}) {
@@ -3110,7 +3158,8 @@ async function loadStaffPropertyPreview(propertyId) {
       city: firstNonEmpty(extra.city),
       neighborhood: firstNonEmpty(extra.neighborhood),
       known_area_district: districtForKnownArea(property.area) || '',
-      warnings: staffLocationWarnings(property)
+      warnings: staffLocationWarnings(property),
+      soft_warnings: staffLocationSoftWarnings(property)
     },
     review: {
       checklist: automatedReview.checklist || safeJsonObject(property.moderation_checklist, {}),
@@ -4385,6 +4434,13 @@ router.post('/properties/:id/images/:imageId/restore', staffChangePropertyImage)
 router.patch('/properties/:id/review', async (req, res, next) => {
   try {
     const listingPatch = safeJsonObject(req.body.listing, req.body || {});
+    const routeId = cleanText(req.params.id);
+    const bodyId = cleanText(listingPatch.id || listingPatch.property_id || req.body?.property_id);
+    if (bodyId && bodyId !== routeId) {
+      return res.status(409).json({ ok: false, error: 'Save target does not match the open listing.' });
+    }
+    delete listingPatch.id;
+    delete listingPatch.property_id;
     const reviewPatch = {
       checklist: safeJsonObject(req.body.checklist, {}),
       notes: req.body.notes || req.body.review_notes,
@@ -5274,4 +5330,4 @@ router.post('/assistant/query', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, liveEditSnapshot, staffLocationWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary };
+module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, liveEditSnapshot, staffLocationWarnings, staffLocationSoftWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary, stripRoadNamePhrases };

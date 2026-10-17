@@ -16,7 +16,7 @@ const { pricePeriodSuffix: sharedPricePeriodSuffix } = require('../config/priceP
 const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
-const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
+const { realHostedPhotoExistsSql, realPhotoRejection, mediaHost } = require('../utils/realListingPhoto');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
 const { compactUgx } = require('../utils/compactUgx');
 const { foundOnlinePrimaryImageUrl, consentedStaffPrimaryImageLateralSql } = require('../utils/foundOnlinePublicImages');
@@ -303,6 +303,35 @@ function facetPredicate(options, values, alias = 'p') {
   return '';
 }
 
+// The public cover is a photo or video still stored on our media host.
+// A found-online row used to drop that cover and fall back to the land
+// category image whenever the staff-consent slot was empty.
+function seoCoverImageUrl(row = {}, foundOnline = false) {
+  const staffCover = String(foundOnlinePrimaryImageUrl(row) || '').trim();
+  const primary = String(row.primary_image_url || '').trim();
+  const hostedCover = realPhotoRejection(primary) === null ? primary : '';
+  if (foundOnline) return staffCover || hostedCover;
+  return hostedCover || primary;
+}
+
+function publicCoverImageLateralSql(alias = 'p') {
+  const host = mediaHost().replace(/[^a-z0-9.-]/gi, '').replace(/\./g, '\\.');
+  return `LEFT JOIN LATERAL (
+       SELECT i.url
+       FROM property_images i
+       WHERE i.property_id = ${alias}.id
+         AND i.url ~* '^https?://${host}/.+'
+         AND i.url !~* 'photo-1560518883-ce09059eeffa|image[ _-]*pending|tiktokcdn|byteimg'
+         AND COALESCE(i.room_label, '') !~* 'image[ _-]*pending'
+         AND COALESCE(i.slot_key, '') <> 'source_evidence_card'
+       ORDER BY
+         (COALESCE(i.slot_key, '') = 'staff_upload') DESC,
+         (COALESCE(i.slot_key, '') ~* '^(video_key_frame_|video_still_|video_recovery_still_)') DESC,
+         i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+       LIMIT 1
+     ) image ON TRUE`;
+}
+
 // Title and description come from services/publicListingCopy.js, the same
 // builders the JSON API uses, so /property/:id and the SPA never disagree.
 function normalizeSeoListingRow(row = {}) {
@@ -344,7 +373,7 @@ function normalizeSeoListingRow(row = {}) {
     bathrooms: Number(row.bathrooms || 0) || 0,
     property_type: humanPropertyTypeLabel(plainText(row.property_type)),
     // Found online: only a photo staff uploaded with consent, never source media.
-    primary_image_url: foundOnline ? String(foundOnlinePrimaryImageUrl(row) || '') : String(row.primary_image_url || '').trim(),
+    primary_image_url: seoCoverImageUrl(row, foundOnline),
     canonical_location_id: String(row.canonical_location_id || '').trim(),
     city: plainText(row.city),
     neighborhood: plainText(row.neighborhood),
@@ -437,13 +466,7 @@ async function loadPublicSeoListing(db, propertyId) {
        image.url AS primary_image_url,
        staff_img.url AS staff_primary_image_url
      FROM properties p
-     LEFT JOIN LATERAL (
-       SELECT i.url
-       FROM property_images i
-       WHERE i.property_id = p.id
-       ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
-       LIMIT 1
-     ) image ON TRUE
+     ${publicCoverImageLateralSql('p')}
      ${consentedStaffPrimaryImageLateralSql('p')}
      WHERE p.id::text = $1
        AND ${publicVisibleInventoryWhere('p')}
@@ -1008,6 +1031,7 @@ module.exports = {
   plainText,
   collapseDuplicatePublicTransaction,
   normalizeSeoListingRow,
+  seoCoverImageUrl,
   loadPublicSeoListings,
   loadPublicSeoListing,
   priceLabel,

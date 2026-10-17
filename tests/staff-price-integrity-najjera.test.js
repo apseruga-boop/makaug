@@ -330,7 +330,9 @@ test('Find shows suggestions and does not rewrite the address note', () => {
 });
 
 test('owner WhatsApp popup sits above the preview and Done closes it', () => {
-  assert.match(page, /#admin-whatsapp-modal\.modal-overlay \{ z-index: 12000; \}/);
+  assert.match(page, /#admin-whatsapp-modal\.admin-whatsapp-panel\.open \{ display: block; \}/);
+  assert.match(page, /class="admin-whatsapp-panel"/);
+  assert.doesNotMatch(page, /id="admin-whatsapp-modal" class="modal-overlay"/);
   assert.match(page, /onclick="closeAdminOwnerWhatsApp\(\)"/);
   assert.match(app, /function closeAdminOwnerWhatsApp\(\)/);
   assert.match(app, /modalEl\.style\.zIndex = "12000"/);

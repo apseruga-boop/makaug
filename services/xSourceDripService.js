@@ -283,9 +283,14 @@ function summarizeSweepResult(result = {}) {
   const rateLimitedCount = reports.filter((report) => reportStatus(report) === 429 || /rate|too many/i.test(String(report.reason || ''))).length;
   const authErrorCount = reports.filter((report) => [401, 403].includes(reportStatus(report))).length;
   const billingErrorCount = reports.filter((report) => reportStatus(report) === 402 || /payment required|credits/i.test(String(report.reason || ''))).length;
+  const missingBearer = reports.length > 0 && reports.every((report) => report.reason === 'missing_x_bearer_token' || report.skipped_reason === 'missing_x_bearer_token');
+  const searchJobCount = Number(x.search_job_count || reports.length || 0);
   return {
-    search_job_count: Number(x.search_job_count || reports.length || 0),
-    api_read_count: Number(x.search_job_count || reports.length || 0),
+    search_job_count: searchJobCount,
+    // A missing token never reached the X API. Counting those skips as reads
+    // walks the monthly cap and then pauses the drip until next month.
+    api_read_count: missingBearer ? 0 : searchJobCount,
+    missing_bearer_token: missingBearer,
     fetched_posts_count: Number(x.fetched_posts_count || 0),
     discovered_posts_count: Number(result.discovered_posts_count || 0),
     created_properties: Number(importResult.created_properties || 0),
@@ -633,6 +638,7 @@ async function tickXSourceDripSchedulerInner(db, actorId = 'x_source_drip_schedu
   schedulerLastTickAt = new Date().toISOString();
   try {
     schedulerLastResult = await runXSourceDripOnce(db, { force: false, actorId });
+    logXDripIdle(schedulerLastResult);
     return schedulerLastResult;
   } catch (error) {
     schedulerLastResult = {
@@ -645,6 +651,24 @@ async function tickXSourceDripSchedulerInner(db, actorId = 'x_source_drip_schedu
   } finally {
     schedulerRunning = false;
   }
+}
+
+const xDripIdleLoggedAt = new Map();
+
+function logXDripIdle(result = {}) {
+  const reason = String(result?.reason || result?.result?.reason || '').trim();
+  const missingBearer = result?.result?.missing_bearer_token === true;
+  if (!reason && !missingBearer) return;
+  if (reason === 'x_source_drip_not_due' || reason === 'x_source_drip_scheduler_already_running' || reason === 'x_source_drip_already_running') return;
+  const key = missingBearer ? 'missing_x_bearer_token' : reason;
+  const now = Date.now();
+  if (now - (xDripIdleLoggedAt.get(key) || 0) < 60 * 60 * 1000) return;
+  xDripIdleLoggedAt.set(key, now);
+  if (missingBearer || key === 'missing_x_bearer_token') {
+    logger.warn('X source drip has no token. Set X_BEARER_TOKEN, TWITTER_BEARER_TOKEN, or X_API_BEARER_TOKEN.');
+    return;
+  }
+  logger.warn('X source drip scheduler is not fetching', key);
 }
 
 function tickXSourceDripScheduler(db, actorId = 'x_source_drip_scheduler') {
