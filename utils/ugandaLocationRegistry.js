@@ -573,6 +573,18 @@ const TEXT_LOCATION_ALIAS_STOP_KEYS = new Set([
   'station', 'umeme', 'church', 'park', 'university'
 ]);
 
+// Single English words that are also a ward somewhere. "housing complex" was
+// filed as Napak, and "peace of mind" as Yumbe. They count only when the
+// caption also names that district (or Uganda).
+const WEAK_ENGLISH_PLACE_ALIASES = new Set(['complex', 'peace']);
+
+function weakEnglishPlaceCorroborated(valueKey, entry) {
+  const districtKey = normalizeLocationKey(entry?.district || '');
+  if (districtKey && aliasAppearsInValue(districtKey, valueKey)) return true;
+  if (aliasAppearsInValue('uganda', valueKey)) return true;
+  return false;
+}
+
 function resolveCanonicalUgandaLocationFromText(value = '', suppliedDistrict = '') {
   const valueKey = normalizeLocationKey(value);
   const suppliedDistrictName = normalizeDistrict(suppliedDistrict);
@@ -595,7 +607,8 @@ function resolveCanonicalUgandaLocationFromText(value = '', suppliedDistrict = '
       ...row,
       tokenCount: row.aliasKey.split(' ').length,
       levelPriority: TEXT_LOCATION_LEVEL_PRIORITY[row.entry.level] || 0
-    }));
+    }))
+    .filter((row) => !WEAK_ENGLISH_PLACE_ALIASES.has(row.aliasKey) || weakEnglishPlaceCorroborated(valueKey, row.entry));
 
   if (!found.length) {
     return { status: 'unmatched', match: null, candidates: [], confidence: 0, match_type: 'unmatched' };
@@ -670,6 +683,7 @@ function canonicalUgandaDistrictsMentionedInText(value = '', options = {}) {
   aliasRows
     .filter((row) => row.aliasKey.length >= 4)
     .filter((row) => !TEXT_LOCATION_ALIAS_STOP_KEYS.has(row.aliasKey))
+    .filter((row) => !WEAK_ENGLISH_PLACE_ALIASES.has(row.aliasKey) || weakEnglishPlaceCorroborated(valueKey, row.entry))
     .filter((row) => !excludedAliasKeys.has(row.aliasKey))
     .filter((row) => aliasAppearsInValue(row.aliasKey, valueKey))
     .forEach((row) => {

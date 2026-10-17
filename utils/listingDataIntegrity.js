@@ -16,6 +16,7 @@ const {
 } = require('./propertyTypeVocabulary');
 const { allowedPricePeriods, normalizePricePeriod } = require('../config/pricePeriods');
 const { staffConfirmedNumericPrice } = require('./staffPriceChoice');
+const { isApartmentBlockText } = require('./listingIntakeQuality');
 
 const HOSPITALITY_SHORT_TERM_MESSAGE = 'Nightly and short-stay places go in Short Term stays (/short-term), not the main listings.';
 
@@ -246,6 +247,13 @@ function deriveListingClassification(record = {}, options = {}) {
   } else if (!physicalType) {
     categoryAmbiguous = true;
     ambiguityReason = 'Source evidence does not identify a specific physical property type.';
+  }
+
+  if (isApartmentBlockText(classificationText) && physicalType === 'land') {
+    physicalType = 'residential';
+    if (!transactionIntent) transactionIntent = 'sale';
+    categoryAmbiguous = false;
+    ambiguityReason = '';
   }
 
   let listingType = currentType;

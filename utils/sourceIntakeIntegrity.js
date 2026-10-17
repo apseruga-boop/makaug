@@ -1,6 +1,7 @@
 'use strict';
 
 const { sourcePriceAmount } = require('./propertyPriceCurrency');
+const { preferEachPlotPrice } = require('./listingIntakeQuality');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
@@ -13,7 +14,7 @@ const UGANDA_FOREIGN_MARKET_SIGNALS = [
   { pattern: /\b(?:lkr|sri lankan rupees?)\b/i, reason: 'foreign_currency_lkr' },
   { pattern: /(?:£|\bgbp\b|\bpounds?\s+sterling\b|\d\s*pcm\b)/i, reason: 'foreign_currency_gbp' },
   { pattern: /(?:₦|\bngn\b|\bnaira\b)/i, reason: 'foreign_currency_ngn' },
-  { pattern: /\b(?:rwanda|kigali|kenya|nairobi|mombasa|tanzania|dar es salaam|sri lanka|sinhala|india|kolkata|kolhapur|hyderabad|mumbai|delhi|nigeria|abuja|lagos|memphis|ridgecrest|fort garland|little rock|united states|usa|united kingdom)\b/i, reason: 'foreign_market_location' },
+  { pattern: /\b(?:rwanda|kigali|kenya|nairobi|mombasa|tanzania|dar es salaam|sri lanka|sinhala|india|kolkata|kolhapur|hyderabad|mumbai|delhi|karnataka|hassan,\s*karnataka|bengaluru|bangalore|nigeria|abuja|lagos|pakistan|karachi|lahore|islamabad|rawalpindi|dha\s+phase|ohio|pickerington|memphis|ridgecrest|fort garland|little rock|united states|usa|united kingdom)\b/i, reason: 'foreign_market_location' },
   { pattern: /[\u0D80-\u0DFF\u0900-\u097F\u0B80-\u0BFF]/u, reason: 'foreign_market_script' },
 ];
 
@@ -184,6 +185,10 @@ function safeSourcePriceCandidate(value, text = '') {
   }
   if (!sourcePriceHasEvidence(value, sourceText)) {
     return { value: null, reason: 'source_price_not_in_evidence' };
+  }
+  const eachPlot = preferEachPlotPrice(sourceText, numericValue);
+  if (eachPlot && eachPlot !== numericValue) {
+    return { value: eachPlot, reason: 'each_plot_price' };
   }
   return { value, reason: '' };
 }
