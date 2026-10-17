@@ -1,6 +1,8 @@
 'use strict';
 
 const logger = require('../config/logger');
+const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
+const { observeJob } = require('../utils/memoryLog');
 const { runBackgroundWork } = require('../config/database');
 const { getPropertySourceRegistry } = require('./propertySourceRegistryService');
 const {
@@ -666,10 +668,10 @@ function startYouTubeSourceDripScheduler(db) {
     });
   }, SCHEDULER_POLL_MS);
   setTimeout(() => {
-    tickYouTubeSourceDripScheduler(db, 'youtube_source_drip_scheduler_boot').catch((error) => {
+    observeJob('youtube_source_drip', () => tickYouTubeSourceDripScheduler(db, 'youtube_source_drip_scheduler_boot')).catch((error) => {
       logger.warn('YouTube source drip scheduler boot tick failed', error.message);
     });
-  }, 5000);
+  }, BOOT_DELAY_MS.youtube_source_drip);
   logger.info('YouTube source drip scheduler armed');
 }
 

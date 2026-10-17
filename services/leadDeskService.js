@@ -19,6 +19,8 @@ const { agentGreetingName } = require('./agentNameService');
  */
 
 const logger = require('../config/logger');
+const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
+const { observeJob } = require('../utils/memoryLog');
 const { runBackgroundWork } = require('../config/database');
 const { deliverWhatsapp } = require('./leadHandoffService');
 const { sendSupportEmail } = require('./emailService');
@@ -1017,8 +1019,12 @@ function kampalaDay(date = new Date()) {
 let schedulerTimer = null;
 let reportClaimedFor = null;
 
+let leadDeskRunning = false;
 async function tickLeadDesk(db) {
-  return runBackgroundWork(async () => {
+  if (leadDeskRunning) return { skipped: true, reason: 'already_running' };
+  leadDeskRunning = true;
+  try {
+  return await runBackgroundWork(async () => {
     lastRefreshAt = Date.now();
     await syncDemandLeads(db, { days: 365 });
     await refreshMatches(db);
@@ -1054,6 +1060,9 @@ async function tickLeadDesk(db) {
       }
     }
   });
+  } finally {
+    leadDeskRunning = false;
+  }
 }
 
 function startLeadDeskScheduler(db) {
@@ -1065,7 +1074,7 @@ function startLeadDeskScheduler(db) {
   schedulerTimer.unref?.();
   setTimeout(() => {
     tickLeadDesk(db).catch((error) => logger.error('Lead desk boot tick failed', { error: error.message }));
-  }, 45_000).unref?.();
+  }, BOOT_DELAY_MS.lead_desk).unref?.();
   logger.info('Lead desk scheduler armed', { pollMs, slaHours: slaHours(), alertRecipients: alertRecipients().length, reportHourKampala: Number(process.env.LEAD_DESK_REPORT_HOUR || 7) });
 }
 

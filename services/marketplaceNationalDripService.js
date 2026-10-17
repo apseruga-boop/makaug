@@ -6,6 +6,8 @@ const crypto = require('crypto');
 
 const logger = require('../config/logger');
 const { runBackgroundWork } = require('../config/database');
+const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
+const { observeJob } = require('../utils/memoryLog');
 const {
   DISTRICTS,
   MARKETPLACE_CATEGORIES,
@@ -1359,8 +1361,8 @@ function startMarketplaceDripScheduler(db) {
   schedulerArmedAt = new Date().toISOString();
   schedulerTimer = setInterval(() => tickMarketplaceDripScheduler(db), SCHEDULER_POLL_MS);
   schedulerTimer.unref?.();
-  setTimeout(() => warmMarketplacePublicCache(db), 2000).unref?.();
-  setTimeout(() => tickMarketplaceDripScheduler(db), 5000).unref?.();
+  setTimeout(() => warmMarketplacePublicCache(db), BOOT_DELAY_MS.marketplace_cache).unref?.();
+  setTimeout(() => observeJob('marketplace_drip', () => tickMarketplaceDripScheduler(db)), BOOT_DELAY_MS.marketplace_drip).unref?.();
   logger.info('Marketplace national drip scheduler armed', { poll_ms: SCHEDULER_POLL_MS });
 }
 

@@ -15,6 +15,8 @@
  */
 
 const logger = require('../config/logger');
+const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
+const { observeJob } = require('../utils/memoryLog');
 const revenue = require('./revenueService');
 const { agentGreetingName } = require('./agentNameService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
@@ -680,7 +682,8 @@ async function listAgentTrials(db, { includeClosed = false } = {}) {
             fee_offer_reason, billing_suspended_at, billing_reminder_log
        FROM agents
       WHERE fee_offer_mode = 'free_period' AND removed_at IS NULL AND NOT COALESCE(fee_exempt, false)
-      ORDER BY fee_offer_until ASC, full_name ASC`
+      ORDER BY fee_offer_until ASC, full_name ASC
+      LIMIT 300`
   )).rows;
   const termsSigned = new Map();
   try {
@@ -752,13 +755,16 @@ async function runTrialDigest(db) {
 
 let billingTimer = null;
 let lastBillingRunDay = '';
+let billingRunning = false;
 function startBillingScheduler(db) {
   if (billingTimer || !process.env.DATABASE_URL || process.env.BILLING_SCHEDULER_ENABLED === 'false') return;
   const tick = async () => {
+    if (billingRunning) return { skipped: true, reason: 'already_running' };
     const now = new Date(Date.now() + 3 * 3600 * 1000);
     const day = now.toISOString().slice(0, 10);
     if (now.getUTCHours() < 9 || lastBillingRunDay === day) return;
     lastBillingRunDay = day;
+    billingRunning = true;
     try {
       const agents = await runAgentFeeReminders(db);
       const trials = await runTrialDigest(db).catch((error) => ({ error: error.message }));
@@ -767,11 +773,13 @@ function startBillingScheduler(db) {
       logger.info('Billing reminders run', { agents, trials, listers, listersDue });
     } catch (error) {
       logger.warn('Billing reminders failed', { error: error.message });
+    } finally {
+      billingRunning = false;
     }
   };
-  billingTimer = setInterval(tick, 20 * 60_000);
+  billingTimer = setInterval(() => { observeJob('billing', tick).catch(() => {}); }, 20 * 60_000);
   billingTimer.unref?.();
-  setTimeout(tick, 60_000).unref?.();
+  setTimeout(() => { observeJob('billing', tick).catch(() => {}); }, BOOT_DELAY_MS.billing).unref?.();
 }
 
 module.exports = {

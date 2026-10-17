@@ -16,6 +16,8 @@
 const crypto = require('crypto');
 
 const logger = require('../config/logger');
+const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
+const { observeJob } = require('../utils/memoryLog');
 const revenue = require('./revenueService');
 const billingOps = require('./billingOpsService');
 const revolut = require('./revolutMerchantService');
@@ -727,11 +729,24 @@ async function sweepOpenCardOrders(db) {
 }
 
 let sweepTimer = null;
+let payLinkRunning = false;
 function startPayLinkScheduler(db) {
   if (sweepTimer || !process.env.DATABASE_URL || process.env.PAY_LINK_SWEEP_ENABLED === 'false') return;
-  const tick = () => sweepOpenCardOrders(db).catch((error) => logger.warn('Pay link sweep failed', { error: error.message }));
-  sweepTimer = setInterval(tick, 5 * 60_000);
+  const tick = async () => {
+    if (payLinkRunning) return { skipped: true, reason: 'already_running' };
+    payLinkRunning = true;
+    try {
+      return await sweepOpenCardOrders(db);
+    } catch (error) {
+      logger.warn('Pay link sweep failed', { error: error.message });
+      return { error: error.message };
+    } finally {
+      payLinkRunning = false;
+    }
+  };
+  sweepTimer = setInterval(() => { observeJob('pay_link', tick).catch(() => {}); }, 5 * 60_000);
   sweepTimer.unref?.();
+  setTimeout(() => { observeJob('pay_link', tick).catch(() => {}); }, BOOT_DELAY_MS.pay_link).unref?.();
   setTimeout(() => {
     ensureRevolutWebhook(db).then((r) => logger.info('Revolut webhook', r)).catch((error) => logger.warn('Revolut webhook setup failed', { error: error.message }));
   }, 30_000).unref?.();
