@@ -262,7 +262,7 @@ function coverErrorMessage(error) {
   return 'We couldn\'t get a clear picture from this video, so no cover was made. Upload a photo instead.';
 }
 
-async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', budgetMs = TICK_BUDGET_MS, backfill: injected = null } = {}) {
+async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', budgetMs = TICK_BUDGET_MS, backfill: injected = null, videoUrl = '' } = {}) {
   if (running) return { ok: false, status: 409, error: 'A cover is already being made. Try again in a minute.' };
   const busy = siteBusyReason(db);
   if (busy) return { ok: false, status: 503, error: 'The site is busy right now. Try again in a few minutes.', ...busy };
@@ -277,10 +277,21 @@ async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', bud
   const property = found.rows[0];
   if (!property) return { ok: false, status: 404, error: 'Listing not found.' };
   if (property.status !== 'pending') return { ok: false, status: 409, error: 'Covers can only be made for listings still in review.' };
-  const { mediaHost } = require('../utils/realListingPhoto');
+  const { mediaHost, sameVideoUrl } = require('../utils/realListingPhoto');
   const urls = coverVideoUrls(property.extra_fields || {}, { mediaHost: mediaHost() });
   if (!urls.length) {
     return { ok: false, status: 422, error: 'This listing\'s video is a TikTok, YouTube or Facebook page, not a video file we can open, so a cover can\'t be made from it. Upload a photo instead.' };
+  }
+  const chosen = String(videoUrl || '').trim();
+  let selected = urls;
+  if (chosen) {
+    const match = urls.find((url) => sameVideoUrl(url, chosen));
+    if (!match) {
+      return { ok: false, status: 422, error: 'That video is not a file we can take a cover from. Pick one of the listing\'s video files, or upload a photo.' };
+    }
+    selected = [match];
+  } else if (urls.length > 1) {
+    return { ok: false, status: 400, error: 'Choose which video to take the cover from.' };
   }
   running = true;
   const controller = new AbortController();
@@ -290,8 +301,8 @@ async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', bud
     controller.signal.addEventListener('abort', () => { try { backfill.killLiveChildren?.(); } catch (_) {} }, { once: true });
     ffmpegReady();
     const uploaded = await backfill.makeAndUploadStills(
-      { ...property, extra_fields: { ...(property.extra_fields || {}), video_urls: urls } },
-      { frameCandidates: backfill.FRAME_CANDIDATE_COUNT, maxVideos: MAX_VIDEOS_PER_TICK, deadline: Date.now() + budgetMs, signal: controller.signal }
+      { ...property, extra_fields: { ...(property.extra_fields || {}), video_urls: selected } },
+      { frameCandidates: backfill.FRAME_CANDIDATE_COUNT, maxVideos: chosen ? 1 : MAX_VIDEOS_PER_TICK, deadline: Date.now() + budgetMs, signal: controller.signal }
     );
     if (!uploaded.length) return { ok: true, attached: 0, note: 'This listing already has stills from its video.' };
     const attached = await backfill.attachStills(property.id, uploaded, { keepListingText: true, actorId });

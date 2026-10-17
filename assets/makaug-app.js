@@ -15565,13 +15565,18 @@ async function renderStaffDashboardOnce() {
 
 function staffPreviewVideosHtml(preview = {}) {
   const urls = propertyVideoUrls(preview);
-  if (!urls.length) return staffEmpty("No property video is attached.");
-  return `<div class="mb-4 grid lg:grid-cols-2 gap-3" data-staff-review-video-gallery="true">
-    ${urls.map((url, index) => renderVideoEmbedCard(url, {
-      clickToPlay: true,
-      title: `Property video ${index + 1}`,
-      sub: "Play the complete walkthrough here before approving it for the public listing."
-    })).join("")}
+  const propertyId = String(preview?.id || "");
+  if (!urls.length) return `<div id="staff-preview-video-gallery">${staffEmpty("No property video is attached.")}</div>`;
+  return `<div id="staff-preview-video-gallery" class="mb-4 grid lg:grid-cols-2 gap-3" data-staff-review-video-gallery="true">
+    ${urls.map((url, index) => `
+      <div data-staff-video-card>
+        ${renderVideoEmbedCard(url, {
+          clickToPlay: true,
+          title: `Property video ${index + 1}`,
+          sub: "Play the complete walkthrough here before approving it for the public listing."
+        })}
+        ${propertyId ? `<button type="button" data-staff-photo-action data-staff-remove-video="${adminAttr(url)}" onclick="staffRemovePreviewVideo(${propertyIdArg(propertyId)}, ${propertyIdArg(url)})" class="w-full border-t border-gray-200 bg-white px-2 py-2 text-xs font-black text-red-700 hover:bg-red-50">Remove video</button>` : ""}
+      </div>`).join("")}
   </div>`;
 }
 
@@ -15609,7 +15614,53 @@ function staffPreviewMediaBasisHtml(propertyId = "") {
   return `<p class="mb-3 rounded-lg border px-3 py-2 text-xs font-bold ${tone}" data-staff-media-basis="${adminAttr(check.basis || "none")}">${adminEscape(label)}</p>`;
 }
 
+function staffFormatVideoClock(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return `${minutes}:${String(rest).padStart(2, "0")}`;
+}
+
+function staffCoverVideoChoices(preview = {}) {
+  const urls = typeof propertyVideoUrls === "function" ? propertyVideoUrls(preview) : [];
+  return urls.filter((url) => /^https:\/\//i.test(String(url || "").trim()));
+}
+
+function staffCoverThumbHtml(url, title) {
+  const youtube = typeof getYouTubeThumbnailUrl === "function" ? getYouTubeThumbnailUrl(url) : "";
+  if (youtube) {
+    return `<img src="${adminAttr(youtube)}" alt="${adminAttr(`${title} thumbnail`)}" class="h-14 w-24 shrink-0 rounded object-cover bg-black" data-staff-cover-thumb>`;
+  }
+  const frame = typeof videoFirstFrameSrc === "function" ? videoFirstFrameSrc(url) : url;
+  return `<video class="h-14 w-24 shrink-0 rounded bg-black object-cover" muted playsinline preload="metadata" src="${adminAttr(frame)}" data-staff-cover-thumb aria-label="${adminAttr(`${title} thumbnail`)}"></video>`;
+}
+
+function staffCoverVideoChoiceHtml(propertyId, url, index) {
+  const title = `Video ${index + 1}`;
+  return `
+    <button type="button" data-staff-photo-action data-staff-video-cover-choice disabled data-staff-cover-video="${adminAttr(url)}" onclick="staffMakeVideoCover(${propertyIdArg(propertyId)}, ${propertyIdArg(url)})" class="flex w-full items-center gap-3 rounded-lg border border-blue-200 bg-white p-2 text-left hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">
+      ${staffCoverThumbHtml(url, title)}
+      <span class="min-w-0 flex-1">
+        <span class="block text-sm font-black text-blue-950">${adminEscape(title)}</span>
+        <span class="block text-xs font-bold text-blue-800" data-staff-cover-duration data-video-src="${adminAttr(url)}">Duration…</span>
+      </span>
+      <span class="shrink-0 text-xs font-black text-blue-800">Use this video</span>
+    </button>`;
+}
+
 function staffPreviewVideoCoverHtml(propertyId) {
+  const preview = String(adminActiveReview?.id || "") === String(propertyId || "") ? adminActiveReview : null;
+  const choices = preview ? staffCoverVideoChoices(preview) : [];
+  if (choices.length > 1) {
+    return `
+      <div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3" data-staff-video-cover data-staff-video-cover-picker="true">
+        <div class="text-sm font-black text-blue-950">Make a cover from the video</div>
+        <p class="mt-1 text-xs text-blue-900">This listing has more than one video. Pick the one that shows this property. Each choice shows a frame and the duration.</p>
+        <div class="mt-2 space-y-2">
+          ${choices.map((url, index) => staffCoverVideoChoiceHtml(propertyId, url, index)).join("")}
+        </div>
+      </div>`;
+  }
   return `
     <div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3" data-staff-video-cover>
       <div class="text-sm font-black text-blue-950">Make a cover from the video</div>
@@ -15618,8 +15669,46 @@ function staffPreviewVideoCoverHtml(propertyId) {
     </div>`;
 }
 
-async function staffMakeVideoCover(propertyId) {
+function staffHydrateCoverVideoChoices(root = document) {
+  const scope = root && root.querySelectorAll ? root : document;
+  scope.querySelectorAll("[data-staff-cover-duration]").forEach((node) => {
+    if (node.dataset.staffDurationBound === "1") return;
+    const src = node.getAttribute("data-video-src") || "";
+    if (!src) return;
+    node.dataset.staffDurationBound = "1";
+    const thumb = node.closest("[data-staff-video-cover-choice]")?.querySelector("video[data-staff-cover-thumb]");
+    const probe = thumb || document.createElement("video");
+    const finish = () => {
+      const seconds = Number(probe.duration);
+      node.textContent = Number.isFinite(seconds) && seconds > 0 ? staffFormatVideoClock(seconds) : "Duration unavailable";
+      if (!thumb) {
+        try { probe.removeAttribute("src"); probe.load(); } catch (error) {}
+      }
+    };
+    if (Number.isFinite(Number(probe.duration)) && Number(probe.duration) > 0) {
+      finish();
+      return;
+    }
+    probe.addEventListener("loadedmetadata", finish, { once: true });
+    probe.addEventListener("error", () => { node.textContent = "Duration unavailable"; }, { once: true });
+    if (!thumb) {
+      probe.preload = "metadata";
+      probe.muted = true;
+      probe.playsInline = true;
+      probe.src = src.includes("#") ? src : `${src}#t=0.1`;
+    }
+  });
+}
+
+async function staffMakeVideoCover(propertyId, videoUrl = "") {
   if (staffPhotoChangePending || String(adminActiveReview?.id || "") !== String(propertyId)) return;
+  const chosen = String(videoUrl || "").trim();
+  const choices = staffCoverVideoChoices(adminActiveReview || {});
+  if (!chosen && choices.length > 1) {
+    document.querySelector("[data-staff-video-cover]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    toast("Choose which video to take the cover from.");
+    return;
+  }
   staffPhotoChangePending = true;
   document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = true; });
   setStaffPreviewDecisionBusy(true);
@@ -15627,7 +15716,7 @@ async function staffMakeVideoCover(propertyId) {
     toast("Making a cover from the video. This can take a minute...");
     const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/video-cover`, {
       method: "POST",
-      body: {}
+      body: chosen ? { video_url: chosen } : {}
     }, Math.max(STAFF_MODERATION_WRITE_TIMEOUT_MS * 4, 120000), "Video cover");
     if (String(adminActiveReview?.id || "") === String(propertyId)) {
       adminActiveReview.images = response.data.images;
@@ -15653,14 +15742,18 @@ function staffSyncPreviewPhotoActions() {
   const consent = document.getElementById("staff-preview-photo-rights")?.checked === true;
   const fileCount = document.getElementById("staff-preview-photo-upload")?.files?.length || 0;
   const cover = document.getElementById("staff-preview-video-cover-button");
+  const choices = [...document.querySelectorAll("[data-staff-video-cover-choice]")];
   const upload = document.getElementById("staff-preview-photo-upload-button");
   if (staffPhotoChangePending) {
     if (cover) cover.disabled = true;
+    choices.forEach((button) => { button.disabled = true; });
     if (upload) upload.disabled = true;
     return;
   }
   if (cover) cover.disabled = !consent;
+  choices.forEach((button) => { button.disabled = !consent; });
   if (upload) upload.disabled = !(consent && fileCount > 0);
+  staffHydrateCoverVideoChoices();
 }
 
 function staffPreviewPhotoUploadHtml(propertyId, existingCount = 0) {
@@ -15747,6 +15840,51 @@ function focusListingPhotoUpload() {
 }
 
 let staffPhotoChangePending = false;
+
+function staffRefreshPreviewMedia(propertyId, data = {}) {
+  if (String(adminActiveReview?.id || "") !== String(propertyId)) return;
+  if (data.images) adminActiveReview.images = data.images;
+  if (data.extra_fields) adminActiveReview.extra_fields = data.extra_fields;
+  if (data.media_check) adminActiveReview.media_check = data.media_check;
+  const videos = document.getElementById("staff-preview-video-gallery");
+  if (videos) videos.outerHTML = staffPreviewVideosHtml(adminActiveReview);
+  const gallery = document.getElementById("staff-preview-photo-gallery");
+  if (gallery) gallery.innerHTML = staffPreviewImagesHtml(adminActiveReview.images || [], propertyId, adminActiveReview.extra_fields?.staff_removed_images || []);
+  staffHydrateCoverVideoChoices(document.getElementById("staff-listing-preview-modal") || document);
+  if (adminActiveReview.media_check?.ok) dismissApprovalBlockerBanner();
+}
+
+async function staffRemovePreviewVideo(propertyId, videoUrl) {
+  if (staffPhotoChangePending || String(adminActiveReview?.id || "") !== String(propertyId)) return;
+  const urls = propertyVideoUrls(adminActiveReview || {});
+  const index = Math.max(0, urls.findIndex((url) => url === videoUrl));
+  const label = `Property video ${index + 1}`;
+  const confirmed = window.confirm(`Remove ${label} from this listing?\n\nIt will be detached from the listing and any stills made from it will be cleared. The video file stays in storage.`);
+  if (!confirmed) return;
+  staffPhotoChangePending = true;
+  document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = true; });
+  setStaffPreviewDecisionBusy(true);
+  try {
+    const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/videos/remove`, {
+      method: "POST",
+      body: { url: videoUrl, confirm: true }
+    }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Remove video");
+    staffRefreshPreviewMedia(propertyId, response.data || {});
+    queueStaffDashboardRefreshAfterModeration({ preservePreviewDraft: true });
+    const cleared = Number(response.data?.stills_cleared || 0);
+    toast(cleared
+      ? `Video removed from this listing. ${cleared} still${cleared === 1 ? "" : "s"} from it ${cleared === 1 ? "was" : "were"} cleared. The file stays in storage.`
+      : "Video removed from this listing. The file stays in storage.");
+  } catch (error) {
+    toast(`Remove video failed: ${error.message || "request failed"}`);
+  } finally {
+    staffPhotoChangePending = false;
+    document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = false; });
+    staffSyncPreviewPhotoActions();
+    setStaffPreviewDecisionBusy(false);
+  }
+}
+
 async function staffChangePreviewPhoto(propertyId, imageId, restore = false) {
   if (staffPhotoChangePending || String(adminActiveReview?.id || "") !== String(propertyId)) return;
   staffPhotoChangePending = true;
@@ -16142,6 +16280,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
     adminReviewOnListingTypeChange();
     adminReviewAutoPopulateLocationFromSource(preview);
     initAdminReviewLocationMap(preview);
+    staffHydrateCoverVideoChoices(modal);
     moderationEnsureIdentityPanel("staff-preview", preview, "staff", document.querySelector("#staff-listing-preview-modal .p-5 > .space-y-4") || document.querySelector("#staff-listing-preview-modal"));
   }, 120);
 }

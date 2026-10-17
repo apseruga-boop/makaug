@@ -1,7 +1,7 @@
 'use strict';
 
 const db = require('../config/database');
-const { realPhotoRejection } = require('../utils/realListingPhoto');
+const { realPhotoRejection, sameVideoUrl, VIDEO_STILL_SLOT_RE } = require('../utils/realListingPhoto');
 const EVIDENCE_SLOTS = new Set(['source_evidence_original', 'quarantined_source_evidence']);
 
 // Remove stale thumbnail/gallery fallbacks as well as the property_images link.
@@ -183,4 +183,221 @@ async function addStaffPropertyImages({ propertyId, actorId, images = [], confir
   }
 }
 
-module.exports = { changeStaffPropertyImage, addStaffPropertyImages, withoutImageUrls, STAFF_PHOTO_MAX_COUNT };
+// Every http(s) video the staff preview lists, in the same order as the screen.
+function collectListingVideoUrls(extra = {}, property = {}) {
+  const fields = extra && typeof extra === 'object' ? extra : {};
+  const tours = Array.isArray(fields.video_tours) ? fields.video_tours : [];
+  const raw = [
+    ...(Array.isArray(fields.video_urls) ? fields.video_urls : []),
+    ...tours.map((item) => (item && typeof item === 'object' ? (item.url || item.video_url) : item)),
+    property?.video_url,
+    property?.youtube_url,
+    property?.tiktok_url,
+    fields.video_url,
+    fields.youtube_url,
+    fields.tiktok_url
+  ];
+  const seen = new Set();
+  const urls = [];
+  for (const value of raw) {
+    const url = String(value || '').trim();
+    if (!/^https?:\/\//i.test(url)) continue;
+    const key = url.replace(/#.*$/, '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    urls.push(url);
+  }
+  return urls;
+}
+
+// Drop one video from the listing fields. The file in storage is not touched.
+function detachVideoFromExtra(extra = {}, videoUrl) {
+  const fields = extra && typeof extra === 'object' && !Array.isArray(extra) ? { ...extra } : {};
+  const videoUrls = (Array.isArray(fields.video_urls) ? fields.video_urls : []).filter((url) => !sameVideoUrl(url, videoUrl));
+  const tours = (Array.isArray(fields.video_tours) ? fields.video_tours : []).filter((item) => {
+    const url = item && typeof item === 'object' ? (item.url || item.video_url) : item;
+    return !sameVideoUrl(url, videoUrl);
+  });
+  const next = {
+    ...fields,
+    video_urls: videoUrls,
+    video_tours: tours,
+    video_url: sameVideoUrl(fields.video_url, videoUrl) ? null : (fields.video_url ?? null),
+    youtube_url: sameVideoUrl(fields.youtube_url, videoUrl) ? null : (fields.youtube_url ?? null),
+    tiktok_url: sameVideoUrl(fields.tiktok_url, videoUrl) ? null : (fields.tiktok_url ?? null)
+  };
+  const remaining = collectListingVideoUrls(next);
+  if (!next.video_url && remaining[0]) next.video_url = remaining[0];
+  next.video_count = remaining.length;
+  return { extra: next, remaining };
+}
+
+function attributedStillUrls(extra = {}, videoUrl) {
+  const urls = new Set();
+  const stillList = Array.isArray(extra.video_still_urls) ? extra.video_still_urls : [];
+  for (const item of (Array.isArray(extra.video_frame_quality) ? extra.video_frame_quality : [])) {
+    if (!item || typeof item !== 'object' || !sameVideoUrl(item.source_video_url, videoUrl)) continue;
+    const still = item.still_url || item.url;
+    if (still) urls.add(String(still));
+    else if (stillList[Number(item.frame) - 1]) urls.add(String(stillList[Number(item.frame) - 1]));
+  }
+  for (const item of (Array.isArray(extra.video_still_sources) ? extra.video_still_sources : [])) {
+    if (item && sameVideoUrl(item.source_video_url, videoUrl) && item.still_url) urls.add(String(item.still_url));
+  }
+  return urls;
+}
+
+// Untagged stills are cleared only when they can only have come from this video:
+// every recorded cover names this video, or it was the listing's only video.
+function untaggedStillsBelongToVideo(extra = {}, events = [], videoUrl, remainingVideoCount = 0) {
+  const quality = Array.isArray(extra.video_frame_quality) ? extra.video_frame_quality : [];
+  const sources = Array.isArray(extra.video_still_sources) ? extra.video_still_sources : [];
+  const tagged = quality.some((item) => item && item.source_video_url) || sources.some((item) => item && item.source_video_url);
+  if (tagged) return false;
+  const recorded = [];
+  for (const event of events || []) {
+    const delivery = event?.delivery && typeof event.delivery === 'object' ? event.delivery : event;
+    const list = delivery?.source_videos;
+    if (Array.isArray(list)) recorded.push(...list.filter(Boolean));
+  }
+  if (recorded.length) return recorded.every((url) => sameVideoUrl(url, videoUrl));
+  return remainingVideoCount === 0;
+}
+
+function stripStillsForVideo(extra, videoUrl, removedStillUrls, { clearUntagged = false } = {}) {
+  const dropStill = (url) => url && removedStillUrls.has(String(url));
+  const quality = (Array.isArray(extra.video_frame_quality) ? extra.video_frame_quality : []).filter((item) => {
+    if (clearUntagged) return false;
+    if (!item || typeof item !== 'object') return false;
+    if (sameVideoUrl(item.source_video_url, videoUrl)) return false;
+    if (dropStill(item.still_url || item.url)) return false;
+    return true;
+  });
+  const sources = (Array.isArray(extra.video_still_sources) ? extra.video_still_sources : []).filter((item) => {
+    if (!item || typeof item !== 'object') return false;
+    if (sameVideoUrl(item.source_video_url, videoUrl)) return false;
+    if (dropStill(item.still_url)) return false;
+    return true;
+  });
+  const stillUrls = (Array.isArray(extra.video_still_urls) ? extra.video_still_urls : []).filter((url) => url && !dropStill(url));
+  return { ...extra, video_frame_quality: quality, video_still_sources: sources, video_still_urls: stillUrls };
+}
+
+// Detach one video from the listing. Stills made from it are removed from the
+// listing. The video object in storage is left where it is.
+async function removeStaffPropertyVideo({ propertyId, videoUrl, actorId, confirm = false }, database = db) {
+  if (confirm !== true) throw mediaError(400, 'Confirm before removing a video from this listing.');
+  const target = String(videoUrl || '').trim();
+  if (!/^https?:\/\//i.test(target)) throw mediaError(400, 'Choose a video to remove.');
+  const client = await database.getClient();
+  try {
+    await client.query('BEGIN');
+    const property = (await client.query('SELECT id, extra_fields FROM properties WHERE id = $1 FOR UPDATE', [propertyId])).rows[0];
+    if (!property) throw mediaError(404, 'Property not found');
+    const extra = property.extra_fields || {};
+    const attached = collectListingVideoUrls(extra, property);
+    const match = attached.find((url) => sameVideoUrl(url, target));
+    if (!match) throw mediaError(404, 'That video is not attached to this listing.');
+    const events = (await client.query(
+      `SELECT delivery FROM property_moderation_events
+        WHERE property_id = $1
+          AND action = ANY($2::text[])
+        ORDER BY created_at ASC`,
+      [propertyId, ['staff_video_cover_made', 'whatsapp_video_still_backfilled']]
+    )).rows;
+    const detached = detachVideoFromExtra(extra, match);
+    const images = (await client.query(
+      'SELECT * FROM property_images WHERE property_id = $1 ORDER BY is_primary DESC, sort_order ASC, created_at ASC, id ASC',
+      [propertyId]
+    )).rows;
+    const attributed = attributedStillUrls(extra, match);
+    const clearUntagged = untaggedStillsBelongToVideo(extra, events, match, detached.remaining.length);
+    const doomed = images.filter((image) => {
+      if (!VIDEO_STILL_SLOT_RE.test(String(image.slot_key || ''))) return false;
+      if (attributed.has(image.url)) return true;
+      return clearUntagged;
+    });
+    if (doomed.length) {
+      await client.query(
+        'DELETE FROM property_images WHERE property_id = $1 AND id = ANY($2::uuid[])',
+        [propertyId, doomed.map((image) => image.id)]
+      );
+    }
+    const kept = (await client.query(
+      'SELECT * FROM property_images WHERE property_id = $1 ORDER BY is_primary DESC, sort_order ASC, created_at ASC, id ASC',
+      [propertyId]
+    )).rows;
+    const publicImages = kept.filter((image) => !EVIDENCE_SLOTS.has(image.slot_key));
+    const primaryId = publicImages[0]?.id || null;
+    await client.query('UPDATE property_images SET is_primary = (id = $2::uuid) IS TRUE WHERE property_id = $1', [propertyId, primaryId]);
+    kept.forEach((image) => { image.is_primary = image.id === primaryId; });
+    const removedStillUrls = new Set(doomed.map((image) => image.url).filter(Boolean));
+    const removedLog = Array.isArray(extra.staff_removed_videos) ? extra.staff_removed_videos : [];
+    const stripped = stripStillsForVideo(
+      withoutImageUrls(detached.extra, removedStillUrls),
+      match,
+      removedStillUrls,
+      { clearUntagged }
+    );
+    const stillCount = kept.filter((image) => VIDEO_STILL_SLOT_RE.test(String(image.slot_key || ''))).length;
+    const nextExtra = {
+      ...stripped,
+      staff_removed_videos: [...removedLog, {
+        url: match,
+        removed_at: new Date().toISOString(),
+        removed_by: actorId || null,
+        stills_cleared: doomed.length,
+        storage_deleted: false
+      }],
+      staff_media_edited_at: new Date().toISOString(),
+      public_image_count: publicImages.length,
+      image_count: publicImages.length,
+      primary_image_url: publicImages[0]?.url || null,
+      video_key_frame_count: stillCount,
+      video_count: detached.remaining.length
+    };
+    await client.query('UPDATE properties SET extra_fields = $2::jsonb, updated_at = NOW() WHERE id = $1', [propertyId, JSON.stringify(nextExtra)]);
+    const delivery = {
+      url: match,
+      stills_cleared: doomed.length,
+      still_urls: [...removedStillUrls],
+      storage_deleted: false,
+      videos_remaining: detached.remaining.length
+    };
+    await client.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, reason, delivery)
+       VALUES ($1,$2,$3,$4,$5::jsonb)`,
+      [propertyId, actorId || null, 'staff_listing_video_removed',
+        'Staff detached a video from this listing. The video file was left in storage.',
+        JSON.stringify(delivery)]
+    );
+    await client.query('COMMIT');
+    return {
+      id: propertyId,
+      images: kept,
+      extra_fields: nextExtra,
+      action: 'staff_listing_video_removed',
+      removed_url: match,
+      stills_cleared: doomed.length,
+      storage_deleted: false
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = {
+  changeStaffPropertyImage,
+  addStaffPropertyImages,
+  removeStaffPropertyVideo,
+  collectListingVideoUrls,
+  detachVideoFromExtra,
+  attributedStillUrls,
+  untaggedStillsBelongToVideo,
+  stripStillsForVideo,
+  withoutImageUrls,
+  STAFF_PHOTO_MAX_COUNT
+};

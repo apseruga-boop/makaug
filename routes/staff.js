@@ -2,7 +2,7 @@ const express = require('express');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { changeStaffPropertyImage, addStaffPropertyImages } = require('../services/staffPropertyMediaService');
+const { changeStaffPropertyImage, addStaffPropertyImages, removeStaffPropertyVideo } = require('../services/staffPropertyMediaService');
 const { requireStaffAccess } = require('../middleware/auth');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
@@ -4412,7 +4412,10 @@ router.post('/properties/:id/images', async (req, res, next) => {
 router.post('/properties/:id/video-cover', async (req, res, next) => {
   try {
     if (!toUuidOrNull(req.params.id)) return res.status(400).json({ ok: false, error: 'Invalid listing id' });
-    const result = await require('../services/videoStillScheduler').makeVideoCoverForListing(db, req.params.id, { actorId: String(actorId(req) || 'staff') });
+    const result = await require('../services/videoStillScheduler').makeVideoCoverForListing(db, req.params.id, {
+      actorId: String(actorId(req) || 'staff'),
+      videoUrl: String(req.body?.video_url || req.body?.url || '')
+    });
     res.set('Cache-Control', 'no-store');
     if (!result.ok) return res.status(result.status || 422).json({ ok: false, error: result.error });
     const [images, property] = await Promise.all([
@@ -4437,6 +4440,33 @@ router.post('/properties/:id/video-cover', async (req, res, next) => {
       }
     });
   } catch (error) {
+    return next(error);
+  }
+});
+
+// Detach one video from the listing. The file stays in storage.
+router.post('/properties/:id/videos/remove', async (req, res, next) => {
+  try {
+    if (!toUuidOrNull(req.params.id)) return res.status(400).json({ ok: false, error: 'Invalid listing id' });
+    const data = await removeStaffPropertyVideo({
+      propertyId: req.params.id,
+      videoUrl: req.body?.url || req.body?.video_url,
+      actorId: actorId(req),
+      confirm: req.body?.confirm === true || String(req.body?.confirm || '').toLowerCase() === 'true'
+    });
+    clearStaffFastDashboardCache();
+    require('./properties').clearPublicPropertiesCache(data.action);
+    invalidatePublicInventoryMetricsCache(data.action);
+    logStaffActivityInBackground(req, data.action, {
+      targetType: 'property',
+      targetId: req.params.id,
+      metadata: { video_url: data.removed_url, stills_cleared: data.stills_cleared, storage_deleted: false }
+    });
+    data.media_check = await listingPhotoOrVideoCheck(db, req.params.id).catch(() => null);
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, data });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
     return next(error);
   }
 });
