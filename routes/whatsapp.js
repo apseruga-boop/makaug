@@ -9326,6 +9326,7 @@ async function handleEmployeeWhatsappIntake({
       let textCaption = cleanBody;
       let textOnlyFacts = employeePropertyFacts(cleanBody, data);
       let textOnlyMissing = employeePropertyMissing(textOnlyFacts);
+      let mergedWithPendingCaption = false;
       // A short reply such as "Kira, Wakiso" or "UGX 300m" is a correction to the
       // property that is waiting, not a caption of its own. Judging it alone threw
       // away everything the original caption already said and asked for it again.
@@ -9337,6 +9338,7 @@ async function handleEmployeeWhatsappIntake({
           textCaption = mergedCaption;
           textOnlyFacts = mergedFacts;
           textOnlyMissing = mergedMissing;
+          mergedWithPendingCaption = true;
         }
       }
       if (
@@ -9352,7 +9354,13 @@ async function handleEmployeeWhatsappIntake({
       }
 
       if (pendingStoredMedia.length && textOnlyMissing.length === 0) {
-        if (pendingCaption && !employeeCaptionLikelySameProperty(pendingCaption, textCaption, data)) {
+        // 17 Oct 2026: Brian answered "Wakiso district" when asked which district
+        // Nakasaja is in. Adding it let the parser resolve the place to Gayaza, so
+        // the merged caption no longer matched the waiting one, was refused as "a
+        // different property", and his Nakasaja, Buwate and Kyanja properties all
+        // stayed stuck behind it. A reply we merged into the waiting caption IS
+        // that property; only a separate full caption can be a different one.
+        if (!mergedWithPendingCaption && pendingCaption && !employeeCaptionLikelySameProperty(pendingCaption, textCaption, data)) {
           const pendingMissing = employeePropertyMissing(employeePropertyFacts(pendingCaption, data));
           return {
             handled: true,
