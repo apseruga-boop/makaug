@@ -1943,7 +1943,19 @@
       padding: 16px;
     }
     .modal-overlay.open { display: flex; }
-    #admin-whatsapp-modal.modal-overlay { z-index: 12000; }
+    #admin-whatsapp-modal.admin-whatsapp-panel {
+      display: none;
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 12000;
+      width: min(420px, calc(100vw - 32px));
+      max-height: 70vh;
+      overflow: auto;
+      pointer-events: auto;
+      background: transparent;
+    }
+    #admin-whatsapp-modal.admin-whatsapp-panel.open { display: block; }
     .modal-box {
       width: 100%;
       max-width: 560px;
@@ -9564,7 +9576,7 @@
     </div>
   </div>
 
-  <div id="admin-whatsapp-modal" class="modal-overlay">
+  <div id="admin-whatsapp-modal" class="admin-whatsapp-panel" role="status" aria-live="polite">
     <div class="modal-box" style="max-width:720px">
       <button type="button" onclick="closeAdminOwnerWhatsApp()" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
       <div class="inline-flex items-center gap-2 bg-green-100 text-green-800 text-xs font-bold rounded-full px-3 py-1 mb-3">
