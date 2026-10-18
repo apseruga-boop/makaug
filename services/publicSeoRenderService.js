@@ -522,25 +522,89 @@ function titlePriceSuffix(listing = {}) {
   return Number(listing.price || 0) > 0 && priceInSeoBounds(listing, category) ? ` — ${titlePriceLabel(listing)}` : '';
 }
 
-function propertySeoTitle(listing = {}) {
-  if (listing.title_reviewed && listing.title) {
-    const reviewedPrice = titlePriceSuffix(listing);
-    return `${listing.title}${reviewedPrice} | ${ACTIVE_BRAND}`;
+function listingTypeKey(listing = {}) {
+  return String(listing.listing_type || '').toLowerCase();
+}
+
+function propertyTypeKey(listing = {}) {
+  return plainText(listing.property_type).toLowerCase();
+}
+
+// Land and plots are identified from listing_type, then property_type. A stored
+// title or extra_fields seo_title is not a type.
+function listingIsLandOrPlot(listing = {}) {
+  const listingType = listingTypeKey(listing);
+  const typeKey = propertyTypeKey(listing);
+  if (listingType === 'land') return true;
+  if (listingType === 'commercial') return false;
+  return /^(?:land|plots?)$/.test(typeKey) || (/\bplots?\b/.test(typeKey) && !/\b(house|home|apartment|flat)\b/.test(typeKey));
+}
+
+function publicTypeNoun(listing = {}) {
+  const listingType = listingTypeKey(listing);
+  const rawType = plainText(listing.property_type);
+  const typeKey = rawType.toLowerCase();
+  if (listingIsLandOrPlot(listing)) {
+    if (/\bplots?\b/.test(typeKey) && !/\bland\b/.test(typeKey) && !/\b(house|home)\b/.test(typeKey)) {
+      return rawType.replace(/\b\p{L}/gu, (char) => char.toUpperCase());
+    }
+    if (/\bland\b/.test(typeKey) && !/\b(house|home)\b/.test(typeKey)) return rawType;
+    return 'Land';
   }
-  const listingType = String(listing.listing_type || '').toLowerCase();
-  const transaction = String(listing.transaction_type || '').toLowerCase()
-    || (listingType === 'rent' ? 'rent' : ['sale', 'land'].includes(listingType) ? 'sale' : '');
-  const type = plainText(listing.property_type) || ({
+  return rawType || ({
     land: 'Land',
     commercial: 'Commercial Property',
     student: 'Student Accommodation',
     students: 'Student Accommodation'
   }[listingType] || 'Property');
-  const bedrooms = Number(listing.bedrooms || 0) > 0 ? `${Number(listing.bedrooms)}bdrm ` : '';
+}
+
+const HOUSE_WORD_PATTERN = /\b(house|home|bungalow|villa|maisonette|duplex|townhouse)\b/i;
+
+function storedHeadingText(listing = {}) {
+  const extra = listing.extra_fields && typeof listing.extra_fields === 'object' ? listing.extra_fields : {};
+  const canonical = extra.canonical && typeof extra.canonical === 'object' ? extra.canonical : {};
+  return [listing.title, listing.seo_title, extra.seo_title, canonical.seo_title]
+    .map((value) => plainText(value))
+    .filter(Boolean)
+    .join(' ');
+}
+
+// A reviewed caption can still say "house" after the listing was saved as land.
+// That stored string, and any SEO title kept in extra_fields, must not win.
+function publicTitleContradictsListingType(listing = {}) {
+  if (!listingIsLandOrPlot(listing)) return false;
+  return HOUSE_WORD_PATTERN.test(storedHeadingText(listing));
+}
+
+function generatedTypeHeading(listing = {}) {
+  const listingType = listingTypeKey(listing);
+  const transaction = String(listing.transaction_type || '').toLowerCase()
+    || (listingType === 'rent' ? 'rent' : ['sale', 'land'].includes(listingType) ? 'sale' : '');
+  const type = publicTypeNoun(listing);
+  const bedrooms = !listingIsLandOrPlot(listing) && Number(listing.bedrooms || 0) > 0
+    ? `${Number(listing.bedrooms)}bdrm `
+    : '';
   const intent = transaction === 'rent' ? ' for Rent' : transaction === 'sale' ? ' for Sale' : '';
   const location = [listing.area, listing.district].filter(Boolean).join(', ');
+  return `${bedrooms}${type}${intent}${location ? ` in ${location}` : ''}`;
+}
+
+function propertyPublicHeading(listing = {}) {
+  const stored = plainText(listing.title);
+  if (stored && !publicTitleContradictsListingType(listing) && (listing.title_reviewed || !listingIsLandOrPlot(listing))) {
+    return stored;
+  }
+  if (stored && listingIsLandOrPlot(listing) && !publicTitleContradictsListingType(listing)) return stored;
+  return generatedTypeHeading(listing);
+}
+
+function propertySeoTitle(listing = {}) {
   const price = titlePriceSuffix(listing);
-  return `${bedrooms}${type}${intent}${location ? ` in ${location}` : ''}${price} | ${ACTIVE_BRAND}`;
+  if (listing.title_reviewed && listing.title && !publicTitleContradictsListingType(listing)) {
+    return `${listing.title}${price} | ${ACTIVE_BRAND}`;
+  }
+  return `${generatedTypeHeading(listing)}${price} | ${ACTIVE_BRAND}`;
 }
 
 function propertySeoDescription(listing = {}) {
@@ -863,22 +927,23 @@ function renderPropertySeoHtml(html, listing, options = {}) {
   const image = absoluteUrl(listing.primary_image_url || config.image || '/assets/house-ads-v3/home-hero.webp', options.baseUrl);
   const location = listingAreaLocation(listing);
   const areaUrl = location ? absoluteUrl(`${config.route}/${canonicalLocationRouteSlug(location)}`, options.baseUrl) : absoluteUrl(config.route, options.baseUrl);
+  const heading = propertyPublicHeading(listing);
   const locationLabel = [listing.area, listing.district].filter(Boolean).join(', ');
   const items = [
     { name: 'Home', url: absoluteUrl('/', options.baseUrl) },
     { name: config.label, url: absoluteUrl(config.route, options.baseUrl) },
     ...(location ? [{ name: location.name, url: areaUrl }] : []),
-    { name: listing.title, url: propertyUrl }
+    { name: heading, url: propertyUrl }
   ];
   const content = `<article class="grid lg:grid-cols-3 gap-6" data-ssr-property-detail="${escapeHtml(listing.id)}" data-detail-layout>
     <div class="lg:col-span-2" data-detail-main>
       ${renderBreadcrumbs(items)}
       <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white" data-detail-card>
         <button type="button" class="block w-full property-gallery-hero relative overflow-hidden group" data-detail-hero onclick="if(typeof openDetailGalleryLightbox==='function')openDetailGalleryLightbox(detailGalleryPhotoIndex)">
-          <img id="detail-gallery-hero-img" data-ssr-detail-hero="${escapeHtml(listing.id)}" src="${escapeHtml(image)}" alt="${escapeHtml(listing.title)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform" width="1200" height="675" loading="eager" decoding="async" fetchpriority="high">
+          <img id="detail-gallery-hero-img" data-ssr-detail-hero="${escapeHtml(listing.id)}" src="${escapeHtml(image)}" alt="${escapeHtml(heading)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform" width="1200" height="675" loading="eager" decoding="async" fetchpriority="high">
         </button>
         <div class="p-5">
-          <h1 class="text-3xl font-bold text-gray-900 serif">${escapeHtml(listing.title)}</h1>
+          <h1 class="text-3xl font-bold text-gray-900 serif">${escapeHtml(heading)}</h1>
           <p class="mt-2 text-gray-600">${location ? `<a href="${escapeHtml(areaUrl)}" class="font-semibold text-green-700 hover:underline">${escapeHtml(locationLabel)}</a>` : escapeHtml(locationLabel)}</p>
           <p class="mt-4 text-3xl font-black text-green-700"${seoPriceDataAttributes(listing)}>${escapeHtml(priceLabel(listing))}</p>
           <p class="mt-3 text-gray-700">${[
@@ -895,7 +960,7 @@ function renderPropertySeoHtml(html, listing, options = {}) {
   const description = propertySeoDescription(listing);
   const product = {
     '@type': ['Product', 'RealEstateListing'],
-    name: listing.title,
+    name: heading,
     description,
     url: propertyUrl,
     image,
@@ -1036,6 +1101,10 @@ module.exports = {
   loadPublicSeoListing,
   priceLabel,
   propertySeoTitle,
+  propertyPublicHeading,
+  publicTypeNoun,
+  listingIsLandOrPlot,
+  publicTitleContradictsListingType,
   propertySeoDescription,
   areaLinksForCategory,
   popularAreaLinks,

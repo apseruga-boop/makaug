@@ -355,12 +355,16 @@ function cutTitleAtWord(value = '', max = TITLE_MAX_CHARS) {
 
 function factualListingTitle(row = {}) {
   const listingType = String(row.listing_type || row.category || '').toLowerCase();
-  const isLand = listingType === 'land';
+  const typeKey = String(row.property_type || '').toLowerCase();
+  const isLand = listingType === 'land'
+    || (listingType !== 'commercial' && (/^(?:land|plots?)$/.test(typeKey) || (/\bplots?\b/.test(typeKey) && !/\b(house|home|apartment|flat)\b/.test(typeKey))));
   const period = normalizePricePeriodForWrite(String(row.price_period || '').toLowerCase()) || '';
   const transaction = String(row.transaction_type || row?.extra_fields?.transaction_type || '').toLowerCase();
   const forRent = listingType === 'rent' || listingType === 'student' || listingType === 'students' || transaction === 'rent' || ['month', 'week', 'year'].includes(period);
-  const typeLabel = humanPropertyTypeLabel(row.property_type || '')
-    || (isLand ? 'Land' : listingType === 'commercial' ? 'Commercial property' : (listingType === 'student' || listingType === 'students') ? 'Student room' : 'Property');
+  const typeLabel = isLand
+    ? (/\bplots?\b/.test(typeKey) && !/\bland\b/.test(typeKey) && !/\b(house|home)\b/.test(typeKey) ? 'Plot' : 'Land')
+    : (humanPropertyTypeLabel(row.property_type || '')
+    || (listingType === 'commercial' ? 'Commercial property' : (listingType === 'student' || listingType === 'students') ? 'Student room' : 'Property'));
   const beds = Number(row.bedrooms);
   const bedPrefix = !isLand && Number.isFinite(beds) && beds > 0 ? `${beds}-bed ` : '';
   const area = String(row.area || row.district || '').trim() || ACTIVE_COUNTRY_NAME;
