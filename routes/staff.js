@@ -929,6 +929,15 @@ function staffReviewQueueSegmentWhere(segment = 'all', alias = 'p') {
   return '';
 }
 
+// The Pending Review tile and GET /properties/review-queue?segment=all share
+// this predicate. segment=all adds nothing on top of the actionable queue.
+function staffReviewQueueWhereSql(segment = 'all', alias = 'p') {
+  const filters = [actionablePendingReviewWhere(alias)];
+  const segmentWhere = staffReviewQueueSegmentWhere(segment, alias);
+  if (segmentWhere) filters.push(segmentWhere);
+  return filters.join(' AND ');
+}
+
 // "Showing X of N" for the found-online panel, and where "Load more" pages.
 function staffFoundOnlinePanelMeta(returned, total, limit = STAFF_DASHBOARD_PANEL_LIMIT) {
   const shown = Array.isArray(returned) ? returned.length : Number(returned) || 0;
@@ -1544,6 +1553,33 @@ function mergeStaffFastDashboardPayload(previous, fresh, { previousAt = Date.now
   for (const key of STAFF_FAST_WIDGET_KEYS) {
     const freshWidget = fresh?.summary?.[key];
     if (freshWidget === undefined) continue;
+    if (key === 'listings' && freshWidget?._pending_count_ok === true && staffWidgetFailed(freshWidget)) {
+      const previousWidget = previous?.summary?.listings;
+      // Number(null) is 0, which is finite. A missing live total must stay missing.
+      const finiteCount = (value) => (value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value));
+      const keptLive = finiteCount(previousWidget?.live);
+      const freshLive = finiteCount(freshWidget.live);
+      const live = freshLive == null ? keptLive : freshLive;
+      out.summary.listings = {
+        ...(previousWidget || {}),
+        ...freshWidget,
+        pending_review: finiteCount(freshWidget.pending_review) ?? 0,
+        broker_pending_review: finiteCount(freshWidget.broker_pending_review) ?? 0,
+        live,
+        count_source: freshWidget.count_source || 'review_queue_segment_all',
+      };
+      delete out.summary.listings._fallback_reason;
+      asOf.listings = new Date(now).toISOString();
+      if (freshLive == null && keptLive != null) {
+        const liveAsOf = previousAsOf.listings || null;
+        stale.listings = {
+          reason: 'live_count_unavailable',
+          as_of: liveAsOf,
+          age_ms: liveAsOf ? Math.max(0, now - Date.parse(liveAsOf)) : null,
+        };
+      }
+      continue;
+    }
     if (!staffWidgetFailed(freshWidget)) {
       asOf[key] = new Date(now).toISOString();
       continue;
@@ -1702,18 +1738,14 @@ async function buildStaffFastListingSummary() {
         }
       })),
     safeOne(
-      `WITH actionable AS MATERIALIZED (
-         SELECT p.listed_via, p.source, p.lister_type, p.agent_id, p.extra_fields
-         FROM properties p
-         WHERE ${actionablePendingReviewWhere('p')}
-       )
-       SELECT
+      `SELECT
          COUNT(*)::int AS pending_review,
-         COUNT(*) FILTER (WHERE ${brokerReviewWhere('actionable')})::int AS broker_pending_review
-       FROM actionable`,
+         COUNT(*) FILTER (WHERE ${brokerReviewWhere('p')})::int AS broker_pending_review
+       FROM properties p
+       WHERE ${staffReviewQueueWhereSql('all', 'p')}`,
       [],
       { pending_review: 0, broker_pending_review: 0 },
-      { timeoutMs: STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS }
+      { timeoutMs: STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS, label: 'staff_fast_pending_review_count' }
     ),
     safeOne(
       `SELECT GREATEST(COALESCE(reltuples::bigint, 0), 0)::int AS database_total
@@ -1728,6 +1760,7 @@ async function buildStaffFastListingSummary() {
   const publicLive = publicInventory?.summary && Number.isFinite(Number(publicInventory.summary.total))
     ? Number(publicInventory.summary.total)
     : null;
+  const reviewFailed = Boolean(reviewRow?._fallback_reason);
   const fallbackReasons = [
     reviewRow?._fallback_reason,
     totalRow?._fallback_reason,
@@ -1743,7 +1776,10 @@ async function buildStaffFastListingSummary() {
     staff_removed: 0,
     found_online: 0,
     website_submitted: 0,
-    count_source: 'shared_public_inventory_and_authoritative_actionable_review_predicate',
+    count_source: 'review_queue_segment_all',
+    // A slow public-inventory count must not freeze this number at the last
+    // cached 0. The review-queue total is authoritative when this is true.
+    _pending_count_ok: !reviewFailed,
     ...(fallbackReasons.length ? { _fallback_reason: [...new Set(fallbackReasons)].join(',') } : {})
   };
 }
@@ -2336,7 +2372,7 @@ async function buildDashboardPanelsPayload(req) {
   const panelQueryOptions = { timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS };
   // Each with its own statement timeout, so one slow list cannot blank the rest.
   const foundOnlineWhere = `${actionablePendingReviewWhere('p')} AND ${foundOnlineReviewWhere('p')}`;
-  const [leadRows, whatsappRows, whatsappBridge, sourceRegistryRows, foundOnlineRows, foundOnlineCount] = await Promise.all([
+  const [leadRows, whatsappRows, whatsappBridge, sourceRegistryRows, foundOnlineRows, foundOnlineCount, pendingCount] = await Promise.all([
     staffPanelLeadRows(staffId, panelLimit, { ...panelQueryOptions, label: 'staff_panel_leads' }),
     staffPanelWhatsappConversationRows(staffId, panelLimit, { ...panelQueryOptions, label: 'staff_panel_whatsapp' }),
     staffPanelWhatsappBridgeStatus({ ...panelQueryOptions, label: 'staff_panel_bridge' }),
@@ -2368,6 +2404,16 @@ async function buildDashboardPanelsPayload(req) {
       [],
       { total: null },
       { ...panelQueryOptions, label: 'staff_panel_found_online_count' }
+    ),
+    safeOne(
+      `SELECT
+         COUNT(*)::int AS pending_review,
+         COUNT(*) FILTER (WHERE ${brokerReviewWhere('p')})::int AS broker_pending_review
+       FROM properties p
+       WHERE ${staffReviewQueueWhereSql('all', 'p')}`,
+      [],
+      { pending_review: null, broker_pending_review: null },
+      { ...panelQueryOptions, label: 'staff_panel_pending_review_count' }
     )
   ]);
   const [recentActivity, reviewResult] = await Promise.all([
@@ -2431,9 +2477,21 @@ async function buildDashboardPanelsPayload(req) {
   const reviewQueue = staffModerationPanelRows(reviewResult.rows.filter((row) => !rowIsBrokerReview(row)), queueLimit);
   const brokerReviewQueue = staffModerationPanelRows(reviewResult.rows.filter(rowIsBrokerReview), queueLimit);
 
+  const pendingCountOk = pendingCount && !pendingCount._fallback_reason
+    && Number.isFinite(Number(pendingCount.pending_review))
+    && Number.isFinite(Number(pendingCount.broker_pending_review));
   return {
     staff: publicStaffUser(req.userAuth),
     panel_payload: true,
+    ...(pendingCountOk ? {
+      summary: {
+        listings: {
+          pending_review: Number(pendingCount.pending_review),
+          broker_pending_review: Number(pendingCount.broker_pending_review),
+          count_source: 'review_queue_segment_all',
+        }
+      }
+    } : {}),
     review_queue: reviewQueue,
     review_queue_meta: {
       ...staffReviewQueueMeta('main', reviewQueue.length, null),
@@ -4023,9 +4081,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
     const segmentParam = cleanText(req.query.segment).toLowerCase();
     const segment = STAFF_REVIEW_QUEUE_SEGMENTS.includes(segmentParam) ? segmentParam : 'all';
-    const filters = [actionablePendingReviewWhere('p')];
-    const segmentWhere = staffReviewQueueSegmentWhere(segment, 'p');
-    if (segmentWhere) filters.push(segmentWhere);
+    const filters = [staffReviewQueueWhereSql(segment, 'p')];
     const values = [];
 
     if (directLookup) {

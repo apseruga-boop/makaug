@@ -43,7 +43,9 @@ function sourceCurrencyForValue(value, explicitCurrency = '') {
     if (/(?:^|[\s(])R\s*\d|\bZAR\s*\d/i.test(raw)) return 'ZAR';
     return 'ZAR';
   }
-  if (/\b(?:ZAR|RWF|FRW|KES|KSH|TZS|TSH|INR|LKR)\b|₹/i.test(raw)) return '';
+  // Euro, sterling and other non-USD currencies are not converted into UGX.
+  // A €159.000 Amsterdam price must stay flagged, not become USh 159,000,000.
+  if (/(?:€|£|₹|\b(?:EUR|EURO|GBP|ZAR|RWF|FRW|KES|KSH|TZS|TSH|INR|LKR|IDR|NGN)\b|\brs\.?\s*\d|\brp\.?\s*\d|\blakhs?\b|\bcrores?\b|(?:^|[^\w])R\s*\d)/i.test(raw)) return '';
   return /(?:^|\s)(?:USD|US\$)\s*[\d.]|\$\s*[\d.]/i.test(raw) ? 'USD' : 'UGX';
 }
 
@@ -61,16 +63,34 @@ const MULTIPLIERS = { b: 1e9, bn: 1e9, billion: 1e9, billions: 1e9, m: 1e6, mn: 
  * distances or phone numbers are skipped. Returns { amount, currency } where
  * currency is 'UGX' / 'USD' when the text says so next to the number, else ''.
  */
+const EUROPEAN_DECIMAL_MAGNITUDE = /\b\d{1,3},\d{1,2}\s*(?:bn|billions?|b|mn|millions?|m|k|thousands?)\b/gi;
+const EUROPEAN_DECIMAL_COMMA = /(\d{1,3}),(\d{1,2})(?=\s*(?:bn|billions?|b|mn|millions?|m|k|thousands?)\b)/gi;
+
+function acceptEuropeanDecimalMagnitudes(value) {
+  return String(value ?? '').replace(EUROPEAN_DECIMAL_COMMA, '$1.$2');
+}
+
+function hasExplicitPriceCurrencyMarker(value) {
+  return /\b(?:ugx|ush|shs?|usd|zar)\b|(?:^|\s)us\$\s*[\d.]|\$\s*[\d.]|(?:^|[^\w])r\s*\d/i.test(String(value ?? ''));
+}
+
 function parseSourcePrice(value) {
   if (value == null || value === '') return null;
   if (typeof value === 'number' && Number.isFinite(value)) return { amount: Math.round(value), currency: '' };
   // A figure written with thousands separators ("1,000,000,000") is marked
   // with GROUPED so a 10-digit grouped price isn't mistaken for a phone number.
-  const raw = String(value || '').toLowerCase()
+  // "18,5M" is a European decimal, not the "5M" after the comma. Keep it only
+  // when a currency marker is already written next to it; otherwise drop it
+  // so it cannot become UGX 5,000,000.
+  const original = String(value || '');
+  const prepared = hasExplicitPriceCurrencyMarker(original)
+    ? acceptEuropeanDecimalMagnitudes(original)
+    : original.replace(EUROPEAN_DECIMAL_MAGNITUDE, ' ');
+  let raw = prepared.toLowerCase()
     .replace(/\b\d{1,3}(?:[, ]\d{3})+\b/g, (figure) => `${figure}${GROUPED}`)
     .replace(/(\d),(?=\d{3}\b)/g, '$1') // 9,500,000 -> 9500000
     .replace(/(\d)\s(?=\d{3}\b)/g, '$1'); // 9 500 000 -> 9500000
-  const rx = /(ugx|ush|shs?|usd|us\$|\$)?\s*(\d+(?:\.\d+)?)\u2063?\s*(bn|billions?|b|mn|millions?|m|k|thousands?)?(?=ugx|ush|shs|usd|[^a-z0-9]|$)\s*(ugx|ush|shs?|usd|\/=|\/-)?/g;
+  const rx = /(?<!\d,)(ugx|ush|shs?|usd|us\$|\$)?\s*(\d+(?:\.\d+)?)\u2063?\s*(bn|billions?|b|mn|millions?|m|k|thousands?)?(?=ugx|ush|shs|usd|[^a-z0-9]|$)\s*(ugx|ush|shs?|usd|\/=|\/-)?/g;
   const candidates = [];
   let m;
   while ((m = rx.exec(raw))) {
@@ -121,12 +141,13 @@ function sourcePriceAmount(value) {
 }
 
 function propertyPriceMetadata(value, options = {}) {
-  const parsed = parseSourcePrice(value);
+  const prepared = options.ugandaConfirmed ? acceptEuropeanDecimalMagnitudes(value) : value;
+  const parsed = parseSourcePrice(prepared);
   // The currency written next to the chosen number wins over a "$" elsewhere in
   // the text ("USh 9,500,000 … $" was read as USD and multiplied by 3,800).
   const currency = options.currency
     ? normalizePropertyPriceCurrency(options.currency)
-    : (ACTIVE_COUNTRY_CODE !== 'ZA' && parsed?.currency ? parsed.currency : sourceCurrencyForValue(value, ''));
+    : (ACTIVE_COUNTRY_CODE !== 'ZA' && parsed?.currency ? parsed.currency : sourceCurrencyForValue(prepared, ''));
   if (!currency) {
     return {
       price: null,
@@ -201,6 +222,7 @@ module.exports = {
   MAX_PLAUSIBLE_USD_ORIGINAL,
   PRICE_PERIOD_ALIASES,
   normalizePricePeriodForWrite,
+  acceptEuropeanDecimalMagnitudes,
   parseSourcePrice,
   DEFAULT_USD_TO_UGX_RATE,
   DEFAULT_USD_TO_ZAR_RATE,

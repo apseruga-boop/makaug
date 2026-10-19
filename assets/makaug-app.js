@@ -14934,6 +14934,12 @@ function mergeStaffDashboardPanelData(base = {}, panels = {}) {
     summary: {
       ...(base?.summary || {}),
       ...(panels.summary || {}),
+      // The panels recount the review queue. Keep the fast payload's live
+      // total, and let that exact pending total replace a cached 0.
+      listings: {
+        ...(base?.summary?.listings || {}),
+        ...(panels.summary?.listings || {}),
+      },
       // The panels bring the live bridge status; keep the fast payload's
       // WhatsApp counts beside it rather than replacing them.
       whatsapp: {
