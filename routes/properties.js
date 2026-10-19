@@ -443,6 +443,20 @@ function addCanonicalLocationSearchFilter(filters, values, scope = {}) {
       )`);
       clauseValues.push(selectedDistricts.map((district) => district.toLowerCase()));
     }
+    const roadAreaNames = Array.from(new Set((scope.area_names || []).map((name) => String(name || '').trim().toLowerCase()).filter(Boolean)));
+    const roadAreaDistricts = Array.from(new Set((scope.area_districts || []).map((name) => String(name || '').trim().toLowerCase()).filter(Boolean)));
+    if (roadAreaNames.length && roadAreaDistricts.length) {
+      // A corridor is the named places along the road, including rows saved
+      // with the area text and no canonical id. It is not the whole district.
+      clauses.push(`(
+        LOWER(TRIM(SPLIT_PART(COALESCE(p.area, ''), ',', 1))) = ANY(?::text[])
+        AND (
+          COALESCE(TRIM(p.district), '') = ''
+          OR LOWER(TRIM(p.district)) = ANY(?::text[])
+        )
+      )`);
+      clauseValues.push(roadAreaNames, roadAreaDistricts);
+    }
     addFilter(filters, values, `(${clauses.join(' OR ')})`, ...clauseValues);
     return true;
   }
@@ -1272,6 +1286,11 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
     distance_km: distanceKm,
     distance_miles: distanceMiles,
     listed_by: row.listed_by || null,
+    lister_type: row.lister_type || null,
+    agent_id: foundOnlinePublic ? null : (row.agent_id || null),
+    agent_name: foundOnlinePublic ? null : (cleanText(row.agent_name) || null),
+    agent_company: foundOnlinePublic ? null : (cleanText(row.agent_company) || null),
+    lister_name: foundOnlinePublic ? null : (cleanText(row.lister_name) || null),
     listing_origin: row.listing_origin || (foundOnlinePublic ? 'found_online' : (row.listed_by || 'private')),
     registration_status: row.registration_status || null,
     canonical_location_id: locationMatch?.canonical_location_id || canonicalDisplay.canonical?.key || null,
@@ -2244,7 +2263,7 @@ function publicCanonicalLocationPayload(item = {}) {
     level: item.level,
     type_label: IS_SOUTH_AFRICA
       ? (item.level === 'province' ? 'Province' : item.level === 'city' ? 'City / main place' : 'Suburb')
-      : (item.level === 'district' ? 'District' : ['city', 'town'].includes(item.level) ? 'Town / city' : 'Neighborhood'),
+      : (item.level === 'road' ? 'Main road' : item.level === 'district' ? 'District' : ['city', 'town'].includes(item.level) ? 'Town / city' : 'Neighborhood'),
     parent_path: IS_SOUTH_AFRICA
       ? Array.from(new Set(parentPathParts.filter(Boolean))).join(', ')
       : (item.level === 'district' ? 'Uganda' : `${item.district} District`),
@@ -2405,6 +2424,41 @@ router.get('/locations/suggest', async (req, res, next) => {
       return res.json({ ok: true, data: [], meta: { canonical: true, max_results: limit } });
     }
 
+    if (!IS_SOUTH_AFRICA) {
+      const road = require('../utils/ugandaLocationRegistry').mainRoadCorridorByQuery(query);
+      if (road) {
+        const districts = Array.from(new Set(road.areas.map((area) => area.district)));
+        return res.json({
+          ok: true,
+          data: [publicCanonicalLocationPayload({
+            key: road.key,
+            canonical_key: road.key,
+            name: road.name,
+            location: road.name,
+            district: districts.length === 1 ? districts[0] : districts.slice(0, 2).join(', '),
+            level: 'road',
+            match: 'exact_alias',
+            confidence: 1,
+            auto_resolvable: true,
+            listing_count: 0
+          })],
+          meta: {
+            canonical: true,
+            query,
+            max_results: limit,
+            road: true,
+            road_areas: road.areas.map((area) => area.name),
+            did_you_mean: false,
+            did_you_mean_suggestions: [],
+            disambiguation_required: false,
+            disambiguation_suggestions: [],
+            unmatched: false,
+            approval_blocked: false
+          }
+        });
+      }
+    }
+
     const counts = await loadPublicLocationSuggestionCounts({ listingType, studentPortal });
     const suggestions = canonicalLocationSuggestions(query, counts, limit);
     const exactSuggestions = suggestions.filter((item) => item.match === 'exact_alias' && item.auto_resolvable === true);
@@ -2523,14 +2577,36 @@ async function listPropertiesHandler(req, res, next) {
     const area = cleanText(req.query.area || req.query.search || req.query.query);
     const referenceLookup = listingReferenceQuery(area);
     let canonicalLocationKeys = parseCanonicalLocationKeys(req.query);
-    if (!canonicalLocationKeys.length && (area || district) && !referenceLookup) {
+    let roadScope = null;
+    if (!IS_SOUTH_AFRICA && !referenceLookup) {
+      const roads = require('../utils/ugandaLocationRegistry');
+      const matchedRoads = [
+        ...canonicalLocationKeys.map((key) => roads.mainRoadCorridorByKey(key)).filter(Boolean),
+        ...((!canonicalLocationKeys.length && area) ? [roads.mainRoadCorridorByQuery(area)].filter(Boolean) : [])
+      ];
+      if (matchedRoads.length) {
+        const roadKeys = new Set(matchedRoads.map((road) => road.key));
+        canonicalLocationKeys = canonicalLocationKeys.filter((key) => !roadKeys.has(key));
+        roadScope = roads.mainRoadSearchScope(matchedRoads.map((road) => road.key));
+      }
+    }
+    if (!canonicalLocationKeys.length && (area || district) && !referenceLookup && !roadScope) {
       const legacyCanonicalLocation = canonicalizeUgandaLocation(area, district);
       if (legacyCanonicalLocation) canonicalLocationKeys = [legacyCanonicalLocation.key];
     }
     const requestedNearbyKm = toNullableFloat(req.query.nearby_km ?? req.query.nearbyKm ?? req.query.nearby);
     const nearbyKm = Math.max(0, Math.min(7, requestedNearbyKm ?? 0));
-    const canonicalLocationScope = canonicalLocationSearchScope(canonicalLocationKeys, nearbyKm);
-    if (canonicalLocationKeys.length !== canonicalLocationScope.selected.length) {
+    const placeScope = canonicalLocationSearchScope(canonicalLocationKeys, nearbyKm);
+    const canonicalLocationScope = roadScope
+      ? {
+        selected: [...roadScope.selected, ...placeScope.selected],
+        exact: [...roadScope.exact, ...placeScope.exact],
+        nearby: placeScope.nearby,
+        area_names: roadScope.area_names,
+        area_districts: roadScope.area_districts
+      }
+      : placeScope;
+    if (canonicalLocationKeys.length !== placeScope.selected.length) {
       return res.status(400).json({
         ok: false,
         error: `Choose a valid suggested ${ACTIVE_COUNTRY_NAME} location before searching.`,
@@ -2989,6 +3065,8 @@ async function listPropertiesHandler(req, res, next) {
           p.longitude,
           p.students_welcome,
           p.agent_id,
+          p.lister_name,
+          p.lister_type,
           p.lister_phone,
           ${extraFieldsSelectSql},
           COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
@@ -3010,10 +3088,13 @@ async function listPropertiesHandler(req, res, next) {
           END AS listed_by,
           ${listingOriginSql('p')} AS listing_origin,
           COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered') AS registration_status,
+          a.full_name AS agent_name,
+          a.company_name AS agent_company,
           img.url AS primary_image_url,
           staff_img.url AS staff_primary_image_url
         FROM public_page
         JOIN properties p ON p.id = public_page.id
+        LEFT JOIN agents a ON a.id = p.agent_id
         LEFT JOIN LATERAL (
           SELECT i.url
           FROM property_images i
@@ -3065,6 +3146,7 @@ async function listPropertiesHandler(req, res, next) {
           p.source,
           p.listed_via,
           p.lister_name,
+          p.lister_type,
           p.lister_phone,
           p.lister_email,
           ${extraFieldsSelectSql},
@@ -3090,7 +3172,9 @@ async function listPropertiesHandler(req, res, next) {
             WHEN p.agent_id IS NOT NULL THEN COALESCE(a.registration_status, 'not_registered')
             WHEN p.lister_type = 'agent' THEN COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered')
             ELSE COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered')
-          END AS registration_status
+          END AS registration_status,
+          a.full_name AS agent_name,
+          a.company_name AS agent_company
         FROM properties p
         LEFT JOIN agents a ON a.id = p.agent_id
         ${where}
@@ -3254,6 +3338,10 @@ async function listPropertiesHandler(req, res, next) {
           availability: row.status,
           sponsored: row.featured === true,
           listing_origin: row.listing_origin || (foundOnlinePublic ? 'found_online' : (row.listed_by || 'private')),
+          agent_name: foundOnlinePublic ? null : (cleanText(row.agent_name) || null),
+          agent_company: foundOnlinePublic ? null : (cleanText(row.agent_company) || null),
+          lister_name: foundOnlinePublic ? null : (rowListerName || null),
+          lister_type: row.lister_type || null,
           canonical_location_id: publicLocationMatchForRow(row, canonicalLocationScope)?.canonical_location_id || row.canonical_location_id || null,
           canonical_location_level: canonicalDisplay.level,
           location_match: publicLocationMatchForRow(row, canonicalLocationScope),

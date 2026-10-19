@@ -47,6 +47,7 @@
     "inventory:continuous-monitor": "node scripts/run-continuous-social-monitor.js",
     "inventory:report-listing-data-quality": "node scripts/report-listing-data-quality.js",
     "inventory:report-pending-intake-rejections": "node scripts/report-pending-intake-rejections.js",
+    "inventory:report-stale-house-titles": "node scripts/report-stale-house-titles.js",
     "inventory:import-source-posts": "node scripts/import-found-online-source-posts.js",
     "inventory:sweep-social-platforms": "node scripts/sweep-social-platform-posts.js",
     "inventory:source-coverage": "node scripts/run-source-coverage.js",

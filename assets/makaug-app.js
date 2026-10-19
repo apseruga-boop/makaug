@@ -8096,7 +8096,7 @@ function ensurePublicResultsHeader(category) {
       left.innerHTML = "";
       left.appendChild(subtitle);
     }
-  } else if (countId) {
+  } else if (countId && key !== "rent") {
     let countEl = document.getElementById(countId);
     if (!countEl) {
       countEl = document.createElement("strong");
@@ -46150,13 +46150,52 @@ function getCanonicalEnglishPropertyTitle(property = {}) {
   return `${bedPrefix}${kindNoun} in ${location}`;
 }
 
+function listingIsLandOrPlotForTitle(property = {}) {
+  const listingType = String(property?.type || property?.listing_type || property?.category || "").toLowerCase();
+  const typeKey = String(property?.subtype || property?.property_type || "").toLowerCase();
+  if (listingType === "land") return true;
+  if (listingType === "commercial") return false;
+  return /^(?:land|plots?)$/.test(typeKey) || (/\bplots?\b/.test(typeKey) && !/\b(house|home|apartment|flat)\b/.test(typeKey));
+}
+
+function publicTypeNounForTitle(property = {}) {
+  const rawType = String(property?.subtype || property?.property_type || "").trim();
+  const typeKey = rawType.toLowerCase();
+  if (listingIsLandOrPlotForTitle(property)) {
+    if (/\bplots?\b/.test(typeKey) && !/\bland\b/.test(typeKey) && !/\b(house|home)\b/.test(typeKey)) {
+      return rawType.replace(/\b[a-z]/g, (char) => char.toUpperCase());
+    }
+    if (/\bland\b/.test(typeKey) && !/\b(house|home)\b/.test(typeKey)) return rawType;
+    return "Land";
+  }
+  return rawType;
+}
+
+function publicTitleContradictsType(property = {}, text = "") {
+  if (!listingIsLandOrPlotForTitle(property)) return false;
+  const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+  const seoTitle = extra.seo_title || extra.canonical?.seo_title || "";
+  return /\b(house|home|bungalow|villa|maisonette|duplex|townhouse)\b/i.test(`${text || ""} ${seoTitle}`);
+}
+
+function generatedTypeHeadingForTitle(property = {}) {
+  const listingType = normalizeType(property?.type || property?.listing_type || property?.category || "");
+  const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ");
+  const noun = publicTypeNounForTitle(property) || (listingType === "land" ? "Land" : "Property");
+  const beds = Number(property?.beds ?? property?.bedrooms);
+  const bedPrefix = !listingIsLandOrPlotForTitle(property) && Number.isFinite(beds) && beds > 0 ? `${beds}bdrm ` : "";
+  const intent = listingType === "rent" ? " for Rent" : (listingType === "sale" || listingType === "land" ? " for Sale" : "");
+  return `${bedPrefix}${noun}${intent}${location ? ` in ${location}` : ""}`.trim();
+}
+
 function getLocalizedPropertyTitle(property = {}) {
   const translated = getLocalizedListingText(property, "title", "");
-  if (translated) return collapseDuplicateTransactionTitle(translated);
+  if (translated && !publicTitleContradictsType(property, translated)) return collapseDuplicateTransactionTitle(translated);
+  if (publicTitleContradictsType(property, translated || property?.title)) return generatedTypeHeadingForTitle(property);
   if ((currentLang || "en") !== "en") return getCanonicalEnglishPropertyTitle(property);
   // A title corrected by staff or King review is shown as written (the API
   // flags it); otherwise found-online rows get a generic factual title.
-  if (property?.public_copy_reviewed?.title === true && String(property?.title || "").trim()) {
+  if (property?.public_copy_reviewed?.title === true && String(property?.title || "").trim() && !publicTitleContradictsType(property, property.title)) {
     return collapseDuplicateTransactionTitle(property.title);
   }
   if (!isFoundOnlineListing(property)) return collapseDuplicateTransactionTitle(property?.title) || translatePropertyUi("Property");
@@ -46916,6 +46955,20 @@ function studentCardExtraHtml(p = {}, theme = publicCardTheme("student", { stude
   return `${tagHtml}${amenityHtml}`;
 }
 
+// Same order as the property page: the agent on agent_id, then the agency,
+// then lister_type. An agent listing must not fall through to Private Owner.
+function publicListerAttribution(p = {}, broker = null) {
+  const resolvedBroker = broker || findBrokerById(p?.agent || p?.agent_id);
+  const agentName = String(resolvedBroker?.name || p?.agent_name || "").trim();
+  if (agentName) return agentName;
+  const agency = String(resolvedBroker?.company || p?.agent_company || "").trim();
+  if (agency) return agency;
+  const listerType = String(p?.lister_type || p?.listed_by || "").toLowerCase();
+  const listerName = String(p?.lister_name || p?.lister_display_name || p?.contact_display_name || "").trim();
+  if (/\b(agent|broker|agency)\b/.test(listerType)) return listerName || translateListingLabel("Agent");
+  return listerName || translateListingLabel("Private Owner");
+}
+
 function studentCardFooterText(p = {}) {
   const nearestUniversity = inferStudentNearestUniversity(p);
   const walkText = String(p.student_walk_text || "").trim();
@@ -46942,7 +46995,7 @@ function studentCardFooterText(p = {}) {
   const studentMode = options.student === true;
   const displayType = studentMode ? "student" : p.type;
   const theme = publicCardTheme(displayType, { student: studentMode });
-  const footerText = studentMode ? studentCardFooterText(p) : (broker ? broker.name : translateListingLabel("Private Owner"));
+  const footerText = studentMode ? studentCardFooterText(p) : publicListerAttribution(p, broker);
   const badgeRow = listingBadgeRowHtml(p, {
     student: studentMode,
     categoryPage: options.categoryPage || "",
@@ -50167,6 +50220,9 @@ function mapRemotePropertyForUi(p, options = {}) {
     inquiry_reference: p?.inquiry_reference || "",
     inquiry_count: Number(p?.inquiry_count || p?.lead_count || p?.leads || 0) || 0,
     agent: p?.agent_id || p?.agent || null,
+    agent_name: p?.agent_name || "",
+    agent_company: p?.agent_company || "",
+    lister_type: p?.lister_type || "",
     lister_display_name: p?.lister_name || p?.contact_display_name || "",
     area_highlights: extraFields.area_highlights || p?.area_highlights || "",
     translations: extraFields.translations || p?.translations || {},
@@ -59326,7 +59382,7 @@ async function openDetail(id, options = {}) {
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
 	      const landTitleLabel = normalizedType === "land" ? publicLandTitleBadgeLabel(getLandTitleAvailabilityValue(p)) : "";
-	      const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
+	      const ownerDisplayName = publicListerAttribution(p, broker);
   const thirdPartyDetail = isFoundOnlineListing(p);
   // Found online with consented staff photos: the gallery shows them and the
   // source preview card isn't the main image.
