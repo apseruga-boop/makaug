@@ -2302,12 +2302,46 @@ async function listPropertySourceRegistry({ db, limit = 250 } = {}) {
   };
 }
 
+function knownUgandanSourcePages() {
+  return BASE_PROPERTY_SOURCE_REGISTRY.filter((item) => (
+    sourceRecordKind(item) === 'source_page'
+    && String(item.status || 'active').toLowerCase() !== 'blocked'
+  ));
+}
+
+function knownChannelKey(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/^@+/, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function knownUgandanChannelMention(text = '') {
+  const raw = String(text || '');
+  if (!raw.trim()) return '';
+  const haystack = ` ${knownChannelKey(raw)} `;
+  const compact = raw.toLowerCase();
+  for (const source of knownUgandanSourcePages()) {
+    const name = knownChannelKey(source.name);
+    if (name.length >= 8 && haystack.includes(` ${name} `)) return source.name;
+    const handle = knownChannelKey(source.handle);
+    if (handle.length >= 8 && (haystack.includes(` ${handle} `) || compact.includes(`@${handle}`) || compact.includes(`/${handle}`))) {
+      return source.name || source.handle;
+    }
+  }
+  return '';
+}
+
 const exported = {
   PROPERTY_SOURCE_REGISTRY_BATCH_ID,
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
   X_SEARCH_REGISTRY_LOCALIZED_MARKER,
   PROPERTY_HASHTAG_WATCHLIST,
   getPropertySourceRegistry,
+  knownUgandanChannelMention,
   normalizeSourceForDb,
   sourceRecordKind,
   sourceRecordLabel,
