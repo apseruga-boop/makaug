@@ -2124,6 +2124,47 @@ function commercialUseInSearch(input = '') {
   return asksForPremises(COMMERCIAL_USE_WEAK);
 }
 
+/**
+ * The pre-filled messages behind the "WhatsApp us" buttons on makaug.com.
+ *
+ * 19 Oct 2026: from makaug.com/land/nansana-wakiso a visitor sent "Hi makaug, I'm
+ * looking for land or a plot. Please help me find available land listings,
+ * compare details, and contact the seller or broker safely. Page: …". The word
+ * "broker" sent it down the find-an-agent route and he was handed a list of
+ * agents instead of land. The page he was on said what he wanted: land, in
+ * Nansana, Wakiso.
+ *
+ * A pre-filled message is turned into the plain search it stands for, using the
+ * category and the area in the page address, before anything tries to guess.
+ */
+const WEBSITE_PREFILL_RULES = [
+  { re: /looking for land or a plot/i, query: 'land for sale' },
+  { re: /looking for a home or investment property/i, query: 'property for sale' },
+  { re: /looking for a rental/i, query: 'property to rent' },
+  { re: /looking for student accommodation/i, query: 'student accommodation' },
+  { re: /looking for commercial property for my business/i, query: 'commercial property' }
+];
+const WEBSITE_PREFILL_NON_AREA_SEGMENTS = new Set([
+  'land', 'sale', 'rent', 'students', 'student', 'commercial', 'for-sale', 'to-rent', 'houses', 'homes',
+  'properties', 'property', 'brokers', 'agents', 'search', 'plots', 'rentals'
+]);
+function websitePrefillSearchText(input = '') {
+  const text = normalizeInput(input);
+  if (!/^hi makaug\b/i.test(text)) return '';
+  const rule = WEBSITE_PREFILL_RULES.find((entry) => entry.re.test(text));
+  if (!rule) return '';
+  let area = '';
+  const page = text.match(/\bPage:\s*(?:https?:\/\/)?makaug\.com(\/[^\s?#]*)?/i);
+  if (page && page[1]) {
+    const segments = page[1].split('/').map((part) => part.trim().toLowerCase()).filter(Boolean);
+    const slug = segments.slice(1).find((part) => !WEBSITE_PREFILL_NON_AREA_SEGMENTS.has(part) && /^[a-z][a-z-]*[a-z]$/.test(part));
+    if (slug && !/^(?:[0-9a-f]{8}-|page-)/.test(slug)) {
+      area = slug.split('-').filter(Boolean).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    }
+  }
+  return area ? `${rule.query} in ${area}` : rule.query;
+}
+
 function inferListingTypeFromStartRequest(input, entities = {}) {
   const text = normalizeInput(input).toLowerCase();
   const entityType = normalizeListingType(entities?.listing_type || entities?.listingType || '');
@@ -10597,6 +10638,7 @@ const PROPERTY_TYPE_KEYWORDS = [
   { value: 'apartment', re: /\b(apartment|flat)\b/i },
   { value: 'townhouse', re: /\b(townhouse)\b/i },
   { value: 'bungalow', re: /\b(bungalow)\b/i },
+  { value: 'single room', re: /\b(single\s+rooms?|bed[-\s]?sitters?|one\s+room)\b/i },
   { value: 'studio', re: /\b(studio)\b/i },
   { value: 'duplex', re: /\b(duplex)\b/i },
   { value: 'hostel', re: /\b(hostel|dorm|dormitory)\b/i },
@@ -11083,9 +11125,12 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', 
   const e = entities && typeof entities === 'object' ? entities : {};
   const parsedSearchType = parseSearchType(clean);
   const entitySearchType = e.listing_type || e.listingType;
+  // Somebody asking FOR a petrol station is looking for business premises. A
+  // station named as a landmark ("plot behind Total fuel station") is not that.
+  const asksForStation = /\b(?:for|need|want|wants|looking for|buy|rent|lease|find)\s+(?:an?\s+|the\s+|some\s+)?(?:petrol|filling|fuel|gas|service)\s+stations?\b/i.test(clean);
   const categorySearchType = ['land', 'student', 'commercial'].includes(parsedSearchType)
     ? parsedSearchType
-    : null;
+    : (asksForStation ? 'commercial' : null);
 
   let searchType = normalizeListingType(
     categorySearchType || entitySearchType || parsedSearchType || fallbackType || 'any'
@@ -11601,6 +11646,19 @@ function whatsappPropertyTypeFilterSql(values, propertyType, searchType, alias =
   if (normalizeListingType(searchType || 'any') === 'student'
     && /^(hostel|hostels|dorm|dormitory|room|rooms|student|students|single room|double room|accommodation)$/.test(clean)) return '';
   const prefix = alias && /^[a-z_][a-z0-9_]*$/i.test(String(alias)) ? `${alias}.` : '';
+  // 19 Oct 2026: "single room for rent Muyenga" returned a 4-bedroom house, because
+  // "single room" was not a property type and the search dropped it. A single
+  // room is also advertised as a bedsitter, a studio or a one-bedroom unit.
+  if (clean === 'single room') {
+    values.push('\\m(single[\\s_-]+room|bed[\\s_-]?sitter|studio|one[\\s_-]+room)');
+    const roomIdx = values.length;
+    return ` AND (
+      COALESCE(${prefix}property_type, '') ~* $${roomIdx}
+      OR COALESCE(${prefix}title, '') ~* $${roomIdx}
+      OR COALESCE(${prefix}description, '') ~* $${roomIdx}
+      OR (COALESCE(${prefix}bedrooms, 0) = 1 AND LOWER(COALESCE(${prefix}listing_type, '')) IN ('rent', 'rental', 'to_rent'))
+    )`;
+  }
   const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '[\\s_-]+');
   values.push(`\\m${escaped}`);
   const idx = values.length;
@@ -15827,7 +15885,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const draft = session.listing_draft || {};
   const sessionData = session.session_data || {};
   const intentResult = runtime.intent || null;
-  const cleanBody = normalizeInput(body);
+  const cleanBody = websitePrefillSearchText(body) || normalizeInput(body);
   const bodyUpper = normUpper(body);
   const compactUpper = normalizeOptKeyword(bodyUpper);
 
@@ -19536,6 +19594,10 @@ module.exports.__test = {
   employeePendingStoredMedia,
   employeeVideoEvidenceOnly,
   employeePropertyFacts,
+  websitePrefillSearchText,
+  extractNaturalSearchFilters,
+  whatsappPropertyTypeFilterSql,
+  commercialUseInSearch,
   employeePropertyMissing,
   isEmployeeNewPropertyCaptionBoundary,
   employeeCaptionLikelySameProperty,
