@@ -1196,6 +1196,25 @@ function mainRoadCorridorByQuery(value = '') {
   return mainRoadByAlias.get(key) || null;
 }
 
+function mainRoadLiveListingCount(road, rows = []) {
+  if (!road) return 0;
+  const areaKeys = new Set((road.areas || []).map((area) => String(area.key || '').trim().toLowerCase()).filter(Boolean));
+  const areaNames = new Set((road.areas || []).map((area) => String(area.name || '').trim().toLowerCase()).filter(Boolean));
+  const districts = new Set((road.areas || []).map((area) => String(area.district || '').trim().toLowerCase()).filter(Boolean));
+  let total = 0;
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const count = Math.max(0, Number(row.listing_count ?? row.count) || 0);
+    if (!count) return;
+    const canonicalId = String(row.canonical_location_id || row.canonical_key || '').trim().toLowerCase();
+    const area = String(row.area || '').split(',')[0].trim().toLowerCase();
+    const district = String(row.district || '').trim().toLowerCase();
+    const keyMatch = canonicalId && areaKeys.has(canonicalId);
+    const areaMatch = area && areaNames.has(area) && (!district || districts.has(district));
+    if (keyMatch || areaMatch) total += count;
+  });
+  return total;
+}
+
 function mainRoadSearchScope(keysOrQueries = []) {
   const roads = [];
   const seenRoads = new Set();
@@ -1256,6 +1275,7 @@ module.exports = {
   editSimilarity,
   mainRoadCorridorByKey,
   mainRoadCorridorByQuery,
+  mainRoadLiveListingCount,
   mainRoadSearchScope,
   MAIN_ROAD_CORRIDORS
 };

@@ -43234,6 +43234,108 @@ function seoRouteStateHandoffPayload(page) {
   };
 }
 
+function publicRouteFiltersFromSearch(search = "") {
+  const qs = new URLSearchParams(String(search || "").replace(/^\?/, ""));
+  return {
+    propertyType: normalizeInput(qs.get("property_type") || qs.get("propertyType") || qs.get("room_type") || ""),
+    transactionType: normalizeInput(qs.get("transaction_type") || qs.get("transactionType") || ""),
+    listingOrigin: normalizeInput(qs.get("listing_origin") || qs.get("listingOrigin") || qs.get("origin_type") || qs.get("origin") || ""),
+    minPrice: normalizeInput(qs.get("min_price") || qs.get("minPrice") || ""),
+    maxPrice: normalizeInput(qs.get("max_price") || qs.get("maxPrice") || qs.get("budget") || ""),
+    bedrooms: normalizeInput(qs.get("bedrooms") || qs.get("beds") || qs.get("min_beds") || ""),
+    maxBeds: normalizeInput(qs.get("max_beds") || qs.get("maxBeds") || ""),
+    bathrooms: normalizeInput(qs.get("bathrooms") || qs.get("baths") || ""),
+    amenities: normalizeInput(qs.get("amenities") || ""),
+    furnished: normalizeInput(qs.get("furnished") || qs.get("furnishing") || ""),
+    sort: normalizeInput(qs.get("sort") || ""),
+    minSize: normalizeInput(qs.get("min_size") || qs.get("minSize") || ""),
+    maxSize: normalizeInput(qs.get("max_size") || qs.get("maxSize") || ""),
+    landTitleType: normalizeInput(qs.get("land_title_type") || qs.get("landTitleType") || ""),
+    commercialType: normalizeInput(qs.get("commercial_type") || qs.get("commercialType") || ""),
+    studentCampus: normalizeInput(qs.get("student_campus") || qs.get("studentCampus") || ""),
+    maxDistance: normalizeInput(qs.get("max_distance_km") || qs.get("maxDistanceKm") || "")
+  };
+}
+
+function publicRouteFilterAssignments(page, filters = {}) {
+  const key = normalizePageKey(page);
+  const prefix = key === "students" ? "student" : key;
+  const rows = [];
+  const add = (id, value, customId = "") => {
+    const text = String(value || "").trim();
+    if (text) rows.push({ id, value: text, customId });
+  };
+  add(`${prefix}-origin-f`, filters.listingOrigin);
+  if (filters.sort && filters.sort !== "newest") add(`${prefix}-sort-f`, filters.sort);
+  if (key === "rent" || key === "sale") {
+    add(`${prefix}-min-price-f`, filters.minPrice, `${prefix}-min-price-custom-f`);
+    add(`${prefix}-price-f`, filters.maxPrice, `${prefix}-max-price-custom-f`);
+    add(`${prefix}-min-beds-f`, filters.bedrooms);
+    add(`${prefix}-beds-f`, filters.maxBeds);
+    add(`${prefix}-baths-f`, filters.bathrooms);
+    add(`${prefix}-type-f`, filters.propertyType);
+    add(`${prefix}-amenity-f`, filters.amenities);
+    if (key === "rent") add("rent-furnished-f", filters.furnished);
+    if (key === "sale") add("sale-title-f", filters.landTitleType);
+  } else if (key === "students") {
+    add("student-type-quick-f", filters.propertyType);
+    add("student-budget-f", filters.maxPrice, "student-budget-custom-f");
+    add("student-uni-f", filters.studentCampus);
+    add("student-amenity-f", filters.amenities);
+    add("student-distance-f", filters.maxDistance);
+  } else if (key === "commercial") {
+    add("commercial-transaction-f", filters.transactionType);
+    add("commercial-type-f", filters.commercialType || filters.propertyType);
+    add("commercial-min-price-f", filters.minPrice, "commercial-min-price-custom-f");
+    add("commercial-price-f", filters.maxPrice, "commercial-max-price-custom-f");
+    add("commercial-size-f", filters.minSize);
+    add("commercial-max-size-f", filters.maxSize);
+  } else if (key === "land") {
+    add("land-transaction-f", filters.transactionType);
+    add("land-type-f", filters.landTitleType || filters.propertyType);
+    add("land-title-f", filters.landTitleType);
+    add("land-min-price-f", filters.minPrice, "land-min-price-custom-f");
+    add("land-price-f", filters.maxPrice, "land-max-price-custom-f");
+    add("land-min-size-f", filters.minSize);
+    add("land-max-size-f", filters.maxSize);
+  }
+  return rows;
+}
+
+function applyPublicRouteFilterControl(selectId, customId, value) {
+  const text = String(value || "").trim();
+  if (!text || typeof document === "undefined" || !document.getElementById) return false;
+  const select = document.getElementById(selectId);
+  if (select && Array.from(select.options || []).some((option) => option.value === text)) {
+    select.value = text;
+    return true;
+  }
+  const custom = customId ? document.getElementById(customId) : null;
+  if (custom) {
+    custom.value = text;
+    return true;
+  }
+  return false;
+}
+
+function hydratePublicCategoryFiltersFromRoute(page) {
+  if (typeof document === "undefined" || !document.getElementById) return false;
+  const payload = routeSearchHandoffPayload(page);
+  const filters = payload?.filters || {};
+  if (!Object.values(filters).some(Boolean) && !payload?.radiusKm) return false;
+  let applied = false;
+  publicRouteFilterAssignments(page, filters).forEach((row) => {
+    if (applyPublicRouteFilterControl(row.id, row.customId, row.value)) applied = true;
+  });
+  const radius = payload?.radiusKm;
+  if (radius) {
+    const key = normalizePageKey(page);
+    const prefix = key === "students" ? "student" : key;
+    if (applyPublicRouteFilterControl(`${prefix}-radius-f`, "", String(radius))) applied = true;
+  }
+  return applied;
+}
+
 function routeSearchHandoffPayload(page) {
   const targetPage = normalizePageKey(page);
   if (!sectionSearchConfigFor(targetPage)) return null;
@@ -43241,17 +43343,10 @@ function routeSearchHandoffPayload(page) {
   const query = normalizeInput(qs.get("q") || qs.get("query") || qs.get("search") || "");
   const area = normalizeInput(qs.get("area") || qs.get("district") || qs.get("location") || qs.get("campus") || qs.get("university") || "");
   const locations = normalizeInput(qs.get("locations") || qs.get("location_ids") || "");
-  const filters = {
-    propertyType: normalizeInput(qs.get("property_type") || qs.get("propertyType") || qs.get("room_type") || qs.get("commercial_type") || qs.get("land_title_type") || ""),
-    transactionType: normalizeInput(qs.get("transaction_type") || qs.get("transactionType") || ""),
-    listingOrigin: normalizeInput(qs.get("listing_origin") || qs.get("listingOrigin") || qs.get("origin_type") || ""),
-    minPrice: normalizeInput(qs.get("min_price") || qs.get("minPrice") || ""),
-    maxPrice: normalizeInput(qs.get("max_price") || qs.get("maxPrice") || qs.get("budget") || ""),
-    bedrooms: normalizeInput(qs.get("bedrooms") || qs.get("beds") || ""),
-    bathrooms: normalizeInput(qs.get("bathrooms") || qs.get("baths") || ""),
-    amenities: normalizeInput(qs.get("amenities") || ""),
-    sort: normalizeInput(qs.get("sort") || "")
-  };
+  const filters = publicRouteFiltersFromSearch(window.location.search || "");
+  if (!filters.propertyType) {
+    filters.propertyType = normalizeInput(qs.get("commercial_type") || qs.get("land_title_type") || "");
+  }
   const hasFilters = Object.values(filters).some(Boolean);
   if (!query && !area && !locations && !hasFilters) return seoRouteStateHandoffPayload(targetPage);
   const radiusKmParam = normalizeInput(qs.get("radiusKm") || qs.get("radius_km") || "");
@@ -43293,8 +43388,16 @@ function heroSearchRouteUrl(page, payload = {}) {
   if (filters.minPrice) params.set("min_price", String(filters.minPrice));
   if (filters.maxPrice) params.set("max_price", String(filters.maxPrice));
   if (filters.bedrooms) params.set("bedrooms", String(filters.bedrooms));
+  if (filters.maxBeds) params.set("max_beds", String(filters.maxBeds));
   if (filters.bathrooms) params.set("bathrooms", String(filters.bathrooms));
   if (filters.amenities) params.set("amenities", String(filters.amenities));
+  if (filters.furnished) params.set("furnished", String(filters.furnished));
+  if (filters.minSize) params.set("min_size", String(filters.minSize));
+  if (filters.maxSize) params.set("max_size", String(filters.maxSize));
+  if (filters.landTitleType) params.set("land_title_type", String(filters.landTitleType));
+  if (filters.commercialType) params.set("commercial_type", String(filters.commercialType));
+  if (filters.studentCampus) params.set("student_campus", String(filters.studentCampus));
+  if (filters.maxDistance) params.set("max_distance_km", String(filters.maxDistance));
   if (filters.sort) params.set("sort", String(filters.sort));
   const queryString = params.toString();
   return `${route}${queryString ? `?${queryString}` : ""}`;
@@ -43320,6 +43423,7 @@ function applyHeroSearchHandoff(page) {
   const payload = consumeHeroSearchHandoff(page) || routeSearchHandoffPayload(page);
   if (!payload) return false;
   if (!payload.preservePath) updateHeroSearchRoute(page, payload, payload.source || "hero_search_handoff");
+  hydratePublicCategoryFiltersFromRoute(page);
   const rawRadiusValue = payload.radiusKm || payload.radius || "";
   const radiusValue = rawRadiusValue ? (radiusKmSelectValue(rawRadiusValue) || String(rawRadiusValue)) : "";
   if (payload.nearState) {
@@ -50825,15 +50929,34 @@ function ensurePublicPaginationContainer(category) {
   return el;
 }
 
+function resolvePublicCategoryPaginationTotal(state, passedTotal = 0, inventoryTotal = null) {
+  if (inventoryTotal > 0 && state && !state.totalAuthoritative) {
+    state.total = inventoryTotal;
+    state.totalAuthoritative = true;
+  }
+  return inventoryTotal > 0 && state?.totalAuthoritative ? Number(inventoryTotal) : Math.max(0, Number(passedTotal) || 0);
+}
+
+function publicCategoryResultsRangeText({ pageStart = 0, pageEnd = 0, total = 0, unknownTotal = false, hasMore = false } = {}) {
+  if (unknownTotal) {
+    return pageEnd ? `Showing ${pageStart}-${pageEnd}${hasMore ? "+" : ""} properties` : "No properties found";
+  }
+  return total ? `Showing ${pageStart}-${pageEnd} of ${total} properties` : "No properties found";
+}
+
 function renderPublicCategoryPagination(category, options = {}) {
   const key = publicPaginationKey(category);
   const el = ensurePublicPaginationContainer(key);
   const state = publicPaginationStateFor(key);
   if (!key || !el || !state) return;
   const authoritative = authoritativePublicCategoryPageRows(key);
-  const total = authoritative
+  const passedTotal = authoritative
     ? authoritative.total
     : Math.max(0, Number(options.total ?? state.total) || 0);
+  const inventoryTotal = state.mode === "api" && !state.totalAuthoritative && authoritative?.totalAuthoritative !== true
+    ? unfilteredPublicCategoryInventoryTotal(key)
+    : null;
+  const total = resolvePublicCategoryPaginationTotal(state, passedTotal, inventoryTotal);
   const totalPages = publicPaginationPageCount(total);
   const page = authoritative
     ? authoritative.page
@@ -50850,8 +50973,8 @@ function renderPublicCategoryPagination(category, options = {}) {
   const unknownTotal = state.mode === "api" && !state.totalAuthoritative;
   const hasMore = options.hasMore ?? authoritative?.hasMore ?? state.hasMore;
   const rangeText = unknownTotal
-    ? (pageEnd ? `Showing ${pageStart}-${pageEnd}${hasMore ? "+" : ""} properties` : "No properties found")
-    : (total ? `Showing ${pageStart}-${pageEnd} of ${total} properties` : "No properties found");
+    ? (pageEnd ? `Showing ${pageStart}-${pageEnd}${hasMore ? "+" : ""} properties` : publicCategoryResultsRangeText({ pageStart, pageEnd, total, unknownTotal, hasMore }))
+    : publicCategoryResultsRangeText({ pageStart, pageEnd, total, unknownTotal, hasMore });
   const disabledClass = "opacity-45 cursor-not-allowed";
   const enabledClass = "hover:bg-green-50 hover:border-green-400";
   const buttonClass = "min-h-[44px] min-w-[44px] rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-700 transition-colors";
@@ -51120,6 +51243,7 @@ async function goToPublicCategoryPage(category, page = 1) {
 
 function publicInventoryRouteSearchPath(category) {
   const page = category === "student" ? "students" : normalizePageKey(category);
+  hydratePublicCategoryFiltersFromRoute(page);
   const controlPath = publicCategoryControlSearchPath(page);
   if (controlPath) return controlPath;
   const payload = routeSearchHandoffPayload(page);
@@ -51155,6 +51279,12 @@ function publicInventoryRouteSearchPath(category) {
   if (filters.transactionType) params.set("transaction_type", String(filters.transactionType));
   if (filters.landTitleType) params.set("land_title_type", String(filters.landTitleType));
   if (filters.listingOrigin) params.set("listing_origin", String(filters.listingOrigin));
+  if (filters.furnished) params.set("furnished", String(filters.furnished));
+  if (filters.maxBeds) params.set("max_beds", String(filters.maxBeds));
+  if (filters.minSize) params.set("min_size", String(filters.minSize));
+  if (filters.maxSize) params.set("max_size", String(filters.maxSize));
+  if (filters.studentCampus) params.set("student_campus", String(filters.studentCampus));
+  if (filters.maxDistance) params.set("max_distance_km", String(filters.maxDistance));
   if (filters.sort) params.set("sort", String(filters.sort));
   else if (publicMoneyPageSort(page)) params.set("sort", publicMoneyPageSort(page));
   return `/api/properties/search?${params.toString()}`;
@@ -52571,12 +52701,30 @@ async function fetchCanonicalAutoWidenedFirstPage(category, initialPath) {
   return lastAttempt;
 }
 
+function canonicalMobileFilterCountText(category, total = 0) {
+  // The to-rent page no longer shows an "N properties found" count. The mobile
+  // More filters line is that same count, so rent keeps the action label.
+  if (publicPaginationKey(category) === "rent") {
+    return { results: "View results", apply: "Show results" };
+  }
+  const count = Math.max(0, Number(total) || 0);
+  return { results: `${count} results`, apply: `Show ${count} results` };
+}
+
 function updateCanonicalMobileFilterCount(category, total = 0) {
   const shell = document.getElementById(sectionSearchShellId(category));
   const count = shell?.querySelector("[data-canonical-mobile-result-count]");
   const close = shell?.querySelector("[data-canonical-mobile-apply-count]");
-  if (count) count.textContent = `${Math.max(0, Number(total) || 0)} results`;
-  if (close) close.textContent = `Show ${Math.max(0, Number(total) || 0)} results`;
+  const label = canonicalMobileFilterCountText(category, total);
+  if (count) count.textContent = label.results;
+  if (close) close.textContent = label.apply;
+}
+
+function unfilteredPublicCategoryInventoryTotal(category) {
+  const key = publicPaginationKey(category);
+  if (!key || hasActivePublicCategoryFilter(key) || publicCategoryHasRouteSearch(key)) return null;
+  const stat = publicOpportunityStatForCategory(key);
+  return stat > 0 ? stat : null;
 }
 
 function sectionSearchSelectMarkup(config, field) {
@@ -52601,6 +52749,7 @@ function syncSectionSearchShell(page, options = {}) {
   restoreCanonicalLocationRouteState(config);
   const shell = document.getElementById(sectionSearchShellId(config.key));
   if (!shell) return false;
+  hydratePublicCategoryFiltersFromRoute(config.key);
   const shellInput = shell.querySelector(".section-search-text-input");
   const legacyInput = document.getElementById(config.queryId);
   const routePayload = routeSearchHandoffPayload(config.key);
@@ -52735,7 +52884,12 @@ function sectionSearchFilterPayload(config, values = {}) {
     minPrice: parseInt(values.minPrice || "0", 10) || 0,
     maxPrice: parseInt(values.maxPrice || "0", 10) || 0,
     bedrooms: values.bedrooms || "",
+    maxBeds: values.maxBeds || "",
+    bathrooms: values.bathrooms || "",
     amenities: values.amenities || "",
+    furnished: values.furnished || "",
+    minSize: values.minSize || "",
+    maxSize: values.maxSize || "",
     commercialType: config.key === "commercial" ? (values.commercialType || values.propertyType || "") : "",
     landTitleType: config.key === "land" ? (values.landTitleType || values.propertyType || "") : "",
     sort: values.sort || "newest",

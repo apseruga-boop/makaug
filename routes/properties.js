@@ -2344,9 +2344,17 @@ async function loadPublicLocationSuggestionCounts({ listingType = '', studentPor
   ));
   const canonicalRows = canonicalizeLocationRows(result.rows);
   const directCounts = new Map(canonicalRows.map((row) => [row.canonical_key, Number(row.listing_count) || 0]));
+  const counts = canonicalLocationRollupCounts(directCounts);
+  if (!IS_SOUTH_AFRICA) {
+    const roads = require('../utils/ugandaLocationRegistry');
+    roads.MAIN_ROAD_CORRIDORS.forEach((road) => {
+      const corridor = roads.mainRoadCorridorByKey(road.key);
+      counts.set(road.key, roads.mainRoadLiveListingCount(corridor, result.rows));
+    });
+  }
   cached = {
     createdAt: Date.now(),
-    counts: canonicalLocationRollupCounts(directCounts)
+    counts
   };
   publicLocationSuggestCache.set(cacheKey, cached);
   return cached.counts;
@@ -2425,9 +2433,11 @@ router.get('/locations/suggest', async (req, res, next) => {
     }
 
     if (!IS_SOUTH_AFRICA) {
-      const road = require('../utils/ugandaLocationRegistry').mainRoadCorridorByQuery(query);
+      const roads = require('../utils/ugandaLocationRegistry');
+      const road = roads.mainRoadCorridorByQuery(query);
       if (road) {
         const districts = Array.from(new Set(road.areas.map((area) => area.district)));
+        const counts = await loadPublicLocationSuggestionCounts({ listingType, studentPortal });
         return res.json({
           ok: true,
           data: [publicCanonicalLocationPayload({
@@ -2440,7 +2450,7 @@ router.get('/locations/suggest', async (req, res, next) => {
             match: 'exact_alias',
             confidence: 1,
             auto_resolvable: true,
-            listing_count: 0
+            listing_count: Number(counts.get(road.key)) || 0
           })],
           meta: {
             canonical: true,
