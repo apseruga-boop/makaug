@@ -171,6 +171,130 @@ test('Entebbe Road and the other main roads search the areas along them', () => 
   assert.match(properties, /mainRoadSearchScope/);
 });
 
+test('a main-road suggestion counts the live listings in the areas along that road', () => {
+  const entebbe = roads.mainRoadCorridorByQuery('Entebbe Road');
+  const kitende = entebbe.areas.find((area) => area.name === 'Kitende');
+  const nalumunye = entebbe.areas.find((area) => area.name === 'Nalumunye');
+  const seguku = entebbe.areas.find((area) => area.name === 'Seguku');
+  const kajjansi = entebbe.areas.find((area) => area.name === 'Kajjansi');
+  assert.ok(kitende?.key && nalumunye?.key && seguku?.key && kajjansi?.key);
+  const rows = [
+    { canonical_location_id: kitende.key, area: 'Kitende', district: 'Wakiso', listing_count: 4 },
+    { canonical_location_id: nalumunye.key, area: 'Nalumunye', district: 'Wakiso', listing_count: 3 },
+    { area: 'Seguku', district: 'Wakiso', listing_count: 2 },
+    { canonical_location_id: kajjansi.key, area: 'Kajjansi, Wakiso', district: 'Wakiso', listing_count: 5 },
+    { canonical_location_id: 'wakiso:wakiso', area: '', district: 'Wakiso', listing_count: 40 },
+    { canonical_location_id: kitende.key, area: 'Kitende', district: 'Wakiso', listing_count: 1 }
+  ];
+  assert.equal(roads.mainRoadLiveListingCount(entebbe, rows), 15);
+  assert.equal(roads.mainRoadLiveListingCount(roads.mainRoadCorridorByQuery('Gayaza Road'), rows), 0);
+  assert.match(properties, /mainRoadLiveListingCount\(corridor, result\.rows\)/);
+  assert.match(properties, /listing_count: Number\(counts\.get\(road\.key\)\) \|\| 0/);
+  assert.doesNotMatch(properties, /listing_count: 0/);
+});
+
+test('a results URL hydrates every filter, including Agent listed, before the search runs', () => {
+  const filtersFromSearch = new Function(`
+    function normalizeInput(value) { return String(value || "").replace(/\\s+/g, " ").trim(); }
+    ${extractFunction(app, 'publicRouteFiltersFromSearch')}
+    return publicRouteFiltersFromSearch;
+  `)();
+  const filters = filtersFromSearch('?listing_origin=agent&furnished=furnished&min_price=500000&max_price=2000000&bedrooms=2&max_beds=4&bathrooms=1&property_type=apartment&amenities=parking&sort=price_asc');
+  assert.equal(filters.listingOrigin, 'agent');
+  assert.equal(filters.furnished, 'furnished');
+  assert.equal(filters.minPrice, '500000');
+  assert.equal(filters.maxPrice, '2000000');
+  assert.equal(filters.bedrooms, '2');
+  assert.equal(filters.maxBeds, '4');
+  assert.equal(filters.bathrooms, '1');
+  assert.equal(filters.propertyType, 'apartment');
+  assert.equal(filters.amenities, 'parking');
+  assert.equal(filters.sort, 'price_asc');
+
+  const assignments = new Function(`
+    function normalizePageKey(page) { return page === 'to-rent' ? 'rent' : page; }
+    ${extractFunction(app, 'publicRouteFilterAssignments')}
+    return publicRouteFilterAssignments;
+  `)();
+  const rows = assignments('rent', filters);
+  const byId = Object.fromEntries(rows.map((row) => [row.id, row.value]));
+  assert.equal(byId['rent-origin-f'], 'agent');
+  assert.equal(byId['rent-furnished-f'], 'furnished');
+  assert.equal(byId['rent-min-price-f'], '500000');
+  assert.equal(byId['rent-price-f'], '2000000');
+  assert.equal(byId['rent-min-beds-f'], '2');
+  assert.equal(byId['rent-beds-f'], '4');
+  assert.equal(byId['rent-baths-f'], '1');
+  assert.equal(byId['rent-type-f'], 'apartment');
+  assert.equal(byId['rent-amenity-f'], 'parking');
+  assert.equal(byId['rent-sort-f'], 'price_asc');
+
+  const nodes = new Map();
+  rows.forEach((row) => {
+    nodes.set(row.id, { tagName: 'SELECT', value: '', options: [{ value: '' }, { value: row.value }] });
+    if (row.customId) nodes.set(row.customId, { tagName: 'INPUT', value: '' });
+  });
+  const applyControl = new Function('nodes', `
+    const document = { getElementById(id) { return nodes.get(id) || null; } };
+    ${extractFunction(app, 'applyPublicRouteFilterControl')}
+    return applyPublicRouteFilterControl;
+  `)(nodes);
+  rows.forEach((row) => {
+    assert.equal(applyControl(row.id, row.customId, row.value), true);
+    assert.equal(nodes.get(row.id).value, row.value);
+  });
+
+  const searchPath = extractFunction(app, 'publicInventoryRouteSearchPath');
+  assert.ok(searchPath.indexOf('hydratePublicCategoryFiltersFromRoute(page)') < searchPath.indexOf('publicCategoryControlSearchPath(page)'));
+  const handoff = extractFunction(app, 'applyHeroSearchHandoff');
+  assert.ok(handoff.indexOf('hydratePublicCategoryFiltersFromRoute(page)') < handoff.indexOf('filterListings("rent")'));
+  assert.match(extractFunction(app, 'syncSectionSearchShell'), /hydratePublicCategoryFiltersFromRoute\(config\.key\)/);
+  assert.match(extractFunction(app, 'sectionSearchFilterPayload'), /furnished: values\.furnished/);
+  assert.match(extractFunction(app, 'heroSearchRouteUrl'), /filters\.listingOrigin\) params\.set\("listing_origin"/);
+  assert.match(extractFunction(app, 'heroSearchRouteUrl'), /filters\.furnished\) params\.set\("furnished"/);
+});
+
+test('mobile to-rent does not repeat an N results count under More filters', () => {
+  const label = new Function(`
+    function publicPaginationKey(category) { return category === 'to-rent' ? 'rent' : category; }
+    ${extractFunction(app, 'canonicalMobileFilterCountText')}
+    return canonicalMobileFilterCountText;
+  `)();
+  assert.deepEqual(label('rent', 1045), { results: 'View results', apply: 'Show results' });
+  assert.deepEqual(label('sale', 1045), { results: '1045 results', apply: 'Show 1045 results' });
+  assert.match(extractFunction(app, 'updateCanonicalMobileFilterCount'), /canonicalMobileFilterCountText\(category, total\)/);
+  assert.match(extractFunction(app, 'ensurePublicResultsHeader'), /countId && key !== "rent"/);
+});
+
+test('unfiltered to-rent pagination uses the inventory total instead of 1-24+', () => {
+  const resolve = new Function(`${extractFunction(app, 'resolvePublicCategoryPaginationTotal')}\nreturn resolvePublicCategoryPaginationTotal;`)();
+  const range = new Function(`${extractFunction(app, 'publicCategoryResultsRangeText')}\nreturn publicCategoryResultsRangeText;`)();
+  const state = { mode: 'api', total: 24, totalAuthoritative: false };
+  const total = resolve(state, 24, 1045);
+  assert.equal(total, 1045);
+  assert.equal(state.totalAuthoritative, true);
+  const unknownTotal = state.mode === 'api' && !state.totalAuthoritative;
+  assert.equal(range({
+    pageStart: 1,
+    pageEnd: 24,
+    total,
+    unknownTotal,
+    hasMore: true
+  }), 'Showing 1-24 of 1045 properties');
+  assert.equal(range({
+    pageStart: 1,
+    pageEnd: 24,
+    total: 24,
+    unknownTotal: true,
+    hasMore: true
+  }), 'Showing 1-24+ properties');
+  const inventory = extractFunction(app, 'unfilteredPublicCategoryInventoryTotal');
+  assert.match(inventory, /hasActivePublicCategoryFilter\(key\)/);
+  assert.match(inventory, /publicCategoryHasRouteSearch\(key\)/);
+  assert.match(extractFunction(app, 'renderPublicCategoryPagination'), /resolvePublicCategoryPaginationTotal\(state, passedTotal, inventoryTotal\)/);
+  assert.match(extractFunction(app, 'renderPublicCategoryPagination'), /publicCategoryResultsRangeText\(/);
+});
+
 test('a road name is still not district evidence for the location guardrail', () => {
   assert.doesNotMatch(stripRoadNamePhrases('House on Entebbe Road in Kitende'), /\bEntebbe\b/);
   const entebbe = roads.canonicalLocationByKey('wakiso:entebbe');
