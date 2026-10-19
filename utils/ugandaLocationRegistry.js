@@ -1067,6 +1067,167 @@ function haversineKm(a = {}, b = {}) {
   return 6371 * (2 * Math.atan2(Math.sqrt(chord), Math.sqrt(1 - chord)));
 }
 
+// Main-road searches name a corridor, not a district. "Entebbe Road" is the
+// places along that road (Kitende, Nalumunye, …). These aliases are not place
+// aliases and are not district evidence: staff location checks still strip
+// road phrases before a district is read from the text.
+const MAIN_ROAD_CORRIDORS = [
+  {
+    key: 'road:entebbe-road',
+    name: 'Entebbe Road',
+    aliases: ['Entebbe Road', 'Entebbe Rd', 'Kampala-Entebbe Road', 'Kampala Entebbe Road', 'Kampala–Entebbe Road'],
+    areas: [
+      ['Najjanankumbi', 'Kampala'], ['Namasuba', 'Wakiso'], ['Lubowa', 'Wakiso'], ['Seguku', 'Wakiso'],
+      ['Zana', 'Wakiso'], ['Bunamwaya', 'Wakiso'], ['Ndejje', 'Wakiso'], ['Lweza', 'Wakiso'],
+      ['Kajjansi', 'Wakiso'], ['Kitende', 'Wakiso'], ['Bwebajja', 'Wakiso'], ['Akright City', 'Wakiso'],
+      ['Namulanda', 'Wakiso'], ['Kisubi', 'Wakiso'], ['Kawuku', 'Wakiso'], ['Abayita Ababiri', 'Wakiso'],
+      ['Kitala', 'Wakiso'], ['Nkumba', 'Wakiso'], ['Katabi', 'Wakiso'], ['Entebbe', 'Wakiso'],
+      ['Nalumunye', 'Wakiso']
+    ]
+  },
+  {
+    key: 'road:gayaza-road',
+    name: 'Gayaza Road',
+    aliases: ['Gayaza Road', 'Gayaza Rd'],
+    areas: [
+      ['Kisaasi', 'Kampala'], ['Kyanja', 'Kampala'], ['Komamboga', 'Kampala'], ['Kanyanya', 'Kampala'],
+      ['Mpererwe', 'Kampala'], ['Najjera', 'Wakiso'], ['Kungu', 'Wakiso'], ['Kasangati', 'Wakiso'],
+      ['Gayaza', 'Wakiso'], ['Wampewo', 'Wakiso'], ['Namulonge', 'Wakiso'], ['Katalemwa', 'Wakiso'],
+      ['Kiwenda', 'Wakiso']
+    ]
+  },
+  {
+    key: 'road:jinja-road',
+    name: 'Jinja Road',
+    aliases: ['Jinja Road', 'Jinja Rd', 'Kampala-Jinja Road', 'Kampala Jinja Road'],
+    areas: [
+      ['Nakawa', 'Kampala'], ['Mbuya', 'Kampala'], ['Bugolobi', 'Kampala'], ['Kinawataka', 'Kampala'],
+      ['Kyambogo', 'Kampala'], ['Kireka', 'Wakiso'], ['Bweyogerere', 'Wakiso'], ['Namanve', 'Mukono'],
+      ['Seeta', 'Mukono'], ['Mukono', 'Mukono'], ['Nalufenya', 'Jinja'], ['Bugembe', 'Jinja'],
+      ['Jinja', 'Jinja']
+    ]
+  },
+  {
+    key: 'road:bombo-road',
+    name: 'Bombo Road',
+    aliases: ['Bombo Road', 'Bombo Rd', 'Kampala-Bombo Road', 'Kampala Bombo Road'],
+    areas: [
+      ['Wandegeya', 'Kampala'], ['Makerere', 'Kampala'], ['Mulago', 'Kampala'], ['Bwaise', 'Kampala'],
+      ['Kawempe', 'Kampala'], ['Kalerwe', 'Kampala'], ['Maganjo', 'Wakiso'], ['Kawanda', 'Wakiso'],
+      ['Matugga', 'Wakiso'], ['Bombo', 'Luwero']
+    ]
+  },
+  {
+    key: 'road:hoima-road',
+    name: 'Hoima Road',
+    aliases: ['Hoima Road', 'Hoima Rd', 'Kampala-Hoima Road', 'Kampala Hoima Road'],
+    areas: [
+      ['Busega', 'Kampala'], ['Nansana', 'Wakiso'], ['Nabweru', 'Wakiso'], ['Bulenga', 'Wakiso'],
+      ['Sentema', 'Wakiso'], ['Buloba', 'Wakiso'], ['Nkoowe', 'Wakiso'], ['Kakiri', 'Wakiso']
+    ]
+  },
+  {
+    key: 'road:masaka-road',
+    name: 'Masaka Road',
+    aliases: ['Masaka Road', 'Masaka Rd', 'Kampala-Masaka Road', 'Kampala Masaka Road'],
+    areas: [
+      ['Nateete', 'Kampala'], ['Ndeeba', 'Kampala'], ['Najjanankumbi', 'Kampala'], ['Bunamwaya', 'Wakiso'],
+      ['Kyengera', 'Wakiso'], ['Nabbingo', 'Wakiso'], ['Nalumunye', 'Wakiso'], ['Maya', 'Wakiso'],
+      ['Nsangi', 'Wakiso'], ['Mpigi', 'Mpigi'], ['Masaka', 'Masaka']
+    ]
+  },
+  {
+    key: 'road:mityana-road',
+    name: 'Mityana Road',
+    aliases: ['Mityana Road', 'Mityana Rd', 'Kampala-Mityana Road', 'Kampala Mityana Road'],
+    areas: [
+      ['Busega', 'Kampala'], ['Bulenga', 'Wakiso'], ['Buloba', 'Wakiso'], ['Mityana', 'Mityana']
+    ]
+  },
+  {
+    key: 'road:ntinda-kira-road',
+    name: 'Ntinda-Kira Road',
+    aliases: ['Ntinda-Kira Road', 'Ntinda Kira Road', 'Ntinda/Kira Road', 'Kira Road', 'Kira Rd', 'Ntinda Road', 'Ntinda Rd'],
+    areas: [
+      ['Ntinda', 'Kampala'], ['Bukoto', 'Kampala'], ['Naguru', 'Kampala'], ['Kiwatule', 'Kampala'],
+      ['Naalya', 'Wakiso'], ['Namugongo', 'Wakiso'], ['Najjera', 'Wakiso'], ['Kyaliwajjala', 'Wakiso'],
+      ['Kira', 'Wakiso']
+    ]
+  }
+];
+
+function roadQueryKey(value = '') {
+  return normalizeLocationKey(value)
+    .replace(/\b(?:rd|road)\b/g, 'road')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const mainRoadByKey = new Map();
+const mainRoadByAlias = new Map();
+MAIN_ROAD_CORRIDORS.forEach((road) => {
+  const areas = road.areas.map(([name, district]) => {
+    const key = `${normalizeLocationKey(district)}:${normalizeLocationKey(name)}`;
+    const entry = registry.find((item) => item.key === key) || null;
+    return {
+      name,
+      district,
+      key: entry && entry.level !== 'district' ? entry.key : '',
+      level: entry?.level || '',
+      entry: entry && entry.level !== 'district' ? entry : null
+    };
+  });
+  const record = { ...road, areas };
+  mainRoadByKey.set(road.key, record);
+  road.aliases.forEach((alias) => {
+    const aliasKey = roadQueryKey(alias);
+    if (aliasKey) mainRoadByAlias.set(aliasKey, record);
+  });
+});
+
+function mainRoadCorridorByKey(value = '') {
+  const key = String(value || '').trim().toLowerCase();
+  return mainRoadByKey.get(key) || null;
+}
+
+function mainRoadCorridorByQuery(value = '') {
+  const key = roadQueryKey(value);
+  if (!key || !/\broad\b/.test(key)) return null;
+  return mainRoadByAlias.get(key) || null;
+}
+
+function mainRoadSearchScope(keysOrQueries = []) {
+  const roads = [];
+  const seenRoads = new Set();
+  (Array.isArray(keysOrQueries) ? keysOrQueries : [keysOrQueries]).forEach((value) => {
+    const road = mainRoadCorridorByKey(value) || mainRoadCorridorByQuery(value);
+    if (!road || seenRoads.has(road.key)) return;
+    seenRoads.add(road.key);
+    roads.push(road);
+  });
+  const exact = [];
+  const seenLocations = new Set();
+  const areaNames = [];
+  const areaDistricts = [];
+  roads.forEach((road) => {
+    road.areas.forEach((area) => {
+      areaNames.push(area.name.toLowerCase());
+      areaDistricts.push(area.district.toLowerCase());
+      if (!area.entry || seenLocations.has(area.entry.key)) return;
+      seenLocations.add(area.entry.key);
+      exact.push(area.entry);
+    });
+  });
+  return {
+    roads: roads.map((road) => ({ key: road.key, name: road.name })),
+    selected: exact,
+    exact,
+    nearby: [],
+    area_names: Array.from(new Set(areaNames)),
+    area_districts: Array.from(new Set(areaDistricts))
+  };
+}
+
 module.exports = {
   CANONICAL_LOCATION_COUNT: registry.length,
   canonicalTownName,
@@ -1092,5 +1253,9 @@ module.exports = {
   haversineKm,
   isExcludedLocationOnly,
   trigramSimilarity,
-  editSimilarity
+  editSimilarity,
+  mainRoadCorridorByKey,
+  mainRoadCorridorByQuery,
+  mainRoadSearchScope,
+  MAIN_ROAD_CORRIDORS
 };
