@@ -1,6 +1,7 @@
 'use strict';
 
 const { isPriceImplausible } = require('./pricePlausibility');
+const { isVerifiedByMakaug } = require('../services/publicAgentEligibilityService');
 
 /**
  * What an anonymous visitor may be sent about a listing or an agent.
@@ -115,17 +116,24 @@ const DIRECT_AGENT_MARKER = '[DIRECT_AGENT_AUTHORISED]';
  */
 function publicAgentPayload(row) {
   if (!row || typeof row !== 'object') return row;
+  const verified = isVerifiedByMakaug(row);
   const {
     user_id: _userId,
     verification_reason: reason,
     private_id_profile_reviewed: _idReviewed,
     profile_claim_pending: _claimPending,
+    identity_document_url: _identityDocumentUrl,
+    identity_document_name: _identityDocumentName,
+    identity_document_type: _identityDocumentType,
+    identity_document_uploaded_at: _identityDocumentUploadedAt,
+    contact_phone_verified_at: _phoneVerifiedAt,
     ...rest
   } = row;
   const note = String(reason || '');
   return {
     ...rest,
-    direct_agent_authorised: note.includes(DIRECT_AGENT_MARKER)
+    direct_agent_authorised: note.includes(DIRECT_AGENT_MARKER),
+    verified_by_makaug: verified
   };
 }
 

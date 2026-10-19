@@ -287,6 +287,7 @@ function mapRemoteAgentForUi(agent = {}) {
     identity_document_uploaded_at: agent.identity_document_uploaded_at || "",
     verification_reason: agent.verification_reason || "",
     direct_agent_authorised: directAgentAuthorised,
+    verified_by_makaug: agent.verified_by_makaug === true,
     private_id_profile_reviewed: agent.private_id_profile_reviewed === true || String(agent.verification_reason || "").includes("[STAFF_REVIEWED_PRIVATE_ID_PROFILE]"),
     profile_claim_pending: typeof agent.profile_claim_pending === "boolean" ? agent.profile_claim_pending : (directAgentAuthorised && !agent.user_id),
     privacy_consent_accepted: agent.privacy_consent_accepted === true,
@@ -44548,6 +44549,118 @@ function listingBadgeRowHtml(p = {}, options = {}) {
   return badges.filter(Boolean).join("");
 }
 
+const VERIFIED_BADGE_LABEL = "Verified by makaug";
+const VERIFIED_BADGE_TIP = "Verified by makaug: ID and phone checked by our team";
+const VERIFIED_ROSETTE_PATH = "M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.818-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.437 2.25c-.415-.165-.866-.25-1.336-.25-2.11 0-3.818 1.79-3.818 4 0 .494.084.965.238 1.4-1.272.65-2.147 2.018-2.147 3.6 0 1.495.782 2.798 1.942 3.486-.02.17-.032.34-.032.514 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.335-.25.62 1.334 1.926 2.25 3.437 2.25 1.512 0 2.818-.916 3.437-2.25.415.163.865.248 1.336.248 2.11 0 3.818-1.79 3.818-4 0-.174-.012-.344-.033-.513 1.158-.687 1.943-1.99 1.943-3.485z";
+const VERIFIED_CHECK_PATH = "M10.15 15.55 6.95 12.35 8.2 11.1 10.15 13.05 15.85 7.35 17.1 8.6z";
+let verifiedBadgeSerial = 0;
+
+function verifiedBadgeDesign() {
+  const fallback = "a";
+  try {
+    const host = String(window.location.hostname || "");
+    const devHost = host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+    if (!devHost) return fallback;
+    const requested = new URLSearchParams(window.location.search).get("verifiedBadge")
+      || document.documentElement.getAttribute("data-verified-badge");
+    if (requested === "a" || requested === "b" || requested === "c") return requested;
+  } catch (_error) {}
+  return fallback;
+}
+
+function agentShowsVerifiedBadge(broker) {
+  if (!broker || broker.verified_by_makaug !== true) return false;
+  const status = String(broker.status || "").toLowerCase();
+  if (status && status !== "approved") return false;
+  const licence = String(broker.licence || broker.licence_number || "").trim();
+  if (/^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-/i.test(licence)) return false;
+  const reason = String(broker.verification_reason || "");
+  if (/public social source onboarding/i.test(reason) || /source profile/i.test(reason)) return false;
+  return true;
+}
+
+function verifiedBadgeSvg(option, size) {
+  const px = Math.max(16, Math.min(24, Number(size) || 18));
+  const check = `<path fill="#fff" d="${VERIFIED_CHECK_PATH}"/>`;
+  if (option === "b") {
+    return `<svg class="makaug-verified-svg" viewBox="0 0 24 24" width="${px}" height="${px}" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" fill="var(--makaug-green, #15803d)"/>${check}</svg>`;
+  }
+  if (option === "c") {
+    const id = `makaug-verified-grad-${++verifiedBadgeSerial}`;
+    return `<svg class="makaug-verified-svg" viewBox="0 0 24 24" width="${px}" height="${px}" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="4" y1="2" x2="20" y2="22" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="var(--makaug-green, #15803d)"/><stop offset="1" stop-color="var(--makaug-green-dark, #14532d)"/></linearGradient></defs><path fill="url(#${id})" d="${VERIFIED_ROSETTE_PATH}"/><circle cx="12" cy="12" r="7.15" fill="none" stroke="#fff" stroke-width="0.9"/><path fill="#fff" d="${VERIFIED_CHECK_PATH}"/></svg>`;
+  }
+  return `<svg class="makaug-verified-svg" viewBox="0 0 24 24" width="${px}" height="${px}" aria-hidden="true" focusable="false"><path fill="var(--makaug-green, #15803d)" d="${VERIFIED_ROSETTE_PATH}"/>${check}</svg>`;
+}
+
+function bindVerifiedBadgeTip() {
+  if (window.__verifiedBadgeTipBound) return;
+  window.__verifiedBadgeTipBound = true;
+  document.addEventListener("click", (event) => {
+    if (event.target && event.target.closest && event.target.closest(".makaug-verified-badge")) return;
+    hideVerifiedBadgeTip();
+  });
+  window.addEventListener("scroll", hideVerifiedBadgeTip, true);
+}
+
+function ensureVerifiedBadgeTip() {
+  let tip = document.getElementById("makaug-verified-tip");
+  if (tip) return tip;
+  tip = document.createElement("div");
+  tip.id = "makaug-verified-tip";
+  tip.className = "makaug-verified-tip";
+  tip.setAttribute("role", "tooltip");
+  tip.hidden = true;
+  document.body.appendChild(tip);
+  return tip;
+}
+
+function hideVerifiedBadgeTip() {
+  const tip = document.getElementById("makaug-verified-tip");
+  if (tip) tip.hidden = true;
+}
+
+function showVerifiedBadgeTip(badge) {
+  if (!badge) return;
+  bindVerifiedBadgeTip();
+  const tip = ensureVerifiedBadgeTip();
+  tip.textContent = badge.getAttribute("data-tip") || VERIFIED_BADGE_TIP;
+  tip.hidden = false;
+  tip.dataset.for = badge.getAttribute("data-badge-id") || "";
+  const rect = badge.getBoundingClientRect();
+  const width = Math.min(240, window.innerWidth - 16);
+  let left = rect.left + (rect.width / 2) - (width / 2);
+  left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+  let top = rect.bottom + 8;
+  if (top + 72 > window.innerHeight) top = Math.max(8, rect.top - 72);
+  tip.style.width = `${width}px`;
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+  badge.setAttribute("aria-describedby", "makaug-verified-tip");
+}
+
+function toggleVerifiedBadgeTip(badge, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const tip = document.getElementById("makaug-verified-tip");
+  const id = badge?.getAttribute("data-badge-id") || "";
+  if (tip && !tip.hidden && tip.dataset.for === id) {
+    hideVerifiedBadgeTip();
+    return;
+  }
+  showVerifiedBadgeTip(badge);
+}
+
+function verifiedAgentBadgeHtml(broker, size = 18) {
+  if (!agentShowsVerifiedBadge(broker)) return "";
+  const option = verifiedBadgeDesign();
+  const label = translateListingLabel(VERIFIED_BADGE_LABEL);
+  const tip = translateListingLabel(VERIFIED_BADGE_TIP);
+  const id = `vb-${++verifiedBadgeSerial}`;
+  return `<span class="makaug-verified-badge is-${option}" data-badge-id="${id}" data-verified-option="${option}" role="img" tabindex="0" aria-label="${adminAttr(label)}" title="${adminAttr(tip)}" data-tip="${adminAttr(tip)}" onclick="toggleVerifiedBadgeTip(this, event)" onmouseenter="showVerifiedBadgeTip(this)" onmouseleave="hideVerifiedBadgeTip()" onkeydown="if(event.key==='Enter'||event.key===' '){toggleVerifiedBadgeTip(this, event)}">${verifiedBadgeSvg(option, size)}</span>`;
+}
+
 function brokerRegistrationMeta(broker) {
   if (broker?.direct_agent_authorised) {
     return {
@@ -47756,6 +47869,7 @@ function brokerCardHtml(b, options = {}) {
       <div class="broker-card-main">
         <div class="broker-card-name-line">
           <h3 class="broker-card-name">${adminEscape(b.name)}</h3>
+          ${verifiedAgentBadgeHtml(b, 18)}
           ${badge ? `<div class="broker-card-badge">${badge}</div>` : ""}
         </div>
         ${brokerCompanyLineHtml(b, "broker-card-role")}
@@ -60132,8 +60246,11 @@ async function openDetail(id, options = {}) {
             <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="detail-broker-profile-link flex items-center gap-3 rounded-xl border border-green-100 bg-green-50/60 p-3 mb-3 hover:border-green-300 hover:bg-green-50 transition">
               ${brokerAvatarHtml({ ...broker, emoji: brokerInitials(broker.name) }, "w-12 h-12")}
               <span class="min-w-0">
-                <span class="block font-semibold text-gray-800 truncate">${broker.name}</span>
-                <span class="block text-sm text-gray-500 truncate">${broker.company || broker.name}</span>
+                <span class="detail-broker-name flex items-center gap-1.5 min-w-0">
+                  <span class="font-semibold text-gray-800 truncate">${adminEscape(broker.name)}</span>
+                  ${verifiedAgentBadgeHtml(broker, 18)}
+                </span>
+                <span class="block text-sm text-gray-500 truncate">${adminEscape(broker.company || broker.name)}</span>
               </span>
             </a>
             ${detailContactActionsHtml}
@@ -60255,7 +60372,7 @@ async function openBrokerProfile(id) {
           <div class="aspect-square w-36 h-36 md:w-44 md:h-44 rounded-full border-[5px] border-white shadow-md overflow-hidden bg-green-50 flex items-center justify-center shrink-0">
             <img src="${adminAttr(photoSrc)}" alt="${adminAttr(b.name)}" class="aspect-square w-full h-full rounded-full object-cover object-center" onerror="this.remove(); this.parentElement.innerHTML='<div class=\\'text-5xl\\'>${adminAttr(b.emoji || "👔")}</div>';">
           </div>
-          <h1 class="mt-4 text-3xl md:text-4xl font-black text-gray-900 leading-tight">${adminEscape(b.name)}</h1>
+          <h1 class="broker-profile-name mt-4 text-3xl md:text-4xl font-black text-gray-900 leading-tight">${adminEscape(b.name)}${verifiedAgentBadgeHtml(b, 22)}</h1>
           ${brokerCompanyLineHtml(b, "text-lg text-gray-600 mt-1 text-center")}
           <div class="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-gray-600">
               <span class="inline-flex items-center gap-1.5"><i class="fas fa-location-dot text-green-600" aria-hidden="true"></i>${adminEscape(b.area)}</span>

@@ -27,7 +27,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1" defer></script>
-  <script src="/assets/makaug-site-i18n.js?v=20261019-site-i18n-v6" defer></script>
+  <script src="/assets/makaug-site-i18n.js?v=20261019-site-i18n-v7" defer></script>
   <meta name="theme-color" content="#15803d">
   <script>
     (function () {
@@ -2352,6 +2352,36 @@
       letter-spacing: -0.03em;
       line-height: 1.2;
     }
+    .makaug-verified-badge {
+      --makaug-green: #15803d;
+      --makaug-green-dark: #14532d;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+      margin-left: 2px;
+      line-height: 0;
+      vertical-align: -0.15em;
+      cursor: help;
+    }
+    .broker-profile-name .makaug-verified-badge { margin-left: 8px; vertical-align: 2px; }
+    .makaug-verified-badge:focus { outline: 2px solid #15803d; outline-offset: 2px; border-radius: 999px; }
+    .makaug-verified-svg { display: block; }
+    .makaug-verified-tip {
+      position: fixed;
+      z-index: 80;
+      max-width: 240px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #14532d;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.35;
+      box-shadow: 0 8px 24px rgba(20, 83, 45, 0.28);
+      pointer-events: none;
+    }
+    .makaug-verified-tip[hidden] { display: none; }
     .broker-card-role { margin: 3px 0 0; color: #166534; font-size: 12.5px; font-weight: 700; line-height: 1.35; }
     .broker-card-bio {
       margin: 8px 0 0;
