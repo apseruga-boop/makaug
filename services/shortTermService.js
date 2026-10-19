@@ -332,21 +332,100 @@ function isStayAvailable(availability = [], checkIn, checkOut) {
 // Row shaping
 // ---------------------------------------------------------------------------
 
-function contactLinks(row) {
+// ~500m. 1° of latitude is about 111km, so 0.0045° is about half a kilometre.
+// Snapping to this grid (the cell centre) is stable for a given pin, so the
+// map does not jump between requests, and it is coarse enough that the exact
+// door is not recoverable from the public JSON.
+const COARSE_STEP_DEG = 0.0045;
+
+function coarseCoordinate(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const snapped = Math.round(n / COARSE_STEP_DEG) * COARSE_STEP_DEG;
+  return Math.round(snapped * 10000) / 10000;
+}
+
+function checklistObject(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+  return typeof raw === 'object' ? raw : {};
+}
+
+function checklistFlag(raw, key) {
+  const value = checklistObject(raw)[key];
+  return value === true || value === 'true' || value === 'pass';
+}
+
+/**
+ * Public "verified" is a staff check, not the host's own tick box.
+ * right_to_let_declared and king_facts_confirmed are not enough: the first
+ * is self-declared, and the second is true of every live listing.
+ */
+function staffVerifiedStay(row = {}) {
+  const checklist = row.moderation_checklist;
+  return checklistFlag(checklist, 'identity_checked')
+    || checklistFlag(checklist, 'contact_details_verified');
+}
+
+/**
+ * Phone and WhatsApp only. Email is never part of a public or enquiry payload.
+ */
+function publicHostContact(row = {}) {
   const phone = normalisePhone(row.host_phone);
   const whatsapp = normalisePhone(row.host_whatsapp || row.host_phone);
   return {
     phone: phone || null,
     phone_display: phone ? phone.replace(/^\+256/, '0') : null,
     tel_href: phone ? `tel:${phone}` : null,
-    whatsapp_href: whatsapp ? `https://wa.me/${whatsapp.replace(/^\+/, '')}` : null,
-    email: row.host_email || null
+    whatsapp_href: whatsapp ? `https://wa.me/${whatsapp.replace(/^\+/, '')}` : null
   };
+}
+
+const PARTNER_PRIVATE_KEYS = [
+  'price_basis',
+  'markup_percent',
+  'source_currency',
+  'source_total',
+  'source_price',
+  'fx_rate',
+  'fx',
+  'host_phone',
+  'host_whatsapp',
+  'host_email',
+  'email',
+  'phone',
+  'contact',
+  'address',
+  'street',
+  'street_address'
+];
+
+/**
+ * Partner hotel cards are public search rows. Street (LiteAPI stores it in
+ * `area`), exact pins, phone, email and the internal rate maths stay here.
+ * The guest-facing UGX price fields are kept.
+ */
+function sanitizePublicPartnerListing(row = {}) {
+  if (!row || typeof row !== 'object') return row;
+  const out = { ...row };
+  for (const key of PARTNER_PRIVATE_KEYS) delete out[key];
+  const source = String(out.source || '').toLowerCase();
+  if (source === 'liteapi' || source === 'hotelbeds') out.area = null;
+  out.latitude = coarseCoordinate(row.latitude);
+  out.longitude = coarseCoordinate(row.longitude);
+  return out;
 }
 
 function normalizeShortTermListing(row = {}, options = {}) {
   if (!row || !row.id) return null;
-  const includeContact = options.includeContact !== false;
+  const includeContact = options.includeContact === true;
   const media = Array.isArray(row.media) ? row.media : [];
   const primary = media.find((item) => item.is_primary) || media[0] || null;
 
@@ -359,9 +438,8 @@ function normalizeShortTermListing(row = {}, options = {}) {
     description: row.description || '',
     district: row.district || '',
     area: row.area || '',
-    address: row.address || null,
-    latitude: row.latitude == null ? null : Number(row.latitude),
-    longitude: row.longitude == null ? null : Number(row.longitude),
+    latitude: coarseCoordinate(row.latitude),
+    longitude: coarseCoordinate(row.longitude),
     place_type: row.place_type || 'entire_place',
     place_type_label: PLACE_TYPES[row.place_type] || PLACE_TYPES.entire_place,
     property_type: row.property_type || null,
@@ -407,10 +485,10 @@ function normalizeShortTermListing(row = {}, options = {}) {
     // score section under it fair, and what tells a guest who they are dealing
     // with before they pick up the phone.
     is_private_listing: (row.source || 'direct') === 'direct',
-    verified: Boolean(row.right_to_let_declared)
+    verified: staffVerifiedStay(row)
   };
 
-  if (includeContact) listing.contact = contactLinks(row);
+  if (includeContact) listing.contact = publicHostContact(row);
   return listing;
 }
 
@@ -568,7 +646,7 @@ async function searchShortTermListings(db, query = {}) {
   };
 }
 
-async function getShortTermListing(db, slugOrId) {
+async function getShortTermListing(db, slugOrId, options = {}) {
   const key = String(slugOrId || '').trim();
   if (!key) return null;
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
@@ -623,7 +701,7 @@ async function getShortTermListing(db, slugOrId) {
     [key]
   );
 
-  return normalizeShortTermListing(result.rows[0]);
+  return normalizeShortTermListing(result.rows[0], options);
 }
 
 /**
@@ -1126,9 +1204,11 @@ module.exports = {
   PUBLIC_STATUSES,
   SHORT_TERM_MARKER,
   createShortTermListing,
+  coarseCoordinate,
   eachNight,
   formatUgx,
   getShortTermListing,
+  publicHostContact,
   isStayAvailable,
   isValidUgandaPhone,
   listPublishedReviews,
@@ -1143,7 +1223,9 @@ module.exports = {
   quoteStay,
   recordShortTermLead,
   reportShortTermListing,
+  sanitizePublicPartnerListing,
   searchShortTermListings,
+  staffVerifiedStay,
   slugify,
   submitShortTermReview,
   validateLead,
