@@ -20,6 +20,21 @@ const {
 } = require('../services/liteapiSupplyService');
 const { affiliateOffersFor } = require('../services/bookingAffiliateService');
 
+const {
+  HOST_PHOTO_TTL_MS,
+  PAYMENT_LINE,
+  createBookingRequest,
+  guestRequestView,
+  hostDecideByToken,
+  hostSession,
+  listingIcs,
+  listStaffRequests,
+  saveIcalUrl,
+  submitVerifiedReview,
+  sweepStayRequests,
+  updateHostAvailability,
+  updateHostPrice
+} = require('../services/shortTermBookingService');
 const { requireAdminApiKey, requireStaffAccess } = require('../middleware/auth');
 const {
   shortTermEnabled,
@@ -627,6 +642,135 @@ router.get('/listings/:id/photos', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Date requests. One message per event. No guest payment is taken here.
+// ---------------------------------------------------------------------------
+
+router.post('/listings/:id/requests', writeLimiter, async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) return res.status(400).json({ ok: false, error: 'Unknown listing' });
+    const request = await createBookingRequest(db, req.params.id, req.body || {});
+    return res.status(201).json({ ok: true, marker: SHORT_TERM_MARKER, ...request, payment_line: PAYMENT_LINE });
+  } catch (error) {
+    return fail(res, error, 'Request could not be saved');
+  }
+});
+
+router.get('/requests/:reference', async (req, res) => {
+  try {
+    const request = await guestRequestView(db, String(req.params.reference || '').trim(), req.query.t);
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ ok: true, request, payment_line: PAYMENT_LINE });
+  } catch (error) {
+    return fail(res, error, 'Request is unavailable');
+  }
+});
+
+router.post('/requests/:reference/review', writeLimiter, async (req, res) => {
+  try {
+    const review = await submitVerifiedReview(db, String(req.params.reference || '').trim(), req.body?.token || req.query.t, req.body || {});
+    return res.status(201).json({ ok: true, review, verified_stay_label: 'Verified stay' });
+  } catch (error) {
+    return fail(res, error, 'Review could not be saved');
+  }
+});
+
+router.get('/listings/:id/calendar.ics', async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) return res.status(400).type('text/plain').send('Unknown listing');
+    const ics = await listingIcs(db, req.params.id);
+    res.set('Content-Type', 'text/calendar; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=300');
+    return res.send(ics);
+  } catch (error) {
+    return fail(res, error, 'Calendar is unavailable');
+  }
+});
+
+router.get('/host/session', async (req, res) => {
+  try {
+    const session = await hostSession(db, req.query.t);
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ ok: true, ...session, payment_line: PAYMENT_LINE });
+  } catch (error) {
+    return fail(res, error, 'Host link is not valid');
+  }
+});
+
+router.post('/host/requests/:reference', writeLimiter, async (req, res) => {
+  try {
+    const decision = String(req.body?.decision || '').trim();
+    if (decision !== 'accept' && decision !== 'decline') {
+      return res.status(400).json({ ok: false, error: 'Say accept or decline' });
+    }
+    const result = await hostDecideByToken(db, String(req.params.reference || '').trim(), req.body?.token, decision);
+    return res.json({ ok: true, ...result, payment_line: PAYMENT_LINE });
+  } catch (error) {
+    return fail(res, error, 'Decision could not be saved');
+  }
+});
+
+router.post('/host/price', writeLimiter, async (req, res) => {
+  try {
+    const result = await updateHostPrice(db, req.body?.token, req.body?.nightly_ugx);
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    return fail(res, error, 'Price could not be saved');
+  }
+});
+
+router.post('/host/availability', writeLimiter, async (req, res) => {
+  try {
+    const result = await updateHostAvailability(db, req.body?.token, req.body || {});
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    return fail(res, error, 'Availability could not be saved');
+  }
+});
+
+router.post('/host/ical', writeLimiter, async (req, res) => {
+  try {
+    const result = await saveIcalUrl(db, req.body?.token, req.body?.url);
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    return fail(res, error, 'Calendar could not be imported');
+  }
+});
+
+router.post('/host/photos', writeLimiter, async (req, res) => {
+  try {
+    const session = await hostSession(db, req.body?.token);
+    const token = createUploadToken(session.listing.id, { ttlMs: HOST_PHOTO_TTL_MS });
+    const photo = await attachListingPhoto(db, session.listing.id, {
+      dataUrl: req.body?.data_url,
+      caption: req.body?.caption,
+      token
+    });
+    return res.status(201).json({ ok: true, photo });
+  } catch (error) {
+    return fail(res, error, 'Photo could not be saved');
+  }
+});
+
+router.get('/staff/booking-requests', requireStaffAccess, async (req, res) => {
+  try {
+    const requests = await listStaffRequests(db);
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, requests, payment_line: PAYMENT_LINE });
+  } catch (error) {
+    return fail(res, error, 'Requests are unavailable');
+  }
+});
+
+router.post('/staff/booking-requests/sweep', requireStaffAccess, async (req, res) => {
+  try {
+    const result = await sweepStayRequests(db);
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    return fail(res, error, 'Sweep failed');
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Staff review queue
 // ---------------------------------------------------------------------------
 
@@ -650,6 +794,7 @@ router.get('/staff/queue', requireStaffAccess, async (req, res) => {
          SELECT COUNT(*)::int AS photo_count FROM st_listing_media WHERE listing_id = l.id
        ) m ON TRUE
        WHERE l.moderation_stage = $1
+          OR ($1 = 'submitted' AND l.reference = 'ST-000001')
        ORDER BY l.created_at DESC
        LIMIT 200`,
       [stage]

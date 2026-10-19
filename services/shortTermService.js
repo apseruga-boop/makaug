@@ -498,21 +498,22 @@ function normalizeShortTermListing(row = {}, options = {}) {
 
 // THE PUBLICATION GATE.
 //
-// Three conditions, and all three have to hold before a short stay is visible
+// Four conditions, and all four have to hold before a short stay is visible
 // to anybody:
 //
 //   status               the listing itself is approved
 //   moderation_stage     it came through the review pipeline
 //   king_facts_confirmed the King signed off the facts
+//   listing_fee_status   the flat listing fee is paid or waived
 //
-// The last one is the point. Approval is not something one person, one stray
-// UPDATE or one bug can grant. If king_facts_confirmed is FALSE the listing
-// does not appear in search, on the map, on its own page, in the sitemap or
-// in the site-wide property count, whatever else has been set.
+// Approval can land before the fee ("approved, awaiting fee"). The listing
+// stays off search, the map and its own page until the fee is paid. The King
+// confirmation is still required: a stray status update is not enough.
 const LIVE_LISTING_SQL = `
   l.status = ANY($LIVE_STATUSES$)
   AND l.moderation_stage = 'approved'
   AND l.king_facts_confirmed = TRUE
+  AND l.listing_fee_status IN ('paid', 'waived')
   AND (l.expires_at IS NULL OR l.expires_at > NOW())
 `.replace('$LIVE_STATUSES$', `'{${PUBLIC_STATUSES.join(',')}}'::text[]`);
 
@@ -583,6 +584,22 @@ function buildSearchFilters(query = {}) {
       FROM st_listing_amenity a
       WHERE a.listing_id = l.id AND a.amenity_slug = ANY($${values.length}::text[])
     ) = ${amenities.length}`);
+  }
+
+  const checkIn = parseDate(query.check_in);
+  const checkOut = parseDate(query.check_out);
+  if (checkIn && checkOut && checkOut > checkIn) {
+    values.push(checkIn);
+    const fromIdx = values.length;
+    values.push(checkOut);
+    const toIdx = values.length;
+    where.push(`NOT EXISTS (
+      SELECT 1 FROM st_availability blocked
+      WHERE blocked.listing_id = l.id
+        AND blocked.is_available = FALSE
+        AND blocked.starts_on < $${toIdx}::date
+        AND blocked.ends_on >= $${fromIdx}::date
+    )`);
   }
 
   return { where: where.join(' AND '), values, amenities };
@@ -730,7 +747,8 @@ async function listShortTermSitemapEntries(db, { limit = 2000 } = {}) {
 
 async function listPublishedReviews(db, listingId, limit = 30) {
   const result = await db.query(
-    `SELECT id, reviewer_name, rating, comment, stayed_on, published_at, created_at
+    `SELECT id, reviewer_name, rating, comment, stayed_on, published_at, created_at,
+            COALESCE(verified_stay, FALSE) AS verified_stay
      FROM st_review
      WHERE listing_id = $1::uuid AND status = 'published'
      ORDER BY COALESCE(published_at, created_at) DESC
@@ -743,7 +761,9 @@ async function listPublishedReviews(db, listingId, limit = 30) {
     rating: toInt(row.rating, 0),
     comment: row.comment || '',
     stayed_on: row.stayed_on ? String(row.stayed_on).slice(0, 10) : null,
-    published_at: row.published_at || row.created_at
+    published_at: row.published_at || row.created_at,
+    verified_stay: row.verified_stay === true,
+    verified_stay_label: row.verified_stay === true ? 'Verified stay' : null
   }));
 }
 

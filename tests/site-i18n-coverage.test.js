@@ -49,6 +49,11 @@ const mustTranslate = [
   'Verified brokers are confirmed by admin review before the public badge is shown.',
   'Verified by makaug',
   'Verified by makaug: ID and phone checked by our team',
+  'Request these dates',
+  'Payment is agreed directly between you and the host. makaug does not take or hold payments.',
+  'Approved, awaiting fee. A pay link follows. The listing goes live when that fee is paid.',
+  'Verified stay',
+  'Short stay terms',
   "Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month. Web or WhatsApp, all 146 districts."
 ];
 for (const lang of LANGS) {
@@ -137,8 +142,8 @@ async function runLayer(lang) {
   }
 
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  assert(/<script src="\/assets\/makaug-site-i18n\.js\?v=20261019-site-i18n-v7" defer><\/script>/.test(html), 'the page loads the current site language pack');
-  assert(fs.readFileSync(path.join(root, 'assets', 'makaug-site-i18n.js'), 'utf8').includes('20261019-site-i18n-v7'), 'the language layer cache version matches the page');
+  assert(/<script src="\/assets\/makaug-site-i18n\.js\?v=20261019-site-i18n-v8" defer><\/script>/.test(html), 'the page loads the current site language pack');
+  assert(fs.readFileSync(path.join(root, 'assets', 'makaug-site-i18n.js'), 'utf8').includes('20261019-site-i18n-v8'), 'the language layer cache version matches the page');
   const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
   assert(app.includes('function getCanonicalEnglishPropertyTitle'), 'non-English visitors get a translatable listing title');
   assert(app.includes('const fromSitePack = siteTranslate(text, lang);'), 'listing labels fall back to the site pack before English');

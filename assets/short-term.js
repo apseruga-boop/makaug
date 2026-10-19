@@ -126,7 +126,17 @@
     "sortRated": "Ma gimito loyo",
     "stays": "kabedo me nino manok",
     "where": "Kany",
-    "wherePh": "Kampala, Entebbe, Jinja…"
+    "wherePh": "Kampala, Entebbe, Jinja…",
+    "requestDates": "Leg nino magi",
+    "paymentDirect": "Cul kimoko atir ikin in ki won ot. makaug pe kwanyo dok pe gwoko cente.",
+    "feeAwaiting": "Kiyee, tye ka kuro cul. Kakube me culo bino. Listing cako nen ka cul otyeko time.",
+    "termsTitle": "Cik me nino manok",
+    "termsBody": "makaug keto kabedo, neno gin ma twero, dok ryeyo welo ki won ot. Won ot aye tye ki tic pi bedo, gwoko, layicens, musolo ki dwoko cente.",
+    "termsLawyer": "Lukwena pa Uganda myero onen cik magi ma peya kimako ni gin aye agiki.",
+    "verifiedStay": "Nino ma kikakaso",
+    "safetyView": "Nen kabedo dok iniang nga ma iculo bot en ma peya iculo.",
+    "safetyName": "Pe icul i akaunt ma nyinge pat.",
+    "safetyReport": "Nong peko ki i listing ka tye gin ma pe atir."
   },
   "am": {
     "adCtaFind": "ማረፊያ ይፍልጉ",
@@ -197,7 +207,17 @@
     "sortRated": "በተሻል የተገመገሙ",
     "stays": "የአጭር ጊዜ ማረፊያዎች",
     "where": "በደት",
-    "wherePh": "Kampala, Entebbe, Jinja…"
+    "wherePh": "Kampala, Entebbe, Jinja…",
+    "requestDates": "እነዚህን ቀናት ይጠይቁ",
+    "paymentDirect": "ክፍያ በቀጥታ በእርስዎና በአስተናጋጁ መካከል ይስማማል። makaug ክፍያ አይወስድም አያቆይምም።",
+    "feeAwaiting": "ጸድቋል፣ ክፍያን ይጠብቃል። የክፍያ አገናኝ ይከተላል። ክፍያው ሲከፈል ማስታወቂያው ይታያል።",
+    "termsTitle": "የአጭር ቆይታ ውሎች",
+    "termsBody": "makaug ቦታውን ይዘረዝራል፣ የሚችለውን ይመረምራል፣ እንግዳውንና አስተናጋጁን ያገናኛል። አስተናጋጁ ለቆይታው፣ ለደህንነት፣ ለፈቃድ፣ ለግብርና ለተመላሽ ገንዘብ ተጠያቂ ነው።",
+    "termsLawyer": "እነዚህ ውሎች እንደ መጨረሻ ከመቆጠራቸው በፊት የኡጋንዳ ጠበቃ ሊገመግማቸው ይገባል።",
+    "verifiedStay": "የተረጋገጠ ቆይታ",
+    "safetyView": "ቦታውን ይመልከቱ እና ከመክፈልዎ በፊት ለማን እንደሚከፍሉ ያረጋግጡ።",
+    "safetyName": "ወደ ሌላ ስም ወዳለው አካውንት በጭራሽ አይክፈሉ።",
+    "safetyReport": "የተሳሳተ ነገር ካለ ከማስታወቂያው ላይ ችግሩን ያሳውቁ።"
   },
   "ar": {
     "adCtaFind": "ابحث عن إقامة",
@@ -268,7 +288,17 @@
     "sortRated": "الأفضل تقييماً",
     "stays": "إقامات قصيرة",
     "where": "أين",
-    "wherePh": "Kampala, Entebbe, Jinja…"
+    "wherePh": "Kampala, Entebbe, Jinja…",
+    "requestDates": "اطلب هذه التواريخ",
+    "paymentDirect": "يُتفق على الدفع مباشرة بينك وبين المضيف. makaug لا تقبض المدفوعات ولا تحتجزها.",
+    "feeAwaiting": "مقبول، بانتظار الرسوم. يلي ذلك رابط الدفع. يظهر الإعلان عند دفع الرسوم.",
+    "termsTitle": "شروط الإقامة القصيرة",
+    "termsBody": "تعرض makaug المكان وتراجع ما تستطيع وتعرّف الضيف بالمضيف. المضيف مسؤول عن الإقامة والسلامة والتراخيص والضريبة والاسترداد.",
+    "termsLawyer": "ينبغي لمحامٍ أوغندي مراجعة هذه الشروط قبل اعتبارها نهائية.",
+    "verifiedStay": "إقامة موثّقة",
+    "safetyView": "عاين المكان وتأكد ممن تدفع له قبل أن تدفع.",
+    "safetyName": "لا تدفع إلى حساب باسم مختلف.",
+    "safetyReport": "أبلغ عن مشكلة من صفحة الإعلان إذا كان هناك خطأ."
   },
   "en": {
     "adCtaFind": "Find a stay",
@@ -339,7 +369,17 @@
     "sortRated": "Best reviewed",
     "stays": "short stays",
     "where": "Where",
-    "wherePh": "Kampala, Entebbe, Jinja…"
+    "wherePh": "Kampala, Entebbe, Jinja…",
+    "requestDates": "Request these dates",
+    "paymentDirect": "Payment is agreed directly between you and the host. makaug does not take or hold payments.",
+    "feeAwaiting": "Approved, awaiting fee. A pay link follows. The listing goes live when that fee is paid.",
+    "termsTitle": "Short stay terms",
+    "termsBody": "makaug lists the place, checks what it can, and introduces the guest and the host. The host is responsible for the stay, for safety, for licences, for tax and for refunds.",
+    "termsLawyer": "A Ugandan lawyer should review these terms before they are treated as final.",
+    "verifiedStay": "Verified stay",
+    "safetyView": "View the place and confirm who you are paying before you pay.",
+    "safetyName": "Never pay into an account in a different name.",
+    "safetyReport": "Report a problem from the listing if something is wrong."
   },
   "lg": {
     "adCtaFind": "Noonya we onoosula",
@@ -410,7 +450,17 @@
     "sortRated": "Ezisiimibwa ennyo",
     "stays": "ebifo eby'okusula",
     "where": "Wa",
-    "wherePh": "Kampala, Entebbe, Jinja…"
+    "wherePh": "Kampala, Entebbe, Jinja…",
+    "requestDates": "Saba ennaku zino",
+    "paymentDirect": "Okusasula mukkiriziganya wakati wo n’omunyumba. makaug tewamba era tewakuma ssente.",
+    "feeAwaiting": "Kikkiriziddwa, kussuubira ssente. Akayungirizi k’okusasula kajja. Listing egenda ku lwebbanga ssente bwe zisasulwa.",
+    "termsTitle": "Obukwakkulizo bw’okusula okumpi",
+    "termsBody": "makaug ewandiika ekifo, ekebera ky’esobola, n’ateeka omugenyi n’omunyumba awamu. Omunyumba ye alina obuvunaanyizibwa ku kusula, obukuumi, layisinsi, musolo n’okuzza ssente.",
+    "termsLawyer": "Munnamateeka wa Uganda asaanye akebere obukwakkulizo buno nga tebunnakolebwa nga bwe bujjuvu.",
+    "verifiedStay": "Okusula okukakasiddwa",
+    "safetyView": "Labako ekifo era okakase ani gw’osasula nga tonnasasula.",
+    "safetyName": "Tosasula ku akawunti erina erinnya eddala.",
+    "safetyReport": "Loopa ekizibu okuva ku listing singa waliwo ekikyamu."
   },
   "ny": {
     "adCtaFind": "Sherura ekyanya",
@@ -481,7 +531,17 @@
     "sortRated": "Ezirikukundwa munonga",
     "stays": "ebyanya by'okuraara",
     "where": "Nkahi",
-    "wherePh": "Kampala, Entebbe, Jinja…"
+    "wherePh": "Kampala, Entebbe, Jinja…",
+    "requestDates": "Saba ebiro ebi",
+    "paymentDirect": "Okuhereza nikwikirizanwa ahagati yawe n’omunyini. makaug teyakira era teyakwata sente.",
+    "feeAwaiting": "Kwikirizibwe, nikurinda sente. Akakwate k’okuhereza nikija. Listing neegenda omumaisho sente zihereirwe.",
+    "termsTitle": "Ebiragiro by’okuraara okuhango",
+    "termsBody": "makaug nehandiika ahantu, nekebera eky’esobora, n’egaita omugenyi n’omunyini. Omunyini niwe aine obuvunanyizibwa aha kuraara, obukuumi, layisensi, omusolo n’okugarura sente.",
+    "termsLawyer": "Munnamateeka wa Uganda asaana akeberere ebiragiro ebi otarikubikozesa nk’ebyaheru.",
+    "verifiedStay": "Okuraara okukakasibwe",
+    "safetyView": "Rora ahantu kandi okakase ou orikuha sente otaraherereza.",
+    "safetyName": "Otarahereza aha akaunti eine izina rindi.",
+    "safetyReport": "Tebeeka ekizibu kuruga aha listing ku orikureeba ekitarikwikiriza."
   },
   "rn": {
     "adCtaFind": "Sherura ahantu",
@@ -552,7 +612,17 @@
     "sortRated": "Ezirikukundwa munonga",
     "stays": "ahantu h'okuraara",
     "where": "Nkahi",
-    "wherePh": "Kampala, Entebbe, Jinja…"
+    "wherePh": "Kampala, Entebbe, Jinja…",
+    "requestDates": "Saba ebiro ebi",
+    "paymentDirect": "Okushashura nikumanyirwa hagati yawe n’omunyini. makaug teyakira kandi teyabika sente.",
+    "feeAwaiting": "Kyemeirwe, nirinda sente. Akakwate k’okushashura nikija. Listing neegenda omumaisho sente zishashuwe.",
+    "termsTitle": "Amateeka y’okuraara ahake",
+    "termsBody": "makaug nehandiika ahantu, nekebera eky’esobora, n’egaita omushyitsi n’omunyini. Omunyini niwe aine obuvunanyizibwa aha kuraara, oburinzi, layisensi, omusoro n’okugarura sente.",
+    "termsLawyer": "Munnamateeka wa Uganda asaana akeberere amateeka aga otarikugakozesa nk’agaheru.",
+    "verifiedStay": "Okuraara okukakasibwe",
+    "safetyView": "Rora ahantu kandi okakase ou orikuha sente otarashashura.",
+    "safetyName": "Otarashashura aha konti eine izina rindi.",
+    "safetyReport": "Menyesha ekizibu kuruga aha listing ku orikureeba ekitarikwikiriza."
   },
   "sm": {
     "adCtaFind": "Noonya ekifo",
@@ -623,7 +693,17 @@
     "sortRated": "Ezisiimibwa eno",
     "stays": "ebifo eby'okusula",
     "where": "Hai",
-    "wherePh": "Kampala, Entebbe, Jinja…"
+    "wherePh": "Kampala, Entebbe, Jinja…",
+    "requestDates": "Saba ennaku zino",
+    "paymentDirect": "Okusasula kukkira wakati wo n’omwami w’ennyumba. makaug tewamba era tewakuma ssente.",
+    "feeAwaiting": "Kikkiriziddwa, kussuubira ssente. Akayungirizi k’okusasula kajja. Listing egenda mu luguudo ssente bwe zisasulwa.",
+    "termsTitle": "Ebiragiro by’okusula okumpi",
+    "termsBody": "makaug ewandiika ekifo, ekebera ky’esobola, n’egatta omugenyi n’omwami w’ennyumba. Omwami w’ennyumba ye alina obuvunaanyizibwa ku kusula, obukuumi, layisinsi, musolo n’okuzza ssente.",
+    "termsLawyer": "Munnamateeka wa Uganda asaanye akebere ebiragiro bino nga tebinnakolebwa nga eby’enkomerero.",
+    "verifiedStay": "Okusula okukakasiddwa",
+    "safetyView": "Laba ekifo era okakase ani gw’osasula nga tonnasasula.",
+    "safetyName": "Tosasula ku akawunti erina erinnya eddala.",
+    "safetyReport": "Loopa ekizibu okuva ku listing singa waliwo ekikyamu."
   },
   "sw": {
     "adCtaFind": "Tafuta malazi",
@@ -694,7 +774,17 @@
     "sortRated": "Zilizopendwa zaidi",
     "stays": "malazi ya muda",
     "where": "Wapi",
-    "wherePh": "Kampala, Entebbe, Jinja…"
+    "wherePh": "Kampala, Entebbe, Jinja…",
+    "requestDates": "Omba tarehe hizi",
+    "paymentDirect": "Malipo yanakubaliwa moja kwa moja kati yako na mwenyeji. makaug haichukui wala kushikilia malipo.",
+    "feeAwaiting": "Imeidhinishwa, inasubiri ada. Kiungo cha kulipa kinafuata. Tangazo linaanza kuonekana ada ikilipwa.",
+    "termsTitle": "Masharti ya kukaa kwa muda mfupi",
+    "termsBody": "makaug inaorodhesha mahali, inakagua inachoweza, na inakutanisha mgeni na mwenyeji. Mwenyeji anawajibika kwa kukaa, usalama, leseni, kodi na marejesho.",
+    "termsLawyer": "Mwanasheria wa Uganda anapaswa kupitia masharti haya kabla hayajachukuliwa kuwa ya mwisho.",
+    "verifiedStay": "Kukaa kulichothibitishwa",
+    "safetyView": "Tazama mahali na uthibitishe unamlipa nani kabla hujalipa.",
+    "safetyName": "Usilipe kwenye akaunti yenye jina tofauti.",
+    "safetyReport": "Ripoti tatizo kutoka kwenye tangazo likitokea kitu kibaya."
   }
 };
 
@@ -1407,6 +1497,7 @@
       ? reviews.map(function (review) {
         return '<div class="st-review"><div class="st-review-head">'
           + '<span class="st-review-name">' + esc(review.reviewer_name) + '</span>'
+          + (review.verified_stay ? '<span class="st-badge">' + esc(t('verifiedStay')) + '</span>' : '')
           + '<span class="st-review-stars">' + stars(review.rating) + '</span></div>'
           + (review.stayed_on ? '<span class="st-review-date">Stayed ' + esc(review.stayed_on) + '</span>' : '')
           + '<p>' + esc(review.comment) + '</p></div>';
@@ -1528,7 +1619,7 @@
       + (listing.external_booking_url
         ? '<a class="st-contact-btn st-contact-form" href="' + esc(listing.external_booking_url) + '" target="_blank" rel="noopener noreferrer nofollow sponsored"><i class="fas fa-arrow-up-right-from-square"></i> See it on ' + esc(listing.partner_name || 'the partner site') + '</a>'
         : '')
-      + '<button class="st-contact-btn st-contact-form" type="button" id="st-enquire-open"><i class="fas fa-envelope"></i> Send your dates instead</button>'
+      + '<button class="st-contact-btn st-contact-form" type="button" id="st-enquire-open"><i class="fas fa-envelope"></i> ' + esc(t('requestDates')) + '</button>'
       + '<div id="st-enquire-shell"></div>'
       + '</div>'
       + '</aside>'
@@ -1544,9 +1635,11 @@
       + '<div style="margin-top:8px"><label class="st-label" for="st-e-email">Email</label><input class="st-input" id="st-e-email" type="email"></div>'
       + '<div style="margin-top:8px"><label class="st-label" for="st-e-guests">Guests</label><input class="st-input" id="st-e-guests" type="number" min="1" max="30"></div>'
       + '<div style="margin-top:8px"><label class="st-label" for="st-e-msg">Message</label><textarea class="st-input" id="st-e-msg" style="min-height:70px" placeholder="What you need to know"></textarea></div>'
+      + '<label class="st-check" style="margin-top:8px"><input type="checkbox" id="st-e-terms" required> '
+      + '<span><a href="/short-term/terms" data-st-link>' + esc(t('termsTitle')) + '</a></span></label>'
       + '<div id="st-enquire-feedback"></div>'
-      + '<button class="st-btn st-btn-primary" type="submit" style="width:100%;margin-top:10px">Send to the host</button>'
-      + '<p class="st-help">This saves your details against the listing and shows you the host’s number. makaug does not pass the message on for you and does not chase a reply.</p>'
+      + '<button class="st-btn st-btn-primary" type="submit" style="width:100%;margin-top:10px">' + esc(t('requestDates')) + '</button>'
+      + '<p class="st-help">' + esc(t('paymentDirect')) + '</p>'
       + '</form>';
   }
 
@@ -1585,26 +1678,28 @@
           var feedback = document.getElementById('st-enquire-feedback');
           var from = document.getElementById('st-d-in');
           var to = document.getElementById('st-d-out');
-          api('/listings/' + encodeURIComponent(listing.id) + '/enquiries', {
+          var terms = document.getElementById('st-e-terms');
+          if (terms && !terms.checked) {
+            if (feedback) feedback.innerHTML = '<p class="st-help">' + esc(t('termsTitle')) + '</p>';
+            return;
+          }
+          api('/listings/' + encodeURIComponent(listing.id) + '/requests', {
             method: 'POST',
             body: {
               guest_name: (document.getElementById('st-e-name') || {}).value,
               guest_phone: (document.getElementById('st-e-phone') || {}).value,
               guest_email: (document.getElementById('st-e-email') || {}).value,
-              party_size: (document.getElementById('st-e-guests') || {}).value,
+              guests: (document.getElementById('st-e-guests') || {}).value,
               message: (document.getElementById('st-e-msg') || {}).value,
               check_in: from ? from.value : null,
-              check_out: to ? to.value : null
+              check_out: to ? to.value : null,
+              terms_accepted: true
             }
           }).then(function (payloadOut) {
-            var c = payloadOut.contact || {};
-            form.innerHTML = '<div class="st-ok"><b>Saved.</b> Now contact '
-              + esc(payloadOut.host_name || 'the host') + ' directly:<br><br>'
-              + (c.whatsapp_href ? '<a class="st-contact-btn st-contact-wa" href="' + esc(c.whatsapp_href)
-                + '" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i> WhatsApp</a>' : '')
-              + (c.tel_href ? '<a class="st-contact-btn st-contact-tel" href="' + esc(c.tel_href)
-                + '"><i class="fas fa-phone"></i> Call ' + esc(c.phone_display || '') + '</a>' : '')
-              + '<p class="st-help" style="margin-top:8px">' + esc(payloadOut.next_step || '') + '</p></div>';
+            form.innerHTML = '<div class="st-ok"><b>' + esc(payloadOut.reference || '') + '</b><p>'
+              + esc(payloadOut.message || '') + '</p>'
+              + (payloadOut.status_url ? '<p><a href="' + esc(payloadOut.status_url) + '">' + esc(payloadOut.status_url) + '</a></p>' : '')
+              + '<p class="st-help">' + esc(payloadOut.payment_line || t('paymentDirect')) + '</p></div>';
           }).catch(function (error) {
             if (feedback) {
               feedback.innerHTML = '<ul class="st-errors">'
@@ -1812,7 +1907,7 @@
       + '<li>The listing is accurate. The photos are of this property. The price is real.</li>'
       + '<li>You deal with guests directly. makaug is a place to be found, not your agent. We do not take bookings, hold deposits or guarantee guests.</li>'
       + '<li>You are responsible for your own tax and licences, including any local hotel tax on short stay accommodation and any income tax due.</li>'
-      + '<li>The fee is <b>' + esc(fee.display) + ' for ' + esc(fee.term_months) + ' months</b>, payable once we approve the listing. We take no commission on any stay.</li>'
+      + '<li>' + esc(t('feeAwaiting')) + ' <b>' + esc(fee.display) + ' for ' + esc(fee.term_months) + ' months</b>.</li>'
       + '<li>We can take a listing down if it is reported, inaccurate, or we cannot reach you.</li>'
       + '</ul></div>'
 
@@ -1821,7 +1916,7 @@
       + '<label class="st-check"><input type="checkbox" id="f-tax"> '
       + '<span>I understand I am responsible for my own tax and any local hotel tax on short stays.</span></label>'
       + '<label class="st-check"><input type="checkbox" id="f-terms-ok" required> '
-      + '<span>I accept the makaug listing terms above.</span></label>'
+      + '<span>I accept the <a href="/short-term/terms" data-st-link>' + esc(t('termsTitle')) + '</a>.</span></label>'
 
       + '<div id="st-list-feedback"></div>'
       + '<p class="st-help" style="margin-top:8px"><i class="fas fa-floppy-disk"></i> '
@@ -2140,7 +2235,7 @@
 
       + '<div class="st-panel">'
       + '<h2>What happens next</h2>'
-      + '<p>Our team checks the listing. Once it is approved you pay the flat listing fee and it goes live for three months.</p>'
+      + '<p>' + esc(t('feeAwaiting')) + '</p>'
       + '<p class="st-help">makaug takes no commission on any stay. Guests will contact you directly on the number you gave us.</p>'
       + '</div>'
       + '<p><a class="st-btn st-btn-primary" href="/short-term" data-st-link>See other short stays</a></p>'
@@ -2430,6 +2525,144 @@
     if (ai) ai.hidden = (name !== 'search');
   }
 
+  function mountTerms() {
+    var view = document.querySelector('#' + ROOT_ID + ' .st-view-detail');
+    if (!view) return;
+    view.innerHTML = '<div class="st-wrap" style="padding:28px 16px 48px;max-width:720px">'
+      + '<h1 style="font-size:1.6rem;font-weight:900">' + esc(t('termsTitle')) + '</h1>'
+      + '<p>' + esc(t('termsBody')) + '</p>'
+      + '<p><b>' + esc(t('paymentDirect')) + '</b></p>'
+      + '<ul><li>' + esc(t('safetyView')) + '</li><li>' + esc(t('safetyName')) + '</li><li>' + esc(t('safetyReport')) + '</li></ul>'
+      + '<p class="st-help">' + esc(t('termsLawyer')) + '</p>'
+      + '<p class="st-help">makaug does not take bookings and does not handle money.</p>'
+      + '</div>';
+  }
+
+  function requestStatusHtml(request) {
+    var accepted = request.status === 'accepted' || request.status === 'completed';
+    var contact = accepted
+      ? '<p><b>' + esc(request.host_name || '') + '</b><br>'
+        + esc(request.host_phone || '') + '<br>'
+        + esc(request.address || '') + '</p>'
+        + (request.check_in_from ? '<p>Check in from ' + esc(request.check_in_from) + '</p>' : '')
+        + (request.house_rules ? '<p>' + esc(request.house_rules) + '</p>' : '')
+      : '';
+    var similar = (request.similar || []).map(function (item) {
+      return '<li><a href="' + esc(item.url || '/short-term') + '" data-st-link>' + esc(item.title || '') + '</a></li>';
+    }).join('');
+    return '<div class="st-wrap" style="padding:28px 16px 48px;max-width:720px">'
+      + '<p class="st-help">' + esc(request.reference || '') + ' · ' + esc(request.status || '') + '</p>'
+      + '<h1 style="font-size:1.5rem;font-weight:900">' + esc(request.title || 'Stay request') + '</h1>'
+      + '<p>' + esc(request.check_in || '') + ' → ' + esc(request.check_out || '') + '</p>'
+      + contact
+      + (similar ? '<h2>Similar places</h2><ul>' + similar + '</ul>' : '')
+      + '<p><b>' + esc(request.payment_line || t('paymentDirect')) + '</b></p>'
+      + '<ul><li>' + esc(t('safetyView')) + '</li><li>' + esc(t('safetyName')) + '</li><li>' + esc(t('safetyReport')) + '</li></ul>'
+      + '</div>';
+  }
+
+  function mountGuestRequest(reference) {
+    var view = document.querySelector('#' + ROOT_ID + ' .st-view-detail');
+    if (!view) return;
+    view.innerHTML = '<div class="st-wrap" style="padding:28px 16px"><p class="st-help">' + esc(t('loading')) + '</p></div>';
+    api('/requests/' + encodeURIComponent(reference) + '?t=' + encodeURIComponent(qs().t || '')).then(function (payload) {
+      view.innerHTML = requestStatusHtml(payload.request || {});
+    }).catch(function (error) {
+      view.innerHTML = '<div class="st-wrap" style="padding:28px 16px"><p>' + esc(error.message) + '</p></div>';
+    });
+  }
+
+  function mountHost() {
+    var view = document.querySelector('#' + ROOT_ID + ' .st-view-detail');
+    if (!view) return;
+    view.innerHTML = '<div class="st-wrap" style="padding:28px 16px"><p class="st-help">' + esc(t('loading')) + '</p></div>';
+    api('/host/session?t=' + encodeURIComponent(qs().t || '')).then(function (payload) {
+      var listing = payload.listing || {};
+      var rows = (payload.requests || []).map(function (row) {
+        var open = row.status === 'requested';
+        return '<article class="st-panel"><p><b>' + esc(row.reference) + '</b> · ' + esc(row.status) + '</p>'
+          + '<p>' + esc(row.check_in) + ' → ' + esc(row.check_out) + ' · ' + esc(row.guest_name || '') + '</p>'
+          + (open
+            ? '<button class="st-btn st-btn-primary" type="button" data-stay-decision="accept" data-stay-ref="' + esc(row.reference) + '">Accept</button> '
+              + '<button class="st-btn" type="button" data-stay-decision="decline" data-stay-ref="' + esc(row.reference) + '">Decline</button>'
+            : '')
+          + '</article>';
+      }).join('');
+      view.innerHTML = '<div class="st-wrap" style="padding:28px 16px 48px;max-width:720px">'
+        + '<h1 style="font-size:1.5rem;font-weight:900">' + esc(listing.title || 'Your place') + '</h1>'
+        + '<p>' + esc(listing.fee_label || '') + '</p>'
+        + (listing.id ? '<p><a href="/api/short-term/listings/' + esc(listing.id) + '/calendar.ics">Download blocked dates</a></p>' : '')
+        + '<p><b>' + esc(t('paymentDirect')) + '</b></p>'
+        + '<form id="st-host-price"><label class="st-label">Nightly price (UGX)</label>'
+        + '<input class="st-input" id="st-host-nightly" value="' + esc(listing.nightly_ugx || '') + '">'
+        + '<button class="st-btn" type="submit">Save price</button></form>'
+        + '<form id="st-host-block" style="margin-top:12px"><label class="st-label">Block dates</label>'
+        + '<input class="st-input" id="st-host-from" type="date"> <input class="st-input" id="st-host-to" type="date">'
+        + '<button class="st-btn" type="submit">Block</button></form>'
+        + '<form id="st-host-photo" style="margin-top:12px"><label class="st-label">Add a photo</label>'
+        + '<input id="st-host-file" type="file" accept="image/jpeg,image/png,image/webp">'
+        + '<button class="st-btn" type="submit">Upload</button></form>'
+        + '<form id="st-host-ical" style="margin-top:12px"><label class="st-label">Airbnb or Booking.com calendar link</label>'
+        + '<input class="st-input" id="st-host-ical-url" placeholder="https://">'
+        + '<button class="st-btn" type="submit">Import</button></form>'
+        + '<div id="st-host-requests">' + (rows || '<p class="st-help">No requests yet.</p>') + '</div>'
+        + '<div id="st-host-feedback"></div></div>';
+      bindHost(payload);
+    }).catch(function (error) {
+      view.innerHTML = '<div class="st-wrap" style="padding:28px 16px"><p>' + esc(error.message) + '</p></div>';
+    });
+  }
+
+  function bindHost(payload) {
+    var token = qs().t || '';
+    var feedback = document.getElementById('st-host-feedback');
+    function note(text) { if (feedback) feedback.textContent = text; }
+    var price = document.getElementById('st-host-price');
+    if (price) price.addEventListener('submit', function (e) {
+      e.preventDefault();
+      api('/host/price', { method: 'POST', body: { token: token, nightly_ugx: (document.getElementById('st-host-nightly') || {}).value } })
+        .then(function () { note('Price saved'); }).catch(function (error) { note(error.message); });
+    });
+    var block = document.getElementById('st-host-block');
+    if (block) block.addEventListener('submit', function (e) {
+      e.preventDefault();
+      api('/host/availability', { method: 'POST', body: {
+        token: token,
+        starts_on: (document.getElementById('st-host-from') || {}).value,
+        ends_on: (document.getElementById('st-host-to') || {}).value,
+        is_available: false
+      } }).then(function () { note('Dates blocked'); }).catch(function (error) { note(error.message); });
+    });
+    var ical = document.getElementById('st-host-ical');
+    if (ical) ical.addEventListener('submit', function (e) {
+      e.preventDefault();
+      api('/host/ical', { method: 'POST', body: { token: token, url: (document.getElementById('st-host-ical-url') || {}).value } })
+        .then(function () { note('Calendar imported'); }).catch(function (error) { note(error.message); });
+    });
+    var photo = document.getElementById('st-host-photo');
+    if (photo) photo.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var file = (document.getElementById('st-host-file') || {}).files;
+      file = file && file[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        api('/host/photos', { method: 'POST', body: { token: token, data_url: reader.result, caption: '' } })
+          .then(function () { note('Photo saved'); }).catch(function (error) { note(error.message); });
+      };
+      reader.readAsDataURL(file);
+    });
+    var box = document.getElementById('st-host-requests');
+    if (box) box.addEventListener('click', function (e) {
+      var button = e.target.closest('[data-stay-decision]');
+      if (!button) return;
+      api('/host/requests/' + encodeURIComponent(button.getAttribute('data-stay-ref')), {
+        method: 'POST',
+        body: { token: token, decision: button.getAttribute('data-stay-decision') }
+      }).then(function () { mountHost(); }).catch(function (error) { note(error.message); });
+    });
+  }
+
   function route() {
     var r = root();
     if (!r) return;
@@ -2466,6 +2699,22 @@
     if (path === '/short-term/list-your-place') {
       setView('list');
       mountList();
+      return;
+    }
+    if (path === '/short-term/terms') {
+      setView('detail');
+      mountTerms();
+      return;
+    }
+    if (path === '/short-term/host') {
+      setView('detail');
+      mountHost();
+      return;
+    }
+    var requestPath = path.match(/^\/short-term\/requests\/([A-Za-z0-9-]+)$/);
+    if (requestPath) {
+      setView('detail');
+      mountGuestRequest(requestPath[1]);
       return;
     }
     if (path.indexOf('/short-term/') === 0) {
@@ -2597,6 +2846,12 @@
     if (!r || !r.classList.contains('active')) return;
     var path = currentPath();
     if (path === '/short-term/list-your-place') { mountList(); return; }
+    if (path === '/short-term/terms') { mountTerms(); return; }
+    if (path === '/short-term/host') { mountHost(); return; }
+    if (/^\/short-term\/requests\/[A-Za-z0-9-]+$/.test(path)) {
+      mountGuestRequest(path.split('/').pop());
+      return;
+    }
     if (path !== '/short-term' && path.indexOf('/short-term/') === 0) {
       mountDetail(path.slice('/short-term/'.length));
       return;
