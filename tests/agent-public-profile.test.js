@@ -10,7 +10,9 @@ const {
   buildAgentPublicSummary,
   agentSummaryDescription,
   isPlaceholderBio,
-  compactUgx
+  compactUgx,
+  composeAgentBio,
+  AGENT_BIO_EN_TEMPLATES
 } = require('../services/agentPublicProfileService');
 
 const listing = (fields) => ({ listing_type: 'sale', property_type: '', district: 'Kampala', area: 'Kyanja', price: 400000000, price_period: 'once', bedrooms: null, extra_fields: {}, ...fields });
@@ -113,6 +115,33 @@ test('one listing, no listings, and land-only agents read naturally', () => {
   assert.match(land.about[0], /land|plot/i);
 });
 
+test('generated bios carry parts the client can compose, and a real bio has none', () => {
+  const rows = [
+    listing({ property_type: 'house', bedrooms: 3, area: 'Kyanja', price: 150e6 }),
+    listing({ listing_type: 'land', area: 'Kira', district: 'Wakiso', price: 80e6 })
+  ];
+  const generated = buildAgentPublicSummary({ id: 'parts-1', full_name: 'Kimuli Brian', company_name: 'Independent agent' }, rows);
+  assert.equal(generated.bio_source, 'generated');
+  assert.ok(Array.isArray(generated.bio_parts) && generated.bio_parts.length >= 1);
+  assert.equal(composeAgentBio(generated.bio_parts, AGENT_BIO_EN_TEMPLATES), generated.bio_display);
+  const sw = JSON.parse(fs.readFileSync('assets/i18n/site-sw.json', 'utf8')).templates;
+  const lg = JSON.parse(fs.readFileSync('assets/i18n/site-lg.json', 'utf8')).templates;
+  const swText = composeAgentBio(generated.bio_parts, sw);
+  const lgText = composeAgentBio(generated.bio_parts, lg);
+  assert.match(swText, /Kyanja/);
+  assert.match(swText, /Kira/);
+  assert.doesNotMatch(swText, /Specialises in/);
+  assert.match(lgText, /Kyanja/);
+  assert.doesNotMatch(lgText, /Specialises in/);
+  const own = buildAgentPublicSummary({ id: 'parts-2', full_name: 'Kazi', bio: 'Kazi helps buyers across Wakiso.' }, rows);
+  assert.equal(own.bio_source, 'agent');
+  assert.equal(own.bio_parts, null);
+  const empty = buildAgentPublicSummary({ id: 'parts-3', full_name: 'Kasulu Francis Atwau', company_name: 'Agency/company', districts_covered: ['Kampala'], bio: 'makaug broker covering Kampala properties.' }, []);
+  assert.match(composeAgentBio(empty.bio_parts, sw), /Kasulu Francis Atwau/);
+  assert.match(composeAgentBio(empty.bio_parts, sw), /Kampala/);
+  assert.doesNotMatch(composeAgentBio(empty.bio_parts, sw), /is an agency on makaug/);
+});
+
 test('the same agent always gets the same wording; meta description is short', () => {
   const rows = [listing({}), listing({ listing_type: 'rent', price: 2e6, price_period: 'mo' })];
   const a = buildAgentPublicSummary({ id: 'same', full_name: 'Same' }, rows);
@@ -133,6 +162,9 @@ test('the API, page meta and profile page use the summary; internal reference nu
   assert.match(route, /loadAgentCardBios/);
   assert.match(route, /bio_display: card\.text/);
   assert.match(route, /bio_source: card\.source/);
+  assert.match(route, /bio_parts: card\.parts/);
+  assert.match(app, /function localizedAgentCardBio/);
+  assert.match(app, /function composeAgentBio/);
   assert.match(route, /AS listing_districts/);
   assert.match(server, /agentPublicProfile\.agentSummaryDescription\(publicSummary, name\)/);
   assert.match(server, /areaServed: publicSummary\?\.districts\?\.length/);

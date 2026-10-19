@@ -24,6 +24,10 @@ for (const lang of LANGS) {
   const missing = Object.keys(reference.phrases).filter((key) => !(key in pack.phrases));
   assert.deepStrictEqual(missing, [], `${lang} pack is missing phrases: ${missing.slice(0, 10).join(' | ')}`);
   assert.deepStrictEqual(pack.patterns.map((p) => p[0]), reference.patterns.map((p) => p[0]), `${lang} patterns must match the reference order`);
+  assert.deepStrictEqual(Object.keys(pack.templates || {}), Object.keys(reference.templates || {}), `${lang} bio templates must match the reference keys`);
+  Object.entries(pack.templates || {}).forEach(([key, value]) => {
+    assert(value && value !== key, `${lang} template ${key} needs a translation`);
+  });
   pack.patterns.forEach(([regex, template]) => {
     const groups = new RegExp(`${regex}|`).exec('').length - 1;
     for (let i = 1; i <= groups; i += 1) {
@@ -37,7 +41,10 @@ const mustTranslate = [
   'Off Plan', 'About Us', 'Properties', 'Featured Properties', 'Updated every morning',
   'Two fresh, checked listings from each property category across Uganda.',
   'Approved agent', 'Land title status pending', 'Houses for Sale', 'Houses for Rent',
-  'Privacy Policy', 'Terms & Conditions', 'Help Centre', 'Safety Tips', 'Download brochure'
+  'Privacy Policy', 'Terms & Conditions', 'Help Centre', 'Safety Tips', 'Download brochure',
+  'Popular property areas', 'No properties found', 'WhatsApp', 'listings', 'listing',
+  'Listing agent?', 'Loading property breakdown...',
+  "Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month. Web or WhatsApp, all 146 districts."
 ];
 for (const lang of LANGS) {
   for (const key of mustTranslate) {
@@ -115,10 +122,18 @@ async function runLayer(lang) {
     assert(!/for sale in/.test(result.title.nodeValue), `${lang}: listing title should be translated by pattern, got ${result.title.nodeValue}`);
     assert(result.title.nodeValue.includes('Kira'), `${lang}: place names stay as they are`);
     assert.strictEqual(result.code.nodeValue, 'Off Plan', `${lang}: script contents are never touched`);
+    assert.notStrictEqual(result.layer.translate('Showing 1-22 of 22 properties', lang), 'Showing 1-22 of 22 properties', `${lang}: result counts translate`);
+    assert.notStrictEqual(result.layer.translate('52 listings', lang), '52 listings', `${lang}: listing counts translate`);
+    assert.notStrictEqual(result.layer.translate('WhatsApp Kimuli Brian', lang), 'WhatsApp Kimuli Brian', `${lang}: WhatsApp name labels translate`);
+    assert.notStrictEqual(result.layer.translate('Call Kimuli Brian', lang), 'Call Kimuli Brian', `${lang}: call name labels translate`);
+    const templates = result.layer.templates(lang);
+    assert(templates && templates.specialises && templates['type.plots'], `${lang}: bio templates are available to the card composer`);
+    assert(templates.specialises.includes('{types}') && templates.specialises.includes('{count}'), `${lang}: specialism template keeps its slots`);
   }
 
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  assert(/<script src="\/assets\/makaug-site-i18n\.js\?v=[^"]+" defer><\/script>/.test(html), 'every page loads the site language layer');
+  assert(/<script src="\/assets\/makaug-site-i18n\.js\?v=20261019-site-i18n-v5" defer><\/script>/.test(html), 'the page loads the current site language pack');
+  assert(fs.readFileSync(path.join(root, 'assets', 'makaug-site-i18n.js'), 'utf8').includes('20261019-site-i18n-v5'), 'the language layer cache version matches the page');
   const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
   assert(app.includes('function getCanonicalEnglishPropertyTitle'), 'non-English visitors get a translatable listing title');
   assert(app.includes('const fromSitePack = siteTranslate(text, lang);'), 'listing labels fall back to the site pack before English');

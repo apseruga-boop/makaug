@@ -790,6 +790,7 @@ router.get('/', async (req, res, next) => {
         ...row,
         bio_display: card.text,
         bio_source: card.source,
+        bio_parts: card.parts || null,
         profile_photo_kind: profilePhotoKind
       }));
     }

@@ -98,7 +98,7 @@ function priceRange(values = []) {
   const kept = prices.slice(cut, prices.length - cut);
   const low = compactUgx(kept[0]);
   const high = compactUgx(kept[kept.length - 1]);
-  return { text: low === high ? low : `${low} to ${high}`, single: low === high, trimmed };
+  return { text: low === high ? low : `${low} to ${high}`, single: low === high, trimmed, low, high };
 }
 
 const MAX_MONTHLY_RENT_UGX = 25000000;
@@ -432,6 +432,224 @@ function emptyPortfolioBio(name, role, company, where) {
   return `${who}. Their properties will appear here once listed.`;
 }
 
+// Property-type words are keys so each language dictionary can translate them.
+// Place names and people's names stay as parameters, never translated.
+const AGENT_BIO_TYPE_EN = {
+  houses_for_sale: 'houses for sale',
+  homes_for_sale: 'homes for sale',
+  apartments_for_sale: 'apartments for sale',
+  properties_for_sale: 'properties for sale',
+  plots: 'plots',
+  rentals: 'rentals',
+  commercial_property: 'commercial property'
+};
+
+const AGENT_BIO_ONE_EN = {
+  plot_of_land: 'a plot of land',
+  rental: 'a rental',
+  commercial_property: 'a commercial property',
+  house_for_sale: 'a house for sale',
+  home_for_sale: 'a home for sale',
+  apartment_for_sale: 'an apartment for sale',
+  property_for_sale: 'a property for sale',
+  property: 'a property'
+};
+
+const AGENT_BIO_EN_TEMPLATES = {
+  'join.comma': ', ',
+  'join.two': '{a} and {b}',
+  'join.many': '{head} and {tail}',
+  'place.around': ' around {areas}',
+  'place.in': ' in {areas}',
+  'place.covering': ' covering {areas}',
+  'count.one': '1 live listing',
+  'count.many': '{n} live listings',
+  'specialises': 'Specialises in {types}{place}, with {count} on makaug.',
+  'specialises.company': '{name} of {company} specialises in {types}{place}, with {count} on makaug.',
+  'empty.agency': '{name} is an agency on makaug{place}. Their properties will appear here once listed.',
+  'empty.independent': '{name} is an independent agent on makaug{place}. Their properties will appear here once listed.',
+  'empty.agent': '{name} is a property agent on makaug{place}. Their properties will appear here once listed.',
+  'empty.company': '{name} of {company} is on makaug{place}. Their properties will appear here once listed.',
+  'fallback': 'Property agent on makaug.',
+  'price.both_single': 'The asking price is {buy}, and the rent is {rent} a month.',
+  'price.both_ranges': 'Asking prices run from {buyLow} to {buyHigh} to buy, and from {rentLow} to {rentHigh} a month to rent.',
+  'price.buy_range_rent_single': 'Asking prices run from {buyLow} to {buyHigh} to buy, and from {rent} a month to rent.',
+  'price.buy_single_rent_range': 'Asking prices run from {buy} to buy, and from {rentLow} to {rentHigh} a month to rent.',
+  'price.buy_single': 'The asking price is {price}.',
+  'price.buy_range': 'Asking prices run from {low} to {high}.',
+  'price.rent_single': 'The rent is {price} a month.',
+  'price.rent_range': 'Rents run from {low} to {high} a month.',
+  'cover': 'They cover {areas}.',
+  ...Object.fromEntries(Object.entries(AGENT_BIO_TYPE_EN).map(([key, text]) => [`type.${key}`, text])),
+  ...Object.fromEntries(Object.entries(AGENT_BIO_ONE_EN).map(([key, text]) => [`one.${key}`, text]))
+};
+
+function fillAgentBioTemplate(template, params = {}) {
+  return String(template || '').replace(/\{(\w+)\}/g, (_all, key) => (params[key] == null ? '' : String(params[key])));
+}
+
+function joinAgentBioList(items = [], templates = AGENT_BIO_EN_TEMPLATES) {
+  const list = items.filter(Boolean);
+  if (list.length <= 1) return list[0] || '';
+  if (list.length === 2) return fillAgentBioTemplate(templates['join.two'], { a: list[0], b: list[1] });
+  return fillAgentBioTemplate(templates['join.many'], {
+    head: list.slice(0, -1).join(templates['join.comma'] || ', '),
+    tail: list[list.length - 1]
+  });
+}
+
+function composeAgentBio(parts, templates = AGENT_BIO_EN_TEMPLATES) {
+  if (!Array.isArray(parts) || !parts.length || !templates) return '';
+  const sentences = parts.map((part) => composeAgentBioSentence(part, templates));
+  if (sentences.some((sentence) => !sentence)) return '';
+  return sentences.join(' ');
+}
+
+function composeAgentBioSentence(part = {}, templates) {
+  const place = (kind, areas) => {
+    const joined = joinAgentBioList(areas, templates);
+    if (!kind || !joined || !templates[`place.${kind}`]) return '';
+    return fillAgentBioTemplate(templates[`place.${kind}`], { areas: joined });
+  };
+  const countPhrase = (count) => (
+    Number(count) === 1
+      ? templates['count.one']
+      : fillAgentBioTemplate(templates['count.many'], { n: count })
+  );
+  if (part.t === 'specialises') {
+    const typeWords = part.one
+      ? [templates[`one.${part.types?.[0]}`] || '']
+      : (part.types || []).map((key) => templates[`type.${key}`] || '');
+    if (!typeWords.length || typeWords.some((word) => !word)) return '';
+    const types = part.one ? typeWords[0] : joinAgentBioList(typeWords, templates);
+    const key = part.company ? 'specialises.company' : 'specialises';
+    if (!templates[key] || !templates['count.one'] || !templates['count.many']) return '';
+    return fillAgentBioTemplate(templates[key], {
+      name: part.name || '',
+      company: part.company || '',
+      types,
+      place: place(part.place, part.areas),
+      count: countPhrase(part.count)
+    });
+  }
+  if (part.t === 'empty') {
+    const key = `empty.${part.role}`;
+    if (!templates[key]) return '';
+    return fillAgentBioTemplate(templates[key], {
+      name: part.name || '',
+      company: part.company || '',
+      place: place(part.areas?.length ? 'covering' : '', part.areas)
+    });
+  }
+  if (part.t === 'price') {
+    const key = `price.${part.kind}`;
+    if (!templates[key]) return '';
+    return fillAgentBioTemplate(templates[key], part);
+  }
+  if (part.t === 'cover') {
+    if (!templates.cover) return '';
+    const areas = joinAgentBioList(part.areas, templates);
+    return areas ? fillAgentBioTemplate(templates.cover, { areas }) : '';
+  }
+  if (part.t === 'fallback') return templates.fallback || '';
+  return '';
+}
+
+function saleTypeKey(summary, many) {
+  const word = saleWords(summary.homeWords, summary.homesForSale, summary.kinds?.sale || 0)[many ? 1 : 0];
+  if (word === 'house' || word === 'houses') return many ? 'houses_for_sale' : 'house_for_sale';
+  if (word === 'apartment' || word === 'apartments') return many ? 'apartments_for_sale' : 'apartment_for_sale';
+  if (word === 'home' || word === 'homes') return many ? 'homes_for_sale' : 'home_for_sale';
+  return many ? 'properties_for_sale' : 'property_for_sale';
+}
+
+function specialismTypeKeys(summary = {}) {
+  const keys = [];
+  Object.entries(summary.kinds || {})
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .forEach(([kind]) => {
+      if (kind === 'sale') keys.push(saleTypeKey(summary, true));
+      if (kind === 'land') keys.push('plots');
+      if (kind === 'rent') keys.push('rentals');
+      if (kind === 'commercial') keys.push('commercial_property');
+    });
+  return keys.slice(0, 3);
+}
+
+function oneListingTypeKey(summary = {}) {
+  const kind = Object.entries(summary.kinds || {}).find(([, count]) => count > 0)?.[0];
+  if (kind === 'land') return 'plot_of_land';
+  if (kind === 'rent') return 'rental';
+  if (kind === 'commercial') return 'commercial_property';
+  if (kind === 'sale') return saleTypeKey(summary, false);
+  return 'property';
+}
+
+function emptyRoleKey(role, company) {
+  if (company) return 'company';
+  if (role === 'Agency') return 'agency';
+  if (role === 'Independent agent') return 'independent';
+  return 'agent';
+}
+
+function priceBioPiece(buy, rent) {
+  if (buy.text && rent.text && buy.single && rent.single) {
+    return {
+      text: `The asking price is ${buy.text}, and the rent is ${rent.text} a month.`,
+      part: { t: 'price', kind: 'both_single', buy: buy.text, rent: rent.text }
+    };
+  }
+  if (buy.text && rent.text && !buy.single && !rent.single) {
+    return {
+      text: `Asking prices run from ${buy.text} to buy, and from ${rent.text} a month to rent.`,
+      part: { t: 'price', kind: 'both_ranges', buyLow: buy.low, buyHigh: buy.high, rentLow: rent.low, rentHigh: rent.high }
+    };
+  }
+  if (buy.text && rent.text && !buy.single && rent.single) {
+    return {
+      text: `Asking prices run from ${buy.text} to buy, and from ${rent.text} a month to rent.`,
+      part: { t: 'price', kind: 'buy_range_rent_single', buyLow: buy.low, buyHigh: buy.high, rent: rent.text }
+    };
+  }
+  if (buy.text && rent.text && buy.single && !rent.single) {
+    return {
+      text: `Asking prices run from ${buy.text} to buy, and from ${rent.text} a month to rent.`,
+      part: { t: 'price', kind: 'buy_single_rent_range', buy: buy.text, rentLow: rent.low, rentHigh: rent.high }
+    };
+  }
+  if (buy.text) {
+    return buy.single
+      ? { text: `The asking price is ${buy.text}.`, part: { t: 'price', kind: 'buy_single', price: buy.text } }
+      : { text: `Asking prices run from ${buy.text}.`, part: { t: 'price', kind: 'buy_range', low: buy.low, high: buy.high } };
+  }
+  if (rent.text) {
+    return rent.single
+      ? { text: `The rent is ${rent.text} a month.`, part: { t: 'price', kind: 'rent_single', price: rent.text } }
+      : { text: `Rents run from ${rent.text} a month.`, part: { t: 'price', kind: 'rent_range', low: rent.low, high: rent.high } };
+  }
+  return null;
+}
+
+function fitCardPieces(pieces = []) {
+  const clean = pieces.filter((piece) => piece?.text).slice(0, 3);
+  if (!clean.length) {
+    return { text: 'Property agent on makaug.', parts: [{ t: 'fallback' }] };
+  }
+  const chosen = [clean[0]];
+  for (let i = 1; i < clean.length; i += 1) {
+    const next = `${chosen.map((piece) => piece.text).join(' ')} ${clean[i].text}`;
+    if (next.length > 280) break;
+    chosen.push(clean[i]);
+  }
+  let text = chosen.map((piece) => piece.text).join(' ');
+  if (text.length > 280) {
+    text = `${text.slice(0, 277).replace(/\s+\S*$/, '').replace(/[,:;]$/, '')}.`;
+    return { text, parts: null };
+  }
+  return { text, parts: chosen.map((piece) => piece.part) };
+}
+
 function fitCardSentences(sentences = []) {
   const clean = sentences.map((sentence) => cleanText(sentence)).filter(Boolean).slice(0, 3);
   if (!clean.length) return 'Property agent on makaug.';
@@ -460,38 +678,56 @@ function agentCardBio(agent = {}, listings = []) {
   const role = agentRoleLabel(agent);
   const summary = summarizeListings(Array.isArray(listings) ? listings : []);
   const covered = districtList(Array.isArray(agent.districts_covered) ? agent.districts_covered : []);
-  const where = joinList(summary.areas.slice(0, 3).map((area) => area.name))
-    || joinList((summary.mainDistricts.length ? summary.mainDistricts : summary.districts).slice(0, 3))
-    || joinList(covered.slice(0, 3));
+  const areaNames = summary.areas.slice(0, 3).map((area) => area.name);
+  const districtNames = (summary.mainDistricts.length ? summary.mainDistricts : summary.districts).slice(0, 3);
+  const coveredNames = covered.slice(0, 3);
+  const areas = areaNames.length ? areaNames : (districtNames.length ? districtNames : coveredNames);
+  const where = joinList(areas);
 
   if (!summary.total) {
-    return { text: emptyPortfolioBio(name, role, company, where), source: 'generated' };
+    const text = emptyPortfolioBio(name, role, company, where);
+    return {
+      text,
+      source: 'generated',
+      parts: [{ t: 'empty', role: emptyRoleKey(role, company), name, company: company || '', areas }]
+    };
   }
 
-  const mix = mixPhrases(summary.kinds, summary.homeWords, summary.homesForSale);
-  const focus = summary.total === 1
-    ? (() => {
-      const only = String(mix[0] || 'property').replace(/^1 /, '');
-      return `${/^[aeiou]/i.test(only) ? 'an' : 'a'} ${only}`;
-    })()
-    : (specialismPhrase(summary) || 'property');
-  const place = where ? `${summary.total === 1 ? ' in' : ' around'} ${where}` : '';
+  const one = summary.total === 1;
+  const typeKeys = one ? [oneListingTypeKey(summary)] : specialismTypeKeys(summary);
+  const focus = one
+    ? (AGENT_BIO_ONE_EN[typeKeys[0]] || 'a property')
+    : (joinList(typeKeys.map((key) => AGENT_BIO_TYPE_EN[key]).filter(Boolean)) || 'property');
+  const placeWord = where ? (one ? 'in' : 'around') : '';
+  const place = where ? ` ${placeWord} ${where}` : '';
   const leadWho = company ? `${name} of ${company} specialises` : 'Specialises';
-  const sentences = [`${leadWho} in ${focus}${place}, with ${plural(summary.total, 'live listing', 'live listings')} on makaug.`];
-  const buy = priceRange([...summary.prices.sale, ...summary.prices.land, ...summary.prices.commercial]);
-  const rent = priceRange(summary.prices.rent);
-  if (buy.text && rent.text) {
-    sentences.push(buy.single && rent.single
-      ? `The asking price is ${buy.text}, and the rent is ${rent.text} a month.`
-      : `Asking prices run from ${buy.text} to buy, and from ${rent.text} a month to rent.`);
-  } else if (buy.text) {
-    sentences.push(buy.single ? `The asking price is ${buy.text}.` : `Asking prices run from ${buy.text}.`);
-  } else if (rent.text) {
-    sentences.push(rent.single ? `The rent is ${rent.text} a month.` : `Rents run from ${rent.text} a month.`);
+  const pieces = [{
+    text: `${leadWho} in ${focus}${place}, with ${plural(summary.total, 'live listing', 'live listings')} on makaug.`,
+    part: {
+      t: 'specialises',
+      one,
+      types: typeKeys,
+      place: placeWord,
+      areas,
+      count: summary.total,
+      name,
+      company: company || ''
+    }
+  }];
+  const priced = priceBioPiece(
+    priceRange([...summary.prices.sale, ...summary.prices.land, ...summary.prices.commercial]),
+    priceRange(summary.prices.rent)
+  );
+  if (priced) pieces.push(priced);
+  const districtNamesForCover = summary.districts.slice(0, 3);
+  if (!where && districtNamesForCover.length) {
+    pieces.push({
+      text: `They cover ${joinList(districtNamesForCover)}.`,
+      part: { t: 'cover', areas: districtNamesForCover }
+    });
   }
-  const districtLine = joinList(summary.districts.slice(0, 3));
-  if (!where && districtLine) sentences.push(`They cover ${districtLine}.`);
-  return { text: fitCardSentences(sentences), source: 'generated' };
+  const fitted = fitCardPieces(pieces);
+  return { text: fitted.text, source: 'generated', parts: fitted.parts };
 }
 
 const cardBioCache = new Map();
@@ -539,6 +775,7 @@ function buildAgentPublicSummary(agent = {}, listings = []) {
     own_bio: card.source === 'agent',
     bio_display: card.text,
     bio_source: card.source,
+    bio_parts: card.parts || null,
     listings_counted: summary.total,
     mix: summary.kinds,
     mix_phrases: mixPhrases(summary.kinds, summary.homeWords, summary.homesForSale),
@@ -566,6 +803,8 @@ module.exports = {
   agentSummaryDescription,
   agentCardBio,
   agentCardBioCached,
+  composeAgentBio,
+  AGENT_BIO_EN_TEMPLATES,
   isPlaceholderBio,
   ownBio,
   listingKind,
