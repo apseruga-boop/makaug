@@ -10,7 +10,8 @@ const { inferProfilePhotoKind } = require('../services/agentProfileImageService'
 const { ensurePostVerificationRecords } = require('../services/authFlowService');
 const {
   DIRECT_AGENT_PROFILE_MARKER,
-  addPublicAgentEligibilityFilters
+  addPublicAgentEligibilityFilters,
+  verifiedByMakaugSql
 } = require('../services/publicAgentEligibilityService');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { parsePagination, toPagination } = require('../utils/pagination');
@@ -746,6 +747,7 @@ router.get('/', async (req, res, next) => {
         a.sales_count,
         a.districts_covered,
         a.specializations,
+        ${verifiedByMakaugSql('a')} AS verified_by_makaug,
         ${knownAgentSocialSelect('a')},
         COALESCE(p.active_listings, 0) AS listings_count,
         COALESCE(ld.districts, ARRAY[]::text[]) AS listing_districts
@@ -830,6 +832,7 @@ router.get('/:id', async (req, res, next) => {
         a.experience_years,
         a.makaug_agent_number,
         a.verification_reason,
+        ${verifiedByMakaugSql('a')} AS verified_by_makaug,
         ${knownAgentSocialSelect('a')},
         COALESCE(p.active_listings, 0) AS listings_count
       FROM agents a

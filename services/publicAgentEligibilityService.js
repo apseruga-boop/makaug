@@ -83,6 +83,53 @@ function addPublicAgentEligibilityFilters(filters, values, alias = 'a') {
   addPublicAgentInventoryFilter(filters, alias);
 }
 
+function isRemoteImportedAgent(row = {}) {
+  const reason = String(row?.verification_reason || '');
+  const licence = String(row?.licence_number || row?.licence || '').trim();
+  return /public social source onboarding/i.test(reason)
+    || /source profile/i.test(reason)
+    || /^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-/i.test(licence);
+}
+
+/**
+ * The public verified tick. Direct onboarding alone is not enough: that path
+ * writes [DIRECT_AGENT_AUTHORISED] while identity verification is still pending.
+ * The tick is the "Approve public profile" action, which is the only writer of
+ * [STAFF_REVIEWED_PRIVATE_ID_PROFILE] and contact_phone_verified_at. It refuses
+ * to run unless a private ID document is stored, a valid phone or WhatsApp is
+ * stored, and staff confirm the ID review, contact permission, and profile facts.
+ * registration_status is not used: it defaults to registered, and found-online
+ * imports set it too.
+ */
+function isVerifiedByMakaug(row = {}) {
+  if (!row || typeof row !== 'object') return false;
+  if (String(row.status || '').toLowerCase() !== 'approved') return false;
+  if (row.removed_at) return false;
+  if (isRemoteImportedAgent(row)) return false;
+  const reason = String(row.verification_reason || '');
+  if (!reason.includes(REVIEWED_PRIVATE_ID_PROFILE_MARKER)) return false;
+  const knowsEvidence = Object.prototype.hasOwnProperty.call(row, 'identity_document_url')
+    || Object.prototype.hasOwnProperty.call(row, 'contact_phone_verified_at');
+  if (!knowsEvidence) return row.verified_by_makaug === true;
+  const idStored = String(row.identity_document_url || '').trim() !== '';
+  const phoneChecked = row.contact_phone_verified_at != null && String(row.contact_phone_verified_at).trim() !== '';
+  return idStored && phoneChecked;
+}
+
+function verifiedByMakaugSql(alias = 'a') {
+  const a = sqlAlias(alias);
+  return `(
+    LOWER(COALESCE(${a}.status, '')) = 'approved'
+    AND ${a}.removed_at IS NULL
+    AND POSITION('${REVIEWED_PRIVATE_ID_PROFILE_MARKER}' IN COALESCE(${a}.verification_reason, '')) > 0
+    AND ${a}.contact_phone_verified_at IS NOT NULL
+    AND NULLIF(BTRIM(COALESCE(${a}.identity_document_url, '')), '') IS NOT NULL
+    AND COALESCE(${a}.verification_reason, '') NOT ILIKE '%public social source onboarding%'
+    AND COALESCE(${a}.verification_reason, '') NOT ILIKE '%source profile%'
+    AND COALESCE(${a}.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'
+  )`;
+}
+
 module.exports = {
   DIRECT_AGENT_PROFILE_MARKER,
   PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS,
@@ -92,5 +139,8 @@ module.exports = {
   addPublicAgentEligibilityFilters,
   addPublicAgentInventoryFilter,
   addPublicAgentLaunchTestFilter,
-  addPublicAgentSelfRegistrationFilter
+  addPublicAgentSelfRegistrationFilter,
+  isRemoteImportedAgent,
+  isVerifiedByMakaug,
+  verifiedByMakaugSql
 };
