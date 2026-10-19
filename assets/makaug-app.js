@@ -47640,7 +47640,7 @@ function brokerCardHtml(b, options = {}) {
         <p class="broker-card-loc"><i class="fas fa-location-dot" aria-hidden="true"></i><span>${adminEscape(b.area || "")}</span></p>
       </div>
       <div class="broker-card-side">
-        <p class="broker-card-count"><strong>${Number(b.listings) || 0}</strong> <span>${translateListingLabel("Active Listings")}</span></p>
+        <p class="broker-card-count"><strong>${Number(b.listings) || 0}</strong> <span class="broker-card-count-long">${translateListingLabel("Active Listings")}</span><span class="broker-card-count-short">${translateListingLabel(Number(b.listings) === 1 ? "listing" : "listings")}</span></p>
         ${brokerIconActionsHtml(b, { labels: true })}
       </div>
     </article>`;

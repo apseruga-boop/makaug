@@ -32,7 +32,10 @@ assert(frontend.includes('profile_photo_kind === "logo"') && frontend.includes('
 assert(frontend.includes('function brokerIconActionsHtml'), 'broker cards should share one contact action rail');
 assert(card.includes('brokerIconActionsHtml(b, { labels: true })'), 'desktop cards label Call and WhatsApp');
 assert(pageHtml.includes('@media (max-width: 640px)'), 'mobile switches layout at 640px');
-assert(pageHtml.includes('grid-template-columns: 56px minmax(0, 1fr) auto'), 'mobile cards keep the count and call buttons on the right');
+assert(pageHtml.includes('grid-template-columns: 52px minmax(0, 1fr) auto'), 'mobile keeps the avatar, name and count on one line');
+assert(pageHtml.includes('"bio bio bio"'), 'the mobile bio uses the full card width');
+assert(pageHtml.includes('-webkit-line-clamp: 2'), 'the mobile bio stays on two lines');
+assert(pageHtml.includes('broker-card-count-short'), 'the mobile count reads as a short listings label');
 assert(pageHtml.includes('broker-card-fallback'), 'a failed photo leaves initials instead of a blank circle');
 assert(frontend.includes('featuredBrokerLimit'), 'the homepage featured row stays a full row of 3 or 6');
 assert(pageHtml.includes('-webkit-line-clamp: 3'), 'desktop bios stay at two to three lines');
