@@ -22,23 +22,25 @@ function declaration(source, name) {
 function publicRenderer() {
   const context = vm.createContext({
     process: { env: { SHARED_CORE_PHASE1_ENABLED: 'false', GA4_MEASUREMENT_ID: 'G-FIXTURE123' } },
-    isProduction: false, publicHtmlCache: new Map(), readIndexHtml: () => index, sanitizePublicHtml,
+    isProduction: false, ACTIVE_COUNTRY_CODE: 'UG', publicHtmlCache: new Map(), readIndexHtml: () => index, sanitizePublicHtml,
     applyHarvestPublicSubmissionVisibility: (html) => html, applyShortTermVisibility: (html) => html,
     injectShortTermRuntimeConfig: (html) => html,
     inlinePublicCoreStylesheets: require('../services/publicCoreStylesheets'),
     inlinePublicFontFaces: require('../services/publicFontFaces')
   });
   vm.runInContext(`const GA4_ID_PATTERN=/^G-[A-Z0-9]{4,20}$/;
-    ${['applyHomeHeroPreload','applyShortTermStylesheetLoading','applyPublicFontDisplayOptional','ga4HeadSnippet','injectGa4HeadTag','renderPublicHtml'].map((name) => declaration(server, name)).join('\n')}`, context);
+    ${server.match(/const TRAVELPAYOUTS_DRIVE_HEAD_TAG = `[^`]*`;/)[0]}
+    ${['applyHomeHeroPreload','applyShortTermStylesheetLoading','applyPublicFontDisplayOptional','ga4HeadSnippet','injectGa4HeadTag','injectTravelpayoutsDriveHeadTag','renderPublicHtml'].map((name) => declaration(server, name)).join('\n')}`, context);
   return context.renderPublicHtml;
 }
 
-test('public HTML contains no global Drive loader while its normal route and analytics shell remains', () => {
+test('every public page carries exactly one Travelpayouts Drive loader in <head> alongside analytics', () => {
   const render = publicRenderer();
   assert.doesNotMatch(index, /data-makaug-affiliate="travelpayouts-drive"|emrldtp\.cc|NTgxODU0|581854/);
   for (const route of ['/', '/student-accommodation', '/student-accommodation/university/makerere', '/to-rent/kireka-wakiso', '/to-rent/kyanja-kampala/apartments', '/short-term', '/short-term/example', '/about', '/advertise']) {
     const html = render(route);
-    assert.doesNotMatch(html, /emrldtp\.cc|travelpayouts-drive|NTgxODU0/, route);
+    assert.equal((html.match(/emrldtp\.cc\/NTgxODU0\.js\?t=581854/g) || []).length, 1, route);
+    assert.ok(html.indexOf('emrldtp.cc') < html.indexOf('</head>'), `${route}: Drive is in head`);
     assert.equal((html.match(/data-ga-ssr="1"/g) || []).length, 1, `${route}: GA4 remains one configured loader`);
     assert.ok(html.includes('https://www.googletagmanager.com/gtag/js?id=G-FIXTURE123'), route);
     assert.ok(html.includes('/assets/makaug-app.js'), `${route}: the property application still loads`);
