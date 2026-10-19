@@ -72,7 +72,6 @@ const {
   injectShortTermRuntimeConfig,
   shortTermEnabled
 } = require('./utils/shortTermFeatureFlags');
-const { driveHeadSnippet } = require('./services/travelpayoutsAffiliate');
 const {
   getShortTermListing,
   listShortTermSitemapEntries,
@@ -1244,6 +1243,14 @@ function injectGa4HeadTag(html, basePath = '/') {
   return String(html).replace(/<\/head>/i, `${snippet}</head>`);
 }
 
+// Travelpayouts Drive loader, in <head> of every public page (not admin/staff).
+const TRAVELPAYOUTS_DRIVE_HEAD_TAG = `<script data-noptimize="1" data-cfasync="false" data-wpfc-render="false">(function () { var script = document.createElement("script"); script.async = 1; script.src = 'https://emrldtp.cc/NTgxODU0.js?t=581854'; document.head.appendChild(script); })();</script>`;
+function injectTravelpayoutsDriveHeadTag(html, basePath = '/') {
+  if (/^\/(?:admin|staff-dashboard|staff|king)(?:\/|$)/.test(String(basePath || '/'))) return html;
+  if (String(html).includes('emrldtp.cc/NTgxODU0.js')) return html;
+  return String(html).replace(/<\/head>/i, `${TRAVELPAYOUTS_DRIVE_HEAD_TAG}</head>`);
+}
+
 function renderPublicHtml(pathname) {
   const rawPath = pathname || '/';
   const basePath = String(rawPath).split('?')[0].split('#')[0] || '/';
@@ -1272,6 +1279,7 @@ function renderPublicHtml(pathname) {
   });
   rendered = inlinePublicCoreStylesheets(rendered);
   rendered = injectGa4HeadTag(rendered, normalizedBasePath);
+  rendered = injectTravelpayoutsDriveHeadTag(rendered, normalizedBasePath);
   if (isProduction) {
     publicHtmlCache.set(key, rendered);
     while (publicHtmlCache.size > PUBLIC_HTML_CACHE_MAX_ENTRIES) {
@@ -1815,9 +1823,6 @@ app.get('/short-term', async (req, res, next) => {
       count: total,
       structuredData: rendered.structuredData
     });
-
-    const drive = driveHeadSnippet();
-    if (drive) html = html.replace('</head>', `${drive}\n</head>`);
 
     res.set('X-makaug-Short-Term-SSR', String(listings.length));
     res.set('X-makaug-Short-Term-Total', String(total));

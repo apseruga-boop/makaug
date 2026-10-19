@@ -61,8 +61,8 @@ test('the live marker is not hard-coded and drive is only on the short-term docu
   const bundled = [server, client, read('utils/shortTermFeatureFlags.js'), read('services/travelpayoutsAffiliate.js')].join('\n');
   assert.equal(bundled.includes('785967'), false);
   const shortTermRoute = server.slice(server.indexOf("app.get('/short-term'"), server.indexOf("app.get('/short-term/list-your-place'"));
-  assert.match(shortTermRoute, /driveHeadSnippet\(\)/);
-  assert.equal(server.split('driveHeadSnippet()').length, 2);
+  assert.equal(server.split('driveHeadSnippet()').length, 1);
+  assert.match(server, /rendered = injectTravelpayoutsDriveHeadTag\(rendered, normalizedBasePath\)/);
   const hotelAt = server.indexOf("app.get('/short-term/hotel/:slug'");
   const listAt = server.indexOf("app.get('/short-term/list-your-place'");
   const slugAt = server.indexOf("app.get('/short-term/:slug'");
