@@ -13,7 +13,10 @@ const UGANDA_FOREIGN_MARKET_SIGNALS = [
   { pattern: /(?:₹|\binr\b|\bindian rupees?\b)/i, reason: 'foreign_currency_inr' },
   { pattern: /\b(?:lkr|sri lankan rupees?)\b/i, reason: 'foreign_currency_lkr' },
   { pattern: /(?:£|\bgbp\b|\bpounds?\s+sterling\b|\d\s*pcm\b)/i, reason: 'foreign_currency_gbp' },
+  { pattern: /(?:€|\beur\b|\beuros?\b)/i, reason: 'foreign_currency_eur' },
   { pattern: /(?:₦|\bngn\b|\bnaira\b)/i, reason: 'foreign_currency_ngn' },
+  { pattern: /\bbaerz(?:\s*&\s*co\.?)?\b/i, reason: 'foreign_channel' },
+  { pattern: /\b(?:zagreb|croatia|amsterdam|netherlands|holland|rotterdam|utrecht|sotogrande|spain|madrid|barcelona|marbella|m[aá]laga|valencia|seville|sevilla|paris|france|lyon|berlin|germany|munich|m[uü]nchen|frankfurt|rome|roma|italy|milan|milano|florence|venice|lisbon|lisboa|portugal|porto|brussels|belgium|vienna|austria|prague|czech(?:ia| republic)?|budapest|hungary|warsaw|poland|stockholm|sweden|oslo|norway|copenhagen|denmark|helsinki|finland|athens|greece|zurich|z[uü]rich|geneva|switzerland|dublin|ireland|manchester|edinburgh|scotland|sydney|melbourne|australia|auckland|new zealand|toronto|vancouver|montreal|doha|qatar|riyadh|jeddah|abu dhabi|singapore|hong kong|tokyo|japan|seoul|korea|beijing|shanghai|bangkok|thailand|bali|jakarta|indonesia|istanbul|casablanca|morocco|cairo|egypt|luxembourg|monaco|ibiza|mallorca|majorca|algarve|tuscany|provence)\b/i, reason: 'foreign_market_location' },
   { pattern: /\b(?:rwanda|kigali|kenya|nairobi|mombasa|tanzania|dar es salaam|sri lanka|sinhala|india|kolkata|kolhapur|hyderabad|mumbai|delhi|karnataka|hassan,\s*karnataka|bengaluru|bangalore|nigeria|abuja|lagos|pakistan|karachi|lahore|islamabad|rawalpindi|dha\s+phase|ohio|pickerington|memphis|ridgecrest|fort garland|little rock|united states|usa|united kingdom)\b/i, reason: 'foreign_market_location' },
   { pattern: /[\u0D80-\u0DFF\u0900-\u097F\u0B80-\u0BFF]/u, reason: 'foreign_market_script' },
 ];

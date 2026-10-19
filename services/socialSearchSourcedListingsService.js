@@ -1152,7 +1152,11 @@ function sourceReviewReasonForIntake(intake = {}) {
   if (intake.source_quality_suppressed && /^low_signal_/i.test(String(intake.source_quality_reason || ''))) {
     return 'low_signal_source_location';
   }
-  if (intake.source_quality_suppressed) return 'non_listing_source_content';
+  if (intake.source_quality_suppressed) {
+    const qualityReason = String(intake.source_quality_reason || '');
+    if (qualityReason === 'suppressed_channel' || qualityReason === 'not_a_listing') return qualityReason;
+    return 'non_listing_source_content';
+  }
   if (intake.positive_listing_gate_passed === false) {
     return intake.positive_listing_gate_reason || 'not_a_listing';
   }
@@ -2669,7 +2673,16 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     : '';
   const youtubeId = raw.youtube_id || raw.youtubeId || raw.youtube_video_id || raw.youtubeVideoId || youtubeIdFromUrl(sourceUrl);
   const countryGate = foreignSourceMarketStatus([
+    sourceName,
+    raw.channel_title,
+    raw.channelTitle,
+    raw.youtube_channel_title,
+    raw.channel,
     sourceText,
+    raw.location,
+    raw.area,
+    raw.price_text,
+    raw.price_label,
     raw.price_currency,
     raw.currency,
     raw.source_currency,
@@ -2680,13 +2693,25 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     ? priceCandidate
     : { value: null, reason: countryGate.reason };
   const ingestedAt = raw.ingested_at || raw.imported_at || raw.first_seen_at || new Date().toISOString();
-  let sourcePriceMetadata = propertyPriceMetadata(safePrice.value, {
-    currency: raw.price_currency || raw.currency || raw.source_currency,
-    ...(IS_SOUTH_AFRICA
-      ? { usdToZarRate: USD_TO_CANONICAL_GUIDE_RATE }
-      : { usdToUgxRate: USD_TO_CANONICAL_GUIDE_RATE }),
-    fxAsOf: raw.price_fx_as_of || ingestedAt
-  });
+  // A blocked country or a euro/sterling price is flagged and left empty.
+  // It is not multiplied into UGX.
+  let sourcePriceMetadata = countryGate.allowed
+    ? propertyPriceMetadata(safePrice.value, {
+      currency: raw.price_currency || raw.currency || raw.source_currency,
+      ...(IS_SOUTH_AFRICA
+        ? { usdToZarRate: USD_TO_CANONICAL_GUIDE_RATE }
+        : { usdToUgxRate: USD_TO_CANONICAL_GUIDE_RATE }),
+      fxAsOf: raw.price_fx_as_of || ingestedAt
+    })
+    : {
+      price: null,
+      price_currency: null,
+      price_original_currency: null,
+      price_original: null,
+      price_fx_rate_ugx: null,
+      price_fx_as_of: null,
+      rejection_reason: countryGate.reason || 'foreign_currency_not_converted',
+    };
   // C17: a price outside the plausibility bounds is stored as Price on
   // application with price_review 'implausible'; the raw figure is kept.
   const pricePlausibilityCheck = pricePlausibility({ listing_type: listingType, transaction_type: transactionType, price_period: pricePeriod, price: sourcePriceMetadata.price });

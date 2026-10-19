@@ -43,7 +43,9 @@ function sourceCurrencyForValue(value, explicitCurrency = '') {
     if (/(?:^|[\s(])R\s*\d|\bZAR\s*\d/i.test(raw)) return 'ZAR';
     return 'ZAR';
   }
-  if (/\b(?:ZAR|RWF|FRW|KES|KSH|TZS|TSH|INR|LKR)\b|₹/i.test(raw)) return '';
+  // Euro, sterling and other non-USD currencies are not converted into UGX.
+  // A €159.000 Amsterdam price must stay flagged, not become USh 159,000,000.
+  if (/(?:€|£|₹|\b(?:EUR|EURO|GBP|ZAR|RWF|FRW|KES|KSH|TZS|TSH|INR|LKR)\b)/i.test(raw)) return '';
   return /(?:^|\s)(?:USD|US\$)\s*[\d.]|\$\s*[\d.]/i.test(raw) ? 'USD' : 'UGX';
 }
 
