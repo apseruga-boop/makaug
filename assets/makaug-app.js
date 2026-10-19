@@ -47861,7 +47861,8 @@ function brokerIconActionsHtml(b, options = {}) {
 
 function brokerCardHtml(b, options = {}) {
   const border = options.directory === true ? "border-green-100" : "border-gray-100";
-  const badge = renderBrokerRegistrationBadge(b, "text-[11px]");
+  const verified = agentShowsVerifiedBadge(b);
+  const badge = verified ? "" : renderBrokerRegistrationBadge(b, "text-[11px]");
   const bio = brokerCardBioText(b);
   return `
     <article class="broker-grid-card bg-white rounded-2xl ${border} shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
@@ -47869,7 +47870,7 @@ function brokerCardHtml(b, options = {}) {
       <div class="broker-card-main">
         <div class="broker-card-name-line">
           <h3 class="broker-card-name">${adminEscape(b.name)}</h3>
-          ${verifiedAgentBadgeHtml(b, 18)}
+          ${verified ? verifiedAgentBadgeHtml(b, 18) : ""}
           ${badge ? `<div class="broker-card-badge">${badge}</div>` : ""}
         </div>
         ${brokerCompanyLineHtml(b, "broker-card-role")}
@@ -60379,7 +60380,7 @@ async function openBrokerProfile(id) {
               <span class="inline-flex items-center gap-1.5"><i class="fas fa-briefcase text-green-600" aria-hidden="true"></i>${adminEscape(b.experience || "Experienced Broker")}</span>
               ${publicLicence ? `<span class="inline-flex items-center gap-1.5"><i class="fas fa-id-card text-green-600" aria-hidden="true"></i>${adminEscape(publicLicence)}</span>` : ""}
           </div>
-          ${renderBrokerRegistrationBadge(b) ? `<div class="mt-3">${renderBrokerRegistrationBadge(b)}</div>` : ""}
+          ${agentShowsVerifiedBadge(b) ? "" : (renderBrokerRegistrationBadge(b) ? `<div class="mt-3">${renderBrokerRegistrationBadge(b)}</div>` : "")}
           <div class="mt-4">${brokerIconActionsHtml(b, { large: true, profile: true })}</div>
           ${brokerDisplayPhone(b) ? `<a href="tel:${adminAttr(brokerDisplayPhone(b).replace(/\s+/g, ""))}" class="mt-3 inline-flex items-center gap-2 rounded-full bg-green-50 px-4 py-2 text-sm font-bold text-green-800 hover:bg-green-100"><i class="fas fa-phone" aria-hidden="true"></i><span>${adminEscape(brokerDisplayPhone(b))}</span></a>` : ""}
         </div>
