@@ -99,7 +99,7 @@ test('titles, one landing page view, and short-stay ask-ai stay on this section'
 });
 
 test('host listings can store an optional UTB licence and a map pin', () => {
-  const migration = read('db/migrations/150_short_term_utb_licence.sql');
+  const migration = read('db/migrations/151_short_term_utb_licence.sql');
   assert.match(migration, /utb_licence_number/);
   const service = read('services/shortTermService.js');
   assert.match(service, /utb_licence_number/);

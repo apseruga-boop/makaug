@@ -49,6 +49,11 @@ const mustTranslate = [
   'Verified brokers are confirmed by admin review before the public badge is shown.',
   'Verified by makaug',
   'Verified by makaug: ID and phone checked by our team',
+  'Request these dates',
+  'Payment is agreed directly between you and the host. makaug does not take or hold payments.',
+  'Approved, awaiting fee. A pay link follows. The listing goes live when that fee is paid.',
+  'Verified stay',
+  'Short stay terms',
   "Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month. Web or WhatsApp, all 146 districts."
 ];
 for (const lang of LANGS) {

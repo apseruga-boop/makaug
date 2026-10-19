@@ -77,7 +77,7 @@
     "check": "node --check server.js",
     "test:go-live-p0": "node tests/go-live-p0.test.js",
     "test:seo-ssr": "node tests/seo-ssr-crawlability.test.js",
-    "test:short-term": "node tests/short-term-route-contract.test.js",
+    "test:short-term": "node tests/short-term-route-contract.test.js && node --test tests/short-stay-public-privacy.test.js tests/short-stay-booking-request.test.js",
     "test:king-harvester-p0": "node tests/king-harvester-route-contract.test.js",
     "test:source-coverage": "node --test tests/source-coverage-manifest.test.js",
     "test:video-first": "node --test tests/video-first-listing-cover.test.js",

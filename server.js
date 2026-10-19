@@ -1845,6 +1845,61 @@ app.get('/short-term/list-your-place', (req, res, next) => {
   }
 });
 
+function sendShortTermShell(req, res, { title, description, canonical, page }) {
+  res.set('X-makaug-Public-Sanitized', '1');
+  let html = renderPublicHtml(req.originalUrl || req.url || req.path);
+  html = patchPublicPageSeoMeta(html, {
+    title,
+    description,
+    canonical,
+    image: absolutePublicUrl('/assets/house-ads-v3/rent.webp')
+  });
+  res.set('X-makaug-Short-Term-Page', page);
+  return sendTextResponse(req, res, html, { cacheControl: 'private, no-store' });
+}
+
+app.get('/short-term/terms', (req, res, next) => {
+  if (!shortTermEnabled()) return next();
+  try {
+    return sendShortTermShell(req, res, {
+      title: 'Short stay terms | makaug',
+      description: 'makaug lists a short stay and introduces guest and host. The host is responsible for the stay. makaug does not take or hold payments.',
+      canonical: absolutePublicUrl('/short-term/terms'),
+      page: 'terms'
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/short-term/host', (req, res, next) => {
+  if (!shortTermEnabled()) return next();
+  try {
+    return sendShortTermShell(req, res, {
+      title: 'Your short stay requests | makaug',
+      description: 'Accept or decline a date request, update your price, and block dates. Payment is agreed directly with the guest.',
+      canonical: absolutePublicUrl('/short-term/host'),
+      page: 'host'
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/short-term/requests/:reference', (req, res, next) => {
+  if (!shortTermEnabled()) return next();
+  try {
+    return sendShortTermShell(req, res, {
+      title: 'Stay request | makaug',
+      description: 'The status of your short stay request. Payment is agreed directly with the host. makaug does not take or hold payments.',
+      canonical: absolutePublicUrl(`/short-term/requests/${req.params.reference}`),
+      page: 'request'
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.get('/short-term/hotel/:slug', (req, res, next) => {
   if (!shortTermEnabled()) return next();
   try {
@@ -1865,6 +1920,7 @@ app.get('/short-term/hotel/:slug', (req, res, next) => {
     return next(error);
   }
 });
+
 
 app.get('/short-term/:slug', async (req, res, next) => {
   if (!shortTermEnabled()) return next();

@@ -105,7 +105,9 @@
         : '<span class="st-desk-warn"><i class="fas fa-triangle-exclamation"></i> No photos</span>')
       + (feeSettled
         ? '<span class="st-desk-ok"><i class="fas fa-coins"></i> Fee ' + esc(row.listing_fee_status) + '</span>'
-        : '<span class="st-desk-warn"><i class="fas fa-coins"></i> Fee ' + esc(row.listing_fee_status) + '</span>')
+        : '<span class="st-desk-warn"><i class="fas fa-coins"></i> '
+          + (row.moderation_stage === 'approved' ? 'Approved, awaiting fee' : 'Fee ' + esc(row.listing_fee_status))
+          + '</span>')
       + (row.right_to_let_declared
         ? '<span class="st-desk-ok"><i class="fas fa-file-signature"></i> Right to let declared</span>'
         : '<span class="st-desk-warn"><i class="fas fa-file-signature"></i> No right-to-let declaration</span>')
@@ -162,7 +164,8 @@
         + '<label class="st-desk-confirm"><input type="checkbox" data-st-facts="' + esc(id) + '"> '
         + '<b>I have checked the facts on this listing myself.</b></label>'
         + '<div class="st-desk-buttons">'
-        + '<button type="button" class="st-btn st-btn-primary" data-st-king="approve" data-st-id="' + esc(id) + '"><i class="fas fa-crown"></i> Approve and publish</button>'
+        + '<button type="button" class="st-btn st-btn-primary" data-st-king="approve" data-st-id="' + esc(id) + '"><i class="fas fa-crown"></i> Approve</button>'
+        + '<p class="st-desk-note">Approved, awaiting fee. A pay link follows. The listing goes live when that fee is paid.</p>'
         + '<button type="button" class="st-btn" data-st-king="send_back" data-st-id="' + esc(id) + '">Send back to staff</button>'
         + '<button type="button" class="st-btn" data-st-king="reject" data-st-id="' + esc(id) + '">Reject</button>'
         + '<button type="button" class="st-btn" data-st-king="suspend" data-st-id="' + esc(id) + '">Suspend</button>'
