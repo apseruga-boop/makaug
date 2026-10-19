@@ -11,7 +11,8 @@ const source = fs.readFileSync(path.join(__dirname, '../routes/staff.js'), 'utf8
 async function capturePanelQueries() {
   const declarations = acorn.parse(source, { ecmaVersion: 'latest' }).body;
   const functions = ['sqlList', 'sourceQualitySuppressedFlagSql', 'indexedSourceQualitySuppressedFlagSql',
-    'launchTestListingWhere', 'actionablePendingReviewWhere', 'foundOnlineReviewWhere',
+    'launchTestListingWhere', 'actionablePendingReviewWhere', 'foundOnlineReviewWhere', 'brokerReviewWhere',
+    'staffReviewQueueSegmentWhere', 'staffReviewQueueWhereSql',
     'staffPanelLeadRows', 'staffPanelWhatsappConversationRows', 'staffPanelWhatsappBridgeStatus',
     'staffPanelSourceRegistryRows', 'staffFoundOnlinePanelMeta', 'buildDashboardPanelsPayload'];
   const constants = ['ACTIONABLE_PENDING_REVIEW_STATUSES', 'OPEN_LEAD_STATUSES', 'STAFF_DASHBOARD_QUEUE_LIMIT',

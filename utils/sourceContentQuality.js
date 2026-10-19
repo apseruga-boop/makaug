@@ -356,6 +356,18 @@ function sourceHasConcreteListingSignal(record = {}) {
 }
 
 function sourcePositiveListingGateForRecord(record = {}) {
+  const notListing = notAListingClassification(record);
+  if (notListing.not_a_listing) {
+    return {
+      ok: false,
+      reason: 'not_a_listing',
+      details: notListing.details.length ? notListing.details : [`Not a listing: ${notListing.matched}`],
+      has_uganda_location_signal: false,
+      has_listing_signal: false,
+      coordinates: null,
+      district: '',
+    };
+  }
   const text = sourcePositiveListingText(record);
   const coords = sourcePositiveListingCoordinates(record);
   const canonicalDistrict = sourceCanonicalUgandaDistrict(record);
@@ -524,7 +536,49 @@ function sourceLocationQualityForRecord(record = {}) {
   };
 }
 
+const NOT_A_LISTING_CONTENT_PATTERN = /\b(?:construction\s+costs?|cost\s+of\s+(?:construction|building)|cost\s+to\s+build|building\s+costs?|bill\s+of\s+quantit(?:y|ies)|\bboq\b|quantity\s+survey(?:or|ing)?|how[\s-]+to\b|\btips\b|cost\s+breakdown)\b/i;
+const SALE_RENT_INTENT_PATTERN = /\b(?:for\s+sale|on\s+sale|for\s+rent|to\s+rent|to\s+let|for\s+lease|available\s+for\s+(?:sale|rent)|selling|asking\s+price)\b/i;
+const SUPPRESSED_INTAKE_CHANNELS = [
+  /\bsushi\s*m\s*99\b/i,
+];
+
+function notAListingClassification(record = {}) {
+  const channel = sourceNameText(record);
+  for (const pattern of SUPPRESSED_INTAKE_CHANNELS) {
+    const matched = channel.match(pattern)?.[0] || '';
+    if (matched) {
+      return {
+        not_a_listing: true,
+        reason: 'suppressed_channel',
+        matched,
+        details: [`Channel suppressed from review: ${matched}`],
+      };
+    }
+  }
+  const text = [sourceQualityText(record), sourcePositiveListingText(record)].filter(Boolean).join(' ');
+  const content = text.match(NOT_A_LISTING_CONTENT_PATTERN);
+  if (!content || SALE_RENT_INTENT_PATTERN.test(text)) {
+    return { not_a_listing: false, reason: '', matched: '', details: [] };
+  }
+  return {
+    not_a_listing: true,
+    reason: 'not_a_listing',
+    matched: content[0],
+    details: [`Not a listing: ${content[0]}. No sale or rent intent.`],
+  };
+}
+
 function sourceQualitySuppressionForRecord(record = {}) {
+  const notListing = notAListingClassification(record);
+  if (notListing.reason === 'suppressed_channel') {
+    return {
+      suppressed: true,
+      reason: notListing.reason,
+      matched: notListing.matched,
+      known_non_listing_source: true,
+      listing_signal: 'no_listing_intent',
+    };
+  }
   const text = sourceQualityText(record);
   const sourceText = sourceNameText(record);
   const hasExplicitListingIntent = EXPLICIT_LISTING_INTENT_PATTERN.test(text);
@@ -553,6 +607,17 @@ function sourceQualitySuppressionForRecord(record = {}) {
       matched: lowSignalPromoMatch[0],
       location_status: locationQuality.status,
       listing_signal: hasMoneySignal ? 'price_signal_without_specific_location' : 'promo_without_specific_location',
+    };
+  }
+
+  if (notListing.not_a_listing) {
+    const tutorial = hardMatch && !hasExplicitListingIntent;
+    return {
+      suppressed: true,
+      reason: tutorial ? 'non_listing_tutorial_or_construction_content' : notListing.reason,
+      matched: tutorial ? hardMatch[0] : notListing.matched,
+      known_non_listing_source: tutorial ? knownNonListingSource : false,
+      listing_signal: tutorial && hasMoneySignal ? 'price_signal_ignored_for_tutorial_content' : 'no_listing_intent',
     };
   }
 
@@ -662,6 +727,7 @@ function sourceQualitySuppressedSql(alias = 'p') {
 }
 
 module.exports = {
+  notAListingClassification,
   sourceQualitySuppressionForRecord,
   sourceLocationQualityForRecord,
   sourcePositiveListingGateForRecord,
