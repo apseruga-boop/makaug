@@ -88,16 +88,33 @@ function resolveWhatsappLocation(value = '', { district = '', allowText = false 
   };
 }
 
+function ugandaTownForMatch(match = {}) {
+  if (['district', 'region'].includes(match.level)) return '';
+  return cleanText(match.town || match.city);
+}
+
+function whatsappResolvedLocationLabel(patch = {}) {
+  const parts = [];
+  for (const value of [patch.area, patch.city, patch.district, patch.region]) {
+    const text = cleanText(value);
+    if (!text || parts.some((item) => item.toLowerCase() === text.toLowerCase())) continue;
+    parts.push(text);
+  }
+  return parts.join(', ');
+}
+
 function canonicalWhatsappLocationPatch(resolution = {}, { includeDistrictLevelArea = false } = {}) {
   if (resolution.status !== 'matched' || !resolution.match?.canonical_location_id) return {};
   const match = resolution.match;
   const area = ['district', 'region'].includes(match.level) && !includeDistrictLevelArea
     ? null
     : match.area;
+  const ugandaCity = IS_SOUTH_AFRICA ? '' : ugandaTownForMatch(match);
   return {
     ...(area ? { area } : {}),
     district: match.district,
     region: match.region,
+    ...(ugandaCity ? { city: ugandaCity } : {}),
     canonical_location_id: match.canonical_location_id,
     canonical_location_level: match.level,
     canonical_location_match: 'exact_alias',
@@ -167,6 +184,7 @@ function canonicalizeWhatsappSearchFilters(filters = {}, originalText = '') {
 module.exports = {
   canonicalizeWhatsappSearchFilters,
   canonicalWhatsappLocationPatch,
+  whatsappResolvedLocationLabel,
   publicCandidate,
   resolveWhatsappLocation,
   whatsappLocationPrompt
