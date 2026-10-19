@@ -100,8 +100,8 @@ function channelStatus(channel) {
   if (channel === 'whatsapp' && (process.env.WHATSAPP_PROVIDER || process.env.TWILIO_ACCOUNT_SID || process.env.WHATSAPP_WEB_BRIDGE_ENABLED === 'true')) {
     return { status: 'pending', failureReason: null };
   }
-  if (channel === 'sms' && (process.env.TWILIO_ACCOUNT_SID || process.env.SMS_PROVIDER)) {
-    return { status: 'pending', failureReason: null };
+  if (channel === 'sms') {
+    return { status: 'skipped', failureReason: 'sms_disabled' };
   }
   return { status: 'failed', failureReason: `${channel}_provider_missing` };
 }
@@ -122,7 +122,16 @@ async function createAlertMatch(db, savedSearch, listing, channel) {
      )
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
      ON CONFLICT (saved_search_id, listing_id, channel) DO UPDATE
-     SET status = CASE WHEN alert_matches.status = 'sent' THEN 'duplicate' ELSE alert_matches.status END
+     SET status = CASE
+           WHEN alert_matches.status = 'sent' THEN 'duplicate'
+           WHEN EXCLUDED.status = 'skipped' THEN 'skipped'
+           ELSE alert_matches.status
+         END,
+         failure_reason = CASE
+           WHEN alert_matches.status = 'sent' THEN alert_matches.failure_reason
+           WHEN EXCLUDED.status = 'skipped' THEN EXCLUDED.failure_reason
+           ELSE alert_matches.failure_reason
+         END
      RETURNING *`,
     [
       savedSearch.id,
@@ -136,12 +145,15 @@ async function createAlertMatch(db, savedSearch, listing, channel) {
     ]
   );
 
+  const notificationStatus = statusInfo.status === 'failed'
+    ? 'failed'
+    : (statusInfo.status === 'skipped' ? 'skipped' : 'queued');
   await logNotification(db, {
     userId: savedSearch.user_id || null,
     recipientPhone: savedSearch.phone || null,
     channel,
     type: 'alert_match_found',
-    status: statusInfo.status === 'failed' ? 'failed' : 'queued',
+    status: notificationStatus,
     payloadSummary: payload,
     relatedListingId: listing.id,
     relatedSavedSearchId: savedSearch.id,
