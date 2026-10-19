@@ -4956,6 +4956,7 @@ const FOOTER_I18N = {
     rent: "Houses for Rent",
     rentKampala: "Houses for Rent in Kampala",
     students: "Student Housing",
+    shortStays: "Short stays",
     commercial: "Commercial",
     land: "Land for Sale in Uganda",
     mortgage: "Mortgage Finder",
@@ -4989,6 +4990,7 @@ const FOOTER_I18N = {
     sale: "Ennyumba ezitundibwa",
     rent: "Ennyumba ezipangisibwa",
     students: "Obutuuze bw'abayizi",
+    shortStays: "Okusula okw'ekiseera ekimpi",
     commercial: "By'obusuubuzi",
     land: "Ettaka eritundibwa",
     mortgage: "Noonya mortgage",
@@ -5022,6 +5024,7 @@ const FOOTER_I18N = {
     sale: "Nyumba za kuuza",
     rent: "Nyumba za kupangisha",
     students: "Makazi ya wanafunzi",
+    shortStays: "Malazi ya muda mfupi",
     commercial: "Biashara",
     land: "Ardhi ya kuuza",
     mortgage: "Kitafuta mortgage",
@@ -5055,6 +5058,7 @@ const FOOTER_I18N = {
     sale: "Ot me cato",
     rent: "Ot me pang",
     students: "Kabedo pa lutino kwan",
+    shortStays: "Kabedo me nino manok",
     commercial: "Property me business",
     land: "Lobo me cato",
     mortgage: "Yeny mortgage",
@@ -5088,6 +5092,7 @@ const FOOTER_I18N = {
     sale: "Amaka ag'okugura",
     rent: "Amaka ag'okupangisa",
     students: "Obutura bw'abanyeshomero",
+    shortStays: "Okusula kw'akanya",
     commercial: "Eby'obushuubuzi",
     land: "Eitaka eririkugurishwa",
     mortgage: "Sherura mortgage",
@@ -5121,6 +5126,7 @@ const FOOTER_I18N = {
     sale: "Enju ezigurishwa",
     rent: "Enju ezipangisibwa",
     students: "Obutura bw'abanyeshomero",
+    shortStays: "Okusula kw'akanya gato",
     commercial: "Eby'obushuubuzi",
     land: "Eitaka erigurishwa",
     mortgage: "Sherura mortgage",
@@ -5154,6 +5160,7 @@ const FOOTER_I18N = {
     sale: "Ennyumba ezitundibwa",
     rent: "Ennyumba ezipangisibwa",
     students: "Obutuuze bw'abayizi",
+    shortStays: "Okusula okw'ekiseera ekitono",
     commercial: "By'obusuubuzi",
     land: "Ettaka eritundibwa",
     mortgage: "Noonya mortgage",
@@ -5187,6 +5194,7 @@ const FOOTER_I18N = {
     sale: "بيوت للبيع",
     rent: "بيوت للإيجار",
     students: "سكن الطلاب",
+    shortStays: "إقامات قصيرة",
     commercial: "تجاري",
     land: "أرض للبيع",
     mortgage: "حاسبة التمويل",
@@ -5253,6 +5261,7 @@ function applyFooterLanguageUI() {
   setTextById("footer-link-rent", footerTr("rent"));
   setTextById("footer-link-rent-kampala", footerTr("rentKampala"));
   setTextById("footer-link-students", footerTr("students"));
+  setTextById("footer-link-short-term", footerTr("shortStays"));
   setTextById("footer-link-commercial", footerTr("commercial"));
   setTextById("footer-link-land", footerTr("land"));
   setTextById("footer-link-mortgage", footerTr("mortgage"));
@@ -8426,11 +8435,12 @@ function applyLanguageUI() {
   const hasCanonicalAreaSeoTitle = /^\/(?:for-sale|to-rent|land|commercial|student-accommodation)(?:\/[a-z0-9-]+)+$/i.test(pathname)
     || /^\/hostels\/[a-z0-9-]+$/i.test(pathname);
   const hasCanonicalPropertySeoTitle = /^\/property\/[^/?#]+$/i.test(pathname);
+  const hasOwnDocumentTitle = /^\/short-term(?:\/|$)/i.test(pathname);
   const serverRenderedSeoHeading = document.querySelector('.page.active [data-ssr-seo-h1="1"]');
   const hasServerRenderedSeoTitle = preserveServerRenderedSeoHeading(serverRenderedSeoHeading);
   if (hasServerRenderedSeoTitle && serverRenderedSeoHeading.dataset.ssrSeoTitle) {
     document.title = serverRenderedSeoHeading.dataset.ssrSeoTitle;
-  } else if (!hasCanonicalAreaSeoTitle && !hasCanonicalPropertySeoTitle) {
+  } else if (!hasCanonicalAreaSeoTitle && !hasCanonicalPropertySeoTitle && !hasOwnDocumentTitle) {
     document.title = tr("siteTitle");
   }
   setTextById("brand-subtitle", tr("brandSubtitle"));
@@ -41424,6 +41434,31 @@ async function requestAiAssistantResults({ message, intent, responseBox, button,
   const fallbackMessage = `Please help me with ${String(intent || "search_property").replace(/_/g, " ")} on makaug.`;
   const finalMessage = (message || "").trim() || fallbackMessage;
   const idleText = button?.dataset?.idleText || button?.textContent || aiAssistantCopyText("ask", "Ask AI");
+  const onShortTermSearch = searchIntent === "search_short_term"
+    || normalizedScope === "short_term"
+    || /^\/short-term(?:\/|$)/i.test(window.location.pathname || "");
+  if (onShortTermSearch && typeof window.makaugShortTerm?.search === "function") {
+    const place = String(finalMessage || "")
+      .replace(/\b(short\s*stays?|short\s*term|nightly|apartments?|guest\s*houses?|hotels?|furnished|looking|find|please|near|in|a|an|the|for|me|by|night)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const input = document.getElementById("st-q");
+    if (input) input.value = place || finalMessage;
+    if (responseBox) {
+      responseBox.classList.remove("hidden");
+      responseBox.innerHTML = `<div class="rounded-xl bg-blue-50 border border-blue-100 p-4 text-sm font-bold text-blue-900">${adminEscape(aiAssistantCopyText("loading", "Searching short stays..."))}</div>`;
+    }
+    try {
+      await window.makaugShortTerm.search();
+      trackEvent("st_search", { source: "ask_ai", q: place || finalMessage });
+      if (responseBox) {
+        responseBox.innerHTML = `<div class="rounded-xl bg-blue-50 border border-blue-100 p-4 text-sm text-blue-950">Showing short stays for that search.</div>`;
+      }
+    } catch (error) {
+      if (responseBox) responseBox.innerHTML = `<div class="rounded-xl bg-blue-50 border border-blue-100 p-4 text-sm text-blue-950">${adminEscape(error?.message || "Short stays could not be searched.")}</div>`;
+    }
+    return { ok: true, data: { intent: "search_short_term", search_scope: "short_term" } };
+  }
   if (button) {
     button.dataset.idleText = idleText;
     button.disabled = true;
@@ -50246,6 +50281,8 @@ function currentPathWithQueryAndHash() {
 function updateRouteHistoryForPage(page, source = "show_page") {
   const route = routeForPage(page);
   if (!route || currentPathWithQueryAndHash() === route) return;
+  const path = normalizeRoutePath(window.location.pathname || "/");
+  if (page === "short-term" && /^\/short-term(?:\/|$)/i.test(path)) return;
   try {
     window.history.pushState({ page, source }, "", route);
   } catch (error) {}
@@ -50314,6 +50351,19 @@ function openOffPlanFromHero() {
   return navigatePublicRoute(`/off-plan${query ? `?q=${encodeURIComponent(query)}` : ""}`, null, { source: "off_plan_hero" });
 }
 
+let landingAnalyticsPageViewSkipped = false;
+function skipDuplicateLandingPageView(targetPage) {
+  if (landingAnalyticsPageViewSkipped) return false;
+  if (typeof window === "undefined" || !window.__MAKAUG_GA_SSR) return false;
+  const path = normalizeRoutePath(window.location.pathname || "/");
+  const route = routeForPage(targetPage);
+  const matches = Boolean(route && (path === route || path.startsWith(`${route}/`)))
+    || (targetPage === "short-term" && /^\/short-term(?:\/|$)/i.test(path));
+  if (!matches) return false;
+  landingAnalyticsPageViewSkipped = true;
+  return true;
+}
+
 function showPage(page, options = {}) {
   const targetPage = normalizePageKey(page);
   if (initialSsrCategoryGrid && initialSsrCategoryGrid.key !== targetPage) invalidateInitialSsrCategoryGrid();
@@ -50356,7 +50406,7 @@ function showPage(page, options = {}) {
   closeMobile();
   window.setTimeout(() => refreshActivePublicMapsAfterRoute(), 120);
   window.requestAnimationFrame(() => scheduleMapsInit({ force: targetPage !== previousPage }));
-  if (targetPage && targetPage !== previousPage) {
+  if (targetPage && targetPage !== previousPage && !skipDuplicateLandingPageView(targetPage)) {
     trackEvent("page_view", { page: targetPage });
   }
   if (targetPage === "finder-dashboard") renderFinderDashboard();

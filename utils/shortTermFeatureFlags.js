@@ -62,7 +62,17 @@ function applyShortTermVisibility(html, env = process.env) {
 // SHORT_TERM_COUNTDOWN_TARGET overrides this, so if CAF moves the date it is a
 // config change rather than a deploy. Setting the variable to an unparseable
 // value hides the banner rather than showing something wrong.
+const { publicConfig: travelpayoutsPublicConfig } = require('../services/travelpayoutsAffiliate');
+
 const AFCON_2027_KICKOFF = '2027-06-19T13:00:00.000Z';
+
+function publicWhatsappDigits(env = process.env) {
+  const raw = String(env.MAKAUG_WHATSAPP_NUMBER || env.WHATSAPP_BUSINESS_NUMBER || '256780863394');
+  let digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('0')) digits = `256${digits.slice(1)}`;
+  if (digits.length === 9) digits = `256${digits}`;
+  return digits || '256780863394';
+}
 
 function shortTermCountdownTarget(env = process.env) {
   const raw = String(env.SHORT_TERM_COUNTDOWN_TARGET || '').trim();
@@ -77,10 +87,20 @@ function shortTermCountdownTarget(env = process.env) {
 function injectShortTermRuntimeConfig(html, env = process.env) {
   const source = String(html || '');
   if (!shortTermEnabled(env)) return source;
+  const travelpayouts = travelpayoutsPublicConfig(env);
   const config = {
     enabled: true,
     countdown: shortTermCountdownEnabled(env) ? shortTermCountdownTarget(env) : null,
-    countdownLabel: String(env.SHORT_TERM_COUNTDOWN_LABEL || 'AFCON 2027').trim()
+    countdownLabel: String(env.SHORT_TERM_COUNTDOWN_LABEL || 'AFCON 2027').trim(),
+    whatsappNumber: publicWhatsappDigits(env),
+    // Drive's script URL is not included here. It is printed only into the
+    // /short-term document, and only when TRAVELPAYOUTS_DRIVE_ENABLED is on.
+    travelpayouts: {
+      marker: travelpayouts.marker,
+      brands: travelpayouts.brands,
+      enabled: travelpayouts.enabled,
+      driveEnabled: travelpayouts.driveEnabled
+    }
   };
   const payload = JSON.stringify(config).replace(/</g, '\\u003c');
   const script = `<script id="makaug-short-term-config">window.__makaugShortTerm=${payload};</script>`;
@@ -97,6 +117,7 @@ module.exports = {
   injectShortTermRuntimeConfig,
   shortTermCountdownTarget,
   shortTermCountdownEnabled,
+  publicWhatsappDigits,
   shortTermEnabled,
   shortTermIntakeEnabled,
   shortTermReviewsEnabled

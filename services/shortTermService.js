@@ -907,6 +907,7 @@ function validateListingSubmission(payload = {}) {
       preferred_payment_method: payment || null,
       payout_note: cleanText(payload.payout_note, 300) || null,
       referral_code: normaliseReferralCode(payload.referral_code) || null,
+      utb_licence_number: cleanText(payload.utb_licence_number, 80) || null,
       amenities,
       availability: windows
     }
@@ -945,7 +946,8 @@ async function createShortTermListing(db, payload = {}, context = {}) {
          terms_accepted_at, terms_accepted_ip,
          status, moderation_stage, listing_fee_ugx, listing_fee_status, listing_term_months,
          preferred_payment_method, payout_note, source,
-         listed_via, entered_by_staff_id, entered_by_staff_name, referral_code, acquisition_notes
+         listed_via, entered_by_staff_id, entered_by_staff_name, referral_code, acquisition_notes,
+         utb_licence_number
        ) VALUES (
          $1,$2,$3,$4,$5,$6,$7,$8,$9,
          $10,$11,$12,$13,$14,$15,
@@ -958,7 +960,7 @@ async function createShortTermListing(db, payload = {}, context = {}) {
          NOW(),$37,
          'pending','submitted',$38,'unpaid',$39,
          $40,$41,'direct',
-         $42,$43,$44,$45,$46
+         $42,$43,$44,$45,$46,$47
        )
        RETURNING id, reference, slug, status, moderation_stage, listed_via`,
       [
@@ -982,7 +984,8 @@ async function createShortTermListing(db, payload = {}, context = {}) {
         context.enteredByStaffId || null,
         context.enteredByStaffName || null,
         value.referral_code || normaliseReferralCode(context.referralCode) || null,
-        cleanMultiline(context.acquisitionNotes, 2000) || null
+        cleanMultiline(context.acquisitionNotes, 2000) || null,
+        value.utb_licence_number
       ]
     );
 
