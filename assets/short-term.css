@@ -626,6 +626,27 @@
 #page-short-term .mk-house-band--st .st-cd-units { margin: 2px 0; }
 #page-short-term .mk-house-band--st .st-cd-date { color: #e7cbb8; }
 
+@media (max-width: 640px) {
+  body:has(#page-short-term.active) #language-spotlight { display: none !important; }
+  #page-short-term .mk-house-band--st {
+    display: flex;
+    flex-direction: column;
+  }
+  #page-short-term .mk-house-band--st .mk-house-band__tag {
+    position: static;
+    order: 0;
+    align-self: flex-start;
+    margin: 12px 14px 0;
+  }
+  #page-short-term .mk-house-band--st .mk-house-band__copy {
+    position: relative;
+    inset: auto;
+    order: 1;
+    width: 100%;
+    padding: 16px 18px 20px;
+  }
+}
+
 @media (max-width: 860px) {
   #page-short-term .mk-house-band--st .mk-house-band__copy {
     width: 100%;
@@ -728,4 +749,29 @@
 /* Several partners sit side by side; they wrap rather than squeeze on a phone. */
 #page-short-term .st-booking-ctas {
   display: flex; flex-wrap: wrap; gap: 10px;
+}
+
+#page-short-term .st-compare { margin-top: 10px; }
+#page-short-term .st-ad-label {
+  display: inline-block; margin: 0 0 6px; padding: 1px 6px;
+  border: 1px solid #d6d3d1; border-radius: 4px;
+  font-size: .68rem; font-weight: 800; letter-spacing: .04em; color: #57534e;
+}
+#page-short-term .st-compare-label { margin: 0 0 6px; font-size: .82rem; font-weight: 800; }
+#page-short-term .st-compare-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+#page-short-term .st-compare-btn {
+  display: inline-flex; align-items: center; padding: 7px 12px; border-radius: 999px;
+  border: 1px solid #166534; background: #fff; color: #166534;
+  font-size: .82rem; font-weight: 800; text-decoration: none; cursor: pointer;
+}
+#page-short-term .st-compare-note, #page-short-term .st-indicative {
+  margin: 6px 0 0; font-size: .75rem; color: var(--st-muted);
+}
+#page-short-term .st-hotel-search {
+  display: grid; gap: 8px; margin: 0 0 18px; padding: 14px;
+  border: 1px dashed var(--st-line); border-radius: 14px; background: #fff;
+}
+#page-short-term .st-pin-map { height: 280px; border-radius: 14px; background: #eee7e1; }
+#page-short-term .st-alert-wa {
+  display: inline-flex; margin-top: 10px; color: #166534; font-weight: 800;
 }

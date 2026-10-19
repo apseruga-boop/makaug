@@ -7,6 +7,7 @@ const { captureLearningEvent } = require('../services/aiLearningCaptureService')
 const { createLead } = require('../services/leadService');
 const { logNotification } = require('../services/notificationLogService');
 const { listPublicDevelopments } = require('../services/offPlanService');
+const { searchShortTermListings } = require('../services/shortTermService');
 const { publicOffPlanPayload } = require('../utils/publicOffPlanPayload');
 const {
   normalizeCommercialTransactionType,
@@ -1267,18 +1268,59 @@ router.post('/assistant-reply', async (req, res, next) => {
     const inferredIntent = inferAssistantIntentFromMessage(userMessage, requestedIntent);
     const normalizedInferredIntent = normalizeAssistantIntent(inferredIntent);
     const cleanBarExplicitActionIntents = ['off_plan_search', 'off_plan_listing', 'property_listing', 'agent_search', 'agent_registration', 'mortgage_help'];
-    const effectiveIntent = cleanBarExplicitActionIntents.includes(normalizedInferredIntent)
+    let effectiveIntent = cleanBarExplicitActionIntents.includes(normalizedInferredIntent)
       ? normalizedInferredIntent
       : cleanBarSearchOnly && !isAssistantSearchIntent(requestedIntent)
         ? inferAssistantIntentFromMessage(userMessage, 'search_property')
         : inferredIntent;
+    const shortTermRequested = requestedIntent === 'search_short_term'
+      || String(context.search_scope || '').toLowerCase().replace(/-/g, '_') === 'short_term'
+      || /^\/short-term(?:\/|$)/i.test(String(context.route || ''));
+    if (shortTermRequested) effectiveIntent = 'search_short_term';
     const assistantIsSearch = isAssistantSearchIntent(effectiveIntent);
     const normalizedEffectiveIntent = normalizeAssistantIntent(effectiveIntent);
     const assistantIsOffPlan = ['off_plan_search', 'off_plan_listing'].includes(normalizedEffectiveIntent);
     let response = null;
     let searchPayload = null;
 
-    if (normalizedEffectiveIntent === 'property_listing') {
+    if (effectiveIntent === 'search_short_term') {
+      const placeQuery = String(userMessage || '')
+        .replace(/\b(short\s*stays?|short\s*term|nightly|apartments?|guest\s*houses?|hotels?|furnished|looking|find|please|near|in|a|an|the|for|me|by|the|night)\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80);
+      const queryText = placeQuery || cleanText(userMessage, 80);
+      let listings = [];
+      let total = 0;
+      try {
+        const found = await searchShortTermListings(db, { q: queryText, limit: 8 });
+        listings = found.listings || [];
+        total = found.total || listings.length;
+      } catch (_searchError) {
+        listings = [];
+        total = 0;
+      }
+      const seeAll = `${appOriginFromRequest(req)}/short-term?q=${encodeURIComponent(queryText)}`;
+      response = {
+        text: sanitizeAssistantText(total
+          ? `I found ${total} short stay${total === 1 ? '' : 's'} matching that search.`
+          : 'No published short stays match that yet. Browse short stays or list a place.'),
+        model: 'short-term-search',
+        language,
+        action_url: seeAll,
+        action: 'open_short_term_search'
+      };
+      searchPayload = {
+        search_type: 'short_term',
+        search_scope: 'short_term',
+        total_matches: total,
+        result_count: listings.length,
+        listings,
+        results: listings,
+        see_all_url: seeAll,
+        zero_results: total === 0
+      };
+    } else if (normalizedEffectiveIntent === 'property_listing') {
       const onlineListingUrl = `${appOriginFromRequest(req)}/list-property?mode=online`;
       response = {
         text: sanitizeAssistantText([

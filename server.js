@@ -72,6 +72,7 @@ const {
   injectShortTermRuntimeConfig,
   shortTermEnabled
 } = require('./utils/shortTermFeatureFlags');
+const { driveHeadSnippet } = require('./services/travelpayoutsAffiliate');
 const {
   getShortTermListing,
   listShortTermSitemapEntries,
@@ -1815,6 +1816,9 @@ app.get('/short-term', async (req, res, next) => {
       structuredData: rendered.structuredData
     });
 
+    const drive = driveHeadSnippet();
+    if (drive) html = html.replace('</head>', `${drive}\n</head>`);
+
     res.set('X-makaug-Short-Term-SSR', String(listings.length));
     res.set('X-makaug-Short-Term-Total', String(total));
     return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
@@ -1841,6 +1845,27 @@ app.get('/short-term/list-your-place', (req, res, next) => {
   }
 });
 
+app.get('/short-term/hotel/:slug', (req, res, next) => {
+  if (!shortTermEnabled()) return next();
+  try {
+    const slug = String(req.params.slug || '').trim().toLowerCase();
+    res.set('X-makaug-Public-Sanitized', '1');
+    let html = renderPublicHtml(req.originalUrl || req.url || req.path);
+    html = patchPublicPageSeoMeta(html, {
+      title: 'Compare hotel prices | Short stays | makaug.com',
+      description: 'Compare prices for this hotel on partner sites. You book and pay on the partner site, which handles the booking.',
+      canonical: absolutePublicUrl(`/short-term/hotel/${encodeURIComponent(slug)}`),
+      image: absolutePublicUrl('/assets/house-ads-v3/rent.webp')
+    });
+    html = patchMetaTag(html, 'robots', 'noindex,follow');
+    res.set('X-Robots-Tag', 'noindex, follow');
+    res.set('X-makaug-Short-Term-Page', 'hotel');
+    return sendTextResponse(req, res, html, { cacheControl: 'no-store' });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.get('/short-term/:slug', async (req, res, next) => {
   if (!shortTermEnabled()) return next();
   try {
@@ -1858,15 +1883,8 @@ app.get('/short-term/:slug', async (req, res, next) => {
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
 
     if (!listing) {
-      html = patchPublicPageSeoMeta(html, {
-        title: SHORT_TERM_PAGE_TITLE,
-        description: SHORT_TERM_PAGE_DESCRIPTION,
-        canonical: absolutePublicUrl('/short-term')
-      });
-      html = patchMetaTag(html, 'robots', 'noindex,follow');
-        res.set('X-Robots-Tag', 'noindex, follow');
       res.set('X-makaug-Short-Term-Listing', 'missing');
-      return sendTextResponse(req, res, html, { cacheControl: 'no-store' });
+      return sendPublicNotFound(req, res);
     }
 
     const rendered = renderShortTermSeoHtml(html, {

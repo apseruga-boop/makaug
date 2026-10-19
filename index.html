@@ -27,7 +27,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1" defer></script>
-  <script src="/assets/makaug-site-i18n.js?v=20261019-site-i18n-v7" defer></script>
+  <script src="/assets/makaug-site-i18n.js?v=20261019-site-i18n-v8" defer></script>
   <meta name="theme-color" content="#15803d">
   <script>
     (function () {
@@ -414,7 +414,7 @@
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" media="(min-width: 768px)" fetchpriority="high" data-home-hero-preload>
   <link rel="stylesheet" href="/assets/tailwind.css">
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
-  <link rel="stylesheet" href="/assets/short-term.css?v=20260916-short-term-v23">
+  <link rel="stylesheet" href="/assets/short-term.css?v=20260916-short-term-v24">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -9660,6 +9660,7 @@
             <a id="footer-link-rent" href="/to-rent" onclick="showPage('rent')" class="block cursor-pointer hover:text-white">Houses for Rent</a>
             <a id="footer-link-rent-kampala" href="/to-rent/kampala-kampala" onclick="return navigatePublicRoute('/to-rent/kampala-kampala', event)" class="block cursor-pointer hover:text-white">Houses for Rent in Kampala</a>
             <a id="footer-link-students" href="/student-accommodation" onclick="showPage('students')" class="block cursor-pointer hover:text-white">Student Housing</a>
+            <a id="footer-link-short-term" href="/short-term" data-short-term-entry class="block cursor-pointer hover:text-white">Short stays</a>
             <a id="footer-link-commercial" href="/commercial" onclick="showPage('commercial')" class="block cursor-pointer hover:text-white">Commercial</a>
             <a id="footer-link-land" href="/land" onclick="showPage('land')" class="block cursor-pointer hover:text-white">Land for Sale in Uganda</a>
             <a id="footer-link-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="block cursor-pointer hover:text-white">Mortgage Finder</a>
@@ -10579,7 +10580,7 @@
       }
       function loadShortTermNow() {
         if (!window.__makaugShortTerm || window.__makaugShortTerm.enabled !== true) return Promise.resolve(false);
-        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20260916-short-term-v23", function () {
+        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20260916-short-term-v24", function () {
           return !!(window.makaugShortTerm && typeof window.makaugShortTerm.route === "function");
         });
       }
