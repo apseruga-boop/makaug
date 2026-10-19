@@ -457,6 +457,13 @@ test('the server mounts the API and serves the public page', () => {
     serverSource.indexOf("app.get('/short-term/list-your-place'") < serverSource.indexOf("app.get('/short-term/:slug'"),
     'list-your-place must be routed before the :slug catch-all'
   );
+  for (const route of ["app.get('/short-term/terms'", "app.get('/short-term/host'", "app.get('/short-term/requests/:reference'"]) {
+    assert.ok(serverSource.includes(route), `${route} is missing`);
+    assert.ok(
+      serverSource.indexOf(route) < serverSource.indexOf("app.get('/short-term/:slug'"),
+      `${route} must be routed before the :slug catch-all`
+    );
+  }
 });
 
 test('the public routes fall through untouched when the flag is off', () => {
@@ -465,7 +472,7 @@ test('the public routes fall through untouched when the flag is off', () => {
     serverSource.indexOf("app.get('/agents/:id'")
   );
   const guards = routeBlock.match(/if \(!shortTermEnabled\(\)\) return next\(\);/g) || [];
-  assert.strictEqual(guards.length, 3, `expected 3 flag guards, found ${guards.length}`);
+  assert.strictEqual(guards.length, 6, `expected 6 flag guards, found ${guards.length}`);
 });
 
 test('the Short Term page is registered with the public HTML sanitizer', () => {
