@@ -3,7 +3,9 @@
 
 /**
  * Read-only list of pending rows the current YouTube intake rules would reject:
- * a foreign city, country, channel, or currency, or a non-listing explainer.
+ * no positive Uganda evidence, a foreign city, country, channel, or currency,
+ * or a non-listing explainer. A stored district is not evidence: fuzzy matches
+ * such as Gulu or Maracha must not keep a foreign caption in the queue.
  *
  * This script only SELECTs those rows and classifies them in process.
  * Do not point it at production unless you only want to read.
@@ -78,7 +80,7 @@ function rejectionForPendingRow(row = {}) {
     row.source_title,
     row.source_text,
     row.area,
-    row.district,
+    row.location,
   ].filter(Boolean).join(' ');
   const foreign = foreignSourceMarketStatus(foreignText);
   if (!foreign.allowed) {

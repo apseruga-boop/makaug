@@ -14036,12 +14036,37 @@ function staffReviewQueueLoadingHtml(label = "Moderation queue is still loading.
     </div>`;
 }
 
+function staffReviewQueueErrorHtml(label, detail = "") {
+  return `
+    <div class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900" data-staff-queue-error="1">
+      <div class="font-black">${adminEscape(label)}</div>
+      <div class="mt-1 text-xs">${adminEscape(detail || "The queue did not finish loading. This is not an empty queue.")}</div>
+      <button type="button" onclick="staffRetryBrokerReviewQueue()" class="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-black text-red-800">Try again</button>
+    </div>`;
+}
+
 function staffPanelQueueNeedsRetry(rows = [], meta = {}) {
   if (Array.isArray(rows) && rows.length) return false;
   return meta?.query_ok === false
     || meta?.timed_out
     || !!meta?.query_error
     || Number(meta?.expected_count || 0) > 0;
+}
+
+// The broker panel used to stay on "catching up" forever. The panels request
+// only splits the oldest pending scan, so a positive broker count with no
+// broker rows in that window retried the same scan. After the retry limit the
+// loading sentence was left in place. A successful empty scan with a positive
+// count loads the broker segment once. A failed scan stops on an error.
+function staffBrokerQueueResolution(rows = [], meta = {}, retryCount = 0, retryLimit = STAFF_DASHBOARD_PANEL_RETRY_LIMIT) {
+  if (Array.isArray(rows) && rows.length) return "rows";
+  if (meta?.broker_segment_loaded === true || meta?.fallback_route === true) return "empty";
+  const failed = meta?.query_ok === false || meta?.timed_out === true || !!meta?.query_error;
+  const countAhead = Number(meta?.expected_count || 0) > 0;
+  if (!failed && meta?.query_ok === true && countAhead) return "load_broker_segment";
+  if (failed && retryCount >= retryLimit) return "error";
+  if (failed || (countAhead && meta?.query_ok !== true)) return "retry";
+  return "empty";
 }
 
 function staffPanelRetryEndpoint(endpoint = "/api/staff/dashboard?panels=1") {
@@ -14175,7 +14200,20 @@ function renderStaffReviewQueue(rows = [], meta = {}) {
 function renderStaffBrokerReviewQueue(rows = [], meta = {}) {
   const wrap = document.getElementById("staff-broker-review-queue");
   if (!wrap) return;
-  if (!rows.length && staffPanelQueueNeedsRetry(rows, meta)) {
+  const resolution = staffBrokerQueueResolution(rows, meta, staffDashboardPanelRetryCount);
+  if (resolution === "load_broker_segment") {
+    wrap.innerHTML = staffReviewQueueLoadingHtml("Broker review rows are still catching up.");
+    staffLoadBrokerReviewSegment();
+    return;
+  }
+  if (resolution === "error") {
+    const detail = meta?.timed_out
+      ? "The broker review query timed out."
+      : (meta?.query_error ? `The broker review query failed (${meta.query_error}).` : "The broker review query did not finish.");
+    wrap.innerHTML = staffReviewQueueErrorHtml("Broker review could not be loaded.", detail);
+    return;
+  }
+  if (resolution === "retry") {
     wrap.innerHTML = staffReviewQueueLoadingHtml("Broker review rows are still catching up.");
     scheduleStaffDashboardPanelRetry("broker queue");
     return;
@@ -14183,6 +14221,50 @@ function renderStaffBrokerReviewQueue(rows = [], meta = {}) {
   staffSetReviewQueue("broker", rows, meta);
   staffPaintReviewQueue("broker");
   if (!staffReviewQueueState.search.term && staffReviewQueueState.main.rows.length) staffPaintReviewQueue("main");
+}
+
+let staffBrokerSegmentLoad = null;
+function staffRetryBrokerReviewQueue() {
+  clearStaffDashboardPanelRetry();
+  staffBrokerSegmentLoad = null;
+  staffLoadBrokerReviewSegment();
+}
+
+async function staffLoadBrokerReviewSegment() {
+  if (staffBrokerSegmentLoad) return staffBrokerSegmentLoad;
+  const wrap = document.getElementById("staff-broker-review-queue");
+  staffBrokerSegmentLoad = (async () => {
+    try {
+      const res = await staffApiRequestWithTimeout(
+        staffPanelRetryEndpoint(staffReviewQueuePageUrl("broker", 1)),
+        {},
+        STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
+        "Broker review queue"
+      );
+      const brokerRows = Array.isArray(res?.data) ? res.data : [];
+      const total = res?.pagination?.total ?? res?.meta?.total;
+      const knownTotal = Number.isFinite(Number(total)) ? Number(total) : brokerRows.length;
+      renderStaffBrokerReviewQueue(brokerRows, {
+        query_ok: true,
+        empty_is_authoritative: true,
+        returned_count: brokerRows.length,
+        total: knownTotal,
+        expected_count: knownTotal,
+        broker_segment_loaded: true
+      });
+      staffReviewQueueState.broker.page = 1;
+    } catch (error) {
+      if (wrap) {
+        wrap.innerHTML = staffReviewQueueErrorHtml(
+          "Broker review could not be loaded.",
+          error?.message || "The broker review request failed."
+        );
+      }
+    } finally {
+      staffBrokerSegmentLoad = null;
+    }
+  })();
+  return staffBrokerSegmentLoad;
 }
 
 function staffReviewQueuePageUrl(segment, page, search = "") {
@@ -27970,10 +28052,25 @@ function adminReviewSetAddressSearchStatus(message = "", tone = "blue") {
     green: "mt-2 text-xs font-semibold text-green-800",
     red: "mt-2 text-xs font-semibold text-red-700",
     blue: "mt-2 text-xs font-semibold text-blue-900",
-    amber: "mt-2 text-xs font-semibold text-amber-900"
+    amber: "mt-2 text-xs font-semibold text-amber-900",
+    slate: "mt-2 text-xs font-semibold text-slate-600"
   };
   el.className = palette[tone] || palette.blue;
+  el.dataset.staffTownNote = tone === "slate" ? "1" : "0";
   el.textContent = message || "Search a place, road, estate, town, or landmark, then confirm the pin.";
+}
+
+// A found-online town saved with a real district and no canonical area is a
+// successful save. It must not raise the hard "location not recognised" warning.
+function adminReviewTownOnlyLocationNote(review = {}) {
+  if (typeof isFoundOnlineListing !== "function" || !isFoundOnlineListing(review)) return "";
+  const extra = adminReviewExtraFields(review);
+  const district = String(review.district || extra.district || "").trim();
+  const city = String(extra.city || extra.town || review.city || "").trim();
+  const canonicalId = String(review.canonical_location_id || extra.canonical_location_id || "").trim();
+  if (canonicalId || !city || !district || !DISTRICTS.includes(district)) return "";
+  if (adminReviewPlaceEqualsDistrict(city, district)) return "";
+  return `Town saved as ${city}, ${district}. An exact neighbourhood is optional. This does not block the save.`;
 }
 
 function adminReviewClearCanonicalSuggestions() {
@@ -28352,6 +28449,11 @@ function adminReviewLocationAutofillText(review = {}, facts = {}) {
 
 async function adminReviewAutoPopulateLocationFromSource(review = {}) {
   const extra = adminReviewExtraFields(review);
+  const townNote = adminReviewTownOnlyLocationNote(review);
+  if (townNote) {
+    adminReviewSetAddressSearchStatus(townNote, "slate");
+    return;
+  }
   // Staff already saved this location. Do not derive Town, Area, Neighbourhood
   // or the address note again from the district or the previous label.
   if (extra.staff_location_reviewed_at) return;
@@ -28705,6 +28807,7 @@ function adminReviewListingEditPanel(review = {}) {
     || (initialCity && storedSearchLabel.toLowerCase().includes(String(initialCity).trim().toLowerCase()))
     || (initialArea && storedSearchLabel.toLowerCase().includes(String(initialArea).trim().toLowerCase()));
   const initialSearchLabel = searchLabelAgrees ? storedSearchLabel : "";
+  const townOnlyNote = adminReviewTownOnlyLocationNote(review);
   const initialLatitude = initialPoint ? Number(initialPoint.lat).toFixed(6) : (review.latitude ?? "");
   const initialLongitude = initialPoint ? Number(initialPoint.lng).toFixed(6) : (review.longitude ?? "");
   const initialStreet = review.street_name || extra.street_name || "";
@@ -28807,7 +28910,7 @@ function adminReviewListingEditPanel(review = {}) {
               <button type="button" onclick="adminReviewFindAddressOrPlace()" class="shrink-0 rounded-lg bg-green-700 px-3 py-2 text-xs font-bold text-white hover:bg-green-600">Find</button>
             </div>
           </label>
-          <div id="admin-review-address-search-status" class="mt-2 text-xs font-semibold text-blue-900">Search a place, road, estate, town, or landmark, then confirm the pin.</div>
+          <div id="admin-review-address-search-status" data-staff-town-note="${townOnlyNote ? "1" : "0"}" class="mt-2 text-xs font-semibold ${townOnlyNote ? "text-slate-600" : "text-blue-900"}">${adminEscape(townOnlyNote || "Search a place, road, estate, town, or landmark, then confirm the pin.")}</div>
           <div id="admin-review-address-suggestions" class="hidden mt-2 rounded-lg border border-green-300 bg-green-50 p-3 text-xs" aria-live="polite"></div>
           <div id="admin-review-canonical-suggestions" class="hidden mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs" aria-live="polite"></div>
           <input id="admin-review-place-id-edit" type="hidden" value="${adminAttr(extra.place_id || "")}">
@@ -28861,7 +28964,7 @@ function adminReviewListingEditPanel(review = {}) {
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <div class="text-xs font-black uppercase tracking-wide text-blue-900">Review map pin</div>
-              <p class="mt-1 text-xs text-blue-900">Move the pin or click the map to set the exact public location before approval.</p>
+              <p class="mt-1 text-xs text-blue-900">The pin follows the town as a guide and is not saved. Latitude and longitude stay empty until you press Use current pin.</p>
             </div>
             <div id="admin-review-location-map-status" class="rounded-full bg-white px-2 py-1 text-[11px] font-bold text-blue-900">Loading map...</div>
           </div>
@@ -29083,7 +29186,10 @@ function adminReviewSyncLocationMapFromInputs() {
   adminReviewMoveLocationPin(point.lat, point.lng, {
     zoom: point.exact ? MAP_PROPERTY_ZOOM : MAP_DISTRICT_ZOOM
   });
-  adminReviewLocationStatus(point.exact ? "Exact pin from fields" : "Approximate area pin - confirm exact pin before approval", point.exact ? "green" : "amber");
+  adminReviewLocationStatus(
+    point.exact ? "Exact pin from fields" : "Closest hierarchy pin — not saved. Lat/Lng stay empty until you press Use current pin.",
+    point.exact ? "green" : "amber"
+  );
   if (!point.exact) {
     const draft = adminReviewLocationDraft();
     const seq = ++adminReviewLocationResolveSeq;
@@ -29099,7 +29205,7 @@ function adminReviewSyncLocationMapFromInputs() {
       const latest = adminReviewLocationDraft();
       if (adminReviewHasUsableCoordinates(latest.latitude, latest.longitude)) return;
       adminReviewMoveLocationPin(resolved.lat, resolved.lng, { zoom: MAP_DISTRICT_ZOOM });
-      adminReviewLocationStatus("Closest hierarchy pin - move/confirm exact pin before approval", "amber");
+      adminReviewLocationStatus("Closest hierarchy pin — not saved. Lat/Lng stay empty until you press Use current pin.", "amber");
     }).catch(() => {});
   }
 }
@@ -29181,7 +29287,7 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
       adminReviewLocationMap = reviewGoogleMapCache.map;
       adminReviewLocationMarker = reviewGoogleMapCache.marker;
       adminReviewLocationProvider = "google";
-      adminReviewLocationStatus(point?.exact ? "Google exact pin loaded" : "Google approximate area pin", point?.exact ? "green" : "amber");
+      adminReviewLocationStatus(point?.exact ? "Google exact pin loaded" : "Closest hierarchy pin — not saved. Lat/Lng stay empty until you press Use current pin.", point?.exact ? "green" : "amber");
       setTimeout(() => {
         try { google.maps.event.trigger(reviewGoogleMapCache.map, "resize"); reviewGoogleMapCache.map.setCenter(center); } catch (e) {}
       }, 150);
@@ -29224,7 +29330,7 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
     adminReviewLocationMap = map;
     adminReviewLocationMarker = marker;
     adminReviewLocationProvider = "google";
-    adminReviewLocationStatus(point?.exact ? "Google exact pin loaded" : "Google approximate area pin", point?.exact ? "green" : "amber");
+    adminReviewLocationStatus(point?.exact ? "Google exact pin loaded" : "Closest hierarchy pin — not saved. Lat/Lng stay empty until you press Use current pin.", point?.exact ? "green" : "amber");
     setTimeout(() => {
       try { google.maps.event.trigger(map, "resize"); info.open({ anchor: marker, map }); } catch (e) {}
     }, 150);
@@ -29255,7 +29361,7 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
   adminReviewLocationMap = map;
   adminReviewLocationMarker = marker;
   adminReviewLocationProvider = "leaflet";
-  adminReviewLocationStatus(point?.exact ? "Exact pin loaded" : "Approximate area pin", point?.exact ? "green" : "amber");
+  adminReviewLocationStatus(point?.exact ? "Exact pin loaded" : "Closest hierarchy pin — not saved. Lat/Lng stay empty until you press Use current pin.", point?.exact ? "green" : "amber");
   setTimeout(() => {
     try { map.invalidateSize(); marker.openPopup(); } catch (e) {}
   }, 150);
