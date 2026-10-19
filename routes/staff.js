@@ -2585,6 +2585,11 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     const landTitleAlias = normalized.landTitleAvailable ?? normalized.title_available ?? normalized.titleAvailable;
     if (landTitleAlias != null) normalized.land_title_available = landTitleAlias;
   }
+  // The review form's Town dropdown is saved as `city`. Accept `town` when
+  // that is the only key a caller sent.
+  if (!Object.prototype.hasOwnProperty.call(normalized, 'city') && Object.prototype.hasOwnProperty.call(normalized, 'town')) {
+    normalized.city = normalized.town;
+  }
   const currentExtra = safeJsonObject(existing.extra_fields, {});
   const base = {
     area: Object.prototype.hasOwnProperty.call(normalized, 'area') ? cleanText(normalized.area) : cleanText(existing.area),
@@ -2616,7 +2621,12 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
   const areaIsBroad = !base.area
     || (base.district && base.area.toLowerCase() === base.district.toLowerCase())
     || Boolean(areaNode && ['district', 'region'].includes(areaNode.level));
-  if (areaIsBroad) {
+  // An explicit clear of both the area box and the neighbourhood must stay
+  // clear. Restoring the previous place is only for a town-only save that
+  // still sent the district name in the area box.
+  const areaExplicitlyCleared = Object.prototype.hasOwnProperty.call(normalized, 'area') && !cleanText(normalized.area);
+  const neighborhoodExplicitlyCleared = neighborhoodProvided && !neighborhoodText;
+  if (areaIsBroad && !(areaExplicitlyCleared && neighborhoodExplicitlyCleared)) {
     const keptRaw = neighborhoodText || cleanText(currentExtra.neighborhood) || cleanText(existing.area);
     const keptNode = keptRaw ? canonicalizeUgandaLocation(keptRaw, base.district) : null;
     if (keptNode && !['district', 'region'].includes(keptNode.level)) {
@@ -2625,6 +2635,17 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
       base.area = keptNode.name;
       base.neighborhood = neighborhoodText || keptNode.name;
     }
+  }
+  // The district name is not an area or a neighbourhood. Drop it so a save
+  // does not fail with "must be more specific than a district" and does not
+  // store Wakiso as the place when staff only chose a town.
+  if (base.district && base.area && base.area.toLowerCase() === base.district.toLowerCase()) {
+    normalized.area = '';
+    base.area = '';
+  }
+  if (base.district && base.neighborhood && base.neighborhood.toLowerCase() === base.district.toLowerCase()) {
+    normalized.neighborhood = '';
+    base.neighborhood = '';
   }
   // C11: a town staff pick in this save is kept (it used to revert to the area's default town).
   const hierarchy = normalizeReviewLocationHierarchy(base, { preferChosenCity: Object.prototype.hasOwnProperty.call(normalized, 'city') && Boolean(cleanText(normalized.city)) });
@@ -2834,7 +2855,9 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   Object.entries(fieldMap).forEach(([key, transform]) => {
     if (!Object.prototype.hasOwnProperty.call(patch, key)) return;
     const value = transform(patch[key]);
-    if (['title', 'description', 'area', 'district', 'listing_type'].includes(key) && !value) return;
+    // Empty area and district are real clears. Title, description and listing
+    // type still keep the stored value when the form sends a blank.
+    if (['title', 'description', 'listing_type'].includes(key) && !value) return;
     add(key, value);
   });
 
@@ -2907,7 +2930,8 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     extraPatch.contact_phone_alt = normalizePhoneLite(patch.contact_phone_alt) || null;
   }
   let locationConfirmNote = '';
-  const locationFieldsTouched = ['city', 'area', 'district', 'neighborhood'].some((key) => Object.prototype.hasOwnProperty.call(listingPatch, key));
+  const locationFieldsTouched = ['city', 'town', 'area', 'district', 'neighborhood', 'region', 'address', 'street_name']
+    .some((key) => Object.prototype.hasOwnProperty.call(listingPatch, key));
   if (locationFieldsTouched) {
     const evidenceRow = {
       ...existing,
@@ -2935,8 +2959,11 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   }
   if (sourcePostDate?.ok) Object.assign(extraPatch, staffSourcePostDateExtra(sourcePostDate, { actorId: actorId(req) }));
   if (hierarchy.region) extraPatch.region = hierarchy.region;
+  else if (Object.prototype.hasOwnProperty.call(patch, 'region')) extraPatch.region = null;
   if (hierarchy.city) extraPatch.city = hierarchy.city;
+  else if (Object.prototype.hasOwnProperty.call(patch, 'city')) extraPatch.city = null;
   if (hierarchy.neighborhood) extraPatch.neighborhood = hierarchy.neighborhood;
+  else if (Object.prototype.hasOwnProperty.call(patch, 'neighborhood')) extraPatch.neighborhood = null;
   const canonical = hierarchy.canonical || canonicalizeUgandaLocation(patch.area, patch.district);
   if (canonical && !['district', 'region'].includes(canonical.level)) {
     extraPatch.staff_area_input_raw = cleanText(listingPatch.area) || canonical.name;
@@ -2944,6 +2971,13 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     extraPatch.canonical_location_level = canonical.level;
     extraPatch.location_resolution_status = 'canonical_staff_edit';
     extraPatch.location_resolution_confidence = 1;
+  } else if (locationFieldsTouched) {
+    // A town with no specific place, and a cleared location, must not keep a
+    // district node or a previous canonical id. Town lives in extra_fields.city.
+    extraPatch.canonical_location_id = null;
+    extraPatch.canonical_location_level = null;
+    extraPatch.location_resolution_status = 'unresolved';
+    extraPatch.location_resolution_confidence = null;
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'amenities')) {
     values.push(JSON.stringify(cleanArray(patch.amenities)));
@@ -2960,11 +2994,30 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   if (Object.keys(extraPatch).length) {
     const latitude = toNullableFloat(patch.latitude ?? patch.lat);
     const longitude = toNullableFloat(patch.longitude ?? patch.lng ?? patch.lon ?? patch.long);
-    const resolvedLocationLabel = firstNonEmpty(
-      [extraPatch.street_name, extraPatch.neighborhood || patch.area, extraPatch.city, patch.district].filter(Boolean).join(', '),
-      patch.address,
-      existing.address
-    );
+    const samePlace = (left, right) => {
+      const a = cleanText(left).toLowerCase();
+      const b = cleanText(right).toLowerCase();
+      return Boolean(a) && a === b;
+    };
+    const labelDistrict = Object.prototype.hasOwnProperty.call(patch, 'district') ? cleanText(patch.district) : '';
+    const labelArea = Object.prototype.hasOwnProperty.call(patch, 'area') ? cleanText(patch.area) : '';
+    const labelNeighborhood = cleanText(extraPatch.neighborhood);
+    const labelPlace = samePlace(labelNeighborhood, labelDistrict)
+      ? ''
+      : (labelNeighborhood || (samePlace(labelArea, labelDistrict) ? '' : labelArea));
+    const labelParts = [];
+    const pushLabel = (value) => {
+      const text = cleanText(value);
+      if (!text || labelParts.some((item) => item.toLowerCase() === text.toLowerCase())) return;
+      labelParts.push(text);
+    };
+    pushLabel(extraPatch.street_name);
+    pushLabel(labelPlace);
+    pushLabel(extraPatch.city);
+    pushLabel(labelDistrict);
+    // A clear must wipe the previous label. Do not fall back to the address
+    // note or the label already stored on the row.
+    const resolvedLocationLabel = locationFieldsTouched ? (labelParts.join(', ') || null) : '';
     extraPatch.staff_location_reviewed_at = new Date().toISOString();
     extraPatch.staff_location_reviewed_by = actorId(req);
     extraPatch.staff_review_public_listing_facts = {
@@ -2992,7 +3045,7 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
       latitude,
       longitude
     };
-    if (resolvedLocationLabel) extraPatch.resolved_location_label = resolvedLocationLabel;
+    if (locationFieldsTouched) extraPatch.resolved_location_label = resolvedLocationLabel;
     if (latitude != null && longitude != null) {
       extraPatch.map_pin_confirmed = true;
       extraPatch.map_pin_source = cleanText(extraPatch.map_pin_source) || 'staff_review';
@@ -3213,8 +3266,8 @@ async function loadStaffPropertyPreview(propertyId) {
     },
     location_review: {
       region: firstNonEmpty(extra.region, regionForDistrict(property.district)),
-      city: firstNonEmpty(extra.city),
-      neighborhood: firstNonEmpty(extra.neighborhood),
+      city: firstNonEmpty(extra.city, extra.town, safeJsonObject(extra.staff_review_public_listing_facts, {}).city),
+      neighborhood: firstNonEmpty(extra.neighborhood, safeJsonObject(extra.staff_review_public_listing_facts, {}).neighborhood),
       known_area_district: districtForKnownArea(property.area) || '',
       warnings: staffLocationWarnings(property),
       soft_warnings: staffLocationSoftWarnings(property)
@@ -5445,4 +5498,4 @@ router.post('/assistant/query', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, liveEditSnapshot, staffLocationWarnings, staffLocationSoftWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary, stripRoadNamePhrases };
+module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, loadStaffPropertyPreview, liveEditSnapshot, staffLocationWarnings, staffLocationSoftWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary, stripRoadNamePhrases };

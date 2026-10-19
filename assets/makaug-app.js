@@ -27190,8 +27190,65 @@ function adminReviewFirstNumber(text = "", pattern) {
   return Number.isFinite(value) ? value : null;
 }
 
+function adminReviewOriginalSourceText(review = {}) {
+  const extra = adminReviewExtraFields(review);
+  return [
+    extra.source_title,
+    extra.source_caption_display,
+    extra.source_caption,
+    extra.caption,
+    extra.source_description,
+    extra.source_text,
+    extra.source_comments,
+    extra.comments,
+    extra.owner_comments,
+    extra.owner_response,
+    extra.poster_reply,
+    extra.poster_response,
+    extra.source_visual_text,
+    extra.video_text,
+    extra.video_ocr_text,
+    extra.frame_text,
+    extra.frame_ocr_text,
+    extra.image_text,
+    extra.image_ocr_text,
+    extra.screen_text,
+    extra.overlay_text,
+    extra.still_text,
+    extra.ocr_text,
+    extra.tiktok_caption,
+    extra.whatsapp_share_card
+  ].filter(Boolean).join(" ");
+}
+
+function adminReviewSourceMentionsPlace(source = "", name = "") {
+  const place = String(name || "").trim();
+  if (place.length < 3) return false;
+  const escaped = place.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^A-Za-z])${escaped}(?=$|[^A-Za-z])`, "i").test(String(source || ""));
+}
+
+// Chips are places written in the original source. A district or area staff
+// typed into the editor is not a source chip.
 function adminReviewDetectedLocation(text = "", review = {}) {
-  return { area: review.area || "", district: review.district || "" };
+  const source = adminReviewOriginalSourceText(review);
+  if (!String(source || "").trim()) return { area: "", district: "" };
+  const district = DISTRICTS.find((item) => adminReviewSourceMentionsPlace(source, item)) || "";
+  const tokens = String(source).match(/[A-Za-z][A-Za-z'’-]{2,}/g) || [];
+  let area = "";
+  const seen = new Set();
+  for (const token of tokens) {
+    const key = token.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (district && key === district.toLowerCase()) continue;
+    const found = findLpCanonicalAreaOption(token, district);
+    if (!found?.neighborhood) continue;
+    if (adminReviewPlaceEqualsDistrict(found.neighborhood, found.district || district)) continue;
+    area = found.neighborhood;
+    break;
+  }
+  return { area, district };
 }
 
 function adminReviewPropertyTypeFromText(text = "") {
@@ -27616,6 +27673,12 @@ function canonicalTownForLocation(location = {}) {
   return /\b(?:town|city|municipality|tc)\b/i.test(name) ? name : `${name} Town`;
 }
 
+function adminReviewPlaceEqualsDistrict(place = "", district = "") {
+  const left = String(place || "").trim().toLowerCase();
+  const right = String(district || "").trim().toLowerCase();
+  return Boolean(left) && left === right;
+}
+
 function adminReviewCityBelongsToDistrict(district = "", city = "") {
   if (!district || !city) return false;
   return getDistrictLocationTree(district).some((item) => item.city === city);
@@ -27701,10 +27764,13 @@ function adminReviewRefreshHierarchyControls(options = {}) {
   const region = fields.district ? regionForDistrict(fields.district) : fields.region;
   if (region) adminSetReviewEditValue("admin-review-region-edit", region);
   const district = adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(region, fields.district), fields.district);
-  const neighborhoodName = fields.neighborhood || fields.area || "";
-  const townValue = adminReviewTownForNeighborhood(district, fields.city, neighborhoodName);
+  const neighborhoodName = adminReviewPlaceEqualsDistrict(fields.neighborhood, district) ? "" : (fields.neighborhood || "");
+  const areaName = adminReviewPlaceEqualsDistrict(fields.area, district) ? "" : (fields.area || "");
+  const townHint = neighborhoodName || areaName;
+  const townValue = adminReviewTownForNeighborhood(district, fields.city, townHint);
   const city = adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, townValue), townValue);
-  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, fields.neighborhood || (townValue !== fields.city ? neighborhoodName : "")), fields.neighborhood || (townValue !== fields.city ? neighborhoodName : ""));
+  const neighborhoodValue = neighborhoodName || (areaName && areaName !== townValue ? areaName : "");
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, neighborhoodValue), neighborhoodValue);
   if (syncMap) adminReviewScheduleLocationSync();
   // P7: the review screen opened before the district's towns were loaded, so the
   // Town dropdown only offered the saved value ("Kampala"). Load them once and redraw.
@@ -27816,8 +27882,12 @@ function clearAdminReviewCanonicalLocation() {
 
 function applyAdminReviewCanonicalLocation(location = {}) {
   if (!location?.canonical_location_id || location.match !== "exact_alias" || Number(location.confidence) !== 1) return false;
+  const level = String(location.level || "").toLowerCase();
+  const canonicalDistrict = location.province || location.district || "";
+  const placeName = String(location.name || "").trim();
+  // A district or region match is not a town, an area, or a neighbourhood.
+  if (level === "district" || level === "region" || adminReviewPlaceEqualsDistrict(placeName, canonicalDistrict)) return false;
   adminReviewCanonicalLocationResolution = location;
-  const canonicalDistrict = location.province || location.district;
   const canonicalTown = location.city || canonicalTownForLocation(location);
   const currentCity = document.getElementById("admin-review-city-edit")?.value || "";
   const town = adminReviewTownAfterCanonicalResolve(
@@ -28281,22 +28351,21 @@ function adminReviewLocationAutofillText(review = {}, facts = {}) {
 }
 
 async function adminReviewAutoPopulateLocationFromSource(review = {}) {
-  const facts = adminExtractReviewFacts(review);
   const extra = adminReviewExtraFields(review);
+  // Staff already saved this location. Do not derive Town, Area, Neighbourhood
+  // or the address note again from the district or the previous label.
+  if (extra.staff_location_reviewed_at) return;
+  const facts = adminExtractReviewFacts(review);
   const query = uniqueTextParts([
     facts.area,
-    review.area,
-    review.district,
-    review.address,
-    review.resolved_location_label
-  ]).join(", ");
+    extra.source_area,
+    extra.location_town
+  ]).filter((part) => part && !adminReviewPlaceEqualsDistrict(part, facts.district)).join(", ");
   const searchEl = document.getElementById("admin-review-address-search-edit");
-  const addressEl = document.getElementById("admin-review-address-edit");
   if (searchEl && !searchEl.value.trim() && query) searchEl.value = query;
-  if (addressEl && !addressEl.value.trim() && query) addressEl.value = query;
   const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
-    extra.location_review_proposed_area || review.area || facts.area,
-    extra.location_review_proposed_district || review.district || facts.district
+    extra.location_review_proposed_area || facts.area,
+    extra.location_review_proposed_district || ""
   ]).join(", "));
   if (String(adminActiveReview?.id || "") !== String(review.id || "")) return;
   if (resolution.status === "matched") {
@@ -28611,22 +28680,31 @@ function adminReviewListingEditPanel(review = {}) {
     extra.city,
     extra.town,
     review.area,
-    review.district,
-    facts.area,
-    facts.district
+    review.district
   ]).join(", ");
   const initialPoint = reviewPoint;
   const locationReviewRequired = extra.location_review_required === true || String(extra.location_review_required || "").toLowerCase() === "true";
   const proposedArea = locationReviewRequired ? String(extra.location_review_proposed_area || review.area || "").trim() : "";
   const proposedDistrict = locationReviewRequired ? String(extra.location_review_proposed_district || review.district || "").trim() : "";
   const proposedRegion = locationReviewRequired ? String(extra.location_review_proposed_region || "").trim() : "";
-  const initialDistrict = proposedDistrict || review.district || facts.district || "";
+  const initialDistrict = proposedDistrict || review.district || "";
   const initialRegion = proposedRegion || (initialDistrict ? regionForDistrict(initialDistrict) : (review.region || extra.region || ""));
-  const cityCandidate = review.city || extra.city || extra.town || "";
-  const initialCity = adminReviewCityBelongsToDistrict(initialDistrict, cityCandidate) ? cityCandidate : "";
-  const neighborhoodCandidate = review.neighborhood || extra.neighborhood || "";
-  const initialNeighborhood = adminReviewNeighborhoodBelongsToCity(initialDistrict, initialCity, neighborhoodCandidate) ? neighborhoodCandidate : "";
-  const initialArea = proposedArea || review.area || facts.area || "";
+  const staffFacts = extra.staff_review_public_listing_facts && typeof extra.staff_review_public_listing_facts === "object"
+    ? extra.staff_review_public_listing_facts
+    : {};
+  // Town is the stored city. Never fall back to the district name, and keep
+  // the value even when the district tree has not loaded yet.
+  const cityCandidate = extra.city || extra.town || review.city || staffFacts.city || "";
+  const initialCity = cityCandidate;
+  const neighborhoodCandidate = extra.neighborhood || review.neighborhood || staffFacts.neighborhood || "";
+  const initialNeighborhood = adminReviewPlaceEqualsDistrict(neighborhoodCandidate, initialDistrict) ? "" : neighborhoodCandidate;
+  const storedArea = proposedArea || review.area || "";
+  const initialArea = adminReviewPlaceEqualsDistrict(storedArea, initialDistrict) ? "" : storedArea;
+  const storedSearchLabel = String(review.resolved_location_label || extra.resolved_location_label || "").trim();
+  const searchLabelAgrees = !storedSearchLabel
+    || (initialCity && storedSearchLabel.toLowerCase().includes(String(initialCity).trim().toLowerCase()))
+    || (initialArea && storedSearchLabel.toLowerCase().includes(String(initialArea).trim().toLowerCase()));
+  const initialSearchLabel = searchLabelAgrees ? storedSearchLabel : "";
   const initialLatitude = initialPoint ? Number(initialPoint.lat).toFixed(6) : (review.latitude ?? "");
   const initialLongitude = initialPoint ? Number(initialPoint.lng).toFixed(6) : (review.longitude ?? "");
   const initialStreet = review.street_name || extra.street_name || "";
@@ -28725,7 +28803,7 @@ function adminReviewListingEditPanel(review = {}) {
         <div class="md:col-span-2 rounded-xl border border-amber-200 bg-white p-3">
           <label class="block text-xs font-bold text-gray-700">Find address / place like the public listing flow
             <div class="mt-1 flex gap-2">
-              <input id="admin-review-address-search-edit" oninput="adminReviewOnAddressSearchInput()" onkeydown="adminReviewAddressSearchKeydown(event)" class="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.resolved_location_label || extra.resolved_location_label || "")}" placeholder="Search estate, road, town, landmark, or area">
+              <input id="admin-review-address-search-edit" oninput="adminReviewOnAddressSearchInput()" onkeydown="adminReviewAddressSearchKeydown(event)" class="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(initialSearchLabel)}" placeholder="Search estate, road, town, landmark, or area">
               <button type="button" onclick="adminReviewFindAddressOrPlace()" class="shrink-0 rounded-lg bg-green-700 px-3 py-2 text-xs font-bold text-white hover:bg-green-600">Find</button>
             </div>
           </label>

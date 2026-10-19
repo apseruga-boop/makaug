@@ -44,7 +44,8 @@ const {
   canonicalizeWhatsappSearchFilters,
   canonicalWhatsappLocationPatch,
   resolveWhatsappLocation,
-  whatsappLocationPrompt
+  whatsappLocationPrompt,
+  whatsappResolvedLocationLabel
 } = require('../services/whatsappLocationResolverService');
 const {
   inferNearestUniversityFromListing,
@@ -2609,7 +2610,8 @@ async function submitWhatsappListingDraft({ phone, lang, draft }) {
           canonical_location_confidence: d.canonical_location_confidence,
           canonical_location_source: d.canonical_location_source,
           region: d.region,
-          resolved_location_label: [d.area, d.district, d.region].filter(Boolean).join(', '),
+          city: d.city || null,
+          resolved_location_label: whatsappResolvedLocationLabel(d),
           removal_command: `REMOVE ${inquiryReference}`,
           ...(d.terms_accepted_at ? {
             lister_terms_version: d.terms_version || null,
@@ -3608,7 +3610,8 @@ async function handleOwnerReviewForward({
     canonical_location_confidence: locationPatch.canonical_location_confidence,
     canonical_location_source: locationPatch.canonical_location_source,
     region: locationPatch.region,
-    resolved_location_label: [locationPatch.area, locationPatch.district, locationPatch.region].filter(Boolean).join(', ')
+    city: locationPatch.city || null,
+    resolved_location_label: whatsappResolvedLocationLabel(locationPatch)
   };
 
   const client = await db.getClient();
@@ -6585,7 +6588,8 @@ async function createEmployeeReviewProperty({
     canonical_location_confidence: facts.locationPatch.canonical_location_confidence,
     canonical_location_source: facts.locationPatch.canonical_location_source,
     region: facts.locationPatch.region,
-    resolved_location_label: [facts.locationPatch.area, facts.locationPatch.district, facts.locationPatch.region].filter(Boolean).join(', '),
+    city: facts.locationPatch.city || null,
+    resolved_location_label: whatsappResolvedLocationLabel(facts.locationPatch),
     ...(customer ? {
       customer_location_confirmed: customer.location
     } : {})
@@ -17615,7 +17619,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
             canonical_location_confidence: d.canonical_location_confidence,
             canonical_location_source: d.canonical_location_source,
             region: d.region,
-            resolved_location_label: [d.area, d.district, d.region].filter(Boolean).join(', ')
+            city: d.city || null,
+            resolved_location_label: whatsappResolvedLocationLabel(d)
           },
           expiresAt,
           buildListingReference()
