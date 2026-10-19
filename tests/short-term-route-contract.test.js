@@ -472,7 +472,7 @@ test('the public routes fall through untouched when the flag is off', () => {
     serverSource.indexOf("app.get('/agents/:id'")
   );
   const guards = routeBlock.match(/if \(!shortTermEnabled\(\)\) return next\(\);/g) || [];
-  assert.strictEqual(guards.length, 6, `expected 6 flag guards, found ${guards.length}`);
+  assert.strictEqual(guards.length, 7, `expected 7 flag guards, found ${guards.length}`);
 });
 
 test('the Short Term page is registered with the public HTML sanitizer', () => {
@@ -1656,7 +1656,7 @@ test('the section starts on its own route without waiting for the main bundle', 
     } };
   }
   const direct = execute('page-short-term');
-  assert.deepStrictEqual(direct.requests.map(node => node.src), ['/assets/short-term.js?v=20260916-short-term-v23'],
+  assert.deepStrictEqual(direct.requests.map(node => node.src), ['/assets/short-term.js?v=20260916-short-term-v24'],
     'direct section starts before the main bundle is even requested');
   direct.startApp();
   assert.strictEqual(direct.requests.filter(node => node.src.includes('/short-term.js')).length, 1);

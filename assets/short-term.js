@@ -95,7 +95,7 @@
     "i3T": "Culo gin mo",
     "i4B": "Mutoka pong i Kampala. App me lwongo mutoka ki boda boda aye yoo ma oyot i gang. Pi wot me Entebbe airport, wurwate i kom wel onyo ibook mutoka con.",
     "i4T": "Wot i lobo",
-    "i5B": "Ngolo timme. Man aye omiyo filter kany tye ki backup power, tank pa pii ki borehole. Ka imito tic ka itye kany, yeny magi ki Wi-Fi.",
+    "i5B": "Ngolo timme. Peny won ot pi backup power, tank pa pii ki borehole. Ka imito tic ka itye kany, peny pi magi ki Wi-Fi. Potbuk man pe yeko ki jami magi.",
     "i5T": "Mac ki pii",
     "i6B": "Kabedo me nino manok i Uganda romo gamo mucoro me hotel pi ot acel i nino acel, ma lutela me kabedo gi cokko. Peny won ot ka wel mere tye ki mucoro-ni.",
     "i6T": "Mucoro me hotel pa kabedo",
@@ -110,8 +110,8 @@
     "newListing": "Manyen",
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotel i Uganda",
-    "partnerNote": "Pe tye wegi ot ma rwatte, ci magi obedo hotel ki bot lawote me wot. makaug pe keto, pe neno dok pe booko magi — link cito bot hotel.",
-    "partnerPriceAsk": "Wel tye i kakube pa hotel",
+    "partnerNote": "Magi obedo otel ki bot lawote me wot. makaug pe keto, pe neno dok pe booko gi. Namba en aye cim pa otel kikome. Por wel yabo kakube pa lawote, ka ma ibuk ki i cul iye.",
+    "partnerPriceAsk": "Wel ma nyutu i kakube pa lawote",
     "partnerReviews": "ngec",
     "partnerVisit": "Kabedo pa hotel kikome",
     "bookingCta": "Yeny kabedo i",
@@ -127,6 +127,16 @@
     "stays": "kabedo me nino manok",
     "where": "Kany",
     "wherePh": "Kampala, Entebbe, Jinja…",
+    "emptyTown": "Pe tye kabedo i {town} pud",
+    "comparePrices": "Por wel",
+    "affiliateDisclosure": "makaug twero nongo komishon; ibuk ki i cul i kakube pa lawote, ma tye ka time booking ni",
+    "indicative": "ma nyutu",
+    "hotelsTown": "Otel i {town}",
+    "hotelsFallback": "Otel i Kampala ki Entebbe",
+    "showMore": "Nyut mapol",
+    "alertWhatsapp": "Mii ngec i WhatsApp ka kabedo oket",
+    "searchHotels": "Yeny otel",
+    "adLabel": "Cato",
     "requestDates": "Leg nino magi",
     "paymentDirect": "Cul kimoko atir ikin in ki won ot. makaug pe kwanyo dok pe gwoko cente.",
     "feeAwaiting": "Kiyee, tye ka kuro cul. Kakube me culo bino. Listing cako nen ka cul otyeko time.",
@@ -176,7 +186,7 @@
     "i3T": "ክፍያ መፈጸም",
     "i4B": "የካምፓላ ትራፊክ ከባድ ነው። የመኪና መጥሪያ መተግበሪያዎችና ቦዳ ቦዳዎች በከተማው ውስጥ ፈጣኑ መንገድ ናቸው። ለኢንቴቤ አውሮፕላን ማረፊያ ጉዞ፣ ዋጋውን ይስማሙ ወይም ከጉዞ በፊት መኪና ያስይዙ።",
     "i4T": "መዘዋወር",
-    "i5B": "መቋረጥ ይከሰታል። ስለዚህ እዚህ ያሉት ማጣሪያዎች ተጠባባቂ ኃይል፣ የውሃ ታንክና የውሃ ጉድጓድ ያካትታሉ። እዚህ እያሉ መሥራት ካስፈለገዎት እነዚያንና Wi-Fi ይፈልጉ።",
+    "i5B": "መቋረጥ ይከሰታል። አስተናጋጁን ስለ ተጠባባቂ ኃይል፣ የውሃ ታንክና የውሃ ጉድጓድ ይጠይቁ። እዚህ እያሉ መሥራት ካስፈለገዎት እነዚያንና Wi-Fi ይጠይቁ። ይህ ገጽ በእነዚህ አገልግሎቶች አያጣራም።",
     "i5T": "ኃይልና ውሃ",
     "i6B": "በዩጋንዳ የአጭር ጊዜ ማረፊያ በአንድ ክፍል በአንድ ሌሊት የአካባቢ ሆቴል ግብር ሊጣልበት ይችላል፣ በአካባቢው አስተዳደር ይሰበሰባል። ዋጋው ያካተተ መሆኑን አስተናጋጅዎን ይጠይቁ።",
     "i6T": "የአካባቢ ሆቴል ግብር",
@@ -191,8 +201,8 @@
     "newListing": "አዲስ",
     "partnerBadge": "ሆቴል",
     "partnerHeading": "በዩጋንዳ ያሉ ሆቴሎች",
-    "partnerNote": "እስካሁን የሚዛመድ አስተናጋጅ የለም። እነዚህ ከጉዞ አጋር የመጡ ሆቴሎች ናቸው። makaug አይዘረዝራቸውም፣ አይመረምራቸውም፣ አያስይዛቸውም — አገናኙ ወደ ሆቴሉ ይወስዳል።",
-    "partnerPriceAsk": "ዋጋው በሆቴሉ ድረ-ገጽ ላይ",
+    "partnerNote": "እነዚህ ከጉዞ አጋር የመጡ ሆቴሎች ናቸው። makaug አይዘረዝራቸውም፣ አይመረምራቸውም፣ አያስይዛቸውም። ቁጥሩ የሆቴሉ ስልክ ነው። ዋጋ ማወዳደር የአጋር ጣቢያውን ይከፍታል፣ እዚያ ያስይዛሉና ይከፍላሉ።",
+    "partnerPriceAsk": "አመላካች ዋጋ በአጋር ጣቢያው ላይ",
     "partnerReviews": "ግምገማዎች",
     "partnerVisit": "የሆቴሉ ድረ-ገጽ",
     "bookingCta": "ማረፊያ ይፈልጉ በ",
@@ -208,6 +218,16 @@
     "stays": "የአጭር ጊዜ ማረፊያዎች",
     "where": "በደት",
     "wherePh": "Kampala, Entebbe, Jinja…",
+    "emptyTown": "በ{town} እስካሁን ቦታ የለም",
+    "comparePrices": "ዋጋዎችን ያወዳድሩ",
+    "affiliateDisclosure": "makaug ኮሚሽን ሊያገኝ ይችላል፤ ማስያዝና ክፍያውን በአጋር ጣቢያው ላይ ያደርጋሉ፣ እሱም ማስያዝዎን ያስተናግዳል",
+    "indicative": "አመላካች",
+    "hotelsTown": "ሆቴሎች በ{town}",
+    "hotelsFallback": "ሆቴሎች በካምፓላ እና ኢንቴቤ",
+    "showMore": "ተጨማሪ አሳይ",
+    "alertWhatsapp": "ቦታ ሲዘረዝር በWhatsApp አሳውቀኝ",
+    "searchHotels": "ሆቴሎችን ፈልግ",
+    "adLabel": "ማስታወቂያ",
     "requestDates": "እነዚህን ቀናት ይጠይቁ",
     "paymentDirect": "ክፍያ በቀጥታ በእርስዎና በአስተናጋጁ መካከል ይስማማል። makaug ክፍያ አይወስድም አያቆይምም።",
     "feeAwaiting": "ጸድቋል፣ ክፍያን ይጠብቃል። የክፍያ አገናኝ ይከተላል። ክፍያው ሲከፈል ማስታወቂያው ይታያል።",
@@ -257,7 +277,7 @@
     "i3T": "الدفع",
     "i4B": "الازدحام في كمبالا شديد. تطبيقات طلب السيارات والبودا بودا أسرع وسيلة للتنقل في المدينة. لرحلات مطار إنتيبي، اتفق على الأجرة أو احجز السيارة قبل السفر.",
     "i4T": "التنقل",
-    "i5B": "الانقطاعات تحدث. لهذا تشمل عوامل التصفية هنا مولد كهرباء احتياطياً وخزان ماء وبئراً. إذا كنت تحتاج للعمل أثناء وجودك، فابحث عن هذه وعن الواي فاي.",
+    "i5B": "الانقطاعات تحدث. اسأل المضيف عن مولد احتياطي وخزان ماء وبئر. إذا كنت تحتاج للعمل أثناء وجودك، فاسأل عن ذلك وعن الواي فاي. هذه الصفحة لا تصفّي حسب هذه الخدمات.",
     "i5T": "الكهرباء والماء",
     "i6B": "قد تخضع أماكن الإقامة القصيرة في أوغندا لضريبة فنادق محلية لكل غرفة لكل ليلة، تجبيها السلطة المحلية. اسأل مضيفك إن كان سعره يشملها.",
     "i6T": "ضريبة الفنادق المحلية",
@@ -272,8 +292,8 @@
     "newListing": "جديد",
     "partnerBadge": "فندق",
     "partnerHeading": "فنادق في أوغندا",
-    "partnerNote": "لا يوجد مضيفون مطابقون بعد، لذلك هذه فنادق من شريك سفر. makaug لا تدرجها ولا تعاينها ولا تحجزها — الرابط يؤدي إلى الفندق.",
-    "partnerPriceAsk": "السعر على موقع الفندق",
+    "partnerNote": "هذه فنادق من شريك سفر. makaug لا تدرجها ولا تعاينها ولا تحجزها. الرقم هو هاتف الفندق نفسه. مقارنة الأسعار تفتح موقع الشريك، حيث تحجز وتدفع.",
+    "partnerPriceAsk": "سعر إرشادي على موقع الشريك",
     "partnerReviews": "تقييم",
     "partnerVisit": "موقع الفندق",
     "bookingCta": "ابحث عن إقامة على",
@@ -289,6 +309,16 @@
     "stays": "إقامات قصيرة",
     "where": "أين",
     "wherePh": "Kampala, Entebbe, Jinja…",
+    "emptyTown": "لا أماكن في {town} بعد",
+    "comparePrices": "قارن الأسعار",
+    "affiliateDisclosure": "قد تربح makaug عمولة؛ تحجز وتدفع على موقع الشريك، وهو الذي يتولى حجزك",
+    "indicative": "إرشادي",
+    "hotelsTown": "فنادق في {town}",
+    "hotelsFallback": "فنادق في كمبالا وإنتيبي",
+    "showMore": "أظهر المزيد",
+    "alertWhatsapp": "نبهني على واتساب عند إدراج مكان",
+    "searchHotels": "ابحث عن فنادق",
+    "adLabel": "إعلان",
     "requestDates": "اطلب هذه التواريخ",
     "paymentDirect": "يُتفق على الدفع مباشرة بينك وبين المضيف. makaug لا تقبض المدفوعات ولا تحتجزها.",
     "feeAwaiting": "مقبول، بانتظار الرسوم. يلي ذلك رابط الدفع. يظهر الإعلان عند دفع الرسوم.",
@@ -338,7 +368,7 @@
     "i3T": "Paying for things",
     "i4B": "Kampala traffic is heavy. Ride-hailing apps and boda bodas are the quickest way across town. For Entebbe airport runs, agree the fare or book the car before you travel.",
     "i4T": "Getting around",
-    "i5B": "Cuts happen. This is why the filters here include backup power, a water tank and a borehole. If you need to work while you are here, look for those and for Wi-Fi.",
+    "i5B": "Cuts happen. Ask the host about backup power, a water tank and a borehole. If you need to work while you are here, ask about those and about Wi-Fi. This page does not filter by those amenities.",
     "i5T": "Power and water",
     "i6B": "Short stay accommodation in Uganda can attract a local hotel tax per room per night, collected by the local authority. Ask your host whether their rate includes it.",
     "i6T": "Local hotel tax",
@@ -353,8 +383,8 @@
     "newListing": "New listing",
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotels in Uganda",
-    "partnerNote": "No hosts match yet, so these are hotels from a travel partner. makaug does not list, inspect or book these — the link goes to the hotel.",
-    "partnerPriceAsk": "Price on the hotel's site",
+    "partnerNote": "These are hotels from a travel partner. makaug does not list, inspect or book them. The number is the hotel's own phone. Compare prices opens the partner site, where you book and pay.",
+    "partnerPriceAsk": "Indicative price on the partner site",
     "partnerReviews": "reviews",
     "partnerVisit": "Hotel's own site",
     "bookingCta": "Search stays on",
@@ -370,6 +400,16 @@
     "stays": "short stays",
     "where": "Where",
     "wherePh": "Kampala, Entebbe, Jinja…",
+    "emptyTown": "No places in {town} yet",
+    "comparePrices": "Compare prices",
+    "affiliateDisclosure": "makaug may earn a commission; you book and pay on the partner site, which handles your booking",
+    "indicative": "indicative",
+    "hotelsTown": "Hotels in {town}",
+    "hotelsFallback": "Hotels in Kampala & Entebbe",
+    "showMore": "Show more",
+    "alertWhatsapp": "Alert me on WhatsApp when a place is listed",
+    "searchHotels": "Search hotels",
+    "adLabel": "Ad",
     "requestDates": "Request these dates",
     "paymentDirect": "Payment is agreed directly between you and the host. makaug does not take or hold payments.",
     "feeAwaiting": "Approved, awaiting fee. A pay link follows. The listing goes live when that fee is paid.",
@@ -419,7 +459,7 @@
     "i3T": "Okusasula",
     "i4B": "Kampala erimu traffic nnyingi. Apps z'okuyita emmotoka ne boda boda ze zisinga obwangu mu kibuga. Ku lugendo lw'e Entebbe airport, mukkiriziganye ku muwendo oba obooke emmotoka nga tonnatambula.",
     "i4T": "Okutambula",
-    "i5B": "Bisalibwako. Kyekivudde ku filters wano okubaamu backup power, ttanka y'amazzi ne borehole. Bw'oba oyagala okukola ng'oli wano, noonya ebyo ne Wi-Fi.",
+    "i5B": "Amasanyalaze gasalibwako. Buuza nnyini kifo ku masanyalaze ag'eddagala, ttanka y'amazzi ne borehole. Bw'oba oyagala okukola ng'oli wano, buuza ku ebyo ne Wi-Fi. Omuko guno tegusunsula ku bikozesebwa ebyo.",
     "i5T": "Amasannyalaze n'amazzi",
     "i6B": "Ebifo eby'okusula mu Uganda biyinza okusasulirwa omusolo gwa hotel buli kisenge buli kiro, ogusoloozebwa ab'ekitundu. Buuza nnyini kifo oba omuwendo gwe gugutwalidde.",
     "i6T": "Omusolo gwa hotel ogw'ekitundu",
@@ -434,8 +474,8 @@
     "newListing": "Empya",
     "partnerBadge": "Wooteeri",
     "partnerHeading": "Wooteeri mu Uganda",
-    "partnerNote": "Tewali bannyini bifo batuukagana, n'olwekyo bino wooteeri okuva ku partner. makaug tegiteeka, tekebera era tebooka bino — link egenda ku wooteeri.",
-    "partnerPriceAsk": "Ebbeeyi eri ku mukutu gwa hotel",
+    "partnerNote": "Bino wooteeri okuva ku mukago gw'okutambula. makaug tebiteeka, tebikebereera era tebibooka. Ennamba ye ssimu ya wooteeri yennyini. Okugeraageranya ebiwendo kuggulawo omukutu gw'omukago, gye booka n'osasula.",
+    "partnerPriceAsk": "Omuwendo ogulaga ku mukutu gw'omukago",
     "partnerReviews": "endowooza",
     "partnerVisit": "Omukutu gwa wooteeri",
     "bookingCta": "Noonya ebifo ku",
@@ -451,6 +491,16 @@
     "stays": "ebifo eby'okusula",
     "where": "Wa",
     "wherePh": "Kampala, Entebbe, Jinja…",
+    "emptyTown": "Tewali bifo mu {town} kaakano",
+    "comparePrices": "Geraageranya ebiwendo",
+    "affiliateDisclosure": "makaug eyinza okufuna komissioni; booka era osasule ku mukutu gw'omukago, ogukola booking yo",
+    "indicative": "ogulaga",
+    "hotelsTown": "Wooteeri mu {town}",
+    "hotelsFallback": "Wooteeri mu Kampala ne Entebbe",
+    "showMore": "Laba ebirala",
+    "alertWhatsapp": "Mpulize ku WhatsApp nga ekifo kiteekeddwa",
+    "searchHotels": "Noonya wooteeri",
+    "adLabel": "Katale",
     "requestDates": "Saba ennaku zino",
     "paymentDirect": "Okusasula mukkiriziganya wakati wo n’omunyumba. makaug tewamba era tewakuma ssente.",
     "feeAwaiting": "Kikkiriziddwa, kussuubira ssente. Akayungirizi k’okusasula kajja. Listing egenda ku lwebbanga ssente bwe zisasulwa.",
@@ -500,7 +550,7 @@
     "i3T": "Okushashura",
     "i4B": "Kampala eine emotoka nyingi. App z'okweta emotoka na boda boda nizo zirikukira obwangu omu rurembo. Aha rugyendo rwa Entebbe airport, mwikirizanise aha muhendo nari obooke emotoka otakagyenzire.",
     "i4T": "Okugyenda",
-    "i5B": "Nibicwekyerera. Nikyo kirekire filters aha kuba na backup power, itanka ry'amaizi na borehole. Ku orikwenda kukora ori aha, sherura ebyo na Wi-Fi.",
+    "i5B": "Nibicwekyerera. Buuza nyineeka aha backup power, itanka ry'amaizi na borehole. Ku orikwenda kukora ori aha, buuza ebyo na Wi-Fi. Orupapura oru tirukusherura na ebyo.",
     "i5T": "Amasyanyarazi n'amaizi",
     "i6B": "Ebyanya by'okuraara omu Uganda nibibaasa kushashura omushoro gwa hotel aha kyumba buri kiro, ogurikukwatwa abakuru b'ekicweka. Buuza nyineeka ku omuhendo gwe gurimu.",
     "i6T": "Omushoro gwa hotel ogw'ekicweka",
@@ -515,8 +565,8 @@
     "newListing": "Ensya",
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotel omu Uganda",
-    "partnerNote": "Tihariho banyineeka abarikuhikaana, n'ahabw'ekyo ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka — link neza aha hotel.",
-    "partnerPriceAsk": "Omuhendo guri aha mukutu gwa hotel",
+    "partnerNote": "Ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka. Enamba n'esimu y'ehotel yenka. Gyeragyerania emihendo n'ayabura omukutu gw'omunywani, ah'obooka kandi oshashura.",
+    "partnerPriceAsk": "Omuhendo ogurikworeka aha mukutu gw'omunywani",
     "partnerReviews": "ebiteekateeko",
     "partnerVisit": "Orubaju rwa hotel",
     "bookingCta": "Shaka ahu kuraara aha",
@@ -532,6 +582,16 @@
     "stays": "ebyanya by'okuraara",
     "where": "Nkahi",
     "wherePh": "Kampala, Entebbe, Jinja…",
+    "emptyTown": "Tihariho bifo omu {town} hati",
+    "comparePrices": "Gyeragyerania emihendo",
+    "affiliateDisclosure": "makaug neyija kutunga komishoni; obooka kandi oshashure aha mukutu gw'omunywani, ogukora booking yaawe",
+    "indicative": "ogurikworeka",
+    "hotelsTown": "Ehotel omu {town}",
+    "hotelsFallback": "Ehotel omu Kampala na Entebbe",
+    "showMore": "Yoreka ebindi",
+    "alertWhatsapp": "Mmanyise aha WhatsApp ahakuba ekifo kikateekwa",
+    "searchHotels": "Sherura ehotel",
+    "adLabel": "Katale ya ny",
     "requestDates": "Saba ebiro ebi",
     "paymentDirect": "Okuhereza nikwikirizanwa ahagati yawe n’omunyini. makaug teyakira era teyakwata sente.",
     "feeAwaiting": "Kwikirizibwe, nikurinda sente. Akakwate k’okuhereza nikija. Listing neegenda omumaisho sente zihereirwe.",
@@ -581,7 +641,7 @@
     "i3T": "Okushashura",
     "i4B": "Kampala eine emotoka nyingi. App z'okweta emotoka na boda boda nizo zirikukira obwangu omu rurembo. Aha rugyendo rwa Entebbe airport, mwikirizanise aha muhendo nari obooke emotoka otakagyenzire.",
     "i4T": "Okugyenda",
-    "i5B": "Nibicwekyerera. Nikyo kirekire filters aha kuba na backup power, itanka ry'amaizi na borehole. Ku orikwenda kukora ori aha, sherura ebyo na Wi-Fi.",
+    "i5B": "Nibicwekyerera. Buuza nyineeka aha mashanyarazi ag'obuhereza, itanka ry'amaizi na borehole. Ku orikwenda kukora ori aha, buuza ebyo na Wi-Fi. Orupapura oru tirukusherura na ebyo.",
     "i5T": "Amasyanyarazi n'amaizi",
     "i6B": "Ahantu h'okuraara omu Uganda nihabaasa kushashura omushoro gwa hotel aha kyumba buri kiro, ogurikukwatwa abakuru b'ekicweka. Buuza nyineeka ku omuhendo gwe gurimu.",
     "i6T": "Omushoro gwa hotel ogw'ekicweka",
@@ -596,8 +656,8 @@
     "newListing": "Ensya",
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotel omu Uganda",
-    "partnerNote": "Tihariho banyineeka abarikuhikaana, n'ahabw'ekyo ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka — link neza aha hotel.",
-    "partnerPriceAsk": "Omuhendo guri aha mukutu gwa hotel",
+    "partnerNote": "Ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka. Enamba n'esimu y'ehotel yonka. Gyeragyerania ibiciro n'ayabura omukutu gw'omunywani, ah'obooka kandi oshashura.",
+    "partnerPriceAsk": "Igiciro kirikworeka aha mukutu gw'omunywani",
     "partnerReviews": "ebiteekateeko",
     "partnerVisit": "Orubaju rwa hotel",
     "bookingCta": "Serra aha kuraara aha",
@@ -613,6 +673,16 @@
     "stays": "ahantu h'okuraara",
     "where": "Nkahi",
     "wherePh": "Kampala, Entebbe, Jinja…",
+    "emptyTown": "Nta bifo omu {town} ubu",
+    "comparePrices": "Gyeragyerania ibiciro",
+    "affiliateDisclosure": "makaug eshobora kugira komisiyo; ubuka kandi wishyure ku rubuga rw'umufatanyabikorwa, urukora booking yawe",
+    "indicative": "kirikwerekana",
+    "hotelsTown": "Ehotel muri {town}",
+    "hotelsFallback": "Ehotel muri Kampala na Entebbe",
+    "showMore": "Erekana ibindi",
+    "alertWhatsapp": "Menyesha kuri WhatsApp iyo ikibanza kibitswe",
+    "searchHotels": "Shakisha ehotel",
+    "adLabel": "Itangazo",
     "requestDates": "Saba ebiro ebi",
     "paymentDirect": "Okushashura nikumanyirwa hagati yawe n’omunyini. makaug teyakira kandi teyabika sente.",
     "feeAwaiting": "Kyemeirwe, nirinda sente. Akakwate k’okushashura nikija. Listing neegenda omumaisho sente zishashuwe.",
@@ -662,7 +732,7 @@
     "i3T": "Okusasula",
     "i4B": "Kampala erimu traffic nhingi. Apps z'okuyita emmotoka ni boda boda ze zisinga obwangu mu kibuga. Ku lugendo lw'e Entebbe airport, mukkiriziganhe ku muwendo oba obooke emmotoka nga tonatambula.",
     "i4T": "Okutambula",
-    "i5B": "Bisalibwako. Kyekivudde ku filters wano okubaamu backup power, ttanka y'amazzi ni borehole. Bw'oba oyagala okukola ng'oli wano, noonya ebyo ni Wi-Fi.",
+    "i5B": "Amasanyalaze gasalibwako. Buuza nnyini kifo ku masanyalaze ag'eddagala, ttanka y'amazzi ni borehole. Bw'oba oyagala okukola ng'oli wano, buuza ku ebyo ni Wi-Fi. Omuko guno tegusunsula ku bikozesebwa ebyo.",
     "i5T": "Amasannhalaze n'amazzi",
     "i6B": "Ebifo eby'okusula mu Uganda biyinza okusasulirwa omusolo gwa hotel buli kisenge buli kiro, ogusoloozebwa ab'ekitundu. Buuza nyini kifo oba omuwendo gwe gugutwalidde.",
     "i6T": "Omusolo gwa hotel ogw'ekitundu",
@@ -677,8 +747,8 @@
     "newListing": "Empya",
     "partnerBadge": "Wooteeri",
     "partnerHeading": "Wooteeri mu Uganda",
-    "partnerNote": "Tewali banyini bifo batuukagana, n'olwekyo bino wooteeri okuva ku partner. makaug tekiteeka, tekikebera era tekibooka bino — link egenda ku wooteeri.",
-    "partnerPriceAsk": "Ebbeeyi eri ku mukutu gwa hotel",
+    "partnerNote": "Bino wooteeri okuva ku mukago. makaug tekiteeka, tekikebera era tekibooka. Ennamba ye ssimu ya wooteeri yennyini. Okugeraageranya emiwendo kuggulawo omukutu gw'omukago, gye booka n'osasula.",
+    "partnerPriceAsk": "Ebbeeyi elaga ku mukutu gw'omukago",
     "partnerReviews": "endowooza",
     "partnerVisit": "Omukutu gwa wooteeri",
     "bookingCta": "Noonia ebifo ku",
@@ -694,6 +764,16 @@
     "stays": "ebifo eby'okusula",
     "where": "Hai",
     "wherePh": "Kampala, Entebbe, Jinja…",
+    "emptyTown": "Tewali bifo mu {town} kati",
+    "comparePrices": "Geraageranya emiwendo",
+    "affiliateDisclosure": "makaug eyinza okufuna komissioni; booka era osasule ku mukutu gw'omukago, ogukola booking yo",
+    "indicative": "elaga",
+    "hotelsTown": "Wooteeri mu {town}",
+    "hotelsFallback": "Wooteeri mu Kampala ni Entebbe",
+    "showMore": "Laga ebirala",
+    "alertWhatsapp": "Mpulize ku WhatsApp nga ekifo kiteekeddwa",
+    "searchHotels": "Noonya wooteeri",
+    "adLabel": "Katale ya sm",
     "requestDates": "Saba ennaku zino",
     "paymentDirect": "Okusasula kukkira wakati wo n’omwami w’ennyumba. makaug tewamba era tewakuma ssente.",
     "feeAwaiting": "Kikkiriziddwa, kussuubira ssente. Akayungirizi k’okusasula kajja. Listing egenda mu luguudo ssente bwe zisasulwa.",
@@ -743,7 +823,7 @@
     "i3T": "Kulipia vitu",
     "i4B": "Msongamano wa magari Kampala ni mkubwa. Programu za kuagiza gari na boda boda ndio njia ya haraka mjini. Kwa safari za uwanja wa ndege Entebbe, kubaliana bei au agiza gari kabla ya safari.",
     "i4T": "Kusafiri",
-    "i5B": "Kukatika hutokea. Ndiyo maana vichujio hapa vinajumuisha umeme wa akiba, tanki la maji na kisima. Kama unahitaji kufanya kazi ukiwa hapa, tafuta hivyo na Wi-Fi.",
+    "i5B": "Kukatika hutokea. Muulize mwenyeji kuhusu umeme wa akiba, tanki la maji na kisima. Ukihisi kufanya kazi ukiwa hapa, uliza kuhusu hivyo na Wi-Fi. Ukurasa huu hauchuji kwa huduma hizo.",
     "i5T": "Umeme na maji",
     "i6B": "Malazi ya muda mfupi Uganda yanaweza kutozwa ushuru wa hoteli kwa chumba kwa usiku, unaokusanywa na mamlaka ya eneo. Muulize mwenyeji kama bei yake imejumuisha.",
     "i6T": "Ushuru wa hoteli wa eneo",
@@ -758,8 +838,8 @@
     "newListing": "Mpya",
     "partnerBadge": "Hoteli",
     "partnerHeading": "Hoteli nchini Uganda",
-    "partnerNote": "Hakuna wenyeji wanaolingana bado, hivyo hizi ni hoteli kutoka kwa mshirika wa safari. makaug haiziorodheshi, haizikagui wala haizibuki — kiungo kinakwenda kwa hoteli.",
-    "partnerPriceAsk": "Bei iko kwenye tovuti ya hoteli",
+    "partnerNote": "Hizi ni hoteli kutoka kwa mshirika wa safari. makaug haiziorodheshi, haizikagui wala haizibuki. Nambari ni simu ya hoteli yenyewe. Linganisha bei hufungua tovuti ya mshirika, ambapo unahifadhi na kulipa.",
+    "partnerPriceAsk": "Bei elekezi kwenye tovuti ya mshirika",
     "partnerReviews": "maoni",
     "partnerVisit": "Tovuti ya hoteli",
     "bookingCta": "Tafuta malazi kwenye",
@@ -775,6 +855,16 @@
     "stays": "malazi ya muda",
     "where": "Wapi",
     "wherePh": "Kampala, Entebbe, Jinja…",
+    "emptyTown": "Bado hakuna mahali {town}",
+    "comparePrices": "Linganisha bei",
+    "affiliateDisclosure": "makaug inaweza kupata kamisheni; unahifadhi na kulipa kwenye tovuti ya mshirika, ambayo inashughulikia uhifadhi wako",
+    "indicative": "elekezi",
+    "hotelsTown": "Hoteli {town}",
+    "hotelsFallback": "Hoteli Kampala na Entebbe",
+    "showMore": "Onyesha zaidi",
+    "alertWhatsapp": "Niarifu WhatsApp mahali panapoorodheshwa",
+    "searchHotels": "Tafuta hoteli",
+    "adLabel": "Tangazo",
     "requestDates": "Omba tarehe hizi",
     "paymentDirect": "Malipo yanakubaliwa moja kwa moja kati yako na mwenyeji. makaug haichukui wala kushikilia malipo.",
     "feeAwaiting": "Imeidhinishwa, inasubiri ada. Kiungo cha kulipa kinafuata. Tangazo linaanza kuonekana ada ikilipwa.",
@@ -863,6 +953,166 @@
     var out = {};
     new URLSearchParams(window.location.search || '').forEach(function (v, k) { out[k] = v; });
     return out;
+  }
+
+  function trackSt(name, params) {
+    var payload = params || {};
+    try {
+      if (typeof window.trackEvent === 'function') window.trackEvent(name, payload);
+      else if (typeof window.gtag === 'function') window.gtag('event', name, payload);
+    } catch (_error) {}
+  }
+
+  function sanitizeSubId(value) {
+    return String(value || '').replace(/[^A-Za-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 100);
+  }
+
+  function trafficExtra() {
+    var query = qs();
+    return query.ref || query.utm_source || '';
+  }
+
+  function travelpayoutsConfig() {
+    return (window.__makaugShortTerm && window.__makaugShortTerm.travelpayouts) || {};
+  }
+
+  function partnerSlug(row) {
+    var ref = String((row && (row.reference || row.title)) || 'hotel').toLowerCase();
+    return ref.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'hotel';
+  }
+
+  function hotelSubId(slug) {
+    var base = sanitizeSubId('st_hotel_' + (slug || 'hotel')) || 'st_hotel';
+    var extra = sanitizeSubId(trafficExtra());
+    return extra ? (base + '_' + extra).slice(0, 100) : base;
+  }
+
+  function brandSearchUrl(key, destination, checkIn, checkOut, adults) {
+    var name = destination || 'Uganda';
+    var people = String(adults || 2);
+    if (key === 'booking') {
+      var booking = new URL('https://www.booking.com/searchresults.html');
+      booking.searchParams.set('ss', name);
+      if (checkIn) booking.searchParams.set('checkin', checkIn);
+      if (checkOut) booking.searchParams.set('checkout', checkOut);
+      booking.searchParams.set('group_adults', people);
+      booking.searchParams.set('no_rooms', '1');
+      return booking.toString();
+    }
+    if (key === 'agoda') {
+      var agoda = new URL('https://www.agoda.com/search');
+      agoda.searchParams.set('q', name);
+      if (checkIn) agoda.searchParams.set('checkIn', checkIn);
+      if (checkOut) agoda.searchParams.set('checkOut', checkOut);
+      agoda.searchParams.set('adults', people);
+      agoda.searchParams.set('rooms', '1');
+      return agoda.toString();
+    }
+    if (key === 'trip') {
+      var trip = new URL('https://www.trip.com/hotels/list');
+      trip.searchParams.set('keyword', name);
+      if (checkIn) trip.searchParams.set('checkin', checkIn);
+      if (checkOut) trip.searchParams.set('checkout', checkOut);
+      trip.searchParams.set('adult', people);
+      trip.searchParams.set('crn', '1');
+      return trip.toString();
+    }
+    return '';
+  }
+
+  function trackedHref(brand, url, subId) {
+    var cfg = travelpayoutsConfig();
+    if (!cfg.marker || !brand || !brand.programId || !url) return '';
+    var params = new URLSearchParams();
+    params.set('marker', cfg.marker);
+    params.set('p', brand.programId);
+    params.set('u', url);
+    if (brand.campaignId) params.set('campaign_id', brand.campaignId);
+    var sub = sanitizeSubId(subId);
+    if (sub) params.set('sub_id', sub);
+    return 'https://tp.media/r?' + params.toString();
+  }
+
+  function compareButtonsHtml(hotelName, subId) {
+    var cfg = travelpayoutsConfig();
+    if (!cfg.enabled || !cfg.brands || !cfg.brands.length) return '';
+    var query = qs();
+    var buttons = cfg.brands.map(function (brand) {
+      var raw = brandSearchUrl(brand.key, hotelName, query.check_in, query.check_out, query.guests || 2);
+      var href = trackedHref(brand, raw, subId);
+      if (!href) return '';
+      return '<a class="st-compare-btn" href="' + esc(href) + '" target="_blank" rel="sponsored noopener"'
+        + ' data-st-affiliate="' + esc(brand.key) + '" data-st-sub="' + esc(subId) + '">'
+        + esc(brand.label) + '</a>';
+    }).join('');
+    if (!buttons) return '';
+    return '<div class="st-compare"><span class="st-ad-label">' + esc(t('adLabel')) + '</span>'
+      + '<p class="st-compare-label">' + esc(t('comparePrices')) + '</p>'
+      + '<div class="st-compare-btns">' + buttons + '</div>'
+      + '<p class="st-compare-note">' + esc(t('affiliateDisclosure')) + '</p></div>';
+  }
+
+  function rememberPartner(row) {
+    if (!row) return;
+    try {
+      window.sessionStorage.setItem('makaug.st.partner.' + partnerSlug(row), JSON.stringify(row));
+    } catch (_error) {}
+  }
+
+  function rememberedPartner(slug) {
+    try {
+      var raw = window.sessionStorage.getItem('makaug.st.partner.' + slug);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  var DRIVE_SRC = 'https://emrldtp.cc/NTgxODU0.js?t=581854';
+  function loadTravelpayoutsDrive() {
+    var cfg = travelpayoutsConfig();
+    if (!cfg.driveEnabled || currentPath() !== '/short-term') return;
+    if (document.querySelector('script[data-tp-drive]')) return;
+    function load() {
+      if (document.querySelector('script[data-tp-drive]')) return;
+      var script = document.createElement('script');
+      script.src = DRIVE_SRC;
+      script.async = true;
+      script.setAttribute('data-tp-drive', '1');
+      document.head.appendChild(script);
+    }
+    var granted = window.__makaugCookieConsent === 'granted'
+      || (document.documentElement && document.documentElement.getAttribute('data-cookie-consent') === 'granted');
+    var banner = document.querySelector('[data-cookie-consent], #cookie-banner, #cookie-consent, [data-cookie-banner]');
+    if (granted || !banner) { load(); return; }
+    document.addEventListener('makaug:cookie-consent', function (event) {
+      var detail = event && event.detail;
+      if (!detail || detail.granted !== false) load();
+    });
+  }
+
+  function whatsappDigits() {
+    var raw = String((window.__makaugShortTerm && window.__makaugShortTerm.whatsappNumber) || '256780863394');
+    var digits = raw.replace(/\D/g, '');
+    if (digits.indexOf('0') === 0) digits = '256' + digits.slice(1);
+    return digits || '256780863394';
+  }
+
+  function alertWhatsappHref(town) {
+    var text = 'Please alert me when a short stay is listed in ' + (town || 'Uganda') + '.';
+    return 'https://wa.me/' + whatsappDigits() + '?text=' + encodeURIComponent(text);
+  }
+
+  function fillTown(template, town) {
+    return String(template || '').replace('{town}', town || '');
+  }
+
+  function searchedTown() {
+    var field = document.getElementById('st-q');
+    var typed = field ? String(field.value || '').trim() : '';
+    if (typed) return typed;
+    var query = qs();
+    return String(query.q || query.district || '').trim();
   }
 
   function go(path, replace) {
@@ -1016,17 +1266,37 @@
 
   // ---------------------------------------------------------------- search view
 
+  function hotelSearchBoxHtml() {
+    var cfg = travelpayoutsConfig();
+    if (!cfg.enabled) return '';
+    var query = qs();
+    return '<form class="st-hotel-search" id="st-hotel-search">'
+      + '<span class="st-ad-label">' + esc(t('adLabel')) + '</span>'
+      + '<label for="st-hotel-q">' + esc(t('searchHotels')) + '</label>'
+      + '<input class="st-input" id="st-hotel-q" name="destination" value="' + esc(query.q || query.district || '') + '">'
+      + '<input class="st-input" id="st-hotel-in" name="check_in" type="date" value="' + esc(query.check_in || '') + '">'
+      + '<input class="st-input" id="st-hotel-out" name="check_out" type="date" value="' + esc(query.check_out || '') + '">'
+      + '<input class="st-input" id="st-hotel-guests" name="guests" type="number" min="1" max="30" value="' + esc(query.guests || '2') + '">'
+      + '<div class="st-compare-btns">' + (cfg.brands || []).map(function (brand) {
+        return '<button class="st-compare-btn" type="submit" data-hotel-brand="' + esc(brand.key) + '">'
+          + esc(brand.label) + '</button>';
+      }).join('') + '</div>'
+      + '<p class="st-compare-note">' + esc(t('affiliateDisclosure')) + '</p>'
+      + '</form>';
+  }
+
   function searchViewHtml() {
     var q = qs();
     return ''
       // The section's own content comes first, as it does on every other page.
       + '<section class="st-hero">'
       + '<div class="st-wrap">'
+      + hotelSearchBoxHtml()
       + '<h1>' + esc(t('heroTitle')) + '</h1>'
       + '<p class="st-hero-sub">' + esc(t('heroSub')) + '</p>'
       + '<form class="st-search" id="st-search-form">'
       + '<div class="st-field"><label for="st-q">' + esc(t('where')) + '</label>'
-      + '<input class="st-input" id="st-q" name="q" placeholder="' + esc(t('wherePh')) + '" value="' + esc(q.q || '') + '"></div>'
+      + '<input class="st-input" id="st-q" name="q" placeholder="' + esc(t('wherePh')) + '" value="' + esc(q.q || q.district || '') + '"></div>'
       + '<div class="st-field"><label for="st-in">' + esc(t('checkIn')) + '</label>'
       + '<input class="st-input" id="st-in" name="check_in" type="date" value="' + esc(q.check_in || '') + '"></div>'
       + '<div class="st-field"><label for="st-out">' + esc(t('checkOut')) + '</label>'
@@ -1090,7 +1360,7 @@
       ? row.image_candidates
       : (row.primary_image ? [row.primary_image] : []);
     var media = shots.length
-      ? '<img src="' + esc(shots[0]) + '" alt="" loading="lazy"'
+      ? '<img src="' + esc(shots[0]) + '" alt="' + esc((row.title || 'Hotel') + (where ? ' in ' + where : '')) + '" loading="lazy"'
         + ' data-st-shots="' + esc(shots.slice(1).join(' ')) + '">'
       : '<div class="st-noimg"><i class="fas fa-hotel"></i></div>';
     // The phone number is the point. A LiteAPI row carries the property's own
@@ -1119,29 +1389,52 @@
     // where a price should be reads as free.
     var price = row.price_display
       ? '<p class="st-partner-price"><b>' + esc(row.price_display) + '</b> '
-        + esc(t('perNight')) + '</p>'
+        + esc(t('perNight')) + ' <span class="st-indicative">' + esc(t('indicative')) + '</span></p>'
       : '<p class="st-partner-price st-partner-price--ask">' + esc(t('partnerPriceAsk')) + '</p>';
+    var slug = partnerSlug(row);
+    rememberPartner(row);
 
     return '<article class="st-card st-partner-card">'
       + '<div class="st-card-media">' + media
       + '<span class="st-badge st-badge-partner">' + esc(t('partnerBadge')) + '</span>'
       + '</div>'
       + '<div class="st-card-body">'
-      + '<h3 class="st-card-title">' + esc(row.title) + '</h3>'
-      + (where ? '<p class="st-card-where">' + esc(where) + '</p>' : '')
+      + '<h3 class="st-card-title"><a href="/short-term/hotel/' + esc(slug) + '" data-st-link>' + esc(row.title) + '</a></h3>'
+      + (where ? '<p class="st-card-where">' + esc(row.district || where) + '</p>' : '')
       + stars
       + score
       + price
       + link
+      + compareButtonsHtml(row.title, hotelSubId(slug))
       + '</div></article>';
+  }
+
+  function partnerRowsForTown() {
+    var town = searchedTown().toLowerCase();
+    var rows = state.partners || [];
+    if (!town) return { rows: rows, heading: t('hotelsFallback'), matched: false };
+    var matched = rows.filter(function (row) {
+      return [row.district, row.area, row.title].some(function (part) {
+        return String(part || '').toLowerCase().indexOf(town) !== -1;
+      });
+    });
+    if (matched.length) return { rows: matched, heading: fillTown(t('hotelsTown'), searchedTown()), matched: true };
+    return { rows: rows, heading: t('hotelsFallback'), matched: false };
   }
 
   function partnerBlockHtml() {
     if (!state.partners || !state.partners.length) return '';
+    var picked = partnerRowsForTown();
+    var limit = state.partnerShown || 8;
+    var shown = picked.rows.slice(0, limit);
+    var more = picked.rows.length > shown.length
+      ? '<button class="st-btn" type="button" id="st-partners-more">' + esc(t('showMore')) + '</button>'
+      : '';
     return '<section class="st-partner-block">'
-      + '<h2 class="st-partner-heading">' + esc(t('partnerHeading')) + '</h2>'
+      + '<h2 class="st-partner-heading">' + esc(picked.heading) + '</h2>'
       + '<p class="st-partner-note">' + esc(t('partnerNote')) + '</p>'
-      + '<div class="st-grid">' + state.partners.map(partnerCardHtml).join('') + '</div>'
+      + '<div class="st-grid">' + shown.map(partnerCardHtml).join('') + '</div>'
+      + more
       + '</section>';
   }
 
@@ -1202,6 +1495,17 @@
     }
     var sort = document.getElementById('st-sort');
     if (sort && sort.value) params.set('sort', sort.value);
+    var incoming = new URLSearchParams(window.location.search || '');
+    var previousQ = incoming.get('q') || '';
+    var newQ = params.get('q') || '';
+    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id', 'gclid', 'fbclid', 'ref'].forEach(function (key) {
+      if (incoming.get(key)) params.set(key, incoming.get(key));
+    });
+    if (incoming.get('district')) {
+      var district = incoming.get('district');
+      var qChanged = newQ && newQ.toLowerCase() !== String(previousQ || district).toLowerCase();
+      if (!qChanged) params.set('district', district);
+    }
 
     var target = document.getElementById('st-results');
     if (target) {
@@ -1227,6 +1531,8 @@
       // partnership is switched off - in which case nothing is drawn.
       state.bookingOffers = payload.booking_links
       || (payload.booking_link ? [payload.booking_link] : []);
+      state.partnerShown = 8;
+      trackSt('st_search', { q: params.get('q') || params.get('district') || '' });
       renderResults();
       if (state.mapOn) paintMap();
     }).catch(function (error) {
@@ -1239,11 +1545,19 @@
 
   function renderResults() {
     var count = document.getElementById('st-count');
-    if (count) {
-      count.innerHTML = '<span>' + state.total + ' ' + esc(t('stays'))
-        + '</span><small>' + esc(t('countNote')) + '</small>';
-    }
     var target = document.getElementById('st-results');
+    var partners = partnerBlockHtml();
+    var town = searchedTown();
+    if (count) {
+      if (!state.listings.length && (partners || town)) {
+        count.innerHTML = town
+          ? '<span>' + esc(fillTown(t('emptyTown'), town)) + '</span>'
+          : '';
+      } else {
+        count.innerHTML = '<span>' + state.total + ' ' + esc(t('stays'))
+          + '</span><small>' + esc(t('countNote')) + '</small>';
+      }
+    }
     if (!target) return;
     if (!state.listings.length) {
       // When partner hotels are showing, their own heading already says no
@@ -1251,12 +1565,16 @@
       // failures instead of one situation with an explanation, which is how
       // the live page looked: "Nothing matches those filters yet", and then
       // twenty-four hotels.
-      var partners = partnerBlockHtml();
+      var townEmpty = town
+        ? '<div class="st-empty"><h2>' + esc(fillTown(t('emptyTown'), town)) + '</h2>'
+          + '<a class="st-alert-wa" data-whatsapp-static="true" data-st-contact="whatsapp-alert" target="_blank" rel="noopener" href="'
+          + esc(alertWhatsappHref(town)) + '">' + esc(t('alertWhatsapp')) + '</a></div>'
+        : '';
       var cta = '<div class="st-empty">'
         + (partners ? '' : '<i class="fas fa-magnifying-glass"></i>' + esc(t('emptyFilters')) + '<br><br>')
         + '<a class="st-btn st-btn-primary" href="/short-term/list-your-place" data-st-link>'
-        + esc(t('listOwn')) + '</a></div>';
-      target.innerHTML = (partners ? partners + cta : cta) + bookingBlockHtml();
+        + esc(t('listPlace') || t('listOwn')) + '</a></div>';
+      target.innerHTML = townEmpty + (partners ? partners + cta : cta) + bookingBlockHtml();
       return;
     }
     target.innerHTML = '<div class="st-grid">' + state.listings.map(cardHtml).join('') + '</div>' + bookingBlockHtml();
@@ -1283,7 +1601,7 @@
     return '<div class="mk-house-band-wrap max-w-7xl mx-auto st-ad-wrap">'
       + '<section class="mk-house-band mk-house-band--st" id="st-countdown" data-copy-side="left" aria-label="' + esc(label) + '">'
       + '<picture>'
-      + '<img class="mk-house-band__image" src="/assets/img/hoima-stadium.jpg" alt="" '
+      + '<img class="mk-house-band__image" src="/assets/img/hoima-stadium.jpg" alt="Hoima Stadium, one of the AFCON 2027 venues in Uganda" '
       + 'style="object-position:center 42%" loading="lazy" decoding="async">'
       + '</picture>'
       + '<div class="mk-house-band__scrim" aria-hidden="true"></div>'
@@ -1428,6 +1746,26 @@
 
     var form = document.getElementById('st-search-form');
     if (form) form.addEventListener('submit', function (e) { e.preventDefault(); runSearch(); });
+    var hotelForm = document.getElementById('st-hotel-search');
+    if (hotelForm) {
+      hotelForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var brandKey = (e.submitter && e.submitter.getAttribute('data-hotel-brand'))
+          || (hotelForm.querySelector('[data-hotel-brand]') || {}).getAttribute && hotelForm.querySelector('[data-hotel-brand]').getAttribute('data-hotel-brand');
+        var cfg = travelpayoutsConfig();
+        var brand = (cfg.brands || []).filter(function (item) { return item.key === brandKey; })[0];
+        if (!brand) return;
+        var destination = (document.getElementById('st-hotel-q') || {}).value || 'Uganda';
+        var checkIn = (document.getElementById('st-hotel-in') || {}).value || '';
+        var checkOut = (document.getElementById('st-hotel-out') || {}).value || '';
+        var guests = (document.getElementById('st-hotel-guests') || {}).value || '2';
+        var sub = sanitizeSubId('st_search' + (trafficExtra() ? '_' + trafficExtra() : ''));
+        var href = trackedHref(brand, brandSearchUrl(brand.key, destination, checkIn, checkOut, guests), sub);
+        if (!href) return;
+        trackSt('st_affiliate_click', { partner: brand.key, sub_id: sub });
+        window.open(href, '_blank', 'noopener');
+      });
+    }
     var sort = document.getElementById('st-sort');
     if (sort) sort.addEventListener('change', runSearch);
 
@@ -1668,6 +2006,7 @@
     var open = document.getElementById('st-enquire-open');
     if (open) {
       open.addEventListener('click', function () {
+        trackSt('st_request_click', { listing_id: listing && listing.id });
         var shell = document.getElementById('st-enquire-shell');
         if (!shell || shell.innerHTML) return;
         shell.innerHTML = enquiryFormHtml();
@@ -1770,18 +2109,74 @@
     }
   }
 
-  function mountDetail(slug) {
+  function mountDetail(slug, force) {
     var view = $('.st-view-detail');
     if (!view) return;
+    if (!force && state.detailSlug === slug && (state.detailInflight || view.getAttribute('data-st-loaded') === slug)) return;
+    state.detailSlug = slug;
+    state.detailInflight = true;
+    view.setAttribute('data-st-loaded', slug);
     view.innerHTML = '<div class="st-wrap"><div class="st-skeleton" style="height:340px;margin-top:20px"></div></div>';
     api('/listings/' + encodeURIComponent(slug)).then(function (payload) {
       view.innerHTML = detailViewHtml(payload);
+      view.setAttribute('data-st-detail', slug);
       bindDetail(payload);
       document.title = payload.listing.title + ' | Short stay on makaug.com';
+      trackSt('st_listing_view', { slug: slug });
     }).catch(function (error) {
+      view.removeAttribute('data-st-loaded');
       view.innerHTML = '<div class="st-wrap"><div class="st-empty"><i class="fas fa-house-circle-xmark"></i>'
         + esc(error.status === 404 ? 'This short stay is no longer listed.' : error.message)
         + '<br><br><a class="st-btn st-btn-primary" href="/short-term" data-st-link>See what is available</a></div></div>';
+    }).then(function () { state.detailInflight = false; });
+  }
+
+  function partnerDetailHtml(row) {
+    var where = [row.area, row.district].filter(Boolean).join(', ');
+    var slug = partnerSlug(row);
+    return '<div class="st-wrap" style="padding:24px 16px 48px" data-st-partner-detail="' + esc(slug) + '">'
+      + '<a href="/short-term" data-st-link>&larr; Short stays</a>'
+      + '<h1 style="margin:12px 0 6px">' + esc(row.title) + '</h1>'
+      + (where ? '<p class="st-card-where">' + esc(where) + '</p>' : '')
+      + (row.primary_image
+        ? '<img src="' + esc(row.primary_image) + '" alt="' + esc(row.title + (where ? ' in ' + where : '')) + '" style="width:100%;max-height:360px;object-fit:cover;border-radius:16px">'
+        : '')
+      + '<p class="st-partner-note">' + esc(t('partnerNote')) + '</p>'
+      + (row.price_display
+        ? '<p class="st-partner-price"><b>' + esc(row.price_display) + '</b> ' + esc(t('perNight'))
+          + ' <span class="st-indicative">' + esc(t('indicative')) + '</span></p>'
+        : '<p class="st-partner-price">' + esc(t('partnerPriceAsk')) + '</p>')
+      + (row.host_phone
+        ? '<p><a class="st-partner-call" href="tel:' + esc(String(row.host_phone).replace(/[^+0-9]/g, '')) + '">'
+          + esc(row.host_phone) + '</a></p>'
+        : '')
+      + compareButtonsHtml(row.title, hotelSubId(slug))
+      + '</div>';
+  }
+
+  function mountPartnerDetail(slug) {
+    var view = $('.st-view-detail');
+    if (!view) return;
+    var known = (state.partners || []).filter(function (row) { return partnerSlug(row) === slug; })[0] || rememberedPartner(slug);
+    if (known) {
+      view.innerHTML = partnerDetailHtml(known);
+      document.title = known.title + ' | Compare prices | makaug.com';
+      return;
+    }
+    view.innerHTML = '<div class="st-wrap"><div class="st-skeleton" style="height:240px;margin-top:20px"></div></div>';
+    api('/search').then(function (payload) {
+      state.partners = payload.partner_listings || [];
+      var row = (state.partners || []).filter(function (item) { return partnerSlug(item) === slug; })[0];
+      if (!row) {
+        view.innerHTML = '<div class="st-wrap"><div class="st-empty">This hotel is not in the current partner list.'
+          + '<br><br><a class="st-btn st-btn-primary" href="/short-term" data-st-link>Back to short stays</a></div></div>';
+        return;
+      }
+      rememberPartner(row);
+      view.innerHTML = partnerDetailHtml(row);
+      document.title = row.title + ' | Compare prices | makaug.com';
+    }).catch(function (error) {
+      view.innerHTML = '<div class="st-wrap"><div class="st-empty">' + esc(error.message || 'Could not load this hotel') + '</div></div>';
     });
   }
 
@@ -1802,32 +2197,34 @@
       + '<div class="st-wrap" style="padding-top:22px;padding-bottom:40px">'
       + '<div class="st-steps">'
       + '<span class="st-step is-on" data-step="1">1. The place</span>'
-      + '<span class="st-step" data-step="2">2. Price and dates</span>'
-      + '<span class="st-step" data-step="3">3. Rules and terms</span>'
-      + '<span class="st-step" data-step="4">4. You and payment</span>'
+      + '<span class="st-step" data-step="2">2. Map pin</span>'
+      + '<span class="st-step" data-step="3">3. Price and dates</span>'
+      + '<span class="st-step" data-step="4">4. Rules and terms</span>'
+      + '<span class="st-step" data-step="5">5. You and payment</span>'
       + '</div>'
 
-      + '<form id="st-list-form">'
+      + '<form id="st-list-form" novalidate>'
+      + '<div id="st-step-errors"></div>'
 
       // step 1
       + '<div class="st-panel" data-panel="1">'
       + '<h2>What are you listing?</h2>'
       + '<div class="st-form-grid">'
       + '<div style="grid-column:1/-1"><label class="st-label" for="f-title">Title</label>'
-      + '<input class="st-input" id="f-title" required placeholder="Quiet 2-bed apartment in Naguru"></div>'
+      + '<input class="st-input" id="f-title" placeholder="Quiet 2-bed apartment in Naguru"></div>'
       + '<div><label class="st-label" for="f-place">Type of place</label><select class="st-input" id="f-place">'
       + '<option value="entire_place">Entire place</option><option value="private_room">Private room</option>'
       + '<option value="shared_room">Shared room</option></select></div>'
       + '<div><label class="st-label" for="f-ptype">Property type</label>'
       + '<input class="st-input" id="f-ptype" placeholder="Apartment, cottage, guest house"></div>'
-      + '<div><label class="st-label" for="f-district">District</label><input class="st-input" id="f-district" required placeholder="Kampala"></div>'
-      + '<div><label class="st-label" for="f-area">Area / neighbourhood</label><input class="st-input" id="f-area" required placeholder="Naguru"></div>'
+      + '<div><label class="st-label" for="f-district">District</label><input class="st-input" id="f-district" placeholder="Kampala"></div>'
+      + '<div><label class="st-label" for="f-area">Area / neighbourhood</label><input class="st-input" id="f-area" placeholder="Naguru"></div>'
       + '<div><label class="st-label" for="f-guests">Sleeps</label><input class="st-input" id="f-guests" type="number" min="1" value="2"></div>'
-      + '<div><label class="st-label" for="f-beds">Bedrooms</label><input class="st-input" id="f-bedrooms" type="number" min="0" value="1"></div>'
-      + '<div><label class="st-label" for="f-bedcount">Beds</label><input class="st-input" id="f-beds" type="number" min="1" value="1"></div>'
-      + '<div><label class="st-label" for="f-baths">Bathrooms</label><input class="st-input" id="f-bathrooms" type="number" min="0" value="1"></div>'
+      + '<div><label class="st-label" for="f-bedrooms">Bedrooms</label><input class="st-input" id="f-bedrooms" type="number" min="0" value="1"></div>'
+      + '<div><label class="st-label" for="f-beds">Beds</label><input class="st-input" id="f-beds" type="number" min="1" value="1"></div>'
+      + '<div><label class="st-label" for="f-bathrooms">Bathrooms</label><input class="st-input" id="f-bathrooms" type="number" min="0" value="1"></div>'
       + '<div style="grid-column:1/-1"><label class="st-label" for="f-desc">Describe it</label>'
-      + '<textarea class="st-input" id="f-desc" required placeholder="What is it actually like? What is nearby? What should a guest know before they arrive?"></textarea></div>'
+      + '<textarea class="st-input" id="f-desc" placeholder="What is it actually like? What is nearby? What should a guest know before they arrive?"></textarea></div>'
       + '</div>'
       + '<h3>Amenities</h3>'
       + '<div class="st-amenity-pick">'
@@ -1835,15 +2232,32 @@
         return '<label><input type="checkbox" value="' + esc(a.slug) + '" data-amenity> ' + esc(a.label) + '</label>';
       }).join('')
       + '</div>'
+      + '<h3>Photos</h3>'
+      + '<label class="st-photo-drop" for="st-photo-input">'
+      + '<i class="fas fa-camera"></i><span>Add photos now</span>'
+      + '<input id="st-photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>'
+      + '</label>'
+      + '<div id="st-photo-tray" style="margin-top:14px"></div>'
+      + '<div id="st-photo-feedback"></div>'
+      + '<p class="st-help">Photos upload after the listing is saved. The first one becomes the cover.</p>'
       + '<button class="st-btn st-btn-primary" type="button" data-next="2" style="margin-top:14px">Next</button>'
       + '</div>'
 
-      // step 2
       + '<div class="st-panel" data-panel="2" hidden>'
+      + '<h2>Pin the place</h2>'
+      + '<p class="st-help">Drop a pin so guests can see the neighbourhood. You can skip this if the map does not load.</p>'
+      + '<div id="st-pin-map" class="st-pin-map"></div>'
+      + '<input type="hidden" id="f-lat"><input type="hidden" id="f-lng">'
+      + '<div style="margin-top:14px"><button class="st-btn" type="button" data-next="1">Back</button> '
+      + '<button class="st-btn st-btn-primary" type="button" data-next="3">Next</button></div>'
+      + '</div>'
+
+      // step 3
+      + '<div class="st-panel" data-panel="3" hidden>'
       + '<h2>Your price and your dates</h2>'
       + '<div class="st-form-grid">'
       + '<div><label class="st-label" for="f-nightly">Price per night (UGX)</label>'
-      + '<input class="st-input" id="f-nightly" type="number" min="1000" step="1000" required placeholder="200000"></div>'
+      + '<input class="st-input" id="f-nightly" type="number" min="1000" step="1000" placeholder="200000"></div>'
       + '<div><label class="st-label" for="f-clean">Cleaning fee (UGX)</label><input class="st-input" id="f-clean" type="number" min="0" step="1000" value="0"></div>'
       + '<div><label class="st-label" for="f-deposit">Refundable deposit (UGX)</label><input class="st-input" id="f-deposit" type="number" min="0" step="1000" value="0"></div>'
       + '<div><label class="st-label" for="f-min">Minimum nights</label><input class="st-input" id="f-min" type="number" min="1" value="1"></div>'
@@ -1856,12 +2270,12 @@
       + '<p class="st-help">Add the date ranges you can take guests. Leave it blank if you would rather people just ask — we will say so on your listing.</p>'
       + '<div id="st-windows" style="margin-top:10px"></div>'
       + '<button class="st-btn" type="button" id="st-add-window"><i class="fas fa-plus"></i> Add another range</button>'
-      + '<div style="margin-top:14px"><button class="st-btn" type="button" data-next="1">Back</button> '
-      + '<button class="st-btn st-btn-primary" type="button" data-next="3">Next</button></div>'
+      + '<div style="margin-top:14px"><button class="st-btn" type="button" data-next="2">Back</button> '
+      + '<button class="st-btn st-btn-primary" type="button" data-next="4">Next</button></div>'
       + '</div>'
 
-      // step 3
-      + '<div class="st-panel" data-panel="3" hidden>'
+      // step 4
+      + '<div class="st-panel" data-panel="4" hidden>'
       + '<h2>House rules and your terms</h2>'
       + '<div><label class="st-label" for="f-rules">House rules</label>'
       + '<textarea class="st-input" id="f-rules" placeholder="No parties. No smoking indoors. Quiet after 10pm. Gate is locked at midnight."></textarea></div>'
@@ -1875,16 +2289,16 @@
           + esc((meta.cancellation_policies || {})[key] || key) + '</option>';
       }).join('')
       + '</select></div>'
-      + '<div style="margin-top:14px"><button class="st-btn" type="button" data-next="2">Back</button> '
-      + '<button class="st-btn st-btn-primary" type="button" data-next="4">Next</button></div>'
+      + '<div style="margin-top:14px"><button class="st-btn" type="button" data-next="3">Back</button> '
+      + '<button class="st-btn st-btn-primary" type="button" data-next="5">Next</button></div>'
       + '</div>'
 
-      // step 4
-      + '<div class="st-panel" data-panel="4" hidden>'
+      // step 5
+      + '<div class="st-panel" data-panel="5" hidden>'
       + '<h2>You, and how you want to be paid</h2>'
       + '<div class="st-form-grid">'
-      + '<div><label class="st-label" for="f-hname">Name guests should ask for</label><input class="st-input" id="f-hname" required></div>'
-      + '<div><label class="st-label" for="f-hphone">Phone</label><input class="st-input" id="f-hphone" required placeholder="0780 863 394"></div>'
+      + '<div><label class="st-label" for="f-hname">Name guests should ask for</label><input class="st-input" id="f-hname"></div>'
+      + '<div><label class="st-label" for="f-hphone">Phone</label><input class="st-input" id="f-hphone" placeholder="0780 863 394"></div>'
       + '<div><label class="st-label" for="f-hwa">WhatsApp (if different)</label><input class="st-input" id="f-hwa"></div>'
       + '<div><label class="st-label" for="f-hemail">Email</label><input class="st-input" id="f-hemail" type="email"></div>'
       + '<div><label class="st-label" for="f-htype">You are the</label><select class="st-input" id="f-htype">'
@@ -1895,6 +2309,8 @@
         return '<option value="' + esc(key) + '">' + esc((meta.payment_methods || {})[key]) + '</option>';
       }).join('')
       + '</select><p class="st-help">This is how guests pay <b>you</b>. makaug never receives or holds guest money.</p></div>'
+      + '<div style="grid-column:1/-1"><label class="st-label" for="f-utb">UTB licence number (optional)</label>'
+      + '<input class="st-input" id="f-utb" placeholder="Uganda Tourism Board licence, if you have one"></div>'
       + '<div style="grid-column:1/-1"><label class="st-label" for="f-titleref">Title or tenancy reference (optional)</label>'
       + '<input class="st-input" id="f-titleref" placeholder="Helps us verify you faster">'
       + '<p class="st-help">If you have a land title reference or a tenancy agreement number, adding it gets your listing through review quicker.</p></div>'
@@ -1911,19 +2327,19 @@
       + '<li>We can take a listing down if it is reported, inaccurate, or we cannot reach you.</li>'
       + '</ul></div>'
 
-      + '<label class="st-check"><input type="checkbox" id="f-right" required> '
+      + '<label class="st-check"><input type="checkbox" id="f-right"> '
       + '<span>I confirm I have the right to let this property out for short stays.</span></label>'
       + '<label class="st-check"><input type="checkbox" id="f-tax"> '
       + '<span>I understand I am responsible for my own tax and any local hotel tax on short stays.</span></label>'
-      + '<label class="st-check"><input type="checkbox" id="f-terms-ok" required> '
+      + '<label class="st-check"><input type="checkbox" id="f-terms-ok"> '
       + '<span>I accept the <a href="/short-term/terms" data-st-link>' + esc(t('termsTitle')) + '</a>.</span></label>'
 
       + '<div id="st-list-feedback"></div>'
       + '<p class="st-help" style="margin-top:8px"><i class="fas fa-floppy-disk"></i> '
       + '<span id="st-draft-note">This form saves itself on this device as you type.</span></p>'
       + '<p class="st-help" style="margin-top:12px"><i class="fas fa-camera"></i> '
-      + 'Photos come next, once the listing is saved. Have a few ready — the outside, the beds, the bathroom and the kitchen.</p>'
-      + '<div style="margin-top:14px"><button class="st-btn" type="button" data-next="3">Back</button> '
+      + 'Photos you added on the first step upload as soon as this listing is saved.</p>'
+      + '<div style="margin-top:14px"><button class="st-btn" type="button" data-next="4">Back</button> '
       + '<button class="st-btn st-btn-primary" type="submit">Submit my place</button></div>'
       + '</div>'
       + '</form>'
@@ -1950,7 +2366,7 @@
     'f-bedrooms', 'f-beds', 'f-bathrooms', 'f-desc',
     'f-nightly', 'f-clean', 'f-deposit', 'f-min', 'f-week', 'f-month', 'f-cin', 'f-cout',
     'f-rules', 'f-terms', 'f-cancel',
-    'f-hname', 'f-hphone', 'f-hwa', 'f-hemail', 'f-htype', 'f-pay', 'f-titleref'
+    'f-hname', 'f-hphone', 'f-hwa', 'f-hemail', 'f-htype', 'f-pay', 'f-titleref', 'f-utb', 'f-lat', 'f-lng'
   ];
 
   function readDraft() {
@@ -2283,13 +2699,114 @@
     }).join('');
   }
 
+  function fieldValue(id) {
+    var el = document.getElementById(id);
+    return el ? String(el.value || '').trim() : '';
+  }
+
+  function stepErrors(step) {
+    var errors = [];
+    if (step === 1) {
+      if (fieldValue('f-title').length < 8) errors.push('Give the place a title of at least 8 characters.');
+      if (!fieldValue('f-district')) errors.push('District is required.');
+      if (!fieldValue('f-area')) errors.push('Area or neighbourhood is required.');
+      if (fieldValue('f-desc').length < 40) errors.push('Describe the place in at least 40 characters.');
+    }
+    if (step === 3) {
+      var nightly = Number(fieldValue('f-nightly'));
+      if (!(nightly > 0)) errors.push('Set a nightly price in Uganda Shillings.');
+      if (nightly > 50000000) errors.push('That nightly price looks wrong. Check the figure.');
+    }
+    if (step === 5) {
+      if (!fieldValue('f-hname')) errors.push('We need the name guests should ask for.');
+      var digits = fieldValue('f-hphone').replace(/\D/g, '');
+      if (digits.indexOf('0') === 0) digits = '256' + digits.slice(1);
+      if (digits.length === 9) digits = '256' + digits;
+      if (!/^256\d{9}$/.test(digits)) errors.push('A reachable Ugandan phone number is required, for example 0780 863 394.');
+      var email = fieldValue('f-hemail');
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) errors.push('That email address does not look right.');
+      var right = document.getElementById('f-right');
+      var terms = document.getElementById('f-terms-ok');
+      if (!right || !right.checked) errors.push('You must confirm you have the right to let this place out.');
+      if (!terms || !terms.checked) errors.push('You must accept the makaug listing terms.');
+    }
+    return errors;
+  }
+
+  function showStepErrors(errors) {
+    var box = document.getElementById('st-step-errors');
+    if (!box) return;
+    box.innerHTML = errors && errors.length
+      ? '<ul class="st-errors">' + errors.map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>'
+      : '';
+  }
+
+  function mountPinMap() {
+    var host = document.getElementById('st-pin-map');
+    if (!host) return;
+    loadMapLibrary().then(function (ok) {
+      if (!document.getElementById('st-pin-map')) return;
+      if (!ok) {
+        host.innerHTML = '<div class="st-empty">' + esc(t('mapFail')) + '</div>';
+        return;
+      }
+      if (state.pinMap) {
+        window.setTimeout(function () { try { state.pinMap.invalidateSize(); } catch (_error) {} }, 80);
+        return;
+      }
+      var L = window.L;
+      var map = L.map(host).setView([0.3476, 32.5825], 12);
+      L.tileLayer(ST_TILE_URL, { attribution: ST_TILE_ATTRIBUTION, referrerPolicy: 'origin' }).addTo(map);
+      var marker = null;
+      function drop(latlng) {
+        if (!marker) {
+          marker = L.marker(latlng, { draggable: true }).addTo(map);
+          marker.on('dragend', function () { drop(marker.getLatLng()); });
+        } else {
+          marker.setLatLng(latlng);
+        }
+        var lat = document.getElementById('f-lat');
+        var lng = document.getElementById('f-lng');
+        if (lat) lat.value = Number(latlng.lat).toFixed(6);
+        if (lng) lng.value = Number(latlng.lng).toFixed(6);
+        queueDraftSave();
+      }
+      map.on('click', function (event) { drop(event.latlng); });
+      var savedLat = Number(fieldValue('f-lat'));
+      var savedLng = Number(fieldValue('f-lng'));
+      if (isFinite(savedLat) && isFinite(savedLng) && fieldValue('f-lat') && fieldValue('f-lng')) {
+        drop({ lat: savedLat, lng: savedLng });
+        map.setView([savedLat, savedLng], 14);
+      }
+      state.pinMap = map;
+      window.setTimeout(function () { try { map.invalidateSize(); } catch (_error) {} }, 200);
+    });
+  }
+
+  function showWizardStep(step) {
+    $$('[data-panel]').forEach(function (panel) { panel.hidden = Number(panel.getAttribute('data-panel')) !== step; });
+    $$('.st-step').forEach(function (stepEl) {
+      var n = Number(stepEl.getAttribute('data-step'));
+      stepEl.classList.toggle('is-on', n === step);
+      stepEl.classList.toggle('is-done', n < step);
+    });
+    state.wizardStep = step;
+    if (step === 2) mountPinMap();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   function mountList() {
     var view = $('.st-view-list');
     if (!view) return;
 
     var render = function () {
+      if (state.pinMap) {
+        try { state.pinMap.remove(); } catch (_error) {}
+        state.pinMap = null;
+      }
       var draft = readDraft();
       view.innerHTML = listViewHtml();
+      renderPhotoTray();
       renderWindows();
       wireShortTermLocationFields();
 
@@ -2318,18 +2835,33 @@
       view.addEventListener('input', queueDraftSave);
       view.addEventListener('change', queueDraftSave);
 
+      var photoInput = document.getElementById('st-photo-input');
+      if (photoInput && !photoInput.dataset.bound) {
+        photoInput.dataset.bound = '1';
+        photoInput.addEventListener('change', function () {
+          addPhotoFiles(photoInput.files).then(function () { photoInput.value = ''; });
+        });
+      }
+
       view.addEventListener('click', function (e) {
+        var photoRemove = e.target.closest('[data-photo-remove]');
+        if (photoRemove && !state.listingId) {
+          state.photos.splice(Number(photoRemove.getAttribute('data-photo-remove')), 1);
+          renderPhotoTray();
+          return;
+        }
         var next = e.target.closest('[data-next]');
         if (next) {
           var step = Number(next.getAttribute('data-next'));
-          $$('[data-panel]').forEach(function (p) { p.hidden = Number(p.getAttribute('data-panel')) !== step; });
-          $$('.st-step').forEach(function (s) {
-            var n = Number(s.getAttribute('data-step'));
-            s.classList.toggle('is-on', n === step);
-            s.classList.toggle('is-done', n < step);
-          });
-          state.wizardStep = step;
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          if (step > state.wizardStep) {
+            var problems = stepErrors(state.wizardStep);
+            if (problems.length) {
+              showStepErrors(problems);
+              return;
+            }
+          }
+          showStepErrors([]);
+          showWizardStep(step);
           return;
         }
         if (e.target.closest('#st-add-window')) {
@@ -2359,6 +2891,12 @@
           var val = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
           var checked = function (id) { var el = document.getElementById(id); return !!(el && el.checked); };
           var feedback = document.getElementById('st-list-feedback');
+          var firstBad = [1, 3, 5].filter(function (step) { return stepErrors(step).length; })[0];
+          if (firstBad) {
+            showWizardStep(firstBad);
+            showStepErrors(stepErrors(firstBad));
+            return;
+          }
 
           api('/listings', {
             method: 'POST',
@@ -2391,6 +2929,9 @@
               host_type: val('f-htype'),
               preferred_payment_method: val('f-pay'),
               right_to_let_reference: val('f-titleref'),
+              utb_licence_number: val('f-utb'),
+              latitude: val('f-lat'),
+              longitude: val('f-lng'),
               right_to_let_declared: checked('f-right'),
               local_hotel_tax_ack: checked('f-tax'),
               terms_accepted: checked('f-terms-ok'),
@@ -2408,6 +2949,7 @@
             }
             view.innerHTML = photoStageHtml(out.listing);
             bindPhotoStage();
+            if (state.photos.some(function (photo) { return photo.status === 'ready'; })) uploadPendingPhotos();
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }).catch(function (error) {
             if (feedback) {
@@ -2680,7 +3222,7 @@
       // throws away /list-your-place, a listing slug and any query string. Put
       // the real one back immediately so refresh, share and back all work.
       var intended = (window.location.pathname || '') + (window.location.search || '');
-      try { window.showPage('short-term', { scroll: false }); } catch (_e) {}
+      try { window.showPage('short-term', { scroll: false, history: false }); } catch (_e) {}
       try {
         if (window.history && window.history.replaceState
           && (window.location.pathname + window.location.search) !== intended) {
@@ -2698,7 +3240,13 @@
 
     if (path === '/short-term/list-your-place') {
       setView('list');
-      mountList();
+      if (!document.getElementById('st-list-form')) mountList();
+      return;
+    }
+    var hotel = path.match(/^\/short-term\/hotel\/([a-z0-9-]+)$/);
+    if (hotel) {
+      setView('detail');
+      mountPartnerDetail(hotel[1]);
       return;
     }
     if (path === '/short-term/terms') {
@@ -2723,6 +3271,7 @@
       return;
     }
     setView('search');
+    loadTravelpayoutsDrive();
     if (!r.querySelector('#st-search-form')) mountSearch();
   }
 
@@ -2829,6 +3378,26 @@
     });
   }, true);
 
+  document.addEventListener('click', function (e) {
+    var more = e.target.closest ? e.target.closest('#st-partners-more') : null;
+    if (more) {
+      state.partnerShown = 999;
+      renderResults();
+      return;
+    }
+    var affiliate = e.target.closest ? e.target.closest('[data-st-affiliate]') : null;
+    if (affiliate) {
+      trackSt('st_affiliate_click', {
+        partner: affiliate.getAttribute('data-st-affiliate') || '',
+        sub_id: affiliate.getAttribute('data-st-sub') || ''
+      });
+    }
+    var whatsapp = e.target.closest ? e.target.closest('a[href*="wa.me"]') : null;
+    if (whatsapp && root() && root().contains(whatsapp)) {
+      trackSt('st_whatsapp_click', { source: whatsapp.getAttribute('data-st-contact') || 'whatsapp' });
+    }
+  });
+
   if (!ensureObserver()) {
     // Covers any other route into the section - a back button, a deep link the
     // bundle resolves itself. Bounded: the click hook above is the real path.
@@ -2846,16 +3415,13 @@
     if (!r || !r.classList.contains('active')) return;
     var path = currentPath();
     if (path === '/short-term/list-your-place') { mountList(); return; }
+    var hotel = path.match(/^\/short-term\/hotel\/([a-z0-9-]+)$/);
+    if (hotel) { mountPartnerDetail(hotel[1]); return; }
     if (path === '/short-term/terms') { mountTerms(); return; }
     if (path === '/short-term/host') { mountHost(); return; }
-    if (/^\/short-term\/requests\/[A-Za-z0-9-]+$/.test(path)) {
-      mountGuestRequest(path.split('/').pop());
-      return;
-    }
-    if (path !== '/short-term' && path.indexOf('/short-term/') === 0) {
-      mountDetail(path.slice('/short-term/'.length));
-      return;
-    }
+    var req = path.match(/^\/short-term\/requests\/([A-Za-z0-9-]+)$/);
+    if (req) { mountGuestRequest(req[1]); return; }
+    if (path.indexOf('/short-term/') === 0) { mountDetail(path.slice(12), true); return; }
     mountSearch();
     renderResults();
     if (state.mapOn) paintMap();
