@@ -1,9 +1,11 @@
 'use strict';
 
-const smsService = require('../models/smsService');
+const emailService = require('./emailService');
+const whatsappWebBridgeService = require('./whatsappWebBridgeService');
 
 function isSmsOtpDeliveryConfirmed(delivery) {
   if (!delivery || delivery.mocked) return false;
+  if (delivery.queued === true) return true;
   if (delivery.sid || delivery.messageId || delivery.sent === true) return true;
 
   const status = String(delivery.status || '').trim().toLowerCase();
@@ -11,6 +13,8 @@ function isSmsOtpDeliveryConfirmed(delivery) {
   if (/(fail|reject|invalid|error|undeliver)/i.test(status)) return false;
   return ['sent', 'success', 'submitted', 'queued', 'accepted', 'buffered'].includes(status);
 }
+
+const isPhoneOtpDeliveryConfirmed = isSmsOtpDeliveryConfirmed;
 
 function publicAttemptSummary(attempt = {}) {
   return {
@@ -23,13 +27,25 @@ function publicAttemptSummary(attempt = {}) {
   };
 }
 
-function deliveryProvider(delivery = {}) {
-  return delivery.provider || (delivery.sid ? 'twilio' : null) || (delivery.messageId ? 'africastalking' : null) || null;
+function whatsappBridgeEnabled() {
+  return String(process.env.WHATSAPP_WEB_BRIDGE_ENABLED || '').trim().toLowerCase() === 'true';
 }
 
-async function sendPhoneOtp({ to, message } = {}) {
+function otpDigitsFromMessage(message = '') {
+  const match = String(message || '').match(/\b(\d{6})\b/);
+  return match ? match[1] : '';
+}
+
+function emailDeliveryConfirmed(delivery) {
+  return delivery?.sent === true && delivery?.mocked !== true;
+}
+
+async function sendPhoneOtp({ to, message, email, otp, expiresMinutes } = {}) {
   const recipient = String(to || '').trim();
   const body = String(message || '').trim();
+  const fallbackEmail = String(email || '').trim();
+  const code = String(otp || '').trim() || otpDigitsFromMessage(body);
+  const minutes = Math.max(parseInt(expiresMinutes || process.env.OTP_EXPIRES_MINUTES || '10', 10) || 10, 1);
   const attempts = [];
 
   if (!recipient || !body) {
@@ -41,41 +57,97 @@ async function sendPhoneOtp({ to, message } = {}) {
     };
   }
 
-  try {
-    const smsDelivery = await smsService.sendSMS(recipient, body);
-    attempts.push(publicAttemptSummary({
-      channel: 'sms',
-      provider: deliveryProvider(smsDelivery),
-      status: smsDelivery?.status || (smsDelivery?.mocked ? 'mocked' : null),
-      sent: isSmsOtpDeliveryConfirmed(smsDelivery),
-      reason: smsDelivery?.reason || null
-    }));
-    if (isSmsOtpDeliveryConfirmed(smsDelivery)) {
-      return {
-        ok: true,
-        channel: 'sms',
-        delivery: smsDelivery,
-        attempts
-      };
+  if (whatsappBridgeEnabled()) {
+    try {
+      const queued = await whatsappWebBridgeService.queueWhatsappWebBridgeMessage({
+        recipient,
+        text: body,
+        source: 'otp',
+        actorId: 'system',
+        metadata: { kind: 'otp' }
+      });
+      if (queued) {
+        const delivery = {
+          provider: 'whatsapp_web_bridge',
+          status: 'queued',
+          queued: true,
+          id: queued.id || null
+        };
+        attempts.push(publicAttemptSummary({
+          channel: 'whatsapp',
+          provider: 'whatsapp_web_bridge',
+          status: 'queued',
+          queued: true
+        }));
+        return {
+          ok: true,
+          channel: 'whatsapp',
+          delivery,
+          attempts
+        };
+      }
+      attempts.push(publicAttemptSummary({
+        channel: 'whatsapp',
+        provider: 'whatsapp_web_bridge',
+        status: 'failed',
+        reason: 'not_queued'
+      }));
+    } catch (error) {
+      attempts.push(publicAttemptSummary({
+        channel: 'whatsapp',
+        provider: 'whatsapp_web_bridge',
+        status: 'failed',
+        error: error.message
+      }));
     }
-  } catch (error) {
-    attempts.push(publicAttemptSummary({
-      channel: 'sms',
-      provider: 'sms',
-      status: 'failed',
-      error: error.message
-    }));
+  }
+
+  if (fallbackEmail && code) {
+    try {
+      const emailDelivery = await emailService.sendOtpEmail({
+        to: fallbackEmail,
+        subject: 'makaug.com verification code',
+        otp: code,
+        expiresMinutes: minutes,
+        purpose: 'account',
+        intro: 'Use this makaug.com code to continue securely.',
+        footer: 'Enter the code on makaug.com. Do not share it with anyone.'
+      });
+      attempts.push(publicAttemptSummary({
+        channel: 'email',
+        provider: emailDelivery?.provider || 'email',
+        status: emailDelivery?.status || (emailDeliveryConfirmed(emailDelivery) ? 'sent' : 'failed'),
+        sent: emailDeliveryConfirmed(emailDelivery),
+        reason: emailDelivery?.reason || emailDelivery?.error || null
+      }));
+      if (emailDeliveryConfirmed(emailDelivery)) {
+        return {
+          ok: true,
+          channel: 'email',
+          delivery: emailDelivery,
+          attempts
+        };
+      }
+    } catch (error) {
+      attempts.push(publicAttemptSummary({
+        channel: 'email',
+        provider: 'email',
+        status: 'failed',
+        error: error.message
+      }));
+    }
   }
 
   return {
     ok: false,
-    channel: 'sms',
-    failureReason: 'sms_otp_delivery_failed',
+    channel: 'phone',
+    failureReason: 'phone_otp_delivery_failed',
     attempts
   };
 }
 
 module.exports = {
   isSmsOtpDeliveryConfirmed,
+  isPhoneOtpDeliveryConfirmed,
   sendPhoneOtp
 };

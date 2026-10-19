@@ -10646,7 +10646,7 @@ function setAuthSignUpOtpChannel(channel) {
   if (hint) {
     hint.value = authSignUpOtpChannel === "email"
       ? "OTP will be sent to your email address"
-      : "OTP will be sent by SMS to your phone number";
+      : "OTP will be sent to your WhatsApp";
   }
 }
 
@@ -33461,7 +33461,7 @@ function formatOtpDeliveryFallbackMessage(message, channel = "phone") {
     || lower.includes("failed to send otp email")
     || lower.includes("failed to send otp sms");
   if (!providerIssue) return raw || "Could not send OTP right now.";
-  const modeLabel = channel === "email" ? "email" : "SMS";
+  const modeLabel = channel === "email" ? "email" : "WhatsApp";
   return `OTP delivery via ${modeLabel} is temporarily unavailable. For internal testing, use the authorized admin override code.`;
 }
 
@@ -33497,7 +33497,7 @@ async function requestListingOtp() {
     const otpStatus = document.getElementById("lp-otp-status");
     if (otpStatus) {
       otpStatus.className = "text-xs text-green-700 mt-1";
-      otpStatus.textContent = channel === "email" ? "OTP sent to your email." : "OTP sent by SMS to your phone.";
+      otpStatus.textContent = channel === "email" ? "OTP sent to your email." : "OTP sent to your WhatsApp.";
     }
     lpListingOtpVerifiedPhone = "";
     lpListingOtpVerifiedEmail = "";
@@ -33549,7 +33549,7 @@ async function verifyListingOtp() {
     const otpStatus = document.getElementById("lp-otp-status");
     if (otpStatus) {
       otpStatus.className = "text-xs text-green-700 mt-1";
-      otpStatus.textContent = `${channel === "email" ? "Email" : "SMS"} OTP verified.`;
+      otpStatus.textContent = `${channel === "email" ? "Email" : "WhatsApp"} OTP verified.`;
     }
     renderListReviewSummary();
   } catch (error) {
@@ -36671,7 +36671,7 @@ function setAgentOtpChannel(channel) {
   agentOtpVerifiedEmail = "";
   const otpInput = document.getElementById("agent-otp-code");
   if (otpInput) otpInput.value = "";
-  setAgentOtpStatus("neutral", "SMS OTP pending verification.");
+  setAgentOtpStatus("neutral", "WhatsApp code pending verification.");
 }
 
 function resetAgentRegistrationOtpState() {
@@ -36871,7 +36871,7 @@ async function requestAgentOtp() {
     agentRegistrationOtpToken = "";
     agentOtpVerifiedPhone = "";
     agentOtpVerifiedEmail = "";
-    setAgentOtpStatus("success", channel === "email" ? "OTP sent to your email." : "OTP sent by SMS to your phone.");
+    setAgentOtpStatus("success", channel === "email" ? "OTP sent to your email." : "OTP sent to your WhatsApp.");
   } catch (error) {
     const fallbackMsg = formatOtpDeliveryFallbackMessage(error.message, channel);
     setAgentOtpStatus("error", fallbackMsg);
@@ -37959,7 +37959,7 @@ function accountAccessText(key) {
       confirmRequirement: "Confirm password must match.",
       termsRequirement: "Agree to the Terms & Conditions.",
       privacyRequirement: "Confirm you have read the Privacy Policy.",
-      verifiedRequirement: "Verify your email or SMS code first.",
+      verifiedRequirement: "Verify your email or WhatsApp code first.",
       readyToCreate: "Ready. Click Create account to open your dashboard.",
       creatingAccount: "Creating your account now...",
       openingDashboard: "Account ready. Opening your dashboard...",
@@ -37973,7 +37973,7 @@ function accountAccessText(key) {
       confirmPassword: "Confirm password",
       otpMethod: "How should we send your verification code?",
       otpEmail: "Email",
-      otpPhone: "SMS / Text",
+      otpPhone: "WhatsApp",
       detailsTitle: "Confirm contact details",
       brokerDetailsTitle: "Your details",
       preferencesTitle: "Quick preferences",
@@ -38020,7 +38020,7 @@ function accountAccessText(key) {
       confirmRequirement: "Password ziteekwa okufaanagana.",
       termsRequirement: "Kkiriza Terms & Conditions.",
       privacyRequirement: "Kakasa nti osomedde Privacy Policy.",
-      verifiedRequirement: "Sooka okakase email oba SMS code.",
+      verifiedRequirement: "Sooka okakase email oba WhatsApp code.",
       readyToCreate: "Kiwedde. Nyiga Create account okuggula dashboard yo.",
       creatingAccount: "Tukola account yo kati...",
       openingDashboard: "Account ewedde. Tuggula dashboard yo...",
@@ -38034,7 +38034,7 @@ function accountAccessText(key) {
       confirmPassword: "Kakasa password",
       otpMethod: "Tukusindikire wa code?",
       otpEmail: "Email",
-      otpPhone: "SMS / Text",
+      otpPhone: "WhatsApp",
       detailsTitle: "Kakasa email n'essimu",
       brokerDetailsTitle: "Ebikukwatako",
       preferencesTitle: "By'oyagala mu bwangu",
@@ -38078,7 +38078,7 @@ function accountAccessText(key) {
       confirmRequirement: "Nenosiri la kuthibitisha lazima lilingane.",
       termsRequirement: "Kubali Sheria na Masharti.",
       privacyRequirement: "Thibitisha kuwa umesoma Sera ya Faragha.",
-      verifiedRequirement: "Thibitisha barua pepe au msimbo wa SMS kwanza.",
+      verifiedRequirement: "Thibitisha barua pepe au msimbo wa WhatsApp kwanza.",
       readyToCreate: "Tayari. Bofya Create account kufungua dashibodi yako.",
       creatingAccount: "Tunafungua akaunti yako sasa...",
       openingDashboard: "Akaunti iko tayari. Tunafungua dashibodi yako...",
@@ -38092,7 +38092,7 @@ function accountAccessText(key) {
       confirmPassword: "Thibitisha nenosiri",
       otpMethod: "Tutume msimbo wapi?",
       otpEmail: "Barua pepe",
-      otpPhone: "SMS / Text",
+      otpPhone: "WhatsApp",
       detailsTitle: "Thibitisha mawasiliano",
       brokerDetailsTitle: "Maelezo yako",
       preferencesTitle: "Mapendeleo ya haraka",
@@ -38137,7 +38137,7 @@ function accountAccessText(key) {
       confirmPassword: "Mok password",
       otpMethod: "Wa cwalo code bot kwene?",
       otpEmail: "Email",
-      otpPhone: "SMS / Text",
+      otpPhone: "WhatsApp",
       terms: `Aye Terms & Conditions me ${publicBrand()}.`,
       privacy: `Asomo Privacy Policy me ${publicBrand()}.`,
       verifyTitle: "Mok account mamegi",
@@ -38162,7 +38162,7 @@ function accountAccessText(key) {
       confirmPassword: "Hamya password",
       otpMethod: "Tukwohereze code hehe?",
       otpEmail: "Email",
-      otpPhone: "SMS / Text",
+      otpPhone: "WhatsApp",
       terms: `Ninyikiriza Terms & Conditions za ${publicBrand()}.`,
       privacy: `Ninsomire Privacy Policy ya ${publicBrand()}.`,
       verifyTitle: "Hamya account yawe",
@@ -38187,7 +38187,7 @@ function accountAccessText(key) {
       confirmPassword: "Hamya password",
       otpMethod: "Tukwohereze code hehe?",
       otpEmail: "Email",
-      otpPhone: "SMS / Text",
+      otpPhone: "WhatsApp",
       terms: `Ninyikiriza Terms & Conditions za ${publicBrand()}.`,
       privacy: `Ninsomire Privacy Policy ya ${publicBrand()}.`,
       verifyTitle: "Hamya account yawe",
@@ -38212,7 +38212,7 @@ function accountAccessText(key) {
       confirmPassword: "Kakasa password",
       otpMethod: "Tukusindikire wa code?",
       otpEmail: "Email",
-      otpPhone: "SMS / Text",
+      otpPhone: "WhatsApp",
       terms: `Nzikiriza Terms & Conditions za ${publicBrand()}.`,
       privacy: `Nsomedde Privacy Policy ya ${publicBrand()}.`,
       verifyTitle: "Kakasa account yo",
@@ -38960,7 +38960,7 @@ function ensureAccountAccessDrawer() {
                   </label>
                   <label class="flex items-center gap-2 rounded-xl bg-white border border-green-100 px-3 py-2 text-xs font-bold text-gray-700">
                     <input type="radio" name="account-access-otp-method" value="phone" class="accent-green-700">
-                    <span data-auth-text="otpPhone">SMS / Text</span>
+                    <span data-auth-text="otpPhone">WhatsApp</span>
                   </label>
                 </div>
               </div>
@@ -39053,7 +39053,7 @@ function ensureAccountAccessDrawer() {
               </label>
               <label class="flex items-center gap-2 rounded-xl bg-white border border-green-100 px-3 py-2 text-xs font-bold text-gray-700">
                 <input type="radio" name="account-access-forgot-method" value="phone" class="accent-green-700">
-                <span data-auth-text="otpPhone">SMS / Text</span>
+                <span data-auth-text="otpPhone">WhatsApp</span>
               </label>
             </div>
             <div id="account-access-forgot-reset-fields" class="hidden space-y-3">
@@ -39388,7 +39388,7 @@ function maskAccountAccessDestination(value = "", channel = "email") {
 function accountAccessOtpChannelCopy(channel = "email", destination = "") {
   const masked = maskAccountAccessDestination(destination, channel);
   if (channel === "phone") {
-    return `We sent a verification code by SMS to: ${masked}. Please enter it below.`;
+    return `We sent a verification code to your WhatsApp: ${masked}. Please enter it below.`;
   }
   return `We sent a verification code to your email: ${masked}. Please enter it below.`;
 }
@@ -39432,7 +39432,7 @@ function validateAccountAccessContactDetails({ firstName, lastName, email, phone
     return false;
   }
   if ((otpChannel === "phone" || isAccountAccessBrokerCreateFlow()) && !/^\+256\d{9}$/.test(phone || "")) {
-    toast(isAccountAccessBrokerCreateFlow() ? "Enter a valid Uganda mobile number." : "Enter a valid Uganda mobile number for SMS verification.");
+    toast(isAccountAccessBrokerCreateFlow() ? "Enter a valid Uganda mobile number." : "Enter a valid Uganda mobile number for WhatsApp verification.");
     return false;
   }
   return true;
@@ -39478,15 +39478,15 @@ async function submitAccountAccessContactOtp() {
     setTextById("account-access-otp-copy", accountAccessOtpChannelCopy(resolvedChannel, destination));
     setAccountAccessCreateStep("verify");
     const message = otpResponse?.data?.email_fallback_to_sms
-      ? "Email is temporarily unavailable, so we sent the code by SMS/Text instead."
-      : (resolvedChannel === "phone" ? "Check your SMS messages for the verification code." : "Check your email for the verification code.");
+      ? "Email is temporarily unavailable, so we sent the code on WhatsApp instead."
+      : (resolvedChannel === "phone" ? "Check your WhatsApp for the verification code." : "Check your email for the verification code.");
     setAccountAccessFlowNote(message, "success");
     toast(message);
     setTimeout(() => document.getElementById("account-access-otp-code")?.focus(), 30);
   } catch (error) {
     const supportPhone = error.response?.support?.whatsapp || "0780863394";
     const recovery = error.status === 503 || Array.isArray(error.response?.retry_channels)
-      ? `${error.message || "Could not send verification code."} You can retry Email, choose SMS/Text if your Uganda number is correct, or WhatsApp makaug support on ${supportPhone}.`
+      ? `${error.message || "Could not send verification code."} You can retry Email, choose WhatsApp if your Uganda number is correct, or WhatsApp makaug support on ${supportPhone}.`
       : `${error.message || "Could not send verification code."} Check your details and try the other verification method.`;
     setAccountAccessFlowNote(recovery, "error");
     toast(error.message || "Could not send verification code.");
@@ -39503,7 +39503,7 @@ async function verifyAccountAccessContactOtp() {
   const code = (document.getElementById("account-access-otp-code")?.value || "").trim();
   const channel = pending.channel === "phone" ? "phone" : "email";
   if (!pending.destination || !code) {
-    toast(`Enter the verification code sent ${channel === "phone" ? "by SMS to your phone" : "to your email"}.`);
+    toast(`Enter the verification code sent ${channel === "phone" ? "on WhatsApp" : "to your email"}.`);
     return;
   }
   const btn = document.getElementById("account-access-continue-btn");
@@ -39662,7 +39662,7 @@ async function submitAccountAccessCreate() {
     return;
   }
 	  if (!isAccountAccessBrokerCreateFlow() && !accountAccessContactVerificationToken) {
-	    toast("Please verify your email or SMS code before creating the account.");
+	    toast("Please verify your email or WhatsApp code before creating the account.");
 	    setAccountAccessCreateStep("details");
 	    return;
 	  }
@@ -39825,7 +39825,7 @@ async function submitAccountAccessOtp() {
   const code = (document.getElementById("account-access-otp-code")?.value || "").trim();
   const channel = pending.channel === "phone" ? "phone" : "email";
   if (!pending.destination || !code) {
-    toast(`Enter the verification code sent ${channel === "phone" ? "by SMS to your phone" : "to your email"}.`);
+    toast(`Enter the verification code sent ${channel === "phone" ? "on WhatsApp" : "to your email"}.`);
     return;
   }
   const btn = document.getElementById("account-access-continue-btn");
@@ -39972,7 +39972,7 @@ async function sendAccountAccessPasswordResetCode() {
     document.getElementById("account-access-forgot-reset-fields")?.classList.remove("hidden");
     document.getElementById("account-access-forgot-method-wrap")?.classList.add("hidden");
     if (btn) btn.textContent = accountAccessText("resetPassword");
-    const channelLabel = resolvedChannel === "email" ? "email" : "SMS/text";
+    const channelLabel = resolvedChannel === "email" ? "email" : "WhatsApp";
     toast(request?.data?.message || `We sent a password reset code by ${channelLabel}.`);
     setTimeout(() => document.getElementById("account-access-reset-code")?.focus(), 30);
   } catch (error) {

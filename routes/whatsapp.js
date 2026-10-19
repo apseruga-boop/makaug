@@ -12,8 +12,8 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const db = require('../config/database');
-const smsService = require('../models/smsService');
 const logger = require('../config/logger');
+const { normalizeUgPhoneForWhatsApp } = require('../services/whatsappNotificationService');
 const { DISTRICTS } = require('../utils/constants');
 const { searchOrderBySql } = require('../utils/searchRankingSql');
 const {
@@ -61,6 +61,7 @@ const { createLead, addLeadActivity } = require('../services/leadService');
 const { handOffListingLead, loadListingContact } = require('../services/leadHandoffService');
 const { isPublicLivePropertyStatus } = require('../utils/publicInventoryStatus');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
+const whatsappWebBridgeService = require('../services/whatsappWebBridgeService');
 const {
   claimWhatsappWebBridgeMessages,
   getWhatsappWebBridgeStatus,
@@ -69,7 +70,7 @@ const {
   markWhatsappWebBridgeMessageSent,
   queueWhatsappWebBridgeMessage,
   upsertWhatsappWebBridgeClient
-} = require('../services/whatsappWebBridgeService');
+} = whatsappWebBridgeService;
 const { isOwnWhatsappMessage } = require('../services/whatsappWebDirectionService');
 const { isWhatsappMissedCallCard } = require('../services/whatsappCallCardDetectionService');
 const {
@@ -238,11 +239,12 @@ const T = {
     askIDNumber: '🪪 Now type your National ID Number (NIN) here.\n\n🔒 This is only to check that you are the real owner. It is never shown on makaug and never shared with anyone who enquires.',
     askSelfie: '🪪 Please send a clear photo of your National ID (a photo, not a PDF).\n\n🔒 Don\'t worry — this is only for verification, to protect buyers and tenants from fraud. Your ID is never shown on makaug or shared with anyone; only the makaug review team sees it.',
     askPhone: '📱 What is your mobile phone number (for verification)?\nFormat: +256 7XX XXX XXX',
-    otpSent: "📲 We've sent a 6-digit code to your phone via SMS. Please type that code here to verify:",
+    otpSent: "📲 We've sent a 6-digit code on WhatsApp. Please type that code here to verify:",
+    otpSendFailed: 'We could not send the verification code on WhatsApp. Please try again.',
     otpSentEmail: "✉️ We've sent a 6-digit code to your email. Please type that code here to verify:",
     listingSubmitted: "🎉 *Your listing has been submitted!*\n\nOur team will review it and make it live within 24 hours.\n\n🔗 You'll receive a link to your listing once approved.\n\nReference: #{ref}\n\n✅ Next step: set up your profile to track listing views, saves, and enquiries.\n\nThank you for using makaug! 🏠🇺🇬",
     invalidInput: "I want to keep this quick. Please reply with one of the options above, or type MENU to start again.",
-    verifyOTP: 'Please type the 6-digit code we sent via SMS:',
+    verifyOTP: 'Please type the 6-digit code we sent on WhatsApp:',
     otpSuccess: '✅ Phone verified!',
     otpFailed: '❌ Incorrect code. Please try again or type RESEND for a new code.',
     askDeposit: '💵 What is the deposit amount required? (in UGX, numbers only)',
@@ -314,7 +316,7 @@ const T = {
     askIDNumber: '🪪 Kwa nteekateeka, tukeetaaga NIN yo (National ID Number).\n\n🔒 Kino kya kukakasa nti ggwe nnannyini yennyini — tekirabikira ku makaug era tekiweebwa muntu yenna.',
     askSelfie: "🤳 Weereza ekifaananyi kyo ekirabika obulungi ng'okutte National ID yo. Tosindika PDF oba document file; kyetaagisa kubeera kifaananyi.\n\n🔒 ID yo ya kukakasa kwokka — tegirabikira ku makaug era tegiweebwa muntu yenna.",
     askPhone: '📱 Enamba yaffe ya simu (okukakasa)?\nFomati: +256 7XX XXX XXX',
-    otpSent: '📲 Tukusindise koodi ku simu yo nga SMS. Wandika koodi eyo eri wano:',
+    otpSent: '📲 Tukusindise koodi ku WhatsApp yo. Wandika koodi eyo eri wano:',
     listingSubmitted: "🎉 *Ensi yo eterekedwa!*\n\nTeemu yaffe eya kulabirira era ejja kuterekebwa mu saawa 24.\n\nReference: #{ref}\n\n✅ Edirirra: teekawo profile yo olabe views, saves n'ebibuuza ku listing yo.\n\nWebale okozesa makaug! 🏠🇺🇬",
     invalidInput: "❓ Simanyi. Ddamu n'okusooka okwandika.",
     otpSuccess: '✅ Simu kakasibwa!',
@@ -378,7 +380,7 @@ const T = {
     askPhotos: '📸 Tuma picha ya *mbele/nje* kwanza.',
     listingSubmitted: '🎉 *Mali yako imewasilishwa!*\n\nRef: #{ref}\n\n✅ Hatua inayofuata: weka profile yako ili kufuatilia views, saves na enquiries za tangazo lako.\n\nAsante kwa kutumia makaug! 🏠🇺🇬',
     invalidInput: '❓ Sijaelewa. Tafadhali jibu kwa mojawapo ya chaguo.',
-    otpSent: '📲 Tumetuma nambari ya siri kwa SMS yako. Andika hapa:',
+    otpSent: '📲 Tumetuma nambari ya siri kwenye WhatsApp yako. Andika hapa:',
     otpSuccess: '✅ Nambari ya simu imethibitishwa!',
     otpFailed: '❌ Nambari si sahihi. Jaribu tena.',
     askSearchType: '🔎 Unatafuta nini?\n1️⃣ Ya kuuza\n2️⃣ Ya kupangisha\n3️⃣ Ardhi\n4️⃣ Makazi ya wanafunzi\n5️⃣ Biashara\n6️⃣ Mali yoyote',
@@ -659,11 +661,11 @@ T.am = Object.assign({}, T.en, {
   askIDNumber: '🪪 ለደህንነት National ID Number (NIN) እንፈልጋለን። በህዝብ አይታይም።\n\nእባክዎ NINዎን ይጻፉ:',
   askSelfie: '🤳 National ID cardዎን ይዘው ግልጽ ፎቶ ያንሱና እዚህ ይላኩ። PDF ወይም document አይላኩ።',
   askPhone: '📱 ለማረጋገጫ የሞባይል ቁጥርዎ ስንት ነው?\nFormat: +256 7XX XXX XXX',
-  otpSent: '📲 የ6 አሃዝ ኮድ በ SMS ላክን። እባክዎ ኮዱን እዚህ ይጻፉ:',
+  otpSent: '📲 የ6 አሃዝ ኮድ በ WhatsApp ላክን። እባክዎ ኮዱን እዚህ ይጻፉ:',
   otpSentEmail: '✉️ የ6 አሃዝ ኮድ በ email ላክን። እባክዎ ኮዱን እዚህ ይጻፉ:',
   listingSubmitted: "🎉 *ዝርዝርዎ ቀርቧል!*\n\nቡድናችን ይመረምረዋል እና በ24 ሰዓታት ውስጥ live ያደርገዋል።\n\nReference: #{ref}\n\n✅ ቀጣይ ደረጃ: views, saves እና enquiries ለመከታተል profileዎን ያዘጋጁ።\n\nmakaugን ስለተጠቀሙ እናመሰግናለን! 🏠🇺🇬",
   invalidInput: "❓ አልተረዳሁም። እባክዎ ከላይ ካሉት አማራጮች አንዱን ይመልሱ።",
-  verifyOTP: 'እባክዎ በ SMS የላክነውን የ6 አሃዝ ኮድ ይጻፉ:',
+  verifyOTP: 'እባክዎ በ WhatsApp የላክነውን የ6 አሃዝ ኮድ ይጻፉ:',
   otpSuccess: '✅ ስልክ ተረጋግጧል!',
   otpFailed: '❌ ኮዱ ትክክል አይደለም። እንደገና ይሞክሩ ወይም RESEND ይጻፉ።',
   askDeposit: '💵 Deposit ስንት ነው? UGX ቁጥር ብቻ።',
@@ -739,11 +741,11 @@ T.ar = Object.assign({}, T.en, {
   askIDNumber: '🪪 للأمان نحتاج National ID Number (NIN). لن يظهر للعامة.\n\nاكتب NIN:',
   askSelfie: '🤳 أرسل صورة واضحة لك وأنت تحمل National ID. لا ترسل PDF أو document file.',
   askPhone: '📱 ما رقم هاتفك للتحقق؟\nFormat: +256 7XX XXX XXX',
-  otpSent: '📲 أرسلنا رمزاً من 6 أرقام عبر SMS. اكتب الرمز هنا:',
+  otpSent: '📲 أرسلنا رمزاً من 6 أرقام على WhatsApp. اكتب الرمز هنا:',
   otpSentEmail: '✉️ أرسلنا رمزاً من 6 أرقام إلى email. اكتب الرمز هنا:',
   listingSubmitted: "🎉 *تم إرسال إعلانك!*\n\nسيراجعه فريقنا ويجعله live خلال 24 ساعة.\n\nReference: #{ref}\n\n✅ الخطوة التالية: أنشئ profile لتتبع views و saves و enquiries.\n\nشكراً لاستخدام makaug! 🏠🇺🇬",
   invalidInput: "❓ لم أفهم ذلك. يرجى الرد بأحد الخيارات أعلاه.",
-  verifyOTP: 'اكتب رمز الـ6 أرقام الذي أرسلناه عبر SMS:',
+  verifyOTP: 'اكتب رمز الـ6 أرقام الذي أرسلناه على WhatsApp:',
   otpSuccess: '✅ تم التحقق من الهاتف!',
   otpFailed: '❌ الرمز غير صحيح. حاول مرة أخرى أو اكتب RESEND.',
   askDeposit: '💵 كم مبلغ deposit المطلوب؟ بالـUGX، أرقام فقط.',
@@ -12849,6 +12851,12 @@ async function saveTranscription({
   );
 }
 
+function whatsappListerPhoneMatchesChat(chatPhone, givenPhone) {
+  const left = normalizeUgPhoneForWhatsApp(chatPhone);
+  const right = normalizeUgPhoneForWhatsApp(givenPhone);
+  return Boolean(left) && left === right;
+}
+
 async function issueOtp(identifier, options = {}) {
   const channel = String(options.channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
   const destination = channel === 'email'
@@ -12873,11 +12881,20 @@ async function issueOtp(identifier, options = {}) {
         subject: 'makaug listing verification code',
         text: `Your makaug listing verification code is ${otp}. It is valid for 10 minutes. Do not share this code.`
       });
-    } else {
-      await smsService.sendSMS(destination, `makaug listing verification: ${otp}. Valid 10 mins. Do not share.`);
+      return { ok: true, channel: 'email' };
     }
+    const queued = await whatsappWebBridgeService.queueWhatsappWebBridgeMessage({
+      recipient: options.notifyPhone || destination,
+      text: `makaug listing verification: ${otp}. Valid 10 mins. Do not share.`,
+      source: 'otp',
+      actorId: 'system',
+      metadata: { kind: 'otp' }
+    });
+    if (!queued) return { ok: false, channel: 'whatsapp', error: 'whatsapp_bridge_not_queued' };
+    return { ok: true, channel: 'whatsapp' };
   } catch (e) {
     logger.error(`OTP ${channel} failed:`, e.message);
+    return { ok: false, channel: channel === 'email' ? 'email' : 'whatsapp', error: e.message };
   }
 }
 
@@ -17552,10 +17569,23 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   if (step === 'ask_phone') {
     const cleanPhone = cleanBody.replace(/\s/g, '');
     if (!/^\+?[0-9]{10,15}$/.test(cleanPhone)) return respond(t(lang, 'invalidPhone'), 'ask_phone');
+    if (whatsappListerPhoneMatchesChat(phone, cleanPhone)) {
+      const verifiedPatch = {
+        owner_phone: cleanPhone,
+        lister_phone: cleanPhone,
+        otp_identifier: cleanPhone,
+        otp_channel: 'whatsapp',
+        phone_verified_via_whatsapp: true,
+        whatsapp_sender_contact_confirmed: true,
+        verification_channel: 'whatsapp_sender'
+      };
+      await patchDraft(phone, verifiedPatch);
+      const nextStep = nextListingDraftStep({ ...draft, ...verifiedPatch });
+      return respond(t(lang, 'otpSuccess'), nextStep === 'submitted' ? 'ask_id_number' : nextStep);
+    }
     await patchDraft(phone, { owner_phone: cleanPhone, lister_phone: cleanPhone, otp_identifier: cleanPhone, otp_channel: 'phone' });
-
-    await issueOtp(cleanPhone, { channel: 'phone' });
-
+    const issued = await issueOtp(cleanPhone, { channel: 'phone', notifyPhone: phone });
+    if (!issued?.ok) return respond(t(lang, 'otpSendFailed'), 'ask_phone');
     return respond(t(lang, 'otpSent'), 'verify_otp');
   }
 
@@ -17564,7 +17594,19 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (bodyUpper === 'RESEND') {
       const otpIdentifier = draft.otp_identifier || draft.owner_phone || draft.lister_email || phone;
       const otpChannel = draft.otp_channel === 'email' ? 'email' : 'phone';
-      await issueOtp(otpIdentifier, { channel: otpChannel });
+      if (otpChannel !== 'email' && whatsappListerPhoneMatchesChat(phone, otpIdentifier)) {
+        const verifiedPatch = {
+          phone_verified_via_whatsapp: true,
+          whatsapp_sender_contact_confirmed: true,
+          verification_channel: 'whatsapp_sender',
+          otp_channel: 'whatsapp'
+        };
+        await patchDraft(phone, verifiedPatch);
+        const nextStep = nextListingDraftStep({ ...draft, ...verifiedPatch });
+        return respond(t(lang, 'otpSuccess'), nextStep === 'submitted' ? 'ask_id_number' : nextStep);
+      }
+      const issued = await issueOtp(otpIdentifier, { channel: otpChannel, notifyPhone: otpChannel === 'email' ? '' : phone });
+      if (!issued?.ok) return respond(t(lang, 'otpSendFailed'), 'verify_otp');
       return respond(otpChannel === 'email' ? t(lang, 'otpSentEmail') : t(lang, 'otpSent'), 'verify_otp');
     }
 
@@ -19356,6 +19398,7 @@ module.exports.__test = {
   applyProximityToFilters,
   isNearMeQuery,
   processMessage,
+  whatsappListerPhoneMatchesChat,
   buildWhatsappListingEnquiryResponse,
   detectLanguageFromText,
   employeeBatchSummaryHeadline,

@@ -17,7 +17,6 @@ const html = read('index.html');
 const app = read('assets/makaug-app.js');
 const scheduleScript = read('scripts/send-ai-ceo-morning-report.js');
 const phoneTestScript = read('scripts/test-ai-ceo-phone-control.js');
-const smsService = read('models/smsService.js');
 const whatsappNotificationService = read('services/whatsappNotificationService.js');
 const envExample = read('.env.example');
 const pkg = JSON.parse(read('package.json'));
@@ -81,7 +80,7 @@ assert(phoneTestScript.includes('non_owner_blocked'), 'CEO phone test must prove
 assert(envExample.includes('AI_CEO_OWNER_PHONES='), 'Example env must document AI CEO owner phones');
 assert(envExample.includes('AI_CEO_REPORT_WHATSAPP_RECIPIENTS='), 'Example env must document report-only WhatsApp recipients');
 assert(envExample.includes('AI_CEO_PHONE_TEST_OWNER='), 'Example env must document CEO phone test owner override');
-assert(!smsService.includes("const twilio = require('twilio')"), 'SMS service must lazy-load Twilio so CEO phone tests do not hang when SMS is unused');
+assert(!fs.existsSync(path.join(root, 'models', 'smsService.js')), 'SMS service is removed, so CEO phone tests do not load Twilio through it');
 assert(!whatsappNotificationService.includes("const twilio = require('twilio')"), 'WhatsApp notification service must lazy-load Twilio so CEO phone tests do not hang when Twilio is unused');
 
 console.log('AI CEO phone-control wiring tests passed');

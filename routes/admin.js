@@ -167,7 +167,6 @@ const {
   sendApprovedOutlookEmailAction,
   syncOutlookInbox
 } = require('../services/outlookAiEmailAgentService');
-const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { buildListingReference } = require('../services/listingReferenceService');
 const { hideReportedProperty } = require('../services/reportListingModerationService');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
@@ -1777,47 +1776,12 @@ function anyEnv(keys = []) {
   return keys.some((key) => envSet(key));
 }
 
-function africasTalkingUsernameConfigured() {
-  return envSet('AFRICASTALKING_USERNAME') || envSet('AFRICASTALKING_UESERNAME');
-}
-
-function africasTalkingSmsConfigured() {
-  return envSet('AFRICASTALKING_API_KEY') && africasTalkingUsernameConfigured();
-}
-
-function twilioSmsConfigured() {
-  const hasSender = envSet('TWILIO_FROM_SMS')
-    || envSet('TWILIO_SMS_FROM')
-    || (envSet('TWILIO_FROM') && !String(process.env.TWILIO_FROM || '').trim().toLowerCase().startsWith('whatsapp:'));
-  return envSet('TWILIO_ACCOUNT_SID') && envSet('TWILIO_AUTH_TOKEN') && hasSender;
-}
-
 function smsProviderWarnings() {
-  const warnings = [];
-  if (envSet('AFRICASTALKING_UESERNAME') && !envSet('AFRICASTALKING_USERNAME')) {
-    warnings.push('AFRICASTALKING_UESERNAME is misspelled. Add AFRICASTALKING_USERNAME and remove the misspelled key after deploy.');
-  }
-  if (envSet('AFRICASTALKING_SENDER_ID')) {
-    warnings.push('If Africa’s Talking SMS fails, confirm AFRICASTALKING_SENDER_ID is approved or temporarily remove it to use the default sender.');
-  }
-  return warnings;
+  return ['SMS is disabled (not used). Phone verification codes go on WhatsApp, then by email.'];
 }
 
 function missingSmsEnv() {
-  const usingTwilio = envSet('TWILIO_ACCOUNT_SID') || envSet('TWILIO_AUTH_TOKEN') || envSet('TWILIO_FROM_SMS') || envSet('TWILIO_SMS_FROM');
-  const usingAfricasTalking = envSet('AFRICASTALKING_API_KEY') || africasTalkingUsernameConfigured() || String(process.env.SMS_PROVIDER || '').toLowerCase().includes('africa');
-  if (usingTwilio && !usingAfricasTalking) {
-    const missing = [];
-    if (!envSet('TWILIO_ACCOUNT_SID')) missing.push('TWILIO_ACCOUNT_SID');
-    if (!envSet('TWILIO_AUTH_TOKEN')) missing.push('TWILIO_AUTH_TOKEN');
-    if (!envSet('TWILIO_FROM_SMS') && !envSet('TWILIO_SMS_FROM')) missing.push('TWILIO_FROM_SMS');
-    return missing;
-  }
-
-  const missing = [];
-  if (!envSet('AFRICASTALKING_API_KEY')) missing.push('AFRICASTALKING_API_KEY');
-  if (!africasTalkingUsernameConfigured()) missing.push('AFRICASTALKING_USERNAME');
-  return missing;
+  return [];
 }
 
 function mediaStorageProvider() {
@@ -1940,7 +1904,7 @@ function providerConfigured(provider) {
     backups: ['DATA_BACKUP_BUCKET', 'DATA_BACKUP_PREFIX', 'DATA_BACKUP_LOCAL_PATHS', 'S3_ENDPOINT', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'],
     public_base_url: ['PUBLIC_BASE_URL', 'APP_BASE_URL']
   };
-  if (provider === 'sms') return africasTalkingSmsConfigured() || twilioSmsConfigured();
+  if (provider === 'sms') return false;
   if (provider === 'whatsapp') return whatsappProviderConfigured();
   if (provider === 'media_storage') return mediaStorageConfigured();
   if (provider === 'backups') return backupStorageConfigured();
@@ -1951,7 +1915,7 @@ function providerEnvKeys(provider) {
   const keyGroups = {
     email: ['RESEND_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM'],
     whatsapp: ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_VERIFY_TOKEN', 'WHATSAPP_APP_SECRET', 'WHATSAPP_WEB_BRIDGE_ENABLED', 'WHATSAPP_WEB_BRIDGE_TOKEN', 'TWILIO_ACCOUNT_SID'],
-    sms: ['SMS_PROVIDER', 'TWILIO_ACCOUNT_SID', 'AFRICASTALKING_API_KEY', 'AFRICASTALKING_USERNAME'],
+    sms: [],
     media_storage: mediaStorageRequiredEnv(),
     google_places: ['GOOGLE_MAPS_API_KEY', 'PUBLIC_GOOGLE_MAPS_API_KEY'],
     openai_llm: ['OPENAI_API_KEY', 'LLM_PROVIDER', 'LLM_API_KEY', 'OLLAMA_BASE_URL'],
@@ -13703,7 +13667,7 @@ async function buildSetupStatus() {
   const providers = [
     ['email', 'Email'],
     ['whatsapp', 'WhatsApp'],
-    ['sms', 'SMS'],
+    ['sms', 'SMS (disabled, not used)'],
     ['media_storage', 'Media storage / Cloudflare R2'],
     ['google_places', 'Google Maps/Places'],
     ['openai_llm', 'OpenAI/LLM'],
@@ -13762,7 +13726,7 @@ async function buildSetupStatus() {
     });
   }
   providers.forEach((provider) => {
-    if (!provider.configured) {
+    if (!provider.configured && provider.key !== 'sms') {
       ownerActions.push({
         title: `Configure ${provider.label}`,
         status: 'provider_missing',
@@ -13943,29 +13907,24 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
         failureReason: configured ? null : 'whatsapp_provider_missing'
       });
     } else if (provider === 'sms') {
-      const deliveryResult = await sendPhoneOtp({
-        to: adminTestPhone(),
-        message: 'makaug SMS provider test. No action needed.'
-      });
-      const deliveryStatus = deliveryResult.ok
-        ? notificationStatusFromDelivery(deliveryResult.delivery)
-        : (configured ? 'failed' : 'provider_missing');
+      base.status = 'disabled';
+      base.configured = false;
+      base.deliveryChannel = 'sms';
+      base.failureReason = 'sms_disabled';
+      base.note = 'SMS is disabled (not used). Phone verification codes go on WhatsApp, then by email.';
       log = await logNotification(db, {
         recipientPhone: adminTestPhone(),
         channel: 'sms',
         type: 'provider_test_sms',
-        status: deliveryStatus,
+        status: 'skipped',
         payloadSummary: {
           provider,
-          configured,
+          configured: false,
           launch_proof: true,
-          attempts: deliveryResult.attempts || []
+          sms_disabled: true
         },
-        failureReason: deliveryResult.ok ? null : (deliveryResult.failureReason || 'sms_provider_test_failed')
+        failureReason: 'sms_disabled'
       });
-      base.status = deliveryStatus;
-      base.deliveryChannel = 'sms';
-      base.attempts = deliveryResult.attempts || [];
     } else if (provider === 'media_storage') {
       let canary = null;
       if (configured) {

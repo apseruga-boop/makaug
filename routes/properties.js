@@ -12,7 +12,7 @@ const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
-const smsService = require('../models/smsService');
+const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const {
   sendOtpEmail,
   sendPropertySubmissionNotification,
@@ -2011,13 +2011,6 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
   );
 
   const emailDeliveryConfirmed = (delivery) => delivery?.sent === true && delivery?.mocked !== true;
-  const phoneDeliveryConfirmed = (delivery) => {
-    if (!delivery || delivery.mocked) return false;
-    if (delivery.sid || delivery.messageId || delivery.sent === true) return true;
-    const status = String(delivery.status || '').trim().toLowerCase();
-    if (!status || /(fail|reject|invalid|error|undeliver)/i.test(status)) return false;
-    return ['sent', 'success', 'submitted', 'queued', 'accepted', 'buffered'].includes(status);
-  };
 
   if (resolvedChannel === 'email') {
     let delivery = null;
@@ -2059,34 +2052,36 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
       throw configError;
     }
   } else {
-    let delivery = null;
-    try {
-      delivery = await smsService.sendSMS(
-        identifier,
-        otpCopy
-      );
-    } catch (error) {
-      logger.error('Listing OTP SMS failed:', error.message);
+    const deliveryResult = await sendPhoneOtp({
+      to: identifier,
+      message: otpCopy,
+      email: normalizeEmail(email),
+      otp,
+      expiresMinutes
+    });
+    if (!deliveryResult.ok) {
+      logger.error('Listing phone OTP failed', {
+        attempts: deliveryResult.attempts,
+        failureReason: deliveryResult.failureReason || 'phone_otp_delivery_failed'
+      });
       if (overrideAllowed) {
-        logger.warn('Listing OTP SMS failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
-        return { otp, expiresMinutes, channel: resolvedChannel, identifier };
+        logger.warn('Listing phone OTP failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        return { otp, expiresMinutes, channel: resolvedChannel, identifier, deliveryChannel: 'whatsapp' };
       }
-      const sendError = new Error('Failed to send OTP SMS');
+      const sendError = new Error('Failed to send OTP');
       sendError.status = 400;
       throw sendError;
     }
-    if (process.env.NODE_ENV === 'production' && !phoneDeliveryConfirmed(delivery)) {
-      if (overrideAllowed) {
-        logger.warn('Listing OTP SMS delivery unavailable, using ADMIN_OTP_OVERRIDE_CODE fallback');
-        return { otp, expiresMinutes, channel: resolvedChannel, identifier };
-      }
-      const configError = new Error('Phone OTP delivery provider is not configured');
-      configError.status = 400;
-      throw configError;
-    }
+    return {
+      otp,
+      expiresMinutes,
+      channel: resolvedChannel,
+      identifier,
+      deliveryChannel: deliveryResult.channel === 'email' ? 'email' : 'whatsapp'
+    };
   }
 
-  return { otp, expiresMinutes, channel: resolvedChannel, identifier };
+  return { otp, expiresMinutes, channel: resolvedChannel, identifier, deliveryChannel: 'email' };
 }
 
 function parseBooleanLike(value, fallback = false) {
@@ -3658,17 +3653,19 @@ router.post('/request-submit-otp', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: `Valid ${ACTIVE_COUNTRY_NAME} phone is required` });
     }
 
-    const { otp, expiresMinutes, identifier } = await issueListingSubmitOtp({ channel, phone, email, preferredLanguage, audience });
+    const { otp, expiresMinutes, identifier, deliveryChannel } = await issueListingSubmitOtp({ channel, phone, email, preferredLanguage, audience });
+    const deliveredByEmail = deliveryChannel === 'email' || channel === 'email';
 
     return res.json({
       ok: true,
       data: {
         channel,
+        delivery_channel: deliveryChannel || (channel === 'email' ? 'email' : 'whatsapp'),
         identifier,
         phone: channel === 'phone' ? phone : undefined,
         email: channel === 'email' ? email : undefined,
         expires_minutes: expiresMinutes,
-        message: channel === 'email' ? 'OTP sent to email' : 'OTP sent by SMS',
+        message: deliveredByEmail ? 'OTP sent to email' : 'OTP sent to your WhatsApp',
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otp })
       }
     });

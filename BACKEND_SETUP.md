@@ -37,7 +37,7 @@ This backend is now scaffolded for same-day launch support.
   - `PATCH /api/admin/users/:id` (admin key)
   - `POST /api/whatsapp/webhook`
 - Google Analytics 4 forwarding support (`services/ga4Service.js`)
-- Twilio SMS integration/fallback (`models/smsService.js`)
+- Phone verification codes use the WhatsApp web bridge, then email (`services/phoneOtpDeliveryService.js`)
 - DB migrations + seed scripts:
   - `npm run migrate`
   - `npm run seed`

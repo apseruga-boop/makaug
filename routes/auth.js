@@ -90,8 +90,23 @@ function isOtpDeliveryFailure(error) {
     || message.includes('otp delivery')
     || message.includes('delivery provider is not configured')
     || message.includes('email is blocked')
-    || message.includes('sms delivery failed')
     || message.includes('phone otp delivery');
+}
+
+function otpSentUserMessage({ purpose = 'login', deliveryChannel = 'whatsapp', emailFallback = false } = {}) {
+  const byEmail = deliveryChannel === 'email';
+  if (emailFallback) {
+    return byEmail
+      ? 'Email delivery is temporarily unavailable. Your verification code was sent to your email.'
+      : 'Email delivery is temporarily unavailable, so your verification OTP was sent to your WhatsApp';
+  }
+  if (purpose === 'reset_password') {
+    return byEmail ? 'Password reset OTP sent to email' : 'Password reset OTP sent to your WhatsApp';
+  }
+  if (purpose === 'signup') {
+    return byEmail ? 'Verification OTP sent to email' : 'Verification OTP sent to your WhatsApp';
+  }
+  return byEmail ? 'OTP sent to email' : 'OTP sent to your WhatsApp';
 }
 
 function otpDeliveryUnavailableResponse({ channel = 'email', purpose = 'login', error } = {}) {
@@ -102,8 +117,8 @@ function otpDeliveryUnavailableResponse({ channel = 'email', purpose = 'login', 
   return {
     ok: false,
     error: isEmail
-      ? `${reset ? 'Password reset' : 'Verification'} email could not be sent right now. Try SMS/Text if your Uganda number is on the account, or contact makaug on WhatsApp.`
-      : `${reset ? 'Password reset' : 'Verification'} SMS could not be sent right now. Try email if your account has one, or contact makaug on WhatsApp.`,
+      ? `${reset ? 'Password reset' : 'Verification'} email could not be sent right now. Try WhatsApp if your Uganda number is on the account, or contact makaug on WhatsApp.`
+      : `${reset ? 'Password reset' : 'Verification'} code could not be sent to your WhatsApp right now. Try email if your account has one, or contact makaug on WhatsApp.`,
     retry_channels: ['email', 'phone'],
     support: {
       whatsapp: supportWhatsapp,
@@ -599,7 +614,7 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
       });
       if (overrideAllowed) {
         logger.warn('OTP email send failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
-        return { otp, channel: resolvedChannel, identifier, expiresMinutes };
+        return { otp, channel: resolvedChannel, identifier, expiresMinutes, deliveryChannel: 'email' };
       }
       const sendError = new Error('Failed to send OTP email');
       sendError.status = 400;
@@ -609,7 +624,7 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
       logger.warn('Email OTP delivery unavailable', { channel: resolvedChannel, delivery });
       if (overrideAllowed) {
         logger.warn('Email OTP delivery unavailable, using ADMIN_OTP_OVERRIDE_CODE fallback');
-        return { otp, channel: resolvedChannel, identifier, expiresMinutes };
+        return { otp, channel: resolvedChannel, identifier, expiresMinutes, deliveryChannel: 'email' };
       }
       const reason = String(delivery?.error || delivery?.reason || '').toLowerCase();
       await logNotification(db, {
@@ -640,9 +655,13 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
   } else {
     const deliveryResult = await sendPhoneOtp({
       to: identifier,
-      message: getOtpCopy(preferredLanguage, { otp, expiresMinutes, purpose })
+      message: getOtpCopy(preferredLanguage, { otp, expiresMinutes, purpose }),
+      email: normalizeEmail(email),
+      otp,
+      expiresMinutes
     });
     const delivery = deliveryResult.delivery || null;
+    const deliveredChannel = deliveryResult.channel === 'email' ? 'email' : 'whatsapp';
     if (!deliveryResult.ok) {
       logger.error('Failed to send OTP to phone', {
         purpose,
@@ -650,7 +669,8 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
       });
       await logNotification(db, {
         recipientPhone: identifier,
-        channel: 'sms',
+        recipientEmail: normalizeEmail(email) || null,
+        channel: deliveredChannel,
         type: 'otp_sent',
         status: 'failed',
         payloadSummary: {
@@ -658,38 +678,47 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
           expires_minutes: expiresMinutes,
           attempts: deliveryResult.attempts
         },
-        failureReason: deliveryResult.failureReason || 'sms_otp_delivery_failed'
+        failureReason: deliveryResult.failureReason || 'phone_otp_delivery_failed'
       });
       if (overrideAllowed) {
-        logger.warn('OTP SMS delivery failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
-        return { otp, channel: resolvedChannel, identifier, expiresMinutes };
+        logger.warn('OTP WhatsApp delivery failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        return { otp, channel: resolvedChannel, identifier, expiresMinutes, deliveryChannel: deliveredChannel };
       }
-      const sendError = new Error('Failed to send OTP SMS');
+      const sendError = new Error('Failed to send OTP');
       sendError.status = 400;
       throw sendError;
     }
     await logNotification(db, {
-      recipientPhone: identifier,
-      channel: 'sms',
+      recipientPhone: deliveredChannel === 'whatsapp' ? identifier : null,
+      recipientEmail: deliveredChannel === 'email' ? normalizeEmail(email) : null,
+      channel: deliveredChannel,
       type: 'otp_sent',
       status: notificationStatusFromDelivery(delivery),
       payloadSummary: {
         purpose,
         expires_minutes: expiresMinutes,
-        delivery_channel: 'sms',
+        delivery_channel: deliveredChannel,
         provider: delivery?.provider || null,
         attempts: deliveryResult.attempts
       },
-      sentAt: delivery?.success || delivery?.sent ? new Date() : null,
+      sentAt: delivery?.sent ? new Date() : null,
       failureReason: delivery?.error || delivery?.reason || null
     });
+    return {
+      otp,
+      channel: resolvedChannel,
+      identifier,
+      expiresMinutes,
+      deliveryChannel: deliveredChannel
+    };
   }
 
   return {
     otp,
     channel: resolvedChannel,
     identifier,
-    expiresMinutes
+    expiresMinutes,
+    deliveryChannel: 'email'
   };
 }
 
@@ -842,7 +871,7 @@ router.post('/request-signup-otp', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Valid email is required' });
     }
     if (channel === 'phone' && (!phone || !isValidPhone(phone) || !isValidUgPhone(phone))) {
-      return res.status(400).json({ ok: false, error: 'Valid Uganda phone number is required for SMS verification' });
+      return res.status(400).json({ ok: false, error: 'Valid Uganda phone number is required for WhatsApp verification' });
     }
 
     const existing = await db.query(
@@ -890,7 +919,7 @@ router.post('/request-signup-otp', async (req, res, next) => {
         await logNotification(db, {
           recipientPhone: phone,
           recipientEmail: email,
-          channel: channel === 'email' ? 'email' : 'sms',
+          channel: channel === 'email' ? 'email' : 'whatsapp',
           type: 'signup_otp_request_failed',
           status: 'failed',
           payloadSummary: otpPayloadSummary,
@@ -902,7 +931,7 @@ router.post('/request-signup-otp', async (req, res, next) => {
         throw error;
       }
 
-      logger.warn('Email signup OTP failed; falling back to SMS', {
+      logger.warn('Email signup OTP failed; falling back to WhatsApp', {
         email,
         phone,
         audience,
@@ -911,7 +940,7 @@ router.post('/request-signup-otp', async (req, res, next) => {
       await logNotification(db, {
         recipientPhone: phone,
         recipientEmail: email,
-        channel: 'sms',
+        channel: 'whatsapp',
         type: 'signup_otp_email_fallback_to_sms',
         status: 'logged',
         payloadSummary: {
@@ -937,12 +966,12 @@ router.post('/request-signup-otp', async (req, res, next) => {
           preferredLanguage
         });
       } catch (fallbackError) {
-        logger.error('Signup OTP email and SMS fallback both failed', {
+        logger.error('Signup OTP email and WhatsApp fallback both failed', {
           email,
           phone,
           audience,
           emailError: error.message,
-          smsError: fallbackError.message
+          whatsappError: fallbackError.message
         });
         await logNotification(db, {
           recipientPhone: phone,
@@ -952,13 +981,13 @@ router.post('/request-signup-otp', async (req, res, next) => {
           status: 'failed',
           payloadSummary: {
             ...otpPayloadSummary,
-            attempted_channels: ['email', 'phone']
+            attempted_channels: ['email', 'whatsapp']
           },
-          failureReason: `email:${error.message || 'failed'}; sms:${fallbackError.message || 'failed'}`
+          failureReason: `email:${error.message || 'failed'}; whatsapp:${fallbackError.message || 'failed'}`
         });
         return res.status(503).json({
           ok: false,
-          error: 'Email verification could not be sent and SMS fallback is unavailable. Please try again, choose SMS/Text with a valid Uganda number, or contact makaug on WhatsApp.',
+          error: 'Email verification could not be sent and WhatsApp fallback is unavailable. Please try again, choose WhatsApp with a valid Uganda number, or contact makaug on WhatsApp.',
           retry_channels: ['email', 'phone'],
           support: {
             whatsapp: process.env.SUPPORT_WHATSAPP || process.env.WHATSAPP_SUPPORT_PHONE || '+256780863394',
@@ -974,10 +1003,13 @@ router.post('/request-signup-otp', async (req, res, next) => {
       ok: true,
       data: {
         channel: resolvedChannel,
+        delivery_channel: otpIssue.deliveryChannel || (resolvedChannel === 'email' ? 'email' : 'whatsapp'),
         email_fallback_to_sms: emailFallbackToSms,
-        message: emailFallbackToSms
-          ? 'Email delivery is temporarily unavailable, so your verification OTP was sent by SMS'
-          : (resolvedChannel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent by SMS'),
+        message: otpSentUserMessage({
+          purpose: 'signup',
+          deliveryChannel: otpIssue.deliveryChannel || (resolvedChannel === 'email' ? 'email' : 'whatsapp'),
+          emailFallback: emailFallbackToSms
+        }),
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
     });
@@ -1297,7 +1329,7 @@ router.post('/register', async (req, res, next) => {
           && isValidUgPhone(phone)
           && (message.includes('email otp') || message.includes('otp email') || message.includes('email delivery') || message.includes('email is blocked'));
         if (!canFallbackToSms) throw error;
-        logger.warn('Register email OTP failed; falling back to SMS', {
+        logger.warn('Register email OTP failed; falling back to WhatsApp', {
           email,
           phone,
           audience,
@@ -1307,7 +1339,7 @@ router.post('/register', async (req, res, next) => {
           userId: user.id,
           recipientPhone: phone,
           recipientEmail: email,
-          channel: 'sms',
+          channel: 'whatsapp',
           type: 'signup_otp_email_fallback_to_sms',
           status: 'logged',
           payloadSummary: {
@@ -1335,14 +1367,14 @@ router.post('/register', async (req, res, next) => {
             queryRunner: client
           });
         } catch (fallbackError) {
-          logger.error('Register signup OTP email and SMS fallback both failed', {
+          logger.error('Register signup OTP email and WhatsApp fallback both failed', {
             email,
             phone,
             audience,
             emailError: error.message,
-            smsError: fallbackError.message
+            whatsappError: fallbackError.message
           });
-          const deliveryError = new Error('Email verification could not be sent and SMS fallback is unavailable. Please try again, choose SMS/Text with a valid Uganda number, or contact makaug on WhatsApp.');
+          const deliveryError = new Error('Email verification could not be sent and WhatsApp fallback is unavailable. Please try again, choose WhatsApp with a valid Uganda number, or contact makaug on WhatsApp.');
           deliveryError.status = 503;
           throw deliveryError;
         }
@@ -1419,10 +1451,13 @@ router.post('/register', async (req, res, next) => {
         user: publicUser(user),
         requires_otp: true,
         channel: resolvedOtpChannel,
+        delivery_channel: otpIssue?.deliveryChannel || (resolvedOtpChannel === 'email' ? 'email' : 'whatsapp'),
         email_fallback_to_sms: emailFallbackToSms,
-        message: emailFallbackToSms
-          ? 'Email delivery is temporarily unavailable, so your verification OTP was sent by SMS'
-          : (resolvedOtpChannel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent by SMS'),
+        message: otpSentUserMessage({
+          purpose: 'signup',
+          deliveryChannel: otpIssue?.deliveryChannel || (resolvedOtpChannel === 'email' ? 'email' : 'whatsapp'),
+          emailFallback: emailFallbackToSms
+        }),
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
     });
@@ -1545,7 +1580,7 @@ router.post('/request-otp', async (req, res, next) => {
       if (!email || !isValidEmail(email)) {
         return res.status(400).json({ ok: false, error: 'Valid email is required' });
       }
-      exists = await db.query('SELECT id, preferred_language FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active']);
+      exists = await db.query('SELECT id, preferred_language, email FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active']);
       if (!exists.rows.length) {
         return res.status(404).json({ ok: false, error: 'No account found with that email' });
       }
@@ -1553,7 +1588,7 @@ router.post('/request-otp', async (req, res, next) => {
       if (!phone || !isValidPhone(phone) || !isValidUgPhone(phone)) {
         return res.status(400).json({ ok: false, error: 'Valid phone is required' });
       }
-      exists = await db.query('SELECT id, preferred_language FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
+      exists = await db.query('SELECT id, preferred_language, email FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
       if (!exists.rows.length) {
         return res.status(404).json({ ok: false, error: 'No account found with that phone' });
       }
@@ -1569,15 +1604,15 @@ router.post('/request-otp', async (req, res, next) => {
         purpose,
         channel,
         phone,
-        email,
+        email: channel === 'email' ? email : normalizeEmail(exists.rows[0]?.email || email),
         preferredLanguage
       });
     } catch (error) {
       if (isOtpDeliveryFailure(error)) {
         await logNotification(db, {
           recipientPhone: phone,
-          recipientEmail: email,
-          channel: channel === 'email' ? 'email' : 'sms',
+          recipientEmail: email || exists?.rows?.[0]?.email || null,
+          channel: channel === 'email' ? 'email' : 'whatsapp',
           type: 'account_otp_delivery_failed',
           status: 'failed',
           payloadSummary: { purpose, requested_channel: channel },
@@ -1591,8 +1626,12 @@ router.post('/request-otp', async (req, res, next) => {
     return res.json({
       ok: true,
       data: {
-        message: channel === 'email' ? 'OTP sent to email' : 'OTP sent by SMS',
+        message: otpSentUserMessage({
+          purpose,
+          deliveryChannel: otpIssue.deliveryChannel || (channel === 'email' ? 'email' : 'whatsapp')
+        }),
         channel,
+        delivery_channel: otpIssue.deliveryChannel || (channel === 'email' ? 'email' : 'whatsapp'),
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
     });
@@ -1616,8 +1655,8 @@ router.post('/request-password-reset', async (req, res, next) => {
     }
 
     const exists = channel === 'email'
-      ? await db.query('SELECT id, preferred_language FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active'])
-      : await db.query('SELECT id, preferred_language FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
+      ? await db.query('SELECT id, preferred_language, email FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active'])
+      : await db.query('SELECT id, preferred_language, email FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
     if (!exists.rows.length) {
       return res.status(404).json({ ok: false, error: channel === 'email' ? 'No account found with that email' : 'No account found with that phone' });
     }
@@ -1633,15 +1672,15 @@ router.post('/request-password-reset', async (req, res, next) => {
         purpose: 'reset_password',
         channel,
         phone,
-        email,
+        email: channel === 'email' ? email : normalizeEmail(exists.rows[0]?.email || email),
         preferredLanguage
       });
     } catch (error) {
       if (isOtpDeliveryFailure(error)) {
         await logNotification(db, {
           recipientPhone: phone,
-          recipientEmail: email,
-          channel: channel === 'email' ? 'email' : 'sms',
+          recipientEmail: email || exists.rows[0]?.email || null,
+          channel: channel === 'email' ? 'email' : 'whatsapp',
           type: 'password_reset_otp_delivery_failed',
           status: 'failed',
           payloadSummary: { purpose: 'reset_password', requested_channel: channel },
@@ -1655,8 +1694,12 @@ router.post('/request-password-reset', async (req, res, next) => {
     return res.json({
       ok: true,
       data: {
-        message: channel === 'email' ? 'Password reset OTP sent to email' : 'Password reset OTP sent by SMS',
+        message: otpSentUserMessage({
+          purpose: 'reset_password',
+          deliveryChannel: otpIssue.deliveryChannel || (channel === 'email' ? 'email' : 'whatsapp')
+        }),
         channel,
+        delivery_channel: otpIssue.deliveryChannel || (channel === 'email' ? 'email' : 'whatsapp'),
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
     });
