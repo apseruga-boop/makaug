@@ -91,13 +91,15 @@ test('home and hidden directory lists defer every original portrait with existin
     const html = f.grids[id].innerHTML;
     const portraits = images(html);
     assert.equal(portraits.length, 2);
-    assert.deepEqual(portraits.map((image) => attribute(image, 'loading')), ['lazy', 'lazy']);
+    assert.deepEqual(portraits.map((image) => attribute(image, 'loading')), ['eager', 'eager']);
+    assert.deepEqual(portraits.map((image) => attribute(image, 'width')), ['160', '160']);
+    assert.deepEqual(portraits.map((image) => attribute(image, 'height')), ['160', '160']);
     assert.deepEqual(portraits.map((image) => attribute(image, 'decoding')), ['async', 'async']);
     assert.deepEqual(portraits.map((image) => attribute(image, 'src')), ['https://media.example/portrait.jpg?a=1&amp;b=&quot;two&quot;', '/images/alice.jpg']);
     assert.deepEqual(portraits.map((image) => attribute(image, 'alt')), ['Kazi &amp; &quot;Honest&quot;', 'Alice']);
     assert.deepEqual(portraits.map((image) => attribute(image, 'class')), ['broker-card-photo object-cover', 'broker-card-photo object-cover']);
-    assert.equal(attribute(portraits[0], 'onerror'), "this.remove(); this.parentElement.className='broker-card-media is-initials'; this.parentElement.textContent='KH'");
-    assert.equal(attribute(portraits[1], 'onerror'), "this.remove(); this.parentElement.className='broker-card-media is-initials'; this.parentElement.textContent='A'");
+    assert.equal(attribute(portraits[0], 'onerror'), 'this.remove()');
+    assert.ok(html.includes('>KH</span>') && html.includes('>A</span>'), 'initials stay under the photo until it loads');
     assert.equal((html.match(/broker-card-media is-portrait/g) || []).length, 2);
     assert.equal((html.match(/broker-card-bio/g) || []).length, 2);
     assert.ok(html.includes('href="/agents/kazi-1"') && html.includes('href="/agents/alice-2"'));
@@ -124,6 +126,12 @@ test('missing portraits use initials, and a logo is shown whole', () => {
     assert.ok(html.includes('object-contain'));
     assert.ok(html.includes('broker-card-bio'));
     assert.ok(html.includes('href="/agents/no-photo"'));
+    assert.ok(html.includes('width="160"') && html.includes('onerror="this.remove()"'));
   }
+  const many = Array.from({ length: 9 }, (_, index) => ({ id: `b-${index}`, name: 'Later Agent', profile_photo_url: `/images/${index}.jpg`, listings: 1 }));
+  f.context.renderBrokers('brokers-grid', many);
+  const later = images(f.grids['brokers-grid'].innerHTML);
+  assert.equal(attribute(later[8], 'loading'), 'lazy', 'cards past the first screen still defer their photo');
+  assert.equal(attribute(later[0], 'loading'), 'eager');
   assert.deepEqual(f.fetches, []);
 });

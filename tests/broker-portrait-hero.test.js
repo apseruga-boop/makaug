@@ -32,7 +32,9 @@ assert(frontend.includes('profile_photo_kind === "logo"') && frontend.includes('
 assert(frontend.includes('function brokerIconActionsHtml'), 'broker cards should share one contact action rail');
 assert(card.includes('brokerIconActionsHtml(b, { labels: true })'), 'desktop cards label Call and WhatsApp');
 assert(pageHtml.includes('@media (max-width: 640px)'), 'mobile switches layout at 640px');
-assert(pageHtml.includes('grid-template-columns: 56px minmax(0, 1fr)'), 'mobile cards become a compact row');
+assert(pageHtml.includes('grid-template-columns: 56px minmax(0, 1fr) auto'), 'mobile cards keep the count and call buttons on the right');
+assert(pageHtml.includes('broker-card-fallback'), 'a failed photo leaves initials instead of a blank circle');
+assert(frontend.includes('featuredBrokerLimit'), 'the homepage featured row stays a full row of 3 or 6');
 assert(pageHtml.includes('-webkit-line-clamp: 3'), 'desktop bios stay at two to three lines');
 assert(profile.includes('h-28 md:h-36 bg-gradient-to-r') && profile.includes('w-36 h-36 md:w-44 md:h-44 rounded-full'), 'broker profile should use a LinkedIn-style cover and a contained portrait');
 assert(profile.includes('flex flex-col items-center text-center'), 'broker profile identity should be centred symmetrically below the cover');

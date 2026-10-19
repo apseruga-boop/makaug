@@ -368,6 +368,15 @@ function getFeaturedBrokers(list = getBrokerDirectory()) {
   return rows;
 }
 
+// A full homepage row is 3 cards, or two full rows when at least 6 agents
+// are available. Four or five would leave a single card on the next row.
+function featuredBrokerLimit(count) {
+  const total = Math.max(0, Number(count) || 0);
+  if (total >= 6) return 6;
+  if (total >= 3) return 3;
+  return total;
+}
+
 async function refreshBrokersFromApi({ silent = true } = {}) {
   try {
     const response = await apiRequest("/api/agents?status=approved&limit=100", { skipAuth: true });
@@ -47517,13 +47526,14 @@ function brokerCardMediaHtml(b = {}, options = {}) {
   const photo = b?.photo || b?.profile_photo_url || "";
   const initials = brokerInitials(b?.name || "");
   const kind = !photo ? "initials" : (b?.profile_photo_kind === "logo" ? "logo" : "portrait");
+  const fallback = `<span class="broker-card-fallback" aria-hidden="true">${adminEscape(initials)}</span>`;
   if (kind === "initials") {
-    return `<div class="broker-card-media is-initials" aria-hidden="true"><span>${adminEscape(initials)}</span></div>`;
+    return `<div class="broker-card-media is-initials">${fallback}</div>`;
   }
-  const loadingHints = options.imageLoading === "lazy" ? ' loading="lazy" decoding="async"' : "";
+  const loading = options.imageLoading === "lazy" ? "lazy" : "eager";
   const fit = kind === "logo" ? "object-contain" : "object-cover";
   const alt = kind === "logo" ? `${b?.name || "Broker"} logo` : (b?.name || "Broker");
-  return `<div class="broker-card-media is-${kind}"><img${loadingHints} src="${adminAttr(photo)}" alt="${adminAttr(alt)}" class="broker-card-photo ${fit}" onerror="this.remove(); this.parentElement.className='broker-card-media is-initials'; this.parentElement.textContent='${adminAttr(initials)}'"></div>`;
+  return `<div class="broker-card-media is-${kind}">${fallback}<img loading="${loading}" decoding="async" width="160" height="160" src="${adminAttr(photo)}" alt="${adminAttr(alt)}" class="broker-card-photo ${fit}" onerror="this.remove()"></div>`;
 }
 
 function brokerCompanyLineHtml(b, classes = "text-center text-gray-500 text-sm") {
@@ -47619,17 +47629,19 @@ function brokerCardHtml(b, options = {}) {
   const bio = brokerCardBioText(b);
   return `
     <article class="broker-grid-card bg-white rounded-2xl ${border} shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
-      ${brokerCardMediaHtml(b, { imageLoading: "lazy" })}
-      <div class="broker-card-body">
-        ${badge ? `<div class="broker-card-badge">${badge}</div>` : ""}
-        <h3 class="broker-card-name">${adminEscape(b.name)}</h3>
+      ${brokerCardMediaHtml(b, { imageLoading: options.imageLoading })}
+      <div class="broker-card-main">
+        <div class="broker-card-name-line">
+          <h3 class="broker-card-name">${adminEscape(b.name)}</h3>
+          ${badge ? `<div class="broker-card-badge">${badge}</div>` : ""}
+        </div>
         ${brokerCompanyLineHtml(b, "broker-card-role")}
         ${bio ? `<p class="broker-card-bio">${adminEscape(bio)}</p>` : ""}
-        <div class="broker-card-foot">
-          <p class="broker-card-loc"><i class="fas fa-location-dot" aria-hidden="true"></i><span>${adminEscape(b.area || "")}</span></p>
-          <p class="broker-card-count"><strong>${Number(b.listings) || 0}</strong> <span>${translateListingLabel("Active Listings")}</span></p>
-          ${brokerIconActionsHtml(b, { labels: true })}
-        </div>
+        <p class="broker-card-loc"><i class="fas fa-location-dot" aria-hidden="true"></i><span>${adminEscape(b.area || "")}</span></p>
+      </div>
+      <div class="broker-card-side">
+        <p class="broker-card-count"><strong>${Number(b.listings) || 0}</strong> <span>${translateListingLabel("Active Listings")}</span></p>
+        ${brokerIconActionsHtml(b, { labels: true })}
       </div>
     </article>`;
 }
@@ -47638,7 +47650,10 @@ function renderBrokers(id, list) {
   const el = document.getElementById(id);
   if (!el) return;
   const directory = id === "brokers-grid";
-  el.innerHTML = list.map((b) => brokerCardHtml(b, { directory })).join("");
+  el.innerHTML = list.map((b, index) => brokerCardHtml(b, {
+    directory,
+    imageLoading: index < 8 ? "eager" : "lazy"
+  })).join("");
   if (directory) setBrokerMapMarkers(list);
 }
 
@@ -47711,7 +47726,8 @@ function renderAll() {
     filtered: landFiltered,
     mode: landFiltered && !publicCategoryHasRouteSearch("land") ? "local" : "api"
   });
-  renderBrokers("home-brokers", getFeaturedBrokers(getBrokerDirectory()).slice(0, 3));
+  const featuredBrokers = getFeaturedBrokers(getBrokerDirectory());
+  renderBrokers("home-brokers", featuredBrokers.slice(0, featuredBrokerLimit(featuredBrokers.length)));
   renderBrokers("brokers-grid", getBrokerDirectory());
   renderSaved();
   renderActiveAuthDashboard();

@@ -403,6 +403,35 @@ function agentRoleLabel(agent = {}) {
   return '';
 }
 
+function specialismPhrase(summary = {}) {
+  const phrases = [];
+  Object.entries(summary.kinds || {})
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .forEach(([kind]) => {
+      if (kind === 'sale') {
+        const word = saleWords(summary.homeWords, summary.homesForSale, summary.kinds.sale);
+        phrases.push(`${word[1]} for sale`);
+      }
+      if (kind === 'land') phrases.push('plots');
+      if (kind === 'rent') phrases.push('rentals');
+      if (kind === 'commercial') phrases.push('commercial property');
+    });
+  return joinList(phrases.slice(0, 3));
+}
+
+function emptyPortfolioBio(name, role, company, where) {
+  const place = where ? ` covering ${where}` : '';
+  const who = company
+    ? `${name} of ${company} is on makaug${place}`
+    : role === 'Agency'
+      ? `${name} is an agency on makaug${place}`
+      : role === 'Independent agent'
+        ? `${name} is an independent agent on makaug${place}`
+        : `${name} is a property agent on makaug${place}`;
+  return `${who}. Their properties will appear here once listed.`;
+}
+
 function fitCardSentences(sentences = []) {
   const clean = sentences.map((sentence) => cleanText(sentence)).filter(Boolean).slice(0, 3);
   if (!clean.length) return 'Property agent on makaug.';
@@ -436,27 +465,19 @@ function agentCardBio(agent = {}, listings = []) {
     || joinList(covered.slice(0, 3));
 
   if (!summary.total) {
-    if (role && !company) {
-      return { text: where ? `${role} covering ${where}.` : `${role} on makaug.`, source: 'generated' };
-    }
-    const who = company ? `${name} of ${company}` : name;
-    return {
-      text: where ? `${who} covers ${where}.` : `${who} is a property agent on makaug.`,
-      source: 'generated'
-    };
+    return { text: emptyPortfolioBio(name, role, company, where), source: 'generated' };
   }
 
-  const who = company ? `${name} of ${company}` : name;
   const mix = mixPhrases(summary.kinds, summary.homeWords, summary.homesForSale);
-  const sentences = [`${who} has ${plural(summary.total, 'live listing', 'live listings')} on makaug${where ? `, mainly around ${where}` : ''}.`];
-  if (mix.length) {
-    if (summary.total === 1) {
-      const only = mix[0].replace(/^1 /, '');
-      sentences.push(`It is ${/^[aeiou]/i.test(only) ? 'an' : 'a'} ${only}.`);
-    } else {
-      sentences.push(`They are ${joinList(mix)}.`);
-    }
-  }
+  const focus = summary.total === 1
+    ? (() => {
+      const only = String(mix[0] || 'property').replace(/^1 /, '');
+      return `${/^[aeiou]/i.test(only) ? 'an' : 'a'} ${only}`;
+    })()
+    : (specialismPhrase(summary) || 'property');
+  const place = where ? `${summary.total === 1 ? ' in' : ' around'} ${where}` : '';
+  const leadWho = company ? `${name} of ${company} specialises` : 'Specialises';
+  const sentences = [`${leadWho} in ${focus}${place}, with ${plural(summary.total, 'live listing', 'live listings')} on makaug.`];
   const buy = priceRange([...summary.prices.sale, ...summary.prices.land, ...summary.prices.commercial]);
   const rent = priceRange(summary.prices.rent);
   if (buy.text && rent.text) {
@@ -469,9 +490,7 @@ function agentCardBio(agent = {}, listings = []) {
     sentences.push(rent.single ? `The rent is ${rent.text} a month.` : `Rents run from ${rent.text} a month.`);
   }
   const districtLine = joinList(summary.districts.slice(0, 3));
-  if (districtLine && !sentences.join(' ').includes(districtLine)) {
-    sentences.push(`They cover ${districtLine}.`);
-  }
+  if (!where && districtLine) sentences.push(`They cover ${districtLine}.`);
   return { text: fitCardSentences(sentences), source: 'generated' };
 }
 
