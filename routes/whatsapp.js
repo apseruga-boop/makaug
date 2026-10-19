@@ -12,6 +12,7 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const db = require('../config/database');
+const { handleHostStayReply } = require('../services/shortTermBookingService');
 const logger = require('../config/logger');
 const { normalizeUgPhoneForWhatsApp } = require('../services/whatsappNotificationService');
 const { DISTRICTS } = require('../utils/constants');
@@ -19109,6 +19110,37 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
         call_log_card: true
       }
     });
+  }
+
+  try {
+    const stayReply = await handleHostStayReply(db, { phone, body, dryRun });
+    if (stayReply && stayReply.handled) {
+      let queuedReply = null;
+      if (stayReply.message && !dryRun) {
+        queuedReply = await queueWhatsappWebBridgeAutoReply({
+          phone,
+          message: stayReply.message,
+          nextStep: 'stay_request',
+          inboundMessageId: runtimeInboundMessageId,
+          source: 'short_stay_request',
+          actorId: 'system'
+        });
+      }
+      return res.json({
+        ok: true,
+        data: {
+          inbound_message_id: runtimeInboundMessageId,
+          next_step: 'stay_request',
+          message: stayReply.message || '',
+          dry_run: dryRun,
+          queued_reply: !!queuedReply,
+          queue_id: queuedReply?.id || null,
+          stay_request: stayReply.request || null
+        }
+      });
+    }
+  } catch (error) {
+    logger.warn('Short stay reply check failed', { message: error.message || String(error) });
   }
 
   const { message, nextStep, ownerForward = null, employeeIntake = null } = await processInboundRuntime({

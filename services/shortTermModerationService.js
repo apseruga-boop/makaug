@@ -37,8 +37,7 @@ const REVIEW_CHECKS = Object.freeze([
   { key: 'pricing_checked', label: 'Nightly price is sane for the area' },
   { key: 'house_rules_and_terms', label: 'House rules and host terms readable' },
   { key: 'availability_published', label: 'Availability published or host asked to be contacted', overrideable: true },
-  { key: 'duplicate_checked', label: 'Not already listed on makaug', overrideable: true },
-  { key: 'listing_fee_settled', label: 'Listing fee paid or waived' }
+  { key: 'duplicate_checked', label: 'Not already listed on makaug', overrideable: true }
 ]);
 
 const REVIEW_CHECK_KEYS = REVIEW_CHECKS.map((item) => item.key);
@@ -131,8 +130,7 @@ function buildAutomatedChecklist(listing = {}, { photoCount = 0 } = {}) {
     right_to_let_confirmed: listing.right_to_let_declared === true,
     photos_present: Number(photoCount) > 0,
     pricing_checked: Number(listing.base_nightly_ugx || 0) > 0,
-    house_rules_and_terms: Boolean(String(listing.house_rules || '').trim() || String(listing.terms_text || '').trim()),
-    listing_fee_settled: ['paid', 'waived'].includes(String(listing.listing_fee_status || ''))
+    house_rules_and_terms: Boolean(String(listing.house_rules || '').trim() || String(listing.terms_text || '').trim())
   });
 }
 

@@ -22,7 +22,7 @@
   if (window.__makaugSiteI18n) return;
 
   var SUPPORTED = { lg: 1, sw: 1, ac: 1, ny: 1, rn: 1, sm: 1, am: 1, ar: 1 };
-  var VERSION = "20261019-site-i18n-v7";
+  var VERSION = "20261019-site-i18n-v8";
   var ATTRS = ["placeholder", "title", "aria-label", "alt", "data-tooltip"];
   var SKIP_SELECTOR = "script,style,noscript,code,pre,[data-no-translate],[contenteditable=true]";
 
