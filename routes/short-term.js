@@ -14,7 +14,6 @@ const {
   shouldOfferPartnerSupply: hotelbedsShouldOffer
 } = require('../services/hotelbedsSupplyService');
 const {
-  enrichWithContact: liteapiContacts,
   fetchRates: liteapiRates,
   fetchUgandaProperties,
   shouldOfferPartnerSupply: liteapiShouldOffer
@@ -44,6 +43,7 @@ const {
   quoteStay,
   recordShortTermLead,
   reportShortTermListing,
+  sanitizePublicPartnerListing,
   searchShortTermListings,
   submitShortTermReview,
   validateListingSubmission
@@ -197,12 +197,9 @@ router.get('/search', async (req, res) => {
       if (partners.length) {
         const query = req.query || {};
 
-        // The phone number lives on the single-property endpoint, so this is
-        // one call per row - made only for the rows actually being sent, and
-        // cached for a day. It is worth it: a partner row with a phone number
-        // keeps the promise the rest of the section makes.
-        await liteapiContacts(partners);
-
+        // Guest-facing UGX only. Source currency, FX, markup and the hotel's
+        // phone stay off this response. A guest who wants the hotel rings it
+        // from the hotel's own site, not from a number we fetched to discard.
         const rates = await liteapiRates({
           hotelIds: partners.map((row) => String(row.reference || '').replace(/^la-/, '')),
           checkIn: query.check_in,
@@ -217,15 +214,9 @@ router.get('/search', async (req, res) => {
           row.price_display = formatUgx(rate.per_night);
           row.price_total_display = formatUgx(rate.total);
           row.price_nights = rate.nights;
-          row.price_basis = {
-            source_currency: rate.source_currency,
-            source_total: rate.source_total,
-            fx_rate: rate.fx_rate,
-            markup_percent: rate.markup_percent
-          };
         });
 
-        result.partner_listings = partners;
+        result.partner_listings = partners.map((row) => sanitizePublicPartnerListing(row));
         result.partner_source = 'liteapi';
       }
     }
@@ -255,17 +246,9 @@ router.get('/search', async (req, res) => {
           row.price_display = formatUgx(rate.per_night);
           row.price_total_display = formatUgx(rate.total);
           row.price_nights = rate.nights;
-          // Kept on the row so a wrong price is arguable from the response
-          // alone: what was quoted, in what currency, at what rate.
-          row.price_basis = {
-            source_currency: rate.source_currency,
-            source_total: rate.source_total,
-            fx_rate: rate.fx_rate,
-            markup_percent: rate.markup_percent
-          };
         });
 
-        result.partner_listings = partners;
+        result.partner_listings = partners.map((row) => sanitizePublicPartnerListing(row));
         result.partner_source = 'hotelbeds';
       }
     }
@@ -376,9 +359,9 @@ router.get('/listings/:slug', async (req, res) => {
 // ---------------------------------------------------------------------------
 // Guest enquiry
 //
-// The response hands back the host's own phone and WhatsApp link. makaug does
-// not relay the message, does not follow it up, and never reports back whether
-// the host replied. Discovery, not brokerage.
+// The response hands back the host's phone and WhatsApp link, and nothing
+// else: no email, no street, no exact pin. makaug does not relay the message,
+// does not follow it up, and never reports back whether the host replied.
 // ---------------------------------------------------------------------------
 
 router.post('/listings/:id/enquiries', writeLimiter, async (req, res) => {
@@ -386,7 +369,7 @@ router.post('/listings/:id/enquiries', writeLimiter, async (req, res) => {
     if (!isUuid(req.params.id)) {
       return res.status(400).json({ ok: false, error: 'Unknown listing' });
     }
-    const listing = await getShortTermListing(db, req.params.id);
+    const listing = await getShortTermListing(db, req.params.id, { includeContact: true });
     if (!listing) return res.status(404).json({ ok: false, error: 'Listing not found' });
 
     const lead = await recordShortTermLead(db, listing.id, req.body || {});

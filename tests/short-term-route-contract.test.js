@@ -1266,8 +1266,10 @@ test('a partner price is for the stay the visitor asked about', () => {
     /!result\.partner_listings && hotelbedsShouldOffer/.test(routeSource),
     'the Hotelbeds fallback is not gated on LiteAPI having come back empty'
   );
-  // The phone number is the reason a partner row can behave like a host row.
-  assert.ok(/liteapiContacts\(partners\)/.test(block), 'partner rows are not being given their phone number');
+  // Partner phone, email, street and internal rate maths stay off public search.
+  assert.ok(!/liteapiContacts\(partners\)/.test(routeSource), 'public search still fetches a partner phone number');
+  assert.ok(/sanitizePublicPartnerListing\(row\)/.test(block), 'partner rows leave search unsanitized');
+  assert.ok(!/price_basis/.test(block), 'search still attaches partner price_basis');
 
   assert.ok(/checkIn:\s*query\.check_in/.test(block), 'the visitor\'s check-in is not passed through');
   assert.ok(/checkOut:\s*query\.check_out/.test(block), 'the visitor\'s check-out is not passed through');
