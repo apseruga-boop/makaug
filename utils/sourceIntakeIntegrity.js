@@ -2,6 +2,7 @@
 
 const { sourcePriceAmount } = require('./propertyPriceCurrency');
 const { preferEachPlotPrice } = require('./listingIntakeQuality');
+const { resolveCanonicalUgandaLocationFromText } = require('./ugandaLocationRegistry');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
@@ -10,7 +11,9 @@ const UGANDA_FOREIGN_MARKET_SIGNALS = [
   { pattern: /\b(?:rwf|frw|rwandan francs?)\b/i, reason: 'foreign_currency_rwf' },
   { pattern: /\b(?:kes|kshs?|kenyan shillings?)\b/i, reason: 'foreign_currency_kes' },
   { pattern: /\b(?:tzs|tshs?|tanzanian shillings?)\b/i, reason: 'foreign_currency_tzs' },
-  { pattern: /(?:₹|\binr\b|\bindian rupees?\b)/i, reason: 'foreign_currency_inr' },
+  { pattern: /(?:₹|\binr\b|\bindian rupees?\b|\brs\.?\s*\d|\blakhs?\b|\bcrores?\b)/i, reason: 'foreign_currency_inr' },
+  { pattern: /\b(?:idr|rp)\b|(?:^|[^\w])rp\.?\s*\d/i, reason: 'foreign_currency_idr' },
+  { pattern: /\bzar\b|(?:^|[^\w])r\s*\d/i, reason: 'foreign_currency_zar' },
   { pattern: /\b(?:lkr|sri lankan rupees?)\b/i, reason: 'foreign_currency_lkr' },
   { pattern: /(?:£|\bgbp\b|\bpounds?\s+sterling\b|\d\s*pcm\b)/i, reason: 'foreign_currency_gbp' },
   { pattern: /(?:€|\beur\b|\beuros?\b)/i, reason: 'foreign_currency_eur' },
@@ -18,6 +21,7 @@ const UGANDA_FOREIGN_MARKET_SIGNALS = [
   { pattern: /\bbaerz(?:\s*&\s*co\.?)?\b/i, reason: 'foreign_channel' },
   { pattern: /\b(?:zagreb|croatia|amsterdam|netherlands|holland|rotterdam|utrecht|sotogrande|spain|madrid|barcelona|marbella|m[aá]laga|valencia|seville|sevilla|paris|france|lyon|berlin|germany|munich|m[uü]nchen|frankfurt|rome|roma|italy|milan|milano|florence|venice|lisbon|lisboa|portugal|porto|brussels|belgium|vienna|austria|prague|czech(?:ia| republic)?|budapest|hungary|warsaw|poland|stockholm|sweden|oslo|norway|copenhagen|denmark|helsinki|finland|athens|greece|zurich|z[uü]rich|geneva|switzerland|dublin|ireland|manchester|edinburgh|scotland|sydney|melbourne|australia|auckland|new zealand|toronto|vancouver|montreal|doha|qatar|riyadh|jeddah|abu dhabi|singapore|hong kong|tokyo|japan|seoul|korea|beijing|shanghai|bangkok|thailand|bali|jakarta|indonesia|istanbul|casablanca|morocco|cairo|egypt|luxembourg|monaco|ibiza|mallorca|majorca|algarve|tuscany|provence)\b/i, reason: 'foreign_market_location' },
   { pattern: /\b(?:rwanda|kigali|kenya|nairobi|mombasa|tanzania|dar es salaam|sri lanka|sinhala|india|kolkata|kolhapur|hyderabad|mumbai|delhi|karnataka|hassan,\s*karnataka|bengaluru|bangalore|nigeria|abuja|lagos|pakistan|karachi|lahore|islamabad|rawalpindi|dha\s+phase|ohio|pickerington|memphis|ridgecrest|fort garland|little rock|united states|usa|united kingdom)\b/i, reason: 'foreign_market_location' },
+  { pattern: /\b(?:tangerang|bandung|badung|darmawangsa|cirendeu|pondok indah|bsd|umhlanga|uttarakhand|jaipur|godhavari|godavari|bharat ratna|johannesburg|durban|pretoria|cape town|south africa|kwazulu(?:-natal)?)\b/i, reason: 'foreign_market_location' },
   { pattern: /[\u0D80-\u0DFF\u0900-\u097F\u0B80-\u0BFF]/u, reason: 'foreign_market_script' },
 ];
 
@@ -54,6 +58,44 @@ function compactText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+const STRONG_UGANDA_PLACE_LEVELS = new Set(['district', 'city', 'town']);
+
+function knownUgandanChannelMention(text = '') {
+  if (IS_SOUTH_AFRICA) return '';
+  const { knownUgandanChannelMention: mention } = require('../services/propertySourceRegistryService');
+  return mention(text) || '';
+}
+
+function ugandaRegistryPlaceMention(text = '') {
+  const resolution = resolveCanonicalUgandaLocationFromText(text);
+  if (resolution.status !== 'matched' || !resolution.match) return null;
+  const level = String(resolution.match.level || '');
+  const letters = String(resolution.match.name || '').replace(/[^a-zA-Z]/g, '');
+  // Parish, subcounty and short area aliases are fuzzy collisions
+  // ("omel" -> Gulu, "kakwa" -> Maracha, "kuru" -> Yumbe). They are not
+  // positive Uganda evidence on their own.
+  if (STRONG_UGANDA_PLACE_LEVELS.has(level) && letters.length >= 4) return resolution.match;
+  if (level === 'area' && letters.length >= 5) return resolution.match;
+  return null;
+}
+
+function ugandaFoundOnlineEvidence(text = '') {
+  const sourceText = compactText(text);
+  const country = sourceText.match(/\buganda(?:n)?\b/i)?.[0] || '';
+  if (country) return { ok: true, kind: 'country_name', matched: country };
+  const kampala = sourceText.match(/\bkampala\b/i)?.[0] || '';
+  if (kampala) return { ok: true, kind: 'kampala', matched: kampala };
+  const currency = sourceText.match(/\b(?:ugx|ush|shs|ugandan shillings?)\b/i)?.[0] || '';
+  if (currency) return { ok: true, kind: 'currency', matched: currency };
+  const phone = ugandanPhoneFromSourceText(sourceText);
+  if (phone) return { ok: true, kind: 'phone', matched: phone };
+  const channel = knownUgandanChannelMention(sourceText);
+  if (channel) return { ok: true, kind: 'channel', matched: channel };
+  const place = ugandaRegistryPlaceMention(sourceText);
+  if (place) return { ok: true, kind: 'place', matched: place.name || place.district || '' };
+  return { ok: false, kind: '', matched: '' };
+}
+
 function foreignSourceMarketStatus(text = '') {
   const sourceText = compactText(text);
   const foreignPhone = sourceText.match(FOREIGN_INTERNATIONAL_PHONE_PATTERN)?.[0] || '';
@@ -74,10 +116,24 @@ function foreignSourceMarketStatus(text = '') {
       };
     }
   }
+  // South Africa stays a denylist. Uganda found-online intake is an allowlist:
+  // no positive Uganda evidence means the post is not queued.
+  if (IS_SOUTH_AFRICA) {
+    return { allowed: true, reason: '', matched: '' };
+  }
+  const evidence = ugandaFoundOnlineEvidence(sourceText);
+  if (!evidence.ok) {
+    return {
+      allowed: false,
+      reason: 'no_uganda_evidence',
+      matched: '',
+    };
+  }
   return {
     allowed: true,
     reason: '',
-    matched: '',
+    matched: evidence.matched,
+    evidence: evidence.kind,
   };
 }
 
@@ -198,6 +254,7 @@ function safeSourcePriceCandidate(value, text = '') {
 
 module.exports = {
   foreignSourceMarketStatus,
+  ugandaFoundOnlineEvidence,
   maskConstructionCostsForPriceExtraction,
   maskPhonesForPriceExtraction,
   normalizeUgandanSourcePhone,

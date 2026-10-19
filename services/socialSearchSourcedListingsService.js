@@ -31,6 +31,7 @@ const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const { isApartmentBlockText, modestPriceDrop, videoIdFromText } = require('../utils/listingIntakeQuality');
 const { blockedSocialSourceMatch } = require('./socialSourceBlocklistService');
 const {
+  acceptEuropeanDecimalMagnitudes,
   CANONICAL_PROPERTY_CURRENCY,
   configuredRateToCanonicalCurrency,
   configuredUsdToUgxRate,
@@ -700,11 +701,11 @@ function explicitSourcePriceTextsFromEvidence(text = '') {
   const patterns = IS_SOUTH_AFRICA
     ? [
       /(?:\b(?:ZAR|R|USD|US\$|EUR|GBP)\s*|[R$€£]\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)(?=ugx|ush|shs|usd|zar|[^a-z]|$))?(?:\s*(?:ZAR|USD|EUR|GBP))?/gi,
-      /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:ZAR|R))?/gi
+      /(?<!\d,)\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:ZAR|R))?/gi
     ]
     : [
       /(?:\b(?:UGX|USh|Shs?|USD|US\$)\s*|\$\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)(?=ugx|ush|shs|usd|zar|[^a-z]|$))?(?:\s*(?:UGX|USh|Shs?))?/gi,
-      /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:UGX|USh|Shs?))?/gi
+      /(?<!\d,)\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:UGX|USh|Shs?))?/gi
     ];
   const matches = [];
   for (const pattern of patterns) {
@@ -1087,7 +1088,9 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     eligible: captureToReview,
     blocking_reasons: blockingReasons,
     capture_mode: 'launch_review_first',
-    capture_rule: `supported social property posts go to review even when phone, media, or exact ${TARGET_COUNTRY_NAME} location needs human confirmation; only explicit foreign evidence is location-rejected`,
+    capture_rule: IS_SOUTH_AFRICA
+      ? `supported social property posts go to review even when phone, media, or exact ${TARGET_COUNTRY_NAME} location needs human confirmation; only explicit foreign evidence is location-rejected`
+      : `supported social property posts go to review even when phone, media, or an exact town pin needs human confirmation; a post is accepted only with positive Uganda evidence and no foreign country, city, currency, or phone`,
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
     country_gate_passed: countryGate.allowed !== false,
@@ -1148,15 +1151,18 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
 function sourceReviewReasonForIntake(intake = {}) {
   if (intake.blocked_social_source) return 'permanently_blocked_social_source';
   if (intake.suppressed_source_url) return 'skipped_suppressed';
-  if (intake.country_gate_passed === false) return NON_TARGET_LOCATION_REASON;
-  if (intake.source_quality_suppressed && /^low_signal_/i.test(String(intake.source_quality_reason || ''))) {
-    return 'low_signal_source_location';
-  }
-  if (intake.source_quality_suppressed) {
-    const qualityReason = String(intake.source_quality_reason || '');
+  const qualityReason = String(intake.source_quality_reason || '');
+  const lowSignalOnly = intake.source_quality_suppressed && /^low_signal_/i.test(qualityReason);
+  // A how-to or a suppressed channel keeps that reason even when it also
+  // lacks Uganda evidence. Foreign and no-evidence posts still record
+  // non_uganda_location once those content reasons do not apply.
+  if (intake.source_quality_suppressed && !lowSignalOnly) {
     if (qualityReason === 'suppressed_channel' || qualityReason === 'not_a_listing') return qualityReason;
     return 'non_listing_source_content';
   }
+  if (intake.positive_listing_gate_reason === 'not_a_listing') return 'not_a_listing';
+  if (intake.country_gate_passed === false) return NON_TARGET_LOCATION_REASON;
+  if (lowSignalOnly) return 'low_signal_source_location';
   if (intake.positive_listing_gate_passed === false) {
     return intake.positive_listing_gate_reason || 'not_a_listing';
   }
@@ -2574,8 +2580,35 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   const sourceDistricts = asTextArray(raw.districts);
   const rawArea = compactText(raw.area || raw.location || raw.neighbourhood || raw.neighborhood || '');
   const fallbackDistrict = compactText(raw.district || sourceDistricts[0] || raw.city || raw.region || '');
-  const explicitLocation = resolveCanonicalUgandaLocation(rawArea, fallbackDistrict);
-  const textLocation = resolveCanonicalUgandaLocationFromText(`${rawArea} ${sourceText}`, fallbackDistrict);
+  const countryGate = foreignSourceMarketStatus([
+    sourceName,
+    raw.channel_title,
+    raw.channelTitle,
+    raw.youtube_channel_title,
+    raw.channel,
+    raw.handle,
+    sourceText,
+    raw.location,
+    raw.area,
+    raw.neighbourhood,
+    raw.neighborhood,
+    raw.price_text,
+    raw.price_label,
+    raw.price_currency,
+    raw.currency,
+    raw.source_currency,
+    raw.country,
+    raw.market,
+  ].filter(Boolean).join(' '));
+  // A supplied district is not Uganda evidence. Fuzzy text matches such as
+  // "omel" -> Gulu or "kakwa" -> Maracha are applied only after the allowlist
+  // has already accepted the post.
+  const explicitLocation = countryGate.allowed
+    ? resolveCanonicalUgandaLocation(rawArea, fallbackDistrict)
+    : { status: 'unmatched', match: null };
+  const textLocation = countryGate.allowed
+    ? resolveCanonicalUgandaLocationFromText(`${rawArea} ${sourceText}`, fallbackDistrict)
+    : { status: 'unmatched', match: null };
   const locationResolution = explicitLocation.status === 'matched'
     && !['district', 'region', 'province'].includes(explicitLocation.match.level)
     ? explicitLocation
@@ -2593,7 +2626,19 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     : Boolean(canonicalLocation);
   const area = canonicalLocation?.name || '';
   const address = String(raw.address || raw.location_label || raw.location || (area && district ? `${area}, ${district}` : area || district)).trim();
-  const priceCandidate = strongestSourcePriceCandidate(raw, sourceText);
+  const ugandaPriceContext = countryGate.allowed && !IS_SOUTH_AFRICA;
+  const priceContextText = ugandaPriceContext ? acceptEuropeanDecimalMagnitudes(sourceText) : sourceText;
+  const priceRaw = ugandaPriceContext
+    ? {
+      ...raw,
+      price: typeof raw.price === 'string' ? acceptEuropeanDecimalMagnitudes(raw.price) : raw.price,
+      price_text: raw.price_text ? acceptEuropeanDecimalMagnitudes(raw.price_text) : raw.price_text,
+      price_label: raw.price_label ? acceptEuropeanDecimalMagnitudes(raw.price_label) : raw.price_label,
+      asking_price: typeof raw.asking_price === 'string' ? acceptEuropeanDecimalMagnitudes(raw.asking_price) : raw.asking_price,
+      guide_price: typeof raw.guide_price === 'string' ? acceptEuropeanDecimalMagnitudes(raw.guide_price) : raw.guide_price,
+    }
+    : raw;
+  const priceCandidate = strongestSourcePriceCandidate(priceRaw, priceContextText);
   const unsafeSourcePrice = priceCandidate.value;
   const rawListingType = normalizeFoundOnlineListingType(
     raw.listing_type || raw.listingType || raw.property_type || raw.category || raw.title || raw.description,
@@ -2672,23 +2717,6 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     })
     : '';
   const youtubeId = raw.youtube_id || raw.youtubeId || raw.youtube_video_id || raw.youtubeVideoId || youtubeIdFromUrl(sourceUrl);
-  const countryGate = foreignSourceMarketStatus([
-    sourceName,
-    raw.channel_title,
-    raw.channelTitle,
-    raw.youtube_channel_title,
-    raw.channel,
-    sourceText,
-    raw.location,
-    raw.area,
-    raw.price_text,
-    raw.price_label,
-    raw.price_currency,
-    raw.currency,
-    raw.source_currency,
-    raw.country,
-    raw.market,
-  ].filter(Boolean).join(' '));
   const safePrice = countryGate.allowed
     ? priceCandidate
     : { value: null, reason: countryGate.reason };
@@ -2697,6 +2725,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   // It is not multiplied into UGX.
   let sourcePriceMetadata = countryGate.allowed
     ? propertyPriceMetadata(safePrice.value, {
+      ugandaConfirmed: ugandaPriceContext,
       currency: raw.price_currency || raw.currency || raw.source_currency,
       ...(IS_SOUTH_AFRICA
         ? { usdToZarRate: USD_TO_CANONICAL_GUIDE_RATE }
@@ -2743,7 +2772,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     xUrl: raw.x_url || raw.twitter_url || (/(^|\/\/)(x|twitter)\.com/i.test(sourceUrl) ? sourceUrl : ''),
     platform,
     sourcePlatform: platform,
-    districts: asTextArray(raw.districts || district || TARGET_COUNTRY_NAME),
+    districts: countryGate.allowed
+      ? asTextArray(raw.districts || district || TARGET_COUNTRY_NAME)
+      : [],
     specializations: asTextArray(raw.specializations || [listingType]),
     profilePhotoUrl: raw.profile_photo_url || raw.avatar_url || null,
     bio: raw.source_bio || `Public ${platform} source imported for ${TARGET_BRAND_NAME} found-online launch intake.`,
