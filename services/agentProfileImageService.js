@@ -60,4 +60,96 @@ async function cleanProfileImage(input) {
   return { bytes, mimeType: 'image/jpeg', mode, width, height };
 }
 
-module.exports = { cleanProfileImage, MIN_SIDE_PX, MAX_SIDE_PX };
+const photoKindCache = new Map();
+
+function declaredPhotoKind(value) {
+  const kind = String(value || '').trim().toLowerCase();
+  return kind === 'logo' || kind === 'portrait' ? kind : '';
+}
+
+function photoUrlSaysLogo(url = '') {
+  const path = String(url || '').split('?')[0];
+  if (path.startsWith('data:')) return false;
+  return /(?:^|[/_.-])logo(?:[/_.-]|$)/i.test(path);
+}
+
+function bufferFromPhotoUrl(url = '') {
+  const match = String(url || '').match(/^data:image\/[a-z0-9.+-]+;base64,([a-z0-9+/=\s]+)$/i);
+  if (!match) return null;
+  const buffer = Buffer.from(match[1].replace(/\s+/g, ''), 'base64');
+  if (buffer.length < 32 || buffer.length > 2_500_000) return null;
+  return buffer;
+}
+
+function luminance(r, g, b) {
+  return (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+}
+
+// A company mark that was squared onto a light or solid plate (the Chief
+// Properties logo is the case this is for). A face fills the frame, so its
+// corners are not one flat colour with a different centre.
+async function squarePlateLooksLikeLogo(buffer) {
+  const sharp = require('sharp');
+  const meta = await sharp(buffer, { failOn: 'none' }).rotate().metadata();
+  const width = meta.width || 0;
+  const height = meta.height || 0;
+  if (!width || !height) return false;
+  const ratio = width / height;
+  if (ratio < 0.9 || ratio > 1.1) return false;
+  const side = 16;
+  const { data } = await sharp(buffer, { failOn: 'none' })
+    .rotate()
+    .resize(side, side, { fit: 'fill' })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const at = (x, y) => {
+    const index = ((y * side) + x) * 3;
+    return luminance(data[index], data[index + 1], data[index + 2]);
+  };
+  const corners = [at(0, 0), at(side - 1, 0), at(0, side - 1), at(side - 1, side - 1), at(1, 1), at(side - 2, 0)];
+  const average = corners.reduce((sum, value) => sum + value, 0) / corners.length;
+  const variance = corners.reduce((sum, value) => sum + ((value - average) ** 2), 0) / corners.length;
+  const flat = variance < 90;
+  const lightOrSolid = average > 205 || average < 45;
+  if (!flat || !lightOrSolid) return false;
+  const center = at(8, 8);
+  return Math.abs(center - average) >= 28;
+}
+
+function photoCacheKey(url, declared) {
+  const value = String(url || '');
+  return `${declared}|${value.length}|${value.slice(0, 64)}|${value.slice(-48)}`;
+}
+
+// Explicit profile_photo_kind wins. Otherwise a logo URL, or a square image
+// whose corners are a light or solid plate, is a logo. Everything else stays
+// a portrait, which is what the round and cover crops expect.
+async function inferProfilePhotoKind(photoUrl = '', declared = '') {
+  const explicit = declaredPhotoKind(declared);
+  if (explicit) return explicit;
+  if (photoUrlSaysLogo(photoUrl)) return 'logo';
+  const key = photoCacheKey(photoUrl, '');
+  const cached = photoKindCache.get(key);
+  if (cached) return cached;
+  let kind = 'portrait';
+  const buffer = bufferFromPhotoUrl(photoUrl);
+  if (buffer) {
+    try {
+      if (await squarePlateLooksLikeLogo(buffer)) kind = 'logo';
+    } catch (_) {
+      kind = 'portrait';
+    }
+  }
+  photoKindCache.set(key, kind);
+  if (photoKindCache.size > 400) photoKindCache.delete(photoKindCache.keys().next().value);
+  return kind;
+}
+
+module.exports = {
+  cleanProfileImage,
+  inferProfilePhotoKind,
+  squarePlateLooksLikeLogo,
+  MIN_SIDE_PX,
+  MAX_SIDE_PX
+};

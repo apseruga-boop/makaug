@@ -115,6 +115,29 @@ test('the image is tidied: photos cropped square, logos kept whole, tiny images 
   assert.strictEqual((await cleanProfileImage(tiny)).tooSmall, true);
 });
 
+test('a square light plate is a logo; a square portrait stays a portrait unless the column says otherwise', async () => {
+  const sharp = require('sharp');
+  const { inferProfilePhotoKind, squarePlateLooksLikeLogo } = require('../services/agentProfileImageService');
+  const plate = await sharp({ create: { width: 400, height: 400, channels: 3, background: '#f7f7f7' } })
+    .composite([{ input: await sharp({ create: { width: 160, height: 160, channels: 3, background: '#166534' } }).png().toBuffer(), gravity: 'centre' }])
+    .jpeg().toBuffer();
+  const portrait = await sharp({
+    create: { width: 400, height: 400, channels: 3, background: { r: 180, g: 140, b: 110 } }
+  }).composite([
+    { input: await sharp({ create: { width: 80, height: 80, channels: 3, background: { r: 40, g: 30, b: 20 } } }).png().toBuffer(), gravity: 'northwest' },
+    { input: await sharp({ create: { width: 80, height: 80, channels: 3, background: { r: 210, g: 180, b: 90 } } }).png().toBuffer(), gravity: 'northeast' },
+    { input: await sharp({ create: { width: 80, height: 80, channels: 3, background: { r: 20, g: 80, b: 140 } } }).png().toBuffer(), gravity: 'southwest' }
+  ]).jpeg().toBuffer();
+  assert.equal(await squarePlateLooksLikeLogo(plate), true);
+  assert.equal(await squarePlateLooksLikeLogo(portrait), false, 'a square face with uneven corners stays a portrait');
+  const logoUrl = `data:image/jpeg;base64,${plate.toString('base64')}`;
+  const portraitUrl = `data:image/jpeg;base64,${portrait.toString('base64')}`;
+  assert.equal(await inferProfilePhotoKind(logoUrl, null), 'logo');
+  assert.equal(await inferProfilePhotoKind(portraitUrl, ''), 'portrait');
+  assert.equal(await inferProfilePhotoKind(logoUrl, 'portrait'), 'portrait', 'an explicit column wins over the heuristic');
+  assert.equal(await inferProfilePhotoKind('/assets/chief-logo.png', ''), 'logo');
+});
+
 test('a picture sent after our own request is accepted with no session open', () => {
   assert(source.includes('async function maybeAcceptRequestedProfilePhoto'));
   assert(source.includes("b.payload::text ILIKE '%your new photo is live%'"), 'a confirmed photo ends the request');

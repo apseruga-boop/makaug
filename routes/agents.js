@@ -5,7 +5,8 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const { asArray, cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { logNotification } = require('../services/notificationLogService');
-const { loadAgentPublicSummary } = require('../services/agentPublicProfileService');
+const { loadAgentPublicSummary, loadAgentCardBios } = require('../services/agentPublicProfileService');
+const { inferProfilePhotoKind } = require('../services/agentProfileImageService');
 const { ensurePostVerificationRecords } = require('../services/authFlowService');
 const {
   DIRECT_AGENT_PROFILE_MARKER,
@@ -737,6 +738,7 @@ router.get('/', async (req, res, next) => {
         a.featured_at,
         a.bio,
         a.profile_photo_url,
+        a.profile_photo_kind,
         a.licence_number,
         a.verification_reason,
         a.status,
@@ -769,9 +771,32 @@ router.get('/', async (req, res, next) => {
       listValues
     );
 
+    let cardBios = new Map();
+    try {
+      cardBios = await loadAgentCardBios(db, rows.rows);
+    } catch (error) {
+      console.warn('[agents] card bios unavailable', { message: error.message });
+    }
+    const data = [];
+    for (const row of rows.rows) {
+      const card = cardBios.get(String(row.id)) || { text: '', source: 'generated' };
+      let profilePhotoKind = 'portrait';
+      try {
+        profilePhotoKind = await inferProfilePhotoKind(row.profile_photo_url, row.profile_photo_kind);
+      } catch (_) {
+        profilePhotoKind = row.profile_photo_kind === 'logo' ? 'logo' : 'portrait';
+      }
+      data.push(publicAgentPayload({
+        ...row,
+        bio_display: card.text,
+        bio_source: card.source,
+        profile_photo_kind: profilePhotoKind
+      }));
+    }
+
     return res.json({
       ok: true,
-      data: rows.rows.map(publicAgentPayload),
+      data,
       pagination: toPagination(total, page, limit)
     });
   } catch (error) {

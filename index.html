@@ -2302,8 +2302,213 @@
     }
     .broker-grid-card {
       min-height: 100%;
+      display: grid;
+      grid-template-columns: 118px minmax(0, 1fr);
+      grid-template-areas: "photo main" "photo side";
+      overflow: hidden;
+      text-align: left;
+    }
+    #brokers-grid .broker-grid-card { grid-template-columns: 148px minmax(0, 1fr); }
+    .broker-card-media {
+      grid-area: photo;
+      position: relative;
+      min-height: 168px;
+      height: 100%;
+      overflow: hidden;
+      background: #14532d;
+      color: #fff;
+    }
+    .broker-card-fallback {
+      position: absolute;
+      inset: 0;
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 28px;
+      letter-spacing: -0.04em;
+    }
+    .broker-card-photo {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .broker-card-media.is-portrait { background: #ecfdf5; }
+    .broker-card-media.is-portrait .broker-card-photo { object-fit: cover; object-position: center 18%; }
+    .broker-card-media.is-logo { background: #fff; }
+    .broker-card-media.is-logo .broker-card-photo { object-fit: contain; padding: 12px; box-sizing: border-box; }
+    .broker-card-media.is-initials .broker-card-fallback { position: static; width: 100%; height: 100%; }
+    .broker-card-main { grid-area: main; min-width: 0; padding: 14px 14px 0; }
+    .broker-card-side { grid-area: side; min-width: 0; padding: 8px 14px 12px; }
+    .broker-card-name-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .broker-card-badge { margin: 0; }
+    .broker-card-name {
+      margin: 0;
+      color: #111827;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+    }
+    .broker-card-role { margin: 3px 0 0; color: #166534; font-size: 12.5px; font-weight: 700; line-height: 1.35; }
+    .broker-card-bio {
+      margin: 8px 0 0;
+      color: #4b5563;
+      font-size: 13px;
+      line-height: 1.45;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .broker-card-loc {
+      display: flex;
+      align-items: flex-start;
+      gap: 5px;
+      margin: 8px 0 0;
+      color: #4b5563;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.35;
+    }
+    .broker-card-loc i { color: #16a34a; margin-top: 2px; }
+    .broker-card-count { margin: 0 0 8px; color: #374151; font-size: 12.5px; font-weight: 600; }
+    .broker-card-count strong { color: #14532d; font-size: 16px; font-weight: 800; letter-spacing: -0.03em; }
+    .broker-card-count-short { display: none; }
+    .broker-card-actions.is-labeled { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 0; }
+    .broker-card-btn {
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1;
+      text-decoration: none;
+    }
+    .broker-card-btn.is-call { background: #fff; color: #166534; border-color: #bbf7d0; }
+    .broker-card-btn.is-wa { background: #16a34a; color: #fff; }
+    .broker-card-btn.is-profile { background: transparent; color: #166534; border-color: transparent; padding: 0 4px; }
+    .broker-card-btn.is-icon {
+      width: 34px;
+      padding: 0;
+      justify-content: center;
+      background: #fff;
+      color: #166534;
+      border-color: #bbf7d0;
+    }
+    .broker-card-btn.is-disabled { opacity: 0.45; }
+    @media (max-width: 640px) {
+      #home-brokers, #brokers-grid { grid-template-columns: 1fr; }
+      #brokers-grid .broker-grid-card, .broker-grid-card {
+        grid-template-columns: 52px minmax(0, 1fr) auto;
+        grid-template-areas:
+          "photo name count"
+          "bio bio bio"
+          "loc loc loc"
+          "actions actions actions";
+        column-gap: 10px;
+        row-gap: 4px;
+        padding: 8px 12px;
+        align-items: center;
+      }
+      .broker-card-main, .broker-card-side { display: contents; }
+      .broker-card-media {
+        grid-area: photo;
+        width: 52px;
+        height: 52px;
+        min-height: 52px;
+        border-radius: 50%;
+        align-self: center;
+      }
+      .broker-card-media.is-logo, .broker-card-media.is-initials { border-radius: 12px; }
+      .broker-card-media.is-logo .broker-card-photo { padding: 4px; }
+      .broker-card-fallback { font-size: 16px; }
+      .broker-card-name-line {
+        grid-area: name;
+        flex-wrap: nowrap;
+        gap: 6px;
+        min-width: 0;
+        overflow: hidden;
+      }
+      .broker-card-name {
+        font-size: 15px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+      }
+      .broker-card-badge { flex: none; }
+      .broker-card-badge > span {
+        background: transparent;
+        padding: 0;
+        gap: 0;
+        font-size: 0;
+        line-height: 0;
+        color: #15803d;
+      }
+      .broker-card-badge i { font-size: 14px; line-height: 1; }
+      .broker-card-role { display: none; }
+      .broker-card-bio {
+        grid-area: bio;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        white-space: normal;
+        overflow: hidden;
+        margin: 0;
+        min-width: 0;
+        font-size: 13px;
+        line-height: 1.3;
+      }
+      .broker-card-loc {
+        grid-area: loc;
+        display: flex;
+        min-width: 0;
+        margin: 0;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .broker-card-loc span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .broker-card-count {
+        grid-area: count;
+        margin: 0;
+        white-space: nowrap;
+        text-align: right;
+        font-size: 12px;
+        font-weight: 700;
+        color: #166534;
+      }
+      .broker-card-count strong { display: inline; font-size: 13px; }
+      .broker-card-count-long { display: none; }
+      .broker-card-count-short { display: inline; font-weight: 600; color: #4b5563; }
+      .broker-card-actions.is-labeled {
+        grid-area: actions;
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 8px;
+        width: 100%;
+        margin: 0;
+      }
+      .broker-card-btn.is-call, .broker-card-btn.is-wa {
+        flex: 1 1 0;
+        justify-content: center;
+        height: 30px;
+        padding: 0 10px;
+        font-size: 13px;
+      }
+      .broker-card-btn.is-profile, .broker-card-btn.is-icon { display: none; }
     }
     .broker-grid-card .broker-action-btn {
       min-height: 40px;
@@ -3334,7 +3539,7 @@
           <h2 id="home-brokers-title" class="text-3xl font-bold text-gray-800 serif">Featured Agents</h2>
           <a id="home-brokers-link" onclick="showPage('brokers')" class="cursor-pointer text-green-700 font-semibold">All Agents</a>
         </div>
-        <div id="home-brokers" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+        <div id="home-brokers" class="grid grid-cols-1 md:grid-cols-3 gap-5"></div>
       </div>
     </section>
 

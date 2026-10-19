@@ -288,6 +288,13 @@ test('unfiltered to-rent pagination uses the inventory total instead of 1-24+', 
     unknownTotal: true,
     hasMore: true
   }), 'Showing 1-24+ properties');
+  assert.equal(range({
+    pageStart: 1,
+    pageEnd: 22,
+    total: 22,
+    unknownTotal: true,
+    hasMore: false
+  }), 'Showing 1-22 of 22 properties');
   const inventory = extractFunction(app, 'unfilteredPublicCategoryInventoryTotal');
   assert.match(inventory, /hasActivePublicCategoryFilter\(key\)/);
   assert.match(inventory, /publicCategoryHasRouteSearch\(key\)/);
