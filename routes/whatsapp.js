@@ -7613,9 +7613,11 @@ async function handleAgentProfilePhotoReply({ phone, data = {}, candidates = [],
   // Tidy it first: upright, square, brightened — or a logo set whole on white.
   let toStore = safeImages.slice(0, 1);
   let tidied = false;
+  let photoKind = '';
   try {
     const original = await loadEmployeeCandidateBytes(toStore[0]);
     const cleaned = await require('../services/agentProfileImageService').cleanProfileImage(original);
+    if (cleaned.mode === 'logo') photoKind = 'logo';
     if (cleaned.tooSmall) {
       return refuse(`That picture is too small to look good on your page (${cleaned.width}×${cleaned.height}).\n\n${agentProfilePhotoPrompt(agent, { retry: true })}`);
     }
@@ -7654,7 +7656,14 @@ async function handleAgentProfilePhotoReply({ phone, data = {}, candidates = [],
     return { handled: true, nextStep: currentStep, message: 'I could not find your agent profile to attach it to. Our team has been told.' };
   }
   try {
-    const updated = await db.query(
+    const updated = photoKind === 'logo'
+      ? await db.query(
+        `UPDATE agents SET profile_photo_url = $2, profile_photo_kind = 'logo', updated_at = NOW()
+          WHERE id = $1
+          RETURNING id, full_name, profile_photo_url`,
+        [agent.id, stored.url]
+      )
+      : await db.query(
       `UPDATE agents SET profile_photo_url = $2, updated_at = NOW()
         WHERE id = $1
         RETURNING id, full_name, profile_photo_url`,

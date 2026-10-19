@@ -38,14 +38,17 @@ function isPlaceholderBio(bio) {
   return PLACEHOLDER_BIO_PATTERNS.some((pattern) => pattern.test(text));
 }
 
-// makaug's own "direct submission / claim pending" note is removed only from
-// profiles makaug created (same policy as publicBrokerBio in the app).
+// The "direct submission / claim pending" note is makaug's own boilerplate, so
+// it is removed from whatever is shown publicly. makaugCreated is accepted so
+// older callers keep working; it no longer decides whether the note is stripped.
 function ownBio(bio, { makaugCreated = false } = {}) {
+  void makaugCreated;
   if (isPlaceholderBio(bio)) return '';
   let text = String(bio || '');
-  if (makaugCreated) INTERNAL_BIO_SENTENCES.forEach((pattern) => { text = text.replace(pattern, ' '); });
+  INTERNAL_BIO_SENTENCES.forEach((pattern) => { text = text.replace(pattern, ' '); });
   text = cleanText(text);
-  return text && !/[.!?]$/.test(text) ? `${text}.` : text;
+  if (!text || isPlaceholderBio(text)) return '';
+  return /[.!?]$/.test(text) ? text : `${text}.`;
 }
 
 // Small stable hash so each agent always gets the same wording, and agents
@@ -374,39 +377,149 @@ function districtList(...groups) {
   return out;
 }
 
+const GENERIC_COMPANY_NAMES = new Set([
+  'independent agent',
+  'agency/company',
+  'agency',
+  'company',
+  'makaug',
+  'agent',
+  'broker'
+]);
+
+// A workplace name is only worth saying when it is not the agent's own name
+// and not the generic type stored in company_name ("Independent agent").
+function distinctCompanyName(agent = {}) {
+  const name = cleanText(agent.full_name || agent.name).toLowerCase();
+  const company = cleanText(agent.company_name || agent.company);
+  if (!company || company.toLowerCase() === name || GENERIC_COMPANY_NAMES.has(company.toLowerCase())) return '';
+  return company;
+}
+
+function agentRoleLabel(agent = {}) {
+  const company = cleanText(agent.company_name || agent.company).toLowerCase();
+  if (company === 'independent agent') return 'Independent agent';
+  if (company === 'agency/company' || company === 'agency') return 'Agency';
+  return '';
+}
+
+function fitCardSentences(sentences = []) {
+  const clean = sentences.map((sentence) => cleanText(sentence)).filter(Boolean).slice(0, 3);
+  if (!clean.length) return 'Property agent on makaug.';
+  const chosen = [clean[0]];
+  for (let i = 1; i < clean.length; i += 1) {
+    const next = `${chosen.join(' ')} ${clean[i]}`;
+    if (next.length > 280) break;
+    chosen.push(clean[i]);
+  }
+  let text = chosen.join(' ');
+  if (text.length > 280) text = `${text.slice(0, 277).replace(/\s+\S*$/, '').replace(/[,:;]$/, '')}.`;
+  return text;
+}
+
+// 2–3 sentences for the card and the profile About. A real bio always wins.
+// Generated text is built only from live listings and the agent's own areas.
+// It is never written back to agents.bio.
+function agentCardBio(agent = {}, listings = []) {
+  const own = ownBio(agent.bio, {
+    makaugCreated: agent.direct_agent_authorised === true || String(agent.verification_reason || '').includes('[DIRECT_AGENT_AUTHORISED]')
+  });
+  if (own) return { text: own, source: 'agent' };
+
+  const name = cleanText(agent.full_name || agent.name || agent.company_name) || 'This agent';
+  const company = distinctCompanyName(agent);
+  const role = agentRoleLabel(agent);
+  const summary = summarizeListings(Array.isArray(listings) ? listings : []);
+  const covered = districtList(Array.isArray(agent.districts_covered) ? agent.districts_covered : []);
+  const where = joinList(summary.areas.slice(0, 3).map((area) => area.name))
+    || joinList((summary.mainDistricts.length ? summary.mainDistricts : summary.districts).slice(0, 3))
+    || joinList(covered.slice(0, 3));
+
+  if (!summary.total) {
+    if (role && !company) {
+      return { text: where ? `${role} covering ${where}.` : `${role} on makaug.`, source: 'generated' };
+    }
+    const who = company ? `${name} of ${company}` : name;
+    return {
+      text: where ? `${who} covers ${where}.` : `${who} is a property agent on makaug.`,
+      source: 'generated'
+    };
+  }
+
+  const who = company ? `${name} of ${company}` : name;
+  const mix = mixPhrases(summary.kinds, summary.homeWords, summary.homesForSale);
+  const sentences = [`${who} has ${plural(summary.total, 'live listing', 'live listings')} on makaug${where ? `, mainly around ${where}` : ''}.`];
+  if (mix.length) {
+    if (summary.total === 1) {
+      const only = mix[0].replace(/^1 /, '');
+      sentences.push(`It is ${/^[aeiou]/i.test(only) ? 'an' : 'a'} ${only}.`);
+    } else {
+      sentences.push(`They are ${joinList(mix)}.`);
+    }
+  }
+  const buy = priceRange([...summary.prices.sale, ...summary.prices.land, ...summary.prices.commercial]);
+  const rent = priceRange(summary.prices.rent);
+  if (buy.text && rent.text) {
+    sentences.push(buy.single && rent.single
+      ? `The asking price is ${buy.text}, and the rent is ${rent.text} a month.`
+      : `Asking prices run from ${buy.text} to buy, and from ${rent.text} a month to rent.`);
+  } else if (buy.text) {
+    sentences.push(buy.single ? `The asking price is ${buy.text}.` : `Asking prices run from ${buy.text}.`);
+  } else if (rent.text) {
+    sentences.push(rent.single ? `The rent is ${rent.text} a month.` : `Rents run from ${rent.text} a month.`);
+  }
+  const districtLine = joinList(summary.districts.slice(0, 3));
+  if (districtLine && !sentences.join(' ').includes(districtLine)) {
+    sentences.push(`They cover ${districtLine}.`);
+  }
+  return { text: fitCardSentences(sentences), source: 'generated' };
+}
+
+const cardBioCache = new Map();
+const CARD_BIO_TTL_MS = 5 * 60 * 1000;
+
+function cardBioCacheKey(agent = {}, listings = []) {
+  let hash = 2166136261;
+  const text = [
+    agent.id,
+    cleanText(agent.bio),
+    cleanText(agent.company_name || agent.company),
+    cleanText(agent.full_name || agent.name),
+    ...(Array.isArray(agent.districts_covered) ? agent.districts_covered : []),
+    ...listings.map((row) => [row.listing_type, row.property_type, row.district, row.area, row.price, row.price_period].join('|'))
+  ].join('\n');
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${hash >>> 0}`;
+}
+
+function agentCardBioCached(agent = {}, listings = []) {
+  const key = cardBioCacheKey(agent, listings);
+  const hit = cardBioCache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.value;
+  const value = agentCardBio(agent, listings);
+  cardBioCache.set(key, { value, expires: Date.now() + CARD_BIO_TTL_MS });
+  if (cardBioCache.size > 400) cardBioCache.delete(cardBioCache.keys().next().value);
+  return value;
+}
+
 function buildAgentPublicSummary(agent = {}, listings = []) {
-  const seed = String(agent.id || agent.full_name || '');
-  const name = cleanText(agent.full_name || agent.company_name) || 'This agent';
   const summary = summarizeListings(Array.isArray(listings) ? listings : []);
   const areas = summary.areas.slice(0, MAX_LISTED_AREAS);
   const areaNames = new Set(areas.map((area) => area.name.toLowerCase()));
   const nearby = nearbyAreasFor(areas, areaNames);
   const covered = Array.isArray(agent.districts_covered) ? agent.districts_covered : [];
   const districts = districtList(summary.districts, nearby.map((area) => area.district), covered);
-  const wordingDistricts = districtList(summary.mainDistricts, covered);
-  const topAreaText = joinList(areas.slice(0, 3).map((area) => area.name))
-    || joinList(summary.districts.slice(0, 2));
-
-  const bio = ownBio(agent.bio, { makaugCreated: String(agent.verification_reason || '').includes('[DIRECT_AGENT_AUTHORISED]') });
-  const paragraphs = [];
-  if (bio) {
-    paragraphs.push(bio);
-  } else if (summary.total) {
-    paragraphs.push(openingSentence(seed, name, summary, topAreaText));
-  } else {
-    const where = joinList(districtList(covered).slice(0, 3));
-    paragraphs.push(`${name} is a property agent on makaug${where ? ` covering ${where}` : ''}. Their listings will appear here once they are approved.`);
-  }
-  if (summary.total) {
-    paragraphs.push(portfolioSentences(seed, summary).join(' '));
-  }
-  const coverage = coverageSentence(seed, summary, nearby, wordingDistricts.length ? wordingDistricts : districts);
-  paragraphs.push([coverage, closingSentence(seed, summary.total > 0)].filter(Boolean).join(' '));
+  const card = agentCardBio(agent, listings);
 
   return {
-    about: paragraphs.filter(Boolean),
-    about_text: paragraphs.filter(Boolean).join('\n\n'),
-    own_bio: Boolean(bio),
+    about: [card.text],
+    about_text: card.text,
+    own_bio: card.source === 'agent',
+    bio_display: card.text,
+    bio_source: card.source,
     listings_counted: summary.total,
     mix: summary.kinds,
     mix_phrases: mixPhrases(summary.kinds, summary.homeWords, summary.homesForSale),
@@ -432,10 +545,13 @@ function agentSummaryDescription(publicSummary = {}, name = '') {
 module.exports = {
   buildAgentPublicSummary,
   agentSummaryDescription,
+  agentCardBio,
+  agentCardBioCached,
   isPlaceholderBio,
   ownBio,
   listingKind,
-  compactUgx
+  compactUgx,
+  distinctCompanyName
 };
 
 // Every approved listing for one agent, with only the columns the summary
@@ -463,5 +579,38 @@ async function loadAgentPublicSummary(db, agent = {}) {
   return buildAgentPublicSummary(agent, listings);
 }
 
+// Listings for every agent on a directory page, in one query. The card bio
+// does not need video columns, so this stays lighter than the profile summary.
+async function loadAgentCardListings(db, agentIds = []) {
+  const ids = [...new Set(agentIds.map((id) => String(id || '')).filter(Boolean))];
+  if (!ids.length) return new Map();
+  const result = await db.query(
+    `SELECT p.agent_id, p.listing_type, p.property_type, p.district, p.area, p.price, p.price_period, p.bedrooms
+       FROM properties p
+      WHERE p.status = 'approved' AND p.agent_id = ANY($1::uuid[])`,
+    [ids]
+  );
+  const grouped = new Map();
+  result.rows.forEach((row) => {
+    const key = String(row.agent_id);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(row);
+  });
+  return grouped;
+}
+
+async function loadAgentCardBios(db, agents = []) {
+  const grouped = await loadAgentCardListings(db, agents.map((agent) => agent.id));
+  const bios = new Map();
+  agents.forEach((agent) => {
+    const key = String(agent.id || '');
+    if (!key) return;
+    bios.set(key, agentCardBioCached(agent, grouped.get(key) || []));
+  });
+  return bios;
+}
+
 module.exports.loadAgentSummaryListings = loadAgentSummaryListings;
 module.exports.loadAgentPublicSummary = loadAgentPublicSummary;
+module.exports.loadAgentCardListings = loadAgentCardListings;
+module.exports.loadAgentCardBios = loadAgentCardBios;

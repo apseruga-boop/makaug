@@ -256,7 +256,10 @@ function mapRemoteAgentForUi(agent = {}) {
     licence: agent.licence_number || agent.licence || "",
     languages: Array.isArray(agent.languages) ? agent.languages.filter(Boolean) : ["English"],
     specialties: specializations,
-    bio: agent.bio || "Professional makaug agent profile.",
+    bio: String(agent.bio || "").trim(),
+    bio_display: String(agent.bio_display || "").trim(),
+    bio_source: agent.bio_source === "generated" || agent.bio_source === "agent" ? agent.bio_source : "",
+    profile_photo_kind: agent.profile_photo_kind === "logo" ? "logo" : (agent.profile_photo_kind === "portrait" ? "portrait" : ""),
     public_summary: agent.public_summary && typeof agent.public_summary === "object" ? agent.public_summary : null,
     service_districts: serviceDistricts,
     featured_homepage: agent.featured_homepage === true,
@@ -11570,8 +11573,14 @@ function brokerDisplayPhone(broker = {}) {
 }
 
 function brokerInitials(name = "") {
-  const parts = String(name || publicBrand()).trim().split(/\s+/).filter(Boolean);
-  return (parts[0]?.[0] || "M") + (parts[1]?.[0] || "");
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  const letters = [];
+  parts.forEach((part) => {
+    const match = String(part).match(/[A-Za-z]/);
+    if (match) letters.push(match[0].toUpperCase());
+  });
+  if (!letters.length) return String(publicBrand() || "M").slice(0, 1).toUpperCase();
+  return letters.slice(0, 2).join("");
 }
 
 function renderBrokerDashboardBadges(broker = {}, stats = {}) {
@@ -23657,7 +23666,9 @@ function openSupportWhatsApp(context = "", options = {}) {
 function buildBrokerContactWhatsappMessage(b = {}) {
   const name = cleanWhatsappValue(b.name) || "there";
   const firstName = name.split(/\s+/).filter(Boolean)[0] || name;
-  const company = cleanWhatsappValue(b.company);
+  const rawCompany = cleanWhatsappValue(b.company);
+  const genericCompany = ["independent agent", "agency/company", "agency", "company", "makaug", "agent", "broker"];
+  const company = genericCompany.includes(rawCompany.toLowerCase()) ? "" : rawCompany;
   const area = cleanWhatsappValue(b.area);
   const specialties = Array.isArray(b.specialties) ? b.specialties.map(cleanWhatsappValue).filter(Boolean).slice(0, 2).join(", ") : "";
   return [
@@ -47487,18 +47498,39 @@ function updateStudentHeader(list, options = {}) {
 
 function brokerAvatarHtml(b, classes = "w-14 h-14", options = {}) {
   const photo = b?.photo || b?.profile_photo_url || "";
+  const initials = brokerInitials(b?.name || "");
   const wrapperClass = `${classes} rounded-full bg-green-50 border border-green-100 mx-auto overflow-hidden flex items-center justify-center text-2xl`;
   if (photo) {
     const loadingHints = options.imageLoading === "lazy" ? ' loading="lazy" decoding="async"' : "";
-    return `<div class="${wrapperClass}"><img${loadingHints} src="${adminAttr(photo)}" alt="${adminAttr(b?.name || "Broker")}" class="w-full h-full object-cover" onerror="this.remove(); this.parentElement.textContent='${adminAttr(b?.emoji || "👔")}'"></div>`;
+    return `<div class="${wrapperClass}"><img${loadingHints} src="${adminAttr(photo)}" alt="${adminAttr(b?.name || "Broker")}" class="w-full h-full object-cover" onerror="this.remove(); this.parentElement.textContent='${adminAttr(initials)}'"></div>`;
   }
-  return `<div class="${wrapperClass}">${b?.emoji || "👔"}</div>`;
+  return `<div class="${wrapperClass}">${adminEscape(initials)}</div>`;
+}
+
+function brokerCardBioText(b = {}) {
+  const display = String(b?.bio_display || "").trim();
+  if (display) return display;
+  return publicBrokerBio(b);
+}
+
+function brokerCardMediaHtml(b = {}, options = {}) {
+  const photo = b?.photo || b?.profile_photo_url || "";
+  const initials = brokerInitials(b?.name || "");
+  const kind = !photo ? "initials" : (b?.profile_photo_kind === "logo" ? "logo" : "portrait");
+  if (kind === "initials") {
+    return `<div class="broker-card-media is-initials" aria-hidden="true"><span>${adminEscape(initials)}</span></div>`;
+  }
+  const loadingHints = options.imageLoading === "lazy" ? ' loading="lazy" decoding="async"' : "";
+  const fit = kind === "logo" ? "object-contain" : "object-cover";
+  const alt = kind === "logo" ? `${b?.name || "Broker"} logo` : (b?.name || "Broker");
+  return `<div class="broker-card-media is-${kind}"><img${loadingHints} src="${adminAttr(photo)}" alt="${adminAttr(alt)}" class="broker-card-photo ${fit}" onerror="this.remove(); this.parentElement.className='broker-card-media is-initials'; this.parentElement.textContent='${adminAttr(initials)}'"></div>`;
 }
 
 function brokerCompanyLineHtml(b, classes = "text-center text-gray-500 text-sm") {
   const name = String(b?.name || "").trim().toLowerCase();
   const company = String(b?.company || "").trim();
-  if (!company || company.toLowerCase() === name) return "";
+  const generic = ["independent agent", "agency/company", "agency", "company", "makaug", "agent", "broker"];
+  if (!company || company.toLowerCase() === name || generic.includes(company.toLowerCase())) return "";
   return `<p class="${classes}">${adminEscape(company)}</p>`;
 }
 
@@ -47534,79 +47566,80 @@ function brokerAreasCoveredHtml(broker = {}) {
 }
 
 function publicBrokerBio(broker = {}) {
-  const fallback = "Professional real estate broker helping clients buy, rent, and invest with confidence.";
-  let bio = String(broker?.bio || fallback).trim();
-  if (broker?.direct_agent_authorised) {
-    bio = bio
-      .replace(/\s*This profile was created from the agent[’']s direct submission[;,]?\s*identity verification and account claim are pending\.?\s*/gi, " ")
-      .replace(/\s*This profile was created from the agent[’']s direct submission[.;]?\s*/gi, " ")
-      .replace(/\s*Identity verification and account claim are pending\.?\s*/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-  return bio || fallback;
+  const display = String(broker?.bio_display || "").trim();
+  if (display) return display;
+  let bio = String(broker?.bio || "").trim();
+  bio = bio
+    .replace(/\s*This profile was created from the agent[’']s direct submission[;,]?\s*identity verification and account claim are pending\.?\s*/gi, " ")
+    .replace(/\s*This profile was created from the agent[’']s direct submission[.;]?\s*/gi, " ")
+    .replace(/\s*Identity verification and account claim are pending\.?\s*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const placeholder = !bio
+    || /^professional makaug agent profile\.?$/i.test(bio)
+    || /^professional real estate broker helping clients buy, rent, and invest with confidence\.?$/i.test(bio)
+    || /^makaug (broker|agent) covering [\w\s,'-]+ propert(y|ies)\.?$/i.test(bio);
+  return placeholder ? "" : bio;
 }
 
 function brokerIconActionsHtml(b, options = {}) {
+  const labeled = options.labels === true;
   const sizeClass = options.large === true ? "w-11 h-11 text-base" : "w-10 h-10 text-sm";
   const name = adminEscape(b?.name || "broker");
   const phone = String(b?.phone || "").replace(/\s+/g, "");
   const whatsapp = String(b?.whatsapp || "").replace(/\D/g, "");
   const profilePath = getBrokerProfilePath(b);
-  const baseClass = `${sizeClass} rounded-full inline-flex items-center justify-center border transition-colors`;
+  const baseClass = labeled
+    ? "broker-card-btn"
+    : `${sizeClass} rounded-full inline-flex items-center justify-center border transition-colors`;
+  const callLabel = labeled ? `<span>Call</span>` : "";
+  const whatsappLabel = labeled ? `<span>WhatsApp</span>` : "";
+  const profileLabel = labeled ? `<span>Profile</span>` : "";
+  const wrapClass = labeled
+    ? "broker-card-actions is-labeled"
+    : "flex items-center justify-center gap-2";
   return `
-    <div class="flex items-center justify-center gap-2" aria-label="Contact and profile actions for ${name}">
+    <div class="${wrapClass}" aria-label="Contact and profile actions for ${name}">
       ${phone
-        ? `<a href="tel:${adminAttr(phone)}" onclick="event.stopPropagation()" class="${baseClass} border-green-200 bg-white text-green-800 hover:bg-green-50" aria-label="Call ${name}" title="Call ${name}"><i class="fas fa-phone" aria-hidden="true"></i><span class="sr-only">Call ${name}</span></a>`
-        : `<span class="${baseClass} border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed" aria-label="Phone unavailable" title="Phone unavailable"><i class="fas fa-phone" aria-hidden="true"></i></span>`}
+        ? `<a href="tel:${adminAttr(phone)}" onclick="event.stopPropagation()" class="${baseClass} ${labeled ? "is-call" : "border-green-200 bg-white text-green-800 hover:bg-green-50"}" aria-label="Call ${name}" title="Call ${name}"><i class="fas fa-phone" aria-hidden="true"></i>${callLabel}<span class="sr-only">Call ${name}</span></a>`
+        : `<span class="${baseClass} ${labeled ? "is-call is-disabled" : "border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed"}" aria-label="Phone unavailable" title="Phone unavailable"><i class="fas fa-phone" aria-hidden="true"></i>${callLabel}</span>`}
       ${whatsapp
-        ? `<a href="${adminAttr(buildWhatsAppUrl(whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="${baseClass} border-green-500 bg-green-500 text-white hover:bg-green-600" aria-label="WhatsApp ${name}" title="WhatsApp ${name}"><i class="fab fa-whatsapp" aria-hidden="true"></i><span class="sr-only">WhatsApp ${name}</span></a>`
-        : `<span class="${baseClass} border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed" aria-label="WhatsApp unavailable" title="WhatsApp unavailable"><i class="fab fa-whatsapp" aria-hidden="true"></i></span>`}
-      <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'native')" class="${baseClass} border-green-200 bg-white text-green-800 hover:bg-green-50" aria-label="Share ${name}'s broker card" title="Share broker card"><i class="fas fa-share-nodes" aria-hidden="true"></i><span class="sr-only">Share broker card</span></button>
+        ? `<a href="${adminAttr(buildWhatsAppUrl(whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="${baseClass} ${labeled ? "is-wa" : "border-green-500 bg-green-500 text-white hover:bg-green-600"}" aria-label="WhatsApp ${name}" title="WhatsApp ${name}"><i class="fab fa-whatsapp" aria-hidden="true"></i>${whatsappLabel}<span class="sr-only">WhatsApp ${name}</span></a>`
+        : `<span class="${baseClass} ${labeled ? "is-wa is-disabled" : "border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed"}" aria-label="WhatsApp unavailable" title="WhatsApp unavailable"><i class="fab fa-whatsapp" aria-hidden="true"></i>${whatsappLabel}</span>`}
+      <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'native')" class="${baseClass} ${labeled ? "is-icon" : "border-green-200 bg-white text-green-800 hover:bg-green-50"}" aria-label="Share ${name}'s broker card" title="Share broker card"><i class="fas fa-share-nodes" aria-hidden="true"></i><span class="sr-only">Share broker card</span></button>
       ${options.profile === true
-        ? `<button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'link')" class="${baseClass} border-gray-900 bg-gray-900 text-white hover:bg-gray-800" aria-label="Copy ${name}'s profile link" title="Copy profile link"><i class="fas fa-link" aria-hidden="true"></i><span class="sr-only">Copy profile link</span></button>`
-        : `<a href="${adminAttr(profilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(b.id)})" class="${baseClass} border-gray-900 bg-gray-900 text-white hover:bg-gray-800" aria-label="View ${name}'s profile" title="View profile"><i class="fas fa-user" aria-hidden="true"></i><span class="sr-only">View profile</span></a>`}
+        ? `<button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'link')" class="${baseClass} ${labeled ? "is-profile" : "border-gray-900 bg-gray-900 text-white hover:bg-gray-800"}" aria-label="Copy ${name}'s profile link" title="Copy profile link"><i class="fas fa-link" aria-hidden="true"></i>${profileLabel}<span class="sr-only">Copy profile link</span></button>`
+        : `<a href="${adminAttr(profilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(b.id)})" class="${baseClass} ${labeled ? "is-profile" : "border-gray-900 bg-gray-900 text-white hover:bg-gray-800"}" aria-label="View ${name}'s profile" title="View profile"><i class="fas fa-user" aria-hidden="true"></i>${profileLabel}<span class="sr-only">View profile</span></a>`}
     </div>`;
+}
+
+function brokerCardHtml(b, options = {}) {
+  const border = options.directory === true ? "border-green-100" : "border-gray-100";
+  const badge = renderBrokerRegistrationBadge(b, "text-[11px]");
+  const bio = brokerCardBioText(b);
+  return `
+    <article class="broker-grid-card bg-white rounded-2xl ${border} shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
+      ${brokerCardMediaHtml(b, { imageLoading: "lazy" })}
+      <div class="broker-card-body">
+        ${badge ? `<div class="broker-card-badge">${badge}</div>` : ""}
+        <h3 class="broker-card-name">${adminEscape(b.name)}</h3>
+        ${brokerCompanyLineHtml(b, "broker-card-role")}
+        ${bio ? `<p class="broker-card-bio">${adminEscape(bio)}</p>` : ""}
+        <div class="broker-card-foot">
+          <p class="broker-card-loc"><i class="fas fa-location-dot" aria-hidden="true"></i><span>${adminEscape(b.area || "")}</span></p>
+          <p class="broker-card-count"><strong>${Number(b.listings) || 0}</strong> <span>${translateListingLabel("Active Listings")}</span></p>
+          ${brokerIconActionsHtml(b, { labels: true })}
+        </div>
+      </div>
+    </article>`;
 }
 
 function renderBrokers(id, list) {
   const el = document.getElementById(id);
   if (!el) return;
-  if (id === "brokers-grid") {
-    el.innerHTML = list.map((b) => `
-      <div class="broker-grid-card bg-white rounded-2xl border border-green-100 p-4 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
-        <div class="mb-3">${brokerAvatarHtml(b, "w-28 h-28 border-4 shadow-sm", { imageLoading: "lazy" })}</div>
-        <h3 class="text-xl font-black text-gray-900 text-center leading-tight">${adminEscape(b.name)}</h3>
-        ${brokerCompanyLineHtml(b)}
-        ${renderBrokerRegistrationBadge(b) ? `<div class="mt-3 text-center">${renderBrokerRegistrationBadge(b)}</div>` : ""}
-
-        <div class="mt-4 flex justify-center">
-          <div class="inline-flex items-baseline gap-1.5 rounded-full bg-green-50 px-4 py-2 text-green-900">
-            <strong class="text-xl leading-none">${b.listings}</strong>
-            <span class="text-xs font-semibold">${translateListingLabel("Active Listings")}</span>
-          </div>
-        </div>
-
-        <p class="text-center text-gray-500 text-sm mt-3"><i class="fas fa-location-dot text-green-600 mr-1" aria-hidden="true"></i>${b.area}</p>
-        <div class="mt-auto pt-4">${brokerIconActionsHtml(b)}</div>
-      </div>
-    `).join("");
-    setBrokerMapMarkers(list);
-    return;
-  }
-
-  el.innerHTML = list.map((b) => `
-    <div class="broker-grid-card bg-white rounded-2xl border border-gray-100 p-4 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
-      <div class="mb-3">${brokerAvatarHtml(b, "w-28 h-28 border-4 shadow-sm", { imageLoading: "lazy" })}</div>
-      <h3 class="text-xl font-black text-gray-900 text-center">${adminEscape(b.name)}</h3>
-      ${brokerCompanyLineHtml(b)}
-      ${renderBrokerRegistrationBadge(b, "text-[11px]") ? `<div class="mt-2 text-center">${renderBrokerRegistrationBadge(b, "text-[11px]")}</div>` : ""}
-      <p class="text-xs text-gray-500 mt-2 text-center"><i class="fas fa-map-marker-alt text-green-600"></i> ${b.area}</p>
-      <div class="mt-3 flex justify-center text-sm">
-        <span class="rounded-full bg-green-50 px-3 py-1.5 text-green-900"><strong>${b.listings}</strong> ${translateListingLabel("Active Listings")}</span>
-      </div>
-      <div class="mt-auto pt-4">${brokerIconActionsHtml(b)}</div>
-    </div>`).join("");
+  const directory = id === "brokers-grid";
+  el.innerHTML = list.map((b) => brokerCardHtml(b, { directory })).join("");
+  if (directory) setBrokerMapMarkers(list);
 }
 
 function renderSaved() {
@@ -51044,10 +51077,12 @@ function resolvePublicCategoryPaginationTotal(state, passedTotal = 0, inventoryT
 }
 
 function publicCategoryResultsRangeText({ pageStart = 0, pageEnd = 0, total = 0, unknownTotal = false, hasMore = false } = {}) {
-  if (unknownTotal) {
-    return pageEnd ? `Showing ${pageStart}-${pageEnd}${hasMore ? "+" : ""} properties` : "No properties found";
-  }
-  return total ? `Showing ${pageStart}-${pageEnd} of ${total} properties` : "No properties found";
+  if (!pageEnd) return "No properties found";
+  // A filtered search can know its own count (hasMore false, total 22) before
+  // that count is marked authoritative. Still say "of 22".
+  if (unknownTotal && hasMore) return `Showing ${pageStart}-${pageEnd}+ properties`;
+  if (total) return `Showing ${pageStart}-${pageEnd} of ${total} properties`;
+  return `Showing ${pageStart}-${pageEnd} properties`;
 }
 
 function renderPublicCategoryPagination(category, options = {}) {
@@ -51078,9 +51113,7 @@ function renderPublicCategoryPagination(category, options = {}) {
   const pageEnd = Math.min(total, page * PUBLIC_RESULTS_PAGE_SIZE);
   const unknownTotal = state.mode === "api" && !state.totalAuthoritative;
   const hasMore = options.hasMore ?? authoritative?.hasMore ?? state.hasMore;
-  const rangeText = unknownTotal
-    ? (pageEnd ? `Showing ${pageStart}-${pageEnd}${hasMore ? "+" : ""} properties` : publicCategoryResultsRangeText({ pageStart, pageEnd, total, unknownTotal, hasMore }))
-    : publicCategoryResultsRangeText({ pageStart, pageEnd, total, unknownTotal, hasMore });
+  const rangeText = publicCategoryResultsRangeText({ pageStart, pageEnd, total, unknownTotal, hasMore });
   const disabledClass = "opacity-45 cursor-not-allowed";
   const enabledClass = "hover:bg-green-50 hover:border-green-400";
   const buttonClass = "min-h-[44px] min-w-[44px] rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-700 transition-colors";
