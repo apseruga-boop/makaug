@@ -257,8 +257,13 @@ function mapRemoteAgentForUi(agent = {}) {
     languages: Array.isArray(agent.languages) ? agent.languages.filter(Boolean) : ["English"],
     specialties: specializations,
     bio: String(agent.bio || "").trim(),
-    bio_display: String(agent.bio_display || "").trim(),
-    bio_source: agent.bio_source === "generated" || agent.bio_source === "agent" ? agent.bio_source : "",
+    bio_display: String(agent.bio_display || agent.public_summary?.bio_display || "").trim(),
+    bio_source: agent.bio_source === "generated" || agent.bio_source === "agent"
+      ? agent.bio_source
+      : (agent.public_summary?.bio_source === "generated" || agent.public_summary?.bio_source === "agent" ? agent.public_summary.bio_source : ""),
+    bio_parts: Array.isArray(agent.bio_parts)
+      ? agent.bio_parts
+      : (Array.isArray(agent.public_summary?.bio_parts) ? agent.public_summary.bio_parts : null),
     profile_photo_kind: agent.profile_photo_kind === "logo" ? "logo" : (agent.profile_photo_kind === "portrait" ? "portrait" : ""),
     public_summary: agent.public_summary && typeof agent.public_summary === "object" ? agent.public_summary : null,
     service_districts: serviceDistricts,
@@ -1551,7 +1556,7 @@ const I18N_UI = {
     heroClear: "Gyawo",
     homeFeatured: "Ebintu Ebitwaliridde",
     homeMap: "Noonya ku Maapu",
-    homeBrokers: "Agents Abalondedwa",
+    homeBrokers: "Ba Agenti Abalondeddwa",
     pageSale: "Ebintu Ebitundibwa",
     pageRent: "Ebintu Ebipangisibwa",
     pageStudents: "Noonya obulamu bw'abayizi obutuufu",
@@ -1680,7 +1685,7 @@ const I18N_UI = {
     heroClear: "Futa",
     homeFeatured: "Mali Zilizoangaziwa",
     homeMap: "Tafuta kwenye Ramani",
-    homeBrokers: "Agents walioangaziwa",
+    homeBrokers: "Mawakala walioangaziwa",
     pageSale: "Mali za Kuuza",
     pageRent: "Mali za Kupanga",
     pageStudents: "Pata makazi bora ya wanafunzi",
@@ -1954,7 +1959,7 @@ const I18N_UI_HARDENING = {
     heroListFree: "Ket Gang",
     homeFeatured: "Gangi ma oyero",
     homeMap: "Yeny i mapa",
-    homeBrokers: "Agents ma oyero",
+    homeBrokers: "Jo cat jami ma oyero",
     pageSale: "Gangi me cato",
     pageRent: "Gangi me gero",
     pageStudents: "Gang pa jo yot",
@@ -2047,7 +2052,7 @@ const I18N_UI_HARDENING = {
     heroListFree: "Teka Property",
     homeFeatured: "Property z’ahaiguru",
     homeMap: "Noonya aha Maapu",
-    homeBrokers: "Agents abakundwa",
+    homeBrokers: "Ba Agenti abakundwa",
     pageSale: "Property ez’okutunda",
     pageRent: "Property ez’okupangisa",
     pageStudents: "Makazi g’abanyeshomesa",
@@ -2140,7 +2145,7 @@ const I18N_UI_HARDENING = {
     heroListFree: "Taho Property",
     homeFeatured: "Property ezahimbisibwe",
     homeMap: "Shaka aha Mapa",
-    homeBrokers: "Agents abahimbisibwe",
+    homeBrokers: "Ba Agenti abahimbisibwe",
     pageSale: "Property ez’okugurishwa",
     pageRent: "Property ez’okupangisibwa",
     pageStudents: "Obuturo bw’abanyeshuuri",
@@ -2233,7 +2238,7 @@ const I18N_UI_HARDENING = {
     heroListFree: "Teka Property",
     homeFeatured: "Property ezirondeddwa",
     homeMap: "Noonia ku Maapu",
-    homeBrokers: "Agents abalondeddwa",
+    homeBrokers: "Ba Agenti abalondeddwa",
     pageSale: "Property ez’okutunda",
     pageRent: "Property ez’okukodesa",
     pageStudents: "Obuturo bw’abaisomesa",
@@ -4974,6 +4979,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. All rights reserved.`
   },
   lg: {
+    brandCopy: "Yingini y'okunoonya ebintu mu Uganda. Teeka wiiki yo esooka ku bwereere, oluvannyuma ogikuume ku mukutu okuva ku UGX 20,000 buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Nyumya ku WhatsApp",
@@ -5000,12 +5006,13 @@ const FOOTER_I18N = {
     cookies: "Enkola ya cookies",
     antiFraud: "Enkola y'okulwanyisa obufere",
     help: "Aw'okufuna obuyambi",
-    report: "Loopa listing",
+    report: "Loopa ekirango",
     safety: "Amagezi g'obukuumi",
     growth: "Ebifo by'obulango ne SEO bya makaug.com bitegekeddwa okuyamba okukula.",
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   sw: {
+    brandCopy: "Injini ya utafutaji wa mali ya Uganda. Orodhesha wiki yako ya kwanza bure, kisha liweke hai kuanzia UGX 20,000 kwa mwezi. Wavuti au WhatsApp, wilaya zote 146.",
     whatsapp: "WhatsApp",
     email: "Barua pepe",
     chatWhatsapp: "Piga gumzo WhatsApp",
@@ -5038,6 +5045,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Haki zote zimehifadhiwa.`
   },
   ac: {
+    brandCopy: "Gin me yeny jami me Uganda. Ket cabit ni mukwongo me nono, ka dong igwok ni otii ki UGX 20,000 dwe ki dwe. Intanet onyo WhatsApp, distrik 146 ducu.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Lok i WhatsApp",
@@ -5064,12 +5072,13 @@ const FOOTER_I18N = {
     cookies: "Cik me cookies",
     antiFraud: "Cik me gengo bwola",
     help: "Kabedo me kony",
-    report: "Mii ngec ikom listing",
+    report: "Mii ngec ikom jami",
     safety: "Tam me gwokke",
     growth: "Kabedo me sponsor ki SEO pa makaug.com tye ka tic pi dong.",
     copyright: `© 2026 ${publicBrand()}. Twero ducu kigwoko.`
   },
   ny: {
+    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Teeka esabiiti yaawe y'okubanza aha busha, obwo ogumye ekirango yaawe kuruga UGX 20,000 buri kwezi. Aha mutimbagano nari WhatsApp, disiturikiti zoona 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Gamba kuri WhatsApp",
@@ -5096,12 +5105,13 @@ const FOOTER_I18N = {
     cookies: "Enkora ya cookies",
     antiFraud: "Enkora y'okurwanisa obufere",
     help: "Ah'okufuna obuhwezi",
-    report: "Gamba aha listing",
+    report: "Gamba aha kirango",
     safety: "Amagezi g'obwerinzi",
     growth: "Ebifo by'okuranga na SEO bya makaug.com bitebekanisiibwe kukuzya.",
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   rn: {
+    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Taho ekirango yaawe wiiki y'okubanza busha, bwanyima ogigumye erikukora kuruga aha UGX 20,000 buri kwezi. Aha mukutu nari WhatsApp, omu disiturikiti zoona 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Ganira kuri WhatsApp",
@@ -5128,12 +5138,13 @@ const FOOTER_I18N = {
     cookies: "Enkora ya cookies",
     antiFraud: "Enkora y'okurwanisa obufere",
     help: "Ah'okufuna obuhwezi",
-    report: "Gamba aha listing",
+    report: "Gamba aha kirango",
     safety: "Amagezi g'obwerinzi",
     growth: "Ebifo by'okuranga na SEO bya makaug.com bitebekanisiibwe kukuzya.",
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   sm: {
+    brandCopy: "Ekyuma ekinoonia ebintu ekya Uganda. Teka wiiki yo esooka bwereere, olwo okiryeyo ku mukutu okuva ku UGX 20,000 buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Yogera ku WhatsApp",
@@ -5160,12 +5171,13 @@ const FOOTER_I18N = {
     cookies: "Enkola ya cookies",
     antiFraud: "Enkola y'okulwanyisa obufere",
     help: "Aw'okufuna obuyambi",
-    report: "Loopa listing",
+    report: "Loopa ekirango",
     safety: "Amagezi g'obukuumi",
     growth: "Ebifo by'obulango ne SEO bya makaug.com bitegekeddwa okuyamba okukula.",
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   ar: {
+    brandCopy: "محرك البحث العقاري في أوغندا. أدرج عقارك مجاناً في الأسبوع الأول، ثم أبقه منشوراً بدءاً من UGX 20,000 شهرياً. عبر الويب أو WhatsApp، في كل المقاطعات الـ 146.",
     whatsapp: "WhatsApp",
     email: "البريد الإلكتروني",
     chatWhatsapp: "الدردشة على WhatsApp",
@@ -8910,7 +8922,14 @@ function setLang(lang, silent = false, rerender = true) {
   applyMarketplaceLanguageUI();
   if (typeof window.applyOffPlanLanguageUI === "function") window.applyOffPlanLanguageUI();
   if (!silent) toast(`${tr("languageSet")}: ${currentLang.toUpperCase()}`);
+  refreshBrokerProfileAbout();
 }
+
+window.addEventListener("makaug:site-i18n-ready", () => {
+  if ((currentLang || "en") === "en") return;
+  try { renderAll(); } catch (error) {}
+  refreshBrokerProfileAbout();
+});
 
 const API_BASE = (window.MAKAUG_API_BASE || "").replace(/\/$/, "");
 const GOOGLE_ADSENSE_CLIENT = (window.MAKAUG_ADSENSE_CLIENT || "").trim();
@@ -47516,8 +47535,99 @@ function brokerAvatarHtml(b, classes = "w-14 h-14", options = {}) {
   return `<div class="${wrapperClass}">${adminEscape(initials)}</div>`;
 }
 
+function fillAgentBioTemplate(template, params = {}) {
+  return String(template || "").replace(/\{(\w+)\}/g, (_all, key) => (params[key] == null ? "" : String(params[key])));
+}
+
+function joinAgentBioList(items = [], templates = {}) {
+  const list = items.filter(Boolean);
+  if (list.length <= 1) return list[0] || "";
+  if (list.length === 2) return fillAgentBioTemplate(templates["join.two"], { a: list[0], b: list[1] });
+  return fillAgentBioTemplate(templates["join.many"], {
+    head: list.slice(0, -1).join(templates["join.comma"] || ", "),
+    tail: list[list.length - 1]
+  });
+}
+
+// Same composer as services/agentPublicProfileService.js. A missing template
+// returns "" so the card keeps the English bio_display instead of a half sentence.
+function composeAgentBio(parts, templates) {
+  if (!Array.isArray(parts) || !parts.length || !templates) return "";
+  const place = (kind, areas) => {
+    const joined = joinAgentBioList(areas, templates);
+    if (!kind || !joined || !templates[`place.${kind}`]) return "";
+    return fillAgentBioTemplate(templates[`place.${kind}`], { areas: joined });
+  };
+  const countPhrase = (count) => (
+    Number(count) === 1
+      ? templates["count.one"]
+      : fillAgentBioTemplate(templates["count.many"], { n: count })
+  );
+  const sentences = parts.map((part) => {
+    if (part?.t === "specialises") {
+      const typeWords = part.one
+        ? [templates[`one.${part.types?.[0]}`] || ""]
+        : (part.types || []).map((key) => templates[`type.${key}`] || "");
+      if (!typeWords.length || typeWords.some((word) => !word)) return "";
+      const key = part.company ? "specialises.company" : "specialises";
+      if (!templates[key] || !templates["count.one"] || !templates["count.many"]) return "";
+      return fillAgentBioTemplate(templates[key], {
+        name: part.name || "",
+        company: part.company || "",
+        types: part.one ? typeWords[0] : joinAgentBioList(typeWords, templates),
+        place: place(part.place, part.areas),
+        count: countPhrase(part.count)
+      });
+    }
+    if (part?.t === "empty") {
+      const key = `empty.${part.role}`;
+      if (!templates[key]) return "";
+      return fillAgentBioTemplate(templates[key], {
+        name: part.name || "",
+        company: part.company || "",
+        place: place(part.areas?.length ? "covering" : "", part.areas)
+      });
+    }
+    if (part?.t === "price") {
+      const key = `price.${part.kind}`;
+      return templates[key] ? fillAgentBioTemplate(templates[key], part) : "";
+    }
+    if (part?.t === "cover") {
+      const areas = joinAgentBioList(part.areas, templates);
+      return areas && templates.cover ? fillAgentBioTemplate(templates.cover, { areas }) : "";
+    }
+    if (part?.t === "fallback") return templates.fallback || "";
+    return "";
+  });
+  if (sentences.some((sentence) => !sentence)) return "";
+  return sentences.join(" ");
+}
+
+function agentBioTemplates(lang = currentLang || "en") {
+  if (!lang || lang === "en") return null;
+  try {
+    const layer = window.__makaugSiteI18n;
+    return layer && typeof layer.templates === "function" ? layer.templates(lang) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Generated bios are composed from bio_parts in the visitor's language.
+// An agent's own bio is returned as they wrote it.
+function localizedAgentCardBio(agent = {}) {
+  const english = String(agent?.bio_display || agent?.public_summary?.bio_display || agent?.public_summary?.about_text || "").trim();
+  const source = agent?.bio_source || agent?.public_summary?.bio_source || "";
+  const parts = Array.isArray(agent?.bio_parts)
+    ? agent.bio_parts
+    : (Array.isArray(agent?.public_summary?.bio_parts) ? agent.public_summary.bio_parts : null);
+  if (source === "agent" || !parts || !parts.length) return english;
+  if ((currentLang || "en") === "en") return english;
+  return composeAgentBio(parts, agentBioTemplates(currentLang)) || english;
+}
+
 function brokerCardBioText(b = {}) {
-  const display = String(b?.bio_display || "").trim();
+  const display = localizedAgentCardBio(b);
   if (display) return display;
   return publicBrokerBio(b);
 }
@@ -47553,10 +47663,23 @@ function isInternalAgentReference(value) {
 // About paragraphs: the agent's own bio (if any) followed by the write-up the
 // server builds from their live listings; the old one-line bio otherwise.
 function brokerAboutParagraphs(broker = {}) {
+  const own = broker?.bio_source === "agent" || broker?.public_summary?.own_bio === true || broker?.public_summary?.bio_source === "agent";
+  if (!own) {
+    const localized = localizedAgentCardBio(broker);
+    if (localized) return [localized];
+  }
   const about = Array.isArray(broker?.public_summary?.about)
     ? broker.public_summary.about.map((text) => String(text || "").trim()).filter(Boolean)
     : [];
   return about.length ? about : [publicBrokerBio(broker)];
+}
+
+function refreshBrokerProfileAbout() {
+  if (!activeBrokerProfileId || currentPage !== "broker-profile") return;
+  const section = document.querySelector('#page-broker-profile [aria-labelledby="broker-about-heading"]');
+  const broker = findBrokerByIdIncludingLoadedProfile(activeBrokerProfileId);
+  if (!section || !broker) return;
+  section.innerHTML = `<h2 id="broker-about-heading" class="text-lg font-bold text-gray-900">About</h2>${brokerAboutParagraphs(broker).map((text) => `<p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(text)}</p>`).join("")}`;
 }
 
 function brokerAreasCoveredHtml(broker = {}) {
@@ -47640,7 +47763,7 @@ function brokerCardHtml(b, options = {}) {
         <p class="broker-card-loc"><i class="fas fa-location-dot" aria-hidden="true"></i><span>${adminEscape(b.area || "")}</span></p>
       </div>
       <div class="broker-card-side">
-        <p class="broker-card-count"><strong>${Number(b.listings) || 0}</strong> <span class="broker-card-count-long">${translateListingLabel("Active Listings")}</span><span class="broker-card-count-short">${translateListingLabel(Number(b.listings) === 1 ? "listing" : "listings")}</span></p>
+        <p class="broker-card-count"><strong>${Number(b.listings) || 0}</strong> <span class="broker-card-count-long">${translateListingLabel("Active Listings")}</span><span class="broker-card-count-short">${translateListingLabel(`${Number(b.listings) || 0} ${Number(b.listings) === 1 ? "listing" : "listings"}`)}</span></p>
         ${brokerIconActionsHtml(b, { labels: true })}
       </div>
     </article>`;
@@ -54317,7 +54440,7 @@ const LISTING_LABEL_I18N = {
     "Back to results": "Ddayo ku byavuddemu",
     "Sign Out": "Fuluma",
     "Registered": "Akwatiddwa",
-    "Active Listings": "Listing ezikola",
+    "Active Listings": "Ebirango ebikola",
     "Sales": "Kutunda",
     "Rating": "Okupima",
     "Call": "Kuba",
@@ -54574,7 +54697,7 @@ const LISTING_LABEL_I18N = {
     "Added today": "Kyataddwako leero",
     "Added recently": "Kyataddwako mu biseera eby'okumpi",
     "View all": "Laba byonna",
-    "All Agents": "Agents Bonna",
+    "All Agents": "Ba Agenti Bonna",
     "This location is attractive for owner-occupiers and long-term value growth.": "Ekifo kino kisikiriza nnyo abagenda okubeera mu maka gaabwe n'abanoonya okukula kw'omuwendo okumala ebbanga.",
     "Renters value this area for practical day-to-day access and flexible commuting.": "Abapangisi batwala ekitundu kino nga kikulu olw'okutuukirira obwangu ku bya buli lunaku n'entambula ennyangu.",
     "Students prefer this area for convenience, safety, and access to nearby campuses.": "Abayizi baagala ekitundu kino olw'obwangu, obukuumi, n'okutuuka ku campuses eziri okumpi.",
@@ -54970,7 +55093,7 @@ const LISTING_LABEL_I18N = {
     "Added today": "Imeongezwa leo",
     "Added recently": "Imeongezwa hivi karibuni",
     "View all": "Tazama zote",
-    "All Agents": "Agents wote",
+    "All Agents": "Mawakala wote",
     "This location is attractive for owner-occupiers and long-term value growth.": "Eneo hili linavutia wanaotaka kuishi wenyewe na wale wanaotafuta ukuaji wa thamani wa muda mrefu.",
     "Renters value this area for practical day-to-day access and flexible commuting.": "Wapangaji wanathamini eneo hili kwa urahisi wa maisha ya kila siku na usafiri unaobadilika kirahisi.",
     "Students prefer this area for convenience, safety, and access to nearby campuses.": "Wanafunzi wanapendelea eneo hili kwa urahisi, usalama, na kufikia kampasi zilizo karibu.",

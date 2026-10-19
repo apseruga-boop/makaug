@@ -34,6 +34,8 @@ function fixture() {
     brokerIconActionsHtml: (broker) => `<a href="/agents/${broker.id}">View profile</a>`,
     translateListingLabel: (label) => label,
     setBrokerMapMarkers: (rows) => mapCalls.push(rows.map((row) => row.id)),
+    currentLang: 'en',
+    window: {},
     fetch(...args) { fetches.push(args); throw new Error('avatar rendering must not fetch'); },
     apiRequest(...args) { fetches.push(args); throw new Error('avatar rendering must not call an API'); }
   });
@@ -41,6 +43,11 @@ function fixture() {
   vm.runInContext([
     declaration('brokerInitials'),
     declaration('publicBrokerBio'),
+    declaration('fillAgentBioTemplate'),
+    declaration('joinAgentBioList'),
+    declaration('composeAgentBio'),
+    declaration('agentBioTemplates'),
+    declaration('localizedAgentCardBio'),
     declaration('brokerCardBioText'),
     declaration('brokerCardMediaHtml'),
     declaration('brokerCardHtml'),

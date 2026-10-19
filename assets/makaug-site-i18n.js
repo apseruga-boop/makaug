@@ -22,7 +22,7 @@
   if (window.__makaugSiteI18n) return;
 
   var SUPPORTED = { lg: 1, sw: 1, ac: 1, ny: 1, rn: 1, sm: 1, am: 1, ar: 1 };
-  var VERSION = "20261003-site-i18n-v4";
+  var VERSION = "20261019-site-i18n-v5";
   var ATTRS = ["placeholder", "title", "aria-label", "alt", "data-tooltip"];
   var SKIP_SELECTOR = "script,style,noscript,code,pre,[data-no-translate],[contenteditable=true]";
 
@@ -45,13 +45,17 @@
   }
 
   function compilePack(raw) {
-    var pack = { phrases: Object.create(null), lower: Object.create(null), patterns: [] };
+    var pack = { phrases: Object.create(null), lower: Object.create(null), patterns: [], templates: Object.create(null) };
     var phrases = raw && raw.phrases ? raw.phrases : {};
     Object.keys(phrases).forEach(function (key) {
       var k = norm(key);
       if (!k || !phrases[key]) return;
       pack.phrases[k] = phrases[key];
       pack.lower[k.toLowerCase()] = phrases[key];
+    });
+    var templates = raw && raw.templates ? raw.templates : {};
+    Object.keys(templates).forEach(function (key) {
+      if (templates[key]) pack.templates[key] = templates[key];
     });
     (raw && raw.patterns ? raw.patterns : []).forEach(function (entry) {
       try {
@@ -353,6 +357,11 @@
       var target = lang || currentLang();
       if (target === "en" || !packs[target]) return text;
       return translateString(packs[target], text) || text;
+    },
+    templates: function (lang) {
+      var target = lang || currentLang();
+      var pack = packs[target];
+      return pack && pack.templates ? pack.templates : null;
     },
     load: loadPack
   };
