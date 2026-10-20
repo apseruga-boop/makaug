@@ -146,7 +146,15 @@
     "verifiedStay": "Nino ma kikakaso",
     "safetyView": "Nen kabedo dok iniang nga ma iculo bot en ma peya iculo.",
     "safetyName": "Pe icul i akaunt ma nyinge pat.",
-    "safetyReport": "Nong peko ki i listing ka tye gin ma pe atir."
+    "safetyReport": "Nong peko ki i listing ka tye gin ma pe atir.",
+    "extrasTitle": "Jami me wot pi bedo ni",
+    "extrasLead": "Yabe i kakube pa lawote. makaug pe time booking onyo cul.",
+    "extrasNote": "Kube me lawote: MakaUG twero nongo komishon",
+    "extrasTransfers": "Wot ki i airport",
+    "extrasEsims": "esimu eSIM",
+    "extrasTours": "Wot ki tic",
+    "extrasCars": "Kango motoka",
+    "extrasFlights": "Ndege"
   },
   "am": {
     "adCtaFind": "ማረፊያ ይፍልጉ",
@@ -237,7 +245,15 @@
     "verifiedStay": "የተረጋገጠ ቆይታ",
     "safetyView": "ቦታውን ይመልከቱ እና ከመክፈልዎ በፊት ለማን እንደሚከፍሉ ያረጋግጡ።",
     "safetyName": "ወደ ሌላ ስም ወዳለው አካውንት በጭራሽ አይክፈሉ።",
-    "safetyReport": "የተሳሳተ ነገር ካለ ከማስታወቂያው ላይ ችግሩን ያሳውቁ።"
+    "safetyReport": "የተሳሳተ ነገር ካለ ከማስታወቂያው ላይ ችግሩን ያሳውቁ።",
+    "extrasTitle": "ለቆይታዎ ተጨማሪ የጉዞ አገልግሎቶች",
+    "extrasLead": "በአጋር ጣቢያው ላይ ይከፈታል። makaug ቦታ አያስይዝም እንዲሁም ክፍያ አይቀበልም።",
+    "extrasNote": "የአጋር አገናኞች፦ MakaUG ኮሚሽን ሊያገኝ ይችላል",
+    "extrasTransfers": "የአየር ማረፊያ መጓጓዣ",
+    "extrasEsims": "ኢሲም ካርዶች",
+    "extrasTours": "ጉብኝቶች እና እንቅስቃሴዎች",
+    "extrasCars": "የመኪና ኪራይ",
+    "extrasFlights": "በረራዎች"
   },
   "ar": {
     "adCtaFind": "ابحث عن إقامة",
@@ -328,7 +344,15 @@
     "verifiedStay": "إقامة موثّقة",
     "safetyView": "عاين المكان وتأكد ممن تدفع له قبل أن تدفع.",
     "safetyName": "لا تدفع إلى حساب باسم مختلف.",
-    "safetyReport": "أبلغ عن مشكلة من صفحة الإعلان إذا كان هناك خطأ."
+    "safetyReport": "أبلغ عن مشكلة من صفحة الإعلان إذا كان هناك خطأ.",
+    "extrasTitle": "إضافات السفر لإقامتك",
+    "extrasLead": "يفتح على موقع الشريك. makaug لا تتولى الحجز ولا الدفع.",
+    "extrasNote": "روابط تابعة: قد تربح MakaUG عمولة",
+    "extrasTransfers": "توصيلات المطار",
+    "extrasEsims": "شرائح eSIM",
+    "extrasTours": "جولات وأنشطة",
+    "extrasCars": "تأجير سيارات",
+    "extrasFlights": "رحلات جوية"
   },
   "en": {
     "adCtaFind": "Find a stay",
@@ -419,7 +443,15 @@
     "verifiedStay": "Verified stay",
     "safetyView": "View the place and confirm who you are paying before you pay.",
     "safetyName": "Never pay into an account in a different name.",
-    "safetyReport": "Report a problem from the listing if something is wrong."
+    "safetyReport": "Report a problem from the listing if something is wrong.",
+    "extrasTitle": "Travel extras for your stay",
+    "extrasLead": "Opens on the partner site. makaug does not take the booking or the payment.",
+    "extrasNote": "Affiliate links: MakaUG may earn a commission",
+    "extrasTransfers": "Airport transfers",
+    "extrasEsims": "eSIMs",
+    "extrasTours": "Tours and activities",
+    "extrasCars": "Car rental",
+    "extrasFlights": "Flights"
   },
   "lg": {
     "adCtaFind": "Noonya we onoosula",
@@ -510,7 +542,15 @@
     "verifiedStay": "Okusula okukakasiddwa",
     "safetyView": "Labako ekifo era okakase ani gw’osasula nga tonnasasula.",
     "safetyName": "Tosasula ku akawunti erina erinnya eddala.",
-    "safetyReport": "Loopa ekizibu okuva ku listing singa waliwo ekikyamu."
+    "safetyReport": "Loopa ekizibu okuva ku listing singa waliwo ekikyamu.",
+    "extrasTitle": "Eby'okutambula eby'okwongerako ku bbeera yo",
+    "extrasLead": "Gulawo ku mukutu gw'omukago. makaug tewera booking era tefuna ssente.",
+    "extrasNote": "Link za affiliate: MakaUG eyinza okufuna komissioni",
+    "extrasTransfers": "Okutwalibwa okuva ku kisaawe ky'ennyonyi",
+    "extrasEsims": "ekaada eSIM",
+    "extrasTours": "Obulambuzi n'emirimu",
+    "extrasCars": "Okupangisa emmotoka",
+    "extrasFlights": "Ennyonyi"
   },
   "ny": {
     "adCtaFind": "Sherura ekyanya",
@@ -601,7 +641,15 @@
     "verifiedStay": "Okuraara okukakasibwe",
     "safetyView": "Rora ahantu kandi okakase ou orikuha sente otaraherereza.",
     "safetyName": "Otarahereza aha akaunti eine izina rindi.",
-    "safetyReport": "Tebeeka ekizibu kuruga aha listing ku orikureeba ekitarikwikiriza."
+    "safetyReport": "Tebeeka ekizibu kuruga aha listing ku orikureeba ekitarikwikiriza.",
+    "extrasTitle": "Eby'okutambura eby'okwongeraho aha kuguma kwawe",
+    "extrasLead": "Ahingurwa aha mukutu gw'omunywani. makaug tekora booking kandi tekwata sente.",
+    "extrasNote": "Link z'abafatanyabikorwa: MakaUG neyija kutunga komishoni",
+    "extrasTransfers": "Okutwarwa kuruga aha kisaawe ky'ennyonyi",
+    "extrasEsims": "ekaada eSIM",
+    "extrasTours": "Obulambuzi n'emirimo",
+    "extrasCars": "Okupangisa emotoka",
+    "extrasFlights": "Enyonyi"
   },
   "rn": {
     "adCtaFind": "Sherura ahantu",
@@ -692,7 +740,15 @@
     "verifiedStay": "Okuraara okukakasibwe",
     "safetyView": "Rora ahantu kandi okakase ou orikuha sente otarashashura.",
     "safetyName": "Otarashashura aha konti eine izina rindi.",
-    "safetyReport": "Menyesha ekizibu kuruga aha listing ku orikureeba ekitarikwikiriza."
+    "safetyReport": "Menyesha ekizibu kuruga aha listing ku orikureeba ekitarikwikiriza.",
+    "extrasTitle": "Ivy'urugendo vy'inyongera ku kuguma kwawe",
+    "extrasLead": "Irakingurwa ku rubuga rw'umufatanyabikorwa. makaug ntibuka kandi ntiyakira amafaranga.",
+    "extrasNote": "Link z'abafatanyabikorwa: MakaUG ishobora kugira komisiyo",
+    "extrasTransfers": "Ugutwarwa ku kibuga c'indege",
+    "extrasEsims": "amakarita eSIM",
+    "extrasTours": "Ingendo n'ibikorwa",
+    "extrasCars": "Gukodesha imodoka",
+    "extrasFlights": "Indege"
   },
   "sm": {
     "adCtaFind": "Noonya ekifo",
@@ -783,7 +839,15 @@
     "verifiedStay": "Okusula okukakasiddwa",
     "safetyView": "Laba ekifo era okakase ani gw’osasula nga tonnasasula.",
     "safetyName": "Tosasula ku akawunti erina erinnya eddala.",
-    "safetyReport": "Loopa ekizibu okuva ku listing singa waliwo ekikyamu."
+    "safetyReport": "Loopa ekizibu okuva ku listing singa waliwo ekikyamu.",
+    "extrasTitle": "Eby'okutambula eby'okwongerako ku bbeera yo",
+    "extrasLead": "Gulawo ku mukutu gw'omukago. makaug tewera booking era tefuna ssente.",
+    "extrasNote": "Link za affiliate: MakaUG eyinza okufuna komissioni",
+    "extrasTransfers": "Okutwalibwa okuva ku kisaawe ky'ennyonyi",
+    "extrasEsims": "ekaada eSIM",
+    "extrasTours": "Obulambuzi n'emirimu",
+    "extrasCars": "Okupangisa emmotoka",
+    "extrasFlights": "Ennyonyi"
   },
   "sw": {
     "adCtaFind": "Tafuta malazi",
@@ -874,7 +938,15 @@
     "verifiedStay": "Kukaa kulichothibitishwa",
     "safetyView": "Tazama mahali na uthibitishe unamlipa nani kabla hujalipa.",
     "safetyName": "Usilipe kwenye akaunti yenye jina tofauti.",
-    "safetyReport": "Ripoti tatizo kutoka kwenye tangazo likitokea kitu kibaya."
+    "safetyReport": "Ripoti tatizo kutoka kwenye tangazo likitokea kitu kibaya.",
+    "extrasTitle": "Vitu vya ziada vya safari kwa kukaa kwako",
+    "extrasLead": "Inafunguka kwenye tovuti ya mshirika. makaug haichukui uhifadhi wala malipo.",
+    "extrasNote": "Viungo vya washirika: MakaUG inaweza kupata kamisheni",
+    "extrasTransfers": "Usafiri wa uwanja wa ndege",
+    "extrasEsims": "kadi za eSIM",
+    "extrasTours": "Ziara na shughuli",
+    "extrasCars": "Kukodisha gari",
+    "extrasFlights": "Ndege"
   }
 };
 
@@ -1050,6 +1122,54 @@
       + '<p class="st-compare-label">' + esc(t('comparePrices')) + '</p>'
       + '<div class="st-compare-btns">' + buttons + '</div>'
       + '<p class="st-compare-note">' + esc(t('affiliateDisclosure')) + '</p></div>';
+  }
+
+  var EXTRA_GROUP_LABEL = {
+    transfers: 'extrasTransfers',
+    esims: 'extrasEsims',
+    tours: 'extrasTours',
+    cars: 'extrasCars',
+    flights: 'extrasFlights'
+  };
+
+  function fireAffiliateClick(partner, placement) {
+    try {
+      if (typeof fireClientGaEvent === 'function') {
+        fireClientGaEvent('affiliate_click', { partner: partner, placement: placement });
+      }
+    } catch (_error) {}
+  }
+
+  // Travel extras. Hidden until the runtime config lists a partner, which
+  // happens only after that partner's program id is set. Compare prices is a
+  // different block and is not built here.
+  function travelExtrasHtml(placement) {
+    var cfg = travelpayoutsConfig();
+    var groups = cfg.extras || [];
+    if (!cfg.marker || !groups.length) return '';
+    var sub = sanitizeSubId('st_extra_' + (placement || 'short-term'));
+    var body = groups.map(function (group) {
+      var labelKey = EXTRA_GROUP_LABEL[group.key];
+      if (!labelKey) return '';
+      var links = (group.partners || []).map(function (partner) {
+        if (!partner || !partner.url || !/^https:\/\//.test(partner.url)) return '';
+        var href = trackedHref(partner, partner.url, sub);
+        if (!href) return '';
+        return '<a class="st-extra-link" href="' + esc(href) + '" target="_blank" rel="sponsored nofollow noopener"'
+          + ' data-st-extra="' + esc(partner.key) + '" data-st-extra-placement="' + esc(placement) + '">'
+          + esc(partner.label) + '</a>';
+      }).join('');
+      if (!links) return '';
+      return '<div class="st-extra-group"><p class="st-extra-group-label">' + esc(t(labelKey)) + '</p>'
+        + '<div class="st-extra-links">' + links + '</div></div>';
+    }).join('');
+    if (!body) return '';
+    return '<section class="st-extras" data-st-extras="' + esc(placement) + '">'
+      + '<h2>' + esc(t('extrasTitle')) + '</h2>'
+      + '<p class="st-extras-lead">' + esc(t('extrasLead')) + '</p>'
+      + body
+      + '<p class="st-extras-note">' + esc(t('extrasNote')) + '</p>'
+      + '</section>';
   }
 
   function rememberPartner(row) {
@@ -1337,6 +1457,7 @@
       + '<div class="st-map-shell" id="st-map-shell" hidden><div id="st-map"></div></div>'
       + '</div>'
 
+      + travelExtrasHtml('short-term')
       + disclaimerBlock()
       + guestInfoBlock()
       + '</div>';
@@ -1962,6 +2083,7 @@
       + '</div>'
       + '</aside>'
       + '</div>'
+      + travelExtrasHtml('short-term-listing')
       + disclaimerBlock()
       + '</div>';
   }
@@ -2151,6 +2273,7 @@
           + esc(row.host_phone) + '</a></p>'
         : '')
       + compareButtonsHtml(row.title, hotelSubId(slug))
+      + travelExtrasHtml('short-term-listing')
       + '</div>';
   }
 
@@ -3384,6 +3507,10 @@
       state.partnerShown = 999;
       renderResults();
       return;
+    }
+    var extra = e.target.closest ? e.target.closest('[data-st-extra]') : null;
+    if (extra) {
+      fireAffiliateClick(extra.getAttribute('data-st-extra') || '', extra.getAttribute('data-st-extra-placement') || 'short-term');
     }
     var affiliate = e.target.closest ? e.target.closest('[data-st-affiliate]') : null;
     if (affiliate) {

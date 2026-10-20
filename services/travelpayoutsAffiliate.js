@@ -36,6 +36,133 @@ const BRAND_DEFS = [
   }
 ];
 
+// Travel extras for a stay: transfers, eSIMs, tours, cars and flights.
+// Hotel brands stay in BRAND_DEFS. Compare prices does not read this list.
+// A partner is omitted until TRAVELPAYOUTS_<PARTNER>_PROGRAM_ID is set, so the
+// block stays hidden until those values are approved. Campaign id is optional
+// and is added to the click URL when TRAVELPAYOUTS_<PARTNER>_CAMPAIGN_ID is set.
+// Destinations point at Entebbe Airport (EBB), Kampala or Uganda where the
+// partner has a page or search that accepts that place.
+const EXTRA_GROUPS = [
+  {
+    key: 'transfers',
+    partners: [
+      {
+        key: 'kiwitaxi',
+        label: 'Kiwitaxi',
+        programEnv: 'TRAVELPAYOUTS_KIWITAXI_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_KIWITAXI_CAMPAIGN_ID',
+        url: 'https://kiwitaxi.com/en/uganda/entebbe'
+      },
+      {
+        key: 'welcome_pickups',
+        label: 'Welcome Pickups',
+        programEnv: 'TRAVELPAYOUTS_WELCOME_PICKUPS_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_WELCOME_PICKUPS_CAMPAIGN_ID',
+        url: 'https://www.welcomepickups.com/kampala/airport-to-city/'
+      },
+      {
+        key: 'gettransfer',
+        label: 'GetTransfer',
+        programEnv: 'TRAVELPAYOUTS_GETTRANSFER_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_GETTRANSFER_CAMPAIGN_ID',
+        url: 'https://gettransfer.com/en/transfers/new?from_name=Entebbe%20International%20Airport&to_name=Kampala'
+      }
+    ]
+  },
+  {
+    key: 'esims',
+    partners: [
+      {
+        key: 'airalo',
+        label: 'Airalo',
+        programEnv: 'TRAVELPAYOUTS_AIRALO_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_AIRALO_CAMPAIGN_ID',
+        url: 'https://www.airalo.com/uganda-esim'
+      },
+      {
+        key: 'yesim',
+        label: 'Yesim',
+        programEnv: 'TRAVELPAYOUTS_YESIM_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_YESIM_CAMPAIGN_ID',
+        url: 'https://yesim.app/country/uganda/'
+      },
+      {
+        key: 'saily',
+        label: 'Saily',
+        programEnv: 'TRAVELPAYOUTS_SAILY_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_SAILY_CAMPAIGN_ID',
+        url: 'https://saily.com/esim-uganda/'
+      }
+    ]
+  },
+  {
+    key: 'tours',
+    partners: [
+      {
+        key: 'klook',
+        label: 'Klook',
+        programEnv: 'TRAVELPAYOUTS_KLOOK_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_KLOOK_CAMPAIGN_ID',
+        url: 'https://www.klook.com/en-US/search/result/?query=Kampala%2C%20Uganda'
+      },
+      {
+        key: 'kkday',
+        label: 'KKday',
+        programEnv: 'TRAVELPAYOUTS_KKDAY_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_KKDAY_CAMPAIGN_ID',
+        url: 'https://www.kkday.com/en/product/productlist?keyword=Kampala%20Uganda'
+      },
+      {
+        key: 'tiqets',
+        label: 'Tiqets',
+        programEnv: 'TRAVELPAYOUTS_TIQETS_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_TIQETS_CAMPAIGN_ID',
+        url: 'https://www.tiqets.com/en/search?q=Kampala%2C%20Uganda'
+      }
+    ]
+  },
+  {
+    key: 'cars',
+    partners: [
+      {
+        key: 'localrent',
+        label: 'Localrent',
+        programEnv: 'TRAVELPAYOUTS_LOCALRENT_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_LOCALRENT_CAMPAIGN_ID',
+        // Localrent publishes no Uganda city page. The query still names Kampala.
+        url: 'https://www.localrent.com/en/?city=Kampala&country=Uganda'
+      },
+      {
+        key: 'economybookings',
+        label: 'Economybookings',
+        programEnv: 'TRAVELPAYOUTS_ECONOMYBOOKINGS_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_ECONOMYBOOKINGS_CAMPAIGN_ID',
+        url: 'https://www.economybookings.com/en/search?pickup=Entebbe%20International%20Airport&iata=EBB'
+      }
+    ]
+  },
+  {
+    key: 'flights',
+    partners: [
+      {
+        key: 'kiwi',
+        label: 'Kiwi.com',
+        programEnv: 'TRAVELPAYOUTS_KIWI_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_KIWI_CAMPAIGN_ID',
+        url: 'https://www.kiwi.com/en/search/results/entebbe-uganda/anywhere'
+      },
+      {
+        key: 'aviasales',
+        label: 'Aviasales',
+        programEnv: 'TRAVELPAYOUTS_AVIASALES_PROGRAM_ID',
+        campaignEnv: 'TRAVELPAYOUTS_AVIASALES_CAMPAIGN_ID',
+        url: 'https://www.aviasales.com/search?origin_iata=EBB&destination_iata='
+      }
+    ]
+  }
+];
+
 function clean(value) {
   return String(value == null ? '' : value).trim();
 }
@@ -131,6 +258,55 @@ function trackedLink({ marker, programId, campaignId, url, subId } = {}) {
   return `https://tp.media/r?${params.toString()}`;
 }
 
+function extrasConfig(env = process.env) {
+  const marker = clean(env.TRAVELPAYOUTS_MARKER);
+  const groups = EXTRA_GROUPS.map((group) => ({
+    key: group.key,
+    partners: group.partners.map((partner) => {
+      const programId = clean(env[partner.programEnv]);
+      const url = clean(partner.url);
+      if (!programId || !/^https:\/\//i.test(url)) return null;
+      return {
+        key: partner.key,
+        label: partner.label,
+        programId,
+        campaignId: clean(env[partner.campaignEnv]),
+        url
+      };
+    }).filter(Boolean)
+  })).filter((group) => group.partners.length);
+  return {
+    marker,
+    groups,
+    enabled: Boolean(marker && groups.length)
+  };
+}
+
+function extraLinks({ marker, groups, subId } = {}) {
+  if (!clean(marker)) return [];
+  const links = [];
+  (Array.isArray(groups) ? groups : []).forEach((group) => {
+    (group.partners || []).forEach((partner) => {
+      const href = trackedLink({
+        marker,
+        programId: partner.programId,
+        campaignId: partner.campaignId,
+        url: partner.url,
+        subId
+      });
+      if (!href) return;
+      links.push({
+        key: partner.key,
+        label: partner.label,
+        group: group.key,
+        href,
+        subId: sanitizeSubId(subId)
+      });
+    });
+  });
+  return links;
+}
+
 function compareLinks({ marker, brands, hotelName, checkIn, checkOut, adults, subId } = {}) {
   if (!clean(marker)) return [];
   return (Array.isArray(brands) ? brands : []).map((brand) => {
@@ -183,9 +359,12 @@ function driveHeadSnippet(env = process.env) {
 module.exports = {
   DEFAULT_DRIVE_SRC,
   BRAND_DEFS,
+  EXTRA_GROUPS,
   brandSearchUrl,
   compareLinks,
   driveHeadSnippet,
+  extraLinks,
+  extrasConfig,
   hotelSubId,
   publicConfig,
   sanitizeSubId,

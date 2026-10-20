@@ -775,3 +775,57 @@
 #page-short-term .st-alert-wa {
   display: inline-flex; margin-top: 10px; color: #166534; font-weight: 800;
 }
+
+/* Travel extras. Same card language as the rest of the section, and the
+   links wrap onto a full-width row on a phone so they stay tappable. */
+#page-short-term .st-extras {
+  margin: 22px 0 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--st-line);
+  border-radius: 16px;
+  background: #fff;
+  max-width: 100%;
+}
+#page-short-term .st-extras h2 {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+#page-short-term .st-extras-lead,
+#page-short-term .st-extras-note {
+  margin: 0 0 12px;
+  font-size: .8rem;
+  color: var(--st-muted);
+  max-width: 70ch;
+}
+#page-short-term .st-extras-note { margin-bottom: 0; }
+#page-short-term .st-extra-group { margin: 0 0 12px; }
+#page-short-term .st-extra-group-label {
+  margin: 0 0 6px;
+  font-size: .78rem;
+  font-weight: 800;
+}
+#page-short-term .st-extra-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#page-short-term .st-extra-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--st-line);
+  background: var(--st-green-soft);
+  color: var(--st-accent-dark);
+  font-size: .84rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+#page-short-term .st-extra-link:hover { filter: brightness(0.97); }
+@media (max-width: 640px) {
+  #page-short-term .st-extras { padding: 14px 12px; }
+  #page-short-term .st-extra-link { flex: 1 1 100%; }
+}
