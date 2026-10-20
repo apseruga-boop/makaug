@@ -27,7 +27,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1" defer></script>
-  <script src="/assets/makaug-site-i18n.js?v=20261019-site-i18n-v8" defer></script>
+  <script src="/assets/makaug-site-i18n.js?v=20261020-site-i18n-v9" defer></script>
   <meta name="theme-color" content="#15803d">
   <script>
     (function () {
@@ -414,7 +414,7 @@
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" media="(min-width: 768px)" fetchpriority="high" data-home-hero-preload>
   <link rel="stylesheet" href="/assets/tailwind.css">
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
-  <link rel="stylesheet" href="/assets/short-term.css?v=20260916-short-term-v24">
+  <link rel="stylesheet" href="/assets/short-term.css?v=20261020-short-term-v25">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -10580,7 +10580,7 @@
       }
       function loadShortTermNow() {
         if (!window.__makaugShortTerm || window.__makaugShortTerm.enabled !== true) return Promise.resolve(false);
-        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20260916-short-term-v24", function () {
+        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261020-short-term-v25", function () {
           return !!(window.makaugShortTerm && typeof window.makaugShortTerm.route === "function");
         });
       }

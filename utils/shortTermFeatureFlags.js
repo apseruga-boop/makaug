@@ -62,7 +62,10 @@ function applyShortTermVisibility(html, env = process.env) {
 // SHORT_TERM_COUNTDOWN_TARGET overrides this, so if CAF moves the date it is a
 // config change rather than a deploy. Setting the variable to an unparseable
 // value hides the banner rather than showing something wrong.
-const { publicConfig: travelpayoutsPublicConfig } = require('../services/travelpayoutsAffiliate');
+const {
+  publicConfig: travelpayoutsPublicConfig,
+  extrasConfig: travelpayoutsExtrasConfig
+} = require('../services/travelpayoutsAffiliate');
 
 const AFCON_2027_KICKOFF = '2027-06-19T13:00:00.000Z';
 
@@ -88,6 +91,7 @@ function injectShortTermRuntimeConfig(html, env = process.env) {
   const source = String(html || '');
   if (!shortTermEnabled(env)) return source;
   const travelpayouts = travelpayoutsPublicConfig(env);
+  const extras = travelpayoutsExtrasConfig(env);
   const config = {
     enabled: true,
     countdown: shortTermCountdownEnabled(env) ? shortTermCountdownTarget(env) : null,
@@ -99,7 +103,9 @@ function injectShortTermRuntimeConfig(html, env = process.env) {
       marker: travelpayouts.marker,
       brands: travelpayouts.brands,
       enabled: travelpayouts.enabled,
-      driveEnabled: travelpayouts.driveEnabled
+      driveEnabled: travelpayouts.driveEnabled,
+      // Empty until a partner program id is set. Compare prices reads brands only.
+      extras: extras.groups
     }
   };
   const payload = JSON.stringify(config).replace(/</g, '\\u003c');

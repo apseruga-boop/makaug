@@ -122,7 +122,7 @@ test('protected admin and direct About/Advertise keep their ordered scripts afte
 test('an already complete document starts once and Short Term keeps its parallel independent startup', () => {
   const f = fixture({ readyState: 'complete', page: 'page-short-term', shortTerm: true });
   assert.equal(f.listeners.size, 0);
-  assert.deepEqual(f.scripts().map((script) => script.src), ['/assets/short-term.js?v=20260916-short-term-v24', '/assets/makaug-app.js?v=fixture%20hash%2Fwith%3Fchars']);
+  assert.deepEqual(f.scripts().map((script) => script.src), ['/assets/short-term.js?v=20261020-short-term-v25', '/assets/makaug-app.js?v=fixture%20hash%2Fwith%3Fchars']);
   assert.equal(f.appended.filter((node) => node.tagName === 'link').length, 1);
 });
 
