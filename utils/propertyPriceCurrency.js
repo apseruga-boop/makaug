@@ -74,6 +74,15 @@ function hasExplicitPriceCurrencyMarker(value) {
   return /\b(?:ugx|ush|shs?|usd|zar)\b|(?:^|\s)us\$\s*[\d.]|\$\s*[\d.]|(?:^|[^\w])r\s*\d/i.test(String(value ?? ''));
 }
 
+// "500M From Tarmac" and "500 metres from the main road" are distances.
+// The M/m is metres, not a million. A later "30M to 40M" is the price.
+function maskRoadDistanceAmounts(value) {
+  return String(value ?? '').replace(
+    /\b\d+(?:\.\d+)?\s*(?:metres?|meters?|m)\s+(?:off|from)\s+(?:the\s+)?(?:tarmac|main\s+road|road)\b/gi,
+    ' '
+  );
+}
+
 function parseSourcePrice(value) {
   if (value == null || value === '') return null;
   if (typeof value === 'number' && Number.isFinite(value)) return { amount: Math.round(value), currency: '' };
@@ -82,7 +91,7 @@ function parseSourcePrice(value) {
   // "18,5M" is a European decimal, not the "5M" after the comma. Keep it only
   // when a currency marker is already written next to it; otherwise drop it
   // so it cannot become UGX 5,000,000.
-  const original = String(value || '');
+  const original = maskRoadDistanceAmounts(value);
   const prepared = hasExplicitPriceCurrencyMarker(original)
     ? acceptEuropeanDecimalMagnitudes(original)
     : original.replace(EUROPEAN_DECIMAL_MAGNITUDE, ' ');
@@ -111,6 +120,11 @@ function parseSourcePrice(value) {
     if (/(price|cost|asking|selling at|sale price|going for|rent|@|\bat\b|for\b|only|negotiable|nego)\W*$/.test(before)) score += 2;
     if (/^\s*(per|\/|a)\s*(month|mo|year|yr|semester|sem|night)/.test(after)) score += 2;
     if (/^\s*(bed|bedroom|br\b|bath|toilet|acre|decimal|ft|feet|sqm|sq|m2|km|miles?|minutes?|mins?|%|units?|rooms?|storey|floors?|plots?\b)/.test(after)) score -= 8;
+    if (/^(?:m|mn)$/.test(suffix) && /^\s*(?:off|from)\s+(?:the\s+)?(?:tarmac|main\s+road|road)\b/.test(after)) score -= 12;
+    if (/^\s*(?:metres?|meters?)\s+(?:off|from)\s+/.test(after)) score -= 12;
+    // "30M to 40M" is a price range. Prefer it (the lower end, which is first)
+    // over a lone shorthand figure.
+    if (/^\s*(?:-|–|—|to)\s*\d/.test(after) || /\d(?:\s*(?:bn|billions?|b|mn|millions?|m|k|thousands?))?\s*(?:-|–|—|to)\s*$/.test(before)) score += 4;
     if (/x\s*$/.test(before) || /^\s*x\s*\d/.test(after) || /\d\s*x\s*\d/.test(near)) score -= 8; // 50x100
     const integerDigits = m[2].split('.')[0].length;
     const numberEnd = m.index + m[0].indexOf(m[2]) + m[2].length;
@@ -223,6 +237,7 @@ module.exports = {
   PRICE_PERIOD_ALIASES,
   normalizePricePeriodForWrite,
   acceptEuropeanDecimalMagnitudes,
+  maskRoadDistanceAmounts,
   parseSourcePrice,
   DEFAULT_USD_TO_UGX_RATE,
   DEFAULT_USD_TO_ZAR_RATE,

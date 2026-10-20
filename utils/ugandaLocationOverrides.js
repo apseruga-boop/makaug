@@ -197,11 +197,11 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'makaug_verified_location_override_20261010'
   },
   {
-    // Hoima Road, inside Wakiso Town Council. Not a Nansana ward.
-    // No coordinates until a cited point is added.
-    name: 'Nkoowe', district: 'Wakiso', town: 'Wakiso', level: 'area',
-    aliases: ['Nkoowe', 'Nkowe'],
-    source: 'makaug_verified_location_override_20261010'
+    // Hoima Road. Moderators pick Nkoowe itself as the town, not only as a
+    // neighbourhood under Wakiso Town Council.
+    name: 'Nkoowe', district: 'Wakiso', town: 'Nkoowe', level: 'town',
+    aliases: ['Nkoowe', 'Nkowe', 'Nkoowe Town'],
+    source: 'makaug_verified_location_override_20261020'
   },
   {
     // Housing estate in Kira, not a parish. No coordinates until a cited point.
@@ -236,7 +236,14 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
   // These names have more than one verified Uganda parent. Keeping one node
   // per parent makes an unqualified exact lookup ambiguous by construction;
   // a supplied district can still select the intended canonical node.
-  ...rows(['Gobero'], 'Wakiso', 'Wakiso'),
+  {
+    // Gobero sits in Kakiri sub-county. The search result is still "Gobero,
+    // Wakiso": town stays Wakiso, and Kakiri is the sub-county the Town
+    // dropdown must also offer.
+    name: 'Gobero', district: 'Wakiso', town: 'Wakiso', level: 'area', subcounty: 'Kakiri',
+    aliases: ['Gobero'],
+    source: 'makaug_verified_location_override'
+  },
   ...rows(['Gobero'], 'Mukono', 'Mukono'),
   ...rows(['Nakasajja'], 'Wakiso', 'Wakiso'),
   ...rows(['Nakasajja'], 'Mukono', 'Mukono'),

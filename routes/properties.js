@@ -2254,6 +2254,7 @@ function publicCanonicalLocationPayload(item = {}) {
     city: item.city || item.town || null,
     suburb: item.suburb || (item.level === 'suburb' ? (item.location || item.name) : null),
     town: item.town || '',
+    subcounty: item.subcounty || '',
     region: activeRegionForDistrict(IS_SOUTH_AFRICA ? province : item.district),
     level: item.level,
     type_label: IS_SOUTH_AFRICA
@@ -5114,9 +5115,13 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           listingPatchResult.changed_fields.includes('property_type')
           || Boolean(propertyExtraFieldsObject(current).human_verified_property_type)
         );
-      dataIntegrity = humanVerifiedPropertyType
-        ? listingDataIntegrityReport(current, { trustFormPropertyType: true })
-        : listingDataIntegrityReport(current);
+      const confirmedListingType = String(propertyExtraFieldsObject(current).staff_confirmed_listing_type || '').toLowerCase();
+      const trustStaffListingType = Boolean(confirmedListingType)
+        && confirmedListingType === String(current.listing_type || '').toLowerCase();
+      dataIntegrity = listingDataIntegrityReport(current, {
+        ...(humanVerifiedPropertyType ? { trustFormPropertyType: true } : {}),
+        ...(trustStaffListingType ? { trustStaffListingType: true } : {})
+      });
       if (!dataIntegrity.ok) {
         if (!handleApprovalBlocker({
           code: 'data_integrity',

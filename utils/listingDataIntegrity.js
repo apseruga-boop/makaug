@@ -257,6 +257,24 @@ function deriveListingClassification(record = {}, options = {}) {
   }
 
   let listingType = currentType;
+  // A moderator who saves sale, rent, land, commercial or student has decided
+  // the category. Source text that still looks mixed must not keep
+  // category_ambiguous on that listing.
+  const confirmedType = normalizedListingType(object(record.extra_fields).staff_confirmed_listing_type);
+  const trustStaffType = (options.trustStaffListingType === true || (confirmedType && confirmedType === currentType))
+    && ['sale', 'rent', 'land', 'commercial', 'student'].includes(currentType);
+  if (trustStaffType) {
+    categoryAmbiguous = false;
+    ambiguityReason = '';
+    listingType = currentType;
+    if (currentType === 'land') physicalType = 'land';
+    else if (currentType === 'commercial') physicalType = 'commercial';
+    else if (currentType === 'student') physicalType = 'student';
+    else {
+      physicalType = 'residential';
+      if (!transactionIntent) transactionIntent = currentType;
+    }
+  }
   if (!categoryAmbiguous) {
     if (physicalType === 'student') listingType = 'student';
     else if (physicalType === 'land') listingType = 'land';
@@ -461,17 +479,68 @@ function listingDataIntegrityReport(record = {}, options = {}) {
   };
 }
 
+const STAFF_EXPLICIT_LISTING_TYPES = new Set(['sale', 'rent', 'land', 'commercial', 'student']);
+
+function integrityIssueCodes(extra = {}) {
+  const review = object(extra.data_integrity_review);
+  const fromReview = Array.isArray(review.issue_codes)
+    ? review.issue_codes
+    : (Array.isArray(review.issues) ? review.issues.map((issue) => issue?.code) : []);
+  const stored = Array.isArray(extra.data_integrity_issue_codes) ? extra.data_integrity_issue_codes : [];
+  return [...new Set([...stored, ...fromReview].map((code) => compact(code)).filter(Boolean))];
+}
+
+// Saving an explicit listing type drops category_ambiguous. Other integrity
+// codes stay, and the review flag stays on only while one of those remains.
+function categoryAmbiguousClearedExtra(existingExtra = {}, listingType = '', { at = new Date().toISOString(), by = '' } = {}) {
+  const type = normalizedListingType(listingType);
+  if (!STAFF_EXPLICIT_LISTING_TYPES.has(type)) return null;
+  const extra = object(existingExtra);
+  const codes = integrityIssueCodes(extra);
+  const nextCodes = codes.filter((code) => code !== 'category_ambiguous');
+  const review = object(extra.data_integrity_review);
+  const hadReview = Object.keys(review).length > 0;
+  const nextReview = hadReview ? {
+    ...review,
+    issue_codes: (Array.isArray(review.issue_codes) ? review.issue_codes : nextCodes).filter((code) => compact(code) !== 'category_ambiguous'),
+    issues: (Array.isArray(review.issues) ? review.issues : []).filter((issue) => issue?.code !== 'category_ambiguous'),
+    ok: nextCodes.length === 0 ? true : review.ok
+  } : null;
+  return {
+    staff_confirmed_listing_type: type,
+    staff_confirmed_listing_type_at: at,
+    ...(by ? { staff_confirmed_listing_type_by: by } : {}),
+    data_integrity_issue_codes: nextCodes,
+    data_integrity_review_required: nextCodes.length > 0,
+    ...(nextReview ? { data_integrity_review: nextReview } : {})
+  };
+}
+
+function moderationReasonWithoutCategoryAmbiguous(reason = '') {
+  let text = compact(reason).replace(/\bcategory_ambiguous\b/gi, '');
+  text = text
+    .replace(/\s*,\s*(?=,|$)/g, '')
+    .replace(/:\s*,/g, ':')
+    .replace(/:\s*$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (/^data integrity review required:?$/i.test(text)) return '';
+  return text;
+}
+
 module.exports = {
   HOSPITALITY_PATTERN,
   HOSPITALITY_SHORT_TERM_MESSAGE,
   MAX_CANONICAL_PRICE_UGX,
   MIN_RECURRING_PRICE_UGX,
   MIN_WHOLE_PROPERTY_PRICE_UGX,
+  categoryAmbiguousClearedExtra,
   deriveListingClassification,
   hasContactPath,
   hasPriceOnApplication,
   hasSpecificLocation,
   listingDataIntegrityReport,
   listingEvidenceText,
+  moderationReasonWithoutCategoryAmbiguous,
   normalizedListingType,
 };

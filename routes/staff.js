@@ -23,7 +23,7 @@ const { priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = req
 const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
 const { listingDirectLookup, listingDirectLookupClause, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
 const { loadListingMediaSummaries, listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
-const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
+const { categoryAmbiguousClearedExtra, listingDataIntegrityReport, moderationReasonWithoutCategoryAmbiguous } = require('../utils/listingDataIntegrity');
 const {
   districtForKnownArea,
   districtsForKnownLocationText,
@@ -2958,6 +2958,13 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     extraPatch.students_welcome = boolField(patch.students_welcome);
   }
   if (sourcePostDate?.ok) Object.assign(extraPatch, staffSourcePostDateExtra(sourcePostDate, { actorId: actorId(req) }));
+  const explicitListingType = cleanText(patch.listing_type).toLowerCase();
+  if (['sale', 'rent', 'land', 'commercial', 'student'].includes(explicitListingType)) {
+    const clearedIntegrity = categoryAmbiguousClearedExtra(existingExtra, explicitListingType, {
+      by: actorId(req)
+    });
+    if (clearedIntegrity) Object.assign(extraPatch, clearedIntegrity);
+  }
   if (hierarchy.region) extraPatch.region = hierarchy.region;
   else if (Object.prototype.hasOwnProperty.call(patch, 'region')) extraPatch.region = null;
   if (hierarchy.city) extraPatch.city = hierarchy.city;
@@ -3074,8 +3081,13 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     }));
   }
   const reason = cleanText(reviewPatch.reason);
+  const clearedCategoryReason = ['sale', 'rent', 'land', 'commercial', 'student'].includes(explicitListingType)
+    ? moderationReasonWithoutCategoryAmbiguous(existing.moderation_reason)
+    : null;
   if (reason) add('moderation_reason', reason);
-  else if (resolvedPriceQuality) {
+  else if (clearedCategoryReason != null && clearedCategoryReason !== cleanText(existing.moderation_reason)) {
+    add('moderation_reason', clearedCategoryReason || null);
+  } else if (resolvedPriceQuality) {
     const nextNote = priceEvidenceNote(existing.moderation_reason, resolvedPriceQuality);
     if (nextNote !== cleanText(existing.moderation_reason)) add('moderation_reason', nextNote || null);
   }
@@ -3436,7 +3448,10 @@ function staffBulkModerationDecision(row = {}, approvedIndex = {}) {
       details: priceQuality.reasons
     };
   }
-  const dataIntegrity = listingDataIntegrityReport(row);
+  const confirmedListingType = String(safeJsonObject(row.extra_fields, {}).staff_confirmed_listing_type || '').toLowerCase();
+  const dataIntegrity = listingDataIntegrityReport(row, {
+    trustStaffListingType: Boolean(confirmedListingType) && confirmedListingType === String(row.listing_type || '').toLowerCase()
+  });
   if (!dataIntegrity.ok) {
     return {
       id: row.id,
@@ -4086,11 +4101,15 @@ router.get('/properties/review-queue', async (req, res, next) => {
 
     if (directLookup) {
       // An MK ref, its 6-character suffix, or a property id is that listing,
-      // including one that is already live. Title and area searches stay on
-      // the pending queue. Same staff sign-in as the rest of this router.
+      // including one that is already live. Same staff sign-in as the rest of this router.
       filters.length = 0;
       filters.push(listingDirectLookupClause('p', directLookup, values));
     } else if (search) {
+      // Title, area, source and phone searches include live listings so a
+      // moderator can check duplicates. Removed and rejected rows stay out.
+      // The queue with no search term stays pending.
+      filters.length = 0;
+      filters.push(staffVisiblePropertyWhere('p'));
       filters.push(propertyListingSearchClause('p', search, values));
     }
     if (listingType && LISTING_TYPES.includes(listingType)) {
@@ -4198,6 +4217,9 @@ router.get('/properties/review-queue', async (req, res, next) => {
           count_filter: 'staff_listing_lookup_any_status',
           status_scope: 'any',
           lookup: directLookup.kind
+        } : search ? {
+          count_filter: 'staff_visible_pending_and_live',
+          status_scope: 'pending_and_live'
         } : { status_scope: 'pending' }),
         search: search || null,
         source_quality_filter: 'stored_suppression_flag_only',

@@ -83,6 +83,8 @@ function getDistrictLocationTree(district) {
   locations.forEach((item) => {
     const town = clean(item.town) || (['city', 'town'].includes(item.level) ? item.location : `${cleanDistrict} Town`);
     addToTown(town, item);
+    const subcounty = clean(item.subcounty);
+    if (subcounty && subcounty !== town) addToTown(subcounty, item);
     if (cleanDistrict === 'Kampala') {
       kampalaTownsForArea(item.location)
         .filter((extraTown) => extraTown && extraTown !== town)

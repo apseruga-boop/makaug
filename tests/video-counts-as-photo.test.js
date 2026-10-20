@@ -97,7 +97,7 @@ test('"Make a cover from the video": a TikTok page gives a plain error; a video 
   const property = { id: 'p1', status: 'pending', video_still_count: 0, extra_fields: { video_url: TIKTOK_PAGE } };
   const refused = await scheduler.makeVideoCoverForListing(fakeDb(property), 'p1', { backfill: {} });
   assert.equal(refused.ok, false);
-  assert.match(refused.error, /TikTok, YouTube or Facebook page, not a video file we can open/);
+  assert.match(refused.error, /TikTok or Facebook page, not a video file we can open/);
   const calls = [];
   const backfill = {
     FRAME_CANDIDATE_COUNT: 8,

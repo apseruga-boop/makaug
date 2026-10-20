@@ -154,7 +154,7 @@ test('the staff "Extracted from source text" panel: MK-20261009-D2F081 reads UGX
 test('staff queue rows show "Price on application" and a red "check price" tag', () => {
   const src = read('assets/makaug-app.js');
   assert.match(src, /data-check-price="1"[^>]*>check price<\/span>/);
-  assert.match(src, /\$\{adminEscape\(item\.title \|\| "Untitled listing"\)\} \$\{brokerBadge\} \$\{checkPriceTag\}<\/div>/);
+  assert.match(src, /\$\{adminEscape\(item\.title \|\| "Untitled listing"\)\} \$\{liveListing \? staffLiveListingBadgeHtml\(\) : ""\} \$\{brokerBadge\} \$\{checkPriceTag\}<\/div>/);
   assert.match(src, /function fmtListingPrice\(p = \{\}, periodOverride = null\)/);
   assert.match(read('server.js'), /window\.MAKAUG_PRICE_BOUNDS = \$\{String\(process\.env\.COUNTRY_CODE \|\| 'UG'\)\.trim\(\)\.toUpperCase\(\) === 'UG' \? JSON\.stringify\(PRICE_BOUNDS_UGX\) : 'false'\};/);
 });

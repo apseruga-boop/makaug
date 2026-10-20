@@ -7,7 +7,9 @@
 
 const PLOT_DIMENSION = /\b\d{1,4}\s*(?:x|by|\*|×)\s*\d{1,4}(?:\s*(?:ft|fts|feet|m))?\b/gi;
 
-const APARTMENT_BLOCK_PATTERN = /\b(?:apartment(?:\s+blocks?)?|blocks?\s+of\s+(?:apartments?|flats?|rentals?)|rental\s+units?\s+apartment)\b/i;
+// "apartment block" / "block of apartments" is a building. A lone "apartment"
+// is one dwelling, so the optional group must not swallow that word.
+const APARTMENT_BLOCK_PATTERN = /\b(?:apartments?\s+blocks?|blocks?\s+of\s+(?:apartments?|flats?|rentals?)|rental\s+units?\s+apartments?)\b/i;
 
 function isApartmentBlockText(value = '') {
   const text = String(value || '');

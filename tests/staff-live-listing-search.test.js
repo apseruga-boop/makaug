@@ -76,17 +76,18 @@ test('an MK ref, its suffix, or a property id is a direct lookup; a place name i
   assert.equal(ilike.includes('inquiry_reference ='), false);
 });
 
-test('the staff review queue drops the pending filter only for a direct lookup', () => {
+test('the staff review queue searches pending and live listings, and a direct lookup still drops the queue filter', () => {
   const route = STAFF.slice(
     STAFF.indexOf("router.get('/properties/review-queue'"),
     STAFF.indexOf("router.patch('/profile'")
   );
-  assert.match(route, /const filters = \[actionablePendingReviewWhere\('p'\)\];/);
+  assert.match(route, /const filters = \[staffReviewQueueWhereSql\(segment, 'p'\)\];/);
   assert.match(route, /const directLookup = listingDirectLookup\(search\)/);
   assert.match(route, /if \(directLookup\) \{[\s\S]*filters\.length = 0;[\s\S]*listingDirectLookupClause\('p', directLookup, values\)/);
-  assert.match(route, /else if \(search\) \{\s*filters\.push\(propertyListingSearchClause\('p', search, values\)\);/);
+  assert.match(route, /else if \(search\) \{[\s\S]*filters\.length = 0;[\s\S]*staffVisiblePropertyWhere\('p'\)[\s\S]*filters\.push\(propertyListingSearchClause\('p', search, values\)\);/);
   assert.match(route, /status_scope: 'any'/);
   assert.match(route, /lookup: directLookup\.kind/);
+  assert.match(route, /status_scope: 'pending_and_live'/);
   assert.match(route, /status_scope: 'pending'/);
   assert.match(STAFF, /router\.use\(requireStaffAccess\)/);
 
@@ -159,10 +160,11 @@ test('the dashboard search opens the same editor and badges a live listing', () 
   assert.match(APP, /No listing matches/);
   assert.match(APP, /No pending listing matches/);
   assert.match(APP, /statusScope === "any" \? "any status"/);
+  assert.match(APP, /pending_and_live/);
   assert.match(APP, /openStaffListingPreview\(openId\)/);
   assert.match(APP, /staffListingDirectLookup\(state\.term\)/);
   assert.match(HTML, /id="staff-review-queue-search"[^>]*oninput="staffSearchReviewQueue\(this\.value\)"/);
-  assert.match(HTML, /placeholder="MK ref or property id \(any status\), or pending title, area, district, phone, source"/);
+  assert.match(HTML, /placeholder="MK ref or property id \(any status\), or title, area, district, phone, source \(pending and live\)"/);
 });
 
 test('the lookup and the editor stay behind staff sign-in', async () => {
@@ -225,10 +227,11 @@ test('a live listing is found by ref, suffix and id, and save keeps its status',
     assert.deepEqual(byId.body.data.map((row) => row.id), [id]);
     assert.equal(byId.body.meta.lookup, 'id');
     const byTitle = await auth(request(app).get('/api/staff/properties/review-queue?search=Kitende%20waiting'));
-    assert.equal(byTitle.body.meta.status_scope, 'pending');
+    assert.equal(byTitle.body.meta.status_scope, 'pending_and_live');
     assert.deepEqual(byTitle.body.data.map((row) => row.id), [pendingId]);
     const liveTitle = await auth(request(app).get('/api/staff/properties/review-queue?search=Plot%20in%20Kitende'));
-    assert.equal(liveTitle.body.data.some((row) => row.id === id), false);
+    assert.equal(liveTitle.body.meta.status_scope, 'pending_and_live');
+    assert.equal(liveTitle.body.data.some((row) => row.id === id), true);
     const preview = await auth(request(app).get(`/api/staff/properties/${id}/preview`));
     assert.equal(preview.status, 200);
     assert.equal(preview.body.data.status, 'approved');
