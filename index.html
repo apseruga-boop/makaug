@@ -27,7 +27,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1" defer></script>
-  <script src="/assets/makaug-site-i18n.js?v=20261020-site-i18n-v9" defer></script>
+  <script src="/assets/makaug-site-i18n.js?v=20261020-site-i18n-v10" defer></script>
   <meta name="theme-color" content="#15803d">
   <script>
     (function () {
@@ -5622,77 +5622,23 @@
   </div>
 
   <div id="page-ai-chatbot" class="page">
-    <div class="bg-gradient-to-br from-green-900 via-green-800 to-emerald-800 py-10 text-white">
-      <div class="max-w-7xl mx-auto px-4">
-        <h1 id="ai-page-title" class="text-3xl md:text-4xl font-black serif">Discover our AI Chatbot</h1>
-        <p id="ai-page-sub" class="text-green-100 mt-2 max-w-3xl">Use WhatsApp to list property, search by area, request broker contacts, and receive instant property links in your preferred Ugandan language.</p>
+    <div class="max-w-7xl mx-auto px-4 py-8">
+      <h1 id="ai-page-title" class="text-3xl md:text-4xl font-black text-gray-950">Find property on WhatsApp</h1>
+      <p id="ai-page-sub" class="mt-2 max-w-2xl text-sm text-gray-600">Search, list or find a broker in 9 languages.</p>
+      <div id="discover-chips" class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Quick searches">
+        <button type="button" data-discover-chip="rent-ntinda" data-discover-label="chipRentNtinda" onclick="loadDiscoverChip('rent-ntinda')" class="discover-chip inline-flex min-h-11 items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="true">Rent in Ntinda</button>
+        <button type="button" data-discover-chip="buy-kira" data-discover-label="chipBuyKira" onclick="loadDiscoverChip('buy-kira')" class="discover-chip inline-flex min-h-11 items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Buy in Kira</button>
+        <button type="button" data-discover-chip="land-mukono" data-discover-label="chipLandMukono" onclick="loadDiscoverChip('land-mukono')" class="discover-chip inline-flex min-h-11 items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Land in Mukono</button>
+        <button type="button" data-discover-chip="near-makerere" data-discover-label="chipNearMakerere" onclick="loadDiscoverChip('near-makerere')" class="discover-chip inline-flex min-h-11 items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Near Makerere</button>
+        <button type="button" data-discover-chip="short-stay" data-discover-label="chipShortStay" onclick="loadDiscoverChip('short-stay')" class="discover-chip inline-flex min-h-11 items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Short stay Entebbe</button>
+        <button type="button" data-discover-chip="broker" data-discover-label="chipBroker" onclick="loadDiscoverChip('broker')" class="discover-chip inline-flex min-h-11 items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Find a broker</button>
       </div>
-    </div>
-    <div class="max-w-7xl mx-auto px-4 py-8 space-y-6">
-      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-        <div class="bg-white border border-green-100 rounded-2xl p-5">
-          <div class="w-11 h-11 rounded-xl bg-green-100 text-green-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-house"></i></div>
-          <h3 id="ai-card-1-title" class="text-lg font-bold text-gray-900">List Property in Minutes</h3>
-          <p id="ai-card-1-sub" class="text-sm text-gray-600 mt-1">Send property details and photos on WhatsApp, then complete OTP verification in one flow.</p>
-        </div>
-        <div class="bg-white border border-green-100 rounded-2xl p-5">
-          <div class="w-11 h-11 rounded-xl bg-green-100 text-green-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-location-dot"></i></div>
-          <h3 id="ai-card-2-title" class="text-lg font-bold text-gray-900">Search by Shared Location</h3>
-          <p id="ai-card-2-sub" class="text-sm text-gray-600 mt-1">Share your location and get matched listings for sale or rent nearby with direct links.</p>
-        </div>
-        <div class="bg-white border border-green-100 rounded-2xl p-5">
-          <div class="w-11 h-11 rounded-xl bg-green-100 text-green-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-user-tie"></i></div>
-          <h3 id="ai-card-3-title" class="text-lg font-bold text-gray-900">Find a Verified Broker</h3>
-          <p id="ai-card-3-sub" class="text-sm text-gray-600 mt-1">Ask for broker contacts by district, speciality, or language and get options instantly.</p>
-        </div>
-      </div>
-
-      <div class="grid lg:grid-cols-2 gap-6">
-        <div class="bg-white border border-green-100 rounded-2xl p-6">
-          <h2 id="ai-flow-title" class="text-2xl font-bold text-gray-900 mb-4">How the chatbot conversation flows</h2>
-          <div class="chatbot-phone">
-            <div class="chatbot-phone-head">
-              <span>makaug bot</span>
-              <span class="text-green-200 text-xs">● online</span>
-            </div>
-            <div class="chatbot-bubble-wrap">
-              <div class="chatbot-bubble bot"><span id="ai-flow-1">Welcome to makaug. Reply 1 to list, 2 to search, 3 to find a broker.</span><span class="chatbot-time">09:01</span></div>
-              <div class="chatbot-bubble user"><span id="ai-flow-2">2 - Search near my location</span><span class="chatbot-time">09:01 ✓✓</span></div>
-              <div class="chatbot-bubble bot"><span id="ai-flow-3">Share location and budget. I will send matching listings with links.</span><span class="chatbot-time">09:02</span></div>
-              <div class="chatbot-bubble user"><span id="ai-flow-4">Location shared + budget USh 1.5M rent</span><span class="chatbot-time">09:02 ✓✓</span></div>
-              <div class="chatbot-bubble bot">
-                <span id="ai-flow-5">Here are 5 matching properties in your area. Tap any link to view details.</span>
-                <div class="chatbot-listing-card">
-                  <img src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=900&q=80" alt="WhatsApp property result preview">
-                  <div class="chatbot-listing-card-body">
-                    <div class="font-bold">3-bed home in Ntinda</div>
-                    <div class="text-green-700 font-semibold">USh 1.5M/mo</div>
-                    <div class="text-gray-500">0.8 km away • Call or WhatsApp broker</div>
-                  </div>
-                </div>
-                <span class="chatbot-time">09:03</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="bg-white border border-green-100 rounded-2xl p-6">
-          <h2 id="ai-benefits-title" class="text-2xl font-bold text-gray-900 mb-4">What you can do right now</h2>
-          <ul class="space-y-3 text-sm text-gray-700">
-            <li id="ai-benefit-1" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>List a property with guided prompts and photo checklist.</span></li>
-            <li id="ai-benefit-2" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Search properties by district, area, budget, beds, and purpose.</span></li>
-            <li id="ai-benefit-3" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Get direct WhatsApp and call contacts for matching brokers.</span></li>
-            <li id="ai-benefit-4" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Use the chatbot in 9 languages with fast replies.</span></li>
-            <li id="ai-benefit-5" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Explore off-plan projects or register a new development for staff review.</span></li>
-          </ul>
-          <a id="ai-cta-btn" href="https://wa.me/256780863394?text=Hello+makaug,+I+want+to+use+the+AI+chatbot" target="_blank" rel="noopener noreferrer" class="inline-flex mt-5 items-center gap-2 bg-green-600 hover:bg-green-500 text-white rounded-xl px-5 py-3 font-semibold" data-public-whatsapp-link data-whatsapp-context="ai-chatbot">
-            <i class="fab fa-whatsapp text-lg"></i> Start Chatbot on WhatsApp
-          </a>
-        </div>
-      </div>
-      <div id="web-ai-chatbot" class="rounded-3xl border border-blue-100 bg-white p-4 md:p-5 shadow-sm" data-ai-chatbot-live-panel="1" data-ask-ai-clean-singlebar="1">
-        <div data-ask-ai-inline-scope="all" data-ask-ai-inline-context="discover"></div>
-      </div>
-      <section class="rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="ai-chatbot"></section>
+      <p id="discover-results-note" class="mt-4 text-sm text-gray-600" aria-live="polite"></p>
+      <div id="discover-results" class="mt-3 grid grid-cols-1 gap-4 min-[700px]:grid-cols-2 xl:grid-cols-4"></div>
+      <a id="ai-cta-btn" href="https://wa.me/256780863394?text=Hello+makaug,+I+want+to+use+the+AI+chatbot" target="_blank" rel="noopener noreferrer" class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#166534] px-5 py-3 font-semibold text-white hover:bg-[#14532d] sm:w-auto" data-public-whatsapp-link data-whatsapp-context="ai-chatbot">
+        <i class="fab fa-whatsapp text-lg"></i> Continue on WhatsApp
+      </a>
+      <section class="mt-8 rounded-3xl border border-gray-100 bg-white p-5 md:p-6" data-howto-video-grid="ai-chatbot"></section>
     </div>
   </div>
 

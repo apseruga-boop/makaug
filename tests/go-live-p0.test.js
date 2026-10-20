@@ -1041,7 +1041,9 @@ function run() {
     assert(frontendSource.includes(previewPath), `missing dashboard preview link: ${previewPath}`);
   }
   assert(healthRoutes.includes("router.get('/migrations'"), 'health migration status route should exist');
-  assert(frontendSource.includes('data-ai-chatbot-live-panel="1"'), 'AI chatbot route should expose a connected live task panel');
+  assert(!frontendSource.includes('id="web-ai-chatbot"'), 'discover page should not mount the describe-what-you-want box');
+  assert(frontendSource.includes('data-discover-chip="rent-ntinda"'), 'discover page should offer quick search chips');
+  assert(frontendSource.includes('function loadDiscoverChip'), 'discover chips should load live results');
   assert(frontendSource.includes('submitAiChatbotPrompt'), 'AI chatbot prompt should be wired to a safe API/fallback flow');
   assert(aiRoutes.includes('captureLearningEvent'), 'AI assistant API should capture conversation events');
   assert(aiRoutes.includes('conversation_logged'), 'AI assistant API should report that backend logging happened');
