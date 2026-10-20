@@ -77,7 +77,11 @@
     "d6Body": "Tii ki report link i listing mo keken. Wan wagolo listing woko.",
     "d6Lead": "Tit pi gin mo keken ma nen marac.",
     "days": "nino",
-    "discTitle": "Kwan man con ma peya i cwalo kop bot ngat mo",
+    "discTitle": "Pe i cul peya ineno kabedo",
+    "safetyMore": "Kwano lok ducu me gwoko kwo",
+    "infoLead": "Jami abicel ma mite ngeyo.",
+    "extrasPartnersNamed": "Nying keken. makaug pe keto logo gi. Kakube yabo kakube pa lawot.",
+    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
     "emptyFilters": "Pe tye gin mo marwate ki magi. Tem yaro nino onyo kabedo.",
     "emptyNone": "Pe tye kabedo me nino manok ma kityeko kete. Ka itye ki kabedo i Uganda ma ipangisa i nino acel acel, kete i makaug.",
     "guests": "Welo",
@@ -108,7 +112,7 @@
     "maxNight": "Wel madit i nino acel",
     "min": "dakika",
     "newListing": "Manyen",
-    "partnerBadge": "Hotel",
+    "partnerBadge": "Otel",
     "partnerHeading": "Hotel i Uganda",
     "partnerNote": "Otel magi oa ki bot lawot me wot, ki nyuto calo tyen lok. makaug pe keto, pe neno, pe booko dok pe keto wel. Namba cim pe tye kany. Check prices nen keken ka brand me hotel oyabe.",
     "partnerPriceAsk": "Tyen lok keken. Wel ma tye kombedi pe nyut kany.",
@@ -148,7 +152,7 @@
     "safetyView": "Nen kabedo dok iniang nga ma iculo bot en ma peya iculo.",
     "safetyName": "Pe icul i akaunt ma nyinge pat.",
     "safetyReport": "Nong peko ki i listing ka tye gin ma pe atir.",
-    "extrasTitle": "Jami me wot pi bedo ni",
+    "extrasTitle": "Plan me wot ni",
     "extrasLead": "Yabe i kakube pa lawote. makaug pe time booking onyo cul.",
     "extrasNote": "Kube me lawote: MakaUG twero nongo komishon",
     "extrasTransfers": "Wot ki i airport",
@@ -177,7 +181,11 @@
     "d6Body": "በማንኛውም ማስታወቂያ ላይ ያለውን የማሳወቂያ አገናኝ ይጠቀሙ። ማስታወቂያዎችን እናነሳለን።",
     "d6Lead": "የተሳሳተ የሚመስል ማንኛውንም ነገር ያሳውቁ።",
     "days": "ቀናት",
-    "discTitle": "ማንንም ከማግኘትዎ በፊት ይህን ያንብቡ",
+    "discTitle": "ቦታውን ከማየትዎ በፊት በጭራሽ አይክፈሉ",
+    "safetyMore": "ሁሉንም የደህንነት ምክሮች ያንብቡ",
+    "infoLead": "ማወቅ የሚገቡ ስድስት ነገሮች።",
+    "extrasPartnersNamed": "ስሞች ብቻ። makaug አርማዎቻቸውን አይጠቀምም። አገናኙ የአጋሩን ጣቢያ ይከፍታል።",
+    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
     "emptyFilters": "ከእነዚህ ማጣሪያዎች ጋር የሚያይ የለም። ቀኑን ወይም አካባቢውን ያስፋሉ።",
     "emptyNone": "ዘንዱ የታተመ የአጭር ጊዜ ማረፊያ የለም። በዩጋንዳ በአንድ ሌሊት የሚያከሯዩት ቤት ካለዎት፣ በmakaug ይመዘግቡ።",
     "guests": "እንግዶች",
@@ -248,7 +256,7 @@
     "safetyView": "ቦታውን ይመልከቱ እና ከመክፈልዎ በፊት ለማን እንደሚከፍሉ ያረጋግጡ።",
     "safetyName": "ወደ ሌላ ስም ወዳለው አካውንት በጭራሽ አይክፈሉ።",
     "safetyReport": "የተሳሳተ ነገር ካለ ከማስታወቂያው ላይ ችግሩን ያሳውቁ።",
-    "extrasTitle": "ለቆይታዎ ተጨማሪ የጉዞ አገልግሎቶች",
+    "extrasTitle": "ቀሪውን ጉዞ ያቅዱ",
     "extrasLead": "በአጋር ጣቢያው ላይ ይከፈታል። makaug ቦታ አያስይዝም እንዲሁም ክፍያ አይቀበልም።",
     "extrasNote": "የአጋር አገናኞች፦ MakaUG ኮሚሽን ሊያገኝ ይችላል",
     "extrasTransfers": "የአየር ማረፊያ መጓጓዣ",
@@ -277,7 +285,11 @@
     "d6Body": "استخدم رابط الإبلاغ في أي إعلان. نحن نزيل الإعلانات.",
     "d6Lead": "أبلغ عن أي شيء يبدو غير صحيح.",
     "days": "يوم",
-    "discTitle": "اقرأ هذا قبل أن تتواصل مع أي شخص",
+    "discTitle": "لا تدفع أبداً قبل أن ترى المكان",
+    "safetyMore": "اقرأ كل نصائح السلامة",
+    "infoLead": "ستة أمور تستحق أن تعرفها.",
+    "extrasPartnersNamed": "الأسماء فقط. makaug لا تستخدم شعاراتهم. الرابط يفتح موقع الشريك.",
+    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
     "emptyFilters": "لا يوجد ما يطابق هذه الفلاتر بعد. جرّب توسيع التواريخ أو المنطقة.",
     "emptyNone": "لم يُنشر أي مكان للإقامة القصيرة بعد. إذا كان لديك مكان في أوغندا تؤجّره بالليلة، أضفه على makaug.",
     "guests": "الضيوف",
@@ -348,7 +360,7 @@
     "safetyView": "عاين المكان وتأكد ممن تدفع له قبل أن تدفع.",
     "safetyName": "لا تدفع إلى حساب باسم مختلف.",
     "safetyReport": "أبلغ عن مشكلة من صفحة الإعلان إذا كان هناك خطأ.",
-    "extrasTitle": "إضافات السفر لإقامتك",
+    "extrasTitle": "خطط لبقية رحلتك",
     "extrasLead": "يفتح على موقع الشريك. makaug لا تتولى الحجز ولا الدفع.",
     "extrasNote": "روابط تابعة: قد تربح MakaUG عمولة",
     "extrasTransfers": "توصيلات المطار",
@@ -377,7 +389,11 @@
     "d6Body": "Use the report link on any listing. We take listings down.",
     "d6Lead": "Report anything that looks wrong.",
     "days": "days",
-    "discTitle": "Read this before you contact anyone",
+    "discTitle": "Never pay before you've seen the place",
+    "safetyMore": "Read all safety tips",
+    "infoLead": "Six things worth knowing.",
+    "extrasPartnersNamed": "Partner names only. makaug does not use their logos. A link opens the partner site.",
+    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
     "emptyFilters": "Nothing matches those filters yet. Try widening the dates or the area.",
     "emptyNone": "No short stays are published yet. If you have a place in Uganda that you rent by the night, list it on makaug.",
     "guests": "Guests",
@@ -448,7 +464,7 @@
     "safetyView": "View the place and confirm who you are paying before you pay.",
     "safetyName": "Never pay into an account in a different name.",
     "safetyReport": "Report a problem from the listing if something is wrong.",
-    "extrasTitle": "Travel extras for your stay",
+    "extrasTitle": "Plan the rest of your trip",
     "extrasLead": "Opens on the partner site. makaug does not take the booking or the payment.",
     "extrasNote": "Affiliate links: MakaUG may earn a commission",
     "extrasTransfers": "Airport transfers",
@@ -477,7 +493,11 @@
     "d6Body": "Kozesa report link ku listing yonna. Tuggyawo listing.",
     "d6Lead": "Tutegeeze ku buli kintu ekitali kituufu.",
     "days": "ennaku",
-    "discTitle": "Soka osome kino nga tonnakubira muntu yenna",
+    "discTitle": "Totuusa nga tonnalaba ekifo",
+    "safetyMore": "Soma ebyokwerinda byonna",
+    "infoLead": "Ebintu mukaaga ebikulu okumanya.",
+    "extrasPartnersNamed": "Amanya gokka. makaug tekozesebwa logo zaabwe. Link egulawo ekibanja ky'omukago.",
+    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
     "emptyFilters": "Tewali kituukagana na filters zino. Gezaako okugaziya ennaku oba ekitundu.",
     "emptyNone": "Tewannabaawo bifo bya kusula bifulumiziddwa. Bw'oba olina ekifo mu Uganda ky'opangisa buli kiro, kiteeke ku makaug.",
     "guests": "Abagenyi",
@@ -548,7 +568,7 @@
     "safetyView": "Labako ekifo era okakase ani gw’osasula nga tonnasasula.",
     "safetyName": "Tosasula ku akawunti erina erinnya eddala.",
     "safetyReport": "Loopa ekizibu okuva ku listing singa waliwo ekikyamu.",
-    "extrasTitle": "Eby'okutambula eby'okwongerako ku bbeera yo",
+    "extrasTitle": "Tekateeka olugendo olusigadde",
     "extrasLead": "Gulawo ku mukutu gw'omukago. makaug tewera booking era tefuna ssente.",
     "extrasNote": "Link za affiliate: MakaUG eyinza okufuna komissioni",
     "extrasTransfers": "Okutwalibwa okuva ku kisaawe ky'ennyonyi",
@@ -577,7 +597,11 @@
     "d6Body": "Koresa report link aha listing yoona. Nitwihaho listing.",
     "d6Lead": "Tugambire aha kintu kyoona ekitari kirungi.",
     "days": "ebiro",
-    "discTitle": "Shoma eki otakahikire kuhikirira omuntu weena",
+    "discTitle": "Otarashashura otarareeba ekifo",
+    "safetyMore": "Shoma eby'okwerinda byona",
+    "infoLead": "Ebintu mukaaga ebikuru okumanya.",
+    "extrasPartnersNamed": "Amaziina goka. makaug tekoresa logo zaabo. Link neihura orubaju rw'omunywani.",
+    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
     "emptyFilters": "Tihariho ekirikuhikaana n'ebi. Gyezaho kwongyera ebiro nari ekicweka.",
     "emptyNone": "Tihariho byanya by'okuraara ebitairwe. Ku oine ekyanya omu Uganda eki orikupangisa buri kiro, kite aha makaug.",
     "guests": "Abashuhuki",
@@ -608,7 +632,7 @@
     "maxNight": "Esente aha kiro",
     "min": "edakiika",
     "newListing": "Ensya",
-    "partnerBadge": "Hotel",
+    "partnerBadge": "Hoteeri",
     "partnerHeading": "Hotel omu Uganda",
     "partnerNote": "Ebi n'ehotel kuruga aha munywani w'orugyendo, kandi nizoreka nk'ekiragiro. makaug tekizita, tekizyebera, tekizibooka kandi tekita omuhendo. Enamba y'esimu tiri aha. Akabumba ka Check prices nikareeba brand y'ehotel yaba eyashweirwe.",
     "partnerPriceAsk": "Ekiragiro kyoka. Omuhendo oguriho tigurikworeka aha.",
@@ -648,7 +672,7 @@
     "safetyView": "Rora ahantu kandi okakase ou orikuha sente otaraherereza.",
     "safetyName": "Otarahereza aha akaunti eine izina rindi.",
     "safetyReport": "Tebeeka ekizibu kuruga aha listing ku orikureeba ekitarikwikiriza.",
-    "extrasTitle": "Eby'okutambura eby'okwongeraho aha kuguma kwawe",
+    "extrasTitle": "Teekateeka orugyendo orusigaire",
     "extrasLead": "Ahingurwa aha mukutu gw'omunywani. makaug tekora booking kandi tekwata sente.",
     "extrasNote": "Link z'abafatanyabikorwa: MakaUG neyija kutunga komishoni",
     "extrasTransfers": "Okutwarwa kuruga aha kisaawe ky'ennyonyi",
@@ -677,7 +701,11 @@
     "d6Body": "Koresa report link aha listing yoona. Nitwihaho listing.",
     "d6Lead": "Tugambire aha kintu kyoona ekitari kirungi.",
     "days": "ebiro",
-    "discTitle": "Shoma eki otakahikire kuhikirira omuntu weena",
+    "discTitle": "Otarashashura otarareeba ekifo",
+    "safetyMore": "Shoma eby'okwerinda byona",
+    "infoLead": "Ebintu mukaaga ebikuru okumanya.",
+    "extrasPartnersNamed": "Amaziina goka. makaug tekoresa logo zaabo. Link neihura orubaju rw'omunywani.",
+    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
     "emptyFilters": "Tihariho ekirikuhikaana n'ebi. Gyezaho kwongyera ebiro nari ekicweka.",
     "emptyNone": "Tihariho hantu h'okuraara hataairwe. Ku oine ahantu omu Uganda ho orikupangisa buri kiro, hate aha makaug.",
     "guests": "Abagyenyi",
@@ -708,7 +736,7 @@
     "maxNight": "Esente aha kiro",
     "min": "edakiika",
     "newListing": "Ensya",
-    "partnerBadge": "Hotel",
+    "partnerBadge": "Ihoteli",
     "partnerHeading": "Hotel omu Uganda",
     "partnerNote": "Ebi n'ehotel kuruga aha munywani w'orugyendo, kandi nizoreka nk'ekiragiro. makaug tekizita, tekizyebera, tekizibooka kandi tekita igiciro. Enamba y'esimu tiri aha. Akabumba ka Check prices nikareeba brand y'ehotel yaba eyashweirwe.",
     "partnerPriceAsk": "Ekiragiro kyoka. Igiciro kirikubaasa tikirikworeka aha.",
@@ -748,7 +776,7 @@
     "safetyView": "Rora ahantu kandi okakase ou orikuha sente otarashashura.",
     "safetyName": "Otarashashura aha konti eine izina rindi.",
     "safetyReport": "Menyesha ekizibu kuruga aha listing ku orikureeba ekitarikwikiriza.",
-    "extrasTitle": "Ivy'urugendo vy'inyongera ku kuguma kwawe",
+    "extrasTitle": "Tegura urugendo rusigaye",
     "extrasLead": "Irakingurwa ku rubuga rw'umufatanyabikorwa. makaug ntibuka kandi ntiyakira amafaranga.",
     "extrasNote": "Link z'abafatanyabikorwa: MakaUG ishobora kugira komisiyo",
     "extrasTransfers": "Ugutwarwa ku kibuga c'indege",
@@ -777,7 +805,11 @@
     "d6Body": "Kozesa report link ku listing yonaena. Tuggyawo listing.",
     "d6Lead": "Tutegeeze ku buli kintu ekitali kituufu.",
     "days": "ennaku",
-    "discTitle": "Soka osome kino nga tonakubira muntu yenaena",
+    "discTitle": "Totuusa nga tonalaba ekifo",
+    "safetyMore": "Soma ebyokwerinda byona",
+    "infoLead": "Ebintu mukaaga ebikulu okumanha.",
+    "extrasPartnersNamed": "Amanya gonka. makaug tekoresa logo zaabwe. Link egulawo ekibanja ky'omukago.",
+    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
     "emptyFilters": "Tewali kituukagana n'ebyo. Gezaako okugaziya ennaku oba ekitundu.",
     "emptyNone": "Tewannabaawo bifo bya kusula bifulumiziddwa. Bw'oba olina ekifo mu Uganda ky'opangisa buli kiro, kiteeke ku makaug.",
     "guests": "Abagenyi",
@@ -848,7 +880,7 @@
     "safetyView": "Laba ekifo era okakase ani gw’osasula nga tonnasasula.",
     "safetyName": "Tosasula ku akawunti erina erinnya eddala.",
     "safetyReport": "Loopa ekizibu okuva ku listing singa waliwo ekikyamu.",
-    "extrasTitle": "Eby'okutambula eby'okwongerako ku bbeera yo",
+    "extrasTitle": "Tekateeka olugendo olusigaddeyo",
     "extrasLead": "Gulawo ku mukutu gw'omukago. makaug tewera booking era tefuna ssente.",
     "extrasNote": "Link za affiliate: MakaUG eyinza okufuna komissioni",
     "extrasTransfers": "Okutwalibwa okuva ku kisaawe ky'ennyonyi",
@@ -877,7 +909,11 @@
     "d6Body": "Tumia kiungo cha ripoti kwenye tangazo lolote. Tunaondoa matangazo.",
     "d6Lead": "Ripoti chochote kinachoonekana si sahihi.",
     "days": "siku",
-    "discTitle": "Soma hili kabla ya kuwasiliana na mtu yeyote",
+    "discTitle": "Usilipe kabla ya kuona mahali",
+    "safetyMore": "Soma vidokezo vyote vya usalama",
+    "infoLead": "Mambo sita yanayofaa kujua.",
+    "extrasPartnersNamed": "Majina pekee. makaug haitumii nembo zao. Kiungo kinafungua tovuti ya mshirika.",
+    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
     "emptyFilters": "Hakuna kinacholingana na vichujio hivi. Jaribu kupanua tarehe au eneo.",
     "emptyNone": "Hakuna malazi ya muda yaliyochapishwa bado. Kama una mahali Uganda unapopangisha kwa usiku, liweke kwenye makaug.",
     "guests": "Wageni",
@@ -948,7 +984,7 @@
     "safetyView": "Tazama mahali na uthibitishe unamlipa nani kabla hujalipa.",
     "safetyName": "Usilipe kwenye akaunti yenye jina tofauti.",
     "safetyReport": "Ripoti tatizo kutoka kwenye tangazo likitokea kitu kibaya.",
-    "extrasTitle": "Vitu vya ziada vya safari kwa kukaa kwako",
+    "extrasTitle": "Panga safari yako iliyobaki",
     "extrasLead": "Inafunguka kwenye tovuti ya mshirika. makaug haichukui uhifadhi wala malipo.",
     "extrasNote": "Viungo vya washirika: MakaUG inaweza kupata kamisheni",
     "extrasTransfers": "Usafiri wa uwanja wa ndege",
@@ -1152,6 +1188,12 @@
   // happens only after that partner's program id is set. Compare prices is a
   // different block and is not built here.
   function travelExtrasHtml(placement) {
+    var extraCardPhoto = {
+      transfers: '/assets/img/worth-knowing/entebbe-airport.jpg',
+      tours: '/assets/img/worth-knowing/murchison-falls.jpg',
+      cars: '/assets/img/worth-knowing/boda-boda.jpg',
+      flights: '/assets/img/worth-knowing/entebbe-airport.jpg'
+    };
     var cfg = travelpayoutsConfig();
     var groups = cfg.extras || [];
     if (!cfg.marker || !groups.length) return '';
@@ -1168,14 +1210,21 @@
           + esc(partner.label) + '</a>';
       }).join('');
       if (!links) return '';
-      return '<div class="st-extra-group"><p class="st-extra-group-label">' + esc(t(labelKey)) + '</p>'
-        + '<div class="st-extra-links">' + links + '</div></div>';
+      var photo = extraCardPhoto[group.key];
+      return '<article class="st-extra-card">'
+        + (photo
+          ? '<img class="st-extra-photo" src="' + esc(photo) + '" alt="">'
+          : '<div class="st-extra-photo st-extra-photo-plain" aria-hidden="true"></div>')
+        + '<div class="st-extra-body"><h3>' + esc(t(labelKey)) + '</h3>'
+        + '<p class="st-extra-sub">' + esc(t('extrasLead')) + '</p>'
+        + '<div class="st-extra-links">' + links + '</div></div></article>';
     }).join('');
     if (!body) return '';
     return '<section class="st-extras" data-st-extras="' + esc(placement) + '">'
-      + '<h2>' + esc(t('extrasTitle')) + '</h2>'
-      + '<p class="st-extras-lead">' + esc(t('extrasLead')) + '</p>'
-      + body
+      + '<div class="st-extras-head"><h2>' + esc(t('extrasTitle')) + '</h2>'
+      + '<span class="st-ad-label">' + esc(t('adLabel')) + '</span></div>'
+      + '<p class="st-extras-lead">' + esc(t('extrasPartnersNamed')) + '</p>'
+      + '<div class="st-extra-grid">' + body + '</div>'
       + '<p class="st-extras-note">' + esc(t('extrasNote')) + '</p>'
       + '</section>';
   }
@@ -1356,40 +1405,45 @@
   }
 
   function disclaimerBlock() {
-    var items = [['d1Lead', 'd1Body'], ['d2Lead', 'd2Body'], ['d3Lead', 'd3Body'],
-                 ['d4Lead', 'd4Body'], ['d5Lead', 'd5Body'], ['d6Lead', 'd6Body']];
+    var shown = [['d1Lead', 'd1Body'], ['d5Lead', 'd5Body'], ['d6Lead', 'd6Body']];
+    var more = [['d2Lead', 'd2Body'], ['d3Lead', 'd3Body'], ['d4Lead', 'd4Body']];
+    function rule(pair) {
+      return '<div class="st-safety-rule"><b>' + esc(t(pair[0])) + '</b><p>' + esc(t(pair[1])) + '</p></div>';
+    }
     return ''
-      + '<section class="st-disclaimer" id="st-disclaimer">'
+      + '<section class="st-disclaimer st-safety" id="st-disclaimer">'
       + '<h2><i class="fas fa-triangle-exclamation"></i> ' + esc(t('discTitle')) + '</h2>'
-      + '<ul>'
-      + items.map(function (pair) {
-          return '<li><b>' + esc(t(pair[0])) + '</b> ' + esc(t(pair[1])) + '</li>';
-        }).join('')
-      + '</ul>'
+      + '<div class="st-safety-rules">' + shown.map(rule).join('') + '</div>'
+      + '<details class="st-safety-more"><summary>' + esc(t('safetyMore')) + '</summary>'
+      + '<div class="st-safety-rules">' + more.map(rule).join('') + '</div></details>'
       + '</section>';
   }
 
   function guestInfoBlock() {
-    function card(icon, titleKey, bodyKey, href, linkKey) {
-      return '<div class="st-info-card"><h3><i class="fas fa-' + icon + '"></i> ' + esc(t(titleKey)) + '</h3>'
+    function card(photo, titleKey, bodyKey, href, linkKey) {
+      return '<article class="st-info-card"><img class="st-info-photo" src="' + esc(photo) + '" alt="">'
+        + '<div class="st-info-body"><h3>' + esc(t(titleKey)) + '</h3>'
         + '<p>' + esc(t(bodyKey)) + '</p>'
         + (href
           ? '<a href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">'
             + esc(t(linkKey)) + ' <i class="fas fa-arrow-up-right-from-square"></i></a>'
           : '')
-        + '</div>';
+        + '</div></article>';
     }
     return ''
-      + '<section style="margin:26px 0">'
-      + '<h2 style="font-size:1.15rem;font-weight:900;margin:0 0 12px">' + esc(t('infoTitle')) + '</h2>'
+      + '<section class="st-worth">'
+      + '<h2>' + esc(t('infoTitle')) + '</h2>'
+      + '<p class="st-worth-lead">' + esc(t('infoLead')) + '</p>'
       + '<div class="st-info-grid">'
-      + card('passport', 'i1T', 'i1B', 'https://visas.immigration.go.ug', 'i1L')
-      + card('umbrella-beach', 'i2T', 'i2B', 'https://utb.go.ug', 'i2L')
-      + card('money-bill-wave', 'i3T', 'i3B')
-      + card('car', 'i4T', 'i4B')
-      + card('plug', 'i5T', 'i5B')
-      + card('receipt', 'i6T', 'i6B')
-      + '</div></section>';
+      + card('/assets/img/worth-knowing/entebbe-airport.jpg', 'i1T', 'i1B', 'https://visas.immigration.go.ug', 'i1L')
+      + card('/assets/img/worth-knowing/murchison-falls.jpg', 'i2T', 'i2B', 'https://utb.go.ug', 'i2L')
+      + card('/assets/img/worth-knowing/shilling.jpg', 'i3T', 'i3B')
+      + card('/assets/img/worth-knowing/boda-boda.jpg', 'i4T', 'i4B')
+      + card('/assets/img/worth-knowing/owen-falls.jpg', 'i5T', 'i5B')
+      + card('/assets/img/worth-knowing/speke-resort.jpg', 'i6T', 'i6B')
+      + '</div>'
+      + '<p class="st-photo-credit">' + esc(t('photoCredit')) + '</p>'
+      + '</section>';
   }
 
   // ---------------------------------------------------------------- search view
