@@ -4111,7 +4111,7 @@ function syncMarketplaceFilterControls(filters = marketplaceRouteFilters()) {
 function renderMarketplaceLoading() {
   const results = document.getElementById("marketplace-results");
   if (!results) return;
-  results.innerHTML = Array.from({ length: 5 }, () => `<div class="bg-white border border-gray-200 rounded-xl p-4 flex gap-4"><div class="marketplace-skeleton w-12 h-12 rounded-lg"></div><div class="flex-1 space-y-2"><div class="marketplace-skeleton h-4 rounded w-1/3"></div><div class="marketplace-skeleton h-3 rounded w-2/3"></div><div class="marketplace-skeleton h-3 rounded w-1/2"></div></div></div>`).join("");
+  results.innerHTML = Array.from({ length: 8 }, () => `<div class="overflow-hidden rounded-2xl border border-gray-200 bg-white"><div class="marketplace-skeleton marketplace-card-photo"></div><div class="space-y-2 p-3"><div class="marketplace-skeleton h-4 w-2/3 rounded"></div><div class="marketplace-skeleton h-3 w-1/2 rounded"></div></div></div>`).join("");
   const count = document.getElementById("marketplace-result-count");
   if (count) count.textContent = marketplaceTr("loading");
 }
@@ -4234,28 +4234,31 @@ function renderMarketplaceBusinesses() {
     const firstFound = marketplaceFormatDate(business.first_seen);
     const lastRefreshed = marketplaceFormatDate(business.last_refreshed);
     const description = marketplaceBusinessDescription(business);
+    const photos = Array.isArray(business.profile_images) ? business.profile_images : [];
+    const photo = photos.map((url) => String(url || "").trim()).find((url) => url && !/unsplash\.com|placeholder\.com/i.test(url)) || "";
+    const icon = marketplaceState.categories.find((item) => item.key === business.category)?.icon || "fa-briefcase";
+    const tierKey = business.tier === "verified" ? "tierVerified" : business.tier === "private" ? "tierPrivate" : "tierFound";
+    const summary = [category, location || business.district].filter(Boolean).join(" · ");
     const stars = rating
       ? `<span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-amber-700"><i class="fas fa-star" aria-hidden="true"></i>${rating.toFixed(1)} <span class="text-amber-700/70">(${Number(business.rating_count || 0)})</span></span>`
       : `<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-gray-600">${adminEscape(marketplaceTr("newBusiness"))}</span>`;
-    return `<article class="marketplace-business-row bg-white border border-gray-200 rounded-xl p-4" data-tier="${adminAttr(business.tier || "found_online")}" style="${adminAttr(marketplaceCategoryStyle(business.category))}">
-      <div class="flex items-start gap-3">
-        <div class="marketplace-category-icon w-12 h-12 shrink-0 rounded-lg flex items-center justify-center"><i class="fas ${adminAttr(marketplaceState.categories.find((item) => item.key === business.category)?.icon || "fa-briefcase")}"></i></div>
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-col items-start gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-            <div class="min-w-0 w-full"><h3 class="marketplace-business-name font-black leading-snug break-words">${adminEscape(business.name)}</h3><p class="marketplace-category-label text-xs font-bold mt-0.5">${adminEscape(category)}</p></div>
-            <div class="w-full sm:w-auto sm:shrink-0">${marketplaceTierHtml(business)}</div>
-          </div>
-          <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600"><span class="inline-flex items-center gap-1"><i class="fas fa-location-dot marketplace-category-label" aria-hidden="true"></i>${adminEscape(location || business.district)}</span>${stars}</div>
-          <p class="mt-2 text-sm text-gray-600 line-clamp-2">${adminEscape(description)}</p>
-          <div class="mt-3 flex items-center justify-between gap-3 flex-wrap">
-            <div class="flex gap-2">
-              ${business.phone ? `<a href="${adminAttr(marketplaceContactUrl("phone", business.phone))}" class="w-9 h-9 rounded-lg border border-gray-200 text-gray-700 inline-flex items-center justify-center hover:border-[#b3134f] hover:text-[#b3134f]" title="${adminAttr(marketplaceTr("call"))}" aria-label="${adminAttr(marketplaceTr("call"))}"><i class="fas fa-phone"></i></a>` : ""}
-              ${business.whatsapp || business.phone ? `<a href="${adminAttr(marketplaceContactUrl("whatsapp", business.whatsapp || business.phone))}" target="_blank" rel="noopener" class="w-9 h-9 rounded-lg border border-green-200 text-green-700 inline-flex items-center justify-center hover:bg-green-50" title="WhatsApp" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>` : ""}
-              ${!business.phone && !business.whatsapp && socialUrl ? `<a href="${adminAttr(socialUrl)}" target="_blank" rel="noopener nofollow" class="w-9 h-9 rounded-lg border border-blue-200 text-blue-700 inline-flex items-center justify-center hover:bg-blue-50" title="Social media" aria-label="Social media"><i class="fas fa-arrow-up-right-from-square"></i></a>` : ""}
-            </div>
-            <button type="button" onclick="marketplaceToggleProfile('${adminAttr(business.id)}')" class="marketplace-category-label text-sm font-black hover:underline">${adminEscape(marketplaceTr("profile"))} <i class="fas fa-chevron-down ml-1 text-[10px]"></i></button>
-          </div>
-          <div id="marketplace-profile-${adminAttr(business.id)}" class="hidden mt-3 border-t border-gray-100 pt-3 text-xs text-gray-600 space-y-1">
+    return `<article class="marketplace-business-row bg-white border border-gray-200 rounded-2xl" data-tier="${adminAttr(business.tier || "found_online")}" style="${adminAttr(marketplaceCategoryStyle(business.category))}">
+      <div class="marketplace-card-photo">
+        ${photo
+          ? `<img src="${adminAttr(photo)}" alt="" loading="lazy">`
+          : `<div class="marketplace-card-fallback marketplace-category-icon" aria-hidden="true"><i class="fas ${adminAttr(icon)}"></i></div>`}
+        <span class="marketplace-card-badge">${business.tier === "verified" ? `<i class="fas fa-check" aria-hidden="true"></i>` : ""}${adminEscape(marketplaceTr(tierKey))}</span>
+      </div>
+      <div class="min-w-0 p-3">
+        <h3 class="marketplace-business-name font-black leading-snug break-words">${adminEscape(business.name)}</h3>
+        <p class="mt-1 text-sm text-gray-600">${adminEscape(summary)}</p>
+        <div class="marketplace-card-actions mt-3">
+          ${business.phone ? `<a href="${adminAttr(marketplaceContactUrl("phone", business.phone))}" class="marketplace-card-call">${adminEscape(marketplaceTr("call"))}</a>` : ""}
+          ${business.whatsapp || business.phone ? `<a href="${adminAttr(marketplaceContactUrl("whatsapp", business.whatsapp || business.phone))}" target="_blank" rel="noopener" class="marketplace-card-wa">${adminEscape(marketplaceTr("whatsappAction"))}</a>` : ""}
+        </div>
+        <button type="button" onclick="marketplaceToggleProfile('${adminAttr(business.id)}')" class="marketplace-category-label mt-2 text-sm font-black hover:underline">${adminEscape(marketplaceTr("profile"))} <i class="fas fa-chevron-down ml-1 text-[10px]"></i></button>
+        <div id="marketplace-profile-${adminAttr(business.id)}" class="hidden mt-3 border-t border-gray-100 pt-3 text-xs text-gray-600 space-y-1">
+          <div>${stars}</div>
             ${Array.isArray(business.profile_images) && business.profile_images.length ? `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pb-2">${business.profile_images.slice(0, 4).map((url, index) => `<img src="${adminAttr(url)}" alt="${adminAttr(`${business.name} business photo ${index + 1}`)}" loading="lazy" class="h-24 w-full rounded-lg border border-gray-200 object-cover">`).join("")}</div>` : ""}
             <div class="text-sm leading-6 text-gray-700">${adminEscape(description)}</div>
             <div><span class="font-black text-gray-800">${adminEscape(marketplaceTr("serves"))}:</span> ${adminEscape((business.serves_regions || []).join(", ") || business.district)}</div>
@@ -4270,7 +4273,6 @@ function renderMarketplaceBusinesses() {
               <p class="pt-1 text-[11px] leading-5 text-gray-500">${adminEscape(marketplaceTr("publicSourceDisclaimer"))}</p>
               <button type="button" onclick="marketplaceOpenClaimForm('${adminAttr(business.id)}','${adminAttr(business.name)}')" class="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-50"><i class="fas fa-hand" aria-hidden="true"></i>${adminEscape(marketplaceTr("claimBusiness"))}</button>
             </div>` : `<div id="marketplace-google-details-${adminAttr(business.id)}" class="pt-1" data-state="idle"></div>`}
-          </div>
         </div>
       </div>
     </article>`;

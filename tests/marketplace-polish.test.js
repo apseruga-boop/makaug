@@ -33,9 +33,10 @@ test('Verified pricing is one monthly config exposed through the public config e
 test('Marketplace business rows are mobile-safe and generated descriptions are localized', () => {
   assert.match(app, /marketplace-business-name font-black leading-snug break-words/);
   assert.doesNotMatch(app, /text-gray-950 truncate/);
-  assert.match(app, /flex flex-col items-start gap-1\.5 sm:flex-row/);
-  assert.match(app, /w-full sm:w-auto sm:shrink-0/);
-  assert.match(app, /inline-flex items-center gap-1/);
+  assert.match(html, /#marketplace-results \{ display: grid; grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(html, /@media \(max-width: 700px\) \{\s*#marketplace-results \{ grid-template-columns: 1fr; \}/);
+  assert.match(app, /marketplace-card-call/);
+  assert.match(app, /marketplace-card-wa/);
   assert.match(app, /marketplaceBusinessDescription/);
   assert.match(app, /foundOnlineDescriptionTemplate/);
   assert.match(app, /newBusiness: "Empya"/);

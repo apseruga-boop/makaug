@@ -3212,7 +3212,33 @@
     .marketplace-focus:focus { border-color: #b3134f; box-shadow: 0 0 0 3px rgba(179, 19, 79, .12); outline: none; }
     .marketplace-category-chip { color: var(--marketplace-category-accent, #4b5563); }
     .marketplace-category-chip[aria-pressed="true"] { border-color: var(--marketplace-category-accent, #b3134f); color: var(--marketplace-category-accent, #8f0f3f); background: var(--marketplace-category-soft, #fff1f6); }
-    .marketplace-business-row { border-left: 3px solid var(--marketplace-category-accent, #9ca3af); }
+    .marketplace-business-row { border-left: 3px solid var(--marketplace-category-accent, #9ca3af); overflow: hidden; display: flex; flex-direction: column; }
+    #marketplace-results { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .marketplace-card-photo { position: relative; height: 150px; background: var(--marketplace-category-soft, #e7eeea); }
+    .marketplace-card-photo img,
+    .marketplace-card-photo .marketplace-card-fallback { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .marketplace-card-fallback { display: flex; align-items: center; justify-content: center; font-size: 1.6rem; }
+    .marketplace-card-badge {
+      position: absolute; top: 10px; left: 10px; max-width: calc(100% - 20px);
+      display: inline-flex; align-items: center; gap: 4px;
+      border-radius: 999px; background: rgba(17, 24, 39, .78); color: #fff;
+      padding: 3px 8px; font-size: 11px; font-weight: 800; line-height: 1.3;
+    }
+    .marketplace-card-actions { display: flex; gap: 8px; }
+    .marketplace-card-call,
+    .marketplace-card-wa {
+      flex: 1; min-height: 40px; border-radius: 10px; font-size: .84rem; font-weight: 800;
+      display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+    }
+    .marketplace-card-call { border: 1px solid #16a34a; color: #166534; background: #fff; }
+    .marketplace-card-wa { background: #16a34a; color: #fff; }
+    @media (max-width: 1100px) {
+      #marketplace-results { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 700px) {
+      #marketplace-results { grid-template-columns: 1fr; }
+      .marketplace-card-photo { height: 180px; }
+    }
     .marketplace-category-icon { background: var(--marketplace-category-soft, #f3f4f6); color: var(--marketplace-category-accent, #4b5563); }
     .marketplace-category-label,
     .marketplace-business-name { color: var(--marketplace-category-text, var(--marketplace-category-accent, #b3134f)); }
@@ -4655,7 +4681,7 @@
         </div>
       </section>
 
-      <section id="marketplace-results" class="space-y-2" aria-live="polite"></section>
+      <section id="marketplace-results" class="marketplace-card-grid" aria-live="polite"></section>
       <div id="marketplace-empty" class="hidden rounded-xl border border-dashed border-rose-200 bg-white p-7 text-center">
         <h3 class="font-black text-gray-950" data-marketplace-i18n="emptyTitle">No exact providers found</h3>
         <p class="mt-1 text-sm text-gray-600" data-marketplace-i18n="emptyText">Tell us what you need and the makaug team will help find it.</p>
