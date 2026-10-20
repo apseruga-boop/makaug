@@ -302,13 +302,153 @@ async function fetchYouTubeThumbnail(videoUrl, fetchImpl = fetch) {
 
 function coverErrorMessage(error) {
   const raw = String(error?.message || error || '');
+  if (error?.code === 'YOUTUBE_TIME_UNAVAILABLE' || /youtube_time_unavailable/i.test(raw)) return 'This YouTube video can\'t be opened at a chosen time on this server. Pick one of the automatic frames, or upload a photo.';
   if (error?.code === 'VIDEO_STILL_TIME_BUDGET' || /time budget|aborted/i.test(raw)) return 'The video took too long to read, so no cover was made. Try again later or upload a photo.';
   if (/exceeds .* byte/i.test(raw)) return 'The video is too large to read here (over 100 MB). Upload a photo instead.';
   if (/HTTP \d{3}|fetch failed|ENOTFOUND|ECONNRE|status/i.test(raw)) return 'We couldn\'t fetch the video file, so no cover was made. Upload a photo instead.';
   return 'We couldn\'t get a clear picture from this video, so no cover was made. Upload a photo instead.';
 }
 
-async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', budgetMs = TICK_BUDGET_MS, backfill: injected = null, videoUrl = '', fetchImpl = fetch, uploadBuffer = null } = {}) {
+function youtubeCandidateThumbnailUrls(videoUrl) {
+  const id = youtubeVideoId(videoUrl);
+  if (!id) return [];
+  const encoded = encodeURIComponent(id);
+  return [
+    [`Automatic frame 1`, `https://i.ytimg.com/vi/${encoded}/maxresdefault.jpg`],
+    [`Automatic frame 2`, `https://i.ytimg.com/vi/${encoded}/sddefault.jpg`],
+    [`Automatic frame 3`, `https://i.ytimg.com/vi/${encoded}/hqdefault.jpg`],
+    [`Automatic frame 4`, `https://i.ytimg.com/vi/${encoded}/1.jpg`],
+    [`Automatic frame 5`, `https://i.ytimg.com/vi/${encoded}/2.jpg`],
+    [`Automatic frame 6`, `https://i.ytimg.com/vi/${encoded}/3.jpg`]
+  ];
+}
+
+function coverCandidateRecord(item, label) {
+  return {
+    url: item.url,
+    sha256: item.sha256 || null,
+    timestamp_seconds: Number(item.timestampSeconds || 0),
+    source_video_url: item.sourceVideoUrl || null,
+    label: label || item.label || 'Frame'
+  };
+}
+
+async function rememberCoverCandidates(db, propertyId, candidates) {
+  await db.query(
+    `UPDATE properties
+        SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('video_cover_candidates', $2::jsonb),
+            updated_at = NOW()
+      WHERE id = $1`,
+    [propertyId, JSON.stringify(candidates.slice(0, 8))]
+  );
+}
+
+async function youtubeCoverCandidates(property, videoUrl, { fetchImpl, uploadBuffer }) {
+  const crypto = require('crypto');
+  const store = uploadBuffer || ((args) => require('./cloudMediaStorageService').uploadBufferToS3(args));
+  const seen = new Set();
+  const uploaded = [];
+  for (const [label, thumb] of youtubeCandidateThumbnailUrls(videoUrl)) {
+    const response = await fetchImpl(thumb);
+    if (!response?.ok) continue;
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (thumb.includes('maxresdefault') && bytes.length < 3000) continue;
+    if (bytes.length < 800) continue;
+    const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+    if (seen.has(sha256)) continue;
+    seen.add(sha256);
+    const stored = await store({
+      bytes,
+      mimeType: 'image/jpeg',
+      key: `staff-video-cover/youtube/${property.id}/candidate-${sha256}.jpg`
+    });
+    if (!stored?.publicUrl) continue;
+    uploaded.push({
+      url: stored.publicUrl,
+      sha256: stored.sha256 || sha256,
+      sourceVideoUrl: videoUrl,
+      sourceVideoIndex: 0,
+      timestampSeconds: 0,
+      label,
+      sharpness: 0,
+      entropy: 0,
+      bytes: stored.bytes || bytes.length
+    });
+  }
+  if (!uploaded.length) throw new Error('YouTube thumbnail could not be fetched');
+  return uploaded;
+}
+
+function youtubeTimeTool() {
+  const fs = require('fs');
+  return ['/usr/local/bin/yt-dlp', '/usr/bin/yt-dlp'].find((candidate) => {
+    try { fs.accessSync(candidate, fs.constants.X_OK); return true; } catch (_) { return false; }
+  }) || '';
+}
+
+// A chosen time on a YouTube video needs yt-dlp. Without it, staff pick one of
+// the automatic frames instead of us guessing the default thumbnail.
+async function youtubeFrameAtTime(property, videoUrl, timestampSeconds, { uploadBuffer, deadline = 0 } = {}) {
+  const tool = youtubeTimeTool();
+  if (!tool) {
+    const unavailable = new Error('youtube_time_unavailable');
+    unavailable.code = 'YOUTUBE_TIME_UNAVAILABLE';
+    throw unavailable;
+  }
+  const { execFile } = require('child_process');
+  const fsp = require('fs/promises');
+  const os = require('os');
+  const path = require('path');
+  const crypto = require('crypto');
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), `makaug-yt-${property.id}-`));
+  const run = (file, args, timeout) => new Promise((resolve, reject) => {
+    execFile(file, args, { timeout }, (error) => (error ? reject(error) : resolve()));
+  });
+  try {
+    const videoPath = path.join(dir, 'video.mp4');
+    const stillPath = path.join(dir, 'frame.jpg');
+    const at = Math.max(0, Number(timestampSeconds) || 0);
+    const timeout = Math.max(15000, (deadline || Date.now() + 60000) - Date.now());
+    await run(tool, [
+      '--no-playlist',
+      '-f', 'best[height<=480]/best',
+      '--download-sections', `*${Math.max(0, at - 1).toFixed(3)}-${(at + 2).toFixed(3)}`,
+      '-o', videoPath,
+      videoUrl
+    ], timeout);
+    await run(process.env.FFMPEG_PATH || 'ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-ss', at.toFixed(3),
+      '-i', videoPath,
+      '-frames:v', '1',
+      '-q:v', '3',
+      stillPath
+    ], 20000);
+    const bytes = await fsp.readFile(stillPath);
+    const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+    const store = uploadBuffer || ((args) => require('./cloudMediaStorageService').uploadBufferToS3(args));
+    const stored = await store({
+      bytes,
+      mimeType: 'image/jpeg',
+      key: `staff-video-cover/youtube/${property.id}/frame-${sha256}.jpg`
+    });
+    if (!stored?.publicUrl) throw new Error('The frame could not be saved.');
+    return [{
+      url: stored.publicUrl,
+      sha256: stored.sha256 || sha256,
+      sourceVideoUrl: videoUrl,
+      sourceVideoIndex: 0,
+      timestampSeconds: at,
+      sharpness: 0,
+      entropy: 0,
+      bytes: bytes.length
+    }];
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+}
+
+async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', budgetMs = TICK_BUDGET_MS, backfill: injected = null, videoUrl = '', fetchImpl = fetch, uploadBuffer = null, preview = false, stillUrl = '', timestampSeconds = null } = {}) {
   if (running) return { ok: false, status: 409, error: 'A cover is already being made. Try again in a minute.' };
   const busy = siteBusyReason(db);
   if (busy) return { ok: false, status: 503, error: 'The site is busy right now. Try again in a few minutes.', ...busy };
@@ -347,20 +487,54 @@ async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', bud
   const backfill = injected || require('../scripts/backfill-whatsapp-video-stills');
   try {
     controller.signal.addEventListener('abort', () => { try { backfill.killLiveChildren?.(); } catch (_) {} }, { once: true });
+    const requestedTime = timestampSeconds == null || timestampSeconds === '' ? null : Number(timestampSeconds);
+    const hasTime = Number.isFinite(requestedTime) && requestedTime >= 0 && timestampSeconds != null && timestampSeconds !== '';
+    const chosenStill = String(stillUrl || '').trim();
     let uploaded;
-    if (selected[0].kind === 'youtube') {
+    if (chosenStill) {
+      let parsed;
+      try { parsed = new URL(chosenStill); } catch (_) { parsed = null; }
+      const candidates = Array.isArray(property.extra_fields?.video_cover_candidates) ? property.extra_fields.video_cover_candidates : [];
+      const match = candidates.find((item) => item && item.url === chosenStill);
+      const hostedStill = parsed && parsed.protocol === 'https:' && /staff-video-cover|video-key-frame|whatsapp-employee-intake/i.test(parsed.pathname);
+      if (!match && !hostedStill) {
+        return { ok: false, status: 422, error: 'Choose one of the frames from this listing.' };
+      }
+      uploaded = [{
+        url: chosenStill,
+        sha256: match?.sha256 || '',
+        sourceVideoUrl: match?.source_video_url || selected[0].url,
+        sourceVideoIndex: 0,
+        timestampSeconds: Number(match?.timestamp_seconds || 0),
+        sharpness: 0,
+        entropy: 0,
+        bytes: 0
+      }];
+    } else if (preview && selected[0].kind === 'youtube') {
+      uploaded = await youtubeCoverCandidates(property, selected[0].url, { fetchImpl, uploadBuffer });
+    } else if (hasTime && selected[0].kind === 'youtube') {
+      uploaded = await youtubeFrameAtTime(property, selected[0].url, requestedTime, { uploadBuffer, deadline: Date.now() + budgetMs });
+    } else if (hasTime && typeof backfill.uploadStillAtTimestamp === 'function' && selected[0].kind === 'file') {
+      uploaded = await backfill.uploadStillAtTimestamp(
+        property,
+        selected[0].url,
+        requestedTime,
+        { deadline: Date.now() + budgetMs, signal: controller.signal, fetchImpl }
+      );
+    } else if (selected[0].kind === 'youtube') {
       const crypto = require('crypto');
       const shot = await fetchYouTubeThumbnail(selected[0].url, fetchImpl);
       const store = uploadBuffer || ((args) => require('../services/cloudMediaStorageService').uploadBufferToS3(args));
+      const sha256 = crypto.createHash('sha256').update(shot.bytes).digest('hex');
       const stored = await store({
         bytes: shot.bytes,
         mimeType: 'image/jpeg',
-        key: `staff-video-cover/youtube/${property.id}/${Date.now()}-${crypto.randomUUID()}.jpg`
+        key: `staff-video-cover/youtube/${property.id}/candidate-${sha256}.jpg`
       });
       if (!stored?.publicUrl) return { ok: false, status: 422, error: 'The YouTube thumbnail could not be saved as a cover. Upload a photo instead.' };
       uploaded = [{
         url: stored.publicUrl,
-        sha256: stored.sha256,
+        sha256: stored.sha256 || sha256,
         sourceVideoUrl: selected[0].url,
         sourceVideoIndex: 0,
         timestampSeconds: 0,
@@ -372,17 +546,33 @@ async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', bud
       ffmpegReady();
       uploaded = await backfill.makeAndUploadStills(
         { ...property, extra_fields: { ...(property.extra_fields || {}), video_urls: selected.map((item) => item.url) } },
-        { frameCandidates: backfill.FRAME_CANDIDATE_COUNT, maxVideos: chosen ? 1 : MAX_VIDEOS_PER_TICK, deadline: Date.now() + budgetMs, signal: controller.signal }
+        {
+          frameCandidates: backfill.FRAME_CANDIDATE_COUNT,
+          maxVideos: chosen ? 1 : MAX_VIDEOS_PER_TICK,
+          deadline: Date.now() + budgetMs,
+          signal: controller.signal,
+          ...(preview ? { framesNeeded: 4 } : {})
+        }
       );
+    }
+    if (preview) {
+      const candidates = (uploaded || []).map((item, index) => coverCandidateRecord(item, item.label || `Frame ${index + 1}`));
+      if (!candidates.length) return { ok: true, attached: 0, preview: true, candidates: [], note: 'No frames could be read from this video.' };
+      await rememberCoverCandidates(db, property.id, candidates);
+      return { ok: true, attached: 0, preview: true, candidates, listingStatus: status };
     }
     if (!uploaded.length) return { ok: true, attached: 0, note: 'This listing already has stills from its video.' };
     const attached = await backfill.attachStills(property.id, uploaded, {
       keepListingText: true,
       actorId,
+      setAsCover: true,
       ...(liveCover ? { coverLiveListing: true } : {})
     });
     if (attached.skipped === 'status_changed') return { ok: false, status: 409, error: 'The listing changed while the cover was being made. Reload and try again.' };
-    return { ok: true, attached: attached.attached || 0, listingStatus: status };
+    if (attached.skipped === 'duplicate_stills') {
+      return { ok: true, attached: 0, reused: attached.reused || 0, listingStatus: status, note: 'That frame is already on the listing.' };
+    }
+    return { ok: true, attached: attached.attached || 0, reused: attached.reused || 0, listingStatus: status };
   } catch (error) {
     try { backfill.killLiveChildren?.(); } catch (_) {}
     logger.warn('Staff video cover failed', { propertyId: property.id, error: String(error?.message || error).slice(0, 300) });

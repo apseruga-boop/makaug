@@ -81,9 +81,17 @@ test('a found-online public row shows 2 staff photos + 1 still, never the TikTok
   assert.deepEqual(foundOnlinePublicImages([images[0]], {}), [], 'source-only stays hidden');
   // Without staff consent the still is still ours to show.
   assert.deepEqual(foundOnlinePublicImages(images, {}).map((image) => image.url), [hosted('k1')]);
+  const coverStill = foundOnlinePublicImages([
+    { url: 'https://i.ytimg.com/vi/old/hqdefault.jpg', slot_key: 'source_youtube_thumbnail', is_primary: true, sort_order: 0 },
+    { url: hosted('staff-1'), slot_key: 'staff_upload', is_primary: false, sort_order: 2 },
+    { url: hosted('k1'), slot_key: 'video_key_frame_1', is_primary: true, sort_order: 1 }
+  ], { staff_image_upload: { by: 'staff' } });
+  assert.deepEqual(coverStill.map((image) => image.url), [hosted('k1'), hosted('staff-1')]);
+  assert.equal(coverStill[0].is_primary, true);
   const sql = consentedStaffPrimaryImageLateralSql('p');
   assert.match(sql, /video_key_frame_/);
-  assert.match(sql, /ORDER BY \(COALESCE\(si\.slot_key, ''\) = 'staff_upload'\) DESC/);
+  assert.match(sql, /ORDER BY si\.is_primary DESC, si\.sort_order ASC, si\.created_at ASC/);
+  assert.doesNotMatch(sql, /staff_upload'\) DESC/);
 });
 
 function fakeDb(row) {
@@ -107,9 +115,9 @@ test('"Make a cover from the video": a TikTok page gives a plain error; a video 
   };
   const mp4 = `https://${mediaHost()}/videos/tour.mp4`;
   const made = await scheduler.makeVideoCoverForListing(fakeDb({ ...property, extra_fields: { video_url: mp4 } }), 'p1', { backfill, actorId: 'staff-9' });
-  assert.deepEqual(made, { ok: true, attached: 1, listingStatus: 'pending' });
+  assert.deepEqual(made, { ok: true, attached: 1, reused: 0, listingStatus: 'pending' });
   assert.deepEqual(calls[0], ['make', [mp4], 2], 'the scheduler\'s two-video limit');
-  assert.deepEqual(calls[1], ['attach', 'p1', { keepListingText: true, actorId: 'staff-9' }], 'description left alone');
+  assert.deepEqual(calls[1], ['attach', 'p1', { keepListingText: true, actorId: 'staff-9', setAsCover: true }], 'description left alone');
   const failing = { ...backfill, async makeAndUploadStills() { throw new Error('no clear, visually distinct frame could be extracted'); } };
   const failed = await scheduler.makeVideoCoverForListing(fakeDb({ ...property, extra_fields: { video_url: mp4 } }), 'p1', { backfill: failing });
   assert.equal(failed.error, 'We couldn\'t get a clear picture from this video, so no cover was made. Upload a photo instead.');

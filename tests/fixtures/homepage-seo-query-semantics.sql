@@ -83,7 +83,7 @@ SELECT
                 AND si.url ~* '^https?://media\.makaug\.com/.+'
               )
             )
-          ORDER BY (COALESCE(si.slot_key, '') = 'staff_upload') DESC, si.is_primary DESC, si.sort_order ASC, si.created_at ASC
+          ORDER BY si.is_primary DESC, si.sort_order ASC, si.created_at ASC
           LIMIT 1
         ) staff_img ON true
      WHERE (LOWER(COALESCE(p.status, '')) IN ('approved', 'live', 'published') AND NOT (
@@ -167,7 +167,7 @@ SELECT
                 AND si.url ~* '^https?://media\.makaug\.com/.+'
               )
             )
-          ORDER BY (COALESCE(si.slot_key, '') = 'staff_upload') DESC, si.is_primary DESC, si.sort_order ASC, si.created_at ASC
+          ORDER BY si.is_primary DESC, si.sort_order ASC, si.created_at ASC
           LIMIT 1
         ) staff_img ON true
 

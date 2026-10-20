@@ -208,9 +208,9 @@ test('a cover with two videos uses only the video staff picked', async () => {
   assert.match(needsChoice.error, /Choose which video/);
   assert.equal(calls.length, 0);
   const made = await scheduler.makeVideoCoverForListing(db, 'p1', { backfill, actorId: 'staff-9', videoUrl: land });
-  assert.deepEqual(made, { ok: true, attached: 1, listingStatus: 'pending' });
+  assert.deepEqual(made, { ok: true, attached: 1, reused: 0, listingStatus: 'pending' });
   assert.deepEqual(calls[0], ['make', [land], 1]);
-  assert.deepEqual(calls[1][2], { keepListingText: true, actorId: 'staff-9' });
+  assert.deepEqual(calls[1][2], { keepListingText: true, actorId: 'staff-9', setAsCover: true });
   const page = await scheduler.makeVideoCoverForListing(db, 'p1', { backfill, videoUrl: 'https://www.tiktok.com/@agent/video/1' });
   assert.equal(page.status, 422);
 });
@@ -295,7 +295,8 @@ test('unsigned video remove and video cover stay closed', async () => {
   const id = '00000000-0000-4000-8000-000000000001';
   for (const response of [
     await request(server).post(`/api/staff/properties/${id}/videos/remove`).send({ url: LAND, confirm: true }),
-    await request(server).post(`/api/staff/properties/${id}/video-cover`).send({ video_url: LAND })
+    await request(server).post(`/api/staff/properties/${id}/video-cover`).send({ video_url: LAND }),
+    await request(server).post(`/api/staff/properties/${id}/video-stills/dedupe`).send({})
   ]) {
     assert.equal(response.status, 403);
     assert.equal(response.body.ok, false);

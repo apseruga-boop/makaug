@@ -1,12 +1,16 @@
 'use strict';
 
 // Found-online listings never republish the source's media (TikTok covers,
-// byteimg links, source_* slots, evidence cards): that rule stays. The one
-// exception is photos staff uploaded from the review screen after ticking the
-// owner/agent consent box (#377). Those are stored with slot_key 'staff_upload'
-// on makaug's media host, and the upload also writes
-// extra_fields.staff_image_upload / image_rights_confirmed. Only those photos are
-// published for a found-online row, primary first.
+// YouTube i.ytimg thumbnails, byteimg links, source_* slots, evidence cards):
+// that rule stays. Two kinds of picture are published, in the same order the
+// editor uses (primary, then sort order, then oldest):
+//   - photos staff uploaded from the review screen after ticking the
+//     owner/agent consent box (#377), slot_key 'staff_upload';
+//   - stills from the listing's own video stored on our media host
+//     (video_key_frame_ / video_still_ / video_recovery_still_).
+// The upload also writes extra_fields.staff_image_upload / image_rights_confirmed
+// for staff photos. A primary video still stays first even when a staff photo
+// is also present.
 
 const { mediaHost, realPhotoRejection } = require('./realListingPhoto');
 
@@ -57,17 +61,33 @@ function isOwnVideoStillImage(image) {
   return realPhotoRejection(image) === null;
 }
 
-// Consented staff photos, then stills from the listing's own video, the stored
-// primary first (else staff photos first, in upload order), with is_primary on
-// exactly the first one.
+function imageSortOrder(image, index) {
+  const value = Number(image?.sort_order);
+  return Number.isFinite(value) ? value : index;
+}
+
+function imageCreatedAt(image) {
+  const parsed = Date.parse(image?.created_at || '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+// Editor order: primary first, then sort_order, then oldest. is_primary is set
+// on exactly the first published image so the public gallery matches the cover.
 function foundOnlinePublicImages(images = [], extraFields = {}) {
   const all = Array.isArray(images) ? images : [];
-  const staff = all.filter((image) => isConsentedStaffImage(image, extraFields));
-  const stills = all.filter((image) => isOwnVideoStillImage(image));
-  const list = [...staff, ...stills];
-  const primaryIndex = staff.findIndex((image) => image.is_primary === true);
-  const ordered = primaryIndex > 0 ? [list[primaryIndex], ...list.slice(0, primaryIndex), ...list.slice(primaryIndex + 1)] : list;
-  return ordered.map((image, index) => ({ ...image, is_primary: index === 0 }));
+  const publishable = all
+    .map((image, index) => ({ image, index }))
+    .filter(({ image }) => isConsentedStaffImage(image, extraFields) || isOwnVideoStillImage(image));
+  publishable.sort((left, right) => {
+    const primary = Number(right.image?.is_primary === true) - Number(left.image?.is_primary === true);
+    if (primary) return primary;
+    const sortDelta = imageSortOrder(left.image, left.index) - imageSortOrder(right.image, right.index);
+    if (sortDelta) return sortDelta;
+    const createdDelta = imageCreatedAt(left.image) - imageCreatedAt(right.image);
+    if (createdDelta) return createdDelta;
+    return left.index - right.index;
+  });
+  return publishable.map(({ image }, index) => ({ ...image, is_primary: index === 0 }));
 }
 
 // SQL twin for list queries: a LATERAL subquery that yields the first consented
@@ -94,7 +114,7 @@ function consentedStaffPrimaryImageLateralSql(alias = 'p') {
                 AND si.url ~* '^https?://${mediaHost().replace(/[^a-z0-9.-]/gi, '').replace(/\./g, '\\.')}/.+'
               )
             )
-          ORDER BY (COALESCE(si.slot_key, '') = '${STAFF_UPLOAD_SLOT}') DESC, si.is_primary DESC, si.sort_order ASC, si.created_at ASC
+          ORDER BY si.is_primary DESC, si.sort_order ASC, si.created_at ASC
           LIMIT 1
         ) staff_img ON true`;
 }
