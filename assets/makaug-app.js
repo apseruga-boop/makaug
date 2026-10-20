@@ -1418,7 +1418,7 @@ const I18N_UI = {
     pageLand: "Find your perfect land opportunity",
     pageBrokers: "Find your perfect broker",
     pageMortgage: "Mortgage Finder",
-    pageAI: "Discover our AI Chatbot",
+    pageAI: "Find property on WhatsApp",
     pageList: "List Property",
     pageAbout: "About makaug",
     pageSaved: "Saved Properties",
@@ -1570,7 +1570,7 @@ const I18N_UI = {
     pageLand: "Ettaka Eritundibwa oba Okupangisibwa",
     pageBrokers: "Noonya omukungu akusaanira",
     pageMortgage: "Noonya Mortgage",
-    pageAI: "Noonya AI Chatbot yaffe",
+    pageAI: "Noonya property ku WhatsApp",
     pageList: "Teka ekintu kyo",
     pageAbout: "Ebikwata ku makaug",
     pageSaved: "Ebintu Byo Ebyaterekedwa",
@@ -1699,7 +1699,7 @@ const I18N_UI = {
     pageLand: "Ardhi ya Kuuza au Kupangisha",
     pageBrokers: "Wakala Waliothibitishwa",
     pageMortgage: "Tafuta Rehani",
-    pageAI: "Gundua AI Chatbot Yetu",
+    pageAI: "Tafuta mali kwenye WhatsApp",
     pageList: "Orodhesha Mali",
     pageAbout: "Kuhusu makaug",
     pageSaved: "Mali Zilizohifadhiwa",
@@ -1738,7 +1738,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     pageBrokers: "Nong ngat ma keto jami ma rwate kwedi",
     pageMortgage: "Mortgage",
-    pageAI: "AI Chatbot",
+    pageAI: "Yenyo gang i WhatsApp",
     signIn: "Dony",
     heroBadge: "Property ducu i Uganda, i kabedo acel", // REVIEW: Acholi, confirm with a native speaker
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
@@ -1771,7 +1771,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     pageBrokers: "Shanga omukungu orikuhika",
     pageMortgage: "Mortgage",
-    pageAI: "AI Chatbot",
+    pageAI: "Noonya property omu WhatsApp",
     signIn: "Ingira",
     heroBadge: "Buri property omuri Uganda, omu mwanya gumwe", // REVIEW: Runyankole, confirm with a native speaker
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
@@ -1804,7 +1804,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     pageBrokers: "Shaka omukungu wawe ohikire",
     pageMortgage: "Mortgage",
-    pageAI: "AI Chatbot",
+    pageAI: "Shaka property kuri WhatsApp",
     signIn: "Injira",
     heroBadge: "Buri property omuri Uganda, omu mwanya gumwe", // REVIEW: Rukiga, confirm with a native speaker
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
@@ -1837,7 +1837,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     pageBrokers: "Noonia omukungu yo atuufu",
     pageMortgage: "Mortgage",
-    pageAI: "AI Chatbot",
+    pageAI: "Noonia property ku WhatsApp",
     signIn: "Yingira",
     heroBadge: "Buli property mu Uganda, mu kifo kimu", // REVIEW: Lusoga, confirm with a native speaker
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
@@ -2412,7 +2412,7 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   pageLand: "የመሬት እድል ያግኙ",
   pageBrokers: "ደላል ያግኙ",
   pageMortgage: "የብድር መፈለጊያ",
-  pageAI: "AI Chatbot ያግኙ",
+  pageAI: "በ WhatsApp ንብረት ይፈልጉ",
   pageList: "ንብረት ዘርዝር",
   pageAbout: "ስለ makaug",
   pageSaved: "የተቀመጡ ንብረቶች",
@@ -2532,7 +2532,7 @@ I18N_UI.ar = Object.assign({}, I18N_UI.en, {
   pageLand: "ابحث عن فرصة أرض",
   pageBrokers: "ابحث عن وسيط",
   pageMortgage: "حاسبة التمويل",
-  pageAI: "اكتشف روبوت AI",
+  pageAI: "ابحث عن عقار على WhatsApp",
   pageList: "أدرج عقاراً",
   pageAbout: "عن makaug",
   pageSaved: "العقارات المحفوظة",
@@ -7121,10 +7121,178 @@ AI_CHATBOT_I18N.ar = Object.assign({}, AI_CHATBOT_I18N.en, {
   cta: "ابدأ الروبوت على WhatsApp"
 });
 
+const DISCOVER_UI_I18N = {
+  en: {
+    title: "Find property on WhatsApp",
+    sub: "Search, list or find a broker in 9 languages.",
+    cta: "Continue on WhatsApp",
+    chipRentNtinda: "Rent in Ntinda",
+    chipBuyKira: "Buy in Kira",
+    chipLandMukono: "Land in Mukono",
+    chipNearMakerere: "Near Makerere",
+    chipShortStay: "Short stay Entebbe",
+    chipBroker: "Find a broker",
+    resultsLoading: "Loading results…",
+    resultsEmpty: "No published listings match that yet.",
+    resultsShortEmpty: "No published short stays in Entebbe yet.",
+    resultsBrokerEmpty: "No approved brokers to show yet.",
+    resultsError: "Could not load these results.",
+    openShortStays: "Open short stays",
+    approvedBroker: "Approved broker"
+  },
+  lg: {
+    title: "Noonya property ku WhatsApp",
+    sub: "Noonya, teeka oba noonya broker mu nnimi 9.",
+    cta: "Genda mu maaso ku WhatsApp",
+    chipRentNtinda: "Panga mu Ntinda",
+    chipBuyKira: "Gula mu Kira",
+    chipLandMukono: "Ettaka mu Mukono",
+    chipNearMakerere: "Okumpi ne Makerere",
+    chipShortStay: "Kusula okumpi mu Entebbe",
+    chipBroker: "Noonya broker",
+    resultsLoading: "Tuteekateeka ebyavaamu…",
+    resultsEmpty: "Tewali listing efulumiziddwa ekwatagana na kino.",
+    resultsShortEmpty: "Tewali kusula okumpi kufulumiziddwa mu Entebbe.",
+    resultsBrokerEmpty: "Tewali broker akakasiddwa okulaga.",
+    resultsError: "Tetusobodde kuleeta bino.",
+    openShortStays: "Ggulawo okusula okumpi",
+    approvedBroker: "Broker akakasiddwa"
+  },
+  sw: {
+    title: "Tafuta mali kwenye WhatsApp",
+    sub: "Tafuta, orodhesha au pata wakala kwa lugha 9.",
+    cta: "Endelea kwenye WhatsApp",
+    chipRentNtinda: "Panga huko Ntinda",
+    chipBuyKira: "Nunua huko Kira",
+    chipLandMukono: "Ardhi huko Mukono",
+    chipNearMakerere: "Karibu na Makerere",
+    chipShortStay: "Malazi mafupi Entebbe",
+    chipBroker: "Pata wakala",
+    resultsLoading: "Inapakia matokeo…",
+    resultsEmpty: "Hakuna matangazo yaliyochapishwa yanayolingana.",
+    resultsShortEmpty: "Hakuna malazi mafupi yaliyochapishwa Entebbe.",
+    resultsBrokerEmpty: "Hakuna wakala aliyethibitishwa wa kuonyesha.",
+    resultsError: "Hatukuweza kupakia matokeo haya.",
+    openShortStays: "Fungua malazi mafupi",
+    approvedBroker: "Wakala aliyethibitishwa"
+  },
+  ac: {
+    title: "Yenyo gang i WhatsApp",
+    sub: "Yenyo, tera listing onyo nong broker i dhok 9.",
+    cta: "Mede i WhatsApp",
+    chipRentNtinda: "Gero i Ntinda",
+    chipBuyKira: "Wil i Kira",
+    chipLandMukono: "Lobo i Mukono",
+    chipNearMakerere: "Ka i akina Makerere",
+    chipShortStay: "Nino manok i Entebbe",
+    chipBroker: "Nong broker",
+    resultsLoading: "Tye ka kelo adwogi…",
+    resultsEmpty: "Pe tye listing ma oyabo ma rwatte.",
+    resultsShortEmpty: "Pe tye nino manok ma oyabo i Entebbe.",
+    resultsBrokerEmpty: "Pe tye broker ma okac me nyuto.",
+    resultsError: "Pe onongo twero kelo adwogi magi.",
+    openShortStays: "Yab nino manok",
+    approvedBroker: "Broker ma okac"
+  },
+  ny: {
+    title: "Noonya property omu WhatsApp",
+    sub: "Noonya, teka nari shanga broker omu ndimi 9.",
+    cta: "Guma omu WhatsApp",
+    chipRentNtinda: "Pangisa omu Ntinda",
+    chipBuyKira: "Gura omu Kira",
+    chipLandMukono: "Eitaka omu Mukono",
+    chipNearMakerere: "Ahafi na Makerere",
+    chipShortStay: "Okuraara kandi omu Entebbe",
+    chipBroker: "Shanga broker",
+    resultsLoading: "Nitureeta ebyahaire…",
+    resultsEmpty: "Tiine listing efulumizibwe erikuhika.",
+    resultsShortEmpty: "Tiine kuraara kandi kufulumizibwe omu Entebbe.",
+    resultsBrokerEmpty: "Tiine broker akakasibwe kworeka.",
+    resultsError: "Tituremire kureeta ebi.",
+    openShortStays: "Igura okuraara kandi",
+    approvedBroker: "Broker akakasibwe"
+  },
+  rn: {
+    title: "Shaka property kuri WhatsApp",
+    sub: "Shaka, tera nari shaka broker mu ndimi 9.",
+    cta: "Bandanya kuri WhatsApp",
+    chipRentNtinda: "Pangisha i Ntinda",
+    chipBuyKira: "Gura i Kira",
+    chipLandMukono: "Itaka i Mukono",
+    chipNearMakerere: "Hafi na Makerere",
+    chipShortStay: "Kuraara gato i Entebbe",
+    chipBroker: "Shaka broker",
+    resultsLoading: "Turiko turazana ibisubizo…",
+    resultsEmpty: "Nta listing yasohowe ihuye.",
+    resultsShortEmpty: "Nta kuraara gato yasohowe i Entebbe.",
+    resultsBrokerEmpty: "Nta broker yemejwe yo kwerekana.",
+    resultsError: "Ntibashoboye kuzana ibi.",
+    openShortStays: "Fungura kuraara gato",
+    approvedBroker: "Broker yemejwe"
+  },
+  sm: {
+    title: "Noonia property ku WhatsApp",
+    sub: "Noonia, teka oba noonia broker mu nnimi 9.",
+    cta: "Genda mu maaso ku WhatsApp",
+    chipRentNtinda: "Kodesa mu Ntinda",
+    chipBuyKira: "Gula mu Kira",
+    chipLandMukono: "Itaka mu Mukono",
+    chipNearMakerere: "Kumpi ne Makerere",
+    chipShortStay: "Kusula kumpi mu Entebbe",
+    chipBroker: "Noonia broker",
+    resultsLoading: "Tuleeta ebyavaamu…",
+    resultsEmpty: "Tewali listing efulumiziddwa ekwatagana.",
+    resultsShortEmpty: "Tewali kusula kumpi kufulumiziddwa mu Entebbe.",
+    resultsBrokerEmpty: "Tewali broker akakasiddwa okulaga.",
+    resultsError: "Tetusobodde kuleeta bino.",
+    openShortStays: "Igulawo okusula kumpi",
+    approvedBroker: "Broker akakasiddwa"
+  },
+  am: {
+    title: "በ WhatsApp ንብረት ይፈልጉ",
+    sub: "በ9 ቋንቋዎች ይፈልጉ፣ ይዘርዝሩ ወይም ደላል ያግኙ።",
+    cta: "በ WhatsApp ይቀጥሉ",
+    chipRentNtinda: "በ Ntinda ይከራዩ",
+    chipBuyKira: "በ Kira ይግዙ",
+    chipLandMukono: "በ Mukono መሬት",
+    chipNearMakerere: "ከ Makerere አጠገብ",
+    chipShortStay: "አጭር ቆይታ በ Entebbe",
+    chipBroker: "ደላል ያግኙ",
+    resultsLoading: "ውጤቶች በመጫን ላይ…",
+    resultsEmpty: "ከዚህ ጋር የሚስማማ የታተመ ዝርዝር የለም።",
+    resultsShortEmpty: "በ Entebbe የታተመ አጭር ቆይታ የለም።",
+    resultsBrokerEmpty: "የሚታይ የጸደቀ ደላል የለም።",
+    resultsError: "እነዚህን ውጤቶች መጫን አልተቻለም።",
+    openShortStays: "አጭር ቆይታዎችን ክፈት",
+    approvedBroker: "የጸደቀ ደላል"
+  },
+  ar: {
+    title: "ابحث عن عقار على WhatsApp",
+    sub: "ابحث أو أدرج أو اعثر على وسيط بتسع لغات.",
+    cta: "تابع على WhatsApp",
+    chipRentNtinda: "إيجار في نتيندا",
+    chipBuyKira: "اشترِ في كيرا",
+    chipLandMukono: "أرض في موكونو",
+    chipNearMakerere: "قرب ماكيريري",
+    chipShortStay: "إقامة قصيرة في عنتيبي",
+    chipBroker: "اعثر على وسيط",
+    resultsLoading: "جارٍ تحميل النتائج…",
+    resultsEmpty: "لا توجد إعلانات منشورة تطابق ذلك.",
+    resultsShortEmpty: "لا توجد إقامات قصيرة منشورة في عنتيبي.",
+    resultsBrokerEmpty: "لا يوجد وسطاء معتمدون للعرض.",
+    resultsError: "تعذر تحميل هذه النتائج.",
+    openShortStays: "افتح الإقامات القصيرة",
+    approvedBroker: "وسيط معتمد"
+  }
+};
+
 function aiTr(key) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
-  return AI_CHATBOT_I18N[lang]?.[key]
+  return DISCOVER_UI_I18N[lang]?.[key]
+    || DISCOVER_UI_I18N[fallback]?.[key]
+    || DISCOVER_UI_I18N.en?.[key]
+    || AI_CHATBOT_I18N[lang]?.[key]
     || AI_CHATBOT_I18N[fallback]?.[key]
     || AI_CHATBOT_I18N.en?.[key]
     || key;
@@ -7899,29 +8067,215 @@ function applyMortgageLanguageUI() {
   renderMortgageLeadProviderContext();
 }
 
+const DISCOVER_CHIPS = [
+  { id: "rent-ntinda", labelKey: "chipRentNtinda", kind: "property", params: { listing_type: "rent", area: "Ntinda" } },
+  { id: "buy-kira", labelKey: "chipBuyKira", kind: "property", params: { listing_type: "sale", area: "Kira" } },
+  { id: "land-mukono", labelKey: "chipLandMukono", kind: "property", params: { listing_type: "land", area: "Mukono" } },
+  { id: "near-makerere", labelKey: "chipNearMakerere", kind: "property", params: { listing_type: "rent", area: "Makerere" } },
+  { id: "short-stay", labelKey: "chipShortStay", kind: "short-term", params: { q: "Entebbe" } },
+  { id: "broker", labelKey: "chipBroker", kind: "broker", params: { status: "approved" } }
+];
+let discoverChipId = "rent-ntinda";
+let discoverLoadToken = 0;
+let discoverCache = { id: "", rows: [], noteKey: "", noteHref: "" };
+
+function discoverChipById(id) {
+  return DISCOVER_CHIPS.find((chip) => chip.id === id) || DISCOVER_CHIPS[0];
+}
+
+function discoverPhotoUrl(value) {
+  const url = String(value || "").trim();
+  if (!url || /unsplash\.com|placeholder\.com|via\.placeholder/i.test(url)) return "";
+  return url;
+}
+
+function discoverPriceText(row = {}) {
+  if (row.price_on_application === true || !(Number(row.price) > 0)) return "Price upon application";
+  const amount = `USh ${formatCompact(Number(row.price))}`;
+  const period = String(row.price_period || "").toLowerCase();
+  const suffix = {
+    month: "/mo",
+    monthly: "/mo",
+    mo: "/mo",
+    night: "/night",
+    nightly: "/night",
+    week: "/week",
+    weekly: "/week",
+    year: "/year",
+    yearly: "/year",
+    sem: "/sem",
+    semester: "/sem",
+    once: "/once"
+  }[period] || "";
+  return `${amount}${suffix}`;
+}
+
+function discoverCardHtml({ href, photo, alt, price, meta }) {
+  const media = photo
+    ? `<img src="${adminAttr(photo)}" alt="${adminAttr(alt || "")}" loading="lazy" class="h-40 w-full object-cover bg-gray-100">`
+    : `<div class="h-40 w-full bg-gray-100" aria-hidden="true"></div>`;
+  return `<a href="${adminAttr(href)}" onclick="return navigatePublicRoute(this.href, event)" class="block overflow-hidden rounded-2xl border border-gray-200 bg-white">
+    ${media}
+    <div class="p-3">
+      <div class="font-black text-gray-950">${adminEscape(price || "")}</div>
+      <div class="mt-1 text-sm text-gray-600">${meta || ""}</div>
+    </div>
+  </a>`;
+}
+
+function discoverMetaHtml(parts) {
+  return parts.filter(Boolean).map((part) => {
+    if (part.html) return part.html;
+    return `<span>${adminEscape(part.text || "")}</span>`;
+  }).join('<span aria-hidden="true"> · </span>');
+}
+
+function renderDiscoverResults() {
+  const host = document.getElementById("discover-results");
+  const note = document.getElementById("discover-results-note");
+  if (!host || !note) return;
+  const chip = discoverChipById(discoverCache.id || discoverChipId);
+  if (!discoverCache.rows.length) {
+    host.innerHTML = "";
+    note.textContent = "";
+    if (discoverCache.noteKey) {
+      note.append(document.createTextNode(aiTr(discoverCache.noteKey)));
+      if (discoverCache.noteHref) {
+        const link = document.createElement("a");
+        link.href = discoverCache.noteHref;
+        link.className = "ml-2 font-bold text-green-800 underline";
+        link.textContent = aiTr("openShortStays");
+        link.setAttribute("onclick", "return navigatePublicRoute(this.href, event)");
+        note.append(link);
+      }
+    }
+    return;
+  }
+  note.textContent = "";
+  host.innerHTML = discoverCache.rows.map((row) => {
+    if (chip.kind === "broker") {
+      const place = Array.isArray(row.districts_covered) ? row.districts_covered.filter(Boolean).slice(0, 2).join(", ") : "";
+      return discoverCardHtml({
+        href: getBrokerProfilePath(row),
+        photo: discoverPhotoUrl(row.profile_photo_url),
+        alt: row.full_name || row.company_name || "",
+        price: row.full_name || row.company_name || "",
+        meta: discoverMetaHtml([
+          { text: aiTr("approvedBroker") },
+          place ? { text: place } : null
+        ])
+      });
+    }
+    if (chip.kind === "short-term") {
+      const nightly = Number(row.price_per_night);
+      const price = nightly > 0 ? `USh ${formatCompact(nightly)}/night` : "Price upon application";
+      const beds = Number(row.bedrooms);
+      const place = [row.area, row.district].filter(Boolean).join(", ");
+      return discoverCardHtml({
+        href: row.url || `/short-term?q=${encodeURIComponent(chip.params.q || "Entebbe")}`,
+        photo: discoverPhotoUrl(row.primary_image_url || row.cover_image || row.image),
+        alt: row.title || "",
+        price,
+        meta: discoverMetaHtml([
+          beds > 0 ? { html: `<span>${adminEscape(`${beds} bed${beds === 1 ? "" : "s"}`)}</span>` } : null,
+          place ? { text: place } : null
+        ])
+      });
+    }
+    const beds = Number(row.bedrooms);
+    const place = [row.area, row.district].filter(Boolean).join(", ");
+    const photo = typeof firstRealListingPhotoUrl === "function"
+      ? discoverPhotoUrl(firstRealListingPhotoUrl(row) || row.primary_image_url)
+      : discoverPhotoUrl(row.primary_image_url);
+    return discoverCardHtml({
+      href: getPropertyDetailPath(row),
+      photo,
+      alt: row.title || "",
+      price: discoverPriceText(row),
+      meta: discoverMetaHtml([
+        beds > 0 ? { html: `<span>${adminEscape(`${beds} bed${beds === 1 ? "" : "s"}`)}</span>` } : null,
+        place ? { text: place } : null
+      ])
+    });
+  }).join("");
+}
+
+function paintDiscoverChips() {
+  document.querySelectorAll("[data-discover-chip]").forEach((btn) => {
+    const on = btn.getAttribute("data-discover-chip") === discoverChipId;
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.classList.toggle("bg-green-800", on);
+    btn.classList.toggle("text-white", on);
+    btn.classList.toggle("border-green-800", on);
+    btn.classList.toggle("bg-white", !on);
+    btn.classList.toggle("text-gray-800", !on);
+    btn.classList.toggle("border-gray-200", !on);
+    const key = btn.getAttribute("data-discover-label");
+    if (key) btn.textContent = aiTr(key);
+  });
+}
+
+async function loadDiscoverChip(id) {
+  const chip = discoverChipById(id || discoverChipId);
+  discoverChipId = chip.id;
+  paintDiscoverChips();
+  const host = document.getElementById("discover-results");
+  const note = document.getElementById("discover-results-note");
+  if (!host || !note) return;
+  const token = ++discoverLoadToken;
+  host.innerHTML = "";
+  note.textContent = aiTr("resultsLoading");
+  try {
+    let rows = [];
+    let noteKey = "resultsEmpty";
+    let noteHref = "";
+    if (chip.kind === "broker") {
+      const params = new URLSearchParams({ status: "approved", limit: "4" });
+      const response = await apiRequest(`/api/agents?${params}`, { skipAuth: true });
+      rows = (Array.isArray(response?.data) ? response.data : []).slice(0, 4);
+      noteKey = "resultsBrokerEmpty";
+    } else if (chip.kind === "short-term") {
+      const params = new URLSearchParams({ q: chip.params.q || "Entebbe", limit: "4" });
+      const response = await apiRequest(`/api/short-term/search?${params}`, { skipAuth: true });
+      rows = (Array.isArray(response?.listings) ? response.listings : []).slice(0, 4);
+      noteKey = "resultsShortEmpty";
+      noteHref = `/short-term?q=${encodeURIComponent(chip.params.q || "Entebbe")}`;
+    } else {
+      const params = new URLSearchParams({
+        status: "approved",
+        public_only: "1",
+        limit: "4",
+        card_fields: "1",
+        include_summary: "0",
+        ...chip.params
+      });
+      const response = await apiRequest(`/api/properties?${params}`, { skipAuth: true });
+      rows = (Array.isArray(response?.data) ? response.data : []).slice(0, 4);
+      if (!rows.length && response?.ok === false && response?.error) noteKey = "resultsError";
+    }
+    if (token !== discoverLoadToken) return;
+    discoverCache = { id: chip.id, rows, noteKey: rows.length ? "" : noteKey, noteHref: rows.length ? "" : noteHref };
+    renderDiscoverResults();
+  } catch (error) {
+    if (token !== discoverLoadToken) return;
+    const missingShortStay = chip.kind === "short-term" && Number(error?.status || 0) === 404;
+    discoverCache = {
+      id: chip.id,
+      rows: [],
+      noteKey: missingShortStay ? "resultsShortEmpty" : (Number(error?.status || 0) === 400 ? "resultsEmpty" : "resultsError"),
+      noteHref: missingShortStay ? `/short-term?q=${encodeURIComponent(chip.params.q || "Entebbe")}` : ""
+    };
+    renderDiscoverResults();
+  }
+}
+
 function applyAiChatbotLanguageUI() {
   setTextById("ai-page-title", aiTr("title"));
   setTextById("ai-page-sub", aiTr("sub"));
-  setTextById("ai-card-1-title", aiTr("card1Title"));
-  setTextById("ai-card-1-sub", aiTr("card1Sub"));
-  setTextById("ai-card-2-title", aiTr("card2Title"));
-  setTextById("ai-card-2-sub", aiTr("card2Sub"));
-  setTextById("ai-card-3-title", aiTr("card3Title"));
-  setTextById("ai-card-3-sub", aiTr("card3Sub"));
-  setTextById("ai-flow-title", aiTr("flowTitle"));
-  setTextById("ai-flow-1", aiTr("flow1"));
-  setTextById("ai-flow-2", aiTr("flow2"));
-  setTextById("ai-flow-3", aiTr("flow3"));
-  setTextById("ai-flow-4", aiTr("flow4"));
-  setTextById("ai-flow-5", aiTr("flow5"));
-  setTextById("ai-benefits-title", aiTr("benefitsTitle"));
-  setTextById("ai-benefit-1", aiTr("benefit1"));
-  setTextById("ai-benefit-2", aiTr("benefit2"));
-  setTextById("ai-benefit-3", aiTr("benefit3"));
-  setTextById("ai-benefit-4", aiTr("benefit4"));
-  setTextById("ai-benefit-5", aiTr("benefit5"));
   const btn = document.getElementById("ai-cta-btn");
   if (btn) btn.innerHTML = `<i class="fab fa-whatsapp text-lg"></i> ${aiTr("cta")}`;
+  paintDiscoverChips();
+  if (discoverCache.id) renderDiscoverResults();
 }
 
 function applyFraudLanguageUI() {
@@ -50764,6 +51118,7 @@ function showPage(page, options = {}) {
   }
   if (targetPage === "admin-setup-status") renderAdminSetupStatus();
   if (targetPage === "marketplace") loadMarketplacePage();
+  if (targetPage === "ai-chatbot") loadDiscoverChip(discoverChipId);
   if (targetPage === "advertise") initializeAdvertisingSelfServe();
   if (targetPage === "valuation") initializeValuationPage();
   if (targetPage === "tiktok-connect") initializeTikTokDisplayPage();
