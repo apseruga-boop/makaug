@@ -513,6 +513,9 @@ async function attachStills(propertyId, uploaded, {
   // C1 staff "Make a cover from the video": add the stills only. The listing's
   // description and video fields are left exactly as staff saved them.
   keepListingText = false,
+  // A live listing stays approved/published. The new still becomes the cover.
+  // reopenApproved is a different path: it sends an approved row back to review.
+  coverLiveListing = false,
   actorId = 'whatsapp-video-still-backfill'
 } = {}) {
   const client = await db.getClient();
@@ -526,7 +529,9 @@ async function attachStills(propertyId, uploaded, {
       [propertyId]
     );
     const property = locked.rows[0];
-    const allowedStatuses = reopenApproved ? ['pending', 'approved'] : ['pending'];
+    const allowedStatuses = coverLiveListing
+      ? ['pending', 'approved', 'live', 'published']
+      : (reopenApproved ? ['pending', 'approved'] : ['pending']);
     if (!property || !allowedStatuses.includes(property.status)) {
       await client.query('ROLLBACK');
       return { attached: 0, skipped: 'status_changed' };
@@ -570,7 +575,9 @@ async function attachStills(propertyId, uploaded, {
     }
     const existingVideoCount = replaceExisting ? 0 : existingVideoCountBeforeRepair;
     const required = Math.max(0, MIN_VIDEO_KEY_FRAMES - existingVideoCount);
-    const selectedUploads = uploaded.slice(0, required);
+    let selectedUploads = uploaded.slice(0, required);
+    // A live cover is one picture, even when the listing already has five frames.
+    if (coverLiveListing && !selectedUploads.length && uploaded.length) selectedUploads = uploaded.slice(0, 1);
     const cleanCaption = cleanEmployeePropertyCaption(property.extra_fields?.source_caption || property.description || '');
     const publicDescription = keepListingText ? property.description : buildEmployeePublicDescription({
       caption: property.extra_fields?.source_caption || property.description || '',
@@ -593,6 +600,12 @@ async function attachStills(propertyId, uploaded, {
     }
 
     const firstSortOrder = replaceExisting ? 0 : Number(existing.rows[0]?.max_sort_order ?? -1) + 1;
+    if (coverLiveListing && selectedUploads.length) {
+      await client.query(
+        `UPDATE property_images SET is_primary = FALSE WHERE property_id = $1`,
+        [propertyId]
+      );
+    }
     for (let index = 0; index < selectedUploads.length; index += 1) {
       const keyFrameNumber = existingVideoCount + index + 1;
       await client.query(
@@ -601,7 +614,7 @@ async function attachStills(propertyId, uploaded, {
         [
           propertyId,
           selectedUploads[index].url,
-          replaceExisting ? index === 0 : firstSortOrder + index === 0,
+          coverLiveListing ? index === 0 : (replaceExisting ? index === 0 : firstSortOrder + index === 0),
           firstSortOrder + index,
           `video_key_frame_${keyFrameNumber}`,
           `Distinct video key image ${keyFrameNumber} of ${existingVideoCount + selectedUploads.length}`
@@ -660,8 +673,10 @@ async function attachStills(propertyId, uploaded, {
         media_quality_blockers: [],
         media_validation_status: selectedUploads.length ? 'passed_repair_image_gate' : 'blocked_no_usable_property_image'
       }),
-      review_only: true,
-      auto_publish: false
+      ...(coverLiveListing ? {} : {
+        review_only: true,
+        auto_publish: false
+      })
     };
     await client.query(
       `UPDATE properties
@@ -679,15 +694,17 @@ async function attachStills(propertyId, uploaded, {
     await client.query(
       `INSERT INTO property_moderation_events
         (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
-       VALUES ($1, $6, $7, $5, 'pending', $2, $3, $4::jsonb)`,
+       VALUES ($1, $7, $8, $5, $6, $2, $3, $4::jsonb)`,
       [
         propertyId,
         keepListingText
           ? 'Staff made a cover from the listing\'s own video.'
           : 'Prepared five representative key images and retained the playable WhatsApp property video.',
-        keepListingText
-          ? `${selectedUploads.length} still(s) from the listing's own video attached, uncropped. Description unchanged. Listing remained in staff review.`
-          : `${selectedUploads.length} key image(s) attached and the public description was cleaned. Listing remained in staff review.`,
+        coverLiveListing
+          ? `${selectedUploads.length} still(s) from the listing's own video attached as the cover. Description unchanged. Status stayed ${property.status}.`
+          : keepListingText
+            ? `${selectedUploads.length} still(s) from the listing's own video attached, uncropped. Description unchanged. Listing remained in staff review.`
+            : `${selectedUploads.length} key image(s) attached and the public description was cleaned. Listing remained in staff review.`,
         JSON.stringify({
           marker: BACKFILL_MARKER,
           stills_attached: selectedUploads.length,
@@ -702,6 +719,7 @@ async function attachStills(propertyId, uploaded, {
           auto_publish: false
         }),
         property.status,
+        coverLiveListing ? property.status : 'pending',
         String(actorId || 'whatsapp-video-still-backfill'),
         keepListingText ? 'staff_video_cover_made' : 'whatsapp_video_still_backfilled'
       ]

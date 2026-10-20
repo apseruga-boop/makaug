@@ -322,7 +322,9 @@ async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', bud
   );
   const property = found.rows[0];
   if (!property) return { ok: false, status: 404, error: 'Listing not found.' };
-  if (property.status !== 'pending') return { ok: false, status: 409, error: 'Covers can only be made for listings still in review.' };
+  const status = String(property.status || '').toLowerCase();
+  const liveCover = ['approved', 'live', 'published'].includes(status);
+  if (status !== 'pending' && !liveCover) return { ok: false, status: 409, error: 'Covers can only be made for listings still in review.' };
   const { mediaHost, sameVideoUrl } = require('../utils/realListingPhoto');
   const sources = coverSourceUrls(property.extra_fields || {}, { mediaHost: mediaHost() });
   if (!sources.length) {
@@ -374,9 +376,13 @@ async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', bud
       );
     }
     if (!uploaded.length) return { ok: true, attached: 0, note: 'This listing already has stills from its video.' };
-    const attached = await backfill.attachStills(property.id, uploaded, { keepListingText: true, actorId });
+    const attached = await backfill.attachStills(property.id, uploaded, {
+      keepListingText: true,
+      actorId,
+      ...(liveCover ? { coverLiveListing: true } : {})
+    });
     if (attached.skipped === 'status_changed') return { ok: false, status: 409, error: 'The listing changed while the cover was being made. Reload and try again.' };
-    return { ok: true, attached: attached.attached || 0 };
+    return { ok: true, attached: attached.attached || 0, listingStatus: status };
   } catch (error) {
     try { backfill.killLiveChildren?.(); } catch (_) {}
     logger.warn('Staff video cover failed', { propertyId: property.id, error: String(error?.message || error).slice(0, 300) });

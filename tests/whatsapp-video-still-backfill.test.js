@@ -110,7 +110,7 @@ assert(workerSource.includes('employeeVideoRecoveryCaptionKey'), 'historic looku
 assert(/mediaType: 'media',\s+mediaPreviews: \[\]/.test(workerSource), 'marked historic video cards must be reopened even if WhatsApp labels the old thumbnail as an image');
 assert(backfillSource.includes("'whatsapp_video_still_backfilled'"), 'repairs must leave an audit event');
 assert(backfillSource.includes('extractStillWithFallback(videoPath, stillPath'), 'backfill must recover when the requested frame timestamp is beyond decodable footage');
-assert(backfillSource.includes("$5, 'pending'"), 'backfill audit events must end in staff-review status');
+assert(backfillSource.includes("coverLiveListing ? property.status : 'pending'"), 'backfill audit events must end in staff-review status unless a live cover keeps the current status');
 assert(backfillSource.includes("'media_repair_reopened'"), 'targeted repairs must record removal from public inventory');
 assert(backfillSource.includes("status = 'pending'"), 'approved repair targets must return to staff review');
 assert(backfillSource.includes('visually_distinct: true'), 'repair audit evidence must record the distinct-frame gate');

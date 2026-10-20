@@ -165,6 +165,37 @@ test('the dashboard search opens the same editor and badges a live listing', () 
   assert.match(APP, /staffListingDirectLookup\(state\.term\)/);
   assert.match(HTML, /id="staff-review-queue-search"[^>]*oninput="staffSearchReviewQueue\(this\.value\)"/);
   assert.match(HTML, /placeholder="MK ref or property id \(any status\), or title, area, district, phone, source \(pending and live\)"/);
+  assert.match(APP, /include_total: search \? "0" : "1"/);
+  assert.match(APP, /staffReviewQueueSearchTimer = window\.setTimeout/);
+});
+
+test('review-queue text search uses trigram-index expressions and skips the count', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { migrationRunsOutsideTransaction, splitSqlStatements } = require('../scripts/migrate');
+  const migration = fs.readFileSync(path.join(__dirname, '../db/migrations/152_staff_review_search_trgm.sql'), 'utf8');
+  const values = [];
+  const clause = propertyListingSearchClause('p', 'SUDA', values);
+  assert.deepEqual(values, ['%SUDA%']);
+  for (const expression of [
+    'p.title',
+    'p.area',
+    'p.district',
+    'p.inquiry_reference',
+    'p.lister_phone',
+    "(p.extra_fields->>'source_name')",
+    "(p.extra_fields->>'source_platform')"
+  ]) {
+    assert.match(clause, new RegExp(expression.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' ILIKE'));
+    assert.doesNotMatch(clause, new RegExp('COALESCE\\(' + expression.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  assert.equal(migrationRunsOutsideTransaction(migration), true);
+  assert.doesNotMatch(migration, /\bBEGIN\b/);
+  assert.equal((migration.match(/^CREATE INDEX CONCURRENTLY/gm) || []).length, 7);
+  assert.ok(splitSqlStatements(migration).length >= 8);
+  for (const indexed of ['title', 'area', 'district', 'inquiry_reference', 'lister_phone', "extra_fields->>'source_name'", "extra_fields->>'source_platform'"]) {
+    assert.match(migration, new RegExp(`${indexed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)? gin_trgm_ops`));
+  }
 });
 
 test('the lookup and the editor stay behind staff sign-in', async () => {

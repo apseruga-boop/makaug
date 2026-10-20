@@ -14150,7 +14150,7 @@ const STAFF_REVIEW_QUEUE_PAGE_LIMIT = 24;
 const staffReviewQueueState = {
   main: { rows: [], total: null, page: 0, loading: false },
   broker: { rows: [], total: null, page: 0, loading: false },
-  search: { term: "", rows: [], total: null, page: 0, loading: false, statusScope: "pending" }
+  search: { term: "", rows: [], total: null, page: 0, loading: false, statusScope: "pending", moreHint: false }
 };
 
 function staffDedupeRows(rows = [], excludeIds = new Set()) {
@@ -14167,7 +14167,7 @@ function staffDedupeRows(rows = [], excludeIds = new Set()) {
 
 function staffReviewQueueFooterHtml(segment, shown, total) {
   const totalKnown = total !== null && total !== undefined && total !== "" && Number.isFinite(Number(total));
-  const more = totalKnown ? shown < Number(total) : false;
+  const more = totalKnown ? shown < Number(total) : Boolean(staffReviewQueueState[segment]?.moreHint);
   return `
     <div class="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600" data-staff-queue-footer="${adminAttr(segment)}">
       <span>Showing ${staffNumber(shown)}${totalKnown ? ` of ${staffNumber(total)}` : ""} · oldest first</span>
@@ -14323,7 +14323,7 @@ function staffReviewQueuePageUrl(segment, page, search = "") {
     segment: segment === "search" ? "all" : segment,
     page: String(page),
     limit: String(STAFF_REVIEW_QUEUE_PAGE_LIMIT),
-    include_total: "1"
+    include_total: search ? "0" : "1"
   });
   if (search) params.set("search", search);
   return `/api/staff/properties/review-queue?${params.toString()}`;
@@ -14343,8 +14343,11 @@ async function staffLoadMoreReviewQueue(segment = "main", searchSeq = 0) {
     state.rows = staffDedupeRows([...state.rows, ...rows]);
     state.page = nextPage;
     if (segment === "search" && res?.meta?.status_scope) state.statusScope = res.meta.status_scope;
+    if (segment === "search") state.moreHint = Boolean(res?.meta?.has_more);
     const total = res?.pagination?.total ?? res?.meta?.total;
-    if (Number.isFinite(Number(total))) state.total = Number(total);
+    const countStatus = res?.count_status || res?.meta?.count_status;
+    if (countStatus === "not_requested") state.total = null;
+    else if (Number.isFinite(Number(total))) state.total = Number(total);
     if (!rows.length && state.total !== null) state.total = Math.min(state.total, state.rows.length);
     // One MK ref, suffix, or property id: open the same editor. A title search stays a list.
     if (segment === "search" && nextPage === 1 && rows.length === 1 && staffListingDirectLookup(state.term)) {
@@ -14377,6 +14380,7 @@ function staffSearchReviewQueue(value = "") {
       search.rows = [];
       search.total = null;
       search.page = 0;
+      search.moreHint = false;
       search.loading = false;
       staffPaintReviewQueue("main");
       return;
@@ -14384,6 +14388,7 @@ function staffSearchReviewQueue(value = "") {
     search.rows = [];
     search.total = null;
     search.page = 0;
+    search.moreHint = false;
     search.loading = false;
     await staffLoadMoreReviewQueue("search", seq);
   }, 300);

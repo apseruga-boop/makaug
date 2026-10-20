@@ -4575,7 +4575,15 @@ router.post('/properties/:id/video-cover', async (req, res, next) => {
       db.query('SELECT extra_fields FROM properties WHERE id = $1', [req.params.id])
     ]);
     clearStaffFastDashboardCache();
-    logStaffActivityInBackground(req, 'staff_video_cover_made', { targetType: 'property', targetId: req.params.id, metadata: { stills: result.attached } });
+    if (['approved', 'live', 'published'].includes(String(result.listingStatus || '').toLowerCase())) {
+      clearPublicListingCaches('staff_live_video_cover');
+      try {
+        require('../services/publicInventoryMetricsService').invalidatePublicInventoryMetricsCache('staff_live_video_cover');
+      } catch (error) {
+        logger.warn('Public HTML cache clear failed after a live video cover', { message: error.message });
+      }
+    }
+    logStaffActivityInBackground(req, 'staff_video_cover_made', { targetType: 'property', targetId: req.params.id, metadata: { stills: result.attached, listing_status: result.listingStatus || null } });
     return res.json({
       ok: true,
       data: {

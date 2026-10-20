@@ -55,14 +55,18 @@ function propertyListingSearchClause(alias = 'p', term = '', values = []) {
   }
   values.push(`%${String(term || '').trim()}%`);
   const idx = values.length;
+  // These expressions are the ones indexed by 152_staff_review_search_trgm.sql.
+  // COALESCE(...) would not match those gin_trgm indexes, and a leading-wildcard
+  // ILIKE would fall back to a sequential scan of every pending and live row.
+  // A NULL column does not match, the same as an empty string.
   return `(
     ${alias}.title ILIKE $${idx}
     OR ${alias}.area ILIKE $${idx}
     OR ${alias}.district ILIKE $${idx}
-    OR COALESCE(${alias}.inquiry_reference, '') ILIKE $${idx}
-    OR COALESCE(${alias}.lister_phone, '') ILIKE $${idx}
-    OR COALESCE(${alias}.extra_fields->>'source_name', '') ILIKE $${idx}
-    OR COALESCE(${alias}.extra_fields->>'source_platform', '') ILIKE $${idx}
+    OR ${alias}.inquiry_reference ILIKE $${idx}
+    OR ${alias}.lister_phone ILIKE $${idx}
+    OR (${alias}.extra_fields->>'source_name') ILIKE $${idx}
+    OR (${alias}.extra_fields->>'source_platform') ILIKE $${idx}
   )`;
 }
 
