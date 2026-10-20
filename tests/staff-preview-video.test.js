@@ -208,7 +208,7 @@ test('a cover with two videos uses only the video staff picked', async () => {
   assert.match(needsChoice.error, /Choose which video/);
   assert.equal(calls.length, 0);
   const made = await scheduler.makeVideoCoverForListing(db, 'p1', { backfill, actorId: 'staff-9', videoUrl: land });
-  assert.deepEqual(made, { ok: true, attached: 1 });
+  assert.deepEqual(made, { ok: true, attached: 1, listingStatus: 'pending' });
   assert.deepEqual(calls[0], ['make', [land], 1]);
   assert.deepEqual(calls[1][2], { keepListingText: true, actorId: 'staff-9' });
   const page = await scheduler.makeVideoCoverForListing(db, 'p1', { backfill, videoUrl: 'https://www.tiktok.com/@agent/video/1' });

@@ -45,7 +45,59 @@ async function getAppliedMigrationNames() {
   return new Set(result.rows.map((r) => r.filename));
 }
 
+function splitSqlStatements(sql = '') {
+  const statements = [];
+  let current = '';
+  let inSingle = false;
+  let dollarTag = '';
+  for (let i = 0; i < sql.length; i += 1) {
+    const ch = sql[i];
+    if (!inSingle && !dollarTag && ch === '-' && sql[i + 1] === '-') {
+      const end = sql.indexOf('\n', i);
+      const line = end === -1 ? sql.slice(i) : sql.slice(i, end + 1);
+      current += line;
+      i += line.length - 1;
+      continue;
+    }
+    if (!inSingle && ch === '$') {
+      const match = sql.slice(i).match(/^\$[A-Za-z0-9_]*\$/);
+      if (match && (!dollarTag || match[0] === dollarTag)) {
+        dollarTag = dollarTag ? '' : match[0];
+        current += match[0];
+        i += match[0].length - 1;
+        continue;
+      }
+    }
+    if (!dollarTag && ch === "'") {
+      if (inSingle && sql[i + 1] === "'") {
+        current += "''";
+        i += 1;
+        continue;
+      }
+      inSingle = !inSingle;
+    }
+    if (!inSingle && !dollarTag && ch === ';') {
+      const trimmed = current.trim();
+      if (trimmed) statements.push(trimmed);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  const trimmed = current.trim();
+  if (trimmed) statements.push(trimmed);
+  return statements;
+}
+
+function migrationRunsOutsideTransaction(sql = '') {
+  return /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/i.test(sql);
+}
+
 async function applyMigration(filename, sql) {
+  if (migrationRunsOutsideTransaction(sql)) {
+    await applyAutocommitMigration(filename, sql);
+    return;
+  }
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -60,6 +112,22 @@ async function applyMigration(filename, sql) {
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function applyAutocommitMigration(filename, sql) {
+  const client = await db.getClient();
+  try {
+    // CREATE INDEX CONCURRENTLY cannot run inside a transaction. Each
+    // statement is its own implicit transaction. The migration row is written
+    // only after every statement succeeds, so a failed index is retried.
+    for (const statement of splitSqlStatements(sql)) {
+      await client.query(statement);
+    }
+    await client.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [filename]);
+    logger.info(`Applied migration: ${filename}`);
   } finally {
     client.release();
   }
@@ -177,6 +245,8 @@ module.exports = {
   SOUTH_AFRICA_BOOTSTRAP_MARKER,
   SOUTH_AFRICA_SEEDED_TABLES,
   isSouthAfricaBootstrapResetEnabled,
+  migrationRunsOutsideTransaction,
+  splitSqlStatements,
   isolateSouthAfricaBootstrapData,
   runMigrations
 };

@@ -107,14 +107,27 @@ test('"Make a cover from the video": a TikTok page gives a plain error; a video 
   };
   const mp4 = `https://${mediaHost()}/videos/tour.mp4`;
   const made = await scheduler.makeVideoCoverForListing(fakeDb({ ...property, extra_fields: { video_url: mp4 } }), 'p1', { backfill, actorId: 'staff-9' });
-  assert.deepEqual(made, { ok: true, attached: 1 });
+  assert.deepEqual(made, { ok: true, attached: 1, listingStatus: 'pending' });
   assert.deepEqual(calls[0], ['make', [mp4], 2], 'the scheduler\'s two-video limit');
   assert.deepEqual(calls[1], ['attach', 'p1', { keepListingText: true, actorId: 'staff-9' }], 'description left alone');
   const failing = { ...backfill, async makeAndUploadStills() { throw new Error('no clear, visually distinct frame could be extracted'); } };
   const failed = await scheduler.makeVideoCoverForListing(fakeDb({ ...property, extra_fields: { video_url: mp4 } }), 'p1', { backfill: failing });
   assert.equal(failed.error, 'We couldn\'t get a clear picture from this video, so no cover was made. Upload a photo instead.');
-  const approved = await scheduler.makeVideoCoverForListing(fakeDb({ ...property, status: 'approved' }), 'p1', { backfill });
-  assert.equal(approved.status, 409);
+  const approved = await scheduler.makeVideoCoverForListing(fakeDb({ ...property, status: 'approved', extra_fields: { video_url: mp4 } }), 'p1', {
+    backfill: {
+      ...backfill,
+      async attachStills(_id, _uploaded, options) {
+        calls.push(['live', options.coverLiveListing, options.keepListingText, options.reopenApproved || false]);
+        return { attached: 1 };
+      }
+    }
+  });
+  assert.equal(approved.ok, true);
+  assert.equal(approved.listingStatus, 'approved');
+  assert.deepEqual(calls.at(-1), ['live', true, true, false]);
+  const sold = await scheduler.makeVideoCoverForListing(fakeDb({ ...property, status: 'sold' }), 'p1', { backfill });
+  assert.equal(sold.status, 409);
+  assert.match(sold.error, /still in review/);
   const busy = await scheduler.makeVideoCoverForListing({ pool: { waitingCount: 3 }, query: async () => ({ rows: [] }) }, 'p1', { backfill });
   assert.equal(busy.status, 503);
 });
