@@ -2478,6 +2478,7 @@ async function start() {
     startLeadDeskScheduler(db);
     startVideoStillScheduler(db);
     whatsappRoutes.startEmployeeBatchSummarySweeper?.();
+    whatsappRoutes.startEmployeeMediaRetrySweeper?.();
     startGreetingNameCache(db);
     startBillingScheduler(db);
     require('./services/payLinkService').startPayLinkScheduler(db);

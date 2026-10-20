@@ -12701,6 +12701,149 @@ async function sweepEmployeeBatchSummaries() {
   return sent;
 }
 
+/**
+ * Media that was shared but did not load is retried by us, never by the agent.
+ *
+ * 20 Oct 2026: Arthur's point about the agent journey — when someone has already
+ * sent the photos or video and our copy fails, "please resend" makes the agent do
+ * the work twice and often they do not. The message is still in the chat; the
+ * remote link is still valid for a while. So a failed store is parked on the
+ * session with the original message, retried on a backoff by the sweeper, and the
+ * agent is told it is being handled. Only after every retry has failed do we ask,
+ * once, for a resend.
+ */
+const EMPLOYEE_MEDIA_FAILURE_RE = /could not store (?:that|the) (?:media|picture)|No usable media bytes|no usable image bytes/i;
+const EMPLOYEE_MEDIA_RETRY_ACK = 'Got your media — it did not load on the first try, so I am retrying it myself. You do not need to send it again; I will confirm here once it is added.';
+const EMPLOYEE_MEDIA_RETRY_DELAYS_MS = [60_000, 3 * 60_000, 10 * 60_000, 30 * 60_000, 90 * 60_000];
+let employeeMediaRetryTimer = null;
+let employeeMediaRetryRunning = false;
+
+function slimEmployeeRetryCandidates(list = []) {
+  return (Array.isArray(list) ? list : [])
+    .map((candidate) => ({
+      url: normalizeInput(candidate?.url || candidate?.media_url || candidate?.mediaUrl || candidate?.remoteUrl || ''),
+      mimeType: normalizeInput(candidate?.mimeType || candidate?.mime_type || candidate?.mimetype || ''),
+      name: normalizeInput(candidate?.name || candidate?.filename || ''),
+      sha256: normalizeInput(candidate?.sha256 || candidate?.hash || '')
+    }))
+    .filter((candidate) => /^https:\/\//i.test(candidate.url))
+    .slice(0, 20);
+}
+
+async function parkEmployeeMediaForRetry({ phone, body = '', mediaUrl = '', runtime = {}, inboundMessageId = '', attempt = 0 } = {}) {
+  if (!phone || attempt >= EMPLOYEE_MEDIA_RETRY_DELAYS_MS.length) return false;
+  const photoCandidates = slimEmployeeRetryCandidates(runtime.photoCandidates);
+  const mediaCandidates = slimEmployeeRetryCandidates(runtime.mediaCandidates);
+  const remoteMediaUrl = /^https:\/\//i.test(String(mediaUrl || '')) ? String(mediaUrl) : '';
+  if (!photoCandidates.length && !mediaCandidates.length && !remoteMediaUrl) return false;
+  const entry = {
+    inboundMessageId: normalizeInput(inboundMessageId).replace(/:retry\d+$/, ''),
+    body: String(body || '').slice(0, 4000),
+    mediaUrl: remoteMediaUrl,
+    runtime: {
+      provider: runtime.provider || 'web_bridge',
+      mediaType: runtime.mediaType || '',
+      mediaCount: Number(runtime.mediaCount || 0),
+      photoCandidates,
+      mediaCandidates
+    },
+    attempt,
+    parkedAt: new Date().toISOString(),
+    nextAt: new Date(Date.now() + EMPLOYEE_MEDIA_RETRY_DELAYS_MS[attempt]).toISOString()
+  };
+  const existing = await db.query(
+    `SELECT session_data->'media_retry_queue' AS queue FROM whatsapp_sessions WHERE phone = $1`,
+    [phone]
+  );
+  const queue = Array.isArray(existing.rows[0]?.queue) ? existing.rows[0].queue : [];
+  const next = queue.filter((item) => item?.inboundMessageId !== entry.inboundMessageId).concat(entry).slice(-30);
+  await db.query(
+    `UPDATE whatsapp_sessions
+        SET session_data = jsonb_set(COALESCE(session_data, '{}'::jsonb), '{media_retry_queue}', $2::jsonb, true)
+      WHERE phone = $1`,
+    [phone, JSON.stringify(next)]
+  );
+  return true;
+}
+
+async function sweepEmployeeMediaRetries() {
+  if (employeeMediaRetryRunning) return 0;
+  employeeMediaRetryRunning = true;
+  let handled = 0;
+  try {
+    const rows = await db.query(
+      `SELECT phone, session_data->'media_retry_queue' AS queue
+         FROM whatsapp_sessions
+        WHERE session_data->'media_retry_queue' IS NOT NULL
+          AND jsonb_array_length(session_data->'media_retry_queue') > 0
+        LIMIT 20`
+    );
+    for (const row of rows.rows) {
+      const phone = String(row.phone || '');
+      const queue = Array.isArray(row.queue) ? row.queue : [];
+      const due = queue.find((item) => item?.nextAt && new Date(item.nextAt).getTime() <= Date.now());
+      if (!due) continue;
+      const rest = queue.filter((item) => item !== due && item?.inboundMessageId !== due.inboundMessageId);
+      await db.query(
+        `UPDATE whatsapp_sessions
+            SET session_data = jsonb_set(COALESCE(session_data, '{}'::jsonb), '{media_retry_queue}', $2::jsonb, true)
+          WHERE phone = $1`,
+        [phone, JSON.stringify(rest)]
+      );
+      try {
+        const attempt = Number(due.attempt || 0) + 1;
+        const session = await getSession(phone);
+        const result = await handleEmployeeWhatsappIntake({
+          phone,
+          body: due.body || '',
+          mediaUrl: due.mediaUrl || '',
+          runtime: due.runtime || {},
+          inboundMessageId: `${due.inboundMessageId}:retry${attempt}`,
+          session
+        });
+        const failedAgain = EMPLOYEE_MEDIA_FAILURE_RE.test(String(result?.message || ''));
+        if (failedAgain) {
+          const reparked = await parkEmployeeMediaForRetry({
+            phone, body: due.body, mediaUrl: due.mediaUrl, runtime: due.runtime,
+            inboundMessageId: due.inboundMessageId, attempt
+          });
+          if (!reparked) {
+            await queueWhatsappWebBridgeAutoReply({
+              phone,
+              message: 'I tried several times to load the media you sent and WhatsApp would not give it to me. Please send that photo or video once more and I will add it straight away.',
+              source: 'whatsapp_runtime',
+              actorId: 'employee_media_retry'
+            });
+          }
+        } else if (result?.message) {
+          await queueWhatsappWebBridgeAutoReply({
+            phone,
+            message: `✅ That media has now loaded.\n\n${result.message}`,
+            nextStep: result.nextStep || null,
+            source: 'whatsapp_runtime',
+            actorId: 'employee_media_retry'
+          });
+        }
+        handled += 1;
+      } catch (error) {
+        logger.warn('Employee media retry failed:', error.message || String(error));
+      }
+    }
+  } catch (error) {
+    logger.warn('Employee media retry sweep skipped:', error.message || String(error));
+  } finally {
+    employeeMediaRetryRunning = false;
+  }
+  return handled;
+}
+
+function startEmployeeMediaRetrySweeper() {
+  if (process.env.NODE_ENV === 'test' || employeeMediaRetryTimer) return null;
+  employeeMediaRetryTimer = setInterval(() => { sweepEmployeeMediaRetries().catch(() => {}); }, 30_000);
+  employeeMediaRetryTimer.unref?.();
+  return employeeMediaRetryTimer;
+}
+
 function startEmployeeBatchSummarySweeper() {
   if (process.env.NODE_ENV === 'test' || employeeSummarySweepTimer) return null;
   const first = setTimeout(() => { sweepEmployeeBatchSummaries().catch(() => {}); }, 20_000);
@@ -18031,6 +18174,26 @@ async function processInboundRuntimeUnlocked({
       message: 'Employee intake hit a temporary error. Nothing was published. Please wait before resending.'
     };
   });
+  if (employeeIntake.handled && EMPLOYEE_MEDIA_FAILURE_RE.test(String(employeeIntake.message || ''))) {
+    const parked = await parkEmployeeMediaForRetry({
+      phone,
+      body: effectiveBody,
+      mediaUrl: effectiveMediaUrl,
+      runtime: {
+        provider,
+        mediaType: normalizedMediaType,
+        mediaCount: inboundMediaCount,
+        photoCandidates: inboundPhotoCandidates,
+        mediaCandidates: inboundMediaCandidates
+      },
+      inboundMessageId,
+      attempt: 0
+    }).catch((error) => {
+      logger.warn('Could not park failed employee media for retry:', error.message || String(error));
+      return false;
+    });
+    if (parked) employeeIntake.message = EMPLOYEE_MEDIA_RETRY_ACK;
+  }
   if (employeeIntake.handled) {
     // A forwarded batch arrives as a burst. Answering each incomplete property on
     // its own, mid-burst, left the agent guessing which property a reply was about
@@ -19506,6 +19669,7 @@ router.delete('/reset/:phone', async (req, res) => {
 
 module.exports = router;
 module.exports.startEmployeeBatchSummarySweeper = startEmployeeBatchSummarySweeper;
+module.exports.startEmployeeMediaRetrySweeper = startEmployeeMediaRetrySweeper;
 module.exports.__test = {
   extractNaturalSearchFilters,
   applyProximityToFilters,
@@ -19571,6 +19735,9 @@ module.exports.__test = {
   scheduleEmployeeBatchSummary,
   sweepEmployeeBatchSummaries,
   startEmployeeBatchSummarySweeper,
+  sweepEmployeeMediaRetries,
+  parkEmployeeMediaForRetry,
+  EMPLOYEE_MEDIA_FAILURE_RE,
   ACTIVE_COUNTRY_CODE,
   ACTIVE_CURRENCY,
   addWhatsappCanonicalLocationFilter,
