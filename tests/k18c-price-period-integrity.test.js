@@ -17,7 +17,7 @@ test('student list and suggestion filters accept singular and legacy plural rows
 });
 
 test('valuation estimate is constrained to its displayed evidence range', () => {
-  const result = valuation.buildEstimate({
+  const input = {
     category: 'sale',
     location: 'Kololo',
     district: 'Kampala',
@@ -33,14 +33,40 @@ test('valuation estimate is constrained to its displayed evidence range', () => 
     tenure: '',
     furnished: '',
     parking: ''
-  }, [
-    { id: 'a', listing_type: 'sale', price: 100_000_000, price_period: 'once', title: 'House A', area: 'Kololo', district: 'Kampala' },
-    { id: 'b', listing_type: 'sale', price: 110_000_000, price_period: 'once', title: 'House B', area: 'Kololo', district: 'Kampala' },
-    { id: 'c', listing_type: 'sale', price: 900_000_000, price_period: 'once', title: 'House C', area: 'Kololo', district: 'Kampala' },
-    { id: 'd', listing_type: 'sale', price: 950_000_000, price_period: 'once', title: 'House D', area: 'Kololo', district: 'Kampala' }
-  ], 'area', false);
+  };
+  const row = (id, price, title) => ({
+    id,
+    listing_type: 'sale',
+    price,
+    price_period: 'once',
+    title,
+    area: 'Kololo',
+    district: 'Kampala'
+  });
 
+  // 100–110M beside 900–950M is two markets, not one range. The weighted
+  // p75/p25 ratio is 9, above the ratio-2 cutoff, so the method refuses to
+  // publish an estimate instead of pinning 110M next to 950M homes.
+  const wide = valuation.buildEstimate(input, [
+    row('a', 100_000_000, 'House A'),
+    row('b', 110_000_000, 'House B'),
+    row('c', 900_000_000, 'House C'),
+    row('d', 950_000_000, 'House D')
+  ], 'area', false);
+  assert.equal(wide.sufficient, false);
+  assert.equal(wide.insufficient_reason, 'range_too_wide');
+  assert.equal(wide.estimate, null);
+
+  // A published estimate has to sit inside the displayed evidence range
+  // (the weighted p25–p75, or the ±30% cap centred on that estimate).
+  const result = valuation.buildEstimate(input, [
+    row('a', 100_000_000, 'House A'),
+    row('b', 110_000_000, 'House B'),
+    row('c', 120_000_000, 'House C'),
+    row('d', 130_000_000, 'House D')
+  ], 'area', false);
   assert.equal(result.sufficient, true);
+  assert.ok(result.range_low != null && result.range_high != null);
   assert.ok(result.estimate >= result.range_low);
   assert.ok(result.estimate <= result.range_high);
 });

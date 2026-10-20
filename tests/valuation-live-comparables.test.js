@@ -337,7 +337,6 @@ assert.strictEqual(evidenceEstimate.confidence, 'low');
 const bedroomAdjusted = helpers.buildEstimate({
   category: 'sale',
   bedrooms: 3,
-  allow_bedroom_adjustment: true,
   location: 'Kololo'
 }, [
   { id: 'b2a', listing_type: 'sale', bedrooms: 2, price: 200_000_000, title: 'Two A' },
@@ -450,8 +449,25 @@ assert.ok(
 assert.ok(app.includes('applyValuationLanguageUI'), 'valuation UI must participate in language changes');
 assert.ok(routeSource.includes("router.get('/locations'"), 'valuation location counts endpoint must exist');
 assert.ok(routeSource.includes("router.post('/matches'"), 'valuation live match-count endpoint must exist');
-assert.ok(routeSource.includes("router.post('/price-hint'"), 'valuation must accept a tell-us-your-price hint');
+assert.ok(routeSource.includes("router.post('/price-hint', priceHintLimiter"), 'valuation must accept a tell-us-your-price hint behind a rate limit');
+assert.ok(routeSource.includes('keyGenerator: rateLimitClientKey'), 'price-hint rate limit must key off the client address');
 assert.ok(routeSource.includes('valuation_price_hints'), 'price hints must be stored, not kept only in the browser');
+assert.ok(!routeSource.includes('CREATE TABLE'), 'price hints must not create a table on the request path');
+assert.ok(!routeSource.includes('ensureValuationPriceHintsTable'), 'price hints must not ensure schema at request time');
+const priceHintMigration = fs.readFileSync(
+  path.join(root, 'db', 'migrations', '153_valuation_price_hints.sql'),
+  'utf8'
+);
+assert.ok(priceHintMigration.includes('CREATE EXTENSION IF NOT EXISTS pgcrypto'), 'the migration must make gen_random_uuid available the same way earlier UUID migrations do');
+assert.ok(priceHintMigration.includes("to_regprocedure('gen_random_uuid()')"), 'the migration must check gen_random_uuid before creating the table');
+assert.ok(priceHintMigration.includes('CREATE TABLE IF NOT EXISTS valuation_price_hints'), 'price hints belong in a numbered migration');
+assert.strictEqual(helpers.validatePriceHint({ category: 'sale', location: 'Kololo', price: '150,000,000', bedrooms: 3 }).error, undefined);
+assert.ok(helpers.validatePriceHint({ category: '', location: 'Kololo', price: 1000 }).error);
+assert.ok(helpers.validatePriceHint({ category: 'sale', location: '1', price: 1000 }).error);
+assert.ok(helpers.validatePriceHint({ category: 'sale', location: 'Kololo', price: 0 }).error);
+assert.ok(helpers.validatePriceHint({ category: 'sale', location: 'Kololo', price: 1 }).error);
+assert.ok(helpers.validatePriceHint({ category: 'sale', location: 'Kololo', price: 'free' }).error);
+assert.ok(helpers.validatePriceHint({ category: 'sale', location: 'Kololo', price: 50_000_000, bedrooms: 40 }).error);
 assert.ok(routeSource.includes('COUNT(*)::int AS listing_count'), 'valuation locations must expose real listing counts');
 assert.ok(
   routeSource.includes("publicLaunchTestListingFastCondition('p')"),

@@ -1,6 +1,8 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 
 const db = require('../config/database');
+const { rateLimitClientKey } = require('../utils/clientIp');
 const { cleanText, toNullableFloat, toNullableInt } = require('../middleware/validation');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
 const { publicLaunchTestListingFastCondition } = require('../services/publicInventoryMetricsService');
@@ -202,7 +204,10 @@ function applyBedroomAdjustment(rows = [], input = {}) {
   const target = Number(input.bedrooms);
   const adjustable = ['sale', 'rent', 'student'].includes(input.category);
   const known = rows.filter((row) => Number(row.bedrooms) > 0);
-  if (!adjustable || !input.allow_bedroom_adjustment || !(target > 0) || !known.length) {
+  // Bedroom adjustment is part of the estimate, not a route-only switch.
+  // Exact bedroom matches are kept when there are enough of them. A thin
+  // exact sample is scaled with the multiplier learned from the mixed rows.
+  if (!adjustable || !(target > 0) || !known.length) {
     return { rows, adjusted: false, multiplier: null };
   }
   const exact = rows.filter((row) => {
@@ -1043,12 +1048,7 @@ async function selectValuationPool(input, locationIsDistrict) {
     ) {
       const mixedQuery = { ...query, bedrooms: null, bedrooms_plus: false };
       const mixedRows = await withTransientDatabaseRetry(() => loadComparableRows(mixedQuery, step.scope));
-      const adjusted = buildEstimate(
-        { ...query, allow_bedroom_adjustment: true },
-        mixedRows,
-        step.scope,
-        step.widened
-      );
+      const adjusted = buildEstimate(query, mixedRows, step.scope, step.widened);
       if (adjusted.bedroom_adjusted) {
         rows = mixedRows;
         probe = adjusted;
@@ -1146,41 +1146,63 @@ router.post('/estimate', async (req, res, next) => {
   }
 });
 
-async function ensureValuationPriceHintsTable() {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS valuation_price_hints (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      category TEXT NOT NULL,
-      location TEXT NOT NULL,
-      district TEXT,
-      bedrooms INTEGER,
-      price NUMERIC NOT NULL,
-      note TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+const PRICE_HINT_MIN_UGX = 1_000;
+
+const priceHintLimiter = rateLimit({
+  keyGenerator: rateLimitClientKey,
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many price hints from this connection. Try again later.' }
+});
+
+function hintText(value, maxLength) {
+  return cleanText(value).replace(/\s+/g, ' ').slice(0, maxLength);
 }
 
-router.post('/price-hint', async (req, res, next) => {
+function validatePriceHint(body = {}) {
+  const category = normalizeCategory(body.category);
+  const location = hintText(body.location || body.area, 80);
+  const district = hintText(body.district, 80);
+  const price = Number(String(body.price ?? '').replace(/[,\s]/g, ''));
+  const bedrooms = toNullableInt(body.bedrooms);
+  const note = hintText(body.note, 240);
+  if (!category) {
+    return { error: 'Choose a property type before sending a price.' };
+  }
+  if (location.length < 2 || !/[a-z]/i.test(location)) {
+    return { error: 'Enter a location before sending a price.' };
+  }
+  if (!Number.isFinite(price) || price < PRICE_HINT_MIN_UGX || price > MAX_PRICE_UGX) {
+    return { error: 'Enter a price in Uganda shillings.' };
+  }
+  if (bedrooms != null && (!Number.isInteger(bedrooms) || bedrooms < 0 || bedrooms > 20)) {
+    return { error: 'Bedrooms must be between 0 and 20.' };
+  }
+  return {
+    value: {
+      category,
+      location,
+      district: district || null,
+      bedrooms,
+      price,
+      note: note || null
+    }
+  };
+}
+
+router.post('/price-hint', priceHintLimiter, async (req, res, next) => {
   try {
-    const body = req.body || {};
-    const category = normalizeCategory(body.category);
-    const location = cleanText(body.location || body.area, 120);
-    const district = cleanText(body.district, 120);
-    const price = Number(body.price);
-    const bedrooms = toNullableInt(body.bedrooms);
-    const note = cleanText(body.note, 240);
-    if (!category || !location) {
-      return res.status(400).json({ ok: false, error: 'Choose a property type and location before sending a price.' });
+    const parsed = validatePriceHint(req.body || {});
+    if (parsed.error) {
+      return res.status(400).json({ ok: false, error: parsed.error });
     }
-    if (!Number.isFinite(price) || price <= 0) {
-      return res.status(400).json({ ok: false, error: 'Enter a price above 0.' });
-    }
-    await ensureValuationPriceHintsTable();
+    const hint = parsed.value;
     await db.query(
       `INSERT INTO valuation_price_hints (category, location, district, bedrooms, price, note)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [category, location, district || null, bedrooms, price, note || null]
+      [hint.category, hint.location, hint.district, hint.bedrooms, hint.price, hint.note]
     );
     return res.status(201).json({
       ok: true,
@@ -1288,6 +1310,7 @@ module.exports._test = {
   valuationConfidenceLevel,
   stableComparableImageUrl,
   filterComparablePriceOutliers,
+  validatePriceHint,
   minimumPlausiblePrice,
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,
