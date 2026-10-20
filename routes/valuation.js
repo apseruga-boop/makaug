@@ -1,6 +1,8 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 
 const db = require('../config/database');
+const { rateLimitClientKey } = require('../utils/clientIp');
 const { cleanText, toNullableFloat, toNullableInt } = require('../middleware/validation');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
 const { publicLaunchTestListingFastCondition } = require('../services/publicInventoryMetricsService');
@@ -31,6 +33,11 @@ const MAX_PRICE_UGX = 100_000_000_000;
 const MIN_RECURRING_PRICE_UGX = 30_000;
 const MIN_TOTAL_PRICE_UGX = 1_000_000;
 const NEARBY_RADIUS_KM = 12;
+const VALUATION_RING_RADII_KM = [1, 3, 5];
+const VALUATION_RANGE_CAP = 0.3;
+const VALUATION_RANGE_TOO_WIDE_RATIO = 2;
+const VALUATION_MAX_FRESH_MS = 365.25 * 24 * 60 * 60 * 1000;
+const ASKING_TO_SALE_DISCOUNT = { low: 0.05, high: 0.1 };
 const SQM_PER_ACRE = 4046.8564224;
 const SQM_PER_DECIMAL = SQM_PER_ACRE / 100;
 const SQM_PER_SQUARE_FOOT = 0.09290304;
@@ -105,6 +112,133 @@ function percentile(values, fraction) {
   if (lower === upper) return sorted[lower];
   const weight = position - lower;
   return sorted[lower] + ((sorted[upper] - sorted[lower]) * weight);
+}
+
+function weightedPercentile(pairs, fraction) {
+  const rows = (Array.isArray(pairs) ? pairs : [])
+    .filter((row) => Number.isFinite(row.value) && Number.isFinite(row.weight) && row.weight > 0)
+    .sort((a, b) => a.value - b.value || a.weight - b.weight);
+  if (!rows.length) return null;
+  const total = rows.reduce((sum, row) => sum + row.weight, 0);
+  if (!(total > 0)) return null;
+  const target = total * Math.min(1, Math.max(0, Number(fraction) || 0));
+  if (target <= 0) return rows[0].value;
+  let cumulative = 0;
+  for (const row of rows) {
+    cumulative += row.weight;
+    if (cumulative >= target) return row.value;
+  }
+  return rows[rows.length - 1].value;
+}
+
+function comparableAgeMs(row = {}) {
+  const stamp = Date.parse(row.created_at || '');
+  if (!Number.isFinite(stamp)) return 0;
+  return Math.max(0, Date.now() - stamp);
+}
+
+function recencyWeight(row = {}) {
+  const age = comparableAgeMs(row);
+  if (age <= VALUATION_MAX_FRESH_MS) return 1;
+  const yearsOver = (age - VALUATION_MAX_FRESH_MS) / VALUATION_MAX_FRESH_MS;
+  return Math.max(0.15, Math.exp(-yearsOver));
+}
+
+function distanceWeight(row = {}) {
+  const km = Number(row.valuation_distance_km);
+  if (!Number.isFinite(km) || km < 0) return 1;
+  return 1 / (1 + km);
+}
+
+function keepFreshComparables(rows = []) {
+  const fresh = rows.filter((row) => comparableAgeMs(row) <= VALUATION_MAX_FRESH_MS);
+  if (fresh.length >= MIN_COMPARABLES) {
+    return { rows: fresh, dropped_stale: rows.length - fresh.length };
+  }
+  return { rows, dropped_stale: 0 };
+}
+
+function dedupeComparables(rows = []) {
+  const seen = new Set();
+  const kept = [];
+  rows.forEach((row) => {
+    const title = cleanText(row.title).toLowerCase();
+    const price = Math.round(Number(row.normalizedPrice) || Number(row.price) || 0);
+    const area = cleanText(row.area || row.canonical_location?.name).toLowerCase();
+    const identity = row.id ? `id:${row.id}` : '';
+    const content = `${title}|${price}|${area}`;
+    if ((identity && seen.has(identity)) || seen.has(`content:${content}`)) return;
+    if (identity) seen.add(identity);
+    seen.add(`content:${content}`);
+    kept.push(row);
+  });
+  return kept;
+}
+
+function learnedBedroomMultiplier(rows = []) {
+  const groups = new Map();
+  rows.forEach((row) => {
+    const beds = Number(row.bedrooms);
+    const price = Number(row.normalizedPrice);
+    if (!Number.isInteger(beds) || beds <= 0 || beds > 20 || !(price > 0)) return;
+    if (!groups.has(beds)) groups.set(beds, []);
+    groups.get(beds).push(price);
+  });
+  const levels = Array.from(groups.keys()).sort((a, b) => a - b);
+  const ratios = [];
+  for (let index = 1; index < levels.length; index += 1) {
+    const step = levels[index] - levels[index - 1];
+    if (step <= 0) continue;
+    const low = percentile(groups.get(levels[index - 1]), 0.5);
+    const high = percentile(groups.get(levels[index]), 0.5);
+    if (low > 0 && high > 0) ratios.push(Math.pow(high / low, 1 / step));
+  }
+  if (!ratios.length) return null;
+  ratios.sort((a, b) => a - b);
+  const mid = ratios[Math.floor((ratios.length - 1) / 2)];
+  if (!Number.isFinite(mid) || mid < 0.85 || mid > 1.6) return null;
+  return mid;
+}
+
+function applyBedroomAdjustment(rows = [], input = {}) {
+  const target = Number(input.bedrooms);
+  const adjustable = ['sale', 'rent', 'student'].includes(input.category);
+  const known = rows.filter((row) => Number(row.bedrooms) > 0);
+  // Bedroom adjustment is part of the estimate, not a route-only switch.
+  // Exact bedroom matches are kept when there are enough of them. A thin
+  // exact sample is scaled with the multiplier learned from the mixed rows.
+  if (!adjustable || !(target > 0) || !known.length) {
+    return { rows, adjusted: false, multiplier: null };
+  }
+  const exact = rows.filter((row) => {
+    const beds = Number(row.bedrooms);
+    if (!(beds > 0)) return false;
+    return input.bedrooms_plus ? beds >= target : beds === target;
+  });
+  if (exact.length >= MIN_COMPARABLES) {
+    return { rows: exact, adjusted: false, multiplier: null };
+  }
+  const multiplier = learnedBedroomMultiplier(rows);
+  if (!multiplier) {
+    return { rows: exact, adjusted: false, multiplier: null };
+  }
+  const adjusted = rows.map((row) => {
+    const beds = Number(row.bedrooms);
+    if (!(beds > 0)) return null;
+    if (input.bedrooms_plus ? beds >= target : beds === target) return row;
+    const factor = Math.pow(multiplier, target - beds);
+    return {
+      ...row,
+      normalizedPrice: row.normalizedPrice * factor,
+      ratePerSqm: Number.isFinite(row.ratePerSqm) ? row.ratePerSqm * factor : row.ratePerSqm,
+      bedroom_adjusted: true
+    };
+  }).filter(Boolean);
+  return {
+    rows: adjusted.length >= MIN_COMPARABLES ? adjusted : exact,
+    adjusted: adjusted.length >= MIN_COMPARABLES,
+    multiplier
+  };
 }
 
 function trimmedMean(values, trimFraction = 0.1) {
@@ -488,7 +622,20 @@ async function loadComparableRows(input, scope, { includeImages = true } = {}) {
 
   const canonicalLocation = input.canonical_location
     || canonicalizeUgandaLocation(input.location, input.district);
-  if (scope === 'district' || scope === 'nearby') {
+  const ringRadiusKm = Number(input.radius_km);
+  if (scope === 'ring') {
+    const origin = canonicalLocation && Number.isFinite(Number(canonicalLocation.lat))
+      ? canonicalLocation
+      : null;
+    const keys = origin
+      ? canonicalLocationOptions()
+        .filter((row) => Number.isFinite(row.latitude) && Number.isFinite(row.longitude))
+        .filter((row) => haversineKm(origin, { lat: row.latitude, lng: row.longitude }) <= ringRadiusKm)
+        .map((row) => row.canonical_key)
+      : [];
+    values.push(keys);
+    where.push(`COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY($${values.length}::text[])`);
+  } else if (scope === 'district' || scope === 'nearby') {
     const district = normalizeDistrict(input.district);
     const districtKey = district ? `${normalizeLocationKey(district)}:${normalizeLocationKey(district)}` : '';
     const districtScope = canonicalLocationSearchScope([districtKey], 0);
@@ -585,6 +732,16 @@ async function loadComparableRows(input, scope, { includeImages = true } = {}) {
         Number(a.valuation_distance_km || 0) - Number(b.valuation_distance_km || 0)
       ));
   }
+  if (scope === 'ring') {
+    return rows
+      .filter((row) => (
+        Number.isFinite(row.valuation_distance_km)
+        && row.valuation_distance_km <= ringRadiusKm
+      ))
+      .sort((a, b) => (
+        Number(a.valuation_distance_km || 0) - Number(b.valuation_distance_km || 0)
+      ));
+  }
   return rows.filter((row) => row.district === input.district);
 }
 
@@ -650,11 +807,15 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
   const compatibleRows = outlierResult.rows;
   const refinementResult = applyOptionalRefinements(compatibleRows, input);
   const prepared = refinementResult.rows;
+  const freshResult = keepFreshComparables(prepared);
+  const deduped = dedupeComparables(freshResult.rows);
+  const bedroomResult = applyBedroomAdjustment(deduped, input);
+  const modelled = bedroomResult.rows;
 
   const targetSizeSqm = input.category === 'land'
     ? targetLandSizeSqm(input.size_value, input.size_unit)
     : (['sale', 'rent', 'commercial'].includes(input.category) ? input.size_sqm : null);
-  const rateRows = prepared.filter((row) => Number.isFinite(row.ratePerSqm) && row.ratePerSqm > 0);
+  const rateRows = modelled.filter((row) => Number.isFinite(row.ratePerSqm) && row.ratePerSqm > 0);
   const useRate = targetSizeSqm && rateRows.length >= MIN_COMPARABLES;
   if (targetSizeSqm) {
     refinementResult.feedback.size = {
@@ -665,13 +826,18 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
       reason: useRate ? 'applied' : 'insufficient_facet_data'
     };
   }
-  const evidencePool = useRate ? rateRows : prepared;
-  const analysisValues = evidencePool.map((row) => (
-    useRate ? row.ratePerSqm * targetSizeSqm : row.normalizedPrice
-  ));
-  const estimate = trimmedMean(analysisValues);
+  const evidencePool = useRate ? rateRows : modelled;
+  const weightedValues = evidencePool.map((row) => ({
+    value: useRate ? row.ratePerSqm * targetSizeSqm : row.normalizedPrice,
+    weight: distanceWeight(row) * recencyWeight(row) * (row.bedroom_adjusted ? 0.85 : 1)
+  })).filter((row) => Number.isFinite(row.value) && row.value > 0);
+  const analysisValues = weightedValues.map((row) => row.value);
+  const estimate = weightedPercentile(weightedValues, 0.5);
   const unitRate = rateRows.length >= MIN_COMPARABLES
-    ? trimmedMean(rateRows.map((row) => row.ratePerSqm))
+    ? weightedPercentile(rateRows.map((row) => ({
+      value: row.ratePerSqm,
+      weight: distanceWeight(row) * recencyWeight(row)
+    })), 0.5)
     : null;
   const ranked = evidencePool
     .map((row) => {
@@ -713,25 +879,57 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
       extra_fields: publicComparableExtraFields(row),
       url: `/property/${encodeURIComponent(row.id)}`
     }));
-  const evidenceValues = ranked.map((row) => row.valuation_value);
-  const low = percentile(evidenceValues, 0.1);
-  const high = percentile(evidenceValues, 0.9);
-  const boundedEstimate = estimate == null || low == null || high == null
-    ? estimate
-    : Math.min(high, Math.max(low, estimate));
-  const sufficient = analysisValues.length >= MIN_COMPARABLES;
+  const lowRaw = weightedPercentile(weightedValues, 0.25);
+  const highRaw = weightedPercentile(weightedValues, 0.75);
+  let low = lowRaw;
+  let high = highRaw;
+  let rangeCapped = false;
+  let rangeTooWide = false;
+  if (estimate > 0 && lowRaw != null && highRaw != null) {
+    const ratio = highRaw / Math.max(lowRaw, 1);
+    const outsideCap = lowRaw < estimate * (1 - VALUATION_RANGE_CAP)
+      || highRaw > estimate * (1 + VALUATION_RANGE_CAP);
+    if (outsideCap && ratio > VALUATION_RANGE_TOO_WIDE_RATIO) {
+      rangeTooWide = true;
+    } else if (outsideCap) {
+      low = estimate * (1 - VALUATION_RANGE_CAP);
+      high = estimate * (1 + VALUATION_RANGE_CAP);
+      rangeCapped = true;
+    }
+  }
+  const enoughRows = analysisValues.length >= MIN_COMPARABLES;
+  const sufficient = enoughRows && !rangeTooWide && estimate != null;
+  const insufficientReason = sufficient
+    ? null
+    : (rangeTooWide ? 'range_too_wide' : 'not_enough_listings');
   const scopeAreas = Array.from(new Set(ranked.map((row) => cleanText(row.area)).filter(Boolean)));
   const confidence = valuationConfidenceLevel({
     sufficient,
-    widened,
+    widened: widened || rangeCapped,
     comparableCount: analysisValues.length
   });
+  const saleDiscount = sufficient && ['sale', 'land'].includes(input.category)
+    ? {
+      low_pct: Math.round(ASKING_TO_SALE_DISCOUNT.low * 100),
+      high_pct: Math.round(ASKING_TO_SALE_DISCOUNT.high * 100),
+      sale_low: Math.round(estimate * (1 - ASKING_TO_SALE_DISCOUNT.high)),
+      sale_high: Math.round(estimate * (1 - ASKING_TO_SALE_DISCOUNT.low)),
+      label: 'Likely sale price is about 5–10% below these asking prices.'
+    }
+    : null;
 
   return {
     sufficient,
-    estimate: sufficient && boundedEstimate != null ? Math.round(boundedEstimate) : null,
-    range_low: sufficient && low != null ? Math.round(low) : null,
-    range_high: sufficient && high != null ? Math.round(high) : null,
+    insufficient_reason: insufficientReason,
+    estimate: sufficient && estimate != null ? Math.round(estimate) : null,
+    range_low: (sufficient || rangeTooWide) && low != null ? Math.round(low) : null,
+    range_high: (sufficient || rangeTooWide) && high != null ? Math.round(high) : null,
+    range_capped: rangeCapped,
+    radius_km: Number.isFinite(Number(input.radius_km)) ? Number(input.radius_km) : null,
+    bedroom_adjusted: bedroomResult.adjusted,
+    bedroom_multiplier: bedroomResult.multiplier,
+    dropped_stale_count: freshResult.dropped_stale,
+    asking_to_sale: saleDiscount,
     comparable_count: ranked.length,
     analysis_comparable_count: analysisValues.length,
     raw_comparable_count: normalizedCompatibleRows.length,
@@ -750,18 +948,21 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
     comparables: ranked,
     view_all_url: categoryResultsPath(input),
     methodology: {
-      estimator: 'trimmed_mean',
-      trim_each_side_percent: analysisValues.length >= 10 ? 10 : 0,
-      range_percentiles: [10, 90],
+      estimator: 'weighted_median',
+      weights: ['distance', 'recency'],
+      range_percentiles: [25, 75],
+      range_cap_percent: Math.round(VALUATION_RANGE_CAP * 100),
       price_normalization: valuationPriceBasis(input),
       minimum_comparables: MIN_COMPARABLES,
       size_adjusted: Boolean(useRate),
+      bedroom_adjusted: bedroomResult.adjusted,
+      stale_after_months: 12,
       outlier_excluded_count: outlierResult.excluded_count,
       outlier_price_floor: outlierResult.price_floor,
       outlier_price_ceiling: outlierResult.price_ceiling,
       analysis_comparable_count: analysisValues.length,
       displayed_evidence_count: ranked.length,
-      displayed_range_only: true
+      displayed_range_only: false
     }
   };
 }
@@ -804,6 +1005,62 @@ async function valuationInputFromBody(body = {}) {
     input.district = district;
   }
   return { input, locationIsDistrict };
+}
+
+function valuationScopeLabel(input = {}, result = {}) {
+  if (!result.sufficient) {
+    if (result.insufficient_reason === 'range_too_wide') {
+      return `Not enough agreement in the prices near ${input.location} to publish a range. Ask a valuer, or tell us a price you have seen.`;
+    }
+    return `Not enough listings near ${input.location} for an honest range. Ask a valuer, or tell us a price you have seen.`;
+  }
+  if (result.radius_km) {
+    return `Using comparable listings within ${result.radius_km} km of ${input.location}.`;
+  }
+  if (result.scope === 'district') {
+    return `Using comparable listings in ${input.district || input.location} District.`;
+  }
+  return `Using comparable listings in ${input.location}.`;
+}
+
+async function selectValuationPool(input, locationIsDistrict) {
+  const hasCoordinates = Number.isFinite(Number(input.canonical_location?.lat))
+    && Number.isFinite(Number(input.canonical_location?.lng));
+  const steps = locationIsDistrict
+    ? [{ scope: 'district', radius: null, widened: false }]
+    : [
+      { scope: 'area', radius: null, widened: false },
+      ...(hasCoordinates
+        ? VALUATION_RING_RADII_KM.map((radius) => ({ scope: 'ring', radius, widened: true }))
+        : [])
+    ];
+  let exactCompatibleCount = null;
+  let chosen = null;
+  for (const step of steps) {
+    const query = { ...input, radius_km: step.radius };
+    let rows = await withTransientDatabaseRetry(() => loadComparableRows(query, step.scope));
+    let probe = buildEstimate(query, rows, step.scope, step.widened);
+    if (exactCompatibleCount == null) exactCompatibleCount = probe.analysis_comparable_count;
+    if (
+      !probe.sufficient
+      && input.bedrooms != null
+      && ['sale', 'rent', 'student'].includes(input.category)
+    ) {
+      const mixedQuery = { ...query, bedrooms: null, bedrooms_plus: false };
+      const mixedRows = await withTransientDatabaseRetry(() => loadComparableRows(mixedQuery, step.scope));
+      const adjusted = buildEstimate(query, mixedRows, step.scope, step.widened);
+      if (adjusted.bedroom_adjusted) {
+        rows = mixedRows;
+        probe = adjusted;
+      }
+    }
+    chosen = { rows, probe, step };
+    if (probe.sufficient) break;
+  }
+  return {
+    ...(chosen || { rows: [], probe: buildEstimate(input, [], 'area', false), step: steps[0] }),
+    exactCompatibleCount: exactCompatibleCount || 0
+  };
 }
 
 router.post('/matches', async (req, res, next) => {
@@ -854,58 +1111,11 @@ router.post('/estimate', async (req, res, next) => {
       return res.status(200).json(cached);
     }
 
-    let scope = locationIsDistrict ? 'district' : 'area';
-    let widened = false;
-    let rows = await withTransientDatabaseRetry(() => loadComparableRows(input, scope));
-    const exactCompatibleCount = buildEstimate(input, rows, scope, false).analysis_comparable_count;
-    if (scope === 'area' && exactCompatibleCount < DISTRICT_WIDEN_THRESHOLD && input.district) {
-      if (
-        input.canonical_location
-        && Number.isFinite(input.canonical_location.lat)
-        && Number.isFinite(input.canonical_location.lng)
-      ) {
-        const nearbyRows = await withTransientDatabaseRetry(() => loadComparableRows(input, 'nearby'));
-        const nearbyCompatibleCount = buildEstimate(input, nearbyRows, 'nearby', true).analysis_comparable_count;
-        if (nearbyCompatibleCount >= DISTRICT_WIDEN_THRESHOLD) {
-          scope = 'nearby';
-          widened = true;
-          rows = nearbyRows;
-        }
-      }
-      if (scope === 'area') {
-        scope = 'district';
-        widened = true;
-        rows = await withTransientDatabaseRetry(() => loadComparableRows(input, scope));
-      }
-    }
-    let result = buildEstimate(input, rows, scope, widened);
-    if (!result.sufficient && input.district) {
-      const broadInput = {
-        ...input,
-        bedrooms: null,
-        bedrooms_plus: false,
-        bathrooms: null,
-        property_type: '',
-        size_value: null,
-        size_unit: '',
-        size_sqm: null,
-        university: '',
-        condition: '',
-        tenure: '',
-        furnished: '',
-        parking: ''
-      };
-      const broadRows = await withTransientDatabaseRetry(() => loadComparableRows(broadInput, 'district'));
-      const broadResult = buildEstimate(broadInput, broadRows, 'district_average', true);
-      if (broadResult.sufficient) {
-        result = {
-          ...broadResult,
-          input,
-          broad_average: true,
-          refinement_feedback: result.refinement_feedback
-        };
-      }
-    }
+    const pool = await selectValuationPool(input, locationIsDistrict);
+    const result = pool.probe;
+    const exactCompatibleCount = pool.exactCompatibleCount;
+    const scope = pool.step.scope;
+    const widened = pool.step.widened;
     const payload = {
       ok: true,
       marker: VALUATION_MARKER,
@@ -918,13 +1128,11 @@ router.post('/estimate', async (req, res, next) => {
       widen_reason: widened
         ? `Only ${exactCompatibleCount} exact compatible comparable${exactCompatibleCount === 1 ? '' : 's'} found; at least ${MIN_COMPARABLES} are required.`
         : null,
-      scope_label: result.broad_average
-        ? `Broad ${input.district} District average — not an estimate for this property.`
-        : widened
-        ? (scope === 'nearby'
-          ? `Not enough exact matches in ${input.location}; using nearby ${input.district} comparables.`
-          : `Not enough exact matches in ${input.location}; using ${input.district} District comparables.`)
-        : `Using comparable listings in ${scope === 'district' ? `${input.district} District` : input.location}.`,
+      scope_label: valuationScopeLabel(input, result),
+      next_steps: result.sufficient ? [] : [
+        { id: 'ask_valuer', href: '/marketplace?category=surveyors', label: 'Ask a valuer' },
+        { id: 'tell_price', action: 'tell_us_your_price', label: 'Tell us your price' }
+      ],
       currency: 'UGX',
       generated_at: new Date().toISOString(),
       cache_ttl_seconds: Math.round(CACHE_TTL_MS / 1000)
@@ -933,6 +1141,73 @@ router.post('/estimate', async (req, res, next) => {
     res.set('Cache-Control', 'private, max-age=0, must-revalidate');
     res.set('X-Makaug-Valuation-Cache', 'MISS');
     return res.status(200).json(payload);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+const PRICE_HINT_MIN_UGX = 1_000;
+
+const priceHintLimiter = rateLimit({
+  keyGenerator: rateLimitClientKey,
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many price hints from this connection. Try again later.' }
+});
+
+function hintText(value, maxLength) {
+  return cleanText(value).replace(/\s+/g, ' ').slice(0, maxLength);
+}
+
+function validatePriceHint(body = {}) {
+  const category = normalizeCategory(body.category);
+  const location = hintText(body.location || body.area, 80);
+  const district = hintText(body.district, 80);
+  const price = Number(String(body.price ?? '').replace(/[,\s]/g, ''));
+  const bedrooms = toNullableInt(body.bedrooms);
+  const note = hintText(body.note, 240);
+  if (!category) {
+    return { error: 'Choose a property type before sending a price.' };
+  }
+  if (location.length < 2 || !/[a-z]/i.test(location)) {
+    return { error: 'Enter a location before sending a price.' };
+  }
+  if (!Number.isFinite(price) || price < PRICE_HINT_MIN_UGX || price > MAX_PRICE_UGX) {
+    return { error: 'Enter a price in Uganda shillings.' };
+  }
+  if (bedrooms != null && (!Number.isInteger(bedrooms) || bedrooms < 0 || bedrooms > 20)) {
+    return { error: 'Bedrooms must be between 0 and 20.' };
+  }
+  return {
+    value: {
+      category,
+      location,
+      district: district || null,
+      bedrooms,
+      price,
+      note: note || null
+    }
+  };
+}
+
+router.post('/price-hint', priceHintLimiter, async (req, res, next) => {
+  try {
+    const parsed = validatePriceHint(req.body || {});
+    if (parsed.error) {
+      return res.status(400).json({ ok: false, error: parsed.error });
+    }
+    const hint = parsed.value;
+    await db.query(
+      `INSERT INTO valuation_price_hints (category, location, district, bedrooms, price, note)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [hint.category, hint.location, hint.district, hint.bedrooms, hint.price, hint.note]
+    );
+    return res.status(201).json({
+      ok: true,
+      message: 'Saved. This is a local price hint, not a formal valuation.'
+    });
   } catch (error) {
     return next(error);
   }
@@ -1025,10 +1300,17 @@ module.exports._test = {
   isTransientDatabaseError,
   categoryResultsPath,
   buildEstimate,
+  weightedPercentile,
+  learnedBedroomMultiplier,
+  applyBedroomAdjustment,
+  selectValuationPool,
+  valuationScopeLabel,
+  VALUATION_RING_RADII_KM,
   applyOptionalRefinements,
   valuationConfidenceLevel,
   stableComparableImageUrl,
   filterComparablePriceOutliers,
+  validatePriceHint,
   minimumPlausiblePrice,
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,

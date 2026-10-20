@@ -324,12 +324,30 @@ const evidenceEstimate = helpers.buildEstimate({
 assert.strictEqual(evidenceEstimate.analysis_comparable_count, 14);
 assert.strictEqual(evidenceEstimate.comparable_count, 10);
 assert.strictEqual(evidenceEstimate.comparables.length, 10);
-const displayedValues = evidenceEstimate.comparables.map((row) => row.valuation_value);
-assert.strictEqual(evidenceEstimate.range_low, Math.round(helpers.percentile(displayedValues, 0.1)));
-assert.strictEqual(evidenceEstimate.range_high, Math.round(helpers.percentile(displayedValues, 0.9)));
-assert.strictEqual(evidenceEstimate.methodology.displayed_range_only, true);
+assert.strictEqual(evidenceEstimate.sufficient, false, 'a 10M–140M spread is too wide for an honest range');
+assert.strictEqual(evidenceEstimate.insufficient_reason, 'range_too_wide');
+assert.strictEqual(evidenceEstimate.estimate, null);
+assert.strictEqual(evidenceEstimate.methodology.estimator, 'weighted_median');
+assert.strictEqual(evidenceEstimate.methodology.displayed_range_only, false);
+assert.strictEqual(evidenceEstimate.methodology.range_percentiles[0], 25);
+assert.ok(evidenceEstimate.range_low >= 10_000_000 && evidenceEstimate.range_low < evidenceEstimate.range_high);
 assert.strictEqual(evidenceEstimate.view_all_url, '/for-sale?area=Kira');
-assert.strictEqual(evidenceEstimate.confidence, 'medium');
+assert.strictEqual(evidenceEstimate.confidence, 'low');
+
+const bedroomAdjusted = helpers.buildEstimate({
+  category: 'sale',
+  bedrooms: 3,
+  location: 'Kololo'
+}, [
+  { id: 'b2a', listing_type: 'sale', bedrooms: 2, price: 200_000_000, title: 'Two A' },
+  { id: 'b2b', listing_type: 'sale', bedrooms: 2, price: 220_000_000, title: 'Two B' },
+  { id: 'b4a', listing_type: 'sale', bedrooms: 4, price: 300_000_000, title: 'Four A' },
+  { id: 'b4b', listing_type: 'sale', bedrooms: 4, price: 340_000_000, title: 'Four B' },
+  { id: 'b3', listing_type: 'sale', bedrooms: 3, price: 250_000_000, title: 'Three only' }
+], 'area');
+assert.strictEqual(bedroomAdjusted.bedroom_adjusted, true, 'thin bedroom samples must be adjusted, not dropped');
+assert.ok(bedroomAdjusted.estimate > 200_000_000 && bedroomAdjusted.estimate < 340_000_000);
+assert.deepStrictEqual(helpers.VALUATION_RING_RADII_KM, [1, 3, 5]);
 
 assert.strictEqual(helpers.canonicalizeUgandaLocation('Kira Town', 'Wakiso').name, 'Kira');
 assert.strictEqual(helpers.canonicalizeUgandaLocation('Kira Town', 'Wakiso').district, 'Wakiso');
@@ -392,7 +410,7 @@ assert.ok(html.includes('valuation-canonical-confidence-cards-20260725'), 'valua
 assert.ok(html.includes('valuation-final-punchlist-20260725'), 'valuation punch-list marker must render');
 assert.ok(html.includes('valuation-k17-simple-range-20260725'), 'valuation K17 UX marker must render');
 assert.ok(html.includes('valuation-k17-closeout-20260725'), 'valuation K17 closeout marker must render');
-assert.ok(html.includes('Property Value Calculator'), 'valuation H1 must use the approved calculator label');
+assert.ok(html.includes("What's my property worth?"), 'valuation H1 must ask what the property is worth');
 assert.ok(html.includes('id="nav-valuation"') && html.includes('>Property Value</a>'), 'valuation navigation must use the shorter label');
 assert.ok(html.includes('id="valuation-view-all"'), 'valuation evidence must include a view-all control');
 assert.ok(!html.includes('<select id="valuation-district"'), 'valuation must not make customers choose a district');
@@ -431,6 +449,25 @@ assert.ok(
 assert.ok(app.includes('applyValuationLanguageUI'), 'valuation UI must participate in language changes');
 assert.ok(routeSource.includes("router.get('/locations'"), 'valuation location counts endpoint must exist');
 assert.ok(routeSource.includes("router.post('/matches'"), 'valuation live match-count endpoint must exist');
+assert.ok(routeSource.includes("router.post('/price-hint', priceHintLimiter"), 'valuation must accept a tell-us-your-price hint behind a rate limit');
+assert.ok(routeSource.includes('keyGenerator: rateLimitClientKey'), 'price-hint rate limit must key off the client address');
+assert.ok(routeSource.includes('valuation_price_hints'), 'price hints must be stored, not kept only in the browser');
+assert.ok(!routeSource.includes('CREATE TABLE'), 'price hints must not create a table on the request path');
+assert.ok(!routeSource.includes('ensureValuationPriceHintsTable'), 'price hints must not ensure schema at request time');
+const priceHintMigration = fs.readFileSync(
+  path.join(root, 'db', 'migrations', '153_valuation_price_hints.sql'),
+  'utf8'
+);
+assert.ok(priceHintMigration.includes('CREATE EXTENSION IF NOT EXISTS pgcrypto'), 'the migration must make gen_random_uuid available the same way earlier UUID migrations do');
+assert.ok(priceHintMigration.includes("to_regprocedure('gen_random_uuid()')"), 'the migration must check gen_random_uuid before creating the table');
+assert.ok(priceHintMigration.includes('CREATE TABLE IF NOT EXISTS valuation_price_hints'), 'price hints belong in a numbered migration');
+assert.strictEqual(helpers.validatePriceHint({ category: 'sale', location: 'Kololo', price: '150,000,000', bedrooms: 3 }).error, undefined);
+assert.ok(helpers.validatePriceHint({ category: '', location: 'Kololo', price: 1000 }).error);
+assert.ok(helpers.validatePriceHint({ category: 'sale', location: '1', price: 1000 }).error);
+assert.ok(helpers.validatePriceHint({ category: 'sale', location: 'Kololo', price: 0 }).error);
+assert.ok(helpers.validatePriceHint({ category: 'sale', location: 'Kololo', price: 1 }).error);
+assert.ok(helpers.validatePriceHint({ category: 'sale', location: 'Kololo', price: 'free' }).error);
+assert.ok(helpers.validatePriceHint({ category: 'sale', location: 'Kololo', price: 50_000_000, bedrooms: 40 }).error);
 assert.ok(routeSource.includes('COUNT(*)::int AS listing_count'), 'valuation locations must expose real listing counts');
 assert.ok(
   routeSource.includes("publicLaunchTestListingFastCondition('p')"),
@@ -466,9 +503,11 @@ assert.ok(
   'valuation API responses must expose the closeout marker'
 );
 assert.ok(
-  routeSource.includes('Broad ${input.district} District average — not an estimate for this property.')
-    && routeSource.includes("loadComparableRows(broadInput, 'district')"),
-  'insufficient district evidence must degrade to a clearly labelled broad average'
+  routeSource.includes('Ask a valuer, or tell us a price you have seen.')
+    && routeSource.includes('tell_us_your_price')
+    && routeSource.includes('VALUATION_RING_RADII_KM')
+    && !routeSource.includes('broad_average'),
+  'thin evidence must stay honest and offer a valuer or a price hint instead of a district-wide average'
 );
 assert.ok(
   routeSource.includes('filterComparablePriceOutliers')
@@ -493,8 +532,8 @@ assert.ok(
   routeSource.includes('withTransientDatabaseRetry')
     && routeSource.includes('hasAmbiguousForeignCurrency')
     && routeSource.includes('parseLandSizeText')
-    && routeSource.includes("loadComparableRows(input, 'nearby')"),
-  'valuation must retry transient database failures, reject ambiguous foreign currency, parse legacy land sizes, and try nearby canonical areas before district widening'
+    && routeSource.includes("scope === 'ring'"),
+  'valuation must retry transient database failures, reject ambiguous foreign currency, parse legacy land sizes, and widen by distance ring'
 );
 assert.ok(
   canonicalLocationMigration.includes('idx_properties_valuation_public_type_normalized_area_created')
@@ -535,11 +574,13 @@ const valuationEnglish = frozenObject('VALUATION_UI_EN');
 const valuationOverrides = frozenObject('VALUATION_UI_OVERRIDES');
 const valuationSupplements = frozenObject('VALUATION_UI_SUPPLEMENTS');
 const valuationK17 = frozenObject('VALUATION_UI_K17');
+const valuationRings = frozenObject('VALUATION_UI_RINGS');
 for (const language of ['lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']) {
   const translated = {
     ...(valuationSupplements[language] || {}),
     ...(valuationOverrides[language] || {}),
-    ...(valuationK17[language] || {})
+    ...(valuationK17[language] || {}),
+    ...(valuationRings[language] || {})
   };
   assert.deepStrictEqual(
     Object.keys(valuationEnglish).filter((key) => !translated[key]),
