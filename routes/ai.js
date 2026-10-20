@@ -8,6 +8,12 @@ const { createLead } = require('../services/leadService');
 const { logNotification } = require('../services/notificationLogService');
 const { listPublicDevelopments } = require('../services/offPlanService');
 const { searchShortTermListings } = require('../services/shortTermService');
+const {
+  parseShortTermSearchText,
+  suggestPartnerHotels,
+  shortTermAssistantText
+} = require('../services/shortTermQuery');
+const { fetchUgandaProperties } = require('../services/liteapiSupplyService');
 const { publicOffPlanPayload } = require('../utils/publicOffPlanPayload');
 const {
   normalizeCommercialTransactionType,
@@ -1284,27 +1290,43 @@ router.post('/assistant-reply', async (req, res, next) => {
     let searchPayload = null;
 
     if (effectiveIntent === 'search_short_term') {
-      const placeQuery = String(userMessage || '')
-        .replace(/\b(short\s*stays?|short\s*term|nightly|apartments?|guest\s*houses?|hotels?|furnished|looking|find|please|near|in|a|an|the|for|me|by|the|night)\b/gi, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 80);
-      const queryText = placeQuery || cleanText(userMessage, 80);
+      const parsed = parseShortTermSearchText(userMessage);
+      const queryText = parsed.place || cleanText(userMessage, 80);
       let listings = [];
       let total = 0;
       try {
-        const found = await searchShortTermListings(db, { q: queryText, limit: 8 });
+        const found = await searchShortTermListings(db, {
+          q: userMessage,
+          bedrooms: parsed.bedrooms || undefined,
+          max_price: parsed.max_price || undefined,
+          limit: 8
+        });
         listings = found.listings || [];
         total = found.total || listings.length;
       } catch (_searchError) {
         listings = [];
         total = 0;
       }
-      const seeAll = `${appOriginFromRequest(req)}/short-term?q=${encodeURIComponent(queryText)}`;
+      let partnerSuggestion = { matched_place: false, hotels: [] };
+      if (!total) {
+        try {
+          const partners = await fetchUgandaProperties({ limit: 24 });
+          partnerSuggestion = suggestPartnerHotels(partners, parsed, 4);
+        } catch (_partnerError) {
+          partnerSuggestion = { matched_place: false, hotels: [] };
+        }
+      }
+      const seeAllParams = new URLSearchParams();
+      if (queryText) seeAllParams.set('q', queryText);
+      if (parsed.bedrooms) seeAllParams.set('bedrooms', String(parsed.bedrooms));
+      if (parsed.max_price) seeAllParams.set('max_price', String(parsed.max_price));
+      const seeAll = `${appOriginFromRequest(req)}/short-term${seeAllParams.toString() ? `?${seeAllParams}` : ''}`;
       response = {
-        text: sanitizeAssistantText(total
-          ? `I found ${total} short stay${total === 1 ? '' : 's'} matching that search.`
-          : 'No published short stays match that yet. Browse short stays or list a place.'),
+        text: sanitizeAssistantText(shortTermAssistantText({
+          total,
+          parsed,
+          suggestion: partnerSuggestion
+        })),
         model: 'short-term-search',
         language,
         action_url: seeAll,
@@ -1313,10 +1335,13 @@ router.post('/assistant-reply', async (req, res, next) => {
       searchPayload = {
         search_type: 'short_term',
         search_scope: 'short_term',
+        parsed_query: parsed,
         total_matches: total,
         result_count: listings.length,
         listings,
         results: listings,
+        partner_hotels: partnerSuggestion.hotels,
+        partner_hotels_guide_only: true,
         see_all_url: seeAll,
         zero_results: total === 0
       };

@@ -4926,12 +4926,14 @@
                   </div>
                   <div>
                     <label id="mortgage-label-rate" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Interest Rate (%)</label>
-                    <input id="mortgage-rate" type="number" value="" min="0" max="45" step="0.1" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" oninput="setMortgageManualRate(this.value)">
+                    <input id="mortgage-rate" type="number" value="" min="0.1" max="45" step="0.1" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" oninput="setMortgageManualRate(this.value)">
+                    <p id="mortgage-rate-hint" class="hidden mt-1 text-xs text-amber-800"></p>
                   </div>
                   <div>
                     <label id="mortgage-label-years" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Loan Term</label>
-                    <input id="mortgage-years" type="number" value="20" min="1" max="30" step="1" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" oninput="syncMortgageInput('years', this.value)">
+                    <input id="mortgage-years" type="number" value="20" min="5" max="30" step="1" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" oninput="syncMortgageInput('years', this.value)">
                     <span id="mortgage-years-value" class="sr-only">20 years</span>
+                    <p id="mortgage-years-hint" class="hidden mt-1 text-xs text-amber-800"></p>
                   </div>
                   <div>
                     <label id="mortgage-label-purpose" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Property Type</label>
@@ -4989,7 +4991,7 @@
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <h2 id="mortgage-results-title" class="text-xl font-bold text-gray-800">Best Match & Bank Comparison</h2>
               <div class="flex items-center gap-2 flex-wrap">
-                <span id="mortgage-rates-footnote" class="text-xs text-gray-500">Indicative public rates. Confirm with bank before applying.</span>
+                <span id="mortgage-rates-footnote" class="text-xs text-gray-500">Indicative public rates. Bank of Uganda CBR is 12% from 14 Oct 2026; lender rates may rise after that hike. Confirm with the bank before applying.</span>
                 <button id="mortgage-refresh-btn" type="button" onclick="loadMortgageRates(true)" class="inline-flex items-center gap-1 border border-green-200 text-green-700 hover:bg-green-50 rounded-lg px-2.5 py-1.5 text-xs font-semibold">
                   <i class="fas fa-rotate-right text-[10px]"></i><span id="mortgage-refresh-btn-text">Refresh</span>
                 </button>

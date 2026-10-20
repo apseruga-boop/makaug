@@ -535,7 +535,9 @@ const CURRENCIES = {
 };
 const REVIEW_USD_TO_UGX_GUIDE_RATE = 3800;
 
-const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-10-02";
+const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-10-20";
+const MORTGAGE_MIN_YEARS = 5;
+const MORTGAGE_MAX_YEARS = 30;
 const MAP_DEFAULT_CENTER = { lat: 1.3733, lng: 32.2903 };
 const MAP_UGANDA_OVERVIEW_CENTER = { lat: 1.3733, lng: 32.2903 };
 const MAP_DEFAULT_ZOOM = 7;
@@ -586,16 +588,16 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
   {
     id: "hfb",
     name: "Housing Finance Bank",
-    residentialRate: null,
-    commercialRate: null,
+    residentialRate: 16,
+    commercialRate: 18,
     landRate: null,
     minDepositPct: { residential: 20, commercial: 20, land: 40, default: 20 },
     maxYears: { residential: 20, commercial: 20, land: 5, default: 20 },
     arrangementFeePct: 1.25,
     sourceLabel: "Housing Finance mortgage terms and conditions",
     sourceUrl: "https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/",
-    sourceNote: "Housing Finance publishes up to 80% purchase finance in Kampala, up to 20-year residential/commercial terms, a 1.25% facility fee, and a 35% income guide. Its public page says interest is variable, so the rate requires lender confirmation.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceNote: "Housing Finance publishes 16% residential and 18% commercial, reviewed after the 14 Oct 2026 Bank of Uganda CBR increase to 12%. It also publishes up to 80% purchase finance in Kampala, up to 20-year residential/commercial terms, a 1.25% facility fee, and a 35% income guide. Confirm the current rate with the bank.",
+    sourceVerifiedAt: "2026-10-20"
   },
   {
     id: "dfcu",
@@ -783,22 +785,24 @@ function monetizationProductByType(type) {
 
 function renderAgentProHook(options = {}) {
   const enabled = monetizationFeatureEnabled("agent_pro_enabled");
+  if (!enabled) return "";
   const product = monetizationProductByType("agent_plan");
-  const price = product?.price ? `UGX ${Number(product.price || 0).toLocaleString("en-UG")}` : "pricing controlled by King";
+  const price = product?.price ? `UGX ${Number(product.price || 0).toLocaleString("en-UG")}` : "";
   return `
-    <button type="button" data-monetization-hook="agent-pro" onclick="toast('${enabled ? "Agent Pro checkout is being prepared." : "Agent Pro is prepared but not live yet."}')" class="${options.className || "border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50 rounded-xl px-3 py-2 text-xs font-black"}">
-      <i class="ti-shield-check fas fa-shield-alt mr-1"></i>Go Pro${enabled ? ` · ${adminEscape(price)}` : " · prepared"}
+    <button type="button" data-monetization-hook="agent-pro" onclick="toast('Agent Pro checkout is being prepared.')" class="${options.className || "border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50 rounded-xl px-3 py-2 text-xs font-black"}">
+      <i class="ti-shield-check fas fa-shield-alt mr-1"></i>Go Pro${price ? ` · ${adminEscape(price)}` : ""}
     </button>`;
 }
 
 function renderFeaturedLenderHook() {
   const enabled = monetizationFeatureEnabled("featured_lenders_enabled");
+  if (!enabled) return "";
   const product = monetizationProductByType("featured_lender");
-  const price = product?.price ? `UGX ${Number(product.price || 0).toLocaleString("en-UG")}` : "King-priced";
+  const price = product?.price ? `UGX ${Number(product.price || 0).toLocaleString("en-UG")}` : "";
   return `
     <div data-monetization-hook="featured-lender" class="rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-950">
-      <div class="font-black"><i class="ti-building-bank fas fa-university mr-1"></i>Featured lender slot ${enabled ? "available" : "prepared"}</div>
-      <div class="text-xs text-emerald-800 mt-1">${enabled ? `Starts from ${adminEscape(price)}. King approval still controls placement.` : "Lender sponsorship is wired but hidden until Arthur turns on the feature flag."}</div>
+      <div class="font-black"><i class="ti-building-bank fas fa-university mr-1"></i>Featured lender</div>
+      <div class="text-xs text-emerald-800 mt-1">${price ? `Starts from ${adminEscape(price)}.` : "Ask makaug about a featured lender placement."}</div>
     </div>`;
 }
 
@@ -5360,6 +5364,9 @@ const MORTGAGE_I18N = {
     resultsTitle: "Best Match & Bank Comparison",
     ratesFootnote: "Indicative public rates from bank sources. Confirm current rates with the lender before applying.",
     ratesAsOfLine: "Sources verified {date} · indicative, confirm with the bank.",
+    cbrNote: "Bank of Uganda CBR is 12% from 14 Oct 2026; lender rates may rise after that hike.",
+    yearsMinNote: "The loan term on this calculator is 5 to 30 years.",
+    rateRequired: "Enter an interest rate above 0%. An empty rate uses the best published bank rate.",
     comparisonSubtitle: "Sort dated public-bank assumptions by repayment, rate, term, or deposit strength.",
     sortBy: "Sort by",
     sortMonthly: "Monthly repayment",
@@ -6743,6 +6750,9 @@ Object.assign(MORTGAGE_I18N.ar, {
 
 Object.assign(MORTGAGE_I18N.lg, {
   ratesAsOfLine: "Rate nga bwe ziri ku {date} · za kuteebereza, kakasa ne bbanka.",
+  cbrNote: "Bank of Uganda CBR eri ku 12% okuva nga 14 Oct 2026; rate za bbanka ziyinza okulinnya oluvannyuma lw'okulinnya kuno.",
+  yearsMinNote: "Ebbanga erya loan ku calculator eno liri wakati wa myaka 5 ne 30.",
+  rateRequired: "Wandika rate y'amagoba esukka ku 0%. Rate enkyamu ekozesebwa eya banka esinga, era tetubala ku 0%.",
   comparisonSubtitle: "Tegeka bbanka okusinziira ku nsasula, rate, ebbanga oba LTV.",
   sortBy: "Tegeka nga",
   sortMonthly: "Okusasula buli mwezi",
@@ -6759,6 +6769,9 @@ Object.assign(MORTGAGE_I18N.lg, {
 });
 Object.assign(MORTGAGE_I18N.sw, {
   ratesAsOfLine: "Viwango kufikia {date} · ni makadirio, thibitisha na benki.",
+  cbrNote: "CBR ya Benki Kuu ya Uganda ni 12% kuanzia 14 Oct 2026; viwango vya benki vinaweza kupanda baada ya ongezeko hilo.",
+  yearsMinNote: "Muda wa mkopo kwenye kikokotoo hiki ni miaka 5 hadi 30.",
+  rateRequired: "Weka riba zaidi ya 0%. Sehemu tupu hutumia kiwango bora cha benki kilichochapishwa, na haikadrii kwa 0%.",
   comparisonSubtitle: "Panga benki kwa malipo, riba, muda au LTV.",
   sortBy: "Panga kwa",
   sortMonthly: "Malipo ya mwezi",
@@ -6775,6 +6788,9 @@ Object.assign(MORTGAGE_I18N.sw, {
 });
 Object.assign(MORTGAGE_I18N.ac, {
   ratesAsOfLine: "Rate me {date} · obedo con, mok ki bank.",
+  cbrNote: "CBR pa Bank of Uganda tye 12% cakke 14 Oct 2026; rate pa bank twero medde inge loc man.",
+  yearsMinNote: "Kare me loan i calculator man tye kin mwaka 5 ki 30.",
+  rateRequired: "Ket rate ma kato 0%. Ka opong pe, watye ki rate pa bank ma ber loyo, pe waporo ki 0%.",
   comparisonSubtitle: "Yer bank pi culu dwe, rate, kare onyo LTV.",
   sortBy: "Yer ki",
   sortMonthly: "Culu dwe",
@@ -6791,6 +6807,9 @@ Object.assign(MORTGAGE_I18N.ac, {
 });
 Object.assign(MORTGAGE_I18N.ny, {
   ratesAsOfLine: "Rate za {date} · ni izo kugereranya, byemeze na banki.",
+  cbrNote: "CBR ya Bank of Uganda eri 12% kuruga 14 Oct 2026; rate za banki zirikubaasa kulinnya enyima y'okulinnya oku.",
+  yearsMinNote: "Obwire bwa loan omu calculator egi buri ahagati y'emyaka 5 na 30.",
+  rateRequired: "Taaha rate erikukira 0%. Ekyaaha nikyokoresa rate y'ebanki erikusinga, kandi titubara aha 0%.",
   comparisonSubtitle: "Tondeka amabanki ku kwishyura, rate, igihe cyangwa LTV.",
   sortBy: "Tondeka kuri",
   sortMonthly: "Kwishyura buri kwezi",
@@ -6807,6 +6826,9 @@ Object.assign(MORTGAGE_I18N.ny, {
 });
 Object.assign(MORTGAGE_I18N.rn, {
   ratesAsOfLine: "Rate za {date} · n'ez'okugerageranya, zikakase na banki.",
+  cbrNote: "CBR ya Bank of Uganda eri 12% kuruga 14 Oct 2026; rate za banki zirikubaasa kulinnya enyima y'okulinnya oku.",
+  yearsMinNote: "Obwire bwa loan omu calculator egi buri ahagati y'emyaka 5 na 30.",
+  rateRequired: "Taaha rate erikukira 0%. Ekyaaha nikyokoresa rate y'ebanki erikusinga, kandi titubara aha 0%.",
   comparisonSubtitle: "Tondeka banki ku nsasura, rate, ebbanga, ninga LTV.",
   sortBy: "Tondeka ku",
   sortMonthly: "Ensasura ya buri kwezi",
@@ -6828,6 +6850,9 @@ Object.assign(MORTGAGE_I18N.rn, {
 });
 Object.assign(MORTGAGE_I18N.sm, {
   ratesAsOfLine: "Rate nga {date} · bya kuteebereza, kakasa ne bbanka.",
+  cbrNote: "Bank of Uganda CBR eri ku 12% okuva nga 14 Oct 2026; rate za bbanka ziyinza okulinnya.",
+  yearsMinNote: "Ebbanga erya loan ku calculator eno liri wakati wa myaka 5 ne 30.",
+  rateRequired: "Wandika rate esukka ku 0%. Rate enkyamu ekozesebwa eya banka esinga, era tetubala ku 0%.",
   comparisonSubtitle: "Tegeka bbanka ku nsasula, rate, ebbanga oba LTV.",
   sortBy: "Tegeka ku",
   sortMonthly: "Okusasula buli mwezi",
@@ -6844,6 +6869,9 @@ Object.assign(MORTGAGE_I18N.sm, {
 });
 Object.assign(MORTGAGE_I18N.am, {
   ratesAsOfLine: "የ{date} ዋጋዎች · ግምት ናቸው፣ ከባንኩ ጋር ያረጋግጡ።",
+  cbrNote: "የኡጋንዳ ማዕከላዊ ባንክ CBR ከ14 Oct 2026 ጀምሮ 12% ነው፤ የባንክ መጠኖች ከዚህ ጭማሪ በኋላ ሊጨምሩ ይችላሉ።",
+  yearsMinNote: "በዚህ ካልኩሌተር የብድር ጊዜው ከ5 እስከ 30 ዓመት ነው።",
+  rateRequired: "ከ0% በላይ ወለድ ያስገቡ። ባዶ መስክ የታተመውን ምርጥ የባንክ መጠን ይጠቀማል፣ በ0% አይሰላም።",
   comparisonSubtitle: "ባንኮችን በወርሃዊ ክፍያ፣ በወለድ፣ በጊዜ ወይም LTV ያስተካክሉ።",
   sortBy: "አስተካክል በ",
   sortMonthly: "ወርሃዊ ክፍያ",
@@ -6860,6 +6888,9 @@ Object.assign(MORTGAGE_I18N.am, {
 });
 Object.assign(MORTGAGE_I18N.ar, {
   ratesAsOfLine: "الأسعار بتاريخ {date} · تقديرية، أكدها مع البنك.",
+  cbrNote: "سعر الفائدة الأساسي لبنك أوغندا المركزي 12٪ منذ 14 أكتوبر 2026؛ قد ترتفع أسعار البنوك بعد هذه الزيادة.",
+  yearsMinNote: "مدة القرض في هذه الحاسبة من 5 إلى 30 سنة.",
+  rateRequired: "أدخل فائدة أعلى من 0٪. الحقل الفارغ يستخدم أفضل سعر بنكي منشور، ولا يحسب عند 0٪.",
   comparisonSubtitle: "رتب البنوك حسب القسط أو الفائدة أو المدة أو LTV.",
   sortBy: "ترتيب حسب",
   sortMonthly: "القسط الشهري",
@@ -59025,7 +59056,8 @@ function calculateExtraMortgageImpact(loanAmount, annualRate, years, baselineMon
 }
 
 function setMortgageManualRate(value = "") {
-  mortgageRateManuallyEdited = true;
+  const raw = String(value ?? "").trim();
+  mortgageRateManuallyEdited = raw !== "";
   const rateInput = document.getElementById("mortgage-rate");
   if (rateInput && rateInput.value !== String(value)) rateInput.value = String(value);
   renderMortgageFinder();
@@ -59033,15 +59065,33 @@ function setMortgageManualRate(value = "") {
 
 function resolveMortgageSelectedRate(result, rateEl) {
   const bestRate = Number(result?.best?.rate || 0);
-  if (!mortgageRateManuallyEdited && bestRate > 0) {
-    if (rateEl && Number(rateEl.value) !== bestRate) {
-      rateEl.value = String(bestRate);
+  const hasBest = Number.isFinite(bestRate) && bestRate > 0;
+  const raw = String(rateEl?.value ?? "").trim();
+  const manualRate = raw === "" ? NaN : Number(raw);
+  const manualValid = Number.isFinite(manualRate) && manualRate > 0 && manualRate <= 45;
+  const hint = document.getElementById("mortgage-rate-hint");
+  const rejectedZero = raw !== "" && !manualValid;
+  if ((!mortgageRateManuallyEdited || raw === "" || !manualValid) && hasBest) {
+    if (rateEl && String(rateEl.value) !== String(bestRate)) rateEl.value = String(bestRate);
+    if (raw === "") mortgageRateManuallyEdited = false;
+    if (hint) {
+      hint.textContent = rejectedZero ? mortgageTr("rateRequired") : "";
+      hint.classList.toggle("hidden", !rejectedZero);
     }
     return bestRate;
   }
-  const manualRate = Number(rateEl?.value || 0);
-  if (Number.isFinite(manualRate) && manualRate >= 0) return manualRate;
-  return bestRate;
+  if (manualValid) {
+    if (hint) {
+      hint.textContent = "";
+      hint.classList.add("hidden");
+    }
+    return manualRate;
+  }
+  if (hint) {
+    hint.textContent = mortgageTr("rateRequired");
+    hint.classList.remove("hidden");
+  }
+  return null;
 }
 
 function getMortgageFeeEstimates(result, provider) {
@@ -59071,7 +59121,7 @@ function currentMortgageCalculation() {
   const income = Math.max(0, Number(document.getElementById("mortgage-income")?.value || 0));
   const result = buildMortgageComparison(price, depositPct, years, purpose);
   const selectedRate = resolveMortgageSelectedRate(result, document.getElementById("mortgage-rate"));
-  const monthly = computeMonthlyRepayment(result.loanAmount, selectedRate, years) || result.best?.monthlyRepayment || 0;
+  const monthly = selectedRate > 0 ? computeMonthlyRepayment(result.loanAmount, selectedRate, years) : (result.best?.monthlyRepayment || 0);
   const selectedProvider = mortgageProviderByKey(selectedMortgageProviderKey);
   const bestProvider = result.best?.provider || null;
   const provider = selectedProvider || bestProvider || null;
@@ -59151,7 +59201,7 @@ function renderMortgageTabs(context = currentMortgageCalculation()) {
         : `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
             <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("estimatedMonthlyRepayment")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(monthly, context.currency)}</strong></div>
             <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("loanAmount")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(result.loanAmount, context.currency)}</strong></div>
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("rate")}</span><strong class="block text-gray-950 mt-1">${selectedRate.toFixed(2)}%</strong></div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("rate")}</span><strong class="block text-gray-950 mt-1">${selectedRate > 0 ? `${Number(selectedRate).toFixed(2)}%` : "—"}</strong></div>
           </div>`;
   panel.innerHTML = `
     <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -59382,7 +59432,7 @@ function computeMonthlyRepayment(principal, annualRate, years) {
 function buildMortgageComparison(price, depositPct, years, purpose) {
   const safePrice = Math.max(0, Number(price) || 0);
   const safeDepositPct = Math.min(90, Math.max(0, Number(depositPct) || 0));
-  const safeYears = Math.max(1, Number(years) || 20);
+  const safeYears = Math.min(MORTGAGE_MAX_YEARS, Math.max(MORTGAGE_MIN_YEARS, Number(years) || 20));
   const depositAmount = safePrice * (safeDepositPct / 100);
   const loanAmount = Math.max(0, safePrice - depositAmount);
   const providerRows = MORTGAGE_PROVIDERS.map((provider) => {
@@ -59452,11 +59502,18 @@ function syncMortgageInput(kind, value) {
     if (numberInput) numberInput.value = String(normalized);
     if (sliderInput) sliderInput.value = String(normalized);
   } else {
-    const normalized = clampMortgageValue(value, 5, 30, 20);
+    const rawYears = Number(value);
+    const outsideRange = Number.isFinite(rawYears) && (rawYears < MORTGAGE_MIN_YEARS || rawYears > MORTGAGE_MAX_YEARS);
+    const normalized = clampMortgageValue(value, MORTGAGE_MIN_YEARS, MORTGAGE_MAX_YEARS, 20);
     const numberInput = document.getElementById("mortgage-years");
     const sliderInput = document.getElementById("mortgage-years-slider");
     if (numberInput) numberInput.value = String(normalized);
     if (sliderInput) sliderInput.value = String(normalized);
+    const yearsHint = document.getElementById("mortgage-years-hint");
+    if (yearsHint) {
+      yearsHint.textContent = outsideRange ? mortgageTr("yearsMinNote") : "";
+      yearsHint.classList.toggle("hidden", !outsideRange);
+    }
   }
   renderMortgageFinder();
 }
@@ -59532,7 +59589,7 @@ function renderMortgageFinder() {
   if (!priceEl || !depositEl || !yearsEl || !purposeEl || !summaryEl || !bestEl || !rowsEl || !healthEl) return;
 
   const normalizedDeposit = clampMortgageValue(depositEl.value, 0, 90, 20);
-  const normalizedYears = clampMortgageValue(yearsEl.value, 5, 30, 20);
+  const normalizedYears = clampMortgageValue(yearsEl.value, MORTGAGE_MIN_YEARS, MORTGAGE_MAX_YEARS, 20);
   depositEl.value = String(normalizedDeposit);
   yearsEl.value = String(normalizedYears);
   if (depositSliderEl) depositSliderEl.value = String(normalizedDeposit);
@@ -59544,31 +59601,34 @@ function renderMortgageFinder() {
   const updatedLabel = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_UPDATED_RAW || MORTGAGE_RATE_UPDATED_AT || DEFAULT_MORTGAGE_RATE_UPDATED_AT);
   const ratesFootnoteEl = document.getElementById("mortgage-rates-footnote");
   if (ratesFootnoteEl) {
-    ratesFootnoteEl.textContent = mortgageTr("ratesAsOfLine").replace("{date}", updatedLabel);
+    ratesFootnoteEl.textContent = `${mortgageTr("ratesAsOfLine").replace("{date}", updatedLabel)} ${mortgageTr("cbrNote")}`;
   }
   const income = Math.max(0, Number(incomeEl?.value || 0));
   const selectedRate = resolveMortgageSelectedRate(result, rateEl);
-  const monthly = computeMonthlyRepayment(result.loanAmount, selectedRate, normalizedYears) || result.best?.monthlyRepayment || 0;
+  const rateLabel = selectedRate > 0 ? Number(selectedRate).toFixed(2) : "—";
+  const monthly = selectedRate > 0 ? computeMonthlyRepayment(result.loanAmount, selectedRate, normalizedYears) : null;
   const suggestedIncome = monthly ? monthly / 0.35 : 0;
   const loanShare = result.price > 0 ? Math.round((result.loanAmount / result.price) * 100) : 0;
   const currency = currencyEl?.value || "UGX";
   const feeProvider = mortgageProviderByKey(selectedMortgageProviderKey) || result.best?.provider || null;
   const fees = getMortgageFeeEstimates(result, feeProvider);
   const totalInterestEstimate = monthly ? Math.max(0, monthly * normalizedYears * 12 - result.loanAmount) : 0;
-  const rateSourceLine = !mortgageRateManuallyEdited && result.best
-    ? mortgageTr("bestRateApplied").replace("{bank}", result.best.provider.name).replace("{rate}", selectedRate.toFixed(2))
-    : mortgageTr("manualRateApplied");
+  const rateSourceLine = !(selectedRate > 0)
+    ? mortgageTr("rateRequired")
+    : (!mortgageRateManuallyEdited && result.best
+      ? mortgageTr("bestRateApplied").replace("{bank}", result.best.provider.name).replace("{rate}", rateLabel)
+      : mortgageTr("manualRateApplied"));
   if (professionalResultsEl) {
     professionalResultsEl.className = "mortgage-result-pop rounded-[1.5rem] bg-gradient-to-br from-white via-emerald-50 to-amber-50 text-gray-950 border border-white p-4 shadow-[0_22px_48px_rgba(20,83,45,0.14)]";
     professionalResultsEl.innerHTML = `
       <div class="flex items-center justify-between gap-3">
         <div>
           <div class="text-xs text-green-800 font-bold uppercase tracking-wide">${mortgageTr("estimatedMonthlyRepayment")}</div>
-          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("basedOnRateTerm").replace("{rate}", selectedRate.toFixed(2)).replace("{years}", normalizedYears)}</div>
+          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("basedOnRateTerm").replace("{rate}", rateLabel).replace("{years}", normalizedYears)}</div>
         </div>
         <div class="w-14 h-14 rounded-full bg-white border-4 border-amber-200 flex items-center justify-center text-xs font-black text-green-800 shadow-sm" aria-label="Deposit percent">${normalizedDeposit}%</div>
       </div>
-      <div class="text-3xl md:text-4xl font-black mt-2 leading-tight">${formatMortgageAmount(monthly, currency)}</div>
+      <div class="text-3xl md:text-4xl font-black mt-2 leading-tight">${monthly ? formatMortgageAmount(monthly, currency) : adminEscape(mortgageTr("rateRequired"))}</div>
       <div class="text-[11px] text-emerald-700 font-semibold mt-1">${adminEscape(rateSourceLine)}</div>
       <div class="mt-4 grid gap-2">
         <div class="rounded-2xl bg-white/85 border border-emerald-100 p-3 shadow-sm">
