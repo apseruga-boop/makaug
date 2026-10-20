@@ -3797,7 +3797,7 @@ function listingTypeFromText(text = '') {
 }
 
 function priceTextFromText(text = '') {
-  const raw = maskPhonesForPriceExtraction(cleanText(text));
+  const raw = require('../utils/propertyPriceCurrency').maskRoadDistanceAmounts(maskPhonesForPriceExtraction(cleanText(text)));
   const localPriceMatch = raw.match(/\b(?:bei|omuwendo|price|ugx|ush|shs?)?\s*\d+(?:\.\d+)?\s*(?:obukadde|akakadde|bukadde|emitwalo|mitwalo|laki|lakhs?)\b(?:\s*(?:negotiable|asking|only|za mwezi|per month|monthly))?/i);
   if (localPriceMatch) return cleanText(localPriceMatch[0]);
   const negotiableMatch = raw.match(/\b(?:UGX|USh|Shs?)?\s*\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))\s*(?:negotiable|asking|only)\b/i);

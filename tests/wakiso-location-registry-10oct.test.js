@@ -56,7 +56,7 @@ test('each missing Wakiso place saves under its town and survives reload', () =>
     ['Kira Municipality', 'Kira', 'Kira'],
     ['Gayaza', 'Gayaza', 'Gayaza'],
     ['Buloba', 'Buloba', 'Buloba'],
-    ['Nkoowe', 'Wakiso', 'Nkoowe'],
+    ['Nkoowe', 'Nkoowe', 'Nkoowe'],
     ['Gganda', 'Nansana', 'Gganda'],
     ['Shimoni Estate', 'Kira', 'Shimoni Estate'],
     ['Kigo', 'Makindye-Ssabagabo', 'Kigo'],

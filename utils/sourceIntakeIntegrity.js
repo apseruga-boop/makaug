@@ -1,6 +1,6 @@
 'use strict';
 
-const { sourcePriceAmount } = require('./propertyPriceCurrency');
+const { maskRoadDistanceAmounts, sourcePriceAmount } = require('./propertyPriceCurrency');
 const { preferEachPlotPrice } = require('./listingIntakeQuality');
 const { resolveCanonicalUgandaLocationFromText } = require('./ugandaLocationRegistry');
 
@@ -198,7 +198,7 @@ function sourcePriceMatchesPhone(value, text = '') {
 }
 
 function sourcePriceEvidenceAmounts(text = '') {
-  const masked = maskConstructionCostsForPriceExtraction(maskPhonesForPriceExtraction(text));
+  const masked = maskRoadDistanceAmounts(maskConstructionCostsForPriceExtraction(maskPhonesForPriceExtraction(text)));
   const candidates = [];
   for (const match of masked.matchAll(SOURCE_PRICE_EVIDENCE_PATTERN)) {
     const token = compactText(match[0]);

@@ -247,11 +247,57 @@ async function tickVideoStills(db, { eventLoopP95Ms, budgetMs = TICK_BUDGET_MS }
 // the agent's branding stays. The description and video fields are untouched.
 const DIRECT_VIDEO_FILE_RE = /\.(?:mp4|mov|m4v|webm)(?:[?#]|$)/i;
 
-function coverVideoUrls(extra = {}, { mediaHost = '' } = {}) {
+function youtubeVideoId(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.replace(/^www\./i, '');
+    if (host === 'youtu.be') return url.pathname.split('/').filter(Boolean)[0] || '';
+    if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
+      if (url.pathname === '/watch') return url.searchParams.get('v') || '';
+      const nested = url.pathname.match(/^\/(?:shorts|embed|live)\/([^/?#]+)/i);
+      if (nested) return nested[1] || '';
+    }
+  } catch (_) { /* not a URL */ }
+  return '';
+}
+
+function isDirectCoverVideo(url, mediaHost = '') {
+  return DIRECT_VIDEO_FILE_RE.test(url) || (mediaHost && url.toLowerCase().startsWith(`https://${String(mediaHost).toLowerCase()}/`));
+}
+
+function coverSourceUrls(extra = {}, { mediaHost = '' } = {}) {
   const { listingSourceVideoUrls } = require('../utils/realListingPhoto');
   return listingSourceVideoUrls(extra)
     .filter((url) => /^https:\/\//i.test(url))
-    .filter((url) => DIRECT_VIDEO_FILE_RE.test(url) || (mediaHost && url.toLowerCase().startsWith(`https://${mediaHost.toLowerCase()}/`)));
+    .map((url) => ({
+      url,
+      kind: isDirectCoverVideo(url, mediaHost) ? 'file' : (youtubeVideoId(url) ? 'youtube' : '')
+    }))
+    .filter((item) => item.kind);
+}
+
+function coverVideoUrls(extra = {}, { mediaHost = '' } = {}) {
+  return coverSourceUrls(extra, { mediaHost }).filter((item) => item.kind === 'file').map((item) => item.url);
+}
+
+async function fetchYouTubeThumbnail(videoUrl, fetchImpl = fetch) {
+  const id = youtubeVideoId(videoUrl);
+  if (!id) throw new Error('not a youtube video');
+  const thumbs = [
+    `https://i.ytimg.com/vi/${encodeURIComponent(id)}/maxresdefault.jpg`,
+    `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`
+  ];
+  for (const thumb of thumbs) {
+    const response = await fetchImpl(thumb);
+    if (!response?.ok) continue;
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (thumb.includes('maxresdefault') && bytes.length < 3000) continue;
+    if (bytes.length < 500) continue;
+    return { bytes, source: thumb };
+  }
+  throw new Error('YouTube thumbnail could not be fetched');
 }
 
 function coverErrorMessage(error) {
@@ -262,7 +308,7 @@ function coverErrorMessage(error) {
   return 'We couldn\'t get a clear picture from this video, so no cover was made. Upload a photo instead.';
 }
 
-async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', budgetMs = TICK_BUDGET_MS, backfill: injected = null, videoUrl = '' } = {}) {
+async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', budgetMs = TICK_BUDGET_MS, backfill: injected = null, videoUrl = '', fetchImpl = fetch, uploadBuffer = null } = {}) {
   if (running) return { ok: false, status: 409, error: 'A cover is already being made. Try again in a minute.' };
   const busy = siteBusyReason(db);
   if (busy) return { ok: false, status: 503, error: 'The site is busy right now. Try again in a few minutes.', ...busy };
@@ -278,19 +324,19 @@ async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', bud
   if (!property) return { ok: false, status: 404, error: 'Listing not found.' };
   if (property.status !== 'pending') return { ok: false, status: 409, error: 'Covers can only be made for listings still in review.' };
   const { mediaHost, sameVideoUrl } = require('../utils/realListingPhoto');
-  const urls = coverVideoUrls(property.extra_fields || {}, { mediaHost: mediaHost() });
-  if (!urls.length) {
-    return { ok: false, status: 422, error: 'This listing\'s video is a TikTok, YouTube or Facebook page, not a video file we can open, so a cover can\'t be made from it. Upload a photo instead.' };
+  const sources = coverSourceUrls(property.extra_fields || {}, { mediaHost: mediaHost() });
+  if (!sources.length) {
+    return { ok: false, status: 422, error: 'This listing\'s video is a TikTok or Facebook page, not a video file we can open, so a cover can\'t be made from it. Upload a photo instead.' };
   }
   const chosen = String(videoUrl || '').trim();
-  let selected = urls;
+  let selected = sources;
   if (chosen) {
-    const match = urls.find((url) => sameVideoUrl(url, chosen));
+    const match = sources.find((item) => sameVideoUrl(item.url, chosen));
     if (!match) {
-      return { ok: false, status: 422, error: 'That video is not a file we can take a cover from. Pick one of the listing\'s video files, or upload a photo.' };
+      return { ok: false, status: 422, error: 'That video is not one we can take a cover from. Pick one of this listing\'s videos, or upload a photo.' };
     }
     selected = [match];
-  } else if (urls.length > 1) {
+  } else if (sources.length > 1) {
     return { ok: false, status: 400, error: 'Choose which video to take the cover from.' };
   }
   running = true;
@@ -299,11 +345,34 @@ async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', bud
   const backfill = injected || require('../scripts/backfill-whatsapp-video-stills');
   try {
     controller.signal.addEventListener('abort', () => { try { backfill.killLiveChildren?.(); } catch (_) {} }, { once: true });
-    ffmpegReady();
-    const uploaded = await backfill.makeAndUploadStills(
-      { ...property, extra_fields: { ...(property.extra_fields || {}), video_urls: selected } },
-      { frameCandidates: backfill.FRAME_CANDIDATE_COUNT, maxVideos: chosen ? 1 : MAX_VIDEOS_PER_TICK, deadline: Date.now() + budgetMs, signal: controller.signal }
-    );
+    let uploaded;
+    if (selected[0].kind === 'youtube') {
+      const crypto = require('crypto');
+      const shot = await fetchYouTubeThumbnail(selected[0].url, fetchImpl);
+      const store = uploadBuffer || ((args) => require('../services/cloudMediaStorageService').uploadBufferToS3(args));
+      const stored = await store({
+        bytes: shot.bytes,
+        mimeType: 'image/jpeg',
+        key: `staff-video-cover/youtube/${property.id}/${Date.now()}-${crypto.randomUUID()}.jpg`
+      });
+      if (!stored?.publicUrl) return { ok: false, status: 422, error: 'The YouTube thumbnail could not be saved as a cover. Upload a photo instead.' };
+      uploaded = [{
+        url: stored.publicUrl,
+        sha256: stored.sha256,
+        sourceVideoUrl: selected[0].url,
+        sourceVideoIndex: 0,
+        timestampSeconds: 0,
+        sharpness: 0,
+        entropy: 0,
+        bytes: stored.bytes || shot.bytes.length
+      }];
+    } else {
+      ffmpegReady();
+      uploaded = await backfill.makeAndUploadStills(
+        { ...property, extra_fields: { ...(property.extra_fields || {}), video_urls: selected.map((item) => item.url) } },
+        { frameCandidates: backfill.FRAME_CANDIDATE_COUNT, maxVideos: chosen ? 1 : MAX_VIDEOS_PER_TICK, deadline: Date.now() + budgetMs, signal: controller.signal }
+      );
+    }
     if (!uploaded.length) return { ok: true, attached: 0, note: 'This listing already has stills from its video.' };
     const attached = await backfill.attachStills(property.id, uploaded, { keepListingText: true, actorId });
     if (attached.skipped === 'status_changed') return { ok: false, status: 409, error: 'The listing changed while the cover was being made. Reload and try again.' };
@@ -365,7 +434,9 @@ module.exports = {
   MAX_ATTEMPTS,
   clearVideoStillAttempts,
   coverErrorMessage,
+  coverSourceUrls,
   coverVideoUrls,
+  youtubeVideoId,
   makeVideoCoverForListing,
   selectionQuery,
   siteBusyReason,

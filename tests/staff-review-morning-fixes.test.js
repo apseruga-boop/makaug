@@ -75,7 +75,8 @@ test('a new internal note is appended with the author and time', () => {
 });
 
 test('Nkoowe stays in Wakiso and a chosen town survives a town-only save', () => {
-  assert.equal(canonicalizeUgandaLocation('Nkoowe', 'Wakiso').town, 'Wakiso');
+  assert.equal(canonicalizeUgandaLocation('Nkoowe', 'Wakiso').district, 'Wakiso');
+  assert.equal(canonicalizeUgandaLocation('Nkoowe', 'Wakiso').town, 'Nkoowe');
   const townOnly = normalizeStaffListingPatch({
     area: 'Nkoowe',
     district: 'Wakiso',

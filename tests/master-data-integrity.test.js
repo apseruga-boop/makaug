@@ -370,8 +370,8 @@ test('all publication paths use the integrity gate and invalidate count cache', 
   const staffRoute = read('routes/staff.js');
   const adminRoute = read('routes/admin.js');
   const metrics = read('services/publicInventoryMetricsService.js');
-  assert.match(propertyRoute, /nextStatus === 'approved'[\s\S]*listingDataIntegrityReport\(current\)/);
-  assert.match(staffRoute, /staffBulkModerationDecision[\s\S]*listingDataIntegrityReport\(row\)/);
+  assert.match(propertyRoute, /nextStatus === 'approved'[\s\S]*listingDataIntegrityReport\(current,/);
+  assert.match(staffRoute, /staffBulkModerationDecision[\s\S]*listingDataIntegrityReport\(row,/);
   assert.match(adminRoute, /direct-publish[\s\S]*listingDataIntegrityReport\(property\)/);
   assert.match(metrics, /function invalidatePublicInventoryMetricsCache[\s\S]*publicInventoryMetricsCache\.clear\(\)/);
   assert.match(propertyRoute, /invalidatePublicInventoryMetricsCache\(`listing_status_/);

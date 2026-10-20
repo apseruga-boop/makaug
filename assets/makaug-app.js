@@ -937,6 +937,7 @@ const reviewGoogleMapCache = { map: null, marker: null, host: null };
 let adminReviewLocationMarker = null;
 let adminReviewLocationProvider = "";
 let adminReviewCanonicalLocationResolution = null;
+let adminReviewLocationAutofillSeq = 0;
 let adminWhatsAppDraft = null;
 let adminAiSnapshot = null;
 let adminLatestCommandCentreMetrics = null;
@@ -14203,11 +14204,13 @@ function staffPaintReviewQueue(segment) {
     wrap.innerHTML = isSearch
       ? staffEmpty(state.statusScope === "any"
         ? `No listing matches “${adminEscape(state.term)}”.`
-        : `No pending listing matches “${adminEscape(state.term)}”.`)
+        : state.statusScope === "pending_and_live"
+          ? `No pending or live listing matches “${adminEscape(state.term)}”.`
+          : `No pending listing matches “${adminEscape(state.term)}”.`)
       : staffEmpty(isBroker ? "No broker listings are waiting for review." : "No listings are waiting for staff review.");
     return;
   }
-  const scopeNote = isSearch && state.statusScope === "any" ? "any status" : "all pending, brokers included";
+  const scopeNote = !isSearch ? "all pending, brokers included" : state.statusScope === "any" ? "any status" : state.statusScope === "pending_and_live" ? "pending and live" : "all pending, brokers included";
   const heading = isSearch ? `<div class="text-xs font-black text-slate-700" data-staff-search-results>Search results for “${adminEscape(state.term)}” (${scopeNote})</div>` : "";
   wrap.innerHTML = heading
     + rows.map((item) => staffReviewQueueCardHtml(item, { brokerQueue: isBroker })).join("")
@@ -14369,7 +14372,7 @@ function staffSearchReviewQueue(value = "") {
     if (seq !== staffReviewQueueSearchSeq) return;
     const search = staffReviewQueueState.search;
     search.term = term;
-    search.statusScope = staffListingDirectLookup(term) ? "any" : "pending";
+    search.statusScope = staffListingDirectLookup(term) ? "any" : (term ? "pending_and_live" : "pending");
     if (!term) {
       search.rows = [];
       search.total = null;
@@ -15774,7 +15777,7 @@ function staffCoverThumbHtml(url, title) {
 function staffCoverVideoChoiceHtml(propertyId, url, index) {
   const title = `Video ${index + 1}`;
   return `
-    <button type="button" data-staff-photo-action data-staff-video-cover-choice disabled data-staff-cover-video="${adminAttr(url)}" onclick="staffMakeVideoCover(${propertyIdArg(propertyId)}, ${propertyIdArg(url)})" class="flex w-full items-center gap-3 rounded-lg border border-blue-200 bg-white p-2 text-left hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">
+    <button type="button" data-staff-photo-action data-staff-video-cover-choice disabled title="Tick the rights box below to make a cover from this listing's video." data-staff-cover-video="${adminAttr(url)}" onclick="staffMakeVideoCover(${propertyIdArg(propertyId)}, ${propertyIdArg(url)})" class="flex w-full items-center gap-3 rounded-lg border border-blue-200 bg-white p-2 text-left hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">
       ${staffCoverThumbHtml(url, title)}
       <span class="min-w-0 flex-1">
         <span class="block text-sm font-black text-blue-950">${adminEscape(title)}</span>
@@ -15801,7 +15804,7 @@ function staffPreviewVideoCoverHtml(propertyId) {
     <div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3" data-staff-video-cover>
       <div class="text-sm font-black text-blue-950">Make a cover from the video</div>
       <p class="mt-1 text-xs text-blue-900">Takes clear stills from this listing's own video and adds them as photos. Nothing is cropped or blurred, so the agent's branding stays.</p>
-      <button type="button" id="staff-preview-video-cover-button" data-staff-photo-action disabled onclick="staffMakeVideoCover(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg bg-blue-700 px-3 py-2 text-sm font-black text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50">Make a cover from the video</button>
+      <button type="button" id="staff-preview-video-cover-button" data-staff-photo-action disabled title="Tick the rights box below to make a cover from this listing's video." onclick="staffMakeVideoCover(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg bg-blue-700 px-3 py-2 text-sm font-black text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50">Make a cover from the video</button>
     </div>`;
 }
 
@@ -15874,20 +15877,55 @@ async function staffMakeVideoCover(propertyId, videoUrl = "") {
   }
 }
 
+function staffCoverVideoIsUsable(url = "") {
+  const value = String(url || "").trim();
+  if (/\.(?:mp4|mov|m4v|webm)(?:[?#]|$)/i.test(value)) return true;
+  if (typeof getYouTubeVideoId === "function" && getYouTubeVideoId(value)) return true;
+  return /(?:youtube\.com|youtu\.be)\//i.test(value);
+}
+
+function staffCoverDisableReason() {
+  if (staffPhotoChangePending) return "A photo change is already running. Wait for it to finish.";
+  const consent = document.getElementById("staff-preview-photo-rights")?.checked === true;
+  if (!consent) return "Tick the rights box below to make a cover from this listing's video.";
+  const choices = staffCoverVideoChoices(adminActiveReview || {});
+  if (!choices.length) return "This listing has no video to take a cover from.";
+  if (!choices.some((url) => staffCoverVideoIsUsable(url))) return "This video is a TikTok or Facebook page, not a file we can open. Upload a photo instead.";
+  return "";
+}
+
 function staffSyncPreviewPhotoActions() {
   const consent = document.getElementById("staff-preview-photo-rights")?.checked === true;
   const fileCount = document.getElementById("staff-preview-photo-upload")?.files?.length || 0;
   const cover = document.getElementById("staff-preview-video-cover-button");
   const choices = [...document.querySelectorAll("[data-staff-video-cover-choice]")];
   const upload = document.getElementById("staff-preview-photo-upload-button");
+  const reason = staffCoverDisableReason();
   if (staffPhotoChangePending) {
-    if (cover) cover.disabled = true;
-    choices.forEach((button) => { button.disabled = true; });
+    if (cover) {
+      cover.disabled = true;
+      cover.title = reason;
+    }
+    choices.forEach((button) => {
+      button.disabled = true;
+      button.title = reason;
+    });
     if (upload) upload.disabled = true;
     return;
   }
   if (cover) cover.disabled = !consent;
   choices.forEach((button) => { button.disabled = !consent; });
+  if (reason) {
+    if (cover) cover.disabled = true;
+    choices.forEach((button) => { button.disabled = true; });
+  }
+  const title = reason || "Make a cover photo from this listing's video, including a YouTube video.";
+  if (cover) cover.title = title;
+  choices.forEach((button) => {
+    const url = button.getAttribute("data-staff-cover-video") || "";
+    button.title = reason || (staffCoverVideoIsUsable(url) ? title : "This video is a TikTok or Facebook page, not a file we can open. Upload a photo instead.");
+    if (!staffCoverVideoIsUsable(url)) button.disabled = true;
+  });
   if (upload) upload.disabled = !(consent && fileCount > 0);
   staffHydrateCoverVideoChoices();
 }
@@ -16417,6 +16455,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
     adminReviewAutoPopulateLocationFromSource(preview);
     initAdminReviewLocationMap(preview);
     staffHydrateCoverVideoChoices(modal);
+    staffSyncPreviewPhotoActions();
     moderationEnsureIdentityPanel("staff-preview", preview, "staff", document.querySelector("#staff-listing-preview-modal .p-5 > .space-y-4") || document.querySelector("#staff-listing-preview-modal"));
   }, 120);
 }
@@ -27778,10 +27817,25 @@ function adminReviewDistrictOptionsHtml(region = "", selected = "") {
     .join("");
 }
 
-function adminReviewCityOptionsHtml(district = "", selected = "") {
+function adminReviewExtraTowns(location = null) {
+  const source = location || (typeof adminReviewCanonicalLocationResolution === "object" ? adminReviewCanonicalLocationResolution : null) || {};
+  return [source.town, source.city, source.subcounty, source.sub_county]
+    .map((value) => String(value || "").trim())
+    .filter((value, index, list) => value && list.indexOf(value) === index);
+}
+
+function adminReviewCityOptionsHtml(district = "", selected = "", extras = null) {
   const tree = getDistrictLocationTree(district);
   const cities = tree.map((item) => item.city);
-  const selectedFallback = selected && !cities.includes(selected) ? [{ city: selected }] : [];
+  const extraCities = [];
+  const push = (city) => {
+    const name = String(city || "").trim();
+    if (!name || cities.includes(name) || extraCities.includes(name)) return;
+    extraCities.push(name);
+  };
+  push(selected);
+  (Array.isArray(extras) ? extras : adminReviewExtraTowns()).forEach(push);
+  const selectedFallback = extraCities.map((city) => ({ city }));
   return [`<option value="">Select town / city</option>`]
     .concat(tree.concat(selectedFallback).map((item) => `<option value="${adminAttr(item.city)}" ${String(selected || "") === item.city ? "selected" : ""}>${adminEscape(item.city)}</option>`))
     .join("");
@@ -28039,6 +28093,17 @@ function applyAdminReviewCanonicalLocation(location = {}) {
     areaEl.value = location.name;
     areaEl.dataset.auto = "1";
   }
+  if (canonicalDistrict && typeof loadSharedLocationCatalogForDistrict === "function") {
+    const pickedTown = town;
+    loadSharedLocationCatalogForDistrict(canonicalDistrict).then(() => {
+      const cityEl = document.getElementById("admin-review-city-edit");
+      if (!cityEl || adminReviewCanonicalLocationResolution?.canonical_location_id !== location.canonical_location_id) return;
+      const current = cityEl.value || pickedTown;
+      adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(canonicalDistrict, current), current);
+      adminReviewExtraTowns(location).forEach((name) => ensureSelectHasValue("admin-review-city-edit", name, name));
+      ensureSelectHasValue("admin-review-city-edit", current, current);
+    }).catch(() => {});
+  }
   return true;
 }
 
@@ -28132,6 +28197,7 @@ function adminReviewClearCanonicalSuggestions() {
 }
 
 function adminReviewChooseCanonicalSuggestion(index = 0) {
+  adminReviewLocationAutofillSeq += 1;
   const candidate = window.__adminReviewCanonicalSuggestions?.[Number(index)];
   if (!candidate?.canonical_location_id) return false;
   const applied = applyAdminReviewCanonicalLocation({
@@ -28378,6 +28444,7 @@ function adminReviewRenderAddressSuggestions(suggestions = []) {
 }
 
 async function adminReviewChooseAddressSuggestion(index = 0) {
+  adminReviewLocationAutofillSeq += 1;
   const point = window.__adminReviewAddressSuggestions?.[Number(index)];
   if (!point || !Number.isFinite(Number(point.lat)) || !Number.isFinite(Number(point.lng))) return false;
   const addressNote = adminReviewRememberAddressNote();
@@ -28497,16 +28564,28 @@ function adminReviewLocationAutofillText(review = {}, facts = {}) {
   ]).join(", ");
 }
 
+function adminReviewRecognisedLocationSelected(review = {}) {
+  const picked = adminReviewCanonicalLocationResolution;
+  if (picked?.canonical_location_id && picked.match === "exact_alias" && Number(picked.confidence) === 1) return true;
+  const extra = adminReviewExtraFields(review);
+  const id = String(extra.canonical_location_id || review.canonical_location_id || "").trim();
+  const status = String(extra.location_resolution_status || review.location_resolution_status || "");
+  if (id && /canonical|exact|matched|staff_edit|shared_resolver|human_confirmed/i.test(status)) return true;
+  if (extra.staff_location_reviewed_at && id) return true;
+  return false;
+}
+
 async function adminReviewAutoPopulateLocationFromSource(review = {}) {
+  const seq = ++adminReviewLocationAutofillSeq;
   const extra = adminReviewExtraFields(review);
   const townNote = adminReviewTownOnlyLocationNote(review);
   if (townNote) {
     adminReviewSetAddressSearchStatus(townNote, "slate");
     return;
   }
-  // Staff already saved this location. Do not derive Town, Area, Neighbourhood
-  // or the address note again from the district or the previous label.
-  if (extra.staff_location_reviewed_at) return;
+  // Staff already saved this location, or they picked a registry result.
+  // Do not replace that with "Location not recognised".
+  if (extra.staff_location_reviewed_at || adminReviewRecognisedLocationSelected(review)) return;
   const facts = adminExtractReviewFacts(review);
   const query = uniqueTextParts([
     facts.area,
@@ -28519,7 +28598,9 @@ async function adminReviewAutoPopulateLocationFromSource(review = {}) {
     extra.location_review_proposed_area || facts.area,
     extra.location_review_proposed_district || ""
   ]).join(", "));
+  if (seq !== adminReviewLocationAutofillSeq) return;
   if (String(adminActiveReview?.id || "") !== String(review.id || "")) return;
+  if (adminReviewRecognisedLocationSelected(review)) return;
   if (resolution.status === "matched") {
     applyAdminReviewCanonicalLocation(resolution.location);
     adminReviewSetAddressSearchStatus("Stored area resolved through the shared canonical registry. Confirm the pin before approval.", "green");
@@ -42666,11 +42747,18 @@ function mergeLocationTreeWithServerRows(district = "", rows = [], browserTree =
   };
   (Array.isArray(rows) ? rows : []).forEach((item) => {
     if (!item?.name || (item.province || item.district) !== district) return;
-    add(item.town || district, {
+    const place = {
       name: item.name,
       ...(Number.isFinite(item.latitude) ? { lat: item.latitude } : {}),
       ...(Number.isFinite(item.longitude) ? { lng: item.longitude } : {})
-    });
+    };
+    add(item.town || district, place);
+    const subcounty = String(item.subcounty || item.sub_county || "").trim();
+    const townName = String(item.town || district || "").trim();
+    if (subcounty && subcounty !== townName) {
+      if (!groups.has(subcounty)) groups.set(subcounty, new Map());
+      if (!groups.get(subcounty).has(item.name)) groups.get(subcounty).set(item.name, place);
+    }
   });
   const serverTowns = new Set(groups.keys());
   (Array.isArray(browserTree) ? browserTree : []).forEach((cityNode) => {

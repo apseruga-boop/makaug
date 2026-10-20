@@ -798,6 +798,7 @@ function canonicalLocationOptions() {
     location: entry.name,
     district: entry.district,
     town: entry.town,
+    subcounty: entry.subcounty || '',
     level: entry.level,
     latitude: Number.isFinite(entry.lat) ? entry.lat : null,
     longitude: Number.isFinite(entry.lng) ? entry.lng : null,

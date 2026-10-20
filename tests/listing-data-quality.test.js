@@ -13,6 +13,7 @@ const { resolveCanonicalUgandaLocationFromText } = require('../utils/ugandaLocat
 const { sourcePositiveListingGateForRecord } = require('../utils/sourceContentQuality');
 const {
   decideIntakeRepeat,
+  isApartmentBlockText,
   preferEachPlotPrice,
   quotedEachPlotAmount,
 } = require('../utils/listingIntakeQuality');
@@ -56,6 +57,8 @@ test('a social each-plot figure beats a multiplied total in the same caption', (
 });
 
 test('an apartment block on a plot is not land', () => {
+  assert.equal(isApartmentBlockText('One Bedroom Apartment at only 900k'), false);
+  assert.equal(isApartmentBlockText('2 bedroom apartment block on a 50x100 plot'), true);
   const caption = '2 bedroom apartment block on a 50x100 plot for sale in Kira at 800m';
   assert.equal(employeePropertyFacts(caption, {}).listingType, 'sale');
   const evidence = detectPropertyTypeEvidence(caption);
