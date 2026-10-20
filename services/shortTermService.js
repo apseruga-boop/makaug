@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 
 const logger = require('../config/logger');
+const { parseShortTermSearchText } = require('./shortTermQuery');
 const { shortTermEnabled } = require('../utils/shortTermFeatureFlags');
 
 // ---------------------------------------------------------------------------
@@ -517,23 +518,37 @@ const LIVE_LISTING_SQL = `
   AND (l.expires_at IS NULL OR l.expires_at > NOW())
 `.replace('$LIVE_STATUSES$', `'{${PUBLIC_STATUSES.join(',')}}'::text[]`);
 
+function applyShortTermFreeText(query = {}) {
+  const parsed = parseShortTermSearchText(query.q || '');
+  const explicitBedrooms = toInt(query.bedrooms, 0);
+  const explicitMax = toBigIntSafe(query.max_price, 0);
+  const structured = Boolean(parsed.bedrooms || parsed.max_price);
+  return {
+    ...query,
+    q: structured ? parsed.place : (parsed.place || query.q || ''),
+    bedrooms: explicitBedrooms || parsed.bedrooms || undefined,
+    max_price: explicitMax || parsed.max_price || undefined
+  };
+}
+
 function buildSearchFilters(query = {}) {
+  const normalized = applyShortTermFreeText(query);
   const where = [LIVE_LISTING_SQL];
   const values = [];
 
-  const district = cleanText(query.district, 120);
+  const district = cleanText(normalized.district, 120);
   if (district) {
     values.push(district.toLowerCase());
     where.push(`LOWER(l.district) = $${values.length}`);
   }
 
-  const area = cleanText(query.area, 120);
+  const area = cleanText(normalized.area, 120);
   if (area) {
     values.push(`%${area.toLowerCase()}%`);
     where.push(`LOWER(l.area) LIKE $${values.length}`);
   }
 
-  const q = cleanText(query.q, 120);
+  const q = cleanText(normalized.q, 120);
   if (q) {
     values.push(`%${q.toLowerCase()}%`);
     where.push(`(LOWER(l.title) LIKE $${values.length}
@@ -542,37 +557,37 @@ function buildSearchFilters(query = {}) {
       OR LOWER(COALESCE(l.description, '')) LIKE $${values.length})`);
   }
 
-  const guests = toInt(query.guests, 0);
+  const guests = toInt(normalized.guests, 0);
   if (guests > 0) {
     values.push(guests);
     where.push(`l.max_guests >= $${values.length}`);
   }
 
-  const bedrooms = toInt(query.bedrooms, 0);
+  const bedrooms = toInt(normalized.bedrooms, 0);
   if (bedrooms > 0) {
     values.push(bedrooms);
     where.push(`l.bedrooms >= $${values.length}`);
   }
 
-  const minPrice = toBigIntSafe(query.min_price, 0);
+  const minPrice = toBigIntSafe(normalized.min_price, 0);
   if (minPrice > 0) {
     values.push(minPrice);
     where.push(`l.base_nightly_ugx >= $${values.length}`);
   }
 
-  const maxPrice = toBigIntSafe(query.max_price, 0);
+  const maxPrice = toBigIntSafe(normalized.max_price, 0);
   if (maxPrice > 0) {
     values.push(maxPrice);
     where.push(`l.base_nightly_ugx <= $${values.length}`);
   }
 
-  const placeType = cleanText(query.place_type, 30);
+  const placeType = cleanText(normalized.place_type, 30);
   if (PLACE_TYPES[placeType]) {
     values.push(placeType);
     where.push(`l.place_type = $${values.length}`);
   }
 
-  const amenities = String(query.amenities || '')
+  const amenities = String(normalized.amenities || '')
     .split(',')
     .map((slug) => normaliseAmenitySlug(slug))
     .filter((slug) => AMENITY_SLUGS.has(slug))
@@ -586,8 +601,8 @@ function buildSearchFilters(query = {}) {
     ) = ${amenities.length}`);
   }
 
-  const checkIn = parseDate(query.check_in);
-  const checkOut = parseDate(query.check_out);
+  const checkIn = parseDate(normalized.check_in);
+  const checkOut = parseDate(normalized.check_out);
   if (checkIn && checkOut && checkOut > checkIn) {
     values.push(checkIn);
     const fromIdx = values.length;
@@ -1226,6 +1241,7 @@ module.exports = {
   PLACE_TYPES,
   PUBLIC_STATUSES,
   SHORT_TERM_MARKER,
+  applyShortTermFreeText,
   createShortTermListing,
   coarseCoordinate,
   eachNight,

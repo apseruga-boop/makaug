@@ -110,8 +110,8 @@
     "newListing": "Manyen",
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotel i Uganda",
-    "partnerNote": "Magi obedo otel ki bot lawote me wot. makaug pe keto, pe neno dok pe booko gi. Namba en aye cim pa otel kikome. Por wel yabo kakube pa lawote, ka ma ibuk ki i cul iye.",
-    "partnerPriceAsk": "Wel ma nyutu i kakube pa lawote",
+    "partnerNote": "Otel magi oa ki bot lawot me wot, ki nyuto calo tyen lok. makaug pe keto, pe neno, pe booko dok pe keto wel. Namba cim pe tye kany. Check prices nen keken ka brand me hotel oyabe.",
+    "partnerPriceAsk": "Tyen lok keken. Wel ma tye kombedi pe nyut kany.",
     "partnerReviews": "ngec",
     "partnerVisit": "Kabedo pa hotel kikome",
     "bookingCta": "Yeny kabedo i",
@@ -129,10 +129,11 @@
     "wherePh": "Kampala, Entebbe, Jinja…",
     "emptyTown": "Pe tye kabedo i {town} pud",
     "comparePrices": "Por wel",
+    "checkPrices": "Nen wel",
     "affiliateDisclosure": "makaug twero nongo komishon; ibuk ki i cul i kakube pa lawote, ma tye ka time booking ni",
     "indicative": "ma nyutu",
-    "hotelsTown": "Otel i {town}",
-    "hotelsFallback": "Otel i Kampala ki Entebbe",
+    "hotelsTown": "Tyen lok pa otel i {town}",
+    "hotelsFallback": "Tyen lok pa otel · Kampala ki Entebbe",
     "showMore": "Nyut mapol",
     "alertWhatsapp": "Mii ngec i WhatsApp ka kabedo oket",
     "searchHotels": "Yeny otel",
@@ -209,8 +210,8 @@
     "newListing": "አዲስ",
     "partnerBadge": "ሆቴል",
     "partnerHeading": "በዩጋንዳ ያሉ ሆቴሎች",
-    "partnerNote": "እነዚህ ከጉዞ አጋር የመጡ ሆቴሎች ናቸው። makaug አይዘረዝራቸውም፣ አይመረምራቸውም፣ አያስይዛቸውም። ቁጥሩ የሆቴሉ ስልክ ነው። ዋጋ ማወዳደር የአጋር ጣቢያውን ይከፍታል፣ እዚያ ያስይዛሉና ይከፍላሉ።",
-    "partnerPriceAsk": "አመላካች ዋጋ በአጋር ጣቢያው ላይ",
+    "partnerNote": "እነዚህ ሆቴሎች ከጉዞ አጋር የመጡ ሲሆን እንደ መመሪያ ይታያሉ። makaug አይዘርዝራቸውም፣ አይመረምራቸውም፣ አያስይዛቸውም፣ ዋጋም አያስቀምጥም። እዚህ ስልክ ቁጥር የለም። ዋጋ ይመልከቱ የሚለው ቁልፍ የሆቴል ቦታ ማስያዣ ምርት ሲበራ ብቻ ይታያል።",
+    "partnerPriceAsk": "መመሪያ ብቻ። የቀጥታ ዋጋ እዚህ አይታይም።",
     "partnerReviews": "ግምገማዎች",
     "partnerVisit": "የሆቴሉ ድረ-ገጽ",
     "bookingCta": "ማረፊያ ይፈልጉ በ",
@@ -228,10 +229,11 @@
     "wherePh": "Kampala, Entebbe, Jinja…",
     "emptyTown": "በ{town} እስካሁን ቦታ የለም",
     "comparePrices": "ዋጋዎችን ያወዳድሩ",
+    "checkPrices": "ዋጋ ይመልከቱ",
     "affiliateDisclosure": "makaug ኮሚሽን ሊያገኝ ይችላል፤ ማስያዝና ክፍያውን በአጋር ጣቢያው ላይ ያደርጋሉ፣ እሱም ማስያዝዎን ያስተናግዳል",
     "indicative": "አመላካች",
-    "hotelsTown": "ሆቴሎች በ{town}",
-    "hotelsFallback": "ሆቴሎች በካምፓላ እና ኢንቴቤ",
+    "hotelsTown": "የሆቴል መመሪያ · {town}",
+    "hotelsFallback": "የሆቴል መመሪያ · ካምፓላ እና ኢንቴቤ",
     "showMore": "ተጨማሪ አሳይ",
     "alertWhatsapp": "ቦታ ሲዘረዝር በWhatsApp አሳውቀኝ",
     "searchHotels": "ሆቴሎችን ፈልግ",
@@ -308,8 +310,8 @@
     "newListing": "جديد",
     "partnerBadge": "فندق",
     "partnerHeading": "فنادق في أوغندا",
-    "partnerNote": "هذه فنادق من شريك سفر. makaug لا تدرجها ولا تعاينها ولا تحجزها. الرقم هو هاتف الفندق نفسه. مقارنة الأسعار تفتح موقع الشريك، حيث تحجز وتدفع.",
-    "partnerPriceAsk": "سعر إرشادي على موقع الشريك",
+    "partnerNote": "هذه فنادق من شريك سفر وتُعرض كدليل فقط. makaug لا تدرجها ولا تعاينها ولا تحجزها ولا تحدد سعرها. لا يظهر رقم هاتف هنا. يظهر زر تحقق من الأسعار فقط عندما تُفعَّل علامة تجارية لحجز الفنادق.",
+    "partnerPriceAsk": "دليل فقط. لا يُعرض سعر مباشر هنا.",
     "partnerReviews": "تقييم",
     "partnerVisit": "موقع الفندق",
     "bookingCta": "ابحث عن إقامة على",
@@ -327,10 +329,11 @@
     "wherePh": "Kampala, Entebbe, Jinja…",
     "emptyTown": "لا أماكن في {town} بعد",
     "comparePrices": "قارن الأسعار",
+    "checkPrices": "تحقق من الأسعار",
     "affiliateDisclosure": "قد تربح makaug عمولة؛ تحجز وتدفع على موقع الشريك، وهو الذي يتولى حجزك",
     "indicative": "إرشادي",
-    "hotelsTown": "فنادق في {town}",
-    "hotelsFallback": "فنادق في كمبالا وإنتيبي",
+    "hotelsTown": "دليل فنادق · {town}",
+    "hotelsFallback": "دليل فنادق · كمبالا وإنتيبي",
     "showMore": "أظهر المزيد",
     "alertWhatsapp": "نبهني على واتساب عند إدراج مكان",
     "searchHotels": "ابحث عن فنادق",
@@ -407,8 +410,8 @@
     "newListing": "New listing",
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotels in Uganda",
-    "partnerNote": "These are hotels from a travel partner. makaug does not list, inspect or book them. The number is the hotel's own phone. Compare prices opens the partner site, where you book and pay.",
-    "partnerPriceAsk": "Indicative price on the partner site",
+    "partnerNote": "These hotels come from a travel partner and are shown as a guide. makaug does not list, inspect, book or set their price. No phone number is shown here. Check prices appears only when a hotel booking brand is switched on.",
+    "partnerPriceAsk": "Guide only. A live price is not shown here.",
     "partnerReviews": "reviews",
     "partnerVisit": "Hotel's own site",
     "bookingCta": "Search stays on",
@@ -426,10 +429,11 @@
     "wherePh": "Kampala, Entebbe, Jinja…",
     "emptyTown": "No places in {town} yet",
     "comparePrices": "Compare prices",
+    "checkPrices": "Check prices",
     "affiliateDisclosure": "makaug may earn a commission; you book and pay on the partner site, which handles your booking",
     "indicative": "indicative",
-    "hotelsTown": "Hotels in {town}",
-    "hotelsFallback": "Hotels in Kampala & Entebbe",
+    "hotelsTown": "Hotel guide · {town}",
+    "hotelsFallback": "Hotel guide · Kampala & Entebbe",
     "showMore": "Show more",
     "alertWhatsapp": "Alert me on WhatsApp when a place is listed",
     "searchHotels": "Search hotels",
@@ -506,8 +510,8 @@
     "newListing": "Empya",
     "partnerBadge": "Wooteeri",
     "partnerHeading": "Wooteeri mu Uganda",
-    "partnerNote": "Bino wooteeri okuva ku mukago gw'okutambula. makaug tebiteeka, tebikebereera era tebibooka. Ennamba ye ssimu ya wooteeri yennyini. Okugeraageranya ebiwendo kuggulawo omukutu gw'omukago, gye booka n'osasula.",
-    "partnerPriceAsk": "Omuwendo ogulaga ku mukutu gw'omukago",
+    "partnerNote": "Bino wooteeri okuva ku mukago gw'okutambula, era biragibwa nga ekkubo. makaug tebiteeka, tebikebera, tebibooka era tebissa ebiwendo. Tewali namba ya ssimu wano. Akabumba ka Check prices kalabika brand ya wooteeri bw'eba nga eyaka.",
+    "partnerPriceAsk": "Kkubo kwokka. Omuwendo ogulabika tegulagibwa wano.",
     "partnerReviews": "endowooza",
     "partnerVisit": "Omukutu gwa wooteeri",
     "bookingCta": "Noonya ebifo ku",
@@ -525,10 +529,11 @@
     "wherePh": "Kampala, Entebbe, Jinja…",
     "emptyTown": "Tewali bifo mu {town} kaakano",
     "comparePrices": "Geraageranya ebiwendo",
+    "checkPrices": "Kebera ebiwendo",
     "affiliateDisclosure": "makaug eyinza okufuna komissioni; booka era osasule ku mukutu gw'omukago, ogukola booking yo",
     "indicative": "ogulaga",
-    "hotelsTown": "Wooteeri mu {town}",
-    "hotelsFallback": "Wooteeri mu Kampala ne Entebbe",
+    "hotelsTown": "Ekkubo lya wooteeri · {town}",
+    "hotelsFallback": "Ekkubo lya wooteeri · Kampala ne Entebbe",
     "showMore": "Laba ebirala",
     "alertWhatsapp": "Mpulize ku WhatsApp nga ekifo kiteekeddwa",
     "searchHotels": "Noonya wooteeri",
@@ -605,8 +610,8 @@
     "newListing": "Ensya",
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotel omu Uganda",
-    "partnerNote": "Ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka. Enamba n'esimu y'ehotel yenka. Gyeragyerania emihendo n'ayabura omukutu gw'omunywani, ah'obooka kandi oshashura.",
-    "partnerPriceAsk": "Omuhendo ogurikworeka aha mukutu gw'omunywani",
+    "partnerNote": "Ebi n'ehotel kuruga aha munywani w'orugyendo, kandi nizoreka nk'ekiragiro. makaug tekizita, tekizyebera, tekizibooka kandi tekita omuhendo. Enamba y'esimu tiri aha. Akabumba ka Check prices nikareeba brand y'ehotel yaba eyashweirwe.",
+    "partnerPriceAsk": "Ekiragiro kyoka. Omuhendo oguriho tigurikworeka aha.",
     "partnerReviews": "ebiteekateeko",
     "partnerVisit": "Orubaju rwa hotel",
     "bookingCta": "Shaka ahu kuraara aha",
@@ -624,10 +629,11 @@
     "wherePh": "Kampala, Entebbe, Jinja…",
     "emptyTown": "Tihariho bifo omu {town} hati",
     "comparePrices": "Gyeragyerania emihendo",
+    "checkPrices": "Rora emihendo",
     "affiliateDisclosure": "makaug neyija kutunga komishoni; obooka kandi oshashure aha mukutu gw'omunywani, ogukora booking yaawe",
     "indicative": "ogurikworeka",
-    "hotelsTown": "Ehotel omu {town}",
-    "hotelsFallback": "Ehotel omu Kampala na Entebbe",
+    "hotelsTown": "Ekiragiro ky'ehotel · {town}",
+    "hotelsFallback": "Ekiragiro ky'ehotel · Kampala na Entebbe",
     "showMore": "Yoreka ebindi",
     "alertWhatsapp": "Mmanyise aha WhatsApp ahakuba ekifo kikateekwa",
     "searchHotels": "Sherura ehotel",
@@ -704,8 +710,8 @@
     "newListing": "Ensya",
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotel omu Uganda",
-    "partnerNote": "Ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka. Enamba n'esimu y'ehotel yonka. Gyeragyerania ibiciro n'ayabura omukutu gw'omunywani, ah'obooka kandi oshashura.",
-    "partnerPriceAsk": "Igiciro kirikworeka aha mukutu gw'omunywani",
+    "partnerNote": "Ebi n'ehotel kuruga aha munywani w'orugyendo, kandi nizoreka nk'ekiragiro. makaug tekizita, tekizyebera, tekizibooka kandi tekita igiciro. Enamba y'esimu tiri aha. Akabumba ka Check prices nikareeba brand y'ehotel yaba eyashweirwe.",
+    "partnerPriceAsk": "Ekiragiro kyoka. Igiciro kirikubaasa tikirikworeka aha.",
     "partnerReviews": "ebiteekateeko",
     "partnerVisit": "Orubaju rwa hotel",
     "bookingCta": "Serra aha kuraara aha",
@@ -723,10 +729,11 @@
     "wherePh": "Kampala, Entebbe, Jinja…",
     "emptyTown": "Nta bifo omu {town} ubu",
     "comparePrices": "Gyeragyerania ibiciro",
+    "checkPrices": "Rora ibiciro",
     "affiliateDisclosure": "makaug eshobora kugira komisiyo; ubuka kandi wishyure ku rubuga rw'umufatanyabikorwa, urukora booking yawe",
     "indicative": "kirikwerekana",
-    "hotelsTown": "Ehotel muri {town}",
-    "hotelsFallback": "Ehotel muri Kampala na Entebbe",
+    "hotelsTown": "Ekiragiro cy'ehotel · {town}",
+    "hotelsFallback": "Ekiragiro cy'ehotel · Kampala na Entebbe",
     "showMore": "Erekana ibindi",
     "alertWhatsapp": "Menyesha kuri WhatsApp iyo ikibanza kibitswe",
     "searchHotels": "Shakisha ehotel",
@@ -803,8 +810,8 @@
     "newListing": "Empya",
     "partnerBadge": "Wooteeri",
     "partnerHeading": "Wooteeri mu Uganda",
-    "partnerNote": "Bino wooteeri okuva ku mukago. makaug tekiteeka, tekikebera era tekibooka. Ennamba ye ssimu ya wooteeri yennyini. Okugeraageranya emiwendo kuggulawo omukutu gw'omukago, gye booka n'osasula.",
-    "partnerPriceAsk": "Ebbeeyi elaga ku mukutu gw'omukago",
+    "partnerNote": "Bino wooteeri okuva ku mukago, era biragibwa nga ekkubo. makaug tekiteeka, tekikebera, tekibooka era tekissa miwendo. Tewali namba ya ssimu wano. Akabumba ka Check prices kalabika brand ya wooteeri bw'eba nga eyaka.",
+    "partnerPriceAsk": "Kkubo kwokka. Ebbeeyi etebeera teragibwa wano.",
     "partnerReviews": "endowooza",
     "partnerVisit": "Omukutu gwa wooteeri",
     "bookingCta": "Noonia ebifo ku",
@@ -822,10 +829,11 @@
     "wherePh": "Kampala, Entebbe, Jinja…",
     "emptyTown": "Tewali bifo mu {town} kati",
     "comparePrices": "Geraageranya emiwendo",
+    "checkPrices": "Kebera emiwendo",
     "affiliateDisclosure": "makaug eyinza okufuna komissioni; booka era osasule ku mukutu gw'omukago, ogukola booking yo",
     "indicative": "elaga",
-    "hotelsTown": "Wooteeri mu {town}",
-    "hotelsFallback": "Wooteeri mu Kampala ni Entebbe",
+    "hotelsTown": "Ekkubo lya wooteeri · {town}",
+    "hotelsFallback": "Ekkubo lya wooteeri · Kampala ni Entebbe",
     "showMore": "Laga ebirala",
     "alertWhatsapp": "Mpulize ku WhatsApp nga ekifo kiteekeddwa",
     "searchHotels": "Noonya wooteeri",
@@ -902,8 +910,8 @@
     "newListing": "Mpya",
     "partnerBadge": "Hoteli",
     "partnerHeading": "Hoteli nchini Uganda",
-    "partnerNote": "Hizi ni hoteli kutoka kwa mshirika wa safari. makaug haiziorodheshi, haizikagui wala haizibuki. Nambari ni simu ya hoteli yenyewe. Linganisha bei hufungua tovuti ya mshirika, ambapo unahifadhi na kulipa.",
-    "partnerPriceAsk": "Bei elekezi kwenye tovuti ya mshirika",
+    "partnerNote": "Hoteli hizi zinatoka kwa mshirika wa safari na zinaonyeshwa kama mwongozo. makaug haziorodheshi, hazikagui, hazibuki wala haziweki bei. Hakuna nambari ya simu hapa. Kitufe cha Angalia bei huonekana tu kampuni ya kuhifadhi hoteli ikiwashwa.",
+    "partnerPriceAsk": "Mwongozo tu. Bei ya moja kwa moja haionyeshwi hapa.",
     "partnerReviews": "maoni",
     "partnerVisit": "Tovuti ya hoteli",
     "bookingCta": "Tafuta malazi kwenye",
@@ -921,10 +929,11 @@
     "wherePh": "Kampala, Entebbe, Jinja…",
     "emptyTown": "Bado hakuna mahali {town}",
     "comparePrices": "Linganisha bei",
+    "checkPrices": "Angalia bei",
     "affiliateDisclosure": "makaug inaweza kupata kamisheni; unahifadhi na kulipa kwenye tovuti ya mshirika, ambayo inashughulikia uhifadhi wako",
     "indicative": "elekezi",
-    "hotelsTown": "Hoteli {town}",
-    "hotelsFallback": "Hoteli Kampala na Entebbe",
+    "hotelsTown": "Mwongozo wa hoteli · {town}",
+    "hotelsFallback": "Mwongozo wa hoteli · Kampala na Entebbe",
     "showMore": "Onyesha zaidi",
     "alertWhatsapp": "Niarifu WhatsApp mahali panapoorodheshwa",
     "searchHotels": "Tafuta hoteli",
@@ -1115,11 +1124,10 @@
       if (!href) return '';
       return '<a class="st-compare-btn" href="' + esc(href) + '" target="_blank" rel="sponsored noopener"'
         + ' data-st-affiliate="' + esc(brand.key) + '" data-st-sub="' + esc(subId) + '">'
-        + esc(brand.label) + '</a>';
+        + esc(t('checkPrices')) + (brand.label ? ' · ' + esc(brand.label) : '') + '</a>';
     }).join('');
     if (!buttons) return '';
     return '<div class="st-compare"><span class="st-ad-label">' + esc(t('adLabel')) + '</span>'
-      + '<p class="st-compare-label">' + esc(t('comparePrices')) + '</p>'
       + '<div class="st-compare-btns">' + buttons + '</div>'
       + '<p class="st-compare-note">' + esc(t('affiliateDisclosure')) + '</p></div>';
   }
@@ -1613,6 +1621,10 @@
         var el = form.querySelector('[name="' + name + '"]');
         if (el && String(el.value).trim()) params.set(name, String(el.value).trim());
       });
+    }
+    var incomingBeds = new URLSearchParams(window.location.search || '');
+    if (!params.get('bedrooms') && incomingBeds.get('bedrooms') && (params.get('q') || '') === (incomingBeds.get('q') || '')) {
+      params.set('bedrooms', incomingBeds.get('bedrooms'));
     }
     var sort = document.getElementById('st-sort');
     if (sort && sort.value) params.set('sort', sort.value);
@@ -2283,7 +2295,7 @@
     var known = (state.partners || []).filter(function (row) { return partnerSlug(row) === slug; })[0] || rememberedPartner(slug);
     if (known) {
       view.innerHTML = partnerDetailHtml(known);
-      document.title = known.title + ' | Compare prices | makaug.com';
+      document.title = known.title + ' | Hotel guide | makaug.com';
       return;
     }
     view.innerHTML = '<div class="st-wrap"><div class="st-skeleton" style="height:240px;margin-top:20px"></div></div>';
@@ -2297,7 +2309,7 @@
       }
       rememberPartner(row);
       view.innerHTML = partnerDetailHtml(row);
-      document.title = row.title + ' | Compare prices | makaug.com';
+      document.title = row.title + ' | Hotel guide | makaug.com';
     }).catch(function (error) {
       view.innerHTML = '<div class="st-wrap"><div class="st-empty">' + esc(error.message || 'Could not load this hotel') + '</div></div>';
     });
