@@ -9585,6 +9585,25 @@ async function handleEmployeeWhatsappIntake({
         const mergedCaption = `${pendingCaption}\n${cleanBody}`;
         const mergedFacts = employeePropertyFacts(mergedCaption, data);
         const mergedMissing = employeePropertyMissing(mergedFacts);
+        // 19 Oct 2026: Brian's "Off Mukono Kayunga Road" plot needed an area and
+        // district. He answered "Mukono district" twice and was asked for the same
+        // thing both times, because a district is never an area and nothing else
+        // he could say would have satisfied it. A short reply that names a district
+        // is the answer: take the district as the area and let a moderator place it.
+        if (mergedMissing.length
+          && mergedMissing.every((item) => item === 'exact area and district')
+          && cleanBody.length <= 60
+          && mergedFacts.locationPatch?.district
+          && mergedFacts.locationPatch?.canonical_location_id
+          && !mergedFacts.locationPatch?.area) {
+          mergedFacts.locationPatch = {
+            ...mergedFacts.locationPatch,
+            area: mergedFacts.locationPatch.district,
+            canonical_location_match: 'district_stated_by_agent',
+            canonical_location_confidence: 0.5
+          };
+          mergedMissing.length = 0;
+        }
         if (mergedMissing.length <= textOnlyMissing.length) {
           textCaption = mergedCaption;
           textOnlyFacts = mergedFacts;
@@ -9613,10 +9632,14 @@ async function handleEmployeeWhatsappIntake({
         // that property; only a separate full caption can be a different one.
         if (!mergedWithPendingCaption && pendingCaption && !employeeCaptionLikelySameProperty(pendingCaption, textCaption, data)) {
           const pendingMissing = employeePropertyMissing(employeePropertyFacts(pendingCaption, data));
+          // Keep the new caption rather than asking for it again: refusing it left
+          // Brian's Kira, Kyanja and Buwate captions stuck behind one plot.
+          rememberEmployeeQueuedSubmission(data, { caption: textCaption, storedMedia: [], inboundMessageId });
+          await replaceEmployeeSession(phone, currentStep, data);
           return {
             handled: true,
             nextStep: currentStep,
-            message: `A different property is already stored and still needs: ${pendingMissing.join(', ') || 'a corrected caption'}. Finish that property first, then resend this caption. Nothing was merged and nothing is live.`
+            message: `Noted — I kept this new caption safe. Your earlier property ${employeeCaptionLabel(pendingCaption)} still needs: ${pendingMissing.join(', ') || 'a corrected caption'}. Reply with just that, for example "Kayunga town, Kayunga" or the district name alone, and I will move on to this one. Nothing is live yet.`
           };
         }
         const propertyInboundMessageId = normalizeInput(data.pending_property_media_message_id) || inboundMessageId;
