@@ -129,7 +129,8 @@ test('the list, card and SSR queries all select the consented staff primary', ()
   assert.equal((routes.match(/staff_img\.url AS staff_primary_image_url/g) || []).length, 2, 'both list queries');
   const ssr = fs.readFileSync(path.join(__dirname, '../services/publicSeoRenderService.js'), 'utf8');
   assert.equal((ssr.match(/staff_img\.url AS staff_primary_image_url/g) || []).length, 2, 'listing pages and /property/:id');
-  assert.match(ssr, /primary_image_url: foundOnline \? String\(foundOnlinePrimaryImageUrl\(row\)/);
+  assert.match(ssr, /primary_image_url: seoCoverImageUrl\(row, foundOnline\)/);
+  assert.match(ssr, /if \(foundOnline\) return staffCover \|\| hostedCover/);
 });
 
 test('the SPA shows consented staff photos for found online and keeps source media out', () => {

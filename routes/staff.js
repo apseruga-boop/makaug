@@ -4561,7 +4561,10 @@ router.post('/properties/:id/video-cover', async (req, res, next) => {
     if (!toUuidOrNull(req.params.id)) return res.status(400).json({ ok: false, error: 'Invalid listing id' });
     const result = await require('../services/videoStillScheduler').makeVideoCoverForListing(db, req.params.id, {
       actorId: String(actorId(req) || 'staff'),
-      videoUrl: String(req.body?.video_url || req.body?.url || '')
+      videoUrl: String(req.body?.video_url || req.body?.url || ''),
+      preview: req.body?.preview === true || String(req.body?.preview || '').toLowerCase() === 'true',
+      stillUrl: String(req.body?.still_url || ''),
+      timestampSeconds: req.body?.timestamp_seconds
     });
     res.set('Cache-Control', 'no-store');
     if (!result.ok) return res.status(result.status || 422).json({ ok: false, error: result.error });
@@ -4588,10 +4591,59 @@ router.post('/properties/:id/video-cover', async (req, res, next) => {
       ok: true,
       data: {
         added: result.attached,
+        reused: result.reused || 0,
+        preview: result.preview === true,
+        candidates: result.candidates || property.rows[0]?.extra_fields?.video_cover_candidates || [],
         note: result.note || null,
         images: images.rows,
         extra_fields: property.rows[0]?.extra_fields || {},
         media_check: await listingPhotoOrVideoCheck(db, req.params.id).catch(() => null)
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Drop duplicate video stills on one listing. Staff open the editor and press
+// the button. Nothing here edits a database outside that request.
+router.post('/properties/:id/video-stills/dedupe', async (req, res, next) => {
+  try {
+    if (!toUuidOrNull(req.params.id)) return res.status(400).json({ ok: false, error: 'Invalid listing id' });
+    const result = await require('../services/videoStillDuplicateService').dedupeListingVideoStills(db, req.params.id, {
+      actorId: String(actorId(req) || 'staff')
+    });
+    res.set('Cache-Control', 'no-store');
+    if (!result.ok) return res.status(result.status || 422).json({ ok: false, error: result.error });
+    const [images, property] = await Promise.all([
+      db.query(
+        `SELECT id, url, is_primary, sort_order, slot_key, room_label
+           FROM property_images WHERE property_id = $1
+          ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
+        [req.params.id]
+      ),
+      db.query('SELECT extra_fields, status FROM properties WHERE id = $1', [req.params.id])
+    ]);
+    clearStaffFastDashboardCache();
+    if (result.removed && ['approved', 'live', 'published'].includes(String(property.rows[0]?.status || '').toLowerCase())) {
+      clearPublicListingCaches('staff_video_still_dedupe');
+      try {
+        require('../services/publicInventoryMetricsService').invalidatePublicInventoryMetricsCache('staff_video_still_dedupe');
+      } catch (error) {
+        logger.warn('Public HTML cache clear failed after duplicate still cleanup', { message: error.message });
+      }
+    }
+    logStaffActivityInBackground(req, 'staff_video_still_duplicates_removed', {
+      targetType: 'property',
+      targetId: req.params.id,
+      metadata: { removed: result.removed || 0 }
+    });
+    return res.json({
+      ok: true,
+      data: {
+        removed: result.removed || 0,
+        images: images.rows,
+        extra_fields: property.rows[0]?.extra_fields || {}
       }
     });
   } catch (error) {

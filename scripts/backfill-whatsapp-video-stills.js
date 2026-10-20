@@ -432,12 +432,15 @@ async function makeAndUploadStills(property, {
   frameCandidates = FRAME_CANDIDATE_COUNT,
   maxVideos = MAX_VIDEOS_PER_PROPERTY,
   deadline = 0,
-  signal = null
+  signal = null,
+  framesNeeded = null
 } = {}) {
   const urls = extractVideoUrls(property.extra_fields).slice(0, Math.max(1, maxVideos));
   const perVideoBudget = Math.max(1, Number(frameCandidates) || FRAME_CANDIDATE_COUNT);
   if (!urls.length) throw new Error('no valid HTTPS video URL');
-  const required = keyFramesNeeded(property, { replaceExisting });
+  const required = framesNeeded == null
+    ? keyFramesNeeded(property, { replaceExisting })
+    : Math.max(0, Number(framesNeeded) || 0);
   if (!required) return [];
   const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), `makaug-video-still-${property.id}-`));
   const uploaded = [];
@@ -506,6 +509,46 @@ async function makeAndUploadStills(property, {
   return uploaded;
 }
 
+// One frame at a staff-chosen time. The storage key is the picture's sha256,
+// so asking for the same frame again does not create a second object.
+async function uploadStillAtTimestamp(property, videoUrl, timestampSeconds, {
+  deadline = 0,
+  signal = null,
+  fetchImpl = fetch
+} = {}) {
+  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), `makaug-video-frame-${property.id}-`));
+  try {
+    checkDeadline(deadline, signal);
+    const videoPath = path.join(tempDir, 'video.bin');
+    await downloadVideo(videoUrl, videoPath, fetchImpl, { signal });
+    checkDeadline(deadline, signal);
+    const stillPath = path.join(tempDir, 'frame.jpg');
+    const actualTimestampSeconds = await extractStillWithFallback(videoPath, stillPath, timestampSeconds, { deadline, signal });
+    const normalizedPath = path.join(tempDir, 'normalized.jpg');
+    await normalizeSelectedFrame(stillPath, normalizedPath);
+    const bytes = await fsp.readFile(normalizedPath);
+    const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+    const stored = await uploadBufferToS3({
+      bytes,
+      mimeType: 'image/jpeg',
+      key: `staff-video-cover/frame/${property.id}/${sha256}.jpg`
+    });
+    if (!stored.publicUrl) throw new Error('S3_PUBLIC_BASE_URL is required for review media');
+    return [{
+      url: stored.publicUrl,
+      sha256: stored.sha256 || sha256,
+      sourceVideoUrl: videoUrl,
+      sourceVideoIndex: 0,
+      timestampSeconds: actualTimestampSeconds,
+      sharpness: 0,
+      entropy: 0,
+      bytes: stored.bytes || bytes.length
+    }];
+  } finally {
+    await fsp.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 async function attachStills(propertyId, uploaded, {
   replaceExisting = false,
   reopenApproved = false,
@@ -516,6 +559,8 @@ async function attachStills(propertyId, uploaded, {
   // A live listing stays approved/published. The new still becomes the cover.
   // reopenApproved is a different path: it sends an approved row back to review.
   coverLiveListing = false,
+  // Staff asked for this picture to be the cover, including on a pending listing.
+  setAsCover = false,
   actorId = 'whatsapp-video-still-backfill'
 } = {}) {
   const client = await db.getClient();
@@ -576,8 +621,35 @@ async function attachStills(propertyId, uploaded, {
     const existingVideoCount = replaceExisting ? 0 : existingVideoCountBeforeRepair;
     const required = Math.max(0, MIN_VIDEO_KEY_FRAMES - existingVideoCount);
     let selectedUploads = uploaded.slice(0, required);
-    // A live cover is one picture, even when the listing already has five frames.
-    if (coverLiveListing && !selectedUploads.length && uploaded.length) selectedUploads = uploaded.slice(0, 1);
+    // A cover is one picture, even when the listing already has five frames.
+    if ((coverLiveListing || setAsCover) && !selectedUploads.length && uploaded.length) selectedUploads = uploaded.slice(0, 1);
+    const imageRows = await client.query(
+      `SELECT id, url, is_primary, slot_key
+         FROM property_images
+        WHERE property_id = $1`,
+      [propertyId]
+    );
+    const knownStillHashes = new Map();
+    const recordedSources = Array.isArray(property.extra_fields?.video_still_sources) ? property.extra_fields.video_still_sources : [];
+    for (const source of recordedSources) {
+      const hash = String(source?.sha256 || '').trim();
+      const url = String(source?.still_url || '').trim();
+      if (!hash || !url) continue;
+      const row = imageRows.rows.find((item) => item.url === url);
+      if (row) knownStillHashes.set(hash, row);
+    }
+    const freshUploads = [];
+    const reusedRows = [];
+    for (const upload of selectedUploads) {
+      const hash = String(upload?.sha256 || '').trim();
+      const sameUrl = imageRows.rows.find((item) => item.url === upload.url);
+      const sameHash = hash ? knownStillHashes.get(hash) : null;
+      if (sameUrl || sameHash) reusedRows.push(sameUrl || sameHash);
+      else freshUploads.push(upload);
+    }
+    // A second run of the same still must not insert another gallery row.
+    selectedUploads = freshUploads;
+    const coverPrimary = coverLiveListing || setAsCover;
     const cleanCaption = cleanEmployeePropertyCaption(property.extra_fields?.source_caption || property.description || '');
     const publicDescription = keepListingText ? property.description : buildEmployeePublicDescription({
       caption: property.extra_fields?.source_caption || property.description || '',
@@ -594,13 +666,13 @@ async function attachStills(propertyId, uploaded, {
       videoCount: extractVideoUrls(property.extra_fields).length,
       keyFrameCount: existingVideoCount + selectedUploads.length
     });
-    if (!selectedUploads.length && publicDescription === property.description) {
+    if (!selectedUploads.length && publicDescription === property.description && !(coverPrimary && reusedRows.length)) {
       await client.query('ROLLBACK');
-      return { attached: 0, skipped: 'already_has_five_key_frames_and_clean_description' };
+      return { attached: 0, reused: reusedRows.length, skipped: reusedRows.length ? 'duplicate_stills' : 'already_has_five_key_frames_and_clean_description' };
     }
 
     const firstSortOrder = replaceExisting ? 0 : Number(existing.rows[0]?.max_sort_order ?? -1) + 1;
-    if (coverLiveListing && selectedUploads.length) {
+    if (coverPrimary && (selectedUploads.length || reusedRows.length)) {
       await client.query(
         `UPDATE property_images SET is_primary = FALSE WHERE property_id = $1`,
         [propertyId]
@@ -614,11 +686,17 @@ async function attachStills(propertyId, uploaded, {
         [
           propertyId,
           selectedUploads[index].url,
-          coverLiveListing ? index === 0 : (replaceExisting ? index === 0 : firstSortOrder + index === 0),
+          coverPrimary ? index === 0 : (replaceExisting ? index === 0 : firstSortOrder + index === 0),
           firstSortOrder + index,
           `video_key_frame_${keyFrameNumber}`,
           `Distinct video key image ${keyFrameNumber} of ${existingVideoCount + selectedUploads.length}`
         ]
+      );
+    }
+    if (coverPrimary && !selectedUploads.length && reusedRows[0]?.id) {
+      await client.query(
+        `UPDATE property_images SET is_primary = TRUE WHERE id = $1 AND property_id = $2`,
+        [reusedRows[0].id, propertyId]
       );
     }
 
@@ -659,7 +737,9 @@ async function attachStills(propertyId, uploaded, {
         ...(Array.isArray(currentExtra.video_still_sources) ? currentExtra.video_still_sources : []),
         ...selectedUploads.map((item) => ({
           still_url: item.url,
-          source_video_url: item.sourceVideoUrl || null
+          source_video_url: item.sourceVideoUrl || null,
+          sha256: item.sha256 || null,
+          timestamp_seconds: Number(item.timestampSeconds || 0)
         }))
       ],
       video_key_frame_count: existingVideoCount + selectedUploads.length,
@@ -727,6 +807,7 @@ async function attachStills(propertyId, uploaded, {
     await client.query('COMMIT');
     return {
       attached: selectedUploads.length,
+      reused: reusedRows.length,
       totalVideoKeyFrames: existingVideoCount + selectedUploads.length,
       descriptionCleaned: publicDescription !== property.description
     };
@@ -1005,6 +1086,7 @@ module.exports = {
   killLiveChildren,
   lowPriorityCommand,
   makeAndUploadStills,
+  uploadStillAtTimestamp,
   attachStills,
   videoDurationSeconds,
   BACKFILL_MARKER,

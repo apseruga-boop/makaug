@@ -15738,6 +15738,7 @@ function staffPreviewImagesHtml(images = [], propertyId = "", removedImages = []
   return `<p class="mb-3 text-xs text-gray-600">Remove any photo that belongs to another property. Changes save immediately; removed photos can be restored below.</p>
     ${staffPreviewMediaBasisHtml(propertyId)}
     ${list.length ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2">${list.map((image) => card(image)).join("")}</div>` : `<div class="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950" data-staff-no-photos>This listing has no photos yet. It needs a photo or its own property video before it can be approved (there is no override). Add photos below, or make a cover from the listing's video.</div>`}
+    ${propertyId && list.some((image) => /^(?:video_key_frame_|video_still_|video_recovery_still_)/i.test(String(image?.slot_key || ""))) ? `<button type="button" data-staff-photo-action data-staff-still-dedupe="true" onclick="staffDedupeVideoStills(${propertyIdArg(propertyId)})" class="mt-3 w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-black text-amber-950 hover:bg-amber-100">Remove duplicate video stills</button>` : ""}
     ${propertyId ? staffPreviewVideoCoverHtml(propertyId) : ""}
     ${propertyId ? staffPreviewPhotoUploadHtml(propertyId, list.length) : ""}
     ${removed.length ? `<details class="mt-3 rounded-xl border border-gray-200 p-3"><summary class="cursor-pointer text-sm font-bold">Removed photos (${removed.length})</summary><div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">${removed.map((image) => card(image, true)).join("")}</div></details>` : ""}`;
@@ -15792,9 +15793,51 @@ function staffCoverVideoChoiceHtml(propertyId, url, index) {
     </button>`;
 }
 
+function staffCoverCandidates(preview = {}) {
+  const extra = preview?.extra_fields && typeof preview.extra_fields === "object" ? preview.extra_fields : {};
+  return (Array.isArray(extra.video_cover_candidates) ? extra.video_cover_candidates : []).filter((item) => /^https:\/\//i.test(String(item?.url || "")));
+}
+
+function staffCoverFrameChoiceHtml(propertyId, item, index) {
+  const seconds = Number(item?.timestamp_seconds);
+  const when = Number.isFinite(seconds) && seconds > 0 ? staffFormatVideoClock(seconds) : "Automatic frame";
+  const label = String(item?.label || `Frame ${index + 1}`);
+  return `
+    <button type="button" data-staff-photo-action data-staff-cover-frame-action disabled title="Tick the rights box below to choose this frame." data-staff-cover-frame="${adminAttr(item.url)}" onclick="staffUseCoverStill(${propertyIdArg(propertyId)}, ${propertyIdArg(item.url)})" class="overflow-hidden rounded-lg border border-blue-200 bg-white text-left hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">
+      <img src="${adminAttr(item.url)}" alt="${adminAttr(label)}" class="h-24 w-full object-cover bg-black">
+      <span class="block px-2 py-1 text-[11px] font-black text-blue-950">${adminEscape(label)}</span>
+      <span class="block px-2 pb-2 text-[11px] font-bold text-blue-800">${adminEscape(when)} · Use as cover</span>
+    </button>`;
+}
+
+function staffCoverFramePickerHtml(propertyId, choices = []) {
+  const preview = String(adminActiveReview?.id || "") === String(propertyId || "") ? adminActiveReview : null;
+  const candidates = preview ? staffCoverCandidates(preview) : [];
+  const usable = choices.filter((url) => /\.(?:mp4|mov|m4v|webm)(?:[?#]|$)/i.test(String(url || "")) || /(?:youtube\.com|youtu\.be)\//i.test(String(url || "")));
+  const videoSelect = usable.length > 1 ? `
+        <label class="mt-2 block text-xs font-bold text-blue-950">Video
+          <select id="staff-cover-frame-video" class="mt-1 w-full rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-sm">
+            ${usable.map((url, index) => `<option value="${adminAttr(url)}">Video ${index + 1}</option>`).join("")}
+          </select>
+        </label>` : "";
+  return `
+      <div class="mt-3 border-t border-blue-200 pt-3" data-staff-cover-frame-picker="true">
+        <div class="text-sm font-black text-blue-950">Choose the frame</div>
+        <p class="mt-1 text-xs text-blue-900">Show the automatic stills and pick one, or type a time in seconds. Nothing is cropped or blurred. The cover changes only when you pick a frame or a time.</p>
+        ${videoSelect}
+        <button type="button" id="staff-cover-frame-preview" data-staff-photo-action data-staff-cover-frame-action disabled title="Tick the rights box below to make a cover from this listing's video." onclick="staffPreviewCoverFrames(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg border border-blue-700 px-3 py-2 text-sm font-black text-blue-800 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">Show frame choices</button>
+        ${candidates.length ? `<div class="mt-2 grid grid-cols-2 gap-2" data-staff-cover-frame-choices="true">${candidates.map((item, index) => staffCoverFrameChoiceHtml(propertyId, item, index)).join("")}</div>` : `<div class="mt-2 text-xs font-semibold text-blue-800" data-staff-cover-frame-choices="true">No frame choices yet.</div>`}
+        <label class="mt-2 block text-xs font-bold text-blue-950">Time in seconds
+          <input id="staff-cover-frame-seconds" type="number" min="0" step="0.1" inputmode="decimal" placeholder="12.5" class="mt-1 w-full rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-sm">
+        </label>
+        <button type="button" id="staff-cover-frame-time" data-staff-photo-action data-staff-cover-frame-action disabled title="Tick the rights box below to make a cover from this listing's video." onclick="staffUseCoverFrameTime(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg bg-blue-700 px-3 py-2 text-sm font-black text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50">Use this time as the cover</button>
+      </div>`;
+}
+
 function staffPreviewVideoCoverHtml(propertyId) {
   const preview = String(adminActiveReview?.id || "") === String(propertyId || "") ? adminActiveReview : null;
   const choices = preview ? staffCoverVideoChoices(preview) : [];
+  const frames = staffCoverFramePickerHtml(propertyId, choices);
   if (choices.length > 1) {
     return `
       <div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3" data-staff-video-cover data-staff-video-cover-picker="true">
@@ -15803,6 +15846,7 @@ function staffPreviewVideoCoverHtml(propertyId) {
         <div class="mt-2 space-y-2">
           ${choices.map((url, index) => staffCoverVideoChoiceHtml(propertyId, url, index)).join("")}
         </div>
+        ${frames}
       </div>`;
   }
   return `
@@ -15810,6 +15854,7 @@ function staffPreviewVideoCoverHtml(propertyId) {
       <div class="text-sm font-black text-blue-950">Make a cover from the video</div>
       <p class="mt-1 text-xs text-blue-900">Takes clear stills from this listing's own video and adds them as photos. Nothing is cropped or blurred, so the agent's branding stays.</p>
       <button type="button" id="staff-preview-video-cover-button" data-staff-photo-action disabled title="Tick the rights box below to make a cover from this listing's video." onclick="staffMakeVideoCover(${propertyIdArg(propertyId)})" class="mt-2 w-full rounded-lg bg-blue-700 px-3 py-2 text-sm font-black text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50">Make a cover from the video</button>
+      ${frames}
     </div>`;
 }
 
@@ -15844,11 +15889,42 @@ function staffHydrateCoverVideoChoices(root = document) {
   });
 }
 
-async function staffMakeVideoCover(propertyId, videoUrl = "") {
+function staffCoverFrameVideoUrl() {
+  const selected = document.getElementById("staff-cover-frame-video")?.value || "";
+  if (selected) return selected;
+  const choices = staffCoverVideoChoices(adminActiveReview || {});
+  return choices.find((url) => staffCoverVideoIsUsable(url)) || choices[0] || "";
+}
+
+function staffPreviewCoverFrames(propertyId) {
+  return staffMakeVideoCover(propertyId, staffCoverFrameVideoUrl(), { preview: true });
+}
+
+function staffUseCoverStill(propertyId, stillUrl) {
+  return staffMakeVideoCover(propertyId, staffCoverFrameVideoUrl(), { stillUrl });
+}
+
+function staffUseCoverFrameTime(propertyId) {
+  const raw = document.getElementById("staff-cover-frame-seconds")?.value;
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    toast("Type a time in seconds, for example 12.5.");
+    return;
+  }
+  return staffMakeVideoCover(propertyId, staffCoverFrameVideoUrl(), { timestampSeconds: seconds });
+}
+
+async function staffMakeVideoCover(propertyId, videoUrl = "", options = {}) {
+  const opts = options && typeof options === "object" ? options : {};
   if (staffPhotoChangePending || String(adminActiveReview?.id || "") !== String(propertyId)) return;
+  const rights = document.getElementById("staff-preview-photo-rights");
+  if (rights && rights.checked !== true) {
+    toast("Tick the rights box below to make a cover from this listing's video.");
+    return;
+  }
   const chosen = String(videoUrl || "").trim();
   const choices = staffCoverVideoChoices(adminActiveReview || {});
-  if (!chosen && choices.length > 1) {
+  if (!chosen && !opts.stillUrl && choices.length > 1) {
     document.querySelector("[data-staff-video-cover]")?.scrollIntoView({ behavior: "smooth", block: "center" });
     toast("Choose which video to take the cover from.");
     return;
@@ -15856,11 +15932,16 @@ async function staffMakeVideoCover(propertyId, videoUrl = "") {
   staffPhotoChangePending = true;
   document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = true; });
   setStaffPreviewDecisionBusy(true);
+  const body = {};
+  if (chosen) body.video_url = chosen;
+  if (opts.preview) body.preview = true;
+  if (opts.stillUrl) body.still_url = opts.stillUrl;
+  if (opts.timestampSeconds != null && opts.timestampSeconds !== "") body.timestamp_seconds = Number(opts.timestampSeconds);
   try {
-    toast("Making a cover from the video. This can take a minute...");
+    toast(opts.preview ? "Reading frames from the video. This can take a minute..." : "Making a cover from the video. This can take a minute...");
     const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/video-cover`, {
       method: "POST",
-      body: chosen ? { video_url: chosen } : {}
+      body
     }, Math.max(STAFF_MODERATION_WRITE_TIMEOUT_MS * 4, 120000), "Video cover");
     if (String(adminActiveReview?.id || "") === String(propertyId)) {
       adminActiveReview.images = response.data.images;
@@ -15871,9 +15952,42 @@ async function staffMakeVideoCover(propertyId, videoUrl = "") {
       if (adminActiveReview.media_check?.ok) dismissApprovalBlockerBanner();
     }
     queueStaffDashboardRefreshAfterModeration({ preservePreviewDraft: true });
-    toast(response.data.added ? `${response.data.added} still${response.data.added === 1 ? "" : "s"} from the video added.` : (response.data.note || "No new stills were needed."));
+    const added = Number(response.data.added || 0);
+    const frameCount = Array.isArray(response.data.candidates) ? response.data.candidates.length : 0;
+    if (opts.preview) toast(frameCount ? `${frameCount} frame choices ready. Pick one, or set a time.` : (response.data.note || "No frames could be read from this video."));
+    else if (added) toast(`${added} still${added === 1 ? "" : "s"} from the video added.`);
+    else if (Number(response.data.reused || 0) > 0) toast("That frame is already on the listing. It is the cover.");
+    else toast(response.data.note || "No new stills were needed.");
   } catch (error) {
     toast(error.message || "We couldn't make a cover from this video. Upload a photo instead.");
+  } finally {
+    staffPhotoChangePending = false;
+    document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = false; });
+    staffSyncPreviewPhotoActions();
+    setStaffPreviewDecisionBusy(false);
+  }
+}
+
+async function staffDedupeVideoStills(propertyId) {
+  if (staffPhotoChangePending || String(adminActiveReview?.id || "") !== String(propertyId)) return;
+  staffPhotoChangePending = true;
+  document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = true; });
+  setStaffPreviewDecisionBusy(true);
+  try {
+    const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/video-stills/dedupe`, {
+      method: "POST",
+      body: {}
+    }, STAFF_MODERATION_WRITE_TIMEOUT_MS * 2, "Duplicate stills");
+    if (String(adminActiveReview?.id || "") === String(propertyId)) {
+      adminActiveReview.images = response.data.images;
+      adminActiveReview.extra_fields = response.data.extra_fields;
+      const gallery = document.getElementById("staff-preview-photo-gallery");
+      if (gallery) gallery.innerHTML = staffPreviewImagesHtml(response.data.images, propertyId, response.data.extra_fields?.staff_removed_images || []);
+    }
+    const removed = Number(response.data.removed || 0);
+    toast(removed ? `${removed} duplicate video still${removed === 1 ? "" : "s"} removed. The cover was kept.` : "No duplicate video stills.");
+  } catch (error) {
+    toast(error.message || "Duplicate video stills could not be removed.");
   } finally {
     staffPhotoChangePending = false;
     document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = false; });
@@ -15904,6 +16018,7 @@ function staffSyncPreviewPhotoActions() {
   const fileCount = document.getElementById("staff-preview-photo-upload")?.files?.length || 0;
   const cover = document.getElementById("staff-preview-video-cover-button");
   const choices = [...document.querySelectorAll("[data-staff-video-cover-choice]")];
+  const frames = [...document.querySelectorAll("[data-staff-cover-frame-action]")];
   const upload = document.getElementById("staff-preview-photo-upload-button");
   const reason = staffCoverDisableReason();
   if (staffPhotoChangePending) {
@@ -15915,17 +16030,24 @@ function staffSyncPreviewPhotoActions() {
       button.disabled = true;
       button.title = reason;
     });
+    frames.forEach((button) => {
+      button.disabled = true;
+      button.title = reason;
+    });
     if (upload) upload.disabled = true;
     return;
   }
   if (cover) cover.disabled = !consent;
   choices.forEach((button) => { button.disabled = !consent; });
+  frames.forEach((button) => { button.disabled = !consent; });
   if (reason) {
     if (cover) cover.disabled = true;
     choices.forEach((button) => { button.disabled = true; });
+    frames.forEach((button) => { button.disabled = true; });
   }
   const title = reason || "Make a cover photo from this listing's video, including a YouTube video.";
   if (cover) cover.title = title;
+  frames.forEach((button) => { button.title = title; });
   choices.forEach((button) => {
     const url = button.getAttribute("data-staff-cover-video") || "";
     button.title = reason || (staffCoverVideoIsUsable(url) ? title : "This video is a TikTok or Facebook page, not a file we can open. Upload a photo instead.");
@@ -28001,6 +28123,7 @@ function adminReviewOnCityChange() {
   const neighborhood = document.getElementById("admin-review-neighborhood-edit")?.value || "";
   adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, neighborhood), neighborhood);
   adminReviewScheduleLocationSync();
+  adminReviewClearStaleUnrecognisedLocation();
 }
 
 async function adminReviewOnNeighborhoodChange() {
@@ -28013,6 +28136,7 @@ async function adminReviewOnNeighborhoodChange() {
   if (resolution.status === "matched") applyAdminReviewCanonicalLocation(resolution.location);
   else adminReviewCanonicalLocationResolution = null;
   adminReviewScheduleLocationSync();
+  adminReviewClearStaleUnrecognisedLocation();
 }
 
 async function adminReviewOnAreaInput() {
@@ -28025,6 +28149,7 @@ async function adminReviewOnAreaInput() {
   if (resolution.status === "matched") applyAdminReviewCanonicalLocation(resolution.location);
   else adminReviewCanonicalLocationResolution = null;
   adminReviewScheduleLocationSync();
+  adminReviewClearStaleUnrecognisedLocation();
 }
 
 async function resolveUgandaLocationFromSharedRegistry(query = "") {
@@ -28109,6 +28234,7 @@ function applyAdminReviewCanonicalLocation(location = {}) {
       ensureSelectHasValue("admin-review-city-edit", current, current);
     }).catch(() => {});
   }
+  adminReviewClearStaleUnrecognisedLocation();
   return true;
 }
 
@@ -28178,6 +28304,70 @@ function adminReviewSetAddressSearchStatus(message = "", tone = "blue") {
   el.className = palette[tone] || palette.blue;
   el.dataset.staffTownNote = tone === "slate" ? "1" : "0";
   el.textContent = message || "Search a place, road, estate, town, or landmark, then confirm the pin.";
+}
+
+function adminReviewStatusIsUnrecognised(text = "") {
+  return /location not recognised/i.test(String(text || ""));
+}
+
+function adminReviewLocationFieldsResolved() {
+  const fields = typeof adminReviewCurrentLocationFields === "function" ? adminReviewCurrentLocationFields() : {};
+  const district = String(fields.district || "").trim();
+  const city = String(fields.city || "").trim();
+  const neighborhood = String(fields.neighborhood || "").trim();
+  const area = String(fields.area || "").trim();
+  if (adminReviewCanonicalLocationResolution?.canonical_location_id) return true;
+  if (typeof adminReviewRecognisedLocationSelected === "function" && adminReviewRecognisedLocationSelected(typeof adminActiveReview === "object" && adminActiveReview ? adminActiveReview : {})) return true;
+  if (district && city && !adminReviewPlaceEqualsDistrict(city, district)) return true;
+  if (district && neighborhood && !adminReviewPlaceEqualsDistrict(neighborhood, district)) return true;
+  if (district && area && !adminReviewPlaceEqualsDistrict(area, district)) return true;
+  return false;
+}
+
+function adminReviewResolvedLocationStatus() {
+  const fields = typeof adminReviewCurrentLocationFields === "function" ? adminReviewCurrentLocationFields() : {};
+  const picked = adminReviewCanonicalLocationResolution;
+  const district = String(fields.district || picked?.district || picked?.province || "").trim();
+  const place = String(picked?.name || fields.neighborhood || fields.area || fields.city || "").trim();
+  const review = {
+    ...(typeof adminActiveReview === "object" && adminActiveReview ? adminActiveReview : {}),
+    district,
+    city: fields.city || "",
+    canonical_location_id: picked?.canonical_location_id || ""
+  };
+  const extra = typeof adminReviewExtraFields === "function" ? adminReviewExtraFields(review) : {};
+  const townNote = adminReviewTownOnlyLocationNote({
+    ...review,
+    extra_fields: { ...extra, city: fields.city || extra.city || "" }
+  });
+  if (townNote) return { message: townNote, tone: "slate" };
+  if (!place && !district) return null;
+  return {
+    message: `Location resolved: ${[place, district].filter(Boolean).join(", ")}. Confirm the pin before approval.`,
+    tone: "green"
+  };
+}
+
+// The amber "Location not recognised" line is not a timed toast. Once a town,
+// neighbourhood, or canonical place is in the editor, that line has to go.
+function adminReviewClearStaleUnrecognisedLocation() {
+  if (!adminReviewLocationFieldsResolved()) return false;
+  const el = document.getElementById("admin-review-address-search-status");
+  const showing = adminReviewStatusIsUnrecognised(el?.textContent || "");
+  const toastEl = document.getElementById("toast-el");
+  const toastShowing = !!(toastEl && toastEl.classList.contains("show") && adminReviewStatusIsUnrecognised(toastEl.textContent || ""));
+  if (!showing && !toastShowing) return false;
+  if (toastShowing) {
+    toastEl.classList.remove("show");
+    toastEl.textContent = "";
+    clearTimeout(toastEl._timer);
+  }
+  if (showing) {
+    const next = adminReviewResolvedLocationStatus();
+    if (next) adminReviewSetAddressSearchStatus(next.message, next.tone);
+    else el.textContent = "";
+  }
+  return true;
 }
 
 // A found-online town saved with a real district and no canonical area is a
@@ -28589,8 +28779,9 @@ async function adminReviewAutoPopulateLocationFromSource(review = {}) {
     return;
   }
   // Staff already saved this location, or they picked a registry result.
-  // Do not replace that with "Location not recognised".
-  if (extra.staff_location_reviewed_at || adminReviewRecognisedLocationSelected(review)) return;
+  // Do not replace that with "Location not recognised", and clear a warning
+  // that was already on screen.
+  if (extra.staff_location_reviewed_at || adminReviewRecognisedLocationSelected(review)) return adminReviewClearStaleUnrecognisedLocation();
   const facts = adminExtractReviewFacts(review);
   const query = uniqueTextParts([
     facts.area,
@@ -28605,7 +28796,7 @@ async function adminReviewAutoPopulateLocationFromSource(review = {}) {
   ]).join(", "));
   if (seq !== adminReviewLocationAutofillSeq) return;
   if (String(adminActiveReview?.id || "") !== String(review.id || "")) return;
-  if (adminReviewRecognisedLocationSelected(review)) return;
+  if (adminReviewRecognisedLocationSelected(review)) return adminReviewClearStaleUnrecognisedLocation();
   if (resolution.status === "matched") {
     applyAdminReviewCanonicalLocation(resolution.location);
     adminReviewSetAddressSearchStatus("Stored area resolved through the shared canonical registry. Confirm the pin before approval.", "green");
@@ -35501,7 +35692,7 @@ function renderVideoEmbedCard(url, options = {}) {
           <a href="${adminAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-sky-700 hover:underline">${translateListingLabel("Open video")}</a>
         </div>
         <div class="aspect-video bg-black">
-          ${videoPlayerSlotHtml(`<video controls ${options.clickToPlay ? "autoplay" : ""} preload="metadata" playsinline class="w-full h-full object-contain" aria-label="${adminAttr(title)}">
+          ${videoPlayerSlotHtml(`<video controls preload="metadata" playsinline${options.clickToPlay ? " autoplay" : ""} class="w-full h-full object-contain" aria-label="${adminAttr(title)}">
             <source src="${adminAttr(safeUrl)}" type="video/mp4">
           </video>`, options)}
         </div>
@@ -44814,29 +45005,53 @@ function renderBrokerRegistrationBadge(broker, textSize = "text-xs") {
   return `<span class="inline-flex items-center gap-1 ${meta.cls} ${textSize} font-semibold px-2.5 py-1 rounded-full"><i class="${meta.icon} text-[10px]"></i>${meta.label}</span>`;
 }
 
-// Found-online listings never show source media (TikTok covers, byteimg links,
-// source_* slots). The one exception is photos staff uploaded from the review
-// screen with the owner's/agent's consent (slot staff_upload, stored under
-// .../staff-images/ on makaug media). The API only sends those; this is the
-// client-side guard.
+// Found-online listings never show source media (TikTok covers, YouTube
+// i.ytimg thumbnails, byteimg links, source_* slots). Published pictures are
+// consented staff uploads and stills from the listing's own video that we host.
+// The API already sends them in editor order (primary, then sort order). This
+// is the client-side guard, and it keeps that order.
 const FOUND_ONLINE_SOURCE_MEDIA_RE = /tiktokcdn|byteimg|tiktok\.com/i;
+const FOUND_ONLINE_YOUTUBE_THUMB_RE = /i\.ytimg\.com|img\.youtube\.com|(?:^|\/\/)(?:www\.)?youtube\.com\/vi\//i;
+const FOUND_ONLINE_OWN_STILL_SLOT_RE = /^(?:video_key_frame_|video_still_|video_recovery_still_)/i;
+const FOUND_ONLINE_HOSTED_STILL_URL_RE = /\/(?:staff-video-cover|video-key-frame|whatsapp-employee-intake)\//i;
 function isFoundOnlineConsentedPhotoUrl(url = "") {
   const value = String(url || "").trim();
-  return !!value && !FOUND_ONLINE_SOURCE_MEDIA_RE.test(value) && /\/staff-images\//i.test(value);
+  return !!value && !FOUND_ONLINE_SOURCE_MEDIA_RE.test(value) && !FOUND_ONLINE_YOUTUBE_THUMB_RE.test(value) && /\/staff-images\//i.test(value);
+}
+function isFoundOnlineHostedStillUrl(url = "") {
+  const value = String(url || "").trim();
+  return !!value && !FOUND_ONLINE_SOURCE_MEDIA_RE.test(value) && !FOUND_ONLINE_YOUTUBE_THUMB_RE.test(value) && FOUND_ONLINE_HOSTED_STILL_URL_RE.test(value);
+}
+function isFoundOnlinePublishablePhoto(item) {
+  if (!item || typeof item !== "object") return false;
+  const url = String(item.url || item.img || item.src || "").trim();
+  if (!url || FOUND_ONLINE_SOURCE_MEDIA_RE.test(url) || FOUND_ONLINE_YOUTUBE_THUMB_RE.test(url)) return false;
+  const slot = String(item.slot_key || item.slot || "").trim();
+  if (/^source_/i.test(slot)) return false;
+  if (slot === "staff_upload" || FOUND_ONLINE_OWN_STILL_SLOT_RE.test(slot)) return true;
+  if (!slot) return isFoundOnlineConsentedPhotoUrl(url) || isFoundOnlineHostedStillUrl(url);
+  return false;
 }
 function foundOnlineConsentedPhotos(images = []) {
-  return (Array.isArray(images) ? images : []).filter((item) => {
-    if (!item || typeof item !== "object") return false;
-    const url = String(item.url || item.img || item.src || "").trim();
-    if (!url || FOUND_ONLINE_SOURCE_MEDIA_RE.test(url)) return false;
-    const slot = String(item.slot_key || item.slot || "").trim();
-    return slot ? slot === "staff_upload" : isFoundOnlineConsentedPhotoUrl(url);
-  });
+  return (Array.isArray(images) ? images : [])
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => isFoundOnlinePublishablePhoto(item))
+    .sort((left, right) => {
+      const primary = Number(right.item.is_primary === true || right.item.is_main === true) - Number(left.item.is_primary === true || left.item.is_main === true);
+      if (primary) return primary;
+      const leftSort = Number(left.item.sort_order);
+      const rightSort = Number(right.item.sort_order);
+      const leftOrder = Number.isFinite(leftSort) ? leftSort : left.index;
+      const rightOrder = Number.isFinite(rightSort) ? rightSort : right.index;
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+      return left.index - right.index;
+    })
+    .map(({ item }) => item);
 }
 function foundOnlineConsentedPhotoUrl(p = {}) {
   const first = foundOnlineConsentedPhotos(p?.images)[0];
   if (first) return String(first.url || first.img || first.src || "").trim();
-  return [p?.primary_image_url, p?.image, p?.img].map((value) => String(value || "").trim()).find(isFoundOnlineConsentedPhotoUrl) || "";
+  return [p?.primary_image_url, p?.image, p?.img].map((value) => String(value || "").trim()).find((value) => isFoundOnlineConsentedPhotoUrl(value) || isFoundOnlineHostedStillUrl(value)) || "";
 }
 
 function getPropertyGalleryPhotos(property) {
@@ -60191,19 +60406,19 @@ async function openDetail(id, options = {}) {
   const contactMessageArg = adminAttr(JSON.stringify(contactMessage));
   const ownerPhoneArg = adminAttr(JSON.stringify(ownerPhone || ""));
   const brokerWhatsAppArg = adminAttr(JSON.stringify(brokerWhatsapp || ""));
-  const allDetailVideoUrls = propertyVideoUrls(p);
+  const detailVideoUrls = propertyVideoUrls(p);
   // The hero already plays the first video on a video-first listing, so don't repeat it below.
-  const detailVideoUrls = detailVideoFirstMedia
-    ? allDetailVideoUrls.filter((url) => url !== detailVideoFirstMedia.url)
-    : allDetailVideoUrls;
-  const detailVideoGalleryHtml = detailVideoUrls.length && !thirdPartyDetail
+  const detailGalleryVideoUrls = detailVideoFirstMedia
+    ? detailVideoUrls.filter((url) => url !== detailVideoFirstMedia.url)
+    : detailVideoUrls;
+  const detailVideoGalleryHtml = detailGalleryVideoUrls.length
     ? `<div class="mt-4">
         <div class="mb-3 flex items-center justify-between gap-3">
           <h3 class="text-lg font-black text-gray-900">${translateListingLabel("Property video tours")}</h3>
-          <span class="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-800">${detailVideoUrls.length} ${translateListingLabel(detailVideoUrls.length === 1 ? "video" : "videos")}</span>
+          <span class="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-800">${detailGalleryVideoUrls.length} ${translateListingLabel(detailGalleryVideoUrls.length === 1 ? "video" : "videos")}</span>
         </div>
         <div class="grid md:grid-cols-2 gap-4">
-          ${detailVideoUrls.map((url, index) => renderVideoEmbedCard(url, {
+          ${detailGalleryVideoUrls.map((url, index) => renderVideoEmbedCard(url, {
             title: /tiktok\.com/i.test(url) ? translateListingLabel("TikTok video") : `${translateListingLabel("Video tour")} ${index + 1 + (detailVideoFirstMedia ? 1 : 0)}`,
             sub: translateListingLabel("Watch the walkthrough before you enquire.")
           })).join("")}
