@@ -5333,11 +5333,11 @@
   </div>
 
   <div id="page-valuation" class="page bg-[#f6f9f7]" data-valuation-marker="valuation-canonical-confidence-cards-20260725" data-valuation-punchlist-marker="valuation-final-punchlist-20260725" data-valuation-ux-marker="valuation-k17-simple-range-20260725" data-properties-search-count-marker="properties-location-search-cache-key-20260725" data-valuation-closeout-marker="valuation-k17-closeout-20260725">
-    <section class="bg-[#0f3d2e] py-10 text-white">
+    <section class="pt-8">
       <div class="max-w-6xl mx-auto px-4">
-        <p class="text-xs font-black uppercase tracking-wide text-emerald-200" data-valuation-i18n="eyebrow">Evidence from live makaug listings</p>
-        <h1 class="mt-2 text-3xl md:text-4xl font-black serif" data-valuation-i18n="title">Property Value Calculator</h1>
-        <p class="mt-2 max-w-3xl text-sm md:text-base text-emerald-50" data-valuation-i18n="subtitle">Compare approved public listings in the same area. This is a market guide, not a formal valuation.</p>
+        <p class="text-xs font-black uppercase tracking-wide text-[#15603f]" data-valuation-i18n="eyebrow">Evidence from live makaug listings</p>
+        <h1 class="mt-2 text-3xl md:text-4xl font-black text-[#16241d]" data-valuation-i18n="title">What's my property worth?</h1>
+        <p class="mt-2 max-w-3xl text-sm md:text-base text-[#5b6b62]" data-valuation-i18n="subtitle">Based on live makaug listings near you. This is a market guide, not a formal valuation.</p>
       </div>
     </section>
 
@@ -5408,7 +5408,7 @@
           <div id="valuation-form-status" class="hidden mt-4 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
           <button id="valuation-submit" type="submit" class="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-[#15603f] px-5 text-sm font-black text-white hover:bg-[#0f4d33] disabled:cursor-wait disabled:opacity-60">
             <i class="fas fa-chart-line" aria-hidden="true"></i>
-            <span data-valuation-i18n="estimateButton">Show my price range</span>
+            <span data-valuation-i18n="estimateButton">Show price range</span>
           </button>
         </form>
 
@@ -5417,8 +5417,8 @@
             <h2 class="font-black text-[#16241d]" data-valuation-i18n="howTitle">How the estimate works</h2>
             <ol class="mt-3 space-y-3 text-sm text-[#5b6b62]">
               <li class="flex gap-3"><strong class="text-[#15603f]">1</strong><span data-valuation-i18n="howOne">We find approved public listings in the same area and category.</span></li>
-              <li class="flex gap-3"><strong class="text-[#15603f]">2</strong><span data-valuation-i18n="howTwo">We remove the top and bottom 10% when the sample is large enough.</span></li>
-              <li class="flex gap-3"><strong class="text-[#15603f]">3</strong><span data-valuation-i18n="howThree">We show the 10th–90th percentile range and the comparable listings.</span></li>
+              <li class="flex gap-3"><strong class="text-[#15603f]">2</strong><span data-valuation-i18n="howTwo">We stay within 1, 3, then 5 km, keep the bedroom count, and weight nearer and newer listings.</span></li>
+              <li class="flex gap-3"><strong class="text-[#15603f]">3</strong><span data-valuation-i18n="howThree">We show a narrow asking-price range. If the prices disagree, we say there is not enough data.</span></li>
             </ol>
           </div>
           <div class="bg-[#f0f6f2] border border-[#dbe8e0] rounded-xl p-5">
@@ -5435,13 +5435,32 @@
         <div id="valuation-scope-note" class="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900"></div>
         <div class="grid md:grid-cols-3 gap-4">
           <article class="bg-white border border-[#e4ece8] rounded-lg p-5 md:col-span-2">
-            <p class="text-xs font-black uppercase tracking-wide text-[#5b6b62]" data-valuation-i18n="likelyRange">Likely price range</p>
+            <p class="text-xs font-black uppercase tracking-wide text-[#5b6b62]" data-valuation-i18n="likelyAsking">Likely asking price</p>
             <div class="mt-2 flex flex-wrap items-center gap-3">
               <div id="valuation-range" class="text-3xl md:text-5xl font-black text-[#15603f]">—</div>
               <span id="valuation-confidence-badge" class="hidden rounded-full border px-3 py-1 text-xs font-black"></span>
             </div>
+            <div id="valuation-gauge" class="mt-4 hidden">
+              <div class="relative h-2.5 overflow-hidden rounded-full bg-gradient-to-r from-emerald-200 via-emerald-500 to-emerald-800">
+                <span id="valuation-gauge-marker" class="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#0f3d2e] shadow"></span>
+              </div>
+              <div class="mt-2 flex justify-between text-xs font-bold text-[#5b6b62]">
+                <span id="valuation-gauge-low" data-valuation-i18n="gaugeLow">Low</span>
+                <span id="valuation-gauge-typical" class="text-[#15603f]" data-valuation-i18n="gaugeTypical">Typical</span>
+                <span id="valuation-gauge-high" data-valuation-i18n="gaugeHigh">High</span>
+              </div>
+            </div>
             <p id="valuation-estimate" class="mt-2 text-sm font-bold text-[#16241d]"></p>
             <p id="valuation-confidence-explanation" class="mt-1 text-xs leading-5 text-[#5b6b62]"></p>
+            <div id="valuation-next-steps" class="mt-4 hidden rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p id="valuation-next-copy" class="text-sm font-bold text-amber-950" data-valuation-i18n="insufficientNext">Not enough data for an honest range. Ask a valuer, or tell us the price you have seen.</p>
+              <form id="valuation-price-hint-form" class="mt-3 flex flex-col gap-2 sm:flex-row" onsubmit="submitValuationPriceHint(event)">
+                <label class="sr-only" for="valuation-price-hint" data-valuation-i18n="tellUsPrice">Tell us your price</label>
+                <input id="valuation-price-hint" inputmode="numeric" class="h-11 min-w-0 flex-1 rounded-lg border border-amber-200 bg-white px-3 text-sm" placeholder="UGX" data-valuation-placeholder="tellUsPriceHint">
+                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-[#15603f] px-4 text-sm font-black text-white" data-valuation-i18n="priceHintButton">Send price hint</button>
+              </form>
+              <p id="valuation-price-hint-status" class="mt-2 hidden text-xs font-bold text-emerald-800"></p>
+            </div>
             <div id="valuation-disclaimer" class="mt-4 rounded-lg border-2 border-red-300 bg-red-50 p-4 text-red-950">
               <h2 id="valuation-disclaimer-title" class="text-base font-black" data-valuation-i18n="guideDisclaimerTitle">This is a guide, not a valuation.</h2>
               <p id="valuation-disclaimer-body" class="mt-1 text-sm leading-6" data-valuation-i18n="guideDisclaimerBody">This estimate is calculated only from approved listings on makaug.com. It is an average for similar properties, and a starting point to help you plan. The real price may be higher or lower. It cannot be used for a loan, a sale, or a legal purpose. Before you buy, sell, or borrow, always ask a licensed surveyor or valuer to inspect the property.</p>
@@ -5539,7 +5558,7 @@
         <div>
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 class="text-xl font-black text-[#16241d]" data-valuation-i18n="comparablesTitle">Properties used in this estimate</h2>
+              <h2 class="text-xl font-black text-[#16241d]" data-valuation-i18n="homesLikeYours">Homes like yours</h2>
               <p class="mt-1 text-sm text-[#5b6b62]" data-valuation-i18n="comparablesSubtitle">Open any listing to inspect the evidence.</p>
             </div>
             <div class="flex flex-wrap items-center gap-4">
@@ -5547,12 +5566,12 @@
               <a href="/?ask_ai=1" onclick="return navigatePublicRoute(this.href, event)" class="text-sm font-black text-[#15603f] hover:underline" data-valuation-i18n="askAi">Ask makaug AI about your search</a>
             </div>
           </div>
-          <div id="valuation-comparables" class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+          <div id="valuation-comparables" class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4"></div>
         </div>
         <details class="bg-white border border-[#e4ece8] rounded-lg p-4">
           <summary class="cursor-pointer font-black text-[#16241d]" data-valuation-i18n="methodTitle">Methodology and worked example</summary>
           <div id="valuation-methodology" class="mt-3 space-y-2 text-sm text-[#5b6b62]">
-            <p data-valuation-i18n="methodText">The estimate uses a trimmed mean. With 10 or more comparable listings, the highest and lowest 10% are removed. The displayed range is the 10th–90th percentile.</p>
+            <p data-valuation-i18n="methodText">The estimate is a weighted median of asking prices. Nearer and newer listings count more. The range is the middle half of those prices, and it is not shown when that half is wider than about 30%.</p>
             <p class="border-t border-[#e4ece8] pt-3 text-xs" data-valuation-i18n="methodLegal">Estimates are averages computed from our own approved listings. They are a guide only — not a formal valuation — and makaug.com accepts no liability for decisions based on them. Always engage a licensed surveyor or valuer before transacting.</p>
           </div>
         </details>

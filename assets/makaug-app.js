@@ -48706,8 +48706,8 @@ function renderAll() {
 const VALUATION_UI_EN = Object.freeze({
   eyebrow: "Evidence from live makaug listings",
   navTitle: "Property Value",
-  title: "Property Value Calculator",
-  subtitle: "Compare approved public listings in the same area. This is a market guide, not a formal valuation.",
+  title: "What's my property worth?",
+  subtitle: "Based on live makaug listings near you. This is a market guide, not a formal valuation.",
   formTitle: "Tell us about the property",
   formSubtitle: "We will compare it with real listings already on makaug.",
   free: "Free guide",
@@ -48742,19 +48742,34 @@ const VALUATION_UI_EN = Object.freeze({
   commercialSize: "Floor area (m²)",
   university: "Nearby university",
   universityPlaceholder: "e.g. Makerere University",
-  estimateButton: "Show my price range",
+  estimateButton: "Show price range",
   matchingCount: "Matching {count} similar listings in {location}",
   matchingCountZero: "No exact matching listings in {location} yet. We may use nearby evidence and will label it clearly.",
   howTitle: "How the estimate works",
   howOne: "We find approved public listings in the same area and category.",
-  howTwo: "We remove the top and bottom 10% when the sample is large enough.",
-  howThree: "We show the 10th–90th percentile range and the comparable listings.",
+  howTwo: "We stay within 1, 3, then 5 km, keep the bedroom count, and weight nearer and newer listings.",
+  howThree: "We show a narrow asking-price range. If the prices disagree, we say there is not enough data.",
   professionalTitle: "Need a formal valuation?",
   professionalText: "A registered surveyor can inspect the property and prepare a professional report.",
   findSurveyor: "Find a surveyor",
   estimatedValue: "Estimated market guide",
   likelyRange: "Likely price range",
-  midpoint: "Midpoint: {estimate}",
+  likelyAsking: "Likely asking price",
+  gaugeLow: "Low",
+  gaugeTypical: "Typical",
+  gaugeHigh: "High",
+  homesLikeYours: "Homes like yours",
+  askingSaleNote: "A likely sale price is about 5–10% below these asking prices.",
+  insufficientNext: "Not enough data for an honest range. Ask a valuer, or tell us the price you have seen.",
+  tellUsPrice: "Tell us your price",
+  tellUsPriceHint: "Price you have seen, in UGX",
+  priceHintButton: "Send price hint",
+  priceHintThanks: "Saved. This is a local price hint, not a formal valuation.",
+  priceHintInvalid: "Enter a price above 0.",
+  rangeTooWide: "The nearby asking prices disagree too much to publish a range.",
+  scopeRing: "Using comparable listings within {radius} km of {location}.",
+  basedOnCount: "Based on {count} live makaug listings {where}.",
+  midpoint: "Typical {estimate}",
   confidenceLowHelp: "Low confidence: fewer than 5 exact matches or a wider-area comparison.",
   confidenceMediumHelp: "Medium confidence: 5–19 similar listings in this area.",
   confidenceHighHelp: "High confidence: 20+ similar listings in this area.",
@@ -48785,7 +48800,7 @@ const VALUATION_UI_EN = Object.freeze({
   confidenceLow: "Low confidence",
   confidenceMedium: "Medium confidence",
   confidenceHigh: "High confidence",
-  methodText: "The estimate uses a trimmed mean. With 10 or more comparable listings, the highest and lowest 10% are removed. The displayed range is the 10th–90th percentile.",
+  methodText: "The estimate is a weighted median of asking prices. Nearer and newer listings count more. The range is the middle half of those prices, and it is not shown when that half is wider than about 30%.",
   methodExample: "Worked example: {count} comparable prices produced a trimmed estimate of {estimate} and a range of {low} to {high}.",
   methodLegal: "Estimates are averages computed from our own approved listings. They are a guide only — not a formal valuation — and makaug.com accepts no liability for decisions based on them. Always engage a licensed surveyor or valuer before transacting.",
   noImage: "No photo",
@@ -49316,11 +49331,183 @@ const VALUATION_UI_K17 = Object.freeze({
   }
 });
 
+const VALUATION_UI_RINGS = Object.freeze({
+  lg: {
+    title: "Omuwendo gw'ekifo kyo guli wa?",
+    subtitle: "Gulagiddwa ku bifo ebiri ku makaug okumpi naawe. Kino kya kukuyamba, si valuation ya mateeka.",
+    estimateButton: "Laga ekkomo ly'omuwendo",
+    howTwo: "Tutandikira ku km 1, oluvannyuma 3, olwo 5. Tusigaza omuwendo gw'ebisenge, era ebiri okumpi n'ebipya bisinga obuzito.",
+    howThree: "Tulaga ekkomo empi eza kuteebereza. Emiwendo bwe gitalina bukwatane, tugamba nti data temala.",
+    likelyAsking: "Omuwendo ogusabibwa",
+    gaugeLow: "Wansi", gaugeTypical: "Awakati", gaugeHigh: "Waggulu",
+    homesLikeYours: "Ebifo ebifaanana n'ekyo",
+    askingSaleNote: "Omuwendo ogutundibwa guba wansi nga 5–10% ku musabibwa.",
+    insufficientNext: "Data temala ku kkomo ettuufu. Buuza omuwendo eri surveyor, oba tubuulire omuwendo gw'olabye.",
+    tellUsPrice: "Tubuulire omuwendo gwo",
+    tellUsPriceHint: "Omuwendo gw'olabye, mu UGX",
+    priceHintButton: "Weereza omuwendo",
+    priceHintThanks: "Kikuutiddwa. Kino kya kukuyamba mu kitundu, si valuation ya mateeka.",
+    priceHintInvalid: "Wandika omuwendo ogusukka ku 0.",
+    rangeTooWide: "Emiwendo egisabibwa okumpi tegukwatagana kusobola okulaga kkomo.",
+    scopeRing: "Tukozesa ebifo eby'okumpi n'ekitundu kya km {radius} okuva e {location}.",
+    basedOnCount: "Ku bifo {count} ebiri ku makaug {where}.",
+    methodText: "Omuwendo guba weighted median ku misabibwa. Ebiri okumpi n'ebipya bisinga. Ekkomo kye kitundu ekya wakati, era teragibwa bwe kiba kiwanvu okusinga nga 30%."
+  },
+  sw: {
+    title: "Mali yangu ina thamani gani?",
+    subtitle: "Kulingana na matangazo ya makaug yaliyo karibu nawe. Hii ni mwongozo wa soko, si uthamini rasmi.",
+    estimateButton: "Onyesha kiwango cha bei",
+    howTwo: "Tunaanza km 1, kisha 3, halafu 5. Tunahifadhi idadi ya vyumba, na matangazo ya karibu na mapya yana uzito zaidi.",
+    howThree: "Tunaonyesha kiwango chembamba cha bei inayotakiwa. Bei zikikosa kukubaliana, tunasema data haitoshi.",
+    likelyAsking: "Bei inayotakiwa",
+    gaugeLow: "Chini", gaugeTypical: "Kawaida", gaugeHigh: "Juu",
+    homesLikeYours: "Nyumba kama yako",
+    askingSaleNote: "Bei ya mauzo inaweza kuwa chini kwa 5–10% ya bei hizi zinazotakiwa.",
+    insufficientNext: "Data haitoshi kwa kiwango cha uaminifu. Muulize mthamini, au tuambie bei uliyoiona.",
+    tellUsPrice: "Tuambie bei yako",
+    tellUsPriceHint: "Bei uliyoiona, kwa UGX",
+    priceHintButton: "Tuma bei",
+    priceHintThanks: "Imehifadhiwa. Hii ni dokezo la bei ya eneo, si uthamani rasmi.",
+    priceHintInvalid: "Weka bei zaidi ya 0.",
+    rangeTooWide: "Bei zinazotakiwa karibu hazikubaliani vya kutosha kuchapisha kiwango.",
+    scopeRing: "Tunatumia matangazo ndani ya km {radius} kutoka {location}.",
+    basedOnCount: "Kulingana na matangazo {count} ya makaug {where}.",
+    methodText: "Makadirio ni wastani wenye uzito wa bei zinazotakiwa. Yaliyo karibu na mapya yanahesabika zaidi. Kiwango ni nusu ya kati, na hakionyeshwi nusu hiyo ikiwa pana zaidi ya takriban 30%."
+  },
+  ac: {
+    title: "Wel pa ot na tye adi?",
+    subtitle: "Ki jami ma tye i makaug ma cok kwedi. Man obedo tyen lok me cuk, pe valuation ma cik.",
+    estimateButton: "Nyut wel ma romo",
+    howTwo: "Watye ka km 1, ka 3, ka 5. Wataro kwan me ot, ki jami ma cok ki manyen peke gi pek.",
+    howThree: "Wanyuto kwan ma cwiny. Ka wel pe rwate, wawaco ni data pe oromo.",
+    likelyAsking: "Wel ma gipenyo",
+    gaugeLow: "Piny", gaugeTypical: "Ma rwate", gaugeHigh: "Malo",
+    homesLikeYours: "Odi ma cal ki meri",
+    askingSaleNote: "Wel me cato twero bedo piny ki 5–10% ikom wel magi ma gipenyo.",
+    insufficientNext: "Data pe oromo pi kwan ma ada. Peny lavaluer, onyo wac ki wel ma ineno.",
+    tellUsPrice: "Wac ki wel meri",
+    tellUsPriceHint: "Wel ma ineno, i UGX",
+    priceHintButton: "Cwal wel",
+    priceHintThanks: "Kigwoko. Man obedo wel me kabedo, pe valuation ma cik.",
+    priceHintInvalid: "Ket wel ma kato 0.",
+    rangeTooWide: "Wel ma gipenyo ma cok pe rwate me yabo kwan.",
+    scopeRing: "Watiyo ki jami ma tye i km {radius} ki {location}.",
+    basedOnCount: "Ki jami {count} ma tye i makaug {where}.",
+    methodText: "Kwan obedo median ma ki pek pa wel ma gipenyo. Ma cok ki manyen peke gi pek. Kwan obedo nucu ma i dyere, pe nyute ka obedo lac ikom 30%."
+  },
+  ny: {
+    title: "Omuhendo gw'ekyaro kyange niguri aha?",
+    subtitle: "Kuruga aha byashangirwe aha makaug ahi okumpi. Eki nikyo kiragiro, tikiri valuation y'amateeka.",
+    estimateButton: "Yoreka omwanya gw'omuhendo",
+    howTwo: "Nitutandika aha km 1, kandi 3, kandi 5. Nitugumya ebyoto, kandi ebiri ahi okumpi n'ebihyaka nibisinga oburemeezi.",
+    howThree: "Nitworeka omwanya gw'emihendo egisabirwe. Emihendo yaba etarikukwatana, nitugira ngu data tekwera.",
+    likelyAsking: "Omuhendo ogusabirwe",
+    gaugeLow: "Ahansi", gaugeTypical: "Ahakati", gaugeHigh: "Aheiguru",
+    homesLikeYours: "Ebyaro ebisa n'ekyawe",
+    askingSaleNote: "Omuhendo gw'okutunda niguba ahansi ya 5–10% aha gusabirwe.",
+    insufficientNext: "Data tekwera aha mwanya ogwikiriza. Buuza valuer, nari otubuulire omuhendo gw'orabwire.",
+    tellUsPrice: "Tubuulire omuhendo gwawe",
+    tellUsPriceHint: "Omuhendo gw'orabwire, omu UGX",
+    priceHintButton: "Tuma omuhendo",
+    priceHintThanks: "Gwabitirwe. Ogu nigwo muhendo gw'ekyanga, tikiri valuation y'amateeka.",
+    priceHintInvalid: "Taaha omuhendo gurikukira 0.",
+    rangeTooWide: "Emihendo egisabirwe ahi okumpi etarikukwatana kuhereza omwanya.",
+    scopeRing: "Nitukoresa ebyashangirwe omu km {radius} kuruga {location}.",
+    basedOnCount: "Ahabw'ebishangirwe {count} aha makaug {where}.",
+    methodText: "Omuhendo niguba weighted median y'emisabirwe. Ebiri ahi okumpi n'ebihyaka nibisinga. Omwanya nigwo rukiri rw'ahakati, kandi tirworekwa rukaba rukira 30%."
+  },
+  rn: {
+    title: "Igiciro c'umutungo wanje ni ingahe?",
+    subtitle: "Bivuye ku bitangwa kuri makaug hafi yawe. Iki ni ikiragiro, si valuation y'amategeko.",
+    estimateButton: "Yoreka omwanya gw'omuhendo",
+    howTwo: "Dutangura kuri km 1, hanyuma 3, hanyuma 5. Dusigaza umubare w'ibitanda, kandi ibiri hafi n'ibishasha biraremereye.",
+    howThree: "Twereka umwanya muto w'ibiciro bisabwa. Ibiciro bitahuye, turavuga ko data idahagije.",
+    likelyAsking: "Igiciro gisabwa",
+    gaugeLow: "Hasi", gaugeTypical: "Hagati", gaugeHigh: "Hejuru",
+    homesLikeYours: "Amazu ameze nka yawe",
+    askingSaleNote: "Igiciro c'ugucuruza gishobora kuba hasi 5–10% y'ibi bisabwa.",
+    insufficientNext: "Data idahagije ku mwanya w'ukuri. Baza valuer, canke utubwire igiciro wabonye.",
+    tellUsPrice: "Tubwire igiciro cawe",
+    tellUsPriceHint: "Igiciro wabonye, mu UGX",
+    priceHintButton: "Rungika igiciro",
+    priceHintThanks: "Kirabitswe. Iki ni igiciro c'akarere, si valuation y'amategeko.",
+    priceHintInvalid: "Andika igiciro kirenze 0.",
+    rangeTooWide: "Ibiciro bisabwa hafi ntibihuye kugira umwanya.",
+    scopeRing: "Dukoresha ibitangwa mu km {radius} kuva {location}.",
+    basedOnCount: "Kubera ibitangwa {count} kuri makaug {where}.",
+    methodText: "Igiciro ni weighted median y'ibisabwa. Ibiri hafi n'ibishasha biraremereye. Umwanya ni igice co hagati, kandi ntukwerekanwa iyo kirenze hafi 30%."
+  },
+  sm: {
+    title: "Omuwendo gw'ekifo kyange guli wa?",
+    subtitle: "Gulagiddwa ku bifo ebiri ku makaug okumpi naawe. Kino kya kukuyamba, si valuation ya mateeka.",
+    estimateButton: "Laga ekkomo ly'omuwendo",
+    howTwo: "Tutandikira ku km 1, oluvannyuma 3, olwo 5. Tusigaza omuwendo gw'ebisenge, era ebiri okumpi n'ebipya bisinga.",
+    howThree: "Tulaga ekkomo empi. Emiwendo bwe gitalina bukwatane, tugamba nti data temala.",
+    likelyAsking: "Omuwendo ogusabibwa",
+    gaugeLow: "Wansi", gaugeTypical: "Awakati", gaugeHigh: "Waggulu",
+    homesLikeYours: "Ebifo ebifaanana n'ekyo",
+    askingSaleNote: "Omuwendo ogutundibwa guba wansi nga 5–10% ku musabibwa.",
+    insufficientNext: "Data temala. Buuza surveyor, oba tubuulire omuwendo gw'olabye.",
+    tellUsPrice: "Tubuulire omuwendo gwo",
+    tellUsPriceHint: "Omuwendo gw'olabye, mu UGX",
+    priceHintButton: "Weereza omuwendo",
+    priceHintThanks: "Kikuutiddwa. Kino kya kitundu, si valuation ya mateeka.",
+    priceHintInvalid: "Wandika omuwendo ogusukka ku 0.",
+    rangeTooWide: "Emiwendo egisabibwa okumpi tegukwatagana.",
+    scopeRing: "Tukozesa ebifo eby'okumpi n'ekitundu kya km {radius} okuva e {location}.",
+    basedOnCount: "Ku bifo {count} ebiri ku makaug {where}.",
+    methodText: "Omuwendo guba weighted median ku misabibwa. Ebiri okumpi n'ebipya bisinga. Ekkomo kye kitundu ekya wakati, era teragibwa bwe kiba kiwanvu okusinga nga 30%."
+  },
+  am: {
+    title: "ንብረቴ ምን ያህል ያወጣል?",
+    subtitle: "በአቅራቢያዎ ባሉ የmakaug ማስታወቂያዎች ላይ የተመሠረተ። ይህ የገበያ መመሪያ ነው፣ መደበኛ ግምገማ አይደለም።",
+    estimateButton: "የዋጋ ክልል አሳይ",
+    howTwo: "በ1፣ ከዚያ 3፣ ከዚያ 5 ኪ.ሜ ውስጥ እንቆያለን። የመኝታ ቁጥር ይቆያል፤ ቅርብና አዲስ ማስታወቂያዎች የበለጠ ክብደት አላቸው።",
+    howThree: "ጠባብ የመጠየቂያ ዋጋ ክልል እናሳያለን። ዋጋዎቹ ካልተስማሙ በቂ መረጃ የለም እንላለን።",
+    likelyAsking: "የሚጠየቅ ዋጋ",
+    gaugeLow: "ዝቅተኛ", gaugeTypical: "የተለመደ", gaugeHigh: "ከፍተኛ",
+    homesLikeYours: "እንደ እርስዎ ያሉ ቤቶች",
+    askingSaleNote: "የመሸጫ ዋጋ ከእነዚህ የሚጠየቁ ዋጋዎች በ5–10% ያነሰ ሊሆን ይችላል።",
+    insufficientNext: "ለታማኝ ክልል በቂ መረጃ የለም። ገምጋሚ ይጠይቁ፣ ወይም ያዩትን ዋጋ ይንገሩን።",
+    tellUsPrice: "ዋጋዎን ይንገሩን",
+    tellUsPriceHint: "ያዩት ዋጋ፣ በUGX",
+    priceHintButton: "ዋጋ ላክ",
+    priceHintThanks: "ተቀምጧል። ይህ የአካባቢ ዋጋ ፍንጭ ነው፣ መደበኛ ግምገማ አይደለም።",
+    priceHintInvalid: "ከ0 በላይ ዋጋ ያስገቡ።",
+    rangeTooWide: "በአቅራቢያ የሚጠየቁ ዋጋዎች ክልል ለማተም አልተስማሙም።",
+    scopeRing: "ከ{location} በ{radius} ኪ.ሜ ውስጥ ያሉ ማስታወቂያዎችን እንጠቀማለን።",
+    basedOnCount: "በ{count} የmakaug ማስታወቂያዎች {where} ላይ የተመሠረተ።",
+    methodText: "ግምቱ የሚጠየቁ ዋጋዎች ክብደት ያለው መካከለኛ ነው። ቅርብና አዲስ የበለጠ ይቆጠራሉ። ክልሉ መካከለኛው ግማሽ ነው፤ ከ30% በላይ ሲሰፋ አይታይም።"
+  },
+  ar: {
+    title: "كم تبلغ قيمة عقاري؟",
+    subtitle: "استناداً إلى إعلانات makaug القريبة منك. هذا دليل سوق، وليس تقييماً رسمياً.",
+    estimateButton: "أظهر نطاق السعر",
+    howTwo: "نبقى ضمن 1 ثم 3 ثم 5 كم. نُبقي عدد الغرف، والإعلانات الأقرب والأحدث أثقل وزناً.",
+    howThree: "نُظهر نطاقاً ضيقاً لسعر الطلب. إذا اختلفت الأسعار نقول إن البيانات لا تكفي.",
+    likelyAsking: "سعر الطلب",
+    gaugeLow: "منخفض", gaugeTypical: "المعتاد", gaugeHigh: "مرتفع",
+    homesLikeYours: "بيوت تشبه بيتك",
+    askingSaleNote: "سعر البيع المرجح أقل بنحو 5–10٪ من أسعار الطلب هذه.",
+    insufficientNext: "لا توجد بيانات كافية لنطاق صادق. اسأل مقيّماً، أو أخبرنا بالسعر الذي رأيته.",
+    tellUsPrice: "أخبرنا بسعرك",
+    tellUsPriceHint: "السعر الذي رأيته، بـ UGX",
+    priceHintButton: "أرسل السعر",
+    priceHintThanks: "حُفظ. هذا تلميح سعر محلي، وليس تقييماً رسمياً.",
+    priceHintInvalid: "أدخل سعراً أعلى من 0.",
+    rangeTooWide: "أسعار الطلب القريبة متباعدة أكثر من أن ننشر نطاقاً.",
+    scopeRing: "نستخدم إعلانات ضمن {radius} كم من {location}.",
+    basedOnCount: "استناداً إلى {count} إعلاناً على makaug {where}.",
+    methodText: "التقدير وسيط موزون لأسعار الطلب. الأقرب والأحدث أثقل. النطاق هو النصف الأوسط، ولا يُعرض إذا اتسع أكثر من نحو 30٪."
+  }
+});
+
 function valuationTr(key, vars = {}) {
   const pack = {
     ...(VALUATION_UI_SUPPLEMENTS[currentLang] || {}),
     ...(VALUATION_UI_OVERRIDES[currentLang] || {}),
-    ...(VALUATION_UI_K17[currentLang] || {})
+    ...(VALUATION_UI_K17[currentLang] || {}),
+    ...(VALUATION_UI_RINGS[currentLang] || {})
   };
   let text = pack[key] || VALUATION_UI_EN[key] || key;
   Object.entries(vars).forEach(([name, value]) => {
@@ -49790,21 +49977,45 @@ function applyValuationResultLanguage(response = {}) {
 
   if (range && estimate) {
     if (!response.sufficient || !response.estimate) {
-      range.textContent = valuationTr("insufficient");
+      range.textContent = valuationTr(response.insufficient_reason === "range_too_wide" ? "rangeTooWide" : "insufficient");
+      range.className = "text-xl md:text-2xl font-black text-[#16241d]";
       estimate.textContent = "";
     } else {
       range.textContent = valuationTr("rangeHeadline", {
         low: formatValuationUgx(response.range_low),
         high: formatValuationUgx(response.range_high)
       });
-      estimate.textContent = valuationTr("midpoint", { estimate: formatValuationUgx(response.estimate) });
+      range.className = "text-3xl md:text-5xl font-black text-[#15603f]";
+      estimate.textContent = [
+        valuationTr("midpoint", { estimate: formatValuationUgx(response.estimate) }),
+        response.asking_to_sale ? valuationTr("askingSaleNote") : ""
+      ].filter(Boolean).join(" ");
     }
   }
+  const gauge = document.getElementById("valuation-gauge");
+  const marker = document.getElementById("valuation-gauge-marker");
+  if (gauge) {
+    const showGauge = Boolean(response.sufficient && response.estimate && response.range_low != null && response.range_high != null);
+    gauge.classList.toggle("hidden", !showGauge);
+    if (showGauge && marker) {
+      const span = Math.max(Number(response.range_high) - Number(response.range_low), 1);
+      const pos = ((Number(response.estimate) - Number(response.range_low)) / span) * 100;
+      marker.style.left = `${Math.min(92, Math.max(8, pos))}%`;
+    }
+    const gaugeLow = document.getElementById("valuation-gauge-low");
+    const gaugeHigh = document.getElementById("valuation-gauge-high");
+    const gaugeTypical = document.getElementById("valuation-gauge-typical");
+    if (gaugeLow) gaugeLow.textContent = `${valuationTr("gaugeLow")} ${formatValuationUgx(response.range_low)}`;
+    if (gaugeHigh) gaugeHigh.textContent = `${valuationTr("gaugeHigh")} ${formatValuationUgx(response.range_high)}`;
+    if (gaugeTypical) gaugeTypical.textContent = `${valuationTr("gaugeTypical")} ${formatValuationUgx(response.estimate)}`;
+  }
+  const nextSteps = document.getElementById("valuation-next-steps");
+  if (nextSteps) nextSteps.classList.toggle("hidden", Boolean(response.sufficient && response.estimate));
   if (scope) {
-    if (response.broad_average) {
-      scope.textContent = valuationTr("broadAverage", { district });
-    } else if (response.scope === "nearby") {
-      scope.textContent = valuationTr("scopeNearby", { location, district });
+    if (!response.sufficient) {
+      scope.textContent = valuationTr(response.insufficient_reason === "range_too_wide" ? "rangeTooWide" : "insufficientNext");
+    } else if (response.radius_km) {
+      scope.textContent = valuationTr("scopeRing", { location, radius: response.radius_km });
     } else if (response.scope === "district" || response.widened) {
       scope.textContent = valuationTr("scopeDistrict", { location, district });
     } else {
@@ -49816,7 +50027,13 @@ function applyValuationResultLanguage(response = {}) {
     confidenceBadge.className = `rounded-full border px-3 py-1 text-xs font-black ${valuationConfidenceClasses(level)}`;
     confidenceBadge.textContent = valuationTr(`confidence${level[0].toUpperCase()}${level.slice(1)}`);
     if (confidenceExplanation) {
-      confidenceExplanation.textContent = valuationTr(`confidence${level[0].toUpperCase()}${level.slice(1)}Help`);
+      const where = response.radius_km
+        ? valuationTr("scopeRing", { location, radius: response.radius_km })
+        : valuationTr("scopeArea", { location });
+      confidenceExplanation.textContent = `${valuationTr(`confidence${level[0].toUpperCase()}${level.slice(1)}Help`)} ${valuationTr("basedOnCount", {
+        count: analysisCount.toLocaleString(),
+        where
+      })}`;
     }
   }
   if (disclaimerTitle) disclaimerTitle.textContent = valuationTr(limited ? "limitedDisclaimerTitle" : "guideDisclaimerTitle");
@@ -49875,7 +50092,7 @@ function renderValuationEstimate(response = {}, { auto = false } = {}) {
   count.textContent = Number(response.comparable_count || 0).toLocaleString();
 
   if (!response.sufficient || !response.estimate) {
-    range.textContent = valuationTr("insufficient");
+    range.textContent = valuationTr(response.insufficient_reason === "range_too_wide" ? "rangeTooWide" : "insufficient");
     range.className = "text-xl md:text-2xl font-black text-[#16241d]";
     estimate.textContent = "";
   } else {
@@ -49950,16 +50167,18 @@ async function submitValuationEstimate(event, { auto = false } = {}) {
       body
     });
     renderValuationEstimate(response, { auto });
-    const statusKey = response.broad_average
-      ? "broadAverage"
-      : response.scope === "nearby"
-        ? "scopeNearby"
+    const statusKey = !response.sufficient
+      ? (response.insufficient_reason === "range_too_wide" ? "rangeTooWide" : "insufficient")
+      : response.radius_km
+        ? "scopeRing"
         : (response.scope === "district" || response.widened)
           ? "scopeDistrict"
           : "scopeArea";
-    setValuationStatus(response.sufficient
-      ? valuationTr(statusKey, { location: body.location, district: body.district })
-      : valuationTr("insufficient"));
+    setValuationStatus(valuationTr(statusKey, {
+      location: body.location,
+      district: body.district,
+      radius: response.radius_km || ""
+    }));
     trackEvent("valuation_estimate_completed", {
       category,
       location: body.location,
@@ -49971,6 +50190,39 @@ async function submitValuationEstimate(event, { auto = false } = {}) {
     setValuationStatus(error?.message || valuationTr("failed"), "error");
   } finally {
     if (button) button.disabled = false;
+  }
+  return false;
+}
+
+async function submitValuationPriceHint(event) {
+  event?.preventDefault();
+  const status = document.getElementById("valuation-price-hint-status");
+  const raw = String(document.getElementById("valuation-price-hint")?.value || "").replace(/[^\d.]/g, "");
+  const price = Number(raw);
+  const body = collectValuationRequestBody();
+  if (!(price > 0) || !body.location || !body.category) {
+    if (status) {
+      status.classList.remove("hidden");
+      status.textContent = valuationTr(!(price > 0) ? "priceHintInvalid" : "locationHelp");
+    }
+    return false;
+  }
+  try {
+    const response = await apiRequest("/api/valuation/price-hint", {
+      method: "POST",
+      skipAuth: true,
+      body: { ...body, price }
+    });
+    if (status) {
+      status.classList.remove("hidden");
+      status.textContent = response?.message || valuationTr("priceHintThanks");
+    }
+    trackEvent("valuation_price_hint_submitted", { category: body.category, location: body.location });
+  } catch (error) {
+    if (status) {
+      status.classList.remove("hidden");
+      status.textContent = error?.message || valuationTr("failed");
+    }
   }
   return false;
 }
