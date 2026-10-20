@@ -24,7 +24,7 @@ assert(page.includes('data-howto-video-grid="ai-chatbot"'), 'the how-to videos s
 for (const id of ['rent-ntinda', 'buy-kira', 'land-mukono', 'near-makerere', 'short-stay', 'broker']) {
   assert(page.includes(`data-discover-chip="${id}"`), `missing chip ${id}`);
 }
-assert(page.includes('grid-cols-1') && page.includes('xl:grid-cols-4'), 'result cards must be one column on a phone and four on a desktop');
+assert(page.includes('grid-cols-1') && page.includes('sm:grid-cols-2') && page.includes('xl:grid-cols-4'), 'result cards must be one column on a phone and four on a desktop');
 assert(app.includes('function loadDiscoverChip'), 'chips need a loader');
 assert(app.includes('/api/properties?'), 'property chips must read live listings');
 assert(app.includes('/api/short-term/search?'), 'the short-stay chip must read published stays');

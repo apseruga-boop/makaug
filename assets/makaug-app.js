@@ -8143,7 +8143,7 @@ function renderDiscoverResults() {
       if (discoverCache.noteHref) {
         const link = document.createElement("a");
         link.href = discoverCache.noteHref;
-        link.className = "ml-2 font-bold text-[#166534] underline";
+        link.className = "ml-2 font-bold text-green-800 underline";
         link.textContent = aiTr("openShortStays");
         link.setAttribute("onclick", "return navigatePublicRoute(this.href, event)");
         note.append(link);
@@ -8204,9 +8204,9 @@ function paintDiscoverChips() {
   document.querySelectorAll("[data-discover-chip]").forEach((btn) => {
     const on = btn.getAttribute("data-discover-chip") === discoverChipId;
     btn.setAttribute("aria-pressed", on ? "true" : "false");
-    btn.classList.toggle("bg-[#166534]", on);
+    btn.classList.toggle("bg-green-800", on);
     btn.classList.toggle("text-white", on);
-    btn.classList.toggle("border-[#166534]", on);
+    btn.classList.toggle("border-green-800", on);
     btn.classList.toggle("bg-white", !on);
     btn.classList.toggle("text-gray-800", !on);
     btn.classList.toggle("border-gray-200", !on);
