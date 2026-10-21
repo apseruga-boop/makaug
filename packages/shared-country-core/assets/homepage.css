@@ -1981,6 +1981,7 @@
       .hero-bg {
         min-height: auto;
         background-position: center top;
+        background-image: linear-gradient(145deg, #041521 0%, #134e4a 100%);
       }
       .hero-tab {
         font-size: 12px;
