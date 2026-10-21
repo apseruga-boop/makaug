@@ -1,6 +1,8 @@
 const logger = require('../config/logger');
+const { logNotFound } = require('../utils/notFoundAccessLog');
 
 function notFound(req, res) {
+  logNotFound(req);
   return res.status(404).json({
     ok: false,
     error: 'Not Found',
