@@ -48287,13 +48287,13 @@ function renderGrid(id, list, options = {}) {
   if (!list.length) {
     if (id === "home-grid" && !publicListingsFromApiLoaded) {
       if (el.querySelector("[data-ssr-property-card]")) return;
-      el.innerHTML = loadingPropertyGridHtml(3);
+      setHtmlIfChanged(el, loadingPropertyGridHtml(3));
       return;
     }
-    el.innerHTML = noResultsCardForGrid(id);
+    setHtmlIfChanged(el, noResultsCardForGrid(id));
     return;
   }
-  el.innerHTML = list.map((p, index) => propCard(p, { ...(options.cardOptions || options), imageLoading: index === 0 ? "eager" : "lazy" })).join("");
+  setHtmlIfChanged(el, list.map((p, index) => propCard(p, { ...(options.cardOptions || options), imageLoading: index === 0 ? "eager" : "lazy" })).join(""));
 }
 
 function studentTypeKey(p) {
