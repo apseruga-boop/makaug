@@ -7606,7 +7606,17 @@ function fraudTr(key) {
 
 function setTextById(id, text) {
   const el = document.getElementById(id);
-  if (el) el.textContent = text;
+  const value = text == null ? "" : String(text);
+  if (el && el.textContent !== value) el.textContent = value;
+}
+
+function setHtmlIfChanged(el, html) {
+  const source = String(html || "");
+  const rendered = el.innerHTML;
+  const previous = el.__makaugHtmlState;
+  if (rendered === source || (previous?.source === source && previous.rendered === rendered)) return;
+  el.innerHTML = source;
+  el.__makaugHtmlState = { source, rendered: el.innerHTML };
 }
 
 function setText(id, text) {
@@ -43109,7 +43119,7 @@ function ensureRevenuePlacements() {
       node.dataset.revenuePlacement = placement.slotKey;
       anchor.insertAdjacentElement("afterend", node);
     }
-    node.innerHTML = buildRevenuePlacementMarkup(placement.slotKey, placement.context);
+    setHtmlIfChanged(node, buildRevenuePlacementMarkup(placement.slotKey, placement.context));
     node.hidden = !node.innerHTML.trim();
   });
 }
@@ -43851,10 +43861,11 @@ function setHeroSelectOptions(selectId, options = [], placeholderKey = "") {
   const el = document.getElementById(selectId);
   if (!el) return;
   const previous = el.value;
-  el.innerHTML = options.map((option, index) => {
+  const markup = options.map((option, index) => {
     const label = index === 0 && placeholderKey ? tr(placeholderKey) : heroOptionLabel(option);
     return `<option value="${adminEscape(option.value || "")}">${adminEscape(label || "")}</option>`;
   }).join("");
+  setHtmlIfChanged(el, markup);
   if (Array.from(el.options).some((option) => option.value === previous)) {
     el.value = previous;
   }
@@ -44765,11 +44776,13 @@ function setHeroLocationFilter(type) {
   const el = document.getElementById("hero-district");
   if (!el) return;
   const current = el.value || "";
+  let markup;
   if (type === "students") {
-    el.innerHTML = `<option value="">${tr("anyUniversity")}</option>` + UGANDA_UNIVERSITIES.map((u) => `<option value="${u}">${u}</option>`).join("");
+    markup = `<option value="">${tr("anyUniversity")}</option>` + UGANDA_UNIVERSITIES.map((u) => `<option value="${u}">${u}</option>`).join("");
   } else {
-    el.innerHTML = `<option value="">${tr("areaOnly")}</option>` + DISTRICTS.map((d) => `<option value="${d}">${d}</option>`).join("");
+    markup = `<option value="">${tr("areaOnly")}</option>` + DISTRICTS.map((d) => `<option value="${d}">${d}</option>`).join("");
   }
+  setHtmlIfChanged(el, markup);
   if (current && Array.from(el.options).some((o) => o.value === current)) el.value = current;
   else el.value = "";
 }

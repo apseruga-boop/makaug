@@ -52,6 +52,7 @@ function languageFixture() {
     'page-home': { classList: { contains: () => true } }
   };
   const context = vm.createContext({
+    String,
     currentLang: 'en', currentTab: 'rent', currentPage: 'home', activeDetailPropertyId: '',
     authSignInAudience: 'finder', authSignUpAudience: 'finder', authSignUpOtpChannel: 'phone',
     typeaheadState: { input: null }, ACTIVE_LOCATION_COUNTRY: { countryCode: 'UG' },
@@ -75,7 +76,7 @@ function languageFixture() {
       context[called] = (...args) => calls.push([called, ...args]);
     }
   });
-  vm.runInContext(['setLang', 'setHeroLocationFilter', 'localizeHeroContextOption', 'setHeroContextFilter',
+  vm.runInContext(['setLang', 'setHtmlIfChanged', 'setHeroLocationFilter', 'localizeHeroContextOption', 'setHeroContextFilter',
     'populateRadiusSelects', 'radiusLabel', 'setHeroRadiusState', 'initializeMakaugApp'].map(code).join('\n'), context);
   for (const name of ['setHeroLocationFilter', 'setHeroRadiusState', 'setHeroContextFilter']) {
     const actual = context[name];
@@ -224,7 +225,7 @@ function inventoryFixture({ category = false } = {}) {
     'normalizeHeroOpportunityStats', 'upsertPropertyForUi', 'applyPublicRowsForUi', 'applyPublicFeaturedRows',
     'applyPublicOpportunityStats', 'isBackendControlledListing', 'getPublicListings', 'isFeaturedListing',
     'getFeaturedListings', 'getHomepageFeaturedListings', 'isStudentDiscoverable', 'getBrokerDirectory',
-    'renderAll', 'refreshPublicListingsFromApi'].map(code).join('\n'), context);
+    'featuredBrokerLimit', 'renderAll', 'refreshPublicListingsFromApi'].map(code).join('\n'), context);
   const render = context.renderAll;
   context.renderAll = () => { calls.push({ actor, kind: 'render' }); return render(); };
   const completion = vm.runInContext(source.slice(refreshStatement.start, refreshStatement.end), context);

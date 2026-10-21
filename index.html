@@ -410,7 +410,7 @@
       windowObject.__makaugMetaPixelReady = true;
     })(window, document);
   </script>
-  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=640&q=50" media="(max-width: 767px)" fetchpriority="high" data-home-hero-preload>
+  <link rel="preload" as="image" href="/assets/home-hero-640.306cd8edb8f0.webp" media="(max-width: 767px)" fetchpriority="high" data-home-hero-preload>
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" media="(min-width: 768px)" fetchpriority="high" data-home-hero-preload>
   <link rel="stylesheet" href="/assets/tailwind.css">
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
@@ -422,6 +422,19 @@
   <script src="/config.js" defer></script>
   <style>
     body { font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    /* Keep the public header and hero stable while the icon stylesheet loads. */
+    :is(.mk-top-strip, body > nav, #language-spotlight, .hero-bg) :is(.fas, .fab) {
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      line-height: 1;
+      font-style: normal;
+      text-align: center;
+      vertical-align: -.125em;
+      flex-shrink: 0;
+    }
+    :is(.mk-top-strip, body > nav, #language-spotlight, .hero-bg) :is(.fa-whatsapp, .fa-user, .fa-bars, .fa-plus, .fa-chevron-down) { width: .875em; }
+    :is(.mk-top-strip, body > nav, #language-spotlight, .hero-bg) .fa-language { width: 1.25em; }
     html.app-ready body { opacity: 1; }
     @media (prefers-reduced-motion: reduce) {
       html.app-ready body { transition: none; }
@@ -3051,7 +3064,7 @@
         min-height: auto;
         background-position: center top;
         background-image: linear-gradient(180deg, rgba(4, 21, 33, 0.35) 0%, rgba(3, 20, 31, 0.62) 100%),
-          url("https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=640&q=50");
+          url("/assets/home-hero-640.306cd8edb8f0.webp");
       }
       .hero-tab {
         font-size: 12px;

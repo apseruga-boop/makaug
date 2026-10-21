@@ -63,7 +63,8 @@ function publicRenderer() {
     inlinePublicFontFaces: require('../services/publicFontFaces'),
     injectGa4HeadTag: (html) => html
   });
-  for (const name of ['applyHomeHeroPreload', 'applyShortTermStylesheetLoading', 'applyPublicFontDisplayOptional', 'renderPublicHtml']) {
+  vm.runInContext(server.match(/const TRAVELPAYOUTS_DRIVE_HEAD_TAG = `[^`]*`;/)[0], context);
+  for (const name of ['applyHomeHeroPreload', 'applyShortTermStylesheetLoading', 'applyPublicFontDisplayOptional', 'injectTravelpayoutsDriveHeadTag', 'renderPublicHtml']) {
     vm.runInContext(declaration(server, name), context);
   }
   return context.renderPublicHtml;
