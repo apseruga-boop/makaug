@@ -11,6 +11,7 @@ const rateLimit = require('express-rate-limit');
 const jwt = require('jsonwebtoken');
 
 const logger = require('./config/logger');
+const { logNotFound } = require('./utils/notFoundAccessLog');
 const db = require('./config/database');
 const healthRoutes = require('./routes/health');
 const authRoutes = require('./routes/auth');
@@ -2161,6 +2162,7 @@ function renderPublicNotFoundPage() {
 }
 
 function sendPublicNotFound(req, res) {
+  logNotFound(req);
   res.set('X-Robots-Tag', 'noindex');
   res.set('Cache-Control', 'no-store');
   return res.status(404).type('html').send(req.method === 'HEAD' ? '' : renderPublicNotFoundPage());
@@ -2359,6 +2361,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   if (!['GET', 'HEAD'].includes(req.method) || req.path.startsWith('/api/')) return next();
   if (!path.extname(req.path)) return next();
+  logNotFound(req);
   res.set('X-Robots-Tag', 'noindex');
   res.set('Cache-Control', 'no-store');
   return res.status(404).type('text/plain').send('Not found');
