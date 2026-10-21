@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const acorn = require('acorn');
+const { propertyPublicHeading } = require('../services/publicSeoRenderService');
 
 const app = fs.readFileSync(path.join(__dirname, '..', 'assets/makaug-app.js'), 'utf8');
 const seo = fs.readFileSync(path.join(__dirname, '..', 'services/publicSeoRenderService.js'), 'utf8');
@@ -69,7 +70,7 @@ function fixture() {
     socialImportSpecsHtml: () => '',
     socialImportProvenanceHtml: () => ''
   });
-  for (const name of ['propCard', 'studentCard', 'renderGrid', 'renderStudentGrid', 'noResultsCardForGrid', 'loadingPropertyGridHtml', 'socialImportListingCardHtml', 'socialImportTileMediaHtml']) {
+  for (const name of ['publicListerAttribution', 'propCard', 'studentCard', 'setHtmlIfChanged', 'renderGrid', 'renderStudentGrid', 'noResultsCardForGrid', 'loadingPropertyGridHtml', 'socialImportListingCardHtml', 'socialImportTileMediaHtml']) {
     vm.runInContext(declaration(app, name), context);
   }
   return { context, grids };
@@ -131,6 +132,7 @@ test('the actual SSR property-detail renderer keeps its high-priority hero image
     priceLabel: () => 'USh 500,000 / month',
     propertySeoDescription: () => 'Property details',
     propertySeoTitle: (property) => property.title,
+    propertyPublicHeading,
     popularAreaLinks: () => [],
     renderFooterAreaLinks: () => '',
     insertBeforeClosingTag: (html) => html,
