@@ -27,15 +27,23 @@ test('mobile and desktop hero preload exactly their matching CSS source with mut
   }
 });
 
-test('same photo, crop and overlay remain; only mobile resolution/quality changes', () => {
-  const mobile = new URL(imageUrl(mobileCss));
+test('mobile hero ships the existing photo as an immutable local WebP while desktop is unchanged', () => {
+  const crypto = require('node:crypto');
+  const mobile = new URL(imageUrl(mobileCss), 'https://makaug.com');
   const desktop = new URL(imageUrl(desktopCss));
-  assert.equal(mobile.origin, desktop.origin);
-  assert.equal(mobile.pathname, '/photo-1560518883-ce09059eeffa');
-  assert.equal(mobile.pathname, desktop.pathname);
-  for (const key of ['auto', 'fit']) assert.equal(mobile.searchParams.get(key), desktop.searchParams.get(key));
-  assert.equal(mobile.searchParams.get('w'), '640');
-  assert.equal(mobile.searchParams.get('q'), '50');
+  const provenance = JSON.parse(fs.readFileSync(path.join(__dirname, '../assets/home-hero-640.source.json'), 'utf8'));
+  const original = new URL(provenance.originalSource);
+  const image = fs.readFileSync(path.join(__dirname, '..', mobile.pathname));
+  assert.equal(mobile.origin, 'https://makaug.com');
+  assert.match(mobile.pathname, /^\/assets\/home-hero-640\.[a-f0-9]{12}\.webp$/);
+  assert.equal(crypto.createHash('sha256').update(image).digest('hex'), provenance.sha256);
+  assert.equal(image.toString('ascii', 0, 4), 'RIFF');
+  assert.equal(image.toString('ascii', 8, 12), 'WEBP');
+  assert.equal(original.origin, desktop.origin);
+  assert.equal(original.pathname, desktop.pathname);
+  for (const key of ['auto', 'fit']) assert.equal(original.searchParams.get(key), desktop.searchParams.get(key));
+  assert.equal(original.searchParams.get('w'), '640');
+  assert.equal(original.searchParams.get('q'), '50');
   assert.equal(desktop.searchParams.get('w'), '1200');
   assert.equal(desktop.searchParams.get('q'), '60');
   assert.match(desktopCss, /linear-gradient\(180deg, rgba\(4, 21, 33, 0\.35\)/);

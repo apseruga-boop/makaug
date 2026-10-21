@@ -10,7 +10,7 @@ const acorn = require('acorn');
 const source = fs.readFileSync(path.join(__dirname, '..', 'assets/makaug-app.js'), 'utf8');
 const ast = acorn.parse(source, { ecmaVersion: 'latest', sourceType: 'script' });
 const functions = [
-  'getPublicListings', 'getHomepageFeaturedListings', 'renderGrid', 'renderAll',
+  'getPublicListings', 'getHomepageFeaturedListings', 'renderGrid', 'renderAll', 'featuredBrokerLimit',
   'loadingPropertyGridHtml', 'noResultsCardForGrid', 'applyPublicFeaturedRows',
   'applyPublicRowsForUi', 'applyPublicOpportunityStats', 'refreshPublicListingsFromApi',
   'normalizeRoutePath', 'isActiveUgandaHomepage'

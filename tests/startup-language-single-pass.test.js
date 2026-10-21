@@ -30,7 +30,7 @@ function fixture(code = declaration) {
     populateLpCityOptions(district, city) { assert.equal(district, 'kept:list-district-sel'); assert.equal(city, 'kept:lp-city'); },
     populateLpNeighborhoodOptions(district, city, area) { assert.equal(district, 'kept:list-district-sel'); assert.equal(city, 'kept:lp-city'); assert.equal(area, 'kept:lp-neighborhood'); }
   });
-  for (const name of ['addAdUnits', 'syncLpAreaFromHierarchy', 'setLpResolvedAltitude', 'setHeroLocationFilter', 'populateRadiusSelects', 'setHeroRadiusState', 'setHeroContextFilter', 'populateUniversitySelects', 'renderAll', 'resetMaps', 'openDetail', 'updateListPreview', 'renderLpVideoPreview', 'updateLpPhotoRequirements', 'renderLpPhotoFeedback', 'renderListReviewSummary', 'renderMortgageFinder', 'updateHomeAskAiLanguageCopy', 'applyMarketplaceLanguageUI', 'toast']) {
+  for (const name of ['addAdUnits', 'syncLpAreaFromHierarchy', 'setLpResolvedAltitude', 'setHeroLocationFilter', 'populateRadiusSelects', 'setHeroRadiusState', 'setHeroContextFilter', 'populateUniversitySelects', 'renderAll', 'resetMaps', 'openDetail', 'updateListPreview', 'renderLpVideoPreview', 'updateLpPhotoRequirements', 'renderLpPhotoFeedback', 'renderListReviewSummary', 'renderMortgageFinder', 'updateHomeAskAiLanguageCopy', 'applyMarketplaceLanguageUI', 'refreshBrokerProfileAbout', 'toast']) {
     context[name] = () => calls.push(name);
   }
   vm.runInContext(code, context);

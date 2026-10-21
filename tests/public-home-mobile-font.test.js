@@ -38,7 +38,8 @@ function renderer(country, production = false) {
     inlinePublicFontFaces: createPublicFontFaceInliner(),
     inlinePublicCoreStylesheets: require('../services/publicCoreStylesheets')
   });
-  vm.runInContext(['applyHomeHeroPreload', 'applyShortTermStylesheetLoading', 'applyPublicFontDisplayOptional', 'renderPublicHtml'].map(declaration).join('\n'), context);
+  vm.runInContext(server.match(/const TRAVELPAYOUTS_DRIVE_HEAD_TAG = `[^`]*`;/)[0], context);
+  vm.runInContext(['applyHomeHeroPreload', 'applyShortTermStylesheetLoading', 'applyPublicFontDisplayOptional', 'injectTravelpayoutsDriveHeadTag', 'renderPublicHtml'].map(declaration).join('\n'), context);
   return context.renderPublicHtml;
 }
 

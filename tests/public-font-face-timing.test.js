@@ -89,7 +89,8 @@ function renderer(inliner = createPublicFontFaceInliner()) {
     injectShortTermRuntimeConfig:(html)=>html,injectGa4HeadTag:(html)=>html,
     inlinePublicFontFaces:inliner,inlinePublicCoreStylesheets:require('../services/publicCoreStylesheets')
   });
-  vm.runInContext(['applyHomeHeroPreload','applyShortTermStylesheetLoading','applyPublicFontDisplayOptional','renderPublicHtml'].map(declaration).join('\n'),context);return context.renderPublicHtml;
+  vm.runInContext(server.match(/const TRAVELPAYOUTS_DRIVE_HEAD_TAG = `[^`]*`;/)[0], context);
+  vm.runInContext(['applyHomeHeroPreload','applyShortTermStylesheetLoading','applyPublicFontDisplayOptional','injectTravelpayoutsDriveHeadTag','renderPublicHtml'].map(declaration).join('\n'),context);return context.renderPublicHtml;
 }
 
 test('actual public renderer has early faces while keeping full CSS, text, language fallback and privacy boundaries', () => {
