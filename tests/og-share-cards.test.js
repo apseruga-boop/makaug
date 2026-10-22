@@ -20,6 +20,8 @@ const {
   shareCardText,
   shareCardKeyForPath,
   usableListingPhoto,
+  shareCardBioText,
+  ellipsizeShareLines,
   renderShareCard
 } = require('../services/shareCardService');
 const { createOgShareRouter, clearOgShareCache } = require('../routes/ogShare');
@@ -77,6 +79,38 @@ test('static card copy is translated in every site language pack', () => {
   assert.equal(normalizeShareLang('en-UG'), 'en');
   assert.equal(usableListingPhoto('https://p16-sign.tiktokcdn.com/cover.jpg'), false);
   assert.equal(usableListingPhoto('https://media.makaug.com/listings/house.jpg'), true);
+  const parts = [{
+    t: 'specialises',
+    one: false,
+    types: ['properties_for_sale', 'plots'],
+    place: 'around',
+    areas: ['Kakiri', 'Nakawuka'],
+    count: 5,
+    name: 'Jonathan wassajja',
+    company: ''
+  }, {
+    t: 'price',
+    kind: 'buy_range',
+    low: 'USh 28M',
+    high: 'USh 45M'
+  }];
+  const englishBio = 'Specialises in properties for sale and plots around Kakiri and Nakawuka, with 5 live listings on makaug. Asking prices run from USh 28M to USh 45M.';
+  const agent = { bio: englishBio, bioSource: 'generated', bioParts: parts };
+  assert.equal(shareCardBioText(agent, 'en'), englishBio);
+  const lugandaBio = shareCardBioText(agent, 'lg');
+  assert.notEqual(lugandaBio, englishBio);
+  assert.match(lugandaBio, /Kakiri/);
+  assert.match(lugandaBio, /Nakawuka/);
+  assert.equal(shareCardBioText({ bio: 'I help buyers in Wakiso.', bioSource: 'agent', bioParts: parts }, 'lg'), 'I help buyers in Wakiso.');
+  const lines = ellipsizeShareLines(englishBio, 58, 2);
+  assert.equal(lines.length, 2);
+  assert.match(lines[1], /…$/);
+  assert.ok(lines.every((line) => line.length <= 58));
+  const cardSource = fs.readFileSync(path.join(root, 'services', 'shareCardService.js'), 'utf8');
+  assert.doesNotMatch(cardSource, /Live listing/);
+  const credits = fs.readFileSync(path.join(root, 'assets', 'og', 'CREDITS.md'), 'utf8');
+  assert.match(credits, /Uganda/);
+  assert.doesNotMatch(credits, /London|Lisbon|Denver|New York|Wukari/);
 });
 
 test('home, category, agent and property cards are 1200 by 630 and under 300 KB', async () => {
@@ -97,7 +131,9 @@ test('home, category, agent and property cards are 1200 by 630 and under 300 KB'
       name: 'Jonathan Wassajja',
       verified: true,
       districts: 'Kampala, Wakiso',
-      liveCount: 5,
+      bio: 'Specialises in properties for sale and plots around Kakiri and Nakawuka, with 5 live listings on makaug.',
+      bioSource: 'generated',
+      bioParts: [{ t: 'fallback' }],
       minPrice: 28000000,
       maxPrice: 45000000,
       photo: portrait
@@ -109,7 +145,8 @@ test('home, category, agent and property cards are 1200 by 630 and under 300 KB'
       name: 'Jonathan Wassajja',
       verified: false,
       districts: 'Kampala, Wakiso',
-      liveCount: 5,
+      bio: 'Specialises in properties for sale and plots around Kakiri and Nakawuka, with 5 live listings on makaug.',
+      bioSource: 'agent',
       minPrice: 28000000,
       maxPrice: 45000000,
       photo: portrait
@@ -152,7 +189,8 @@ test('share-card endpoints cache a JPEG and fall back when the record or photo i
       name: 'Jonathan Wassajja',
       verified: true,
       districts: 'Kampala',
-      liveCount: 5,
+      bio: 'Specialises in plots around Kampala.',
+      bioSource: 'agent',
       minPrice: 28000000,
       maxPrice: 45000000,
       photo: portrait

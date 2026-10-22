@@ -4,6 +4,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const logger = require('../config/logger');
 const { isVerifiedByMakaug } = require('../services/publicAgentEligibilityService');
+const { agentCardBio, loadAgentSummaryListings } = require('../services/agentPublicProfileService');
 const { loadPublicSeoListing } = require('../services/publicSeoRenderService');
 const {
   SHARE_CACHE_CONTROL,
@@ -86,7 +87,7 @@ async function defaultLoadAgent(db, id) {
   const agentResult = await db.query(
     `SELECT
        a.id, a.full_name, a.company_name, a.profile_photo_url, a.status, a.removed_at,
-       a.verification_reason, a.identity_document_url, a.contact_phone_verified_at,
+       a.bio, a.verification_reason, a.identity_document_url, a.contact_phone_verified_at,
        a.licence_number, a.districts_covered
      FROM agents a
      WHERE a.id::text = $1
@@ -100,24 +101,18 @@ async function defaultLoadAgent(db, id) {
   );
   const row = agentResult.rows[0];
   if (!row) return null;
-  const stats = await db.query(
-    `SELECT
-       COUNT(*)::int AS live_count,
-       MIN(price) FILTER (WHERE price > 0) AS min_price,
-       MAX(price) FILTER (WHERE price > 0) AS max_price,
-       ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(district), '')), NULL) AS districts
-     FROM properties
-     WHERE agent_id = $1 AND status = 'approved'`,
-    [row.id]
-  );
-  const summary = stats.rows[0] || {};
+  const listings = await loadAgentSummaryListings(db, row.id);
+  const prices = listings.map((item) => Number(item.price)).filter((price) => price > 0);
+  const cardBio = agentCardBio(row, listings);
   return {
     name: publicAgentName(row.full_name || row.company_name || 'Property agent'),
     verified: isVerifiedByMakaug(row),
-    districts: districtText(row, summary.districts),
-    liveCount: Number(summary.live_count) || 0,
-    minPrice: Number(summary.min_price) || 0,
-    maxPrice: Number(summary.max_price) || 0,
+    districts: districtText(row, listings.map((item) => item.district)),
+    bio: cardBio.text,
+    bioSource: cardBio.source,
+    bioParts: cardBio.parts || null,
+    minPrice: prices.length ? Math.min(...prices) : 0,
+    maxPrice: prices.length ? Math.max(...prices) : 0,
     photoUrl: usableAgentPhoto(row.profile_photo_url) ? String(row.profile_photo_url).trim() : ''
   };
 }

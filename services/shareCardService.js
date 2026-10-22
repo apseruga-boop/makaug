@@ -6,6 +6,7 @@ const sharp = require('sharp');
 const { Resvg } = require('@resvg/resvg-js');
 const { compactUgx } = require('../utils/compactUgx');
 const { realPhotoRejection } = require('../utils/realListingPhoto');
+const { composeAgentBio } = require('./agentPublicProfileService');
 
 const ROOT = path.join(__dirname, '..');
 const WIDTH = 1200;
@@ -53,7 +54,7 @@ const CATEGORIES = Object.freeze({
     title: 'Short stays',
     subtitle: 'Stays by the night',
     alt: 'Short stays on makaug',
-    photos: ['rental']
+    photos: ['hotel']
   },
   students: {
     title: 'Student rooms',
@@ -253,6 +254,57 @@ function clip(value, max) {
   return `${text.slice(0, Math.max(0, max - 1)).trim()}…`;
 }
 
+const bioTemplateCache = new Map();
+
+function bioTemplates(lang) {
+  const code = normalizeShareLang(lang);
+  if (code === 'en') return null;
+  if (bioTemplateCache.has(code)) return bioTemplateCache.get(code);
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(ROOT, 'assets', 'i18n', `site-${code}.json`), 'utf8'));
+    bioTemplateCache.set(code, raw.templates || null);
+  } catch (_error) {
+    bioTemplateCache.set(code, null);
+  }
+  return bioTemplateCache.get(code);
+}
+
+function shareCardBioText(agent = {}, lang) {
+  const english = String(agent.bio || agent.bioText || '').replace(/\s+/g, ' ').trim();
+  const source = agent.bioSource || agent.bio_source || '';
+  const parts = agent.bioParts || agent.bio_parts || null;
+  if (source === 'agent' || normalizeShareLang(lang) === 'en' || !Array.isArray(parts) || !parts.length) return english;
+  return composeAgentBio(parts, bioTemplates(lang)) || english;
+}
+
+function ellipsizeShareLines(value, perLine, lines) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  const width = Math.max(8, Number(perLine) || 58);
+  const limit = Math.max(1, Number(lines) || 2);
+  if (!text) return [];
+  const words = text.split(' ');
+  const result = [];
+  let index = 0;
+  while (index < words.length && result.length < limit) {
+    let line = '';
+    while (index < words.length) {
+      const next = line ? `${line} ${words[index]}` : words[index];
+      if (next.length > width && line) break;
+      line = next.length > width ? next.slice(0, width) : next;
+      index += 1;
+      if (line.length >= width) break;
+    }
+    result.push(line);
+  }
+  if (index < words.length && result.length) {
+    const last = result.length - 1;
+    const trimmed = result[last].replace(/[,:;.\s]+$/g, '').replace(/\s+\S*$/, '');
+    const room = Math.max(1, width - 1);
+    result[last] = `${(trimmed || result[last]).slice(0, room).replace(/\s+\S*$/, '').replace(/[,:;.\s]+$/g, '')}…`;
+  }
+  return result.filter(Boolean);
+}
+
 function categoryForListing(listing = {}) {
   const type = String(listing.listing_type || listing.listingType || '').toLowerCase();
   if (type === 'student' || type === 'students') return 'students';
@@ -431,12 +483,12 @@ async function agentSvg(agent, lang) {
   const family = fontFamily(lang);
   const name = clip(agent.name || 'Property agent', 32);
   const districts = clip(agent.districts || '', 52);
-  const count = Math.max(0, Number(agent.liveCount) || 0);
-  const countLabel = `${count} ${shareCardText(lang, count === 1 ? 'Live listing' : 'Live listings')}`;
   const range = formatPriceRange(agent.minPrice, agent.maxPrice);
   const rangeLabel = range
     ? `${shareCardText(lang, 'Price range')} ${range}`
     : shareCardText(lang, 'Price on request');
+  const perLine = family.startsWith('Noto') ? 42 : 58;
+  const bioLines = ellipsizeShareLines(shareCardBioText(agent, lang), perLine, 2);
   const logo = await logoDataUri(96);
   let face = '';
   if (agent.photo) {
@@ -452,10 +504,14 @@ async function agentSvg(agent, lang) {
       ${textEl(218, 310, initials(agent.name), { size: 72, weight: 700, anchor: 'middle', family })}`;
   }
   const verified = agent.verified
-    ? `<circle cx="430" cy="356" r="16" fill="#15803d"/>
-       <path d="M421 356 l6 6 l12-14" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-       ${textEl(456, 363, shareCardText(lang, 'Verified'), { size: 22, weight: 700, fill: '#15803d', family })}`
+    ? `<circle cx="430" cy="268" r="16" fill="#15803d"/>
+       <path d="M421 268 l6 6 l12-14" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+       ${textEl(456, 275, shareCardText(lang, 'Verified'), { size: 22, weight: 700, fill: '#15803d', family })}`
     : '';
+  const bio = bioLines.map((line, index) => (
+    textEl(430, 368 + index * 32, line, { size: 20, weight: 500, fill: '#3f6212', family })
+  )).join('\n');
+  const rangeWidth = Math.min(660, Math.max(280, Math.round(rangeLabel.length * (family.startsWith('Noto') ? 13 : 11.5) + 40)));
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   <rect width="${WIDTH}" height="${HEIGHT}" fill="#14532d"/>
@@ -463,14 +519,13 @@ async function agentSvg(agent, lang) {
   <circle cx="218" cy="294" r="148" fill="#dcfce7"/>
   ${face}
   <image href="${logo}" x="1008" y="64" width="72" height="72"/>
-  ${textEl(430, 250, name, { size: name.length > 22 ? 40 : 52, weight: 700, fill: '#14532d', family })}
+  ${textEl(430, 210, name, { size: name.length > 22 ? 40 : 48, weight: 700, fill: '#14532d', family })}
   ${verified}
-  ${textEl(430, 420, districts || shareCardText(lang, 'Agents across Uganda'), { size: 24, weight: 500, fill: '#3f6212', family })}
-  <rect x="430" y="450" width="300" height="64" rx="16" fill="#f0fdf4"/>
-  <rect x="746" y="450" width="330" height="64" rx="16" fill="#f0fdf4"/>
-  ${textEl(450, 490, clip(countLabel, 24), { size: 20, weight: 700, fill: '#14532d', family })}
-  ${textEl(766, 490, clip(rangeLabel, 28), { size: 20, weight: 700, fill: '#14532d', family })}
-  ${textEl(430, 556, shareCardText(lang, 'View profile on makaug.com'), { size: 22, weight: 700, fill: '#15803d', family })}
+  ${textEl(430, 324, districts || shareCardText(lang, 'Agents across Uganda'), { size: 24, weight: 600, fill: '#14532d', family })}
+  ${bio}
+  <rect x="430" y="448" width="${rangeWidth}" height="52" rx="16" fill="#f0fdf4"/>
+  ${textEl(450, 481, clip(rangeLabel, 42), { size: 20, weight: 700, fill: '#14532d', family })}
+  ${textEl(430, 548, shareCardText(lang, 'View profile on makaug.com'), { size: 22, weight: 700, fill: '#15803d', family })}
 </svg>`;
 }
 
@@ -564,5 +619,7 @@ module.exports = {
   usableAgentPhoto,
   formatSharePrice,
   formatPriceRange,
+  shareCardBioText,
+  ellipsizeShareLines,
   renderShareCard
 };
