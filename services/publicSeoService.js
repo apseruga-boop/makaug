@@ -647,7 +647,7 @@ function categoryPageSeoMeta(pathname = '/', snapshot = null, baseUrl = PUBLIC_S
     title,
     description,
     canonical: `${String(baseUrl || PUBLIC_SITE_URL).replace(/\/+$/, '')}${location ? `${config.route}/${canonicalLocationRouteSlug(location)}` : config.route}`,
-    image: `${String(baseUrl || PUBLIC_SITE_URL).replace(/\/+$/, '')}${config.image}`
+    image: `${String(baseUrl || PUBLIC_SITE_URL).replace(/\/+$/, '')}/og/category/${key}.jpg`
   };
 }
 
