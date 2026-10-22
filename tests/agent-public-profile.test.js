@@ -169,7 +169,15 @@ test('the API, page meta and profile page use the summary; internal reference nu
   assert.match(server, /agentPublicProfile\.agentSummaryDescription\(publicSummary, name\)/);
   assert.match(server, /areaServed: publicSummary\?\.districts\?\.length/);
   assert.match(app, /brokerAboutParagraphs\(b\)\.map/);
-  assert.match(app, /\$\{brokerAreasCoveredHtml\(b\)\}/);
-  assert.match(app, /const publicLicence = isInternalAgentReference\(b\.licence\) \? "" :/);
+  const profileStart = app.indexOf('async function openBrokerProfile(id)');
+  const profileEnd = app.indexOf('function applyBrokerFilters()', profileStart);
+  const profile = app.slice(profileStart, profileEnd);
+  assert.ok(profileStart > 0 && profileEnd > profileStart);
+  assert.match(profile, /const areaCounts = agentProfileAreaCounts\(list, b\)/);
+  assert.match(profile, /<span>Areas covered<\/span>/);
+  assert.match(profile, /agent-profile-chip">\$\{adminEscape\(name\)\} <span>\(\$\{count\}\)<\/span>/);
+  assert.match(profile, /const agentNumber = String\(b\.makaug_agent_number \|\| ""\)\.trim\(\)/);
+  assert.match(profile, /<span>Agent number<\/span>/);
+  assert.doesNotMatch(profile, /\$\{[^}]*\blicence\b/);
   assert.match(app, /\^\(DIRECT\|EMPLOYEE-INTAKE\|STAFF-REASSIGN\|PENDING\|/);
 });
