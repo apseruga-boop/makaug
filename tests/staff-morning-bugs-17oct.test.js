@@ -142,7 +142,9 @@ test('a public property page uses the listing cover as an absolute og:image', ()
   }, true), cover);
   const html = '<html><head></head><body><div id="detail-content"></div><footer></footer></body></html>';
   const rendered = renderPropertySeoHtml(html, listing, { baseUrl: 'https://makaug.com' });
-  assert.equal(rendered.meta.image, cover);
+  assert.equal(rendered.meta.image, `https://makaug.com/og/property/${row.id}.jpg`);
+  assert.match(rendered.html, new RegExp(cover.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.doesNotMatch(rendered.meta.image, /house-ads-v3\/land\.webp/);
   assert.match(rendered.meta.image, /^https:\/\//);
+  assert.equal(rendered.meta.imageAlt.includes('Found online') || rendered.meta.imageAlt.includes('Verified'), true);
 });

@@ -98,6 +98,7 @@
     "./shared-country-core": "./packages/shared-country-core/index.js"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
