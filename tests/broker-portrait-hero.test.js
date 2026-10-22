@@ -39,12 +39,13 @@ assert(pageHtml.includes('broker-card-count-short'), 'the mobile count reads as 
 assert(pageHtml.includes('broker-card-fallback'), 'a failed photo leaves initials instead of a blank circle');
 assert(frontend.includes('featuredBrokerLimit'), 'the homepage featured row stays a full row of 3 or 6');
 assert(pageHtml.includes('-webkit-line-clamp: 3'), 'desktop bios stay at two to three lines');
-assert(profile.includes('h-28 md:h-36 bg-gradient-to-r') && profile.includes('w-36 h-36 md:w-44 md:h-44 rounded-full'), 'broker profile should use a LinkedIn-style cover and a contained portrait');
-assert(profile.includes('flex flex-col items-center text-center'), 'broker profile identity should be centred symmetrically below the cover');
+assert(profile.includes('agent-profile-identity') && profile.includes('agent-profile-avatar aspect-square rounded-full object-cover object-center'), 'broker profile should use a compact identity card and a contained portrait');
+assert(!profile.includes('h-28 md:h-36 bg-gradient-to-r') && !profile.includes('flex flex-col items-center text-center'), 'broker profile should not use the tall centred banner');
 assert(profile.includes('aspect-square') && profile.includes('rounded-full object-cover object-center'), 'every broker portrait should use a consistent square-to-circle crop');
-assert(profile.includes('items-center justify-center gap-x-4') && profile.includes('brokerIconActionsHtml(b, { large: true, profile: true })'), 'broker metadata and actions should remain centred below the portrait');
+assert(profile.includes('agent-profile-actions') && profile.includes('agentProfileContactButtons(b)'), 'broker profile should label WhatsApp, Call and Share on the identity card');
 assert(!profile.includes('w-64 h-64') && !profile.includes('lg:grid-cols-[300px,1fr]'), 'broker profile must not stretch the portrait into the old oversized photo block');
-assert(profile.includes('aria-labelledby="broker-about-heading"') && profile.includes('Profile overview'), 'broker profile should clearly explain who the agent is');
+assert(profile.includes('aria-labelledby="broker-about-heading"') && profile.includes('agent-profile-contact'), 'broker profile should explain who the agent is and keep a contact column');
+assert(!profile.includes('Experienced Broker'), 'the public profile must not invent an experience line');
 assert(frontend.includes('function publicBrokerBio(broker = {})'), 'public broker biographies should use a shared cleanup policy');
 // The About section now renders brokerAboutParagraphs(b): the agent's own
 // bio (cleaned by publicBrokerBio as before) plus the listing write-up.
