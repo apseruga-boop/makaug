@@ -68,7 +68,12 @@ assert(server.includes('patchPublicPageSeoMeta'), 'category and detail metadata 
 assert(server.includes("'makaug:listing-count'"), 'area HTML must expose the authoritative server count to the client');
 assert(fs.readFileSync(path.join(root, 'services', 'publicSeoService.js'), 'utf8').includes("publicVisibleInventoryWhere('properties')"), 'SEO counts and sitemap must use the authoritative public predicate');
 assert(publicSeoRenderer.includes('RealEstateListing'), 'detail pages should expose listing structured data');
-assert(!server.includes('/assets/og-cover.jpg'), 'SEO metadata must not reference a missing fallback image');
+const ogCoverPath = path.join(root, 'assets', 'og-cover.jpg');
+const ogCover = fs.readFileSync(ogCoverPath);
+assert.equal((server.match(/\/assets\/og-cover\.jpg/g) || []).length, 2, 'about and fallback SEO images must use the shared cover');
+assert(html.includes('https://makaug.com/assets/og-cover.jpg'), 'the public shell og:image and twitter:image must use the shared cover');
+assert(ogCover.length > 0 && ogCover.length < 300 * 1024, 'the shared cover must exist and stay under 300 KB');
+assert.equal(ogCover.subarray(0, 3).toString('hex'), 'ffd8ff', 'the shared cover must be a JPEG');
 assert(app.includes('Look at this on makaug.com:'), 'property share copy must use the launch wording');
 assert(app.includes('utm_campaign", "property_share'), 'property shares must be attributed');
 assert(app.includes('stripTransactionFromPropertyType'), 'duplicate sale/rent suffixes must be removed');
