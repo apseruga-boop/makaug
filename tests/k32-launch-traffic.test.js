@@ -54,7 +54,7 @@ assert(areaMeta, 'area metadata should resolve');
 assert.equal(areaMeta.count, 4);
 assert(areaMeta.title.includes('Ntinda, Kampala — 4 Listings'), 'area title should include location and honest count');
 assert.equal(areaMeta.canonical, 'https://makaug.com/for-sale/ntinda-kampala');
-assert.equal(areaMeta.image, 'https://makaug.com/assets/house-ads-v3/sale.webp');
+assert.equal(areaMeta.image, 'https://makaug.com/og/category/sale.jpg');
 
 const sitemap = sitemapEntries(snapshot);
 assert(sitemap.some((entry) => entry.loc === 'https://makaug.com/for-sale/ntinda-kampala'));

@@ -113,6 +113,13 @@ const {
   renderPropertySeoHtml,
   renderHomepageSeoHtml
 } = require('./services/publicSeoRenderService');
+const { createOgShareRouter } = require('./routes/ogShare');
+const {
+  shareImagePath,
+  shareCardAlt,
+  shareCardKeyForPath,
+  normalizeShareLang
+} = require('./services/shareCardService');
 const {
   SEO_FACET_MIN_LISTINGS,
   resolvePublicSeoLanding,
@@ -1355,6 +1362,11 @@ function patchPublicPageSeoMeta(html, meta = {}) {
   patched = patchMetaTag(patched, 'og:description', meta.description);
   patched = patchMetaTag(patched, 'og:url', meta.canonical);
   patched = patchMetaTag(patched, 'og:image', meta.image);
+  if (meta.image) {
+    patched = patchMetaTag(patched, 'og:image:width', String(meta.imageWidth || 1200));
+    patched = patchMetaTag(patched, 'og:image:height', String(meta.imageHeight || 630));
+    if (meta.imageAlt) patched = patchMetaTag(patched, 'og:image:alt', meta.imageAlt);
+  }
   patched = patchMetaTag(patched, 'twitter:title', meta.title);
   patched = patchMetaTag(patched, 'twitter:description', meta.description);
   patched = patchMetaTag(patched, 'twitter:image', meta.image);
@@ -1364,6 +1376,13 @@ function patchPublicPageSeoMeta(html, meta = {}) {
 
 function patchListingOpenGraphMeta(html, meta = {}) {
   return patchPublicPageSeoMeta(html, meta);
+}
+
+function requestShareLang(req) {
+  const queryLang = req && req.query ? req.query.lang : '';
+  if (queryLang) return normalizeShareLang(queryLang);
+  const cookies = parseCookies(req && req.headers ? req.headers.cookie : '');
+  return normalizeShareLang(cookies.makaug_lang || 'en');
 }
 
 const FRANCIS_ISABIRYE_AGENT_ID = '5674f6cb-37a0-4e1e-904f-06e03ec401ab';
@@ -1432,7 +1451,7 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
       ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v3.png')
       : isApprovedFrancisShare
         ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v2.png')
-        : absolutePublicUrl(row.profile_photo_url || '/assets/house-ads-v3/agents.webp');
+        : absolutePublicUrl(shareImagePath('agent', row.id, options.lang));
   const title = isBrandFrancisPreview
     ? `${name} | Uganda property agent on MakaUG`
     : isPremiumFrancisPreview
@@ -1447,6 +1466,7 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
     title,
     description: shareDescription,
     image,
+    imageAlt: shareCardAlt('agent', options.lang, { agentName: name }),
     canonical: absolutePublicUrl(profilePath),
     ogType: 'profile',
     structuredData: {
@@ -1551,7 +1571,15 @@ app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config
       res.locals.publicHtmlDegraded = true; // never share-cache a degraded page
       logger.warn('Category SEO is continuing without an inventory count', { path: req.path, message: error.message });
     }
+    const categoryLang = requestShareLang(req);
     let meta = categoryPageSeoMeta(req.path, snapshot, absolutePublicUrl('/'));
+    if (meta) {
+      meta = {
+        ...meta,
+        image: absolutePublicUrl(shareImagePath(meta.key, null, categoryLang)),
+        imageAlt: shareCardAlt(meta.key, categoryLang)
+      };
+    }
     if (req.params.locationSlug && !meta?.location) {
       // /to-rent/kampala → 301 /to-rent/kampala-kampala when the bare slug is a
       // district or exactly one place; otherwise a real 404.
@@ -1710,6 +1738,8 @@ app.get('/assets/makaug-app.js', (req, res, next) => {
 
 app.use('/pay', require('./routes/pay').pages);
 
+app.use('/og', createOgShareRouter({ db }));
+
 app.get('/property/:id', async (req, res, next) => {
   try {
     res.set('X-makaug-Public-Sanitized', '1');
@@ -1726,8 +1756,16 @@ app.get('/property/:id', async (req, res, next) => {
       return res.status(404).send('Property not found');
     }
     const renderedSeo = renderPropertySeoHtml(html, listing, { snapshot: detailSnapshot, baseUrl: absolutePublicUrl('/') });
+    const propertyLang = requestShareLang(req);
     html = patchListingOpenGraphMeta(renderedSeo.html, {
       ...renderedSeo.meta,
+      image: absolutePublicUrl(shareImagePath('property', listing.id, propertyLang)),
+      imageAlt: shareCardAlt('property', propertyLang, {
+        title: listing.title,
+        area: listing.area,
+        district: listing.district,
+        foundOnline: Boolean(listing.found_online_notice)
+      }),
       structuredData: renderedSeo.structuredData
     });
     if (listing.thin || listing.price_implausible) {
@@ -1773,7 +1811,8 @@ app.get(['/', '/index.html'], async (req, res, next) => {
         ? "Find reviewed homes for sale, rentals, land, commercial property and student accommodation across South Africa on seshaikhaya.com."
         : "Find houses for rent, homes for sale, land, commercial property and student accommodation across Uganda on makaug.com.",
       canonical: absolutePublicUrl('/'),
-      image: absolutePublicUrl('/assets/house-ads-v3/home-hero.webp'),
+      image: absolutePublicUrl(shareImagePath('home', null, requestShareLang(req))),
+      imageAlt: shareCardAlt('home', requestShareLang(req)),
       structuredData: renderedSeo.structuredData
     });
     res.set('X-makaug-Homepage-SSR', String(listings.length));
@@ -1820,7 +1859,8 @@ app.get('/short-term', async (req, res, next) => {
       title: SHORT_TERM_PAGE_TITLE,
       description: SHORT_TERM_PAGE_DESCRIPTION,
       canonical: absolutePublicUrl('/short-term'),
-      image: absolutePublicUrl('/assets/house-ads-v3/rent.webp'),
+      image: absolutePublicUrl(shareImagePath('short-stay', null, requestShareLang(req))),
+      imageAlt: shareCardAlt('short-stay', requestShareLang(req)),
       count: total,
       structuredData: rendered.structuredData
     });
@@ -1842,7 +1882,8 @@ app.get('/short-term/list-your-place', (req, res, next) => {
       title: 'List Your Short Stay on makaug | UGX 50,000 for 3 Months',
       description: 'Put your Uganda short stay in front of guests for a flat UGX 50,000 for three months. No commission on any booking. Guests contact you directly.',
       canonical: absolutePublicUrl('/short-term/list-your-place'),
-      image: absolutePublicUrl('/assets/house-ads-v3/rent.webp')
+      image: absolutePublicUrl(shareImagePath('short-stay', null, requestShareLang(req))),
+      imageAlt: shareCardAlt('short-stay', requestShareLang(req))
     });
     res.set('X-makaug-Short-Term-Page', 'list-your-place');
     return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
@@ -1858,7 +1899,8 @@ function sendShortTermShell(req, res, { title, description, canonical, page }) {
     title,
     description,
     canonical,
-    image: absolutePublicUrl('/assets/house-ads-v3/rent.webp')
+    image: absolutePublicUrl(shareImagePath('short-stay', null, requestShareLang(req))),
+    imageAlt: shareCardAlt('short-stay', requestShareLang(req))
   });
   res.set('X-makaug-Short-Term-Page', page);
   return sendTextResponse(req, res, html, { cacheControl: 'private, no-store' });
@@ -1916,7 +1958,8 @@ app.get('/short-term/hotel/:slug', (req, res, next) => {
       title: 'Compare hotel prices | Short stays | makaug.com',
       description: 'Compare prices for this hotel on partner sites. You book and pay on the partner site, which handles the booking.',
       canonical: absolutePublicUrl(`/short-term/hotel/${encodeURIComponent(slug)}`),
-      image: absolutePublicUrl('/assets/house-ads-v3/rent.webp')
+      image: absolutePublicUrl(shareImagePath('short-stay', null, requestShareLang(req))),
+      imageAlt: shareCardAlt('short-stay', requestShareLang(req))
     });
     html = patchMetaTag(html, 'robots', 'noindex,follow');
     res.set('X-Robots-Tag', 'noindex, follow');
@@ -1957,7 +2000,8 @@ app.get('/short-term/:slug', async (req, res, next) => {
       title: `${listing.title} | Short Stay in ${listing.area}, Uganda | makaug.com`,
       description: `${listing.place_type_label} in ${listing.area}, ${listing.district}. Sleeps ${listing.max_guests}. From ${listing.nightly_display} per night. Contact the host directly on makaug.`,
       canonical: absolutePublicUrl(`/short-term/${listing.slug}`),
-      image: absolutePublicUrl(listing.primary_image || '/assets/house-ads-v3/rent.webp'),
+      image: absolutePublicUrl(shareImagePath('short-stay', null, requestShareLang(req))),
+      imageAlt: shareCardAlt('short-stay', requestShareLang(req)),
       structuredData: vacationRentalStructuredData(listing, absolutePublicUrl('/'))
     });
 
@@ -1982,7 +2026,7 @@ app.get('/agents/:id', async (req, res, next) => {
       // a profile that isn't public is a 404 (it used to be the homepage).
       let meta = null;
       try {
-        meta = await loadPublicAgentOpenGraphMeta(req.params.id, {});
+        meta = await loadPublicAgentOpenGraphMeta(req.params.id, { lang: requestShareLang(req) });
       } catch (error) {
         logger.warn('Agent profile SEO is continuing without its meta', { message: error.message });
         meta = { canonical: absolutePublicUrl(`/agents/${encodeURIComponent(req.params.id)}`) };
@@ -1993,7 +2037,8 @@ app.get('/agents/:id', async (req, res, next) => {
     if (isSupportedPreview || isApprovedFrancisProfile) {
       const meta = await loadPublicAgentOpenGraphMeta(req.params.id, {
         previewVersion,
-        approvedShare: isApprovedFrancisProfile && !isSupportedPreview
+        approvedShare: isApprovedFrancisProfile && !isSupportedPreview,
+        lang: requestShareLang(req)
       });
       if (meta) {
         html = patchPublicPageSeoMeta(html, meta);
@@ -2229,6 +2274,7 @@ async function sendPublicIndex(req, res, next) {
         description: 'Everything makaug offers: listings from UGX 20,000/month (first week free), agent plans, off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
         canonical: absolutePublicUrl('/about'),
         image: absolutePublicUrl('/assets/og-cover.jpg'),
+        imageAlt: shareCardAlt('home', requestShareLang(req)),
         structuredData: { '@context': 'https://schema.org', '@type': 'AboutPage', name: 'About makaug', url: absolutePublicUrl('/about') }
       });
     } else if (/^\/off-plan\/overseas\/kenya\/?$/i.test(req.path)) {
@@ -2272,11 +2318,16 @@ async function sendPublicIndex(req, res, next) {
       const pageSeo = ACTIVE_COUNTRY_CODE === 'UG' ? publicPageSeoFor(req.path, absolutePublicUrl('/')) : null;
       const selfPath = (String(req.path || '/').replace(/\/+$/, '') || '/').toLowerCase();
       if (pageSeo && pageSeo.title) {
+        const pageLang = requestShareLang(req);
+        const cardKey = shareCardKeyForPath(req.path);
         html = patchPublicPageSeoMeta(html, {
           title: pageSeo.title,
           description: pageSeo.description,
           canonical: pageSeo.canonical,
-          image: absolutePublicUrl('/assets/og-cover.jpg')
+          image: cardKey
+            ? absolutePublicUrl(shareImagePath(cardKey, null, pageLang))
+            : absolutePublicUrl('/assets/og-cover.jpg'),
+          imageAlt: shareCardAlt(cardKey || 'home', pageLang)
         });
         html = patchMetaTag(html, 'robots', pageSeo.robots);
         if (pageSeo.robots.startsWith('noindex')) res.set('X-Robots-Tag', 'noindex, follow');

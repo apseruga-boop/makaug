@@ -1,0 +1,86 @@
+[
+  {
+    "key": "house",
+    "title": "File:Semi-detached houses, Neville Road, W5 - geograph.org.uk - 5700566.jpg",
+    "author": "Jim Osley",
+    "license": "CC BY-SA 2.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/2.0",
+    "source": "Semi-detached houses, Neville Road, W5",
+    "page": "https://commons.wikimedia.org/wiki/File:Semi-detached_houses,_Neville_Road,_W5_-_geograph.org.uk_-_5700566.jpg",
+    "attribution": "Semi-detached houses, Neville Road, W5 by Jim Osley, via Geograph Britain and Ireland / Wikimedia Commons",
+    "file": "assets/og/photos/house.jpg",
+    "bytes": 128141
+  },
+  {
+    "key": "apartment",
+    "title": "File:Apartment blocks, Hillcrest Estate - geograph.org.uk - 5460208.jpg",
+    "author": "Jim Osley",
+    "license": "CC BY-SA 2.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/2.0",
+    "source": "Apartment blocks, Hillcrest Estate",
+    "page": "https://commons.wikimedia.org/wiki/File:Apartment_blocks,_Hillcrest_Estate_-_geograph.org.uk_-_5460208.jpg",
+    "attribution": "Apartment blocks, Hillcrest Estate by Jim Osley, via Wikimedia Commons",
+    "file": "assets/og/photos/apartment.jpg",
+    "bytes": 159337
+  },
+  {
+    "key": "land",
+    "title": "File:An empty plot of land in GRA Wukari.jpg",
+    "author": "Kambai Akau",
+    "license": "CC BY-SA 4.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "An empty plot of land in GRA Wukari",
+    "page": "https://commons.wikimedia.org/wiki/File:An_empty_plot_of_land_in_GRA_Wukari.jpg",
+    "attribution": "An empty plot of land in GRA Wukari by Kambai Akau, via Wikimedia Commons",
+    "file": "assets/og/photos/land.jpg",
+    "bytes": 71071
+  },
+  {
+    "key": "rental",
+    "title": "File:Modern Bungalow - geograph.org.uk - 5089868.jpg",
+    "author": "Bob Harvey",
+    "license": "CC BY-SA 2.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/2.0",
+    "source": "Modern Bungalow",
+    "page": "https://commons.wikimedia.org/wiki/File:Modern_Bungalow_-_geograph.org.uk_-_5089868.jpg",
+    "attribution": "Modern bungalow by Bob Harvey, via Geograph Britain and Ireland / Wikimedia Commons",
+    "file": "assets/og/photos/rental.jpg",
+    "bytes": 113268
+  },
+  {
+    "key": "office",
+    "title": "File:Marcello Rodriguez Pons -Siva Office Building- Exterior View.jpg",
+    "author": "Marcello Rodríguez Pons",
+    "license": "CC BY-SA 4.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "Siva Office Building, New York",
+    "page": "https://commons.wikimedia.org/wiki/File:Marcello_Rodriguez_Pons_-Siva_Office_Building-_Exterior_View.jpg",
+    "attribution": "Siva Office Building by Marcello Rodríguez Pons, via Wikimedia Commons",
+    "file": "assets/og/photos/office.jpg",
+    "bytes": 80588
+  },
+  {
+    "key": "shop",
+    "title": "File:Storefront of Cafélia, Avenida de Roma, Lisbon, Portugal julesvernex2.jpg",
+    "author": "Jules Verne Times Two",
+    "license": "CC BY-SA 4.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "Storefront of Cafélia, Avenida de Roma, Lisbon",
+    "page": "https://commons.wikimedia.org/wiki/File:Storefront_of_Caf%C3%A9lia,_Avenida_de_Roma,_Lisbon,_Portugal_julesvernex2.jpg",
+    "attribution": "Storefront of Cafélia by Jules Verne Times Two, via Wikimedia Commons",
+    "file": "assets/og/photos/shop.jpg",
+    "bytes": 96615
+  },
+  {
+    "key": "warehouse",
+    "title": "File:Cold storage warehouse in Denver, Colorado.jpg",
+    "author": "Pelajanela",
+    "license": "CC BY-SA 4.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "Cold storage warehouse at 18th & Wynkoop Street, Denver",
+    "page": "https://commons.wikimedia.org/wiki/File:Cold_storage_warehouse_in_Denver,_Colorado.jpg",
+    "attribution": "Cold storage warehouse in Denver by Pelajanela, via Wikimedia Commons",
+    "file": "assets/og/photos/warehouse.jpg",
+    "bytes": 94178
+  }
+]
