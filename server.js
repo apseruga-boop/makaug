@@ -1359,6 +1359,7 @@ function patchPublicPageSeoMeta(html, meta = {}) {
   patched = patchMetaTag(patched, 'twitter:description', meta.description);
   patched = patchMetaTag(patched, 'twitter:image', meta.image);
   patched = patchMetaTag(patched, 'twitter:card', 'summary_large_image');
+  patched = patchMetaTag(patched, 'twitter:site', '@makauganda');
   return patchStructuredData(patched, meta.structuredData);
 }
 
@@ -2134,6 +2135,7 @@ function renderPublicNotFoundPage() {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
+  <meta name="twitter:site" content="@makauganda">
   <title>Page not found | ${brand}</title>
   <link rel="icon" href="/favicon.ico">
   <style>
