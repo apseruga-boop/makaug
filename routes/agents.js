@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
 const { asArray, cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
+const { createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
+const { createLead } = require('../services/leadService');
 const { logNotification } = require('../services/notificationLogService');
 const { loadAgentPublicSummary, loadAgentCardBios } = require('../services/agentPublicProfileService');
 const { inferProfilePhotoKind } = require('../services/agentProfileImageService');
@@ -11,6 +13,8 @@ const { ensurePostVerificationRecords } = require('../services/authFlowService')
 const {
   DIRECT_AGENT_PROFILE_MARKER,
   addPublicAgentEligibilityFilters,
+  addPublicAgentLaunchTestFilter,
+  addPublicAgentSelfRegistrationFilter,
   verifiedByMakaugSql
 } = require('../services/publicAgentEligibilityService');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
@@ -807,6 +811,82 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// A profile request is an enquiry to the agent, not a listing enquiry.
+// Same spam controls as the other public lead forms. Source stays agent_profile.
+const agentProfileEnquiryLimiter = createLeadFormLimiter();
+
+function buildAgentProfileEnquiry(agent, body = {}) {
+  const contactName = cleanText(body.contact_name || body.name);
+  const contactPhone = cleanText(body.contact_phone || body.phone);
+  const message = cleanText(body.message);
+  const errors = [];
+  if (!contactName) errors.push('contact_name is required');
+  if (!contactPhone) errors.push('contact_phone is required');
+  else if (!isValidPhone(contactPhone)) errors.push('contact_phone is invalid');
+  if (errors.length || !agent?.id) return { errors };
+  return {
+    errors,
+    input: {
+      agentId: agent.id,
+      buyerRef: contactPhone,
+      channel: 'web',
+      contact: {
+        name: contactName,
+        phone: contactPhone,
+        preferredContactChannel: 'phone',
+        roleType: 'property_seeker'
+      },
+      source: 'agent_profile',
+      leadType: 'enquiry',
+      explicitContact: true,
+      message: message || `Request from the agent profile of ${cleanText(agent.full_name) || 'an agent'}.`,
+      activityType: 'agent_profile_enquiry',
+      visitorId: cleanText(body.visitor_id).slice(0, 80) || null,
+      metadata: {
+        agent_id: agent.id,
+        agent_name: cleanText(agent.full_name) || null
+      }
+    }
+  };
+}
+
+async function findPublicAgentForEnquiry(agentId) {
+  const filters = ['a.id = $1'];
+  const values = [agentId];
+  addPublicAgentLaunchTestFilter(filters, values, 'a');
+  addPublicAgentSelfRegistrationFilter(filters, 'a');
+  filters.push(`LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')`);
+  const result = await db.query(
+    `SELECT a.id, a.full_name
+     FROM agents a
+     WHERE ${filters.join('\n       AND ')}
+     LIMIT 1`,
+    values
+  );
+  return result.rows[0] || null;
+}
+
+router.post('/:id/enquiries', agentProfileEnquiryLimiter, leadHoneypot, async (req, res, next) => {
+  try {
+    const agent = await findPublicAgentForEnquiry(req.params.id);
+    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    const built = buildAgentProfileEnquiry(agent, req.body || {});
+    if (built.errors.length) {
+      return res.status(400).json({ ok: false, error: 'Validation failed', details: built.errors });
+    }
+    const lead = await createLead(db, built.input);
+    return res.status(201).json({
+      ok: true,
+      data: {
+        lead_id: lead?.id || null,
+        repeat: Boolean(lead?._isRepeat)
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/:id', async (req, res, next) => {
   try {
     const agent = await db.query(
@@ -831,6 +911,7 @@ router.get('/:id', async (req, res, next) => {
         a.specializations,
         a.experience_years,
         a.makaug_agent_number,
+        a.created_at,
         a.verification_reason,
         ${verifiedByMakaugSql('a')} AS verified_by_makaug,
         ${knownAgentSocialSelect('a')},
@@ -1073,3 +1154,4 @@ router.post('/register', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.buildAgentProfileEnquiry = buildAgentProfileEnquiry;
