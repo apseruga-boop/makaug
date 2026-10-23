@@ -9908,6 +9908,27 @@ async function handleEmployeeWhatsappIntake({
       && pendingStoredMediaBeforeMessage.length > 0
       && employeeCaptionLikelySameProperty(pendingCaptionBeforeMessage, caption, data);
 
+    // 23 Oct 2026: Brian's Kiwatule building was saved at 12:57. At 15:26 he sent
+    // four photos and three videos of a house in Namugongo, with the caption
+    // following two minutes later. The Kiwatule property was still "current", so
+    // all seven files went onto it — a commercial building showing a house, and
+    // the Namugongo listing left with one photo. Media with no caption that turns
+    // up long after the last thing the agent sent is the start of a new property,
+    // not more of the old one: hold it until its caption arrives.
+    const nowMs = Date.now();
+    const previousActivityMs = Number(data.last_inbound_ms || 0)
+      || Date.parse(data.property_media_meta?.[data.current_property_id]?.at || '') || 0;
+    if (
+      !caption
+      && data.current_property_id
+      && data.whatsapp_agent_self_intake === true
+      && previousActivityMs
+      && nowMs - previousActivityMs > EMPLOYEE_STALE_CURRENT_PROPERTY_MS
+    ) {
+      data.current_property_id = null;
+    }
+    data.last_inbound_ms = nowMs;
+
     // A captionless photo in the middle of a forwarded burst: hold it, do not guess.
     // A photo that is part of an album (media_count > 1) still follows its
     // captioned first photo, as WhatsApp sends albums in order.
@@ -12427,6 +12448,8 @@ function employeeMediaFamily(item = {}) {
  * left on the closest match and say so, because a listing with all of its
  * photos, checked by a moderator, beats photos thrown away.
  */
+// Captionless media this long after the agent last wrote starts a new property.
+const EMPLOYEE_STALE_CURRENT_PROPERTY_MS = 20 * 60 * 1000;
 const EMPLOYEE_ORPHAN_MEDIA_WINDOW_MS = 45000;
 async function settleEmployeeOrphanMedia({ phone, data = {}, currentStep = 'employee_property_media', inboundMessageId = '', final = false } = {}) {
   const placed = [];
