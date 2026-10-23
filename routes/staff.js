@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const express = require('express');
 
 const db = require('../config/database');
@@ -221,6 +222,10 @@ const staffFastDashboardCache = new Map();
 const staffFastDashboardRefreshes = new Map();
 const staffFastDashboardRefreshBackoff = new Map();
 const staffDashboardPanelsCache = new Map();
+const previewSignalCache = new Map();
+const PREVIEW_SIGNAL_CACHE_TTL_MS = 60_000;
+const staffDuplicateGroupCache = { at: 0, row: null };
+const STAFF_DUPLICATE_GROUP_CACHE_TTL_MS = 60_000;
 const staffSourceIntakeJobs = new Map();
 
 function activeStaffSourceIntakeJob(type = '') {
@@ -1545,6 +1550,9 @@ function clearStaffFastDashboardCache() {
   staffFastDashboardCache.clear();
   staffFastDashboardRefreshBackoff.clear();
   staffDashboardPanelsCache.clear();
+  previewSignalCache.clear();
+  staffDuplicateGroupCache.at = 0;
+  staffDuplicateGroupCache.row = null;
 }
 // routes/properties.js calls this after a moderation decision.
 router.clearStaffFastDashboardCache = clearStaffFastDashboardCache;
@@ -2149,6 +2157,27 @@ function staffPanelSourceRegistryRows(panelLimit, options = {}) {
   );
 }
 
+// The pending-listing self-join plus md5 photo groups is the heaviest staff
+// read. Cache a successful result for a minute and bound it, so a moderator
+// refreshing the full dashboard does not start that scan on every request.
+async function staffDuplicateGroupSummary() {
+  const now = Date.now();
+  if (staffDuplicateGroupCache.row && now - staffDuplicateGroupCache.at < STAFF_DUPLICATE_GROUP_CACHE_TTL_MS) {
+    return staffDuplicateGroupCache.row;
+  }
+  const row = await safeOne(
+    duplicateGroupsCountSql(activePendingReviewWhere('p')),
+    [],
+    { possible_duplicates: 0 },
+    { timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS, label: 'staff_duplicate_groups' }
+  );
+  if (!row?._fallback_reason) {
+    staffDuplicateGroupCache.at = now;
+    staffDuplicateGroupCache.row = row;
+  }
+  return row;
+}
+
 async function dashboardPayload(req) {
   const staffId = actorId(req);
   const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
@@ -2187,7 +2216,8 @@ async function dashboardPayload(req) {
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND LOWER(COALESCE(p.source, p.listed_via, '')) IN ('website','web'))::int AS website_submitted
        FROM properties p`,
       [],
-      { database_total: 0, staff_visible_total: 0, pending_review: 0, broker_pending_review: 0, source_quality_suppressed_pending: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
+      { database_total: 0, staff_visible_total: 0, pending_review: 0, broker_pending_review: 0, source_quality_suppressed_pending: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 },
+      { timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS, label: 'staff_dashboard_listing_summary' }
     ),
     safeOne(
       `SELECT
@@ -2293,11 +2323,7 @@ async function dashboardPayload(req) {
     staffPanelWhatsappBridgeStatus(),
     staffFastSourceSummary(),
     // C10: groups of pending listings with strong evidence only.
-    safeOne(
-      duplicateGroupsCountSql(activePendingReviewWhere('p')),
-      [],
-      { possible_duplicates: 0 }
-    ),
+    staffDuplicateGroupSummary(),
     staffPanelSourceRegistryRows(panelLimit),
     safeRows(
       `SELECT p.id, p.title, p.area, p.district, p.status, p.updated_at,
@@ -2464,7 +2490,7 @@ async function buildDashboardPanelsPayload(req) {
        ORDER BY created_at DESC
        LIMIT $2`,
       [staffId, panelLimit],
-      panelQueryOptions
+      { ...panelQueryOptions, label: 'staff_panel_recent_activity' }
     ),
     safeRowsResult(
       `WITH panel_candidates AS MATERIALIZED (
@@ -3199,8 +3225,26 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   return { changed_fields: changed, property: updated.rows[0] };
 }
 
+function previewQueryOptions(label) {
+  return { timeoutMs: STAFF_PREVIEW_QUERY_TIMEOUT_MS, label };
+}
+
+function previewImageHashes(images = []) {
+  const hashes = [];
+  const seen = new Set();
+  for (const image of images) {
+    const url = cleanText(image?.url);
+    if (!url) continue;
+    const hash = crypto.createHash('md5').update(url).digest('hex');
+    if (seen.has(hash)) continue;
+    seen.add(hash);
+    hashes.push(hash);
+    if (hashes.length >= 40) break;
+  }
+  return hashes;
+}
+
 async function loadStaffPropertyPreview(propertyId) {
-  const previewQueryOptions = { timeoutMs: STAFF_PREVIEW_QUERY_TIMEOUT_MS };
   const lookup = cleanText(propertyId);
   const lookupUuid = toUuidOrNull(lookup);
   const property = await safeOne(
@@ -3209,20 +3253,29 @@ async function loadStaffPropertyPreview(propertyId) {
       : `SELECT p.* FROM properties p WHERE p.inquiry_reference = $1 LIMIT 1`,
     [lookup],
     null,
-    previewQueryOptions
+    previewQueryOptions('staff_preview_property')
   );
-  if (!property) return null;
-  const [images, duplicateCandidates, events, previousListerListings, reusedImages, idNumberMatches, matchingUsers] = await Promise.all([
-    safeRows(
-      `SELECT id, url, is_primary, sort_order, slot_key, room_label, created_at
-       FROM property_images
-       WHERE property_id = $1
-       ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
-      [property.id],
-      previewQueryOptions
-    ),
-    // C10: strong-evidence candidates only (utils/duplicateEvidence.js).
-    safeRows(DUPLICATE_CANDIDATES_SQL, duplicateCandidateParams(property), previewQueryOptions),
+  if (!property || property._fallback_reason || !property.id) return null;
+  // Photos first. The hash lookup below uses md5(url) = ANY($hashes), which
+  // matches idx_property_images_duplicate_url_lookup. The old join computed
+  // md5() across property_images inside the same Promise.all as the duplicate
+  // sequential scan, and both were cancelled at 900ms.
+  const images = await safeRows(
+    `SELECT id, url, is_primary, sort_order, slot_key, room_label, created_at
+     FROM property_images
+     WHERE property_id = $1
+     ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
+    [property.id],
+    previewQueryOptions('staff_preview_images')
+  );
+  const signalKey = `${property.id}|${property.updated_at || ''}`;
+  const cachedSignals = previewSignalCache.get(signalKey);
+  const signalFresh = !!(cachedSignals && cachedSignals.expires > Date.now());
+  const imageHashes = signalFresh ? [] : previewImageHashes(images);
+  const [duplicateResult, events, previousListerListings, reusedResult, idNumberMatches, matchingUsers] = await Promise.all([
+    signalFresh
+      ? null
+      : safeRowsResult(DUPLICATE_CANDIDATES_SQL, duplicateCandidateParams(property), previewQueryOptions('staff_preview_duplicates')),
     safeRows(
       `SELECT id, actor_id, action, status_from, status_to, reason, notes, created_at
        FROM property_moderation_events
@@ -3230,36 +3283,52 @@ async function loadStaffPropertyPreview(propertyId) {
        ORDER BY created_at DESC
       LIMIT 30`,
       [property.id],
-      previewQueryOptions
+      previewQueryOptions('staff_preview_events')
     ),
     safeRows(
       `SELECT id, title, listing_type, district, area, price, status, created_at
-       FROM properties
-       WHERE id <> $1
-         AND (
-           ($2::text IS NOT NULL AND lister_phone = $2)
-           OR ($3::text IS NOT NULL AND LOWER(COALESCE(lister_email, '')) = LOWER($3))
+       FROM (
+         (
+           SELECT id, title, listing_type, district, area, price, status, created_at
+           FROM properties
+           WHERE id <> $1
+             AND $2::text IS NOT NULL
+             AND lister_phone = $2
+           ORDER BY created_at DESC
+           LIMIT 20
          )
+         UNION ALL
+         (
+           SELECT id, title, listing_type, district, area, price, status, created_at
+           FROM properties
+           WHERE id <> $1
+             AND $3::text IS NOT NULL
+             AND COALESCE(lister_email, '') <> ''
+             AND LOWER(COALESCE(lister_email, '')) = LOWER($3)
+             AND ($2::text IS NULL OR lister_phone IS DISTINCT FROM $2)
+           ORDER BY created_at DESC
+           LIMIT 20
+         )
+       ) previous_lister
        ORDER BY created_at DESC
        LIMIT 20`,
       [property.id, property.lister_phone || null, property.lister_email || null],
-      previewQueryOptions
+      previewQueryOptions('staff_preview_previous_lister')
     ),
-    safeRows(
-      `WITH current_image_hashes AS MATERIALIZED (
-         SELECT md5(url) AS url_hash
-         FROM property_images
-         WHERE property_id = $1
-       )
-       SELECT DISTINCT p.id, p.title, p.status, i.url
-       FROM current_image_hashes current_i
-       JOIN property_images i ON md5(i.url) = current_i.url_hash AND i.property_id <> $1
-       JOIN properties p ON p.id = i.property_id
-       ORDER BY p.title ASC
-       LIMIT 20`,
-      [property.id],
-      previewQueryOptions
-    ),
+    signalFresh || !imageHashes.length
+      ? null
+      : safeRowsResult(
+        `SELECT DISTINCT p.id, p.title, p.status, i.url
+         FROM property_images i
+         JOIN properties p ON p.id = i.property_id
+         WHERE i.property_id <> $1
+           AND COALESCE(i.url, '') <> ''
+           AND md5(i.url) = ANY($2::text[])
+         ORDER BY p.title ASC
+         LIMIT 20`,
+        [property.id, imageHashes],
+        previewQueryOptions('staff_preview_image_hashes')
+      ),
     safeRows(
       `SELECT id, title, lister_name, lister_phone, lister_email, status, created_at
        FROM properties
@@ -3269,7 +3338,7 @@ async function loadStaffPropertyPreview(propertyId) {
        ORDER BY created_at DESC
        LIMIT 20`,
       [property.id, property.id_number || null],
-      previewQueryOptions
+      previewQueryOptions('staff_preview_id_number')
     ),
     safeRows(
       `SELECT id, first_name, last_name, phone, email, role, status, created_at
@@ -3279,9 +3348,19 @@ async function loadStaffPropertyPreview(propertyId) {
        ORDER BY created_at DESC
        LIMIT 20`,
       [property.lister_phone || null, property.lister_email || null],
-      previewQueryOptions
+      previewQueryOptions('staff_preview_matching_users')
     )
   ]);
+  const duplicateCandidates = signalFresh ? cachedSignals.duplicateCandidates : (duplicateResult?.rows || []);
+  const reusedImages = signalFresh ? cachedSignals.reusedImages : (reusedResult?.rows || []);
+  if (!signalFresh && duplicateResult?.ok && (reusedResult == null || reusedResult.ok)) {
+    previewSignalCache.set(signalKey, {
+      duplicateCandidates,
+      reusedImages,
+      expires: Date.now() + PREVIEW_SIGNAL_CACHE_TTL_MS
+    });
+    if (previewSignalCache.size > 200) previewSignalCache.delete(previewSignalCache.keys().next().value);
+  }
   const extra = safeJsonObject(property.extra_fields, {});
   const sourceUrl = firstNonEmpty(extra.source_url, extra.source_post_url, extra.tiktok_url, extra.youtube_url, extra.video_url);
   const duplicates = classifyDuplicates(property, duplicateCandidates, reusedImages);
@@ -3816,6 +3895,7 @@ async function collectStaffContactRows(question = '') {
   const filter = extractQuestionFilter(question);
   const like = `%${filter.area || filter.district || ''}%`;
   const params = [filter.area || filter.district || '', like, filter.limit];
+  const contactQuery = (label) => ({ timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS, label });
   const [listingRows, leadRows, propertyLeadRows, mortgageRows, whatsappRows, adRows] = await Promise.all([
     safeRows(
       `SELECT 'property_listing' AS source, id::text AS reference, COALESCE(lister_name, title) AS name,
@@ -3828,7 +3908,8 @@ async function collectStaffContactRows(question = '') {
          AND ($1::text = '' OR area ILIKE $2 OR district ILIKE $2 OR address ILIKE $2 OR title ILIKE $2)
        ORDER BY approved_at DESC NULLS LAST, updated_at DESC
        LIMIT $3`,
-      params
+      params,
+      contactQuery('staff_contact_listings')
     ),
     safeRows(
       `SELECT 'lead' AS source, l.id::text AS reference, COALESCE(c.name, 'Lead contact') AS name,
@@ -3841,7 +3922,8 @@ async function collectStaffContactRows(question = '') {
          AND ($1::text = '' OR l.location ILIKE $2 OR l.message ILIKE $2 OR l.metadata->>'preferred_area' ILIKE $2)
        ORDER BY l.created_at DESC
        LIMIT $3`,
-      params
+      params,
+      contactQuery('staff_contact_leads')
     ),
     safeRows(
       `SELECT 'property_lead' AS source, id::text AS reference, COALESCE(name, 'Property lead') AS name,
@@ -3852,7 +3934,8 @@ async function collectStaffContactRows(question = '') {
          AND ($1::text = '' OR preferred_area ILIKE $2 OR notes ILIKE $2 OR category ILIKE $2)
        ORDER BY created_at DESC
        LIMIT $3`,
-      params
+      params,
+      contactQuery('staff_contact_property_leads')
     ),
     safeRows(
       `SELECT 'mortgage_enquiry' AS source, id::text AS reference, 'Mortgage lead' AS name,
@@ -3864,7 +3947,8 @@ async function collectStaffContactRows(question = '') {
          AND ($1::text = '' OR payload->>'location' ILIKE $2 OR payload->>'preferred_area' ILIKE $2 OR property_purpose ILIKE $2)
        ORDER BY created_at DESC
        LIMIT $3`,
-      params
+      params,
+      contactQuery('staff_contact_mortgage')
     ),
     safeRows(
       `SELECT 'whatsapp_conversation' AS source, phone AS reference, 'WhatsApp contact' AS name,
@@ -3875,7 +3959,8 @@ async function collectStaffContactRows(question = '') {
          AND ($1::text = '' OR last_summary ILIKE $2 OR category ILIKE $2 OR metadata->>'location' ILIKE $2)
        ORDER BY COALESCE(last_message_at, updated_at) DESC
        LIMIT $3`,
-      params
+      params,
+      contactQuery('staff_contact_whatsapp')
     ),
     safeRows(
       `SELECT 'advertising_inquiry' AS source, id::text AS reference, COALESCE(full_name, business_name, 'Advertiser') AS name,
@@ -3886,7 +3971,8 @@ async function collectStaffContactRows(question = '') {
          AND ($1::text = '' OR full_name ILIKE $2 OR business_name ILIKE $2 OR target_locations::text ILIKE $2)
        ORDER BY created_at DESC
        LIMIT $3`,
-      params
+      params,
+      contactQuery('staff_contact_advertising')
     )
   ]);
   const seen = new Set();
@@ -5510,6 +5596,7 @@ router.post('/assistant/query', async (req, res, next) => {
 
     const areaMatch = question.match(/\b(?:in|around|near|for)\s+([a-z][a-z\s-]{2,40})/i);
     const area = cleanText(areaMatch?.[1] || '').replace(/\b(properties|property|houses|land|rent|sale|area|district)\b/gi, '').trim();
+    const assistantQuery = (label) => ({ timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS, label });
     const [demandRows, listingRows, whatsappRows, sourceRows, adRows, bankRows] = await Promise.all([
       safeRows(
         `SELECT
@@ -5523,7 +5610,8 @@ router.post('/assistant/query', async (req, res, next) => {
          GROUP BY 1
          ORDER BY lead_count DESC, location ASC
          LIMIT 10`,
-        [area, `%${area}%`]
+        [area, `%${area}%`],
+        assistantQuery('staff_assistant_demand')
       ),
       safeRows(
         `SELECT
@@ -5532,11 +5620,15 @@ router.post('/assistant/query', async (req, res, next) => {
            COUNT(*) FILTER (WHERE ${activePendingReviewWhere('p')})::int AS pending_review,
            COUNT(*) FILTER (WHERE COALESCE(lister_phone, '') <> '')::int AS listings_with_phone
          FROM properties p
-         WHERE ($1::text = '' OR p.area ILIKE $2 OR p.district ILIKE $2 OR p.address ILIKE $2)
+         WHERE (
+           ($1::text <> '' AND (p.area ILIKE $2 OR p.district ILIKE $2 OR p.address ILIKE $2))
+           OR ($1::text = '' AND p.created_at >= NOW() - INTERVAL '180 days')
+         )
          GROUP BY 1
          ORDER BY live_listings DESC, pending_review DESC, location ASC
          LIMIT 10`,
-        [area, `%${area}%`]
+        [area, `%${area}%`],
+        assistantQuery('staff_assistant_listings')
       ),
       safeRows(
         `SELECT category, status, COUNT(*)::int AS count
@@ -5545,7 +5637,8 @@ router.post('/assistant/query', async (req, res, next) => {
          GROUP BY category, status
          ORDER BY count DESC
          LIMIT 10`,
-        [area, `%${area}%`]
+        [area, `%${area}%`],
+        assistantQuery('staff_assistant_whatsapp')
       ),
       safeRows(
         `SELECT platform, status, COUNT(*)::int AS count
@@ -5554,7 +5647,8 @@ router.post('/assistant/query', async (req, res, next) => {
          GROUP BY platform, status
          ORDER BY count DESC
          LIMIT 10`,
-        [area, `%${area}%`]
+        [area, `%${area}%`],
+        assistantQuery('staff_assistant_sources')
       ),
       safeRows(
         `SELECT status, COUNT(*)::int AS count, COALESCE(SUM(estimated_value_ugx), 0)::bigint AS pipeline_ugx
@@ -5563,7 +5657,8 @@ router.post('/assistant/query', async (req, res, next) => {
          GROUP BY status
          ORDER BY count DESC
          LIMIT 10`,
-        [area, `%${area}%`]
+        [area, `%${area}%`],
+        assistantQuery('staff_assistant_advertising')
       ),
       safeRows(
         `SELECT COALESCE(payload->>'preferred_area', payload->>'location', 'Unknown') AS location,
@@ -5574,7 +5669,8 @@ router.post('/assistant/query', async (req, res, next) => {
          GROUP BY 1
          ORDER BY mortgage_count DESC
          LIMIT 10`,
-        [area, `%${area}%`]
+        [area, `%${area}%`],
+        assistantQuery('staff_assistant_mortgage')
       )
     ]);
     const context = {

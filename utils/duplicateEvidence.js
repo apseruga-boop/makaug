@@ -102,11 +102,18 @@ function duplicateReason(listing = {}, candidate = {}) {
   return null;
 }
 
+// Same expression as idx_properties_preview_source_url_trgm (migration 160).
+const DUPLICATE_SOURCE_URL_SQL = `COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url', '')`;
+
 // Rows that share at least one strong signal with the listing; classified in JS.
+// Two branches, not one OR: the old OR of ILIKE and a phone-suffix expression
+// was a sequential scan of properties and the staff preview's 900ms statement
+// timeout cancelled it (57014, label staff_rows). Each branch matches an index.
 const DUPLICATE_CANDIDATES_SQL = `
+  (
   SELECT p.id, p.title, p.listing_type, p.district, p.area, p.address, p.price, p.bedrooms,
          p.status, p.moderation_stage, p.lister_phone, p.inquiry_reference, p.created_at,
-         COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url', '') AS source_url
+         ${DUPLICATE_SOURCE_URL_SQL} AS source_url
     FROM properties p
    WHERE p.id <> $1
      AND LOWER(COALESCE(p.status, '')) <> ALL($2::text[])
@@ -116,16 +123,32 @@ const DUPLICATE_CANDIDATES_SQL = `
        LOWER(COALESCE(p.extra_fields->'source_quality_review'->>'suppressed', '')) IN ('true', '1', 'yes')
        OR LOWER(COALESCE(p.extra_fields->>'source_quality_suppressed', '')) IN ('true', '1', 'yes')
      )
-     AND (
-       (COALESCE($3::text, '') <> '' AND COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url', '') ILIKE '%' || $3 || '%')
-       OR (
-         COALESCE($4::text, '') <> ''
-         AND RIGHT(regexp_replace(COALESCE(p.lister_phone, ''), '\\D', '', 'g'), 9) = $4
-         AND LOWER(COALESCE(p.area, '')) = LOWER(COALESCE($5::text, ''))
-       )
-     )
+     AND COALESCE($3::text, '') <> ''
+     AND ${DUPLICATE_SOURCE_URL_SQL} <> ''
+     AND ${DUPLICATE_SOURCE_URL_SQL} ILIKE '%' || $3 || '%'
    ORDER BY p.created_at DESC
-   LIMIT 40`;
+   LIMIT 40
+  )
+  UNION ALL
+  (
+  SELECT p.id, p.title, p.listing_type, p.district, p.area, p.address, p.price, p.bedrooms,
+         p.status, p.moderation_stage, p.lister_phone, p.inquiry_reference, p.created_at,
+         ${DUPLICATE_SOURCE_URL_SQL} AS source_url
+    FROM properties p
+   WHERE p.id <> $1
+     AND LOWER(COALESCE(p.status, '')) <> ALL($2::text[])
+     AND LOWER(COALESCE(p.moderation_stage, '')) <> ALL($2::text[])
+     AND NOT (
+       LOWER(COALESCE(p.extra_fields->'source_quality_review'->>'suppressed', '')) IN ('true', '1', 'yes')
+       OR LOWER(COALESCE(p.extra_fields->>'source_quality_suppressed', '')) IN ('true', '1', 'yes')
+     )
+     AND COALESCE($4::text, '') <> ''
+     AND COALESCE(p.lister_phone, '') <> ''
+     AND RIGHT(regexp_replace(COALESCE(p.lister_phone, ''), '\\D', '', 'g'), 9) = $4
+     AND LOWER(COALESCE(p.area, '')) = LOWER(COALESCE($5::text, ''))
+   ORDER BY p.created_at DESC
+   LIMIT 40
+  )`;
 
 // The search term for the source post: its id when it has one, else the URL.
 function sourceSearchTerm(url = '') {

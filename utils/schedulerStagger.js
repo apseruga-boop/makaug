@@ -15,7 +15,26 @@ const BOOT_DELAY_MS = Object.freeze({
   billing: 260_000,
   greeting_names: 290_000,
   agent_booking: 320_000,
-  video_stills: 600_000
+  video_stills: 600_000,
+  // After the harvest ticks. Startup repairs and the WhatsApp sweepers used
+  // to fire in the first minute, on top of a deploy's migrations and the
+  // still-running previous instance.
+  startup_data_repairs: 620_000,
+  whatsapp_media_retry: 640_000,
+  whatsapp_batch_summary: 680_000
 });
 
-module.exports = { BOOT_DELAY_MS };
+// Two instances overlap for a few minutes on a Render deploy. A pid offset
+// keeps this process's first ticks from landing on the same second as the
+// other instance's.
+function deployJitterMs() {
+  return (process.pid % 5) * 3_000;
+}
+
+function staggeredBootDelay(name) {
+  const base = BOOT_DELAY_MS[name];
+  if (!Number.isFinite(base)) throw new Error(`Unknown scheduler boot delay: ${name}`);
+  return base + deployJitterMs();
+}
+
+module.exports = { BOOT_DELAY_MS, deployJitterMs, staggeredBootDelay };
