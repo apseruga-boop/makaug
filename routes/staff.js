@@ -1009,7 +1009,7 @@ function staffReviewQueueMeta(segment, returnedCount, total, extra = {}) {
     order: 'oldest_first',
     returned_count: returnedCount,
     total: total === null || total === undefined || total === '' || !Number.isFinite(Number(total)) ? null : Number(total),
-    page_endpoint: `/api/staff/properties/review-queue?segment=${segment}&limit=24`,
+    page_endpoint: `/api/staff/properties/review-queue?segment=${segment}&limit=50`,
     ...extra
   };
 }
