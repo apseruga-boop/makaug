@@ -48231,12 +48231,6 @@ async function shareBrokerBusinessCard(id, channel = "native") {
       window.open(brokerShareHref(channel, shareUrl, shareText), "_blank", "noopener,noreferrer");
       return;
     }
-    if (channel === "tiktok") {
-      const copied = await copyTextToClipboard(shareUrl);
-      window.open("https://www.tiktok.com/", "_blank", "noopener,noreferrer");
-      toast(copied ? "Profile link copied. Paste it into TikTok." : "Open TikTok and paste the profile link.");
-      return;
-    }
     if (channel === "link") {
       const copiedUrl = await copyTextToClipboard(shareUrl);
       if (copiedUrl) {
@@ -61710,8 +61704,6 @@ let agentProfileListingSort = "newest";
 let agentProfileLeafletMap = null;
 let agentBookingOptions = null;
 let agentBookingTab = "viewing";
-let agentBookingSelectedDate = "";
-let agentBookingVisibleMonth = "";
 let agentBookingAgentId = "";
 
 function agentProfileFirstName(broker = {}) {
@@ -61795,80 +61787,21 @@ function agentProfilePriceLabel(listings) {
   return `${fmtP(min)} – ${fmtP(max)}`;
 }
 
-function agentProfileAvatarSrc(broker) {
-  const photo = String(broker?.photo || broker?.profile_photo_url || "").trim();
-  if (photo) return publicImageSrc(photo, "");
-  const initials = String(broker?.name || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.slice(0, 1))
-    .join("")
-    .toUpperCase() || "AG";
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="168" height="168" viewBox="0 0 168 168"><rect width="168" height="168" rx="84" fill="#0b1f3a"/><text x="84" y="100" text-anchor="middle" font-family="Arial,sans-serif" font-size="64" font-weight="700" fill="#ffffff">${initials}</text></svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
-}
-
 function agentProfileContactButtons(broker, { mobile = false } = {}) {
-  const name = adminEscape(agentProfileFirstName(broker));
+  const name = adminEscape(broker?.name || "agent");
   const phone = brokerDisplayPhone(broker);
   const tel = String(phone || "").replace(/\s+/g, "");
   const whatsapp = String(broker?.whatsapp || "").replace(/\D/g, "");
   const idArg = adminListingIdArg(broker?.id);
   const call = tel
-    ? `<a class="agent-profile-btn" href="tel:${adminAttr(tel)}" aria-label="Call ${name}" title="Call ${name}"><i class="fas fa-phone" aria-hidden="true"></i><span>Call</span></a>`
+    ? `<a class="agent-profile-btn" href="tel:${adminAttr(tel)}" aria-label="Call ${name}" title="Call"><i class="fas fa-phone" aria-hidden="true"></i><span>Call</span></a>`
     : `<span class="agent-profile-btn is-disabled" aria-label="Phone unavailable" title="Call"><i class="fas fa-phone" aria-hidden="true"></i><span>Call</span></span>`;
   const wa = whatsapp
-    ? `<a class="agent-profile-btn is-wa" href="${adminAttr(buildWhatsAppUrl(whatsapp, buildBrokerContactWhatsappMessage(broker)))}" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp ${name}" title="WhatsApp ${name}"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span></a>`
+    ? `<a class="agent-profile-btn is-wa" href="${adminAttr(buildWhatsAppUrl(whatsapp, buildBrokerContactWhatsappMessage(broker)))}" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp ${name}" title="WhatsApp"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span></a>`
     : `<span class="agent-profile-btn is-wa is-disabled" aria-label="WhatsApp unavailable" title="WhatsApp"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span></span>`;
-  const book = `<button type="button" class="agent-profile-btn" onclick="focusAgentProfileRequest()" aria-label="Book a viewing" title="Book a viewing"><i class="fas fa-calendar" aria-hidden="true"></i><span>Book</span></button>`;
   const share = `<button type="button" class="agent-profile-btn" onclick="shareBrokerBusinessCard(${idArg}, 'native')" aria-label="Share profile" title="Share"><i class="fas fa-share-nodes" aria-hidden="true"></i><span>Share</span></button>`;
   const request = `<button type="button" class="agent-profile-btn is-primary" onclick="focusAgentProfileRequest()" aria-label="Book"><span>Book</span></button>`;
-  return mobile ? `${wa}${call}${request}` : `${wa}${call}${book}${share}`;
-}
-
-function agentProfileHeaderActions(broker) {
-  const name = adminEscape(agentProfileFirstName(broker));
-  const phone = brokerDisplayPhone(broker);
-  const tel = String(phone || "").replace(/\s+/g, "");
-  const whatsapp = String(broker?.whatsapp || "").replace(/\D/g, "");
-  const idArg = adminListingIdArg(broker?.id);
-  const wa = whatsapp
-    ? `<a class="agent-profile-btn is-wa" href="${adminAttr(buildWhatsAppUrl(whatsapp, buildBrokerContactWhatsappMessage(broker)))}" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp ${name}" title="WhatsApp ${name}"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span></a>`
-    : `<span class="agent-profile-btn is-wa is-disabled" aria-label="WhatsApp unavailable" title="WhatsApp"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span></span>`;
-  const call = tel
-    ? `<a class="agent-profile-btn" href="tel:${adminAttr(tel)}" aria-label="Call ${name}" title="Call ${name}"><i class="fas fa-phone" aria-hidden="true"></i><span>Call</span></a>`
-    : `<span class="agent-profile-btn is-disabled" aria-label="Phone unavailable" title="Call"><i class="fas fa-phone" aria-hidden="true"></i><span>Call</span></span>`;
-  const book = `<button type="button" class="agent-profile-btn" onclick="focusAgentProfileRequest()" aria-label="Book a viewing" title="Book a viewing"><i class="fas fa-calendar" aria-hidden="true"></i><span>Book</span></button>`;
-  const shareBtn = (channel, icon, label) => `<button type="button" class="agent-profile-btn" onclick="shareBrokerBusinessCard(${idArg}, '${channel}')" aria-label="${adminAttr(label)}" title="${adminAttr(label)}"><i class="${icon}" aria-hidden="true"></i><span>${adminEscape(label)}</span></button>`;
-  const link = `<button type="button" class="agent-profile-btn" onclick="shareBrokerBusinessCard(${idArg}, 'link')" aria-label="Copy link" title="Copy link"><i class="fas fa-link" aria-hidden="true"></i><span>Copy link</span></button>`;
-  return `<div class="agent-profile-action-row">
-    <span class="agent-profile-action-label">Contact</span>
-    <div class="agent-profile-actions">${wa}${call}${book}</div>
-    <span class="agent-profile-action-label">Share</span>
-    <div class="agent-profile-actions">${shareBtn("facebook", "fab fa-facebook-f", "Facebook")}${shareBtn("linkedin", "fab fa-linkedin-in", "LinkedIn")}${shareBtn("x", "fab fa-x-twitter", "X")}${shareBtn("tiktok", "fab fa-tiktok", "TikTok")}${link}</div>
-  </div>`;
-}
-
-function agentProfileListingImage(listing) {
-  const images = Array.isArray(listing?.images) ? listing.images : [];
-  const fromImages = images.map((item) => (typeof item === "string" ? item : item?.url)).find((url) => String(url || "").trim());
-  const direct = String(listing?.primary_image_url || listing?.cover_image_url || "").trim();
-  const img = String(fromImages || direct || "").trim();
-  if (!img || img.includes("images.unsplash.com/photo-1560518883-ce09059eeffa")) return "";
-  return img;
-}
-
-function agentProfileListingPrice(listing) {
-  const amount = Number(listing?.price);
-  if (!Number.isFinite(amount) || amount <= 0 || listingPriceNeedsCheck(listing)) return "Price on request";
-  const formatted = `UGX ${Math.round(amount).toLocaleString("en-US")}`;
-  const period = String(listing?.period || listing?.price_period || "").toLowerCase();
-  if (period === "month" || period === "mo") return `${formatted} / month`;
-  if (period === "night") return `${formatted} / night`;
-  if (period === "year" || period === "yr") return `${formatted} / year`;
-  return formatted;
+  return mobile ? `${wa}${call}${request}` : `${wa}${call}${share}`;
 }
 
 function renderAgentProfileListingGrid() {
@@ -61879,16 +61812,11 @@ function renderAgentProfileListingGrid() {
     agentProfileListingSort
   );
   el.innerHTML = filtered.length
-    ? `<div class="agent-profile-grid">${filtered.map((listing, index) => {
-        const tone = listing.availability_tone || "";
+    ? `<div class="agent-profile-grid">${filtered.map((listing) => {
         const badge = listing.availability_label
-          ? `<p class="agent-availability-badge${tone === "stale" ? " is-stale" : ""}${tone && tone !== "fresh" ? ` is-${tone}` : ""}">${tone === "fresh" ? `<i class="fas fa-check" aria-hidden="true"></i> ` : ""}${adminEscape(listing.availability_label)}</p>`
+          ? `<p class="agent-availability-badge${listing.availability_tone === "stale" ? " is-stale" : ""}">${adminEscape(listing.availability_label)}</p>`
           : "";
-        const idArg = adminListingIdArg(listing.id);
-        const image = agentProfileListingImage(listing);
-        const wash = tone === "under_offer" ? "is-offer" : `is-${index % 3}`;
-        const photo = image ? `<img src="${adminAttr(image)}" alt="" loading="lazy">` : `<span class="agent-listing-photo ${wash}" aria-hidden="true"></span>`;
-        return `<button type="button" class="agent-listing-card" onclick="openDetail(${idArg})">${photo}<span class="agent-listing-body"><strong>${adminEscape(listing.title || "Property")}</strong><span>${adminEscape(agentProfileListingPrice(listing))}</span>${badge}</span></button>`;
+        return `<div class="agent-profile-listing">${propCard(listing)}${badge}</div>`;
       }).join("")}</div>`
     : `<div class="agent-profile-empty">No active listings yet.</div>`;
 }
@@ -61921,143 +61849,11 @@ function setAgentBookingTab(tab) {
   renderAgentBookingFields();
 }
 
-function agentBookingMoney(item) {
-  const amount = Number(item?.price);
-  if (!Number.isFinite(amount) || amount <= 0) return "";
-  let text = "";
-  if (amount >= 1000000) {
-    const millions = amount / 1000000;
-    text = `UGX ${Number.isInteger(millions) ? millions : millions.toFixed(1).replace(/\.0$/, "")}M`;
-  } else if (amount >= 1000) {
-    text = `UGX ${Math.round(amount / 1000)}K`;
-  } else {
-    text = `UGX ${Math.round(amount)}`;
-  }
-  const period = String(item.price_period || item.period || "");
-  if (period === "month") return `${text}/mo`;
-  if (period === "night") return `${text}/night`;
-  if (period === "year") return `${text}/yr`;
-  return text;
-}
-
 function agentBookingPlaceOptions(options) {
-  const labelFor = (item, stay) => {
-    const title = item.title || (stay ? "Short stay" : "Property");
-    const area = item.area && !String(title).toLowerCase().includes(String(item.area).toLowerCase()) ? item.area : "";
-    const place = [title, area].filter(Boolean).join(", ");
-    const price = agentBookingMoney(item);
-    const stayMark = stay ? " · Short stay" : "";
-    return `${place}${price ? ` · ${price}` : ""}${stayMark}`;
-  };
-  const properties = (options?.properties || []).map((item) => `<option value="property:${adminAttr(item.id)}">${adminEscape(labelFor(item, false))}</option>`);
-  const stays = (options?.stays || []).map((item) => `<option value="stay:${adminAttr(item.id)}">${adminEscape(labelFor(item, true))}</option>`);
+  const properties = (options?.properties || []).map((item) => `<option value="property:${adminAttr(item.id)}">${adminEscape(item.title || "Property")}</option>`);
+  const stays = (options?.stays || []).map((item) => `<option value="stay:${adminAttr(item.id)}">${adminEscape(item.title || "Short stay")} · Short stay</option>`);
   const empty = `<option value="">Choose a property</option>`;
   return `${empty}${properties.join("")}${stays.join("")}`;
-}
-
-function agentBookingDateValue(iso) {
-  const match = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return null;
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-}
-
-function agentBookingMonthKey(iso) {
-  return String(iso || "").slice(0, 7);
-}
-
-function agentBookingRangeLabel(days) {
-  const first = agentBookingDateValue(days[0]?.date);
-  const last = agentBookingDateValue(days[days.length - 1]?.date);
-  if (!first || !last) return "";
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const left = `${first.getDate()} ${months[first.getMonth()]}`;
-  const right = `${last.getDate()} ${months[last.getMonth()]} ${last.getFullYear()}`;
-  return `${left} – ${right}`;
-}
-
-function agentBookingWhenLabel(iso, timeLabel) {
-  const date = agentBookingDateValue(iso);
-  if (!date) return "";
-  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const when = `${weekdays[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
-  return timeLabel ? `${when}, ${timeLabel}` : when;
-}
-
-function agentBookingSlotText(slot) {
-  if (!slot) return "";
-  if (slot.time === "any") return "Any time";
-  const match = String(slot.time || "").match(/^(\d{2}):(\d{2})$/);
-  if (!match) return slot.label || slot.time;
-  return `${Number(match[1])}:${match[2]}`;
-}
-
-function agentBookingClockLabel(slot) {
-  if (!slot || slot.time === "any") return "Any time";
-  return slot.label || agentBookingSlotText(slot);
-}
-
-function selectedAgentBookingPlace() {
-  const value = document.getElementById("agent-booking-place")?.value || "";
-  const [kind, id] = String(value).split(":");
-  const list = kind === "stay" ? (agentBookingOptions?.stays || []) : (agentBookingOptions?.properties || []);
-  return { kind, id, item: list.find((row) => String(row.id) === String(id)) || null };
-}
-
-function agentBookingConfirmedNote() {
-  const { item } = selectedAgentBookingPlace();
-  const agent = findBrokerByIdIncludingLoadedProfile(agentBookingAgentId);
-  const first = agentProfileFirstName(agent || { name: "The agent" });
-  if (!item) return { fresh: false, text: "" };
-  if (item.availability_tone && item.availability_tone !== "fresh") {
-    return { fresh: false, text: item.availability_label || "" };
-  }
-  const detail = String(item.availability_label || "Available").replace(/^Available(?: · )?/, "").replace(/^checked\s+/i, "").trim();
-  return {
-    fresh: true,
-    text: detail ? `${first} confirmed this is available · ${detail}` : `${first} confirmed this is available`
-  };
-}
-
-function paintAgentBookingConfirmed() {
-  const note = document.getElementById("agent-booking-confirmed");
-  if (!note) return;
-  const result = agentBookingConfirmedNote();
-  if (!result.text) {
-    note.hidden = true;
-    note.textContent = "";
-    return;
-  }
-  note.hidden = false;
-  note.innerHTML = result.fresh
-    ? `<i class="fas fa-check" aria-hidden="true"></i> ${adminEscape(result.text)}`
-    : adminEscape(result.text);
-}
-
-function updateAgentBookingSubmitLabel() {
-  const button = document.getElementById("agent-profile-submit");
-  if (!button) return;
-  const place = document.getElementById("agent-booking-place")?.value || "";
-  if (agentBookingTab === "callback") {
-    button.textContent = "Request a callback";
-    return;
-  }
-  if (agentBookingTab === "question") {
-    button.textContent = "Ask a question";
-    return;
-  }
-  if (agentBookingTab === "offer") {
-    button.textContent = "Make an offer";
-    return;
-  }
-  if (place.startsWith("stay:")) {
-    button.textContent = "Request these dates";
-    return;
-  }
-  const slot = document.querySelector(".agent-booking-slot.is-active");
-  const known = ((agentBookingOptions?.slots_by_date || {})[agentBookingSelectedDate] || []).find((item) => item.time === slot?.getAttribute("data-time"));
-  const when = agentBookingWhenLabel(agentBookingSelectedDate, known ? agentBookingClockLabel(known) : "");
-  button.textContent = when && slot ? `Request viewing · ${when}` : "Request viewing";
 }
 
 function renderAgentBookingSlots() {
@@ -62071,91 +61867,17 @@ function renderAgentBookingSlots() {
         <label>Check out<input id="agent-booking-check-out" type="date" required></label>
         <p class="agent-booking-note">Still available for these dates?</p>`;
     }
-    updateAgentBookingSubmitLabel();
     return;
   }
   if (!wrap) return;
-  const day = agentBookingSelectedDate || document.getElementById("agent-booking-day")?.value;
-  const hidden = document.getElementById("agent-booking-day");
-  if (hidden) hidden.value = day || "";
+  const day = document.getElementById("agent-booking-day")?.value;
   const slots = (agentBookingOptions?.slots_by_date || {})[day] || [];
-  const heading = document.getElementById("agent-booking-time-label");
-  if (heading) heading.textContent = day ? `Pick a time · ${agentBookingWhenLabel(day, "").toUpperCase()}` : "Pick a time";
-  wrap.innerHTML = slots.map((slot) => `<button type="button" class="agent-booking-slot" data-time="${adminAttr(slot.time)}" ${slot.available ? "" : "disabled"} onclick="selectAgentBookingSlot(this)">${adminEscape(agentBookingSlotText(slot))}</button>`).join("");
-  updateAgentBookingSubmitLabel();
-}
-
-function selectAgentBookingDay(iso) {
-  const day = (agentBookingOptions?.days || []).find((item) => item.date === iso);
-  if (!day || !day.available) return;
-  agentBookingSelectedDate = iso;
-  agentBookingVisibleMonth = agentBookingMonthKey(iso);
-  document.querySelectorAll(".agent-booking-day").forEach((button) => {
-    button.classList.toggle("is-selected", button.getAttribute("data-date") === iso);
-  });
-  renderAgentBookingSlots();
-}
-
-function shiftAgentBookingMonth(delta) {
-  const days = agentBookingOptions?.days || [];
-  const months = [...new Set(days.map((day) => agentBookingMonthKey(day.date)).filter(Boolean))];
-  const index = Math.max(0, months.indexOf(agentBookingVisibleMonth));
-  const next = months[index + delta];
-  if (!next) return;
-  agentBookingVisibleMonth = next;
-  renderAgentBookingCalendar();
-}
-
-function renderAgentBookingCalendar() {
-  const host = document.getElementById("agent-booking-calendar");
-  if (!host) return;
-  const days = agentBookingOptions?.days || [];
-  if (!agentBookingSelectedDate) {
-    const firstOpen = days.find((day) => day.available);
-    agentBookingSelectedDate = firstOpen?.date || days[0]?.date || "";
-  }
-  if (!agentBookingVisibleMonth) agentBookingVisibleMonth = agentBookingMonthKey(agentBookingSelectedDate || days[0]?.date);
-  const byDate = new Map(days.map((day) => [day.date, day]));
-  const cursor = agentBookingDateValue(`${agentBookingVisibleMonth}-01`) || agentBookingDateValue(days[0]?.date);
-  if (!cursor) {
-    host.innerHTML = "";
-    return;
-  }
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-  const first = new Date(year, month, 1);
-  const lead = (first.getDay() + 6) % 7;
-  const count = new Date(year, month + 1, 0).getDate();
-  const dows = [
-    ["M", "Monday"], ["T", "Tuesday"], ["W", "Wednesday"], ["T", "Thursday"],
-    ["F", "Friday"], ["S", "Saturday"], ["S", "Sunday"]
-  ];
-  const cells = dows.map(([letter, name]) => `<span class="agent-booking-dow" title="${name}" aria-label="${name}">${letter}</span>`);
-  for (let i = 0; i < lead; i += 1) cells.push(`<span class="agent-booking-day is-out"></span>`);
-  for (let day = 1; day <= count; day += 1) {
-    const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const known = byDate.get(iso);
-    const open = Boolean(known?.available);
-    cells.push(`<button type="button" class="agent-booking-day${agentBookingSelectedDate === iso ? " is-selected" : ""}" data-date="${iso}" ${open ? `onclick="selectAgentBookingDay('${iso}')"` : "disabled"}>${day}</button>`);
-  }
-  const agent = findBrokerByIdIncludingLoadedProfile(agentBookingAgentId);
-  const firstName = agentProfileFirstName(agent || { name: "the agent" });
-  const notice = Number(agentBookingOptions?.notice_hours) || 24;
-  host.innerHTML = `
-    <div class="agent-booking-cal-head">
-      <button type="button" onclick="shiftAgentBookingMonth(-1)" aria-label="Previous month">‹</button>
-      <span>${adminEscape(agentBookingRangeLabel(days))}</span>
-      <button type="button" onclick="shiftAgentBookingMonth(1)" aria-label="Next month">›</button>
-    </div>
-    <div class="agent-booking-cal-grid">${cells.join("")}</div>
-    <p class="agent-booking-note">Greyed days: Sundays and days ${adminEscape(firstName)} has blocked. Bookings need ${notice} h notice.</p>`;
+  wrap.innerHTML = slots.map((slot) => `<button type="button" class="agent-booking-slot" data-time="${adminAttr(slot.time)}" ${slot.available ? "" : "disabled"} onclick="selectAgentBookingSlot(this)">${adminEscape(slot.label || slot.time)}</button>`).join("");
 }
 
 function selectAgentBookingSlot(button) {
-  if (!button || button.disabled) return;
   document.querySelectorAll(".agent-booking-slot").forEach((item) => item.classList.remove("is-active"));
   button.classList.add("is-active");
-  updateAgentBookingSubmitLabel();
 }
 
 function renderAgentBookingFields() {
@@ -62163,54 +61885,37 @@ function renderAgentBookingFields() {
   if (!el) return;
   const options = agentBookingOptions || { properties: [], stays: [], days: [] };
   const places = agentBookingPlaceOptions(options);
-  const placeSelect = `<p class="agent-booking-kicker">Which property?</p><label class="agent-booking-select"><select id="agent-booking-place" onchange="refreshAgentBookingDays(this.value)">${places}</select></label>`;
   if (agentBookingTab === "viewing") {
+    const days = (options.days || []).map((day) => `<option value="${adminAttr(day.date)}" ${day.available ? "" : "disabled"}>${adminEscape(`${day.weekday || ""} ${day.date}`.trim())}</option>`).join("");
     el.innerHTML = `
-      ${placeSelect}
-      <p class="agent-booking-confirmed" id="agent-booking-confirmed"></p>
-      <input id="agent-booking-day" type="hidden" value="${adminAttr(agentBookingSelectedDate)}">
+      <label>Choose a property<select id="agent-booking-place" onchange="refreshAgentBookingDays(this.value)">${places}</select></label>
       <div id="agent-booking-when">
-        <div id="agent-booking-calendar"></div>
-        <p class="agent-booking-kicker" id="agent-booking-time-label">Pick a time</p>
+        <label>Pick a day<select id="agent-booking-day" onchange="renderAgentBookingSlots()">${days}</select></label>
         <div id="agent-booking-slots" class="agent-booking-slots"></div>
       </div>`;
-    const select = document.getElementById("agent-booking-place");
-    if (select && !select.value) {
-      const first = [...select.options].find((option) => option.value);
-      if (first) select.value = first.value;
-    }
-    paintAgentBookingConfirmed();
-    const place = select?.value || "";
-    if (place.startsWith("stay:")) renderAgentBookingSlots();
-    else {
-      renderAgentBookingCalendar();
-      renderAgentBookingSlots();
-    }
+    renderAgentBookingSlots();
     return;
   }
   if (agentBookingTab === "callback") {
     el.innerHTML = `
-      ${placeSelect}
+      <label>Choose a property<select id="agent-booking-place">${places}</select></label>
       <label>Best time to call<select id="agent-booking-window"><option>Morning</option><option>Afternoon</option><option>Evening</option><option>Any time</option></select></label>
       <div class="agent-booking-channels">
         <label><input type="radio" name="agent-booking-channel" value="call" checked> Call me</label>
         <label><input type="radio" name="agent-booking-channel" value="whatsapp"> WhatsApp me</label>
       </div>`;
-    updateAgentBookingSubmitLabel();
     return;
   }
   if (agentBookingTab === "question") {
     el.innerHTML = `
-      ${placeSelect}
+      <label>Choose a property<select id="agent-booking-place">${places}</select></label>
       <label>Your question<textarea id="agent-booking-note" rows="3" maxlength="2000"></textarea></label>`;
-    updateAgentBookingSubmitLabel();
     return;
   }
   el.innerHTML = `
-    ${placeSelect}
+    <label>Choose a property<select id="agent-booking-place">${places}</select></label>
     <label>Offer amount<input id="agent-booking-offer" type="text" maxlength="40" inputmode="numeric"></label>
     <label>Message<textarea id="agent-booking-note" rows="3" maxlength="2000"></textarea></label>`;
-  updateAgentBookingSubmitLabel();
 }
 
 async function refreshAgentBookingDays(value) {
@@ -62227,19 +61932,12 @@ async function refreshAgentBookingDays(value) {
   renderAgentBookingFields();
   const select = document.getElementById("agent-booking-place");
   if (select) select.value = value;
-  paintAgentBookingConfirmed();
   if (stay) renderAgentBookingSlots();
-  else if (agentBookingTab === "viewing") {
-    renderAgentBookingCalendar();
-    renderAgentBookingSlots();
-  }
 }
 
 async function initAgentBookingPanel(agentId) {
   agentBookingAgentId = String(agentId || "");
   agentBookingTab = "viewing";
-  agentBookingSelectedDate = "";
-  agentBookingVisibleMonth = "";
   try {
     const res = await apiRequest(`/api/agents/${encodeURIComponent(agentId)}/booking-options`, { skipAuth: true });
     agentBookingOptions = res?.data || { properties: [], stays: [], days: [], slots_by_date: {} };
@@ -62430,6 +62128,7 @@ async function openBrokerProfile(id) {
   const remoteListings = Array.isArray(b.remote_listings) ? b.remote_listings.filter(isListingPublicVisible) : [];
   const list = remoteListings.length ? remoteListings : getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
   const offPlanProjects = Array.isArray(b.remote_off_plan_projects) ? b.remote_off_plan_projects : [];
+  const photoSrc = publicImageSrc(b.photo || b.profile_photo_url, `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`);
   const totalVideoTours = list.reduce((sum, property) => sum + propertyVideoUrls(property).length, 0);
   const firstName = agentProfileFirstName(b);
   const experienceLabel = agentProfileExperienceLabel(b);
@@ -62456,7 +62155,7 @@ async function openBrokerProfile(id) {
       <div class="agent-profile-layout">
         <div class="agent-profile-main">
           <section class="agent-profile-identity" aria-label="Agent identity">
-            <img class="agent-profile-avatar aspect-square rounded-full object-cover object-center" src="${adminAttr(agentProfileAvatarSrc(b))}" alt="${adminAttr(b.name)}" width="84" height="84" onerror="this.remove();">
+            <img class="agent-profile-avatar aspect-square rounded-full object-cover object-center" src="${adminAttr(photoSrc)}" alt="${adminAttr(b.name)}" width="84" height="84" onerror="this.remove();">
             <div class="agent-profile-identity-main">
               <h1 class="broker-profile-name agent-profile-name">${adminEscape(b.name)}${verifiedAgentBadgeHtml(b, 22)}</h1>
               ${brokerCompanyLineHtml(b, "agent-profile-company")}
@@ -62468,8 +62167,8 @@ async function openBrokerProfile(id) {
                 ${b.response_time_label ? `<span><i class="fas fa-clock" aria-hidden="true"></i>${adminEscape(b.response_time_label)}</span>` : ""}
               </div>
               ${agentShowsVerifiedBadge(b) ? "" : (renderBrokerRegistrationBadge(b) ? `<div class="mt-3">${renderBrokerRegistrationBadge(b)}</div>` : "")}
+              <div class="agent-profile-actions">${agentProfileContactButtons(b)}</div>
             </div>
-            ${agentProfileHeaderActions(b)}
           </section>
           <div class="agent-profile-stats" aria-label="Key figures">
             <div class="agent-profile-stat"><strong>${list.length}</strong><span>Live listings</span></div>
@@ -62492,8 +62191,8 @@ async function openBrokerProfile(id) {
             ${typeCounts.size ? `<div class="agent-profile-mix" aria-label="Listing mix"><div class="text-xs font-bold uppercase tracking-wide text-gray-500">Listing mix</div>${[...typeCounts.entries()].map(([key, count]) => `<div class="agent-profile-mix-row"><span>${adminEscape(agentProfileTypeLabel(key))}</span><span class="agent-profile-mix-track"><span class="agent-profile-mix-fill" style="inline-size:${Math.round((count / typeMax) * 100)}%"></span></span><span>${count}</span></div>`).join("")}</div>` : ""}
             ${areaCounts.length ? `<div class="agent-profile-chips">${areaCounts.map(([name, count]) => `<span class="agent-profile-chip">${adminEscape(name)} <span>(${count})</span></span>`).join("")}</div>` : ""}
           </section>
-          <section class="agent-profile-section agent-profile-section-listings" aria-labelledby="agent-profile-listings-heading">
-            <h2 id="agent-profile-listings-heading">Live properties (${list.length})</h2>
+          <section class="agent-profile-section" aria-labelledby="agent-profile-listings-heading">
+            <h2 id="agent-profile-listings-heading">Listings</h2>
             <div class="agent-profile-toolbar">
               ${typeButtons.join("")}
               <label>Sort
@@ -62510,25 +62209,23 @@ async function openBrokerProfile(id) {
         </div>
         <aside class="agent-profile-contact">
           <div class="agent-profile-card" id="agent-profile-request">
-            <h2>Contact ${adminEscape(firstName)}</h2>
-            <p class="agent-profile-lead">Free · goes to ${adminEscape(firstName)} on WhatsApp and to the MakaUG team</p>
+            <h2>Book with ${adminEscape(firstName)}</h2>
+            <div class="agent-profile-actions">${agentProfileContactButtons(b)}</div>
+            ${phoneText ? `<p class="agent-profile-phone"><a href="tel:${adminAttr(String(phoneText).replace(/\s+/g, ""))}">${adminEscape(phoneText)}</a></p>` : ""}
             <div class="agent-booking-tabs" role="tablist">
-              <button type="button" class="is-active" data-agent-booking-tab="viewing" onclick="setAgentBookingTab('viewing')"><i class="fas fa-house" aria-hidden="true"></i><span>Book a viewing</span></button>
-              <button type="button" data-agent-booking-tab="callback" onclick="setAgentBookingTab('callback')"><i class="fas fa-phone" aria-hidden="true"></i><span>Callback</span></button>
-              <button type="button" data-agent-booking-tab="question" onclick="setAgentBookingTab('question')"><i class="fas fa-comment" aria-hidden="true"></i><span>Ask a question</span></button>
-              <button type="button" data-agent-booking-tab="offer" onclick="setAgentBookingTab('offer')"><i class="fas fa-tag" aria-hidden="true"></i><span>Make an offer</span></button>
+              <button type="button" class="is-active" data-agent-booking-tab="viewing" onclick="setAgentBookingTab('viewing')">Book a viewing</button>
+              <button type="button" data-agent-booking-tab="callback" onclick="setAgentBookingTab('callback')">Request a callback</button>
+              <button type="button" data-agent-booking-tab="question" onclick="setAgentBookingTab('question')">Ask a question</button>
+              <button type="button" data-agent-booking-tab="offer" onclick="setAgentBookingTab('offer')">Make an offer</button>
             </div>
             <form class="agent-profile-form" onsubmit="event.preventDefault(); submitAgentProfileRequest(${idArg});">
               <input id="agent-profile-website" name="website" class="agent-profile-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" value="">
               <div id="agent-booking-fields"></div>
-              <p class="agent-booking-kicker">Your details</p>
-              <div class="agent-booking-detail-row">
-                <label><span class="agent-booking-sr">Your name</span><input id="agent-profile-name" name="name" type="text" autocomplete="name" maxlength="120" placeholder="Your name" required></label>
-                <label><span class="agent-booking-sr">Phone number</span><input id="agent-profile-phone" name="phone" type="tel" autocomplete="tel" maxlength="40" placeholder="Phone number" required></label>
-              </div>
-              <button id="agent-profile-submit" class="agent-booking-submit" type="submit">Request viewing</button>
+              <label>Your name<input id="agent-profile-name" name="name" type="text" autocomplete="name" maxlength="120" required></label>
+              <label>Phone number<input id="agent-profile-phone" name="phone" type="tel" autocomplete="tel" maxlength="40" required></label>
+              <button id="agent-profile-submit" class="agent-profile-btn is-primary" type="submit">Send request</button>
             </form>
-            <p class="agent-profile-safety">${adminEscape(firstName)} confirms by WhatsApp, usually within 1 hour. If they can't, MakaUG will call you. Never pay before you've seen the property and its documents.</p>
+            <p class="agent-profile-safety">Never pay before viewing</p>
           </div>
           <div class="agent-profile-subactions">
             <button type="button" class="agent-profile-btn" onclick="shareBrokerBusinessCard(${idArg}, 'native')">Share profile</button>

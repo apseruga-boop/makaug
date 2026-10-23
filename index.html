@@ -2563,7 +2563,6 @@
       font-size: 12px;
       line-height: 1;
     }
-    #page-broker-profile { background: #f3faf6; }
     .agent-profile { font-family: "Plus Jakarta Sans", system-ui, sans-serif; color: #14532d; }
     .agent-profile-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
     .agent-profile-card, .agent-profile-identity, .agent-profile-section {
@@ -2573,7 +2572,7 @@
       padding-block: 16px;
       padding-inline: 18px;
     }
-    .agent-profile-identity { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; min-inline-size: 0; max-inline-size: 100%; }
+    .agent-profile-identity { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }
     .agent-profile-avatar {
       inline-size: 84px;
       block-size: 84px;
@@ -2659,13 +2658,8 @@
     .agent-profile-pin span.is-approx { background: #86efac; }
     .agent-profile-popup { background: none; border: 0; color: #14532d; font-weight: 800; cursor: pointer; text-align: start; }
     @media (min-width: 768px) {
-      .agent-profile-layout { grid-template-columns: minmax(0, 1fr) 380px; }
-      .agent-profile-main { display: contents; }
-      .agent-profile-identity { grid-column: 1 / -1; }
-      .agent-profile-section-listings { grid-column: 1; grid-row: 2; }
-      .agent-profile-contact { grid-column: 2; grid-row: 2; position: sticky; inset-block-start: 16px; align-self: start; }
-      .agent-profile-stats,
-      .agent-profile-section:not(.agent-profile-section-listings) { grid-column: 1 / -1; }
+      .agent-profile-layout { grid-template-columns: minmax(0, 1fr) 300px; }
+      .agent-profile-contact { position: sticky; inset-block-start: 16px; }
       .agent-profile-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
       .agent-profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
@@ -2688,8 +2682,7 @@
       .agent-profile-main { display: contents; }
       .agent-profile-identity { order: 1; }
       .agent-profile-contact { order: 2; }
-      .agent-profile-stats, .agent-profile-section { order: 4; }
-      .agent-profile-section.agent-profile-section-listings { order: 3; }
+      .agent-profile-stats, .agent-profile-section { order: 3; }
     }
     .agent-profile-identity .agent-profile-actions .agent-profile-btn,
     .agent-profile-card .agent-profile-actions .agent-profile-btn {
@@ -2717,79 +2710,34 @@
       background: #fff;
       color: #15803d;
     }
-    .agent-profile-action-row { display: flex; flex-wrap: nowrap; overflow-x: auto; align-items: center; gap: 8px 12px; margin-block-start: 12px; flex: 1 0 100%; min-inline-size: 0; max-inline-size: 100%; }
-    .agent-profile-action-label { font-size: 13px; font-weight: 700; color: #4b5563; }
-    .agent-profile-action-row .agent-profile-actions { margin-block-start: 0; flex-wrap: nowrap; }
-    .agent-profile-lead { margin: 4px 0 0; color: #6b7280; font-size: 13px; font-weight: 600; }
-    .agent-booking-kicker { margin: 14px 0 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #6b7280; }
-    .agent-booking-select select, .agent-profile-form select {
-      inline-size: 100%;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      min-block-size: 44px;
-      padding-inline: 12px;
+    .agent-booking-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-block-start: 12px; }
+    .agent-booking-tabs button {
+      border: 1px solid #bbf7d0;
       background: #fff;
-      font: inherit;
-    }
-    .agent-booking-confirmed { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0 0; background: #f0fdf4; color: #15803d; border-radius: 12px; padding: 8px 10px; font-size: 13px; font-weight: 700; }
-    .agent-booking-confirmed[hidden] { display: none; }
-    .agent-booking-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
-    .agent-booking-cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 800; color: #111827; }
-    .agent-booking-cal-head button { border: 0; background: transparent; font-size: 20px; color: #6b7280; min-inline-size: 32px; }
-    .agent-booking-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; margin-block-start: 8px; text-align: center; }
-    .agent-booking-dow { font-size: 11px; font-weight: 700; color: #9ca3af; padding-block: 4px; }
-    .agent-booking-day { border: 0; background: transparent; border-radius: 999px; min-block-size: 32px; font-weight: 700; color: #111827; }
-    .agent-booking-day.is-selected { background: #15803d; color: #fff; }
-    .agent-booking-day:disabled, .agent-booking-day.is-out { color: #d1d5db; }
-    .agent-booking-note { margin: 8px 0 0; color: #6b7280; font-size: 12px; font-weight: 600; }
-    .agent-booking-detail-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .agent-booking-submit { inline-size: 100%; margin-block-start: 8px; min-block-size: 48px; border: 0; border-radius: 999px; background: #15803d; color: #fff; font-weight: 800; font-size: 15px; }
-    .agent-listing-card { display: flex; flex-direction: column; inline-size: 100%; padding: 0; border: 1px solid #e5e7eb; border-radius: 16px; background: #fff; overflow: hidden; text-align: start; color: inherit; }
-    .agent-listing-card img, .agent-listing-photo { inline-size: 100%; block-size: 140px; object-fit: cover; background: linear-gradient(135deg, #86efac, #15803d); }
-    .agent-listing-photo.is-0 { background: linear-gradient(160deg, #6ee7b7, #047857); }
-    .agent-listing-photo.is-1 { background: linear-gradient(160deg, #d9f99d, #16a34a); }
-    .agent-listing-photo.is-2 { background: linear-gradient(160deg, #5eead4, #0f766e); }
-    .agent-listing-photo.is-offer { background: linear-gradient(160deg, #e5e7eb, #6b7280); }
-    .agent-listing-body { display: grid; gap: 4px; padding: 12px; }
-    .agent-listing-body strong { font-size: 15px; color: #111827; }
-    .agent-listing-body > span { color: #4b5563; font-size: 13px; }
-    .agent-profile-card .agent-booking-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-block-start: 14px; }
-    .agent-profile-card .agent-booking-tabs button {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      min-block-size: 72px;
-      border: 1px solid #e5e7eb;
-      background: #fff;
-      color: #374151;
-      border-radius: 14px;
-      padding: 8px 4px;
+      color: #14532d;
+      border-radius: 999px;
+      padding-block: 6px;
+      padding-inline: 10px;
       font-weight: 700;
-      font-size: 11px;
-      line-height: 1.15;
+      font-size: 12px;
     }
-    .agent-profile-card .agent-booking-tabs button.is-active { background: #15803d; color: #fff; border-color: #15803d; }
-    .agent-booking-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .agent-booking-tabs button.is-active { background: #15803d; color: #fff; border-color: #15803d; }
+    .agent-booking-slots { display: flex; flex-wrap: wrap; gap: 6px; }
     .agent-booking-slot {
-      border: 1px solid #e5e7eb;
+      border: 1px solid #bbf7d0;
       background: #fff;
-      color: #111827;
-      border-radius: 12px;
-      min-block-size: 40px;
-      padding-block: 8px;
-      padding-inline: 6px;
+      color: #14532d;
+      border-radius: 999px;
+      padding-block: 6px;
+      padding-inline: 10px;
       font-weight: 700;
     }
-    .agent-booking-slot.is-active { background: #15803d; color: #fff; border-color: #15803d; }
-    .agent-booking-slot:disabled { border-style: dashed; color: #d1d5db; background: #fff; }
+    .agent-booking-slot.is-active { background: #15803d; color: #fff; }
+    .agent-booking-slot:disabled { opacity: 0.4; }
     .agent-booking-channels { display: flex; gap: 12px; font-weight: 700; }
     .agent-booking-sent { font-weight: 800; }
-    .agent-availability-badge { display: inline-flex; align-items: center; gap: 4px; margin: 4px 0 0; font-size: 12px; font-weight: 700; color: #15803d; background: #f0fdf4; border-radius: 999px; padding: 3px 8px; }
-    .agent-availability-badge.is-stale { color: #92400e; background: #fffbeb; }
-    .agent-availability-badge.is-under_offer { color: #c2410c; background: #fff7ed; }
-    .agent-profile-subactions .agent-profile-btn { border: 0; background: transparent; color: #6b7280; min-block-size: 0; padding: 0; font-size: 12px; }
+    .agent-availability-badge { margin-block: 8px 0; margin-inline: 0; font-size: 12px; font-weight: 700; color: #15803d; }
+    .agent-availability-badge.is-stale { color: #92400e; }
     .toast {
       position: fixed;
       right: 20px;
