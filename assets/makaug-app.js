@@ -48857,6 +48857,91 @@ function stripListingCountClause(template) {
     .trim();
 }
 
+function bucketWord(key, one, templates) {
+  return templates[one ? `one.bucket.${key}` : `bucket.${key}`] || "";
+}
+
+function composePortfolioSentence(part, templates) {
+  const mode = part.mode ? `${part.mode}_` : "";
+  const template = templates[`portfolio.${mode}${part.lead}`];
+  if (!template) return "";
+  const one = part.lead === "one";
+  let primary = "";
+  let types = "";
+  let extras = "";
+  if (part.lead === "mix") {
+    const words = (part.types || []).map((key) => bucketWord(key, false, templates));
+    if (!words.length || words.some((word) => !word)) return "";
+    types = joinAgentBioList(words, templates);
+  } else {
+    primary = bucketWord(part.primary, one, templates);
+    if (!primary) return "";
+    const clauses = [];
+    (part.extras || []).forEach((extra) => {
+      const words = (extra.keys || []).map((key) => bucketWord(key, false, templates));
+      if (!words.length || words.some((word) => !word) || !templates[`extra.${extra.w}`]) return;
+      clauses.push(fillAgentBioTemplate(templates[`extra.${extra.w}`], { types: joinAgentBioList(words, templates) }));
+    });
+    extras = clauses.join("");
+  }
+  let placeText = "";
+  if (part.place === "around_district") {
+    const areas = joinAgentBioList(part.areas, templates);
+    if (!areas || !part.district || !templates["place.around_district"]) return "";
+    placeText = fillAgentBioTemplate(templates["place.around_district"], { areas, district: part.district });
+  } else if (part.place) {
+    const areas = joinAgentBioList(part.areas, templates);
+    if (areas && templates[`place.${part.place}`]) placeText = fillAgentBioTemplate(templates[`place.${part.place}`], { areas });
+  }
+  return stripListingCountClause(fillAgentBioTemplate(template, {
+    name: part.name || "",
+    company: part.company || "",
+    primary,
+    types,
+    extras,
+    place: placeText
+  }));
+}
+
+function composePriceSentence(part, templates) {
+  if (!templates["price.lead"]) return "";
+  const bits = (part.items || []).map((item) => {
+    const label = templates[`priceLabel.${item.one ? "one." : ""}${item.k}`] || "";
+    const period = item.period === "month" ? "rent" : item.period === "night" ? "night" : "sale";
+    const single = item.low && item.low === item.high;
+    const key = `priceBit.${period}_${single ? "single" : "range"}`;
+    if (!label || !templates[key]) return "";
+    return fillAgentBioTemplate(templates[key], { label, low: item.low || "", high: item.high || "", price: item.low || "" });
+  });
+  if (!bits.length || bits.some((bit) => !bit)) return "";
+  return stripListingCountClause(fillAgentBioTemplate(templates["price.lead"], { items: joinAgentBioList(bits, templates) }));
+}
+
+function composeDetailSentence(part, templates) {
+  const featureWords = (part.features || []).map((key) => templates[`feat.${key}`] || "");
+  if (featureWords.some((word) => !word)) return "";
+  const features = featureWords.length ? joinAgentBioList(featureWords, templates) : "";
+  const beds = Array.isArray(part.beds) ? part.beds : null;
+  const same = beds && beds[0] === beds[1];
+  let key = "";
+  if (beds && features) key = same ? "detail.both_same" : "detail.both";
+  else if (beds) key = same ? "detail.beds_same" : "detail.beds";
+  else if (features) key = "detail.features";
+  if (!key || !templates[key]) return "";
+  return stripListingCountClause(fillAgentBioTemplate(templates[key], {
+    low: beds ? beds[0] : "",
+    high: beds ? beds[1] : "",
+    n: beds ? beds[0] : "",
+    features
+  }));
+}
+
+function composeSuitsSentence(part, templates) {
+  const words = (part.who || []).map((key) => templates[`who.${key}`] || "");
+  if (!words.length || words.some((word) => !word) || !templates.suits) return "";
+  return stripListingCountClause(fillAgentBioTemplate(templates.suits, { who: joinAgentBioList(words, templates) }));
+}
+
 function composeAgentBio(parts, templates) {
   if (!Array.isArray(parts) || !parts.length || !templates) return "";
   const place = (kind, areas) => {
@@ -48896,6 +48981,12 @@ function composeAgentBio(parts, templates) {
       const areas = joinAgentBioList(part.areas, templates);
       return areas && templates.cover ? fillAgentBioTemplate(templates.cover, { areas }) : "";
     }
+    if (part?.t === "portfolio") return composePortfolioSentence(part, templates);
+    if (part?.t === "deal") return templates[`deal.${part.kind}`] ? stripListingCountClause(templates[`deal.${part.kind}`]) : "";
+    if (part?.t === "prices") return composePriceSentence(part, templates);
+    if (part?.t === "detail") return composeDetailSentence(part, templates);
+    if (part?.t === "suits") return composeSuitsSentence(part, templates);
+    if (part?.t === "book") return templates.book ? stripListingCountClause(templates.book) : "";
     if (part?.t === "fallback") return templates.fallback || "";
     return "";
   });
@@ -48921,7 +49012,14 @@ function localizedAgentCardBio(agent = {}) {
   const parts = Array.isArray(agent?.bio_parts)
     ? agent.bio_parts
     : (Array.isArray(agent?.public_summary?.bio_parts) ? agent.public_summary.bio_parts : null);
-  if (source === "agent" || !parts || !parts.length) return english;
+  const own = source === "agent" || agent?.public_summary?.own_bio === true;
+  if (own) {
+    const ownText = String(agent?.public_summary?.about?.[0] || english.split(/\n\n/)[0] || "").trim();
+    if ((currentLang || "en") === "en" || !parts || !parts.length) return english;
+    const appendix = composeAgentBio(parts, agentBioTemplates(currentLang));
+    return appendix ? `${ownText}\n\n${appendix}` : english;
+  }
+  if (!parts || !parts.length) return english;
   if ((currentLang || "en") === "en") return english;
   return composeAgentBio(parts, agentBioTemplates(currentLang)) || english;
 }
@@ -48963,11 +49061,8 @@ function isInternalAgentReference(value) {
 // About paragraphs: the agent's own bio (if any) followed by the write-up the
 // server builds from their live listings; the old one-line bio otherwise.
 function brokerAboutParagraphs(broker = {}) {
-  const own = broker?.bio_source === "agent" || broker?.public_summary?.own_bio === true || broker?.public_summary?.bio_source === "agent";
-  if (!own) {
-    const localized = localizedAgentCardBio(broker);
-    if (localized) return [localized];
-  }
+  const localized = localizedAgentCardBio(broker);
+  if (localized) return localized.split(/\n\n/).map((text) => String(text || "").trim()).filter(Boolean);
   const about = Array.isArray(broker?.public_summary?.about)
     ? broker.public_summary.about.map((text) => String(text || "").trim()).filter(Boolean)
     : [];

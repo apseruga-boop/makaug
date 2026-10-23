@@ -1483,7 +1483,12 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
       '@context': 'https://schema.org',
       '@type': 'RealEstateAgent',
       name,
-      description: String(publicSummary?.about_text || row.bio || shareDescription).trim(),
+      description: String(
+        (publicSummary && agentPublicProfile.localizedPublicBio(publicSummary, options.lang))
+        || publicSummary?.about_text
+        || row.bio
+        || shareDescription
+      ).trim(),
       url: absolutePublicUrl(profilePath),
       image,
       areaServed: publicSummary?.districts?.length

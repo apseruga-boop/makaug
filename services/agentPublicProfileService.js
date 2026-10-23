@@ -1,17 +1,22 @@
 'use strict';
 
 // Public "About" text and areas covered for an agent profile, written from the
-// agent's live (approved) listings. Nothing here is stored: it is rebuilt on
-// every profile request, so it follows the listings as they change. Facts
-// only come from the listings (counts, places, asking prices, bedrooms, video
-// tours) - no years of experience, awards or claims the data cannot back.
-// An agent's own bio is never replaced; the listing write-up follows it.
+// agent's live (approved) listings. Nothing here is stored. The paragraph is
+// computed on request and kept in a short in-process cache keyed by every
+// fact it uses, so a publish, update, unpublish or delete changes the text
+// on the next read. Facts only come from the listings (types, places, asking
+// prices, bedrooms, title and features the rows actually record). No years
+// of experience, awards, or a total such as "57 listings". An agent's own
+// bio is kept, with a short "On makaug" paragraph after it.
 
+const fs = require('fs');
+const path = require('path');
 const {
   resolveCanonicalUgandaLocation,
   canonicalLocationSearchScope,
   normalizeDistrict
 } = require('../utils/ugandaLocationRegistry');
+const { isPriceImplausible } = require('../utils/pricePlausibility');
 
 const PLACEHOLDER_BIO_PATTERNS = [
   /^\s*$/,
@@ -125,11 +130,13 @@ function hasVideoTour(row = {}) {
   return values.some((value) => /^https?:\/\//i.test(String(value || '').trim()));
 }
 
-// sale = homes and buildings for sale; land; rent; commercial.
+// sale = homes and buildings for sale; land; rent; commercial; student; short_stay.
 function listingKind(row = {}) {
   const type = cleanText(row.listing_type).toLowerCase();
   const propertyType = cleanText(row.property_type).toLowerCase();
-  if (type === 'rent' || type === 'students' || type === 'student' || (isMonthlyPeriod(row.price_period) && type !== 'land')) return 'rent';
+  if (type === 'short_stay' || type === 'short_term' || type === 'short-term') return 'short_stay';
+  if (type === 'students' || type === 'student') return 'student';
+  if (type === 'rent' || (isMonthlyPeriod(row.price_period) && type !== 'land' && type !== 'commercial')) return 'rent';
   if (type === 'land' || (propertyType.includes('land') && type !== 'commercial')) return 'land';
   if (type === 'commercial' || propertyType.startsWith('commercial') || propertyType === 'hospitality' || propertyType === 'warehouse') return 'commercial';
   return 'sale';
@@ -157,28 +164,111 @@ function placeFor(row = {}) {
   return { name: area.replace(/\b\w/g, (c) => c.toUpperCase()), district, key: '' };
 }
 
+function plausibleAskingPrice(row, kind) {
+  const price = listingPrice(row);
+  if (!price) return null;
+  if (kind === 'short_stay') {
+    return isPriceImplausible({ ...row, listing_type: 'short_term', price_period: 'night', price }) ? null : price;
+  }
+  if ((kind === 'rent' || kind === 'student') && (price < MIN_MONTHLY_RENT_UGX || price > MAX_MONTHLY_RENT_UGX)) return null;
+  if (isPriceImplausible({ ...row, listing_type: kind === 'student' ? 'student' : row.listing_type, price })) return null;
+  return price;
+}
+
+function featureBlob(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const amenities = [
+    ...(Array.isArray(row.amenities) ? row.amenities : []),
+    ...(Array.isArray(extra.amenities) ? extra.amenities : [])
+  ];
+  return [row.title, row.description, row.title_type, extra.title_type, amenities.join(' ')]
+    .map((value) => String(value || ''))
+    .join(' ');
+}
+
+function titleKindOf(row = {}, blob = '') {
+  const given = cleanText(row.title_kind).toLowerCase();
+  if (given === 'mailo' || given === 'freehold' || given === 'leasehold' || given === 'titled') return given;
+  if (/mailo|\bmilo\b/i.test(blob)) return 'mailo';
+  if (/freehold/i.test(blob)) return 'freehold';
+  if (/leasehold/i.test(blob)) return 'leasehold';
+  if (cleanText(row.title_type) || /land title|ready title/i.test(blob)) return 'titled';
+  return '';
+}
+
+function priceBucketFor(row, kind) {
+  if (kind === 'short_stay') return { key: 'short_stays', period: 'night' };
+  if (kind === 'student') return { key: 'student_rent', period: 'month' };
+  if (kind === 'rent') {
+    const word = homeWord(row);
+    if (word === 'apartment') return { key: 'apartments_rent', period: 'month' };
+    if (word === 'house') return { key: 'houses_rent', period: 'month' };
+    return { key: 'rent', period: 'month' };
+  }
+  if (kind === 'land') return { key: 'plots', period: 'sale' };
+  if (kind === 'commercial') return { key: 'commercial', period: 'sale' };
+  const word = homeWord(row);
+  if (word === 'apartment') return { key: 'apartments_sale', period: 'sale' };
+  if (word === 'house') return { key: 'houses_sale', period: 'sale' };
+  return { key: 'properties_sale', period: 'sale' };
+}
+
 function summarizeListings(listings = []) {
-  const kinds = { sale: 0, land: 0, rent: 0, commercial: 0 };
+  const kinds = { sale: 0, land: 0, rent: 0, commercial: 0, student: 0, short_stay: 0 };
   const prices = { sale: [], land: [], rent: [], commercial: [] };
+  const priceBuckets = {};
+  const typeCounts = {
+    family_homes: 0, houses: 0, apartments: 0, homes: 0, properties: 0,
+    plots: 0, commercial: 0, short_stays: 0, student_rooms: 0
+  };
+  const features = {
+    gated: 0, self_contained: 0, lake_view: 0, mailo: 0, freehold: 0, leasehold: 0, titled: 0
+  };
   const bedrooms = [];
+  const houseBeds = [];
   const homeWords = { apartment: 0, house: 0 };
   const areaCounts = new Map();
   const districtCounts = new Map();
   let videos = 0;
   let commercialLand = 0;
   let homesForSale = 0;
+  let studentSignal = 0;
   listings.forEach((row) => {
     const kind = listingKind(row);
     kinds[kind] += 1;
-    const price = listingPrice(row);
-    const plausible = kind !== 'rent' || (price >= MIN_MONTHLY_RENT_UGX && price <= MAX_MONTHLY_RENT_UGX);
-    if (price && plausible) prices[kind].push(price);
+    const price = plausibleAskingPrice(row, kind);
+    if (price && prices[kind]) prices[kind].push(price);
+    const bucket = priceBucketFor(row, kind);
+    if (!priceBuckets[bucket.key]) priceBuckets[bucket.key] = { prices: [], listings: 0, period: bucket.period };
+    priceBuckets[bucket.key].listings += 1;
+    if (price) priceBuckets[bucket.key].prices.push(price);
     if (kind === 'land' && cleanText(row.property_type).toLowerCase().includes('commercial')) commercialLand += 1;
     const beds = Number(row.bedrooms);
-    if ((kind === 'sale' || kind === 'rent') && Number.isFinite(beds) && beds > 0 && beds <= MAX_HOME_BEDROOMS) bedrooms.push(beds);
-    const word = kind === 'sale' ? homeWord(row) : '';
-    if (word) homeWords[word] += 1;
-    if (kind === 'sale' && (word || (Number.isFinite(beds) && beds > 0 && beds <= MAX_HOME_BEDROOMS))) homesForSale += 1;
+    const bedsOk = Number.isFinite(beds) && beds > 0 && beds <= MAX_HOME_BEDROOMS;
+    if (bedsOk && kind !== 'land' && kind !== 'commercial') bedrooms.push(beds);
+    const word = homeWord(row);
+    if (kind === 'sale' && word) homeWords[word] += 1;
+    if (kind === 'sale' && (word || bedsOk)) homesForSale += 1;
+    if (kind === 'short_stay') typeCounts.short_stays += 1;
+    else if (kind === 'student') typeCounts.student_rooms += 1;
+    else if (kind === 'land') typeCounts.plots += 1;
+    else if (kind === 'commercial') typeCounts.commercial += 1;
+    else if (word === 'apartment') typeCounts.apartments += 1;
+    else if (word === 'house') {
+      typeCounts.houses += 1;
+      if (bedsOk) houseBeds.push(beds);
+    } else if (kind === 'sale') {
+      if (beds >= 3 && bedsOk) typeCounts.family_homes += 1;
+      else if (bedsOk) typeCounts.homes += 1;
+      else typeCounts.properties += 1;
+    }
+    const blob = featureBlob(row);
+    if (row.feat_gated === true || /\bgated\b/i.test(blob)) features.gated += 1;
+    if (row.feat_self_contained === true || /self[- ]contained/i.test(blob)) features.self_contained += 1;
+    if (row.feat_lake === true || /lake\s*view|lakeview/i.test(blob)) features.lake_view += 1;
+    const titleKind = titleKindOf(row, blob);
+    if (titleKind && features[titleKind] != null) features[titleKind] += 1;
+    if (kind === 'student' || cleanText(row.nearest_university)) studentSignal += 1;
     if (hasVideoTour(row)) videos += 1;
     const place = placeFor(row);
     if (place.district) districtCounts.set(place.district, (districtCounts.get(place.district) || 0) + 1);
@@ -189,6 +279,12 @@ function summarizeListings(listings = []) {
       areaCounts.set(id, entry);
     }
   });
+  if (typeCounts.houses && houseBeds.length && medianNumber(houseBeds) >= 3) {
+    typeCounts.family_homes += typeCounts.houses;
+    typeCounts.houses = 0;
+  }
+  const dwellingTyped = typeCounts.houses + typeCounts.apartments + typeCounts.student_rooms + typeCounts.short_stays + typeCounts.family_homes + typeCounts.homes;
+  if (dwellingTyped > 0) typeCounts.properties = 0;
   const areas = Array.from(areaCounts.values()).sort((a, b) => b.listings - a.listings || a.name.localeCompare(b.name));
   const districts = Array.from(districtCounts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
   // A district counts as "theirs" in the wording when it holds at least two
@@ -197,7 +293,30 @@ function summarizeListings(listings = []) {
     .filter(([, n]) => n >= 2 || n >= listings.length * 0.1)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([name]) => name);
-  return { total: listings.length, kinds, prices, bedrooms, homeWords, homesForSale, areas, districts, mainDistricts, videos, commercialLand };
+  return {
+    total: listings.length,
+    kinds,
+    prices,
+    priceBuckets,
+    typeCounts,
+    features,
+    commercialLand,
+    studentSignal,
+    bedrooms,
+    homeWords,
+    homesForSale,
+    areas,
+    districts,
+    mainDistricts,
+    videos
+  };
+}
+
+function medianNumber(values = []) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 function nearbyAreasFor(areas = [], exclude = new Set()) {
@@ -480,6 +599,95 @@ const AGENT_BIO_EN_TEMPLATES = {
   'price.rent_single': 'The rent is {price} a month.',
   'price.rent_range': 'Rents run from {low} to {high} a month.',
   'cover': 'They cover {areas}.',
+  'place.around_district': ' around {areas} in {district}',
+  'extra.along': ', along with {types}',
+  'extra.few': ', plus a few {types}',
+  'extra.some': ', plus some {types}',
+  'portfolio.mostly': 'The listings are mostly {primary}{extras}{place}.',
+  'portfolio.only': 'The listings are {primary}{place}.',
+  'portfolio.mix': 'The listings are a mix of {types}{place}.',
+  'portfolio.one': 'There is {primary}{place}.',
+  'portfolio.named_mostly': '{name} of {company} lists mostly {primary}{extras}{place}.',
+  'portfolio.named_only': '{name} of {company} lists {primary}{place}.',
+  'portfolio.named_mix': '{name} of {company} lists a mix of {types}{place}.',
+  'portfolio.named_one': '{name} of {company} lists {primary}{place}.',
+  'portfolio.on_mostly': 'On makaug, the listings are mostly {primary}{extras}{place}.',
+  'portfolio.on_only': 'On makaug, the listings are {primary}{place}.',
+  'portfolio.on_mix': 'On makaug, the listings are a mix of {types}{place}.',
+  'portfolio.on_one': 'On makaug, there is {primary}{place}.',
+  'bucket.family_homes': 'family homes',
+  'bucket.houses': 'houses',
+  'bucket.apartments': 'apartments',
+  'bucket.plots': 'plots',
+  'bucket.commercial': 'commercial property',
+  'bucket.short_stays': 'short stays',
+  'bucket.student_rooms': 'student rooms',
+  'bucket.homes': 'homes',
+  'bucket.properties': 'properties',
+  'one.bucket.family_homes': 'a family home',
+  'one.bucket.houses': 'a house',
+  'one.bucket.apartments': 'an apartment',
+  'one.bucket.plots': 'a plot',
+  'one.bucket.commercial': 'a commercial property',
+  'one.bucket.short_stays': 'a short stay',
+  'one.bucket.student_rooms': 'a student room',
+  'one.bucket.homes': 'a home',
+  'one.bucket.properties': 'a property',
+  'deal.sale_only': 'What is listed is for sale.',
+  'deal.rent_only': 'What is listed is to rent.',
+  'deal.mostly_sale': 'Most of what is listed is for sale, with some homes to rent.',
+  'deal.mostly_rent': 'Most of what is listed is to rent, with some properties for sale.',
+  'deal.both': 'Sales and homes to rent sit side by side.',
+  'deal.stays': 'What is listed is short stays.',
+  'price.lead': 'Asking prices are {items}.',
+  'priceBit.sale_range': '{low} to {high} for {label}',
+  'priceBit.sale_single': '{price} for {label}',
+  'priceBit.rent_range': '{low} to {high} a month for {label}',
+  'priceBit.rent_single': '{price} a month for {label}',
+  'priceBit.night_range': '{low} to {high} a night for {label}',
+  'priceBit.night_single': '{price} a night for {label}',
+  'priceLabel.houses_sale': 'houses for sale',
+  'priceLabel.apartments_sale': 'apartments for sale',
+  'priceLabel.properties_sale': 'properties for sale',
+  'priceLabel.plots': 'plots',
+  'priceLabel.commercial': 'commercial property',
+  'priceLabel.houses_rent': 'houses to rent',
+  'priceLabel.apartments_rent': 'apartments to rent',
+  'priceLabel.rent': 'rents',
+  'priceLabel.student_rent': 'student rooms',
+  'priceLabel.short_stays': 'short stays',
+  'priceLabel.one.houses_sale': 'a house for sale',
+  'priceLabel.one.apartments_sale': 'an apartment for sale',
+  'priceLabel.one.properties_sale': 'a property for sale',
+  'priceLabel.one.plots': 'a plot',
+  'priceLabel.one.commercial': 'a commercial property',
+  'priceLabel.one.houses_rent': 'a house to rent',
+  'priceLabel.one.apartments_rent': 'an apartment to rent',
+  'priceLabel.one.rent': 'the rent',
+  'priceLabel.one.student_rent': 'a student room',
+  'priceLabel.one.short_stays': 'a short stay',
+  'detail.beds': 'Homes are typically {low} to {high} bedrooms.',
+  'detail.beds_same': 'Homes are typically {n} bedrooms.',
+  'detail.features': 'Some listings note {features}.',
+  'detail.both': 'Homes are typically {low} to {high} bedrooms, and some listings note {features}.',
+  'detail.both_same': 'Homes are typically {n} bedrooms, and some listings note {features}.',
+  'feat.gated': 'a gated compound',
+  'feat.self_contained': 'a self-contained layout',
+  'feat.lake_view': 'a lake view',
+  'feat.mailo': 'a private mailo title',
+  'feat.freehold': 'a freehold title',
+  'feat.leasehold': 'a leasehold title',
+  'feat.titled': 'a land title',
+  'feat.commercial_land': 'commercial land among the plots',
+  'suits': 'This suits {who}.',
+  'who.families': 'families',
+  'who.buyers': 'buyers',
+  'who.investors': 'people looking for land',
+  'who.renters': 'renters',
+  'who.students': 'students',
+  'who.guests': 'guests looking for a short stay',
+  'who.business': 'businesses',
+  'book': 'To see a property, book a viewing or request a callback from this profile on makaug.',
   ...Object.fromEntries(Object.entries(AGENT_BIO_TYPE_EN).map(([key, text]) => [`type.${key}`, text])),
   ...Object.fromEntries(Object.entries(AGENT_BIO_ONE_EN).map(([key, text]) => [`one.${key}`, text]))
 };
@@ -558,8 +766,104 @@ function composeAgentBioSentence(part = {}, templates) {
     const areas = joinAgentBioList(part.areas, templates);
     return areas ? fillAgentBioTemplate(templates.cover, { areas }) : '';
   }
+  if (part.t === 'portfolio') return composePortfolioSentence(part, templates);
+  if (part.t === 'deal') {
+    const sentence = templates[`deal.${part.kind}`];
+    return sentence ? stripListingCountClause(sentence) : '';
+  }
+  if (part.t === 'prices') return composePriceSentence(part, templates);
+  if (part.t === 'detail') return composeDetailSentence(part, templates);
+  if (part.t === 'suits') return composeSuitsSentence(part, templates);
+  if (part.t === 'book') return templates.book ? stripListingCountClause(templates.book) : '';
   if (part.t === 'fallback') return templates.fallback || '';
   return '';
+}
+
+function bucketWord(key, one, templates) {
+  return templates[one ? `one.bucket.${key}` : `bucket.${key}`] || '';
+}
+
+function composePortfolioSentence(part = {}, templates) {
+  const mode = part.mode ? `${part.mode}_` : '';
+  const template = templates[`portfolio.${mode}${part.lead}`];
+  if (!template) return '';
+  const one = part.lead === 'one';
+  let primary = '';
+  let types = '';
+  let extras = '';
+  if (part.lead === 'mix') {
+    const words = (part.types || []).map((key) => bucketWord(key, false, templates));
+    if (!words.length || words.some((word) => !word)) return '';
+    types = joinAgentBioList(words, templates);
+  } else {
+    primary = bucketWord(part.primary, one, templates);
+    if (!primary) return '';
+    const clauses = [];
+    (part.extras || []).forEach((extra) => {
+      const words = (extra.keys || []).map((key) => bucketWord(key, false, templates));
+      if (!words.length || words.some((word) => !word) || !templates[`extra.${extra.w}`]) return;
+      clauses.push(fillAgentBioTemplate(templates[`extra.${extra.w}`], { types: joinAgentBioList(words, templates) }));
+    });
+    extras = clauses.join('');
+  }
+  let placeText = '';
+  if (part.place === 'around_district') {
+    const areas = joinAgentBioList(part.areas, templates);
+    if (!areas || !part.district || !templates['place.around_district']) return '';
+    placeText = fillAgentBioTemplate(templates['place.around_district'], { areas, district: part.district });
+  } else if (part.place) {
+    const areas = joinAgentBioList(part.areas, templates);
+    if (areas && templates[`place.${part.place}`]) {
+      placeText = fillAgentBioTemplate(templates[`place.${part.place}`], { areas });
+    }
+  }
+  return stripListingCountClause(fillAgentBioTemplate(template, {
+    name: part.name || '',
+    company: part.company || '',
+    primary,
+    types,
+    extras,
+    place: placeText
+  }));
+}
+
+function composePriceSentence(part = {}, templates) {
+  if (!templates['price.lead']) return '';
+  const bits = (part.items || []).map((item) => {
+    const label = templates[`priceLabel.${item.one ? 'one.' : ''}${item.k}`] || '';
+    const period = item.period === 'month' ? 'rent' : item.period === 'night' ? 'night' : 'sale';
+    const single = item.low && item.low === item.high;
+    const key = `priceBit.${period}_${single ? 'single' : 'range'}`;
+    if (!label || !templates[key]) return '';
+    return fillAgentBioTemplate(templates[key], { label, low: item.low || '', high: item.high || '', price: item.low || '' });
+  });
+  if (!bits.length || bits.some((bit) => !bit)) return '';
+  return stripListingCountClause(fillAgentBioTemplate(templates['price.lead'], { items: joinAgentBioList(bits, templates) }));
+}
+
+function composeDetailSentence(part = {}, templates) {
+  const featureWords = (part.features || []).map((key) => templates[`feat.${key}`] || '');
+  if (featureWords.some((word) => !word)) return '';
+  const features = featureWords.length ? joinAgentBioList(featureWords, templates) : '';
+  const beds = Array.isArray(part.beds) ? part.beds : null;
+  const same = beds && beds[0] === beds[1];
+  let key = '';
+  if (beds && features) key = same ? 'detail.both_same' : 'detail.both';
+  else if (beds) key = same ? 'detail.beds_same' : 'detail.beds';
+  else if (features) key = 'detail.features';
+  if (!key || !templates[key]) return '';
+  return stripListingCountClause(fillAgentBioTemplate(templates[key], {
+    low: beds ? beds[0] : '',
+    high: beds ? beds[1] : '',
+    n: beds ? beds[0] : '',
+    features
+  }));
+}
+
+function composeSuitsSentence(part = {}, templates) {
+  const words = (part.who || []).map((key) => templates[`who.${key}`] || '');
+  if (!words.length || words.some((word) => !word) || !templates.suits) return '';
+  return stripListingCountClause(fillAgentBioTemplate(templates.suits, { who: joinAgentBioList(words, templates) }));
 }
 
 function saleTypeKey(summary, many) {
@@ -671,15 +975,200 @@ function fitCardSentences(sentences = []) {
   return text;
 }
 
-// 2–3 sentences for the card and the profile About. A real bio always wins.
-// Generated text is built only from live listings and the agent's own areas.
+function quartileBand(values = []) {
+  if (values.length < 2) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const at = (p) => {
+    const index = (sorted.length - 1) * p;
+    const low = Math.floor(index);
+    const high = Math.ceil(index);
+    return sorted[low] + (sorted[high] - sorted[low]) * (index - low);
+  };
+  const low = Math.max(1, Math.round(at(0.25)));
+  const high = Math.max(low, Math.round(at(0.75)));
+  return [low, high];
+}
+
+function positiveBuckets(counts = {}) {
+  return Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+function portfolioShape(typeCounts = {}) {
+  const entries = positiveBuckets(typeCounts);
+  const total = entries.reduce((sum, [, count]) => sum + count, 0);
+  if (!total) return null;
+  if (entries.length === 1 && entries[0][1] === 1) return { lead: 'one', primary: entries[0][0], extras: [] };
+  if (entries.length === 1) return { lead: 'only', primary: entries[0][0], extras: [] };
+  const [top, topCount] = entries[0];
+  if (topCount / total >= 0.5) {
+    const grouped = { along: [], few: [], some: [] };
+    entries.slice(1, 5).forEach(([key, count]) => {
+      const share = count / total;
+      const countable = key !== 'commercial';
+      const weight = share >= 0.25 ? 'along' : (count >= 2 && countable ? 'few' : 'some');
+      grouped[weight].push(key);
+    });
+    const extras = [];
+    let kept = 0;
+    ['along', 'few', 'some'].forEach((weight) => {
+      if (!grouped[weight].length || kept >= 3) return;
+      const keys = grouped[weight].slice(0, 3 - kept);
+      extras.push({ w: weight, keys });
+      kept += keys.length;
+    });
+    return { lead: 'mostly', primary: top, extras };
+  }
+  return { lead: 'mix', types: entries.slice(0, 4).map(([key]) => key) };
+}
+
+function placeShape(summary, covered = []) {
+  const seen = new Set();
+  const topAreas = [];
+  (summary.areas || []).forEach((area) => {
+    const id = String(area.name || '').toLowerCase();
+    if (!id || seen.has(id) || topAreas.length >= 6) return;
+    seen.add(id);
+    topAreas.push(area);
+  });
+  const areaNames = topAreas.map((area) => area.name);
+  const districtNames = (summary.mainDistricts.length ? summary.mainDistricts : summary.districts).slice(0, 6);
+  const coveredNames = covered.slice(0, 6);
+  const areas = areaNames.length ? areaNames : (districtNames.length ? districtNames : coveredNames);
+  if (!areas.length) return { place: '', areas: [], district: '' };
+  const districts = [...new Set(topAreas.map((area) => area.district).filter(Boolean))];
+  const oneDistrict = areaNames.length && districts.length === 1 ? districts[0] : '';
+  const districtIsArea = oneDistrict && areaNames.some((name) => name.toLowerCase() === oneDistrict.toLowerCase());
+  if (summary.total === 1) {
+    return { place: areaNames.length ? 'in' : 'in', areas, district: '' };
+  }
+  if (oneDistrict && !districtIsArea) return { place: 'around_district', areas, district: oneDistrict };
+  return { place: areaNames.length ? 'around' : 'in', areas, district: '' };
+}
+
+function dealKind(summary) {
+  const sale = (summary.kinds.sale || 0) + (summary.kinds.land || 0) + (summary.kinds.commercial || 0);
+  const rent = (summary.kinds.rent || 0) + (summary.kinds.student || 0);
+  const stays = summary.kinds.short_stay || 0;
+  if (!sale && !rent && stays) return 'stays';
+  if (sale && !rent) return 'sale_only';
+  if (rent && !sale) return 'rent_only';
+  if (!sale && !rent) return '';
+  if (sale / (sale + rent) >= 0.7) return 'mostly_sale';
+  if (rent / (sale + rent) >= 0.7) return 'mostly_rent';
+  return 'both';
+}
+
+function selectPriceItems(summary) {
+  const entries = Object.entries(summary.priceBuckets || {})
+    .map(([key, bucket]) => ({ key, ...bucket, range: priceRange(bucket.prices || []) }))
+    .filter((item) => item.range.text);
+  entries.sort((a, b) => b.listings - a.listings || a.key.localeCompare(b.key));
+  const isRent = (key) => /rent|student/.test(key);
+  const isBuy = (key) => key !== 'short_stays' && !isRent(key);
+  const chosen = entries.slice(0, 4);
+  const ensure = (pred) => {
+    if (chosen.some((item) => pred(item.key))) return;
+    const next = entries.find((item) => pred(item.key) && !chosen.includes(item));
+    if (!next) return;
+    if (chosen.length < 4) {
+      chosen.push(next);
+      return;
+    }
+    const replaceAt = chosen
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => !pred(item.key))
+      .sort((a, b) => a.item.listings - b.item.listings)[0];
+    if (replaceAt) chosen[replaceAt.index] = next;
+  };
+  ensure(isRent);
+  ensure(isBuy);
+  ensure((key) => key === 'short_stays');
+  chosen.sort((a, b) => b.listings - a.listings || a.key.localeCompare(b.key));
+  return chosen.map((item) => ({
+    k: item.key,
+    one: item.listings === 1,
+    low: item.range.low,
+    high: item.range.high,
+    period: item.period
+  }));
+}
+
+function detailShape(summary) {
+  const beds = quartileBand(summary.bedrooms || []);
+  const order = ['gated', 'self_contained', 'lake_view', 'mailo', 'freehold', 'leasehold', 'titled'];
+  const features = order.filter((key) => (summary.features?.[key] || 0) >= 2);
+  if ((summary.commercialLand || 0) >= 1 && (summary.typeCounts?.plots || 0) >= 1) features.push('commercial_land');
+  const picked = features.slice(0, 3);
+  if (!beds && !picked.length) return null;
+  return { beds, features: picked };
+}
+
+function suitsWho(summary) {
+  const buckets = summary.typeCounts || {};
+  const who = [];
+  const familySized = (summary.bedrooms || []).some((beds) => beds >= 3) || (buckets.family_homes || 0) > 0;
+  const saleDwellings = (summary.kinds.sale || 0) > 0 && ((buckets.houses || 0) + (buckets.homes || 0) + (buckets.apartments || 0) + (buckets.properties || 0) + (buckets.family_homes || 0) > 0);
+  if (familySized && ((summary.kinds.sale || 0) + (summary.kinds.rent || 0) > 0)) who.push('families');
+  else if (saleDwellings) who.push('buyers');
+  if ((buckets.plots || 0) || (buckets.commercial || 0) || summary.commercialLand) who.push('investors');
+  if ((summary.kinds.rent || 0) > 0) who.push('renters');
+  if ((summary.kinds.student || 0) > 0 || (summary.studentSignal || 0) >= 2) who.push('students');
+  if ((buckets.short_stays || 0) > 0) who.push('guests');
+  if ((buckets.commercial || 0) > 0) who.push('business');
+  return who.slice(0, 4);
+}
+
+// A paragraph from the live listings. Facts only: no listing totals, and no
+// claim the columns do not support. An agent's own bio keeps their words and
+// gets a short "On makaug" appendix.
+function buildRichParagraph(agent, summary, { onMakaug = false } = {}) {
+  const company = distinctCompanyName(agent);
+  const name = cleanText(agent.full_name || agent.name || agent.company_name);
+  const covered = districtList(Array.isArray(agent.districts_covered) ? agent.districts_covered : []);
+  const shape = portfolioShape(summary.typeCounts || {});
+  if (!shape) return null;
+  const where = placeShape(summary, covered);
+  const mode = onMakaug ? 'on' : (company && name ? 'named' : '');
+  const parts = [{
+    t: 'portfolio',
+    mode,
+    lead: shape.lead,
+    primary: shape.primary || '',
+    extras: shape.extras || [],
+    types: shape.types || [],
+    areas: where.areas,
+    place: where.place,
+    district: where.district,
+    name,
+    company: company || ''
+  }];
+  if (!onMakaug) {
+    const kind = dealKind(summary);
+    if (kind) parts.push({ t: 'deal', kind });
+  }
+  const items = selectPriceItems(summary);
+  if (items.length) parts.push({ t: 'prices', items });
+  if (!onMakaug) {
+    const detail = detailShape(summary);
+    if (detail) parts.push({ t: 'detail', beds: detail.beds, features: detail.features });
+    const who = suitsWho(summary);
+    if (who.length) parts.push({ t: 'suits', who });
+  }
+  parts.push({ t: 'book' });
+  const text = composeAgentBio(parts, AGENT_BIO_EN_TEMPLATES);
+  if (!text) return null;
+  return { text, parts };
+}
+
+// The profile About paragraph. A real bio always wins, with a short data
+// appendix after it. Generated text is built only from live listings.
 // It is never written back to agents.bio.
 function agentCardBio(agent = {}, listings = []) {
   const own = ownBio(agent.bio, {
     makaugCreated: agent.direct_agent_authorised === true || String(agent.verification_reason || '').includes('[DIRECT_AGENT_AUTHORISED]')
   });
-  if (own) return { text: own, source: 'agent' };
-
   const name = cleanText(agent.full_name || agent.name || agent.company_name) || 'This agent';
   const company = distinctCompanyName(agent);
   const role = agentRoleLabel(agent);
@@ -689,10 +1178,15 @@ function agentCardBio(agent = {}, listings = []) {
   const districtNames = (summary.mainDistricts.length ? summary.mainDistricts : summary.districts).slice(0, 3);
   const coveredNames = covered.slice(0, 3);
   const areas = areaNames.length ? areaNames : (districtNames.length ? districtNames : coveredNames);
-  const where = joinList(areas);
+
+  if (own) {
+    const appendix = summary.total ? buildRichParagraph(agent, summary, { onMakaug: true }) : null;
+    if (!appendix) return { text: own, source: 'agent', parts: null, own };
+    return { text: `${own}\n\n${appendix.text}`, source: 'agent', parts: appendix.parts, own, appendix: appendix.text };
+  }
 
   if (!summary.total) {
-    const text = emptyPortfolioBio(name, role, company, where);
+    const text = emptyPortfolioBio(name, role, company, joinList(areas));
     return {
       text,
       source: 'generated',
@@ -700,40 +1194,11 @@ function agentCardBio(agent = {}, listings = []) {
     };
   }
 
-  const one = summary.total === 1;
-  const typeKeys = one ? [oneListingTypeKey(summary)] : specialismTypeKeys(summary);
-  const focus = one
-    ? (AGENT_BIO_ONE_EN[typeKeys[0]] || 'a property')
-    : (joinList(typeKeys.map((key) => AGENT_BIO_TYPE_EN[key]).filter(Boolean)) || 'property');
-  const placeWord = where ? (one ? 'in' : 'around') : '';
-  const place = where ? ` ${placeWord} ${where}` : '';
-  const leadWho = company ? `${name} of ${company} specialises` : 'Specialises';
-  const pieces = [{
-    text: `${leadWho} in ${focus}${place} on makaug.`,
-    part: {
-      t: 'specialises',
-      one,
-      types: typeKeys,
-      place: placeWord,
-      areas,
-      name,
-      company: company || ''
-    }
-  }];
-  const priced = priceBioPiece(
-    priceRange([...summary.prices.sale, ...summary.prices.land, ...summary.prices.commercial]),
-    priceRange(summary.prices.rent)
-  );
-  if (priced) pieces.push(priced);
-  const districtNamesForCover = summary.districts.slice(0, 3);
-  if (!where && districtNamesForCover.length) {
-    pieces.push({
-      text: `They cover ${joinList(districtNamesForCover)}.`,
-      part: { t: 'cover', areas: districtNamesForCover }
-    });
+  const rich = buildRichParagraph(agent, summary, { onMakaug: false });
+  if (!rich) {
+    return { text: 'Property agent on makaug.', source: 'generated', parts: [{ t: 'fallback' }] };
   }
-  const fitted = fitCardPieces(pieces);
-  return { text: fitted.text, source: 'generated', parts: fitted.parts };
+  return { text: rich.text, source: 'generated', parts: rich.parts };
 }
 
 const cardBioCache = new Map();
@@ -747,7 +1212,11 @@ function cardBioCacheKey(agent = {}, listings = []) {
     cleanText(agent.company_name || agent.company),
     cleanText(agent.full_name || agent.name),
     ...(Array.isArray(agent.districts_covered) ? agent.districts_covered : []),
-    ...listings.map((row) => [row.listing_type, row.property_type, row.district, row.area, row.price, row.price_period].join('|'))
+    ...listings.map((row) => [
+      row.listing_type, row.property_type, row.district, row.area, row.price, row.price_period,
+      row.bedrooms, row.title_type, row.title_kind, row.nearest_university,
+      row.feat_gated, row.feat_self_contained, row.feat_lake, row.title, row.description
+    ].join('|'))
   ].join('\n');
   for (let i = 0; i < text.length; i += 1) {
     hash ^= text.charCodeAt(i);
@@ -775,8 +1244,9 @@ function buildAgentPublicSummary(agent = {}, listings = []) {
   const districts = districtList(summary.districts, nearby.map((area) => area.district), covered);
   const card = agentCardBio(agent, listings);
 
+  const about = card.appendix ? [card.own, card.appendix] : [card.text];
   return {
-    about: [card.text],
+    about,
     about_text: card.text,
     own_bio: card.source === 'agent',
     bio_display: card.text,
@@ -793,15 +1263,41 @@ function buildAgentPublicSummary(agent = {}, listings = []) {
 }
 
 // One-line version for meta descriptions (at most ~155 characters).
+// The first sentence of the paragraph, never a listing total.
 function agentSummaryDescription(publicSummary = {}, name = '') {
-  const areas = (publicSummary.areas || []).slice(0, 3).map((area) => area.name);
-  const mix = Array.isArray(publicSummary.mix_phrases) ? publicSummary.mix_phrases : mixPhrases(publicSummary.mix || {}, {});
-  const who = cleanText(name) || 'This makaug agent';
-  let text = mix.length
-    ? `${who}: ${joinList(mix.slice(0, 3))}${areas.length ? ` in ${joinList(areas)}` : ''}.`
-    : `${who}, property agent on makaug.`;
-  if (text.length < 120) text += ' Call or WhatsApp on makaug.com.';
+  const about = cleanText(String(publicSummary.about_text || '').split('\n')[0]);
+  const who = cleanText(name);
+  let text = about || `${who || 'This agent'} is a property agent on makaug.`;
+  if (who && text.length < 110 && !text.toLowerCase().includes(who.toLowerCase())) text = `${who}. ${text}`;
   return text.length > 158 ? `${text.slice(0, 155).replace(/\s+\S*$/, '')}…` : text;
+}
+
+const langTemplateCache = new Map();
+
+function bioTemplatesFor(lang) {
+  const code = cleanText(lang).toLowerCase();
+  if (!code || code === 'en') return AGENT_BIO_EN_TEMPLATES;
+  if (langTemplateCache.has(code)) return langTemplateCache.get(code);
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'assets', 'i18n', `site-${code}.json`), 'utf8'));
+    langTemplateCache.set(code, raw.templates || null);
+  } catch (_error) {
+    langTemplateCache.set(code, null);
+  }
+  return langTemplateCache.get(code);
+}
+
+function localizedPublicBio(summary = {}, lang = 'en') {
+  const english = cleanText(summary.about_text || '');
+  const code = cleanText(lang).toLowerCase();
+  if (!code || code === 'en' || !Array.isArray(summary.bio_parts) || !summary.bio_parts.length) return english;
+  const composed = composeAgentBio(summary.bio_parts, bioTemplatesFor(code));
+  if (!composed) return english;
+  if (summary.bio_source === 'agent' || summary.own_bio) {
+    const own = cleanText(Array.isArray(summary.about) ? summary.about[0] : '');
+    return own ? `${own}\n\n${composed}` : composed;
+  }
+  return composed;
 }
 
 module.exports = {
@@ -810,6 +1306,7 @@ module.exports = {
   agentCardBio,
   agentCardBioCached,
   composeAgentBio,
+  localizedPublicBio,
   AGENT_BIO_EN_TEMPLATES,
   isPlaceholderBio,
   ownBio,
@@ -818,23 +1315,94 @@ module.exports = {
   distinctCompanyName
 };
 
+const SUMMARY_FACT_SQL = `
+  p.listing_type, p.property_type, p.district, p.area, p.price, p.price_period, p.bedrooms,
+  p.title_type, p.nearest_university,
+  (
+    COALESCE(p.title, '') ~* '\\mgated\\M'
+    OR COALESCE(p.description, '') ~* '\\mgated\\M'
+    OR COALESCE(p.amenities::text, '') ~* 'gated'
+  ) AS feat_gated,
+  (
+    COALESCE(p.title, '') ~* 'self[- ]contained'
+    OR COALESCE(p.description, '') ~* 'self[- ]contained'
+  ) AS feat_self_contained,
+  (
+    COALESCE(p.title, '') ~* 'lake[[:space:]]*view|lakeview'
+    OR COALESCE(p.description, '') ~* 'lake[[:space:]]*view|lakeview'
+  ) AS feat_lake,
+  CASE
+    WHEN COALESCE(p.title, '') || ' ' || COALESCE(p.description, '') || ' ' || COALESCE(p.title_type, '') ~* 'mailo|\\mmilo\\M' THEN 'mailo'
+    WHEN COALESCE(p.title, '') || ' ' || COALESCE(p.description, '') || ' ' || COALESCE(p.title_type, '') ~* 'freehold' THEN 'freehold'
+    WHEN COALESCE(p.title, '') || ' ' || COALESCE(p.description, '') || ' ' || COALESCE(p.title_type, '') ~* 'leasehold' THEN 'leasehold'
+    WHEN COALESCE(p.title_type, '') <> ''
+      OR COALESCE(p.title, '') || ' ' || COALESCE(p.description, '') ~* 'land title|ready title' THEN 'titled'
+    ELSE ''
+  END AS title_kind,
+  jsonb_build_object(
+    'video_url', p.extra_fields->'video_url',
+    'video_urls', p.extra_fields->'video_urls',
+    'video_tours', p.extra_fields->'video_tours',
+    'youtube_url', p.extra_fields->'youtube_url',
+    'tiktok_url', p.extra_fields->'tiktok_url'
+  ) AS extra_fields
+`;
+
+async function loadShortStayRows(db, agentIds) {
+  const ids = [...new Set(agentIds.map((id) => String(id || '')).filter(Boolean))];
+  if (!ids.length) return [];
+  try {
+    const result = await db.query(
+      `SELECT a.id AS agent_id,
+              'short_stay' AS listing_type,
+              COALESCE(l.property_type, l.place_type, '') AS property_type,
+              l.district, l.area,
+              l.base_nightly_ugx AS price,
+              'night' AS price_period,
+              l.bedrooms,
+              '' AS title_type,
+              '' AS nearest_university,
+              (COALESCE(l.title, '') || ' ' || COALESCE(l.description, '')) ~* '\\mgated\\M' AS feat_gated,
+              (COALESCE(l.title, '') || ' ' || COALESCE(l.description, '')) ~* 'self[- ]contained' AS feat_self_contained,
+              (COALESCE(l.title, '') || ' ' || COALESCE(l.description, '')) ~* 'lake[[:space:]]*view|lakeview' AS feat_lake,
+              '' AS title_kind,
+              '{}'::jsonb AS extra_fields
+         FROM st_listing l
+         JOIN agents a ON a.id = ANY($1::uuid[])
+        WHERE l.status = 'approved'
+          AND l.moderation_stage = 'approved'
+          AND l.king_facts_confirmed = TRUE
+          AND l.listing_fee_status IN ('paid', 'waived')
+          AND (
+            (a.user_id IS NOT NULL AND l.host_user_id = a.user_id)
+            OR (
+              length(regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')) >= 9
+              AND (
+                regexp_replace(COALESCE(l.host_phone, ''), '\\D', '', 'g') = regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')
+                OR regexp_replace(COALESCE(l.host_whatsapp, ''), '\\D', '', 'g') = regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')
+              )
+            )
+          )`,
+      [ids]
+    );
+    return result.rows;
+  } catch (error) {
+    if (error.code === '42P01' || error.code === '42703') return [];
+    throw error;
+  }
+}
+
 // Every approved listing for one agent, with only the columns the summary
 // reads (the profile's own listing grid is capped at 100; the write-up is not).
 async function loadAgentSummaryListings(db, agentId) {
   const result = await db.query(
-    `SELECT p.listing_type, p.property_type, p.district, p.area, p.price, p.price_period, p.bedrooms,
-            jsonb_build_object(
-              'video_url', p.extra_fields->'video_url',
-              'video_urls', p.extra_fields->'video_urls',
-              'video_tours', p.extra_fields->'video_tours',
-              'youtube_url', p.extra_fields->'youtube_url',
-              'tiktok_url', p.extra_fields->'tiktok_url'
-            ) AS extra_fields
+    `SELECT ${SUMMARY_FACT_SQL}
        FROM properties p
       WHERE p.agent_id = $1 AND p.status = 'approved'`,
     [agentId]
   );
-  return result.rows;
+  const stays = await loadShortStayRows(db, [agentId]);
+  return result.rows.concat(stays);
 }
 
 async function loadAgentPublicSummary(db, agent = {}) {
@@ -843,19 +1411,20 @@ async function loadAgentPublicSummary(db, agent = {}) {
   return buildAgentPublicSummary(agent, listings);
 }
 
-// Listings for every agent on a directory page, in one query. The card bio
-// does not need video columns, so this stays lighter than the profile summary.
+// Listings for every agent on a directory page, in one query. Same facts as
+// the profile write-up, so the card and the profile stay in step.
 async function loadAgentCardListings(db, agentIds = []) {
   const ids = [...new Set(agentIds.map((id) => String(id || '')).filter(Boolean))];
   if (!ids.length) return new Map();
   const result = await db.query(
-    `SELECT p.agent_id, p.listing_type, p.property_type, p.district, p.area, p.price, p.price_period, p.bedrooms
+    `SELECT p.agent_id, ${SUMMARY_FACT_SQL}
        FROM properties p
       WHERE p.status = 'approved' AND p.agent_id = ANY($1::uuid[])`,
     [ids]
   );
+  const stays = await loadShortStayRows(db, ids);
   const grouped = new Map();
-  result.rows.forEach((row) => {
+  result.rows.concat(stays).forEach((row) => {
     const key = String(row.agent_id);
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key).push(row);
