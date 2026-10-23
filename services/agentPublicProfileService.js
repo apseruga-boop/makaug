@@ -464,8 +464,8 @@ const AGENT_BIO_EN_TEMPLATES = {
   'place.covering': ' covering {areas}',
   'count.one': '1 live listing',
   'count.many': '{n} live listings',
-  'specialises': 'Specialises in {types}{place}, with {count} on makaug.',
-  'specialises.company': '{name} of {company} specialises in {types}{place}, with {count} on makaug.',
+  'specialises': 'Specialises in {types}{place} on makaug.',
+  'specialises.company': '{name} of {company} specialises in {types}{place} on makaug.',
   'empty.agency': '{name} is an agency on makaug{place}. Their properties will appear here once listed.',
   'empty.independent': '{name} is an independent agent on makaug{place}. Their properties will appear here once listed.',
   'empty.agent': '{name} is a property agent on makaug{place}. Their properties will appear here once listed.',
@@ -505,17 +505,25 @@ function composeAgentBio(parts, templates = AGENT_BIO_EN_TEMPLATES) {
   return sentences.join(' ');
 }
 
+// Older language packs still say ", with {count}". Drop that clause so a
+// cached pack cannot print a listing total. count.one and count.many stay in
+// the packs so every language keeps the same keys.
+function stripListingCountClause(template) {
+  return String(template || '')
+    .replace(/,\s*(?:with|nga alina|akiwa na|ki|aine)\s+\{count\}/gi, '')
+    .replace(/،\s*ولديه\s+\{count\}/g, '')
+    .replace(/፣\s*በmakaug\s+\{count\}\s*አሉት/g, ' በmakaug')
+    .replace(/\s*\{count\}/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
 function composeAgentBioSentence(part = {}, templates) {
   const place = (kind, areas) => {
     const joined = joinAgentBioList(areas, templates);
     if (!kind || !joined || !templates[`place.${kind}`]) return '';
     return fillAgentBioTemplate(templates[`place.${kind}`], { areas: joined });
   };
-  const countPhrase = (count) => (
-    Number(count) === 1
-      ? templates['count.one']
-      : fillAgentBioTemplate(templates['count.many'], { n: count })
-  );
   if (part.t === 'specialises') {
     const typeWords = part.one
       ? [templates[`one.${part.types?.[0]}`] || '']
@@ -523,13 +531,12 @@ function composeAgentBioSentence(part = {}, templates) {
     if (!typeWords.length || typeWords.some((word) => !word)) return '';
     const types = part.one ? typeWords[0] : joinAgentBioList(typeWords, templates);
     const key = part.company ? 'specialises.company' : 'specialises';
-    if (!templates[key] || !templates['count.one'] || !templates['count.many']) return '';
-    return fillAgentBioTemplate(templates[key], {
+    if (!templates[key]) return '';
+    return fillAgentBioTemplate(stripListingCountClause(templates[key]), {
       name: part.name || '',
       company: part.company || '',
       types,
-      place: place(part.place, part.areas),
-      count: countPhrase(part.count)
+      place: place(part.place, part.areas)
     });
   }
   if (part.t === 'empty') {
@@ -702,14 +709,13 @@ function agentCardBio(agent = {}, listings = []) {
   const place = where ? ` ${placeWord} ${where}` : '';
   const leadWho = company ? `${name} of ${company} specialises` : 'Specialises';
   const pieces = [{
-    text: `${leadWho} in ${focus}${place}, with ${plural(summary.total, 'live listing', 'live listings')} on makaug.`,
+    text: `${leadWho} in ${focus}${place} on makaug.`,
     part: {
       t: 'specialises',
       one,
       types: typeKeys,
       place: placeWord,
       areas,
-      count: summary.total,
       name,
       company: company || ''
     }

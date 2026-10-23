@@ -48672,6 +48672,18 @@ function joinAgentBioList(items = [], templates = {}) {
 
 // Same composer as services/agentPublicProfileService.js. A missing template
 // returns "" so the card keeps the English bio_display instead of a half sentence.
+// A cached pack may still contain ", with {count}". That clause is removed
+// before the sentence is filled, so the card never states a listing total.
+function stripListingCountClause(template) {
+  return String(template || "")
+    .replace(/,\s*(?:with|nga alina|akiwa na|ki|aine)\s+\{count\}/gi, "")
+    .replace(/،\s*ولديه\s+\{count\}/g, "")
+    .replace(/፣\s*በmakaug\s+\{count\}\s*አሉት/g, " በmakaug")
+    .replace(/\s*\{count\}/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 function composeAgentBio(parts, templates) {
   if (!Array.isArray(parts) || !parts.length || !templates) return "";
   const place = (kind, areas) => {
@@ -48679,11 +48691,6 @@ function composeAgentBio(parts, templates) {
     if (!kind || !joined || !templates[`place.${kind}`]) return "";
     return fillAgentBioTemplate(templates[`place.${kind}`], { areas: joined });
   };
-  const countPhrase = (count) => (
-    Number(count) === 1
-      ? templates["count.one"]
-      : fillAgentBioTemplate(templates["count.many"], { n: count })
-  );
   const sentences = parts.map((part) => {
     if (part?.t === "specialises") {
       const typeWords = part.one
@@ -48691,13 +48698,12 @@ function composeAgentBio(parts, templates) {
         : (part.types || []).map((key) => templates[`type.${key}`] || "");
       if (!typeWords.length || typeWords.some((word) => !word)) return "";
       const key = part.company ? "specialises.company" : "specialises";
-      if (!templates[key] || !templates["count.one"] || !templates["count.many"]) return "";
-      return fillAgentBioTemplate(templates[key], {
+      if (!templates[key]) return "";
+      return fillAgentBioTemplate(stripListingCountClause(templates[key]), {
         name: part.name || "",
         company: part.company || "",
         types: part.one ? typeWords[0] : joinAgentBioList(typeWords, templates),
-        place: place(part.place, part.areas),
-        count: countPhrase(part.count)
+        place: place(part.place, part.areas)
       });
     }
     if (part?.t === "empty") {
