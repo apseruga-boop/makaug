@@ -29086,6 +29086,23 @@ function adminReviewCurrentLocationFields() {
   };
 }
 
+function adminReviewActiveCanonicalLocation() {
+  // 23 Oct 2026: Brian's Muyenga plot went live under Kisoro. The review screen
+  // kept a canonical place picked earlier (Cyanika, Kisoro) after staff had
+  // moved on to Muyenga, Kampala, and saved the stale district over the form.
+  // A picked place only counts while the form still says the same thing.
+  const picked = adminReviewCanonicalLocationResolution;
+  if (!picked?.canonical_location_id) return null;
+  const fields = adminReviewCurrentLocationFields();
+  const same = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+  const pickedDistrict = picked.province || picked.district || "";
+  if (fields.district && pickedDistrict && !same(fields.district, pickedDistrict)) return null;
+  const typed = [fields.area, fields.neighborhood].map((value) => String(value || "").trim()).filter(Boolean);
+  const name = String(picked.name || "").trim();
+  if (typed.length && name && !typed.some((value) => same(value, name))) return null;
+  return picked;
+}
+
 function adminReviewSetAreaFromNeighborhood() {
   const areaEl = document.getElementById("admin-review-area-edit");
   const neighborhood = document.getElementById("admin-review-neighborhood-edit")?.value || "";
@@ -29388,7 +29405,9 @@ function adminReviewLocationFieldsResolved() {
 
 function adminReviewResolvedLocationStatus() {
   const fields = typeof adminReviewCurrentLocationFields === "function" ? adminReviewCurrentLocationFields() : {};
-  const picked = adminReviewCanonicalLocationResolution;
+  const picked = typeof adminReviewActiveCanonicalLocation === "function"
+    ? adminReviewActiveCanonicalLocation()
+    : adminReviewCanonicalLocationResolution;
   const district = String(fields.district || picked?.district || picked?.province || "").trim();
   const place = String(picked?.name || fields.neighborhood || fields.area || fields.city || "").trim();
   const review = {
@@ -29822,7 +29841,7 @@ function adminReviewLocationAutofillText(review = {}, facts = {}) {
 }
 
 function adminReviewRecognisedLocationSelected(review = {}) {
-  const picked = adminReviewCanonicalLocationResolution;
+  const picked = adminReviewActiveCanonicalLocation();
   if (picked?.canonical_location_id && picked.match === "exact_alias" && Number(picked.confidence) === 1) return true;
   const extra = adminReviewExtraFields(review);
   const id = String(extra.canonical_location_id || review.canonical_location_id || "").trim();
@@ -30997,9 +31016,10 @@ function adminReviewSourcePostDateFieldHtml(review = {}) {
 function collectAdminReviewListingPatch() {
   const get = (id) => adminReviewField(id)?.value ?? "";
   const listingType = normalizeType(get("admin-review-listing-type-edit"));
-  const canonical = adminReviewCanonicalLocationResolution?.match === "exact_alias"
-    && Number(adminReviewCanonicalLocationResolution?.confidence) === 1
-    ? adminReviewCanonicalLocationResolution
+  const activeCanonical = adminReviewActiveCanonicalLocation();
+  const canonical = activeCanonical?.match === "exact_alias"
+    && Number(activeCanonical?.confidence) === 1
+    ? activeCanonical
     : null;
   const district = canonical?.province || canonical?.district || get("admin-review-district-edit");
   const region = canonical?.region || (district ? regionForDistrict(district) : get("admin-review-region-edit"));
@@ -31094,9 +31114,10 @@ function collectAdminReviewListingPatch() {
 }
 
 function adminReviewHumanLocationConfirmation() {
-  const canonical = adminReviewCanonicalLocationResolution?.match === "exact_alias"
-    && Number(adminReviewCanonicalLocationResolution?.confidence) === 1
-    && Boolean(adminReviewCanonicalLocationResolution?.canonical_location_id);
+  const activeCanonical = adminReviewActiveCanonicalLocation();
+  const canonical = activeCanonical?.match === "exact_alias"
+    && Number(activeCanonical?.confidence) === 1
+    && Boolean(activeCanonical?.canonical_location_id);
   const fields = adminReviewCurrentLocationFields();
   const coordinates = adminReviewNormalizeCoordinateInputs(
     document.getElementById("admin-review-latitude-edit")?.value,
