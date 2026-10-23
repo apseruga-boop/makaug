@@ -7,6 +7,7 @@ const http = require('http');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
+const { isAllowedCorsOrigin } = require('./utils/corsOrigin');
 const rateLimit = require('express-rate-limit');
 const jwt = require('jsonwebtoken');
 
@@ -173,10 +174,8 @@ app.use(
 app.use(
   cors({
     origin(origin, callback) {
-      const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(String(origin || ''));
-      const tenantHost = new URL(ACTIVE_TENANT.domain).hostname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const isTenantOrigin = new RegExp(`^https?:\\/\\/(?:[^/]+\\.)?${tenantHost}$`, 'i').test(String(origin || ''));
-      if (!origin || !corsOrigins.length || corsOrigins.includes(origin) || isLocalOrigin || isTenantOrigin) {
+      const tenantHost = new URL(ACTIVE_TENANT.domain).hostname;
+      if (isAllowedCorsOrigin(origin, { allowedOrigins: corsOrigins, tenantHost })) {
         return callback(null, true);
       }
       // A rejected origin is a 403, not a 500 (a plain Error reached errorHandler as 500).
@@ -460,8 +459,9 @@ app.get('/marketplace-sitemap.xml', (_req, res) => {
   return res.status(410).type('text/plain').set('Cache-Control', 'public, max-age=3600').send('Gone');
 });
 
-// In-process HTML for the busiest public pages (120 s, cleared whenever
-// inventory changes). Anonymous, cookie-less GETs without a query string only.
+// In-process HTML for anonymous list and area pages (3 min, byte-capped,
+// cleared whenever inventory changes). Cookie-less GETs without a query
+// string only. Personalised, admin and property pages stay out.
 app.use((req, res, next) => {
   if (!isProduction || req.method !== 'GET') return next();
   const key = publicHtmlResponseCache.cacheKeyFor(req);
@@ -836,6 +836,8 @@ const PUBLIC_HTML_CACHE_MAX_ENTRIES = Math.max(
   4,
   Math.min(64, Number(process.env.PUBLIC_HTML_CACHE_MAX_ENTRIES || 16) || 16)
 );
+const PUBLIC_HTML_CACHE_MAX_BYTES = 8 * 1024 * 1024;
+let publicHtmlCacheBytes = 0;
 const PUBLIC_HTML_WARMUP_PATHS = [
   '/',
   '/sitemap.xml',
@@ -978,7 +980,10 @@ function preferredContentEncoding(req) {
   return '';
 }
 
+const SYNC_COMPRESS_MAX_BYTES = 128 * 1024;
+
 function compressBody(body, encoding) {
+  if (!body || body.length > SYNC_COMPRESS_MAX_BYTES) return null;
   if (encoding === 'br') {
     return zlib.brotliCompressSync(body, {
       params: {
@@ -1062,7 +1067,7 @@ function sendBufferResponse(req, res, body, options = {}) {
 
   const encoding = preferredContentEncoding(req);
   let output = source;
-  if (encoding && source.length >= 1024) {
+  if (encoding && source.length >= 1024 && source.length <= SYNC_COMPRESS_MAX_BYTES) {
     const candidate = compressed?.[encoding] || (dynamicCompression ? compressBody(source, encoding) : null);
     if (candidate && candidate.length < source.length) {
       output = candidate;
@@ -1297,11 +1302,21 @@ function renderPublicHtml(pathname) {
   rendered = injectTravelpayoutsDriveHeadTag(rendered, normalizedBasePath);
   rendered = patchStructuredData(rendered, null);
   if (isProduction) {
-    publicHtmlCache.set(key, rendered);
-    while (publicHtmlCache.size > PUBLIC_HTML_CACHE_MAX_ENTRIES) {
-      const oldestKey = publicHtmlCache.keys().next().value;
-      if (oldestKey === undefined) break;
-      publicHtmlCache.delete(oldestKey);
+    const size = Buffer.byteLength(rendered);
+    if (publicHtmlCache.has(key)) publicHtmlCacheBytes -= Buffer.byteLength(publicHtmlCache.get(key) || '');
+    if (size <= PUBLIC_HTML_CACHE_MAX_BYTES) {
+      publicHtmlCache.set(key, rendered);
+      publicHtmlCacheBytes += size;
+      while (
+        (publicHtmlCache.size > PUBLIC_HTML_CACHE_MAX_ENTRIES || publicHtmlCacheBytes > PUBLIC_HTML_CACHE_MAX_BYTES)
+        && publicHtmlCache.size
+      ) {
+        const oldestKey = publicHtmlCache.keys().next().value;
+        if (oldestKey === undefined) break;
+        publicHtmlCacheBytes -= Buffer.byteLength(publicHtmlCache.get(oldestKey) || '');
+        publicHtmlCache.delete(oldestKey);
+      }
+      if (publicHtmlCacheBytes < 0) publicHtmlCacheBytes = 0;
     }
   }
   return rendered;
@@ -1700,7 +1715,98 @@ function useBuiltAppBundles() {
   return ACTIVE_COUNTRY_CODE === 'UG' && appBundleBuildState().fresh;
 }
 
-app.get('/assets/makaug-admin.js', (req, res, next) => {
+// Large bundles stay on disk. One async gzip is cached (raw + brotli are not),
+// so a cold start does not synchronously compress a multi-megabyte file on
+// the event loop or keep three copies of it in the heap.
+const diskGzipCache = new Map();
+const diskGzipInflight = new Map();
+const DISK_GZIP_MAX_BYTES = 3 * 1024 * 1024;
+let diskGzipBytes = 0;
+
+function rememberDiskGzip(filePath, entry) {
+  const previous = diskGzipCache.get(filePath);
+  if (previous) {
+    diskGzipBytes -= previous.gzip.length;
+    diskGzipCache.delete(filePath);
+  }
+  while (diskGzipBytes + entry.gzip.length > DISK_GZIP_MAX_BYTES && diskGzipCache.size) {
+    const oldest = diskGzipCache.keys().next().value;
+    diskGzipBytes -= diskGzipCache.get(oldest).gzip.length;
+    diskGzipCache.delete(oldest);
+  }
+  if (diskGzipBytes + entry.gzip.length > DISK_GZIP_MAX_BYTES) return null;
+  diskGzipCache.set(filePath, entry);
+  diskGzipBytes += entry.gzip.length;
+  return entry;
+}
+
+function loadDiskGzip(filePath) {
+  const stat = fs.statSync(filePath);
+  const cached = diskGzipCache.get(filePath);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    diskGzipCache.delete(filePath);
+    diskGzipCache.set(filePath, cached);
+    return Promise.resolve(cached);
+  }
+  const inflight = diskGzipInflight.get(filePath);
+  if (inflight) return inflight;
+  const pending = new Promise((resolve, reject) => {
+    const chunks = [];
+    const input = fs.createReadStream(filePath);
+    const gzip = zlib.createGzip({ level: 1 });
+    input.on('error', reject);
+    gzip.on('error', reject);
+    gzip.on('data', (chunk) => chunks.push(chunk));
+    gzip.on('end', () => {
+      resolve({
+        mtimeMs: stat.mtimeMs,
+        size: stat.size,
+        gzip: Buffer.concat(chunks),
+        etag: `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`,
+        lastModified: stat.mtime.toUTCString()
+      });
+    });
+    input.pipe(gzip);
+  }).then((entry) => rememberDiskGzip(filePath, entry) || entry).finally(() => {
+    if (diskGzipInflight.get(filePath) === pending) diskGzipInflight.delete(filePath);
+  });
+  diskGzipInflight.set(filePath, pending);
+  return pending;
+}
+
+async function sendDiskJavaScript(req, res, filePath, cacheControl) {
+  const stat = fs.statSync(filePath);
+  const etag = `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`;
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', cacheControl);
+  res.setHeader('ETag', etag);
+  res.setHeader('Last-Modified', stat.mtime.toUTCString());
+  appendVaryHeader(res, 'Accept-Encoding');
+  if (req.fresh) return res.status(304).end();
+  if (req.method === 'HEAD') {
+    res.setHeader('Content-Length', String(stat.size));
+    return res.end();
+  }
+  if (acceptsContentEncoding(req, 'gzip')) {
+    const packed = await loadDiskGzip(filePath);
+    res.setHeader('Content-Encoding', 'gzip');
+    res.setHeader('Content-Length', String(packed.gzip.length));
+    return res.end(packed.gzip);
+  }
+  if (acceptsContentEncoding(req, 'br')) {
+    res.setHeader('Content-Encoding', 'br');
+    const stream = fs.createReadStream(filePath);
+    const brotli = zlib.createBrotliCompress({
+      params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 }
+    });
+    stream.on('error', () => res.destroy());
+    return stream.pipe(brotli).pipe(res);
+  }
+  res.setHeader('Content-Length', String(stat.size));
+  return fs.createReadStream(filePath).pipe(res);
+}
+
+app.get('/assets/makaug-admin.js', async (req, res, next) => {
   try {
     if (!useBuiltAppBundles()) {
       res.set('X-makaug-App-Bundle', 'source');
@@ -1710,21 +1816,14 @@ app.get('/assets/makaug-admin.js', (req, res, next) => {
         dynamicCompression: false
       });
     }
-    const asset = readCachedTextAsset(builtAdminAppPath);
     res.set('X-makaug-App-Bundle', 'built');
-    return sendBufferResponse(req, res, asset.body, {
-      contentType: 'application/javascript; charset=utf-8',
-      cacheControl: staticCacheControlForUrl(req.originalUrl || req.url),
-      etag: asset.etag,
-      lastModified: asset.lastModified,
-      compressed: asset.compressed
-    });
+    return await sendDiskJavaScript(req, res, builtAdminAppPath, staticCacheControlForUrl(req.originalUrl || req.url));
   } catch (error) {
     return next(error);
   }
 });
 
-app.get('/assets/makaug-app.js', (req, res, next) => {
+app.get('/assets/makaug-app.js', async (req, res, next) => {
   try {
     if (ACTIVE_COUNTRY_CODE !== 'UG') {
       const adapted = readCountryAppAsset();
@@ -1737,15 +1836,13 @@ app.get('/assets/makaug-app.js', (req, res, next) => {
       });
     }
     const built = useBuiltAppBundles();
-    const asset = readCachedTextAsset(built ? builtPublicAppPath : appJsPath);
     res.set('X-makaug-App-Bundle', built ? 'built' : 'source');
-    return sendBufferResponse(req, res, asset.body, {
-      contentType: 'application/javascript; charset=utf-8',
-      cacheControl: staticCacheControlForUrl(req.originalUrl || req.url),
-      etag: asset.etag,
-      lastModified: asset.lastModified,
-      compressed: asset.compressed
-    });
+    return await sendDiskJavaScript(
+      req,
+      res,
+      built ? builtPublicAppPath : appJsPath,
+      staticCacheControlForUrl(req.originalUrl || req.url)
+    );
   } catch (error) {
     return next(error);
   }
@@ -2528,11 +2625,15 @@ async function start() {
     }
   }
   try {
-    const adaptedApp = readCountryAppAsset();
+    // Uganda serves the built bundle from disk. Reading the full source here
+    // kept a second multi-megabyte copy alive for the life of the process.
+    const appBytes = (ACTIVE_COUNTRY_CODE === 'UG' && useBuiltAppBundles())
+      ? fs.statSync(builtPublicAppPath).size
+      : readCountryAppAsset().body.length;
     renderPublicHtml('/');
     logger.info('Country public assets verified before accepting traffic', {
       country_code: ACTIVE_COUNTRY_CODE,
-      app_bytes: adaptedApp.body.length
+      app_bytes: appBytes
     });
   } catch (error) {
     logger.error('Country public asset verification failed; refusing unready deployment', {

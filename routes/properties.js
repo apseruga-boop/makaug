@@ -213,11 +213,13 @@ function isPublicTikTokVideoUrl(value = '') {
 
 const PUBLIC_PROPERTIES_CACHE_TTL_MS = readPositiveIntegerEnv(
   ['PUBLIC_PROPERTIES_CACHE_TTL_MS'],
-  60 * 1000
+  3 * 60 * 1000
 );
 const PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS = Math.max(1, Math.floor(PUBLIC_PROPERTIES_CACHE_TTL_MS / 1000));
 const PUBLIC_PROPERTIES_CACHE_STALE_SECONDS = 300;
 const PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES = 120;
+const PUBLIC_PROPERTIES_CACHE_MAX_BYTES = 8 * 1024 * 1024;
+let publicPropertiesCacheBytes = 0;
 const PUBLIC_PROPERTIES_CACHE_REFRESH_AGENT = 'makaug-public-inventory-cache-warmup';
 const PUBLIC_LOCATION_SEARCH_PERFORMANCE_MARKER = 'properties-location-search-cache-key-20260725';
 const PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set([
@@ -240,7 +242,7 @@ function runPublicInventoryFollowup(task, label, context = {}) {
 }
 
 function publicPropertiesCacheControl() {
-  return `public, max-age=${PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS}, stale-while-revalidate=${PUBLIC_PROPERTIES_CACHE_STALE_SECONDS}`;
+  return `public, max-age=${PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS}, s-maxage=${PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS}, stale-while-revalidate=${PUBLIC_PROPERTIES_CACHE_STALE_SECONDS}`;
 }
 
 function setPublicPropertiesCacheHeaders(res, cacheable = true) {
@@ -307,10 +309,31 @@ function getPublicPropertiesCache(req) {
 
 function setPublicPropertiesCache(key, payload) {
   if (!key || !payload) return;
-  publicPropertiesResponseCache.set(key, { createdAt: Date.now(), payload });
-  if (publicPropertiesResponseCache.size <= PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES) return;
-  const oldestKey = publicPropertiesResponseCache.keys().next().value;
-  if (oldestKey) publicPropertiesResponseCache.delete(oldestKey);
+  let size = 0;
+  try {
+    size = Buffer.byteLength(JSON.stringify(payload));
+  } catch (_error) {
+    return;
+  }
+  if (!size || size > PUBLIC_PROPERTIES_CACHE_MAX_BYTES) return;
+  const previous = publicPropertiesResponseCache.get(key);
+  if (previous) {
+    publicPropertiesCacheBytes -= previous.bytes || 0;
+    publicPropertiesResponseCache.delete(key);
+  }
+  publicPropertiesResponseCache.set(key, { createdAt: Date.now(), payload, bytes: size });
+  publicPropertiesCacheBytes += size;
+  while (
+    (publicPropertiesResponseCache.size > PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES
+      || publicPropertiesCacheBytes > PUBLIC_PROPERTIES_CACHE_MAX_BYTES)
+    && publicPropertiesResponseCache.size
+  ) {
+    const oldestKey = publicPropertiesResponseCache.keys().next().value;
+    if (!oldestKey) break;
+    publicPropertiesCacheBytes -= publicPropertiesResponseCache.get(oldestKey)?.bytes || 0;
+    publicPropertiesResponseCache.delete(oldestKey);
+  }
+  if (publicPropertiesCacheBytes < 0) publicPropertiesCacheBytes = 0;
 }
 
 // After a moderation decision: the public inventory, the SSR listing cache, and
@@ -343,6 +366,7 @@ function clearPublicPropertiesCache(reason = 'public_inventory_changed') {
   if (!publicPropertiesResponseCache.size) return;
   const entries = publicPropertiesResponseCache.size;
   publicPropertiesResponseCache.clear();
+  publicPropertiesCacheBytes = 0;
   logger.info('Cleared public properties response cache', { reason, entries });
 }
 

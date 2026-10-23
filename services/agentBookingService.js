@@ -1686,7 +1686,12 @@ async function tickAgentBookings(db, now = new Date(), deps = {}) {
       LIMIT 200`
   );
   const summary = { reminded: 0, escalated: 0, visitor_reminders: 0, outcomes: 0, weekly: 0 };
+  let bookingRowsSeen = 0;
   for (const row of due.rows) {
+    if (bookingRowsSeen > 0 && bookingRowsSeen % 5 === 0) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    bookingRowsSeen += 1;
     const request = describeRequest(row, config);
     const actions = dueActions(request, now, config);
     for (const action of actions) {
@@ -1841,12 +1846,13 @@ let schedulerTimer = null;
 function startAgentBookingScheduler(db) {
   if (schedulerTimer || !process.env.DATABASE_URL || !bookingConfig().schedulerEnabled) return;
   const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
+  const { runBackgroundWork } = require('../config/database');
   const pollMs = bookingConfig().pollMs;
   let running = false;
   const run = () => {
     if (running) return;
     running = true;
-    tickAgentBookings(db).catch((error) => {
+    runBackgroundWork(() => tickAgentBookings(db)).catch((error) => {
       logger.error('Agent booking tick failed', { error: error.message });
     }).finally(() => {
       running = false;

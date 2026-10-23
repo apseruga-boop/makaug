@@ -23,6 +23,7 @@ UPDATE properties AS p
      WHERE e.action = 'listing_status_changed'
        AND e.status_to = 'approved'
        AND e.actor_id IS NOT NULL
+       AND e.actor_id ~* '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
      ORDER BY e.property_id, e.created_at DESC
   ) latest
  WHERE p.id = latest.property_id

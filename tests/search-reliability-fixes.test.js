@@ -23,9 +23,9 @@ test('public pages no longer crawl the complete inventory in the background', ()
   assert.match(appSource, /limit: activeCategory \? PUBLIC_RESULTS_PAGE_SIZE : PUBLIC_LISTINGS_FAST_PAGE_LIMIT,[\s\S]*maxPages: 1/);
 });
 
-test('public search endpoints use a 60-second cache contract without response cookies', () => {
+test('public search endpoints use a 3-minute list cache and a 60-second suggest cache, without response cookies', () => {
   assert.match(propertiesSource, /PUBLIC_LOCATION_SUGGEST_CACHE_TTL_MS = 60 \* 1000/);
-  assert.match(propertiesSource, /\['PUBLIC_PROPERTIES_CACHE_TTL_MS'\],[\s\S]*60 \* 1000/);
+  assert.match(propertiesSource, /\['PUBLIC_PROPERTIES_CACHE_TTL_MS'\],\s*3 \* 60 \* 1000/);
   assert.match(propertiesSource, /res\.removeHeader\('Set-Cookie'\)/);
   assert.match(propertiesSource, /res\.set\('CDN-Cache-Control', value\)/);
   assert.match(propertiesSource, /res\.set\('Cloudflare-CDN-Cache-Control', value\)/);
