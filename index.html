@@ -2668,7 +2668,7 @@
       .agent-profile-mobile-bar {
         display: flex;
         position: fixed;
-        z-index: 40;
+        z-index: 45;
         inset-inline: 0;
         inset-block-end: 0;
         gap: 8px;
@@ -2771,12 +2771,15 @@
       clip: rect(0, 0, 0, 0);
     }
     .agent-booking-tabs button.is-active { background: #15803d; color: #fff; border-color: #15803d; }
-    .agent-booking-date-row { display: flex; align-items: center; gap: 4px; }
+    .agent-profile-contact { min-inline-size: 0; max-inline-size: 100%; }
+    .agent-profile-contact .agent-profile-card { inline-size: 100%; min-inline-size: 0; }
+    .agent-booking-date-row { display: flex; align-items: center; gap: 4px; inline-size: 100%; min-inline-size: 0; }
     .agent-booking-date-strip {
       display: flex;
       gap: 4px;
       overflow-x: auto;
-      flex: 1 1 auto;
+      flex: 1 1 0;
+      inline-size: 0;
       min-inline-size: 0;
       scrollbar-width: none;
     }

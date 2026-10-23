@@ -61867,13 +61867,14 @@ function scrollAgentBookingDates(direction) {
   if (!strip) return;
   const days = [...strip.querySelectorAll(".agent-booking-day")];
   if (!days.length) return;
-  const host = strip.getBoundingClientRect();
   const sample = days[0].getBoundingClientRect().width || 36;
-  const visible = Math.max(1, Math.min(14, Math.floor(strip.clientWidth / (sample + 4)) || 1));
-  let firstVisible = days.findIndex((day) => day.getBoundingClientRect().right > host.left + 2);
-  if (firstVisible < 0) firstVisible = 0;
-  const next = Math.max(0, Math.min(days.length - 1, firstVisible + (Number(direction) || 1) * visible));
-  days[next].scrollIntoView({ inline: "start", block: "nearest", behavior: "smooth" });
+  const step = Math.max(sample + 4, 40);
+  const visible = Math.max(1, Math.min(14, Math.floor(strip.clientWidth / step) || 1));
+  const rtl = document.documentElement.dir === "rtl";
+  const max = Math.max(0, strip.scrollWidth - strip.clientWidth);
+  const current = rtl ? Math.abs(strip.scrollLeft) : strip.scrollLeft;
+  const next = Math.max(0, Math.min(max, current + (Number(direction) || 1) * visible * step));
+  strip.scrollTo({ left: rtl ? -next : next, behavior: "auto" });
 }
 
 function setAgentBookingTab(tab) {
