@@ -34,8 +34,12 @@ const DEFAULT_WINDOWS = Object.freeze([
 ]);
 const ONE_TAP_ACTIONS = Object.freeze([
   'confirm', 'decline', 'still_available', 'under_offer', 'let_agreed', 'sold',
-  'visitor_cancel', 'outcome_went', 'outcome_noshow', 'outcome_taken'
+  'visitor_cancel', 'outcome_went', 'outcome_noshow', 'outcome_taken',
+  'guest_accept', 'open', 'fully_booked', 'paused'
 ]);
+const WEEKLY_ACTIONS = Object.freeze(['still_available', 'under_offer', 'let_agreed', 'sold']);
+const REF_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const REF_DIGITS = '23456789';
 
 function text(value, fallback = '') {
   const cleaned = String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -66,7 +70,9 @@ function bookingConfig(env = process.env) {
     minReplies: numberSetting(env.AGENT_BOOKING_MIN_REPLIES, 3, 1, 100),
     outcomeDelayHours: numberSetting(env.AGENT_BOOKING_OUTCOME_DELAY_HOURS, 2, 0, 48),
     schedulerEnabled: String(env.AGENT_BOOKING_SCHEDULER_ENABLED || '').trim().toLowerCase() !== 'false',
-    pollMs: numberSetting(env.AGENT_BOOKING_POLL_MS, 5 * 60 * 1000, 60 * 1000, 60 * 60 * 1000)
+    pollMs: numberSetting(env.AGENT_BOOKING_POLL_MS, 5 * 60 * 1000, 60 * 1000, 60 * 60 * 1000),
+    realertHours: numberSetting(env.AGENT_BOOKING_ESCALATION_REALERT_HOURS, 12, 1, 24 * 14),
+    noteLimit: numberSetting(env.AGENT_BOOKING_NOTE_LIMIT, 900, 400, 4000)
   };
 }
 
@@ -431,6 +437,54 @@ function publicStaleAvailabilitySql(alias = 'p', env = process.env) {
   return `(${column} IS NULL OR ${column} >= NOW() - (${config.hideAfterDays} * INTERVAL '1 day'))`;
 }
 
+function makeShortRef() {
+  const bytes = crypto.randomBytes(2);
+  return REF_LETTERS[bytes[0] % REF_LETTERS.length] + REF_DIGITS[bytes[1] % REF_DIGITS.length];
+}
+
+function parseOfferUgx(value) {
+  const raw = String(value ?? '').replace(/[,_\s]/g, '').replace(/ugx/ig, '');
+  if (!/^\d+(\.\d{1,2})?$/.test(raw)) return null;
+  const amount = Math.round(Number(raw));
+  if (!Number.isFinite(amount) || amount < 1 || amount > 100000000000) return null;
+  return amount;
+}
+
+function formatOfferUgx(amount) {
+  const digits = String(Math.round(Number(amount)));
+  return `UGX ${digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+}
+
+function clipNote(value, limit = 900) {
+  const raw = text(value);
+  const max = Math.max(1, Number(limit) || 900);
+  if (!raw) return '';
+  if (raw.length <= max) return raw;
+  return `${raw.slice(0, max)} (cut)`;
+}
+
+function appointmentInstant(date, time, timeZone) {
+  return slotInstant(date, time, timeZone || bookingConfig().timezone);
+}
+
+function shouldCatchUpWeekly(date, config = bookingConfig()) {
+  const parts = zonedParts(date, config.timezone);
+  const day = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }[parts.weekday];
+  if (!day) return false;
+  if (day === 1) return parts.hour >= 9;
+  return true;
+}
+
+function realertDue(request, now = new Date(), config = bookingConfig()) {
+  if (!request || request.status !== 'escalated') return false;
+  const stamp = request.staff_alerted_at || request.escalated_at;
+  if (!stamp) return true;
+  const at = now instanceof Date ? now : new Date(now);
+  const from = new Date(stamp);
+  if (Number.isNaN(from.getTime())) return true;
+  return from.getTime() + config.realertHours * 3600000 <= at.getTime();
+}
+
 function responseTimeLabel(samples, config = bookingConfig()) {
   const seconds = (Array.isArray(samples) ? samples : [])
     .map((value) => Number(value))
@@ -494,7 +548,9 @@ function issueStayLinks(reference, now = Date.now(), env = process.env) {
   return {
     confirm: link('confirm'),
     reschedule: link('reschedule'),
-    decline: link('decline')
+    decline: link('decline'),
+    guest_accept: link('guest_accept'),
+    guest_pick: link('guest_pick')
   };
 }
 
@@ -504,6 +560,9 @@ function issueStayListingLinks(listingId, now = Date.now(), env = process.env) {
   const base = siteUrl(env);
   const link = (action) => `${base}/v/${signToken({ v: 1, stay_listing: listingId, action, exp }, secret)}`;
   return {
+    open: link('open'),
+    fully_booked: link('fully_booked'),
+    paused: link('paused'),
     still_available: link('still_available'),
     under_offer: link('under_offer'),
     let_agreed: link('let_agreed'),
@@ -530,17 +589,48 @@ function shouldApplyOnOpen({ method = 'GET', purpose = '', action = '' } = {}) {
   return ONE_TAP_ACTIONS.includes(action);
 }
 
-function parseAgentReply(body) {
-  const value = text(body).toLowerCase();
-  if (value === '1' || value === 'confirm') return { action: 'confirm' };
-  if (value === '2' || value === 'suggest' || value === 'suggest new time') return { action: 'reschedule' };
-  if (value === '3' || value === "can't" || value === 'cant' || value === "can't do it" || value === 'decline') return { action: 'decline' };
-  if (value === 'sold') return { action: 'sold' };
-  if (value === 'let') return { action: 'let_agreed' };
-  if (value === 'went' || value === 'went ahead') return { action: 'outcome_went' };
-  if (value === 'no-show' || value === 'noshow' || value === 'no show') return { action: 'outcome_noshow' };
-  if (value === 'taken' || value === 'property now taken') return { action: 'outcome_taken' };
+function actionFromBookingToken(token) {
+  const value = String(token || '').toLowerCase();
+  if (value === '1' || value === 'confirm') return 'confirm';
+  if (value === '2' || value === 'suggest' || value === 'suggest new time') return 'reschedule';
+  if (value === '3' || value === "can't" || value === 'cant' || value === "can't do it" || value === 'decline') return 'decline';
+  if (value === 'sold') return 'sold';
+  if (value === 'let') return 'let_agreed';
   return null;
+}
+
+function parseAgentReply(body) {
+  const raw = text(body);
+  const value = raw.toLowerCase();
+  const withRef = raw.match(/^(1|2|3)\s+([A-Za-z][2-9])$/);
+  if (withRef) return { action: actionFromBookingToken(withRef[1]), ref: withRef[2].toUpperCase() };
+  const mapped = actionFromBookingToken(value);
+  if (mapped) return { action: mapped, ref: '' };
+  if (value === 'went' || value === 'went ahead') return { action: 'outcome_went', ref: '' };
+  if (value === 'no-show' || value === 'noshow' || value === 'no show') return { action: 'outcome_noshow', ref: '' };
+  if (value === 'taken' || value === 'property now taken') return { action: 'outcome_taken', ref: '' };
+  return null;
+}
+
+function parseWeeklyReply(body) {
+  const value = text(body).toLowerCase();
+  const pair = value.match(/^(\d{1,2})\s+([1-4])$/);
+  if (pair) return { listingIndex: Number(pair[1]), action: WEEKLY_ACTIONS[Number(pair[2]) - 1] };
+  const words = {
+    1: 'still_available',
+    2: 'under_offer',
+    3: 'let_agreed',
+    4: 'sold',
+    still: 'still_available',
+    'still available': 'still_available',
+    offer: 'under_offer',
+    'under offer': 'under_offer',
+    let: 'let_agreed',
+    'let agreed': 'let_agreed',
+    sold: 'sold'
+  };
+  if (!words[value]) return null;
+  return { listingIndex: 0, action: words[value] };
 }
 
 function withEvent(request, type, at) {
@@ -553,7 +643,7 @@ function applyReply(request, action, extra = {}, now = new Date()) {
   const current = { ...request, events: Array.isArray(request.events) ? request.events : [] };
   const at = now instanceof Date ? now : new Date(now);
   if (action === 'remind') {
-    if (current.status !== 'pending') return { ok: false, error: 'This request is no longer waiting.' };
+    if (!['pending', 'reschedule'].includes(current.status)) return { ok: false, error: 'This request is no longer waiting.' };
     return { ok: true, request: withEvent({ ...current, reminded_at: at.toISOString() }, 'remind', at), listingPatch: null };
   }
   if (action === 'escalate') {
@@ -563,7 +653,12 @@ function applyReply(request, action, extra = {}, now = new Date()) {
     let next = current.status === 'no_response'
       ? current
       : withEvent({ ...current, status: 'no_response', no_response_at: at.toISOString() }, 'no_response', at);
-    next = withEvent({ ...next, status: 'escalated', escalated_at: at.toISOString() }, 'escalated', at);
+    next = withEvent({
+      ...next,
+      status: 'escalated',
+      escalated_at: at.toISOString(),
+      staff_alerted_at: at.toISOString()
+    }, 'escalated', at);
     return { ok: true, request: next, listingPatch: null };
   }
   if (action === 'confirm') {
@@ -592,7 +687,12 @@ function applyReply(request, action, extra = {}, now = new Date()) {
       status: 'reschedule',
       proposed_date: extra.proposed_date || current.proposed_date || null,
       proposed_time: extra.proposed_time || current.proposed_time || null,
-      first_response_at: current.first_response_at || at.toISOString()
+      first_response_at: current.first_response_at || at.toISOString(),
+      reminded_at: null,
+      escalated_at: null,
+      staff_alerted_at: null,
+      reminder_due_at: reminderDueAt(at).toISOString(),
+      escalate_due_at: escalateDueAt(at).toISOString()
     }, 'reschedule', at);
     return { ok: true, request: next, listingPatch: null };
   }
@@ -629,11 +729,13 @@ function applyReply(request, action, extra = {}, now = new Date()) {
 function dueActions(request, now = new Date(), config = bookingConfig()) {
   const actions = [];
   const at = now instanceof Date ? now : new Date(now);
-  if (request.status === 'pending' && !request.escalated_at && request.escalate_due_at && new Date(request.escalate_due_at) <= at) {
+  const waiting = request.status === 'pending' || request.status === 'reschedule';
+  if (waiting && !request.escalated_at && request.escalate_due_at && new Date(request.escalate_due_at) <= at) {
     actions.push('escalate');
-  } else if (request.status === 'pending' && !request.reminded_at && request.reminder_due_at && new Date(request.reminder_due_at) <= at) {
+  } else if (waiting && !request.reminded_at && request.reminder_due_at && new Date(request.reminder_due_at) <= at) {
     actions.push('remind');
   }
+  if (realertDue(request, at, config)) actions.push('realert');
   if (request.status === 'confirmed' && request.intent === 'viewing' && request.preferred_date && request.preferred_time && request.preferred_time !== 'any') {
     const when = slotInstant(String(request.preferred_date).slice(0, 10), request.preferred_time, config.timezone);
     if (when) {
@@ -672,16 +774,23 @@ function buildAgentRequestMessage(request, links, config = bookingConfig()) {
   }[request.intent] || 'New request';
   const who = text(request.visitor_name, 'A visitor');
   const property = text(request.property_label || request.property_title, 'a property on your profile');
+  const note = clipNote(request.visitor_message, config.noteLimit);
+  const offer = request.intent === 'offer' && request.offer_amount
+    ? `Offer: ${formatOfferUgx(request.offer_amount)}`
+    : '';
   const lines = [
     intentLine,
+    request.public_ref ? `Ref ${request.public_ref}` : '',
     `Hi ${firstName(request.agent_name)}, you've got interest!`,
     `${who} wants to ${request.intent === 'viewing' ? 'view' : request.intent === 'callback' ? 'be called about' : request.intent === 'offer' ? 'make an offer on' : 'ask about'}`,
     `${property}${request.inquiry_reference ? ` (${request.inquiry_reference})` : ''}`,
+    offer,
     request.when_label || '',
     request.visitor_phone || '',
-    request.visitor_message ? `Note: ${text(request.visitor_message).slice(0, 400)}` : '',
+    note ? `Note: ${note}` : '',
     '',
     `Please confirm within ${config.replyWindowHours} hour${config.replyWindowHours === 1 ? '' : 's'}. Reply 1 Confirm, 2 Suggest new time, 3 Can't do it`,
+    request.public_ref ? `Reply like 1 ${request.public_ref}` : '',
     `1 Confirm: ${links.confirm}`,
     `2 Suggest new time: ${links.reschedule}`,
     `3 Can't do it: ${links.decline}`
@@ -703,22 +812,71 @@ function buildVisitorRequestMessage(request) {
   ].filter((line) => line !== '').join('\n');
 }
 
-function buildVisitorStatusMessage(request, action) {
+function handoffReached(status) {
+  return ['sent', 'queued', 'simulated'].includes(String(status || ''));
+}
+
+function buildVisitorSkippedMessage(request, handoffStatus) {
+  const name = firstName(request.visitor_name);
+  const agent = text(request.agent_name, 'the agent');
+  const property = text(request.property_label || request.property_title, 'the property');
+  const status = String(handoffStatus || 'skipped');
+  const reason = {
+    repeat: `We already have your request about ${property}, so we have not sent it to ${agent} again.`,
+    capped: `We saved your request about ${property}. ${agent} has reached today's message limit, so the MakaUG team will follow up.`,
+    listing_not_live: `We saved your request about ${property}. This listing is not live, so we have not messaged ${agent}. The MakaUG team will follow up.`,
+    disabled: `We saved your request about ${property}. Messaging the agent is turned off, so the MakaUG team will follow up.`,
+    agent_not_approved: `We saved your request about ${property}. This agent is not live on makaug, so we have not messaged them. The MakaUG team will follow up.`,
+    contact_shown: `We saved your request about ${property}. This listing keeps the original poster's contact, so makaug has not messaged them.`,
+    failed: `We saved your request about ${property}, but the message to ${agent} did not go out. The MakaUG team will follow up.`,
+    no_lister_contact: `We saved your request about ${property}. We do not have a WhatsApp number for ${agent}, so the MakaUG team will follow up.`,
+    no_listing: `We saved your request. We could not match it to a live listing, so the MakaUG team will follow up.`,
+    no_lead: `We saved your request about ${property}. It is with the MakaUG team, and ${agent} has not been messaged yet.`,
+    test_skipped: `We saved your request about ${property}. It was marked as a test, so ${agent} was not messaged.`,
+    skipped: `We saved your request about ${property}. ${agent} has not been messaged yet. The MakaUG team will follow up.`
+  }[status] || `We saved your request about ${property}. ${agent} has not been messaged yet. The MakaUG team will follow up.`;
+  return [`Hi ${name},`, '', reason, 'Never pay before you have seen the property and its documents.'].join('\n');
+}
+
+function buildVisitorStatusMessage(request, action, links = {}) {
   const name = firstName(request.visitor_name);
   const agent = text(request.agent_name, 'The agent');
   const when = request.when_label || formatWhen(request.preferred_date, request.preferred_time);
+  const windowLabel = text(request.callback_window || request.when_label, 'soon');
   if (action === 'confirm') {
-    return [
-      `Hi ${name}, confirmed. ${agent} will meet you ${when}.`,
-      `They will call you on ${request.visitor_phone} to agree the meeting point.`,
-      'Never pay before you have seen the property and its documents.'
-    ].join('\n');
+    let lead;
+    if (request.intent === 'callback') {
+      lead = `Hi ${name}, confirmed. ${agent} will call you ${windowLabel}.`;
+    } else if (request.intent === 'question') {
+      lead = `Hi ${name}, confirmed. ${agent} has your question and will reply.`;
+    } else if (request.intent === 'offer') {
+      const amount = request.offer_amount ? formatOfferUgx(request.offer_amount) : 'UGX';
+      lead = `Hi ${name}, confirmed. ${agent} has received your offer of ${amount} and will respond.`;
+    } else {
+      lead = [
+        `Hi ${name}, confirmed. ${agent} will meet you ${when}.`,
+        `They will call you on ${request.visitor_phone} to agree the meeting point.`,
+        'Never pay before you have seen the property and its documents.'
+      ].join('\n');
+    }
+    const extra = [];
+    if (links.visitor_cancel) extra.push(`Cancel: ${links.visitor_cancel}`);
+    if (links.visitor_reschedule) extra.push(`Reschedule: ${links.visitor_reschedule}`);
+    return [lead, ...extra].join('\n');
   }
   if (action === 'reschedule') {
-    const proposed = formatWhen(request.proposed_date, request.proposed_time);
-    return proposed
-      ? `Hi ${name}, ${agent} suggests ${proposed} instead. We will confirm once you agree.`
-      : `Hi ${name}, ${agent} cannot do ${when} and will suggest another time.`;
+    const proposed = request.proposed_date ? formatWhen(request.proposed_date, request.proposed_time) : '';
+    if (proposed) {
+      return [
+        `Hi ${name}, ${agent} suggests ${proposed} instead.`,
+        links.confirm ? `Accept: ${links.confirm}` : '',
+        links.visitor_reschedule ? `Pick another: ${links.visitor_reschedule}` : ''
+      ].filter((line) => line !== '').join('\n');
+    }
+    return [
+      `Hi ${name}, ${agent} cannot do ${when} and will suggest another time.`,
+      links.visitor_reschedule ? `Pick another: ${links.visitor_reschedule}` : ''
+    ].filter((line) => line !== '').join('\n');
   }
   if (action === 'decline' || action === 'escalate') {
     return `Hi ${name}, ${agent} has not confirmed this request. A MakaUG team member will call you.`;
@@ -742,7 +900,8 @@ function buildAgentAck(request, action, links) {
   }
   if (action === 'decline') return `We've told them you can't do it. The MakaUG team will call them.`;
   if (action === 'remind') {
-    return `Reminder: ${text(request.visitor_name, 'A visitor')} is still waiting${request.when_label ? ` (${request.when_label})` : ''}. Reply 1 Confirm, 2 Suggest new time, 3 Can't do it.`;
+    const ref = request.public_ref ? ` Ref ${request.public_ref}.` : '';
+    return `Reminder: ${text(request.visitor_name, 'A visitor')} is still waiting${request.when_label ? ` (${request.when_label})` : ''}.${ref} Reply 1 Confirm, 2 Suggest new time, 3 Can't do it.`;
   }
   if (action === 'sold') return 'Marked sold.';
   if (action === 'let_agreed') return 'Marked let agreed.';
@@ -766,6 +925,8 @@ function buildWeeklyMessage(agent, listings, linkSets) {
   const lines = [
     `Monday check-in for ${text(agent.full_name || agent.name, 'your listings')}`,
     'For each listing, tap Still available, Under offer, Let agreed, or Sold.',
+    'Reply 1 Still available, 2 Under offer, 3 Let agreed, 4 Sold.',
+    listings.length > 1 ? 'If you have more than one listing, reply with the listing number then the status number, for example 2 4.' : '',
     ''
   ];
   listings.forEach((listing, index) => {
@@ -816,6 +977,9 @@ async function saveRequest(db, request) {
        outcome_asked_at = $13,
        outcome = $14,
        events = $15::jsonb,
+       reminder_due_at = $16,
+       escalate_due_at = $17,
+       staff_alerted_at = $18,
        updated_at = NOW()
      WHERE id = $1`,
     [
@@ -833,7 +997,10 @@ async function saveRequest(db, request) {
       request.visitor_reminder_2h_at || null,
       request.outcome_asked_at || null,
       request.outcome || null,
-      JSON.stringify(request.events || [])
+      JSON.stringify(request.events || []),
+      request.reminder_due_at || null,
+      request.escalate_due_at || null,
+      request.staff_alerted_at || null
     ]
   );
   return request;
@@ -926,6 +1093,11 @@ async function createAgentBooking(db, input = {}, deps = {}) {
   }
   if (intent === 'viewing' && !listing) throw bookingError('Choose a property, a day and a time.');
   if (intent === 'offer' && !listing) throw bookingError('Choose a property for the offer.');
+  let offerAmount = null;
+  if (intent === 'offer') {
+    offerAmount = parseOfferUgx(input.offerAmount || input.offer_amount);
+    if (offerAmount == null) throw bookingError('Offer amount must be a number in UGX.');
+  }
   const preferredDate = text(input.preferredDate || input.preferred_date);
   const preferredTime = text(input.preferredTime || input.preferred_time);
   if (intent === 'viewing') {
@@ -982,35 +1154,48 @@ async function createAgentBooking(db, input = {}, deps = {}) {
   }
   const reminderAt = reminderDueAt(now, config);
   const escalateAt = escalateDueAt(now, config);
-  const requestRow = await db.query(
-    `/* agent-booking:insert-request */
-     INSERT INTO agent_booking_requests (
-       agent_id, listing_id, viewing_booking_id, intent, status, visitor_name, visitor_phone,
-       visitor_message, preferred_date, preferred_time, callback_window, contact_channel,
-       offer_amount, language, reminder_due_at, escalate_due_at, events
-     ) VALUES (
-       $1, $2, $3, $4, 'pending', $5, $6,
-       $7, $8, $9, $10, $11,
-       $12, $13, $14, $15, '[]'::jsonb
-     ) RETURNING id, created_at`,
-    [
-      agent.id,
-      listing?.id || null,
-      viewingId,
-      intent,
-      name,
-      phone,
-      text(input.message) || null,
-      preferredDate || null,
-      preferredTime || null,
-      text(input.callbackWindow || input.callback_window) || null,
-      text(input.contactChannel || input.contact_channel) || null,
-      text(input.offerAmount || input.offer_amount) || null,
-      text(input.language, 'en').slice(0, 8),
-      reminderAt,
-      escalateAt
-    ]
-  );
+  let publicRef = '';
+  let requestRow = null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    publicRef = makeShortRef();
+    try {
+      requestRow = await db.query(
+        `/* agent-booking:insert-request */
+         INSERT INTO agent_booking_requests (
+           agent_id, listing_id, viewing_booking_id, intent, status, visitor_name, visitor_phone,
+           visitor_message, preferred_date, preferred_time, callback_window, contact_channel,
+           offer_amount, language, reminder_due_at, escalate_due_at, events, public_ref
+         ) VALUES (
+           $1, $2, $3, $4, 'pending', $5, $6,
+           $7, $8, $9, $10, $11,
+           $12, $13, $14, $15, '[]'::jsonb, $16
+         ) RETURNING id, created_at`,
+        [
+          agent.id,
+          listing?.id || null,
+          viewingId,
+          intent,
+          name,
+          phone,
+          text(input.message) || null,
+          preferredDate || null,
+          preferredTime || null,
+          text(input.callbackWindow || input.callback_window) || null,
+          text(input.contactChannel || input.contact_channel) || null,
+          offerAmount == null ? null : String(offerAmount),
+          text(input.language, 'en').slice(0, 8),
+          reminderAt,
+          escalateAt,
+          publicRef
+        ]
+      );
+      break;
+    } catch (error) {
+      if (error && error.code === '23505' && attempt < 5) continue;
+      throw error;
+    }
+  }
+  if (!requestRow?.rows?.[0]) throw bookingError('Could not save the request', 500);
   const request = describeRequest({
     id: requestRow.rows[0]?.id,
     agent_id: agent.id,
@@ -1025,7 +1210,8 @@ async function createAgentBooking(db, input = {}, deps = {}) {
     preferred_date: preferredDate || null,
     preferred_time: preferredTime || null,
     callback_window: text(input.callbackWindow || input.callback_window),
-    offer_amount: text(input.offerAmount || input.offer_amount),
+    offer_amount: offerAmount == null ? '' : String(offerAmount),
+    public_ref: publicRef,
     property_title: listing?.title || '',
     bedrooms: listing?.bedrooms,
     property_type: listing?.property_type,
@@ -1061,6 +1247,7 @@ async function createAgentBooking(db, input = {}, deps = {}) {
     }
   }
   let handoff = { status: 'skipped' };
+  const agentPhone = agent.whatsapp || agent.phone;
   if (listing && lead?.id) {
     const loaded = await services.loadListingContact(db, listing.id);
     handoff = await services.handOffListingLead(db, {
@@ -1078,21 +1265,37 @@ async function createAgentBooking(db, input = {}, deps = {}) {
       }
     });
   } else {
-    const agentPhone = agent.whatsapp || agent.phone;
     const agentDelivery = await deliverPlain(services.deliverWhatsapp, {
       to: agentPhone, body: agentMessage, kind: `agent_booking_${intent}`, leadId: lead?.id, nonce: request.id
     });
     const visitorDelivery = await deliverPlain(services.deliverWhatsapp, {
       to: phone, body: visitorMessage, kind: `agent_booking_visitor_${intent}`, leadId: lead?.id, nonce: `${request.id}:visitor`
     });
-    handoff = { status: agentDelivery.status, visitor: visitorDelivery.status };
+    handoff = { status: agentDelivery.status, visitor: visitorDelivery.status, lister: { phone: agentPhone } };
+  }
+  const sentTo = handoff?.lister?.phone || agentPhone || '';
+  await db.query(
+    `/* agent-booking:sent-to */ UPDATE agent_booking_requests SET sent_to_phone = $2 WHERE id = $1`,
+    [request.id, sentTo || null]
+  );
+  request.sent_to_phone = sentTo || '';
+  let visitorShown = visitorMessage;
+  if (!handoffReached(handoff.status)) {
+    visitorShown = buildVisitorSkippedMessage(request, handoff.status);
+    await deliverPlain(services.deliverWhatsapp, {
+      to: phone,
+      body: visitorShown,
+      kind: `agent_booking_visitor_status_${handoff.status || 'skipped'}`,
+      leadId: lead?.id,
+      nonce: `${request.id}:visitor-status`
+    });
   }
   return {
     request,
     links,
     handoff: handoff.status,
     agent_message: agentMessage,
-    visitor_message: visitorMessage
+    visitor_message: visitorShown
   };
 }
 
@@ -1120,7 +1323,7 @@ async function applyStoredAction(db, request, action, extra, deps, now = new Dat
   if (applied.listingPatch) await touchListing(db, applied.listingPatch, now);
   const links = described.id ? issueLinks(described, now.getTime()) : null;
   const saved = describeRequest({ ...described, ...applied.request });
-  const visitorBody = buildVisitorStatusMessage(saved, action);
+  const visitorBody = buildVisitorStatusMessage(saved, action, links || {});
   if (visitorBody && !['remind', 'sold', 'let_agreed', 'under_offer', 'still_available'].includes(action)) {
     await deliverPlain(services.deliverWhatsapp, {
       to: saved.visitor_phone,
@@ -1133,23 +1336,35 @@ async function applyStoredAction(db, request, action, extra, deps, now = new Dat
   return { ok: true, request: saved, agentAck: buildAgentAck(saved, action, links), visitorBody };
 }
 
-async function findPendingForAgentPhone(db, phone) {
+async function findOpenRequestsForAgentPhone(db, phone) {
   const tail = phoneTail(phone);
-  if (!tail) return null;
+  if (!tail) return [];
   const result = await db.query(
     `/* agent-booking:pending-agent */
      SELECT r.*, p.title AS property_title, p.area, p.district, p.bedrooms, p.property_type,
-            p.inquiry_reference, a.full_name AS agent_name
+            p.inquiry_reference, a.full_name AS agent_name, a.phone AS agent_phone, a.whatsapp AS agent_whatsapp
        FROM agent_booking_requests r
        JOIN agents a ON a.id = r.agent_id
        LEFT JOIN properties p ON p.id = r.listing_id
       WHERE r.status IN ('pending', 'reschedule', 'no_response', 'escalated')
-        AND right(regexp_replace(COALESCE(a.whatsapp, a.phone, ''), '\\D', '', 'g'), 9) = $1
+        AND (
+          right(regexp_replace(COALESCE(r.sent_to_phone, ''), '\\D', '', 'g'), 9) = $1
+          OR right(regexp_replace(COALESCE(a.whatsapp, ''), '\\D', '', 'g'), 9) = $1
+          OR right(regexp_replace(COALESCE(a.phone, ''), '\\D', '', 'g'), 9) = $1
+        )
       ORDER BY r.created_at DESC
-      LIMIT 1`,
+      LIMIT 8`,
     [tail]
   );
-  return result.rows[0] ? describeRequest(result.rows[0]) : null;
+  return result.rows.map((row) => describeRequest(row));
+}
+
+function whichRequestMessage(rows) {
+  const lines = ['Which request? Reply with the number and the reference.', 'Example: 1 A7'];
+  rows.forEach((row) => {
+    lines.push(`${row.public_ref || 'request'} — ${text(row.visitor_name, 'Visitor')}, ${text(row.property_label, row.intent)}`);
+  });
+  return lines.join('\n');
 }
 
 async function findOutcomeForVisitorPhone(db, phone) {
@@ -1172,25 +1387,96 @@ async function findOutcomeForVisitorPhone(db, phone) {
   return result.rows[0] ? describeRequest(result.rows[0]) : null;
 }
 
+async function applyWeeklyReply(db, phone, weekly, { dryRun = false } = {}) {
+  const tail = phoneTail(phone);
+  if (!tail || !weekly?.action) return { handled: false };
+  const agents = await db.query(
+    `/* agent-booking:weekly-by-phone */
+     SELECT id, full_name FROM agents
+      WHERE status = 'approved'
+        AND (
+          right(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1
+          OR right(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1
+        )
+      LIMIT 1`,
+    [tail]
+  );
+  const agent = agents.rows[0];
+  if (!agent) return { handled: false };
+  const checkin = await db.query(
+    `/* agent-booking:weekly-open */
+     SELECT week_key FROM listing_availability_checkins
+      WHERE agent_id = $1
+      ORDER BY sent_at DESC
+      LIMIT 1`,
+    [agent.id]
+  );
+  if (!checkin.rows.length) return { handled: false };
+  const listings = await db.query(
+    `/* agent-booking:weekly-reply-listings */
+     SELECT id, title, area, district, bedrooms, property_type
+       FROM properties
+      WHERE agent_id = $1 AND LOWER(COALESCE(status, '')) = 'approved'
+      ORDER BY created_at DESC
+      LIMIT 12`,
+    [agent.id]
+  );
+  if (!listings.rows.length) return { handled: false };
+  let index = Number(weekly.listingIndex) || 0;
+  if (!index) {
+    if (listings.rows.length > 1) {
+      const lines = [
+        'Which listing? Reply with the listing number then the status number, for example 2 4.',
+        '1 Still available, 2 Under offer, 3 Let agreed, 4 Sold.'
+      ];
+      listings.rows.forEach((listing, item) => lines.push(`${item + 1}. ${propertyLabel(listing)}`));
+      return { handled: true, message: lines.join('\n') };
+    }
+    index = 1;
+  }
+  const listing = listings.rows[index - 1];
+  if (!listing) return { handled: true, message: 'That listing number is not in this week\'s check-in.' };
+  const status = weekly.action === 'still_available' ? 'available' : weekly.action;
+  if (!dryRun) await touchListing(db, { id: listing.id, availability_status: status, touch: true }, new Date());
+  const names = { available: 'Still available', under_offer: 'Under offer', let_agreed: 'Let agreed', sold: 'Sold' };
+  return { handled: true, dry_run: Boolean(dryRun), message: `${propertyLabel(listing)}: ${names[status] || 'Saved.'}` };
+}
+
 async function handleAgentBookingReply(db, { phone, body, dryRun = false } = {}, deps = {}) {
   const parsed = parseAgentReply(body);
-  if (!parsed) return { handled: false };
+  const weekly = parseWeeklyReply(body);
   const agentActions = ['confirm', 'reschedule', 'decline', 'sold', 'let_agreed'];
-  if (agentActions.includes(parsed.action)) {
-    const row = await findPendingForAgentPhone(db, phone);
-    if (!row) return { handled: false };
-    if (dryRun) return { handled: true, dry_run: true, message: '', request: { id: row.id, action: parsed.action } };
-    const action = parsed.action === 'sold' || parsed.action === 'let_agreed' ? parsed.action : parsed.action;
-    const result = await applyStoredAction(db, row, action, {}, deps);
-    return { handled: true, message: result.agentAck || result.error || '', request: result.request || null };
+  if (parsed && agentActions.includes(parsed.action)) {
+    const rows = await findOpenRequestsForAgentPhone(db, phone);
+    const matches = parsed.ref
+      ? rows.filter((row) => String(row.public_ref || '').toUpperCase() === parsed.ref)
+      : rows;
+    if (parsed.ref && !matches.length) {
+      const known = rows.map((row) => row.public_ref).filter(Boolean);
+      return {
+        handled: true,
+        message: known.length ? `No open request ${parsed.ref}. Open ones: ${known.join(', ')}.` : `No open request ${parsed.ref}.`
+      };
+    }
+    if (!parsed.ref && rows.length > 1 && ['confirm', 'reschedule', 'decline'].includes(parsed.action)) {
+      return { handled: true, message: whichRequestMessage(rows) };
+    }
+    const row = matches[0] || null;
+    if (row) {
+      if (dryRun) return { handled: true, dry_run: true, message: '', request: { id: row.id, action: parsed.action } };
+      const result = await applyStoredAction(db, row, parsed.action, {}, deps);
+      return { handled: true, message: result.agentAck || result.error || '', request: result.request || null };
+    }
   }
-  if (parsed.action.startsWith('outcome_')) {
+  if (parsed && String(parsed.action).startsWith('outcome_')) {
     const row = await findOutcomeForVisitorPhone(db, phone);
-    if (!row) return { handled: false };
-    if (dryRun) return { handled: true, dry_run: true, message: '', request: { id: row.id, action: parsed.action } };
-    const result = await applyStoredAction(db, row, parsed.action, {}, deps);
-    return { handled: true, message: result.ok ? 'Thank you. That is saved.' : (result.error || ''), request: result.request || null };
+    if (row) {
+      if (dryRun) return { handled: true, dry_run: true, message: '', request: { id: row.id, action: parsed.action } };
+      const result = await applyStoredAction(db, row, parsed.action, {}, deps);
+      return { handled: true, message: result.ok ? 'Thank you. That is saved.' : (result.error || ''), request: result.request || null };
+    }
   }
+  if (weekly) return applyWeeklyReply(db, phone, weekly, { dryRun });
   return { handled: false };
 }
 
@@ -1392,7 +1678,7 @@ async function tickAgentBookings(db, now = new Date(), deps = {}) {
        FROM agent_booking_requests r
        LEFT JOIN properties p ON p.id = r.listing_id
        LEFT JOIN agents a ON a.id = r.agent_id
-      WHERE r.status IN ('pending', 'confirmed')
+      WHERE r.status IN ('pending', 'reschedule', 'confirmed', 'escalated')
         AND r.created_at > NOW() - INTERVAL '21 days'
       ORDER BY r.created_at ASC
       LIMIT 200`
@@ -1423,23 +1709,20 @@ async function tickAgentBookings(db, now = new Date(), deps = {}) {
         await saveRequest(db, request);
         const targets = escalationTargets();
         const body = buildEscalationMessage(request);
-        if (!targets.length) {
-          await flagStaff(db, {
-            bookingId: request.id,
-            listingId: request.listing_id,
-            kind: 'escalation',
-            message: body
+        await flagStaff(db, {
+          bookingId: request.id,
+          listingId: request.listing_id,
+          kind: 'escalation',
+          message: body
+        });
+        for (const target of targets) {
+          await deliverPlain(services.deliverWhatsapp, {
+            to: target,
+            body,
+            kind: 'agent_booking_escalation',
+            leadId: request.lead_id,
+            nonce: `${request.id}:escalate:${phoneTail(target)}`
           });
-        } else {
-          for (const target of targets) {
-            await deliverPlain(services.deliverWhatsapp, {
-              to: target,
-              body,
-              kind: 'agent_booking_escalation',
-              leadId: request.lead_id,
-              nonce: `${request.id}:escalate:${phoneTail(target)}`
-            });
-          }
         }
         await deliverPlain(services.deliverWhatsapp, {
           to: request.visitor_phone,
@@ -1472,10 +1755,30 @@ async function tickAgentBookings(db, now = new Date(), deps = {}) {
           nonce: `${request.id}:outcome`
         });
         summary.outcomes += 1;
+      } else if (action === 'realert') {
+        request.staff_alerted_at = now.toISOString();
+        await saveRequest(db, request);
+        const body = buildEscalationMessage(request);
+        await flagStaff(db, {
+          bookingId: request.id,
+          listingId: request.listing_id,
+          kind: 'escalation_realert',
+          message: body
+        });
+        for (const target of escalationTargets()) {
+          await deliverPlain(services.deliverWhatsapp, {
+            to: target,
+            body,
+            kind: 'agent_booking_escalation_realert',
+            leadId: request.lead_id,
+            nonce: `${request.id}:realert:${phoneTail(target)}:${request.staff_alerted_at}`
+          });
+        }
+        summary.realerts = (summary.realerts || 0) + 1;
       }
     }
   }
-  if (shouldSendWeekly(now, config)) {
+  if (shouldCatchUpWeekly(now, config)) {
     const key = weekKey(now, config);
     const agents = await db.query(
       `/* agent-booking:weekly-agents */
@@ -1550,15 +1853,36 @@ function startAgentBookingScheduler(db) {
   setTimeout(run, BOOT_DELAY_MS.agent_booking).unref?.();
   logger.info('Agent booking scheduler armed', {
     pollMs,
+    catchUp: true,
     quietHours: bookingConfig().quietHours,
-    escalationTargets: escalationTargets().length
+    escalationTargets: escalationTargets().length,
+    realertHours: bookingConfig().realertHours
   });
+}
+
+async function loadResponseTimeLabel(db, agentId) {
+  try {
+    const samples = await db.query(
+      `/* agent-booking:response-times */
+       SELECT EXTRACT(EPOCH FROM (first_response_at - created_at)) AS seconds
+         FROM agent_booking_requests
+        WHERE agent_id = $1 AND first_response_at IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT 30`,
+      [agentId]
+    );
+    return responseTimeLabel(samples.rows.map((row) => Number(row.seconds)));
+  } catch (error) {
+    if (error.code === '42P01' || error.code === '42703') return '';
+    throw error;
+  }
 }
 
 module.exports = {
   AVAILABILITY,
   INTENTS,
   STATUSES,
+  appointmentInstant,
   applyReply,
   availabilityView,
   bookingConfig,
@@ -1567,8 +1891,11 @@ module.exports = {
   buildDaysAndSlots,
   buildEscalationMessage,
   buildVisitorRequestMessage,
+  buildVisitorSkippedMessage,
   buildVisitorStatusMessage,
   buildWeeklyMessage,
+  clipNote,
+  formatOfferUgx,
   createAgentBooking,
   dueActions,
   escalateDueAt,
@@ -1576,7 +1903,12 @@ module.exports = {
   flagStaff,
   formatWhen,
   handleAgentBookingReply,
+  handoffReached,
   isQuietHours,
+  loadResponseTimeLabel,
+  makeShortRef,
+  parseOfferUgx,
+  parseWeeklyReply,
   issueLinks,
   issueListingLinks,
   issueStayLinks,
@@ -1588,9 +1920,11 @@ module.exports = {
   propertyLabel,
   publicStaleAvailabilitySql,
   readToken,
+  realertDue,
   reminderDueAt,
   responseTimeLabel,
   shouldApplyOnOpen,
+  shouldCatchUpWeekly,
   shouldSendWeekly,
   signToken,
   slotIsOpen,

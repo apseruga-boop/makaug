@@ -28,8 +28,8 @@ const {
   availabilityView,
   buildDaysAndSlots,
   createAgentBooking,
-  mergeSchedule,
-  responseTimeLabel
+  loadResponseTimeLabel,
+  mergeSchedule
 } = require('../services/agentBookingService');
 const { createBookingRequest } = require('../services/shortTermBookingService');
 
@@ -1009,7 +1009,7 @@ router.get('/:id/booking-options', async (req, res, next) => {
       ok: true,
       data: {
         agent_id: agent.id,
-        response_time_label: '',
+        response_time_label: await loadResponseTimeLabel(db, agent.id),
         properties: propertyRows.map((row) => {
           const view = availabilityView(row);
           return {
@@ -1080,13 +1080,13 @@ router.post('/:id/bookings', agentProfileEnquiryLimiter, leadHoneypot, async (re
       const created = await createBookingRequest(db, body.stay_listing_id, {
         guest_name: body.name || body.contact_name,
         guest_phone: body.phone || body.contact_phone,
-        guest_email: body.email || '',
+        guest_email: body.email || body.guest_email || '',
         guests: body.guests || 1,
         message: body.message || body.callback_window || '',
         check_in: body.check_in || '',
         check_out: body.check_out || '',
         intent,
-        terms_accepted: true,
+        terms_accepted: body.terms_accepted === true || body.terms_accepted === 'true',
         language: body.language || 'en'
       });
       return res.status(201).json({ ok: true, data: created, source: 'agent_profile' });
@@ -1235,20 +1235,7 @@ router.get('/:id', async (req, res, next) => {
       console.warn('[agents] public summary unavailable', { agentId: req.params.id, message: error.message });
     }
 
-    let responseTime = '';
-    try {
-      const samples = await db.query(
-        `SELECT EXTRACT(EPOCH FROM (first_response_at - created_at)) AS seconds
-           FROM agent_booking_requests
-          WHERE agent_id = $1 AND first_response_at IS NOT NULL
-          ORDER BY created_at DESC
-          LIMIT 30`,
-        [req.params.id]
-      );
-      responseTime = responseTimeLabel(samples.rows.map((row) => Number(row.seconds)));
-    } catch (error) {
-      if (error.code !== '42P01') throw error;
-    }
+    const responseTime = await loadResponseTimeLabel(db, req.params.id);
 
     return res.json({
       ok: true,

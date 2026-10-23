@@ -137,6 +137,7 @@ test('creating a booking uses the injected sender and does not call the bridge i
       if (sql.includes('agent-booking:insert-viewing')) return { rows: [{ id: 'view-1' }] };
       if (sql.includes('agent-booking:insert-request')) return { rows: [{ id: 'req-1', created_at: '2026-10-27T07:00:00Z' }] };
       if (sql.includes('agent-booking:attach')) return { rows: [] };
+      if (sql.includes('agent-booking:sent-to')) return { rows: [] };
       throw new Error(sql.slice(0, 80));
     }
   };

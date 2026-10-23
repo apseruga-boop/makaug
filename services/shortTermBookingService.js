@@ -33,6 +33,23 @@ const ICAL_MIN_INTERVAL_MS = 60 * 60 * 1000;
 const REFERENCE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 const PAYMENT_LINE = 'Payment is agreed directly between you and the host. makaug does not take or hold payments.';
+const STAY_DEADLINE_HOURS = REQUEST_TTL_MS / 3600000;
+
+function stayDeadlinePhrase(hours = STAY_DEADLINE_HOURS) {
+  const count = Number(hours);
+  if (!Number.isFinite(count) || count <= 0) return '24 hours';
+  return count === 1 ? '1 hour' : `${count} hours`;
+}
+
+function clipStayNote(value, limit = 900) {
+  const raw = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!raw || raw.length <= limit) return raw;
+  return `${raw.slice(0, limit)} (cut)`;
+}
+
+function datedStay(row = {}) {
+  return row.intent !== 'callback' && row.intent !== 'question' && Boolean(isoDate(row.check_in) && isoDate(row.check_out));
+}
 
 const SAFETY_TIPS = Object.freeze([
   'View the place and confirm who you are paying before you pay.',
@@ -122,6 +139,35 @@ function choiceFromReply(body) {
   return null;
 }
 
+function parseStayChoice(body) {
+  const raw = String(body || '').trim();
+  const withRef = raw.match(/^(1|2|3)\s+(MKS-[A-Za-z0-9]{4,12})$/i);
+  if (withRef) return { choice: choiceFromReply(withRef[1]), reference: withRef[2].toUpperCase() };
+  const choice = choiceFromReply(raw);
+  if (!choice) return null;
+  return { choice, reference: '' };
+}
+
+function parseStayWeeklyReply(body) {
+  const value = String(body || '').trim().toLowerCase();
+  const pair = value.match(/^(\d{1,2})\s+(1|2|3)$/);
+  if (pair) {
+    const action = ['open', 'fully_booked', 'paused'][Number(pair[2]) - 1];
+    return { listingIndex: Number(pair[1]), action };
+  }
+  const words = {
+    1: 'open',
+    2: 'fully_booked',
+    3: 'paused',
+    open: 'open',
+    'fully booked': 'fully_booked',
+    fully_booked: 'fully_booked',
+    paused: 'paused'
+  };
+  if (!words[value]) return null;
+  return { listingIndex: 0, action: words[value] };
+}
+
 function stayActionLinks(reference, now = Date.now()) {
   const booking = require('./agentBookingService');
   return booking.issueStayLinks(reference, now);
@@ -149,7 +195,10 @@ function channelsFor({ phone, email, bridgeEnabled }) {
 
 function stayWhenLine({ intent = 'dates', checkIn, checkOut, guests, message }) {
   if (intent === 'callback') return 'Callback request. No dates yet.';
-  if (intent === 'question') return message ? `Question: ${String(message).slice(0, 400)}` : 'Question about this stay.';
+  if (intent === 'question') {
+    const note = clipStayNote(message, 900);
+    return note ? `Question: ${note}` : 'Question about this stay.';
+  }
   if (!checkIn || !checkOut) return 'Dates to be agreed.';
   return `${checkIn} to ${checkOut}, ${guests || 1} guest${Number(guests) === 1 ? '' : 's'}`;
 }
@@ -165,7 +214,7 @@ function hostRequestMessage({
     guestName ? `Guest: ${guestName}` : '',
     guestPhone || '',
     '',
-    'Please confirm within 1 hour. Reply 1 Confirm, 2 Suggest new time, 3 Can\'t do it',
+    `Please confirm within ${stayDeadlinePhrase()}. Reply 1 Confirm, 2 Suggest new time, 3 Can't do it`,
     links?.confirm ? `1 Confirm: ${links.confirm}` : '',
     links?.reschedule ? `2 Suggest new time: ${links.reschedule}` : '',
     links?.decline ? `3 Can't do it: ${links.decline}` : '',
@@ -175,15 +224,24 @@ function hostRequestMessage({
   return lines.filter((line) => line !== '').join('\n');
 }
 
-function guestRequestMessage({ reference, statusUrl }) {
+function guestRequestMessage({ reference, statusUrl, deadline = stayDeadlinePhrase() }) {
   return [
-    `Request ${reference} is with the host. They have 24 hours to accept or decline.`,
+    `Request ${reference} is with the host. They have ${deadline} to accept or decline.`,
     statusUrl,
     PAYMENT_LINE
   ].join('\n');
 }
 
-function guestDecisionMessage({ reference, accepted, statusUrl, hostPhone, address, checkInFrom, houseRules }) {
+function guestSuggestedDatesMessage({ reference, checkIn, checkOut, acceptUrl, pickUrl }) {
+  return [
+    `The host suggests ${checkIn} to ${checkOut} for ${reference}.`,
+    acceptUrl ? `Accept: ${acceptUrl}` : '',
+    pickUrl ? `Pick another: ${pickUrl}` : ''
+  ].filter((line) => line !== '').join('\n');
+}
+
+function guestDecisionMessage({ reference, accepted, statusUrl, hostPhone, address, checkInFrom, houseRules, intent, checkIn }) {
+  const sharePlace = accepted && (intent ? datedStay({ intent, check_in: checkIn, check_out: checkIn }) : Boolean(checkIn));
   if (!accepted) {
     return [
       `The host cannot take ${reference}. Similar places are on this page:`,
@@ -194,24 +252,25 @@ function guestDecisionMessage({ reference, accepted, statusUrl, hostPhone, addre
   return [
     `Accepted ${reference}.`,
     hostPhone ? `Host phone: ${hostPhone}` : '',
-    address ? `Address: ${address}` : '',
-    checkInFrom ? `Check in from ${checkInFrom}` : '',
-    houseRules ? `House rules: ${houseRules}` : '',
+    sharePlace && address ? `Address: ${address}` : '',
+    sharePlace && checkInFrom ? `Check in from ${checkInFrom}` : '',
+    sharePlace && houseRules ? `House rules: ${houseRules}` : '',
     statusUrl,
     PAYMENT_LINE,
     ...SAFETY_TIPS
   ].filter(Boolean).join('\n');
 }
 
-function hostDecisionAck({ reference, accepted }) {
-  return accepted
+function hostDecisionAck({ reference, accepted, dated = true }) {
+  if (!accepted) return `Declined ${reference}. The guest has been told.`;
+  return dated
     ? `Accepted ${reference}. The guest has your phone and the address. ${PAYMENT_LINE}`
-    : `Declined ${reference}. The guest has been told.`;
+    : `Accepted ${reference}. The guest has your phone. ${PAYMENT_LINE}`;
 }
 
 function expiryMessage({ reference, statusUrl }) {
   return [
-    `Request ${reference} expired. The host did not reply within 24 hours.`,
+    `Request ${reference} expired. The host did not reply within ${stayDeadlinePhrase()}.`,
     statusUrl,
     PAYMENT_LINE
   ].join('\n');
@@ -276,17 +335,18 @@ function publicRequestShape(row) {
 function acceptedGuestShape(row) {
   const base = publicRequestShape(row);
   if (row.status !== 'accepted' && row.status !== 'completed') return base;
+  const sharePlace = datedStay(row);
   return {
     ...base,
     host_name: row.host_name || null,
     host_phone: normalisePhone(row.host_phone) || null,
     host_whatsapp: normalisePhone(row.host_whatsapp || row.host_phone) || null,
-    address: row.address || null,
-    latitude: row.latitude == null ? null : Number(row.latitude),
-    longitude: row.longitude == null ? null : Number(row.longitude),
-    check_in_from: row.check_in_from || null,
-    check_out_by: row.check_out_by || null,
-    house_rules: row.house_rules || null
+    address: sharePlace ? (row.address || null) : null,
+    latitude: sharePlace && row.latitude != null ? Number(row.latitude) : null,
+    longitude: sharePlace && row.longitude != null ? Number(row.longitude) : null,
+    check_in_from: sharePlace ? (row.check_in_from || null) : null,
+    check_out_by: sharePlace ? (row.check_out_by || null) : null,
+    house_rules: sharePlace ? (row.house_rules || null) : null
   };
 }
 
@@ -329,9 +389,6 @@ function assertRequestInput(listing, payload) {
     ? String(payload.intent || 'dates')
     : 'dates';
   if (!phoneDigits(phone) && !email.includes('@')) errors.push('Add a phone number or an email.');
-  if (payload.terms_accepted !== true && payload.terms_accepted !== 'true') {
-    errors.push('Tick the short stay terms before sending the request.');
-  }
   if (intent === 'dates') {
     if (!checkIn || !checkOut || checkOut <= checkIn) errors.push('Choose a check-in and a later check-out.');
     if (!Number.isFinite(guests) || guests < 1) errors.push('Say how many guests.');
@@ -381,13 +438,14 @@ async function createBookingRequest(db, listingId, payload = {}, deps = {}) {
          INSERT INTO st_booking_request (
            reference, listing_id, guest_name, guest_phone, guest_email, party_size,
            check_in, check_out, message, status, expires_at, intent,
-           reminder_due_at, escalate_due_at, language
-         ) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7::date,$8::date,$9,'requested',$10,$11,$12,$13,$14)
+           reminder_due_at, escalate_due_at, language, sent_to_phone
+         ) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7::date,$8::date,$9,'requested',$10,$11,$12,$13,$14,$15)
          RETURNING id, reference, status, expires_at, check_in, check_out, party_size`,
         [
           reference, listing.id, value.name, value.phone, value.email, value.guests,
           value.checkIn, value.checkOut, value.message, expiresAt, value.intent,
-          reminderAt, escalateAt, String(payload.language || 'en').slice(0, 8)
+          reminderAt, escalateAt, String(payload.language || 'en').slice(0, 8),
+          phoneDigits(listing.host_whatsapp || listing.host_phone) || null
         ]
       );
       row = inserted.rows[0];
@@ -417,7 +475,8 @@ async function createBookingRequest(db, listingId, payload = {}, deps = {}) {
     message: value.message,
     links: actionLinks
   });
-  const guestText = guestRequestMessage({ reference: row.reference, statusUrl });
+  const deadline = stayDeadlinePhrase();
+  const guestText = guestRequestMessage({ reference: row.reference, statusUrl, deadline });
   const deliver = deps.deliverStayNotice || deliverStayNotice;
   const hostNotice = await deliver({
     phone: listing.host_whatsapp || listing.host_phone,
@@ -427,7 +486,7 @@ async function createBookingRequest(db, listingId, payload = {}, deps = {}) {
     event: 'requested',
     role: 'host'
   }, deps);
-  await deliver({
+  const guestNotice = await deliver({
     phone: value.phone,
     email: value.email,
     text: guestText,
@@ -435,6 +494,8 @@ async function createBookingRequest(db, listingId, payload = {}, deps = {}) {
     event: 'requested',
     role: 'guest'
   }, deps);
+  await alertIfBridgeDown(db, hostNotice, { reference: row.reference, role: 'host', text: hostText }, deps);
+  await alertIfBridgeDown(db, guestNotice, { reference: row.reference, role: 'guest', text: guestText }, deps);
   if (hostNotice.staff_wa_link) {
     await db.query(
       `/* st-booking:staff-link */ UPDATE st_booking_request SET staff_wa_link = $2, updated_at = NOW() WHERE id = $1::uuid`,
@@ -461,9 +522,29 @@ async function createBookingRequest(db, listingId, payload = {}, deps = {}) {
     status_url: statusUrl,
     expires_at: row.expires_at,
     payment_line: PAYMENT_LINE,
-    message: `Request ${row.reference} is with the host. They have 24 hours to accept or decline.`,
+    message: `Request ${row.reference} is with the host. They have ${deadline} to accept or decline.`,
     whatsapp_configured: hostNotice.whatsapp_queued === true
   };
+}
+
+async function alertIfBridgeDown(db, notice, { reference, role, text }, deps = {}) {
+  if (!notice || notice.whatsapp_queued || !notice.staff_wa_link) return;
+  const booking = require('./agentBookingService');
+  await booking.flagStaff(db, {
+    bookingId: null,
+    kind: 'stay_bridge_unavailable',
+    message: `WhatsApp bridge is unavailable for stay ${reference} (${role}). No official API was used.\n${text}`
+  });
+  const support = Object.prototype.hasOwnProperty.call(deps, 'supportEmail') ? deps.supportEmail : getSupportEmail();
+  if (!support) return;
+  const mail = deps.sendSupportEmail || sendSupportEmail;
+  await mail({
+    to: support,
+    subject: `makaug stay ${reference}: WhatsApp bridge unavailable`,
+    text: `WhatsApp bridge is unavailable for stay ${reference} (${role}). Staff have a flag. No official API was used.\n${text}`
+  }).catch((error) => {
+    logger.warn('Stay bridge staff email failed', { marker: STAY_REQUEST_MARKER, message: error.message });
+  });
 }
 
 async function blockAcceptedDates(db, listingId, checkIn, checkOut, reference) {
@@ -536,7 +617,9 @@ async function decideRequest(db, row, decision, { via = 'link' } = {}, deps = {}
     hostPhone: normalisePhone(row.host_phone),
     address: row.address,
     checkInFrom: row.check_in_from,
-    houseRules: row.house_rules
+    houseRules: row.house_rules,
+    intent: row.intent || 'dates',
+    checkIn: isoDate(row.check_in)
   });
   const deliver = deps.deliverStayNotice || deliverStayNotice;
   await deliver({
@@ -551,13 +634,14 @@ async function decideRequest(db, row, decision, { via = 'link' } = {}, deps = {}
   return {
     reference: row.reference,
     status,
-    host_reply: hostDecisionAck({ reference: row.reference, accepted })
+    host_reply: hostDecisionAck({ reference: row.reference, accepted, dated: datedStay(row) })
   };
 }
 
-async function findOpenRequestForHostPhone(db, phone) {
+async function findOpenRequestsForHostPhone(db, phone) {
   const digits = phoneDigits(phone);
-  if (!digits) return null;
+  if (!digits) return [];
+  const tail = digits.slice(-9);
   const result = await db.query(
     `/* st-booking:host-phone */
      SELECT r.*, l.title, l.address, l.host_phone, l.host_whatsapp, l.host_email,
@@ -567,53 +651,150 @@ async function findOpenRequestForHostPhone(db, phone) {
      WHERE r.status IN ('requested', 'reschedule', 'escalated', 'no_response')
        AND r.expires_at > NOW()
        AND (
-         regexp_replace(COALESCE(l.host_phone, ''), '\\D', '', 'g') = $1
-         OR regexp_replace(COALESCE(l.host_whatsapp, ''), '\\D', '', 'g') = $1
+         right(regexp_replace(COALESCE(r.sent_to_phone, ''), '\\D', '', 'g'), 9) = $1
+         OR right(regexp_replace(COALESCE(l.host_phone, ''), '\\D', '', 'g'), 9) = $1
+         OR right(regexp_replace(COALESCE(l.host_whatsapp, ''), '\\D', '', 'g'), 9) = $1
        )
      ORDER BY r.created_at DESC
-     LIMIT 1`,
-    [digits]
+     LIMIT 8`,
+    [tail]
   );
-  return result.rows[0] || null;
+  return result.rows;
+}
+
+function whichStayMessage(rows) {
+  const lines = ['Which request? Reply with the number and the reference.', 'Example: 1 MKS-AB12CD'];
+  rows.forEach((row) => lines.push(`${row.reference} — ${row.guest_name || 'Guest'}`));
+  return lines.join('\n');
+}
+
+async function armStayTimers(db, id, now = new Date()) {
+  const booking = require('./agentBookingService');
+  const reminderAt = booking.reminderDueAt(now);
+  const escalateAt = booking.escalateDueAt(now);
+  await db.query(
+    `/* st-booking:arm-timers */
+     UPDATE st_booking_request
+        SET reminder_due_at = $2,
+            escalate_due_at = $3,
+            reminded_at = NULL,
+            escalated_at = NULL,
+            staff_alerted_at = NULL,
+            updated_at = NOW()
+      WHERE id = $1::uuid`,
+    [id, reminderAt, escalateAt]
+  );
+}
+
+async function applyStayWeeklyReply(db, phone, weekly, { dryRun = false } = {}) {
+  const digits = phoneDigits(phone);
+  if (!digits || !weekly?.action) return { handled: false };
+  const tail = digits.slice(-9);
+  const listings = await db.query(
+    `/* st-booking:weekly-reply */
+     SELECT l.id, l.title
+       FROM st_listing l
+       JOIN st_availability_checkins c ON c.listing_id = l.id
+      WHERE (
+          right(regexp_replace(COALESCE(l.host_phone, ''), '\\D', '', 'g'), 9) = $1
+          OR right(regexp_replace(COALESCE(l.host_whatsapp, ''), '\\D', '', 'g'), 9) = $1
+        )
+      ORDER BY c.sent_at DESC, l.created_at DESC
+      LIMIT 12`,
+    [tail]
+  );
+  if (!listings.rows.length) return { handled: false };
+  let index = Number(weekly.listingIndex) || 0;
+  if (!index) {
+    if (listings.rows.length > 1) {
+      const lines = [
+        'Which stay? Reply with the listing number then 1 Open, 2 Fully booked, or 3 Paused. For example 2 1.'
+      ];
+      listings.rows.forEach((listing, item) => lines.push(`${item + 1}. ${listing.title}`));
+      return { handled: true, message: lines.join('\n') };
+    }
+    index = 1;
+  }
+  const listing = listings.rows[index - 1];
+  if (!listing) return { handled: true, message: 'That listing number is not in this week\'s check-in.' };
+  const status = weekly.action === 'open' ? 'available' : weekly.action;
+  if (!dryRun) {
+    await db.query(
+      `/* st-booking:listing-status */
+       UPDATE st_listing SET availability_status = $2, last_confirmed_at = NOW(), updated_at = NOW() WHERE id = $1::uuid`,
+      [listing.id, status]
+    );
+  }
+  const names = { available: 'Open', fully_booked: 'Fully booked', paused: 'Paused' };
+  return { handled: true, dry_run: Boolean(dryRun), message: `${listing.title}: ${names[status] || 'Saved.'}` };
 }
 
 async function handleHostStayReply(db, { phone, body, dryRun = false } = {}, deps = {}) {
-  const choice = choiceFromReply(body);
-  if (!choice) return { handled: false };
+  const parsed = parseStayChoice(body);
+  const weekly = parseStayWeeklyReply(body);
+  if (!parsed && !weekly) return { handled: false };
   try {
     await expireDueRequests(db, deps);
-    const row = await findOpenRequestForHostPhone(db, phone);
-    if (!row) return { handled: false };
-    if (choice === 'reschedule') {
-      const links = stayActionLinks(row.reference);
-      const message = `Open this link to suggest new dates: ${links.reschedule}`;
-      if (!dryRun) {
-        await db.query(
-          `/* st-booking:reschedule */
-           UPDATE st_booking_request
-              SET status = 'reschedule', updated_at = NOW()
-            WHERE id = $1::uuid
-              AND status IN ('requested', 'reschedule', 'escalated', 'no_response')`,
-          [row.id]
-        );
+    if (parsed) {
+      const rows = await findOpenRequestsForHostPhone(db, phone);
+      const matches = parsed.reference
+        ? rows.filter((row) => String(row.reference || '').toUpperCase() === parsed.reference)
+        : rows;
+      if (parsed.reference && !matches.length) {
+        const known = rows.map((row) => row.reference).filter(Boolean);
+        return {
+          handled: true,
+          message: known.length ? `No open request ${parsed.reference}. Open ones: ${known.join(', ')}.` : `No open request ${parsed.reference}.`
+        };
       }
-      return {
-        handled: true,
-        dry_run: Boolean(dryRun),
-        message,
-        request: { reference: row.reference, status: 'reschedule' }
-      };
+      if (!parsed.reference && rows.length > 1) {
+        return { handled: true, message: whichStayMessage(rows) };
+      }
+      const row = matches[0] || null;
+      if (row) {
+        const choice = parsed.choice;
+        if (choice === 'reschedule') {
+          const links = stayActionLinks(row.reference);
+          const message = `Open this link to suggest new dates: ${links.reschedule}`;
+          if (!dryRun) {
+            const booking = require('./agentBookingService');
+            const now = new Date();
+            await db.query(
+              `/* st-booking:reschedule */
+               UPDATE st_booking_request
+                  SET status = 'reschedule',
+                      reminder_due_at = $2,
+                      escalate_due_at = $3,
+                      reminded_at = NULL,
+                      escalated_at = NULL,
+                      staff_alerted_at = NULL,
+                      updated_at = NOW()
+                WHERE id = $1::uuid
+                  AND status IN ('requested', 'reschedule', 'escalated', 'no_response')`,
+              [row.id, booking.reminderDueAt(now), booking.escalateDueAt(now)]
+            );
+          }
+          return {
+            handled: true,
+            dry_run: Boolean(dryRun),
+            message,
+            request: { reference: row.reference, status: 'reschedule' }
+          };
+        }
+        if (dryRun) {
+          return {
+            handled: true,
+            dry_run: true,
+            message: hostDecisionAck({ reference: row.reference, accepted: choice === 'accept', dated: datedStay(row) }),
+            request: { reference: row.reference, status: choice === 'accept' ? 'accepted' : 'declined' }
+          };
+        }
+        const decided = await decideRequest(db, row, choice, { via: 'whatsapp' }, deps);
+        return { handled: true, message: decided.host_reply, request: { reference: decided.reference, status: decided.status } };
+      }
     }
-    if (dryRun) {
-      return {
-        handled: true,
-        dry_run: true,
-        message: hostDecisionAck({ reference: row.reference, accepted: choice === 'accept' }),
-        request: { reference: row.reference, status: choice === 'accept' ? 'accepted' : 'declined' }
-      };
-    }
-    const decided = await decideRequest(db, row, choice, { via: 'whatsapp' }, deps);
-    return { handled: true, message: decided.host_reply, request: { reference: decided.reference, status: decided.status } };
+    if (weekly) return applyStayWeeklyReply(db, phone, weekly, { dryRun });
+    return { handled: false };
   } catch (error) {
     logger.warn('Stay request reply was not applied', { marker: STAY_REQUEST_MARKER, message: error.message });
     return { handled: false };
@@ -841,7 +1022,8 @@ async function expireDueRequests(db, deps = {}) {
     `/* st-booking:expire */
      UPDATE st_booking_request
      SET status = 'expired', expired_at = NOW(), expiry_notified_at = NOW(), updated_at = NOW()
-     WHERE status = 'requested' AND expires_at <= NOW() AND expiry_notified_at IS NULL
+     WHERE status IN ('requested', 'reschedule', 'escalated', 'no_response')
+       AND expires_at <= NOW() AND expiry_notified_at IS NULL
      RETURNING id, reference, listing_id, guest_phone, guest_email`
   );
   const deliver = deps.deliverStayNotice || deliverStayNotice;
@@ -963,7 +1145,8 @@ async function openStayToken(db, payload, { method = 'GET', purpose = '', body =
   const booking = require('./agentBookingService');
   const say = (english) => booking.phrase(lang, english);
   const action = String(payload.action || '');
-  if (payload.stay_listing && ['still_available', 'under_offer', 'let_agreed', 'sold'].includes(action)) {
+  const stayWeeklyActions = ['still_available', 'under_offer', 'let_agreed', 'sold', 'open', 'fully_booked', 'paused'];
+  if (payload.stay_listing && stayWeeklyActions.includes(action)) {
     if (!booking.shouldApplyOnOpen({ method, purpose, action })) {
       return {
         status: 200,
@@ -971,7 +1154,13 @@ async function openStayToken(db, payload, { method = 'GET', purpose = '', body =
         body: stayTokenPage({ title: say('Still available for these dates?'), body: say('Open this link again to save the listing status.'), lang })
       };
     }
-    const status = action === 'still_available' ? 'available' : action;
+    const stayStatus = {
+      still_available: 'available',
+      open: 'available',
+      fully_booked: 'fully_booked',
+      paused: 'paused'
+    };
+    const status = stayStatus[action] || action;
     await db.query(
       `/* st-booking:listing-status */
        UPDATE st_listing SET availability_status = $2, last_confirmed_at = NOW(), updated_at = NOW() WHERE id = $1::uuid`,
@@ -1008,18 +1197,35 @@ async function openStayToken(db, payload, { method = 'GET', purpose = '', body =
           })
         };
       }
+      const bookingTimes = require('./agentBookingService');
+      const now = new Date();
       await db.query(
         `/* st-booking:propose-dates */
          UPDATE st_booking_request
-            SET status = 'reschedule', proposed_check_in = $2::date, proposed_check_out = $3::date, updated_at = NOW()
+            SET status = 'reschedule',
+                proposed_check_in = $2::date,
+                proposed_check_out = $3::date,
+                reminder_due_at = $4,
+                escalate_due_at = $5,
+                reminded_at = NULL,
+                escalated_at = NULL,
+                staff_alerted_at = NULL,
+                updated_at = NOW()
           WHERE id = $1::uuid`,
-        [row.id, checkIn, checkOut]
+        [row.id, checkIn, checkOut, bookingTimes.reminderDueAt(now), bookingTimes.escalateDueAt(now)]
       );
+      const links = stayActionLinks(row.reference, now.getTime());
       const deliver = deps.deliverStayNotice || deliverStayNotice;
       await deliver({
         phone: row.guest_phone,
         email: row.guest_email,
-        text: `The host suggests ${checkIn} to ${checkOut} for ${row.reference}.`,
+        text: guestSuggestedDatesMessage({
+          reference: row.reference,
+          checkIn,
+          checkOut,
+          acceptUrl: links.guest_accept,
+          pickUrl: links.guest_pick
+        }),
         reference: row.reference,
         event: 'reschedule',
         role: 'guest'
@@ -1039,6 +1245,104 @@ async function openStayToken(db, payload, { method = 'GET', purpose = '', body =
         lang,
         form: { checkIn: isoDate(row.check_in), checkOut: isoDate(row.check_out), submit: 'Suggest new dates' }
       })
+    };
+  }
+  if (action === 'guest_pick') {
+    if (String(method).toUpperCase() === 'POST') {
+      const checkIn = isoDate(body.check_in);
+      const checkOut = isoDate(body.check_out);
+      if (!checkIn || !checkOut || checkOut <= checkIn) {
+        return {
+          status: 400,
+          contentType: 'text/html; charset=utf-8',
+          body: stayTokenPage({
+            title: say('Pick another'),
+            body: say('Choose a check-in and a later check-out.'),
+            lang,
+            form: { checkIn, checkOut, submit: 'Pick another' }
+          })
+        };
+      }
+      const now = new Date();
+      const bookingTimes = require('./agentBookingService');
+      await db.query(
+        `/* st-booking:guest-pick */
+         UPDATE st_booking_request
+            SET status = 'reschedule', proposed_check_in = $2::date, proposed_check_out = $3::date,
+                reminder_due_at = $4, escalate_due_at = $5, reminded_at = NULL, escalated_at = NULL,
+                staff_alerted_at = NULL, updated_at = NOW()
+          WHERE id = $1::uuid`,
+        [row.id, checkIn, checkOut, bookingTimes.reminderDueAt(now), bookingTimes.escalateDueAt(now)]
+      );
+      const deliver = deps.deliverStayNotice || deliverStayNotice;
+      await deliver({
+        phone: row.host_whatsapp || row.host_phone,
+        email: row.host_email,
+        text: `The guest suggests ${checkIn} to ${checkOut} for ${row.reference}.`,
+        reference: row.reference,
+        event: 'guest_pick',
+        role: 'host'
+      }, deps).catch(() => null);
+      return {
+        status: 200,
+        contentType: 'text/html; charset=utf-8',
+        body: stayTokenPage({ title: say('New time saved'), body: `${checkIn} to ${checkOut}`, lang })
+      };
+    }
+    return {
+      status: 200,
+      contentType: 'text/html; charset=utf-8',
+      body: stayTokenPage({
+        title: say('Pick another'),
+        body: row.title || '',
+        lang,
+        form: { checkIn: isoDate(row.proposed_check_in || row.check_in), checkOut: isoDate(row.proposed_check_out || row.check_out), submit: 'Pick another' }
+      })
+    };
+  }
+  if (action === 'guest_accept' && booking.shouldApplyOnOpen({ method, purpose, action })) {
+    const checkIn = isoDate(row.proposed_check_in) || isoDate(row.check_in);
+    const checkOut = isoDate(row.proposed_check_out) || isoDate(row.check_out);
+    if (!checkIn || !checkOut || checkOut <= checkIn) {
+      return {
+        status: 409,
+        contentType: 'text/html; charset=utf-8',
+        body: stayTokenPage({ title: say('Pick another'), body: say('Choose a check-in and a later check-out.'), lang })
+      };
+    }
+    await db.query(
+      `/* st-booking:guest-accept */
+       UPDATE st_booking_request
+          SET status = 'accepted', check_in = $2::date, check_out = $3::date,
+              accepted_at = NOW(), decided_via = 'guest_link', updated_at = NOW()
+        WHERE id = $1::uuid AND status IN ('requested', 'reschedule', 'escalated', 'no_response')`,
+      [row.id, checkIn, checkOut]
+    );
+    await blockAcceptedDates(db, row.listing_id, checkIn, checkOut, row.reference);
+    const statusUrl = `${publicBase()}/short-term/requests/${row.reference}?t=${encodeURIComponent(guestToken(row.reference, row.listing_id))}`;
+    const deliver = deps.deliverStayNotice || deliverStayNotice;
+    await deliver({
+      phone: row.guest_phone,
+      email: row.guest_email,
+      text: guestDecisionMessage({
+        reference: row.reference,
+        accepted: true,
+        statusUrl,
+        hostPhone: normalisePhone(row.host_phone),
+        address: row.address,
+        checkInFrom: row.check_in_from,
+        houseRules: row.house_rules,
+        intent: 'dates',
+        checkIn
+      }),
+      reference: row.reference,
+      event: 'accepted',
+      role: 'guest'
+    }, deps).catch(() => null);
+    return {
+      status: 200,
+      contentType: 'text/html; charset=utf-8',
+      body: stayTokenPage({ title: say('Saved.'), body: `${checkIn} to ${checkOut}`, lang })
     };
   }
   if (!booking.shouldApplyOnOpen({ method, purpose, action })) {
@@ -1071,36 +1375,62 @@ async function openStayToken(db, payload, { method = 'GET', purpose = '', body =
   }
 }
 
-function stayCheckInInstant(iso) {
+function stayCheckInInstant(iso, checkInFrom) {
   const day = isoDate(iso);
   if (!day) return null;
-  return new Date(`${day}T11:00:00.000Z`);
+  const match = String(checkInFrom || '').trim().match(/^(\d{1,2}):(\d{2})/);
+  const time = match ? `${String(Number(match[1])).padStart(2, '0')}:${match[2]}` : '14:00';
+  const booking = require('./agentBookingService');
+  return booking.appointmentInstant(day, time);
+}
+
+async function sendStaySweepNotice(db, notice, deps) {
+  const deliver = deps.deliverStayNotice || deliverStayNotice;
+  let result = null;
+  try {
+    result = await deliver(notice, deps);
+  } catch (error) {
+    logger.warn('Stay notice failed', { marker: STAY_REQUEST_MARKER, message: error.message });
+    return null;
+  }
+  if (result) await alertIfBridgeDown(db, result, notice, deps).catch(() => null);
+  return result;
+}
+
+function stayCheckInLabel(value) {
+  const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return '14:00';
+  return `${String(Number(match[1])).padStart(2, '0')}:${match[2]}`;
 }
 
 async function sweepStayReplyLoop(db, now = new Date(), deps = {}) {
   const booking = require('./agentBookingService');
   const at = now instanceof Date ? now : new Date(now);
-  const summary = { reminded: 0, escalated: 0, visitor_reminders: 0, weekly: 0, expired: 0 };
+  const summary = { reminded: 0, escalated: 0, visitor_reminders: 0, weekly: 0, expired: 0, realerts: 0 };
   const expired = await sweepStayRequests(db, deps).catch(() => ({ expired: 0 }));
   summary.expired = expired?.expired || 0;
   const due = await db.query(
     `/* st-booking:reply-due */
-     SELECT r.*, l.title, l.host_phone, l.host_whatsapp, l.host_email, l.area, l.district
+     SELECT r.*, l.title, l.host_phone, l.host_whatsapp, l.host_email, l.area, l.district, l.check_in_from
        FROM st_booking_request r
        JOIN st_listing l ON l.id = r.listing_id
-      WHERE r.status IN ('requested', 'reschedule', 'accepted')
+      WHERE r.status IN ('requested', 'reschedule', 'accepted', 'escalated')
         AND r.created_at > NOW() - INTERVAL '21 days'
       ORDER BY r.created_at ASC
       LIMIT 200`
   );
-  const deliver = deps.deliverStayNotice || deliverStayNotice;
   for (const row of due.rows) {
-    if (row.status === 'requested' && !row.escalated_at && row.escalate_due_at && new Date(row.escalate_due_at) <= at) {
+    const waiting = row.status === 'requested' || row.status === 'reschedule';
+    if (waiting && !row.escalated_at && row.escalate_due_at && new Date(row.escalate_due_at) <= at) {
       await db.query(
         `/* st-booking:mark-escalated */
          UPDATE st_booking_request
-            SET status = 'escalated', no_response_at = COALESCE(no_response_at, $2), escalated_at = $2, updated_at = NOW()
-          WHERE id = $1::uuid AND status = 'requested'`,
+            SET status = 'escalated',
+                no_response_at = COALESCE(no_response_at, $2),
+                escalated_at = $2,
+                staff_alerted_at = $2,
+                updated_at = NOW()
+          WHERE id = $1::uuid AND status IN ('requested', 'reschedule')`,
         [row.id, at]
       );
       const text = [
@@ -1110,32 +1440,69 @@ async function sweepStayReplyLoop(db, now = new Date(), deps = {}) {
         row.guest_phone ? `Call the guest: ${row.guest_phone}` : '',
         'The host has not replied.'
       ].filter(Boolean).join('\n');
-      const targets = booking.escalationTargets();
-      if (!targets.length) {
-        await booking.flagStaff(db, { bookingId: null, listingId: null, kind: 'stay_escalation', message: `${row.reference}\n${text}` });
-      } else {
-        for (const target of targets) {
-          await deliver({ phone: target, email: null, text, reference: row.reference, event: 'escalated', role: 'staff' }, deps);
-        }
+      await booking.flagStaff(db, {
+        bookingId: null,
+        listingId: null,
+        kind: 'stay_escalation',
+        message: `${row.reference}\n${text}`
+      });
+      for (const target of booking.escalationTargets()) {
+        await sendStaySweepNotice(db, {
+          phone: target,
+          email: null,
+          text,
+          reference: row.reference,
+          event: 'escalated',
+          role: 'staff'
+        }, deps);
       }
-      await deliver({
+      await sendStaySweepNotice(db, {
         phone: row.guest_phone,
         email: row.guest_email,
         text: `The host has not confirmed ${row.reference}. A MakaUG team member will call you.`,
         reference: row.reference,
         event: 'escalated',
         role: 'guest'
-      }, deps).catch(() => null);
+      }, deps);
       summary.escalated += 1;
       continue;
     }
-    if (row.status === 'requested' && !row.reminded_at && row.reminder_due_at && new Date(row.reminder_due_at) <= at) {
+    if (row.status === 'escalated' && booking.realertDue(row, at)) {
+      await db.query(
+        `/* st-booking:realert */ UPDATE st_booking_request SET staff_alerted_at = $2, updated_at = NOW() WHERE id = $1::uuid`,
+        [row.id, at]
+      );
+      const text = [
+        'A short stay request still needs a person from MakaUG.',
+        `${row.reference} for ${row.title || 'a stay'} is still unanswered.`,
+        row.guest_phone ? `Call the guest: ${row.guest_phone}` : ''
+      ].filter(Boolean).join('\n');
+      await booking.flagStaff(db, {
+        bookingId: null,
+        listingId: null,
+        kind: 'stay_escalation_realert',
+        message: `${row.reference}\n${text}`
+      });
+      for (const target of booking.escalationTargets()) {
+        await sendStaySweepNotice(db, {
+          phone: target,
+          email: null,
+          text,
+          reference: row.reference,
+          event: 'realert',
+          role: 'staff'
+        }, deps);
+      }
+      summary.realerts += 1;
+      continue;
+    }
+    if (waiting && !row.reminded_at && row.reminder_due_at && new Date(row.reminder_due_at) <= at) {
       await db.query(
         `/* st-booking:mark-reminded */ UPDATE st_booking_request SET reminded_at = $2, updated_at = NOW() WHERE id = $1::uuid`,
         [row.id, at]
       );
       const links = stayActionLinks(row.reference, at.getTime());
-      await deliver({
+      await sendStaySweepNotice(db, {
         phone: row.host_whatsapp || row.host_phone,
         email: row.host_email,
         text: hostRequestMessage({
@@ -1157,7 +1524,8 @@ async function sweepStayReplyLoop(db, now = new Date(), deps = {}) {
       summary.reminded += 1;
     }
     if (row.status === 'accepted' && row.check_in) {
-      const when = stayCheckInInstant(row.check_in);
+      const when = stayCheckInInstant(row.check_in, row.check_in_from);
+      const fromLabel = stayCheckInLabel(row.check_in_from);
       if (when && when > at) {
         const dayBefore = new Date(when.getTime() - 24 * 3600000);
         const twoHours = new Date(when.getTime() - 2 * 3600000);
@@ -1166,14 +1534,14 @@ async function sweepStayReplyLoop(db, now = new Date(), deps = {}) {
             `/* st-booking:remind-24 */ UPDATE st_booking_request SET visitor_reminder_24h_at = $2 WHERE id = $1::uuid`,
             [row.id, at]
           );
-          await deliver({
+          await sendStaySweepNotice(db, {
             phone: row.guest_phone,
             email: row.guest_email,
-            text: `Reminder: your stay ${row.reference} starts tomorrow (${isoDate(row.check_in)}).`,
+            text: `Reminder: your stay ${row.reference} starts tomorrow (${isoDate(row.check_in)}). Check in from ${fromLabel}.`,
             reference: row.reference,
             event: 'remind_24h',
             role: 'guest'
-          }, deps).catch(() => null);
+          }, deps);
           summary.visitor_reminders += 1;
         }
         if (!row.visitor_reminder_2h_at && twoHours <= at) {
@@ -1181,20 +1549,20 @@ async function sweepStayReplyLoop(db, now = new Date(), deps = {}) {
             `/* st-booking:remind-2 */ UPDATE st_booking_request SET visitor_reminder_2h_at = $2 WHERE id = $1::uuid`,
             [row.id, at]
           );
-          await deliver({
+          await sendStaySweepNotice(db, {
             phone: row.guest_phone,
             email: row.guest_email,
-            text: `Reminder: your stay ${row.reference} starts in about 2 hours.`,
+            text: `Reminder: your stay ${row.reference} starts in about 2 hours. Check in from ${fromLabel}.`,
             reference: row.reference,
             event: 'remind_2h',
             role: 'guest'
-          }, deps).catch(() => null);
+          }, deps);
           summary.visitor_reminders += 1;
         }
       }
     }
   }
-  if (booking.shouldSendWeekly(at)) {
+  if (booking.shouldCatchUpWeekly(at)) {
     const key = booking.weekKey(at);
     const listings = await db.query(
       `/* st-booking:weekly-listings */
@@ -1223,17 +1591,17 @@ async function sweepStayReplyLoop(db, now = new Date(), deps = {}) {
       );
       const links = stayListingLinks(listing.id, at.getTime());
       const lines = [
-        'Still available for these dates?',
+        'Monday check-in',
         listing.title,
         blocked.rows.length
           ? `Blocked dates: ${blocked.rows.map((item) => `${item.starts_on} to ${item.ends_on}`).join('; ')}`
           : 'Blocked dates: none on the calendar.',
-        `Still available: ${links.still_available}`,
-        `Under offer: ${links.under_offer}`,
-        `Let agreed: ${links.let_agreed}`,
-        `Sold: ${links.sold}`
+        'Reply 1 Open, 2 Fully booked, 3 Paused.',
+        `Open: ${links.open}`,
+        `Fully booked: ${links.fully_booked}`,
+        `Paused: ${links.paused}`
       ];
-      await deliver({
+      await sendStaySweepNotice(db, {
         phone: listing.host_whatsapp || listing.host_phone,
         email: listing.host_email,
         text: lines.join('\n'),
@@ -1251,6 +1619,34 @@ async function sweepStayReplyLoop(db, now = new Date(), deps = {}) {
     }
   }
   return summary;
+}
+
+async function staffCloseStayRequest(db, reference, deps = {}) {
+  const row = await loadRequestRow(db, reference);
+  if (!row) throw stayError('Request not found', 404);
+  if (!['requested', 'reschedule', 'escalated', 'no_response'].includes(row.status)) {
+    throw stayError('This request is already closed.', 409);
+  }
+  const updated = await db.query(
+    `/* st-booking:staff-close */
+     UPDATE st_booking_request
+        SET status = 'cancelled', decided_via = 'staff', updated_at = NOW()
+      WHERE id = $1::uuid
+        AND status IN ('requested', 'reschedule', 'escalated', 'no_response')
+      RETURNING reference, status`,
+    [row.id]
+  );
+  if (!updated.rows[0]) throw stayError('This request is already closed.', 409);
+  const statusUrl = `${publicBase()}/short-term/requests/${row.reference}?t=${encodeURIComponent(guestToken(row.reference, row.listing_id))}`;
+  await sendStaySweepNotice(db, {
+    phone: row.guest_phone,
+    email: row.guest_email,
+    text: `Request ${row.reference} is closed. ${statusUrl}`,
+    reference: row.reference,
+    event: 'staff_closed',
+    role: 'guest'
+  }, deps);
+  return { reference: row.reference, status: 'cancelled' };
 }
 
 async function listStaffRequests(db) {
@@ -1279,12 +1675,16 @@ module.exports = {
   blockedNightRange,
   buildIcs,
   channelsFor,
+  alertIfBridgeDown,
   choiceFromReply,
   createBookingRequest,
   deliverStayNotice,
   expireDueRequests,
   guestDecisionMessage,
   guestRequestMessage,
+  guestSuggestedDatesMessage,
+  parseStayChoice,
+  parseStayWeeklyReply,
   guestRequestView,
   guestToken,
   handleHostStayReply,
@@ -1302,6 +1702,9 @@ module.exports = {
   refreshIcal,
   saveIcalUrl,
   signStayToken,
+  staffCloseStayRequest,
+  stayCheckInInstant,
+  stayDeadlinePhrase,
   submitVerifiedReview,
   sweepStayRequests,
   sweepStayReplyLoop,
