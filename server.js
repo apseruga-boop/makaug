@@ -60,6 +60,8 @@ const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLi
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
 const { startLeadDeskScheduler } = require('./services/leadDeskService');
+const { startAgentBookingScheduler } = require('./services/agentBookingService');
+const agentBookingRoutes = require('./routes/agentBookings');
 const { startVideoStillScheduler } = require('./services/videoStillScheduler');
 const { startGreetingNameCache } = require('./services/agentNameService');
 const { startBillingScheduler } = require('./services/billingOpsService');
@@ -420,6 +422,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/properties', propertiesRoutes);
 app.use('/api/off-plan', offPlanRoutes);
 app.use('/api/agents', agentsRoutes);
+app.use('/api/agent-bookings', agentBookingRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/advertising', advertisingRoutes);
 app.use('/api/monetization', monetizationRoutes);
@@ -2430,6 +2433,9 @@ app.use((req, res, next) => {
   return res.status(404).type('text/plain').send('Not found');
 });
 
+app.get('/v/:token', agentBookingRoutes.handleToken);
+app.post('/v/:token', agentBookingRoutes.handleToken);
+
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
   return sendPublicIndex(req, res, next);
@@ -2542,6 +2548,7 @@ async function start() {
   }
   if (!IS_SOUTH_AFRICA) {
     startLeadDeskScheduler(db);
+    startAgentBookingScheduler(db);
     startVideoStillScheduler(db);
     whatsappRoutes.startEmployeeBatchSummarySweeper?.();
     whatsappRoutes.startEmployeeMediaRetrySweeper?.();

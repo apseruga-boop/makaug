@@ -198,6 +198,7 @@ const KIND_LABEL = Object.freeze({
 });
 
 function buildListerMessage({ kind, listing, seeker, message, extra = {} }) {
+  if (text(extra.agent_message)) return text(extra.agent_message);
   const lines = [
     `${KIND_LABEL[kind] || 'New enquiry'} from makaug.com`,
     '',
@@ -220,7 +221,8 @@ function buildListerMessage({ kind, listing, seeker, message, extra = {} }) {
   return lines.join('\n');
 }
 
-function buildSeekerMessage({ kind, listing, lister, seeker }) {
+function buildSeekerMessage({ kind, listing, lister, seeker, extra = {} }) {
+  if (text(extra.seeker_message)) return text(extra.seeker_message);
   const greeting = seeker.name && !/^(unknown|whatsapp contact)/i.test(seeker.name) ? `Hi ${seeker.name.split(' ')[0]},` : 'Hi,';
   const action = kind === 'viewing' ? 'viewing request' : kind === 'callback' ? 'callback request' : 'enquiry';
   const lines = [
@@ -386,7 +388,7 @@ async function handOffListingLead(db, { lead, listing: listingInput = null, list
       cap: dailyCap('LEAD_HANDOFF_SEEKER_DAILY_CAP', 5)
     });
     if (kind !== 'whatsapp_bot' && listerReached && !seekerCapped && flag('LEAD_HANDOFF_SEEKER_CONFIRMATION', true)) {
-      const body = buildSeekerMessage({ kind, listing, lister, seeker });
+      const body = buildSeekerMessage({ kind, listing, lister, seeker, extra });
       if (seeker.phone) {
         seekerResult = await deliverWhatsapp({ to: seeker.phone, body, kind: `seeker_${kind}`, leadId: lead.id, nonce });
         await logAttempt(db, { lead, listing, channel: 'whatsapp', recipientPhone: seeker.phone, type: `lead_confirmation_seeker_${kind}`, result: seekerResult });

@@ -24,6 +24,14 @@ const { renderReportCardPng, renderAgentShareCardPng, reportCardUrl, verifyCardT
 const { ensureReportVideo, ensureWelcomeVideo, reportVideoUrl, isVideoRenderingAvailable } = require('../services/agentReportVideoService');
 const { agentProfileUrl, buildWelcomePack, countAgentListings } = require('../services/agentWelcomeService');
 const { publicAgentPayload, publicAgentListingPayload } = require('../utils/publicListingPayload');
+const {
+  availabilityView,
+  buildDaysAndSlots,
+  createAgentBooking,
+  mergeSchedule,
+  responseTimeLabel
+} = require('../services/agentBookingService');
+const { createBookingRequest } = require('../services/shortTermBookingService');
 
 const router = express.Router();
 const KNOWN_AGENT_SOCIAL_LINKS = [
@@ -887,6 +895,232 @@ router.post('/:id/enquiries', agentProfileEnquiryLimiter, leadHoneypot, async (r
   }
 });
 
+function bookingErrorStatus(error) {
+  const status = Number(error?.status);
+  return status >= 400 && status < 500 ? status : 0;
+}
+
+router.get('/:id/booking-options', async (req, res, next) => {
+  try {
+    const agent = await findPublicAgentForEnquiry(req.params.id);
+    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    const contact = await db.query(
+      `SELECT id, user_id, phone, whatsapp FROM agents WHERE id = $1 LIMIT 1`,
+      [agent.id]
+    );
+    const agentRow = contact.rows[0] || { id: agent.id };
+    let propertyRows = [];
+    try {
+      const properties = await db.query(
+        `SELECT id, title, area, district, bedrooms, property_type, availability_status, last_confirmed_at
+           FROM properties
+          WHERE agent_id = $1 AND LOWER(COALESCE(status, '')) = 'approved'
+          ORDER BY created_at DESC
+          LIMIT 40`,
+        [agent.id]
+      );
+      propertyRows = properties.rows;
+    } catch (error) {
+      if (error.code !== '42703') throw error;
+      const properties = await db.query(
+        `SELECT id, title, area, district, bedrooms, property_type
+           FROM properties
+          WHERE agent_id = $1 AND LOWER(COALESCE(status, '')) = 'approved'
+          ORDER BY created_at DESC
+          LIMIT 40`,
+        [agent.id]
+      );
+      propertyRows = properties.rows;
+    }
+    let stayRows = [];
+    try {
+      const stays = await db.query(
+        `SELECT l.id, l.title, l.area, l.district, l.slug, l.availability_status, l.last_confirmed_at
+           FROM st_listing l
+           JOIN agents a ON a.id = $1
+          WHERE l.status = 'approved'
+            AND l.moderation_stage = 'approved'
+            AND l.king_facts_confirmed = TRUE
+            AND l.listing_fee_status IN ('paid', 'waived')
+            AND (
+              (a.user_id IS NOT NULL AND l.host_user_id = a.user_id)
+              OR (
+                length(regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')) >= 9
+                AND (
+                  regexp_replace(COALESCE(l.host_phone, ''), '\\D', '', 'g') = regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')
+                  OR regexp_replace(COALESCE(l.host_whatsapp, ''), '\\D', '', 'g') = regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')
+                )
+              )
+            )
+          ORDER BY l.created_at DESC
+          LIMIT 20`,
+        [agent.id]
+      );
+      stayRows = stays.rows;
+    } catch (error) {
+      if (error.code !== '42P01' && error.code !== '42703') throw error;
+    }
+    const listingId = String(req.query.listing_id || propertyRows[0]?.id || '');
+    let schedule = mergeSchedule(null, null);
+    if (listingId) {
+      try {
+        const configRow = await db.query(`SELECT * FROM viewing_configs WHERE listing_id = $1 LIMIT 1`, [listingId]);
+        const defaultsRow = await db.query(`SELECT * FROM agent_viewing_defaults WHERE agent_id = $1 LIMIT 1`, [agent.id]);
+        schedule = mergeSchedule(configRow.rows[0] || null, defaultsRow.rows[0] || null);
+      } catch (error) {
+        if (error.code !== '42P01') throw error;
+      }
+    }
+    let counts = [];
+    if (listingId) {
+      try {
+        const slotCounts = await db.query(
+          `SELECT preferred_date::text AS preferred_date, preferred_time, COUNT(*)::int AS n
+             FROM viewing_bookings
+            WHERE listing_id = $1 AND preferred_date >= CURRENT_DATE
+              AND status NOT IN ('cancelled', 'declined')
+            GROUP BY 1, 2`,
+          [listingId]
+        );
+        counts = slotCounts.rows;
+      } catch (error) {
+        if (error.code !== '42P01') throw error;
+      }
+    }
+    const built = buildDaysAndSlots({ schedule, bookings: counts });
+    let blocked = [];
+    const stayId = String(req.query.stay_listing_id || '');
+    if (stayId) {
+      try {
+        const ranges = await db.query(
+          `SELECT to_char(starts_on, 'YYYY-MM-DD') AS starts_on, to_char(ends_on, 'YYYY-MM-DD') AS ends_on
+             FROM st_availability
+            WHERE listing_id = $1::uuid AND is_available = FALSE
+            ORDER BY starts_on
+            LIMIT 12`,
+          [stayId]
+        );
+        blocked = ranges.rows;
+      } catch (error) {
+        if (error.code !== '42P01') throw error;
+      }
+    }
+    return res.json({
+      ok: true,
+      data: {
+        agent_id: agent.id,
+        response_time_label: '',
+        properties: propertyRows.map((row) => {
+          const view = availabilityView(row);
+          return {
+            id: row.id,
+            kind: 'property',
+            title: row.title,
+            area: row.area,
+            district: row.district,
+            bedrooms: row.bedrooms,
+            property_type: row.property_type,
+            availability_label: view.label,
+            availability_tone: view.tone
+          };
+        }),
+        stays: stayRows.map((row) => {
+          const view = availabilityView(row);
+          return {
+            id: row.id,
+            kind: 'stay',
+            title: row.title,
+            area: row.area,
+            district: row.district,
+            slug: row.slug,
+            availability_label: view.label,
+            availability_tone: view.tone
+          };
+        }),
+        days: built.days,
+        slots_by_date: built.slotsByDate,
+        blocked_dates: blocked,
+        host_phone_known: Boolean(agentRow.phone || agentRow.whatsapp)
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/:id/bookings', agentProfileEnquiryLimiter, leadHoneypot, async (req, res, next) => {
+  try {
+    const agent = await findPublicAgentForEnquiry(req.params.id);
+    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    const body = req.body || {};
+    if (body.stay_listing_id) {
+      const owned = await db.query(
+        `SELECT l.id
+           FROM st_listing l
+           JOIN agents a ON a.id = $2
+          WHERE l.id = $1::uuid
+            AND l.status = 'approved'
+            AND (
+              (a.user_id IS NOT NULL AND l.host_user_id = a.user_id)
+              OR (
+                length(regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')) >= 9
+                AND (
+                  regexp_replace(COALESCE(l.host_phone, ''), '\\D', '', 'g') = regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')
+                  OR regexp_replace(COALESCE(l.host_whatsapp, ''), '\\D', '', 'g') = regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')
+                )
+              )
+            )
+          LIMIT 1`,
+        [body.stay_listing_id, agent.id]
+      );
+      if (!owned.rows.length) return res.status(404).json({ ok: false, error: 'Property not found' });
+      const rawIntent = String(body.intent || 'dates');
+      const intent = rawIntent === 'callback' || rawIntent === 'question' ? rawIntent : 'dates';
+      if (rawIntent === 'offer') return res.status(400).json({ ok: false, error: 'Choose a property for the offer.' });
+      const created = await createBookingRequest(db, body.stay_listing_id, {
+        guest_name: body.name || body.contact_name,
+        guest_phone: body.phone || body.contact_phone,
+        guest_email: body.email || '',
+        guests: body.guests || 1,
+        message: body.message || body.callback_window || '',
+        check_in: body.check_in || '',
+        check_out: body.check_out || '',
+        intent,
+        terms_accepted: true,
+        language: body.language || 'en'
+      });
+      return res.status(201).json({ ok: true, data: created, source: 'agent_profile' });
+    }
+    const created = await createAgentBooking(db, {
+      agentId: agent.id,
+      intent: body.intent,
+      name: body.name || body.contact_name,
+      phone: body.phone || body.contact_phone,
+      message: body.message,
+      listingId: body.listing_id || null,
+      preferredDate: body.preferred_date,
+      preferredTime: body.preferred_time,
+      callbackWindow: body.callback_window,
+      contactChannel: body.contact_channel,
+      offerAmount: body.offer_amount,
+      language: body.language || 'en'
+    });
+    return res.status(201).json({
+      ok: true,
+      source: 'agent_profile',
+      data: {
+        id: created.request?.id || null,
+        status: created.request?.status || 'pending',
+        message: created.visitor_message
+      }
+    });
+  } catch (error) {
+    const status = bookingErrorStatus(error);
+    if (status) return res.status(status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
 router.get('/:id', async (req, res, next) => {
   try {
     const agent = await db.query(
@@ -970,6 +1204,8 @@ router.get('/:id', async (req, res, next) => {
          p.bathrooms,
          p.property_type,
          p.status,
+         p.availability_status,
+         p.last_confirmed_at,
          p.created_at,
          p.latitude,
          p.longitude,
@@ -999,12 +1235,35 @@ router.get('/:id', async (req, res, next) => {
       console.warn('[agents] public summary unavailable', { agentId: req.params.id, message: error.message });
     }
 
+    let responseTime = '';
+    try {
+      const samples = await db.query(
+        `SELECT EXTRACT(EPOCH FROM (first_response_at - created_at)) AS seconds
+           FROM agent_booking_requests
+          WHERE agent_id = $1 AND first_response_at IS NOT NULL
+          ORDER BY created_at DESC
+          LIMIT 30`,
+        [req.params.id]
+      );
+      responseTime = responseTimeLabel(samples.rows.map((row) => Number(row.seconds)));
+    } catch (error) {
+      if (error.code !== '42P01') throw error;
+    }
+
     return res.json({
       ok: true,
       data: {
         ...publicAgentPayload(agent.rows[0]),
+        response_time_label: responseTime,
         public_summary: publicSummary,
-        listings: listings.rows.map(publicAgentListingPayload)
+        listings: listings.rows.map((row) => {
+          const view = availabilityView(row);
+          return {
+            ...publicAgentListingPayload(row),
+            availability_label: view.label,
+            availability_tone: view.tone
+          };
+        })
       }
     });
   } catch (error) {

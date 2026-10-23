@@ -2125,6 +2125,10 @@
       + '<aside>'
       + '<div class="st-book">'
       + '<div class="st-book-price">' + esc(listing.nightly_display) + ' <span>per night</span></div>'
+      + (listing.availability_label ? '<p class="st-help' + (listing.availability_tone === 'stale' ? '" style="color:#92400e"' : '" style="color:#15803d"') + '>' + esc(listing.availability_label) + '</p>' : '')
+      + ((listing.availability || []).some(function (row) { return row && row.is_available === false; })
+        ? '<p class="st-help">Blocked dates: ' + (listing.availability || []).filter(function (row) { return row && row.is_available === false; }).slice(0, 6).map(function (row) { return esc(row.starts_on) + ' to ' + esc(row.ends_on); }).join('; ') + '</p>'
+        : '')
       + '<div class="st-form-grid" style="margin-top:12px">'
       + '<div><label class="st-label" for="st-d-in">Check in</label><input class="st-input" id="st-d-in" type="date" value="' + esc(q.check_in || '') + '"></div>'
       + '<div><label class="st-label" for="st-d-out">Check out</label><input class="st-input" id="st-d-out" type="date" value="' + esc(q.check_out || '') + '"></div>'
@@ -2144,6 +2148,11 @@
       + (listing.external_booking_url
         ? '<a class="st-contact-btn st-contact-form" href="' + esc(listing.external_booking_url) + '" target="_blank" rel="noopener noreferrer nofollow sponsored"><i class="fas fa-arrow-up-right-from-square"></i> See it on ' + esc(listing.partner_name || 'the partner site') + '</a>'
         : '')
+      + '<div class="agent-booking-tabs" role="tablist" id="st-intent-tabs">'
+      + '<button type="button" class="is-active" data-st-intent="dates">Request these dates</button>'
+      + '<button type="button" data-st-intent="callback">Request a callback</button>'
+      + '<button type="button" data-st-intent="question">Ask a question</button>'
+      + '</div>'
       + '<button class="st-contact-btn st-contact-form" type="button" id="st-enquire-open"><i class="fas fa-envelope"></i> ' + esc(t('requestDates')) + '</button>'
       + '<div id="st-enquire-shell"></div>'
       + '</div>'
@@ -2155,16 +2164,22 @@
   }
 
   function enquiryFormHtml() {
-    return '<form id="st-enquire-form" style="margin-top:12px;border-top:1px solid #dfe8e3;padding-top:12px">'
+    var intent = 'dates';
+    var active = document.querySelector('#st-intent-tabs button.is-active');
+    if (active) intent = active.getAttribute('data-st-intent') || 'dates';
+    var dates = intent === 'dates';
+    return '<form id="st-enquire-form" style="margin-top:12px;border-top:1px solid #dfe8e3;padding-top:12px" data-intent="' + esc(intent) + '">'
       + '<div><label class="st-label" for="st-e-name">Your name</label><input class="st-input" id="st-e-name" required></div>'
       + '<div style="margin-top:8px"><label class="st-label" for="st-e-phone">Phone</label><input class="st-input" id="st-e-phone" placeholder="0780 000 000"></div>'
       + '<div style="margin-top:8px"><label class="st-label" for="st-e-email">Email</label><input class="st-input" id="st-e-email" type="email"></div>'
-      + '<div style="margin-top:8px"><label class="st-label" for="st-e-guests">Guests</label><input class="st-input" id="st-e-guests" type="number" min="1" max="30"></div>'
+      + (dates
+        ? '<div style="margin-top:8px"><label class="st-label" for="st-e-guests">Guests</label><input class="st-input" id="st-e-guests" type="number" min="1" max="30"></div>'
+        : '<input id="st-e-guests" type="hidden" value="1">')
       + '<div style="margin-top:8px"><label class="st-label" for="st-e-msg">Message</label><textarea class="st-input" id="st-e-msg" style="min-height:70px" placeholder="What you need to know"></textarea></div>'
       + '<label class="st-check" style="margin-top:8px"><input type="checkbox" id="st-e-terms" required> '
       + '<span><a href="/short-term/terms" data-st-link>' + esc(t('termsTitle')) + '</a></span></label>'
       + '<div id="st-enquire-feedback"></div>'
-      + '<button class="st-btn st-btn-primary" type="submit" style="width:100%;margin-top:10px">' + esc(t('requestDates')) + '</button>'
+      + '<button class="st-btn st-btn-primary" type="submit" style="width:100%;margin-top:10px">' + esc(dates ? t('requestDates') : (intent === 'callback' ? 'Request a callback' : 'Ask a question')) + '</button>'
       + '<p class="st-help">' + esc(t('paymentDirect')) + '</p>'
       + '</form>';
   }
@@ -2191,6 +2206,65 @@
       if (el) el.addEventListener('change', refreshQuote);
     });
 
+    function bindStayEnquiry() {
+      var form = document.getElementById('st-enquire-form');
+      if (!form || form.getAttribute('data-bound') === '1') return;
+      form.setAttribute('data-bound', '1');
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var feedback = document.getElementById('st-enquire-feedback');
+        var from = document.getElementById('st-d-in');
+        var to = document.getElementById('st-d-out');
+        var terms = document.getElementById('st-e-terms');
+        var intent = form.getAttribute('data-intent') || 'dates';
+        if (terms && !terms.checked) {
+          if (feedback) feedback.innerHTML = '<p class="st-help">' + esc(t('termsTitle')) + '</p>';
+          return;
+        }
+        api('/listings/' + encodeURIComponent(listing.id) + '/requests', {
+          method: 'POST',
+          body: {
+            intent: intent,
+            guest_name: (document.getElementById('st-e-name') || {}).value,
+            guest_phone: (document.getElementById('st-e-phone') || {}).value,
+            guest_email: (document.getElementById('st-e-email') || {}).value,
+            guests: (document.getElementById('st-e-guests') || {}).value,
+            message: (document.getElementById('st-e-msg') || {}).value,
+            check_in: intent === 'dates' && from ? from.value : '',
+            check_out: intent === 'dates' && to ? to.value : '',
+            terms_accepted: true
+          }
+        }).then(function (payloadOut) {
+          form.innerHTML = '<div class="st-ok"><b>' + esc(payloadOut.reference || '') + '</b><p>'
+            + esc(payloadOut.message || 'Your request has been sent.') + '</p>'
+            + (payloadOut.status_url ? '<p><a href="' + esc(payloadOut.status_url) + '">' + esc(payloadOut.status_url) + '</a></p>' : '')
+            + '<p class="st-help">' + esc(payloadOut.payment_line || t('paymentDirect')) + '</p></div>';
+        }).catch(function (error) {
+          if (feedback) {
+            feedback.innerHTML = '<ul class="st-errors">'
+              + ((error.details && error.details.length ? error.details : [error.message])
+                .map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('')) + '</ul>';
+          }
+        });
+      });
+    }
+
+    var tabs = document.getElementById('st-intent-tabs');
+    if (tabs) {
+      tabs.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-st-intent]');
+        if (!button) return;
+        Array.prototype.forEach.call(tabs.querySelectorAll('button'), function (item) {
+          item.classList.toggle('is-active', item === button);
+        });
+        var shell = document.getElementById('st-enquire-shell');
+        if (shell && shell.innerHTML) {
+          shell.innerHTML = enquiryFormHtml();
+          bindStayEnquiry();
+        }
+      });
+    }
+
     var open = document.getElementById('st-enquire-open');
     if (open) {
       open.addEventListener('click', function () {
@@ -2198,43 +2272,7 @@
         var shell = document.getElementById('st-enquire-shell');
         if (!shell || shell.innerHTML) return;
         shell.innerHTML = enquiryFormHtml();
-        var form = document.getElementById('st-enquire-form');
-        if (!form) return;
-        form.addEventListener('submit', function (e) {
-          e.preventDefault();
-          var feedback = document.getElementById('st-enquire-feedback');
-          var from = document.getElementById('st-d-in');
-          var to = document.getElementById('st-d-out');
-          var terms = document.getElementById('st-e-terms');
-          if (terms && !terms.checked) {
-            if (feedback) feedback.innerHTML = '<p class="st-help">' + esc(t('termsTitle')) + '</p>';
-            return;
-          }
-          api('/listings/' + encodeURIComponent(listing.id) + '/requests', {
-            method: 'POST',
-            body: {
-              guest_name: (document.getElementById('st-e-name') || {}).value,
-              guest_phone: (document.getElementById('st-e-phone') || {}).value,
-              guest_email: (document.getElementById('st-e-email') || {}).value,
-              guests: (document.getElementById('st-e-guests') || {}).value,
-              message: (document.getElementById('st-e-msg') || {}).value,
-              check_in: from ? from.value : null,
-              check_out: to ? to.value : null,
-              terms_accepted: true
-            }
-          }).then(function (payloadOut) {
-            form.innerHTML = '<div class="st-ok"><b>' + esc(payloadOut.reference || '') + '</b><p>'
-              + esc(payloadOut.message || '') + '</p>'
-              + (payloadOut.status_url ? '<p><a href="' + esc(payloadOut.status_url) + '">' + esc(payloadOut.status_url) + '</a></p>' : '')
-              + '<p class="st-help">' + esc(payloadOut.payment_line || t('paymentDirect')) + '</p></div>';
-          }).catch(function (error) {
-            if (feedback) {
-              feedback.innerHTML = '<ul class="st-errors">'
-                + ((error.details && error.details.length ? error.details : [error.message])
-                  .map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('')) + '</ul>';
-            }
-          });
-        });
+        bindStayEnquiry();
       });
     }
 
