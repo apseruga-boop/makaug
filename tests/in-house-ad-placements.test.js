@@ -16,17 +16,17 @@ const {
 } = require('../services/advertisingCatalogService');
 
 const placements = [
-  ['home-grid', 'home-featured', 'home-hero', 'Home starts here.'],
-  ['home-brokers', 'home-brokers', 'agents', 'The right hands for your keys.'],
-  ['sale-grid', 'sale-grid', 'sale', 'Say hello to yours.'],
-  ['rent-grid', 'rent-grid', 'rent', 'Move in Monday.'],
-  ['student-grid', 'student-grid', 'students', 'Your campus. Your room.'],
-  ['commercial-grid', 'commercial-grid', 'commercial', 'Open for business.'],
-  ['land-grid', 'land-grid', 'land', 'Own the hill.'],
-  ['marketplace-results', 'marketplace-results', 'marketplace', 'Built by people who care.'],
-  ['brokers-grid', 'brokers-grid', 'brokers', 'Walk in with an expert.'],
-  ['mortgage-results', 'mortgage-results', 'mortgage', 'Closer than you think.'],
-  ['detail-content', 'property-detail', 'detail', 'Open the door.']
+  ['home-grid', 'home-featured', 'home-hero', 'Every property in Uganda, in one place.'],
+  ['home-brokers', 'home-brokers', 'agents', 'Talk to an agent who knows the area.'],
+  ['sale-grid', 'sale-grid', 'sale', 'Search by neighbourhood.'],
+  ['rent-grid', 'rent-grid', 'rent', 'Get new rentals first.'],
+  ['student-grid', 'student-grid', 'students', 'Find a room near your campus.'],
+  ['commercial-grid', 'commercial-grid', 'commercial', 'Shops and offices, one search.'],
+  ['land-grid', 'land-grid', 'land', 'Walk the plot first.'],
+  ['marketplace-results', 'marketplace-results', 'marketplace', 'Find surveyors, lawyers and builders.'],
+  ['brokers-grid', 'brokers-grid', 'brokers', 'Agents who know the area.'],
+  ['mortgage-results', 'mortgage-results', 'mortgage', 'Plan your home loan before you view.'],
+  ['detail-content', 'property-detail', 'detail', 'Like it? Ask on WhatsApp.']
 ];
 
 for (const [anchorId, slotKey, assetName, headline] of placements) {
@@ -48,7 +48,7 @@ for (const [anchorId, slotKey, assetName, headline] of placements) {
 assert.ok(app.includes('function ensureRevenuePlacements()'), 'placements must be inserted into the rendered page');
 assert.ok(app.includes('anchor.insertAdjacentElement("afterend", node)'), 'placement insertion must follow the real page anchor');
 assert.ok(app.includes('fetch("/api/advertising/placements"'), 'public bands must hydrate from the live placement API');
-assert.ok(app.includes('srcset="${adminAttr(mobileImage)}"'), 'public bands must use a mobile source');
+assert.ok(app.includes('srcset="${adminAttr(mobileImageUrl)}"'), 'public bands must use a mobile source');
 assert.ok(app.includes('href="${adminAttr(ctaUrl)}"'), 'the sponsored label must link to the configured advertising route');
 assert.ok(app.includes('data-copy-side="${copySide}"'), 'commercial must support mirrored copy');
 assert.ok(!app.includes('const INHOUSE_AD_SAMPLES'), 'legacy Unsplash placement catalog must be removed');

@@ -2977,7 +2977,7 @@
       overflow: hidden;
       border: .5px solid #dbe8e0;
       border-radius: 14px;
-      background: #eef4f0;
+      background: #f7f4eb;
       isolation: isolate;
     }
     .mk-house-band picture,
@@ -2990,7 +2990,7 @@
     }
     .mk-house-band__image {
       display: block;
-      object-fit: cover;
+      object-fit: contain;
     }
     .mk-house-band__scrim {
       z-index: 1;
@@ -3012,12 +3012,12 @@
       right: 0;
       bottom: 0;
       width: 36%;
-      padding: 0 28px;
+      padding: 30px 28px 16px;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: flex-start;
-      gap: 10px;
+      gap: 7px;
     }
     .mk-house-band[data-copy-side="left"] .mk-house-band__copy {
       right: auto;
@@ -3031,6 +3031,12 @@
       font-weight: 800;
       line-height: 1.12;
       letter-spacing: 0;
+    }
+    .mk-house-band__subline {
+      margin: 0;
+      color: #374151;
+      font-size: 14px;
+      line-height: 1.35;
     }
     .mk-house-band__pill,
     .mk-house-band__tag {
@@ -3578,11 +3584,14 @@
       }
       .mk-house-band__copy {
         width: 58%;
-        padding: 0 14px;
-        gap: 8px;
+        padding: 30px 14px 12px;
+        gap: 6px;
       }
       .mk-house-band__headline {
-        font-size: 20px;
+        font-size: 18px;
+      }
+      .mk-house-band__subline {
+        font-size: 12px;
       }
       .mk-house-band__tag {
         max-width: calc(100% - 28px);
