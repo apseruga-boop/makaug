@@ -192,7 +192,8 @@ test('7. property pages include a compact booking panel with the listing locked'
   const css = read('index.html');
   assert.match(app, /property-booking-panel/);
   assert.match(app, /function propertyBookingPanelHtml/);
-  assert.match(app, /initPropertyBookingPanel\(broker\.id, propertyBookingListingId\(p\)\)/);
+  assert.match(app, /mountPropertyBookingPanel\(bookingAgentId, propertyBookingListingId\(p\), renderSerial\)/);
+  assert.match(app, /lockedPlace: listingId \? `property:\$\{listingId\}` : ""/);
   assert.match(app, /agentBookingLockedPlace/);
   assert.match(app, /type="hidden"/);
   assert.match(css, /\.property-booking-panel \{/);

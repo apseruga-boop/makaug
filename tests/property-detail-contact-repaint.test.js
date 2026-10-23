@@ -108,13 +108,15 @@ test('a newer detail render wins over a cold paint that finishes late', () => {
 test('openDetail resolves the broker after hydration and ignores a stale paint', () => {
   const openDetail = code('openDetail');
   const guard = openDetail.indexOf('if (!detailRenderIsCurrent(renderSerial) || !p) return false;');
-  const lookup = openDetail.indexOf('const broker = resolvedDetailBroker(p);');
+  const lookup = openDetail.indexOf('const broker = resolvedDetailBroker(p) || brokerFromPropertyAgent(p);');
   const paintGuard = openDetail.lastIndexOf('if (!detailRenderIsCurrent(renderSerial)) return false;');
   const paint = openDetail.indexOf('renderPropertyDetailContent(');
   assert.ok(openDetail.includes('const renderSerial = beginDetailRender();'));
   assert.ok(guard > 0 && lookup > guard && paintGuard > lookup && paint > paintGuard);
   assert.match(openDetail, /detailPaintedBrokerId = broker\?\.id \? String\(broker\.id\) : "";/);
-  assert.match(openDetail, /scheduleDetailAgentLookup\(p\.agent \|\| p\.agent_id\)/);
+  assert.match(openDetail, /brokerFromPropertyAgent\(p\)/);
+  assert.match(openDetail, /mountPropertyBookingPanel\(/);
+  assert.doesNotMatch(openDetail, /scheduleDetailAgentLookup\(p\.agent \|\| p\.agent_id\)/);
   assert.match(code('refreshBrokersFromApi'), /refreshOpenPropertyContact\(\)/);
 });
 
