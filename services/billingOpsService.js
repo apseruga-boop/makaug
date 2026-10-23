@@ -18,6 +18,7 @@ const logger = require('../config/logger');
 const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
 const { observeJob } = require('../utils/memoryLog');
 const revenue = require('./revenueService');
+const { publishedPricing } = require('../config/publishedPricing');
 const { agentGreetingName } = require('./agentNameService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
@@ -102,7 +103,7 @@ function onFreeTrial(agent = {}) {
 
 function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '' } = {}) {
   const name = agentGreetingName(agent, 'there');
-  const fee = Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || 50000);
+  const fee = Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || publishedPricing().agent.monthly_ugx);
   const pay = payToLine(settings);
   const due = agent.paid_until ? prettyDate(agent.paid_until) : '';
   const help = helpContact();
@@ -438,7 +439,7 @@ async function rejectClaim(db, { claimId, actor, note }) {
 
 async function recordListingPayment(db, { propertyId, payment, actor }) {
   const settings = await getSettings(db);
-  const fee = Number(settings.lister_fee?.monthly_ugx || 20000);
+  const fee = Number(settings.lister_fee?.monthly_ugx || publishedPricing().owner_listing.monthly_ugx);
   const property = (await db.query('SELECT id, title, lister_paid_until, lister_billing_suspended_at, extra_fields FROM properties WHERE id = $1::uuid', [propertyId])).rows[0];
   if (!property) throw revenue.httpError(404, 'Listing not found');
   const entry = revenue.normalizeEntry(payment);
@@ -489,7 +490,7 @@ async function listingStats(db, propertyId) {
 }
 
 function listerFreeUntil(property = {}, settings = {}) {
-  const freeDays = Number(settings.lister_fee?.free_days || 7);
+  const freeDays = Number(settings.lister_fee?.free_days || publishedPricing().owner_listing.free_days);
   const start = new Date(property.reviewed_at || property.created_at || Date.now());
   return new Date(start.getTime() + (freeDays - 1) * 86400000 + 3 * 3600 * 1000).toISOString().slice(0, 10);
 }
@@ -502,7 +503,7 @@ const LISTER_MESSAGE_KINDS = ['views', 'reminder', 'final_reminder', 'taken_down
 
 async function buildListerMessage(db, kind, property, settings, payLink = '') {
   const name = String(property.lister_name || '').trim().split(/\s+/)[0] || 'there';
-  const fee = Number(settings.lister_fee?.monthly_ugx || 20000);
+  const fee = Number(settings.lister_fee?.monthly_ugx || publishedPricing().owner_listing.monthly_ugx);
   const pay = payToLine(settings);
   const link = `${SITE()}/property/${property.id}`;
   const title = property.title || 'property';

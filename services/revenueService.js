@@ -20,6 +20,7 @@
  */
 
 const crypto = require('crypto');
+const { publishedPricing } = require('../config/publishedPricing');
 
 const METHODS = {
   mtn_momo: { label: 'MTN Mobile Money', account: 'mtn_momo' },
@@ -34,16 +35,16 @@ const OUT_KINDS = new Set(['withdrawal', 'expense', 'transfer_out', 'refund']);
 const IN_KINDS = new Set(['agent_subscription', 'listing_fee', 'short_term_fee', 'advertising', 'listing_boost', 'other_income', 'transfer_in', 'opening_adjustment']);
 
 function feeConfig() {
+  const published = publishedPricing();
   return {
-    feeUgx: Math.max(0, Number(process.env.AGENT_MONTHLY_FEE_UGX || 50000) || 50000),
+    feeUgx: published.agent.monthly_ugx,
     startDate: String(process.env.AGENT_FEE_START_DATE || '2026-10-05').slice(0, 10)
   };
 }
 
 /** Free days a new agent gets before the monthly fee starts (decision of 10 Oct 2026). */
 function agentTrialDays() {
-  const days = Math.round(Number(process.env.AGENT_TRIAL_DAYS || 14));
-  return Number.isFinite(days) && days >= 1 && days <= 366 ? days : 14;
+  return publishedPricing().agent.trial_days;
 }
 
 function kampalaDate(date = new Date()) {

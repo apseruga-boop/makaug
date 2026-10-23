@@ -96,6 +96,7 @@ const {
 const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
 const { loadPublicOpportunitySummary } = require('./services/publicInventoryMetricsService');
 const { injectAboutCommercialProducts } = require('./services/aboutCommercialProductsService');
+const { publishedPricing } = require('./config/publishedPricing');
 const { buildAboutCommercialRateCardPdf } = require('./services/aboutCommercialRateCardPdfService');
 const {
   SESHAIKHAYA_LAUNCH_MARKER,
@@ -339,6 +340,11 @@ app.use('/api', (req, res, next) => {
     };
   }
   next();
+});
+
+app.get('/api/pricing', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  return res.status(200).json(publishedPricing());
 });
 
 app.get('/api/version', (_req, res) => {
@@ -1205,10 +1211,16 @@ function injectRuntimeMetaPixelId(html) {
 }
 
 
+function injectPublishedPricing(html) {
+  const payload = JSON.stringify(publishedPricing()).replace(/</g, '\\u003c');
+  const tag = `<script>window.MAKAUG_PRICING=${payload};</script>`;
+  return String(html || '').replace('</head>', `${tag}</head>`);
+}
+
 function readIndexHtml() {
   if (isProduction && cachedIndexHtml) return cachedIndexHtml;
   const patchedHtml = applyCaptureHelperUsabilityIndexPatch(fs.readFileSync(indexPath, 'utf8'));
-  const html = injectAboutCommercialProducts(injectRuntimeMetaPixelId(injectRuntimeBundleVersion(patchedHtml)));
+  const html = injectPublishedPricing(injectAboutCommercialProducts(injectRuntimeMetaPixelId(injectRuntimeBundleVersion(patchedHtml))));
   if (isProduction) cachedIndexHtml = html;
   return html;
 }
@@ -2390,7 +2402,7 @@ async function sendPublicIndex(req, res, next) {
     if (/^\/about\/?$/i.test(req.path)) {
       html = patchPublicPageSeoMeta(html, {
         title: 'About makaug — Products, pricing & how it works | makaug.com',
-        description: 'Everything makaug offers: listings from UGX 20,000/month (first week free), agent plans, off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
+        description: 'Everything makaug offers: listings from UGX 20,000 per listing per month after 7 free days, agent plans from UGX 50,000 a month after 14 days free, short stays included in the agent plan, off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
         canonical: absolutePublicUrl('/about'),
         image: absolutePublicUrl('/assets/og-cover.jpg'),
         imageAlt: shareCardAlt('home', requestShareLang(req)),
@@ -2478,7 +2490,7 @@ app.get('/about/rate-card.pdf', async (req, res, next) => {
     res.type('application/pdf');
     res.set('Cache-Control', 'public, max-age=3600');
     res.set('Content-Disposition', 'attachment; filename="makaug-commercial-rate-card.pdf"');
-    res.set('X-makaug-Rate-Card-Version', 'about-commercial-products-20261023-v3');
+    res.set('X-makaug-Rate-Card-Version', 'about-commercial-products-20261023-v4');
     return res.send(pdf);
   } catch (error) {
     return next(error);

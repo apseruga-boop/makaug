@@ -3144,7 +3144,8 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.shortStayTitle": "Short stays",
   "about.shortStayText": "List a place guests rent by the night.",
   "about.shortStayNoFree": "No free days for short stays",
-  "about.shortStayAgent": "Included in the UGX 50,000 a month agent plan",
+  "about.shortStayAgent": "Included in the agent plan",
+  "about.shortStayPriceTemplate": "{price} for non-agents",
   "about.shortStayNoCommission": "No commission on any stay",
   "about.shortStayDirect": "Guests contact you directly",
   "about.shortStayAction": "List a short stay",
@@ -3284,14 +3285,15 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.chooseVerifiedTitle": "Verified listings",
   "about.chooseVerifiedText": "human-reviewed for trust",
   "about.finalTitle": "Ready to start?",
-  "about.finalSub": "List your first property free for 7 days, or talk to our sales team about agent plans, developments and advertising.",
+  "about.finalSub": "List your first property free for 7 days, then UGX 20,000 per listing per month. The agent plan is 14 days free, then UGX 50,000 a month, and short stays are included.",
   "about.finalWhatsapp": "WhatsApp sales: 0780 863 394",
   "about.finalEmail": "Email: info@makaug.com",
   "about.finalHow": "How it works",
   "about.finalHelp": "Help centre",
   "about.finalSafety": "Safety tips",
-  "about.privateTrialTemplate": "First week free · then {price}",
-  "about.agentPriceTemplate": "{price} · all your listings",
+  "about.privateTrialTemplate": "{price} after 7 free days",
+  "about.agentPriceTemplate": "{price} after 14 days free",
+  "about.agentShortStays": "Short stays included",
   "about.productAiDescription": "AI-written description in 9 languages",
   "about.productChecked": "Checked by our team",
   "about.productWhatsappLeads": "WhatsApp and phone leads",
@@ -3588,6 +3590,73 @@ Object.assign(CONTENT_I18N.en, ABOUT_PAGE_I18N_EN, ADVERTISING_UI_I18N_EN);
   );
 });
 function applyAboutAdvertiseLocalOverrides() {
+const PRICING_I18N = {
+  lg: {
+    "about.privateTrialTemplate": "{price} oluvannyuma lw'ennaku 7 eza bwereere",
+    "about.agentPriceTemplate": "{price} oluvannyuma lw'ennaku 14 eza bwereere",
+    "about.agentShortStays": "Short stays zirimu",
+    "about.shortStayPriceTemplate": "{price} eri abatali ba agent",
+    "about.shortStayAgent": "Kiri mu pulani ya agent",
+    "about.finalSub": "Teeka ekintu kyo eky'olubereberye ku bwereere okumala ennaku 7, oluvannyuma UGX 20,000 buli listing, buli mwezi. Pulani ya agent eri ennaku 14 eza bwereere, oluvannyuma UGX 50,000 buli mwezi, era short stays zirimu."
+  },
+  sw: {
+    "about.privateTrialTemplate": "{price} baada ya siku 7 za bure",
+    "about.agentPriceTemplate": "{price} baada ya siku 14 za bure",
+    "about.agentShortStays": "Malazi ya muda yamejumuishwa",
+    "about.shortStayPriceTemplate": "{price} kwa wasio mawakala",
+    "about.shortStayAgent": "Yamo katika mpango wa wakala",
+    "about.finalSub": "Orodhesha mali yako ya kwanza bure kwa siku 7, kisha UGX 20,000 kwa kila tangazo kwa mwezi. Mpango wa wakala ni siku 14 za bure, kisha UGX 50,000 kwa mwezi, na malazi ya muda yamejumuishwa."
+  },
+  ac: {
+    "about.privateTrialTemplate": "{price} nge nino 7 ma nono otum",
+    "about.agentPriceTemplate": "{price} nge nino 14 ma nono otum",
+    "about.agentShortStays": "Short stay tye iye",
+    "about.shortStayPriceTemplate": "{price} pi jo ma pe agent",
+    "about.shortStayAgent": "Tye i plan pa agent",
+    "about.finalSub": "Ket jami ni mukwongo me nono pi nino 7, ka dong UGX 20,000 pi listing acel dwe ki dwe. Plan pa agent aye nino 14 ma nono, ka dong UGX 50,000 dwe ki dwe, ki short stay tye iye."
+  },
+  ny: {
+    "about.privateTrialTemplate": "{price} ahabwa ebiro 7 bya busha",
+    "about.agentPriceTemplate": "{price} ahabwa ebiro 14 bya busha",
+    "about.agentShortStays": "Okusula kw'akanya kurimu",
+    "about.shortStayPriceTemplate": "{price} ahabw'abatari agent",
+    "about.shortStayAgent": "Niri omu plan ya agent",
+    "about.finalSub": "Teeka ekintu kyawe eky'okubanza aha busha ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Plan ya agent ni ebiro 14 bya busha, bwanyima UGX 50,000 buri kwezi, kandi okusula kw'akanya kurimu."
+  },
+  rn: {
+    "about.privateTrialTemplate": "{price} ahabwa ebiro 7 bya busha",
+    "about.agentPriceTemplate": "{price} ahabwa ebiro 14 bya busha",
+    "about.agentShortStays": "Okusula kw'akanya gato kurimu",
+    "about.shortStayPriceTemplate": "{price} ahabw'abatari agent",
+    "about.shortStayAgent": "Birimwo mu plan y'agent",
+    "about.finalSub": "Taho ekintu kyawe eky'okubanza busha ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Plan y'agent ni ebiro 14 bya busha, bwanyima UGX 50,000 buri kwezi, kandi okusula kw'akanya gato kurimu."
+  },
+  sm: {
+    "about.privateTrialTemplate": "{price} oluvanyuma lw'ennaku 7 eza bwereere",
+    "about.agentPriceTemplate": "{price} oluvanyuma lw'ennaku 14 eza bwereere",
+    "about.agentShortStays": "Okusula okw'ekiseera ekitono kulimu",
+    "about.shortStayPriceTemplate": "{price} eri abatali ba agent",
+    "about.shortStayAgent": "Kiri mu pulani ya agent",
+    "about.finalSub": "Teka ekintu kyo eky'olubereberye bwereere okumala ennaku 7, olwo UGX 20,000 buli listing, buli mwezi. Pulani ya agent eri ennaku 14 eza bwereere, olwo UGX 50,000 buli mwezi, era okusula okw'ekiseera ekitono kulimu."
+  },
+  am: {
+    "about.privateTrialTemplate": "{price} ከ7 ነፃ ቀናት በኋላ",
+    "about.agentPriceTemplate": "{price} ከ14 ነፃ ቀናት በኋላ",
+    "about.agentShortStays": "አጭር ቆይታዎች ተካተዋል",
+    "about.shortStayPriceTemplate": "{price} ላልሆኑ ወኪሎች",
+    "about.shortStayAgent": "በወኪል እቅድ ውስጥ ይካተታል",
+    "about.finalSub": "የመጀመሪያውን ዝርዝር ለ7 ቀናት ነፃ ይዘምኑ፣ ከዚያ በወር በአንድ ዝርዝር UGX 20,000። የወኪል እቅድ 14 ነፃ ቀናት ነው፣ ከዚያ በወር UGX 50,000፣ አጭር ቆይታዎችም ተካተዋል።"
+  },
+  ar: {
+    "about.privateTrialTemplate": "{price} بعد 7 أيام مجانية",
+    "about.agentPriceTemplate": "{price} بعد 14 يوماً مجانياً",
+    "about.agentShortStays": "الإقامات القصيرة مشمولة",
+    "about.shortStayPriceTemplate": "{price} لغير الوكلاء",
+    "about.shortStayAgent": "مشمول في باقة الوكيل",
+    "about.finalSub": "أدرج عقارك الأول مجاناً لمدة 7 أيام، ثم UGX 20,000 لكل إعلان في الشهر. باقة الوكيل 14 يوماً مجانياً، ثم UGX 50,000 شهرياً، والإقامات القصيرة مشمولة."
+  }
+};
+Object.keys(PRICING_I18N).forEach((code) => Object.assign(CONTENT_I18N[code], PRICING_I18N[code]));
 Object.assign(CONTENT_I18N.lg, {
   "about.heroLabel": "Ebitukwatako",
   "about.ctaSearch": "Noonya property",
@@ -5073,7 +5142,7 @@ const HOME_ASSISTANT_I18N = {
 
 const FOOTER_I18N = {
   en: {
-    brandCopy: `Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month. Web or WhatsApp, all 146 districts.`,
+    brandCopy: `Uganda's property search engine. List your first property free for 7 days, then UGX 20,000 per listing per month. Web or WhatsApp, all 146 districts.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Chat on WhatsApp",
@@ -5108,7 +5177,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. All rights reserved.`
   },
   lg: {
-    brandCopy: "Yingini y'okunoonya ebintu mu Uganda. Teeka wiiki yo esooka ku bwereere, oluvannyuma ogikuume ku mukutu okuva ku UGX 20,000 buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
+    brandCopy: "Yingini y'okunoonya ebintu mu Uganda. Teeka ekintu kyo eky'olubereberye ku bwereere okumala ennaku 7, oluvannyuma UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Nyumya ku WhatsApp",
@@ -5142,7 +5211,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   sw: {
-    brandCopy: "Injini ya utafutaji wa mali ya Uganda. Orodhesha wiki yako ya kwanza bure, kisha liweke hai kuanzia UGX 20,000 kwa mwezi. Wavuti au WhatsApp, wilaya zote 146.",
+    brandCopy: "Injini ya utafutaji wa mali ya Uganda. Orodhesha mali yako ya kwanza bure kwa siku 7, kisha UGX 20,000 kwa kila tangazo kwa mwezi. Wavuti au WhatsApp, wilaya zote 146.",
     whatsapp: "WhatsApp",
     email: "Barua pepe",
     chatWhatsapp: "Piga gumzo WhatsApp",
@@ -5176,7 +5245,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Haki zote zimehifadhiwa.`
   },
   ac: {
-    brandCopy: "Gin me yeny jami me Uganda. Ket cabit ni mukwongo me nono, ka dong igwok ni otii ki UGX 20,000 dwe ki dwe. Intanet onyo WhatsApp, distrik 146 ducu.",
+    brandCopy: "Gin me yeny jami me Uganda. Ket jami ni mukwongo me nono pi nino 7, ka dong UGX 20,000 pi listing acel dwe ki dwe. Intanet onyo WhatsApp, distrik 146 ducu.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Lok i WhatsApp",
@@ -5210,7 +5279,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Twero ducu kigwoko.`
   },
   ny: {
-    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Teeka esabiiti yaawe y'okubanza aha busha, obwo ogumye ekirango yaawe kuruga UGX 20,000 buri kwezi. Aha mutimbagano nari WhatsApp, disiturikiti zoona 146.",
+    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Teeka ekintu kyawe eky'okubanza aha busha ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mutimbagano nari WhatsApp, disiturikiti zoona 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Gamba kuri WhatsApp",
@@ -5244,7 +5313,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   rn: {
-    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Taho ekirango yaawe wiiki y'okubanza busha, bwanyima ogigumye erikukora kuruga aha UGX 20,000 buri kwezi. Aha mukutu nari WhatsApp, omu disiturikiti zoona 146.",
+    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Taho ekintu kyawe eky'okubanza busha ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mukutu nari WhatsApp, omu disiturikiti zoona 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Ganira kuri WhatsApp",
@@ -5278,7 +5347,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   sm: {
-    brandCopy: "Ekyuma ekinoonia ebintu ekya Uganda. Teka wiiki yo esooka bwereere, olwo okiryeyo ku mukutu okuva ku UGX 20,000 buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
+    brandCopy: "Ekyuma ekinoonia ebintu ekya Uganda. Teka ekintu kyo eky'olubereberye bwereere okumala ennaku 7, olwo UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Yogera ku WhatsApp",
@@ -5311,8 +5380,11 @@ const FOOTER_I18N = {
     growth: "Ebifo by'obulango ne SEO bya makaug.com bitegekeddwa okuyamba okukula.",
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
+  am: {
+    brandCopy: "የኡጋንዳ ንብረት መፈለጊያ። የመጀመሪያውን ዝርዝር ለ7 ቀናት ነፃ ይዘምኑ፣ ከዚያ በኋላ በወር በአንድ ዝርዝር UGX 20,000። በድር ወይም በWhatsApp፣ በ146 ወረዳዎች ሁሉ።"
+  },
   ar: {
-    brandCopy: "محرك البحث العقاري في أوغندا. أدرج عقارك مجاناً في الأسبوع الأول، ثم أبقه منشوراً بدءاً من UGX 20,000 شهرياً. عبر الويب أو WhatsApp، في كل المقاطعات الـ 146.",
+    brandCopy: "محرك البحث العقاري في أوغندا. أدرج عقارك الأول مجاناً لمدة 7 أيام، ثم UGX 20,000 لكل إعلان في الشهر. عبر الويب أو WhatsApp، في كل المقاطعات الـ 146.",
     whatsapp: "WhatsApp",
     email: "البريد الإلكتروني",
     chatWhatsapp: "الدردشة على WhatsApp",
@@ -7820,7 +7892,7 @@ function applyListingWizardLanguageUI() {
     ["list-choice-wa-title", "List through WhatsApp"],
     ["list-choice-wa-copy", "Message 0780 863 394 and let the makaug assistant guide you."],
     ["list-choice-free-title", "Start with 7 days free."],
-    ["list-choice-free-copy", "After that, one private listing costs UGX 20,000 per month. Every submission stays in staff review until approved."]
+    ["list-choice-free-copy", "After that, one private listing costs UGX 20,000 per listing, per month. Every submission stays in staff review until approved."]
   ];
   labelPairs.forEach(([id, text]) => {
     const el = document.getElementById(id);
@@ -8826,10 +8898,35 @@ function aboutCommercialCatalog() {
   return window.__MAKAUG_ABOUT_COMMERCIAL_PRODUCTS__ || null;
 }
 
-function aboutCommercialPriceLabel(key, priceOnly = false) {
+function aboutCommercialEntry(key) {
   const entry = aboutCommercialCatalog()?.products?.[key];
+  if (!entry) return null;
+  const live = window.MAKAUG_PRICING || null;
+  const override = live && {
+    agentSubscription: live.agent?.monthly_ugx,
+    privateListing: live.owner_listing?.monthly_ugx,
+    shortStayListing: live.short_stay?.monthly_ugx
+  }[key];
+  const amount = Number.isFinite(Number(override)) ? Number(override) : entry.amount;
+  return { ...entry, amount };
+}
+
+function publishedMarketplacePricing() {
+  return window.MAKAUG_PRICING || {
+    currency: "UGX",
+    agent: { monthly_ugx: 50000, trial_days: 14, per: "month", includes_short_stays: true },
+    owner_listing: { monthly_ugx: 20000, free_days: 7, per: "listing" },
+    short_stay: { monthly_ugx: 20000, free_days: 0, per: "month", applies_to: "non_agent", included_in_agent_plan: true }
+  };
+}
+
+function aboutCommercialPriceLabel(key, priceOnly = false) {
+  const entry = aboutCommercialEntry(key);
   if (!entry) return '';
-  const value = fmtP(entry.amount, '');
+  const converted = fmtP(entry.amount, '');
+  const value = (!activeCur || activeCur === "UGX")
+    ? `UGX ${Number(entry.amount).toLocaleString("en-US")}`
+    : converted;
   const periodKeys = {
     'property / month': 'about.periodPropertyMonth',
     month: 'about.periodMonth',
@@ -32109,7 +32206,7 @@ function adminAgentBillingLine(agent = {}) {
   if (!agent.paid_until) {
     return String(agent.status || "").toLowerCase() === "approved"
       ? `💳 <strong class="text-red-700">No payment recorded</strong>${payBtn}`
-      : `💳 <span class="text-gray-600">UGX 50,000 a month — not paid yet</span>${payBtn}`;
+      : `💳 <span class="text-gray-600">${adminFormatUgx(publishedMarketplacePricing().agent.monthly_ugx)} a month after ${adminEscape(String(publishedMarketplacePricing().agent.trial_days))} days free — not paid yet</span>${payBtn}`;
   }
   if (agent.paid_until < today) return `💳 <strong class="text-red-700">Overdue</strong> — paid until ${adminEscape(agent.paid_until)}${payBtn}`;
   return `💳 <strong class="text-emerald-700">Paid</strong> until ${adminEscape(agent.paid_until)}`;
@@ -32204,8 +32301,8 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
   const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
   const title = mode === "approve" ? `Did ${adminEscape(agent.name || "they")} pay?` : `Record a payment — ${adminEscape(agent.name || "agent")}`;
   const intro = mode === "approve"
-    ? "New agents pay <strong>UGX 50,000 a month</strong>. Approval goes through once the payment is recorded — the welcome pack and how-to-post film are then sent on WhatsApp."
-    : "UGX 50,000 = one month. Paying more adds whole months.";
+    ? `New agents get <strong>${publishedMarketplacePricing().agent.trial_days} days free</strong>, then <strong>${adminFormatUgx(publishedMarketplacePricing().agent.monthly_ugx)} a month</strong>. Short stays are included. Nothing is charged automatically.`
+    : `${adminFormatUgx(publishedMarketplacePricing().agent.monthly_ugx)} = one month. Paying more adds whole months.`;
   const wrap = document.createElement("div");
   wrap.id = "admin-payment-modal";
   wrap.className = "fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4";
@@ -32217,7 +32314,7 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       <h3 id="admin-payment-title" class="text-lg font-black text-gray-900">${title}</h3>
       <p class="text-gray-600">${intro}</p>
       <label class="block"><span class="font-bold">Amount (UGX)</span>
-        <input name="amount" inputmode="numeric" required value="50000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+        <input name="amount" inputmode="numeric" required value="${publishedMarketplacePricing().agent.monthly_ugx}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <label class="block"><span class="font-bold">How was it paid?</span>
         <select name="method" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">
           <option value="">Choose…</option>
@@ -32240,7 +32337,7 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       <label class="block"><span class="font-bold">Note</span>
         <input name="note" placeholder="For cash: who received it and where it is kept" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <p id="admin-payment-error" class="hidden rounded-lg bg-red-50 border border-red-200 p-2 text-red-800" role="alert"></p>
-      ${mode === "approve" ? `<div class="rounded-lg border border-green-300 bg-green-50 p-3 text-xs text-green-950"><strong>Not paid yet? The usual way:</strong> approve now — they get the welcome pack and the how-to-post film straight away, then the payment link (UGX 50,000).
+      ${mode === "approve" ? `<div class="rounded-lg border border-green-300 bg-green-50 p-3 text-xs text-green-950"><strong>Not paid yet?</strong> The published plan is ${publishedMarketplacePricing().agent.trial_days} days free, then ${adminFormatUgx(publishedMarketplacePricing().agent.monthly_ugx)} a month. Short stays are included.
         <div class="mt-2"><button type="button" data-approve-standard class="rounded bg-green-700 px-3 py-1.5 font-bold text-white">✅ Approve &amp; send welcome pack + pay link</button></div></div>
       <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700"><strong>Only want to send the link?</strong> Send them a payment link instead — they can pay by card, Apple Pay, Google Pay or MoMo. You'll get a WhatsApp when it's paid, and approving then won't ask for payment again.
         <div class="mt-2"><button type="button" onclick="adminSendAgentPayLink('${adminAttr(agentId)}')" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">💳 Send pay link</button></div></div>
@@ -32558,7 +32655,7 @@ function renderAdminRevenue() {
     ].filter(Boolean).join(" ");
     return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(p.title || "Listing")}<div class="text-[11px] font-normal text-gray-500">${adminEscape(p.lister_name || "")} ${adminEscape(p.lister_phone || "")}</div></td><td class="py-2 pr-3 font-bold ${tone}">${label}</td><td class="py-2 text-xs space-x-2">${btns}</td></tr>`;
   }).join("");
-  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — 7 days free, then ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 20000)} a month</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
+  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — ${adminEscape(String(d.settings?.lister_fee?.free_days || publishedMarketplacePricing().owner_listing.free_days))} days free, then ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)} per listing, per month</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
     ${listerRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Listing</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${listerRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No private listings since ${adminEscape(d.settings?.lister_fee?.start_date || "")}.</p>`}</div>`;
 
   const claims = (d.claims || []);
@@ -32580,7 +32677,7 @@ function renderAdminRevenue() {
 
   const settingsBlock = `<div class="rounded-xl border ${d.pay_to_line ? "border-gray-200" : "border-red-300 bg-red-50"} p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">Settings</h4><button type="button" onclick="adminOpenBillingSettings()" class="rounded border border-gray-300 px-2 py-1 text-xs font-bold">Edit settings</button></div>
     <p class="text-xs mt-1">${d.pay_to_line ? `People are told to pay to: <strong>${adminEscape(d.pay_to_line.replace(/\\*/g, ""))}</strong>` : `<strong class="text-red-800">No pay-to number yet — reminders and payment messages are switched off until you add the number and registered name.</strong>`}</p>
-    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || 50000)}/month · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || 20000)}/month after ${adminEscape(String(d.settings?.lister_fee?.free_days || 7))} free days</p></div>`;
+    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || publishedMarketplacePricing().agent.monthly_ugx)}/month after ${adminEscape(String(d.settings?.agent_fee?.agent_trial_days ?? publishedMarketplacePricing().agent.trial_days))} days free · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)} per listing, per month after ${adminEscape(String(d.settings?.lister_fee?.free_days || publishedMarketplacePricing().owner_listing.free_days))} free days · Short stays ${adminFormatUgx(publishedMarketplacePricing().short_stay.monthly_ugx)}/month for non-agents, included in the agent plan</p></div>`;
 
   const reconBlock = `<div class="rounded-xl border border-gray-200 p-3"><h4 class="font-black text-gray-900">Weekly reconciliation</h4><p class="text-xs text-gray-600 mb-2">Upload a statement (CSV export from Absa, the bank or MoMo). Lines are matched to the entries above; anything on the statement that nobody recorded — and anything recorded that is not on the statement — is listed.</p>
     <div class="flex flex-wrap gap-2 items-center text-xs"><select id="admin-recon-account" class="rounded border border-gray-300 px-2 py-1">${(d.accounts || []).map((a) => `<option value="${adminAttr(a.key)}">${adminEscape(a.name)}</option>`).join("")}</select><input id="admin-recon-file" type="file" accept=".csv,text/csv,text/plain" class="text-xs"><button type="button" onclick="adminUploadStatement()" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">Upload & match</button></div>
@@ -32969,11 +33066,12 @@ function adminOpenBillingSettings() {
         <label class="block"><span class="font-bold">Registered name (what the payer sees on MoMo)</span><input name="pay_name" value="${adminAttr(pay.name || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label></fieldset>
       <label class="block"><span class="font-bold">Who confirms payments</span> <span class="text-xs text-gray-500">(one per line: name, WhatsApp number)</span><textarea name="confirmers" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">${adminEscape(confirmers)}</textarea></label>
       <div class="grid grid-cols-3 gap-2">
-        <label class="block"><span class="font-bold text-xs">Agent fee / month</span><input name="agent_monthly" inputmode="numeric" value="${adminAttr(agentFee.monthly_ugx || 50000)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Agent fee / month</span><input name="agent_monthly" inputmode="numeric" value="${adminAttr(agentFee.monthly_ugx || publishedMarketplacePricing().agent.monthly_ugx)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">New agent free days</span><input name="agent_trial_days" inputmode="numeric" value="${adminAttr(agentFee.agent_trial_days ?? publishedMarketplacePricing().agent.trial_days)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Remind days before</span><input name="remind_days" inputmode="numeric" value="${adminAttr(agentFee.remind_days_before ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Final reminder after (days overdue)</span><input name="final_days" inputmode="numeric" value="${adminAttr(agentFee.final_after_days_overdue ?? 7)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
-        <label class="block"><span class="font-bold text-xs">Private listing / month</span><input name="lister_monthly" inputmode="numeric" value="${adminAttr(listerFee.monthly_ugx || 20000)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
-        <label class="block"><span class="font-bold text-xs">Free days</span><input name="free_days" inputmode="numeric" value="${adminAttr(listerFee.free_days ?? 7)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Owner listing per listing / month</span><input name="lister_monthly" inputmode="numeric" value="${adminAttr(listerFee.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
+        <label class="block"><span class="font-bold text-xs">Owner free days</span><input name="free_days" inputmode="numeric" value="${adminAttr(listerFee.free_days ?? publishedMarketplacePricing().owner_listing.free_days)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Views message on day</span><input name="views_day" inputmode="numeric" value="${adminAttr(listerFee.views_message_day ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
       </div>
       <label class="block"><span class="font-bold">Day-${adminEscape(String(listerFee.views_message_day ?? 3))} “people have seen your property” message</span><textarea name="views_text" rows="9" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-[12px]">${adminEscape(views)}</textarea>
@@ -32989,8 +33087,8 @@ function adminOpenBillingSettings() {
       if (!confirmersList.length) throw new Error("Add at least one person who confirms payments.");
       await put("pay_to", { method: String(data.get("pay_method") || "").trim(), number: String(data.get("pay_number") || "").trim(), name: String(data.get("pay_name") || "").trim() });
       await put("confirmers", confirmersList);
-      await put("agent_fee", { ...agentFee, monthly_ugx: num(data.get("agent_monthly"), 50000), remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });
-      await put("lister_fee", { ...listerFee, monthly_ugx: num(data.get("lister_monthly"), 20000), free_days: num(data.get("free_days"), 7), views_message_day: num(data.get("views_day"), 3) });
+      await put("agent_fee", { ...agentFee, monthly_ugx: num(data.get("agent_monthly"), publishedMarketplacePricing().agent.monthly_ugx), agent_trial_days: num(data.get("agent_trial_days"), publishedMarketplacePricing().agent.trial_days), remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });
+      await put("lister_fee", { ...listerFee, monthly_ugx: num(data.get("lister_monthly"), publishedMarketplacePricing().owner_listing.monthly_ugx), free_days: num(data.get("free_days"), publishedMarketplacePricing().owner_listing.free_days), views_message_day: num(data.get("views_day"), 3) });
       await put("lister_views_message", { ...(s.lister_views_message || {}), text: String(data.get("views_text") || "") });
       toast("Settings saved.");
     }
@@ -40422,7 +40520,7 @@ function ensureAccountAccessDrawer() {
                 <p class="mt-1">Add your National ID number and a clear photo. Makaug staff review these details privately; they are never shown publicly.</p>
               </div>
               <div id="account-access-broker-fee-note" class="rounded-2xl border border-amber-200 bg-white p-3 text-xs text-gray-800">
-                <p><strong>Agent plan: UGX 50,000 a month.</strong> Our team will WhatsApp you to check your details and explain how to pay by MTN Mobile Money. Your agent account is approved once the first month is paid. Nothing is charged automatically.</p>
+                <p><strong>Agent plan: UGX 50,000 a month after 14 days free.</strong> Short stays are included. Our team will WhatsApp you to check your details. Nothing is charged automatically.</p>
               </div>
               <div class="grid sm:grid-cols-2 gap-3">
                 <label class="block">
@@ -41251,7 +41349,7 @@ function showBrokerApplicationReceived({ firstName = "", phone = "" } = {}) {
       <p style="margin:0 0 12px;color:#4b5563;">Your makaug agent account is set up and waiting for our review.</p>
       <ol style="margin:0 0 14px;padding-left:22px;line-height:1.55;list-style:decimal;">
         <li><strong>We WhatsApp you</strong>${phone ? ` on ${esc(phone)}` : ""}, usually the same day, to check your details.</li>
-        <li><strong>Pay the first month</strong> — UGX 50,000. We send you a payment link (MTN Mobile Money or card). Nothing is charged automatically.</li>
+        <li><strong>14 days free, then UGX 50,000 a month.</strong> Short stays are included. We send a payment link before the free days end. Nothing is charged automatically.</li>
         <li><strong>You're approved</strong> — you get your welcome pack and the how-to-post guide, and your listings can go live.</li>
       </ol>
       <p style="margin:0 0 16px;font-size:12px;color:#6b7280;">You can already fill in your profile from your dashboard. Questions? WhatsApp us on 0780 863394.</p>

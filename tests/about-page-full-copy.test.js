@@ -40,7 +40,7 @@ assert(!normalized.includes('Why people choose makaug'), 'obsolete Why people ch
 assert(!normalized.includes('Find and list land'), 'the confusing standalone land proposition should be removed');
 assert(!normalized.includes('no listing fees, ever'), 'obsolete free-listing claim should be removed');
 assert(!html.includes("Uganda's first completely free property platform"), 'the shared footer must not contradict the paid-listing model');
-assert(html.includes("Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month."), 'the shared footer should state the current listing model');
+assert(html.includes("Uganda's property search engine. List your first property free for 7 days, then UGX 20,000 per listing per month."), 'the shared footer should state the current listing model');
 assert(!normalized.includes('1,889'), 'About must not contain a hardcoded live-listing total');
 assert(aboutBlock.includes('id="about-live-listings-stat" class="about-stat-card hidden"'), 'live count should fail closed and stay hidden until the API succeeds');
 assert(frontend.includes('return plausibleTotal || 0'), 'live-count helper should not use a hardcoded fallback');
@@ -130,10 +130,19 @@ assert(html.includes('object-fit: cover;'), 'journey photos should fill their ca
 const rendered = injectAboutCommercialProducts(aboutBlock);
 assert(!rendered.includes('{{ABOUT_PRICE:'), 'server rendering should replace every price placeholder');
 assert(!rendered.includes('{{ABOUT_PRICE_ONLY:'), 'server rendering should replace every price-only placeholder');
-assert(rendered.includes('UGX 20,000 / property / month'), 'private listing price should come from the catalog');
+assert(rendered.includes('UGX 20,000 / listing / month'), 'private listing price should come from the catalog');
+assert(rendered.includes('after 7 free days'), 'private listings start after 7 free days');
 assert(rendered.includes('UGX 20,000 / month'), 'short-stay price should come from the catalog');
+assert(rendered.includes('for non-agents'), 'short stays are priced for non-agents');
 assert(rendered.includes('No free days for short stays'));
-assert(rendered.includes('Included in the UGX 50,000 a month agent plan'));
+assert(rendered.includes('Included in the agent plan'));
+assert(rendered.includes('after 14 days free'), 'the agent plan starts after 14 days free');
+assert(rendered.includes('Short stays included'));
+assert(!/\bVAT\b|vat_inclusive|incl\.?\s*VAT/i.test(rendered), 'the public pricing cards must not mention VAT');
+assert(!/\bVAT\b|vat_inclusive|incl\.?\s*VAT/i.test(pdfService), 'the rate card must not mention VAT');
+assert.strictEqual(catalog.products.privateListing.period, 'listing / month');
+assert.strictEqual(catalog.products.agentSubscription.trialDays, 14);
+assert.strictEqual(catalog.products.shortStayListing.includedInAgentPlan, true);
 assert(rendered.includes('UGX 150,000 / post'), 'Off Plan price should be presented per post');
 assert(frontend.includes('window.__MAKAUG_ABOUT_COMMERCIAL_PRODUCTS__'), 'client pricing should read from the shared catalog');
 assert(frontend.includes("fmtP(entry.amount, '')"), 'About prices should use the existing currency conversion helper');
@@ -157,7 +166,7 @@ assert(hrefs.filter((href) => href.startsWith('https://wa.me/256780863394?text='
 assert(server.includes("app.get('/about/rate-card.pdf'"), 'existing PDF route should remain available for compatibility');
 assert(server.includes("canonical: absolutePublicUrl('/about')"), 'About should have a self-referencing canonical');
 assert(server.includes('About makaug — Products, pricing & how it works | makaug.com'), 'About should have the approved unique title');
-assert(server.includes('Everything makaug offers: listings from UGX 20,000/month'), 'About should have the approved meta description');
+assert(server.includes('Everything makaug offers: listings from UGX 20,000 per listing per month after 7 free days'), 'About should have the approved meta description');
 assert(pdfService.includes("require('../config/aboutCommercialProducts')"), 'PDF must use the same price catalog as the page');
 
 console.log('about page commercial rebuild checks passed');
