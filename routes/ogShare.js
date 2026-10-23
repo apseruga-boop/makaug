@@ -2,6 +2,7 @@
 
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const sharp = require('sharp');
 const logger = require('../config/logger');
 const { isVerifiedByMakaug } = require('../services/publicAgentEligibilityService');
 const { agentCardBio, loadAgentSummaryListings } = require('../services/agentPublicProfileService');
@@ -9,9 +10,9 @@ const { loadPublicSeoListing } = require('../services/publicSeoRenderService');
 const {
   SHARE_CACHE_CONTROL,
   categoryKey,
-  categoryForListing,
   normalizeShareLang,
   renderShareCard,
+  propertyShareRevision,
   usableAgentPhoto,
   usableListingPhoto
 } = require('../services/shareCardService');
@@ -19,9 +20,9 @@ const {
 const CARD_CACHE_MAX = 80;
 const cardCache = new Map();
 
-function rememberCard(key, buffer) {
+function rememberCard(key, buffer, ttlMs = Infinity) {
   if (cardCache.has(key)) cardCache.delete(key);
-  cardCache.set(key, buffer);
+  cardCache.set(key, { buffer, expiresAt: Date.now() + ttlMs });
   while (cardCache.size > CARD_CACHE_MAX) {
     const oldest = cardCache.keys().next().value;
     if (oldest === undefined) break;
@@ -32,9 +33,13 @@ function rememberCard(key, buffer) {
 function cachedCard(key) {
   const hit = cardCache.get(key);
   if (!hit) return null;
+  if (hit.expiresAt <= Date.now()) {
+    cardCache.delete(key);
+    return null;
+  }
   cardCache.delete(key);
   cardCache.set(key, hit);
-  return hit;
+  return hit.buffer;
 }
 
 function safeId(value) {
@@ -43,9 +48,9 @@ function safeId(value) {
   return id;
 }
 
-function sendCard(res, buffer, source) {
+function sendCard(res, buffer, source, cacheControl = SHARE_CACHE_CONTROL) {
   res.set('Content-Type', 'image/jpeg');
-  res.set('Cache-Control', SHARE_CACHE_CONTROL);
+  res.set('Cache-Control', cacheControl);
   res.set('X-makaug-Og-Card', source || 'card');
   return res.status(200).send(buffer);
 }
@@ -68,6 +73,7 @@ async function fetchPhoto(url) {
   if (!type.startsWith('image/')) return null;
   const buffer = Buffer.from(await response.arrayBuffer());
   if (!buffer.length || buffer.length > 8 * 1024 * 1024) return null;
+  try { await sharp(buffer).stats(); } catch (_error) { return null; }
   return buffer;
 }
 
@@ -131,6 +137,7 @@ async function defaultLoadProperty(db, id) {
     area: listing.area,
     district: listing.district,
     foundOnline: Boolean(listing.found_online_notice),
+    updated_at: listing.updated_at,
     photoUrl: usableListingPhoto(listing.primary_image_url) ? listing.primary_image_url : ''
   };
 }
@@ -230,20 +237,16 @@ function createOgShareRouter(options = {}) {
     try {
       const listing = await loadProperty(id);
       if (!listing) return sendCard(res, await homeCard(lang), 'home');
-      const category = categoryForListing(listing);
+      const cacheKey = `property:${id}:${lang}:${propertyShareRevision(listing)}`;
+      const hit = cachedCard(cacheKey);
+      if (hit) return sendCard(res, hit, 'property');
       let photo = listing.photo || null;
       if (!photo && listing.photoUrl && usableListingPhoto(listing.photoUrl)) {
         try { photo = await readPhoto(listing.photoUrl); } catch (_error) { photo = null; }
       }
-      const source = photo ? 'property' : category;
-      const cacheKey = `property:${id}:${lang}:${source}`;
-      const hit = cachedCard(cacheKey);
-      if (hit) return sendCard(res, hit, source);
-      const buffer = photo
-        ? await renderShareCard({ kind: 'property', lang, listing: { ...listing, photo } })
-        : await categoryCard(category, lang);
-      rememberCard(cacheKey, buffer);
-      return sendCard(res, buffer, source);
+      const buffer = await renderShareCard({ kind: 'property', lang, listing: { ...listing, photo } });
+      if (photo) rememberCard(cacheKey, buffer, 24 * 60 * 60 * 1000);
+      return sendCard(res, buffer, 'property', photo ? SHARE_CACHE_CONTROL : 'public, max-age=60, must-revalidate');
     } catch (error) {
       logger.warn('Share card property render failed', { message: error.message });
       try { return sendCard(res, await homeCard(lang), 'home'); } catch (_fallback) { return res.status(200).end(); }

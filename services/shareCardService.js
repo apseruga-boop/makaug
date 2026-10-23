@@ -2,10 +2,12 @@
 
 const fs = require('fs');
 const path = require('path');
+const { createHash } = require('crypto');
 const sharp = require('sharp');
 const { Resvg } = require('@resvg/resvg-js');
 const { compactUgx } = require('../utils/compactUgx');
 const { realPhotoRejection } = require('../utils/realListingPhoto');
+const { pricePeriodSuffix } = require('../config/pricePeriods');
 const { composeAgentBio } = require('./agentPublicProfileService');
 
 const ROOT = path.join(__dirname, '..');
@@ -186,9 +188,23 @@ function shareCardKeyForPath(pathname = '/') {
   return '';
 }
 
-function shareImagePath(kind, id, lang) {
+function propertyShareRevision(listing = {}) {
+  const fields = [
+    'property-card-v2', listing.id, listing.title, listing.listing_type,
+    listing.property_type || listing.propertyType, listing.price,
+    listing.price_period || listing.pricePeriod, listing.bedrooms, listing.area, listing.district,
+    Boolean(listing.found_online_notice || listing.foundOnline),
+    listing.primary_image_url || listing.photoUrl, listing.updated_at
+  ];
+  return createHash('sha256').update(JSON.stringify(fields)).digest('hex').slice(0, 16);
+}
+
+function shareImagePath(kind, id, lang, revision) {
   const code = normalizeShareLang(lang);
-  const query = code === 'en' ? '' : `?lang=${code}`;
+  const params = new URLSearchParams();
+  if (code !== 'en') params.set('lang', code);
+  if (kind === 'property') params.set('v', revision || '2');
+  const query = params.size ? `?${params}` : '';
   if (kind === 'agent') return `/og/agent/${encodeURIComponent(id)}.jpg${query}`;
   if (kind === 'property') return `/og/property/${encodeURIComponent(id)}.jpg${query}`;
   if (kind === 'home' || kind === 'default' || !kind) return `/og/home.jpg${query}`;
@@ -336,13 +352,7 @@ function usableAgentPhoto(url) {
 function formatSharePrice(price, pricePeriod) {
   const amount = Number(price);
   if (!(amount > 0)) return '';
-  const period = String(pricePeriod || '').toLowerCase();
-  let suffix = '';
-  if (/night/.test(period)) suffix = '/night';
-  else if (/week/.test(period)) suffix = '/wk';
-  else if (/year|annum|\byr\b/.test(period)) suffix = '/yr';
-  else if (/mo|month/.test(period)) suffix = '/mo';
-  return `USh ${compactUgx(amount)}${suffix}`;
+  return `UGX ${compactUgx(amount)}${pricePeriodSuffix(pricePeriod)}`;
 }
 
 function formatPriceRange(minPrice, maxPrice) {
@@ -531,27 +541,36 @@ async function agentSvg(agent, lang) {
 
 async function propertySvg(listing, lang) {
   const family = fontFamily(lang);
-  const photo = await sharp(listing.photo).rotate().resize(760, 630, { fit: 'cover', position: 'attention' }).jpeg({ quality: 76 }).toBuffer();
-  const href = `data:image/jpeg;base64,${photo.toString('base64')}`;
+  let photoPanel = `<rect width="760" height="630" fill="#f0fdf4"/>
+    ${textEl(380, 300, shareCardText(lang, 'Photo unavailable'), { size: 32, weight: 600, fill: '#14532d', anchor: 'middle', family })}`;
+  if (listing.photo) {
+    try {
+      const photo = await sharp(listing.photo).rotate().resize(760, 630, { fit: 'contain', background: '#f0fdf4' }).jpeg({ quality: 76 }).toBuffer();
+      const href = `data:image/jpeg;base64,${photo.toString('base64')}`;
+      photoPanel = `<image href="${href}" x="0" y="0" width="760" height="630"/>`;
+    } catch (_error) { /* Keep this listing's details when its photo cannot be decoded. */ }
+  }
   const logo = await logoDataUri(96);
-  const price = formatSharePrice(listing.price, listing.pricePeriod) || shareCardText(lang, 'Price on request');
+  const price = formatSharePrice(listing.price, listing.pricePeriod || listing.price_period) || shareCardText(lang, 'Price on request');
+  const title = ellipsizeShareLines(listing.title || '', 25, 2);
   const type = clip(listing.propertyType || shareCardText(lang, CATEGORIES[categoryForListing(listing)].title), 28);
   const beds = Number(listing.bedrooms) > 0 && categoryForListing(listing) !== 'land'
     ? `${Number(listing.bedrooms)} ${shareCardText(lang, Number(listing.bedrooms) === 1 ? 'Bedroom' : 'Bedrooms')}`
     : '';
-  const place = clip([listing.area, listing.district].filter(Boolean).join(', '), 36);
+  const place = ellipsizeShareLines([listing.area, listing.district].filter(Boolean).join(', '), 26, 2);
   const badge = shareCardText(lang, listing.foundOnline ? 'Found online' : 'Verified');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   <rect width="${WIDTH}" height="${HEIGHT}" fill="#14532d"/>
-  <image href="${href}" x="0" y="0" width="760" height="630" preserveAspectRatio="xMidYMid slice"/>
+  ${photoPanel}
   <rect x="760" y="0" width="440" height="630" fill="#14532d"/>
   <image href="${logo}" x="800" y="40" width="72" height="72"/>
   ${textEl(888, 86, 'makaug.com', { size: 22, weight: 700, fill: '#f6bd38', family })}
-  ${textEl(800, 230, clip(price, 18), { size: price.length > 14 ? 36 : 46, weight: 700, fill: '#f6bd38', family })}
+  ${title.map((line, index) => textEl(800, 140 + index * 32, line, { size: 25, weight: 600, family })).join('\n')}
+  ${textEl(800, 230, price, { size: price.length > 18 ? 26 : price.length > 14 ? 32 : 46, weight: 700, fill: '#f6bd38', family })}
   ${textEl(800, 292, type, { size: 28, weight: 700, family })}
   ${beds ? textEl(800, 342, beds, { size: 24, weight: 500, fill: '#bbf7d0', family }) : ''}
-  ${place ? textEl(800, 400, place, { size: 24, weight: 600, family }) : ''}
+  ${place.map((line, index) => textEl(800, 390 + index * 30, line, { size: 24, weight: 600, family })).join('\n')}
   <rect x="800" y="470" width="${Math.min(360, 36 + badge.length * 14)}" height="48" rx="24" fill="#f6bd38"/>
   ${textEl(824, 502, badge, { size: 20, weight: 700, fill: '#14532d', family })}
 </svg>`;
@@ -584,14 +603,7 @@ async function renderShareCard(input = {}) {
   }
   if (kind === 'property') {
     const listing = input.listing || input;
-    if (!listing.photo) {
-      return renderShareCard({ kind: 'category', category: categoryForListing(listing), lang });
-    }
-    try {
-      return await svgToJpeg(await propertySvg(listing, lang), lang);
-    } catch (_error) {
-      return renderShareCard({ kind: 'category', category: categoryForListing(listing), lang });
-    }
+    return svgToJpeg(await propertySvg(listing, lang), lang);
   }
   if (kind === 'category') {
     const key = categoryKey(input.category || input.key) || 'sale';
@@ -613,6 +625,7 @@ module.exports = {
   categoryForListing,
   shareCardKeyForPath,
   shareImagePath,
+  propertyShareRevision,
   shareCardText,
   shareCardAlt,
   usableListingPhoto,

@@ -194,7 +194,21 @@ async function tickVideoStills(db, { eventLoopP95Ms, budgetMs = TICK_BUDGET_MS }
       deadline,
       signal: controller.signal
     });
-    const attached = await backfill.attachStills(property.id, uploaded);
+    const liveCover = property.status === 'approved';
+    const attached = await backfill.attachStills(property.id, uploaded, liveCover ? {
+      keepListingText: true,
+      coverLiveListing: true,
+      setAsCover: true,
+      onlyIfNoImages: true
+    } : undefined);
+    if (liveCover && Number(attached.attached) > 0) {
+      try {
+        require('../routes/properties').clearPublicPropertiesCache('automatic_live_video_cover');
+        require('./publicInventoryMetricsService').invalidatePublicInventoryMetricsCache('automatic_live_video_cover');
+      } catch (error) {
+        logger.warn('Public caches could not be cleared after an automatic video cover', { propertyId: property.id, message: error.message });
+      }
+    }
     // Clear any recorded failure, and the failure count, now that it has worked.
     await db.query(
       `UPDATE properties

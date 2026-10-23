@@ -30,7 +30,7 @@ const {
   listingCopyExtraFromRaw,
   listingCopyExtraSql
 } = require('./publicListingCopy');
-const { shareImagePath, shareCardAlt } = require('./shareCardService');
+const { shareImagePath, shareCardAlt, propertyShareRevision } = require('./shareCardService');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const ACTIVE_TENANT = tenantFor(ACTIVE_COUNTRY_CODE);
@@ -990,7 +990,7 @@ function renderPropertySeoHtml(html, listing, options = {}) {
       title: propertySeoTitle(listing),
       description,
       canonical: propertyUrl,
-      image: absoluteUrl(shareImagePath('property', listing.id), options.baseUrl),
+      image: absoluteUrl(shareImagePath('property', listing.id, 'en', propertyShareRevision(listing)), options.baseUrl),
       imageAlt: shareCardAlt('property', 'en', {
         title: heading,
         area: listing.area,

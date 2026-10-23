@@ -561,6 +561,8 @@ async function attachStills(propertyId, uploaded, {
   coverLiveListing = false,
   // Staff asked for this picture to be the cover, including on a pending listing.
   setAsCover = false,
+  // Automatic live repairs may only fill an empty gallery, checked under lock.
+  onlyIfNoImages = false,
   actorId = 'whatsapp-video-still-backfill'
 } = {}) {
   const client = await db.getClient();
@@ -580,6 +582,16 @@ async function attachStills(propertyId, uploaded, {
     if (!property || !allowedStatuses.includes(property.status)) {
       await client.query('ROLLBACK');
       return { attached: 0, skipped: 'status_changed' };
+    }
+    if (onlyIfNoImages) {
+      const currentImages = await client.query(
+        'SELECT 1 FROM property_images WHERE property_id = $1 LIMIT 1',
+        [propertyId]
+      );
+      if (currentImages.rows.length) {
+        await client.query('ROLLBACK');
+        return { attached: 0, skipped: 'already_has_images' };
+      }
     }
     const existing = await client.query(
       `SELECT COUNT(*) FILTER (
