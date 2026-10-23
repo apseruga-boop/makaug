@@ -1,10 +1,8 @@
 'use strict';
 
 /**
- * S2: the homepage tells search engines who "makaug" is (it was being read as
- * "MAKAUT"): Organization + WebSite JSON-LD with alternate names, logo, sameAs
- * and a contact point, a title that starts with the brand, and a visible
- * eyebrow. Uganda only: other tenants keep their own values.
+ * The public Uganda pages identify the same MakaUG business while retaining
+ * the homepage WebSite and each route's structured data.
  */
 
 const test = require('node:test');
@@ -18,11 +16,11 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const { renderHomepageSeoHtml } = require('../services/publicSeoRenderService');
 
 const SAME_AS = [
+  'https://x.com/makauganda',
   'https://www.instagram.com/makaugcom',
   'https://www.tiktok.com/@makaug.com',
   'https://www.linkedin.com/company/makaug-com',
-  'https://www.youtube.com/@makaugproperty',
-  'https://x.com/makauganda'
+  'https://www.youtube.com/@makaugproperty'
 ];
 
 function homepageGraph() {
@@ -33,13 +31,17 @@ function homepageGraph() {
 }
 
 test('Organization has the brand entity: name, alternate names, logo, sameAs, contact point', () => {
-  const org = homepageGraph().find((node) => node['@type'] === 'Organization');
+  const org = homepageGraph().find((node) => [].concat(node['@type']).includes('Organization'));
+  assert.deepStrictEqual(org['@type'], ['Organization', 'RealEstateAgent']);
   assert.strictEqual(org['@id'], 'https://makaug.com/#organization');
-  assert.strictEqual(org.name, 'makaug');
+  assert.strictEqual(org.name, 'MakaUG');
   assert.deepStrictEqual(org.alternateName, ['makaug.com', 'MakaUG']);
-  assert.strictEqual(org.url, 'https://makaug.com/');
-  assert.strictEqual(org.logo, 'https://makaug.com/assets/icons/makaug-icon-512.png');
-  assert.ok(fs.existsSync(path.join(root, 'assets/icons/makaug-icon-512.png')), 'the logo file exists');
+  assert.strictEqual(org.url, 'https://makaug.com');
+  assert.strictEqual(org.logo, 'https://makaug.com/assets/icons/makaug-mark.svg');
+  assert.ok(fs.existsSync(path.join(root, 'assets/icons/makaug-mark.svg')), 'the logo file exists');
+  assert.strictEqual(org.telephone, '+256780863394');
+  assert.deepStrictEqual(org.areaServed, ['Kampala', 'Wakiso', 'Entebbe', 'Mukono', 'Uganda']);
+  assert.deepStrictEqual(org.parentOrganization, { '@type': 'Organization', name: 'WHISPERS GLOBAL LTD' });
   assert.deepStrictEqual(org.sameAs, SAME_AS);
   assert.deepStrictEqual(org.contactPoint, {
     '@type': 'ContactPoint',
@@ -53,10 +55,39 @@ test('Organization has the brand entity: name, alternate names, logo, sameAs, co
 test('WebSite points at the Organization and keeps the search action', () => {
   const site = homepageGraph().find((node) => node['@type'] === 'WebSite');
   assert.strictEqual(site['@id'], 'https://makaug.com/#website');
-  assert.strictEqual(site.name, 'makaug');
+  assert.strictEqual(site.name, 'MakaUG');
   assert.deepStrictEqual(site.alternateName, ['makaug.com', 'MakaUG']);
   assert.deepStrictEqual(site.publisher, { '@id': 'https://makaug.com/#organization' });
   assert.match(site.potentialAction.target, /\/for-sale\?area=\{search_term_string\}/);
+});
+
+test('public route schemas retain their nodes and one canonical MakaUG organization', () => {
+  const { mergePublicOrganizationSchema } = require('../services/publicOrganizationSchema');
+  const staleOrganization = { '@type': 'Organization', '@id': 'https://makaug.com/#organization', name: 'Old name' };
+  const website = { '@type': 'WebSite', publisher: { '@id': staleOrganization['@id'] } };
+  const listing = { '@type': 'RealEstateListing', '@id': 'https://makaug.com/property/example', name: 'A property' };
+  const routeData = { '@context': 'https://schema.org', '@graph': [staleOrganization, website, listing, staleOrganization] };
+  const original = JSON.stringify(routeData);
+  const merged = mergePublicOrganizationSchema(routeData);
+  assert.strictEqual(merged['@context'], 'https://schema.org');
+  assert.strictEqual(merged['@graph'].filter((node) => node['@id'] === staleOrganization['@id']).length, 1);
+  assert.deepStrictEqual(merged['@graph'].slice(1), [website, listing]);
+  assert.strictEqual(merged['@graph'][0].name, 'MakaUG');
+  assert.deepStrictEqual(merged['@graph'][0]['@type'], ['Organization', 'RealEstateAgent']);
+  assert.deepStrictEqual(mergePublicOrganizationSchema(merged), merged, 'repeated metadata patching does not duplicate the organization');
+  assert.strictEqual(JSON.stringify(routeData), original, 'route data is not mutated');
+});
+
+test('public pages without a route graph still receive the same brand schema', () => {
+  const { publicOrganizationNode, mergePublicOrganizationSchema } = require('../services/publicOrganizationSchema');
+  assert.deepStrictEqual(mergePublicOrganizationSchema(null), {
+    '@context': 'https://schema.org',
+    '@graph': [publicOrganizationNode()]
+  });
+  const routeData = { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Search results' };
+  const merged = mergePublicOrganizationSchema(routeData);
+  assert.strictEqual(merged['@graph'].length, 2);
+  assert.deepStrictEqual(merged['@graph'][1], routeData);
 });
 
 test('the homepage title starts with the brand', () => {
@@ -72,6 +103,10 @@ test('a South Africa render has no makaug values', () => {
   const script = `
     const r = require('./services/publicSeoRenderService');
     const out = r.renderHomepageSeoHtml('<section id="home-grid"></section><footer></footer>', { listings: [], snapshot: null, baseUrl: 'https://seshaikhaya.com/' });
+    const s = require('./services/publicOrganizationSchema');
+    if (s.publicOrganizationNode() !== null) throw new Error('Unexpected Uganda organization');
+    if (s.mergePublicOrganizationSchema(null) !== null) throw new Error('Unexpected Uganda default graph');
+    if (s.mergePublicOrganizationSchema(out.structuredData) !== out.structuredData) throw new Error('Unexpected non-Uganda graph change');
     process.stdout.write(JSON.stringify(out.structuredData));
   `;
   const stdout = execFileSync(process.execPath, ['-e', script], {

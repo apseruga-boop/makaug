@@ -19,18 +19,21 @@ const TENANTS = Object.freeze({
     logoLetter: "M",
     logoSuffix: ".com",
     localeStorageKey: "makaug_lang",
-    // Homepage Organization/WebSite JSON-LD (services/publicSeoRenderService.js).
+    // Public Organization/WebSite JSON-LD.
     // Tenant config so Uganda's brand entity never leaks into another country.
     schemaOrg: Object.freeze({
-      name: "makaug",
+      types: Object.freeze(["Organization", "RealEstateAgent"]),
+      name: "MakaUG",
       alternateName: Object.freeze(["makaug.com", "MakaUG"]),
-      logoPath: "/assets/icons/makaug-icon-512.png",
+      logoPath: "/assets/icons/makaug-mark.svg",
+      areaServed: Object.freeze(["Kampala", "Wakiso", "Entebbe", "Mukono", "Uganda"]),
+      parentOrganization: "WHISPERS GLOBAL LTD",
       sameAs: Object.freeze([
+        "https://x.com/makauganda",
         "https://www.instagram.com/makaugcom",
         "https://www.tiktok.com/@makaug.com",
         "https://www.linkedin.com/company/makaug-com",
-        "https://www.youtube.com/@makaugproperty",
-        "https://x.com/makauganda"
+        "https://www.youtube.com/@makaugproperty"
       ]),
       contactPoint: Object.freeze({
         contactType: "customer service",

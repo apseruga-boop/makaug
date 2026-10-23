@@ -11,7 +11,6 @@ const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService
 const { SEO_FACET_MIN_LISTINGS, FACET_DEFINITIONS, COMMERCIAL_TRANSACTION_FACETS, UNIVERSITY_LANDINGS } = require('../utils/publicSeoFacets');
 const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require('../utils/locationRegistry');
 const { tenantFor } = require('../packages/shared-country-core');
-const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
 const { pricePeriodSuffix: sharedPricePeriodSuffix } = require('../config/pricePeriods');
 const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
@@ -28,8 +27,12 @@ const {
   isFoundOnlinePublicRow,
   foundOnlinePublicNotice,
   listingCopyExtraFromRaw,
-  listingCopyExtraSql
+  listingCopyExtraSql,
+  publicListingTransaction,
+  publicListingPricePeriod,
+  publicListingTitleContradictsFacts
 } = require('./publicListingCopy');
+const { publicOrganizationNode } = require('./publicOrganizationSchema');
 const { shareImagePath, shareCardAlt, propertyShareRevision } = require('./shareCardService');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
@@ -342,7 +345,12 @@ function normalizeSeoListingRow(row = {}) {
   const foundOnline = foundOnlinePublic || ['true', '1', 'yes'].includes(String(row.found_online_candidate || '').toLowerCase());
   const review = copyReviewState(copyRow, copyExtra);
   const canonicalDisplay = canonicalDisplayLocationForRow(row);
-  const priceImplausible = isPriceImplausible(row) || copyExtra.price_review === 'implausible';
+  const rowType = String(row.listing_type || '').trim().toLowerCase();
+  const priceImplausible = isPriceImplausible({
+    ...row,
+    listing_type: ['sale', 'rent'].includes(rowType) ? publicListingTransaction(row) : rowType,
+    price_period: publicListingPricePeriod(row)
+  }) || copyExtra.price_review === 'implausible';
   const title = foundOnlinePublic
     ? buildThirdPartyPublicTitle(copyRow, copyExtra)
     : (review.staffTitle ? collapseDuplicatePublicTransaction(row.title) : cleanListingTitle(row));
@@ -489,13 +497,13 @@ function currencyLabelForSeo() {
 // code (C20: it printed "UGX 700,000/wk"). One-off, negotiable and POA have no
 // suffix. Shared table: config/pricePeriods.js.
 function pricePeriodSuffix(listing = {}) {
-  return sharedPricePeriodSuffix(normalizePricePeriodForWrite(String(listing.price_period || '').trim().toLowerCase()) || '');
+  return sharedPricePeriodSuffix(publicListingPricePeriod(listing));
 }
 
 // C6: the browser's currency switch updates server-rendered prices in place.
 function seoPriceDataAttributes(listing = {}) {
   if (!(Number(listing.price) > 0)) return '';
-  return ` data-price-ugx="${escapeHtml(String(Math.round(Number(listing.price))))}" data-price-period="${escapeHtml(String(listing.price_period || ''))}" data-listing-type="${escapeHtml(String(listing.listing_type || ''))}" data-transaction-type="${escapeHtml(String(listing.transaction_type || ''))}"`;
+  return ` data-price-ugx="${escapeHtml(String(Math.round(Number(listing.price))))}" data-price-period="${escapeHtml(publicListingPricePeriod(listing))}" data-listing-type="${escapeHtml(String(listing.listing_type || ''))}" data-transaction-type="${escapeHtml(publicListingTransaction(listing))}"`;
 }
 
 // Full price for cards, detail pages and descriptions: UGX 80,000,000/month.
@@ -517,10 +525,12 @@ function titlePriceLabel(listing = {}) {
 // The price is left out of <title> when it is outside the honest bounds
 // (50ce7080 showed "— USh 2").
 function titlePriceSuffix(listing = {}) {
-  const category = ['student', 'students'].includes(String(listing.listing_type || '').toLowerCase()) ? 'students' : String(listing.listing_type || '').toLowerCase();
+  const listingType = listingTypeKey(listing);
+  const category = ['student', 'students'].includes(listingType) ? 'students'
+    : ['sale', 'rent'].includes(listingType) ? publicListingTransaction(listing) : listingType;
   // C17: a POA or implausible price reads "Price on application" in the title.
   if (listing.price_implausible || (listing.price_on_application && !(Number(listing.price) > 0))) return ' — Price on application';
-  return Number(listing.price || 0) > 0 && priceInSeoBounds(listing, category) ? ` — ${titlePriceLabel(listing)}` : '';
+  return Number(listing.price || 0) > 0 && priceInSeoBounds({ ...listing, price_period: publicListingPricePeriod(listing) }, category) ? ` — ${titlePriceLabel(listing)}` : '';
 }
 
 function listingTypeKey(listing = {}) {
@@ -574,14 +584,13 @@ function storedHeadingText(listing = {}) {
 // A reviewed caption can still say "house" after the listing was saved as land.
 // That stored string, and any SEO title kept in extra_fields, must not win.
 function publicTitleContradictsListingType(listing = {}) {
-  if (!listingIsLandOrPlot(listing)) return false;
-  return HOUSE_WORD_PATTERN.test(storedHeadingText(listing));
+  const text = storedHeadingText(listing);
+  if (listingIsLandOrPlot(listing) && HOUSE_WORD_PATTERN.test(text)) return true;
+  return publicListingTitleContradictsFacts(listing, text);
 }
 
 function generatedTypeHeading(listing = {}) {
-  const listingType = listingTypeKey(listing);
-  const transaction = String(listing.transaction_type || '').toLowerCase()
-    || (listingType === 'rent' ? 'rent' : ['sale', 'land'].includes(listingType) ? 'sale' : '');
+  const transaction = publicListingTransaction(listing);
   const type = publicTypeNoun(listing);
   const bedrooms = !listingIsLandOrPlot(listing) && Number(listing.bedrooms || 0) > 0
     ? `${Number(listing.bedrooms)}bdrm `
@@ -611,8 +620,8 @@ function propertySeoTitle(listing = {}) {
 function propertySeoDescription(listing = {}) {
   const description = plainText(listing.description);
   const sentence = description.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() || description.slice(0, 220).trim();
-  if (sentence) return sentence.slice(0, 300);
-  return `${[listing.area, listing.district].filter(Boolean).join(', ')} - ${priceLabel(listing)}. View this ${ACTIVE_COUNTRY_NAME} property on ${ACTIVE_BRAND}.`;
+  if (sentence && !publicListingTitleContradictsFacts(listing, sentence)) return sentence.slice(0, 300);
+  return `${generatedTypeHeading(listing)}. ${priceLabel(listing)}. View this ${ACTIVE_COUNTRY_NAME} property on ${ACTIVE_BRAND}.`;
 }
 
 function listingAreaLocation(listing = {}) {
@@ -1090,7 +1099,7 @@ function homepageBrandGraph(baseUrl) {
     alternateName: [...config.alternateName],
     publisher: { '@id': organizationId }
   });
-  return [organization, website];
+  return [publicOrganizationNode() || organization, website];
 }
 
 module.exports = {
