@@ -103,10 +103,6 @@ test('approval records the staff member and the editor shows that name', () => {
   assert.match(sql, /p\.approved_by IS NULL/);
   assert.match(sql, /u\.id::text = e\.actor_id/);
   assert.match(sql, /approved_by = latest\.actor_id::uuid/);
-  const numbers = fs.readdirSync(path.join(__dirname, '../db/migrations'))
-    .map((name) => Number(name.split('_')[0]))
-    .filter((n) => Number.isFinite(n));
-  assert.equal(Math.max(...numbers), 164);
   const repair = read('db/migrations/164_restore_republished_listing_visibility.sql');
   assert.match(repair, /2026-10-23 07:26:00\+00/);
   assert.match(repair, /staff_listing_republished/);

@@ -1330,22 +1330,22 @@ function patchMetaTag(html, propertyName, content) {
   const attribute = propertyName.startsWith('og:') ? 'property' : 'name';
   const replacement = `<meta ${attribute}="${safeName}" content="${safeContent}">`;
   const tagPattern = new RegExp(`<meta\\b(?=[^>]*(?:property|name)=["']${escapedName}["'])[^>]*>`, 'i');
-  if (tagPattern.test(html)) return html.replace(tagPattern, replacement);
-  return html.replace('</head>', `  ${replacement}\n</head>`);
+  if (tagPattern.test(html)) return html.replace(tagPattern, () => replacement);
+  return html.replace('</head>', () => `  ${replacement}\n</head>`);
 }
 
 function patchDocumentTitle(html, title) {
   const replacement = `<title>${escapeMetaContent(title)}</title>`;
   return /<title>[^<]*<\/title>/i.test(html)
-    ? html.replace(/<title>[^<]*<\/title>/i, replacement)
-    : html.replace('</head>', `  ${replacement}\n</head>`);
+    ? html.replace(/<title>[^<]*<\/title>/i, () => replacement)
+    : html.replace('</head>', () => `  ${replacement}\n</head>`);
 }
 
 function patchCanonicalLink(html, canonical) {
   const replacement = `<link rel="canonical" href="${escapeMetaContent(canonical)}">`;
   return /<link\b(?=[^>]*rel=["']canonical["'])[^>]*>/i.test(html)
-    ? html.replace(/<link\b(?=[^>]*rel=["']canonical["'])[^>]*>/i, replacement)
-    : html.replace('</head>', `  ${replacement}\n</head>`);
+    ? html.replace(/<link\b(?=[^>]*rel=["']canonical["'])[^>]*>/i, () => replacement)
+    : html.replace('</head>', () => `  ${replacement}\n</head>`);
 }
 
 function patchStructuredData(html, structuredData) {
@@ -1356,8 +1356,8 @@ function patchStructuredData(html, structuredData) {
   const payload = JSON.stringify(data).replace(/</g, '\\u003c');
   const replacement = `<script type="application/ld+json" id="makaug-route-structured-data">${payload}</script>`;
   return pattern.test(html)
-    ? html.replace(pattern, replacement)
-    : html.replace('</head>', `  ${replacement}\n</head>`);
+    ? html.replace(pattern, () => replacement)
+    : html.replace('</head>', () => `  ${replacement}\n</head>`);
 }
 
 function patchPublicPageSeoMeta(html, meta = {}) {
