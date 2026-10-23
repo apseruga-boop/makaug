@@ -5715,5 +5715,15 @@ router.post('/assistant/query', async (req, res, next) => {
   }
 });
 
+router.get('/video-caption-conflicts', async (req, res, next) => {
+  try {
+    const { listVideoCaptionConflicts } = require('../services/videoCaptionOcrService');
+    const data = await listVideoCaptionConflicts();
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 module.exports = router;
 module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, loadStaffPropertyPreview, liveEditSnapshot, staffLocationWarnings, staffLocationSoftWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary, stripRoadNamePhrases };

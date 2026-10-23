@@ -4297,6 +4297,16 @@ router.get('/properties/actioned', async (req, res, next) => {
 // no property to attach itself to. This runs the scheduler's own query and
 // returns the rows, or the database error, so the next one is read rather
 // than guessed at.
+router.get('/video-caption-conflicts', async (req, res, next) => {
+  try {
+    const { listVideoCaptionConflicts } = require('../services/videoCaptionOcrService');
+    const data = await listVideoCaptionConflicts();
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/properties/video-still-candidates', async (req, res) => {
   try {
     const backfill = require('../scripts/backfill-whatsapp-video-stills');

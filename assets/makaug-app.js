@@ -16093,6 +16093,7 @@ async function renderStaffDashboardOnce() {
     applyStaffDashboardData(data, user);
     loadAgentBookingStaffFlags();
     refreshMarketplaceModerationQueue("staff", { silent: true });
+    adminLoadVideoCaptionConflicts("staff");
     // Always: the fast payload carries counts only, and its lists (leads,
     // WhatsApp, source registry, found-online queue) are empty until the
     // panels arrive. Asking only when it was `partial` left them looking empty.
@@ -17018,7 +17019,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
             <div class="mt-3" data-human-integrity-override-host></div>
             <div class="mt-3 grid gap-2">
               <button type="button" onclick="saveStaffListingPreview(${propertyIdArg(preview.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-black">Save preview changes</button>
-              <button type="button" data-staff-approve-id="${adminAttr(String(preview.id || ""))}" data-identity-approve-prefix="staff-preview" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
+              <button type="button" data-video-caption-approve="true" data-staff-approve-id="${adminAttr(String(preview.id || ""))}" data-identity-approve-prefix="staff-preview" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
               <div class="hidden" data-approval-blocker-host></div>
               <button type="button" data-reject-button="staff-preview" onclick="staffRejectPreviewListing(${propertyIdArg(preview.id)})" class="bg-red-600 hover:bg-red-500 text-white rounded-xl px-4 py-2 text-sm font-black">Reject with reason</button>
               <button type="button" onclick="staffModerateListing(${propertyIdArg(preview.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-black">Keep pending</button>
@@ -17037,6 +17038,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
     staffHydrateCoverVideoChoices(modal);
     staffSyncPreviewPhotoActions();
     moderationEnsureIdentityPanel("staff-preview", preview, "staff", document.querySelector("#staff-listing-preview-modal .p-5 > .space-y-4") || document.querySelector("#staff-listing-preview-modal"));
+    adminRefreshVideoCaptionApproveGate();
   }, 120);
 }
 
@@ -17545,6 +17547,10 @@ async function staffApprovePreviewListing(propertyId, options = {}) {
   const humanApprovalOverride = options?.humanApprovalOverride === true || options?.integrityOverride === true;
   try {
     if (!propertyIdForRequest) throw new Error("Missing listing id for approval request");
+    if (adminVideoCaptionConflictsRemain()) {
+      toast("Video text conflicts with the caption or listing. Edit the listing to match the video, or record an override reason.");
+      return;
+    }
     const foundOnlineApproval = staffSafeFoundOnlineApproval(adminActiveReview);
     const identityRequired = !foundOnlineApproval && moderationRequiresIdentity(adminActiveReview);
     const identityConfirmed = moderationIdentityConfirmed("staff-preview", adminActiveReview);
@@ -17578,6 +17584,7 @@ async function staffApprovePreviewListing(propertyId, options = {}) {
       location_confirmed: locationConfirmation.confirmed,
       location_confirmation_source: locationConfirmation.source,
       location_confirmation_fields: locationConfirmation.fields,
+      ...adminVideoCaptionOverridePayload(),
       fast_admin_render: true,
       manual_notification_only: true,
       ...(humanApprovalOverride ? { human_approval_override: true, integrity_override: true } : {})
@@ -23337,6 +23344,7 @@ async function renderAdminDashboard(options = {}) {
   gate.classList.add("hidden");
   body.classList.remove("hidden");
   refreshMarketplaceModerationQueue("admin", { silent: true });
+  adminLoadVideoCaptionConflicts("admin");
 
   const nameEl = document.getElementById("admin-dashboard-name");
   const statusEl = document.getElementById("admin-dashboard-status");
@@ -29538,6 +29546,191 @@ function adminReviewOnPriceCurrencyChange() {
   }
 }
 
+function adminVideoCaptionOcrRecord(review = {}) {
+  const extra = adminReviewExtraFields(review);
+  const stored = extra.video_caption_ocr && typeof extra.video_caption_ocr === "object" ? extra.video_caption_ocr : null;
+  const videos = []
+    .concat(Array.isArray(extra.video_urls) ? extra.video_urls : [])
+    .concat(extra.video_url ? [extra.video_url] : [])
+    .filter(Boolean);
+  if (stored) return stored;
+  if (videos.length) return { status: "pending", text: "", facts: {}, conflicts: [] };
+  return null;
+}
+
+function adminVideoCaptionFactRows(facts = {}) {
+  const location = facts.location && typeof facts.location === "object" ? (facts.location.name || "") : "";
+  const price = facts.price ? `${facts.currency || "UGX"} ${Number(facts.price).toLocaleString("en-UG")}` : "";
+  const rows = [
+    ["Price", price],
+    ["Acres", facts.acres ? String(facts.acres) : ""],
+    ["Bedrooms", facts.beds ? String(facts.beds) : ""],
+    ["Location", location],
+    ["Property type", facts.type || ""]
+  ].filter((row) => row[1]);
+  if (!rows.length) return "";
+  return rows.map(([label, value]) => `<div class="text-xs text-slate-800"><span class="font-black">${adminEscape(label)}</span>: <span data-no-translate>${adminEscape(value)}</span></div>`).join("");
+}
+
+function adminVideoCaptionOcrPanelHtml(review = {}) {
+  const record = adminVideoCaptionOcrRecord(review);
+  if (!record) return "";
+  const status = String(record.status || "pending");
+  const facts = record.facts && typeof record.facts === "object" ? record.facts : {};
+  const conflicts = Array.isArray(record.conflicts) ? record.conflicts : [];
+  const text = String(record.text || "").trim();
+  const factRows = adminVideoCaptionFactRows(facts);
+  const dimensionLabel = {
+    location: "Location",
+    price: "Price",
+    size: "Size",
+    type: "Property type"
+  };
+  const statusLine = status === "ocr pending"
+    ? "OCR pending"
+    : (status === "pending" ? "Video text is still being read." : "");
+  return `
+    <div class="rounded-lg border border-slate-200 bg-white p-2" data-video-caption-ocr="1" data-ocr-status="${adminAttr(status)}" data-video-facts="${adminAttr(encodeURIComponent(JSON.stringify(facts)))}" data-conflicts="${adminAttr(encodeURIComponent(JSON.stringify(conflicts)))}">
+      <div class="text-[11px] font-black uppercase tracking-wide text-slate-700">Extracted from video</div>
+      ${statusLine ? `<p class="mt-1 text-xs font-semibold text-slate-700">${adminEscape(statusLine)}</p>` : ""}
+      <div class="mt-2 text-[11px] font-black uppercase tracking-wide text-slate-500">Read from the video</div>
+      <pre class="mt-1 max-h-28 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-800" data-no-translate>${adminEscape(text || (status === "done" ? "" : ""))}</pre>
+      ${status === "done" && !text ? `<p class="mt-1 text-xs text-slate-600">No text was read from the video.</p>` : ""}
+      <div class="mt-2 text-[11px] font-black uppercase tracking-wide text-slate-500">Video facts</div>
+      <div class="mt-1">${factRows || `<p class="text-xs text-slate-600">${status === "done" ? "No text was read from the video." : "Video text is still being read."}</p>`}</div>
+      ${conflicts.length ? `
+        <div class="mt-2 rounded-lg border border-red-300 bg-red-50 p-2" data-video-caption-ocr-block>
+          <div class="text-[11px] font-black uppercase tracking-wide text-red-900">Why approval is blocked</div>
+          <p class="mt-1 text-xs font-semibold text-red-900">Video facts conflict with the caption or listing.</p>
+          <p class="mt-1 text-xs text-red-900">Approve stays blocked until the listing matches the video, or you record an override reason.</p>
+          <ul class="mt-2 space-y-1 text-xs text-red-950">${conflicts.map((item) => `<li><span class="font-black">${adminEscape(dimensionLabel[item.dimension] || item.dimension || "Conflict")}</span>: <span data-no-translate>${adminEscape([item.video, item.other, item.against].filter(Boolean).join(" / "))}</span></li>`).join("")}</ul>
+          <label class="mt-2 flex items-start gap-2 text-xs font-bold text-red-950">
+            <input id="video-caption-ocr-override" type="checkbox" class="mt-0.5 h-4 w-4">
+            <span>I checked the video text. Approve with this reason.</span>
+          </label>
+          <label class="mt-2 block text-xs font-bold text-red-950">Override reason
+            <textarea id="video-caption-ocr-override-reason" class="mt-1 w-full rounded border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-slate-900" placeholder="Which property does this video show, and why is the other text wrong?"></textarea>
+          </label>
+        </div>` : ""}
+    </div>`;
+}
+
+let videoCaptionOcrGateBound = false;
+function adminVideoCaptionConflictsRemain() {
+  const panel = document.querySelector("[data-video-caption-ocr]");
+  if (!panel || panel.getAttribute("data-ocr-status") !== "done") return false;
+  let facts = {};
+  let conflicts = [];
+  try {
+    facts = JSON.parse(decodeURIComponent(panel.getAttribute("data-video-facts") || "") || "{}");
+    conflicts = JSON.parse(decodeURIComponent(panel.getAttribute("data-conflicts") || "") || "[]");
+  } catch (error) {
+    return false;
+  }
+  if (!Array.isArray(conflicts) || !conflicts.length) return false;
+  const reason = String(document.getElementById("video-caption-ocr-override-reason")?.value || "").trim();
+  if (document.getElementById("video-caption-ocr-override")?.checked === true && reason.length >= 8) return false;
+  const read = (id) => String(document.getElementById(id)?.value || "");
+  const blob = [
+    read("admin-review-area-edit"),
+    read("admin-review-district-edit"),
+    read("admin-review-address-edit"),
+    read("admin-review-description-edit"),
+    read("admin-review-title-edit"),
+    read("admin-review-property-type-edit")
+  ].join(" ").toLowerCase();
+  const price = Number(String(read("admin-review-price-edit")).replace(/[^\d.]/g, ""));
+  const propertyType = read("admin-review-property-type-edit").toLowerCase();
+  const listingType = read("admin-review-listing-type-edit").toLowerCase();
+  const dimensions = new Set(conflicts.map((item) => item.dimension));
+  if (dimensions.has("location")) {
+    const name = String(facts.location?.name || "").toLowerCase();
+    if (!name || !blob.includes(name)) return true;
+  }
+  if (dimensions.has("price")) {
+    const videoPrice = Number(facts.price || 0);
+    if (!(videoPrice > 0) || !(price > 0)) return true;
+    if (Math.abs(price - videoPrice) > Math.max(1000, Math.max(price, videoPrice) * 0.1)) return true;
+  }
+  if (dimensions.has("size")) {
+    if (facts.acres && !blob.includes(String(facts.acres))) return true;
+    if (!facts.acres && facts.beds && String(Number(read("admin-review-bedrooms-edit"))) !== String(Number(facts.beds))) return true;
+  }
+  if (dimensions.has("type")) {
+    const kind = String(facts.type || "").toLowerCase();
+    const stated = `${propertyType} ${listingType} ${blob}`;
+    if (kind === "land" && !/\bland\b/.test(stated)) return true;
+    if (kind === "house" && !/\b(house|home|bungalow|villa|mansion)\b/.test(stated)) return true;
+    if (kind === "apartment" && !/\b(apartment|flat)\b/.test(stated)) return true;
+    if (kind === "commercial" && !/\b(commercial|office|shop|warehouse)\b/.test(stated)) return true;
+  }
+  return false;
+}
+
+function adminRefreshVideoCaptionApproveGate() {
+  if (!videoCaptionOcrGateBound && typeof document !== "undefined") {
+    videoCaptionOcrGateBound = true;
+    const onEdit = (event) => {
+      const root = event.target?.closest?.("#staff-listing-preview-modal, #admin-review-content, #admin-review-panel");
+      if (!root) return;
+      adminRefreshVideoCaptionApproveGate();
+    };
+    document.addEventListener("input", onEdit);
+    document.addEventListener("change", onEdit);
+  }
+  const blocked = adminVideoCaptionConflictsRemain();
+  document.querySelectorAll("[data-video-caption-approve]").forEach((button) => {
+    if (!button.closest("#staff-listing-preview-modal, #admin-review-content, #admin-review-panel")) return;
+    button.disabled = blocked;
+    button.classList.toggle("opacity-50", blocked);
+    button.classList.toggle("cursor-not-allowed", blocked);
+    if (blocked) button.title = "Video facts conflict with the caption or listing.";
+  });
+}
+
+function adminVideoCaptionOverridePayload() {
+  return {
+    video_caption_ocr_override: document.getElementById("video-caption-ocr-override")?.checked === true,
+    video_caption_ocr_override_reason: String(document.getElementById("video-caption-ocr-override-reason")?.value || "").trim()
+  };
+}
+
+async function adminLoadVideoCaptionConflicts(which = "staff") {
+  const host = document.getElementById(which === "admin" ? "admin-video-caption-conflicts-list" : "staff-video-caption-conflicts-list");
+  if (!host) return;
+  const path = which === "admin" ? "/api/admin/video-caption-conflicts" : "/api/staff/video-caption-conflicts";
+  try {
+    const response = await apiRequest(path, which === "admin" ? { headers: adminAuthHeaders() } : {});
+    const data = response?.data || {};
+    const live = Array.isArray(data.items) ? data.items : [];
+    const backfill = Array.isArray(data.backfill_items) ? data.backfill_items : [];
+    const card = (item) => {
+      const id = String(item.id || "").trim();
+      const open = id
+        ? (which === "admin" ? `openAdminListingReview(${JSON.stringify(id)})` : `openStaffDirectReview(${JSON.stringify(id)})`)
+        : "";
+      const conflicts = Array.isArray(item.conflicts) ? item.conflicts : [];
+      return `<article class="rounded-xl border border-red-100 bg-red-50 p-3">
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <p class="text-sm font-black text-gray-900" data-no-translate>${adminEscape(item.title || item.inquiry_reference || "Listing")}</p>
+            <p class="text-xs text-gray-600" data-no-translate>${adminEscape([item.inquiry_reference, item.lister_name, item.lister_phone, item.area].filter(Boolean).join(" · "))}</p>
+          </div>
+          ${open ? `<button type="button" onclick="${open}" class="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-black text-red-900">Open review</button>` : ""}
+        </div>
+        <ul class="mt-2 space-y-1 text-xs text-red-950">${conflicts.slice(0, 6).map((conflict) => `<li data-no-translate>${adminEscape(conflict.message || conflict.dimension || "")}</li>`).join("")}</ul>
+      </article>`;
+    };
+    const section = (title, items) => `<div>
+      <h4 class="text-sm font-black text-gray-900">${title}</h4>
+      <div class="mt-2 grid gap-2">${items.length ? items.map(card).join("") : `<p class="text-sm text-gray-500">No video caption conflicts are waiting.</p>`}</div>
+    </div>`;
+    host.innerHTML = `<div class="grid gap-4">${section("Live import conflicts", live)}${section("Backfill review list", backfill)}</div>`;
+  } catch (error) {
+    host.innerHTML = `<p class="text-sm text-gray-500">No video caption conflicts are waiting.</p>`;
+  }
+}
+
 function adminReviewListingEditPanel(review = {}) {
   const facts = adminExtractReviewFacts(review);
   const amenities = Array.isArray(review.amenities) ? review.amenities.join(", ") : "";
@@ -29642,9 +29835,13 @@ function adminReviewListingEditPanel(review = {}) {
           <button type="button" onclick="adminUseConciseReviewDescription()" class="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100">Shorten description</button>
         </div>
       </div>
-      <div class="mt-3 rounded-lg border border-amber-100 bg-amber-100/60 p-2">
-        <div class="text-[11px] font-black uppercase tracking-wide text-amber-900">Extracted from source text</div>
-        <div class="mt-2">${adminReviewFactBadgesHtml(facts)}</div>
+      <div class="mt-3 grid gap-2 md:grid-cols-2">
+        <div class="rounded-lg border border-amber-100 bg-amber-100/60 p-2">
+          <div class="text-[11px] font-black uppercase tracking-wide text-amber-900">Extracted from source text</div>
+          <div class="mt-2 text-[11px] font-black uppercase tracking-wide text-amber-800">Caption facts</div>
+          <div class="mt-2">${adminReviewFactBadgesHtml(facts)}</div>
+        </div>
+        ${adminVideoCaptionOcrPanelHtml(review)}
       </div>
       ${adminLocationReclassificationReviewHtml(extra)}
       ${adminDataIntegrityReviewHtml(extra)}
@@ -30666,7 +30863,7 @@ function renderAdminReviewPanel(review) {
             <button onclick="adminCreateShareablePreviewLink(${reviewIdArg})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy Private Preview Link</button>
             <button onclick="saveAdminListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Save Review</button>
             ${generatedDecisionReason ? `<button onclick="useAdminGeneratedDecisionReason()" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Use Suggested Reason</button>` : ""}
-            <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" data-identity-approve-prefix="admin-review" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
+            <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" data-video-caption-approve="true" data-identity-approve-prefix="admin-review" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
             ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" data-price-approve-prefix="admin-review" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" ${sourcedCandidateOverrideReady && (!priceConfirmationRequired || priceConfirmationOpen) ? "" : "disabled"} class="${sourcedCandidateOverrideReady && (!priceConfirmationRequired || priceConfirmationOpen) ? "bg-blue-700 hover:bg-blue-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Found Online</button>` : ""}
             <button data-reject-button="admin-review" onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg}, { ui_control: 'admin_review_reject_button' })" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
           </div>
@@ -30698,6 +30895,7 @@ function renderAdminReviewPanel(review) {
     adminReviewAutoPopulateLocationFromSource(review);
     initAdminReviewLocationMap(review);
     moderationEnsureIdentityPanel("admin-review", review, "admin", document.querySelector("#admin-review-content .space-y-4") || document.getElementById("admin-review-content"));
+    adminRefreshVideoCaptionApproveGate();
   }, 120);
 }
 
@@ -31052,6 +31250,10 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
     }
     if (!confirmRejectClick(`admin:${backendId || localId}`, '[data-reject-button="admin-review"]')) return;
   }
+  if (normalizedStatus === "approved" && adminVideoCaptionConflictsRemain()) {
+    toast("Video text conflicts with the caption or listing. Edit the listing to match the video, or record an override reason.");
+    return;
+  }
 
   listing.status = normalizedStatus;
   listing.reviewed_at = new Date().toISOString();
@@ -31114,7 +31316,8 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
             canonical_location_confirmed: locationConfirmation.confirmed,
             location_confirmed: locationConfirmation.confirmed,
             location_confirmation_source: locationConfirmation.source,
-            location_confirmation_fields: locationConfirmation.fields
+            location_confirmation_fields: locationConfirmation.fields,
+            ...adminVideoCaptionOverridePayload()
         }
       });
       statusResponse = response?.data || null;
