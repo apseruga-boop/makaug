@@ -20,11 +20,14 @@ const {
   shareCardText,
   shareCardKeyForPath,
   usableListingPhoto,
+  usableShareCardPhoto,
+  shareCardPhotoList,
+  sharePhotoHostPattern,
   shareCardBioText,
   ellipsizeShareLines,
   renderShareCard
 } = require('../services/shareCardService');
-const { createOgShareRouter, clearOgShareCache } = require('../routes/ogShare');
+const { createOgShareRouter, clearOgShareCache, SHARE_PHOTO_LOOKUP_SQL, NO_PHOTO_CACHE_CONTROL } = require('../routes/ogShare');
 
 const LANGS = ['lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar'];
 const AGENT_ID = 'b06c4547-9312-415c-90af-3296e88bf53a';
@@ -79,6 +82,28 @@ test('static card copy is translated in every site language pack', () => {
   assert.equal(normalizeShareLang('en-UG'), 'en');
   assert.equal(usableListingPhoto('https://p16-sign.tiktokcdn.com/cover.jpg'), false);
   assert.equal(usableListingPhoto('https://media.makaug.com/listings/house.jpg'), true);
+  assert.equal(usableListingPhoto('https://i.ytimg.com/vi/ZxIslo4MYsc/maxresdefault.jpg'), false);
+  assert.equal(usableShareCardPhoto('https://i.ytimg.com/vi/ZxIslo4MYsc/maxresdefault.jpg'), true);
+  assert.equal(usableShareCardPhoto('https://pbs.twimg.com/media/house.jpg'), true);
+  assert.equal(usableShareCardPhoto('https://p16-sign.tiktokcdn.com/cover.jpg'), false);
+  assert.equal(usableShareCardPhoto('https://media.makaug.com/listings/house.jpg'), true);
+  assert.deepEqual(shareCardPhotoList({
+    photoUrls: [
+      'https://p16-sign.tiktokcdn.com/cover.jpg',
+      'https://i.ytimg.com/vi/abc/maxresdefault.jpg',
+      'https://media.makaug.com/properties/house.jpg'
+    ]
+  }), [
+    'https://media.makaug.com/properties/house.jpg',
+    'https://i.ytimg.com/vi/abc/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/abc/hqdefault.jpg',
+    'https://i.ytimg.com/vi/abc/sddefault.jpg'
+  ]);
+  assert.match(sharePhotoHostPattern(), /media\\\.makaug\\\.com/);
+  assert.match(SHARE_PHOTO_LOOKUP_SQL, /property_images/);
+  assert.match(SHARE_PHOTO_LOOKUP_SQL, /i\\\.ytimg\\\.com/);
+  assert.match(SHARE_PHOTO_LOOKUP_SQL, /staff_upload/);
+  assert.match(SHARE_PHOTO_LOOKUP_SQL, /tiktokcdn\|byteimg/);
   const parts = [{
     t: 'specialises',
     one: false,
@@ -250,7 +275,7 @@ test('share-card endpoints cache a JPEG and fall back when the record or photo i
       assert.equal(response.status, 200, cardPath);
       assert.equal(response.headers.get('content-type'), 'image/jpeg', cardPath);
       const missingPhoto = cardPath.includes('22222222-2222-4222-8222-222222222222');
-      assert.equal(response.headers.get('cache-control'), missingPhoto ? 'public, max-age=60, must-revalidate' : 'public, max-age=86400, stale-while-revalidate=604800', cardPath);
+      assert.equal(response.headers.get('cache-control'), missingPhoto ? NO_PHOTO_CACHE_CONTROL : 'public, max-age=86400, stale-while-revalidate=604800', cardPath);
       await expectCard(body);
     }
     const missingAgent = await fetch(`http://127.0.0.1:${port}/og/agent/missing-id.jpg`);
@@ -259,8 +284,8 @@ test('share-card endpoints cache a JPEG and fall back when the record or photo i
     assert.equal(home.headers.get('x-makaug-og-card'), 'home');
     const noPhoto = await fetch(`http://127.0.0.1:${port}/og/property/22222222-2222-4222-8222-222222222222.jpg`);
     const land = await fetch(`http://127.0.0.1:${port}/og/category/land.jpg`);
-    assert.equal(noPhoto.headers.get('x-makaug-og-card'), 'property');
-    assert.ok(!Buffer.from(await noPhoto.arrayBuffer()).equals(Buffer.from(await land.arrayBuffer())), 'missing photo keeps a listing-specific card');
+    assert.equal(noPhoto.headers.get('x-makaug-og-card'), 'land');
+    assert.ok(Buffer.from(await noPhoto.arrayBuffer()).equals(Buffer.from(await land.arrayBuffer())), 'a listing with no usable photo uses the land category card');
     const arabic = await fetch(`http://127.0.0.1:${port}/og/category/sale.jpg?lang=ar`);
     await expectCard(Buffer.from(await arabic.arrayBuffer()));
     assert.equal(arabic.headers.get('x-makaug-og-card'), 'sale');

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const express = require('express');
 const sharp = require('sharp');
-const { renderShareCard, shareImagePath, propertyShareRevision, formatSharePrice } = require('../services/shareCardService');
+const { renderShareCard, shareImagePath, propertyShareRevision, formatSharePrice, usableShareCardPhoto } = require('../services/shareCardService');
 const { createOgShareRouter, clearOgShareCache } = require('../routes/ogShare');
 
 const ID = '11111111-1111-4111-8111-111111111111';
@@ -103,6 +103,88 @@ test('a temporary photo failure preserves the listing and retries instead of cac
     const recovered = await fetch(url);
     assert.equal(recovered.headers.get('x-makaug-og-card'), 'property');
     assert.ok(!before.equals(Buffer.from(await recovered.arrayBuffer())), 'the photo must reappear as soon as the fetch recovers');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('a YouTube or Twitter still is the listing photo when no hosted picture exists', async () => {
+  clearOgShareCache();
+  const photo = await sharp({ create: { width: 90, height: 60, channels: 3, background: '#b45309' } }).jpeg().toBuffer();
+  const hosted = await sharp({ create: { width: 90, height: 60, channels: 3, background: '#1d4ed8' } }).jpeg().toBuffer();
+  const youtube = 'https://i.ytimg.com/vi/ZxIslo4MYsc/maxresdefault.jpg';
+  let reads = 0;
+  const seen = [];
+  const app = express();
+  app.use('/og', createOgShareRouter({
+    limiter: (_req, _res, next) => next(),
+    loadProperty: async () => ({ ...listing, photoUrl: youtube, photoUrls: [youtube] }),
+    fetchPhoto: async (url) => {
+      reads += 1;
+      seen.push(url);
+      if (url.endsWith('maxresdefault.jpg')) return null;
+      if (url.includes('hqdefault')) return photo;
+      return null;
+    }
+  }));
+  const server = await new Promise((resolve) => {
+    const handle = app.listen(0, '127.0.0.1', () => resolve(handle));
+  });
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/og/property/${ID}.jpg`;
+    const first = await fetch(url);
+    assert.equal(first.headers.get('x-makaug-og-card'), 'property');
+    assert.equal(first.headers.get('cache-control'), 'public, max-age=86400, stale-while-revalidate=604800');
+    const body = Buffer.from(await first.arrayBuffer());
+    const expected = await renderShareCard({ kind: 'property', listing: { ...listing, photo } });
+    const hostedCard = await renderShareCard({ kind: 'property', listing: { ...listing, photo: hosted } });
+    const category = await renderShareCard({ kind: 'category', category: 'sale' });
+    assert.ok(body.equals(expected), 'the card is this listing with its YouTube still');
+    assert.ok(!body.equals(hostedCard));
+    assert.ok(!body.equals(category));
+    assert.ok(seen.includes('https://i.ytimg.com/vi/ZxIslo4MYsc/hqdefault.jpg'));
+    const again = Buffer.from(await (await fetch(url)).arrayBuffer());
+    assert.ok(again.equals(body));
+    assert.equal(reads, 2, 'a cached card must not fetch the still again');
+    assert.equal(usableShareCardPhoto(youtube), true);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('a hosted photo is tried before a source still, and a failed fetch is not cached as the category card', async () => {
+  clearOgShareCache();
+  const hostedUrl = 'https://media.makaug.com/properties/house.jpg';
+  const youtube = 'https://i.ytimg.com/vi/abc/hqdefault.jpg';
+  const photo = await sharp({ create: { width: 80, height: 80, channels: 3, background: '#15803d' } }).jpeg().toBuffer();
+  let hostedUp = false;
+  const app = express();
+  app.use('/og', createOgShareRouter({
+    limiter: (_req, _res, next) => next(),
+    loadProperty: async () => ({ ...listing, photoUrl: hostedUrl, photoUrls: [hostedUrl, youtube] }),
+    fetchPhoto: async (url) => {
+      if (url === hostedUrl) {
+        if (!hostedUp) throw new Error('media host timeout');
+        return photo;
+      }
+      return null;
+    }
+  }));
+  const server = await new Promise((resolve) => {
+    const handle = app.listen(0, '127.0.0.1', () => resolve(handle));
+  });
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/og/property/${ID}.jpg`;
+    const missing = await fetch(url);
+    assert.equal(missing.headers.get('x-makaug-og-card'), 'property');
+    assert.equal(missing.headers.get('cache-control'), 'public, max-age=60, must-revalidate');
+    const before = Buffer.from(await missing.arrayBuffer());
+    const category = await renderShareCard({ kind: 'category', category: 'sale' });
+    assert.ok(!before.equals(category), 'a temporary photo failure keeps the listing price and area');
+    hostedUp = true;
+    const recovered = await fetch(url);
+    assert.equal(recovered.headers.get('cache-control'), 'public, max-age=86400, stale-while-revalidate=604800');
+    assert.ok(!before.equals(Buffer.from(await recovered.arrayBuffer())));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
