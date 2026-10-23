@@ -1,3 +1,4 @@
+-- Migration 158. Numbers 156 and 157 are the agent-profile booking migrations.
 -- Arthur's rule, confirmed 23 Oct 2026.
 -- Ordinary short-stay listings are UGX 20,000 for one month, with no free days.
 -- Rows already paid or waived keep the term they were sold under. The next

@@ -75,8 +75,8 @@ test('an approved agent matched by phone has the short stay included', async () 
   assert.match(agentQuery.sql, /removed_at IS NULL/);
 });
 
-test('migration 156 reprices only unpaid short stays and cancels open UGX 50,000 links', () => {
-  const sql = read('db', 'migrations', '156_short_stay_monthly_fee.sql');
+test('migration 158 reprices only unpaid short stays and cancels open UGX 50,000 links', () => {
+  const sql = read('db', 'migrations', '158_short_stay_monthly_fee.sql');
   assert.match(sql, /ALTER COLUMN listing_fee_ugx SET DEFAULT 20000/);
   assert.match(sql, /ALTER COLUMN listing_term_months SET DEFAULT 1/);
   assert.match(sql, /listing_fee_status IN \('unpaid', 'pending'\)/);
