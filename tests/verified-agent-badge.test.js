@@ -99,7 +99,11 @@ test('the public agent queries use the same predicate and do not select the ID d
   assert.match(sql, /removed_at IS NULL/);
   assert.match(sql, /FOUND-ONLINE/);
   const agents = read('routes/agents.js');
-  assert.equal((agents.match(/verifiedByMakaugSql\('a'\)/g) || []).length, 2);
+  assert.equal((agents.match(/verifiedByMakaugSql\('a'\)/g) || []).length, 3);
+  const listingBooking = agents.slice(agents.indexOf("router.get('/:id/listing-booking'"), agents.indexOf("router.get('/:id/booking-options'"));
+  assert.match(listingBooking, /verifiedByMakaugSql\('a'\)/);
+  assert.doesNotMatch(listingBooking, /a\.identity_document_url/);
+  assert.doesNotMatch(listingBooking, /a\.contact_phone_verified_at/);
   const directory = agents.slice(agents.indexOf("router.get('/',"), agents.indexOf("router.get('/:id',"));
   const profile = agents.slice(agents.indexOf("router.get('/:id',"), agents.indexOf("router.post('/register',"));
   assert.doesNotMatch(directory, /a\.identity_document_url/);

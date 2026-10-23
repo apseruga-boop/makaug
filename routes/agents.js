@@ -900,6 +900,126 @@ function bookingErrorStatus(error) {
   return status >= 400 && status < 500 ? status : 0;
 }
 
+// One property page only needs this listing and its agent, not the directory
+// and not the agent's other listings. The property page paints a skeleton
+// from the listing payload, then fills days from this response.
+router.get('/:id/listing-booking', async (req, res, next) => {
+  try {
+    const listingId = String(req.query.listing_id || '').trim();
+    if (!listingId) return res.status(400).json({ ok: false, error: 'listing_id is required' });
+    const agent = await findPublicAgentForEnquiry(req.params.id);
+    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    let listing = null;
+    try {
+      const card = await db.query(
+        `/* listing-booking:card */
+         SELECT p.id, p.title, p.area, p.district, p.price, p.price_period, p.bedrooms, p.property_type,
+                p.availability_status, p.last_confirmed_at,
+                img.url AS image_url,
+                a.id AS agent_id, a.full_name, a.company_name, a.phone, a.whatsapp,
+                a.profile_photo_url, a.status, a.registration_status, a.experience_years,
+                a.makaug_agent_number,
+                ${verifiedByMakaugSql('a')} AS verified_by_makaug
+           FROM properties p
+           JOIN agents a ON a.id = p.agent_id
+           LEFT JOIN LATERAL (
+             SELECT i.url
+               FROM property_images i
+              WHERE i.property_id = p.id
+              ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+              LIMIT 1
+           ) img ON true
+          WHERE p.id = $1
+            AND p.agent_id = $2
+            AND LOWER(COALESCE(p.status, '')) = 'approved'
+          LIMIT 1`,
+        [listingId, agent.id]
+      );
+      listing = card.rows[0] || null;
+    } catch (error) {
+      if (error.code === '22P02') return res.status(404).json({ ok: false, error: 'Property not found' });
+      if (error.code !== '42703' && error.code !== '42P01') throw error;
+      const card = await db.query(
+        `/* listing-booking:card-fallback */
+         SELECT p.id, p.title, p.area, p.district, p.bedrooms, p.property_type,
+                a.id AS agent_id, a.full_name, a.company_name, a.phone, a.whatsapp, a.status
+           FROM properties p
+           JOIN agents a ON a.id = p.agent_id
+          WHERE p.id = $1
+            AND p.agent_id = $2
+            AND LOWER(COALESCE(p.status, '')) = 'approved'
+          LIMIT 1`,
+        [listingId, agent.id]
+      );
+      listing = card.rows[0] || null;
+    }
+    if (!listing) return res.status(404).json({ ok: false, error: 'Property not found' });
+    let schedule = mergeSchedule(null, null);
+    let counts = [];
+    try {
+      const [configRow, defaultsRow, slotCounts] = await Promise.all([
+        db.query(`/* listing-booking:config */ SELECT * FROM viewing_configs WHERE listing_id = $1 LIMIT 1`, [listing.id]),
+        db.query(`/* listing-booking:defaults */ SELECT * FROM agent_viewing_defaults WHERE agent_id = $1 LIMIT 1`, [agent.id]),
+        db.query(
+          `/* listing-booking:slot-count */
+           SELECT preferred_date::text AS preferred_date, preferred_time, COUNT(*)::int AS n
+             FROM viewing_bookings
+            WHERE listing_id = $1 AND preferred_date >= CURRENT_DATE
+              AND status NOT IN ('cancelled', 'declined')
+            GROUP BY 1, 2`,
+          [listing.id]
+        )
+      ]);
+      schedule = mergeSchedule(configRow.rows[0] || null, defaultsRow.rows[0] || null);
+      counts = slotCounts.rows;
+    } catch (error) {
+      if (error.code !== '42P01' && error.code !== '42703') throw error;
+    }
+    const built = buildDaysAndSlots({ schedule, bookings: counts });
+    const responseTime = await loadResponseTimeLabel(db, agent.id);
+    const view = availabilityView(listing);
+    return res.json({
+      ok: true,
+      data: {
+        agent: {
+          id: listing.agent_id,
+          full_name: listing.full_name,
+          company_name: listing.company_name || '',
+          phone: listing.phone || '',
+          whatsapp: listing.whatsapp || '',
+          profile_photo_url: listing.profile_photo_url || '',
+          status: listing.status || 'approved',
+          registration_status: listing.registration_status || '',
+          experience_years: listing.experience_years || 0,
+          makaug_agent_number: listing.makaug_agent_number || '',
+          verified_by_makaug: listing.verified_by_makaug === true,
+          response_time_label: responseTime
+        },
+        listing: {
+          id: listing.id,
+          kind: 'property',
+          title: listing.title,
+          area: listing.area,
+          district: listing.district,
+          bedrooms: listing.bedrooms,
+          property_type: listing.property_type,
+          price: listing.price || null,
+          price_period: listing.price_period || '',
+          image_url: listing.image_url || '',
+          availability_label: view.label,
+          availability_tone: view.tone
+        },
+        days: built.days,
+        slots_by_date: built.slotsByDate,
+        response_time_label: responseTime
+      }
+    });
+  } catch (error) {
+    if (error.code === '22P02') return res.status(404).json({ ok: false, error: 'Property not found' });
+    return next(error);
+  }
+});
+
 router.get('/:id/booking-options', async (req, res, next) => {
   try {
     const agent = await findPublicAgentForEnquiry(req.params.id);

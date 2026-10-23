@@ -385,7 +385,23 @@ function featuredBrokerLimit(count) {
   return total;
 }
 
-async function refreshBrokersFromApi({ silent = true } = {}) {
+async function refreshBrokersFromApi({ silent = true, force = false } = {}) {
+  // A cold property page must not wait on the full agent directory. The
+  // booking panel uses the listing's own agent fields plus one listing-booking
+  // request. The directory starts after that, or after a short fallback.
+  const deferDirectory = !force
+    && typeof window !== "undefined"
+    && window.location
+    && /^\/property\/[^/?#]+/i.test(String(window.location.pathname || ""));
+  if (deferDirectory) {
+    if (!brokerDirectoryDeferTimer && !window.__makaugBrokerDirectoryReleased && typeof window.setTimeout === "function") {
+      brokerDirectoryDeferTimer = window.setTimeout(() => {
+        brokerDirectoryDeferTimer = 0;
+        releaseDeferredBrokerDirectory();
+      }, 2000);
+    }
+    return false;
+  }
   try {
     const response = await apiRequest("/api/agents?status=approved&limit=100", { skipAuth: true });
     const rows = Array.isArray(response?.data) ? response.data : [];
@@ -426,6 +442,43 @@ function resolvedDetailBroker(property) {
   const agentId = String(property?.agent || property?.agent_id || "").trim();
   if (!agentId) return null;
   return findBrokerByIdIncludingLoadedProfile(agentId);
+}
+
+// The property payload already carries the agent name, company and phone.
+// That is enough to paint the contact card and booking shell before either
+// the directory or the single-agent profile comes back.
+function brokerFromPropertyAgent(property) {
+  const id = String(property?.agent || property?.agent_id || "").trim();
+  if (!id) return null;
+  const name = String(property?.agent_name || "").trim();
+  const company = String(property?.agent_company || "").trim();
+  if (!name && !company) return null;
+  const phone = String(property?.agent_phone || property?.public_contact_phone || property?.contact_phone || "").trim();
+  return {
+    id,
+    name: name || company,
+    company: company || name,
+    phone,
+    whatsapp: String(property?.agent_whatsapp || phone).replace(/\D/g, ""),
+    photo: property?.agent_profile_photo_url || "",
+    profile_photo_url: property?.agent_profile_photo_url || "",
+    verified_by_makaug: property?.agent_verified_by_makaug === true,
+    status: "approved"
+  };
+}
+
+function releaseDeferredBrokerDirectory() {
+  if (typeof window === "undefined" || !window.location) return;
+  if (!/^\/property\/[^/?#]+/i.test(String(window.location.pathname || ""))) return;
+  if (window.__makaugBrokerDirectoryReleased) return;
+  window.__makaugBrokerDirectoryReleased = true;
+  if (brokerDirectoryDeferTimer) {
+    window.clearTimeout(brokerDirectoryDeferTimer);
+    brokerDirectoryDeferTimer = 0;
+  }
+  const run = () => refreshBrokersFromApi({ silent: true, force: true });
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(run, { timeout: 3000 });
+  else window.setTimeout(run, 400);
 }
 
 // A cold /property/:id paint can run before the broker directory (or the one
@@ -1098,6 +1151,7 @@ let activeDetailPropertyId = "";
 let detailPaintedBrokerId = "";
 let detailRenderSerial = 0;
 let detailAgentLookupId = "";
+let brokerDirectoryDeferTimer = 0;
 let activeBrokerProfileId = "";
 let adminAccessUnlocked = false;
 let adminUnlockTapBuffer = [];
@@ -61648,8 +61702,10 @@ async function openDetail(id, options = {}) {
   let p = id && typeof id === "object" ? id : findPropertyForUi(id);
   if (p?.id) upsertPropertyForUi(p);
   if (!p) return false;
+  primePropertyListingBooking(p.agent || p.agent_id, propertyBookingListingId(p));
   p = await hydratePropertyDetailForUi(p);
   if (!detailRenderIsCurrent(renderSerial) || !p) return false;
+  primePropertyListingBooking(p.agent || p.agent_id, propertyBookingListingId(p));
   activeDetailPropertyId = String(p.id || id || "");
   const isAdminViewer = !!(authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin");
   const isOwnerPreviewViewer = p.owner_preview_visible === true;
@@ -61667,7 +61723,7 @@ async function openDetail(id, options = {}) {
     district: p.district,
     area: p.area
   });
-  const broker = resolvedDetailBroker(p);
+  const broker = resolvedDetailBroker(p) || brokerFromPropertyAgent(p);
   const similar = getSimilarProperties(p, 8);
   const normalizedType = normalizeType(p.type);
   const showMortgageWidget = normalizedType === "sale" || normalizedType === "land" || isCommercialForSale(p);
@@ -61773,6 +61829,8 @@ async function openDetail(id, options = {}) {
   const inquiryPhoneDefault = canPrefillInquiryFromUser ? (authState?.user?.phone || "") : "";
   const inquiryEmailDefault = canPrefillInquiryFromUser ? (authState?.user?.email || "") : "";
   const brokerProfilePath = broker ? getBrokerProfilePath(broker) : "";
+  const bookingAgentId = String(broker?.id || p.agent || p.agent_id || "").trim();
+  const propertyBookingSkeleton = !isFoundOnlineContact && bookingAgentId && !broker ? propertyBookingSkeletonHtml() : "";
   const detailBadgeRow = listingBadgeRowHtml(p, {
     categoryPage: normalizedType === "student" ? "students" : normalizedType,
     showTypeBadge: false,
@@ -61940,6 +61998,7 @@ async function openDetail(id, options = {}) {
             ${detailContactActionsHtml}
             ${ownerEmailUrl ? `<a href="${adminAttr(ownerEmailUrl)}" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Email Contact")}</a>` : ""}
             ${sourceContactUrl && !publicWhatsappPhone ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
+            ${propertyBookingSkeleton}
           `}
           <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>
           <button id="detail-price-range-btn" type="button" class="mt-2 w-full border border-emerald-200 bg-emerald-50 text-emerald-800 py-2.5 rounded-xl font-semibold hover:bg-emerald-100">
@@ -61985,8 +62044,8 @@ async function openDetail(id, options = {}) {
     openValuationForProperty(p.id);
   });
   showPage("detail");
-  if (broker?.id && !isFoundOnlineContact) initPropertyBookingPanel(broker.id, propertyBookingListingId(p));
-  else if (!isFoundOnlineContact) scheduleDetailAgentLookup(p.agent || p.agent_id);
+  if (bookingAgentId && !isFoundOnlineContact) mountPropertyBookingPanel(bookingAgentId, propertyBookingListingId(p), renderSerial);
+  else releaseDeferredBrokerDirectory();
   setLang(currentLang, true, false);
   updateDetailSaveButton(p.id);
   ensureRevenuePlacements();
@@ -62107,11 +62166,121 @@ function propertyBookingListingId(property) {
   return backend || id;
 }
 
+const propertyListingBookingCache = new Map();
+
+function listingBookingOptionsFrom(data) {
+  if (!data) return { properties: [], stays: [], days: [], slots_by_date: {} };
+  const listing = data.listing || null;
+  return {
+    properties: listing ? [listing] : (Array.isArray(data.properties) ? data.properties : []),
+    stays: [],
+    days: data.days || [],
+    slots_by_date: data.slots_by_date || {},
+    response_time_label: data.response_time_label || data.agent?.response_time_label || ""
+  };
+}
+
+function primePropertyListingBooking(agentId, listingId) {
+  const agent = String(agentId || "").trim();
+  const listing = String(listingId || "").trim();
+  if (!agent || !/^[0-9a-f-]{36}$/i.test(listing)) return null;
+  const key = `${agent}:${listing}`;
+  const existing = propertyListingBookingCache.get(key);
+  if (existing) return existing;
+  const entry = {
+    data: null,
+    promise: apiRequest(`/api/agents/${encodeURIComponent(agent)}/listing-booking?listing_id=${encodeURIComponent(listing)}`, { skipAuth: true })
+      .then((res) => {
+        entry.data = res?.data || null;
+        return entry.data;
+      })
+      .catch(() => null)
+  };
+  propertyListingBookingCache.set(key, entry);
+  return entry;
+}
+
+function rememberPropertyBookingAgent(agent) {
+  if (!agent || typeof mapRemoteAgentForUi !== "function") return null;
+  const broker = mapRemoteAgentForUi(agent);
+  if (!broker?.id) return null;
+  const idx = REMOTE_BROKERS.findIndex((item) => String(item.id || "") === String(broker.id));
+  if (idx >= 0) {
+    const existing = REMOTE_BROKERS[idx];
+    REMOTE_BROKERS[idx] = existing.remote_profile_loaded ? { ...broker, ...existing } : { ...existing, ...broker };
+  } else {
+    REMOTE_BROKERS.push(broker);
+  }
+  return REMOTE_BROKERS[idx >= 0 ? idx : REMOTE_BROKERS.length - 1];
+}
+
+function patchDetailBrokerCard(broker) {
+  if (!broker?.id || typeof document === "undefined") return;
+  const link = document.querySelector("#page-detail .detail-broker-profile-link");
+  if (!link) return;
+  const nameEl = link.querySelector(".detail-broker-name .font-semibold");
+  if (nameEl && broker.name) nameEl.textContent = broker.name;
+  const photo = broker.photo || broker.profile_photo_url || "";
+  if (photo && !link.querySelector("img")) {
+    const avatar = link.querySelector(":scope > div");
+    if (avatar) avatar.outerHTML = brokerAvatarHtml({ ...broker, emoji: brokerInitials(broker.name) }, "w-12 h-12");
+  }
+  const nameWrap = link.querySelector(".detail-broker-name");
+  if (nameWrap && agentShowsVerifiedBadge(broker) && !nameWrap.querySelector(".makaug-verified-badge")) {
+    nameWrap.insertAdjacentHTML("beforeend", verifiedAgentBadgeHtml(broker, 18));
+  }
+}
+
+function markPropertyBookingReady() {
+  const panel = typeof document !== "undefined" ? document.getElementById("property-booking-panel") : null;
+  if (!panel || panel.classList.contains("is-loading")) return;
+  const fields = panel.querySelector("#agent-booking-fields");
+  if (!fields || fields.classList.contains("property-booking-skeleton")) return;
+  panel.dataset.bookingReady = "1";
+  panel.setAttribute("data-booking-ready", "1");
+}
+
+async function mountPropertyBookingPanel(agentId, listingId, renderSerial) {
+  const entry = primePropertyListingBooking(agentId, listingId);
+  let data = null;
+  try {
+    data = entry ? (entry.data || await entry.promise) : null;
+    if (renderSerial && typeof detailRenderIsCurrent === "function" && !detailRenderIsCurrent(renderSerial)) return;
+    const broker = data?.agent ? rememberPropertyBookingAgent(data.agent) : null;
+    const panel = typeof document !== "undefined" ? document.getElementById("property-booking-panel") : null;
+    if (panel?.classList.contains("is-loading")) {
+      const named = broker?.name ? broker : null;
+      const link = document.querySelector("#page-detail .detail-broker-profile-link");
+      if (named && !link) {
+        detailPaintedBrokerId = "";
+        openDetail(activeDetailPropertyId);
+        return;
+      }
+      panel.outerHTML = propertyBookingPanelHtml(named || { id: agentId, name: "" });
+    }
+    await initAgentBookingPanel(agentId, {
+      lockedPlace: listingId ? `property:${listingId}` : "",
+      preloaded: data
+    });
+    if (broker) patchDetailBrokerCard(broker);
+  } finally {
+    releaseDeferredBrokerDirectory();
+  }
+}
+
+function propertyBookingSkeletonHtml() {
+  return `
+    <div class="property-booking-panel is-loading" id="property-booking-panel" data-booking-visible="1" aria-busy="true" aria-label="Book a viewing">
+      <div class="agent-booking-head"><h2>Book a viewing</h2></div>
+      <div class="property-booking-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
+    </div>`;
+}
+
 function propertyBookingPanelHtml(broker) {
   const firstName = agentProfileFirstName(broker);
   const idArg = adminListingIdArg(broker.id);
   return `
-    <div class="property-booking-panel" id="property-booking-panel">
+    <div class="property-booking-panel" id="property-booking-panel" data-booking-visible="1">
       <div class="agent-booking-head"><h2>Book with ${adminEscape(firstName)}</h2></div>
       <p class="agent-booking-response" hidden></p>
       <div class="agent-booking-tabs" role="tablist">
@@ -62122,7 +62291,7 @@ function propertyBookingPanelHtml(broker) {
       </div>
       <form class="agent-profile-form" onsubmit="event.preventDefault(); submitAgentProfileRequest(${idArg});">
         <input id="agent-profile-website" name="website" class="agent-profile-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" value="">
-        <div id="agent-booking-fields"></div>
+        <div id="agent-booking-fields" class="property-booking-skeleton" aria-busy="true" aria-label="Book a viewing"><span></span><span></span><span></span></div>
         <div class="agent-booking-who">
           <label>Your name<input id="agent-profile-name" name="name" type="text" autocomplete="name" maxlength="120" required></label>
           <label>Phone number<input id="agent-profile-phone" name="phone" type="tel" autocomplete="tel" maxlength="40" required></label>
@@ -62375,6 +62544,8 @@ function selectAgentBookingSlot(button) {
 function renderAgentBookingFields() {
   const el = bookingEl("agent-booking-fields");
   if (!el) return;
+  el.classList.remove("property-booking-skeleton");
+  el.removeAttribute("aria-busy");
   const options = agentBookingOptions || { properties: [], stays: [], days: [] };
   const places = agentBookingPlaceOptions(options);
   if (agentBookingTab === "viewing") {
@@ -62400,6 +62571,7 @@ function renderAgentBookingFields() {
     if (String(bookingEl("agent-booking-place")?.value || "").startsWith("stay:")) renderAgentBookingSlots();
     else if (match) selectAgentBookingDay(match);
     else renderAgentBookingSlots();
+    markPropertyBookingReady();
     return;
   }
   if (agentBookingTab === "callback") {
@@ -62411,6 +62583,7 @@ function renderAgentBookingFields() {
         <label><input type="radio" name="agent-booking-channel" value="whatsapp"> WhatsApp me</label>
       </div>`;
     paintAgentBookingPlaceLine();
+    markPropertyBookingReady();
     return;
   }
   if (agentBookingTab === "question") {
@@ -62418,6 +62591,7 @@ function renderAgentBookingFields() {
       ${agentBookingPlaceMarkup(places, false)}
       <label>Your question<textarea id="agent-booking-note" rows="2" maxlength="2000"></textarea></label>`;
     paintAgentBookingPlaceLine();
+    markPropertyBookingReady();
     return;
   }
   el.innerHTML = `
@@ -62425,6 +62599,7 @@ function renderAgentBookingFields() {
     <label>Offer amount<input id="agent-booking-offer" type="text" maxlength="40" inputmode="numeric" placeholder="UGX"></label>
     <label>Message<textarea id="agent-booking-note" rows="2" maxlength="2000"></textarea></label>`;
   paintAgentBookingPlaceLine();
+  markPropertyBookingReady();
 }
 
 async function refreshAgentBookingDays(value) {
@@ -62450,12 +62625,22 @@ async function initAgentBookingPanel(agentId, options = {}) {
   agentBookingAgentId = String(agentId || "");
   agentBookingTab = "viewing";
   agentBookingLockedPlace = options.lockedPlace || "";
-  const listingQuery = agentBookingLockedPlace.startsWith("property:")
-    ? `?listing_id=${encodeURIComponent(agentBookingLockedPlace.slice("property:".length))}`
+  const listingId = agentBookingLockedPlace.startsWith("property:")
+    ? agentBookingLockedPlace.slice("property:".length)
     : "";
   try {
-    const res = await apiRequest(`/api/agents/${encodeURIComponent(agentId)}/booking-options${listingQuery}`, { skipAuth: true });
-    agentBookingOptions = res?.data || { properties: [], stays: [], days: [], slots_by_date: {} };
+    if (options.preloaded) {
+      agentBookingOptions = listingBookingOptionsFrom(options.preloaded);
+    } else if (listingId && /^[0-9a-f-]{36}$/i.test(listingId)) {
+      const data = await (primePropertyListingBooking(agentId, listingId)?.promise);
+      if (data?.agent) rememberPropertyBookingAgent(data.agent);
+      agentBookingOptions = listingBookingOptionsFrom(data);
+    } else if (!listingId) {
+      const res = await apiRequest(`/api/agents/${encodeURIComponent(agentId)}/booking-options`, { skipAuth: true });
+      agentBookingOptions = res?.data || { properties: [], stays: [], days: [], slots_by_date: {} };
+    } else {
+      agentBookingOptions = { properties: [], stays: [], days: [], slots_by_date: {} };
+    }
   } catch (error) {
     agentBookingOptions = { properties: [], stays: [], days: [], slots_by_date: {} };
   }
