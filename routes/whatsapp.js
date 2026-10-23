@@ -8,6 +8,7 @@ const {
   pricePeriodForUnitQuote,
 } = require('../utils/listingIntakeQuality');
 const { agentGreetingName } = require('../services/agentNameService');
+const { scheduleVideoCaptionOcr } = require('../services/videoCaptionOcrService');
 const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -4525,6 +4526,9 @@ async function recoverEmployeeVideoReviewMedia(propertyId, runtime = {}) {
       ]
     );
     await client.query('COMMIT');
+    try { scheduleVideoCaptionOcr(propertyId); } catch (scheduleError) {
+      logger.warn('Video caption OCR schedule failed', { property_id: propertyId, error: scheduleError?.message });
+    }
     return { recovered: true, videos: videos.length, images: images.length };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -6753,6 +6757,11 @@ async function createEmployeeReviewProperty({
     payload: { marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, agent_id: agent?.id || null, auto_publish: false },
     dedupeKey: `whatsapp:employee-intake:${inboundMessageId || propertyId}`
   });
+  if (videoMedia.length) {
+    try { scheduleVideoCaptionOcr(propertyId); } catch (scheduleError) {
+      logger.warn('Video caption OCR schedule failed', { property_id: propertyId, error: scheduleError?.message });
+    }
+  }
   return propertyId;
 }
 
@@ -6989,6 +6998,11 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
     throw error;
   } finally {
     client.release();
+  }
+  if (videos.length) {
+    try { scheduleVideoCaptionOcr(propertyId); } catch (scheduleError) {
+      logger.warn('Video caption OCR schedule failed', { property_id: propertyId, error: scheduleError?.message });
+    }
   }
   return {
     attached: uniqueMedia.length,

@@ -33,6 +33,11 @@ const {
   sendOwnerListingStatusNotifications,
   sendOwnerListingSubmissionNotifications
 } = require('../services/listingModerationService');
+const {
+  evaluateVideoCaptionApproval,
+  persistVideoCaptionResolution,
+  MIN_OVERRIDE_REASON
+} = require('../services/videoCaptionOcrService');
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { buildListingReference } = require('../services/listingReferenceService');
@@ -4927,6 +4932,34 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       current = listingPatchResult.property || current;
       approvalWarnings.push(`Listing facts updated before moderation status change: ${listingPatchResult.changed_fields.join(', ')}`);
     }
+    let videoCaptionDecision = { blocked: false, conflicts: [] };
+    if (nextStatus === 'approved') {
+      const overrideRequested = parseBooleanLike(
+        req.body.video_caption_ocr_override || req.body.videoCaptionOcrOverride,
+        false
+      );
+      const overrideReason = cleanText(req.body.video_caption_ocr_override_reason || req.body.videoCaptionOcrOverrideReason);
+      try {
+        videoCaptionDecision = await evaluateVideoCaptionApproval(current, { overrideRequested, overrideReason });
+      } catch (error) {
+        logger.warn('Video caption approval check skipped', { property_id: current.id, error: error.message });
+        videoCaptionDecision = { blocked: false, conflicts: [] };
+      }
+      if (videoCaptionDecision.blocked) {
+        return res.status(400).json({
+          ok: false,
+          code: 'video_caption_conflict',
+          error: 'Video text conflicts with the caption or listing. Edit the listing to match the video, or record an override reason.',
+          details: (videoCaptionDecision.conflicts || []).map((item) => item.message),
+          conflicts: videoCaptionDecision.conflicts || [],
+          approval_blocker: 'video_caption_conflict',
+          approval_blocked: true,
+          human_approval_override_available: false,
+          video_caption_override_required: true,
+          video_caption_override_min_length: MIN_OVERRIDE_REASON
+        });
+      }
+    }
     const currentLocationExtra = propertyExtraFieldsObject(current);
     const humanLocationConfirmed = nextStatus === 'approved'
       && humanApprovalAccess.human_session
@@ -5467,7 +5500,12 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
             ? currentExtraFields.data_integrity_issue_codes
             : []),
         ...(humanIntegrityOverride ? { human_integrity_override: humanIntegrityOverride } : {}),
-        ...(humanApprovalOverride ? { human_approval_override: humanApprovalOverride } : {})
+        ...(humanApprovalOverride ? { human_approval_override: humanApprovalOverride } : {}),
+        ...(videoCaptionDecision?.override ? { video_caption_ocr_override: videoCaptionDecision.override } : {}),
+        ...(videoCaptionDecision?.cleared_by_edit ? {
+          video_caption_ocr_resolved_by_edit: true,
+          video_caption_ocr_resolved_at: new Date().toISOString()
+        } : {})
       } : {})
     };
     const moderationExtraFieldsJson = Object.keys(moderationExtraFields).length
@@ -5581,6 +5619,9 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
     if (nextStatus === 'approved') {
       listing.primary_image_url = await getPrimaryImageUrlForProperty(listing.id);
+      if (videoCaptionDecision?.persist) {
+        await persistVideoCaptionResolution(listing.id, videoCaptionDecision, actorId);
+      }
     }
     let notification = {
       email: { sent: false, reason: 'not_attempted' },
@@ -5648,6 +5689,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           ...(locationReclassificationExtraFields ? { location_reclassification_confirmation: locationReclassificationExtraFields } : {}),
           ...(humanIntegrityOverride ? { human_integrity_override: humanIntegrityOverride } : {}),
           ...(humanApprovalOverride ? { human_approval_override: humanApprovalOverride } : {}),
+          ...(videoCaptionDecision?.override ? { video_caption_ocr_override: videoCaptionDecision.override } : {}),
+          ...(videoCaptionDecision?.cleared_by_edit ? { video_caption_ocr_resolved_by_edit: true } : {}),
           ...(staffSourcedOwnerChecklistWaived ? { staff_sourced_owner_checklist_note: STAFF_SOURCED_OWNER_CHECKLIST_NOTE } : {}),
           ...(structuredRejectionReasons.length ? { structured_rejection_reasons: structuredRejectionReasons } : {}),
           ...(nextStatus === 'rejected' ? {
@@ -5728,6 +5771,38 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
               moderationReason,
               HUMAN_INTEGRITY_OVERRIDE_NOTE,
               JSON.stringify(humanIntegrityOverride)
+            ]
+          );
+        }
+        if (videoCaptionDecision?.override || videoCaptionDecision?.cleared_by_edit) {
+          await db.query(
+            `INSERT INTO property_moderation_events (
+              property_id,
+              actor_id,
+              action,
+              status_from,
+              status_to,
+              checklist,
+              reason,
+              notes,
+              delivery
+            ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
+            [
+              listing.id,
+              actorId,
+              videoCaptionDecision.override ? 'video_caption_ocr_override' : 'video_caption_ocr_listing_matched',
+              current.status,
+              nextStatus,
+              JSON.stringify(checklist),
+              videoCaptionDecision.override?.reason || moderationReason,
+              videoCaptionDecision.override
+                ? 'Moderator approved despite the video text, with a written reason.'
+                : 'Moderator edited the listing so it matches the video text.',
+              JSON.stringify({
+                override: videoCaptionDecision.override || null,
+                conflicts: videoCaptionDecision.conflicts || [],
+                caption_conflicts: videoCaptionDecision.caption_conflicts || []
+              })
             ]
           );
         }

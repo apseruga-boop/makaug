@@ -58,6 +58,7 @@
     "ads:daily-report": "node scripts/send-advertising-daily-reports.js",
     "data:backup": "node scripts/run-production-data-backup.js",
     "data:backfill-whatsapp-video-stills": "node scripts/backfill-whatsapp-video-stills.js",
+    "data:video-caption-ocr": "node scripts/backfill-video-caption-ocr.js",
     "data:audit-whatsapp-employee-media": "node scripts/audit-whatsapp-employee-media.js",
     "cloud:readiness": "node scripts/check-cloud-readiness.js",
     "cloud:verify-storage": "node scripts/verify-cloud-storage.js",
@@ -115,6 +116,7 @@
     "playwright-core": "^1.59.1",
     "qrcode": "^1.5.4",
     "sharp": "^0.35.3",
+    "tesseract.js": "5.1.1",
     "twilio": "^5.3.3"
   },
   "devDependencies": {
