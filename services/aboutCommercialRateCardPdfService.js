@@ -26,6 +26,7 @@ function buildAboutCommercialRateCardPdf() {
 
     const productRows = [
       ['Private listing', 'privateListing', 'First 7 days free'],
+      ['Short stay', 'shortStayListing', 'No free days; included for agents'],
       ['Agent subscription', 'agentSubscription', 'Multiple listings'],
       ['Off-plan development', 'offPlanDevelopment', 'Dedicated project page'],
       ['Featured listing', 'featuredListing', 'Homepage and category visibility'],

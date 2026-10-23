@@ -144,7 +144,8 @@
     "adLabel": "Cato",
     "requestDates": "Leg nino magi",
     "paymentDirect": "Cul kimoko atir ikin in ki won ot. makaug pe kwanyo dok pe gwoko cente.",
-    "feeAwaiting": "Kiyee, tye ka kuro cul. Kakube me culo bino. Listing cako nen ka cul otyeko time.",
+    "feeAwaiting": "Kiyee, tye ka kuro cul me UGX 20,000 dwe ki dwe. Peke nino ma nono. Kakube me culo bino. Listing cako nen ka cul otyeko time.",
+    "listFee": "Jo ma pe agent culo UGX 20,000 dwe ki dwe, peke nino ma nono. Short stay pa agent ma oyee tye i plan pa agent (UGX 50,000 dwe ki dwe).",
     "termsTitle": "Cik me nino manok",
     "termsBody": "makaug keto kabedo, neno gin ma twero, dok ryeyo welo ki won ot. Won ot aye tye ki tic pi bedo, gwoko, layicens, musolo ki dwoko cente.",
     "termsLawyer": "Lukwena pa Uganda myero onen cik magi ma peya kimako ni gin aye agiki.",
@@ -248,7 +249,8 @@
     "adLabel": "ማስታወቂያ",
     "requestDates": "እነዚህን ቀናት ይጠይቁ",
     "paymentDirect": "ክፍያ በቀጥታ በእርስዎና በአስተናጋጁ መካከል ይስማማል። makaug ክፍያ አይወስድም አያቆይምም።",
-    "feeAwaiting": "ጸድቋል፣ ክፍያን ይጠብቃል። የክፍያ አገናኝ ይከተላል። ክፍያው ሲከፈል ማስታወቂያው ይታያል።",
+    "feeAwaiting": "ጸድቋል፣ የወር UGX 20,000 ክፍያን ይጠብቃል። ነፃ ቀናት የሉም። የክፍያ አገናኝ ይከተላል። ክፍያው ሲከፈል ማስታወቂያው ይታያል።",
+    "listFee": "ለተራ አስተዋዋቂዎች በወር UGX 20,000 ይከፈላል፣ ነፃ ቀናት የሉም። በተፈቀደ ወኪል የተዘረዘሩ አጭር ጊዜ ማረፊያዎች በወኪል ፓኬጅ (በወር UGX 50,000) ውስጥ ይካተታሉ።",
     "termsTitle": "የአጭር ቆይታ ውሎች",
     "termsBody": "makaug ቦታውን ይዘረዝራል፣ የሚችለውን ይመረምራል፣ እንግዳውንና አስተናጋጁን ያገናኛል። አስተናጋጁ ለቆይታው፣ ለደህንነት፣ ለፈቃድ፣ ለግብርና ለተመላሽ ገንዘብ ተጠያቂ ነው።",
     "termsLawyer": "እነዚህ ውሎች እንደ መጨረሻ ከመቆጠራቸው በፊት የኡጋንዳ ጠበቃ ሊገመግማቸው ይገባል።",
@@ -352,7 +354,8 @@
     "adLabel": "إعلان",
     "requestDates": "اطلب هذه التواريخ",
     "paymentDirect": "يُتفق على الدفع مباشرة بينك وبين المضيف. makaug لا تقبض المدفوعات ولا تحتجزها.",
-    "feeAwaiting": "مقبول، بانتظار الرسوم. يلي ذلك رابط الدفع. يظهر الإعلان عند دفع الرسوم.",
+    "feeAwaiting": "مقبول، بانتظار رسوم UGX 20,000 الشهرية. لا أيام مجانية. يلي ذلك رابط الدفع. يظهر الإعلان عند دفع الرسوم.",
+    "listFee": "المعلنون العاديون يدفعون UGX 20,000 شهرياً، بلا أيام مجانية. الإقامات القصيرة لوكيل معتمد مشمولة في باقة الوكيل (UGX 50,000 شهرياً).",
     "termsTitle": "شروط الإقامة القصيرة",
     "termsBody": "تعرض makaug المكان وتراجع ما تستطيع وتعرّف الضيف بالمضيف. المضيف مسؤول عن الإقامة والسلامة والتراخيص والضريبة والاسترداد.",
     "termsLawyer": "ينبغي لمحامٍ أوغندي مراجعة هذه الشروط قبل اعتبارها نهائية.",
@@ -456,7 +459,8 @@
     "adLabel": "Ad",
     "requestDates": "Request these dates",
     "paymentDirect": "Payment is agreed directly between you and the host. makaug does not take or hold payments.",
-    "feeAwaiting": "Approved, awaiting fee. A pay link follows. The listing goes live when that fee is paid.",
+    "feeAwaiting": "Approved, awaiting the UGX 20,000 monthly fee. No free days. A pay link follows. The listing goes live when that fee is paid.",
+    "listFee": "Ordinary listers pay UGX 20,000 a month, with no free days. Short stays listed by an approved agent are included in the agent plan (UGX 50,000 a month).",
     "termsTitle": "Short stay terms",
     "termsBody": "makaug lists the place, checks what it can, and introduces the guest and the host. The host is responsible for the stay, for safety, for licences, for tax and for refunds.",
     "termsLawyer": "A Ugandan lawyer should review these terms before they are treated as final.",
@@ -560,7 +564,8 @@
     "adLabel": "Katale",
     "requestDates": "Saba ennaku zino",
     "paymentDirect": "Okusasula mukkiriziganya wakati wo n’omunyumba. makaug tewamba era tewakuma ssente.",
-    "feeAwaiting": "Kikkiriziddwa, kussuubira ssente. Akayungirizi k’okusasula kajja. Listing egenda ku lwebbanga ssente bwe zisasulwa.",
+    "feeAwaiting": "Kikkiriziddwa, kussuubira ssente eza UGX 20,000 buli mwezi. Tewali nnaku za bwereere. Akayungirizi k’okusasula kajja. Listing egenda ku lwebbanga ssente bwe zisasulwa.",
+    "listFee": "Abateeka abatali ba agent basasula UGX 20,000 buli mwezi, tewali nnaku za bwereere. Short stays ez'agent eyakkirizibwa ziri mu pulani ya agent (UGX 50,000 buli mwezi).",
     "termsTitle": "Obukwakkulizo bw’okusula okumpi",
     "termsBody": "makaug ewandiika ekifo, ekebera ky’esobola, n’ateeka omugenyi n’omunyumba awamu. Omunyumba ye alina obuvunaanyizibwa ku kusula, obukuumi, layisinsi, musolo n’okuzza ssente.",
     "termsLawyer": "Munnamateeka wa Uganda asaanye akebere obukwakkulizo buno nga tebunnakolebwa nga bwe bujjuvu.",
@@ -664,7 +669,8 @@
     "adLabel": "Katale ya ny",
     "requestDates": "Saba ebiro ebi",
     "paymentDirect": "Okuhereza nikwikirizanwa ahagati yawe n’omunyini. makaug teyakira era teyakwata sente.",
-    "feeAwaiting": "Kwikirizibwe, nikurinda sente. Akakwate k’okuhereza nikija. Listing neegenda omumaisho sente zihereirwe.",
+    "feeAwaiting": "Kwikirizibwe, nikurinda sente eza UGX 20,000 buri kwezi. Tihari ebiro bya busha. Akakwate k’okuhereza nikija. Listing neegenda omumaisho sente zihereirwe.",
+    "listFee": "Abatari agent baherera UGX 20,000 buri kwezi, tihari ebiro bya busha. Short stays z'agent eyikirizibwe ziri omu plan ya agent (UGX 50,000 buri kwezi).",
     "termsTitle": "Ebiragiro by’okuraara okuhango",
     "termsBody": "makaug nehandiika ahantu, nekebera eky’esobora, n’egaita omugenyi n’omunyini. Omunyini niwe aine obuvunanyizibwa aha kuraara, obukuumi, layisensi, omusolo n’okugarura sente.",
     "termsLawyer": "Munnamateeka wa Uganda asaana akeberere ebiragiro ebi otarikubikozesa nk’ebyaheru.",
@@ -768,7 +774,8 @@
     "adLabel": "Itangazo",
     "requestDates": "Saba ebiro ebi",
     "paymentDirect": "Okushashura nikumanyirwa hagati yawe n’omunyini. makaug teyakira kandi teyabika sente.",
-    "feeAwaiting": "Kyemeirwe, nirinda sente. Akakwate k’okushashura nikija. Listing neegenda omumaisho sente zishashuwe.",
+    "feeAwaiting": "Kyemeirwe, nirinda sente za UGX 20,000 buri kwezi. Nta minsi y'ubuntu. Akakwate k’okushashura nikija. Listing neegenda omumaisho sente zishashuwe.",
+    "listFee": "Abatari agent barishura UGX 20,000 buri kwezi, nta minsi y'ubuntu. Short stays z'agent yemejwe ziri mu plan y'agent (UGX 50,000 buri kwezi).",
     "termsTitle": "Amateeka y’okuraara ahake",
     "termsBody": "makaug nehandiika ahantu, nekebera eky’esobora, n’egaita omushyitsi n’omunyini. Omunyini niwe aine obuvunanyizibwa aha kuraara, oburinzi, layisensi, omusoro n’okugarura sente.",
     "termsLawyer": "Munnamateeka wa Uganda asaana akeberere amateeka aga otarikugakozesa nk’agaheru.",
@@ -872,7 +879,8 @@
     "adLabel": "Katale ya sm",
     "requestDates": "Saba ennaku zino",
     "paymentDirect": "Okusasula kukkira wakati wo n’omwami w’ennyumba. makaug tewamba era tewakuma ssente.",
-    "feeAwaiting": "Kikkiriziddwa, kussuubira ssente. Akayungirizi k’okusasula kajja. Listing egenda mu luguudo ssente bwe zisasulwa.",
+    "feeAwaiting": "Kikkiriziddwa, kussuubira ssente eza UGX 20,000 buli mwezi. Tewali nnaku za bwereere. Akayungirizi k’okusasula kajja. Listing egenda mu luguudo ssente bwe zisasulwa.",
+    "listFee": "Abateeka abatali agent basasula UGX 20,000 buli mwezi, tewali nnaku za bwereere. Obusulo obw'okusula okumpi obw'agent eyakkirizibwa buli mu pulani ya agent (UGX 50,000 buli mwezi).",
     "termsTitle": "Ebiragiro by’okusula okumpi",
     "termsBody": "makaug ewandiika ekifo, ekebera ky’esobola, n’egatta omugenyi n’omwami w’ennyumba. Omwami w’ennyumba ye alina obuvunaanyizibwa ku kusula, obukuumi, layisinsi, musolo n’okuzza ssente.",
     "termsLawyer": "Munnamateeka wa Uganda asaanye akebere ebiragiro bino nga tebinnakolebwa nga eby’enkomerero.",
@@ -976,7 +984,8 @@
     "adLabel": "Tangazo",
     "requestDates": "Omba tarehe hizi",
     "paymentDirect": "Malipo yanakubaliwa moja kwa moja kati yako na mwenyeji. makaug haichukui wala kushikilia malipo.",
-    "feeAwaiting": "Imeidhinishwa, inasubiri ada. Kiungo cha kulipa kinafuata. Tangazo linaanza kuonekana ada ikilipwa.",
+    "feeAwaiting": "Imeidhinishwa, inasubiri ada ya UGX 20,000 kwa mwezi. Hakuna siku za bure. Kiungo cha kulipa kinafuata. Tangazo linaanza kuonekana ada ikilipwa.",
+    "listFee": "Watoa orodha wa kawaida hulipa UGX 20,000 kwa mwezi, bila siku za bure. Malazi ya muda ya wakala aliyeidhinishwa yamo katika mpango wa wakala (UGX 50,000 kwa mwezi).",
     "termsTitle": "Masharti ya kukaa kwa muda mfupi",
     "termsBody": "makaug inaorodhesha mahali, inakagua inachoweza, na inakutanisha mgeni na mwenyeji. Mwenyeji anawajibika kwa kukaa, usalama, leseni, kodi na marejesho.",
     "termsLawyer": "Mwanasheria wa Uganda anapaswa kupitia masharti haya kabla hayajachukuliwa kuwa ya mwisho.",
@@ -1476,6 +1485,7 @@
       + hotelSearchBoxHtml()
       + '<h1>' + esc(t('heroTitle')) + '</h1>'
       + '<p class="st-hero-sub">' + esc(t('heroSub')) + '</p>'
+      + '<p class="st-hero-sub" data-st-list-fee>' + esc(t('listFee')) + '</p>'
       + '<form class="st-search" id="st-search-form">'
       + '<div class="st-field"><label for="st-q">' + esc(t('where')) + '</label>'
       + '<input class="st-input" id="st-q" name="q" placeholder="' + esc(t('wherePh')) + '" value="' + esc(q.q || q.district || '') + '"></div>'
@@ -2374,13 +2384,11 @@
   function listViewHtml() {
     var meta = state.meta || {};
     var amenities = meta.amenities || [];
-    var fee = meta.fee || { display: 'UGX 50,000', term_months: 3 };
 
     return ''
       + '<section class="st-hero"><div class="st-wrap">'
       + '<h1>List your short stay on makaug</h1>'
-      + '<p class="st-hero-sub">Flat fee of <b>' + esc(fee.display) + ' for ' + esc(fee.term_months)
-      + ' months</b>. No commission on any stay, ever. Guests contact you directly on your own number — we never sit in the middle.</p>'
+      + '<p class="st-hero-sub">' + esc(t('listFee')) + ' No commission on any stay, ever. Guests contact you directly on your own number — we never sit in the middle.</p>'
       + '</div></section>'
 
       + '<div class="st-wrap" style="padding-top:22px;padding-bottom:40px">'
@@ -2512,7 +2520,7 @@
       + '<li>The listing is accurate. The photos are of this property. The price is real.</li>'
       + '<li>You deal with guests directly. makaug is a place to be found, not your agent. We do not take bookings, hold deposits or guarantee guests.</li>'
       + '<li>You are responsible for your own tax and licences, including any local hotel tax on short stay accommodation and any income tax due.</li>'
-      + '<li>' + esc(t('feeAwaiting')) + ' <b>' + esc(fee.display) + ' for ' + esc(fee.term_months) + ' months</b>.</li>'
+      + '<li>' + esc(t('listFee')) + '</li>'
       + '<li>We can take a listing down if it is reported, inaccurate, or we cannot reach you.</li>'
       + '</ul></div>'
 
@@ -3262,6 +3270,7 @@
     view.innerHTML = '<div class="st-wrap" style="padding:28px 16px 48px;max-width:720px">'
       + '<h1 style="font-size:1.6rem;font-weight:900">' + esc(t('termsTitle')) + '</h1>'
       + '<p>' + esc(t('termsBody')) + '</p>'
+      + '<p><b>' + esc(t('listFee')) + '</b></p>'
       + '<p><b>' + esc(t('paymentDirect')) + '</b></p>'
       + '<ul><li>' + esc(t('safetyView')) + '</li><li>' + esc(t('safetyName')) + '</li><li>' + esc(t('safetyReport')) + '</li></ul>'
       + '<p class="st-help">' + esc(t('termsLawyer')) + '</p>'

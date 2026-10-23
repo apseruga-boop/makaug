@@ -11,9 +11,9 @@
 const PDFDocument = require('pdfkit');
 const sharp = require('sharp');
 
-const LISTER_TERMS_VERSION = '2026-10-v1';
-const AGENT_GUIDE_VERSION = '2026-10-v2';
-const AGENT_TERMS_VERSION = '2026-10-v1';
+const LISTER_TERMS_VERSION = '2026-10-23-v1';
+const AGENT_GUIDE_VERSION = '2026-10-23-v1';
+const AGENT_TERMS_VERSION = '2026-10-23-v1';
 
 const INK = '#15213A';
 const ORANGE = '#E8662A';
@@ -147,6 +147,7 @@ async function buildListerTermsPdf(settings = {}) {
   bullets(doc, [
     `Free period: your listing is free for the first ${s.freeDays} days after it goes live.`,
     `After that: ${ugx(s.listerMonthly)} per property, per month, paid in advance to the makaug number we give you on WhatsApp. Send us the transaction ID after paying so we can match it.`,
+    'Short stays (by the night) are separate: ordinary listers pay UGX 20,000 a month from approval, with no free days. There is no free period on a short stay.',
     'Payments are confirmed by a member of the makaug team before they are recorded. Keep your MoMo / bank message as proof.',
     'If a month is not paid, we will remind you. If it is still not paid, the listing is hidden from the website. Nothing is deleted: when you pay, it goes back live exactly as it was.',
     'Fees are for advertising time and are not refundable once the month has started, including if the property is sold or let early.',
@@ -232,6 +233,7 @@ async function buildAgentGuidePdf(settings = {}) {
   bullets(doc, [
     `New agents start with ${s.agentFreeDays} days free. We tell you the date it ends and remind you before it does, so there are no surprises.`,
     `After the free days, the makaug agent plan is ${ugx(s.agentMonthly)} per month.`,
+    'Short stays you list are included in this plan. There is no separate short-stay fee.',
     `Pay to ${payLine}, then send the transaction ID (or a screenshot of the payment message) here on WhatsApp. We match it and confirm it — you will get a thank-you message when it is recorded.`,
     'We remind you 3 days before your renewal date and on the day.',
     `If the month is not paid, we send reminders; after ${s.finalAfter} days overdue a final reminder, and then your listings may be paused. Nothing is deleted — as soon as you pay, everything goes back live exactly as it was.`
@@ -288,6 +290,7 @@ async function buildAgentTermsPdf(settings = {}) {
   section(doc, '3. What you get');
   bullets(doc, [
     'Your own agent page on makaug.com and an agent ID, showing your listings.',
+    'Short stays you list are included in the agent plan. There is no separate short-stay fee and no free days on a short stay.',
     'Posting by WhatsApp: send photos and details, we write the listing, our team checks it, and you get the link when it is live.',
     'Enquiries sent straight to your WhatsApp number with the enquirer\'s name, number and message, and a weekly report of views and enquiries.',
     'Exposure to buyers and tenants in Uganda and Ugandans abroad. We do not promise a particular number of views, enquiries or sales.'
@@ -389,6 +392,7 @@ function listerTermsMessage(settings = {}, { name = '' } = {}) {
     '',
     `• Your first *${s.freeDays} days are free*.`,
     `• After that it is *${ugx(s.listerMonthly)} per property, per month* to stay live. We'll remind you before the free week ends — nothing is charged automatically.`,
+    '• A short stay (by the night) is *UGX 20,000 a month*, with *no free days*. Approved agents include short stays in the agent plan.',
     '• Your ID is only for checking — it is *never shown* to anyone.',
     '• makaug advertises your property; the deal itself is between you and the buyer or tenant.',
     '',

@@ -38,7 +38,7 @@ const packs = context.window.__MAKAUG_ABOUT_ADVERTISE_I18N__;
 const languages = ['lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar'];
 
 assert(packs && typeof packs === 'object', 'generated About/Advertise language pack should load');
-assert(html.includes('/assets/about-advertise-i18n.js?v=whatsapp-number-20260911'), 'page should load the generated language pack');
+assert(html.includes('/assets/about-advertise-i18n.js?v=short-stay-fee-20261023'), 'page should load the generated language pack');
 // Relevant direct routes keep ordered pack/app execution. Other routes use
 // the on-demand loader; execution fixtures cover SPA entry and late merging.
 // The pack must not be a render-blocking <script src> in <head>.

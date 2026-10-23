@@ -585,7 +585,7 @@ async function hostSession(db, token) {
       listing_fee_status: listing.listing_fee_status,
       fee_label: ['paid', 'waived'].includes(String(listing.listing_fee_status || ''))
         ? 'Live'
-        : 'Approved, awaiting fee'
+        : 'Approved, awaiting the UGX 20,000 monthly fee. No free days.'
     },
     requests: requests.rows.map((row) => ({
       reference: row.reference,

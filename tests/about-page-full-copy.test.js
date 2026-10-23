@@ -49,7 +49,12 @@ assert(frontend.includes("liveStat?.classList.add('hidden')"), 'client should hi
 ['listings', 'agents', 'developers', 'featured', 'premium', 'boosted', 'advertising', 'reports', 'websites', 'professional'].forEach((anchor) => {
   assert(aboutBlock.includes(`id="${anchor}"`), `missing deep-link anchor #${anchor}`);
 });
-assert.strictEqual((aboutBlock.match(/class="about-product-card"/g) || []).length, 10, 'About should render ten commercial product cards');
+assert.strictEqual((aboutBlock.match(/class="about-product-card"/g) || []).length, 11, 'About should render eleven commercial product cards');
+assert(aboutBlock.includes('id="short-stays"'), 'short stays need a pricing card on /about, which /pricing opens');
+assert.strictEqual(catalog.products.shortStayListing.amount, 20000);
+assert.strictEqual(catalog.products.shortStayListing.trialDays, 0);
+assert.strictEqual(catalog.products.privateListing.trialDays, 7);
+assert.strictEqual(catalog.products.agentSubscription.amount, 50000);
 assert.strictEqual(catalog.advertisingPlacements.length, 22, 'single-source catalog should contain all 22 advertising placements');
 assert.strictEqual(catalog.products.privateListing.amount, 20000);
 assert.strictEqual(catalog.products.featuredListing.amount, 50000);
@@ -126,6 +131,9 @@ const rendered = injectAboutCommercialProducts(aboutBlock);
 assert(!rendered.includes('{{ABOUT_PRICE:'), 'server rendering should replace every price placeholder');
 assert(!rendered.includes('{{ABOUT_PRICE_ONLY:'), 'server rendering should replace every price-only placeholder');
 assert(rendered.includes('UGX 20,000 / property / month'), 'private listing price should come from the catalog');
+assert(rendered.includes('UGX 20,000 / month'), 'short-stay price should come from the catalog');
+assert(rendered.includes('No free days for short stays'));
+assert(rendered.includes('Included in the UGX 50,000 a month agent plan'));
 assert(rendered.includes('UGX 150,000 / post'), 'Off Plan price should be presented per post');
 assert(frontend.includes('window.__MAKAUG_ABOUT_COMMERCIAL_PRODUCTS__'), 'client pricing should read from the shared catalog');
 assert(frontend.includes("fmtP(entry.amount, '')"), 'About prices should use the existing currency conversion helper');

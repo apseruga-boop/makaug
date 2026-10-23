@@ -173,7 +173,7 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
     `INSERT INTO st_listing (reference, slug, title, description, district, area, base_nightly_ugx, host_name, host_phone)
      VALUES ('PAYTEST-ST1', 'paytest-st1-${Date.now()}', 'Lakeview cottage', 'test', 'Wakiso', 'Entebbe', 150000, 'Host Harriet', '256779000222') RETURNING id`)).rows[0];
   const stLink = await api('POST', '/revenue/pay-links', { purpose: 'short_term_fee', st_listing_id: st.id, send_to: '256779000222' });
-  check('short-stay link is UGX 50,000 for the listing', stLink.ok && Number(stLink.data?.link?.amount_ugx) === 50000 && /short stay/.test(stLink.data?.link?.description || ''), stLink.error || stLink.data?.link?.description);
+  check('short-stay link is UGX 20,000 for one month', stLink.ok && Number(stLink.data?.link?.amount_ugx) === 20000 && /short stay/.test(stLink.data?.link?.description || '') && /1 month/.test(stLink.data?.link?.description || ''), stLink.error || stLink.data?.link?.description);
   const stGo = await page(`/pay/${stLink.data.link.code}/card`, { method: 'POST' });
   const stOrder = String(stGo.location).split('/').pop();
   await fetch(`${MOCK}/__complete/${stOrder}`, { method: 'POST' });
@@ -181,7 +181,8 @@ async function webhook(orderId, { secret, tamper = false } = {}) {
   const stRow = (await pool.query('SELECT listing_fee_status, expires_at FROM st_listing WHERE id = $1', [st.id])).rows[0];
   const stPay = (await pool.query(`SELECT status, method FROM st_listing_payment WHERE listing_id = $1`, [st.id])).rows[0];
   const stEntry = (await pool.query(`SELECT kind, account_key, st_listing_id, verified_status FROM revenue_entries WHERE reference = $1`, [stOrder])).rows[0];
-  check('listing marked paid with 3 months from today', stRow.listing_fee_status === 'paid' && new Date(stRow.expires_at) > new Date(Date.now() + 85 * 86400e3), JSON.stringify(stRow));
+  const stExpiry = new Date(stRow.expires_at).getTime();
+  check('listing marked paid with 1 month from today', stRow.listing_fee_status === 'paid' && stExpiry > Date.now() + 25 * 86400e3 && stExpiry < Date.now() + 40 * 86400e3, JSON.stringify(stRow));
   check('short-stay payment record shows card, paid', stPay?.status === 'paid' && stPay?.method === 'card', JSON.stringify(stPay));
   check('ledger entry: short_term_fee, Revolut, verified, linked', stEntry?.kind === 'short_term_fee' && stEntry?.account_key === 'revolut_whispers' && stEntry?.st_listing_id === st.id && stEntry?.verified_status === 'verified', JSON.stringify(stEntry));
   const again3 = await api('POST', '/revenue/pay-links', { purpose: 'short_term_fee', st_listing_id: st.id });

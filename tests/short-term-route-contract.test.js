@@ -260,9 +260,16 @@ test('st_lead has no reply, status or expiry column', () => {
   assert.ok(!/^\s*status\s+TEXT/m.test(block), 'st_lead must not have a status column');
 });
 
-test('the listing fee is a flat 50,000 for 3 months, with no commission anywhere', () => {
-  assert.strictEqual(service.LISTING_FEE_UGX, 50000);
-  assert.strictEqual(service.LISTING_TERM_MONTHS, 3);
+test('the listing fee is UGX 20,000 a month, with no free days and no commission', () => {
+  assert.strictEqual(service.LISTING_FEE_UGX, 20000);
+  assert.strictEqual(service.LISTING_TERM_MONTHS, 1);
+  assert.strictEqual(service.LISTING_FREE_DAYS, 0);
+  const live = [routeSource, clientSource, read('services', 'shortTermService.js'), read('services', 'payLinkService.js')].join('\n');
+  assert.ok(!/UGX 50,000 for 3 months/i.test(live), 'the old three-month short-stay price must be gone from live code');
+  assert.ok(!/50,000 for a 3 month/i.test(live), 'the old three-month short-stay note must be gone from live code');
+  assert.ok(/no free days/i.test(routeSource), 'the fee basis must say there are no free days');
+  assert.ok(/included in the agent plan/i.test(routeSource));
+  assert.ok(clientSource.includes('Ordinary listers pay UGX 20,000 a month, with no free days.'));
   const all = [migration, routeSource, clientSource, read('services', 'shortTermService.js')].join('\n');
   assert.ok(!/commission_(?:rate|pct|amount)/i.test(all), 'no commission field may exist');
   assert.ok(!/take_rate|platform_fee_pct/i.test(all), 'no take-rate field may exist');
@@ -1656,7 +1663,7 @@ test('the section starts on its own route without waiting for the main bundle', 
     } };
   }
   const direct = execute('page-short-term');
-  assert.deepStrictEqual(direct.requests.map(node => node.src), ['/assets/short-term.js?v=20261020-short-term-v25'],
+  assert.deepStrictEqual(direct.requests.map(node => node.src), ['/assets/short-term.js?v=20261023-short-stay-fee-v26'],
     'direct section starts before the main bundle is even requested');
   direct.startApp();
   assert.strictEqual(direct.requests.filter(node => node.src.includes('/short-term.js')).length, 1);

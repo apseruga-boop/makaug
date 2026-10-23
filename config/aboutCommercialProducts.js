@@ -1,11 +1,12 @@
 'use strict';
 
 const ABOUT_COMMERCIAL_PRODUCTS = Object.freeze({
-  version: 'about-commercial-products-20260910-v2',
+  version: 'about-commercial-products-20261023-v3',
   currency: 'UGX',
   monthlyDiscountPercent: 10,
   products: Object.freeze({
     privateListing: { amount: 20000, period: 'property / month', trialDays: 7 },
+    shortStayListing: { amount: 20000, period: 'month', trialDays: 0 },
     agentSubscription: { amount: 50000, period: 'month' },
     offPlanDevelopment: { amount: 150000, period: 'post' },
     featuredListing: { amount: 50000, period: '7 days' },

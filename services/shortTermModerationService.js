@@ -354,6 +354,7 @@ async function applyKingDecision(db, listingId, { action, checklist, overrides, 
            reviewed_at = NOW(),
            listed_at = CASE WHEN $2 = 'approved' THEN COALESCE(listed_at, NOW()) ELSE listed_at END,
            expires_at = CASE
+             WHEN $2 = 'approved' AND listing_fee_status = 'waived' THEN NULL
              WHEN $2 = 'approved'
                THEN COALESCE(listed_at, NOW()) + (listing_term_months || ' months')::interval
              ELSE expires_at

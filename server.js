@@ -1879,8 +1879,8 @@ app.get('/short-term/list-your-place', (req, res, next) => {
     res.set('X-makaug-Public-Sanitized', '1');
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
     html = patchPublicPageSeoMeta(html, {
-      title: 'List Your Short Stay on makaug | UGX 50,000 for 3 Months',
-      description: 'Put your Uganda short stay in front of guests for a flat UGX 50,000 for three months. No commission on any booking. Guests contact you directly.',
+      title: 'List Your Short Stay on makaug | UGX 20,000 a Month',
+      description: 'Put your Uganda short stay in front of guests for UGX 20,000 a month, with no free days. Approved agents include short stays in the UGX 50,000 a month agent plan. No commission on any booking. Guests contact you directly.',
       canonical: absolutePublicUrl('/short-term/list-your-place'),
       image: absolutePublicUrl(shareImagePath('short-stay', null, requestShareLang(req))),
       imageAlt: shareCardAlt('short-stay', requestShareLang(req))
@@ -2359,7 +2359,7 @@ app.get('/about/rate-card.pdf', async (req, res, next) => {
     res.type('application/pdf');
     res.set('Cache-Control', 'public, max-age=3600');
     res.set('Content-Disposition', 'attachment; filename="makaug-commercial-rate-card.pdf"');
-    res.set('X-makaug-Rate-Card-Version', 'about-commercial-products-20260910-v1');
+    res.set('X-makaug-Rate-Card-Version', 'about-commercial-products-20261023-v3');
     return res.send(pdf);
   } catch (error) {
     return next(error);

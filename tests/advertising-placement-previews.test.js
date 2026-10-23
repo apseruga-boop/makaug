@@ -51,7 +51,7 @@ const aboutStart = html.indexOf('id="page-about"');
 const aboutEnd = html.indexOf('id="about-discovery-title"', aboutStart);
 const aboutProducts = html.slice(aboutStart, aboutEnd);
 assert(aboutProducts.includes('data-about-product-images="20260910"'), 'About product imagery marker should render');
-assert((aboutProducts.match(/class="about-product-image"/g) || []).length === 10, 'all ten About product cards should have images');
+assert((aboutProducts.match(/class="about-product-image"/g) || []).length === 11, 'all eleven About product cards should have images');
 assert(aboutProducts.includes('class="about-advertising-image"'), 'Advertise with makaug summary should have an image');
 assert(aboutProducts.includes('These options promote one property; broader brand and multi-channel campaigns sit under Advertise with makaug.'), 'About page should distinguish listing boosts from advertising campaigns');
 

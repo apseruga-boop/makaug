@@ -29,8 +29,8 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/makaug-icon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
-  <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1" defer></script>
-  <script src="/assets/makaug-site-i18n.js?v=20261022-site-i18n-v13" defer></script>
+  <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20261023-v3" defer></script>
+  <script src="/assets/makaug-site-i18n.js?v=20261023-site-i18n-v14" defer></script>
   <meta name="theme-color" content="#15803d">
   <script>
     (function () {
@@ -416,7 +416,7 @@
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" media="(min-width: 768px)" fetchpriority="high" data-home-hero-preload>
   <link rel="stylesheet" href="/assets/tailwind.css">
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
-  <link rel="stylesheet" href="/assets/short-term.css?v=20261020-short-term-v25">
+  <link rel="stylesheet" href="/assets/short-term.css?v=20261023-short-stay-fee-v26">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -4700,6 +4700,10 @@
       </div>
     </div>
     <section class="st-view st-view-search is-active">
+      <section class="st-hero"><div class="st-wrap">
+        <h1>Find a short stay in Uganda</h1>
+        <p class="st-hero-sub" data-st-list-fee>Ordinary listers pay UGX 20,000 a month, with no free days. Short stays listed by an approved agent are included in the agent plan (UGX 50,000 a month).</p>
+      </div></section>
       <div id="short-term-ssr" class="st-wrap" style="padding-top:12px"></div>
     </section>
     <section class="st-view st-view-detail"></section>
@@ -9464,7 +9468,7 @@
     </div>
   </div>
 
-  <div id="page-about" class="page bg-white text-[#16241d]" data-about-commercial-version="about-commercial-products-20260910-v2">
+  <div id="page-about" class="page bg-white text-[#16241d]" data-about-commercial-version="about-commercial-products-20261023-v3">
     <div class="about-hero-panel py-14">
       <div class="max-w-6xl mx-auto px-4 about-reveal">
         <p class="about-eyebrow" data-content-i18n="about.heroLabel">About makaug</p>
@@ -9515,6 +9519,7 @@
         <div class="about-product-grid about-product-grid-four mt-6" data-about-product-images="20260910">
           <article id="listings" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/sale.webp" alt="Home promoted for sale on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-house"></i></span><h3 data-content-i18n="about.saleTitle">Private listing — For Sale</h3><p data-content-i18n="about.saleText">List your home, land or commercial property yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template-key="about.privateTrialTemplate">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li data-content-i18n="about.productAiDescription">AI-written description in 9 languages</li><li data-content-i18n="about.productChecked">Checked by our team</li><li data-content-i18n="about.productWhatsappLeads">WhatsApp and phone leads</li><li data-content-i18n="about.productEdit">Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=sale" data-content-i18n="about.saleAction">List for sale</a></article>
           <article class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/rent.webp" alt="Rental property journey on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-key"></i></span><h3 data-content-i18n="about.rentTitle">Private listing — To Rent</h3><p data-content-i18n="about.rentText">List a rental or student room yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template-key="about.privateTrialTemplate">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li data-content-i18n="about.productAiDescription">AI-written description in 9 languages</li><li data-content-i18n="about.productChecked">Checked by our team</li><li data-content-i18n="about.productWhatsappLeads">WhatsApp and phone leads</li><li data-content-i18n="about.productEdit">Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=rent" data-content-i18n="about.rentAction">List for rent</a></article>
+          <article id="short-stays" class="about-product-card"><span class="about-product-image"><img src="/assets/img/worth-knowing/speke-resort.jpg" alt="Short stay by the lake in Uganda" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-bed"></i></span><h3 data-content-i18n="about.shortStayTitle">Short stays</h3><p data-content-i18n="about.shortStayText">List a place guests rent by the night.</p><strong class="about-price" data-about-price="shortStayListing">{{ABOUT_PRICE:shortStayListing}}</strong><ul><li data-content-i18n="about.shortStayNoFree">No free days for short stays</li><li data-content-i18n="about.shortStayAgent">Included in the UGX 50,000 a month agent plan</li><li data-content-i18n="about.shortStayNoCommission">No commission on any stay</li><li data-content-i18n="about.shortStayDirect">Guests contact you directly</li></ul><a class="about-product-action" href="/short-term/list-your-place" data-content-i18n="about.shortStayAction">List a short stay</a></article>
           <article id="agents" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/agents.webp" alt="Property agent helping a customer" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-user-tie"></i></span><h3 data-content-i18n="about.agentTitle">Agent subscription</h3><p data-content-i18n="about.agentText">For brokers and agencies with multiple properties.</p><strong class="about-price" data-about-price="agentSubscription" data-about-price-template-key="about.agentPriceTemplate">{{ABOUT_PRICE:agentSubscription}} · all your listings</strong><ul><li data-content-i18n="about.agentAllListings">All listings on one account</li><li data-content-i18n="about.agentVerified">Verified badge and broker profile</li><li data-content-i18n="about.agentLeadInbox">Lead inbox and CSV export</li><li data-content-i18n="about.agentPriority">Priority review</li></ul><a class="about-product-action" href="/broker-signup" data-content-i18n="about.agentAction">Register as an agent</a></article>
           <article id="developers" class="about-product-card"><span class="about-product-image"><img src="/assets/off-plan/spectre-westlands/arrival.jpg" alt="Off Plan development arrival view" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-city"></i></span><h3 data-content-i18n="about.developerTitle">Off-plan developments</h3><p data-content-i18n="about.developerText">Dedicated project pages for developers and marketing agents.</p><strong class="about-price" data-about-price="offPlanDevelopment">{{ABOUT_PRICE:offPlanDevelopment}}</strong><ul><li data-content-i18n="about.developerUnits">Units, plans, video and payment plans</li><li data-content-i18n="about.developerVisibility">Off Plan and search visibility</li><li data-content-i18n="about.developerEnquiries">Enquiries to your sales team</li><li data-content-i18n="about.developerOverseas">Overseas projects welcome</li></ul><a class="about-product-action" href="/broker-signup" data-content-i18n="about.agentAction">Register as an agent</a></article>
         </div>
@@ -10703,7 +10708,7 @@
       }
       function loadShortTermNow() {
         if (!window.__makaugShortTerm || window.__makaugShortTerm.enabled !== true) return Promise.resolve(false);
-        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261020-short-term-v25", function () {
+        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261023-short-stay-fee-v26", function () {
           return !!(window.makaugShortTerm && typeof window.makaugShortTerm.route === "function");
         });
       }
@@ -10723,7 +10728,7 @@
         if (aboutAdvertiseI18nPromise) return aboutAdvertiseI18nPromise;
         aboutAdvertiseI18nPromise = new Promise(function (resolve) {
           var pack = document.createElement("script");
-          pack.src = "/assets/about-advertise-i18n.js?v=whatsapp-number-20260911";
+          pack.src = "/assets/about-advertise-i18n.js?v=short-stay-fee-20261023";
           pack.async = false;
           pack.onload = function () {
             var data = window.__MAKAUG_ABOUT_ADVERTISE_I18N__ || null;
