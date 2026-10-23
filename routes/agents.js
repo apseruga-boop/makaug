@@ -912,7 +912,7 @@ router.get('/:id/booking-options', async (req, res, next) => {
     let propertyRows = [];
     try {
       const properties = await db.query(
-        `SELECT id, title, area, district, bedrooms, property_type, availability_status, last_confirmed_at
+        `SELECT id, title, area, district, bedrooms, property_type, price, price_period, availability_status, last_confirmed_at
            FROM properties
           WHERE agent_id = $1 AND LOWER(COALESCE(status, '')) = 'approved'
           ORDER BY created_at DESC
@@ -923,7 +923,7 @@ router.get('/:id/booking-options', async (req, res, next) => {
     } catch (error) {
       if (error.code !== '42703') throw error;
       const properties = await db.query(
-        `SELECT id, title, area, district, bedrooms, property_type
+        `SELECT id, title, area, district, bedrooms, property_type, price, price_period
            FROM properties
           WHERE agent_id = $1 AND LOWER(COALESCE(status, '')) = 'approved'
           ORDER BY created_at DESC
@@ -1020,6 +1020,8 @@ router.get('/:id/booking-options', async (req, res, next) => {
             district: row.district,
             bedrooms: row.bedrooms,
             property_type: row.property_type,
+            price: row.price,
+            price_period: row.price_period,
             availability_label: view.label,
             availability_tone: view.tone
           };
@@ -1039,6 +1041,7 @@ router.get('/:id/booking-options', async (req, res, next) => {
         }),
         days: built.days,
         slots_by_date: built.slotsByDate,
+        notice_hours: built.noticeHours,
         blocked_dates: blocked,
         host_phone_known: Boolean(agentRow.phone || agentRow.whatsapp)
       }
