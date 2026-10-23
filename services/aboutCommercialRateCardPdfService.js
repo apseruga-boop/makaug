@@ -25,9 +25,9 @@ function buildAboutCommercialRateCardPdf() {
     doc.moveDown(1.2);
 
     const productRows = [
-      ['Private listing', 'privateListing', 'First 7 days free'],
-      ['Short stay', 'shortStayListing', 'No free days; included for agents'],
-      ['Agent subscription', 'agentSubscription', 'Multiple listings'],
+      ['Private listing', 'privateListing', '7 free days, then per listing'],
+      ['Short stay', 'shortStayListing', 'Non-agents; included in the agent plan'],
+      ['Agent subscription', 'agentSubscription', '14 days free, then monthly. Short stays included'],
       ['Off-plan development', 'offPlanDevelopment', 'Dedicated project page'],
       ['Featured listing', 'featuredListing', 'Homepage and category visibility'],
       ['Premium listing', 'premiumListing', 'Prime search position'],
@@ -86,7 +86,7 @@ function buildAboutCommercialRateCardPdf() {
     doc.moveDown(.8).fillColor(PALE).roundedRect(doc.page.margins.left, doc.y, pageWidth, 58, 8).fill();
     doc.fillColor(INK).font('Helvetica-Bold').fontSize(10).text('Book or ask a question', doc.page.margins.left + 12, doc.y + 12);
     doc.fillColor(MUTED).font('Helvetica').fontSize(9).text('WhatsApp 0780 863 394 · info@makaug.com · makaug.com/advertise', { lineGap: 2 });
-    doc.moveDown(2.4).fontSize(8).text('Rate guide dated 10 September 2026. Items marked for commercial confirmation in the source brief remain subject to written quotation. VAT treatment should be confirmed before invoicing.');
+    doc.moveDown(2.4).fontSize(8).text('Rate guide dated 23 October 2026. Prices are in Uganda shillings. Items marked for commercial confirmation in the source brief remain subject to written quotation.');
     doc.end();
   });
 }
