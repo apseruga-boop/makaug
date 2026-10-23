@@ -52,13 +52,21 @@ test('a live listing can be unpublished with a reason and published again', () =
 
 test('unpublish asks for a reason inline and confirms before the page disappears', () => {
   const app = read('assets/makaug-app.js');
-  const start = app.indexOf('async function staffUnpublishPreviewListing');
+  const start = app.indexOf('function staffSetUnpublishReasonError');
   const end = app.indexOf('async function staffRepublishPreviewListing', start);
   const unpublish = app.slice(start, end);
   const republish = app.slice(end, app.indexOf('async function staffClaimLead', end));
   assert.match(app, /data-staff-unpublish-error/);
+  assert.match(app, /data-staff-unpublish-confirm/);
+  assert.match(app, /data-staff-unpublish-cancel/);
+  assert.match(app, /data-staff-unpublish-yes/);
+  assert.match(app, /Yes, unpublish/);
+  assert.match(app, /border:1px solid #dc2626/);
+  assert.match(app, /Unpublish this listing\? It will disappear from the site\./);
   assert.match(unpublish, /Type why this live listing is being unpublished\./);
-  assert.match(unpublish, /Unpublish this listing\? It will disappear from the site\./);
+  assert.match(unpublish, /borderColor = "#dc2626"/);
+  assert.match(unpublish, /staffShowUnpublishConfirm\(modal, true\)/);
+  assert.doesNotMatch(unpublish, /window\.confirm/);
   assert.match(unpublish, /staffPatchPreviewPublication/);
   assert.doesNotMatch(unpublish, /renderStaffListingPreviewModal/);
   assert.doesNotMatch(unpublish, /queueStaffDashboardRefreshAfterModeration/);
@@ -67,6 +75,13 @@ test('unpublish asks for a reason inline and confirms before the page disappears
   assert.doesNotMatch(republish, /queueStaffDashboardRefreshAfterModeration/);
   assert.match(app, /data-staff-queue-card="1"/);
   assert.match(app, /function staffPatchQueueRowPublication/);
+  const adminBundle = read('assets/build/makaug-admin.min.js');
+  const publicBundle = read('assets/build/makaug-app.min.js');
+  assert.match(adminBundle, /Yes, unpublish/);
+  assert.match(adminBundle, /Unpublish this listing\? It will disappear from the site\./);
+  assert.match(adminBundle, /data-staff-unpublish-error/);
+  assert.doesNotMatch(publicBundle, /Yes, unpublish/);
+  assert.doesNotMatch(publicBundle, /Unpublish this listing\? It will disappear from the site\./);
 });
 
 test('approval records the staff member and the editor shows that name', () => {
@@ -101,44 +116,72 @@ test('approval records the staff member and the editor shows that name', () => {
   assert.doesNotMatch(repair, /1691d2bd-ffed-4e16-a9f5-2f9666dba642/);
 });
 
-test('an empty unpublish reason stays inline and a cancelled confirm does not call the API', () => {
+test('an empty unpublish reason shows a red error and the in-modal confirm is required', () => {
   const app = read('assets/makaug-app.js');
-  const start = app.indexOf('async function staffUnpublishPreviewListing');
+  const start = app.indexOf('function staffSetUnpublishReasonError');
   const end = app.indexOf('async function staffRepublishPreviewListing', start);
   const calls = [];
-  const errorEl = { textContent: '', classList: { hidden: true, remove(name) { if (name === 'hidden') this.hidden = false; }, add(name) { if (name === 'hidden') this.hidden = true; } } };
-  const reasonEl = { value: '', invalid: '', focus() { calls.push('focus'); }, setAttribute(name) { this.invalid = name; }, removeAttribute() { this.invalid = ''; } };
+  const errorEl = { textContent: '', hidden: true, style: { display: 'none' }, scrollIntoView() { calls.push('error-scroll'); } };
+  const reasonEl = {
+    value: '',
+    invalid: '',
+    style: { borderColor: '', borderWidth: '', boxShadow: '' },
+    focus() { calls.push('focus'); },
+    setAttribute(name) { this.invalid = name; },
+    removeAttribute() { this.invalid = ''; }
+  };
+  const confirmEl = { hidden: true, style: { display: 'none' }, scrollIntoView() { calls.push('confirm-scroll'); } };
   const modal = {
     querySelector(sel) {
       if (sel === '[data-staff-unpublish-error]') return errorEl;
       if (sel === '#admin-review-reason') return reasonEl;
+      if (sel === '[data-staff-unpublish-confirm]') return confirmEl;
       return null;
     }
   };
   const sandbox = {
     document: { getElementById(id) { return id === 'staff-listing-preview-modal' ? modal : null; } },
-    staffReviewPatch: () => ({ reason: '' }),
     isDefaultStatusNoteText: (value) => !String(value || '').trim(),
     adminActiveReview: { moderation_reason: 'Approved from source' },
-    window: { confirm: () => { calls.push('confirm'); return false; } },
-    staffApiRequestWithTimeout: async () => { calls.push('api'); return { data: {} }; },
+    window: { confirm() { calls.push('native-confirm'); return true; } },
+    staffApiRequestWithTimeout: async () => { calls.push('api'); return { data: { id: 'listing-id', status: 'hidden' } }; },
     setStaffPreviewDecisionBusy() { calls.push('busy'); },
     toast() { calls.push('toast'); },
     staffPatchPreviewPublication() { calls.push('patch'); },
+    STAFF_MODERATION_WRITE_TIMEOUT_MS: 1000,
     encodeURIComponent
   };
-  vm.runInNewContext(`${app.slice(start, end)}\nthis.run = staffUnpublishPreviewListing;`, sandbox);
+  vm.runInNewContext(`${app.slice(start, end)}\nthis.run = staffUnpublishPreviewListing;\nthis.cancel = staffCancelUnpublishConfirm;`, sandbox);
   return sandbox.run('listing-id').then(() => {
     assert.equal(errorEl.textContent, 'Type why this live listing is being unpublished.');
-    assert.equal(errorEl.classList.hidden, false);
+    assert.equal(errorEl.hidden, false);
+    assert.equal(errorEl.style.display, 'block');
     assert.equal(reasonEl.invalid, 'aria-invalid');
-    assert.deepEqual(calls, ['focus']);
-    sandbox.staffReviewPatch = () => ({ reason: 'Duplicate of a live listing' });
+    assert.equal(reasonEl.style.borderColor, '#dc2626');
+    assert.equal(reasonEl.style.borderWidth, '2px');
+    assert.equal(confirmEl.style.display, 'none');
+    assert.deepEqual(calls, ['error-scroll', 'focus']);
+    reasonEl.value = 'Duplicate of a live listing';
     sandbox.isDefaultStatusNoteText = () => false;
     return sandbox.run('listing-id');
   }).then(() => {
-    assert.equal(errorEl.classList.hidden, true);
-    assert.deepEqual(calls, ['focus', 'confirm']);
+    assert.equal(errorEl.style.display, 'none');
+    assert.equal(errorEl.hidden, true);
+    assert.equal(reasonEl.style.borderColor, '');
+    assert.equal(confirmEl.hidden, false);
+    assert.equal(confirmEl.style.display, 'block');
+    assert.deepEqual(calls, ['error-scroll', 'focus', 'confirm-scroll']);
+    return sandbox.cancel();
+  }).then(() => {
+    assert.equal(confirmEl.style.display, 'none');
+    assert.equal(confirmEl.hidden, true);
+    assert.deepEqual(calls, ['error-scroll', 'focus', 'confirm-scroll']);
+    return sandbox.run('listing-id', true);
+  }).then(() => {
+    assert.equal(confirmEl.style.display, 'none');
+    assert.ok(calls.includes('api'));
+    assert.ok(calls.includes('patch'));
+    assert.equal(calls.includes('native-confirm'), false);
   });
 });
 

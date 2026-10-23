@@ -17025,7 +17025,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
             ${moderationPriceBasisConfirmationHtml(preview, "staff-preview")}
             ${moderationStructuredReasonControlsHtml("staff-preview")}
             <textarea id="admin-review-reason" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[80px]" placeholder="Type the reason (required to reject or unpublish)">${adminEscape(typedDecisionReasonForPrefill(preview))}</textarea>
-            <p class="mt-1 hidden text-xs font-bold text-red-700" data-staff-unpublish-error role="alert"></p>
+            <p data-staff-unpublish-error role="alert" hidden style="display:none;margin-top:8px;padding:8px 10px;border:1px solid #dc2626;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:14px;font-weight:800;line-height:1.35"></p>
             ${preview.moderation_reason ? `<p class="mt-1 text-[11px] text-gray-500" data-staff-status-note>Current status note (not a rejection reason): ${adminEscape(preview.moderation_reason)}</p>` : ""}
           </section>
           <section class="rounded-xl border border-gray-200 p-4">
@@ -17041,6 +17041,13 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
               <div data-staff-publication-actions class="contents">
               ${staffListingIsLive(preview.status) ? `<button type="button" data-staff-unpublish="1" onclick="staffUnpublishPreviewListing(${propertyIdArg(preview.id)})" class="border border-amber-300 text-amber-950 hover:bg-amber-50 rounded-xl px-4 py-2 text-sm font-black">Unpublish</button>` : ""}
               ${staffListingCanRepublish(preview) ? `<button type="button" data-staff-republish="1" onclick="staffRepublishPreviewListing(${propertyIdArg(preview.id)})" class="border border-emerald-300 text-emerald-900 hover:bg-emerald-50 rounded-xl px-4 py-2 text-sm font-black">Publish again</button>` : ""}
+              </div>
+              <div data-staff-unpublish-confirm role="alertdialog" aria-label="Confirm unpublish" hidden style="display:none;margin-top:8px;padding:12px;border:2px solid #b91c1c;border-radius:12px;background:#fef2f2">
+                <p style="margin:0;color:#991b1b;font-size:14px;font-weight:800;line-height:1.4">Unpublish this listing? It will disappear from the site.</p>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+                  <button type="button" data-staff-unpublish-cancel onclick="staffCancelUnpublishConfirm()" style="border:1px solid #d1d5db;background:#ffffff;color:#111827;border-radius:12px;padding:8px 14px;font-size:14px;font-weight:800;cursor:pointer">Cancel</button>
+                  <button type="button" data-staff-unpublish-yes onclick="staffUnpublishPreviewListing(${propertyIdArg(preview.id)}, true)" style="border:1px solid #b91c1c;background:#dc2626;color:#ffffff;border-radius:12px;padding:8px 14px;font-size:14px;font-weight:800;cursor:pointer">Yes, unpublish</button>
+                </div>
               </div>
             </div>
             <p class="text-xs text-gray-500 mt-3">Approve uses the same live publish API as King moderation. If checklist warnings remain, the backend will block approval.</p>
@@ -17846,13 +17853,14 @@ function staffPatchPreviewPublication(preview = {}) {
       actions.innerHTML = `${unpublishButton}${republishButton}`;
     }
     const reasonBox = modal.querySelector("#admin-review-reason");
+    const reasonError = modal.querySelector("[data-staff-unpublish-error]");
     let note = modal.querySelector("[data-staff-status-note]");
     if (next.moderation_reason) {
       if (!note && reasonBox) {
         note = document.createElement("p");
         note.className = "mt-1 text-[11px] text-gray-500";
         note.setAttribute("data-staff-status-note", "");
-        reasonBox.insertAdjacentElement("afterend", note);
+        (reasonError || reasonBox).insertAdjacentElement("afterend", note);
       }
       if (note) note.textContent = `Current status note (not a rejection reason): ${next.moderation_reason}`;
     } else if (note) {
@@ -17867,27 +17875,57 @@ function staffPatchPreviewPublication(preview = {}) {
   return true;
 }
 
-async function staffUnpublishPreviewListing(propertyId) {
-  const modal = document.getElementById("staff-listing-preview-modal");
-  const review = staffReviewPatch();
-  const reason = String(review.reason || "").trim();
-  const errorEl = modal?.querySelector("[data-staff-unpublish-error]");
-  const reasonEl = modal?.querySelector("#admin-review-reason") || document.getElementById("admin-review-reason");
-  if (!reason || isDefaultStatusNoteText(reason, adminActiveReview || {})) {
-    if (errorEl) {
-      errorEl.textContent = "Type why this live listing is being unpublished.";
-      errorEl.classList.remove("hidden");
+function staffSetUnpublishReasonError(reasonEl, errorEl, show) {
+  if (errorEl) {
+    errorEl.textContent = show ? "Type why this live listing is being unpublished." : "";
+    errorEl.hidden = !show;
+    errorEl.style.display = show ? "block" : "none";
+  }
+  if (reasonEl) {
+    if (show) {
+      reasonEl.setAttribute("aria-invalid", "true");
+      reasonEl.style.borderColor = "#dc2626";
+      reasonEl.style.borderWidth = "2px";
+      reasonEl.style.boxShadow = "0 0 0 1px #dc2626";
+    } else {
+      reasonEl.removeAttribute("aria-invalid");
+      reasonEl.style.borderColor = "";
+      reasonEl.style.borderWidth = "";
+      reasonEl.style.boxShadow = "";
     }
-    reasonEl?.setAttribute("aria-invalid", "true");
+  }
+  if (show && errorEl && typeof errorEl.scrollIntoView === "function") errorEl.scrollIntoView({ block: "nearest" });
+}
+
+function staffShowUnpublishConfirm(modal, show) {
+  const panel = modal?.querySelector("[data-staff-unpublish-confirm]");
+  if (!panel) return;
+  panel.hidden = !show;
+  panel.style.display = show ? "block" : "none";
+  if (show && typeof panel.scrollIntoView === "function") panel.scrollIntoView({ block: "nearest" });
+}
+
+function staffCancelUnpublishConfirm() {
+  staffShowUnpublishConfirm(document.getElementById("staff-listing-preview-modal"), false);
+}
+
+async function staffUnpublishPreviewListing(propertyId, confirmed) {
+  const modal = document.getElementById("staff-listing-preview-modal");
+  const reasonEl = modal?.querySelector("#admin-review-reason") || document.getElementById("admin-review-reason");
+  const reason = String(reasonEl?.value || "").trim();
+  const errorEl = modal?.querySelector("[data-staff-unpublish-error]");
+  if (!reason || isDefaultStatusNoteText(reason, adminActiveReview || {})) {
+    staffSetUnpublishReasonError(reasonEl, errorEl, true);
+    staffShowUnpublishConfirm(modal, false);
     reasonEl?.focus();
     return;
   }
-  if (errorEl) {
-    errorEl.textContent = "";
-    errorEl.classList.add("hidden");
+  staffSetUnpublishReasonError(reasonEl, errorEl, false);
+  if (confirmed !== true) {
+    staffShowUnpublishConfirm(modal, true);
+    return;
   }
-  reasonEl?.removeAttribute("aria-invalid");
-  if (typeof window.confirm === "function" && !window.confirm("Unpublish this listing? It will disappear from the site.")) return;
+  staffShowUnpublishConfirm(modal, false);
   try {
     setStaffPreviewDecisionBusy(true);
     const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/unpublish`, {
