@@ -12,6 +12,11 @@ const jwt = require('jsonwebtoken');
 
 const logger = require('./config/logger');
 const { logNotFound } = require('./utils/notFoundAccessLog');
+const { resolvePublicPathAlias } = require('./services/publicPathAliases');
+const {
+  notFoundLanguageFromRequest,
+  renderPublicNotFoundPage: renderBrandedNotFoundPage
+} = require('./services/publicNotFoundPage');
 const db = require('./config/database');
 const { deployJitterMs, staggeredBootDelay } = require('./utils/schedulerStagger');
 const healthRoutes = require('./routes/health');
@@ -2195,68 +2200,36 @@ app.get('/off-plan/:slug', (req, res, next) => renderOffPlanProjectPage(req, res
 
 // Five obvious aliases people (and old links) use. Everything else unknown is a
 // real 404: it used to be 200 + the homepage + canonical "/" (a soft 404).
-const PUBLIC_ALIAS_REDIRECTS = Object.freeze({
-  '/contact': '/help',
-  '/faq': '/help',
-  '/privacy': '/privacy-policy',
-  '/legal/terms': '/terms',
-  '/pricing': '/about'
-});
-
-function publicAliasRedirectTarget(pathname = '') {
-  const clean = String(pathname || '').replace(/\/+$/, '').toLowerCase();
-  return PUBLIC_ALIAS_REDIRECTS[clean] || '';
+function publicAliasRedirectTarget(pathname = '', originalUrl = '') {
+  return resolvePublicPathAlias(pathname, originalUrl || pathname);
 }
 
-function renderPublicNotFoundPage() {
-  const brand = escapeMetaContent(ACTIVE_TENANT.publicName || ACTIVE_TENANT.brandName || 'makaug.com');
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex">
-  <title>Page not found | ${brand}</title>
-  <link rel="icon" href="/favicon.ico">
-  <style>
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f8faf9;color:#14251b}
-    main{max-width:560px;margin:12vh auto;padding:0 20px}
-    h1{font-size:28px;margin:0 0 8px} p{color:#4b5d52;line-height:1.5}
-    nav{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
-    a{color:#fff;background:#166534;text-decoration:none;padding:10px 14px;border-radius:10px;font-weight:700}
-    a.secondary{background:#fff;color:#166534;border:1px solid #bbf7d0}
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Page not found</h1>
-    <p>We couldn't find that page. It may have moved, or the link may be wrong.</p>
-    <nav>
-      <a href="/">Home</a>
-      <a class="secondary" href="/for-sale">For sale</a>
-      <a class="secondary" href="/to-rent">To rent</a>
-      <a class="secondary" href="/land">Land</a>
-      <a class="secondary" href="/help">Help</a>
-    </nav>
-  </main>
-</body>
-</html>`;
+function renderPublicNotFoundPage(req) {
+  const source = req || {};
+  return renderBrandedNotFoundPage({
+    path: source.path,
+    query: source.query,
+    headers: source.headers,
+    brand: ACTIVE_TENANT.publicName || ACTIVE_TENANT.brandName || 'makaug.com'
+  });
 }
 
 function sendPublicNotFound(req, res) {
   logNotFound(req);
   res.set('X-Robots-Tag', 'noindex');
   res.set('Cache-Control', 'no-store');
-  return res.status(404).type('html').send(req.method === 'HEAD' ? '' : renderPublicNotFoundPage());
+  res.set('Vary', 'Cookie, Accept-Language');
+  const chosen = notFoundLanguageFromRequest(req);
+  if (req.query && req.query.lang && chosen) {
+    res.setHeader('Set-Cookie', `makaug_lang=${encodeURIComponent(chosen)}; Max-Age=31536000; Path=/; SameSite=Lax`);
+  }
+  return res.status(404).type('html').send(req.method === 'HEAD' ? '' : renderPublicNotFoundPage(req));
 }
 
 async function sendPublicIndex(req, res, next) {
   if (req.path.startsWith('/api/')) return next();
-  const aliasTarget = publicAliasRedirectTarget(req.path);
-  if (aliasTarget) {
-    const query = String(req.originalUrl || '').includes('?') ? String(req.originalUrl).slice(String(req.originalUrl).indexOf('?')) : '';
-    return res.redirect(301, `${aliasTarget}${query}`);
-  }
+  const aliasTarget = publicAliasRedirectTarget(req.path, req.originalUrl || req.url || '');
+  if (aliasTarget) return res.redirect(301, aliasTarget);
   if (!isKnownPublicRoute(req.path)) return sendPublicNotFound(req, res);
   if (ACTIVE_TENANT.publicFeatures?.marketplace === false && /^\/marketplace(?:\/|$)/i.test(req.path)) {
     return res.status(404).type('text/plain').send('Not found');
