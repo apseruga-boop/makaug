@@ -108,6 +108,7 @@ const {
   publicPageSeoFor,
   slugifySeoPart,
   canonicalLocationRouteSlug,
+  publicPathIsNoindex,
   sitemapEntries
 } = require('./services/publicSeoService');
 const { canonicalLocationOptions } = require('./utils/locationRegistry');
@@ -561,7 +562,8 @@ app.get('/sitemap.xml', async (_req, res, next) => {
         });
       }
     }
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((entry) => [
+    const indexableUrls = urls.filter((entry) => entry && entry.loc && !publicPathIsNoindex(entry.loc));
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${indexableUrls.map((entry) => [
       '  <url>',
       `    <loc>${escapeXml(entry.loc)}</loc>`,
       entry.lastmod ? `    <lastmod>${escapeXml(entry.lastmod)}</lastmod>` : '',

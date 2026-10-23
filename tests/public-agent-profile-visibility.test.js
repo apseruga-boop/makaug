@@ -86,6 +86,42 @@ test('a blocked agent stays hidden, and one approved listing still opens the pro
   }), true);
 });
 
+test('agents the public API 404s stay hidden even when a listing names them', () => {
+  assert.equal(publicAgentProfileVisible({
+    id: '0702086e-60c3-42c2-8c04-8fc2fb926601',
+    full_name: 'Listed without an account',
+    status: 'approved',
+    user_id: null,
+    verification_reason: '',
+    approved_listing_count: 4
+  }), false);
+  assert.equal(publicAgentProfileVisible(reviewedDirectAgent({
+    full_name: 'QA TEST - DELETE agent',
+    approved_listing_count: 2
+  })), false);
+  assert.equal(publicAgentProfileVisible({
+    id: 'f1932d42-eddd-4bae-904d-b883600113ee',
+    full_name: 'Imported profile',
+    status: 'approved',
+    user_id: null,
+    verification_reason: 'public social source onboarding',
+    licence_number: 'SOCIAL-9',
+    approved_listing_count: 2
+  }), false);
+  assert.equal(resolvePublicPathAlias('/agents'), '/brokers');
+  assert.equal(resolvePublicPathAlias('/agents/0702086e-60c3-42c2-8c04-8fc2fb926601'), '');
+});
+
+test('the sitemap only advertises approved agents a public profile can open', () => {
+  const seo = fs.readFileSync(path.join(root, 'services/publicSeoService.js'), 'utf8');
+  const eligibility = fs.readFileSync(path.join(root, 'services/publicAgentEligibilityService.js'), 'utf8');
+  assert.match(seo, /agent_id,\s+EXISTS/);
+  assert.match(seo, /publicSitemapAgentWhereSql\('a'\)/);
+  assert.match(eligibility, /LOWER\(COALESCE\(\$\{a\}\.status, ''\)\) = 'approved'/);
+  assert.match(eligibility, /user_id IS NOT NULL/);
+  assert.match(eligibility, /DIRECT_AGENT_PROFILE_MARKER/);
+});
+
 test('the profile route uses that rule and does not 404 an agent only because they have no listing', () => {
   const start = server.indexOf('async function loadPublicAgentOpenGraphMeta');
   const end = server.indexOf('app.get([', start);

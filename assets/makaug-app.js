@@ -61990,8 +61990,8 @@ async function openDetail(id, options = {}) {
             ${detailContactActionsHtml}
             ${propertyBookingPanelHtml(broker)}
             ${sourceContactUrl && !publicCallPhone ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
-            <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">${translateListingLabel("Share Broker Card")}</button>
-            <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold inline-flex items-center justify-center">${translatePropertyUi("View Broker")}</a>
+            <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" data-broker-profile-action="share" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">${translateListingLabel("Share Broker Card")}</button>
+            <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" data-broker-profile-action="profile" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold inline-flex items-center justify-center">${translatePropertyUi("View Broker")}</a>
           ` : `
             <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
             <p class="text-xs text-gray-500 mb-3">${adminEscape(sourceContactSubtitle || translatePropertyUi("Public listing contact"))}</p>
@@ -62240,12 +62240,47 @@ function markPropertyBookingReady() {
   panel.setAttribute("data-booking-ready", "1");
 }
 
+function makaugListingContactLink(property) {
+  const title = String(property?.title || "this property").trim() || "this property";
+  const share = typeof getPropertyShareUrl === "function" ? getPropertyShareUrl(property || {}) : "";
+  const href = buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, `Hi makaug, I need help with ${title}. ${share}`.trim());
+  const label = typeof translatePropertyUi === "function" ? translatePropertyUi("Ask makaug") : "Ask makaug";
+  return `<a href="${adminAttr(href)}" target="_blank" rel="noopener noreferrer" class="property-makaug-contact block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2" data-makaug-contact="1"><i class="fab fa-whatsapp mr-1.5"></i>${label}</a>`;
+}
+
+function hideMissingAgentBookingPanel() {
+  if (typeof document === "undefined") return;
+  const property = typeof findPropertyForUi === "function" && typeof activeDetailPropertyId !== "undefined"
+    ? findPropertyForUi(activeDetailPropertyId)
+    : null;
+  const panel = document.getElementById("property-booking-panel");
+  const card = panel?.parentElement || document.querySelector("#page-detail .sticky");
+  if (panel) panel.remove();
+  document.querySelectorAll("#page-detail .detail-broker-profile-link").forEach((link) => {
+    const block = document.createElement("div");
+    block.className = "detail-broker-summary flex items-center gap-3 rounded-xl border border-green-100 bg-green-50/60 p-3 mb-3";
+    block.innerHTML = link.innerHTML;
+    link.replaceWith(block);
+  });
+  document.querySelectorAll("#page-detail [data-broker-profile-action]").forEach((node) => node.remove());
+  if (card && !card.querySelector("[data-makaug-contact]")) {
+    const fallback = makaugListingContactLink(property);
+    const save = card.querySelector("#detail-save-btn");
+    if (save) save.insertAdjacentHTML("beforebegin", fallback);
+    else card.insertAdjacentHTML("beforeend", fallback);
+  }
+}
+
 async function mountPropertyBookingPanel(agentId, listingId, renderSerial) {
   const entry = primePropertyListingBooking(agentId, listingId);
   let data = null;
   try {
     data = entry ? (entry.data || await entry.promise) : null;
     if (renderSerial && typeof detailRenderIsCurrent === "function" && !detailRenderIsCurrent(renderSerial)) return;
+    if (!data?.agent) {
+      hideMissingAgentBookingPanel();
+      return;
+    }
     const broker = data?.agent ? rememberPropertyBookingAgent(data.agent) : null;
     const panel = typeof document !== "undefined" ? document.getElementById("property-booking-panel") : null;
     if (panel?.classList.contains("is-loading")) {

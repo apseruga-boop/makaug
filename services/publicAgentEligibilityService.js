@@ -134,20 +134,46 @@ function hasPublicAgentInventory(row = {}, approvedListingCount = 0) {
   return count >= PUBLIC_AGENT_MIN_LIVE_LISTINGS;
 }
 
-// The HTML profile follows the public directory, including a staff-reviewed
-// direct agent who is approved before any listing is live. An agent who
-// already has an approved listing keeps the page they had before that rule.
+// The HTML profile matches GET /api/agents/:id. A listing count is not enough:
+// an agent the API 404s (no account, not a direct agent, test data, or a
+// source import) stays a friendly 404. A staff-reviewed direct agent who is
+// approved before any listing is live still has a page.
 function publicAgentProfileVisible(row = {}) {
   if (!row || typeof row !== 'object') return false;
   const status = String(row.status || 'pending').trim().toLowerCase();
   if (BLOCKED_PUBLIC_AGENT_STATUSES.has(status)) return false;
+  if (isSuppressedPublicAgent(row) || isRemoteImportedAgent(row)) return false;
+  if (!isSelfRegisteredPublicAgent(row)) return false;
   const listings = Number(row.approved_listing_count ?? row.listings_count ?? 0);
   const count = Number.isFinite(listings) ? listings : 0;
   if (count >= 1) return true;
   if (status !== 'approved') return false;
-  if (isSuppressedPublicAgent(row) || isRemoteImportedAgent(row)) return false;
-  if (!isSelfRegisteredPublicAgent(row)) return false;
   return hasPublicAgentInventory(row, count);
+}
+
+// Sitemap profiles are the approved slice of that same rule. Pending agents
+// can still open when the API returns them, but they are not advertised.
+function publicSitemapAgentWhereSql(alias = 'a') {
+  const a = sqlAlias(alias);
+  const markerSql = PUBLIC_AGENT_SUPPRESSED_MARKERS.map((marker) => {
+    const safe = String(marker).replace(/'/g, "''");
+    return `COALESCE(${a}.full_name, '') NOT ILIKE '%${safe}%'
+      AND COALESCE(${a}.company_name, '') NOT ILIKE '%${safe}%'
+      AND COALESCE(${a}.bio, '') NOT ILIKE '%${safe}%'
+      AND COALESCE(${a}.verification_reason, '') NOT ILIKE '%${safe}%'`;
+  }).join('\n      AND ');
+  return `LOWER(COALESCE(${a}.status, '')) = 'approved'
+    AND (
+      ${a}.user_id IS NOT NULL
+      OR COALESCE(${a}.verification_reason, '') ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
+    )
+    AND COALESCE(${a}.verification_reason, '') NOT ILIKE '%public social source onboarding%'
+    AND COALESCE(${a}.verification_reason, '') NOT ILIKE '%source profile%'
+    AND COALESCE(${a}.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'
+    AND COALESCE(${a}.email, '') !~* '(qa-test|makaug\\.invalid|dummy|sample)'
+    AND COALESCE(${a}.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'
+    AND COALESCE(${a}.specializations::text, '') !~* '(qa test delete|soft launch test|dummy|sample|training|demo|placeholder)'
+    AND ${markerSql}`;
 }
 
 function isRemoteImportedAgent(row = {}) {
@@ -214,5 +240,6 @@ module.exports = {
   isSuppressedPublicAgent,
   isVerifiedByMakaug,
   publicAgentProfileVisible,
+  publicSitemapAgentWhereSql,
   verifiedByMakaugSql
 };
