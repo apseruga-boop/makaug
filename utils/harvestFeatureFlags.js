@@ -12,6 +12,10 @@ function harvestPublicSubmissionsEnabled(env = process.env) {
   return envFlagEnabled(env.HARVEST_PUBLIC_SUBMISSIONS_ENABLED);
 }
 
+function tiktokSourceSweepEnabled(env = process.env) {
+  return envFlagEnabled(env.TIKTOK_SOURCE_SWEEP_ENABLED);
+}
+
 function applyHarvestPublicSubmissionVisibility(html, env = process.env) {
   const source = String(html || '');
   if (harvestPublicSubmissionsEnabled(env)) return source;
@@ -26,4 +30,5 @@ module.exports = {
   envFlagEnabled,
   harvestAutomationEnabled,
   harvestPublicSubmissionsEnabled,
+  tiktokSourceSweepEnabled,
 };

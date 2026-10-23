@@ -12,8 +12,16 @@ const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
   runSocialPlatformPostSweep,
 } = require('../services/socialPlatformPostDiscoveryService');
-const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const { socialSweepPublishedAfter } = require('../utils/socialSweepWindow');
+const { dailySourceMonitorPlan } = require('../utils/dailySourceMonitorPlan');
+const logger = require('../config/logger');
+const {
+  DEFAULT_STALE_AFTER_DAYS,
+  LISTING_SOURCE_HEALTH_AUDIT_ACTION,
+  buildListingSourceHealthReport,
+  probeListingSources,
+  storeListingSourceHealthReport,
+} = require('../services/listingSourceHealthService');
 
 const args = process.argv.slice(2);
 const MONITOR_AUDIT_ACTION = 'continuous_social_monitor_run';
@@ -46,7 +54,9 @@ function usage() {
     'Usage:',
     '  node scripts/run-continuous-social-monitor.js --dry-run',
     '  node scripts/run-continuous-social-monitor.js --confirm',
-    '  node scripts/run-continuous-social-monitor.js --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=15',
+    '  node scripts/run-continuous-social-monitor.js --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=8',
+    '  The daily Render cron uses this command. YouTube/X run only when HARVEST_AUTOMATION_ENABLED=true.',
+    '  TikTok public pages run only when TIKTOK_SOURCE_SWEEP_ENABLED=true. The health report always runs.',
     '',
     'Defaults:',
     '  High-frequency YouTube runs use --youtube-job-mode=channel_uploads to avoid broad Search quota burn.',
@@ -132,10 +142,6 @@ async function main() {
     usage();
     process.exit(2);
   }
-  if (confirm && !harvestAutomationEnabled()) {
-    throw new Error('Harvest automation is disabled. Set HARVEST_AUTOMATION_ENABLED=true only after Dave verification.');
-  }
-
   const targetCount = numberValue('--source-target', PROPERTY_SOURCE_REGISTRY_TARGET_COUNT, { min: 1 });
   const cadenceMinutes = numberValue('--cadence-minutes', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_CADENCE_MINUTES || DEFAULT_CADENCE_MINUTES), { min: 1, max: 1440 });
   const maxSources = numberValue('--max-sources', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_MAX_SOURCES || 15), { min: 1, max: 60 });
@@ -145,7 +151,9 @@ async function main() {
   const lookbackDays = numberValue('--lookback-days', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_LOOKBACK_DAYS || 30), { min: 0, max: 30 });
   const searchMode = argValue('--x-search-mode', process.env.CONTINUOUS_SOCIAL_MONITOR_X_SEARCH_MODE || 'recent');
   const youtubeJobMode = argValue('--youtube-job-mode', process.env.CONTINUOUS_SOCIAL_MONITOR_YOUTUBE_JOB_MODE || 'channel_uploads');
-  const platforms = listValue('--platforms', process.env.CONTINUOUS_SOCIAL_MONITOR_PLATFORMS || 'youtube,x');
+  const requestedPlatforms = listValue('--platforms', process.env.CONTINUOUS_SOCIAL_MONITOR_PLATFORMS || 'youtube,x');
+  const plan = dailySourceMonitorPlan({ env: process.env, platforms: requestedPlatforms });
+  const platforms = plan.sweep_platforms;
   const explicitOffset = argValue('--source-offset', '');
   const auditCursor = explicitOffset === '' ? await readLastMonitorCursor() : null;
   const sourceOffset = explicitOffset !== ''
@@ -154,6 +162,21 @@ async function main() {
   const nextSourceOffset = (sourceOffset + maxSources) % targetCount;
 
   const sweepResults = [];
+  for (const skipped of plan.skipped) {
+    sweepResults.push({
+      platform: skipped.platform,
+      result: { skipped_reason: skipped.reason, posts: [] },
+      summary: {
+        platforms: [skipped.platform],
+        skipped_reason: skipped.reason,
+        discovered_posts_count: 0,
+        created_properties: 0,
+        existing_properties: 0,
+        review_queue_properties: 0,
+      },
+    });
+    logger.warn(`source monitor skipped ${skipped.platform}: ${skipped.reason}`);
+  }
   for (const platform of platforms) {
     const result = await runSocialPlatformPostSweep({
       db,
@@ -192,11 +215,53 @@ async function main() {
     published_after: publishedAfter,
     youtube_job_mode: youtubeJobMode,
     platforms,
+    sweep_plan: plan,
     summaries: sweepResults.map((item) => item.summary),
   };
 
-  if (confirm) await writeMonitorAudit(report);
+  const staleAfterDays = numberValue('--stale-after-days', Number(process.env.LISTING_SOURCE_STALE_AFTER_DAYS || DEFAULT_STALE_AFTER_DAYS), { min: 1, max: 90 });
+  const probeLimit = numberValue('--probe-limit', Number(process.env.LISTING_SOURCE_HEALTH_PROBE_LIMIT || 8), { min: 1, max: 20 });
+  const probes = dryRun
+    ? { skipped: true, reason: 'dry_run', checked: 0, results: [] }
+    : await probeListingSources({ limit: probeLimit, pacingMs: Number(process.env.LISTING_SOURCE_HEALTH_PROBE_PACING_MS || 1100) });
+  const health = await buildListingSourceHealthReport({
+    db,
+    staleAfterDays,
+    probes: probes.results || [],
+    tiktokSweepEnabled: plan.tiktok_sweep_enabled,
+    sweepSkipped: plan.skipped,
+  });
+  health.probes = {
+    skipped: probes.skipped === true,
+    reason: probes.reason || '',
+    checked: probes.checked || 0,
+    note: probes.note || '',
+  };
+  const publicSweepBroken = sweepResults.flatMap((item) => item.result?.tiktok?.public_sweep?.broken_sources || item.result?.public_sweep?.broken_sources || []);
+  if (publicSweepBroken.length) {
+    const extraBroken = publicSweepBroken.map((row) => ({
+      kind: 'tiktok_public_sweep',
+      platform: 'tiktok',
+      source_key: row.source_key || '',
+      source_name: row.source_name || '',
+      source_url: row.source_url || '',
+      http_status: row.http_status || null,
+      status: 'broken',
+      reason: row.reason || 'broken',
+    }));
+    health.broken = [...health.broken, ...extraBroken].slice(0, 40);
+    health.broken_count = health.broken.length;
+    health.summary = `${health.broken_count} broken, ${health.stale_count} stale, ${health.auth_wall_count} auth-walled, TikTok public sweep ${plan.tiktok_sweep_enabled ? 'on' : 'off'}`;
+  }
+  report.listing_source_health = health;
+
+  if (confirm && platforms.length) await writeMonitorAudit(report);
+  let healthStored = { ok: true, skipped: !confirm };
+  if (confirm) healthStored = await storeListingSourceHealthReport(db, health);
+  report.listing_source_health_stored = healthStored;
+  logger.info(`listing_source_health_report ${health.summary} audit=${LISTING_SOURCE_HEALTH_AUDIT_ACTION}`);
   console.log(JSON.stringify(report, null, 2));
+  if (confirm && healthStored.ok !== true) process.exitCode = 1;
 }
 
 main()

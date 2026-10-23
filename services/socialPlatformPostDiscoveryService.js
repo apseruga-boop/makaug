@@ -30,6 +30,8 @@ const {
   primaryImagePerceptualHashes,
 } = require('./propertyHarvestDedupService');
 const { recordHarvestImportResult } = require('./propertyHarvestMonitoringService');
+const { fetchTikTokPublicSourcePosts } = require('./tiktokPublicSweepService');
+const { tiktokSourceSweepEnabled } = require('../utils/harvestFeatureFlags');
 const {
   blockedSocialSourceMatch,
   isPermanentlyBlockedSocialSource,
@@ -4739,6 +4741,25 @@ async function runSocialPlatformPostSweep({
     || tiktokDataSourceFetch.timed_out === true
     || /source_sweep/.test(tiktokDataSourceFetch.skipped_reason || '')
   ) partialResults = true;
+  const tiktokPublicSweep = requestedPlatforms.includes('tiktok')
+    ? await fetchTikTokPublicSourcePosts({
+      enabled: tiktokSourceSweepEnabled(env),
+      sources: tiktokSourceWindow.sources,
+      fetchImpl: sweepFetchImpl,
+      env,
+      publishedAfter: cleanText(publishedAfter) || archiveStartTime,
+      deadlineAt: sweepDeadlineAt,
+      minRemainingMs: SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS,
+    })
+    : {
+      enabled: false,
+      skipped_reason: 'tiktok_not_requested',
+      posts: [],
+      reports: [],
+      broken_sources: [],
+      http_call_count: 0,
+    };
+  if (tiktokPublicSweep.partial_results === true || tiktokPublicSweep.rate_limited === true) partialResults = true;
   const youtubeCommentLookupBudget = {
     remaining: cappedNumber(
       env.STAFF_YOUTUBE_COMMENT_LOOKUP_LIMIT,
@@ -4989,6 +5010,7 @@ async function runSocialPlatformPostSweep({
   }
   const allDiscoveredPosts = uniquePosts([
     ...tiktokDataSourceFetch.posts,
+    ...(tiktokPublicSweep.posts || []),
     ...youtubeFetch.posts,
     ...xFetch.posts,
   ]);
@@ -5131,7 +5153,7 @@ async function runSocialPlatformPostSweep({
       instagram: sourceWindowSummary(instagramSourceWindow),
     },
     policy: {
-      tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, and source evidence are captured. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
+      tiktok: 'Public TikTok sweep runs only when TIKTOK_SOURCE_SWEEP_ENABLED is on. It reads unauthenticated profile, tag, and search pages, keeps exact /@handle/video/id links, confirms them with the public oEmbed endpoint, and queues them through the same found-online moderation path as YouTube and X. Login walls, captcha pages, and HTML with no video links are reported and not guessed. Missing price becomes Price upon application.',
       youtube: 'YouTube source pages are scanned through channel upload playlists when a channel/handle is known; hashtags and search feeds use focused YouTube Data API search queries from 1 January 2026 onward for both Shorts and long-form videos. If YouTube Search quota is exhausted, the sweep falls back to stored YouTube source/contact channels and scans their upload playlists without broad hashtag search. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
       x: 'X/Twitter source lists become properties after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, location, and contact path. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
       student_housing_focus: 'Student housing sweeps prioritize campus, hostel, student accommodation, university, and student-room source signals and prepare manual Facebook/Instagram capture tasks when direct APIs are unavailable.',
@@ -5161,6 +5183,27 @@ async function runSocialPlatformPostSweep({
         reports: (tiktokDataSourceFetch.reports || []).slice(0, 20),
       },
       pending_thumbnail_reprocess: pendingTikTokThumbnailReprocess,
+      public_sweep: {
+        enabled: tiktokPublicSweep.enabled === true,
+        skipped_reason: tiktokPublicSweep.skipped_reason || '',
+        method: tiktokPublicSweep.method || '',
+        sources_considered: tiktokPublicSweep.sources_considered || 0,
+        sources_fetched: tiktokPublicSweep.sources_fetched || 0,
+        http_call_count: tiktokPublicSweep.http_call_count || 0,
+        video_urls_found: tiktokPublicSweep.video_urls_found || 0,
+        duplicates_skipped: tiktokPublicSweep.duplicates_skipped || 0,
+        outside_lookback_count: tiktokPublicSweep.outside_lookback_count || 0,
+        oembed_fetch_count: tiktokPublicSweep.oembed_fetch_count || 0,
+        fetched_posts_count: (tiktokPublicSweep.posts || []).length,
+        rate_limited: tiktokPublicSweep.rate_limited === true,
+        partial_results: tiktokPublicSweep.partial_results === true,
+        broken_sources: tiktokPublicSweep.broken_sources || [],
+        auth_wall_sources: (tiktokPublicSweep.auth_wall_sources || []).slice(0, 20),
+        no_video_sources: (tiktokPublicSweep.no_video_sources || []).slice(0, 20),
+        reports: (tiktokPublicSweep.reports || []).slice(0, 20),
+        limits: tiktokPublicSweep.limits || {},
+        cannot_capture: tiktokPublicSweep.cannot_capture || [],
+      },
     },
     youtube: {
       source_count: youtubeSources.length,

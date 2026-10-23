@@ -14993,6 +14993,22 @@ function renderStaffSourceIntake(data = {}) {
       monitor.audit_log_action ? `Audit: ${monitor.audit_log_action}` : ""
     ].filter(Boolean).join(" • ");
   }
+  const monitorHealth = document.getElementById("staff-source-monitor-health");
+  if (monitorHealth) {
+    const health = monitor.health && typeof monitor.health === "object" ? monitor.health : null;
+    if (!health || !health.reported_at) {
+      monitorHealth.textContent = "No daily source health report stored yet. The cron writes broken and stale listing sources here.";
+    } else {
+      const broken = Array.isArray(health.broken) ? health.broken : [];
+      const stale = Array.isArray(health.stale) ? health.stale : [];
+      const itemLabel = (row) => [row.source_name || row.source_key || row.platform, row.reason].filter(Boolean).join(" — ");
+      monitorHealth.innerHTML = `
+        <div class="font-black">Last health report ${adminEscape(staffKampalaDateTime(health.reported_at) || "")}: ${staffNumber(health.broken_count || 0)} broken, ${staffNumber(health.stale_count || 0)} stale.</div>
+        ${broken.length ? `<div class="mt-1">Broken: ${broken.map((row) => adminEscape(itemLabel(row))).join("; ")}</div>` : ""}
+        ${stale.length ? `<div class="mt-1">Stale: ${stale.map((row) => adminEscape(itemLabel(row))).join("; ")}</div>` : ""}
+        <div class="mt-1 text-sky-800">${adminEscape(health.summary || "")}</div>`;
+    }
+  }
   const monitorWindow = document.getElementById("staff-source-monitor-window");
   if (monitorWindow) {
     const lookback = monitor.published_after ? staffKampalaDateTime(monitor.published_after) : "";

@@ -196,17 +196,18 @@ const STAFF_BULK_APPROVAL_CHECK_KEYS = [
 ];
 const STAFF_SOURCE_MONITOR_GUIDE = {
   title: 'Continuous source monitor',
-  status: 'Ready for Render Cron Job and Render Shell trigger',
+  status: 'Daily Render cron at 04:30 UTC reports broken and stale sources here and in the logs.',
   dry_run_command: 'npm run inventory:continuous-monitor -- --dry-run',
   confirm_command: 'npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=15 --max-results=25 --max-pages=1',
   deep_channel_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=channel_uploads --lookback-days=30 --max-sources=50 --max-results=25 --max-pages=1',
   broad_search_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=search --lookback-days=30 --max-sources=20 --max-results=10 --max-pages=1',
   daily_registry_command: 'npm run inventory:daily-source-sweep -- --confirm',
-  high_frequency_cadence: 'Every 10-15 minutes: safe known-channel uploads plus X recent search.',
+  high_frequency_cadence: 'Once daily at 04:30 UTC, before 06:00 London: health report, then YouTube and X only when HARVEST_AUTOMATION_ENABLED is on.',
+  tiktok_public_sweep_cadence: 'Same daily cron. Public TikTok page and oEmbed sweep runs only when TIKTOK_SOURCE_SWEEP_ENABLED is on.',
   deep_channel_cadence: 'Every 1-2 hours: deeper known-channel upload scans for agency sources that post heavily.',
   broad_search_cadence: 'Every 2-4 hours: broader hashtag/search discovery in small batches so YouTube Search quota is protected.',
   daily_registry_cadence: 'Once daily: refresh the source registry and review baseline.',
-  render_trigger_path: 'Render Dashboard > project > New > Cron Job, or web service Shell for a one-off run.',
+  render_trigger_path: 'Render Dashboard > New > Cron Job, schedule 30 4 * * * UTC, command npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=8 --max-results=10 --max-pages=1.',
   lookback_days: 30,
   source_registry_batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
   source_registry_target_count: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
@@ -722,16 +723,55 @@ function staffSourceMonitorGuide() {
     deep_channel_command: deepChannelCommand,
     broad_search_command: broadSearchCommand,
     cadences: [
-      { label: 'Fast monitor', value: STAFF_SOURCE_MONITOR_GUIDE.high_frequency_cadence },
+      { label: 'Daily monitor', value: STAFF_SOURCE_MONITOR_GUIDE.high_frequency_cadence },
+      { label: 'TikTok public sweep', value: STAFF_SOURCE_MONITOR_GUIDE.tiktok_public_sweep_cadence },
       { label: 'Broad search', value: STAFF_SOURCE_MONITOR_GUIDE.broad_search_cadence },
       { label: 'Registry refresh', value: STAFF_SOURCE_MONITOR_GUIDE.daily_registry_cadence }
     ],
     commands: [
       { label: 'Dry proof', value: STAFF_SOURCE_MONITOR_GUIDE.dry_run_command },
+      { label: 'Daily cron', value: 'npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=8 --max-results=10 --max-pages=1' },
       { label: 'Trigger now', value: STAFF_SOURCE_MONITOR_GUIDE.confirm_command },
       { label: 'Broad YouTube search', value: broadSearchCommand },
       { label: 'Daily registry', value: STAFF_SOURCE_MONITOR_GUIDE.daily_registry_command }
     ]
+  };
+}
+
+async function latestListingSourceHealthForMonitor() {
+  const row = await safeOne(
+    `SELECT created_at, details
+     FROM audit_logs
+     WHERE action = 'listing_source_health_report'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [],
+    {},
+    { timeoutMs: 800, label: 'staff_source_health' }
+  );
+  const details = row?.details && typeof row.details === 'object' ? row.details : {};
+  if (!row?.created_at && !details.reported_at) return null;
+  const broken = Array.isArray(details.broken) ? details.broken.slice(0, 8) : [];
+  const stale = Array.isArray(details.stale) ? details.stale.slice(0, 8) : [];
+  return {
+    reported_at: row.created_at || details.reported_at || null,
+    summary: details.summary || '',
+    broken_count: Number(details.broken_count || broken.length || 0),
+    stale_count: Number(details.stale_count || stale.length || 0),
+    auth_wall_count: Number(details.auth_wall_count || 0),
+    tiktok_sweep_enabled: details.tiktok_sweep_enabled === true,
+    broken,
+    stale,
+  };
+}
+
+async function staffSourceMonitorPayload() {
+  const guide = staffSourceMonitorGuide();
+  const health = await latestListingSourceHealthForMonitor();
+  return {
+    ...guide,
+    health,
+    health_audit_action: 'listing_source_health_report',
   };
 }
 
@@ -1972,7 +2012,7 @@ async function buildDashboardFastPayload(req) {
       batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
       summary: widgetRows.sources,
       possible_duplicates: 0,
-      monitor: staffSourceMonitorGuide(),
+      monitor: await staffSourceMonitorPayload(),
       source_presets: STAFF_SOURCE_PRESETS,
       source_registry: [],
       queued_found_online: [],
@@ -2340,7 +2380,7 @@ async function dashboardPayload(req) {
         hidden_from_active_review: true,
         reason: 'Construction tutorials, design showcases, building-cost videos, and similar non-listing source posts are filtered out of the active moderator queue.'
       },
-      monitor: staffSourceMonitorGuide(),
+      monitor: await staffSourceMonitorPayload(),
       source_presets: STAFF_SOURCE_PRESETS,
       source_registry: sourceRows,
       queued_found_online: activeSourceQueueRows,

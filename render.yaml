@@ -104,3 +104,30 @@ services:
         value: https://makaug-whatsapp-ai-runtime.onrender.com
       - key: WHATSAPP_AI_RUNTIME_TOKEN
         sync: false
+
+  # Daily listing-source monitor. Do not sync this service until CTO review.
+  # Schedule is UTC. 04:30 UTC is 05:30 London during British Summer Time and
+  # 04:30 London in winter, both before 06:00 London. Set region to the live
+  # makaug web service region if that service is not in oregon.
+  - type: cron
+    name: makaug-daily-source-monitor
+    runtime: node
+    plan: starter
+    region: oregon
+    schedule: "30 4 * * *"
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=8 --max-results=10 --max-pages=1
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: HARVEST_AUTOMATION_ENABLED
+        sync: false
+      - key: TIKTOK_SOURCE_SWEEP_ENABLED
+        value: "false"
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: X_BEARER_TOKEN
+        sync: false
