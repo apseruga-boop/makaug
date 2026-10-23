@@ -197,18 +197,18 @@ const STAFF_BULK_APPROVAL_CHECK_KEYS = [
 ];
 const STAFF_SOURCE_MONITOR_GUIDE = {
   title: 'Continuous source monitor',
-  status: 'Daily Render cron at 04:30 UTC reports broken and stale sources here and in the logs.',
+  status: 'The web service runs this once a day at 05:30 Europe/London and reports broken and stale sources here and in the logs.',
   dry_run_command: 'npm run inventory:continuous-monitor -- --dry-run',
   confirm_command: 'npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=15 --max-results=25 --max-pages=1',
   deep_channel_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=channel_uploads --lookback-days=30 --max-sources=50 --max-results=25 --max-pages=1',
   broad_search_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=search --lookback-days=30 --max-sources=20 --max-results=10 --max-pages=1',
   daily_registry_command: 'npm run inventory:daily-source-sweep -- --confirm',
-  high_frequency_cadence: 'Once daily at 04:30 UTC, before 06:00 London: health report, then YouTube and X only when HARVEST_AUTOMATION_ENABLED is on.',
-  tiktok_public_sweep_cadence: 'Same daily cron. Public TikTok page and oEmbed sweep runs only when TIKTOK_SOURCE_SWEEP_ENABLED is on.',
+  high_frequency_cadence: 'Once a day at 05:30 Europe/London: health report, then YouTube and X only when HARVEST_AUTOMATION_ENABLED is on. TikTok is included unless TIKTOK_SOURCE_SWEEP_ENABLED is false.',
+  tiktok_public_sweep_cadence: 'Included in the 05:30 Europe/London run unless TIKTOK_SOURCE_SWEEP_ENABLED is false.',
   deep_channel_cadence: 'Every 1-2 hours: deeper known-channel upload scans for agency sources that post heavily.',
   broad_search_cadence: 'Every 2-4 hours: broader hashtag/search discovery in small batches so YouTube Search quota is protected.',
   daily_registry_cadence: 'Once daily: refresh the source registry and review baseline.',
-  render_trigger_path: 'Render Dashboard > New > Cron Job, schedule 30 4 * * * UTC, command npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=8 --max-results=10 --max-pages=1.',
+  render_trigger_path: 'No separate Render cron. The makaug web service schedules it at 05:30 Europe/London. Kill switch: SOURCE_MONITOR_SCHEDULER_ENABLED (default on).',
   lookback_days: 30,
   source_registry_batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
   source_registry_target_count: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
@@ -735,7 +735,7 @@ function staffSourceMonitorGuide() {
     ],
     commands: [
       { label: 'Dry proof', value: STAFF_SOURCE_MONITOR_GUIDE.dry_run_command },
-      { label: 'Daily cron', value: 'npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=8 --max-results=10 --max-pages=1' },
+      { label: 'Daily run', value: 'npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x,tiktok --youtube-job-mode=channel_uploads --max-sources=8 --max-results=10 --max-pages=1' },
       { label: 'Trigger now', value: STAFF_SOURCE_MONITOR_GUIDE.confirm_command },
       { label: 'Broad YouTube search', value: broadSearchCommand },
       { label: 'Daily registry', value: STAFF_SOURCE_MONITOR_GUIDE.daily_registry_command }

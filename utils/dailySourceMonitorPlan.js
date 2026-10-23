@@ -16,9 +16,15 @@ function normalizePlatforms(platforms) {
   return normalized.length ? [...new Set(normalized)] : ['youtube', 'x'];
 }
 
-function dailySourceMonitorPlan({ env = process.env, platforms = ['youtube', 'x'] } = {}) {
+function tiktokEnabledForPlan(env, tiktokWhenUnset) {
+  const raw = env?.TIKTOK_SOURCE_SWEEP_ENABLED;
+  if (raw == null || String(raw).trim() === '') return tiktokWhenUnset === true;
+  return tiktokSourceSweepEnabled(env);
+}
+
+function dailySourceMonitorPlan({ env = process.env, platforms = ['youtube', 'x'], tiktokWhenUnset = false } = {}) {
   const harvestOn = harvestAutomationEnabled(env);
-  const tiktokOn = tiktokSourceSweepEnabled(env);
+  const tiktokOn = tiktokEnabledForPlan(env, tiktokWhenUnset);
   const requested = normalizePlatforms(platforms);
   const withTikTok = tiktokOn && !requested.includes('tiktok')
     ? [...requested, 'tiktok']

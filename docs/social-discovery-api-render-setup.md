@@ -82,30 +82,21 @@ npm run inventory:sweep-social-platforms -- --platform=students --dry-run --max-
 
 Switch `--dry-run` to `--confirm` only after the reports show usable exact posts and the credentials are configured.
 
-## Render Cron Jobs
+## Daily source monitor
 
-Approved schedule (Arthur, 23 Oct 2026): one daily cron, not a 10-minute loop. The blueprint service is `makaug-daily-source-monitor` in `render.yaml`. Creating it is a manual Render step after review. This repo change does not create the service.
+Approved schedule (Arthur, 23 Oct 2026): once a day, not a 10-minute loop. A separate Render cron was refused because the Hobby workspace is at its 25-service limit. The makaug web service runs the monitor itself at 05:30 Europe/London. The old cron block in `render.yaml` is a comment only.
 
-The cron runs the existing source monitor. That command always writes a broken/stale source report to logs, `audit_logs` (`listing_source_health_report`), the in-app notification log, and the staff source monitor card. It does not send WhatsApp. YouTube and X sweeps still run only when `HARVEST_AUTOMATION_ENABLED=true`. The TikTok public sweep runs only when `TIKTOK_SOURCE_SWEEP_ENABLED=true`.
+The run is the same command as `npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x,tiktok --youtube-job-mode=channel_uploads --max-sources=8 --max-results=10 --max-pages=1`. It writes a broken/stale source report to logs, `audit_logs` (`listing_source_health_report`), the in-app notification log, and the staff source monitor card. It does not send WhatsApp. YouTube and X sweeps still run only when `HARVEST_AUTOMATION_ENABLED=true`. TikTok is included unless `TIKTOK_SOURCE_SWEEP_ENABLED` is explicitly `false`. An unset TikTok flag stays off for a manual command and on for this scheduled run.
 
-Schedule: `30 4 * * *` UTC. That is 05:30 in London during British Summer Time and 04:30 in London during winter, both before 06:00 London.
+`SOURCE_MONITOR_SCHEDULER_ENABLED` defaults to on. Set it to `false` to stop the scheduler. No new Render service and no env change is required for the default.
 
-Create the cron in the Render Dashboard after this pull request is reviewed. Do not apply it from this change alone.
+A Postgres advisory lock plus a `daily_source_monitor_ran` audit row for the London date stop a second instance or a restart from running it twice. The work is background database work with an 8 minute timeout, so it does not hold the request path. A restart between 05:30 and 06:30 London still catches up if today's marker is missing. After 06:30 it waits for the next morning.
 
-1. Render Dashboard -> New -> Cron Job. Connect the makaug repo and the production branch.
-2. Name: `makaug-daily-source-monitor`.
-3. Runtime: Node. Plan: Starter. Region: the same region as the live makaug web service (`oregon` in `render.yaml` only if the web service is there).
-4. Schedule: `30 4 * * *`.
-5. Build command: `npm ci --omit=dev`.
-6. Start command: `npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=8 --max-results=10 --max-pages=1`.
-7. Copy these environment variable names from the web service, with no new secret values in git: `DATABASE_URL`, `HARVEST_AUTOMATION_ENABLED`, `YOUTUBE_API_KEY`, `X_BEARER_TOKEN`. Set `NODE_ENV` to `production` and `TIKTOK_SOURCE_SWEEP_ENABLED` to `false` until Arthur turns the TikTok sweep on.
-8. Estimated cost: about $1/month. Render bills cron runtime by the second and applies a $1 monthly minimum. This job is one short run per day.
+On boot the process logs `source monitor scheduler registered next_run=<ISO time>`.
 
-The same service is declared in `render.yaml` for review. Syncing that blueprint also touches the WhatsApp services in the file, so prefer the Dashboard steps above unless the CTO intends to sync the whole blueprint.
+TikTok capture limits, when the sweep is on: at most 8 public pages, 4 video URLs per page, 16 oEmbed calls, and 1.2 seconds between requests. Pages that return a login wall, captcha, or no video URLs are reported and not turned into listings. The sweep cannot see private posts, comments, or captions beyond the oEmbed title.
 
-TikTok capture limits, when the flag is on: at most 8 public pages, 4 video URLs per page, 16 oEmbed calls, and 1.2 seconds between requests. Pages that return a login wall, captcha, or no video URLs are reported and not turned into listings. The sweep cannot see private posts, comments, or captions beyond the oEmbed title.
-
-Use bounded batches so Render does not timeout or rate-limit the API providers. YouTube stays on known-channel uploads so the daily run does not burn Search quota.
+Use bounded batches so the web service does not timeout or rate-limit the API providers. YouTube stays on known-channel uploads so the daily run does not burn Search quota.
 
 One-off trigger from Render:
 
@@ -135,7 +126,7 @@ Advance `--source-offset` for YouTube batches to walk the 60,000-record registry
 
 Recommended production cadence:
 
-- Once daily at 04:30 UTC: `inventory:continuous-monitor` with `--youtube-job-mode=channel_uploads`, `--max-sources=8`, and `--max-results=10`. This is the Render cron above. It writes the broken/stale report, advances the YouTube/X cursor only when harvest automation is on, and queues TikTok posts only when the TikTok flag is on.
+- Once a day at 05:30 Europe/London, inside the makaug web service: `inventory:continuous-monitor` with `--youtube-job-mode=channel_uploads`, `--max-sources=8`, `--max-results=10`, and `--max-pages=1`. It writes the broken/stale report, advances the YouTube/X cursor only when harvest automation is on, and queues TikTok posts unless `TIKTOK_SOURCE_SWEEP_ENABLED=false`.
 - Broader YouTube hashtag search stays a manual staff run with a small `--max-sources` batch.
 - `inventory:daily-source-sweep -- --confirm` still refreshes the source registry and is separate from this health cron.
 
@@ -149,7 +140,7 @@ The same process is shown inside `/staff-dashboard` under Source intake & social
 - auto-live rule and review rule;
 - the `continuous_social_monitor_run` audit action used to prove confirmed runs and advance the source cursor.
 
-Staff should use the dashboard wording as the board-level operating process. If the cron cadence changes in Render, update `STAFF_SOURCE_MONITOR_GUIDE` in `routes/staff.js` and this document in the same pull.
+Staff should use the dashboard wording as the board-level operating process. If the 05:30 Europe/London run changes, update `STAFF_SOURCE_MONITOR_GUIDE` in `routes/staff.js` and this document in the same pull.
 
 Useful Render env controls for the continuous monitor:
 
