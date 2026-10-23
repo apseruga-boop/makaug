@@ -7,7 +7,8 @@ This is the production setup for Makaug found-online property discovery. The job
 - Source registry target: 60,000 social source records across TikTok, YouTube, X, Facebook, Instagram, and local-language hashtag feeds.
 - Direct API discovery today: YouTube Data API and X API.
 - Exact-link import today: TikTok, YouTube, X, Instagram, and Facebook public post URLs.
-- Meta/TikTok broad discovery: credential readiness is tracked, but broad Facebook/Instagram/TikTok discovery stays approval-gated until the approved platform API adapter is enabled.
+- TikTok public sweep: off unless `TIKTOK_SOURCE_SWEEP_ENABLED=true`. It uses unauthenticated TikTok pages plus the public oEmbed endpoint only. It does not use the Research API, a login, or a paid API.
+- Meta broad discovery stays approval-gated. Facebook and Instagram still produce manual capture tasks.
 - Public count: the homepage number changes when a property becomes public/live through the existing public property APIs, not when a raw source or review candidate is only discovered.
 
 ## Render Environment Variables
@@ -39,7 +40,11 @@ TIKTOK_ACCESS_TOKEN=
 TIKTOK_RESEARCH_API_ACCESS_TOKEN=
 TIKTOK_CLIENT_KEY=
 TIKTOK_CLIENT_SECRET=
+
+TIKTOK_SOURCE_SWEEP_ENABLED=false
 ```
+
+`TIKTOK_SOURCE_SWEEP_ENABLED` defaults off. Set it to `true` only on the daily source-monitor cron when Arthur wants the public TikTok sweep to queue posts. Leave the Research API token unset for that sweep; the public sweep does not read it.
 
 Use one YouTube key env and one X bearer env. The aliases are accepted so old Render names can keep working.
 
@@ -51,7 +56,7 @@ Keep both rollout flags `false` for the initial production deploy. Dave's authen
 - X/Twitter: X Developer Portal -> project/app -> Keys and tokens -> Bearer Token. Official docs: https://docs.x.com/fundamentals/authentication/oauth-2-0/bearer-tokens
 - Facebook/Meta: Meta for Developers -> app -> Graph API permissions/tokens. For Makaug, use approved Page access first, then import exact public post URLs into King review. Official docs: https://developers.facebook.com/docs/graph-api/overview/
 - Instagram: Meta for Developers -> Instagram Graph API -> connect an Instagram Business/Creator account to a Facebook Page -> app review for required permissions -> use the Instagram Business Account ID. Official docs: https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/
-- TikTok: TikTok for Developers -> create app -> request the product/API access that fits the use case. Broad public discovery is approval-gated, so production keeps exact TikTok video URL import plus oEmbed until approved API access is available. Official docs: https://developers.tiktok.com/
+- TikTok: the daily sweep does not need a TikTok app. It reads public `https://www.tiktok.com/` pages and `https://www.tiktok.com/oembed` with no login and no Research API token. Official oEmbed docs: https://developers.tiktok.com/doc/embed-videos
 
 ## First Run
 
@@ -79,7 +84,28 @@ Switch `--dry-run` to `--confirm` only after the reports show usable exact posts
 
 ## Render Cron Jobs
 
-Use bounded batches so Render does not timeout or rate-limit the API providers. The high-frequency job should keep to known YouTube channel uploads first; this keeps Makaug fresh without burning the daily YouTube Search quota on every tick.
+Approved schedule (Arthur, 23 Oct 2026): one daily cron, not a 10-minute loop. The blueprint service is `makaug-daily-source-monitor` in `render.yaml`. Creating it is a manual Render step after review. This repo change does not create the service.
+
+The cron runs the existing source monitor. That command always writes a broken/stale source report to logs, `audit_logs` (`listing_source_health_report`), the in-app notification log, and the staff source monitor card. It does not send WhatsApp. YouTube and X sweeps still run only when `HARVEST_AUTOMATION_ENABLED=true`. The TikTok public sweep runs only when `TIKTOK_SOURCE_SWEEP_ENABLED=true`.
+
+Schedule: `30 4 * * *` UTC. That is 05:30 in London during British Summer Time and 04:30 in London during winter, both before 06:00 London.
+
+Create the cron in the Render Dashboard after this pull request is reviewed. Do not apply it from this change alone.
+
+1. Render Dashboard -> New -> Cron Job. Connect the makaug repo and the production branch.
+2. Name: `makaug-daily-source-monitor`.
+3. Runtime: Node. Plan: Starter. Region: the same region as the live makaug web service (`oregon` in `render.yaml` only if the web service is there).
+4. Schedule: `30 4 * * *`.
+5. Build command: `npm ci --omit=dev`.
+6. Start command: `npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=8 --max-results=10 --max-pages=1`.
+7. Copy these environment variable names from the web service, with no new secret values in git: `DATABASE_URL`, `HARVEST_AUTOMATION_ENABLED`, `YOUTUBE_API_KEY`, `X_BEARER_TOKEN`. Set `NODE_ENV` to `production` and `TIKTOK_SOURCE_SWEEP_ENABLED` to `false` until Arthur turns the TikTok sweep on.
+8. Estimated cost: about $1/month. Render bills cron runtime by the second and applies a $1 monthly minimum. This job is one short run per day.
+
+The same service is declared in `render.yaml` for review. Syncing that blueprint also touches the WhatsApp services in the file, so prefer the Dashboard steps above unless the CTO intends to sync the whole blueprint.
+
+TikTok capture limits, when the flag is on: at most 8 public pages, 4 video URLs per page, 16 oEmbed calls, and 1.2 seconds between requests. Pages that return a login wall, captcha, or no video URLs are reported and not turned into listings. The sweep cannot see private posts, comments, or captions beyond the oEmbed title.
+
+Use bounded batches so Render does not timeout or rate-limit the API providers. YouTube stays on known-channel uploads so the daily run does not burn Search quota.
 
 One-off trigger from Render:
 
@@ -109,9 +135,9 @@ Advance `--source-offset` for YouTube batches to walk the 60,000-record registry
 
 Recommended production cadence:
 
-- Every 10-15 minutes: `inventory:continuous-monitor` with `--youtube-job-mode=channel_uploads`. This follows known source channels, advances offsets through `audit_logs`, dedupes exact URLs, and pushes high-confidence rows through the existing auto-live/review gates.
-- Every 2-4 hours: `inventory:sweep-social-platforms` with `--youtube-job-mode=all` and a small `--max-sources` batch for broader hashtag/search discovery.
-- Once daily: `inventory:daily-source-sweep -- --confirm` to refresh the 60,000 source registry and King review queue baseline.
+- Once daily at 04:30 UTC: `inventory:continuous-monitor` with `--youtube-job-mode=channel_uploads`, `--max-sources=8`, and `--max-results=10`. This is the Render cron above. It writes the broken/stale report, advances the YouTube/X cursor only when harvest automation is on, and queues TikTok posts only when the TikTok flag is on.
+- Broader YouTube hashtag search stays a manual staff run with a small `--max-sources` batch.
+- `inventory:daily-source-sweep -- --confirm` still refreshes the source registry and is separate from this health cron.
 
 ## Staff Dashboard Communication
 
