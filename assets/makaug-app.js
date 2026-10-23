@@ -288,6 +288,7 @@ function mapRemoteAgentForUi(agent = {}) {
     verification_reason: agent.verification_reason || "",
     direct_agent_authorised: directAgentAuthorised,
     verified_by_makaug: agent.verified_by_makaug === true,
+    response_time_label: agent.response_time_label || "",
     private_id_profile_reviewed: agent.private_id_profile_reviewed === true || String(agent.verification_reason || "").includes("[STAFF_REVIEWED_PRIVATE_ID_PROFILE]"),
     profile_claim_pending: typeof agent.profile_claim_pending === "boolean" ? agent.profile_claim_pending : (directAgentAuthorised && !agent.user_id),
     privacy_consent_accepted: agent.privacy_consent_accepted === true,
@@ -16004,6 +16005,36 @@ async function renderStaffDashboard() {
   }
 }
 
+async function loadAgentBookingStaffFlags() {
+  const list = document.getElementById("staff-booking-flags");
+  if (!list || !authState?.token) return;
+  try {
+    const res = await staffApiRequestWithTimeout("/api/agent-bookings/staff-flags", {}, 12000, "Booking escalations");
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    if (!rows.length) {
+      list.textContent = "No open booking escalations.";
+      return;
+    }
+    list.innerHTML = rows.map((row) => `
+      <article class="border border-gray-200 rounded-xl p-3 mb-2">
+        <p class="font-semibold">${adminEscape(row.kind || "escalation")} · ${adminEscape(row.agent_name || row.visitor_name || "")}</p>
+        <p>${adminEscape(row.message || "")}</p>
+        <button type="button" class="mt-2 border border-gray-300 rounded-lg px-3 py-1 text-xs font-semibold" onclick="resolveAgentBookingFlag('${adminAttr(row.id)}')">Resolve</button>
+      </article>`).join("");
+  } catch (error) {
+    list.textContent = "No open booking escalations.";
+  }
+}
+
+async function resolveAgentBookingFlag(id) {
+  try {
+    await staffApiRequestWithTimeout(`/api/agent-bookings/staff-flags/${encodeURIComponent(id)}/resolve`, { method: "POST" }, 12000, "Booking escalations");
+    await loadAgentBookingStaffFlags();
+  } catch (error) {
+    toast(error?.message || "Could not send the request.");
+  }
+}
+
 async function renderStaffDashboardOnce() {
   staffDashboardRenderSeq += 1;
   const gate = document.getElementById("staff-auth-gate");
@@ -16037,6 +16068,7 @@ async function renderStaffDashboardOnce() {
     }
     const data = res?.data || {};
     applyStaffDashboardData(data, user);
+    loadAgentBookingStaffFlags();
     refreshMarketplaceModerationQueue("staff", { silent: true });
     // Always: the fast payload carries counts only, and its lists (leads,
     // WhatsApp, source registry, found-online queue) are empty until the
@@ -61363,6 +61395,9 @@ let agentProfileListingCache = [];
 let agentProfileListingType = "all";
 let agentProfileListingSort = "newest";
 let agentProfileLeafletMap = null;
+let agentBookingOptions = null;
+let agentBookingTab = "viewing";
+let agentBookingAgentId = "";
 
 function agentProfileFirstName(broker = {}) {
   const name = String(broker?.name || "").trim();
@@ -61452,13 +61487,13 @@ function agentProfileContactButtons(broker, { mobile = false } = {}) {
   const whatsapp = String(broker?.whatsapp || "").replace(/\D/g, "");
   const idArg = adminListingIdArg(broker?.id);
   const call = tel
-    ? `<a class="agent-profile-btn" href="tel:${adminAttr(tel)}" aria-label="Call ${name}"><i class="fas fa-phone" aria-hidden="true"></i><span>Call</span></a>`
-    : `<span class="agent-profile-btn is-disabled" aria-label="Phone unavailable"><i class="fas fa-phone" aria-hidden="true"></i><span>Call</span></span>`;
+    ? `<a class="agent-profile-btn" href="tel:${adminAttr(tel)}" aria-label="Call ${name}" title="Call"><i class="fas fa-phone" aria-hidden="true"></i><span>Call</span></a>`
+    : `<span class="agent-profile-btn is-disabled" aria-label="Phone unavailable" title="Call"><i class="fas fa-phone" aria-hidden="true"></i><span>Call</span></span>`;
   const wa = whatsapp
-    ? `<a class="agent-profile-btn is-wa" href="${adminAttr(buildWhatsAppUrl(whatsapp, buildBrokerContactWhatsappMessage(broker)))}" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp ${name}"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span></a>`
-    : `<span class="agent-profile-btn is-wa is-disabled" aria-label="WhatsApp unavailable"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span></span>`;
-  const share = `<button type="button" class="agent-profile-btn" onclick="shareBrokerBusinessCard(${idArg}, 'native')" aria-label="Share profile"><i class="fas fa-share-nodes" aria-hidden="true"></i><span>Share</span></button>`;
-  const request = `<button type="button" class="agent-profile-btn is-primary" onclick="focusAgentProfileRequest()"><span>Request</span></button>`;
+    ? `<a class="agent-profile-btn is-wa" href="${adminAttr(buildWhatsAppUrl(whatsapp, buildBrokerContactWhatsappMessage(broker)))}" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp ${name}" title="WhatsApp"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span></a>`
+    : `<span class="agent-profile-btn is-wa is-disabled" aria-label="WhatsApp unavailable" title="WhatsApp"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span></span>`;
+  const share = `<button type="button" class="agent-profile-btn" onclick="shareBrokerBusinessCard(${idArg}, 'native')" aria-label="Share profile" title="Share"><i class="fas fa-share-nodes" aria-hidden="true"></i><span>Share</span></button>`;
+  const request = `<button type="button" class="agent-profile-btn is-primary" onclick="focusAgentProfileRequest()" aria-label="Book"><span>Book</span></button>`;
   return mobile ? `${wa}${call}${request}` : `${wa}${call}${share}`;
 }
 
@@ -61470,7 +61505,12 @@ function renderAgentProfileListingGrid() {
     agentProfileListingSort
   );
   el.innerHTML = filtered.length
-    ? `<div class="agent-profile-grid">${filtered.map((listing) => propCard(listing)).join("")}</div>`
+    ? `<div class="agent-profile-grid">${filtered.map((listing) => {
+        const badge = listing.availability_label
+          ? `<p class="agent-availability-badge${listing.availability_tone === "stale" ? " is-stale" : ""}">${adminEscape(listing.availability_label)}</p>`
+          : "";
+        return `<div class="agent-profile-listing">${propCard(listing)}${badge}</div>`;
+      }).join("")}</div>`
     : `<div class="agent-profile-empty">No active listings yet.</div>`;
 }
 
@@ -61494,34 +61534,163 @@ function focusAgentProfileRequest() {
   if (name) name.focus();
 }
 
+function setAgentBookingTab(tab) {
+  agentBookingTab = tab || "viewing";
+  document.querySelectorAll("[data-agent-booking-tab]").forEach((button) => {
+    button.classList.toggle("is-active", button.getAttribute("data-agent-booking-tab") === agentBookingTab);
+  });
+  renderAgentBookingFields();
+}
+
+function agentBookingPlaceOptions(options) {
+  const properties = (options?.properties || []).map((item) => `<option value="property:${adminAttr(item.id)}">${adminEscape(item.title || "Property")}</option>`);
+  const stays = (options?.stays || []).map((item) => `<option value="stay:${adminAttr(item.id)}">${adminEscape(item.title || "Short stay")} · Short stay</option>`);
+  const empty = `<option value="">Choose a property</option>`;
+  return `${empty}${properties.join("")}${stays.join("")}`;
+}
+
+function renderAgentBookingSlots() {
+  const wrap = document.getElementById("agent-booking-slots");
+  const place = document.getElementById("agent-booking-place")?.value || "";
+  if (place.startsWith("stay:")) {
+    const when = document.getElementById("agent-booking-when");
+    if (when && !document.getElementById("agent-booking-check-in")) {
+      when.innerHTML = `
+        <label>Check in<input id="agent-booking-check-in" type="date" required></label>
+        <label>Check out<input id="agent-booking-check-out" type="date" required></label>
+        <p class="agent-booking-note">Still available for these dates?</p>`;
+    }
+    return;
+  }
+  if (!wrap) return;
+  const day = document.getElementById("agent-booking-day")?.value;
+  const slots = (agentBookingOptions?.slots_by_date || {})[day] || [];
+  wrap.innerHTML = slots.map((slot) => `<button type="button" class="agent-booking-slot" data-time="${adminAttr(slot.time)}" ${slot.available ? "" : "disabled"} onclick="selectAgentBookingSlot(this)">${adminEscape(slot.label || slot.time)}</button>`).join("");
+}
+
+function selectAgentBookingSlot(button) {
+  document.querySelectorAll(".agent-booking-slot").forEach((item) => item.classList.remove("is-active"));
+  button.classList.add("is-active");
+}
+
+function renderAgentBookingFields() {
+  const el = document.getElementById("agent-booking-fields");
+  if (!el) return;
+  const options = agentBookingOptions || { properties: [], stays: [], days: [] };
+  const places = agentBookingPlaceOptions(options);
+  if (agentBookingTab === "viewing") {
+    const days = (options.days || []).map((day) => `<option value="${adminAttr(day.date)}" ${day.available ? "" : "disabled"}>${adminEscape(`${day.weekday || ""} ${day.date}`.trim())}</option>`).join("");
+    el.innerHTML = `
+      <label>Choose a property<select id="agent-booking-place" onchange="refreshAgentBookingDays(this.value)">${places}</select></label>
+      <div id="agent-booking-when">
+        <label>Pick a day<select id="agent-booking-day" onchange="renderAgentBookingSlots()">${days}</select></label>
+        <div id="agent-booking-slots" class="agent-booking-slots"></div>
+      </div>`;
+    renderAgentBookingSlots();
+    return;
+  }
+  if (agentBookingTab === "callback") {
+    el.innerHTML = `
+      <label>Choose a property<select id="agent-booking-place">${places}</select></label>
+      <label>Best time to call<select id="agent-booking-window"><option>Morning</option><option>Afternoon</option><option>Evening</option><option>Any time</option></select></label>
+      <div class="agent-booking-channels">
+        <label><input type="radio" name="agent-booking-channel" value="call" checked> Call me</label>
+        <label><input type="radio" name="agent-booking-channel" value="whatsapp"> WhatsApp me</label>
+      </div>`;
+    return;
+  }
+  if (agentBookingTab === "question") {
+    el.innerHTML = `
+      <label>Choose a property<select id="agent-booking-place">${places}</select></label>
+      <label>Your question<textarea id="agent-booking-note" rows="3" maxlength="2000"></textarea></label>`;
+    return;
+  }
+  el.innerHTML = `
+    <label>Choose a property<select id="agent-booking-place">${places}</select></label>
+    <label>Offer amount<input id="agent-booking-offer" type="text" maxlength="40" inputmode="numeric"></label>
+    <label>Message<textarea id="agent-booking-note" rows="3" maxlength="2000"></textarea></label>`;
+}
+
+async function refreshAgentBookingDays(value) {
+  if (!agentBookingAgentId) return;
+  const stay = String(value || "").startsWith("stay:");
+  const placeId = String(value || "").split(":").slice(1).join(":");
+  const query = stay ? `stay_listing_id=${encodeURIComponent(placeId)}` : `listing_id=${encodeURIComponent(placeId)}`;
+  try {
+    const res = await apiRequest(`/api/agents/${encodeURIComponent(agentBookingAgentId)}/booking-options?${query}`, { skipAuth: true });
+    if (res?.data) agentBookingOptions = res.data;
+  } catch (error) {}
+  const previous = agentBookingTab;
+  agentBookingTab = previous;
+  renderAgentBookingFields();
+  const select = document.getElementById("agent-booking-place");
+  if (select) select.value = value;
+  if (stay) renderAgentBookingSlots();
+}
+
+async function initAgentBookingPanel(agentId) {
+  agentBookingAgentId = String(agentId || "");
+  agentBookingTab = "viewing";
+  try {
+    const res = await apiRequest(`/api/agents/${encodeURIComponent(agentId)}/booking-options`, { skipAuth: true });
+    agentBookingOptions = res?.data || { properties: [], stays: [], days: [], slots_by_date: {} };
+  } catch (error) {
+    agentBookingOptions = { properties: [], stays: [], days: [], slots_by_date: {} };
+  }
+  renderAgentBookingFields();
+}
+
 async function submitAgentProfileRequest(id) {
   const name = (document.getElementById("agent-profile-name")?.value || "").trim();
   const phone = normalizePhoneInput(document.getElementById("agent-profile-phone")?.value || "");
-  const message = (document.getElementById("agent-profile-message")?.value || "").trim();
   if (!name || !phone) {
     toast("Add your name and phone to send a request.");
+    return;
+  }
+  const place = document.getElementById("agent-booking-place")?.value || "";
+  const [kind, placeId] = String(place).split(":");
+  const slot = document.querySelector(".agent-booking-slot.is-active");
+  const checkIn = document.getElementById("agent-booking-check-in")?.value || "";
+  const checkOut = document.getElementById("agent-booking-check-out")?.value || "";
+  if (agentBookingTab === "viewing" && kind !== "stay" && (!placeId || !document.getElementById("agent-booking-day")?.value || !slot)) {
+    toast("Choose a property, a day and a time.");
+    return;
+  }
+  if (agentBookingTab === "viewing" && kind === "stay" && (!checkIn || !checkOut)) {
+    toast("Choose a check-in and a later check-out.");
     return;
   }
   const button = document.getElementById("agent-profile-submit");
   if (button?.disabled) return;
   if (button) button.disabled = true;
   try {
-    await apiRequest(`/api/agents/${encodeURIComponent(id)}/enquiries`, {
+    const res = await apiRequest(`/api/agents/${encodeURIComponent(id)}/bookings`, {
       method: "POST",
       skipAuth: true,
       body: {
-        contact_name: name,
-        contact_phone: phone,
-        message,
-        channel: "web",
-        visitor_id: typeof getAnalyticsClientId === "function" ? getAnalyticsClientId() : "",
+        intent: agentBookingTab,
+        name,
+        phone,
+        listing_id: kind === "property" ? placeId : "",
+        stay_listing_id: kind === "stay" ? placeId : "",
+        preferred_date: document.getElementById("agent-booking-day")?.value || "",
+        preferred_time: slot?.getAttribute("data-time") || "",
+        check_in: checkIn,
+        check_out: checkOut,
+        callback_window: document.getElementById("agent-booking-window")?.value || "",
+        contact_channel: document.querySelector("input[name='agent-booking-channel']:checked")?.value || "",
+        offer_amount: document.getElementById("agent-booking-offer")?.value || "",
+        message: document.getElementById("agent-booking-note")?.value || "",
         website: document.getElementById("agent-profile-website")?.value || "",
         source: "agent_profile"
       }
     });
-    const messageEl = document.getElementById("agent-profile-message");
-    if (messageEl) messageEl.value = "";
-    toast("Request sent. The agent will follow up.");
+    const sent = res?.data?.message || "Your request has been sent.";
+    const form = document.querySelector("#agent-profile-request .agent-profile-form");
+    if (form) {
+      form.innerHTML = `<p class="agent-booking-sent">Your request has been sent.</p><p>${adminEscape(sent)}</p>`;
+    }
+    toast("Your request has been sent.");
   } catch (error) {
     toast(error?.message || "Could not send the request.");
   } finally {
@@ -61688,6 +61857,7 @@ async function openBrokerProfile(id) {
                 ${districts.length ? `<span><i class="fas fa-location-dot" aria-hidden="true"></i>${adminEscape(districts.join(", "))}</span>` : ""}
                 ${joinedText ? `<span><i class="fas fa-calendar" aria-hidden="true"></i>${adminEscape(joinedText)}</span>` : ""}
                 ${experienceLabel ? `<span><i class="fas fa-briefcase" aria-hidden="true"></i>${adminEscape(experienceLabel)}</span>` : ""}
+                ${b.response_time_label ? `<span><i class="fas fa-clock" aria-hidden="true"></i>${adminEscape(b.response_time_label)}</span>` : ""}
               </div>
               ${agentShowsVerifiedBadge(b) ? "" : (renderBrokerRegistrationBadge(b) ? `<div class="mt-3">${renderBrokerRegistrationBadge(b)}</div>` : "")}
               <div class="agent-profile-actions">${agentProfileContactButtons(b)}</div>
@@ -61732,14 +61902,20 @@ async function openBrokerProfile(id) {
         </div>
         <aside class="agent-profile-contact">
           <div class="agent-profile-card" id="agent-profile-request">
-            <h2>Contact ${adminEscape(firstName)}</h2>
+            <h2>Book with ${adminEscape(firstName)}</h2>
             <div class="agent-profile-actions">${agentProfileContactButtons(b)}</div>
             ${phoneText ? `<p class="agent-profile-phone"><a href="tel:${adminAttr(String(phoneText).replace(/\s+/g, ""))}">${adminEscape(phoneText)}</a></p>` : ""}
+            <div class="agent-booking-tabs" role="tablist">
+              <button type="button" class="is-active" data-agent-booking-tab="viewing" onclick="setAgentBookingTab('viewing')">Book a viewing</button>
+              <button type="button" data-agent-booking-tab="callback" onclick="setAgentBookingTab('callback')">Request a callback</button>
+              <button type="button" data-agent-booking-tab="question" onclick="setAgentBookingTab('question')">Ask a question</button>
+              <button type="button" data-agent-booking-tab="offer" onclick="setAgentBookingTab('offer')">Make an offer</button>
+            </div>
             <form class="agent-profile-form" onsubmit="event.preventDefault(); submitAgentProfileRequest(${idArg});">
               <input id="agent-profile-website" name="website" class="agent-profile-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" value="">
+              <div id="agent-booking-fields"></div>
               <label>Your name<input id="agent-profile-name" name="name" type="text" autocomplete="name" maxlength="120" required></label>
               <label>Phone number<input id="agent-profile-phone" name="phone" type="tel" autocomplete="tel" maxlength="40" required></label>
-              <label>Message<textarea id="agent-profile-message" name="message" rows="4" maxlength="2000" placeholder="How can this agent help?"></textarea></label>
               <button id="agent-profile-submit" class="agent-profile-btn is-primary" type="submit">Send request</button>
             </form>
             <p class="agent-profile-safety">Never pay before viewing</p>
@@ -61753,6 +61929,7 @@ async function openBrokerProfile(id) {
       <div class="agent-profile-mobile-bar">${agentProfileContactButtons(b, { mobile: true })}</div>
     </div>`;
   renderAgentProfileListingGrid();
+  initAgentBookingPanel(b.id);
   setTimeout(() => { initAgentProfileMap(list); }, 80);
   showPage("broker-profile", { history: false, source: "broker_profile_loaded", scroll: false });
 }

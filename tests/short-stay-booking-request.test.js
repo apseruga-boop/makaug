@@ -39,9 +39,10 @@ function listing(overrides = {}) {
   };
 }
 
-test('a host reply is only the digits 1 or 2', () => {
+test('a host reply is only the digits 1, 2 or 3', () => {
   assert.equal(booking.choiceFromReply('1'), 'accept');
-  assert.equal(booking.choiceFromReply(' 2 '), 'decline');
+  assert.equal(booking.choiceFromReply(' 2 '), 'reschedule');
+  assert.equal(booking.choiceFromReply('3'), 'decline');
   assert.equal(booking.choiceFromReply('1.'), null);
   assert.equal(booking.choiceFromReply('yes'), null);
   assert.equal(booking.choiceFromReply('12'), null);
@@ -59,19 +60,29 @@ test('whatsapp is one queue send, email is a copy, and there is no send when the
   assert.equal(booking.channelsFor({ phone: '', email: '', bridgeEnabled: true }).whatsapp, false);
 });
 
-test('the host message carries the reply digits and the magic link in the same text', () => {
+test('the host message carries 1, 2 and 3 plus one-tap links', () => {
   const text = booking.hostRequestMessage({
     reference: 'MKS-AB12CD',
     title: 'Garden flat',
     checkIn: '2026-11-01',
     checkOut: '2026-11-04',
     guests: 2,
-    hostLink: 'https://makaug.com/short-term/host?t=abc'
+    guestName: 'Sara',
+    guestPhone: '0780111222',
+    hostLink: 'https://makaug.com/short-term/host?t=abc',
+    links: {
+      confirm: 'https://makaug.com/v/confirm',
+      reschedule: 'https://makaug.com/v/reschedule',
+      decline: 'https://makaug.com/v/decline'
+    }
   });
-  assert.match(text, /Reply 1 to accept, 2 to decline/);
-  assert.match(text, /https:\/\/makaug.com\/short-term\/host\?t=abc/);
+  assert.match(text, /Reply 1 Confirm, 2 Suggest new time, 3 Can't do it/);
+  assert.match(text, /https:\/\/makaug.com\/v\/confirm/);
+  assert.match(text, /https:\/\/makaug.com\/v\/reschedule/);
+  assert.match(text, /https:\/\/makaug.com\/v\/decline/);
+  assert.match(text, /Sara/);
+  assert.match(text, /0780111222/);
   assert.match(text, /does not take or hold payments/);
-  assert.equal(text.split('https://').length, 2);
 });
 
 test('tokens round-trip and a guest link cannot open the host page', () => {
@@ -172,7 +183,8 @@ test('creating a request notifies host and guest once each and hides the host nu
   assert.equal(JSON.stringify(result).includes('Plot 14'), false);
   assert.equal(calls.length, 2);
   assert.deepEqual(calls.map((call) => call.role), ['host', 'guest']);
-  assert.match(calls[0].text, /Reply 1 to accept, 2 to decline/);
+  assert.match(calls[0].text, /Reply 1 Confirm, 2 Suggest new time, 3 Can't do it/);
+  assert.match(calls[0].text, /\/v\//);
   assert.match(calls[1].text, new RegExp(result.reference));
 });
 
@@ -188,7 +200,7 @@ test('reply 1 does nothing when this host has no open request', async () => {
   assert.equal(result.handled, false);
 });
 
-test('the bridge inbound path owns 1 and 2, and sms is not part of the loop', () => {
+test('the bridge inbound path owns 1, 2 and 3, and sms is not part of the loop', () => {
   const service = read('services/shortTermBookingService.js');
   const route = read('routes/whatsapp.js');
   const stayRoute = read('routes/short-term.js');

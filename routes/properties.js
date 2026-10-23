@@ -70,6 +70,7 @@ const {
   isPublicLivePropertyStatus,
   publicLivePropertyStatusSql
 } = require('../utils/publicInventoryStatus');
+const { publicStaleAvailabilitySql } = require('../services/agentBookingService');
 const {
   DEFAULT_SEARCH_RADIUS_MILES,
   buildHaversineSql,
@@ -2745,6 +2746,10 @@ async function listPropertiesHandler(req, res, next) {
       }
     } else if (publicOnly || !adminAccess) {
       filters.push(publicLivePropertyStatusSql('p'));
+    }
+    if ((status === 'approved') || ((!status || status === 'all') && (publicOnly || !adminAccess))) {
+      const staleAvailability = publicStaleAvailabilitySql('p');
+      if (staleAvailability) filters.push(staleAvailability);
     }
     if (featuredFilterRequested) {
       if (featuredOnly) {

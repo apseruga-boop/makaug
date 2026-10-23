@@ -424,6 +424,15 @@ function sanitizePublicPartnerListing(row = {}) {
   return out;
 }
 
+function stayAvailabilityLabel(row = {}) {
+  try {
+    const { availabilityView } = require('./agentBookingService');
+    return availabilityView(row);
+  } catch (_error) {
+    return { label: 'Available', tone: 'fresh' };
+  }
+}
+
 function normalizeShortTermListing(row = {}, options = {}) {
   if (!row || !row.id) return null;
   const includeContact = options.includeContact === true;
@@ -488,6 +497,12 @@ function normalizeShortTermListing(row = {}, options = {}) {
     is_private_listing: (row.source || 'direct') === 'direct',
     verified: staffVerifiedStay(row)
   };
+
+  const availability = stayAvailabilityLabel(row);
+  listing.availability_status = availability.status || row.availability_status || 'available';
+  listing.last_confirmed_at = row.last_confirmed_at || null;
+  listing.availability_label = availability.label || 'Available';
+  listing.availability_tone = availability.tone || 'fresh';
 
   if (includeContact) listing.contact = publicHostContact(row);
   return listing;
@@ -603,6 +618,14 @@ function buildSearchFilters(query = {}) {
 
   const checkIn = parseDate(normalized.check_in);
   const checkOut = parseDate(normalized.check_out);
+  try {
+    const { publicStaleAvailabilitySql } = require('./agentBookingService');
+    const staleAvailability = publicStaleAvailabilitySql('l');
+    if (staleAvailability) where.push(staleAvailability);
+  } catch (_error) {
+    // Search stays available when the booking module cannot load.
+  }
+
   if (checkIn && checkOut && checkOut > checkIn) {
     values.push(checkIn);
     const fromIdx = values.length;

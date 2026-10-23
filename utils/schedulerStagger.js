@@ -14,6 +14,7 @@ const BOOT_DELAY_MS = Object.freeze({
   lead_desk: 230_000,
   billing: 260_000,
   greeting_names: 290_000,
+  agent_booking: 320_000,
   video_stills: 600_000
 });
 
