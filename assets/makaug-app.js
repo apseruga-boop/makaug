@@ -405,11 +405,65 @@ async function refreshBrokersFromApi({ silent = true } = {}) {
     populateBrokerFilterOptions();
     renderAll();
     setBrokerMapMarkers(getBrokerDirectory());
+    refreshOpenPropertyContact();
     return true;
   } catch (error) {
     if (!silent) toast(`Agent refresh failed: ${error.message || "error"}`);
     return false;
   }
+}
+
+function beginDetailRender() {
+  detailRenderSerial += 1;
+  return detailRenderSerial;
+}
+
+function detailRenderIsCurrent(serial) {
+  return serial === detailRenderSerial;
+}
+
+function resolvedDetailBroker(property) {
+  const agentId = String(property?.agent || property?.agent_id || "").trim();
+  if (!agentId) return null;
+  return findBrokerByIdIncludingLoadedProfile(agentId);
+}
+
+// A cold /property/:id paint can run before the broker directory (or the one
+// agent lookup) is back. The first paint stays immediate. When a lookup then
+// resolves a broker the open detail did not have, paint the contact card and
+// booking panel again. A warm open already has the broker, so this is a no-op.
+function refreshOpenPropertyContact() {
+  if (typeof currentPage === "undefined" || currentPage !== "detail" || typeof activeDetailPropertyId === "undefined" || !activeDetailPropertyId) return;
+  if (typeof openDetail !== "function" || typeof findPropertyForUi !== "function") return;
+  const property = findPropertyForUi(activeDetailPropertyId);
+  if (!property) return;
+  if (typeof shouldUseSourceOnlyContact === "function") {
+    const meta = typeof foundOnlineSourceMeta === "function" ? foundOnlineSourceMeta(property) : null;
+    if (shouldUseSourceOnlyContact(property, meta)) return;
+  }
+  const nextId = String(resolvedDetailBroker(property)?.id || "");
+  if (!nextId || nextId === String(detailPaintedBrokerId || "")) return;
+  openDetail(activeDetailPropertyId);
+}
+
+function scheduleDetailAgentLookup(agentId) {
+  const key = String(agentId || "").trim();
+  if (!key || detailAgentLookupId === key || resolvedDetailBroker({ agent: key })) return;
+  detailAgentLookupId = key;
+  const request = typeof apiRequest === "function"
+    ? apiRequest(`/api/agents/${encodeURIComponent(key)}`, { skipAuth: true })
+    : Promise.reject(new Error("missing api"));
+  Promise.resolve(request).then((response) => {
+    const agent = response?.data;
+    if (!agent || typeof mapRemoteAgentForUi !== "function") return;
+    const broker = mapRemoteAgentForUi(agent);
+    if (!broker?.id) return;
+    broker.remote_profile_loaded = true;
+    const idx = REMOTE_BROKERS.findIndex((item) => String(item.id || "") === String(broker.id));
+    if (idx >= 0) REMOTE_BROKERS[idx] = { ...REMOTE_BROKERS[idx], ...broker };
+    else REMOTE_BROKERS.push(broker);
+    refreshOpenPropertyContact();
+  }).catch(() => {});
 }
 
 async function loadRemoteBrokerProfileForUi(id) {
@@ -1041,6 +1095,9 @@ let lpStreetSuggestSeq = 0;
 let detailGalleryPhotos = [];
 let detailGalleryPhotoIndex = 0;
 let activeDetailPropertyId = "";
+let detailPaintedBrokerId = "";
+let detailRenderSerial = 0;
+let detailAgentLookupId = "";
 let activeBrokerProfileId = "";
 let adminAccessUnlocked = false;
 let adminUnlockTapBuffer = [];
@@ -61587,11 +61644,12 @@ function renderPropertyDetailContent(html, { propertyId, selectedPhotoSrc, prese
 }
 
 async function openDetail(id, options = {}) {
+  const renderSerial = beginDetailRender();
   let p = id && typeof id === "object" ? id : findPropertyForUi(id);
   if (p?.id) upsertPropertyForUi(p);
   if (!p) return false;
   p = await hydratePropertyDetailForUi(p);
-  if (!p) return false;
+  if (!detailRenderIsCurrent(renderSerial) || !p) return false;
   activeDetailPropertyId = String(p.id || id || "");
   const isAdminViewer = !!(authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin");
   const isOwnerPreviewViewer = p.owner_preview_visible === true;
@@ -61609,7 +61667,7 @@ async function openDetail(id, options = {}) {
     district: p.district,
     area: p.area
   });
-  const broker = findBrokerById(p.agent);
+  const broker = resolvedDetailBroker(p);
   const similar = getSimilarProperties(p, 8);
   const normalizedType = normalizeType(p.type);
   const showMortgageWidget = normalizedType === "sale" || normalizedType === "land" || isCommercialForSale(p);
@@ -61916,6 +61974,8 @@ async function openDetail(id, options = {}) {
     </div>
     ${mobileContactBarHtml}
     <div class="lg:hidden h-24" aria-hidden="true"></div>`;
+  if (!detailRenderIsCurrent(renderSerial)) return false;
+  detailPaintedBrokerId = broker?.id ? String(broker.id) : "";
   renderPropertyDetailContent(detailHtml, {
     propertyId: p.backend_id || p.id,
     selectedPhotoSrc,
@@ -61926,6 +61986,7 @@ async function openDetail(id, options = {}) {
   });
   showPage("detail");
   if (broker?.id && !isFoundOnlineContact) initPropertyBookingPanel(broker.id, propertyBookingListingId(p));
+  else if (!isFoundOnlineContact) scheduleDetailAgentLookup(p.agent || p.agent_id);
   setLang(currentLang, true, false);
   updateDetailSaveButton(p.id);
   ensureRevenuePlacements();
@@ -61971,12 +62032,61 @@ function agentBookingRangeBlocks(iso, ranges) {
   return (ranges || []).some((range) => range && range.starts_on && range.ends_on && iso >= range.starts_on && iso <= range.ends_on);
 }
 
+function agentBookingPlaceStepLabel() {
+  const labels = {
+    viewing: "Choose the property you want to view",
+    callback: "Choose the property you're asking about",
+    question: "Choose the property your question is about",
+    offer: "Choose the property you want to make an offer on"
+  };
+  return translateListingLabel(labels[agentBookingTab] || labels.viewing);
+}
+
+function agentBookingPlaceChoice(item, kind) {
+  const price = Number(item?.price) > 0 ? fmtP(item.price, item.price_period) : "";
+  const where = [item?.area, item?.district].filter(Boolean).join(", ");
+  const tail = [price, where].filter(Boolean).join(" · ");
+  const title = item?.title || (kind === "stay" ? "Short stay" : "Property");
+  return `<option value="${kind}:${adminAttr(item.id)}">${adminEscape(tail ? `${title} — ${tail}` : title)}</option>`;
+}
+
 function agentBookingPlaceMarkup(places, withChange) {
   if (agentBookingLockedPlace) {
     return `<input id="agent-booking-place" type="hidden" value="${adminAttr(agentBookingLockedPlace)}">`;
   }
-  const change = withChange ? ` onchange="refreshAgentBookingDays(this.value)"` : "";
-  return `<label>Choose a property<select id="agent-booking-place"${change}>${places}</select></label>`;
+  const label = agentBookingPlaceStepLabel();
+  return `<div class="agent-booking-step">
+    <p class="agent-booking-step-label" id="agent-booking-place-label">${adminEscape(label)}</p>
+    <select id="agent-booking-place" class="agent-booking-place" aria-labelledby="agent-booking-place-label" onchange="onAgentBookingPlaceChange(this.value, ${withChange ? "true" : "false"})">${places}</select>
+    <div class="agent-booking-place-line" id="agent-booking-place-line" hidden></div>
+  </div>`;
+}
+
+function paintAgentBookingPlaceLine() {
+  const line = bookingEl("agent-booking-place-line");
+  if (!line || agentBookingLockedPlace) return;
+  const value = String(bookingEl("agent-booking-place")?.value || "");
+  const [kind, id] = value.split(":");
+  const rows = kind === "stay" ? agentBookingOptions?.stays : agentBookingOptions?.properties;
+  const item = (rows || []).find((row) => String(row.id) === String(id || ""));
+  if (!item) {
+    line.hidden = true;
+    line.innerHTML = "";
+    return;
+  }
+  const price = Number(item.price) > 0 ? fmtP(item.price, item.price_period) : "";
+  const where = [item.area, item.district].filter(Boolean).join(", ");
+  const meta = [price, where].filter(Boolean).join(" · ");
+  const image = item.image_url
+    ? `<img src="${adminAttr(publicImageSrc(item.image_url))}" alt="">`
+    : "";
+  line.hidden = false;
+  line.innerHTML = `${image}<span><strong>${adminEscape(item.title || "")}</strong>${meta ? `<em>${adminEscape(meta)}</em>` : ""}</span>`;
+}
+
+function onAgentBookingPlaceChange(value, refreshDays) {
+  paintAgentBookingPlaceLine();
+  if (refreshDays) refreshAgentBookingDays(value);
 }
 
 function paintAgentBookingResponse() {
@@ -62205,10 +62315,12 @@ function setAgentBookingTab(tab) {
 }
 
 function agentBookingPlaceOptions(options) {
-  const properties = (options?.properties || []).map((item) => `<option value="property:${adminAttr(item.id)}">${adminEscape(item.title || "Property")}</option>`);
-  const stays = (options?.stays || []).map((item) => `<option value="stay:${adminAttr(item.id)}">${adminEscape(item.title || "Short stay")} · Short stay</option>`);
-  const empty = `<option value="">Choose a property</option>`;
-  return `${empty}${properties.join("")}${stays.join("")}`;
+  const properties = (options?.properties || []).map((item) => agentBookingPlaceChoice(item, "property"));
+  const stays = (options?.stays || []).map((item) => agentBookingPlaceChoice(item, "stay"));
+  if (!properties.length && !stays.length) {
+    return `<option value="">${adminEscape(translateListingLabel("No properties yet"))}</option>`;
+  }
+  return `${properties.join("")}${stays.join("")}`;
 }
 
 function selectAgentBookingStayDay(button) {
@@ -62275,7 +62387,7 @@ function renderAgentBookingFields() {
     const first = horizon.find((day) => day.available) || horizon[0] || { date: "" };
     el.innerHTML = `
       ${agentBookingPlaceMarkup(places, true)}
-      <div id="agent-booking-when">
+      <div id="agent-booking-when" class="agent-booking-step">
         <div class="agent-booking-date-row">
           <div id="agent-booking-date-strip" class="agent-booking-date-strip" aria-label="Pick a day">${chips}</div>
           <button type="button" class="agent-booking-more" onclick="scrollAgentBookingDates(1)" aria-label="More dates" title="More dates"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
@@ -62283,6 +62395,7 @@ function renderAgentBookingFields() {
         <input id="agent-booking-day" type="hidden" value="">
         <div id="agent-booking-slots" class="agent-booking-slots"></div>
       </div>`;
+    paintAgentBookingPlaceLine();
     const match = [...el.querySelectorAll(".agent-booking-day")].find((node) => node.getAttribute("data-date") === first.date && !node.disabled);
     if (String(bookingEl("agent-booking-place")?.value || "").startsWith("stay:")) renderAgentBookingSlots();
     else if (match) selectAgentBookingDay(match);
@@ -62297,18 +62410,21 @@ function renderAgentBookingFields() {
         <label><input type="radio" name="agent-booking-channel" value="call" checked> Call me</label>
         <label><input type="radio" name="agent-booking-channel" value="whatsapp"> WhatsApp me</label>
       </div>`;
+    paintAgentBookingPlaceLine();
     return;
   }
   if (agentBookingTab === "question") {
     el.innerHTML = `
       ${agentBookingPlaceMarkup(places, false)}
       <label>Your question<textarea id="agent-booking-note" rows="2" maxlength="2000"></textarea></label>`;
+    paintAgentBookingPlaceLine();
     return;
   }
   el.innerHTML = `
     ${agentBookingPlaceMarkup(places, false)}
     <label>Offer amount<input id="agent-booking-offer" type="text" maxlength="40" inputmode="numeric" placeholder="UGX"></label>
     <label>Message<textarea id="agent-booking-note" rows="2" maxlength="2000"></textarea></label>`;
+  paintAgentBookingPlaceLine();
 }
 
 async function refreshAgentBookingDays(value) {
@@ -62326,6 +62442,7 @@ async function refreshAgentBookingDays(value) {
   const select = bookingEl("agent-booking-place");
   if (select && !agentBookingLockedPlace) select.value = value;
   if (stay) renderAgentBookingSlots();
+  paintAgentBookingPlaceLine();
   paintAgentBookingResponse();
 }
 

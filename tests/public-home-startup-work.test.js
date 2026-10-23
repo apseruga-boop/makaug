@@ -49,13 +49,15 @@ test('actual startup broker refresh applies API state and renders/maps exactly o
     populateBrokerFilterOptions: () => calls.push(['filters']),
     renderAll: () => calls.push(['render']),
     getBrokerDirectory: () => context.REMOTE_BROKERS,
-    setBrokerMapMarkers: (rows) => calls.push(['maps', rows.map((r) => r.id)]), toast: () => {}
+    setBrokerMapMarkers: (rows) => calls.push(['maps', rows.map((r) => r.id)]),
+    refreshOpenPropertyContact: () => calls.push(['detail-contact']),
+    toast: () => {}
   });
   vm.runInContext(code('refreshBrokersFromApi'), context);
   await vm.runInContext(startupExpression(['refreshBrokersFromApi']), context);
   assert.equal(context.remoteBrokersLoaded, true);
   assert.equal(context.REMOTE_BROKERS[0].id, 'a');
-  assert.deepEqual(calls, [['api', '/api/agents?status=approved&limit=100', true], ['filters'], ['render'], ['maps', ['a']]]);
+  assert.deepEqual(calls, [['api', '/api/agents?status=approved&limit=100', true], ['filters'], ['render'], ['maps', ['a']], ['detail-contact']]);
 });
 
 test('failed broker startup preserves API state and performs no render/map work', async () => {

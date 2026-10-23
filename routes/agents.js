@@ -912,16 +912,24 @@ router.get('/:id/booking-options', async (req, res, next) => {
     let propertyRows = [];
     try {
       const properties = await db.query(
-        `SELECT id, title, area, district, bedrooms, property_type, availability_status, last_confirmed_at
-           FROM properties
-          WHERE agent_id = $1 AND LOWER(COALESCE(status, '')) = 'approved'
-          ORDER BY created_at DESC
+        `SELECT p.id, p.title, p.area, p.district, p.bedrooms, p.property_type, p.availability_status, p.last_confirmed_at,
+                p.price, p.price_period, img.url AS image_url
+           FROM properties p
+           LEFT JOIN LATERAL (
+             SELECT i.url
+               FROM property_images i
+              WHERE i.property_id = p.id
+              ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+              LIMIT 1
+           ) img ON true
+          WHERE p.agent_id = $1 AND LOWER(COALESCE(p.status, '')) = 'approved'
+          ORDER BY p.created_at DESC
           LIMIT 40`,
         [agent.id]
       );
       propertyRows = properties.rows;
     } catch (error) {
-      if (error.code !== '42703') throw error;
+      if (error.code !== '42703' && error.code !== '42P01') throw error;
       const properties = await db.query(
         `SELECT id, title, area, district, bedrooms, property_type
            FROM properties
@@ -1020,6 +1028,9 @@ router.get('/:id/booking-options', async (req, res, next) => {
             district: row.district,
             bedrooms: row.bedrooms,
             property_type: row.property_type,
+            price: row.price || null,
+            price_period: row.price_period || "",
+            image_url: row.image_url || "",
             availability_label: view.label,
             availability_tone: view.tone
           };
