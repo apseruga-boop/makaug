@@ -23,9 +23,32 @@ const {
   storeListingSourceHealthReport,
 } = require('../services/listingSourceHealthService');
 
-const args = process.argv.slice(2);
+let args = process.argv.slice(2);
+let activeRun = {};
 const MONITOR_AUDIT_ACTION = 'continuous_social_monitor_run';
 const DEFAULT_CADENCE_MINUTES = 10;
+
+function argvFromRunOptions(options = {}) {
+  const argv = [];
+  if (options.dryRun) argv.push('--dry-run');
+  if (options.confirm) argv.push('--confirm');
+  if (options.platforms) {
+    const list = Array.isArray(options.platforms) ? options.platforms.join(',') : String(options.platforms);
+    argv.push(`--platforms=${list}`);
+  }
+  if (options.youtubeJobMode) argv.push(`--youtube-job-mode=${options.youtubeJobMode}`);
+  if (options.maxSources != null) argv.push(`--max-sources=${options.maxSources}`);
+  if (options.maxResults != null) argv.push(`--max-results=${options.maxResults}`);
+  if (options.maxPages != null) argv.push(`--max-pages=${options.maxPages}`);
+  if (options.publishedAfter) argv.push(`--published-after=${options.publishedAfter}`);
+  if (options.lookbackDays != null) argv.push(`--lookback-days=${options.lookbackDays}`);
+  if (options.searchMode) argv.push(`--x-search-mode=${options.searchMode}`);
+  return argv;
+}
+
+function runWasStopped() {
+  return typeof activeRun.shouldStop === 'function' && activeRun.shouldStop() === true;
+}
 
 function argValue(name, fallback = '') {
   const exactIndex = args.indexOf(name);
@@ -55,8 +78,9 @@ function usage() {
     '  node scripts/run-continuous-social-monitor.js --dry-run',
     '  node scripts/run-continuous-social-monitor.js --confirm',
     '  node scripts/run-continuous-social-monitor.js --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=8',
-    '  The daily Render cron uses this command. YouTube/X run only when HARVEST_AUTOMATION_ENABLED=true.',
-    '  TikTok public pages run only when TIKTOK_SOURCE_SWEEP_ENABLED=true. The health report always runs.',
+    '  The makaug web service runs this once a day at 05:30 Europe/London.',
+    '  YouTube/X run only when HARVEST_AUTOMATION_ENABLED=true.',
+    '  The scheduled run includes TikTok unless TIKTOK_SOURCE_SWEEP_ENABLED=false. The health report always runs.',
     '',
     'Defaults:',
     '  High-frequency YouTube runs use --youtube-job-mode=channel_uploads to avoid broad Search quota burn.',
@@ -135,12 +159,19 @@ function summarizeSweepResult(result = {}) {
   };
 }
 
-async function main() {
+async function runContinuousSocialMonitor(options = {}) {
+  activeRun = options || {};
+  args = options.argv || (
+    options.confirm || options.dryRun || options.platforms || options.youtubeJobMode
+      ? argvFromRunOptions(options)
+      : process.argv.slice(2)
+  );
   const dryRun = args.includes('--dry-run');
   const confirm = args.includes('--confirm');
   if (!dryRun && !confirm) {
     usage();
-    process.exit(2);
+    if (require.main === module) process.exit(2);
+    throw new Error('source monitor requires --confirm or --dry-run');
   }
   const targetCount = numberValue('--source-target', PROPERTY_SOURCE_REGISTRY_TARGET_COUNT, { min: 1 });
   const cadenceMinutes = numberValue('--cadence-minutes', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_CADENCE_MINUTES || DEFAULT_CADENCE_MINUTES), { min: 1, max: 1440 });
@@ -152,7 +183,11 @@ async function main() {
   const searchMode = argValue('--x-search-mode', process.env.CONTINUOUS_SOCIAL_MONITOR_X_SEARCH_MODE || 'recent');
   const youtubeJobMode = argValue('--youtube-job-mode', process.env.CONTINUOUS_SOCIAL_MONITOR_YOUTUBE_JOB_MODE || 'channel_uploads');
   const requestedPlatforms = listValue('--platforms', process.env.CONTINUOUS_SOCIAL_MONITOR_PLATFORMS || 'youtube,x');
-  const plan = dailySourceMonitorPlan({ env: process.env, platforms: requestedPlatforms });
+  const plan = dailySourceMonitorPlan({
+    env: activeRun.env || process.env,
+    platforms: requestedPlatforms,
+    tiktokWhenUnset: activeRun.tiktokWhenUnset === true,
+  });
   const platforms = plan.sweep_platforms;
   const explicitOffset = argValue('--source-offset', '');
   const auditCursor = explicitOffset === '' ? await readLastMonitorCursor() : null;
@@ -178,6 +213,10 @@ async function main() {
     logger.warn(`source monitor skipped ${skipped.platform}: ${skipped.reason}`);
   }
   for (const platform of platforms) {
+    if (runWasStopped()) {
+      logger.warn('source monitor stopped before the next platform', { platform });
+      break;
+    }
     const result = await runSocialPlatformPostSweep({
       db,
       platform,
@@ -223,7 +262,9 @@ async function main() {
   const probeLimit = numberValue('--probe-limit', Number(process.env.LISTING_SOURCE_HEALTH_PROBE_LIMIT || 8), { min: 1, max: 20 });
   const probes = dryRun
     ? { skipped: true, reason: 'dry_run', checked: 0, results: [] }
-    : await probeListingSources({ limit: probeLimit, pacingMs: Number(process.env.LISTING_SOURCE_HEALTH_PROBE_PACING_MS || 1100) });
+    : runWasStopped()
+      ? { skipped: true, reason: 'timeout', checked: 0, results: [] }
+      : await probeListingSources({ limit: probeLimit, pacingMs: Number(process.env.LISTING_SOURCE_HEALTH_PROBE_PACING_MS || 1100) });
   const health = await buildListingSourceHealthReport({
     db,
     staleAfterDays,
@@ -260,17 +301,25 @@ async function main() {
   if (confirm) healthStored = await storeListingSourceHealthReport(db, health);
   report.listing_source_health_stored = healthStored;
   logger.info(`listing_source_health_report ${health.summary} audit=${LISTING_SOURCE_HEALTH_AUDIT_ACTION}`);
-  console.log(JSON.stringify(report, null, 2));
-  if (confirm && healthStored.ok !== true) process.exitCode = 1;
+  if (require.main === module) console.log(JSON.stringify(report, null, 2));
+  if (require.main === module && confirm && healthStored.ok !== true) process.exitCode = 1;
+  return report;
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  })
-  .finally(async () => {
-    try {
-      await db.pool.end();
-    } catch (_) {}
-  });
+if (require.main === module) {
+  runContinuousSocialMonitor()
+    .catch((error) => {
+      console.error(error);
+      process.exit(1);
+    })
+    .finally(async () => {
+      try {
+        await db.pool.end();
+      } catch (_) {}
+    });
+}
+
+module.exports = {
+  MONITOR_AUDIT_ACTION,
+  runContinuousSocialMonitor,
+};

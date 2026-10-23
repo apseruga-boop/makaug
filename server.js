@@ -66,6 +66,7 @@ const agentBookingRoutes = require('./routes/agentBookings');
 const { startVideoStillScheduler } = require('./services/videoStillScheduler');
 const { startGreetingNameCache } = require('./services/agentNameService');
 const { startBillingScheduler } = require('./services/billingOpsService');
+const { startDailySourceMonitorScheduler } = require('./services/dailySourceMonitorScheduler');
 const { getPublicDevelopment, getPublicMarket, isPubliclyVisible, normalizeDevelopmentRow } = require('./services/offPlanService');
 const {
   applyHarvestPublicSubmissionVisibility,
@@ -2535,6 +2536,7 @@ async function start() {
   } else {
     logger.info('Harvest automation schedulers disabled by rollout flag');
   }
+  if (!IS_SOUTH_AFRICA) startDailySourceMonitorScheduler(db);
   if (ACTIVE_TENANT.publicFeatures?.marketplace !== false) {
     startMarketplaceLifecycleScheduler(db);
     // The drip's Google source is off unless GOOGLE_PLACES_ALLOWED=true (C18).
