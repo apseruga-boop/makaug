@@ -183,7 +183,9 @@ test('staff, admin and public search use the reference lookup, and the price cho
   assert.match(app, /id="admin-review-price-edit" type="text" inputmode="decimal"/);
   assert.match(app, /function adminReviewOnCanonicalPriceInput\(\)/);
   assert.match(app, /!adminReviewHasTypedCanonicalPrice\(get\("admin-review-price-edit"\)\)/);
-  const saveStart = app.indexOf('async function saveStaffListingPreview');
-  const saveBody = app.slice(saveStart, saveStart + 500);
+  const saveFunction = require('acorn').parse(app, { ecmaVersion: 'latest' }).body
+    .find((node) => node.type === 'FunctionDeclaration' && node.id?.name === 'saveStaffListingPreview');
+  assert.ok(saveFunction, 'staff listing save function exists');
+  const saveBody = app.slice(saveFunction.start, saveFunction.end);
   assert.match(saveBody, /try \{[\s\S]*apiRequest\(`\/api\/staff\/properties\//);
 });
