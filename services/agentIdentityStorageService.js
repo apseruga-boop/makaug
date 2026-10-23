@@ -12,10 +12,73 @@ const {
   storeDataUrl
 } = require('./cloudMediaStorageService');
 
-const ID_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'application/pdf'];
+const ID_MIME_ALIASES = {
+  'image/jpg': 'image/jpeg',
+  'image/pjpeg': 'image/jpeg',
+  'image/x-png': 'image/png',
+  'image/x-webp': 'image/webp',
+  'image/heic-sequence': 'image/heic',
+  'image/heif-sequence': 'image/heif',
+  'image/heic': 'image/heic',
+  'image/heif': 'image/heif',
+  'application/x-pdf': 'application/pdf',
+  'application/acrobat': 'application/pdf',
+  'application/vnd.pdf': 'application/pdf'
+};
+
+const ID_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'application/pdf'];
+const ID_MIME_SET = new Set(ID_MIME_TYPES);
+
+function sniffIdentityMime(bytes) {
+  if (!bytes || bytes.length < 12) return '';
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  if (bytes.slice(0, 8).toString('hex') === '89504e470d0a1a0a') return 'image/png';
+  if (bytes.slice(0, 4).toString() === 'RIFF' && bytes.slice(8, 12).toString() === 'WEBP') return 'image/webp';
+  if (bytes.slice(0, 5).toString() === '%PDF-') return 'application/pdf';
+  if (bytes.slice(0, 6).toString() === 'GIF87a' || bytes.slice(0, 6).toString() === 'GIF89a') return 'image/gif';
+  if (bytes.slice(4, 8).toString() === 'ftyp') {
+    const brand = bytes.slice(8, 12).toString().toLowerCase();
+    if (brand.startsWith('hei') || brand === 'mif1' || brand === 'msf1' || brand === 'hevc') return 'image/heic';
+  }
+  return '';
+}
+
+function canonicalIdentityMime(declared, bytes) {
+  const raw = String(declared || '').trim().toLowerCase();
+  const aliased = ID_MIME_ALIASES[raw] || raw;
+  if (ID_MIME_SET.has(aliased)) return aliased;
+  const sniffed = sniffIdentityMime(bytes);
+  return ID_MIME_SET.has(sniffed) ? sniffed : '';
+}
+
+function parseIdentityDataUrl(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^data:([^;,]+)((?:;[^;,]+)*)?;base64,([a-z0-9+/=\s]+)$/i);
+  if (!match) return null;
+  const bytes = Buffer.from(match[3].replace(/\s+/g, ''), 'base64');
+  if (!bytes.length) return null;
+  const mimeType = canonicalIdentityMime(match[1], bytes);
+  if (!mimeType) return null;
+  return { bytes, mimeType };
+}
 
 function isInlineImage(value) {
-  return /^data:(?:image\/[a-z0-9.+-]+|application\/pdf);base64,/i.test(String(value || '').trim());
+  return Boolean(parseIdentityDataUrl(value));
+}
+
+async function normaliseIdentityBytes(bytes, mimeType) {
+  if (mimeType === 'application/pdf') return { bytes, mimeType };
+  try {
+    const sharp = require('sharp');
+    const jpeg = await sharp(bytes, { failOn: 'none', limitInputPixels: 40_000_000 })
+      .rotate()
+      .jpeg({ quality: 82 })
+      .toBuffer();
+    if (jpeg?.length) return { bytes: jpeg, mimeType: 'image/jpeg' };
+  } catch (_error) {
+    // A HEIC file without a decoder is stored as itself, still private.
+  }
+  return { bytes, mimeType };
 }
 
 function isPrivateRef(value) {
@@ -29,11 +92,15 @@ function isPrivateRef(value) {
  */
 async function toPrivateIdentityRef(value, { keyPrefix = 'agents/identity', label = 'Agent National ID photo' } = {}) {
   const raw = String(value || '').trim();
-  if (!isInlineImage(raw) || !cloudMediaStorageConfigured()) return raw;
-  const digest = crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16);
+  const parsed = parseIdentityDataUrl(raw);
+  if (!parsed || !cloudMediaStorageConfigured()) return raw;
+  const prepared = await normaliseIdentityBytes(parsed.bytes, parsed.mimeType);
+  const dataUrl = `data:${prepared.mimeType};base64,${prepared.bytes.toString('base64')}`;
+  const digest = crypto.createHash('sha256').update(dataUrl).digest('hex').slice(0, 16);
   // If storage is down, keep the photo as it came (the start-up tidy-up moves it
-  // later) rather than failing the person's sign-up.
-  const stored = await storeDataUrl(raw, {
+  // later) rather than failing the person's sign-up. The stored object stays
+  // private: a public https URL is never written back.
+  const stored = await storeDataUrl(dataUrl, {
     keyPrefix,
     filename: `national-id-${digest}`,
     label,
@@ -44,6 +111,7 @@ async function toPrivateIdentityRef(value, { keyPrefix = 'agents/identity', labe
     console.warn('Private ID photo storage failed; keeping it inline for now:', error.message || String(error));
     return null;
   });
+  if (stored && /^https?:\/\//i.test(stored)) return raw;
   return stored || raw;
 }
 
@@ -130,6 +198,8 @@ module.exports = {
   isInlineImage,
   isPrivateRef,
   migrateInlineAgentIdentityDocuments,
+  normaliseIdentityBytes,
+  parseIdentityDataUrl,
   toPrivateIdentityRef,
   viewableIdentityUrl
 };

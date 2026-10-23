@@ -19,6 +19,7 @@
 
 const crypto = require('crypto');
 const logger = require('../config/logger');
+const { bookingSay, replyWindow, siteLang } = require('./bookingMessageText');
 
 const INTENTS = Object.freeze(['viewing', 'callback', 'question', 'offer']);
 const STATUSES = Object.freeze(['pending', 'confirmed', 'reschedule', 'declined', 'no_response', 'escalated', 'completed']);
@@ -767,50 +768,70 @@ function shouldSendWeekly(date, config = bookingConfig()) {
   return parts.weekday === 'Mon' && parts.hour >= 9 && parts.hour < 18;
 }
 
+function agentMessageLang(request = {}) {
+  return siteLang(request.agent_preferred_language || request.agent_language);
+}
+
+function visitorMessageLang(request = {}) {
+  return siteLang(request.language || request.visitor_language);
+}
+
 function buildAgentRequestMessage(request, links, config = bookingConfig()) {
-  const intentLine = {
+  const lang = agentMessageLang(request);
+  const intentKey = {
     viewing: 'New viewing request',
     callback: 'New callback request',
     question: 'New question',
     offer: 'New offer'
   }[request.intent] || 'New request';
-  const who = text(request.visitor_name, 'A visitor');
-  const property = text(request.property_label || request.property_title, 'a property on your profile');
+  const who = text(request.visitor_name, bookingSay(lang, 'A visitor'));
+  const property = text(request.property_label || request.property_title, bookingSay(lang, 'a property on your profile'));
   const note = clipNote(request.visitor_message, config.noteLimit);
+  const wants = {
+    viewing: '{who} wants to view',
+    callback: '{who} wants to be called about',
+    offer: '{who} wants to make an offer on'
+  }[request.intent] || '{who} wants to ask about';
   const offer = request.intent === 'offer' && request.offer_amount
-    ? `Offer: ${formatOfferUgx(request.offer_amount)}`
+    ? bookingSay(lang, 'Offer: {amount}', { amount: formatOfferUgx(request.offer_amount) })
     : '';
   const lines = [
-    intentLine,
-    request.public_ref ? `Ref ${request.public_ref}` : '',
-    `Hi ${firstName(request.agent_name)}, you've got interest!`,
-    `${who} wants to ${request.intent === 'viewing' ? 'view' : request.intent === 'callback' ? 'be called about' : request.intent === 'offer' ? 'make an offer on' : 'ask about'}`,
+    bookingSay(lang, intentKey),
+    request.public_ref ? bookingSay(lang, 'Ref {ref}', { ref: request.public_ref }) : '',
+    bookingSay(lang, 'Hi {name}, you\'ve got interest!', { name: firstName(request.agent_name) }),
+    bookingSay(lang, wants, { who }),
     `${property}${request.inquiry_reference ? ` (${request.inquiry_reference})` : ''}`,
     offer,
     request.when_label || '',
     request.visitor_phone || '',
-    note ? `Note: ${note}` : '',
-    '',
-    `Please confirm within ${config.replyWindowHours} hour${config.replyWindowHours === 1 ? '' : 's'}. Reply 1 Confirm, 2 Suggest new time, 3 Can't do it`,
-    request.public_ref ? `Reply like 1 ${request.public_ref}` : '',
-    `1 Confirm: ${links.confirm}`,
-    `2 Suggest new time: ${links.reschedule}`,
-    `3 Can't do it: ${links.decline}`
+    note ? bookingSay(lang, 'Note: {note}', { note }) : '',
+    bookingSay(lang, 'Please confirm within {window}. Reply 1 Confirm, 2 Suggest new time, 3 Can\'t do it', {
+      window: replyWindow(lang, config.replyWindowHours)
+    }),
+    request.public_ref ? bookingSay(lang, 'Reply like 1 {ref}', { ref: request.public_ref }) : '',
+    `1 ${bookingSay(lang, 'Confirm')}: ${links.confirm}`,
+    `2 ${bookingSay(lang, 'Suggest new time')}: ${links.reschedule}`,
+    `3 ${bookingSay(lang, 'Can\'t do it')}: ${links.decline}`
   ];
   return lines.filter((line) => line !== '').join('\n');
 }
 
 function buildVisitorRequestMessage(request) {
+  const lang = visitorMessageLang(request);
   const name = firstName(request.visitor_name);
   const agent = firstName(request.agent_name);
-  const property = text(request.property_label || request.property_title, 'the property');
+  const property = text(request.property_label || request.property_title, bookingSay(lang, 'the property'));
+  const sentKey = {
+    viewing: 'Your viewing request for {property} has been sent to {agent}.',
+    callback: 'Your callback request for {property} has been sent to {agent}.',
+    offer: 'Your offer for {property} has been sent to {agent}.'
+  }[request.intent] || 'Your question for {property} has been sent to {agent}.';
   return [
-    `Hi ${name},`,
-    '',
-    `Your ${request.intent === 'viewing' ? 'viewing request' : request.intent === 'callback' ? 'callback request' : request.intent === 'offer' ? 'offer' : 'question'} for ${property} has been sent to ${agent}.`,
-    request.when_label ? `Time: ${request.when_label}` : '',
-    'We will message you when they confirm. If they have not replied in time, the MakaUG team will call you.',
-    'Never pay before you have seen the property and its documents.'
+    bookingSay(lang, 'Hi {name},', { name }),
+    bookingSay(lang, sentKey, { property, agent }),
+    request.when_label ? bookingSay(lang, 'Time: {when}', { when: request.when_label }) : '',
+    bookingSay(lang, 'We will message you when they confirm. If they have not replied in time, the MakaUG team will call you.'),
+    bookingSay(lang, 'Never pay before you have seen the property and its documents.')
   ].filter((line) => line !== '').join('\n');
 }
 
@@ -819,97 +840,118 @@ function handoffReached(status) {
 }
 
 function buildVisitorSkippedMessage(request, handoffStatus) {
+  const lang = visitorMessageLang(request);
   const name = firstName(request.visitor_name);
-  const agent = text(request.agent_name, 'the agent');
-  const property = text(request.property_label || request.property_title, 'the property');
+  const agent = text(request.agent_name, bookingSay(lang, 'the agent'));
+  const property = text(request.property_label || request.property_title, bookingSay(lang, 'the property'));
   const status = String(handoffStatus || 'skipped');
-  const reason = {
-    repeat: `We already have your request about ${property}, so we have not sent it to ${agent} again.`,
-    capped: `We saved your request about ${property}. ${agent} has reached today's message limit, so the MakaUG team will follow up.`,
-    listing_not_live: `We saved your request about ${property}. This listing is not live, so we have not messaged ${agent}. The MakaUG team will follow up.`,
-    disabled: `We saved your request about ${property}. Messaging the agent is turned off, so the MakaUG team will follow up.`,
-    agent_not_approved: `We saved your request about ${property}. This agent is not live on makaug, so we have not messaged them. The MakaUG team will follow up.`,
-    contact_shown: `We saved your request about ${property}. This listing keeps the original poster's contact, so makaug has not messaged them.`,
-    failed: `We saved your request about ${property}, but the message to ${agent} did not go out. The MakaUG team will follow up.`,
-    no_lister_contact: `We saved your request about ${property}. We do not have a WhatsApp number for ${agent}, so the MakaUG team will follow up.`,
-    no_listing: `We saved your request. We could not match it to a live listing, so the MakaUG team will follow up.`,
-    no_lead: `We saved your request about ${property}. It is with the MakaUG team, and ${agent} has not been messaged yet.`,
-    test_skipped: `We saved your request about ${property}. It was marked as a test, so ${agent} was not messaged.`,
-    skipped: `We saved your request about ${property}. ${agent} has not been messaged yet. The MakaUG team will follow up.`
-  }[status] || `We saved your request about ${property}. ${agent} has not been messaged yet. The MakaUG team will follow up.`;
-  return [`Hi ${name},`, '', reason, 'Never pay before you have seen the property and its documents.'].join('\n');
+  const reasonKey = {
+    repeat: 'We already have your request about {property}, so we have not sent it to {agent} again.',
+    capped: 'We saved your request about {property}. {agent} has reached today\'s message limit, so the MakaUG team will follow up.',
+    listing_not_live: 'We saved your request about {property}. This listing is not live, so we have not messaged {agent}. The MakaUG team will follow up.',
+    disabled: 'We saved your request about {property}. Messaging the agent is turned off, so the MakaUG team will follow up.',
+    agent_not_approved: 'We saved your request about {property}. This agent is not live on makaug, so we have not messaged them. The MakaUG team will follow up.',
+    contact_shown: 'We saved your request about {property}. This listing keeps the original poster\'s contact, so makaug has not messaged them.',
+    failed: 'We saved your request about {property}, but the message to {agent} did not go out. The MakaUG team will follow up.',
+    no_lister_contact: 'We saved your request about {property}. We do not have a WhatsApp number for {agent}, so the MakaUG team will follow up.',
+    no_listing: 'We saved your request. We could not match it to a live listing, so the MakaUG team will follow up.',
+    no_lead: 'We saved your request about {property}. It is with the MakaUG team, and {agent} has not been messaged yet.',
+    test_skipped: 'We saved your request about {property}. It was marked as a test, so {agent} was not messaged.',
+    skipped: 'We saved your request about {property}. {agent} has not been messaged yet. The MakaUG team will follow up.'
+  }[status] || 'We saved your request about {property}. {agent} has not been messaged yet. The MakaUG team will follow up.';
+  return [
+    bookingSay(lang, 'Hi {name},', { name }),
+    '',
+    bookingSay(lang, reasonKey, { property, agent }),
+    bookingSay(lang, 'Never pay before you have seen the property and its documents.')
+  ].join('\n');
 }
 
 function buildVisitorStatusMessage(request, action, links = {}) {
+  const lang = visitorMessageLang(request);
   const name = firstName(request.visitor_name);
-  const agent = text(request.agent_name, 'The agent');
+  const agent = text(request.agent_name, bookingSay(lang, 'The agent'));
   const when = request.when_label || formatWhen(request.preferred_date, request.preferred_time);
-  const windowLabel = text(request.callback_window || request.when_label, 'soon');
+  const windowLabel = text(request.callback_window || request.when_label, bookingSay(lang, 'soon'));
   if (action === 'confirm') {
     let lead;
     if (request.intent === 'callback') {
-      lead = `Hi ${name}, confirmed. ${agent} will call you ${windowLabel}.`;
+      lead = bookingSay(lang, 'Hi {name}, confirmed. {agent} will call you {window}.', { name, agent, window: windowLabel });
     } else if (request.intent === 'question') {
-      lead = `Hi ${name}, confirmed. ${agent} has your question and will reply.`;
+      lead = bookingSay(lang, 'Hi {name}, confirmed. {agent} has your question and will reply.', { name, agent });
     } else if (request.intent === 'offer') {
       const amount = request.offer_amount ? formatOfferUgx(request.offer_amount) : 'UGX';
-      lead = `Hi ${name}, confirmed. ${agent} has received your offer of ${amount} and will respond.`;
+      lead = bookingSay(lang, 'Hi {name}, confirmed. {agent} has received your offer of {amount} and will respond.', { name, agent, amount });
     } else {
       lead = [
-        `Hi ${name}, confirmed. ${agent} will meet you ${when}.`,
-        `They will call you on ${request.visitor_phone} to agree the meeting point.`,
-        'Never pay before you have seen the property and its documents.'
+        bookingSay(lang, 'Hi {name}, confirmed. {agent} will meet you {when}.', { name, agent, when }),
+        bookingSay(lang, 'They will call you on {phone} to agree the meeting point.', { phone: request.visitor_phone }),
+        bookingSay(lang, 'Never pay before you have seen the property and its documents.')
       ].join('\n');
     }
     const extra = [];
-    if (links.visitor_cancel) extra.push(`Cancel: ${links.visitor_cancel}`);
-    if (links.visitor_reschedule) extra.push(`Reschedule: ${links.visitor_reschedule}`);
+    if (links.visitor_cancel) extra.push(bookingSay(lang, 'Cancel: {link}', { link: links.visitor_cancel }));
+    if (links.visitor_reschedule) extra.push(bookingSay(lang, 'Reschedule: {link}', { link: links.visitor_reschedule }));
     return [lead, ...extra].join('\n');
   }
   if (action === 'reschedule') {
     const proposed = request.proposed_date ? formatWhen(request.proposed_date, request.proposed_time) : '';
     if (proposed) {
       return [
-        `Hi ${name}, ${agent} suggests ${proposed} instead.`,
-        links.confirm ? `Accept: ${links.confirm}` : '',
-        links.visitor_reschedule ? `Pick another: ${links.visitor_reschedule}` : ''
+        bookingSay(lang, 'Hi {name}, {agent} suggests {when} instead.', { name, agent, when: proposed }),
+        links.confirm ? bookingSay(lang, 'Accept: {link}', { link: links.confirm }) : '',
+        links.visitor_reschedule ? bookingSay(lang, 'Pick another: {link}', { link: links.visitor_reschedule }) : ''
       ].filter((line) => line !== '').join('\n');
     }
     return [
-      `Hi ${name}, ${agent} cannot do ${when} and will suggest another time.`,
-      links.visitor_reschedule ? `Pick another: ${links.visitor_reschedule}` : ''
+      bookingSay(lang, 'Hi {name}, {agent} cannot do {when} and will suggest another time.', { name, agent, when }),
+      links.visitor_reschedule ? bookingSay(lang, 'Pick another: {link}', { link: links.visitor_reschedule }) : ''
     ].filter((line) => line !== '').join('\n');
   }
   if (action === 'decline' || action === 'escalate') {
-    return `Hi ${name}, ${agent} has not confirmed this request. A MakaUG team member will call you.`;
+    return bookingSay(lang, 'Hi {name}, {agent} has not confirmed this request. A MakaUG team member will call you.', { name, agent });
   }
-  if (action === 'remind_visitor_24h') return `Reminder: your viewing with ${agent} is tomorrow, ${when}.`;
-  if (action === 'remind_visitor_2h') return `Reminder: your viewing with ${agent} is in about 2 hours, ${when}.`;
+  if (action === 'remind_visitor_24h') {
+    return bookingSay(lang, 'Reminder: your viewing with {agent} is tomorrow, {when}.', { agent, when });
+  }
+  if (action === 'remind_visitor_2h') {
+    return bookingSay(lang, 'Reminder: your viewing with {agent} is in about 2 hours, {when}.', { agent, when });
+  }
   if (action === 'ask_outcome') {
-    return `Hi ${name}, how did the viewing go? Reply WENT, NO-SHOW, or TAKEN.`;
+    return bookingSay(lang, 'Hi {name}, how did the viewing go? Reply WENT, NO-SHOW, or TAKEN.', { name });
   }
   return '';
 }
 
 function buildAgentAck(request, action, links) {
+  const lang = agentMessageLang(request);
+  const visitor = text(request.visitor_name, bookingSay(lang, 'the visitor'));
   if (action === 'confirm') {
-    return `Confirmed. We've told ${text(request.visitor_name, 'the visitor')}. Call them on ${request.visitor_phone} to agree where to meet. Reply SOLD or LET any time if this property is taken.`;
+    return bookingSay(lang, 'Confirmed. We\'ve told {visitor}. Call them on {phone} to agree where to meet. Reply SOLD or LET any time if this property is taken.', {
+      visitor,
+      phone: request.visitor_phone
+    });
   }
   if (action === 'reschedule') {
     return request.proposed_date
-      ? `New time saved. We've told ${text(request.visitor_name, 'the visitor')}.`
-      : `Open this link to pick a new time: ${links?.reschedule || ''}`.trim();
+      ? bookingSay(lang, 'New time saved. We\'ve told {visitor}.', { visitor })
+      : bookingSay(lang, 'Open this link to pick a new time: {link}', { link: links?.reschedule || '' }).trim();
   }
-  if (action === 'decline') return `We've told them you can't do it. The MakaUG team will call them.`;
+  if (action === 'decline') return bookingSay(lang, 'We\'ve told them you can\'t do it. The MakaUG team will call them.');
   if (action === 'remind') {
-    const ref = request.public_ref ? ` Ref ${request.public_ref}.` : '';
-    return `Reminder: ${text(request.visitor_name, 'A visitor')} is still waiting${request.when_label ? ` (${request.when_label})` : ''}.${ref} Reply 1 Confirm, 2 Suggest new time, 3 Can't do it.`;
+    const ref = request.public_ref ? bookingSay(lang, ' Ref {ref}.', { ref: request.public_ref }) : '';
+    const when = request.when_label ? ` (${request.when_label})` : '';
+    return bookingSay(lang, 'Reminder: {visitor} is still waiting{when}.{ref} Reply 1 Confirm, 2 Suggest new time, 3 Can\'t do it.', {
+      visitor: text(request.visitor_name, bookingSay(lang, 'A visitor')),
+      when,
+      ref
+    });
   }
-  if (action === 'sold') return 'Marked sold.';
-  if (action === 'let_agreed') return 'Marked let agreed.';
-  if (action === 'under_offer') return 'Marked under offer.';
-  if (action === 'still_available') return 'Marked still available.';
-  return 'Saved.';
+  if (action === 'sold') return bookingSay(lang, 'Marked sold.');
+  if (action === 'let_agreed') return bookingSay(lang, 'Marked let agreed.');
+  if (action === 'under_offer') return bookingSay(lang, 'Marked under offer.');
+  if (action === 'still_available') return bookingSay(lang, 'Marked still available.');
+  return bookingSay(lang, 'Saved.');
 }
 
 function buildEscalationMessage(request) {
@@ -1071,7 +1113,8 @@ async function createAgentBooking(db, input = {}, deps = {}) {
   if (!phone || !/^\+?[0-9]{10,15}$/.test(phone)) throw bookingError('phone is invalid');
   const agentResult = await db.query(
     `/* agent-booking:agent */
-     SELECT id, full_name, phone, whatsapp, status
+     SELECT id, full_name, phone, whatsapp, status,
+            COALESCE((SELECT preferred_language FROM users WHERE id = agents.user_id), 'en') AS agent_preferred_language
        FROM agents
       WHERE id = $1
       LIMIT 1`,
@@ -1221,7 +1264,9 @@ async function createAgentBooking(db, input = {}, deps = {}) {
     district: listing?.district,
     reminder_due_at: reminderAt.toISOString(),
     escalate_due_at: escalateAt.toISOString(),
-    events: []
+    events: [],
+    language: siteLang(input.language),
+    agent_preferred_language: siteLang(agent.agent_preferred_language)
   }, config);
   const links = issueLinks(request, now.getTime());
   const agentMessage = buildAgentRequestMessage(request, links, config);
@@ -1305,7 +1350,8 @@ async function loadRequest(db, id) {
   const result = await db.query(
     `/* agent-booking:by-id */
      SELECT r.*, p.title AS property_title, p.area, p.district, p.bedrooms, p.property_type,
-            p.inquiry_reference, a.full_name AS agent_name, a.phone AS agent_phone, a.whatsapp AS agent_whatsapp
+            p.inquiry_reference, a.full_name AS agent_name, a.phone AS agent_phone, a.whatsapp AS agent_whatsapp,
+            COALESCE((SELECT preferred_language FROM users WHERE id = a.user_id), 'en') AS agent_preferred_language
        FROM agent_booking_requests r
        LEFT JOIN properties p ON p.id = r.listing_id
        LEFT JOIN agents a ON a.id = r.agent_id
@@ -1344,7 +1390,8 @@ async function findOpenRequestsForAgentPhone(db, phone) {
   const result = await db.query(
     `/* agent-booking:pending-agent */
      SELECT r.*, p.title AS property_title, p.area, p.district, p.bedrooms, p.property_type,
-            p.inquiry_reference, a.full_name AS agent_name, a.phone AS agent_phone, a.whatsapp AS agent_whatsapp
+            p.inquiry_reference, a.full_name AS agent_name, a.phone AS agent_phone, a.whatsapp AS agent_whatsapp,
+            COALESCE((SELECT preferred_language FROM users WHERE id = a.user_id), 'en') AS agent_preferred_language
        FROM agent_booking_requests r
        JOIN agents a ON a.id = r.agent_id
        LEFT JOIN properties p ON p.id = r.listing_id
@@ -1375,7 +1422,8 @@ async function findOutcomeForVisitorPhone(db, phone) {
   const result = await db.query(
     `/* agent-booking:outcome-visitor */
      SELECT r.*, p.title AS property_title, p.area, p.district, p.bedrooms, p.property_type,
-            a.full_name AS agent_name
+            a.full_name AS agent_name,
+            COALESCE((SELECT preferred_language FROM users WHERE id = a.user_id), 'en') AS agent_preferred_language
        FROM agent_booking_requests r
        LEFT JOIN properties p ON p.id = r.listing_id
        LEFT JOIN agents a ON a.id = r.agent_id
@@ -1676,7 +1724,8 @@ async function tickAgentBookings(db, now = new Date(), deps = {}) {
   const due = await db.query(
     `/* agent-booking:due */
      SELECT r.*, p.title AS property_title, p.area, p.district, p.bedrooms, p.property_type,
-            p.inquiry_reference, a.full_name AS agent_name, a.phone AS agent_phone, a.whatsapp AS agent_whatsapp
+            p.inquiry_reference, a.full_name AS agent_name, a.phone AS agent_phone, a.whatsapp AS agent_whatsapp,
+            COALESCE((SELECT preferred_language FROM users WHERE id = a.user_id), 'en') AS agent_preferred_language
        FROM agent_booking_requests r
        LEFT JOIN properties p ON p.id = r.listing_id
        LEFT JOIN agents a ON a.id = r.agent_id
@@ -1897,6 +1946,7 @@ module.exports = {
   applyReply,
   availabilityView,
   bookingConfig,
+  buildAgentAck,
   buildAgentRequestMessage,
   buildBookingCalendar: buildDaysAndSlots,
   buildDaysAndSlots,
