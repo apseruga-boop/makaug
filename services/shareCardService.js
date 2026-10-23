@@ -6,7 +6,7 @@ const { createHash } = require('crypto');
 const sharp = require('sharp');
 const { Resvg } = require('@resvg/resvg-js');
 const { compactUgx } = require('../utils/compactUgx');
-const { realPhotoRejection } = require('../utils/realListingPhoto');
+const { mediaHost, realPhotoRejection } = require('../utils/realListingPhoto');
 const { pricePeriodSuffix } = require('../config/pricePeriods');
 const { composeAgentBio } = require('./agentPublicProfileService');
 
@@ -189,12 +189,13 @@ function shareCardKeyForPath(pathname = '/') {
 }
 
 function propertyShareRevision(listing = {}) {
+  const photoUrls = Array.isArray(listing.photoUrls) ? listing.photoUrls : [];
   const fields = [
-    'property-card-v2', listing.id, listing.title, listing.listing_type,
+    'property-card-v3', listing.id, listing.title, listing.listing_type,
     listing.property_type || listing.propertyType, listing.price,
     listing.price_period || listing.pricePeriod, listing.bedrooms, listing.area, listing.district,
     Boolean(listing.found_online_notice || listing.foundOnline),
-    listing.primary_image_url || listing.photoUrl, listing.updated_at
+    listing.primary_image_url || listing.photoUrl || photoUrls[0] || '', listing.updated_at
   ];
   return createHash('sha256').update(JSON.stringify(fields)).digest('hex').slice(0, 16);
 }
@@ -333,6 +334,88 @@ function categoryForListing(listing = {}) {
 
 function usableListingPhoto(url) {
   return realPhotoRejection(url) === null;
+}
+
+// Share cards may use a still the listing already stores when it is not on
+// our media host. YouTube and Twitter image CDNs are stable public files.
+// TikTok CDN links, stock photos and generated cards are not: they expire,
+// 403, or are not the property.
+const STABLE_SOURCE_PHOTO_HOSTS = new Set([
+  'i.ytimg.com',
+  'img.youtube.com',
+  'pbs.twimg.com',
+  'video.twimg.com'
+]);
+
+function shareCardPhotoRejection(url) {
+  const hosted = realPhotoRejection(url);
+  if (hosted === null) return null;
+  if (hosted === 'empty' || hosted === 'generated_data_image' || hosted === 'stock_photo' || hosted === 'image_pending_card' || hosted === 'tiktok_cdn') {
+    return hosted;
+  }
+  let parsed;
+  try {
+    parsed = new URL(String(url || '').trim());
+  } catch (_error) {
+    return 'not_hosted_on_media';
+  }
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return 'not_https';
+  const host = parsed.hostname.toLowerCase();
+  if (host === 'localhost' || host.endsWith('.local') || host === '169.254.169.254') return 'blocked_host';
+  if (/^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host)) return 'blocked_host';
+  if (!STABLE_SOURCE_PHOTO_HOSTS.has(host)) return 'not_hosted_on_media';
+  if (!parsed.pathname || parsed.pathname === '/') return 'not_hosted_on_media';
+  return null;
+}
+
+function usableShareCardPhoto(url) {
+  return shareCardPhotoRejection(url) === null;
+}
+
+function sharePhotoHostPattern() {
+  const host = mediaHost().replace(/[^a-z0-9.-]/gi, '').replace(/\./g, '\\.');
+  return `^https://${host}/`;
+}
+
+// maxresdefault is sometimes a tiny grey placeholder. hqdefault and sddefault
+// are the same video's smaller stills and are tried next.
+function shareCardPhotoAttempts(url) {
+  const value = String(url || '').trim();
+  if (!usableShareCardPhoto(value)) return [];
+  const attempts = [value];
+  const match = value.match(/^https:\/\/i\.ytimg\.com\/vi\/([^/?#]+)\/(?:maxresdefault|sddefault)\.jpg(?:[?#].*)?$/i);
+  if (match) {
+    const id = match[1];
+    attempts.push(
+      `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      `https://i.ytimg.com/vi/${id}/sddefault.jpg`
+    );
+  }
+  return [...new Set(attempts)].filter((item) => usableShareCardPhoto(item));
+}
+
+function shareCardPhotoList(listing = {}) {
+  const incoming = [];
+  const pushRaw = (value) => {
+    const list = Array.isArray(value) ? value : [value];
+    for (const item of list) {
+      const text = String(item || '').trim();
+      if (text && !incoming.includes(text)) incoming.push(text);
+    }
+  };
+  pushRaw(listing.photoUrls);
+  pushRaw(listing.photoUrl);
+  pushRaw(listing.primary_image_url);
+  pushRaw(listing.share_photo_url);
+  const hosted = [];
+  const source = [];
+  for (const url of incoming) {
+    for (const attempt of shareCardPhotoAttempts(url)) {
+      const bucket = realPhotoRejection(attempt) === null ? hosted : source;
+      if (!bucket.includes(attempt) && !hosted.includes(attempt) && !source.includes(attempt)) bucket.push(attempt);
+    }
+  }
+  return [...hosted, ...source];
 }
 
 function usableAgentPhoto(url) {
@@ -629,6 +712,11 @@ module.exports = {
   shareCardText,
   shareCardAlt,
   usableListingPhoto,
+  usableShareCardPhoto,
+  shareCardPhotoRejection,
+  shareCardPhotoAttempts,
+  shareCardPhotoList,
+  sharePhotoHostPattern,
   usableAgentPhoto,
   formatSharePrice,
   formatPriceRange,

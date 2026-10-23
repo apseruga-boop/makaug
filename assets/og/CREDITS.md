@@ -2,7 +2,7 @@
 
 The default collage and the category share cards crop and overlay these photographs with the makaug logo and brand text. Every photograph was taken in Uganda. Each file's Wikimedia Commons description or location categories name Uganda, or a city or district in Uganda. They are not listing photos, and they are not scraped from TikTok or Facebook.
 
-A property share card uses that listing's own hosted photo when one is usable, and falls back to a category card when it is not.
+A property share card uses that listing's own photo when one can be fetched: a picture hosted on makaug, or the listing's YouTube or Twitter still when that is the photo stored for the listing. The card keeps the listing's price and area. It uses the matching category card only when the listing has no usable photo.
 
 Each source keeps the licence below. The adapted cards, which crop the photos and add the makaug logo and brand text, are offered under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 

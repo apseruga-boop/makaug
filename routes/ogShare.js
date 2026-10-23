@@ -9,16 +9,22 @@ const { agentCardBio, loadAgentSummaryListings } = require('../services/agentPub
 const { loadPublicSeoListing } = require('../services/publicSeoRenderService');
 const {
   SHARE_CACHE_CONTROL,
+  categoryForListing,
   categoryKey,
   normalizeShareLang,
   renderShareCard,
   propertyShareRevision,
-  usableAgentPhoto,
-  usableListingPhoto
+  shareCardPhotoList,
+  sharePhotoHostPattern,
+  usableAgentPhoto
 } = require('../services/shareCardService');
 
 const CARD_CACHE_MAX = 80;
+const PHOTO_CACHE_MAX = 40;
+const PHOTO_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const NO_PHOTO_CACHE_CONTROL = 'public, max-age=600, stale-while-revalidate=86400';
 const cardCache = new Map();
+const photoCache = new Map();
 
 function rememberCard(key, buffer, ttlMs = Infinity) {
   if (cardCache.has(key)) cardCache.delete(key);
@@ -28,6 +34,29 @@ function rememberCard(key, buffer, ttlMs = Infinity) {
     if (oldest === undefined) break;
     cardCache.delete(oldest);
   }
+}
+
+function rememberPhoto(url, buffer) {
+  if (!url || !buffer) return;
+  if (photoCache.has(url)) photoCache.delete(url);
+  photoCache.set(url, { buffer, expiresAt: Date.now() + PHOTO_CACHE_TTL_MS });
+  while (photoCache.size > PHOTO_CACHE_MAX) {
+    const oldest = photoCache.keys().next().value;
+    if (oldest === undefined) break;
+    photoCache.delete(oldest);
+  }
+}
+
+function cachedPhoto(url) {
+  const hit = photoCache.get(url);
+  if (!hit) return null;
+  if (hit.expiresAt <= Date.now()) {
+    photoCache.delete(url);
+    return null;
+  }
+  photoCache.delete(url);
+  photoCache.set(url, hit);
+  return hit.buffer;
 }
 
 function cachedCard(key) {
@@ -55,26 +84,86 @@ function sendCard(res, buffer, source, cacheControl = SHARE_CACHE_CONTROL) {
   return res.status(200).send(buffer);
 }
 
+function imageMagic(buffer) {
+  if (!buffer || buffer.length < 12) return false;
+  if (buffer[0] === 0xff && buffer[1] === 0xd8) return true;
+  if (buffer.subarray(0, 8).toString('hex') === '89504e470d0a1a0a') return true;
+  if (buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP') return true;
+  if (buffer.subarray(0, 3).toString() === 'GIF') return true;
+  return false;
+}
+
+function blockedPhotoTarget(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return true;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host === '169.254.169.254' || host === 'metadata.google.internal') return true;
+    if (/^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.|0\.0\.0\.0$)/.test(host)) return true;
+    return false;
+  } catch (_error) {
+    return true;
+  }
+}
+
 async function fetchPhoto(url) {
   const value = String(url || '').trim();
   if (!value) return null;
+  const cached = cachedPhoto(value);
+  if (cached) return cached;
   if (/^data:image\/(?:jpeg|jpg|png|webp);base64,/i.test(value)) {
     const payload = value.slice(value.indexOf(',') + 1);
     const buffer = Buffer.from(payload, 'base64');
-    return buffer.length ? buffer : null;
+    if (!buffer.length || buffer.length > 8 * 1024 * 1024) return null;
+    try { await sharp(buffer).stats(); } catch (_error) { return null; }
+    return buffer;
   }
+  if (blockedPhotoTarget(value)) return null;
   const response = await fetch(value, {
     redirect: 'follow',
-    signal: AbortSignal.timeout(5000),
-    headers: { 'User-Agent': 'makaug-og-card/1.0' }
+    signal: AbortSignal.timeout(8000),
+    headers: {
+      Accept: 'image/avif,image/webp,image/apng,image/jpeg,image/png,image/*;q=0.8',
+      'User-Agent': 'Mozilla/5.0 (compatible; makaug-og-card/1.0; +https://makaug.com)'
+    }
   });
   if (!response.ok) return null;
-  const type = String(response.headers.get('content-type') || '');
-  if (!type.startsWith('image/')) return null;
+  if (response.url && blockedPhotoTarget(response.url)) return null;
+  const type = String(response.headers.get('content-type') || '').toLowerCase();
+  if (type.startsWith('text/') || type.includes('html') || type.includes('json')) return null;
   const buffer = Buffer.from(await response.arrayBuffer());
   if (!buffer.length || buffer.length > 8 * 1024 * 1024) return null;
+  if (!type.startsWith('image/') && !imageMagic(buffer)) return null;
+  if (/maxresdefault/i.test(value) && buffer.length < 3000) return null;
   try { await sharp(buffer).stats(); } catch (_error) { return null; }
+  rememberPhoto(value, buffer);
   return buffer;
+}
+
+const SHARE_PHOTO_LOOKUP_SQL = `SELECT i.url
+     FROM property_images i
+    WHERE i.property_id::text = $1
+      AND i.url ~* '^https://.+'
+      AND i.url !~* 'tiktokcdn|byteimg|unsplash\\.com|photo-1560518883-ce09059eeffa|image[ _-]*pending'
+      AND COALESCE(i.slot_key, '') <> 'source_evidence_card'
+      AND COALESCE(i.room_label, '') !~* 'image[ _-]*pending'
+      AND (
+        i.url ~* $2
+        OR i.url ~* '^https://(i\\.ytimg\\.com|img\\.youtube\\.com|pbs\\.twimg\\.com|video\\.twimg\\.com)/'
+      )
+    ORDER BY
+      (i.url ~* $2) DESC,
+      (COALESCE(i.slot_key, '') = 'staff_upload') DESC,
+      (COALESCE(i.slot_key, '') ~* '^(video_key_frame_|video_still_|video_recovery_still_)') DESC,
+      i.is_primary DESC,
+      i.sort_order ASC NULLS LAST,
+      i.created_at ASC
+    LIMIT 6`;
+
+async function defaultLoadSharePhotos(db, id) {
+  if (!db || typeof db.query !== 'function') return [];
+  const result = await db.query(SHARE_PHOTO_LOOKUP_SQL, [id, sharePhotoHostPattern()]);
+  return (result.rows || []).map((row) => row.url).filter(Boolean);
 }
 
 function publicAgentName(value) {
@@ -123,9 +212,18 @@ async function defaultLoadAgent(db, id) {
   };
 }
 
-async function defaultLoadProperty(db, id) {
+async function defaultLoadProperty(db, id, loadSharePhotos) {
   const listing = await loadPublicSeoListing(db, id);
   if (!listing) return null;
+  let gallery = [];
+  try {
+    gallery = await (loadSharePhotos || defaultLoadSharePhotos)(db, id);
+  } catch (error) {
+    logger.warn('Share card photo lookup failed', { message: error.message });
+  }
+  const photoUrls = shareCardPhotoList({
+    photoUrls: [listing.primary_image_url, ...(Array.isArray(gallery) ? gallery : [])]
+  });
   return {
     id: listing.id,
     listing_type: listing.listing_type,
@@ -138,14 +236,15 @@ async function defaultLoadProperty(db, id) {
     district: listing.district,
     foundOnline: Boolean(listing.found_online_notice),
     updated_at: listing.updated_at,
-    photoUrl: usableListingPhoto(listing.primary_image_url) ? listing.primary_image_url : ''
+    photoUrl: photoUrls[0] || '',
+    photoUrls
   };
 }
 
 function createOgShareRouter(options = {}) {
   const router = express.Router();
   const loadAgent = options.loadAgent || ((id) => defaultLoadAgent(options.db, id));
-  const loadProperty = options.loadProperty || ((id) => defaultLoadProperty(options.db, id));
+  const loadProperty = options.loadProperty || ((id) => defaultLoadProperty(options.db, id, options.loadSharePhotos));
   const readPhoto = options.fetchPhoto || fetchPhoto;
   const limiter = options.limiter || rateLimit({
     windowMs: 60 * 1000,
@@ -240,13 +339,34 @@ function createOgShareRouter(options = {}) {
       const cacheKey = `property:${id}:${lang}:${propertyShareRevision(listing)}`;
       const hit = cachedCard(cacheKey);
       if (hit) return sendCard(res, hit, 'property');
+      const photoUrls = listing.photo ? [] : shareCardPhotoList(listing);
+      if (!listing.photo && !photoUrls.length) {
+        const key = categoryForListing(listing);
+        return sendCard(res, await categoryCard(key, lang), key, NO_PHOTO_CACHE_CONTROL);
+      }
       let photo = listing.photo || null;
-      if (!photo && listing.photoUrl && usableListingPhoto(listing.photoUrl)) {
-        try { photo = await readPhoto(listing.photoUrl); } catch (_error) { photo = null; }
+      if (!photo) {
+        for (const photoUrl of photoUrls) {
+          try {
+            const candidate = await readPhoto(photoUrl);
+            if (!candidate) continue;
+            if (/maxresdefault/i.test(photoUrl) && candidate.length < 3000) continue;
+            photo = candidate;
+            break;
+          } catch (error) {
+            logger.warn('Share card photo fetch failed', {
+              host: (() => { try { return new URL(photoUrl).host; } catch (_error) { return ''; } })(),
+              message: error.message
+            });
+          }
+        }
       }
       const buffer = await renderShareCard({ kind: 'property', lang, listing: { ...listing, photo } });
-      if (photo) rememberCard(cacheKey, buffer, 24 * 60 * 60 * 1000);
-      return sendCard(res, buffer, 'property', photo ? SHARE_CACHE_CONTROL : 'public, max-age=60, must-revalidate');
+      if (photo) {
+        rememberCard(cacheKey, buffer, 24 * 60 * 60 * 1000);
+        return sendCard(res, buffer, 'property');
+      }
+      return sendCard(res, buffer, 'property', 'public, max-age=60, must-revalidate');
     } catch (error) {
       logger.warn('Share card property render failed', { message: error.message });
       try { return sendCard(res, await homeCard(lang), 'home'); } catch (_fallback) { return res.status(200).end(); }
@@ -258,5 +378,10 @@ function createOgShareRouter(options = {}) {
 
 module.exports = {
   createOgShareRouter,
-  clearOgShareCache() { cardCache.clear(); }
+  SHARE_PHOTO_LOOKUP_SQL,
+  NO_PHOTO_CACHE_CONTROL,
+  clearOgShareCache() {
+    cardCache.clear();
+    photoCache.clear();
+  }
 };
