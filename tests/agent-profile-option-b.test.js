@@ -48,6 +48,8 @@ assert(!surface.includes('Experienced Broker'), 'the hard-coded experience line 
 assert(!profile.includes('h-28 md:h-36'), 'the tall green banner is gone');
 assert(profile.includes('Live listings') && profile.includes('Price range') && profile.includes('Video tours') && profile.includes('Areas covered') && profile.includes('Verified status'), 'key figures sit under the identity card');
 assert(profile.includes('brokerAboutParagraphs(b).map((text) => `<p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(text)}</p>`)'), 'About still uses the translated biography');
+assert(profile.indexOf('broker-about-heading') < profile.indexOf('Live listings'), 'the biography sits above the key figures');
+assert(surface.includes('grid grid-cols-1 sm:grid-cols-2 gap-5') && surface.includes('propCard(listing'), 'listings use the same property card grid as the sale and rent pages');
 assert(profile.includes('Where ${adminEscape(firstName)} works'), 'the map section is titled with the agent first name');
 assert(surface.includes('getListingMapPoint') && surface.includes('OSM_TILE_URL') && profile.includes('initAgentProfileMap(list)'), 'listing pins use OpenStreetMap through the existing area fallback');
 assert(!/google\.maps|ensureGoogleMapsApi/.test(surface), 'the profile map does not call Google');
