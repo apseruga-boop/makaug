@@ -14414,6 +14414,18 @@ function staffLiveListingBadgeHtml() {
   return `<span class="inline-flex rounded-full bg-emerald-600 text-white px-2.5 py-1 text-[11px] font-black" data-live-listing-badge>Live listing</span>`;
 }
 
+function staffApprovedByHtml(preview = {}) {
+  const name = String(preview.approved_by_name || "").trim();
+  if (!name) return `<p class="mt-2 text-xs text-gray-500" data-staff-approved-by>Approved by: not recorded</p>`;
+  return `<p class="mt-2 text-xs text-gray-700" data-staff-approved-by>Approved by <span class="font-black">${adminEscape(name)}</span></p>`;
+}
+
+function staffListingCanRepublish(preview = {}) {
+  const status = String(preview.status || "").toLowerCase();
+  const extra = preview.extra_fields && typeof preview.extra_fields === "object" ? preview.extra_fields : {};
+  return status === "hidden" && staffListingIsLive(extra.unpublished_from_status);
+}
+
 // Same shapes the review-queue lookup accepts: full MK ref, its 6-hex suffix, or a property id.
 function staffListingDirectLookup(term = "") {
   const clean = String(term || "").trim();
@@ -16964,6 +16976,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
           <div class="text-xs uppercase tracking-wide text-emerald-200 font-black">${staffListingIsLive(preview.status) ? "Live listing" : "Preview before publishing"}</div>
           <h3 class="text-2xl font-black mt-1">${adminEscape(preview.title || "Untitled listing")}</h3>
           <p class="text-sm text-slate-300 mt-1">${adminEscape([preview.area, preview.district].filter(Boolean).join(", ") || "Location needs checking")} • ${adminEscape(preview.status || "pending")}</p>
+          <p class="text-xs text-emerald-100 mt-1" data-staff-preview-save-state></p>
           ${staffListingIsLive(preview.status) ? `<div class="mt-2 flex flex-wrap items-center gap-2" data-live-listing-edit="1">${staffLiveListingBadgeHtml()}<span class="text-xs font-bold text-emerald-100">Saving changes keeps this listing live. Every change is recorded.</span></div>` : ""}
         </div>
         <div class="flex items-center gap-2">
@@ -17016,6 +17029,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
           </section>
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900">Decision</h4>
+            ${staffApprovedByHtml(preview)}
             <div class="mt-3" data-human-integrity-override-host></div>
             <div class="mt-3 grid gap-2">
               <button type="button" onclick="saveStaffListingPreview(${propertyIdArg(preview.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-black">Save preview changes</button>
@@ -17023,6 +17037,8 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
               <div class="hidden" data-approval-blocker-host></div>
               <button type="button" data-reject-button="staff-preview" onclick="staffRejectPreviewListing(${propertyIdArg(preview.id)})" class="bg-red-600 hover:bg-red-500 text-white rounded-xl px-4 py-2 text-sm font-black">Reject with reason</button>
               <button type="button" onclick="staffModerateListing(${propertyIdArg(preview.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-black">Keep pending</button>
+              ${staffListingIsLive(preview.status) ? `<button type="button" data-staff-unpublish="1" onclick="staffUnpublishPreviewListing(${propertyIdArg(preview.id)})" class="border border-amber-300 text-amber-950 hover:bg-amber-50 rounded-xl px-4 py-2 text-sm font-black">Unpublish</button>` : ""}
+              ${staffListingCanRepublish(preview) ? `<button type="button" data-staff-republish="1" onclick="staffRepublishPreviewListing(${propertyIdArg(preview.id)})" class="border border-emerald-300 text-emerald-900 hover:bg-emerald-50 rounded-xl px-4 py-2 text-sm font-black">Publish again</button>` : ""}
             </div>
             <p class="text-xs text-gray-500 mt-3">Approve uses the same live publish API as King moderation. If checklist warnings remain, the backend will block approval.</p>
           </section>
@@ -17385,15 +17401,18 @@ async function saveStaffListingPreview(propertyId, options = {}) {
       toast("The save response was a different listing, so this editor was left unchanged.");
       return null;
     }
-    if (options.deferUi) {
-      adminActiveReview = {
-        ...(adminActiveReview || {}),
-        ...saved,
-        id: targetId
-      };
-    } else {
-      renderStaffListingPreviewModal(saved.id ? saved : { ...(adminActiveReview || {}), id: targetId });
-      await renderStaffDashboard();
+    adminActiveReview = {
+      ...(adminActiveReview || {}),
+      ...saved,
+      id: targetId
+    };
+    if (!options.deferUi) {
+      // Rebuilding the editor re-inits the map, and waiting here for the full
+      // staff dashboard rewrote the page under the open modal. That locked the
+      // tab. The fields just saved are already on screen.
+      const state = document.querySelector("#staff-listing-preview-modal [data-staff-preview-save-state]");
+      if (state) state.textContent = "Saved. This editor stays open.";
+      queueStaffDashboardRefreshAfterModeration({ keepPreviewOpen: true });
     }
     if (!options.silent) toast("Preview changes saved.");
     return saved.id ? saved : null;
@@ -17435,6 +17454,8 @@ function staffPreviewDecisionButtons() {
     return text === "Approve live after preview"
       || text === "Reject with reason"
       || text === "Keep pending"
+      || text === "Unpublish"
+      || text === "Publish again"
       || text === "Saving decision...";
   });
 }
@@ -17512,14 +17533,17 @@ function staffVerifyApprovedListingInBackground(propertyId) {
     });
 }
 
-function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = false, preservePreviewDraft = false } = {}) {
+function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = false, preservePreviewDraft = false, keepPreviewOpen = false } = {}) {
   if (staffModerationRefreshTimer) window.clearTimeout(staffModerationRefreshTimer);
   staffModerationRefreshTimer = null;
   // Photo upload already patched the gallery in place. Reloading the review
   // here would throw away price, note, and pin edits that are not saved yet.
   if (preservePreviewDraft && document.getElementById("staff-listing-preview-modal")) return;
+  // A save keeps the open editor. Reloading it would rebuild the map and lock
+  // the tab the same way an inline dashboard render did.
+  if (keepPreviewOpen && currentPage === "staff-review") return;
   // Direct review page: reload just this listing's review, not the dashboard.
-  if (currentPage === "staff-review") {
+  if (!keepPreviewOpen && currentPage === "staff-review") {
     const reviewId = staffDirectReviewState.id;
     if (reviewId) scheduleDashboardRefresh("staff_direct_review", 700, () => staffReloadDirectReview(reviewId), { page: "staff-review" });
     return;
@@ -17735,6 +17759,57 @@ async function staffModerateListing(propertyId, status) {
     queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary: cleanStatus === "approved" });
   } catch (error) {
     toast(`Listing moderation failed: ${error.message || "request failed"}`);
+  } finally {
+    setStaffPreviewDecisionBusy(false);
+  }
+}
+
+async function staffRefreshOpenPreview(propertyId, preview) {
+  const data = preview?.id ? preview : null;
+  if (data) {
+    renderStaffListingPreviewModal(data, { allowSwitch: true });
+    return;
+  }
+  const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/preview`);
+  if (response?.data?.id) renderStaffListingPreviewModal(response.data, { allowSwitch: true });
+}
+
+async function staffUnpublishPreviewListing(propertyId) {
+  const review = staffReviewPatch();
+  const reason = String(review.reason || "").trim();
+  if (!reason || isDefaultStatusNoteText(reason, adminActiveReview || {})) {
+    toast("Type why this live listing is being unpublished.");
+    document.getElementById("admin-review-reason")?.focus();
+    return;
+  }
+  try {
+    setStaffPreviewDecisionBusy(true);
+    const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/unpublish`, {
+      method: "POST",
+      body: { reason }
+    }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Unpublish listing");
+    toast("Listing unpublished. It is off the public site until you publish it again.");
+    await staffRefreshOpenPreview(propertyId, response?.data);
+    queueStaffDashboardRefreshAfterModeration({ keepPreviewOpen: true, refreshPublicSummary: true });
+  } catch (error) {
+    toast(`Unpublish failed: ${error.message || "request failed"}`);
+  } finally {
+    setStaffPreviewDecisionBusy(false);
+  }
+}
+
+async function staffRepublishPreviewListing(propertyId) {
+  try {
+    setStaffPreviewDecisionBusy(true);
+    const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/republish`, {
+      method: "POST",
+      body: { reason: "Published again from the moderation editor" }
+    }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Publish listing again");
+    toast("Listing published again.");
+    await staffRefreshOpenPreview(propertyId, response?.data);
+    queueStaffDashboardRefreshAfterModeration({ keepPreviewOpen: true, refreshPublicSummary: true });
+  } catch (error) {
+    toast(`Publish again failed: ${error.message || "request failed"}`);
   } finally {
     setStaffPreviewDecisionBusy(false);
   }

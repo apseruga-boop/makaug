@@ -3412,8 +3412,25 @@ async function loadStaffPropertyPreview(propertyId) {
       automated: automatedReview,
       bulk_gate_preview: bulkGatePreview
     },
+    approved_by_name: await staffApprovedByName(property.approved_by),
     events
   };
+}
+
+async function staffApprovedByName(userId) {
+  const id = toUuidOrNull(userId);
+  if (!id) return '';
+  const user = await safeOne(
+    `SELECT first_name, last_name, email
+     FROM users
+     WHERE id = $1::uuid
+     LIMIT 1`,
+    [id],
+    null,
+    previewQueryOptions('staff_preview_approved_by')
+  );
+  if (!user || user._fallback_reason) return '';
+  return [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || cleanText(user.email);
 }
 
 function staffBulkApprovalChecklist() {
@@ -4861,6 +4878,130 @@ router.patch('/properties/:id/review', async (req, res, next) => {
 // needed another look — a duplicate, a wrong price — could not be put back in front of a
 // moderator. It comes off the public site and lands in the review queue, where it can be
 // approved again or rejected through the normal path. Nothing is destroyed.
+const STAFF_UNPUBLISH_LIVE_STATUSES = new Set(['approved', 'live', 'published', 'sold']);
+
+function staffUnpublishReason(reason, property = {}) {
+  const typed = cleanText(reason);
+  if (!typed) return '';
+  if (/^\s*(pending\s+(king\s+)?review\b|awaiting\s+(king\s+|staff\s+)?review\b|submitted for review\b)/i.test(typed)) return '';
+  const stored = [property.moderation_reason, safeJsonObject(property.extra_fields, {}).moderation_reason]
+    .map((value) => cleanText(value).toLowerCase())
+    .filter(Boolean);
+  if (stored.includes(typed.toLowerCase()) && String(property.status || '').toLowerCase() !== 'rejected') return '';
+  return typed;
+}
+
+router.post('/properties/:id/unpublish', async (req, res, next) => {
+  try {
+    const existing = await db.query(
+      `SELECT id, status, title, moderation_reason, extra_fields
+       FROM properties WHERE id = $1 LIMIT 1`,
+      [req.params.id]
+    );
+    if (!existing.rows.length) return res.status(404).json({ ok: false, error: 'Property not found' });
+    const row = existing.rows[0];
+    const currentStatus = String(row.status || '').toLowerCase();
+    if (!STAFF_UNPUBLISH_LIVE_STATUSES.has(currentStatus)) {
+      return res.status(409).json({ ok: false, error: 'Only a live listing can be unpublished from the editor.' });
+    }
+    const reason = staffUnpublishReason(req.body?.reason || req.body?.notes, row);
+    if (!reason) {
+      return res.status(400).json({ ok: false, error: 'A reason is required to unpublish a live listing.' });
+    }
+    const actor = actorId(req);
+    const updated = await db.query(
+      `UPDATE properties
+          SET status = 'hidden',
+              moderation_reason = $2,
+              reviewed_by = COALESCE($3::uuid, reviewed_by),
+              extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
+                'unpublished_from_status', $4::text,
+                'unpublished_reason', $2::text,
+                'unpublished_at', to_jsonb(NOW()),
+                'unpublished_by', $3::text
+              ),
+              updated_at = NOW()
+        WHERE id = $1
+          AND lower(status) = $5
+        RETURNING id::text AS id, status`,
+      [req.params.id, reason, actor, currentStatus, currentStatus]
+    );
+    if (!updated.rows.length) {
+      return res.status(409).json({ ok: false, error: 'This listing changed before it could be unpublished.' });
+    }
+    await db.query(
+      `INSERT INTO property_moderation_events (
+         property_id, actor_id, action, status_from, status_to, reason
+       ) VALUES ($1,$2,'staff_listing_unpublished',$3,'hidden',$4)`,
+      [req.params.id, actor, row.status, reason]
+    );
+    clearStaffFastDashboardCache();
+    invalidatePublicInventoryMetricsCache('staff_listing_unpublished');
+    logStaffActivityInBackground(req, 'staff_listing_unpublished', {
+      targetType: 'property',
+      targetId: req.params.id,
+      metadata: { from_status: row.status, reason }
+    });
+    const preview = await loadStaffPropertyPreview(updated.rows[0].id);
+    return res.json({ ok: true, data: preview || updated.rows[0] });
+  } catch (error) {
+    logger.error('Staff unpublish failed', { message: error.message });
+    return next(error);
+  }
+});
+
+router.post('/properties/:id/republish', async (req, res, next) => {
+  try {
+    const existing = await db.query(
+      `SELECT id, status, title, extra_fields
+       FROM properties WHERE id = $1 LIMIT 1`,
+      [req.params.id]
+    );
+    if (!existing.rows.length) return res.status(404).json({ ok: false, error: 'Property not found' });
+    const row = existing.rows[0];
+    const extra = safeJsonObject(row.extra_fields, {});
+    const restore = String(extra.unpublished_from_status || '').toLowerCase();
+    if (String(row.status || '').toLowerCase() !== 'hidden' || !STAFF_UNPUBLISH_LIVE_STATUSES.has(restore)) {
+      return res.status(409).json({ ok: false, error: 'Only a listing unpublished from the editor can be published again.' });
+    }
+    const actor = actorId(req);
+    const note = cleanText(req.body?.reason || req.body?.notes) || 'Published again from the moderation editor';
+    const updated = await db.query(
+      `UPDATE properties
+          SET status = $2,
+              reviewed_by = COALESCE($3::uuid, reviewed_by),
+              extra_fields = (COALESCE(extra_fields, '{}'::jsonb) - 'unpublished_from_status')
+                || jsonb_build_object('republished_at', to_jsonb(NOW()), 'republished_by', $3::text, 'republished_note', $4::text),
+              updated_at = NOW()
+        WHERE id = $1
+          AND lower(status) = 'hidden'
+        RETURNING id::text AS id, status`,
+      [req.params.id, restore, actor, note]
+    );
+    if (!updated.rows.length) {
+      return res.status(409).json({ ok: false, error: 'This listing changed before it could be published again.' });
+    }
+    await db.query(
+      `INSERT INTO property_moderation_events (
+         property_id, actor_id, action, status_from, status_to, reason
+       ) VALUES ($1,$2,'staff_listing_republished','hidden',$3,$4)`,
+      [req.params.id, actor, restore, note]
+    );
+    clearStaffFastDashboardCache();
+    invalidatePublicInventoryMetricsCache('staff_listing_republished');
+    logStaffActivityInBackground(req, 'staff_listing_republished', {
+      targetType: 'property',
+      targetId: req.params.id,
+      metadata: { to_status: restore }
+    });
+    const preview = await loadStaffPropertyPreview(updated.rows[0].id);
+    return res.json({ ok: true, data: preview || updated.rows[0] });
+  } catch (error) {
+    logger.error('Staff republish failed', { message: error.message });
+    return next(error);
+  }
+});
+
 router.post('/properties/:id/return-to-review', async (req, res, next) => {
   try {
     const reason = cleanText(req.body?.reason || req.body?.notes);

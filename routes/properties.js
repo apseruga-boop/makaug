@@ -5531,6 +5531,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
            status = $2,
            reviewed_at = NOW(),
            reviewed_by = COALESCE($7::uuid, reviewed_by),
+           approved_by = CASE WHEN $2 = 'approved' THEN COALESCE($7::uuid, approved_by) ELSE approved_by END,
            moderation_stage = $8,
            moderation_checklist = $4::jsonb,
            moderation_notes = COALESCE($5::text, moderation_notes),
@@ -5584,6 +5585,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
          SET
            status = $2,
            reviewed_at = NOW(),
+           approved_by = CASE WHEN $2 = 'approved' THEN COALESCE($9::uuid, approved_by) ELSE approved_by END,
            sold_at = CASE WHEN $2 = 'sold' THEN NOW() WHEN $2 = 'approved' THEN NULL ELSE sold_at END,
            updated_at = NOW(),
            extra_fields = COALESCE(extra_fields, '{}'::jsonb)
@@ -5606,7 +5608,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           reviewNotes,
           moderationReason,
           JSON.stringify(warningOverrides),
-          moderationExtraFieldsJson
+          moderationExtraFieldsJson,
+          reviewerUserId
         ]
       );
       listing = {
