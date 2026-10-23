@@ -57,6 +57,11 @@ assert(profile.includes('class="agent-profile-contact"') && profile.includes('Ne
 assert(profile.includes('name="website"') && profile.includes('submitAgentProfileRequest'), 'the request form posts through the honeypot field');
 assert(surface.includes('source: "agent_profile"'), 'the browser tags the request as an agent profile enquiry');
 assert(profile.includes('agent-profile-mobile-bar'), 'phones get a sticky WhatsApp, Call and Request bar');
+assert(surface.includes('openAgentBookingSheet'), 'the phone Book button opens the booking sheet');
+assert(profile.includes('agent-booking-who'), 'name and phone sit on one row');
+assert(surface.includes('agent-booking-date-strip') && surface.includes('More dates') && surface.includes('.slice(0, 31)'), 'dates are a strip of the next month, moved on by More dates');
+assert(surface.includes('propCard(listing)'), 'listings still use the original property card');
+assert(!surface.includes('agent-booking-cal-grid') && !surface.includes('agent-listing-card'), 'the month grid and gradient listing cards stay out');
 assert(profile.includes('openAgentProfileReport') && profile.includes('Share profile'), 'share and report sit with the contact card');
 
 assert.strictEqual(helpers.agentProfileExperienceLabel({ experience: 'Experienced Broker' }), '', 'an empty experience record stays blank');
@@ -119,7 +124,7 @@ const requiredPhrases = [
   'Share', 'Report', 'Listings', 'Areas covered', 'Newest', 'Request',
   'Agent number', 'Live listings', 'Price range', 'Video tours', 'Price on request',
   'Listing mix', 'Short stay', 'Other', 'All types', 'Price: low to high', 'Price: high to low',
-  'Never pay before viewing', 'Phone number', 'Send request',
+  'Never pay before viewing', 'Phone number', 'Send request', 'More dates',
   'Request sent. The agent will follow up.',
   'Add your name and phone to send a request.',
   'Could not send the request.',
