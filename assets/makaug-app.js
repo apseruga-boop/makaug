@@ -61872,6 +61872,7 @@ async function openDetail(id, options = {}) {
               </span>
             </a>
             ${detailContactActionsHtml}
+            ${propertyBookingPanelHtml(broker)}
             ${sourceContactUrl && !publicCallPhone ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
             <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">${translateListingLabel("Share Broker Card")}</button>
             <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold inline-flex items-center justify-center">${translatePropertyUi("View Broker")}</a>
@@ -61924,6 +61925,7 @@ async function openDetail(id, options = {}) {
     openValuationForProperty(p.id);
   });
   showPage("detail");
+  if (broker?.id && !isFoundOnlineContact) initPropertyBookingPanel(broker.id, propertyBookingListingId(p));
   setLang(currentLang, true, false);
   updateDetailSaveButton(p.id);
   ensureRevenuePlacements();
@@ -61942,6 +61944,84 @@ let agentProfileLeafletMap = null;
 let agentBookingOptions = null;
 let agentBookingTab = "viewing";
 let agentBookingAgentId = "";
+let agentBookingLockedPlace = "";
+
+function bookingRoot() {
+  const activeDetail = document.querySelector("#page-detail.active .property-booking-panel");
+  if (activeDetail) return activeDetail;
+  const activeProfile = document.querySelector("#page-broker-profile.active #agent-profile-request");
+  if (activeProfile) return activeProfile;
+  return document.querySelector("#agent-profile-request") || document.querySelector(".property-booking-panel");
+}
+
+function bookingEl(id) {
+  const root = bookingRoot();
+  if (!root) return null;
+  return root.querySelector("#" + id);
+}
+
+function agentBookingIso(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + d;
+}
+
+function agentBookingRangeBlocks(iso, ranges) {
+  return (ranges || []).some((range) => range && range.starts_on && range.ends_on && iso >= range.starts_on && iso <= range.ends_on);
+}
+
+function agentBookingPlaceMarkup(places, withChange) {
+  if (agentBookingLockedPlace) {
+    return `<input id="agent-booking-place" type="hidden" value="${adminAttr(agentBookingLockedPlace)}">`;
+  }
+  const change = withChange ? ` onchange="refreshAgentBookingDays(this.value)"` : "";
+  return `<label>Choose a property<select id="agent-booking-place"${change}>${places}</select></label>`;
+}
+
+function paintAgentBookingResponse() {
+  const root = bookingRoot();
+  if (!root) return;
+  const node = root.querySelector(".agent-booking-response");
+  if (!node) return;
+  const label = String(agentBookingOptions?.response_time_label || "").trim();
+  node.textContent = label;
+  node.hidden = !label;
+}
+
+function propertyBookingListingId(property) {
+  const backend = String(property?.backend_id || "").trim();
+  const id = String(property?.id || "").trim();
+  if (/^[0-9a-f-]{36}$/i.test(backend)) return backend;
+  if (/^[0-9a-f-]{36}$/i.test(id)) return id;
+  return backend || id;
+}
+
+function propertyBookingPanelHtml(broker) {
+  const firstName = agentProfileFirstName(broker);
+  const idArg = adminListingIdArg(broker.id);
+  return `
+    <div class="property-booking-panel" id="property-booking-panel">
+      <div class="agent-booking-head"><h2>Book with ${adminEscape(firstName)}</h2></div>
+      <p class="agent-booking-response" hidden></p>
+      <div class="agent-booking-tabs" role="tablist">
+        <button type="button" class="is-active" data-agent-booking-tab="viewing" onclick="setAgentBookingTab('viewing')" aria-label="Book a viewing" title="Book a viewing"><i class="fas fa-calendar-check" aria-hidden="true"></i><span>Viewing</span></button>
+        <button type="button" data-agent-booking-tab="callback" onclick="setAgentBookingTab('callback')" aria-label="Request a callback" title="Request a callback"><i class="fas fa-phone" aria-hidden="true"></i><span>Callback</span></button>
+        <button type="button" data-agent-booking-tab="question" onclick="setAgentBookingTab('question')" aria-label="Ask a question" title="Ask a question"><i class="fas fa-comment" aria-hidden="true"></i><span>Question</span></button>
+        <button type="button" data-agent-booking-tab="offer" onclick="setAgentBookingTab('offer')" aria-label="Make an offer" title="Make an offer"><i class="fas fa-tag" aria-hidden="true"></i><span>Offer</span></button>
+      </div>
+      <form class="agent-profile-form" onsubmit="event.preventDefault(); submitAgentProfileRequest(${idArg});">
+        <input id="agent-profile-website" name="website" class="agent-profile-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" value="">
+        <div id="agent-booking-fields"></div>
+        <div class="agent-booking-who">
+          <label>Your name<input id="agent-profile-name" name="name" type="text" autocomplete="name" maxlength="120" required></label>
+          <label>Phone number<input id="agent-profile-phone" name="phone" type="tel" autocomplete="tel" maxlength="40" required></label>
+        </div>
+        <button id="agent-profile-submit" class="agent-profile-btn is-primary" type="submit">Send request</button>
+      </form>
+      <p class="agent-profile-safety">Never pay before viewing</p>
+    </div>`;
+}
 
 function agentProfileFirstName(broker = {}) {
   const name = String(broker?.name || "").trim();
@@ -62092,15 +62172,16 @@ function closeAgentBookingSheet() {
 
 function selectAgentBookingDay(button) {
   if (!button || button.disabled) return;
-  document.querySelectorAll(".agent-booking-day").forEach((item) => item.classList.remove("is-active"));
+  const root = bookingRoot();
+  (root ? root.querySelectorAll(".agent-booking-day") : []).forEach((item) => item.classList.remove("is-active"));
   button.classList.add("is-active");
-  const hidden = document.getElementById("agent-booking-day");
+  const hidden = bookingEl("agent-booking-day");
   if (hidden) hidden.value = button.getAttribute("data-date") || "";
   renderAgentBookingSlots();
 }
 
 function scrollAgentBookingDates(direction) {
-  const strip = document.getElementById("agent-booking-date-strip");
+  const strip = bookingEl("agent-booking-date-strip");
   if (!strip) return;
   const days = [...strip.querySelectorAll(".agent-booking-day")];
   if (!days.length) return;
@@ -62116,7 +62197,8 @@ function scrollAgentBookingDates(direction) {
 
 function setAgentBookingTab(tab) {
   agentBookingTab = tab || "viewing";
-  document.querySelectorAll("[data-agent-booking-tab]").forEach((button) => {
+  const root = bookingRoot();
+  (root ? root.querySelectorAll("[data-agent-booking-tab]") : []).forEach((button) => {
     button.classList.toggle("is-active", button.getAttribute("data-agent-booking-tab") === agentBookingTab);
   });
   renderAgentBookingFields();
@@ -62129,32 +62211,57 @@ function agentBookingPlaceOptions(options) {
   return `${empty}${properties.join("")}${stays.join("")}`;
 }
 
+function selectAgentBookingStayDay(button) {
+  if (!button || button.disabled) return;
+  const iso = button.getAttribute("data-date") || "";
+  const checkIn = bookingEl("agent-booking-check-in");
+  const checkOut = bookingEl("agent-booking-check-out");
+  if (checkIn && !checkIn.value) checkIn.value = iso;
+  else if (checkOut) checkOut.value = iso;
+}
+
 function renderAgentBookingSlots() {
-  const wrap = document.getElementById("agent-booking-slots");
-  const place = document.getElementById("agent-booking-place")?.value || "";
+  const wrap = bookingEl("agent-booking-slots");
+  const place = bookingEl("agent-booking-place")?.value || agentBookingLockedPlace || "";
   if (place.startsWith("stay:")) {
-    const when = document.getElementById("agent-booking-when");
-    if (when && !document.getElementById("agent-booking-check-in")) {
+    const when = bookingEl("agent-booking-when");
+    if (when) {
+      const ranges = agentBookingOptions?.blocked_dates || [];
+      const days = [];
+      for (let i = 0; i < 21; i += 1) {
+        const date = new Date();
+        date.setHours(12, 0, 0, 0);
+        date.setDate(date.getDate() + i);
+        const iso = agentBookingIso(date);
+        const blocked = agentBookingRangeBlocks(iso, ranges);
+        days.push(`<button type="button" class="agent-booking-day${blocked ? " is-blocked" : ""}" data-date="${adminAttr(iso)}" ${blocked ? "disabled" : ""} onclick="selectAgentBookingStayDay(this)"><strong>${date.getDate()}</strong></button>`);
+      }
       when.innerHTML = `
+        <p class="agent-booking-note">Blocked dates</p>
+        <div class="agent-booking-date-strip" aria-label="Blocked date">${days.join("")}</div>
         <label>Check in<input id="agent-booking-check-in" type="date" required></label>
         <label>Check out<input id="agent-booking-check-out" type="date" required></label>
+        <label>Guests<input id="agent-booking-guests" type="number" min="1" max="30" value="1"></label>
+        <label>Email (optional)<input id="agent-booking-email" type="email" maxlength="200"></label>
+        <label><input id="agent-booking-terms" type="checkbox"> Short stay terms</label>
         <p class="agent-booking-note">Still available for these dates?</p>`;
     }
     return;
   }
   if (!wrap) return;
-  const day = document.getElementById("agent-booking-day")?.value;
+  const day = bookingEl("agent-booking-day")?.value;
   const slots = (agentBookingOptions?.slots_by_date || {})[day] || [];
   wrap.innerHTML = slots.map((slot) => `<button type="button" class="agent-booking-slot" data-time="${adminAttr(slot.time)}" ${slot.available ? "" : "disabled"} onclick="selectAgentBookingSlot(this)">${adminEscape(slot.label || slot.time)}</button>`).join("");
 }
 
 function selectAgentBookingSlot(button) {
-  document.querySelectorAll(".agent-booking-slot").forEach((item) => item.classList.remove("is-active"));
+  const root = bookingRoot();
+  (root ? root.querySelectorAll(".agent-booking-slot") : []).forEach((item) => item.classList.remove("is-active"));
   button.classList.add("is-active");
 }
 
 function renderAgentBookingFields() {
-  const el = document.getElementById("agent-booking-fields");
+  const el = bookingEl("agent-booking-fields");
   if (!el) return;
   const options = agentBookingOptions || { properties: [], stays: [], days: [] };
   const places = agentBookingPlaceOptions(options);
@@ -62167,7 +62274,7 @@ function renderAgentBookingFields() {
     }).join("");
     const first = horizon.find((day) => day.available) || horizon[0] || { date: "" };
     el.innerHTML = `
-      <label>Choose a property<select id="agent-booking-place" onchange="refreshAgentBookingDays(this.value)">${places}</select></label>
+      ${agentBookingPlaceMarkup(places, true)}
       <div id="agent-booking-when">
         <div class="agent-booking-date-row">
           <div id="agent-booking-date-strip" class="agent-booking-date-strip" aria-label="Pick a day">${chips}</div>
@@ -62177,13 +62284,14 @@ function renderAgentBookingFields() {
         <div id="agent-booking-slots" class="agent-booking-slots"></div>
       </div>`;
     const match = [...el.querySelectorAll(".agent-booking-day")].find((node) => node.getAttribute("data-date") === first.date && !node.disabled);
-    if (match) selectAgentBookingDay(match);
+    if (String(bookingEl("agent-booking-place")?.value || "").startsWith("stay:")) renderAgentBookingSlots();
+    else if (match) selectAgentBookingDay(match);
     else renderAgentBookingSlots();
     return;
   }
   if (agentBookingTab === "callback") {
     el.innerHTML = `
-      <label>Choose a property<select id="agent-booking-place">${places}</select></label>
+      ${agentBookingPlaceMarkup(places, false)}
       <label>Best time to call<select id="agent-booking-window"><option>Morning</option><option>Afternoon</option><option>Evening</option><option>Any time</option></select></label>
       <div class="agent-booking-channels">
         <label><input type="radio" name="agent-booking-channel" value="call" checked> Call me</label>
@@ -62193,13 +62301,13 @@ function renderAgentBookingFields() {
   }
   if (agentBookingTab === "question") {
     el.innerHTML = `
-      <label>Choose a property<select id="agent-booking-place">${places}</select></label>
+      ${agentBookingPlaceMarkup(places, false)}
       <label>Your question<textarea id="agent-booking-note" rows="2" maxlength="2000"></textarea></label>`;
     return;
   }
   el.innerHTML = `
-    <label>Choose a property<select id="agent-booking-place">${places}</select></label>
-    <label>Offer amount<input id="agent-booking-offer" type="text" maxlength="40" inputmode="numeric"></label>
+    ${agentBookingPlaceMarkup(places, false)}
+    <label>Offer amount<input id="agent-booking-offer" type="text" maxlength="40" inputmode="numeric" placeholder="UGX"></label>
     <label>Message<textarea id="agent-booking-note" rows="2" maxlength="2000"></textarea></label>`;
 }
 
@@ -62215,36 +62323,47 @@ async function refreshAgentBookingDays(value) {
   const previous = agentBookingTab;
   agentBookingTab = previous;
   renderAgentBookingFields();
-  const select = document.getElementById("agent-booking-place");
-  if (select) select.value = value;
+  const select = bookingEl("agent-booking-place");
+  if (select && !agentBookingLockedPlace) select.value = value;
   if (stay) renderAgentBookingSlots();
+  paintAgentBookingResponse();
 }
 
-async function initAgentBookingPanel(agentId) {
+async function initAgentBookingPanel(agentId, options = {}) {
   agentBookingAgentId = String(agentId || "");
   agentBookingTab = "viewing";
+  agentBookingLockedPlace = options.lockedPlace || "";
+  const listingQuery = agentBookingLockedPlace.startsWith("property:")
+    ? `?listing_id=${encodeURIComponent(agentBookingLockedPlace.slice("property:".length))}`
+    : "";
   try {
-    const res = await apiRequest(`/api/agents/${encodeURIComponent(agentId)}/booking-options`, { skipAuth: true });
+    const res = await apiRequest(`/api/agents/${encodeURIComponent(agentId)}/booking-options${listingQuery}`, { skipAuth: true });
     agentBookingOptions = res?.data || { properties: [], stays: [], days: [], slots_by_date: {} };
   } catch (error) {
     agentBookingOptions = { properties: [], stays: [], days: [], slots_by_date: {} };
   }
   renderAgentBookingFields();
+  paintAgentBookingResponse();
+}
+
+function initPropertyBookingPanel(agentId, listingId) {
+  return initAgentBookingPanel(agentId, { lockedPlace: `property:${listingId}` });
 }
 
 async function submitAgentProfileRequest(id) {
-  const name = (document.getElementById("agent-profile-name")?.value || "").trim();
-  const phone = normalizePhoneInput(document.getElementById("agent-profile-phone")?.value || "");
+  const root = bookingRoot();
+  const name = (bookingEl("agent-profile-name")?.value || "").trim();
+  const phone = normalizePhoneInput(bookingEl("agent-profile-phone")?.value || "");
   if (!name || !phone) {
     toast("Add your name and phone to send a request.");
     return;
   }
-  const place = document.getElementById("agent-booking-place")?.value || "";
+  const place = bookingEl("agent-booking-place")?.value || agentBookingLockedPlace || "";
   const [kind, placeId] = String(place).split(":");
-  const slot = document.querySelector(".agent-booking-slot.is-active");
-  const checkIn = document.getElementById("agent-booking-check-in")?.value || "";
-  const checkOut = document.getElementById("agent-booking-check-out")?.value || "";
-  if (agentBookingTab === "viewing" && kind !== "stay" && (!placeId || !document.getElementById("agent-booking-day")?.value || !slot)) {
+  const slot = root?.querySelector(".agent-booking-slot.is-active");
+  const checkIn = bookingEl("agent-booking-check-in")?.value || "";
+  const checkOut = bookingEl("agent-booking-check-out")?.value || "";
+  if (agentBookingTab === "viewing" && kind !== "stay" && (!placeId || !bookingEl("agent-booking-day")?.value || !slot)) {
     toast("Choose a property, a day and a time.");
     return;
   }
@@ -62252,7 +62371,7 @@ async function submitAgentProfileRequest(id) {
     toast("Choose a check-in and a later check-out.");
     return;
   }
-  const button = document.getElementById("agent-profile-submit");
+  const button = bookingEl("agent-profile-submit");
   if (button?.disabled) return;
   if (button) button.disabled = true;
   try {
@@ -62263,26 +62382,30 @@ async function submitAgentProfileRequest(id) {
         intent: agentBookingTab,
         name,
         phone,
+        email: bookingEl("agent-booking-email")?.value || "",
+        guests: bookingEl("agent-booking-guests")?.value || "",
+        terms_accepted: Boolean(bookingEl("agent-booking-terms")?.checked),
         listing_id: kind === "property" ? placeId : "",
         stay_listing_id: kind === "stay" ? placeId : "",
-        preferred_date: document.getElementById("agent-booking-day")?.value || "",
+        preferred_date: bookingEl("agent-booking-day")?.value || "",
         preferred_time: slot?.getAttribute("data-time") || "",
         check_in: checkIn,
         check_out: checkOut,
-        callback_window: document.getElementById("agent-booking-window")?.value || "",
-        contact_channel: document.querySelector("input[name='agent-booking-channel']:checked")?.value || "",
-        offer_amount: document.getElementById("agent-booking-offer")?.value || "",
-        message: document.getElementById("agent-booking-note")?.value || "",
-        website: document.getElementById("agent-profile-website")?.value || "",
-        source: "agent_profile"
+        callback_window: bookingEl("agent-booking-window")?.value || "",
+        contact_channel: root?.querySelector("input[name='agent-booking-channel']:checked")?.value || "",
+        offer_amount: bookingEl("agent-booking-offer")?.value || "",
+        message: bookingEl("agent-booking-note")?.value || "",
+        website: bookingEl("agent-profile-website")?.value || "",
+        source: root?.classList.contains("property-booking-panel") ? "property_page" : "agent_profile"
       }
     });
-    const sent = res?.data?.message || "Your request has been sent.";
-    const form = document.querySelector("#agent-profile-request .agent-profile-form");
+    const sent = res?.data?.visitor_message || res?.data?.message || "We saved your request.";
+    const statusUrl = res?.data?.status_url || "";
+    const form = root?.querySelector("form.agent-profile-form");
     if (form) {
-      form.innerHTML = `<p class="agent-booking-sent">Your request has been sent.</p><p>${adminEscape(sent)}</p>`;
+      form.innerHTML = `<p class="agent-booking-sent">${adminEscape(sent)}</p>${statusUrl ? `<p><a href="${adminAttr(statusUrl)}">Track this request</a></p>` : ""}`;
     }
-    toast("Your request has been sent.");
+    toast(sent);
   } catch (error) {
     toast(error?.message || "Could not send the request.");
   } finally {
@@ -62498,11 +62621,12 @@ async function openBrokerProfile(id) {
               <h2>Book with ${adminEscape(firstName)}</h2>
               <button type="button" class="agent-booking-close" onclick="closeAgentBookingSheet()" aria-label="Close"><i class="fas fa-xmark" aria-hidden="true"></i></button>
             </div>
+            <p class="agent-booking-response" hidden></p>
             <div class="agent-booking-tabs" role="tablist">
-              <button type="button" class="is-active" data-agent-booking-tab="viewing" onclick="setAgentBookingTab('viewing')" aria-label="Book a viewing" title="Book a viewing"><i class="fas fa-calendar-check" aria-hidden="true"></i><span>Book a viewing</span></button>
-              <button type="button" data-agent-booking-tab="callback" onclick="setAgentBookingTab('callback')" aria-label="Request a callback" title="Request a callback"><i class="fas fa-phone" aria-hidden="true"></i><span>Request a callback</span></button>
-              <button type="button" data-agent-booking-tab="question" onclick="setAgentBookingTab('question')" aria-label="Ask a question" title="Ask a question"><i class="fas fa-comment" aria-hidden="true"></i><span>Ask a question</span></button>
-              <button type="button" data-agent-booking-tab="offer" onclick="setAgentBookingTab('offer')" aria-label="Make an offer" title="Make an offer"><i class="fas fa-tag" aria-hidden="true"></i><span>Make an offer</span></button>
+              <button type="button" class="is-active" data-agent-booking-tab="viewing" onclick="setAgentBookingTab('viewing')" aria-label="Book a viewing" title="Book a viewing"><i class="fas fa-calendar-check" aria-hidden="true"></i><span>Viewing</span></button>
+              <button type="button" data-agent-booking-tab="callback" onclick="setAgentBookingTab('callback')" aria-label="Request a callback" title="Request a callback"><i class="fas fa-phone" aria-hidden="true"></i><span>Callback</span></button>
+              <button type="button" data-agent-booking-tab="question" onclick="setAgentBookingTab('question')" aria-label="Ask a question" title="Ask a question"><i class="fas fa-comment" aria-hidden="true"></i><span>Question</span></button>
+              <button type="button" data-agent-booking-tab="offer" onclick="setAgentBookingTab('offer')" aria-label="Make an offer" title="Make an offer"><i class="fas fa-tag" aria-hidden="true"></i><span>Offer</span></button>
             </div>
             <form class="agent-profile-form" onsubmit="event.preventDefault(); submitAgentProfileRequest(${idArg});">
               <input id="agent-profile-website" name="website" class="agent-profile-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" value="">

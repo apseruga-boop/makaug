@@ -1987,6 +1987,45 @@
 
   // ---------------------------------------------------------------- detail view
 
+  function stayLocalIso(date) {
+    var y = date.getFullYear();
+    var m = String(date.getMonth() + 1).padStart(2, '0');
+    var d = String(date.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+  }
+
+  function stayBlockedSet(listing) {
+    var set = {};
+    (listing && listing.availability || []).forEach(function (row) {
+      if (!row || row.is_available !== false || !row.starts_on || !row.ends_on) return;
+      var cursor = new Date(String(row.starts_on).slice(0, 10) + 'T12:00:00');
+      var end = new Date(String(row.ends_on).slice(0, 10) + 'T12:00:00');
+      if (Number.isNaN(cursor.getTime()) || Number.isNaN(end.getTime())) return;
+      var guard = 0;
+      while (cursor <= end && guard < 120) {
+        set[stayLocalIso(cursor)] = true;
+        cursor.setDate(cursor.getDate() + 1);
+        guard += 1;
+      }
+    });
+    return set;
+  }
+
+  function stayDayStrip(listing) {
+    var blocked = stayBlockedSet(listing);
+    var html = '<div id="st-day-strip" class="agent-booking-date-strip" aria-label="Blocked date">';
+    for (var i = 0; i < 21; i += 1) {
+      var day = new Date();
+      day.setHours(12, 0, 0, 0);
+      day.setDate(day.getDate() + i);
+      var iso = stayLocalIso(day);
+      var off = !!blocked[iso];
+      html += '<button type="button" class="agent-booking-day' + (off ? ' is-blocked' : '') + '" data-stay-day="'
+        + esc(iso) + '" data-stay-target="st-d-in"' + (off ? ' disabled' : '') + '><strong>' + day.getDate() + '</strong></button>';
+    }
+    return html + '</div>';
+  }
+
   function quoteHtml(quote) {
     if (!quote) {
       return '<p class="st-help">Add your dates above to see what the host’s rate works out at.</p>';
@@ -2143,6 +2182,11 @@
       + '<div><label class="st-label" for="st-d-in">Check in</label><input class="st-input" id="st-d-in" type="date" value="' + esc(q.check_in || '') + '"></div>'
       + '<div><label class="st-label" for="st-d-out">Check out</label><input class="st-input" id="st-d-out" type="date" value="' + esc(q.check_out || '') + '"></div>'
       + '</div>'
+      + stayDayStrip(listing)
+      + '<div style="margin-top:8px"><label class="st-label" for="st-d-guests">Guests</label><input class="st-input" id="st-d-guests" type="number" min="1" max="30" value="' + esc(q.guests || '1') + '"></div>'
+      + '<div style="margin-top:8px"><label class="st-label" for="st-d-email">Email (optional)</label><input class="st-input" id="st-d-email" type="email"></div>'
+      + '<label class="st-check" style="margin-top:8px"><input type="checkbox" id="st-d-terms"> '
+      + '<span><a href="/short-term/terms" data-st-link>' + esc(t('termsTitle')) + '</a></span></label>'
       + '<div id="st-quote">' + quoteHtml(payload.quote) + '</div>'
       + '<div id="st-availability">' + availabilityHtml(payload.availability) + '</div>'
 
@@ -2186,7 +2230,7 @@
         ? '<div style="margin-top:8px"><label class="st-label" for="st-e-guests">Guests</label><input class="st-input" id="st-e-guests" type="number" min="1" max="30"></div>'
         : '<input id="st-e-guests" type="hidden" value="1">')
       + '<div style="margin-top:8px"><label class="st-label" for="st-e-msg">Message</label><textarea class="st-input" id="st-e-msg" style="min-height:70px" placeholder="What you need to know"></textarea></div>'
-      + '<label class="st-check" style="margin-top:8px"><input type="checkbox" id="st-e-terms" required> '
+      + '<label class="st-check" style="margin-top:8px"><input type="checkbox" id="st-e-terms"> '
       + '<span><a href="/short-term/terms" data-st-link>' + esc(t('termsTitle')) + '</a></span></label>'
       + '<div id="st-enquire-feedback"></div>'
       + '<button class="st-btn st-btn-primary" type="submit" style="width:100%;margin-top:10px">' + esc(dates ? t('requestDates') : (intent === 'callback' ? 'Request a callback' : 'Ask a question')) + '</button>'
@@ -2216,6 +2260,19 @@
       if (el) el.addEventListener('change', refreshQuote);
     });
 
+    var dayStrip = document.getElementById('st-day-strip');
+    if (dayStrip) {
+      dayStrip.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-stay-day]');
+        if (!button || button.disabled) return;
+        var target = document.getElementById(button.getAttribute('data-stay-target') || 'st-d-in');
+        var other = document.getElementById(target && target.id === 'st-d-in' ? 'st-d-out' : 'st-d-in');
+        if (target && !target.value) target.value = button.getAttribute('data-stay-day') || '';
+        else if (other) other.value = button.getAttribute('data-stay-day') || '';
+        refreshQuote();
+      });
+    }
+
     function bindStayEnquiry() {
       var form = document.getElementById('st-enquire-form');
       if (!form || form.getAttribute('data-bound') === '1') return;
@@ -2225,29 +2282,27 @@
         var feedback = document.getElementById('st-enquire-feedback');
         var from = document.getElementById('st-d-in');
         var to = document.getElementById('st-d-out');
-        var terms = document.getElementById('st-e-terms');
+        var terms = document.getElementById('st-e-terms') || document.getElementById('st-d-terms');
         var intent = form.getAttribute('data-intent') || 'dates';
-        if (terms && !terms.checked) {
-          if (feedback) feedback.innerHTML = '<p class="st-help">' + esc(t('termsTitle')) + '</p>';
-          return;
-        }
+        var guestsEl = document.getElementById('st-e-guests') || document.getElementById('st-d-guests');
+        var emailEl = document.getElementById('st-e-email') || document.getElementById('st-d-email');
         api('/listings/' + encodeURIComponent(listing.id) + '/requests', {
           method: 'POST',
           body: {
             intent: intent,
             guest_name: (document.getElementById('st-e-name') || {}).value,
             guest_phone: (document.getElementById('st-e-phone') || {}).value,
-            guest_email: (document.getElementById('st-e-email') || {}).value,
-            guests: (document.getElementById('st-e-guests') || {}).value,
+            guest_email: emailEl ? emailEl.value : '',
+            guests: guestsEl ? guestsEl.value : '',
             message: (document.getElementById('st-e-msg') || {}).value,
             check_in: intent === 'dates' && from ? from.value : '',
             check_out: intent === 'dates' && to ? to.value : '',
-            terms_accepted: true
+            terms_accepted: !!(terms && terms.checked)
           }
         }).then(function (payloadOut) {
           form.innerHTML = '<div class="st-ok"><b>' + esc(payloadOut.reference || '') + '</b><p>'
-            + esc(payloadOut.message || 'Your request has been sent.') + '</p>'
-            + (payloadOut.status_url ? '<p><a href="' + esc(payloadOut.status_url) + '">' + esc(payloadOut.status_url) + '</a></p>' : '')
+            + esc(payloadOut.message || 'We saved your request.') + '</p>'
+            + (payloadOut.status_url ? '<p><a href="' + esc(payloadOut.status_url) + '">Track this request</a></p>' : '')
             + '<p class="st-help">' + esc(payloadOut.payment_line || t('paymentDirect')) + '</p></div>';
         }).catch(function (error) {
           if (feedback) {

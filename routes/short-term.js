@@ -30,6 +30,7 @@ const {
   listingIcs,
   listStaffRequests,
   saveIcalUrl,
+  staffCloseStayRequest,
   submitVerifiedReview,
   sweepStayRequests,
   updateHostAvailability,
@@ -773,6 +774,15 @@ router.post('/staff/booking-requests/sweep', requireStaffAccess, async (req, res
     return res.json({ ok: true, ...result });
   } catch (error) {
     return fail(res, error, 'Sweep failed');
+  }
+});
+
+router.post('/staff/booking-requests/:reference/close', requireStaffAccess, async (req, res) => {
+  try {
+    const result = await staffCloseStayRequest(db, req.params.reference);
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    return fail(res, error, 'Could not close the request');
   }
 });
 

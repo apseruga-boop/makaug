@@ -2774,7 +2774,62 @@
       overflow: hidden;
       clip: rect(0, 0, 0, 0);
     }
+    /* booking-tab-labels: desktop short names stay visible; stay tabs are words, not icons */
+    @media (min-width: 768px) {
+      .agent-booking-tabs button {
+        inline-size: auto;
+        block-size: auto;
+        padding-block: 6px;
+        padding-inline: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .agent-booking-tabs button span {
+        position: static;
+        inline-size: auto;
+        block-size: auto;
+        overflow: visible;
+        clip: auto;
+      }
+    }
+    #st-intent-tabs button {
+      inline-size: auto;
+      block-size: auto;
+      padding-block: 6px;
+      padding-inline: 10px;
+    }
     .agent-booking-tabs button.is-active { background: #15803d; color: #fff; border-color: #15803d; }
+    .property-booking-panel {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #e5e7eb;
+      min-inline-size: 0;
+    }
+    .property-booking-panel .agent-booking-head h2 { font-size: 14px; margin: 0; }
+    .property-booking-panel .agent-profile-form { display: grid; gap: 6px; margin-top: 8px; }
+    .property-booking-panel .agent-profile-form label { display: grid; gap: 2px; font-size: 12px; font-weight: 700; }
+    .property-booking-panel input,
+    .property-booking-panel select,
+    .property-booking-panel textarea {
+      width: 100%;
+      border: 1px solid #bbf7d0;
+      border-radius: 10px;
+      padding: 6px 8px;
+      font: inherit;
+      font-size: 13px;
+    }
+    .property-booking-panel .agent-booking-who { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+    .property-booking-panel .agent-profile-btn.is-primary {
+      background: #15803d;
+      color: #fff;
+      border: 0;
+      border-radius: 999px;
+      padding: 8px 10px;
+      font-weight: 800;
+    }
+    .property-booking-panel .agent-profile-safety { font-size: 11px; color: #166534; margin: 6px 0 0; }
+    .agent-booking-day.is-blocked { opacity: 0.35; }
     .agent-profile-contact { min-inline-size: 0; max-inline-size: 100%; }
     .agent-profile-contact .agent-profile-card { inline-size: 100%; min-inline-size: 0; }
     .agent-booking-date-row { display: flex; align-items: center; gap: 4px; inline-size: 100%; min-inline-size: 0; }

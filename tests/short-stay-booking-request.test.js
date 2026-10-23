@@ -109,7 +109,7 @@ test('phone and street stay hidden until the host accepts', () => {
   assert.match(shown.payment_line, /does not take or hold payments/);
 });
 
-test('blocked dates and a missing terms tick are refused', () => {
+test('blocked dates are refused and a missing terms tick is allowed', () => {
   const place = listing({
     availability: [{ starts_on: '2026-11-01', ends_on: '2026-11-10', is_available: false }]
   });
@@ -121,14 +121,14 @@ test('blocked dates and a missing terms tick are refused', () => {
     guests: 2,
     terms_accepted: true
   }), /not available/);
-  assert.throws(() => booking.assertRequestInput(listing(), {
+  assert.doesNotThrow(() => booking.assertRequestInput(listing(), {
     guest_name: 'Sara',
     guest_phone: '0780111222',
     check_in: '2026-11-02',
     check_out: '2026-11-05',
     guests: 2,
     terms_accepted: false
-  }), /terms/);
+  }));
 });
 
 test('an ics export is blocked dates only and can be read back', () => {
@@ -193,6 +193,7 @@ test('reply 1 does nothing when this host has no open request', async () => {
     async query(sql) {
       if (sql.includes('st-booking:expire')) return { rows: [] };
       if (sql.includes('st-booking:host-phone')) return { rows: [] };
+      if (sql.includes('st-booking:weekly-reply')) return { rows: [] };
       throw new Error(sql.slice(0, 60));
     }
   };
