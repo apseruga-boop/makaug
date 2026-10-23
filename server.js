@@ -13,6 +13,7 @@ const jwt = require('jsonwebtoken');
 const logger = require('./config/logger');
 const { logNotFound } = require('./utils/notFoundAccessLog');
 const db = require('./config/database');
+const { deployJitterMs, staggeredBootDelay } = require('./utils/schedulerStagger');
 const healthRoutes = require('./routes/health');
 const authRoutes = require('./routes/auth');
 const propertiesRoutes = require('./routes/properties');
@@ -2511,25 +2512,6 @@ async function start() {
       });
     }
   }
-  if (process.env.DATABASE_URL) {
-    try {
-      const [seoSnapshot, homepageListings] = await Promise.all([
-        loadPublicSeoInventorySnapshot(db),
-        loadPublicSeoListings(db, { limit: 6, homepage: true })
-      ]);
-      logger.info('Public homepage SEO cache warmed before accepting traffic', {
-        listings: homepageListings.length,
-        generated_at: seoSnapshot?.generatedAt || null,
-        html_cache_max_entries: PUBLIC_HTML_CACHE_MAX_ENTRIES,
-        marker: 'makaug-always-on-whatsapp-runtime-20260814'
-      });
-    } catch (error) {
-      logger.warn('Public homepage SEO warmup failed; the first live request will use the bounded fallback', {
-        code: error?.code,
-        message: error?.message
-      });
-    }
-  }
   try {
     const adaptedApp = readCountryAppAsset();
     renderPublicHtml('/');
@@ -2559,8 +2541,14 @@ async function start() {
     startLeadDeskScheduler(db);
     startAgentBookingScheduler(db);
     startVideoStillScheduler(db);
-    whatsappRoutes.startEmployeeBatchSummarySweeper?.();
-    whatsappRoutes.startEmployeeMediaRetrySweeper?.();
+    const whatsappBatchDelay = staggeredBootDelay('whatsapp_batch_summary');
+    const whatsappMediaDelay = staggeredBootDelay('whatsapp_media_retry');
+    setTimeout(() => whatsappRoutes.startEmployeeBatchSummarySweeper?.(), whatsappBatchDelay).unref?.();
+    setTimeout(() => whatsappRoutes.startEmployeeMediaRetrySweeper?.(), whatsappMediaDelay).unref?.();
+    logger.info('WhatsApp employee sweepers delayed until after deploy settle', {
+      batch_delay_ms: whatsappBatchDelay,
+      media_delay_ms: whatsappMediaDelay
+    });
     startGreetingNameCache(db);
     startBillingScheduler(db);
     require('./services/payLinkService').startPayLinkScheduler(db);
@@ -2581,6 +2569,7 @@ async function start() {
     renderHeartbeatTimer.unref?.();
   }
   schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
+  scheduleHomepageSeoWarmup();
   scheduleStartupDataRepairs();
   startMemoryLog();
   if (process.env.NODE_ENV !== 'test' && process.env.EVENT_LOOP_LAG_LOG !== 'off') startEventLoopLagMonitor({ logger });
@@ -2602,8 +2591,39 @@ function startMemoryLog() {
   timer.unref?.();
 }
 
+// Homepage SEO reads run after the instance is already serving, and not in the
+// same second as migrations. The first request until then uses the bounded
+// fallback inside loadPublicSeoListings.
+function scheduleHomepageSeoWarmup() {
+  if (process.env.NODE_ENV === 'test' || !process.env.DATABASE_URL) return;
+  const delayMs = 90_000 + deployJitterMs();
+  const timer = setTimeout(async () => {
+    try {
+      const [seoSnapshot, homepageListings] = await Promise.all([
+        loadPublicSeoInventorySnapshot(db),
+        loadPublicSeoListings(db, { limit: 6, homepage: true })
+      ]);
+      logger.info('Public homepage SEO cache warmed after deploy settle', {
+        listings: homepageListings.length,
+        generated_at: seoSnapshot?.generatedAt || null,
+        html_cache_max_entries: PUBLIC_HTML_CACHE_MAX_ENTRIES,
+        delay_ms: delayMs,
+        marker: 'makaug-always-on-whatsapp-runtime-20260814'
+      });
+    } catch (error) {
+      logger.warn('Public homepage SEO warmup failed; the first live request will use the bounded fallback', {
+        code: error?.code,
+        message: error?.message
+      });
+    }
+  }, delayMs);
+  timer.unref?.();
+  logger.info('Public homepage SEO warmup scheduled after deploy settle', { delay_ms: delayMs });
+}
+
 // One-off tidy-ups that are safe to repeat on every start: move inline agent ID
-// photos into private storage.
+// photos into private storage. The delay sits after the harvest schedulers so
+// a deploy does not run repairs in the same minute as the drip ticks.
 function scheduleStartupDataRepairs() {
   if (process.env.NODE_ENV === 'test' || process.env.STARTUP_DATA_REPAIRS === 'off') return;
   const timer = setTimeout(async () => {
@@ -2628,7 +2648,7 @@ function scheduleStartupDataRepairs() {
     } catch (error) {
       logger.warn('Agent welcome catch-up skipped:', error.message || String(error));
     }
-  }, 45_000);
+  }, staggeredBootDelay('startup_data_repairs'));
   timer.unref?.();
 }
 

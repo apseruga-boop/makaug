@@ -67,7 +67,7 @@ test('two template-titled listings in different areas are not duplicates, and re
 
 test('staff, admin and the properties review all use the one helper; the dashboard counts strong groups', () => {
   const staff = read('routes/staff.js');
-  assert.match(staff, /safeRows\(DUPLICATE_CANDIDATES_SQL, duplicateCandidateParams\(property\), previewQueryOptions\)/);
+  assert.match(staff, /safeRowsResult\(DUPLICATE_CANDIDATES_SQL, duplicateCandidateParams\(property\), previewQueryOptions\('staff_preview_duplicates'\)\)/);
   assert.match(staff, /const duplicates = classifyDuplicates\(property, duplicateCandidates, reusedImages\);/);
   assert.match(staff, /duplicateGroupsCountSql\(activePendingReviewWhere\('p'\)\)/);
   assert.doesNotMatch(staff, /SELECT lister_phone AS duplicate_key FROM pending/);
