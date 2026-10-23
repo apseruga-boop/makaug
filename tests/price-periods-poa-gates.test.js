@@ -158,8 +158,8 @@ test('the short-term validator is unchanged: UGX-only nightly price, 250,000 a n
 test('SEO: weekly and yearly rents print words and keep their price in bounds', () => {
   const { priceLabel } = require('../services/publicSeoRenderService');
   const { priceInSeoBounds } = require('../services/publicSeoService');
-  assert.equal(priceLabel({ price: 700000, price_period: 'wk' }).replace(/ /g, ' '), 'UGX 700,000/week');
-  assert.equal(priceLabel({ price: 18000000, price_period: 'yr' }).replace(/ /g, ' '), 'UGX 18,000,000/year');
+  assert.equal(priceLabel({ listing_type: 'rent', price: 700000, price_period: 'wk' }).replace(/ /g, ' '), 'UGX 700,000/week');
+  assert.equal(priceLabel({ listing_type: 'rent', price: 18000000, price_period: 'yr' }).replace(/ /g, ' '), 'UGX 18,000,000/year');
   assert.equal(priceLabel({ price: 60000000, price_period: 'acre', listing_type: 'land' }).replace(/ /g, ' '), 'UGX 60,000,000/acre');
   assert.equal(priceLabel({ price: null, price_period: 'poa', price_on_application: true }), 'Price on application');
   assert.equal(priceInSeoBounds({ listing_type: 'rent', price: 700000, price_period: 'week' }), true);

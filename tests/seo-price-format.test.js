@@ -52,10 +52,10 @@ test('a reviewed title also gets the short price', () => {
 
 test('cards and descriptions keep the full, grouped price, spelled UGX', () => {
   assert.strictEqual(render.priceLabel(listing({ price: 80000000 })), 'UGX 80,000,000');
-  assert.strictEqual(render.priceLabel(listing({ price: 1800000, price_period: 'monthly' })), 'UGX 1,800,000/month');
+  assert.strictEqual(render.priceLabel(listing({ listing_type: 'rent', transaction_type: 'rent', price: 1800000, price_period: 'monthly' })), 'UGX 1,800,000/month');
   assert.match(render.propertySeoDescription({ area: 'Kira', district: 'Wakiso', price: 120000000 }), /UGX 120,000,000/);
   assert.strictEqual(publicPriceLabelFor({ price: 80000000 }), 'UGX 80,000,000');
-  assert.strictEqual(publicPriceLabelFor({ price: 1800000, price_period: 'mo' }), 'UGX 1,800,000/month');
+  assert.strictEqual(publicPriceLabelFor({ listing_type: 'rent', price: 1800000, price_period: 'mo' }), 'UGX 1,800,000/month');
 });
 
 test('the price is still left out of the title when it is out of bounds', () => {

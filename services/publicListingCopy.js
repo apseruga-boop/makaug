@@ -134,13 +134,54 @@ function publicAreaLabelFor(property = {}, extra = {}) {
   ) || ACTIVE_COUNTRY_NAME;
 }
 
+function publicListingTransaction(property = {}) {
+  const transaction = cleanText(property.transaction_type || property.extra_fields?.transaction_type || '').toLowerCase();
+  if (transaction === 'sale' || transaction === 'rent') return transaction;
+  const type = cleanText(property.listing_type || property.category || '').toLowerCase();
+  if (['rent', 'student', 'students', 'short_term', 'short-term'].includes(type)) return 'rent';
+  if (type === 'sale') return 'sale';
+  const period = normalizePricePeriodForWrite(cleanText(property.price_period || '').toLowerCase()) || '';
+  if (['land', 'commercial'].includes(type) && ['month', 'week', 'year', 'semester', 'night', 'acre_yr'].includes(period)) return 'rent';
+  if (type === 'land') return 'sale';
+  return '';
+}
+
+function publicListingPricePeriod(property = {}) {
+  const period = normalizePricePeriodForWrite(cleanText(property.price_period || '').toLowerCase()) || '';
+  if (['month', 'week', 'year', 'semester', 'night', 'acre_yr'].includes(period)
+    && publicListingTransaction(property) === 'sale') return '';
+  return period;
+}
+
+function publicListingTitleContradictsFacts(property = {}, value = '') {
+  const text = cleanText(value);
+  const transaction = publicListingTransaction(property);
+  if (transaction === 'sale' && /\b(?:for rent|to rent|to let|for lease)\b/i.test(text)) return true;
+  if (transaction === 'sale' && /^rental\s+(?:property|apartments?|house|home)\s+in\b/i.test(text)) return true;
+  if (transaction === 'sale' && /\/(?:month|mo|week|wk|year|yr|night|semester)\b/i.test(text)) return true;
+  if (transaction === 'rent' && /\b(?:for sale|on sale)\b/i.test(text)) return true;
+  const rawType = cleanText(property.property_type || '');
+  const type = cleanText(property.listing_type || property.category || '').toLowerCase() === 'land'
+    ? (/\bplots?\b/i.test(rawType) ? 'Plot' : 'Land') : rawType;
+  if (!type || /^property$/i.test(type)) return false;
+  if (/\bproperty\s+(?:for\s+(?:sale|rent)|in)\b/i.test(text) && !text.toLowerCase().includes(type.toLowerCase())) return true;
+  const families = [
+    /\b(?:land|plots?)\b/i,
+    /\b(?:houses?|homes?|bungalows?|villas?|maisonettes?|duplex(?:es)?|townhouses?)\b/i,
+    /\b(?:apartments?|flats?|condominiums?|condos?)\b/i,
+    /\b(?:offices?)\b/i,
+    /\b(?:shops?|retail)\b/i
+  ];
+  const family = families.find((pattern) => pattern.test(type));
+  return Boolean(family && !family.test(text) && families.some((pattern) => pattern.test(text)));
+}
+
 function thirdPartyTypeLabel(property = {}) {
   const type = cleanText(property.listing_type || property.category || '').toLowerCase();
   if (type === 'land') return 'land';
-  if (type === 'rent') return 'property for rent';
   if (type === 'commercial') return 'commercial property';
   if (type === 'student' || type === 'students') return 'student accommodation';
-  return 'property for sale';
+  return publicListingTransaction(property) === 'rent' ? 'property for rent' : 'property for sale';
 }
 
 function publicPriceLabelFor(property = {}) {
@@ -150,9 +191,16 @@ function publicPriceLabelFor(property = {}) {
   // C17: the found-online summary ("Guide price: …") printed the impossible
   // figure; a price outside the plausibility bounds reads Price on application.
   const extra = property.extra_fields && typeof property.extra_fields === 'object' ? property.extra_fields : {};
+  const type = cleanText(property.listing_type || property.category || '').toLowerCase();
+  const priceFacts = {
+    ...property,
+    price: amount,
+    listing_type: ['sale', 'rent'].includes(type) ? publicListingTransaction(property) : type,
+    price_period: publicListingPricePeriod(property)
+  };
   if (property.price_on_application === true || extra.price_review === 'implausible'
-    || isPriceImplausible({ ...property, price: amount })) return 'Price on application';
-  const period = cleanText(property.price_period || '').toLowerCase();
+    || isPriceImplausible(priceFacts)) return 'Price on application';
+  const period = publicListingPricePeriod(property);
   const currencyLabel = IS_SOUTH_AFRICA ? 'R' : 'UGX';
   const locale = IS_SOUTH_AFRICA ? 'en-ZA' : 'en-US';
   // Rows store mo / monthly / per_month as well as month.
@@ -178,7 +226,7 @@ function buildThirdPartyPublicTitle(property = {}, extra = {}) {
   const review = copyReviewState(property, extra);
   if (review.staffTitle) {
     const staffTitle = sanitizeStaffCopy(property.title || '');
-    if (staffTitle) return staffTitle;
+    if (staffTitle && !publicListingTitleContradictsFacts(property, staffTitle)) return staffTitle;
   }
   const reviewedFields = review.kingFields;
   const reviewedTitle = collapseDuplicatePublicTransaction(property.title || '');
@@ -190,6 +238,7 @@ function buildThirdPartyPublicTitle(property = {}, extra = {}) {
     reviewedTitle
     && review.kingTitle
     && !reviewedTitleLooksCopied
+    && !publicListingTitleContradictsFacts(property, reviewedTitle)
     && !(typeForReview !== 'land' && /^land\s+in\b/i.test(reviewedTitle))
   ) {
     return reviewedTitle;
@@ -358,9 +407,7 @@ function factualListingTitle(row = {}) {
   const typeKey = String(row.property_type || '').toLowerCase();
   const isLand = listingType === 'land'
     || (listingType !== 'commercial' && (/^(?:land|plots?)$/.test(typeKey) || (/\bplots?\b/.test(typeKey) && !/\b(house|home|apartment|flat)\b/.test(typeKey))));
-  const period = normalizePricePeriodForWrite(String(row.price_period || '').toLowerCase()) || '';
-  const transaction = String(row.transaction_type || row?.extra_fields?.transaction_type || '').toLowerCase();
-  const forRent = listingType === 'rent' || listingType === 'student' || listingType === 'students' || transaction === 'rent' || ['month', 'week', 'year'].includes(period);
+  const forRent = publicListingTransaction(row) === 'rent';
   const typeLabel = isLand
     ? (/\bplots?\b/.test(typeKey) && !/\bland\b/.test(typeKey) && !/\b(house|home)\b/.test(typeKey) ? 'Plot' : 'Land')
     : (humanPropertyTypeLabel(row.property_type || '')
@@ -375,6 +422,7 @@ function factualListingTitle(row = {}) {
 
 function cleanListingTitle(row = {}) {
   const original = String(row.title || '').replace(/\s+/g, ' ').trim();
+  if (publicListingTitleContradictsFacts(row, original)) return factualListingTitle(row);
   // Stored enums in titles ("shop_retail in Kampala") read as labels.
   const humanised = original.replace(/\b[a-z]+(?:_[a-z]+)+\b/gi, (word) => humanPropertyTypeLabel(word.toLowerCase()));
   const stripped = stripTitleNoise(cleanPublicListingCopy(humanised))
@@ -554,6 +602,9 @@ module.exports = {
   cleanPublicListingCopy,
   redactThirdPartyPublicText,
   publicAreaLabelFor,
+  publicListingTransaction,
+  publicListingPricePeriod,
+  publicListingTitleContradictsFacts,
   thirdPartyTypeLabel,
   publicPriceLabelFor,
   stripTransactionFromPublicPropertyType,

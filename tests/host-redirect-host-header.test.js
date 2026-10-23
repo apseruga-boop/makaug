@@ -30,9 +30,9 @@ function freePort() {
   });
 }
 
-function request(port, p, headers = {}) {
+function request(port, p, headers = {}, method = 'GET') {
   return new Promise((resolve, reject) => {
-    const req = http.request({ hostname: '127.0.0.1', port, path: p, method: 'GET', headers }, (res) => {
+    const req = http.request({ hostname: '127.0.0.1', port, path: p, method, headers }, (res) => {
       res.resume();
       res.on('end', () => resolve({ status: res.statusCode, location: res.headers.location || null }));
     });
@@ -80,6 +80,22 @@ test.after(() => {
 });
 
 for (const [label, portOf] of [['behind render-start (production)', () => proxyPort], ['server.js on its own', () => directPort]]) {
+  test(`${label}: GET and HEAD rental aliases permanently preserve the suffix and query`, async () => {
+    for (const method of ['GET', 'HEAD']) {
+      for (const [source, target] of [
+        ['/for-rent', '/to-rent'],
+        ['/for-rent/', '/to-rent/'],
+        ['/for-rent/naguru-kampala/apartments?area=Naguru%20Hill&bedrooms=3&x=1&x=2', '/to-rent/naguru-kampala/apartments?area=Naguru%20Hill&bedrooms=3&x=1&x=2']
+      ]) {
+        const res = await request(portOf(), source, { Host: 'makaug.com' }, method);
+        assert.equal(res.status, 301, `${method} ${source}`);
+        assert.equal(res.location, target, `${method} ${source}`);
+      }
+    }
+    const unrelated = await request(portOf(), '/for-rental', { Host: 'makaug.com' });
+    assert.notEqual(unrelated.status, 301, 'only the exact alias prefix redirects');
+  });
+
   test(`${label}: a forged X-Forwarded-Host still gets the 301`, async () => {
     const res = await request(portOf(), '/help', { Host: 'makaug.onrender.com', 'X-Forwarded-Host': 'makaug.com' });
     assert.equal(res.status, 301);

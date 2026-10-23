@@ -114,6 +114,7 @@ const {
   renderHomepageSeoHtml
 } = require('./services/publicSeoRenderService');
 const { createOgShareRouter } = require('./routes/ogShare');
+const { mergePublicOrganizationSchema } = require('./services/publicOrganizationSchema');
 const {
   shareImagePath,
   propertyShareRevision,
@@ -1289,6 +1290,7 @@ function renderPublicHtml(pathname) {
   rendered = inlinePublicCoreStylesheets(rendered);
   rendered = injectGa4HeadTag(rendered, normalizedBasePath);
   rendered = injectTravelpayoutsDriveHeadTag(rendered, normalizedBasePath);
+  rendered = patchStructuredData(rendered, null);
   if (isProduction) {
     publicHtmlCache.set(key, rendered);
     while (publicHtmlCache.size > PUBLIC_HTML_CACHE_MAX_ENTRIES) {
@@ -1342,10 +1344,12 @@ function patchCanonicalLink(html, canonical) {
 }
 
 function patchStructuredData(html, structuredData) {
-  if (!structuredData) return html;
-  const payload = JSON.stringify(structuredData).replace(/</g, '\\u003c');
+  const pattern = /<script\b(?=[^>]*id=["']makaug-route-structured-data["'])[^>]*>([\s\S]*?)<\/script>/i;
+  const existing = html.match(pattern);
+  const data = mergePublicOrganizationSchema(structuredData || (existing ? JSON.parse(existing[1]) : null));
+  if (!data) return html;
+  const payload = JSON.stringify(data).replace(/</g, '\\u003c');
   const replacement = `<script type="application/ld+json" id="makaug-route-structured-data">${payload}</script>`;
-  const pattern = /<script\b(?=[^>]*id=["']makaug-route-structured-data["'])[^>]*>[\s\S]*?<\/script>/i;
   return pattern.test(html)
     ? html.replace(pattern, replacement)
     : html.replace('</head>', `  ${replacement}\n</head>`);
@@ -1740,6 +1744,11 @@ app.get('/assets/makaug-app.js', (req, res, next) => {
 app.use('/pay', require('./routes/pay').pages);
 
 app.use('/og', createOgShareRouter({ db }));
+
+app.get(/^\/for-rent(?:\/.*)?$/i, (req, res, next) => {
+  if (ACTIVE_COUNTRY_CODE !== 'UG') return next();
+  return res.redirect(301, req.originalUrl.replace(/^\/for-rent(?=\/|\?|$)/i, '/to-rent'));
+});
 
 app.get(['/', '/index.html', '/property'], (req, res, next) => {
   if (['listing_preview', 'preview_token', 'edit_token', 'owner_token', 'token'].some((key) => key in req.query)) return next();

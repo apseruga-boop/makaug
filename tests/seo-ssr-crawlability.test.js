@@ -183,7 +183,7 @@ async function run() {
   assert(homepage.html.includes('data-ssr-property-card'), 'the homepage must ship at least one rendered card when inventory exists');
   assert(homepage.html.includes('data-ssr-area-links'), 'the homepage must expose crawlable popular-area links');
   assert(!homepage.html.includes('/for-sale/kampala-kampala'), 'the homepage and its footer must not emit a bare district route');
-  assert.deepEqual(structuredTypes(homepage.structuredData), ['Organization', 'WebSite']);
+  assert.deepEqual(structuredTypes(homepage.structuredData), ['Organization', 'RealEstateAgent', 'WebSite']);
   assert.equal(homepage.structuredData['@graph'][1].potentialAction['@type'], 'SearchAction');
   assert(homepage.html.includes('style="min-height:24rem"'), 'the homepage grid must reserve first-paint space to reduce layout shift');
 
