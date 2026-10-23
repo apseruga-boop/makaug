@@ -2398,6 +2398,12 @@ function shouldServeIndex(req) {
   return !path.extname(req.path);
 }
 
+// Booking reply links have to be registered before the public-shell catch-all
+// below. That middleware answers an unknown GET or HEAD with the public 404
+// and does not call next(), so /v/:token never reached the booking handler.
+app.get('/v/:token', agentBookingRoutes.handleToken);
+app.post('/v/:token', agentBookingRoutes.handleToken);
+
 app.use((req, res, next) => {
   if (!shouldServeIndex(req)) return next();
   return sendPublicIndex(req, res, next);
@@ -2442,9 +2448,6 @@ app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   return res.status(404).type('text/plain').send('Not found');
 });
-
-app.get('/v/:token', agentBookingRoutes.handleToken);
-app.post('/v/:token', agentBookingRoutes.handleToken);
 
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
