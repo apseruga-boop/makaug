@@ -121,12 +121,15 @@ test('public HTML invokes route-aware CSS loading after the homepage-image decis
     inlinePublicCoreStylesheets(html) { return html; },
     inlinePublicFontFaces(html) { return html; },
     applyHomeHeroPreload(html, pathname) { calls.push(['hero', pathname]); return html; },
-    injectGa4HeadTag(html, pathname) { calls.push(['analytics', pathname]); return html; }
+    injectGa4HeadTag(html, pathname) { calls.push(['analytics', pathname]); return html; },
+    patchStructuredData(html) { return html; },
+    travelpayoutsAffiliate: { drivePublicHeadTag() { return ''; }, driveScriptSrc() { return ''; }, driveProjectId() { return '581854'; } }
   });
   vm.runInContext(functionSource('applyShortTermStylesheetLoading'), context);
   vm.runInContext(functionSource('applyPublicFontDisplayOptional'), context);
   const realApply = context.applyShortTermStylesheetLoading;
   context.applyShortTermStylesheetLoading = (html, pathname) => { calls.push(['style', pathname]); return realApply(html, pathname); };
+  vm.runInContext(functionSource('injectTravelpayoutsDriveHeadTag'), context);
   vm.runInContext(functionSource('renderPublicHtml'), context);
   const out = context.renderPublicHtml('/to-rent/kireka-wakiso/?page=2#photos');
   assert.deepEqual(calls, [['hero', '/to-rent/kireka-wakiso'], ['style', '/to-rent/kireka-wakiso'], ['analytics', '/to-rent/kireka-wakiso']]);

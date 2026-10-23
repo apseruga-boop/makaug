@@ -91,10 +91,12 @@ function publicRenderer({ inliner = createPublicCoreStylesheetInliner(), product
     readIndexHtml: () => index, sanitizePublicHtml,
     applyHarvestPublicSubmissionVisibility: (html) => html, applyShortTermVisibility: (html) => html,
     injectShortTermRuntimeConfig: (html) => html, injectGa4HeadTag: (html) => html,
+    patchStructuredData: (html) => html,
+    travelpayoutsAffiliate: { drivePublicHeadTag() { return ''; }, driveScriptSrc() { return ''; }, driveProjectId() { return '581854'; } },
     inlinePublicCoreStylesheets: inliner,
     inlinePublicFontFaces: require('../services/publicFontFaces')
   });
-  vm.runInContext(['applyHomeHeroPreload', 'applyShortTermStylesheetLoading', 'applyPublicFontDisplayOptional', 'renderPublicHtml'].map(declaration).join('\n'), context);
+  vm.runInContext(['applyHomeHeroPreload', 'applyShortTermStylesheetLoading', 'applyPublicFontDisplayOptional', 'injectTravelpayoutsDriveHeadTag', 'renderPublicHtml'].map(declaration).join('\n'), context);
   return context;
 }
 

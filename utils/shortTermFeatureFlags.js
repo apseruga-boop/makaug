@@ -97,13 +97,17 @@ function injectShortTermRuntimeConfig(html, env = process.env) {
     countdown: shortTermCountdownEnabled(env) ? shortTermCountdownTarget(env) : null,
     countdownLabel: String(env.SHORT_TERM_COUNTDOWN_LABEL || 'AFCON 2027').trim(),
     whatsappNumber: publicWhatsappDigits(env),
-    // Drive's script URL is not included here. It is printed only into the
-    // /short-term document, and only when TRAVELPAYOUTS_DRIVE_ENABLED is on.
+    // The Drive script URL stays out of this payload. driveEnabled follows
+    // TRAVELPAYOUTS_DRIVE_ENABLED (default off). driveProjectId is
+    // TRAVELPAYOUTS_DRIVE_PROJECT_ID, or 581854. short-term.js loads the script
+    // only on /short-term when driveEnabled is on. Other public pages get it
+    // from injectTravelpayoutsDriveHeadTag under the same switch.
     travelpayouts: {
       marker: travelpayouts.marker,
       brands: travelpayouts.brands,
       enabled: travelpayouts.enabled,
       driveEnabled: travelpayouts.driveEnabled,
+      driveProjectId: travelpayouts.driveProjectId,
       // Empty until a partner program id is set. Compare prices reads brands only.
       extras: extras.groups
     }
