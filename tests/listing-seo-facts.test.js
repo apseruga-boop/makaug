@@ -100,3 +100,31 @@ test('commercial and land rental periods without explicit transactions keep thei
   }
   assert.equal(seo.priceLabel({ listing_type: 'short_term', price: 250000, price_period: 'night' }), 'UGX 250,000/night');
 });
+
+test('Kira-Mulawa units for sale show the asking price rather than a monthly rental or POA', () => {
+  const row = {
+    id: '7aafe4c1-4eb5-4e13-8e8d-28b78616710b',
+    title: 'property for rent in Kira-Mulawa',
+    description: 'Rental property in Kira-Mulawa, Wakiso, listed at UGX 160,000,000. Kira Mulawa 5 double rental units monthly income 2.2 million on sale UGX 160 million.',
+    area: 'Kira-Mulawa', district: 'Wakiso', bedrooms: null,
+    canonical_location_id: 'wakiso:kira mulawa',
+    listing_type: 'sale', transaction_type: 'sale', property_type: 'Double rental units',
+    price: 160000000, price_original: 160000000, price_currency: 'UGX',
+    price_original_currency: 'UGX', price_period: 'once', price_on_application: false
+  };
+  const listing = seo.normalizeSeoListingRow(row);
+  assert.equal(listing.price, 160000000);
+  assert.equal(listing.price_on_application, false);
+  assert.equal(copy.cleanListingTitle(row), 'Double rental units for sale in Kira-Mulawa');
+  for (const text of [seo.propertySeoTitle(listing), seo.propertyPublicHeading(listing), seo.propertySeoDescription(listing)]) {
+    assert.match(text, /Double rental units for [Ss]ale in Kira-Mulawa/);
+    assert.doesNotMatch(text, /for rent|\/month|Price on application|\b\d+[- ]?(?:bed|bdrm)/i);
+  }
+  assert.match(seo.propertySeoTitle(listing), /UGX 160M/);
+  assert.match(seo.propertySeoDescription(listing), /UGX 160,000,000/);
+  const rendered = seo.renderPropertySeoHtml('<div id="detail-content"></div><footer></footer>', listing);
+  const product = rendered.structuredData['@graph'].find((node) => [].concat(node['@type']).includes('Product'));
+  assert.equal(product.category, 'Double rental units');
+  assert.equal(product.offers.price, 160000000);
+  assert.equal(product.offers.priceCurrency, 'UGX');
+});
