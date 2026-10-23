@@ -92,6 +92,140 @@ test('the booking shell strings are already translated in all nine languages', (
   }
 });
 
+test('a missing listing-booking agent removes the booking panel and offers MakaUG contact', () => {
+  const mount = code('mountPropertyBookingPanel');
+  assert.ok(mount.indexOf('hideMissingAgentBookingPanel()') < mount.indexOf('initAgentBookingPanel('));
+  assert.match(mount, /if \(!data\?\.agent\)/);
+  assert.match(code('makaugListingContactLink'), /MAKAUG_SUPPORT_WHATSAPP/);
+  assert.match(code('hideMissingAgentBookingPanel'), /makaugListingContactLink\(property\)/);
+  assert.match(code('openDetail'), /data-broker-profile-action="profile"/);
+  assert.match(code('openDetail'), /data-broker-profile-action="share"/);
+
+  function makeNode(tag) {
+    const node = {
+      tag,
+      id: '',
+      className: '',
+      innerHTML: '',
+      parent: null,
+      attributes: {},
+      children: [],
+      setAttribute(name, value) { this.attributes[name] = String(value); },
+      getAttribute(name) { return this.attributes[name]; },
+      get parentElement() { return this.parent; },
+      remove() {
+        if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this);
+        this.parent = null;
+      },
+      replaceWith(next) {
+        if (!this.parent) return;
+        const index = this.parent.children.indexOf(this);
+        next.parent = this.parent;
+        this.parent.children.splice(index, 1, next);
+        this.parent = null;
+      },
+      querySelector(selector) {
+        return this.querySelectorAll(selector)[0] || null;
+      },
+      querySelectorAll(selector) {
+        const found = [];
+        const walk = (current) => {
+          current.children.forEach((child) => {
+            found.push(child);
+            walk(child);
+          });
+        };
+        walk(this);
+        return found.filter((child) => selectorMatches(child, selector));
+      },
+      insertAdjacentHTML(position, html) {
+        const child = makeNode('a');
+        child.outerHTML = html;
+        if (html.includes('data-makaug-contact')) child.setAttribute('data-makaug-contact', '1');
+        const href = html.match(/href="([^"]+)"/);
+        if (href) child.setAttribute('href', href[1].replace(/&amp;/g, '&'));
+        if (position === 'beforebegin' && this.parent) {
+          const index = this.parent.children.indexOf(this);
+          child.parent = this.parent;
+          this.parent.children.splice(index, 0, child);
+        } else {
+          child.parent = this;
+          this.children.push(child);
+        }
+      }
+    };
+    return node;
+  }
+  function selectorMatches(node, selector) {
+    if (selector === '#property-booking-panel') return node.id === 'property-booking-panel';
+    if (selector === '#detail-save-btn') return node.id === 'detail-save-btn';
+    if (selector === '#page-detail .detail-broker-profile-link') return node.className.split(/\s+/).includes('detail-broker-profile-link');
+    if (selector === '#page-detail .sticky') return node.className.split(/\s+/).includes('sticky');
+    if (selector === '#page-detail [data-broker-profile-action]') return Boolean(node.getAttribute('data-broker-profile-action'));
+    if (selector === '[data-makaug-contact]') return node.getAttribute('data-makaug-contact') === '1';
+    return false;
+  }
+  const page = makeNode('div');
+  page.id = 'page-detail';
+  const card = makeNode('div');
+  card.className = 'sticky top-24';
+  card.parent = page;
+  page.children.push(card);
+  const profile = makeNode('a');
+  profile.className = 'detail-broker-profile-link flex';
+  profile.setAttribute('href', '/agents/f1932d42-eddd-4bae-904d-b883600113ee');
+  profile.innerHTML = '<span class="font-semibold">Segawa Frederick Kevin SFK</span>';
+  profile.parent = card;
+  const panel = makeNode('div');
+  panel.id = 'property-booking-panel';
+  panel.parent = card;
+  const share = makeNode('button');
+  share.setAttribute('data-broker-profile-action', 'share');
+  share.parent = card;
+  const view = makeNode('a');
+  view.setAttribute('data-broker-profile-action', 'profile');
+  view.setAttribute('href', '/agents/f1932d42-eddd-4bae-904d-b883600113ee');
+  view.parent = card;
+  const save = makeNode('button');
+  save.id = 'detail-save-btn';
+  save.parent = card;
+  card.children.push(profile, panel, share, view, save);
+  const documentStub = {
+    getElementById(id) {
+      return page.querySelectorAll('*').concat(page.querySelectorAll('#property-booking-panel')).find((node) => node.id === id)
+        || [page, card, profile, panel, share, view, save].find((node) => node.id === id)
+        || null;
+    },
+    querySelector(selector) { return page.querySelector(selector); },
+    querySelectorAll(selector) { return page.querySelectorAll(selector); },
+    createElement() { return makeNode('div'); }
+  };
+  const context = {
+    document: documentStub,
+    activeDetailPropertyId: PROPERTY_ID,
+    findPropertyForUi() {
+      return { id: PROPERTY_ID, title: '4-Bed property for sale in Kitende' };
+    },
+    getPropertyShareUrl() { return `https://makaug.com/property/${PROPERTY_ID}`; },
+    buildWhatsAppUrl(phone, text) { return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`; },
+    adminAttr(value) { return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); },
+    translatePropertyUi(text) { return text; },
+    MAKAUG_SUPPORT_WHATSAPP: '256780863394'
+  };
+  vm.createContext(context);
+  vm.runInContext(`${code('makaugListingContactLink')}\n${code('hideMissingAgentBookingPanel')}\nhideMissingAgentBookingPanel();`, context);
+  assert.equal(card.children.includes(panel), false);
+  assert.equal(card.children.includes(share), false);
+  assert.equal(card.children.includes(view), false);
+  assert.equal(card.children.includes(profile), false);
+  assert.equal(card.querySelector('.detail-broker-profile-link'), null);
+  const contact = card.querySelector('[data-makaug-contact]');
+  assert.ok(contact);
+  assert.match(contact.getAttribute('href'), /wa\.me\/256780863394/);
+  assert.match(decodeURIComponent(contact.getAttribute('href')), /Kitende/);
+  assert.equal(card.children.includes(save), true);
+});
+
 test('an inline property agent is enough to name the booking panel before the directory loads', () => {
   const context = {
     result: null

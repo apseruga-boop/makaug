@@ -767,7 +767,7 @@
   function prepopulateOffPlanSearch() {
     if (!/^\/off-plan(?:\/overseas\/kenya)?\/?$/i.test(location.pathname)) return;
     const params = new URLSearchParams(location.search);
-    const q = clean(params.get('q') || params.get('query') || params.get('location') || params.get('area'));
+    const q = clean(params.get('q') || params.get('query') || params.get('search') || params.get('location') || params.get('area'));
     const area = clean(params.get('area'));
     const district = clean(params.get('district'));
     const query = document.getElementById('off-plan-q');

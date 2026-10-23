@@ -9,7 +9,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
-const { buildPublicSeoSnapshot, sitemapEntries } = require('../services/publicSeoService');
+const { PUBLIC_PAGE_SEO, buildPublicSeoSnapshot, publicPathIsNoindex, sitemapEntries } = require('../services/publicSeoService');
 const indexNow = require('../services/indexNowService');
 
 const KEY = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
@@ -49,7 +49,33 @@ test('public agents with a live listing are in the sitemap with their newest lis
 
 test('snapshot SQL selects agent visibility', () => {
   const src = read('services/publicSeoService.js');
-  assert.match(src, /agent_id,\s+EXISTS/);
+  assert.match(src, /LEFT JOIN LATERAL/);
+  assert.match(src, /\(public_agent\.id IS NOT NULL\) AS agent_public/);
+  assert.match(src, /publicSitemapAgentWhereSql\('a'\)/);
+  assert.match(read('server.js'), /publicPathIsNoindex\(entry\.loc\)/);
+});
+
+test('noindex pages stay out of the sitemap', () => {
+  const rows = [
+    { id: 'ok-sale', listing_type: 'sale', price: 80_000_000, area: 'Ntinda', district: 'Kampala', canonical_location_id: 'kampala:ntinda', updated_at: '2026-10-02T08:00:00.000Z', agent_id: 'ag1', agent_public: true },
+    { id: 'cheap-sale', listing_type: 'sale', price: 2, area: 'Ntinda', district: 'Kampala', canonical_location_id: 'kampala:ntinda', updated_at: '2026-10-02T08:00:00.000Z' },
+    { id: 'flagged-sale', listing_type: 'sale', price: 80_000_000, price_review: 'implausible', area: 'Ntinda', district: 'Kampala', canonical_location_id: 'kampala:ntinda', updated_at: '2026-10-02T08:00:00.000Z' }
+  ];
+  const locs = sitemapEntries(buildPublicSeoSnapshot(rows, '2026-10-09T00:00:00.000Z'), 'https://makaug.com').map((entry) => entry.loc);
+  assert.ok(locs.includes('https://makaug.com/property/ok-sale'));
+  assert.ok(!locs.includes('https://makaug.com/property/cheap-sale'));
+  assert.ok(!locs.includes('https://makaug.com/property/flagged-sale'));
+  assert.ok(locs.includes('https://makaug.com/badge'));
+  assert.ok(locs.includes('https://makaug.com/agents/ag1'));
+  for (const [path, entry] of Object.entries(PUBLIC_PAGE_SEO)) {
+    if (String(entry.robots || '').startsWith('noindex')) {
+      assert.equal(publicPathIsNoindex(`https://makaug.com${path}`), true, path);
+      assert.ok(!locs.includes(`https://makaug.com${path}`), path);
+    }
+  }
+  assert.equal(publicPathIsNoindex('https://makaug.com/short-term/hotel/sheraton'), true);
+  assert.equal(publicPathIsNoindex('https://makaug.com/short-term'), false);
+  assert.equal(publicPathIsNoindex('https://makaug.com/brokers'), false);
 });
 
 test('key route serves the key only at its own path', () => {

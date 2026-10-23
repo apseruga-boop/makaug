@@ -16,7 +16,9 @@ const {
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
 const { compactUgx } = require('../utils/compactUgx');
 const { isFoundOnlinePublicRow } = require('./publicListingCopy');
+const { publicSitemapAgentWhereSql } = require('./publicAgentEligibilityService');
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
+const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
 
 const PUBLIC_SITE_URL = 'https://makaug.com';
@@ -453,10 +455,12 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
     const thin = isThinListingRow(row);
     if (thin) thinPropertyCount += 1;
     if (row.id) {
+      const priceNoindex = listingPriceNoindex(row);
       properties.push({
         id: String(row.id),
         lastmod: row.updated_at || row.created_at || null,
-        thin
+        thin,
+        noindex: thin || priceNoindex
       });
     }
   }
@@ -518,6 +522,35 @@ function isThinListingRow(row = {}) {
   });
 }
 
+// /property/:id noindexes an implausible price (and a stored price_review
+// flag) while the listing stays live. The sitemap must not advertise it.
+// Price floors keep using validSeoPrice on the same row.
+function listingPriceNoindex(row = {}) {
+  const review = String(row.price_review || row?.extra_fields?.price_review || '').trim().toLowerCase();
+  if (review === 'implausible') return true;
+  return isPriceImplausible({
+    listing_type: row.listing_type,
+    price: row.price,
+    price_period: row.price_period,
+    transaction_type: row.transaction_type || row?.extra_fields?.transaction_type
+  });
+}
+
+function publicPathIsNoindex(value = '') {
+  const raw = String(value || '').trim();
+  let pathname = raw;
+  try {
+    if (/^https?:\/\//i.test(raw)) pathname = new URL(raw).pathname;
+  } catch {
+    return false;
+  }
+  const clean = pathname.split('?')[0].replace(/\/+$/, '').toLowerCase() || '/';
+  const seo = publicPageSeoFor(clean);
+  if (seo?.robots && String(seo.robots).toLowerCase().startsWith('noindex')) return true;
+  if (clean.startsWith('/short-term/hotel/')) return true;
+  return false;
+}
+
 async function refreshPublicSeoInventorySnapshot(db) {
   const result = await db.query(
     `SELECT id, listing_type, students_welcome, area, district,
@@ -525,6 +558,7 @@ async function refreshPublicSeoInventorySnapshot(db) {
             LEFT(COALESCE(description, ''), 1200) AS description,
             price, price_period, bedrooms, property_type,
             transaction_type, title_type, nearest_university,
+            extra_fields->>'price_review' AS price_review,
             jsonb_strip_nulls(jsonb_build_object(
               'room_type', extra_fields->>'room_type',
               'commercial_type', extra_fields->>'commercial_type',
@@ -561,7 +595,7 @@ async function refreshPublicSeoInventorySnapshot(db) {
        SELECT a.id
        FROM agents a
        WHERE a.id = properties.agent_id
-         AND LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
+         AND ${publicSitemapAgentWhereSql('a')}
        LIMIT 1
      ) public_agent ON TRUE
      WHERE ${publicVisibleInventoryWhere('properties')}
@@ -735,7 +769,7 @@ function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
     });
   }
   for (const property of snapshot?.properties || []) {
-    if (property.thin) continue; // noindex,follow pages stay out of the sitemap
+    if (property.thin || property.noindex) continue; // noindex,follow pages stay out of the sitemap
     entries.push({
       loc: `${root}/property/${encodeURIComponent(property.id)}`,
       lastmod: property.lastmod ? new Date(property.lastmod).toISOString() : '',
@@ -753,7 +787,7 @@ function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
   }
   const seen = new Set();
   return entries.filter((entry) => {
-    if (seen.has(entry.loc)) return false;
+    if (!entry?.loc || seen.has(entry.loc) || publicPathIsNoindex(entry.loc)) return false;
     seen.add(entry.loc);
     return true;
   });
@@ -764,6 +798,7 @@ module.exports = {
   PUBLIC_PAGE_SEO,
   PUBLIC_PAGE_ALIASES,
   publicPageSeoFor,
+  publicPathIsNoindex,
   PUBLIC_SEO_CACHE_TTL_MS,
   slugifySeoPart,
   canonicalLocationRouteSlug,

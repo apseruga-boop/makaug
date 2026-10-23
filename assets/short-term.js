@@ -1298,7 +1298,7 @@
     var typed = field ? String(field.value || '').trim() : '';
     if (typed) return typed;
     var query = qs();
-    return String(query.q || query.district || '').trim();
+    return String(query.q || query.search || query.query || query.district || '').trim();
   }
 
   function go(path, replace) {
@@ -1464,7 +1464,7 @@
     return '<form class="st-hotel-search" id="st-hotel-search">'
       + '<span class="st-ad-label">' + esc(t('adLabel')) + '</span>'
       + '<label for="st-hotel-q">' + esc(t('searchHotels')) + '</label>'
-      + '<input class="st-input" id="st-hotel-q" name="destination" value="' + esc(query.q || query.district || '') + '">'
+      + '<input class="st-input" id="st-hotel-q" name="destination" value="' + esc(query.q || query.search || query.query || query.district || '') + '">'
       + '<input class="st-input" id="st-hotel-in" name="check_in" type="date" value="' + esc(query.check_in || '') + '">'
       + '<input class="st-input" id="st-hotel-out" name="check_out" type="date" value="' + esc(query.check_out || '') + '">'
       + '<input class="st-input" id="st-hotel-guests" name="guests" type="number" min="1" max="30" value="' + esc(query.guests || '2') + '">'
@@ -1488,7 +1488,7 @@
       + '<p class="st-hero-sub" data-st-list-fee>' + esc(t('listFee')) + '</p>'
       + '<form class="st-search" id="st-search-form">'
       + '<div class="st-field"><label for="st-q">' + esc(t('where')) + '</label>'
-      + '<input class="st-input" id="st-q" name="q" placeholder="' + esc(t('wherePh')) + '" value="' + esc(q.q || q.district || '') + '"></div>'
+      + '<input class="st-input" id="st-q" name="q" placeholder="' + esc(t('wherePh')) + '" value="' + esc(q.q || q.search || q.query || q.district || '') + '"></div>'
       + '<div class="st-field"><label for="st-in">' + esc(t('checkIn')) + '</label>'
       + '<input class="st-input" id="st-in" name="check_in" type="date" value="' + esc(q.check_in || '') + '"></div>'
       + '<div class="st-field"><label for="st-out">' + esc(t('checkOut')) + '</label>'
