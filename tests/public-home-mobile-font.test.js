@@ -35,10 +35,11 @@ function renderer(country, production = false) {
     applyShortTermVisibility: (html) => html,
     injectShortTermRuntimeConfig: (html) => html,
     injectGa4HeadTag: (html) => html,
+    patchStructuredData: (html) => html,
     inlinePublicFontFaces: createPublicFontFaceInliner(),
-    inlinePublicCoreStylesheets: require('../services/publicCoreStylesheets')
+    inlinePublicCoreStylesheets: require('../services/publicCoreStylesheets'),
+    travelpayoutsAffiliate: { drivePublicHeadTag() { return ''; }, driveScriptSrc() { return ''; }, driveProjectId() { return '581854'; } }
   });
-  vm.runInContext(server.match(/const TRAVELPAYOUTS_DRIVE_HEAD_TAG = `[^`]*`;/)[0], context);
   vm.runInContext(['applyHomeHeroPreload', 'applyShortTermStylesheetLoading', 'applyPublicFontDisplayOptional', 'injectTravelpayoutsDriveHeadTag', 'renderPublicHtml'].map(declaration).join('\n'), context);
   return context.renderPublicHtml;
 }

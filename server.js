@@ -77,6 +77,7 @@ const {
   injectShortTermRuntimeConfig,
   shortTermEnabled
 } = require('./utils/shortTermFeatureFlags');
+const travelpayoutsAffiliate = require('./services/travelpayoutsAffiliate');
 const {
   getShortTermListing,
   listShortTermSitemapEntries,
@@ -1258,12 +1259,16 @@ function injectGa4HeadTag(html, basePath = '/') {
   return String(html).replace(/<\/head>/i, `${snippet}</head>`);
 }
 
-// Travelpayouts Drive loader, in <head> of every public page (not admin/staff).
-const TRAVELPAYOUTS_DRIVE_HEAD_TAG = `<script data-noptimize="1" data-cfasync="false" data-wpfc-render="false">(function () { var script = document.createElement("script"); script.async = 1; script.src = 'https://emrldtp.cc/NTgxODU0.js?t=581854'; document.head.appendChild(script); })();</script>`;
+// Travelpayouts Drive loader. Off unless TRAVELPAYOUTS_DRIVE_ENABLED is on.
+// Project id is TRAVELPAYOUTS_DRIVE_PROJECT_ID, or 581854. Public pages only;
+// admin and staff documents are skipped. Affiliate links do not use this script.
 function injectTravelpayoutsDriveHeadTag(html, basePath = '/') {
   if (/^\/(?:admin|staff-dashboard|staff|king)(?:\/|$)/.test(String(basePath || '/'))) return html;
-  if (String(html).includes('emrldtp.cc/NTgxODU0.js')) return html;
-  return String(html).replace(/<\/head>/i, `${TRAVELPAYOUTS_DRIVE_HEAD_TAG}</head>`);
+  const tag = travelpayoutsAffiliate.drivePublicHeadTag(process.env);
+  if (!tag) return html;
+  const src = travelpayoutsAffiliate.driveScriptSrc(travelpayoutsAffiliate.driveProjectId(process.env));
+  if (String(html).includes(src)) return html;
+  return String(html).replace(/<\/head>/i, `${tag}</head>`);
 }
 
 function renderPublicHtml(pathname) {

@@ -10,8 +10,15 @@
 // is optional; the click URL works without it.
 //
 // Drive (the emrld script Travelpayouts uses to finish onboarding) is a
-// separate switch, TRAVELPAYOUTS_DRIVE_ENABLED, default off. The page that
-// serves /short-term is the only place that prints it.
+// separate switch, TRAVELPAYOUTS_DRIVE_ENABLED, default off. It does not
+// change affiliate click links or TRAVELPAYOUTS_MARKER.
+//
+// When the switch is on, server.js injects the loader into <head> of every
+// public page. Admin and staff pages are left out. The project id is the
+// optional TRAVELPAYOUTS_DRIVE_PROJECT_ID, falling back to 581854.
+// assets/short-term.js loads the same script only on /short-term, and only
+// when that switch is on. TRAVELPAYOUTS_DRIVE_SRC feeds driveHeadSnippet
+// only; public HTML does not print that snippet.
 
 const DEFAULT_DRIVE_SRC = 'https://emrldtp.cc/NTgxODU0.js?t=581854';
 
@@ -171,6 +178,27 @@ function flagOn(value) {
   return /^(1|true|yes|on)$/i.test(clean(value));
 }
 
+const DEFAULT_DRIVE_PROJECT_ID = '581854';
+
+function driveProjectId(env = process.env) {
+  const raw = clean(env && env.TRAVELPAYOUTS_DRIVE_PROJECT_ID);
+  return /^[0-9]{1,16}$/.test(raw) ? raw : DEFAULT_DRIVE_PROJECT_ID;
+}
+
+function driveScriptSrc(projectId) {
+  const id = /^[0-9]{1,16}$/.test(clean(projectId)) ? clean(projectId) : DEFAULT_DRIVE_PROJECT_ID;
+  const token = Buffer.from(id, 'utf8').toString('base64').replace(/=+$/g, '');
+  return `https://emrldtp.cc/${token}.js?t=${id}`;
+}
+
+// Empty unless TRAVELPAYOUTS_DRIVE_ENABLED is on. This is the tag server.js
+// prints into public <head>. The project id is not TRAVELPAYOUTS_DRIVE_SRC.
+function drivePublicHeadTag(env = process.env) {
+  if (!flagOn(env && env.TRAVELPAYOUTS_DRIVE_ENABLED)) return '';
+  const src = driveScriptSrc(driveProjectId(env));
+  return `<script data-noptimize="1" data-cfasync="false" data-wpfc-render="false">(function () { var script = document.createElement("script"); script.async = 1; script.src = '${src}'; document.head.appendChild(script); })();</script>`;
+}
+
 function sanitizeSubId(value) {
   return clean(value).replace(/[^A-Za-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 100);
 }
@@ -238,6 +266,7 @@ function publicConfig(env = process.env) {
     brands,
     enabled: Boolean(marker && brands.length),
     driveEnabled: flagOn(env.TRAVELPAYOUTS_DRIVE_ENABLED),
+    driveProjectId: driveProjectId(env),
     driveSrc: clean(env.TRAVELPAYOUTS_DRIVE_SRC) || DEFAULT_DRIVE_SRC
   };
 }
@@ -327,7 +356,10 @@ function compareLinks({ marker, brands, hotelName, checkIn, checkOut, adults, su
   }).filter(Boolean);
 }
 
-// Printed into <head> of GET /short-term only. The site has no cookie-consent
+// Cookie-aware helper. Public HTML does not print this. The live injector is
+// injectTravelpayoutsDriveHeadTag in server.js, gated by
+// TRAVELPAYOUTS_DRIVE_ENABLED. This helper still uses TRAVELPAYOUTS_DRIVE_SRC
+// when set, otherwise the 581854 default URL. The site has no cookie-consent
 // banner, so the loader runs immediately unless a consent element is present.
 function driveHeadSnippet(env = process.env) {
   const config = publicConfig(env);
@@ -357,12 +389,16 @@ function driveHeadSnippet(env = process.env) {
 }
 
 module.exports = {
+  DEFAULT_DRIVE_PROJECT_ID,
   DEFAULT_DRIVE_SRC,
   BRAND_DEFS,
   EXTRA_GROUPS,
   brandSearchUrl,
   compareLinks,
   driveHeadSnippet,
+  driveProjectId,
+  drivePublicHeadTag,
+  driveScriptSrc,
   extraLinks,
   extrasConfig,
   hotelSubId,

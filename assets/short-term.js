@@ -1254,15 +1254,36 @@
     }
   }
 
-  var DRIVE_SRC = 'https://emrldtp.cc/NTgxODU0.js?t=581854';
+  // Same switch as the public <head> tag: TRAVELPAYOUTS_DRIVE_ENABLED, default off.
+  // Project id is travelpayouts.driveProjectId, or 581854.
+  function travelpayoutsDriveScriptSrc(projectId) {
+    var id = String(projectId || '').trim();
+    if (!/^[0-9]{1,16}$/.test(id)) id = '581854';
+    var alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    var out = '';
+    var i = 0;
+    while (i < id.length) {
+      var b0 = id.charCodeAt(i);
+      var b1 = i + 1 < id.length ? id.charCodeAt(i + 1) : 0;
+      var b2 = i + 2 < id.length ? id.charCodeAt(i + 2) : 0;
+      out += alphabet.charAt(b0 >> 2);
+      out += alphabet.charAt(((b0 & 3) << 4) | (b1 >> 4));
+      if (i + 1 < id.length) out += alphabet.charAt(((b1 & 15) << 2) | (b2 >> 6));
+      if (i + 2 < id.length) out += alphabet.charAt(b2 & 63);
+      i += 3;
+    }
+    return 'https://emrldtp.cc/' + out + '.js?t=' + id;
+  }
+
   function loadTravelpayoutsDrive() {
     var cfg = travelpayoutsConfig();
     if (!cfg.driveEnabled || currentPath() !== '/short-term') return;
-    if (document.querySelector('script[data-tp-drive]')) return;
+    if (document.querySelector('script[data-tp-drive], script[src*="emrldtp.cc"]')) return;
+    var src = travelpayoutsDriveScriptSrc(cfg.driveProjectId);
     function load() {
       if (document.querySelector('script[data-tp-drive]')) return;
       var script = document.createElement('script');
-      script.src = DRIVE_SRC;
+      script.src = src;
       script.async = true;
       script.setAttribute('data-tp-drive', '1');
       document.head.appendChild(script);

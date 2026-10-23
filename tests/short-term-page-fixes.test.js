@@ -55,14 +55,21 @@ test('the drive snippet is off unless TRAVELPAYOUTS_DRIVE_ENABLED is on', () => 
   assert.doesNotMatch(html, /785967/);
 });
 
-test('the live marker is not hard-coded and drive is only on the short-term document', () => {
+test('the live marker is not hard-coded and the public Drive tag follows TRAVELPAYOUTS_DRIVE_ENABLED', () => {
   const server = read('server.js');
   const client = read('assets/short-term.js');
   const bundled = [server, client, read('utils/shortTermFeatureFlags.js'), read('services/travelpayoutsAffiliate.js')].join('\n');
   assert.equal(bundled.includes('785967'), false);
   const shortTermRoute = server.slice(server.indexOf("app.get('/short-term'"), server.indexOf("app.get('/short-term/list-your-place'"));
+  assert.equal(shortTermRoute.length > 0, true);
   assert.equal(server.split('driveHeadSnippet()').length, 1);
   assert.match(server, /rendered = injectTravelpayoutsDriveHeadTag\(rendered, normalizedBasePath\)/);
+  assert.match(server, /drivePublicHeadTag\(process\.env\)/);
+  assert.match(server, /TRAVELPAYOUTS_DRIVE_PROJECT_ID/);
+  assert.doesNotMatch(server, /const TRAVELPAYOUTS_DRIVE_HEAD_TAG|emrldtp\.cc\/NTgxODU0/);
+  assert.match(client, /if \(!cfg\.driveEnabled \|\| currentPath\(\) !== '\/short-term'\) return;/);
+  assert.match(client, /travelpayoutsDriveScriptSrc\(cfg\.driveProjectId\)/);
+  assert.doesNotMatch(client, /var DRIVE_SRC = /);
   const hotelAt = server.indexOf("app.get('/short-term/hotel/:slug'");
   const listAt = server.indexOf("app.get('/short-term/list-your-place'");
   const slugAt = server.indexOf("app.get('/short-term/:slug'");
