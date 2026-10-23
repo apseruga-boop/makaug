@@ -20,7 +20,8 @@ const SAME_AS = [
   'https://www.instagram.com/makaugcom',
   'https://www.tiktok.com/@makaug.com',
   'https://www.linkedin.com/company/makaug-com',
-  'https://www.youtube.com/@makaugproperty'
+  'https://www.youtube.com/@makaugproperty',
+  'https://maps.app.goo.gl/UU4x3shUvyU4jnaV8'
 ];
 
 function homepageGraph() {
@@ -74,6 +75,7 @@ test('public route schemas retain their nodes and one canonical MakaUG organizat
   assert.deepStrictEqual(merged['@graph'].slice(1), [website, listing]);
   assert.strictEqual(merged['@graph'][0].name, 'MakaUG');
   assert.deepStrictEqual(merged['@graph'][0]['@type'], ['Organization', 'RealEstateAgent']);
+  assert.deepStrictEqual(merged['@graph'][0].sameAs, SAME_AS);
   assert.deepStrictEqual(mergePublicOrganizationSchema(merged), merged, 'repeated metadata patching does not duplicate the organization');
   assert.strictEqual(JSON.stringify(routeData), original, 'route data is not mutated');
 });

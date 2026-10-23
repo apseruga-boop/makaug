@@ -33,7 +33,8 @@ const TENANTS = Object.freeze({
         "https://www.instagram.com/makaugcom",
         "https://www.tiktok.com/@makaug.com",
         "https://www.linkedin.com/company/makaug-com",
-        "https://www.youtube.com/@makaugproperty"
+        "https://www.youtube.com/@makaugproperty",
+        "https://maps.app.goo.gl/UU4x3shUvyU4jnaV8"
       ]),
       contactPoint: Object.freeze({
         contactType: "customer service",
