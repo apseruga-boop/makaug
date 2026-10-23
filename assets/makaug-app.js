@@ -61812,7 +61812,7 @@ function renderAgentProfileListingGrid() {
     agentProfileListingSort
   );
   el.innerHTML = filtered.length
-    ? `<div class="agent-profile-grid">${filtered.map((listing) => {
+    ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">${filtered.map((listing) => {
         const badge = listing.availability_label
           ? `<p class="agent-availability-badge${listing.availability_tone === "stale" ? " is-stale" : ""}">${adminEscape(listing.availability_label)}</p>`
           : "";
@@ -62217,6 +62217,13 @@ async function openBrokerProfile(id) {
               <div class="agent-profile-actions">${agentProfileContactButtons(b)}</div>
             </div>
           </section>
+          <section class="agent-profile-section agent-profile-about" aria-labelledby="broker-about-heading">
+            <h2 id="broker-about-heading">About</h2>
+            ${brokerAboutParagraphs(b).map((text) => `<p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(text)}</p>`).join("")}
+            ${(b.specialties || []).length ? `<div class="mt-5"><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Specialities</div><div class="flex flex-wrap gap-2">${(b.specialties || []).map((s) => `<span class="bg-gray-100 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(s)}</span>`).join("")}</div></div>` : ""}
+            ${(b.languages || []).length ? `<div class="mt-4"><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Languages</div><div class="flex flex-wrap gap-2">${(b.languages || []).map((l) => `<span class="bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(l)}</span>`).join("")}</div></div>` : ""}
+            ${renderBrokerSocialLinks(b)}
+          </section>
           <div class="agent-profile-stats" aria-label="Key figures">
             <div class="agent-profile-stat"><strong>${list.length}</strong><span>Live listings</span></div>
             <div class="agent-profile-stat"><strong>${adminEscape(agentProfilePriceLabel(list))}</strong><span>Price range</span></div>
@@ -62224,13 +62231,6 @@ async function openBrokerProfile(id) {
             <div class="agent-profile-stat"><strong>${areaCounts.length}</strong><span>Areas covered</span></div>
             <div class="agent-profile-stat"><strong>${agentShowsVerifiedBadge(b) ? "Verified" : "Unverified"}</strong><span>Verified status</span></div>
           </div>
-          <section class="agent-profile-section" aria-labelledby="broker-about-heading">
-            <h2 id="broker-about-heading">About</h2>
-            ${brokerAboutParagraphs(b).map((text) => `<p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(text)}</p>`).join("")}
-            ${(b.specialties || []).length ? `<div class="mt-5"><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Specialities</div><div class="flex flex-wrap gap-2">${(b.specialties || []).map((s) => `<span class="bg-gray-100 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(s)}</span>`).join("")}</div></div>` : ""}
-            ${(b.languages || []).length ? `<div class="mt-4"><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Languages</div><div class="flex flex-wrap gap-2">${(b.languages || []).map((l) => `<span class="bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(l)}</span>`).join("")}</div></div>` : ""}
-            ${renderBrokerSocialLinks(b)}
-          </section>
           <section class="agent-profile-section" aria-labelledby="agent-profile-where">
             <h2 id="agent-profile-where">Where ${adminEscape(firstName)} works</h2>
             <div id="agent-profile-map" class="agent-profile-map" role="img" aria-label="Where ${adminAttr(firstName)} works"></div>
