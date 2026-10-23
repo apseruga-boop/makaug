@@ -27,7 +27,7 @@ test('migration 160 builds the preview indexes concurrently', () => {
   const numbers = fs.readdirSync(path.join(__dirname, '../db/migrations'))
     .map((name) => Number(name.split('_')[0]))
     .filter((n) => Number.isFinite(n));
-  assert.equal(Math.max(...numbers.filter((n) => n !== 160)), 159);
+  assert.equal(Math.max(...numbers.filter((n) => n !== 160)), 161);
 });
 
 test('staff preview names each query and does not hash every image in one join', () => {
