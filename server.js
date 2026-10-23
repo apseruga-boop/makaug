@@ -1779,6 +1779,12 @@ app.get('/property/:id', async (req, res, next) => {
     ]);
     if (!listing) {
       res.set('X-Robots-Tag', 'noindex, noarchive');
+      // A cached 404 outlives Publish again. The SEO listing cache is the
+      // one that kept 9BBB26 on "Property not found"; this stops a CDN from
+      // pinning the same miss.
+      res.set('Cache-Control', 'private, no-store');
+      res.set('CDN-Cache-Control', 'no-store');
+      res.set('Surrogate-Control', 'no-store');
       return res.status(404).send('Property not found');
     }
     const renderedSeo = renderPropertySeoHtml(html, listing, { snapshot: detailSnapshot, baseUrl: absolutePublicUrl('/') });
