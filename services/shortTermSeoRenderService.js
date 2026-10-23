@@ -60,7 +60,7 @@ function renderShortTermSsrBlock(listings = [], options = {}) {
 <div class="st-ssr-grid">
 ${cards}
 </div>
-<p class="st-ssr-note">Prices are set by each host and shown per night in Uganda Shillings. makaug lists the place and the host's own contact details. makaug does not take bookings, does not handle payment and is not a party to any stay.</p>`;
+<p class="st-ssr-note">Prices are set by each host and shown per night in Uganda Shillings. Ordinary listers pay UGX 20,000 a month to list a short stay, with no free days. Short stays listed by an approved agent are included in the agent plan (UGX 50,000 a month). makaug lists the place and the host's own contact details. makaug does not take bookings, does not handle payment and is not a party to any stay.</p>`;
 }
 
 function shortTermItemListStructuredData(listings = [], baseUrl = '') {

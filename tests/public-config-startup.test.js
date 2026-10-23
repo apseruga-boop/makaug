@@ -72,7 +72,7 @@ function fixture({ readyState = 'loading', page = 'page-rent', protectedShell = 
 }
 
 test('config scripts defer parsing and inline code cannot mask custom AdSense slots', () => {
-  for (const url of ['/config.js', '/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1']) {
+  for (const url of ['/config.js', '/config/aboutCommercialProducts.js?v=about-commercial-products-20261023-v3']) {
     const tag = [...html.matchAll(/<script\b[^>]*src="([^"]+)"[^>]*>/g)].find((match) => match[1] === url)?.[0];
     assert.ok(tag, url); assert.match(tag, /\bdefer\b/); assert.doesNotMatch(tag, /\basync\b/);
   }
@@ -114,7 +114,7 @@ test('protected admin and direct About/Advertise keep their ordered scripts afte
   assert.ok(admin.scripts().every((script) => script.async === false));
   for (const page of ['page-about', 'page-advertise']) {
     const f = fixture({ page }); f.catalog(); f.config({}); f.dcl();
-    assert.deepEqual(f.scripts().map((script) => script.src), ['/assets/about-advertise-i18n.js?v=whatsapp-number-20260911', '/assets/makaug-app.js?v=fixture%20hash%2Fwith%3Fchars']);
+    assert.deepEqual(f.scripts().map((script) => script.src), ['/assets/about-advertise-i18n.js?v=short-stay-fee-20261023', '/assets/makaug-app.js?v=fixture%20hash%2Fwith%3Fchars']);
     assert.ok(f.scripts().every((script) => script.async === false)); assert.equal(f.captureApp().catalog.currency, 'UGX');
   }
 });
@@ -122,7 +122,7 @@ test('protected admin and direct About/Advertise keep their ordered scripts afte
 test('an already complete document starts once and Short Term keeps its parallel independent startup', () => {
   const f = fixture({ readyState: 'complete', page: 'page-short-term', shortTerm: true });
   assert.equal(f.listeners.size, 0);
-  assert.deepEqual(f.scripts().map((script) => script.src), ['/assets/short-term.js?v=20261020-short-term-v25', '/assets/makaug-app.js?v=fixture%20hash%2Fwith%3Fchars']);
+  assert.deepEqual(f.scripts().map((script) => script.src), ['/assets/short-term.js?v=20261023-short-stay-fee-v26', '/assets/makaug-app.js?v=fixture%20hash%2Fwith%3Fchars']);
   assert.equal(f.appended.filter((node) => node.tagName === 'link').length, 1);
 });
 
@@ -137,7 +137,7 @@ test('public route sanitization retains SSR sections and the same deferred confi
   for (const route of ['/student-accommodation', '/student-accommodation/university/makerere', '/to-rent/kireka-wakiso', '/to-rent/kyanja-kampala/apartments', '/about', '/advertise']) {
     const publicHtml = sanitizePublicHtml(html, { pathname: route });
     assert.match(publicHtml, /<script src="\/config\.js" defer><\/script>/, route);
-    assert.match(publicHtml, /<script src="\/config\/aboutCommercialProducts\.js\?v=about-commercial-products-20260910-v1" defer><\/script>/, route);
+    assert.match(publicHtml, /<script src="\/config\/aboutCommercialProducts\.js\?v=about-commercial-products-20261023-v3" defer><\/script>/, route);
     assert.match(publicHtml, /DOMContentLoaded/); assert.match(publicHtml, /appPreload\.href = makaugAppSrc/);
     assert.match(publicHtml, /<h1\b/); assert.doesNotMatch(publicHtml, /id="page-(?:staff|admin)-dashboard"/);
   }

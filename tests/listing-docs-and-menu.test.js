@@ -19,6 +19,8 @@ test('terms WhatsApp message states the free week, the fee, ID privacy and asks 
   const text = docs.listerTermsMessage({ lister_fee: { free_days: 7, monthly_ugx: 20000 } }, { name: 'Mary' });
   assert.match(text, /7 days are free/);
   assert.match(text, /UGX 20,000 per property, per month/);
+  assert.match(text, /UGX 20,000 a month/);
+  assert.match(text, /no free days/);
   assert.match(text, /never shown/);
   assert.match(text, /AGREE/);
   assert.match(text, /\/legal\/makaug-private-lister-terms\.pdf/);

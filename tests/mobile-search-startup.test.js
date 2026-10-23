@@ -101,7 +101,7 @@ test('listing bootstraps skip the About pack while direct About/Advertise retain
   for (const page of ['page-about', 'page-advertise']) {
     const f = bootstrapFixture(page); vm.runInContext('loadMakaugApp()', f.context);
     assert.equal(f.scripts.length, 1); assert.equal(f.scripts[0].async, false);
-    assert.equal(f.scripts[0].src, '/assets/about-advertise-i18n.js?v=whatsapp-number-20260911');
+    assert.equal(f.scripts[0].src, '/assets/about-advertise-i18n.js?v=short-stay-fee-20261023');
     const promise = f.context.window.__makaugLoadAboutAdvertiseI18n();
     assert.equal(f.scripts.length, 1, 'on-demand calls share the same loading promise');
     f.context.window.__MAKAUG_ABOUT_ADVERTISE_I18N__ = { lg: { 'about.heroLabel': 'pack' } };

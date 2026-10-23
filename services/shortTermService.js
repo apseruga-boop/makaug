@@ -12,11 +12,16 @@ const { shortTermEnabled } = require('../utils/shortTermFeatureFlags');
 
 const SHORT_TERM_MARKER = 'short-term-discovery-v1';
 
-// UGX 50,000 buys a 3 month run. One flat fee, no commission on any stay.
-// Commission would put makaug inside the transaction, which breaks the
-// intermediary position the whole section is built on.
-const LISTING_FEE_UGX = 50000;
-const LISTING_TERM_MONTHS = 3;
+// Arthur's rule, decided 20 Oct 2026 and confirmed 23 Oct 2026.
+// Ordinary (non-agent) listers pay UGX 20,000 a month from approval, with no
+// free days. An approved agent's short stays are included in the agent plan
+// (UGX 50,000 a month — that agent price is not set here). One listing fee,
+// no commission on any stay. Commission would put makaug inside the
+// transaction, which breaks the intermediary position this section is built on.
+const LISTING_FEE_UGX = 20000;
+const LISTING_TERM_MONTHS = 1;
+const LISTING_FREE_DAYS = 0;
+const SHORT_STAY_FEE_NOTE = 'Short stay listing fee, UGX 20,000 for one month. No free days. No commission on any stay.';
 
 const MAX_SEARCH_LIMIT = 48;
 const DEFAULT_SEARCH_LIMIT = 24;
@@ -223,6 +228,33 @@ function formatUgx(amount) {
   const value = Number(amount || 0);
   if (!Number.isFinite(value)) return 'UGX 0';
   return `UGX ${Math.round(value).toLocaleString('en-UG')}`;
+}
+
+function phoneTail(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : '';
+}
+
+// Approved agents include short stays in the agent plan. host_type is what the
+// lister typed, so it is not proof. Match the host phone to an approved,
+// non-removed agent the same way team billing matches an agent.
+async function findApprovedAgentForHost(client, hostPhone, hostWhatsapp) {
+  const tails = [...new Set([phoneTail(hostPhone), phoneTail(hostWhatsapp)].filter((tail) => tail.length === 9))];
+  if (!tails.length) return null;
+  const result = await client.query(
+    `SELECT id, full_name
+       FROM agents
+      WHERE removed_at IS NULL
+        AND status = 'approved'
+        AND (
+          RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ANY($1::text[])
+          OR RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = ANY($1::text[])
+        )
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [tails]
+  );
+  return result.rows[0] || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -970,6 +1002,14 @@ async function createShortTermListing(db, payload = {}, context = {}) {
     const reference = `ST-${String(refResult.rows[0].n).padStart(6, '0')}`;
     const slugBase = slugify(`${value.title}-${value.area}`) || 'short-stay';
     const slug = `${slugBase}-${reference.toLowerCase()}`;
+    const coveringAgent = await findApprovedAgentForHost(client, value.host_phone, value.host_whatsapp);
+    const includedInAgentPlan = Boolean(coveringAgent);
+    const feeUgx = includedInAgentPlan ? 0 : LISTING_FEE_UGX;
+    const feeStatus = includedInAgentPlan ? 'waived' : 'unpaid';
+    const paymentStatus = includedInAgentPlan ? 'waived' : 'initiated';
+    const paymentNote = includedInAgentPlan
+      ? `Short stays are included in the approved agent plan for ${coveringAgent.full_name || 'this agent'}. No separate short-stay fee. The agent plan is UGX 50,000 a month.`
+      : SHORT_STAY_FEE_NOTE;
 
     const inserted = await client.query(
       `INSERT INTO st_listing (
@@ -996,9 +1036,9 @@ async function createShortTermListing(db, payload = {}, context = {}) {
          $31,$32,$33,
          $34,$35,$36,
          NOW(),$37,
-         'pending','submitted',$38,'unpaid',$39,
-         $40,$41,'direct',
-         $42,$43,$44,$45,$46,$47
+         'pending','submitted',$38,$39,$40,
+         $41,$42,'direct',
+         $43,$44,$45,$46,$47,$48
        )
        RETURNING id, reference, slug, status, moderation_stage, listed_via`,
       [
@@ -1013,7 +1053,7 @@ async function createShortTermListing(db, payload = {}, context = {}) {
         value.house_rules, value.terms_text, value.cancellation_policy,
         value.right_to_let_declared, value.right_to_let_reference, value.local_hotel_tax_ack,
         context.ip || null,
-        LISTING_FEE_UGX, LISTING_TERM_MONTHS,
+        feeUgx, feeStatus, LISTING_TERM_MONTHS,
         value.preferred_payment_method, value.payout_note,
         // Provenance. Staff-assisted listings are flagged here so the King
         // review sheet can show that a colleague typed this in rather than a
@@ -1050,12 +1090,14 @@ async function createShortTermListing(db, payload = {}, context = {}) {
     // touches guest money at any point.
     await client.query(
       `INSERT INTO st_listing_payment (listing_id, amount_ugx, method, status, covers_from, covers_to, notes)
-       VALUES ($1, $2, $3, 'initiated', CURRENT_DATE, CURRENT_DATE + INTERVAL '3 months', $4)`,
+       VALUES ($1, $2, $3, $4, CURRENT_DATE, CURRENT_DATE + ($5 || ' months')::interval, $6)`,
       [
         listingId,
-        LISTING_FEE_UGX,
+        feeUgx,
         value.preferred_payment_method || 'mtn_mobile_money',
-        'Flat listing fee, UGX 50,000 for a 3 month run. No commission on any stay.'
+        paymentStatus,
+        String(LISTING_TERM_MONTHS),
+        paymentNote
       ]
     );
 
@@ -1074,9 +1116,12 @@ async function createShortTermListing(db, payload = {}, context = {}) {
       status: inserted.rows[0].status,
       moderation_stage: inserted.rows[0].moderation_stage,
       listed_via: inserted.rows[0].listed_via,
-      listing_fee_ugx: LISTING_FEE_UGX,
-      listing_fee_display: formatUgx(LISTING_FEE_UGX),
-      listing_term_months: LISTING_TERM_MONTHS
+      listing_fee_ugx: feeUgx,
+      listing_fee_display: includedInAgentPlan ? 'Included in the agent plan' : formatUgx(feeUgx),
+      listing_fee_status: feeStatus,
+      listing_term_months: LISTING_TERM_MONTHS,
+      listing_free_days: LISTING_FREE_DAYS,
+      listing_fee_included_in_agent_plan: includedInAgentPlan
     };
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch (_) {}
@@ -1258,7 +1303,10 @@ module.exports = {
   CANCELLATION_POLICIES,
   DEFAULT_SEARCH_LIMIT,
   LISTING_FEE_UGX,
+  LISTING_FREE_DAYS,
   LISTING_TERM_MONTHS,
+  SHORT_STAY_FEE_NOTE,
+  findApprovedAgentForHost,
   MAX_SEARCH_LIMIT,
   PAYMENT_METHODS,
   PLACE_TYPES,

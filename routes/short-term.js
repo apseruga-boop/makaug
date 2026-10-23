@@ -45,6 +45,7 @@ const {
   AMENITY_CATALOGUE,
   CANCELLATION_POLICIES,
   LISTING_FEE_UGX,
+  LISTING_FREE_DAYS,
   LISTING_TERM_MONTHS,
   PAYMENT_METHODS,
   PLACE_TYPES,
@@ -184,9 +185,12 @@ router.get('/meta', (_req, res) => {
       amount_ugx: LISTING_FEE_UGX,
       display: formatUgx(LISTING_FEE_UGX),
       term_months: LISTING_TERM_MONTHS,
+      period: 'month',
+      free_days: LISTING_FREE_DAYS,
+      agent_included: true,
       // Stated on the API as well as the page, because this is the single
       // fact that keeps makaug out of the transaction.
-      basis: 'Flat listing fee. makaug charges no commission on any stay and never handles guest money.'
+      basis: 'Ordinary listers pay UGX 20,000 a month from approval, with no free days. Short stays listed by an approved agent are included in the agent plan (UGX 50,000 a month). makaug charges no commission on any stay and never handles guest money.'
     }
   });
 });
@@ -523,7 +527,9 @@ router.post('/listings', intakeLimiter, async (req, res) => {
       listing: created,
       upload_token: uploadToken,
       photos_ready: photoUploadReady(),
-      next_step: `Your place is with our team for review. The listing fee is ${formatUgx(LISTING_FEE_UGX)} for ${LISTING_TERM_MONTHS} months, payable once the listing is approved. makaug takes no commission on any stay.`
+      next_step: created.listing_fee_included_in_agent_plan
+        ? 'Your place is with our team for review. Short stays are included in your agent plan (UGX 50,000 a month), so there is no separate short-stay fee and no free days. makaug takes no commission on any stay.'
+        : `Your place is with our team for review. The listing fee is ${formatUgx(LISTING_FEE_UGX)} a month, with no free days, payable once the listing is approved. makaug takes no commission on any stay.`
     });
   } catch (error) {
     return fail(res, error, 'Listing could not be saved');
@@ -1025,14 +1031,17 @@ router.post('/staff/listings/:id/payment', requireStaffAccess, async (req, res) 
       const updated = await client.query(
         `UPDATE st_listing
          SET listing_fee_status = $2,
+             listing_term_months = CASE WHEN $2 = 'paid' THEN $3 ELSE listing_term_months END,
+             listing_fee_ugx = CASE WHEN $2 = 'paid' THEN $4 ELSE listing_fee_ugx END,
              expires_at = CASE
-               WHEN $2 IN ('paid','waived')
-                 THEN COALESCE(listed_at, NOW()) + (listing_term_months || ' months')::interval
+               WHEN $2 = 'waived' THEN NULL
+               WHEN $2 = 'paid'
+                 THEN COALESCE(listed_at, NOW()) + ($3 || ' months')::interval
                ELSE expires_at
              END
          WHERE id = $1::uuid
          RETURNING id, listing_fee_status, expires_at`,
-        [req.params.id, listingFeeStatus]
+        [req.params.id, listingFeeStatus, LISTING_TERM_MONTHS, Number(req.body?.amount_ugx || LISTING_FEE_UGX)]
       );
       await client.query('COMMIT');
       if (!updated.rows.length) return res.status(404).json({ ok: false, error: 'Listing not found' });
@@ -1044,7 +1053,7 @@ router.post('/staff/listings/:id/payment', requireStaffAccess, async (req, res) 
         try {
           const revenue = require('../services/revenueService');
           const entry = await revenue.recordEntry(db, {
-            direction: 'in', kind: 'short_term_fee', method: ledgerMethod, amount: Number(req.body?.amount_ugx || fee.listing_fee_ugx || 50000),
+            direction: 'in', kind: 'short_term_fee', method: ledgerMethod, amount: Number(req.body?.amount_ugx || fee.listing_fee_ugx || LISTING_FEE_UGX),
             reference, payer_name: fee.host_name, payer_phone: fee.host_phone,
             note: String(req.body?.note || '').trim() || `Short stay fee recorded by ${req.staffAuth?.userId || 'staff'}`
           }, req.staffAuth?.userId || 'staff');

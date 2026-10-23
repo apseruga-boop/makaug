@@ -19,6 +19,7 @@ const logger = require('../config/logger');
 const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
 const { observeJob } = require('../utils/memoryLog');
 const revenue = require('./revenueService');
+const { LISTING_FEE_UGX, LISTING_TERM_MONTHS } = require('./shortTermService');
 const billingOps = require('./billingOpsService');
 const revolut = require('./revolutMerchantService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
@@ -154,9 +155,13 @@ async function createPayLink(db, input = {}, actor = 'admin') {
     )).rows[0];
     if (!st) throw revenue.httpError(404, 'Short-stay listing not found');
     if (['paid', 'waived'].includes(String(st.listing_fee_status))) throw revenue.httpError(409, `This listing's fee is already ${st.listing_fee_status}`);
+    if (Number(st.listing_fee_ugx) === 0) throw revenue.httpError(409, 'Short stays are included in the agent plan — no separate fee');
     stListingId = st.id;
-    amountUgx = amountUgx || Number(st.listing_fee_ugx || 50000);
-    description = description || `makaug short stay — ${Number(st.listing_term_months || 3)} months: ${st.title || st.reference}`.slice(0, 200);
+    // Current tariff, not a historical amount stored on an older row.
+    amountUgx = amountUgx || LISTING_FEE_UGX;
+    const months = LISTING_TERM_MONTHS;
+    const monthWord = months === 1 ? 'month' : 'months';
+    description = description || `makaug short stay — ${months} ${monthWord}: ${st.title || st.reference}`.slice(0, 200);
     payerName = payerName || st.host_name || null;
     payerPhone = payerPhone || digits(st.host_phone) || null;
   } else if (purpose === 'hosted_payment') {
@@ -184,6 +189,18 @@ async function createPayLink(db, input = {}, actor = 'admin') {
       [propertyId, agentId, amountUgx, stListingId]
     )).rows[0];
     if (existing) return { link: existing, url: payUrl(existing.code), reused: true };
+  }
+
+  if (purpose === 'short_term_fee' && stListingId) {
+    await db.query(
+      `UPDATE pay_links
+          SET status = 'cancelled', updated_at = NOW()
+        WHERE st_listing_id = $1::uuid
+          AND purpose = 'short_term_fee'
+          AND status = 'open'
+          AND amount_ugx <> $2`,
+      [stListingId, amountUgx]
+    );
   }
 
   const card = cardSettings(settings);
@@ -314,19 +331,26 @@ function cardPaymentFor(link, order) {
   };
 }
 
-/** A short-stay fee is paid: the listing's 3 months run from today, recorded on the listing too. */
+/** A short-stay fee is paid: one month at the current tariff runs from today, or is added to time still left. */
 async function markShortTermPaid(db, { stListingId, method, reference, amountUgx, actor }) {
   if (!stListingId) return null;
   const stMethod = { revolut_card: 'card', mtn_momo: 'mtn_mobile_money', airtel_money: 'airtel_money', bank_transfer: 'bank_transfer', absa_ugx: 'bank_transfer', absa_usd: 'bank_transfer', cash: 'cash' }[method] || 'other';
+  const months = LISTING_TERM_MONTHS;
   const updated = (await db.query(
     `UPDATE st_listing
         SET listing_fee_status = 'paid',
-            -- First payment: the paid months run from today. A renewal adds on to what is left.
-            expires_at = CASE WHEN listing_fee_status = 'paid' THEN GREATEST(COALESCE(expires_at, NOW()), NOW()) ELSE NOW() END
-                         + (listing_term_months || ' months')::interval
+            listing_fee_ugx = CASE WHEN listing_fee_status = 'paid' THEN listing_fee_ugx ELSE $2 END,
+            listing_term_months = CASE WHEN listing_fee_status = 'paid' THEN listing_term_months ELSE $3 END,
+            -- First payment: one month at the current tariff runs from today.
+            -- A listing that is already paid keeps the term it was sold under.
+            expires_at = CASE
+              WHEN listing_fee_status = 'paid'
+                THEN GREATEST(COALESCE(expires_at, NOW()), NOW()) + (listing_term_months || ' months')::interval
+              ELSE NOW() + ($3 || ' months')::interval
+            END
       WHERE id = $1::uuid
       RETURNING id, expires_at, listing_term_months`,
-    [stListingId]
+    [stListingId, LISTING_FEE_UGX, months]
   )).rows[0];
   if (!updated) return null;
   const existing = (await db.query('SELECT id FROM st_listing_payment WHERE listing_id = $1::uuid ORDER BY created_at DESC LIMIT 1', [stListingId])).rows[0];

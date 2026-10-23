@@ -225,7 +225,7 @@ const T = {
   en: {
     welcome: "🏠 Welcome to *makaug* - Uganda's property platform!\n\nWhat would you like to do?\n1️⃣ List my property (first 7 days free)\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nReply with a number",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
-    askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
+    askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property\n\nShort stays (by the night): ordinary listers pay UGX 20,000 a month, with no free days. Approved agents include short stays in the UGX 50,000 a month agent plan.',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
     askTitle: '✏️ Give your property a short title (e.g. "3-bedroom house in Ntinda Kampala"):',
     askDistrict: '📍 Which district is the property in? If there is more than one, list them all. (e.g. Kampala, Wakiso, Mukono, Jinja...)',
@@ -306,7 +306,7 @@ const T = {
   lg: {
     welcome: "🏠 Tukusuubiza ku *makaug* - eyitwa wangu ya property mu Uganda!\n\nOyagala kukola ki?\n1️⃣ Okwetayirira eby'ensi byange\n2️⃣ Okunoonyereza ensi\n3️⃣ Okunoonya musomesa\n\nSuula 1, 2 oba 3",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
-    askListingType: "🏠 Kyoyetaagadde okutereka kya ki?\n1️⃣ Enju/Ensi okutunda\n2️⃣ Enju okusasula\n3️⃣ Ttaka\n4️⃣ Eby'okulala by'abayizi\n5️⃣ Ensi ez'ebikolwa",
+    askListingType: "🏠 Kyoyetaagadde okutereka kya ki?\n1️⃣ Enju/Ensi okutunda\n2️⃣ Enju okusasula\n3️⃣ Ttaka\n4️⃣ Eby'okulala by'abayizi\n5️⃣ Ensi ez'ebikolwa\n\nShort stays (okusula okumpi): abatali ba agent basasula UGX 20,000 buli mwezi, tewali nnaku za bwereere. Ba agent abakkirizibwa bafuna short stays mu pulani ya UGX 50,000 buli mwezi.",
     askOwnership: "✅ Ggwe nnyini ensi ono oba agent?\n1️⃣ Nze nnyini\n2️⃣ Nze agent",
     askTitle: '✏️ Nyumba yoyo ejjiire etya? (e.g. "Enyumba esatu Ntinda Kampala"):',
     askDistrict: '📍 Ensi eno eri mu kitundu ki? (e.g. Kampala, Wakiso, Mukono...)',
@@ -374,7 +374,7 @@ const T = {
   },
   sw: {
     welcome: '🏠 Karibu *makaug* - Jukwaa la bure la mali Uganda!\n\nUnataka kufanya nini?\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta mali\n3️⃣ Pata wakala\n\nJibu 1, 2 au 3',
-    askListingType: '🏠 Unaorodhesha nini?\n1️⃣ Nyumba/Mali ya KUUZA\n2️⃣ Nyumba/Mali ya KUKODISHA\n3️⃣ Ardhi/Kiwanja\n4️⃣ Malazi ya wanafunzi\n5️⃣ Mali ya biashara',
+    askListingType: '🏠 Unaorodhesha nini?\n1️⃣ Nyumba/Mali ya KUUZA\n2️⃣ Nyumba/Mali ya KUKODISHA\n3️⃣ Ardhi/Kiwanja\n4️⃣ Malazi ya wanafunzi\n5️⃣ Mali ya biashara\n\nMalazi ya muda (kwa usiku): watoa orodha wa kawaida hulipa UGX 20,000 kwa mwezi, bila siku za bure. Mawakala walioidhinishwa wanajumuisha malazi ya muda katika mpango wa UGX 50,000 kwa mwezi.',
     askTitle: '✏️ Toa kichwa kifupi cha mali yako:',
     askDistrict: '📍 Wilaya ipi? (mf. Kampala, Wakiso, Mukono...)',
     askArea: '🗺️ Mtaa au eneo gani?',
@@ -482,7 +482,7 @@ Object.assign(T.sw, {
 });
 
 Object.assign(T.ac, {
-  askListingType: '🏠 Itye keto ngo?\n1️⃣ Ot/property me acata\n2️⃣ Ot/property me rent\n3️⃣ Ngom/plot\n4️⃣ Kabedo me students\n5️⃣ Property me business',
+  askListingType: '🏠 Itye keto ngo?\n1️⃣ Ot/property me acata\n2️⃣ Ot/property me rent\n3️⃣ Ngom/plot\n4️⃣ Kabedo me students\n5️⃣ Property me business\n\nShort stay (bedo me nino manok): jo ma pe agent culo UGX 20,000 dwe ki dwe, peke nino ma nono. Agent ma oyee keto short stay i plan me UGX 50,000 dwe ki dwe.',
   askOwnership: '✅ In aye won property man, onyo agent?\n1️⃣ An won-ne\n2️⃣ An agent',
   askTitle: '✏️ Coo nying property macek:',
   askDistrict: '📍 Property man tye i district mene?',
@@ -539,7 +539,7 @@ Object.assign(T.ac, {
 });
 
 Object.assign(T.ny, {
-  askListingType: '🏠 Niki eki orikuteeka?\n1️⃣ Enju/property kugurisha\n2️⃣ Enju/property kukodisa\n3️⃣ Itaka/plot\n4️⃣ Ebyokutuuramu byaba students\n5️⃣ Commercial property',
+  askListingType: '🏠 Niki eki orikuteeka?\n1️⃣ Enju/property kugurisha\n2️⃣ Enju/property kukodisa\n3️⃣ Itaka/plot\n4️⃣ Ebyokutuuramu byaba students\n5️⃣ Commercial property\n\nShort stays (okuraara ahake): abatari agent baherera UGX 20,000 buri kwezi, tihari ebiro bya busha. Agent eyikirizibwe ashyira short stays omu plan ya UGX 50,000 buri kwezi.',
   askOwnership: '✅ Niwe nyini property egi, nari ori agent?\n1️⃣ Ndi nyini\n2️⃣ Ndi agent',
   askTitle: '✏️ Ha property yaawe omutwe mugufi:',
   askDistrict: '📍 Property eri mu district ki?',
@@ -573,7 +573,7 @@ Object.assign(T.ny, {
 });
 
 Object.assign(T.rn, {
-  askListingType: '🏠 Uriko ushira ikiho?\n1️⃣ Inzu/property yo kugurisha\n2️⃣ Inzu/property yo gukodesha\n3️⃣ Ubutaka/plot\n4️⃣ Aho abanyeshuri baba\n5️⃣ Commercial property',
+  askListingType: '🏠 Uriko ushira ikiho?\n1️⃣ Inzu/property yo kugurisha\n2️⃣ Inzu/property yo gukodesha\n3️⃣ Ubutaka/plot\n4️⃣ Aho abanyeshuri baba\n5️⃣ Commercial property\n\nShort stays (kuguma igihe gito): abatari agent barishura UGX 20,000 buri kwezi, nta minsi y\'ubuntu. Agent yemejwe ashyira short stays mu plan ya UGX 50,000 buri kwezi.',
   askOwnership: '✅ Ni wewe nyiri property, canke uri agent?\n1️⃣ Ndi nyiri\n2️⃣ Ndi agent',
   askTitle: '✏️ Andika umutwe mugufi wa property:',
   askDistrict: '📍 Property iri muri district iyihe?',
@@ -607,7 +607,7 @@ Object.assign(T.rn, {
 });
 
 Object.assign(T.sm, {
-  askListingType: "🏠 Oteeka ki?\n1️⃣ Ennyumba/property okutunda\n2️⃣ Ennyumba/property okukodisa\n3️⃣ Ettaka/plot\n4️⃣ Obutuuze bw'abayizi\n5️⃣ Commercial property",
+  askListingType: "🏠 Oteeka ki?\n1️⃣ Ennyumba/property okutunda\n2️⃣ Ennyumba/property okukodisa\n3️⃣ Ettaka/plot\n4️⃣ Obutuuze bw'abayizi\n5️⃣ Commercial property\n\nShort stays (okusula okumpi): abatali agent basasula UGX 20,000 buli mwezi, tewali nnaku za bwereere. Agent eyakkirizibwa afuna short stays mu pulani ya UGX 50,000 buli mwezi.",
   askOwnership: '✅ Ggwe nyini property eno, oba agent?\n1️⃣ Nze nyini\n2️⃣ Nze agent',
   askTitle: '✏️ Wa property yo omutwe omumpi:',
   askDistrict: '📍 Property eri mu district ki?',
@@ -647,7 +647,7 @@ const WHATSAPP_LANGUAGE_MENU = IS_SOUTH_AFRICA
 T.am = Object.assign({}, T.en, {
   welcome: "🏠 ወደ *makaug* እንኳን በደህና መጡ - የኡጋንዳ ነፃ የንብረት መድረክ!\n\nምን ማድረግ ይፈልጋሉ?\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\n1፣ 2 ወይም 3 ብለው ይመልሱ",
   chooseLanguage: WHATSAPP_LANGUAGE_MENU,
-  askListingType: '🏠 ምን እየዘረዘሩ ነው?\n1️⃣ ለሽያጭ ቤት/ንብረት\n2️⃣ ለኪራይ ቤት/ንብረት\n3️⃣ መሬት/ፕሎት\n4️⃣ የተማሪ መኖሪያ\n5️⃣ የንግድ ንብረት',
+  askListingType: '🏠 ምን እየዘረዘሩ ነው?\n1️⃣ ለሽያጭ ቤት/ንብረት\n2️⃣ ለኪራይ ቤት/ንብረት\n3️⃣ መሬት/ፕሎት\n4️⃣ የተማሪ መኖሪያ\n5️⃣ የንግድ ንብረት\n\nአጭር ጊዜ ማረፊያ (በሌሊት)፦ ተራ አስተዋዋቂዎች በወር UGX 20,000 ይከፍላሉ፣ ነፃ ቀናት የሉም። የተፈቀዱ ወኪሎች አጭር ጊዜ ማረፊያዎችን በወር UGX 50,000 የወኪል ፓኬጅ ውስጥ ያካትታሉ።',
   askOwnership: '✅ የዚህ ንብረት ባለቤት ነዎት ወይስ በባለቤት ስም የሚዘረዝር ወኪል?\n1️⃣ ባለቤት ነኝ\n2️⃣ ወኪል ነኝ',
   askTitle: '✏️ ለንብረቱ አጭር ርዕስ ይስጡ፣ ለምሳሌ "3-bedroom house in Ntinda Kampala":',
   askDistrict: '📍 ንብረቱ በየትኛው ዲስትሪክት ነው? ለምሳሌ Kampala, Wakiso, Mukono',
@@ -727,7 +727,7 @@ T.am = Object.assign({}, T.en, {
 T.ar = Object.assign({}, T.en, {
   welcome: "🏠 مرحباً بك في *makaug* - منصة العقارات المجانية في أوغندا!\n\nماذا تريد أن تفعل؟\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n\nأرسل 1 أو 2 أو 3",
   chooseLanguage: WHATSAPP_LANGUAGE_MENU,
-  askListingType: '🏠 ماذا تريد أن تدرج؟\n1️⃣ بيت/عقار للبيع\n2️⃣ بيت/عقار للإيجار\n3️⃣ أرض/قطعة\n4️⃣ سكن طلاب\n5️⃣ عقار تجاري',
+  askListingType: '🏠 ماذا تريد أن تدرج؟\n1️⃣ بيت/عقار للبيع\n2️⃣ بيت/عقار للإيجار\n3️⃣ أرض/قطعة\n4️⃣ سكن طلاب\n5️⃣ عقار تجاري\n\nالإقامة القصيرة (بالليلة): المعلنون العاديون يدفعون UGX 20,000 شهرياً بلا أيام مجانية. الوكلاء المعتمدون تشمل إقاماتهم القصيرة في باقة الوكيل البالغة UGX 50,000 شهرياً.',
   askOwnership: '✅ هل أنت مالك هذا العقار أم وكيل يدرجه نيابة عن المالك؟\n1️⃣ أنا المالك\n2️⃣ أنا وكيل',
   askTitle: '✏️ أعط العقار عنواناً قصيراً، مثل "3-bedroom house in Ntinda Kampala":',
   askDistrict: '📍 في أي district يقع العقار؟ مثال: Kampala, Wakiso, Mukono',
