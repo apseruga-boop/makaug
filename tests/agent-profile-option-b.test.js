@@ -53,7 +53,7 @@ assert(surface.includes('getListingMapPoint') && surface.includes('OSM_TILE_URL'
 assert(!/google\.maps|ensureGoogleMapsApi/.test(surface), 'the profile map does not call Google');
 assert(profile.includes('Listing mix') && profile.includes('agent-profile-chip'), 'listing mix and area counts are on the page');
 assert(profile.includes('All types') && profile.includes('Price: low to high') && profile.includes('Price: high to low') && profile.includes('Newest'), 'listings can be filtered and sorted');
-assert(profile.includes('class="agent-profile-contact"') && profile.includes('Never pay before viewing'), 'the contact column has the safety line');
+assert(profile.includes('class="agent-profile-contact"') && profile.includes("Never pay before you've seen the property and its documents."), 'the contact column has the safety line');
 assert(profile.includes('name="website"') && profile.includes('submitAgentProfileRequest'), 'the request form posts through the honeypot field');
 assert(surface.includes('source: "agent_profile"'), 'the browser tags the request as an agent profile enquiry');
 assert(profile.includes('agent-profile-mobile-bar'), 'phones get a sticky WhatsApp, Call and Request bar');
