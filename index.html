@@ -2819,6 +2819,31 @@
       font: inherit;
       font-size: 13px;
     }
+    .agent-booking-step { display: grid; gap: 6px; }
+    .agent-profile-form .agent-booking-step + .agent-booking-step,
+    .agent-profile-form .agent-booking-who { margin-top: 12px; }
+    .agent-booking-step-label { margin: 0; font-size: 13px; font-weight: 800; color: #14532d; line-height: 1.35; }
+    .agent-profile-form select.agent-booking-place,
+    .property-booking-panel select.agent-booking-place {
+      inline-size: 100%;
+      width: 100%;
+      min-block-size: 42px;
+      border: 1px solid #16a34a;
+      border-radius: 10px;
+      background: #fff;
+      color: #14532d;
+      padding-block: 8px;
+      padding-inline: 10px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .agent-booking-place-line { display: flex; align-items: center; gap: 8px; min-block-size: 36px; }
+    .agent-booking-place-line[hidden] { display: none; }
+    .agent-booking-place-line img { inline-size: 48px; block-size: 36px; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
+    .agent-booking-place-line span { display: grid; min-inline-size: 0; }
+    .agent-booking-place-line strong,
+    .agent-booking-place-line em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .agent-booking-place-line em { font-size: 12px; color: #166534; font-weight: 700; }
     .property-booking-panel .agent-booking-who { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
     .property-booking-panel .agent-profile-btn.is-primary {
       background: #15803d;
