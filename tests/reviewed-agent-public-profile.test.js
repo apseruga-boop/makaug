@@ -25,7 +25,7 @@ test('a staff-reviewed private-ID profile can go public without publishing pendi
 test('the protected admin approval requires three explicit checks and does not update properties', () => {
   const admin = read('routes/admin.js');
   const start = admin.indexOf("router.post('/agents/:id/public-profile-approval'");
-  const end = admin.indexOf("router.patch('/agents/:id/featured'", start);
+  const end = admin.indexOf('\nrouter.', start + 10);
   assert.ok(start > admin.indexOf('router.use(requireAdminApiKey)'));
   assert.ok(end > start);
   const route = admin.slice(start, end);

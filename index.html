@@ -15,6 +15,9 @@
   <meta property="og:description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
   <meta property="og:url" content="https://makaug.com/">
   <meta property="og:image" content="https://makaug.com/assets/og-cover.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="makaug — houses, apartments, land, rentals and commercial property in Uganda">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@makauganda">
   <meta name="twitter:creator" content="@makauganda">
@@ -29,7 +32,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1" defer></script>
-  <script src="/assets/makaug-site-i18n.js?v=20261020-site-i18n-v10" defer></script>
+  <script src="/assets/makaug-site-i18n.js?v=20261022-site-i18n-v13" defer></script>
   <meta name="theme-color" content="#15803d">
   <script>
     (function () {
@@ -2559,6 +2562,122 @@
       white-space: nowrap;
       font-size: 12px;
       line-height: 1;
+    }
+    .agent-profile { font-family: "Plus Jakarta Sans", system-ui, sans-serif; color: #14532d; }
+    .agent-profile-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+    .agent-profile-card, .agent-profile-identity, .agent-profile-section {
+      background: #fff;
+      border: 1px solid #dcfce7;
+      border-radius: 20px;
+      padding-block: 16px;
+      padding-inline: 18px;
+    }
+    .agent-profile-identity { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }
+    .agent-profile-avatar {
+      inline-size: 84px;
+      block-size: 84px;
+      border-radius: 999px;
+      object-fit: cover;
+      flex: 0 0 auto;
+      background: #f0fdf4;
+      border: 3px solid #fff;
+      box-shadow: 0 0 0 1px #bbf7d0;
+    }
+    .agent-profile-identity-main { flex: 1 1 220px; min-inline-size: 0; }
+    .agent-profile-name { margin: 0; font-size: 1.7rem; line-height: 1.15; font-weight: 800; color: #14532d; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .agent-profile-company { margin-block: 4px 0; margin-inline: 0; color: #3f6212; }
+    .agent-profile-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-block-start: 8px; color: #3f6212; font-size: 0.92rem; }
+    .agent-profile-meta span { display: inline-flex; align-items: center; gap: 6px; }
+    .agent-profile-actions, .agent-profile-subactions { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 14px; }
+    .agent-profile-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-block-size: 40px;
+      padding-block: 8px;
+      padding-inline: 14px;
+      border-radius: 999px;
+      border: 1px solid #15803d;
+      background: #fff;
+      color: #14532d;
+      font-weight: 700;
+      font-size: 14px;
+      text-decoration: none;
+    }
+    .agent-profile-btn.is-wa, .agent-profile-btn.is-primary { background: #15803d; color: #fff; }
+    .agent-profile-btn.is-disabled { opacity: 0.45; pointer-events: none; }
+    .agent-profile-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-block-start: 14px; }
+    .agent-profile-stat { background: #f0fdf4; border: 1px solid #dcfce7; border-radius: 16px; padding-block: 10px; padding-inline: 12px; }
+    .agent-profile-stat strong { display: block; font-size: 1.05rem; color: #14532d; }
+    .agent-profile-stat span { display: block; margin-block-start: 2px; font-size: 12px; color: #3f6212; }
+    .agent-profile-section { margin-block-start: 14px; }
+    .agent-profile-section h2, .agent-profile-card h2 { margin: 0; font-size: 1.15rem; font-weight: 800; color: #14532d; }
+    .agent-profile-map { block-size: 280px; border-radius: 16px; overflow: hidden; margin-block-start: 12px; background: #f0fdf4; direction: ltr; }
+    .agent-profile-map-note { margin-block: 8px 0; margin-inline: 0; font-size: 12px; color: #3f6212; }
+    .agent-profile-mix { display: grid; gap: 8px; margin-block-start: 14px; }
+    .agent-profile-mix-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .agent-profile-mix-row span:first-child { flex: 0 0 7.5rem; }
+    .agent-profile-mix-track { flex: 1 1 auto; block-size: 8px; border-radius: 999px; background: #ecfdf3; overflow: hidden; }
+    .agent-profile-mix-fill { display: block; block-size: 100%; background: #15803d; border-radius: 999px; }
+    .agent-profile-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 12px; }
+    .agent-profile-chip { border: 1px solid #bbf7d0; background: #f0fdf4; color: #14532d; border-radius: 999px; padding-block: 6px; padding-inline: 10px; font-size: 12px; font-weight: 700; }
+    .agent-profile-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 12px; }
+    .agent-profile-toolbar button, .agent-profile-toolbar select {
+      min-block-size: 36px;
+      border-radius: 999px;
+      border: 1px solid #bbf7d0;
+      background: #fff;
+      color: #14532d;
+      padding-block: 6px;
+      padding-inline: 12px;
+      font-weight: 700;
+      text-align: start;
+    }
+    .agent-profile-toolbar button.is-active { background: #15803d; color: #fff; border-color: #15803d; }
+    .agent-profile-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .agent-profile-empty { border: 1px solid #e5e7eb; background: #f9fafb; border-radius: 16px; padding: 20px; text-align: center; color: #4b5563; }
+    .agent-profile-phone { margin-block: 8px; font-weight: 800; }
+    .agent-profile-phone a { color: #14532d; }
+    .agent-profile-form { display: grid; gap: 8px; margin-block-start: 12px; }
+    .agent-profile-form label { display: grid; gap: 4px; font-size: 13px; font-weight: 700; }
+    .agent-profile-form input, .agent-profile-form textarea {
+      inline-size: 100%;
+      border: 1px solid #d1fae5;
+      border-radius: 12px;
+      padding-block: 10px;
+      padding-inline: 12px;
+      text-align: start;
+      font: inherit;
+    }
+    .agent-profile-safety { margin-block-start: 12px; background: #f0fdf4; border-radius: 12px; padding-block: 8px; padding-inline: 10px; font-size: 12px; color: #14532d; }
+    .agent-profile-hp { position: absolute; inset-inline-start: -9999px; inline-size: 1px; block-size: 1px; opacity: 0; }
+    .agent-profile-mobile-bar { display: none; }
+    .agent-profile-pin { background: transparent; border: 0; }
+    .agent-profile-pin span { display: block; inline-size: 14px; block-size: 14px; border-radius: 999px; background: #15803d; border: 2px solid #14532d; box-shadow: 0 0 0 2px #fff; }
+    .agent-profile-pin span.is-approx { background: #86efac; }
+    .agent-profile-popup { background: none; border: 0; color: #14532d; font-weight: 800; cursor: pointer; text-align: start; }
+    @media (min-width: 768px) {
+      .agent-profile-layout { grid-template-columns: minmax(0, 1fr) 300px; }
+      .agent-profile-contact { position: sticky; inset-block-start: 16px; }
+      .agent-profile-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .agent-profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 767px) {
+      .agent-profile { padding-block-end: 84px; }
+      .agent-profile-mobile-bar {
+        display: flex;
+        position: fixed;
+        z-index: 40;
+        inset-inline: 0;
+        inset-block-end: 0;
+        gap: 8px;
+        padding-block: 10px calc(10px + env(safe-area-inset-bottom));
+        padding-inline: 12px;
+        background: #fff;
+        border-block-start: 1px solid #dcfce7;
+      }
+      .agent-profile-mobile-bar .agent-profile-btn { flex: 1 1 0; }
     }
     .toast {
       position: fixed;
@@ -5880,7 +5999,7 @@
   </div>
 
   <div id="page-broker-profile" class="page">
-    <div class="max-w-5xl mx-auto px-4 py-8" id="broker-profile-content"></div>
+    <div class="max-w-6xl mx-auto px-4 py-8" id="broker-profile-content"></div>
   </div>
 
   <div id="page-detail" class="page">

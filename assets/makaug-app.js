@@ -297,6 +297,7 @@ function mapRemoteAgentForUi(agent = {}) {
     contact_phone_verified_at: agent.contact_phone_verified_at || "",
     agent_application_channel: agent.agent_application_channel || "",
     approved_at: agent.approved_at || "",
+    created_at: agent.created_at || "",
     greeting_name: agent.greeting_name || "",
     removed_at: agent.removed_at || "",
     removed_reason: agent.removed_reason || "",
@@ -47545,7 +47546,7 @@ function ensureBrokerProfilePageShell() {
     page.id = "page-broker-profile";
     page.className = "page";
   }
-  page.innerHTML = `<div class="max-w-5xl mx-auto px-4 py-8" id="broker-profile-content"></div>`;
+  page.innerHTML = `<div class="max-w-6xl mx-auto px-4 py-8" id="broker-profile-content"></div>`;
   if (!page.parentElement) {
     const footer = document.querySelector("footer");
     document.body.insertBefore(page, footer || document.body.lastElementChild);
@@ -61358,6 +61359,257 @@ async function openDetail(id, options = {}) {
   return true;
 }
 
+let agentProfileListingCache = [];
+let agentProfileListingType = "all";
+let agentProfileListingSort = "newest";
+let agentProfileLeafletMap = null;
+
+function agentProfileFirstName(broker = {}) {
+  const name = String(broker?.name || "").trim();
+  return name.split(/\s+/).filter(Boolean)[0] || "agent";
+}
+
+function agentProfileExperienceLabel(broker = {}) {
+  const years = Number(broker?.experience_years || 0);
+  if (Number.isFinite(years) && years > 0) {
+    return String(broker.experience || `${years} year${years === 1 ? "" : "s"}`).trim();
+  }
+  const text = String(broker?.experience || "").trim();
+  if (!text || /^experienced broker$/i.test(text)) return "";
+  return text;
+}
+
+function agentProfileJoinedText(broker = {}) {
+  const formatted = formatListingDate(broker?.created_at);
+  return formatted ? `Joined ${formatted}` : "";
+}
+
+function agentProfileTypeKey(listing = {}) {
+  const key = normalizeType(listing?.type || listing?.listing_type || "");
+  if (key === "short_term" || key === "short-term" || key === "short stay") return "short_term";
+  return key || "other";
+}
+
+function agentProfileTypeLabel(type) {
+  return {
+    sale: "For sale",
+    rent: "For rent",
+    student: "Student",
+    commercial: "Commercial",
+    land: "Land",
+    short_term: "Short stay",
+    other: "Other"
+  }[type] || "Other";
+}
+
+function filterAgentProfileListings(listings, type) {
+  const rows = Array.isArray(listings) ? listings : [];
+  if (!type || type === "all") return rows.slice();
+  return rows.filter((listing) => agentProfileTypeKey(listing) === type);
+}
+
+function sortAgentProfileListings(listings, sort) {
+  const rows = (Array.isArray(listings) ? listings : []).slice();
+  if (sort === "price-asc") {
+    rows.sort((a, b) => (Number(a?.price) > 0 ? Number(a.price) : Infinity) - (Number(b?.price) > 0 ? Number(b.price) : Infinity));
+  } else if (sort === "price-desc") {
+    rows.sort((a, b) => (Number(b?.price) || 0) - (Number(a?.price) || 0));
+  } else {
+    rows.sort((a, b) => (Date.parse(b?.created_at || b?.published_at || 0) || 0) - (Date.parse(a?.created_at || a?.published_at || 0) || 0));
+  }
+  return rows;
+}
+
+function agentProfileAreaCounts(listings, broker = {}) {
+  const counts = new Map();
+  (Array.isArray(listings) ? listings : []).forEach((listing) => {
+    const name = String(listing?.area || listing?.district || "").trim();
+    if (!name) return;
+    counts.set(name, (counts.get(name) || 0) + 1);
+  });
+  if (!counts.size && Array.isArray(broker?.public_summary?.areas)) {
+    broker.public_summary.areas.forEach((area) => {
+      const name = String(area?.name || "").trim();
+      if (name) counts.set(name, Number(area.listings) || 0);
+    });
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+function agentProfilePriceLabel(listings) {
+  const prices = (Array.isArray(listings) ? listings : []).map((item) => Number(item?.price)).filter((value) => Number.isFinite(value) && value > 0);
+  if (!prices.length) return "Price on request";
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  if (min === max) return fmtP(min);
+  return `${fmtP(min)} – ${fmtP(max)}`;
+}
+
+function agentProfileContactButtons(broker, { mobile = false } = {}) {
+  const name = adminEscape(broker?.name || "agent");
+  const phone = brokerDisplayPhone(broker);
+  const tel = String(phone || "").replace(/\s+/g, "");
+  const whatsapp = String(broker?.whatsapp || "").replace(/\D/g, "");
+  const idArg = adminListingIdArg(broker?.id);
+  const call = tel
+    ? `<a class="agent-profile-btn" href="tel:${adminAttr(tel)}" aria-label="Call ${name}"><i class="fas fa-phone" aria-hidden="true"></i><span>Call</span></a>`
+    : `<span class="agent-profile-btn is-disabled" aria-label="Phone unavailable"><i class="fas fa-phone" aria-hidden="true"></i><span>Call</span></span>`;
+  const wa = whatsapp
+    ? `<a class="agent-profile-btn is-wa" href="${adminAttr(buildWhatsAppUrl(whatsapp, buildBrokerContactWhatsappMessage(broker)))}" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp ${name}"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span></a>`
+    : `<span class="agent-profile-btn is-wa is-disabled" aria-label="WhatsApp unavailable"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span></span>`;
+  const share = `<button type="button" class="agent-profile-btn" onclick="shareBrokerBusinessCard(${idArg}, 'native')" aria-label="Share profile"><i class="fas fa-share-nodes" aria-hidden="true"></i><span>Share</span></button>`;
+  const request = `<button type="button" class="agent-profile-btn is-primary" onclick="focusAgentProfileRequest()"><span>Request</span></button>`;
+  return mobile ? `${wa}${call}${request}` : `${wa}${call}${share}`;
+}
+
+function renderAgentProfileListingGrid() {
+  const el = document.getElementById("agent-profile-listings-grid");
+  if (!el) return;
+  const filtered = sortAgentProfileListings(
+    filterAgentProfileListings(agentProfileListingCache, agentProfileListingType),
+    agentProfileListingSort
+  );
+  el.innerHTML = filtered.length
+    ? `<div class="agent-profile-grid">${filtered.map((listing) => propCard(listing)).join("")}</div>`
+    : `<div class="agent-profile-empty">No active listings yet.</div>`;
+}
+
+function setAgentProfileListingType(type) {
+  agentProfileListingType = type || "all";
+  document.querySelectorAll("[data-agent-profile-type]").forEach((button) => {
+    button.classList.toggle("is-active", button.getAttribute("data-agent-profile-type") === agentProfileListingType);
+  });
+  renderAgentProfileListingGrid();
+}
+
+function setAgentProfileListingSort(sort) {
+  agentProfileListingSort = sort || "newest";
+  renderAgentProfileListingGrid();
+}
+
+function focusAgentProfileRequest() {
+  const form = document.getElementById("agent-profile-request");
+  if (form) form.scrollIntoView({ behavior: "smooth", block: "center" });
+  const name = document.getElementById("agent-profile-name");
+  if (name) name.focus();
+}
+
+async function submitAgentProfileRequest(id) {
+  const name = (document.getElementById("agent-profile-name")?.value || "").trim();
+  const phone = normalizePhoneInput(document.getElementById("agent-profile-phone")?.value || "");
+  const message = (document.getElementById("agent-profile-message")?.value || "").trim();
+  if (!name || !phone) {
+    toast("Add your name and phone to send a request.");
+    return;
+  }
+  const button = document.getElementById("agent-profile-submit");
+  if (button?.disabled) return;
+  if (button) button.disabled = true;
+  try {
+    await apiRequest(`/api/agents/${encodeURIComponent(id)}/enquiries`, {
+      method: "POST",
+      skipAuth: true,
+      body: {
+        contact_name: name,
+        contact_phone: phone,
+        message,
+        channel: "web",
+        visitor_id: typeof getAnalyticsClientId === "function" ? getAnalyticsClientId() : "",
+        website: document.getElementById("agent-profile-website")?.value || "",
+        source: "agent_profile"
+      }
+    });
+    const messageEl = document.getElementById("agent-profile-message");
+    if (messageEl) messageEl.value = "";
+    toast("Request sent. The agent will follow up.");
+  } catch (error) {
+    toast(error?.message || "Could not send the request.");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function openAgentProfileReport(id) {
+  const broker = findBrokerByIdIncludingLoadedProfile(id) || { id };
+  const reference = [
+    broker.makaug_agent_number ? `Agent number: ${broker.makaug_agent_number}` : "",
+    broker.name ? `Agent: ${broker.name}` : "",
+    typeof window !== "undefined" ? window.location.href : getBrokerProfilePath(broker)
+  ].filter(Boolean).join("\n");
+  const modal = document.getElementById("report-modal");
+  if (!modal) {
+    navigatePublicRoute(`/report-fraud?source=agent_profile&listing=${encodeURIComponent(broker.makaug_agent_number || broker.name || id || "")}`, null, { source: "agent_profile" });
+    return;
+  }
+  modal.dataset.requestType = "report";
+  modal.dataset.requestSource = "agent_profile";
+  modal.dataset.propertyId = "";
+  const referenceEl = document.getElementById("report-reference");
+  const detailsEl = document.getElementById("report-details");
+  if (referenceEl) referenceEl.value = reference;
+  ensureReportReasonOption("Suspected fraud");
+  if (detailsEl) {
+    detailsEl.value = "";
+    detailsEl.dataset.defaultDetails = reference;
+  }
+  openModal("report-modal");
+}
+
+async function initAgentProfileMap(listings) {
+  const el = document.getElementById("agent-profile-map");
+  if (!el) return;
+  const points = (Array.isArray(listings) ? listings : []).map((listing) => {
+    const point = getListingMapPoint(listing);
+    if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return null;
+    return { listing, lat: point.lat, lng: point.lng, exact: point.exact === true };
+  }).filter(Boolean);
+  if (!(await ensureLeafletApi()) || !document.getElementById("agent-profile-map")) return;
+  if (agentProfileLeafletMap?.remove) {
+    try { agentProfileLeafletMap.remove(); } catch (error) {}
+  }
+  agentProfileLeafletMap = null;
+  if (el._leaflet_id) {
+    try { el._leaflet_id = null; } catch (error) {}
+  }
+  el.innerHTML = "";
+  if (!window.L) {
+    el.textContent = "Map unavailable";
+    return;
+  }
+  const map = L.map(el, { scrollWheelZoom: false }).setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], 11);
+  L.tileLayer(OSM_TILE_URL, {
+    attribution: OSM_TILE_ATTRIBUTION,
+    referrerPolicy: OSM_REFERRER_POLICY,
+    maxZoom: 18
+  }).addTo(map);
+  const seen = new Map();
+  const bounds = [];
+  points.forEach((item) => {
+    const key = `${item.lat.toFixed(4)},${item.lng.toFixed(4)}`;
+    const n = seen.get(key) || 0;
+    seen.set(key, n + 1);
+    const angle = n * 0.9;
+    const lat = item.lat + (n ? Math.cos(angle) * 0.004 * n : 0);
+    const lng = item.lng + (n ? Math.sin(angle) * 0.004 * n : 0);
+    const title = item.listing?.title || "Listing";
+    const marker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: "agent-profile-pin",
+        html: `<span class="${item.exact ? "is-exact" : "is-approx"}"></span>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+      })
+    }).addTo(map);
+    const note = item.exact ? "" : `<div>Approximate area</div>`;
+    marker.bindPopup(`<button type="button" class="agent-profile-popup" onclick="openDetail(${adminListingIdArg(item.listing?.id)})">${adminEscape(title)}</button>${note}`);
+    bounds.push([lat, lng]);
+  });
+  if (bounds.length === 1) map.setView(bounds[0], 13);
+  else if (bounds.length > 1) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
+  agentProfileLeafletMap = map;
+  setTimeout(() => map.invalidateSize(), 150);
+}
+
 async function openBrokerProfile(id) {
   const content = ensureBrokerProfilePageShell();
   if (!content) {
@@ -61401,71 +61653,107 @@ async function openBrokerProfile(id) {
   const list = remoteListings.length ? remoteListings : getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
   const offPlanProjects = Array.isArray(b.remote_off_plan_projects) ? b.remote_off_plan_projects : [];
   const photoSrc = publicImageSrc(b.photo || b.profile_photo_url, `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`);
-  const publicLicence = isInternalAgentReference(b.licence) ? "" : String(b.licence || "").trim();
   const totalVideoTours = list.reduce((sum, property) => sum + propertyVideoUrls(property).length, 0);
+  const firstName = agentProfileFirstName(b);
+  const experienceLabel = agentProfileExperienceLabel(b);
+  const joinedText = agentProfileJoinedText(b);
+  const agentNumber = String(b.makaug_agent_number || "").trim();
+  const districts = (Array.isArray(b.service_districts) && b.service_districts.length ? b.service_districts : String(b.area || "").split("•").map((part) => part.trim()).filter(Boolean));
+  const areaCounts = agentProfileAreaCounts(list, b);
+  const typeCounts = new Map();
+  list.forEach((listing) => {
+    const key = agentProfileTypeKey(listing);
+    typeCounts.set(key, (typeCounts.get(key) || 0) + 1);
+  });
+  const typeMax = Math.max(1, ...typeCounts.values());
+  const phoneText = brokerDisplayPhone(b);
+  const idArg = adminListingIdArg(b.id);
+  agentProfileListingCache = list;
+  agentProfileListingType = "all";
+  agentProfileListingSort = "newest";
+  const typeButtons = [`<button type="button" class="is-active" data-agent-profile-type="all" onclick="setAgentProfileListingType('all')">All types</button>`]
+    .concat([...typeCounts.keys()].map((key) => `<button type="button" data-agent-profile-type="${adminAttr(key)}" onclick="setAgentProfileListingType('${adminAttr(key)}')">${adminEscape(agentProfileTypeLabel(key))}</button>`));
   content.innerHTML = `
     <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
-
-    <div class="bg-white border border-green-100 rounded-3xl mb-6 shadow-sm overflow-hidden">
-      <div class="h-28 md:h-36 bg-gradient-to-r from-green-900 via-green-700 to-emerald-500" aria-hidden="true"></div>
-      <div class="px-5 md:px-8 pb-7">
-        <div class="-mt-16 md:-mt-20 flex flex-col items-center text-center">
-          <div class="aspect-square w-36 h-36 md:w-44 md:h-44 rounded-full border-[5px] border-white shadow-md overflow-hidden bg-green-50 flex items-center justify-center shrink-0">
-            <img src="${adminAttr(photoSrc)}" alt="${adminAttr(b.name)}" class="aspect-square w-full h-full rounded-full object-cover object-center" onerror="this.remove(); this.parentElement.innerHTML='<div class=\\'text-5xl\\'>${adminAttr(b.emoji || "👔")}</div>';">
+    <div class="agent-profile">
+      <div class="agent-profile-layout">
+        <div class="agent-profile-main">
+          <section class="agent-profile-identity" aria-label="Agent identity">
+            <img class="agent-profile-avatar aspect-square rounded-full object-cover object-center" src="${adminAttr(photoSrc)}" alt="${adminAttr(b.name)}" width="84" height="84" onerror="this.remove();">
+            <div class="agent-profile-identity-main">
+              <h1 class="broker-profile-name agent-profile-name">${adminEscape(b.name)}${verifiedAgentBadgeHtml(b, 22)}</h1>
+              ${brokerCompanyLineHtml(b, "agent-profile-company")}
+              <div class="agent-profile-meta">
+                ${agentNumber ? `<span><i class="fas fa-id-card" aria-hidden="true"></i><span>Agent number</span> <strong>${adminEscape(agentNumber)}</strong></span>` : ""}
+                ${districts.length ? `<span><i class="fas fa-location-dot" aria-hidden="true"></i>${adminEscape(districts.join(", "))}</span>` : ""}
+                ${joinedText ? `<span><i class="fas fa-calendar" aria-hidden="true"></i>${adminEscape(joinedText)}</span>` : ""}
+                ${experienceLabel ? `<span><i class="fas fa-briefcase" aria-hidden="true"></i>${adminEscape(experienceLabel)}</span>` : ""}
+              </div>
+              ${agentShowsVerifiedBadge(b) ? "" : (renderBrokerRegistrationBadge(b) ? `<div class="mt-3">${renderBrokerRegistrationBadge(b)}</div>` : "")}
+              <div class="agent-profile-actions">${agentProfileContactButtons(b)}</div>
+            </div>
+          </section>
+          <div class="agent-profile-stats" aria-label="Key figures">
+            <div class="agent-profile-stat"><strong>${list.length}</strong><span>Live listings</span></div>
+            <div class="agent-profile-stat"><strong>${adminEscape(agentProfilePriceLabel(list))}</strong><span>Price range</span></div>
+            <div class="agent-profile-stat"><strong>${totalVideoTours}</strong><span>Video tours</span></div>
+            <div class="agent-profile-stat"><strong>${areaCounts.length}</strong><span>Areas covered</span></div>
+            <div class="agent-profile-stat"><strong>${agentShowsVerifiedBadge(b) ? "Verified" : "Unverified"}</strong><span>Verified status</span></div>
           </div>
-          <h1 class="broker-profile-name mt-4 text-3xl md:text-4xl font-black text-gray-900 leading-tight">${adminEscape(b.name)}${verifiedAgentBadgeHtml(b, 22)}</h1>
-          ${brokerCompanyLineHtml(b, "text-lg text-gray-600 mt-1 text-center")}
-          <div class="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-gray-600">
-              <span class="inline-flex items-center gap-1.5"><i class="fas fa-location-dot text-green-600" aria-hidden="true"></i>${adminEscape(b.area)}</span>
-              <span class="inline-flex items-center gap-1.5"><i class="fas fa-briefcase text-green-600" aria-hidden="true"></i>${adminEscape(b.experience || "Experienced Broker")}</span>
-              ${publicLicence ? `<span class="inline-flex items-center gap-1.5"><i class="fas fa-id-card text-green-600" aria-hidden="true"></i>${adminEscape(publicLicence)}</span>` : ""}
-          </div>
-          ${agentShowsVerifiedBadge(b) ? "" : (renderBrokerRegistrationBadge(b) ? `<div class="mt-3">${renderBrokerRegistrationBadge(b)}</div>` : "")}
-          <div class="mt-4">${brokerIconActionsHtml(b, { large: true, profile: true })}</div>
-          ${brokerDisplayPhone(b) ? `<a href="tel:${adminAttr(brokerDisplayPhone(b).replace(/\s+/g, ""))}" class="mt-3 inline-flex items-center gap-2 rounded-full bg-green-50 px-4 py-2 text-sm font-bold text-green-800 hover:bg-green-100"><i class="fas fa-phone" aria-hidden="true"></i><span>${adminEscape(brokerDisplayPhone(b))}</span></a>` : ""}
-        </div>
-
-        <div class="grid lg:grid-cols-[minmax(0,1fr),280px] gap-7 mt-7 border-t border-gray-100 pt-6">
-          <div>
-            <section aria-labelledby="broker-about-heading">
-              <h2 id="broker-about-heading" class="text-lg font-bold text-gray-900">About</h2>
-              ${brokerAboutParagraphs(b).map((text) => `<p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(text)}</p>`).join("")}
-            </section>
-            ${brokerAreasCoveredHtml(b)}
-
+          <section class="agent-profile-section" aria-labelledby="broker-about-heading">
+            <h2 id="broker-about-heading">About</h2>
+            ${brokerAboutParagraphs(b).map((text) => `<p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(text)}</p>`).join("")}
             ${(b.specialties || []).length ? `<div class="mt-5"><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Specialities</div><div class="flex flex-wrap gap-2">${(b.specialties || []).map((s) => `<span class="bg-gray-100 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(s)}</span>`).join("")}</div></div>` : ""}
             ${(b.languages || []).length ? `<div class="mt-4"><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Languages</div><div class="flex flex-wrap gap-2">${(b.languages || []).map((l) => `<span class="bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(l)}</span>`).join("")}</div></div>` : ""}
             ${renderBrokerSocialLinks(b)}
-          </div>
-
-          <aside class="rounded-2xl border border-gray-100 bg-gray-50 p-4 h-fit" aria-label="Broker profile overview">
-            <h2 class="font-bold text-gray-900">Profile overview</h2>
-            <div class="mt-3 grid grid-cols-2 gap-3">
-              <div class="rounded-xl bg-white border border-gray-100 p-3 text-center">
-                <div class="text-2xl font-black text-gray-900">${Math.max(list.length, Number(b.public_summary?.listings_counted) || 0)}</div>
-                <div class="text-xs text-gray-500">Active Listings</div>
-              </div>
-              <div class="rounded-xl bg-white border border-gray-100 p-3 text-center">
-                <div class="text-2xl font-black text-gray-900">${brokerMetric(getBrokerProfileViewCount(b.id))}</div>
-                <div class="text-xs text-gray-500">Profile Views</div>
-              </div>
+          </section>
+          <section class="agent-profile-section" aria-labelledby="agent-profile-where">
+            <h2 id="agent-profile-where">Where ${adminEscape(firstName)} works</h2>
+            <div id="agent-profile-map" class="agent-profile-map" role="img" aria-label="Where ${adminAttr(firstName)} works"></div>
+            <p class="agent-profile-map-note">Pins without a GPS point use the area or district centre.</p>
+            ${typeCounts.size ? `<div class="agent-profile-mix" aria-label="Listing mix"><div class="text-xs font-bold uppercase tracking-wide text-gray-500">Listing mix</div>${[...typeCounts.entries()].map(([key, count]) => `<div class="agent-profile-mix-row"><span>${adminEscape(agentProfileTypeLabel(key))}</span><span class="agent-profile-mix-track"><span class="agent-profile-mix-fill" style="inline-size:${Math.round((count / typeMax) * 100)}%"></span></span><span>${count}</span></div>`).join("")}</div>` : ""}
+            ${areaCounts.length ? `<div class="agent-profile-chips">${areaCounts.map(([name, count]) => `<span class="agent-profile-chip">${adminEscape(name)} <span>(${count})</span></span>`).join("")}</div>` : ""}
+          </section>
+          <section class="agent-profile-section" aria-labelledby="agent-profile-listings-heading">
+            <h2 id="agent-profile-listings-heading">Listings</h2>
+            <div class="agent-profile-toolbar">
+              ${typeButtons.join("")}
+              <label>Sort
+                <select id="agent-profile-sort" onchange="setAgentProfileListingSort(this.value)">
+                  <option value="newest">Newest</option>
+                  <option value="price-asc">Price: low to high</option>
+                  <option value="price-desc">Price: high to low</option>
+                </select>
+              </label>
             </div>
-            ${totalVideoTours ? `<div class="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800"><i class="fas fa-video mr-1" aria-hidden="true"></i>${totalVideoTours} property video tour${totalVideoTours === 1 ? "" : "s"}</div>` : ""}
-            <p class="mt-4 text-xs leading-relaxed text-gray-500">Use the icons above to call, WhatsApp, share this broker card, or open the profile link.</p>
-          </aside>
+            <div id="agent-profile-listings-grid"></div>
+          </section>
+          ${brokerOffPlanProjectsHtml(offPlanProjects)}
         </div>
+        <aside class="agent-profile-contact">
+          <div class="agent-profile-card" id="agent-profile-request">
+            <h2>Contact ${adminEscape(firstName)}</h2>
+            <div class="agent-profile-actions">${agentProfileContactButtons(b)}</div>
+            ${phoneText ? `<p class="agent-profile-phone"><a href="tel:${adminAttr(String(phoneText).replace(/\s+/g, ""))}">${adminEscape(phoneText)}</a></p>` : ""}
+            <form class="agent-profile-form" onsubmit="event.preventDefault(); submitAgentProfileRequest(${idArg});">
+              <input id="agent-profile-website" name="website" class="agent-profile-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" value="">
+              <label>Your name<input id="agent-profile-name" name="name" type="text" autocomplete="name" maxlength="120" required></label>
+              <label>Phone number<input id="agent-profile-phone" name="phone" type="tel" autocomplete="tel" maxlength="40" required></label>
+              <label>Message<textarea id="agent-profile-message" name="message" rows="4" maxlength="2000" placeholder="How can this agent help?"></textarea></label>
+              <button id="agent-profile-submit" class="agent-profile-btn is-primary" type="submit">Send request</button>
+            </form>
+            <p class="agent-profile-safety">Never pay before viewing</p>
+          </div>
+          <div class="agent-profile-subactions">
+            <button type="button" class="agent-profile-btn" onclick="shareBrokerBusinessCard(${idArg}, 'native')">Share profile</button>
+            <button type="button" class="agent-profile-btn" onclick="openAgentProfileReport(${idArg})">Report profile</button>
+          </div>
+        </aside>
       </div>
-    </div>
-
-    ${brokerOffPlanProjectsHtml(offPlanProjects)}
-
-    <div class="bg-white border border-gray-200 rounded-2xl p-5">
-      <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-        <h2 class="text-xl font-bold text-gray-800">Listings by ${b.name.split(" ")[0]}</h2>
-        <span class="text-sm text-gray-500">${list.length} active listing${list.length === 1 ? "" : "s"}</span>
-      </div>
-      ${list.length ? `<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map(propCard).join("")}</div>` : `<div class="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center text-gray-500">No active listings yet.</div>`}
+      <div class="agent-profile-mobile-bar">${agentProfileContactButtons(b, { mobile: true })}</div>
     </div>`;
+  renderAgentProfileListingGrid();
+  setTimeout(() => { initAgentProfileMap(list); }, 80);
   showPage("broker-profile", { history: false, source: "broker_profile_loaded", scroll: false });
 }
 
