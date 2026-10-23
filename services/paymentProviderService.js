@@ -490,7 +490,7 @@ async function getPaymentStatus(db, paymentLinkId) {
      FROM payment_links pl
      LEFT JOIN invoices i ON i.id = pl.invoice_id
      LEFT JOIN advertising_campaigns c ON c.id = pl.related_campaign_id
-     WHERE pl.id = $1 OR pl.provider_reference = $1
+     WHERE pl.id::text = $1 OR pl.provider_reference = $1
      LIMIT 1`,
     [paymentLinkId]
   );

@@ -308,7 +308,7 @@ async function fetchBrokerLeads(agent, limit = 100) {
             NULLIF(l.metadata->'submitted_contact'->>'email', '') AS contact_email
        FROM leads l
        JOIN properties p ON p.id = l.listing_id
-      WHERE (p.agent_id = $1 OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text)
+      WHERE (p.agent_id::text = $1::text OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text)
         AND l.is_test = FALSE
         AND l.lead_type IN ('enquiry', 'viewing', 'callback')
       ORDER BY COALESCE(l.last_repeat_at, l.created_at) DESC
@@ -340,9 +340,9 @@ async function fetchBrokerListings({ agent, user }) {
        ORDER BY pi.is_primary DESC, pi.sort_order ASC, pi.created_at ASC
        LIMIT 1
      ) img ON true
-     WHERE $1::uuid IS NOT NULL
+     WHERE NULLIF(BTRIM($1::text), '') IS NOT NULL
        AND (
-         p.agent_id = $1
+         p.agent_id::text = $1::text
          OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text
        )
      ORDER BY p.created_at DESC
@@ -1071,7 +1071,7 @@ router.get('/:id/booking-options', async (req, res, next) => {
             AND l.king_facts_confirmed = TRUE
             AND l.listing_fee_status IN ('paid', 'waived')
             AND (
-              (a.user_id IS NOT NULL AND l.host_user_id = a.user_id)
+              (a.user_id IS NOT NULL AND l.host_user_id::text = a.user_id::text)
               OR (
                 length(regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')) >= 9
                 AND (
@@ -1192,7 +1192,7 @@ router.post('/:id/bookings', agentProfileEnquiryLimiter, leadHoneypot, async (re
           WHERE l.id = $1::uuid
             AND l.status = 'approved'
             AND (
-              (a.user_id IS NOT NULL AND l.host_user_id = a.user_id)
+              (a.user_id IS NOT NULL AND l.host_user_id::text = a.user_id::text)
               OR (
                 length(regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')) >= 9
                 AND (

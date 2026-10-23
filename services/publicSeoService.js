@@ -521,7 +521,9 @@ function isThinListingRow(row = {}) {
 async function refreshPublicSeoInventorySnapshot(db) {
   const result = await db.query(
     `SELECT id, listing_type, students_welcome, area, district,
-            title, description, price, price_period, bedrooms, property_type,
+            LEFT(COALESCE(title, ''), 300) AS title,
+            LEFT(COALESCE(description, ''), 1200) AS description,
+            price, price_period, bedrooms, property_type,
             transaction_type, title_type, nearest_university,
             jsonb_strip_nulls(jsonb_build_object(
               'room_type', extra_fields->>'room_type',
@@ -552,13 +554,16 @@ async function refreshPublicSeoInventorySnapshot(db) {
             ) AS copy_flags,
             ${realHostedPhotoExistsSql('properties')} AS has_real_photo,
             agent_id,
-            EXISTS (
-              SELECT 1 FROM agents a
-              WHERE a.id = properties.agent_id
-                AND LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
-            ) AS agent_public,
+            (public_agent.id IS NOT NULL) AS agent_public,
             updated_at, created_at
      FROM properties
+     LEFT JOIN LATERAL (
+       SELECT a.id
+       FROM agents a
+       WHERE a.id = properties.agent_id
+         AND LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
+       LIMIT 1
+     ) public_agent ON TRUE
      WHERE ${publicVisibleInventoryWhere('properties')}
      ORDER BY updated_at DESC NULLS LAST, created_at DESC, id DESC`
   );

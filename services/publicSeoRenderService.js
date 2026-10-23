@@ -417,13 +417,29 @@ async function loadPublicSeoListings(db, options = {}) {
     const orderBy = landingRank
       ? agentFirstOrderSql('p', { homesBeforeLand: key === 'sale' })
       : 'p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC';
-    const result = await db.query(
-      `${homepage ? `WITH homepage_candidates AS MATERIALIZED (
+    const imageLateral = `LEFT JOIN LATERAL (
+       SELECT i.url
+       FROM property_images i
+       WHERE i.property_id = p.id
+       ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+       LIMIT 1
+     ) image ON TRUE`;
+    const staffLateral = consentedStaffPrimaryImageLateralSql('p');
+    const whereSql = `${publicVisibleInventoryWhere('p')}
+         AND ${categoryWhere}
+         ${locationWhere}
+         ${facetWhere}`;
+    // Homepage SQL stays the id-first candidate list. Every other caller
+    // (category, area, facet) picks the page of ids first, counts without
+    // joining images, then loads columns for that page only. The same
+    // placeholders are reused, so facet values are not duplicated.
+    const sql = homepage
+      ? `WITH homepage_candidates AS MATERIALIZED (
        SELECT p.id FROM properties p
        WHERE ${publicVisibleInventoryWhere('p')}
        ORDER BY ${orderBy}
        LIMIT ${limitRef}
-     )\n` : ''}SELECT
+     )\nSELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
        p.price, p.price_period, p.price_on_application, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
@@ -432,27 +448,44 @@ async function loadPublicSeoListings(db, options = {}) {
        COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
        p.source, p.listed_via,
        ${listingCopyExtraSql('p')} AS copy_extra,
-       p.created_at, p.updated_at${homepage ? '' : ', COUNT(*) OVER() AS seo_total'},
+       p.created_at, p.updated_at,
        image.url AS primary_image_url,
        staff_img.url AS staff_primary_image_url
      FROM properties p
-     ${homepage ? 'JOIN homepage_candidates home ON home.id = p.id' : ''}
-     LEFT JOIN LATERAL (
-       SELECT i.url
-       FROM property_images i
-       WHERE i.property_id = p.id
-       ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
-       LIMIT 1
-     ) image ON TRUE
-     ${consentedStaffPrimaryImageLateralSql('p')}
-     ${homepage ? '' : `WHERE ${publicVisibleInventoryWhere('p')}
-       AND ${categoryWhere}
-       ${locationWhere}
-       ${facetWhere}`}
-     ORDER BY ${orderBy}
-       ${homepage ? '' : `LIMIT ${limitRef}`}`,
-      values
-    );
+     JOIN homepage_candidates home ON home.id = p.id
+     ${imageLateral}
+     ${staffLateral}
+     ORDER BY ${orderBy}`
+      : `WITH page AS MATERIALIZED (
+       SELECT p.id FROM properties p
+       WHERE ${whereSql}
+       ORDER BY ${orderBy}
+       LIMIT ${limitRef}
+     ), totals AS MATERIALIZED (
+       SELECT COUNT(*)::int AS seo_total
+       FROM properties p
+       WHERE ${whereSql}
+     )
+     SELECT
+       p.id, p.listing_type, p.title, LEFT(COALESCE(p.description, ''), 600) AS description, p.area, p.district,
+       p.price, p.price_period, p.price_on_application, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.extra_fields->>'canonical_location_id' AS canonical_location_id,
+       p.extra_fields->>'city' AS city,
+       p.extra_fields->>'neighborhood' AS neighborhood,
+       COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
+       p.source, p.listed_via,
+       ${listingCopyExtraSql('p')} AS copy_extra,
+       p.created_at, p.updated_at,
+       totals.seo_total,
+       image.url AS primary_image_url,
+       staff_img.url AS staff_primary_image_url
+     FROM page
+     JOIN properties p ON p.id = page.id
+     CROSS JOIN totals
+     ${imageLateral}
+     ${staffLateral}
+     ORDER BY ${orderBy}`;
+    const result = await db.query(sql, values);
     const rows = result.rows.map(normalizeSeoListingRow);
     // Homepage cards never consume a total; facets retain their exact count.
     if (homepage) for (const row of rows) delete row.seo_total;

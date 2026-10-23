@@ -20,7 +20,7 @@ const req = (headers = {}, url = '/for-sale', method = 'GET') => ({
 });
 
 test('anonymous cookie-less GET gets the edge cache header', () => {
-  assert.strictEqual(cache.EDGE_CACHE_CONTROL, 'public, max-age=0, s-maxage=300, stale-while-revalidate=600');
+  assert.strictEqual(cache.EDGE_CACHE_CONTROL, 'public, max-age=0, s-maxage=180, stale-while-revalidate=300');
   assert.strictEqual(cache.cacheDecision(req()), 'edge');
   assert.strictEqual(cache.cacheDecision(req({ cookie: '_ga=GA1.1.123; _gid=GA1.2.9' })), 'edge');
 });
@@ -35,18 +35,21 @@ test('a session cookie, auth cookie or auth header is private, no-store and neve
   assert.strictEqual(cache.cacheKeyFor(req({ cookie: 'sid=1' })) && cache.cacheDecision(req({ cookie: 'sid=1' })) === 'edge', false);
 });
 
-test('only the home page, three hubs and /brokers are cached in process, and never with a query string', () => {
+test('anonymous list and area pages are cached in process, and never with a query string', () => {
   for (const p of ['/', '/for-sale', '/to-rent', '/land', '/brokers']) assert.strictEqual(cache.cacheKeyFor(req({}, p)), p);
+  assert.strictEqual(cache.cacheKeyFor(req({}, '/for-sale/kira-wakiso')), '/for-sale/kira-wakiso');
+  assert.strictEqual(cache.cacheKeyFor(req({}, '/commercial/for-sale/kira-wakiso')), '/commercial/for-sale/kira-wakiso');
   assert.strictEqual(cache.cacheKeyFor(req({}, '/for-sale?utm_source=x')), '');
   assert.strictEqual(cache.cacheKeyFor(req({}, '/property/1')), '');
+  assert.strictEqual(cache.cacheKeyFor(req({}, '/admin/review')), '');
   assert.strictEqual(cache.cacheKeyFor(req({}, '/for-sale', 'POST')), '');
 });
 
-test('the in-process cache expires after 120 s and clears on inventory change', () => {
+test('the in-process cache expires after 3 min and clears on inventory change', () => {
   cache.clear();
   cache.set('/for-sale', { html: 'x', headers: {} }, 1000);
-  assert.ok(cache.get('/for-sale', 1000 + 119000));
-  assert.strictEqual(cache.get('/for-sale', 1000 + 121000), null);
+  assert.ok(cache.get('/for-sale', 1000 + 179000));
+  assert.strictEqual(cache.get('/for-sale', 1000 + 181000), null);
   cache.set('/land', { html: 'y', headers: {} });
   process.env.NODE_ENV = 'test';
   require('../services/publicInventoryMetricsService').invalidatePublicInventoryMetricsCache('test');

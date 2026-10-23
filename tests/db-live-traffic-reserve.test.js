@@ -39,7 +39,8 @@ test('the schedulers that emptied the pool now declare themselves background', (
     'youtubeSourceDripService.js',
     'marketplaceNationalDripService.js',
     'marketplaceLifecycleService.js',
-    'featuredRotationService.js'
+    'featuredRotationService.js',
+    'agentBookingService.js'
   ];
   for (const name of services) {
     const source = fs.readFileSync(path.join(__dirname, '..', 'services', name), 'utf8');
@@ -48,49 +49,68 @@ test('the schedulers that emptied the pool now declare themselves background', (
   }
 });
 
-test('the reserve keeps connections back for whoever is waiting', () => {
+test('background work has its own one-connection pool and does not borrow a live slot', () => {
   const p = db.poolPressure();
-  assert.ok(p.live_reserve > 0, 'some of the pool must be unavailable to background work');
-  assert.ok(p.background_ceiling < p.pool_max,
-    'the background ceiling must sit below the pool size, or it reserves nothing');
-  assert.strictEqual(p.background_ceiling + p.live_reserve, p.pool_max);
+  assert.strictEqual(p.background_pool_max, 1, 'background scans share one connection');
+  assert.ok(p.live_reserve > 0, 'the live pool still keeps room for a person who is waiting');
+  assert.ok(p.pool_max <= 10, 'the live pool stays sized for the 0.1 CPU database');
+  assert.strictEqual(db.backgroundPool.options.max, 1);
 });
 
-test('background work is held at the ceiling while live work goes straight through', async (t) => {
-  const ceiling = db.poolPressure().background_ceiling;
-  const realQuery = db.pool.query;
-  const finish = [];
-  // Every query hangs until this test lets it go, which is what a pool under
-  // real pressure feels like from the caller's side.
-  db.pool.query = () => new Promise((resolve) => { finish.push(() => resolve({ rows: [] })); });
-  t.after(() => { db.pool.query = realQuery; });
+test('background work is queued on its own pool while live work goes straight through', async (t) => {
+  const realLive = db.pool.query.bind(db.pool);
+  const realBackground = db.backgroundPool.query.bind(db.backgroundPool);
+  const liveCalls = [];
+  const backgroundCalls = [];
+  const releaseBackground = [];
+  let releaseLive = null;
+  db.pool.query = (sql) => new Promise((resolve) => {
+    liveCalls.push(sql);
+    releaseLive = () => resolve({ rows: [] });
+  });
+  db.backgroundPool.query = (sql) => new Promise((resolve) => {
+    backgroundCalls.push(sql);
+    releaseBackground.push(() => resolve({ rows: [] }));
+  });
+  t.after(() => {
+    db.pool.query = realLive;
+    db.backgroundPool.query = realBackground;
+    releaseBackground.splice(0).forEach((go) => go());
+    if (releaseLive) releaseLive();
+  });
 
-  const background = [];
-  for (let i = 0; i < ceiling; i += 1) {
-    background.push(db.runBackgroundWork(() => db.query('SELECT 1')));
+  const first = db.runBackgroundWork(() => db.query('SELECT background'));
+  for (let i = 0; i < 8 && backgroundCalls.length === 0; i += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
   }
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.strictEqual(db.poolPressure().in_flight, ceiling, 'the allowance is fully taken');
+  assert.deepStrictEqual(backgroundCalls, ['SELECT background']);
+  assert.strictEqual(liveCalls.length, 0, 'the background scan does not use the live pool');
+  assert.strictEqual(db.poolPressure().in_flight, 0, 'and it does not occupy a live slot');
 
-  // One more background query must wait rather than take a reserved connection.
-  let overflowStarted = false;
-  const overflow = db.runBackgroundWork(() => db.query('SELECT 2')).then(() => { overflowStarted = true; });
+  let secondStarted = false;
+  const second = db.runBackgroundWork(() => db.query('SELECT queued')).then(() => { secondStarted = true; });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.strictEqual(db.poolPressure().background_waiting, 1, 'the extra scan queues');
-  assert.strictEqual(overflowStarted, false);
+  assert.strictEqual(db.poolPressure().background_jobs_queued, 1, 'a second scan waits instead of opening another connection');
+  assert.strictEqual(secondStarted, false);
 
-  // Live traffic — Arthur's "Hello" — goes through regardless.
-  const live = db.query('SELECT 3');
+  const live = db.query('SELECT live');
   await new Promise((resolve) => setImmediate(resolve));
-  assert.strictEqual(db.poolPressure().in_flight, ceiling + 1,
-    'a waiting person is never queued behind a background scan');
+  assert.deepStrictEqual(liveCalls, ['SELECT live']);
+  assert.strictEqual(db.poolPressure().in_flight, 1, 'a waiting person is served on the live pool');
+  releaseLive();
+  await live;
+  assert.strictEqual(db.poolPressure().in_flight, 0);
 
-  finish.forEach((go) => go());
-  await Promise.all([...background, live]);
-  finish.forEach((go) => go());
-  await overflow;
-  assert.strictEqual(db.poolPressure().background_waiting, 0);
-  assert.strictEqual(db.poolPressure().in_flight, 0, 'every slot comes back');
+  releaseBackground.shift()();
+  await first;
+  for (let i = 0; i < 8 && backgroundCalls.length < 2; i += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.deepStrictEqual(backgroundCalls, ['SELECT background', 'SELECT queued']);
+  releaseBackground.shift()();
+  await second;
+  assert.strictEqual(db.poolPressure().background_jobs_queued, 0);
+  assert.strictEqual(db.poolPressure().in_flight, 0, 'every live slot comes back');
 });
 
 test('a background query waits its turn rather than being refused', async () => {

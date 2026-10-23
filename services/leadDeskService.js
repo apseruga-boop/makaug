@@ -275,7 +275,7 @@ async function syncDemandLeads(db, { days = 365, full = false } = {}) {
            jsonb_build_object('campus', nr.campus, 'property_type', nr.property_type, 'urgency', nr.urgency)
       FROM property_need_requests nr
       LEFT JOIN contacts c ON c.id = nr.contact_id
-      LEFT JOIN users u ON u.id = nr.user_id
+      LEFT JOIN users u ON u.id::text = nr.user_id::text
      WHERE nr.created_at >= NOW() - ($1 || ' days')::interval
        AND COALESCE(NULLIF(c.whatsapp, ''), NULLIF(c.phone, ''), u.phone, NULLIF(c.email, ''), u.email) IS NOT NULL
        AND (${REAL_PHONE_SQL("COALESCE(NULLIF(c.whatsapp, ''), NULLIF(c.phone, ''), u.phone)")}

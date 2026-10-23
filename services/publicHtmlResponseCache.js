@@ -3,11 +3,18 @@
 // S6: edge-cacheable public HTML and a small in-process cache for the pages
 // crawlers and visitors hit most. Anonymous, cookie-less requests only.
 
-const EDGE_CACHE_CONTROL = 'public, max-age=0, s-maxage=300, stale-while-revalidate=600';
+const EDGE_CACHE_CONTROL = 'public, max-age=0, s-maxage=180, stale-while-revalidate=300';
 const PRIVATE_CACHE_CONTROL = 'private, no-store';
-const TTL_MS = 120 * 1000;
-const MAX_ENTRIES = 16;
-const CACHEABLE_PATHS = new Set(['/', '/for-sale', '/to-rent', '/land', '/brokers']);
+const TTL_MS = 180 * 1000;
+const MAX_ENTRIES = 48;
+const MAX_BYTES = 8 * 1024 * 1024;
+const CACHEABLE_PATHS = new Set([
+  '/', '/for-sale', '/to-rent', '/land', '/brokers',
+  '/commercial', '/student-accommodation', '/hostels'
+]);
+// Anonymous list and area pages only. One to three extra segments covers
+// /for-sale/kira-wakiso and /commercial/for-sale/kira-wakiso.
+const AREA_LISTING_PATH = /^\/(?:for-sale|to-rent|land|commercial|student-accommodation|hostels)(?:\/[a-z0-9-]+){1,3}$/;
 
 // Cookies that never change what the server renders. Anything else (a session
 // or auth cookie, or one we do not know) keeps the request out of the cache.
@@ -41,34 +48,73 @@ function cacheKeyFor(req) {
   const url = String(req.originalUrl || req.url || '');
   if (url.includes('?')) return '';
   const pathName = (url.replace(/\/+$/, '') || '/').toLowerCase();
-  return CACHEABLE_PATHS.has(pathName) ? pathName : '';
+  if (
+    pathName.startsWith('/admin')
+    || pathName.startsWith('/staff')
+    || pathName.startsWith('/king')
+    || pathName.startsWith('/dashboard')
+    || pathName.startsWith('/api')
+    || pathName.startsWith('/property/')
+    || pathName === '/property'
+  ) return '';
+  if (CACHEABLE_PATHS.has(pathName)) return pathName;
+  return AREA_LISTING_PATH.test(pathName) ? pathName : '';
 }
 
 const store = new Map();
+let bytes = 0;
+
+function entrySize(html) {
+  return Buffer.byteLength(String(html || ''), 'utf8');
+}
+
+function evictOldest() {
+  const oldest = store.keys().next().value;
+  if (oldest === undefined) return;
+  const removed = store.get(oldest);
+  bytes -= removed?.bytes || 0;
+  store.delete(oldest);
+}
 
 function get(key, now = Date.now()) {
   const hit = store.get(key);
   if (!hit) return null;
   if (now - hit.at > TTL_MS) {
+    bytes -= hit.bytes || 0;
     store.delete(key);
     return null;
   }
+  store.delete(key);
+  store.set(key, hit);
   return hit;
 }
 
 function set(key, entry, now = Date.now()) {
-  store.delete(key);
-  store.set(key, { ...entry, at: now });
-  while (store.size > MAX_ENTRIES) store.delete(store.keys().next().value);
+  const prev = store.get(key);
+  if (prev) {
+    bytes -= prev.bytes || 0;
+    store.delete(key);
+  }
+  const size = entrySize(entry?.html);
+  if (size > MAX_BYTES) return;
+  store.set(key, { ...entry, at: now, bytes: size });
+  bytes += size;
+  while ((store.size > MAX_ENTRIES || bytes > MAX_BYTES) && store.size) evictOldest();
+  if (bytes < 0) bytes = 0;
 }
 
 function clear() {
   const size = store.size;
   store.clear();
+  bytes = 0;
   return size;
 }
 
+function cacheBytes() {
+  return bytes;
+}
+
 module.exports = {
-  EDGE_CACHE_CONTROL, PRIVATE_CACHE_CONTROL, TTL_MS, CACHEABLE_PATHS,
-  cacheDecision, cacheKeyFor, isAnonymousRequest, carriesAuth, get, set, clear
+  EDGE_CACHE_CONTROL, PRIVATE_CACHE_CONTROL, TTL_MS, MAX_ENTRIES, MAX_BYTES, CACHEABLE_PATHS,
+  cacheDecision, cacheKeyFor, isAnonymousRequest, carriesAuth, get, set, clear, cacheBytes
 };

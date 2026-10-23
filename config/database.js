@@ -92,10 +92,11 @@ function repairParams(params) {
  * reported `code: 'POOL_TIMEOUT'` in the same second, the pool had nothing left
  * to give, and the bridge's handover timed out over and over.
  *
- * Background work has all day. A person on WhatsApp does not. So background
- * work is held to a ceiling below the pool's size, and the difference is kept
- * for whoever is actually waiting. Nothing is refused, only queued — a drip
- * scan that starts a few seconds later costs nobody anything.
+ * Background work has all day. A person on WhatsApp does not. Background
+ * queries use a separate pool of one connection and run one job at a time,
+ * so a drip scan cannot empty the pool that live traffic is waiting on.
+ * The separate pool is the seam for moving those jobs to another process
+ * later: they already call runBackgroundWork(), and only that pool would move.
  *
  * Work marks itself as background by running inside runBackgroundWork(), and
  * every query underneath inherits that through AsyncLocalStorage, so the
@@ -104,56 +105,80 @@ function repairParams(params) {
 const { AsyncLocalStorage } = require('async_hooks');
 
 const workClass = new AsyncLocalStorage();
-// Scaled to the pool rather than fixed, so shrinking the pool for a small
-// database does not quietly leave background work with nothing, or with
-// everything. Roughly a third stays background, the rest is held for people.
+// Reported for the live pool so a reader can still see how much of it is
+// meant for people. Background work no longer borrows from this pool.
 const liveReserve = Math.max(1, Math.min(
   poolMax - 1,
   parseInt(process.env.DB_LIVE_RESERVE || '', 10) || Math.ceil(poolMax * 0.6)
 ));
 const backgroundCeiling = Math.max(1, poolMax - liveReserve);
-const backgroundWaitMs = Math.max(1000, parseInt(process.env.DB_BACKGROUND_WAIT_MS || '20000', 10) || 20000);
+const backgroundPoolMax = Math.max(1, Math.min(2, parseInt(process.env.DB_BACKGROUND_POOL_MAX || '1', 10) || 1));
+
+const backgroundPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  max: backgroundPoolMax,
+  min: 0,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 10000
+});
+
+backgroundPool.on('error', (err) => {
+  logger.error('Unexpected PostgreSQL background client error:', err);
+});
 
 let inFlight = 0;
-const backgroundWaiters = [];
+let backgroundJobActive = false;
+const backgroundJobQueue = [];
 
 function isBackgroundWork() {
   return workClass.getStore() === 'background';
 }
 
 function acquireSlot() {
-  if (!isBackgroundWork() || inFlight < backgroundCeiling) {
-    inFlight += 1;
-    return Promise.resolve();
-  }
-  return new Promise((resolve, reject) => {
-    const waiter = {
-      resolve,
-      timer: setTimeout(() => {
-        const at = backgroundWaiters.indexOf(waiter);
-        if (at >= 0) backgroundWaiters.splice(at, 1);
-        const error = new Error('Background database work waited too long behind live traffic');
-        error.code = 'DB_BACKGROUND_BUSY';
-        reject(error);
-      }, backgroundWaitMs)
-    };
-    backgroundWaiters.push(waiter);
-  });
+  inFlight += 1;
+  return Promise.resolve();
 }
 
 function releaseSlot() {
   inFlight = Math.max(0, inFlight - 1);
-  while (backgroundWaiters.length && inFlight < backgroundCeiling) {
-    const waiter = backgroundWaiters.shift();
-    clearTimeout(waiter.timer);
-    inFlight += 1;
-    waiter.resolve();
-  }
 }
 
-/** Run fn — and everything it awaits — as background work. */
+function pumpBackgroundJobs() {
+  if (backgroundJobActive || !backgroundJobQueue.length) return;
+  backgroundJobActive = true;
+  const job = backgroundJobQueue.shift();
+  workClass.run('background', () => Promise.resolve().then(job.fn))
+    .then(job.resolve, job.reject)
+    .finally(() => {
+      backgroundJobActive = false;
+      setImmediate(pumpBackgroundJobs);
+    });
+}
+
+/** Run fn — and everything it awaits — as background work, one job at a time. */
 function runBackgroundWork(fn) {
-  return workClass.run('background', fn);
+  if (isBackgroundWork()) return Promise.resolve().then(fn);
+  return new Promise((resolve, reject) => {
+    backgroundJobQueue.push({ fn, resolve, reject });
+    pumpBackgroundJobs();
+  });
+}
+
+// Let a live request that is already waiting take the database first.
+// Background work proceeds after a short pause. It is not failed.
+async function yieldToLiveTraffic() {
+  await new Promise((resolve) => setImmediate(resolve));
+  if (pool.waitingCount <= 0) return;
+  const deadline = Date.now() + 2000;
+  while (pool.waitingCount > 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  if (pool.waitingCount > 0) {
+    logger.info('Background database work is proceeding while live traffic is still queued', {
+      live_queued: pool.waitingCount
+    });
+  }
 }
 
 function poolPressure() {
@@ -161,15 +186,37 @@ function poolPressure() {
     pool_max: poolMax,
     live_reserve: liveReserve,
     background_ceiling: backgroundCeiling,
+    background_pool_max: backgroundPoolMax,
     in_flight: inFlight,
-    background_waiting: backgroundWaiters.length,
+    background_waiting: backgroundJobQueue.length,
+    background_jobs_queued: backgroundJobQueue.length,
+    background_job_active: backgroundJobActive,
     total: pool.totalCount,
     idle: pool.idleCount,
     queued: pool.waitingCount
   };
 }
 
+function wrapClientQuery(client, { background = false } = {}) {
+  if (client.__makaugParamRepair) return client;
+  const originalQuery = client.query.bind(client);
+  client.query = (text, params, ...rest) => {
+    const callback = typeof params === 'function' || rest.some((item) => typeof item === 'function');
+    const exec = () => (
+      Array.isArray(params) ? originalQuery(text, repairParams(params), ...rest) : originalQuery(text, params, ...rest)
+    );
+    if (!background || callback) return exec();
+    return yieldToLiveTraffic().then(exec);
+  };
+  client.__makaugParamRepair = true;
+  return client;
+}
+
 async function query(text, params) {
+  if (isBackgroundWork()) {
+    await yieldToLiveTraffic();
+    return backgroundPool.query(text, repairParams(params));
+  }
   await acquireSlot();
   try {
     return await pool.query(text, repairParams(params));
@@ -219,6 +266,11 @@ function attachSlotRelease(client, onRelease = () => {}) {
 }
 
 async function getClient() {
+  if (isBackgroundWork()) {
+    await yieldToLiveTraffic();
+    const client = await backgroundPool.connect();
+    return wrapClientQuery(client, { background: true });
+  }
   await acquireSlot();
   let client;
   try {
@@ -228,14 +280,7 @@ async function getClient() {
     throw error;
   }
   attachSlotRelease(client, releaseSlot);
-  if (!client.__makaugParamRepair) {
-    const originalQuery = client.query.bind(client);
-    client.query = (text, params, ...rest) => (
-      Array.isArray(params) ? originalQuery(text, repairParams(params), ...rest) : originalQuery(text, params, ...rest)
-    );
-    client.__makaugParamRepair = true;
-  }
-  return client;
+  return wrapClientQuery(client);
 }
 
 async function healthcheck() {
@@ -262,6 +307,7 @@ async function warmPool(targetConnections = process.env.DB_POOL_WARM_CONNECTIONS
 
 module.exports = {
   pool,
+  backgroundPool,
   query,
   getClient,
   healthcheck,
