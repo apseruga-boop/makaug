@@ -65,9 +65,13 @@ function fakeDb(row) {
 const PROPERTY = { id: 'prop-1', status: 'approved', created_at: new Date().toISOString(), extra_fields: {} };
 
 test('an approved listing is no longer skipped', async () => {
+  let attachmentOptions;
   installBackfillStub({
     makeAndUploadStills: async () => [{ url: 'x' }],
-    attachStills: async () => ({ attached: 1 })
+    attachStills: async (_id, _uploaded, options) => {
+      attachmentOptions = options;
+      return { attached: 1 };
+    }
   });
   const db = fakeDb(PROPERTY);
   await freshScheduler().tickVideoStills(db);
@@ -77,6 +81,49 @@ test('an approved listing is no longer skipped', async () => {
     'a listing approved without a cover must still be reachable');
   assert.doesNotMatch(select.text, /p\.status = 'pending'/,
     'the pending-only clause should have been rewritten, not left beside the new one');
+  assert.deepStrictEqual(attachmentOptions, {
+    keepListingText: true,
+    coverLiveListing: true,
+    setAsCover: true,
+    onlyIfNoImages: true
+  }, 'the attachment transaction must accept the approved row and preserve staff edits');
+});
+
+test('an attached live cover clears public listing, SEO and HTML caches', async () => {
+  const propertiesPath = require.resolve('../routes/properties');
+  const metricsPath = require.resolve('../services/publicInventoryMetricsService');
+  const saved = [require.cache[propertiesPath], require.cache[metricsPath]];
+  const invalidated = [];
+  require.cache[propertiesPath] = { id: propertiesPath, filename: propertiesPath, loaded: true,
+    exports: { clearPublicPropertiesCache: (reason) => invalidated.push(['listings', reason]) } };
+  require.cache[metricsPath] = { id: metricsPath, filename: metricsPath, loaded: true,
+    exports: { invalidatePublicInventoryMetricsCache: (reason) => invalidated.push(['html', reason]) } };
+  try {
+    installBackfillStub({ makeAndUploadStills: async () => [{ url: 'x' }], attachStills: async () => ({ attached: 1 }) });
+    await freshScheduler().tickVideoStills(fakeDb(PROPERTY));
+    assert.deepStrictEqual(invalidated, [
+      ['listings', 'automatic_live_video_cover'],
+      ['html', 'automatic_live_video_cover']
+    ]);
+  } finally {
+    [propertiesPath, metricsPath].forEach((key, index) => {
+      if (saved[index]) require.cache[key] = saved[index];
+      else delete require.cache[key];
+    });
+  }
+});
+
+test('a pending listing keeps the existing review attachment behavior', async () => {
+  let attachmentOptions;
+  installBackfillStub({
+    makeAndUploadStills: async () => [{ url: 'x' }],
+    attachStills: async (_id, _uploaded, options) => {
+      attachmentOptions = options;
+      return { attached: 1 };
+    }
+  });
+  await freshScheduler().tickVideoStills(fakeDb({ ...PROPERTY, status: 'pending' }));
+  assert.strictEqual(attachmentOptions, undefined);
 });
 
 test('an approved listing is only revisited when it has no image at all', async () => {
@@ -304,6 +351,69 @@ function realBackfill() {
   delete require.cache[BACKFILL_PATH];
   return require('../scripts/backfill-whatsapp-video-stills');
 }
+
+test('an automatic live cover keeps a photo added after the scheduler selected it', async () => {
+  const database = require('../config/database');
+  const original = database.getClient;
+  const calls = [];
+  database.getClient = async () => ({
+    async query(sql) {
+      calls.push(sql);
+      if (/FROM properties[\s\S]*FOR UPDATE/.test(sql)) return { rows: [{ ...PROPERTY, description: 'Staff description' }] };
+      if (/^\s*SELECT 1 FROM property_images/.test(sql)) return { rows: [{ '?column?': 1 }] };
+      if (['BEGIN', 'ROLLBACK'].includes(sql)) return { rows: [] };
+      throw new Error(`The existing photo must stop attachment before ${sql.trim().split('\n')[0]}`);
+    },
+    release() { calls.push('RELEASE'); }
+  });
+  try {
+    const result = await realBackfill().attachStills(PROPERTY.id, [{ url: 'new-video-frame.jpg' }], {
+      keepListingText: true, coverLiveListing: true, setAsCover: true, onlyIfNoImages: true
+    });
+    assert.deepStrictEqual(result, { attached: 0, skipped: 'already_has_images' });
+    assert.ok(calls.indexOf('ROLLBACK') > calls.findIndex((sql) => /FOR UPDATE/.test(sql)));
+    assert.strictEqual(calls.at(-1), 'RELEASE');
+  } finally {
+    database.getClient = original;
+  }
+});
+
+test('the real attachment keeps an approved listing live with its staff description', async () => {
+  const database = require('../config/database');
+  const original = database.getClient;
+  const calls = [];
+  const description = 'Staff reviewed and saved this exact listing description.';
+  database.getClient = async () => ({
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (/FROM properties[\s\S]*FOR UPDATE/.test(sql)) {
+        return { rows: [{ ...PROPERTY, description, extra_fields: { video_urls: ['https://media.makaug.com/own-video.mp4'] } }] };
+      }
+      if (/SELECT COUNT\(\*\) FILTER/.test(sql)) {
+        return { rows: [{ video_count: 0, max_sort_order: -1, primary_url: null }] };
+      }
+      return { rows: [] };
+    },
+    release() {}
+  });
+  try {
+    const result = await realBackfill().attachStills(PROPERTY.id, [{ url: 'https://media.makaug.com/own-frame.jpg' }], {
+      keepListingText: true, coverLiveListing: true, setAsCover: true, onlyIfNoImages: true
+    });
+    assert.strictEqual(result.attached, 1);
+    const update = calls.find(({ sql }) => /UPDATE properties/.test(sql));
+    assert.strictEqual(update.values[2], description);
+    assert.strictEqual(update.values[3], false, 'the listing is not reopened for review');
+    assert.ok(update.values[4].includes('approved'));
+    const extra = JSON.parse(update.values[1]);
+    assert.ok(!('review_only' in extra) && !('source_caption_display' in extra));
+    const event = calls.find(({ sql }) => /INSERT INTO property_moderation_events/.test(sql));
+    assert.deepStrictEqual(event.values.slice(4, 6), ['approved', 'approved']);
+    assert.ok(calls.some(({ sql }) => sql === 'COMMIT'));
+  } finally {
+    database.getClient = original;
+  }
+});
 
 function fakeVideoFetch() {
   const calls = [];

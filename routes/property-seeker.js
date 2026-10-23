@@ -1,4 +1,5 @@
 const { handOffListingLead, loadListingContact } = require('../services/leadHandoffService');
+const { viewingAcceptsBookings } = require('../services/agentBookingService');
 const { recordLeadHandoff } = require('../services/leadService');
 const { createLeadClickLimiter, createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
 const leadFormLimiter = createLeadFormLimiter();
@@ -1989,7 +1990,7 @@ router.post('/viewings', leadFormLimiter, leadHoneypot, optionalAuth, async (req
     if (!isUuid(listingId)) return res.status(400).json({ ok: false, error: 'Valid listing_id is required' });
     const config = await db.query('SELECT * FROM viewing_configs WHERE listing_id = $1 LIMIT 1', [listingId]);
     const viewingConfig = config.rows[0] || null;
-    if (viewingConfig && (viewingConfig.accepts_viewings === false || viewingConfig.booking_mode === 'disabled' || viewingConfig.booking_mode === 'callback_only')) {
+    if (!viewingAcceptsBookings(viewingConfig)) {
       return res.status(409).json({ ok: false, error: 'This listing is not accepting viewing bookings. Request a callback instead.' });
     }
     const listing = await loadListingContact(db, listingId);

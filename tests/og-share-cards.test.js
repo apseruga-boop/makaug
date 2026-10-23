@@ -75,7 +75,7 @@ test('static card copy is translated in every site language pack', () => {
   assert.equal(shareCardKeyForPath('/mortgage-finder'), 'mortgage');
   assert.equal(shareCardKeyForPath('/discover-ai-chatbot'), 'discover');
   assert.equal(shareCardKeyForPath('/valuation'), 'value');
-  assert.equal(shareImagePath('property', PROPERTY_ID, 'lg'), `/og/property/${PROPERTY_ID}.jpg?lang=lg`);
+  assert.equal(shareImagePath('property', PROPERTY_ID, 'lg'), `/og/property/${PROPERTY_ID}.jpg?lang=lg&v=2`);
   assert.equal(normalizeShareLang('en-UG'), 'en');
   assert.equal(usableListingPhoto('https://p16-sign.tiktokcdn.com/cover.jpg'), false);
   assert.equal(usableListingPhoto('https://media.makaug.com/listings/house.jpg'), true);
@@ -174,7 +174,7 @@ test('home, category, agent and property cards are 1200 by 630 and under 300 KB'
     listing: { listing_type: 'land', photo: null, price: 120000000, area: 'Kitende', district: 'Wakiso' }
   });
   await expectCard(withPhoto);
-  assert.equal(withoutPhoto.toString('base64'), landCard.toString('base64'));
+  assert.ok(!withoutPhoto.equals(landCard), 'a missing photo must not erase the listing price and identity');
 });
 
 test('share-card endpoints cache a JPEG and fall back when the record or photo is missing', async () => {
@@ -249,7 +249,8 @@ test('share-card endpoints cache a JPEG and fall back when the record or photo i
       const body = Buffer.from(await response.arrayBuffer());
       assert.equal(response.status, 200, cardPath);
       assert.equal(response.headers.get('content-type'), 'image/jpeg', cardPath);
-      assert.equal(response.headers.get('cache-control'), 'public, max-age=86400, stale-while-revalidate=604800', cardPath);
+      const missingPhoto = cardPath.includes('22222222-2222-4222-8222-222222222222');
+      assert.equal(response.headers.get('cache-control'), missingPhoto ? 'public, max-age=60, must-revalidate' : 'public, max-age=86400, stale-while-revalidate=604800', cardPath);
       await expectCard(body);
     }
     const missingAgent = await fetch(`http://127.0.0.1:${port}/og/agent/missing-id.jpg`);
@@ -258,8 +259,8 @@ test('share-card endpoints cache a JPEG and fall back when the record or photo i
     assert.equal(home.headers.get('x-makaug-og-card'), 'home');
     const noPhoto = await fetch(`http://127.0.0.1:${port}/og/property/22222222-2222-4222-8222-222222222222.jpg`);
     const land = await fetch(`http://127.0.0.1:${port}/og/category/land.jpg`);
-    assert.equal(noPhoto.headers.get('x-makaug-og-card'), 'land');
-    assert.equal(Buffer.from(await noPhoto.arrayBuffer()).toString('base64'), Buffer.from(await land.arrayBuffer()).toString('base64'));
+    assert.equal(noPhoto.headers.get('x-makaug-og-card'), 'property');
+    assert.ok(!Buffer.from(await noPhoto.arrayBuffer()).equals(Buffer.from(await land.arrayBuffer())), 'missing photo keeps a listing-specific card');
     const arabic = await fetch(`http://127.0.0.1:${port}/og/category/sale.jpg?lang=ar`);
     await expectCard(Buffer.from(await arabic.arrayBuffer()));
     assert.equal(arabic.headers.get('x-makaug-og-card'), 'sale');
@@ -277,7 +278,8 @@ test('public pages point og:image, twitter:image and image alt at the matching c
   assert.match(html, /property="og:image:height" content="630"/);
   assert.match(html, new RegExp(`property="og:image:alt" content="${HOME_ALT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
   assert.match(html, /name="twitter:image" content="https:\/\/makaug\.com\/assets\/og-cover\.jpg"/);
-  assert.doesNotMatch(html, /twitter:site/);
+  assert.equal((html.match(/name="twitter:site" content="@makauganda"/g) || []).length, 1);
+  assert.equal((html.match(/name="twitter:creator" content="@makauganda"/g) || []).length, 1);
   assert.match(server, /og:image:width/);
   assert.match(server, /og:image:alt/);
   assert.match(server, /shareImagePath\('home'/);

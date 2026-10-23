@@ -60,6 +60,8 @@ const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLi
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
 const { startLeadDeskScheduler } = require('./services/leadDeskService');
+const { startAgentBookingScheduler } = require('./services/agentBookingService');
+const agentBookingRoutes = require('./routes/agentBookings');
 const { startVideoStillScheduler } = require('./services/videoStillScheduler');
 const { startGreetingNameCache } = require('./services/agentNameService');
 const { startBillingScheduler } = require('./services/billingOpsService');
@@ -116,6 +118,7 @@ const {
 const { createOgShareRouter } = require('./routes/ogShare');
 const {
   shareImagePath,
+  propertyShareRevision,
   shareCardAlt,
   shareCardKeyForPath,
   normalizeShareLang
@@ -419,6 +422,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/properties', propertiesRoutes);
 app.use('/api/off-plan', offPlanRoutes);
 app.use('/api/agents', agentsRoutes);
+app.use('/api/agent-bookings', agentBookingRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/advertising', advertisingRoutes);
 app.use('/api/monetization', monetizationRoutes);
@@ -1740,6 +1744,17 @@ app.use('/pay', require('./routes/pay').pages);
 
 app.use('/og', createOgShareRouter({ db }));
 
+app.get(['/', '/index.html', '/property'], (req, res, next) => {
+  if (['listing_preview', 'preview_token', 'edit_token', 'owner_token', 'token'].some((key) => key in req.query)) return next();
+  const id = req.query.property || req.query.listing;
+  if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return next();
+  const query = new URL(req.originalUrl, 'http://localhost').searchParams;
+  query.delete('property');
+  query.delete('listing');
+  const suffix = query.size ? `?${query}` : '';
+  return res.redirect(301, `/property/${encodeURIComponent(id)}${suffix}`);
+});
+
 app.get('/property/:id', async (req, res, next) => {
   try {
     res.set('X-makaug-Public-Sanitized', '1');
@@ -1759,7 +1774,7 @@ app.get('/property/:id', async (req, res, next) => {
     const propertyLang = requestShareLang(req);
     html = patchListingOpenGraphMeta(renderedSeo.html, {
       ...renderedSeo.meta,
-      image: absolutePublicUrl(shareImagePath('property', listing.id, propertyLang)),
+      image: absolutePublicUrl(shareImagePath('property', listing.id, propertyLang, propertyShareRevision(listing))),
       imageAlt: shareCardAlt('property', propertyLang, {
         title: listing.title,
         area: listing.area,
@@ -2418,6 +2433,9 @@ app.use((req, res, next) => {
   return res.status(404).type('text/plain').send('Not found');
 });
 
+app.get('/v/:token', agentBookingRoutes.handleToken);
+app.post('/v/:token', agentBookingRoutes.handleToken);
+
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
   return sendPublicIndex(req, res, next);
@@ -2530,6 +2548,7 @@ async function start() {
   }
   if (!IS_SOUTH_AFRICA) {
     startLeadDeskScheduler(db);
+    startAgentBookingScheduler(db);
     startVideoStillScheduler(db);
     whatsappRoutes.startEmployeeBatchSummarySweeper?.();
     whatsappRoutes.startEmployeeMediaRetrySweeper?.();

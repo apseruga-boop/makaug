@@ -19,6 +19,8 @@
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="makaug — houses, apartments, land, rentals and commercial property in Uganda">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@makauganda">
+  <meta name="twitter:creator" content="@makauganda">
   <meta name="twitter:title" content="makaug.com | Uganda Property Portal">
   <meta name="twitter:description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
   <meta name="twitter:image" content="https://makaug.com/assets/og-cover.jpg">
@@ -2676,7 +2678,66 @@
         border-block-start: 1px solid #dcfce7;
       }
       .agent-profile-mobile-bar .agent-profile-btn { flex: 1 1 0; }
+      .agent-profile-layout { display: flex; flex-direction: column; }
+      .agent-profile-main { display: contents; }
+      .agent-profile-identity { order: 1; }
+      .agent-profile-contact { order: 2; }
+      .agent-profile-stats, .agent-profile-section { order: 3; }
     }
+    .agent-profile-identity .agent-profile-actions .agent-profile-btn,
+    .agent-profile-card .agent-profile-actions .agent-profile-btn {
+      inline-size: 36px;
+      block-size: 36px;
+      min-block-size: 36px;
+      padding-block: 0;
+      padding-inline: 0;
+      border-radius: 999px;
+      border-color: #d1d5db;
+      background: #fff;
+      color: #14532d;
+      position: relative;
+    }
+    .agent-profile-identity .agent-profile-actions .agent-profile-btn span,
+    .agent-profile-card .agent-profile-actions .agent-profile-btn span {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+    }
+    .agent-profile-identity .agent-profile-actions .agent-profile-btn.is-wa,
+    .agent-profile-card .agent-profile-actions .agent-profile-btn.is-wa {
+      background: #fff;
+      color: #15803d;
+    }
+    .agent-booking-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-block-start: 12px; }
+    .agent-booking-tabs button {
+      border: 1px solid #bbf7d0;
+      background: #fff;
+      color: #14532d;
+      border-radius: 999px;
+      padding-block: 6px;
+      padding-inline: 10px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .agent-booking-tabs button.is-active { background: #15803d; color: #fff; border-color: #15803d; }
+    .agent-booking-slots { display: flex; flex-wrap: wrap; gap: 6px; }
+    .agent-booking-slot {
+      border: 1px solid #bbf7d0;
+      background: #fff;
+      color: #14532d;
+      border-radius: 999px;
+      padding-block: 6px;
+      padding-inline: 10px;
+      font-weight: 700;
+    }
+    .agent-booking-slot.is-active { background: #15803d; color: #fff; }
+    .agent-booking-slot:disabled { opacity: 0.4; }
+    .agent-booking-channels { display: flex; gap: 12px; font-weight: 700; }
+    .agent-booking-sent { font-weight: 800; }
+    .agent-availability-badge { margin-block: 8px 0; margin-inline: 0; font-size: 12px; font-weight: 700; color: #15803d; }
+    .agent-availability-badge.is-stale { color: #92400e; }
     .toast {
       position: fixed;
       right: 20px;
@@ -7521,6 +7582,10 @@
       </div>
 
       <div id="staff-body" class="hidden space-y-6">
+        <section id="staff-booking-escalations" class="bg-white border border-gray-200 rounded-2xl p-6">
+          <h3 class="text-lg font-black text-gray-900">Booking escalations</h3>
+          <div id="staff-booking-flags" class="mt-3 text-sm text-gray-600">No open booking escalations.</div>
+        </section>
         <div class="bg-white border border-gray-200 rounded-2xl p-6">
           <div class="flex justify-between items-start gap-4 flex-wrap">
             <div>
@@ -10630,7 +10695,7 @@
       <p class="mt-2 text-sm text-gray-600">Paste an exact TikTok, Facebook, Instagram, YouTube, or X post. It goes to human review and never publishes automatically.</p>
       <form class="mt-5 space-y-3" onsubmit="submitHarvestSourceLink(event)">
         <label class="block text-sm font-bold text-gray-800">Exact post link
-          <input id="harvest-submission-url" type="url" required class="mt-1 w-full rounded-xl border border-green-200 px-4 py-3 text-sm" placeholder="https://www.tiktok.com/@agent/video/…">
+          <input id="harvest-submission-url" type="url" required class="mt-1 w-full rounded-xl border border-green-200 px-4 py-3 text-sm">
         </label>
         <label class="block text-sm font-bold text-gray-800">Useful details (optional)
           <textarea id="harvest-submission-note" rows="3" class="mt-1 w-full rounded-xl border border-green-200 px-4 py-3 text-sm" placeholder="Area, price, rent/sale, or contact shown in the post"></textarea>
