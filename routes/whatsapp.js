@@ -5182,6 +5182,34 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
       if (landmarkFallback?.status === 'matched') locationResolution = landmarkFallback;
     }
   }
+  // 23 Oct 2026: "GAYAZA MAKENKE 3 Bedrooms House For Sale" was refused as needing
+  // an "exact area and district". Gayaza on its own resolves to Wakiso, but the
+  // extra word (Makenke, a neighbourhood we do not hold) sent the whole phrase
+  // to fuzzy matching, which found a dozen Gayazas in unrelated districts. A
+  // place name we DO recognise inside the caption is the answer; the neighbourhood
+  // beside it is detail for a moderator. Longest phrase first, earliest first.
+  if (!locationResolution || locationResolution.status !== 'matched') {
+    // Only when exactly one recognised place is named. Two of them is a real
+    // ambiguity (Seeta and Bajjo, a place and the road beside it) and is settled
+    // further down, never guessed here. A word followed by "road" is a road.
+    const windowWords = locationCaption.split(/[^A-Za-z'’-]+/).filter(Boolean).slice(0, 12);
+    const found = new Map();
+    let anotherNameAmbiguous = false;
+    windowWords.forEach((word, index) => {
+      if (word.length < 4) return;
+      if (/^(?:road|rd|highway|hwy|street|avenue)$/i.test(windowWords[index + 1] || '')) return;
+      const attempt = resolveWhatsappLocation(word, { allowText: true });
+      // A second name that is itself ambiguous (Kasana + Nakasajja) is not
+      // something one recognised word may settle.
+      if (attempt?.status === 'ambiguous') anotherNameAmbiguous = true;
+      if (
+        attempt?.status === 'matched'
+        && Number(attempt.confidence || 0) >= 1
+        && !['district', 'region'].includes(normalizeInput(attempt.match?.level || ''))
+      ) found.set(attempt.match?.canonical_location_id || word.toLowerCase(), attempt);
+    });
+    if (found.size === 1 && !anotherNameAmbiguous) locationResolution = Array.from(found.values())[0];
+  }
   // "SEETA_BAJJO RD NEW TARMAC ACCESS 3 RENTAL UNITS…" — 9 Oct 2026. Seeta and
   // Bajjo are two different places, so the caption came back ambiguous and intake
   // asked for "exact area and district". But both of them are in Mukono. The
