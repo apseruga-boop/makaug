@@ -14472,10 +14472,10 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
     ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-200 p-2 text-xs text-red-900"><strong>Media blocked:</strong> ${mediaQualityWarningText}</div>`
     : "";
   return `
-    <article class="border border-gray-200 rounded-2xl p-4">
+    <article class="border border-gray-200 rounded-2xl p-4" data-staff-queue-card="1" data-property-id="${adminAttr(String(item.id || ""))}">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
-          <div class="font-black text-gray-900">${mkRef ? `<span class="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-black text-slate-700" data-mk-ref>${adminEscape(mkRef)}</span>` : ""}${adminEscape(item.title || "Untitled listing")} ${liveListing ? staffLiveListingBadgeHtml() : ""} ${brokerBadge} ${checkPriceTag}</div>
+          <div class="font-black text-gray-900" data-staff-queue-title>${mkRef ? `<span class="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-black text-slate-700" data-mk-ref>${adminEscape(mkRef)}</span>` : ""}${adminEscape(item.title || "Untitled listing")} ${liveListing ? staffLiveListingBadgeHtml() : ""} ${brokerBadge} ${checkPriceTag}</div>
           <div class="text-xs text-gray-500 mt-1">${adminEscape(typeLabel)} • ${adminEscape(location)} • ${adminEscape(price)}</div>
           <div class="text-xs text-gray-500 mt-1">Submitted by ${adminEscape(submitter)}${maskedPhone ? ` • ${adminEscape(maskedPhone)}` : ""}${submittedAt ? ` • ${adminEscape(submittedAt)}` : ""}</div>
           <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(item.source_platform || item.source || item.listed_via || "website")}${sourceUrl ? ` • <a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="font-black text-blue-700 underline underline-offset-2">open evidence</a>` : ""}</div>
@@ -14485,7 +14485,7 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
           ${duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800"><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : ""}
           ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
         </div>
-        <span class="shrink-0 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-2.5 py-1 text-[11px] font-black">${adminEscape(item.status || item.moderation_stage || "pending")}</span>
+        <span class="shrink-0 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-2.5 py-1 text-[11px] font-black" data-staff-queue-status>${adminEscape(item.status || item.moderation_stage || "pending")}</span>
       </div>
       <div class="mt-3 flex flex-wrap gap-2">
         <button type="button" onclick="openStaffListingPreview(${propertyIdArg(item.id)})" class="bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-eye mr-1"></i>Preview & edit</button>
@@ -16973,11 +16973,11 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
     <div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
       <div class="bg-slate-900 text-white p-5 flex justify-between gap-4">
         <div>
-          <div class="text-xs uppercase tracking-wide text-emerald-200 font-black">${staffListingIsLive(preview.status) ? "Live listing" : "Preview before publishing"}</div>
+          <div class="text-xs uppercase tracking-wide text-emerald-200 font-black" data-staff-preview-eyebrow>${staffListingIsLive(preview.status) ? "Live listing" : "Preview before publishing"}</div>
           <h3 class="text-2xl font-black mt-1">${adminEscape(preview.title || "Untitled listing")}</h3>
-          <p class="text-sm text-slate-300 mt-1">${adminEscape([preview.area, preview.district].filter(Boolean).join(", ") || "Location needs checking")} • ${adminEscape(preview.status || "pending")}</p>
+          <p class="text-sm text-slate-300 mt-1" data-staff-preview-status-line>${adminEscape([preview.area, preview.district].filter(Boolean).join(", ") || "Location needs checking")} • ${adminEscape(preview.status || "pending")}</p>
           <p class="text-xs text-emerald-100 mt-1" data-staff-preview-save-state></p>
-          ${staffListingIsLive(preview.status) ? `<div class="mt-2 flex flex-wrap items-center gap-2" data-live-listing-edit="1">${staffLiveListingBadgeHtml()}<span class="text-xs font-bold text-emerald-100">Saving changes keeps this listing live. Every change is recorded.</span></div>` : ""}
+          <div class="mt-2 flex flex-wrap items-center gap-2${staffListingIsLive(preview.status) ? "" : " hidden"}" data-staff-preview-live-slot data-live-listing-edit="1">${staffListingIsLive(preview.status) ? `${staffLiveListingBadgeHtml()}<span class="text-xs font-bold text-emerald-100">Saving changes keeps this listing live. Every change is recorded.</span>` : ""}</div>
         </div>
         <div class="flex items-center gap-2">
           ${currentPage === "staff-review" ? "" : `<a href="/staff-dashboard/review/${adminAttr(encodeURIComponent(String(preview.id || "")))}" target="_blank" rel="noopener" class="hidden sm:inline-flex items-center rounded-full bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-black text-white">Open on its own page</a>`}
@@ -17024,7 +17024,8 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
             <textarea id="admin-review-notes" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[90px]" placeholder="Add a note. It is kept with your name and the time."></textarea>
             ${moderationPriceBasisConfirmationHtml(preview, "staff-preview")}
             ${moderationStructuredReasonControlsHtml("staff-preview")}
-            <textarea id="admin-review-reason" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[80px]" placeholder="Type the reason (required to reject)">${adminEscape(typedDecisionReasonForPrefill(preview))}</textarea>
+            <textarea id="admin-review-reason" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[80px]" placeholder="Type the reason (required to reject or unpublish)">${adminEscape(typedDecisionReasonForPrefill(preview))}</textarea>
+            <p class="mt-1 hidden text-xs font-bold text-red-700" data-staff-unpublish-error role="alert"></p>
             ${preview.moderation_reason ? `<p class="mt-1 text-[11px] text-gray-500" data-staff-status-note>Current status note (not a rejection reason): ${adminEscape(preview.moderation_reason)}</p>` : ""}
           </section>
           <section class="rounded-xl border border-gray-200 p-4">
@@ -17037,8 +17038,10 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
               <div class="hidden" data-approval-blocker-host></div>
               <button type="button" data-reject-button="staff-preview" onclick="staffRejectPreviewListing(${propertyIdArg(preview.id)})" class="bg-red-600 hover:bg-red-500 text-white rounded-xl px-4 py-2 text-sm font-black">Reject with reason</button>
               <button type="button" onclick="staffModerateListing(${propertyIdArg(preview.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-black">Keep pending</button>
+              <div data-staff-publication-actions class="contents">
               ${staffListingIsLive(preview.status) ? `<button type="button" data-staff-unpublish="1" onclick="staffUnpublishPreviewListing(${propertyIdArg(preview.id)})" class="border border-amber-300 text-amber-950 hover:bg-amber-50 rounded-xl px-4 py-2 text-sm font-black">Unpublish</button>` : ""}
               ${staffListingCanRepublish(preview) ? `<button type="button" data-staff-republish="1" onclick="staffRepublishPreviewListing(${propertyIdArg(preview.id)})" class="border border-emerald-300 text-emerald-900 hover:bg-emerald-50 rounded-xl px-4 py-2 text-sm font-black">Publish again</button>` : ""}
+              </div>
             </div>
             <p class="text-xs text-gray-500 mt-3">Approve uses the same live publish API as King moderation. If checklist warnings remain, the backend will block approval.</p>
           </section>
@@ -17774,14 +17777,117 @@ async function staffRefreshOpenPreview(propertyId, preview) {
   if (response?.data?.id) renderStaffListingPreviewModal(response.data, { allowSwitch: true });
 }
 
+function staffPatchQueueRowPublication(preview = {}) {
+  const id = String(preview.id || "");
+  if (!id) return;
+  const live = staffListingIsLive(preview.status);
+  document.querySelectorAll(`[data-staff-queue-card="1"][data-property-id="${id}"]`).forEach((card) => {
+    const status = card.querySelector("[data-staff-queue-status]");
+    if (status) status.textContent = preview.status || "pending";
+    const title = card.querySelector("[data-staff-queue-title]");
+    const badge = title?.querySelector("[data-live-listing-badge]");
+    if (live && title && !badge) title.insertAdjacentHTML("beforeend", ` ${staffLiveListingBadgeHtml()}`);
+    if (!live && badge) badge.remove();
+  });
+  ["main", "broker", "search"].forEach((segment) => {
+    const rows = staffReviewQueueState[segment]?.rows;
+    if (!Array.isArray(rows)) return;
+    rows.forEach((row) => {
+      if (String(row?.id || "") !== id) return;
+      row.status = preview.status || row.status;
+      if (preview.extra_fields && typeof preview.extra_fields === "object") {
+        row.extra_fields = { ...(row.extra_fields || {}), ...preview.extra_fields };
+      }
+      if (Object.prototype.hasOwnProperty.call(preview, "moderation_reason")) row.moderation_reason = preview.moderation_reason;
+    });
+  });
+}
+
+// Status, the live badge and Unpublish / Publish again change where they
+// already are. Rebuilding the editor blanks the screen and redraws the map.
+function staffPatchPreviewPublication(preview = {}) {
+  const modal = document.getElementById("staff-listing-preview-modal");
+  const id = String(preview?.id || modal?.dataset?.propertyId || "");
+  if (modal && id && String(modal.dataset.propertyId || "") === id) {
+    const previous = adminActiveReview && String(adminActiveReview.id || "") === id ? adminActiveReview : {};
+    const next = {
+      ...previous,
+      ...preview,
+      id,
+      extra_fields: preview.extra_fields && typeof preview.extra_fields === "object"
+        ? preview.extra_fields
+        : (previous.extra_fields || {})
+    };
+    adminActiveReview = next;
+    const live = staffListingIsLive(next.status);
+    const eyebrow = modal.querySelector("[data-staff-preview-eyebrow]");
+    if (eyebrow) eyebrow.textContent = live ? "Live listing" : "Preview before publishing";
+    const line = modal.querySelector("[data-staff-preview-status-line]");
+    if (line) {
+      const place = [next.area, next.district].filter(Boolean).join(", ") || "Location needs checking";
+      line.textContent = `${place} • ${next.status || "pending"}`;
+    }
+    const slot = modal.querySelector("[data-staff-preview-live-slot]");
+    if (slot) {
+      slot.classList.toggle("hidden", !live);
+      slot.innerHTML = live
+        ? `${staffLiveListingBadgeHtml()}<span class="text-xs font-bold text-emerald-100">Saving changes keeps this listing live. Every change is recorded.</span>`
+        : "";
+    }
+    const actions = modal.querySelector("[data-staff-publication-actions]");
+    if (actions) {
+      const idArg = propertyIdArg(next.id);
+      const unpublishButton = live
+        ? `<button type="button" data-staff-unpublish="1" onclick="staffUnpublishPreviewListing(${idArg})" class="border border-amber-300 text-amber-950 hover:bg-amber-50 rounded-xl px-4 py-2 text-sm font-black">Unpublish</button>`
+        : "";
+      const republishButton = staffListingCanRepublish(next)
+        ? `<button type="button" data-staff-republish="1" onclick="staffRepublishPreviewListing(${idArg})" class="border border-emerald-300 text-emerald-900 hover:bg-emerald-50 rounded-xl px-4 py-2 text-sm font-black">Publish again</button>`
+        : "";
+      actions.innerHTML = `${unpublishButton}${republishButton}`;
+    }
+    const reasonBox = modal.querySelector("#admin-review-reason");
+    let note = modal.querySelector("[data-staff-status-note]");
+    if (next.moderation_reason) {
+      if (!note && reasonBox) {
+        note = document.createElement("p");
+        note.className = "mt-1 text-[11px] text-gray-500";
+        note.setAttribute("data-staff-status-note", "");
+        reasonBox.insertAdjacentElement("afterend", note);
+      }
+      if (note) note.textContent = `Current status note (not a rejection reason): ${next.moderation_reason}`;
+    } else if (note) {
+      note.remove();
+    }
+  }
+  const direct = document.getElementById("staff-direct-review-status");
+  if (direct && currentPage === "staff-review") {
+    direct.textContent = `${preview.title || adminActiveReview?.title || "Listing"} • ${preview.status || "pending"}.`;
+  }
+  staffPatchQueueRowPublication({ ...preview, id });
+  return true;
+}
+
 async function staffUnpublishPreviewListing(propertyId) {
+  const modal = document.getElementById("staff-listing-preview-modal");
   const review = staffReviewPatch();
   const reason = String(review.reason || "").trim();
+  const errorEl = modal?.querySelector("[data-staff-unpublish-error]");
+  const reasonEl = modal?.querySelector("#admin-review-reason") || document.getElementById("admin-review-reason");
   if (!reason || isDefaultStatusNoteText(reason, adminActiveReview || {})) {
-    toast("Type why this live listing is being unpublished.");
-    document.getElementById("admin-review-reason")?.focus();
+    if (errorEl) {
+      errorEl.textContent = "Type why this live listing is being unpublished.";
+      errorEl.classList.remove("hidden");
+    }
+    reasonEl?.setAttribute("aria-invalid", "true");
+    reasonEl?.focus();
     return;
   }
+  if (errorEl) {
+    errorEl.textContent = "";
+    errorEl.classList.add("hidden");
+  }
+  reasonEl?.removeAttribute("aria-invalid");
+  if (typeof window.confirm === "function" && !window.confirm("Unpublish this listing? It will disappear from the site.")) return;
   try {
     setStaffPreviewDecisionBusy(true);
     const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/unpublish`, {
@@ -17789,8 +17895,7 @@ async function staffUnpublishPreviewListing(propertyId) {
       body: { reason }
     }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Unpublish listing");
     toast("Listing unpublished. It is off the public site until you publish it again.");
-    await staffRefreshOpenPreview(propertyId, response?.data);
-    queueStaffDashboardRefreshAfterModeration({ keepPreviewOpen: true, refreshPublicSummary: true });
+    staffPatchPreviewPublication(response?.data || { id: propertyId, status: "hidden" });
   } catch (error) {
     toast(`Unpublish failed: ${error.message || "request failed"}`);
   } finally {
@@ -17806,8 +17911,7 @@ async function staffRepublishPreviewListing(propertyId) {
       body: { reason: "Published again from the moderation editor" }
     }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Publish listing again");
     toast("Listing published again.");
-    await staffRefreshOpenPreview(propertyId, response?.data);
-    queueStaffDashboardRefreshAfterModeration({ keepPreviewOpen: true, refreshPublicSummary: true });
+    staffPatchPreviewPublication(response?.data || { id: propertyId, status: "approved" });
   } catch (error) {
     toast(`Publish again failed: ${error.message || "request failed"}`);
   } finally {

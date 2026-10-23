@@ -4894,7 +4894,7 @@ function staffUnpublishReason(reason, property = {}) {
 router.post('/properties/:id/unpublish', async (req, res, next) => {
   try {
     const existing = await db.query(
-      `SELECT id, status, title, moderation_reason, extra_fields
+      `SELECT id, status, title, moderation_reason, moderation_stage, extra_fields, inquiry_reference
        FROM properties WHERE id = $1 LIMIT 1`,
       [req.params.id]
     );
@@ -4918,13 +4918,16 @@ router.post('/properties/:id/unpublish', async (req, res, next) => {
                 'unpublished_from_status', $4::text,
                 'unpublished_reason', $2::text,
                 'unpublished_at', to_jsonb(NOW()),
-                'unpublished_by', $3::text
+                'unpublished_by', $3::text,
+                'unpublished_previous_moderation_reason', to_jsonb($6::text),
+                'unpublished_previous_moderation_stage', to_jsonb($7::text)
               ),
               updated_at = NOW()
         WHERE id = $1
           AND lower(status) = $5
-        RETURNING id::text AS id, status`,
-      [req.params.id, reason, actor, currentStatus, currentStatus]
+        RETURNING id::text AS id, title, status, moderation_reason, moderation_stage,
+                  extra_fields, inquiry_reference`,
+      [req.params.id, reason, actor, currentStatus, currentStatus, row.moderation_reason, row.moderation_stage]
     );
     if (!updated.rows.length) {
       return res.status(409).json({ ok: false, error: 'This listing changed before it could be unpublished.' });
@@ -4936,14 +4939,16 @@ router.post('/properties/:id/unpublish', async (req, res, next) => {
       [req.params.id, actor, row.status, reason]
     );
     clearStaffFastDashboardCache();
+    // Public /property/:id caches a miss. Without this, the page keeps saying
+    // "Property not found" after the row is hidden, and again after Publish again.
+    clearPublicListingCaches('staff_listing_unpublished');
     invalidatePublicInventoryMetricsCache('staff_listing_unpublished');
     logStaffActivityInBackground(req, 'staff_listing_unpublished', {
       targetType: 'property',
       targetId: req.params.id,
       metadata: { from_status: row.status, reason }
     });
-    const preview = await loadStaffPropertyPreview(updated.rows[0].id);
-    return res.json({ ok: true, data: preview || updated.rows[0] });
+    return res.json({ ok: true, data: updated.rows[0] });
   } catch (error) {
     logger.error('Staff unpublish failed', { message: error.message });
     return next(error);
@@ -4953,7 +4958,7 @@ router.post('/properties/:id/unpublish', async (req, res, next) => {
 router.post('/properties/:id/republish', async (req, res, next) => {
   try {
     const existing = await db.query(
-      `SELECT id, status, title, extra_fields
+      `SELECT id, status, title, moderation_reason, moderation_stage, extra_fields, inquiry_reference
        FROM properties WHERE id = $1 LIMIT 1`,
       [req.params.id]
     );
@@ -4966,16 +4971,44 @@ router.post('/properties/:id/republish', async (req, res, next) => {
     }
     const actor = actorId(req);
     const note = cleanText(req.body?.reason || req.body?.notes) || 'Published again from the moderation editor';
+    // Restore the public status and the moderation note unpublish overwrote.
+    // Status alone is what the public query checks (approved/live/published).
+    // The previous note is restored so the editor does not keep the unpublish
+    // reason as the listing's status note. Audit keys that are not part of
+    // the public predicate are removed so the row matches its pre-unpublish
+    // public state, plus a republish note.
     const updated = await db.query(
       `UPDATE properties
           SET status = $2,
+              moderation_reason = CASE
+                WHEN COALESCE(extra_fields, '{}'::jsonb) ? 'unpublished_previous_moderation_reason'
+                  THEN NULLIF(extra_fields->>'unpublished_previous_moderation_reason', '')
+                ELSE moderation_reason
+              END,
+              moderation_stage = CASE
+                WHEN NULLIF(extra_fields->>'unpublished_previous_moderation_stage', '') IS NOT NULL
+                  THEN extra_fields->>'unpublished_previous_moderation_stage'
+                ELSE moderation_stage
+              END,
               reviewed_by = COALESCE($3::uuid, reviewed_by),
-              extra_fields = (COALESCE(extra_fields, '{}'::jsonb) - 'unpublished_from_status')
-                || jsonb_build_object('republished_at', to_jsonb(NOW()), 'republished_by', $3::text, 'republished_note', $4::text),
+              extra_fields = (
+                COALESCE(extra_fields, '{}'::jsonb)
+                  - 'unpublished_from_status'
+                  - 'unpublished_reason'
+                  - 'unpublished_at'
+                  - 'unpublished_by'
+                  - 'unpublished_previous_moderation_reason'
+                  - 'unpublished_previous_moderation_stage'
+              ) || jsonb_build_object(
+                'republished_at', to_jsonb(NOW()),
+                'republished_by', $3::text,
+                'republished_note', $4::text
+              ),
               updated_at = NOW()
         WHERE id = $1
           AND lower(status) = 'hidden'
-        RETURNING id::text AS id, status`,
+        RETURNING id::text AS id, title, status, moderation_reason, moderation_stage,
+                  extra_fields, inquiry_reference`,
       [req.params.id, restore, actor, note]
     );
     if (!updated.rows.length) {
@@ -4988,14 +5021,18 @@ router.post('/properties/:id/republish', async (req, res, next) => {
       [req.params.id, actor, restore, note]
     );
     clearStaffFastDashboardCache();
+    // Listing 9BBB26 (1691d2bd-ffed-4e16-a9f5-2f9666dba642) was approved again
+    // in the editor while /property/:id kept the cached 404. The cache key is
+    // the property id, so a query-string cache-buster does not drop it, and
+    // a stale hit keeps serving "Property not found" until a later refresh.
+    clearPublicListingCaches('staff_listing_republished');
     invalidatePublicInventoryMetricsCache('staff_listing_republished');
     logStaffActivityInBackground(req, 'staff_listing_republished', {
       targetType: 'property',
       targetId: req.params.id,
-      metadata: { to_status: restore }
+      metadata: { to_status: restore, from_status: 'hidden' }
     });
-    const preview = await loadStaffPropertyPreview(updated.rows[0].id);
-    return res.json({ ok: true, data: preview || updated.rows[0] });
+    return res.json({ ok: true, data: updated.rows[0] });
   } catch (error) {
     logger.error('Staff republish failed', { message: error.message });
     return next(error);

@@ -51,6 +51,9 @@ const SEO_LISTING_CACHE_MAX_ENTRIES = Math.max(
 );
 const listingCache = new Map();
 const listingCacheInFlight = new Map();
+// Bumped on every clear. An in-flight refresh that started before unpublish
+// or republish must not write a stale 404 (or a stale live row) back afterwards.
+let seoListingCacheGeneration = 0;
 
 const CATEGORY_GRID_IDS = Object.freeze({
   sale: 'sale-grid',
@@ -164,8 +167,15 @@ function setSeoListingCacheEntry(key, value, now = Date.now()) {
 }
 
 function clearSeoListingCache() {
+  seoListingCacheGeneration += 1;
   listingCache.clear();
   listingCacheInFlight.clear();
+}
+
+function rememberSeoListingCacheEntry(generation, key, value) {
+  if (generation !== seoListingCacheGeneration) return null;
+  setSeoListingCacheEntry(key, value);
+  return getSeoListingCacheEntry(key);
 }
 
 async function loadSeoListingCacheEntry(key, loader, { force = false } = {}) {
@@ -176,12 +186,10 @@ async function loadSeoListingCacheEntry(key, loader, { force = false } = {}) {
     const stale = getStaleSeoListingCacheEntry(key);
     if (stale) {
       if (!pending) {
+        const generation = seoListingCacheGeneration;
         const refresh = Promise.resolve()
           .then(loader)
-          .then((value) => {
-            setSeoListingCacheEntry(key, value);
-            return getSeoListingCacheEntry(key);
-          });
+          .then((value) => rememberSeoListingCacheEntry(generation, key, value));
         listingCacheInFlight.set(key, refresh);
         refresh
           .catch(() => null)
@@ -194,12 +202,10 @@ async function loadSeoListingCacheEntry(key, loader, { force = false } = {}) {
     if (pending) return pending;
   }
 
+  const generation = seoListingCacheGeneration;
   const pending = Promise.resolve()
     .then(loader)
-    .then((value) => {
-      setSeoListingCacheEntry(key, value);
-      return getSeoListingCacheEntry(key);
-    });
+    .then((value) => rememberSeoListingCacheEntry(generation, key, value));
   if (force) return pending;
 
   listingCacheInFlight.set(key, pending);
