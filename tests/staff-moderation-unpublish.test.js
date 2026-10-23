@@ -58,6 +58,8 @@ test('approval records the staff member and the editor shows that name', () => {
   assert.match(sql, /DISABLE TRIGGER trg_properties_updated_at/);
   assert.match(sql, /ENABLE TRIGGER trg_properties_updated_at/);
   assert.match(sql, /p\.approved_by IS NULL/);
+  assert.match(sql, /u\.id::text = e\.actor_id/);
+  assert.match(sql, /approved_by = latest\.actor_id::uuid/);
   const numbers = fs.readdirSync(path.join(__dirname, '../db/migrations'))
     .map((name) => Number(name.split('_')[0]))
     .filter((n) => Number.isFinite(n));
