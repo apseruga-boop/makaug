@@ -17,8 +17,8 @@ test('duplicate candidate lookup is two indexable branches, not one OR scan', ()
   assert.match(sql, /p\.extra_fields->>'source_quality_suppressed'/);
 });
 
-test('migration 159 builds the preview indexes concurrently', () => {
-  const sql = read('db/migrations/159_staff_preview_duplicate_indexes.sql');
+test('migration 160 builds the preview indexes concurrently', () => {
+  const sql = read('db/migrations/160_staff_preview_duplicate_indexes.sql');
   assert.match(sql, /CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_properties_preview_phone_suffix_area/);
   assert.match(sql, /CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_properties_preview_source_url_trgm/);
   assert.match(sql, /RIGHT\(regexp_replace\(COALESCE\(lister_phone, ''\), '\\D', '', 'g'\), 9\)/);
@@ -27,7 +27,7 @@ test('migration 159 builds the preview indexes concurrently', () => {
   const numbers = fs.readdirSync(path.join(__dirname, '../db/migrations'))
     .map((name) => Number(name.split('_')[0]))
     .filter((n) => Number.isFinite(n));
-  assert.equal(Math.max(...numbers.filter((n) => n !== 159)), 158);
+  assert.equal(Math.max(...numbers.filter((n) => n !== 160)), 159);
 });
 
 test('staff preview names each query and does not hash every image in one join', () => {

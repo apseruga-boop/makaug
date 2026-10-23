@@ -102,7 +102,7 @@ function duplicateReason(listing = {}, candidate = {}) {
   return null;
 }
 
-// Same expression as idx_properties_preview_source_url_trgm (migration 159).
+// Same expression as idx_properties_preview_source_url_trgm (migration 160).
 const DUPLICATE_SOURCE_URL_SQL = `COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url', '')`;
 
 // Rows that share at least one strong signal with the listing; classified in JS.
