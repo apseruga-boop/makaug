@@ -11,9 +11,10 @@
  * so tests never touch a real sender.
  *
  * The clock is an in-process scheduler, the same kind the lead desk uses.
- * Reminders, the staff escalation and the Monday availability check-in run
- * from tickAgentBookings. On a sleeping host those ticks wait until the
- * process is awake.
+ * Reminders and the staff escalation run from tickAgentBookings. The Monday
+ * availability check-in uses that same tick, and it stays off unless
+ * AGENT_WEEKLY_CHECKIN_ENABLED is true. On a sleeping host those ticks wait
+ * until the process is awake.
  */
 
 const crypto = require('crypto');
@@ -70,6 +71,7 @@ function bookingConfig(env = process.env) {
     minReplies: numberSetting(env.AGENT_BOOKING_MIN_REPLIES, 3, 1, 100),
     outcomeDelayHours: numberSetting(env.AGENT_BOOKING_OUTCOME_DELAY_HOURS, 2, 0, 48),
     schedulerEnabled: String(env.AGENT_BOOKING_SCHEDULER_ENABLED || '').trim().toLowerCase() !== 'false',
+    weeklyCheckinEnabled: flagOn(env.AGENT_WEEKLY_CHECKIN_ENABLED),
     pollMs: numberSetting(env.AGENT_BOOKING_POLL_MS, 5 * 60 * 1000, 60 * 1000, 60 * 60 * 1000),
     realertHours: numberSetting(env.AGENT_BOOKING_ESCALATION_REALERT_HOURS, 12, 1, 24 * 14),
     noteLimit: numberSetting(env.AGENT_BOOKING_NOTE_LIMIT, 900, 400, 4000)
@@ -1684,7 +1686,12 @@ async function tickAgentBookings(db, now = new Date(), deps = {}) {
       LIMIT 200`
   );
   const summary = { reminded: 0, escalated: 0, visitor_reminders: 0, outcomes: 0, weekly: 0 };
+  let bookingRowsSeen = 0;
   for (const row of due.rows) {
+    if (bookingRowsSeen > 0 && bookingRowsSeen % 5 === 0) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    bookingRowsSeen += 1;
     const request = describeRequest(row, config);
     const actions = dueActions(request, now, config);
     for (const action of actions) {
@@ -1778,7 +1785,9 @@ async function tickAgentBookings(db, now = new Date(), deps = {}) {
       }
     }
   }
-  if (shouldCatchUpWeekly(now, config)) {
+  // Off unless AGENT_WEEKLY_CHECKIN_ENABLED is true. No query, send, or
+  // check-in row while paused, so a later week can still catch up.
+  if (config.weeklyCheckinEnabled && shouldCatchUpWeekly(now, config)) {
     const key = weekKey(now, config);
     const agents = await db.query(
       `/* agent-booking:weekly-agents */
@@ -1837,12 +1846,13 @@ let schedulerTimer = null;
 function startAgentBookingScheduler(db) {
   if (schedulerTimer || !process.env.DATABASE_URL || !bookingConfig().schedulerEnabled) return;
   const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
+  const { runBackgroundWork } = require('../config/database');
   const pollMs = bookingConfig().pollMs;
   let running = false;
   const run = () => {
     if (running) return;
     running = true;
-    tickAgentBookings(db).catch((error) => {
+    runBackgroundWork(() => tickAgentBookings(db)).catch((error) => {
       logger.error('Agent booking tick failed', { error: error.message });
     }).finally(() => {
       running = false;
@@ -1856,7 +1866,8 @@ function startAgentBookingScheduler(db) {
     catchUp: true,
     quietHours: bookingConfig().quietHours,
     escalationTargets: escalationTargets().length,
-    realertHours: bookingConfig().realertHours
+    realertHours: bookingConfig().realertHours,
+    weeklyCheckinEnabled: bookingConfig().weeklyCheckinEnabled
   });
 }
 

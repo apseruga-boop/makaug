@@ -115,7 +115,8 @@ test('agents the public API 404s stay hidden even when a listing names them', ()
 test('the sitemap only advertises approved agents a public profile can open', () => {
   const seo = fs.readFileSync(path.join(root, 'services/publicSeoService.js'), 'utf8');
   const eligibility = fs.readFileSync(path.join(root, 'services/publicAgentEligibilityService.js'), 'utf8');
-  assert.match(seo, /agent_id,\s+EXISTS/);
+  assert.match(seo, /LEFT JOIN LATERAL/);
+  assert.match(seo, /\(public_agent\.id IS NOT NULL\) AS agent_public/);
   assert.match(seo, /publicSitemapAgentWhereSql\('a'\)/);
   assert.match(eligibility, /LOWER\(COALESCE\(\$\{a\}\.status, ''\)\) = 'approved'/);
   assert.match(eligibility, /user_id IS NOT NULL/);

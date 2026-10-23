@@ -98,7 +98,7 @@ function shareCardUrl(agent, version) {
 async function countAgentListings(agentId) {
   const result = await safe(db.query(
     `SELECT COUNT(*)::int AS total FROM properties p
-     WHERE (p.agent_id = $1 OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text)
+     WHERE (p.agent_id::text = $1::text OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text)
        AND p.status = 'approved'`,
     [agentId]
   ), { rows: [] });

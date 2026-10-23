@@ -1374,7 +1374,7 @@ async function loadShortStayRows(db, agentIds) {
           AND l.king_facts_confirmed = TRUE
           AND l.listing_fee_status IN ('paid', 'waived')
           AND (
-            (a.user_id IS NOT NULL AND l.host_user_id = a.user_id)
+            (a.user_id IS NOT NULL AND l.host_user_id::text = a.user_id::text)
             OR (
               length(regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')) >= 9
               AND (

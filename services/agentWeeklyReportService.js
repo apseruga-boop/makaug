@@ -181,7 +181,7 @@ async function searchAgents(query, limit = 20) {
 
 const OWNED_PROPERTIES_SQL = `
   SELECT p.id FROM properties p
-  WHERE p.agent_id = $1 OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text`;
+  WHERE p.agent_id::text = $1::text OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text`;
 
 // The agent's property ids, fetched once and passed to every window query:
 // `= ANY($ids)` lets Postgres use the property_open index per id instead of
@@ -399,7 +399,7 @@ async function countryTrackingSince() {
 async function countActiveListings(agentId) {
   const result = await db.query(
     `SELECT COUNT(*)::int AS total FROM properties p
-     WHERE (p.agent_id = $1 OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text)
+     WHERE (p.agent_id::text = $1::text OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text)
        AND p.status = 'approved'`,
     [agentId]
   );

@@ -25464,6 +25464,8 @@ async function adminUpdateHousePlacementCreative(placementKey) {
   if (image == null) return;
   const headline = window.prompt("Headline", String(slot.headline || ""));
   if (headline == null) return;
+  const subline = window.prompt("Subline (optional)", String(slot.subline || ""));
+  if (subline == null) return;
   const position = window.prompt("Image position (for example: left center)", String(slot.background_position || "left center"));
   if (position == null) return;
   const copySide = window.prompt("Copy side: left or right", String(slot.copy_side || "right"));
@@ -25475,6 +25477,7 @@ async function adminUpdateHousePlacementCreative(placementKey) {
       body: {
         preview_image_url: image.trim(),
         headline: headline.trim(),
+        subline: subline.trim(),
         background_position: position.trim(),
         copy_side: copySide.trim().toLowerCase()
       }
@@ -43579,73 +43582,84 @@ const HOUSE_AD_SAMPLES = {
   "home-featured": {
     image: "/assets/house-ads-v3/home-hero.webp",
     mobileImage: "/assets/house-ads-v3/home-hero-mobile.webp",
-    headline: "Home starts here.",
+    headline: "Every property in Uganda, in one place.",
+    subline: "Search homes, land and rentals by area.",
     backgroundPosition: "left center"
   },
   "home-brokers": {
     image: "/assets/house-ads-v3/agents.webp",
     mobileImage: "/assets/house-ads-v3/agents-mobile.webp",
-    headline: "The right hands for your keys.",
+    headline: "Talk to an agent who knows the area.",
+    subline: "Open an agent profile and message them direct.",
     backgroundPosition: "left center",
     strongScrim: true
   },
   "sale-grid": {
     image: "/assets/house-ads-v3/sale.webp",
     mobileImage: "/assets/house-ads-v3/sale-mobile.webp",
-    headline: "Say hello to yours.",
-    backgroundPosition: "center 30%",
+    headline: "Search by neighbourhood.",
+    subline: "Filter by area, bedrooms and property type.",
+    backgroundPosition: "left center",
     strongScrim: true
   },
   "rent-grid": {
     image: "/assets/house-ads-v3/rent.webp",
     mobileImage: "/assets/house-ads-v3/rent-mobile.webp",
-    headline: "Move in Monday.",
+    headline: "Get new rentals first.",
+    subline: "Tap Save search on any results page.",
     backgroundPosition: "left center"
   },
   "student-grid": {
     image: "/assets/house-ads-v3/students.webp",
     mobileImage: "/assets/house-ads-v3/students-mobile.webp",
-    headline: "Your campus. Your room.",
-    backgroundPosition: "left 25%",
+    headline: "Find a room near your campus.",
+    subline: "Search hostels and rooms by university area.",
+    backgroundPosition: "left center",
     studentsScrim: true
   },
   "commercial-grid": {
     image: "/assets/house-ads-v3/commercial.webp",
     mobileImage: "/assets/house-ads-v3/commercial-mobile.webp",
-    headline: "Open for business.",
+    headline: "Shops and offices, one search.",
+    subline: "Filter by town and type of space.",
     backgroundPosition: "right center",
     copySide: "left"
   },
   "land-grid": {
     image: "/assets/house-ads-v3/land.webp",
     mobileImage: "/assets/house-ads-v3/land-mobile.webp",
-    headline: "Own the hill.",
-    backgroundPosition: "center 40%"
+    headline: "Walk the plot first.",
+    subline: "Read our land safety tips, then visit with the seller.",
+    backgroundPosition: "left center"
   },
   "marketplace-results": {
     image: "/assets/house-ads-v3/marketplace.webp",
     mobileImage: "/assets/house-ads-v3/marketplace-mobile.webp",
-    headline: "Built by people who care.",
+    headline: "Find surveyors, lawyers and builders.",
+    subline: "Browse property services by area and specialty.",
     backgroundPosition: "left center"
   },
   "brokers-grid": {
     image: "/assets/house-ads-v3/brokers.webp",
     mobileImage: "/assets/house-ads-v3/brokers-mobile.webp",
-    headline: "Walk in with an expert.",
-    backgroundPosition: "20% center",
+    headline: "Agents who know the area.",
+    subline: "Open a profile to see their current listings.",
+    backgroundPosition: "left center",
     strongScrim: true
   },
   "mortgage-results": {
     image: "/assets/house-ads-v3/mortgage.webp",
     mobileImage: "/assets/house-ads-v3/mortgage-mobile.webp",
-    headline: "Closer than you think.",
-    backgroundPosition: "25% 30%",
+    headline: "Plan your home loan before you view.",
+    subline: "Use the repayment calculator to compare lenders.",
+    backgroundPosition: "left center",
     strongScrim: true
   },
   "property-detail": {
     image: "/assets/house-ads-v3/detail.webp",
     mobileImage: "/assets/house-ads-v3/detail-mobile.webp",
-    headline: "Open the door.",
+    headline: "Like it? Ask on WhatsApp.",
+    subline: "WhatsApp 0780 863 394 with the listing link.",
     backgroundPosition: "left center"
   }
 };
@@ -43667,8 +43681,14 @@ function buildRevenuePlacementMarkup(slotKey, context) {
   const image = safeHouseAdUrl(configured?.preview_image_url, fallback.image);
   const usingBundledImage = image === fallback.image;
   const mobileImage = usingBundledImage ? fallback.mobileImage : image;
+  const imageUrl = usingBundledImage ? `${image}?v=house-banners-20261023` : image;
+  const mobileImageUrl = usingBundledImage ? `${mobileImage}?v=house-banners-20261023` : mobileImage;
   const headlineKey = String(configured?.headline || fallback.headline).trim();
   const headline = translateListingLabel(headlineKey);
+  const sublineValue = configured && Object.prototype.hasOwnProperty.call(configured, "subline")
+    ? configured.subline
+    : fallback.subline;
+  const subline = translateListingLabel(String(sublineValue || "").trim());
   const ctaLabel = translateListingLabel(String(configured?.cta_label || "Advertise here").trim());
   const ctaUrl = safeHouseAdUrl(configured?.cta_url, "/advertise");
   const copySide = String(configured?.copy_side || fallback.copySide || "right").toLowerCase() === "left" ? "left" : "right";
@@ -43681,12 +43701,13 @@ function buildRevenuePlacementMarkup(slotKey, context) {
     <div class="mk-house-band-wrap max-w-7xl mx-auto">
       <section class="mk-house-band${scrimClass}" data-copy-side="${copySide}" data-house-placement="${adminAttr(slotKey)}" aria-label="${adminAttr(`${context || "makaug.com"} sponsored placement`)}">
         <picture>
-          <source media="(max-width: 640px)" srcset="${adminAttr(mobileImage)}">
-          <img class="mk-house-band__image" src="${adminAttr(image)}" alt="" style="object-position:${adminAttr(backgroundPosition)}" loading="lazy" decoding="async">
+          <source media="(max-width: 640px)" srcset="${adminAttr(mobileImageUrl)}">
+          <img class="mk-house-band__image" src="${adminAttr(imageUrl)}" alt="" style="object-position:${adminAttr(backgroundPosition)}" loading="lazy" decoding="async">
         </picture>
         <div class="mk-house-band__scrim" aria-hidden="true"></div>
         <div class="mk-house-band__copy">
           <h2 class="mk-house-band__headline">${adminEscape(headline)}</h2>
+          ${subline ? `<p class="mk-house-band__subline">${adminEscape(subline)}</p>` : ""}
           <a class="mk-house-band__pill" href="/" aria-label="makaug.com">makaug.com</a>
         </div>
         <a class="mk-house-band__tag" href="${adminAttr(ctaUrl)}">${adminEscape(sponsorLabel)}</a>

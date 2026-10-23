@@ -7541,6 +7541,7 @@ router.patch('/advertising/placements/:key', async (req, res, next) => {
     if (Object.prototype.hasOwnProperty.call(req.body, 'notes')) add('notes', String(req.body.notes || '').trim() || null);
     if (Object.prototype.hasOwnProperty.call(req.body, 'preview_image_url')) add('preview_image_url', String(req.body.preview_image_url || '').trim() || null);
     if (Object.prototype.hasOwnProperty.call(req.body, 'headline')) add('headline', String(req.body.headline || '').trim() || null);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'subline')) add('subline', String(req.body.subline || '').trim() || null);
     if (Object.prototype.hasOwnProperty.call(req.body, 'cta_label')) add('cta_label', String(req.body.cta_label || '').trim() || null);
     if (Object.prototype.hasOwnProperty.call(req.body, 'cta_url')) add('cta_url', String(req.body.cta_url || '').trim() || null);
     if (Object.prototype.hasOwnProperty.call(req.body, 'background_position')) add('background_position', String(req.body.background_position || '').trim() || null);

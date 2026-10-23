@@ -38,7 +38,7 @@ function captureDb(rows = [rawRow]) {
 
 test.beforeEach(() => seo.clearSeoListingCache());
 
-test('actual homepage query matches the read-only semantics fixture, while generic SQL remains the exact baseline', async () => {
+test('actual homepage query matches the read-only semantics fixture, and other pages count after the id page', async () => {
   const homeDb = captureDb();
   const home = await seo.loadPublicSeoListings(homeDb, { limit: 6, homepage: true });
   assert.equal(normalized(homeDb.queries[0].sql), normalized(fixtureQuery('NEW')));
@@ -49,7 +49,12 @@ test('actual homepage query matches the read-only semantics fixture, while gener
 
   const genericDb = captureDb();
   const generic = await seo.loadPublicSeoListings(genericDb, { limit: 6 });
-  assert.equal(normalized(genericDb.queries[0].sql), normalized(fixtureQuery('OLD')));
+  const genericSql = genericDb.queries[0].sql;
+  assert.match(genericSql, /WITH page AS MATERIALIZED/);
+  assert.match(genericSql, /COUNT\(\*\)::int AS seo_total/);
+  assert.equal(genericSql.includes('COUNT(*) OVER()'), false);
+  assert.equal(genericSql.includes('homepage_candidates'), false);
+  assert.ok(genericSql.indexOf('WITH page AS MATERIALIZED') < genericSql.indexOf('LEFT JOIN LATERAL'));
   assert.deepEqual(genericDb.queries[0].values, [6]);
   assert.equal(generic[0].seo_total, 12);
 });
@@ -77,7 +82,7 @@ test('category and facet callers keep exact totals even if a homepage flag is pa
   const db = captureDb();
   const rows = await seo.loadPublicSeoListings(db, { categoryKey: 'rent', limit: 6, homepage: true });
   assert.equal(rows[0].seo_total, 12);
-  assert.ok(db.queries[0].sql.includes('COUNT(*) OVER() AS seo_total'));
+  assert.ok(db.queries[0].sql.includes('COUNT(*)::int AS seo_total'));
   assert.ok(db.queries[0].sql.includes("LOWER(COALESCE(p.listing_type, '')) = 'rent'"));
   assert.equal(db.queries[0].sql.includes('homepage_candidates'), false);
   const facetDb = captureDb();
@@ -85,7 +90,7 @@ test('category and facet callers keep exact totals even if a homepage flag is pa
     limit: 6, homepage: true, facet: { kind: 'bedrooms', value: 2 }
   });
   assert.equal(facetRows[0].seo_total, 12);
-  assert.ok(facetDb.queries[0].sql.includes('COUNT(*) OVER() AS seo_total'));
+  assert.ok(facetDb.queries[0].sql.includes('COUNT(*)::int AS seo_total'));
   assert.ok(facetDb.queries[0].sql.includes('AND p.bedrooms = $1'));
   assert.deepEqual(facetDb.queries[0].values, [2, 6]);
   assert.equal(facetDb.queries[0].sql.includes('homepage_candidates'), false);

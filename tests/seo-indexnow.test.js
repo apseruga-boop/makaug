@@ -49,7 +49,8 @@ test('public agents with a live listing are in the sitemap with their newest lis
 
 test('snapshot SQL selects agent visibility', () => {
   const src = read('services/publicSeoService.js');
-  assert.match(src, /agent_id,\s+EXISTS/);
+  assert.match(src, /LEFT JOIN LATERAL/);
+  assert.match(src, /\(public_agent\.id IS NOT NULL\) AS agent_public/);
   assert.match(src, /publicSitemapAgentWhereSql\('a'\)/);
   assert.match(read('server.js'), /publicPathIsNoindex\(entry\.loc\)/);
 });
