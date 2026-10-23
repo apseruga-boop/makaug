@@ -119,13 +119,14 @@ test('static card copy is translated in every site language pack', () => {
     low: 'USh 28M',
     high: 'USh 45M'
   }];
-  const englishBio = 'Specialises in properties for sale and plots around Kakiri and Nakawuka, with 5 live listings on makaug. Asking prices run from USh 28M to USh 45M.';
+  const englishBio = 'Specialises in properties for sale and plots around Kakiri and Nakawuka on makaug. Asking prices run from USh 28M to USh 45M.';
   const agent = { bio: englishBio, bioSource: 'generated', bioParts: parts };
   assert.equal(shareCardBioText(agent, 'en'), englishBio);
   const lugandaBio = shareCardBioText(agent, 'lg');
   assert.notEqual(lugandaBio, englishBio);
   assert.match(lugandaBio, /Kakiri/);
   assert.match(lugandaBio, /Nakawuka/);
+  assert.doesNotMatch(lugandaBio, /live listing|ebirango|ekirango/i);
   assert.equal(shareCardBioText({ bio: 'I help buyers in Wakiso.', bioSource: 'agent', bioParts: parts }, 'lg'), 'I help buyers in Wakiso.');
   const lines = ellipsizeShareLines(englishBio, 58, 2);
   assert.equal(lines.length, 2);
@@ -156,7 +157,7 @@ test('home, category, agent and property cards are 1200 by 630 and under 300 KB'
       name: 'Jonathan Wassajja',
       verified: true,
       districts: 'Kampala, Wakiso',
-      bio: 'Specialises in properties for sale and plots around Kakiri and Nakawuka, with 5 live listings on makaug.',
+      bio: 'Specialises in properties for sale and plots around Kakiri and Nakawuka on makaug.',
       bioSource: 'generated',
       bioParts: [{ t: 'fallback' }],
       minPrice: 28000000,
@@ -170,7 +171,7 @@ test('home, category, agent and property cards are 1200 by 630 and under 300 KB'
       name: 'Jonathan Wassajja',
       verified: false,
       districts: 'Kampala, Wakiso',
-      bio: 'Specialises in properties for sale and plots around Kakiri and Nakawuka, with 5 live listings on makaug.',
+      bio: 'Specialises in properties for sale and plots around Kakiri and Nakawuka on makaug.',
       bioSource: 'agent',
       minPrice: 28000000,
       maxPrice: 45000000,

@@ -30,7 +30,9 @@ test('a mixed agent gets an About written from their listings, with areas and ne
   assert.equal(s.listings_counted, 7);
   assert.equal(s.about.length, 1);
   assert.equal(s.about_text, s.bio_display);
-  assert.match(s.about[0], /^Specialises in houses for sale, rentals and plots around Kyanja, Kisaasi and Kira, with 7 live listings on makaug/);
+  assert.match(s.about[0], /^Specialises in houses for sale, rentals and plots around Kyanja, Kisaasi and Kira on makaug/);
+  assert.doesNotMatch(s.about_text, /live listings?/i);
+  assert.doesNotMatch(s.about_text, /\b7\b/);
   assert.match(s.about[0], /USh 1\.5M a month/);
   assert.doesNotMatch(s.about.join(' '), /950M/, 'an impossible monthly rent is left out of the range');
   assert.equal(s.video_tours, 1);
@@ -67,10 +69,11 @@ test('land-heavy, rental, mixed and empty portfolios each get a plain-English ca
   const land = buildAgentPublicSummary({ id: 'land-1', full_name: 'Innocent', bio: '', company_name: 'Independent agent' }, landRows);
   assert.equal(land.bio_source, 'generated');
   assert.match(land.about[0], /^Specialises in plots and houses for sale around Kira/);
-  assert.match(land.about[0], /with 9 live listings on makaug/);
+  assert.match(land.about[0], /on makaug/);
+  assert.doesNotMatch(land.about_text, /live listings?/i);
   assert.match(land.about[0], /USh /);
   assert.doesNotMatch(land.about_text, /years|award|Call or WhatsApp/i);
-  assert.ok(land.about_text.length >= 120 && land.about_text.length <= 280, land.about_text);
+  assert.ok(land.about_text.length >= 100 && land.about_text.length <= 280, land.about_text);
 
   const rentRows = Array.from({ length: 6 }, (_, i) => listing({
     listing_type: 'rent',
@@ -84,7 +87,8 @@ test('land-heavy, rental, mixed and empty portfolios each get a plain-English ca
   const rent = buildAgentPublicSummary({ id: 'rent-1', full_name: 'Amina', company_name: 'Amina Lets Ltd' }, rentRows);
   assert.equal(rent.bio_source, 'generated');
   assert.match(rent.about[0], /^Amina of Amina Lets Ltd specialises in rentals around Ntinda/);
-  assert.match(rent.about[0], /with 6 live listings on makaug/);
+  assert.match(rent.about[0], /on makaug/);
+  assert.doesNotMatch(rent.about_text, /live listings?/i);
   assert.match(rent.about[0], /a month/);
   assert.doesNotMatch(rent.about_text, /for sale/);
   assert.ok(rent.about_text.length <= 280, rent.about_text);
@@ -104,7 +108,8 @@ test('land-heavy, rental, mixed and empty portfolios each get a plain-English ca
 
 test('one listing, no listings, and land-only agents read naturally', () => {
   const one = buildAgentPublicSummary({ id: 'a4', full_name: 'Promise', bio: '' }, [listing({ listing_type: 'land', price: 7.6e9, area: 'Makerere' })]);
-  assert.match(one.about[0], /^Specialises in a plot of land in Makerere, with 1 live listing on makaug/);
+  assert.match(one.about[0], /^Specialises in a plot of land in Makerere on makaug/);
+  assert.doesNotMatch(one.about_text, /live listing/i);
   assert.match(one.about[0], /USh 7\.6bn/);
   assert.doesNotMatch(one.about_text, /Call or WhatsApp/i);
   const none = buildAgentPublicSummary({ id: 'a5', full_name: 'Kasulu', bio: 'makaug broker covering Kampala properties.', company_name: 'Agency/company', districts_covered: ['Kampala', 'Makerere Kikoni'] }, []);
@@ -133,6 +138,28 @@ test('generated bios carry parts the client can compose, and a real bio has none
   assert.doesNotMatch(swText, /Specialises in/);
   assert.match(lgText, /Kyanja/);
   assert.doesNotMatch(lgText, /Specialises in/);
+  assert.doesNotMatch(swText, /live listing|tangazo|matangazo/i);
+  assert.doesNotMatch(lgText, /live listing|ekirango|ebirango/i);
+  for (const lang of ['lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']) {
+    const templates = JSON.parse(fs.readFileSync(`assets/i18n/site-${lang}.json`, 'utf8')).templates;
+    const translated = composeAgentBio([generated.bio_parts[0]], templates);
+    assert.ok(translated, `${lang} still composes a bio`);
+    assert.doesNotMatch(translated, /\{count\}|live listing|[0-9]/i, lang);
+    assert.doesNotMatch(templates.specialises, /\{count\}/, lang);
+    assert.doesNotMatch(templates['specialises.company'], /\{count\}/, lang);
+    assert.ok(templates['count.one'] && templates['count.many'], `${lang} keeps the unused count keys`);
+  }
+  const stale = composeAgentBio([{ ...generated.bio_parts[0], count: 9 }], {
+    ...AGENT_BIO_EN_TEMPLATES,
+    specialises: 'Specialises in {types}{place}, with {count} on makaug.'
+  });
+  assert.equal(stale, 'Specialises in plots and houses for sale around Kira and Kyanja on makaug.');
+  assert.doesNotMatch(stale, /live listing|[0-9]/i);
+  const migration = fs.readFileSync('db/migrations/162_clear_generated_listing_count_bios.sql', 'utf8');
+  assert.match(migration, /UPDATE agents/);
+  assert.match(migration, /SET bio = NULL/);
+  assert.match(migration, /specialises in \.\+ with \[0-9\]\+ live listings\? on makaug/);
+  assert.doesNotMatch(migration, /UPDATE agents\s+SET bio = NULL\s+WHERE bio IS NOT NULL\s*;/);
   const own = buildAgentPublicSummary({ id: 'parts-2', full_name: 'Kazi', bio: 'Kazi helps buyers across Wakiso.' }, rows);
   assert.equal(own.bio_source, 'agent');
   assert.equal(own.bio_parts, null);

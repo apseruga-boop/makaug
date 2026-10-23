@@ -143,12 +143,12 @@ async function runLayer(lang) {
     assert.notStrictEqual(result.layer.translate('Call Kimuli Brian', lang), 'Call Kimuli Brian', `${lang}: call name labels translate`);
     const templates = result.layer.templates(lang);
     assert(templates && templates.specialises && templates['type.plots'], `${lang}: bio templates are available to the card composer`);
-    assert(templates.specialises.includes('{types}') && templates.specialises.includes('{count}'), `${lang}: specialism template keeps its slots`);
+    assert(templates.specialises.includes('{types}') && !templates.specialises.includes('{count}'), `${lang}: specialism template names the work and not a listing count`);
   }
 
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  assert(/<script src="\/assets\/makaug-site-i18n\.js\?v=20261023-site-i18n-v17" defer><\/script>/.test(html), 'the page loads the current site language pack');
-  assert(fs.readFileSync(path.join(root, 'assets', 'makaug-site-i18n.js'), 'utf8').includes('20261023-site-i18n-v17'), 'the language layer cache version matches the page');
+  assert(/<script src="\/assets\/makaug-site-i18n\.js\?v=20261023-site-i18n-v18" defer><\/script>/.test(html), 'the page loads the current site language pack');
+  assert(fs.readFileSync(path.join(root, 'assets', 'makaug-site-i18n.js'), 'utf8').includes('20261023-site-i18n-v18'), 'the language layer cache version matches the page');
   const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
   assert(app.includes('function getCanonicalEnglishPropertyTitle'), 'non-English visitors get a translatable listing title');
   assert(app.includes('const fromSitePack = siteTranslate(text, lang);'), 'listing labels fall back to the site pack before English');
