@@ -1406,6 +1406,7 @@ const AGENT_SHARE_PREMIUM_PREVIEW_VERSION = 'preview-v3';
 const AGENT_SHARE_BRAND_PREVIEW_VERSION = 'preview-v4';
 
 const agentPublicProfile = require('./services/agentPublicProfileService');
+const { publicAgentProfileVisible } = require('./services/publicAgentEligibilityService');
 
 async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
   const safeId = String(agentId || '').trim();
@@ -1416,24 +1417,28 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
        a.full_name,
        a.company_name,
        a.bio,
+       a.email,
+       a.user_id,
+       a.licence_number,
        a.profile_photo_url,
        a.specializations,
        a.districts_covered,
-       a.verification_reason
-     FROM agents a
-     WHERE a.id::text = $1
-       AND LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
-       AND EXISTS (
-         SELECT 1
+       a.verification_reason,
+       a.status,
+       (NULLIF(BTRIM(COALESCE(a.identity_document_url, '')), '') IS NOT NULL) AS identity_document_stored,
+       (
+         SELECT COUNT(*)::int
          FROM properties p
          WHERE p.agent_id = a.id
            AND p.status = 'approved'
-       )
+       ) AS approved_listing_count
+     FROM agents a
+     WHERE a.id::text = $1
      LIMIT 1`,
     [safeId]
   );
   const row = result.rows[0];
-  if (!row) return null;
+  if (!row || !publicAgentProfileVisible(row)) return null;
   const name = String(row.full_name || row.company_name || 'MakaUG property agent').trim();
   const profilePath = `/agents/${encodeURIComponent(row.id)}`;
   const specializations = Array.isArray(row.specializations)

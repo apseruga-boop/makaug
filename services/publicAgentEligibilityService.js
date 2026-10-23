@@ -83,6 +83,73 @@ function addPublicAgentEligibilityFilters(filters, values, alias = 'a') {
   addPublicAgentInventoryFilter(filters, alias);
 }
 
+const BLOCKED_PUBLIC_AGENT_STATUSES = new Set([
+  'rejected',
+  'declined',
+  'suspended',
+  'deleted',
+  'removed',
+  'blocked'
+]);
+
+function markerPresent(value, marker) {
+  return String(value || '').toLowerCase().includes(String(marker || '').toLowerCase());
+}
+
+function isSuppressedPublicAgent(row = {}) {
+  const name = String(row.full_name || '');
+  const company = String(row.company_name || '');
+  const bio = String(row.bio || '');
+  const reason = String(row.verification_reason || '');
+  const email = String(row.email || '');
+  const licence = String(row.licence_number || row.licence || '').trim();
+  const specs = Array.isArray(row.specializations)
+    ? row.specializations.join(' ')
+    : String(row.specializations || '');
+  for (const marker of PUBLIC_AGENT_SUPPRESSED_MARKERS) {
+    if ([name, company, bio, reason].some((field) => markerPresent(field, marker))) return true;
+  }
+  if (/(qa-test|makaug\.invalid|dummy|sample)/i.test(email)) return true;
+  if (/^(QA|TEST|DUMMY|SAMPLE)-/i.test(licence)) return true;
+  if (/(qa test delete|soft launch test|dummy|sample|training|demo|placeholder)/i.test(specs)) return true;
+  return false;
+}
+
+function isSelfRegisteredPublicAgent(row = {}) {
+  const userId = row.user_id == null ? '' : String(row.user_id).trim();
+  return Boolean(userId) || markerPresent(row.verification_reason, DIRECT_AGENT_PROFILE_MARKER);
+}
+
+function hasPublicAgentInventory(row = {}, approvedListingCount = 0) {
+  const listings = Number(approvedListingCount);
+  const count = Number.isFinite(listings) ? listings : 0;
+  const direct = markerPresent(row.verification_reason, DIRECT_AGENT_PROFILE_MARKER);
+  const reviewed = markerPresent(row.verification_reason, REVIEWED_PRIVATE_ID_PROFILE_MARKER);
+  const idStored = row.identity_document_stored === true
+    || String(row.identity_document_url || '').trim() !== '';
+  if (direct) {
+    if (reviewed && idStored) return true;
+    return count >= PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS;
+  }
+  return count >= PUBLIC_AGENT_MIN_LIVE_LISTINGS;
+}
+
+// The HTML profile follows the public directory, including a staff-reviewed
+// direct agent who is approved before any listing is live. An agent who
+// already has an approved listing keeps the page they had before that rule.
+function publicAgentProfileVisible(row = {}) {
+  if (!row || typeof row !== 'object') return false;
+  const status = String(row.status || 'pending').trim().toLowerCase();
+  if (BLOCKED_PUBLIC_AGENT_STATUSES.has(status)) return false;
+  const listings = Number(row.approved_listing_count ?? row.listings_count ?? 0);
+  const count = Number.isFinite(listings) ? listings : 0;
+  if (count >= 1) return true;
+  if (status !== 'approved') return false;
+  if (isSuppressedPublicAgent(row) || isRemoteImportedAgent(row)) return false;
+  if (!isSelfRegisteredPublicAgent(row)) return false;
+  return hasPublicAgentInventory(row, count);
+}
+
 function isRemoteImportedAgent(row = {}) {
   const reason = String(row?.verification_reason || '');
   const licence = String(row?.licence_number || row?.licence || '').trim();
@@ -111,7 +178,8 @@ function isVerifiedByMakaug(row = {}) {
   const knowsEvidence = Object.prototype.hasOwnProperty.call(row, 'identity_document_url')
     || Object.prototype.hasOwnProperty.call(row, 'contact_phone_verified_at');
   if (!knowsEvidence) return row.verified_by_makaug === true;
-  const idStored = String(row.identity_document_url || '').trim() !== '';
+  const idStored = row.identity_document_stored === true
+    || String(row.identity_document_url || '').trim() !== '';
   const phoneChecked = row.contact_phone_verified_at != null && String(row.contact_phone_verified_at).trim() !== '';
   return idStored && phoneChecked;
 }
@@ -140,7 +208,11 @@ module.exports = {
   addPublicAgentInventoryFilter,
   addPublicAgentLaunchTestFilter,
   addPublicAgentSelfRegistrationFilter,
+  hasPublicAgentInventory,
   isRemoteImportedAgent,
+  isSelfRegisteredPublicAgent,
+  isSuppressedPublicAgent,
   isVerifiedByMakaug,
+  publicAgentProfileVisible,
   verifiedByMakaugSql
 };
