@@ -373,7 +373,10 @@ test('all publication paths use the integrity gate and invalidate count cache', 
   assert.match(propertyRoute, /nextStatus === 'approved'[\s\S]*listingDataIntegrityReport\(current,/);
   assert.match(staffRoute, /staffBulkModerationDecision[\s\S]*listingDataIntegrityReport\(row,/);
   assert.match(adminRoute, /direct-publish[\s\S]*listingDataIntegrityReport\(property\)/);
-  assert.match(metrics, /function invalidatePublicInventoryMetricsCache[\s\S]*publicInventoryMetricsCache\.clear\(\)/);
+  const invalidateAt = metrics.indexOf('function invalidatePublicInventoryMetricsCache');
+  const invalidateBlock = metrics.slice(invalidateAt, metrics.indexOf('\nfunction ', invalidateAt + 1));
+  assert.match(invalidateBlock, /entry\.stale = true/);
+  assert.doesNotMatch(invalidateBlock, /publicInventoryMetricsCache\.clear\(/);
   assert.match(propertyRoute, /invalidatePublicInventoryMetricsCache\(`listing_status_/);
 });
 

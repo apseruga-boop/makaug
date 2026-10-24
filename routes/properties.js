@@ -629,6 +629,37 @@ function addPublicLaunchSeedFilter(filters, values) {
   filters.push(`NOT ${publicLaunchTestListingFastCondition('p')}`);
 }
 
+// Same predicate the anonymous approved list uses for homepage, /for-sale,
+// /to-rent and /land (no area, price or other extra filters). Kept beside
+// listPropertiesHandler so a warmup fills the cache key those pages request.
+function publicCategoryOpportunityQuery(listingType = '') {
+  const filters = [];
+  const values = [];
+  addPublicLaunchSeedFilter(filters, values);
+  filters.push(publicHasPhotoOrVideoSql('p'));
+  if (listingType && LISTING_TYPES.includes(listingType)) {
+    if (listingType === 'student') {
+      addFilter(filters, values, 'p.listing_type IN (?, ?)', 'student', 'students');
+    } else {
+      addFilter(filters, values, 'p.listing_type = ?', listingType);
+    }
+  }
+  filters.push(publicLivePropertyStatusSql('p'));
+  const staleAvailability = publicStaleAvailabilitySql('p');
+  if (staleAvailability) filters.push(staleAvailability);
+  return { where: `WHERE ${filters.join(' AND ')}`, values };
+}
+
+function mainPublicOpportunityCountQueries() {
+  const timeoutMs = 4000;
+  return [
+    { label: 'homepage', timeoutMs, ...publicCategoryOpportunityQuery('') },
+    { label: 'for-sale', timeoutMs, ...publicCategoryOpportunityQuery('sale') },
+    { label: 'to-rent', timeoutMs, ...publicCategoryOpportunityQuery('rent') },
+    { label: 'land', timeoutMs, ...publicCategoryOpportunityQuery('land') }
+  ];
+}
+
 function normalizeListingType(type) {
   const t = cleanText(type).toLowerCase();
   if (t === 'students') return 'student';
@@ -6104,6 +6135,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 
 module.exports = router;
 module.exports.clearPublicPropertiesCache = clearPublicPropertiesCache;
+module.exports.mainPublicOpportunityCountQueries = mainPublicOpportunityCountQueries;
+module.exports.publicCategoryOpportunityQuery = publicCategoryOpportunityQuery;
 module.exports._test = {
   isDefaultStatusNoteReason,
   addCanonicalLocationSearchFilter,
