@@ -37380,13 +37380,13 @@ function propertyVideoUrls(property = {}) {
 
 // The Unsplash model house with a red front and a key is banned on makaug.
 // It is not a property photo. Neither is any other Unsplash stand-in.
-const MAKAUG_GENERIC_LISTING_PHOTO_ID = "photo-1560518883-ce09059eeffa";
 const MAKAUG_LOGO_SRC = "/assets/icons/makaug-icon-512.png";
 
 function isStockOrPlaceholderPhoto(value) {
   const text = String(value || "").trim().toLowerCase();
   if (!text) return false;
-  if (text.includes(MAKAUG_GENERIC_LISTING_PHOTO_ID)) return true;
+  // Literals stay inside this function so card tests can run it on its own.
+  if (text.includes("photo-1560518883-ce09059eeffa")) return true;
   if (/(^|\/\/|\/)([a-z0-9-]+\.)*unsplash\.com\b/.test(text) || text.includes("images.unsplash.com")) return true;
   if (text.includes("/assets/house-ads-v3/home-hero") || text.includes("home-hero-640")) return true;
   return false;
@@ -43932,7 +43932,7 @@ const PAGE_CONTENT = {
         <div class="rounded-xl border border-gray-200 p-3 bg-white">
           <div class="text-[11px] uppercase tracking-wide text-amber-700 font-bold">Sponsored regional result</div>
           <div class="mt-2 rounded-lg border border-green-100 overflow-hidden">
-            <div class="relative h-24 bg-[#f0fdf4]">${photosComingSoonHtml({ compact: true })}</div>
+            <div class="relative h-24 bg-[#f0fdf4]"><div class="photos-coming-soon absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#f0fdf4] text-[#14532d]" data-photos-coming-soon="1" role="img" aria-label="Photos coming soon"><img src="/assets/icons/makaug-icon-512.png" alt="" class="h-8 w-8 object-contain" width="32" height="32" decoding="async"><span class="text-[11px] font-semibold">Photos coming soon</span></div></div>
             <div class="p-3">
               <div class="font-black text-gray-800">Featured in Kampala searches</div>
               <div class="text-xs text-gray-600">Target by district, area, property type, and intent.</div>
@@ -62750,7 +62750,7 @@ async function openDetail(id, options = {}) {
                 return `
                 <button type="button" onclick="selectDetailGalleryPhoto(${idx})" data-detail-gallery-thumb="${idx}" aria-current="${idx === detailGalleryPhotoIndex ? "true" : "false"}" class="border ${idx === detailGalleryPhotoIndex ? "border-green-500" : "border-gray-200"} rounded-lg overflow-hidden bg-gray-50 text-left hover:border-green-400 transition-colors">
                   <img src="${adminAttr(publicImageSrc(photo.url))}" alt="${adminAttr(thumbLabel || photo.name || `Photo ${idx + 1}`)}" class="w-full h-20 object-cover" loading="lazy" decoding="async">
-                  ${thumbLabel ? `<div class="px-2 py-1.5 text-[11px] text-gray-600 truncate">${adminEscape(thumbLabel)}</div>` : ""}
+                  ${thumbLabel ? `<div class="px-2 py-1.5 text-[11px] text-gray-600 truncate">${adminAttr(thumbLabel)}</div>` : ""}
                 </button>
               `;
               }).join("")}

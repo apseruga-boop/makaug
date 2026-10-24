@@ -318,11 +318,11 @@ function facetPredicate(options, values, alias = 'p') {
 // A found-online row used to drop that cover and fall back to the land
 // category image whenever the staff-consent slot was empty.
 function seoCoverImageUrl(row = {}, foundOnline = false) {
-  const staffCover = String(foundOnlinePrimaryImageUrl(row) || '').trim();
+  const staffRaw = String(foundOnlinePrimaryImageUrl(row) || '').trim();
   const primary = String(row.primary_image_url || '').trim();
   const hostedCover = realPhotoRejection(primary) === null ? primary : '';
-  const staffOk = realPhotoRejection(staffCover) === null ? staffCover : '';
-  if (foundOnline) return staffOk || hostedCover;
+  const staffCover = realPhotoRejection(staffRaw) === null ? staffRaw : '';
+  if (foundOnline) return staffCover || hostedCover;
   return hostedCover;
 }
 
@@ -335,9 +335,18 @@ function photosComingSoonSeoHtml() {
   </div>`;
 }
 
+// A public page may show any photo that is not a stock or placeholder stand-in.
+// Approval still requires a file on our media host; that check is realPhotoRejection.
 function usableSeoListingPhoto(url) {
   const value = String(url || '').trim();
-  return value && realPhotoRejection(value) === null ? value : '';
+  if (!value) return '';
+  const lower = value.toLowerCase();
+  if (lower.startsWith('data:')) return '';
+  if (lower.includes('photo-1560518883-ce09059eeffa')) return '';
+  if (/(^|\/\/)([a-z0-9-]+\.)*unsplash\.com/.test(lower) || lower.includes('images.unsplash.com')) return '';
+  if (lower.includes('/assets/house-ads-v3/home-hero') || lower.includes('home-hero-640')) return '';
+  if (/image[\s_-]*pending/.test(lower)) return '';
+  return value;
 }
 
 function publicCoverImageLateralSql(alias = 'p') {
