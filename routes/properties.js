@@ -135,6 +135,7 @@ const { resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staf
 const { listingReferenceQuery } = require('../utils/listingReferenceSearch');
 const { pricePlausibility } = require('../utils/pricePlausibility');
 const { listingPhotoOrVideoCheck, summariseListingMedia, publicHasPhotoOrVideoSql, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
+const { publicListingAreaRedirectPath } = require('../services/publicSeoService');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const { CANONICAL_PROPERTY_CURRENCY, propertyPriceMetadata, configuredRateToCanonicalCurrency, normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
 const {
@@ -3572,6 +3573,15 @@ router.param('id', (req, res, next, id) => {
   return next();
 });
 
+function sendHiddenListingRedirect(res, property) {
+  const redirect = publicListingAreaRedirectPath(property || {});
+  res.set('X-Robots-Tag', 'noindex, noarchive');
+  res.set('Cache-Control', 'private, no-store');
+  res.set('CDN-Cache-Control', 'no-store');
+  res.set('X-makaug-Listing-Redirect', 'area');
+  return res.status(404).json({ ok: false, error: 'Property not found', redirect });
+}
+
 router.get('/:id', async (req, res, next) => {
   try {
     const loaded = await loadPropertyWithImages(req.params.id);
@@ -3588,16 +3598,8 @@ router.get('/:id', async (req, res, next) => {
       || ownerCanPreview
       || adminAccess;
 
-    if (!canViewNonPublic) {
-      return res.status(404).json({ ok: false, error: 'Property not found' });
-    }
-
-    if (isLaunchSeedListing(property) && !ownerCanPreview && !adminAccess) {
-      return res.status(404).json({ ok: false, error: 'Property not found' });
-    }
-
-    if (!ownerCanPreview && !adminAccess && !summariseListingMedia(images, property.extra_fields || {}).ok) {
-      return res.status(404).json({ ok: false, error: 'Property not found' });
+    if (!canViewNonPublic || (isLaunchSeedListing(property) && !ownerCanPreview && !adminAccess) || (!ownerCanPreview && !adminAccess && !summariseListingMedia(images, property.extra_fields || {}).ok)) {
+      return sendHiddenListingRedirect(res, property);
     }
 
     return res.json({

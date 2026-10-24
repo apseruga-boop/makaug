@@ -548,6 +548,44 @@ async function loadPublicSeoListing(db, propertyId) {
   return cached.row;
 }
 
+// The public loader above returns null for a hidden, pending, or media-less
+// row. This one still loads that row so the public URL can redirect to the
+// area page, and so staff can open the listing. It is not cached: a cached
+// hidden row would keep the public page off the site after photos return.
+async function loadSeoListingBypassingPublicFilter(db, propertyId) {
+  const safeId = String(propertyId || '').trim();
+  if (!safeId) return null;
+  const result = await db.query(
+    `SELECT
+       p.id, p.listing_type, p.title, p.description, p.area, p.district,
+       p.price, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.students_welcome,
+       p.extra_fields->>'canonical_location_id' AS canonical_location_id,
+       p.extra_fields->>'city' AS city,
+       p.extra_fields->>'neighborhood' AS neighborhood,
+       COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
+       p.source, p.listed_via,
+       ${listingCopyExtraSql('p')} AS copy_extra,
+       p.created_at, p.updated_at,
+       ${realHostedPhotoExistsSql('p')} AS has_real_photo,
+       (${publicVisibleInventoryWhere('p')}) AS public_ok,
+       image.url AS primary_image_url,
+       staff_img.url AS staff_primary_image_url
+     FROM properties p
+     ${publicCoverImageLateralSql('p')}
+     ${consentedStaffPrimaryImageLateralSql('p')}
+     WHERE p.id::text = $1
+     LIMIT 1`,
+    [safeId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  const listing = normalizeSeoListingRow(row);
+  listing.public_ok = row.public_ok === true;
+  listing.students_welcome = row.students_welcome === true;
+  return listing;
+}
+
 // One currency spelling site-wide: UGX (it was USh in titles and cards but UGX in
 // descriptions). South Africa keeps R.
 function currencyLabelForSeo() {
@@ -1216,6 +1254,7 @@ module.exports = {
   seoCoverImageUrl,
   loadPublicSeoListings,
   loadPublicSeoListing,
+  loadSeoListingBypassingPublicFilter,
   priceLabel,
   propertySeoTitle,
   propertyPublicHeading,

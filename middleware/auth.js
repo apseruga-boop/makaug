@@ -81,6 +81,32 @@ async function isAdminBearerToken(req) {
   }
 }
 
+// Staff and admin keep the listing itself. A public visitor does not.
+// An invalid token is not staff. A database failure is thrown so the caller
+// can still send the visitor to the area page.
+async function hasStaffOrAdminAccess(req) {
+  const headerKey = req.get('x-api-key');
+  const expected = process.env.ADMIN_API_KEY;
+  if (expected && headerKey === expected) {
+    req.adminAuth = { type: 'api_key' };
+    return true;
+  }
+  try {
+    const user = await loadActiveUserFromToken(req);
+    if (!user || !isStaffRole(user.role)) return false;
+    req.userAuth = user;
+    if (['admin', 'super_admin'].includes(String(user.role || '').toLowerCase())) {
+      req.adminAuth = { type: 'bearer', userId: user.id, role: user.role };
+    } else {
+      req.staffAuth = { userId: user.id, role: user.role };
+    }
+    return true;
+  } catch (error) {
+    if (!isAuthenticationError(error)) throw error;
+    return false;
+  }
+}
+
 async function hasAdminAccess(req) {
   const headerKey = req.get('x-api-key');
   const expected = process.env.ADMIN_API_KEY;
@@ -177,6 +203,7 @@ async function requireListingModerationAccess(req, res, next) {
 
 module.exports = {
   hasAdminAccess,
+  hasStaffOrAdminAccess,
   requireAdminApiKey,
   requireAuthenticatedUser,
   requireListingModerationAccess,

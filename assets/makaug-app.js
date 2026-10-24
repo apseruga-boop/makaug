@@ -54567,6 +54567,16 @@ async function openOwnerPreviewEdit(id) {
   }
 }
 
+function followPublicListingAreaRedirect(error) {
+  const target = String(error?.response?.redirect || "");
+  if (!target.startsWith("/") || target.startsWith("//") || target.startsWith("/property")) return false;
+  const mode = authState?.user ? derivePortalMode(authState.user, authState.user.portal_mode) : "";
+  if (mode === "admin" || mode === "moderator") return false;
+  if (document.querySelector("[data-ssr-property-detail]")) return false;
+  window.location.replace(target);
+  return true;
+}
+
 async function parseInitialDeepLink() {
   normalizeLegacyHashPublicRoute();
   const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
@@ -54614,6 +54624,7 @@ async function parseInitialDeepLink() {
         return true;
       }
     } catch (error) {
+      if (followPublicListingAreaRedirect(error)) return true;
       console.warn("Unable to open linked property", error);
     }
     if (publicListingsApiLoading || !publicListingsFromApiLoaded) {

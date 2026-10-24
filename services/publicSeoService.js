@@ -765,6 +765,53 @@ function isoFromMs(ms) {
   return Number.isFinite(value) && value > 0 ? new Date(value).toISOString() : '';
 }
 
+function routeLocationSlug(location) {
+  if (!location) return '';
+  const slug = canonicalLocationRouteSlug({
+    location: location.location || location.name || '',
+    name: location.name || location.location || '',
+    district: location.district || ''
+  });
+  return slug && locationForRouteSlug(slug) ? slug : '';
+}
+
+function districtRouteLocation(district = '') {
+  const name = String(district || '').trim().toLowerCase();
+  if (!name) return null;
+  return canonicalLocationOptions().find((location) => (
+    location.level === 'district' && String(location.district || '').trim().toLowerCase() === name
+  )) || null;
+}
+
+// A hidden or media-less listing has no public page. Send the visitor to that
+// listing's area search, then the district, then the category root. The path
+// is only a gazetteer slug the area route already accepts, or a category root
+// such as /for-sale or /land. 302, not 301: the listing comes back when a
+// real photo or video is stored.
+function publicListingAreaRedirectPath(row = {}) {
+  const keys = publicCategoryKeysForRow(row);
+  const config = CATEGORY_SEO[keys[0]] || CATEGORY_SEO.sale;
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const areaText = [row.area, row.neighborhood, extra.neighborhood, row.city, extra.city]
+    .map((value) => String(value || '').trim())
+    .find(Boolean) || '';
+  const byKey = canonicalLocationByKey(row.canonical_location_id || extra.canonical_location_id);
+  const byText = canonicalizeUgandaLocation(areaText, row.district || '');
+  const candidates = [];
+  if (byKey && byKey.level !== 'district') candidates.push(byKey);
+  if (byText && byText.level !== 'district' && byText.key !== byKey?.key) candidates.push(byText);
+  const districtName = byKey?.district || byText?.district || row.district || '';
+  const district = districtRouteLocation(districtName);
+  if (district) candidates.push(district);
+  if (byKey?.level === 'district') candidates.push(byKey);
+  if (byText?.level === 'district' && byText.key !== byKey?.key) candidates.push(byText);
+  for (const location of candidates) {
+    const slug = routeLocationSlug(location);
+    if (slug) return `${config.route}/${slug}`;
+  }
+  return config.route || '/for-sale';
+}
+
 function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
   const root = String(baseUrl || PUBLIC_SITE_URL).replace(/\/+$/, '');
   // Hub lastmod = newest updated_at among the listings on that hub, never the
@@ -875,6 +922,7 @@ module.exports = {
   facetLocationSlug,
   categoryForPath,
   locationForRouteSlug,
+  publicListingAreaRedirectPath,
   publicCategoryKeysForRow,
   canonicalLocationsForSeoRow,
   buildPublicSeoSnapshot,

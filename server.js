@@ -112,10 +112,12 @@ const {
   publicPageSeoFor,
   slugifySeoPart,
   canonicalLocationRouteSlug,
+  publicListingAreaRedirectPath,
   publicPathIsNoindex,
   sitemapEntries
 } = require('./services/publicSeoService');
 const { canonicalLocationOptions } = require('./utils/locationRegistry');
+const { hasStaffOrAdminAccess } = require('./middleware/auth');
 const { clientIpMiddleware } = require('./utils/clientIp');
 const { apiRateLimitKey, apiRateLimitMax, WINDOW_MS: API_RATE_LIMIT_WINDOW_MS } = require('./utils/apiRateLimit');
 const { lagTrackingMiddleware, startEventLoopLagMonitor } = require('./utils/eventLoopLagMonitor');
@@ -123,6 +125,7 @@ const { buildLandingCopy } = require('./services/publicLandingCopy');
 const {
   loadPublicSeoListings,
   loadPublicSeoListing,
+  loadSeoListingBypassingPublicFilter,
   renderCategorySeoHtml,
   renderPropertySeoHtml,
   renderHomepageSeoHtml
@@ -1937,22 +1940,46 @@ app.get('/property/:id', async (req, res, next) => {
   try {
     res.set('X-makaug-Public-Sanitized', '1');
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
-    const [listing, detailSnapshot] = await Promise.all([
+    let [listing, detailSnapshot] = await Promise.all([
       loadPublicSeoListing(db, req.params.id),
       loadPublicSeoInventorySnapshot(db).catch((error) => {
         logger.warn('Detail SEO is continuing without popular-area footer links', { propertyId: req.params.id, message: error.message });
         return null;
       })
     ]);
+    let staffView = false;
     if (!listing) {
-      res.set('X-Robots-Tag', 'noindex, noarchive');
-      // A cached 404 outlives Publish again. The SEO listing cache is the
-      // one that kept 9BBB26 on "Property not found"; this stops a CDN from
-      // pinning the same miss.
-      res.set('Cache-Control', 'private, no-store');
-      res.set('CDN-Cache-Control', 'no-store');
-      res.set('Surrogate-Control', 'no-store');
-      return res.status(404).send('Property not found');
+      // A cached public miss outlives Publish again. This lookup is uncached.
+      const hidden = await loadSeoListingBypassingPublicFilter(db, req.params.id);
+      if (!hidden) {
+        res.set('X-Robots-Tag', 'noindex, noarchive');
+        res.set('Cache-Control', 'private, no-store');
+        res.set('CDN-Cache-Control', 'no-store');
+        res.set('Surrogate-Control', 'no-store');
+        return res.status(404).send('Property not found');
+      }
+      if (hidden.public_ok) {
+        listing = hidden;
+      } else {
+        let staff = false;
+        try {
+          staff = await hasStaffOrAdminAccess(req);
+        } catch (error) {
+          logger.warn('Staff check failed while redirecting a hidden listing', { propertyId: req.params.id, message: error.message });
+        }
+        if (staff) {
+          listing = hidden;
+          staffView = true;
+        } else {
+          const target = publicListingAreaRedirectPath(hidden);
+          res.set('X-Robots-Tag', 'noindex, noarchive');
+          res.set('Cache-Control', 'private, no-store');
+          res.set('CDN-Cache-Control', 'no-store');
+          res.set('Surrogate-Control', 'no-store');
+          res.set('X-makaug-Listing-Redirect', 'area');
+          return res.redirect(302, target);
+        }
+      }
     }
     const renderedSeo = renderPropertySeoHtml(html, listing, { snapshot: detailSnapshot, baseUrl: absolutePublicUrl('/') });
     const propertyLang = requestShareLang(req);
@@ -1967,16 +1994,17 @@ app.get('/property/:id', async (req, res, next) => {
       }),
       structuredData: renderedSeo.structuredData
     });
-    if (listing.thin || listing.price_implausible) {
+    if (staffView || listing.thin || listing.price_implausible) {
       // Thin found-online page, or (C17) a price outside the plausibility
       // bounds shown as "Price on application": stays live, but noindex,follow.
+      // A staff view of a hidden listing is noindex and is not cached.
       html = patchMetaTag(html, 'robots', 'noindex,follow');
       res.set('X-Robots-Tag', 'noindex, follow');
     }
     res.set('X-makaug-Listing-OG', '1');
     res.set('X-makaug-Listing-SSR', '1');
     return sendTextResponse(req, res, html, {
-      cacheControl: PUBLIC_HTML_CACHE_CONTROL
+      cacheControl: staffView ? 'private, no-store' : PUBLIC_HTML_CACHE_CONTROL
     });
   } catch (error) {
     return next(error);
