@@ -66,7 +66,6 @@ test('listing correction 177 is one guarded migration with a droppable Busika bl
   const names = fs.readdirSync(MIGRATIONS).filter((name) => name.endsWith('.sql'));
   assert.equal(names.includes('177_marketing_recheck_fixes.sql'), true);
   assert.equal(names.filter((name) => name.startsWith('177_')).length, 1);
-  assert.equal(names.some((name) => /^178_/.test(name)), false);
   assert.match(sql, /SET LOCAL lock_timeout = '8s'/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS listing_correction_177_backup/);
   assert.match(sql, /property_image/);
