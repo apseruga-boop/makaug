@@ -80,6 +80,7 @@ test('listing correction 177 is one guarded migration with a droppable Busika bl
   assert.match(sql, /RAISE NOTICE 'listing_correction_177 % applied kikyusa_per_acre'/);
   assert.match(sql, /RAISE NOTICE 'listing_correction_177 % applied remove_copied_photos'/);
   assert.match(sql, /RAISE NOTICE 'listing_correction_177 % applied mbalwa_media'/);
+  assert.match(sql, /Watch the attached video tour and browse the 3 plot photos before enquiring\./);
   assert.match(sql, /RAISE NOTICE 'listing_correction_177 % applied namulanda_primary'/);
   assert.match(sql, /price = 13000000/);
   assert.match(sql, /price_unit = 'per_acre'/);
@@ -211,7 +212,7 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
         [KAKIRI, 'Property for sale in Kakiri', 'Property for sale in Kakiri, Wakiso, listed at UGX 45,000,000. Caption.', 'sale', null, null, null, 'Wakiso', 45000000, { canonical_location_id: 'wakiso:kakiri' }],
         [NAMUSEERA, 'Land for sale in Namuseera, Wakiso', 'Plots for sale in Namuseera Estate, Wakiso. About 2.5 km from Namuseera town.', 'land', 'sale', 'Commercial land', null, 'Wakiso', 30000000, { canonical_location_id: 'wakiso:wakiso', canonical_location_level: 'district', city: 'Wakiso Town', neighborhood: 'Wakiso', region: 'Central', resolved_location_label: 'From, Kampala, Central' }],
         [KIKYUSA, 'Land for sale in Kikyusa', 'Land for sale in Kikyusa, Nakaseke, listed at UGX 13,000,000. Farmland For Sale. Plot Size; 70 acres. Price ; 13m per Acre.', 'land', 'sale', null, 'Kikyusa', 'Nakaseke', null, { canonical_location_id: 'nakaseke:kikyusa', price_original: 13000000 }],
-        [MBALWA, 'Land for sale in Mbalwa', 'Land for sale in Mbalwa, Wakiso, listed at UGX 190,000,000. Caption.', 'land', 'sale', null, 'Mbalwa', 'Wakiso', 190000000, {
+        [MBALWA, 'Land for sale in Mbalwa', 'Land for sale in Mbalwa, Wakiso, listed at UGX 190,000,000. Watch the 2 attached video tours and browse 5 extracted key images before enquiring. Contact Francis Isabirye.', 'land', 'sale', null, 'Mbalwa', 'Wakiso', 190000000, {
           canonical_location_id: 'wakiso:mbalwa',
           video_url: MBALWA_VIDEO_1,
           video_tours: [
@@ -366,6 +367,8 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
       assert.equal(mbalwaImages[0].is_primary, true);
       assert.equal(mbalwaImages[0].sort_order, 0);
       const mbalwa = await row(MBALWA);
+      assert.match(mbalwa.description, /Watch the attached video tour and browse the 3 plot photos before enquiring\./);
+      assert.doesNotMatch(mbalwa.description, /2 attached video tours/);
       assert.equal(mbalwa.extra_fields.video_url, MBALWA_VIDEO_1);
       assert.equal(mbalwa.extra_fields.video_tours.length, 1);
       assert.equal(mbalwa.extra_fields.video_tours[0].url, MBALWA_VIDEO_1);
@@ -418,6 +421,7 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
       assert.equal((await images(KASANJE)).length, 4);
       assert.equal((await images(KASANJE))[0].is_primary, true);
       const restoredMbalwa = await row(MBALWA);
+      assert.match(restoredMbalwa.description, /Watch the 2 attached video tours and browse 5 extracted key images before enquiring\./);
       assert.equal(restoredMbalwa.extra_fields.video_tours.length, 2);
       assert.equal(restoredMbalwa.extra_fields.video_tours[1].url, MBALWA_VIDEO_2);
       const restoredPrimary = await images(MBALWA);

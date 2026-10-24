@@ -583,10 +583,13 @@ DECLARE
   primary_id uuid := 'a18c7a45-8c4e-433b-8c50-becee8f53e71';
   keep_id uuid := '9aabcdde-3d49-4df5-9dbf-41992ddb4c5f';
   bad_video text := 'https://media.makaug.com/whatsapp-employee-intake/video/1791548942015-d720afea-9ba7-42f3-b270-5db2f8d634d7-57773202-false_95365487423704-lid_3A4A54B8E62E2CFC1166-1.mp4';
+  old_copy text := 'Watch the 2 attached video tours and browse 5 extracted key images before enquiring.';
+  new_copy text := 'Watch the attached video tour and browse the 3 plot photos before enquiring.';
   trigger_off boolean := FALSE;
   p properties%ROWTYPE;
   v_now timestamptz;
   v_extra jsonb;
+  v_description text;
   primary_row property_images%ROWTYPE;
   keep_row property_images%ROWTYPE;
   other_bad integer;
@@ -629,7 +632,8 @@ BEGIN
         AND keep_row.id IS NOT NULL
         AND keep_row.is_primary IS TRUE
         AND keep_row.sort_order = 0
-        AND NOT bad_present;
+        AND NOT bad_present
+        AND position(old_copy in COALESCE(p.description, '')) = 0;
       IF already THEN
         RAISE NOTICE 'listing_correction_177 % skipped already_in_target_state', pid;
       ELSIF keep_row.id IS NULL THEN
@@ -698,9 +702,10 @@ BEGIN
           IF COALESCE(v_extra->>'video_url', '') = bad_video THEN
             v_extra := v_extra - 'video_url';
           END IF;
+          v_description := replace(COALESCE(p.description, ''), old_copy, new_copy);
           v_extra := pg_temp.listing_177_stamp(v_extra, 'mbalwa_media', v_now);
           UPDATE properties AS target
-          SET extra_fields = v_extra, updated_at = v_now
+          SET description = v_description, extra_fields = v_extra, updated_at = v_now
           WHERE target.id = pid;
           RAISE NOTICE 'listing_correction_177 % applied mbalwa_media', pid;
         END IF;
