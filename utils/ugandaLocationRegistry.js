@@ -839,14 +839,34 @@ function canonicalLocationForRow(row = {}) {
     || canonicalizeUgandaLocation('', row.district);
 }
 
+// A district-level canonical (wakiso:wakiso) has no area name. A stored area
+// that is not itself a district, and that the registry does not know, is still
+// the place the listing was given (Namuseera has no node). A stored district
+// name, a place the registry already has, or the distance word "From" stays
+// blank: those are the labels this display exists to correct.
+function specificStoredAreaForDistrictCanonical(row = {}, district = '') {
+  const stored = String(row.area || '').trim();
+  if (!stored) return null;
+  const key = normalizeLocationKey(stored);
+  if (!key || key === 'from') return null;
+  const districtName = normalizeDistrict(district) || String(district || '').trim();
+  if (normalizeLocationKey(districtName) === key) return null;
+  if (normalizeDistrict(stored)) return null;
+  if (canonicalizeUgandaLocation(stored, districtName)) return null;
+  return stored;
+}
+
 function canonicalDisplayLocationForRow(row = {}) {
   const canonical = canonicalLocationForRow(row);
   if (!canonical) {
     return { canonical: null, area: null, district: normalizeDistrict(row.district) || null, level: null };
   }
+  const districtLevel = ['district', 'region'].includes(canonical.level);
   return {
     canonical,
-    area: ['district', 'region'].includes(canonical.level) ? null : canonical.name,
+    area: districtLevel
+      ? specificStoredAreaForDistrictCanonical(row, canonical.district)
+      : canonical.name,
     district: canonical.district,
     level: canonical.level
   };

@@ -12548,8 +12548,8 @@ function renderBrokerDashboardListingCard(p) {
   return `
     <div class="border border-gray-200 rounded-2xl p-4 bg-white">
       <div class="grid sm:grid-cols-[120px_1fr] gap-4">
-        <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="h-28 rounded-xl bg-gray-100 overflow-hidden border border-gray-100">
-          <img src="${adminAttr(p.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=500&q=80")}" alt="${adminAttr(p.title || "Broker listing")}" class="w-full h-full object-cover">
+        <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="relative h-28 rounded-xl bg-[#f0fdf4] overflow-hidden border border-gray-100">
+          ${!isStockOrPlaceholderPhoto(p.img) && p.img ? `<img src="${adminAttr(p.img)}" alt="${adminAttr(p.title || "Broker listing")}" class="w-full h-full object-cover">` : photosComingSoonHtml({ compact: true })}
         </button>
         <div class="min-w-0">
           <div class="flex items-start justify-between gap-2">
@@ -13118,7 +13118,7 @@ function renderBrokerBoostPanel(listingId = "", formatKey = "") {
         <div class="mt-4 rounded-2xl bg-white border border-amber-100 p-4">
           <div class="text-xs font-black uppercase tracking-wide text-amber-700">Preview</div>
           <div class="mt-2 flex items-center gap-3">
-            <div class="w-24 h-20 rounded-xl bg-gray-100 overflow-hidden">${selected ? `<img src="${adminAttr(selected.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=500&q=80")}" alt="${adminAttr(selected.title || "Listing")}" class="w-full h-full object-cover">` : ""}</div>
+            <div class="relative w-24 h-20 rounded-xl bg-[#f0fdf4] overflow-hidden">${selected && !isStockOrPlaceholderPhoto(selected.img) && selected.img ? `<img src="${adminAttr(selected.img)}" alt="${adminAttr(selected.title || "Listing")}" class="w-full h-full object-cover">` : photosComingSoonHtml({ compact: true })}</div>
             <div>
               <div class="text-[11px] font-black text-amber-700 uppercase">Sponsored makaug broker listing</div>
               <h3 class="font-black text-gray-900">${adminEscape(selected?.title || "Choose a listing")}</h3>
@@ -37378,11 +37378,38 @@ function propertyVideoUrls(property = {}) {
   return [...new Set(raw.map((value) => String(value || "").trim()).filter((value) => /^https?:\/\//i.test(value)))];
 }
 
-// Stock house-and-keys photo makaug drops in when a listing has no photo of its own.
-const MAKAUG_GENERIC_LISTING_PHOTO_ID = "photo-1560518883-ce09059eeffa";
+// The Unsplash model house with a red front and a key is banned on makaug.
+// It is not a property photo. Neither is any other Unsplash stand-in.
+const MAKAUG_LOGO_SRC = "/assets/icons/makaug-icon-512.png";
+
+function isStockOrPlaceholderPhoto(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return false;
+  // Literals stay inside this function so card tests can run it on its own.
+  if (text.includes("photo-1560518883-ce09059eeffa")) return true;
+  if (/(^|\/\/|\/)([a-z0-9-]+\.)*unsplash\.com\b/.test(text) || text.includes("images.unsplash.com")) return true;
+  if (text.includes("/assets/house-ads-v3/home-hero") || text.includes("home-hero-640")) return true;
+  return false;
+}
 
 function isGenericListingPhoto(value) {
-  return String(value || "").includes(MAKAUG_GENERIC_LISTING_PHOTO_ID);
+  return isStockOrPlaceholderPhoto(value);
+}
+
+function isGeneratedMediaCaption(value) {
+  const text = String(value || "").trim();
+  return /^distinct video key image\b/i.test(text) || /^primary property photo$/i.test(text);
+}
+
+function photosComingSoonHtml(options = {}) {
+  const label = translateListingLabel("Photos coming soon");
+  const compact = options.compact === true;
+  const logoClass = compact ? "h-8 w-8" : "h-14 w-14";
+  const textClass = compact ? "text-[11px]" : "text-sm";
+  return `<div class="photos-coming-soon absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#f0fdf4] text-[#14532d]" data-photos-coming-soon="1" role="img" aria-label="${adminAttr(label)}">
+    <img src="${MAKAUG_LOGO_SRC}" alt="" class="${logoClass} object-contain" width="${compact ? 32 : 56}" height="${compact ? 32 : 56}" decoding="async">
+    <span class="${textClass} font-semibold">${adminEscape(label)}</span>
+  </div>`;
 }
 
 // First photo that actually belongs to the property (the stock placeholder does not count).
@@ -38052,7 +38079,7 @@ function applySubmittedListingToLocal(payload, apiData = {}) {
     baths: payload.bathrooms || null,
     price: payload.price || 0,
     size: payload.extra_fields?.size_raw || "",
-    img: mainPhoto?.url || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80",
+    img: mainPhoto?.url || "",
     images: galleryPhotos,
     main_photo_index: Number.isFinite(lpMainPhotoIndex) ? lpMainPhotoIndex : 0,
     photoCount: galleryPhotos.length,
@@ -43892,8 +43919,8 @@ const PAGE_CONTENT = {
       </div>
       <div class="grid md:grid-cols-2 gap-3">
         <div class="rounded-xl border border-gray-200 overflow-hidden bg-gray-950 text-white">
-          <div class="h-36 bg-cover bg-center relative" style="background-image:url('https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&q=80')">
-            <div class="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent"></div>
+          <div class="h-36 bg-[#14532d] relative">
+            <div class="absolute inset-0 bg-gradient-to-r from-black/50 via-black/20 to-transparent"></div>
             <div class="absolute left-4 top-4 right-4">
               <div class="text-[11px] uppercase tracking-wide text-green-100 font-bold">Sponsored homepage banner</div>
               <div class="text-xl font-black mt-1">Own your first home faster</div>
@@ -43905,7 +43932,7 @@ const PAGE_CONTENT = {
         <div class="rounded-xl border border-gray-200 p-3 bg-white">
           <div class="text-[11px] uppercase tracking-wide text-amber-700 font-bold">Sponsored regional result</div>
           <div class="mt-2 rounded-lg border border-green-100 overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=900&q=80" alt="Sponsored listing preview" class="w-full h-24 object-cover">
+            <div class="relative h-24 bg-[#f0fdf4] flex items-center justify-center"><img src="/assets/icons/makaug-icon-512.png" alt="" class="h-8 w-8 object-contain" width="32" height="32" decoding="async"></div>
             <div class="p-3">
               <div class="font-black text-gray-800">Featured in Kampala searches</div>
               <div class="text-xs text-gray-600">Target by district, area, property type, and intent.</div>
@@ -46730,7 +46757,7 @@ function getPropertyGalleryPhotos(property) {
   const list = foundOnline ? foundOnlineConsentedPhotos(property.images) : (Array.isArray(property.images) ? property.images : []);
   const normalized = list.map((item, idx) => {
     const url = item?.url || item?.img || item?.src || "";
-    if (!url) return null;
+    if (!url || isStockOrPlaceholderPhoto(url)) return null;
     const rawRoomLabel = item?.room_label || item?.label || "";
     const slotKey = item?.slot_key || item?.slot || "";
     const roomLabel = /^photo\s*\d+$/i.test(String(rawRoomLabel || "").trim()) ? "" : rawRoomLabel;
@@ -46746,7 +46773,7 @@ function getPropertyGalleryPhotos(property) {
   }).filter(Boolean);
   if (normalized.length) return normalized;
   const fallbackImg = foundOnline ? foundOnlineConsentedPhotoUrl(property) : property.img;
-  if (fallbackImg) {
+  if (fallbackImg && !isStockOrPlaceholderPhoto(fallbackImg)) {
     return [{
       url: fallbackImg,
       name: property.title || "Property photo",
@@ -46778,6 +46805,9 @@ function photoLabelFromSlot(slotKey, listingType = "") {
 function getDisplayPhotoLabel(photo, index = 0, property = null) {
   const type = normalizeType(property?.type || property?.listing_type || "");
   const raw = String(photo?.room_label || photo?.label || "").trim();
+  const slot = String(photo?.slot_key || photo?.slot || "");
+  if (isGeneratedMediaCaption(raw)) return "";
+  if (/^video_key_frame_/i.test(slot) && !raw) return "";
   if (raw && !/^photo\s*\d+$/i.test(raw)) return raw;
   const slotLabel = photoLabelFromSlot(photo?.slot_key || photo?.slot, type);
   if (slotLabel) return slotLabel;
@@ -48680,13 +48710,18 @@ function uniqueTextParts(parts = []) {
   });
 }
 
+function placeNameOrBlank(value) {
+  const text = String(value || "").trim();
+  return /^from$/i.test(text) ? "" : text;
+}
+
 function getPropertyStructuredLocation(property = {}) {
   const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
   return {
     street: property?.street_name || extra.street_name || "",
-    area: property?.area || extra.neighborhood || extra.city || "",
-    neighborhood: property?.neighborhood || extra.neighborhood || property?.area || "",
-    city: property?.city || extra.city || "",
+    area: placeNameOrBlank(property?.area) || placeNameOrBlank(extra.neighborhood) || placeNameOrBlank(extra.city) || "",
+    neighborhood: placeNameOrBlank(property?.neighborhood) || placeNameOrBlank(extra.neighborhood) || placeNameOrBlank(property?.area) || "",
+    city: placeNameOrBlank(property?.city) || placeNameOrBlank(extra.city) || "",
     district: property?.district || "",
     region: property?.region || extra.region || ""
   };
@@ -48701,10 +48736,8 @@ function getPropertyPreviewPhotoUrl(property = {}) {
   if (isFoundOnlineListing(property)) return "";
   const images = Array.isArray(property?.images) ? property.images : [];
   const firstImage = images.find((item) => String(item?.url || "").trim());
-  return property?.primary_image_url
-    || property?.img
-    || firstImage?.url
-    || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80";
+  const candidate = property?.primary_image_url || property?.img || firstImage?.url || "";
+  return isStockOrPlaceholderPhoto(candidate) ? "" : candidate;
 }
 
 function buildMapListingPopupHtml(property = {}) {
@@ -49311,11 +49344,15 @@ function uniqueCleanLocationParts(parts = []) {
 }
 
 function publicPropertyLocationLabel(p = {}, fallback = "Location pending") {
-  const area = cleanWhatsappValue(p.area);
-  const neighbourhood = cleanWhatsappValue(p.neighborhood || p.neighbourhood || p.suburb);
-  const city = cleanWhatsappValue(p.city || p.town || p.municipality);
-  const district = cleanWhatsappValue(p.district);
-  const region = cleanWhatsappValue(p.region);
+  const usablePlace = (value) => {
+    const text = cleanWhatsappValue(value);
+    return /^from$/i.test(text) ? "" : text;
+  };
+  const area = usablePlace(p.area);
+  const neighbourhood = usablePlace(p.neighborhood || p.neighbourhood || p.suburb);
+  const city = usablePlace(p.city || p.town || p.municipality);
+  const district = usablePlace(p.district);
+  const region = usablePlace(p.region);
   const areaKey = area.toLowerCase();
   const cityKey = city.toLowerCase();
   const districtKey = district.toLowerCase();
@@ -49324,12 +49361,13 @@ function publicPropertyLocationLabel(p = {}, fallback = "Location pending") {
   if (staleKampalaArea && specificParts.length) return specificParts.join(", ");
   const primaryParts = uniqueCleanLocationParts([area || neighbourhood || city, district || region]);
   if (primaryParts.length) return primaryParts.join(", ");
+  const resolvedLabel = /^from\b/i.test(String(p.resolved_location_label || "").trim()) ? "" : p.resolved_location_label;
   const fallbackParts = uniqueCleanLocationParts([
     neighbourhood,
     city,
     district,
     region,
-    p.resolved_location_label,
+    resolvedLabel,
     p.location_label,
     p.location
   ]);
@@ -49440,7 +49478,7 @@ function studentCardFooterText(p = {}) {
   const distanceMiles = p.distance_miles ?? p.distanceMiles;
   const nearDistance = distanceMiles != null && Number.isFinite(Number(distanceMiles)) ? `${Number(distanceMiles).toFixed(1)} mi away` : "";
   const cardVideoFirstMedia = propertyVideoFirstMedia(p);
-  const photoSrc = publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
+  const photoSrc = isStockOrPlaceholderPhoto(p.img) ? "" : publicImageSrc(p.img);
   const displayTitle = getLocalizedPropertyTitle(p);
   const detailPath = getPropertyDetailPath(p);
   const displayLocation = publicPropertyLocationLabel(p);
@@ -49455,13 +49493,16 @@ function studentCardFooterText(p = {}) {
     showTypeBadge: options.showTypeBadge,
     compact: true
   });
+  if (!cardVideoFirstMedia && !photoSrc) return "";
   return `
     <div class="group relative bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       ${propertyDescriptionHoverHtml(p)}
       <div class="h-48 relative overflow-hidden bg-gray-100">
         ${cardVideoFirstMedia
           ? videoFirstTileHtml(cardVideoFirstMedia, { alt: displayTitle })
-          : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover" loading="${options.imageLoading === "lazy" ? "lazy" : "eager"}" decoding="async">`}
+          : photoSrc
+            ? `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover" loading="${options.imageLoading === "lazy" ? "lazy" : "eager"}" decoding="async">`
+            : ""}
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           ${badgeRow}
         </div>
@@ -53088,6 +53129,19 @@ function canonicalUiLocationForProperty(property = {}, extraFields = {}) {
   const district = DISTRICTS.find((item) => normalize(item) === districtKey)
     || (districtKey === "luwero" ? "Luwero" : districtKey.replace(/\b\w/g, (char) => char.toUpperCase()));
   if (["district", "region"].includes(level) || districtKey === areaKey) {
+    // The API area is blank for a district canonical. Keep a stored area the
+    // registry does not know (Namuseera). A district name, a known area, or
+    // the distance word "From" stays blank.
+    const storedArea = String(property.area || "").trim();
+    const storedKey = normalize(storedArea);
+    const knownDistrict = DISTRICTS.some((item) => normalize(item) === storedKey);
+    const knownInTree = getDistrictLocationTree(district).some((cityNode) => (
+      normalize(cityNode.city) === storedKey
+      || (cityNode.neighborhoods || []).some((item) => normalize(item.name) === storedKey)
+    ));
+    if (storedArea && storedKey && storedKey !== "from" && storedKey !== normalize(district) && storedKey !== districtKey && !knownDistrict && !knownInTree) {
+      return { area: storedArea, district, level: level || "district" };
+    }
     return { area: "", district, level: level || "district" };
   }
   for (const cityNode of getDistrictLocationTree(district)) {
@@ -53160,7 +53214,7 @@ function mapRemotePropertyForUi(p, options = {}) {
     baths: p?.bathrooms,
     price: Number(p?.price || 0),
     period: p?.price_period || p?.period || "",
-    img: thirdPartyDiscovery ? foundOnlineConsentedPhotoUrl({ ...p, images: publicImageItems }) : (firstRealListingPhotoUrl({ ...p, images: publicImageItems }) || (videoFirstMedia ? "" : "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80")),
+    img: thirdPartyDiscovery ? foundOnlineConsentedPhotoUrl({ ...p, images: publicImageItems }) : (firstRealListingPhotoUrl({ ...p, images: publicImageItems }) || ""),
     desc: p?.description || p?.desc || "",
     area: canonicalDisplay.area,
     district: canonicalDisplay.district,
@@ -54513,6 +54567,16 @@ async function openOwnerPreviewEdit(id) {
   }
 }
 
+function followPublicListingAreaRedirect(error) {
+  const target = String(error?.response?.redirect || "");
+  if (!target.startsWith("/") || target.startsWith("//") || target.startsWith("/property")) return false;
+  const mode = authState?.user ? derivePortalMode(authState.user, authState.user.portal_mode) : "";
+  if (mode === "admin" || mode === "moderator") return false;
+  if (document.querySelector("[data-ssr-property-detail]")) return false;
+  window.location.replace(target);
+  return true;
+}
+
 async function parseInitialDeepLink() {
   normalizeLegacyHashPublicRoute();
   const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
@@ -54560,6 +54624,7 @@ async function parseInitialDeepLink() {
         return true;
       }
     } catch (error) {
+      if (followPublicListingAreaRedirect(error)) return true;
       console.warn("Unable to open linked property", error);
     }
     if (publicListingsApiLoading || !publicListingsFromApiLoaded) {
@@ -60404,7 +60469,7 @@ function updateListPreview() {
     }));
     const previewPhotos = lpPreviewPhotos;
     const previewMain = previewPhotos.find((item) => item.is_main) || previewPhotos[0];
-    const previewImg = publicImageSrc(previewMain?.url, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
+    const previewImg = previewMain?.url && !isStockOrPlaceholderPhoto(previewMain.url) ? publicImageSrc(previewMain.url) : "";
     const previewType = type === "student" ? "student" : type;
     const source = listingSourceMeta({ listed_by: "private" });
     const bedVal = lpVal("lp-beds");
@@ -60448,7 +60513,7 @@ function updateListPreview() {
     previewWrap.innerHTML = `
       <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div class="h-64 md:h-72 relative overflow-hidden">
-          <img src="${adminAttr(previewImg)}" alt="${adminAttr(title)}" class="w-full h-full object-cover">
+          ${previewImg ? `<img src="${adminAttr(previewImg)}" alt="${adminAttr(title)}" class="w-full h-full object-cover">` : photosComingSoonHtml()}
           <div class="absolute top-3 left-3 flex flex-wrap gap-1.5">
             <div class="${badgeColor(previewType)} text-white text-xs px-2 py-1 rounded font-bold">${badgeLabel(previewType)}</div>
             <div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-bolt text-[10px]"></i> ${translateListingLabel("NEW")}</div>
@@ -62546,13 +62611,18 @@ async function openDetail(id, options = {}) {
   const thirdPartySourceVisual = thirdPartyDetail && !foundOnlineConsentedPhotoUrl(p);
   const detailVideoFirstMedia = thirdPartyDetail ? null : propertyVideoFirstMedia(p);
   const hidePhotoGallery = thirdPartySourceVisual || !!detailVideoFirstMedia;
-  const detailPhotos = hidePhotoGallery ? [] : getPropertyGalleryPhotos(p);
-  const primaryPhoto = hidePhotoGallery ? null : (detailPhotos.find((item) => item.is_main) || detailPhotos[0] || { url: p.img, slot: "", room_label: "", location_label: [p.area, p.district].filter(Boolean).join(", ") });
-  detailGalleryPhotos = hidePhotoGallery ? [] : (detailPhotos.length ? detailPhotos : [primaryPhoto]);
+  const detailPhotos = (hidePhotoGallery ? [] : getPropertyGalleryPhotos(p)).filter((photo) => photo?.url && !isStockOrPlaceholderPhoto(photo.url));
+  detailGalleryPhotos = detailPhotos;
   detailGalleryPhotoIndex = Math.max(0, detailGalleryPhotos.findIndex((item) => item?.is_main));
   if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
-  const selectedPhoto = hidePhotoGallery ? null : (detailGalleryPhotos[detailGalleryPhotoIndex] || primaryPhoto);
-  const selectedPhotoSrc = hidePhotoGallery ? "" : publicImageSrc(selectedPhoto?.url || p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
+  const selectedPhoto = hidePhotoGallery ? null : (detailGalleryPhotos[detailGalleryPhotoIndex] || null);
+  const selectedPhotoSrc = selectedPhoto ? publicImageSrc(selectedPhoto.url) : "";
+  const staffMaySeePhotoPlaceholder = isAdminViewer || isOwnerPreviewViewer;
+  const showPhotosComingSoon = staffMaySeePhotoPlaceholder && !hidePhotoGallery && !selectedPhotoSrc;
+  if (!staffMaySeePhotoPlaceholder && !hidePhotoGallery && !selectedPhotoSrc) {
+    toast("This listing is currently not publicly available.");
+    return false;
+  }
   const detailIdArg = propertyIdArg(p.id);
   const detailLocation = getPropertyLocationDisplay(p);
   const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
@@ -62678,6 +62748,10 @@ async function openDetail(id, options = {}) {
                 <i class="fas fa-video"></i>${translateListingLabel("This listing was shared as a video walkthrough. Play it above to see the property.")}
               </div>
             </div>
+          ` : showPhotosComingSoon ? `
+            <div class="property-gallery-hero relative overflow-hidden bg-[#f0fdf4]" data-detail-hero data-photos-coming-soon="1">
+              ${photosComingSoonHtml()}
+            </div>
           ` : `
 	              <button type="button" onclick="openDetailGalleryLightbox(detailGalleryPhotoIndex)" class="block w-full property-gallery-hero relative overflow-hidden group" data-detail-hero>
             <img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}" alt="${adminAttr(getDisplayPhotoLabel(selectedPhoto, detailGalleryPhotoIndex, p) || displayTitle)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform" loading="eager" decoding="async" fetchpriority="high">
@@ -62688,12 +62762,15 @@ async function openDetail(id, options = {}) {
           <div class="px-5 pt-4">
             <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">${translatePropertyUi("Gallery")}</div>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-              ${detailGalleryPhotos.map((photo, idx) => `
+              ${detailGalleryPhotos.map((photo, idx) => {
+                const thumbLabel = getDisplayPhotoLabel(photo, idx, p);
+                return `
                 <button type="button" onclick="selectDetailGalleryPhoto(${idx})" data-detail-gallery-thumb="${idx}" aria-current="${idx === detailGalleryPhotoIndex ? "true" : "false"}" class="border ${idx === detailGalleryPhotoIndex ? "border-green-500" : "border-gray-200"} rounded-lg overflow-hidden bg-gray-50 text-left hover:border-green-400 transition-colors">
-                  <img src="${adminAttr(publicImageSrc(photo.url))}" alt="${adminAttr(photo.name || `Photo ${idx + 1}`)}" class="w-full h-20 object-cover" loading="lazy" decoding="async">
-                  <div class="px-2 py-1.5 text-[11px] text-gray-600 truncate">${getDisplayPhotoLabel(photo, idx, p)}</div>
+                  <img src="${adminAttr(publicImageSrc(photo.url))}" alt="${adminAttr(thumbLabel || photo.name || `Photo ${idx + 1}`)}" class="w-full h-20 object-cover" loading="lazy" decoding="async">
+                  ${thumbLabel ? `<div class="px-2 py-1.5 text-[11px] text-gray-600 truncate">${adminAttr(thumbLabel)}</div>` : ""}
                 </button>
-              `).join("")}
+              `;
+              }).join("")}
             </div>
           </div>
           `}

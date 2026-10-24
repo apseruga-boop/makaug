@@ -134,7 +134,8 @@ const { listingPriceQuality, IMPOSSIBLE_PRICE_UGX } = require('../utils/listingP
 const { resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { listingReferenceQuery } = require('../utils/listingReferenceSearch');
 const { pricePlausibility } = require('../utils/pricePlausibility');
-const { listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
+const { listingPhotoOrVideoCheck, summariseListingMedia, publicHasPhotoOrVideoSql, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
+const { publicListingAreaRedirectPath } = require('../services/publicSeoService');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const { CANONICAL_PROPERTY_CURRENCY, propertyPriceMetadata, configuredRateToCanonicalCurrency, normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
 const {
@@ -2422,7 +2423,8 @@ async function loadPublicLocationSuggestionCounts({ listingType = '', studentPor
   const values = [];
   const filters = [
     publicLivePropertyStatusSql('p'),
-    `NOT ${publicLaunchTestListingFastCondition('p')}`
+    `NOT ${publicLaunchTestListingFastCondition('p')}`,
+    publicHasPhotoOrVideoSql('p')
   ];
   if (studentPortal || listingType === 'student') {
     addFilter(filters, values, '(p.listing_type IN (?, ?) OR (p.listing_type = ? AND p.students_welcome = ?))', 'student', 'students', 'rent', true);
@@ -2623,8 +2625,10 @@ router.get('/suggestions', async (req, res, next) => {
 
     const areas = await db.query(
       `SELECT DISTINCT area
-       FROM properties
-       WHERE ${publicLivePropertyStatusSql('')} AND area ILIKE $1${whereType}
+       FROM properties p
+       WHERE ${publicLivePropertyStatusSql('p')}
+         AND ${publicHasPhotoOrVideoSql('p')}
+         AND area ILIKE $1${whereType}
        ORDER BY area ASC
        LIMIT 20`,
       values
@@ -2632,8 +2636,9 @@ router.get('/suggestions', async (req, res, next) => {
 
     const streets = await db.query(
       `SELECT DISTINCT extra_fields->>'street_name' AS street_name
-       FROM properties
-       WHERE ${publicLivePropertyStatusSql('')}
+       FROM properties p
+       WHERE ${publicLivePropertyStatusSql('p')}
+         AND ${publicHasPhotoOrVideoSql('p')}
          AND COALESCE(extra_fields->>'street_name', '') ILIKE $1${whereType}
        ORDER BY extra_fields->>'street_name' ASC
        LIMIT 20`,
@@ -2801,6 +2806,7 @@ async function listPropertiesHandler(req, res, next) {
 
     if (publicOnly || !adminAccess) {
       addPublicLaunchSeedFilter(filters, values);
+      filters.push(publicHasPhotoOrVideoSql('p'));
     }
 
     if (studentPortal) {
@@ -3567,6 +3573,15 @@ router.param('id', (req, res, next, id) => {
   return next();
 });
 
+function sendHiddenListingRedirect(res, property) {
+  const redirect = publicListingAreaRedirectPath(property || {});
+  res.set('X-Robots-Tag', 'noindex, noarchive');
+  res.set('Cache-Control', 'private, no-store');
+  res.set('CDN-Cache-Control', 'no-store');
+  res.set('X-makaug-Listing-Redirect', 'area');
+  return res.status(404).json({ ok: false, error: 'Property not found', redirect });
+}
+
 router.get('/:id', async (req, res, next) => {
   try {
     const loaded = await loadPropertyWithImages(req.params.id);
@@ -3583,12 +3598,8 @@ router.get('/:id', async (req, res, next) => {
       || ownerCanPreview
       || adminAccess;
 
-    if (!canViewNonPublic) {
-      return res.status(404).json({ ok: false, error: 'Property not found' });
-    }
-
-    if (isLaunchSeedListing(property) && !ownerCanPreview && !adminAccess) {
-      return res.status(404).json({ ok: false, error: 'Property not found' });
+    if (!canViewNonPublic || (isLaunchSeedListing(property) && !ownerCanPreview && !adminAccess) || (!ownerCanPreview && !adminAccess && !summariseListingMedia(images, property.extra_fields || {}).ok)) {
+      return sendHiddenListingRedirect(res, property);
     }
 
     return res.json({

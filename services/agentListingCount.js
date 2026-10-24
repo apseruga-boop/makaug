@@ -1,3 +1,5 @@
+const { publicHasPhotoOrVideoSql } = require('../utils/realListingPhoto');
+
 const DEFAULT_AGENT_LISTING_PAGE_SIZE = 24;
 const MAX_AGENT_LISTING_PAGE_SIZE = 48;
 
@@ -14,7 +16,7 @@ function sqlAlias(value = 'a') {
 // number and must not be mixed in, or the two pages can disagree.
 function approvedAgentListingsCountSql(agentAlias = 'a') {
   const alias = sqlAlias(agentAlias);
-  return `(SELECT COUNT(*)::int FROM properties p WHERE p.agent_id = ${alias}.id AND p.status = 'approved')`;
+  return `(SELECT COUNT(*)::int FROM properties p WHERE p.agent_id = ${alias}.id AND p.status = 'approved' AND ${publicHasPhotoOrVideoSql('p')})`;
 }
 
 function parseAgentListingPage(query = {}) {
@@ -76,6 +78,7 @@ async function listApprovedAgentListingPage(db, agentId, query = {}) {
          LIMIT 1
        ) img ON true
       WHERE p.agent_id = $1 AND p.status = 'approved'
+        AND ${publicHasPhotoOrVideoSql('p')}
       ORDER BY COALESCE(p.approved_at, p.updated_at, p.created_at) DESC, p.id DESC
       LIMIT $2 OFFSET $3`,
     [agentId, paging.limit, paging.offset]
@@ -97,6 +100,7 @@ async function approvedListingPriceRange(db, agentId) {
        FROM properties p
       WHERE p.agent_id = $1
         AND p.status = 'approved'
+        AND ${publicHasPhotoOrVideoSql('p')}
         AND p.price > 0`,
     [agentId]
   );

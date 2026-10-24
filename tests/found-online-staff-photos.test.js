@@ -148,7 +148,7 @@ test('the list, card and SSR queries all select the consented staff primary', ()
   const routes = fs.readFileSync(path.join(__dirname, '../routes/properties.js'), 'utf8');
   assert.equal((routes.match(/staff_img\.url AS staff_primary_image_url/g) || []).length, 2, 'both list queries');
   const ssr = fs.readFileSync(path.join(__dirname, '../services/publicSeoRenderService.js'), 'utf8');
-  assert.equal((ssr.match(/staff_img\.url AS staff_primary_image_url/g) || []).length, 3, 'homepage, category pages and /property/:id');
+  assert.equal((ssr.match(/staff_img\.url AS staff_primary_image_url/g) || []).length, 4, 'homepage, category pages, /property/:id, and the hidden-listing lookup');
   assert.match(ssr, /primary_image_url: seoCoverImageUrl\(row, foundOnline\)/);
   assert.match(ssr, /if \(foundOnline\) return staffCover \|\| hostedCover/);
 });

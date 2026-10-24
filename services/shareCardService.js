@@ -631,8 +631,9 @@ async function agentSvg(agent, lang) {
 
 async function propertySvg(listing, lang) {
   const family = fontFamily(lang);
+  const logo = await logoDataUri(96);
   let photoPanel = `<rect width="760" height="630" fill="#f0fdf4"/>
-    ${textEl(380, 300, shareCardText(lang, 'Photo unavailable'), { size: 32, weight: 600, fill: '#14532d', anchor: 'middle', family })}`;
+    <image href="${logo}" x="332" y="210" width="96" height="96"/>`;
   if (listing.photo) {
     try {
       const photo = await sharp(listing.photo).rotate().resize(760, 630, { fit: 'contain', background: '#f0fdf4' }).jpeg({ quality: 76 }).toBuffer();
@@ -640,7 +641,6 @@ async function propertySvg(listing, lang) {
       photoPanel = `<image href="${href}" x="0" y="0" width="760" height="630"/>`;
     } catch (_error) { /* Keep this listing's details when its photo cannot be decoded. */ }
   }
-  const logo = await logoDataUri(96);
   const price = formatSharePrice(listing.price, listing.pricePeriod || listing.price_period) || shareCardText(lang, 'Price on request');
   const title = ellipsizeShareLines(listing.title || '', 25, 2);
   const type = clip(listing.propertyType || shareCardText(lang, CATEGORIES[categoryForListing(listing)].title), 28);

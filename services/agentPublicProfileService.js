@@ -17,6 +17,7 @@ const {
   normalizeDistrict
 } = require('../utils/ugandaLocationRegistry');
 const { isPriceImplausible } = require('../utils/pricePlausibility');
+const { publicHasPhotoOrVideoSql } = require('../utils/realListingPhoto');
 
 const PLACEHOLDER_BIO_PATTERNS = [
   /^\s*$/,
@@ -1415,7 +1416,8 @@ async function loadAgentSummaryListings(db, agentId) {
   const result = await db.query(
     `SELECT ${SUMMARY_FACT_SQL}
        FROM properties p
-      WHERE p.agent_id = $1 AND p.status = 'approved'`,
+      WHERE p.agent_id = $1 AND p.status = 'approved'
+        AND ${publicHasPhotoOrVideoSql('p')}`,
     [agentId]
   );
   const stays = await loadShortStayRows(db, [agentId]);
@@ -1436,7 +1438,8 @@ async function loadAgentCardListings(db, agentIds = []) {
   const result = await db.query(
     `SELECT p.agent_id, ${SUMMARY_FACT_SQL}
        FROM properties p
-      WHERE p.status = 'approved' AND p.agent_id = ANY($1::uuid[])`,
+      WHERE p.status = 'approved' AND p.agent_id = ANY($1::uuid[])
+        AND ${publicHasPhotoOrVideoSql('p')}`,
     [ids]
   );
   const stays = await loadShortStayRows(db, ids);

@@ -318,11 +318,28 @@ function facetPredicate(options, values, alias = 'p') {
 // A found-online row used to drop that cover and fall back to the land
 // category image whenever the staff-consent slot was empty.
 function seoCoverImageUrl(row = {}, foundOnline = false) {
-  const staffCover = String(foundOnlinePrimaryImageUrl(row) || '').trim();
+  const staffRaw = String(foundOnlinePrimaryImageUrl(row) || '').trim();
   const primary = String(row.primary_image_url || '').trim();
   const hostedCover = realPhotoRejection(primary) === null ? primary : '';
+  const staffCover = realPhotoRejection(staffRaw) === null ? staffRaw : '';
   if (foundOnline) return staffCover || hostedCover;
-  return hostedCover || primary;
+  return hostedCover;
+}
+
+const LISTING_LOGO_PATH = '/assets/icons/makaug-icon-512.png';
+
+// A public page may show any photo that is not a stock or placeholder stand-in.
+// Approval still requires a file on our media host; that check is realPhotoRejection.
+function usableSeoListingPhoto(url) {
+  const value = String(url || '').trim();
+  if (!value) return '';
+  const lower = value.toLowerCase();
+  if (lower.startsWith('data:')) return '';
+  if (lower.includes('photo-1560518883-ce09059eeffa')) return '';
+  if (/(^|\/\/)([a-z0-9-]+\.)*unsplash\.com/.test(lower) || lower.includes('images.unsplash.com')) return '';
+  if (lower.includes('/assets/house-ads-v3/home-hero') || lower.includes('home-hero-640')) return '';
+  if (/image[\s_-]*pending/.test(lower)) return '';
+  return value;
 }
 
 function publicCoverImageLateralSql(alias = 'p') {
@@ -393,6 +410,7 @@ function normalizeSeoListingRow(row = {}) {
     property_type: humanPropertyTypeLabel(plainText(row.property_type)),
     // Found online: only a photo staff uploaded with consent, never source media.
     primary_image_url: seoCoverImageUrl(row, foundOnline),
+    video_url: plainText(copyExtra.video_url || ''),
     canonical_location_id: String(row.canonical_location_id || '').trim(),
     city: plainText(row.city),
     neighborhood: plainText(row.neighborhood),
@@ -528,6 +546,44 @@ async function loadPublicSeoListing(db, propertyId) {
     return { row: result.rows[0] ? normalizeSeoListingRow(result.rows[0]) : null };
   });
   return cached.row;
+}
+
+// The public loader above returns null for a hidden, pending, or media-less
+// row. This one still loads that row so the public URL can redirect to the
+// area page, and so staff can open the listing. It is not cached: a cached
+// hidden row would keep the public page off the site after photos return.
+async function loadSeoListingBypassingPublicFilter(db, propertyId) {
+  const safeId = String(propertyId || '').trim();
+  if (!safeId) return null;
+  const result = await db.query(
+    `SELECT
+       p.id, p.listing_type, p.title, p.description, p.area, p.district,
+       p.price, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.students_welcome,
+       p.extra_fields->>'canonical_location_id' AS canonical_location_id,
+       p.extra_fields->>'city' AS city,
+       p.extra_fields->>'neighborhood' AS neighborhood,
+       COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
+       p.source, p.listed_via,
+       ${listingCopyExtraSql('p')} AS copy_extra,
+       p.created_at, p.updated_at,
+       ${realHostedPhotoExistsSql('p')} AS has_real_photo,
+       (${publicVisibleInventoryWhere('p')}) AS public_ok,
+       image.url AS primary_image_url,
+       staff_img.url AS staff_primary_image_url
+     FROM properties p
+     ${publicCoverImageLateralSql('p')}
+     ${consentedStaffPrimaryImageLateralSql('p')}
+     WHERE p.id::text = $1
+     LIMIT 1`,
+    [safeId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  const listing = normalizeSeoListingRow(row);
+  listing.public_ok = row.public_ok === true;
+  listing.students_welcome = row.students_welcome === true;
+  return listing;
 }
 
 // One currency spelling site-wide: UGX (it was USh in titles and cards but UGX in
@@ -722,10 +778,16 @@ function renderListingLocationLink(listing, categoryKey) {
 
 function renderSeoListingCard(listing, options = {}) {
   const href = `/property/${encodeURIComponent(listing.id)}`;
-  const image = absoluteUrl(listing.primary_image_url || CATEGORY_SEO[options.categoryKey]?.image || '/assets/house-ads-v3/home-hero.webp', options.baseUrl);
+  const image = usableSeoListingPhoto(listing.primary_image_url);
+  const videoUrl = String(listing.video_url || '').trim();
+  const media = image
+    ? `<img src="${escapeHtml(absoluteUrl(image, options.baseUrl))}" alt="${escapeHtml(listing.title)}" class="w-full h-full object-cover" width="640" height="384" decoding="async" loading="${options.eager ? 'eager' : 'lazy'}">`
+    : (videoUrl
+      ? `<div class="flex h-full min-h-[12rem] w-full items-center justify-center bg-black text-sm font-semibold text-white" data-video-cover="1">Video</div>`
+      : '');
   return `<article class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card" data-ssr-property-card="${escapeHtml(listing.id)}">
-    <a href="${escapeHtml(href)}" class="block h-48 overflow-hidden" aria-label="View ${escapeHtml(listing.title)}">
-      <img src="${escapeHtml(image)}" alt="${escapeHtml(listing.title)}" class="w-full h-full object-cover" width="640" height="384" decoding="async" loading="${options.eager ? 'eager' : 'lazy'}">
+    <a href="${escapeHtml(href)}" class="relative block h-48 overflow-hidden bg-[#f0fdf4]" aria-label="View ${escapeHtml(listing.title)}">
+      ${media}
     </a>
     <div class="p-4">
       <h2 class="font-bold text-gray-900"><a href="${escapeHtml(href)}" class="hover:text-green-700 hover:underline">${escapeHtml(listing.title)}</a></h2>
@@ -1012,7 +1074,9 @@ function renderPropertySeoHtml(html, listing, options = {}) {
   const categoryKey = listing.listing_type === 'student' ? 'students' : listing.listing_type;
   const config = CATEGORY_SEO[categoryKey] || CATEGORY_SEO.sale;
   const propertyUrl = absoluteUrl(`/property/${encodeURIComponent(listing.id)}`, options.baseUrl);
-  const image = absoluteUrl(listing.primary_image_url || config.image || '/assets/house-ads-v3/home-hero.webp', options.baseUrl);
+  const photoUrl = usableSeoListingPhoto(listing.primary_image_url);
+  const videoUrl = String(listing.video_url || '').trim();
+  const image = absoluteUrl(photoUrl || LISTING_LOGO_PATH, options.baseUrl);
   const location = listingAreaLocation(listing);
   const areaUrl = location ? absoluteUrl(`${config.route}/${canonicalLocationRouteSlug(location)}`, options.baseUrl) : absoluteUrl(config.route, options.baseUrl);
   const heading = propertyPublicHeading(listing);
@@ -1027,9 +1091,9 @@ function renderPropertySeoHtml(html, listing, options = {}) {
     <div class="lg:col-span-2" data-detail-main>
       ${renderBreadcrumbs(items)}
       <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white" data-detail-card>
-        <button type="button" class="block w-full property-gallery-hero relative overflow-hidden group" data-detail-hero onclick="if(typeof openDetailGalleryLightbox==='function')openDetailGalleryLightbox(detailGalleryPhotoIndex)">
+        ${photoUrl ? `<button type="button" class="block w-full property-gallery-hero relative overflow-hidden group" data-detail-hero onclick="if(typeof openDetailGalleryLightbox==='function')openDetailGalleryLightbox(detailGalleryPhotoIndex)">
           <img id="detail-gallery-hero-img" data-ssr-detail-hero="${escapeHtml(listing.id)}" src="${escapeHtml(image)}" alt="${escapeHtml(heading)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform" width="1200" height="675" loading="eager" decoding="async" fetchpriority="high">
-        </button>
+        </button>` : (videoUrl ? `<div class="property-gallery-hero relative overflow-hidden bg-black" data-detail-hero data-video-cover="1"></div>` : '')}
         <div class="p-5">
           <h1 class="text-3xl font-bold text-gray-900 serif">${escapeHtml(heading)}</h1>
           <p class="mt-2 text-gray-600">${location ? `<a href="${escapeHtml(areaUrl)}" class="font-semibold text-green-700 hover:underline">${escapeHtml(locationLabel)}</a>` : escapeHtml(locationLabel)}</p>
@@ -1190,6 +1254,7 @@ module.exports = {
   seoCoverImageUrl,
   loadPublicSeoListings,
   loadPublicSeoListing,
+  loadSeoListingBypassingPublicFilter,
   priceLabel,
   propertySeoTitle,
   propertyPublicHeading,
