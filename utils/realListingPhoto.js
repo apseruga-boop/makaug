@@ -95,14 +95,53 @@ async function loadRealPhotoSummaries(queryable, propertyIds = []) {
 // loaded): true when the listing has at least one real hosted photo.
 function realHostedPhotoExistsSql(alias = 'p') {
   const host = mediaHost().replace(/[^a-z0-9.-]/gi, '');
+  const id = alias ? `${alias}.id` : 'id';
   return `EXISTS (
     SELECT 1 FROM property_images rhp
-     WHERE rhp.property_id = ${alias}.id
+     WHERE rhp.property_id = ${id}
        AND rhp.url ~* '^https?://${host.replace(/\./g, '\\.')}/.+'
        AND rhp.url !~* '${STOCK_PHOTO_ID}|image[ _-]*pending|tiktokcdn|byteimg'
        AND COALESCE(rhp.room_label, '') !~* 'image[ _-]*pending'
        AND COALESCE(rhp.slot_key, '') <> 'source_evidence_card'
   )`;
+}
+
+// A public page may show a listing that has its own playable video and no
+// still. TikTok CDN covers do not count unless the file is an mp4. This is
+// the SQL twin of listingSourceVideoUrls().
+function publicPlayableVideoExistsSql(alias = 'p') {
+  const extra = alias ? `${alias}.extra_fields` : 'extra_fields';
+  const playable = (expr) => `(${expr} ~* '^https?://' AND (${expr} !~* 'tiktokcdn|byteimg' OR ${expr} ~* '\\.mp4(\\?|$)'))`;
+  const tourUrl = `COALESCE(video_tour.elem->>'url', video_tour.elem->>'video_url', CASE WHEN jsonb_typeof(video_tour.elem) = 'string' THEN video_tour.elem #>> '{}' ELSE '' END)`;
+  return `(
+    COALESCE(${extra}->>'source_unavailable', '') !~* '^(true|t|1|yes)$'
+    AND COALESCE(${extra}->>'source_url_status', '') !~* 'unavailable|removed|deleted|private'
+    AND COALESCE(${extra}->>'source_status', '') !~* 'unavailable|removed|deleted|private'
+    AND (
+      ${playable(`${extra}->>'video_url'`)}
+      OR ${playable(`${extra}->>'youtube_url'`)}
+      OR ${playable(`${extra}->>'tiktok_url'`)}
+      OR EXISTS (
+        SELECT 1
+          FROM jsonb_array_elements_text(
+            CASE WHEN jsonb_typeof(${extra}->'video_urls') = 'array' THEN ${extra}->'video_urls' ELSE '[]'::jsonb END
+          ) AS video_url(url)
+         WHERE ${playable('video_url.url')}
+      )
+      OR EXISTS (
+        SELECT 1
+          FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(${extra}->'video_tours') = 'array' THEN ${extra}->'video_tours' ELSE '[]'::jsonb END
+          ) AS video_tour(elem)
+         WHERE ${playable(tourUrl)}
+           AND (${tourUrl} ~* '\\.mp4(\\?|$)' OR ${tourUrl} ~* 'youtu|tiktok')
+      )
+    )
+  )`;
+}
+
+function publicHasPhotoOrVideoSql(alias = 'p') {
+  return `(${realHostedPhotoExistsSql(alias)} OR ${publicPlayableVideoExistsSql(alias)})`;
 }
 
 // C1 (10 Oct 2026, Arthur): a still from the listing's own source video counts
@@ -241,5 +280,7 @@ module.exports = {
   summariseListingPhotos,
   loadRealPhotoSummaries,
   listingRealPhotoCheck,
-  realHostedPhotoExistsSql
+  realHostedPhotoExistsSql,
+  publicPlayableVideoExistsSql,
+  publicHasPhotoOrVideoSql
 };

@@ -633,8 +633,7 @@ async function propertySvg(listing, lang) {
   const family = fontFamily(lang);
   const logo = await logoDataUri(96);
   let photoPanel = `<rect width="760" height="630" fill="#f0fdf4"/>
-    <image href="${logo}" x="332" y="210" width="96" height="96"/>
-    ${textEl(380, 360, shareCardText(lang, 'Photos coming soon'), { size: 32, weight: 600, fill: '#14532d', anchor: 'middle', family })}`;
+    <image href="${logo}" x="332" y="210" width="96" height="96"/>`;
   if (listing.photo) {
     try {
       const photo = await sharp(listing.photo).rotate().resize(760, 630, { fit: 'contain', background: '#f0fdf4' }).jpeg({ quality: 76 }).toBuffer();

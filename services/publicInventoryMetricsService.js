@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
+const { publicHasPhotoOrVideoSql } = require('../utils/realListingPhoto');
 const { shortTermEnabled } = require('../utils/shortTermFeatureFlags');
 
 const PUBLIC_INVENTORY_METRICS_MARKER = 'properties-list-count-fast-20260718';
@@ -74,7 +75,7 @@ function publicLaunchTestListingFastCondition(alias = 'p') {
 }
 
 function publicVisibleInventoryWhere(alias = 'p') {
-  return `(${publicLivePropertyStatusSql(alias)} AND NOT ${publicLaunchTestListingFastCondition(alias)})`;
+  return `(${publicLivePropertyStatusSql(alias)} AND NOT ${publicLaunchTestListingFastCondition(alias)} AND ${publicHasPhotoOrVideoSql(alias)})`;
 }
 
 function publicOpportunityBucketSql(alias = 'p') {

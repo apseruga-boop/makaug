@@ -13,6 +13,7 @@ const MIGRATION = path.join(__dirname, '../db/migrations/177_marketing_recheck_f
 const ROLLBACK = path.join(__dirname, '../scripts/rollback-177-listing-corrections.sql');
 const MIGRATIONS = path.join(__dirname, '../db/migrations');
 const KASANJE = 'd8c78ccd-81ec-4e92-9126-8e603d7c5071';
+const NTINDA = '73fbf51d-58f9-47df-8080-ffee9abb9b2f';
 const GAYAZA = '36760196-c98d-41c9-b1e5-31e1417067c6';
 const KITENDE = '673e383b-3480-423a-acce-74fb6f192ba7';
 const BUSIKA = 'db4d4516-5008-4c25-a677-04c0459427c6';
@@ -83,6 +84,10 @@ test('listing correction 177 is one guarded migration with a droppable Busika bl
   assert.match(sql, /Watch the attached video tour and browse the 3 plot photos before enquiring\./);
   assert.match(sql, /RAISE NOTICE 'listing_correction_177 % applied namulanda_primary'/);
   assert.match(sql, /RAISE NOTICE 'listing_correction_177 % applied remove_stock_photo'/);
+  assert.match(sql, /RAISE NOTICE 'listing_correction_177 % applied hide_no_real_photos'/);
+  assert.match(sql, /hidden: no real photos/);
+  assert.match(sql, /status = 'hidden'/);
+  assert.match(sql, new RegExp(NTINDA));
   assert.match(sql, /photo-1560518883-ce09059eeffa/);
   assert.match(sql, /unsplash\\\.com/);
   assert.match(sql, /clear_caption/);
@@ -117,6 +122,7 @@ test('listing correction 177 is one guarded migration with a droppable Busika bl
   assert.match(rollbackSql, /reorder_image/);
   assert.match(rollbackSql, /image_caption/);
   assert.match(rollbackSql, /room_label = NULLIF\(b\.before_row->>'room_label', ''\)/);
+  assert.match(rollbackSql, /status = COALESCE\(b\.before_row->>'status', p\.status\)/);
   assert.match(rollbackSql, /advertising_placement/);
   assert.doesNotMatch(rollbackSql, /DELETE\s+FROM\s+properties/i);
   assert.doesNotMatch(rollbackSql, /DROP TABLE listing_correction_177_backup/i);
@@ -233,6 +239,7 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
           video_urls: [MBALWA_VIDEO_1, MBALWA_VIDEO_2]
         }],
         [NAMULANDA, 'Commercial land for sale in Namulanda', 'Commercial property in Namulanda, Wakiso, listed at UGX 270,000,000. Caption.', 'commercial', 'sale', 'Commercial land', 'Namulanda', 'Wakiso', 270000000, { canonical_location_id: 'wakiso:namulanda' }],
+        [NTINDA, '6-Bed house for sale in Ntinda', 'Ntinda 6 bedrooms 4 bathrooms on 20 decimals plot private mailo UGX 700 million.', 'sale', 'sale', 'House', 'Ntinda', 'Kampala', 700000000, { canonical_location_id: 'kampala:ntinda' }],
         [DECOY, 'Property for sale in Busika', 'Property for sale in Busika, Wakiso, listed at UGX 40,000,000. Leave me.', 'sale', null, 'house', null, 'Wakiso', 1000, { canonical_location_id: 'wakiso:wakiso' }]
       ];
       for (const [id, title, description, listingType, transactionType, propertyType, area, district, price, extra] of rows) {
@@ -312,6 +319,7 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
         `${BUSIKA.slice(0, 8)}:busika_luwero`,
         `${GAYAZA.slice(0, 8)}:property_type_land`,
         `${KAKIRI.slice(0, 8)}:kakiri_land`,
+        `${KASANJE.slice(0, 8)}:hide_no_real_photos`,
         `${KASANJE.slice(0, 8)}:property_type_land`,
         `${KASANJE.slice(0, 8)}:remove_copied_photos`,
         `${KIKYUSA.slice(0, 8)}:kikyusa_per_acre`,
@@ -319,6 +327,7 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
         `${MBALWA.slice(0, 8)}:mbalwa_media`,
         `${NAMULANDA.slice(0, 8)}:namulanda_primary`,
         `${NAMUSEERA.slice(0, 8)}:namuseera_area`,
+        `${NTINDA.slice(0, 8)}:hide_no_real_photos`,
         `${DECOY.slice(0, 8)}:remove_stock_photo`
       ].sort(), first.notices.join('\n'));
       assert.equal(applied.filter((item) => item.verb === 'skipped').length, 0, first.notices.join('\n'));
@@ -329,9 +338,16 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
       assert.equal(kasanje.area, 'Nakawuka');
       assert.equal(Number(kasanje.price), 24000000);
       assert.equal((await images(KASANJE)).length, 0);
+      assert.equal(kasanje.status, 'hidden');
+      assert.equal(kasanje.extra_fields.hidden_reason, 'hidden: no real photos');
       assert.equal(kasanje.updated_at.toISOString(), new Date(kasanje.extra_fields.listing_correction_177.applied_at).toISOString());
       assert.ok(kasanje.extra_fields.listing_correction_177.actions.includes('property_type_land'));
       assert.ok(kasanje.extra_fields.listing_correction_177.actions.includes('remove_copied_photos'));
+      assert.ok(kasanje.extra_fields.listing_correction_177.actions.includes('hide_no_real_photos'));
+      const ntinda = await row(NTINDA);
+      assert.equal(ntinda.status, 'hidden');
+      assert.equal(ntinda.extra_fields.hidden_reason, 'hidden: no real photos');
+      assert.equal(ntinda.title, '6-Bed house for sale in Ntinda');
 
       assert.equal((await row(GAYAZA)).property_type, 'Land');
       assert.equal((await images(GAYAZA)).length, 1);
@@ -433,7 +449,7 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
       const stampedAt = kasanje.updated_at.toISOString();
       const second = await apply(sql);
       const skipped = rowNotices(second.notices);
-      assert.equal(skipped.length, 11, second.notices.join('\n'));
+      assert.equal(skipped.length, 13, second.notices.join('\n'));
       assert.ok(skipped.every((item) => item.verb === 'skipped' && item.reason === 'already_in_target_state'), second.notices.join('\n'));
       assert.equal((await row(KASANJE)).updated_at.toISOString(), stampedAt);
       assert.equal((await client.query('SELECT COUNT(*)::int AS n FROM listing_correction_177_backup WHERE action = \'delete_image\' AND property_id = $1', [KASANJE])).rows[0].n, 4);
@@ -442,8 +458,13 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
       assert.ok(propertyUpdates >= 1);
       const restored = await row(KASANJE);
       assert.equal(restored.property_type, 'house');
+      assert.equal(restored.status, 'approved');
       assert.equal(restored.extra_fields.listing_correction_177, undefined);
+      assert.equal(restored.extra_fields.hidden_reason, undefined);
       assert.equal((await images(KASANJE)).length, 4);
+      const restoredNtinda = await row(NTINDA);
+      assert.equal(restoredNtinda.status, 'approved');
+      assert.equal(restoredNtinda.extra_fields.hidden_reason, undefined);
       assert.equal((await images(KASANJE))[0].is_primary, true);
       const restoredMbalwa = await row(MBALWA);
       assert.match(restoredMbalwa.description, /Watch the 2 attached video tours and browse 5 extracted key images before enquiring\./);
@@ -510,7 +531,9 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
       await client.query(`UPDATE property_images SET url = url || '?changed' WHERE id = 'bfd2d7fe-db42-4229-9bd5-762d9504b986'`);
       const photos = await apply(sql);
       assert.equal(rowNotices(photos.notices).find((item) => item.id === KASANJE && item.reason === 'url_guard').reason, 'url_guard');
+      assert.equal(rowNotices(photos.notices).find((item) => item.id === KASANJE && item.reason === 'has_media').reason, 'has_media');
       assert.equal((await images(KASANJE)).length, 4);
+      assert.equal((await row(KASANJE)).status, 'approved');
       await client.query('ROLLBACK');
 
       await client.query('BEGIN');

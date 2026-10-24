@@ -81,6 +81,7 @@ SET
   listing_type = b.before_row->>'listing_type',
   transaction_type = b.before_row->>'transaction_type',
   property_type = b.before_row->>'property_type',
+  status = COALESCE(b.before_row->>'status', p.status),
   area = b.before_row->>'area',
   district = b.before_row->>'district',
   price = (b.before_row->>'price')::numeric,

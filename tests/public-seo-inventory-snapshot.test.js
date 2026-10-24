@@ -31,6 +31,7 @@ const PUBLIC_PROPERTY_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
 const PRIVATE_AGENT_PROPERTY_ID = '11111111-1111-4111-8111-111111111111';
 const PENDING_PROPERTY_ID = '22222222-2222-4222-8222-222222222222';
 const QA_PROPERTY_ID = '33333333-3333-4333-8333-333333333333';
+const NO_MEDIA_PROPERTY_ID = '44444444-4444-4444-8444-444444444444';
 const SAME_TIME = '2026-10-20T00:00:00.000Z';
 
 const pgBin = [
@@ -185,12 +186,14 @@ test('refreshPublicSeoInventorySnapshot runs on Postgres and keeps property ids'
           '{"canonical_location_id":"kampala:ntinda"}'::jsonb, 'website', 'website', $2, 'approved', $3, $3),
          ($4, 'sale', false, 'Ntinda', 'Kampala', 'Second house in Ntinda', 'Another family house in Ntinda.',
           180000000, 'once', 4, 'house', 'sale', 'mailo',
-          '{"canonical_location_id":"kampala:ntinda"}'::jsonb, 'website', 'website', $5, 'approved', $3, $3),
+          '{"canonical_location_id":"kampala:ntinda","video_url":"https://media.makaug.com/listings/walkthrough.mp4"}'::jsonb, 'website', 'website', $5, 'approved', $3, $3),
          ($6, 'sale', false, 'Ntinda', 'Kampala', 'Hidden pending house', 'Not live.',
           150000000, 'once', 3, 'house', 'sale', 'mailo', '{}'::jsonb, 'website', 'website', $2, 'pending', $3, $3),
          ($7, 'sale', false, 'Ntinda', 'Kampala', 'QA TEST - DELETE house', 'Launch fixture.',
+          150000000, 'once', 3, 'house', 'sale', 'mailo', '{}'::jsonb, 'website', 'website', $2, 'approved', $3, $3),
+         ($8, 'sale', false, 'Ntinda', 'Kampala', 'House with no photo', 'No photo and no video.',
           150000000, 'once', 3, 'house', 'sale', 'mailo', '{}'::jsonb, 'website', 'website', $2, 'approved', $3, $3)`,
-      [PUBLIC_PROPERTY_ID, PUBLIC_AGENT_ID, SAME_TIME, PRIVATE_AGENT_PROPERTY_ID, PRIVATE_AGENT_ID, PENDING_PROPERTY_ID, QA_PROPERTY_ID]
+      [PUBLIC_PROPERTY_ID, PUBLIC_AGENT_ID, SAME_TIME, PRIVATE_AGENT_PROPERTY_ID, PRIVATE_AGENT_ID, PENDING_PROPERTY_ID, QA_PROPERTY_ID, NO_MEDIA_PROPERTY_ID]
     );
     await client.query(
       `INSERT INTO property_images (id, property_id, url, room_label, slot_key)
@@ -239,6 +242,8 @@ test('refreshPublicSeoInventorySnapshot runs on Postgres and keeps property ids'
     assert.ok(locs.includes(`https://makaug.com/agents/${PRIVATE_AGENT_ID}`));
     assert.equal(locs.includes(`https://makaug.com/property/${PENDING_PROPERTY_ID}`), false);
     assert.equal(locs.includes(`https://makaug.com/property/${QA_PROPERTY_ID}`), false);
+    assert.equal(rows.map((row) => row.id).includes(NO_MEDIA_PROPERTY_ID), false);
+    assert.equal(locs.includes(`https://makaug.com/property/${NO_MEDIA_PROPERTY_ID}`), false);
   } catch (error) {
     const logPath = path.join(cluster, 'postgres.log');
     if (fs.existsSync(logPath)) error.message += `\n${fs.readFileSync(logPath, 'utf8').slice(-2000)}`;

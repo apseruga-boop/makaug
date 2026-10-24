@@ -43932,7 +43932,7 @@ const PAGE_CONTENT = {
         <div class="rounded-xl border border-gray-200 p-3 bg-white">
           <div class="text-[11px] uppercase tracking-wide text-amber-700 font-bold">Sponsored regional result</div>
           <div class="mt-2 rounded-lg border border-green-100 overflow-hidden">
-            <div class="relative h-24 bg-[#f0fdf4]"><div class="photos-coming-soon absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#f0fdf4] text-[#14532d]" data-photos-coming-soon="1" role="img" aria-label="Photos coming soon"><img src="/assets/icons/makaug-icon-512.png" alt="" class="h-8 w-8 object-contain" width="32" height="32" decoding="async"><span class="text-[11px] font-semibold">Photos coming soon</span></div></div>
+            <div class="relative h-24 bg-[#f0fdf4] flex items-center justify-center"><img src="/assets/icons/makaug-icon-512.png" alt="" class="h-8 w-8 object-contain" width="32" height="32" decoding="async"></div>
             <div class="p-3">
               <div class="font-black text-gray-800">Featured in Kampala searches</div>
               <div class="text-xs text-gray-600">Target by district, area, property type, and intent.</div>
@@ -49493,6 +49493,7 @@ function studentCardFooterText(p = {}) {
     showTypeBadge: options.showTypeBadge,
     compact: true
   });
+  if (!cardVideoFirstMedia && !photoSrc) return "";
   return `
     <div class="group relative bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       ${propertyDescriptionHoverHtml(p)}
@@ -49501,7 +49502,7 @@ function studentCardFooterText(p = {}) {
           ? videoFirstTileHtml(cardVideoFirstMedia, { alt: displayTitle })
           : photoSrc
             ? `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover" loading="${options.imageLoading === "lazy" ? "lazy" : "eager"}" decoding="async">`
-            : photosComingSoonHtml()}
+            : ""}
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           ${badgeRow}
         </div>
@@ -62605,7 +62606,12 @@ async function openDetail(id, options = {}) {
   if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
   const selectedPhoto = hidePhotoGallery ? null : (detailGalleryPhotos[detailGalleryPhotoIndex] || null);
   const selectedPhotoSrc = selectedPhoto ? publicImageSrc(selectedPhoto.url) : "";
-  const showPhotosComingSoon = !hidePhotoGallery && !selectedPhotoSrc;
+  const staffMaySeePhotoPlaceholder = isAdminViewer || isOwnerPreviewViewer;
+  const showPhotosComingSoon = staffMaySeePhotoPlaceholder && !hidePhotoGallery && !selectedPhotoSrc;
+  if (!staffMaySeePhotoPlaceholder && !hidePhotoGallery && !selectedPhotoSrc) {
+    toast("This listing is currently not publicly available.");
+    return false;
+  }
   const detailIdArg = propertyIdArg(p.id);
   const detailLocation = getPropertyLocationDisplay(p);
   const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";

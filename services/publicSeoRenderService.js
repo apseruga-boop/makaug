@@ -328,13 +328,6 @@ function seoCoverImageUrl(row = {}, foundOnline = false) {
 
 const LISTING_LOGO_PATH = '/assets/icons/makaug-icon-512.png';
 
-function photosComingSoonSeoHtml() {
-  return `<div class="photos-coming-soon flex h-full min-h-[12rem] w-full flex-col items-center justify-center gap-2 bg-[#f0fdf4] text-[#14532d]" data-photos-coming-soon="1" role="img" aria-label="Photos coming soon">
-    <img src="${LISTING_LOGO_PATH}" alt="" width="56" height="56" decoding="async">
-    <span class="text-sm font-semibold">Photos coming soon</span>
-  </div>`;
-}
-
 // A public page may show any photo that is not a stock or placeholder stand-in.
 // Approval still requires a file on our media host; that check is realPhotoRejection.
 function usableSeoListingPhoto(url) {
@@ -417,6 +410,7 @@ function normalizeSeoListingRow(row = {}) {
     property_type: humanPropertyTypeLabel(plainText(row.property_type)),
     // Found online: only a photo staff uploaded with consent, never source media.
     primary_image_url: seoCoverImageUrl(row, foundOnline),
+    video_url: plainText(copyExtra.video_url || ''),
     canonical_location_id: String(row.canonical_location_id || '').trim(),
     city: plainText(row.city),
     neighborhood: plainText(row.neighborhood),
@@ -747,9 +741,12 @@ function renderListingLocationLink(listing, categoryKey) {
 function renderSeoListingCard(listing, options = {}) {
   const href = `/property/${encodeURIComponent(listing.id)}`;
   const image = usableSeoListingPhoto(listing.primary_image_url);
+  const videoUrl = String(listing.video_url || '').trim();
   const media = image
     ? `<img src="${escapeHtml(absoluteUrl(image, options.baseUrl))}" alt="${escapeHtml(listing.title)}" class="w-full h-full object-cover" width="640" height="384" decoding="async" loading="${options.eager ? 'eager' : 'lazy'}">`
-    : photosComingSoonSeoHtml();
+    : (videoUrl
+      ? `<div class="flex h-full min-h-[12rem] w-full items-center justify-center bg-black text-sm font-semibold text-white" data-video-cover="1">Video</div>`
+      : '');
   return `<article class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card" data-ssr-property-card="${escapeHtml(listing.id)}">
     <a href="${escapeHtml(href)}" class="relative block h-48 overflow-hidden bg-[#f0fdf4]" aria-label="View ${escapeHtml(listing.title)}">
       ${media}
@@ -1040,6 +1037,7 @@ function renderPropertySeoHtml(html, listing, options = {}) {
   const config = CATEGORY_SEO[categoryKey] || CATEGORY_SEO.sale;
   const propertyUrl = absoluteUrl(`/property/${encodeURIComponent(listing.id)}`, options.baseUrl);
   const photoUrl = usableSeoListingPhoto(listing.primary_image_url);
+  const videoUrl = String(listing.video_url || '').trim();
   const image = absoluteUrl(photoUrl || LISTING_LOGO_PATH, options.baseUrl);
   const location = listingAreaLocation(listing);
   const areaUrl = location ? absoluteUrl(`${config.route}/${canonicalLocationRouteSlug(location)}`, options.baseUrl) : absoluteUrl(config.route, options.baseUrl);
@@ -1057,7 +1055,7 @@ function renderPropertySeoHtml(html, listing, options = {}) {
       <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white" data-detail-card>
         ${photoUrl ? `<button type="button" class="block w-full property-gallery-hero relative overflow-hidden group" data-detail-hero onclick="if(typeof openDetailGalleryLightbox==='function')openDetailGalleryLightbox(detailGalleryPhotoIndex)">
           <img id="detail-gallery-hero-img" data-ssr-detail-hero="${escapeHtml(listing.id)}" src="${escapeHtml(image)}" alt="${escapeHtml(heading)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform" width="1200" height="675" loading="eager" decoding="async" fetchpriority="high">
-        </button>` : `<div class="property-gallery-hero relative overflow-hidden bg-[#f0fdf4]" data-detail-hero data-photos-coming-soon="1">${photosComingSoonSeoHtml()}</div>`}
+        </button>` : (videoUrl ? `<div class="property-gallery-hero relative overflow-hidden bg-black" data-detail-hero data-video-cover="1"></div>` : '')}
         <div class="p-5">
           <h1 class="text-3xl font-bold text-gray-900 serif">${escapeHtml(heading)}</h1>
           <p class="mt-2 text-gray-600">${location ? `<a href="${escapeHtml(areaUrl)}" class="font-semibold text-green-700 hover:underline">${escapeHtml(locationLabel)}</a>` : escapeHtml(locationLabel)}</p>

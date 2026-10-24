@@ -15,9 +15,14 @@
 --
 -- No properties row is deleted. Photo and video rows that are removed are
 -- copied first, including the image url. The media files in object storage
--- are left where they are. A listing left with zero photos gets no
--- placeholder image row. The public page shows a logo tile that says
--- "Photos coming soon". It does not invent a house photo.
+-- are left where they are. A listing left with no real photo and no video
+-- is not given a placeholder. Ntinda 73fbf51d has no image in property_images,
+-- no source URL, and no video. Migration 169 only changed its title. Those
+-- images were never stored, so the row is set to status hidden with
+-- hidden_reason 'hidden: no real photos'. Kasanje's four copied Gayaza
+-- photos are removed first. With nothing left, that row is hidden the same
+-- way. A later real photo is left in place and the row is not hidden again.
+-- Rollback restores status from the property backup.
 --
 -- Any property_images row whose url is the Unsplash model house
 -- (photo-1560518883-ce09059eeffa) or any other unsplash.com file is backed
@@ -909,3 +914,107 @@ EXCEPTION WHEN OTHERS THEN
   RAISE;
 END
 $do_177_stock_photos$;
+
+-- Ntinda never had a stored photo. Kasanje's copied photos are already gone
+-- by this point. Hide only when the row is still public and still has no
+-- real hosted photo and no playable video. A real photo that arrives later
+-- is not removed, and this block does not unhide the row.
+DO $do_177_hide_no_media$
+DECLARE
+  ids uuid[] := ARRAY[
+    '73fbf51d-58f9-47df-8080-ffee9abb9b2f'::uuid,
+    'd8c78ccd-81ec-4e92-9126-8e603d7c5071'::uuid
+  ];
+  pid uuid;
+  trigger_off boolean := FALSE;
+  p properties%ROWTYPE;
+  v_now timestamptz;
+  real_photos integer;
+  has_video boolean;
+BEGIN
+  trigger_off := pg_temp.listing_177_disable_updated_at();
+  IF pg_temp.listing_177_guard_country() THEN
+    FOREACH pid IN ARRAY ids LOOP
+      SELECT * INTO p FROM properties WHERE id = pid;
+      IF NOT FOUND OR lower(btrim(coalesce(p.status, ''))) IN ('deleted', 'purged') THEN
+        RAISE NOTICE 'listing_correction_177 % skipped deleted', pid;
+      ELSE
+        SELECT COUNT(*) INTO real_photos
+        FROM property_images i
+        WHERE i.property_id = pid
+          AND i.url ~* '^https?://media\.makaug\.com/.+'
+          AND i.url !~* 'photo-1560518883-ce09059eeffa|image[ _-]*pending|tiktokcdn|byteimg|unsplash\.com'
+          AND COALESCE(i.room_label, '') !~* 'image[ _-]*pending'
+          AND COALESCE(i.slot_key, '') <> 'source_evidence_card';
+        has_video := FALSE;
+        IF COALESCE(p.extra_fields->>'source_unavailable', '') !~* '^(true|t|1|yes)$'
+           AND COALESCE(p.extra_fields->>'source_url_status', '') !~* 'unavailable|removed|deleted|private'
+           AND COALESCE(p.extra_fields->>'source_status', '') !~* 'unavailable|removed|deleted|private' THEN
+          IF (
+            COALESCE(p.extra_fields->>'video_url', '') ~* '^https?://'
+            AND (COALESCE(p.extra_fields->>'video_url', '') !~* 'tiktokcdn|byteimg' OR COALESCE(p.extra_fields->>'video_url', '') ~* '\.mp4')
+          ) OR (
+            COALESCE(p.extra_fields->>'youtube_url', '') ~* '^https?://'
+            AND (COALESCE(p.extra_fields->>'youtube_url', '') !~* 'tiktokcdn|byteimg' OR COALESCE(p.extra_fields->>'youtube_url', '') ~* '\.mp4')
+          ) OR (
+            COALESCE(p.extra_fields->>'tiktok_url', '') ~* '^https?://'
+            AND (COALESCE(p.extra_fields->>'tiktok_url', '') !~* 'tiktokcdn|byteimg' OR COALESCE(p.extra_fields->>'tiktok_url', '') ~* '\.mp4')
+          ) THEN
+            has_video := TRUE;
+          END IF;
+          IF NOT has_video AND jsonb_typeof(p.extra_fields->'video_urls') = 'array' THEN
+            SELECT EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements_text(p.extra_fields->'video_urls') AS v(url)
+              WHERE v.url ~* '^https?://'
+                AND (v.url !~* 'tiktokcdn|byteimg' OR v.url ~* '\.mp4')
+            ) INTO has_video;
+          END IF;
+          IF NOT has_video AND jsonb_typeof(p.extra_fields->'video_tours') = 'array' THEN
+            SELECT EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(p.extra_fields->'video_tours') AS t(elem)
+              WHERE COALESCE(t.elem->>'url', t.elem->>'video_url', CASE WHEN jsonb_typeof(t.elem) = 'string' THEN t.elem #>> '{}' ELSE '' END) ~* '^https?://'
+                AND (
+                  COALESCE(t.elem->>'url', t.elem->>'video_url', CASE WHEN jsonb_typeof(t.elem) = 'string' THEN t.elem #>> '{}' ELSE '' END) ~* '\.mp4'
+                  OR COALESCE(t.elem->>'url', t.elem->>'video_url', CASE WHEN jsonb_typeof(t.elem) = 'string' THEN t.elem #>> '{}' ELSE '' END) ~* 'youtu|tiktok'
+                )
+                AND (
+                  COALESCE(t.elem->>'url', t.elem->>'video_url', CASE WHEN jsonb_typeof(t.elem) = 'string' THEN t.elem #>> '{}' ELSE '' END) !~* 'tiktokcdn|byteimg'
+                  OR COALESCE(t.elem->>'url', t.elem->>'video_url', CASE WHEN jsonb_typeof(t.elem) = 'string' THEN t.elem #>> '{}' ELSE '' END) ~* '\.mp4'
+                )
+            ) INTO has_video;
+          END IF;
+        END IF;
+        IF real_photos > 0 OR has_video THEN
+          RAISE NOTICE 'listing_correction_177 % skipped has_media', pid;
+        ELSIF lower(btrim(coalesce(p.status, ''))) = 'hidden'
+          AND COALESCE(p.extra_fields->>'hidden_reason', '') = 'hidden: no real photos' THEN
+          RAISE NOTICE 'listing_correction_177 % skipped already_in_target_state', pid;
+        ELSIF lower(btrim(coalesce(p.status, ''))) NOT IN ('approved', 'live', 'published') THEN
+          RAISE NOTICE 'listing_correction_177 % skipped not_public', pid;
+        ELSE
+          v_now := clock_timestamp();
+          PERFORM pg_temp.listing_177_backup_property(p, 'hide_no_real_photos');
+          UPDATE properties AS target
+          SET
+            status = 'hidden',
+            extra_fields = pg_temp.listing_177_stamp(target.extra_fields, 'hide_no_real_photos', v_now)
+              || jsonb_build_object('hidden_reason', 'hidden: no real photos'),
+            updated_at = v_now
+          WHERE target.id = pid;
+          RAISE NOTICE 'listing_correction_177 % applied hide_no_real_photos', pid;
+        END IF;
+      END IF;
+    END LOOP;
+  END IF;
+  IF trigger_off THEN
+    ALTER TABLE properties ENABLE TRIGGER trg_properties_updated_at;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  IF trigger_off THEN
+    ALTER TABLE properties ENABLE TRIGGER trg_properties_updated_at;
+  END IF;
+  RAISE;
+END
+$do_177_hide_no_media$;

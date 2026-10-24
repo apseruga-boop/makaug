@@ -83,9 +83,19 @@ test('a listing with neither photo nor video keeps the existing placeholder beha
   assert.strictEqual(propertyVideoFirstMedia({ images: [], extra_fields: {} }), null);
 });
 
-test('a listing with zero photos shows the photos coming soon tile and no stock house', () => {
-  assert.match(frontend, /data-photos-coming-soon="1"/);
-  assert.match(frontend, /Photos coming soon/);
+test('a public card with no photo and no video is omitted, and the stock house stays out', () => {
+  const propStart = frontend.indexOf('function propCard(p, options = {})');
+  const propEnd = frontend.indexOf('function studentCard(', propStart);
+  const propCard = frontend.slice(propStart, propEnd);
+  assert.match(propCard, /if \(!cardVideoFirstMedia && !photoSrc\) return "";/);
+  assert.doesNotMatch(propCard, /photosComingSoonHtml/);
+  const detailStart = frontend.indexOf('async function openDetail(');
+  const detail = frontend.slice(detailStart, detailStart + 12000);
+  assert.match(detail, /staffMaySeePhotoPlaceholder/);
+  assert.match(detail, /This listing is currently not publicly available\./);
+  const advertiseStart = frontend.indexOf('advertise: `');
+  const advertise = frontend.slice(advertiseStart, advertiseStart + 4000);
+  assert.doesNotMatch(advertise, /Photos coming soon/);
   assert.doesNotMatch(frontend, /https:\/\/images\.unsplash\.com\/photo-1560518883-ce09059eeffa/);
   assert.doesNotMatch(frontend, /firstRealListingPhotoUrl\(\{ \.\.\.p, images: publicImageItems \}\) \|\| \(videoFirstMedia \? "" : "https:\/\/images\.unsplash\.com/);
 });

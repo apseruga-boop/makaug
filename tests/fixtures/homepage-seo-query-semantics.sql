@@ -41,6 +41,7 @@ WITH fixture_inputs (id,title,description,extra_fields,status,source,listed_via,
  ('00000000-0000-4000-8000-000000000006', 'https://media.makaug.com/unconsented-only.jpg', TRUE, 0, 'staff_upload')
 ), property_images AS (
  SELECT property_id::uuid,url,is_primary,sort_order,slot_key,
+ NULL::text AS room_label,
  '2026-10-10T00:00:00Z'::timestamptz AS created_at FROM fixture_images
 ), old_homepage AS (
 -- BEGIN OLD HOMEPAGE
@@ -123,7 +124,38 @@ WITH homepage_candidates AS MATERIALIZED (
     OR COALESCE(p.extra_fields->>'is_test', '') ~* '^(true|1|yes)$'
     OR COALESCE(p.extra_fields->>'launch_proof', '') ~* '^(true|1|yes)$'
     OR COALESCE(p.extra_fields->>'non_public_test', '') ~* '^(true|1|yes)$'
-  ))
+  ) AND (EXISTS (
+    SELECT 1 FROM property_images rhp
+     WHERE rhp.property_id = p.id
+       AND rhp.url ~* '^https?://media\.makaug\.com/.+'
+       AND rhp.url !~* 'photo-1560518883-ce09059eeffa|image[ _-]*pending|tiktokcdn|byteimg'
+       AND COALESCE(rhp.room_label, '') !~* 'image[ _-]*pending'
+       AND COALESCE(rhp.slot_key, '') <> 'source_evidence_card'
+  ) OR (
+    COALESCE(p.extra_fields->>'source_unavailable', '') !~* '^(true|t|1|yes)$'
+    AND COALESCE(p.extra_fields->>'source_url_status', '') !~* 'unavailable|removed|deleted|private'
+    AND COALESCE(p.extra_fields->>'source_status', '') !~* 'unavailable|removed|deleted|private'
+    AND (
+      (p.extra_fields->>'video_url' ~* '^https?://' AND (p.extra_fields->>'video_url' !~* 'tiktokcdn|byteimg' OR p.extra_fields->>'video_url' ~* '\.mp4(\?|$)'))
+      OR (p.extra_fields->>'youtube_url' ~* '^https?://' AND (p.extra_fields->>'youtube_url' !~* 'tiktokcdn|byteimg' OR p.extra_fields->>'youtube_url' ~* '\.mp4(\?|$)'))
+      OR (p.extra_fields->>'tiktok_url' ~* '^https?://' AND (p.extra_fields->>'tiktok_url' !~* 'tiktokcdn|byteimg' OR p.extra_fields->>'tiktok_url' ~* '\.mp4(\?|$)'))
+      OR EXISTS (
+        SELECT 1
+          FROM jsonb_array_elements_text(
+            CASE WHEN jsonb_typeof(p.extra_fields->'video_urls') = 'array' THEN p.extra_fields->'video_urls' ELSE '[]'::jsonb END
+          ) AS video_url(url)
+         WHERE (video_url.url ~* '^https?://' AND (video_url.url !~* 'tiktokcdn|byteimg' OR video_url.url ~* '\.mp4(\?|$)'))
+      )
+      OR EXISTS (
+        SELECT 1
+          FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(p.extra_fields->'video_tours') = 'array' THEN p.extra_fields->'video_tours' ELSE '[]'::jsonb END
+          ) AS video_tour(elem)
+         WHERE (COALESCE(video_tour.elem->>'url', video_tour.elem->>'video_url', CASE WHEN jsonb_typeof(video_tour.elem) = 'string' THEN video_tour.elem #>> '{}' ELSE '' END) ~* '^https?://' AND (COALESCE(video_tour.elem->>'url', video_tour.elem->>'video_url', CASE WHEN jsonb_typeof(video_tour.elem) = 'string' THEN video_tour.elem #>> '{}' ELSE '' END) !~* 'tiktokcdn|byteimg' OR COALESCE(video_tour.elem->>'url', video_tour.elem->>'video_url', CASE WHEN jsonb_typeof(video_tour.elem) = 'string' THEN video_tour.elem #>> '{}' ELSE '' END) ~* '\.mp4(\?|$)'))
+           AND (COALESCE(video_tour.elem->>'url', video_tour.elem->>'video_url', CASE WHEN jsonb_typeof(video_tour.elem) = 'string' THEN video_tour.elem #>> '{}' ELSE '' END) ~* '\.mp4(\?|$)' OR COALESCE(video_tour.elem->>'url', video_tour.elem->>'video_url', CASE WHEN jsonb_typeof(video_tour.elem) = 'string' THEN video_tour.elem #>> '{}' ELSE '' END) ~* 'youtu|tiktok')
+      )
+    )
+  )))
        ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC
        LIMIT 6
      )
@@ -192,7 +224,7 @@ SELECT
  (SELECT count(*)::int FROM old_homepage) AS old_rows,
  (SELECT count(*)::int FROM new_homepage) AS new_rows,
  (SELECT count(*)::int FROM differences) AS full_public_row_differences,
- (SELECT array_agg(id::text ORDER BY updated_at DESC NULLS LAST,created_at DESC,id DESC) FROM new_homepage) = ARRAY['00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000004','00000000-0000-4000-8000-000000000006','00000000-0000-4000-8000-000000000007'] AS expected_order,
+ (SELECT array_agg(id::text ORDER BY updated_at DESC NULLS LAST,created_at DESC,id DESC) FROM new_homepage) = ARRAY['00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000004','00000000-0000-4000-8000-000000000006'] AS expected_order,
  (SELECT array_agg(id ORDER BY updated_at DESC NULLS LAST,created_at DESC,id DESC) FROM old_homepage) =
  (SELECT array_agg(id ORDER BY updated_at DESC NULLS LAST,created_at DESC,id DESC) FROM new_homepage) AS order_equal,
  (SELECT bool_and(seo_total=8) FROM old_homepage) AS generic_total_still_exact,
