@@ -5105,6 +5105,24 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       const staleNoImageBlock = mediaValidationStatus === 'blocked_no_usable_property_image'
         && usableImageCount >= 1;
       const blockingValidationStatus = mediaValidationStatus.startsWith('blocked_') && !staleNoImageBlock;
+      const reuseHashes = Array.isArray(mediaQuality.media_also_on_other_property)
+        ? mediaQuality.media_also_on_other_property.map((item) => cleanText(item)).filter(Boolean)
+        : [];
+      const reuseNote = cleanText(mediaQuality.media_reuse_note);
+      if (reuseHashes.length || reuseNote) {
+        if (!handleApprovalBlocker({
+          code: 'media_also_on_other_property',
+          error: reuseNote || 'This media is also on another listing',
+          details: [
+            reuseNote,
+            reuseHashes.length ? `media_also_on_other_property: ${reuseHashes.join(', ')}` : 'media_also_on_other_property'
+          ].filter(Boolean),
+          response: {
+            media_also_on_other_property: reuseHashes,
+            media_reuse_note: reuseNote
+          }
+        })) return;
+      }
       if (blockingValidationStatus || videoRecoveryRequired || usableImageCount < 1) {
         if (!handleApprovalBlocker({
           code: 'employee_media_quality',

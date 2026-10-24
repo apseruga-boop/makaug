@@ -5699,6 +5699,94 @@ function employeeMediaMessageCaption({ cleanBody = '', placeholderBody = false, 
   return normalizeInput(pendingCaption) || '';
 }
 
+function rememberEmployeeCaptionForPairing(data = {}, { caption = '', whatsappMessageId = '', sentAt = '' } = {}) {
+  const clean = normalizeInput(caption);
+  if (!clean) return data;
+  if (!Array.isArray(data.employee_caption_index)) data.employee_caption_index = [];
+  const id = normalizeInput(whatsappMessageId);
+  const sent = normalizeInput(sentAt);
+  const duplicate = data.employee_caption_index.some((entry) => (
+    normalizeInput(entry?.caption) === clean
+    && normalizeInput(entry?.whatsappMessageId) === id
+    && normalizeInput(entry?.sentAt) === sent
+  ));
+  if (!duplicate) {
+    data.employee_caption_index.push({ caption: clean, whatsappMessageId: id, sentAt: sent });
+  }
+  if (data.employee_caption_index.length > 40) {
+    data.employee_caption_index.splice(0, data.employee_caption_index.length - 40);
+  }
+  return data;
+}
+
+function pairEmployeeCaptionForMedia({
+  cleanBody = '',
+  placeholderBody = false,
+  pendingCaption = '',
+  quotedMessageId = '',
+  whatsappSentAt = '',
+  captionIndex = []
+} = {}) {
+  if (!placeholderBody && normalizeInput(cleanBody)) return normalizeInput(cleanBody);
+  const index = Array.isArray(captionIndex) ? captionIndex : [];
+  const quoted = normalizeInput(quotedMessageId);
+  if (quoted) {
+    const match = [...index].reverse().find((entry) => (
+      normalizeInput(entry?.whatsappMessageId) === quoted && normalizeInput(entry?.caption)
+    ));
+    if (match) return normalizeInput(match.caption);
+  }
+  const sentMs = Date.parse(String(whatsappSentAt || ''));
+  if (Number.isFinite(sentMs)) {
+    const eligible = index.filter((entry) => {
+      const at = Date.parse(String(entry?.sentAt || ''));
+      return Number.isFinite(at) && at <= sentMs + 1000 && normalizeInput(entry?.caption);
+    });
+    if (eligible.length) return normalizeInput(eligible[eligible.length - 1].caption);
+  }
+  return employeeMediaMessageCaption({ cleanBody, placeholderBody, pendingCaption });
+}
+
+function applyBridgeCaptionPairing(data = {}, {
+  cleanBody = '',
+  placeholderBody = false,
+  whatsappSentAt = '',
+  quotedMessageId = ''
+} = {}) {
+  if ((!placeholderBody && normalizeInput(cleanBody)) || (!normalizeInput(quotedMessageId) && !normalizeInput(whatsappSentAt))) {
+    return normalizeInput(data.pending_property_caption || '');
+  }
+  const pending = normalizeInput(data.pending_property_caption || '');
+  const paired = pairEmployeeCaptionForMedia({
+    cleanBody,
+    placeholderBody,
+    pendingCaption: pending,
+    quotedMessageId,
+    whatsappSentAt,
+    captionIndex: data.employee_caption_index
+  });
+  if (!paired || paired === pending) return pending;
+  const queue = employeePendingSubmissionQueue(data);
+  const matchIndex = queue.findIndex((entry) => normalizeInput(entry.caption) === paired);
+  if (matchIndex < 0) return pending;
+  const matched = queue[matchIndex];
+  const rest = queue.filter((_, index) => index !== matchIndex);
+  if (pending || employeePendingStoredMedia(data).length) {
+    rest.unshift({
+      caption: pending,
+      inboundMessageId: normalizeInput(data.pending_property_media_message_id || ''),
+      storedAt: normalizeInput(data.pending_property_media_stored_at || '') || new Date().toISOString(),
+      media: employeePendingStoredMedia(data)
+    });
+  }
+  data.pending_property_queue = rest.slice(-20);
+  data.pending_property_caption = matched.caption;
+  data.pending_property_media = matched.media;
+  data.pending_property_media_message_id = matched.inboundMessageId || null;
+  data.pending_property_media_stored_at = matched.storedAt || new Date().toISOString();
+  return paired;
+}
+
 function employeeCaptionLabel(caption = '') {
   const clean = normalizeInput(stripForwardMarkers(caption)).replace(/\s+/g, ' ').trim();
   if (!clean) return 'this property';
@@ -5802,7 +5890,18 @@ function employeePendingSubmissionQueue(data = {}) {
     .filter((entry) => entry.caption || entry.media.length);
 }
 
-function rememberEmployeeQueuedSubmission(data = {}, { caption = '', storedMedia = [], inboundMessageId = '' } = {}) {
+function rememberEmployeeQueuedSubmission(data = {}, {
+  caption = '',
+  storedMedia = [],
+  inboundMessageId = '',
+  whatsappMessageId = '',
+  sentAt = ''
+} = {}) {
+  rememberEmployeeCaptionForPairing(data, {
+    caption,
+    whatsappMessageId: whatsappMessageId || inboundMessageId,
+    sentAt
+  });
   const queue = employeePendingSubmissionQueue(data);
   const candidateKey = employeePropertyAttemptKey({ inboundMessageId, caption });
   const exists = queue.some((entry) => employeePropertyAttemptKey({
@@ -6544,6 +6643,15 @@ async function createEmployeeReviewProperty({
     propertyId: '00000000-0000-0000-0000-000000000000',
     storedMedia
   });
+  const videoReuse = await applyEmployeeVideoReuseHold({
+    propertyId: '00000000-0000-0000-0000-000000000000',
+    storedMedia,
+    phone,
+    batchPropertyIds: sessionData.property_ids,
+    selfIntake: sessionData.whatsapp_agent_self_intake === true,
+    claimedElsewhere
+  });
+  storedMedia = videoReuse.media;
   // An agent posting their own stock sent this photo WITH this caption, so it is
   // this property's photo even when the same picture (a company flyer, say) is
   // on another of their listings. Dropping it left Jonathan's Kiwenda estate
@@ -6582,7 +6690,7 @@ async function createEmployeeReviewProperty({
   const evidenceMedia = storedMedia.filter((item) => item.kind === 'image' && item.publicEligible === false);
   const videoMedia = storedMedia.filter((item) => item.kind === 'video');
   const documentMedia = storedMedia.filter((item) => item.kind === 'document');
-  const videoRecoveryRequired = videoMedia.length === 0 && evidenceMedia.some(employeeVideoEvidenceOnly);
+  const videoRecoveryRequired = videoReuse.recovery || (videoMedia.length === 0 && evidenceMedia.some(employeeVideoEvidenceOnly));
   const videoKeyFrames = imageMedia.filter((item) => /video-(?:key-frame|still|message-preview|preview)/i.test(String(item.name || '')));
   const cleanPublicCaption = cleanEmployeePropertyCaption(caption);
   const publicDescription = buildEmployeePublicDescription({
@@ -6595,11 +6703,14 @@ async function createEmployeeReviewProperty({
   const extraFields = {
     review_only: true,
     auto_publish: false,
-    ...(reusedMedia.length ? {
-      media_also_on_other_property: reusedMedia.map((item) => item.sha256),
-      media_reuse_note: sessionData.whatsapp_agent_self_intake === true
+    ...(reusedMedia.length || videoReuse.note ? {
+      media_also_on_other_property: [...new Set([
+        ...reusedMedia.map((item) => item.sha256),
+        ...videoReuse.refusedHashes
+      ])],
+      media_reuse_note: videoReuse.note || (sessionData.whatsapp_agent_self_intake === true
         ? 'The agent sent a photo that is also on another listing (e.g. a shared flyer). Check it shows this property.'
-        : 'A photo sent for this property is already on another listing and was not attached.'
+        : 'A photo sent for this property is already on another listing and was not attached.')
     } : {}),
     whatsapp_employee_intake: true,
     whatsapp_employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
@@ -6656,7 +6767,9 @@ async function createEmployeeReviewProperty({
     video_count: videoMedia.length,
     video_key_frame_count: videoKeyFrames.length,
     video_recovery_required: videoRecoveryRequired,
-    video_recovery_reason: videoRecoveryRequired ? 'original_whatsapp_video_bytes_unavailable' : null,
+    video_recovery_reason: videoReuse.recovery
+      ? 'video_bytes_reused_from_other_message'
+      : (videoRecoveryRequired ? 'original_whatsapp_video_bytes_unavailable' : null),
     video_recovery_requested_at: videoRecoveryRequired ? new Date().toISOString() : null,
     document_urls: documentMedia.map((item) => item.url),
     canonical_location_id: facts.locationPatch.canonical_location_id,
@@ -6810,6 +6923,141 @@ async function createEmployeeReviewProperty({
 //
 // A media item sent by this agent in this batch belongs to whichever property
 // claimed it first. If another record already holds it, leave it there.
+function employeeVideoStillItem(item = {}) {
+  if (item?.kind === 'video') return false;
+  if (employeeVideoEvidenceOnly(item)) return true;
+  return /video-(?:key-frame|still|message-preview|preview)/i.test(String(item?.name || ''));
+}
+
+function employeeVideoReuseRef(row = {}) {
+  const reference = normalizeInput(row.inquiry_reference);
+  if (reference) return reference;
+  const id = normalizeInput(row.id);
+  return id ? id.slice(0, 8) : '';
+}
+
+function employeeVideoReuseNote(claims = []) {
+  const refs = [...new Set((Array.isArray(claims) ? claims : []).map((claim) => employeeVideoReuseRef(claim)).filter(Boolean))];
+  if (!refs.length) return '';
+  return `this video is also on ${refs.join(', ')}`;
+}
+
+function decideEmployeeVideoAttachment({
+  storedMedia = [],
+  siblingClaims = [],
+  claimedElsewhere = new Set(),
+  selfIntake = false
+} = {}) {
+  const list = Array.isArray(storedMedia) ? storedMedia : [];
+  const siblingHashes = new Set((Array.isArray(siblingClaims) ? siblingClaims : []).map((claim) => normalizeInput(claim?.sha256)).filter(Boolean));
+  const claimed = claimedElsewhere instanceof Set ? claimedElsewhere : new Set();
+  const refusedSibling = [];
+  const refusedHashes = [];
+  for (const item of list) {
+    if (item?.kind !== 'video' || !item?.sha256) continue;
+    const hash = normalizeInput(item.sha256);
+    if (siblingHashes.has(hash)) {
+      refusedSibling.push(item);
+      refusedHashes.push(hash);
+      continue;
+    }
+    if (!selfIntake && claimed.has(hash)) refusedHashes.push(hash);
+  }
+  const drop = new Set(refusedHashes);
+  let media = list.filter((item) => !(item?.kind === 'video' && item?.sha256 && drop.has(normalizeInput(item.sha256))));
+  if (drop.size && !media.some((item) => item?.kind === 'video')) {
+    media = media.filter((item) => !employeeVideoStillItem(item));
+  }
+  const note = employeeVideoReuseNote(siblingClaims.filter((claim) => drop.has(normalizeInput(claim?.sha256))));
+  return {
+    media,
+    note,
+    recovery: drop.size > 0 && !media.some((item) => item?.kind === 'video'),
+    refusedHashes: [...drop]
+  };
+}
+
+async function employeeVideoReuseOnSibling({
+  propertyId,
+  storedMedia = [],
+  phone = '',
+  batchPropertyIds = []
+} = {}) {
+  const hashes = [...new Set(
+    (Array.isArray(storedMedia) ? storedMedia : [])
+      .filter((item) => item?.kind === 'video')
+      .map((item) => normalizeInput(item?.sha256))
+      .filter(Boolean)
+  )];
+  if (!hashes.length) return [];
+  const batchIds = [...new Set((Array.isArray(batchPropertyIds) ? batchPropertyIds : [])
+    .map((id) => normalizeInput(id))
+    .filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))];
+  const phoneTail = String(localPhone(phone) || '').replace(/\D/g, '').slice(-9);
+  const suffix = employeeIntakePhoneSuffix(phone) || '';
+  const excluded = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(propertyId || ''))
+    ? propertyId
+    : '00000000-0000-0000-0000-000000000000';
+  const result = await db.query(
+    `SELECT p.id::text AS id,
+            COALESCE(p.inquiry_reference, '') AS inquiry_reference,
+            jsonb_array_elements_text(p.extra_fields -> 'media_sha256') AS sha256
+       FROM properties p
+      WHERE p.source = 'whatsapp_employee_intake'
+        AND p.id <> $1::uuid
+        AND p.status IN ('pending','approved')
+        AND p.extra_fields -> 'media_sha256' ?| $2::text[]
+        AND (
+          p.id = ANY($3::uuid[])
+          OR (
+            p.created_at > NOW() - INTERVAL '7 days'
+            AND (
+              ($4::text <> '' AND right(regexp_replace(COALESCE(p.lister_phone, ''), '\\D', '', 'g'), 9) = $4)
+              OR ($5::text <> '' AND COALESCE(p.extra_fields->>'whatsapp_employee_sender_phone_suffix', '') = $5)
+            )
+          )
+        )`,
+    [excluded, hashes, batchIds, phoneTail, suffix]
+  );
+  const wanted = new Set(hashes);
+  return result.rows
+    .map((row) => ({
+      id: normalizeInput(row.id),
+      inquiry_reference: normalizeInput(row.inquiry_reference),
+      sha256: normalizeInput(row.sha256)
+    }))
+    .filter((row) => wanted.has(row.sha256));
+}
+
+async function applyEmployeeVideoReuseHold({
+  propertyId,
+  storedMedia = [],
+  phone = '',
+  batchPropertyIds = [],
+  selfIntake = false,
+  claimedElsewhere = null
+} = {}) {
+  const list = Array.isArray(storedMedia) ? storedMedia : [];
+  if (!list.some((item) => item?.kind === 'video' && item?.sha256)) {
+    return { media: list, note: '', recovery: false, refusedHashes: [] };
+  }
+  const claimed = claimedElsewhere instanceof Set
+    ? claimedElsewhere
+    : await employeeMediaClaimedElsewhere({ propertyId, storedMedia: list });
+  const siblingClaims = await employeeVideoReuseOnSibling({
+    propertyId,
+    storedMedia: list,
+    phone,
+    batchPropertyIds
+  });
+  return decideEmployeeVideoAttachment({
+    storedMedia: list,
+    siblingClaims,
+    claimedElsewhere: claimed,
+    selfIntake
+  });
+}
+
 async function employeeMediaClaimedElsewhere({ propertyId, storedMedia = [] } = {}) {
   const hashes = [...new Set(
     (Array.isArray(storedMedia) ? storedMedia : [])
@@ -6831,7 +7079,14 @@ async function employeeMediaClaimedElsewhere({ propertyId, storedMedia = [] } = 
   return new Set(result.rows.map((row) => normalizeInput(row.sha256)).filter((sha) => claimed.has(sha)));
 }
 
-async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inboundMessageId } = {}) {
+async function attachEmployeeReviewMedia({
+  propertyId,
+  storedMedia,
+  phone,
+  inboundMessageId,
+  batchPropertyIds = [],
+  keepNonSiblingClaimedVideos = false
+} = {}) {
   const propertyResult = await db.query(
     `SELECT id, extra_fields
        FROM properties
@@ -6867,8 +7122,23 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   if (!uniqueMedia.length && !hasOwnMedia && notYetHeld.some((item) => item.kind === 'image' || item.kind === 'video')) {
     uniqueMedia = notYetHeld;
   }
+  const videoReuse = await applyEmployeeVideoReuseHold({
+    propertyId,
+    storedMedia: notYetHeld,
+    phone,
+    batchPropertyIds,
+    selfIntake: keepNonSiblingClaimedVideos === true,
+    claimedElsewhere
+  });
+  if (videoReuse.refusedHashes.length) {
+    const refusedVideoHashes = new Set(videoReuse.refusedHashes);
+    uniqueMedia = uniqueMedia.filter((item) => !(item?.kind === 'video' && refusedVideoHashes.has(normalizeInput(item?.sha256))));
+    if (!uniqueMedia.some((item) => item?.kind === 'video')) {
+      uniqueMedia = uniqueMedia.filter((item) => !employeeVideoStillItem(item));
+    }
+  }
   if (!uniqueMedia.length) {
-    if (imageOffset > 0) {
+    if (imageOffset > 0 || videoReuse.note || videoReuse.recovery) {
       const retainedVideoBlockers = (Array.isArray(property.extra_fields?.media_quality_blockers)
         ? property.extra_fields.media_quality_blockers
         : []).filter((item) => {
@@ -6885,8 +7155,19 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
         [propertyId, JSON.stringify({
           public_image_count: imageOffset,
           primary_image_url: existingPrimaryImageUrl || property.extra_fields?.primary_image_url || null,
-          media_validation_status: 'passed_automated_image_gate',
-          media_quality_blockers: retainedVideoBlockers
+          media_validation_status: videoReuse.recovery
+            ? 'blocked_original_video_recovery_required'
+            : 'passed_automated_image_gate',
+          media_quality_blockers: retainedVideoBlockers,
+          ...(videoReuse.note ? {
+            media_reuse_note: videoReuse.note,
+            media_also_on_other_property: videoReuse.refusedHashes
+          } : {}),
+          ...(videoReuse.recovery ? {
+            video_recovery_required: true,
+            video_recovery_reason: 'video_bytes_reused_from_other_message',
+            video_recovery_requested_at: property.extra_fields?.video_recovery_requested_at || new Date().toISOString()
+          } : {})
         }), property.extra_fields?.staff_media_edited_at || null]
       );
     }
@@ -6909,10 +7190,10 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   const previousDocuments = Array.isArray(property.extra_fields?.document_urls) ? property.extra_fields.document_urls : [];
   const videos = uniqueMedia.filter((item) => item.kind === 'video').map((item) => item.url);
   const mergedVideos = [...new Set([...previousVideos, ...videos])];
-  const videoRecoveryRequired = mergedVideos.length === 0 && (
+  const videoRecoveryRequired = videoReuse.recovery || (mergedVideos.length === 0 && (
     property.extra_fields?.video_recovery_required === true
     || evidenceImages.some(employeeVideoEvidenceOnly)
-  );
+  ));
   const documents = uniqueMedia.filter((item) => item.kind === 'document').map((item) => item.url);
   const mergedHashes = [...existingHashes, ...uniqueMedia.map((item) => item.sha256).filter(Boolean)];
   const previousEvidenceUrls = Array.isArray(property.extra_fields?.source_evidence_urls) ? property.extra_fields.source_evidence_urls : [];
@@ -6980,7 +7261,13 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
         video_count: mergedVideos.length,
         video_key_frame_count: Number(property.extra_fields?.video_key_frame_count || 0) + videoKeyFrames.length,
         video_recovery_required: videoRecoveryRequired,
-        video_recovery_reason: videoRecoveryRequired ? 'original_whatsapp_video_bytes_unavailable' : null,
+        video_recovery_reason: videoReuse.recovery
+          ? 'video_bytes_reused_from_other_message'
+          : (videoRecoveryRequired ? 'original_whatsapp_video_bytes_unavailable' : null),
+        ...(videoReuse.note ? {
+          media_reuse_note: videoReuse.note,
+          media_also_on_other_property: videoReuse.refusedHashes
+        } : {}),
         video_recovery_requested_at: videoRecoveryRequired
           ? (property.extra_fields?.video_recovery_requested_at || new Date().toISOString())
           : null,
@@ -9368,7 +9655,14 @@ async function handleEmployeeWhatsappIntake({
             provider: runtime.provider
           });
           rememberEmployeePendingMedia(data, heldMedia, inboundMessageId);
-          if (cleanBody) data.pending_property_caption = cleanBody;
+          if (cleanBody) {
+            data.pending_property_caption = cleanBody;
+            rememberEmployeeCaptionForPairing(data, {
+              caption: cleanBody,
+              whatsappMessageId: runtime.whatsappMessageId || inboundMessageId,
+              sentAt: runtime.whatsappSentAt
+            });
+          }
           await replaceEmployeeSession(phone, currentStep, data);
           const heldCount = employeePendingStoredMedia(data).length;
           return {
@@ -9677,7 +9971,13 @@ async function handleEmployeeWhatsappIntake({
           const pendingMissing = employeePropertyMissing(employeePropertyFacts(pendingCaption, data));
           // Keep the new caption rather than asking for it again: refusing it left
           // Brian's Kira, Kyanja and Buwate captions stuck behind one plot.
-          rememberEmployeeQueuedSubmission(data, { caption: textCaption, storedMedia: [], inboundMessageId });
+          rememberEmployeeQueuedSubmission(data, {
+            caption: textCaption,
+            storedMedia: [],
+            inboundMessageId,
+            whatsappMessageId: runtime.whatsappMessageId || inboundMessageId,
+            sentAt: runtime.whatsappSentAt
+          });
           await replaceEmployeeSession(phone, currentStep, data);
           return {
             handled: true,
@@ -9703,7 +10003,9 @@ async function handleEmployeeWhatsappIntake({
                 propertyId: existingProperty.id,
                 storedMedia: pendingStoredMedia,
                 phone,
-                inboundMessageId: propertyInboundMessageId
+                inboundMessageId: propertyInboundMessageId,
+                batchPropertyIds: data.property_ids,
+                keepNonSiblingClaimedVideos: data.whatsapp_agent_self_intake === true
               });
               data.current_property_id = existingProperty.id;
               if (!attachment.duplicate) {
@@ -9855,7 +10157,9 @@ async function handleEmployeeWhatsappIntake({
         rememberEmployeeQueuedSubmission(data, {
           caption: pendingCaption,
           storedMedia: pendingStoredMedia,
-          inboundMessageId: normalizeInput(data.pending_property_media_message_id || '')
+          inboundMessageId: normalizeInput(data.pending_property_media_message_id || ''),
+          whatsappMessageId: normalizeInput(data.pending_property_media_message_id || ''),
+          sentAt: normalizeInput(data.pending_property_caption_sent_at || '')
         });
         clearEmployeePendingMedia(data);
       }
@@ -9865,6 +10169,11 @@ async function handleEmployeeWhatsappIntake({
         data.current_property_id = null;
       }
       data.pending_property_caption = textCaption;
+      rememberEmployeeCaptionForPairing(data, {
+        caption: textCaption,
+        whatsappMessageId: runtime.whatsappMessageId || inboundMessageId,
+        sentAt: runtime.whatsappSentAt
+      });
       await replaceEmployeeSession(phone, currentStep, data);
       const waitingForMedia = employeePendingSubmissionQueue(data).filter((entry) => !entry.media.length).length;
       return {
@@ -9884,6 +10193,14 @@ async function handleEmployeeWhatsappIntake({
 
     if (Number(data.total_media_count || 0) + candidates.length > 100) {
       return { handled: true, nextStep: currentStep, message: 'This batch has reached the 100-media safety limit. Type *COMPLETE*, then start another batch with *Agent 007*.' };
+    }
+    if (candidates.length) {
+      applyBridgeCaptionPairing(data, {
+        cleanBody,
+        placeholderBody,
+        whatsappSentAt: runtime.whatsappSentAt,
+        quotedMessageId: runtime.quotedMessageId
+      });
     }
     const pendingCaptionBeforeMessage = normalizeInput(data.pending_property_caption || '');
     const pendingStoredMediaBeforeMessage = employeePendingStoredMedia(data);
@@ -9955,7 +10272,14 @@ async function handleEmployeeWhatsappIntake({
           provider: runtime.provider
         });
         rememberEmployeePendingMedia(data, pendingStoredMedia, inboundMessageId);
-        if (caption) data.pending_property_caption = caption;
+        if (caption) {
+          data.pending_property_caption = caption;
+          rememberEmployeeCaptionForPairing(data, {
+            caption,
+            whatsappMessageId: runtime.whatsappMessageId || inboundMessageId,
+            sentAt: runtime.whatsappSentAt
+          });
+        }
         await replaceEmployeeSession(phone, currentStep, data);
         if (!caption) await settleEmployeeOrphanMedia({ phone, data, currentStep, inboundMessageId });
       } catch (error) {
@@ -9981,10 +10305,21 @@ async function handleEmployeeWhatsappIntake({
           && pendingCaptionBeforeMessage
           && !employeeCaptionLikelySameProperty(pendingCaptionBeforeMessage, caption, data)
         ) {
-          rememberEmployeeQueuedSubmission(data, { caption, storedMedia: pendingStoredMedia, inboundMessageId });
+          rememberEmployeeQueuedSubmission(data, {
+            caption,
+            storedMedia: pendingStoredMedia,
+            inboundMessageId,
+            whatsappMessageId: runtime.whatsappMessageId || inboundMessageId,
+            sentAt: runtime.whatsappSentAt
+          });
         } else {
           rememberEmployeePendingMedia(data, pendingStoredMedia, inboundMessageId);
           data.pending_property_caption = caption;
+          rememberEmployeeCaptionForPairing(data, {
+            caption,
+            whatsappMessageId: runtime.whatsappMessageId || inboundMessageId,
+            sentAt: runtime.whatsappSentAt
+          });
         }
         await replaceEmployeeSession(phone, currentStep, data);
       } catch (error) {
@@ -10173,7 +10508,9 @@ async function handleEmployeeWhatsappIntake({
         propertyId: data.current_property_id,
         storedMedia,
         phone,
-        inboundMessageId
+        inboundMessageId,
+        batchPropertyIds: data.property_ids,
+        keepNonSiblingClaimedVideos: data.whatsapp_agent_self_intake === true
       });
       if (!attachment.duplicate) {
         data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
@@ -12481,7 +12818,14 @@ async function settleEmployeeOrphanMedia({ phone, data = {}, currentStep = 'empl
   const remaining = new Set(pending.map((item) => normalizeInput(item.sha256 || item.url)));
   for (const { target, items } of groups.values()) {
     try {
-      const attachment = await attachEmployeeReviewMedia({ propertyId: target.id, storedMedia: items, phone, inboundMessageId });
+      const attachment = await attachEmployeeReviewMedia({
+        propertyId: target.id,
+        storedMedia: items,
+        phone,
+        inboundMessageId,
+        batchPropertyIds: data.property_ids,
+        keepNonSiblingClaimedVideos: data.whatsapp_agent_self_intake === true
+      });
       if (!attachment.duplicate) data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
       items.forEach((item) => remaining.delete(normalizeInput(item.sha256 || item.url)));
       placed.push({ propertyId: target.id, label: target.label, count: items.length });
@@ -12507,7 +12851,14 @@ async function agentTopUpExistingProperty({ data = {}, existingProperty = null, 
   if (data.whatsapp_agent_self_intake !== true || !existingProperty?.id || !storedMedia.length) return null;
   if (String(existingProperty.status) !== 'pending') return null;
   try {
-    const attachment = await attachEmployeeReviewMedia({ propertyId: existingProperty.id, storedMedia, phone, inboundMessageId });
+    const attachment = await attachEmployeeReviewMedia({
+      propertyId: existingProperty.id,
+      storedMedia,
+      phone,
+      inboundMessageId,
+      batchPropertyIds: data.property_ids,
+      keepNonSiblingClaimedVideos: data.whatsapp_agent_self_intake === true
+    });
     if (!attachment.attached) return null;
     data.current_property_id = existingProperty.id;
     return `📸 Thank you — I have added ${attachment.attached} ${attachment.attached === 1 ? 'photo' : 'photos/videos'} to the property you already sent us. It is with our team for review, and I will send you the link when it is live.`;
@@ -18228,7 +18579,10 @@ async function processInboundRuntimeUnlocked({
       mediaCount: inboundMediaCount,
       photoCandidates: inboundPhotoCandidates,
       mediaCandidates: inboundMediaCandidates,
-      sharedLocation
+      sharedLocation,
+      whatsappSentAt: normalizeInput(inboundMetadata.whatsapp_sent_at || inboundMetadata.whatsappSentAt || ''),
+      quotedMessageId: normalizeInput(inboundMetadata.quoted_message_id || inboundMetadata.quotedMessageId || ''),
+      whatsappMessageId: normalizeInput(inboundMetadata.whatsapp_message_id || inboundMetadata.whatsappMessageId || '')
     },
     inboundMessageId,
     session: sessionForMessage
@@ -18250,7 +18604,10 @@ async function processInboundRuntimeUnlocked({
         mediaType: normalizedMediaType,
         mediaCount: inboundMediaCount,
         photoCandidates: inboundPhotoCandidates,
-        mediaCandidates: inboundMediaCandidates
+        mediaCandidates: inboundMediaCandidates,
+        whatsappSentAt: normalizeInput(inboundMetadata.whatsapp_sent_at || inboundMetadata.whatsappSentAt || ''),
+        quotedMessageId: normalizeInput(inboundMetadata.quoted_message_id || inboundMetadata.quotedMessageId || ''),
+        whatsappMessageId: normalizeInput(inboundMetadata.whatsapp_message_id || inboundMetadata.whatsappMessageId || '')
       },
       inboundMessageId,
       attempt: 0
@@ -19821,7 +20178,15 @@ module.exports.__test = {
   isTransientMediaFetchError,
   storeEmployeeMedia,
   employeeMediaClaimedElsewhere,
+  employeeVideoReuseOnSibling,
+  decideEmployeeVideoAttachment,
+  applyEmployeeVideoReuseHold,
+  employeeVideoReuseNote,
   attachEmployeeReviewMedia,
+  pairEmployeeCaptionForMedia,
+  applyBridgeCaptionPairing,
+  rememberEmployeeCaptionForPairing,
+  createEmployeeReviewProperty,
   normalizeEmployeeSourceMessageId,
   englishTextConfidence,
   resolveDetectedLanguage,
