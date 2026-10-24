@@ -571,7 +571,7 @@ WITH specs AS (
     "id": "5c6d460a-4061-4c07-96e3-7dfc53839420",
     "action": "relabel",
     "kept_id": null,
-    "flag": null,
+    "flag": "Title and type stay the same. The stored UGX 270 million is the caption's per-acre rate, so the price period changes from once to per acre.",
     "evidence": "270m per acre",
     "expect": {
       "title": "10 Acres of land for sale in Matuga, Bombo Road",
