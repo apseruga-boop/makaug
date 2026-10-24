@@ -16,7 +16,7 @@ const {
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
 const { compactUgx } = require('../utils/compactUgx');
 const { isFoundOnlinePublicRow } = require('./publicListingCopy');
-const { publicSitemapAgentWhereSql } = require('./publicAgentEligibilityService');
+const { publicSitemapAgentWhereSql, publicSitemapBasicAgentWhereSql } = require('./publicAgentEligibilityService');
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
@@ -597,7 +597,10 @@ function publicSeoInventorySnapshotSql() {
        SELECT a.id
        FROM agents a
        WHERE a.id = properties.agent_id
-         AND ${publicSitemapAgentWhereSql('a')}
+         AND (
+           ${publicSitemapAgentWhereSql('a')}
+           OR ${publicSitemapBasicAgentWhereSql('a')}
+         )
        LIMIT 1
      ) public_agent ON TRUE
      WHERE ${publicVisibleInventoryWhere('properties')}

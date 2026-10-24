@@ -242,6 +242,11 @@ function mapRemoteAgentForUi(agent = {}) {
     area,
     rating: Number(agent.rating || 0) || 0,
     listings: Number(agent.listings_count || agent.total_listings || agent.listings || 0) || 0,
+    listings_page: agent.listings_page && typeof agent.listings_page === "object" ? agent.listings_page : null,
+    listing_price_min: Number(agent.listing_price_min) > 0 ? Number(agent.listing_price_min) : null,
+    listing_price_max: Number(agent.listing_price_max) > 0 ? Number(agent.listing_price_max) : null,
+    short_path: /^\/a\/[a-z0-9-]+$/i.test(String(agent.short_path || "")) ? String(agent.short_path) : "",
+    profile_kind: agent.profile_kind === "unclaimed" ? "unclaimed" : (agent.profile_kind === "full" ? "full" : ""),
     live_listings: Number(agent.live_listings || agent.listings_count || 0) || 0,
     pending_listings: Number(agent.pending_listings || agent.pending_listings_count || 0) || 0,
     rejected_listings: Number(agent.rejected_listings || 0) || 0,
@@ -47667,8 +47672,10 @@ function sharePropertyListingFromEvent(event, id, channel = "copy") {
 }
 
 function getBrokerShareUrl(broker) {
-  if (!broker?.id) return window.location.href;
   const origin = window.location.origin || "https://makaug.com";
+  const shortPath = String(broker?.short_path || "");
+  if (/^\/a\/[a-z0-9-]+$/i.test(shortPath)) return `${origin}${shortPath}`;
+  if (!broker?.id) return window.location.href;
   return `${origin}${getBrokerProfilePath(broker)}`;
 }
 
@@ -54221,6 +54228,8 @@ async function parseInitialDeepLink() {
     } catch (error) {
       console.warn("Unable to open linked broker", error);
     }
+    await openBrokerProfile(decodeURIComponent(bid));
+    return true;
   }
 
   const adminControl = path === "/admin-dashboard" ? adminControlForPath("/admin") : adminControlForPath(path);
@@ -62371,6 +62380,8 @@ async function openDetail(id, options = {}) {
 }
 
 let agentProfileListingCache = [];
+let agentProfileListingsPage = null;
+let agentProfileListingsLoading = false;
 let agentProfileListingType = "all";
 let agentProfileListingSort = "newest";
 let agentProfileLeafletMap = null;
@@ -62707,18 +62718,20 @@ function sortAgentProfileListings(listings, sort) {
 }
 
 function agentProfileAreaCounts(listings, broker = {}) {
+  const summaryAreas = Array.isArray(broker?.public_summary?.areas)
+    ? broker.public_summary.areas.filter((area) => String(area?.name || "").trim())
+    : [];
+  if (summaryAreas.length) {
+    return summaryAreas
+      .map((area) => [String(area.name).trim(), Number(area.listings) || 0])
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }
   const counts = new Map();
   (Array.isArray(listings) ? listings : []).forEach((listing) => {
     const name = String(listing?.area || listing?.district || "").trim();
     if (!name) return;
     counts.set(name, (counts.get(name) || 0) + 1);
   });
-  if (!counts.size && Array.isArray(broker?.public_summary?.areas)) {
-    broker.public_summary.areas.forEach((area) => {
-      const name = String(area?.name || "").trim();
-      if (name) counts.set(name, Number(area.listings) || 0);
-    });
-  }
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
@@ -62729,6 +62742,36 @@ function agentProfilePriceLabel(listings) {
   const max = Math.max(...prices);
   if (min === max) return fmtP(min);
   return `${fmtP(min)} – ${fmtP(max)}`;
+}
+
+function agentProfilePriceLabelFromBroker(broker, listings) {
+  const min = Number(broker?.listing_price_min);
+  const max = Number(broker?.listing_price_max);
+  if (min > 0 && max > 0) {
+    if (min === max) return fmtP(min);
+    return `${fmtP(min)} – ${fmtP(max)}`;
+  }
+  return agentProfilePriceLabel(listings);
+}
+
+function agentProfileMixCounts(broker, listings) {
+  const mix = broker?.public_summary?.mix;
+  if (mix && typeof mix === "object") {
+    const counts = new Map();
+    Object.entries(mix).forEach(([key, value]) => {
+      const count = Number(value) || 0;
+      if (count <= 0) return;
+      const type = key === "short_stay" ? "short_term" : key;
+      counts.set(type, (counts.get(type) || 0) + count);
+    });
+    if (counts.size) return counts;
+  }
+  const counts = new Map();
+  (Array.isArray(listings) ? listings : []).forEach((listing) => {
+    const key = agentProfileTypeKey(listing);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  return counts;
 }
 
 function agentProfileContactButtons(broker, { mobile = false } = {}) {
@@ -62763,6 +62806,7 @@ function renderAgentProfileListingGrid() {
         return `<div class="agent-profile-listing">${propCard(listing)}${badge}</div>`;
       }).join("")}</div>`
     : `<div class="agent-profile-empty">No active listings yet.</div>`;
+  renderAgentProfileLoadMore();
 }
 
 function setAgentProfileListingType(type) {
@@ -62776,6 +62820,45 @@ function setAgentProfileListingType(type) {
 function setAgentProfileListingSort(sort) {
   agentProfileListingSort = sort || "newest";
   renderAgentProfileListingGrid();
+}
+
+function renderAgentProfileLoadMore() {
+  const el = document.getElementById("agent-profile-load-more");
+  if (!el) return;
+  const page = agentProfileListingsPage;
+  if (!page?.has_more) {
+    el.innerHTML = "";
+    return;
+  }
+  const label = agentProfileListingsLoading ? "Loading" : "Load more";
+  el.innerHTML = `<button type="button" class="agent-profile-load-more-btn" onclick="loadMoreAgentProfileListings()" ${agentProfileListingsLoading ? "disabled" : ""}>${label}</button>`;
+}
+
+async function loadMoreAgentProfileListings() {
+  const page = agentProfileListingsPage;
+  const id = activeBrokerProfileId;
+  if (!page?.has_more || agentProfileListingsLoading || !id) return;
+  agentProfileListingsLoading = true;
+  renderAgentProfileLoadMore();
+  try {
+    const next = Number(page.page || 1) + 1;
+    const limit = Number(page.limit || 24);
+    const res = await apiRequest(`/api/agents/${encodeURIComponent(id)}/listings?page=${next}&limit=${limit}`, { skipAuth: true });
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    const mapped = rows.map((row) => mapRemotePropertyForUi(row)).filter((listing) => listing?.id && isListingPublicVisible(listing));
+    const seen = new Set(agentProfileListingCache.map((listing) => String(listing.id)));
+    mapped.forEach((listing) => {
+      if (!seen.has(String(listing.id))) agentProfileListingCache.push(listing);
+    });
+    agentProfileListingsPage = res?.pagination || { ...page, page: next, has_more: false };
+    agentProfileListingsLoading = false;
+    renderAgentProfileListingGrid();
+  } catch (error) {
+    toast(error?.message || "Could not load more listings.");
+  } finally {
+    agentProfileListingsLoading = false;
+    renderAgentProfileLoadMore();
+  }
 }
 
 function focusAgentProfileRequest() {
@@ -63171,13 +63254,11 @@ async function openBrokerProfile(id) {
   }
   if (!b) {
     content.innerHTML = `
-      <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
-      <div class="bg-white border border-amber-200 rounded-3xl p-6 md:p-8 shadow-sm">
-        <h1 class="text-2xl font-black text-gray-900">Broker profile is not available yet.</h1>
-        <p class="mt-2 text-gray-600">Please refresh the brokers page or try the profile again.</p>
-        <button type="button" onclick="showPage('brokers')" class="mt-4 inline-flex items-center justify-center rounded-xl bg-green-700 px-4 py-2 font-semibold text-white">Back to brokers</button>
+      <div id="unknown-agent-fallback" class="bg-white border border-green-100 rounded-3xl p-6 md:p-8 shadow-sm">
+        <h1 class="text-2xl font-black text-gray-900">This agent page is not on makaug</h1>
+        <p class="mt-2 text-gray-600">Open the agents directory to find a property agent.</p>
+        <a href="/brokers" class="mt-4 inline-flex items-center justify-center rounded-xl bg-green-700 px-4 py-2 font-semibold text-white">Open the agents directory</a>
       </div>`;
-    toast("Broker profile is not available yet.");
     return;
   }
   activeBrokerProfileId = String(b.id || id || "");
@@ -63187,7 +63268,10 @@ async function openBrokerProfile(id) {
   const list = remoteListings.length ? remoteListings : getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
   const offPlanProjects = Array.isArray(b.remote_off_plan_projects) ? b.remote_off_plan_projects : [];
   const photoSrc = publicImageSrc(b.photo || b.profile_photo_url, `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`);
-  const totalVideoTours = list.reduce((sum, property) => sum + propertyVideoUrls(property).length, 0);
+  const liveCount = Number(b.listings || 0) > 0 ? Number(b.listings || 0) : list.length;
+  const priceLabel = agentProfilePriceLabelFromBroker(b, list);
+  const summaryVideos = Number(b.public_summary?.video_tours);
+  const totalVideoTours = Number.isFinite(summaryVideos) ? summaryVideos : list.reduce((sum, property) => sum + propertyVideoUrls(property).length, 0);
   const firstName = agentProfileFirstName(b);
   const experienceLabel = agentProfileExperienceLabel(b);
   const joinedText = agentProfileJoinedText(b);
@@ -63199,9 +63283,14 @@ async function openBrokerProfile(id) {
     const key = agentProfileTypeKey(listing);
     typeCounts.set(key, (typeCounts.get(key) || 0) + 1);
   });
-  const typeMax = Math.max(1, ...typeCounts.values());
+  const mixCounts = agentProfileMixCounts(b, list);
+  const typeMax = Math.max(1, ...mixCounts.values(), 1);
   const idArg = adminListingIdArg(b.id);
   agentProfileListingCache = list;
+  agentProfileListingsPage = b.listings_page && typeof b.listings_page === "object"
+    ? { ...b.listings_page }
+    : { page: 1, limit: Math.max(list.length, 1), total: liveCount, has_more: liveCount > list.length };
+  agentProfileListingsLoading = false;
   agentProfileListingType = "all";
   agentProfileListingSort = "newest";
   const typeButtons = [`<button type="button" class="is-active" data-agent-profile-type="all" onclick="setAgentProfileListingType('all')">All types</button>`]
@@ -63215,6 +63304,7 @@ async function openBrokerProfile(id) {
             <img class="agent-profile-avatar aspect-square rounded-full object-cover object-center" src="${adminAttr(photoSrc)}" alt="${adminAttr(b.name)}" width="84" height="84" onerror="this.remove();">
             <div class="agent-profile-identity-main">
               <h1 class="broker-profile-name agent-profile-name">${adminEscape(b.name)}${verifiedAgentBadgeHtml(b, 22)}</h1>
+              ${b.profile_kind === "unclaimed" ? `<p class="agent-profile-unclaimed">Basic profile. This page is built from this lister's live listings and has not been claimed by them.</p>` : ""}
               ${brokerCompanyLineHtml(b, "agent-profile-company")}
               <div class="agent-profile-meta">
                 ${agentNumber ? `<span><i class="fas fa-id-card" aria-hidden="true"></i><span>Agent number</span> <strong>${adminEscape(agentNumber)}</strong></span>` : ""}
@@ -63235,8 +63325,8 @@ async function openBrokerProfile(id) {
             ${renderBrokerSocialLinks(b)}
           </section>
           <div class="agent-profile-stats" aria-label="Key figures">
-            <div class="agent-profile-stat"><strong>${list.length}</strong><span>Live listings</span></div>
-            <div class="agent-profile-stat"><strong>${adminEscape(agentProfilePriceLabel(list))}</strong><span>Price range</span></div>
+            <div class="agent-profile-stat"><strong id="agent-profile-live-count">${liveCount}</strong><span>Live listings</span></div>
+            <div class="agent-profile-stat"><strong>${adminEscape(priceLabel)}</strong><span>Price range</span></div>
             <div class="agent-profile-stat"><strong>${totalVideoTours}</strong><span>Video tours</span></div>
             <div class="agent-profile-stat"><strong>${areaCounts.length}</strong><span>Areas covered</span></div>
             <div class="agent-profile-stat"><strong>${agentShowsVerifiedBadge(b) ? "Verified" : "Unverified"}</strong><span>Verified status</span></div>
@@ -63245,7 +63335,7 @@ async function openBrokerProfile(id) {
             <h2 id="agent-profile-where">Where ${adminEscape(firstName)} works</h2>
             <div id="agent-profile-map" class="agent-profile-map" role="img" aria-label="Where ${adminAttr(firstName)} works"></div>
             <p class="agent-profile-map-note">Pins without a GPS point use the area or district centre.</p>
-            ${typeCounts.size ? `<div class="agent-profile-mix" aria-label="Listing mix"><div class="text-xs font-bold uppercase tracking-wide text-gray-500">Listing mix</div>${[...typeCounts.entries()].map(([key, count]) => `<div class="agent-profile-mix-row"><span>${adminEscape(agentProfileTypeLabel(key))}</span><span class="agent-profile-mix-track"><span class="agent-profile-mix-fill" style="inline-size:${Math.round((count / typeMax) * 100)}%"></span></span><span>${count}</span></div>`).join("")}</div>` : ""}
+            ${mixCounts.size ? `<div class="agent-profile-mix" aria-label="Listing mix"><div class="text-xs font-bold uppercase tracking-wide text-gray-500">Listing mix</div>${[...mixCounts.entries()].map(([key, count]) => `<div class="agent-profile-mix-row"><span>${adminEscape(agentProfileTypeLabel(key))}</span><span class="agent-profile-mix-track"><span class="agent-profile-mix-fill" style="inline-size:${Math.round((count / typeMax) * 100)}%"></span></span><span>${count}</span></div>`).join("")}</div>` : ""}
             ${areaCounts.length ? `<div class="agent-profile-chips">${areaCounts.map(([name, count]) => `<span class="agent-profile-chip">${adminEscape(name)} <span>(${count})</span></span>`).join("")}</div>` : ""}
           </section>
           <section class="agent-profile-section" aria-labelledby="agent-profile-listings-heading">
@@ -63261,6 +63351,7 @@ async function openBrokerProfile(id) {
               </label>
             </div>
             <div id="agent-profile-listings-grid"></div>
+            <div id="agent-profile-load-more"></div>
           </section>
           ${brokerOffPlanProjectsHtml(offPlanProjects)}
         </div>

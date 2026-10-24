@@ -1393,7 +1393,7 @@ async function loadShortStayRows(db, agentIds) {
 }
 
 // Every approved listing for one agent, with only the columns the summary
-// reads (the profile's own listing grid is capped at 100; the write-up is not).
+// reads. The profile grid pages through the same approved set.
 async function loadAgentSummaryListings(db, agentId) {
   const result = await db.query(
     `SELECT ${SUMMARY_FACT_SQL}

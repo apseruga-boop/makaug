@@ -171,9 +171,15 @@ test('A2: no public page except / canonicalises to the homepage; aliases canonic
   assert.equal(canonicalOf(await (await get('/')).text()), 'https://makaug.com/');
 });
 
-test('A2: unknown overseas market and non-public agent are 404; sitemap lists the new hub pages', async () => {
+test('A2: unknown overseas market is 404; an unknown agent opens the directory; sitemap lists the new hub pages', async () => {
   assert.equal((await get('/off-plan/overseas/atlantis-xyz')).status, 404);
-  assert.equal((await get(`/agents/${crypto.randomUUID()}`)).status, 404);
+  const missingAgent = await get(`/agents/${crypto.randomUUID()}`);
+  assert.equal(missingAgent.status, 200);
+  assert.match(missingAgent.headers.get('x-robots-tag') || '', /noindex/);
+  const missingHtml = await missingAgent.text();
+  assert.equal(canonicalOf(missingHtml), 'https://makaug.com/brokers');
+  assert.match(missingHtml, /Open the agents directory/);
+  assert.doesNotMatch(missingHtml, /not found/i);
   const entries = seo.sitemapEntries({}, 'https://makaug.com').map((entry) => entry.loc);
   for (const p of ['/about', '/how-it-works', '/help', '/safety', '/anti-fraud', '/advertise']) assert.ok(entries.includes(`https://makaug.com${p}`), p);
 });

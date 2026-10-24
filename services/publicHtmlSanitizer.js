@@ -409,6 +409,7 @@ const KNOWN_PUBLIC_EXTRA_ROUTES = ['/', '/index.html', '/about', '/off-plan', '/
 const KNOWN_PUBLIC_ROUTE_PATTERNS = [
   /^\/property\/[a-z0-9-]+$/i,
   /^\/agents\/[a-z0-9-]+$/i,
+  /^\/a\/[a-z0-9-]+$/i,
   /^\/broker\/[a-z0-9-]+$/i,
   /^\/off-plan(?:\/[a-z0-9-]+){1,3}$/i,
   /^\/hostels\/[a-z0-9-]+$/i,

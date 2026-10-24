@@ -14,9 +14,16 @@ const {
   DIRECT_AGENT_PROFILE_MARKER,
   addPublicAgentEligibilityFilters,
   addPublicAgentLaunchTestFilter,
-  addPublicAgentSelfRegistrationFilter,
+  publicAgentProfileVisible,
   verifiedByMakaugSql
 } = require('../services/publicAgentEligibilityService');
+const { basicAgentProfileVisible } = require('../services/agentBasicProfile');
+const {
+  approvedAgentListingsCountSql,
+  approvedListingPriceRange,
+  listApprovedAgentListingPage
+} = require('../services/agentListingCount');
+const { shortPathForAgent } = require('../services/agentShortLink');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { getAgentFacingReport, getReportById, listAgentReportWeeks, siteUrl } = require('../services/agentWeeklyReportService');
@@ -761,14 +768,9 @@ router.get('/', async (req, res, next) => {
         a.specializations,
         ${verifiedByMakaugSql('a')} AS verified_by_makaug,
         ${knownAgentSocialSelect('a')},
-        COALESCE(p.active_listings, 0) AS listings_count,
+        ${approvedAgentListingsCountSql('a')} AS listings_count,
         COALESCE(ld.districts, ARRAY[]::text[]) AS listing_districts
       FROM agents a
-      LEFT JOIN LATERAL (
-        SELECT COUNT(*)::int AS active_listings
-        FROM properties p
-        WHERE p.agent_id = a.id AND p.status = 'approved'
-      ) p ON true
       LEFT JOIN LATERAL (
         SELECT ARRAY_AGG(d.district ORDER BY d.n DESC, d.district) AS districts
         FROM (
@@ -862,8 +864,15 @@ async function findPublicAgentForEnquiry(agentId) {
   const filters = ['a.id = $1'];
   const values = [agentId];
   addPublicAgentLaunchTestFilter(filters, values, 'a');
-  addPublicAgentSelfRegistrationFilter(filters, 'a');
   filters.push(`LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')`);
+  filters.push(`COALESCE(a.verification_reason, '') NOT ILIKE '%public social source onboarding%'`);
+  filters.push(`COALESCE(a.verification_reason, '') NOT ILIKE '%source profile%'`);
+  filters.push(`COALESCE(a.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'`);
+  filters.push(`(
+    a.user_id IS NOT NULL
+    OR COALESCE(a.verification_reason, '') ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
+    OR ${approvedAgentListingsCountSql('a')} >= 1
+  )`);
   const result = await db.query(
     `SELECT a.id, a.full_name
      FROM agents a
@@ -1252,9 +1261,19 @@ router.post('/:id/bookings', agentProfileEnquiryLimiter, leadHoneypot, async (re
   }
 });
 
-router.get('/:id', async (req, res, next) => {
-  try {
-    const agent = await db.query(
+function mapAgentProfileListings(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const view = availabilityView(row);
+    return {
+      ...publicAgentListingPayload(row),
+      availability_label: view.label,
+      availability_tone: view.tone
+    };
+  });
+}
+
+async function loadPublicAgentProfileRow(agentId) {
+  const agent = await db.query(
       `SELECT
         a.id,
         a.full_name,
@@ -1278,19 +1297,16 @@ router.get('/:id', async (req, res, next) => {
         a.makaug_agent_number,
         a.created_at,
         a.verification_reason,
+        (NULLIF(BTRIM(COALESCE(a.identity_document_url, '')), '') IS NOT NULL) AS identity_document_stored,
         ${verifiedByMakaugSql('a')} AS verified_by_makaug,
         ${knownAgentSocialSelect('a')},
-        COALESCE(p.active_listings, 0) AS listings_count
+        ${approvedAgentListingsCountSql('a')} AS listings_count
       FROM agents a
-      LEFT JOIN LATERAL (
-        SELECT COUNT(*)::int AS active_listings
-        FROM properties p
-        WHERE p.agent_id = a.id AND p.status = 'approved'
-      ) p ON true
       WHERE a.id = $1
         AND (
           a.user_id IS NOT NULL
           OR COALESCE(a.verification_reason, '') ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
+          OR ${approvedAgentListingsCountSql('a')} >= 1
         )
         AND LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
         AND COALESCE(a.verification_reason, '') NOT ILIKE '%public social source onboarding%'
@@ -1309,79 +1325,84 @@ router.get('/:id', async (req, res, next) => {
         AND COALESCE(a.email, '') !~* '(qa-test|makaug\\.invalid|dummy|sample)'
         AND COALESCE(a.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'
         AND COALESCE(a.specializations::text, '') !~* '(qa test delete|soft launch test|dummy|sample|training|demo|placeholder)'`,
-      [req.params.id]
+      [agentId]
     );
 
-    if (!agent.rows.length) {
-      return res.status(404).json({ ok: false, error: 'Agent not found' });
+    if (!agent.rows.length) return null;
+    const row = agent.rows[0];
+    const visibilityRow = {
+      ...row,
+      approved_listing_count: Number(row.listings_count || 0)
+    };
+    const profileKind = publicAgentProfileVisible(visibilityRow)
+      ? 'full'
+      : (basicAgentProfileVisible(visibilityRow) ? 'unclaimed' : '');
+    if (!profileKind) return null;
+    return { row, profileKind };
+}
+
+router.get('/:id/listings', async (req, res, next) => {
+  try {
+    const loaded = await loadPublicAgentProfileRow(req.params.id);
+    if (!loaded) return res.status(404).json({ ok: false, error: 'Agent not found', fallback: '/brokers' });
+    const page = await listApprovedAgentListingPage(db, loaded.row.id, req.query);
+    return res.json({
+      ok: true,
+      data: mapAgentProfileListings(page.rows),
+      listings_count: page.page.total,
+      pagination: page.page
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/:id', async (req, res, next) => {
+  try {
+    const loaded = await loadPublicAgentProfileRow(req.params.id);
+    if (!loaded) return res.status(404).json({ ok: false, error: 'Agent not found', fallback: '/brokers' });
+
+    const page = await listApprovedAgentListingPage(db, loaded.row.id, { page: 1, limit: 24 });
+    let prices = { listing_price_min: null, listing_price_max: null };
+    try {
+      prices = await approvedListingPriceRange(db, loaded.row.id);
+    } catch (error) {
+      console.warn('[agents] price range unavailable', { agentId: req.params.id, message: error.message });
     }
-
-    const listings = await db.query(
-      `SELECT
-         p.id,
-         p.title,
-         p.description,
-         p.listing_type,
-         p.district,
-         p.area,
-         p.address,
-         p.price,
-         p.price_currency,
-         p.price_original,
-         p.price_fx_rate_ugx,
-         p.price_fx_as_of,
-         p.price_period,
-         p.bedrooms,
-         p.bathrooms,
-         p.property_type,
-         p.status,
-         p.availability_status,
-         p.last_confirmed_at,
-         p.created_at,
-         p.latitude,
-         p.longitude,
-         p.agent_id,
-         p.extra_fields,
-         img.url AS primary_image_url
-       FROM properties p
-       LEFT JOIN LATERAL (
-         SELECT i.url
-         FROM property_images i
-         WHERE i.property_id = p.id
-         ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
-         LIMIT 1
-       ) img ON true
-       WHERE p.agent_id = $1 AND p.status = 'approved'
-       ORDER BY COALESCE(p.approved_at, p.updated_at, p.created_at) DESC
-       LIMIT 100`,
-      [req.params.id]
-    );
+    let shortPath = '';
+    try {
+      shortPath = await shortPathForAgent(db, loaded.row.id);
+    } catch (error) {
+      console.warn('[agents] short link unavailable', { agentId: req.params.id, message: error.message });
+    }
 
     // About text and areas covered, written from all of the agent's live
     // listings (never stored; an agent's own bio stays first).
     let publicSummary = null;
     try {
-      publicSummary = await loadAgentPublicSummary(db, agent.rows[0]);
+      publicSummary = await loadAgentPublicSummary(db, loaded.row);
     } catch (error) {
       console.warn('[agents] public summary unavailable', { agentId: req.params.id, message: error.message });
     }
 
-    const responseTime = await loadResponseTimeLabel(db, req.params.id);
+    const responseTime = await loadResponseTimeLabel(db, loaded.row.id);
+    const payload = publicAgentPayload(loaded.row);
+    delete payload.identity_document_stored;
+    if (loaded.profileKind === 'unclaimed') delete payload.email;
+    payload.profile_kind = loaded.profileKind;
 
     return res.json({
       ok: true,
       data: {
-        ...publicAgentPayload(agent.rows[0]),
+        ...payload,
+        listings_count: page.page.total,
+        listing_price_min: prices.listing_price_min,
+        listing_price_max: prices.listing_price_max,
+        short_path: shortPath,
         response_time_label: responseTime,
         public_summary: publicSummary,
-        listings: listings.rows.map((row) => {
-          const view = availabilityView(row);
-          return {
-            ...publicAgentListingPayload(row),
-            availability_label: view.label,
-            availability_tone: view.tone
-          };
-        })
+        listings_page: page.page,
+        listings: mapAgentProfileListings(page.rows)
       }
     });
   } catch (error) {
