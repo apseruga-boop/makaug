@@ -204,6 +204,14 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'makaug_verified_location_override_20261020'
   },
   {
+    // Matuga, Wakiso (Entebbe Road side). Distinct from Matugga on Bombo Road,
+    // which stays under Gombe. Captions such as "10 acres in Matuga" had no
+    // town to select.
+    name: 'Matuga', district: 'Wakiso', town: 'Matuga', level: 'town',
+    aliases: ['Matuga', 'Matuga Town', 'Matuga Wakiso'],
+    source: 'makaug_verified_location_override_20261024'
+  },
+  {
     // Housing estate in Kira, not a parish. No coordinates until a cited point.
     name: 'Shimoni Estate', district: 'Wakiso', town: 'Kira', level: 'area',
     aliases: ['Shimoni Estate', 'Shimoni', 'Kira Shimoni'],

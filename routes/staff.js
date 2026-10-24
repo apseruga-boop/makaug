@@ -3,7 +3,7 @@ const express = require('express');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { changeStaffPropertyImage, addStaffPropertyImages, removeStaffPropertyVideo } = require('../services/staffPropertyMediaService');
+const { changeStaffPropertyImage, addStaffPropertyImages, removeStaffPropertyVideo, moveOrSwapStaffPropertyVideo } = require('../services/staffPropertyMediaService');
 const { requireStaffAccess } = require('../middleware/auth');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
@@ -23,6 +23,7 @@ const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const { priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
 const { listingDirectLookup, listingDirectLookupClause, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
+const { computedListingTotal, normalizeLandSizeUnit, normalizePriceUnit } = require('../utils/listingLandPrice');
 const { loadListingMediaSummaries, listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
 const { categoryAmbiguousClearedExtra, listingDataIntegrityReport, moderationReasonWithoutCategoryAmbiguous } = require('../utils/listingDataIntegrity');
 const {
@@ -1792,7 +1793,7 @@ async function buildStaffFastListingSummary() {
        FROM properties p
        WHERE ${staffReviewQueueWhereSql('all', 'p')}`,
       [],
-      { pending_review: 0, broker_pending_review: 0 },
+      { pending_review: null, broker_pending_review: null },
       { timeoutMs: STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS, label: 'staff_fast_pending_review_count' }
     ),
     safeOne(
@@ -1926,8 +1927,8 @@ async function buildDashboardFastPayload(req) {
        FROM property_moderation_events
        WHERE actor_id = $1`,
       [staffId],
-      { total_actions: 0, approvals: 0, rejections: 0, actions_24h: 0 },
-      { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
+      { total_actions: null, approvals: null, rejections: null, actions_24h: null },
+      { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS, label: 'staff_fast_my_moderation' }
     ),
     () => safeOne(
       `SELECT
@@ -2810,14 +2811,37 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
   if (priceChoice.mode === 'amount' && Number(normalized.price) > 1e12) {
     errors.push('price is over UGX 1 trillion; please check the number');
   }
+  if (Object.prototype.hasOwnProperty.call(normalized, 'land_size_unit')) {
+    const unit = normalizeLandSizeUnit(normalized.land_size_unit);
+    if (cleanText(normalized.land_size_unit) && !unit) errors.push('Plot size unit must be acres, decimals, sq ft, or m²');
+    normalized.land_size_unit = unit || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, 'land_size_value')) {
+    normalized.land_size_value = toNullableFloat(normalized.land_size_value);
+    if (normalized.land_size_value != null && normalized.land_size_value < 0) errors.push('Plot size must be a positive number');
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, 'price_unit')) {
+    const unit = normalizePriceUnit(normalized.price_unit);
+    if (cleanText(normalized.price_unit) && !unit) errors.push('Price unit must be total, per acre, or per decimal');
+    // NULL stays "total" for rows this editor has not saved. An explicit
+    // Total choice is stored as total and does not rewrite the price.
+    normalized.price_unit = unit || null;
+  }
   // C17: staff can't save a price outside the plausibility bounds; they fix
   // the number or tick Price on application.
   if (Object.prototype.hasOwnProperty.call(normalized, 'price') && normalized.price != null && normalized.price_on_application !== true) {
+    const comparable = computedListingTotal({
+      price: normalized.price,
+      price_unit: normalized.price_unit || existing.price_unit,
+      land_size_value: Object.prototype.hasOwnProperty.call(normalized, 'land_size_value') ? normalized.land_size_value : existing.land_size_value,
+      land_size_unit: Object.prototype.hasOwnProperty.call(normalized, 'land_size_unit') ? normalized.land_size_unit : existing.land_size_unit
+    });
+    const priceForBounds = comparable != null ? comparable : normalized.price;
     const plausibility = require('../utils/pricePlausibility').pricePlausibility({
       listing_type: normalized.listing_type || existing.listing_type,
       transaction_type: normalized.transaction_type || existing.transaction_type,
       price_period: normalized.price_period || existing.price_period,
-      price: normalized.price
+      price: priceForBounds
     });
     if (plausibility.reason === 'price_above_plausible_bounds') {
       const [min, max] = plausibility.bounds;
@@ -2840,6 +2864,27 @@ function liveEditSnapshot(row = {}, changed = []) {
   return Object.fromEntries(LIVE_EDIT_AUDIT_COLUMNS
     .filter((column) => changed.includes(column))
     .map((column) => [column, column === 'description' ? String(row[column] ?? '').slice(0, 500) : (row[column] ?? null)]));
+}
+
+async function persistStaffReviewNoteOnly(req, propertyId, existing, reviewPatch = {}) {
+  const incomingNotes = cleanText(reviewPatch.notes || reviewPatch.review_notes);
+  if (!incomingNotes) return false;
+  const notes = appendModerationNote(existing.moderation_notes, incomingNotes, {
+    author: moderationActorLabel(req.userAuth),
+    at: new Date()
+  });
+  await db.query(
+    'UPDATE properties SET moderation_notes = $2, updated_at = NOW() WHERE id = $1',
+    [propertyId, notes]
+  );
+  await db.query(
+    `INSERT INTO property_moderation_events (property_id, actor_id, action, notes)
+     VALUES ($1,$2,'staff_listing_note_saved',$3)`,
+    [propertyId, toUuidOrNull(actorId(req)), incomingNotes]
+  ).catch((error) => {
+    logger.warn('Staff review note event failed', { property_id: propertyId, message: error.message });
+  });
+  return true;
 }
 
 async function updateStaffEditableListing(req, propertyId, listingPatch = {}, reviewPatch = {}) {
@@ -2873,9 +2918,16 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     if (!sourcePostDate.ok) errors.push(sourcePostDate.error);
   }
   if (errors.length) {
+    // A location failure used to throw before the note was written, so the
+    // internal note disappeared with the rejected save.
+    const noteSaved = await persistStaffReviewNoteOnly(req, propertyId, existing, reviewPatch).catch((error) => {
+      logger.warn('Staff review note was not saved with the location error', { property_id: propertyId, message: error.message });
+      return false;
+    });
     const error = new Error(errors[0]);
     error.status = 400;
     error.details = errors;
+    error.note_saved = noteSaved;
     throw error;
   }
 
@@ -2915,7 +2967,10 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     nearest_university: (value) => cleanText(value) || null,
     distance_to_uni_km: (value) => toNullableFloat(value),
     room_type: (value) => cleanText(value) || null,
-    students_welcome: (value) => boolField(value)
+    students_welcome: (value) => boolField(value),
+    land_size_value: (value) => toNullableFloat(value),
+    land_size_unit: (value) => normalizeLandSizeUnit(value) || null,
+    price_unit: (value) => normalizePriceUnit(value) || null
   };
 
   Object.entries(fieldMap).forEach(([key, transform]) => {
@@ -3303,8 +3358,9 @@ async function loadStaffPropertyPreview(propertyId) {
            FROM properties
            WHERE id <> $1
              AND $3::text IS NOT NULL
-             AND COALESCE(lister_email, '') <> ''
-             AND LOWER(COALESCE(lister_email, '')) = LOWER($3)
+             AND lister_email IS NOT NULL
+             AND btrim(lister_email) <> ''
+             AND lower(lister_email) = lower($3)
              AND ($2::text IS NULL OR lister_phone IS DISTINCT FROM $2)
            ORDER BY created_at DESC
            LIMIT 20
@@ -3413,8 +3469,33 @@ async function loadStaffPropertyPreview(propertyId) {
       bulk_gate_preview: bulkGatePreview
     },
     approved_by_name: await staffApprovedByName(property.approved_by),
+    editor_title: staffEditorTitle(property, extra),
+    video_caption_ocr: await staffPreviewOcr(property),
     events
   };
+}
+
+function staffEditorTitle(property = {}, extra = {}) {
+  const stored = cleanText(property.title);
+  if (!rowIsFoundOnlineReview(property)) return stored;
+  try {
+    const { buildThirdPartyPublicTitle } = require('../services/publicListingCopy');
+    const publicTitle = cleanText(buildThirdPartyPublicTitle(property, extra));
+    return publicTitle || stored;
+  } catch (_) {
+    return stored;
+  }
+}
+
+async function staffPreviewOcr(property = {}) {
+  try {
+    const { loadVideoCaptionRecord, publicOcrView } = require('../services/videoCaptionOcrService');
+    const record = await loadVideoCaptionRecord(property);
+    return record ? publicOcrView(record) : null;
+  } catch (error) {
+    logger.warn('Staff preview OCR record failed', { property_id: property.id, message: error.message });
+    return null;
+  }
 }
 
 async function staffApprovedByName(userId) {
@@ -4174,7 +4255,15 @@ router.get('/properties', async (req, res, next) => {
       `SELECT p.id, p.title, p.listing_type, p.property_type, p.district, p.area, p.address,
               p.price, p.price_period, p.status, p.moderation_stage, p.moderation_reason,
               p.created_at, p.updated_at, p.inquiry_reference, p.lister_name, p.lister_phone,
-              p.lister_email, p.source, p.listed_via, p.extra_fields,
+              p.lister_email, p.source, p.listed_via, p.lister_type, p.agent_id,
+              p.land_size_value, p.land_size_unit, p.price_unit,
+              jsonb_build_object(
+                'source_name', p.extra_fields->>'source_name',
+                'source_platform', p.extra_fields->>'source_platform',
+                'price_review', p.extra_fields->>'price_review',
+                'broker_submission', p.extra_fields->>'broker_submission',
+                'broker_agent_id', p.extra_fields->>'broker_agent_id'
+              ) AS extra_fields,
               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url
        FROM properties p
        ${where}
@@ -4243,8 +4332,8 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const values = [];
 
     if (directLookup) {
-      // An MK ref, its 6-character suffix, or a property id is that listing,
-      // including one that is already live. Same staff sign-in as the rest of this router.
+      // An MK ref, its 6-character suffix, a property id, or an 8-hex id prefix
+      // is that listing, including one that is already live.
       filters.length = 0;
       filters.push(listingDirectLookupClause('p', directLookup, values));
     } else if (search) {
@@ -4794,6 +4883,52 @@ router.post('/properties/:id/video-stills/dedupe', async (req, res, next) => {
   }
 });
 
+// Move one video onto another listing, or swap it with a video on that listing.
+// Staff record an audit note. The files stay in storage. This route does not
+// itself swap any particular pair of listings.
+router.post('/properties/:id/videos/move', async (req, res, next) => {
+  try {
+    if (!toUuidOrNull(req.params.id)) return res.status(400).json({ ok: false, error: 'Invalid listing id' });
+    const data = await moveOrSwapStaffPropertyVideo({
+      propertyId: req.params.id,
+      videoUrl: req.body?.url || req.body?.video_url,
+      target: req.body?.target_id || req.body?.target || req.body?.target_reference,
+      targetVideoUrl: req.body?.target_video_url || req.body?.swap_url,
+      mode: req.body?.mode,
+      note: req.body?.note || req.body?.reason,
+      actorId: actorId(req),
+      confirm: req.body?.confirm === true || String(req.body?.confirm || '').toLowerCase() === 'true'
+    });
+    clearStaffFastDashboardCache();
+    require('./properties').clearPublicPropertiesCache(data.action);
+    invalidatePublicInventoryMetricsCache(data.action);
+    logStaffActivityInBackground(req, data.action, {
+      targetType: 'property',
+      targetId: req.params.id,
+      metadata: { target_id: data.target_id, mode: data.mode }
+    });
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, data });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
+router.post('/properties/:id/video-caption-ocr', async (req, res, next) => {
+  try {
+    if (!toUuidOrNull(req.params.id)) return res.status(400).json({ ok: false, error: 'Invalid listing id' });
+    const { runVideoCaptionOcr, publicOcrView } = require('../services/videoCaptionOcrService');
+    const record = await runVideoCaptionOcr(req.params.id);
+    const view = publicOcrView(record) || { status: 'not_checked', text: '', facts: {}, conflicts: [] };
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, data: { id: req.params.id, video_caption_ocr: view } });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
 // Detach one video from the listing. The file stays in storage.
 router.post('/properties/:id/videos/remove', async (req, res, next) => {
   try {
@@ -4866,7 +5001,12 @@ router.patch('/properties/:id/review', async (req, res, next) => {
     return res.json({ ok: true, data: preview, changed_fields: saved.changed_fields || [] });
   } catch (error) {
     if (error.status) {
-      return res.status(error.status).json({ ok: false, error: error.message, details: error.details || undefined });
+      return res.status(error.status).json({
+        ok: false,
+        error: error.message,
+        details: error.details || undefined,
+        note_saved: error.note_saved === true
+      });
     }
     return next(error);
   }

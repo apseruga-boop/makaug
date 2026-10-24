@@ -70,6 +70,7 @@ const {
   verifyListingSubmitToken
 } = require('../utils/listingSubmitOtp');
 const { parsePagination, toPagination } = require('../utils/pagination');
+const { publicLandSizeLabel, priceUnitCaption, computedListingTotal, listingPriceFacts, storedPriceUnit } = require('../utils/listingLandPrice');
 const { DISTRICTS, UNIVERSITIES, LISTING_TYPES, PROPERTY_STATUSES } = require('../utils/constants');
 const {
   isPublicLivePropertyStatus,
@@ -1258,6 +1259,21 @@ function publicContactPhoneForRow(row = {}, safeExtra = null) {
   return safeExtraPhone || extraPhone || rowPhone || '';
 }
 
+function publicSizePriceFields(row = {}) {
+  const facts = listingPriceFacts(row);
+  const rawUnit = storedPriceUnit(row);
+  const perUnit = rawUnit != null && (facts.priceUnit === 'per_acre' || facts.priceUnit === 'per_decimal');
+  const label = rawUnit != null ? publicLandSizeLabel(row) : '';
+  return {
+    land_size_value: row.land_size_value == null || row.land_size_value === '' ? null : Number(row.land_size_value),
+    land_size_unit: facts.sizeUnit || row.land_size_unit || null,
+    land_size_label: label || null,
+    price_unit: rawUnit == null ? null : (perUnit ? facts.priceUnit : 'total'),
+    price_unit_label: perUnit ? priceUnitCaption(facts.priceUnit) : null,
+    price_total: perUnit ? computedListingTotal(row) : null
+  };
+}
+
 function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, locationScope = {}) {
   const safeExtra = publicExtraFields(row.admin_extra_fields || row.extra_fields || {}, { createdAt: row.created_at || null });
   const canonicalDisplay = canonicalDisplayLocationForRow({
@@ -1361,7 +1377,8 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
     public_contact_phone: publicContactPhone || null,
     contact_phone: publicContactPhone || null,
     extra_fields: publicExtra,
-    third_party_discovery_result: foundOnlinePublic
+    third_party_discovery_result: foundOnlinePublic,
+    ...publicSizePriceFields(row)
   };
 }
 
@@ -1964,7 +1981,8 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
     image: foundOnlinePublic ? (foundOnlineImages[0]?.url || null) : safeProperty.image,
     images: foundOnlinePublic ? foundOnlineImages : images,
     third_party_discovery_result: foundOnlinePublic,
-    listing_origin: foundOnlinePublic ? 'found_online' : (safeProperty.listed_by || (safeProperty.agent_id || safeProperty.lister_type === 'agent' ? 'agent' : 'private'))
+    listing_origin: foundOnlinePublic ? 'found_online' : (safeProperty.listed_by || (safeProperty.agent_id || safeProperty.lister_type === 'agent' ? 'agent' : 'private')),
+    ...publicSizePriceFields(safeProperty)
   };
   return publicListingPayload(row, { privileged });
 }

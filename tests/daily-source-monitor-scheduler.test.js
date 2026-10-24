@@ -103,8 +103,9 @@ test('registration logs the next run and the kill switch can refuse to arm', () 
 test('the scheduled run matches the daily command and includes TikTok unless the flag is false', () => {
   assert.deepEqual(SCHEDULED_MONITOR_SETTINGS.platforms, ['youtube', 'x', 'tiktok']);
   assert.equal(SCHEDULED_MONITOR_SETTINGS.youtubeJobMode, 'channel_uploads');
-  assert.equal(SCHEDULED_MONITOR_SETTINGS.maxSources, 8);
-  assert.equal(SCHEDULED_MONITOR_SETTINGS.maxResults, 10);
+  assert.equal(SCHEDULED_MONITOR_SETTINGS.maxSources, 3);
+  assert.equal(SCHEDULED_MONITOR_SETTINGS.maxResults, 4);
+  assert.equal(SCHEDULED_MONITOR_SETTINGS.yieldBetweenPlatforms, true);
   assert.equal(SCHEDULED_MONITOR_SETTINGS.maxPages, 1);
   assert.equal(SCHEDULED_MONITOR_SETTINGS.tiktokWhenUnset, true);
   const included = dailySourceMonitorPlan({

@@ -122,6 +122,8 @@ async function applyMigration(filename, sql) {
 
 async function applyAutocommitMigration(filename, sql) {
   const client = await db.getClient();
+  const onNotice = (notice) => logger.info(`Migration notice (${filename}): ${notice.message || notice}`);
+  client.on('notice', onNotice);
   try {
     // CREATE INDEX CONCURRENTLY cannot run inside a transaction. Each
     // statement is its own implicit transaction. The migration row is written
@@ -132,6 +134,7 @@ async function applyAutocommitMigration(filename, sql) {
     await client.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [filename]);
     logger.info(`Applied migration: ${filename}`);
   } finally {
+    client.removeListener('notice', onNotice);
     client.release();
   }
 }
