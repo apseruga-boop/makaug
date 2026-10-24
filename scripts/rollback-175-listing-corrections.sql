@@ -1,9 +1,11 @@
 -- Manual rollback for db/migrations/175_clear_seeta_bedrooms_and_kigo_pin.sql.
 -- This file is not in db/migrations, so scripts/migrate.js does not run it.
--- It restores bedrooms, coordinates, extra_fields and updated_at from
--- listing_correction_175_backup, and only while the row still carries
--- extra_fields.listing_correction_175 and updated_at is still the marker's
--- applied_at. A later edit is left in place. The backup table is kept.
+-- It restores bedrooms, area, district, coordinates, extra_fields and
+-- updated_at from listing_correction_175_backup, and only while the row still
+-- carries extra_fields.listing_correction_175 and updated_at is still the
+-- marker's applied_at. That puts the Hoima listing's Wakiso/Kigo labels back
+-- and leaves its pin untouched when the backup pin is the Hoima centroid.
+-- A later edit is left in place. The backup table is kept.
 -- Titles, prices and status are not written.
 
 SET LOCAL lock_timeout = '8s';
@@ -16,6 +18,8 @@ SET
     WHEN b.before_row->>'bedrooms' IS NULL OR b.before_row->>'bedrooms' = '' THEN NULL
     ELSE (b.before_row->>'bedrooms')::integer
   END,
+  area = b.before_row->>'area',
+  district = b.before_row->>'district',
   latitude = CASE
     WHEN b.before_row->>'latitude' IS NULL OR b.before_row->>'latitude' = '' THEN NULL
     ELSE (b.before_row->>'latitude')::numeric
