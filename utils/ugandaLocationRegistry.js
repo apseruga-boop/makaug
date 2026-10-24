@@ -65,7 +65,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Kitende', district: 'Wakiso', town: 'Kajjansi', lat: 0.198, lng: 32.533 },
   { name: 'Kajjansi', district: 'Wakiso', town: 'Kajjansi', level: 'town', lat: 0.208, lng: 32.552, aliases: ['Kajjansi', 'Kajansi', 'Kajjansi Town Council'] },
   { name: 'Bwebajja', district: 'Wakiso', town: 'Makindye-Ssabagabo', lat: 0.179, lng: 32.541 },
-  { name: 'Kigo', district: 'Wakiso', town: 'Makindye-Ssabagabo', lat: 0.196, lng: 32.615 },
+  { name: 'Kigo', district: 'Wakiso', town: 'Makindye-Ssabagabo', lat: 0.2052, lng: 32.5967 },
   { name: 'Lubowa', district: 'Wakiso', town: 'Makindye-Ssabagabo', lat: 0.237, lng: 32.576, aliases: ['Lubowa', 'Lubowa Estate'] },
   { name: 'Namasuba', district: 'Wakiso', lat: 0.258, lng: 32.558, aliases: ['Namasuba', 'Namasuba Ndejje', 'Ndejje Namasuba'] },
   { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553 },
@@ -115,7 +115,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Katosi', district: 'Mukono', lat: 0.181, lng: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
 
   { name: 'Jinja', district: 'Jinja', level: 'district', lat: 0.424, lng: 33.204, aliases: ['Jinja', 'Jinja City', 'Jinja Town', 'Jinja Central'] },
-  { name: 'Masese', district: 'Jinja', lat: 0.406, lng: 33.209 },
+  { name: 'Masese', district: 'Jinja', lat: 0.45, lng: 33.2333 },
   { name: 'Nalufenya', district: 'Jinja', lat: 0.427, lng: 33.222 },
   { name: 'Bugembe', district: 'Jinja', lat: 0.457, lng: 33.231 },
 
@@ -198,7 +198,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Dabani', district: 'Busia', lat: 0.5, lng: 34.0 },
   { name: 'Masafu', district: 'Busia', lat: 0.45, lng: 34.02 },
   { name: 'Lumino', district: 'Busia', lat: 0.33, lng: 33.98 },
-  { name: 'Malaba', district: 'Tororo', level: 'city', lat: 0.635, lng: 34.268 },
+  { name: 'Malaba', district: 'Tororo', level: 'city', lat: 0.6407, lng: 34.263 },
   { name: 'Nagongera', district: 'Tororo', lat: 0.77, lng: 34.02 },
   { name: 'Osukuru', district: 'Tororo', lat: 0.67, lng: 34.12 },
   { name: 'Madera', district: 'Soroti', lat: 1.72, lng: 33.61 },

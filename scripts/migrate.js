@@ -99,6 +99,8 @@ async function applyMigration(filename, sql) {
     return;
   }
   const client = await db.getClient();
+  const onNotice = (notice) => logger.info(`Migration notice (${filename}): ${notice.message || notice}`);
+  client.on('notice', onNotice);
   try {
     await client.query('BEGIN');
     await client.query(
@@ -113,6 +115,7 @@ async function applyMigration(filename, sql) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
+    client.removeListener('notice', onNotice);
     client.release();
   }
 }
