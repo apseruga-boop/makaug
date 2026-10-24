@@ -16,8 +16,16 @@
 -- No properties row is deleted. Photo and video rows that are removed are
 -- copied first, including the image url. The media files in object storage
 -- are left where they are. A listing left with zero photos gets no
--- placeholder image row; the public page already uses its stock cover when
--- a listing has neither a photo nor a video.
+-- placeholder image row. The public page shows a logo tile that says
+-- "Photos coming soon". It does not invent a house photo.
+--
+-- Any property_images row whose url is the Unsplash model house
+-- (photo-1560518883-ce09059eeffa) or any other unsplash.com file is backed
+-- up and deleted. Advertising placement previews that still point at
+-- Unsplash are pointed at the MakaUG logo when that table exists.
+-- Generated captions "Distinct video key image …" and "Primary property
+-- photo" are cleared on the Mbalwa and Namulanda rows that this migration
+-- keeps.
 --
 -- ee920882 keeps canonical wakiso:wakiso. There is no Namuseera node, and
 -- this migration does not add one. The stored area is Namuseera. The public
@@ -633,7 +641,12 @@ BEGIN
         AND keep_row.is_primary IS TRUE
         AND keep_row.sort_order = 0
         AND NOT bad_present
-        AND position(old_copy in COALESCE(p.description, '')) = 0;
+        AND position(old_copy in COALESCE(p.description, '')) = 0
+        AND NOT EXISTS (
+          SELECT 1 FROM property_images caption
+          WHERE caption.property_id = pid
+            AND COALESCE(caption.room_label, '') ~* '^(distinct video key image|primary property photo)([[:space:]]|$)'
+        );
       IF already THEN
         RAISE NOTICE 'listing_correction_177 % skipped already_in_target_state', pid;
       ELSIF keep_row.id IS NULL THEN
@@ -696,6 +709,16 @@ BEGIN
           UPDATE property_images
           SET is_primary = TRUE, sort_order = 0
           WHERE id = keep_id AND property_id = pid;
+          INSERT INTO listing_correction_177_backup (property_id, action, row_kind, row_key, before_row)
+          SELECT i.property_id, 'clear_caption', 'image_caption', i.id::text, to_jsonb(i)
+          FROM property_images i
+          WHERE i.property_id = pid
+            AND COALESCE(i.room_label, '') ~* '^(distinct video key image|primary property photo)([[:space:]]|$)'
+          ON CONFLICT (property_id, row_kind, row_key) DO NOTHING;
+          UPDATE property_images
+          SET room_label = NULL
+          WHERE property_id = pid
+            AND COALESCE(room_label, '') ~* '^(distinct video key image|primary property photo)([[:space:]]|$)';
           v_extra := COALESCE(p.extra_fields, '{}'::jsonb);
           v_extra := jsonb_set(v_extra, '{video_tours}', pg_temp.listing_177_without_video(v_extra->'video_tours', bad_video), TRUE);
           v_extra := jsonb_set(v_extra, '{video_urls}', pg_temp.listing_177_without_video(v_extra->'video_urls', bad_video), TRUE);
@@ -750,7 +773,12 @@ BEGIN
       SELECT * INTO middle FROM property_images WHERE id = middle_id AND property_id = pid;
       already := plot.id IS NOT NULL AND plot.is_primary IS TRUE AND plot.sort_order = 0
         AND middle.id IS NOT NULL AND middle.is_primary IS NOT TRUE AND middle.sort_order = 1
-        AND car.id IS NOT NULL AND car.is_primary IS NOT TRUE AND car.sort_order = 2;
+        AND car.id IS NOT NULL AND car.is_primary IS NOT TRUE AND car.sort_order = 2
+        AND NOT EXISTS (
+          SELECT 1 FROM property_images caption
+          WHERE caption.property_id = pid
+            AND COALESCE(caption.room_label, '') ~* '^(distinct video key image|primary property photo)([[:space:]]|$)'
+        );
       IF already THEN
         RAISE NOTICE 'listing_correction_177 % skipped already_in_target_state', pid;
       ELSIF plot.id IS NULL OR middle.id IS NULL OR car.id IS NULL THEN
@@ -768,6 +796,16 @@ BEGIN
         UPDATE property_images SET is_primary = TRUE, sort_order = 0 WHERE id = plot_id AND property_id = pid;
         UPDATE property_images SET is_primary = FALSE, sort_order = 1 WHERE id = middle_id AND property_id = pid;
         UPDATE property_images SET is_primary = FALSE, sort_order = 2 WHERE id = car_id AND property_id = pid;
+        INSERT INTO listing_correction_177_backup (property_id, action, row_kind, row_key, before_row)
+        SELECT i.property_id, 'clear_caption', 'image_caption', i.id::text, to_jsonb(i)
+        FROM property_images i
+        WHERE i.property_id = pid
+          AND COALESCE(i.room_label, '') ~* '^(distinct video key image|primary property photo)([[:space:]]|$)'
+        ON CONFLICT (property_id, row_kind, row_key) DO NOTHING;
+        UPDATE property_images
+        SET room_label = NULL
+        WHERE property_id = pid
+          AND COALESCE(room_label, '') ~* '^(distinct video key image|primary property photo)([[:space:]]|$)';
         UPDATE properties AS target
         SET
           extra_fields = pg_temp.listing_177_stamp(target.extra_fields, 'namulanda_primary', v_now),
@@ -787,3 +825,87 @@ EXCEPTION WHEN OTHERS THEN
   RAISE;
 END
 $do_177_namulanda$;
+
+-- Drop stored stock and Unsplash files. A listing photo has to be a photo of
+-- that listing. The public page no longer substitutes a house picture.
+DO $do_177_stock_photos$
+DECLARE
+  trigger_off boolean := FALSE;
+  pid uuid;
+  p properties%ROWTYPE;
+  v_now timestamptz;
+  removed int := 0;
+  row_count int := 0;
+BEGIN
+  trigger_off := pg_temp.listing_177_disable_updated_at();
+  IF pg_temp.listing_177_guard_country() THEN
+    FOR pid IN
+      SELECT DISTINCT i.property_id
+      FROM property_images i
+      JOIN properties prop ON prop.id = i.property_id
+      WHERE lower(btrim(coalesce(prop.status, ''))) NOT IN ('deleted', 'purged')
+        AND (
+          i.url ~* 'photo-1560518883-ce09059eeffa'
+          OR i.url ~* 'unsplash\.com'
+        )
+    LOOP
+      SELECT * INTO p FROM properties WHERE id = pid;
+      v_now := clock_timestamp();
+      INSERT INTO listing_correction_177_backup (property_id, action, row_kind, row_key, before_row)
+      SELECT i.property_id, 'delete_image', 'property_image', i.id::text, to_jsonb(i)
+      FROM property_images i
+      WHERE i.property_id = pid
+        AND (
+          i.url ~* 'photo-1560518883-ce09059eeffa'
+          OR i.url ~* 'unsplash\.com'
+        )
+      ON CONFLICT (property_id, row_kind, row_key) DO NOTHING;
+      DELETE FROM property_images
+      WHERE property_id = pid
+        AND (
+          url ~* 'photo-1560518883-ce09059eeffa'
+          OR url ~* 'unsplash\.com'
+        );
+      GET DIAGNOSTICS row_count = ROW_COUNT;
+      removed := removed + row_count;
+      PERFORM pg_temp.listing_177_backup_property(p, 'remove_stock_photo');
+      UPDATE properties AS target
+      SET
+        extra_fields = pg_temp.listing_177_stamp(target.extra_fields, 'remove_stock_photo', v_now),
+        updated_at = v_now
+      WHERE target.id = pid;
+      RAISE NOTICE 'listing_correction_177 % applied remove_stock_photo', pid;
+    END LOOP;
+    IF removed = 0 THEN
+      RAISE NOTICE 'listing_correction_177 00000000-0000-4000-8000-0000000000aa skipped already_in_target_state';
+    END IF;
+    IF to_regclass('public.advertising_placements') IS NOT NULL THEN
+      INSERT INTO listing_correction_177_backup (property_id, action, row_kind, row_key, before_row)
+      SELECT
+        '00000000-0000-4000-8000-0000000000ad'::uuid,
+        'retarget_preview',
+        'advertising_placement',
+        ap.key,
+        to_jsonb(ap)
+      FROM advertising_placements ap
+      WHERE COALESCE(ap.preview_image_url, '') ~* 'unsplash\.com|photo-1560518883-ce09059eeffa'
+      ON CONFLICT (property_id, row_kind, row_key) DO NOTHING;
+      UPDATE advertising_placements
+      SET preview_image_url = '/assets/icons/makaug-icon-512.png'
+      WHERE COALESCE(preview_image_url, '') ~* 'unsplash\.com|photo-1560518883-ce09059eeffa';
+      GET DIAGNOSTICS row_count = ROW_COUNT;
+      IF row_count > 0 THEN
+        RAISE NOTICE 'listing_correction_177 00000000-0000-4000-8000-0000000000ad applied remove_stock_ad_preview';
+      END IF;
+    END IF;
+  END IF;
+  IF trigger_off THEN
+    ALTER TABLE properties ENABLE TRIGGER trg_properties_updated_at;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  IF trigger_off THEN
+    ALTER TABLE properties ENABLE TRIGGER trg_properties_updated_at;
+  END IF;
+  RAISE;
+END
+$do_177_stock_photos$;

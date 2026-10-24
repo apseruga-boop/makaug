@@ -41,12 +41,38 @@ WHERE b.row_kind = 'property_image'
 UPDATE property_images AS image
 SET
   is_primary = COALESCE((b.before_row->>'is_primary')::boolean, FALSE),
-  sort_order = COALESCE((b.before_row->>'sort_order')::integer, 0)
+  sort_order = COALESCE((b.before_row->>'sort_order')::integer, 0),
+  room_label = NULLIF(b.before_row->>'room_label', '')
 FROM listing_correction_177_backup b
 JOIN listing_correction_177_rollback_ids r ON r.id = b.property_id
 WHERE b.row_kind = 'property_image'
   AND b.action = 'reorder_image'
   AND image.id = (b.before_row->>'id')::uuid;
+
+UPDATE property_images AS image
+SET room_label = NULLIF(b.before_row->>'room_label', '')
+FROM listing_correction_177_backup b
+JOIN listing_correction_177_rollback_ids r ON r.id = b.property_id
+WHERE b.row_kind = 'image_caption'
+  AND b.action = 'clear_caption'
+  AND image.id = (b.before_row->>'id')::uuid;
+
+DO $rollback_177_ad_previews$
+BEGIN
+  IF to_regclass('public.advertising_placements') IS NULL THEN
+    RETURN;
+  END IF;
+  IF current_setting('app.country_code', true) IS DISTINCT FROM 'UG' THEN
+    RETURN;
+  END IF;
+  UPDATE advertising_placements AS placement
+  SET preview_image_url = b.before_row->>'preview_image_url'
+  FROM listing_correction_177_backup b
+  WHERE b.row_kind = 'advertising_placement'
+    AND b.action = 'retarget_preview'
+    AND placement.key = b.row_key;
+END
+$rollback_177_ad_previews$;
 
 UPDATE properties AS p
 SET

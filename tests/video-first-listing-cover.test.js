@@ -18,7 +18,7 @@ const root = path.resolve(__dirname, '..');
 const frontend = fs.readFileSync(path.join(root, 'assets/makaug-app.js'), 'utf8');
 
 const STOCK_PHOTO_ID = 'photo-1560518883-ce09059eeffa';
-const BLOCK_START = '// Stock house-and-keys photo makaug drops in when a listing has no photo of its own.';
+const BLOCK_START = '// The Unsplash model house with a red front and a key is banned on makaug.';
 const BLOCK_END = 'function renderLpVideoPreview()';
 
 function loadVideoFirstHelpers() {
@@ -83,12 +83,11 @@ test('a listing with neither photo nor video keeps the existing placeholder beha
   assert.strictEqual(propertyVideoFirstMedia({ images: [], extra_fields: {} }), null);
 });
 
-test('a listing with zero photos still renders a cover instead of an empty image', () => {
-  assert.match(
-    frontend,
-    /publicImageSrc\(selectedPhoto\?\.url \|\| p\.img, "https:\/\/images\.unsplash\.com\/photo-1560518883-ce09059eeffa\?w=900&q=80"\)/
-  );
-  assert.match(frontend, /firstRealListingPhotoUrl\(\{ \.\.\.p, images: publicImageItems \}\) \|\| \(videoFirstMedia \? "" : "https:\/\/images\.unsplash\.com\/photo-1560518883-ce09059eeffa\?w=900&q=80"\)/);
+test('a listing with zero photos shows the photos coming soon tile and no stock house', () => {
+  assert.match(frontend, /data-photos-coming-soon="1"/);
+  assert.match(frontend, /Photos coming soon/);
+  assert.doesNotMatch(frontend, /https:\/\/images\.unsplash\.com\/photo-1560518883-ce09059eeffa/);
+  assert.doesNotMatch(frontend, /firstRealListingPhotoUrl\(\{ \.\.\.p, images: publicImageItems \}\) \|\| \(videoFirstMedia \? "" : "https:\/\/images\.unsplash\.com/);
 });
 
 test('found-online listings keep their own source treatment', () => {
@@ -124,7 +123,9 @@ test('the card cover only fetches its frame once scrolled into view', () => {
 test('the listing normaliser does not hand the stock photo to a video-first listing', () => {
   const line = frontend.split('\n').find((text) => text.includes('img: thirdPartyDiscovery ?'));
   assert.ok(line, 'could not find the listing image normaliser');
-  assert.match(line, /videoFirstMedia/, 'the normaliser must skip the stock fallback when a video cover is available');
+  assert.match(line, /firstRealListingPhotoUrl/);
+  assert.doesNotMatch(line, /unsplash\.com/);
+  assert.match(frontend, /cardVideoFirstMedia\s*\?\s*videoFirstTileHtml/);
 });
 
 test('the property page hero plays the video instead of showing a fabricated gallery', () => {

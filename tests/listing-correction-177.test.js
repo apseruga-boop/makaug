@@ -82,6 +82,14 @@ test('listing correction 177 is one guarded migration with a droppable Busika bl
   assert.match(sql, /RAISE NOTICE 'listing_correction_177 % applied mbalwa_media'/);
   assert.match(sql, /Watch the attached video tour and browse the 3 plot photos before enquiring\./);
   assert.match(sql, /RAISE NOTICE 'listing_correction_177 % applied namulanda_primary'/);
+  assert.match(sql, /RAISE NOTICE 'listing_correction_177 % applied remove_stock_photo'/);
+  assert.match(sql, /photo-1560518883-ce09059eeffa/);
+  assert.match(sql, /unsplash\\\.com/);
+  assert.match(sql, /clear_caption/);
+  assert.match(sql, /distinct video key image/);
+  assert.match(sql, /to_regclass\('public\.advertising_placements'\)/);
+  assert.match(sql, /\/assets\/icons\/makaug-icon-512\.png/);
+  assert.doesNotMatch(sql, /images\.unsplash\.com/);
   assert.match(sql, /price = 13000000/);
   assert.match(sql, /price_unit = 'per_acre'/);
   assert.match(sql, /price_period = 'acre'/);
@@ -107,6 +115,9 @@ test('listing correction 177 is one guarded migration with a droppable Busika bl
   assert.match(rollbackSql, /current_setting\('app\.country_code', true\) = 'UG'/);
   assert.match(rollbackSql, /delete_image/);
   assert.match(rollbackSql, /reorder_image/);
+  assert.match(rollbackSql, /image_caption/);
+  assert.match(rollbackSql, /room_label = NULLIF\(b\.before_row->>'room_label', ''\)/);
+  assert.match(rollbackSql, /advertising_placement/);
   assert.doesNotMatch(rollbackSql, /DELETE\s+FROM\s+properties/i);
   assert.doesNotMatch(rollbackSql, /DROP TABLE listing_correction_177_backup/i);
   KASANJE_PHOTOS.forEach(([id, url]) => {
@@ -194,7 +205,7 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
 
     async function images(id) {
       const found = await client.query(
-        'SELECT id, url, is_primary, sort_order FROM property_images WHERE property_id = $1 ORDER BY sort_order, id',
+        'SELECT id, url, is_primary, sort_order, room_label FROM property_images WHERE property_id = $1 ORDER BY sort_order, id',
         [id]
       );
       return found.rows;
@@ -256,31 +267,39 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
         [GAYAZA]
       );
       const mbalwaImages = [
-        ['a18c7a45-8c4e-433b-8c50-becee8f53e71', 'https://media.makaug.com/whatsapp-employee-intake/image/1791548952370-ed03e6be-5268-471c-b17c-dfdb80e98045-57773202-false_95365487423704-lid_3A138919FC8A463C8315-1.jpg', true, 0],
-        ['9aabcdde-3d49-4df5-9dbf-41992ddb4c5f', 'https://media.makaug.com/whatsapp-employee-intake/video-key-frame/c8bebd69-2006-4796-a591-65e97be82e37/1791549685740-8eb446a5-a67f-4799-b689-ce5166594ae9.jpg', false, 1],
-        ['c7bd7386-7306-4b7e-a14b-899092fbdf1d', 'https://media.makaug.com/keep-c7.jpg', false, 2],
-        ['0cbf2b94-204d-4aed-a3d7-21d18afa1a44', 'https://media.makaug.com/keep-0c.jpg', false, 3],
-        ['5e4bf216-980e-4472-9a3a-649ead4643f6', 'https://media.makaug.com/whatsapp-employee-intake/video-key-frame/c8bebd69-2006-4796-a591-65e97be82e37/1791549688621-7ac8b128-8489-4d98-b004-6ffba7f9f070.jpg', false, 4],
-        ['7890d2d9-d325-4784-b142-b3525f07462c', 'https://media.makaug.com/whatsapp-employee-intake/video-key-frame/c8bebd69-2006-4796-a591-65e97be82e37/1791549689421-d515da14-fa4f-4ffa-ae92-881d5031e946.jpg', false, 5]
+        ['a18c7a45-8c4e-433b-8c50-becee8f53e71', 'https://media.makaug.com/whatsapp-employee-intake/image/1791548952370-ed03e6be-5268-471c-b17c-dfdb80e98045-57773202-false_95365487423704-lid_3A138919FC8A463C8315-1.jpg', true, 0, 'primary', 'Primary property photo'],
+        ['9aabcdde-3d49-4df5-9dbf-41992ddb4c5f', 'https://media.makaug.com/whatsapp-employee-intake/video-key-frame/c8bebd69-2006-4796-a591-65e97be82e37/1791549685740-8eb446a5-a67f-4799-b689-ce5166594ae9.jpg', false, 1, 'video_key_frame_1', 'Distinct video key image 1 of 5'],
+        ['c7bd7386-7306-4b7e-a14b-899092fbdf1d', 'https://media.makaug.com/keep-c7.jpg', false, 2, 'video_key_frame_2', 'Distinct video key image 2 of 5'],
+        ['0cbf2b94-204d-4aed-a3d7-21d18afa1a44', 'https://media.makaug.com/keep-0c.jpg', false, 3, 'video_key_frame_3', 'Distinct video key image 3 of 5'],
+        ['5e4bf216-980e-4472-9a3a-649ead4643f6', 'https://media.makaug.com/whatsapp-employee-intake/video-key-frame/c8bebd69-2006-4796-a591-65e97be82e37/1791549688621-7ac8b128-8489-4d98-b004-6ffba7f9f070.jpg', false, 4, 'video_key_frame_4', 'Distinct video key image 4 of 5'],
+        ['7890d2d9-d325-4784-b142-b3525f07462c', 'https://media.makaug.com/whatsapp-employee-intake/video-key-frame/c8bebd69-2006-4796-a591-65e97be82e37/1791549689421-d515da14-fa4f-4ffa-ae92-881d5031e946.jpg', false, 5, 'video_key_frame_5', 'Distinct video key image 5 of 5']
       ];
-      for (const [id, url, primary, order] of mbalwaImages) {
+      for (const [id, url, primary, order, slot, room] of mbalwaImages) {
         await client.query(
           `INSERT INTO property_images (id, property_id, url, is_primary, sort_order, slot_key, room_label)
-           VALUES ($1, $2, $3, $4, $5, 'primary', 'frame')`,
-          [id, MBALWA, url, primary, order]
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [id, MBALWA, url, primary, order, slot, room]
         );
       }
       const namulandaImages = [
-        ['e07d9155-226c-4921-9086-bd6e66abc454', true, 0],
-        ['d5a58fa6-04b1-4501-b9d6-f0b4e0d5142d', false, 1],
-        ['3f92067d-2354-4ece-bf18-6ffecaf7c856', false, 2]
+        ['e07d9155-226c-4921-9086-bd6e66abc454', true, 0, 'Distinct video key image 1 of 3'],
+        ['d5a58fa6-04b1-4501-b9d6-f0b4e0d5142d', false, 1, 'Distinct video key image 2 of 3'],
+        ['3f92067d-2354-4ece-bf18-6ffecaf7c856', false, 2, 'Distinct video key image 3 of 3']
       ];
-      for (const [id, primary, order] of namulandaImages) {
+      for (const [id, primary, order, room] of namulandaImages) {
         await client.query(
-          `INSERT INTO property_images (id, property_id, url, is_primary, sort_order) VALUES ($1, $2, $3, $4, $5)`,
-          [id, NAMULANDA, `https://media.makaug.com/${id}.jpg`, primary, order]
+          `INSERT INTO property_images (id, property_id, url, is_primary, sort_order, slot_key, room_label)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [id, NAMULANDA, `https://media.makaug.com/${id}.jpg`, primary, order, 'video_key_frame_1', room]
         );
       }
+      await client.query(
+        `INSERT INTO property_images (id, property_id, url, is_primary, sort_order, room_label) VALUES
+          ('11111111-1111-4111-8111-111111111111', $1, 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80', true, 0, 'Stock house'),
+          ('22222222-2222-4222-8222-222222222222', $1, 'https://media.makaug.com/photo-1560518883-ce09059eeffa.jpg', false, 1, 'Hosted stock'),
+          ('33333333-3333-4333-8333-333333333333', $1, 'https://media.makaug.com/decoy-real.jpg', false, 2, 'Real plot')`,
+        [DECOY]
+      );
     }
 
     await t.test('the live guards apply and a second run skips every listing', async () => {
@@ -299,7 +318,8 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
         `${KITENDE.slice(0, 8)}:property_type_land`,
         `${MBALWA.slice(0, 8)}:mbalwa_media`,
         `${NAMULANDA.slice(0, 8)}:namulanda_primary`,
-        `${NAMUSEERA.slice(0, 8)}:namuseera_area`
+        `${NAMUSEERA.slice(0, 8)}:namuseera_area`,
+        `${DECOY.slice(0, 8)}:remove_stock_photo`
       ].sort(), first.notices.join('\n'));
       assert.equal(applied.filter((item) => item.verb === 'skipped').length, 0, first.notices.join('\n'));
 
@@ -366,6 +386,7 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
       ]);
       assert.equal(mbalwaImages[0].is_primary, true);
       assert.equal(mbalwaImages[0].sort_order, 0);
+      assert.ok(mbalwaImages.every((image) => image.room_label == null));
       const mbalwa = await row(MBALWA);
       assert.match(mbalwa.description, /Watch the attached video tour and browse the 3 plot photos before enquiring\./);
       assert.doesNotMatch(mbalwa.description, /2 attached video tours/);
@@ -381,12 +402,16 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
         ['3f92067d-2354-4ece-bf18-6ffecaf7c856', 1, false],
         ['e07d9155-226c-4921-9086-bd6e66abc454', 2, false]
       ]);
+      assert.ok(namulandaImages.every((image) => image.room_label == null));
 
       const decoy = await row(DECOY);
       assert.equal(decoy.title, 'Property for sale in Busika');
       assert.equal(decoy.property_type, 'house');
-      assert.equal(decoy.extra_fields.listing_correction_177, undefined);
+      assert.ok(decoy.extra_fields.listing_correction_177.actions.includes('remove_stock_photo'));
       assert.equal(Number(decoy.price), 1000);
+      const decoyImages = await images(DECOY);
+      assert.deepEqual(decoyImages.map((image) => image.id), ['33333333-3333-4333-8333-333333333333']);
+      assert.equal(decoyImages[0].room_label, 'Real plot');
 
       const backupImages = await client.query(
         `SELECT row_kind, action FROM listing_correction_177_backup WHERE property_id = $1 ORDER BY action, row_key`,
@@ -408,7 +433,7 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
       const stampedAt = kasanje.updated_at.toISOString();
       const second = await apply(sql);
       const skipped = rowNotices(second.notices);
-      assert.equal(skipped.length, 10, second.notices.join('\n'));
+      assert.equal(skipped.length, 11, second.notices.join('\n'));
       assert.ok(skipped.every((item) => item.verb === 'skipped' && item.reason === 'already_in_target_state'), second.notices.join('\n'));
       assert.equal((await row(KASANJE)).updated_at.toISOString(), stampedAt);
       assert.equal((await client.query('SELECT COUNT(*)::int AS n FROM listing_correction_177_backup WHERE action = \'delete_image\' AND property_id = $1', [KASANJE])).rows[0].n, 4);
@@ -427,8 +452,11 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
       const restoredPrimary = await images(MBALWA);
       assert.equal(restoredPrimary.find((image) => image.is_primary).id, 'a18c7a45-8c4e-433b-8c50-becee8f53e71');
       assert.equal((await images(MBALWA)).length, 6);
+      assert.equal((await images(MBALWA)).find((image) => image.id === '9aabcdde-3d49-4df5-9dbf-41992ddb4c5f').room_label, 'Distinct video key image 1 of 5');
       const restoredNamulanda = await images(NAMULANDA);
       assert.equal(restoredNamulanda.find((image) => image.is_primary).id, 'e07d9155-226c-4921-9086-bd6e66abc454');
+      assert.equal(restoredNamulanda.find((image) => image.id === 'd5a58fa6-04b1-4501-b9d6-f0b4e0d5142d').room_label, 'Distinct video key image 2 of 3');
+      assert.equal((await images(DECOY)).length, 3);
       const restoredKikyusa = await row(KIKYUSA);
       assert.equal(restoredKikyusa.price, null);
       assert.equal(restoredKikyusa.price_unit, null);
@@ -504,6 +532,7 @@ test('listing correction 177 applies once, skips the second run, and rolls back 
       assert.equal(rowNotices(other.notices).length, 0);
       assert.equal((await row(KASANJE)).property_type, 'house');
       assert.equal((await images(KASANJE)).length, 4);
+      assert.equal((await images(DECOY)).length, 3);
       await client.query('ROLLBACK');
 
       await client.query('BEGIN');

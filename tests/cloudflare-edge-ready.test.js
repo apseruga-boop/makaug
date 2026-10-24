@@ -212,9 +212,12 @@ test('head: no render-blocking language pack, no app preload, hero preload only 
   assert.match(head, /Plus\+Jakarta\+Sans:wght@400;500;600;700;800&/);
 
   const home = await (await get('/')).text();
-  assert.match(home, /data-home-hero-preload/);
+  assert.doesNotMatch(home, /data-home-hero-preload/);
+  assert.doesNotMatch(home, /photo-1560518883-ce09059eeffa/);
   for (const p of ['/for-sale', '/help']) {
-    assert.doesNotMatch(await (await get(p)).text(), /data-home-hero-preload/, p);
+    const body = await (await get(p)).text();
+    assert.doesNotMatch(body, /data-home-hero-preload/, p);
+    assert.doesNotMatch(body, /images\.unsplash\.com\/photo-1560518883/, p);
   }
 });
 
