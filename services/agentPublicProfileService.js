@@ -285,6 +285,10 @@ function summarizeListings(listings = []) {
   }
   const dwellingTyped = typeCounts.houses + typeCounts.apartments + typeCounts.student_rooms + typeCounts.short_stays + typeCounts.family_homes + typeCounts.homes;
   if (dwellingTyped > 0) typeCounts.properties = 0;
+  // Untyped sale rows get their own "properties for sale" price phrase even
+  // when the portfolio already calls the same stock houses or apartments.
+  // Fold that bucket into the typed sale phrase so the sentence is one range.
+  foldUntypedSalePriceBucket(priceBuckets);
   const areas = Array.from(areaCounts.values()).sort((a, b) => b.listings - a.listings || a.name.localeCompare(b.name));
   const districts = Array.from(districtCounts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
   // A district counts as "theirs" in the wording when it holds at least two
@@ -987,6 +991,19 @@ function quartileBand(values = []) {
   const low = Math.max(1, Math.round(at(0.25)));
   const high = Math.max(low, Math.round(at(0.75)));
   return [low, high];
+}
+
+function foldUntypedSalePriceBucket(priceBuckets = {}) {
+  const untyped = priceBuckets.properties_sale;
+  if (!untyped || !untyped.listings) return;
+  const target = ['houses_sale', 'apartments_sale']
+    .filter((key) => priceBuckets[key] && priceBuckets[key].listings > 0)
+    .sort((a, b) => (priceBuckets[b].listings - priceBuckets[a].listings) || (a === 'houses_sale' ? -1 : 1))[0];
+  if (!target) return;
+  const dest = priceBuckets[target];
+  dest.listings += untyped.listings;
+  dest.prices.push(...(untyped.prices || []));
+  delete priceBuckets.properties_sale;
 }
 
 function positiveBuckets(counts = {}) {

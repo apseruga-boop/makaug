@@ -244,3 +244,37 @@ test('the API, page meta and profile page use the summary; internal reference nu
   assert.doesNotMatch(profile, /\$\{[^}]*\blicence\b/);
   assert.match(app, /\^\(DIRECT\|EMPLOYEE-INTAKE\|STAFF-REASSIGN\|PENDING\|/);
 });
+
+test('untyped sale prices fold into the typed sale phrase and still omit listing counts', () => {
+  const houses = [
+    listing({ property_type: 'house', bedrooms: 3, price: 200e6 }),
+    listing({ property_type: 'house', bedrooms: 3, price: 250e6 }),
+    listing({ property_type: 'house', bedrooms: 3, price: 300e6 }),
+    listing({ property_type: 'house', bedrooms: 3, price: 350e6 })
+  ];
+  const untyped = [
+    listing({ property_type: '', price: 80e6 }),
+    listing({ property_type: '', price: 90e6 }),
+    listing({ property_type: '', price: 100e6 })
+  ];
+  const mixed = buildAgentPublicSummary({ id: 'fold-houses', full_name: 'Fold Agent', bio: '' }, [...houses, ...untyped]);
+  assert.match(mixed.about_text, /houses for sale/);
+  assert.doesNotMatch(mixed.about_text, /properties for sale/);
+  assert.equal((mixed.about_text.match(/for sale/g) || []).length >= 1, true);
+  assert.doesNotMatch(mixed.about_text, /live listings?/i);
+  assert.doesNotMatch(mixed.about_text, /\b\d+\s+listings?\b/i);
+
+  const apartments = [
+    ...Array.from({ length: 4 }, () => listing({ property_type: 'apartment', bedrooms: 2, price: 180e6 })),
+    listing({ property_type: 'house', bedrooms: 3, price: 400e6 })
+  ];
+  const intoApartments = buildAgentPublicSummary({ id: 'fold-flats', full_name: 'Fold Agent', bio: '' }, [...apartments, ...untyped]);
+  assert.match(intoApartments.about_text, /apartments for sale/);
+  assert.doesNotMatch(intoApartments.about_text, /properties for sale/);
+  assert.doesNotMatch(intoApartments.about_text, /\b\d+\s+listings?\b/i);
+
+  const onlyUntyped = buildAgentPublicSummary({ id: 'fold-plain', full_name: 'Fold Agent', bio: '' }, untyped.slice(0, 2));
+  assert.match(onlyUntyped.about_text, /properties for sale/);
+  assert.doesNotMatch(onlyUntyped.about_text, /houses for sale/);
+  assert.doesNotMatch(onlyUntyped.about_text, /\b\d+\s+listings?\b/i);
+});

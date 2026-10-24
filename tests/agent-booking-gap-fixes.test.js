@@ -431,7 +431,10 @@ test('17. long questions are marked cut, the response label is real, desktop tab
   assert.equal(atThree.toISOString(), '2026-11-01T12:00:00.000Z');
   const fallback = stay.stayCheckInInstant('2026-11-01', '');
   assert.equal(fallback.toISOString(), '2026-11-01T11:00:00.000Z');
-  assert.match(read('services/shortTermBookingService.js'), /Check in from \$\{fromLabel\}/);
+  const stayReminders = read('services/shortTermBookingService.js');
+  assert.match(stayReminders, /const fromLabel = stayCheckInLabel\(row\.check_in_from\)/);
+  assert.match(stayReminders, /Check in from \{time\}/);
+  assert.match(stayReminders, /time: fromLabel/);
 });
 
 test('a stay escalation flags staff even when a WhatsApp target exists', async () => {

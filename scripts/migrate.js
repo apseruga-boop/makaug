@@ -208,6 +208,30 @@ async function isolateSouthAfricaBootstrapData() {
   }
 }
 
+const AREA_INDEX_MIGRATION = '168_area_category_lookup_indexes.sql';
+
+function classifyMigrationFiles(files = [], appliedNames = new Set()) {
+  const applied = appliedNames instanceof Set ? appliedNames : new Set(appliedNames);
+  const skipped = [];
+  const pending = [];
+  for (const file of files) {
+    if (applied.has(file)) skipped.push(file);
+    else pending.push(file);
+  }
+  let areaIndex = 'missing';
+  if (files.includes(AREA_INDEX_MIGRATION)) {
+    areaIndex = applied.has(AREA_INDEX_MIGRATION) ? 'skipped' : 'pending';
+  }
+  return { skipped, pending, areaIndex, areaIndexFile: AREA_INDEX_MIGRATION };
+}
+
+function logMigrationPlan(plan, log = logger) {
+  for (const file of plan.skipped) log.info(`Migration skipped (already applied): ${file}`);
+  for (const file of plan.pending) log.info(`Migration pending: ${file}`);
+  log.info(`Migration 168 area index: ${plan.areaIndex} (${plan.areaIndexFile})`);
+  return plan;
+}
+
 async function runMigrations({ closePool = false } = {}) {
   const migrationsDir = path.join(__dirname, '..', 'db', 'migrations');
   const files = fs
@@ -217,20 +241,24 @@ async function runMigrations({ closePool = false } = {}) {
 
   await ensureMigrationsTable();
   const applied = await getAppliedMigrationNames();
+  const plan = logMigrationPlan(classifyMigrationFiles(files, applied));
 
-  for (const file of files) {
-    if (applied.has(file)) {
-      logger.debug(`Skipping already applied migration: ${file}`);
-      continue;
-    }
-
+  for (const file of plan.pending) {
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
     await applyMigration(file, sql);
   }
 
   await isolateSouthAfricaBootstrapData();
 
-  logger.info('Migrations complete');
+  const areaIndex = plan.pending.includes(AREA_INDEX_MIGRATION)
+    ? 'applied'
+    : plan.areaIndex;
+  logger.info('Migrations complete', {
+    applied: plan.pending,
+    skipped: plan.skipped,
+    areaIndex,
+    areaIndexFile: AREA_INDEX_MIGRATION
+  });
   if (closePool) {
     await db.pool.end();
   }
@@ -245,9 +273,12 @@ if (require.main === module) {
 }
 
 module.exports = {
+  AREA_INDEX_MIGRATION,
   SOUTH_AFRICA_BOOTSTRAP_MARKER,
   SOUTH_AFRICA_SEEDED_TABLES,
+  classifyMigrationFiles,
   isSouthAfricaBootstrapResetEnabled,
+  logMigrationPlan,
   migrationRunsOutsideTransaction,
   splitSqlStatements,
   isolateSouthAfricaBootstrapData,
