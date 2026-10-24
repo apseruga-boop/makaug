@@ -1712,7 +1712,7 @@ function unreadPreviewSnapshot(row = {}, source = 'unread_preview_fallback') {
 }
 
 async function getActiveChatSnapshot(page) {
-  return page.evaluate((callDetection) => {
+  const snapshot = await page.evaluate((callDetection) => {
     const header = document.querySelector('header');
     const headerTitle = header?.querySelector('span[title]')?.getAttribute('title')
       || Array.from(header?.querySelectorAll('[dir="auto"]') || []).map((el) => (el.textContent || '').trim()).find(Boolean)
@@ -2045,12 +2045,19 @@ async function getActiveChatSnapshot(page) {
         ? 'image'
         : 'text';
     const cleanText = cleanRenderedMessageText(text, mediaType);
+    const quotedRoot = last.querySelector('[data-testid*="quoted" i], .quoted-mention');
+    const quotedCandidate = quotedRoot
+      ? (quotedRoot.getAttribute('data-id') || quotedRoot.querySelector('[data-id]')?.getAttribute('data-id') || '')
+      : '';
+    const quotedMessageId = quotedCandidate && quotedCandidate !== messageId ? String(quotedCandidate).trim() : '';
 
     return {
       chatKey: resolvedChatKey,
       contactName,
       text: cleanText || (mediaType === 'call' ? '[missed call]' : mediaType === 'image' ? '[image]' : mediaType === 'voice' ? '[voice note]' : mediaType === 'media' ? '[media]' : ''),
       timestampLabel,
+      prePlainText: pre,
+      quotedMessageId,
       messageId,
       senderLabel,
       direction,
@@ -2061,10 +2068,11 @@ async function getActiveChatSnapshot(page) {
       mediaFingerprint
     };
   }, WHATSAPP_CALL_CARD_BROWSER_CONFIG);
+  return attachWhatsappPairingFields(snapshot);
 }
 
 async function getRecentIncomingSnapshots(page, limit = 20) {
-  return page.evaluate((options) => {
+  const snapshots = await page.evaluate((options) => {
     const maxItems = options.maxItems;
     const callDetection = options.callDetection;
     const header = document.querySelector('header');
@@ -2388,11 +2396,18 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           lastInboundChatKey = senderDigits || dataIdDigits;
           lastInboundContactName = senderLabel;
         }
+        const quotedRoot = node.querySelector('[data-testid*="quoted" i], .quoted-mention');
+        const quotedCandidate = quotedRoot
+          ? (quotedRoot.getAttribute('data-id') || quotedRoot.querySelector('[data-id]')?.getAttribute('data-id') || '')
+          : '';
+        const quotedMessageId = quotedCandidate && quotedCandidate !== messageId ? String(quotedCandidate).trim() : '';
         snapshots.push({
           chatKey: resolvedChatKey,
           contactName,
           text,
           timestampLabel,
+          prePlainText: pre,
+          quotedMessageId,
           messageId,
           senderLabel,
           direction: inferredDirection,
@@ -2412,6 +2427,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       ))
       .slice(-Math.max(1, maxItems));
   }, { maxItems: limit, callDetection: WHATSAPP_CALL_CARD_BROWSER_CONFIG });
+  return (Array.isArray(snapshots) ? snapshots : []).map((item) => attachWhatsappPairingFields(item));
 }
 
 async function hydrateVoiceSnapshot(page, snapshot) {
@@ -3152,30 +3168,249 @@ async function clickVideoMessageControl(page, messageId) {
   }, messageId).catch(() => false);
 }
 
-async function captureVideoSnapshotFromNetwork(page, messageId) {
-  const responsePromise = page.waitForResponse(
-    (response) => response.ok() && isLikelyWhatsappVideoResponse(response),
-    { timeout: 8000 }
-  ).catch(() => null);
-  const clicked = await clickVideoMessageControl(page, messageId);
-  if (!clicked) return null;
-  const response = await responsePromise;
-  if (!response) return null;
-  const buffer = await response.body().catch(() => null);
-  if (!buffer?.length || buffer.length > EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES) return null;
-  const contentType = String(response.headers()['content-type'] || '').split(';')[0].trim().toLowerCase();
-  const mimeType = contentType.startsWith('video/') ? contentType : 'video/mp4';
-  if (!isPlayableVideoBuffer(buffer, mimeType)) {
-    log(`ignored encrypted or unsupported WhatsApp video response for ${messageId}`);
+// One chat run remembers the video bytes it has already captured. A later
+// message that yields the same bytes is the previous viewer, not a new file.
+const chatRunVideoBytes = new Map();
+
+function beginChatVideoCaptureRun(chatKey = '') {
+  const key = String(chatKey || '').trim();
+  chatRunVideoBytes.set(key, new Map());
+  return key;
+}
+
+function assessChatRunVideoBytes(chatKey, messageId, bytes) {
+  if (!Buffer.isBuffer(bytes) || !bytes.length) return { reused: false, sha256: '' };
+  const key = String(chatKey || '').trim();
+  if (!chatRunVideoBytes.has(key)) chatRunVideoBytes.set(key, new Map());
+  const run = chatRunVideoBytes.get(key);
+  const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+  const id = String(messageId || '').trim();
+  const prior = run.get(hash);
+  if (prior && prior !== id) {
+    return { reused: true, sha256: hash, priorMessageId: prior };
+  }
+  if (id) run.set(hash, id);
+  return { reused: false, sha256: hash };
+}
+
+function videoBytesFromPreview(preview) {
+  if (Buffer.isBuffer(preview?.buffer) && preview.buffer.length) return preview.buffer;
+  const dataUrl = String(preview?.dataUrl || '');
+  const match = dataUrl.match(/^data:[^;,]*;base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!match) return null;
+  try {
+    const bytes = Buffer.from(match[1].replace(/\s+/g, ''), 'base64');
+    return bytes.length ? bytes : null;
+  } catch (_error) {
     return null;
   }
+}
+
+function videoResponseStartedAfter(response, clickedAtMs) {
+  let timing = null;
+  try {
+    const request = typeof response.request === 'function' ? response.request() : null;
+    timing = request && typeof request.timing === 'function' ? request.timing() : null;
+  } catch (_error) {
+    timing = null;
+  }
+  const start = Number(timing?.startTime);
+  if (!Number.isFinite(start) || start <= 0) return false;
+  return start >= Number(clickedAtMs) - 25;
+}
+
+function videoResponseBelongsToOpenedViewer(response, opened) {
+  const url = String(typeof response?.url === 'function' ? response.url() : '').trim();
+  const sources = Array.isArray(opened?.sourceUrls) ? opened.sourceUrls : [];
+  if (!url || !sources.length) return false;
+  return sources.some((source) => {
+    const value = String(source || '').trim();
+    return value && value === url;
+  });
+}
+
+function quotedAttr(value) {
+  return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+// WhatsApp's data-pre-plain-text is "[h:mm[:ss] [AM/PM], d/m/yyyy] Name: ".
+// The clock is the browser's local time. Seconds stay 0 when WhatsApp omits them.
+function parseWhatsappMessageSentAt(prePlainText = '', timestampLabel = '') {
+  const source = String(prePlainText || timestampLabel || '').trim();
+  if (!source) return '';
+  const bracket = source.match(/\[([^\]]+)\]/);
+  const raw = (bracket ? bracket[1] : source).trim();
+  const match = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([AP]M))?\s*,\s*(\d{1,2})[/. -](\d{1,2})[/. -](\d{2,4})$/i);
+  if (!match) {
+    const parsed = Date.parse(source);
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : '';
+  }
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = Number(match[3] || 0);
+  const ampm = String(match[4] || '').toUpperCase();
+  if (ampm === 'PM' && hour < 12) hour += 12;
+  if (ampm === 'AM' && hour === 12) hour = 0;
+  let day = Number(match[5]);
+  let month = Number(match[6]);
+  let year = Number(match[7]);
+  if (year < 100) year += 2000;
+  if (month > 12 && day <= 12) {
+    const swap = day;
+    day = month;
+    month = swap;
+  }
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) return '';
+  const local = new Date(year, month - 1, day, hour, minute, second);
+  if (Number.isNaN(local.getTime())) return '';
+  if (local.getFullYear() !== year || local.getMonth() !== month - 1 || local.getDate() !== day) return '';
+  return local.toISOString();
+}
+
+function quotedWhatsappMessageId(root, ownId = '') {
+  if (!root || typeof root.querySelector !== 'function') return '';
+  const quotedRoot = root.querySelector('[data-testid*="quoted" i], .quoted-mention');
+  if (!quotedRoot) return '';
+  const id = quotedRoot.getAttribute?.('data-id')
+    || quotedRoot.querySelector?.('[data-id]')?.getAttribute?.('data-id')
+    || '';
+  const clean = String(id || '').trim();
+  const own = String(ownId || '').trim();
+  return clean && clean !== own ? clean : '';
+}
+
+function attachWhatsappPairingFields(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return snapshot;
+  const whatsappSentAt = snapshot.whatsappSentAt
+    || parseWhatsappMessageSentAt(snapshot.prePlainText || '', snapshot.timestampLabel || '');
   return {
-    dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
-    mimeType,
-    bytes: buffer.length,
-    kind: 'video',
-    name: ''
+    ...snapshot,
+    whatsappSentAt: whatsappSentAt || '',
+    quotedMessageId: String(snapshot.quotedMessageId || '').trim()
   };
+}
+
+async function whatsappMediaViewerIsOpen(page) {
+  return page.evaluate(() => {
+    const roots = Array.from(document.querySelectorAll([
+      '[data-testid*="media-viewer" i]',
+      '[data-animate-modal-popup="true"]',
+      '[role="dialog"]'
+    ].join(','))).filter((element) => {
+      const rect = element.getBoundingClientRect();
+      const explicitViewer = /media.*viewer|viewer.*media/i.test([
+        element.getAttribute('data-testid') || '',
+        element.getAttribute('aria-label') || ''
+      ].join(' '));
+      const visibleMedia = Array.from(element.querySelectorAll('img, video')).some((media) => {
+        const mediaRect = media.getBoundingClientRect();
+        return mediaRect.width >= 120 && mediaRect.height >= 90;
+      });
+      return rect.width >= 320 && rect.height >= 240 && (explicitViewer || visibleMedia);
+    });
+    return roots.length > 0;
+  }).catch(() => false);
+}
+
+async function prepareBoundVideoCapture(page) {
+  const open = await whatsappMediaViewerIsOpen(page);
+  if (open) {
+    const closed = await closeWhatsappMediaViewer(page);
+    if (closed !== true) return { ready: false, reason: 'video_bytes_unavailable_viewer_still_open' };
+    const stillOpen = await whatsappMediaViewerIsOpen(page);
+    if (stillOpen) return { ready: false, reason: 'video_bytes_unavailable_viewer_still_open' };
+  }
+  await page.evaluate(() => {
+    document.querySelectorAll('[data-makaug-capture-for]').forEach((element) => {
+      element.removeAttribute('data-makaug-capture-for');
+    });
+  }).catch(() => {});
+  return { ready: true };
+}
+
+async function bindOpenedVideoViewer(page, messageId) {
+  return page.evaluate((targetMessageId) => {
+    const nodes = Array.from(document.querySelectorAll('[data-id], [data-testid^="conv-msg-"]'));
+    const root = nodes.find((el) => (
+      el.getAttribute('data-id') === targetMessageId
+      || el.getAttribute('data-testid') === targetMessageId
+    )) || null;
+    const viewers = Array.from(document.querySelectorAll([
+      '[data-testid*="media-viewer" i]',
+      '[data-animate-modal-popup="true"]',
+      '[role="dialog"]'
+    ].join(','))).filter((element) => {
+      const rect = element.getBoundingClientRect();
+      const visibleMedia = Array.from(element.querySelectorAll('img, video')).some((media) => {
+        const mediaRect = media.getBoundingClientRect();
+        return mediaRect.width >= 120 && mediaRect.height >= 90;
+      });
+      return rect.width >= 320 && rect.height >= 240 && visibleMedia;
+    });
+    const viewer = viewers.sort((left, right) => {
+      const leftRect = left.getBoundingClientRect();
+      const rightRect = right.getBoundingClientRect();
+      return (rightRect.width * rightRect.height) - (leftRect.width * leftRect.height);
+    })[0] || null;
+    if (viewer) viewer.setAttribute('data-makaug-capture-for', targetMessageId);
+    const sources = [];
+    for (const scope of [root, viewer].filter(Boolean)) {
+      scope.querySelectorAll('video, video source, a[href]').forEach((element) => {
+        const url = element.currentSrc || element.src || element.href || '';
+        if (url) sources.push(String(url));
+      });
+    }
+    return {
+      bound: Boolean(root),
+      viewerBound: Boolean(viewer),
+      sourceUrls: sources.filter((url) => /^https?:/i.test(url))
+    };
+  }, messageId).catch(() => ({ bound: false, viewerBound: false, sourceUrls: [] }));
+}
+
+async function captureVideoSnapshotFromNetwork(page, messageId) {
+  const clickedAt = Date.now();
+  const pending = [];
+  const onResponse = (response) => { pending.push(response); };
+  if (typeof page.on === 'function') page.on('response', onResponse);
+  try {
+    const clicked = await clickVideoMessageControl(page, messageId);
+    if (!clicked) return null;
+    const deadline = Date.now() + 8000;
+    let opened = await bindOpenedVideoViewer(page, messageId);
+    while (Date.now() < deadline) {
+      opened = await bindOpenedVideoViewer(page, messageId);
+      const response = pending.find((item) => {
+        const ok = typeof item?.ok === 'function' ? item.ok() : item?.ok !== false;
+        return ok
+          && isLikelyWhatsappVideoResponse(item)
+          && videoResponseStartedAfter(item, clickedAt)
+          && videoResponseBelongsToOpenedViewer(item, opened);
+      });
+      if (response) {
+        const buffer = await response.body().catch(() => null);
+        if (!buffer?.length || buffer.length > EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES) return null;
+        const contentType = String(response.headers()['content-type'] || '').split(';')[0].trim().toLowerCase();
+        const mimeType = contentType.startsWith('video/') ? contentType : 'video/mp4';
+        if (!isPlayableVideoBuffer(buffer, mimeType)) {
+          log(`ignored encrypted or unsupported WhatsApp video response for ${messageId}`);
+          return null;
+        }
+        return {
+          dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
+          mimeType,
+          bytes: buffer.length,
+          buffer,
+          kind: 'video',
+          name: ''
+        };
+      }
+      await page.waitForTimeout(150).catch(() => {});
+    }
+    return null;
+  } finally {
+    if (typeof page.off === 'function') page.off('response', onResponse);
+  }
 }
 
 async function readWhatsappDownloadBuffer(download, maxBytes) {
@@ -3217,12 +3452,13 @@ async function captureVideoSnapshotFromDownload(page, messageId) {
 
   await root.scrollIntoViewIfNeeded().catch(() => {});
   await root.hover().catch(() => {});
+  const boundViewer = page.locator(`[data-makaug-capture-for="${quotedAttr(messageId)}"]`);
   const controls = [
     root.getByRole('button', { name: /download/i }).first(),
     root.locator('[aria-label*="download" i]').first(),
     root.locator('[data-icon="download"], [data-testid*="download" i]').first(),
-    page.locator('[role="dialog"]').getByRole('button', { name: /download/i }).first(),
-    page.locator('[role="dialog"] [aria-label*="download" i], [role="dialog"] [data-icon="download"]').first()
+    boundViewer.getByRole('button', { name: /download/i }).first(),
+    boundViewer.locator('[aria-label*="download" i], [data-icon="download"]').first()
   ];
 
   for (const control of controls) {
@@ -3248,6 +3484,7 @@ async function captureVideoSnapshotFromDownload(page, messageId) {
       dataUrl: `data:video/mp4;base64,${buffer.toString('base64')}`,
       mimeType: 'video/mp4',
       bytes: buffer.length,
+      buffer,
       kind: 'video',
       name: suggestedName || 'whatsapp-property-video.mp4'
     };
@@ -3281,11 +3518,7 @@ async function captureVideoMessageScreenshot(page, messageId) {
       previewWarning: 'video_bytes_unavailable_screenshot_evidence_only'
     };
   }
-  const viewerCandidates = page.locator([
-    '[data-testid*="media-viewer" i]',
-    '[data-animate-modal-popup="true"]',
-    '[role="dialog"]'
-  ].join(','));
+  const viewerCandidates = page.locator(`[data-makaug-capture-for="${quotedAttr(messageId)}"]`);
   const viewerCount = await viewerCandidates.count().catch(() => 0);
   for (let index = 0; index < viewerCount; index += 1) {
     const viewer = viewerCandidates.nth(index);
@@ -3368,11 +3601,10 @@ async function captureVideoKeyFrames(page, messageId, requestedFrameCount = 5) {
     ));
     if (!root) return null;
 
-    const visibleVideo = Array.from(document.querySelectorAll('video')).find((item) => {
-      const rect = item.getBoundingClientRect();
-      return rect.width >= 120 && rect.height >= 90 && item.videoWidth > 0 && item.videoHeight > 0;
-    });
-    const video = root.querySelector('video') || visibleVideo || null;
+    const boundViewer = Array.from(document.querySelectorAll('[data-makaug-capture-for]')).find((element) => (
+      element.getAttribute('data-makaug-capture-for') === targetMessageId
+    )) || null;
+    const video = root.querySelector('video') || boundViewer?.querySelector('video') || null;
     if (video?.videoWidth && video?.videoHeight) {
       video.pause?.();
     }
@@ -3543,6 +3775,15 @@ async function hydrateVideoSnapshot(page, snapshot) {
   if (!messageId) return snapshot;
 
   try {
+    const prepared = await prepareBoundVideoCapture(page);
+    if (!prepared.ready) {
+      log(`video capture skipped for ${messageId}; closeWhatsappMediaViewer did not close the open viewer`);
+      return {
+        ...snapshot,
+        mediaPreviews: [],
+        mediaPreviewError: prepared.reason || 'video_bytes_unavailable_viewer_still_open'
+      };
+    }
     let preview = await captureVideoSnapshotFromNetwork(page, messageId);
     let browserPreviewError = '';
     if (!preview) {
@@ -3556,13 +3797,13 @@ async function hydrateVideoSnapshot(page, snapshot) {
         el.getAttribute('data-id') === targetMessageId
         || el.getAttribute('data-testid') === targetMessageId
       ));
-      const visibleVideo = () => Array.from(document.querySelectorAll('video')).find((item) => {
-        const rect = item.getBoundingClientRect();
-        return rect.width >= 120 && rect.height >= 90;
-      });
-      let video = root?.querySelector('video') || visibleVideo();
+      const boundViewer = () => Array.from(document.querySelectorAll('[data-makaug-capture-for]')).find((element) => (
+        element.getAttribute('data-makaug-capture-for') === targetMessageId
+      )) || null;
+      let video = root?.querySelector('video') || boundViewer()?.querySelector('video') || null;
       let documentAnchor = root?.querySelector('a[download][href], a[href^="blob:"]')
-        || document.querySelector('[role="dialog"] a[download][href], [role="dialog"] a[href^="blob:"]');
+        || boundViewer()?.querySelector('a[download][href], a[href^="blob:"]')
+        || null;
       let sourceUrl = video?.currentSrc || video?.src || video?.querySelector('source')?.src
         || documentAnchor?.href || '';
       const highResolutionPoster = Array.from(root?.querySelectorAll('img') || []).some((img) => (
@@ -3575,9 +3816,10 @@ async function hydrateVideoSnapshot(page, snapshot) {
         clickable?.click?.();
         for (let attempt = 0; attempt < 20 && !sourceUrl; attempt += 1) {
           await new Promise((resolve) => setTimeout(resolve, 250));
-          video = root?.querySelector('video') || visibleVideo();
+          video = root?.querySelector('video') || boundViewer()?.querySelector('video') || null;
           documentAnchor = root?.querySelector('a[download][href], a[href^="blob:"]')
-            || document.querySelector('[role="dialog"] a[download][href], [role="dialog"] a[href^="blob:"]');
+            || boundViewer()?.querySelector('a[download][href], a[href^="blob:"]')
+            || null;
           sourceUrl = video?.currentSrc || video?.src || video?.querySelector('source')?.src
             || documentAnchor?.href || '';
         }
@@ -3657,6 +3899,23 @@ async function hydrateVideoSnapshot(page, snapshot) {
     }
     if (!preview?.dataUrl) {
       preview = await captureVideoMessageScreenshot(page, messageId);
+    }
+
+    if (preview?.dataUrl && (String(preview.mimeType || '').startsWith('video/') || preview.kind === 'video')) {
+      const bytes = videoBytesFromPreview(preview);
+      if (bytes) {
+        const verdict = assessChatRunVideoBytes(snapshot.chatKey, messageId, bytes);
+        if (verdict.reused) {
+          log(`video_bytes_reused_from_other_message for ${messageId}; sha256=${verdict.sha256}; prior=${verdict.priorMessageId}`);
+          return {
+            ...snapshot,
+            mediaPreviews: [],
+            mediaPreviewError: 'video_bytes_reused_from_other_message',
+            videoBytesReusedFromMessageId: verdict.priorMessageId,
+            videoBytesSha256: verdict.sha256
+          };
+        }
+      }
     }
 
     if (preview?.dataUrl) {
@@ -3939,7 +4198,8 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
     && browserMediaPlaceholder
     && !(Array.isArray(snapshot.mediaPreviews) && snapshot.mediaPreviews.length)
     && !(Array.isArray(snapshot.imagePreviews) && snapshot.imagePreviews.length);
-  if (missingImageBytes || missingFileBytes) {
+  const reusedVideoBytes = snapshot.mediaPreviewError === 'video_bytes_reused_from_other_message';
+  if ((missingImageBytes || missingFileBytes) && !reusedVideoBytes) {
     const hydrationError = snapshot.imagePreviewError || snapshot.mediaPreviewError || 'media_bytes_unavailable';
     const deferred = deferMediaHydration(snapshot, row, hydrationError);
     return {
@@ -3971,7 +4231,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
         media_type: mediaType,
         media_count: snapshot.mediaCount || 0,
         shared_location: snapshot.sharedLocation || null,
-        created_at: snapshot.timestampLabel || new Date().toISOString(),
+        created_at: snapshot.whatsappSentAt || snapshot.timestampLabel || new Date().toISOString(),
         metadata: {
           chat_title: snapshot.chatKey || row.title,
           contact_name: snapshot.contactName || row.title || '',
@@ -4009,6 +4269,11 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
             }))
             : [],
           media_preview_error: snapshot.mediaPreviewError || '',
+          whatsapp_sent_at: snapshot.whatsappSentAt || '',
+          quoted_message_id: snapshot.quotedMessageId || '',
+          whatsapp_message_id: snapshot.messageId || '',
+          video_bytes_reused_from_message_id: snapshot.videoBytesReusedFromMessageId || '',
+          video_bytes_sha256: snapshot.videoBytesSha256 || '',
           unread_preview: row.preview || '',
           source,
           ...(snapshot.bridgeMetadata && typeof snapshot.bridgeMetadata === 'object'
@@ -4311,6 +4576,7 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
     .update(`${history.triggerKey}:${history.completionKey}:${Date.now()}:${crypto.randomUUID()}`)
     .digest('hex')
     .slice(0, 16);
+  beginChatVideoCaptureRun(history.chatKey);
 
   for (let round = 0; round < EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS * 2 && !completed; round += 1) {
     const snapshots = (await getRecentIncomingSnapshots(page, EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT))
@@ -4713,6 +4979,7 @@ async function runPendingEmployeeVideoRecovery(page) {
       retryable = true;
       continue;
     }
+    beginChatVideoCaptureRun(phone);
     let hydrated = null;
     let previews = [];
     let hasVideo = false;
@@ -4906,6 +5173,7 @@ async function ingestUnreadChats(page) {
       continue;
     }
     const liveSnapshots = snapshotsAfterCompletedEmployeeBatch(snapshots, employeeReplay);
+    beginChatVideoCaptureRun(normalizeChatKey(row.title) || row.title);
     let handledRow = false;
     let retryableBlocked = false;
     for (const snapshot of liveSnapshots) {
@@ -5005,6 +5273,7 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
       return finish(true);
     }
     const liveSnapshots = snapshotsAfterCompletedEmployeeBatch(snapshots, employeeReplay);
+    beginChatVideoCaptureRun(normalizeChatKey(row.title) || row.title);
     let rowObserved = !liveSnapshots.length;
     let handledRow = false;
     let retryableBlocked = false;
@@ -5078,6 +5347,7 @@ async function ingestActiveChat(page) {
   });
   if (employeeReplay.handled) return employeeReplay.processed || 0;
   const liveSnapshots = snapshotsAfterCompletedEmployeeBatch(snapshots, employeeReplay);
+  beginChatVideoCaptureRun(normalizeChatKey(liveSnapshots[0]?.chatKey || snapshots[0]?.chatKey || ''));
   let processed = 0;
   for (const snapshot of liveSnapshots) {
     const row = { title: snapshot.chatKey, preview: '' };
@@ -6879,12 +7149,32 @@ async function main() {
   }
 }
 
-main().catch(async (error) => {
-  log('fatal error:', error.message || error);
-  await sendHeartbeat({
-    status: 'error',
-    current_url: '',
-    last_error: error.message || String(error)
+if (require.main === module) {
+  main().catch(async (error) => {
+    log('fatal error:', error.message || error);
+    await sendHeartbeat({
+      status: 'error',
+      current_url: '',
+      last_error: error.message || String(error)
+    });
+    process.exit(1);
   });
-  process.exit(1);
-});
+}
+
+module.exports = {
+  beginChatVideoCaptureRun,
+  assessChatRunVideoBytes,
+  parseWhatsappMessageSentAt,
+  quotedWhatsappMessageId,
+  attachWhatsappPairingFields,
+  prepareBoundVideoCapture,
+  videoResponseStartedAfter,
+  videoResponseBelongsToOpenedViewer,
+  captureVideoSnapshotFromNetwork,
+  captureVideoSnapshotFromDownload,
+  captureVideoKeyFrames,
+  hydrateVideoSnapshot,
+  ingestSnapshot,
+  closeWhatsappMediaViewer,
+  whatsappMediaViewerIsOpen
+};

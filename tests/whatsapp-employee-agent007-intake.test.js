@@ -591,7 +591,8 @@ assert.equal(
   2,
   'video detection must take priority over the generic play-button voice-note heuristic'
 );
-assert(copilotSource.includes("Array.from(document.querySelectorAll('video')).find"), 'video hydration must recover media opened in the WhatsApp preview dialog');
+assert(!copilotSource.includes("Array.from(document.querySelectorAll('video')).find"), 'video hydration must not take a video that belongs to another open viewer');
+assert(copilotSource.includes("boundViewer()?.querySelector('video')"), 'video hydration must read the video inside the bubble or the viewer this click opened');
 assert(copilotSource.includes('clickable?.click?.()'), 'video hydration must activate thumbnail-only video cards before capturing permanent bytes');
 assert(!copilotSource.includes('getRecentIncomingSnapshots(page, 1)'), 'rapid batches must not be reduced to one visible message');
 assert(

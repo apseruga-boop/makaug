@@ -14717,6 +14717,16 @@ function staffListingDirectLookup(term = "") {
   return "";
 }
 
+function staffMediaReuseWarningHtml(extra = {}) {
+  const fields = extra && typeof extra === "object" ? extra : {};
+  const note = String(fields.media_reuse_note || "").trim();
+  const also = Array.isArray(fields.media_also_on_other_property)
+    ? fields.media_also_on_other_property.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  if (!note && !also.length) return "";
+  return `<div class="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950" data-media-reuse-note="1"><strong>media_reuse_note:</strong> ${adminEscape(note || "This media is also on another listing.")}${also.length ? `<div class="mt-1" data-media-also-on-other-property="1">media_also_on_other_property: ${adminEscape(also.join(", "))}</div>` : ""}</div>`;
+}
+
 function staffReviewQueueCardHtml(item = {}, options = {}) {
   const location = [item.area, item.district].filter(Boolean).join(", ") || "Location needs checking";
   const mkRef = String(item.inquiry_reference || "").trim();
@@ -14764,6 +14774,7 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
           ${primaryImageUrl ? `<div class="mt-2 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-2"><img src="${adminAttr(primaryImageUrl)}" alt="Primary property photo" class="h-16 w-20 rounded-lg border border-emerald-100 object-cover"><div class="text-xs font-black text-emerald-900">${staffNumber(imageCount)} clear property photo${imageCount === 1 ? "" : "s"} attached</div></div>` : ""}
           ${queueNote}
           ${mediaQualityWarning}
+          ${staffMediaReuseWarningHtml(item.extra_fields || {})}
           ${duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800"><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : ""}
           ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
         </div>
@@ -17421,6 +17432,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
           ${adminReviewListingEditPanel(preview)}
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900 mb-3">Photos, video and source evidence</h4>
+            ${staffMediaReuseWarningHtml(preview.extra_fields || {})}
             ${staffPreviewVideosHtml(preview)}
             <div id="staff-preview-photo-gallery">${staffPreviewImagesHtml(preview.images || [], preview.id, preview.extra_fields?.staff_removed_images || [])}</div>
             <div class="mt-3 rounded-xl bg-gray-50 border border-gray-200 p-3 text-xs text-gray-700">
@@ -30092,6 +30104,10 @@ function showApprovalBlockerBanner(response = {}, propertyId = "") {
     ? response.missing_fields.map((item) => String(item || "").trim()).filter(Boolean)
     : [];
   const overrideAvailable = response?.human_approval_override_available === true;
+  const reuseNote = String(response?.media_reuse_note || "").trim();
+  const reuseAlso = Array.isArray(response?.media_also_on_other_property)
+    ? response.media_also_on_other_property.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
   const photoBlocked = response?.code === "no_real_hosted_photo";
   const shownDetails = photoBlocked
     ? details.map((detail) => REAL_PHOTO_BLOCK_REASONS[detail] || detail)
@@ -30118,6 +30134,7 @@ function showApprovalBlockerBanner(response = {}, propertyId = "") {
         <button type="button" onclick="dismissApprovalBlockerBanner()" class="shrink-0 rounded-lg border border-red-300 bg-white px-2 py-1 text-xs font-black text-red-900">Dismiss</button>
       </div>
       ${shownDetails.length ? `<ul class="mt-3 list-disc space-y-1 pl-5 text-xs font-semibold" data-approval-blocker-details>${shownDetails.map((detail) => `<li>${adminEscape(detail)}</li>`).join("")}</ul>` : ""}
+      ${reuseNote || reuseAlso.length ? `<div class="mt-3 text-xs font-black" data-media-reuse-note="1">media_reuse_note: ${adminEscape(reuseNote)}${reuseAlso.length ? `<div data-media-also-on-other-property="1">media_also_on_other_property: ${adminEscape(reuseAlso.join(", "))}</div>` : ""}</div>` : ""}
       ${photoBlocked ? `<button type="button" onclick="focusListingPhotoUpload()" class="mt-3 w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-black text-white hover:bg-emerald-600" data-approval-blocker-add-photo>Add photos now</button>` : ""}
       ${photoBlocked && activeHumanApprovalBlocker.propertyId && document.querySelector("#staff-listing-preview-modal [data-staff-video-cover]") ? `<button type="button" onclick="staffMakeVideoCover(${propertyIdArg(activeHumanApprovalBlocker.propertyId)})" class="mt-2 w-full rounded-lg bg-blue-700 px-3 py-2 text-sm font-black text-white hover:bg-blue-600" data-approval-blocker-video-cover>Make a cover from the video</button>` : ""}
       ${proposed.length ? `<div class="mt-3 rounded-lg border border-red-200 bg-white p-2 text-xs font-bold">${Array.from(new Set(proposed)).map(adminEscape).join(" · ")}</div>` : ""}
