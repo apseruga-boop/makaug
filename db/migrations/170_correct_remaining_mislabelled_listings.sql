@@ -18,6 +18,11 @@
 -- including 01bf0f1d, whose description changed and whose title did not).
 -- Rows are never deleted. Uganda only.
 --
+-- Ntinda bfbc521d stays Price on application. Its title and category still
+-- change from commercial land to a commercial building, which was a separate
+-- label correction. This migration does not write a price, currency, FX rate,
+-- or a description sentence that states USD 4,500,000 for that row.
+--
 -- Idempotent: each applied row is stamped extra_fields.listing_correction_170.
 -- Old values go into listing_correction_170_backup.
 -- Manual rollback: scripts/rollback-170-listing-corrections.sql
@@ -166,7 +171,7 @@ WITH specs AS (
     "id": "bfbc521d-9f76-4caf-a30c-d8fedeb4cd78",
     "action": "relabel",
     "kept_id": null,
-    "flag": "Public price is hidden because UGX 4,500,000 is below the commercial-sale floor. The caption says selling $4.5M. UGX guide uses the published 1 USD = 3,800 rate dated 2026-10-01, not a new quote.",
+    "flag": "Owner decision: this listing stays Price on application. The caption mentions USD 4.5 million, and that figure is not written into the price, the currency, or the description. The title and category still change from commercial land to a commercial building, which was a separate label correction.",
     "evidence": "selling $4.5M usd",
     "expect": {
       "title": "Commercial land for sale in Ntinda",
@@ -183,16 +188,7 @@ WITH specs AS (
       "title": "Commercial building for sale in Ntinda",
       "listing_type": "commercial",
       "property_type": "Commercial building",
-      "transaction_type": "sale",
-      "description_prefix_from": "Commercial property in Ntinda, Kampala, listed at UGX 4,500,000. ",
-      "description_prefix_to": "Commercial building for sale in Ntinda, Kampala, listed at USD 4,500,000. ",
-      "price": 17100000000,
-      "price_original": 4500000,
-      "price_currency": "UGX",
-      "price_original_currency": "USD",
-      "price_on_application": false,
-      "price_fx_rate_ugx": 3800,
-      "price_fx_as_of": "2026-10-01"
+      "transaction_type": "sale"
     }
   },
   {

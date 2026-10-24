@@ -4,6 +4,8 @@
 -- and only while the row still carries extra_fields.listing_correction_170 and
 -- updated_at is still the marker's applied_at. A later edit is left in place.
 -- The backup table is kept.
+-- Ntinda bfbc521d is not given a new price. Rolling that row back restores
+-- the commercial-land title and category. It does not write UGX 17,100,000,000.
 
 SET LOCAL lock_timeout = '8s';
 SET LOCAL statement_timeout = '120s';

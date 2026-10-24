@@ -63,6 +63,15 @@ test('listing correction 170 finishes 169 without repeating it or deleting rows'
   const ids = applied.map((spec) => spec.id);
   assert.equal(new Set(ids).size, ids.length);
   assert.equal(applied.length, 50);
+  const ntindaSpec = specs.find((spec) => spec.id === NTINDA);
+  assert.equal(ntindaSpec.action, 'relabel');
+  assert.equal(ntindaSpec.patch.title, 'Commercial building for sale in Ntinda');
+  assert.equal(ntindaSpec.patch.property_type, 'Commercial building');
+  assert.equal(ntindaSpec.patch.price, undefined);
+  assert.equal(ntindaSpec.patch.price_on_application, undefined);
+  assert.equal(ntindaSpec.patch.description_prefix_to, undefined);
+  assert.doesNotMatch(sql, /17100000000/);
+  assert.doesNotMatch(JSON.stringify(ntindaSpec.patch), /USD 4,500,000/);
   assert.equal(specs.filter((spec) => spec.action === 'skip').length, 2);
   assert.equal(specs.filter((spec) => spec.action === 'relabel').length, 15);
   assert.equal(specs.filter((spec) => spec.action === 'area').length, 14);
@@ -215,6 +224,15 @@ test('listing correction 170 applies rows 169 skipped for area text, then rolls 
 
     await t.test('169 matches none of these rows and 170 corrects them', async () => {
       await client.query('BEGIN');
+      await client.query(
+        `UPDATE properties
+         SET price = 4500000, price_original = 4500000, price_currency = 'UGX',
+             price_original_currency = 'UGX', price_on_application = TRUE,
+             price_fx_rate_ugx = NULL, price_fx_as_of = NULL,
+             description = 'Commercial property in Ntinda, Kampala, listed at UGX 4,500,000. selling $4.5M usd'
+         WHERE id = $1`,
+        [NTINDA]
+      );
       assert.equal(await apply(previousSql), 0, 'migration 169 still rejects stored area text that is not the public label');
       assert.equal(await apply(sql), applied.length);
       const units = await row(DOUBLE_UNITS);
@@ -231,8 +249,12 @@ test('listing correction 170 applies rows 169 skipped for area text, then rolls 
       assert.equal(kololo.listing_type, 'commercial');
       const ntinda = await row(NTINDA);
       assert.equal(ntinda.title, 'Commercial building for sale in Ntinda');
-      assert.equal(ntinda.price, '17100000000');
-      assert.equal(ntinda.price_original_currency, 'USD');
+      assert.equal(ntinda.property_type, 'Commercial building');
+      assert.equal(ntinda.price, '4500000');
+      assert.equal(ntinda.price_on_application, true);
+      assert.equal(ntinda.price_original_currency, 'UGX');
+      assert.equal(ntinda.price_fx_rate_ugx, null);
+      assert.match(ntinda.description, /^Commercial property in Ntinda, Kampala, listed at UGX 4,500,000\. /);
       const plot = await row(PLOT_BEDS);
       assert.equal(plot.bedrooms, null);
       const moved = await row(KITUKUTWE);
@@ -254,6 +276,9 @@ test('listing correction 170 applies rows 169 skipped for area text, then rolls 
       assert.equal(updates(await client.query(rollbackSql)), applied.length);
       assert.equal((await row(DOUBLE_UNITS)).title, 'Land for sale in Bweyogerere');
       assert.equal((await row(DOUBLE_UNITS)).listing_type, 'land');
+      assert.equal((await row(NTINDA)).title, 'Commercial land for sale in Ntinda');
+      assert.equal((await row(NTINDA)).price, '4500000');
+      assert.equal((await row(NTINDA)).price_on_application, true);
       assert.equal((await row(KOLOLO)).bedrooms, 15);
       assert.equal((await row(DUP)).status, 'approved');
       assert.equal((await row(KITUKUTWE)).area, 'stored-area-not-the-public-label');
