@@ -140,8 +140,27 @@ function publicPlayableVideoExistsSql(alias = 'p') {
   )`;
 }
 
-function publicHasPhotoOrVideoSql(alias = 'p') {
+// The expression public pages used before has_public_media existed. The
+// migration trigger and the read-only check script must keep this text.
+// Unknown (no photo and no video fields) is not true, and the stored flag
+// records that as false. In a WHERE clause those two results hide the same rows.
+function legacyPublicHasPhotoOrVideoSql(alias = 'p') {
   return `(${realHostedPhotoExistsSql(alias)} OR ${publicPlayableVideoExistsSql(alias)})`;
+}
+
+function publicMediaAlias(alias = 'p') {
+  const name = String(alias || '').trim();
+  if (name && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    throw new Error('Invalid SQL alias for has_public_media');
+  }
+  return name;
+}
+
+// Hot path for public lists and counts. Kept equal to
+// legacyPublicHasPhotoOrVideoSql by the properties.has_public_media trigger.
+function publicHasPhotoOrVideoSql(alias = 'p') {
+  const name = publicMediaAlias(alias);
+  return name ? `${name}.has_public_media` : 'has_public_media';
 }
 
 // C1 (10 Oct 2026, Arthur): a still from the listing's own source video counts
@@ -282,5 +301,6 @@ module.exports = {
   listingRealPhotoCheck,
   realHostedPhotoExistsSql,
   publicPlayableVideoExistsSql,
+  legacyPublicHasPhotoOrVideoSql,
   publicHasPhotoOrVideoSql
 };

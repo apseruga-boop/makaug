@@ -168,6 +168,12 @@ test('refreshPublicSeoInventorySnapshot runs on Postgres and keeps property ids'
         slot_key text
       );
     `);
+    // The public snapshot reads has_public_media. Migration 180 fills that
+    // flag from the same photo-or-video rule as these seeded rows.
+    const mediaMigration = fs.readFileSync(path.join(__dirname, '../db/migrations/180_property_has_public_media.sql'), 'utf8');
+    await client.query('BEGIN');
+    await client.query(mediaMigration);
+    await client.query('COMMIT');
     await client.query(
       `INSERT INTO agents (id, full_name, licence_number, email, status, user_id, verification_reason)
        VALUES
