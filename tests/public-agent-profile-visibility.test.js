@@ -128,8 +128,9 @@ test('the profile route uses that rule and does not 404 an agent only because th
   const end = server.indexOf('app.get([', start);
   const fn = server.slice(start, end);
   assert.match(fn, /publicAgentProfileVisible\(row\)/);
+  assert.match(fn, /basicAgentProfileVisible\(row\)/);
   assert.match(fn, /approved_listing_count/);
   assert.doesNotMatch(fn, /AND EXISTS \(/);
-  assert.match(server, /if \(!meta\) return sendPublicNotFound\(req, res\)/);
+  assert.match(server, /if \(!meta\) return sendUnknownAgentDirectoryPage\(req, res\)/);
   assert.equal(resolvePublicPathAlias(`/agents/${KASULU_ID}`), '');
 });

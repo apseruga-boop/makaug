@@ -1441,6 +1441,8 @@ const AGENT_SHARE_BRAND_PREVIEW_VERSION = 'preview-v4';
 
 const agentPublicProfile = require('./services/agentPublicProfileService');
 const { publicAgentProfileVisible } = require('./services/publicAgentEligibilityService');
+const { basicAgentProfileVisible } = require('./services/agentBasicProfile');
+const { lookupAgentByShortSlug } = require('./services/agentShortLink');
 
 async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
   const safeId = String(agentId || '').trim();
@@ -1472,7 +1474,9 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
     [safeId]
   );
   const row = result.rows[0];
-  if (!row || !publicAgentProfileVisible(row)) return null;
+  const full = Boolean(row) && publicAgentProfileVisible(row);
+  const basic = Boolean(row) && !full && basicAgentProfileVisible(row);
+  if (!full && !basic) return null;
   const name = String(row.full_name || row.company_name || 'MakaUG property agent').trim();
   const profilePath = `/agents/${encodeURIComponent(row.id)}`;
   const specializations = Array.isArray(row.specializations)
@@ -2175,6 +2179,24 @@ app.get('/short-term/:slug', async (req, res, next) => {
   }
 });
 
+app.get('/a/:slug', async (req, res, next) => {
+  try {
+    const slug = String(req.params.slug || '').trim().toLowerCase();
+    let agent = null;
+    try {
+      agent = await lookupAgentByShortSlug(db, slug);
+    } catch (error) {
+      logger.warn('Agent short link lookup failed', { message: error.message });
+    }
+    if (!agent?.id) return sendUnknownAgentDirectoryPage(req, res);
+    const queryIndex = String(req.originalUrl || '').indexOf('?');
+    const qs = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+    return res.redirect(301, `/agents/${encodeURIComponent(agent.id)}${qs}`);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.get('/agents/:id', async (req, res, next) => {
   try {
     res.set('X-makaug-Public-Sanitized', '1');
@@ -2194,7 +2216,7 @@ app.get('/agents/:id', async (req, res, next) => {
         logger.warn('Agent profile SEO is continuing without its meta', { message: error.message });
         meta = { canonical: absolutePublicUrl(`/agents/${encodeURIComponent(req.params.id)}`) };
       }
-      if (!meta) return sendPublicNotFound(req, res);
+      if (!meta) return sendUnknownAgentDirectoryPage(req, res);
       html = patchPublicPageSeoMeta(html, meta);
     }
     if (isSupportedPreview || isApprovedFrancisProfile) {
@@ -2333,6 +2355,22 @@ function renderPublicNotFoundPage(req) {
     headers: source.headers,
     brand: ACTIVE_TENANT.publicName || ACTIVE_TENANT.brandName || 'makaug.com'
   });
+}
+
+function sendUnknownAgentDirectoryPage(req, res) {
+  res.set('X-Robots-Tag', 'noindex, follow');
+  res.set('X-makaug-Agent-Fallback', 'directory');
+  res.set('X-makaug-Public-Sanitized', '1');
+  let html = renderPublicHtml(req.originalUrl || req.url || req.path);
+  html = patchPublicPageSeoMeta(html, {
+    title: 'Agents | makaug.com',
+    description: 'This agent page is not on makaug. Open the agents directory to find a property agent.',
+    canonical: absolutePublicUrl('/brokers')
+  });
+  html = patchMetaTag(html, 'robots', 'noindex,follow');
+  const note = '<div id="unknown-agent-fallback"><h1>This agent page is not on makaug</h1><p>Open the agents directory to find a property agent.</p><p><a href="/brokers">Open the agents directory</a></p></div>';
+  html = html.replace(/<body([^>]*)>/i, `<body$1>${note}`);
+  return sendTextResponse(req, res, html, { cacheControl: 'no-store' });
 }
 
 function sendPublicNotFound(req, res) {

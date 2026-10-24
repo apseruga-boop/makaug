@@ -225,7 +225,7 @@ test('refreshPublicSeoInventorySnapshot runs on Postgres and keeps property ids'
     assert.equal(rows[0].agent_public, true);
     assert.equal(rows[0].has_real_photo, true);
     assert.equal(rows[1].agent_id, PRIVATE_AGENT_ID);
-    assert.equal(rows[1].agent_public, false);
+    assert.equal(rows[1].agent_public, true);
     assert.equal(rows[1].has_real_photo, false);
     assert.equal(snapshot.categoryTotals.sale, 2);
     assert.equal(snapshot.properties[0].id, PUBLIC_PROPERTY_ID);
@@ -234,7 +234,7 @@ test('refreshPublicSeoInventorySnapshot runs on Postgres and keeps property ids'
     assert.ok(locs.includes(`https://makaug.com/property/${PUBLIC_PROPERTY_ID}`));
     assert.ok(locs.includes(`https://makaug.com/property/${PRIVATE_AGENT_PROPERTY_ID}`));
     assert.ok(locs.includes(`https://makaug.com/agents/${PUBLIC_AGENT_ID}`));
-    assert.equal(locs.includes(`https://makaug.com/agents/${PRIVATE_AGENT_ID}`), false);
+    assert.ok(locs.includes(`https://makaug.com/agents/${PRIVATE_AGENT_ID}`));
     assert.equal(locs.includes(`https://makaug.com/property/${PENDING_PROPERTY_ID}`), false);
     assert.equal(locs.includes(`https://makaug.com/property/${QA_PROPERTY_ID}`), false);
   } catch (error) {

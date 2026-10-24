@@ -1,3 +1,5 @@
+const { approvedAgentListingsCountSql } = require('./agentListingCount');
+
 const PUBLIC_AGENT_SUPPRESSED_MARKERS = [
   'QA TEST - DELETE',
   'SOFT LAUNCH TEST - DELETE',
@@ -46,22 +48,12 @@ function addPublicAgentInventoryFilter(filters, alias = 'a') {
           COALESCE(${a}.verification_reason, '') ILIKE '%${REVIEWED_PRIVATE_ID_PROFILE_MARKER}%'
           AND NULLIF(BTRIM(COALESCE(${a}.identity_document_url, '')), '') IS NOT NULL
         )
-        OR (
-          SELECT COUNT(*)::int
-          FROM properties p
-          WHERE p.agent_id = ${a}.id
-            AND p.status = 'approved'
-        ) >= ${PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS}
+        OR ${approvedAgentListingsCountSql(a)} >= ${PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS}
       )
     )
     OR (
       COALESCE(${a}.verification_reason, '') NOT ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
-      AND (
-        SELECT COUNT(*)::int
-        FROM properties p
-        WHERE p.agent_id = ${a}.id
-          AND p.status = 'approved'
-      ) >= ${PUBLIC_AGENT_MIN_LIVE_LISTINGS}
+      AND ${approvedAgentListingsCountSql(a)} >= ${PUBLIC_AGENT_MIN_LIVE_LISTINGS}
     )
   )`);
 }
@@ -176,6 +168,29 @@ function publicSitemapAgentWhereSql(alias = 'a') {
     AND ${markerSql}`;
 }
 
+// Basic unclaimed profiles: a lister with at least one live listing who is
+// not blocked, not a test record, and not a social-source import. Pending
+// status is allowed. Columns stay inside the SEO snapshot test schema.
+function publicSitemapBasicAgentWhereSql(alias = 'a') {
+  const a = sqlAlias(alias);
+  const markerSql = PUBLIC_AGENT_SUPPRESSED_MARKERS.map((marker) => {
+    const safe = String(marker).replace(/'/g, "''");
+    return `COALESCE(${a}.full_name, '') NOT ILIKE '%${safe}%'
+      AND COALESCE(${a}.company_name, '') NOT ILIKE '%${safe}%'
+      AND COALESCE(${a}.bio, '') NOT ILIKE '%${safe}%'
+      AND COALESCE(${a}.verification_reason, '') NOT ILIKE '%${safe}%'`;
+  }).join('\n      AND ');
+  return `LOWER(COALESCE(${a}.status, '')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
+    AND COALESCE(${a}.verification_reason, '') NOT ILIKE '%public social source onboarding%'
+    AND COALESCE(${a}.verification_reason, '') NOT ILIKE '%source profile%'
+    AND COALESCE(${a}.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'
+    AND COALESCE(${a}.email, '') !~* '(qa-test|makaug\\.invalid|dummy|sample)'
+    AND COALESCE(${a}.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'
+    AND COALESCE(${a}.specializations::text, '') !~* '(qa test delete|soft launch test|dummy|sample|training|demo|placeholder)'
+    AND ${markerSql}
+    AND ${approvedAgentListingsCountSql(a)} >= 1`;
+}
+
 function isRemoteImportedAgent(row = {}) {
   const reason = String(row?.verification_reason || '');
   const licence = String(row?.licence_number || row?.licence || '').trim();
@@ -241,5 +256,6 @@ module.exports = {
   isVerifiedByMakaug,
   publicAgentProfileVisible,
   publicSitemapAgentWhereSql,
+  publicSitemapBasicAgentWhereSql,
   verifiedByMakaugSql
 };
