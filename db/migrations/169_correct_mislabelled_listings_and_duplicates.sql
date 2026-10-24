@@ -708,7 +708,7 @@ WITH specs AS (
     "id": "f7266be0-21ff-424a-9d33-2a5522afc541",
     "action": "clear_bedrooms",
     "kept_id": null,
-    "flag": "Area left unchanged. Mbalwa Estate sits on Namugongo Road, and Kira-Mulawa differs from Kira Mulawa only by a hyphen.",
+    "flag": "Area left unchanged. Kira-Mulawa and the title's Kira Mulawa differ only by a hyphen.",
     "evidence": "100 by 100 plot",
     "expect": {
       "title": "100-By-100 plot in Kira Mulawa",
