@@ -1994,12 +1994,15 @@ app.get('/property/:id', async (req, res, next) => {
       }),
       structuredData: renderedSeo.structuredData
     });
-    if (staffView || listing.thin || listing.price_implausible) {
+    if (listing.thin || listing.price_implausible) {
       // Thin found-online page, or (C17) a price outside the plausibility
       // bounds shown as "Price on application": stays live, but noindex,follow.
-      // A staff view of a hidden listing is noindex and is not cached.
       html = patchMetaTag(html, 'robots', 'noindex,follow');
       res.set('X-Robots-Tag', 'noindex, follow');
+    }
+    if (staffView) {
+      html = patchMetaTag(html, 'robots', 'noindex,follow');
+      res.set('X-Robots-Tag', 'noindex, noarchive');
     }
     res.set('X-makaug-Listing-OG', '1');
     res.set('X-makaug-Listing-SSR', '1');
