@@ -19,6 +19,7 @@ const { Client } = require('pg');
 
 const {
   publicSeoInventorySnapshotSql,
+  SEO_SNAPSHOT_PAGE_SIZE,
   loadPublicSeoInventorySnapshot,
   sitemapEntries,
   __seoSnapshotCache
@@ -213,7 +214,8 @@ test('refreshPublicSeoInventorySnapshot runs on Postgres and keeps property ids'
     __seoSnapshotCache.clear();
     const snapshot = await loadPublicSeoInventorySnapshot({
       async query(sql, params) {
-        assert.equal(sql, publicSeoInventorySnapshotSql());
+        assert.equal(sql, `${publicSeoInventorySnapshotSql()} LIMIT $1 OFFSET $2`);
+        assert.deepEqual(params, [SEO_SNAPSHOT_PAGE_SIZE, 0]);
         const result = await client.query(sql, params);
         rows = result.rows;
         return result;

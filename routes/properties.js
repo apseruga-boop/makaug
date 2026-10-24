@@ -1494,6 +1494,28 @@ function canUseOwnerEditToken(property, token) {
   return isOwnerEditTokenValid(token, property.owner_edit_token_hash);
 }
 
+function isTwimgHostedUrl(value) {
+  const raw = cleanText(value);
+  if (!raw) return false;
+  try {
+    const host = new URL(raw).hostname.replace(/\.$/, '').toLowerCase();
+    return host === 'twimg.com' || host.endsWith('.twimg.com');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function firstPublicImageUrl(candidates, { omitTwimg = true } = {}) {
+  const list = Array.isArray(candidates) ? candidates : [];
+  for (const candidate of list) {
+    const url = normalizePublicImageUrl(candidate);
+    if (!url) continue;
+    if (omitTwimg && isTwimgHostedUrl(url)) continue;
+    return url;
+  }
+  return null;
+}
+
 function normalizePublicImageUrl(value) {
   const raw = cleanText(value);
   if (!raw) return null;
@@ -1563,7 +1585,7 @@ function publicSourceDateOutOfOrder(firstPostedRaw, firstSeenRaw, addedToMakaugR
     || (addedMs != null && firstPostedMs > addedMs);
 }
 
-function publicExtraFields(extraFields = {}, { createdAt = null } = {}) {
+function publicExtraFields(extraFields = {}, { createdAt = null, omitTwimg = true } = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
   const rawSourcePost = extra.raw_source_post && typeof extra.raw_source_post === 'object' ? extra.raw_source_post : {};
   const landTitleAvailable = normalizeLandTitleAvailability(
@@ -1679,18 +1701,20 @@ function publicExtraFields(extraFields = {}, { createdAt = null } = {}) {
     || isPublicTikTokVideoUrl(tiktokUrl)
     || isPublicTikTokVideoUrl(videoUrl);
   const tiktokProfileOnlyContact = isPublicTikTokProfileUrl(sourceContactUrl) && !sourceHasTikTokVideoPost;
-  const tiktokThumbnailUrl = normalizePublicImageUrl(extra.tiktok_thumbnail_url);
-  const oembedThumbnailUrl = normalizePublicImageUrl(extra.oembed_thumbnail_url);
-  const sourceThumbnailUrl = normalizePublicImageUrl(
-    tiktokThumbnailUrl
-      || oembedThumbnailUrl
-      || extra.source_thumbnail_url
-      || extra.video_thumbnail_url
-      || extra.thumbnail_url
-      || extra.cover_image_url
-      || (Array.isArray(extra.photo_source_urls) ? extra.photo_source_urls[0] : '')
-      || (Array.isArray(extra.authorised_photo_urls) ? extra.authorised_photo_urls[0] : '')
-  );
+  const tiktokThumbnailUrl = firstPublicImageUrl([extra.tiktok_thumbnail_url], { omitTwimg });
+  const oembedThumbnailUrl = firstPublicImageUrl([extra.oembed_thumbnail_url], { omitTwimg });
+  // Public pages must not be handed pbs.twimg.com / video.twimg.com links.
+  // Staff and admin responses pass omitTwimg: false and keep the stored URL.
+  const sourceThumbnailUrl = firstPublicImageUrl([
+    tiktokThumbnailUrl,
+    oembedThumbnailUrl,
+    extra.source_thumbnail_url,
+    extra.video_thumbnail_url,
+    extra.thumbnail_url,
+    extra.cover_image_url,
+    ...(Array.isArray(extra.photo_source_urls) ? extra.photo_source_urls : []),
+    ...(Array.isArray(extra.authorised_photo_urls) ? extra.authorised_photo_urls : [])
+  ], { omitTwimg });
   const mediaTypeRaw = cleanText(
     extra.media_type
       || extra.source_media_type
@@ -1865,7 +1889,10 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
     id_document_url: _idDocumentUrl,
     ...safeProperty
   } = property || {};
-  const safeExtra = publicExtraFields(property?.extra_fields, { createdAt: property?.created_at || null });
+  const safeExtra = publicExtraFields(property?.extra_fields, {
+    createdAt: property?.created_at || null,
+    omitTwimg: !privileged
+  });
   const canonicalDisplay = canonicalDisplayLocationForRow({
     ...safeProperty,
     canonical_location_id: safeProperty.canonical_location_id || safeExtra.canonical_location_id,
@@ -6059,6 +6086,7 @@ module.exports._test = {
   publicPropertyRow,
   publicPropertiesCacheKey,
   sendPublicPropertySearchUnavailable,
+  isTwimgHostedUrl,
   isSourcedInventoryCandidateRecord,
   sourcedCandidateRecordHasApprovalLocation,
   sourcedInventoryApprovalPolicy,

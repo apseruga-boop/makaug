@@ -159,6 +159,7 @@ const COLLAGE = Object.freeze([
 
 const phraseCache = new Map();
 const photoUriCache = new Map();
+const PHOTO_URI_CACHE_MAX = 32;
 let logoUri = '';
 
 function normalizeShareLang(value) {
@@ -455,7 +456,13 @@ async function photoDataUri(key, width, height) {
     .jpeg({ quality: 74, mozjpeg: true })
     .toBuffer();
   const uri = `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+  if (photoUriCache.has(cacheKey)) photoUriCache.delete(cacheKey);
   photoUriCache.set(cacheKey, uri);
+  while (photoUriCache.size > PHOTO_URI_CACHE_MAX) {
+    const oldest = photoUriCache.keys().next().value;
+    if (!oldest) break;
+    photoUriCache.delete(oldest);
+  }
   return uri;
 }
 

@@ -354,7 +354,10 @@ function canonicalLocationsForSeoRow(row = {}) {
   return canonical ? [canonical] : [];
 }
 
-function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString()) {
+const SEO_SNAPSHOT_PAGE_SIZE = 400;
+const SEO_SNAPSHOT_MAX_PAGES = 200;
+
+function createPublicSeoSnapshotBuilder(generatedAt = new Date().toISOString()) {
   const directCounts = emptyCounts();
   const directPriceFloors = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, new Map()]));
   const categoryTotals = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, 0]));
@@ -378,7 +381,9 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
   let overallLastmod = 0;
   let newLast7d = 0;
   let thinPropertyCount = 0;
-  if (!rows.length) {
+  let hasRows = false;
+
+  function emptySnapshot() {
     return {
       directCounts,
       counts: emptyCounts(),
@@ -401,7 +406,12 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
       generatedAt
     };
   }
-  for (const row of rows) {
+
+  return {
+    ingest(rows = []) {
+      if (!rows.length) return;
+      hasRows = true;
+      for (const row of rows) {
     const categories = publicCategoryKeysForRow(row);
     if (!categories.length) continue;
     const locations = canonicalLocationsForSeoRow(row);
@@ -463,7 +473,10 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
         noindex: thin || priceNoindex
       });
     }
-  }
+    }
+    },
+    finish() {
+      if (!hasRows) return emptySnapshot();
   for (const category of Object.keys(CATEGORY_SEO)) {
     categoryPriceFloors[category] = floorFromPrices(categoryValidPrices[category]);
   }
@@ -507,6 +520,54 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
     thinPropertyCount,
     generatedAt
   };
+    }
+  };
+}
+
+function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString()) {
+  const builder = createPublicSeoSnapshotBuilder(generatedAt);
+  if (rows.length) builder.ingest(rows);
+  return builder.finish();
+}
+
+// One page at a time. A cursor keeps the database from materialising every
+// public description in the web process at once. Callers without getClient
+// (tests, and any pool that only exposes query) use LIMIT/OFFSET. A short
+// page stops the loop, so a small result is still a single query.
+async function forEachPublicSeoSnapshotPage(db, onPage) {
+  if (typeof db?.getClient === 'function') {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      await client.query(`DECLARE makaug_seo_snapshot NO SCROLL CURSOR FOR ${publicSeoInventorySnapshotSql()}`);
+      for (let page = 0; page < SEO_SNAPSHOT_MAX_PAGES; page += 1) {
+        const result = await client.query(`FETCH ${SEO_SNAPSHOT_PAGE_SIZE} FROM makaug_seo_snapshot`);
+        const rows = result?.rows || [];
+        if (!rows.length) break;
+        onPage(rows);
+        if (rows.length < SEO_SNAPSHOT_PAGE_SIZE) break;
+      }
+      await client.query('CLOSE makaug_seo_snapshot');
+      await client.query('COMMIT');
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch (_rollbackError) { /* the original error is the one to surface */ }
+      throw error;
+    } finally {
+      client.release?.();
+    }
+    return;
+  }
+
+  for (let page = 0; page < SEO_SNAPSHOT_MAX_PAGES; page += 1) {
+    const result = await db.query(
+      `${publicSeoInventorySnapshotSql()} LIMIT $1 OFFSET $2`,
+      [SEO_SNAPSHOT_PAGE_SIZE, page * SEO_SNAPSHOT_PAGE_SIZE]
+    );
+    const rows = result?.rows || [];
+    if (!rows.length) break;
+    onPage(rows);
+    if (rows.length < SEO_SNAPSHOT_PAGE_SIZE) break;
+  }
 }
 
 // Snapshot rows carry the found-online flags, review flags and a has_real_photo
@@ -608,8 +669,9 @@ function publicSeoInventorySnapshotSql() {
 }
 
 async function refreshPublicSeoInventorySnapshot(db) {
-  const result = await db.query(publicSeoInventorySnapshotSql());
-  const value = buildPublicSeoSnapshot(result.rows);
+  const builder = createPublicSeoSnapshotBuilder();
+  await forEachPublicSeoSnapshotPage(db, (rows) => builder.ingest(rows));
+  const value = builder.finish();
   snapshotCache = { cachedAt: Date.now(), value };
   return value;
 }
@@ -816,6 +878,7 @@ module.exports = {
   publicCategoryKeysForRow,
   canonicalLocationsForSeoRow,
   buildPublicSeoSnapshot,
+  SEO_SNAPSHOT_PAGE_SIZE,
   publicSeoInventorySnapshotSql,
   loadPublicSeoInventorySnapshot,
   categoryPageSeoMeta,

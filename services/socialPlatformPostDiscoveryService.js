@@ -2,6 +2,7 @@
 
 const {
   getPropertySourceRegistry,
+  releasePropertySourceRegistryCache,
   sourceRecordKind,
 } = require('./propertySourceRegistryService');
 const {
@@ -4634,16 +4635,21 @@ async function runSocialPlatformPostSweep({
   );
   const importPostLimit = Math.min(SOCIAL_SWEEP_IMPORT_POST_LIMIT, Math.max(sourceLimit, sourceLimit * resultLimit));
   const normalizedSourceOffset = cappedOffset(sourceOffset);
-  const tiktokSources = requestedPlatforms.includes('tiktok') ? sourcesForPlatform('tiktok') : [];
-  const youtubeSources = requestedPlatforms.includes('youtube') ? sourcesForPlatform('youtube') : [];
-  const xSources = requestedPlatforms.includes('x') ? sourcesForPlatform('x') : [];
-  const facebookSources = requestedPlatforms.includes('facebook') ? sourcesForPlatform('facebook') : [];
-  const instagramSources = requestedPlatforms.includes('instagram') ? sourcesForPlatform('instagram') : [];
+  let tiktokSources = requestedPlatforms.includes('tiktok') ? sourcesForPlatform('tiktok') : [];
+  let youtubeSources = requestedPlatforms.includes('youtube') ? sourcesForPlatform('youtube') : [];
+  let xSources = requestedPlatforms.includes('x') ? sourcesForPlatform('x') : [];
+  let facebookSources = requestedPlatforms.includes('facebook') ? sourcesForPlatform('facebook') : [];
+  let instagramSources = requestedPlatforms.includes('instagram') ? sourcesForPlatform('instagram') : [];
   const tiktokSourceWindow = rotatingSourceWindow(tiktokSources, { limit: sourceLimit, offset: normalizedSourceOffset });
   const youtubeSourceWindow = rotatingSourceWindow(youtubeSources, { limit: sourceLimit, offset: normalizedSourceOffset });
   const xSourceWindow = rotatingSourceWindow(xSources, { limit: sourceLimit, offset: normalizedSourceOffset });
   const facebookSourceWindow = rotatingSourceWindow(facebookSources, { limit: sourceLimit, offset: normalizedSourceOffset });
   const instagramSourceWindow = rotatingSourceWindow(instagramSources, { limit: sourceLimit, offset: normalizedSourceOffset });
+  const tiktokSourceCount = tiktokSources.length;
+  const youtubeSourceCount = youtubeSources.length;
+  const xSourceCount = xSources.length;
+  const facebookSourceCount = facebookSources.length;
+  const instagramSourceCount = instagramSources.length;
   const archiveStartTime = isoStartTimeForLookbackDays(lookbackDays);
   const youtubeStartTime = cleanText(publishedAfter || youtubePublishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START;
   const xStartTime = cleanText(xPublishedAfter || archiveStartTime) || LAUNCH_SOURCE_POST_WINDOW_START;
@@ -4671,6 +4677,15 @@ async function runSocialPlatformPostSweep({
     }).filter((job) => !primaryYoutubeSourceKeys.has(job.source_key))
     : [];
   let youtubeSearchJobs = [...primaryYoutubeSearchJobs, ...youtubeRegistryFillSearchJobs];
+  // The registry is ~60,000 generated rows (~100 MB). The sweep only needs the
+  // window and the jobs already built from it. Drop the full copies before the
+  // network work so a timeout does not keep that array for the rest of the run.
+  tiktokSources = [];
+  youtubeSources = [];
+  xSources = [];
+  facebookSources = [];
+  instagramSources = [];
+  releasePropertySourceRegistryCache();
   if (useSavedCursors && youtubeSearchJobs.length && db?.query) {
     try {
       const cursorRows = await db.query(
@@ -5161,7 +5176,7 @@ async function runSocialPlatformPostSweep({
     },
     api_readiness: apiReadiness,
     tiktok: {
-      source_count: tiktokSources.length,
+      source_count: tiktokSourceCount,
       selected_source_count: tiktokSourceWindow.selected_source_count,
       source_offset: tiktokSourceWindow.source_offset,
       next_source_offset: tiktokSourceWindow.next_source_offset,
@@ -5206,7 +5221,7 @@ async function runSocialPlatformPostSweep({
       },
     },
     youtube: {
-      source_count: youtubeSources.length,
+      source_count: youtubeSourceCount,
       selected_source_count: youtubeSourceWindow.selected_source_count,
       source_offset: normalizedSourceOffset,
       next_source_offset: youtubeSourceWindow.next_source_offset,
@@ -5230,7 +5245,7 @@ async function runSocialPlatformPostSweep({
       websub_channel_registry: youtubeChannelRegistry,
     },
     x: {
-      source_count: xSources.length,
+      source_count: xSourceCount,
       selected_source_count: xSourceWindow.selected_source_count,
       source_offset: xSourceWindow.source_offset,
       next_source_offset: xSourceWindow.next_source_offset,
@@ -5247,7 +5262,7 @@ async function runSocialPlatformPostSweep({
       fetched_posts_count: xFetch.posts.length,
     },
     facebook: {
-      source_count: facebookSources.length,
+      source_count: facebookSourceCount,
       selected_source_count: facebookSourceWindow.selected_source_count,
       source_offset: facebookSourceWindow.source_offset,
       next_source_offset: facebookSourceWindow.next_source_offset,
@@ -5260,7 +5275,7 @@ async function runSocialPlatformPostSweep({
       capture_tasks: facebookCaptureTasks,
     },
     instagram: {
-      source_count: instagramSources.length,
+      source_count: instagramSourceCount,
       selected_source_count: instagramSourceWindow.selected_source_count,
       source_offset: instagramSourceWindow.source_offset,
       next_source_offset: instagramSourceWindow.next_source_offset,

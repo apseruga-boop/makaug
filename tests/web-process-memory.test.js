@@ -89,6 +89,13 @@ test('memory fields name rss and heap, and scheduler boot delays do not collide'
   }
   const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
   assert.match(server, /phase=minute rss_mb=/);
+  assert.match(server, /phase=ten_minute rss_mb=/);
+  assert.match(server, /heap_used_mb=\$\{mb\(m\.heapUsed\)\}/);
+  const sharpLimits = fs.readFileSync(path.join(root, 'utils/sharpLimits.js'), 'utf8');
+  assert.match(sharpLimits, /sharp\.concurrency\(1\)/);
+  assert.match(sharpLimits, /memory: 16/);
+  assert.match(server, /applySharpMemoryLimits\(\)/);
+  assert.match(server, /TEXT_ASSET_CACHE_MAX_BYTES/);
   const featured = fs.readFileSync(path.join(root, 'services/featuredRotationService.js'), 'utf8');
   assert.doesNotMatch(featured, /p\.extra_fields,/);
   assert.match(featured, /jsonb_build_object\(/);
