@@ -4165,9 +4165,10 @@ router.post('/', async (req, res, next) => {
         ...(idNumber ? { nin: idNumber, id_number: idNumber } : {})
       };
     }
-    // A pin far away from the listing's own area (e.g. the middle-of-Uganda
-    // default) goes to the area centre, so distance searches stay right.
-    if (latitude != null && longitude != null && !IS_SOUTH_AFRICA) {
+    // A pin in the lake, outside Uganda, or far from the listing's own area
+    // goes to a flipped latitude or the area centre. A listing saved with no
+    // coordinates gets the area centre when the registry has one.
+    if (!IS_SOUTH_AFRICA) {
       const pinFix = correctedPinForNewListing({
         title,
         area,

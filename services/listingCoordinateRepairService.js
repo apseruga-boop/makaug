@@ -20,8 +20,10 @@ const {
   normalizeLocationKey,
   resolveCanonicalUgandaLocationFromText
 } = require('../utils/ugandaLocationRegistry');
+const { isOnUgandaLand } = require('../utils/ugandaLand');
 
 const AREA_LIMIT_KM = 8;
+const GREATER_KAMPALA_AREA_LIMIT_KM = 5;
 const DISTRICT_LIMIT_KM = 45;
 const KAMPALA_DISTRICT_LIMIT_KM = 20;
 const NEAR_PIN_KM = 3;
@@ -47,7 +49,13 @@ function pointOf(entry) {
 }
 
 function inUganda(p) {
-  return p && p.lat > -1.6 && p.lat < 4.4 && p.lng > 29.4 && p.lng < 35.2 && !(Math.abs(p.lat) < 0.01 && Math.abs(p.lng) < 0.01);
+  if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return false;
+  if (Math.abs(p.lat) < 0.01 && Math.abs(p.lng) < 0.01) return false;
+  return isOnUgandaLand(p.lat, p.lng);
+}
+
+function areaLimitKm(district) {
+  return GREATER_KAMPALA.has(String(district || '').toLowerCase()) ? GREATER_KAMPALA_AREA_LIMIT_KM : AREA_LIMIT_KM;
 }
 
 let allNamedIndex = null;
@@ -119,10 +127,38 @@ function classifyListingLocation(row = {}) {
   const districtEntry = districtName ? canonicalizeUgandaLocation('', districtName) : null;
   const districtPoint = pointOf(districtEntry);
   const ref = areaPoint
-    ? { point: areaPoint, label: `${areaEntry.name}, ${areaEntry.district}`, limit: AREA_LIMIT_KM, level: 'area' }
+    ? { point: areaPoint, label: `${areaEntry.name}, ${areaEntry.district}`, limit: areaLimitKm(areaEntry.district), level: 'area' }
     : (districtPoint ? { point: districtPoint, label: districtEntry.name, limit: districtLimitKm(districtEntry.name), level: 'district' } : null);
 
-  const placeholder = !inUganda(pin) || PLACEHOLDER_POINTS.some((p) => km(p, pin) < 0.3);
+  // A pin in the lake or outside the country is not a place. Try the same
+  // point with the latitude sign flipped (a common typo that lands on the
+  // opposite shore) and, if that is still off the land, the area centre.
+  if (!inUganda(pin)) {
+    const flipped = { lat: -pin.lat, lng: pin.lng };
+    if (inUganda(flipped) && (!ref || km(flipped, ref.point) <= ref.limit)) {
+      return {
+        action: 'repin',
+        reason: 'flipped_latitude',
+        km: ref ? km(pin, ref.point) : null,
+        from: ref ? ref.label : null,
+        to_point: flipped,
+        to_level: ref ? ref.level : 'pin'
+      };
+    }
+    if (ref) {
+      return {
+        action: 'repin',
+        reason: 'off_uganda_land',
+        km: km(pin, ref.point),
+        from: ref.label,
+        to_point: ref.point,
+        to_level: ref.level
+      };
+    }
+    return { action: 'review', reason: 'off_uganda_land_no_reference' };
+  }
+
+  const placeholder = PLACEHOLDER_POINTS.some((p) => km(p, pin) < 0.3);
   if (!ref) return placeholder ? { action: 'review', reason: 'placeholder_pin_no_reference' } : { action: 'ok', reason: 'no_reference' };
 
   const distance = km(pin, ref.point);
@@ -169,7 +205,7 @@ function classifyListingLocation(row = {}) {
       : (titlePlace.district === districtName || titlePlace.name === districtName))
       // "in Kampala" is used loosely for all of greater Kampala.
       || (String(titlePlace.name).toLowerCase() === 'kampala' && GREATER_KAMPALA.has(recordedDistrict));
-    if (!placeholder && !titleAgreesWithArea && !(titlePoint && km(pin, titlePoint) <= (['district', 'region'].includes(titlePlace.level) ? districtLimitKm(titlePlace.name) : AREA_LIMIT_KM))) {
+    if (!placeholder && !titleAgreesWithArea && !(titlePoint && km(pin, titlePoint) <= (['district', 'region'].includes(titlePlace.level) ? districtLimitKm(titlePlace.name) : areaLimitKm(titlePlace.district)))) {
       return { action: 'review', reason: 'title_area_and_pin_disagree', km: distance, from: ref.label, title_place: `${titlePlace.name}${titlePlace.district && titlePlace.district !== titlePlace.name ? `, ${titlePlace.district}` : ''}` };
     }
   }
@@ -293,6 +329,27 @@ async function repairListingCoordinates(db, { apply = false, limit = 20000, stat
  * at the area centre (and say so in extra_fields) before it reaches search.
  */
 function correctedPinForNewListing({ title = '', area = '', district = '', latitude = null, longitude = null, extra_fields = {} } = {}) {
+  const latNum = latitude == null || latitude === '' ? null : Number(latitude);
+  const lngNum = longitude == null || longitude === '' ? null : Number(longitude);
+  const hasPin = latNum != null && lngNum != null && Number.isFinite(latNum) && Number.isFinite(lngNum);
+  if (!hasPin) {
+    const canonical = canonicalLocationForRow({ title, area, district, latitude: null, longitude: null, extra_fields });
+    const areaEntry = canonical && !['district', 'region'].includes(canonical.level) ? canonical : null;
+    const point = pointOf(areaEntry);
+    if (!point || !inUganda(point)) return null;
+    return {
+      latitude: point.lat,
+      longitude: point.lng,
+      coords_fix: {
+        action: 'repin',
+        reason: 'missing_pin',
+        at: new Date().toISOString(),
+        by: 'submission_check',
+        previous: { latitude: null, longitude: null },
+        to: `${areaEntry.name}, ${areaEntry.district}`
+      }
+    };
+  }
   const decision = classifyListingLocation({ title, area, district, latitude, longitude, extra_fields });
   if (decision.action !== 'repin') return null;
   return {

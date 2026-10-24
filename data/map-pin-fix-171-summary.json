@@ -1,0 +1,18 @@
+{
+  "moves": 451,
+  "counts": {
+    "medium": 271,
+    "high": 22,
+    "low": 158
+  },
+  "sources": {
+    "proposed": 451
+  },
+  "skipCounts": {
+    "migration_169": 18,
+    "label_left_pin_already_on_land": 16,
+    "already_at_target": 126,
+    "no_on_land_coordinate": 39
+  },
+  "rows": 650
+}

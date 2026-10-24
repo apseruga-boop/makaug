@@ -2661,8 +2661,9 @@
     .agent-profile-hp { position: absolute; inset-inline-start: -9999px; inline-size: 1px; block-size: 1px; opacity: 0; }
     .agent-profile-mobile-bar { display: none; }
     .agent-profile-pin { background: transparent; border: 0; }
-    .agent-profile-pin span { display: block; inline-size: 14px; block-size: 14px; border-radius: 999px; background: #15803d; border: 2px solid #14532d; box-shadow: 0 0 0 2px #fff; }
+    .agent-profile-pin span { position: relative; display: grid; place-items: center; inline-size: 14px; block-size: 14px; border-radius: 999px; background: #15803d; border: 2px solid #14532d; box-shadow: 0 0 0 2px #fff; }
     .agent-profile-pin span.is-approx { background: #86efac; }
+    .agent-profile-pin b { position: absolute; inset-inline-end: -10px; inset-block-start: -8px; min-inline-size: 16px; block-size: 16px; padding-inline: 3px; border-radius: 999px; background: #14532d; color: #fff; font-size: 10px; line-height: 16px; text-align: center; }
     .agent-profile-popup { background: none; border: 0; color: #14532d; font-weight: 800; cursor: pointer; text-align: start; }
     @media (min-width: 768px) {
       .agent-profile-layout { grid-template-columns: minmax(0, 1fr) 300px; }
