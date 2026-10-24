@@ -163,6 +163,11 @@ SELECT
                 )
               )
               OR (
+                si.slot_key = 'x_post_photo'
+                AND si.url ~* '/x-post-photos/'
+                AND si.url ~* '^https?://media\.makaug\.com/.+'
+              )
+              OR (
                 COALESCE(si.slot_key, '') ~* '^(video_key_frame_|video_still_|video_recovery_still_)'
                 AND si.url ~* '^https?://media\.makaug\.com/.+'
               )

@@ -1,11 +1,14 @@
 'use strict';
 
 // Found-online listings never republish the source's media (TikTok covers,
-// YouTube i.ytimg thumbnails, byteimg links, source_* slots, evidence cards):
-// that rule stays. Two kinds of picture are published, in the same order the
-// editor uses (primary, then sort order, then oldest):
+// YouTube i.ytimg thumbnails, byteimg links, source_* slots, evidence cards,
+// raw pbs.twimg.com links): that rule stays. Pictures published, in the same
+// order the editor uses (primary, then sort order, then oldest):
 //   - photos staff uploaded from the review screen after ticking the
 //     owner/agent consent box (#377), slot_key 'staff_upload';
+//   - photos copied from the X post onto our media host
+//     (slot_key x_post_photo, path /x-post-photos/). A twimg URL in that slot
+//     is not published;
 //   - stills from the listing's own video stored on our media host
 //     (video_key_frame_ / video_still_ / video_recovery_still_).
 // The upload also writes extra_fields.staff_image_upload / image_rights_confirmed
@@ -17,6 +20,8 @@ const { mediaHost, realPhotoRejection } = require('./realListingPhoto');
 const STAFF_UPLOAD_SLOT = 'staff_upload';
 const SOURCE_MEDIA_URL_PATTERN = 'tiktokcdn|byteimg|tiktok\\.com';
 const SOURCE_MEDIA_URL_RE = new RegExp(SOURCE_MEDIA_URL_PATTERN, 'i');
+const X_POST_PHOTO_SLOT = 'x_post_photo';
+const X_POST_PHOTO_PATH_SQL = '/x-post-photos/';
 
 function asExtra(value) {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value;
@@ -61,6 +66,14 @@ function isOwnVideoStillImage(image) {
   return realPhotoRejection(image) === null;
 }
 
+function isHostedXPostPhoto(image) {
+  if (!image || typeof image !== 'object') return false;
+  if (String(image.slot_key || '').trim() !== X_POST_PHOTO_SLOT) return false;
+  const url = String(image.url || '').trim();
+  if (!url || SOURCE_MEDIA_URL_RE.test(url) || !/\/x-post-photos\//i.test(url)) return false;
+  return realPhotoRejection(image) === null;
+}
+
 function imageSortOrder(image, index) {
   const value = Number(image?.sort_order);
   return Number.isFinite(value) ? value : index;
@@ -77,7 +90,7 @@ function foundOnlinePublicImages(images = [], extraFields = {}) {
   const all = Array.isArray(images) ? images : [];
   const publishable = all
     .map((image, index) => ({ image, index }))
-    .filter(({ image }) => isConsentedStaffImage(image, extraFields) || isOwnVideoStillImage(image));
+    .filter(({ image }) => isConsentedStaffImage(image, extraFields) || isHostedXPostPhoto(image) || isOwnVideoStillImage(image));
   publishable.sort((left, right) => {
     const primary = Number(right.image?.is_primary === true) - Number(left.image?.is_primary === true);
     if (primary) return primary;
@@ -95,6 +108,7 @@ function foundOnlinePublicImages(images = [], extraFields = {}) {
 // listing's own extra_fields through the image's property_id, so it works for
 // any outer alias (properties p, or a CTE that only carries id).
 function consentedStaffPrimaryImageLateralSql(alias = 'p') {
+  const hostedUrlSql = `^https?://${mediaHost().replace(/[^a-z0-9.-]/gi, '').replace(/\./g, '\\.')}/.+`;
   return `LEFT JOIN LATERAL (
           SELECT si.url
           FROM property_images si
@@ -110,8 +124,13 @@ function consentedStaffPrimaryImageLateralSql(alias = 'p') {
                 )
               )
               OR (
+                si.slot_key = '${X_POST_PHOTO_SLOT}'
+                AND si.url ~* '${X_POST_PHOTO_PATH_SQL}'
+                AND si.url ~* '${hostedUrlSql}'
+              )
+              OR (
                 COALESCE(si.slot_key, '') ~* '${VIDEO_STILL_SLOT_SQL}'
-                AND si.url ~* '^https?://${mediaHost().replace(/[^a-z0-9.-]/gi, '').replace(/\./g, '\\.')}/.+'
+                AND si.url ~* '${hostedUrlSql}'
               )
             )
           ORDER BY si.is_primary DESC, si.sort_order ASC, si.created_at ASC
@@ -131,6 +150,7 @@ module.exports = {
   STAFF_UPLOAD_SLOT,
   VIDEO_STILL_SLOT_RE,
   isOwnVideoStillImage,
+  isHostedXPostPhoto,
   staffImageConsentGiven,
   isConsentedStaffImage,
   foundOnlinePublicImages,
