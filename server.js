@@ -1,4 +1,5 @@
 require('dotenv').config();
+require('./utils/sharpLimits').applySharpMemoryLimits();
 
 const path = require('path');
 const fs = require('fs');
@@ -570,15 +571,22 @@ app.get('/sitemap.xml', async (_req, res, next) => {
       }
     }
     const indexableUrls = urls.filter((entry) => entry && entry.loc && !publicPathIsNoindex(entry.loc));
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${indexableUrls.map((entry) => [
-      '  <url>',
-      `    <loc>${escapeXml(entry.loc)}</loc>`,
-      entry.lastmod ? `    <lastmod>${escapeXml(entry.lastmod)}</lastmod>` : '',
-      entry.changefreq ? `    <changefreq>${escapeXml(entry.changefreq)}</changefreq>` : '',
-      entry.priority ? `    <priority>${escapeXml(entry.priority)}</priority>` : '',
-      '  </url>'
-    ].filter(Boolean).join('\n')).join('\n')}\n</urlset>`;
-    return res.type('application/xml').set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600').send(xml);
+    res.type('application/xml').set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    res.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+    if (!indexableUrls.length) res.write('\n');
+    for (const entry of indexableUrls) {
+      const block = [
+        '  <url>',
+        `    <loc>${escapeXml(entry.loc)}</loc>`,
+        entry.lastmod ? `    <lastmod>${escapeXml(entry.lastmod)}</lastmod>` : '',
+        entry.changefreq ? `    <changefreq>${escapeXml(entry.changefreq)}</changefreq>` : '',
+        entry.priority ? `    <priority>${escapeXml(entry.priority)}</priority>` : '',
+        '  </url>'
+      ].filter(Boolean).join('\n');
+      res.write(`\n${block}`);
+    }
+    res.write('\n</urlset>');
+    return res.end();
   } catch (error) {
     return next(error);
   }
@@ -846,6 +854,9 @@ let cachedIndexHtml = null;
 let countryAppAssetCache = null;
 const publicHtmlCache = new Map();
 const textAssetCache = new Map();
+const TEXT_ASSET_CACHE_MAX_ENTRIES = 40;
+const TEXT_ASSET_CACHE_MAX_BYTES = 12 * 1024 * 1024;
+let textAssetCacheBytes = 0;
 const PUBLIC_HTML_CACHE_MAX_ENTRIES = Math.max(
   4,
   Math.min(64, Number(process.env.PUBLIC_HTML_CACHE_MAX_ENTRIES || 16) || 16)
@@ -1011,6 +1022,25 @@ function compressBody(body, encoding) {
   return body;
 }
 
+function rememberTextAsset(filePath, entry) {
+  if (textAssetCache.has(filePath)) {
+    textAssetCacheBytes -= textAssetCache.get(filePath).size || 0;
+    textAssetCache.delete(filePath);
+  }
+  textAssetCache.set(filePath, entry);
+  textAssetCacheBytes += entry.size || 0;
+  while (
+    textAssetCache.size > 1
+    && (textAssetCache.size > TEXT_ASSET_CACHE_MAX_ENTRIES || textAssetCacheBytes > TEXT_ASSET_CACHE_MAX_BYTES)
+  ) {
+    const oldest = textAssetCache.keys().next().value;
+    if (!oldest || oldest === filePath) break;
+    const dropped = textAssetCache.get(oldest);
+    textAssetCache.delete(oldest);
+    textAssetCacheBytes -= dropped?.size || 0;
+  }
+}
+
 function readCachedTextAsset(filePath, { compress = true } = {}) {
   const stat = fs.statSync(filePath);
   const cached = textAssetCache.get(filePath);
@@ -1021,6 +1051,8 @@ function readCachedTextAsset(filePath, { compress = true } = {}) {
         gzip: compressBody(cached.body, 'gzip')
       };
     }
+    textAssetCache.delete(filePath);
+    textAssetCache.set(filePath, cached);
     return cached;
   }
   const body = fs.readFileSync(filePath);
@@ -1035,7 +1067,7 @@ function readCachedTextAsset(filePath, { compress = true } = {}) {
       gzip: compressBody(body, 'gzip')
     } : null
   };
-  textAssetCache.set(filePath, entry);
+  rememberTextAsset(filePath, entry);
   return entry;
 }
 
@@ -2741,6 +2773,11 @@ function startMemoryLog() {
     if (heapPct >= 85) logger.warn(`memory heap at ${heapPct}% of its ${mb(heapLimit)} MB ceiling; the process will abort (exit 134) if this keeps rising`);
   }, 60_000);
   timer.unref?.();
+  const tenMinute = setInterval(() => {
+    const m = process.memoryUsage();
+    logger.info(`memory phase=ten_minute rss_mb=${mb(m.rss)} heap_used_mb=${mb(m.heapUsed)}`);
+  }, 10 * 60 * 1000);
+  tenMinute.unref?.();
 }
 
 // Homepage SEO reads run after the instance is already serving, and not in the

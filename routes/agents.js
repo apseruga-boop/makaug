@@ -860,6 +860,17 @@ function buildAgentProfileEnquiry(agent, body = {}) {
   };
 }
 
+const AGENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// "null", a slug, or any other non-UUID used to reach `a.id = $1` and Postgres
+// raised 22P02, which the booking routes turned into a 500. A malformed id is
+// 400. A real UUID that is not a public agent stays 404.
+function rejectMalformedAgentId(res, agentId) {
+  if (AGENT_ID_PATTERN.test(String(agentId || '').trim())) return false;
+  res.status(400).json({ ok: false, error: 'Invalid agent id' });
+  return true;
+}
+
 async function findPublicAgentForEnquiry(agentId) {
   const filters = ['a.id = $1'];
   const values = [agentId];
@@ -885,6 +896,7 @@ async function findPublicAgentForEnquiry(agentId) {
 
 router.post('/:id/enquiries', agentProfileEnquiryLimiter, leadHoneypot, async (req, res, next) => {
   try {
+    if (rejectMalformedAgentId(res, req.params.id)) return undefined;
     const agent = await findPublicAgentForEnquiry(req.params.id);
     if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
     const built = buildAgentProfileEnquiry(agent, req.body || {});
@@ -914,6 +926,7 @@ function bookingErrorStatus(error) {
 // from the listing payload, then fills days from this response.
 router.get('/:id/listing-booking', async (req, res, next) => {
   try {
+    if (rejectMalformedAgentId(res, req.params.id)) return undefined;
     const listingId = String(req.query.listing_id || '').trim();
     if (!listingId) return res.status(400).json({ ok: false, error: 'listing_id is required' });
     const agent = await findPublicAgentForEnquiry(req.params.id);
@@ -1031,6 +1044,7 @@ router.get('/:id/listing-booking', async (req, res, next) => {
 
 router.get('/:id/booking-options', async (req, res, next) => {
   try {
+    if (rejectMalformedAgentId(res, req.params.id)) return undefined;
     const agent = await findPublicAgentForEnquiry(req.params.id);
     if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
     const contact = await db.query(
@@ -1190,6 +1204,7 @@ router.get('/:id/booking-options', async (req, res, next) => {
 
 router.post('/:id/bookings', agentProfileEnquiryLimiter, leadHoneypot, async (req, res, next) => {
   try {
+    if (rejectMalformedAgentId(res, req.params.id)) return undefined;
     const agent = await findPublicAgentForEnquiry(req.params.id);
     if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
     const body = req.body || {};
@@ -1343,6 +1358,7 @@ async function loadPublicAgentProfileRow(agentId) {
 
 router.get('/:id/listings', async (req, res, next) => {
   try {
+    if (rejectMalformedAgentId(res, req.params.id)) return undefined;
     const loaded = await loadPublicAgentProfileRow(req.params.id);
     if (!loaded) return res.status(404).json({ ok: false, error: 'Agent not found', fallback: '/brokers' });
     const page = await listApprovedAgentListingPage(db, loaded.row.id, req.query);
@@ -1359,6 +1375,7 @@ router.get('/:id/listings', async (req, res, next) => {
 
 router.get('/:id', async (req, res, next) => {
   try {
+    if (rejectMalformedAgentId(res, req.params.id)) return undefined;
     const loaded = await loadPublicAgentProfileRow(req.params.id);
     if (!loaded) return res.status(404).json({ ok: false, error: 'Agent not found', fallback: '/brokers' });
 

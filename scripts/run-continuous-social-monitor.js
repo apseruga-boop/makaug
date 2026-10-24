@@ -7,6 +7,7 @@ const db = require('../config/database');
 const {
   PROPERTY_SOURCE_REGISTRY_BATCH_ID,
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
+  releasePropertySourceRegistryCache,
 } = require('../services/propertySourceRegistryService');
 const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
@@ -230,9 +231,10 @@ async function runContinuousSocialMonitor(options = {}) {
       publishedAfter,
       youtubeJobMode: platform === 'youtube' ? youtubeJobMode : 'all',
     });
+    const brokenSources = result?.tiktok?.public_sweep?.broken_sources || result?.public_sweep?.broken_sources || [];
     sweepResults.push({
       platform,
-      result,
+      broken_sources: brokenSources,
       summary: summarizeSweepResult(result),
     });
   }
@@ -278,7 +280,7 @@ async function runContinuousSocialMonitor(options = {}) {
     checked: probes.checked || 0,
     note: probes.note || '',
   };
-  const publicSweepBroken = sweepResults.flatMap((item) => item.result?.tiktok?.public_sweep?.broken_sources || item.result?.public_sweep?.broken_sources || []);
+  const publicSweepBroken = sweepResults.flatMap((item) => item.broken_sources || []);
   if (publicSweepBroken.length) {
     const extraBroken = publicSweepBroken.map((row) => ({
       kind: 'tiktok_public_sweep',
@@ -301,6 +303,7 @@ async function runContinuousSocialMonitor(options = {}) {
   if (confirm) healthStored = await storeListingSourceHealthReport(db, health);
   report.listing_source_health_stored = healthStored;
   logger.info(`listing_source_health_report ${health.summary} audit=${LISTING_SOURCE_HEALTH_AUDIT_ACTION}`);
+  releasePropertySourceRegistryCache();
   if (require.main === module) console.log(JSON.stringify(report, null, 2));
   if (require.main === module && confirm && healthStored.ok !== true) process.exitCode = 1;
   return report;

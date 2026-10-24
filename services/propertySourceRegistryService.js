@@ -1973,7 +1973,9 @@ function expandedLocalizedXSearchSources(limit = Infinity) {
   return sources.slice(0, limit);
 }
 
+const REGISTRY_CACHE_TTL_MS = 10 * 60 * 1000;
 let propertySourceRegistryCache = null;
+let propertySourceRegistryCachedAt = 0;
 
 function socialSourceRegistryRows(rows = []) {
   return rows.filter((item) => SOCIAL_FIRST_PLATFORM_PRIORITY.includes(String(item.platform || '').toLowerCase()));
@@ -2010,10 +2012,17 @@ function buildPropertySourceRegistry() {
 }
 
 function getPropertySourceRegistry() {
-  if (!propertySourceRegistryCache) {
-    propertySourceRegistryCache = buildPropertySourceRegistry();
+  if (propertySourceRegistryCache && (Date.now() - propertySourceRegistryCachedAt) < REGISTRY_CACHE_TTL_MS) {
+    return propertySourceRegistryCache;
   }
+  propertySourceRegistryCache = buildPropertySourceRegistry();
+  propertySourceRegistryCachedAt = Date.now();
   return propertySourceRegistryCache;
+}
+
+function releasePropertySourceRegistryCache() {
+  propertySourceRegistryCache = null;
+  propertySourceRegistryCachedAt = 0;
 }
 
 function byPlatformSummary(sources = getPropertySourceRegistry()) {
@@ -2340,7 +2349,9 @@ const exported = {
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
   X_SEARCH_REGISTRY_LOCALIZED_MARKER,
   PROPERTY_HASHTAG_WATCHLIST,
+  REGISTRY_CACHE_TTL_MS,
   getPropertySourceRegistry,
+  releasePropertySourceRegistryCache,
   knownUgandanChannelMention,
   normalizeSourceForDb,
   sourceRecordKind,

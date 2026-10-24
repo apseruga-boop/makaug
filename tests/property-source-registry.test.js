@@ -27,6 +27,9 @@ const {
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
   X_SEARCH_REGISTRY_LOCALIZED_MARKER,
   PROPERTY_HASHTAG_WATCHLIST,
+  REGISTRY_CACHE_TTL_MS,
+  getPropertySourceRegistry,
+  releasePropertySourceRegistryCache,
   sourceRecordKind,
   summarizePropertySourceRegistry,
 } = require('../services/propertySourceRegistryService');
@@ -316,6 +319,16 @@ test('social-first X sweep adds named Twitter sources while current policy defer
   assert(agentsRoute.includes('SOCIAL-ECOLAND-PROPERTY-SERVICES-X-20260524'), 'public broker profiles should expose Ecoland X link');
   assert(agentsRoute.includes('SOCIAL-BIGWAYS-UG-X-20260524'), 'public broker profiles should expose Bigways X link');
   assert(healthRoute.includes('049_social_first_x_priority_profiles.sql'), 'migration health should expose the social-first X priority status');
+});
+
+test('source registry cache is reused until it is released', () => {
+  assert.strictEqual(REGISTRY_CACHE_TTL_MS, 10 * 60 * 1000);
+  const first = getPropertySourceRegistry();
+  assert.strictEqual(getPropertySourceRegistry(), first);
+  releasePropertySourceRegistryCache();
+  const second = getPropertySourceRegistry();
+  assert.notStrictEqual(second, first);
+  assert.strictEqual(second.length, first.length);
 });
 
 test('WhatsApp search results disclose found-online source without losing makaug links', () => {

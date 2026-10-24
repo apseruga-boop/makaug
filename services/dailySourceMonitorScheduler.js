@@ -192,6 +192,12 @@ async function runScheduledSourceMonitor(db, options = {}) {
     return { ok: false, skipped: false, reason: 'run_failed', message: error?.message || String(error) };
   } finally {
     tickRunning = false;
+    // The timeout does not cancel the sweep. Dropping the registry here means
+    // a timed-out run does not keep the ~100 MB cache for the rest of its TTL.
+    // The sweep copies the window it needs before its own first await.
+    try {
+      require('./propertySourceRegistryService').releasePropertySourceRegistryCache();
+    } catch (_error) { /* the monitor result is already decided */ }
   }
 }
 

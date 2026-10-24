@@ -20,6 +20,18 @@ const {
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
+test('the daily probe drops the registry after it has copied its sample', () => {
+  const source = read('services/listingSourceHealthService.js');
+  assert.match(source, /releasePropertySourceRegistryCache\(\)/);
+  const monitor = read('scripts/run-continuous-social-monitor.js');
+  assert.match(monitor, /broken_sources: brokenSources/);
+  assert.match(monitor, /releasePropertySourceRegistryCache\(\)/);
+  const sweep = read('services/socialPlatformPostDiscoveryService.js');
+  assert.match(sweep, /releasePropertySourceRegistryCache\(\)/);
+  const scheduler = read('services/dailySourceMonitorScheduler.js');
+  assert.match(scheduler, /releasePropertySourceRegistryCache\(\)/);
+});
+
 test('direct profile URLs are probed and search pages are not', () => {
   assert.equal(isDirectPublicSourceUrl('https://www.tiktok.com/@kampalahomes'), true);
   assert.equal(isDirectPublicSourceUrl('https://www.tiktok.com/tag/ugandarealestate'), false);

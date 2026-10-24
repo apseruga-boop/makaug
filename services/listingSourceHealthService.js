@@ -1,7 +1,7 @@
 'use strict';
 
 const logger = require('../config/logger');
-const { getPropertySourceRegistry } = require('./propertySourceRegistryService');
+const { getPropertySourceRegistry, releasePropertySourceRegistryCache } = require('./propertySourceRegistryService');
 const { logNotification } = require('./notificationLogService');
 
 const LISTING_SOURCE_HEALTH_AUDIT_ACTION = 'listing_source_health_report';
@@ -174,8 +174,12 @@ async function probeListingSources({
   pacingMs = DEFAULT_PROBE_PACING_MS,
   sleep = delay,
 } = {}) {
-  const registry = Array.isArray(sources) ? sources : getPropertySourceRegistry();
-  const selected = selectDailyProbeSources(registry, { now, limit });
+  const loadedRegistry = !Array.isArray(sources);
+  const registry = loadedRegistry ? getPropertySourceRegistry() : sources;
+  const selected = selectDailyProbeSources(registry, { now, limit }).map((source) => ({ ...source }));
+  // The probe only needs the handful of URLs it is about to HEAD. Drop the
+  // 60,000-row registry before the paced requests so it can be collected.
+  if (loadedRegistry) releasePropertySourceRegistryCache();
   const results = [];
   let paced = false;
   for (const source of selected) {
