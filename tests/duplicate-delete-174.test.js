@@ -161,7 +161,9 @@ test('duplicate delete 174 is the 49 hidden duplicates and refuses Najjera', () 
   assert.doesNotMatch(sql, /'saved_properties'/);
   assert.equal(fs.existsSync(ROLLBACK), true);
   assert.equal(fs.existsSync(path.join(__dirname, '../db/migrations/rollback-174-duplicate-deletes.sql')), false);
-  assert.equal(fs.readdirSync(path.join(__dirname, '../db/migrations')).some((name) => name.startsWith('173_')), false);
+  const migration173 = fs.readdirSync(path.join(__dirname, '../db/migrations')).filter((name) => name.startsWith('173_'));
+  assert.deepEqual(migration173, ['173_listing_refs_price_unit_and_staff_indexes.sql']);
+  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '../db/migrations', migration173[0]), 'utf8'), /duplicate_delete_174|deleted_duplicates_backup_174/);
   assert.match(rollbackSql, /deleted_duplicates_backup_174_properties/);
   assert.match(rollbackSql, /current_setting\('app\.country_code', true\) IS DISTINCT FROM 'UG'/);
   assert.match(rollbackSql, /rollback_174 % restored/);
