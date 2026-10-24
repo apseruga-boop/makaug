@@ -68,9 +68,17 @@ test('listing correction 176 relabels only the Makerere building', () => {
   const names = fs.readdirSync(MIGRATIONS);
   assert.equal(names.includes('176_correct_makerere_building_listing.sql'), true);
   assert.equal(names.filter((name) => name.startsWith('176_')).length, 1);
-  assert.equal(names.some((name) => name.startsWith('173_')), false);
-  assert.equal(names.some((name) => name.startsWith('175_')), false);
   assert.equal(names.includes('174_delete_hidden_duplicate_listings.sql'), true);
+  // 173 and 175 are on main. This correction is the only migration after 169
+  // that names the Makerere listing. 169 is the earlier hotel/hostel relabel.
+  const makerereMigrations = names
+    .filter((name) => name.endsWith('.sql'))
+    .filter((name) => fs.readFileSync(path.join(MIGRATIONS, name), 'utf8').includes(MAKERERE))
+    .sort();
+  assert.deepEqual(makerereMigrations, [
+    '169_correct_mislabelled_listings_and_duplicates.sql',
+    '176_correct_makerere_building_listing.sql'
+  ]);
   assert.equal(spec.id, MAKERERE);
   assert.equal(spec.lister_name, 'Promise Ahimbisibwe');
   assert.deepEqual(spec.source_titles, [LAND_TITLE, HOTEL_TITLE]);
