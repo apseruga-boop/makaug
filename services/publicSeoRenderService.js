@@ -318,11 +318,35 @@ function facetPredicate(options, values, alias = 'p') {
 // A found-online row used to drop that cover and fall back to the land
 // category image whenever the staff-consent slot was empty.
 function seoCoverImageUrl(row = {}, foundOnline = false) {
-  const staffCover = String(foundOnlinePrimaryImageUrl(row) || '').trim();
+  const staffRaw = String(foundOnlinePrimaryImageUrl(row) || '').trim();
   const primary = String(row.primary_image_url || '').trim();
   const hostedCover = realPhotoRejection(primary) === null ? primary : '';
+  const staffCover = realPhotoRejection(staffRaw) === null ? staffRaw : '';
   if (foundOnline) return staffCover || hostedCover;
-  return hostedCover || primary;
+  return hostedCover;
+}
+
+const LISTING_LOGO_PATH = '/assets/icons/makaug-icon-512.png';
+
+function photosComingSoonSeoHtml() {
+  return `<div class="photos-coming-soon flex h-full min-h-[12rem] w-full flex-col items-center justify-center gap-2 bg-[#f0fdf4] text-[#14532d]" data-photos-coming-soon="1" role="img" aria-label="Photos coming soon">
+    <img src="${LISTING_LOGO_PATH}" alt="" width="56" height="56" decoding="async">
+    <span class="text-sm font-semibold">Photos coming soon</span>
+  </div>`;
+}
+
+// A public page may show any photo that is not a stock or placeholder stand-in.
+// Approval still requires a file on our media host; that check is realPhotoRejection.
+function usableSeoListingPhoto(url) {
+  const value = String(url || '').trim();
+  if (!value) return '';
+  const lower = value.toLowerCase();
+  if (lower.startsWith('data:')) return '';
+  if (lower.includes('photo-1560518883-ce09059eeffa')) return '';
+  if (/(^|\/\/)([a-z0-9-]+\.)*unsplash\.com/.test(lower) || lower.includes('images.unsplash.com')) return '';
+  if (lower.includes('/assets/house-ads-v3/home-hero') || lower.includes('home-hero-640')) return '';
+  if (/image[\s_-]*pending/.test(lower)) return '';
+  return value;
 }
 
 function publicCoverImageLateralSql(alias = 'p') {
@@ -722,10 +746,13 @@ function renderListingLocationLink(listing, categoryKey) {
 
 function renderSeoListingCard(listing, options = {}) {
   const href = `/property/${encodeURIComponent(listing.id)}`;
-  const image = absoluteUrl(listing.primary_image_url || CATEGORY_SEO[options.categoryKey]?.image || '/assets/house-ads-v3/home-hero.webp', options.baseUrl);
+  const image = usableSeoListingPhoto(listing.primary_image_url);
+  const media = image
+    ? `<img src="${escapeHtml(absoluteUrl(image, options.baseUrl))}" alt="${escapeHtml(listing.title)}" class="w-full h-full object-cover" width="640" height="384" decoding="async" loading="${options.eager ? 'eager' : 'lazy'}">`
+    : photosComingSoonSeoHtml();
   return `<article class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card" data-ssr-property-card="${escapeHtml(listing.id)}">
-    <a href="${escapeHtml(href)}" class="block h-48 overflow-hidden" aria-label="View ${escapeHtml(listing.title)}">
-      <img src="${escapeHtml(image)}" alt="${escapeHtml(listing.title)}" class="w-full h-full object-cover" width="640" height="384" decoding="async" loading="${options.eager ? 'eager' : 'lazy'}">
+    <a href="${escapeHtml(href)}" class="relative block h-48 overflow-hidden bg-[#f0fdf4]" aria-label="View ${escapeHtml(listing.title)}">
+      ${media}
     </a>
     <div class="p-4">
       <h2 class="font-bold text-gray-900"><a href="${escapeHtml(href)}" class="hover:text-green-700 hover:underline">${escapeHtml(listing.title)}</a></h2>
@@ -1012,7 +1039,8 @@ function renderPropertySeoHtml(html, listing, options = {}) {
   const categoryKey = listing.listing_type === 'student' ? 'students' : listing.listing_type;
   const config = CATEGORY_SEO[categoryKey] || CATEGORY_SEO.sale;
   const propertyUrl = absoluteUrl(`/property/${encodeURIComponent(listing.id)}`, options.baseUrl);
-  const image = absoluteUrl(listing.primary_image_url || config.image || '/assets/house-ads-v3/home-hero.webp', options.baseUrl);
+  const photoUrl = usableSeoListingPhoto(listing.primary_image_url);
+  const image = absoluteUrl(photoUrl || LISTING_LOGO_PATH, options.baseUrl);
   const location = listingAreaLocation(listing);
   const areaUrl = location ? absoluteUrl(`${config.route}/${canonicalLocationRouteSlug(location)}`, options.baseUrl) : absoluteUrl(config.route, options.baseUrl);
   const heading = propertyPublicHeading(listing);
@@ -1027,9 +1055,9 @@ function renderPropertySeoHtml(html, listing, options = {}) {
     <div class="lg:col-span-2" data-detail-main>
       ${renderBreadcrumbs(items)}
       <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white" data-detail-card>
-        <button type="button" class="block w-full property-gallery-hero relative overflow-hidden group" data-detail-hero onclick="if(typeof openDetailGalleryLightbox==='function')openDetailGalleryLightbox(detailGalleryPhotoIndex)">
+        ${photoUrl ? `<button type="button" class="block w-full property-gallery-hero relative overflow-hidden group" data-detail-hero onclick="if(typeof openDetailGalleryLightbox==='function')openDetailGalleryLightbox(detailGalleryPhotoIndex)">
           <img id="detail-gallery-hero-img" data-ssr-detail-hero="${escapeHtml(listing.id)}" src="${escapeHtml(image)}" alt="${escapeHtml(heading)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform" width="1200" height="675" loading="eager" decoding="async" fetchpriority="high">
-        </button>
+        </button>` : `<div class="property-gallery-hero relative overflow-hidden bg-[#f0fdf4]" data-detail-hero data-photos-coming-soon="1">${photosComingSoonSeoHtml()}</div>`}
         <div class="p-5">
           <h1 class="text-3xl font-bold text-gray-900 serif">${escapeHtml(heading)}</h1>
           <p class="mt-2 text-gray-600">${location ? `<a href="${escapeHtml(areaUrl)}" class="font-semibold text-green-700 hover:underline">${escapeHtml(locationLabel)}</a>` : escapeHtml(locationLabel)}</p>

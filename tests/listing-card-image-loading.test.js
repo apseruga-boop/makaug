@@ -70,7 +70,7 @@ function fixture() {
     socialImportSpecsHtml: () => '',
     socialImportProvenanceHtml: () => ''
   });
-  for (const name of ['publicListerAttribution', 'propCard', 'studentCard', 'setHtmlIfChanged', 'renderGrid', 'renderStudentGrid', 'noResultsCardForGrid', 'loadingPropertyGridHtml', 'socialImportListingCardHtml', 'socialImportTileMediaHtml']) {
+  for (const name of ['isStockOrPlaceholderPhoto', 'publicListerAttribution', 'propCard', 'studentCard', 'setHtmlIfChanged', 'renderGrid', 'renderStudentGrid', 'noResultsCardForGrid', 'loadingPropertyGridHtml', 'socialImportListingCardHtml', 'socialImportTileMediaHtml']) {
     vm.runInContext(declaration(app, name), context);
   }
   return { context, grids };
@@ -138,7 +138,7 @@ test('the actual SSR property-detail renderer keeps its high-priority hero image
     insertBeforeClosingTag: (html) => html,
     breadcrumbStructuredData: () => ({})
   });
-  for (const name of ['findElementBoundsById', 'replaceElementInnerHtml', 'renderPropertySeoHtml']) vm.runInContext(declaration(seo, name), context);
+  for (const name of ['usableSeoListingPhoto', 'findElementBoundsById', 'replaceElementInnerHtml', 'renderPropertySeoHtml']) vm.runInContext(declaration(seo, name), context);
   const result = context.renderPropertySeoHtml('<main id="detail-content"></main>', {
     id: 'detail-1', listing_type: 'rent', title: 'Rental details', area: 'Kireka', district: 'Wakiso', primary_image_url: '/images/detail.webp'
   });

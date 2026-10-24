@@ -122,6 +122,26 @@ test('canonical row ids drive aggregation and public display instead of raw area
     district: 'Wakiso',
     canonical_location_id: 'wakiso:wakiso'
   }).area, null);
+  assert.equal(canonicalDisplayLocationForRow({
+    area: 'Kampala',
+    district: 'Wakiso',
+    canonical_location_id: 'wakiso:wakiso'
+  }).area, null);
+  assert.equal(canonicalDisplayLocationForRow({
+    area: 'From',
+    district: 'Wakiso',
+    canonical_location_id: 'wakiso:wakiso'
+  }).area, null);
+  assert.equal(canonicalDisplayLocationForRow({
+    area: 'Kitende',
+    district: 'Wakiso',
+    canonical_location_id: 'wakiso:wakiso'
+  }).area, null);
+  assert.equal(canonicalDisplayLocationForRow({
+    area: 'Namuseera',
+    district: 'Wakiso',
+    canonical_location_id: 'wakiso:wakiso'
+  }).area, 'Namuseera');
 });
 
 test('moderation hierarchy rejects unknown, road and cross-district area values', () => {
