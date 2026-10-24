@@ -551,45 +551,47 @@ function publicPathIsNoindex(value = '') {
   return false;
 }
 
-async function refreshPublicSeoInventorySnapshot(db) {
-  const result = await db.query(
-    `SELECT id, listing_type, students_welcome, area, district,
-            LEFT(COALESCE(title, ''), 300) AS title,
-            LEFT(COALESCE(description, ''), 1200) AS description,
-            price, price_period, bedrooms, property_type,
-            transaction_type, title_type, nearest_university,
-            extra_fields->>'price_review' AS price_review,
+// The lateral join exposes public_agent.id. Every properties column in the
+// outer statement is qualified, or Postgres rejects the snapshot with
+// "column reference \"id\" is ambiguous" and public pages lose SEO counts.
+function publicSeoInventorySnapshotSql() {
+  return `SELECT properties.id, properties.listing_type, properties.students_welcome, properties.area, properties.district,
+            LEFT(COALESCE(properties.title, ''), 300) AS title,
+            LEFT(COALESCE(properties.description, ''), 1200) AS description,
+            properties.price, properties.price_period, properties.bedrooms, properties.property_type,
+            properties.transaction_type, properties.title_type, properties.nearest_university,
+            properties.extra_fields->>'price_review' AS price_review,
             jsonb_strip_nulls(jsonb_build_object(
-              'room_type', extra_fields->>'room_type',
-              'commercial_type', extra_fields->>'commercial_type',
-              'title_type', extra_fields->>'title_type',
-              'transaction_type', extra_fields->>'transaction_type',
-              'nearest_university', extra_fields->>'nearest_university',
-              'student_university', extra_fields->>'student_university',
-              'student_campus', extra_fields->>'student_campus'
+              'room_type', properties.extra_fields->>'room_type',
+              'commercial_type', properties.extra_fields->>'commercial_type',
+              'title_type', properties.extra_fields->>'title_type',
+              'transaction_type', properties.extra_fields->>'transaction_type',
+              'nearest_university', properties.extra_fields->>'nearest_university',
+              'student_university', properties.extra_fields->>'student_university',
+              'student_campus', properties.extra_fields->>'student_campus'
             )) AS extra_fields,
-            extra_fields->>'canonical_location_id' AS canonical_location_id,
-            extra_fields->>'city' AS city,
-            extra_fields->>'neighborhood' AS neighborhood,
-            source, listed_via,
+            properties.extra_fields->>'canonical_location_id' AS canonical_location_id,
+            properties.extra_fields->>'city' AS city,
+            properties.extra_fields->>'neighborhood' AS neighborhood,
+            properties.source, properties.listed_via,
             jsonb_build_object(
-              'found_online', extra_fields->'found_online',
-              'social_search_candidate', extra_fields->'social_search_candidate',
-              'sourced_inventory_candidate', extra_fields->'sourced_inventory_candidate',
-              'third_party_discovery_result', extra_fields->'third_party_discovery_result',
-              'source_badge', extra_fields->'source_badge',
-              'source_batch', extra_fields->'source_batch',
-              'source_platform', extra_fields->'source_platform',
-              'source_url', COALESCE(extra_fields->'source_url', extra_fields->'source_post_url'),
-              'video_url', extra_fields->'video_url',
-              'staff_corrected_fields', extra_fields->'staff_corrected_fields',
-              'king_review_corrected_fields', extra_fields->'king_review_corrected_fields',
-              'king_review_facts_confirmed', extra_fields->'king_review_facts_confirmed'
+              'found_online', properties.extra_fields->'found_online',
+              'social_search_candidate', properties.extra_fields->'social_search_candidate',
+              'sourced_inventory_candidate', properties.extra_fields->'sourced_inventory_candidate',
+              'third_party_discovery_result', properties.extra_fields->'third_party_discovery_result',
+              'source_badge', properties.extra_fields->'source_badge',
+              'source_batch', properties.extra_fields->'source_batch',
+              'source_platform', properties.extra_fields->'source_platform',
+              'source_url', COALESCE(properties.extra_fields->'source_url', properties.extra_fields->'source_post_url'),
+              'video_url', properties.extra_fields->'video_url',
+              'staff_corrected_fields', properties.extra_fields->'staff_corrected_fields',
+              'king_review_corrected_fields', properties.extra_fields->'king_review_corrected_fields',
+              'king_review_facts_confirmed', properties.extra_fields->'king_review_facts_confirmed'
             ) AS copy_flags,
             ${realHostedPhotoExistsSql('properties')} AS has_real_photo,
-            agent_id,
+            properties.agent_id,
             (public_agent.id IS NOT NULL) AS agent_public,
-            updated_at, created_at
+            properties.updated_at, properties.created_at
      FROM properties
      LEFT JOIN LATERAL (
        SELECT a.id
@@ -599,8 +601,11 @@ async function refreshPublicSeoInventorySnapshot(db) {
        LIMIT 1
      ) public_agent ON TRUE
      WHERE ${publicVisibleInventoryWhere('properties')}
-     ORDER BY updated_at DESC NULLS LAST, created_at DESC, id DESC`
-  );
+     ORDER BY properties.updated_at DESC NULLS LAST, properties.created_at DESC, properties.id DESC`;
+}
+
+async function refreshPublicSeoInventorySnapshot(db) {
+  const result = await db.query(publicSeoInventorySnapshotSql());
   const value = buildPublicSeoSnapshot(result.rows);
   snapshotCache = { cachedAt: Date.now(), value };
   return value;
@@ -808,6 +813,7 @@ module.exports = {
   publicCategoryKeysForRow,
   canonicalLocationsForSeoRow,
   buildPublicSeoSnapshot,
+  publicSeoInventorySnapshotSql,
   loadPublicSeoInventorySnapshot,
   categoryPageSeoMeta,
   sitemapEntries,
