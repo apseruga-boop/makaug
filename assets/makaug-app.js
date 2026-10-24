@@ -48680,13 +48680,18 @@ function uniqueTextParts(parts = []) {
   });
 }
 
+function placeNameOrBlank(value) {
+  const text = String(value || "").trim();
+  return /^from$/i.test(text) ? "" : text;
+}
+
 function getPropertyStructuredLocation(property = {}) {
   const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
   return {
     street: property?.street_name || extra.street_name || "",
-    area: property?.area || extra.neighborhood || extra.city || "",
-    neighborhood: property?.neighborhood || extra.neighborhood || property?.area || "",
-    city: property?.city || extra.city || "",
+    area: placeNameOrBlank(property?.area) || placeNameOrBlank(extra.neighborhood) || placeNameOrBlank(extra.city) || "",
+    neighborhood: placeNameOrBlank(property?.neighborhood) || placeNameOrBlank(extra.neighborhood) || placeNameOrBlank(property?.area) || "",
+    city: placeNameOrBlank(property?.city) || placeNameOrBlank(extra.city) || "",
     district: property?.district || "",
     region: property?.region || extra.region || ""
   };
@@ -49311,11 +49316,15 @@ function uniqueCleanLocationParts(parts = []) {
 }
 
 function publicPropertyLocationLabel(p = {}, fallback = "Location pending") {
-  const area = cleanWhatsappValue(p.area);
-  const neighbourhood = cleanWhatsappValue(p.neighborhood || p.neighbourhood || p.suburb);
-  const city = cleanWhatsappValue(p.city || p.town || p.municipality);
-  const district = cleanWhatsappValue(p.district);
-  const region = cleanWhatsappValue(p.region);
+  const usablePlace = (value) => {
+    const text = cleanWhatsappValue(value);
+    return /^from$/i.test(text) ? "" : text;
+  };
+  const area = usablePlace(p.area);
+  const neighbourhood = usablePlace(p.neighborhood || p.neighbourhood || p.suburb);
+  const city = usablePlace(p.city || p.town || p.municipality);
+  const district = usablePlace(p.district);
+  const region = usablePlace(p.region);
   const areaKey = area.toLowerCase();
   const cityKey = city.toLowerCase();
   const districtKey = district.toLowerCase();
@@ -49324,12 +49333,13 @@ function publicPropertyLocationLabel(p = {}, fallback = "Location pending") {
   if (staleKampalaArea && specificParts.length) return specificParts.join(", ");
   const primaryParts = uniqueCleanLocationParts([area || neighbourhood || city, district || region]);
   if (primaryParts.length) return primaryParts.join(", ");
+  const resolvedLabel = /^from\b/i.test(String(p.resolved_location_label || "").trim()) ? "" : p.resolved_location_label;
   const fallbackParts = uniqueCleanLocationParts([
     neighbourhood,
     city,
     district,
     region,
-    p.resolved_location_label,
+    resolvedLabel,
     p.location_label,
     p.location
   ]);
@@ -53088,6 +53098,19 @@ function canonicalUiLocationForProperty(property = {}, extraFields = {}) {
   const district = DISTRICTS.find((item) => normalize(item) === districtKey)
     || (districtKey === "luwero" ? "Luwero" : districtKey.replace(/\b\w/g, (char) => char.toUpperCase()));
   if (["district", "region"].includes(level) || districtKey === areaKey) {
+    // The API area is blank for a district canonical. Keep a stored area the
+    // registry does not know (Namuseera). A district name, a known area, or
+    // the distance word "From" stays blank.
+    const storedArea = String(property.area || "").trim();
+    const storedKey = normalize(storedArea);
+    const knownDistrict = DISTRICTS.some((item) => normalize(item) === storedKey);
+    const knownInTree = getDistrictLocationTree(district).some((cityNode) => (
+      normalize(cityNode.city) === storedKey
+      || (cityNode.neighborhoods || []).some((item) => normalize(item.name) === storedKey)
+    ));
+    if (storedArea && storedKey && storedKey !== "from" && storedKey !== normalize(district) && storedKey !== districtKey && !knownDistrict && !knownInTree) {
+      return { area: storedArea, district, level: level || "district" };
+    }
     return { area: "", district, level: level || "district" };
   }
   for (const cityNode of getDistrictLocationTree(district)) {

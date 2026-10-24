@@ -83,6 +83,14 @@ test('a listing with neither photo nor video keeps the existing placeholder beha
   assert.strictEqual(propertyVideoFirstMedia({ images: [], extra_fields: {} }), null);
 });
 
+test('a listing with zero photos still renders a cover instead of an empty image', () => {
+  assert.match(
+    frontend,
+    /publicImageSrc\(selectedPhoto\?\.url \|\| p\.img, "https:\/\/images\.unsplash\.com\/photo-1560518883-ce09059eeffa\?w=900&q=80"\)/
+  );
+  assert.match(frontend, /firstRealListingPhotoUrl\(\{ \.\.\.p, images: publicImageItems \}\) \|\| \(videoFirstMedia \? "" : "https:\/\/images\.unsplash\.com\/photo-1560518883-ce09059eeffa\?w=900&q=80"\)/);
+});
+
 test('found-online listings keep their own source treatment', () => {
   const { propertyVideoFirstMedia } = loadVideoFirstHelpers();
   const media = propertyVideoFirstMedia({ images: [], listing_origin: 'found_online', extra_fields: { video_urls: [MP4] } });
