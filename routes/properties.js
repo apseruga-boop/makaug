@@ -70,7 +70,7 @@ const {
   verifyListingSubmitToken
 } = require('../utils/listingSubmitOtp');
 const { parsePagination, toPagination } = require('../utils/pagination');
-const { listingComparablePriceSql, publicLandSizeLabel, priceUnitCaption, computedListingTotal, listingPriceFacts } = require('../utils/listingLandPrice');
+const { listingComparablePriceSql, publicLandSizeLabel, priceUnitCaption, computedListingTotal, listingPriceFacts, storedPriceUnit } = require('../utils/listingLandPrice');
 const { DISTRICTS, UNIVERSITIES, LISTING_TYPES, PROPERTY_STATUSES } = require('../utils/constants');
 const {
   isPublicLivePropertyStatus,
@@ -1261,13 +1261,14 @@ function publicContactPhoneForRow(row = {}, safeExtra = null) {
 
 function publicSizePriceFields(row = {}) {
   const facts = listingPriceFacts(row);
-  const perUnit = facts.priceUnit === 'per_acre' || facts.priceUnit === 'per_decimal';
-  const label = publicLandSizeLabel(row);
+  const rawUnit = storedPriceUnit(row);
+  const perUnit = rawUnit != null && (facts.priceUnit === 'per_acre' || facts.priceUnit === 'per_decimal');
+  const label = rawUnit != null ? publicLandSizeLabel(row) : '';
   return {
     land_size_value: row.land_size_value == null || row.land_size_value === '' ? null : Number(row.land_size_value),
     land_size_unit: facts.sizeUnit || row.land_size_unit || null,
     land_size_label: label || null,
-    price_unit: perUnit ? facts.priceUnit : null,
+    price_unit: rawUnit == null ? null : (perUnit ? facts.priceUnit : 'total'),
     price_unit_label: perUnit ? priceUnitCaption(facts.priceUnit) : null,
     price_total: perUnit ? computedListingTotal(row) : null
   };

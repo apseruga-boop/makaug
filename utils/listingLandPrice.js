@@ -53,6 +53,28 @@ function listingPriceFacts(row = {}) {
   return { priceUnit, sizeValue, sizeUnit };
 }
 
+// NULL and blank mean the column was never set. Do not treat that as 'total':
+// normalizePriceUnit('') is 'total', which would make old rows look edited.
+function storedPriceUnit(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const direct = row.price_unit;
+  if (direct != null && String(direct).trim() !== '') return String(direct).trim();
+  if (extra.price_unit != null && String(extra.price_unit).trim() !== '') return String(extra.price_unit).trim();
+  return null;
+}
+
+function formatPublicAmount(amount) {
+  const numeric = Number(amount);
+  const rounded = Number.isInteger(numeric) ? numeric : Math.round(numeric * 100) / 100;
+  return new Intl.NumberFormat('en-UG', { maximumFractionDigits: 2 }).format(rounded);
+}
+
+// A price period of acre already prints "/acre". Adding "per acre" again
+// produced "UGX X/acre per acre".
+function priceTextAlreadyPerAcre(text = '') {
+  return /\/acre$/i.test(String(text || '').trim());
+}
+
 function computedListingTotal(row = {}) {
   const price = Number(row.price);
   if (!Number.isFinite(price) || price <= 0) return null;
@@ -67,10 +89,11 @@ function computedListingTotal(row = {}) {
 }
 
 function publicLandSizeLabel(row = {}) {
+  if (storedPriceUnit(row) == null) return '';
   const { sizeValue, sizeUnit } = listingPriceFacts(row);
   const amount = Number(sizeValue);
   if (!Number.isFinite(amount) || amount <= 0 || !sizeUnit) return '';
-  const shown = Number.isInteger(amount) ? String(amount) : String(Math.round(amount * 100) / 100);
+  const shown = formatPublicAmount(amount);
   const labels = {
     acres: amount === 1 ? 'acre' : 'acres',
     decimals: amount === 1 ? 'decimal' : 'decimals',
@@ -78,6 +101,14 @@ function publicLandSizeLabel(row = {}) {
     m2: 'm²'
   };
   return `${shown} ${labels[sizeUnit]}`;
+}
+
+function publicPriceWithUnit(base, priceUnit) {
+  const text = String(base || '');
+  const unit = priceUnitCaption(priceUnit);
+  if (!unit) return text;
+  if (unit === 'per acre' && priceTextAlreadyPerAcre(text)) return text;
+  return `${text} ${unit}`;
 }
 
 function priceUnitCaption(priceUnit = '') {
@@ -123,9 +154,13 @@ module.exports = {
   landSizeAcres,
   listingComparablePriceSql,
   listingPriceFacts,
+  formatPublicAmount,
   normalizeLandSizeUnit,
   normalizePriceUnit,
+  priceTextAlreadyPerAcre,
   priceUnitCaption,
   publicLandSizeLabel,
-  sizeInUnit
+  publicPriceWithUnit,
+  sizeInUnit,
+  storedPriceUnit
 };

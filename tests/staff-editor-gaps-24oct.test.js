@@ -19,7 +19,10 @@ const {
   computedListingTotal,
   listingComparablePriceSql,
   publicLandSizeLabel,
-  priceUnitCaption
+  publicPriceWithUnit,
+  priceTextAlreadyPerAcre,
+  priceUnitCaption,
+  storedPriceUnit
 } = require('../utils/listingLandPrice');
 const { listingDirectLookup, listingDirectLookupClause, uuidPrefixBounds } = require('../utils/listingReferenceSearch');
 const { canonicalizeUgandaLocation } = require('../utils/locationRegistry');
@@ -52,7 +55,8 @@ test('plot size and per-unit price compute a total without rewriting the stored 
   assert.match(sql, /43560/);
   assert.doesNotMatch(migration, /UPDATE\s+properties[\s\S]*\bSET\s+price\b/i);
   assert.match(properties, /listingComparablePriceSql\('p'\)/);
-  assert.match(properties, /price_unit: perUnit \? facts\.priceUnit : null/);
+  assert.match(properties, /price_unit: rawUnit == null \? null : \(perUnit \? facts\.priceUnit : 'total'\)/);
+  assert.match(properties, /land_size_label: label \|\| null/);
   assert.match(app, /data-plot-size="1"/);
   assert.match(app, /data-price-unit-field="1"/);
   assert.match(app, /id="admin-review-land-size-value-edit"/);
@@ -144,7 +148,8 @@ test('migration 173 assigns an MK ref on insert and backfills blanks without tou
   assert.match(migration, /BEFORE INSERT ON properties/);
   assert.match(migration, /EXECUTE FUNCTION properties_assign_inquiry_reference/);
   assert.match(migration, /MK-/);
-  assert.match(migration, /UPDATE properties AS target/);
+  assert.match(migration, /UPDATE properties/);
+  assert.match(migration, /inquiry_reference IS NULL OR btrim\(inquiry_reference\) = ''/);
   assert.match(migration, /inquiry_reference/);
   assert.doesNotMatch(migration, /BEGIN;/);
   assert.match(migration, /without\n-- changing the WhatsApp bridge/);
@@ -242,4 +247,105 @@ test('staff list and moderation counts avoid the slow scans, and the 05:30 monit
   assert.match(scheduler, /yieldBetweenPlatforms: true/);
   assert.match(read('scripts/run-continuous-social-monitor.js'), /yieldBetweenPlatforms === true/);
   assert.equal(require('../services/dailySourceMonitorScheduler').SCHEDULED_MONITOR_SETTINGS.maxSources, 3);
+});
+
+test('public size, per-unit price and total stay hidden when price_unit is NULL', () => {
+  const silent = {
+    id: 'c25256a2-82e1-4668-8afc-48c4801d88d3',
+    price: 320000000,
+    price_period: 'once',
+    price_unit: null,
+    land_size_value: 17,
+    land_size_unit: 'decimals'
+  };
+  for (const id of ['c25256a2', '490d074e', 'e8571cf2', '950e10f7']) {
+    assert.equal(storedPriceUnit({ ...silent, id }), null);
+    assert.equal(publicLandSizeLabel({ ...silent, id }), '');
+  }
+  assert.equal(publicLandSizeLabel({ ...silent, price_unit: 'total' }), '17 decimals');
+  assert.equal(publicLandSizeLabel({ ...silent, price_unit: 'per_decimal' }), '17 decimals');
+  assert.equal(publicPriceWithUnit('UGX 320,000,000', null), 'UGX 320,000,000');
+  assert.equal(publicPriceWithUnit('UGX 1,000,000/acre', 'per_acre'), 'UGX 1,000,000/acre');
+  assert.equal(priceTextAlreadyPerAcre('UGX 1,000,000/acre'), true);
+  assert.equal(publicPriceWithUnit('UGX 1,000,000', 'per_acre'), 'UGX 1,000,000 per acre');
+  assert.equal(publicPriceWithUnit('UGX 1,000,000', 'per_decimal'), 'UGX 1,000,000 per decimal');
+  assert.equal(publicPriceWithUnit('UGX 1,000,000/acre/year', 'per_acre'), 'UGX 1,000,000/acre/year per acre');
+  const { priceLabel } = require('../services/publicSeoRenderService');
+  assert.equal(priceLabel(silent), 'UGX 320,000,000');
+  assert.equal(priceLabel({ price: 1000000, price_period: 'acre', price_unit: 'per_acre', listing_type: 'land' }), 'UGX 1,000,000/acre');
+  assert.equal(priceLabel({
+    price: 320000000,
+    price_period: 'once',
+    price_unit: 'per_decimal',
+    land_size_value: 17,
+    land_size_unit: 'decimals',
+    listing_type: 'sale'
+  }), 'UGX 320,000,000 per decimal');
+  assert.match(seo, /function seoFactLineHtml/);
+  assert.match(seo, /function seoPriceInnerHtml/);
+  assert.doesNotMatch(seo, /seoFactLine\(listing\)\.map\(escapeHtml\)/);
+  assert.ok(app.includes('p.size ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.size}</strong></div>` : ""'));
+  assert.equal(app.includes('adminEscape(String(p.size))'), false);
+  assert.match(app, /listingPriceUnitIsSet\(p\) && listingLandSizeLabel\(p\)/);
+  assert.match(app, /p\?\.size \|\| extraFields\.size_raw \|\| extraFields\.size_label \|\| extraFields\.land_size_label/);
+  assert.match(app, /unit === "per acre" && priceTextAlreadyPerAcre\(text\)/);
+  assert.match(app, /translateListingLabel\(labels\[unit\]\)/);
+  assert.match(app, /translateListingLabel\("Total UGX \{amount\}"\)/);
+  assert.match(app, /translateListingLabel\(unit\)/);
+  assert.match(app, /toLocaleString\("en-UG"/);
+});
+
+test('the seven public size and price strings are translated in all nine languages', () => {
+  const keys = ['per acre', 'per decimal', 'Total UGX {amount}', 'acre', 'acres', 'decimal', 'decimals', 'sq ft', 'm²'];
+  const langs = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar'];
+  const start = app.indexOf('const LISTING_SIZE_PRICE_I18N = ');
+  const end = app.indexOf('Object.entries(LISTING_SIZE_PRICE_I18N)');
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext(`${app.slice(start, end)}; this.pack = LISTING_SIZE_PRICE_I18N;`, context);
+  for (const lang of langs) {
+    for (const key of keys) {
+      const value = context.pack[lang][key];
+      assert.ok(value, `${lang} has ${key}`);
+      if (key === 'Total UGX {amount}') assert.match(value, /\{amount\}/);
+    }
+  }
+  for (const lang of langs.filter((code) => code !== 'en')) {
+    const phrases = JSON.parse(read(`assets/i18n/site-${lang}.json`)).phrases;
+    for (const key of keys) {
+      assert.equal(phrases[key], context.pack[lang][key], `${lang} pack matches ${key}`);
+    }
+    const patterns = JSON.parse(read(`assets/i18n/site-${lang}.json`)).patterns.map((entry) => entry[0]);
+    assert.ok(patterns.includes('(\\d+(?:[.,]\\d+)?) acres'));
+    assert.ok(patterns.includes('(\\d+(?:[.,]\\d+)?) decimals'));
+    assert.ok(patterns.includes('(\\d+(?:[.,]\\d+)?) sq ft'));
+    assert.ok(patterns.includes('(\\d+(?:[.,]\\d+)?) m²'));
+    assert.ok(patterns.includes('Total UGX ([0-9][0-9,]*)'));
+  }
+});
+
+test('migration 173 locks, rebuilds invalid indexes, and does not rewrite existing MK refs', () => {
+  assert.match(migration, /SET lock_timeout = '5s'/);
+  assert.doesNotMatch(migration, /SET LOCAL lock_timeout/);
+  assert.match(migration, /RAISE NOTICE 'Duplicate inquiry reference left unchanged for staff/);
+  assert.match(migration, /AND i\.indisvalid IS NOT TRUE/);
+  assert.match(migration, /DROP INDEX IF EXISTS %I/);
+  assert.doesNotMatch(migration, /ref_rank/);
+  assert.doesNotMatch(migration, /PARTITION BY inquiry_reference/);
+  assert.doesNotMatch(migration, /substr\(replace\(target\.id::text/);
+  assert.match(migration, /EXIT WHEN NOT EXISTS \(\s*SELECT 1 FROM properties WHERE inquiry_reference = candidate/s);
+  assert.match(migration, /Could not assign an unused inquiry reference/);
+  const indexes = [
+    'idx_property_moderation_events_actor_created',
+    'idx_properties_pending_review_created',
+    'idx_properties_lister_phone_lookup',
+    'idx_properties_lister_email_lookup',
+    'idx_properties_staff_list_updated'
+  ];
+  for (const name of indexes) {
+    const createAt = migration.indexOf(`CREATE INDEX CONCURRENTLY IF NOT EXISTS ${name}`);
+    const dropAt = migration.indexOf(`SELECT makaug_drop_invalid_index('${name}')`);
+    assert.ok(dropAt >= 0 && createAt > dropAt, name);
+  }
+  assert.match(read('scripts/migrate.js'), /Migration notice/);
 });

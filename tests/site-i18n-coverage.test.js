@@ -159,8 +159,8 @@ async function runLayer(lang) {
   }
 
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  assert(/<script src="\/assets\/makaug-site-i18n\.js\?v=20261023-site-i18n-v21" defer><\/script>/.test(html), 'the page loads the current site language pack');
-  assert(fs.readFileSync(path.join(root, 'assets', 'makaug-site-i18n.js'), 'utf8').includes('20261023-site-i18n-v21'), 'the language layer cache version matches the page');
+  assert(/<script src="\/assets\/makaug-site-i18n\.js\?v=20261024-site-i18n-v22" defer><\/script>/.test(html), 'the page loads the current site language pack');
+  assert(fs.readFileSync(path.join(root, 'assets', 'makaug-site-i18n.js'), 'utf8').includes('20261024-site-i18n-v22'), 'the language layer cache version matches the page');
   const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
   assert(app.includes('function getCanonicalEnglishPropertyTitle'), 'non-English visitors get a translatable listing title');
   assert(app.includes('const fromSitePack = siteTranslate(text, lang);'), 'listing labels fall back to the site pack before English');

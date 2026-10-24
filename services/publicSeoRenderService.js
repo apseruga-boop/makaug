@@ -18,7 +18,7 @@ const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql, realPhotoRejection, mediaHost } = require('../utils/realListingPhoto');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
 const { compactUgx } = require('../utils/compactUgx');
-const { computedListingTotal, priceUnitCaption, publicLandSizeLabel } = require('../utils/listingLandPrice');
+const { computedListingTotal, priceUnitCaption, publicLandSizeLabel, publicPriceWithUnit } = require('../utils/listingLandPrice');
 const { foundOnlinePrimaryImageUrl, consentedStaffPrimaryImageLateralSql } = require('../utils/foundOnlinePublicImages');
 const {
   buildThirdPartyPublicSummary,
@@ -554,8 +554,7 @@ function priceLabel(listing = {}) {
   if (!(Number(listing.price) > 0)) return 'Price on application';
   const numberLocale = ACTIVE_COUNTRY_CODE === 'ZA' ? 'en-ZA' : 'en-UG';
   const amount = new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 }).format(Number(listing.price));
-  const unit = priceUnitCaption(listing.price_unit);
-  return `${currencyLabelForSeo()} ${amount}${pricePeriodSuffix(listing)}${unit ? ` ${unit}` : ''}`;
+  return publicPriceWithUnit(`${currencyLabelForSeo()} ${amount}${pricePeriodSuffix(listing)}`, listing.price_unit);
 }
 
 function priceTotalLabel(listing = {}) {
@@ -575,6 +574,25 @@ function seoFactLine(listing = {}) {
     size,
     listing.property_type
   ].filter(Boolean);
+}
+
+// The size phrase is its own text node so the site language layer can translate
+// "17 decimals". Listings with no price unit keep the previous joined text.
+function seoFactLineHtml(listing = {}) {
+  const size = publicLandSizeLabel(listing);
+  return seoFactLine(listing).map((part) => (
+    size && part === size
+      ? `<span data-land-size="1">${escapeHtml(part)}</span>`
+      : escapeHtml(part)
+  )).join(' · ');
+}
+
+function seoPriceInnerHtml(listing = {}) {
+  const full = priceLabel(listing);
+  const unit = priceUnitCaption(listing.price_unit);
+  if (!unit || !full.endsWith(` ${unit}`)) return escapeHtml(full);
+  const base = full.slice(0, -(unit.length + 1));
+  return `${escapeHtml(base)} <span data-price-unit="1">${escapeHtml(unit)}</span>`;
 }
 
 // Short price for <title> and og:title, where long numbers get cut off in search
@@ -712,9 +730,9 @@ function renderSeoListingCard(listing, options = {}) {
     <div class="p-4">
       <h2 class="font-bold text-gray-900"><a href="${escapeHtml(href)}" class="hover:text-green-700 hover:underline">${escapeHtml(listing.title)}</a></h2>
       <p class="mt-1 text-sm text-gray-600">${renderListingLocationLink(listing, options.categoryKey)}</p>
-      <p class="mt-3 text-lg font-black text-green-700"${seoPriceDataAttributes(listing)}>${escapeHtml(priceLabel(listing))}</p>
+      <p class="mt-3 text-lg font-black text-green-700"${seoPriceDataAttributes(listing)}>${seoPriceInnerHtml(listing)}</p>
       ${priceTotalLabel(listing) ? `<p class="mt-1 text-sm font-semibold text-gray-700" data-price-total="1">${escapeHtml(priceTotalLabel(listing))}</p>` : ''}
-      <p class="mt-2 text-sm text-gray-600">${seoFactLine(listing).map(escapeHtml).join(' · ')}</p>
+      <p class="mt-2 text-sm text-gray-600">${seoFactLineHtml(listing)}</p>
     </div>
   </article>`;
 }
@@ -1015,9 +1033,9 @@ function renderPropertySeoHtml(html, listing, options = {}) {
         <div class="p-5">
           <h1 class="text-3xl font-bold text-gray-900 serif">${escapeHtml(heading)}</h1>
           <p class="mt-2 text-gray-600">${location ? `<a href="${escapeHtml(areaUrl)}" class="font-semibold text-green-700 hover:underline">${escapeHtml(locationLabel)}</a>` : escapeHtml(locationLabel)}</p>
-          <p class="mt-4 text-3xl font-black text-green-700"${seoPriceDataAttributes(listing)}>${escapeHtml(priceLabel(listing))}</p>
+          <p class="mt-4 text-3xl font-black text-green-700"${seoPriceDataAttributes(listing)}>${seoPriceInnerHtml(listing)}</p>
           ${priceTotalLabel(listing) ? `<p class="mt-1 text-lg font-semibold text-gray-800" data-price-total="1">${escapeHtml(priceTotalLabel(listing))}</p>` : ''}
-          <p class="mt-3 text-gray-700">${seoFactLine(listing).map(escapeHtml).join(' · ')}</p>
+          <p class="mt-3 text-gray-700">${seoFactLineHtml(listing)}</p>
           <section class="mt-6"><h2 class="text-xl font-black text-gray-900">Property description</h2><p class="mt-2 whitespace-pre-line text-gray-700">${escapeHtml(listing.description || `View this property in ${locationLabel} on ${ACTIVE_BRAND}.`)}</p></section>
           ${listing.found_online_notice ? `<section class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900" data-found-online-notice>${escapeHtml(listing.found_online_notice)}</section>` : ''}
         </div>

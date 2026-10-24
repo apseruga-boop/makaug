@@ -9389,6 +9389,12 @@ function useLpPriceOnApplication() {
   if (typeof updateListPreview === "function") updateListPreview();
 }
 
+function listingPriceUnitIsSet(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const raw = p?.price_unit != null && String(p.price_unit).trim() !== "" ? p.price_unit : extra.price_unit;
+  return raw != null && String(raw).trim() !== "";
+}
+
 function listingPriceUnitCaption(p = {}) {
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
   const raw = String(p?.price_unit_label || p?.price_unit || extra.price_unit || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
@@ -9398,14 +9404,24 @@ function listingPriceUnitCaption(p = {}) {
 }
 
 function listingLandSizeLabel(p = {}) {
+  if (!listingPriceUnitIsSet(p)) return "";
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
-  if (p?.land_size_label) return String(p.land_size_label);
   const amount = Number(p?.land_size_value ?? extra.land_size_value);
   const unit = String(p?.land_size_unit || extra.land_size_unit || "").trim().toLowerCase();
   if (!Number.isFinite(amount) || amount <= 0) return "";
-  const shown = Number.isInteger(amount) ? String(amount) : String(Math.round(amount * 100) / 100);
+  const rounded = Number.isInteger(amount) ? amount : Math.round(amount * 100) / 100;
+  const shown = rounded.toLocaleString("en-UG", { maximumFractionDigits: 2 });
   const labels = { acres: amount === 1 ? "acre" : "acres", decimals: amount === 1 ? "decimal" : "decimals", sq_ft: "sq ft", m2: "m²" };
-  return labels[unit] ? `${shown} ${labels[unit]}` : "";
+  return labels[unit] ? `${shown} ${translateListingLabel(labels[unit])}` : "";
+}
+
+function priceTextAlreadyPerAcre(text = "") {
+  const trimmed = String(text || "").trim();
+  if (/\/acre$/i.test(trimmed)) return true;
+  const acre = translateListingLabel("acre");
+  if (!acre || String(acre).toLowerCase() === "acre") return false;
+  const escaped = String(acre).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp("/" + escaped + "$", "i").test(trimmed);
 }
 
 function listingComputedTotal(p = {}) {
@@ -9428,7 +9444,9 @@ function listingComputedTotal(p = {}) {
 function listingPriceTotalHtml(p = {}) {
   const total = listingComputedTotal(p);
   if (!listingPriceUnitCaption(p) || total == null) return "";
-  return `<div class="mt-1 text-sm font-semibold text-gray-700" data-price-total="1">Total UGX ${Math.round(total).toLocaleString("en-UG")}</div>`;
+  const amount = Math.round(total).toLocaleString("en-UG");
+  const text = translateListingLabel("Total UGX {amount}").replace(/\{amount\}/g, amount);
+  return `<div class="mt-1 text-sm font-semibold text-gray-700" data-price-total="1">${adminEscape(text)}</div>`;
 }
 
 function fmtListingPrice(p = {}, periodOverride = null) {
@@ -9439,7 +9457,9 @@ function fmtListingPrice(p = {}, periodOverride = null) {
   const period = periodOverride ?? (p?.period || p?.price_period || "");
   const withUnit = (text) => {
     const unit = listingPriceUnitCaption(p);
-    return unit ? `${text} ${unit}` : text;
+    if (!unit) return text;
+    if (unit === "per acre" && priceTextAlreadyPerAcre(text)) return text;
+    return `${text} ${translateListingLabel(unit)}`;
   };
   // C6: a listing priced in USD shows its exact original when USD is chosen.
   const originalCurrency = String(p?.price_original_currency || extra.price_original_currency || "").toUpperCase();
@@ -53184,10 +53204,12 @@ function mapRemotePropertyForUi(p, options = {}) {
     media_duration: p?.media_duration || p?.video_duration || extraFields.media_duration || extraFields.video_duration || "",
     image_count: Number(p?.image_count || extraFields.image_count || extraFields.photo_count || 0) || null,
     resolved_location_label: p?.resolved_location_label || extraFields.resolved_location_label || "",
-    size: listingLandSizeLabel(p) || p?.size || extraFields.size_raw || extraFields.size_label || extraFields.land_size_label || "",
+    size: listingPriceUnitIsSet(p) && listingLandSizeLabel(p)
+      ? listingLandSizeLabel(p)
+      : (p?.size || extraFields.size_raw || extraFields.size_label || extraFields.land_size_label || ""),
     land_size_value: p?.land_size_value ?? extraFields.land_size_value ?? null,
     land_size_unit: p?.land_size_unit || extraFields.land_size_unit || "",
-    land_size_label: p?.land_size_label || listingLandSizeLabel(p) || "",
+    land_size_label: listingPriceUnitIsSet(p) ? (listingLandSizeLabel(p) || "") : "",
     price_unit: p?.price_unit || extraFields.price_unit || null,
     price_unit_label: p?.price_unit_label || "",
     price_total: p?.price_total ?? null,
@@ -58820,6 +58842,113 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
   });
 })();
 
+// Public size and per-unit price. English is the source key; the other eight
+// packs in assets/i18n/site-*.json carry the same phrases for the site layer.
+const LISTING_SIZE_PRICE_I18N = {
+  en: {
+    "per acre": "per acre",
+    "per decimal": "per decimal",
+    "Total UGX {amount}": "Total UGX {amount}",
+    "acre": "acre",
+    "acres": "acres",
+    "decimal": "decimal",
+    "decimals": "decimals",
+    "sq ft": "sq ft",
+    "m²": "m²"
+  },
+  lg: {
+    "per acre": "buli ekari",
+    "per decimal": "buli desimolo",
+    "Total UGX {amount}": "Omuwendo ogw'omugatte UGX {amount}",
+    "acre": "ekari",
+    "acres": "ekari",
+    "decimal": "desimolo",
+    "decimals": "desimolo",
+    "sq ft": "futi eza skwe",
+    "m²": "m²"
+  },
+  sw: {
+    "per acre": "kwa ekari",
+    "per decimal": "kwa desimali",
+    "Total UGX {amount}": "Jumla UGX {amount}",
+    "acre": "ekari",
+    "acres": "ekari",
+    "decimal": "desimali",
+    "decimals": "desimali",
+    "sq ft": "futi za mraba",
+    "m²": "m²"
+  },
+  ac: {
+    "per acre": "i eka",
+    "per decimal": "i decimal",
+    "Total UGX {amount}": "Wel ducu UGX {amount}",
+    "acre": "eka",
+    "acres": "eka",
+    "decimal": "decimal",
+    "decimals": "decimal",
+    "sq ft": "fut ma lapim",
+    "m²": "m²"
+  },
+  ny: {
+    "per acre": "aha ekari",
+    "per decimal": "aha desimolo",
+    "Total UGX {amount}": "Omuhendo gwona UGX {amount}",
+    "acre": "ekari",
+    "acres": "ekari",
+    "decimal": "desimolo",
+    "decimals": "desimolo",
+    "sq ft": "futi za skwe",
+    "m²": "m²"
+  },
+  rn: {
+    "per acre": "buri ekari",
+    "per decimal": "buri desimolo",
+    "Total UGX {amount}": "Omuhendo gwensi UGX {amount}",
+    "acre": "ekari",
+    "acres": "ekari",
+    "decimal": "desimolo",
+    "decimals": "desimolo",
+    "sq ft": "futi za skwe",
+    "m²": "m²"
+  },
+  sm: {
+    "per acre": "buli eka",
+    "per decimal": "buli desimolo",
+    "Total UGX {amount}": "Omuwendo gwona UGX {amount}",
+    "acre": "eka",
+    "acres": "eka",
+    "decimal": "desimolo",
+    "decimals": "desimolo",
+    "sq ft": "futi eza skwe",
+    "m²": "m²"
+  },
+  am: {
+    "per acre": "በአንድ ኤከር",
+    "per decimal": "በአንድ ዴሲማል",
+    "Total UGX {amount}": "ጠቅላላ UGX {amount}",
+    "acre": "ኤከር",
+    "acres": "ኤከር",
+    "decimal": "ዴሲማል",
+    "decimals": "ዴሲማል",
+    "sq ft": "ካሬ ጫማ",
+    "m²": "ሜ²"
+  },
+  ar: {
+    "per acre": "لكل فدان",
+    "per decimal": "لكل عشري",
+    "Total UGX {amount}": "الإجمالي UGX {amount}",
+    "acre": "فدان",
+    "acres": "أفدنة",
+    "decimal": "عشري",
+    "decimals": "أعشار",
+    "sq ft": "قدم مربع",
+    "m²": "م²"
+  }
+};
+Object.entries(LISTING_SIZE_PRICE_I18N).forEach(([lang, labels]) => {
+  Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels);
+});
+
 (function registerListingContactIdLabels() {
   const contactIdLabels = {
     lg: {
@@ -62622,7 +62751,7 @@ async function openDetail(id, options = {}) {
             <div class="mt-4 grid sm:grid-cols-4 gap-3 text-sm">
               ${p.beds ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.beds}</strong> ${countLabel(p.beds, "bed", "beds")}</div>` : ""}
               ${p.baths ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.baths}</strong> ${countLabel(p.baths, "bath", "baths")}</div>` : ""}
-              ${listingLandSizeLabel(p) ? `<div class="bg-green-50 rounded-lg p-2" data-land-size="1"><strong>${adminEscape(listingLandSizeLabel(p))}</strong></div>` : (p.size ? `<div class="bg-green-50 rounded-lg p-2"><strong>${adminEscape(String(p.size))}</strong></div>` : "")}
+              ${listingLandSizeLabel(p) ? `<div class="bg-green-50 rounded-lg p-2" data-land-size="1"><strong>${adminEscape(listingLandSizeLabel(p))}</strong></div>` : (p.size ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.size}</strong></div>` : "")}
               <div class="bg-green-50 rounded-lg p-2"><strong>${translateListingLabel(p.subtype || p.property_type || "Property")}</strong></div>
               ${landTitleLabel ? `<div class="bg-green-50 rounded-lg p-2"><strong>${adminEscape(landTitleLabel)}</strong><div class="text-[11px] text-gray-500 mt-0.5">${translateListingLabel("Source or lister stated")}</div></div>` : ""}
             </div>

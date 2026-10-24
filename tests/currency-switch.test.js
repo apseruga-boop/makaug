@@ -71,7 +71,8 @@ function sandboxFor({ stored = null, fx = undefined } = {}) {
     grabFunction('readStoredDisplayCurrency'), 'var activeCur = readStoredDisplayCurrency();',
     grabFunction('formatCompact'), grabFunction('localizePricePeriod'), grabFunction('fmtP'),
     grabFunction('normalizeListingPricePeriodValue'), grabConst('PRICE_PLAUSIBILITY_BOUNDS_FALLBACK'), grabFunction('listingPriceIsPlausible'),
-    grabFunction('listingPriceNeedsCheck'), grabFunction('fmtListingPrice'), grabFunction('listingPriceHtml'),
+    grabFunction('listingPriceNeedsCheck'), grabFunction('listingPriceUnitCaption'), grabFunction('priceTextAlreadyPerAcre'),
+    grabFunction('fmtListingPrice'), grabFunction('listingPriceHtml'),
     grabFunction('listingFromPriceElement'), grabFunction('fxNoteText'), grabFunction('refreshDisplayedPrices'),
     grabFunction('syncCurrencySelect'), grabFunction('setCurrency'),
     'this.api = { setCurrency, listingPriceHtml, fmtListingPrice, refreshDisplayedPrices, fxNoteText, get activeCur() { return activeCur; } };'
@@ -135,7 +136,7 @@ test('a USD-original listing shows its exact original when USD is chosen; UGX st
 });
 
 test('cards, the detail page, map popups and found-online cards render updatable prices; SSR prices carry the data too', () => {
-  assert.match(APP, /<div class="text-3xl font-black text-green-700">\$\{listingPriceHtml\(p\)\}<\/div>\n\s*<div data-fx-note/);
+  assert.match(APP, /<div class="text-3xl font-black text-green-700">\$\{listingPriceHtml\(p\)\}<\/div>\n\s*\$\{listingPriceTotalHtml\(p\)\}\n\s*<div data-fx-note/);
   assert.match(APP, /text-sm font-bold">\$\{listingPriceHtml\(p, studentMode \? \(p\.period \|\| "sem"\) : p\.period\)\}<\/div>/);
   assert.match(APP, /margin-bottom:8px;">\$\{listingPriceHtml\(property \|\| \{\}\)\}<\/div>/);
   assert.match(APP, /<div class="social-import-card-price">\$\{listingPriceHtml\(/);
