@@ -62650,7 +62650,7 @@ async function openDetail(id, options = {}) {
             <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Send enquiry")}</h4>
             <p class="text-xs text-gray-500 mb-2">${adminEscape(translatePropertyUi("Your enquiry will go to {name}.", { name: inquiryRecipientName }))}</p>
             <div class="space-y-2">
-              <input id="detail-inquiry-website" name="website" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" value="">
+              <input id="detail-inquiry-website" name="website" class="agent-profile-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" value="">
               <input id="detail-inquiry-name" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Your name"))}" value="${adminAttr(inquiryNameDefault)}">
               <input id="detail-inquiry-phone" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="+256 7XX XXX XXX" value="${adminAttr(inquiryPhoneDefault)}">
               <input id="detail-inquiry-email" type="email" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Email optional"))}" value="${adminAttr(inquiryEmailDefault)}">
