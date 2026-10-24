@@ -13,14 +13,21 @@ const LOCK_KEY = 'makaug_daily_source_monitor';
 const RAN_TODAY_ACTION = 'daily_source_monitor_ran';
 const DEFAULT_TIMEOUT_MS = 8 * 60 * 1000;
 
+// 24 Oct 2026, about 06:00–06:30 UK: Chrome timed out opening Preview & edit.
+// This job runs inside the web process at 05:30 London and can still start
+// during the 60-minute catch-up, through 06:30, on a 512 MB instance. The
+// scheduled pass is smaller and yields between platforms so requests can run.
+// 22 Oct 05:20 was before 05:30. That pass was the unindexed actor_id count.
 const SCHEDULED_MONITOR_SETTINGS = Object.freeze({
   confirm: true,
   platforms: ['youtube', 'x', 'tiktok'],
   youtubeJobMode: 'channel_uploads',
-  maxSources: 8,
-  maxResults: 10,
+  maxSources: 3,
+  maxResults: 4,
   maxPages: 1,
   tiktokWhenUnset: true,
+  yieldBetweenPlatforms: true,
+  yieldMs: 250,
 });
 
 let timer = null;

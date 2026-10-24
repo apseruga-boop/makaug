@@ -18,6 +18,7 @@ const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql, realPhotoRejection, mediaHost } = require('../utils/realListingPhoto');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
 const { compactUgx } = require('../utils/compactUgx');
+const { computedListingTotal, priceUnitCaption, publicLandSizeLabel } = require('../utils/listingLandPrice');
 const { foundOnlinePrimaryImageUrl, consentedStaffPrimaryImageLateralSql } = require('../utils/foundOnlinePublicImages');
 const {
   buildThirdPartyPublicSummary,
@@ -383,6 +384,9 @@ function normalizeSeoListingRow(row = {}) {
     price_implausible: priceImplausible,
     price_on_application: row.price_on_application === true || priceImplausible,
     price_period: plainText(row.price_period),
+    price_unit: plainText(row.price_unit),
+    land_size_value: row.land_size_value == null || row.land_size_value === '' ? null : Number(row.land_size_value),
+    land_size_unit: plainText(row.land_size_unit),
     transaction_type: plainText(row.transaction_type),
     bedrooms: Number(row.bedrooms || 0) || 0,
     bathrooms: Number(row.bathrooms || 0) || 0,
@@ -441,7 +445,7 @@ async function loadPublicSeoListings(db, options = {}) {
        LIMIT ${limitRef}
      )\nSELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
-       p.price, p.price_period, p.price_on_application, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.price, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
        p.extra_fields->>'city' AS city,
        p.extra_fields->>'neighborhood' AS neighborhood,
@@ -468,7 +472,7 @@ async function loadPublicSeoListings(db, options = {}) {
      )
      SELECT
        p.id, p.listing_type, p.title, LEFT(COALESCE(p.description, ''), 600) AS description, p.area, p.district,
-       p.price, p.price_period, p.price_on_application, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.price, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
        p.extra_fields->>'city' AS city,
        p.extra_fields->>'neighborhood' AS neighborhood,
@@ -502,7 +506,7 @@ async function loadPublicSeoListing(db, propertyId) {
     const result = await db.query(
       `SELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
-       p.price, p.price_period, p.price_on_application, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.price, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
        p.extra_fields->>'city' AS city,
        p.extra_fields->>'neighborhood' AS neighborhood,
@@ -550,7 +554,27 @@ function priceLabel(listing = {}) {
   if (!(Number(listing.price) > 0)) return 'Price on application';
   const numberLocale = ACTIVE_COUNTRY_CODE === 'ZA' ? 'en-ZA' : 'en-UG';
   const amount = new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 }).format(Number(listing.price));
-  return `${currencyLabelForSeo()} ${amount}${pricePeriodSuffix(listing)}`;
+  const unit = priceUnitCaption(listing.price_unit);
+  return `${currencyLabelForSeo()} ${amount}${pricePeriodSuffix(listing)}${unit ? ` ${unit}` : ''}`;
+}
+
+function priceTotalLabel(listing = {}) {
+  const unit = priceUnitCaption(listing.price_unit);
+  const total = computedListingTotal(listing);
+  if (!unit || total == null) return '';
+  const numberLocale = ACTIVE_COUNTRY_CODE === 'ZA' ? 'en-ZA' : 'en-UG';
+  const amount = new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 }).format(total);
+  return `Total ${currencyLabelForSeo()} ${amount}`;
+}
+
+function seoFactLine(listing = {}) {
+  const size = publicLandSizeLabel(listing);
+  return [
+    listing.bedrooms ? `${listing.bedrooms} ${listing.bedrooms === 1 ? 'bedroom' : 'bedrooms'}` : '',
+    listing.bathrooms ? `${listing.bathrooms} ${listing.bathrooms === 1 ? 'bathroom' : 'bathrooms'}` : '',
+    size,
+    listing.property_type
+  ].filter(Boolean);
 }
 
 // Short price for <title> and og:title, where long numbers get cut off in search
@@ -689,11 +713,8 @@ function renderSeoListingCard(listing, options = {}) {
       <h2 class="font-bold text-gray-900"><a href="${escapeHtml(href)}" class="hover:text-green-700 hover:underline">${escapeHtml(listing.title)}</a></h2>
       <p class="mt-1 text-sm text-gray-600">${renderListingLocationLink(listing, options.categoryKey)}</p>
       <p class="mt-3 text-lg font-black text-green-700"${seoPriceDataAttributes(listing)}>${escapeHtml(priceLabel(listing))}</p>
-      <p class="mt-2 text-sm text-gray-600">${[
-        listing.bedrooms ? `${listing.bedrooms} ${listing.bedrooms === 1 ? 'bedroom' : 'bedrooms'}` : '',
-        listing.bathrooms ? `${listing.bathrooms} ${listing.bathrooms === 1 ? 'bathroom' : 'bathrooms'}` : '',
-        listing.property_type
-      ].filter(Boolean).map(escapeHtml).join(' · ')}</p>
+      ${priceTotalLabel(listing) ? `<p class="mt-1 text-sm font-semibold text-gray-700" data-price-total="1">${escapeHtml(priceTotalLabel(listing))}</p>` : ''}
+      <p class="mt-2 text-sm text-gray-600">${seoFactLine(listing).map(escapeHtml).join(' · ')}</p>
     </div>
   </article>`;
 }
@@ -995,11 +1016,8 @@ function renderPropertySeoHtml(html, listing, options = {}) {
           <h1 class="text-3xl font-bold text-gray-900 serif">${escapeHtml(heading)}</h1>
           <p class="mt-2 text-gray-600">${location ? `<a href="${escapeHtml(areaUrl)}" class="font-semibold text-green-700 hover:underline">${escapeHtml(locationLabel)}</a>` : escapeHtml(locationLabel)}</p>
           <p class="mt-4 text-3xl font-black text-green-700"${seoPriceDataAttributes(listing)}>${escapeHtml(priceLabel(listing))}</p>
-          <p class="mt-3 text-gray-700">${[
-            listing.bedrooms ? `${listing.bedrooms} ${listing.bedrooms === 1 ? 'bedroom' : 'bedrooms'}` : '',
-            listing.bathrooms ? `${listing.bathrooms} ${listing.bathrooms === 1 ? 'bathroom' : 'bathrooms'}` : '',
-            listing.property_type
-          ].filter(Boolean).map(escapeHtml).join(' · ')}</p>
+          ${priceTotalLabel(listing) ? `<p class="mt-1 text-lg font-semibold text-gray-800" data-price-total="1">${escapeHtml(priceTotalLabel(listing))}</p>` : ''}
+          <p class="mt-3 text-gray-700">${seoFactLine(listing).map(escapeHtml).join(' · ')}</p>
           <section class="mt-6"><h2 class="text-xl font-black text-gray-900">Property description</h2><p class="mt-2 whitespace-pre-line text-gray-700">${escapeHtml(listing.description || `View this property in ${locationLabel} on ${ACTIVE_BRAND}.`)}</p></section>
           ${listing.found_online_notice ? `<section class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900" data-found-online-notice>${escapeHtml(listing.found_online_notice)}</section>` : ''}
         </div>
@@ -1023,7 +1041,7 @@ function renderPropertySeoHtml(html, listing, options = {}) {
     ...(listing.price > 0 ? {
       offers: {
         '@type': 'Offer',
-        price: listing.price,
+        price: computedListingTotal(listing) || listing.price,
         priceCurrency: ACTIVE_CURRENCY,
         url: propertyUrl,
         availability: 'https://schema.org/InStock'

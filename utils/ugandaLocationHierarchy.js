@@ -185,6 +185,13 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
   const boundaryTowns = canonical && canonical.district === 'Kampala' ? kampalaTownsForArea(canonical.name) : [];
   const staffCityOnBoundary = Boolean(city) && boundaryTowns.includes(city);
   const chosenCityIsKnown = options.preferChosenCity === true && Boolean(city) && tree.some((item) => item.city === city);
+  // A town staff already saved (Nkoowe, or a spelling the dropdown does not
+  // list yet) is kept. Only the district name itself ("Kampala" over Luzira)
+  // is still relocated to the neighbourhood's town.
+  const explicitUnknownTown = options.preferChosenCity === true
+    && Boolean(city)
+    && city.toLowerCase() !== district.toLowerCase()
+    && !tree.some((item) => item.city === city);
   if (canonical && canonical.level !== 'region' && (canonical.level !== 'district' || allowDistrictNode)) {
     // Area "Kira" is the town. An explicit child such as Najjera must stay
     // the neighbourhood; the town's own name used to replace it.
@@ -192,7 +199,7 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
     const keepExplicitChild = neighborhoodIsChildOfTown(district, city || parentTown, neighborhood, canonical)
       || neighborhoodIsChildOfTown(district, parentTown, neighborhood, canonical);
     if (!keepExplicitChild) neighborhood = canonical.name;
-    if (!(chosenCityIsKnown || staffCityOnBoundary)) {
+    if (!(chosenCityIsKnown || staffCityOnBoundary || explicitUnknownTown)) {
       city = clean(canonical.town) || city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
     }
   }
@@ -200,7 +207,7 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
   let cityNode = city ? tree.find((item) => item.city === city) : null;
   const staffTownForCanonical = chosenCityIsKnown && canonical && canonical.district === district && neighborhood === canonical.name;
   const explicitCanonicalHierarchy = allowCanonicalHierarchy && explicitCanonical && explicitCanonical.district === district;
-  if (city && !cityNode && !explicitCanonicalHierarchy) {
+  if (city && !cityNode && !explicitCanonicalHierarchy && !explicitUnknownTown) {
     errors.push('city/town must belong to the selected district');
   }
 
@@ -212,7 +219,7 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
     const neighborhoodMatchesCity = cityNode
       ? (cityNode.neighborhoods || []).some((n) => n.name === neighborhood)
       : false;
-    if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name) && !staffTownForCanonical && !staffCityOnBoundary) {
+    if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name) && !staffTownForCanonical && !staffCityOnBoundary && !explicitUnknownTown) {
       errors.push('neighbourhood must belong to the selected district and town/city');
     }
   }

@@ -389,10 +389,144 @@ async function removeStaffPropertyVideo({ propertyId, videoUrl, actorId, confirm
   }
 }
 
+function attachVideoToExtra(extra = {}, videoUrl) {
+  const fields = extra && typeof extra === 'object' && !Array.isArray(extra) ? { ...extra } : {};
+  const urls = Array.isArray(fields.video_urls) ? fields.video_urls.map((url) => String(url)) : [];
+  if (!urls.some((url) => sameVideoUrl(url, videoUrl))) urls.push(videoUrl);
+  const next = { ...fields, video_urls: urls };
+  if (!next.video_url) next.video_url = videoUrl;
+  next.video_count = collectListingVideoUrls(next).length;
+  return next;
+}
+
+async function lockListing(client, idOrRef) {
+  const text = String(idOrRef || '').trim();
+  if (!text) return null;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text);
+  if (uuid) {
+    return (await client.query('SELECT id, extra_fields, inquiry_reference FROM properties WHERE id = $1::uuid FOR UPDATE', [text])).rows[0] || null;
+  }
+  if (/^MK-/i.test(text)) {
+    return (await client.query(
+      'SELECT id, extra_fields, inquiry_reference FROM properties WHERE inquiry_reference = $1 FOR UPDATE',
+      [text.toUpperCase()]
+    )).rows[0] || null;
+  }
+  if (/^[0-9a-f]{8}$/i.test(text)) {
+    const { uuidPrefixBounds } = require('../utils/listingReferenceSearch');
+    const bounds = uuidPrefixBounds(text);
+    const rows = bounds.end
+      ? (await client.query(
+        'SELECT id, extra_fields, inquiry_reference FROM properties WHERE id >= $1::uuid AND id < $2::uuid ORDER BY created_at ASC LIMIT 2 FOR UPDATE',
+        [bounds.start, bounds.end]
+      )).rows
+      : (await client.query(
+        'SELECT id, extra_fields, inquiry_reference FROM properties WHERE id >= $1::uuid ORDER BY created_at ASC LIMIT 2 FOR UPDATE',
+        [bounds.start]
+      )).rows;
+    if (rows.length === 1) return rows[0];
+    if (rows.length > 1) throw mediaError(409, 'That id prefix matches more than one listing. Paste the full id or the MK reference.');
+    return null;
+  }
+  return null;
+}
+
+// Move one video from this listing onto another, or swap it with a video there.
+// Both listings get a history event carrying the required audit note.
+async function moveOrSwapStaffPropertyVideo({
+  propertyId,
+  videoUrl,
+  target,
+  targetVideoUrl = '',
+  mode = 'move',
+  note = '',
+  actorId,
+  confirm = false
+}, database = db) {
+  if (confirm !== true) throw mediaError(400, 'Confirm before moving or swapping a video.');
+  const auditNote = String(note || '').trim();
+  if (auditNote.length < 3) throw mediaError(400, 'An audit note is required to move or swap a video.');
+  const actionMode = String(mode || 'move').trim().toLowerCase() === 'swap' ? 'swap' : 'move';
+  const sourceUrl = String(videoUrl || '').trim();
+  if (!/^https?:\/\//i.test(sourceUrl)) throw mediaError(400, 'Choose a video to move.');
+  const client = await database.getClient();
+  try {
+    await client.query('BEGIN');
+    const source = await lockListing(client, propertyId);
+    if (!source) throw mediaError(404, 'Property not found');
+    const destination = await lockListing(client, target);
+    if (!destination) throw mediaError(404, 'The other listing was not found. Use its id or MK reference.');
+    if (String(source.id) === String(destination.id)) throw mediaError(400, 'Choose a different listing.');
+    const sourceVideos = collectListingVideoUrls(source.extra_fields || {}, source);
+    const moving = sourceVideos.find((url) => sameVideoUrl(url, sourceUrl));
+    if (!moving) throw mediaError(404, 'That video is not attached to this listing.');
+    const targetVideos = collectListingVideoUrls(destination.extra_fields || {}, destination);
+    let returning = null;
+    if (actionMode === 'swap') {
+      const requested = String(targetVideoUrl || '').trim();
+      returning = requested
+        ? targetVideos.find((url) => sameVideoUrl(url, requested))
+        : targetVideos[0];
+      if (!returning) throw mediaError(400, 'The other listing has no video to swap. Use Move instead.');
+    }
+    const sourceDetached = detachVideoFromExtra(source.extra_fields || {}, moving);
+    let sourceExtra = sourceDetached.extra;
+    let targetExtra = destination.extra_fields || {};
+    if (returning) {
+      targetExtra = detachVideoFromExtra(targetExtra, returning).extra;
+      sourceExtra = attachVideoToExtra(sourceExtra, returning);
+    }
+    targetExtra = attachVideoToExtra(targetExtra, moving);
+    const stamp = new Date().toISOString();
+    sourceExtra = { ...sourceExtra, staff_media_edited_at: stamp };
+    targetExtra = { ...targetExtra, staff_media_edited_at: stamp };
+    await client.query('UPDATE properties SET extra_fields = $2::jsonb, updated_at = NOW() WHERE id = $1', [source.id, JSON.stringify(sourceExtra)]);
+    await client.query('UPDATE properties SET extra_fields = $2::jsonb, updated_at = NOW() WHERE id = $1', [destination.id, JSON.stringify(targetExtra)]);
+    const action = actionMode === 'swap' ? 'staff_listing_video_swapped' : 'staff_listing_video_moved';
+    const delivery = {
+      mode: actionMode,
+      video_url: moving,
+      swapped_video_url: returning,
+      source_id: source.id,
+      target_id: destination.id,
+      source_reference: source.inquiry_reference || null,
+      target_reference: destination.inquiry_reference || null,
+      note: auditNote
+    };
+    await client.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, reason, notes, delivery)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+      [source.id, actorId || null, action, auditNote, auditNote, JSON.stringify(delivery)]
+    );
+    await client.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, reason, notes, delivery)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+      [destination.id, actorId || null, action, auditNote, auditNote, JSON.stringify({ ...delivery, direction: 'received' })]
+    );
+    await client.query('COMMIT');
+    return {
+      id: source.id,
+      target_id: destination.id,
+      action,
+      mode: actionMode,
+      video_url: moving,
+      swapped_video_url: returning,
+      extra_fields: sourceExtra
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   changeStaffPropertyImage,
   addStaffPropertyImages,
   removeStaffPropertyVideo,
+  moveOrSwapStaffPropertyVideo,
+  attachVideoToExtra,
   collectListingVideoUrls,
   detachVideoFromExtra,
   attributedStillUrls,

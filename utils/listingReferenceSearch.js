@@ -12,6 +12,18 @@
 const LISTING_REFERENCE_RE = /^MK-[0-9A-Z-]{4,}$/i;
 const LISTING_REFERENCE_SUFFIX_RE = /^[0-9A-F]{6}$/i;
 const PROPERTY_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// The first 8 hex digits are a UUID's time_low. A prefix uses the primary-key
+// range, not id::text LIKE, which cannot use the uuid index. Six hex digits
+// stay the MK suffix (EFB4A3), so a place name is still not an id.
+const PROPERTY_ID_PREFIX_RE = /^[0-9a-f]{8}$/i;
+
+function uuidPrefixBounds(prefix = '') {
+  const hex = String(prefix || '').trim().toLowerCase();
+  const start = `${hex}-0000-0000-0000-000000000000`;
+  const next = parseInt(hex, 16) + 1;
+  if (!Number.isFinite(next) || next > 0xffffffff) return { start, end: null };
+  return { start, end: `${next.toString(16).padStart(8, '0')}-0000-0000-0000-000000000000` };
+}
 
 function listingReferenceQuery(term = '') {
   const clean = String(term || '').trim();
@@ -25,6 +37,7 @@ function listingDirectLookup(term = '') {
   const reference = listingReferenceQuery(clean);
   if (reference) return { kind: 'reference', value: reference };
   if (LISTING_REFERENCE_SUFFIX_RE.test(clean)) return { kind: 'suffix', value: clean.toUpperCase() };
+  if (PROPERTY_ID_PREFIX_RE.test(clean)) return { kind: 'id_prefix', value: clean.toLowerCase() };
   return null;
 }
 
@@ -44,10 +57,19 @@ function listingDirectLookupClause(alias = 'p', lookup = null, values = []) {
     values.push(`MK-________-${lookup.value}`);
     return `${alias}.inquiry_reference LIKE $${values.length}`;
   }
+  if (lookup.kind === 'id_prefix') {
+    const bounds = uuidPrefixBounds(lookup.value);
+    values.push(bounds.start);
+    if (!bounds.end) return `${alias}.id >= $${values.length}::uuid`;
+    values.push(bounds.end);
+    return `${alias}.id >= $${values.length - 1}::uuid AND ${alias}.id < $${values.length}::uuid`;
+  }
   return 'FALSE';
 }
 
 function propertyListingSearchClause(alias = 'p', term = '', values = []) {
+  const direct = listingDirectLookup(term);
+  if (direct) return listingDirectLookupClause(alias, direct, values);
   const reference = listingReferenceQuery(term);
   if (reference) {
     values.push(reference);
@@ -73,9 +95,11 @@ function propertyListingSearchClause(alias = 'p', term = '', values = []) {
 module.exports = {
   LISTING_REFERENCE_RE,
   LISTING_REFERENCE_SUFFIX_RE,
+  PROPERTY_ID_PREFIX_RE,
   PROPERTY_ID_RE,
   listingDirectLookup,
   listingDirectLookupClause,
   listingReferenceQuery,
-  propertyListingSearchClause
+  propertyListingSearchClause,
+  uuidPrefixBounds
 };

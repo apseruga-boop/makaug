@@ -30,6 +30,7 @@ const PUBLIC_LISTING_KEYS = new Set([
   'inquiry_reference', 'land_size_unit', 'land_size_value', 'land_verification', 'latitude',
   'listed_by', 'listed_via', 'lister_name', 'lister_type', 'listing_origin', 'listing_type',
   'longitude', 'nearest_university', 'new_until', 'parking_bays', 'price', 'price_currency',
+  'price_unit', 'price_unit_label', 'price_total', 'land_size_label',
   'price_fx_as_of', 'price_fx_rate_ugx', 'price_on_application', 'price_original',
   'price_original_currency', 'price_period', 'primary_image_url', 'property_type',
   'public_contact_phone', 'public_copy_reviewed', 'found_online_notice', 'published_at', 'room_arrangement', 'room_type',

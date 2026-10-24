@@ -217,6 +217,11 @@ async function runContinuousSocialMonitor(options = {}) {
       logger.warn('source monitor stopped before the next platform', { platform });
       break;
     }
+    if (activeRun.yieldBetweenPlatforms === true) {
+      const pauseMs = Math.max(0, Number(activeRun.yieldMs) || 0);
+      await new Promise((resolve) => setTimeout(resolve, pauseMs));
+      if (runWasStopped()) break;
+    }
     const result = await runSocialPlatformPostSweep({
       db,
       platform,

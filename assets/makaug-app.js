@@ -9389,20 +9389,66 @@ function useLpPriceOnApplication() {
   if (typeof updateListPreview === "function") updateListPreview();
 }
 
+function listingPriceUnitCaption(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const raw = String(p?.price_unit_label || p?.price_unit || extra.price_unit || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (raw === "per_acre") return "per acre";
+  if (raw === "per_decimal") return "per decimal";
+  return "";
+}
+
+function listingLandSizeLabel(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  if (p?.land_size_label) return String(p.land_size_label);
+  const amount = Number(p?.land_size_value ?? extra.land_size_value);
+  const unit = String(p?.land_size_unit || extra.land_size_unit || "").trim().toLowerCase();
+  if (!Number.isFinite(amount) || amount <= 0) return "";
+  const shown = Number.isInteger(amount) ? String(amount) : String(Math.round(amount * 100) / 100);
+  const labels = { acres: amount === 1 ? "acre" : "acres", decimals: amount === 1 ? "decimal" : "decimals", sq_ft: "sq ft", m2: "m²" };
+  return labels[unit] ? `${shown} ${labels[unit]}` : "";
+}
+
+function listingComputedTotal(p = {}) {
+  const caption = listingPriceUnitCaption(p);
+  if (!caption) return null;
+  if (p?.price_total != null && Number(p.price_total) > 0) return Math.round(Number(p.price_total));
+  const price = Number(p?.price);
+  if (!Number.isFinite(price) || price <= 0) return null;
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const amount = Number(p?.land_size_value ?? extra.land_size_value);
+  const unit = String(p?.land_size_unit || extra.land_size_unit || "").trim().toLowerCase();
+  const toAcres = { acres: 1, decimals: 0.01, sq_ft: 1 / 43560, m2: 1 / 4046.8564224 };
+  if (!toAcres[unit] || !Number.isFinite(amount) || amount <= 0) return null;
+  const acres = amount * toAcres[unit];
+  const size = caption === "per acre" ? acres : acres * 100;
+  const total = Math.round(price * size);
+  return Number.isFinite(total) && total > 0 ? total : null;
+}
+
+function listingPriceTotalHtml(p = {}) {
+  const total = listingComputedTotal(p);
+  if (!listingPriceUnitCaption(p) || total == null) return "";
+  return `<div class="mt-1 text-sm font-semibold text-gray-700" data-price-total="1">Total UGX ${Math.round(total).toLocaleString("en-UG")}</div>`;
+}
+
 function fmtListingPrice(p = {}, periodOverride = null) {
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
   if (p?.price_on_application === true || extra.price_on_application === true || listingPriceNeedsCheck(p)) {
     return translateListingLabel("Price upon application");
   }
   const period = periodOverride ?? (p?.period || p?.price_period || "");
+  const withUnit = (text) => {
+    const unit = listingPriceUnitCaption(p);
+    return unit ? `${text} ${unit}` : text;
+  };
   // C6: a listing priced in USD shows its exact original when USD is chosen.
   const originalCurrency = String(p?.price_original_currency || extra.price_original_currency || "").toUpperCase();
   const original = Number(p?.price_original ?? extra.price_original);
   if (activeCur === "USD" && originalCurrency === "USD" && Number.isFinite(original) && original > 0) {
     const suffix = localizePricePeriod(period);
-    return `$${Math.round(original).toLocaleString("en-US")}${suffix ? "/" + suffix : ""}`;
+    return withUnit(`$${Math.round(original).toLocaleString("en-US")}${suffix ? "/" + suffix : ""}`);
   }
-  return fmtP(p?.price || 0, period);
+  return withUnit(fmtP(p?.price || 0, period));
 }
 
 // C6: a price that setCurrency() can update in place (cards, detail, similar
@@ -14463,6 +14509,15 @@ function staffNumber(value) {
   return Number(value).toLocaleString("en-UG");
 }
 
+// A failed pending-review count is a dash. Number(null) is 0, and a leaked 0
+// must not paint the tile while the queue still has rows.
+function staffCountOrDash(listings = {}, key = "") {
+  if (!listings || listings._pending_count_ok === false) return null;
+  const value = listings[key];
+  if (value == null || value === "" || !Number.isFinite(Number(value))) return null;
+  return Number(value);
+}
+
 function openHarvestSubmissionModal() {
   const modal = document.getElementById("harvest-submission-modal");
   if (!modal) return;
@@ -14713,6 +14768,7 @@ function staffListingDirectLookup(term = "") {
   const clean = String(term || "").trim();
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) return "id";
   if (/^MK-[0-9A-Z-]{4,}$/i.test(clean)) return "reference";
+  if (/^[0-9a-f]{8}$/i.test(clean)) return "id_prefix";
   if (/^[0-9A-F]{6}$/i.test(clean)) return "suffix";
   return "";
 }
@@ -14884,8 +14940,8 @@ function staffBrokerQueueIds() {
 }
 
 function staffHeaderPendingReviewCount() {
-  const pending = Number(staffDashboardData?.summary?.listings?.pending_review);
-  return Number.isFinite(pending) ? pending : 0;
+  const pending = staffCountOrDash(staffDashboardData?.summary?.listings || {}, "pending_review");
+  return pending == null ? 0 : pending;
 }
 
 function staffPaintReviewQueue(segment) {
@@ -15132,8 +15188,8 @@ function staffRestoreDecisionQueueSnapshot(snapshot) {
     listings.pending_review = snapshot.pending;
     listings.broker_pending_review = snapshot.broker;
     const definitions = staffDashboardData?.summary?.definitions || {};
-    setStaffStat("staff-stat-pending", listings.pending_review, definitions, "pending_review");
-    setStaffStat("staff-stat-broker-pending", listings.broker_pending_review, definitions, "broker_pending_review");
+    setStaffStat("staff-stat-pending", staffCountOrDash(listings, "pending_review"), definitions, "pending_review");
+    setStaffStat("staff-stat-broker-pending", staffCountOrDash(listings, "broker_pending_review"), definitions, "broker_pending_review");
   }
   ["main", "broker", "search"].forEach((segment) => {
     staffReviewQueueState[segment].rows = snapshot.queues[segment] || [];
@@ -15189,8 +15245,8 @@ function staffOptimisticallyApplyDecision(propertyId, nextStatus) {
         listings.broker_pending_review -= 1;
       }
       const definitions = staffDashboardData?.summary?.definitions || {};
-      setStaffStat("staff-stat-pending", listings.pending_review, definitions, "pending_review");
-      setStaffStat("staff-stat-broker-pending", listings.broker_pending_review, definitions, "broker_pending_review");
+      setStaffStat("staff-stat-pending", staffCountOrDash(listings, "pending_review"), definitions, "pending_review");
+      setStaffStat("staff-stat-broker-pending", staffCountOrDash(listings, "broker_pending_review"), definitions, "broker_pending_review");
     }
   }
   return snapshot;
@@ -15897,8 +15953,8 @@ function applyStaffDashboardData(data = {}, user = {}) {
   const definitions = data.summary?.definitions || {};
   staffRenderDashboardFreshness(data);
   setStaffStat("staff-stat-total", data.summary?.listings?.live, definitions, "total_properties");
-  setStaffStat("staff-stat-pending", data.summary?.listings?.pending_review, definitions, "pending_review");
-  setStaffStat("staff-stat-broker-pending", data.summary?.listings?.broker_pending_review, definitions, "broker_pending_review");
+  setStaffStat("staff-stat-pending", staffCountOrDash(data.summary?.listings, "pending_review"), definitions, "pending_review");
+  setStaffStat("staff-stat-broker-pending", staffCountOrDash(data.summary?.listings, "broker_pending_review"), definitions, "broker_pending_review");
   setStaffStat("staff-stat-approvals", data.summary?.my_moderation?.approvals, definitions, "my_approvals");
   setStaffStat("staff-stat-leads", data.summary?.leads?.open, definitions, "open_leads");
   setStaffStat("staff-stat-ads", data.summary?.advertising?.open_inquiries, definitions, "ad_leads");
@@ -16617,7 +16673,26 @@ function staffPreviewVideosHtml(preview = {}) {
           title: `Property video ${index + 1}`,
           sub: "Play the complete walkthrough here before approving it for the public listing."
         })}
-        ${propertyId ? `<button type="button" data-staff-photo-action data-staff-remove-video="${adminAttr(url)}" onclick="staffRemovePreviewVideo(${propertyIdArg(propertyId)}, ${propertyIdArg(url)})" class="w-full border-t border-gray-200 bg-white px-2 py-2 text-xs font-black text-red-700 hover:bg-red-50">Remove video</button>` : ""}
+        ${propertyId ? `<div class="border-t border-gray-200 bg-white" data-staff-video-move data-video-url="${adminAttr(url)}">
+          <button type="button" data-staff-photo-action data-staff-remove-video="${adminAttr(url)}" onclick="staffRemovePreviewVideo(${propertyIdArg(propertyId)}, ${propertyIdArg(url)})" class="w-full bg-white px-2 py-2 text-xs font-black text-red-700 hover:bg-red-50">Remove video</button>
+          <button type="button" data-staff-photo-action data-staff-video-move-open="1" onclick="staffToggleVideoMove(this)" class="w-full border-t border-gray-200 bg-white px-2 py-2 text-xs font-black text-slate-800 hover:bg-slate-50">Move/swap video</button>
+          <form class="hidden space-y-2 border-t border-gray-200 p-2" data-staff-video-move-form onsubmit="return staffSubmitVideoMove(event, ${propertyIdArg(propertyId)}, ${propertyIdArg(url)})">
+            <label class="block text-[11px] font-bold text-gray-700">Other listing id or MK ref
+              <input data-staff-video-target required class="mt-1 w-full rounded border border-gray-200 px-2 py-1 text-xs" placeholder="MK ref or property id">
+            </label>
+            <label class="block text-[11px] font-bold text-gray-700">Action
+              <select data-staff-video-mode class="mt-1 w-full rounded border border-gray-200 px-2 py-1 text-xs">
+                <option value="move">Move to that listing</option>
+                <option value="swap">Swap with that listing's video</option>
+              </select>
+            </label>
+            <label class="block text-[11px] font-bold text-gray-700">Audit note
+              <textarea data-staff-video-note required minlength="3" class="mt-1 w-full rounded border border-gray-200 px-2 py-1 text-xs" placeholder="Why this video is moving (required)"></textarea>
+            </label>
+            <p data-staff-video-move-error role="alert" hidden style="display:none;margin:0;padding:6px 8px;border:1px solid #dc2626;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:12px;font-weight:800"></p>
+            <button type="submit" class="w-full rounded bg-slate-900 px-2 py-2 text-xs font-black text-white">Confirm move/swap</button>
+          </form>
+        </div>` : ""}
       </div>`).join("")}
   </div>`;
 }
@@ -17084,6 +17159,79 @@ async function staffRemovePreviewVideo(propertyId, videoUrl) {
   }
 }
 
+function staffToggleVideoMove(button) {
+  const form = button?.closest?.("[data-staff-video-move]")?.querySelector("[data-staff-video-move-form]");
+  if (!form) return;
+  form.classList.toggle("hidden");
+}
+
+async function staffSubmitVideoMove(event, propertyId, videoUrl) {
+  event?.preventDefault?.();
+  const form = event?.currentTarget || event?.target;
+  const target = String(form?.querySelector?.("[data-staff-video-target]")?.value || "").trim();
+  const mode = String(form?.querySelector?.("[data-staff-video-mode]")?.value || "move");
+  const note = String(form?.querySelector?.("[data-staff-video-note]")?.value || "").trim();
+  const errorEl = form?.querySelector?.("[data-staff-video-move-error]");
+  const showError = (message) => {
+    if (!errorEl) return;
+    errorEl.textContent = message || "";
+    errorEl.hidden = !message;
+    errorEl.style.display = message ? "block" : "none";
+  };
+  if (!target) {
+    showError("Enter the other listing's id or MK ref.");
+    return false;
+  }
+  if (note.length < 3) {
+    showError("An audit note is required.");
+    return false;
+  }
+  showError("");
+  try {
+    await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/videos/move`, {
+      method: "POST",
+      body: { url: videoUrl, target, mode, note, confirm: true }
+    }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Move video");
+    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/preview`);
+    if (response?.data && String(adminActiveReview?.id || "") === String(propertyId)) {
+      adminActiveReview = { ...(adminActiveReview || {}), ...response.data, id: propertyId };
+      const videos = document.getElementById("staff-preview-video-gallery");
+      if (videos) videos.outerHTML = staffPreviewVideosHtml(adminActiveReview);
+    }
+    toast(mode === "swap" ? "Videos swapped. Both listings record the note." : "Video moved. Both listings record the note.");
+  } catch (error) {
+    showError(error.message || "Move/swap failed.");
+  }
+  return false;
+}
+
+async function staffRunVideoCaptionOcr(propertyId) {
+  const id = String(propertyId || document.getElementById("staff-listing-preview-modal")?.dataset?.propertyId || adminActiveReview?.id || "");
+  const panel = document.querySelector("#staff-listing-preview-modal [data-video-caption-ocr], #admin-review-content [data-video-caption-ocr]");
+  const button = panel?.querySelector("[data-staff-ocr-run]");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Checking…";
+  }
+  try {
+    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(id)}/video-caption-ocr`, { method: "POST", body: {} });
+    const view = response?.data?.video_caption_ocr || { status: "not_checked", text: "", facts: {}, conflicts: [] };
+    if (adminActiveReview && String(adminActiveReview.id || "") === id) {
+      adminActiveReview.video_caption_ocr = view;
+      const extra = adminActiveReview.extra_fields && typeof adminActiveReview.extra_fields === "object" ? adminActiveReview.extra_fields : {};
+      adminActiveReview.extra_fields = { ...extra, video_caption_ocr: view };
+    }
+    if (panel) panel.outerHTML = adminVideoCaptionOcrPanelHtml(adminActiveReview || { video_caption_ocr: view, extra_fields: { video_caption_ocr: view, video_urls: ["stored"] } });
+    adminRefreshVideoCaptionApproveGate();
+  } catch (error) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Run check now";
+    }
+    toast(`Video check failed: ${error.message || "request failed"}`);
+  }
+}
+
 async function staffChangePreviewPhoto(propertyId, imageId, restore = false) {
   if (staffPhotoChangePending || String(adminActiveReview?.id || "") !== String(propertyId)) return;
   staffPhotoChangePending = true;
@@ -17381,7 +17529,8 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
     toast("Kept this listing open. A different listing was not applied.");
     return;
   }
-  staffPreviewTitleDraft = String(preview.title || "");
+  const editorTitle = String(preview.editor_title || preview.title || "");
+  staffPreviewTitleDraft = editorTitle;
   if (existing) {
     releaseReviewModal(existing);
   } else {
@@ -17406,7 +17555,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
       <div class="bg-slate-900 text-white p-5 flex justify-between gap-4">
         <div>
           <div class="text-xs uppercase tracking-wide text-emerald-200 font-black" data-staff-preview-eyebrow>${staffListingIsLive(preview.status) ? "Live listing" : "Preview before publishing"}</div>
-          <h3 class="text-2xl font-black mt-1">${adminEscape(preview.title || "Untitled listing")}</h3>
+          <h3 class="text-2xl font-black mt-1">${adminEscape(editorTitle || "Untitled listing")}</h3>
           <p class="text-sm text-slate-300 mt-1" data-staff-preview-status-line>${adminEscape([preview.area, preview.district].filter(Boolean).join(", ") || "Location needs checking")} • ${adminEscape(preview.status || "pending")}</p>
           <p class="text-xs text-emerald-100 mt-1" data-staff-preview-save-state></p>
           <div class="mt-2 flex flex-wrap items-center gap-2${staffListingIsLive(preview.status) ? "" : " hidden"}" data-staff-preview-live-slot data-live-listing-edit="1">${staffListingIsLive(preview.status) ? `${staffLiveListingBadgeHtml()}<span class="text-xs font-bold text-emerald-100">Saving changes keeps this listing live. Every change is recorded.</span>` : ""}</div>
@@ -17447,7 +17596,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
           <section class="rounded-xl border border-amber-100 bg-amber-50 p-4">
             <h4 class="font-black text-amber-950">Location guardrail</h4>
             <p class="text-xs text-amber-900 mt-1">Location is non-negotiable. Known hierarchy warnings block staff save/approval until corrected.</p>
-            ${(location.warnings || []).length ? `<div class="mt-2 rounded-lg bg-white border border-red-100 p-2 text-xs text-red-800">${(location.warnings || []).map((w) => adminEscape(w)).join("<br>")}</div>` : `<div class="mt-2 text-xs text-emerald-800 font-bold">No known area/district mismatch detected.</div>`}
+            ${(location.warnings || []).length ? `<div class="mt-2 rounded-lg bg-white border border-red-100 p-2 text-xs text-red-800" data-staff-location-warnings="1">${(location.warnings || []).map((w) => adminEscape(w)).join("<br>")}</div>` : `<div class="mt-2 text-xs text-emerald-800 font-bold" data-staff-location-warnings="0">No known area/district mismatch detected.</div>`}
             ${(location.soft_warnings || []).length ? `<div class="mt-2 rounded-lg border border-amber-200 bg-white p-2 text-xs text-amber-950" data-staff-location-soft-warning>${(location.soft_warnings || []).map((w) => adminEscape(w)).join("<br>")}</div>` : ""}
           </section>
           <section class="rounded-xl border border-gray-200 p-4">
@@ -17481,6 +17630,13 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
                   <button type="button" data-staff-unpublish-yes onclick="staffUnpublishPreviewListing(${propertyIdArg(preview.id)}, true)" style="border:1px solid #b91c1c;background:#dc2626;color:#ffffff;border-radius:12px;padding:8px 14px;font-size:14px;font-weight:800;cursor:pointer">Yes, unpublish</button>
                 </div>
               </div>
+              <div data-staff-republish-confirm role="alertdialog" aria-label="Confirm publish again" hidden style="display:none;margin-top:8px;padding:12px;border:2px solid #047857;border-radius:12px;background:#ecfdf5">
+                <p style="margin:0;color:#065f46;font-size:14px;font-weight:800;line-height:1.4">Publish this listing again? It will go back on the site.</p>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+                  <button type="button" data-staff-republish-cancel onclick="staffCancelRepublishConfirm()" style="border:1px solid #d1d5db;background:#ffffff;color:#111827;border-radius:12px;padding:8px 14px;font-size:14px;font-weight:800;cursor:pointer">Cancel</button>
+                  <button type="button" data-staff-republish-yes onclick="staffRepublishPreviewListing(${propertyIdArg(preview.id)}, true)" style="border:1px solid #047857;background:#047857;color:#ffffff;border-radius:12px;padding:8px 14px;font-size:14px;font-weight:800;cursor:pointer">Yes, publish again</button>
+                </div>
+              </div>
             </div>
             <p class="text-xs text-gray-500 mt-3">Approve uses the same live publish API as King moderation. If checklist warnings remain, the backend will block approval.</p>
           </section>
@@ -17492,6 +17648,12 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
     adminReviewRefreshHierarchyControls({ syncMap: false });
     adminReviewOnListingTypeChange();
     adminReviewAutoPopulateLocationFromSource(preview);
+    const titleInput = document.getElementById("admin-review-title-edit");
+    const openModal = document.getElementById("staff-listing-preview-modal");
+    if (titleInput && openModal && openModal.dataset.propertyId === String(preview.id || "") && document.activeElement !== titleInput) {
+      titleInput.value = editorTitle;
+      staffPreviewTitleDraft = editorTitle;
+    }
     initAdminReviewLocationMap(preview);
     staffHydrateCoverVideoChoices(modal);
     staffSyncPreviewPhotoActions();
@@ -17854,14 +18016,68 @@ async function saveStaffListingPreview(propertyId, options = {}) {
       // tab. The fields just saved are already on screen.
       const state = document.querySelector("#staff-listing-preview-modal [data-staff-preview-save-state]");
       if (state) state.textContent = "Saved. This editor stays open.";
+      staffClearLocationBannerAfterSave(saved);
+      const saveError = document.querySelector("#staff-listing-preview-modal [data-staff-save-error]");
+      if (saveError) saveError.remove();
       queueStaffDashboardRefreshAfterModeration({ keepPreviewOpen: true });
     }
     if (!options.silent) toast("Preview changes saved.");
     return saved.id ? saved : null;
   } catch (error) {
+    staffShowPreviewSaveError(error);
     toast(`Preview save failed: ${error.message || "request failed"}`);
     throw error;
   }
+}
+
+function staffClearLocationBannerAfterSave(saved = {}) {
+  const warnings = saved?.location_review?.warnings;
+  if (Array.isArray(warnings) && warnings.length) return;
+  const modal = document.getElementById("staff-listing-preview-modal");
+  const banner = modal?.querySelector("[data-staff-location-warnings='1']");
+  if (banner) {
+    const clear = document.createElement("div");
+    clear.className = "mt-2 text-xs text-emerald-800 font-bold";
+    clear.setAttribute("data-staff-location-warnings", "0");
+    clear.textContent = "No known area/district mismatch detected.";
+    banner.replaceWith(clear);
+  }
+  adminReviewClearStaleUnrecognisedLocation();
+  const status = modal?.querySelector("#admin-review-address-search-status") || document.getElementById("admin-review-address-search-status");
+  if (status && /location not recognised/i.test(status.textContent || "")) {
+    status.textContent = "Location saved.";
+    status.classList.remove("text-amber-800", "text-red-800");
+    status.classList.add("text-emerald-800");
+  }
+}
+
+function staffShowPreviewSaveError(error = {}) {
+  const modal = document.getElementById("staff-listing-preview-modal");
+  if (!modal) return;
+  let errorEl = modal.querySelector("[data-staff-save-error]");
+  if (!errorEl) {
+    errorEl = document.createElement("p");
+    errorEl.setAttribute("data-staff-save-error", "1");
+    errorEl.setAttribute("role", "alert");
+    const notes = modal.querySelector("#admin-review-notes");
+    if (notes) notes.insertAdjacentElement("afterend", errorEl);
+    else modal.appendChild(errorEl);
+  }
+  const noteSaved = error?.response?.note_saved === true || error?.note_saved === true;
+  const detail = error?.message || "Preview save failed.";
+  errorEl.textContent = noteSaved
+    ? `The location was not saved. ${detail} The internal note was saved.`
+    : detail;
+  errorEl.hidden = false;
+  errorEl.style.display = "block";
+  errorEl.style.marginTop = "8px";
+  errorEl.style.padding = "8px 10px";
+  errorEl.style.border = "1px solid #dc2626";
+  errorEl.style.borderRadius = "8px";
+  errorEl.style.background = "#fef2f2";
+  errorEl.style.color = "#991b1b";
+  errorEl.style.fontSize = "14px";
+  errorEl.style.fontWeight = "800";
 }
 
 function openStaffOwnerStatusWhatsApp(statusData = {}, normalizedStatus = "", reason = "") {
@@ -18332,7 +18548,7 @@ function staffPatchPreviewPublication(preview = {}) {
 
 function staffSetUnpublishReasonError(reasonEl, errorEl, show) {
   if (errorEl) {
-    errorEl.textContent = show ? "Type why this live listing is being unpublished." : "";
+    errorEl.textContent = show ? "Reason required. Type why this live listing is being unpublished." : "";
     errorEl.hidden = !show;
     errorEl.style.display = show ? "block" : "none";
   }
@@ -18362,6 +18578,18 @@ function staffShowUnpublishConfirm(modal, show) {
 
 function staffCancelUnpublishConfirm() {
   staffShowUnpublishConfirm(document.getElementById("staff-listing-preview-modal"), false);
+}
+
+function staffShowRepublishConfirm(modal, show) {
+  const panel = modal?.querySelector("[data-staff-republish-confirm]");
+  if (!panel) return;
+  panel.hidden = !show;
+  panel.style.display = show ? "block" : "none";
+  if (show && typeof panel.scrollIntoView === "function") panel.scrollIntoView({ block: "nearest" });
+}
+
+function staffCancelRepublishConfirm() {
+  staffShowRepublishConfirm(document.getElementById("staff-listing-preview-modal"), false);
 }
 
 async function staffUnpublishPreviewListing(propertyId, confirmed) {
@@ -18396,7 +18624,13 @@ async function staffUnpublishPreviewListing(propertyId, confirmed) {
   }
 }
 
-async function staffRepublishPreviewListing(propertyId) {
+async function staffRepublishPreviewListing(propertyId, confirmed) {
+  const modal = document.getElementById("staff-listing-preview-modal");
+  if (confirmed !== true) {
+    staffShowRepublishConfirm(modal, true);
+    return;
+  }
+  staffShowRepublishConfirm(modal, false);
   try {
     setStaffPreviewDecisionBusy(true);
     const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/republish`, {
@@ -29143,8 +29377,15 @@ function adminReviewSetOptions(id, html, value = "") {
   const el = adminReviewField(id);
   if (!el) return "";
   el.innerHTML = html;
+  const wanted = String(value || "");
+  if (wanted && id === "admin-review-city-edit" && !Array.from(el.options || []).some((option) => option.value === wanted)) {
+    const option = document.createElement("option");
+    option.value = wanted;
+    option.textContent = wanted;
+    el.appendChild(option);
+  }
   const values = Array.from(el.options || []).map((option) => option.value);
-  el.value = values.includes(value) ? value : "";
+  el.value = values.includes(wanted) ? wanted : "";
   return el.value || "";
 }
 
@@ -29219,7 +29460,10 @@ function adminReviewTownForNeighborhood(district = "", city = "", neighborhood =
   const name = String(neighborhood || "").trim();
   const chosen = String(city || "").trim();
   if (!name || !tree.length) return chosen;
-  if (tree.some((node) => node.city === chosen)) return chosen;
+  const chosenIsDistrict = chosen.toLowerCase() === String(district || "").trim().toLowerCase();
+  // A saved town that is not the district name stays, even when the dropdown
+  // does not list it (Nkoowe). "Kampala" plus Luzira still moves to Nakawa.
+  if (chosen && !chosenIsDistrict) return chosen;
   const home = tree.find((node) => (node.neighborhoods || []).some((item) => item.name === name));
   return home ? home.city : chosen;
 }
@@ -30242,13 +30486,15 @@ function adminReviewOnPriceCurrencyChange() {
 
 function adminVideoCaptionOcrRecord(review = {}) {
   const extra = adminReviewExtraFields(review);
-  const stored = extra.video_caption_ocr && typeof extra.video_caption_ocr === "object" ? extra.video_caption_ocr : null;
+  const fromPreview = review.video_caption_ocr && typeof review.video_caption_ocr === "object" ? review.video_caption_ocr : null;
+  const stored = extra.video_caption_ocr && typeof extra.video_caption_ocr === "object" ? extra.video_caption_ocr : fromPreview;
   const videos = []
     .concat(Array.isArray(extra.video_urls) ? extra.video_urls : [])
     .concat(extra.video_url ? [extra.video_url] : [])
+    .concat(Array.isArray(review.video_urls) ? review.video_urls : [])
     .filter(Boolean);
   if (stored) return stored;
-  if (videos.length) return { status: "pending", text: "", facts: {}, conflicts: [] };
+  if (videos.length) return { status: "not_checked", text: "", facts: {}, conflicts: [] };
   return null;
 }
 
@@ -30280,9 +30526,12 @@ function adminVideoCaptionOcrPanelHtml(review = {}) {
     size: "Size",
     type: "Property type"
   };
-  const statusLine = status === "ocr pending"
-    ? "OCR pending"
-    : (status === "pending" ? "Video text is still being read." : "");
+  const statusLine = status === "not_checked"
+    ? "Not checked"
+    : status === "ocr pending"
+      ? "OCR pending"
+      : (status === "pending" ? "Video text is still being read." : "");
+  const propertyId = String(review.id || "");
   return `
     <div class="rounded-lg border border-slate-200 bg-white p-2" data-video-caption-ocr="1" data-ocr-status="${adminAttr(status)}" data-video-facts="${adminAttr(encodeURIComponent(JSON.stringify(facts)))}" data-conflicts="${adminAttr(encodeURIComponent(JSON.stringify(conflicts)))}">
       <div class="text-[11px] font-black uppercase tracking-wide text-slate-700">Extracted from video</div>
@@ -30291,7 +30540,8 @@ function adminVideoCaptionOcrPanelHtml(review = {}) {
       <pre class="mt-1 max-h-28 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-800" data-no-translate>${adminEscape(text || (status === "done" ? "" : ""))}</pre>
       ${status === "done" && !text ? `<p class="mt-1 text-xs text-slate-600">No text was read from the video.</p>` : ""}
       <div class="mt-2 text-[11px] font-black uppercase tracking-wide text-slate-500">Video facts</div>
-      <div class="mt-1">${factRows || `<p class="text-xs text-slate-600">${status === "done" ? "No text was read from the video." : "Video text is still being read."}</p>`}</div>
+      <div class="mt-1">${factRows || `<p class="text-xs text-slate-600">${status === "done" || status === "not_checked" ? "No text was read from the video." : "Video text is still being read."}</p>`}</div>
+      ${status === "not_checked" ? `<button type="button" data-staff-ocr-run="1" onclick="staffRunVideoCaptionOcr(${propertyIdArg(propertyId)})" class="mt-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-black text-slate-800">Run check now</button>` : ""}
       ${conflicts.length ? `
         <div class="mt-2 rounded-lg border border-red-300 bg-red-50 p-2" data-video-caption-ocr-block>
           <div class="text-[11px] font-black uppercase tracking-wide text-red-900">Why approval is blocked</div>
@@ -30425,6 +30675,26 @@ async function adminLoadVideoCaptionConflicts(which = "staff") {
   }
 }
 
+function adminReviewLandSizeUnitOptions(review = {}, extra = {}) {
+  const raw = String(review.land_size_unit || extra.land_size_unit || "").trim().toLowerCase().replace(/²/g, "2");
+  const selected = ["acre", "acres", "ac"].includes(raw) ? "acres"
+    : ["decimal", "decimals", "dec"].includes(raw) ? "decimals"
+      : ["sq ft", "sqft", "sq_ft", "square feet", "square foot", "ft2"].includes(raw) ? "sq_ft"
+        : ["m2", "sq m", "sqm", "sq_m", "square metres", "square meters"].includes(raw) ? "m2"
+          : "";
+  return [["", "Choose unit"], ["acres", "acres"], ["decimals", "decimals"], ["sq_ft", "sq ft"], ["m2", "m²"]]
+    .map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function adminReviewPriceUnitOptions(review = {}, extra = {}) {
+  const raw = String(review.price_unit || extra.price_unit || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const selected = raw === "per_acre" || raw === "peracre" ? "per_acre"
+    : raw === "per_decimal" || raw === "perdecimal" ? "per_decimal"
+      : "total";
+  return [["total", "Total price"], ["per_acre", "Per acre"], ["per_decimal", "Per decimal"]]
+    .map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
+}
+
 function adminReviewListingEditPanel(review = {}) {
   const facts = adminExtractReviewFacts(review);
   const amenities = Array.isArray(review.amenities) ? review.amenities.join(", ") : "";
@@ -30541,7 +30811,7 @@ function adminReviewListingEditPanel(review = {}) {
       ${adminDataIntegrityReviewHtml(extra)}
       <div class="mt-3 grid md:grid-cols-2 gap-3">
         <label class="block text-xs font-bold text-gray-700">Public title
-          <input id="admin-review-title-edit" oninput="staffPreviewRememberTitle(this.value)" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.title || "")}">
+          <input id="admin-review-title-edit" oninput="staffPreviewRememberTitle(this.value)" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.editor_title || review.title || "")}">
         </label>
         <label class="block text-xs font-bold text-gray-700">Listing type
           <select id="admin-review-listing-type-edit" onchange="adminReviewOnListingTypeChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${typeOptions}</select>
@@ -30613,6 +30883,15 @@ function adminReviewListingEditPanel(review = {}) {
         </label>
         <label class="block text-xs font-bold text-gray-700">Price period
           <select id="admin-review-price-period-edit" onchange="adminReviewOnPricePeriodChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${periodOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-gray-700" data-plot-size="1">Plot / land size
+          <input id="admin-review-land-size-value-edit" type="number" min="0" step="any" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.land_size_value ?? extra.land_size_value ?? "")}" placeholder="e.g. 10">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Size unit
+          <select id="admin-review-land-size-unit-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${adminReviewLandSizeUnitOptions(review, extra)}</select>
+        </label>
+        <label class="block text-xs font-bold text-gray-700" data-price-unit-field="1">Price unit
+          <select id="admin-review-price-unit-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${adminReviewPriceUnitOptions(review, extra)}</select>
         </label>
         <label class="flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-gray-700">
           <input id="admin-review-price-on-application-edit" type="checkbox" onchange="adminReviewOnPriceOnApplicationChange()" ${poaChecked ? "checked" : ""}>
@@ -31145,6 +31424,9 @@ function collectAdminReviewListingPatch() {
       get("admin-review-price-fx-rate-edit")
     ),
     price_period: get("admin-review-price-period-edit"),
+    land_size_value: get("admin-review-land-size-value-edit"),
+    land_size_unit: get("admin-review-land-size-unit-edit"),
+    price_unit: get("admin-review-price-unit-edit") || "total",
     // A typed amount is the price. The checkbox stays ticked on null-price
     // rows; sending it as well used to wipe the number on save.
     price_on_application: normalizeListingPricePeriodValue(get("admin-review-price-period-edit")) === "poa"
@@ -52902,7 +53184,13 @@ function mapRemotePropertyForUi(p, options = {}) {
     media_duration: p?.media_duration || p?.video_duration || extraFields.media_duration || extraFields.video_duration || "",
     image_count: Number(p?.image_count || extraFields.image_count || extraFields.photo_count || 0) || null,
     resolved_location_label: p?.resolved_location_label || extraFields.resolved_location_label || "",
-    size: p?.size || extraFields.size_raw || extraFields.size_label || extraFields.land_size_label || "",
+    size: listingLandSizeLabel(p) || p?.size || extraFields.size_raw || extraFields.size_label || extraFields.land_size_label || "",
+    land_size_value: p?.land_size_value ?? extraFields.land_size_value ?? null,
+    land_size_unit: p?.land_size_unit || extraFields.land_size_unit || "",
+    land_size_label: p?.land_size_label || listingLandSizeLabel(p) || "",
+    price_unit: p?.price_unit || extraFields.price_unit || null,
+    price_unit_label: p?.price_unit_label || "",
+    price_total: p?.price_total ?? null,
     nearby_places: normalizeNearbyPlacesForUi(
       Array.isArray(extraFields.nearby_facilities) ? extraFields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : [])
     ),
@@ -55956,7 +56244,8 @@ function publicListingFilterNumber(id) {
 }
 
 function publicSortablePrice(property) {
-  const value = Number(property?.price);
+  const computed = listingComputedTotal(property);
+  const value = computed != null ? computed : Number(property?.price);
   return Number.isFinite(value) && value > 0 && value <= 100000000000 ? value : null;
 }
 
@@ -62294,6 +62583,7 @@ async function openDetail(id, options = {}) {
               </div>
               <div class="text-right">
                 <div class="text-3xl font-black text-green-700">${listingPriceHtml(p)}</div>
+                ${listingPriceTotalHtml(p)}
                 <div data-fx-note class="mt-1 text-[11px] text-gray-500 ${activeCur === "UGX" ? "hidden" : ""}">${adminEscape(fxNoteText())}</div>
                 ${propertyOriginalCurrencyGuideHtml(p, "mt-1 text-xs font-semibold text-sky-700")}
               </div>
@@ -62332,7 +62622,7 @@ async function openDetail(id, options = {}) {
             <div class="mt-4 grid sm:grid-cols-4 gap-3 text-sm">
               ${p.beds ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.beds}</strong> ${countLabel(p.beds, "bed", "beds")}</div>` : ""}
               ${p.baths ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.baths}</strong> ${countLabel(p.baths, "bath", "baths")}</div>` : ""}
-              ${p.size ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.size}</strong></div>` : ""}
+              ${listingLandSizeLabel(p) ? `<div class="bg-green-50 rounded-lg p-2" data-land-size="1"><strong>${adminEscape(listingLandSizeLabel(p))}</strong></div>` : (p.size ? `<div class="bg-green-50 rounded-lg p-2"><strong>${adminEscape(String(p.size))}</strong></div>` : "")}
               <div class="bg-green-50 rounded-lg p-2"><strong>${translateListingLabel(p.subtype || p.property_type || "Property")}</strong></div>
               ${landTitleLabel ? `<div class="bg-green-50 rounded-lg p-2"><strong>${adminEscape(landTitleLabel)}</strong><div class="text-[11px] text-gray-500 mt-0.5">${translateListingLabel("Source or lister stated")}</div></div>` : ""}
             </div>

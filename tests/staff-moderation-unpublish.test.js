@@ -63,7 +63,7 @@ test('unpublish asks for a reason inline and confirms before the page disappears
   assert.match(app, /Yes, unpublish/);
   assert.match(app, /border:1px solid #dc2626/);
   assert.match(app, /Unpublish this listing\? It will disappear from the site\./);
-  assert.match(unpublish, /Type why this live listing is being unpublished\./);
+  assert.match(unpublish, /Reason required\. Type why this live listing is being unpublished\./);
   assert.match(unpublish, /borderColor = "#dc2626"/);
   assert.match(unpublish, /staffShowUnpublishConfirm\(modal, true\)/);
   assert.doesNotMatch(unpublish, /window\.confirm/);
@@ -149,7 +149,7 @@ test('an empty unpublish reason shows a red error and the in-modal confirm is re
   };
   vm.runInNewContext(`${app.slice(start, end)}\nthis.run = staffUnpublishPreviewListing;\nthis.cancel = staffCancelUnpublishConfirm;`, sandbox);
   return sandbox.run('listing-id').then(() => {
-    assert.equal(errorEl.textContent, 'Type why this live listing is being unpublished.');
+    assert.equal(errorEl.textContent, 'Reason required. Type why this live listing is being unpublished.');
     assert.equal(errorEl.hidden, false);
     assert.equal(errorEl.style.display, 'block');
     assert.equal(reasonEl.invalid, 'aria-invalid');
