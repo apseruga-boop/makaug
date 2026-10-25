@@ -2753,6 +2753,12 @@ async function start() {
     startGreetingNameCache(db);
     startBillingScheduler(db);
     require('./services/payLinkService').startPayLinkScheduler(db);
+    // Daily USD/GBP/EUR to UGX rates. The last good rate is loaded from
+    // fx_rates at once; the first fetch waits for the deploy to settle.
+    require('./services/fxRateService').startFxRateScheduler(db, {
+      logger,
+      bootDelayMs: staggeredBootDelay('fx_rates')
+    });
   }
   if (!IS_SOUTH_AFRICA || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true') {
     startFeaturedRotationScheduler(db);

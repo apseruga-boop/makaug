@@ -653,8 +653,11 @@ function getListingMapPoint(property = {}) {
 
 // C6 (10 Oct 2026, Marketing): one place for display exchange rates. The
 // server publishes them in /config.js (window.MAKAUG_FX, also GET /api/fx) with
-// an "as of" date; these are only the fallback. UGX stays the stored value;
-// other currencies are shown as an approximate conversion ("≈").
+// an "as of" date. Since 25 Oct 2026 the server fetches them daily
+// (services/fxRateService.js); these are only the fallback when the config is
+// missing. UGX stays the stored value; other currencies are shown as an
+// approximate conversion ("≈"). A listing priced in US dollars is shown in
+// UGX at today's rate.
 const FX_FALLBACK = { base: "UGX", as_of: "2026-10-01", rates: { USD: 3800, GBP: 4900, EUR: 4100 } };
 const CURRENCY_SYMBOLS = { USD: "$", GBP: "£", EUR: "€" };
 const SUPPORTED_DISPLAY_CURRENCIES = ["UGX", "USD", "GBP", "EUR"];
@@ -665,6 +668,15 @@ function publicFx() {
 function fxRateToUgx(cur) {
   const rate = Number(publicFx().rates?.[cur]);
   return Number.isFinite(rate) && rate > 0 ? rate : FX_FALLBACK.rates[cur];
+}
+// A listing's price in UGX today: a dollar-priced listing at today's rate,
+// anything else at its stored UGX price (same rule as the server's search).
+function listingUgxToday(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const currency = String(p?.price_original_currency || extra.price_original_currency || "").toUpperCase();
+  const original = Number(p?.price_original ?? extra.price_original);
+  if (currency === "USD" && Number.isFinite(original) && original > 0) return Math.round(original * fxRateToUgx("USD"));
+  return Number(p?.price) || 0;
 }
 function convertedPriceText(cur, v, p) {
   if (!v) return "Price upon application";
@@ -9029,6 +9041,18 @@ function ensurePublicResultsHeader(category) {
       if (wrapper && wrapper.children.length === 1) wrapper.classList.add("hidden");
     }
   }
+  // "Approximate: $1 = USh N (rates as of D)" under the count when a converted
+  // currency is chosen. refreshDisplayedPrices() keeps it current.
+  let fxNote = document.getElementById(`${key}-results-fx-note`);
+  if (!fxNote) {
+    fxNote = document.createElement("div");
+    fxNote.id = `${key}-results-fx-note`;
+    fxNote.setAttribute("data-fx-note", "1");
+    fxNote.className = "-mt-2 mb-3 text-[11px] text-gray-500";
+    grid.parentElement.insertBefore(fxNote, grid);
+  }
+  fxNote.textContent = fxNoteText();
+  fxNote.classList.toggle("hidden", activeCur === "UGX");
   return header;
 }
 
@@ -9646,11 +9670,15 @@ function fmtListingPrice(p = {}, periodOverride = null) {
   // C6: a listing priced in USD shows its exact original when USD is chosen.
   const originalCurrency = String(p?.price_original_currency || extra.price_original_currency || "").toUpperCase();
   const original = Number(p?.price_original ?? extra.price_original);
-  if (activeCur === "USD" && originalCurrency === "USD" && Number.isFinite(original) && original > 0) {
+  const usdOriginal = originalCurrency === "USD" && Number.isFinite(original) && original > 0;
+  if (activeCur === "USD" && usdOriginal) {
     const suffix = localizePricePeriod(period);
     return withUnit(`$${Math.round(original).toLocaleString("en-US")}${suffix ? "/" + suffix : ""}`);
   }
-  return withUnit(fmtP(p?.price || 0, period));
+  // Dollar-priced listing: UGX (and £/€) from today's rate, not the rate
+  // stored when it was imported. The stored price is unchanged.
+  const ugxToday = usdOriginal ? Math.round(original * fxRateToUgx("USD")) : (p?.price || 0);
+  return withUnit(fmtP(ugxToday, period));
 }
 
 // C6: a price that setCurrency() can update in place (cards, detail, similar
@@ -9718,15 +9746,15 @@ function propertyOriginalCurrencyGuide(p = {}) {
   const currency = String(p?.price_original_currency || extra.price_original_currency || "UGX").trim().toUpperCase();
   if (currency !== "USD") return "";
   const original = Number(p?.price_original ?? extra.price_original);
-  const canonicalUgx = Number(p?.price || 0);
-  const rate = Number(p?.price_fx_rate_ugx ?? extra.price_fx_rate_ugx);
-  if (!Number.isFinite(original) || original <= 0 || !Number.isFinite(canonicalUgx) || canonicalUgx <= 0) return "";
+  if (!Number.isFinite(original) || original <= 0) return "";
+  // Today's published rate, not the rate stored at import.
+  const rate = fxRateToUgx("USD");
   const usd = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(original));
-  const ugx = `USh ${formatCompact(Math.round(canonicalUgx))}`;
-  const rateLabel = Number.isFinite(rate) && rate > 0
-    ? ` @ ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(rate)} UGX/USD`
-    : "";
-  return `USD ${usd} · ≈ ${ugx}${rateLabel}`;
+  const ugx = `USh ${formatCompact(Math.round(original * rate))}`;
+  const asOf = publicFx().as_of ? new Date(publicFx().as_of) : null;
+  const asOfText = asOf && !Number.isNaN(asOf.getTime()) ? asOf.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+  const rateLabel = ` @ ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(rate)} UGX/USD`;
+  return `USD ${usd} · ≈ ${ugx}${rateLabel}${asOfText ? ` (rates as of ${asOfText}, approx.)` : ""}`;
 }
 
 function propertyOriginalCurrencyGuideHtml(p = {}, className = "mt-1 text-[11px] font-semibold text-sky-700") {
@@ -44307,7 +44335,7 @@ async function hydrateAdvertisePricingPreview() {
       return;
     }
     const creative = res?.data?.creative_guidelines || {};
-    const fx = Number(res?.data?.ugx_per_usd || 3800);
+    const fx = Number(res?.data?.ugx_per_usd || fxRateToUgx("USD"));
     wrap.innerHTML = `
       <div class="flex flex-wrap items-start justify-between gap-2">
         <div>
@@ -56514,7 +56542,7 @@ function publicListingFilterNumber(id) {
 
 function publicSortablePrice(property) {
   const computed = listingComputedTotal(property);
-  const value = computed != null ? computed : Number(property?.price);
+  const value = computed != null ? computed : listingUgxToday(property);
   return Number.isFinite(value) && value > 0 && value <= 100000000000 ? value : null;
 }
 
@@ -56606,8 +56634,8 @@ function filterListings(page, options = {}) {
       const minBedsMatch = !minBeds || (p.beds || 0) >= minBeds;
       const maxBedsMatch = !maxBeds || (p.beds || 0) <= maxBeds;
       const minBathsMatch = !minBaths || Number(p.baths || p.bathrooms || 0) >= minBaths;
-      const minMatch = !min || p.price >= min;
-      const maxMatch = !max || p.price <= max;
+      const minMatch = !min || listingUgxToday(p) >= min;
+      const maxMatch = !max || listingUgxToday(p) <= max;
       const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
       const titleMatch = !titleType || text.includes(titleType);
       const amenityMatch = !amenity || text.includes(amenity);
@@ -56652,8 +56680,8 @@ function filterListings(page, options = {}) {
       const minBedsMatch = !minBeds || (p.beds || 0) >= minBeds;
       const maxBedsMatch = !maxBeds || (p.beds || 0) <= maxBeds;
       const minBathsMatch = !minBaths || Number(p.baths || p.bathrooms || 0) >= minBaths;
-      const minMatch = !min || p.price >= min;
-      const maxMatch = !max || p.price <= max;
+      const minMatch = !min || listingUgxToday(p) >= min;
+      const maxMatch = !max || listingUgxToday(p) <= max;
       const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
       const furnishingMatch = publicListingMatchesFurnishing(text, furnishing);
       const amenityMatch = !amenity || text.includes(amenity);
@@ -56712,7 +56740,7 @@ function filterStudents(options = {}) {
       || (category === "shared" && pType === "shared")
       || (category === "near" && nearCampus);
     const vMatch = !verifiedOnly || !!p.student_verified || !!p.students_welcome;
-    const maxMatch = !max || p.price <= max;
+    const maxMatch = !max || listingUgxToday(p) <= max;
     const distanceMatch = !maxDistance || (typeof p.distance_to_uni_km === "number" && p.distance_to_uni_km <= maxDistance);
     const originMatch = publicListingMatchesOrigin(p, origin);
     return typeMatch && qMatch && dMatch && uMatch && aMatch && cMatch && vMatch && maxMatch && distanceMatch && originMatch;
@@ -60969,8 +60997,8 @@ function filterCommercial(options = {}) {
     const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
     const tMatch = !type || canonicalCommercialTypeForProperty(p) === type;
     const transactionMatch = !transactionType || commercialTransactionForProperty(p) === transactionType;
-    const minMatch = !min || p.price >= min;
-    const maxMatch = !max || p.price <= max;
+    const minMatch = !min || listingUgxToday(p) >= min;
+    const maxMatch = !max || listingUgxToday(p) <= max;
     const sizeMatch = !minSize || sizeNum >= minSize;
     const maxSizeMatch = !maxSize || sizeNum <= maxSize;
     const originMatch = publicListingMatchesOrigin(p, origin);
@@ -61017,8 +61045,8 @@ function filterLand(options = {}) {
     const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
     const tMatch = !type || text.includes(type);
     const transactionMatch = !transactionType || commercialTransactionForProperty(p) === transactionType;
-    const minMatch = !min || p.price >= min;
-    const maxMatch = !max || p.price <= max;
+    const minMatch = !min || listingUgxToday(p) >= min;
+    const maxMatch = !max || listingUgxToday(p) <= max;
     const sizeMatch = !minSize || sizeNum >= minSize;
     const maxSizeMatch = !maxSize || sizeNum <= maxSize;
     const titleMatch = !titleType || text.includes(titleType);
@@ -62229,7 +62257,7 @@ function renderDetailMortgageWidget(propertyId) {
   const depositInput = document.getElementById("detail-mortgage-deposit");
   const yearsInput = document.getElementById("detail-mortgage-years");
   if (!p || !target || !depositInput || !yearsInput) return;
-  const result = buildMortgageComparison(p.price, depositInput.value, yearsInput.value, mortgagePurposeFromListing(p.type));
+  const result = buildMortgageComparison(listingUgxToday(p), depositInput.value, yearsInput.value, mortgagePurposeFromListing(p.type));
   if (!result.best) {
     target.innerHTML = `<div class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">${translatePropertyUi("No direct estimate available for this setup. Open Mortgage Finder for more options.")}</div>`;
     return;
@@ -63085,7 +63113,7 @@ async function openDetail(id, options = {}) {
               </div>
             </div>
             <div id="detail-mortgage-result"></div>
-            <button onclick="openMortgageFinderWithPrefill(${p.price}, '${normalizeType(p.type)}')" class="w-full mt-2 border border-green-700 text-green-700 py-2 rounded-lg text-xs font-semibold hover:bg-green-50">
+            <button onclick="openMortgageFinderWithPrefill(${listingUgxToday(p)}, '${normalizeType(p.type)}')" class="w-full mt-2 border border-green-700 text-green-700 py-2 rounded-lg text-xs font-semibold hover:bg-green-50">
               ${translatePropertyUi("Open full Mortgage Finder")}
             </button>
           </div>` : ""}
