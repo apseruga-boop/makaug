@@ -157,6 +157,39 @@ test('the event-loop lag logger names what was running', async () => {
   assert.deepEqual(lag.inFlightSummary(), []);
 });
 
+// 25 Oct 2026: single 5-9 s blocks never moved the minute p99, so nothing was logged.
+test('one long block is logged as event_loop_stall with memory and the work in flight', async () => {
+  const done = lag.trackWork('GET /api/slow-thing');
+  const lines = [];
+  // p99 threshold out of reach: only the stall tick can log here.
+  const monitor = lag.startEventLoopLagMonitor({
+    logger: { warn: (text) => lines.push(text) },
+    thresholdMs: 1e9,
+    intervalMs: 60_000,
+    stallMs: 300,
+    stallTickMs: 50
+  });
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  const until = Date.now() + 500;
+  while (Date.now() < until) { /* block the loop once */ }
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  monitor.stop();
+  done();
+  const stall = lines.find((text) => text.startsWith('event_loop_stall '));
+  assert.ok(stall, lines.join('\n'));
+  assert.match(stall, /^event_loop_stall blocked_ms=(\d+) rss_mb=\d+ heap_used_mb=\d+ heap_total_mb=\d+ in_flight=.*GET \/api\/slow-thing \(\d+s\)/);
+  assert.ok(Number(stall.match(/blocked_ms=(\d+)/)[1]) >= 300);
+  assert.equal(lines.some((text) => text.startsWith('event_loop_lag ')), false);
+});
+
+test('the stall tick stays quiet when the loop is free', async () => {
+  const stalls = [];
+  const timer = lag.startStallDetector({ stallMs: 300, tickMs: 20, onStall: (ms) => stalls.push(ms) });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  clearInterval(timer);
+  assert.deepEqual(stalls, []);
+});
+
 test('server.js uses the per-user limiter, the lag middleware and the monitor', () => {
   const src = require('fs').readFileSync(require('path').join(__dirname, '../server.js'), 'utf8');
   assert.match(src, /max: apiRateLimitMax,\n  keyGenerator: apiRateLimitKey,/);
