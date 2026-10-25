@@ -36,7 +36,9 @@ function generatedConfig(env = {}) {
   const context = vm.createContext({ process: { env },
     PRICE_PERIOD_FORM_OPTIONS: { rent: [{ value: 'custom-month', label: 'Configured month' }] },
     PRICE_BOUNDS_UGX: { rent: { min: 50000, max: 7000000 } },
-    publicDisplayFx: () => ({ base: 'UGX', as_of: '2026-10-11', rates: { USD: 3700 } })
+    publicDisplayFx: () => ({ base: 'UGX', as_of: '2026-10-11', rates: { USD: 3700 } }),
+    publicHowToVideosConfig: require('../config/howToGuides').publicHowToVideosConfig,
+    howToLocalDir: '', HOWTO_LOCAL_PREFIX: '/__howto-local'
   });
   const handler = vm.runInContext(`(${server.slice(configHandler.start, configHandler.end)})`, context);
   handler({}, res); assert.equal(headers['Cache-Control'], 'no-store'); return body;

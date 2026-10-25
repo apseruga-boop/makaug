@@ -609,6 +609,15 @@ app.get('/api/fx', (_req, res) => {
   return res.json({ ok: true, data: publicDisplayFx() });
 });
 
+const { publicHowToVideosConfig } = require('./config/howToGuides');
+// Local preview only: serve built how-to videos from a folder on disk so the
+// sections can be checked before the files are uploaded. Never in production.
+const HOWTO_LOCAL_PREFIX = '/__howto-local';
+const howToLocalDir = process.env.NODE_ENV !== 'production' && String(process.env.HOWTO_VIDEOS_LOCAL_DIR || '').trim();
+if (howToLocalDir) {
+  app.use(HOWTO_LOCAL_PREFIX, express.static(path.resolve(howToLocalDir), { fallthrough: false, index: false }));
+}
+
 app.get('/config.js', (_req, res) => {
   // Free maps only (Leaflet + OpenStreetMap). C18, 10 Oct 2026: Google Maps is
   // no longer used and no Google key is ever sent to browsers.
@@ -634,7 +643,9 @@ app.get('/config.js', (_req, res) => {
     `window.MAKAUG_GOOGLE_MAPS_API_KEY = ${JSON.stringify(publicConfig.googleMapsApiKey)};`,
     `window.MAKAUG_API_BASE = window.MAKAUG_API_BASE || ${JSON.stringify(publicConfig.apiBase)};`,
     `window.MAKAUG_ADSENSE_CLIENT = window.MAKAUG_ADSENSE_CLIENT || ${JSON.stringify(publicConfig.adsenseClient)};`,
-    `window.MAKAUG_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || ${JSON.stringify(publicConfig.adsenseSlots)};`
+    `window.MAKAUG_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || ${JSON.stringify(publicConfig.adsenseSlots)};`,
+    `window.MAKAUG_HOWTO = ${JSON.stringify(publicHowToVideosConfig(process.env, { localBaseUrl: howToLocalDir ? HOWTO_LOCAL_PREFIX : '' }))};`,
+    'if (typeof window.renderHowToGuides === "function") window.renderHowToGuides();'
   ].join('\n'));
 });
 

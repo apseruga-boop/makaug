@@ -416,6 +416,34 @@
     })(window, document);
   </script>
   <link rel="stylesheet" href="/assets/tailwind.css">
+  <style id="mk-howto-style">
+    .mk-howto{padding:2.75rem 0;background:linear-gradient(180deg,#f3f8f5 0%,#fff 100%)}
+    .mk-howto-about{padding:0;background:none}
+    .mk-howto-wrap{max-width:80rem;margin:0 auto;padding:0 1rem}
+    .mk-howto-about .mk-howto-wrap{padding:0}
+    .mk-howto-head{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;margin-bottom:1rem}
+    .mk-howto-eyebrow{font-size:.75rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#15803d}
+    .mk-howto-title{font-size:1.75rem;line-height:1.15;font-weight:900;color:#16241d;margin-top:.25rem}
+    .mk-howto-sub{font-size:.9rem;color:#52665b;margin-top:.35rem;max-width:42rem}
+    .mk-howto-note{display:inline-block;margin-top:.5rem;font-size:.72rem;font-weight:800;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:999px;padding:.15rem .6rem}
+    .mk-howto-nav{display:none;gap:.5rem;flex-shrink:0}
+    .mk-howto-nav button{width:2.5rem;height:2.5rem;border-radius:999px;border:1px solid #cfe3d7;background:#fff;color:#166534;font-weight:900}
+    .mk-howto-nav button:focus-visible,.mk-howto-card video:focus-visible{outline:3px solid #16a34a;outline-offset:2px}
+    .mk-howto-row{display:flex;gap:.9rem;overflow-x:auto;scroll-snap-type:x mandatory;padding:.25rem .1rem 1rem;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+    .mk-howto-card{flex:0 0 62vw;max-width:15rem;scroll-snap-align:start;border-radius:1.25rem;background:#fff;border:1px solid #e1ece6;box-shadow:0 6px 18px rgba(16,61,40,.08);overflow:hidden}
+    .mk-howto-media{position:relative;aspect-ratio:9/16;background:#0f3d2e}
+    .mk-howto-media video{display:block;width:100%;height:100%;object-fit:cover;background:#0f3d2e}
+    .mk-howto-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:linear-gradient(180deg,rgba(0,0,0,0) 55%,rgba(0,0,0,.18));border:0;cursor:pointer;color:#0f7a3d}
+    .mk-howto-play svg{width:3.6rem;height:3.6rem;padding:.85rem;border-radius:999px;background:rgba(255,255,255,.94);box-shadow:0 8px 24px rgba(0,0,0,.28);transition:transform .15s}
+    .mk-howto-play:hover svg{transform:scale(1.06)}
+    .mk-howto-play:focus-visible{outline:3px solid #16a34a;outline-offset:-3px}
+    .mk-howto-play[hidden]{display:none}
+    .mk-howto-body{padding:.7rem .8rem .85rem}
+    .mk-howto-card h3{font-size:.9rem;line-height:1.25;font-weight:900;color:#16241d}
+    .mk-howto-meta{display:flex;gap:.4rem;align-items:center;margin-top:.35rem;font-size:.72rem;color:#5b6b62}
+    .mk-howto-meta a{color:#15803d;font-weight:800}
+    @media (min-width:768px){.mk-howto-card{flex-basis:13.5rem}.mk-howto-nav{display:flex}.mk-howto-title{font-size:2rem}}
+  </style>
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
   <link rel="stylesheet" href="/assets/short-term.css?v=20261023-short-stay-fee-v26">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -4080,6 +4108,8 @@
         <div id="home-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" style="min-height:24rem"></div>
       </div>
     </section>
+
+    <section id="home-howto-videos" class="mk-howto hidden" data-howto-guides="home" aria-labelledby="home-howto-videos-title" aria-hidden="true"></section>
 
     <section class="py-12 bg-gray-100">
       <div class="max-w-7xl mx-auto px-4">
@@ -9865,6 +9895,8 @@
         <div id="about-live-listings-stat" class="about-stat-card hidden"><div id="about-live-listing-count" class="about-stat-value"></div><p data-content-i18n="about.statLiveListings">live listings</p></div>
         <div class="about-stat-card"><div class="about-stat-value" data-about-stat-count="7">7</div><p data-content-i18n="about.statTrial">days free to list</p></div>
       </section>
+
+      <section id="about-howto-videos" class="mk-howto mk-howto-about hidden mb-10" data-howto-guides="about" aria-labelledby="about-howto-videos-title" aria-hidden="true"></section>
 
       <section class="about-card rounded-xl border border-[#dfe9e3] bg-[#f6f9f7] p-6 md:p-8 mb-8 shadow-sm" aria-labelledby="about-mission-title">
         <div class="grid lg:grid-cols-[0.9fr,1.1fr] gap-7 lg:items-start">

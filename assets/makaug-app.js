@@ -9899,6 +9899,7 @@ function setLang(lang, silent = false, rerender = true) {
   if (typeof window.applyOffPlanLanguageUI === "function") window.applyOffPlanLanguageUI();
   if (!silent) toast(`${tr("languageSet")}: ${currentLang.toUpperCase()}`);
   refreshBrokerProfileAbout();
+  renderHowToGuides();
 }
 
 window.addEventListener("makaug:site-i18n-ready", () => {
@@ -42325,6 +42326,7 @@ function renderHowToVideoCard(video) {
 }
 
 function renderHowToVideoSections() {
+  renderHowToGuides();
   document.querySelectorAll("[data-howto-video-grid]").forEach((container) => {
     const context = container.getAttribute("data-howto-video-grid") || "all";
     const videos = howToVideosForContext(context).filter(isPublishedHowToVideo).slice(0, 6);
@@ -42346,6 +42348,161 @@ function renderHowToVideoSections() {
     </div>
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${videos.map(renderHowToVideoCard).join("")}</div>`;
     trackEvent("howto_video_shown", { source_page: currentPage, context, count: videos.length });
+  });
+}
+
+// Self-hosted how-to videos (home + About). Off unless /config.js sends
+// window.MAKAUG_HOWTO.enabled (HOWTO_VIDEOS_ENABLED on the server).
+function howToGuideEscape(value) {
+  return String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+function howToGuideVideoLang(config, lang) {
+  const code = String(lang || "en").toLowerCase();
+  const available = Array.isArray(config?.videoLanguages) ? config.videoLanguages : ["en"];
+  return available.includes(code) ? code : "en";
+}
+
+function howToGuideMediaUrl(config, videoLang, slug, ext) {
+  const base = String(config?.baseUrl || "").replace(/\/+$/, "");
+  return `${base}/${encodeURIComponent(videoLang)}/${encodeURIComponent(slug)}.${ext}`;
+}
+
+function howToGuidesFor(config, context) {
+  const guides = Array.isArray(config?.guides) ? config.guides.slice() : [];
+  if (context !== "about" || !Array.isArray(config?.aboutOrder)) return guides;
+  const order = config.aboutOrder;
+  return guides.sort((a, b) => {
+    const ia = order.indexOf(a.slug);
+    const ib = order.indexOf(b.slug);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+}
+
+function hideHowToGuideSection(container) {
+  if (!container.classList.contains("hidden") || container.innerHTML) {
+    container.innerHTML = "";
+    container.classList.add("hidden");
+    container.setAttribute("aria-hidden", "true");
+  }
+  delete container.dataset.howtoRendered;
+}
+
+function renderHowToGuides() {
+  const containers = document.querySelectorAll("[data-howto-guides]");
+  if (!containers.length) return;
+  const config = window.MAKAUG_HOWTO;
+  if (!config || config.enabled !== true || !Array.isArray(config.guides) || !config.guides.length) {
+    containers.forEach(hideHowToGuideSection);
+    return;
+  }
+  const lang = String((typeof currentLang !== "undefined" && currentLang) || "en").toLowerCase();
+  const videoLang = howToGuideVideoLang(config, lang);
+  const copy = config.copy?.[lang] || config.copy?.en || {};
+  const isDraft = Array.isArray(config.draftLanguages) && config.draftLanguages.includes(lang);
+  const note = videoLang !== lang ? copy.englishCaptions : (isDraft ? copy.draft : "");
+  containers.forEach((container) => {
+    const context = container.getAttribute("data-howto-guides") || "home";
+    const stamp = `${lang}|${videoLang}|${config.baseUrl}|${config.version || ""}`;
+    if (container.dataset.howtoRendered === stamp) return;
+    const titleId = `${context}-howto-videos-title`;
+    const rowId = `${context}-howto-videos-row`;
+    const cards = howToGuidesFor(config, context).map((guide) => {
+      const title = guide.titles?.[lang] || guide.titles?.en || guide.slug;
+      const poster = howToGuideMediaUrl(config, videoLang, guide.slug, "jpg");
+      const src = howToGuideMediaUrl(config, videoLang, guide.slug, "mp4");
+      const seconds = Number(guide.durationSeconds) || 0;
+      return `<article class="mk-howto-card" data-howto-guide="${howToGuideEscape(guide.slug)}" data-howto-video-lang="${howToGuideEscape(videoLang)}">
+        <div class="mk-howto-media">
+          <video muted playsinline preload="none" disablepictureinpicture controlslist="nodownload noremoteplayback"
+            data-howto-poster="${howToGuideEscape(poster)}" data-howto-src="${howToGuideEscape(src)}"
+            aria-label="${howToGuideEscape(title)}" lang="${howToGuideEscape(videoLang)}"></video>
+          <button type="button" class="mk-howto-play" data-howto-play aria-label="${howToGuideEscape(title)}"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></button>
+        </div>
+        <div class="mk-howto-body">
+          <h3>${howToGuideEscape(title)}</h3>
+          <div class="mk-howto-meta"><span>${seconds ? `${seconds}${howToGuideEscape(copy.seconds || "s")}` : ""}</span>${guide.ctaUrl ? `<span aria-hidden="true">·</span><a href="${howToGuideEscape(guide.ctaUrl)}">makaug.com${guide.ctaUrl === "/" ? "" : howToGuideEscape(guide.ctaUrl)}</a>` : ""}</div>
+        </div>
+      </article>`;
+    }).join("");
+    container.innerHTML = `<div class="mk-howto-wrap">
+      <div class="mk-howto-head">
+        <div>
+          <p class="mk-howto-eyebrow">${howToGuideEscape(copy.eyebrow || "How-to videos")}</p>
+          <h2 id="${titleId}" class="mk-howto-title serif">${howToGuideEscape(copy.title || "See how makaug.com works")}</h2>
+          <p class="mk-howto-sub">${howToGuideEscape(copy.sub || "")}</p>
+          ${note ? `<span class="mk-howto-note" data-howto-note="${videoLang !== lang ? "english" : "draft"}">${howToGuideEscape(note)}</span>` : ""}
+        </div>
+        <div class="mk-howto-nav">
+          <button type="button" data-howto-scroll="-1" aria-controls="${rowId}" aria-label="${howToGuideEscape(copy.prev || "Previous videos")}">‹</button>
+          <button type="button" data-howto-scroll="1" aria-controls="${rowId}" aria-label="${howToGuideEscape(copy.next || "More videos")}">›</button>
+        </div>
+      </div>
+      <div id="${rowId}" class="mk-howto-row" role="list">${cards}</div>
+    </div>`;
+    container.querySelectorAll(".mk-howto-card").forEach((card) => card.setAttribute("role", "listitem"));
+    container.classList.remove("hidden");
+    container.removeAttribute("aria-hidden");
+    container.dataset.howtoRendered = stamp;
+    wireHowToGuideSection(container);
+  });
+}
+
+function loadHowToGuideVideo(video) {
+  if (!video || video.dataset.howtoLoaded === "1") return;
+  video.dataset.howtoLoaded = "1";
+  if (video.dataset.howtoPoster) video.poster = video.dataset.howtoPoster;
+  if (video.dataset.howtoSrc) video.src = video.dataset.howtoSrc;
+}
+
+function wireHowToGuideSection(container) {
+  const videos = Array.from(container.querySelectorAll("video[data-howto-src]"));
+  // Posters (and the file, still preload="none") only attach near the viewport.
+  if (typeof window.IntersectionObserver === "function") {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        loadHowToGuideVideo(entry.target);
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: "300px" });
+    videos.forEach((video) => observer.observe(video));
+  } else {
+    videos.forEach(loadHowToGuideVideo);
+  }
+  videos.forEach((video) => {
+    video.muted = true;
+    // Native controls only appear once the viewer starts a video, so they never cover the poster title.
+    const playButton = video.parentElement?.querySelector("[data-howto-play]");
+    if (playButton) {
+      playButton.addEventListener("click", () => {
+        loadHowToGuideVideo(video);
+        video.controls = true;
+        const started = video.play();
+        if (started && typeof started.catch === "function") started.catch(() => {});
+      });
+    }
+    video.addEventListener("play", () => {
+      loadHowToGuideVideo(video);
+      video.controls = true;
+      if (playButton) playButton.hidden = true;
+      document.querySelectorAll("[data-howto-guides] video").forEach((other) => {
+        if (other !== video && !other.paused) other.pause();
+      });
+      const card = video.closest("[data-howto-guide]");
+      if (typeof trackEvent === "function") {
+        trackEvent("howto_video_played", { video_key: card?.dataset.howtoGuide || "", video_lang: card?.dataset.howtoVideoLang || "", source_page: typeof currentPage !== "undefined" ? currentPage : "" });
+      }
+    });
+  });
+  const row = container.querySelector(".mk-howto-row");
+  container.querySelectorAll("[data-howto-scroll]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!row) return;
+      const step = Number(button.getAttribute("data-howto-scroll")) || 1;
+      const rtl = (document.documentElement.dir || "ltr") === "rtl";
+      row.scrollBy({ left: step * (rtl ? -1 : 1) * Math.max(220, row.clientWidth * 0.8), behavior: "smooth" });
+    });
   });
 }
 
