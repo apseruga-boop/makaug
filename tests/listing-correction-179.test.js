@@ -155,7 +155,6 @@ test('listing correction 179 matches the stored type code and records every disp
   // The public rows capitalise the shared label, so the stored code 'land' reads "Land".
   assert.match(propertiesSource, /property_type:\s*publicPropertyTypeLabel\(row\.property_type\)/);
   assert.match(propertiesSource, /property_type:\s*publicPropertyTypeLabel\(safeProperty\.property_type\)/);
-  assert.match(propertiesSource, /function publicPropertyTypeLabel\(value\) \{\s*const label = humanPropertyTypeLabel\(value\);/);
   assert.equal(publicPropertyTypeLabel('land'), 'Land');
   assert.equal(publicPropertyTypeLabel('commercial_land'), 'Commercial land');
   assert.match(propertiesSource, /city:\s*extra\.city\s*\|\|\s*null/);

@@ -13,7 +13,7 @@ const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require
 const { tenantFor } = require('../packages/shared-country-core');
 const { pricePeriodSuffix: sharedPricePeriodSuffix } = require('../config/pricePeriods');
 const { isPriceImplausible } = require('../utils/pricePlausibility');
-const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
+const { publicPropertyTypeLabel } = require('../utils/commercialClassification');
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql, realPhotoRejection, mediaHost } = require('../utils/realListingPhoto');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
@@ -413,7 +413,7 @@ function normalizeSeoListingRow(row = {}) {
     transaction_type: plainText(row.transaction_type),
     bedrooms: Number(row.bedrooms || 0) || 0,
     bathrooms: Number(row.bathrooms || 0) || 0,
-    property_type: humanPropertyTypeLabel(plainText(row.property_type)),
+    property_type: publicPropertyTypeLabel(plainText(row.property_type)),
     // Found online: only a photo staff uploaded with consent, never source media.
     primary_image_url: seoCoverImageUrl(row, foundOnline),
     video_url: plainText(copyExtra.video_url || ''),

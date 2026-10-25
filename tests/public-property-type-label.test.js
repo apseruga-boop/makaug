@@ -46,3 +46,10 @@ test('detail and card rows show Land for the Namuseera listing after 179', () =>
   assert.equal(_test.publicPropertyRow(namuseera, []).property_type, 'Land');
   assert.equal(_test.compactPublicCardRow(namuseera).property_type, 'Land');
 });
+
+test('server-rendered property page title reads "Land for Sale" for the Namuseera listing after 179', () => {
+  const { normalizeSeoListingRow, propertySeoTitle } = require('../services/publicSeoRenderService');
+  const seoRow = normalizeSeoListingRow({ ...namuseera, price: 30000000, price_currency: 'UGX', price_period: 'once' });
+  assert.equal(seoRow.property_type, 'Land');
+  assert.match(propertySeoTitle(seoRow), /^Land for Sale in Namuseera, Wakiso/);
+});
