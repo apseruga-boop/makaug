@@ -33,7 +33,8 @@ const GLOBAL_EXCLUDED_TYPES = Object.freeze(new Set([
   'restaurant',
   'bar',
   'bank',
-  'atm'
+  'atm',
+  'laundry'
 ]));
 
 // Google sometimes adds these types to legitimate professional offices. Treat
@@ -56,6 +57,12 @@ const GLOBAL_NAME_EXCLUSIONS = Object.freeze([
   { reason: 'beauty', pattern: /\b(?:beauty salon|hair salon|nail salon|salon)\b/i },
   { reason: 'bank_branch_or_forex', pattern: /\b(?:bank branch|atm|forex|bureau de change)\b/i }
 ]);
+
+// Laundries and dry cleaners are not property services (Arthur, 25 Oct 2026;
+// migration 183 deleted them). Checked against the name and website only, so a
+// building-cleaning firm whose description mentions laundry is not rejected.
+// Website hosts run words together (freshlaundry.ug), so they match without \b.
+const LAUNDRY_NAME_PATTERN = /\b(?:laundr(?:y|ies)|laundromats?|launderettes?|dry[\s-]*clean(?:ers?|ing)?|drycleaners?)\b/i;
 
 const CATEGORY_RELEVANCE = Object.freeze({
   surveyors: {
@@ -212,6 +219,9 @@ function classifyMarketplaceRelevance(input = {}) {
   if (!policy) {
     return { decision: 'reject', score: 0, reason: 'invalid_category', category, google_types: types };
   }
+  if (LAUNDRY_NAME_PATTERN.test(clean(input.name)) || /laundr|dry-?clean/i.test(clean(input.website))) {
+    return { decision: 'reject', score: 0, reason: 'excluded_name:laundry', category, google_types: types };
+  }
   const globalNameExclusion = GLOBAL_NAME_EXCLUSIONS.find((entry) => entry.pattern.test(text));
   if (globalNameExclusion) {
     return { decision: 'reject', score: 0, reason: `excluded_name:${globalNameExclusion.reason}`, category, google_types: types };
@@ -260,6 +270,7 @@ module.exports = {
   CATEGORY_RELEVANCE,
   CONTEXTUAL_EXCLUDED_TYPES,
   GLOBAL_EXCLUDED_TYPES,
+  LAUNDRY_NAME_PATTERN,
   MARKETPLACE_RELEVANCE_MARKER,
   classifyMarketplaceRelevance,
   googleSearchOptionsForCategory,
