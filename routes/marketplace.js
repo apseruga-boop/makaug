@@ -30,6 +30,8 @@ const {
 const {
   DISTRICTS,
   MARKETPLACE_CATEGORIES,
+  MARKETPLACE_CATEGORY_GROUPS,
+  MARKETPLACE_DIRECTORY_REDESIGN_MARKER,
   MARKETPLACE_ENRICH_MARKER,
   MARKETPLACE_P1_MARKER,
   MARKETPLACE_REPORT_FIXES_MARKER,
@@ -106,7 +108,8 @@ function publicBusiness(row = {}) {
     source_url: foundOnline ? row.source_url : null,
     first_seen: foundOnline ? row.first_seen : null,
     last_refreshed: foundOnline ? row.last_refreshed : null,
-    updated_at: row.updated_at
+    updated_at: row.updated_at,
+    branch_count: Math.max(1, Number(row.branch_count) || 1)
   };
 }
 
@@ -115,8 +118,9 @@ router.get('/config', async (_req, res) => {
     ok: true,
     data: {
       marker: MARKETPLACE_P1_MARKER,
-      release_markers: [MARKETPLACE_P1_MARKER, MARKETPLACE_REPORT_FIXES_MARKER, MARKETPLACE_ENRICH_MARKER, MARKETPLACE_REGJOURNEY_MARKER, MARKETPLACE_P2_MARKER, MARKETPLACE_POLISH_MARKER, MARKETPLACE_FINAL_TWEAKS_MARKER],
+      release_markers: [MARKETPLACE_P1_MARKER, MARKETPLACE_REPORT_FIXES_MARKER, MARKETPLACE_ENRICH_MARKER, MARKETPLACE_REGJOURNEY_MARKER, MARKETPLACE_P2_MARKER, MARKETPLACE_POLISH_MARKER, MARKETPLACE_FINAL_TWEAKS_MARKER, MARKETPLACE_DIRECTORY_REDESIGN_MARKER],
       categories: MARKETPLACE_CATEGORIES,
+      category_groups: MARKETPLACE_CATEGORY_GROUPS,
       districts: DISTRICTS,
       paid_verification_enabled: false,
       verified_waitlist_enabled: true,
@@ -138,7 +142,7 @@ router.get('/config', async (_req, res) => {
 
 router.get('/seo-links', (_req, res) => {
   const links = [];
-  for (const category of MARKETPLACE_CATEGORIES) {
+  for (const category of MARKETPLACE_CATEGORIES.filter((item) => item.sourcing !== false)) {
     for (const district of DISTRICTS) {
       links.push({
         category: category.key,
