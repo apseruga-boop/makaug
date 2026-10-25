@@ -9899,7 +9899,7 @@ function setLang(lang, silent = false, rerender = true) {
   if (typeof window.applyOffPlanLanguageUI === "function") window.applyOffPlanLanguageUI();
   if (!silent) toast(`${tr("languageSet")}: ${currentLang.toUpperCase()}`);
   refreshBrokerProfileAbout();
-  renderHowToGuides();
+  if (typeof renderHowToGuides === "function") renderHowToGuides();
 }
 
 window.addEventListener("makaug:site-i18n-ready", () => {
