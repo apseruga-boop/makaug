@@ -21,15 +21,19 @@ const {
   startMarketplaceDrip,
   warmMarketplacePublicCache
 } = require('../services/marketplaceNationalDripService');
-const { DISTRICTS, MARKETPLACE_CATEGORIES } = require('../services/marketplaceService');
+const { DISTRICTS, MARKETPLACE_CATEGORIES, MARKETPLACE_CORE_ORDER } = require('../services/marketplaceService');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('national registry covers every category, district and declared source exactly once', () => {
   const rows = registryRows();
-  const expected = MARKETPLACE_CATEGORIES.length * DISTRICTS.length * SOURCE_DEFINITIONS.length;
-  assert.equal(MARKETPLACE_CATEGORIES.length, 20);
+  // loans_microfinance (sourcing: false) only holds re-filed businesses and is not walked.
+  const sourced = MARKETPLACE_CATEGORIES.filter((category) => category.sourcing !== false);
+  const expected = sourced.length * DISTRICTS.length * SOURCE_DEFINITIONS.length;
+  assert.equal(MARKETPLACE_CATEGORIES.length, 21);
+  assert.equal(sourced.length, 20);
+  assert.equal(rows.some((row) => row.category === 'loans_microfinance'), false);
   assert.equal(DISTRICTS.length, 146);
   assert.equal(rows.length, expected);
   assert.equal(new Set(rows.map((row) => row.source_key)).size, expected);
@@ -149,7 +153,8 @@ test('public Marketplace cache pre-warm hydrates stats and the broad first page'
   assert.equal(result.ok, true);
   assert.equal(statements.length, 2);
   const search = statements.find((entry) => /WITH filtered AS/.test(entry.sql));
-  assert.deepEqual(search.params, [20, 0]);
+  // the default sort passes the core category order ahead of LIMIT and OFFSET
+  assert.deepEqual(search.params, [[...MARKETPLACE_CORE_ORDER], 20, 0]);
 });
 
 test('scheduled run uses a typed interval and re-warms public caches after inserts', () => {

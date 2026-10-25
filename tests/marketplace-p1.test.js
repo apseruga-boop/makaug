@@ -36,7 +36,7 @@ test('marketplace schema creates the P1 business, review, lead, payment and audi
 });
 
 test('marketplace service uses canonical categories, Uganda districts and hard tier ordering', () => {
-  assert.equal(marketplace.MARKETPLACE_CATEGORIES.length, 20);
+  assert.equal(marketplace.MARKETPLACE_CATEGORIES.length, 21);
   assert.equal(marketplace.DISTRICTS.length, 146);
   assert.equal(marketplace.normalizeCategory('Property lawyers'), 'property_lawyers');
   assert.equal(marketplace.validateUgandaLocation({ district: 'Wakiso', area: 'Kira' }).ok, true);

@@ -12,22 +12,21 @@ const start = app.indexOf('function renderMarketplaceBusinesses');
 const end = app.indexOf('function renderMarketplaceCategoryChips', start);
 const block = app.slice(start, end);
 
-test('marketplace results are a responsive photo grid', () => {
-  assert.match(html, /id="marketplace-results" class="marketplace-card-grid"/);
-  assert.match(html, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
-  assert.match(html, /@media \(max-width: 1100px\)/);
-  assert.match(html, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(html, /@media \(max-width: 700px\)/);
-  assert.match(html, /grid-template-columns: 1fr/);
+// The 25 Oct 2026 directory redesign replaced photo cards with compact rows:
+// two columns on desktop, one on mobile, initials instead of stock photos.
+test('marketplace results are a responsive list of compact rows', () => {
+  assert.match(html, /id="marketplace-results" class="marketplace-card-grid mk-list"/);
+  assert.match(html, /#marketplace-results\.mk-list \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(html, /#marketplace-results\.mk-list \{ grid-template-columns: 1fr; \}/);
+  assert.match(html, /\.mk-row-actions \{ display: flex;/);
 });
 
-test('a business card is a photo, a short line, and real contact buttons', () => {
-  assert.match(block, /marketplace-card-photo/);
-  assert.match(block, /marketplace-card-badge/);
-  assert.match(block, /marketplace-business-name font-black leading-snug break-words/);
-  assert.match(block, /marketplace-card-call/);
+test('a business row is an initials avatar or owner photo, a short line, and real contact buttons', () => {
+  assert.match(block, /marketplaceAvatarHtml\(business, photo\)/);
+  assert.match(block, /marketplace-business-name mk-name/);
+  assert.match(block, /mk-btn mk-btn-call/);
   assert.match(block, /marketplaceTr\("call"\)/);
-  assert.match(block, /marketplace-card-wa/);
+  assert.match(block, /mk-btn mk-btn-wa/);
   assert.match(block, /marketplaceTr\("whatsappAction"\)/);
   assert.match(block, /unsplash\\.com/);
   assert.doesNotMatch(block, /https:\/\/images\.unsplash\.com/);
