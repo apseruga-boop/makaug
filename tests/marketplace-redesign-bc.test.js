@@ -243,7 +243,8 @@ test('migration 181 is the next free number and carries the reviewed plan, guard
   const names = fs.readdirSync(MIGRATIONS).filter((name) => name.endsWith('.sql'));
   assert.equal(names.filter((name) => name.startsWith('181_')).length, 1);
   const highest = Math.max(...names.map((name) => Number(name.slice(0, 3))).filter(Number.isFinite));
-  assert.equal(highest, 181);
+  // Later changes take 182 and up (182: daily exchange rates).
+  assert.ok(highest >= 181);
   assert.match(SQL, /SET LOCAL lock_timeout = '8s'/);
   assert.match(SQL, /CREATE TABLE IF NOT EXISTS marketplace_cleanup_181_backup/);
   assert.match(SQL, /current_setting\('app\.country_code', true\)/);

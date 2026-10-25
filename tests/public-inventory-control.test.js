@@ -220,8 +220,8 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /const pagination = hasOpportunitySummary[\s\S]*approximatePublicPagination/);
   assert.match(routeSource, /newest: 'p\.created_at DESC, p\.id DESC'/);
   assert(routeSource.includes('const priceSortRankSql'), 'public inventory route should rank unpriced/outlier rows last for price sorting');
-  assert.match(routeSource, /price_asc: `\$\{priceSortRankSql\} ASC, p\.price ASC NULLS LAST, p\.created_at DESC, p\.id DESC`/);
-  assert.match(routeSource, /price_desc: `\$\{priceSortRankSql\} ASC, p\.price DESC NULLS LAST, p\.created_at DESC, p\.id DESC`/);
+  assert.match(routeSource, /price_asc: `\$\{priceSortRankSql\} ASC, \$\{priceSortValueSql\} ASC NULLS LAST, p\.created_at DESC, p\.id DESC`/);
+  assert.match(routeSource, /price_desc: `\$\{priceSortRankSql\} ASC, \$\{priceSortValueSql\} DESC NULLS LAST, p\.created_at DESC, p\.id DESC`/);
   assert.match(routeSource, /\?\s*`\$\{distanceSql\} ASC NULLS LAST, p\.created_at DESC, p\.id DESC`/);
   assert.doesNotMatch(routeSource, /} else \{\s*const countResult = await db\.query/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
