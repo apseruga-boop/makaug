@@ -27,14 +27,66 @@ const poolMin = Math.max(
   Math.min(poolMax, parseInt(process.env.DB_POOL_MIN || '2', 10) || 2)
 );
 
+/**
+ * No single live query may run for more than a minute.
+ *
+ * 25 Oct 2026: one analysis query ran for 2 h 29 min and held the database CPU
+ * at its limit the whole time, so every page waited behind it. PostgreSQL's
+ * default statement_timeout is 0 (no limit), so nothing stopped it.
+ *
+ * Every connection in the live pool now starts with statement_timeout = 60 s:
+ * PostgreSQL cancels any one statement that runs longer, and the caller gets
+ * "canceling statement due to statement timeout" (code 57014) instead of a
+ * page that never loads. A connection left idle inside an open transaction is
+ * closed after five minutes, so a leaked transaction cannot hold locks forever.
+ *
+ * Exempt, because they are legitimately longer (Postgres slow-query log,
+ * 22-25 Oct 2026):
+ * - migrations (scripts/migrate.js): migration 180 ran one 101 s statement;
+ * - the harvester's duplicate check (queueFoundOnlineSourcePostListings):
+ *   85-243 s every ten minutes;
+ * - the SEO snapshot cursor (publicSeoService): up to 31 s per page;
+ * - the background pool below, which runs scheduled jobs one at a time.
+ * Exempt work calls exemptTransactionFromStatementTimeout() inside its own
+ * transaction, so the limit comes back by itself at COMMIT or ROLLBACK.
+ *
+ * DB_STATEMENT_TIMEOUT_MS / DB_IDLE_IN_TRANSACTION_TIMEOUT_MS override the
+ * defaults; 0 turns a limit off (for example for a one-off bulk script).
+ */
+function timeoutMs(raw, fallback) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return fallback;
+  const value = parseInt(String(raw), 10);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+const DEFAULT_STATEMENT_TIMEOUT_MS = 60000;
+const DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS = 300000;
+const statementTimeoutMs = timeoutMs(process.env.DB_STATEMENT_TIMEOUT_MS, DEFAULT_STATEMENT_TIMEOUT_MS);
+const idleInTransactionTimeoutMs = timeoutMs(
+  process.env.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+  DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS
+);
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
   max: poolMax,
   min: poolMin,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000
+  connectionTimeoutMillis: 10000,
+  // pg sends these as connection start-up settings; 0 sends nothing, which
+  // leaves the server default (no limit).
+  statement_timeout: statementTimeoutMs,
+  idle_in_transaction_session_timeout: idleInTransactionTimeoutMs
 });
+
+// Lift the live statement limit for the rest of the caller's transaction.
+// SET LOCAL ends with the transaction, so the connection goes back to the
+// pool with its 60 s limit intact. Outside a transaction it would do nothing,
+// which is why this is only for work that has already sent BEGIN.
+async function exemptTransactionFromStatementTimeout(client) {
+  await client.query('SET LOCAL statement_timeout = 0');
+}
 
 pool.on('error', (err) => {
   logger.error('Unexpected PostgreSQL client error:', err);
@@ -306,6 +358,9 @@ async function warmPool(targetConnections = process.env.DB_POOL_WARM_CONNECTIONS
 }
 
 module.exports = {
+  DEFAULT_STATEMENT_TIMEOUT_MS,
+  DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+  exemptTransactionFromStatementTimeout,
   pool,
   backgroundPool,
   query,

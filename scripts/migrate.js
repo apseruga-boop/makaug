@@ -103,6 +103,9 @@ async function applyMigration(filename, sql) {
   client.on('notice', onNotice);
   try {
     await client.query('BEGIN');
+    // A migration may take longer than the live pool's 60 s statement limit
+    // (180 ran one 101 s statement). The exemption ends with this transaction.
+    await db.exemptTransactionFromStatementTimeout(client);
     await client.query(
       "SELECT set_config('app.country_code', $1, true)",
       [String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase() || 'UG']
@@ -128,6 +131,9 @@ async function applyAutocommitMigration(filename, sql) {
     // CREATE INDEX CONCURRENTLY cannot run inside a transaction. Each
     // statement is its own implicit transaction. The migration row is written
     // only after every statement succeeds, so a failed index is retried.
+    // No transaction here, so the limit is lifted for the session and put
+    // back before the connection returns to the pool.
+    await client.query('SET statement_timeout = 0');
     for (const statement of splitSqlStatements(sql)) {
       await client.query(statement);
     }
@@ -135,7 +141,14 @@ async function applyAutocommitMigration(filename, sql) {
     logger.info(`Applied migration: ${filename}`);
   } finally {
     client.removeListener('notice', onNotice);
-    client.release();
+    let resetError = null;
+    try {
+      await client.query('RESET statement_timeout');
+    } catch (error) {
+      resetError = error;
+    }
+    // A connection that could not get its limit back is closed, not reused.
+    client.release(resetError || undefined);
   }
 }
 
@@ -277,6 +290,8 @@ if (require.main === module) {
 
 module.exports = {
   AREA_INDEX_MIGRATION,
+  applyAutocommitMigration,
+  applyMigration,
   SOUTH_AFRICA_BOOTSTRAP_MARKER,
   SOUTH_AFRICA_SEEDED_TABLES,
   classifyMigrationFiles,

@@ -539,6 +539,11 @@ async function forEachPublicSeoSnapshotPage(db, onPage) {
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
+      // Sitemap / SEO snapshot: a page has taken up to 31 s; keep it clear of
+      // the live 60 s statement limit. Ends with this transaction.
+      if (typeof db.exemptTransactionFromStatementTimeout === 'function') {
+        await db.exemptTransactionFromStatementTimeout(client);
+      }
       await client.query(`DECLARE makaug_seo_snapshot NO SCROLL CURSOR FOR ${publicSeoInventorySnapshotSql()}`);
       for (let page = 0; page < SEO_SNAPSHOT_MAX_PAGES; page += 1) {
         const result = await client.query(`FETCH ${SEO_SNAPSHOT_PAGE_SIZE} FROM makaug_seo_snapshot`);
