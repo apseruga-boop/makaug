@@ -12,6 +12,7 @@ const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
 const { canonicalDisplayLocationForRow } = require('../utils/ugandaLocationRegistry');
 const { cleanListingTitle } = require('../services/publicListingCopy');
 const { PROPERTY_TYPE_RULES } = require('../utils/propertyTypeVocabulary');
+const { publicPropertyTypeLabel } = require('../routes/properties')._test;
 
 const MIGRATION = path.join(__dirname, '../db/migrations/179_namuseera_stored_type.sql');
 const ROLLBACK = path.join(__dirname, '../scripts/rollback-179-listing-corrections.sql');
@@ -151,8 +152,12 @@ test('listing correction 179 matches the stored type code and records every disp
   assert.equal([shown.area, shown.district].filter(Boolean).join(', '), 'Namuseera, Wakiso');
   assert.equal(humanPropertyTypeLabel('land'), 'land');
 
-  assert.match(propertiesSource, /property_type:\s*humanPropertyTypeLabel\(row\.property_type\)\s*\|\|\s*row\.property_type/);
-  assert.match(propertiesSource, /property_type:\s*humanPropertyTypeLabel\(safeProperty\.property_type\)\s*\|\|\s*safeProperty\.property_type/);
+  // The public rows capitalise the shared label, so the stored code 'land' reads "Land".
+  assert.match(propertiesSource, /property_type:\s*publicPropertyTypeLabel\(row\.property_type\)/);
+  assert.match(propertiesSource, /property_type:\s*publicPropertyTypeLabel\(safeProperty\.property_type\)/);
+  assert.match(propertiesSource, /function publicPropertyTypeLabel\(value\) \{\s*const label = humanPropertyTypeLabel\(value\);/);
+  assert.equal(publicPropertyTypeLabel('land'), 'Land');
+  assert.equal(publicPropertyTypeLabel('commercial_land'), 'Commercial land');
   assert.match(propertiesSource, /city:\s*extra\.city\s*\|\|\s*null/);
   assert.match(propertiesSource, /neighborhood:\s*extra\.neighborhood\s*\|\|\s*null/);
   assert.match(propertiesSource, /resolved_location_label:\s*extra\.resolved_location_label\s*\|\|\s*null/);
@@ -291,6 +296,7 @@ test('listing correction 179 applies the production code, skips with the values 
       const namuseera = await row(NAMUSEERA);
       assert.equal(namuseera.property_type, 'land');
       assert.equal(humanPropertyTypeLabel(namuseera.property_type), 'land');
+      assert.equal(publicPropertyTypeLabel(namuseera.property_type), 'Land');
       assert.equal(namuseera.area, 'Namuseera');
       assert.equal(namuseera.district, 'Wakiso');
       assert.equal(namuseera.address, LIVE_ADDRESS);

@@ -132,6 +132,14 @@ const {
   humanPropertyTypeLabel
 } = require('../utils/commercialClassification');
 const { listingPriceQuality, IMPOSSIBLE_PRICE_UGX } = require('../utils/listingPriceQuality');
+// Public property_type: the shared label, with a capital first letter so a
+// stored code like 'land' or 'house' reads "Land" / "House" on the page.
+function publicPropertyTypeLabel(value) {
+  const label = humanPropertyTypeLabel(value);
+  if (!label) return value;
+  return /^[a-z]/.test(label) ? label.charAt(0).toUpperCase() + label.slice(1) : label;
+}
+
 const { resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { listingReferenceQuery } = require('../utils/listingReferenceSearch');
 const { pricePlausibility } = require('../utils/pricePlausibility');
@@ -1380,7 +1388,7 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
     transaction_type: row.transaction_type || null,
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
-    property_type: humanPropertyTypeLabel(row.property_type) || row.property_type,
+    property_type: publicPropertyTypeLabel(row.property_type),
     room_type: row.room_type || null,
     title_type: row.title_type || null,
     status: row.status,
@@ -1987,7 +1995,7 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
     found_online_notice: foundOnlinePublic ? foundOnlinePublicNotice(property, safeExtra) : null,
     amenities: filterPublicAmenities(safeProperty.amenities),
     // Public label, not the stored enum ("shop_retail" → "Shop / retail space").
-    property_type: humanPropertyTypeLabel(safeProperty.property_type) || safeProperty.property_type,
+    property_type: publicPropertyTypeLabel(safeProperty.property_type),
     public_copy_reviewed: publicCopyReviewed(property, safeExtra),
     area: canonicalDisplay.area,
     district: canonicalDisplay.district,
@@ -3518,7 +3526,7 @@ async function listPropertiesHandler(req, res, next) {
         };
         if (!adminAccess) {
           responseRow.amenities = filterPublicAmenities(publicRow.amenities);
-          responseRow.property_type = humanPropertyTypeLabel(publicRow.property_type) || publicRow.property_type;
+          responseRow.property_type = publicPropertyTypeLabel(publicRow.property_type);
         }
         if (adminAccess) {
           responseRow.source = rowSource || null;
@@ -6151,6 +6159,7 @@ module.exports._test = {
   parseCanonicalLocationKeys,
   publicLocationMatchForRow,
   publicPropertyRow,
+  publicPropertyTypeLabel,
   publicPropertiesCacheKey,
   sendPublicPropertySearchUnavailable,
   isTwimgHostedUrl,
