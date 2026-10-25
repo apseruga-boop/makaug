@@ -173,11 +173,20 @@ function commercialMisclassificationWarning(record = {}) {
   return '';
 }
 
+// Public pages: the label above with a capital first letter, so a stored code
+// like 'land' or 'house' reads "Land" / "House". Staff tools keep the code.
+function publicPropertyTypeLabel(value) {
+  const label = humanPropertyTypeLabel(value);
+  if (!label) return value;
+  return /^[a-z]/.test(label) ? label.charAt(0).toUpperCase() + label.slice(1) : label;
+}
+
 module.exports = {
   COMMERCIAL_TRANSACTION_TYPES,
   COMMERCIAL_PROPERTY_TYPES,
   COMMERCIAL_PROPERTY_TYPE_LABELS,
   humanPropertyTypeLabel,
+  publicPropertyTypeLabel,
   normalizeCommercialTransactionType,
   normalizeListingPricePeriod,
   normalizeCommercialPropertyType,
