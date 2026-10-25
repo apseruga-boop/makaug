@@ -210,13 +210,15 @@ function orderedCategoryDistrictPairs() {
     pairs.push({ district, category });
   };
 
+  // Categories that only hold re-filed businesses (sourcing: false) are not walked.
+  const categories = MARKETPLACE_CATEGORIES.filter((category) => category.sourcing !== false);
   // Prove national coverage first: one category in every district, rotating
   // through all service categories before deepening any single district.
   districts.forEach((district, index) => {
-    push(district, MARKETPLACE_CATEGORIES[index % MARKETPLACE_CATEGORIES.length]);
+    push(district, categories[index % categories.length]);
   });
   for (const district of districts) {
-    for (const category of MARKETPLACE_CATEGORIES) push(district, category);
+    for (const category of categories) push(district, category);
   }
   return pairs;
 }

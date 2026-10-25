@@ -91,9 +91,11 @@ assert(
   'server startup should warm the database pool before accepting requests'
 );
 assert(
-  serverSource.includes("await loadPublicOpportunitySummary({ timeoutMs: 5000 })")
-    && serverSource.includes("Public inventory summary warmed before accepting traffic"),
-  'server startup should pre-warm the authoritative public inventory summary before accepting requests'
+  serverSource.includes('schedulePublicInventoryCountWarmup()')
+    && serverSource.includes('Public inventory counts warming in the background')
+    && serverSource.includes("if (process.env.NODE_ENV === 'test' || !process.env.DATABASE_URL) return;")
+    && !serverSource.includes('await loadPublicOpportunitySummary({ timeoutMs: 5000 })'),
+  'server startup should warm the main public counts in the background without blocking boot'
 );
 
 assert(

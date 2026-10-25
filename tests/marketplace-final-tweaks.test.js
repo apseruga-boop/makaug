@@ -31,7 +31,7 @@ test('expanded tier explainer restores three compact bordered cards', () => {
 
 test('business card and managed-profile names use the readable category colour', () => {
   assert.match(html, /\.marketplace-category-label,\s*\.marketplace-business-name \{ color: var\(--marketplace-category-text/);
-  assert.match(app, /marketplace-business-name font-black leading-snug break-words/);
+  assert.match(app, /class="marketplace-business-name mk-name"/);
   assert.match(html, /id="marketplace-manage-title" class="marketplace-business-name/);
   assert.match(app, /--marketplace-category-text:\$\{theme\.text \|\| theme\.accent\}/);
   assert.match(app, /marketplace-manage-title"\)\?\.setAttribute\("style", marketplaceCategoryStyle/);

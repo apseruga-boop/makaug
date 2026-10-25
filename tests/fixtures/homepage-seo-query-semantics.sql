@@ -28,7 +28,14 @@ WITH fixture_inputs (id,title,description,extra_fields,status,source,listed_via,
  false AS price_on_application, 'rent'::text AS transaction_type,
  1::int AS bedrooms, 1::int AS bathrooms, 'apartment'::text AS property_type,
  extra_fields::jsonb, status, source, listed_via, lister_name,lister_email,inquiry_reference,
- created_at::timestamptz,updated_at::timestamptz
+ created_at::timestamptz,updated_at::timestamptz,
+ (id IN (
+   '00000000-0000-4000-8000-000000000001',
+   '00000000-0000-4000-8000-000000000002',
+   '00000000-0000-4000-8000-000000000003',
+   '00000000-0000-4000-8000-000000000004',
+   '00000000-0000-4000-8000-000000000006'
+ )) AS has_public_media
  FROM fixture_inputs
 ), fixture_images (property_id,url,is_primary,sort_order,slot_key) AS (
  VALUES ('00000000-0000-4000-8000-000000000001', 'https://media.makaug.com/ordinary-primary.jpg', TRUE, 0, 'exterior'),
@@ -124,44 +131,13 @@ WITH homepage_candidates AS MATERIALIZED (
     OR COALESCE(p.extra_fields->>'is_test', '') ~* '^(true|1|yes)$'
     OR COALESCE(p.extra_fields->>'launch_proof', '') ~* '^(true|1|yes)$'
     OR COALESCE(p.extra_fields->>'non_public_test', '') ~* '^(true|1|yes)$'
-  ) AND (EXISTS (
-    SELECT 1 FROM property_images rhp
-     WHERE rhp.property_id = p.id
-       AND rhp.url ~* '^https?://media\.makaug\.com/.+'
-       AND rhp.url !~* 'photo-1560518883-ce09059eeffa|image[ _-]*pending|tiktokcdn|byteimg'
-       AND COALESCE(rhp.room_label, '') !~* 'image[ _-]*pending'
-       AND COALESCE(rhp.slot_key, '') <> 'source_evidence_card'
-  ) OR (
-    COALESCE(p.extra_fields->>'source_unavailable', '') !~* '^(true|t|1|yes)$'
-    AND COALESCE(p.extra_fields->>'source_url_status', '') !~* 'unavailable|removed|deleted|private'
-    AND COALESCE(p.extra_fields->>'source_status', '') !~* 'unavailable|removed|deleted|private'
-    AND (
-      (p.extra_fields->>'video_url' ~* '^https?://' AND (p.extra_fields->>'video_url' !~* 'tiktokcdn|byteimg' OR p.extra_fields->>'video_url' ~* '\.mp4(\?|$)'))
-      OR (p.extra_fields->>'youtube_url' ~* '^https?://' AND (p.extra_fields->>'youtube_url' !~* 'tiktokcdn|byteimg' OR p.extra_fields->>'youtube_url' ~* '\.mp4(\?|$)'))
-      OR (p.extra_fields->>'tiktok_url' ~* '^https?://' AND (p.extra_fields->>'tiktok_url' !~* 'tiktokcdn|byteimg' OR p.extra_fields->>'tiktok_url' ~* '\.mp4(\?|$)'))
-      OR EXISTS (
-        SELECT 1
-          FROM jsonb_array_elements_text(
-            CASE WHEN jsonb_typeof(p.extra_fields->'video_urls') = 'array' THEN p.extra_fields->'video_urls' ELSE '[]'::jsonb END
-          ) AS video_url(url)
-         WHERE (video_url.url ~* '^https?://' AND (video_url.url !~* 'tiktokcdn|byteimg' OR video_url.url ~* '\.mp4(\?|$)'))
-      )
-      OR EXISTS (
-        SELECT 1
-          FROM jsonb_array_elements(
-            CASE WHEN jsonb_typeof(p.extra_fields->'video_tours') = 'array' THEN p.extra_fields->'video_tours' ELSE '[]'::jsonb END
-          ) AS video_tour(elem)
-         WHERE (COALESCE(video_tour.elem->>'url', video_tour.elem->>'video_url', CASE WHEN jsonb_typeof(video_tour.elem) = 'string' THEN video_tour.elem #>> '{}' ELSE '' END) ~* '^https?://' AND (COALESCE(video_tour.elem->>'url', video_tour.elem->>'video_url', CASE WHEN jsonb_typeof(video_tour.elem) = 'string' THEN video_tour.elem #>> '{}' ELSE '' END) !~* 'tiktokcdn|byteimg' OR COALESCE(video_tour.elem->>'url', video_tour.elem->>'video_url', CASE WHEN jsonb_typeof(video_tour.elem) = 'string' THEN video_tour.elem #>> '{}' ELSE '' END) ~* '\.mp4(\?|$)'))
-           AND (COALESCE(video_tour.elem->>'url', video_tour.elem->>'video_url', CASE WHEN jsonb_typeof(video_tour.elem) = 'string' THEN video_tour.elem #>> '{}' ELSE '' END) ~* '\.mp4(\?|$)' OR COALESCE(video_tour.elem->>'url', video_tour.elem->>'video_url', CASE WHEN jsonb_typeof(video_tour.elem) = 'string' THEN video_tour.elem #>> '{}' ELSE '' END) ~* 'youtu|tiktok')
-      )
-    )
-  )))
+  ) AND p.has_public_media)
        ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC
        LIMIT 6
      )
 SELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
-       p.price, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.price, p.price_original, p.price_original_currency, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
        p.extra_fields->>'city' AS city,
        p.extra_fields->>'neighborhood' AS neighborhood,

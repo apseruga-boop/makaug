@@ -19,6 +19,9 @@ const PUBLIC_INVENTORY_METRICS_CACHE_MAX_ENTRIES = Math.max(
   20,
   Math.min(300, parseInt(process.env.PUBLIC_INVENTORY_METRICS_CACHE_MAX_ENTRIES || '120', 10) || 120)
 );
+// Background refreshes use the same 4s budget as the public list route.
+// Callers never wait on this; it only lets a refresh finish and fill the cache.
+const PUBLIC_INVENTORY_BACKGROUND_REFRESH_TIMEOUT_MS = 4000;
 
 const LAUNCH_SEED_LISTING_MARKERS = [
   'SOFT LAUNCH TEST - DELETE',
@@ -28,17 +31,43 @@ const LAUNCH_SEED_LISTING_MARKERS = [
 ];
 const LAUNCH_DUMMY_LISTING_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const publicInventoryMetricsCache = new Map();
+const publicInventoryMetricsInflight = new Map();
+const loggedInventoryRefreshes = new WeakSet();
+let inventoryCacheGeneration = 0;
+let inventoryCacheLimitOverride = 0;
+let inventoryNow = () => Date.now();
+let inventoryQueryRunner = null;
+let inventoryWarmChain = Promise.resolve();
+
+function inventoryCacheLimit() {
+  const override = Number(inventoryCacheLimitOverride);
+  if (Number.isFinite(override) && override >= 1) return Math.floor(override);
+  return PUBLIC_INVENTORY_METRICS_CACHE_MAX_ENTRIES;
+}
+
+function clonePublicOpportunitySummary(summary = {}) {
+  return {
+    ...summary,
+    by_type: { ...(summary.by_type || {}) }
+  };
+}
 
 function invalidatePublicInventoryMetricsCache(reason = 'public_inventory_changed') {
-  const cleared = publicInventoryMetricsCache.size;
-  publicInventoryMetricsCache.clear();
+  inventoryCacheGeneration += 1;
+  let marked = 0;
+  for (const entry of publicInventoryMetricsCache.values()) {
+    entry.stale = true;
+    entry.createdAt = 0;
+    marked += 1;
+  }
   require('./publicHtmlResponseCache').clear();
   logger.info('Public inventory metrics cache invalidated', {
     marker: PUBLIC_INVENTORY_METRICS_MARKER,
     reason,
-    cleared
+    cleared: marked,
+    mode: 'mark_stale'
   });
-  return cleared;
+  return marked;
 }
 
 function sqlLiteral(value = '') {
@@ -131,20 +160,39 @@ function publicInventoryCacheKey(where = '', values = []) {
   return crypto.createHash('sha1').update(raw).digest('hex');
 }
 
-function getCachedPublicInventoryMetrics(key) {
+function readCachedPublicInventoryMetrics(key) {
   const cached = publicInventoryMetricsCache.get(key);
-  if (!cached) return null;
-  if ((Date.now() - cached.createdAt) <= PUBLIC_INVENTORY_METRICS_CACHE_TTL_MS) {
-    return { ...cached, cache: 'hit' };
-  }
-  return { ...cached, cache: 'stale' };
+  if (!cached?.summary) return null;
+  publicInventoryMetricsCache.delete(key);
+  publicInventoryMetricsCache.set(key, cached);
+  const ageMs = inventoryNow() - Number(cached.createdAt || 0);
+  const fresh = !cached.stale && ageMs <= PUBLIC_INVENTORY_METRICS_CACHE_TTL_MS;
+  return { summary: cached.summary, cache: fresh ? 'hit' : 'stale' };
 }
 
-function setCachedPublicInventoryMetrics(key, summary) {
-  publicInventoryMetricsCache.set(key, { createdAt: Date.now(), summary });
-  if (publicInventoryMetricsCache.size <= PUBLIC_INVENTORY_METRICS_CACHE_MAX_ENTRIES) return;
-  const oldestKey = publicInventoryMetricsCache.keys().next().value;
-  if (oldestKey) publicInventoryMetricsCache.delete(oldestKey);
+function rememberCachedPublicInventoryMetrics(key, summary, generation) {
+  const existing = publicInventoryMetricsCache.get(key);
+  if (existing && Number(existing.generation) > generation) return;
+  const stale = generation !== inventoryCacheGeneration;
+  if (
+    existing
+    && !existing.stale
+    && existing.generation === inventoryCacheGeneration
+    && generation < inventoryCacheGeneration
+  ) return;
+  if (publicInventoryMetricsCache.has(key)) publicInventoryMetricsCache.delete(key);
+  publicInventoryMetricsCache.set(key, {
+    createdAt: stale ? 0 : inventoryNow(),
+    stale,
+    generation,
+    summary: clonePublicOpportunitySummary(summary)
+  });
+  const limit = inventoryCacheLimit();
+  while (publicInventoryMetricsCache.size > limit) {
+    const oldestKey = publicInventoryMetricsCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    publicInventoryMetricsCache.delete(oldestKey);
+  }
 }
 
 async function timedQuery(sql, values = [], timeoutMs = PUBLIC_INVENTORY_METRICS_TIMEOUT_MS) {
@@ -221,22 +269,23 @@ async function addShortTermToSiteWideSummary(summary, callerWhere = '') {
   return summary;
 }
 
-async function loadPublicOpportunitySummary({ where = '', values = [], timeoutMs = PUBLIC_INVENTORY_METRICS_TIMEOUT_MS } = {}) {
-  const normalizedWhere = where && String(where).trim() ? where : `WHERE ${publicVisibleInventoryWhere('p')}`;
-  const key = publicInventoryCacheKey(normalizedWhere, values);
-  const cached = getCachedPublicInventoryMetrics(key);
-  if (cached?.cache === 'hit') {
-    return {
-      summary: cached.summary,
-      meta: {
-        cache: 'hit',
-        marker: PUBLIC_INVENTORY_METRICS_MARKER
-      }
-    };
-  }
+function countFallbackReason(error) {
+  if (error?.code === '57014') return 'statement_timeout';
+  if (error?.code === 'POOL_TIMEOUT') return 'pool_timeout';
+  return 'query_failed';
+}
 
+function logStaleInventoryCount(error) {
+  logger.warn('Using stale public inventory metrics after count timeout/error', {
+    marker: PUBLIC_INVENTORY_METRICS_MARKER,
+    code: error?.code,
+    message: error?.message
+  });
+}
+
+function inventoryCountSql(normalizedWhere) {
   const bucketSql = publicOpportunityBucketSql('p');
-  const sql = `SELECT
+  return `SELECT
       COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE bucket = 'sale')::int AS sale,
       COUNT(*) FILTER (WHERE bucket = 'rent')::int AS rent,
@@ -249,48 +298,220 @@ async function loadPublicOpportunitySummary({ where = '', values = [], timeoutMs
       FROM properties p
       ${normalizedWhere}
     ) public_inventory`;
+}
+
+async function executePublicInventoryCount({ key, normalizedWhere, callerWhere, values, timeoutMs, generation }) {
+  const sql = inventoryCountSql(normalizedWhere);
+  const runQuery = inventoryQueryRunner || timedQuery;
+  const result = await runQuery(sql, values, timeoutMs);
+  const summary = normalizePublicOpportunitySummary(result.rows[0] || {});
+  await addShortTermToSiteWideSummary(summary, callerWhere);
+  rememberCachedPublicInventoryMetrics(key, summary, generation);
+  return summary;
+}
+
+function beginPublicInventoryCount({ key, normalizedWhere, callerWhere, values, timeoutMs }) {
+  const existing = publicInventoryMetricsInflight.get(key);
+  if (existing && existing.generation === inventoryCacheGeneration) return existing.promise;
+  if (!existing && publicInventoryMetricsInflight.size >= inventoryCacheLimit()) return null;
+  const generation = inventoryCacheGeneration;
+  let promise;
+  promise = executePublicInventoryCount({
+    key,
+    normalizedWhere,
+    callerWhere,
+    values,
+    timeoutMs,
+    generation
+  }).finally(() => {
+    const current = publicInventoryMetricsInflight.get(key);
+    if (current?.promise === promise) publicInventoryMetricsInflight.delete(key);
+  });
+  // Callers may stop waiting before this settles. A later rejection must not
+  // become an unhandled rejection once they have moved on.
+  promise.catch(() => {});
+  publicInventoryMetricsInflight.set(key, { promise, generation });
+  return promise;
+}
+
+function watchInventoryRefresh(promise) {
+  if (!promise || loggedInventoryRefreshes.has(promise)) return;
+  loggedInventoryRefreshes.add(promise);
+  promise.catch((error) => logStaleInventoryCount(error));
+}
+
+function awaitInventoryCount(promise, timeoutMs) {
+  const budget = Math.max(1, Number(timeoutMs) || PUBLIC_INVENTORY_METRICS_TIMEOUT_MS);
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error('Public inventory count exceeded the request budget');
+      error.code = '57014';
+      reject(error);
+    }, budget);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function inventoryResult(summary, meta) {
+  return {
+    summary: clonePublicOpportunitySummary(summary),
+    meta: {
+      marker: PUBLIC_INVENTORY_METRICS_MARKER,
+      ...meta
+    }
+  };
+}
+
+async function loadPublicOpportunitySummary({
+  where = '',
+  values = [],
+  timeoutMs = PUBLIC_INVENTORY_METRICS_TIMEOUT_MS,
+  preferFresh = false
+} = {}) {
+  const normalizedWhere = where && String(where).trim() ? where : `WHERE ${publicVisibleInventoryWhere('p')}`;
+  const key = publicInventoryCacheKey(normalizedWhere, values);
+  const cached = readCachedPublicInventoryMetrics(key);
+  if (cached?.cache === 'hit') {
+    return inventoryResult(cached.summary, { cache: 'hit' });
+  }
+
+  if (cached?.summary && !preferFresh) {
+    const refresh = beginPublicInventoryCount({
+      key,
+      normalizedWhere,
+      callerWhere: where,
+      values,
+      timeoutMs: PUBLIC_INVENTORY_BACKGROUND_REFRESH_TIMEOUT_MS
+    });
+    watchInventoryRefresh(refresh);
+    return inventoryResult(cached.summary, { cache: 'stale' });
+  }
+
+  let pending = beginPublicInventoryCount({
+    key,
+    normalizedWhere,
+    callerWhere: where,
+    values,
+    timeoutMs
+  });
+  if (!pending) {
+    pending = executePublicInventoryCount({
+      key,
+      normalizedWhere,
+      callerWhere: where,
+      values,
+      timeoutMs,
+      generation: inventoryCacheGeneration
+    });
+    pending.catch(() => {});
+  }
 
   try {
-    const result = await timedQuery(sql, values, timeoutMs);
-    const summary = normalizePublicOpportunitySummary(result.rows[0] || {});
-    await addShortTermToSiteWideSummary(summary, where);
-    setCachedPublicInventoryMetrics(key, summary);
-    return {
-      summary,
-      meta: {
-        cache: cached ? 'refresh' : 'miss',
-        marker: PUBLIC_INVENTORY_METRICS_MARKER
-      }
-    };
+    const summary = await awaitInventoryCount(pending, timeoutMs);
+    const stored = readCachedPublicInventoryMetrics(key);
+    const cache = stored?.cache === 'stale' ? 'stale' : (cached ? 'refresh' : 'miss');
+    return inventoryResult(summary, { cache });
   } catch (error) {
     if (cached?.summary) {
-      logger.warn('Using stale public inventory metrics after count timeout/error', {
-        marker: PUBLIC_INVENTORY_METRICS_MARKER,
-        code: error.code,
-        message: error.message
+      logStaleInventoryCount(error);
+      return inventoryResult(cached.summary, {
+        cache: 'stale',
+        fallback_reason: countFallbackReason(error)
       });
-      return {
-        summary: cached.summary,
-        meta: {
-          cache: 'stale',
-          marker: PUBLIC_INVENTORY_METRICS_MARKER,
-          fallback_reason: error.code === '57014'
-            ? 'statement_timeout'
-            : error.code === 'POOL_TIMEOUT' ? 'pool_timeout' : 'query_failed'
-        }
-      };
     }
     throw error;
   }
 }
 
+function warmPublicInventoryCounts(queries = []) {
+  const jobs = [
+    {
+      label: 'site-wide',
+      where: '',
+      values: [],
+      timeoutMs: PUBLIC_INVENTORY_BACKGROUND_REFRESH_TIMEOUT_MS
+    },
+    ...queries
+  ];
+  const run = inventoryWarmChain.catch(() => {}).then(async () => {
+    const results = [];
+    for (const job of jobs) {
+      try {
+        const result = await loadPublicOpportunitySummary({
+          where: job.where || '',
+          values: Array.isArray(job.values) ? job.values : [],
+          timeoutMs: job.timeoutMs || PUBLIC_INVENTORY_BACKGROUND_REFRESH_TIMEOUT_MS,
+          preferFresh: true
+        });
+        logger.info('Public inventory count warmed', {
+          label: job.label,
+          total: result?.summary?.total ?? null,
+          cache: result?.meta?.cache || null
+        });
+        results.push({
+          label: job.label,
+          ok: true,
+          total: result?.summary?.total ?? null,
+          cache: result?.meta?.cache || null
+        });
+      } catch (error) {
+        logger.warn('Public inventory count warmup failed; pages render without waiting for this count', {
+          label: job.label,
+          code: error?.code,
+          message: error?.message
+        });
+        results.push({ label: job.label, ok: false, code: error?.code || null });
+      }
+    }
+    return results;
+  });
+  inventoryWarmChain = run;
+  return run;
+}
+
+function resetPublicInventoryMetricsForTests() {
+  publicInventoryMetricsCache.clear();
+  publicInventoryMetricsInflight.clear();
+  inventoryCacheGeneration = 0;
+  inventoryCacheLimitOverride = 0;
+  inventoryNow = () => Date.now();
+  inventoryQueryRunner = null;
+  inventoryWarmChain = Promise.resolve();
+}
+
+function setPublicInventoryQueryRunnerForTests(runner) {
+  inventoryQueryRunner = typeof runner === 'function' ? runner : null;
+}
+
+function setPublicInventoryClockForTests(clock) {
+  inventoryNow = typeof clock === 'function' ? clock : () => Date.now();
+}
+
+function setPublicInventoryCacheLimitForTests(limit) {
+  inventoryCacheLimitOverride = Number(limit) || 0;
+}
+
+function publicInventoryMetricsCacheSizeForTests() {
+  return publicInventoryMetricsCache.size;
+}
+
 module.exports = {
+  PUBLIC_INVENTORY_BACKGROUND_REFRESH_TIMEOUT_MS,
+  PUBLIC_INVENTORY_METRICS_CACHE_MAX_ENTRIES,
+  PUBLIC_INVENTORY_METRICS_CACHE_TTL_MS,
   PUBLIC_INVENTORY_METRICS_MARKER,
   addShortTermToSiteWideSummary,
   invalidatePublicInventoryMetricsCache,
   loadPublicOpportunitySummary,
   normalizePublicOpportunitySummary,
+  publicInventoryMetricsCacheSizeForTests,
   publicLaunchTestListingFastCondition,
   publicOpportunityBucketSql,
-  publicVisibleInventoryWhere
+  publicVisibleInventoryWhere,
+  resetPublicInventoryMetricsForTests,
+  setPublicInventoryCacheLimitForTests,
+  setPublicInventoryClockForTests,
+  setPublicInventoryQueryRunnerForTests,
+  warmPublicInventoryCounts
 };

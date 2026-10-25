@@ -48,6 +48,7 @@ const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 const { createLead } = require('../services/leadService');
 const { ensurePostVerificationRecords } = require('../services/authFlowService');
 const { prepareMediaUrlForStorage } = require('../services/cloudMediaStorageService');
+const { effectivePriceUgxSql } = require('../services/fxRateService');
 const {
   buildIdentityVerificationExtra,
   listingRequiresIdentityVerification
@@ -627,6 +628,37 @@ function isLaunchSeedListing(row = {}) {
 
 function addPublicLaunchSeedFilter(filters, values) {
   filters.push(`NOT ${publicLaunchTestListingFastCondition('p')}`);
+}
+
+// Same predicate the anonymous approved list uses for homepage, /for-sale,
+// /to-rent and /land (no area, price or other extra filters). Kept beside
+// listPropertiesHandler so a warmup fills the cache key those pages request.
+function publicCategoryOpportunityQuery(listingType = '') {
+  const filters = [];
+  const values = [];
+  addPublicLaunchSeedFilter(filters, values);
+  filters.push(publicHasPhotoOrVideoSql('p'));
+  if (listingType && LISTING_TYPES.includes(listingType)) {
+    if (listingType === 'student') {
+      addFilter(filters, values, 'p.listing_type IN (?, ?)', 'student', 'students');
+    } else {
+      addFilter(filters, values, 'p.listing_type = ?', listingType);
+    }
+  }
+  filters.push(publicLivePropertyStatusSql('p'));
+  const staleAvailability = publicStaleAvailabilitySql('p');
+  if (staleAvailability) filters.push(staleAvailability);
+  return { where: `WHERE ${filters.join(' AND ')}`, values };
+}
+
+function mainPublicOpportunityCountQueries() {
+  const timeoutMs = 4000;
+  return [
+    { label: 'homepage', timeoutMs, ...publicCategoryOpportunityQuery('') },
+    { label: 'for-sale', timeoutMs, ...publicCategoryOpportunityQuery('sale') },
+    { label: 'to-rent', timeoutMs, ...publicCategoryOpportunityQuery('rent') },
+    { label: 'land', timeoutMs, ...publicCategoryOpportunityQuery('land') }
+  ];
 }
 
 function normalizeListingType(type) {
@@ -2874,8 +2906,11 @@ async function listPropertiesHandler(req, res, next) {
       addFilter(filters, values, `${listingOriginSql('p')} = ?`, listingOrigin);
     }
 
-    if (minPrice != null) addFilter(filters, values, 'p.price >= ?', minPrice);
-    if (maxPrice != null) addFilter(filters, values, 'p.price <= ?', maxPrice);
+    // A dollar-priced listing is filtered at today's rate (services/fxRateService),
+    // not the rate stored when it was imported. Stored prices are unchanged.
+    const effectivePriceSql = effectivePriceUgxSql('p');
+    if (minPrice != null) addFilter(filters, values, `${effectivePriceSql} >= ?`, minPrice);
+    if (maxPrice != null) addFilter(filters, values, `${effectivePriceSql} <= ?`, maxPrice);
     if (minBeds != null) addFilter(filters, values, 'p.bedrooms >= ?', minBeds);
     if (maxBeds != null) addFilter(filters, values, 'p.bedrooms <= ?', maxBeds);
     if (bathrooms != null) addFilter(filters, values, 'p.bathrooms >= ?', bathrooms);
@@ -3107,12 +3142,13 @@ async function listPropertiesHandler(req, res, next) {
 
     const publicPriceSortMaxUgx = 100000000000;
     const priceSortRankSql = `(CASE WHEN p.price IS NOT NULL AND p.price > 0 AND p.price <= ${publicPriceSortMaxUgx} THEN 0 ELSE 1 END)`;
+    const priceSortValueSql = effectivePriceUgxSql('p');
     const sortMap = {
       featured: "p.extra_fields->>'featured_at' DESC NULLS LAST, p.updated_at DESC, p.created_at DESC, p.id DESC",
       newest: 'p.created_at DESC, p.id DESC',
       oldest: 'p.created_at ASC, p.id ASC',
-      price_asc: `${priceSortRankSql} ASC, p.price ASC NULLS LAST, p.created_at DESC, p.id DESC`,
-      price_desc: `${priceSortRankSql} ASC, p.price DESC NULLS LAST, p.created_at DESC, p.id DESC`,
+      price_asc: `${priceSortRankSql} ASC, ${priceSortValueSql} ASC NULLS LAST, p.created_at DESC, p.id DESC`,
+      price_desc: `${priceSortRankSql} ASC, ${priceSortValueSql} DESC NULLS LAST, p.created_at DESC, p.id DESC`,
       // The money pages' server-rendered order (utils/agentFirstRank), so hydration keeps it.
       agent_first: agentFirstOrderSql('p'),
       agent_first_homes: agentFirstOrderSql('p', { homesBeforeLand: true })
@@ -6104,6 +6140,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 
 module.exports = router;
 module.exports.clearPublicPropertiesCache = clearPublicPropertiesCache;
+module.exports.mainPublicOpportunityCountQueries = mainPublicOpportunityCountQueries;
+module.exports.publicCategoryOpportunityQuery = publicCategoryOpportunityQuery;
 module.exports._test = {
   isDefaultStatusNoteReason,
   addCanonicalLocationSearchFilter,

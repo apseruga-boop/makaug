@@ -653,8 +653,11 @@ function getListingMapPoint(property = {}) {
 
 // C6 (10 Oct 2026, Marketing): one place for display exchange rates. The
 // server publishes them in /config.js (window.MAKAUG_FX, also GET /api/fx) with
-// an "as of" date; these are only the fallback. UGX stays the stored value;
-// other currencies are shown as an approximate conversion ("≈").
+// an "as of" date. Since 25 Oct 2026 the server fetches them daily
+// (services/fxRateService.js); these are only the fallback when the config is
+// missing. UGX stays the stored value; other currencies are shown as an
+// approximate conversion ("≈"). A listing priced in US dollars is shown in
+// UGX at today's rate.
 const FX_FALLBACK = { base: "UGX", as_of: "2026-10-01", rates: { USD: 3800, GBP: 4900, EUR: 4100 } };
 const CURRENCY_SYMBOLS = { USD: "$", GBP: "£", EUR: "€" };
 const SUPPORTED_DISPLAY_CURRENCIES = ["UGX", "USD", "GBP", "EUR"];
@@ -665,6 +668,15 @@ function publicFx() {
 function fxRateToUgx(cur) {
   const rate = Number(publicFx().rates?.[cur]);
   return Number.isFinite(rate) && rate > 0 ? rate : FX_FALLBACK.rates[cur];
+}
+// A listing's price in UGX today: a dollar-priced listing at today's rate,
+// anything else at its stored UGX price (same rule as the server's search).
+function listingUgxToday(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const currency = String(p?.price_original_currency || extra.price_original_currency || "").toUpperCase();
+  const original = Number(p?.price_original ?? extra.price_original);
+  if (currency === "USD" && Number.isFinite(original) && original > 0) return Math.round(original * fxRateToUgx("USD"));
+  return Number(p?.price) || 0;
 }
 function convertedPriceText(cur, v, p) {
   if (!v) return "Price upon application";
@@ -3962,7 +3974,12 @@ const MARKETPLACE_UI_EN = Object.freeze({
   googleLoading: "Refreshing details from Google...", googleRating: "Google rating", reviewsOnGoogle: "reviews on Google", openNow: "Open now", closedNow: "Closed now", openingHours: "Opening hours", fullAddress: "Full address", plusCode: "Plus code", businessStatus: "Business status", operational: "Operational", temporarilyClosed: "Temporarily closed", googleDetailsUnavailable: "Live Google details are temporarily unavailable.", websiteLabel: "Website", phoneLabel: "International phone", viewOnGoogle: "View on Google Maps",
   contactName: "Contact person name", reviewTitle: "Your business is under review", reviewCopy: "Thanks — most reviews are completed within 24 hours. We will message you when it is live.", acknowledgementWhatsApp: "Acknowledgement sent by WhatsApp.", acknowledgementEmail: "Acknowledgement sent by email.", acknowledgementPending: "Your reference is saved. We will contact you after review.",
   manageProfile: "Manage your business profile", manageSubtitle: "This secure link lets you update your approved listing without a password.", loadingProfile: "Loading your secure profile...", profileViews: "Profile views", servicesOffered: "Services offered", servesRegions: "Other districts served, separated by commas", profilePhotos: "Business photos", profilePhotosHelp: "Upload up to four JPG, PNG or WebP images, 2.5MB each.", saveChanges: "Save changes", changesSaved: "Your business profile has been updated.",
-  privateUpsellTitle: "You're Privately Listed", privateUpsellCopy: "Verified businesses rank first and receive leads first. Verified is coming soon.", joinWaitlist: "Join the Verified waitlist", verifiedComing: "Verified is coming", waitlistTitle: "Get first access to Marketplace Verified", waitlistSubtitle: "Join the waitlist. We will contact you when evidence review and payment open.", businessOrOwnerName: "Business or owner name", waitlistSent: "You're on the Verified waitlist. We will contact you when it opens."
+  privateUpsellTitle: "You're Privately Listed", privateUpsellCopy: "Verified businesses rank first and receive leads first. Verified is coming soon.", joinWaitlist: "Join the Verified waitlist", verifiedComing: "Verified is coming", waitlistTitle: "Get first access to Marketplace Verified", waitlistSubtitle: "Join the waitlist. We will contact you when evidence review and payment open.", businessOrOwnerName: "Business or owner name", waitlistSent: "You're on the Verified waitlist. We will contact you when it opens.",
+  whoPlaceholder: "Who do you need? e.g. surveyor, land lawyer, solar", askAiLink: "Not sure who you need? Describe the job and Ask AI",
+  branchesCount: "{count} branches", panelTitle: "What do you need help with?", groupBusinesses: "{count} businesses",
+  groupBuySellLegal: "Buy, sell & legal", groupBuildDesign: "Build & design", groupPowerWaterSecurity: "Power, water & security", groupManageMoveInsure: "Manage, move & insure",
+  allInGroup: "All {group}", moreCategories: "+{count} more", fewerCategories: "Fewer", clearGroup: "Show all services",
+  listingNote: "Most listings come from Google Maps and are unclaimed. Owner-listed and Verified businesses show first."
 });
 
 const MARKETPLACE_UI_OVERRIDES = Object.freeze({
@@ -4191,6 +4208,71 @@ Object.entries(MARKETPLACE_LIFECYCLE_I18N).forEach(([language, values]) => {
   Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
 });
 
+// Directory redesign strings (25 Oct 2026). Drafts: non-English wording needs a
+// native-speaker check before the next language review.
+const MARKETPLACE_DIRECTORY_I18N = Object.freeze({
+  lg: {
+    whoPlaceholder: "Oyagala ani? okugeza: omupima ettaka, munnamateeka w'ettaka, solar", askAiLink: "Tomanyi gw'oyagala? Nnyonnyola omulimu, Buuza AI",
+    branchesCount: "amatabi {count}", panelTitle: "Oyagala buyambi ki?", groupBusinesses: "bizinesi {count}",
+    groupBuySellLegal: "Okugula, okutunda n'amateeka", groupBuildDesign: "Okuzimba n'okukola dizayini", groupPowerWaterSecurity: "Amasannyalaze, amazzi n'obukuumi", groupManageMoveInsure: "Okuddukanya, okusengula n'yinsuwa",
+    allInGroup: "{group} byonna", moreCategories: "+{count} endala", fewerCategories: "Bitono", clearGroup: "Laga obuweereza bwonna",
+    listingNote: "Bizinesi nnyingi zaggyibwa ku Google Maps era tezinnaba kwewandiisa. Ezawandiisibwa bannannyini n'ezakakasibwa zisooka."
+  },
+  sw: {
+    whoPlaceholder: "Unamhitaji nani? mf. mpima ardhi, wakili wa ardhi, sola", askAiLink: "Huna uhakika? Eleza kazi na Uliza AI",
+    branchesCount: "matawi {count}", panelTitle: "Unahitaji msaada gani?", groupBusinesses: "biashara {count}",
+    groupBuySellLegal: "Kununua, kuuza na sheria", groupBuildDesign: "Ujenzi na usanifu", groupPowerWaterSecurity: "Umeme, maji na ulinzi", groupManageMoveInsure: "Usimamizi, kuhama na bima",
+    allInGroup: "{group} zote", moreCategories: "+{count} zaidi", fewerCategories: "Chache", clearGroup: "Onyesha huduma zote",
+    listingNote: "Biashara nyingi zimetoka Google Maps na bado hazijadaiwa. Zilizoorodheshwa na wamiliki na zilizothibitishwa huonyeshwa kwanza."
+  },
+  ac: {
+    whoPlaceholder: "Imito nga? calo: lapim ngom, lalok me ngom, solar", askAiLink: "Pe ingeyo ngat ma imito? Tit tic ni, Peny AI",
+    branchesCount: "jange {count}", panelTitle: "Imito kony i kom ngo?", groupBusinesses: "biacara {count}",
+    groupBuySellLegal: "Wilo, cato ki cik", groupBuildDesign: "Gero ki dizain", groupPowerWaterSecurity: "Mac, pii ki gwoko", groupManageMoveInsure: "Loyo, kobo ki insurans",
+    allInGroup: "{group} weng", moreCategories: "+{count} mukene", fewerCategories: "Manok", clearGroup: "Nyut tic weng",
+    listingNote: "Biacara mapol oa ki Google Maps dok pe ki dok gi. Ma lutela gi oketo ki ma kiyubo gi nyute mukwongo."
+  },
+  ny: {
+    whoPlaceholder: "Noyenda oha? nk'omupimi w'eitaka, omuramuzi w'eitaka, solar", askAiLink: "Torikumanya? Shoboorora omurimo, Buuza AI",
+    branchesCount: "amatabi {count}", panelTitle: "Noyenda obuyambi ki?", groupBusinesses: "bizinesi {count}",
+    groupBuySellLegal: "Okugura, okuguza n'ebiragiro", groupBuildDesign: "Okwombeka na dizayini", groupPowerWaterSecurity: "Amashanyarazi, amaizi n'oburinzi", groupManageMoveInsure: "Okureeberera, okwimuka na insuwa",
+    allInGroup: "{group} zoona", moreCategories: "+{count} ezindi", fewerCategories: "Bikye", clearGroup: "Yoreka obuheereza bwona",
+    listingNote: "Bizinesi nyingi ziihirwe aha Google Maps kandi tizikabaire nizihandiikwa. Ezahandiikwa ba nyinazo n'ezakakasiibwe nizibanza."
+  },
+  rn: {
+    whoPlaceholder: "Noyenda oha? nk'omupimi w'eitaka, omuramuzi w'eitaka, solar", askAiLink: "Torikumanya? Shoboorora omurimo, Buuza AI",
+    branchesCount: "amatabi {count}", panelTitle: "Noyenda obuyambi ki?", groupBusinesses: "bizinesi {count}",
+    groupBuySellLegal: "Okugura, okuguza n'ebiragiro", groupBuildDesign: "Okwombeka na dizayini", groupPowerWaterSecurity: "Amashanyarazi, amaizi n'oburinzi", groupManageMoveInsure: "Okureeberera, okwimuka na insuwa",
+    allInGroup: "{group} zoona", moreCategories: "+{count} ezindi", fewerCategories: "Bikye", clearGroup: "Yoreka obuheereza bwona",
+    listingNote: "Bizinesi nyingi ziihirwe aha Google Maps kandi tizikabaire nizihandiikwa. Ezahandiikwa ba nyinazo n'ezakakasiibwe nizibanza."
+  },
+  sm: {
+    whoPlaceholder: "Oyagala ani? okugeza: omupima ettaka, munnamateeka w'ettaka, solar", askAiLink: "Tomanyi gw'oyagala? Nnyonnyola omulimu, Buuza AI",
+    branchesCount: "amatabi {count}", panelTitle: "Oyagala buyambi ki?", groupBusinesses: "bizinesi {count}",
+    groupBuySellLegal: "Okugula, okutunda n'amateeka", groupBuildDesign: "Okuzimba n'okukola dizayini", groupPowerWaterSecurity: "Amasannyalaze, amazzi n'obukuumi", groupManageMoveInsure: "Okuddukanya, okusengula n'yinsuwa",
+    allInGroup: "{group} byonna", moreCategories: "+{count} endala", fewerCategories: "Bitono", clearGroup: "Laga obuweereza bwonna",
+    listingNote: "Bizinesi nnyingi zaggyibwa ku Google Maps era tezinnaba kwewandiisa. Ezawandiisibwa bannannyini n'ezakakasibwa zisooka."
+  },
+  am: {
+    whoPlaceholder: "ማንን ይፈልጋሉ? ለምሳሌ ቀያሽ፣ የመሬት ጠበቃ፣ ሶላር", askAiLink: "እርግጠኛ አይደሉም? ስራውን ይግለጹ እና AI ይጠይቁ",
+    branchesCount: "{count} ቅርንጫፎች", panelTitle: "በምን እንርዳዎት?", groupBusinesses: "{count} ንግዶች",
+    groupBuySellLegal: "ግዢ፣ ሽያጭ እና ህግ", groupBuildDesign: "ግንባታ እና ዲዛይን", groupPowerWaterSecurity: "ኃይል፣ ውሃ እና ጥበቃ", groupManageMoveInsure: "አስተዳደር፣ እቃ ማጓጓዝ እና መድን",
+    allInGroup: "ሁሉም {group}", moreCategories: "+{count} ተጨማሪ", fewerCategories: "ያነሰ", clearGroup: "ሁሉንም አገልግሎቶች አሳይ",
+    listingNote: "አብዛኛዎቹ ንግዶች ከGoogle Maps የተገኙ ሲሆኑ ገና ባለቤት አልጠየቃቸውም። በባለቤቶች የተመዘገቡ እና የተረጋገጡ ንግዶች መጀመሪያ ይታያሉ።"
+  },
+  ar: {
+    whoPlaceholder: "من تحتاج؟ مثلا: مساح، محامي أراضٍ، طاقة شمسية", askAiLink: "لست متأكدا؟ صف العمل واسأل الذكاء الاصطناعي",
+    branchesCount: "{count} فروع", panelTitle: "بماذا تحتاج المساعدة؟", groupBusinesses: "{count} نشاطا",
+    groupBuySellLegal: "شراء وبيع وقانون", groupBuildDesign: "بناء وتصميم", groupPowerWaterSecurity: "كهرباء ومياه وأمن", groupManageMoveInsure: "إدارة ونقل وتأمين",
+    allInGroup: "كل {group}", moreCategories: "+{count} أخرى", fewerCategories: "أقل", clearGroup: "عرض كل الخدمات",
+    listingNote: "معظم الأنشطة مصدرها خرائط Google ولم يطالب بها أصحابها بعد. تظهر الأنشطة المسجلة من أصحابها والموثقة أولا."
+  }
+});
+
+Object.entries(MARKETPLACE_DIRECTORY_I18N).forEach(([language, values]) => {
+  Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
+});
+
 const MARKETPLACE_CATEGORY_LABELS = Object.freeze({
   surveyors: { en: "Surveyors", lg: "Abapima ettaka", sw: "Wapima ardhi", ac: "Jo pim ngom", ny: "Abapima eitaka", rn: "Abapima eitaka", sm: "Abapima eitaka", am: "ቀያሾች", ar: "المساحون" },
   brokers: { en: "Brokers & agents", lg: "Aba broker n'abasenza", sw: "Madalali na mawakala", ac: "Jo cat ot", ny: "Ba broker n'abakozi", rn: "Ba broker n'abakozi", sm: "Aba broker", am: "ደላሎች", ar: "الوسطاء والوكلاء" },
@@ -4211,6 +4293,8 @@ const MARKETPLACE_CATEGORY_LABELS = Object.freeze({
   solar: { en: "Solar installers", lg: "Abateeka solar", sw: "Wafungaji solar", ac: "Jo keto solar", ny: "Abateeka solar", rn: "Abateeka solar", sm: "Abateeka solar", am: "የፀሐይ ኃይል ጫኚዎች", ar: "تركيب الطاقة الشمسية" },
   security: { en: "Security services", lg: "Obukuumi", sw: "Huduma za ulinzi", ac: "Tic me gwoko", ny: "Oburinzi", rn: "Oburinzi", sm: "Obukuumi", am: "የደህንነት አገልግሎቶች", ar: "خدمات الأمن" },
   cleaning: { en: "Cleaning services", lg: "Obuyonjo", sw: "Huduma za usafi", ac: "Tic me yweyo", ny: "Obuyonjo", rn: "Obuyonjo", sm: "Obuyonjo", am: "የጽዳት አገልግሎቶች", ar: "خدمات التنظيف" },
+  // loans_microfinance non-English labels need native-speaker review.
+  loans_microfinance: { en: "Loans & microfinance", lg: "Looni ne microfinance", sw: "Mikopo na taasisi ndogo za fedha", ac: "Loan ki microfinance", ny: "Looni na microfinance", rn: "Looni na microfinance", sm: "Looni ne microfinance", am: "ብድር እና ማይክሮፋይናንስ", ar: "القروض والتمويل الأصغر" },
   commercial_services: { en: "Commercial property services", lg: "Obuweereza bw'ebizimbe bya bizinesi", sw: "Huduma za mali za biashara", ac: "Tic me ot pa bici", ny: "Obuheereza bw'emitungo ya bizinesi", rn: "Obuheereza bw'emitungo ya bizinesi", sm: "Obuweereza bwa bizinesi", am: "የንግድ ንብረት አገልግሎቶች", ar: "خدمات العقارات التجارية" }
 });
 
@@ -4235,6 +4319,7 @@ const MARKETPLACE_CATEGORY_PALETTE = Object.freeze({
   borehole_water: { accent: "#0e7490", soft: "#ecfeff" },
   developers: { accent: "#a16207", text: "#92400e", soft: "#fefce8" },
   commercial_services: { accent: "#6b7280", soft: "#f3f4f6" },
+  loans_microfinance: { accent: "#a21caf", soft: "#fdf4ff" },
   other: { accent: "#6b7280", soft: "#f3f4f6" }
 });
 
@@ -4251,6 +4336,9 @@ const marketplaceState = {
   totalPages: 1,
   limit: 20,
   activeCategory: "",
+  activeGroup: "",
+  categoryGroups: [],
+  groupCounts: [],
   categoryCounts: {},
   verifiedPricing: { amount_ugx: 150000, billing_period: "month" },
   profileDetails: {},
@@ -4352,6 +4440,7 @@ function marketplaceRouteFilters() {
   return {
     q: cleanText(params.get("q") || ""),
     category: cleanText(params.get("category") || ""),
+    group: cleanText(params.get("group") || ""),
     district: cleanText(params.get("district") || ""),
     area: cleanText(params.get("area") || ""),
     min_rating: cleanText(params.get("min_rating") || ""),
@@ -4367,6 +4456,7 @@ function syncMarketplaceFilterControls(filters = marketplaceRouteFilters()) {
     if (element) element.value = filters[key] || "";
   });
   marketplaceState.activeCategory = filters.category || "";
+  marketplaceState.activeGroup = filters.group || "";
   marketplaceState.page = filters.page || 1;
   marketplaceApplyCategoryControlTheme();
 }
@@ -4374,7 +4464,7 @@ function syncMarketplaceFilterControls(filters = marketplaceRouteFilters()) {
 function renderMarketplaceLoading() {
   const results = document.getElementById("marketplace-results");
   if (!results) return;
-  results.innerHTML = Array.from({ length: 8 }, () => `<div class="overflow-hidden rounded-2xl border border-gray-200 bg-white"><div class="marketplace-skeleton marketplace-card-photo"></div><div class="space-y-2 p-3"><div class="marketplace-skeleton h-4 w-2/3 rounded"></div><div class="marketplace-skeleton h-3 w-1/2 rounded"></div></div></div>`).join("");
+  results.innerHTML = Array.from({ length: 8 }, () => `<div class="overflow-hidden rounded-2xl border border-gray-200 bg-white"><div class="space-y-2 p-3"><div class="marketplace-skeleton mk-avatar"></div><div class="marketplace-skeleton h-4 w-2/3 rounded"></div><div class="marketplace-skeleton h-3 w-1/2 rounded"></div></div></div>`).join("");
   const count = document.getElementById("marketplace-result-count");
   if (count) count.textContent = marketplaceTr("loading");
 }
@@ -4482,6 +4572,32 @@ async function loadMarketplaceProfileDetails(id) {
   }
 }
 
+const MARKETPLACE_NAME_KEEP_UPPER = /^(LTD|SMC|CCTV|UG|TV|SWICO|NIC|SACCO|SACCOS|NSSF|UAP|URSB|NHCC|NHCCL|UMEME|UEB|AAR|APA|CIC|ICT|FINCA|NWSC|UEDCL|KCCA|HFB|MSC|TFS|PVC|HQ|II|III|IV|\(U\)|U\))$/;
+function marketplaceDisplayName(name = "") {
+  const raw = cleanText(name);
+  const letters = raw.replace(/[^A-Za-z]/g, "");
+  if (letters.length < 4 || letters.replace(/[^A-Z]/g, "").length / letters.length < 0.6) return raw;
+  return raw.split(/\s+/).map((word, index) => {
+    const bare = word.toUpperCase().replace(/[.,:;]/g, "");
+    if (bare === "LTD") return word.replace(/LTD/i, "Ltd");
+    if (MARKETPLACE_NAME_KEEP_UPPER.test(bare)) return word;
+    const lower = word.toLowerCase();
+    if (index > 0 && /^(and|of|the|in|for|at|on|to|by)$/.test(lower)) return lower;
+    return lower.replace(/(^|[-/(.&])([a-z])/g, (_match, lead, letter) => lead + letter.toUpperCase());
+  }).join(" ");
+}
+function marketplaceInitials(name = "") {
+  const words = marketplaceDisplayName(name).replace(/\(.*?\)/g, " ").split(/[\s-]+/)
+    .filter((word) => /^[A-Za-z0-9]/.test(word) && !/^(the|and|of|&|ltd|limited|uganda|smc|co|company|u)$/i.test(word.replace(/[.,']/g, "")));
+  return ((words[0]?.[0] || "") + (words[1]?.[0] || "")).toUpperCase() || "M";
+}
+function marketplaceAvatarHtml(business = {}, photo = "") {
+  return `<span class="mk-avatar" aria-hidden="true">${photo ? `<img src="${adminAttr(photo)}" alt="" loading="lazy">` : adminEscape(marketplaceInitials(business.name))}</span>`;
+}
+function marketplaceWebsiteHost(url = "") {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch (_error) { return ""; }
+}
+
 function renderMarketplaceBusinesses() {
   const results = document.getElementById("marketplace-results");
   const empty = document.getElementById("marketplace-empty");
@@ -4505,21 +4621,25 @@ function renderMarketplaceBusinesses() {
     const stars = rating
       ? `<span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-amber-700"><i class="fas fa-star" aria-hidden="true"></i>${rating.toFixed(1)} <span class="text-amber-700/70">(${Number(business.rating_count || 0)})</span></span>`
       : `<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-gray-600">${adminEscape(marketplaceTr("newBusiness"))}</span>`;
-    return `<article class="marketplace-business-row bg-white border border-gray-200 rounded-2xl" data-tier="${adminAttr(business.tier || "found_online")}" style="${adminAttr(marketplaceCategoryStyle(business.category))}">
-      <div class="marketplace-card-photo">
-        ${photo
-          ? `<img src="${adminAttr(photo)}" alt="" loading="lazy">`
-          : `<div class="marketplace-card-fallback marketplace-category-icon" aria-hidden="true"><i class="fas ${adminAttr(icon)}"></i></div>`}
-        <span class="marketplace-card-badge">${business.tier === "verified" ? `<i class="fas fa-check" aria-hidden="true"></i>` : ""}${adminEscape(marketplaceTr(tierKey))}</span>
-      </div>
-      <div class="min-w-0 p-3">
-        <h3 class="marketplace-business-name font-black leading-snug break-words">${adminEscape(business.name)}</h3>
-        <p class="mt-1 text-sm text-gray-600">${adminEscape(summary)}</p>
-        <div class="marketplace-card-actions mt-3">
-          ${business.phone ? `<a href="${adminAttr(marketplaceContactUrl("phone", business.phone))}" class="marketplace-card-call">${adminEscape(marketplaceTr("call"))}</a>` : ""}
-          ${business.whatsapp || business.phone ? `<a href="${adminAttr(marketplaceContactUrl("whatsapp", business.whatsapp || business.phone))}" target="_blank" rel="noopener" class="marketplace-card-wa">${adminEscape(marketplaceTr("whatsappAction"))}</a>` : ""}
+    return `<article class="marketplace-business-row mk-row bg-white border border-gray-200 rounded-2xl" data-tier="${adminAttr(business.tier || "found_online")}" style="${adminAttr(marketplaceCategoryStyle(business.category))}">
+      <div class="mk-row-main">
+        ${marketplaceAvatarHtml(business, photo)}
+        <div class="min-w-0 flex-1">
+          <h3 class="marketplace-business-name mk-name">${adminEscape(marketplaceDisplayName(business.name))}${business.tier === "verified" ? ` <i class="fas fa-circle-check text-blue-600" title="${adminAttr(marketplaceTr("tierVerified"))}"></i>` : ""}</h3>
+          <p class="mk-meta"><i class="fas ${adminAttr(icon)}" aria-hidden="true"></i> ${adminEscape(summary)}</p>
+          <div class="mk-tags">
+            ${business.tier === "private" ? `<span class="mk-tag mk-tag-owner"><i class="fas fa-user-check" aria-hidden="true"></i>${adminEscape(marketplaceTr("tierPrivate"))}</span>` : ""}
+            ${Number(business.branch_count || 0) > 1 ? `<span class="mk-tag"><i class="fas fa-code-branch" aria-hidden="true"></i>${adminEscape(marketplaceInterpolate(marketplaceTr("branchesCount"), { count: Number(business.branch_count) }))}</span>` : ""}
+            ${business.website && marketplaceWebsiteHost(business.website) ? `<a class="mk-tag mk-tag-link" href="${adminAttr(business.website)}" target="_blank" rel="noopener nofollow"><i class="fas fa-globe" aria-hidden="true"></i>${adminEscape(marketplaceWebsiteHost(business.website))}</a>` : ""}
+          </div>
         </div>
-        <button type="button" onclick="marketplaceToggleProfile('${adminAttr(business.id)}')" class="marketplace-category-label mt-2 text-sm font-black hover:underline">${adminEscape(marketplaceTr("profile"))} <i class="fas fa-chevron-down ml-1 text-[10px]"></i></button>
+        <div class="mk-row-actions">
+          ${business.phone ? `<a href="${adminAttr(marketplaceContactUrl("phone", business.phone))}" class="mk-btn mk-btn-call" aria-label="${adminAttr(marketplaceTr("call"))}"><i class="fas fa-phone" aria-hidden="true"></i><span>${adminEscape(marketplaceTr("call"))}</span></a>` : ""}
+          ${business.whatsapp || business.phone ? `<a href="${adminAttr(marketplaceContactUrl("whatsapp", business.whatsapp || business.phone))}" target="_blank" rel="noopener" class="mk-btn mk-btn-wa"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>${adminEscape(marketplaceTr("whatsappAction"))}</span></a>` : ""}
+        </div>
+      </div>
+      <div class="min-w-0 mk-row-foot">
+        <button type="button" onclick="marketplaceToggleProfile('${adminAttr(business.id)}')" class="marketplace-category-label text-xs font-black hover:underline">${adminEscape(marketplaceTr("profile"))} <i class="fas fa-chevron-down ml-1 text-[10px]"></i></button>
         <div id="marketplace-profile-${adminAttr(business.id)}" class="hidden mt-3 border-t border-gray-100 pt-3 text-xs text-gray-600 space-y-1">
           <div>${stars}</div>
             ${Array.isArray(business.profile_images) && business.profile_images.length ? `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pb-2">${business.profile_images.slice(0, 4).map((url, index) => `<img src="${adminAttr(url)}" alt="${adminAttr(`${business.name} business photo ${index + 1}`)}" loading="lazy" class="h-24 w-full rounded-lg border border-gray-200 object-cover">`).join("")}</div>` : ""}
@@ -4553,12 +4673,79 @@ function renderMarketplaceBusinesses() {
   if (next) next.disabled = marketplaceState.page >= marketplaceState.totalPages;
 }
 
+const MARKETPLACE_GROUP_TITLE_KEYS = Object.freeze({ buy_sell_legal: "groupBuySellLegal", build_design: "groupBuildDesign", power_water_security: "groupPowerWaterSecurity", manage_move_insure: "groupManageMoveInsure" });
+function marketplaceGroupTitle(group = {}) {
+  const key = MARKETPLACE_GROUP_TITLE_KEYS[group.key];
+  return key ? marketplaceTr(key) : (group.label || group.key || "");
+}
+function marketplaceGroupForCategory(category = "") {
+  return (marketplaceState.categoryGroups || []).find((group) => (group.categories || []).includes(category)) || null;
+}
+// Panel groups with live counts. Server counts (stats.by_group) win; category counts are the fallback.
+function marketplacePanelGroups() {
+  const counts = marketplaceState.categoryCounts || {};
+  const serverCounts = Object.fromEntries((marketplaceState.groupCounts || []).map((group) => [group.key, Number(group.count || 0)]));
+  return (marketplaceState.categoryGroups || []).map((group) => {
+    const items = (group.categories || []).map((key) => ({ key, count: Number(counts[key] || 0) })).filter((item) => item.count > 0);
+    const fallback = items.reduce((sum, item) => sum + item.count, 0);
+    return { ...group, items, count: serverCounts[group.key] ?? fallback };
+  });
+}
+function renderMarketplaceGroupPanel() {
+  const tiles = document.getElementById("mkc-groups");
+  if (!tiles) return;
+  const iconByKey = Object.fromEntries((marketplaceState.categories || []).map((item) => [item.key, item.icon]));
+  const activeGroup = marketplaceState.activeGroup;
+  const activeCategory = marketplaceState.activeCategory;
+  tiles.innerHTML = marketplacePanelGroups().map((group) => {
+    const pressed = group.key === activeGroup || (!activeGroup && activeCategory && group.categories?.includes(activeCategory));
+    const links = [...group.items].sort((a, b) => b.count - a.count).slice(0, 5);
+    return `<article class="mkc-tile" data-group="${adminAttr(group.key)}" aria-current="${pressed ? "true" : "false"}">
+      <button type="button" class="mkc-tile-head" onclick="selectMarketplaceGroup('${adminAttr(group.key)}')" aria-pressed="${pressed ? "true" : "false"}">
+        <span class="mkc-tile-icon"><i class="fas ${adminAttr(group.icon || "fa-briefcase")}" aria-hidden="true"></i></span>
+        <span class="min-w-0"><span class="mkc-tile-title">${adminEscape(marketplaceGroupTitle(group))}</span><span class="mkc-tile-count">${adminEscape(marketplaceInterpolate(marketplaceTr("groupBusinesses"), { count: group.count.toLocaleString() }))}</span></span>
+      </button>
+      <div class="mkc-tile-links">${links.map((item) => `<button type="button" onclick="selectMarketplaceCategory('${adminAttr(item.key)}')" style="${adminAttr(marketplaceCategoryStyle(item.key))}" aria-pressed="${item.key === activeCategory ? "true" : "false"}"><i class="fas ${adminAttr(iconByKey[item.key] || "fa-briefcase")}" aria-hidden="true"></i>${adminEscape(marketplaceCategoryLabel(item.key))} <span>${item.count.toLocaleString()}</span></button>`).join("")}</div>
+    </article>`;
+  }).join("");
+}
 function renderMarketplaceCategoryChips() {
+  renderMarketplaceGroupPanel();
   const wrap = document.getElementById("marketplace-category-chips");
   if (!wrap) return;
-  const allCount = Object.values(marketplaceState.categoryCounts || {}).reduce((sum, count) => sum + Number(count || 0), 0);
-  const items = [{ key: "", label: marketplaceTr("allServices"), icon: "fa-border-all", count: allCount }, ...(marketplaceState.categories || []).map((item) => ({ ...item, label: marketplaceCategoryLabel(item.key), count: Number(marketplaceState.categoryCounts?.[item.key] || 0) }))];
-  wrap.innerHTML = items.map((item) => `<button type="button" onclick="selectMarketplaceCategory('${adminAttr(item.key)}')" class="marketplace-category-chip shrink-0 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-black" style="${adminAttr(marketplaceCategoryStyle(item.key || "other"))}" aria-pressed="${item.key === marketplaceState.activeCategory ? "true" : "false"}"><i class="fas ${adminAttr(item.icon || "fa-briefcase")}"></i>${adminEscape(item.label)}<span class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">${item.count}</span></button>`).join("");
+  const counts = marketplaceState.categoryCounts || {};
+  const allCount = Object.values(counts).reduce((sum, count) => sum + Number(count || 0), 0);
+  const activeGroup = (marketplaceState.categoryGroups || []).find((group) => group.key === marketplaceState.activeGroup) || null;
+  const ranked = (marketplaceState.categories || [])
+    .filter((item) => !activeGroup || (activeGroup.categories || []).includes(item.key))
+    .map((item) => ({ ...item, label: marketplaceCategoryLabel(item.key), count: Number(counts[item.key] || 0) }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const showAll = Boolean(marketplaceState.showAllCategories) || Boolean(activeGroup);
+  const active = marketplaceState.activeCategory;
+  const visible = showAll ? ranked : ranked.filter((item, index) => index < 9 || item.key === active);
+  const chip = (item, onclick = `selectMarketplaceCategory('${adminAttr(item.key)}')`) => `<button type="button" onclick="${onclick}" class="marketplace-category-chip mk-chip" style="${adminAttr(marketplaceCategoryStyle(item.key || "other"))}" aria-pressed="${item.pressed ?? (item.key === active) ? "true" : "false"}"><i class="fas ${adminAttr(item.icon || "fa-briefcase")}" aria-hidden="true"></i><span>${adminEscape(item.label)}</span><span class="mk-chip-count">${Number(item.count).toLocaleString()}</span></button>`;
+  const hidden = ranked.length - visible.length;
+  const lead = activeGroup
+    ? chip({ key: "", label: marketplaceInterpolate(marketplaceTr("allInGroup"), { group: marketplaceGroupTitle(activeGroup) }), icon: activeGroup.icon, count: ranked.reduce((sum, item) => sum + item.count, 0), pressed: !active }, `selectMarketplaceGroup('${adminAttr(activeGroup.key)}')`)
+    : chip({ key: "", label: marketplaceTr("allServices"), icon: "fa-border-all", count: allCount });
+  const more = activeGroup
+    ? `<button type="button" class="mk-chip mk-chip-more" onclick="selectMarketplaceGroup('')">${adminEscape(marketplaceTr("clearGroup"))}</button>`
+    : (hidden > 0 || marketplaceState.showAllCategories ? `<button type="button" class="mk-chip mk-chip-more" onclick="marketplaceState.showAllCategories=!marketplaceState.showAllCategories;renderMarketplaceCategoryChips()">${adminEscape(marketplaceState.showAllCategories ? marketplaceTr("fewerCategories") : marketplaceInterpolate(marketplaceTr("moreCategories"), { count: hidden }))}</button>` : "");
+  wrap.innerHTML = [lead, ...visible.map((item) => chip(item))].join("") + more;
+}
+
+function selectMarketplaceGroup(groupKey) {
+  const filters = marketplaceRouteFilters();
+  filters.group = groupKey || "";
+  filters.category = "";
+  filters.page = 1;
+  updateMarketplaceRoute(filters);
+  syncMarketplaceFilterControls(filters);
+  renderMarketplaceLoading();
+  searchMarketplaceBusinesses()
+    .then(() => { if (groupKey) document.getElementById("marketplace-category-chips")?.scrollIntoView({ behavior: "smooth", block: "start" }); })
+    .catch((error) => toast(error.message || "Marketplace search failed."));
 }
 
 async function loadMarketplacePage({ force = false } = {}) {
@@ -4572,6 +4759,8 @@ async function loadMarketplacePage({ force = false } = {}) {
       marketplaceState.districts = configResponse?.data?.districts || [];
       marketplaceState.verifiedPricing = configResponse?.data?.verified_pricing || marketplaceState.verifiedPricing;
       marketplaceState.categoryCounts = statsResponse?.data?.by_category || {};
+      marketplaceState.categoryGroups = configResponse?.data?.category_groups || [];
+      marketplaceState.groupCounts = statsResponse?.data?.by_group || [];
       const total = Number(statsResponse?.data?.total || 0);
       const totalEl = document.getElementById("marketplace-live-total");
       if (totalEl) totalEl.textContent = total.toLocaleString();
@@ -4610,6 +4799,7 @@ async function searchMarketplaceBusinesses() {
   const filters = marketplaceRouteFilters();
   marketplaceState.page = filters.page;
   marketplaceState.activeCategory = filters.category;
+  marketplaceState.activeGroup = filters.group;
   renderMarketplaceCategoryChips();
   const params = new URLSearchParams({ page: String(filters.page), limit: String(marketplaceState.limit) });
   Object.entries(filters).forEach(([key, value]) => {
@@ -4637,6 +4827,7 @@ function submitMarketplaceFilters(event) {
   const filters = {
     q: cleanText(document.getElementById("marketplace-q")?.value || ""),
     category: cleanText(document.getElementById("marketplace-category")?.value || ""),
+    group: marketplaceState.activeGroup || "",
     district: cleanText(document.getElementById("marketplace-district")?.value || ""),
     area: cleanText(document.getElementById("marketplace-area")?.value || ""),
     min_rating: cleanText(document.getElementById("marketplace-rating")?.value || ""),
@@ -4652,6 +4843,9 @@ function submitMarketplaceFilters(event) {
 function selectMarketplaceCategory(category) {
   const filters = marketplaceRouteFilters();
   filters.category = category || "";
+  const group = marketplaceGroupForCategory(filters.category);
+  if (!filters.category) filters.group = "";
+  else if (filters.group && group?.key !== filters.group) filters.group = group?.key || "";
   filters.page = 1;
   updateMarketplaceRoute(filters);
   syncMarketplaceFilterControls(filters);
@@ -4661,7 +4855,7 @@ function selectMarketplaceCategory(category) {
 
 function resetMarketplaceFilters() {
   updateMarketplaceRoute({}, { replace: true });
-  syncMarketplaceFilterControls({ q: "", category: "", district: "", area: "", min_rating: "", tier: "", page: 1 });
+  syncMarketplaceFilterControls({ q: "", category: "", group: "", district: "", area: "", min_rating: "", tier: "", page: 1 });
   renderMarketplaceLoading();
   searchMarketplaceBusinesses().catch((error) => toast(error.message || "Marketplace search failed."));
 }
@@ -8847,6 +9041,18 @@ function ensurePublicResultsHeader(category) {
       if (wrapper && wrapper.children.length === 1) wrapper.classList.add("hidden");
     }
   }
+  // "Approximate: $1 = USh N (rates as of D)" under the count when a converted
+  // currency is chosen. refreshDisplayedPrices() keeps it current.
+  let fxNote = document.getElementById(`${key}-results-fx-note`);
+  if (!fxNote) {
+    fxNote = document.createElement("div");
+    fxNote.id = `${key}-results-fx-note`;
+    fxNote.setAttribute("data-fx-note", "1");
+    fxNote.className = "-mt-2 mb-3 text-[11px] text-gray-500";
+    grid.parentElement.insertBefore(fxNote, grid);
+  }
+  fxNote.textContent = fxNoteText();
+  fxNote.classList.toggle("hidden", activeCur === "UGX");
   return header;
 }
 
@@ -9464,11 +9670,15 @@ function fmtListingPrice(p = {}, periodOverride = null) {
   // C6: a listing priced in USD shows its exact original when USD is chosen.
   const originalCurrency = String(p?.price_original_currency || extra.price_original_currency || "").toUpperCase();
   const original = Number(p?.price_original ?? extra.price_original);
-  if (activeCur === "USD" && originalCurrency === "USD" && Number.isFinite(original) && original > 0) {
+  const usdOriginal = originalCurrency === "USD" && Number.isFinite(original) && original > 0;
+  if (activeCur === "USD" && usdOriginal) {
     const suffix = localizePricePeriod(period);
     return withUnit(`$${Math.round(original).toLocaleString("en-US")}${suffix ? "/" + suffix : ""}`);
   }
-  return withUnit(fmtP(p?.price || 0, period));
+  // Dollar-priced listing: UGX (and £/€) from today's rate, not the rate
+  // stored when it was imported. The stored price is unchanged.
+  const ugxToday = usdOriginal ? Math.round(original * fxRateToUgx("USD")) : (p?.price || 0);
+  return withUnit(fmtP(ugxToday, period));
 }
 
 // C6: a price that setCurrency() can update in place (cards, detail, similar
@@ -9536,15 +9746,15 @@ function propertyOriginalCurrencyGuide(p = {}) {
   const currency = String(p?.price_original_currency || extra.price_original_currency || "UGX").trim().toUpperCase();
   if (currency !== "USD") return "";
   const original = Number(p?.price_original ?? extra.price_original);
-  const canonicalUgx = Number(p?.price || 0);
-  const rate = Number(p?.price_fx_rate_ugx ?? extra.price_fx_rate_ugx);
-  if (!Number.isFinite(original) || original <= 0 || !Number.isFinite(canonicalUgx) || canonicalUgx <= 0) return "";
+  if (!Number.isFinite(original) || original <= 0) return "";
+  // Today's published rate, not the rate stored at import.
+  const rate = fxRateToUgx("USD");
   const usd = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(original));
-  const ugx = `USh ${formatCompact(Math.round(canonicalUgx))}`;
-  const rateLabel = Number.isFinite(rate) && rate > 0
-    ? ` @ ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(rate)} UGX/USD`
-    : "";
-  return `USD ${usd} · ≈ ${ugx}${rateLabel}`;
+  const ugx = `USh ${formatCompact(Math.round(original * rate))}`;
+  const asOf = publicFx().as_of ? new Date(publicFx().as_of) : null;
+  const asOfText = asOf && !Number.isNaN(asOf.getTime()) ? asOf.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+  const rateLabel = ` @ ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(rate)} UGX/USD`;
+  return `USD ${usd} · ≈ ${ugx}${rateLabel}${asOfText ? ` (rates as of ${asOfText}, approx.)` : ""}`;
 }
 
 function propertyOriginalCurrencyGuideHtml(p = {}, className = "mt-1 text-[11px] font-semibold text-sky-700") {
@@ -44125,7 +44335,7 @@ async function hydrateAdvertisePricingPreview() {
       return;
     }
     const creative = res?.data?.creative_guidelines || {};
-    const fx = Number(res?.data?.ugx_per_usd || 3800);
+    const fx = Number(res?.data?.ugx_per_usd || fxRateToUgx("USD"));
     wrap.innerHTML = `
       <div class="flex flex-wrap items-start justify-between gap-2">
         <div>
@@ -56332,7 +56542,7 @@ function publicListingFilterNumber(id) {
 
 function publicSortablePrice(property) {
   const computed = listingComputedTotal(property);
-  const value = computed != null ? computed : Number(property?.price);
+  const value = computed != null ? computed : listingUgxToday(property);
   return Number.isFinite(value) && value > 0 && value <= 100000000000 ? value : null;
 }
 
@@ -56424,8 +56634,8 @@ function filterListings(page, options = {}) {
       const minBedsMatch = !minBeds || (p.beds || 0) >= minBeds;
       const maxBedsMatch = !maxBeds || (p.beds || 0) <= maxBeds;
       const minBathsMatch = !minBaths || Number(p.baths || p.bathrooms || 0) >= minBaths;
-      const minMatch = !min || p.price >= min;
-      const maxMatch = !max || p.price <= max;
+      const minMatch = !min || listingUgxToday(p) >= min;
+      const maxMatch = !max || listingUgxToday(p) <= max;
       const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
       const titleMatch = !titleType || text.includes(titleType);
       const amenityMatch = !amenity || text.includes(amenity);
@@ -56470,8 +56680,8 @@ function filterListings(page, options = {}) {
       const minBedsMatch = !minBeds || (p.beds || 0) >= minBeds;
       const maxBedsMatch = !maxBeds || (p.beds || 0) <= maxBeds;
       const minBathsMatch = !minBaths || Number(p.baths || p.bathrooms || 0) >= minBaths;
-      const minMatch = !min || p.price >= min;
-      const maxMatch = !max || p.price <= max;
+      const minMatch = !min || listingUgxToday(p) >= min;
+      const maxMatch = !max || listingUgxToday(p) <= max;
       const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
       const furnishingMatch = publicListingMatchesFurnishing(text, furnishing);
       const amenityMatch = !amenity || text.includes(amenity);
@@ -56530,7 +56740,7 @@ function filterStudents(options = {}) {
       || (category === "shared" && pType === "shared")
       || (category === "near" && nearCampus);
     const vMatch = !verifiedOnly || !!p.student_verified || !!p.students_welcome;
-    const maxMatch = !max || p.price <= max;
+    const maxMatch = !max || listingUgxToday(p) <= max;
     const distanceMatch = !maxDistance || (typeof p.distance_to_uni_km === "number" && p.distance_to_uni_km <= maxDistance);
     const originMatch = publicListingMatchesOrigin(p, origin);
     return typeMatch && qMatch && dMatch && uMatch && aMatch && cMatch && vMatch && maxMatch && distanceMatch && originMatch;
@@ -60787,8 +60997,8 @@ function filterCommercial(options = {}) {
     const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
     const tMatch = !type || canonicalCommercialTypeForProperty(p) === type;
     const transactionMatch = !transactionType || commercialTransactionForProperty(p) === transactionType;
-    const minMatch = !min || p.price >= min;
-    const maxMatch = !max || p.price <= max;
+    const minMatch = !min || listingUgxToday(p) >= min;
+    const maxMatch = !max || listingUgxToday(p) <= max;
     const sizeMatch = !minSize || sizeNum >= minSize;
     const maxSizeMatch = !maxSize || sizeNum <= maxSize;
     const originMatch = publicListingMatchesOrigin(p, origin);
@@ -60835,8 +61045,8 @@ function filterLand(options = {}) {
     const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
     const tMatch = !type || text.includes(type);
     const transactionMatch = !transactionType || commercialTransactionForProperty(p) === transactionType;
-    const minMatch = !min || p.price >= min;
-    const maxMatch = !max || p.price <= max;
+    const minMatch = !min || listingUgxToday(p) >= min;
+    const maxMatch = !max || listingUgxToday(p) <= max;
     const sizeMatch = !minSize || sizeNum >= minSize;
     const maxSizeMatch = !maxSize || sizeNum <= maxSize;
     const titleMatch = !titleType || text.includes(titleType);
@@ -62047,7 +62257,7 @@ function renderDetailMortgageWidget(propertyId) {
   const depositInput = document.getElementById("detail-mortgage-deposit");
   const yearsInput = document.getElementById("detail-mortgage-years");
   if (!p || !target || !depositInput || !yearsInput) return;
-  const result = buildMortgageComparison(p.price, depositInput.value, yearsInput.value, mortgagePurposeFromListing(p.type));
+  const result = buildMortgageComparison(listingUgxToday(p), depositInput.value, yearsInput.value, mortgagePurposeFromListing(p.type));
   if (!result.best) {
     target.innerHTML = `<div class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">${translatePropertyUi("No direct estimate available for this setup. Open Mortgage Finder for more options.")}</div>`;
     return;
@@ -62903,7 +63113,7 @@ async function openDetail(id, options = {}) {
               </div>
             </div>
             <div id="detail-mortgage-result"></div>
-            <button onclick="openMortgageFinderWithPrefill(${p.price}, '${normalizeType(p.type)}')" class="w-full mt-2 border border-green-700 text-green-700 py-2 rounded-lg text-xs font-semibold hover:bg-green-50">
+            <button onclick="openMortgageFinderWithPrefill(${listingUgxToday(p)}, '${normalizeType(p.type)}')" class="w-full mt-2 border border-green-700 text-green-700 py-2 rounded-lg text-xs font-semibold hover:bg-green-50">
               ${translatePropertyUi("Open full Mortgage Finder")}
             </button>
           </div>` : ""}

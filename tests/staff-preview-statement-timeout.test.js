@@ -71,8 +71,11 @@ test('startup repairs, homepage SEO and the employee sweepers wait out the deplo
   assert.match(server, /staggeredBootDelay\('startup_data_repairs'\)/);
   assert.match(server, /staggeredBootDelay\('whatsapp_media_retry'\)/);
   assert.match(server, /staggeredBootDelay\('whatsapp_batch_summary'\)/);
-  assert.match(server, /Public inventory summary warmed before accepting traffic/);
+  assert.match(server, /Public inventory counts warming in the background/);
+  assert.doesNotMatch(server, /await loadPublicOpportunitySummary\(\{ timeoutMs: 5000 \}\)/);
   const readyAt = server.indexOf('runtimeReady = true');
   const seoAt = server.indexOf('function scheduleHomepageSeoWarmup');
+  const countWarmAt = server.indexOf('schedulePublicInventoryCountWarmup()');
   assert.ok(readyAt > 0 && seoAt > readyAt, 'SEO warmup is not awaited before the process accepts traffic');
+  assert.ok(countWarmAt > readyAt, 'inventory count warmup is scheduled after the process accepts traffic');
 });

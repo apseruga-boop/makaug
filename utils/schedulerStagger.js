@@ -16,6 +16,7 @@ const BOOT_DELAY_MS = Object.freeze({
   greeting_names: 290_000,
   agent_booking: 320_000,
   source_monitor: 350_000,
+  fx_rates: 380_000,
   video_stills: 600_000,
   // After the harvest ticks. Startup repairs and the WhatsApp sweepers used
   // to fire in the first minute, on top of a deploy's migrations and the

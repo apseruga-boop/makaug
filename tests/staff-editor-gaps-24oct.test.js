@@ -54,7 +54,7 @@ test('plot size and per-unit price compute a total without rewriting the stored 
   assert.match(sql, /per_decimal/);
   assert.match(sql, /43560/);
   assert.doesNotMatch(migration, /UPDATE\s+properties[\s\S]*\bSET\s+price\b/i);
-  assert.match(properties, /price_desc: `\$\{priceSortRankSql\} ASC, p\.price DESC NULLS LAST/);
+  assert.match(properties, /price_desc: `\$\{priceSortRankSql\} ASC, \$\{priceSortValueSql\} DESC NULLS LAST/);
   assert.match(properties, /price_unit: rawUnit == null \? null : \(perUnit \? facts\.priceUnit : 'total'\)/);
   assert.match(properties, /land_size_label: label \|\| null/);
   assert.match(app, /data-plot-size="1"/);

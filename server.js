@@ -95,7 +95,7 @@ const {
   vacationRentalStructuredData
 } = require('./services/shortTermSeoRenderService');
 const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
-const { loadPublicOpportunitySummary } = require('./services/publicInventoryMetricsService');
+const { warmPublicInventoryCounts } = require('./services/publicInventoryMetricsService');
 const { injectAboutCommercialProducts } = require('./services/aboutCommercialProductsService');
 const { publishedPricing } = require('./config/publishedPricing');
 const { buildAboutCommercialRateCardPdf } = require('./services/aboutCommercialRateCardPdfService');
@@ -2708,20 +2708,6 @@ async function start() {
       });
     }
   }
-  if (process.env.DATABASE_URL) {
-    try {
-      const publicInventory = await loadPublicOpportunitySummary({ timeoutMs: 5000 });
-      logger.info('Public inventory summary warmed before accepting traffic', {
-        total: publicInventory?.summary?.total ?? null,
-        cache: publicInventory?.meta?.cache || null
-      });
-    } catch (error) {
-      logger.warn('Public inventory summary warmup failed; list routes will use bounded fallback', {
-        code: error?.code,
-        message: error?.message
-      });
-    }
-  }
   try {
     // Uganda serves the built bundle from disk. Reading the full source here
     // kept a second multi-megabyte copy alive for the life of the process.
@@ -2767,6 +2753,12 @@ async function start() {
     startGreetingNameCache(db);
     startBillingScheduler(db);
     require('./services/payLinkService').startPayLinkScheduler(db);
+    // Daily USD/GBP/EUR to UGX rates. The last good rate is loaded from
+    // fx_rates at once; the first fetch waits for the deploy to settle.
+    require('./services/fxRateService').startFxRateScheduler(db, {
+      logger,
+      bootDelayMs: staggeredBootDelay('fx_rates')
+    });
   }
   if (!IS_SOUTH_AFRICA || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true') {
     startFeaturedRotationScheduler(db);
@@ -2775,6 +2767,7 @@ async function start() {
   }
   runtimeReady = true;
   logger.info(`${ACTIVE_TENANT.brandName} backend ready for traffic`);
+  schedulePublicInventoryCountWarmup();
   if (typeof process.send === 'function' && process.connected) {
     const sendRenderHeartbeat = () => {
       if (process.connected) process.send({ type: 'runtime_heartbeat' });
@@ -2809,6 +2802,22 @@ function startMemoryLog() {
     logger.info(`memory phase=ten_minute rss_mb=${mb(m.rss)} heap_used_mb=${mb(m.heapUsed)}`);
   }, 10 * 60 * 1000);
   tenMinute.unref?.();
+}
+
+// Count queries are heavy. They start after the process is already serving so
+// a slow recount cannot hold boot, and a visitor who arrives first shares the
+// same in-flight query instead of starting another one.
+function schedulePublicInventoryCountWarmup() {
+  if (process.env.NODE_ENV === 'test' || !process.env.DATABASE_URL) return;
+  const delayMs = 1000;
+  const timer = setTimeout(() => {
+    warmPublicInventoryCounts(propertiesRoutes.mainPublicOpportunityCountQueries())
+      .catch((error) => {
+        logger.warn('Public inventory count warmup crashed', { message: error?.message });
+      });
+  }, delayMs);
+  timer.unref?.();
+  logger.info('Public inventory counts warming in the background', { delay_ms: delayMs });
 }
 
 // Homepage SEO reads run after the instance is already serving, and not in the
