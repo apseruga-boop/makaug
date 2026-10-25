@@ -2933,6 +2933,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   };
 }
 
+const HARVEST_DUPLICATE_CHECK_NO_TIMEOUT_SQL = 'SET statement_timeout = 0';
+const HARVEST_DUPLICATE_CHECK_NO_TIMEOUT_LOCAL_SQL = 'SET LOCAL statement_timeout = 0';
+
 async function existingFoundOnlineSourcePostListings(client, items = []) {
   // king-harvester-duplicate-lookup-20260809: keep each fingerprint lookup in
   // its own indexable branch instead of forcing one broad JSON expression scan.
@@ -3479,10 +3482,20 @@ async function queueFoundOnlineSourcePostListings({
   let previewExisting = new Map();
   if (dryRun && db?.pool) {
     const previewClient = await db.pool.connect();
+    let resetError = null;
     try {
+      // The duplicate check runs 85-243 s on production; the live pool's
+      // 60 s statement limit would cancel it. No transaction here, so the
+      // limit is put back before the connection returns to the pool.
+      await previewClient.query(HARVEST_DUPLICATE_CHECK_NO_TIMEOUT_SQL);
       previewExisting = await existingFoundOnlineSourcePostListings(previewClient, items);
     } finally {
-      previewClient.release();
+      try {
+        await previewClient.query('RESET statement_timeout');
+      } catch (error) {
+        resetError = error;
+      }
+      previewClient.release(resetError || undefined);
     }
   }
 
@@ -3587,6 +3600,9 @@ async function queueFoundOnlineSourcePostListings({
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
+    // Exempt from the live pool's 60 s statement limit until COMMIT/ROLLBACK:
+    // the duplicate check below runs 85-243 s on production.
+    await client.query(HARVEST_DUPLICATE_CHECK_NO_TIMEOUT_LOCAL_SQL);
     const existing = await existingFoundOnlineSourcePostListings(client, items);
     if (shouldCreateSourceProfile()) {
       existingContactCounts = await existingFoundOnlineContactCounts(client, items);
