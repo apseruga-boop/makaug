@@ -422,7 +422,7 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(appSource, /function listingBadgeRowHtml/);
   assert.match(appSource, /function shouldShowListingTypeBadge/);
   assert.match(appSource, /function landTitleBadgeForListingHtml/);
-  assert.match(appSource, /listingAgent: "Agent listed"/);
+  assert.match(appSource, /listingAgent: "Listed by an agent"/);
   assert.match(appSource, /listingPrivate: "Private listed"/);
   assert.match(functionSource('listingBadgeRowHtml'), /if \(!isFoundOnlineListing\(p\)\) badges\.push\(badgeHtml\(listingSourceMeta\(p\), sizeClass\)\);/);
   assert.doesNotMatch(functionSource('listingBadgeRowHtml'), /foundOnlineSourcePlatformBadgeMeta/);
