@@ -151,11 +151,13 @@ test('language pick: ac/ny/rn/sm fall back to the English video, with translated
   assert.match(unknown.home.innerHTML, /\/howto\/v1\/en\/find-a-home\.mp4/);
 });
 
-test('sections are placed on the home page and high on the About page; renders hook into language changes', () => {
+test('sections are placed after the home map and high on the About page; renders hook into language changes', () => {
   const home = html.indexOf('id="page-home"');
   const homeSection = html.indexOf('id="home-howto-videos"');
-  const brokers = html.indexOf('id="home-brokers-title"');
-  assert.ok(home > 0 && homeSection > home && homeSection < brokers);
+  const map = html.indexOf('id="map-home"');
+  const nextPage = html.indexOf('id="page-featured"');
+  assert.ok(home > 0 && map > home && homeSection > map && homeSection < nextPage, 'Home videos sit directly after the Explore on Map section');
+  assert.match(html.slice(map, homeSection), /^id="map-home"[^>]*><\/div>\s*<\/div>\s*<\/section>\s*<section $/);
   const about = html.indexOf('id="page-about"');
   const aboutSection = html.indexOf('id="about-howto-videos"');
   const mission = html.indexOf('aria-labelledby="about-mission-title"');
