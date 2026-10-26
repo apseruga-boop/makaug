@@ -202,3 +202,19 @@ test('public /cookie-policy page explains the device cookie', () => {
   assert.match(block, /id="cookie-policy-device-line"[^>]*>When you save a property or a search without an account/);
   assert.match(block, /up to 400 days, is not used for\s+advertising|up to 400 days, is not used for advertising/);
 });
+
+test('users who agreed in person before 26 Oct are never put in a digest on that consent alone', () => {
+  const base = { user_id: 'u1', user_phone: '+256700000011', user_marketing_opt_in: true };
+  assert.equal(digest.searchRecipient({ ...base, user_marketing_consent_source: 'in_person' }), null);
+  assert.ok(digest.searchRecipient({ ...base, user_marketing_consent_source: 'signup_checkbox' }));
+  // A fresh "alert me" tick on a search is its own consent and still counts.
+  assert.ok(digest.searchRecipient({
+    ...base,
+    user_marketing_consent_source: 'in_person',
+    alert_scope: 'search_alerts_whatsapp',
+    consent_granted: true,
+    consent_at: new Date().toISOString()
+  }));
+  const src = read('services/whatsappAlertDigestService.js');
+  assert.match(src, /COALESCE\(u\.marketing_consent_source, ''\) <> 'in_person'/);
+});
