@@ -1511,6 +1511,7 @@ const I18N_UI = {
     navStudents: "Students",
     navCommercial: "Commercial",
     navLand: "Land",
+    navMore: "More",
     navBrokers: "Find Brokers",
     navMortgage: "Mortgage Finder",
     navAI: "Discover AI Chatbot",
@@ -1678,6 +1679,7 @@ const I18N_UI = {
     navStudents: "Abayizi",
     navCommercial: "Byobusuubuzi",
     navLand: "Ettaka",
+    navMore: "Ebirala",
     navBrokers: "Noonya Broker",
     navMortgage: "Noonya Mortgage",
     navAI: "Noonya AI Chatbot",
@@ -1807,6 +1809,7 @@ const I18N_UI = {
     navStudents: "Wanafunzi",
     navCommercial: "Biashara",
     navLand: "Ardhi",
+    navMore: "Zaidi",
     navBrokers: "Tafuta Wakala",
     navMortgage: "Tafuta Rehani",
     navAI: "Gundua AI Chatbot",
@@ -1931,6 +1934,7 @@ const I18N_UI = {
     navStudents: "Jo-Yot",
     navCommercial: "Cwercwiny",
     navLand: "Lobo",
+    navMore: "Mukene", // REVIEW: Acholi, confirm with a native speaker
     navBrokers: "Nong Broker",
     navMortgage: "Mortgage",
     navAI: "AI Chatbot",
@@ -1964,6 +1968,7 @@ const I18N_UI = {
     navStudents: "Abanyeshomesa",
     navCommercial: "By'obusuubuzi",
     navLand: "Eitaka",
+    navMore: "Ebindi", // REVIEW: Runyankole, confirm with a native speaker
     navBrokers: "Shanga Broker",
     navMortgage: "Mortgage",
     navAI: "AI Chatbot",
@@ -1997,6 +2002,7 @@ const I18N_UI = {
     navStudents: "Abanyeshuri",
     navCommercial: "By'ubucuruzi",
     navLand: "Itaka",
+    navMore: "Ebindi", // REVIEW: Rukiga, confirm with a native speaker
     navBrokers: "Shaka Broker",
     navMortgage: "Mortgage",
     navAI: "AI Chatbot",
@@ -2030,6 +2036,7 @@ const I18N_UI = {
     navStudents: "Abaisomesa",
     navCommercial: "Bya busubuzi",
     navLand: "Itaka",
+    navMore: "Ebindi", // REVIEW: Lusoga, confirm with a native speaker
     navBrokers: "Noonia Broker",
     navMortgage: "Mortgage",
     navAI: "AI Chatbot",
@@ -2527,6 +2534,7 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   navStudents: "ተማሪዎች",
   navCommercial: "ንግድ",
   navLand: "መሬት",
+  navMore: "ተጨማሪ",
   navBrokers: "ደላሎችን ፈልግ",
   navMortgage: "የብድር መፈለጊያ",
   navAI: "AI Chatbot ያግኙ",
@@ -2653,6 +2661,7 @@ I18N_UI.ar = Object.assign({}, I18N_UI.en, {
   navStudents: "الطلاب",
   navCommercial: "تجاري",
   navLand: "أرض",
+  navMore: "المزيد",
   navBrokers: "ابحث عن وسيط",
   navMortgage: "حاسبة التمويل",
   navAI: "اكتشف روبوت AI",
@@ -9366,6 +9375,7 @@ function applyLanguageUI() {
   setTextById("nav-ai", currentLang === "en" ? "AI Chatbot" : tr("navAI"));
   setTextById("nav-marketplace", marketplaceTr("breadcrumbMarketplace"));
   setTextById("nav-about", translateListingLabel("About Us"));
+  setTextById("nav-more-label", tr("navMore"));
   setTextById("mnav-sale", tr("navSale"));
   setTextById("mnav-rent", tr("navRent"));
   setTextById("mnav-short-term", tr("navShortTerm"));

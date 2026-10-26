@@ -35,7 +35,7 @@
   </div>
 
   <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+    <div id="site-header-row" class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
       <a id="brand-home-link" onclick="handleBrandClick(event)" class="cursor-pointer flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-green-700 text-white font-black text-xl flex items-center justify-center serif">M</div>
         <div>
@@ -63,8 +63,12 @@
         <a id="nav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">AI Chatbot</a>
         <a id="nav-marketplace" href="/marketplace" onclick="showPage('marketplace')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-rose-50 hover:text-[#b3134f] cursor-pointer">Marketplace</a>
         <a id="nav-about" href="/about" onclick="showPage('about')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">About Us</a>
+        <div id="nav-more" class="nav-more" hidden>
+          <button type="button" id="nav-more-btn" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer" aria-haspopup="true" aria-expanded="false" aria-controls="nav-more-menu"><span id="nav-more-label">More</span> <i class="fas fa-chevron-down nav-more-caret" aria-hidden="true"></i></button>
+          <div id="nav-more-menu" class="nav-more-menu" hidden></div>
+        </div>
       </div>
-      <div class="flex items-center gap-2">
+      <div id="nav-actions" class="flex items-center gap-2">
         <button type="button" data-harvest-public-submission onclick="openHarvestSubmissionModal()" class="hidden xl:block border border-green-700 text-green-800 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-50">Paste listing link</button>
         <a id="nav-list-btn" data-testid="list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event)" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">List Property</a>
         <a id="nav-saved-btn" href="/saved" onclick="handleSavedClick(event)" class="relative inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-700 hover:bg-green-50 hover:text-green-700" aria-label="Saved properties" data-testid="nav-saved-link"><i class="far fa-heart text-lg text-green-700"></i><span class="hidden sm:inline">Saved</span><span id="nav-saved-count" class="hidden absolute -top-0.5 -right-0.5 min-w-[1.15rem] h-[1.15rem] rounded-full bg-red-500 px-1 text-[10px] font-black leading-[1.15rem] text-white text-center">0</span></a>
@@ -91,6 +95,131 @@
       <a id="mnav-advertise" data-testid="mobile-list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event);closeMobile()" class="px-3 py-2 rounded-lg bg-green-700 text-white font-semibold">List Property</a>
     </div>
   </nav>
+  <script>
+    /* Header "More" menu. Keeps the desktop nav on one row in every language:
+       any link that would run past the nav's inline-end edge (right in LTR,
+       left in Arabic) is hidden whole and listed under "More" instead. It
+       re-measures on resize, font load, language change and label changes. */
+    (function makaugHeaderNavFit() {
+      var nav = document.getElementById('desktop-primary-nav');
+      var more = document.getElementById('nav-more');
+      var moreBtn = document.getElementById('nav-more-btn');
+      var menu = document.getElementById('nav-more-menu');
+      if (!nav || !more || !moreBtn || !menu) return;
+      var frame = 0;
+      var applying = false;
+      function entries() {
+        return Array.prototype.filter.call(nav.children, function (el) { return el !== more; });
+      }
+      function linkOf(el) {
+        return el.tagName === 'A' ? el : el.querySelector('a.nav-item');
+      }
+      function shown(el) {
+        return el.getClientRects().length > 0;
+      }
+      function overflows() {
+        var box = nav.getBoundingClientRect();
+        var rtl = getComputedStyle(nav).direction === 'rtl';
+        var kids = nav.children;
+        for (var i = 0; i < kids.length; i += 1) {
+          if (!shown(kids[i])) continue;
+          var r = kids[i].getBoundingClientRect();
+          if (rtl ? r.left < box.left - 0.5 : r.right > box.right + 0.5) return true;
+        }
+        return false;
+      }
+      function closeMenu() {
+        menu.hidden = true;
+        moreBtn.setAttribute('aria-expanded', 'false');
+      }
+      function buildMenu(hidden) {
+        menu.textContent = '';
+        hidden.forEach(function (el) {
+          var source = linkOf(el);
+          if (!source) return;
+          var item = document.createElement('a');
+          item.href = source.getAttribute('href') || '#';
+          item.textContent = (source.textContent || '').trim();
+          item.setAttribute('data-nav-more-for', source.id || '');
+          item.addEventListener('click', function (event) {
+            event.preventDefault();
+            closeMenu();
+            source.click();
+          });
+          menu.appendChild(item);
+        });
+      }
+      function fit() {
+        frame = 0;
+        applying = true;
+        try {
+          var items = entries();
+          items.forEach(function (el) { el.classList.remove('is-nav-overflow'); });
+          more.hidden = true;
+          if (!shown(nav) || !overflows()) { closeMenu(); buildMenu([]); return; }
+          more.hidden = false;
+          var candidates = items.filter(shown);
+          var hidden = [];
+          while (candidates.length && overflows()) {
+            var last = candidates.pop();
+            last.classList.add('is-nav-overflow');
+            hidden.unshift(last);
+          }
+          buildMenu(hidden);
+        } finally {
+          applying = false;
+        }
+      }
+      function schedule() {
+        if (applying || frame) return;
+        frame = (window.requestAnimationFrame || setTimeout)(fit);
+      }
+      moreBtn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var open = menu.hidden;
+        menu.hidden = !open;
+        moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      document.addEventListener('click', function (event) {
+        if (!more.contains(event.target)) closeMenu();
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !menu.hidden) { closeMenu(); moreBtn.focus(); }
+      });
+      if (window.ResizeObserver) {
+        // Watch the links too: icon and web fonts arrive after first paint
+        // and change link widths without changing the nav's own size.
+        var sizes = new ResizeObserver(schedule);
+        sizes.observe(nav);
+        entries().concat([moreBtn]).forEach(function (el) { sizes.observe(el); });
+      }
+      window.addEventListener('resize', schedule);
+      if (window.MutationObserver) {
+        var stripFit = function (value) {
+          return String(value || '').replace(/(^|\s)is-nav-overflow(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+        };
+        // Ignore the changes fit() itself makes, or it would re-run forever.
+        var relevant = function (record) {
+          var target = record.target;
+          if (target === menu || menu.contains(target)) return false;
+          if (record.type !== 'attributes') return true;
+          if (target === more && record.attributeName === 'hidden') return false;
+          if (record.attributeName === 'class') return stripFit(record.oldValue) !== stripFit(target.getAttribute('class'));
+          return true;
+        };
+        new MutationObserver(function (records) {
+          for (var i = 0; i < records.length; i += 1) {
+            if (relevant(records[i])) { schedule(); return; }
+          }
+        }).observe(nav, { subtree: true, childList: true, characterData: true, attributes: true, attributeOldValue: true, attributeFilter: ['class', 'hidden', 'style'] });
+        new MutationObserver(schedule).observe(document.documentElement, { attributes: true, attributeFilter: ['lang', 'dir', 'class'] });
+      }
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+      window.addEventListener('load', schedule);
+      window.makaugFitHeaderNav = fit;
+      fit();
+    })();
+  </script>
 
   <div id="language-spotlight" class="bg-green-50 border-b border-green-100">
     <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
