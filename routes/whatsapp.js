@@ -4949,7 +4949,11 @@ function parseEmployeeBedroomDraft(caption = '') {
   // "50" as a bedroom count and a live land listing showed 50 bedrooms. Without
   // any word for a building or a room there is no bedroom count to find.
   if (!/\b(?:house|home|apartments?|flats?|villa|bungalow|mansion|duplex|townhouse|rooms?|bedrooms?|beds?|condo|cottage|storey|storeyed)\b/i.test(clean)) return {};
-  return parseBedroomDraft(clean.replace(/\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\s*(?:ft|fts|feet|m)?\b/gi, ' ')) || {};
+  // "6 units of One Bedroom Apartments On 12 Decimals" became a 12-bedroom
+  // listing (26 Oct 2026): the plot size was read as rooms.
+  return parseBedroomDraft(clean
+    .replace(/\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\s*(?:ft|fts|feet|m)?\b/gi, ' ')
+    .replace(/\b\d+(?:\.\d+)?\s*(?:decimals?|acres?|hectares?|sqm|sq\s*m|square\s+met(?:er|re)s?)\b/gi, ' ')) || {};
 }
 
 // Same floor parseListingPriceDraft applies: below this a "price" is a room count, a plot
@@ -4970,7 +4974,9 @@ function normalizeCaptionPriceNotation(caption = '') {
     .replace(/(?:us\s*)?\$\s*(\d[\d,.]*)/gi, 'USD $1')
     .replace(/\busd\s*(\d[\d,.]*)/gi, 'USD $1')
     // 2000$ · 2000 USD · 2000 us dollars · 2,000 dollars
-    .replace(/(\d[\d,.]*)\s*(?:\$|us\s*\$|usd|u\.s\.d\.|(?:us\s+)?dollars?)(?![a-z])/gi, 'USD $1')
+    // "1M USD" (Charles, 26 Oct 2026) went live as UGX 1,000,000: the M sat
+    // between the number and the currency and the rewrite skipped it.
+    .replace(/(\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?)\s*(?:\$|us\s*\$|usd|u\.s\.d\.|(?:us\s+)?dollars?)(?![a-z])/gi, 'USD $1')
     // 300m UGX · 1,200,000/= · 500,000 shs · shs 500,000
     .replace(/(\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?)\s*(?:ugx|ush|shs?|shillings?|\/=)(?![a-z])/gi, 'UGX $1')
     .replace(/\b(?:ugx|ush|shs|shillings?)\s*(\d[\d,.]*)/gi, 'UGX $1');
@@ -5711,6 +5717,66 @@ function statedAreaWithoutDistrict(caption = '', { allowLeadingToken = true } = 
  * photos of four different properties (a steel factory, a lodge, a block of
  * shops and some houses) to one Seeta listing on 23 Sep 2026.
  */
+/**
+ * When the sender's phone sent this message. The bridge downloads media one by
+ * one (about eleven seconds each), so a burst forwarded in eighteen seconds was
+ * processed over thirteen minutes on 26 Oct 2026 and every timing rule that used
+ * the server clock saw no burst at all. WAHA stamps each event with a ULID
+ * whose first ten characters are the receive time in milliseconds.
+ */
+const EMPLOYEE_ULID_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const EMPLOYEE_SENDER_BURST_WINDOW_MS = 30 * 1000;
+const EMPLOYEE_SENDER_BURST_MIN = 6;
+const EMPLOYEE_ALBUM_GAP_MS = 3000;
+function employeeSenderMs(metadata = {}) {
+  const raw = Number(metadata?.timestamp || metadata?.message_timestamp || metadata?.messageTimestamp || 0);
+  if (raw > 1e12 && raw < 4e12) return raw;
+  if (raw > 1e9 && raw < 4e9) return raw * 1000;
+  const ev = String(metadata?.waha_event_id || '').replace(/^evt_/i, '').toUpperCase();
+  if (ev.length < 10) return 0;
+  let t = 0;
+  for (const ch of ev.slice(0, 10)) {
+    const index = EMPLOYEE_ULID_ALPHABET.indexOf(ch);
+    if (index < 0) return 0;
+    t = t * 32 + index;
+  }
+  return t > 1.6e12 && t < 4e12 ? t : 0;
+}
+
+function noteEmployeeSenderTime(data = {}, senderMs = Date.now()) {
+  const list = (Array.isArray(data.recent_sender_ms) ? data.recent_sender_ms : [])
+    .map(Number)
+    .filter((t) => Number.isFinite(t) && Math.abs(senderMs - t) < EMPLOYEE_SENDER_BURST_WINDOW_MS);
+  list.push(senderMs);
+  data.recent_sender_ms = list.slice(-60);
+  data.current_sender_ms = senderMs;
+  return list.length;
+}
+
+/**
+ * 26 Oct 2026, Ronald for Charles: six descriptions forwarded as plain text,
+ * then seventy photos of nine properties with no captions, all in eighteen
+ * seconds. Each waiting description was handed the next photo, so Kyanja and
+ * Kira houses went up with lakefront land in Entebbe, and one Garuga listing
+ * collected forty-eight photos of seven different houses. In a forwarded burst
+ * a photo with no caption of its own belongs to a property only when it is part
+ * of the album of a photo that carried the caption; otherwise it is held and
+ * nothing is guessed.
+ */
+function employeeShouldHoldUnassignedMedia({ data = {}, ownCaption = false, senderMs = 0, burstSize = 0 } = {}) {
+  if (ownCaption) return false;
+  if (data.whatsapp_agent_self_intake === true) return false;
+  if (Number(burstSize) < EMPLOYEE_SENDER_BURST_MIN) return false;
+  const lastAlbum = Number(data.last_album_sender_ms || 0);
+  const lastText = Number(data.last_text_caption_sender_ms || 0);
+  const inAlbum = lastAlbum > 0 && lastAlbum >= lastText && senderMs - lastAlbum <= EMPLOYEE_ALBUM_GAP_MS;
+  return !inAlbum;
+}
+
+function employeeUnassignedMedia(data = {}) {
+  return Array.isArray(data.employee_unassigned_media) ? data.employee_unassigned_media : [];
+}
+
 function employeeMediaMessageCaption({ cleanBody = '', placeholderBody = false, pendingCaption = '' } = {}) {
   if (!placeholderBody && normalizeInput(cleanBody)) return normalizeInput(cleanBody);
   return normalizeInput(pendingCaption) || '';
@@ -6430,6 +6496,9 @@ async function prepareEmployeeOrderedBatchReplay({
     properties_shared_count: 0,
     properties_duplicate_count: 0,
     employee_batch_duplicates: [],
+    employee_unassigned_media: [],
+    employee_unassigned_notice_sent: false,
+    recent_sender_ms: [],
     properties_failed_count: 0,
     employee_intake_recovery_previous_properties_shared: previousShared,
     employee_intake_recovery_previous_duplicates: previousDuplicates,
@@ -7559,6 +7628,9 @@ function agentSelfIntakeSessionData(agent) {
     properties_shared_count: 0,
     properties_duplicate_count: 0,
     employee_batch_duplicates: [],
+    employee_unassigned_media: [],
+    employee_unassigned_notice_sent: false,
+    recent_sender_ms: [],
     properties_failed_count: 0,
     property_attempt_message_ids: []
   };
@@ -8802,6 +8874,9 @@ async function handleEmployeeWhatsappIntake({
       properties_shared_count: 0,
       properties_duplicate_count: 0,
     employee_batch_duplicates: [],
+    employee_unassigned_media: [],
+    employee_unassigned_notice_sent: false,
+    recent_sender_ms: [],
       properties_failed_count: 0,
       property_attempt_message_ids: []
     };
@@ -9625,6 +9700,7 @@ async function handleEmployeeWhatsappIntake({
         return { handled: true, nextStep: currentStep, message: agentVoiceNoteReply() };
       }
     }
+    const employeeBurstSize = noteEmployeeSenderTime(data, Number(runtime.senderMs || 0) || Date.now());
     if (isEmployeeIntakeComplete(cleanBody)) {
       // Save anything that is already finished before deciding the batch cannot
       // be closed. Without this, a property needing nothing still counted as an
@@ -9674,6 +9750,28 @@ async function handleEmployeeWhatsappIntake({
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
       const queuedSubmissions = employeePendingSubmissionQueue(data);
       const duplicateLines = employeeBatchDuplicateLines(data);
+      const unassignedMedia = employeeUnassignedMedia(data);
+      if (unassignedMedia.length) {
+        const waitingCaptions = [
+          ...(pendingCaption && !pendingStoredMedia.length ? [pendingCaption] : []),
+          ...queuedSubmissions.filter((entry) => entry.caption && !entry.media.length).map((entry) => entry.caption)
+        ];
+        const savedNow = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
+        return {
+          handled: true,
+          nextStep: currentStep,
+          batchComplete: false,
+          message: [
+            `I have not closed this batch. ${unassignedMedia.length} photo${unassignedMedia.length === 1 ? '' : 's'}/video${unassignedMedia.length === 1 ? '' : 's'} came on their own, separately from the descriptions, so I cannot tell which property they belong to — and I have not guessed.`,
+            savedNow ? `${savedNow} ${savedNow === 1 ? 'property that arrived with its photos is' : 'properties that arrived with their photos are'} already in staff review.` : '',
+            waitingCaptions.length
+              ? `Descriptions still waiting for their photos:\n${waitingCaptions.slice(0, 15).map((text, index) => `${index + 1}. ${employeeCaptionLabel(text)}`).join('\n')}`
+              : '',
+            duplicateLines.length ? `Already on makaug, so not added again:\n${duplicateLines.join('\n')}` : '',
+            'To fix it: reply *CANCEL*, start a new *Agent 007* batch, and for each property select its photos in WhatsApp and type or paste its description as the caption, then send. One property at a time.'
+          ].filter(Boolean).join('\n\n')
+        };
+      }
       if (pendingStoredMedia.length || pendingCaption || queuedSubmissions.length) {
         const pendingFacts = employeePropertyFacts(pendingCaption, data);
         const pendingMissing = employeePropertyMissing(pendingFacts);
@@ -10082,6 +10180,7 @@ async function handleEmployeeWhatsappIntake({
         data.current_property_id = null;
       }
       data.pending_property_caption = textCaption;
+      data.last_text_caption_sender_ms = Number(data.current_sender_ms || 0) || Date.now();
       await replaceEmployeeSession(phone, currentStep, data);
       const waitingForMedia = employeePendingSubmissionQueue(data).filter((entry) => !entry.media.length).length;
       return {
@@ -10116,6 +10215,32 @@ async function handleEmployeeWhatsappIntake({
       placeholderBody,
       pendingCaption: pendingCaptionBeforeMessage
     });
+    const ownMediaCaption = !placeholderBody && Boolean(normalizeInput(cleanBody));
+    const mediaSenderMs = Number(data.current_sender_ms || 0) || Date.now();
+    if (employeeShouldHoldUnassignedMedia({ data, ownCaption: ownMediaCaption, senderMs: mediaSenderMs, burstSize: employeeBurstSize })) {
+      let held = [];
+      try {
+        held = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider });
+      } catch (error) {
+        logger.error('Agent 007 could not store a held photo', { error: error.message });
+        return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
+      }
+      const pool = employeeUnassignedMedia(data);
+      held.forEach((item) => pool.push({ ...item, sender_ms: mediaSenderMs, inbound_message_id: normalizeInput(inboundMessageId) }));
+      data.employee_unassigned_media = pool.slice(-120);
+      const firstNotice = data.employee_unassigned_notice_sent !== true;
+      data.employee_unassigned_notice_sent = true;
+      await replaceEmployeeSession(phone, currentStep, data);
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: firstNotice
+          ? '⚠️ Photos are arriving on their own, separately from the property descriptions. I am holding them and *not* attaching them to any property, so nothing gets mixed up. When you type COMPLETE I will tell you exactly what to resend.'
+          : ''
+      };
+    }
+    if (ownMediaCaption) data.last_album_sender_ms = mediaSenderMs;
+    else if (Number(data.last_album_sender_ms || 0) >= Number(data.last_text_caption_sender_ms || 0)) data.last_album_sender_ms = mediaSenderMs;
     const facts = employeePropertyFacts(caption, data);
     const missing = employeePropertyMissing(facts);
     const shouldStartProperty = Boolean(caption) && !missing.length;
@@ -12841,6 +12966,13 @@ async function buildEmployeeBatchSummary(phone, since) {
     });
   }
 
+  const heldMedia = employeeUnassignedMedia(data);
+  if (heldMedia.length) {
+    notSaved.push({
+      label: `${heldMedia.length} photo${heldMedia.length === 1 ? '' : 's'}/video${heldMedia.length === 1 ? '' : 's'} sent without a description (held, not guessed)`,
+      needs: 'each property sent as its photos with the description as the caption'
+    });
+  }
   const duplicateLines = employeeBatchDuplicateLines(data);
   if (!saved.length && !notSaved.length && !duplicateLines.length) return '';
   const lines = [];
@@ -18452,7 +18584,8 @@ async function processInboundRuntimeUnlocked({
       mediaCount: inboundMediaCount,
       photoCandidates: inboundPhotoCandidates,
       mediaCandidates: inboundMediaCandidates,
-      sharedLocation
+      sharedLocation,
+      senderMs: employeeSenderMs(inboundMetadata)
     },
     inboundMessageId,
     session: sessionForMessage
@@ -20106,6 +20239,10 @@ module.exports.__test = {
   employeeVideoEvidenceOnly,
   employeePropertyFacts,
   noteEmployeeBatchDuplicate,
+  employeeSenderMs,
+  employeeShouldHoldUnassignedMedia,
+  normalizeCaptionPriceNotation,
+  parseEmployeeBedroomDraft,
   bestCaptionFromOnScreenText,
   employeeBatchDuplicateLines,
   captionPendingVideosFromOnScreenText,
