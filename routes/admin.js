@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const { requireAdminApiKey } = require('../middleware/auth');
+const { registerAgentManagerRoutes } = require('./adminAgentManager');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { listingReferenceQuery, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
@@ -8911,6 +8912,18 @@ router.get('/agents', async (req, res, next) => {
   } catch (error) {
     return next(error);
   }
+});
+
+// King → Agents manager (see routes/adminAgentManager.js).
+registerAgentManagerRoutes(router, {
+  db,
+  writeAudit,
+  adminActorId,
+  cleanText,
+  isValidEmail,
+  normalizePhone: (value) => normalizeCountryPhone(value),
+  actorLabel: (user) => moderationActorLabel(user),
+  onListingsChanged: (reason) => invalidatePublicInventoryMetricsCache(reason)
 });
 
 router.post('/agents/invite', async (req, res, next) => {
