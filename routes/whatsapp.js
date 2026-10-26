@@ -20124,6 +20124,73 @@ router.delete('/reset/:phone', async (req, res) => {
 module.exports = router;
 module.exports.startEmployeeBatchSummarySweeper = startEmployeeBatchSummarySweeper;
 module.exports.startEmployeeMediaRetrySweeper = startEmployeeMediaRetrySweeper;
+/**
+ * Forwarded adverts in a customer chat, grouped into properties.
+ *
+ * 26 Oct 2026, 15:28–15:53: a broker who is not yet on makaug forwarded nine
+ * adverts to the public number — each as a caption text and an album of
+ * photos — and the consumer assistant answered each with a search, a land
+ * safety note or a photo count. Nothing was saved. This reads the stored
+ * messages back, pairs each caption with the photos that follow it (photos
+ * that arrive before the first caption belong to it), and returns the groups.
+ * Importing them is the admin's call (see routes/admin.js).
+ */
+async function groupForwardedAdverts(phone, { since = null, until = null } = {}) {
+  const rows = (await db.query(
+    `SELECT id, wa_message_id, created_at, message_type, payload
+       FROM whatsapp_messages
+      WHERE user_phone = $1 AND direction = 'inbound'
+        AND ($2::timestamptz IS NULL OR created_at >= $2::timestamptz)
+        AND ($3::timestamptz IS NULL OR created_at <= $3::timestamptz)
+      ORDER BY created_at ASC
+      LIMIT 600`,
+    [phone, since, until]
+  )).rows;
+  const groups = [];
+  let orphans = [];
+  let current = null;
+  for (const row of rows) {
+    const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+    const body = normalizeInput(payload.body || payload.effectiveBody || '');
+    const mediaUrl = normalizeInput(payload.mediaUrl || payload.media_url || '');
+    const mediaType = normalizeInput(payload.mediaType || payload.media_type || (payload.metadata && payload.metadata.mime) || '');
+    const isMedia = /^https:\/\//i.test(mediaUrl);
+    if (body && !isMedia) {
+      const facts = employeePropertyFacts(body, {});
+      const isAdvert = Boolean(facts.listingType && Number(facts.price) > 0) || isReviewableOwnerForwardCaption(body);
+      if (!isAdvert) continue;
+      current = { caption: body, caption_message_id: row.wa_message_id, caption_at: row.created_at, facts, missing: employeePropertyMissing(facts), media: orphans.splice(0) };
+      groups.push(current);
+      continue;
+    }
+    if (isMedia) {
+      const item = { message_id: row.wa_message_id, at: row.created_at, url: mediaUrl, mimeType: mediaType || 'image/jpeg' };
+      if (body && current) current.caption = `${current.caption}\n${body}`;
+      if (current) current.media.push(item); else orphans.push(item);
+    }
+  }
+  return { groups, orphans };
+}
+
+/** Save one grouped advert for staff review under an approved agent. Nothing is sent. */
+async function importForwardedAdvert({ phone, agent, group, inboundMessageId }) {
+  const sessionData = agentSelfIntakeSessionData(agent);
+  const facts = employeePropertyFacts(group.caption, sessionData);
+  const missing = employeePropertyMissing(facts);
+  if (missing.length) return { skipped: 'missing', missing };
+  const duplicate = await findEmployeeDuplicateProperty({ caption: group.caption, facts, sessionData });
+  if (duplicate) return { skipped: 'duplicate', duplicate_id: duplicate.id };
+  const candidates = employeeMediaCandidates({ mediaCandidates: group.media.map((m) => ({ url: m.url, mime_type: m.mimeType })), mediaType: 'image/jpeg' }, '');
+  const storedMedia = candidates.length
+    ? await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: 'web_bridge' })
+    : [];
+  const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption: group.caption, facts, storedMedia, sessionData });
+  return { property_id: propertyId, media_stored: storedMedia.length, listing_type: facts.listingType, price: facts.price, area: facts.locationPatch?.area, district: facts.locationPatch?.district };
+}
+
+module.exports.groupForwardedAdverts = groupForwardedAdverts;
+module.exports.importForwardedAdvert = importForwardedAdvert;
+
 module.exports.__test = {
   extractNaturalSearchFilters,
   applyProximityToFilters,
