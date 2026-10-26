@@ -130,6 +130,8 @@ test('the visible brand eyebrow sits above the H1, and the footer links X', () =
     const h1 = html.indexOf('<h1 id="hero-title"');
     assert.ok(eyebrow > 0 && eyebrow < h1, `${file}: eyebrow above the H1`);
     assert.match(html.slice(eyebrow, eyebrow + 260), />makaug\.com<\/p>/);
+    const eyebrowTag = html.slice(eyebrow, html.indexOf('>', eyebrow));
+    assert.doesNotMatch(eyebrowTag, /\buppercase\b/, `${file}: the brand reads in lowercase (makaug.com), not MAKAUG.COM`);
   }
   for (const file of ['index.html', 'packages/shared-country-core/components/footer.html']) {
     assert.match(read(file), /href="https:\/\/x\.com\/makauganda"[^>]*aria-label="X"/, `${file} links X`);
