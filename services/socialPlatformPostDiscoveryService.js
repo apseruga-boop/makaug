@@ -2183,19 +2183,42 @@ function isDiscoveryFeed(source = {}) {
   return sourceRecordKind(source) === 'discovery_feed';
 }
 
+function sweepableSourceForPlatform(source, normalized) {
+  return (normalized === 'all' || normalizePlatform(source.platform) === normalized)
+    && cleanText(source.status).toLowerCase() !== 'blocked'
+    && !isPermanentlyBlockedSocialSource(source);
+}
+
+function sweepSourceRecord(source) {
+  return {
+    ...source,
+    source_key: source.key || source.source_key,
+    source_name: source.name || source.source_name,
+    source_type: source.sourceType || source.source_type,
+    source_url: source.url || source.source_url,
+  };
+}
+
 function sourcesForPlatform(platform = 'all') {
   const normalized = normalizePlatform(platform);
   return getPropertySourceRegistry()
-    .filter((source) => normalized === 'all' || normalizePlatform(source.platform) === normalized)
-    .filter((source) => cleanText(source.status).toLowerCase() !== 'blocked')
-    .filter((source) => !isPermanentlyBlockedSocialSource(source))
-    .map((source) => ({
-      ...source,
-      source_key: source.key || source.source_key,
-      source_name: source.name || source.source_name,
-      source_type: source.sourceType || source.source_type,
-      source_url: source.url || source.source_url,
-    }));
+    .filter((source) => sweepableSourceForPlatform(source, normalized))
+    .map(sweepSourceRecord);
+}
+
+// Same list as sourcesForPlatform, but yields to the event loop while it walks
+// the ~60,000-row registry so a background sweep does not freeze requests.
+async function sourcesForPlatformAsync(platform = 'all') {
+  const normalized = normalizePlatform(platform);
+  const registry = getPropertySourceRegistry();
+  await yieldToEventLoop();
+  const out = [];
+  for (let index = 0; index < registry.length; index += 1) {
+    const source = registry[index];
+    if (sweepableSourceForPlatform(source, normalized)) out.push(sweepSourceRecord(source));
+    if ((index + 1) % 5000 === 0) await yieldToEventLoop();
+  }
+  return out;
 }
 
 function rotatingSourceWindow(sources = [], {
@@ -2645,6 +2668,79 @@ async function knownYouTubeChannelSourcesFromDb(db, {
   }
 }
 
+// Each registry source turns into one or more cheap "stubs" (method + query).
+// Only the stubs inside the requested window are expanded into full jobs, so a
+// 5-job drip run no longer builds ~30,000 full job objects to keep 5 of them.
+function youtubeJobStubsForSource(source, sourceIndex) {
+  const channelLookup = youtubeChannelLookupForSource(source);
+  const searchMethod = channelLookup ? 'channel_uploads' : 'search';
+  const queries = searchMethod === 'channel_uploads'
+    ? [buildYouTubeQueryForSource(source)]
+    : youtubeFocusedSearchQueriesForSource(source);
+  return queries.map((query, queryIndex) => ({
+    source, sourceIndex, query, queryIndex, searchMethod, channelLookup,
+  }));
+}
+
+function youtubeJobFromStub({ source, sourceIndex, query, queryIndex, searchMethod, channelLookup }, { start, publishedBefore, pageLimit }) {
+  return {
+    platform: 'youtube',
+    source_registry_offset: sourceIndex,
+    source_key: queryIndex ? `${sourceKey(source)}:q${queryIndex + 1}` : sourceKey(source),
+    source_root_key: sourceKey(source),
+    source_name: sourceName(source),
+    source_type: source.source_type || source.sourceType || '',
+    source_record_kind: isDiscoveryFeed(source) ? 'discovery_feed' : 'source_page',
+    source_url: sourceUrl(source),
+    source_phone: cleanText(source.phone || source.contact_phone || ''),
+    source_phone_alt: cleanText(source.phoneAlt || source.phone_alt || source.contact_phone_alt || ''),
+    source_email: cleanText(source.email || source.contact_email || ''),
+    source_listing_types: sourceListValues(source, 'listingTypes', 'listing_types'),
+    source_hashtags: sourceListValues(source, 'hashtags', 'hashtags'),
+    source_can_contact_directly: source.canContactDirectly === true || source.can_contact_directly === true,
+    source_trust_level: cleanText(source.trustLevel || source.trust_level || ''),
+    source_consent_status: cleanText(source.consentStatus || source.consent_status || ''),
+    discovery_priority: youtubeDiscoveryPriority(source),
+    query: cleanText(query).slice(0, 500),
+    query_variant: queryIndex + 1,
+    query_strategy: searchMethod === 'channel_uploads'
+      ? 'channel_uploads'
+      : (youtubeSourceIsHashtag(source) ? 'single_hashtag_or_hashtag_plus_town' : 'focused_registry_query'),
+    coverage_terms: youtubeCoverageTermsForSource(source).slice(0, 80),
+    search_method: searchMethod,
+    channel_id: channelLookup?.channel_id || '',
+    channel_handle: channelLookup?.channel_handle || '',
+    endpoint: searchMethod === 'channel_uploads' ? YOUTUBE_PLAYLIST_ITEMS_URL : YOUTUBE_SEARCH_URL,
+    channel_lookup_endpoint: searchMethod === 'channel_uploads' ? YOUTUBE_CHANNELS_URL : '',
+    published_after: start,
+    published_before: cleanText(publishedBefore),
+    max_results: DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
+    max_pages: pageLimit,
+    includes_shorts_and_long_form: true,
+  };
+}
+
+function youtubeJobContext({ publishedAfter, publishedBefore, maxPagesPerSource, jobMode }) {
+  return {
+    start: cleanText(publishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START,
+    publishedBefore,
+    pageLimit: cappedNumber(maxPagesPerSource, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, 10),
+    jobMode: normalizeYouTubeJobMode(jobMode),
+  };
+}
+
+function sortedYouTubeSources(sources = []) {
+  return sortYouTubeSourcesForDiscovery(sources
+    .filter((source) => normalizePlatform(source.platform) === 'youtube')
+  );
+}
+
+function windowYouTubeJobStubs(stubs = [], { jobMode, limit, offset }) {
+  const filtered = jobMode === 'all' ? stubs : stubs.filter((stub) => stub.searchMethod === jobMode);
+  const startOffset = filtered.length ? cappedOffset(offset) % filtered.length : 0;
+  return filtered.slice(startOffset, startOffset + cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES));
+}
+
 function buildYouTubeSearchJobs({
   sources = sourcesForPlatform('youtube'),
   limit = DEFAULT_MAX_SOURCES,
@@ -2654,60 +2750,47 @@ function buildYouTubeSearchJobs({
   maxPagesPerSource = DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
   jobMode = 'all',
 } = {}) {
-  const start = cleanText(publishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START;
-  const pageLimit = cappedNumber(maxPagesPerSource, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, 10);
-  const normalizedJobMode = normalizeYouTubeJobMode(jobMode);
-  const sortedSources = sortYouTubeSourcesForDiscovery(sources
-    .filter((source) => normalizePlatform(source.platform) === 'youtube')
-  );
-  const jobs = sortedSources.flatMap((source, sourceIndex) => {
-      const channelLookup = youtubeChannelLookupForSource(source);
-      const searchMethod = channelLookup ? 'channel_uploads' : 'search';
-      const queries = searchMethod === 'channel_uploads'
-        ? [buildYouTubeQueryForSource(source)]
-        : youtubeFocusedSearchQueriesForSource(source);
-      return queries.map((query, queryIndex) => ({
-        platform: 'youtube',
-        source_registry_offset: sourceIndex,
-        source_key: queryIndex ? `${sourceKey(source)}:q${queryIndex + 1}` : sourceKey(source),
-        source_root_key: sourceKey(source),
-        source_name: sourceName(source),
-        source_type: source.source_type || source.sourceType || '',
-        source_record_kind: isDiscoveryFeed(source) ? 'discovery_feed' : 'source_page',
-        source_url: sourceUrl(source),
-        source_phone: cleanText(source.phone || source.contact_phone || ''),
-        source_phone_alt: cleanText(source.phoneAlt || source.phone_alt || source.contact_phone_alt || ''),
-        source_email: cleanText(source.email || source.contact_email || ''),
-        source_listing_types: sourceListValues(source, 'listingTypes', 'listing_types'),
-        source_hashtags: sourceListValues(source, 'hashtags', 'hashtags'),
-        source_can_contact_directly: source.canContactDirectly === true || source.can_contact_directly === true,
-        source_trust_level: cleanText(source.trustLevel || source.trust_level || ''),
-        source_consent_status: cleanText(source.consentStatus || source.consent_status || ''),
-        discovery_priority: youtubeDiscoveryPriority(source),
-        query: cleanText(query).slice(0, 500),
-        query_variant: queryIndex + 1,
-        query_strategy: searchMethod === 'channel_uploads'
-          ? 'channel_uploads'
-          : (youtubeSourceIsHashtag(source) ? 'single_hashtag_or_hashtag_plus_town' : 'focused_registry_query'),
-        coverage_terms: youtubeCoverageTermsForSource(source).slice(0, 80),
-        search_method: searchMethod,
-        channel_id: channelLookup?.channel_id || '',
-        channel_handle: channelLookup?.channel_handle || '',
-        endpoint: searchMethod === 'channel_uploads' ? YOUTUBE_PLAYLIST_ITEMS_URL : YOUTUBE_SEARCH_URL,
-        channel_lookup_endpoint: searchMethod === 'channel_uploads' ? YOUTUBE_CHANNELS_URL : '',
-        published_after: start,
-        published_before: cleanText(publishedBefore),
-        max_results: DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
-        max_pages: pageLimit,
-        includes_shorts_and_long_form: true,
-      }));
-    });
-  const filteredJobs = filterYouTubeJobsByMode(jobs, normalizedJobMode);
-  const startOffset = filteredJobs.length ? cappedOffset(offset) % filteredJobs.length : 0;
-  return filteredJobs
-    .slice(startOffset, startOffset + cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
-    .map((job, sourceWindowIndex) => ({
-      ...job,
+  const context = youtubeJobContext({ publishedAfter, publishedBefore, maxPagesPerSource, jobMode });
+  const stubs = sortedYouTubeSources(sources).flatMap((source, sourceIndex) => youtubeJobStubsForSource(source, sourceIndex));
+  return windowYouTubeJobStubs(stubs, { jobMode: context.jobMode, limit, offset })
+    .map((stub, sourceWindowIndex) => ({
+      ...youtubeJobFromStub(stub, context),
+      source_window_index: sourceWindowIndex,
+    }));
+}
+
+const YOUTUBE_JOB_BUILD_YIELD_EVERY = 250;
+
+function yieldToEventLoop() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+// Same output as buildYouTubeSearchJobs, but hands the event loop back every
+// few hundred sources. The background sweep walks ~11,000 YouTube sources, and
+// doing that in one synchronous pass froze the web server for 4-7 seconds.
+async function buildYouTubeSearchJobsAsync({
+  sources = [],
+  limit = DEFAULT_MAX_SOURCES,
+  offset = 0,
+  publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
+  publishedBefore = '',
+  maxPagesPerSource = DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
+  jobMode = 'all',
+} = {}) {
+  const context = youtubeJobContext({ publishedAfter, publishedBefore, maxPagesPerSource, jobMode });
+  const filtered = sources.filter((source) => normalizePlatform(source.platform) === 'youtube');
+  await yieldToEventLoop();
+  const sorted = sortYouTubeSourcesForDiscovery(filtered);
+  await yieldToEventLoop();
+  const stubs = [];
+  for (let index = 0; index < sorted.length; index += 1) {
+    const sourceStubs = youtubeJobStubsForSource(sorted[index], index);
+    for (const stub of sourceStubs) stubs.push(stub);
+    if ((index + 1) % YOUTUBE_JOB_BUILD_YIELD_EVERY === 0) await yieldToEventLoop();
+  }
+  return windowYouTubeJobStubs(stubs, { jobMode: context.jobMode, limit, offset })
+    .map((stub, sourceWindowIndex) => ({
+      ...youtubeJobFromStub(stub, context),
       source_window_index: sourceWindowIndex,
     }));
 }
@@ -4636,7 +4719,7 @@ async function runSocialPlatformPostSweep({
   const importPostLimit = Math.min(SOCIAL_SWEEP_IMPORT_POST_LIMIT, Math.max(sourceLimit, sourceLimit * resultLimit));
   const normalizedSourceOffset = cappedOffset(sourceOffset);
   let tiktokSources = requestedPlatforms.includes('tiktok') ? sourcesForPlatform('tiktok') : [];
-  let youtubeSources = requestedPlatforms.includes('youtube') ? sourcesForPlatform('youtube') : [];
+  let youtubeSources = requestedPlatforms.includes('youtube') ? await sourcesForPlatformAsync('youtube') : [];
   let xSources = requestedPlatforms.includes('x') ? sourcesForPlatform('x') : [];
   let facebookSources = requestedPlatforms.includes('facebook') ? sourcesForPlatform('facebook') : [];
   let instagramSources = requestedPlatforms.includes('instagram') ? sourcesForPlatform('instagram') : [];
@@ -4658,14 +4741,18 @@ async function runSocialPlatformPostSweep({
     : [];
   const normalizedYoutubeJobMode = normalizeYouTubeJobMode(youtubeJobMode);
   const unfilteredYoutubeSearchJobs = requestedPlatforms.includes('youtube')
-    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, publishedBefore: youtubePublishedBefore, maxPagesPerSource: pageLimit, jobMode: 'all' })
+    ? await buildYouTubeSearchJobsAsync({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, publishedBefore: youtubePublishedBefore, maxPagesPerSource: pageLimit, jobMode: 'all' })
     : [];
-  const primaryYoutubeSearchJobs = requestedPlatforms.includes('youtube')
-    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, publishedBefore: youtubePublishedBefore, maxPagesPerSource: pageLimit, jobMode: normalizedYoutubeJobMode })
-    : [];
+  // In 'all' mode the primary window is the unfiltered window; reuse it rather
+  // than walking every YouTube source a second time.
+  const primaryYoutubeSearchJobs = !requestedPlatforms.includes('youtube')
+    ? []
+    : (normalizedYoutubeJobMode === 'all'
+      ? unfilteredYoutubeSearchJobs
+      : await buildYouTubeSearchJobsAsync({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, publishedBefore: youtubePublishedBefore, maxPagesPerSource: pageLimit, jobMode: normalizedYoutubeJobMode }));
   const primaryYoutubeSourceKeys = new Set(primaryYoutubeSearchJobs.map((item) => item.source_key));
   const youtubeRegistryFillSearchJobs = requestedPlatforms.includes('youtube') && normalizedYoutubeJobMode === 'channel_uploads' && primaryYoutubeSearchJobs.length < sourceLimit
-    ? buildYouTubeSearchJobs({
+    ? (await buildYouTubeSearchJobsAsync({
       sources: youtubeSources,
       limit: sourceLimit - primaryYoutubeSearchJobs.length,
       offset: normalizedSourceOffset,
@@ -4674,7 +4761,7 @@ async function runSocialPlatformPostSweep({
       maxPagesPerSource: pageLimit,
       backfillMode,
       jobMode: 'search',
-    }).filter((job) => !primaryYoutubeSourceKeys.has(job.source_key))
+    })).filter((job) => !primaryYoutubeSourceKeys.has(job.source_key))
     : [];
   let youtubeSearchJobs = [...primaryYoutubeSearchJobs, ...youtubeRegistryFillSearchJobs];
   // The registry is ~60,000 generated rows (~100 MB). The sweep only needs the
@@ -5330,6 +5417,7 @@ module.exports = {
   X_FULL_ARCHIVE_SEARCH_PACING_MS,
   socialDiscoveryApiReadiness,
   sourcesForPlatform,
+  sourcesForPlatformAsync,
   TIKTOK_OEMBED_URL,
   TIKTOK_EXACT_VIDEO_URL_PATTERN,
   extractExactSocialPostUrls,
@@ -5343,6 +5431,7 @@ module.exports = {
   buildTikTokExactPostImportRows,
   buildKnownYouTubeChannelSourcesFromRows,
   buildYouTubeSearchJobs,
+  buildYouTubeSearchJobsAsync,
   fetchYouTubePostsForJobs,
   filterYouTubeJobsByMode,
   normalizeYouTubeJobMode,

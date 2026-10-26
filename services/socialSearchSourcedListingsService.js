@@ -3244,7 +3244,10 @@ async function applyFoundOnlinePriceDrop(client, existingRow = {}, item = {}) {
             extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
               'previous_price', $3::text,
               'price_updated_from_repeat_post', true,
-              'price_updated_at', $4
+              -- jsonb_build_object takes "any", so Postgres cannot infer a bare
+              -- parameter's type here; without the cast every repeat-post price
+              -- drop failed with "could not determine data type of parameter $4".
+              'price_updated_at', $4::text
             )
       WHERE id = $1
         AND status IN ('pending','approved')
