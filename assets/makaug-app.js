@@ -41248,6 +41248,7 @@ function setAccountAccessCreateStep(step = "details") {
   updateAccountAccessRoleFocus();
   applyAccountAccessTheme();
   updateAccountAccessCreateFinalState();
+  syncAccountAccessPhoneOnlyUi();
 }
 
 function showAccountAccessRolePicker() {
@@ -41378,7 +41379,7 @@ function ensureAccountAccessDrawer() {
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="lastName">Second name / surname</span>
                   <input id="account-access-last-name" autocomplete="family-name" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="Second name / surname">
                 </label>
-                <label class="block">
+                <label id="account-access-email-wrap" class="block">
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="email">Email</span>
                   <input id="account-access-email" type="email" autocomplete="email" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="you@email.com">
                 </label>
@@ -41400,6 +41401,11 @@ function ensureAccountAccessDrawer() {
                   </label>
                 </div>
               </div>
+              <p id="account-access-phone-only-note" class="hidden rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-900">We send your code to this number on WhatsApp. No email needed.</p>
+              <label class="flex items-start gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-800">
+                <input id="account-access-whatsapp-consent" type="checkbox" class="mt-0.5 h-4 w-4 accent-green-700" data-consent-wording="signup_whatsapp_2026_10_26">
+                <span>Send me new property alerts and offers on WhatsApp. Reply STOP anytime.</span>
+              </label>
             </div>
             <div id="account-access-create-preferences-step" data-auth-create-step="preferences" class="hidden space-y-3">
               <div class="text-xs font-bold text-gray-600 mb-2" data-auth-text="quickPreferences">Quick preferences</div>
@@ -41556,6 +41562,7 @@ function handleAccountAccessKeydown(event) {
 
 function setAccountAccessRole(role = "finder") {
   accountAccessDrawerAudience = normalizeAuthAudience(role, true);
+  setTimeout(syncAccountAccessPhoneOnlyUi, 0);
   const copy = accountAccessRoleCopy(accountAccessDrawerAudience);
   const theme = accountAccessRoleTheme(accountAccessDrawerAudience);
   setTextById("account-access-role-label", copy.label);
@@ -41806,7 +41813,28 @@ function collectAccountAccessScreeningData() {
 }
 
 function selectedAccountAccessOtpChannel() {
+  if (isAccountAccessPhoneOnly()) return "phone";
   return document.querySelector('input[name="account-access-otp-method"]:checked')?.value === "phone" ? "phone" : "email";
+}
+
+// SIGNUP_PHONE_ONLY_ENABLED: new home-seeker accounts use a phone number only.
+// Brokers keep email. Existing email sign-ins are not affected.
+function isAccountAccessPhoneOnly() {
+  return window.MAKAUG_CONFIG?.signupPhoneOnly === true && accountAccessDrawerAudience !== "agent";
+}
+
+function syncAccountAccessPhoneOnlyUi() {
+  const phoneOnly = isAccountAccessPhoneOnly();
+  document.getElementById("account-access-email-wrap")?.classList.toggle("hidden", phoneOnly);
+  document.getElementById("account-access-otp-method-wrap")?.classList.toggle("hidden", phoneOnly);
+  document.getElementById("account-access-phone-only-note")?.classList.toggle("hidden", !phoneOnly);
+  if (phoneOnly) {
+    const radio = document.querySelector('input[name="account-access-otp-method"][value="phone"]');
+    if (radio) radio.checked = true;
+    if (accountAccessCreateStep === "details" && accountAccessDrawerMode === "create") {
+      setAccountAccessFlowNote("Add your first name, second name and mobile number. We will send a code on WhatsApp.", "info");
+    }
+  }
 }
 
 function maskAccountAccessDestination(value = "", channel = "email") {
@@ -41858,6 +41886,17 @@ function getAccountAccessContactDetails() {
 }
 
 function validateAccountAccessContactDetails({ firstName, lastName, email, phone, otpChannel } = {}) {
+  if (isAccountAccessPhoneOnly()) {
+    if (!firstName || !lastName || !phone) {
+      toast("Add your first name, second name/surname, and mobile number.");
+      return false;
+    }
+    if (!/^\+256\d{9}$/.test(phone || "")) {
+      toast("Enter a valid Uganda mobile number for WhatsApp verification.");
+      return false;
+    }
+    return true;
+  }
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email || "");
   if (!firstName || !lastName || !email || !phone) {
     toast("Add your first name, second name/surname, email address, and mobile number.");
@@ -41890,7 +41929,7 @@ async function submitAccountAccessContactOtp() {
       body: {
         first_name: details.firstName,
         last_name: details.lastName,
-        email: details.email,
+        email: isAccountAccessPhoneOnly() ? undefined : details.email,
         phone: details.phone,
         channel: details.otpChannel,
         preferred_language: details.preferredLanguage,
@@ -42076,12 +42115,16 @@ async function submitAccountAccessCreate() {
   const termsAccepted = document.getElementById("account-access-terms")?.checked === true;
   const privacyAccepted = document.getElementById("account-access-privacy")?.checked === true;
   const otpChannel = details.otpChannel;
+  const phoneOnlySignup = isAccountAccessPhoneOnly();
+  const whatsappConsent = document.getElementById("account-access-whatsapp-consent")?.checked === true;
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  if (!firstName || !lastName || !email || !phone || !password) {
-    toast("Add your first name, second name/surname, email, phone/WhatsApp, and password.");
+  if (!firstName || !lastName || (!email && !phoneOnlySignup) || !phone || !password) {
+    toast(phoneOnlySignup
+      ? "Add your first name, second name/surname, phone/WhatsApp, and password."
+      : "Add your first name, second name/surname, email, phone/WhatsApp, and password.");
     return;
   }
-  if (!emailLooksValid) {
+  if (!phoneOnlySignup && !emailLooksValid) {
     toast("Enter a valid email address.");
     return;
   }
@@ -42143,7 +42186,7 @@ async function submitAccountAccessCreate() {
         first_name: firstName,
         last_name: lastName,
         phone,
-        email,
+        email: phoneOnlySignup ? undefined : email,
         role: roleLabel,
         password,
         confirm_password: confirmPassword,
@@ -42155,6 +42198,8 @@ async function submitAccountAccessCreate() {
         terms_accepted: termsAccepted,
         privacy_accepted: privacyAccepted,
         weekly_tips_opt_in: false,
+        // Unticked by default. Only a tick here is WhatsApp marketing consent.
+        marketing_opt_in: whatsappConsent,
         preferred_language: preferredLanguage,
         preferred_contact_channel: profileData.preferred_contact_channel || "whatsapp",
         profile_data: profileData
@@ -51005,7 +51050,7 @@ function renderStaffHomeSeekers() {
       <td class="py-2 pr-3 text-xs">${u.saves}</td>
       <td class="py-2 text-xs">
         <label class="inline-flex items-center gap-1.5 font-semibold text-gray-800">
-          <input type="checkbox" data-in-person-user="${adminAttr(u.id)}" ${u.marketing_opt_in ? "checked" : ""} class="accent-green-700"> Agreed in person
+          <input type="checkbox" data-in-person-user="${adminAttr(u.id)}" ${u.marketing_opt_in ? "checked" : ""} class="accent-green-700"> ${u.marketing_opt_in && !["in_person", "staff_in_person"].includes(u.marketing_consent_source) ? "WhatsApp yes (not in person)" : "Agreed in person"}
         </label>
         <input type="date" data-in-person-date="${adminAttr(u.id)}" max="${today}" value="${adminAttr((u.marketing_consent_source === "staff_in_person" && u.marketing_consent_at) ? String(u.marketing_consent_at).slice(0, 10) : today)}" class="mt-1 block border border-gray-200 rounded-lg px-2 py-1 text-xs">
         <button type="button" onclick="saveStaffInPersonConsent('${adminAttr(u.id)}')" class="mt-1 rounded-lg border border-gray-300 px-2 py-1 text-[11px] font-black">Save</button>

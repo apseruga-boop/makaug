@@ -184,3 +184,21 @@ test('front end: unticked sign-up box with the exact wording; saves work signed 
   assert.match(app, /Save this search \/ alert me/);
   assert.match(app, /Device cookie \(mk_did\)/);
 });
+
+test('live sign-up drawer: unticked WhatsApp box, phone-only behind the flag, brokers keep email', () => {
+  const app = read('assets/makaug-app.js');
+  const box = app.match(/<input id="account-access-whatsapp-consent"[^>]*>/);
+  assert.ok(box, 'drawer consent checkbox exists');
+  assert.doesNotMatch(box[0], /\bchecked\b/);
+  assert.match(app, /<span>Send me new property alerts and offers on WhatsApp\. Reply STOP anytime\.<\/span>/);
+  assert.match(app, /marketing_opt_in: whatsappConsent,\n\s+preferred_language: preferredLanguage/);
+  assert.match(app, /window\.MAKAUG_CONFIG\?\.signupPhoneOnly === true && accountAccessDrawerAudience !== "agent"/);
+  assert.match(app, /email: phoneOnlySignup \? undefined : email/);
+});
+
+test('public /cookie-policy page explains the device cookie', () => {
+  const src = read('services/publicHtmlSanitizer.js');
+  const block = src.slice(src.indexOf("'/cookie-policy': {"));
+  assert.match(block, /id="cookie-policy-device-line"[^>]*>When you save a property or a search without an account/);
+  assert.match(block, /up to 400 days, is not used for\s+advertising|up to 400 days, is not used for advertising/);
+});
