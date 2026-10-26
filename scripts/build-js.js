@@ -52,7 +52,9 @@ const KEEP_PUBLIC = new Set([
   'submitHarvestSourceLink', 'adminScrollTo', 'ensureStaffModerationActionDelegates', 'updateAdminAccessEntrypoints',
   'unlockAdminAccess', 'adminSocialCaptureHelperScript', 'adminSocialCaptureBookmarkletUrl',
   'adminSocialCaptureHelperPanelHtml', 'adminCopySocialCaptureBookmarklet', 'adminSocialQuickPastePanelHtml',
-  'adminOpenSocialQuickPastePanel'
+  'adminOpenSocialQuickPastePanel',
+  // Called synchronously by the top-level staff queue click guard (PR #564).
+  'staffQueueClickShouldBeIgnored'
 ]);
 
 const ASYNC_ENTRY_POINTS = new Set([
