@@ -5018,6 +5018,14 @@ async function saveStaffReviewNoteBeforeRefusal(req, propertyId, reviewPatch = {
   }
 }
 
+// A refused save still keeps the staff note. The note goes on the listing
+// named in the URL (the one open in the editor), then the refusal is sent
+// with note_saved so the editor can say "Note saved".
+async function refuseStaffReviewSave(req, res, reviewPatch, status, body) {
+  const noteSaved = await saveStaffReviewNoteBeforeRefusal(req, req.params.id, reviewPatch);
+  return res.status(status).json({ ok: false, ...body, note_saved: noteSaved });
+}
+
 router.patch('/properties/:id/review', async (req, res, next) => {
   let reviewPatch = null;
   let mainSaveDone = false;
@@ -5033,29 +5041,23 @@ router.patch('/properties/:id/review', async (req, res, next) => {
       warning_overrides: safeJsonObject(req.body.warning_overrides, {})
     };
     if (bodyId && bodyId !== routeId) {
-      // The note goes on the listing named in the URL: the one open in the editor.
-      const noteSaved = await saveStaffReviewNoteBeforeRefusal(req, req.params.id, reviewPatch);
-      return res.status(409).json({ ok: false, error: 'Save target does not match the open listing.', note_saved: noteSaved });
+      return refuseStaffReviewSave(req, res, reviewPatch, 409, { error: 'Save target does not match the open listing.' });
     }
     delete listingPatch.id;
     delete listingPatch.property_id;
     // C2 addendum: Save never rejects. Rejecting goes through Reject, with a
     // typed reason and a confirmation (PATCH /api/properties/:id/status).
     if (['rejected', 'declined', 'fraud', 'deleted', 'archived'].includes(String(reviewPatch.stage || '').trim().toLowerCase())) {
-      const noteSaved = await saveStaffReviewNoteBeforeRefusal(req, req.params.id, reviewPatch);
-      return res.status(400).json({ ok: false, code: 'reject_via_decision_panel', error: 'Saving can\'t reject a listing. Use Reject in the Decision panel, type the reason and confirm.', note_saved: noteSaved });
+      return refuseStaffReviewSave(req, res, reviewPatch, 400, { code: 'reject_via_decision_panel', error: 'Saving can\'t reject a listing. Use Reject in the Decision panel, type the reason and confirm.' });
     }
     if (['approved', 'live', 'published'].includes(String(reviewPatch.stage || '').trim().toLowerCase())) {
       const photos = await listingPhotoOrVideoCheck(db, req.params.id);
       if (!photos.ok) {
-        const noteSaved = await saveStaffReviewNoteBeforeRefusal(req, req.params.id, reviewPatch);
-        return res.status(422).json({
-          ok: false,
+        return refuseStaffReviewSave(req, res, reviewPatch, 422, {
           error: NO_PHOTO_OR_VIDEO_MESSAGE,
           code: NO_REAL_PHOTO_CODE,
           override_available: false,
-          photo_check: photos,
-          note_saved: noteSaved
+          photo_check: photos
         });
       }
     }

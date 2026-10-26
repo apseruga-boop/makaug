@@ -76,7 +76,8 @@ test('retries back off with jitter and full renders are spaced out', () => {
   vm.runInNewContext(`${grab('staffDashboardRetryDelayMs')}\nthis.fn = staffDashboardRetryDelayMs;`, ctx);
   assert.deepEqual([1, 2, 3, 4, 5, 9].map((n) => ctx.fn(n, 1500, 20000)), [1500, 3000, 6000, 12000, 20000, 20000]);
   assert.match(grab('renderStaffDashboard'), /sinceLast < STAFF_DASHBOARD_MIN_RENDER_GAP_MS/);
-  assert.match(grab('scheduleStaffDashboardPanelRetry'), /staffDashboardRetryDelayMs\(staffDashboardPanelRetryCount/);
+  // Panel retries keep their existing capped linear backoff (pinned by staff-dashboard-panel-retry-scheduler.test.js).
+  assert.match(grab('renderStaffDashboardOnce'), /staffDashboardRetryDelayMs\(staffDashboardAuthRetryCount, 1500, 20000\)/);
 });
 
 function statSandbox(stored = {}) {

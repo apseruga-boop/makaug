@@ -15246,7 +15246,7 @@ function scheduleStaffDashboardPanelRetry(reason = "review_queue") {
   if (dashboardRefreshPending() || staffDashboardPanelRetryCount >= STAFF_DASHBOARD_PANEL_RETRY_LIMIT) return;
   if (currentPage !== "staff-dashboard" || !authState?.token) return;
   staffDashboardPanelRetryCount += 1;
-  const delay = staffDashboardRetryDelayMs(staffDashboardPanelRetryCount, 2000, 30000);
+  const delay = Math.min(15000, 1800 * staffDashboardPanelRetryCount);
   scheduleDashboardRefresh("staff_panels_retry", delay, () => {
     if (currentPage !== "staff-dashboard" || !authState?.token) return;
     hydrateStaffDashboardPanels(
