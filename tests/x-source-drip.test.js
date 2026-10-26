@@ -81,10 +81,11 @@ async function main() {
   assert(adminRoute.includes("router.post('/x-source-drip/start'"), 'admin route should expose start control');
   assert(adminRoute.includes("router.post('/x-source-drip/pause'"), 'admin route should expose pause control');
   assert(adminRoute.includes("router.post('/x-source-drip/run-once'"), 'admin route should expose manual one-batch control');
-  // King dashboard slim-down (26 Oct 2026): the paused X drip no longer arms a timer.
+  // King dashboard slim-down (26 Oct 2026): the paused X drip no longer arms a timer,
+  // and its button is gone from the dashboard. Routes and the manual run-once stay.
   assert(!server.includes('startXSourceDripScheduler(db)'), 'server should not arm the X drip scheduler');
-  assert(html.includes('admin-x-drip-btn'), 'dashboard HTML should expose X drip button');
-  assert(frontend.includes('adminLoadXSourceDrip'), 'frontend should load the X drip panel');
+  assert(!html.includes('admin-x-drip-btn'), 'King slim-down (26 Oct 2026) removed the X drip button from the dashboard');
+  assert(!frontend.includes('id="admin-x-drip-btn"'), 'frontend should not re-inject the retired X drip button');
   assert(frontend.includes('/api/admin/x-source-drip/run-once'), 'frontend should call the protected run-once endpoint');
   assert(frontend.includes('admin-x-drip-published-after'), 'frontend should expose the X drip since-date field');
   assert(frontend.includes('admin-x-drip-monthly-cap'), 'frontend should expose the monthly X read cap');

@@ -23539,7 +23539,6 @@ function renderAdminLiveListingsRows(listings) {
 function renderAdminAllListingsRows(listings) {
   const wrap = document.getElementById("admin-all-listings-table");
   if (!wrap) return;
-  ensureAdminApril29CleanupControls();
   const q = (document.getElementById("admin-listings-q")?.value || "").toLowerCase().trim();
   const statusFilter = (document.getElementById("admin-listings-status")?.value || "").toLowerCase().trim();
   let view = Array.isArray(listings) ? listings : [];
@@ -23632,46 +23631,6 @@ function hydrateAdminListingsForExactIdInBackground(propertyId, headers) {
     .finally(() => {
       adminExactIdHydrationInFlight = null;
     });
-}
-
-function ensureAdminApril29CleanupControls() {
-  const panel = document.getElementById("admin-listings-control");
-  if (!panel || document.getElementById("admin-april29-cleanup-controls")) return;
-  const header = panel.firstElementChild;
-  if (!header) return;
-  const controls = document.createElement("div");
-  controls.id = "admin-april29-cleanup-controls";
-  controls.className = "flex flex-col items-start sm:items-end gap-1";
-  controls.innerHTML = `
-    <button id="admin-clean-april29-tests-btn" type="button" onclick="adminCleanupApril29TestBatch()" class="border border-red-300 text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl text-xs font-bold">Clean 29 Apr Test Batch</button>
-    <div id="admin-april29-cleanup-status" class="text-[11px] text-gray-500"></div>
-  `;
-  header.appendChild(controls);
-}
-
-async function adminCleanupApril29TestBatch() {
-  if (!canUseLiveAdminApi()) {
-    toast("Admin API key is required for launch cleanup.");
-    return;
-  }
-  const ok = window.confirm("Soft-delete test-like listings created on 29 Apr 2026? This does not touch ordinary listings from other dates.");
-  if (!ok) return;
-  const statusEl = document.getElementById("admin-april29-cleanup-status");
-  if (statusEl) statusEl.textContent = "Cleaning test batch...";
-  try {
-    const response = await apiRequest("/api/admin/test-listings/cleanup-april-29", {
-      method: "POST",
-      headers: adminAuthHeaders(),
-      body: {}
-    });
-    const data = response?.data || {};
-    if (statusEl) statusEl.textContent = `Deleted ${Number(data.deleted || 0)} of ${Number(data.matched || 0)} matched test listings.`;
-    toast(`April 29 cleanup done: ${Number(data.deleted || 0)} listing${Number(data.deleted || 0) === 1 ? "" : "s"} deleted.`);
-    await renderAdminDashboard();
-  } catch (e) {
-    if (statusEl) statusEl.textContent = "Cleanup failed. Check admin API access and logs.";
-    toast(`Cleanup failed: ${e.message || "error"}`);
-  }
 }
 
 async function adminCleanupLiveTestListings() {
