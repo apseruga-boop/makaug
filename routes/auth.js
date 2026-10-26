@@ -16,6 +16,24 @@ const {
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { isSmsOtpDeliveryConfirmed, sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
+const { recordUserMarketingConsent, SIGNUP_CONSENT_WORDING } = require('../services/marketingConsentService');
+const { enqueueConsentMessage } = require('../services/whatsappAlertDigestService');
+
+// Phone-only sign-up (26 Oct 2026, area B). When on, a new account (other
+// than a broker, who still gives an email for the review) has no email field
+// and verifies the phone by a code sent on WhatsApp. It is OFF by default
+// because the WhatsApp code does not reach anyone yet; see
+// makaug-health/2026-10-26-claude-whatsapp-items.md, item 1.
+function isPhoneOnlySignupEnabled() {
+  return String(process.env.SIGNUP_PHONE_ONLY_ENABLED || '').trim().toLowerCase() === 'true';
+}
+
+// An account counts as verified when its phone (WhatsApp or SMS code) or its
+// email (email code) was confirmed. An email code no longer marks the phone
+// verified.
+function accountContactVerified(row = {}) {
+  return row.phone_verified === true || row.email_verified === true;
+}
 const {
   parseBooleanLike,
   normalizeEmail,
@@ -143,9 +161,10 @@ function publicUser(row) {
     email: row.email,
     role: row.role,
     phone_verified: row.phone_verified,
+    email_verified: row.email_verified === true,
     status: row.status,
-    marketing_opt_in: row.marketing_opt_in !== false,
-    weekly_tips_opt_in: row.weekly_tips_opt_in !== false,
+    marketing_opt_in: row.marketing_opt_in === true,
+    weekly_tips_opt_in: row.weekly_tips_opt_in === true,
     preferred_contact_channel: row.preferred_contact_channel || 'whatsapp',
     preferred_language: row.preferred_language || 'en',
     profile_data: row.profile_data && typeof row.profile_data === 'object' && !Array.isArray(row.profile_data) ? row.profile_data : {},
@@ -846,13 +865,14 @@ router.get('/oauth/:provider/callback', async (req, res) => {
 
 router.post('/request-signup-otp', async (req, res, next) => {
   try {
+    const audience = normalizeSignupAudience(req.body.audience || req.body.account_kind || req.body.role || '');
+    const phoneOnlySignup = isPhoneOnlySignupEnabled() && audience !== 'agent';
     const channelInput = cleanText(req.body.channel).toLowerCase();
-    const channel = channelInput === 'phone' ? 'phone' : 'email';
+    const channel = phoneOnlySignup ? 'phone' : (channelInput === 'phone' ? 'phone' : 'email');
     const firstName = cleanText(req.body.first_name);
     const lastName = cleanText(req.body.last_name || req.body.second_name || req.body.surname);
     const phone = normalizeUgPhone(req.body.phone);
-    const email = normalizeEmail(req.body.email);
-    const audience = normalizeSignupAudience(req.body.audience || req.body.account_kind || req.body.role || '');
+    const email = phoneOnlySignup ? '' : normalizeEmail(req.body.email);
     const preferredLanguageInput = cleanText(req.body.preferred_language).toLowerCase();
     const preferredLanguage = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguageInput)
       ? preferredLanguageInput
@@ -875,7 +895,7 @@ router.post('/request-signup-otp', async (req, res, next) => {
     }
 
     const existing = await db.query(
-      `SELECT id, phone_verified
+      `SELECT id, phone_verified, email_verified
        FROM users
        WHERE status = $3
          AND (
@@ -885,7 +905,7 @@ router.post('/request-signup-otp', async (req, res, next) => {
        LIMIT 2`,
       [email, phone, 'active']
     );
-    if (existing.rows.some((row) => row.phone_verified === true)) {
+    if (existing.rows.some((row) => accountContactVerified(row))) {
       return res.status(409).json({ ok: false, error: 'An active account already exists. Please sign in or reset your password.' });
     }
 
@@ -1093,14 +1113,14 @@ router.post('/signup-check', async (req, res, next) => {
     const email = normalizeEmail(req.body?.email) || null;
     if (!phone && !email) return res.status(400).json({ ok: false, error: 'phone or email is required' });
     const rows = (await db.query(
-      `SELECT phone, email, phone_verified, status, role
+      `SELECT phone, email, phone_verified, email_verified, status, role
          FROM users
         WHERE ($1::text IS NOT NULL AND phone = $1)
            OR ($2::text IS NOT NULL AND LOWER(email) = LOWER($2))
         LIMIT 5`,
       [phone || null, email]
     )).rows;
-    const taken = (row) => row.phone_verified || row.status !== 'active' || row.role === 'agent_broker';
+    const taken = (row) => accountContactVerified(row) || row.status !== 'active' || row.role === 'agent_broker';
     const phoneTaken = Boolean(phone) && rows.some((row) => row.phone === phone && taken(row));
     const emailTaken = Boolean(email) && rows.some((row) => String(row.email || '').toLowerCase() === email.toLowerCase() && taken(row));
     return res.json({ ok: true, data: { phone_taken: phoneTaken, email_taken: emailTaken } });
@@ -1116,15 +1136,22 @@ router.post('/register', async (req, res, next) => {
     const firstName = cleanText(req.body.first_name);
     const lastName = cleanText(req.body.last_name) || '';
     const phone = normalizeUgPhone(req.body.phone);
-    const email = normalizeEmail(req.body.email) || null;
+    const audienceForContact = normalizeSignupAudience(req.body.audience || req.body.profile_data?.audience || req.body.role);
+    const phoneOnlySignup = isPhoneOnlySignupEnabled() && audienceForContact !== 'agent';
+    const email = phoneOnlySignup ? null : (normalizeEmail(req.body.email) || null);
     const roleInput = cleanText(req.body.role).toLowerCase();
     const password = cleanText(req.body.password);
     const confirmPassword = cleanText(req.body.confirm_password);
     const otpChannelInput = cleanText(req.body.otp_channel).toLowerCase();
-    const otpChannel = otpChannelInput === 'email' ? 'email' : 'phone';
-    const contactVerification = verifySignupContactVerificationToken(cleanText(req.body.contact_verification_token), { email, phone });
-    const marketingOptIn = parseBooleanLike(req.body.marketing_opt_in, true);
-    const weeklyTipsOptIn = parseBooleanLike(req.body.weekly_tips_opt_in, true);
+    const otpChannel = !phoneOnlySignup && otpChannelInput === 'email' ? 'email' : 'phone';
+    const contactVerificationRaw = verifySignupContactVerificationToken(cleanText(req.body.contact_verification_token), { email, phone });
+    // In phone-only mode only a WhatsApp/SMS-verified phone counts.
+    const contactVerification = phoneOnlySignup && contactVerificationRaw.ok && contactVerificationRaw.channel !== 'phone'
+      ? { ok: false, error: 'contact_verification_token must come from the phone code' }
+      : contactVerificationRaw;
+    // Marketing consent is NO unless the person ticks the (unticked) box.
+    const marketingOptIn = parseBooleanLike(req.body.marketing_opt_in, false);
+    const weeklyTipsOptIn = parseBooleanLike(req.body.weekly_tips_opt_in, false);
     const preferredContactInput = cleanText(req.body.preferred_contact_channel).toLowerCase();
     const preferredContactChannel = ['whatsapp', 'phone', 'email'].includes(preferredContactInput) ? preferredContactInput : 'whatsapp';
     const preferredLanguageInput = cleanText(req.body.preferred_language).toLowerCase();
@@ -1156,7 +1183,7 @@ router.post('/register', async (req, res, next) => {
     const errors = [];
     if (!firstName) errors.push('first_name is required');
     if (!lastName) errors.push('last_name is required');
-    if (!email) errors.push('email is required');
+    if (!email && !phoneOnlySignup) errors.push('email is required');
     if (!phone) errors.push('phone is required');
     if (!password || password.length < 8) errors.push('password must be at least 8 characters');
     if (confirmPassword && confirmPassword !== password) errors.push('confirm_password must match password');
@@ -1214,7 +1241,7 @@ router.post('/register', async (req, res, next) => {
       [phone, email]
     );
 
-    const verifiedConflict = existingResult.rows.find((row) => row.phone_verified || row.status !== 'active' || row.role === 'agent_broker');
+    const verifiedConflict = existingResult.rows.find((row) => accountContactVerified(row) || row.status !== 'active' || row.role === 'agent_broker');
     if (verifiedConflict) {
       await client.query('ROLLBACK');
       return res.status(409).json({ ok: false, error: 'Account with this phone or email already exists' });
@@ -1232,7 +1259,7 @@ router.post('/register', async (req, res, next) => {
          SET first_name = $2,
              last_name = $3,
              phone = $4,
-             email = $5,
+             email = COALESCE($5, email),
              role = $6,
              password_hash = $7,
              marketing_opt_in = $8,
@@ -1303,12 +1330,18 @@ router.post('/register', async (req, res, next) => {
       const verifiedUpdate = await client.query(
         `UPDATE users
          SET phone_verified = CASE WHEN $3::boolean THEN TRUE ELSE phone_verified END,
+             email_verified = CASE WHEN $4::boolean THEN TRUE ELSE email_verified END,
              profile_data = COALESCE(profile_data, '{}'::jsonb) || $2::jsonb,
              last_login_at = NOW(),
              updated_at = NOW()
          WHERE id = $1
          RETURNING *`,
-        [user.id, JSON.stringify(verifiedPatch), contactVerification.ok]
+        [
+          user.id,
+          JSON.stringify(verifiedPatch),
+          contactVerification.ok && contactVerification.channel === 'phone',
+          contactVerification.ok && contactVerification.channel === 'email'
+        ]
       );
       user = verifiedUpdate.rows[0];
     } else {
@@ -1383,9 +1416,31 @@ router.post('/register', async (req, res, next) => {
       }
       await client.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
     }
+    if (marketingOptIn) {
+      const consentEvent = await recordUserMarketingConsent(client, {
+        userId: user.id,
+        phone,
+        granted: true,
+        source: 'signup_checkbox',
+        wordingVersion: SIGNUP_CONSENT_WORDING.version,
+        wordingText: SIGNUP_CONSENT_WORDING.text
+      });
+      // Written as 'preview' (not sent) unless WHATSAPP_ALERTS_ENABLED=true.
+      await enqueueConsentMessage(client, {
+        kind: 'welcome',
+        userId: user.id,
+        phone,
+        firstName,
+        consentEventId: consentEvent?.id
+      });
+      const withConsent = await client.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [user.id]);
+      if (withConsent.rows.length) user = withConsent.rows[0];
+    }
     await client.query('COMMIT');
 
-    if (audience === 'field_agent') {
+    if (audience === 'finder' || audience === 'student') {
+      await notifyAdminSignup({ user, eventType: 'new_home_seeker_signup' });
+    } else if (audience === 'field_agent') {
       await notifyAdminSignup({ user, eventType: 'new_field_agent_application' });
     } else if (audience === 'agent') {
       await notifyAdminSignup({ user, eventType: 'new_broker_verification_request' });
@@ -1527,7 +1582,7 @@ router.post('/login', async (req, res, next) => {
     }
 
     const brokerPhoneOtpNotRequired = user.role === 'agent_broker';
-    if (!user.phone_verified && !brokerPhoneOtpNotRequired) {
+    if (!accountContactVerified(user) && !brokerPhoneOtpNotRequired) {
       return res.status(403).json({ ok: false, error: 'Phone not verified. Use OTP sign in to verify this account.' });
     }
 
@@ -1773,7 +1828,8 @@ router.post('/reset-password', async (req, res, next) => {
       await db.query('UPDATE otps SET used = TRUE WHERE id = $1', [matchedOtp.id]);
     }
     if (channel === 'email') {
-      await db.query('UPDATE users SET password_hash = $2, phone_verified = TRUE WHERE LOWER(email) = $1', [identifier, newHash]);
+      // An email code proves the email, not the phone.
+      await db.query('UPDATE users SET password_hash = $2, email_verified = TRUE WHERE LOWER(email) = $1', [identifier, newHash]);
     } else {
       await db.query('UPDATE users SET password_hash = $2, phone_verified = TRUE WHERE phone = $1', [identifier, newHash]);
     }
@@ -1840,7 +1896,8 @@ router.post('/verify-otp', async (req, res, next) => {
     if (channel === 'phone') {
       await db.query('UPDATE users SET phone_verified = TRUE WHERE phone = $1', [identifier]);
     } else {
-      await db.query('UPDATE users SET phone_verified = TRUE WHERE LOWER(email) = $1', [identifier]);
+      // An email code proves the email, not the phone.
+      await db.query('UPDATE users SET email_verified = TRUE WHERE LOWER(email) = $1', [identifier]);
     }
 
     const userResult = channel === 'phone'
@@ -1984,8 +2041,8 @@ router.patch('/me', async (req, res, next) => {
     const lastName = cleanText(req.body.last_name) || user.last_name;
     const nextPhone = req.body.phone !== undefined ? normalizeUgPhone(req.body.phone) : user.phone;
     const emailInput = req.body.email !== undefined ? cleanText(req.body.email).toLowerCase() : user.email;
-    const marketingOptIn = req.body.marketing_opt_in === undefined ? user.marketing_opt_in : parseBooleanLike(req.body.marketing_opt_in, true);
-    const weeklyTipsOptIn = req.body.weekly_tips_opt_in === undefined ? user.weekly_tips_opt_in : parseBooleanLike(req.body.weekly_tips_opt_in, true);
+    const marketingOptIn = req.body.marketing_opt_in === undefined ? user.marketing_opt_in === true : parseBooleanLike(req.body.marketing_opt_in, false);
+    const weeklyTipsOptIn = req.body.weekly_tips_opt_in === undefined ? user.weekly_tips_opt_in === true : parseBooleanLike(req.body.weekly_tips_opt_in, false);
     const preferredContactInput = cleanText(req.body.preferred_contact_channel).toLowerCase();
     const preferredContactChannel = ['whatsapp', 'email'].includes(preferredContactInput)
       ? preferredContactInput
@@ -2039,6 +2096,20 @@ router.patch('/me', async (req, res, next) => {
       ]
     );
 
+    let updatedUser = updated.rows[0];
+    if ((user.marketing_opt_in === true) !== marketingOptIn) {
+      await recordUserMarketingConsent(db, {
+        userId: auth.userId,
+        phone: nextPhone || null,
+        granted: marketingOptIn,
+        source: 'account_settings',
+        wordingVersion: SIGNUP_CONSENT_WORDING.version,
+        wordingText: SIGNUP_CONSENT_WORDING.text
+      });
+      const refreshedConsent = await db.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [auth.userId]);
+      if (refreshedConsent.rows.length) updatedUser = refreshedConsent.rows[0];
+    }
+
     if (phoneChanged) {
       await logNotification(db, {
         userId: auth.userId,
@@ -2050,7 +2121,7 @@ router.patch('/me', async (req, res, next) => {
       });
     }
 
-    return res.json({ ok: true, data: { user: publicUser(updated.rows[0]) } });
+    return res.json({ ok: true, data: { user: publicUser(updatedUser) } });
   } catch (error) {
     if (error.code === '23505') {
       return res.status(409).json({ ok: false, error: 'Email or phone already in use' });
