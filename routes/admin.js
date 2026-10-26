@@ -10030,9 +10030,9 @@ router.post('/agents/:id/merge-into', async (req, res, next) => {
     const reason = `Merged into ${target.full_name} (${targetId}) — duplicate record`;
     await client.query(
       `UPDATE agents
-          SET removed_at = NOW(), removed_reason = $2, removed_by = $3, status = 'suspended',
+          SET removed_at = NOW(), removed_reason = $2::text, removed_by = $3::text, status = 'suspended',
               removal_snapshot = $4::jsonb, updated_at = NOW()
-        WHERE id = $1`,
+        WHERE id = $1::uuid`,
       [sourceId, reason, adminActorId(req), JSON.stringify({ merged_into: targetId, listings_moved: moved.map((row) => row.id) })]
     );
     await client.query('COMMIT');
