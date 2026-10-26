@@ -8,10 +8,11 @@ const { firstSyncDays } = require('../services/leadDeskService');
 const dbWithNewest = (at) => ({ query: async () => ({ rows: [{ at }] }) });
 
 test('after a restart the first sync reads back from the newest lead, not a year', async () => {
-  const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000);
-  assert.equal(await firstSyncDays(dbWithNewest(twoDaysAgo), 365), 5);
-  const fortyDaysAgo = new Date(Date.now() - 40 * 86_400_000);
-  assert.equal(await firstSyncDays(dbWithNewest(fortyDaysAgo), 365), 43);
+  // Half-day offsets keep the rounding away from a whole-day edge.
+  const twoDaysAgo = new Date(Date.now() - 2.5 * 86_400_000);
+  assert.equal(await firstSyncDays(dbWithNewest(twoDaysAgo), 365), 6);
+  const fortyDaysAgo = new Date(Date.now() - 40.5 * 86_400_000);
+  assert.equal(await firstSyncDays(dbWithNewest(fortyDaysAgo), 365), 44);
   assert.equal(await firstSyncDays(dbWithNewest(new Date()), 365), 3);
 });
 
