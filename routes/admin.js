@@ -10701,6 +10701,15 @@ router.patch('/agents/:id/greeting-name', async (req, res, next) => {
   }
 });
 
+// Who did it, in words, for the audit log ("Arthur Seruga", or "admin key").
+async function adminActorDisplayName(req) {
+  if (req.adminAuth?.userId) {
+    const user = (await db.query('SELECT first_name, last_name, email, phone FROM users WHERE id = $1', [req.adminAuth.userId]).catch(() => ({ rows: [] }))).rows[0];
+    if (user) return moderationActorLabel(user);
+  }
+  return req.adminAuth?.type === 'api_key' ? 'admin key' : 'staff';
+}
+
 router.patch('/agents/:id/status', async (req, res, next) => {
   try {
     const status = String(req.body.status || '').trim().toLowerCase();
@@ -10708,6 +10717,31 @@ router.patch('/agents/:id/status', async (req, res, next) => {
 
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ ok: false, error: 'Invalid status value' });
+    }
+
+    // "Approve anyway" (King → Agents): the same approval as below, on purpose
+    // while something is still missing (the ID, usually). Owner accounts only,
+    // with a reason; recorded in the audit log once the approval has gone through.
+    let approvalOverride = null;
+    if (req.body.approval_override && typeof req.body.approval_override === 'object') {
+      if (status !== 'approved') return res.status(400).json({ ok: false, error: 'Approve anyway only approves.' });
+      const auth = req.adminAuth || {};
+      if (!(auth.type === 'api_key' || ['admin', 'super_admin'].includes(String(auth.role || '').toLowerCase()))) {
+        return res.status(403).json({ ok: false, error: 'Only the owner (King) account can approve anyway.' });
+      }
+      const reason = cleanText(req.body.approval_override.reason || '').slice(0, 500);
+      if (reason.length < 3) return res.status(400).json({ ok: false, error: 'Say why you are approving before the details are complete.' });
+      const current = (await db.query(
+        `SELECT status, removed_at, COALESCE(btrim(nin), '') <> '' AS has_nin,
+                COALESCE(identity_document_url, '') <> '' AS has_id_document,
+                COALESCE(phone, whatsapp, '') <> '' AS has_phone
+           FROM agents WHERE id = $1`, [req.params.id])).rows[0];
+      if (!current) return res.status(404).json({ ok: false, error: 'Agent not found' });
+      const missing = [];
+      if (!current.has_nin) missing.push('nin');
+      if (!current.has_id_document) missing.push('id_document');
+      if (!current.has_phone) missing.push('phone');
+      approvalOverride = { reason, missing, status_before: current.status };
     }
 
     // From 5 Oct 2026 a new agent is only approved once their first month is paid.
@@ -10836,6 +10870,17 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       agent_id: req.params.id,
       status
     });
+    if (approvalOverride) {
+      const overrideActor = await adminActorDisplayName(req);
+      await writeAudit('admin_agent_approved_anyway', {
+        agent_id: req.params.id,
+        by: overrideActor,
+        reason: approvalOverride.reason,
+        missing: approvalOverride.missing,
+        status_before: approvalOverride.status_before,
+        approved_at: new Date().toISOString()
+      }, adminActorId(req));
+    }
 
     let accountProvisioning = null;
     let welcome = null;

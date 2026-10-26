@@ -9,7 +9,7 @@
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const DATE_KEYS = new Set(['id_expiry_date', 'paid_until']);
+const DATE_KEYS = new Set(['id_expiry_date', 'paid_until', 'plan_started_on', 'last_payment_on']);
 
 const LISTING_ACTIONS = Object.freeze({
   take_down: { label: 'Taken down by staff', status: 'hidden', availability: null },
@@ -18,6 +18,7 @@ const LISTING_ACTIONS = Object.freeze({
   put_back: { label: 'Put back by staff', status: null, availability: 'available' }
 });
 const RESTORABLE_STATUSES = new Set(['approved', 'pending', 'draft', 'rejected']);
+const PUBLIC_FIELDS = new Set(['full_name', 'company_name', 'greeting_name', 'bio', 'phone', 'whatsapp', 'email', 'districts_covered', 'specializations', 'experience_years', 'licence_number']);
 
 function maskNin(value) {
   const text = String(value || '').trim();
@@ -37,6 +38,110 @@ function paymentState(agent = {}, today = new Date()) {
   return { key: 'unpaid', label: 'Unpaid' };
 }
 
+// Kampala is UTC+3 all year; the fee and the paid-until dates are Kampala days.
+function kampalaDay(now = new Date()) {
+  return new Date(now.getTime() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+function isoDay(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : kampalaDay(value);
+  const text = String(value).trim();
+  if (DATE_RE.test(text.slice(0, 10)) && (text.length === 10 || /^\d{4}-\d{2}-\d{2}T/.test(text))) {
+    if (text.length === 10) return text;
+    const parsed = new Date(text);
+    return Number.isNaN(parsed.getTime()) ? text.slice(0, 10) : kampalaDay(parsed);
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+}
+
+function dayNumber(day) {
+  return Math.round(Date.parse(`${day}T00:00:00Z`) / 86400000);
+}
+
+function addDay(day, n) {
+  return new Date((dayNumber(day) + n) * 86400000).toISOString().slice(0, 10);
+}
+
+/**
+ * The payment countdown for one agent, from what is on file — never guessed.
+ * paid_until is the last paid (or free) day, so the next payment is due the
+ * day after it. Sources, best first: what staff typed (plan_started_on,
+ * last_payment_*), the payment ledger (revenue_entries), the free-trial offer.
+ */
+function paymentTracker(agent = {}, ledger = null, now = new Date()) {
+  const today = kampalaDay(now);
+  const state = paymentState(agent, new Date(`${today}T12:00:00Z`));
+  const paidUntil = isoDay(agent.paid_until);
+  const offerMode = String(agent.fee_offer_mode || '').toLowerCase();
+  let plan = 'Not set';
+  if (agent.fee_exempt) plan = 'Free (staff override)';
+  else if (offerMode === 'free_period' && paidUntil && isoDay(agent.fee_offer_until) === paidUntil) plan = 'Free trial';
+  else if (offerMode === 'pay_later' && !paidUntil) plan = 'Pay later (approved before paying)';
+  else if (agent.billing_plan === 'agent_monthly' || ledger?.period_end) plan = 'Monthly';
+  else if (paidUntil) plan = 'Paid until a set date';
+
+  let periodStart = isoDay(agent.plan_started_on);
+  let periodSource = periodStart ? 'staff' : null;
+  if (!periodStart && ledger?.period_start && paidUntil && isoDay(ledger.period_end) === paidUntil) {
+    periodStart = isoDay(ledger.period_start); periodSource = 'ledger';
+  }
+  if (!periodStart && offerMode === 'free_period' && agent.fee_offer_at && paidUntil && isoDay(agent.fee_offer_until) === paidUntil) {
+    periodStart = isoDay(agent.fee_offer_at); periodSource = 'free_trial';
+  }
+  const daysOnPeriod = periodStart && dayNumber(periodStart) <= dayNumber(today) ? dayNumber(today) - dayNumber(periodStart) + 1 : null;
+
+  const nextDue = agent.fee_exempt || !paidUntil ? null : addDay(paidUntil, 1);
+  const daysLeft = nextDue ? dayNumber(nextDue) - dayNumber(today) : null;
+  let tone = null;
+  if (daysLeft !== null) tone = daysLeft < 0 ? 'red' : daysLeft <= 7 ? 'amber' : 'ok';
+
+  const manualOn = isoDay(agent.last_payment_on);
+  const ledgerOn = ledger?.paid_at ? isoDay(ledger.paid_at) : null;
+  let lastPaymentOn = null;
+  let lastPaymentUgx = null;
+  let lastPaymentSource = null;
+  if (ledgerOn && (!manualOn || ledgerOn >= manualOn)) {
+    lastPaymentOn = ledgerOn; lastPaymentUgx = ledger.amount_ugx == null ? null : Number(ledger.amount_ugx); lastPaymentSource = 'ledger';
+  } else if (manualOn || agent.last_payment_ugx != null) {
+    lastPaymentOn = manualOn; lastPaymentUgx = agent.last_payment_ugx == null ? null : Number(agent.last_payment_ugx); lastPaymentSource = 'staff';
+  }
+
+  return {
+    status_key: state.key,
+    status_label: state.label,
+    plan,
+    paid_until: paidUntil,
+    period_start: periodStart,
+    period_source: periodSource,
+    days_on_period: daysOnPeriod,
+    next_due: nextDue,
+    days_left: daysLeft,
+    overdue: daysLeft !== null && daysLeft < 0,
+    days_overdue: daysLeft !== null && daysLeft < 0 ? -daysLeft : 0,
+    tone,
+    last_payment_on: lastPaymentOn,
+    last_payment_ugx: lastPaymentUgx,
+    last_payment_source: lastPaymentSource,
+    today
+  };
+}
+
+// The latest "Approve anyway" in an agent's audit history (newest first).
+function approvedAnyway(history = []) {
+  const row = history.find((entry) => entry.action === 'admin_agent_approved_anyway');
+  if (!row) return null;
+  const details = row.details || {};
+  return { at: row.created_at, by: details.by || row.actor_id || null, reason: details.reason || '', missing: details.missing || [] };
+}
+
+// Approved and live, but the national ID (NIN) was never filled in.
+function idStillNeeded(agent = {}) {
+  return String(agent.status || '').toLowerCase() === 'approved' && !agent.removed_at
+    && !String(agent.nin ?? '').trim() && agent.has_nin !== true;
+}
+
 function registerAgentManagerRoutes(router, deps) {
   const { db, writeAudit, adminActorId, cleanText, isValidEmail, normalizePhone, actorLabel, onListingsChanged } = deps;
   const actorOf = async (req) => {
@@ -54,11 +159,14 @@ function registerAgentManagerRoutes(router, deps) {
   router.get('/agent-manager/agents', async (req, res, next) => {
     try {
       const show = ['active', 'removed', 'all'].includes(String(req.query.show)) ? String(req.query.show) : 'active';
+      const only = ['id_needed', 'pending', 'overdue', 'due_soon'].includes(String(req.query.only)) ? String(req.query.only) : '';
       const search = cleanText(req.query.search || '').slice(0, 120);
       const values = [];
       const filters = [];
       if (show === 'active') filters.push('a.removed_at IS NULL');
       if (show === 'removed') filters.push('a.removed_at IS NOT NULL');
+      if (only === 'id_needed') filters.push(`a.status = 'approved' AND COALESCE(btrim(a.nin), '') = ''`);
+      if (only === 'pending') filters.push(`a.status = 'pending'`);
       if (search) {
         values.push(`%${search}%`);
         const digits = search.replace(/\D/g, '');
@@ -77,7 +185,14 @@ function registerAgentManagerRoutes(router, deps) {
                 (COALESCE(btrim(a.nin), '') <> '') AS has_nin,
                 (COALESCE(a.identity_document_url, '') <> '') AS has_id_document,
                 (COALESCE(a.licence_number, '') <> '' AND a.licence_number !~* '^(STAFF-|WA-|AUTO-|PENDING|EMPLOYEE-INTAKE-|DIRECT-)') AS has_licence,
-                a.paid_until, a.fee_exempt, a.paid_awaiting_approval_at,
+                to_char(a.paid_until, 'YYYY-MM-DD') AS paid_until, a.fee_exempt, a.paid_awaiting_approval_at,
+                a.approved_at, a.billing_plan, a.monthly_fee_ugx, a.fee_offer_mode, a.fee_offer_at,
+                to_char(a.fee_offer_until, 'YYYY-MM-DD') AS fee_offer_until,
+                to_char(a.plan_started_on, 'YYYY-MM-DD') AS plan_started_on,
+                to_char(a.last_payment_on, 'YYYY-MM-DD') AS last_payment_on, a.last_payment_ugx,
+                to_char(r.period_start, 'YYYY-MM-DD') AS ledger_period_start,
+                to_char(r.period_end, 'YYYY-MM-DD') AS ledger_period_end,
+                r.paid_at AS ledger_paid_at, r.amount_ugx AS ledger_amount_ugx,
                 COALESCE(p.total, 0)::int AS total_listings,
                 COALESCE(p.live, 0)::int AS live_listings,
                 COALESCE(p.pending, 0)::int AS pending_listings,
@@ -94,6 +209,13 @@ function registerAgentManagerRoutes(router, deps) {
                     MAX(created_at) AS last_listing_at
                FROM properties WHERE agent_id = a.id AND status <> 'deleted'
            ) p ON true
+           LEFT JOIN LATERAL (
+             SELECT period_start, period_end, paid_at, amount_ugx
+               FROM revenue_entries
+              WHERE agent_id = a.id AND kind = 'agent_subscription' AND voided_at IS NULL
+              ORDER BY paid_at DESC NULLS LAST, recorded_at DESC
+              LIMIT 1
+           ) r ON true
            ${where}
           ORDER BY a.removed_at IS NULL DESC, a.created_at DESC
           LIMIT 500`,
@@ -102,10 +224,27 @@ function registerAgentManagerRoutes(router, deps) {
       const counts = await db.query(
         `SELECT COUNT(*) FILTER (WHERE removed_at IS NULL)::int AS active,
                 COUNT(*) FILTER (WHERE removed_at IS NOT NULL)::int AS removed,
-                COUNT(*) FILTER (WHERE removed_at IS NULL AND COALESCE(btrim(nin), '') = '')::int AS missing_id
+                COUNT(*) FILTER (WHERE removed_at IS NULL AND COALESCE(btrim(nin), '') = '')::int AS missing_id,
+                COUNT(*) FILTER (WHERE removed_at IS NULL AND status = 'approved' AND COALESCE(btrim(nin), '') = '')::int AS approved_missing_id,
+                COUNT(*) FILTER (WHERE removed_at IS NULL AND status = 'pending')::int AS pending,
+                COUNT(*) FILTER (WHERE removed_at IS NULL AND paid_until IS NOT NULL AND fee_exempt IS NOT TRUE)::int AS due_date_set
            FROM agents`
       );
-      const rows = result.rows.map((row) => ({ ...row, payment: paymentState(row) }));
+      const now = new Date();
+      let rows = result.rows.map((row) => {
+        const ledger = row.ledger_paid_at || row.ledger_period_end
+          ? { period_start: row.ledger_period_start, period_end: row.ledger_period_end, paid_at: row.ledger_paid_at, amount_ugx: row.ledger_amount_ugx }
+          : null;
+        const { ledger_period_start, ledger_period_end, ledger_paid_at, ledger_amount_ugx, ...rest } = row;
+        return {
+          ...rest,
+          payment: paymentState(row),
+          tracker: paymentTracker(row, ledger, now),
+          id_still_needed: idStillNeeded(row)
+        };
+      });
+      if (only === 'overdue') rows = rows.filter((row) => row.tracker.overdue);
+      if (only === 'due_soon') rows = rows.filter((row) => row.tracker.days_left !== null && row.tracker.days_left >= 0 && row.tracker.days_left <= 7);
       return res.json({ ok: true, data: rows, counts: counts.rows[0] || {} });
     } catch (error) {
       return next(error);
@@ -123,12 +262,14 @@ function registerAgentManagerRoutes(router, deps) {
                 a.identity_document_uploaded_at, (COALESCE(a.identity_document_url, '') <> '') AS has_id_document,
                 (COALESCE(a.profile_photo_url, '') <> '') AS has_profile_photo,
                 a.verification_reason, a.privacy_consent_accepted, a.privacy_consent_at, a.approved_at,
-                a.makaug_agent_number, a.id_expiry_date, a.experience_years, a.contact_phone_verified_at,
+                a.makaug_agent_number, to_char(a.id_expiry_date, 'YYYY-MM-DD') AS id_expiry_date, a.experience_years, a.contact_phone_verified_at,
                 a.agent_application_channel, a.plan, a.verified_badge, a.greeting_name, a.billing_plan,
-                a.monthly_fee_ugx, a.paid_until, a.fee_exempt, a.fee_exempt_reason, a.removed_at, a.removed_reason,
+                a.monthly_fee_ugx, to_char(a.paid_until, 'YYYY-MM-DD') AS paid_until, a.fee_exempt, a.fee_exempt_reason, a.removed_at, a.removed_reason,
+                to_char(a.plan_started_on, 'YYYY-MM-DD') AS plan_started_on,
+                to_char(a.last_payment_on, 'YYYY-MM-DD') AS last_payment_on, a.last_payment_ugx, a.fee_offer_at,
                 a.removed_by, a.welcome_sent_at, a.billing_suspended_at, a.paid_awaiting_approval_at,
                 a.registered_by_phone, a.registered_by_name, a.pay_link_sent_at, a.fee_offer_mode,
-                a.fee_offer_reason, a.fee_offer_until, a.listing_limit, a.featured_homepage,
+                a.fee_offer_reason, to_char(a.fee_offer_until, 'YYYY-MM-DD') AS fee_offer_until, a.listing_limit, a.featured_homepage,
                 u.last_login_at AS user_last_login_at, u.email AS user_email, u.role AS user_role
            FROM agents a LEFT JOIN users u ON u.id = a.user_id
           WHERE a.id = $1`,
@@ -152,7 +293,7 @@ function registerAgentManagerRoutes(router, deps) {
         [agent.id]
       )).rows;
       const ids = listings.map((row) => row.id);
-      const [views, leads, history, duplicates] = await Promise.all([
+      const [views, leads, history, duplicates, payments] = await Promise.all([
         ids.length ? db.query(
           `SELECT payload->>'property_id' AS property_id, COUNT(*)::int AS views
              FROM analytics_events
@@ -173,7 +314,14 @@ function registerAgentManagerRoutes(router, deps) {
                   RIGHT(regexp_replace(COALESCE(a.phone, ''), '\\D', '', 'g'), 9) = $2
                OR RIGHT(regexp_replace(COALESCE(a.whatsapp, ''), '\\D', '', 'g'), 9) = $2)
             ORDER BY a.created_at`,
-          [agent.id, String(agent.phone || agent.whatsapp || '').replace(/\D/g, '').slice(-9)])
+          [agent.id, String(agent.phone || agent.whatsapp || '').replace(/\D/g, '').slice(-9)]),
+        db.query(
+          `SELECT id, amount_ugx, method, reference, paid_at, recorded_by, verified_status,
+                  to_char(period_start, 'YYYY-MM-DD') AS period_start, to_char(period_end, 'YYYY-MM-DD') AS period_end
+             FROM revenue_entries
+            WHERE agent_id = $1 AND kind = 'agent_subscription' AND voided_at IS NULL
+            ORDER BY paid_at DESC NULLS LAST, recorded_at DESC
+            LIMIT 12`, [agent.id]).catch(() => ({ rows: [] }))
       ]);
       const viewMap = new Map(views.rows.map((row) => [row.property_id, row.views]));
       const leadMap = new Map(leads.rows.map((row) => [row.property_id, row.leads]));
@@ -182,7 +330,15 @@ function registerAgentManagerRoutes(router, deps) {
       return res.json({
         ok: true,
         data: {
-          agent: { ...agent, payment: paymentState(agent), last_activity_at: lastActivity },
+          agent: {
+            ...agent,
+            payment: paymentState(agent),
+            tracker: paymentTracker(agent, payments.rows[0] || null),
+            id_still_needed: idStillNeeded(agent),
+            approved_anyway: approvedAnyway(history.rows),
+            last_activity_at: lastActivity
+          },
+          payments: payments.rows,
           listings: listings.map((row) => ({ ...row, views: viewMap.get(row.id) || 0, leads: leadMap.get(row.id) || 0 })),
           history: history.rows,
           same_phone_agents: duplicates.rows
@@ -194,7 +350,7 @@ function registerAgentManagerRoutes(router, deps) {
   });
 
   const TEXT_FIELDS = {
-    full_name: 160, company_name: 160, licence_number: 80, nin: 32, bio: 1500, fee_exempt_reason: 300, billing_plan: 40
+    full_name: 160, company_name: 160, greeting_name: 80, licence_number: 80, nin: 32, bio: 1500, fee_exempt_reason: 300, billing_plan: 40
   };
 
   function readDetails(body = {}, { creating = false } = {}) {
@@ -221,17 +377,30 @@ function registerAgentManagerRoutes(router, deps) {
       if (email && !isValidEmail(email)) errors.push('Email is not valid');
       patch.email = email || null;
     }
-    for (const key of ['id_expiry_date', 'paid_until']) {
+    const DATE_LABELS = { id_expiry_date: 'ID expiry', paid_until: 'Paid until', plan_started_on: 'Plan start', last_payment_on: 'Last payment date' };
+    for (const key of Object.keys(DATE_LABELS)) {
       if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
       const value = cleanText(body[key]);
-      if (value && !DATE_RE.test(value)) errors.push(`${key === 'paid_until' ? 'Paid until' : 'ID expiry'} must be a date`);
+      if (value && (!DATE_RE.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`)))) errors.push(`${DATE_LABELS[key]} must be a date`);
       patch[key] = value || null;
     }
-    if (Object.prototype.hasOwnProperty.call(body, 'monthly_fee_ugx')) {
-      const raw = cleanText(body.monthly_fee_ugx).replace(/[,\s]/g, '');
+    const UGX_LABELS = { monthly_fee_ugx: 'Monthly fee', last_payment_ugx: 'Last payment amount' };
+    for (const key of Object.keys(UGX_LABELS)) {
+      if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+      const raw = cleanText(body[key]).replace(/[,\s]/g, '');
       const fee = raw === '' ? null : Number(raw);
-      if (fee !== null && (!Number.isInteger(fee) || fee < 0 || fee > 100000000)) errors.push('Monthly fee must be a whole number of UGX');
-      patch.monthly_fee_ugx = fee;
+      if (fee !== null && (!Number.isInteger(fee) || fee < 0 || fee > 100000000)) errors.push(`${UGX_LABELS[key]} must be a whole number of UGX`);
+      patch[key] = fee;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'experience_years')) {
+      const raw = cleanText(body.experience_years);
+      const years = raw === '' ? null : Number(raw);
+      if (years !== null && (!Number.isInteger(years) || years < 0 || years > 80)) errors.push('Years of experience must be a whole number');
+      patch.experience_years = years;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'specializations')) {
+      patch.specializations = (Array.isArray(body.specializations) ? body.specializations : String(body.specializations || '').split(','))
+        .map((v) => cleanText(v).slice(0, 60)).filter(Boolean).slice(0, 20);
     }
     if (Object.prototype.hasOwnProperty.call(body, 'fee_exempt')) {
       patch.fee_exempt = body.fee_exempt === true || ['true', '1', 'yes', 'on'].includes(String(body.fee_exempt).toLowerCase());
@@ -248,9 +417,9 @@ function registerAgentManagerRoutes(router, deps) {
   // format (07…) are not rewritten just because the form re-normalised them.
   function sameValue(key, before, after) {
     if (key === 'phone' || key === 'whatsapp') return (before ? (normalizePhone(before) || before) : null) === (after || null);
-    if (key === 'monthly_fee_ugx') return (before == null ? null : Number(before)) === (after == null ? null : Number(after));
+    if (['monthly_fee_ugx', 'last_payment_ugx', 'experience_years'].includes(key)) return (before == null ? null : Number(before)) === (after == null ? null : Number(after));
     if (key === 'fee_exempt') return Boolean(before) === Boolean(after);
-    if (key === 'districts_covered') return JSON.stringify(before || []) === JSON.stringify(after || []);
+    if (key === 'districts_covered' || key === 'specializations') return JSON.stringify(before || []) === JSON.stringify(after || []);
     return (before ?? null) === (after ?? null);
   }
 
@@ -281,7 +450,7 @@ function registerAgentManagerRoutes(router, deps) {
       if (!before) return res.status(404).json({ ok: false, error: 'Agent not found' });
       const changed = keys.filter((key) => !sameValue(key, before[key], patch[key]));
       if (!changed.length) return res.json({ ok: true, data: { id: before.id, changed: [] } });
-      const sets = changed.map((key, i) => `${key} = $${i + 2}${key === 'districts_covered' ? '::text[]' : ''}`);
+      const sets = changed.map((key, i) => `${key} = $${i + 2}${key === 'districts_covered' || key === 'specializations' ? '::text[]' : ''}`);
       try {
         await db.query(`UPDATE agents SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1`, [req.params.id, ...changed.map((key) => patch[key])]);
       } catch (error) {
@@ -295,6 +464,8 @@ function registerAgentManagerRoutes(router, deps) {
         by: actor.label,
         changes: Object.fromEntries(changed.map((key) => [key, { from: auditValue(key, before[key]) ?? null, to: auditValue(key, patch[key]) ?? null }]))
       }, actor.id);
+      // The public agent page and listing cards read the name live; drop the cached copies.
+      if (changed.some((key) => PUBLIC_FIELDS.has(key))) onListingsChanged('agent_manager_details');
       return res.json({ ok: true, data: { id: before.id, changed } });
     } catch (error) {
       return next(error);
@@ -464,4 +635,4 @@ function registerAgentManagerRoutes(router, deps) {
   });
 }
 
-module.exports = { registerAgentManagerRoutes, paymentState, maskNin, LISTING_ACTIONS };
+module.exports = { registerAgentManagerRoutes, paymentState, paymentTracker, idStillNeeded, approvedAnyway, kampalaDay, maskNin, LISTING_ACTIONS };
