@@ -6206,6 +6206,7 @@ router.patch('/properties/:id/images/:imageId', async (req, res, next) => {
         JSON.stringify({ image_id: req.params.imageId, primary: makePrimary, replaced: hasNewImage })
       ]
     );
+    await require('../services/staffPropertyMediaService').syncListingImageSummary(client, req.params.id);
     await client.query('COMMIT');
     await writeAudit(hasNewImage ? 'admin_listing_image_replaced' : 'admin_listing_image_updated', {
       property_id: req.params.id,
