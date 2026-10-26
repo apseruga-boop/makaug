@@ -693,7 +693,7 @@ async function dashboardPayload(user) {
     db.query(
       `SELECT sl.*, p.title, p.listing_type, p.district, p.area, p.price, p.price_period,
               img.url AS primary_image_url
-       FROM saved_listings sl
+       FROM (SELECT id, user_id, property_id AS listing_id, list_name, note, status, created_at, updated_at FROM saved_properties WHERE user_id IS NOT NULL) sl
        JOIN properties p ON p.id = sl.listing_id
        LEFT JOIN LATERAL (
          SELECT url FROM property_images WHERE property_id = p.id ORDER BY is_primary DESC, sort_order ASC, created_at ASC LIMIT 1
@@ -1554,7 +1554,7 @@ router.get('/saved-listings', requireAuth, async (req, res, next) => {
     const result = await db.query(
       `SELECT sl.*, p.title, p.listing_type, p.district, p.area, p.price, p.price_period,
               img.url AS primary_image_url
-       FROM saved_listings sl
+       FROM (SELECT id, user_id, property_id AS listing_id, list_name, note, status, created_at, updated_at FROM saved_properties WHERE user_id IS NOT NULL) sl
        JOIN properties p ON p.id = sl.listing_id
        LEFT JOIN LATERAL (
          SELECT url FROM property_images WHERE property_id = p.id ORDER BY is_primary DESC, sort_order ASC, created_at ASC LIMIT 1
@@ -1574,11 +1574,11 @@ router.post('/saved-listings', requireAuth, async (req, res, next) => {
     const listingId = req.body.listing_id || req.body.listingId;
     if (!isUuid(listingId)) return res.status(400).json({ ok: false, error: 'Valid listing_id is required' });
     const result = await db.query(
-      `INSERT INTO saved_listings (user_id, listing_id, list_name, note, status)
-       VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT (user_id, listing_id)
+      `INSERT INTO saved_properties (user_id, property_id, list_name, note, status, source)
+       VALUES ($1,$2,$3,$4,$5,'seeker_dashboard')
+       ON CONFLICT (user_id, property_id)
        DO UPDATE SET list_name = EXCLUDED.list_name, note = EXCLUDED.note, status = EXCLUDED.status, updated_at = NOW()
-       RETURNING *`,
+       RETURNING id, user_id, property_id AS listing_id, list_name, note, status, created_at, updated_at`,
       [
         req.userAuth.id,
         listingId,
@@ -1598,7 +1598,7 @@ router.delete('/saved-listings/:id', requireAuth, async (req, res, next) => {
   try {
     const id = req.params.id;
     if (!isUuid(id)) return res.status(400).json({ ok: false, error: 'Invalid saved listing id' });
-    const result = await db.query('DELETE FROM saved_listings WHERE user_id = $1 AND id = $2 RETURNING id', [req.userAuth.id, id]);
+    const result = await db.query('DELETE FROM saved_properties WHERE user_id = $1 AND id = $2 RETURNING id', [req.userAuth.id, id]);
     await logActivity(req.userAuth.id, 'saved_listing_removed', { saved_listing_id: id });
     return res.json({ ok: true, data: { removed: result.rowCount > 0 } });
   } catch (error) {

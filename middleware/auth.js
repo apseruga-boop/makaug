@@ -204,6 +204,8 @@ async function requireListingModerationAccess(req, res, next) {
 module.exports = {
   hasAdminAccess,
   hasStaffOrAdminAccess,
+  isAuthenticationError,
+  loadActiveUserFromToken,
   requireAdminApiKey,
   requireAuthenticatedUser,
   requireListingModerationAccess,
