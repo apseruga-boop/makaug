@@ -20,6 +20,8 @@ const { publicSitemapAgentWhereSql, publicSitemapBasicAgentWhereSql } = require(
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
+const logger = require('../config/logger');
+const { trackWork } = require('../utils/eventLoopLagMonitor');
 
 const PUBLIC_SITE_URL = 'https://makaug.com';
 const PUBLIC_SEO_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -687,11 +689,21 @@ function publicSeoInventorySnapshotSql() {
 }
 
 async function refreshPublicSeoInventorySnapshot(db) {
-  const builder = createPublicSeoSnapshotBuilder();
-  await forEachPublicSeoSnapshotPage(db, (rows) => builder.ingest(rows));
-  const value = builder.finish();
-  snapshotCache = { cachedAt: Date.now(), value };
-  return value;
+  // Named in event_loop_stall lines while it runs (it is started by a request
+  // but outlives it, so it would otherwise show as in_flight=none).
+  const done = trackWork('seo_snapshot_refresh');
+  try {
+    const builder = createPublicSeoSnapshotBuilder();
+    await forEachPublicSeoSnapshotPage(db, (rows) => builder.ingest(rows));
+    const finishStarted = Date.now();
+    const value = builder.finish();
+    const finishMs = Date.now() - finishStarted;
+    if (finishMs >= 500) logger.warn('Public SEO snapshot finish was slow', { finish_ms: finishMs });
+    snapshotCache = { cachedAt: Date.now(), value };
+    return value;
+  } finally {
+    done();
+  }
 }
 
 async function loadPublicSeoInventorySnapshot(db, options = {}) {
