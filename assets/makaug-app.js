@@ -21428,6 +21428,12 @@ function ensureAdminFoundOnlineControls() {
     sourcePanel.className = "hidden mb-4 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-950";
     table.parentNode.insertBefore(sourcePanel, table);
   }
+  if (!document.getElementById("admin-x-source-drip-panel")) {
+    const dripPanel = document.createElement("div");
+    dripPanel.id = "admin-x-source-drip-panel";
+    dripPanel.className = "hidden mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-950";
+    table.parentNode.insertBefore(dripPanel, table);
+  }
   if (!document.getElementById("admin-harvest-summary")) {
     const harvestPanel = document.createElement("section");
     harvestPanel.id = "admin-harvest-summary";
@@ -21451,6 +21457,7 @@ function ensureAdminFoundOnlineControls() {
     && document.getElementById("admin-import-youtube-posts-btn")
     && document.getElementById("admin-sweep-youtube-posts-btn")
     && document.getElementById("admin-sweep-x-posts-btn")
+    && document.getElementById("admin-x-drip-btn")
     && document.getElementById("admin-sweep-all-social-posts-btn")
     && document.getElementById("admin-copy-social-capture-helper-btn")
     && document.getElementById("admin-import-exact-social-links-btn")
@@ -21480,6 +21487,9 @@ function ensureAdminFoundOnlineControls() {
   }
   if (!document.getElementById("admin-sweep-x-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-x-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('x')" class="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep X Posts</button>`);
+  }
+  if (!document.getElementById("admin-x-drip-btn")) {
+    missingButtons.push(`<button id="admin-x-drip-btn" type="button" onclick="adminLoadXSourceDrip()" class="border border-slate-900 text-slate-900 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">X Drip Crawler</button>`);
   }
   if (!document.getElementById("admin-sweep-all-social-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-all-social-posts-btn" type="button" onclick="adminSweepAllSocialPosts()" class="border border-gray-900 text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep All Social Sources</button>`);
