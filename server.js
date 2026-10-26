@@ -2266,7 +2266,14 @@ app.get('/a/:slug', async (req, res, next) => {
     } catch (error) {
       logger.warn('Agent short link lookup failed', { message: error.message });
     }
-    if (!agent?.id) return sendUnknownAgentDirectoryPage(req, res);
+    if (!agent?.id) {
+      // An unknown or retired short link goes to the agents directory instead
+      // of a generic 200 page; noindex keeps the dead link out of search.
+      res.set('X-Robots-Tag', 'noindex, follow');
+      res.set('Cache-Control', 'no-store');
+      res.set('X-makaug-Agent-Fallback', 'directory');
+      return res.redirect(302, '/brokers');
+    }
     const queryIndex = String(req.originalUrl || '').indexOf('?');
     const qs = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
     return res.redirect(301, `/agents/${encodeURIComponent(agent.id)}${qs}`);
