@@ -277,10 +277,11 @@ test('public Marketplace publishes the P2 marker and crawlable national links', 
   }
 });
 
-test('server arms the drip scheduler but the scheduler is environment disabled by default', () => {
+test('server no longer arms the drip scheduler, and it stays environment disabled by default', () => {
   const server = read('server.js');
   const service = read('services/marketplaceNationalDripService.js');
-  assert.match(server, /startMarketplaceDripScheduler\(db\)/);
+  // King dashboard slim-down (26 Oct 2026): the national drip timer is not armed.
+  assert.doesNotMatch(server, /startMarketplaceDripScheduler\(db\)/);
   assert.match(service, /MARKETPLACE_DRIP_SCHEDULER_ENABLED !== 'true'/);
   assert.match(service, /monthly_request_cap_reached/);
   assert.match(service, /provider_auth_or_config_error/);
