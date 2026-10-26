@@ -339,6 +339,7 @@ const centroidByKey = new Map();
   if (!centroidByKey.has(key)) centroidByKey.set(key, { lat, lng });
 });
 
+const borrowedCentroidByKey = new Map();
 const registryByKey = new Map();
 sourceLocations.forEach((entry, index) => {
   const name = String(entry.name || '').trim();
@@ -350,10 +351,12 @@ sourceLocations.forEach((entry, index) => {
   if (!isOverride && sourceAliasKeys.some((aliasKey) => sameDistrictOverrideAliases.has(aliasKey))) return;
   const key = `${normalizeLocationKey(district)}:${normalizeLocationKey(name)}`;
   if (registryByKey.has(key)) return;
+  // Borrowed centroids stay internal (pin lookups only): the public
+  // latitude/longitude of a catalogue place does not change.
   const centroid = Number.isFinite(entry.lat) && Number.isFinite(entry.lng) ? null : centroidByKey.get(key);
+  if (centroid) borrowedCentroidByKey.set(key, centroid);
   registryByKey.set(key, {
     ...entry,
-    ...(centroid || {}),
     name,
     district,
     town: canonicalTownName(district, String(entry.town || '').trim()
@@ -1182,7 +1185,7 @@ function matchAddressPart(part, districtHint, point) {
     if (point) {
       // A same-name place far from the pin is a different place.
       const near = candidates
-        .map((entry) => ({ entry, distance: haversineKm(point, entry) }))
+        .map((entry) => ({ entry, distance: pinDistanceKm(point, entry) }))
         .filter((row) => row.distance == null || row.distance <= PART_MATCH_MAX_KM)
         .sort((a, b) => (a.distance ?? PART_MATCH_MAX_KM) - (b.distance ?? PART_MATCH_MAX_KM)
           || (LOCATION_LEVEL_PRIORITY[b.entry.level] || 0) - (LOCATION_LEVEL_PRIORITY[a.entry.level] || 0));
@@ -1195,13 +1198,23 @@ function matchAddressPart(part, districtHint, point) {
   return null;
 }
 
+function entryPinPoint(entry = {}) {
+  if (Number.isFinite(entry.lat) && Number.isFinite(entry.lng)) return entry;
+  return borrowedCentroidByKey.get(entry.key) || null;
+}
+
+function pinDistanceKm(point, entry) {
+  const centre = entryPinPoint(entry);
+  return centre ? haversineKm(point, centre) : null;
+}
+
 function nearestCanonicalArea(point, districtHint = '', maxKm = NEAR_AREA_KM) {
   if (!point) return null;
   let best = null;
   const pool = districtHint ? (registryEntriesByDistrict.get(districtHint) || []) : registry;
   pool.forEach((entry) => {
     if (!POINT_LEVELS.has(entry.level)) return;
-    const distance = haversineKm(point, entry);
+    const distance = pinDistanceKm(point, entry);
     if (distance == null || distance > maxKm) return;
     if (!best || distance < best.distance) best = { entry, distance };
   });
@@ -1237,7 +1250,7 @@ function resolveCanonicalUgandaLocationFromAddress({ specific = [], broad = [], 
   if (wide) return result(wide, 'nearest_area');
   if (districtHint) {
     const entry = canonicalLocationByKey(`${normalizeLocationKey(districtHint)}:${normalizeLocationKey(districtHint)}`);
-    if (entry) return result({ entry, distance: point ? haversineKm(point, entry) : null }, 'district');
+    if (entry) return result({ entry, distance: point ? pinDistanceKm(point, entry) : null }, 'district');
   }
   return { status: 'unmatched', match: null, resolved_by: null, matched_part: null, distance_km: null, district_hint: districtHint || null };
 }
@@ -1433,6 +1446,7 @@ module.exports = {
   resolveCanonicalUgandaLocation,
   resolveCanonicalUgandaLocationFromText,
   resolveCanonicalUgandaLocationFromAddress,
+  canonicalLocationPinPoint: entryPinPoint,
   canonicalUgandaDistrictsMentionedInText,
   canonicalizeLocationRows,
   canonicalLocationOptions,

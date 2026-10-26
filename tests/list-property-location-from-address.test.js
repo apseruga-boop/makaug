@@ -123,11 +123,14 @@ test('borrowed centroids: every area centroid sits in its district and fills a c
     assert.ok(km <= centre[2], `${item.name} ${km}`);
     const entry = registry.canonicalLocationByKey(`${item.district.toLowerCase()}:${registry.normalizeLocationKey(item.name)}`);
     assert.ok(entry, `${item.district}:${item.name} is a catalogue place`);
-    assert.ok(Number.isFinite(entry.lat) && Number.isFinite(entry.lng), item.name);
+    const pin = registry.canonicalLocationPinPoint(entry);
+    assert.ok(pin && Number.isFinite(pin.lat) && Number.isFinite(pin.lng), item.name);
   }
   // Nakawa had no point before: a curated override without coordinates hid the detailed one.
   const nakawa = registry.canonicalLocationByKey('kampala:nakawa');
-  assert.ok(Number.isFinite(nakawa.lat));
+  assert.ok(Number.isFinite(registry.canonicalLocationPinPoint(nakawa).lat));
+  // Borrowed points stay internal: the public latitude of a catalogue place does not change.
+  assert.equal(nakawa.lat ?? null, null);
 });
 
 test('the page sends the address parts and the pin, caches Nominatim, and fixes a far OSM pin', () => {
