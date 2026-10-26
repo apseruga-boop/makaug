@@ -21,3 +21,12 @@ test('a sender with no agent profile gets one opened as pending, never approved,
   assert(!/'approved', 'whatsapp_forwarded_adverts'/.test(block));
   assert(/ORDER BY \(status = 'approved'\) DESC/.test(block), 'an existing profile on the number is reused first');
 });
+
+test('a logged media kind ("image") becomes a real MIME type before intake', () => {
+  const { forwardedAdvertMimeType } = require('../routes/whatsapp');
+  const url = 'https://makaug-waha-bridge.onrender.com/media?p=abc&m=aW1hZ2UvanBlZw&s=1';
+  assert.strictEqual(forwardedAdvertMimeType({ mediaType: 'image' }, url), 'image/jpeg');
+  assert.strictEqual(forwardedAdvertMimeType({ mediaType: 'video' }, 'https://x/y'), 'video/mp4');
+  assert.strictEqual(forwardedAdvertMimeType({ mediaType: 'image/png' }, url), 'image/png');
+  assert.strictEqual(forwardedAdvertMimeType({}, 'https://x/y.jpg'), 'image/jpeg');
+});
