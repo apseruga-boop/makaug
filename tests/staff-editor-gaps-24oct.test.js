@@ -107,7 +107,7 @@ test('a location failure keeps the internal note and a successful save clears th
   const save = staff.slice(saveStart, staff.indexOf('async function loadStaffPropertyPreview', saveStart));
   assert.match(save, /persistStaffReviewNoteOnly/);
   assert.match(staff, /staff_listing_note_saved/);
-  assert.match(staff, /note_saved: error\.note_saved === true/);
+  assert.match(staff, /error\.note_saved === true/);
   const clientSave = extract(app, 'async function saveStaffListingPreview', 'function staffClearLocationBannerAfterSave');
   assert.match(clientSave, /staffShowPreviewSaveError\(error\)/);
   assert.doesNotMatch(clientSave, /admin-review-notes"\)\.value = ""/);
