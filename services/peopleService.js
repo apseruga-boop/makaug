@@ -22,6 +22,24 @@ const SORTS = Object.freeze({
 });
 const DATE_FIELDS = Object.freeze({ last_activity: 'p.last_activity_at', first_seen: 'p.first_seen_at' });
 
+// Quick filters for the clean-up (Arthur, 26 Oct 2026). "Looks like test"
+// is a hint for a person to check, never an automatic delete: a test word
+// on its own (not inside a longer name such as Testimony), keyboard mashing
+// (five consonants in a row, or one letter four times), a test-looking
+// email, or a phone of one repeated digit or a straight run.
+const QUICK_FILTERS = Object.freeze(['unnamed', 'test']);
+const QUICK_SQL = Object.freeze({
+  unnamed: "NULLIF(btrim(COALESCE(p.display_name, '')), '') IS NULL",
+  test: `(
+    p.display_name ~* '\\m(test|testing|tester|demo|fake|dummy|sample|asdf|qwerty|lorem|xxx+)\\M'
+    OR p.display_name ~* '[bcdfghjklmnpqrstvwxz]{5,}'
+    OR p.display_name ~* '([a-z])\\1{3,}'
+    OR p.email ~* '(^test|test[0-9]*@|@(test|example)\\.|mailinator|@x+\\.)'
+    OR p.phone_e164 ~ '([0-9])\\1{5,}'
+    OR p.phone_e164 ~ '(0123456|1234567|2345678|3456789|9876543)'
+  )`
+});
+
 // Every 15 minutes. The poll only reads (seven index lookups); a full
 // reconcile runs only when something moved, plus once a night. Never below
 // five minutes, whatever the environment says.
@@ -229,6 +247,7 @@ function parsePeopleFilters(query = {}) {
     from: parseDate(query.from),
     to: parseDate(query.to),
     sort: oneOf(query.sort, Object.keys(SORTS)) || 'last_activity',
+    quick: oneOf(query.quick, QUICK_FILTERS),
     limit,
     page,
     offset: (page - 1) * limit
@@ -256,6 +275,7 @@ function buildPeopleWhere(filters) {
   const dateColumn = DATE_FIELDS[filters.dateField] || DATE_FIELDS.last_activity;
   if (filters.from) where.push(`${dateColumn} >= ${add(filters.from)}::date`);
   if (filters.to) where.push(`${dateColumn} < (${add(filters.to)}::date + 1)`);
+  if (filters.quick && QUICK_SQL[filters.quick]) where.push(QUICK_SQL[filters.quick]);
   return { sql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
 }
 
@@ -282,8 +302,12 @@ async function listPeople(db, query = {}) {
     db.query(`SELECT count(*)::int AS n FROM people p ${sql}`, params),
     peopleListMeta(db)
   ]);
+  const queries = await originalQueriesFor(db, rows.rows).catch((error) => {
+    logger.warn('People original query lookup failed', { message: error.message });
+    return new Map();
+  });
   return {
-    rows: rows.rows,
+    rows: rows.rows.map((row) => ({ ...row, original_query: snippetOf(queries.get(row.id)?.[0]) })),
     total: total.rows[0]?.n || 0,
     page: filters.page,
     limit: filters.limit,
@@ -309,7 +333,10 @@ async function peopleListMeta(db) {
        FROM people`
     )
   ]);
-  return { ...(runs.rows[0] || {}), counts: counts.rows[0] || {} };
+  const deleted = await db.query(
+    'SELECT count(*)::int AS n FROM people_suppressions WHERE restored_at IS NULL'
+  ).then((r) => r.rows[0]?.n || 0).catch(() => null);
+  return { ...(runs.rows[0] || {}), counts: { ...(counts.rows[0] || {}), deleted } };
 }
 
 async function latestDedupeReport(db) {
@@ -408,8 +435,14 @@ async function getPersonDetail(db, personId) {
   for (const s of saves.rows) push(s.created_at, 'save', 'Saved a property', s.title || '');
   history.sort((a, b) => new Date(b.at) - new Date(a.at));
 
+  const queries = await originalQueriesFor(db, [person]).catch((error) => {
+    logger.warn('People original query lookup failed', { message: error.message });
+    return new Map();
+  });
+
   return {
     person,
+    original_queries: queries.get(person.id) || [],
     links,
     sources: {
       users: users.rows,
@@ -422,6 +455,353 @@ async function getPersonDetail(db, personId) {
     },
     history: history.slice(0, 300)
   };
+}
+
+// ---------------------------------------------------------------------------
+// Original query: what the person first asked for, read from the rows they
+// came from (never written). Ranked most useful first:
+//   1. a listing they enquired about (lead with a listing, with its link)
+//   2. what they asked for in a lead (a property need, a viewing, mortgage…)
+//   3. their first real WhatsApp request (not a bare greeting or menu digit)
+//   4. a listing they submitted
+//   5. a saved search / alert
+//   6. other lead messages (missed-call callbacks and the like)
+//   7. their home-seeker goal
+//   8. their first WhatsApp message when it was only a greeting
+// Batched: one round of queries for a whole list page.
+
+const WA_FILLER_RE = "^\\s*(hi+|hello+|hel+o|hey+|hallo|helo|hy|hie|good\\s+(morning|afternoon|evening|day)|morning|menu|main menu|start|restart|back|ok(ay)?|k|thanks?( you)?|thank you|yes|no|y|n|sure|oli otya|gyebale ko|ki kati|[0-9]+|#|\\*)[\\s.!?,]*$";
+const WA_IGNORED_INTENTS = ['greeting', 'unknown', 'menu', 'fallback', 'small_talk', 'thanks', 'language_selection', 'language_change', 'main_menu', 'menu_option', 'apply_filters'];
+const SNIPPET_LEN = 120;
+const TEXT_LEN = 600;
+
+function cleanText(value, max = TEXT_LEN) {
+  const s = String(value ?? '').replace(/\s+/g, ' ').trim();
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+function humanize(value) {
+  return String(value || '').replace(/_/g, ' ').trim();
+}
+
+function snippetOf(item) {
+  if (!item) return null;
+  const text = item.listing?.title && !item.text ? item.listing.title : item.text;
+  return {
+    kind: item.kind,
+    label: item.label,
+    text: cleanText(text, SNIPPET_LEN),
+    at: item.at,
+    source: item.source
+  };
+}
+
+function listingOf(row) {
+  if (!row.listing_id) return null;
+  return { id: row.listing_id, title: row.listing_title || null, url: `/property/${row.listing_id}` };
+}
+
+function searchText(s) {
+  const price = s.min_price || s.max_price
+    ? `${s.currency || 'UGX'} ${[s.min_price, s.max_price].map((v) => (v ? Number(v).toLocaleString('en-GB') : '…')).join('–')}`
+    : '';
+  return [
+    s.label,
+    humanize(s.category),
+    humanize(s.property_type),
+    s.bedrooms ? `${s.bedrooms} bed` : '',
+    s.location,
+    price
+  ].filter(Boolean).join(' · ');
+}
+
+async function originalQueriesFor(db, people = []) {
+  const out = new Map();
+  const list = (people || []).filter((p) => p && p.id);
+  if (!list.length) return out;
+  const ids = list.map((p) => p.id);
+  // WhatsApp tables store the number as digits without the plus.
+  const waPhones = [...new Set(list.map((p) => String(p.phone_e164 || '').replace(/\D/g, '')).filter((d) => d.length >= 7))];
+  const userIds = [...new Set(list.map((p) => p.user_id).filter(Boolean))];
+  const phones = [...new Set(list.map((p) => p.phone_e164).filter(Boolean))];
+  const empty = { rows: [] };
+
+  const [wa, leads, searches, seekers] = await Promise.all([
+    waPhones.length ? db.query(
+      `SELECT ph AS wa_phone,
+              f.created_at AS first_at, f.body AS first_body, f.message_type AS first_type,
+              r.created_at AS real_at, r.body AS real_body,
+              i.detected_intent, i.created_at AS intent_at
+       FROM unnest($1::text[]) AS ph
+       LEFT JOIN LATERAL (
+         SELECT m.created_at, m.message_type,
+                COALESCE(NULLIF(m.payload->>'effectiveBody', ''), m.payload->>'body') AS body
+         FROM whatsapp_messages m
+         WHERE m.user_phone = ph AND m.direction = 'inbound'
+         ORDER BY m.created_at ASC LIMIT 1
+       ) f ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT x.created_at, x.body FROM (
+           SELECT m.created_at,
+                  btrim(COALESCE(NULLIF(m.payload->>'effectiveBody', ''), m.payload->>'body')) AS body
+           FROM whatsapp_messages m
+           WHERE m.user_phone = ph AND m.direction = 'inbound'
+           ORDER BY m.created_at ASC LIMIT 40
+         ) x
+         WHERE length(x.body) >= 8 AND x.body !~* $2
+         ORDER BY x.created_at ASC LIMIT 1
+       ) r ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT l.detected_intent, l.created_at
+         FROM whatsapp_intent_logs l
+         WHERE l.user_phone = ph AND l.detected_intent IS NOT NULL
+           AND NOT (l.detected_intent = ANY($3::text[]))
+         ORDER BY l.created_at ASC LIMIT 1
+       ) i ON TRUE`,
+      [waPhones, WA_FILLER_RE, WA_IGNORED_INTENTS]
+    ) : empty,
+    db.query(
+      `SELECT pl.person_id, l.id, l.created_at, l.message, l.listing_id, l.lead_type, l.source,
+              pr.title AS listing_title
+       FROM people_links pl
+       JOIN leads l ON l.id::text = pl.source_id
+       LEFT JOIN properties pr ON pr.id = l.listing_id
+       WHERE pl.source_table = 'leads' AND pl.person_id = ANY($1::uuid[])
+       ORDER BY l.created_at ASC
+       LIMIT 2000`,
+      [ids]
+    ),
+    (userIds.length || phones.length) ? db.query(
+      `SELECT s.user_id, people_normalize_phone(s.phone, $3) AS phone_e164, s.created_at, s.label, s.category,
+              s.property_type, s.bedrooms, s.location, s.min_price, s.max_price, s.currency
+       FROM saved_searches s
+       WHERE (s.user_id = ANY($1::uuid[]))
+          OR (s.user_id IS NULL AND s.phone IS NOT NULL AND people_normalize_phone(s.phone, $3) = ANY($2::text[]))
+       ORDER BY s.created_at ASC
+       LIMIT 2000`,
+      [userIds, phones, defaultCallingCode()]
+    ) : empty,
+    db.query(
+      `SELECT pl.person_id, sp.current_goal, sp.seeker_type, sp.timeline, sp.created_at
+       FROM people_links pl
+       JOIN property_seeker_profiles sp ON sp.id::text = pl.source_id
+       WHERE pl.source_table = 'property_seeker_profiles' AND pl.person_id = ANY($1::uuid[])
+       ORDER BY sp.created_at ASC`,
+      [ids]
+    )
+  ]);
+
+  const waByPhone = new Map(wa.rows.map((r) => [r.wa_phone, r]));
+  for (const person of list) {
+    const items = [];
+    const add = (rank, item) => { if (item.text || item.listing) items.push({ rank, ...item }); };
+
+    for (const l of leads.rows.filter((r) => r.person_id === person.id)) {
+      const type = String(l.lead_type || '');
+      const base = { at: l.created_at, source: 'lead', source_detail: humanize(l.source), text: cleanText(l.message) };
+      if (l.listing_id && type === 'listing_owner') {
+        add(4, { ...base, kind: 'listing_submitted', label: 'Submitted a listing', listing: listingOf(l) });
+      } else if (l.listing_id) {
+        add(1, { ...base, kind: 'listing_enquiry', label: `Enquired about a listing (${humanize(type) || 'enquiry'})`, listing: listingOf(l) });
+      } else if (['callback'].includes(type) || /missed_call/.test(String(l.source || ''))) {
+        add(6, { ...base, kind: 'lead_other', label: `Lead: ${humanize(type) || 'callback'}` });
+      } else {
+        add(2, { ...base, kind: 'lead_request', label: `Asked for: ${humanize(type) || 'enquiry'}` });
+      }
+    }
+
+    const w = waByPhone.get(String(person.phone_e164 || '').replace(/\D/g, ''));
+    if (w) {
+      const intent = w.detected_intent ? humanize(w.detected_intent) : '';
+      if (w.real_at) {
+        add(3, {
+          kind: 'whatsapp_request',
+          label: 'First WhatsApp request',
+          text: cleanText(w.real_body),
+          intent: intent || null,
+          at: w.real_at,
+          source: 'whatsapp'
+        });
+      }
+      if (w.first_at && (!w.real_at || new Date(w.first_at).getTime() !== new Date(w.real_at).getTime())) {
+        const body = cleanText(w.first_body);
+        add(w.real_at ? 9 : 8, {
+          kind: 'whatsapp_first',
+          label: w.real_at ? 'First WhatsApp message' : 'First WhatsApp message (greeting only, nothing asked yet)',
+          text: body || (w.first_type ? `[${humanize(w.first_type)}]` : ''),
+          intent: intent || null,
+          at: w.first_at,
+          source: 'whatsapp'
+        });
+      }
+    }
+
+    for (const s of searches.rows.filter((r) => (person.user_id && r.user_id === person.user_id)
+      || (!r.user_id && person.phone_e164 && r.phone_e164 === person.phone_e164))) {
+      add(5, { kind: 'saved_search', label: 'Saved a search / alert', text: searchText(s), at: s.created_at, source: 'saved_search' });
+    }
+
+    for (const sp of seekers.rows.filter((r) => r.person_id === person.id)) {
+      const text = [humanize(sp.current_goal), humanize(sp.seeker_type), sp.timeline ? `timeline: ${humanize(sp.timeline)}` : '']
+        .filter(Boolean).join(' · ');
+      add(7, { kind: 'seeker_goal', label: 'Home-seeker goal', text, at: sp.created_at, source: 'property_seeker_profile' });
+    }
+
+    items.sort((a, b) => a.rank - b.rank || new Date(a.at || 0) - new Date(b.at || 0));
+    // The earliest item of each kind; at most eight.
+    const seen = new Set();
+    const ranked = [];
+    for (const item of items) {
+      const key = item.kind === 'listing_enquiry' || item.kind === 'lead_request'
+        ? `${item.kind}:${item.listing?.id || item.text}` : item.kind;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const { rank, ...rest } = item;
+      ranked.push(rest);
+      if (ranked.length >= 8) break;
+    }
+    out.set(person.id, ranked);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Delete (super_admin) = take the person off the list and keep them off.
+// The person row and its links go (links cascade); a people_suppressions row
+// keeps their key, phone and email so the 15-minute and nightly reconcile
+// skip them (trigger, migration 189). No source row is touched: accounts,
+// leads, WhatsApp tables and seeker profiles stay exactly as they are.
+// The reconcile advisory lock is held for the write, so a reconcile running
+// at the same moment cannot put the person back.
+
+const DELETE_MAX = 200;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function cleanIds(value, max = DELETE_MAX) {
+  const list = Array.isArray(value) ? value : [value];
+  return [...new Set(list.map((v) => String(v || '').trim()).filter((v) => UUID_RE.test(v)))].slice(0, max);
+}
+
+function cleanSuppressionIds(value, max = DELETE_MAX) {
+  const list = Array.isArray(value) ? value : [value];
+  return [...new Set(list.map((v) => String(v ?? '').trim()).filter((v) => /^\d{1,18}$/.test(v)))].slice(0, max);
+}
+
+async function withReconcileLock(db, work) {
+  const client = typeof db.getClient === 'function' ? await db.getClient() : await db.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SET LOCAL lock_timeout = '20s'");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('makaug_people_reconcile'))");
+    const result = await work(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function deletePeople(db, personIds, { actorId = null, reason = 'staff_delete' } = {}) {
+  const ids = cleanIds(personIds);
+  if (!ids.length) return { requested: 0, deleted: 0, suppressed: 0 };
+  // Read the snapshot's "original query" before the links go.
+  const people = await db.query('SELECT id, phone_e164, user_id FROM people WHERE id = ANY($1::uuid[])', [ids]);
+  const queries = await originalQueriesFor(db, people.rows).catch(() => new Map());
+  const firstQuery = {};
+  for (const [id, items] of queries) firstQuery[id] = snippetOf(items[0]);
+  const actor = UUID_RE.test(String(actorId || '')) ? actorId : null;
+  const counts = await withReconcileLock(db, async (client) => {
+    const result = await client.query(
+      `WITH target AS (
+         SELECT * FROM people WHERE id = ANY($1::uuid[]) FOR UPDATE
+       ), ins AS (
+         INSERT INTO people_suppressions (person_key, key_kind, phone_e164, email, snapshot, reason, deleted_by)
+         SELECT t.person_key, t.key_kind, t.phone_e164, t.email,
+                jsonb_build_object(
+                  'person_id', t.id, 'display_name', t.display_name, 'roles', t.roles, 'sources', t.sources,
+                  'source_row_count', t.source_row_count, 'first_seen_at', t.first_seen_at,
+                  'last_activity_at', t.last_activity_at, 'saves_count', t.saves_count,
+                  'alerts_count', t.alerts_count, 'leads_count', t.leads_count,
+                  'consent_status', t.consent_status, 'user_id', t.user_id,
+                  'original_query', $2::jsonb -> t.id::text
+                ),
+                $3, $4::uuid
+         FROM target t
+         ON CONFLICT (person_key) WHERE restored_at IS NULL DO NOTHING
+         RETURNING id
+       ), del AS (
+         DELETE FROM people p USING target t WHERE p.id = t.id RETURNING p.id
+       )
+       SELECT (SELECT count(*) FROM del)::int AS deleted, (SELECT count(*) FROM ins)::int AS suppressed`,
+      [ids, JSON.stringify(firstQuery), String(reason || 'staff_delete').slice(0, 60), actor]
+    );
+    return result.rows[0] || { deleted: 0, suppressed: 0 };
+  });
+  logger.info('People deleted from list', { requested: ids.length, deleted: counts.deleted, suppressed: counts.suppressed });
+  return { requested: ids.length, deleted: counts.deleted, suppressed: counts.suppressed };
+}
+
+async function restorePeople(db, suppressionIds, { actorId = null } = {}) {
+  const ids = cleanSuppressionIds(suppressionIds);
+  if (!ids.length) return { requested: 0, restored: 0 };
+  const actor = UUID_RE.test(String(actorId || '')) ? actorId : null;
+  const restored = await withReconcileLock(db, async (client) => {
+    const result = await client.query(
+      `UPDATE people_suppressions SET restored_at = NOW(), restored_by = $2::uuid
+       WHERE id = ANY($1::bigint[]) AND restored_at IS NULL
+       RETURNING id`,
+      [ids, actor]
+    );
+    return result.rowCount || 0;
+  });
+  let back = null;
+  if (restored) {
+    // Put them back now from the untouched source rows.
+    const stats = await reconcilePeople(db, 'people_restore').catch((error) => {
+      logger.warn('People restore reconcile failed', { message: error.message });
+      return { skipped: 'error' };
+    });
+    if (stats?.skipped) schedulePeopleRefresh('people_restore');
+    back = stats?.skipped ? null : (stats?.written?.people_inserted ?? null);
+  }
+  logger.info('People restored to list', { requested: ids.length, restored, re_added: back });
+  return { requested: ids.length, restored, re_added: back };
+}
+
+async function listDeletedPeople(db, query = {}) {
+  const limit = Math.min(200, Math.max(1, Number.parseInt(query.limit, 10) || 50));
+  const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
+  const q = String(query.q || '').trim().slice(0, 120);
+  const params = [];
+  const where = ['s.restored_at IS NULL'];
+  if (q) {
+    params.push(`%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`);
+    const like = `$${params.length}`;
+    const digits = q.replace(/\D/g, '').replace(/^0+/, '');
+    const parts = [`s.snapshot->>'display_name' ILIKE ${like}`, `s.email ILIKE ${like}`];
+    if (digits.length >= 3) {
+      params.push(`%${digits.length > 9 ? digits.slice(-9) : digits}%`);
+      parts.push(`s.phone_e164 LIKE $${params.length}`);
+    }
+    where.push(`(${parts.join(' OR ')})`);
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+  const [rows, total] = await Promise.all([
+    db.query(
+      `SELECT s.id, s.key_kind, s.phone_e164, s.email, s.snapshot, s.reason, s.deleted_at, s.deleted_by,
+              NULLIF(btrim(concat_ws(' ', u.first_name, u.last_name)), '') AS deleted_by_name
+       FROM people_suppressions s LEFT JOIN users u ON u.id = s.deleted_by
+       ${whereSql}
+       ORDER BY s.deleted_at DESC, s.id DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, (page - 1) * limit]
+    ),
+    db.query(`SELECT count(*)::int AS n FROM people_suppressions s ${whereSql}`, params)
+  ]);
+  return { rows: rows.rows, total: total.rows[0]?.n || 0, page, limit };
 }
 
 function csvCell(value) {
@@ -459,22 +839,29 @@ async function peopleCsv(db, query = {}) {
 
 module.exports = {
   CONSENT,
+  DELETE_MAX,
   FINGERPRINT_PROBES,
   FINGERPRINT_SQL,
   POLL_MS,
+  QUICK_FILTERS,
+  QUICK_SQL,
   ROLES,
   SOURCES,
   bindPeopleDb,
   buildPeopleWhere,
   csvCell,
   defaultCallingCode,
+  deletePeople,
   getPersonDetail,
   latestDedupeReport,
+  listDeletedPeople,
   listPeople,
+  originalQueriesFor,
   parsePeopleFilters,
   peopleCsv,
   pollTick,
   reconcilePeople,
+  restorePeople,
   schedulePeopleRefresh,
   startPeopleScheduler,
   stopPeopleSchedulerForTests
