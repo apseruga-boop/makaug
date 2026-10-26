@@ -12,3 +12,12 @@ test('forwarded adverts in a customer chat can be grouped and imported for revie
   assert(/media: orphans\.splice\(0\)/.test(block), 'photos before the first caption go with it');
   assert(!/queueWhatsappWebBridgeAutoReply|deliverWhatsapp/.test(block));
 });
+
+test('a sender with no agent profile gets one opened as pending, never approved, when staff name them', () => {
+  const route = admin.slice(admin.indexOf("router.post('/whatsapp/conversations/:phone/import-forwarded-adverts'"));
+  const block = route.slice(0, route.indexOf("router.post('/agents/:id/restore'"));
+  assert(/create_agent/.test(block));
+  assert(/'pending', 'whatsapp_forwarded_adverts'/.test(block), 'opened profile starts pending');
+  assert(!/'approved', 'whatsapp_forwarded_adverts'/.test(block));
+  assert(/ORDER BY \(status = 'approved'\) DESC/.test(block), 'an existing profile on the number is reused first');
+});
