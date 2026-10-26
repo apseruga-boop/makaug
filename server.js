@@ -62,6 +62,7 @@ const {
 } = require('./services/publicHtmlSanitizer');
 const inlinePublicCoreStylesheets = require('./services/publicCoreStylesheets');
 const inlinePublicFontFaces = require('./services/publicFontFaces');
+const { startXSourceDripScheduler } = require('./services/xSourceDripService');
 const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDripService');
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
@@ -2736,9 +2737,7 @@ async function start() {
     throw error;
   }
   if (harvestAutomationEnabled()) {
-    // The X source drip no longer arms here (King dashboard slim-down, 26 Oct 2026):
-    // it was paused but still checked every minute. Its tables, routes and
-    // manual one-batch run stay; only the background timer is gone.
+    startXSourceDripScheduler(db);
     startYouTubeSourceDripScheduler(db);
   } else {
     logger.info('Harvest automation schedulers disabled by rollout flag');
