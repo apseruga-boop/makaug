@@ -22,7 +22,12 @@ const SORTS = Object.freeze({
 });
 const DATE_FIELDS = Object.freeze({ last_activity: 'p.last_activity_at', first_seen: 'p.first_seen_at' });
 
-const POLL_MS = Number(process.env.PEOPLE_POLL_MS || 90_000);
+// Every 15 minutes. The poll only reads (seven index lookups); a full
+// reconcile runs only when something moved, plus once a night. Never below
+// five minutes, whatever the environment says.
+const POLL_DEFAULT_MS = 15 * 60_000;
+const POLL_MIN_MS = 5 * 60_000;
+const POLL_MS = Math.max(POLL_MIN_MS, Number(process.env.PEOPLE_POLL_MS) || POLL_DEFAULT_MS);
 const DEBOUNCE_MS = Number(process.env.PEOPLE_DEBOUNCE_MS || 15_000);
 const NIGHTLY_HOUR_LONDON = 3;
 const NIGHTLY_MINUTE_LONDON = 15;
@@ -33,6 +38,7 @@ const state = {
   countryCode: 'UG',
   debounceTimer: null,
   pollTimer: null,
+  polling: false,
   running: null,
   pendingTrigger: null,
   lastFingerprint: null,
@@ -115,19 +121,25 @@ function runExclusive(trigger) {
   return state.running;
 }
 
-// A cheap fingerprint of the source tables: row counts and newest change.
+// A cheap fingerprint of the source tables: the newest change in each.
 // When it moves, something was added or updated (a sign-up, a lead, a
 // WhatsApp profile update) and the list is reconciled. This is how WhatsApp
 // profile changes are picked up without touching the WhatsApp code.
+// Each probe is max() over an expression that has its own index (migration
+// 188), so it is one index lookup, never a table scan. Deletions are not
+// seen here; the nightly full reconcile picks them up.
+const FINGERPRINT_PROBES = Object.freeze([
+  ['users', 'GREATEST(created_at, updated_at, last_login_at)'],
+  ['contacts', 'GREATEST(created_at, updated_at)'],
+  ['leads', 'GREATEST(created_at, updated_at, last_contacted_at)'],
+  ['whatsapp_user_profiles', 'GREATEST(created_at, updated_at, last_seen_at)'],
+  ['property_seeker_profiles', 'GREATEST(created_at, updated_at)'],
+  ['saved_searches', 'GREATEST(created_at, updated_at)'],
+  ['saved_properties', 'created_at']
+]);
 const FINGERPRINT_SQL = `
   SELECT concat_ws('|',
-    (SELECT count(*) || ':' || COALESCE(max(GREATEST(created_at, updated_at, last_login_at))::text, '') FROM users),
-    (SELECT count(*) || ':' || COALESCE(max(GREATEST(created_at, updated_at))::text, '') FROM contacts),
-    (SELECT count(*) || ':' || COALESCE(max(GREATEST(created_at, updated_at, last_contacted_at))::text, '') FROM leads),
-    (SELECT count(*) || ':' || COALESCE(max(GREATEST(created_at, updated_at, last_seen_at))::text, '') FROM whatsapp_user_profiles),
-    (SELECT count(*) || ':' || COALESCE(max(GREATEST(created_at, updated_at))::text, '') FROM property_seeker_profiles),
-    (SELECT count(*) || ':' || COALESCE(max(GREATEST(created_at, updated_at))::text, '') FROM saved_searches),
-    (SELECT count(*)::text FROM saved_properties)
+    ${FINGERPRINT_PROBES.map(([table, expr]) => `(SELECT COALESCE(max(${expr})::text, '') FROM ${table})`).join(',\n    ')}
   ) AS fingerprint`;
 
 async function sourceFingerprint(db = state.db) {
@@ -138,7 +150,16 @@ async function sourceFingerprint(db = state.db) {
 }
 
 async function pollTick(now = new Date()) {
-  if (!state.db) return null;
+  if (!state.db || state.polling) return null;
+  state.polling = true;
+  try {
+    return await pollTickInner(now);
+  } finally {
+    state.polling = false;
+  }
+}
+
+async function pollTickInner(now) {
   const london = londonParts(now);
   const nightlyDue = london.dateKey !== state.lastNightlyDate
     && (london.hour > NIGHTLY_HOUR_LONDON || (london.hour === NIGHTLY_HOUR_LONDON && london.minute >= NIGHTLY_MINUTE_LONDON));
@@ -174,7 +195,7 @@ function stopPeopleSchedulerForTests() {
   if (state.pollTimer) clearInterval(state.pollTimer);
   if (state.debounceTimer) clearTimeout(state.debounceTimer);
   Object.assign(state, {
-    db: null, debounceTimer: null, pollTimer: null, running: null, pendingTrigger: null,
+    db: null, debounceTimer: null, pollTimer: null, polling: false, running: null, pendingTrigger: null,
     lastFingerprint: null, lastNightlyDate: null
   });
 }
@@ -438,6 +459,9 @@ async function peopleCsv(db, query = {}) {
 
 module.exports = {
   CONSENT,
+  FINGERPRINT_PROBES,
+  FINGERPRINT_SQL,
+  POLL_MS,
   ROLES,
   SOURCES,
   bindPeopleDb,

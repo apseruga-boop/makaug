@@ -118,3 +118,35 @@ test('people UI marks personal data and keeps CSV export to super_admin', () => 
   assert.match(html, /data-people-root="staff"/);
   assert.match(html, /data-admin-tab-panel="accounts"[^>]*>\s*<div data-people-root="admin"/);
 });
+
+test('the change poll runs every 15 minutes and never faster than 5', () => {
+  assert.equal(people.POLL_MS, 15 * 60_000);
+  const source = read('services/peopleService.js');
+  assert.match(source, /Math\.max\(POLL_MIN_MS/);
+  assert.match(source, /POLL_MIN_MS = 5 \* 60_000/);
+  assert.match(source, /03:15|NIGHTLY/);
+});
+
+test('the change poll is index lookups only: no counts, every probe has a matching index', () => {
+  assert.doesNotMatch(people.FINGERPRINT_SQL, /count\s*\(/i);
+  const migration = read('db/migrations/188_people_master_contact_list.sql');
+  for (const [table, expr] of people.FINGERPRINT_PROBES) {
+    assert.match(people.FINGERPRINT_SQL, new RegExp(`max\\(${expr.replace(/[()]/g, '\\$&')}\\)`));
+    const indexed = expr === 'created_at'
+      ? new RegExp(`ON ${table} \\(created_at DESC\\)`)
+      : new RegExp(`ON ${table} \\(\\(${expr.replace(/[()]/g, '\\$&')}\\)\\)`);
+    assert.match(migration, indexed, `${table} probe needs an index`);
+  }
+});
+
+test('migration 188 records the in-person consents without writing users', () => {
+  const migration = read('db/migrations/188_people_master_contact_list.sql');
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS people_consent_records/);
+  assert.match(migration, /source IN \('in_person'\)/);
+  assert.match(migration, /marketing_opt_in[\s\S]{0,200}created_at < cutoff/);
+  assert.match(migration, /ON CONFLICT \(user_id, channel, purpose, source\) DO NOTHING/);
+  assert.doesNotMatch(migration, /UPDATE\s+users\b/i);
+  const rollback = read('scripts/rollback-188-people-master-contact-list.sql');
+  assert.doesNotMatch(rollback, /DROP TABLE IF EXISTS people_consent_records/);
+  assert.doesNotMatch(rollback, /DROP INDEX IF EXISTS idx_saved_properties_created/);
+});

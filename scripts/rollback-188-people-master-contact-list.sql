@@ -14,6 +14,9 @@
 --      missing id is reported, it was not caused by 188).
 --   2. Drop people_links, people, people_reconcile_runs and the functions.
 --   3. Stamp the manifest rows restored_at. The backup table is kept.
+--   4. Drop the poll's change-probe indexes. idx_saved_properties_created is
+--      kept: migration 185 creates the same index.
+-- people_consent_records is kept: it is the record of who agreed in person.
 -- The schema_migrations row is left, like every other rollback, so the
 -- migration is not re-run on the next deploy.
 
@@ -60,3 +63,9 @@ DROP FUNCTION IF EXISTS people_normalize_email(TEXT);
 DROP FUNCTION IF EXISTS people_normalize_phone(TEXT, TEXT);
 DROP FUNCTION IF EXISTS people_try_bool(TEXT);
 DROP FUNCTION IF EXISTS people_try_ts(TEXT);
+DROP INDEX IF EXISTS idx_users_people_change;
+DROP INDEX IF EXISTS idx_contacts_people_change;
+DROP INDEX IF EXISTS idx_leads_people_change;
+DROP INDEX IF EXISTS idx_whatsapp_user_profiles_people_change;
+DROP INDEX IF EXISTS idx_property_seeker_profiles_people_change;
+DROP INDEX IF EXISTS idx_saved_searches_people_change;

@@ -31,6 +31,20 @@
 -- picked up without a code change. A users.marketing_opt_in flag with no
 -- date and no source is shown as 'unverified_flag', never as consent.
 --
+-- In-person consent (Arthur, 26 Oct 2026 07:42 UK): the users who had the
+-- marketing opt-in flag before 26 Oct 2026 06:45 UTC agreed in person (20 on
+-- that day: 10 buyer_renter, 7 agent_broker, 2 field_agent, 1 admin).
+-- people_consent_records holds one row each: source 'in_person', dated with
+-- the account creation time, the best date on record (no consent date was
+-- stored for any of them; a seeker-profile flag only carries the profile's
+-- last edit time). The same users and date as migration 186 on the
+-- device-saves branch, so the two agree whichever runs first. No users row
+-- is written and nobody is sent anything. A later opt-out still wins.
+--
+-- Change probes: one small index per source table on the same expression
+-- the 15-minute poll reads, so each probe is one index lookup (max), not a
+-- table scan. idx_saved_properties_created matches migration 185 exactly.
+--
 -- Rollback: scripts/rollback-188-people-master-contact-list.sql (manual).
 
 SET LOCAL lock_timeout = '8s';
@@ -96,6 +110,32 @@ CREATE TABLE IF NOT EXISTS people_reconcile_runs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_people_reconcile_runs_finished ON people_reconcile_runs (finished_at DESC);
+
+-- Consent agreed outside the site (in person). Read by people_reconcile();
+-- kept by the rollback, because it is the record of what people agreed to.
+CREATE TABLE IF NOT EXISTS people_consent_records (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID NOT NULL,
+  channel TEXT NOT NULL DEFAULT 'whatsapp' CHECK (channel IN ('whatsapp')),
+  purpose TEXT NOT NULL DEFAULT 'marketing' CHECK (purpose IN ('marketing')),
+  granted BOOLEAN NOT NULL DEFAULT TRUE,
+  source TEXT NOT NULL CHECK (source IN ('in_person')),
+  consented_at TIMESTAMPTZ NOT NULL,
+  date_basis TEXT NOT NULL,
+  note TEXT,
+  recorded_by UUID,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, channel, purpose, source)
+);
+
+-- Change probes for the 15-minute poll (services/peopleService.js).
+CREATE INDEX IF NOT EXISTS idx_users_people_change ON users ((GREATEST(created_at, updated_at, last_login_at)));
+CREATE INDEX IF NOT EXISTS idx_contacts_people_change ON contacts ((GREATEST(created_at, updated_at)));
+CREATE INDEX IF NOT EXISTS idx_leads_people_change ON leads ((GREATEST(created_at, updated_at, last_contacted_at)));
+CREATE INDEX IF NOT EXISTS idx_whatsapp_user_profiles_people_change ON whatsapp_user_profiles ((GREATEST(created_at, updated_at, last_seen_at)));
+CREATE INDEX IF NOT EXISTS idx_property_seeker_profiles_people_change ON property_seeker_profiles ((GREATEST(created_at, updated_at)));
+CREATE INDEX IF NOT EXISTS idx_saved_searches_people_change ON saved_searches ((GREATEST(created_at, updated_at)));
+CREATE INDEX IF NOT EXISTS idx_saved_properties_created ON saved_properties (created_at DESC);
 
 CREATE OR REPLACE FUNCTION people_try_ts(value TEXT)
 RETURNS TIMESTAMPTZ
@@ -255,18 +295,31 @@ BEGIN
          u.created_at,
          GREATEST(u.created_at, u.updated_at, u.last_login_at),
          CASE
-           WHEN c.out_at IS NOT NULL AND (c.in_at IS NULL OR c.out_at >= c.in_at) THEN 'opt_out'
+           WHEN c.out_at IS NOT NULL AND (COALESCE(ip.at, c.in_at) IS NULL OR c.out_at >= COALESCE(ip.at, c.in_at)) THEN 'opt_out'
+           WHEN c.granted AND ip.at IS NOT NULL THEN 'opt_in'
            WHEN c.granted AND (c.in_at IS NOT NULL OR c.in_src IS NOT NULL) THEN 'opt_in'
            WHEN c.granted THEN 'flag_only'
            ELSE NULL
          END,
          CASE
-           WHEN c.out_at IS NOT NULL AND (c.in_at IS NULL OR c.out_at >= c.in_at) THEN c.out_at
+           WHEN c.out_at IS NOT NULL AND (COALESCE(ip.at, c.in_at) IS NULL OR c.out_at >= COALESCE(ip.at, c.in_at)) THEN c.out_at
+           WHEN c.granted AND ip.at IS NOT NULL THEN ip.at
            ELSE c.in_at
          END,
-         COALESCE(c.in_src, CASE WHEN c.granted THEN 'users.marketing_opt_in' END)
+         CASE
+           WHEN c.out_at IS NOT NULL AND (COALESCE(ip.at, c.in_at) IS NULL OR c.out_at >= COALESCE(ip.at, c.in_at)) THEN COALESCE(c.in_src, 'users.marketing_opt_in')
+           WHEN c.granted AND ip.at IS NOT NULL THEN 'in_person'
+           ELSE COALESCE(c.in_src, CASE WHEN c.granted THEN 'users.marketing_opt_in' END)
+         END
   FROM users u
   CROSS JOIN LATERAL (SELECT to_jsonb(u) AS j) jj
+  -- A recorded in-person consent counts while the account still says yes
+  -- and has no later withdrawal.
+  LEFT JOIN LATERAL (
+    SELECT min(r.consented_at) AS at
+    FROM people_consent_records r
+    WHERE r.user_id = u.id AND r.granted AND r.purpose = 'marketing' AND r.source = 'in_person'
+  ) ip ON TRUE
   CROSS JOIN LATERAL (
     SELECT
       COALESCE(people_try_bool(jj.j->>'marketing_consent'),
@@ -481,10 +534,24 @@ BEGIN
     FROM keyed WHERE email IS NOT NULL
     ORDER BY person_key, name_rank, last_activity_at DESC NULLS LAST, source_table, source_id
   ),
-  explicit_consent AS (
+  latest_consent AS (
     SELECT DISTINCT ON (person_key) person_key, consent_kind, consent_at, consent_source
     FROM keyed WHERE consent_kind IN ('opt_in', 'opt_out')
     ORDER BY person_key, consent_at DESC NULLS LAST, (consent_kind = 'opt_out') DESC, source_table, source_id
+  ),
+  -- When the latest word is yes and the person agreed in person, the
+  -- in-person record is what the consent rests on: show its source and date.
+  in_person_consent AS (
+    SELECT DISTINCT ON (person_key) person_key, consent_at, consent_source
+    FROM keyed WHERE consent_kind = 'opt_in' AND consent_source = 'in_person'
+    ORDER BY person_key, consent_at ASC NULLS LAST, source_table, source_id
+  ),
+  explicit_consent AS (
+    SELECT l.person_key, l.consent_kind,
+           CASE WHEN l.consent_kind = 'opt_in' AND ip.person_key IS NOT NULL THEN ip.consent_at ELSE l.consent_at END AS consent_at,
+           CASE WHEN l.consent_kind = 'opt_in' AND ip.person_key IS NOT NULL THEN ip.consent_source ELSE l.consent_source END AS consent_source
+    FROM latest_consent l
+    LEFT JOIN in_person_consent ip ON ip.person_key = l.person_key
   ),
   assigned AS (
     SELECT DISTINCT ON (person_key) person_key, assigned_staff_user_id
@@ -704,6 +771,8 @@ CREATE TABLE IF NOT EXISTS data_change_188_backup (
 DO $migration_188$
 DECLARE
   stats JSONB;
+  n_in_person INTEGER := 0;
+  cutoff CONSTANT TIMESTAMPTZ := '2026-10-26 06:45:00+00';
 BEGIN
   IF current_setting('app.country_code', true) IS DISTINCT FROM 'UG' THEN
     RAISE NOTICE 'migration_188 backfill skipped: app.country_code is not UG (tables and functions are created)';
@@ -724,6 +793,18 @@ BEGIN
     SELECT 'property_seeker_profiles', jsonb_build_object('rows', count(*), 'id_md5', md5(COALESCE(string_agg(id::text, ',' ORDER BY id), ''))) FROM property_seeker_profiles
   ) t
   ON CONFLICT (row_kind, row_key) DO NOTHING;
+
+  -- In-person consent for the users who had the opt-in flag before Arthur's
+  -- decision (26 Oct 2026 06:45 UTC). users is only read.
+  INSERT INTO people_consent_records (user_id, channel, purpose, granted, source, consented_at, date_basis, note)
+  SELECT u.id, 'whatsapp', 'marketing', TRUE, 'in_person', u.created_at, 'users.created_at',
+         'Agreed in person before 26 Oct 2026; no consent date was stored, so the account creation time is used.'
+  FROM users u
+  WHERE u.marketing_opt_in = TRUE
+    AND u.created_at < cutoff
+  ON CONFLICT (user_id, channel, purpose, source) DO NOTHING;
+  GET DIAGNOSTICS n_in_person = ROW_COUNT;
+  RAISE NOTICE 'migration_188: % in-person consents recorded', n_in_person;
 
   stats := people_reconcile('migration_188', '256');
   RAISE NOTICE 'migration_188 people backfill: people=%, merged_duplicates=%, consent=%, test_rows_excluded=%, rows_without_phone_or_email=%',
