@@ -47952,7 +47952,15 @@ function chooseTypeahead(value, item = null) {
 
 function renderTypeahead(inputEl, pool, onPick, options = {}) {
   const query = inputEl.value || "";
-  const matches = (options.preRanked ? pool : rankSuggestions(pool, query)).slice(0, 8);
+  // 26 Oct 2026: Charles, listing a house on his phone, typed into "Find
+  // address or place" and could not scroll the page. The suggestion panel is
+  // position:fixed with its own scrollbar; on a phone it sat over the lower
+  // half of the screen, so every swipe scrolled the eight suggestions instead
+  // of the page, and the panel only ever closed on a page scroll. Fewer
+  // suggestions on a phone, so the panel never needs its own scrollbar, and
+  // a touch anywhere outside it closes it (see the touchstart listener).
+  const limit = window.innerWidth < 640 ? 5 : 8;
+  const matches = (options.preRanked ? pool : rankSuggestions(pool, query)).slice(0, limit);
   if (!matches.length) {
     closeTypeahead();
     return;
@@ -67125,6 +67133,13 @@ function initializeMakaugApp({ yieldBetweenStages = false } = {}) {
 
       window.addEventListener("resize", closeHeroSuggestions);
       window.addEventListener("scroll", closeHeroSuggestions, true);
+      document.addEventListener("touchstart", (e) => {
+        const panel = document.getElementById("rm-sugg-panel");
+        if (!panel || !panel.classList.contains("open")) return;
+        const activeInput = typeaheadState.input;
+        if (e.target.closest("#rm-sugg-panel") || (activeInput && e.target === activeInput)) return;
+        closeHeroSuggestions();
+      }, { passive: true });
     }
   ];
   let nextStage = 0;
