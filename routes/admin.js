@@ -10002,7 +10002,7 @@ router.post('/agents/:id/merge-into', async (req, res, next) => {
     if (target.removed_at) { await client.query('ROLLBACK'); return res.status(409).json({ ok: false, error: 'The target agent was removed' }); }
     const moved = (await client.query(
       `UPDATE properties
-          SET agent_id = $2,
+          SET agent_id = $2::uuid,
               lister_name = COALESCE(NULLIF($3, ''), lister_name),
               extra_fields = CASE
                 WHEN COALESCE(extra_fields, '{}'::jsonb) ? 'broker_agent_id'
@@ -10010,7 +10010,7 @@ router.post('/agents/:id/merge-into', async (req, res, next) => {
                 ELSE extra_fields END
                 || jsonb_build_object('merged_from_agent_id', $1::text),
               updated_at = NOW()
-        WHERE agent_id = $1 OR COALESCE(extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text
+        WHERE agent_id = $1::uuid OR COALESCE(extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text
         RETURNING id, status`,
       [sourceId, targetId, cleanText(target.full_name)]
     )).rows;
