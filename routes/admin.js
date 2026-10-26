@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const { requireAdminApiKey } = require('../middleware/auth');
-const { registerAgentManagerRoutes } = require('./adminAgentManager');
+const { registerAgentManagerRoutes, HAS_ID_DOCUMENT_SQL: AGENT_HAS_ID_DOCUMENT_SQL } = require('./adminAgentManager');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { listingReferenceQuery, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
@@ -9461,8 +9461,9 @@ router.post('/agents/:id/public-profile-approval', async (req, res, next) => {
     }
 
     const existing = await db.query(
-      `SELECT id, full_name, company_name, phone, whatsapp, identity_document_url, verification_reason, status
-       FROM agents
+      `SELECT id, full_name, company_name, phone, whatsapp, identity_document_url, verification_reason, status,
+              ${AGENT_HAS_ID_DOCUMENT_SQL} AS has_id_document
+       FROM agents a
        WHERE id = $1
        LIMIT 1`,
       [req.params.id]
@@ -9471,7 +9472,7 @@ router.post('/agents/:id/public-profile-approval', async (req, res, next) => {
     if (!agent) {
       return res.status(404).json({ ok: false, error: 'Agent not found' });
     }
-    if (!String(agent.identity_document_url || '').trim()) {
+    if (!agent.has_id_document && !String(agent.identity_document_url || '').trim()) {
       return res.status(409).json({ ok: false, error: 'A private identity document must be stored before the public profile can be approved' });
     }
     if (!normalizeCountryPhone(agent.phone || agent.whatsapp)) {
@@ -10760,9 +10761,9 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       if (reason.length < 3) return res.status(400).json({ ok: false, error: 'Say why you are approving before the details are complete.' });
       const current = (await db.query(
         `SELECT status, removed_at, COALESCE(btrim(nin), '') <> '' AS has_nin,
-                COALESCE(identity_document_url, '') <> '' AS has_id_document,
+                ${AGENT_HAS_ID_DOCUMENT_SQL} AS has_id_document,
                 COALESCE(phone, whatsapp, '') <> '' AS has_phone
-           FROM agents WHERE id = $1`, [req.params.id])).rows[0];
+           FROM agents a WHERE id = $1`, [req.params.id])).rows[0];
       if (!current) return res.status(404).json({ ok: false, error: 'Agent not found' });
       const missing = [];
       if (!current.has_nin) missing.push('nin');

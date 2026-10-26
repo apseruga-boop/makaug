@@ -44,7 +44,9 @@ test('agent manager routes sit behind the admin key guard', () => {
     'POST /agent-manager/agents', 'POST /agent-manager/listings/:propertyId/state', 'POST /agent-manager/listings/:propertyId/move']) {
     assert.ok(routes.includes(r), `${r} registered`);
   }
-  assert.ok(!routes.some((r) => r.startsWith('DELETE')), 'no hard-delete routes');
+  // The only hard delete is an archived (replaced) ID file, super_admin only
+  // (tests/admin-agent-id-documents-1026.test.js). Agents and listings never.
+  assert.deepEqual(routes.filter((r) => r.startsWith('DELETE')), ['DELETE /agent-manager/id-files/:fileId'], 'no other hard-delete routes');
 });
 
 test('helpers: NIN is masked in audit, payment state is read correctly', () => {
