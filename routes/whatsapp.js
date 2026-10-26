@@ -20150,6 +20150,24 @@ module.exports.startEmployeeMediaRetrySweeper = startEmployeeMediaRetrySweeper;
  * that arrive before the first caption belong to it), and returns the groups.
  * Importing them is the admin's call (see routes/admin.js).
  */
+// The logged message type is a kind ("image", "video"), not a MIME type. The
+// bridge URL carries the real MIME as a base64 `m` param; fall back to the kind.
+function forwardedAdvertMimeType(payload = {}, mediaUrl = '') {
+  const direct = normalizeInput(payload.mediaType || payload.media_type || (payload.metadata && payload.metadata.mime) || '').toLowerCase();
+  if (direct.includes('/')) return direct.split(';')[0].trim();
+  try {
+    const m = new URL(mediaUrl).searchParams.get('m');
+    if (m) {
+      const decoded = Buffer.from(m.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8').toLowerCase();
+      if (/^[a-z]+\/[a-z0-9.+-]+$/.test(decoded)) return decoded;
+    }
+  } catch (_) { /* not a URL */ }
+  if (direct === 'video') return 'video/mp4';
+  if (/\.(mp4|mov)(\?|$)/i.test(mediaUrl)) return 'video/mp4';
+  if (/\.png(\?|$)/i.test(mediaUrl)) return 'image/png';
+  return 'image/jpeg';
+}
+
 async function groupForwardedAdverts(phone, { since = null, until = null } = {}) {
   const rows = (await db.query(
     `SELECT id, wa_message_id, created_at, message_type, payload
@@ -20168,7 +20186,7 @@ async function groupForwardedAdverts(phone, { since = null, until = null } = {})
     const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
     const body = normalizeInput(payload.body || payload.effectiveBody || '');
     const mediaUrl = normalizeInput(payload.mediaUrl || payload.media_url || '');
-    const mediaType = normalizeInput(payload.mediaType || payload.media_type || (payload.metadata && payload.metadata.mime) || '');
+    const mediaType = forwardedAdvertMimeType(payload, mediaUrl);
     const isMedia = /^https:\/\//i.test(mediaUrl);
     if (body && !isMedia) {
       const facts = employeePropertyFacts(body, {});
@@ -20204,6 +20222,7 @@ async function importForwardedAdvert({ phone, agent, group, inboundMessageId }) 
 }
 
 module.exports.groupForwardedAdverts = groupForwardedAdverts;
+module.exports.forwardedAdvertMimeType = forwardedAdvertMimeType;
 module.exports.importForwardedAdvert = importForwardedAdvert;
 
 module.exports.__test = {
