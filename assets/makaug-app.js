@@ -17544,7 +17544,7 @@ async function staffPeopleExportCsv(scope) {
 // every listing, and to correct details (ID/NIN included), take listings down,
 // mark them sold/let, move them, or remove/restore the agent. Nothing here
 // hard-deletes and the server logs every change with who made it.
-const ADMIN_AGENT_MANAGER_STATE = { rows: [], counts: {}, show: "active", search: "", missingOnly: false, loading: false, loadedAt: 0, openId: null, detail: null };
+const ADMIN_AGENT_MANAGER_STATE = { rows: [], counts: {}, show: "active", search: "", missingOnly: false, only: "", sort: "joined", loading: false, loadedAt: 0, openId: null, detail: null };
 
 function adminAgentManagerRoot() {
   return document.getElementById("admin-agent-manager");
@@ -17573,6 +17573,51 @@ function adminAgentManagerIdChip(agent = {}) {
     : adminAgentManagerChip("ID missing", "bg-red-50 text-red-700 border border-red-200");
 }
 
+// Approved and live, but the ID (NIN) was never filled in — clears once it is saved.
+function adminAgentManagerIdNeededBadge(agent = {}) {
+  return agent.id_still_needed ? adminAgentManagerChip("Approved – ID still needed", "bg-red-600 text-white") : "";
+}
+
+function adminAgentManagerCanApprove(agent = {}) {
+  return String(agent.status || "") === "pending" && !agent.removed_at;
+}
+
+function adminAgentManagerMissingList(agent = {}) {
+  const missing = [];
+  if (!(agent.has_nin || String(agent.nin || "").trim())) missing.push("ID number (NIN)");
+  if (!agent.has_id_document) missing.push("ID photo");
+  if (!(agent.phone || agent.whatsapp)) missing.push("phone");
+  return missing;
+}
+
+function adminAgentManagerApproveButton(agent = {}, size = "sm") {
+  if (!adminAgentManagerCanApprove(agent)) return "";
+  const cls = size === "lg" ? "px-4 py-2 text-sm" : "px-3 py-1.5 text-xs";
+  return `<button type="button" data-agent-approve-anyway="${adminAttr(agent.id)}" class="rounded-lg bg-amber-500 hover:bg-amber-600 text-gray-950 font-black whitespace-nowrap ${cls}" onclick="event.stopPropagation(); adminAgentManagerApproveAnyway('${adminAttr(agent.id)}')">Approve anyway</button>`;
+}
+
+function adminAgentManagerDay(value) {
+  if (!value) return "— not set";
+  const d = new Date(`${String(value).slice(0, 10)}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? "— not set" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+function adminAgentManagerDaysLeft(t = {}, agent = {}) {
+  if (agent.fee_exempt) return `<span class="text-blue-800 font-semibold">No fee</span>`;
+  if (t.days_left === null || t.days_left === undefined) return `<span class="text-gray-400">— not set</span>`;
+  const n = Number(t.days_left);
+  if (n < 0) return `<span class="inline-flex rounded-full bg-red-600 text-white px-2 py-0.5 text-[11px] font-black whitespace-nowrap" data-days-tone="red">${-n} day${n === -1 ? "" : "s"} overdue</span>`;
+  const text = n === 0 ? "Due today" : `${n} day${n === 1 ? "" : "s"} left`;
+  if (n <= 7) return `<span class="inline-flex rounded-full bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 text-[11px] font-black whitespace-nowrap" data-days-tone="amber">${text}</span>`;
+  return `<span class="text-gray-800 font-semibold whitespace-nowrap" data-days-tone="ok">${text}</span>`;
+}
+
+function adminAgentManagerSortRows(rows, sort) {
+  if (sort !== "due") return rows;
+  const key = (a) => (a.fee_exempt || !a.tracker?.next_due ? "9999-12-31" : a.tracker.next_due);
+  return rows.slice().sort((x, y) => key(x).localeCompare(key(y)) || String(x.full_name || "").localeCompare(String(y.full_name || "")));
+}
+
 function adminAgentManagerLicencePlaceholder(value) {
   return /^(STAFF-|WA-|AUTO-|PENDING|EMPLOYEE-INTAKE-|DIRECT-)/i.test(String(value || ""));
 }
@@ -17592,7 +17637,7 @@ function adminAgentManagerShellHtml() {
       </div>
     </div>
     <div class="flex flex-wrap gap-2 mb-3 text-xs" data-agent-manager-counts></div>
-    <form class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3" onsubmit="adminAgentManagerApplyFilters(event)" onchange="adminAgentManagerApplyFilters(event)">
+    <form class="grid grid-cols-2 md:grid-cols-6 gap-2 mb-3" onsubmit="adminAgentManagerApplyFilters(event)" onchange="adminAgentManagerApplyFilters(event)">
       <label class="col-span-2 text-xs font-semibold text-gray-700">Search
         <input name="search" type="search" value="${adminAttr(s.search)}" placeholder="Name, phone, email or agent number" autocomplete="off" class="${input}">
       </label>
@@ -17601,6 +17646,21 @@ function adminAgentManagerShellHtml() {
           <option value="active"${s.show === "active" ? " selected" : ""}>Current agents</option>
           <option value="removed"${s.show === "removed" ? " selected" : ""}>Removed agents</option>
           <option value="all"${s.show === "all" ? " selected" : ""}>Everyone</option>
+        </select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Only
+        <select name="only" class="${input}" data-agent-manager-only>
+          <option value=""${!s.only ? " selected" : ""}>Everyone shown</option>
+          <option value="id_needed"${s.only === "id_needed" ? " selected" : ""}>Approved – ID still needed</option>
+          <option value="pending"${s.only === "pending" ? " selected" : ""}>Pending approval</option>
+          <option value="overdue"${s.only === "overdue" ? " selected" : ""}>Payment overdue</option>
+          <option value="due_soon"${s.only === "due_soon" ? " selected" : ""}>Payment due within 7 days</option>
+        </select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Sort by
+        <select name="sort" class="${input}" data-agent-manager-sort>
+          <option value="joined"${s.sort !== "due" ? " selected" : ""}>Newest joined</option>
+          <option value="due"${s.sort === "due" ? " selected" : ""}>Next payment due (soonest first)</option>
         </select>
       </label>
       <label class="text-xs font-semibold text-gray-700 flex items-end gap-2 pb-2">
@@ -17641,6 +17701,7 @@ async function adminAgentManagerLoad(options = {}) {
   if (options.force || !s.rows.length) list.innerHTML = `<p class="text-gray-500">Loading agents…</p>`;
   const params = new URLSearchParams({ show: s.show });
   if (s.search) params.set("search", s.search);
+  if (s.only) params.set("only", s.only);
   try {
     const seq = (s.requestSeq = (s.requestSeq || 0) + 1);
     const res = await apiRequest(`/api/admin/agent-manager/agents?${params.toString()}`, { headers: adminAuthHeaders() });
@@ -17666,10 +17727,28 @@ function adminAgentManagerApplyFilters(event) {
   const search = String(data.get("search") || "").trim();
   const show = String(data.get("show") || "active");
   const missingOnly = data.get("missing") === "on";
-  const refetch = search !== s.search || show !== s.show;
-  Object.assign(s, { search, show, missingOnly });
+  const only = String(data.get("only") || "");
+  const sort = String(data.get("sort") || "joined");
+  const refetch = search !== s.search || show !== s.show || only !== s.only;
+  Object.assign(s, { search, show, missingOnly, only, sort });
   if (refetch) adminAgentManagerLoad();
   else adminAgentManagerRenderList();
+}
+
+function adminAgentManagerShowOnly(only) {
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  s.only = only || "";
+  const select = adminAgentManagerRoot()?.querySelector("[data-agent-manager-only]");
+  if (select) select.value = s.only;
+  adminAgentManagerLoad({ force: true });
+}
+
+function adminAgentManagerSortBy(sort) {
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  s.sort = sort === "due" ? "due" : "joined";
+  const select = adminAgentManagerRoot()?.querySelector("[data-agent-manager-sort]");
+  if (select) select.value = s.sort;
+  adminAgentManagerRenderList();
 }
 
 function adminAgentManagerRenderList() {
@@ -17678,12 +17757,16 @@ function adminAgentManagerRenderList() {
   const s = ADMIN_AGENT_MANAGER_STATE;
   const c = s.counts || {};
   const chip = (label, value, cls) => `<span class="rounded-xl px-3 py-1.5 font-bold ${cls}">${adminEscape(label)} <span class="font-black">${Number(value || 0).toLocaleString("en-GB")}</span></span>`;
+  const idNeeded = Number(c.approved_missing_id || 0);
   root.querySelector("[data-agent-manager-counts]").innerHTML = [
+    idNeeded ? `<button type="button" data-agent-manager-id-needed class="rounded-xl px-3 py-1.5 font-black bg-red-600 text-white hover:bg-red-700" onclick="adminAgentManagerShowOnly('id_needed')">${idNeeded.toLocaleString("en-GB")} approved agent${idNeeded === 1 ? "" : "s"} still missing ID</button>` : "",
     chip("Current agents", c.active, "bg-gray-900 text-white"),
+    c.pending ? `<button type="button" class="rounded-xl px-3 py-1.5 font-bold bg-amber-100 text-amber-900" onclick="adminAgentManagerShowOnly('pending')">Pending approval <span class="font-black">${Number(c.pending).toLocaleString("en-GB")}</span></button>` : "",
     chip("Missing ID", c.missing_id, "bg-red-100 text-red-800"),
+    chip("Payment due date set", c.due_date_set, "bg-emerald-50 text-emerald-800"),
     chip("Removed", c.removed, "bg-gray-100 text-gray-700")
-  ].join("");
-  const rows = s.missingOnly ? s.rows.filter((a) => !a.has_nin && !a.removed_at) : s.rows;
+  ].filter(Boolean).join("");
+  const rows = adminAgentManagerSortRows(s.missingOnly ? s.rows.filter((a) => !a.has_nin && !a.removed_at) : s.rows, s.sort);
   root.querySelector("[data-agent-manager-summary]").textContent = `${rows.length} agent${rows.length === 1 ? "" : "s"}${s.search ? ` matching “${s.search}”` : ""}`;
   const list = root.querySelector("[data-agent-manager-list]");
   if (!rows.length) {
@@ -17695,7 +17778,7 @@ function adminAgentManagerRenderList() {
     <div class="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
       <table class="w-full text-left text-sm" data-agent-manager-table>
         <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
-          <tr><th class="px-3 py-2">Agent</th><th class="px-3 py-2">Phone</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">ID</th><th class="px-3 py-2">Payment</th><th class="px-3 py-2">Listings</th><th class="px-3 py-2">Joined</th><th class="px-3 py-2"></th></tr>
+          <tr><th class="px-3 py-2">Agent</th><th class="px-3 py-2">Phone</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">ID</th><th class="px-3 py-2">Payment</th><th class="px-3 py-2">Live listings</th><th class="px-3 py-2"><button type="button" class="uppercase tracking-wide font-bold ${s.sort === "due" ? "text-gray-900 underline" : ""}" onclick="event.stopPropagation(); adminAgentManagerSortBy('${s.sort === "due" ? "joined" : "due"}')" data-agent-manager-sort-due>Next payment due${s.sort === "due" ? " ↑" : ""}</button></th><th class="px-3 py-2">Days left</th><th class="px-3 py-2">Joined</th><th class="px-3 py-2"></th></tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           ${rows.map((a) => `
@@ -17705,10 +17788,12 @@ function adminAgentManagerRenderList() {
                 <p class="text-xs text-gray-500">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · ${adminEscape(a.makaug_agent_number)}` : ""}</p>
               </td>
               <td class="px-3 py-2 text-xs font-mono whitespace-nowrap" data-pii="phone">${adminEscape(a.phone || a.whatsapp || "—")}</td>
-              <td class="px-3 py-2">${adminAgentManagerStatusChip(a)}</td>
+              <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerStatusChip(a)}${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerApproveButton(a)}</div></td>
               <td class="px-3 py-2">${adminAgentManagerIdChip(a)}</td>
-              <td class="px-3 py-2">${adminAgentManagerPaymentChip(a.payment)}</td>
-              <td class="px-3 py-2 text-xs whitespace-nowrap"><strong>${Number(a.live_listings || 0)}</strong> live / ${Number(a.total_listings || 0)}</td>
+              <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerPaymentChip(a.payment)}<span class="text-[11px] text-gray-500">${adminEscape(a.tracker?.plan || "")}</span></div></td>
+              <td class="px-3 py-2 text-xs whitespace-nowrap" data-live-listings><strong>${Number(a.live_listings || 0)}</strong> / ${Number(a.total_listings || 0)}</td>
+              <td class="px-3 py-2 text-xs whitespace-nowrap" data-next-due>${a.fee_exempt ? `<span class="text-gray-400">—</span>` : adminEscape(adminAgentManagerDay(a.tracker?.next_due))}</td>
+              <td class="px-3 py-2 text-xs" data-days-left>${adminAgentManagerDaysLeft(a.tracker || {}, a)}</td>
               <td class="px-3 py-2 text-xs whitespace-nowrap">${staffPeopleDate(a.created_at)}</td>
               <td class="px-3 py-2"><button type="button" class="rounded-lg bg-gray-900 text-white px-3 py-1.5 text-xs font-bold" onclick="event.stopPropagation(); ${open(a)}">Manage</button></td>
             </tr>`).join("")}
@@ -17725,9 +17810,10 @@ function adminAgentManagerRenderList() {
             </div>
             ${adminAgentManagerStatusChip(a)}
           </div>
-          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
-          <p class="text-[11px] text-gray-500 mt-2">${Number(a.live_listings || 0)} live of ${Number(a.total_listings || 0)} listings · joined ${staffPeopleDate(a.created_at)}</p>
-        </button>`).join("")}
+          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
+          <p class="text-[11px] text-gray-500 mt-2">${Number(a.live_listings || 0)} live of ${Number(a.total_listings || 0)} listings · next payment ${a.fee_exempt ? "none (free)" : adminEscape(adminAgentManagerDay(a.tracker?.next_due))} · joined ${staffPeopleDate(a.created_at)}</p>
+          <div class="mt-2">${adminAgentManagerDaysLeft(a.tracker || {}, a)}</div>
+        </button>${adminAgentManagerCanApprove(a) ? `<div class="-mt-1 flex justify-end">${adminAgentManagerApproveButton(a)}</div>` : ""}`).join("")}
     </div>`;
 }
 
@@ -17817,12 +17903,15 @@ function adminAgentManagerDetailHtml(d = {}) {
     admin_agent_listing_mark_let: "Listing marked let",
     admin_agent_listing_put_back: "Listing put back",
     admin_agent_listing_moved: "Listing moved to another agent",
-    admin_agent_listing_received: "Listing moved to this agent"
+    admin_agent_listing_received: "Listing moved to this agent",
+    admin_agent_approved_anyway: "Approved anyway (details still missing)",
+    admin_agent_status_updated: "Status changed",
+    admin_agent_fee_override: "Fee offer set"
   }[h.action] || String(h.action || "").replace(/^admin_/, "").replace(/_/g, " "));
   const historyDetail = (h) => {
     const det = h.details || {};
     if (det.changes) return Object.entries(det.changes).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v.from ?? "—"} → ${v.to ?? "—"}`).join("; ");
-    return [det.reason, det.status_from && det.status_to ? `${det.status_from} → ${det.status_to}` : "", det.payment_status ? `payment ${det.payment_status}` : ""].filter(Boolean).join(" · ");
+    return [det.reason, det.status_from && det.status_to ? `${det.status_from} → ${det.status_to}` : "", det.status && !det.status_to ? `now ${det.status}` : "", Array.isArray(det.missing) && det.missing.length ? `missing: ${det.missing.join(", ").replace(/_/g, " ")}` : "", det.payment_status ? `payment ${det.payment_status}` : ""].filter(Boolean).join(" · ");
   };
   return `
     <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3 flex items-center justify-between gap-3">
@@ -17833,22 +17922,38 @@ function adminAgentManagerDetailHtml(d = {}) {
       <div>
         <h4 class="text-xl font-black text-gray-900" data-pii>${adminEscape(a.full_name || "Unnamed")}</h4>
         <p class="text-sm text-gray-600">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · Agent No ${adminEscape(a.makaug_agent_number)}` : " · no agent number yet"}</p>
-        <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdChip(a)}${a.agent_application_channel === "staff_added" ? adminAgentManagerChip("Added by staff", "bg-purple-100 text-purple-800") : ""}</div>
+        <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerIdChip(a)}${a.agent_application_channel === "staff_added" ? adminAgentManagerChip("Added by staff", "bg-purple-100 text-purple-800") : ""}</div>
       </div>
+      ${a.id_still_needed ? `<div class="rounded-xl border-2 border-red-600 bg-red-50 p-3 text-sm text-red-900" data-agent-id-needed-banner>
+        <p class="font-black text-red-800">Approved – ID still needed</p>
+        <p class="mt-1">This agent is live but their ID number (NIN) is not on file.${a.approved_anyway ? ` Approved anyway by ${adminEscape(a.approved_anyway.by || "staff")} on ${date(a.approved_anyway.at, true)}: “${adminEscape(a.approved_anyway.reason || "")}”.` : ""} Type the NIN in <strong>ID number (NIN)</strong> below and press <strong>Save changes</strong>; this reminder goes away by itself.</p>
+      </div>` : ""}
+      ${adminAgentManagerCanApprove(a) ? `<div class="rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-sm text-amber-950" data-agent-approve-panel>
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div class="min-w-0">
+            <p class="font-black">Pending approval</p>
+            <p class="mt-1">${adminAgentManagerMissingList(a).length ? `Still missing: <strong>${adminEscape(adminAgentManagerMissingList(a).join(", "))}</strong>. ` : ""}Until they are approved, WhatsApp messages from this number go to the buyer assistant, not the agent assistant.</p>
+          </div>
+          ${adminAgentManagerApproveButton(a, "lg")}
+        </div>
+      </div>` : ""}
       ${a.removed_at ? `<div class="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-800">Removed ${date(a.removed_at, true)}${a.removed_reason ? ` — “${adminEscape(a.removed_reason)}”` : ""}. Their profile and listings are off the site. <button type="button" data-agent-restore class="ml-2 rounded-lg bg-green-700 text-white px-3 py-1.5 text-xs font-bold" onclick="adminAgentManagerRestore('${id}')">Restore agent</button></div>` : ""}
       ${dupes.length ? `<div class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><strong>Same phone number on another agent record:</strong> ${dupes.map((x) => `<button type="button" class="underline font-bold" onclick="adminAgentManagerOpen('${adminAttr(x.id)}')">${adminEscape(x.full_name)}</button> (joined ${date(x.created_at)}, ${Number(x.total_listings || 0)} listings${x.removed_at ? ", removed" : ""})`).join(", ")}. If it is the same person, move the listings to one record and remove the other.</div>` : ""}
       <form class="rounded-xl border border-gray-200 p-3" onsubmit="adminAgentManagerSaveDetails(event, '${id}')" data-agent-details-form>
         <h5 class="font-black text-gray-900 mb-2">Details</h5>
         <div class="grid grid-cols-2 gap-2">
-          ${field("full_name", "Full name", a.full_name, { wide: true })}
+          ${field("full_name", "Display name (shown on the site and listings)", a.full_name, { wide: true })}
+          ${field("company_name", "Company name (shown on the site)", a.company_name, { wide: true })}
+          ${field("greeting_name", "Greeting name (how WhatsApp says hello)", a.greeting_name)}
+          ${field("experience_years", "Years of experience", a.experience_years, { type: "number" })}
           ${field("nin", "ID number (NIN)", a.nin, { missing: ninMissing, placeholder: "e.g. CM90012345ABCD" })}
           ${field("id_expiry_date", "ID expiry", dayValue(a.id_expiry_date), { type: "date" })}
           ${field("phone", "Phone", a.phone)}
           ${field("whatsapp", "WhatsApp", a.whatsapp)}
           ${field("email", "Email", a.email, { type: "email" })}
-          ${field("company_name", "Company", a.company_name)}
           ${field("licence_number", "Licence number", adminAgentManagerLicencePlaceholder(a.licence_number) ? "" : a.licence_number, { placeholder: adminAgentManagerLicencePlaceholder(a.licence_number) ? "None yet (system code " + a.licence_number + ")" : "" })}
           ${field("districts_covered", "Districts (comma separated)", (a.districts_covered || []).join(", "))}
+          ${field("specializations", "Specialities (comma separated)", (a.specializations || []).join(", "), { wide: true })}
           <label class="col-span-2 text-xs font-semibold text-gray-700">Bio<textarea name="bio" rows="2" class="${input}">${adminEscape(a.bio || "")}</textarea></label>
         </div>
         <div class="mt-3 flex justify-end"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Save changes</button></div>
@@ -17856,10 +17961,14 @@ function adminAgentManagerDetailHtml(d = {}) {
       <form class="rounded-xl border border-gray-200 p-3" onsubmit="adminAgentManagerSaveDetails(event, '${id}')" data-agent-payment-form>
         <h5 class="font-black text-gray-900 mb-1">Plan &amp; payment</h5>
         <p class="text-xs text-gray-500 mb-2">Now: ${adminAgentManagerPaymentChip(a.payment)}${a.billing_suspended_at ? ` · billing suspended ${date(a.billing_suspended_at)}` : ""}${a.fee_offer_mode ? ` · offer: ${adminEscape(a.fee_offer_mode)}${a.fee_offer_until ? ` until ${date(a.fee_offer_until)}` : ""}` : ""}</p>
+        ${adminAgentManagerTrackerHtml(a, Array.isArray(d.payments) ? d.payments : [])}
         <div class="grid grid-cols-2 gap-2">
-          ${field("paid_until", "Paid until", dayValue(a.paid_until), { type: "date" })}
+          ${field("paid_until", "Paid until (last paid day)", dayValue(a.paid_until), { type: "date" })}
+          ${field("plan_started_on", "Plan start (current period)", dayValue(a.plan_started_on), { type: "date" })}
+          ${field("last_payment_on", "Last payment date", dayValue(a.last_payment_on), { type: "date" })}
+          ${field("last_payment_ugx", "Last payment amount (UGX)", a.last_payment_ugx)}
           ${field("monthly_fee_ugx", "Monthly fee (UGX)", a.monthly_fee_ugx)}
-          ${field("billing_plan", "Plan", a.billing_plan || a.plan)}
+          ${field("billing_plan", "Billing plan (e.g. agent_monthly)", a.billing_plan || "", { placeholder: a.plan ? `sign-up tier: ${a.plan}` : "not set" })}
           <label class="text-xs font-semibold text-gray-700 flex items-end gap-2 pb-2"><input type="checkbox" name="fee_exempt" ${a.fee_exempt ? "checked" : ""} class="h-4 w-4"> Free (staff override)</label>
           ${field("fee_exempt_reason", "Reason for free", a.fee_exempt_reason, { wide: true })}
         </div>
@@ -17908,6 +18017,73 @@ function adminAgentManagerDetailHtml(d = {}) {
         </div>
       </section>`}
     </div>`;
+}
+
+function adminAgentManagerTrackerHtml(a = {}, payments = []) {
+  const t = a.tracker || {};
+  const ugx = (n) => (n === null || n === undefined || n === "" ? "" : `UGX ${Number(n).toLocaleString("en-GB")}`);
+  const source = { staff: "typed by staff", ledger: "payment ledger", free_trial: "free trial start" };
+  const box = (label, value, extra = "") => `<div class="rounded-lg bg-white border border-gray-200 p-2 ${extra}"><p class="text-[10px] uppercase tracking-wide text-gray-400">${adminEscape(label)}</p><p class="text-sm font-bold text-gray-900">${value}</p></div>`;
+  const toneCls = t.tone === "red" ? "border-red-500 bg-red-50" : t.tone === "amber" ? "border-amber-400 bg-amber-50" : "";
+  const last = t.last_payment_on || t.last_payment_ugx !== null && t.last_payment_ugx !== undefined
+    ? `${adminEscape(adminAgentManagerDay(t.last_payment_on))}${t.last_payment_ugx !== null && t.last_payment_ugx !== undefined ? ` · ${adminEscape(ugx(t.last_payment_ugx))}` : ""}<span class="block text-[10px] font-normal text-gray-500">${adminEscape(source[t.last_payment_source] || "")}</span>`
+    : `<span class="text-gray-400">— not set</span>`;
+  return `
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3 rounded-xl bg-gray-50 p-2" data-agent-payment-tracker>
+      ${box("Plan", adminEscape(t.plan || "Not set"))}
+      ${box("Status", adminEscape(t.status_label || a.payment?.label || ""))}
+      ${box("Days on current period", t.days_on_period ? `${t.days_on_period} day${t.days_on_period === 1 ? "" : "s"}<span class="block text-[10px] font-normal text-gray-500">since ${adminEscape(adminAgentManagerDay(t.period_start))} (${adminEscape(source[t.period_source] || "")})</span>` : `<span class="text-gray-400">— not set</span>`)}
+      ${box("Next payment due", a.fee_exempt ? "No fee (free)" : adminEscape(adminAgentManagerDay(t.next_due)), toneCls)}
+      ${box(t.overdue ? "Days overdue" : "Days left", adminAgentManagerDaysLeft(t, a), toneCls)}
+      ${box("Last payment", last)}
+    </div>
+    ${payments.length ? `<details class="mb-3 text-xs"><summary class="cursor-pointer font-semibold text-gray-700">Payments recorded (${payments.length})</summary><ul class="mt-1 space-y-1">${payments.map((p) => `<li>${adminEscape(adminAgentManagerDay(p.paid_at ? String(p.paid_at).slice(0, 10) : ""))} · ${adminEscape(ugx(p.amount_ugx))} · ${adminEscape(p.method || "")} ${adminEscape(p.reference || "")} · covers ${adminEscape(adminAgentManagerDay(p.period_start))} – ${adminEscape(adminAgentManagerDay(p.period_end))}</li>`).join("")}</ul></details>` : ""}`;
+}
+
+function adminAgentManagerApproveAnyway(agentId) {
+  const fromDetail = ADMIN_AGENT_MANAGER_STATE.detail?.agent?.id === agentId ? ADMIN_AGENT_MANAGER_STATE.detail.agent : null;
+  const agent = fromDetail || (ADMIN_AGENT_MANAGER_STATE.rows || []).find((a) => a.id === agentId) || { id: agentId };
+  document.querySelector("[data-agent-approve-dialog]")?.remove();
+  const missing = adminAgentManagerMissingList(agent);
+  const wrap = document.createElement("div");
+  wrap.setAttribute("data-agent-approve-dialog", agentId);
+  wrap.className = "fixed inset-0 z-[10070] bg-black/50 flex items-center justify-center p-4";
+  wrap.innerHTML = `
+    <form class="w-full max-w-lg rounded-2xl bg-white shadow-2xl p-5 space-y-3" onsubmit="adminAgentManagerConfirmApproveAnyway(event, '${adminAttr(agentId)}')">
+      <h4 class="text-lg font-black text-gray-900">Approve ${adminEscape(agent.full_name || "this agent")} anyway?</h4>
+      <p class="text-sm text-gray-700">${missing.length ? `Still missing: <strong>${adminEscape(missing.join(", "))}</strong>.` : "Their approval is waiting on a check."} Approving does exactly what a normal approval does:</p>
+      <ul class="text-xs text-gray-700 list-disc pl-5 space-y-0.5">
+        <li>their profile becomes approved, and WhatsApp messages from their number go to the agent assistant (so they can post listings);</li>
+        <li>the welcome pack and the how-to-post film are sent to them on WhatsApp (once);</li>
+        <li>their makaug login is set up, and the usual fee rule applies (new agents start on the free trial).</li>
+      </ul>
+      <p class="text-xs text-red-800 font-semibold">They will show as “Approved – ID still needed” until the ID number is saved.</p>
+      <label class="block text-xs font-semibold text-gray-700">Why are you approving now? (required)
+        <textarea name="reason" rows="2" required minlength="3" data-approve-reason class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. Met in person, ID to follow this week"></textarea>
+      </label>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold" onclick="this.closest('[data-agent-approve-dialog]').remove()">Cancel</button>
+        <button type="submit" data-approve-confirm class="rounded-lg bg-amber-500 hover:bg-amber-600 text-gray-950 px-4 py-2 text-sm font-black">Yes, approve anyway</button>
+      </div>
+    </form>`;
+  wrap.addEventListener("click", (event) => { if (event.target === wrap) wrap.remove(); });
+  document.body.appendChild(wrap);
+  wrap.querySelector("textarea")?.focus();
+}
+
+async function adminAgentManagerConfirmApproveAnyway(event, agentId) {
+  event?.preventDefault?.();
+  const dialog = document.querySelector("[data-agent-approve-dialog]");
+  const reason = String(dialog?.querySelector("[data-approve-reason]")?.value || "").trim();
+  if (reason.length < 3) { toast("Say why you are approving now."); return; }
+  const button = dialog?.querySelector("[data-approve-confirm]");
+  if (button) { button.disabled = true; button.textContent = "Approving…"; }
+  // The normal approval (same endpoint, same welcome pack and fee rules) plus the reason.
+  const ok = await adminSetAgentStatus(agentId, "approved", null, null, { approval_override: { reason } });
+  dialog?.remove();
+  if (ok) {
+    await adminAgentManagerRefreshOpen();
+  }
 }
 
 async function adminAgentManagerRefreshOpen(message) {
@@ -34010,13 +34186,13 @@ async function adminRunFeaturedRotation() {
   }
 }
 
-async function adminSetAgentStatus(agentId, status, payment = null, feeOverride = null) {
+async function adminSetAgentStatus(agentId, status, payment = null, feeOverride = null, extraBody = null) {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or set ADMIN_API_KEY first to moderate broker status.");
-    return;
+    return false;
   }
   try {
-    const body = { status };
+    const body = { ...(extraBody && typeof extraBody === "object" ? extraBody : {}), status };
     if (payment) body.payment = payment;
     if (feeOverride) body.fee_override = feeOverride;
     let response;
@@ -34030,7 +34206,7 @@ async function adminSetAgentStatus(agentId, status, payment = null, feeOverride 
       // Approving a new agent needs their first month recorded first.
       if (status === "approved" && /payment_required|Did they pay/i.test(String(e?.message || ""))) {
         adminOpenAgentPayment(agentId, "approve");
-        return;
+        return false;
       }
       throw e;
     }
@@ -34052,8 +34228,10 @@ async function adminSetAgentStatus(agentId, status, payment = null, feeOverride 
     const emailStatus = provisioning?.email_status ? ` Email: ${provisioning.email_status}.` : "";
     const accessNote = provisioning?.temporary_password_issued ? " Temporary password issued." : "";
     if (status !== "approved") toast(`Broker updated: ${status}.${accessNote}${emailStatus}`);
+    return true;
   } catch (e) {
     toast(`Broker update failed: ${e.message || "error"}`);
+    return false;
   }
 }
 
