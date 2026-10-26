@@ -1,6 +1,46 @@
 const db = require('../config/database');
 const { normalizeUgPhoneForWhatsApp } = require('./whatsappNotificationService');
 const crypto = require('crypto');
+const logger = require('../config/logger');
+
+// The WhatsApp sender (scripts/whatsapp-web-copilot.js) only claims outbox rows
+// whose metadata.source is on its allow-list. In production that list is
+// WHATSAPP_WEB_COPILOT_OUTBOX_ALLOWED_SOURCES=whatsapp_runtime,whatsapp_missed_call
+// (render.yaml). Anything queued under another source is stored, reported as
+// "queued", and never sent: an agent_booking reply queued on 23 Oct 2026 sat
+// there with 0 attempts. Chat replies therefore go out under the chat-reply
+// source and keep where they came from in metadata.reply_origin.
+const DEFAULT_BRIDGE_CLAIMED_SOURCES = ['whatsapp_runtime', 'whatsapp_missed_call'];
+
+function parseSourceList(value) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter((item, index, items) => item && /^[a-z0-9_:-]{1,80}$/.test(item) && items.indexOf(item) === index);
+}
+
+/** Sources the sender drains. Mirrors the sender's own allow-list. */
+function bridgeClaimedSources() {
+  const configured = parseSourceList(
+    process.env.WHATSAPP_WEB_BRIDGE_CLAIMED_SOURCES || process.env.WHATSAPP_WEB_COPILOT_OUTBOX_ALLOWED_SOURCES
+  );
+  return configured.length ? configured : DEFAULT_BRIDGE_CLAIMED_SOURCES.slice();
+}
+
+function isBridgeClaimedSource(source) {
+  return bridgeClaimedSources().includes(String(source || 'system').trim().toLowerCase());
+}
+
+/** The source chat replies are queued under (same default as routes/admin.js). */
+function bridgeChatReplySource() {
+  return String(process.env.WHATSAPP_REPLY_BRIDGE_SOURCE || 'whatsapp_runtime').trim().toLowerCase()
+    || 'whatsapp_runtime';
+}
+
+function maskRecipient(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits ? `***${digits.slice(-4)}` : '';
+}
 
 function isTruthy(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
@@ -205,6 +245,18 @@ async function queueWhatsappWebBridgeMessage({
     metadata: meta
   })).trim();
   meta.reply_dedupe_window_seconds = getReplyDedupeWindowSeconds();
+  if (!isBridgeClaimedSource(meta.source)) {
+    // Loud on purpose: this message will sit in the outbox until someone
+    // either adds the source to the sender's allow-list or re-queues it.
+    meta.bridge_source_unclaimed = true;
+    logger.warn('[whatsapp-bridge] message queued under a source the sender does not claim; it will not be sent', {
+      alert: 'whatsapp_bridge_source_unclaimed',
+      source: meta.source,
+      claimed_sources: bridgeClaimedSources(),
+      reply_origin: meta.reply_origin || null,
+      recipient: maskRecipient(userPhone)
+    });
+  }
 
   const existing = await db.query(
     `SELECT *
@@ -406,6 +458,10 @@ async function getWhatsappWebBridgeStatus() {
 }
 
 module.exports = {
+  DEFAULT_BRIDGE_CLAIMED_SOURCES,
+  bridgeChatReplySource,
+  bridgeClaimedSources,
+  isBridgeClaimedSource,
   getWhatsappDeliveryMode,
   getWhatsappWebBridgeStatus,
   getWhatsappWebBridgeToken,

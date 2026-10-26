@@ -16,7 +16,8 @@ const { bookingSay, replyWindow, siteLang } = require('./bookingMessageText');
 const { sendSupportEmail, getSupportEmail } = require('./emailService');
 const {
   isWhatsappWebBridgeEnabled,
-  queueWhatsappWebBridgeMessage
+  queueWhatsappWebBridgeMessage,
+  bridgeChatReplySource
 } = require('./whatsappWebBridgeService');
 const {
   eachNight,
@@ -314,8 +315,10 @@ async function deliverStayNotice({ phone, email, text, reference, event, role },
     await queue({
       recipient: normalisePhone(phone) || phone,
       text,
-      source: 'short_stay_request',
-      metadata: { stay_reference: reference, event, role }
+      // Queued as a chat reply so the sender actually delivers it; the
+      // origin is kept in metadata.reply_origin.
+      source: bridgeChatReplySource(),
+      metadata: { stay_reference: reference, event, role, reply_origin: 'short_stay_request' }
     });
     out.whatsapp_queued = true;
   } else if (plan.staff_wa_link) {
