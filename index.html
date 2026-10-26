@@ -3860,7 +3860,7 @@
           <option value="GBP">£ (GBP)</option>
           <option value="EUR">€ (EUR)</option>
         </select>
-        <a id="top-saved-link" href="/saved" onclick="handleSavedClick(event)" class="cursor-pointer hover:text-green-200 hidden sm:block"><i class="fas fa-heart text-green-300"></i> Saved</a>
+        <a id="top-saved-link" href="/saved" onclick="handleSavedClick(event)" class="cursor-pointer hover:text-green-200 hidden sm:inline-flex items-center gap-1"><i class="fas fa-heart text-green-300"></i> <span id="top-saved-label">Saved</span> <span id="top-saved-count" class="hidden rounded-full bg-white/20 px-1.5 text-[11px] font-black">0</span></a>
         <a id="top-dashboard-link" onclick="openSignedInDashboard()" class="cursor-pointer hover:text-green-200 hidden"></a>
         <a id="top-signin-link" href="/login" onclick="openAuthSignIn('finder', event)" class="cursor-pointer hover:text-green-200"><i class="fas fa-user text-green-300"></i> Sign In</a>
         <a id="top-signout-link" onclick="signOut()" class="cursor-pointer hover:text-green-200 hidden"></a>
@@ -3901,6 +3901,7 @@
       <div class="flex items-center gap-2">
         <button type="button" data-harvest-public-submission onclick="openHarvestSubmissionModal()" class="hidden xl:block border border-green-700 text-green-800 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-50">Paste listing link</button>
         <a id="nav-list-btn" data-testid="list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event)" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">List Property</a>
+        <a id="nav-saved-btn" href="/saved" onclick="handleSavedClick(event)" class="relative inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-700 hover:bg-green-50 hover:text-green-700" aria-label="Saved properties" data-testid="nav-saved-link"><i class="far fa-heart text-lg text-green-700"></i><span class="hidden sm:inline">Saved</span><span id="nav-saved-count" class="hidden absolute -top-0.5 -right-0.5 min-w-[1.15rem] h-[1.15rem] rounded-full bg-red-500 px-1 text-[10px] font-black leading-[1.15rem] text-white text-center">0</span></a>
         <button id="mob-toggle" class="xl:hidden text-gray-700 p-2" onclick="toggleMobile()"><i class="fas fa-bars text-xl"></i></button>
       </div>
     </div>
@@ -3919,6 +3920,7 @@
       <a id="mnav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">AI Chatbot</a>
       <a id="mnav-marketplace" href="/marketplace" onclick="showPage('marketplace');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-rose-50">Marketplace</a>
       <a id="mnav-about" href="/about" onclick="showPage('about');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">About Us</a>
+      <a id="mnav-saved" href="/saved" onclick="closeMobile();handleSavedClick(event)" class="px-3 py-2 rounded-lg hover:bg-green-50"><i class="far fa-heart text-green-700 mr-1"></i>Saved properties</a>
       <button type="button" data-harvest-public-submission onclick="closeMobile();openHarvestSubmissionModal()" class="px-3 py-2 rounded-lg border border-green-700 text-green-800 font-semibold text-left">Paste TikTok / FB link</button>
       <a id="mnav-advertise" data-testid="mobile-list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event);closeMobile()" class="px-3 py-2 rounded-lg bg-green-700 text-white font-semibold">List Property</a>
     </div>
@@ -7064,7 +7066,7 @@
             </label>
             <label class="flex items-start gap-3 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-gray-700">
               <input id="account-marketing-opt-in" type="checkbox" class="mt-1 accent-green-700">
-              <span><strong id="account-alerts-title" class="block text-gray-900">Account activity alerts</strong><span id="account-alerts-copy">Receive updates about enquiries, saves, listing progress, and new matching properties.</span></span>
+              <span><strong id="account-alerts-title" class="block text-gray-900">WhatsApp property alerts and offers</strong><span id="account-alerts-copy">Send me new property alerts and offers on WhatsApp. Reply STOP anytime.</span></span>
             </label>
             <div>
               <label id="account-contact-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Preferred Contact</label>
@@ -10178,10 +10180,12 @@
     <div class="bg-green-800 py-8 text-white">
       <div class="max-w-7xl mx-auto px-4">
         <h1 class="text-3xl font-black serif">Saved Properties</h1>
+        <p id="saved-page-sub" class="text-green-100 text-sm mt-1">Homes you saved and the searches you asked us to watch.</p>
       </div>
     </div>
     <div class="max-w-7xl mx-auto px-4 py-8">
       <div id="saved-content" class="bg-white border border-gray-200 rounded-2xl p-6"></div>
+      <div id="saved-searches-content" class="mt-6 bg-white border border-gray-200 rounded-2xl p-6"></div>
     </div>
   </div>
 
@@ -10750,8 +10754,11 @@
           <label class="block text-sm font-medium text-gray-800 mb-2">Phone Number *</label>
           <input id="auth-signup-phone" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm mb-4" placeholder="+256 7XX XXX XXX">
 
-          <label class="block text-sm font-medium text-gray-800 mb-2">Email *</label>
-          <input id="auth-signup-email" type="email" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm mb-4" placeholder="your@email.com">
+          <div id="auth-signup-email-wrap">
+            <label id="auth-signup-email-label" class="block text-sm font-medium text-gray-800 mb-2">Email *</label>
+            <input id="auth-signup-email" type="email" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm mb-4" placeholder="your@email.com">
+          </div>
+          <p id="auth-signup-phone-only-note" class="hidden -mt-2 mb-4 text-xs text-gray-500">No email needed. We send your sign-up code to this number on WhatsApp.</p>
 
           <label class="block text-sm font-medium text-gray-800 mb-2">Preferred Communication Language</label>
           <select id="auth-signup-preferred-language" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white mb-4">
@@ -10766,7 +10773,7 @@
             <option value="ar">Arabic</option>
           </select>
 
-          <div class="grid sm:grid-cols-[1fr,170px] gap-2 mb-4">
+          <div id="auth-signup-otp-channel-wrap" class="grid sm:grid-cols-[1fr,170px] gap-2 mb-4">
             <div>
               <label class="block text-sm font-medium text-gray-800 mb-2">OTP delivery method</label>
               <input id="auth-signup-otp-hint" class="w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm bg-gray-50 text-gray-600" value="Choose where you want OTP delivered" disabled>
@@ -10797,8 +10804,8 @@
           </label>
 
           <label class="flex items-start gap-2 text-sm text-gray-700 mb-5">
-            <input id="auth-signup-weekly-tips" type="checkbox" checked class="mt-1 accent-green-700">
-            <span>Send me weekly property tips, market updates, and account activity alerts.</span>
+            <input id="auth-signup-whatsapp-consent" type="checkbox" class="mt-1 accent-green-700" data-consent-wording="signup_whatsapp_2026_10_26">
+            <span id="auth-signup-whatsapp-consent-text">Send me new property alerts and offers on WhatsApp. Reply STOP anytime.</span>
           </label>
 
           <button id="auth-signup-btn" onclick="submitAuthSignUp()" class="w-full bg-green-800 hover:bg-green-700 text-white py-3 rounded-xl font-semibold">Send Verification OTP →</button>
