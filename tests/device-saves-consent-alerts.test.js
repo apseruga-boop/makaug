@@ -203,18 +203,40 @@ test('public /cookie-policy page explains the device cookie', () => {
   assert.match(block, /up to 400 days, is not used for\s+advertising|up to 400 days, is not used for advertising/);
 });
 
-test('users who agreed in person before 26 Oct are never put in a digest on that consent alone', () => {
+test('users who agreed in person count as opted in like any other consented user', () => {
   const base = { user_id: 'u1', user_phone: '+256700000011', user_marketing_opt_in: true };
-  assert.equal(digest.searchRecipient({ ...base, user_marketing_consent_source: 'in_person' }), null);
+  assert.ok(digest.searchRecipient({ ...base, user_marketing_consent_source: 'in_person' }));
   assert.ok(digest.searchRecipient({ ...base, user_marketing_consent_source: 'signup_checkbox' }));
-  // A fresh "alert me" tick on a search is its own consent and still counts.
-  assert.ok(digest.searchRecipient({
-    ...base,
-    user_marketing_consent_source: 'in_person',
-    alert_scope: 'search_alerts_whatsapp',
-    consent_granted: true,
-    consent_at: new Date().toISOString()
-  }));
+  assert.equal(digest.searchRecipient({ ...base, user_marketing_opt_in: false }), null);
   const src = read('services/whatsappAlertDigestService.js');
-  assert.match(src, /COALESCE\(u\.marketing_consent_source, ''\) <> 'in_person'/);
+  assert.doesNotMatch(src, /<> 'in_person'/);
+});
+
+test('hourly digest job is off unless WHATSAPP_ALERT_DIGEST_JOB=on', () => {
+  const saved = process.env.WHATSAPP_ALERT_DIGEST_JOB;
+  try {
+    delete process.env.WHATSAPP_ALERT_DIGEST_JOB;
+    assert.equal(digest.digestJobEnabled(), false);
+    process.env.WHATSAPP_ALERT_DIGEST_JOB = 'off';
+    assert.equal(digest.digestJobEnabled(), false);
+    process.env.WHATSAPP_ALERT_DIGEST_JOB = 'true';
+    assert.equal(digest.digestJobEnabled(), false);
+    process.env.WHATSAPP_ALERT_DIGEST_JOB = 'on';
+    assert.equal(digest.digestJobEnabled(), true);
+  } finally {
+    if (saved === undefined) delete process.env.WHATSAPP_ALERT_DIGEST_JOB;
+    else process.env.WHATSAPP_ALERT_DIGEST_JOB = saved;
+  }
+  // With the flag unset no timer is registered, even outside tests.
+  const env = { NODE_ENV: process.env.NODE_ENV, DATABASE_URL: process.env.DATABASE_URL };
+  try {
+    process.env.NODE_ENV = 'production';
+    process.env.DATABASE_URL = 'postgres://unused';
+    delete process.env.WHATSAPP_ALERT_DIGEST_JOB;
+    assert.equal(digest.startWhatsappAlertDigestSchedule({ runner: { query: async () => ({ rows: [] }) } }), null);
+  } finally {
+    process.env.NODE_ENV = env.NODE_ENV;
+    if (env.DATABASE_URL === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = env.DATABASE_URL;
+    if (saved !== undefined) process.env.WHATSAPP_ALERT_DIGEST_JOB = saved;
+  }
 });

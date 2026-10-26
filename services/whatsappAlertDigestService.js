@@ -99,12 +99,7 @@ function searchRecipient(search = {}, withdrawals = new Map()) {
   const phone = normalizeUgPhone(search.phone || search.user_phone || '');
   if (!phone) return null;
   const searchConsent = search.alert_scope === 'search_alerts_whatsapp' && search.consent_granted === true;
-  // The users who agreed in person before 26 Oct 2026 (migration 186,
-  // source 'in_person') are never put in a digest on that consent alone:
-  // Arthur, 26 Oct 2026, "we're not sending anything to them".
-  const accountConsent = Boolean(search.user_id)
-    && search.user_marketing_opt_in === true
-    && search.user_marketing_consent_source !== 'in_person';
+  const accountConsent = Boolean(search.user_id) && search.user_marketing_opt_in === true;
   if (!searchConsent && !accountConsent) return null;
   const withdrawnAt = withdrawals.get(phone);
   if (withdrawnAt && !accountConsent) {
@@ -190,7 +185,6 @@ async function loadRecentListings(runner, since) {
 async function loadAlertSearches(runner) {
   const result = await runner.query(
     `SELECT ss.*, u.phone AS user_phone, u.marketing_opt_in AS user_marketing_opt_in,
-            u.marketing_consent_source AS user_marketing_consent_source,
             ce.granted AS consent_granted, ce.consented_at AS consent_at
      FROM saved_searches ss
      LEFT JOIN users u ON u.id = ss.user_id
@@ -199,8 +193,7 @@ async function loadAlertSearches(runner) {
        AND COALESCE(ss.alert_frequency, 'daily') <> 'off'
        AND (
          (ss.alert_scope = 'search_alerts_whatsapp' AND ce.granted IS TRUE)
-         OR (ss.user_id IS NOT NULL AND u.marketing_opt_in IS TRUE AND COALESCE(u.status, 'active') = 'active'
-             AND COALESCE(u.marketing_consent_source, '') <> 'in_person')
+         OR (ss.user_id IS NOT NULL AND u.marketing_opt_in IS TRUE AND COALESCE(u.status, 'active') = 'active')
        )
      ORDER BY ss.created_at ASC
      LIMIT 5000`
@@ -345,12 +338,18 @@ async function getPendingAlertSummary(runner = db) {
   return { enabled: alertsEnabled(), counts: counts.rows, recent: recent.rows };
 }
 
+function digestJobEnabled() {
+  return String(process.env.WHATSAPP_ALERT_DIGEST_JOB || '').trim().toLowerCase() === 'on';
+}
+
+// OFF by default (Arthur, 26 Oct 2026): no timer is registered unless
+// WHATSAPP_ALERT_DIGEST_JOB=on. Staff can still build previews by hand.
 // Hourly check; writes a digest between 09:00 and 18:00 Kampala time. The
 // unique (recipient, kind, day) key keeps it to one digest a day even with
 // more than one instance running.
 function startWhatsappAlertDigestSchedule({ runner = db, intervalMs = 60 * 60 * 1000 } = {}) {
   if (process.env.NODE_ENV === 'test' || !process.env.DATABASE_URL) return null;
-  if (String(process.env.WHATSAPP_ALERT_DIGEST_JOB || '').toLowerCase() === 'off') return null;
+  if (!digestJobEnabled()) return null;
   const tick = async () => {
     const hour = kampalaHour();
     if (hour < DIGEST_HOURS_KAMPALA.from || hour >= DIGEST_HOURS_KAMPALA.to) return;
@@ -373,6 +372,7 @@ module.exports = {
   buildConsentConfirmationMessage,
   buildDigestMessage,
   buildWelcomeMessage,
+  digestJobEnabled,
   digestSearchMatchesListing,
   enqueueConsentMessage,
   getPendingAlertSummary,
