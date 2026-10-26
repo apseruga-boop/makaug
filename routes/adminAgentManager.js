@@ -1,5 +1,7 @@
 'use strict';
 
+const { registerAgentIdFileRoutes, listIdFiles } = require('./adminAgentIdFiles');
+
 // King → Agents: one place to see an agent, everything on file about them and
 // every listing they have, and to correct it. Nothing here hard-deletes: a
 // listing that is taken down or marked sold/let keeps its previous status so
@@ -142,6 +144,12 @@ function idStillNeeded(agent = {}) {
     && !String(agent.nin ?? '').trim() && agent.has_nin !== true;
 }
 
+// SQL: a live (not archived) "ID front" uploaded by staff for agent a.
+const LIVE_ID_FRONT_SQL = `EXISTS (SELECT 1 FROM agent_identity_files f
+  WHERE f.agent_id = a.id AND f.kind = 'id_front' AND f.archived_at IS NULL)`;
+// SQL: an ID document is on file, either from sign-up or uploaded by staff.
+const HAS_ID_DOCUMENT_SQL = `(COALESCE(a.identity_document_url, '') <> '' OR ${LIVE_ID_FRONT_SQL})`;
+
 function registerAgentManagerRoutes(router, deps) {
   const { db, writeAudit, adminActorId, cleanText, isValidEmail, normalizePhone, actorLabel, onListingsChanged } = deps;
   const actorOf = async (req) => {
@@ -154,18 +162,20 @@ function registerAgentManagerRoutes(router, deps) {
     return { id, label: label || (req.adminAuth?.type === 'api_key' ? 'admin key' : 'staff') };
   };
   const badId = (res, what = 'agent') => res.status(400).json({ ok: false, error: `Invalid ${what} id` });
+  registerAgentIdFileRoutes(router, { db, writeAudit, actorOf, UUID_RE });
 
   // List: who is who, at a glance — what is missing and how many listings.
   router.get('/agent-manager/agents', async (req, res, next) => {
     try {
       const show = ['active', 'removed', 'all'].includes(String(req.query.show)) ? String(req.query.show) : 'active';
-      const only = ['id_needed', 'pending', 'overdue', 'due_soon'].includes(String(req.query.only)) ? String(req.query.only) : '';
+      const only = ['id_needed', 'id_doc_missing', 'pending', 'overdue', 'due_soon'].includes(String(req.query.only)) ? String(req.query.only) : '';
       const search = cleanText(req.query.search || '').slice(0, 120);
       const values = [];
       const filters = [];
       if (show === 'active') filters.push('a.removed_at IS NULL');
       if (show === 'removed') filters.push('a.removed_at IS NOT NULL');
       if (only === 'id_needed') filters.push(`a.status = 'approved' AND COALESCE(btrim(a.nin), '') = ''`);
+      if (only === 'id_doc_missing') filters.push(`NOT ${HAS_ID_DOCUMENT_SQL}`);
       if (only === 'pending') filters.push(`a.status = 'pending'`);
       if (search) {
         values.push(`%${search}%`);
@@ -183,7 +193,9 @@ function registerAgentManagerRoutes(router, deps) {
         `SELECT a.id, a.full_name, a.company_name, a.phone, a.whatsapp, a.email, a.status, a.makaug_agent_number,
                 a.created_at, a.updated_at, a.removed_at, a.removed_reason, a.user_id, a.agent_application_channel,
                 (COALESCE(btrim(a.nin), '') <> '') AS has_nin,
-                (COALESCE(a.identity_document_url, '') <> '') AS has_id_document,
+                ${HAS_ID_DOCUMENT_SQL} AS has_id_document,
+                (COALESCE(a.identity_document_url, '') <> '') AS has_signup_id_document,
+                ${LIVE_ID_FRONT_SQL} AS has_id_front_file,
                 (COALESCE(a.licence_number, '') <> '' AND a.licence_number !~* '^(STAFF-|WA-|AUTO-|PENDING|EMPLOYEE-INTAKE-|DIRECT-)') AS has_licence,
                 to_char(a.paid_until, 'YYYY-MM-DD') AS paid_until, a.fee_exempt, a.paid_awaiting_approval_at,
                 a.approved_at, a.billing_plan, a.monthly_fee_ugx, a.fee_offer_mode, a.fee_offer_at,
@@ -226,9 +238,10 @@ function registerAgentManagerRoutes(router, deps) {
                 COUNT(*) FILTER (WHERE removed_at IS NOT NULL)::int AS removed,
                 COUNT(*) FILTER (WHERE removed_at IS NULL AND COALESCE(btrim(nin), '') = '')::int AS missing_id,
                 COUNT(*) FILTER (WHERE removed_at IS NULL AND status = 'approved' AND COALESCE(btrim(nin), '') = '')::int AS approved_missing_id,
+                COUNT(*) FILTER (WHERE removed_at IS NULL AND NOT ${HAS_ID_DOCUMENT_SQL})::int AS id_document_missing,
                 COUNT(*) FILTER (WHERE removed_at IS NULL AND status = 'pending')::int AS pending,
                 COUNT(*) FILTER (WHERE removed_at IS NULL AND paid_until IS NOT NULL AND fee_exempt IS NOT TRUE)::int AS due_date_set
-           FROM agents`
+           FROM agents a`
       );
       const now = new Date();
       let rows = result.rows.map((row) => {
@@ -259,7 +272,12 @@ function registerAgentManagerRoutes(router, deps) {
         `SELECT a.id, a.full_name, a.company_name, a.licence_number, a.phone, a.whatsapp, a.email,
                 a.districts_covered, a.specializations, a.nin, a.bio, a.status, a.registration_status,
                 a.created_at, a.updated_at, a.user_id, a.identity_document_name, a.identity_document_type,
-                a.identity_document_uploaded_at, (COALESCE(a.identity_document_url, '') <> '') AS has_id_document,
+                a.identity_document_uploaded_at, ${HAS_ID_DOCUMENT_SQL} AS has_id_document,
+                (COALESCE(a.identity_document_url, '') <> '') AS has_signup_id_document,
+                CASE WHEN a.identity_document_url ILIKE 's3://%' THEN 'private_bucket'
+                     WHEN a.identity_document_url ILIKE 'data:%' THEN 'inline'
+                     WHEN COALESCE(a.identity_document_url, '') <> '' THEN 'link' END AS signup_id_storage,
+                ${LIVE_ID_FRONT_SQL} AS has_id_front_file,
                 (COALESCE(a.profile_photo_url, '') <> '') AS has_profile_photo,
                 a.verification_reason, a.privacy_consent_accepted, a.privacy_consent_at, a.approved_at,
                 a.makaug_agent_number, to_char(a.id_expiry_date, 'YYYY-MM-DD') AS id_expiry_date, a.experience_years, a.contact_phone_verified_at,
@@ -293,7 +311,7 @@ function registerAgentManagerRoutes(router, deps) {
         [agent.id]
       )).rows;
       const ids = listings.map((row) => row.id);
-      const [views, leads, history, duplicates, payments] = await Promise.all([
+      const [views, leads, history, duplicates, payments, idFiles] = await Promise.all([
         ids.length ? db.query(
           `SELECT payload->>'property_id' AS property_id, COUNT(*)::int AS views
              FROM analytics_events
@@ -321,7 +339,8 @@ function registerAgentManagerRoutes(router, deps) {
              FROM revenue_entries
             WHERE agent_id = $1 AND kind = 'agent_subscription' AND voided_at IS NULL
             ORDER BY paid_at DESC NULLS LAST, recorded_at DESC
-            LIMIT 12`, [agent.id]).catch(() => ({ rows: [] }))
+            LIMIT 12`, [agent.id]).catch(() => ({ rows: [] })),
+        listIdFiles(db, agent.id)
       ]);
       const viewMap = new Map(views.rows.map((row) => [row.property_id, row.views]));
       const leadMap = new Map(leads.rows.map((row) => [row.property_id, row.leads]));
@@ -341,6 +360,7 @@ function registerAgentManagerRoutes(router, deps) {
           payments: payments.rows,
           listings: listings.map((row) => ({ ...row, views: viewMap.get(row.id) || 0, leads: leadMap.get(row.id) || 0 })),
           history: history.rows,
+          id_files: idFiles,
           same_phone_agents: duplicates.rows
         }
       });
@@ -635,4 +655,4 @@ function registerAgentManagerRoutes(router, deps) {
   });
 }
 
-module.exports = { registerAgentManagerRoutes, paymentState, paymentTracker, idStillNeeded, approvedAnyway, kampalaDay, maskNin, LISTING_ACTIONS };
+module.exports = { HAS_ID_DOCUMENT_SQL, LIVE_ID_FRONT_SQL, registerAgentManagerRoutes, paymentState, paymentTracker, idStillNeeded, approvedAnyway, kampalaDay, maskNin, LISTING_ACTIONS };

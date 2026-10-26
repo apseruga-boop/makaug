@@ -17573,6 +17573,13 @@ function adminAgentManagerIdChip(agent = {}) {
     : adminAgentManagerChip("ID missing", "bg-red-50 text-red-700 border border-red-200");
 }
 
+// The ID document itself (a photo or PDF), from sign-up or uploaded by staff.
+function adminAgentManagerIdDocChip(agent = {}) {
+  return agent.has_id_document
+    ? `<span data-id-doc-chip="on">${adminAgentManagerChip("ID document: on file", "bg-green-50 text-green-800 border border-green-200")}</span>`
+    : `<span data-id-doc-chip="missing">${adminAgentManagerChip("ID document: missing", "bg-orange-50 text-orange-800 border border-orange-200")}</span>`;
+}
+
 // Approved and live, but the ID (NIN) was never filled in — clears once it is saved.
 function adminAgentManagerIdNeededBadge(agent = {}) {
   return agent.id_still_needed ? adminAgentManagerChip("Approved – ID still needed", "bg-red-600 text-white") : "";
@@ -17652,6 +17659,7 @@ function adminAgentManagerShellHtml() {
         <select name="only" class="${input}" data-agent-manager-only>
           <option value=""${!s.only ? " selected" : ""}>Everyone shown</option>
           <option value="id_needed"${s.only === "id_needed" ? " selected" : ""}>Approved – ID still needed</option>
+          <option value="id_doc_missing"${s.only === "id_doc_missing" ? " selected" : ""}>ID document missing</option>
           <option value="pending"${s.only === "pending" ? " selected" : ""}>Pending approval</option>
           <option value="overdue"${s.only === "overdue" ? " selected" : ""}>Payment overdue</option>
           <option value="due_soon"${s.only === "due_soon" ? " selected" : ""}>Payment due within 7 days</option>
@@ -17763,6 +17771,7 @@ function adminAgentManagerRenderList() {
     chip("Current agents", c.active, "bg-gray-900 text-white"),
     c.pending ? `<button type="button" class="rounded-xl px-3 py-1.5 font-bold bg-amber-100 text-amber-900" onclick="adminAgentManagerShowOnly('pending')">Pending approval <span class="font-black">${Number(c.pending).toLocaleString("en-GB")}</span></button>` : "",
     chip("Missing ID", c.missing_id, "bg-red-100 text-red-800"),
+    c.id_document_missing ? `<button type="button" data-agent-manager-id-doc-missing class="rounded-xl px-3 py-1.5 font-bold bg-orange-100 text-orange-900" onclick="adminAgentManagerShowOnly('id_doc_missing')">ID document missing <span class="font-black">${Number(c.id_document_missing).toLocaleString("en-GB")}</span></button>` : "",
     chip("Payment due date set", c.due_date_set, "bg-emerald-50 text-emerald-800"),
     chip("Removed", c.removed, "bg-gray-100 text-gray-700")
   ].filter(Boolean).join("");
@@ -17789,7 +17798,7 @@ function adminAgentManagerRenderList() {
               </td>
               <td class="px-3 py-2 text-xs font-mono whitespace-nowrap" data-pii="phone">${adminEscape(a.phone || a.whatsapp || "—")}</td>
               <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerStatusChip(a)}${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerApproveButton(a)}</div></td>
-              <td class="px-3 py-2">${adminAgentManagerIdChip(a)}</td>
+              <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerIdChip(a)}${adminAgentManagerIdDocChip(a)}</div></td>
               <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerPaymentChip(a.payment)}<span class="text-[11px] text-gray-500">${adminEscape(a.tracker?.plan || "")}</span></div></td>
               <td class="px-3 py-2 text-xs whitespace-nowrap" data-live-listings><strong>${Number(a.live_listings || 0)}</strong> / ${Number(a.total_listings || 0)}</td>
               <td class="px-3 py-2 text-xs whitespace-nowrap" data-next-due>${a.fee_exempt ? `<span class="text-gray-400">—</span>` : adminEscape(adminAgentManagerDay(a.tracker?.next_due))}</td>
@@ -17810,7 +17819,7 @@ function adminAgentManagerRenderList() {
             </div>
             ${adminAgentManagerStatusChip(a)}
           </div>
-          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
+          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerIdDocChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
           <p class="text-[11px] text-gray-500 mt-2">${Number(a.live_listings || 0)} live of ${Number(a.total_listings || 0)} listings · next payment ${a.fee_exempt ? "none (free)" : adminEscape(adminAgentManagerDay(a.tracker?.next_due))} · joined ${staffPeopleDate(a.created_at)}</p>
           <div class="mt-2">${adminAgentManagerDaysLeft(a.tracker || {}, a)}</div>
         </button>${adminAgentManagerCanApprove(a) ? `<div class="-mt-1 flex justify-end">${adminAgentManagerApproveButton(a)}</div>` : ""}`).join("")}
@@ -17906,11 +17915,21 @@ function adminAgentManagerDetailHtml(d = {}) {
     admin_agent_listing_received: "Listing moved to this agent",
     admin_agent_approved_anyway: "Approved anyway (details still missing)",
     admin_agent_status_updated: "Status changed",
-    admin_agent_fee_override: "Fee offer set"
+    admin_agent_fee_override: "Fee offer set",
+    admin_agent_id_file_uploaded: "ID document uploaded",
+    admin_agent_id_file_replaced: "ID document replaced (old one kept)",
+    admin_agent_id_file_viewed: "ID document viewed",
+    admin_agent_id_file_downloaded: "ID document downloaded",
+    admin_agent_id_file_deleted: "Old ID document deleted (super admin)",
+    admin_agent_signup_id_viewed: "Sign-up ID viewed",
+    admin_agent_signup_id_downloaded: "Sign-up ID downloaded",
+    admin_agent_identity_viewed: "Sign-up ID viewed",
+    admin_agent_identity_document_attached: "Sign-up ID attached"
   }[h.action] || String(h.action || "").replace(/^admin_/, "").replace(/_/g, " "));
   const historyDetail = (h) => {
     const det = h.details || {};
     if (det.changes) return Object.entries(det.changes).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v.from ?? "—"} → ${v.to ?? "—"}`).join("; ");
+    if (/^admin_agent_(id_file|signup_id)_/.test(String(h.action || ""))) return [det.label, det.archived ? "older version" : "", det.reason].filter(Boolean).join(" · ");
     return [det.reason, det.status_from && det.status_to ? `${det.status_from} → ${det.status_to}` : "", det.status && !det.status_to ? `now ${det.status}` : "", Array.isArray(det.missing) && det.missing.length ? `missing: ${det.missing.join(", ").replace(/_/g, " ")}` : "", det.payment_status ? `payment ${det.payment_status}` : ""].filter(Boolean).join(" · ");
   };
   return `
@@ -17922,11 +17941,11 @@ function adminAgentManagerDetailHtml(d = {}) {
       <div>
         <h4 class="text-xl font-black text-gray-900" data-pii>${adminEscape(a.full_name || "Unnamed")}</h4>
         <p class="text-sm text-gray-600">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · Agent No ${adminEscape(a.makaug_agent_number)}` : " · no agent number yet"}</p>
-        <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerIdChip(a)}${a.agent_application_channel === "staff_added" ? adminAgentManagerChip("Added by staff", "bg-purple-100 text-purple-800") : ""}</div>
+        <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerIdChip(a)}${adminAgentManagerIdDocChip(a)}${a.agent_application_channel === "staff_added" ? adminAgentManagerChip("Added by staff", "bg-purple-100 text-purple-800") : ""}</div>
       </div>
       ${a.id_still_needed ? `<div class="rounded-xl border-2 border-red-600 bg-red-50 p-3 text-sm text-red-900" data-agent-id-needed-banner>
         <p class="font-black text-red-800">Approved – ID still needed</p>
-        <p class="mt-1">This agent is live but their ID number (NIN) is not on file.${a.approved_anyway ? ` Approved anyway by ${adminEscape(a.approved_anyway.by || "staff")} on ${date(a.approved_anyway.at, true)}: “${adminEscape(a.approved_anyway.reason || "")}”.` : ""} Type the NIN in <strong>ID number (NIN)</strong> below and press <strong>Save changes</strong>; this reminder goes away by itself.</p>
+        <p class="mt-1">This agent is live but their ID number (NIN) is not on file.${a.approved_anyway ? ` Approved anyway by ${adminEscape(a.approved_anyway.by || "staff")} on ${date(a.approved_anyway.at, true)}: “${adminEscape(a.approved_anyway.reason || "")}”.` : ""} Type the NIN in <strong>ID number (NIN)</strong> below and press <strong>Save changes</strong>; this reminder goes away by itself. Upload a photo of the ID under <strong>ID documents</strong> too, so it is on file.</p>
       </div>` : ""}
       ${adminAgentManagerCanApprove(a) ? `<div class="rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-sm text-amber-950" data-agent-approve-panel>
         <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -17958,6 +17977,7 @@ function adminAgentManagerDetailHtml(d = {}) {
         </div>
         <div class="mt-3 flex justify-end"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Save changes</button></div>
       </form>
+      ${adminAgentManagerIdFilesHtml(a, Array.isArray(d.id_files) ? d.id_files : [])}
       <form class="rounded-xl border border-gray-200 p-3" onsubmit="adminAgentManagerSaveDetails(event, '${id}')" data-agent-payment-form>
         <h5 class="font-black text-gray-900 mb-1">Plan &amp; payment</h5>
         <p class="text-xs text-gray-500 mb-2">Now: ${adminAgentManagerPaymentChip(a.payment)}${a.billing_suspended_at ? ` · billing suspended ${date(a.billing_suspended_at)}` : ""}${a.fee_offer_mode ? ` · offer: ${adminEscape(a.fee_offer_mode)}${a.fee_offer_until ? ` until ${date(a.fee_offer_until)}` : ""}` : ""}</p>
@@ -17979,7 +17999,7 @@ function adminAgentManagerDetailHtml(d = {}) {
         ${fact("Approved", date(a.approved_at))}
         ${fact("Last activity", date(a.last_activity_at, true))}
         ${fact("Last sign-in", date(a.user_last_login_at, true))}
-        ${fact("ID photo", a.has_id_document ? `uploaded ${date(a.identity_document_uploaded_at)}` : "missing")}
+        ${fact("ID photo", a.has_id_front_file ? "uploaded by staff" : a.has_signup_id_document ? `from sign-up ${date(a.identity_document_uploaded_at)}` : "missing")}
         ${fact("Profile photo", a.has_profile_photo ? "uploaded" : "missing")}
         ${fact("Joined via", adminEscape(String(a.agent_application_channel || "web").replace(/_/g, " ")))}
         ${fact("Registered by", adminEscape(a.registered_by_name || a.registered_by_phone || "—"))}
@@ -18017,6 +18037,249 @@ function adminAgentManagerDetailHtml(d = {}) {
         </div>
       </section>`}
     </div>`;
+}
+
+// ── ID documents (front, back, other) ──────────────────────────────────────
+// Files live in the database, not in the public media store. They are only
+// fetched with the staff sign-in (never a plain link), shown from a local
+// blob, and every view and download is logged in the agent's history.
+const ADMIN_AGENT_ID_FILE_KINDS = [
+  ["id_front", "ID front"],
+  ["id_back", "ID back"],
+  ["other", "Other document"]
+];
+const ADMIN_AGENT_ID_FILE_ACCEPT = "image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,application/pdf";
+const ADMIN_AGENT_ID_FILE_MAX = 10 * 1024 * 1024;
+// Local previews: picked-but-not-saved files, and what was just uploaded.
+const ADMIN_AGENT_ID_PREVIEWS = { picked: {}, saved: {} };
+
+function adminAgentManagerIdFileSize(bytes) {
+  const n = Number(bytes || 0);
+  return n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
+function adminAgentManagerIdThumb(src, mime, alt) {
+  if (src && /^image\/(jpeg|png|webp|gif)/.test(String(mime || ""))) {
+    return `<img src="${adminAttr(src)}" alt="${adminAttr(alt)}" class="h-28 w-full max-w-[16rem] object-contain rounded-lg border border-gray-200 bg-gray-50" data-id-file-preview>`;
+  }
+  const label = /pdf/.test(String(mime || "")) ? "PDF" : /heic|heif/.test(String(mime || "")) ? "HEIC photo" : "ID";
+  return `<div class="h-28 w-full max-w-[16rem] rounded-lg border border-dashed border-gray-300 bg-white flex flex-col items-center justify-center text-[11px] text-gray-500 text-center px-2"><span class="text-lg">🪪</span>${adminEscape(label)}${src ? "" : `<span class="text-[10px]">press View to open</span>`}</div>`;
+}
+
+function adminAgentManagerIdFileCard(f, agentId) {
+  const fid = adminAttr(f.id);
+  const saved = ADMIN_AGENT_ID_PREVIEWS.saved[f.id];
+  const by = f.uploaded_by_label ? ` by ${adminEscape(f.uploaded_by_label)}` : "";
+  return `<div class="flex flex-col gap-2" data-id-file="${fid}" data-id-file-kind="${adminAttr(f.kind)}">
+      ${adminAgentManagerIdThumb(saved?.src, saved?.mime || f.mime_type, f.label || "ID")}
+      <div class="min-w-0 text-xs">
+        <p class="font-bold text-gray-900">${adminEscape(f.label || "ID document")} <span class="font-normal text-green-700">· on file</span></p>
+        <p class="text-gray-500">Uploaded ${staffPeopleDate(f.uploaded_at, true)}${by} · ${adminEscape(adminAgentManagerIdFileSize(f.byte_size))}${f.metadata_stripped ? " · location data removed" : ""}</p>
+        <div class="flex flex-wrap gap-1 mt-2">
+          <button type="button" data-id-file-view="${fid}" class="rounded-lg bg-gray-900 text-white px-3 py-1.5 text-[11px] font-bold" onclick="adminAgentManagerIdFileView('${fid}')">View</button>
+          <button type="button" data-id-file-download="${fid}" class="rounded-lg border border-gray-300 px-3 py-1.5 text-[11px] font-bold" onclick="adminAgentManagerIdFileDownload('${fid}')">Download</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function adminAgentManagerIdSlotHtml(kind, label, live, agentId) {
+  const id = adminAttr(agentId);
+  const picked = ADMIN_AGENT_ID_PREVIEWS.picked[`${agentId}:${kind}`];
+  const pickLabel = live.length && kind !== "other" ? `Replace ${label}` : `Upload ${label}`;
+  const picker = `<label class="inline-flex items-center rounded-lg border border-green-700 text-green-800 bg-white hover:bg-green-50 px-3 py-1.5 text-[11px] font-bold cursor-pointer" data-id-file-pick="${kind}">
+      ${adminEscape(pickLabel)}
+      <input type="file" class="sr-only" accept="${ADMIN_AGENT_ID_FILE_ACCEPT}" data-id-file-input="${kind}" onchange="adminAgentManagerIdFilePicked(this, '${id}', '${kind}')">
+    </label>`;
+  const pickedHtml = picked ? `<div class="mt-2 rounded-lg border-2 border-amber-300 bg-amber-50 p-2 flex flex-col gap-2" data-id-file-picked="${kind}">
+      ${adminAgentManagerIdThumb(picked.src, picked.mime, `${label} (not saved yet)`)}
+      <div class="text-xs min-w-0">
+        <p class="font-bold text-amber-900">Not saved yet: ${adminEscape(picked.name || label)}</p>
+        <p class="text-amber-900">${adminEscape(adminAgentManagerIdFileSize(picked.size))}${live.length && kind !== "other" ? ". The current one is kept as an older version." : ""}</p>
+        <div class="flex gap-1 mt-2">
+          <button type="button" data-id-file-save="${kind}" class="rounded-lg bg-green-700 text-white px-3 py-1.5 text-[11px] font-black" onclick="adminAgentManagerIdFileSave('${id}', '${kind}')">Save ${adminEscape(label)}</button>
+          <button type="button" class="rounded-lg border border-gray-300 px-3 py-1.5 text-[11px] font-bold" onclick="adminAgentManagerIdFileCancel('${id}', '${kind}')">Cancel</button>
+        </div>
+      </div>
+    </div>` : "";
+  return `<div class="rounded-xl border ${live.length ? "border-gray-200 bg-white" : "border-dashed border-gray-300 bg-gray-50"} p-3" data-id-slot="${kind}">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <p class="text-xs font-black text-gray-900">${adminEscape(label)}${kind === "other" ? ` <span class="font-normal text-gray-500">(optional, e.g. trading licence)</span>` : ""}</p>
+        ${live.length ? "" : `<span class="text-[11px] font-bold ${kind === "other" ? "text-gray-400" : "text-orange-700"}">${kind === "other" ? "none" : "missing"}</span>`}
+      </div>
+      <div class="space-y-2">${live.map((f) => adminAgentManagerIdFileCard(f, agentId)).join("")}</div>
+      <div class="${live.length ? "mt-2" : ""}">${picker}</div>
+      ${pickedHtml}
+    </div>`;
+}
+
+function adminAgentManagerIdFilesHtml(a = {}, files = []) {
+  const live = files.filter((f) => !f.archived_at);
+  const archived = files.filter((f) => f.archived_at);
+  const signup = a.has_signup_id_document ? `<div class="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs" data-id-signup>
+      <p class="font-black text-blue-950">ID from sign-up <span class="font-normal">(sent by the agent, read-only)</span></p>
+      <p class="text-blue-900">${a.identity_document_name ? `${adminEscape(a.identity_document_name)} · ` : ""}${a.identity_document_uploaded_at ? `received ${staffPeopleDate(a.identity_document_uploaded_at, true)}` : "on file"}</p>
+      ${a.signup_id_storage === "link" ? `<p class="mt-2 text-blue-900">Saved as an outside link, so it can't be opened here. Ask the agent for a photo and upload it above.</p>` : `<div class="flex gap-1 mt-2">
+        <button type="button" data-id-signup-view class="rounded-lg bg-blue-900 text-white px-3 py-1.5 text-[11px] font-bold" onclick="adminAgentManagerSignupIdView('${adminAttr(a.id)}')">View</button>
+        <button type="button" class="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-[11px] font-bold" onclick="adminAgentManagerSignupIdDownload('${adminAttr(a.id)}')">Download</button>
+      </div>`}
+    </div>` : "";
+  return `<section class="rounded-xl border border-gray-200 p-3" data-agent-id-files>
+      <div class="flex items-start justify-between gap-2 mb-2 flex-wrap">
+        <div>
+          <h5 class="font-black text-gray-900">ID documents</h5>
+          <p class="text-[11px] text-gray-500">Photo (JPG, PNG, WebP, HEIC) or PDF, up to 10 MB. Private: only staff signed in to King can open these, and every view and download is logged below.</p>
+        </div>
+        ${adminAgentManagerIdDocChip(a)}
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+        ${ADMIN_AGENT_ID_FILE_KINDS.map(([kind, label]) => adminAgentManagerIdSlotHtml(kind, label, live.filter((f) => f.kind === kind), a.id)).join("")}
+      </div>
+      ${signup ? `<div class="mt-2">${signup}</div>` : ""}
+      ${archived.length ? `<details class="mt-2 text-xs" data-id-files-archived><summary class="cursor-pointer font-semibold text-gray-700">Older versions (${archived.length})</summary>
+        <ul class="mt-1 space-y-1">${archived.map((f) => `<li class="flex flex-wrap items-center gap-2" data-id-file-archived="${adminAttr(f.id)}">
+          <span><strong>${adminEscape(f.label || f.kind)}</strong> · uploaded ${staffPeopleDate(f.uploaded_at, true)}${f.uploaded_by_label ? ` by ${adminEscape(f.uploaded_by_label)}` : ""} · replaced ${staffPeopleDate(f.archived_at, true)}</span>
+          <button type="button" class="underline font-bold" onclick="adminAgentManagerIdFileView('${adminAttr(f.id)}')">View</button>
+          <button type="button" class="underline font-bold" onclick="adminAgentManagerIdFileDownload('${adminAttr(f.id)}')">Download</button>
+        </li>`).join("")}</ul>
+      </details>` : ""}
+    </section>`;
+}
+
+function adminAgentManagerIdFilePicked(input, agentId, kind) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const okType = /^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/i.test(file.type) || /\.(heic|heif|pdf|jpe?g|png|webp)$/i.test(file.name || "");
+  if (!okType) { toast("Only JPG, PNG, WebP, HEIC photos or PDF files can be uploaded."); input.value = ""; return; }
+  if (file.size > ADMIN_AGENT_ID_FILE_MAX) { toast("That file is over 10 MB. Send a smaller photo or PDF."); input.value = ""; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    ADMIN_AGENT_ID_PREVIEWS.picked[`${agentId}:${kind}`] = { src: String(reader.result || ""), mime: file.type || "", name: file.name || "", size: file.size };
+    adminAgentManagerIdFilesRerender();
+  };
+  reader.onerror = () => toast("Could not read that file.");
+  reader.readAsDataURL(file);
+}
+
+function adminAgentManagerIdFileCancel(agentId, kind) {
+  delete ADMIN_AGENT_ID_PREVIEWS.picked[`${agentId}:${kind}`];
+  adminAgentManagerIdFilesRerender();
+}
+
+function adminAgentManagerIdFilesRerender() {
+  const d = ADMIN_AGENT_MANAGER_STATE.detail;
+  const section = adminAgentManagerOverlay()?.querySelector("[data-agent-id-files]");
+  if (!d || !section) return;
+  section.outerHTML = adminAgentManagerIdFilesHtml(d.agent || {}, Array.isArray(d.id_files) ? d.id_files : []);
+}
+
+async function adminAgentManagerIdFileSave(agentId, kind) {
+  const key = `${agentId}:${kind}`;
+  const picked = ADMIN_AGENT_ID_PREVIEWS.picked[key];
+  if (!picked) return;
+  const button = adminAgentManagerOverlay()?.querySelector(`[data-id-file-save="${kind}"]`);
+  if (button) { button.disabled = true; button.textContent = "Saving…"; }
+  try {
+    const res = await apiRequest(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}/id-files`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { kind, data_url: picked.src, name: picked.name }
+    });
+    const saved = res?.data?.file;
+    if (saved?.id) ADMIN_AGENT_ID_PREVIEWS.saved[saved.id] = { src: /^image\/(jpeg|png|webp)/.test(picked.mime) ? picked.src : "", mime: picked.mime };
+    delete ADMIN_AGENT_ID_PREVIEWS.picked[key];
+    await adminAgentManagerRefreshOpen(res?.data?.replaced_file_id ? "Replaced. The old one is kept under Older versions." : "Saved. The ID document is on file.");
+  } catch (error) {
+    toast(error?.message || "Could not save the file.");
+    if (button) { button.disabled = false; button.textContent = "Try again"; }
+  }
+}
+
+// Fetch a private file with the staff sign-in, as a blob (never a plain link).
+async function adminAgentManagerIdBlob(path) {
+  const headers = { ...adminAuthHeaders() };
+  if (authState?.token && !headers.Authorization) headers.Authorization = `Bearer ${authState.token}`;
+  const response = await fetch(apiUrl(path), { headers, credentials: "same-origin", cache: "no-store" });
+  if (!response.ok) {
+    let message = response.status === 401 || response.status === 403 ? "Your account cannot open ID documents." : "Could not open the file.";
+    try { message = (await response.json())?.error || message; } catch (e) {}
+    throw new Error(message);
+  }
+  const disposition = String(response.headers.get("content-disposition") || "");
+  const filename = (disposition.match(/filename="([^"]+)"/) || [])[1] || "id-document";
+  return { blob: await response.blob(), filename, mime: String(response.headers.get("content-type") || "") };
+}
+
+function adminAgentManagerIdViewer(title, file, onDownload) {
+  document.querySelector("[data-id-file-viewer]")?.remove();
+  const url = URL.createObjectURL(file.blob);
+  const wrap = document.createElement("div");
+  wrap.setAttribute("data-id-file-viewer", "");
+  wrap.className = "fixed inset-0 z-[10080] bg-black/80 flex flex-col p-3 md:p-6";
+  const isImage = /^image\/(jpeg|png|webp|gif)/.test(file.mime);
+  const isPdf = /pdf/.test(file.mime);
+  const body = isImage
+    ? `<img src="${url}" alt="${adminAttr(title)}" class="max-h-full max-w-full object-contain rounded-lg bg-white" data-id-file-viewer-image>`
+    : isPdf
+      ? `<iframe src="${url}" title="${adminAttr(title)}" class="w-full h-full rounded-lg bg-white"></iframe>`
+      : `<p class="text-white text-sm">This file type cannot be shown here (for example an iPhone HEIC photo). Press Download to open it.</p>`;
+  wrap.innerHTML = `
+    <div class="flex items-center justify-between gap-2 text-white mb-3">
+      <p class="font-black text-sm truncate">${adminEscape(title)} <span class="font-normal text-gray-300">· private, staff only</span></p>
+      <div class="flex gap-2">
+        <button type="button" class="rounded-lg bg-white text-gray-900 px-3 py-1.5 text-xs font-bold" data-id-file-viewer-download>Download</button>
+        <button type="button" class="rounded-lg border border-white/60 px-3 py-1.5 text-xs font-bold" data-id-file-viewer-close>Close</button>
+      </div>
+    </div>
+    <div class="flex-1 min-h-0 flex items-center justify-center">${body}</div>`;
+  const close = () => { wrap.remove(); URL.revokeObjectURL(url); };
+  wrap.querySelector("[data-id-file-viewer-close]").addEventListener("click", close);
+  // Download goes back to the server so it is logged as a download, not a view.
+  wrap.querySelector("[data-id-file-viewer-download]").addEventListener("click", () => (onDownload ? onDownload() : adminAgentManagerIdSave(file)));
+  wrap.addEventListener("click", (event) => { if (event.target === wrap) close(); });
+  document.body.appendChild(wrap);
+}
+
+function adminAgentManagerIdSave(file) {
+  const url = URL.createObjectURL(file.blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function adminAgentManagerIdFileTitle(fileId) {
+  const d = ADMIN_AGENT_MANAGER_STATE.detail || {};
+  const f = (d.id_files || []).find((x) => x.id === fileId) || {};
+  return `${d.agent?.full_name || "Agent"} · ${f.label || "ID document"}${f.archived_at ? " (older version)" : ""}`;
+}
+
+async function adminAgentManagerIdFileView(fileId) {
+  try {
+    adminAgentManagerIdViewer(adminAgentManagerIdFileTitle(fileId), await adminAgentManagerIdBlob(`/api/admin/agent-manager/id-files/${encodeURIComponent(fileId)}`), () => adminAgentManagerIdFileDownload(fileId));
+  } catch (error) { toast(error?.message || "Could not open the file."); }
+}
+
+async function adminAgentManagerIdFileDownload(fileId) {
+  try {
+    adminAgentManagerIdSave(await adminAgentManagerIdBlob(`/api/admin/agent-manager/id-files/${encodeURIComponent(fileId)}?download=1`));
+  } catch (error) { toast(error?.message || "Could not download the file."); }
+}
+
+async function adminAgentManagerSignupIdView(agentId) {
+  const name = ADMIN_AGENT_MANAGER_STATE.detail?.agent?.full_name || "Agent";
+  try {
+    adminAgentManagerIdViewer(`${name} · ID from sign-up`, await adminAgentManagerIdBlob(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}/signup-id`), () => adminAgentManagerSignupIdDownload(agentId));
+  } catch (error) { toast(error?.message || "Could not open the file."); }
+}
+
+async function adminAgentManagerSignupIdDownload(agentId) {
+  try {
+    adminAgentManagerIdSave(await adminAgentManagerIdBlob(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}/signup-id?download=1`));
+  } catch (error) { toast(error?.message || "Could not download the file."); }
 }
 
 function adminAgentManagerTrackerHtml(a = {}, payments = []) {
