@@ -122,6 +122,34 @@ function priceStrippedCaption(caption = '') {
     .trim();
 }
 
+const CAPTION_IDENTITY_STOPWORDS = new Set([
+  'forwarded', 'for', 'sale', 'on', 'the', 'and', 'in', 'at', 'with', 'of', 'to', 'is', 'a', 'an',
+  'selling', 'sell', 'now', 'price', 'negotiable', 'call', 'contact', 'whatsapp', 'located', 'location'
+]);
+
+function captionIdentityTokens(caption = '') {
+  return new Set(priceStrippedCaption(caption)
+    .split(' ')
+    .filter((word) => word.length >= 3 && !CAPTION_IDENTITY_STOPWORDS.has(word)));
+}
+
+/**
+ * Two captions that plainly describe different things. 26 Oct 2026: "Namugongo
+ * Sonde 6 double rental units monthly income 3.9 million on sale UGX 400 million"
+ * was refused as a repeat of the same agent's August "Namugongo 2 houses in same
+ * compound each 2 bedrooms" because both were Namugongo at 400 million. An agent
+ * with a lot of stock in one area will often have two listings at one price.
+ */
+function captionsDescribeDifferentListings(left = '', right = '') {
+  const a = captionIdentityTokens(left);
+  const b = captionIdentityTokens(right);
+  if (a.size < 3 || b.size < 3) return false;
+  let shared = 0;
+  for (const word of a) if (b.has(word)) shared += 1;
+  const union = a.size + b.size - shared;
+  return union > 0 && shared / union < 0.34;
+}
+
 function modestPriceDrop(nextPrice, currentPrice) {
   const next = Number(nextPrice);
   const current = Number(currentPrice);
@@ -184,9 +212,11 @@ function decideIntakeRepeat(incoming = {}, rows = []) {
     const sameCaptionIdentity = incomingCaption.length >= 24
       && rowCaption.length >= 24
       && incomingCaption === rowCaption;
+    const differentDescription = Boolean(incoming.caption && row.source_caption)
+      && captionsDescribeDifferentListings(incoming.caption, row.source_caption);
     const sameListing = sameVideo
       || sameHash
-      || (samePhone && sameArea && samePrice)
+      || (samePhone && sameArea && samePrice && !differentDescription)
       || (samePhone && sameArea && sameCaptionIdentity);
     if (!sameListing) continue;
     const priceUpdate = modestPriceDrop(incomingPrice, rowPrice)
@@ -199,6 +229,7 @@ function decideIntakeRepeat(incoming = {}, rows = []) {
 }
 
 module.exports = {
+  captionsDescribeDifferentListings,
   decideIntakeRepeat,
   isApartmentBlockText,
   localPhone,

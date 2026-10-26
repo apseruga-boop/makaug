@@ -5871,6 +5871,163 @@ function promoteEmployeeQueuedSubmission(data = {}) {
  * stops rather than reaching past it. An item that still needs a detail therefore
  * blocks only itself and the ones behind it, exactly as it does today.
  */
+/**
+ * A property in this batch that is already on makaug. Staff batches used to skip
+ * these in silence ("" reply in multiple mode), so on 26 Oct 2026 Arthur forwarded
+ * Kira Kitukutwe, saw nothing saved and no word about it, and could not tell
+ * whether it had been lost.
+ */
+function noteEmployeeBatchDuplicate(data = {}, caption = '', existing = {}) {
+  if (!existing || !existing.id) return;
+  const list = Array.isArray(data.employee_batch_duplicates) ? data.employee_batch_duplicates : [];
+  const id = String(existing.id);
+  if (list.some((entry) => entry && entry.id === id)) return;
+  list.push({
+    id,
+    ref: id.slice(0, 8).toUpperCase(),
+    status: String(existing.status || ''),
+    label: shortEmployeeLabel(caption || 'Property', 60)
+  });
+  data.employee_batch_duplicates = list.slice(-20);
+}
+
+function employeeBatchDuplicateLines(data = {}) {
+  const list = Array.isArray(data.employee_batch_duplicates) ? data.employee_batch_duplicates : [];
+  return list.map((entry) => `• "${entry.label}" — already ${entry.status === 'approved' ? 'live' : 'in staff review'} (ref ${entry.ref})`);
+}
+
+/**
+ * Captionless videos left over at COMPLETE. Agents forward adverts whose words
+ * are burned into the video itself ("One acre Mutundwe near Victoria primary
+ * school UGX 1.4 billion") with no WhatsApp caption, and the whole batch was
+ * refused for want of one. Read the on-screen text with the same OCR the staff
+ * review uses; if it names a type, a place and a price, save the property for
+ * staff review. Anything unreadable stays pending exactly as before.
+ */
+/**
+ * OCR returns one line per distinct frame, much of it noise from the scenery.
+ * Prefer the shortest single line (or pair of adjacent lines) that names a type,
+ * a place and a price; the price most lines agree on wins.
+ */
+function bestCaptionFromOnScreenText(rawText = '', data = {}) {
+  const lines = String(rawText || '').split(/\n+/).map((line) => line.replace(/\s+/g, ' ').trim()).filter((line) => line.length >= 8);
+  const candidates = [];
+  const consider = (text) => {
+    const clean = normalizeInput(text).slice(0, 300);
+    if (clean.length < 12) return;
+    const facts = employeePropertyFacts(clean, data);
+    if (employeePropertyMissing(facts).length) return;
+    candidates.push({ text: clean, facts });
+  };
+  lines.forEach((line, index) => {
+    consider(line);
+    if (index + 1 < lines.length) consider(`${line} ${lines[index + 1]}`);
+  });
+  if (!candidates.length) consider(lines.join(' '));
+  if (!candidates.length) return null;
+  const votes = new Map();
+  candidates.forEach((entry) => votes.set(Number(entry.facts.price), (votes.get(Number(entry.facts.price)) || 0) + 1));
+  candidates.sort((a, b) => (votes.get(Number(b.facts.price)) - votes.get(Number(a.facts.price))) || (a.text.length - b.text.length));
+  return candidates[0];
+}
+
+async function captionPendingVideosFromOnScreenText({ phone, currentStep, data, inboundMessageId } = {}) {
+  if (process.env.AGENT007_VIDEO_TEXT_CAPTIONS === 'off') return [];
+  if (normalizeInput(data.pending_property_caption || '')) return [];
+  const pending = employeePendingStoredMedia(data);
+  const videos = pending.filter((item) => item.kind === 'video' && /^https:\/\//i.test(item.url)).slice(0, 4);
+  if (!videos.length) return [];
+  let ocr = null;
+  try {
+    ocr = require('../services/videoCaptionOcrService');
+  } catch (error) {
+    logger.warn('Agent 007 on-screen text reader unavailable', { error: error.message });
+    return [];
+  }
+  if (typeof ocr.ocrPropertyVideos !== 'function') return [];
+  const deadline = Date.now() + Math.max(10000, Number(process.env.AGENT007_VIDEO_TEXT_DEADLINE_MS || 75000) || 75000);
+  const consumed = new Set();
+  const saved = [];
+  for (const video of videos) {
+    if (Date.now() > deadline) break;
+    let rawText = '';
+    try {
+      const read = await ocr.ocrPropertyVideos({ extra_fields: { video_urls: [video.url] } }, { deadline });
+      rawText = String(read?.text || '');
+    } catch (error) {
+      logger.warn('Agent 007 could not read on-screen text from a video', { error: error.message || String(error) });
+      continue;
+    }
+    const best = bestCaptionFromOnScreenText(rawText, data);
+    if (!best) continue;
+    const { text, facts } = best;
+    let duplicate = null;
+    try {
+      duplicate = await findEmployeeDuplicateProperty({ caption: text, facts, sessionData: data });
+    } catch (error) {
+      logger.warn('Agent 007 video-text duplicate check failed', { error: error.message });
+      continue;
+    }
+    if (duplicate) {
+      noteEmployeeBatchDuplicate(data, text, duplicate);
+      consumed.add(video.url);
+      continue;
+    }
+    let propertyId = '';
+    try {
+      propertyId = await createEmployeeReviewProperty({
+        phone,
+        inboundMessageId: `${normalizeInput(inboundMessageId) || 'complete'}:video-text:${saved.length + 1}`,
+        caption: text,
+        facts,
+        storedMedia: [video],
+        sessionData: data
+      });
+    } catch (error) {
+      logger.error('Agent 007 could not save a property read from video text', { error: error.message });
+      continue;
+    }
+    if (!propertyId) continue;
+    // OCR misreads digits ("1.4 billion" came back as "14 billion"), so the
+    // moderator is told plainly where these facts came from.
+    await db.query(
+      `UPDATE properties
+          SET moderation_notes = CONCAT_WS(E'\n', NULLIF(moderation_notes, ''), $2::text),
+              extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $3::jsonb
+        WHERE id = $1`,
+      [
+        propertyId,
+        'Caption read from the text written on the video (no WhatsApp caption). Check price, place and type against the video before approving.',
+        JSON.stringify({ caption_source: 'video_on_screen_text', video_on_screen_text: String(rawText).slice(0, 1200) })
+      ]
+    ).catch((error) => logger.warn('Agent 007 could not flag a video-text property', { error: error.message }));
+    consumed.add(video.url);
+    noteEmployeePropertyCreated(data, propertyId, [video], text);
+    data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
+    data.total_media_count = Number(data.total_media_count || 0) + 1;
+    data.properties_shared_count = Number(data.properties_shared_count || 0) + 1;
+    saved.push({ propertyId, label: `"${shortEmployeeLabel(text, 50)}" read as ${facts.listingType} in ${facts.locationPatch?.area || facts.locationPatch?.district || 'Uganda'} at UGX ${Number(facts.price || 0).toLocaleString('en-US')}` });
+  }
+  if (consumed.size) {
+    const left = (Array.isArray(data.pending_property_media) ? data.pending_property_media : [])
+      .filter((item) => !consumed.has(normalizeInput(item?.url)));
+    if (left.length) {
+      data.pending_property_media = left;
+    } else {
+      clearEmployeePendingMedia(data);
+      promoteEmployeeQueuedSubmission(data);
+    }
+    if (phone) {
+      try {
+        await replaceEmployeeSession(phone, currentStep, data);
+      } catch (error) {
+        logger.error('Agent 007 could not persist the session after reading video text', { error: error.message });
+      }
+    }
+  }
+  return saved;
+}
+
 async function flushReadyEmployeeSubmissions({ phone, currentStep, data, inboundMessageId } = {}) {
   const savedIds = [];
   // Bounded, in case a promotion ever fails to consume its own entry.
@@ -5891,6 +6048,7 @@ async function flushReadyEmployeeSubmissions({ phone, currentStep, data, inbound
       break;
     }
     if (duplicate) {
+      noteEmployeeBatchDuplicate(data, caption, duplicate);
       delete data.pending_property_caption;
       clearEmployeePendingMedia(data);
       if (!promoteEmployeeQueuedSubmission(data)) break;
@@ -6271,6 +6429,7 @@ async function prepareEmployeeOrderedBatchReplay({
     total_media_count: previousMedia,
     properties_shared_count: 0,
     properties_duplicate_count: 0,
+    employee_batch_duplicates: [],
     properties_failed_count: 0,
     employee_intake_recovery_previous_properties_shared: previousShared,
     employee_intake_recovery_previous_duplicates: previousDuplicates,
@@ -7399,6 +7558,7 @@ function agentSelfIntakeSessionData(agent) {
     total_media_count: 0,
     properties_shared_count: 0,
     properties_duplicate_count: 0,
+    employee_batch_duplicates: [],
     properties_failed_count: 0,
     property_attempt_message_ids: []
   };
@@ -8641,6 +8801,7 @@ async function handleEmployeeWhatsappIntake({
       total_media_count: 0,
       properties_shared_count: 0,
       properties_duplicate_count: 0,
+    employee_batch_duplicates: [],
       properties_failed_count: 0,
       property_attempt_message_ids: []
     };
@@ -9487,9 +9648,32 @@ async function handleEmployeeWhatsappIntake({
           actorId: 'employee_orphan_media'
         }).catch(() => {});
       }
+      // Videos whose words are on the screen, not in a caption.
+      if (!normalizeInput(data.pending_property_caption || '') && employeePendingStoredMedia(data).some((item) => item.kind === 'video')) {
+        queueWhatsappWebBridgeAutoReply({
+          phone,
+          message: '🔎 Some videos came without a caption. I am reading the text written on them — one moment.',
+          nextStep: currentStep,
+          source: 'whatsapp_runtime',
+          actorId: 'employee_video_text'
+        }).catch(() => {});
+        const fromVideoText = await captionPendingVideosFromOnScreenText({ phone, currentStep, data, inboundMessageId });
+        if (fromVideoText.length) {
+          flushedIds.push(...fromVideoText.map((entry) => entry.propertyId));
+          queueWhatsappWebBridgeAutoReply({
+            phone,
+            message: `🎬 Read from the text on the video and saved for staff review: ${fromVideoText.map((entry) => entry.label).join('; ')}. Text on a video is sometimes misread (a 1.4 billion can come out as 4 billion), so staff will check every figure against the video before anything goes live.`,
+            nextStep: currentStep,
+            source: 'whatsapp_runtime',
+            actorId: 'employee_video_text'
+          }).catch(() => {});
+          flushedIds.push(...await flushReadyEmployeeSubmissions({ phone, currentStep, data, inboundMessageId }));
+        }
+      }
       const pendingStoredMedia = employeePendingStoredMedia(data);
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
       const queuedSubmissions = employeePendingSubmissionQueue(data);
+      const duplicateLines = employeeBatchDuplicateLines(data);
       if (pendingStoredMedia.length || pendingCaption || queuedSubmissions.length) {
         const pendingFacts = employeePropertyFacts(pendingCaption, data);
         const pendingMissing = employeePropertyMissing(pendingFacts);
@@ -9520,7 +9704,7 @@ async function handleEmployeeWhatsappIntake({
           // refusal each time, with no exit named in it. The way out existed —
           // CANCEL — but nothing here ever said so, so there was no way to know
           // the batch could be closed at all.
-          message: `I have not completed this batch because ${blocker}.${missingLine}${savedLine}${queuedLine} Send the corrected caption or the missing media; nothing has been merged and nothing is live.\n\nIf you would rather stop here, reply *CANCEL* — anything already in staff review stays there.`
+          message: `I have not completed this batch because ${blocker}.${missingLine}${savedLine}${queuedLine} Send the corrected caption or the missing media; nothing has been merged and nothing is live.${duplicateLines.length ? `\n\nAlready on makaug, so not added again:\n${duplicateLines.join('\n')}` : ''}\n\nIf you would rather stop here, reply *CANCEL* — anything already in staff review stays there.`
         };
       }
       let propertyIds = Array.isArray(data.property_ids) ? data.property_ids : [];
@@ -10092,6 +10276,7 @@ async function handleEmployeeWhatsappIntake({
           });
         }
         if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
+        noteEmployeeBatchDuplicate(data, caption, existingProperty);
         if (data.whatsapp_agent_self_intake === true && String(existingProperty.status) === 'pending' && candidates.length) {
           const fresh = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider }).catch(() => []);
           const toppedUp = await agentTopUpExistingProperty({ data, existingProperty, storedMedia: fresh, phone, inboundMessageId });
@@ -12656,11 +12841,17 @@ async function buildEmployeeBatchSummary(phone, since) {
     });
   }
 
-  if (!saved.length && !notSaved.length) return '';
+  const duplicateLines = employeeBatchDuplicateLines(data);
+  if (!saved.length && !notSaved.length && !duplicateLines.length) return '';
   const lines = [];
   const everythingReady = notSaved.length > 0
     && notSaved.every((item) => /^nothing more\b/i.test(item.needs));
-  lines.push(employeeBatchSummaryHeadline(saved.length, notSaved.length, everythingReady));
+  lines.push(!saved.length && !notSaved.length
+    ? '📋 *Nothing new in this batch* — every property sent is already on makaug.'
+    : employeeBatchSummaryHeadline(saved.length, notSaved.length, everythingReady));
+  if (duplicateLines.length) {
+    lines.push('', '↩️ *Already on makaug, not added again:*', ...duplicateLines);
+  }
   if (saved.length) {
     lines.push('', '✅ *Saved for staff review:*');
     saved.forEach((row, index) => lines.push(`${index + 1}. ${shortEmployeeLabel(row.title || 'Property', 50)}${row.inquiry_reference ? ` — ref *${row.inquiry_reference}*` : ''}`));
@@ -19914,6 +20105,10 @@ module.exports.__test = {
   employeePendingStoredMedia,
   employeeVideoEvidenceOnly,
   employeePropertyFacts,
+  noteEmployeeBatchDuplicate,
+  bestCaptionFromOnScreenText,
+  employeeBatchDuplicateLines,
+  captionPendingVideosFromOnScreenText,
   employeeLandSize,
   websitePrefillSearchText,
   extractNaturalSearchFilters,
