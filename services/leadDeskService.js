@@ -1096,12 +1096,13 @@ async function tickLeadDesk(db) {
 function startLeadDeskScheduler(db) {
   if (schedulerTimer || !process.env.DATABASE_URL || process.env.LEAD_DESK_SCHEDULER_ENABLED === 'false') return;
   const pollMs = Math.max(2 * 60_000, Number(process.env.LEAD_DESK_POLL_MS || 5 * 60_000));
+  // observeJob names the desk in the stall and memory logs.
   schedulerTimer = setInterval(() => {
-    tickLeadDesk(db).catch((error) => logger.error('Lead desk tick failed', { error: error.message }));
+    observeJob('lead_desk', () => tickLeadDesk(db)).catch((error) => logger.error('Lead desk tick failed', { error: error.message }));
   }, pollMs);
   schedulerTimer.unref?.();
   setTimeout(() => {
-    tickLeadDesk(db).catch((error) => logger.error('Lead desk boot tick failed', { error: error.message }));
+    observeJob('lead_desk', () => tickLeadDesk(db)).catch((error) => logger.error('Lead desk boot tick failed', { error: error.message }));
   }, BOOT_DELAY_MS.lead_desk).unref?.();
   logger.info('Lead desk scheduler armed', { pollMs, slaHours: slaHours(), alertRecipients: alertRecipients().length, reportHourKampala: Number(process.env.LEAD_DESK_REPORT_HOUR || 7) });
 }
