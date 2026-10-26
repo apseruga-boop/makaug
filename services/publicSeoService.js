@@ -485,11 +485,24 @@ function createPublicSeoSnapshotBuilder(generatedAt = new Date().toISOString()) 
   );
   // 10th percentile of valid prices per location (children included for a
   // city/district); no floor below 5 valid prices.
+  // Same scope as locationValidPrices(), but each district's prices are
+  // bucketed in one pass instead of rescanning every location per district.
+  const locationOptions = canonicalLocationOptions();
   const locationPriceFloors = Object.fromEntries(Object.keys(CATEGORY_SEO).map((category) => {
     const floors = new Map();
-    const scratch = { locationValidPrices: locationValidPricesByCategory };
-    for (const location of canonicalLocationOptions()) {
-      const values = locationValidPrices(scratch, category, location.canonical_key);
+    const direct = locationValidPricesByCategory[category];
+    const districtPrices = new Map();
+    for (const [key, prices] of direct) {
+      const district = canonicalLocationByKey(key)?.district;
+      if (!district) continue;
+      if (!districtPrices.has(district)) districtPrices.set(district, []);
+      const bucket = districtPrices.get(district);
+      for (const price of prices) bucket.push(price);
+    }
+    for (const location of locationOptions) {
+      const values = location.level === 'district'
+        ? (districtPrices.get(location.district) || [])
+        : (direct.get(location.canonical_key) || []);
       const floor = floorFromPrices(values);
       if (floor > 0) floors.set(location.canonical_key, floor);
     }
