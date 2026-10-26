@@ -90,12 +90,14 @@ const {
 
 const {
   DUPLICATE_CANDIDATES_SQL,
+  DUPLICATE_CANDIDATE_COLUMNS_SQL,
   classifyDuplicates,
   duplicateCandidateParams,
   duplicateGroupsCountSql,
   duplicateReason,
   sourcePostKey
 } = require('../utils/duplicateEvidence');
+const { duplicateRef: duplicateRefOf, listerKeys, possibleDuplicateWarning } = require('../utils/crossVideoDuplicate');
 const { normalizeStaffSourcePostDate, staffSourcePostDateExtra } = require('../utils/sourcePostDate');
 
 const router = express.Router();
@@ -2524,7 +2526,8 @@ async function buildDashboardPanelsPayload(req) {
                 'media_quality_blockers', COALESCE(p.extra_fields->'media_quality_blockers', '[]'::jsonb),
                 'source_evidence_urls', COALESCE(p.extra_fields->'source_evidence_urls', '[]'::jsonb),
                 'public_image_count', COALESCE(p.extra_fields->'public_image_count', '0'::jsonb),
-                'primary_image_url', p.extra_fields->>'primary_image_url'
+                'primary_image_url', p.extra_fields->>'primary_image_url',
+                'possible_duplicate_of', p.extra_fields->'possible_duplicate_of'
               ) AS extra_fields,
               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
               COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
@@ -3441,8 +3444,9 @@ async function loadStaffPropertyPreview(propertyId) {
     images,
     duplicate_review: {
       count: duplicates.length,
-      rows: duplicates,
-      must_check_before_approval: duplicates.length > 0
+      rows: duplicates.map((row) => ({ ...row, duplicate_ref: duplicateRefOf(row), review_url: staffReviewUrlFor(row.id) })),
+      must_check_before_approval: duplicates.length > 0,
+      possible_duplicate_of: staffPossibleDuplicateOf(duplicates, extra)
     },
     source_evidence: {
       platform: firstNonEmpty(extra.source_platform, extra.source_badge, property.source, property.listed_via),
@@ -3569,8 +3573,7 @@ async function loadStaffBulkReviewCandidates({ ids = [], allPending = false } = 
 
 async function loadApprovedDuplicateIndex() {
   const result = await staffQuery(
-    `SELECT p.id, p.title, p.lister_phone, p.status, p.area, p.listing_type, p.bedrooms, p.price,
-            COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url
+    `SELECT ${DUPLICATE_CANDIDATE_COLUMNS_SQL}
      FROM properties p
      WHERE LOWER(COALESCE(p.status, '')) = 'approved'
      ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST
@@ -3581,9 +3584,38 @@ async function loadApprovedDuplicateIndex() {
   return buildApprovedDuplicateIndex(result.rows);
 }
 
+function staffReviewUrlFor(id) {
+  return id ? `/staff-dashboard/review/${encodeURIComponent(String(id))}` : '';
+}
+
+// "Possible duplicate of <ref>": the first duplicate found now, else the one
+// the harvester stored when it created this pending listing.
+function staffPossibleDuplicateOf(duplicates = [], extra = {}) {
+  const row = (Array.isArray(duplicates) ? duplicates : [])[0];
+  if (row) {
+    return {
+      id: row.id,
+      ref: duplicateRefOf(row),
+      reason: row.duplicate_reason || '',
+      warning: possibleDuplicateWarning(row),
+      review_url: staffReviewUrlFor(row.id)
+    };
+  }
+  const stored = extra && typeof extra.possible_duplicate_of === 'object' ? extra.possible_duplicate_of : null;
+  if (!stored || !stored.id) return null;
+  return {
+    id: stored.id,
+    ref: stored.ref || duplicateRefOf(stored),
+    reason: stored.reason || '',
+    warning: possibleDuplicateWarning(stored),
+    review_url: staffReviewUrlFor(stored.id)
+  };
+}
+
 function buildApprovedDuplicateIndex(rows = []) {
   const bySourceKey = new Map();
   const byPhoneRows = new Map();
+  const byListerRows = new Map();
   (Array.isArray(rows) ? rows : [])
     .filter((row) => ['approved', 'live', 'published'].includes(String(row.status || '').toLowerCase()))
     .forEach((row) => {
@@ -3591,8 +3623,9 @@ function buildApprovedDuplicateIndex(rows = []) {
       if (post && !bySourceKey.has(post.key)) bySourceKey.set(post.key, row);
       const phone = normalizePhoneLite(row.lister_phone);
       if (phone) byPhoneRows.set(phone, [...(byPhoneRows.get(phone) || []), row]);
+      for (const key of listerKeys(row)) byListerRows.set(key, [...(byListerRows.get(key) || []), row]);
     });
-  return { bySourceKey, byPhoneRows };
+  return { bySourceKey, byPhoneRows, byListerRows };
 }
 
 function approvedDuplicateIndexFromRows(rows = []) {
@@ -3612,6 +3645,13 @@ function staffBulkDuplicateMatch(row = {}, approvedIndex = {}) {
   for (const candidate of sameAgent) {
     const reason = duplicateReason(listing, candidate);
     if (reason) return { ...candidate, duplicate_reason: reason.label };
+  }
+  // Same channel or lister name (no shared phone): cross-video duplicates.
+  for (const key of listerKeys(listing)) {
+    for (const candidate of approvedIndex.byListerRows?.get(key) || []) {
+      const reason = duplicateReason(listing, candidate);
+      if (reason) return { ...candidate, duplicate_reason: reason.label };
+    }
   }
   return null;
 }
@@ -6044,4 +6084,4 @@ router.get('/video-caption-conflicts', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports._test = { normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, loadStaffPropertyPreview, liveEditSnapshot, staffLocationWarnings, staffLocationSoftWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary, stripRoadNamePhrases };
+module.exports._test = { staffBulkDuplicateMatch, buildApprovedDuplicateIndex, staffPossibleDuplicateOf, normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, loadStaffPropertyPreview, liveEditSnapshot, staffLocationWarnings, staffLocationSoftWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary, stripRoadNamePhrases };
