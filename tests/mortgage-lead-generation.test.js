@@ -132,7 +132,10 @@ assert(app.includes('sortMortgageProviderRows(result.providerRows)'), 'mortgage 
 assert(app.includes('data-mortgage-sort-option'), 'mortgage comparison should expose sort controls');
 assert(app.includes('hidden md:block') && app.includes('md:hidden'), 'mortgage comparison should have desktop table and mobile card layouts');
 assert(app.includes('ratesAsOfLine'), 'mortgage page should render an explicit rates-as-of line');
-assert(html.includes('admin-mortgage-leads-table'), 'admin dashboard should include a visible mortgage leads table');
+// King dashboard slim-down (26 Oct 2026): the separate CRM shell (with its mortgage table) is retired;
+// mortgage leads are worked from the CRM Leads card on the Leads tab.
+assert(!html.includes('admin-mortgage-leads-table'), 'retired King CRM shell mortgage table should stay removed');
+assert(html.includes('admin-crm-leads-table'), 'King Leads tab keeps the CRM leads table');
 assert(app.includes('/api/admin/mortgage-leads?limit=20'), 'admin dashboard should fetch dedicated mortgage leads');
 for (const provider of [
   'NCBA Bank Uganda',

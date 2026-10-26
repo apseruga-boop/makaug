@@ -249,7 +249,8 @@ test('protected admin API exposes registry, config, start, pause, import and run
 test('admin dashboard renders provider truth, coverage, caps, controls and run logs', () => {
   const html = read('index.html');
   const app = read('assets/makaug-app.js');
-  assert.match(html, /id="admin-marketplace-drip-panel"/);
+  // King dashboard slim-down (26 Oct 2026): the drip panel is retired from King; the renderer stays for the API.
+  assert.doesNotMatch(html, /id="admin-marketplace-drip-panel"/);
   assert.match(app, /function marketplaceDripHtml/);
   assert.match(app, /Provider truth/);
   assert.match(app, /Monthly requests/);

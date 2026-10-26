@@ -130,7 +130,8 @@ test('marketplace UI has all nine language packs and localized category labels',
 
 test('staff and King dashboards share the protected Marketplace approval queue', () => {
   assert.match(html, /id="staff-marketplace-queue"/);
-  assert.match(html, /id="admin-marketplace-queue"/);
+  // King dashboard slim-down (26 Oct 2026): King links to the staff approval desk instead of a copy of it.
+  assert.match(html, /kingOpenStaffDesk\(event, 'marketplace'\)/);
   assert.match(app, /refreshMarketplaceModerationQueue\("staff"/);
   assert.match(app, /refreshMarketplaceModerationQueue\("admin"/);
   assert.match(app, /\/api\/marketplace\/admin\/pending/);

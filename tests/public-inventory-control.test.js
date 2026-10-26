@@ -717,8 +717,9 @@ test('King dashboard loads core review data before heavy tab-specific panels', (
   const snapshotSource = asyncFunctionSource('fetchRemoteAdminSnapshot');
   const tabSource = functionSource('setAdminWorkflowTab');
   const renderSource = asyncFunctionSource('renderAdminDashboard');
-  assert.match(needsSource, /reviewQueue: \["review", "student-sweep", "youtube-sweep"\]\.includes\(normalized\)/);
-  assert.match(needsSource, /ads: normalized === "ads"/);
+  assert.match(needsSource, /reviewQueue: \["review", "youtube-sweep"\]\.includes\(normalized\)/);
+  // Ad placements moved onto the Revenue tab (King slim-down, 26 Oct 2026).
+  assert.match(needsSource, /ads: normalized === "revenue"/);
   assert.match(needsSource, /whatsapp: normalized === "whatsapp"/);
   assert.match(snapshotSource, /const fieldAgentParams = new URLSearchParams\(\{ limit: "10000", role: "field_agent" \}\)/);
   assert.match(snapshotSource, /shouldLoadFieldAgents \? adminSafeSnapshotRequest\("field agents"/);
