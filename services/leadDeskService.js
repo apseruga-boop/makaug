@@ -216,10 +216,29 @@ async function loadExtraInternalPhones(db) {
 
 let fullSyncDone = false;
 
+// After a restart the desk already holds everything synced before, and every
+// insert below skips rows it already has. So the first sync in a process only
+// looks back from the newest lead on the desk (plus a 3-day margin), not a
+// whole year. An empty desk, or a forced refresh, still reads the full window.
+async function firstSyncDays(db, days) {
+  try {
+    const result = await db.query('SELECT MAX(asked_at) AS at FROM demand_leads');
+    const at = result.rows[0]?.at ? new Date(result.rows[0].at) : null;
+    if (!at || Number.isNaN(at.getTime())) return days;
+    const since = Math.ceil((Date.now() - at.getTime()) / 86_400_000) + 3;
+    return Math.max(3, Math.min(Number(days) || 365, since));
+  } catch (_error) {
+    return days;
+  }
+}
+
 async function syncDemandLeads(db, { days = 365, full = false } = {}) {
-  // The first sync in a process looks back a year; after that only the last
-  // three days, so the 15-minute tick stays cheap on a small database.
-  const effectiveDays = full || !fullSyncDone ? days : Math.min(Number(days) || 3, 3);
+  // A forced sync reads the full window; the first sync in a process reads
+  // back from the newest lead (see firstSyncDays); after that only three days.
+  let effectiveDays;
+  if (full) effectiveDays = days;
+  else if (!fullSyncDone) effectiveDays = await firstSyncDays(db, days);
+  else effectiveDays = Math.min(Number(days) || 3, 3);
   const window = String(Math.max(1, Math.min(730, Number(effectiveDays) || 365)));
   const counts = {};
   await loadExtraInternalPhones(db);
@@ -1019,6 +1038,9 @@ function kampalaDay(date = new Date()) {
 let schedulerTimer = null;
 let reportClaimedFor = null;
 
+const MATCH_EVERY_MS = Math.max(5 * 60_000, Number(process.env.LEAD_DESK_MATCH_EVERY_MS || 60 * 60_000));
+let lastScheduledMatchAt = 0;
+
 let leadDeskRunning = false;
 async function tickLeadDesk(db) {
   if (leadDeskRunning) return { skipped: true, reason: 'already_running' };
@@ -1027,7 +1049,13 @@ async function tickLeadDesk(db) {
   return await runBackgroundWork(async () => {
     lastRefreshAt = Date.now();
     await syncDemandLeads(db, { days: 365 });
-    await refreshMatches(db);
+    // The listing match scan is the heavy part; the timer runs it at most
+    // hourly (opening the desk still refreshes it). The tick itself stays on
+    // its short poll because it carries the new-lead alerts and reminders.
+    if (Date.now() - lastScheduledMatchAt >= MATCH_EVERY_MS) {
+      lastScheduledMatchAt = Date.now();
+      await refreshMatches(db);
+    }
     await sendNewLeadAlerts(db).catch((error) => logger.warn('Lead desk new-lead alert failed', { error: error.message }));
     await sendOverdueReminders(db).catch((error) => logger.warn('Lead desk reminder failed', { error: error.message }));
     const reportHour = Math.max(0, Math.min(23, Number(process.env.LEAD_DESK_REPORT_HOUR || 7)));
@@ -1129,5 +1157,6 @@ module.exports = {
   sendDailyReport,
   startLeadDeskScheduler,
   syncDemandLeads,
+  firstSyncDays,
   tickLeadDesk
 };
