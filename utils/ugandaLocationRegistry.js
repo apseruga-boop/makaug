@@ -368,6 +368,17 @@ Array.from(new Set(canonicalDistrictByKey.values())).forEach((district) => {
   });
 });
 
+// The registry is fixed from here on. Key and district indexes keep lookups
+// O(1): a linear find over ~11.5k entries, run per location in the SEO
+// snapshot, blocked the event loop for 5-10 s every few minutes.
+const registryIndexByKey = new Map();
+const registryEntriesByDistrict = new Map();
+registry.forEach((entry) => {
+  if (!registryIndexByKey.has(entry.key)) registryIndexByKey.set(entry.key, entry);
+  if (!registryEntriesByDistrict.has(entry.district)) registryEntriesByDistrict.set(entry.district, []);
+  registryEntriesByDistrict.get(entry.district).push(entry);
+});
+
 const aliasRows = registry
   .flatMap((entry) => entry.aliases.map((alias) => ({
     alias,
@@ -817,7 +828,7 @@ function canonicalLocationByKey(value = '') {
   const key = String(value || '').trim().toLowerCase();
   if (!key) return null;
   const resolvedKey = LEGACY_CANONICAL_LOCATION_KEYS.get(key) || key;
-  const matched = registry.find((entry) => entry.key === resolvedKey);
+  const matched = registryIndexByKey.get(resolvedKey);
   return matched ? { ...matched, aliases: [...matched.aliases] } : null;
 }
 
@@ -1071,7 +1082,7 @@ function canonicalLocationRollupCounts(counts = new Map()) {
   const rolled = new Map(direct);
   registry.forEach((location) => {
     if (location.level !== 'district') return;
-    const descendants = registry.filter((entry) => entry.district === location.district);
+    const descendants = registryEntriesByDistrict.get(location.district) || [];
     const total = descendants.reduce((sum, child) => sum + Math.max(0, Number(direct.get(child.key)) || 0), 0);
     rolled.set(location.key, total);
   });
