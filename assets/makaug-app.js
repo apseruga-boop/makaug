@@ -14984,16 +14984,31 @@ function setStaffDashboardLoadingState(message = "Staff dashboard loading...") {
   setTextById("staff-source-monitor-status", "Monitor cadence loading...");
 }
 
+// King links into a staff desk queue (reports, marketplace approvals, source intake).
+function kingOpenStaffDesk(event, target) {
+  event?.preventDefault?.();
+  showPage("staff-dashboard");
+  let tries = 0;
+  const jump = () => {
+    tries += 1;
+    const el = document.getElementById(`staff-${target}-panel`);
+    const body = document.getElementById("staff-body");
+    if (el && body && !body.classList.contains("hidden")) staffJumpToDesk(target);
+    else if (tries < 20) window.setTimeout(jump, 250);
+  };
+  window.setTimeout(jump, 120);
+  return false;
+}
+
 function staffJumpToDesk(target) {
   const id = {
     review: "staff-review-panel",
     activity: "staff-activity-panel",
     leads: "staff-leads-panel",
-    advertising: "staff-advertising-panel",
     whatsapp: "staff-whatsapp-panel",
-    bank: "staff-bank-panel",
     source: "staff-source-panel",
-    ai: "staff-ai-panel",
+    reports: "staff-reports-panel",
+    marketplace: "staff-marketplace-panel",
     training: "staff-training-panel"
   }[String(target || "").toLowerCase()];
   const el = id ? document.getElementById(id) : null;
@@ -20056,11 +20071,10 @@ function adminCeoDashboardSummary(data = {}) {
 function adminCommandSelectorForTab(tab = "review") {
   const map = {
     review: "#admin-review-queue-control",
-    actioned: "#admin-actioned-listings-control",
     live: "#admin-live-followup-control",
     accounts: "#admin-accounts-control",
     staff: "#admin-staff-control",
-    "field-agents": "#admin-field-agent-control",
+    revenue: "#admin-revenue-control",
     ads: "#admin-advertising-control",
     whatsapp: "#admin-whatsapp-control",
     notifications: "#admin-notifications-control",
@@ -20104,7 +20118,7 @@ function adminBuildCommandCentre(remoteSnap, localSnap) {
     { key: "lead_follow_up", label: "Open CRM leads", value: merged.open_leads, priority: merged.hot_leads || merged.overdue_tasks ? "high" : merged.open_leads ? "medium" : "clear", tab: "notifications", action: "Work hot leads and overdue follow-ups first." },
     { key: "broker_review", label: "Broker accounts needing review", value: merged.broker_pending, priority: merged.broker_pending ? "high" : "clear", tab: "accounts", action: "Review broker ID, consent, and approval state." },
     { key: "whatsapp_handoff", label: "WhatsApp needs human", value: merged.whatsapp_needs_human, priority: merged.whatsapp_needs_human ? "high" : "clear", tab: "whatsapp", action: "Resolve, reply, or hand off conversations." },
-    { key: "advertising_revenue", label: "Advertising pipeline", value: merged.advertising_open_leads, priority: merged.advertising_open_leads ? "medium" : "clear", tab: "ads", action: "Move advertiser interest to campaign and payment." }
+    { key: "advertising_revenue", label: "Advertising pipeline", value: merged.advertising_open_leads, priority: merged.advertising_open_leads ? "medium" : "clear", tab: "revenue", action: "Move advertiser interest to campaign and payment." }
   ];
   return { metrics: merged, decisions };
 }
@@ -20136,10 +20150,7 @@ function renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel = "") {
       ["Live on site", metrics.live_listings, "text-green-700", "live", "admin-live-followup-control"],
       ["Open leads", metrics.open_leads, "text-blue-700", "notifications", "admin-notifications-control"],
       ["WhatsApp handoffs", metrics.whatsapp_needs_human, "text-red-700", "whatsapp", "admin-whatsapp-control"],
-      ["Broker reviews", metrics.broker_pending, "text-amber-700", "accounts", "admin-broker-accounts-table"],
-      ["Ad leads", metrics.advertising_open_leads, "text-emerald-700", "ads", "admin-advertising-control"],
-      ["Revenue paid", adminFormatUgx(metrics.paid_revenue_ugx), "text-gray-900", "ads", "admin-advertising-control"],
-      ["Pipeline quote", adminFormatUgx(metrics.quoted_pipeline_ugx), "text-fuchsia-700", "ads", "admin-advertising-control"]
+      ["Broker reviews", metrics.broker_pending, "text-amber-700", "accounts", "admin-broker-accounts-table"]
     ];
     metricsGrid.innerHTML = cards.map(([label, value, tone, tab, selector]) => `
       <button type="button" onclick="adminOpenDecision('${adminAttr(tab)}', '#${adminAttr(selector)}')" class="text-left rounded-2xl border border-gray-200 bg-white hover:border-green-300 hover:bg-green-50 p-4 transition">
@@ -20176,7 +20187,7 @@ function renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel = "") {
       <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
         <div class="text-xs font-black uppercase tracking-wide text-amber-800">Money focus</div>
         <div class="mt-2 text-sm text-amber-950">Open ad leads: <strong>${adminEscape(openAdLeads)}</strong>. Quoted pipeline: <strong>${adminEscape(adminFormatUgx(pipeline))}</strong>. Paid: <strong>${adminEscape(adminFormatUgx(paid))}</strong>.</div>
-        <button type="button" onclick="adminOpenDecision('ads', '#admin-advertising-control')" class="mt-3 rounded-xl bg-amber-700 px-4 py-2 text-xs font-black text-white">Open Advertising Desk</button>
+        <button type="button" onclick="adminOpenDecision('revenue', '#admin-revenue-control')" class="mt-3 rounded-xl bg-amber-700 px-4 py-2 text-xs font-black text-white">Open Revenue</button>
       </div>`;
   }
 
@@ -20203,9 +20214,8 @@ function adminRunCommandSearch() {
   const routes = [
     { terms: ["lead", "crm", "callback", "viewing", "mortgage", "enquiry", "enquiries"], tab: "notifications", selector: "#admin-notifications-control", label: "Leads & Notifications" },
     { terms: ["whatsapp", "chat", "handoff", "conversation", "language"], tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp Inbox" },
-    { terms: ["ad", "advert", "revenue", "payment", "invoice", "boost", "campaign", "monetization", "entitlement", "product"], tab: "ads", selector: "#admin-advertising-control", label: "Advertising Desk" },
+    { terms: ["ad", "advert", "revenue", "payment", "invoice", "boost", "campaign", "monetization", "entitlement", "product"], tab: "revenue", selector: "#admin-revenue-control", label: "Revenue" },
     { terms: ["broker", "agent account", "account", "password", "user", "student"], tab: "accounts", selector: "#admin-accounts-control", label: "Accounts & Outreach" },
-    { terms: ["field", "payout", "pin", "territory"], tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
     { terms: ["listing", "property", "delete", "hide", "approve", "pending", "live"], tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
     { terms: ["review", "queue", "moderate"], tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" }
   ];
@@ -20923,12 +20933,13 @@ function adminOpenDecision(tab = "review", selector = "") {
 function adminDashboardActiveTabNeedsRows(tab = activeAdminWorkflowTab) {
   const normalized = String(tab || "review");
   return {
-    reviewQueue: ["review", "student-sweep", "youtube-sweep"].includes(normalized),
+    reviewQueue: ["review", "youtube-sweep"].includes(normalized),
     liveListings: ["live", "listings"].includes(normalized),
-    actionedListings: ["actioned", "listings"].includes(normalized),
+    actionedListings: normalized === "listings",
     accounts: normalized === "accounts",
-    fieldAgents: normalized === "field-agents",
-    ads: normalized === "ads",
+    fieldAgents: false,
+    // Ad placements and revenue products now sit on the Revenue tab.
+    ads: normalized === "revenue",
     whatsapp: normalized === "whatsapp",
     notifications: normalized === "notifications",
     staff: normalized === "staff"
@@ -20974,9 +20985,12 @@ function adminVerificationBadge(status) {
 }
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "student-sweep", "youtube-sweep", "revenue", "actioned", "live", "accounts", "staff", "field-agents", "ads", "whatsapp", "agent-reports", "notifications", "listings"];
+  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "staff", "whatsapp", "agent-reports", "notifications", "listings"];
   const previousTab = activeAdminWorkflowTab;
-  activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
+  // Tabs removed in the Oct 2026 King slim-down open where their content now lives.
+  const moved = { "student-sweep": "review", actioned: "listings", "field-agents": "review", ads: "revenue" };
+  const requested = moved[String(tab)] || String(tab);
+  activeAdminWorkflowTab = allowed.includes(requested) ? requested : "review";
   document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.adminTabPanel !== activeAdminWorkflowTab);
   });
@@ -21160,8 +21174,8 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     shouldLoadNotifications ? adminSafeSnapshotRequest("demand gaps", () => apiRequest("/api/admin/demand-gaps?days=90&limit=20", { headers }), { data: { totals: {}, gaps: [] } }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("notifications", () => apiRequest("/api/admin/notifications?limit=50", { headers }), { data: [] }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("emails", () => apiRequest("/api/admin/emails?limit=50", { headers }), { data: [] }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("outlook status", () => apiRequest("/api/admin/outlook-agent/status", { headers }), { data: {} }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("outlook actions", () => apiRequest("/api/admin/outlook-agent/actions?limit=50", { headers }), { data: [] }) : null,
+    null, // Outlook agent panel removed from King (Oct 2026)
+    null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("whatsapp logs", () => apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers }), { data: [] }) : null
   ]);
   const authFailure = buildAdminAuthFailureError();
@@ -21414,12 +21428,6 @@ function ensureAdminFoundOnlineControls() {
     sourcePanel.className = "hidden mb-4 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-950";
     table.parentNode.insertBefore(sourcePanel, table);
   }
-  if (!document.getElementById("admin-x-source-drip-panel")) {
-    const dripPanel = document.createElement("div");
-    dripPanel.id = "admin-x-source-drip-panel";
-    dripPanel.className = "hidden mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-950";
-    table.parentNode.insertBefore(dripPanel, table);
-  }
   if (!document.getElementById("admin-harvest-summary")) {
     const harvestPanel = document.createElement("section");
     harvestPanel.id = "admin-harvest-summary";
@@ -21437,16 +21445,12 @@ function ensureAdminFoundOnlineControls() {
     table.parentNode.insertBefore(creatorPanel, table);
   }
   if (
-    document.getElementById("admin-seed-bakaima-listings-btn")
-    && document.getElementById("admin-seed-carnelian-listings-btn")
-    && document.getElementById("admin-seed-social-search-listings-btn")
-    && document.getElementById("admin-sweep-tiktok-posts-btn")
+    document.getElementById("admin-sweep-tiktok-posts-btn")
     && document.getElementById("admin-sweep-student-housing-btn")
     && document.getElementById("admin-import-tiktok-posts-btn")
     && document.getElementById("admin-import-youtube-posts-btn")
     && document.getElementById("admin-sweep-youtube-posts-btn")
     && document.getElementById("admin-sweep-x-posts-btn")
-    && document.getElementById("admin-x-drip-btn")
     && document.getElementById("admin-sweep-all-social-posts-btn")
     && document.getElementById("admin-copy-social-capture-helper-btn")
     && document.getElementById("admin-import-exact-social-links-btn")
@@ -21459,15 +21463,6 @@ function ensureAdminFoundOnlineControls() {
   const actions = document.createElement("div");
   actions.className = "flex items-center gap-2 flex-wrap";
   const missingButtons = [];
-  if (!document.getElementById("admin-seed-bakaima-listings-btn")) {
-    missingButtons.push(`<button id="admin-seed-bakaima-listings-btn" type="button" onclick="adminSeedBakaimaAuthorisedListings()" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-bold">Create Bakaima Listings</button>`);
-  }
-  if (!document.getElementById("admin-seed-carnelian-listings-btn")) {
-    missingButtons.push(`<button id="admin-seed-carnelian-listings-btn" type="button" onclick="adminSeedCarnelianAuthorisedListings()" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">Create Carnelian Listings</button>`);
-  }
-  if (!document.getElementById("admin-seed-social-search-listings-btn")) {
-    missingButtons.push(`<button id="admin-seed-social-search-listings-btn" type="button" onclick="adminSeedSocialSearchAuthorisedListings()" class="border border-sky-200 text-sky-700 hover:bg-sky-50 px-3 py-2 rounded-lg text-xs font-bold">Queue Found-Online Properties</button>`);
-  }
   if (!document.getElementById("admin-sweep-tiktok-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-tiktok-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('tiktok')" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep TikTok Hashtags</button>`);
   }
@@ -21485,9 +21480,6 @@ function ensureAdminFoundOnlineControls() {
   }
   if (!document.getElementById("admin-sweep-x-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-x-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('x')" class="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep X Posts</button>`);
-  }
-  if (!document.getElementById("admin-x-drip-btn")) {
-    missingButtons.push(`<button id="admin-x-drip-btn" type="button" onclick="adminLoadXSourceDrip()" class="border border-slate-900 text-slate-900 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">X Drip Crawler</button>`);
   }
   if (!document.getElementById("admin-sweep-all-social-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-all-social-posts-btn" type="button" onclick="adminSweepAllSocialPosts()" class="border border-gray-900 text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep All Social Sources</button>`);
@@ -25222,7 +25214,6 @@ async function renderAdminDashboard(options = {}) {
   if (sourceEl) sourceEl.textContent = sourceLabel;
   renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel);
   renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel);
-  loadAiCeoStatus({ silent: true });
 
   const adminUsers = remoteSnap?.users || localSnap.users || [];
   const adminAgents = remoteSnap?.agents || localSnap.agents || [];
@@ -53941,58 +53932,57 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/dashboard": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
   "/king": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
   "/king/dashboard": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
-  "/admin/launch-control": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "Launch Control" },
+  "/admin/launch-control": { page: "admin-setup-status", label: "Owner Setup Status", moved: "Launch Control moved to Owner Setup Status." },
   "/admin/moderation": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
   "/admin/review": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
-  "/admin/student-sweep": { page: "admin-dashboard", tab: "student-sweep", selector: "#admin-student-sweep-control", label: "Student Sweep" },
+  "/admin/student-sweep": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue", moved: "Student Sweep moved into the Review Queue (Student Housing Sweep button)." },
   "/admin/youtube-sweep": { page: "admin-dashboard", tab: "youtube-sweep", selector: "#admin-youtube-sweep-control", label: "YouTube Sweep" },
   "/admin/revenue": { page: "admin-dashboard", tab: "revenue", selector: "#admin-revenue-control", label: "Sales & Revenue" },
-  "/admin/rejected": { page: "admin-dashboard", tab: "actioned", selector: "#admin-actioned-listings-control", label: "Rejected / Actioned" },
-  "/admin/actioned": { page: "admin-dashboard", tab: "actioned", selector: "#admin-actioned-listings-control", label: "Rejected / Actioned" },
+  "/admin/rejected": { page: "admin-dashboard", tab: "listings", selector: "#admin-actioned-listings-control", label: "Recently Actioned (All Listings)" },
+  "/admin/actioned": { page: "admin-dashboard", tab: "listings", selector: "#admin-actioned-listings-control", label: "Recently Actioned (All Listings)" },
   "/admin/live": { page: "admin-dashboard", tab: "live", selector: "#admin-live-followup-control", label: "Live Listings" },
   "/admin/featured": { page: "admin-dashboard", tab: "live", selector: "#admin-featured-properties-control", label: "Featured Control" },
   "/admin/listings": { page: "admin-dashboard", tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
   "/admin/staff": { page: "admin-dashboard", tab: "staff", selector: "#admin-staff-control", label: "Staff Ops" },
   "/admin/moderators": { page: "admin-dashboard", tab: "staff", selector: "#admin-staff-control", label: "Staff Ops" },
-  "/admin/crm": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "CRM Lead Centre" },
+  "/admin/crm": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "CRM Lead Centre" },
   "/admin/leads": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Lead Centre" },
   "/admin/property-needs": { page: "admin-dashboard", tab: "accounts", selector: "#admin-property-requests-table", label: "Property Need Requests" },
   "/admin/property-requests": { page: "admin-dashboard", tab: "accounts", selector: "#admin-property-requests-table", label: "Property Need Requests" },
   "/admin/viewings": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Viewing Bookings" },
   "/admin/callbacks": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Callback Requests" },
-  "/admin/mortgage": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "Mortgage Leads" },
-  "/admin/help": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "Help Requests" },
-  "/admin/careers": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "Career Submissions" },
+  "/admin/mortgage": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Mortgage Leads" },
+  "/admin/help": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Help Requests" },
+  "/admin/careers": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Career Submissions" },
   "/admin/notifications": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Notifications" },
   "/admin/emails": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Email Logs" },
   "/admin/alerts": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Alerts" },
   "/admin/saved-searches": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Saved Alerts" },
   "/admin/whatsapp-inbox": { page: "admin-dashboard", tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp AI Inbox" },
   "/admin/whatsapp": { page: "admin-dashboard", tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp AI Inbox" },
-  "/admin/advertising": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Advertising Desk" },
-  "/admin/revenue": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Revenue" },
-  "/admin/payments": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Payments" },
-  "/admin/field-agents": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
-  "/admin/field-agent-control": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
-  "/admin/field-agent-performance": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-performance-board", label: "Field Agent Performance" },
-  "/admin/field-agent-all": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "All Field Agents", fieldAgentKpi: "agents" },
-  "/admin/field-agent-active": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Active Field Agents", fieldAgentKpi: "active" },
-  "/admin/field-agent-pending": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Pending Field Agent Listings", fieldAgentKpi: "pending" },
-  "/admin/field-agent-accepted": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Accepted Field Agent Listings", fieldAgentKpi: "approved" },
-  "/admin/field-agent-rejected": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Rejected Field Agent Listings", fieldAgentKpi: "rejected" },
-  "/admin/field-agent-payouts": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Field Agent Payouts", fieldAgentKpi: "payouts" },
-  "/admin/field-agent-training": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-training-control", label: "Field Agent Training" },
-  "/admin/field-agent-notices": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-notice-control", label: "Field Agent Notice Board" },
+  "/admin/advertising": { page: "admin-dashboard", tab: "revenue", selector: "#admin-advertising-control", label: "Ad placements" },
+  "/admin/payments": { page: "admin-dashboard", tab: "revenue", selector: "#admin-advertising-control", label: "Payments" },
+  "/admin/field-agents": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/field-agent-control": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/field-agent-performance": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/field-agent-all": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/field-agent-active": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/field-agent-pending": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/field-agent-accepted": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/field-agent-rejected": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/field-agent-payouts": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/field-agent-training": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/field-agent-notices": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
   "/admin/accounts": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Accounts" },
   "/admin/users": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Users" },
-  "/admin/contracts": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-training-control", label: "Contracts and field team setup" },
-  "/admin/fraud": { page: "admin-dashboard", tab: "listings", selector: "#admin-recent-reports", label: "Fraud reports" },
+  "/admin/contracts": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/fraud": { page: "staff-dashboard", staffDesk: "reports", label: "Reports & claims (staff desk)" },
   "/admin/data-protection": { page: "admin-dashboard", tab: "accounts", selector: "#admin-users-table", label: "Data protection" },
   "/admin/providers": { page: "admin-setup-status", label: "Provider Tests" },
-  "/admin/language": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "Language Status" },
-  "/admin/content-i18n": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "Translation Status" },
+  "/admin/language": { page: "admin-setup-status", label: "Language Status", moved: "Language Status moved to Owner Setup Status." },
+  "/admin/content-i18n": { page: "admin-setup-status", label: "Translation Status", moved: "Translation Status moved to Owner Setup Status." },
   "/admin/location": { page: "admin-setup-status", label: "Location and Maps Status" },
-  "/admin/how-to-videos": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "How-to Video Status" },
+  "/admin/how-to-videos": { page: "admin-setup-status", label: "How-to Video Status", moved: "How-to Video Status moved to Owner Setup Status." },
   "/admin/docs": { page: "admin-docs", label: "Admin Docs" },
   "/admin/setup-status": { page: "admin-setup-status", label: "Owner Setup Status" }
 });
@@ -54035,6 +54025,12 @@ async function openAdminControl(control, options = {}) {
   if (target.page === "admin-setup-status") {
     showPage("admin-setup-status", { history: false, source: options.source || "admin_control" });
     renderAdminSetupStatus();
+    if (target.moved && options.toast !== false) toast(target.moved);
+    return true;
+  }
+  if (target.page === "staff-dashboard") {
+    kingOpenStaffDesk(null, target.staffDesk || "review");
+    if (target.label && options.toast !== false) toast(`Opened ${target.label}.`);
     return true;
   }
   if (target.tab) activeAdminWorkflowTab = target.tab;
@@ -54042,7 +54038,8 @@ async function openAdminControl(control, options = {}) {
   if (target.tab) setAdminWorkflowTab(target.tab);
   if (target.fieldAgentKpi) adminOpenFieldAgentKpi(target.fieldAgentKpi);
   scrollAdminControlIntoView(target.selector);
-  if (target.label && options.toast !== false) toast(`Opened ${target.label}.`);
+  if (target.moved && options.toast !== false) toast(target.moved);
+  else if (target.label && options.toast !== false) toast(`Opened ${target.label}.`);
   renderAdminDashboard()
     .then(() => {
       if (target.tab) setAdminWorkflowTab(target.tab);
