@@ -5419,7 +5419,7 @@ const HOME_ASSISTANT_I18N = {
 
 const FOOTER_I18N = {
   en: {
-    brandCopy: `Uganda's property search engine. List your first property free for 7 days, then UGX 20,000 per listing per month. Web or WhatsApp, all 146 districts.`,
+    brandCopy: `Uganda's property search engine. List your first property and pay nothing for 7 days, then UGX 20,000 per listing per month. Web or WhatsApp, all 146 districts.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Chat on WhatsApp",
@@ -5454,7 +5454,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. All rights reserved.`
   },
   lg: {
-    brandCopy: "Yingini y'okunoonya ebintu mu Uganda. Teeka ekintu kyo eky'olubereberye ku bwereere okumala ennaku 7, oluvannyuma UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
+    brandCopy: "Yingini y'okunoonya ebintu mu Uganda. Teeka ekintu kyo eky'olubereberye, tosasula kintu okumala ennaku 7, oluvannyuma UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Nyumya ku WhatsApp",
@@ -5488,7 +5488,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   sw: {
-    brandCopy: "Injini ya utafutaji wa mali ya Uganda. Orodhesha mali yako ya kwanza bure kwa siku 7, kisha UGX 20,000 kwa kila tangazo kwa mwezi. Wavuti au WhatsApp, wilaya zote 146.",
+    brandCopy: "Injini ya utafutaji wa mali ya Uganda. Orodhesha mali yako ya kwanza na hulipi chochote kwa siku 7, kisha UGX 20,000 kwa kila tangazo kwa mwezi. Wavuti au WhatsApp, wilaya zote 146.",
     whatsapp: "WhatsApp",
     email: "Barua pepe",
     chatWhatsapp: "Piga gumzo WhatsApp",
@@ -5522,7 +5522,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Haki zote zimehifadhiwa.`
   },
   ac: {
-    brandCopy: "Gin me yeny jami me Uganda. Ket jami ni mukwongo me nono pi nino 7, ka dong UGX 20,000 pi listing acel dwe ki dwe. Intanet onyo WhatsApp, distrik 146 ducu.",
+    brandCopy: "Gin me yeny jami me Uganda. Ket jami ni mukwongo ma pe iculo gin mo pi nino 7, ka dong UGX 20,000 pi listing acel dwe ki dwe. Intanet onyo WhatsApp, distrik 146 ducu.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Lok i WhatsApp",
@@ -5556,7 +5556,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Twero ducu kigwoko.`
   },
   ny: {
-    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Teeka ekintu kyawe eky'okubanza aha busha ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mutimbagano nari WhatsApp, disiturikiti zoona 146.",
+    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Teeka ekintu kyawe eky'okubanza otashashuraine kintu ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mutimbagano nari WhatsApp, disiturikiti zoona 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Gamba kuri WhatsApp",
@@ -5590,7 +5590,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   rn: {
-    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Taho ekintu kyawe eky'okubanza busha ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mukutu nari WhatsApp, omu disiturikiti zoona 146.",
+    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Taho ekintu kyawe eky'okubanza otashashuraine kintu ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mukutu nari WhatsApp, omu disiturikiti zoona 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Ganira kuri WhatsApp",
@@ -5624,7 +5624,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   sm: {
-    brandCopy: "Ekyuma ekinoonia ebintu ekya Uganda. Teka ekintu kyo eky'olubereberye bwereere okumala ennaku 7, olwo UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
+    brandCopy: "Ekyuma ekinoonia ebintu ekya Uganda. Teka ekintu kyo eky'olubereberye, tosasula kintu okumala ennaku 7, olwo UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Yogera ku WhatsApp",
@@ -5658,10 +5658,10 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   am: {
-    brandCopy: "የኡጋንዳ ንብረት መፈለጊያ። የመጀመሪያውን ዝርዝር ለ7 ቀናት ነፃ ይዘምኑ፣ ከዚያ በኋላ በወር በአንድ ዝርዝር UGX 20,000። በድር ወይም በWhatsApp፣ በ146 ወረዳዎች ሁሉ።"
+    brandCopy: "የኡጋንዳ ንብረት መፈለጊያ። የመጀመሪያውን ዝርዝር ያስገቡ፤ ለ7 ቀናት ምንም አይከፍሉም፣ ከዚያ በኋላ በወር በአንድ ዝርዝር UGX 20,000። በድር ወይም በWhatsApp፣ በ146 ወረዳዎች ሁሉ።"
   },
   ar: {
-    brandCopy: "محرك البحث العقاري في أوغندا. أدرج عقارك الأول مجاناً لمدة 7 أيام، ثم UGX 20,000 لكل إعلان في الشهر. عبر الويب أو WhatsApp، في كل المقاطعات الـ 146.",
+    brandCopy: "محرك البحث العقاري في أوغندا. أدرج عقارك الأول ولا تدفع شيئاً لمدة 7 أيام، ثم UGX 20,000 لكل إعلان في الشهر. عبر الويب أو WhatsApp، في كل المقاطعات الـ 146.",
     whatsapp: "WhatsApp",
     email: "البريد الإلكتروني",
     chatWhatsapp: "الدردشة على WhatsApp",
@@ -5811,7 +5811,7 @@ const MORTGAGE_I18N = {
     mortgageStampDutyEstimate: "Mortgage stamp duty estimate",
     valuationEstimate: "Valuation estimate",
     transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, and valuation estimate",
-    bestRateApplied: "Using current best match: {bank} at {rate}%. Edit the rate to test another assumption.",
+    bestRateApplied: "Using the option closest to your inputs: {bank} at {rate}%. Edit the rate to test another assumption.",
     manualRateApplied: "Using your manual calculator rate.",
     grossMonthlyIncomeRequired: "Gross Monthly Income Required",
     loanAmount: "Loan Amount",
@@ -5832,7 +5832,7 @@ const MORTGAGE_I18N = {
     sourceNoteLabel: "Source note",
     publicRecordDisclosure: "Advisory only: rates and fees are pulled from public bank pages and market records, but banks can change terms without notice. Ask a makaug consultant or selected bank to confirm current rates before applying.",
     leadSubmitBank: "Request {bank} Call",
-    resultsTitle: "Best Match & Bank Comparison",
+    resultsTitle: "Closest to your inputs & bank comparison",
     ratesFootnote: "Indicative public rates from bank sources. Confirm current rates with the lender before applying.",
     ratesAsOfLine: "Sources verified {date} · indicative, confirm with the bank.",
     cbrNote: "Bank of Uganda CBR is 12% from 14 Oct 2026; lender rates may rise after that hike.",
@@ -5851,7 +5851,7 @@ const MORTGAGE_I18N = {
     tableMaxLtv: "Max LTV",
     tableMonthly: "Monthly repayment",
     tableAction: "Action",
-    bestMatchBadge: "Best match",
+    bestMatchBadge: "Closest to your inputs",
     refresh: "Refresh",
     whatTitle: "What is a Mortgage?",
     whatBody: "A mortgage is a long-term loan used to buy property. You pay a deposit upfront, and the bank finances the balance. You then repay monthly with interest over an agreed period.",
@@ -7377,6 +7377,22 @@ Object.assign(MORTGAGE_I18N.ar, {
   bestMatchBadge: "أفضل تطابق"
 });
 
+// Neutral wording for the top mortgage result: it is the option closest to the
+// visitor's inputs, not a recommendation. Applied last so it wins over older copy.
+const MORTGAGE_CLOSEST_MATCH_COPY = {
+  lg: { bestMatchBadge: "Ekisemberera by'oyingizza", resultsTitle: "Ekisemberera by'oyingizza & okugeraageranya bbanka", bestRateApplied: "Tukozesa ekisemberera by'oyingizza: {bank} ku {rate}%. Kyusa rate okugezesa ekiteeberezebwa ekirala." },
+  sw: { bestMatchBadge: "Karibu zaidi na taarifa zako", resultsTitle: "Karibu zaidi na taarifa zako & ulinganisho wa benki", bestRateApplied: "Tunatumia chaguo kilicho karibu zaidi na taarifa zako: {bank} kwa {rate}%. Badilisha riba kujaribu makadirio mengine." },
+  ac: { bestMatchBadge: "Cok loyo ki lok ma iketo", resultsTitle: "Cok loyo ki lok ma iketo & poro bengi", bestRateApplied: "Tye ka tic ki ma cok loyo ki lok ma iketo: {bank} ki {rate}%. Lok magoba me temo tam mukene." },
+  ny: { bestMatchBadge: "Ekiri haihi n'ebi wataho", resultsTitle: "Ekiri haihi n'ebi wataho & okugyeragyeranisa banka", bestRateApplied: "Nitukoresa ekiri haihi n'ebi wataho: {bank} aha {rate}%. Hindura interest ogyezeho ekindi." },
+  rn: { bestMatchBadge: "Ekiri haihi n'ebi wataho", resultsTitle: "Ekiri haihi n'ebi wataho & okugyeragyeranisa banka", bestRateApplied: "Nitukoresa ekiri haihi n'ebi wataho: {bank} aha {rate}%. Hindura inyungu kugyezaho ekindi." },
+  sm: { bestMatchBadge: "Ekisemberera by'oteekayo", resultsTitle: "Ekisemberera by'oteekayo & okugeraageranya bbanka", bestRateApplied: "Tukozesa ekisemberera by'oteekayo: {bank} ku {rate}%. Kyusa rate ogezeeko ekiteeberezebwa ekirala." },
+  am: { bestMatchBadge: "ለገቡት መረጃ ቅርብ", resultsTitle: "ለገቡት መረጃ ቅርብ እና የባንክ ንጽጽር", bestRateApplied: "ለገቡት መረጃ ቅርብ የሆነውን አማራጭ እየተጠቀምን ነው፦ {bank} በ {rate}%። ሌላ ግምት ለመሞከር ወለዱን ይቀይሩ።" },
+  ar: { bestMatchBadge: "الأقرب إلى مدخلاتك", resultsTitle: "الأقرب إلى مدخلاتك ومقارنة البنوك", bestRateApplied: "نستخدم الخيار الأقرب إلى مدخلاتك: {bank} عند {rate}%. عدّل الفائدة لاختبار افتراض آخر." }
+};
+Object.entries(MORTGAGE_CLOSEST_MATCH_COPY).forEach(([lang, copy]) => {
+  MORTGAGE_I18N[lang] = Object.assign(MORTGAGE_I18N[lang] || {}, copy);
+});
+
 function mortgageTr(key) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -8168,7 +8184,7 @@ function applyListingWizardLanguageUI() {
     ["list-choice-online-copy", "Open the guided website form."],
     ["list-choice-wa-title", "List through WhatsApp"],
     ["list-choice-wa-copy", "Message 0780 863 394 and let the makaug assistant guide you."],
-    ["list-choice-free-title", "Start with 7 days free."],
+    ["list-choice-free-title", "Pay nothing for your first 7 days."],
     ["list-choice-free-copy", "After that, one private listing costs UGX 20,000 per listing, per month. Every submission stays in staff review until approved."]
   ];
   labelPairs.forEach(([id, text]) => {
@@ -8237,12 +8253,12 @@ function applyListingWizardLanguageUI() {
   setTextById("lp-success-contact", translateListingLabel("We will contact you by WhatsApp or email once this listing is approved."));
   setTextById("lp-success-ref-label", translateListingLabel("Reference:"));
   setTextById("lp-success-support-label", translateListingLabel("Support:"));
-  setTextById("lp-success-account-title", translateListingLabel("Create your free makaug account to:"));
+  setTextById("lp-success-account-title", translateListingLabel("Create your makaug account to:"));
   setTextById("lp-success-benefit-1", translateListingLabel("Track listing views, saves, and enquiries in real time."));
   setTextById("lp-success-benefit-2", translateListingLabel("Edit your listing faster and update photos any time."));
   setTextById("lp-success-benefit-3", translateListingLabel("Receive weekly property tips and market updates."));
   setTextById("lp-success-benefit-4", translateListingLabel("Get priority alerts when buyers or tenants show interest."));
-  setTextById("lp-success-account-btn", translateListingLabel("Create Free Account"));
+  setTextById("lp-success-account-btn", translateListingLabel("Create Account"));
   setTextById("listing-submit-pill", translateListingLabel("Submission Received"));
   setTextById("listing-submit-title", translateListingLabel("Your property has been submitted"));
   setTextById("listing-submit-sub", translateListingLabel("Thank you. Your property listing has been submitted to makaug for review. Our team will check the details and contact you if we need anything else."));
@@ -8250,12 +8266,12 @@ function applyListingWizardLanguageUI() {
   setTextById("listing-submit-ref-label", translateListingLabel("Reference:"));
   setTextById("listing-submit-status-label", translateListingLabel("Status"));
   setTextById("listing-submit-status", translateListingLabel("Pending Review"));
-  setTextById("listing-submit-benefits-title", translateListingLabel("Create your free makaug account to:"));
+  setTextById("listing-submit-benefits-title", translateListingLabel("Create your makaug account to:"));
   setTextById("listing-submit-benefit-1", translateListingLabel("Track listing views, saves, and enquiries in real time."));
   setTextById("listing-submit-benefit-2", translateListingLabel("Edit your listing faster and update photos any time."));
   setTextById("listing-submit-benefit-3", translateListingLabel("Receive weekly property tips and market updates."));
   setTextById("listing-submit-benefit-4", translateListingLabel("Get priority alerts when buyers or tenants show interest."));
-  setTextById("listing-submit-account-btn", translateListingLabel("Create Free Account"));
+  setTextById("listing-submit-account-btn", translateListingLabel("Create Account"));
   setTextById("listing-submit-home-btn", translateListingLabel("Back to Home"));
   setTextById("listing-submit-support-label", translateListingLabel("Support:"));
   setTextById("lp-type-reset-note", translateListingLabel("Changed the property type? Use “Clear & Start Again” if this is a different listing."));
@@ -11469,7 +11485,7 @@ function applySavePropertyLanguageUI() {
   setTextById("save-property-next-2", translatePropertyUi("You can review saved homes, compare options, and track your enquiries in one place."));
   setTextById("save-property-next-3", translatePropertyUi("We will also send a welcome email when your account is created."));
   setTextById("save-property-footnote", translatePropertyUi("No property is saved publicly. Saved homes stay inside the signed-in account only."));
-  setTextById("save-property-signup-btn", translateListingLabel("Create Free Account"));
+  setTextById("save-property-signup-btn", translateListingLabel("Create Account"));
   setTextById("save-property-signin-btn", translatePropertyUi("Sign In"));
 }
 
@@ -12776,7 +12792,7 @@ function buildBrokerDashboardShareText(broker = {}, stats = {}) {
     broker.company || "Independent broker",
     `Areas: ${areas}`,
     `Active listings: ${brokerMetric(stats.active_listings || broker.live_listings || 0)}`,
-    phone ? `Call: ${phone}` : "",
+    phone ? `WhatsApp ${phone}` : "",
     whatsapp ? `WhatsApp: https://wa.me/${whatsapp}` : "",
     url
   ].filter(Boolean).join("\n");
@@ -50214,7 +50230,7 @@ async function shareBrokerBusinessCard(id, channel = "native") {
     return;
   }
   const shareUrl = getBrokerShareUrl(broker);
-  const shareText = `Broker Card: ${broker.name}\n${broker.company || ""}\n${broker.phone ? `Call: ${broker.phone}\n` : ""}${broker.whatsapp ? `WhatsApp: https://wa.me/${String(broker.whatsapp).replace(/\D/g, "")}\n` : ""}${shareUrl}`;
+  const shareText = `Broker Card: ${broker.name}\n${broker.company || ""}\n${broker.phone ? `WhatsApp ${broker.phone}\n` : ""}${broker.whatsapp ? `WhatsApp: https://wa.me/${String(broker.whatsapp).replace(/\D/g, "")}\n` : ""}${shareUrl}`;
   try {
     if (channel === "native" && navigator.share) {
       await navigator.share({ title: broker.name, text: shareText, url: shareUrl });
@@ -58643,13 +58659,13 @@ const LISTING_LABEL_I18N = {
     "Reference:": "Namba y'Okutunuulira:",
     "Status": "Embeera",
     "Support:": "Obuyambi:",
-    "Create your free makaug account to:": "Kola account yo eya makaug ey'obwereere okusobola:",
+    "Create your makaug account to:": "Kola account yo eya makaug okusobola:",
     "Summary reset to auto-generated.": "Summary ezze ku ebyekolebwa yokka.",
     "Track listing views, saves, and enquiries in real time.": "Kulondoola abalabye listing, abagiterekedde n'ababuuzizza mu kiseera kyennyini.",
     "Edit your listing faster and update photos any time.": "Okulongoosa listing yo amangu n'okukyusa bifaananyi buli kiseera.",
     "Receive weekly property tips and market updates.": "Okufuna obukodyo bw'ebintu obwa buli wiiki n'amawulire g'akatale.",
     "Get priority alerts when buyers or tenants show interest.": "Okufuna amagezi ago bukadde nga abagula oba abapangisi balaze obwagazi.",
-    "Create Free Account": "Kola Account ya Bwereere",
+    "Create Account": "Kola Account",
     "Back to Home": "Ddayo Awaka",
     "Submitted online and sent for verification.": "Kiweerezeddwa ku mutimbagano era kitwaliddwa okukakasa.",
     "Submitted in offline mode. We will sync this listing once connection returns.": "Kiweerezeddwa mu offline mode. Tujja ku-sync-a listing eno nga connection ekomyewo.",
@@ -59039,13 +59055,13 @@ const LISTING_LABEL_I18N = {
     "Reference:": "Namba ya Rufaa:",
     "Status": "Hali",
     "Support:": "Msaada:",
-    "Create your free makaug account to:": "Fungua akaunti yako ya bure ya makaug ili:",
+    "Create your makaug account to:": "Fungua akaunti yako ya makaug ili:",
     "Summary reset to auto-generated.": "Muhtasari umerudishwa wa kiotomatiki.",
     "Track listing views, saves, and enquiries in real time.": "Kufuatilia miangalo, hifadhi na maulizo ya tangazo lako kwa wakati halisi.",
     "Edit your listing faster and update photos any time.": "Kuhariri tangazo haraka na kusasisha picha muda wowote.",
     "Receive weekly property tips and market updates.": "Kupokea vidokezo vya mali vya kila wiki na masasisho ya soko.",
     "Get priority alerts when buyers or tenants show interest.": "Kupata arifa za kipaumbele wanunuzi au wapangaji wanapoonyesha nia.",
-    "Create Free Account": "Fungua Akaunti ya Bure",
+    "Create Account": "Fungua Akaunti",
     "Back to Home": "Rudi Nyumbani",
     "Submitted online and sent for verification.": "Imewasilishwa mtandaoni na kutumwa kwa uthibitisho.",
     "Submitted in offline mode. We will sync this listing once connection returns.": "Imewasilishwa kwa hali ya offline. Tutaisawazisha tangazo hili mtandao ukirudi.",
@@ -60196,7 +60212,6 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
       "Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.": "makaug teweereza kubuuza eri lister ono. Kozesa ensibuko eyasooka okukakasa okubeerawo, contact, n'amawulire g'okusasula.",
       "No direct estimate available for this setup. Open Mortgage Finder for more options.": "Tewali mbalirira eri setup eno. Ggulawo Mortgage Finder okulaba eby'okulonda ebirala.",
       "Estimated from {amount} loan": "Kubaliriddwa okuva ku loan ya {amount}",
-      "Best match": "Ekyasinga okukwatagana",
       "once": "omulundi gumu",
       "month": "omwezi",
       "year": "omwaka",
@@ -60228,7 +60243,6 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
       "Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.": "makaug haitumi maswali kwa mtangazaji huyu. Tumia chanzo cha awali kukagua upatikanaji, mawasiliano, na maelekezo ya malipo.",
       "No direct estimate available for this setup. Open Mortgage Finder for more options.": "Hakuna makadirio ya moja kwa moja kwa mpangilio huu. Fungua Mortgage Finder kwa chaguo zaidi.",
       "Estimated from {amount} loan": "Imekadiriwa kutoka mkopo wa {amount}",
-      "Best match": "Inayofaa zaidi",
       "once": "mara moja",
       "month": "mwezi",
       "year": "mwaka",
@@ -60262,7 +60276,6 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
       "Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.": "makaug ጥያቄዎችን ወደዚህ ዝርዝር አቅራቢ አይልክም። መገኘት፣ እውቂያ ዝርዝሮች እና የክፍያ መመሪያዎችን ለመፈተሽ ዋናውን ምንጭ ይጠቀሙ።",
       "No direct estimate available for this setup. Open Mortgage Finder for more options.": "ለዚህ ቅንብር ቀጥተኛ ግምት አይገኝም። ተጨማሪ አማራጮችን ለማየት Mortgage Finder ይክፈቱ።",
       "Estimated from {amount} loan": "ከ {amount} ብድር ተገምቷል",
-      "Best match": "ምርጥ ተዛማጅ",
       "once": "አንድ ጊዜ",
       "month": "ወር",
       "year": "ዓመት",
@@ -63316,7 +63329,7 @@ function renderMortgageFinder() {
   const sortControls = `
     <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
       <p class="text-xs text-gray-600">${adminEscape(mortgageTr("comparisonSubtitle"))}</p>
-      <div class="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-white p-1 shadow-sm" aria-label="${adminAttr(mortgageTr("sortBy"))}">
+      <div class="inline-flex max-w-full flex-wrap items-center gap-1 rounded-2xl border border-emerald-100 bg-white p-1 shadow-sm" aria-label="${adminAttr(mortgageTr("sortBy"))}">
         ${sortOptions.map(([key, label]) => `
           <button type="button" data-mortgage-sort-option="${adminAttr(key)}" onclick="setMortgageComparisonSort('${adminAttr(key)}')" aria-pressed="${activeMortgageComparisonSort === key ? "true" : "false"}" class="${activeMortgageComparisonSort === key ? "bg-green-700 text-white" : "text-green-800 hover:bg-green-50"} rounded-full px-3 py-1.5 text-xs font-black">${adminEscape(label)}</button>
         `).join("")}
@@ -63463,7 +63476,7 @@ function renderDetailMortgageWidget(propertyId) {
   target.innerHTML = `
     <div class="text-sm font-semibold text-gray-800 mb-2">${translatePropertyUi("Estimated from {amount} loan", { amount: formatUgxAmount(result.loanAmount) })}</div>
     <div class="bg-green-50 border border-green-100 rounded-lg p-3 mb-2">
-      <div class="text-xs uppercase tracking-wide text-green-700 font-semibold">${translatePropertyUi("Best match")}</div>
+      <div class="text-xs uppercase tracking-wide text-green-700 font-semibold">${mortgageTr("bestMatchBadge")}</div>
       <div class="text-sm font-bold text-gray-900 mt-1">${result.best.provider.name}</div>
       <div class="text-xs text-gray-600 mt-0.5">${result.best.rate.toFixed(2)}% • ${formatUgxAmount(result.best.monthlyRepayment || 0)} / ${mortgageTr("monthWord")}</div>
     </div>

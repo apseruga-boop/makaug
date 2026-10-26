@@ -55,6 +55,12 @@ function listingShell() {
   const source = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   return applyCountryHtml(sanitizePublicHtml(source, { pathname: `/property/${LISTING_ID}` }), 'UG', { homepage: false });
 }
+const MARKETPLACE_COUNTS = {
+  surveyors: 89, brokers: 230, developers: 28, property_lawyers: 117, valuers: 10, mortgage_providers: 4,
+  architects: 40, builders: 225, electricians: 172, plumbers: 43, painters: 36, property_managers: 39,
+  insurance: 30, movers: 33, interior_design: 70, borehole_water: 19, solar: 80, security: 32,
+  cleaning: 46, loans_microfinance: 21
+};
 // Font Awesome is blocked (external), so give icons their real footprint.
 const ICON_CSS = '.fa,.fas,.far,.fab,.fa-solid,.fa-regular{display:inline-block;width:1.25em;height:1em}';
 
@@ -121,6 +127,12 @@ async function stubNetwork(context, origin) {
       return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: listingShell() });
     }
     if (!url.pathname.startsWith('/api/')) return route.continue();
+    // The marketplace category list is static config served by server.js; the
+    // counts need a database, so stub them with a realistic spread.
+    if (url.pathname === '/api/marketplace/config') return route.continue();
+    if (url.pathname === '/api/marketplace/stats') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { total: 1364, by_category: MARKETPLACE_COUNTS, by_group: [] } }) });
+    }
     if (url.pathname === `/api/properties/${LISTING_ID}`) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: LISTING }) });
     }
@@ -284,4 +296,114 @@ test('the header fits on one row without overlap in all 9 languages at every com
   assert.equal(coverage.size, PAGES.length * LANGUAGES.length * WIDTHS.length, 'every page, language and width was checked');
   assert.deepEqual(problems, [], 'no header element overlaps, spills or is cut off');
   assert.ok(moreUsed > 0, 'at least one language needed the More menu, so the overflow path was exercised');
+});
+
+// Small-screen page checks: the marketplace category chips must all be
+// reachable on a phone (they used to sit in a clipped sideways strip with the
+// "+N more" chip hidden), the mortgage page must not scroll sideways, and the
+// valuation property-type buttons must fit their labels on desktop.
+function chipLayout() {
+  const wrap = document.getElementById('marketplace-category-chips');
+  const chips = Array.from(wrap.querySelectorAll('button'));
+  const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  return {
+    viewport: innerWidth,
+    docScroll: document.documentElement.scrollWidth,
+    wrapScroll: wrap.scrollWidth,
+    wrapClient: wrap.clientWidth,
+    chips: chips.map((b) => {
+      const r = b.getBoundingClientRect();
+      return { text: b.textContent.replace(/\s+/g, ' ').trim(), more: b.classList.contains('mk-chip-more'), shown: shown(b), left: r.left, right: r.right, over: b.scrollWidth > b.clientWidth + 1 };
+    })
+  };
+}
+
+function chipProblems(tag, m) {
+  const out = [];
+  if (m.wrapScroll > m.wrapClient + 1) out.push(`${tag}: chip row scrolls sideways (${m.wrapScroll} > ${m.wrapClient})`);
+  if (m.docScroll > m.viewport + 1) out.push(`${tag}: page is wider than the screen (${m.docScroll})`);
+  for (const chip of m.chips) {
+    if (!chip.shown) out.push(`${tag}: chip "${chip.text}" is hidden`);
+    else if (chip.left < -0.5 || chip.right > m.viewport + 0.5) out.push(`${tag}: chip "${chip.text}" is off screen (${chip.left.toFixed(1)}..${chip.right.toFixed(1)})`);
+    if (chip.over) out.push(`${tag}: chip "${chip.text}" text is cut off`);
+  }
+  return out;
+}
+
+test('marketplace chips, mortgage and valuation fit small and desktop screens in all 9 languages', { timeout: 600000 }, async () => {
+  const { port, child } = await startServer();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--no-first-run'] });
+  const problems = [];
+  const checked = new Set();
+  const nonEmpty = Object.values(MARKETPLACE_COUNTS).filter((count) => count > 0).length;
+  try {
+    for (const lang of LANGUAGES) {
+      const context = await browser.newContext({ viewport: { width: 390, height: 900 } });
+      await context.addCookies([{ name: 'makaug_lang', value: lang, url: base }]);
+      await context.addInitScript((code) => { try { localStorage.setItem('makaug_lang', code); } catch (_error) {} }, lang);
+      await stubNetwork(context, base);
+      const page = await context.newPage();
+      try {
+        // Marketplace chips at phone width: first row plus the "+N more" chip, then every chip.
+        await openPage(page, base, { path: '/marketplace' }, lang);
+        await page.waitForFunction(() => document.querySelectorAll('#marketplace-category-chips button').length > 5, null, { timeout: 30000 });
+        await settle(page);
+        let m = await page.evaluate(chipLayout);
+        problems.push(...chipProblems(`marketplace [${lang} 390px]`, m));
+        const moreChip = m.chips.find((chip) => chip.more);
+        if (!moreChip || !moreChip.shown) problems.push(`marketplace [${lang} 390px]: the "more categories" chip is not visible`);
+        else {
+          await page.click('#marketplace-category-chips .mk-chip-more');
+          await settle(page);
+          m = await page.evaluate(chipLayout);
+          problems.push(...chipProblems(`marketplace expanded [${lang} 390px]`, m));
+          const categoryChips = m.chips.filter((chip) => !chip.more).length - 1;
+          if (categoryChips !== nonEmpty) problems.push(`marketplace expanded [${lang} 390px]: ${categoryChips} of ${nonEmpty} categories shown`);
+        }
+        checked.add(`marketplace:${lang}`);
+
+        // Mortgage at phone width: nothing may push the page sideways.
+        await openPage(page, base, { path: '/mortgage' }, lang);
+        await page.waitForFunction(() => document.getElementById('page-mortgage')?.classList.contains('active'), null, { timeout: 30000 });
+        await settle(page);
+        const mortgage = await page.evaluate(() => {
+          const wide = Array.from(document.querySelectorAll('#page-mortgage *'))
+            .filter((el) => {
+              if (!el.getClientRects().length || el.getBoundingClientRect().right <= innerWidth + 0.5) return false;
+              // Decorative shapes clipped by an overflow-hidden parent inside the screen do not move the page.
+              for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+                if (/hidden|clip|auto|scroll/.test(getComputedStyle(a).overflowX) && a.getBoundingClientRect().right <= innerWidth + 0.5) return false;
+              }
+              return true;
+            })
+            .slice(0, 3)
+            .map((el) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ').slice(0, 3).join('.')}`);
+          return { docScroll: document.documentElement.scrollWidth, wide };
+        });
+        if (mortgage.docScroll > 391 || mortgage.wide.length) problems.push(`mortgage [${lang} 390px]: page scrolls sideways (${mortgage.docScroll}px; ${mortgage.wide.join(', ')})`);
+        checked.add(`mortgage:${lang}`);
+
+        // Valuation property types at desktop widths: every label fits its button.
+        await openPage(page, base, { path: '/valuation' }, lang);
+        await page.waitForFunction(() => document.querySelectorAll('#valuation-category-chips > button').length > 3, null, { timeout: 30000 });
+        for (const width of [1280, 1440]) {
+          await page.setViewportSize({ width, height: 900 });
+          await settle(page);
+          const cut = await page.evaluate(() => Array.from(document.querySelectorAll('#valuation-category-chips > button'))
+            .filter((b) => b.getClientRects().length && (b.scrollWidth > b.clientWidth + 1 || b.scrollHeight > b.clientHeight + 1))
+            .map((b) => b.textContent.replace(/\s+/g, ' ').trim()));
+          for (const label of cut) problems.push(`valuation [${lang} ${width}px]: property type "${label}" does not fit its button`);
+          checked.add(`valuation:${lang}:${width}`);
+        }
+      } finally {
+        await context.close();
+      }
+    }
+  } finally {
+    await browser.close();
+    child.kill('SIGTERM');
+  }
+  assert.equal(checked.size, LANGUAGES.length * 4, 'every language was checked on every page');
+  assert.deepEqual(problems, [], 'no chip, button or page section is hidden, cut off or wider than the screen');
 });

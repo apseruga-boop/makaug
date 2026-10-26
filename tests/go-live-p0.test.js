@@ -352,7 +352,7 @@ function run() {
   assert(!/id="listing-submit-modal"[^>]*class="[^"]*\bopen\b/i.test(listPropertyHtml), 'listing submit modal should not be open before submission');
   assert(listPropertyText.includes('List Property'), '/list-property should use short page title');
   assert(!listPropertyText.includes('Always 100% Free.'), '/list-property must not claim listings are always free');
-  assert(listPropertyText.includes('Start with 7 days free.'), '/list-property should explain the introductory listing period');
+  assert(listPropertyText.includes('Pay nothing for your first 7 days.'), '/list-property should explain the introductory listing period');
   assert(listPropertyText.includes('one private listing costs UGX 20,000 per month'), '/list-property should state the current post-trial price');
   assert(!listPropertyText.includes('List Your Property - Free'), '/list-property should not use old long free title');
   assert(listPropertyText.includes('Find address or place'), '/list-property should show address-first location flow');

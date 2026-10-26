@@ -38,6 +38,7 @@ for (const lang of LANGS) {
 
 // 2. The strings reported untranslated on 3 Oct 2026 are translated everywhere.
 const mustTranslate = [
+  'Listed by an agent',
   'Off Plan', 'About Us', 'Properties', 'Featured Properties', 'Updated every morning',
   'Two fresh, checked listings from each property category across Uganda.',
   'Approved agent', 'Land title status pending', 'Houses for Sale', 'Houses for Rent',
@@ -60,14 +61,14 @@ const mustTranslate = [
   'Verified stay',
   'Short stay terms',
   "Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month. Web or WhatsApp, all 146 districts.",
-  "Uganda's property search engine. List your first property free for 7 days, then UGX 20,000 per listing per month. Web or WhatsApp, all 146 districts.",
+  "Uganda's property search engine. List your first property and pay nothing for 7 days, then UGX 20,000 per listing per month. Web or WhatsApp, all 146 districts.",
   'UGX 20,000 / listing / month after 7 free days',
   'UGX 50,000 / month after 14 days free',
   'UGX 20,000 / month for non-agents',
   'Included in the agent plan',
   'Short stays included',
   'After that, one private listing costs UGX 20,000 per listing, per month. Every submission stays in staff review until approved.',
-  'Start with 7 days free, then keep one private listing live for UGX 20,000 per listing, per month.',
+  'Pay nothing for your first 7 days, then keep one private listing live for UGX 20,000 per listing, per month.',
   'Agent plan: UGX 50,000 a month after 14 days free.',
   '14 days free, then UGX 50,000 a month.'
 ];
@@ -159,8 +160,11 @@ async function runLayer(lang) {
   }
 
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  assert(/<script src="\/assets\/makaug-site-i18n\.js\?v=20261024-site-i18n-v22" defer><\/script>/.test(html), 'the page loads the current site language pack');
-  assert(fs.readFileSync(path.join(root, 'assets', 'makaug-site-i18n.js'), 'utf8').includes('20261024-site-i18n-v22'), 'the language layer cache version matches the page');
+  // The listing-origin filter matches any agent (approved or not), so it must not borrow the 'Approved agent' badge wording.
+  assert.equal((html.match(/<option value="agent">Listed by an agent<\/option>/g) || []).length, 5, 'every listing-origin filter offers "Listed by an agent"');
+  assert(!html.includes('>Agent listed</option>'), 'the old "Agent listed" filter label is gone');
+  assert(/<script src="\/assets\/makaug-site-i18n\.js\?v=20261026-site-i18n-v23" defer><\/script>/.test(html), 'the page loads the current site language pack');
+  assert(fs.readFileSync(path.join(root, 'assets', 'makaug-site-i18n.js'), 'utf8').includes('20261026-site-i18n-v23'), 'the language layer cache version matches the page');
   const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
   assert(app.includes('function getCanonicalEnglishPropertyTitle'), 'non-English visitors get a translatable listing title');
   assert(app.includes('const fromSitePack = siteTranslate(text, lang);'), 'listing labels fall back to the site pack before English');

@@ -40,7 +40,7 @@ assert(!normalized.includes('Why people choose makaug'), 'obsolete Why people ch
 assert(!normalized.includes('Find and list land'), 'the confusing standalone land proposition should be removed');
 assert(!normalized.includes('no listing fees, ever'), 'obsolete free-listing claim should be removed');
 assert(!html.includes("Uganda's first completely free property platform"), 'the shared footer must not contradict the paid-listing model');
-assert(html.includes("Uganda's property search engine. List your first property free for 7 days, then UGX 20,000 per listing per month."), 'the shared footer should state the current listing model');
+assert(html.includes("Uganda's property search engine. List your first property and pay nothing for 7 days, then UGX 20,000 per listing per month."), 'the shared footer should state the current listing model');
 assert(!normalized.includes('1,889'), 'About must not contain a hardcoded live-listing total');
 assert(aboutBlock.includes('id="about-live-listings-stat" class="about-stat-card hidden"'), 'live count should fail closed and stay hidden until the API succeeds');
 assert(frontend.includes('return plausibleTotal || 0'), 'live-count helper should not use a hardcoded fallback');

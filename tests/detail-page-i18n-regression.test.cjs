@@ -10,7 +10,7 @@ for (const expected of [
   '"Original source": "ዋናው ምንጭ"',
   '"Contact via {platform} source": "በ{platform} ምንጭ በኩል ያግኙ"',
   '"Estimated from {amount} loan": "ከ {amount} ብድር ተገምቷል"',
-  '"Best match": "ምርጥ ተዛማጅ"',
+  '${mortgageTr("bestMatchBadge")}</div>',
   '"Standalone House": "ብቻውን የቆመ ቤት"',
   '"Area Highlights": "የአካባቢ ጎላ ያሉ ነጥቦች"',
   '"Nearby Amenities": "በአቅራቢያ ያሉ አገልግሎቶች"',

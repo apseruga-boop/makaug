@@ -16,7 +16,7 @@ assert(html.includes('id="topbar-whatsapp-link" href="https://wa.me/256780863394
 assert(html.includes('id="floating-whatsapp-link" href="https://wa.me/256780863394"'), 'the floating WhatsApp icon must remain a direct link');
 assert(html.includes('List through WhatsApp'), 'the listing choice should use the approved WhatsApp label');
 assert(html.includes('0780 863 394'), 'the listing choice should visibly show the WhatsApp number');
-assert(html.includes('Start with 7 days free.'), 'the listing modal should explain the introductory trial');
+assert(html.includes('Pay nothing for your first 7 days.'), 'the listing modal should explain the introductory trial');
 assert(html.includes('one private listing costs UGX 20,000 per month'), 'the listing modal should state the post-trial price');
 assert(html.includes('Every submission stays in staff review until approved.'), 'the listing modal must retain the review boundary');
 
