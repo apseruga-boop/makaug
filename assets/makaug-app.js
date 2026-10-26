@@ -16760,6 +16760,7 @@ async function renderStaffDashboard() {
   staffDashboardRenderInFlight = true;
   try {
     await renderStaffDashboardOnce();
+    if (currentPage === "staff-dashboard") staffPeopleEnsureLoaded("staff");
   } finally {
     staffDashboardRenderInFlight = false;
     if (staffDashboardRenderQueued) {
@@ -16787,6 +16788,400 @@ async function loadAgentBookingStaffFlags() {
       </article>`).join("");
   } catch (error) {
     list.textContent = "No open booking escalations.";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// People: the master contact list (Accounts & Outreach). One row per person,
+// matched by WhatsApp/phone number, built from accounts, contacts, leads,
+// WhatsApp profiles and seeker profiles by the server (migration 185).
+// Rendered in the staff dashboard (scope "staff") and the King dashboard
+// (scope "admin"). Personal fields carry data-pii so they can be masked.
+// ---------------------------------------------------------------------------
+const STAFF_PEOPLE_ROLE_LABELS = {
+  home_seeker: "Home-seeker",
+  agent: "Agent",
+  owner_advertiser: "Owner / advertiser",
+  lead: "Lead",
+  whatsapp_contact: "WhatsApp contact",
+  staff: "Staff"
+};
+const STAFF_PEOPLE_SOURCE_LABELS = {
+  users: "Account",
+  contacts: "Contact",
+  leads: "Lead",
+  whatsapp_user_profiles: "WhatsApp",
+  property_seeker_profiles: "Seeker profile"
+};
+const STAFF_PEOPLE_CONSENT = {
+  consented: { label: "Consented", cls: "bg-emerald-100 text-emerald-900" },
+  opted_out: { label: "Opted out", cls: "bg-red-100 text-red-900" },
+  unverified_flag: { label: "Flag only", cls: "bg-amber-100 text-amber-900" },
+  legitimate_interest: { label: "Legitimate interest", cls: "bg-blue-100 text-blue-900" },
+  none: { label: "No consent", cls: "bg-gray-100 text-gray-700" }
+};
+
+function staffPeopleState(scope) {
+  window.__makaugPeople = window.__makaugPeople || {};
+  if (!window.__makaugPeople[scope]) {
+    window.__makaugPeople[scope] = {
+      loadedAt: 0,
+      loading: false,
+      filters: { q: "", role: "", source: "", consent: "", date_field: "last_activity", from: "", to: "", sort: "last_activity", page: 1, limit: 25 },
+      data: null
+    };
+  }
+  return window.__makaugPeople[scope];
+}
+
+function staffPeopleRoot(scope) {
+  return document.querySelector(`[data-people-root="${scope}"]`);
+}
+
+function staffPeopleDate(value, withTime = false) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const opts = withTime
+    ? { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }
+    : { day: "numeric", month: "short", year: "numeric" };
+  return d.toLocaleString("en-GB", opts);
+}
+
+function staffPeopleChip(text, cls = "bg-gray-100 text-gray-700") {
+  return `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${cls}">${adminEscape(text)}</span>`;
+}
+
+function staffPeopleConsentChip(status) {
+  const c = STAFF_PEOPLE_CONSENT[status] || STAFF_PEOPLE_CONSENT.none;
+  return staffPeopleChip(c.label, c.cls);
+}
+
+function staffPeopleRoleChips(roles = []) {
+  return (roles || []).map((r) => staffPeopleChip(STAFF_PEOPLE_ROLE_LABELS[r] || r, "bg-green-50 text-green-900 border border-green-100")).join(" ");
+}
+
+function staffPeopleSourceChips(sources = []) {
+  return (sources || []).map((s) => staffPeopleChip(STAFF_PEOPLE_SOURCE_LABELS[s] || s)).join(" ");
+}
+
+function staffPeopleOptions(map, selected, allLabel) {
+  return `<option value="">${adminEscape(allLabel)}</option>` + Object.entries(map)
+    .map(([value, label]) => `<option value="${adminAttr(value)}"${value === selected ? " selected" : ""}>${adminEscape(typeof label === "string" ? label : label.label)}</option>`)
+    .join("");
+}
+
+function staffPeopleShellHtml(scope) {
+  const f = staffPeopleState(scope).filters;
+  const input = "mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm";
+  return `
+    <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+      <div class="min-w-0">
+        <h3 class="text-xl font-black text-gray-900">People · master contact list</h3>
+        <p class="text-xs text-gray-500 mt-1">One row per person, matched by WhatsApp/phone number across accounts, contacts, leads, WhatsApp and seeker profiles. Updates itself.</p>
+        <p class="text-xs text-gray-600 mt-1" data-people-updated>Last updated: …</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="staffPeopleLoad('${scope}', { force: true })" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh</button>
+        <button type="button" data-people-export onclick="staffPeopleExportCsv('${scope}')" class="hidden bg-gray-900 text-white hover:bg-black px-3 py-1.5 rounded-lg text-xs font-semibold">Export CSV</button>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2 mb-3 text-xs" data-people-counts></div>
+    <form class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 mb-3" onsubmit="staffPeopleApplyFilters(event, '${scope}')" onchange="staffPeopleApplyFilters(event, '${scope}')">
+      <label class="col-span-2 text-xs font-semibold text-gray-700">Search
+        <input name="q" type="search" value="${adminAttr(f.q)}" placeholder="Name, phone or email" autocomplete="off" class="${input}">
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Role
+        <select name="role" class="${input}">${staffPeopleOptions(STAFF_PEOPLE_ROLE_LABELS, f.role, "All roles")}</select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Source
+        <select name="source" class="${input}">${staffPeopleOptions(STAFF_PEOPLE_SOURCE_LABELS, f.source, "All sources")}</select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Consent
+        <select name="consent" class="${input}">${staffPeopleOptions(STAFF_PEOPLE_CONSENT, f.consent, "Any consent")}</select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Date
+        <select name="date_field" class="${input}">
+          <option value="last_activity"${f.date_field === "last_activity" ? " selected" : ""}>Last activity</option>
+          <option value="first_seen"${f.date_field === "first_seen" ? " selected" : ""}>First seen</option>
+        </select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">From
+        <input name="from" type="date" value="${adminAttr(f.from)}" class="${input}">
+      </label>
+      <label class="text-xs font-semibold text-gray-700">To
+        <input name="to" type="date" value="${adminAttr(f.to)}" class="${input}">
+      </label>
+      <label class="text-xs font-semibold text-gray-700 col-span-2 md:col-span-1">Sort
+        <select name="sort" class="${input}">
+          <option value="last_activity"${f.sort === "last_activity" ? " selected" : ""}>Last activity (newest)</option>
+          <option value="oldest_activity"${f.sort === "oldest_activity" ? " selected" : ""}>Last activity (oldest)</option>
+          <option value="first_seen"${f.sort === "first_seen" ? " selected" : ""}>First seen (newest)</option>
+          <option value="name"${f.sort === "name" ? " selected" : ""}>Name A–Z</option>
+        </select>
+      </label>
+    </form>
+    <p class="text-xs text-gray-500 mb-2" data-people-summary></p>
+    <div data-people-list class="text-sm"></div>
+    <div class="flex items-center justify-between gap-2 mt-3" data-people-pager></div>
+    <div data-people-detail="${scope}" class="hidden fixed inset-0 z-[10050] bg-black/40" onclick="if (event.target === this) staffPeopleCloseDetail('${scope}')">
+      <div class="absolute inset-y-0 right-0 w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto" data-people-detail-body></div>
+    </div>`;
+}
+
+function staffPeopleRowsHtml(scope, rows) {
+  if (!rows.length) return `<p class="rounded-xl border border-dashed border-gray-300 p-4 text-gray-500">No people match these filters.</p>`;
+  const table = `
+    <div class="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
+          <tr>
+            <th class="px-3 py-2">Person</th><th class="px-3 py-2">Role</th><th class="px-3 py-2">Sources</th>
+            <th class="px-3 py-2">First seen</th><th class="px-3 py-2">Last activity</th>
+            <th class="px-3 py-2">Saves / alerts</th><th class="px-3 py-2">Consent</th><th class="px-3 py-2">Staff</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${rows.map((p) => `
+            <tr class="hover:bg-green-50/40 cursor-pointer align-top" onclick="staffPeopleOpenDetail('${scope}', '${adminAttr(p.id)}')">
+              <td class="px-3 py-2 min-w-[180px]">
+                <p class="font-bold text-gray-900" data-pii>${adminEscape(p.display_name || "Unnamed")}</p>
+                <p class="text-xs text-gray-600 font-mono" data-pii="phone">${adminEscape(p.phone_e164 || "")}</p>
+                ${p.email ? `<p class="text-xs text-gray-500" data-pii>${adminEscape(p.email)}</p>` : ""}
+              </td>
+              <td class="px-3 py-2"><div class="flex flex-wrap gap-1">${staffPeopleRoleChips(p.roles)}</div></td>
+              <td class="px-3 py-2"><div class="flex flex-wrap gap-1">${staffPeopleSourceChips(p.sources)}</div><p class="text-[11px] text-gray-400 mt-1">${Number(p.source_row_count || 0)} record${Number(p.source_row_count) === 1 ? "" : "s"}</p></td>
+              <td class="px-3 py-2 whitespace-nowrap text-xs">${staffPeopleDate(p.first_seen_at)}</td>
+              <td class="px-3 py-2 whitespace-nowrap text-xs font-semibold">${staffPeopleDate(p.last_activity_at)}</td>
+              <td class="px-3 py-2 text-xs">${Number(p.saves_count || 0)} / ${Number(p.alerts_count || 0)}</td>
+              <td class="px-3 py-2">${staffPeopleConsentChip(p.consent_status)}${p.consent_at ? `<p class="text-[11px] text-gray-400 mt-1">${staffPeopleDate(p.consent_at)}</p>` : ""}</td>
+              <td class="px-3 py-2 text-xs">${adminEscape(p.assigned_staff_name || "—")}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+  const cards = `
+    <div class="md:hidden space-y-2">
+      ${rows.map((p) => `
+        <button type="button" class="w-full text-left rounded-xl border border-gray-200 p-3 hover:border-green-300 active:bg-green-50" onclick="staffPeopleOpenDetail('${scope}', '${adminAttr(p.id)}')">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="font-bold text-gray-900 truncate" data-pii>${adminEscape(p.display_name || "Unnamed")}</p>
+              <p class="text-xs text-gray-600 font-mono" data-pii="phone">${adminEscape(p.phone_e164 || p.email || "")}</p>
+            </div>
+            ${staffPeopleConsentChip(p.consent_status)}
+          </div>
+          <div class="flex flex-wrap gap-1 mt-2">${staffPeopleRoleChips(p.roles)}</div>
+          <div class="flex flex-wrap gap-1 mt-1">${staffPeopleSourceChips(p.sources)}</div>
+          <p class="text-[11px] text-gray-500 mt-2">Last activity ${staffPeopleDate(p.last_activity_at)} · first seen ${staffPeopleDate(p.first_seen_at)} · ${Number(p.saves_count || 0)} saves · ${Number(p.alerts_count || 0)} alerts${p.assigned_staff_name ? ` · ${adminEscape(p.assigned_staff_name)}` : ""}</p>
+        </button>`).join("")}
+    </div>`;
+  return table + cards;
+}
+
+function staffPeopleEnsureLoaded(scope) {
+  const root = staffPeopleRoot(scope);
+  if (!root || !authState?.token) return;
+  const state = staffPeopleState(scope);
+  if (state.loading || (state.loadedAt && Date.now() - state.loadedAt < 5 * 60 * 1000)) return;
+  staffPeopleLoad(scope);
+}
+
+async function staffPeopleLoad(scope, options = {}) {
+  const root = staffPeopleRoot(scope);
+  if (!root) return;
+  if (!root.dataset.peopleReady) {
+    root.innerHTML = staffPeopleShellHtml(scope);
+    root.dataset.peopleReady = "1";
+  }
+  const state = staffPeopleState(scope);
+  const list = root.querySelector("[data-people-list]");
+  if (!authState?.token) {
+    list.innerHTML = `<p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">Sign in with your staff account to see the contact list.</p>`;
+    return;
+  }
+  state.loading = true;
+  if (options.force || !state.data) list.innerHTML = `<p class="text-gray-500">Loading people…</p>`;
+  const params = new URLSearchParams();
+  Object.entries(state.filters).forEach(([key, value]) => { if (value !== "" && value != null) params.set(key, value); });
+  try {
+    const res = await staffApiRequestWithTimeout(`/api/people?${params.toString()}`, {}, 20000, "People list");
+    state.data = res;
+    state.loadedAt = Date.now();
+    staffPeopleRenderData(scope);
+  } catch (error) {
+    const denied = Number(error?.status) === 401 || Number(error?.status) === 403;
+    list.innerHTML = `<p class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">${denied ? "Your account cannot see the contact list." : adminEscape(error?.message || "Could not load people.")}</p>`;
+  } finally {
+    state.loading = false;
+  }
+}
+
+function staffPeopleRenderData(scope) {
+  const root = staffPeopleRoot(scope);
+  const res = staffPeopleState(scope).data;
+  if (!root || !res) return;
+  const meta = res.meta || {};
+  const counts = meta.counts || {};
+  const updated = root.querySelector("[data-people-updated]");
+  if (updated) {
+    updated.textContent = meta.last_reconciled_at
+      ? `Last updated: ${staffPeopleDate(meta.last_reconciled_at, true)}${meta.last_changed_at ? ` · last change ${staffPeopleDate(meta.last_changed_at, true)}` : ""}`
+      : "Last updated: not yet built";
+  }
+  root.querySelector("[data-people-export]")?.classList.toggle("hidden", !res.can_export);
+  const chip = (label, value, cls) => `<span class="rounded-xl px-3 py-1.5 font-bold ${cls}">${adminEscape(label)} <span class="font-black">${Number(value || 0).toLocaleString("en-GB")}</span></span>`;
+  root.querySelector("[data-people-counts]").innerHTML = [
+    chip("People", counts.people, "bg-gray-900 text-white"),
+    chip("Consented", counts.consented, "bg-emerald-100 text-emerald-900"),
+    chip("Flag only", counts.unverified_flag, "bg-amber-100 text-amber-900"),
+    chip("Opted out", counts.opted_out, "bg-red-100 text-red-900"),
+    chip("In 2+ sources", counts.in_several_sources, "bg-blue-50 text-blue-900")
+  ].join("");
+  const rows = Array.isArray(res.rows) ? res.rows : [];
+  const start = rows.length ? (res.page - 1) * res.limit + 1 : 0;
+  root.querySelector("[data-people-summary]").textContent = `${Number(res.total || 0).toLocaleString("en-GB")} ${Number(res.total) === 1 ? "person" : "people"} · showing ${rows.length ? `${start}–${start + rows.length - 1}` : "none"}`;
+  root.querySelector("[data-people-list]").innerHTML = staffPeopleRowsHtml(scope, rows);
+  const pages = Math.max(1, Math.ceil(Number(res.total || 0) / Number(res.limit || 25)));
+  root.querySelector("[data-people-pager]").innerHTML = pages > 1 ? `
+    <button type="button" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40" ${res.page <= 1 ? "disabled" : ""} onclick="staffPeopleGoToPage('${scope}', ${res.page - 1})">Previous</button>
+    <span class="text-xs text-gray-500">Page ${res.page} of ${pages}</span>
+    <button type="button" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40" ${res.page >= pages ? "disabled" : ""} onclick="staffPeopleGoToPage('${scope}', ${res.page + 1})">Next</button>` : "";
+}
+
+function staffPeopleApplyFilters(event, scope) {
+  event?.preventDefault?.();
+  const form = event?.currentTarget || event?.target?.form;
+  if (!form) return;
+  const state = staffPeopleState(scope);
+  const data = new FormData(form);
+  ["q", "role", "source", "consent", "date_field", "from", "to", "sort"].forEach((key) => {
+    state.filters[key] = String(data.get(key) || "").trim();
+  });
+  state.filters.page = 1;
+  staffPeopleLoad(scope);
+}
+
+function staffPeopleGoToPage(scope, page) {
+  const state = staffPeopleState(scope);
+  state.filters.page = Math.max(1, Number(page) || 1);
+  staffPeopleLoad(scope);
+}
+
+// The overlay is moved to <body> when opened so sticky dashboard headers
+// (their own stacking contexts) cannot sit on top of it.
+function staffPeopleDetailOverlay(scope) {
+  const fresh = staffPeopleRoot(scope)?.querySelector("[data-people-detail]");
+  const parked = Array.from(document.querySelectorAll("body > [data-people-detail]")).filter((node) => node.dataset.peopleDetail === scope);
+  if (fresh) {
+    parked.forEach((node) => node.remove());
+    document.body.appendChild(fresh);
+    return fresh;
+  }
+  return parked[0] || null;
+}
+
+function staffPeopleCloseDetail(scope) {
+  staffPeopleDetailOverlay(scope)?.classList.add("hidden");
+}
+
+async function staffPeopleOpenDetail(scope, personId) {
+  const root = staffPeopleRoot(scope);
+  if (!root) return;
+  const overlay = staffPeopleDetailOverlay(scope);
+  const body = overlay?.querySelector("[data-people-detail-body]");
+  if (!overlay || !body) return;
+  overlay.classList.remove("hidden");
+  body.innerHTML = `<div class="p-5 text-gray-500">Loading…</div>`;
+  try {
+    const res = await staffApiRequestWithTimeout(`/api/people/${encodeURIComponent(personId)}`, {}, 20000, "Person");
+    body.innerHTML = staffPeopleDetailHtml(scope, res);
+  } catch (error) {
+    body.innerHTML = `<div class="p-5"><button type="button" class="text-sm font-bold text-gray-700" onclick="staffPeopleCloseDetail('${scope}')">← Back</button><p class="mt-4 text-red-800">${adminEscape(error?.message || "Could not load this person.")}</p></div>`;
+  }
+}
+
+function staffPeopleDetailHtml(scope, res) {
+  const p = res.person || {};
+  const consentDetail = Array.isArray(p.consent_detail) ? p.consent_detail : [];
+  const consentKind = { opt_in: "Opt-in", opt_out: "Opt-out", flag_only: "Flag without record", legit: "Legitimate interest" };
+  const fact = (label, value) => `<div><dt class="text-[11px] uppercase tracking-wide text-gray-400">${adminEscape(label)}</dt><dd class="text-sm font-semibold text-gray-900">${value}</dd></div>`;
+  const links = Array.isArray(res.links) ? res.links : [];
+  const history = Array.isArray(res.history) ? res.history : [];
+  return `
+    <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3 flex items-center justify-between gap-3">
+      <button type="button" class="text-sm font-bold text-gray-700" onclick="staffPeopleCloseDetail('${scope}')">← Back</button>
+      ${staffPeopleConsentChip(p.consent_status)}
+    </div>
+    <div class="p-5 space-y-5">
+      <div>
+        <h4 class="text-xl font-black text-gray-900" data-pii>${adminEscape(p.display_name || "Unnamed")}</h4>
+        <p class="text-sm text-gray-700 font-mono mt-1" data-pii="phone">${adminEscape(p.phone_e164 || "No phone")}</p>
+        <p class="text-sm text-gray-600" data-pii>${adminEscape(p.email || "No email")}</p>
+        <div class="flex flex-wrap gap-1 mt-2">${staffPeopleRoleChips(p.roles)}</div>
+      </div>
+      <dl class="grid grid-cols-2 gap-3 rounded-xl bg-gray-50 p-3">
+        ${fact("First seen", staffPeopleDate(p.first_seen_at))}
+        ${fact("Last activity", staffPeopleDate(p.last_activity_at, true))}
+        ${fact("Saves", Number(p.saves_count || 0))}
+        ${fact("Alerts", Number(p.alerts_count || 0))}
+        ${fact("Leads", Number(p.leads_count || 0))}
+        ${fact("Assigned staff", adminEscape(p.assigned_staff_name || "—"))}
+        ${fact("Sources", staffPeopleSourceChips(p.sources))}
+        ${fact("Matched by", p.key_kind === "email" ? "Email (no phone)" : "Phone number")}
+      </dl>
+      <section>
+        <h5 class="font-black text-gray-900 mb-1">Consent</h5>
+        <p class="text-sm text-gray-700">${staffPeopleConsentChip(p.consent_status)} ${p.consent_source ? `<span class="text-xs text-gray-500">via ${adminEscape(p.consent_source)}</span>` : ""} ${p.consent_at ? `<span class="text-xs text-gray-500">· ${staffPeopleDate(p.consent_at, true)}</span>` : ""}</p>
+        ${consentDetail.length ? `<ul class="mt-2 space-y-1 text-xs text-gray-600">${consentDetail.map((c) => `
+          <li class="flex flex-wrap gap-x-2"><span class="font-bold">${adminEscape(consentKind[c.kind] || c.kind)}</span><span>${adminEscape(c.via || c.source || "")}</span><span class="text-gray-400">${c.at ? staffPeopleDate(c.at, true) : "no date"}</span>${Number(c.rows) > 1 ? `<span class="text-gray-400">× ${Number(c.rows)}</span>` : ""}</li>`).join("")}</ul>`
+          : `<p class="text-xs text-gray-500 mt-1">No consent signal on any linked record.</p>`}
+      </section>
+      <section>
+        <h5 class="font-black text-gray-900 mb-2">History</h5>
+        ${history.length ? `<ol class="relative border-l border-gray-200 ml-2 space-y-3">${history.map((h) => `
+          <li class="ml-4">
+            <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full border border-white bg-green-600"></span>
+            <p class="text-[11px] text-gray-400">${staffPeopleDate(h.at, true)}</p>
+            <p class="text-sm font-semibold text-gray-900">${adminEscape(h.label)}</p>
+            ${h.detail ? `<p class="text-xs text-gray-500">${adminEscape(h.detail)}</p>` : ""}
+          </li>`).join("")}</ol>` : `<p class="text-xs text-gray-500">No dated activity.</p>`}
+      </section>
+      <section>
+        <h5 class="font-black text-gray-900 mb-2">Linked records (${links.length})</h5>
+        <div class="space-y-1">${links.map((l) => `
+          <div class="flex items-center justify-between gap-2 rounded-lg border border-gray-100 px-3 py-2 text-xs">
+            <span class="font-bold text-gray-800">${adminEscape(STAFF_PEOPLE_SOURCE_LABELS[l.source_table] || l.source_table)}</span>
+            <span class="text-gray-500">${adminEscape(STAFF_PEOPLE_ROLE_LABELS[l.role] || l.role || "")}</span>
+            <span class="text-gray-400 whitespace-nowrap">${staffPeopleDate(l.last_activity_at)}</span>
+          </div>`).join("")}</div>
+      </section>
+    </div>`;
+}
+
+async function staffPeopleExportCsv(scope) {
+  const state = staffPeopleState(scope);
+  if (!authState?.token) return;
+  const params = new URLSearchParams();
+  Object.entries(state.filters).forEach(([key, value]) => { if (value !== "" && value != null && key !== "page" && key !== "limit") params.set(key, value); });
+  try {
+    const response = await fetch(apiUrl(`/api/people/export.csv?${params.toString()}`), {
+      headers: { Authorization: `Bearer ${authState.token}` },
+      credentials: "same-origin",
+      cache: "no-store"
+    });
+    if (!response.ok) throw new Error(response.status === 403 ? "Only the super admin can export the contact list." : `Export failed (${response.status})`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `makaug-people-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (error) {
+    toast(error?.message || "Export failed.");
   }
 }
 
@@ -20363,6 +20758,7 @@ function setAdminWorkflowTab(tab = "review") {
   if (previousTab !== activeAdminWorkflowTab) adminScheduleDashboardRefreshForTab();
   if (activeAdminWorkflowTab === "agent-reports" && previousTab !== "agent-reports") initAdminAgentReportsTab();
   if (activeAdminWorkflowTab === "revenue" && previousTab !== "revenue") loadAdminRevenue();
+  if (activeAdminWorkflowTab === "accounts") staffPeopleEnsureLoaded("admin");
 }
 
 async function fetchAdminPaginatedRows(path, headers, options = {}) {

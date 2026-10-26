@@ -465,6 +465,7 @@ app.use('/api/property-seeker', propertySeekerRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/field-agent', fieldAgentRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/people', require('./routes/people'));
 app.use('/api/staff/off-plan', offPlanStaffRoutes);
 app.use('/api/harvest', harvestRoutes);
 app.use('/api/short-term', shortTermRoutes);
@@ -2769,6 +2770,12 @@ async function start() {
     require('./services/fxRateService').startFxRateScheduler(db, {
       logger,
       bootDelayMs: staggeredBootDelay('fx_rates')
+    });
+    // The master contact list (people): reconciled when the source tables
+    // change (sign-up, lead, WhatsApp profile) and fully every night.
+    require('./services/peopleService').startPeopleScheduler(db, {
+      countryCode: ACTIVE_COUNTRY_CODE,
+      bootDelayMs: staggeredBootDelay('people_reconcile')
     });
   }
   if (!IS_SOUTH_AFRICA || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true') {
