@@ -15004,6 +15004,15 @@ function staffListingDirectLookup(term = "") {
   return "";
 }
 
+// "Possible duplicate of <ref>" with a link to the other listing. A warning
+// only: staff can still approve after comparing.
+function staffPossibleDuplicateOfHtml(dup) {
+  if (!dup || typeof dup !== "object" || !dup.id) return "";
+  const ref = String(dup.ref || "").trim() || String(dup.id).slice(0, 8);
+  const url = String(dup.review_url || "").trim() || `/staff-dashboard/review/${encodeURIComponent(String(dup.id))}`;
+  return `<div class="mt-2 rounded-xl bg-red-50 border border-red-200 p-2 text-xs text-red-900" data-possible-duplicate-of="${adminAttr(ref)}"><strong>Possible duplicate of <a href="${adminAttr(url)}" target="_blank" rel="noopener" class="underline underline-offset-2">${adminEscape(ref)}</a></strong>${dup.reason ? ` (${adminEscape(dup.reason)})` : ""}. Compare both before approving.</div>`;
+}
+
 function staffReviewQueueCardHtml(item = {}, options = {}) {
   const location = [item.area, item.district].filter(Boolean).join(", ") || "Location needs checking";
   const mkRef = String(item.inquiry_reference || "").trim();
@@ -15052,6 +15061,7 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
           ${queueNote}
           ${mediaQualityWarning}
           ${duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800"><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : ""}
+          ${staffPossibleDuplicateOfHtml(item.extra_fields?.possible_duplicate_of)}
           ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
         </div>
         <span class="shrink-0 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-2.5 py-1 text-[11px] font-black" data-staff-queue-status>${adminEscape(item.status || item.moderation_stage || "pending")}</span>
@@ -17816,9 +17826,11 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
           <section class="rounded-xl border ${duplicates.count ? "border-red-200 bg-red-50" : "border-emerald-100 bg-emerald-50"} p-4">
             <h4 class="font-black ${duplicates.count ? "text-red-900" : "text-emerald-950"}">Duplicate check</h4>
             <p class="text-xs mt-1 ${duplicates.count ? "text-red-800" : "text-emerald-900"}">${duplicates.count ? `${staffNumber(duplicates.count)} possible duplicate(s). Compare before approval.` : "No obvious duplicate rows returned by staff preview."}</p>
+            ${staffPossibleDuplicateOfHtml(duplicates.possible_duplicate_of)}
             <div class="mt-3 space-y-2 max-h-52 overflow-auto">
               ${(duplicates.rows || []).slice(0, 8).map((row) => `<div class="rounded-lg bg-white border border-gray-200 p-2 text-xs">
                 <div class="font-black text-gray-900">${adminEscape(row.title || "Duplicate candidate")}</div>
+                ${row.review_url ? `<a href="${adminAttr(row.review_url)}" target="_blank" rel="noopener" class="font-black text-blue-700 underline underline-offset-2" data-duplicate-link>Open ${adminEscape(row.duplicate_ref || "the other listing")}</a>` : ""}
                 ${row.duplicate_reason ? `<div class="mt-0.5 inline-block rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-black text-red-800" data-duplicate-reason="${adminAttr(row.duplicate_reason_code || "")}">${adminEscape(row.duplicate_reason)}</div>` : ""}
                 <div class="text-gray-500">${adminEscape([row.inquiry_reference, row.area, row.district, row.status].filter(Boolean).join(" • "))}</div>
               </div>`).join("") || ""}

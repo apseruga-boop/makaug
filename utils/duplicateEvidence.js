@@ -12,9 +12,14 @@
 //   - the same photo (image URL hash)              -> "same photo"
 //   - the same lister phone AND the same area AND the same listing type AND
 //     the same bedrooms AND a price within ±5%     -> "same agent, same area and price"
+//   - (26 Oct 2026) the same property from another post: same phone, source
+//     channel or lister name, same area, and a similar plot/size/price/caption
+//     (utils/crossVideoDuplicate.js)              -> "same property from another post: ..."
 // Same phone or same title on their own never count. Rejected, deleted and
 // archived rows are never "possible duplicates". One helper for staff, admin
 // and the properties automated review.
+
+const { crossVideoDuplicateReason, channelKey, nameKeyOf } = require('./crossVideoDuplicate');
 
 const EXCLUDED_DUPLICATE_STATUSES = ['deleted', 'rejected', 'declined', 'fraud', 'archived', 'removed', 'test_pending_review'];
 const PRICE_TOLERANCE = 0.05;
@@ -99,11 +104,26 @@ function duplicateReason(listing = {}, candidate = {}) {
   ) {
     return { code: 'same_agent_area_price', label: 'same agent, same area and price' };
   }
-  return null;
+  // Different posts (or no post) from the same lister: the cross-video check.
+  if (listingPost && candidatePost && listingPost.key === candidatePost.key) return null;
+  const crossVideo = crossVideoDuplicateReason(listing, candidate);
+  return crossVideo ? { code: crossVideo.code, label: crossVideo.label } : null;
 }
 
 // Same expression as idx_properties_preview_source_url_trgm (migration 160).
 const DUPLICATE_SOURCE_URL_SQL = `COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url', '')`;
+
+// The columns duplicateReason reads, including the text the cross-video check
+// compares (title, caption, plot size, channel).
+const DUPLICATE_CANDIDATE_COLUMNS_SQL = `p.id, p.title, p.listing_type, p.district, p.area, p.address, p.price, p.bedrooms,
+         p.status, p.moderation_stage, p.lister_phone, p.lister_name, p.inquiry_reference, p.created_at,
+         p.land_size_value, p.land_size_unit,
+         ${DUPLICATE_SOURCE_URL_SQL} AS source_url,
+         p.extra_fields->>'source_title' AS source_title,
+         LEFT(COALESCE(p.extra_fields->>'source_caption', p.extra_fields->>'source_description', p.description, ''), 600) AS caption,
+         p.extra_fields->>'source_registry_key' AS source_registry_key,
+         COALESCE(p.extra_fields->>'youtube_channel_url', p.extra_fields->>'source_channel_url') AS source_channel_url,
+         p.extra_fields->>'source_name' AS source_name`;
 
 // Rows that share at least one strong signal with the listing; classified in JS.
 // Two branches, not one OR: the old OR of ILIKE and a phone-suffix expression
@@ -111,9 +131,7 @@ const DUPLICATE_SOURCE_URL_SQL = `COALESCE(p.extra_fields->>'source_url', p.extr
 // timeout cancelled it (57014, label staff_rows). Each branch matches an index.
 const DUPLICATE_CANDIDATES_SQL = `
   (
-  SELECT p.id, p.title, p.listing_type, p.district, p.area, p.address, p.price, p.bedrooms,
-         p.status, p.moderation_stage, p.lister_phone, p.inquiry_reference, p.created_at,
-         ${DUPLICATE_SOURCE_URL_SQL} AS source_url
+  SELECT ${DUPLICATE_CANDIDATE_COLUMNS_SQL}
     FROM properties p
    WHERE p.id <> $1
      AND LOWER(COALESCE(p.status, '')) <> ALL($2::text[])
@@ -131,9 +149,7 @@ const DUPLICATE_CANDIDATES_SQL = `
   )
   UNION ALL
   (
-  SELECT p.id, p.title, p.listing_type, p.district, p.area, p.address, p.price, p.bedrooms,
-         p.status, p.moderation_stage, p.lister_phone, p.inquiry_reference, p.created_at,
-         ${DUPLICATE_SOURCE_URL_SQL} AS source_url
+  SELECT ${DUPLICATE_CANDIDATE_COLUMNS_SQL}
     FROM properties p
    WHERE p.id <> $1
      AND LOWER(COALESCE(p.status, '')) <> ALL($2::text[])
@@ -146,6 +162,29 @@ const DUPLICATE_CANDIDATES_SQL = `
      AND COALESCE(p.lister_phone, '') <> ''
      AND RIGHT(regexp_replace(COALESCE(p.lister_phone, ''), '\\D', '', 'g'), 9) = $4
      AND LOWER(COALESCE(p.area, '')) = LOWER(COALESCE($5::text, ''))
+   ORDER BY p.created_at DESC
+   LIMIT 40
+  )
+  UNION ALL
+  (
+  -- Same area AND the same source channel or lister name (cross-video
+  -- duplicates). The area index (idx_properties_duplicate_review_lookup)
+  -- narrows it first; 22ms on production for Kira-Nsasa.
+  SELECT ${DUPLICATE_CANDIDATE_COLUMNS_SQL}
+    FROM properties p
+   WHERE p.id <> $1
+     AND LOWER(COALESCE(p.status, '')) <> ALL($2::text[])
+     AND LOWER(COALESCE(p.moderation_stage, '')) <> ALL($2::text[])
+     AND NOT (
+       LOWER(COALESCE(p.extra_fields->'source_quality_review'->>'suppressed', '')) IN ('true', '1', 'yes')
+       OR LOWER(COALESCE(p.extra_fields->>'source_quality_suppressed', '')) IN ('true', '1', 'yes')
+     )
+     AND COALESCE($5::text, '') <> ''
+     AND LOWER(COALESCE(p.area, '')) = LOWER(COALESCE($5::text, ''))
+     AND (
+       (COALESCE($6::text, '') <> '' AND LOWER(COALESCE(p.extra_fields->>'source_registry_key', '')) = $6)
+       OR (COALESCE($7::text, '') <> '' AND LOWER(COALESCE(p.lister_name, p.extra_fields->>'source_name', '')) = $7)
+     )
    ORDER BY p.created_at DESC
    LIMIT 40
   )`;
@@ -163,7 +202,9 @@ function duplicateCandidateParams(listing = {}) {
     EXCLUDED_DUPLICATE_STATUSES,
     sourceSearchTerm(sourceUrlOf(listing)),
     phoneKey(listing.lister_phone),
-    clean(listing.area)
+    clean(listing.area),
+    channelKey(listing).replace(/^registry:/, ''),
+    nameKeyOf(listing)
   ];
 }
 
@@ -227,6 +268,7 @@ function duplicateGroupsCountSql(pendingWhere) {
 module.exports = {
   EXCLUDED_DUPLICATE_STATUSES,
   DUPLICATE_CANDIDATES_SQL,
+  DUPLICATE_CANDIDATE_COLUMNS_SQL,
   classifyDuplicates,
   duplicateCandidateParams,
   duplicateGroupsCountSql,
