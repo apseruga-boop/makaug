@@ -315,6 +315,14 @@ async function recordRepeatOnLead(db, lead, input = {}, { source, leadType }) {
  *
  * Never throws: a CRM failure must not break the public form that called it.
  */
+// The master contact list picks up a new lead a few seconds later. Lazy so
+// the lead path never depends on it; a failure here is ignored.
+function nudgePeopleList(trigger) {
+  try {
+    require('./peopleService').schedulePeopleRefresh(trigger);
+  } catch (_error) {}
+}
+
 async function createLead(db, input = {}) {
   if (!db) return null;
   try {
@@ -432,6 +440,7 @@ async function createLead(db, input = {}) {
           ...(safeJson(input.metadata, {}))
         }
       });
+      if (!isTest) nudgePeopleList('lead_created');
     }
     return lead ? { ...lead, _isRepeat: false } : null;
   } catch (error) {
