@@ -7933,31 +7933,6 @@
           <div id="staff-video-caption-conflicts-list" class="mt-4 text-sm text-gray-500">No video caption conflicts are waiting.</div>
         </section>
 
-        <section id="staff-off-plan-control" class="bg-white border border-emerald-100 rounded-2xl p-6" data-off-plan-dashboard="staff">
-          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div><p class="text-xs font-black uppercase tracking-widest text-emerald-700">New developments</p><h3 class="mt-1 text-xl font-black text-gray-950">Off Plan review desk</h3><p class="mt-1 text-sm text-gray-500">Check source evidence, update construction and sales figures, preview the brochure, and prepare floor-plan walkthrough briefs. Projects remain private until every publication check passes.</p></div>
-            <div class="flex gap-2"><button type="button" onclick="openOffPlanCreateModal('staff')" class="rounded-xl bg-emerald-700 text-white px-4 py-2 text-sm font-black"><i class="fas fa-plus mr-1"></i>Add project</button><button type="button" onclick="loadOffPlanManagement('staff')" class="rounded-xl border border-emerald-200 text-emerald-800 px-4 py-2 text-sm font-black"><i class="fas fa-rotate-right mr-1"></i>Refresh</button></div>
-          </div>
-          <div id="staff-off-plan-projects" class="mt-5 grid gap-4"><p class="text-sm text-gray-500">Open this desk to load the off-plan review queue.</p></div>
-          <details class="mt-5 rounded-xl border border-gray-200 p-4"><summary class="cursor-pointer font-black text-sm">Off-plan enquiries</summary><div id="staff-off-plan-enquiries" class="mt-3 grid gap-2 text-sm text-gray-600">Refresh to load enquiries.</div></details>
-        </section>
-
-        <section id="staff-short-term-control" class="st-scope bg-white border border-emerald-100 rounded-2xl p-6" data-short-term-desk="staff">
-          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div>
-              <p class="text-xs font-black uppercase tracking-widest text-emerald-700">Short Term stays</p>
-              <h3 class="mt-1 text-xl font-black text-gray-950">Short Term review desk</h3>
-              <p class="mt-1 text-sm text-gray-500">Screen a host&rsquo;s short stay: check the photos are of that property, ring the number, confirm the area and the price. When it is clean, send it to King review. <b>A moderator cannot publish a short stay</b> &mdash; the King makes the final call.</p>
-            </div>
-            <div class="flex gap-2">
-              <button type="button" onclick="window.makaugShortTermDesk &amp;&amp; window.makaugShortTermDesk.intake()" class="rounded-xl border border-emerald-200 text-emerald-800 px-4 py-2 text-sm font-black"><i class="fas fa-plus mr-1"></i>Add a place for a host</button>
-              <button type="button" onclick="window.makaugShortTermDesk &amp;&amp; window.makaugShortTermDesk.load('staff','submitted')" class="rounded-xl bg-emerald-700 text-white px-4 py-2 text-sm font-black"><i class="fas fa-rotate-right mr-1"></i>Open queue</button>
-            </div>
-          </div>
-          <div id="staff-short-term-intake" class="mt-5"></div>
-          <div id="staff-short-term-queue" class="mt-5"><p class="text-sm text-gray-500">Open this desk to load the short term review queue.</p></div>
-        </section>
-
         <div id="staff-settings-panel" class="bg-white border border-blue-100 rounded-2xl p-6">
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <div>
@@ -8056,16 +8031,6 @@
                 <button type="button" onclick="refreshStaffReportsQueue()" class="border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg text-xs font-black">Refresh</button>
               </div>
               <div id="staff-reports-queue" class="space-y-3 text-sm text-gray-700">Reports loading...</div>
-            </div>
-            <div id="staff-marketplace-panel" class="bg-white border border-rose-100 rounded-2xl p-5 scroll-mt-28">
-              <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
-                <div>
-                  <h3 class="text-xl font-black text-gray-900">Marketplace approvals</h3>
-                  <p class="text-xs text-gray-500 mt-1">Check private business registrations before they appear in the public services directory.</p>
-                </div>
-                <button type="button" onclick="refreshMarketplaceModerationQueue('staff')" class="border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg text-xs font-black">Refresh</button>
-              </div>
-              <div id="staff-marketplace-queue" class="space-y-3 text-sm text-gray-700">Marketplace registrations loading...</div>
             </div>
             <div id="staff-activity-panel" class="bg-white border border-gray-200 rounded-2xl p-5 scroll-mt-28">
               <h3 class="text-xl font-black text-gray-900 mb-3">My recent work</h3>
@@ -8476,17 +8441,6 @@
             <button type="button" data-admin-tab-button="notifications" onclick="setAdminWorkflowTab('notifications')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Leads & Notifications</button>
             <button type="button" data-admin-tab-button="listings" onclick="setAdminWorkflowTab('listings')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">All Listings</button>
           </div>
-        </div>
-
-        <div id="admin-short-term-king-control" data-admin-tab-panel="review" class="st-scope admin-tab-panel bg-white border border-amber-200 rounded-2xl p-5">
-          <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
-            <div>
-              <h3 class="text-lg font-bold text-gray-800"><i class="fas fa-crown text-amber-500 mr-1"></i>Short Term &mdash; King review</h3>
-              <p class="text-xs text-gray-500 mt-1">The final gate. A short stay only reaches the public site from here. Approving needs every hard check ticked, the facts box confirmed, and at least one photo. Overrideable checks can be waived, but write the reason.</p>
-            </div>
-            <button type="button" onclick="window.makaugShortTermDesk &amp;&amp; window.makaugShortTermDesk.load('king','king_review')" class="rounded-xl bg-amber-500 text-white px-4 py-2 text-sm font-black"><i class="fas fa-rotate-right mr-1"></i>Open King queue</button>
-          </div>
-          <div id="admin-short-term-king-queue"><p class="text-sm text-gray-500">Open this desk to load the listings waiting on King review.</p></div>
         </div>
 
         <div id="admin-review-queue-control" data-admin-tab-panel="review" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
@@ -9168,11 +9122,10 @@
         </div>
 
         <div id="admin-staff-queue-links" data-admin-tab-panel="listings" class="admin-tab-panel bg-white border border-rose-100 rounded-2xl p-5">
-          <h3 class="text-lg font-bold text-gray-800">Reports, claims and marketplace approvals</h3>
-          <p class="text-xs text-gray-500 mt-1">Staff work these queues every day on the staff desk. Open them there.</p>
+          <h3 class="text-lg font-bold text-gray-800">Reports and claims</h3>
+          <p class="text-xs text-gray-500 mt-1">Staff work this queue on the staff desk. Open it there.</p>
           <div class="mt-3 flex flex-wrap gap-2">
             <a href="/staff-dashboard#staff-reports-panel" onclick="return kingOpenStaffDesk(event, 'reports')" class="border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-xl text-xs font-bold">Open reports &amp; claims</a>
-            <a href="/staff-dashboard#staff-marketplace-panel" onclick="return kingOpenStaffDesk(event, 'marketplace')" class="border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-xl text-xs font-bold">Open marketplace approvals</a>
           </div>
         </div>
       </div>

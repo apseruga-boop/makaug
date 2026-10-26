@@ -128,10 +128,11 @@ test('marketplace UI has all nine language packs and localized category labels',
   }
 });
 
-test('staff and King dashboards share the protected Marketplace approval queue', () => {
-  assert.match(html, /id="staff-marketplace-queue"/);
-  // King dashboard slim-down (26 Oct 2026): King links to the staff approval desk instead of a copy of it.
-  assert.match(html, /kingOpenStaffDesk\(event, 'marketplace'\)/);
+test('the retired Marketplace approval desks are gone but the approval API stays', () => {
+  // King slim-down (26 Oct 2026): nothing new since July, so both desks were removed.
+  assert.doesNotMatch(html, /id="staff-marketplace-queue"/);
+  assert.doesNotMatch(html, /id="admin-marketplace-queue"/);
+  assert.doesNotMatch(html, /kingOpenStaffDesk\(event, 'marketplace'\)/);
   assert.match(app, /refreshMarketplaceModerationQueue\("staff"/);
   assert.match(app, /refreshMarketplaceModerationQueue\("admin"/);
   assert.match(app, /\/api\/marketplace\/admin\/pending/);

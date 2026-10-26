@@ -14984,7 +14984,7 @@ function setStaffDashboardLoadingState(message = "Staff dashboard loading...") {
   setTextById("staff-source-monitor-status", "Monitor cadence loading...");
 }
 
-// King links into a staff desk queue (reports, marketplace approvals, source intake).
+// King links into a staff desk queue (reports and claims, source intake).
 function kingOpenStaffDesk(event, target) {
   event?.preventDefault?.();
   showPage("staff-dashboard");
@@ -15008,7 +15008,6 @@ function staffJumpToDesk(target) {
     whatsapp: "staff-whatsapp-panel",
     source: "staff-source-panel",
     reports: "staff-reports-panel",
-    marketplace: "staff-marketplace-panel",
     training: "staff-training-panel"
   }[String(target || "").toLowerCase()];
   const el = id ? document.getElementById(id) : null;

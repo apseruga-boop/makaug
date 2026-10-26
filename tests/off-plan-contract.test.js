@@ -33,8 +33,9 @@ test('public route, project detail route, API and protected dashboards are wired
   assert.match(server, /app\.use\('\/api\/admin\/off-plan', offPlanAdminRoutes\)/);
   assert.match(route, /mountManagementRoutes\(staffRouter, requireStaffAccess, \{ allowPermanentDelete: 'super_admin' \}\)/);
   assert.match(route, /mountManagementRoutes\(adminRouter, requireAdminApiKey, \{ allowPermanentDelete: true \}\)/);
-  assert.match(html, /id="staff-off-plan-control"/);
-  // King dashboard slim-down (26 Oct 2026): off-plan approvals run from the staff desk only.
+  // King slim-down (26 Oct 2026): the stale off-plan desks left King and the staff desk.
+  // The routes, tables and public /off-plan page stay.
+  assert.doesNotMatch(html, /id="staff-off-plan-control"/);
   assert.doesNotMatch(html, /id="admin-off-plan-control"/);
 });
 
