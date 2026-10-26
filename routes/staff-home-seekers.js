@@ -216,3 +216,4 @@ router.post('/whatsapp-alerts/run', async (_req, res, next) => {
 router._test = { inPersonConsentDate, loadHomeSeekerOverview };
 
 module.exports = router;
+module.exports._test = { inPersonConsentDate };

@@ -114,6 +114,26 @@ function searchRecipient(search = {}, withdrawals = new Map()) {
   };
 }
 
+// alertSchedulerService.money('') is 0, not null, so a search with no max
+// price would reject every listing there. The price check is done here and the
+// rest (category, beds, type, place, campus) is left to the shared matcher.
+function priceBound(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const parsed = Number(String(value).replace(/[^\d.]/g, ''));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function digestSearchMatchesListing(search = {}, listing = {}) {
+  const price = priceBound(listing.price);
+  const min = priceBound(search.min_price);
+  const max = priceBound(search.max_price);
+  if (price != null && min != null && price < min) return false;
+  if (price != null && max != null && price > max) return false;
+  const { price: _p, price_ugx: _pu, pricePerMonth: _ppm, price_per_month: _ppm2, ...withoutPrice } = listing;
+  const { min_price: _min, max_price: _max, minPrice: _mn, maxPrice: _mx, ...searchWithoutPrice } = search;
+  return savedSearchMatchesListing({ ...searchWithoutPrice, filters: { ...(search.filters || {}), minPrice: undefined, maxPrice: undefined, min_price: undefined, max_price: undefined } }, withoutPrice);
+}
+
 // Pure grouping: one entry per person, newest listings first, without the
 // listings that person was already told about.
 function groupDigests({ listings = [], searches = [], alreadyAlerted = new Set(), alreadyHadDigestToday = new Set(), withdrawals = new Map() } = {}) {
@@ -123,7 +143,7 @@ function groupDigests({ listings = [], searches = [], alreadyAlerted = new Set()
     if (!recipient || alreadyHadDigestToday.has(recipient.key)) continue;
     for (const listing of listings) {
       if (alreadyAlerted.has(`${recipient.key}|${listing.id}`)) continue;
-      if (!savedSearchMatchesListing(search, listing)) continue;
+      if (!digestSearchMatchesListing(search, listing)) continue;
       const entry = byRecipient.get(recipient.key) || { ...recipient, listings: new Map(), searchIds: new Set() };
       if (!entry.userId && recipient.userId) entry.userId = recipient.userId;
       if (!entry.deviceId && recipient.deviceId) entry.deviceId = recipient.deviceId;
@@ -346,6 +366,7 @@ module.exports = {
   buildConsentConfirmationMessage,
   buildDigestMessage,
   buildWelcomeMessage,
+  digestSearchMatchesListing,
   enqueueConsentMessage,
   getPendingAlertSummary,
   groupDigests,
