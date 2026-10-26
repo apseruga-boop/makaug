@@ -52,7 +52,7 @@ const KEEP_PUBLIC = new Set([
   'submitHarvestSourceLink', 'adminScrollTo', 'ensureStaffModerationActionDelegates', 'updateAdminAccessEntrypoints',
   'unlockAdminAccess', 'adminSocialCaptureHelperScript', 'adminSocialCaptureBookmarkletUrl',
   'adminSocialCaptureHelperPanelHtml', 'adminCopySocialCaptureBookmarklet', 'adminSocialQuickPastePanelHtml',
-  'adminOpenSocialQuickPastePanel'
+  'adminOpenSocialQuickPastePanel', 'staffQueueClickShouldBeIgnored'
 ]);
 
 const ASYNC_ENTRY_POINTS = new Set([
