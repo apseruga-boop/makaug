@@ -393,6 +393,13 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
     title: 'makaug Cookie Policy',
     eyebrow: 'Cookies and preferences',
     body: 'makaug uses necessary cookies for security and sessions, plus preference, analytics, and advertising cookies where configured and lawful.',
+    extraHtml: `
+      <div class="mt-5 space-y-4 text-sm text-gray-700">
+        <section>
+          <h3 class="font-black text-gray-900">Device cookie for saves (mk_did)</h3>
+          <p id="cookie-policy-device-line" class="mt-1">When you save a property or a search without an account, we set a random device ID so your saves are still here next time on this phone or computer. It lasts up to 400 days, is not used for advertising, and is moved into your account when you sign in or sign up. Clearing your cookies removes it.</p>
+        </section>
+      </div>`,
     ctas: ['Manage preferences', 'Privacy policy', 'Contact support'],
     links: ['/login?next=%2Faccount%3Ftab%3Dpreferences', '/privacy-policy', '/help']
   }

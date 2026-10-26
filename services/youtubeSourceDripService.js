@@ -13,8 +13,14 @@ const { logNotification } = require('./notificationLogService');
 
 const YOUTUBE_DRIP_MARKER = 'youtube-drip-20260715';
 const YOUTUBE_SOURCE_DRIP_KEY = 'youtube_source_drip';
-const BASE_INTERVAL_MINUTES = 10;
-const MAX_BACKOFF_MINUTES = 360;
+// The drip used to run every 10 minutes. YouTube search costs 100 quota units
+// a call, so 5 calls every 10 minutes spent the daily quota before lunch and
+// 68% of calls came back quota-limited. Each run also walks ~11,000 registry
+// sources. It now runs a few times a day: never more often than this floor,
+// whatever the saved interval says.
+const MIN_INTERVAL_MINUTES = Math.max(1, Number(process.env.YOUTUBE_DRIP_MIN_INTERVAL_MINUTES) || 240);
+const BASE_INTERVAL_MINUTES = MIN_INTERVAL_MINUTES;
+const MAX_BACKOFF_MINUTES = 1440;
 const MAX_BATCH_SIZE = 5;
 const DEFAULT_BATCH_SIZE = 5;
 const DEFAULT_MAX_RESULTS = 10;
@@ -22,7 +28,7 @@ const DEFAULT_PUBLISHED_AFTER = '2026-06-01T00:00:00.000Z';
 const DEFAULT_JOB_MODE = 'all';
 const TARGET_REVIEWABLE = 3000;
 const DEFAULT_MONTHLY_READ_CAP = 10000;
-const SCHEDULER_POLL_MS = 60 * 1000;
+const SCHEDULER_POLL_MS = 5 * 60 * 1000;
 
 let schedulerTimer = null;
 let schedulerRunning = false;
@@ -77,8 +83,43 @@ function normalizeMonthWindow(value) {
   return monthWindowStart().toISOString();
 }
 
+// The registry is generated from code (~60,000 rows, ~100 MB to build), so the
+// YouTube count cannot change while the process runs. Count it once instead of
+// rebuilding the registry on every scheduler tick.
+let cachedYouTubeSourceCount = null;
 function youtubeSourceCount() {
-  return getPropertySourceRegistry().filter((source) => String(source.platform || '').toLowerCase() === 'youtube').length;
+  if (cachedYouTubeSourceCount === null) {
+    cachedYouTubeSourceCount = getPropertySourceRegistry().filter((source) => String(source.platform || '').toLowerCase() === 'youtube').length;
+  }
+  return cachedYouTubeSourceCount;
+}
+
+function intervalMinutes(value, fallback = BASE_INTERVAL_MINUTES) {
+  return numberInRange(value, fallback, MIN_INTERVAL_MINUTES, 1440);
+}
+
+// YouTube Data API quota resets at midnight Pacific time. A run that finds the
+// quota spent waits for the reset instead of retrying every few minutes.
+function nextYouTubeQuotaResetAt(now = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
+  }).formatToParts(now).map((part) => [part.type, part.value]));
+  // Midnight PDT is 07:00 UTC; midnight PST is 08:00 UTC. Try PDT, and if that
+  // lands on 23:00 in Los Angeles it is winter time, so add an hour.
+  let reset = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day) + 1, 7, 5));
+  const laHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', hourCycle: 'h23' }).format(reset));
+  if (laHour === 23) reset = new Date(reset.getTime() + 60 * 60 * 1000);
+  return reset;
+}
+
+function quotaExhaustedBackoffMinutes(now = new Date()) {
+  const untilReset = Math.ceil((nextYouTubeQuotaResetAt(now).getTime() - now.getTime()) / 60000);
+  return Math.max(MIN_INTERVAL_MINUTES, Math.min(MAX_BACKOFF_MINUTES, untilReset));
+}
+
+function errorBackoffMinutes(state = {}) {
+  const current = intervalMinutes(state.current_interval_minutes, MIN_INTERVAL_MINUTES);
+  return Math.min(MAX_BACKOFF_MINUTES, current * 2);
 }
 
 function schedulerDisabledByEnv() {
@@ -109,8 +150,8 @@ function normalizeStateRow(row = {}) {
     cursor_offset: offset,
     source_count: sourceCount,
     percent_crawled: sourceCount ? Number(((offset / sourceCount) * 100).toFixed(2)) : 0,
-    base_interval_minutes: numberInRange(row.base_interval_minutes, BASE_INTERVAL_MINUTES, 1, 1440),
-    current_interval_minutes: numberInRange(row.current_interval_minutes, BASE_INTERVAL_MINUTES, 1, 1440),
+    base_interval_minutes: intervalMinutes(row.base_interval_minutes),
+    current_interval_minutes: intervalMinutes(row.current_interval_minutes),
     batch_size: numberInRange(row.batch_size, DEFAULT_BATCH_SIZE, 1, MAX_BATCH_SIZE),
     max_results: numberInRange(row.max_results, DEFAULT_MAX_RESULTS, 1, 50),
     job_mode: normalizeJobMode(row.search_mode),
@@ -134,7 +175,7 @@ function normalizeStateRow(row = {}) {
 
 async function ensureYouTubeSourceDripState(db) {
   const sourceCount = youtubeSourceCount();
-  const baseInterval = numberInRange(process.env.YOUTUBE_DRIP_BASE_INTERVAL_MINUTES || process.env.YOUTUBE_SOURCE_DRIP_BASE_INTERVAL_MINUTES, BASE_INTERVAL_MINUTES, 1, 1440);
+  const baseInterval = intervalMinutes(process.env.YOUTUBE_DRIP_BASE_INTERVAL_MINUTES || process.env.YOUTUBE_SOURCE_DRIP_BASE_INTERVAL_MINUTES);
   const jobMode = normalizeJobMode(process.env.YOUTUBE_DRIP_JOB_MODE || process.env.YOUTUBE_SOURCE_DRIP_JOB_MODE);
   const batchSize = numberInRange(process.env.YOUTUBE_DRIP_BATCH_SIZE || process.env.YOUTUBE_SOURCE_DRIP_BATCH_SIZE, DEFAULT_BATCH_SIZE, 1, MAX_BATCH_SIZE);
   const maxResults = numberInRange(process.env.YOUTUBE_DRIP_MAX_RESULTS || process.env.YOUTUBE_SOURCE_DRIP_MAX_RESULTS, DEFAULT_MAX_RESULTS, 1, 50);
@@ -151,6 +192,8 @@ async function ensureYouTubeSourceDripState(db) {
        SET platform = 'youtube',
            source_count = EXCLUDED.source_count,
            batch_size = LEAST(source_drip_state.batch_size, 5),
+           base_interval_minutes = GREATEST(source_drip_state.base_interval_minutes, EXCLUDED.base_interval_minutes),
+           current_interval_minutes = GREATEST(source_drip_state.current_interval_minutes, EXCLUDED.base_interval_minutes),
            monthly_read_cap = COALESCE(source_drip_state.monthly_read_cap, EXCLUDED.monthly_read_cap),
            updated_at = NOW()
      RETURNING *`,
@@ -199,7 +242,7 @@ async function updateYouTubeSourceDripConfig(db, input = {}) {
   const sourceCount = youtubeSourceCount();
   const jobMode = normalizeJobMode(input.youtube_job_mode || input.youtubeJobMode || input.job_mode || input.jobMode || input.search_mode || input.searchMode || state.job_mode);
   const batchSize = numberInRange(input.batch_size ?? input.batchSize ?? state.batch_size, state.batch_size, 1, MAX_BATCH_SIZE);
-  const baseInterval = numberInRange(input.interval_minutes ?? input.intervalMinutes ?? input.base_interval_minutes ?? state.base_interval_minutes, state.base_interval_minutes, 1, 1440);
+  const baseInterval = intervalMinutes(input.interval_minutes ?? input.intervalMinutes ?? input.base_interval_minutes ?? state.base_interval_minutes, state.base_interval_minutes);
   const maxResults = numberInRange(input.max_results ?? input.maxResults ?? state.max_results, state.max_results, 1, 50);
   const cursorOffset = numberInRange(input.cursor_offset ?? input.cursorOffset ?? state.cursor_offset, state.cursor_offset, 0, Math.max(sourceCount - 1, 0));
   const publishedAfter = normalizeIsoDate(input.published_after ?? input.publishedAfter ?? input.youtube_published_after ?? input.youtubePublishedAfter ?? state.published_after, state.published_after);
@@ -444,9 +487,10 @@ async function runYouTubeSourceDripOnce(db, { force = false, actorId = 'system' 
     return { ok: true, skipped: true, reason: 'youtube_source_drip_already_running' };
   }
   const started = Date.now();
+  let state = null;
   try {
     const stateResult = await db.query('SELECT * FROM source_drip_state WHERE drip_key = $1', [YOUTUBE_SOURCE_DRIP_KEY]);
-    let state = normalizeStateRow(stateResult.rows[0]);
+    state = normalizeStateRow(stateResult.rows[0]);
     const now = new Date();
     // Before the paused check: in a new month the cap pause lifts itself.
     // It used to run after it, so a drip the cap had paused never got here.
@@ -507,7 +551,8 @@ async function runYouTubeSourceDripOnce(db, { force = false, actorId = 'system' 
        WHERE drip_key = $1`,
       [YOUTUBE_SOURCE_DRIP_KEY]
     );
-    const result = await runSocialPlatformPostSweep({
+    // Named job: an event_loop_stall line during the sweep names this drip.
+    const result = await observeJob('youtube_source_drip', () => runSocialPlatformPostSweep({
       db,
       platform: 'youtube',
       dryRun: false,
@@ -520,7 +565,7 @@ async function runYouTubeSourceDripOnce(db, { force = false, actorId = 'system' 
       fetchX: false,
       fetchYouTube: true,
       timeBudgetMs: 45000,
-    });
+    }));
     const summary = summarizeYouTubeDripSweepResult(result);
     const elapsedMs = Date.now() - started;
     const sweepNextOffset = sourceCount ? (offset + batchSize) % sourceCount : offset + batchSize;
@@ -532,7 +577,7 @@ async function runYouTubeSourceDripOnce(db, { force = false, actorId = 'system' 
     const hardStop = summary.auth_error_count > 0
       ? { status: 'blocked', reason: 'youtube_auth_or_quota_permission_error' }
       : youtubeSearchQuotaExceededFromReports(summary.fetch_reports) && summary.quota_limited_count >= Math.max(1, summary.search_job_count)
-        ? { status: 'rate_limited', reason: 'youtube_quota_exhausted' }
+        ? { status: 'rate_limited', reason: 'youtube_quota_exhausted', interval: quotaExhaustedBackoffMinutes(now), consecutive: Number(state.consecutive_rate_limited_runs || 0) + 1 }
         : null;
     const capReached = !hardStop && monthlyReadCountAfter >= state.monthly_read_cap;
     const backoff = hardStop || nextBackoff({ summary, state });
@@ -586,7 +631,7 @@ async function runYouTubeSourceDripOnce(db, { force = false, actorId = 'system' 
         backoff.interval || state.base_interval_minutes,
         capReached ? 'blocked' : backoff.status,
         hardStop?.status === 'blocked' ? backoff.reason : (capReached ? 'youtube_monthly_read_cap_reached' : null),
-        hardStop || capReached ? state.consecutive_rate_limited_runs : backoff.consecutive,
+        hardStop?.status === 'blocked' || capReached ? state.consecutive_rate_limited_runs : backoff.consecutive,
         nextRunAt,
         JSON.stringify(lastResult),
         apiReadCount,
@@ -596,11 +641,15 @@ async function runYouTubeSourceDripOnce(db, { force = false, actorId = 'system' 
     return { ok: true, marker: YOUTUBE_DRIP_MARKER, state: (await getYouTubeSourceDripStatus(db)).state, result: lastResult };
   } catch (error) {
     const elapsedMs = Date.now() - started;
+    // A failing run backs off (doubling, up to a day) instead of retrying on
+    // the normal interval: the same error every 12 minutes helped nobody.
+    const retryMinutes = errorBackoffMinutes(state || {});
     const failure = {
       marker: YOUTUBE_DRIP_MARKER,
       status: 'error',
       reason: error.message || 'youtube_source_drip_failed',
       elapsed_ms: elapsedMs,
+      retry_in_minutes: retryMinutes,
     };
     await insertRunLog(db, {
       status: 'error',
@@ -612,10 +661,11 @@ async function runYouTubeSourceDripOnce(db, { force = false, actorId = 'system' 
        SET status = 'error',
            pause_reason = $2,
            last_result = $3::jsonb,
-           next_run_at = NOW() + (current_interval_minutes * INTERVAL '1 minute'),
+           current_interval_minutes = $4,
+           next_run_at = NOW() + ($4 * INTERVAL '1 minute'),
            updated_at = NOW()
        WHERE drip_key = $1`,
-      [YOUTUBE_SOURCE_DRIP_KEY, failure.reason.slice(0, 240), JSON.stringify(failure)]
+      [YOUTUBE_SOURCE_DRIP_KEY, failure.reason.slice(0, 240), JSON.stringify(failure), retryMinutes]
     ).catch(() => {});
     await logDripNotification(db, failure, 'failed', failure.reason).catch(() => {});
     return { ok: false, marker: YOUTUBE_DRIP_MARKER, error: failure.reason, result: failure };
@@ -668,7 +718,7 @@ function startYouTubeSourceDripScheduler(db) {
     });
   }, SCHEDULER_POLL_MS);
   setTimeout(() => {
-    observeJob('youtube_source_drip', () => tickYouTubeSourceDripScheduler(db, 'youtube_source_drip_scheduler_boot')).catch((error) => {
+    tickYouTubeSourceDripScheduler(db, 'youtube_source_drip_scheduler_boot').catch((error) => {
       logger.warn('YouTube source drip scheduler boot tick failed', error.message);
     });
   }, BOOT_DELAY_MS.youtube_source_drip);
@@ -680,6 +730,10 @@ module.exports = {
   YOUTUBE_DRIP_MARKER,
   YOUTUBE_SOURCE_DRIP_KEY,
   firstQuotaLimitedSourceOffset,
+  nextYouTubeQuotaResetAt,
+  quotaExhaustedBackoffMinutes,
+  errorBackoffMinutes,
+  MIN_INTERVAL_MINUTES,
   ensureYouTubeSourceDripState,
   getYouTubeSourceDripStatus,
   updateYouTubeSourceDripConfig,

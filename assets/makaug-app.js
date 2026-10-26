@@ -9053,6 +9053,7 @@ function ensurePublicResultsHeader(category) {
   }
   fxNote.textContent = fxNoteText();
   fxNote.classList.toggle("hidden", activeCur === "UGX");
+  ensureSearchAlertButton(key);
   return header;
 }
 
@@ -9341,7 +9342,9 @@ function applyLanguageUI() {
   setTextById("brand-subtitle", tr("brandSubtitle"));
 
   const savedEl = document.getElementById("top-saved-link");
-  if (savedEl) savedEl.innerHTML = `<i class="fas fa-heart text-green-300"></i> ${tr("saved")}`;
+  const savedLabelEl = document.getElementById("top-saved-label");
+  if (savedLabelEl) savedLabelEl.textContent = tr("saved");
+  else if (savedEl) savedEl.innerHTML = `<i class="fas fa-heart text-green-300"></i> ${tr("saved")}`;
   const signEl = document.getElementById("top-signin-link");
   if (signEl) signEl.innerHTML = `<i class="fas fa-user text-green-300"></i> ${tr("signIn")}`;
   const signOutEl = document.getElementById("top-signout-link");
@@ -10600,8 +10603,8 @@ const FINDER_DASHBOARD_I18N = {
     benefitsTitle: "Account Benefits & Contact",
     weeklyTitle: "Weekly property tips",
     weeklyCopy: "Receive market updates, safety tips, and reminders about saved listings.",
-    alertsTitle: "Account activity alerts",
-    alertsCopy: "Receive updates about enquiries, saves, listing progress, and new matching properties.",
+    alertsTitle: "WhatsApp property alerts and offers",
+    alertsCopy: "Send me new property alerts and offers on WhatsApp. Reply STOP anytime.",
     preferredContact: "Preferred Contact",
     communicationLanguage: "Preferred Communication Language",
     languageHelp: "English remains the default. We use this for account updates where available.",
@@ -10788,7 +10791,7 @@ const FINDER_DASHBOARD_I18N = {
     benefitsTitle: "Account benefits ne contact",
     weeklyTitle: "Tips za property buli wiiki",
     weeklyCopy: "Funa market updates, safety tips, ne reminders ku saved listings.",
-    alertsTitle: "Account activity alerts",
+    alertsTitle: "WhatsApp property alerts and offers",
     alertsCopy: "Funa updates ku enquiries, saves, listing progress, ne matching properties empya.",
     preferredContact: "Engeri y'okukukwatako",
     communicationLanguage: "Olulimi lw'empuliziganya",
@@ -10976,7 +10979,7 @@ const FINDER_DASHBOARD_I18N = {
     benefitsTitle: "Account Benefits & Contact",
     weeklyTitle: "Weekly property tips",
     weeklyCopy: "Pokea market updates, safety tips, na reminders kuhusu saved listings.",
-    alertsTitle: "Account activity alerts",
+    alertsTitle: "WhatsApp property alerts and offers",
     alertsCopy: "Pokea updates kuhusu enquiries, saves, listing progress, na matching properties mpya.",
     preferredContact: "Preferred Contact",
     communicationLanguage: "Preferred Communication Language",
@@ -11263,31 +11266,50 @@ function isPropertySaved(propertyId) {
   return Array.from(savedIds).some((value) => String(value) === key);
 }
 
+// Saves work with or without an account (26 Oct 2026). A visitor without an
+// account is known only by the first-party device cookie set by /api/saves.
+// A save shows as "Saved" only after the server has confirmed it.
+const savePendingIds = new Set();
+let savedServerItems = [];
+let savedServerLoaded = false;
+let savedServerUnavailableCount = 0;
+let savedSearchAlerts = [];
+
+function isSignedInForSaves() {
+  return !!(authState?.user && authState?.token);
+}
+
+function isSavePending(propertyId) {
+  return savePendingIds.has(String(propertyId || ""));
+}
+
 function getDetailSaveButtonClasses(propertyId) {
-  const signedIn = !!(authState?.user && authState?.token);
-  const saved = signedIn && isPropertySaved(propertyId);
+  const saved = isPropertySaved(propertyId);
+  if (isSavePending(propertyId)) {
+    return "w-full mt-3 border border-gray-300 bg-gray-50 text-gray-500 py-2.5 rounded-xl font-semibold cursor-wait";
+  }
   return saved
     ? "w-full mt-3 border border-green-700 bg-green-700 text-white py-2.5 rounded-xl font-semibold shadow-sm"
     : "w-full mt-3 border border-gray-300 text-gray-800 hover:bg-gray-50 py-2.5 rounded-xl font-semibold";
 }
 
 function getDetailSaveButtonContent(propertyId) {
-  const signedIn = !!(authState?.user && authState?.token);
-  const saved = signedIn && isPropertySaved(propertyId);
-  if (saved) {
+  const signedIn = isSignedInForSaves();
+  if (isSavePending(propertyId)) {
     return `
       <span class="inline-flex items-center justify-center gap-2">
-        <i class="fas fa-heart"></i>
-        <span>${translatePropertyUi("Saved to Profile")}</span>
+        <i class="fas fa-spinner fa-spin"></i>
+        <span>${translatePropertyUi("Saving…")}</span>
       </span>
     `;
   }
-  if (signedIn) {
+  if (isPropertySaved(propertyId)) {
     return `
       <span class="inline-flex items-center justify-center gap-2">
-        <i class="far fa-heart"></i>
-        <span>${translatePropertyUi("Save Property")}</span>
+        <i class="fas fa-heart"></i>
+        <span>${translatePropertyUi(signedIn ? "Saved to Profile" : "Saved")}</span>
       </span>
+      ${signedIn ? "" : `<span class="block text-[11px] font-medium text-green-100 mt-1">${translatePropertyUi("Saved on this device. Sign in to keep it on any phone.")}</span>`}
     `;
   }
   return `
@@ -11295,37 +11317,70 @@ function getDetailSaveButtonContent(propertyId) {
       <i class="far fa-heart"></i>
       <span>${translatePropertyUi("Save Property")}</span>
     </span>
-    <span class="block text-[11px] font-medium text-gray-500 mt-1">${translatePropertyUi("Sign in or create an account to keep it in your profile.")}</span>
+    ${signedIn ? "" : `<span class="block text-[11px] font-medium text-gray-500 mt-1">${translatePropertyUi("No account needed. Find it under Saved at the top.")}</span>`}
   `;
 }
 
 function getCardSaveButtonClasses(propertyId) {
   const saved = isPropertySaved(propertyId);
+  if (isSavePending(propertyId)) {
+    return "absolute top-2 right-2 min-w-[2.25rem] h-9 rounded-full bg-white/90 text-gray-400 flex items-center justify-center shadow-sm cursor-wait";
+  }
   return saved
     ? "absolute top-2 right-2 min-w-[2.25rem] h-9 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg ring-2 ring-white/80"
     : "absolute top-2 right-2 min-w-[2.25rem] h-9 rounded-full bg-white/90 text-gray-500 flex items-center justify-center shadow-sm";
 }
 
 function getCardSaveButtonIconClasses(propertyId) {
+  if (isSavePending(propertyId)) return "fas fa-spinner fa-spin text-gray-400";
   return isPropertySaved(propertyId) ? "fas fa-heart text-white" : "far fa-heart text-gray-500";
 }
 
 function getCardSaveButtonTitle(propertyId) {
-  if (isPropertySaved(propertyId)) return translatePropertyUi("Saved to Profile");
-  if (authState?.user && authState?.token) return translatePropertyUi("Save Property");
-  return translatePropertyUi("Sign in or create an account to keep it in your profile.");
+  if (isSavePending(propertyId)) return translatePropertyUi("Saving…");
+  if (isPropertySaved(propertyId)) return translatePropertyUi(isSignedInForSaves() ? "Saved to Profile" : "Saved");
+  return translatePropertyUi("Save Property");
 }
 
 function isUuidLike(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 }
 
+// The listing id the server knows (a UUID). Cards from older feeds may carry
+// a display id with the UUID in backend_id.
+function savedServerPropertyId(propertyId) {
+  const key = String(propertyId || "");
+  if (isUuidLike(key)) return key;
+  const property = findPropertyForUi(key);
+  const backendId = String(property?.backend_id || "");
+  return isUuidLike(backendId) ? backendId : "";
+}
+
 async function syncSavedPropertyToServer(propertyId, shouldSave) {
-  if (!authState?.token || !propertyId) return null;
-  if (!isUuidLike(propertyId)) return { ok: true, localOnly: true };
-  return apiRequest(`/api/saved-properties/${encodeURIComponent(propertyId)}`, {
+  const serverId = savedServerPropertyId(propertyId);
+  if (!serverId) throw new Error("This property can't be saved yet.");
+  return apiRequest(`/api/saves/${encodeURIComponent(serverId)}`, {
     method: shouldSave ? "POST" : "DELETE"
   });
+}
+
+function updateSavedNavCount() {
+  const total = savedIds.size;
+  ["nav-saved-count", "top-saved-count"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = total > 99 ? "99+" : String(total);
+    el.classList.toggle("hidden", total === 0);
+  });
+}
+
+function applySavesPayload(data = {}) {
+  const ids = Array.isArray(data?.ids) ? data.ids : [];
+  savedServerItems = Array.isArray(data?.items) ? data.items : [];
+  savedServerUnavailableCount = Number(data?.unavailable_count || 0) || 0;
+  savedServerLoaded = true;
+  setSavedIdsFromArray(ids);
+  updateSavedNavCount();
 }
 
 function refreshSavedUi(propertyId = "") {
@@ -11335,25 +11390,35 @@ function refreshSavedUi(propertyId = "") {
   updateDetailSaveButton(propertyId || activeDetailPropertyId);
 }
 
+// Staff and admin accounts don't keep a home-seeker saved list; skip the sync
+// for them. Signed-out visitors sync by device cookie.
 function canSyncSavedPropertiesForCurrentUser() {
-  if (!authState?.user) return false;
+  if (!authState?.user) return true;
   const mode = derivePortalMode(authState.user, authState.user.portal_mode);
   return ["finder", "student", "agent"].includes(mode);
 }
 
 async function refreshSavedPropertiesFromServer({ silent = true } = {}) {
-  if (!authState?.token) return false;
   if (!canSyncSavedPropertiesForCurrentUser()) return false;
   try {
-    const response = await apiRequest("/api/saved-properties");
-    const ids = Array.isArray(response?.data?.ids) ? response.data.ids : [];
-    setSavedIdsFromArray(ids);
+    const response = await apiRequest("/api/saves");
+    applySavesPayload(response?.data || {});
     refreshSavedUi(activeDetailPropertyId);
     return true;
   } catch (e) {
     if (!silent) toast(`Saved properties refresh failed: ${e.message || "error"}`);
     return false;
   }
+}
+
+async function refreshSavedSearchAlerts() {
+  try {
+    const response = await apiRequest("/api/saves/searches");
+    savedSearchAlerts = Array.isArray(response?.data?.items) ? response.data.items : [];
+  } catch (e) {
+    savedSearchAlerts = [];
+  }
+  return savedSearchAlerts;
 }
 
 function setPendingSavePropertyId(propertyId) {
@@ -11374,20 +11439,11 @@ function popPendingSavePropertyId() {
   }
 }
 
+// A save started before sign-in (older pages) is finished by
+// syncSavedStateAfterAuth once the server confirms it.
 function applyPendingSaveAfterAuth() {
   if (!authState?.user) return "";
-  const id = popPendingSavePropertyId();
-  if (!id) return "";
-  const property = findPropertyForUi(id);
-  if (!property) return "";
-  if (!isPropertySaved(id)) {
-    savedIds.add(String(id));
-    siteMetrics.propertySaves[String(id)] = (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + 1;
-    persistSavedIdsForCurrentUser();
-    saveDashboardState();
-    trackEvent("property_save", { property_id: id, source: "post_auth" });
-  }
-  return id;
+  return popPendingSavePropertyId();
 }
 
 function applySavePropertyLanguageUI() {
@@ -11425,14 +11481,26 @@ function continueSavePropertyAuth(mode = "signup") {
 
 async function syncSavedStateAfterAuth(pendingSaveId = "") {
   if (!authState?.token) return;
-  if (!pendingSaveId && !canSyncSavedPropertiesForCurrentUser()) return;
+  if (!canSyncSavedPropertiesForCurrentUser()) return;
   try {
-    if (pendingSaveId) {
+    // Move this device's saves and alerts into the account first.
+    const merged = await apiRequest("/api/saves/merge", { method: "POST" });
+    const movedSaves = Number(merged?.data?.merged?.saves || 0) || 0;
+    if (pendingSaveId && savedServerPropertyId(pendingSaveId)) {
       await syncSavedPropertyToServer(pendingSaveId, true);
+      trackEvent("property_save", { property_id: pendingSaveId, source: "post_auth" });
     }
-    await refreshSavedPropertiesFromServer({ silent: true });
+    if (pendingSaveId) {
+      await refreshSavedPropertiesFromServer({ silent: true });
+    } else {
+      applySavesPayload(merged?.data || {});
+      refreshSavedUi(activeDetailPropertyId);
+    }
+    if (pendingSaveId && isPropertySaved(pendingSaveId)) toast("Property saved to your account.");
+    else if (movedSaves > 0) toast(`${movedSaves} saved ${movedSaves === 1 ? "property" : "properties"} from this device moved into your account.`);
   } catch (e) {
     console.warn("Unable to sync saved properties", e);
+    refreshSavedPropertiesFromServer({ silent: true });
   }
 }
 
@@ -11784,7 +11852,7 @@ function collectAuthProfileData() {
     field_agent_availability: get("auth-profile-field-availability"),
     field_agent_reason: get("auth-profile-field-reason"),
     field_agent_application_status: authSignUpAudience === "field_agent" ? "pending_review" : "",
-    preferred_updates: document.getElementById("auth-signup-weekly-tips")?.checked === false ? "essential only" : "weekly tips and WhatsApp updates"
+    preferred_updates: document.getElementById("auth-signup-whatsapp-consent")?.checked === true ? "whatsapp property alerts and offers" : "essential only"
   };
 }
 
@@ -11819,6 +11887,21 @@ function setAuthSignUpAudience(mode) {
     ["auth-signup-audience-finder", "auth-signup-audience-student", "auth-signup-audience-agent", "auth-signup-audience-field", "auth-signup-audience-advertiser"]
   );
   updateAuthSignUpUi();
+  syncPhoneOnlySignupUi();
+}
+
+// Phone-only sign-up (SIGNUP_PHONE_ONLY_ENABLED on the server). Brokers still
+// give an email. Existing email logins are unchanged.
+function isPhoneOnlySignupActive() {
+  return window.MAKAUG_CONFIG?.signupPhoneOnly === true && authSignUpAudience !== "agent";
+}
+
+function syncPhoneOnlySignupUi() {
+  const phoneOnly = isPhoneOnlySignupActive();
+  document.getElementById("auth-signup-email-wrap")?.classList.toggle("hidden", phoneOnly);
+  document.getElementById("auth-signup-otp-channel-wrap")?.classList.toggle("hidden", phoneOnly);
+  document.getElementById("auth-signup-phone-only-note")?.classList.toggle("hidden", !phoneOnly);
+  if (phoneOnly) setAuthSignUpOtpChannel("phone");
 }
 
 	    function openSignedInDashboard(targetUrl = "") {
@@ -16953,6 +17036,7 @@ async function renderStaffDashboardOnce() {
   if (!staffDashboardSidePanelsStarted) {
     staffDashboardSidePanelsStarted = true;
     loadAgentBookingStaffFlags();
+    loadStaffHomeSeekers();
     adminLoadVideoCaptionConflicts("staff");
   }
   try {
@@ -34477,8 +34561,9 @@ function loadAuthState() {
   adminApiKey = loadStoredAdminApiKey();
   loadSavedIdsForCurrentUser();
   applyAuthUi();
+  updateSavedNavCount();
+  refreshSavedPropertiesFromServer({ silent: true });
   if (authState?.token) {
-    refreshSavedPropertiesFromServer({ silent: true });
     refreshAuthSession();
   }
 }
@@ -34526,7 +34611,6 @@ function persistAuthState(token, user, options = {}) {
   applyAuthUi();
   if (options.renderDashboard !== false) renderActiveAuthDashboard();
   if (authState?.token) syncSavedStateAfterAuth(pendingSaveId);
-  if (pendingSaveId) toast("Property saved to your account.");
 }
 
 function clearAuthState() {
@@ -34539,6 +34623,7 @@ function clearAuthState() {
   applyAuthUi();
   hydrateAccountForm();
   renderActiveAuthDashboard();
+  updateSavedNavCount();
 }
 
 	    function applyAuthUi() {
@@ -34635,7 +34720,7 @@ function hydrateAccountForm() {
 	      const preferredLanguageEl = document.getElementById("account-preferred-language");
 	      applyAccountLanguageUI();
 	      if (weeklyEl) weeklyEl.checked = user.weekly_tips_opt_in !== false;
-	      if (marketingEl) marketingEl.checked = user.marketing_opt_in !== false;
+	      if (marketingEl) marketingEl.checked = user.marketing_opt_in === true;
 	      if (contactEl) contactEl.value = user.preferred_contact_channel === "email" ? "email" : "whatsapp";
 	      if (preferredLanguageEl) preferredLanguageEl.value = user.preferred_language || currentLang || "en";
 	      setSelectOptions("account-pref-goal", ACCOUNT_FINDER_PREF_OPTIONS.goal, profile.primary_goal || "Rent");
@@ -34713,7 +34798,7 @@ async function submitAccountProfile() {
 	      const phone = normalizePhoneInput(document.getElementById("account-phone")?.value || "");
 	      const email = (document.getElementById("account-email")?.value || "").trim();
 	      const weeklyTipsOptIn = document.getElementById("account-weekly-tips")?.checked !== false;
-	      const marketingOptIn = document.getElementById("account-marketing-opt-in")?.checked !== false;
+	      const marketingOptIn = document.getElementById("account-marketing-opt-in")?.checked === true;
 	      const preferredContactChannel = (document.getElementById("account-contact-channel")?.value || "whatsapp").trim();
 	      const preferredLanguage = (document.getElementById("account-preferred-language")?.value || currentLang || "en").trim();
 	      const profileData = {
@@ -34846,7 +34931,9 @@ async function submitAccountPassword() {
 
 function signOut() {
   trackEvent("auth_sign_out", {});
-  apiRequest("/api/auth/logout", { method: "POST", body: {} }).catch(() => {});
+  apiRequest("/api/auth/logout", { method: "POST", body: {} })
+    .catch(() => {})
+    .finally(() => refreshSavedPropertiesFromServer({ silent: true }));
   clearAuthState();
   showPage("home");
   toast("Signed out");
@@ -35045,17 +35132,21 @@ async function submitAuthSignUp() {
   const role = (document.getElementById("auth-signup-role")?.value || "").trim();
   const password = (document.getElementById("auth-signup-password")?.value || "").trim();
   const confirmPassword = (document.getElementById("auth-signup-confirm-password")?.value || "").trim();
-  const otpChannel = authSignUpOtpChannel === "email" ? "email" : "phone";
+  const otpChannel = isPhoneOnlySignupActive() ? "phone" : (authSignUpOtpChannel === "email" ? "email" : "phone");
   const registrationStatus = "not_registered";
   const areaLicenceNumber = (document.getElementById("auth-signup-agent-licence")?.value || "").trim();
-  const weeklyTipsOptIn = document.getElementById("auth-signup-weekly-tips")?.checked !== false;
+  // Unticked by default; only a tick is a yes (26 Oct 2026).
+  const whatsappConsent = document.getElementById("auth-signup-whatsapp-consent")?.checked === true;
   const preferredLanguage = (document.getElementById("auth-signup-preferred-language")?.value || currentLang || "en").trim();
   const termsAccepted = document.getElementById("auth-signup-terms")?.checked === true;
   const privacyAccepted = document.getElementById("auth-signup-privacy")?.checked === true;
   const profileData = collectAuthProfileData();
 
-  if (!firstName || !lastName || !phone || !email || !password) {
-    toast("Please complete first name, second name/surname, email, phone/WhatsApp, and password.");
+  const phoneOnly = isPhoneOnlySignupActive();
+  if (!firstName || !lastName || !phone || (!phoneOnly && !email) || !password) {
+    toast(phoneOnly
+      ? "Please complete first name, second name/surname, WhatsApp number, and password."
+      : "Please complete first name, second name/surname, email, phone/WhatsApp, and password.");
     return;
   }
   if (password !== confirmPassword) {
@@ -35086,7 +35177,7 @@ async function submitAuthSignUp() {
         first_name: firstName,
         last_name: lastName,
         phone,
-        email,
+        email: phoneOnly ? undefined : email,
         role,
         password,
         confirm_password: confirmPassword,
@@ -35094,8 +35185,8 @@ async function submitAuthSignUp() {
         audience: authSignUpAudience,
         terms_accepted: termsAccepted,
         privacy_accepted: privacyAccepted,
-        weekly_tips_opt_in: weeklyTipsOptIn,
-        marketing_opt_in: weeklyTipsOptIn,
+        weekly_tips_opt_in: false,
+        marketing_opt_in: whatsappConsent,
         preferred_contact_channel: "whatsapp",
         preferred_language: preferredLanguage,
         profile_data: profileData,
@@ -39849,8 +39940,8 @@ function openListPropertyWhatsApp() {
 function handleSavedClick(event) {
   if (!authState?.user) {
     if (event) event.preventDefault();
-    trackEvent("saved_auth_required_clicked", { source_page: window.location.pathname || "/" });
-    openAuthSignIn("finder");
+    trackEvent("saved_opened_signed_out", { source_page: window.location.pathname || "/" });
+    showPage("saved");
     return;
   }
   if (event) event.preventDefault();
@@ -41157,6 +41248,7 @@ function setAccountAccessCreateStep(step = "details") {
   updateAccountAccessRoleFocus();
   applyAccountAccessTheme();
   updateAccountAccessCreateFinalState();
+  syncAccountAccessPhoneOnlyUi();
 }
 
 function showAccountAccessRolePicker() {
@@ -41287,7 +41379,7 @@ function ensureAccountAccessDrawer() {
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="lastName">Second name / surname</span>
                   <input id="account-access-last-name" autocomplete="family-name" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="Second name / surname">
                 </label>
-                <label class="block">
+                <label id="account-access-email-wrap" class="block">
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="email">Email</span>
                   <input id="account-access-email" type="email" autocomplete="email" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="you@email.com">
                 </label>
@@ -41309,6 +41401,11 @@ function ensureAccountAccessDrawer() {
                   </label>
                 </div>
               </div>
+              <p id="account-access-phone-only-note" class="hidden rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-900">We send your code to this number on WhatsApp. No email needed.</p>
+              <label class="flex items-start gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-800">
+                <input id="account-access-whatsapp-consent" type="checkbox" class="mt-0.5 h-4 w-4 accent-green-700" data-consent-wording="signup_whatsapp_2026_10_26">
+                <span>Send me new property alerts and offers on WhatsApp. Reply STOP anytime.</span>
+              </label>
             </div>
             <div id="account-access-create-preferences-step" data-auth-create-step="preferences" class="hidden space-y-3">
               <div class="text-xs font-bold text-gray-600 mb-2" data-auth-text="quickPreferences">Quick preferences</div>
@@ -41465,6 +41562,7 @@ function handleAccountAccessKeydown(event) {
 
 function setAccountAccessRole(role = "finder") {
   accountAccessDrawerAudience = normalizeAuthAudience(role, true);
+  setTimeout(syncAccountAccessPhoneOnlyUi, 0);
   const copy = accountAccessRoleCopy(accountAccessDrawerAudience);
   const theme = accountAccessRoleTheme(accountAccessDrawerAudience);
   setTextById("account-access-role-label", copy.label);
@@ -41715,7 +41813,28 @@ function collectAccountAccessScreeningData() {
 }
 
 function selectedAccountAccessOtpChannel() {
+  if (isAccountAccessPhoneOnly()) return "phone";
   return document.querySelector('input[name="account-access-otp-method"]:checked')?.value === "phone" ? "phone" : "email";
+}
+
+// SIGNUP_PHONE_ONLY_ENABLED: new home-seeker accounts use a phone number only.
+// Brokers keep email. Existing email sign-ins are not affected.
+function isAccountAccessPhoneOnly() {
+  return window.MAKAUG_CONFIG?.signupPhoneOnly === true && accountAccessDrawerAudience !== "agent";
+}
+
+function syncAccountAccessPhoneOnlyUi() {
+  const phoneOnly = isAccountAccessPhoneOnly();
+  document.getElementById("account-access-email-wrap")?.classList.toggle("hidden", phoneOnly);
+  document.getElementById("account-access-otp-method-wrap")?.classList.toggle("hidden", phoneOnly);
+  document.getElementById("account-access-phone-only-note")?.classList.toggle("hidden", !phoneOnly);
+  if (phoneOnly) {
+    const radio = document.querySelector('input[name="account-access-otp-method"][value="phone"]');
+    if (radio) radio.checked = true;
+    if (accountAccessCreateStep === "details" && accountAccessDrawerMode === "create") {
+      setAccountAccessFlowNote("Add your first name, second name and mobile number. We will send a code on WhatsApp.", "info");
+    }
+  }
 }
 
 function maskAccountAccessDestination(value = "", channel = "email") {
@@ -41767,6 +41886,17 @@ function getAccountAccessContactDetails() {
 }
 
 function validateAccountAccessContactDetails({ firstName, lastName, email, phone, otpChannel } = {}) {
+  if (isAccountAccessPhoneOnly()) {
+    if (!firstName || !lastName || !phone) {
+      toast("Add your first name, second name/surname, and mobile number.");
+      return false;
+    }
+    if (!/^\+256\d{9}$/.test(phone || "")) {
+      toast("Enter a valid Uganda mobile number for WhatsApp verification.");
+      return false;
+    }
+    return true;
+  }
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email || "");
   if (!firstName || !lastName || !email || !phone) {
     toast("Add your first name, second name/surname, email address, and mobile number.");
@@ -41799,7 +41929,7 @@ async function submitAccountAccessContactOtp() {
       body: {
         first_name: details.firstName,
         last_name: details.lastName,
-        email: details.email,
+        email: isAccountAccessPhoneOnly() ? undefined : details.email,
         phone: details.phone,
         channel: details.otpChannel,
         preferred_language: details.preferredLanguage,
@@ -41985,12 +42115,16 @@ async function submitAccountAccessCreate() {
   const termsAccepted = document.getElementById("account-access-terms")?.checked === true;
   const privacyAccepted = document.getElementById("account-access-privacy")?.checked === true;
   const otpChannel = details.otpChannel;
+  const phoneOnlySignup = isAccountAccessPhoneOnly();
+  const whatsappConsent = document.getElementById("account-access-whatsapp-consent")?.checked === true;
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  if (!firstName || !lastName || !email || !phone || !password) {
-    toast("Add your first name, second name/surname, email, phone/WhatsApp, and password.");
+  if (!firstName || !lastName || (!email && !phoneOnlySignup) || !phone || !password) {
+    toast(phoneOnlySignup
+      ? "Add your first name, second name/surname, phone/WhatsApp, and password."
+      : "Add your first name, second name/surname, email, phone/WhatsApp, and password.");
     return;
   }
-  if (!emailLooksValid) {
+  if (!phoneOnlySignup && !emailLooksValid) {
     toast("Enter a valid email address.");
     return;
   }
@@ -42052,7 +42186,7 @@ async function submitAccountAccessCreate() {
         first_name: firstName,
         last_name: lastName,
         phone,
-        email,
+        email: phoneOnlySignup ? undefined : email,
         role: roleLabel,
         password,
         confirm_password: confirmPassword,
@@ -42064,6 +42198,8 @@ async function submitAccountAccessCreate() {
         terms_accepted: termsAccepted,
         privacy_accepted: privacyAccepted,
         weekly_tips_opt_in: false,
+        // Unticked by default. Only a tick here is WhatsApp marketing consent.
+        marketing_opt_in: whatsappConsent,
         preferred_language: preferredLanguage,
         preferred_contact_channel: profileData.preferred_contact_channel || "whatsapp",
         profile_data: profileData
@@ -44266,7 +44402,7 @@ const PAGE_CONTENT = {
     </p>`,
   cookies: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Cookie Policy</h2>
-    <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
+    <p class="text-xs text-gray-500 mb-4">Last updated: 26 October 2026</p>
     <p class="mb-3 text-sm">
       Cookies and similar technologies help makaug.com run securely, remember your preferences, and improve user experience.
     </p>
@@ -44274,6 +44410,11 @@ const PAGE_CONTENT = {
     <p class="mb-3 text-sm">
       Required for account login, session continuity, fraud controls, and core platform functionality.
       Disabling these may prevent the site from working correctly.
+    </p>
+    <p id="cookie-policy-device-line" class="mb-3 text-sm">
+      <strong>Device cookie (mk_did).</strong> When you save a property or a search without an account, we set a random
+      device ID so your saves are still here next time on this phone or computer. It lasts up to 400 days, is not used for
+      advertising, and is moved into your account when you sign in or sign up. Clearing your cookies removes it.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">2. Preference Cookies</h3>
     <p class="mb-3 text-sm">
@@ -50038,7 +50179,7 @@ function studentCardFooterText(p = {}) {
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           ${badgeRow}
         </div>
-        <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
+        <button onclick="event.stopPropagation(); toggleSave(${idArg})" data-save-id="${adminAttr(String(p.id))}" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
           <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
         </button>
         <div class="absolute bottom-2 right-2 ${theme.priceBg} text-white px-2 py-1 rounded text-sm font-bold">${listingPriceHtml(p, studentMode ? (p.period || "sem") : p.period)}</div>
@@ -50582,33 +50723,390 @@ function renderBrokers(id, list) {
   if (directory) setBrokerMapMarkers(list);
 }
 
+const savedListingHydrationTried = new Set();
+
+async function hydrateMissingSavedListings(ids = []) {
+  const missing = ids
+    .map((id) => String(id || ""))
+    .filter((id) => id && !findPropertyForUi(id) && !savedListingHydrationTried.has(id))
+    .slice(0, 24);
+  if (!missing.length) return;
+  missing.forEach((id) => savedListingHydrationTried.add(id));
+  const results = await Promise.allSettled(
+    missing.map((id) => apiRequest(`/api/properties/${encodeURIComponent(id)}`, { skipAuth: true }))
+  );
+  let added = 0;
+  results.forEach((result) => {
+    const row = result.status === "fulfilled" ? result.value?.data : null;
+    if (row?.id && upsertPropertyForUi(row)) added += 1;
+  });
+  if (added && currentPage === "saved") renderSaved();
+}
+
+function savedItemFallbackCard(item = {}) {
+  const id = String(item.property_id || "");
+  const place = [item.area, item.district].filter(Boolean).join(", ");
+  const price = Number(item.price) > 0 ? `${adminEscape(item.currency || "UGX")} ${Number(item.price).toLocaleString()}${item.price_period ? ` / ${adminEscape(item.price_period)}` : ""}` : "";
+  return `
+    <a href="/property/${encodeURIComponent(id)}" class="block border border-gray-200 rounded-xl overflow-hidden bg-white hover:shadow-md">
+      ${item.image_url ? `<img src="${adminAttr(item.image_url)}" alt="" loading="lazy" class="w-full h-40 object-cover">` : `<div class="w-full h-40 bg-gray-100"></div>`}
+      <div class="p-3">
+        <p class="font-semibold text-gray-900">${adminEscape(item.title || "Saved property")}</p>
+        <p class="text-xs text-gray-500 mt-0.5">${adminEscape(place)}</p>
+        ${price ? `<p class="text-sm font-bold text-green-800 mt-1">${price}</p>` : ""}
+      </div>
+    </a>`;
+}
+
 function renderSaved() {
   const el = document.getElementById("saved-content");
   if (!el) return;
-  if (!authState?.user) {
-    el.innerHTML = `
-      <div class="text-center py-10">
-        <i class="far fa-user-circle text-4xl text-gray-300 mb-3"></i>
-        <p class="text-gray-700 font-semibold">Create or sign in to your free account to save properties.</p>
-        <p class="text-sm text-gray-500 mt-1">Saved properties then appear in your personal finder dashboard.</p>
-        <div class="mt-5 flex flex-col sm:flex-row justify-center gap-2">
-          <button onclick="openAuthSignUp('finder')" class="bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Create Free Account</button>
-          <button onclick="openAuthSignIn('finder')" class="border border-green-700 text-green-700 px-5 py-2 rounded-lg text-sm font-semibold">Sign In</button>
+  const signedIn = isSignedInForSaves();
+  const ids = Array.from(savedIds);
+  if (!savedServerLoaded && !ids.length) {
+    el.innerHTML = `<div class="text-center py-10 text-gray-500"><i class="fas fa-spinner fa-spin text-2xl mb-2"></i><p>Loading your saved properties…</p></div>`;
+    renderSavedSearchesPanel();
+    return;
+  }
+  const deviceNote = signedIn ? "" : `
+      <div id="saved-device-note" class="mb-5 rounded-xl border border-green-100 bg-green-50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <p class="text-sm font-semibold text-green-900"><i class="fas fa-mobile-screen-button mr-1"></i>Saved on this device</p>
+          <p class="text-xs text-green-800 mt-0.5">No account needed. Create a free account or sign in to keep these on any phone or computer. Your saves move across automatically.</p>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <button onclick="openAuthSignUp('finder')" class="bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Create free account</button>
+          <button onclick="openAuthSignIn('finder')" class="border border-green-700 text-green-700 px-4 py-2 rounded-lg text-sm font-semibold bg-white">Sign in</button>
         </div>
       </div>`;
-    return;
-  }
-  const list = getPublicListings().filter((p) => isPropertySaved(p.id));
-  if (!list.length) {
-    el.innerHTML = `
+  if (!ids.length) {
+    el.innerHTML = `${deviceNote}
       <div class="text-center py-10">
         <i class="far fa-heart text-4xl text-gray-300 mb-3"></i>
-        <p class="text-gray-600 font-medium">No saved properties yet.</p>
-        <button onclick="showPage('sale')" class="mt-4 bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Browse Properties</button>
+        <p class="text-gray-700 font-medium">No saved properties yet.</p>
+        <p class="text-sm text-gray-500 mt-1">Tap the heart on any listing to keep it here${signedIn ? "" : " (no account needed)"}.</p>
+        <button onclick="showPage('rent')" class="mt-4 bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Browse Properties</button>
       </div>`;
+    renderSavedSearchesPanel();
     return;
   }
-  el.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">${list.map(propCard).join("")}</div>`;
+  const itemsById = new Map(savedServerItems.map((item) => [String(item.property_id), item]));
+  const cards = ids.map((id) => {
+    const property = findPropertyForUi(id);
+    if (property) return propCard(property);
+    const item = itemsById.get(String(id));
+    return item ? savedItemFallbackCard(item) : "";
+  }).filter(Boolean);
+  const unavailable = savedServerUnavailableCount > 0
+    ? `<p class="mt-4 text-xs text-gray-500">${savedServerUnavailableCount} saved ${savedServerUnavailableCount === 1 ? "listing is" : "listings are"} no longer on makaug and ${savedServerUnavailableCount === 1 ? "is" : "are"} hidden.</p>`
+    : "";
+  el.innerHTML = `${deviceNote}
+    <p class="text-sm font-semibold text-gray-600 mb-4"><strong>${ids.length}</strong> saved ${ids.length === 1 ? "property" : "properties"}</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">${cards.join("")}</div>${unavailable}`;
+  hydrateMissingSavedListings(ids);
+  renderSavedSearchesPanel();
+}
+
+let savedSearchesPanelLoadedAt = 0;
+
+function renderSavedSearchesPanel() {
+  const el = document.getElementById("saved-searches-content");
+  if (!el) return;
+  const now = Date.now();
+  if (now - savedSearchesPanelLoadedAt > 15000) {
+    savedSearchesPanelLoadedAt = now;
+    refreshSavedSearchAlerts().then(() => renderSavedSearchesPanel());
+  }
+  const rows = savedSearchAlerts;
+  el.innerHTML = `
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <h2 class="text-lg font-black text-gray-900"><i class="far fa-bell text-green-700 mr-1"></i>Saved searches and alerts</h2>
+        <p class="text-sm text-gray-500 mt-0.5">Use "Save this search / alert me" on any results page.</p>
+      </div>
+    </div>
+    ${rows.length ? `<ul class="mt-4 divide-y divide-gray-100">${rows.map((row) => `
+      <li class="py-3 flex items-center justify-between gap-3">
+        <div>
+          <p class="font-semibold text-gray-800">${adminEscape(row.label || "Saved search")}</p>
+          <p class="text-xs text-gray-500">${row.alert_scope === "search_alerts_whatsapp" ? "WhatsApp alerts on (max one a day)" : "Saved search, no WhatsApp alerts"}</p>
+        </div>
+        <button type="button" onclick="deleteSavedSearchAlert('${adminAttr(row.id)}')" class="text-xs font-semibold text-red-600 border border-red-200 rounded-lg px-3 py-1.5">Remove</button>
+      </li>`).join("")}</ul>` : `<p class="mt-4 text-sm text-gray-500">No saved searches yet.</p>`}`;
+}
+
+async function deleteSavedSearchAlert(id) {
+  try {
+    await apiRequest(`/api/saves/searches/${encodeURIComponent(id)}`, { method: "DELETE" });
+    savedSearchAlerts = savedSearchAlerts.filter((row) => String(row.id) !== String(id));
+    renderSavedSearchesPanel();
+    toast("Saved search removed");
+  } catch (e) {
+    toast(`Could not remove it: ${e.message || "error"}`);
+  }
+}
+
+// ---------- "Save this search / alert me" on results pages ----------
+const SEARCH_ALERT_CONSENT_TEXT = "Send me new properties that match this search on WhatsApp. Max one message a day. Reply STOP anytime.";
+
+function currentSearchAlertCriteria(category) {
+  const key = publicPaginationKey(category) || String(category || "");
+  const path = publicCategoryApiPathForPagination(key) || "";
+  let params = new URLSearchParams();
+  try {
+    params = new URL(path || "/", window.location.origin).searchParams;
+  } catch (e) {}
+  const location = params.get("area") || params.get("studentCampus") || params.get("district") || params.get("query") || params.get("locations") || "";
+  const criteria = {
+    category: key === "students" ? "student" : key,
+    location,
+    query: params.get("query") || "",
+    min_price: params.get("min_price") || "",
+    max_price: params.get("max_price") || "",
+    bedrooms: params.get("bedrooms") || "",
+    property_type: params.get("property_type") || ""
+  };
+  const typeLabel = { sale: "For sale", rent: "To rent", student: "Student rooms", land: "Land", commercial: "Commercial" }[criteria.category] || "Properties";
+  const bits = [typeLabel];
+  if (criteria.bedrooms) bits.push(`${criteria.bedrooms}+ bed`);
+  if (criteria.location) bits.push(`in ${criteria.location}`);
+  if (criteria.max_price) bits.push(`up to UGX ${Number(criteria.max_price).toLocaleString()}`);
+  criteria.label = bits.join(" ");
+  return criteria;
+}
+
+function ensureSearchAlertButton(category) {
+  const key = publicPaginationKey(category);
+  if (!["sale", "rent", "students", "commercial", "land"].includes(key)) return;
+  const header = document.getElementById(`${key}-results-header`);
+  if (!header || header.querySelector("[data-search-alert-btn]")) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.setAttribute("data-search-alert-btn", key);
+  btn.setAttribute("data-testid", `search-alert-btn-${key}`);
+  btn.className = "inline-flex items-center justify-center gap-2 rounded-xl border border-green-700 bg-white px-4 h-11 text-sm font-bold text-green-800 hover:bg-green-50";
+  btn.innerHTML = `<i class="far fa-bell"></i><span>Save this search / alert me</span>`;
+  btn.onclick = () => openSearchAlertModal(key);
+  const sort = header.querySelector("[data-public-results-sort]");
+  let actions = header.querySelector("[data-public-results-actions]");
+  if (!actions) {
+    actions = document.createElement("div");
+    actions.setAttribute("data-public-results-actions", "1");
+    actions.className = "flex flex-col gap-2 sm:flex-row sm:items-center";
+    header.appendChild(actions);
+    if (sort) actions.appendChild(sort);
+  }
+  actions.insertBefore(btn, actions.firstChild);
+}
+
+function ensureSearchAlertModal() {
+  let modal = document.getElementById("search-alert-modal");
+  if (modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "search-alert-modal";
+  modal.className = "modal-overlay";
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:520px">
+      <button type="button" onclick="closeModal('search-alert-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50" aria-label="Close">✕</button>
+      <div class="inline-flex items-center gap-2 bg-green-100 text-green-800 text-xs font-bold rounded-full px-3 py-1 mb-3"><i class="far fa-bell"></i><span>Save this search</span></div>
+      <h2 class="text-xl font-black text-gray-900">Tell me about new matches</h2>
+      <p id="search-alert-summary" class="mt-1 text-sm text-gray-600"></p>
+      <label for="search-alert-label" class="mt-4 block text-sm font-medium text-gray-800">Name this search</label>
+      <input id="search-alert-label" class="mt-1 w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm" maxlength="120">
+      <label class="mt-4 flex items-start gap-2 text-sm text-gray-700">
+        <input id="search-alert-whatsapp" type="checkbox" class="mt-1 accent-green-700" onchange="document.getElementById('search-alert-phone-wrap').classList.toggle('hidden', !this.checked)">
+        <span>${SEARCH_ALERT_CONSENT_TEXT}</span>
+      </label>
+      <div id="search-alert-phone-wrap" class="hidden mt-3">
+        <label for="search-alert-phone" class="block text-sm font-medium text-gray-800">WhatsApp number</label>
+        <input id="search-alert-phone" inputmode="tel" class="mt-1 w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm" placeholder="07XX XXX XXX">
+      </div>
+      <p class="mt-3 text-xs text-gray-500">No account needed. We keep this search on this device with a device cookie (see our Cookie Policy). Ticking the box agrees to alerts for this search only, not other offers.</p>
+      <button id="search-alert-submit" type="button" onclick="submitSearchAlert()" class="mt-4 w-full bg-green-800 hover:bg-green-700 text-white py-3 rounded-xl font-semibold">Save search</button>
+    </div>`;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function openSearchAlertModal(category) {
+  const modal = ensureSearchAlertModal();
+  const criteria = currentSearchAlertCriteria(category);
+  modal.dataset.criteria = JSON.stringify(criteria);
+  const summary = document.getElementById("search-alert-summary");
+  if (summary) summary.textContent = criteria.label;
+  const labelInput = document.getElementById("search-alert-label");
+  if (labelInput) labelInput.value = criteria.label;
+  const box = document.getElementById("search-alert-whatsapp");
+  if (box) box.checked = false;
+  document.getElementById("search-alert-phone-wrap")?.classList.add("hidden");
+  const phoneInput = document.getElementById("search-alert-phone");
+  if (phoneInput) phoneInput.value = authState?.user?.phone || "";
+  openModal("search-alert-modal");
+  trackEvent("search_alert_opened", { category: criteria.category });
+}
+
+async function submitSearchAlert() {
+  const modal = document.getElementById("search-alert-modal");
+  if (!modal) return;
+  let criteria = {};
+  try { criteria = JSON.parse(modal.dataset.criteria || "{}"); } catch (e) {}
+  const whatsapp = document.getElementById("search-alert-whatsapp")?.checked === true;
+  const phone = (document.getElementById("search-alert-phone")?.value || "").trim();
+  if (whatsapp && !phone) {
+    toast("Enter your WhatsApp number, or untick the box to just save the search.");
+    return;
+  }
+  const label = (document.getElementById("search-alert-label")?.value || "").trim() || criteria.label;
+  setButtonLoading("search-alert-submit", true);
+  try {
+    await apiRequest("/api/saves/searches", {
+      method: "POST",
+      body: { ...criteria, label, whatsapp_alerts: whatsapp, phone: whatsapp ? phone : undefined }
+    });
+    closeModal("search-alert-modal");
+    savedSearchesPanelLoadedAt = 0;
+    toast(whatsapp ? "Search saved. Alerts for new matches are on." : "Search saved. Find it under Saved.", 3200);
+    trackEvent("search_alert_saved", { category: criteria.category, whatsapp });
+  } catch (e) {
+    toast(`Not saved: ${e.message || "error"}`, 3600);
+  } finally {
+    setButtonLoading("search-alert-submit", false, "Save search");
+  }
+}
+
+// ---------- Staff: new home seekers, saves and alerts ----------
+let staffHomeSeekersData = null;
+
+async function loadStaffHomeSeekers() {
+  const host = ensureStaffHomeSeekersSection();
+  if (!host || !authState?.token) return;
+  try {
+    const res = await staffApiRequestWithTimeout("/api/staff/home-seekers?days=14", {}, 15000, "Home seekers");
+    staffHomeSeekersData = res?.data || null;
+    renderStaffHomeSeekers();
+  } catch (error) {
+    host.querySelector("[data-home-seekers-body]").innerHTML = `<p class="text-sm text-red-600">Could not load home seekers: ${adminEscape(error.message || "error")}</p>`;
+  }
+}
+
+function ensureStaffHomeSeekersSection() {
+  let section = document.getElementById("staff-home-seekers");
+  if (section) return section;
+  const body = document.getElementById("staff-body");
+  if (!body) return null;
+  section = document.createElement("section");
+  section.id = "staff-home-seekers";
+  section.className = "bg-white border border-gray-200 rounded-2xl p-6";
+  section.innerHTML = `
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <h3 class="text-lg font-black text-gray-900">New home seekers <span id="staff-home-seekers-badge" class="hidden ml-1 align-middle rounded-full bg-red-500 px-2 py-0.5 text-xs font-black text-white"></span></h3>
+        <p class="mt-1 text-sm text-gray-500">Sign-ups, saves (with or without an account) and "alert me" searches. WhatsApp alerts are previews only; nothing is sent from here.</p>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <button type="button" onclick="loadStaffHomeSeekers()" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-black text-gray-700">Refresh</button>
+        <button type="button" onclick="runStaffWhatsappDigestPreview()" class="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-black text-emerald-800">Build today's alert previews</button>
+      </div>
+    </div>
+    <div data-home-seekers-body class="mt-4 text-sm text-gray-600">Loading…</div>`;
+  const anchor = document.getElementById("staff-booking-escalations");
+  if (anchor && anchor.parentElement === body) anchor.insertAdjacentElement("afterend", section);
+  else body.insertBefore(section, body.firstChild);
+  return section;
+}
+
+function staffShortDate(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Kampala" });
+}
+
+function renderStaffHomeSeekers() {
+  const section = ensureStaffHomeSeekersSection();
+  if (!section) return;
+  const data = staffHomeSeekersData || {};
+  const c = data.counts || {};
+  const badge = document.getElementById("staff-home-seekers-badge");
+  if (badge) {
+    badge.textContent = `${c.new_24h || 0} new today`;
+    badge.classList.toggle("hidden", !(c.new_24h > 0));
+  }
+  const wa = data.whatsapp_alerts || {};
+  const waCount = (status) => (Array.isArray(wa.counts) ? wa.counts : [])
+    .filter((row) => row.status === status)
+    .reduce((sum, row) => sum + Number(row.count || 0), 0);
+  wa.preview = waCount("preview");
+  wa.pending = waCount("pending");
+  const waRecent = (Array.isArray(wa.recent) ? wa.recent : []).slice(0, 5).map((row) => `
+    <li class="py-2 border-t border-gray-100"><span class="text-xs font-semibold text-gray-700">${adminEscape(row.kind)} · ${adminEscape(row.status)} · ${adminEscape(row.phone || "")} · ${Number(row.listing_count || 0)} listings</span>
+      <pre class="mt-1 whitespace-pre-wrap text-[11px] text-gray-600 bg-gray-50 rounded-lg p-2">${adminEscape(row.message_preview || "")}</pre></li>`).join("");
+  const today = new Date().toISOString().slice(0, 10);
+  const stat = (label, value) => `<div class="rounded-xl border border-gray-200 p-3"><div class="text-2xl font-black text-gray-900">${Number(value || 0)}</div><div class="text-xs text-gray-500">${label}</div></div>`;
+  const signups = (data.signups || []).map((u) => `
+    <tr class="border-t border-gray-100 align-top">
+      <td class="py-2 pr-3"><div class="font-semibold text-gray-900">${adminEscape(u.name)}</div><div class="text-xs text-gray-500">${adminEscape(u.audience)} · ${adminEscape(staffShortDate(u.created_at))}</div></td>
+      <td class="py-2 pr-3 text-xs">${adminEscape(u.phone || "")}${u.email ? `<br>${adminEscape(u.email)}` : ""}<br><span class="text-gray-500">Verified: ${adminEscape(u.verified)}</span></td>
+      <td class="py-2 pr-3 text-xs">${u.saves}</td>
+      <td class="py-2 text-xs">
+        <label class="inline-flex items-center gap-1.5 font-semibold text-gray-800">
+          <input type="checkbox" data-in-person-user="${adminAttr(u.id)}" ${u.marketing_opt_in ? "checked" : ""} class="accent-green-700"> ${u.marketing_opt_in && !["in_person", "staff_in_person"].includes(u.marketing_consent_source) ? "WhatsApp yes (not in person)" : "Agreed in person"}
+        </label>
+        <input type="date" data-in-person-date="${adminAttr(u.id)}" max="${today}" value="${adminAttr((u.marketing_consent_source === "staff_in_person" && u.marketing_consent_at) ? String(u.marketing_consent_at).slice(0, 10) : today)}" class="mt-1 block border border-gray-200 rounded-lg px-2 py-1 text-xs">
+        <button type="button" onclick="saveStaffInPersonConsent('${adminAttr(u.id)}')" class="mt-1 rounded-lg border border-gray-300 px-2 py-1 text-[11px] font-black">Save</button>
+        <div class="mt-1 text-[11px] text-gray-500">${u.marketing_opt_in ? `WhatsApp: yes (${adminEscape(u.marketing_consent_source || "recorded")}${u.marketing_consent_at ? `, ${adminEscape(String(u.marketing_consent_at).slice(0, 10))}` : ""})` : "WhatsApp: no"}</div>
+      </td>
+    </tr>`).join("");
+  const saves = (data.saves || []).slice(0, 20).map((row) => `
+    <li class="py-2 border-t border-gray-100"><span class="font-semibold text-gray-900">${adminEscape(row.title || "Listing")}</span>
+      <span class="text-xs text-gray-500">${adminEscape(row.place || "")}${row.listing_code ? ` · ${adminEscape(row.listing_code)}` : ""}</span><br>
+      <span class="text-xs ${row.kind === "device" ? "text-amber-700" : "text-green-700"}">${adminEscape(row.who)}</span> <span class="text-xs text-gray-400">${adminEscape(staffShortDate(row.created_at))}</span></li>`).join("");
+  const alerts = (data.alerts || []).slice(0, 20).map((row) => `
+    <li class="py-2 border-t border-gray-100"><span class="font-semibold text-gray-900">${adminEscape(row.label || "Search")}</span><br>
+      <span class="text-xs text-gray-500">${adminEscape(row.who)} · ${row.whatsapp ? "WhatsApp alerts" : "saved only"} · ${adminEscape(staffShortDate(row.created_at))}</span></li>`).join("");
+  section.querySelector("[data-home-seekers-body]").innerHTML = `
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+      ${stat("Sign-ups (24h)", c.signups_24h)}
+      ${stat(`Sign-ups (${data.window_days || 14} days)`, c.signups_window)}
+      ${stat("Saves (24h)", c.saves_24h)}
+      ${stat("Saves without account (24h)", c.device_saves_24h)}
+      ${stat("Alert-me searches (24h)", c.alerts_24h)}
+    </div>
+    <p class="mt-3 text-xs text-gray-500">WhatsApp marketing yes: <strong>${Number(c.whatsapp_marketing_yes || 0)}</strong> people. Alert messages waiting: ${Number(wa.preview || 0)} preview, ${Number(wa.pending || 0)} pending (sending is ${wa.enabled ? "ON" : "OFF"}).</p>
+    <h4 class="mt-5 font-black text-gray-900">Sign-ups</h4>
+    ${signups ? `<div class="overflow-x-auto"><table class="mt-2 w-full text-left text-sm"><thead><tr class="text-xs uppercase text-gray-400"><th class="py-1">Who</th><th>Contact</th><th>Saves</th><th>WhatsApp consent</th></tr></thead><tbody>${signups}</tbody></table></div>` : `<p class="mt-2 text-sm text-gray-500">No new home-seeker sign-ups in this window.</p>`}
+    <div class="mt-5 grid md:grid-cols-2 gap-6">
+      <div><h4 class="font-black text-gray-900">Latest saves</h4>${saves ? `<ul class="mt-2 text-sm">${saves}</ul>` : `<p class="mt-2 text-sm text-gray-500">No saves yet.</p>`}</div>
+      <div><h4 class="font-black text-gray-900">Alert-me searches</h4>${alerts ? `<ul class="mt-2 text-sm">${alerts}</ul>` : `<p class="mt-2 text-sm text-gray-500">No alert-me searches yet.</p>`}</div>
+    </div>
+    ${waRecent ? `<h4 class="mt-5 font-black text-gray-900">Latest WhatsApp alert previews (not sent)</h4><ul class="mt-2">${waRecent}</ul>` : ""}`;
+}
+
+async function saveStaffInPersonConsent(userId) {
+  const box = document.querySelector(`[data-in-person-user="${CSS.escape(userId)}"]`);
+  const dateInput = document.querySelector(`[data-in-person-date="${CSS.escape(userId)}"]`);
+  const agreed = box?.checked === true;
+  try {
+    await staffApiRequestWithTimeout(`/api/staff/home-seekers/users/${encodeURIComponent(userId)}/marketing-consent-in-person`, {
+      method: "POST",
+      body: { agreed, agreed_on: dateInput?.value || "" }
+    }, 12000, "In-person consent");
+    toast(agreed ? "Recorded: agreed in person." : "Recorded: WhatsApp marketing is now no.");
+    await loadStaffHomeSeekers();
+  } catch (error) {
+    toast(error?.message || "Could not record it.");
+  }
+}
+
+async function runStaffWhatsappDigestPreview() {
+  try {
+    const res = await staffApiRequestWithTimeout("/api/staff/home-seekers/whatsapp-alerts/run", { method: "POST" }, 30000, "Alert previews");
+    const d = res?.data || {};
+    toast(`Alert previews built: ${Number(d.digests_written || 0)} new. Nothing was sent.`, 3600);
+    await loadStaffHomeSeekers();
+  } catch (error) {
+    toast(error?.message || "Could not build previews.");
+  }
 }
 
 function renderAll() {
@@ -61409,42 +61907,58 @@ function sortProps(page, order) {
   });
 }
 
+function paintSaveButtons(id) {
+  const key = String(id || "");
+  updateDetailSaveButton(key);
+  document.querySelectorAll("[data-save-id]").forEach((btn) => {
+    if (btn.getAttribute("data-save-id") !== key) return;
+    btn.className = getCardSaveButtonClasses(key);
+    btn.title = getCardSaveButtonTitle(key);
+    btn.setAttribute("aria-pressed", isPropertySaved(key) ? "true" : "false");
+    btn.setAttribute("aria-busy", isSavePending(key) ? "true" : "false");
+    const icon = btn.querySelector("i");
+    if (icon) icon.className = getCardSaveButtonIconClasses(key);
+  });
+}
+
 async function toggleSave(id) {
   const key = String(id);
-  if (!authState?.user || !authState?.token) {
-    setPendingSavePropertyId(key);
-    openSavePropertyPrompt(key);
-    trackEvent("property_save_auth_required", { property_id: id });
-    return;
-  }
-  if (!findPropertyForUi(key)) {
+  if (isSavePending(key)) return;
+  const serverId = savedServerPropertyId(key);
+  if (!serverId) {
     toast("This property is not available to save yet.");
     return;
   }
-  const wasSaved = isPropertySaved(key);
-  const existing = Array.from(savedIds).find((value) => String(value) === key);
-  if (wasSaved && existing !== undefined) {
-    savedIds.delete(existing);
-    siteMetrics.propertySaves[String(id)] = Math.max(0, (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) - 1);
-  } else {
-    savedIds.add(key);
-    siteMetrics.propertySaves[String(id)] = (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + 1;
-  }
-  refreshSavedUi(id);
-
+  const wasSaved = isPropertySaved(key) || isPropertySaved(serverId);
+  savePendingIds.add(key);
+  paintSaveButtons(key);
   try {
-    await syncSavedPropertyToServer(key, !wasSaved);
-    toast(wasSaved ? "Removed from saved" : "Property saved to your account");
-    trackEvent(wasSaved ? "property_unsave" : "property_save", { property_id: id });
-  } catch (e) {
-    if (wasSaved) savedIds.add(key);
-    else savedIds.delete(key);
-    siteMetrics.propertySaves[String(id)] = Math.max(
-      0,
-      (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + (wasSaved ? 1 : -1)
-    );
+    const response = await syncSavedPropertyToServer(key, !wasSaved);
+    // "Saved" only once the server says so.
+    if (wasSaved) {
+      savedIds.delete(key);
+      savedIds.delete(serverId);
+      siteMetrics.propertySaves[key] = Math.max(0, (parseInt(siteMetrics.propertySaves[key] || 0, 10) || 0) - 1);
+    } else {
+      savedIds.add(key);
+      siteMetrics.propertySaves[key] = (parseInt(siteMetrics.propertySaves[key] || 0, 10) || 0) + 1;
+    }
+    savePendingIds.delete(key);
+    if (response?.data?.owner === "device" || response?.data?.owner === "user") {
+      savedServerLoaded = true;
+    }
+    updateSavedNavCount();
     refreshSavedUi(id);
-    toast(`Saved property update failed: ${e.message || "error"}`);
+    paintSaveButtons(key);
+    const signedIn = isSignedInForSaves();
+    toast(wasSaved
+      ? "Removed from saved"
+      : (signedIn ? "Property saved to your account" : "Saved on this device. Find it under Saved at the top."), 3200);
+    trackEvent(wasSaved ? "property_unsave" : "property_save", { property_id: id, signed_in: signedIn });
+  } catch (e) {
+    savePendingIds.delete(key);
+    paintSaveButtons(key);
+    toast(`${wasSaved ? "Could not remove it" : "Not saved"}: ${e.message || "network error"}. Please try again.`, 3600);
   }
 }
 

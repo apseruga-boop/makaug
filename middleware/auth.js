@@ -275,6 +275,8 @@ module.exports = {
   isTransientDbError,
   hasAdminAccess,
   hasStaffOrAdminAccess,
+  isAuthenticationError,
+  loadActiveUserFromToken,
   requireAdminApiKey,
   requireAuthenticatedUser,
   requireListingModerationAccess,

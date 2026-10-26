@@ -33,6 +33,7 @@ const valuationRoutes = require('./routes/valuation');
 const tiktokDisplayRoutes = require('./routes/tiktok-display');
 const analyticsRoutes = require('./routes/analytics');
 const savedPropertiesRoutes = require('./routes/saved-properties');
+const savesRoutes = require('./routes/saves');
 const adminRoutes = require('./routes/admin');
 const whatsappRoutes = require('./routes/whatsapp');
 const mortgageRoutes = require('./routes/mortgage');
@@ -449,6 +450,7 @@ if (ACTIVE_TENANT.publicFeatures?.valuation !== false) app.use('/api/valuation',
 app.use('/api/tiktok-display', tiktokDisplayRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/saved-properties', savedPropertiesRoutes);
+app.use('/api/saves', savesRoutes);
 app.use('/api/money-sms', require('./routes/moneySms'));
 app.use('/api/pay', require('./routes/pay').api);
 app.use('/legal', require('./routes/legalDocs'));
@@ -463,6 +465,7 @@ app.use('/api/admin/ai-agents', adminAiAgentsRoutes);
 app.use('/api/property-seeker', propertySeekerRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/field-agent', fieldAgentRoutes);
+app.use('/api/staff/home-seekers', require('./routes/staff-home-seekers'));
 app.use('/api/staff', staffRoutes);
 app.use('/api/staff/off-plan', offPlanStaffRoutes);
 app.use('/api/harvest', harvestRoutes);
@@ -625,6 +628,8 @@ app.get('/config.js', (_req, res) => {
     mapProvider,
     googleMapsApiKey: '',
     apiBase: process.env.PUBLIC_API_BASE || '',
+    // Phone-only sign-up (area B). Off until the WhatsApp code reaches people.
+    signupPhoneOnly: String(process.env.SIGNUP_PHONE_ONLY_ENABLED || '').trim().toLowerCase() === 'true',
     adsenseClient: process.env.GOOGLE_ADSENSE_CLIENT || '',
     adsenseSlots: {
       default: process.env.GOOGLE_ADSENSE_SLOT_DEFAULT || ''
@@ -2789,6 +2794,8 @@ async function start() {
   schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
   scheduleHomepageSeoWarmup();
   scheduleStartupDataRepairs();
+  // Writes WhatsApp alert digest rows only; never sends (area C, 26 Oct 2026).
+  require('./services/whatsappAlertDigestService').startWhatsappAlertDigestSchedule();
   startMemoryLog();
   if (process.env.NODE_ENV !== 'test' && process.env.EVENT_LOOP_LAG_LOG !== 'off') startEventLoopLagMonitor({ logger });
 }
