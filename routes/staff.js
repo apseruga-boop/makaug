@@ -149,7 +149,9 @@ const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS || '5000', 10) || 5000);
 const STAFF_DASHBOARD_PANEL_CACHE_TTL_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_PANEL_CACHE_TTL_MS || '30000', 10) || 30000);
 const STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS || '4000', 10) || 4000);
-const STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS = Math.max(250, parseInt(process.env.STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS || '700', 10) || 700);
+// 700 ms timed out the small widgets (my approvals, leads, ads) on a busy
+// minute and left them on "Loading"; they run alongside the 4 s counts.
+const STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS = Math.max(250, parseInt(process.env.STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS || '2500', 10) || 2500);
 const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS || '4000', 10) || 4000);
 const STAFF_REVIEW_QUEUE_ACQUIRE_TIMEOUT_MS = Math.max(250, parseInt(process.env.STAFF_REVIEW_QUEUE_ACQUIRE_TIMEOUT_MS || '3000', 10) || 3000);
 const STAFF_PREVIEW_QUERY_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_PREVIEW_QUERY_TIMEOUT_MS || '900', 10) || 900);
@@ -2876,6 +2878,8 @@ async function persistStaffReviewNoteOnly(req, propertyId, existing, reviewPatch
     author: moderationActorLabel(req.userAuth),
     at: new Date()
   });
+  // Already on the listing (same note sent again): nothing to write.
+  if (notes === String(existing.moderation_notes == null ? '' : existing.moderation_notes).trim()) return true;
   await db.query(
     'UPDATE properties SET moderation_notes = $2, updated_at = NOW() WHERE id = $1',
     [propertyId, notes]
@@ -4999,33 +5003,57 @@ router.post('/properties/:id/videos/remove', async (req, res, next) => {
 router.delete('/properties/:id/images/:imageId', staffChangePropertyImage);
 router.post('/properties/:id/images/:imageId/restore', staffChangePropertyImage);
 
+// A refused or failed save still keeps the internal note the moderator typed
+// (it used to vanish on these early returns). Returns true when the note is
+// on the listing. Never throws.
+async function saveStaffReviewNoteBeforeRefusal(req, propertyId, reviewPatch = {}) {
+  if (!cleanText(reviewPatch.notes || reviewPatch.review_notes) || !toUuidOrNull(propertyId)) return false;
+  try {
+    const existing = await db.query('SELECT id, moderation_notes FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
+    if (!existing.rows.length) return false;
+    return await persistStaffReviewNoteOnly(req, propertyId, existing.rows[0], reviewPatch);
+  } catch (error) {
+    logger.warn('Staff review note was not saved with the refused save', { property_id: propertyId, message: error.message });
+    return false;
+  }
+}
+
+// A refused save still keeps the staff note. The note goes on the listing
+// named in the URL (the one open in the editor), then the refusal is sent
+// with note_saved so the editor can say "Note saved".
+async function refuseStaffReviewSave(req, res, reviewPatch, status, body) {
+  const noteSaved = await saveStaffReviewNoteBeforeRefusal(req, req.params.id, reviewPatch);
+  return res.status(status).json({ ok: false, ...body, note_saved: noteSaved });
+}
+
 router.patch('/properties/:id/review', async (req, res, next) => {
+  let reviewPatch = null;
+  let mainSaveDone = false;
   try {
     const listingPatch = safeJsonObject(req.body.listing, req.body || {});
     const routeId = cleanText(req.params.id);
     const bodyId = cleanText(listingPatch.id || listingPatch.property_id || req.body?.property_id);
-    if (bodyId && bodyId !== routeId) {
-      return res.status(409).json({ ok: false, error: 'Save target does not match the open listing.' });
-    }
-    delete listingPatch.id;
-    delete listingPatch.property_id;
-    const reviewPatch = {
+    reviewPatch = {
       checklist: safeJsonObject(req.body.checklist, {}),
       notes: req.body.notes || req.body.review_notes,
       reason: req.body.reason,
       stage: req.body.stage || 'in_review',
       warning_overrides: safeJsonObject(req.body.warning_overrides, {})
     };
+    if (bodyId && bodyId !== routeId) {
+      return refuseStaffReviewSave(req, res, reviewPatch, 409, { error: 'Save target does not match the open listing.' });
+    }
+    delete listingPatch.id;
+    delete listingPatch.property_id;
     // C2 addendum: Save never rejects. Rejecting goes through Reject, with a
     // typed reason and a confirmation (PATCH /api/properties/:id/status).
     if (['rejected', 'declined', 'fraud', 'deleted', 'archived'].includes(String(reviewPatch.stage || '').trim().toLowerCase())) {
-      return res.status(400).json({ ok: false, code: 'reject_via_decision_panel', error: 'Saving can\'t reject a listing. Use Reject in the Decision panel, type the reason and confirm.' });
+      return refuseStaffReviewSave(req, res, reviewPatch, 400, { code: 'reject_via_decision_panel', error: 'Saving can\'t reject a listing. Use Reject in the Decision panel, type the reason and confirm.' });
     }
     if (['approved', 'live', 'published'].includes(String(reviewPatch.stage || '').trim().toLowerCase())) {
       const photos = await listingPhotoOrVideoCheck(db, req.params.id);
       if (!photos.ok) {
-        return res.status(422).json({
-          ok: false,
+        return refuseStaffReviewSave(req, res, reviewPatch, 422, {
           error: NO_PHOTO_OR_VIDEO_MESSAGE,
           code: NO_REAL_PHOTO_CODE,
           override_available: false,
@@ -5034,21 +5062,31 @@ router.patch('/properties/:id/review', async (req, res, next) => {
       }
     }
     const saved = await updateStaffEditableListing(req, req.params.id, listingPatch, reviewPatch);
+    mainSaveDone = true;
     if ((saved.changed_fields || []).length) clearPublicListingCaches('staff_listing_preview_saved');
     // C5: the queue showed the old title after Preview & edit saved a new one.
     clearStaffFastDashboardCache();
     const preview = await loadStaffPropertyPreview(req.params.id);
     return res.json({ ok: true, data: preview, changed_fields: saved.changed_fields || [] });
   } catch (error) {
+    // The main save writes the note with the listing; after it, the note is in.
+    // appendModerationNote skips a note that is already there, so a retry here
+    // after a partial write does not duplicate it.
+    const noteSaved = mainSaveDone
+      || error.note_saved === true
+      || (error.note_saved === undefined && reviewPatch
+        ? await saveStaffReviewNoteBeforeRefusal(req, req.params.id, reviewPatch)
+        : false);
     if (error.status) {
       return res.status(error.status).json({
         ok: false,
         error: error.message,
         details: error.details || undefined,
-        note_saved: error.note_saved === true
+        note_saved: noteSaved
       });
     }
-    return next(error);
+    logger.error('Staff listing preview save failed', { property_id: req.params.id, message: error.message, note_saved: noteSaved });
+    return res.status(500).json({ ok: false, error: 'The listing changes could not be saved. Please try again.', note_saved: noteSaved });
   }
 });
 
