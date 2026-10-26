@@ -481,7 +481,9 @@ function startFeaturedRotationScheduler(db) {
     || !process.env.DATABASE_URL
     || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'false'
   ) return;
-  const pollMs = Math.max(60_000, Number(process.env.FEATURED_ROTATION_POLL_MS || 60_000));
+  // The rotation runs once a day after FEATURED_ROTATION_HOUR, so an hourly
+  // check is enough (it used to wake every minute).
+  const pollMs = Math.max(60_000, Number(process.env.FEATURED_ROTATION_POLL_MS || 60 * 60_000));
   schedulerTimer = setInterval(() => {
     observeJob('featured_rotation', () => tickFeaturedRotationScheduler(db)).catch((error) => {
       logger.error('Featured rotation scheduler tick failed', { error: error.message });
