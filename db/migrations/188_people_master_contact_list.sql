@@ -14,12 +14,12 @@
 --      people_reconcile(). The last one recomputes the whole list from the
 --      source tables, writes only what changed, and records counts (never
 --      names, numbers or emails) in people_reconcile_runs.stats.
---   3. Backup: data_change_185_backup holds a manifest of every source table
+--   3. Backup: data_change_188_backup holds a manifest of every source table
 --      (row count plus an md5 of the ordered row ids) taken before the
 --      backfill. No source row is written, so there is nothing else to back
 --      up; the manifest lets the rollback prove the sources are untouched.
 --   4. Backfill (UG only, like every data change): runs people_reconcile
---      once. Its stats row (trigger 'migration_185') is the dedupe report.
+--      once. Its stats row (trigger 'migration_188') is the dedupe report.
 --
 -- Test data is left out of the list but counted: WhatsApp profiles whose key
 -- starts with dryrun: or sim-, contacts with role_type admin_test or a
@@ -31,7 +31,7 @@
 -- picked up without a code change. A users.marketing_opt_in flag with no
 -- date and no source is shown as 'unverified_flag', never as consent.
 --
--- Rollback: scripts/rollback-185-people-master-contact-list.sql (manual).
+-- Rollback: scripts/rollback-188-people-master-contact-list.sql (manual).
 
 SET LOCAL lock_timeout = '8s';
 SET LOCAL statement_timeout = '300s';
@@ -684,14 +684,14 @@ BEGIN
 
   -- Keep a month of run history, and always the backfill.
   DELETE FROM people_reconcile_runs
-  WHERE finished_at < NOW() - INTERVAL '30 days' AND trigger <> 'migration_185';
+  WHERE finished_at < NOW() - INTERVAL '30 days' AND trigger <> 'migration_188';
 
   RETURN result || jsonb_build_object('run_id', run_id);
 END
 $fn$;
 
 -- Backup manifest of the sources (counts and an id checksum, no personal data).
-CREATE TABLE IF NOT EXISTS data_change_185_backup (
+CREATE TABLE IF NOT EXISTS data_change_188_backup (
   id BIGSERIAL PRIMARY KEY,
   row_kind TEXT NOT NULL,
   row_key TEXT NOT NULL,
@@ -701,16 +701,16 @@ CREATE TABLE IF NOT EXISTS data_change_185_backup (
   UNIQUE (row_kind, row_key)
 );
 
-DO $migration_185$
+DO $migration_188$
 DECLARE
   stats JSONB;
 BEGIN
   IF current_setting('app.country_code', true) IS DISTINCT FROM 'UG' THEN
-    RAISE NOTICE 'migration_185 backfill skipped: app.country_code is not UG (tables and functions are created)';
+    RAISE NOTICE 'migration_188 backfill skipped: app.country_code is not UG (tables and functions are created)';
     RETURN;
   END IF;
 
-  INSERT INTO data_change_185_backup (row_kind, row_key, before_row)
+  INSERT INTO data_change_188_backup (row_kind, row_key, before_row)
   SELECT 'source_manifest', t.name, t.manifest
   FROM (
     SELECT 'users' AS name, jsonb_build_object('rows', count(*), 'id_md5', md5(COALESCE(string_agg(id::text, ',' ORDER BY id), ''))) AS manifest FROM users
@@ -725,8 +725,8 @@ BEGIN
   ) t
   ON CONFLICT (row_kind, row_key) DO NOTHING;
 
-  stats := people_reconcile('migration_185', '256');
-  RAISE NOTICE 'migration_185 people backfill: people=%, merged_duplicates=%, consent=%, test_rows_excluded=%, rows_without_phone_or_email=%',
+  stats := people_reconcile('migration_188', '256');
+  RAISE NOTICE 'migration_188 people backfill: people=%, merged_duplicates=%, consent=%, test_rows_excluded=%, rows_without_phone_or_email=%',
     stats->>'people', stats->>'merged_duplicates', stats->'consent', stats->>'test_rows_excluded', stats->>'rows_without_phone_or_email';
 END
-$migration_185$;
+$migration_188$;

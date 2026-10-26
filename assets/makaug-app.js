@@ -16794,7 +16794,7 @@ async function loadAgentBookingStaffFlags() {
 // ---------------------------------------------------------------------------
 // People: the master contact list (Accounts & Outreach). One row per person,
 // matched by WhatsApp/phone number, built from accounts, contacts, leads,
-// WhatsApp profiles and seeker profiles by the server (migration 185).
+// WhatsApp profiles and seeker profiles by the server (migration 188).
 // Rendered in the staff dashboard (scope "staff") and the King dashboard
 // (scope "admin"). Personal fields carry data-pii so they can be masked.
 // ---------------------------------------------------------------------------

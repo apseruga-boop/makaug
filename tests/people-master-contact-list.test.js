@@ -99,14 +99,14 @@ test('people code logs counts and ids, never names, numbers or emails', () => {
   }
 });
 
-test('migration 185 keeps a backup table, a UG guard and a rollback script', () => {
-  const migration = read('db/migrations/185_people_master_contact_list.sql');
-  assert.match(migration, /data_change_185_backup/);
+test('migration 188 keeps a backup table, a UG guard and a rollback script', () => {
+  const migration = read('db/migrations/188_people_master_contact_list.sql');
+  assert.match(migration, /data_change_188_backup/);
   assert.match(migration, /app\.country_code/);
   assert.doesNotMatch(migration, /\b(DELETE FROM|TRUNCATE|DROP TABLE)\s+(users|contacts|leads|whatsapp_user_profiles|property_seeker_profiles)\b/i);
-  const rollback = read('scripts/rollback-185-people-master-contact-list.sql');
+  const rollback = read('scripts/rollback-188-people-master-contact-list.sql');
   assert.match(rollback, /DROP TABLE IF EXISTS people\b/);
-  assert.doesNotMatch(rollback, /DROP TABLE IF EXISTS data_change_185_backup/);
+  assert.doesNotMatch(rollback, /DROP TABLE IF EXISTS data_change_188_backup/);
 });
 
 test('people UI marks personal data and keeps CSV export to super_admin', () => {

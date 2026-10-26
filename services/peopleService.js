@@ -3,7 +3,7 @@
 // The master contact list ("people"). One row per person, keyed by their
 // E.164 phone (email only when there is no phone), linked to the rows they
 // came from. The list is derived: people_reconcile() in the database
-// (migration 185) recomputes it from users, contacts, leads,
+// (migration 188) recomputes it from users, contacts, leads,
 // whatsapp_user_profiles and property_seeker_profiles and writes only what
 // changed. This file decides when to run it and serves the list to staff.
 //
