@@ -19,3 +19,10 @@ test('admin can set a temporary password that must be changed', () => {
   assert(/'force_password_change', true/.test(block));
   assert(!/queueAgentWelcomePack|sendWhatsapp|deliverWhatsapp|sendBroker/.test(block), 'setting a password sends nothing');
 });
+
+test('a WhatsApp-registered agent with no login gets a phone-only broker account', () => {
+  const block = src.slice(src.indexOf("router.post('/agents/:id/temporary-password'"), src.indexOf("router.post('/agents/:id/restore'"));
+  assert(/INSERT INTO users \(first_name, last_name, phone, email, role, password_hash/.test(block));
+  assert(/'agent_broker'/.test(block));
+  assert(/UPDATE agents SET user_id = \$2/.test(block));
+});
