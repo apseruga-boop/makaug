@@ -14,6 +14,8 @@ test('admin photo add and delete rewrite the summary the review card reads', () 
   const add = admin.slice(admin.indexOf("router.post('/properties/:id/images'"));
   assert(add.slice(0, add.indexOf('COMMIT')).includes('syncListingImageSummary'), 'add path syncs');
   assert(admin.includes("router.post('/properties/resync-image-summaries'"));
+  const patch = admin.slice(admin.indexOf("router.patch('/properties/:id/images/:imageId'"));
+  assert(patch.slice(0, patch.indexOf('COMMIT')).includes('syncListingImageSummary'), 'primary/replace path syncs');
 });
 
 test('the summary ignores evidence slots and names the first public photo as primary', async () => {
