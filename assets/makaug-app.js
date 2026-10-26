@@ -37675,6 +37675,59 @@ async function resolveHierarchyMapAnchor({ region = "", district = "", city = ""
   return fallback;
 }
 
+// Mobile list-property maps must never trap page scroll (Charles, 26 Oct 2026:
+// "I can't scroll down" after Find on map). A dragging Leaflet map sets
+// touch-action:none and scrollWheelZoom eats the wheel, so on a phone every
+// swipe that lands on the 220px map pans the map instead of the form.
+// Touch devices: one finger scrolls the page, pinch zooms, tap drops the pin,
+// and a "Move map" button turns panning on until "Done".
+function isLpCoarsePointerDevice() {
+  try {
+    if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return true;
+    const touch = Number(navigator.maxTouchPoints || 0) > 0 || "ontouchstart" in window;
+    const hover = window.matchMedia && window.matchMedia("(hover: hover)").matches;
+    return Boolean(touch && !hover);
+  } catch (e) {
+    return false;
+  }
+}
+
+function makeListMapScrollFriendly(map) {
+  if (!map || !window.L || typeof map.getContainer !== "function") return map;
+  const el = map.getContainer();
+  if (!el || el.dataset.lpScrollFriendly === "1") return map;
+  el.dataset.lpScrollFriendly = "1";
+  el.classList.add("lp-scroll-friendly-map");
+  if (map.scrollWheelZoom) {
+    map.scrollWheelZoom.disable();
+    map.on("click focus", () => { if (map.scrollWheelZoom) map.scrollWheelZoom.enable(); });
+    map.on("mouseout blur", () => { if (map.scrollWheelZoom) map.scrollWheelZoom.disable(); });
+  }
+  if (!isLpCoarsePointerDevice() || !map.dragging) return map;
+  map.dragging.disable();
+  const Control = L.Control.extend({
+    options: { position: "topright" },
+    onAdd() {
+      const btn = L.DomUtil.create("button", "lp-map-move-btn");
+      btn.type = "button";
+      btn.textContent = "Move map";
+      btn.setAttribute("aria-pressed", "false");
+      L.DomEvent.disableClickPropagation(btn);
+      L.DomEvent.on(btn, "click", (evt) => {
+        L.DomEvent.preventDefault(evt);
+        const active = !el.classList.contains("lp-map-active");
+        el.classList.toggle("lp-map-active", active);
+        if (active) map.dragging.enable(); else map.dragging.disable();
+        btn.textContent = active ? "Done" : "Move map";
+        btn.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      return btn;
+    }
+  });
+  map.addControl(new Control());
+  return map;
+}
+
 function initGoogleListPinMap(el) {
   if (!window.google?.maps || !el) return false;
   el.innerHTML = "";
@@ -37685,7 +37738,8 @@ function initGoogleListPinMap(el) {
     mapTypeControl: true,
     streetViewControl: true,
     fullscreenControl: true,
-    clickableIcons: true
+    clickableIcons: true,
+    gestureHandling: "cooperative"
   });
   lpPinMapProvider = "google";
   lpPinInfoWindow = new google.maps.InfoWindow();
@@ -37715,6 +37769,7 @@ function initLeafletListPinMap() {
     maxZoom: 18
   }).addTo(lpPinMap);
   lpPinMapProvider = "leaflet";
+  makeListMapScrollFriendly(lpPinMap);
   lpPinMap.on("click", (evt) => {
     setListPinCoords(evt.latlng.lat, evt.latlng.lng, false);
   });
@@ -37767,7 +37822,8 @@ function initGoogleListPreviewMap(el) {
     mapTypeControl: true,
     streetViewControl: true,
     fullscreenControl: true,
-    clickableIcons: true
+    clickableIcons: true,
+    gestureHandling: "cooperative"
   });
   lpPreviewMapProvider = "google";
   lpPreviewInfoWindow = new google.maps.InfoWindow();
@@ -37793,6 +37849,7 @@ function initLeafletListPreviewMap() {
     maxZoom: 18
   }).addTo(lpPreviewMap);
   lpPreviewMapProvider = "leaflet";
+  makeListMapScrollFriendly(lpPreviewMap);
   return true;
 }
 
