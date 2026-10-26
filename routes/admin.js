@@ -9979,6 +9979,96 @@ router.post('/agents/:id/remove', async (req, res, next) => {
   }
 });
 
+/**
+ * Two records for one agent: staff registered "Charles" through Agent 007 at
+ * 15:30 on 26 Oct 2026 (no email, no login) and Charles signed himself up an
+ * hour later (email, ID, login). His listings sat on the first record and his
+ * dashboard was empty. Move every listing, booking and lead link onto the
+ * record that has the login, then retire the duplicate. Nothing is sent.
+ */
+router.post('/agents/:id/merge-into', async (req, res, next) => {
+  const client = await db.getClient();
+  try {
+    const sourceId = String(req.params.id || '');
+    const targetId = String(req.body?.target_id || req.body?.targetId || '');
+    if (!/^[0-9a-f-]{36}$/i.test(sourceId) || !/^[0-9a-f-]{36}$/i.test(targetId) || sourceId === targetId) {
+      return res.status(400).json({ ok: false, error: 'Give a different target_id to merge this agent into' });
+    }
+    await client.query('BEGIN');
+    const rows = (await client.query('SELECT id, full_name, phone, whatsapp, removed_at FROM agents WHERE id = ANY($1::uuid[]) FOR UPDATE', [[sourceId, targetId]])).rows;
+    const source = rows.find((row) => row.id === sourceId);
+    const target = rows.find((row) => row.id === targetId);
+    if (!source || !target) { await client.query('ROLLBACK'); return res.status(404).json({ ok: false, error: 'Agent not found' }); }
+    if (target.removed_at) { await client.query('ROLLBACK'); return res.status(409).json({ ok: false, error: 'The target agent was removed' }); }
+    const moved = (await client.query(
+      `UPDATE properties
+          SET agent_id = $2,
+              lister_name = COALESCE(NULLIF($3, ''), lister_name),
+              extra_fields = CASE
+                WHEN COALESCE(extra_fields, '{}'::jsonb) ? 'broker_agent_id'
+                  THEN jsonb_set(extra_fields, '{broker_agent_id}', to_jsonb($2::text))
+                ELSE extra_fields END
+                || jsonb_build_object('merged_from_agent_id', $1::text),
+              updated_at = NOW()
+        WHERE agent_id = $1 OR COALESCE(extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text
+        RETURNING id, status`,
+      [sourceId, targetId, cleanText(target.full_name)]
+    )).rows;
+    const reason = `Merged into ${target.full_name} (${targetId}) — duplicate record`;
+    await client.query(
+      `UPDATE agents
+          SET removed_at = NOW(), removed_reason = $2, removed_by = $3, status = 'suspended',
+              removal_snapshot = $4::jsonb, updated_at = NOW()
+        WHERE id = $1`,
+      [sourceId, reason, adminActorId(req), JSON.stringify({ merged_into: targetId, listings_moved: moved.map((row) => row.id) })]
+    );
+    await client.query('COMMIT');
+    await writeAudit('admin_agent_merged', { source_agent_id: sourceId, target_agent_id: targetId, listings_moved: moved.length }, adminActorId(req));
+    return res.json({ ok: true, data: { source_id: sourceId, target_id: targetId, listings_moved: moved.length, listings: moved } });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Give an agent's login a temporary password chosen by staff, for agents with
+ * no email to receive one. They are asked to change it after signing in.
+ * Nothing is sent: staff pass the password on themselves.
+ */
+router.post('/agents/:id/temporary-password', async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
+    const password = cleanText(req.body?.password);
+    if (password.length < 4 || password.length > 64) {
+      return res.status(400).json({ ok: false, error: 'Temporary password must be 4 to 64 characters' });
+    }
+    const agent = (await db.query('SELECT id, user_id, full_name, phone, whatsapp FROM agents WHERE id = $1', [req.params.id])).rows[0];
+    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    if (!agent.user_id) return res.status(409).json({ ok: false, error: 'This agent has no login yet' });
+    const hash = await bcrypt.hash(password, 12);
+    const updated = await db.query(
+      `UPDATE users
+          SET password_hash = $2,
+              role = 'agent_broker',
+              status = 'active',
+              profile_data = COALESCE(profile_data, '{}'::jsonb)
+                || jsonb_build_object('force_password_change', true, 'broker_agent_id', $3::text, 'temporary_password_set_at', NOW()::text),
+              updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, phone, email, role, status`,
+      [agent.user_id, hash, agent.id]
+    );
+    if (!updated.rows.length) return res.status(404).json({ ok: false, error: 'Login account not found' });
+    await writeAudit('admin_agent_temporary_password_set', { agent_id: agent.id, user_id: agent.user_id }, adminActorId(req));
+    return res.json({ ok: true, data: { agent_id: agent.id, user: updated.rows[0], force_password_change: true } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/agents/:id/restore', async (req, res, next) => {
   const client = await db.getClient();
   try {
