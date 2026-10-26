@@ -12894,7 +12894,7 @@ function renderBrokerDashboardListingCard(p) {
         ${isLiveListing
           ? `<button onclick="openBrokerBoostPlanner(${propertyIdArg(p.id)})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Boost</button>`
           : `<button type="button" onclick="toast('This listing can be boosted after makaug approves it.')" class="border border-gray-200 text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold cursor-not-allowed">Boost after approval</button>`}
-        <button onclick="requestBrokerListingRemoval(${propertyIdArg(p.id)})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold">Request removal</button>
+        <button onclick="requestBrokerListingRemoval(${propertyIdArg(p.id)})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold">Remove</button>
       </div>
     </div>`;
 }
@@ -13985,16 +13985,118 @@ async function shareBrokerListing(id) {
   }
 }
 
-function editBrokerListing(id) {
-  const listing = (brokerDashboardCache?.listings || []).find((item) => String(item.id) === String(id));
-  startBrokerOnlineListing();
-  toast(listing ? `Opening broker upload for edits to ${listing.title || "this listing"}. makaug review still applies.` : "Opening broker upload. makaug review still applies.");
+// A small sheet over the dashboard for editing or removing one listing.
+function closeBrokerListingSheet() {
+  document.getElementById("broker-listing-sheet")?.remove();
+}
+
+function openBrokerListingSheet(innerHtml) {
+  closeBrokerListingSheet();
+  const wrap = document.createElement("div");
+  wrap.id = "broker-listing-sheet";
+  wrap.setAttribute("role", "dialog");
+  wrap.setAttribute("aria-modal", "true");
+  wrap.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center;padding:12px;";
+  wrap.innerHTML = `<div style="background:#fff;border-radius:18px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.25);font-family:inherit;">${innerHtml}</div>`;
+  wrap.addEventListener("click", (event) => { if (event.target === wrap) closeBrokerListingSheet(); });
+  document.body.appendChild(wrap);
+}
+
+const BROKER_SHEET_INPUT = "width:100%;box-sizing:border-box;border:1px solid #d1fae5;border-radius:12px;padding:11px 12px;font-size:15px;margin-top:4px;";
+const BROKER_SHEET_LABEL = "display:block;font-size:13px;font-weight:700;color:#334155;margin-top:12px;";
+
+async function editBrokerListing(id) {
+  let row = null;
+  try {
+    const res = await apiRequest(`/api/agents/me/listings/${encodeURIComponent(id)}`);
+    row = res?.data || null;
+  } catch (error) {
+    toast(error?.message || "Could not open this listing.");
+    return;
+  }
+  if (!row) return;
+  const periods = [["once", "Total price (sale)"], ["month", "Per month (rent)"], ["acre", "Per acre"], ["plot", "Per plot"], ["decimal", "Per decimal"], ["night", "Per night"], ["week", "Per week"], ["year", "Per year"]];
+  const period = String(row.price_period || "once").toLowerCase();
+  openBrokerListingSheet(`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <h3 style="font-size:20px;font-weight:900;color:#14532d;margin:0;">Edit listing</h3>
+      <button type="button" onclick="closeBrokerListingSheet()" aria-label="Close" style="border:none;background:#f1f5f9;border-radius:999px;width:36px;height:36px;font-size:18px;cursor:pointer;">✕</button>
+    </div>
+    <p style="font-size:13px;color:#64748b;margin:6px 0 0;">Changes save straight to your listing. makaug can see what was changed.</p>
+    <label style="${BROKER_SHEET_LABEL}">Title</label>
+    <input id="broker-edit-title" style="${BROKER_SHEET_INPUT}" value="${adminAttr(row.title || "")}">
+    <label style="${BROKER_SHEET_LABEL}">Price (UGX, numbers only)</label>
+    <input id="broker-edit-price" inputmode="numeric" style="${BROKER_SHEET_INPUT}" value="${adminAttr(row.price ? String(Math.round(Number(row.price))) : "")}">
+    <label style="${BROKER_SHEET_LABEL}">How the price is charged</label>
+    <select id="broker-edit-period" style="${BROKER_SHEET_INPUT}">${periods.map(([value, label]) => `<option value="${value}"${value === period ? " selected" : ""}>${label}</option>`).join("")}</select>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label style="${BROKER_SHEET_LABEL}">Bedrooms</label><input id="broker-edit-bedrooms" inputmode="numeric" style="${BROKER_SHEET_INPUT}" value="${adminAttr(row.bedrooms ?? "")}"></div>
+      <div><label style="${BROKER_SHEET_LABEL}">Bathrooms</label><input id="broker-edit-bathrooms" inputmode="numeric" style="${BROKER_SHEET_INPUT}" value="${adminAttr(row.bathrooms ?? "")}"></div>
+    </div>
+    <label style="${BROKER_SHEET_LABEL}">Description</label>
+    <textarea id="broker-edit-description" rows="6" style="${BROKER_SHEET_INPUT}">${adminEscape(row.description || "")}</textarea>
+    <p id="broker-edit-error" style="color:#b91c1c;font-size:13px;margin:10px 0 0;"></p>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button type="button" onclick="saveBrokerListingEdit(${propertyIdArg(row.id)})" style="flex:1;background:#166534;color:#fff;border:none;border-radius:12px;padding:13px;font-weight:800;font-size:15px;cursor:pointer;">Save changes</button>
+      <button type="button" onclick="closeBrokerListingSheet()" style="border:1px solid #e2e8f0;background:#fff;border-radius:12px;padding:13px 16px;font-weight:700;cursor:pointer;">Cancel</button>
+    </div>
+    <p style="font-size:12px;color:#64748b;margin:12px 0 0;">To change photos or the location, send them to makaug on WhatsApp and we will update the listing.</p>`);
+}
+
+async function saveBrokerListingEdit(id) {
+  const value = (elementId) => document.getElementById(elementId)?.value ?? "";
+  const errorEl = document.getElementById("broker-edit-error");
+  try {
+    const res = await apiRequest(`/api/agents/me/listings/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: {
+        title: value("broker-edit-title"),
+        price: value("broker-edit-price"),
+        price_period: value("broker-edit-period"),
+        bedrooms: value("broker-edit-bedrooms"),
+        bathrooms: value("broker-edit-bathrooms"),
+        description: value("broker-edit-description")
+      }
+    });
+    const changed = res?.data?.changed || [];
+    closeBrokerListingSheet();
+    toast(changed.length ? "Listing updated." : "Nothing changed.");
+    renderAgentDashboard();
+  } catch (error) {
+    if (errorEl) errorEl.textContent = error?.message || "Could not save. Try again.";
+  }
 }
 
 function requestBrokerListingRemoval(id) {
   const listing = (brokerDashboardCache?.listings || []).find((item) => String(item.id) === String(id));
   const title = listing?.title || "this listing";
-  toast(`Removal request noted for ${title}. makaug admin approval is required before public changes.`);
+  openBrokerListingSheet(`
+    <h3 style="font-size:20px;font-weight:900;color:#7f1d1d;margin:0;">Remove this listing?</h3>
+    <p style="font-size:15px;color:#334155;margin:10px 0 0;"><strong>${adminEscape(title)}</strong> will come off makaug straight away. Use this when the property is sold, let, or no longer yours to market.</p>
+    <label style="${BROKER_SHEET_LABEL}">Why? (optional)</label>
+    <select id="broker-remove-reason" style="${BROKER_SHEET_INPUT}">
+      <option>Sold</option><option>Rented out</option><option>Owner withdrew it</option><option>Listed by mistake</option><option>Other</option>
+    </select>
+    <p id="broker-remove-error" style="color:#b91c1c;font-size:13px;margin:10px 0 0;"></p>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button type="button" onclick="confirmBrokerListingRemoval(${propertyIdArg(id)})" style="flex:1;background:#b91c1c;color:#fff;border:none;border-radius:12px;padding:13px;font-weight:800;font-size:15px;cursor:pointer;">Remove listing</button>
+      <button type="button" onclick="closeBrokerListingSheet()" style="border:1px solid #e2e8f0;background:#fff;border-radius:12px;padding:13px 16px;font-weight:700;cursor:pointer;">Keep it</button>
+    </div>`);
+}
+
+async function confirmBrokerListingRemoval(id) {
+  const errorEl = document.getElementById("broker-remove-error");
+  try {
+    await apiRequest(`/api/agents/me/listings/${encodeURIComponent(id)}/remove`, {
+      method: "POST",
+      body: { reason: document.getElementById("broker-remove-reason")?.value || "" }
+    });
+    closeBrokerListingSheet();
+    toast("Listing removed from makaug.");
+    renderAgentDashboard();
+  } catch (error) {
+    if (errorEl) errorEl.textContent = error?.message || "Could not remove it. Try again.";
+  }
 }
 
 function polishBrokerBioDraft() {

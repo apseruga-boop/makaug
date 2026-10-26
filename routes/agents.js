@@ -1356,6 +1356,144 @@ async function loadPublicAgentProfileRow(agentId) {
     return { row, profileKind };
 }
 
+// --- A broker managing their own listings -------------------------------------
+// 26 Oct 2026: the dashboard's Edit button only opened a blank upload form and
+// "Request removal" only showed a toast; nothing reached the listing. These let a
+// signed-in broker change the details of their own listing and take it down.
+const BROKER_PRICE_PERIODS = new Set(['once', 'month', 'year', 'week', 'day', 'night', 'acre', 'plot', 'decimal']);
+function brokerIntOrNull(value, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const n = Math.round(Number(String(value).replace(/[,\s]/g, '')));
+  if (!Number.isFinite(n) || n < min || n > max) return undefined;
+  return n;
+}
+
+async function loadOwnedBrokerListing(req, res) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) { res.status(401).json({ ok: false, error: 'Sign in required' }); return null; }
+  if (user.role !== 'agent_broker') { res.status(403).json({ ok: false, error: 'Broker account required' }); return null; }
+  const agent = await fetchBrokerAgentForUser(user);
+  if (!agent?.id) { res.status(403).json({ ok: false, error: 'No broker profile is linked to this account yet' }); return null; }
+  if (!AGENT_ID_PATTERN.test(String(req.params.id || ''))) { res.status(400).json({ ok: false, error: 'Invalid listing id' }); return null; }
+  const row = (await db.query(
+    `SELECT id, title, description, price, price_period, bedrooms, bathrooms, status, listing_type,
+            area, district, land_size_value, land_size_unit, agent_id, extra_fields
+       FROM properties
+      WHERE id = $1
+        AND (agent_id = $2::uuid OR COALESCE(extra_fields, '{}'::jsonb)->>'broker_agent_id' = $2::text)
+      LIMIT 1`,
+    [req.params.id, agent.id]
+  )).rows[0];
+  if (!row) { res.status(404).json({ ok: false, error: 'This listing is not on your profile' }); return null; }
+  return { user, agent, row };
+}
+
+router.get('/me/listings/:id', async (req, res, next) => {
+  try {
+    const owned = await loadOwnedBrokerListing(req, res);
+    if (!owned) return undefined;
+    const { extra_fields: _extra, ...listing } = owned.row;
+    return res.json({ ok: true, data: listing });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/me/listings/:id', async (req, res, next) => {
+  try {
+    const owned = await loadOwnedBrokerListing(req, res);
+    if (!owned) return undefined;
+    const { user, row } = owned;
+    const status = String(row.status || '').toLowerCase();
+    if (!['pending', 'approved'].includes(status)) {
+      return res.status(409).json({ ok: false, error: 'Only a live or in-review listing can be edited. Message makaug on WhatsApp to bring this one back.' });
+    }
+    const body = req.body?.listing && typeof req.body.listing === 'object' ? req.body.listing : (req.body || {});
+    const changes = {};
+    const errors = [];
+    if (Object.prototype.hasOwnProperty.call(body, 'title')) {
+      const title = cleanText(body.title).slice(0, 140);
+      if (title.length < 5) errors.push('Title needs at least 5 characters');
+      else changes.title = title;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'description')) {
+      const description = String(body.description || '').replace(/\r\n/g, '\n').trim().slice(0, 4000);
+      if (description.length < 10) errors.push('Description needs at least 10 characters');
+      else changes.description = description;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'price')) {
+      const price = brokerIntOrNull(body.price, { min: 1000, max: 100000000000000 });
+      if (price === undefined || price === null) errors.push('Enter the price in Uganda shillings, numbers only');
+      else changes.price = price;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'price_period')) {
+      const period = cleanText(body.price_period).toLowerCase();
+      if (!BROKER_PRICE_PERIODS.has(period)) errors.push('Choose how the price is charged');
+      else changes.price_period = period;
+    }
+    for (const key of ['bedrooms', 'bathrooms']) {
+      if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+      const value = brokerIntOrNull(body[key], { min: 0, max: 200 });
+      if (value === undefined) errors.push(`${key} must be a number`);
+      else changes[key] = value;
+    }
+    if (errors.length) return res.status(400).json({ ok: false, error: errors.join('. '), details: errors });
+    const keys = Object.keys(changes).filter((key) => String(changes[key] ?? '') !== String(row[key] ?? ''));
+    if (!keys.length) return res.json({ ok: true, data: { id: row.id, changed: [] } });
+    const sets = keys.map((key, index) => `${key} = $${index + 2}`);
+    const values = [row.id, ...keys.map((key) => changes[key])];
+    values.push(JSON.stringify({ broker_last_edit_at: new Date().toISOString(), broker_last_edit_fields: keys }));
+    const updated = await db.query(
+      `UPDATE properties
+          SET ${sets.join(', ')},
+              extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${values.length}::jsonb,
+              updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, title, description, price, price_period, bedrooms, bathrooms, status`,
+      values
+    );
+    const before = Object.fromEntries(keys.map((key) => [key, row[key]]));
+    await db.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, reason)
+       VALUES ($1, $2, 'broker_listing_edited', $3, $3, $4)`,
+      [row.id, user.id, status, JSON.stringify({ before, after: Object.fromEntries(keys.map((key) => [key, changes[key]])) }).slice(0, 4000)]
+    ).catch(() => {});
+    return res.json({ ok: true, data: { ...updated.rows[0], changed: keys } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/me/listings/:id/remove', async (req, res, next) => {
+  try {
+    const owned = await loadOwnedBrokerListing(req, res);
+    if (!owned) return undefined;
+    const { user, row } = owned;
+    const status = String(row.status || '').toLowerCase();
+    if (!['pending', 'approved'].includes(status)) {
+      return res.status(409).json({ ok: false, error: 'This listing is already off makaug.' });
+    }
+    const reason = cleanText(req.body?.reason || 'Removed by the broker').slice(0, 300);
+    await db.query(
+      `UPDATE properties
+          SET status = 'hidden',
+              extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+                || jsonb_build_object('broker_removed_at', NOW()::text, 'broker_removed_reason', $2::text, 'broker_removed_from_status', $3::text),
+              updated_at = NOW()
+        WHERE id = $1`,
+      [row.id, reason, status]
+    );
+    await db.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, reason)
+       VALUES ($1, $2, 'broker_listing_removed', $3, 'hidden', $4)`,
+      [row.id, user.id, status, reason]
+    ).catch(() => {});
+    return res.json({ ok: true, data: { id: row.id, status: 'hidden' } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/:id/listings', async (req, res, next) => {
   try {
     if (rejectMalformedAgentId(res, req.params.id)) return undefined;
