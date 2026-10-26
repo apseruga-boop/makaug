@@ -5703,6 +5703,7 @@ router.post('/properties/:id/images', async (req, res, next) => {
           AND extra_fields->>'media_validation_status' = 'blocked_no_usable_property_image'`,
       [req.params.id]
     );
+    await require('../services/staffPropertyMediaService').syncListingImageSummary(client, req.params.id);
     await client.query(
       `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
        VALUES ($1,$2,$3,$4,$4,$5,$6,$7::jsonb)`,
@@ -6223,6 +6224,31 @@ router.patch('/properties/:id/images/:imageId', async (req, res, next) => {
   }
 });
 
+
+// Rewrites the photo summary the review card reads from every row that is
+// still pending (or the ids given), from property_images as they stand now.
+router.post('/properties/resync-image-summaries', async (req, res, next) => {
+  const client = await db.pool.connect();
+  try {
+    const ids = asArray(req.body?.property_ids).filter((id) => /^[0-9a-f-]{36}$/i.test(String(id)));
+    const rows = ids.length
+      ? ids.map((id) => ({ id }))
+      : (await client.query(`SELECT id FROM properties WHERE status IN ('pending', 'pending_review', 'draft') ORDER BY created_at DESC LIMIT 500`)).rows;
+    const { syncListingImageSummary } = require('../services/staffPropertyMediaService');
+    const results = [];
+    for (const row of rows) {
+      const summary = await syncListingImageSummary(client, row.id);
+      results.push({ id: row.id, ...summary });
+    }
+    await writeAudit('admin_listing_image_summaries_resynced', { count: results.length }, adminActorId(req));
+    return res.json({ ok: true, data: { results } });
+  } catch (error) {
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
 router.delete('/properties/:id/images/:imageId', async (req, res, next) => {
   const actorId = adminActorId(req);
   const client = await db.pool.connect();
@@ -6252,7 +6278,7 @@ router.delete('/properties/:id/images/:imageId', async (req, res, next) => {
         [req.params.id]
       );
     }
-    await client.query('UPDATE properties SET updated_at = NOW() WHERE id = $1', [req.params.id]);
+    await require('../services/staffPropertyMediaService').syncListingImageSummary(client, req.params.id);
     await client.query(
       `INSERT INTO property_moderation_events (property_id, actor_id, action, reason, notes, delivery)
        VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
