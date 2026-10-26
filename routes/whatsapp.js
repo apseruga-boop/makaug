@@ -72,6 +72,7 @@ const {
   markWhatsappWebBridgeMessageFailed,
   markWhatsappWebBridgeMessageSent,
   queueWhatsappWebBridgeMessage,
+  bridgeChatReplySource,
   upsertWhatsappWebBridgeClient
 } = whatsappWebBridgeService;
 const { isOwnWhatsappMessage } = require('../services/whatsappWebDirectionService');
@@ -13046,6 +13047,7 @@ async function queueWhatsappWebBridgeAutoReply({
   nextStep = null,
   inboundMessageId = null,
   source = 'whatsapp_runtime',
+  origin = null,
   actorId = 'system'
 }) {
   let text = String(message || '').trim();
@@ -13088,7 +13090,8 @@ async function queueWhatsappWebBridgeAutoReply({
     metadata: {
       inbound_message_id: inboundMessageId || null,
       next_step: nextStep || null,
-      queued_by: source,
+      queued_by: origin || source,
+      ...(origin ? { reply_origin: origin } : {}),
       queued_at: new Date().toISOString()
     }
   });
@@ -19432,7 +19435,10 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
           message: stayReply.message,
           nextStep: 'stay_request',
           inboundMessageId: runtimeInboundMessageId,
-          source: 'short_stay_request',
+          // The sender only drains chat-reply sources; 'short_stay_request' was never
+          // sent. Queue as a chat reply and keep the origin in metadata.
+          source: bridgeChatReplySource(),
+          origin: 'short_stay_request',
           actorId: 'system'
         });
       }
@@ -19463,7 +19469,10 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
           message: bookingReply.message,
           nextStep: 'agent_booking',
           inboundMessageId: runtimeInboundMessageId,
-          source: 'agent_booking',
+          // The sender only drains chat-reply sources; 'agent_booking' was never
+          // sent. Queue as a chat reply and keep the origin in metadata.
+          source: bridgeChatReplySource(),
+          origin: 'agent_booking',
           actorId: 'system'
         });
       }
