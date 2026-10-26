@@ -5146,6 +5146,23 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   ) {
     listingType = 'land';
   }
+  // "12 decimals Kyanja ring Road NOW SELLING UGX 200 million" — 26 Oct 2026.
+  // "SELLING" made it a sale before the plot-size rule above could run, so a
+  // bare plot went up as "Property for sale" with no type and no size. A
+  // priced plot measured in decimals, acres or feet, with no building and no
+  // bedrooms, is land however the agent says it is on offer.
+  if (
+    listingType === 'sale'
+    && Number(price) > 0
+    && !Number(bedroomDraft.bedrooms)
+    && !/\b(?:house|home|villa|bungalow|mansion|apartment|flat|townhouse|shop|office|warehouse|hostel|rentals?|units?|building|storey|storied|quarters?)\b/i.test(cleanCaption)
+    && (
+      /\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\b/i.test(cleanCaption)
+      || /\b\d+(?:\.\d+)?\s*(?:decimals?|acres?|hectares?)\b/i.test(cleanCaption)
+    )
+  ) {
+    listingType = 'land';
+  }
   // "NALYA 4 RENTAL UNITS APARTMENT BLOCK OF 3 BEDROOMS EACH MAKING 10MILLION
   // MONTHLY SELLING UGX 1.1BILLION" — 4 Oct 2026. The words "rental" and
   // "monthly" describe what the block earns; "SELLING" describes what is on
@@ -6528,6 +6545,18 @@ async function applyEmployeePriceDrop(existing, facts) {
   );
 }
 
+/** "12 decimals", "2.5 acres", "1 hectare" → { value, unit } for the listing row. */
+function employeeLandSize(caption = '') {
+  const clean = normalizeInput(withEnglishPropertyTerms(caption));
+  const m = clean.match(/\b(\d+(?:\.\d+)?)\s*(decimals?|acres?|hectares?)\b/i);
+  if (!m) return { value: null, unit: null };
+  const value = Number(m[1]);
+  if (!Number.isFinite(value) || value <= 0 || value > 10000) return { value: null, unit: null };
+  const word = m[2].toLowerCase();
+  const unit = word.startsWith('decimal') ? 'decimals' : word.startsWith('acre') ? 'acres' : 'hectares';
+  return { value, unit };
+}
+
 async function createEmployeeReviewProperty({
   phone,
   inboundMessageId,
@@ -6683,8 +6712,9 @@ async function createEmployeeReviewProperty({
         bedrooms, lister_name, lister_phone, lister_email, lister_type, agent_id,
         id_document_name, id_document_url, extra_fields,
         property_type, latitude, longitude,
-        status, moderation_stage, listed_via, source, inquiry_reference
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'pending','submitted','whatsapp','whatsapp_employee_intake',$25)
+        status, moderation_stage, listed_via, source, inquiry_reference,
+        land_size_value, land_size_unit
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'pending','submitted','whatsapp','whatsapp_employee_intake',$25,$26,$27)
       RETURNING id, inquiry_reference`,
       [
         facts.listingType,
@@ -6714,7 +6744,10 @@ async function createEmployeeReviewProperty({
         Number.isFinite(Number(sessionData.pending_property_pin?.lng)) ? Number(sessionData.pending_property_pin.lng) : null,
         // Every listing gets an MK reference when it is created. 424 Agent 007
         // listings had none, so staff and agents had nothing short to quote.
-        buildListingReference()
+        buildListingReference(),
+        // "12 decimals" in the caption is the plot size; it used to be dropped.
+        employeeLandSize(caption).value,
+        employeeLandSize(caption).unit
       ]
     );
     propertyId = inserted.rows[0].id;
@@ -19881,6 +19914,7 @@ module.exports.__test = {
   employeePendingStoredMedia,
   employeeVideoEvidenceOnly,
   employeePropertyFacts,
+  employeeLandSize,
   websitePrefillSearchText,
   extractNaturalSearchFilters,
   whatsappPropertyTypeFilterSql,
