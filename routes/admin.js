@@ -10128,6 +10128,61 @@ router.post('/agents/:id/temporary-password', async (req, res, next) => {
   }
 });
 
+/**
+ * Import the adverts a broker forwarded into a WhatsApp chat as listings for
+ * staff review, under an approved agent. dry_run returns the groups so the
+ * pairing of captions and photos can be checked first; `groups` lets staff
+ * override that pairing by caption message id. Nothing is sent to anyone.
+ */
+router.post('/whatsapp/conversations/:phone/import-forwarded-adverts', async (req, res, next) => {
+  try {
+    const whatsapp = require('./whatsapp');
+    const phone = String(req.params.phone || '').replace(/\D/g, '');
+    if (phone.length < 9) return res.status(400).json({ ok: false, error: 'Invalid phone' });
+    const dryRun = parseBooleanLike(req.body?.dry_run, false);
+    const since = cleanText(req.body?.since) || null;
+    const until = cleanText(req.body?.until) || null;
+    const grouped = await whatsapp.groupForwardedAdverts(phone, { since, until });
+    let groups = grouped.groups;
+    if (Array.isArray(req.body?.groups) && req.body.groups.length) {
+      const byId = new Map();
+      groups.forEach((g) => { byId.set(g.caption_message_id, g); g.media.forEach((m) => byId.set(m.message_id, m)); });
+      grouped.orphans.forEach((m) => byId.set(m.message_id, m));
+      groups = req.body.groups.map((spec) => {
+        const base = byId.get(spec.caption_message_id);
+        if (!base || !base.caption) return null;
+        const media = (spec.media_message_ids || []).map((id) => byId.get(id)).filter((m) => m && m.url);
+        return { ...base, media };
+      }).filter(Boolean);
+    }
+    const summary = groups.map((g) => ({
+      caption_message_id: g.caption_message_id, caption: g.caption.slice(0, 160), at: g.caption_at,
+      listing_type: g.facts?.listingType, price: g.facts?.price, area: g.facts?.locationPatch?.area, district: g.facts?.locationPatch?.district,
+      missing: g.missing, media: g.media.map((m) => ({ id: m.message_id, url: m.url }))
+    }));
+    if (dryRun) return res.json({ ok: true, data: { dry_run: true, groups: summary, orphans: grouped.orphans } });
+    const agentId = cleanText(req.body?.agent_id);
+    if (!/^[0-9a-f-]{36}$/i.test(agentId)) return res.status(400).json({ ok: false, error: 'agent_id is required' });
+    const agent = (await db.query('SELECT * FROM agents WHERE id = $1', [agentId])).rows[0];
+    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    const only = Array.isArray(req.body?.only_caption_message_ids) ? new Set(req.body.only_caption_message_ids) : null;
+    const results = [];
+    for (const g of groups) {
+      if (only && !only.has(g.caption_message_id)) continue;
+      try {
+        const r = await whatsapp.importForwardedAdvert({ phone, agent, group: g, inboundMessageId: `${g.caption_message_id}:forward-import` });
+        results.push({ caption_message_id: g.caption_message_id, caption: g.caption.slice(0, 80), ...r });
+      } catch (error) {
+        results.push({ caption_message_id: g.caption_message_id, caption: g.caption.slice(0, 80), error: error.message });
+      }
+    }
+    await writeAudit('admin_whatsapp_forwarded_adverts_imported', { phone, agent_id: agentId, created: results.filter((r) => r.property_id).length }, adminActorId(req));
+    return res.json({ ok: true, data: { results } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/agents/:id/restore', async (req, res, next) => {
   const client = await db.getClient();
   try {
