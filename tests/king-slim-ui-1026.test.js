@@ -15,7 +15,7 @@ const server = read('server.js');
 test('retired King and staff panels are gone from the page', () => {
   for (const id of [
     'admin-ai-ceo-panel', 'admin-ai-agent-results', 'admin-backlog-recovery-lab', 'admin-control-shortcuts',
-    'admin-crm-shell', 'admin-field-agent-control', 'admin-launch-control', 'king-control-map-legacy',
+    'admin-crm-shell', 'admin-launch-control', 'king-control-map-legacy',
     'admin-marketplace-queue', 'admin-off-plan-control', 'admin-short-term-king-control',
     'staff-off-plan-control', 'staff-short-term-control', 'staff-marketplace-panel',
     'staff-ai-panel', 'staff-advertising-panel', 'staff-bank-panel', 'admin-x-drip-btn'
@@ -30,7 +30,7 @@ test('kept panels and merge targets are still on the page', () => {
     'admin-review-queue-control', 'admin-live-followup-control', 'admin-accounts-control', 'admin-staff-control',
     'admin-revenue-control', 'admin-whatsapp-control', 'admin-notifications-control', 'admin-listings-control',
     'admin-actioned-listings-control', 'admin-featured-agents-control', 'admin-crm-tasks-table',
-    'admin-video-caption-conflicts', 'staff-reports-panel', 'staff-whatsapp-panel', 'staff-source-panel'
+    'admin-video-caption-conflicts', 'admin-field-agent-control', 'admin-agents-control', 'staff-reports-panel', 'staff-whatsapp-panel', 'staff-source-panel'
   ]) {
     assert.match(html, new RegExp(`id="${id}`), `${id} should stay`);
   }
@@ -43,7 +43,7 @@ test('backends for removed panels stay mounted (no data is dropped)', () => {
 });
 
 test('old dashboard links open the new home with a moved note', () => {
-  for (const route of ['/admin/launch-control', '/admin/student-sweep', '/admin/field-agents', '/admin/language']) {
+  for (const route of ['/admin/launch-control', '/admin/student-sweep', '/admin/language']) {
     const line = app.split('\n').find((l) => l.includes(`"${route}": {`));
     assert.ok(line, `${route} still resolves`);
     assert.match(line, /moved: "/, `${route} explains where it went`);

@@ -17472,6 +17472,7 @@ function staffPeopleDetailHtml(scope, res) {
         <p class="text-sm text-gray-700 font-mono mt-1" data-pii="phone">${adminEscape(p.phone_e164 || "No phone")}</p>
         <p class="text-sm text-gray-600" data-pii>${adminEscape(p.email || "No email")}</p>
         <div class="flex flex-wrap gap-1 mt-2">${staffPeopleRoleChips(p.roles)}</div>
+        ${scope === "admin" && (p.roles || []).includes("agent") ? `<button type="button" data-people-manage-agent class="mt-3 rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold" onclick="adminAgentManagerOpenForPerson(${adminAttr(JSON.stringify(String(p.phone_e164 || "")))}, ${adminAttr(JSON.stringify(String(p.display_name || "")))})">Manage agent</button>` : ""}
       </div>
       <dl class="grid grid-cols-2 gap-3 rounded-xl bg-gray-50 p-3">
         ${fact("First seen", staffPeopleDate(p.first_seen_at))}
@@ -17536,6 +17537,522 @@ async function staffPeopleExportCsv(scope) {
   } catch (error) {
     toast(error?.message || "Export failed.");
   }
+}
+
+// ---------------------------------------------------------------------------
+// King → Agents. One list of every agent; open one to see everything on file,
+// every listing, and to correct details (ID/NIN included), take listings down,
+// mark them sold/let, move them, or remove/restore the agent. Nothing here
+// hard-deletes and the server logs every change with who made it.
+const ADMIN_AGENT_MANAGER_STATE = { rows: [], counts: {}, show: "active", search: "", missingOnly: false, loading: false, loadedAt: 0, openId: null, detail: null };
+
+function adminAgentManagerRoot() {
+  return document.getElementById("admin-agent-manager");
+}
+
+function adminAgentManagerChip(text, cls) {
+  return `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold whitespace-nowrap ${cls}">${adminEscape(text)}</span>`;
+}
+
+function adminAgentManagerStatusChip(agent = {}) {
+  if (agent.removed_at) return adminAgentManagerChip("Removed", "bg-gray-200 text-gray-700");
+  const st = String(agent.status || "pending");
+  const map = { approved: ["Live", "bg-green-100 text-green-800"], pending: ["Pending", "bg-amber-100 text-amber-800"], rejected: ["Rejected", "bg-red-100 text-red-800"], suspended: ["Suspended", "bg-yellow-100 text-yellow-800"] };
+  const [label, cls] = map[st] || [st, "bg-gray-100 text-gray-700"];
+  return adminAgentManagerChip(label, cls);
+}
+
+function adminAgentManagerPaymentChip(payment = {}) {
+  const cls = { paid: "bg-emerald-100 text-emerald-800", free: "bg-blue-100 text-blue-800", paid_awaiting: "bg-teal-100 text-teal-800", expired: "bg-orange-100 text-orange-800" }[payment.key] || "bg-gray-100 text-gray-700";
+  return adminAgentManagerChip(payment.label || "Unpaid", cls);
+}
+
+function adminAgentManagerIdChip(agent = {}) {
+  return agent.has_nin || agent.nin
+    ? adminAgentManagerChip("ID on file", "bg-green-50 text-green-800 border border-green-200")
+    : adminAgentManagerChip("ID missing", "bg-red-50 text-red-700 border border-red-200");
+}
+
+function adminAgentManagerLicencePlaceholder(value) {
+  return /^(STAFF-|WA-|AUTO-|PENDING|EMPLOYEE-INTAKE-|DIRECT-)/i.test(String(value || ""));
+}
+
+function adminAgentManagerShellHtml() {
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  const input = "mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm";
+  return `
+    <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+      <div class="min-w-0">
+        <h3 class="text-xl font-black text-gray-900">Agents</h3>
+        <p class="text-xs text-gray-500 mt-1">Every agent on makaug. Open one to see their listings, fill in missing details such as the ID (NIN), take listings down or mark them sold/let, move a listing, or remove the agent. Nothing is deleted, and every change is logged with your name.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="adminAgentManagerOpenAdd()" class="bg-green-700 text-white hover:bg-green-800 px-3 py-1.5 rounded-lg text-xs font-bold">Add agent</button>
+        <button type="button" onclick="adminAgentManagerLoad({ force: true })" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh</button>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2 mb-3 text-xs" data-agent-manager-counts></div>
+    <form class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3" onsubmit="adminAgentManagerApplyFilters(event)" onchange="adminAgentManagerApplyFilters(event)">
+      <label class="col-span-2 text-xs font-semibold text-gray-700">Search
+        <input name="search" type="search" value="${adminAttr(s.search)}" placeholder="Name, phone, email or agent number" autocomplete="off" class="${input}">
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Show
+        <select name="show" class="${input}">
+          <option value="active"${s.show === "active" ? " selected" : ""}>Current agents</option>
+          <option value="removed"${s.show === "removed" ? " selected" : ""}>Removed agents</option>
+          <option value="all"${s.show === "all" ? " selected" : ""}>Everyone</option>
+        </select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700 flex items-end gap-2 pb-2">
+        <input name="missing" type="checkbox"${s.missingOnly ? " checked" : ""} class="h-4 w-4"> Missing ID only
+      </label>
+    </form>
+    <p class="text-xs text-gray-500 mb-2" data-agent-manager-summary></p>
+    <div data-agent-manager-list class="text-sm"></div>
+    <div data-agent-manager-detail class="hidden fixed inset-0 z-[10050] bg-black/40" onclick="if (event.target === this) adminAgentManagerClose()">
+      <div class="absolute inset-y-0 right-0 w-full md:w-[760px] bg-white shadow-2xl overflow-y-auto" data-agent-manager-detail-body></div>
+    </div>`;
+}
+
+function adminAgentManagerEnsureLoaded() {
+  const root = adminAgentManagerRoot();
+  if (!root || !authState?.token) return;
+  if (ADMIN_AGENT_MANAGER_STATE.loading || (ADMIN_AGENT_MANAGER_STATE.loadedAt && Date.now() - ADMIN_AGENT_MANAGER_STATE.loadedAt < 60 * 1000)) {
+    if (!root.dataset.agentManagerReady) adminAgentManagerLoad();
+    return;
+  }
+  adminAgentManagerLoad();
+}
+
+async function adminAgentManagerLoad(options = {}) {
+  const root = adminAgentManagerRoot();
+  if (!root) return;
+  if (!root.dataset.agentManagerReady) {
+    root.innerHTML = adminAgentManagerShellHtml();
+    root.dataset.agentManagerReady = "1";
+  }
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  const list = root.querySelector("[data-agent-manager-list]");
+  if (!authState?.token) {
+    list.innerHTML = `<p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">Sign in with your King account to manage agents.</p>`;
+    return;
+  }
+  s.loading = true;
+  if (options.force || !s.rows.length) list.innerHTML = `<p class="text-gray-500">Loading agents…</p>`;
+  const params = new URLSearchParams({ show: s.show });
+  if (s.search) params.set("search", s.search);
+  try {
+    const seq = (s.requestSeq = (s.requestSeq || 0) + 1);
+    const res = await apiRequest(`/api/admin/agent-manager/agents?${params.toString()}`, { headers: adminAuthHeaders() });
+    if (seq !== s.requestSeq) return; // a newer search replaced this one
+    s.rows = Array.isArray(res?.data) ? res.data : [];
+    s.counts = res?.counts || {};
+    s.loadedAt = Date.now();
+    adminAgentManagerRenderList();
+  } catch (error) {
+    const denied = Number(error?.status) === 401 || Number(error?.status) === 403;
+    list.innerHTML = `<p class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">${denied ? "Your account cannot manage agents." : adminEscape(error?.message || "Could not load agents.")}</p>`;
+  } finally {
+    s.loading = false;
+  }
+}
+
+function adminAgentManagerApplyFilters(event) {
+  event?.preventDefault?.();
+  const form = event?.currentTarget || event?.target?.form;
+  if (!form) return;
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  const data = new FormData(form);
+  const search = String(data.get("search") || "").trim();
+  const show = String(data.get("show") || "active");
+  const missingOnly = data.get("missing") === "on";
+  const refetch = search !== s.search || show !== s.show;
+  Object.assign(s, { search, show, missingOnly });
+  if (refetch) adminAgentManagerLoad();
+  else adminAgentManagerRenderList();
+}
+
+function adminAgentManagerRenderList() {
+  const root = adminAgentManagerRoot();
+  if (!root) return;
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  const c = s.counts || {};
+  const chip = (label, value, cls) => `<span class="rounded-xl px-3 py-1.5 font-bold ${cls}">${adminEscape(label)} <span class="font-black">${Number(value || 0).toLocaleString("en-GB")}</span></span>`;
+  root.querySelector("[data-agent-manager-counts]").innerHTML = [
+    chip("Current agents", c.active, "bg-gray-900 text-white"),
+    chip("Missing ID", c.missing_id, "bg-red-100 text-red-800"),
+    chip("Removed", c.removed, "bg-gray-100 text-gray-700")
+  ].join("");
+  const rows = s.missingOnly ? s.rows.filter((a) => !a.has_nin && !a.removed_at) : s.rows;
+  root.querySelector("[data-agent-manager-summary]").textContent = `${rows.length} agent${rows.length === 1 ? "" : "s"}${s.search ? ` matching “${s.search}”` : ""}`;
+  const list = root.querySelector("[data-agent-manager-list]");
+  if (!rows.length) {
+    list.innerHTML = `<p class="rounded-xl border border-dashed border-gray-300 p-4 text-gray-500">No agents match.</p>`;
+    return;
+  }
+  const open = (a) => `adminAgentManagerOpen('${adminAttr(a.id)}')`;
+  list.innerHTML = `
+    <div class="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
+      <table class="w-full text-left text-sm" data-agent-manager-table>
+        <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
+          <tr><th class="px-3 py-2">Agent</th><th class="px-3 py-2">Phone</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">ID</th><th class="px-3 py-2">Payment</th><th class="px-3 py-2">Listings</th><th class="px-3 py-2">Joined</th><th class="px-3 py-2"></th></tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${rows.map((a) => `
+            <tr class="hover:bg-green-50/40 cursor-pointer align-top" onclick="${open(a)}">
+              <td class="px-3 py-2 min-w-[180px]">
+                <p class="font-bold text-gray-900" data-pii>${adminEscape(a.full_name || "Unnamed")}</p>
+                <p class="text-xs text-gray-500">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · ${adminEscape(a.makaug_agent_number)}` : ""}</p>
+              </td>
+              <td class="px-3 py-2 text-xs font-mono whitespace-nowrap" data-pii="phone">${adminEscape(a.phone || a.whatsapp || "—")}</td>
+              <td class="px-3 py-2">${adminAgentManagerStatusChip(a)}</td>
+              <td class="px-3 py-2">${adminAgentManagerIdChip(a)}</td>
+              <td class="px-3 py-2">${adminAgentManagerPaymentChip(a.payment)}</td>
+              <td class="px-3 py-2 text-xs whitespace-nowrap"><strong>${Number(a.live_listings || 0)}</strong> live / ${Number(a.total_listings || 0)}</td>
+              <td class="px-3 py-2 text-xs whitespace-nowrap">${staffPeopleDate(a.created_at)}</td>
+              <td class="px-3 py-2"><button type="button" class="rounded-lg bg-gray-900 text-white px-3 py-1.5 text-xs font-bold" onclick="event.stopPropagation(); ${open(a)}">Manage</button></td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div class="md:hidden space-y-2">
+      ${rows.map((a) => `
+        <button type="button" class="w-full text-left rounded-xl border border-gray-200 p-3 active:bg-green-50" onclick="${open(a)}">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="font-bold text-gray-900 truncate" data-pii>${adminEscape(a.full_name || "Unnamed")}</p>
+              <p class="text-xs text-gray-600 font-mono" data-pii="phone">${adminEscape(a.phone || a.whatsapp || "")}</p>
+            </div>
+            ${adminAgentManagerStatusChip(a)}
+          </div>
+          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
+          <p class="text-[11px] text-gray-500 mt-2">${Number(a.live_listings || 0)} live of ${Number(a.total_listings || 0)} listings · joined ${staffPeopleDate(a.created_at)}</p>
+        </button>`).join("")}
+    </div>`;
+}
+
+function adminAgentManagerOverlay() {
+  const fresh = adminAgentManagerRoot()?.querySelector("[data-agent-manager-detail]");
+  const parked = document.querySelector("body > [data-agent-manager-detail]");
+  if (fresh) {
+    if (parked) parked.remove();
+    document.body.appendChild(fresh);
+    return fresh;
+  }
+  return parked;
+}
+
+function adminAgentManagerClose() {
+  adminAgentManagerOverlay()?.classList.add("hidden");
+  ADMIN_AGENT_MANAGER_STATE.openId = null;
+}
+
+async function adminAgentManagerOpen(agentId) {
+  if (!adminAgentManagerRoot()?.dataset.agentManagerReady) await adminAgentManagerLoad();
+  const overlay = adminAgentManagerOverlay();
+  const body = overlay?.querySelector("[data-agent-manager-detail-body]");
+  if (!overlay || !body) return;
+  overlay.classList.remove("hidden");
+  ADMIN_AGENT_MANAGER_STATE.openId = agentId;
+  if (!ADMIN_AGENT_MANAGER_STATE.detail || ADMIN_AGENT_MANAGER_STATE.detail.agent?.id !== agentId) body.innerHTML = `<div class="p-5 text-gray-500">Loading…</div>`;
+  try {
+    const res = await apiRequest(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}`, { headers: adminAuthHeaders() });
+    ADMIN_AGENT_MANAGER_STATE.detail = res?.data || null;
+    body.innerHTML = adminAgentManagerDetailHtml(ADMIN_AGENT_MANAGER_STATE.detail || {});
+  } catch (error) {
+    body.innerHTML = `<div class="p-5"><button type="button" class="text-sm font-bold text-gray-700" onclick="adminAgentManagerClose()">← Back</button><p class="mt-4 text-red-800">${adminEscape(error?.message || "Could not load this agent.")}</p></div>`;
+  }
+}
+
+const ADMIN_AGENT_MANAGER_LISTING_STATUS = {
+  approved: ["Live", "bg-green-100 text-green-800"],
+  pending: ["Pending review", "bg-amber-100 text-amber-800"],
+  hidden: ["Taken down", "bg-yellow-100 text-yellow-800"],
+  archived: ["Archived", "bg-gray-200 text-gray-700"],
+  rejected: ["Rejected", "bg-red-100 text-red-800"],
+  draft: ["Draft", "bg-gray-100 text-gray-700"]
+};
+
+function adminAgentManagerListingChip(l = {}) {
+  if (l.status === "sold") return adminAgentManagerChip(l.availability_status === "let_agreed" ? "Let" : "Sold", "bg-blue-100 text-blue-800");
+  const [label, cls] = ADMIN_AGENT_MANAGER_LISTING_STATUS[l.status] || [l.status || "Unknown", "bg-gray-100 text-gray-700"];
+  return adminAgentManagerChip(label, cls);
+}
+
+function adminAgentManagerListingActions(l, agentId) {
+  const id = adminAttr(l.id);
+  const btn = (action, label, cls) => `<button type="button" data-listing-action="${action}" class="rounded-lg px-2 py-1 text-[11px] font-bold ${cls}" onclick="adminAgentManagerListingState('${id}', '${action}')">${label}</button>`;
+  const parts = [];
+  if (["hidden", "sold", "archived"].includes(l.status)) parts.push(btn("put_back", "Put back", "bg-green-700 text-white"));
+  if (!["hidden", "archived"].includes(l.status)) parts.push(btn("take_down", "Take down", "border border-yellow-300 text-yellow-800 bg-yellow-50"));
+  if (l.status !== "sold") {
+    const rent = /rent|short/.test(String(l.listing_type || ""));
+    parts.push(rent ? btn("mark_let", "Mark let", "border border-blue-200 text-blue-800 bg-blue-50") : btn("mark_sold", "Mark sold", "border border-blue-200 text-blue-800 bg-blue-50"));
+  }
+  const others = (ADMIN_AGENT_MANAGER_STATE.rows || []).filter((a) => a.id !== agentId && !a.removed_at);
+  parts.push(`<span class="inline-flex items-center gap-1"><select data-move-target="${id}" class="rounded-lg border border-gray-200 px-1 py-1 text-[11px] max-w-[130px]"><option value="">Move to…</option>${others.map((a) => `<option value="${adminAttr(a.id)}">${adminEscape(a.full_name)}${a.phone ? ` ·${adminEscape(String(a.phone).slice(-3))}` : ""}</option>`).join("")}</select><button type="button" class="rounded-lg border border-gray-300 px-2 py-1 text-[11px] font-bold" onclick="adminAgentManagerMoveListing('${id}')">Move</button></span>`);
+  return `<div class="flex flex-wrap gap-1">${parts.join("")}</div>`;
+}
+
+function adminAgentManagerDetailHtml(d = {}) {
+  const a = d.agent || {};
+  const listings = Array.isArray(d.listings) ? d.listings : [];
+  const history = Array.isArray(d.history) ? d.history : [];
+  const dupes = Array.isArray(d.same_phone_agents) ? d.same_phone_agents : [];
+  const id = adminAttr(a.id);
+  const input = "mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm";
+  const field = (name, label, value, opts = {}) => `<label class="text-xs font-semibold ${opts.missing ? "text-red-700" : "text-gray-700"} ${opts.wide ? "col-span-2" : ""}">${adminEscape(label)}${opts.missing ? " · missing" : ""}
+      <input name="${name}" type="${opts.type || "text"}" value="${adminAttr(value == null ? "" : String(value))}" ${opts.placeholder ? `placeholder="${adminAttr(opts.placeholder)}"` : ""} class="${input}${opts.missing ? " border-red-300 bg-red-50" : ""}" data-agent-field="${name}"></label>`;
+  const fact = (label, value) => `<div><dt class="text-[11px] uppercase tracking-wide text-gray-400">${adminEscape(label)}</dt><dd class="text-sm font-semibold text-gray-900">${value}</dd></div>`;
+  const date = (v, t) => (v ? staffPeopleDate(v, t) : "—");
+  const dayValue = (v) => (v ? String(v).slice(0, 10) : "");
+  const ninMissing = !String(a.nin || "").trim();
+  const historyLabel = (h) => ({
+    admin_agent_details_updated: "Details changed",
+    admin_agent_added_manually: "Added by hand (staff)",
+    admin_agent_removed: "Agent removed",
+    admin_agent_restored: "Agent restored",
+    admin_agent_listing_take_down: "Listing taken down",
+    admin_agent_listing_mark_sold: "Listing marked sold",
+    admin_agent_listing_mark_let: "Listing marked let",
+    admin_agent_listing_put_back: "Listing put back",
+    admin_agent_listing_moved: "Listing moved to another agent",
+    admin_agent_listing_received: "Listing moved to this agent"
+  }[h.action] || String(h.action || "").replace(/^admin_/, "").replace(/_/g, " "));
+  const historyDetail = (h) => {
+    const det = h.details || {};
+    if (det.changes) return Object.entries(det.changes).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v.from ?? "—"} → ${v.to ?? "—"}`).join("; ");
+    return [det.reason, det.status_from && det.status_to ? `${det.status_from} → ${det.status_to}` : "", det.payment_status ? `payment ${det.payment_status}` : ""].filter(Boolean).join(" · ");
+  };
+  return `
+    <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3 flex items-center justify-between gap-3">
+      <button type="button" class="text-sm font-bold text-gray-700" onclick="adminAgentManagerClose()">← Back to agents</button>
+      <div class="flex gap-1">${adminAgentManagerStatusChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
+    </div>
+    <div class="p-5 space-y-5" data-agent-manager-agent="${id}">
+      <div>
+        <h4 class="text-xl font-black text-gray-900" data-pii>${adminEscape(a.full_name || "Unnamed")}</h4>
+        <p class="text-sm text-gray-600">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · Agent No ${adminEscape(a.makaug_agent_number)}` : " · no agent number yet"}</p>
+        <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdChip(a)}${a.agent_application_channel === "staff_added" ? adminAgentManagerChip("Added by staff", "bg-purple-100 text-purple-800") : ""}</div>
+      </div>
+      ${a.removed_at ? `<div class="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-800">Removed ${date(a.removed_at, true)}${a.removed_reason ? ` — “${adminEscape(a.removed_reason)}”` : ""}. Their profile and listings are off the site. <button type="button" data-agent-restore class="ml-2 rounded-lg bg-green-700 text-white px-3 py-1.5 text-xs font-bold" onclick="adminAgentManagerRestore('${id}')">Restore agent</button></div>` : ""}
+      ${dupes.length ? `<div class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><strong>Same phone number on another agent record:</strong> ${dupes.map((x) => `<button type="button" class="underline font-bold" onclick="adminAgentManagerOpen('${adminAttr(x.id)}')">${adminEscape(x.full_name)}</button> (joined ${date(x.created_at)}, ${Number(x.total_listings || 0)} listings${x.removed_at ? ", removed" : ""})`).join(", ")}. If it is the same person, move the listings to one record and remove the other.</div>` : ""}
+      <form class="rounded-xl border border-gray-200 p-3" onsubmit="adminAgentManagerSaveDetails(event, '${id}')" data-agent-details-form>
+        <h5 class="font-black text-gray-900 mb-2">Details</h5>
+        <div class="grid grid-cols-2 gap-2">
+          ${field("full_name", "Full name", a.full_name, { wide: true })}
+          ${field("nin", "ID number (NIN)", a.nin, { missing: ninMissing, placeholder: "e.g. CM90012345ABCD" })}
+          ${field("id_expiry_date", "ID expiry", dayValue(a.id_expiry_date), { type: "date" })}
+          ${field("phone", "Phone", a.phone)}
+          ${field("whatsapp", "WhatsApp", a.whatsapp)}
+          ${field("email", "Email", a.email, { type: "email" })}
+          ${field("company_name", "Company", a.company_name)}
+          ${field("licence_number", "Licence number", adminAgentManagerLicencePlaceholder(a.licence_number) ? "" : a.licence_number, { placeholder: adminAgentManagerLicencePlaceholder(a.licence_number) ? "None yet (system code " + a.licence_number + ")" : "" })}
+          ${field("districts_covered", "Districts (comma separated)", (a.districts_covered || []).join(", "))}
+          <label class="col-span-2 text-xs font-semibold text-gray-700">Bio<textarea name="bio" rows="2" class="${input}">${adminEscape(a.bio || "")}</textarea></label>
+        </div>
+        <div class="mt-3 flex justify-end"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Save changes</button></div>
+      </form>
+      <form class="rounded-xl border border-gray-200 p-3" onsubmit="adminAgentManagerSaveDetails(event, '${id}')" data-agent-payment-form>
+        <h5 class="font-black text-gray-900 mb-1">Plan &amp; payment</h5>
+        <p class="text-xs text-gray-500 mb-2">Now: ${adminAgentManagerPaymentChip(a.payment)}${a.billing_suspended_at ? ` · billing suspended ${date(a.billing_suspended_at)}` : ""}${a.fee_offer_mode ? ` · offer: ${adminEscape(a.fee_offer_mode)}${a.fee_offer_until ? ` until ${date(a.fee_offer_until)}` : ""}` : ""}</p>
+        <div class="grid grid-cols-2 gap-2">
+          ${field("paid_until", "Paid until", dayValue(a.paid_until), { type: "date" })}
+          ${field("monthly_fee_ugx", "Monthly fee (UGX)", a.monthly_fee_ugx)}
+          ${field("billing_plan", "Plan", a.billing_plan || a.plan)}
+          <label class="text-xs font-semibold text-gray-700 flex items-end gap-2 pb-2"><input type="checkbox" name="fee_exempt" ${a.fee_exempt ? "checked" : ""} class="h-4 w-4"> Free (staff override)</label>
+          ${field("fee_exempt_reason", "Reason for free", a.fee_exempt_reason, { wide: true })}
+        </div>
+        <div class="mt-3 flex justify-end"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Save payment</button></div>
+      </form>
+      <dl class="grid grid-cols-2 md:grid-cols-3 gap-3 rounded-xl bg-gray-50 p-3">
+        ${fact("Signed up", date(a.created_at, true))}
+        ${fact("Approved", date(a.approved_at))}
+        ${fact("Last activity", date(a.last_activity_at, true))}
+        ${fact("Last sign-in", date(a.user_last_login_at, true))}
+        ${fact("ID photo", a.has_id_document ? `uploaded ${date(a.identity_document_uploaded_at)}` : "missing")}
+        ${fact("Profile photo", a.has_profile_photo ? "uploaded" : "missing")}
+        ${fact("Joined via", adminEscape(String(a.agent_application_channel || "web").replace(/_/g, " ")))}
+        ${fact("Registered by", adminEscape(a.registered_by_name || a.registered_by_phone || "—"))}
+        ${fact("Phone checked", date(a.contact_phone_verified_at))}
+        ${fact("Privacy consent", a.privacy_consent_accepted ? date(a.privacy_consent_at) : "not given")}
+        ${fact("Welcome sent", date(a.welcome_sent_at))}
+        ${fact("Account", adminEscape(a.user_id ? (a.user_email || "linked") : "no login"))}
+      </dl>
+      <section>
+        <h5 class="font-black text-gray-900 mb-2">Listings (${listings.length})</h5>
+        ${listings.length ? `<div class="space-y-2" data-agent-listings>${listings.map((l) => `
+          <div class="rounded-xl border border-gray-200 p-3" data-agent-listing="${adminAttr(l.id)}">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="font-bold text-gray-900 text-sm">${adminEscape(l.title || "Untitled")}</p>
+                <p class="text-[11px] text-gray-500">${adminEscape([l.inquiry_reference, l.listing_type, l.area || l.district].filter(Boolean).join(" · "))}</p>
+              </div>
+              ${adminAgentManagerListingChip(l)}
+            </div>
+            <p class="text-[11px] text-gray-600 mt-1">Posted ${date(l.created_at)}${l.sold_at ? ` · ${l.availability_status === "let_agreed" ? "let" : "sold"} ${date(l.sold_at)}` : ""}${l.status === "hidden" && (l.last_staff_action_at || l.taken_down_at) ? ` · taken down ${date(l.last_staff_action_at || l.taken_down_at)}` : ""}${l.expires_at ? ` · expires ${date(l.expires_at)}` : ""} · ${Number(l.views || 0)} views · ${Number(l.leads || 0)} leads</p>
+            <div class="mt-2">${adminAgentManagerListingActions(l, a.id)}</div>
+          </div>`).join("")}</div>` : `<p class="text-xs text-gray-500">No listings.</p>`}
+      </section>
+      <section>
+        <h5 class="font-black text-gray-900 mb-2">Change history</h5>
+        ${history.length ? `<ol class="space-y-2" data-agent-history>${history.map((h) => `
+          <li class="text-xs"><span class="text-gray-400">${date(h.created_at, true)}</span> · <strong>${adminEscape(historyLabel(h))}</strong> · ${adminEscape(h.details?.by || h.actor_id || "")}${historyDetail(h) ? `<div class="text-gray-500">${adminEscape(historyDetail(h))}</div>` : ""}</li>`).join("")}</ol>` : `<p class="text-xs text-gray-500">No staff changes yet.</p>`}
+      </section>
+      ${a.removed_at ? "" : `<section class="rounded-xl border border-red-200 bg-red-50 p-3" data-agent-remove>
+        <h5 class="font-black text-red-900 mb-1">Remove agent</h5>
+        <p class="text-xs text-red-900 mb-2">Takes their profile and live/pending listings off makaug. Nothing is deleted: “Restore agent” puts everything back as it was.</p>
+        <div class="flex flex-wrap gap-2">
+          <input type="text" data-remove-reason placeholder="Why? e.g. duplicate of another record" class="flex-1 min-w-[200px] rounded-xl border border-red-200 bg-white px-3 py-2 text-sm">
+          <button type="button" class="rounded-lg bg-red-700 text-white px-4 py-2 text-xs font-bold" onclick="adminAgentManagerRemove('${id}')">Remove agent</button>
+        </div>
+      </section>`}
+    </div>`;
+}
+
+async function adminAgentManagerRefreshOpen(message) {
+  if (message) toast(message);
+  const openId = ADMIN_AGENT_MANAGER_STATE.openId;
+  await adminAgentManagerLoad();
+  if (openId) await adminAgentManagerOpen(openId);
+}
+
+async function adminAgentManagerSaveDetails(event, agentId) {
+  event?.preventDefault?.();
+  const form = event?.currentTarget;
+  if (!form) return;
+  const data = new FormData(form);
+  const body = {};
+  form.querySelectorAll("input[name], textarea[name]").forEach((el) => {
+    body[el.name] = el.type === "checkbox" ? el.checked : String(data.get(el.name) ?? "");
+  });
+  const button = form.querySelector("button[type=submit]");
+  if (button) button.disabled = true;
+  try {
+    const res = await apiRequest(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}`, { method: "PATCH", headers: adminAuthHeaders(), body });
+    const changed = res?.data?.changed || [];
+    await adminAgentManagerRefreshOpen(changed.length ? `Saved: ${changed.map((k) => k.replace(/_/g, " ")).join(", ")}.` : "Nothing changed.");
+  } catch (error) {
+    toast(`Not saved: ${error?.message || "error"}`);
+    if (button) button.disabled = false;
+  }
+}
+
+async function adminAgentManagerListingState(propertyId, action) {
+  const labels = { take_down: "Take this listing down? It comes off the site but nothing is deleted.", mark_sold: "Mark this listing as sold?", mark_let: "Mark this listing as let?", put_back: "Put this listing back as it was before?" };
+  if (!window.confirm(labels[action] || "Continue?")) return;
+  try {
+    await apiRequest(`/api/admin/agent-manager/listings/${encodeURIComponent(propertyId)}/state`, { method: "POST", headers: adminAuthHeaders(), body: { action } });
+    await adminAgentManagerRefreshOpen({ take_down: "Listing taken down.", mark_sold: "Marked sold.", mark_let: "Marked let.", put_back: "Listing put back." }[action]);
+  } catch (error) {
+    toast(`Not changed: ${error?.message || "error"}`);
+  }
+}
+
+async function adminAgentManagerMoveListing(propertyId) {
+  const select = document.querySelector(`[data-move-target="${CSS.escape(propertyId)}"]`);
+  const target = select?.value;
+  if (!target) { toast("Choose the agent to move it to."); return; }
+  const name = select.options[select.selectedIndex]?.textContent || "that agent";
+  if (!window.confirm(`Move this listing to ${name}?`)) return;
+  try {
+    const res = await apiRequest(`/api/admin/agent-manager/listings/${encodeURIComponent(propertyId)}/move`, { method: "POST", headers: adminAuthHeaders(), body: { agent_id: target } });
+    await adminAgentManagerRefreshOpen(`Moved to ${res?.data?.to_agent_name || name}.`);
+  } catch (error) {
+    toast(`Not moved: ${error?.message || "error"}`);
+  }
+}
+
+async function adminAgentManagerRemove(agentId) {
+  const reason = String(document.querySelector("[data-agent-manager-agent] [data-remove-reason]")?.value || "").trim();
+  if (!reason) { toast("Say why this agent is being removed."); return; }
+  if (!window.confirm("Remove this agent? Their profile and listings come off makaug. You can Restore them later.")) return;
+  try {
+    const res = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/remove`, { method: "POST", headers: adminAuthHeaders(), body: { reason } });
+    await adminAgentManagerRefreshOpen(`Removed ${res?.data?.full_name || "agent"}${res?.data?.listings_hidden ? ` and hid ${res.data.listings_hidden} listing(s)` : ""}.`);
+  } catch (error) {
+    toast(`Remove failed: ${error?.message || "error"}`);
+  }
+}
+
+async function adminAgentManagerRestore(agentId) {
+  if (!window.confirm("Restore this agent and put their listings back as they were?")) return;
+  try {
+    await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/restore`, { method: "POST", headers: adminAuthHeaders() });
+    await adminAgentManagerRefreshOpen("Agent restored.");
+  } catch (error) {
+    toast(`Restore failed: ${error?.message || "error"}`);
+  }
+}
+
+function adminAgentManagerOpenAdd() {
+  const overlay = adminAgentManagerOverlay();
+  const body = overlay?.querySelector("[data-agent-manager-detail-body]");
+  if (!overlay || !body) return;
+  ADMIN_AGENT_MANAGER_STATE.openId = null;
+  const input = "mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm";
+  const f = (name, label, type = "text", extra = "") => `<label class="text-xs font-semibold text-gray-700">${label}<input name="${name}" type="${type}" class="${input}" ${extra}></label>`;
+  body.innerHTML = `
+    <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3"><button type="button" class="text-sm font-bold text-gray-700" onclick="adminAgentManagerClose()">← Back to agents</button></div>
+    <form class="p-5 space-y-3" onsubmit="adminAgentManagerSubmitAdd(event)" data-agent-add-form>
+      <h4 class="text-xl font-black text-gray-900">Add agent</h4>
+      <p class="text-xs text-gray-500">For an agent you are adding by hand. They are marked “Added by staff” with your name, and nothing is sent to them.</p>
+      <div class="grid grid-cols-2 gap-2">
+        ${f("full_name", "Full name *", "text", "required")}
+        ${f("phone", "Phone *", "tel", "required")}
+        ${f("company_name", "Company")}
+        ${f("email", "Email", "email")}
+        ${f("nin", "ID number (NIN)")}
+        ${f("licence_number", "Licence number")}
+        ${f("districts_covered", "Districts (comma separated)")}
+        <label class="text-xs font-semibold text-gray-700">Status<select name="status" class="${input}"><option value="pending">Pending (not public yet)</option><option value="approved">Live now</option></select></label>
+      </div>
+      <fieldset class="rounded-xl border border-gray-200 p-3">
+        <legend class="text-xs font-black text-gray-900 px-1">Payment *</legend>
+        <div class="flex flex-wrap gap-4 text-sm">
+          <label class="flex items-center gap-2"><input type="radio" name="payment_status" value="unpaid" checked> Unpaid</label>
+          <label class="flex items-center gap-2"><input type="radio" name="payment_status" value="paid"> Paid</label>
+          <label class="flex items-center gap-2"><input type="radio" name="payment_status" value="free"> Free (staff override)</label>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          ${f("paid_until", "Paid until (if paid)", "date")}
+          ${f("fee_exempt_reason", "Reason (if free)")}
+        </div>
+      </fieldset>
+      <div class="flex justify-end"><button type="submit" class="rounded-lg bg-green-700 text-white px-4 py-2 text-sm font-bold">Add agent</button></div>
+    </form>`;
+  overlay.classList.remove("hidden");
+}
+
+async function adminAgentManagerSubmitAdd(event) {
+  event?.preventDefault?.();
+  const form = event?.currentTarget;
+  if (!form) return;
+  const data = Object.fromEntries(new FormData(form).entries());
+  try {
+    const res = await apiRequest("/api/admin/agent-manager/agents", { method: "POST", headers: adminAuthHeaders(), body: data });
+    toast(`Added ${res?.data?.full_name || "agent"}.`);
+    await adminAgentManagerLoad({ force: true });
+    if (res?.data?.id) await adminAgentManagerOpen(res.data.id);
+  } catch (error) {
+    toast(`Not added: ${error?.message || "error"}`);
+  }
+}
+
+// From People: jump to the Agents tab with this person's agent record(s).
+async function adminAgentManagerOpenForPerson(phone, name) {
+  const overlay = staffPeopleDetailOverlay("admin");
+  overlay?.classList.add("hidden");
+  const digits = String(phone || "").replace(/\D/g, "").slice(-9);
+  Object.assign(ADMIN_AGENT_MANAGER_STATE, { search: digits || String(name || ""), show: "all", missingOnly: false });
+  setAdminWorkflowTab("agents");
+  const root = adminAgentManagerRoot();
+  if (root) delete root.dataset.agentManagerReady;
+  await adminAgentManagerLoad({ force: true });
+  const rows = ADMIN_AGENT_MANAGER_STATE.rows || [];
+  if (rows.length === 1) await adminAgentManagerOpen(rows[0].id);
+  else if (!rows.length) toast("No agent record matches this person's phone. Use Add agent to create one.");
+  else toast(`${rows.length} agent records use this number — pick the right one.`);
 }
 
 async function resolveAgentBookingFlag(id) {
@@ -20200,6 +20717,8 @@ function adminCommandSelectorForTab(tab = "review") {
     review: "#admin-review-queue-control",
     live: "#admin-live-followup-control",
     accounts: "#admin-accounts-control",
+    agents: "#admin-agents-control",
+    "field-agents": "#admin-field-agent-control",
     staff: "#admin-staff-control",
     revenue: "#admin-revenue-control",
     ads: "#admin-advertising-control",
@@ -20243,7 +20762,7 @@ function adminBuildCommandCentre(remoteSnap, localSnap) {
   const decisions = Array.isArray(command.decisions) && command.decisions.length ? command.decisions : [
     { key: "listing_review", label: "Listings waiting for approval", value: merged.pending_listings, priority: merged.pending_listings ? "high" : "clear", tab: "review", action: "Approve, reject, hide, or request changes." },
     { key: "lead_follow_up", label: "Open CRM leads", value: merged.open_leads, priority: merged.hot_leads || merged.overdue_tasks ? "high" : merged.open_leads ? "medium" : "clear", tab: "notifications", action: "Work hot leads and overdue follow-ups first." },
-    { key: "broker_review", label: "Broker accounts needing review", value: merged.broker_pending, priority: merged.broker_pending ? "high" : "clear", tab: "accounts", action: "Review broker ID, consent, and approval state." },
+    { key: "broker_review", label: "Broker accounts needing review", value: merged.broker_pending, priority: merged.broker_pending ? "high" : "clear", tab: "agents", action: "Review broker ID, consent, and approval state." },
     { key: "whatsapp_handoff", label: "WhatsApp needs human", value: merged.whatsapp_needs_human, priority: merged.whatsapp_needs_human ? "high" : "clear", tab: "whatsapp", action: "Resolve, reply, or hand off conversations." },
     { key: "advertising_revenue", label: "Advertising pipeline", value: merged.advertising_open_leads, priority: merged.advertising_open_leads ? "medium" : "clear", tab: "revenue", action: "Move advertiser interest to campaign and payment." }
   ];
@@ -20277,7 +20796,7 @@ function renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel = "") {
       ["Live on site", metrics.live_listings, "text-green-700", "live", "admin-live-followup-control"],
       ["Open leads", metrics.open_leads, "text-blue-700", "notifications", "admin-notifications-control"],
       ["WhatsApp handoffs", metrics.whatsapp_needs_human, "text-red-700", "whatsapp", "admin-whatsapp-control"],
-      ["Broker reviews", metrics.broker_pending, "text-amber-700", "accounts", "admin-broker-accounts-table"]
+      ["Broker reviews", metrics.broker_pending, "text-amber-700", "agents", "admin-broker-accounts-table"]
     ];
     metricsGrid.innerHTML = cards.map(([label, value, tone, tab, selector]) => `
       <button type="button" onclick="adminOpenDecision('${adminAttr(tab)}', '#${adminAttr(selector)}')" class="text-left rounded-2xl border border-gray-200 bg-white hover:border-green-300 hover:bg-green-50 p-4 transition">
@@ -20342,7 +20861,9 @@ function adminRunCommandSearch() {
     { terms: ["lead", "crm", "callback", "viewing", "mortgage", "enquiry", "enquiries"], tab: "notifications", selector: "#admin-notifications-control", label: "Leads & Notifications" },
     { terms: ["whatsapp", "chat", "handoff", "conversation", "language"], tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp Inbox" },
     { terms: ["ad", "advert", "revenue", "payment", "invoice", "boost", "campaign", "monetization", "entitlement", "product"], tab: "revenue", selector: "#admin-revenue-control", label: "Revenue" },
-    { terms: ["broker", "agent account", "account", "password", "user", "student"], tab: "accounts", selector: "#admin-accounts-control", label: "Accounts & Outreach" },
+    { terms: ["agent", "broker", "nin", "remove agent", "delete agent"], tab: "agents", selector: "#admin-agents-control", label: "Agents" },
+    { terms: ["field", "payout", "pin", "territory"], tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
+    { terms: ["agent account", "account", "password", "user", "student"], tab: "accounts", selector: "#admin-accounts-control", label: "Accounts & Outreach" },
     { terms: ["listing", "property", "delete", "hide", "approve", "pending", "live"], tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
     { terms: ["review", "queue", "moderate"], tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" }
   ];
@@ -21063,8 +21584,8 @@ function adminDashboardActiveTabNeedsRows(tab = activeAdminWorkflowTab) {
     reviewQueue: ["review", "youtube-sweep"].includes(normalized),
     liveListings: ["live", "listings"].includes(normalized),
     actionedListings: normalized === "listings",
-    accounts: normalized === "accounts",
-    fieldAgents: false,
+    accounts: ["accounts", "agents"].includes(normalized),
+    fieldAgents: normalized === "field-agents",
     // Ad placements and revenue products now sit on the Revenue tab.
     ads: normalized === "revenue",
     whatsapp: normalized === "whatsapp",
@@ -21112,10 +21633,10 @@ function adminVerificationBadge(status) {
 }
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "staff", "whatsapp", "agent-reports", "notifications", "listings"];
+  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "agents", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings"];
   const previousTab = activeAdminWorkflowTab;
   // Tabs removed in the Oct 2026 King slim-down open where their content now lives.
-  const moved = { "student-sweep": "review", actioned: "listings", "field-agents": "review", ads: "revenue" };
+  const moved = { "student-sweep": "review", actioned: "listings", ads: "revenue" };
   const requested = moved[String(tab)] || String(tab);
   activeAdminWorkflowTab = allowed.includes(requested) ? requested : "review";
   document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
@@ -21133,6 +21654,7 @@ function setAdminWorkflowTab(tab = "review") {
   if (activeAdminWorkflowTab === "agent-reports" && previousTab !== "agent-reports") initAdminAgentReportsTab();
   if (activeAdminWorkflowTab === "revenue" && previousTab !== "revenue") loadAdminRevenue();
   if (activeAdminWorkflowTab === "accounts") staffPeopleEnsureLoaded("admin");
+  if (activeAdminWorkflowTab === "agents") adminAgentManagerEnsureLoaded();
 }
 
 async function fetchAdminPaginatedRows(path, headers, options = {}) {
@@ -54048,17 +54570,18 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/whatsapp": { page: "admin-dashboard", tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp AI Inbox" },
   "/admin/advertising": { page: "admin-dashboard", tab: "revenue", selector: "#admin-advertising-control", label: "Ad placements" },
   "/admin/payments": { page: "admin-dashboard", tab: "revenue", selector: "#admin-advertising-control", label: "Payments" },
-  "/admin/field-agents": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
-  "/admin/field-agent-control": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
-  "/admin/field-agent-performance": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
-  "/admin/field-agent-all": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
-  "/admin/field-agent-active": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
-  "/admin/field-agent-pending": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
-  "/admin/field-agent-accepted": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
-  "/admin/field-agent-rejected": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
-  "/admin/field-agent-payouts": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
-  "/admin/field-agent-training": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
-  "/admin/field-agent-notices": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/agents": { page: "admin-dashboard", tab: "agents", selector: "#admin-agents-control", label: "Agents" },
+  "/admin/field-agents": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
+  "/admin/field-agent-control": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
+  "/admin/field-agent-performance": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-performance-board", label: "Field Agent Performance" },
+  "/admin/field-agent-all": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "All Field Agents", fieldAgentKpi: "agents" },
+  "/admin/field-agent-active": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Active Field Agents", fieldAgentKpi: "active" },
+  "/admin/field-agent-pending": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Pending Field Agent Listings", fieldAgentKpi: "pending" },
+  "/admin/field-agent-accepted": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Accepted Field Agent Listings", fieldAgentKpi: "approved" },
+  "/admin/field-agent-rejected": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Rejected Field Agent Listings", fieldAgentKpi: "rejected" },
+  "/admin/field-agent-payouts": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Field Agent Payouts", fieldAgentKpi: "payouts" },
+  "/admin/field-agent-training": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-training-control", label: "Field Agent Training" },
+  "/admin/field-agent-notices": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-notice-control", label: "Field Agent Notice Board" },
   "/admin/accounts": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Accounts" },
   "/admin/users": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Users" },
   "/admin/contracts": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
