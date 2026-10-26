@@ -126,6 +126,7 @@ test('the dashboard search opens the same editor and badges a live listing', () 
     'staffListingIsLive',
     'staffLiveListingBadgeHtml',
     'staffListingDirectLookup',
+    'staffPossibleDuplicateOfHtml',
     'staffReviewQueueCardHtml'
   ].map(extractFunction).join('\n'), sandbox);
 
