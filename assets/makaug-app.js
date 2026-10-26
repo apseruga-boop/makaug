@@ -14723,6 +14723,16 @@ let staffDashboardData = null;
 let staffDashboardRenderSeq = 0;
 let staffDashboardRenderInFlight = false;
 let staffDashboardRenderQueued = false;
+// Side panels start once per dashboard visit (render retries do not refire them).
+let staffDashboardSidePanelsStarted = false;
+// Full renders fire ~10 requests. Two within this gap become one.
+const STAFF_DASHBOARD_MIN_RENDER_GAP_MS = 4000;
+let staffDashboardLastRenderAt = 0;
+function staffDashboardRetryDelayMs(attempt, baseMs = 1500, capMs = 30000) {
+  const n = Math.max(1, Number(attempt) || 1);
+  const delay = Math.min(capMs, baseMs * (2 ** (n - 1)));
+  return Math.round(delay * (0.85 + Math.random() * 0.3));
+}
 let staffDashboardHasLiveData = false;
 let staffDashboardAuthRetryCount = 0;
 let staffDashboardPanelHydrationSeq = 0;
@@ -14816,9 +14826,56 @@ function staffStatCopy(definitions = {}, key = "") {
   return [meaning, action].filter(Boolean).join(" Action: ");
 }
 
+// Last-known stat counts, per staff account (memory and localStorage). A
+// count that timed out shows its last value, marked, instead of "Loading" or
+// a dash.
+const STAFF_STAT_CACHE_PREFIX = "makaug_staff_stats_v1:";
+const staffStatCache = { owner: "", values: {} };
+function staffStatCacheOwner() {
+  const user = authState?.user || {};
+  return String(user.id || user.email || user.phone || "");
+}
+function staffStatCacheValues() {
+  const owner = staffStatCacheOwner();
+  if (staffStatCache.owner !== owner) {
+    staffStatCache.owner = owner;
+    staffStatCache.values = {};
+    try {
+      const stored = owner ? JSON.parse(window.localStorage?.getItem(STAFF_STAT_CACHE_PREFIX + owner) || "{}") : {};
+      if (stored && typeof stored === "object") staffStatCache.values = stored;
+    } catch (error) { /* private mode or bad JSON: memory only */ }
+  }
+  return staffStatCache.values;
+}
+function staffRememberStat(id, value) {
+  const owner = staffStatCacheOwner();
+  if (!owner) return;
+  const values = staffStatCacheValues();
+  values[id] = { value: Number(value), at: Date.now() };
+  try { window.localStorage?.setItem(STAFF_STAT_CACHE_PREFIX + owner, JSON.stringify(values)); } catch (error) { /* quota: memory only */ }
+}
+function staffShowCachedStat(el, id) {
+  const cached = staffStatCacheValues()[id];
+  if (!el || !cached || !Number.isFinite(Number(cached.value))) return false;
+  el.textContent = staffNumber(cached.value);
+  el.dataset.staffStatCached = "1";
+  el.title = `Last known count (${staffKampalaDateTime(new Date(cached.at).toISOString())}). The live count is still loading.`;
+  return true;
+}
+
 function setStaffStat(id, value, definitions = {}, key = "") {
   const el = document.getElementById(id);
-  if (el) el.textContent = staffNumber(value);
+  if (el) {
+    const live = value != null && value !== "" && Number.isFinite(Number(value));
+    if (live) {
+      el.textContent = staffNumber(value);
+      delete el.dataset.staffStatCached;
+      el.removeAttribute("title");
+      staffRememberStat(id, value);
+    } else if (!staffShowCachedStat(el, id)) {
+      el.textContent = staffNumber(value);
+    }
+  }
   const help = document.getElementById(`${id}-help`);
   if (help) {
     help.textContent = staffStatCopy(definitions, key);
@@ -14837,7 +14894,9 @@ function setStaffDashboardLoadingState(message = "Staff dashboard loading...") {
     "staff-stat-whatsapp",
     "staff-stat-duplicates",
     "staff-stat-bank"
-  ].forEach((id) => setTextById(id, "Loading"));
+  ].forEach((id) => {
+    if (!staffShowCachedStat(document.getElementById(id), id)) setTextById(id, "Loading");
+  });
   setTextById("staff-source-intake-status", message);
   setTextById("staff-source-monitor-status", "Monitor cadence loading...");
 }
@@ -15074,6 +15133,67 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
     </article>`;
 }
 
+// "Preview & edit" opened the wrong listing (26 Oct 2026, FA7807, the top
+// card) when a panel above the queue (booking escalations, video caption
+// conflicts, broker review) repainted between aiming and clicking. Panels above
+// the queue now keep the queue where it was on screen, a repainting list keeps
+// its height, and a click on a queue card is ignored if the list moved in the
+// last half second or the card under the pointer changed during the click.
+const STAFF_QUEUE_CLICK_GUARD_MS = 500;
+let staffQueueLastLayoutChangeAt = 0;
+let staffQueuePointerDownCardId = null;
+function staffMarkQueueLayoutChange() {
+  staffQueueLastLayoutChangeAt = Date.now();
+}
+function staffQueueClickShouldBeIgnored(now, lastChangeAt, downCardId, clickCardId) {
+  if (now - lastChangeAt < STAFF_QUEUE_CLICK_GUARD_MS) return "moved";
+  if (downCardId !== null && downCardId !== clickCardId) return "changed";
+  return "";
+}
+function staffReplaceHtmlAboveQueue(host, html) {
+  if (!host) return;
+  if (host.innerHTML === html) return;
+  const anchor = document.getElementById("staff-review-panel");
+  const before = anchor ? anchor.getBoundingClientRect().top : null;
+  host.innerHTML = html;
+  if (!anchor || before === null) return;
+  const delta = anchor.getBoundingClientRect().top - before;
+  if (!delta) return;
+  staffMarkQueueLayoutChange();
+  // Keep the queue under the pointer only while it is on screen.
+  if (before < window.innerHeight && typeof window.scrollBy === "function") window.scrollBy(0, delta);
+}
+function staffSetQueueHtml(wrap, html) {
+  if (!wrap || wrap.innerHTML === html) return;
+  const height = wrap.offsetHeight || 0;
+  // Hold the old height for one frame-ish window so the cards below do not jump.
+  if (height) wrap.style.minHeight = `${height}px`;
+  wrap.innerHTML = html;
+  staffMarkQueueLayoutChange();
+  window.clearTimeout(wrap._staffHeightRelease);
+  wrap._staffHeightRelease = window.setTimeout(() => { wrap.style.minHeight = ""; }, 1500);
+}
+if (typeof document !== "undefined" && document.addEventListener) {
+  const queueCardIdAt = (target) => {
+    const card = target && target.closest ? target.closest("[data-staff-queue-card]") : null;
+    return card ? String(card.getAttribute("data-property-id") || "") : null;
+  };
+  document.addEventListener("pointerdown", (event) => {
+    staffQueuePointerDownCardId = queueCardIdAt(event.target);
+  }, true);
+  document.addEventListener("click", (event) => {
+    const button = event.target && event.target.closest ? event.target.closest("[data-staff-queue-card] button") : null;
+    const downCardId = staffQueuePointerDownCardId;
+    staffQueuePointerDownCardId = null;
+    if (!button) return;
+    const why = staffQueueClickShouldBeIgnored(Date.now(), staffQueueLastLayoutChangeAt, event.detail === 0 ? null : downCardId, queueCardIdAt(button));
+    if (!why) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    toast("The list just moved. Check the listing and click again.");
+  }, true);
+}
+
 function staffReviewQueueLoadingHtml(label = "Moderation queue is still loading. Retry the dashboard in a moment.") {
   return `
     <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -15195,27 +15315,27 @@ function staffPaintReviewQueue(segment) {
   state.rows = isSearch || isBroker ? rows : staffDedupeRows(state.rows);
   if (!rows.length) {
     if (isSearch && state.loading) {
-      wrap.innerHTML = staffEmpty(`Searching for “${adminEscape(state.term)}”…`);
+      staffSetQueueHtml(wrap, staffEmpty(`Searching for “${adminEscape(state.term)}”…`));
       return;
     }
     if (!isSearch && !isBroker && staffHeaderPendingReviewCount() > 0 && staffReviewQueueState.broker.rows.length) {
-      wrap.innerHTML = staffEmpty("Pending listings in this count are in Broker listings review above.");
+      staffSetQueueHtml(wrap, staffEmpty("Pending listings in this count are in Broker listings review above."));
       return;
     }
-    wrap.innerHTML = isSearch
+    staffSetQueueHtml(wrap, isSearch
       ? staffEmpty(state.statusScope === "any"
         ? `No listing matches “${adminEscape(state.term)}”.`
         : state.statusScope === "pending_and_live"
           ? `No pending or live listing matches “${adminEscape(state.term)}”.`
           : `No pending listing matches “${adminEscape(state.term)}”.`)
-      : staffEmpty(isBroker ? "No broker listings are waiting for review." : "No listings are waiting for staff review.");
+      : staffEmpty(isBroker ? "No broker listings are waiting for review." : "No listings are waiting for staff review."));
     return;
   }
   const scopeNote = !isSearch ? "all pending, brokers included" : state.statusScope === "any" ? "any status" : state.statusScope === "pending_and_live" ? "pending and live" : "all pending, brokers included";
   const heading = isSearch ? `<div class="text-xs font-black text-slate-700" data-staff-search-results>Search results for “${adminEscape(state.term)}” (${scopeNote})</div>` : "";
-  wrap.innerHTML = heading
+  staffSetQueueHtml(wrap, heading
     + rows.map((item) => staffReviewQueueCardHtml(item, { brokerQueue: isBroker })).join("")
-    + staffReviewQueueFooterHtml(segment, rows.length, state.total);
+    + staffReviewQueueFooterHtml(segment, rows.length, state.total));
 }
 
 function staffSetReviewQueue(segment, rows = [], meta = {}) {
@@ -15242,7 +15362,8 @@ function renderStaffReviewQueue(rows = [], meta = {}) {
     guardedMeta.empty_is_authoritative = false;
   }
   if (!rows.length && staffPanelQueueNeedsRetry(rows, guardedMeta)) {
-    if (!searching) wrap.innerHTML = staffReviewQueueLoadingHtml("Listing moderation rows are still catching up.");
+    // Rows already on screen stay; only an empty list shows the placeholder.
+    if (!searching && !staffReviewQueueState.main.rows.length) staffSetQueueHtml(wrap, staffReviewQueueLoadingHtml("Listing moderation rows are still catching up."));
     scheduleStaffDashboardPanelRetry("listing queue");
     return;
   }
@@ -15256,8 +15377,9 @@ function renderStaffBrokerReviewQueue(rows = [], meta = {}) {
   const wrap = document.getElementById("staff-broker-review-queue");
   if (!wrap) return;
   const resolution = staffBrokerQueueResolution(rows, meta, staffDashboardPanelRetryCount);
+  const brokerRowsShown = staffReviewQueueState.broker.rows.length > 0;
   if (resolution === "load_broker_segment") {
-    wrap.innerHTML = staffReviewQueueLoadingHtml("Broker review rows are still catching up.");
+    if (!brokerRowsShown) staffSetQueueHtml(wrap, staffReviewQueueLoadingHtml("Broker review rows are still catching up."));
     staffLoadBrokerReviewSegment();
     return;
   }
@@ -15265,11 +15387,11 @@ function renderStaffBrokerReviewQueue(rows = [], meta = {}) {
     const detail = meta?.timed_out
       ? "The broker review query timed out."
       : (meta?.query_error ? `The broker review query failed (${meta.query_error}).` : "The broker review query did not finish.");
-    wrap.innerHTML = staffReviewQueueErrorHtml("Broker review could not be loaded.", detail);
+    if (!brokerRowsShown) staffSetQueueHtml(wrap, staffReviewQueueErrorHtml("Broker review could not be loaded.", detail));
     return;
   }
   if (resolution === "retry") {
-    wrap.innerHTML = staffReviewQueueLoadingHtml("Broker review rows are still catching up.");
+    if (!brokerRowsShown) staffSetQueueHtml(wrap, staffReviewQueueLoadingHtml("Broker review rows are still catching up."));
     scheduleStaffDashboardPanelRetry("broker queue");
     return;
   }
@@ -16757,7 +16879,13 @@ async function renderStaffDashboard() {
     staffDashboardRenderQueued = true;
     return;
   }
+  const sinceLast = Date.now() - staffDashboardLastRenderAt;
+  if (staffDashboardHasLiveData && sinceLast < STAFF_DASHBOARD_MIN_RENDER_GAP_MS) {
+    scheduleDashboardRefresh("staff_render_queued", STAFF_DASHBOARD_MIN_RENDER_GAP_MS - sinceLast, () => renderStaffDashboard(), { page: "staff-dashboard" });
+    return;
+  }
   staffDashboardRenderInFlight = true;
+  staffDashboardLastRenderAt = Date.now();
   try {
     await renderStaffDashboardOnce();
   } finally {
@@ -16776,17 +16904,17 @@ async function loadAgentBookingStaffFlags() {
     const res = await staffApiRequestWithTimeout("/api/agent-bookings/staff-flags", {}, 12000, "Booking escalations");
     const rows = Array.isArray(res?.data) ? res.data : [];
     if (!rows.length) {
-      list.textContent = "No open booking escalations.";
+      staffReplaceHtmlAboveQueue(list, "No open booking escalations.");
       return;
     }
-    list.innerHTML = rows.map((row) => `
+    staffReplaceHtmlAboveQueue(list, rows.map((row) => `
       <article class="border border-gray-200 rounded-xl p-3 mb-2">
         <p class="font-semibold">${adminEscape(row.kind || "escalation")} · ${adminEscape(row.agent_name || row.visitor_name || "")}</p>
         <p>${adminEscape(row.message || "")}</p>
         <button type="button" class="mt-2 border border-gray-300 rounded-lg px-3 py-1 text-xs font-semibold" onclick="resolveAgentBookingFlag('${adminAttr(row.id)}')">Resolve</button>
-      </article>`).join("");
+      </article>`).join(""));
   } catch (error) {
-    list.textContent = "No open booking escalations.";
+    staffReplaceHtmlAboveQueue(list, "No open booking escalations.");
   }
 }
 
@@ -16820,6 +16948,13 @@ async function renderStaffDashboardOnce() {
   setTextById("staff-dashboard-name", `${user.first_name || "Staff"} ${user.last_name || ""}`.trim() || "Staff Operations Dashboard");
   setTextById("staff-dashboard-status", `Role: ${mapRoleLabel(user.role)} • ${user.email || user.phone || "staff account"}`);
   if (!staffDashboardHasLiveData) setStaffDashboardLoadingState();
+  // These two do not need the dashboard payload. Started first, they land
+  // before the moderator starts clicking queue cards, not after.
+  if (!staffDashboardSidePanelsStarted) {
+    staffDashboardSidePanelsStarted = true;
+    loadAgentBookingStaffFlags();
+    adminLoadVideoCaptionConflicts("staff");
+  }
   try {
     const res = await staffApiRequestWithTimeout(
       "/api/staff/dashboard?fast=1",
@@ -16832,9 +16967,9 @@ async function renderStaffDashboardOnce() {
     }
     const data = res?.data || {};
     applyStaffDashboardData(data, user);
-    loadAgentBookingStaffFlags();
+    // The next full render starts the side panels again; failed-render retries do not.
+    staffDashboardSidePanelsStarted = false;
     refreshMarketplaceModerationQueue("staff", { silent: true });
-    adminLoadVideoCaptionConflicts("staff");
     // Always: the fast payload carries counts only, and its lists (leads,
     // WhatsApp, source registry, found-online queue) are empty until the
     // panels arrive. Asking only when it was `partial` left them looking empty.
@@ -16869,7 +17004,7 @@ async function renderStaffDashboardOnce() {
     const retryLimit = signInRequired ? 3 : 8;
     if (transientStaffRequest && staffDashboardAuthRetryCount < retryLimit) {
       staffDashboardAuthRetryCount += 1;
-      scheduleDashboardRefresh("staff_dashboard_retry", Math.min(10000, 1200 * staffDashboardAuthRetryCount), () => renderStaffDashboard(), { page: "staff-dashboard" });
+      scheduleDashboardRefresh("staff_dashboard_retry", staffDashboardRetryDelayMs(staffDashboardAuthRetryCount, 1500, 20000), () => renderStaffDashboard(), { page: "staff-dashboard" });
       return;
     }
     if (signInRequired) {
@@ -17762,6 +17897,16 @@ function staffPreviewRememberTitle(value) {
   staffPreviewTitleDraft = value == null ? "" : String(value);
 }
 
+// The ref is the first thing in the editor header, so a moderator sees which
+// listing opened before editing it (26 Oct 2026: FA7807 opened instead).
+function staffPreviewRefBadgeHtml(preview = {}) {
+  const ref = String(preview.inquiry_reference || "").trim();
+  const id = String(preview.id || "").trim();
+  const label = ref || (id ? `ID ${id.slice(0, 8)}` : "");
+  if (!label) return "";
+  return `<div class="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-300 text-slate-950 px-3 py-1.5 text-lg font-black tracking-wide" data-staff-preview-ref data-no-translate title="${adminAttr(id)}"><i class="fas fa-hashtag text-sm"></i>${adminEscape(label)}</div>`;
+}
+
 function renderStaffListingPreviewModal(preview = {}, options = {}) {
   const nextId = String(preview?.id || "");
   const existing = document.getElementById("staff-listing-preview-modal");
@@ -17796,6 +17941,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
       <div class="bg-slate-900 text-white p-5 flex justify-between gap-4">
         <div>
           <div class="text-xs uppercase tracking-wide text-emerald-200 font-black" data-staff-preview-eyebrow>${staffListingIsLive(preview.status) ? "Live listing" : "Preview before publishing"}</div>
+          ${staffPreviewRefBadgeHtml(preview)}
           <h3 class="text-2xl font-black mt-1">${adminEscape(editorTitle || "Untitled listing")}</h3>
           <p class="text-sm text-slate-300 mt-1" data-staff-preview-status-line>${adminEscape([preview.area, preview.district].filter(Boolean).join(", ") || "Location needs checking")} • ${adminEscape(preview.status || "pending")}</p>
           <p class="text-xs text-emerald-100 mt-1" data-staff-preview-save-state></p>
@@ -18309,8 +18455,11 @@ function staffShowPreviewSaveError(error = {}) {
   const noteSaved = error?.response?.note_saved === true || error?.note_saved === true;
   const detail = error?.message || "Preview save failed.";
   errorEl.textContent = noteSaved
-    ? `The location was not saved. ${detail} The internal note was saved.`
+    ? `Your other changes were not saved. ${detail} The internal note was saved.`
     : detail;
+  // Note saved: say so where the moderator is looking (the header save line).
+  const saveState = modal.querySelector("[data-staff-preview-save-state]");
+  if (saveState && noteSaved) saveState.textContent = "Note saved. Other changes were not saved.";
   errorEl.hidden = false;
   errorEl.style.display = "block";
   errorEl.style.marginTop = "8px";
@@ -30912,9 +31061,13 @@ async function adminLoadVideoCaptionConflicts(which = "staff") {
       <h4 class="text-sm font-black text-gray-900">${title}</h4>
       <div class="mt-2 grid gap-2">${items.length ? items.map(card).join("") : `<p class="text-sm text-gray-500">No video caption conflicts are waiting.</p>`}</div>
     </div>`;
-    host.innerHTML = `<div class="grid gap-4">${section("Live import conflicts", live)}${section("Backfill review list", backfill)}</div>`;
+    const html = `<div class="grid gap-4">${section("Live import conflicts", live)}${section("Backfill review list", backfill)}</div>`;
+    if (which === "staff") staffReplaceHtmlAboveQueue(host, html);
+    else host.innerHTML = html;
   } catch (error) {
-    host.innerHTML = `<p class="text-sm text-gray-500">No video caption conflicts are waiting.</p>`;
+    const html = `<p class="text-sm text-gray-500">No video caption conflicts are waiting.</p>`;
+    if (which === "staff") staffReplaceHtmlAboveQueue(host, html);
+    else host.innerHTML = html;
   }
 }
 
