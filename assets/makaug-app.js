@@ -17062,8 +17062,12 @@ function staffPeopleState(scope) {
     window.__makaugPeople[scope] = {
       loadedAt: 0,
       loading: false,
-      filters: { q: "", role: "", source: "", consent: "", date_field: "last_activity", from: "", to: "", sort: "last_activity", page: 1, limit: 25 },
-      data: null
+      filters: { q: "", role: "", source: "", consent: "", quick: "", date_field: "last_activity", from: "", to: "", sort: "last_activity", page: 1, limit: 25 },
+      data: null,
+      view: "list",
+      deleted: null,
+      deletedPage: 1,
+      selected: new Set()
     };
   }
   return window.__makaugPeople[scope];
@@ -17122,7 +17126,8 @@ function staffPeopleShellHtml(scope) {
       </div>
     </div>
     <div class="flex flex-wrap gap-2 mb-3 text-xs" data-people-counts></div>
-    <form class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 mb-3" onsubmit="staffPeopleApplyFilters(event, '${scope}')" onchange="staffPeopleApplyFilters(event, '${scope}')">
+    <div class="flex flex-wrap items-center gap-2 mb-3 text-xs" data-people-views>${staffPeopleViewsHtml(scope)}</div>
+    <form data-people-filters class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 mb-3" onsubmit="staffPeopleApplyFilters(event, '${scope}')" onchange="staffPeopleApplyFilters(event, '${scope}')">
       <label class="col-span-2 text-xs font-semibold text-gray-700">Search
         <input name="q" type="search" value="${adminAttr(f.q)}" placeholder="Name, phone or email" autocomplete="off" class="${input}">
       </label>
@@ -17156,6 +17161,7 @@ function staffPeopleShellHtml(scope) {
         </select>
       </label>
     </form>
+    <div data-people-bulk class="hidden sticky top-0 z-20 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs"></div>
     <p class="text-xs text-gray-500 mb-2" data-people-summary></p>
     <div data-people-list class="text-sm"></div>
     <div class="flex items-center justify-between gap-2 mt-3" data-people-pager></div>
@@ -17164,13 +17170,27 @@ function staffPeopleShellHtml(scope) {
     </div>`;
 }
 
+function staffPeopleQuerySnippetHtml(q, { compact = false } = {}) {
+  if (!q || !(q.text || q.label)) return `<p class="text-[11px] text-gray-400 mt-1">No query on record</p>`;
+  const src = STAFF_PEOPLE_QUERY_SOURCE[q.source] || q.source || "";
+  return `<p class="text-xs text-gray-700 mt-1 ${compact ? "line-clamp-2" : ""}" data-people-query><span class="font-semibold text-gray-500">${adminEscape(q.label || "Asked")}:</span> <span data-pii="text">${adminEscape(q.text || "")}</span> <span class="text-[11px] text-gray-400 whitespace-nowrap">· ${adminEscape(src)}${q.at ? ` · ${staffPeopleDate(q.at)}` : ""}</span></p>`;
+}
+
+function staffPeopleCheckboxHtml(scope, id, checked) {
+  return `<input type="checkbox" class="h-4 w-4 accent-red-600" aria-label="Select for delete" data-people-select="${adminAttr(id)}" ${checked ? "checked" : ""} onclick="event.stopPropagation()" onchange="staffPeopleToggleSelect('${scope}', '${adminAttr(id)}', this.checked)">`;
+}
+
 function staffPeopleRowsHtml(scope, rows) {
   if (!rows.length) return `<p class="rounded-xl border border-dashed border-gray-300 p-4 text-gray-500">No people match these filters.</p>`;
+  const state = staffPeopleState(scope);
+  const canDelete = Boolean(state.data?.can_delete);
+  const allChecked = canDelete && rows.length > 0 && rows.every((p) => state.selected.has(p.id));
   const table = `
     <div class="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
       <table class="w-full text-left text-sm">
         <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
           <tr>
+            ${canDelete ? `<th class="pl-3 py-2 w-8"><input type="checkbox" class="h-4 w-4 accent-red-600" aria-label="Select all on this page" ${allChecked ? "checked" : ""} onchange="staffPeopleSelectPage('${scope}', this.checked)"></th>` : ""}
             <th class="px-3 py-2">Person</th><th class="px-3 py-2">Role</th><th class="px-3 py-2">Sources</th>
             <th class="px-3 py-2">First seen</th><th class="px-3 py-2">Last activity</th>
             <th class="px-3 py-2">Saves / alerts</th><th class="px-3 py-2">Consent</th><th class="px-3 py-2">Staff</th>
@@ -17178,11 +17198,13 @@ function staffPeopleRowsHtml(scope, rows) {
         </thead>
         <tbody class="divide-y divide-gray-100">
           ${rows.map((p) => `
-            <tr class="hover:bg-green-50/40 cursor-pointer align-top" onclick="staffPeopleOpenDetail('${scope}', '${adminAttr(p.id)}')">
-              <td class="px-3 py-2 min-w-[180px]">
+            <tr class="hover:bg-green-50/40 cursor-pointer align-top ${state.selected.has(p.id) ? "bg-red-50/60" : ""}" onclick="staffPeopleOpenDetail('${scope}', '${adminAttr(p.id)}')">
+              ${canDelete ? `<td class="pl-3 py-2.5">${staffPeopleCheckboxHtml(scope, p.id, state.selected.has(p.id))}</td>` : ""}
+              <td class="px-3 py-2 min-w-[220px] max-w-[340px]">
                 <p class="font-bold text-gray-900" data-pii>${adminEscape(p.display_name || "Unnamed")}</p>
                 <p class="text-xs text-gray-600 font-mono" data-pii="phone">${adminEscape(p.phone_e164 || "")}</p>
                 ${p.email ? `<p class="text-xs text-gray-500" data-pii>${adminEscape(p.email)}</p>` : ""}
+                ${staffPeopleQuerySnippetHtml(p.original_query, { compact: true })}
               </td>
               <td class="px-3 py-2"><div class="flex flex-wrap gap-1">${staffPeopleRoleChips(p.roles)}</div></td>
               <td class="px-3 py-2"><div class="flex flex-wrap gap-1">${staffPeopleSourceChips(p.sources)}</div><p class="text-[11px] text-gray-400 mt-1">${Number(p.source_row_count || 0)} record${Number(p.source_row_count) === 1 ? "" : "s"}</p></td>
@@ -17198,9 +17220,10 @@ function staffPeopleRowsHtml(scope, rows) {
   const cards = `
     <div class="md:hidden space-y-2">
       ${rows.map((p) => `
-        <button type="button" class="w-full text-left rounded-xl border border-gray-200 p-3 hover:border-green-300 active:bg-green-50" onclick="staffPeopleOpenDetail('${scope}', '${adminAttr(p.id)}')">
+        <div role="button" tabindex="0" class="w-full text-left rounded-xl border ${state.selected.has(p.id) ? "border-red-300 bg-red-50/60" : "border-gray-200"} p-3 hover:border-green-300 active:bg-green-50 cursor-pointer" onclick="staffPeopleOpenDetail('${scope}', '${adminAttr(p.id)}')" onkeydown="if (event.key === 'Enter') staffPeopleOpenDetail('${scope}', '${adminAttr(p.id)}')">
           <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0">
+            ${canDelete ? `<div class="pt-0.5">${staffPeopleCheckboxHtml(scope, p.id, state.selected.has(p.id))}</div>` : ""}
+            <div class="min-w-0 flex-1">
               <p class="font-bold text-gray-900 truncate" data-pii>${adminEscape(p.display_name || "Unnamed")}</p>
               <p class="text-xs text-gray-600 font-mono" data-pii="phone">${adminEscape(p.phone_e164 || p.email || "")}</p>
             </div>
@@ -17208,8 +17231,9 @@ function staffPeopleRowsHtml(scope, rows) {
           </div>
           <div class="flex flex-wrap gap-1 mt-2">${staffPeopleRoleChips(p.roles)}</div>
           <div class="flex flex-wrap gap-1 mt-1">${staffPeopleSourceChips(p.sources)}</div>
+          ${staffPeopleQuerySnippetHtml(p.original_query, { compact: true })}
           <p class="text-[11px] text-gray-500 mt-2">Last activity ${staffPeopleDate(p.last_activity_at)} · first seen ${staffPeopleDate(p.first_seen_at)} · ${Number(p.saves_count || 0)} saves · ${Number(p.alerts_count || 0)} alerts${p.assigned_staff_name ? ` · ${adminEscape(p.assigned_staff_name)}` : ""}</p>
-        </button>`).join("")}
+        </div>`).join("")}
     </div>`;
   return table + cards;
 }
@@ -17235,6 +17259,7 @@ async function staffPeopleLoad(scope, options = {}) {
     list.innerHTML = `<p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">Sign in with your staff account to see the contact list.</p>`;
     return;
   }
+  if (state.view === "deleted") return staffPeopleLoadDeleted(scope, options);
   state.loading = true;
   if (options.force || !state.data) list.innerHTML = `<p class="text-gray-500">Loading people…</p>`;
   const params = new URLSearchParams();
@@ -17273,6 +17298,7 @@ function staffPeopleRenderData(scope) {
     chip("Opted out", counts.opted_out, "bg-red-100 text-red-900"),
     chip("In 2+ sources", counts.in_several_sources, "bg-blue-50 text-blue-900")
   ].join("");
+  staffPeopleSyncChrome(scope);
   const rows = Array.isArray(res.rows) ? res.rows : [];
   const start = rows.length ? (res.page - 1) * res.limit + 1 : 0;
   root.querySelector("[data-people-summary]").textContent = `${Number(res.total || 0).toLocaleString("en-GB")} ${Number(res.total) === 1 ? "person" : "people"} · showing ${rows.length ? `${start}–${start + rows.length - 1}` : "none"}`;
@@ -17346,7 +17372,10 @@ function staffPeopleDetailHtml(scope, res) {
   return `
     <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3 flex items-center justify-between gap-3">
       <button type="button" class="text-sm font-bold text-gray-700" onclick="staffPeopleCloseDetail('${scope}')">← Back</button>
-      ${staffPeopleConsentChip(p.consent_status)}
+      <div class="flex items-center gap-2">
+        ${staffPeopleConsentChip(p.consent_status)}
+        ${res.can_delete ? `<button type="button" data-people-delete-one class="border border-red-300 text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold" onclick="staffPeopleConfirmDelete('${scope}', ['${adminAttr(p.id)}'], ${adminAttr(JSON.stringify(p.display_name || "Unnamed"))})">Delete</button>` : ""}
+      </div>
     </div>
     <div class="p-5 space-y-5">
       <div>
@@ -17355,6 +17384,7 @@ function staffPeopleDetailHtml(scope, res) {
         <p class="text-sm text-gray-600" data-pii>${adminEscape(p.email || "No email")}</p>
         <div class="flex flex-wrap gap-1 mt-2">${staffPeopleRoleChips(p.roles)}</div>
       </div>
+      ${staffPeopleOriginalQueryHtml(res.original_queries)}
       <dl class="grid grid-cols-2 gap-3 rounded-xl bg-gray-50 p-3">
         ${fact("First seen", staffPeopleDate(p.first_seen_at))}
         ${fact("Last activity", staffPeopleDate(p.last_activity_at, true))}
@@ -17392,6 +17422,216 @@ function staffPeopleDetailHtml(scope, res) {
           </div>`).join("")}</div>
       </section>
     </div>`;
+}
+
+const STAFF_PEOPLE_QUERY_SOURCE = {
+  whatsapp: "WhatsApp",
+  lead: "Lead",
+  saved_search: "Saved search",
+  property_seeker_profile: "Seeker profile"
+};
+
+// What the person first asked for, most useful first (server ranks it).
+function staffPeopleOriginalQueryHtml(items) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) {
+    return `<section data-people-original class="rounded-xl border border-dashed border-gray-300 p-3">
+      <h5 class="font-black text-gray-900">Original query</h5>
+      <p class="text-xs text-gray-500 mt-1">Nothing asked on record: no WhatsApp message, lead, saved search or seeker goal is linked to this person.</p>
+    </section>`;
+  }
+  const [top, ...rest] = list;
+  const item = (q, main) => `
+    <div class="${main ? "" : "border-t border-green-100 pt-2 mt-2"}">
+      <p class="text-[11px] uppercase tracking-wide ${main ? "text-green-800 font-bold" : "text-gray-500 font-semibold"}">${adminEscape(q.label || "Asked")}</p>
+      ${q.text ? `<p class="${main ? "text-sm font-semibold text-gray-900" : "text-xs text-gray-800"} mt-0.5 whitespace-pre-line break-words" data-pii="text">“${adminEscape(q.text)}”</p>` : ""}
+      ${q.listing ? `<p class="text-xs mt-1"><a class="font-bold text-green-800 underline" href="${adminAttr(q.listing.url)}" target="_blank" rel="noopener">${adminEscape(q.listing.title || "Open the listing")} ↗</a></p>` : ""}
+      <p class="text-[11px] text-gray-500 mt-1">${adminEscape(STAFF_PEOPLE_QUERY_SOURCE[q.source] || q.source || "")}${q.source_detail ? ` (${adminEscape(q.source_detail)})` : ""}${q.at ? ` · ${staffPeopleDate(q.at, true)}` : ""}${q.intent ? ` · bot read it as: ${adminEscape(q.intent)}` : ""}</p>
+    </div>`;
+  return `<section data-people-original class="rounded-xl border border-green-200 bg-green-50/60 p-3">
+    <h5 class="font-black text-gray-900 mb-1">Original query</h5>
+    ${item(top, true)}
+    ${rest.map((q) => item(q, false)).join("")}
+  </section>`;
+}
+
+function staffPeopleViewsHtml(scope) {
+  const state = staffPeopleState(scope);
+  const counts = state.data?.meta?.counts || {};
+  const pill = (active, label, onclick, extra = "") => `<button type="button" class="rounded-full border px-3 py-1 font-bold ${active ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}" onclick="${onclick}" ${extra}>${label}</button>`;
+  const listView = state.view !== "deleted";
+  return [
+    pill(listView && !state.filters.quick, "All people", `staffPeopleSetQuick('${scope}', '')`),
+    pill(listView && state.filters.quick === "unnamed", "Unnamed", `staffPeopleSetQuick('${scope}', 'unnamed')`, 'data-people-quick="unnamed"'),
+    pill(listView && state.filters.quick === "test", "Looks like test", `staffPeopleSetQuick('${scope}', 'test')`, 'data-people-quick="test"'),
+    `<span class="mx-1 h-4 w-px bg-gray-300"></span>`,
+    pill(!listView, `Deleted${counts.deleted != null ? ` <span class="font-black">${Number(counts.deleted || 0)}</span>` : ""}`, `staffPeopleSetView('${scope}', 'deleted')`, "data-people-deleted-view")
+  ].join("");
+}
+
+function staffPeopleSyncChrome(scope) {
+  const root = staffPeopleRoot(scope);
+  if (!root) return;
+  const state = staffPeopleState(scope);
+  const views = root.querySelector("[data-people-views]");
+  if (views) views.innerHTML = staffPeopleViewsHtml(scope);
+  root.querySelector("[data-people-filters]")?.classList.toggle("hidden", state.view === "deleted");
+  const bulk = root.querySelector("[data-people-bulk]");
+  if (!bulk) return;
+  const n = state.selected.size;
+  const show = state.view !== "deleted" && Boolean(state.data?.can_delete) && n > 0;
+  bulk.classList.toggle("hidden", !show);
+  bulk.innerHTML = show ? `
+    <span class="font-bold text-red-900">${n} selected</span>
+    <span class="flex items-center gap-2">
+      <button type="button" class="border border-gray-300 bg-white text-gray-700 px-3 py-1.5 rounded-lg font-semibold" onclick="staffPeopleClearSelection('${scope}')">Clear</button>
+      <button type="button" data-people-delete-selected class="bg-red-700 hover:bg-red-800 text-white px-3 py-1.5 rounded-lg font-bold" onclick="staffPeopleConfirmDelete('${scope}', null)">Delete ${n} from list</button>
+    </span>` : "";
+}
+
+function staffPeopleSetQuick(scope, quick) {
+  const state = staffPeopleState(scope);
+  state.view = "list";
+  state.filters.quick = quick || "";
+  state.filters.page = 1;
+  state.selected.clear();
+  staffPeopleSyncChrome(scope);
+  staffPeopleLoad(scope, { force: true });
+}
+
+function staffPeopleSetView(scope, view) {
+  const state = staffPeopleState(scope);
+  state.view = view === "deleted" ? "deleted" : "list";
+  state.selected.clear();
+  staffPeopleSyncChrome(scope);
+  staffPeopleLoad(scope, { force: true });
+}
+
+function staffPeopleToggleSelect(scope, id, checked) {
+  const state = staffPeopleState(scope);
+  if (checked) state.selected.add(id); else state.selected.delete(id);
+  staffPeopleSyncChrome(scope);
+}
+
+function staffPeopleSelectPage(scope, checked) {
+  const state = staffPeopleState(scope);
+  (state.data?.rows || []).forEach((p) => { if (checked) state.selected.add(p.id); else state.selected.delete(p.id); });
+  staffPeopleRenderData(scope);
+}
+
+function staffPeopleClearSelection(scope) {
+  staffPeopleState(scope).selected.clear();
+  staffPeopleRenderData(scope);
+}
+
+function staffPeopleCloseConfirm() {
+  document.querySelectorAll("body > [data-people-confirm]").forEach((node) => node.remove());
+}
+
+// In-page confirm (not window.confirm) so it states exactly what happens.
+function staffPeopleConfirmDelete(scope, ids, name) {
+  const state = staffPeopleState(scope);
+  const list = Array.isArray(ids) && ids.length ? ids : Array.from(state.selected);
+  if (!list.length) return;
+  staffPeopleCloseConfirm();
+  const one = list.length === 1;
+  const who = one && name ? `<span data-pii>${adminEscape(name)}</span>` : `${list.length} ${one ? "person" : "people"}`;
+  const node = document.createElement("div");
+  node.setAttribute("data-people-confirm", scope);
+  node.className = "fixed inset-0 z-[10060] flex items-end md:items-center justify-center bg-black/50 p-3";
+  node.innerHTML = `
+    <div role="dialog" aria-modal="true" class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+      <h4 class="text-lg font-black text-gray-900">Delete ${who} from the People list?</h4>
+      <ul class="mt-3 space-y-1.5 text-sm text-gray-700 list-disc pl-5">
+        <li>${one ? "They are" : "They are"} removed from this list and kept off it: the automatic refresh will not add ${one ? "them" : "them"} back.</li>
+        <li>Their WhatsApp chats, account, leads and saved searches are <b>not</b> deleted.</li>
+        <li>You can restore ${one ? "them" : "them"} from <b>Deleted</b> at any time.</li>
+      </ul>
+      <p class="mt-3 text-xs text-gray-500">Logged as: your account, the time and the number deleted.</p>
+      <div class="mt-4 flex justify-end gap-2">
+        <button type="button" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold" onclick="staffPeopleCloseConfirm()">Cancel</button>
+        <button type="button" data-people-confirm-delete class="bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-lg text-sm font-bold">Delete ${one ? "" : `${list.length} `}from list</button>
+      </div>
+    </div>`;
+  node.addEventListener("click", (event) => { if (event.target === node) staffPeopleCloseConfirm(); });
+  node.querySelector("[data-people-confirm-delete]").addEventListener("click", () => staffPeopleDoDelete(scope, list, node));
+  document.body.appendChild(node);
+}
+
+async function staffPeopleDoDelete(scope, ids, node) {
+  const button = node?.querySelector("[data-people-confirm-delete]");
+  if (button) { button.disabled = true; button.textContent = "Deleting…"; }
+  try {
+    const res = await staffApiRequestWithTimeout("/api/people/delete", { method: "POST", body: { ids, confirm: true } }, 30000, "Delete people");
+    staffPeopleCloseConfirm();
+    staffPeopleCloseDetail(scope);
+    const state = staffPeopleState(scope);
+    ids.forEach((id) => state.selected.delete(id));
+    toast(`${Number(res?.deleted || 0)} removed from the People list. Restore them from Deleted.`);
+    staffPeopleLoad(scope, { force: true });
+  } catch (error) {
+    if (button) { button.disabled = false; button.textContent = "Try again"; }
+    toast(Number(error?.status) === 403 ? "Only the super admin can delete people." : (error?.message || "Delete failed."));
+  }
+}
+
+async function staffPeopleLoadDeleted(scope, options = {}) {
+  const root = staffPeopleRoot(scope);
+  const state = staffPeopleState(scope);
+  const list = root.querySelector("[data-people-list]");
+  state.loading = true;
+  if (options.force || !state.deleted) list.innerHTML = `<p class="text-gray-500">Loading deleted people…</p>`;
+  try {
+    const res = await staffApiRequestWithTimeout(`/api/people/deleted?page=${Number(state.deletedPage || 1)}&limit=25`, {}, 20000, "Deleted people");
+    state.deleted = res;
+    staffPeopleSyncChrome(scope);
+    const rows = Array.isArray(res.rows) ? res.rows : [];
+    root.querySelector("[data-people-summary]").textContent = `${Number(res.total || 0).toLocaleString("en-GB")} deleted · kept off the list until restored · their source records are untouched`;
+    list.innerHTML = rows.length ? `<div class="space-y-2">${rows.map((d) => {
+      const snap = d.snapshot || {};
+      return `
+      <div class="rounded-xl border border-gray-200 p-3 flex flex-wrap items-start justify-between gap-3" data-people-deleted-row>
+        <div class="min-w-0 flex-1">
+          <p class="font-bold text-gray-900" data-pii>${adminEscape(snap.display_name || "Unnamed")}</p>
+          <p class="text-xs text-gray-600 font-mono" data-pii="phone">${adminEscape(d.phone_e164 || "")}</p>
+          ${d.email ? `<p class="text-xs text-gray-500" data-pii>${adminEscape(d.email)}</p>` : ""}
+          <div class="flex flex-wrap gap-1 mt-1">${staffPeopleSourceChips(snap.sources)}</div>
+          ${staffPeopleQuerySnippetHtml(snap.original_query, { compact: true })}
+          <p class="text-[11px] text-gray-500 mt-1">Deleted ${staffPeopleDate(d.deleted_at, true)}${d.deleted_by_name ? ` by ${adminEscape(d.deleted_by_name)}` : ""} · first seen ${staffPeopleDate(snap.first_seen_at)}</p>
+        </div>
+        ${res.can_restore ? `<button type="button" data-people-restore class="border border-green-700 text-green-800 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold" onclick="staffPeopleRestore('${scope}', '${adminAttr(d.id)}', this)">Restore</button>` : ""}
+      </div>`;
+    }).join("")}</div>` : `<p class="rounded-xl border border-dashed border-gray-300 p-4 text-gray-500">Nobody has been deleted from the list.</p>`;
+    const pages = Math.max(1, Math.ceil(Number(res.total || 0) / Number(res.limit || 25)));
+    root.querySelector("[data-people-pager]").innerHTML = pages > 1 ? `
+      <button type="button" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40" ${res.page <= 1 ? "disabled" : ""} onclick="staffPeopleDeletedPage('${scope}', ${res.page - 1})">Previous</button>
+      <span class="text-xs text-gray-500">Page ${res.page} of ${pages}</span>
+      <button type="button" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40" ${res.page >= pages ? "disabled" : ""} onclick="staffPeopleDeletedPage('${scope}', ${res.page + 1})">Next</button>` : "";
+  } catch (error) {
+    list.innerHTML = `<p class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">${adminEscape(error?.message || "Could not load deleted people.")}</p>`;
+  } finally {
+    state.loading = false;
+  }
+}
+
+function staffPeopleDeletedPage(scope, page) {
+  staffPeopleState(scope).deletedPage = Math.max(1, Number(page) || 1);
+  staffPeopleLoadDeleted(scope, { force: true });
+}
+
+async function staffPeopleRestore(scope, suppressionId, button) {
+  if (button) { button.disabled = true; button.textContent = "Restoring…"; }
+  try {
+    await staffApiRequestWithTimeout("/api/people/restore", { method: "POST", body: { ids: [suppressionId] } }, 60000, "Restore person");
+    toast("Restored to the People list.");
+    const state = staffPeopleState(scope);
+    state.loadedAt = 0;
+    if (state.data?.meta?.counts && state.data.meta.counts.deleted) state.data.meta.counts.deleted -= 1;
+    staffPeopleLoadDeleted(scope, { force: true });
+  } catch (error) {
+    if (button) { button.disabled = false; button.textContent = "Restore"; }
+    toast(Number(error?.status) === 403 ? "Only the super admin can restore people." : (error?.message || "Restore failed."));
+  }
 }
 
 async function staffPeopleExportCsv(scope) {

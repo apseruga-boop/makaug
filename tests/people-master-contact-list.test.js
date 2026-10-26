@@ -33,7 +33,8 @@ function fakeRes() {
 test('every /api/people route sits behind signed-in staff access', () => {
   assert.equal(router.stack[0]?.name, 'requireStaffAccess');
   const paths = router.stack.map((layer) => layer.route?.path).filter(Boolean);
-  assert.deepEqual(paths.sort(), ['/', '/:id', '/export.csv', '/report'].sort());
+  assert.deepEqual([...paths].sort(), ['/', '/:id', '/delete', '/deleted', '/export.csv', '/report', '/restore'].sort());
+  assert.ok(paths.indexOf('/delete') < paths.indexOf('/:id'), 'delete routes must sit before /:id');
   assert.match(read('server.js'), /app\.use\('\/api\/people', require\('\.\/routes\/people'\)\)/);
 });
 
