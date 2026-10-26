@@ -117,8 +117,8 @@ test('backlog endpoints and King controls are proposal-only with no bulk publish
   assert.doesNotMatch(adminRoute, /router\.(?:post|patch)\('\/backlog-recovery\/apply'/);
   assert.match(adminRoute, /rows_updated:\s*0/);
   assert.match(adminRoute, /rows_published:\s*0/);
-  assert.match(adminUi, /Review backlog recovery lab/);
-  assert.match(adminUi, /Student \(manual only\)/);
+  // King dashboard slim-down (26 Oct 2026): the read-only lab panel is retired from King; the routes stay proposal-only.
+  assert.doesNotMatch(adminUi, /Review backlog recovery lab/);
   assert.match(browser, /\/api\/admin\/backlog-recovery\/proposal\//);
   assert.match(server, /uganda-master-intake-recovery-20260811/);
 });

@@ -7933,31 +7933,6 @@
           <div id="staff-video-caption-conflicts-list" class="mt-4 text-sm text-gray-500">No video caption conflicts are waiting.</div>
         </section>
 
-        <section id="staff-off-plan-control" class="bg-white border border-emerald-100 rounded-2xl p-6" data-off-plan-dashboard="staff">
-          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div><p class="text-xs font-black uppercase tracking-widest text-emerald-700">New developments</p><h3 class="mt-1 text-xl font-black text-gray-950">Off Plan review desk</h3><p class="mt-1 text-sm text-gray-500">Check source evidence, update construction and sales figures, preview the brochure, and prepare floor-plan walkthrough briefs. Projects remain private until every publication check passes.</p></div>
-            <div class="flex gap-2"><button type="button" onclick="openOffPlanCreateModal('staff')" class="rounded-xl bg-emerald-700 text-white px-4 py-2 text-sm font-black"><i class="fas fa-plus mr-1"></i>Add project</button><button type="button" onclick="loadOffPlanManagement('staff')" class="rounded-xl border border-emerald-200 text-emerald-800 px-4 py-2 text-sm font-black"><i class="fas fa-rotate-right mr-1"></i>Refresh</button></div>
-          </div>
-          <div id="staff-off-plan-projects" class="mt-5 grid gap-4"><p class="text-sm text-gray-500">Open this desk to load the off-plan review queue.</p></div>
-          <details class="mt-5 rounded-xl border border-gray-200 p-4"><summary class="cursor-pointer font-black text-sm">Off-plan enquiries</summary><div id="staff-off-plan-enquiries" class="mt-3 grid gap-2 text-sm text-gray-600">Refresh to load enquiries.</div></details>
-        </section>
-
-        <section id="staff-short-term-control" class="st-scope bg-white border border-emerald-100 rounded-2xl p-6" data-short-term-desk="staff">
-          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div>
-              <p class="text-xs font-black uppercase tracking-widest text-emerald-700">Short Term stays</p>
-              <h3 class="mt-1 text-xl font-black text-gray-950">Short Term review desk</h3>
-              <p class="mt-1 text-sm text-gray-500">Screen a host&rsquo;s short stay: check the photos are of that property, ring the number, confirm the area and the price. When it is clean, send it to King review. <b>A moderator cannot publish a short stay</b> &mdash; the King makes the final call.</p>
-            </div>
-            <div class="flex gap-2">
-              <button type="button" onclick="window.makaugShortTermDesk &amp;&amp; window.makaugShortTermDesk.intake()" class="rounded-xl border border-emerald-200 text-emerald-800 px-4 py-2 text-sm font-black"><i class="fas fa-plus mr-1"></i>Add a place for a host</button>
-              <button type="button" onclick="window.makaugShortTermDesk &amp;&amp; window.makaugShortTermDesk.load('staff','submitted')" class="rounded-xl bg-emerald-700 text-white px-4 py-2 text-sm font-black"><i class="fas fa-rotate-right mr-1"></i>Open queue</button>
-            </div>
-          </div>
-          <div id="staff-short-term-intake" class="mt-5"></div>
-          <div id="staff-short-term-queue" class="mt-5"><p class="text-sm text-gray-500">Open this desk to load the short term review queue.</p></div>
-        </section>
-
         <div id="staff-settings-panel" class="bg-white border border-blue-100 rounded-2xl p-6">
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <div>
@@ -8014,11 +7989,6 @@
             <div id="staff-stat-leads" class="text-3xl font-black text-blue-700 mt-1">0</div>
             <p id="staff-stat-leads-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
           </button>
-          <button type="button" onclick="staffJumpToDesk('advertising')" class="text-left bg-white border border-gray-200 hover:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200 rounded-2xl p-5 transition" title="Open advertising sales inquiries.">
-            <div class="text-sm text-gray-500">Ad Leads</div>
-            <div id="staff-stat-ads" class="text-3xl font-black text-amber-700 mt-1">0</div>
-            <p id="staff-stat-ads-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
-          </button>
           <button type="button" onclick="staffJumpToDesk('whatsapp')" class="text-left bg-white border border-gray-200 hover:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-200 rounded-2xl p-5 transition" title="WhatsApp conversations needing a human.">
             <div class="text-sm text-gray-500">WhatsApp Chats</div>
             <div id="staff-stat-whatsapp" class="text-3xl font-black text-purple-700 mt-1">0</div>
@@ -8028,11 +7998,6 @@
             <div class="text-sm text-gray-500">Duplicate Risk</div>
             <div id="staff-stat-duplicates" class="text-3xl font-black text-red-700 mt-1">0</div>
             <p id="staff-stat-duplicates-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
-          </button>
-          <button type="button" onclick="staffJumpToDesk('bank')" class="text-left bg-white border border-gray-200 hover:border-green-300 focus:outline-none focus:ring-2 focus:ring-green-200 rounded-2xl p-5 transition" title="Mortgage and bank-finance leads.">
-            <div class="text-sm text-gray-500">Bank Leads</div>
-            <div id="staff-stat-bank" class="text-3xl font-black text-green-700 mt-1">0</div>
-            <p id="staff-stat-bank-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
           </button>
         </div>
 
@@ -8066,24 +8031,6 @@
                 <button type="button" onclick="refreshStaffReportsQueue()" class="border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg text-xs font-black">Refresh</button>
               </div>
               <div id="staff-reports-queue" class="space-y-3 text-sm text-gray-700">Reports loading...</div>
-            </div>
-            <div id="staff-marketplace-panel" class="bg-white border border-rose-100 rounded-2xl p-5 scroll-mt-28">
-              <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
-                <div>
-                  <h3 class="text-xl font-black text-gray-900">Marketplace approvals</h3>
-                  <p class="text-xs text-gray-500 mt-1">Check private business registrations before they appear in the public services directory.</p>
-                </div>
-                <button type="button" onclick="refreshMarketplaceModerationQueue('staff')" class="border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg text-xs font-black">Refresh</button>
-              </div>
-              <div id="staff-marketplace-queue" class="space-y-3 text-sm text-gray-700">Marketplace registrations loading...</div>
-            </div>
-            <div id="staff-ai-panel" class="bg-white border border-gray-200 rounded-2xl p-5 scroll-mt-28">
-              <h3 class="text-xl font-black text-gray-900 mb-3">Staff AI assistant</h3>
-              <form onsubmit="askStaffAssistant(event)" class="space-y-3">
-                <textarea id="staff-ai-question" rows="4" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Ask: how many people looked for properties in Nansana?"></textarea>
-                <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white py-3 rounded-xl font-bold"><i class="fas fa-wand-magic-sparkles mr-1"></i>Ask makaug data</button>
-              </form>
-              <div id="staff-ai-answer" class="mt-4 rounded-xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-800">Ask a staff-safe data question.</div>
             </div>
             <div id="staff-activity-panel" class="bg-white border border-gray-200 rounded-2xl p-5 scroll-mt-28">
               <h3 class="text-xl font-black text-gray-900 mb-3">My recent work</h3>
@@ -8218,17 +8165,9 @@
             <div id="staff-leads-list" class="space-y-3 text-sm"></div>
           </div>
           <div class="space-y-5">
-            <div id="staff-advertising-panel" class="bg-white border border-gray-200 rounded-2xl p-5 scroll-mt-28">
-              <h3 class="text-lg font-black text-gray-900 mb-3">Advertising sales</h3>
-              <div id="staff-advertising-list" class="space-y-3 text-sm"></div>
-            </div>
             <div id="staff-whatsapp-panel" class="bg-white border border-gray-200 rounded-2xl p-5 scroll-mt-28">
               <h3 class="text-lg font-black text-gray-900 mb-3">WhatsApp conversations</h3>
               <div id="staff-whatsapp-list" class="space-y-3 text-sm"></div>
-            </div>
-            <div id="staff-bank-panel" class="bg-white border border-gray-200 rounded-2xl p-5 scroll-mt-28">
-              <h3 class="text-lg font-black text-gray-900 mb-3">Bank / mortgage leads</h3>
-              <div id="staff-bank-leads-list" class="space-y-3 text-sm"></div>
             </div>
           </div>
         </div>
@@ -8419,35 +8358,13 @@
             </div>
             <div class="flex gap-2 flex-wrap">
               <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Refresh</button>
-              <a href="/admin/launch-control" onclick="return openKingShortcut(event, '/admin/launch-control')" class="border border-green-200 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Launch Control</a>
               <a href="/admin/staff" onclick="return openKingShortcut(event, '/admin/staff')" class="border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-semibold">Staff Ops</a>
-              <a href="/admin/field-agents" onclick="return openKingShortcut(event, '/admin/field-agents')" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-semibold">Field Agent Control Centre</a>
               <a href="/admin/setup-status" onclick="return openKingShortcut(event, '/admin/setup-status')" class="border border-amber-200 text-amber-800 hover:bg-amber-50 px-4 py-2 rounded-lg text-sm font-semibold">Setup Status</a>
               <button onclick="showPage('account')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Account Settings</button>
               <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
             </div>
           </div>
         </div>
-
-        <section id="admin-video-caption-conflicts" class="bg-white border border-red-100 rounded-2xl p-6">
-          <div class="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <h3 class="text-lg font-black text-gray-900">Video caption conflicts</h3>
-              <p class="mt-1 text-sm text-gray-500">Listings whose burned-in video text disagrees with the caption or the listing. Nothing here changes a listing on its own.</p>
-            </div>
-            <button type="button" onclick="adminLoadVideoCaptionConflicts('admin')" class="rounded-lg border border-red-200 px-3 py-2 text-xs font-black text-red-900">Refresh</button>
-          </div>
-          <div id="admin-video-caption-conflicts-list" class="mt-4 text-sm text-gray-500">No video caption conflicts are waiting.</div>
-        </section>
-
-        <section id="admin-off-plan-control" class="bg-white border border-emerald-100 rounded-2xl p-6" data-off-plan-dashboard="admin">
-          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div><p class="text-xs font-black uppercase tracking-widest text-emerald-700">New developments</p><h3 class="mt-1 text-xl font-black text-gray-950">Off Plan control centre</h3><p class="mt-1 text-sm text-gray-500">Review projects and enquiries, update completion and sales, preview branded brochures, and create approval-gated walkthrough briefs. Publishing remains an explicit verified action.</p></div>
-            <div class="flex gap-2"><button type="button" onclick="openOffPlanCreateModal('admin')" class="rounded-xl bg-emerald-700 text-white px-4 py-2 text-sm font-black"><i class="fas fa-plus mr-1"></i>Add project</button><button type="button" onclick="loadOffPlanManagement('admin')" class="rounded-xl border border-emerald-200 text-emerald-800 px-4 py-2 text-sm font-black"><i class="fas fa-rotate-right mr-1"></i>Refresh</button></div>
-          </div>
-          <div id="admin-off-plan-projects" class="mt-5 grid gap-4"><p class="text-sm text-gray-500">Open this control to load the off-plan review queue.</p></div>
-          <details class="mt-5 rounded-xl border border-gray-200 p-4"><summary class="cursor-pointer font-black text-sm">Off-plan enquiries</summary><div id="admin-off-plan-enquiries" class="mt-3 grid gap-2 text-sm text-gray-600">Refresh to load enquiries.</div></details>
-        </section>
 
         <div id="admin-command-centre" class="bg-white border border-green-100 rounded-2xl overflow-hidden">
           <div class="grid xl:grid-cols-[1.05fr,0.95fr] gap-0">
@@ -8456,15 +8373,19 @@
                 <div>
                   <p class="text-xs font-black uppercase tracking-wide text-green-200">makaug backend operating system</p>
                   <h3 class="mt-2 text-3xl font-black serif">Today’s control room</h3>
-                  <p class="mt-2 max-w-2xl text-sm text-green-50">One clean place to decide what goes live, who needs a reply, where money is waiting, and what the AI CEO should inspect next.</p>
+                  <p class="mt-2 max-w-2xl text-sm text-green-50">One clean place to decide what goes live, who needs a reply, where money is waiting, and how many people are on the site right now.</p>
                 </div>
                 <span id="admin-command-source" class="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-green-50">loading data</span>
               </div>
-              <div id="admin-command-metrics-grid" class="mt-5 grid sm:grid-cols-2 xl:grid-cols-4 gap-3 text-gray-900"></div>
-              <div class="mt-5 grid md:grid-cols-[1fr,150px,170px] gap-2">
+              <div id="admin-command-metrics-grid" class="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3 text-gray-900"></div>
+              <div id="admin-command-visitors" class="mt-3 grid grid-cols-3 gap-3 text-gray-900">
+                <div class="rounded-2xl bg-white/95 p-3"><div class="text-[11px] font-black uppercase tracking-wide text-gray-500">On site now</div><div id="admin-ai-visitors-live" class="text-2xl font-black text-gray-900 mt-1">0</div></div>
+                <div class="rounded-2xl bg-white/95 p-3"><div class="text-[11px] font-black uppercase tracking-wide text-gray-500">Visitors today</div><div id="admin-ai-visitors-today" class="text-2xl font-black text-gray-900 mt-1">0</div></div>
+                <div class="rounded-2xl bg-white/95 p-3"><div class="text-[11px] font-black uppercase tracking-wide text-gray-500">Page views 48h</div><div id="admin-ai-views-48h" class="text-2xl font-black text-gray-900 mt-1">0</div></div>
+              </div>
+              <div class="mt-5 grid md:grid-cols-[1fr,150px] gap-2">
                 <input id="admin-command-search" onkeydown="if(event.key==='Enter') adminRunCommandSearch()" class="w-full rounded-xl border border-white/20 bg-white/95 px-4 py-3 text-sm text-gray-900" placeholder="Ask the backend: show leads, review brokers, open ads, check failed emails...">
                 <button type="button" onclick="adminRunCommandSearch()" class="rounded-xl bg-amber-400 px-4 py-3 text-sm font-black text-green-950">Find panel</button>
-                <button type="button" onclick="runManagingDirectorAgent(); adminScrollTo('#admin-ai-agent-results')" class="rounded-xl bg-white/10 px-4 py-3 text-sm font-black text-white border border-white/20">Run AI CEO</button>
               </div>
               <div id="admin-command-search-result" class="mt-3 rounded-xl border border-white/15 bg-white/10 p-3 text-xs text-green-50">Type a plain-English admin question or task, for example: show leads, review brokers, check failed emails, or open ads.</div>
             </div>
@@ -8496,402 +8417,30 @@
               <h3 class="text-xl font-black text-gray-900">Simple backend map</h3>
               <p class="text-sm text-gray-500 mt-1">Use these six areas. Everything else sits inside one of them.</p>
             </div>
-            <span class="rounded-full bg-gray-900 px-3 py-1 text-xs font-black text-white">AI CEO friendly</span>
           </div>
           <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">
             <button type="button" onclick="adminOpenDecision('review', '#admin-review-queue-control')" class="text-left rounded-2xl border border-amber-100 bg-amber-50 p-4 hover:bg-white"><strong>1. Listings</strong><br><span class="text-gray-600">Review, approve, reject, hide, delete, feature, and inspect every property.</span></button>
             <button type="button" onclick="adminOpenDecision('notifications', '#admin-notifications-control')" class="text-left rounded-2xl border border-green-100 bg-green-50 p-4 hover:bg-white"><strong>2. Leads</strong><br><span class="text-gray-600">WhatsApp, viewings, callbacks, saved searches, mortgage, help, and advertiser intent.</span></button>
             <button type="button" onclick="adminOpenDecision('accounts', '#admin-accounts-control')" class="text-left rounded-2xl border border-blue-100 bg-blue-50 p-4 hover:bg-white"><strong>3. Accounts</strong><br><span class="text-gray-600">Users, students, brokers, passwords, approvals, privacy and data deletion.</span></button>
             <button type="button" onclick="adminOpenDecision('whatsapp', '#admin-whatsapp-control')" class="text-left rounded-2xl border border-emerald-100 bg-emerald-50 p-4 hover:bg-white"><strong>4. WhatsApp AI</strong><br><span class="text-gray-600">Conversations, missed calls, language, human handoff, and message logs.</span></button>
-            <button type="button" onclick="adminOpenDecision('ads', '#admin-advertising-control')" class="text-left rounded-2xl border border-orange-100 bg-orange-50 p-4 hover:bg-white"><strong>5. Money</strong><br><span class="text-gray-600">Ad leads, boost plans, placements, payment status, campaigns and revenue.</span></button>
+            <button type="button" onclick="adminOpenDecision('revenue', '#admin-revenue-control')" class="text-left rounded-2xl border border-orange-100 bg-orange-50 p-4 hover:bg-white"><strong>5. Money</strong><br><span class="text-gray-600">Ad leads, boost plans, placements, payment status, campaigns and revenue.</span></button>
             <a href="/admin/setup-status" onclick="return openKingShortcut(event, '/admin/setup-status')" class="text-left rounded-2xl border border-gray-200 bg-gray-50 p-4 hover:bg-white"><strong>6. Launch & proof</strong><br><span class="text-gray-600">Provider status, routes, security, email/SMS/WhatsApp health, and launch evidence.</span></a>
-          </div>
-        </div>
-
-        <div id="admin-control-shortcuts" class="hidden bg-white border border-green-100 rounded-2xl p-5">
-          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
-            <div>
-              <h3 class="text-xl font-bold text-gray-800">King Control Shortcuts</h3>
-              <p class="text-sm text-gray-500 mt-1">Jump straight to the protected control room you need. These links open the matching backend-fed panel inside the King Dashboard.</p>
-            </div>
-            <span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">Live King routes</span>
-          </div>
-          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
-            <a href="/admin/moderation" data-king-shortcut="/admin/moderation" onclick="return openKingShortcut(event, '/admin/moderation')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Review Queue</a>
-            <a href="/admin/listings" data-king-shortcut="/admin/listings" onclick="return openKingShortcut(event, '/admin/listings')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">All Listings</a>
-            <a href="/admin/field-agents" data-king-shortcut="/admin/field-agents" onclick="return openKingShortcut(event, '/admin/field-agents')" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Field Agent Control Centre</a>
-            <a href="/admin/staff" data-king-shortcut="/admin/staff" onclick="return openKingShortcut(event, '/admin/staff')" class="rounded-xl border border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 p-3 font-bold text-slate-800">Staff Ops</a>
-            <a href="/admin/field-agent-active" data-king-shortcut="/admin/field-agent-active" onclick="return openKingShortcut(event, '/admin/field-agent-active')" class="rounded-xl border border-green-100 bg-green-50 hover:bg-white hover:border-green-300 p-3 font-bold text-green-800">Active Field Agents</a>
-            <a href="/admin/field-agent-pending" data-king-shortcut="/admin/field-agent-pending" onclick="return openKingShortcut(event, '/admin/field-agent-pending')" class="rounded-xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-3 font-bold text-amber-800">Pending FA Listings</a>
-            <a href="/admin/field-agent-accepted" data-king-shortcut="/admin/field-agent-accepted" onclick="return openKingShortcut(event, '/admin/field-agent-accepted')" class="rounded-xl border border-emerald-100 bg-emerald-50 hover:bg-white hover:border-emerald-300 p-3 font-bold text-emerald-800">Accepted FA Listings</a>
-            <a href="/admin/field-agent-rejected" data-king-shortcut="/admin/field-agent-rejected" onclick="return openKingShortcut(event, '/admin/field-agent-rejected')" class="rounded-xl border border-red-100 bg-red-50 hover:bg-white hover:border-red-300 p-3 font-bold text-red-800">Rejected FA Listings</a>
-            <a href="/admin/field-agent-payouts" data-king-shortcut="/admin/field-agent-payouts" onclick="return openKingShortcut(event, '/admin/field-agent-payouts')" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Field Agent Payouts</a>
-            <a href="/admin/field-agent-training" data-king-shortcut="/admin/field-agent-training" onclick="return openKingShortcut(event, '/admin/field-agent-training')" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Field Agent Training</a>
-            <a href="/admin/field-agent-notices" data-king-shortcut="/admin/field-agent-notices" onclick="return openKingShortcut(event, '/admin/field-agent-notices')" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Field Agent Notice Board</a>
-            <a href="/admin/whatsapp-inbox" data-king-shortcut="/admin/whatsapp-inbox" onclick="return openKingShortcut(event, '/admin/whatsapp-inbox')" class="rounded-xl border border-green-100 bg-green-50 hover:bg-white hover:border-green-300 p-3 font-bold text-green-800">WhatsApp AI Inbox</a>
-            <a href="/admin/crm" data-king-shortcut="/admin/crm" onclick="return openKingShortcut(event, '/admin/crm')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">CRM Lead Centre</a>
-            <a href="/admin/property-needs" data-king-shortcut="/admin/property-needs" onclick="return openKingShortcut(event, '/admin/property-needs')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Property Need Requests</a>
-            <a href="/admin/viewings" data-king-shortcut="/admin/viewings" onclick="return openKingShortcut(event, '/admin/viewings')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Viewings</a>
-            <a href="/admin/callbacks" data-king-shortcut="/admin/callbacks" onclick="return openKingShortcut(event, '/admin/callbacks')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Callbacks</a>
-            <a href="/admin/notifications" data-king-shortcut="/admin/notifications" onclick="return openKingShortcut(event, '/admin/notifications')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Notifications & Logs</a>
-            <a href="/admin/advertising" data-king-shortcut="/admin/advertising" onclick="return openKingShortcut(event, '/admin/advertising')" class="rounded-xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-3 font-bold text-amber-800">Advertising & Payments</a>
-            <a href="/admin/setup-status" data-king-shortcut="/admin/setup-status" onclick="return openKingShortcut(event, '/admin/setup-status')" class="rounded-xl border border-green-200 bg-white hover:bg-green-50 p-3 font-bold text-green-800">Owner Setup Status</a>
-            <a href="/admin/providers" data-king-shortcut="/admin/providers" onclick="return openKingShortcut(event, '/admin/providers')" class="rounded-xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-3 font-bold text-amber-800">Provider Tests</a>
-            <a href="/admin/language" data-king-shortcut="/admin/language" onclick="return openKingShortcut(event, '/admin/language')" class="rounded-xl border border-indigo-100 bg-indigo-50 hover:bg-white hover:border-indigo-300 p-3 font-bold text-indigo-800">Language & i18n</a>
-            <a href="/admin/location" data-king-shortcut="/admin/location" onclick="return openKingShortcut(event, '/admin/location')" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Location & Maps</a>
-            <a href="/admin/docs" data-king-shortcut="/admin/docs" onclick="return openKingShortcut(event, '/admin/docs')" class="rounded-xl border border-gray-900 bg-gray-900 hover:bg-gray-800 p-3 font-bold text-white">King Docs</a>
-          </div>
-        </div>
-
-        <div id="king-control-map-legacy" class="hidden bg-white border border-green-100 rounded-2xl p-5">
-          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
-            <div>
-              <h3 class="text-xl font-bold text-gray-800">King Dashboard Control Map</h3>
-              <p class="text-sm text-gray-500 mt-1">Every major makaug.com flow should have a route, backend source, log trail, owner control, and proof status. Use this map as the King dashboard brain.</p>
-            </div>
-            <a href="/admin/setup-status" class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-800 hover:bg-green-200">Run proof actions</a>
-          </div>
-          <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">
-            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <h4 class="font-black text-gray-900">Listings & moderation</h4>
-              <p class="text-gray-500 mt-1">Create, approve, reject, hide, feature, delete, fraud-review, and inspect every listing.</p>
-              <div class="mt-3 flex flex-wrap gap-2">
-                <a href="/admin/moderation" class="text-xs font-bold text-green-700">Pending review</a>
-                <a href="/admin/listings" class="text-xs font-bold text-green-700">All listings</a>
-                <a href="/admin/fraud" class="text-xs font-bold text-green-700">Fraud reports</a>
-              </div>
-            </div>
-            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <h4 class="font-black text-gray-900">Accounts, roles & field agents</h4>
-              <p class="text-gray-500 mt-1">Users, brokers, field-agent ID/PIN setup, account status, contracts, outreach, and data protection.</p>
-              <div class="mt-3 flex flex-wrap gap-2">
-                <a href="/admin/accounts" class="text-xs font-bold text-blue-700">Accounts</a>
-                <a href="/admin/field-agents" class="text-xs font-bold text-blue-700">Field agents</a>
-                <a href="/admin/data-protection" class="text-xs font-bold text-blue-700">Data protection</a>
-              </div>
-            </div>
-            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <h4 class="font-black text-gray-900">CRM, leads & demand</h4>
-              <p class="text-gray-500 mt-1">Property needs, no-results demand, saved alerts, enquiries, viewings, callbacks, mortgage, help, careers, and fraud follow-up.</p>
-              <div class="mt-3 flex flex-wrap gap-2">
-                <a href="/admin/crm" class="text-xs font-bold text-green-700">CRM</a>
-                <a href="/admin/property-needs" class="text-xs font-bold text-green-700">Property needs</a>
-                <a href="/admin/viewings" class="text-xs font-bold text-green-700">Viewings</a>
-                <a href="/admin/callbacks" class="text-xs font-bold text-green-700">Callbacks</a>
-              </div>
-            </div>
-            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <h4 class="font-black text-gray-900">WhatsApp AI & conversations</h4>
-              <p class="text-gray-500 mt-1">Conversation logs, language guardrails, shared-location search, human handoff, and owner/broker follow-up.</p>
-              <div class="mt-3 flex flex-wrap gap-2">
-                <a href="/admin/whatsapp-inbox" class="text-xs font-bold text-green-700">Inbox</a>
-                <a href="/admin/language" class="text-xs font-bold text-green-700">Language status</a>
-                <a href="/admin/location" class="text-xs font-bold text-green-700">Location searches</a>
-              </div>
-            </div>
-            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <h4 class="font-black text-gray-900">Advertising, payments & revenue</h4>
-              <p class="text-gray-500 mt-1">Ad packages, campaign builder, placement controls, invoices, payment links, manual payments, and revenue reporting.</p>
-              <div class="mt-3 flex flex-wrap gap-2">
-                <a href="/admin/advertising" class="text-xs font-bold text-amber-700">Advertising</a>
-                <a href="/admin/payments" class="text-xs font-bold text-amber-700">Payments</a>
-                <a href="/admin/revenue" class="text-xs font-bold text-amber-700">Revenue</a>
-              </div>
-            </div>
-            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <h4 class="font-black text-gray-900">Providers, language, location & proof</h4>
-              <p class="text-gray-500 mt-1">Email, SMS, WhatsApp, OpenAI, maps, payments, migrations, route probes, click probes, performance, missing translations, and how-to videos.</p>
-              <div class="mt-3 flex flex-wrap gap-2">
-                <a href="/admin/setup-status" class="text-xs font-bold text-green-700">Setup status</a>
-                <a href="/admin/providers" class="text-xs font-bold text-green-700">Providers</a>
-                <a href="/admin/content-i18n" class="text-xs font-bold text-green-700">Translations</a>
-                <a href="/admin/how-to-videos" class="text-xs font-bold text-green-700">Videos</a>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="admin-launch-control" class="hidden bg-white border border-amber-100 rounded-2xl p-5">
-          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
-            <div>
-              <h3 class="text-xl font-bold text-gray-800">Launch Control</h3>
-              <p class="text-sm text-gray-500 mt-1">CTA health, public route rendering, performance probes, and launch-readiness docs for go-live checks.</p>
-            </div>
-            <span class="text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-800">Admin only</span>
-          </div>
-          <div class="grid md:grid-cols-3 gap-3 text-sm">
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Auth Drawer Status</strong><br><span class="text-gray-500">Public Sign In opens the makaug auth drawer; <code>/login</code> is a clean fallback route.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>CTA Health</strong><br><span class="text-gray-500">Run <code>npm run probe:click-actions</code>; header free-listing CTA, Sign In drawer, and footer routes are checked.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Performance Health</strong><br><span class="text-gray-500">Run <code>npm run probe:performance</code> to verify route speed, console errors, and unexpected map/chatbot loading.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Route Health</strong><br><span class="text-gray-500">Run public HTML and browser route probes before launch.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Mortgage Calculator</strong><br><span class="text-gray-500">Professional repayment calculator status is covered by go-live tests and public route probes.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Owner Actions Required</strong><br><span class="text-gray-500">Confirm provider keys for maps, WhatsApp, email, SMS, and payments before live traffic ramps up.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Public Route Health</strong><br><span class="text-gray-500">Homepage, sale, rent, student, land, commercial, brokers, listing, help, safety, and content routes are probe-ready.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Email / Notification Health</strong><br><span class="text-gray-500">Listing, help, fraud, OTP, saved search, viewing, callback, advertiser, and payment events are logged for admin review.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>WhatsApp Health</strong><br><span class="text-gray-500">WhatsApp contact links include source context and provider-missing states are logged safely.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Listings Pending Review</strong><br><span class="text-gray-500">New submissions include a reference and appear in the protected review queue.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Saved-search Demand</strong><br><span class="text-gray-500">Saved searches and alerts feed admin demand intelligence.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>How-to Video Status</strong><br><span class="text-gray-500">10 video slots are configured; add YouTube IDs when published.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Content / i18n Status</strong><br><span class="text-gray-500">English go-live content is visible; missing translations are tracked in the content audit.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Payment Status</strong><br><span class="text-gray-500">Payment links, manual marking, invoices, and provider fallback states are available in advertising controls.</span></div>
-          </div>
-          <div class="mt-4 rounded-2xl border border-green-100 bg-green-50 p-4" data-admin-preview-links="1">
-            <div class="text-sm font-black text-green-950">Admin preview mode — read only</div>
-            <p class="text-xs text-green-800 mt-1">Super admins can inspect dashboard shells without using a universal password or silently impersonating users. Preview actions must be audited.</p>
-            <div class="mt-3 flex flex-wrap gap-2">
-              <a href="/dashboard?admin_preview=1" class="border border-green-200 bg-white text-green-800 rounded-xl px-3 py-2 text-xs font-bold">Preview property seeker dashboard</a>
-              <a href="/student-dashboard?admin_preview=1" class="border border-green-200 bg-white text-green-800 rounded-xl px-3 py-2 text-xs font-bold">Preview student dashboard</a>
-              <a href="/broker-dashboard?admin_preview=1" class="border border-green-200 bg-white text-green-800 rounded-xl px-3 py-2 text-xs font-bold">Preview broker dashboard</a>
-              <a href="/field-agent-dashboard?admin_preview=1" class="border border-green-200 bg-white text-green-800 rounded-xl px-3 py-2 text-xs font-bold">Preview field agent dashboard</a>
-              <a href="/advertiser-dashboard?admin_preview=1" class="border border-green-200 bg-white text-green-800 rounded-xl px-3 py-2 text-xs font-bold">Preview advertiser dashboard</a>
-            </div>
-          </div>
-          <div class="mt-4 flex flex-wrap gap-2">
-            <a href="/admin/setup-status" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-2 text-sm font-semibold">Owner Setup Status</a>
-            <a href="/admin/docs" class="bg-gray-900 hover:bg-gray-800 text-white rounded-xl px-4 py-2 text-sm font-semibold">View Admin Docs</a>
-            <a href="/admin/notifications" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-semibold">Notification Failures</a>
-            <a href="/admin/emails" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-semibold">Email Logs</a>
-          </div>
-        </div>
-
-        <div class="bg-white border border-gray-200 rounded-2xl p-5">
-          <h3 class="text-lg font-bold text-gray-800 mb-2">Admin API Key (optional)</h3>
-          <p class="text-sm text-gray-500 mb-3">
-            Signed-in admins load live moderation data automatically. Paste <code>ADMIN_API_KEY</code> only as a fallback.
-          </p>
-          <div class="grid sm:grid-cols-[1fr,180px] gap-2">
-            <input id="admin-api-key" type="password" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Paste ADMIN_API_KEY">
-            <button onclick="saveAdminApiKeyAndRefresh()" class="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Save & Refresh</button>
-          </div>
-          <p id="admin-summary-note" class="text-xs text-gray-500 mt-2">Data source: local browser data.</p>
-        </div>
-
-        <div id="admin-crm-shell" class="hidden bg-white border border-gray-200 rounded-2xl p-5">
-          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
-            <div>
-              <h3 class="text-xl font-bold text-gray-800">CRM Lead Centre</h3>
-              <p class="text-sm text-gray-500 mt-1">A protected control area for enquiries, missed WhatsApp calls, WhatsApp leads, property needs, viewings, callbacks, mortgage leads, student demand, advertiser leads, and follow-up tasks.</p>
-            </div>
-            <span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">Admin only</span>
-          </div>
-          <div class="grid md:grid-cols-3 gap-3 text-sm">
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Lead Overview</strong><br><span class="text-gray-500">Total, hot, unassigned, overdue, and high-value leads.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Lead Pipeline</strong><br><span class="text-gray-500">New, contacted, qualified, viewing booked, won, lost, dormant, and spam.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Lead Table</strong><br><span class="text-gray-500">Filter by source, category, location, status, assignee, and SLA.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Follow-up Tasks</strong><br><span class="text-gray-500">Calls, WhatsApp, email, viewing, callback, and admin notes.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Demand Intelligence</strong><br><span class="text-gray-500">No-results demand, saved searches, high-demand areas, campus demand, and supply gaps.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Revenue Opportunities</strong><br><span class="text-gray-500">Mortgage, advertiser, student, broker, land/title, and commercial opportunities.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>WhatsApp Lead Sources</strong><br><span class="text-gray-500">Missed calls, listing card/detail clicks, no-results help, student requests, and routed conversations.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Mortgage Leads</strong><br><span class="text-gray-500">Requests from listing mortgage widgets, mortgage page, WhatsApp, and callbacks.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Advertiser Leads</strong><br><span class="text-gray-500">Advertiser signup, campaign requests, payments, and package interest.</span></div>
-          </div>
-          <div class="mt-5 rounded-2xl border border-green-100 bg-green-50/40 p-4">
-            <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
-              <div>
-                <h4 class="text-lg font-black text-gray-900">Mortgage Leads</h4>
-                <p class="text-xs text-gray-600 mt-1">Bank callback and mortgage-page enquiries from the dedicated mortgage queue.</p>
-              </div>
-              <a href="/admin/mortgage" class="text-xs font-black text-green-700 hover:underline">Open Mortgage Leads</a>
-            </div>
-            <div id="admin-mortgage-leads-table" class="space-y-3">
-              <div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">Refresh the admin dashboard to load mortgage leads.</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-white border border-green-100 rounded-2xl p-5">
-          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
-            <div>
-              <h3 class="text-xl font-bold text-gray-800">makaug AI Data Assistant</h3>
-              <p class="text-xs text-gray-500 mt-1">Quick answers from live admin, account, engagement, and listing data.</p>
-            </div>
-            <span id="admin-ai-source" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700">Ready</span>
-          </div>
-          <div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
-            <div class="rounded-xl border border-blue-200 bg-blue-50 p-3">
-              <div class="text-xs uppercase tracking-wide text-blue-700 font-bold">Live Visitors · 30m</div>
-              <div id="admin-ai-visitors-live" class="text-2xl font-black text-gray-900 mt-1">0</div>
-            </div>
-            <div class="rounded-xl border border-green-200 bg-green-50 p-3">
-              <div class="text-xs uppercase tracking-wide text-green-700 font-bold">Visitors Today</div>
-              <div id="admin-ai-visitors-today" class="text-2xl font-black text-gray-900 mt-1">0</div>
-            </div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Last 48h Views</div>
-              <div id="admin-ai-views-48h" class="text-2xl font-black text-gray-900 mt-1">0</div>
-            </div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Last 48h Visitors</div>
-              <div id="admin-ai-visitors-48h" class="text-2xl font-black text-gray-900 mt-1">0</div>
-            </div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Weekly Tips</div>
-              <div id="admin-ai-weekly-tips" class="text-2xl font-black text-gray-900 mt-1">0</div>
-            </div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Top Area</div>
-              <div id="admin-ai-top-area" class="text-lg font-black text-gray-900 mt-1 truncate">-</div>
-            </div>
-          </div>
-          <div class="mb-4 rounded-xl border border-gray-200 bg-white p-3">
-            <div class="flex items-center justify-between gap-3 mb-2">
-              <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Traffic sources · last 48h</div>
-              <div class="text-[11px] text-gray-500">Source / medium</div>
-            </div>
-            <div id="admin-ai-traffic-sources" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm text-gray-700">
-              <div class="text-gray-500">Waiting for live analytics.</div>
-            </div>
-          </div>
-          <div class="grid md:grid-cols-[1fr,160px,230px] gap-2">
-            <input id="admin-ai-question" class="w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm" placeholder="Ask: how many people visited in the last two days?">
-            <button type="button" onclick="askAdminAiAssistant()" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Ask</button>
-            <button type="button" onclick="runManagingDirectorAgent()" class="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Run Managing Director</button>
-          </div>
-          <div id="admin-ai-answer" class="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">Refresh the admin dashboard to load live insight data.</div>
-          <div id="admin-ai-ceo-panel" class="mt-4 rounded-2xl border border-green-100 bg-white p-4">
-            <div class="flex items-start justify-between gap-3 flex-wrap">
-              <div>
-                <p class="text-xs font-black uppercase tracking-wide text-green-700">Founder-controlled AI CEO</p>
-                <h4 class="mt-1 text-lg font-black text-gray-900">Morning report, commands, approvals, and kill switches</h4>
-                <p class="mt-1 text-xs text-gray-500">The AI CEO can inspect, draft, report, and route work. Founder approval is required before listings go live, ads spend, public posts, bulk outreach, data deletion, or access changes.</p>
-              </div>
-              <span id="admin-ai-ceo-status-pill" class="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-700">Not loaded</span>
-            </div>
-            <div id="admin-ai-ceo-kill-switches" class="mt-3 flex flex-wrap gap-2 text-xs"></div>
-            <div class="mt-4 grid md:grid-cols-[1fr,180px,180px] gap-2">
-              <input id="admin-ai-ceo-command" class="w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm" placeholder="Ask the AI CEO: morning report, revenue, leads, WhatsApp health, field agents...">
-              <button type="button" onclick="askAiCeoCommand()" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Ask AI CEO</button>
-              <button type="button" onclick="runAiCeoMorningReport()" class="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Morning report</button>
-            </div>
-            <div id="admin-ai-ceo-output" class="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">Load the dashboard, then ask the AI CEO for the latest operating view.</div>
-            <div id="admin-ai-ceo-approvals" class="mt-3 grid md:grid-cols-2 gap-3 text-sm"></div>
-          </div>
-          <div id="admin-ai-agent-results" class="mt-3 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-green-900">Managing Director findings will appear here after a run.</div>
-        </div>
-
-        <div class="hidden grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Total Listings</div>
-            <div id="admin-stat-total-listings" class="text-3xl font-black text-gray-900 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Pending Review</div>
-            <div id="admin-stat-pending" class="text-3xl font-black text-amber-600 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Approved Listings</div>
-            <div id="admin-stat-approved" class="text-3xl font-black text-green-700 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Rejected Listings</div>
-            <div id="admin-stat-rejected" class="text-3xl font-black text-red-600 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Hidden Listings</div>
-            <div id="admin-stat-hidden" class="text-3xl font-black text-yellow-600 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Deleted Listings</div>
-            <div id="admin-stat-deleted" class="text-3xl font-black text-gray-700 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Brokers</div>
-            <div id="admin-stat-agents" class="text-3xl font-black text-gray-900 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Users</div>
-            <div id="admin-stat-users" class="text-3xl font-black text-gray-900 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Total Property Views</div>
-            <div id="admin-stat-total-views" class="text-3xl font-black text-gray-900 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Total Saves</div>
-            <div id="admin-stat-total-saves" class="text-3xl font-black text-gray-900 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Broker Profile Views</div>
-            <div id="admin-stat-broker-views" class="text-3xl font-black text-gray-900 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Private Listings</div>
-            <div id="admin-stat-private" class="text-3xl font-black text-gray-900 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Broker Listings</div>
-            <div id="admin-stat-agent-listings" class="text-3xl font-black text-gray-900 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Student Discoverable</div>
-            <div id="admin-stat-students" class="text-3xl font-black text-gray-900 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Approval Rate</div>
-            <div id="admin-stat-approval-rate" class="text-3xl font-black text-green-700 mt-1">0%</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Rejection Rate</div>
-            <div id="admin-stat-rejection-rate" class="text-3xl font-black text-red-600 mt-1">0%</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Avg Views / Listing</div>
-            <div id="admin-stat-avg-views" class="text-3xl font-black text-gray-900 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Save-to-View Ratio</div>
-            <div id="admin-stat-save-view-ratio" class="text-3xl font-black text-gray-900 mt-1">0%</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Verified Brokers</div>
-            <div id="admin-stat-registered-agents" class="text-3xl font-black text-green-700 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Broker Reviews Needed</div>
-            <div id="admin-stat-not-registered-agents" class="text-3xl font-black text-amber-600 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Ad Leads</div>
-            <div id="admin-stat-ad-leads" class="text-3xl font-black text-emerald-700 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Live Ads</div>
-            <div id="admin-stat-live-ads" class="text-3xl font-black text-fuchsia-700 mt-1">0</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Ad Revenue</div>
-            <div id="admin-stat-ad-revenue" class="text-3xl font-black text-gray-900 mt-1">UGX 0</div>
           </div>
         </div>
 
         <div id="admin-workflow-tabs" class="bg-white border border-gray-200 rounded-2xl p-3 sticky top-20 z-20 shadow-sm">
           <div class="flex gap-2 overflow-x-auto">
             <button type="button" data-admin-tab-button="review" onclick="setAdminWorkflowTab('review')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Review Queue</button>
-            <button type="button" data-admin-tab-button="student-sweep" onclick="setAdminWorkflowTab('student-sweep')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Students Sweep</button>
             <button type="button" data-admin-tab-button="youtube-sweep" onclick="setAdminWorkflowTab('youtube-sweep')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">YouTube Sweep</button>
             <button type="button" data-admin-tab-button="revenue" onclick="setAdminWorkflowTab('revenue')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Sales &amp; Revenue</button>
-            <button type="button" data-admin-tab-button="actioned" onclick="setAdminWorkflowTab('actioned')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Rejected / Actioned</button>
             <button type="button" data-admin-tab-button="live" onclick="setAdminWorkflowTab('live')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Live & Featured</button>
             <button type="button" data-admin-tab-button="accounts" onclick="setAdminWorkflowTab('accounts')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Accounts & Outreach</button>
             <button type="button" data-admin-tab-button="staff" onclick="setAdminWorkflowTab('staff')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Staff Ops</button>
-            <button type="button" data-admin-tab-button="field-agents" onclick="setAdminWorkflowTab('field-agents')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Field Agent Control Centre</button>
-            <button type="button" data-admin-tab-button="ads" onclick="setAdminWorkflowTab('ads')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Advertising Desk</button>
             <button type="button" data-admin-tab-button="whatsapp" onclick="setAdminWorkflowTab('whatsapp')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">WhatsApp Inbox</button>
             <button type="button" data-admin-tab-button="agent-reports" onclick="setAdminWorkflowTab('agent-reports')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Agent Reports</button>
             <button type="button" data-admin-tab-button="notifications" onclick="setAdminWorkflowTab('notifications')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Leads & Notifications</button>
             <button type="button" data-admin-tab-button="listings" onclick="setAdminWorkflowTab('listings')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">All Listings</button>
           </div>
-        </div>
-
-        <div id="admin-short-term-king-control" data-admin-tab-panel="review" class="st-scope admin-tab-panel bg-white border border-amber-200 rounded-2xl p-5">
-          <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
-            <div>
-              <h3 class="text-lg font-bold text-gray-800"><i class="fas fa-crown text-amber-500 mr-1"></i>Short Term &mdash; King review</h3>
-              <p class="text-xs text-gray-500 mt-1">The final gate. A short stay only reaches the public site from here. Approving needs every hard check ticked, the facts box confirmed, and at least one photo. Overrideable checks can be waived, but write the reason.</p>
-            </div>
-            <button type="button" onclick="window.makaugShortTermDesk &amp;&amp; window.makaugShortTermDesk.load('king','king_review')" class="rounded-xl bg-amber-500 text-white px-4 py-2 text-sm font-black"><i class="fas fa-rotate-right mr-1"></i>Open King queue</button>
-          </div>
-          <div id="admin-short-term-king-queue"><p class="text-sm text-gray-500">Open this desk to load the listings waiting on King review.</p></div>
         </div>
 
         <div id="admin-review-queue-control" data-admin-tab-panel="review" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
@@ -8901,16 +8450,12 @@
               <div class="text-xs text-gray-500 mt-1">Review checklist before approval</div>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
-              <button id="admin-seed-bakaima-listings-btn" type="button" onclick="adminSeedBakaimaAuthorisedListings()" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-bold">Create Bakaima Listings</button>
-              <button id="admin-seed-carnelian-listings-btn" type="button" onclick="adminSeedCarnelianAuthorisedListings()" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">Create Carnelian Listings</button>
-              <button id="admin-seed-social-search-listings-btn" type="button" onclick="adminSeedSocialSearchAuthorisedListings()" class="border border-sky-200 text-sky-700 hover:bg-sky-50 px-3 py-2 rounded-lg text-xs font-bold">Queue Found-Online Properties</button>
               <button id="admin-sweep-tiktok-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('tiktok')" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep TikTok Hashtags</button>
               <button id="admin-sweep-student-housing-btn" type="button" onclick="adminSweepStudentHousingPosts()" title="Student Housing Sweep" class="border border-purple-200 text-purple-700 hover:bg-purple-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep Student Housing</button>
               <button id="admin-import-tiktok-posts-btn" type="button" onclick="adminImportTikTokExactPosts()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Import TikTok Videos</button>
               <button id="admin-import-youtube-posts-btn" type="button" onclick="adminImportYouTubeExactPosts()" class="border border-red-300 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Import YouTube Videos</button>
               <button id="admin-sweep-youtube-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('youtube')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep YouTube Videos</button>
               <button id="admin-sweep-x-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('x')" class="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep X Posts</button>
-              <button id="admin-x-drip-btn" type="button" onclick="adminLoadXSourceDrip()" class="border border-slate-900 text-slate-900 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">X Drip Crawler</button>
               <button id="admin-sweep-all-social-posts-btn" type="button" onclick="adminSweepAllSocialPosts()" class="border border-gray-900 text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep All Social Sources</button>
               <button id="admin-copy-social-capture-helper-btn" type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Set Up Capture Bookmark</button>
               <button id="admin-import-exact-social-links-btn" type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Paste Captured Links</button>
@@ -8918,11 +8463,23 @@
               <button id="admin-seed-source-registry-btn" type="button" onclick="adminSeedPropertySourceRegistry()" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-bold">Build 30,000 Source Pages</button>
               <button id="admin-load-source-registry-btn" type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">View Source Database</button>
               <button id="admin-harvest-summary-btn" type="button" onclick="adminLoadHarvestSummary()" class="border border-emerald-300 text-emerald-800 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-bold">Harvest Coverage</button>
+              <a id="admin-staff-source-intake-link" href="/staff-dashboard#staff-source-panel" onclick="return kingOpenStaffDesk(event, 'source')" class="border border-violet-300 text-violet-800 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Source intake (staff desk)</a>
               <a id="admin-source-coverage-link" href="/staff-dashboard#staff-source-coverage-status" class="border border-violet-300 text-violet-800 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Exhaustive 30-day Coverage</a>
               <button id="admin-harvest-next-creator-btn" type="button" onclick="adminLoadNextHarvestCreator()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Harvest next creator</button>
               <button type="button" onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Refresh Queue</button>
             </div>
           </div>
+        <section id="admin-video-caption-conflicts" class="mb-4 rounded-xl border border-red-100 bg-red-50/40 p-4">
+          <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h3 class="text-lg font-black text-gray-900">Video caption conflicts</h3>
+              <p class="mt-1 text-sm text-gray-500">Listings whose burned-in video text disagrees with the caption or the listing. Nothing here changes a listing on its own.</p>
+            </div>
+            <button type="button" onclick="adminLoadVideoCaptionConflicts('admin')" class="rounded-lg border border-red-200 px-3 py-2 text-xs font-black text-red-900">Refresh</button>
+          </div>
+          <div id="admin-video-caption-conflicts-list" class="mt-4 text-sm text-gray-500">No video caption conflicts are waiting.</div>
+        </section>
+
           <div id="admin-found-online-status" class="hidden mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900"></div>
           <div id="admin-source-registry-panel" class="hidden mb-4 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-950"></div>
           <section id="admin-harvest-summary" class="mb-4 rounded-xl border border-emerald-100 bg-white p-3 text-xs text-gray-700">
@@ -8946,60 +8503,7 @@
             </div>
             <div id="admin-harvest-creator-card" class="mt-3">Select Harvest next creator when ready.</div>
           </section>
-          <section id="admin-backlog-recovery-lab" data-backlog-recovery-marker="uganda-review-recovery-proposals-20260811" class="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-xs text-indigo-950">
-            <div class="flex items-start justify-between gap-3 flex-wrap">
-              <div>
-                <div class="font-black text-sm">Review backlog recovery lab</div>
-                <div class="mt-1">Read-only recount and source-backed proposals. It never approves, publishes, or changes a listing. Student rows stay manual.</div>
-              </div>
-              <button type="button" onclick="adminLoadBacklogRecoveryRecount()" class="rounded-lg border border-indigo-300 bg-white px-3 py-2 font-black text-indigo-800">Recount real queue</button>
-            </div>
-            <div class="mt-3 grid gap-2 md:grid-cols-3">
-              <label class="font-bold">Proposal bucket
-                <select id="admin-backlog-recovery-bucket" class="mt-1 w-full rounded-lg border border-indigo-200 bg-white px-3 py-2">
-                  <option value="missing_price">Missing price</option>
-                  <option value="missing_location">Missing canonical location</option>
-                  <option value="junk_title">Hashtag/junk title</option>
-                  <option value="category_ambiguous">Category ambiguous</option>
-                  <option value="district_only">District only</option>
-                  <option value="student">Student (manual only)</option>
-                </select>
-              </label>
-              <label class="font-bold">District-only policy
-                <select id="admin-backlog-recovery-district-policy" class="mt-1 w-full rounded-lg border border-indigo-200 bg-white px-3 py-2">
-                  <option value="hold">Hold for enrichment</option>
-                  <option value="release">Prepare for human review</option>
-                </select>
-              </label>
-              <div class="flex items-end"><button type="button" onclick="adminLoadBacklogRecoverySample()" class="w-full rounded-lg bg-indigo-800 px-3 py-2 font-black text-white">Load 50 proposals</button></div>
-            </div>
-            <div id="admin-backlog-recovery-output" class="mt-3 rounded-lg border border-indigo-100 bg-white p-3">No recount loaded. No business decision has been made for district-only rows.</div>
-          </section>
-          <div id="admin-x-source-drip-panel" class="hidden mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-950"></div>
           <div id="admin-pending-table" class="space-y-3"></div>
-        </div>
-
-        <div id="admin-student-sweep-control" data-admin-tab-panel="student-sweep" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
-          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
-            <div>
-              <h3 class="text-xl font-bold text-gray-800">Student Housing Source Sweep</h3>
-              <p class="text-xs text-gray-500 mt-1">Campus, hostel, student-room, and university accommodation sources for Makerere, Kyambogo, MUBS, UCU, KIU, Nkumba, Ndejje, Kikoni, Wandegeya, Banda, Nakawa, Kansanga, and Mukono.</p>
-            </div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <button id="admin-student-suite-sweep-btn" type="button" onclick="adminSweepStudentHousingPosts()" title="Student Housing Sweep" class="border border-purple-200 text-purple-700 hover:bg-purple-50 px-3 py-2 rounded-lg text-xs font-bold">Run Student Housing Sweep</button>
-              <button type="button" onclick="adminImportYouTubeExactPosts(adminStudentHousingYouTubeQuickPasteExample())" class="border border-red-300 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Paste YouTube Student Videos</button>
-              <button type="button" onclick="adminOpenSocialQuickPastePanel(adminStudentHousingQuickPasteExample())" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Paste Student Links</button>
-              <button type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Set Up Capture Bookmark</button>
-              <button type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-bold">View Source Database</button>
-              <button type="button" onclick="adminSetPendingQueueFilter('student'); setAdminWorkflowTab('review'); adminScrollTo('#admin-pending-table')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Show Student Queue</button>
-            </div>
-          </div>
-          <div class="grid md:grid-cols-3 gap-3 text-xs text-purple-950 mb-4">
-            <div class="rounded-xl border border-purple-100 bg-purple-50 p-3"><strong>1. Find sources</strong><br>TikTok/Facebook/Instagram become capture tasks; YouTube and X can import exact posts when API keys are configured.</div>
-            <div class="rounded-xl border border-purple-100 bg-white p-3"><strong>2. Paste exact links</strong><br>Drop YouTube Shorts/watch URLs, X status URLs, TikTok videos, Facebook posts, or Instagram reels with caption/comment text.</div>
-            <div class="rounded-xl border border-purple-100 bg-white p-3"><strong>3. Queue students</strong><br>Eligible records land in Found Online review with student listing type and student discovery enabled after approval.</div>
-          </div>
-          <div id="admin-student-sweep-status" class="rounded-xl border border-purple-100 bg-purple-50 p-3 text-xs text-purple-950">Run the student sweep or paste exact student source links to preview extracted accommodation records.</div>
         </div>
 
         <div id="admin-youtube-sweep-control" data-admin-tab-panel="youtube-sweep" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
@@ -9025,16 +8529,6 @@
           <div id="admin-youtube-sweep-status" class="rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-950">Sweep YouTube sources or paste exact YouTube videos to preview extracted property records.</div>
         </div>
 
-        <div id="admin-actioned-listings-control" data-admin-tab-panel="actioned" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
-          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
-            <div>
-              <h3 class="text-xl font-bold text-gray-800">Recently Actioned Listings</h3>
-              <p class="text-xs text-gray-500 mt-1">Once approved, rejected, hidden, or deleted, listings move out of Pending and appear here.</p>
-            </div>
-          </div>
-          <div id="admin-actioned-table" class="space-y-3"></div>
-        </div>
-
         <div id="admin-live-followup-control" data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
@@ -9053,7 +8547,7 @@
         <div id="admin-featured-properties-control" data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
-              <h3 class="text-xl font-bold text-gray-800">Featured Properties Control</h3>
+              <h3 class="text-xl font-bold text-gray-800">Featured Properties &amp; Agents</h3>
               <p class="text-xs text-gray-500 mt-1">Choose which live listings appear in the homepage Featured Properties section.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
@@ -9063,17 +8557,16 @@
           </div>
           <div id="admin-featured-rotation-status" class="mb-3"></div>
           <div id="admin-featured-parity-summary"></div>          <div id="admin-featured-listings-table" class="space-y-3"></div>
-        </div>
-
-        <div id="admin-featured-agents-control" data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-featured-agents-control" class="mt-6 border-t border-gray-200 pt-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
-              <h3 class="text-xl font-bold text-gray-800">Featured Agents Control</h3>
+              <h3 class="text-lg font-bold text-gray-800">Featured Agents</h3>
               <p class="text-xs text-gray-500 mt-1">Choose which approved agents appear on the homepage Featured Agents section and review their performance.</p>
             </div>
             <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Agents</button>
           </div>
           <div id="admin-featured-agents-table" class="space-y-3"></div>
+        </div>
         </div>
 
         <div id="admin-people-control" data-admin-tab-panel="accounts" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-4 md:p-5">
@@ -9358,193 +8851,20 @@
           </div>
         </div>
 
-        <div id="admin-field-agent-control" data-admin-tab-panel="field-agents" class="admin-tab-panel bg-white border border-blue-100 rounded-2xl p-5">
+        <div id="admin-advertising-control" data-admin-tab-panel="revenue" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
-              <h3 class="text-xl font-bold text-gray-800">Field Agent Control Centre</h3>
-              <p class="text-xs uppercase tracking-wide font-black text-blue-700 mt-1">King Field Agent Command Centre</p>
-              <p class="text-xs text-gray-500 mt-1">Create Field Agent IDs, control notice-board copy, assign territories, track listings, manage payouts, and keep the field team trained from one King tab.</p>
+              <h3 class="text-xl font-bold text-gray-800">Ad placements &amp; revenue products</h3>
+              <p class="text-xs text-gray-500 mt-1">Price, switch on, or pause each ad slot, and the prepared revenue switches.</p>
             </div>
-            <button onclick="renderAdminDashboard()" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Field Agents</button>
+            <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh</button>
           </div>
-
-          <div id="admin-field-agent-performance-board" class="grid sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-5 text-sm">
-            <button type="button" onclick="adminOpenFieldAgentKpi('agents')" class="text-left rounded-2xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-4 transition"><span class="text-xs font-black text-blue-700 uppercase">Total agents</span><div id="admin-field-agent-total" class="text-2xl font-black text-blue-950 mt-1">0</div><span class="mt-2 inline-flex text-[11px] font-bold text-blue-700">Open all agents</span></button>
-            <button type="button" onclick="adminOpenFieldAgentKpi('active')" class="text-left rounded-2xl border border-green-100 bg-green-50 hover:bg-white hover:border-green-300 p-4 transition"><span class="text-xs font-black text-green-700 uppercase">Active</span><div id="admin-field-agent-active" class="text-2xl font-black text-green-950 mt-1">0</div><span class="mt-2 inline-flex text-[11px] font-bold text-green-700">Open active agents</span></button>
-            <button type="button" onclick="adminOpenFieldAgentKpi('pending')" class="text-left rounded-2xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-4 transition"><span class="text-xs font-black text-amber-700 uppercase">Pending listings</span><div id="admin-field-agent-pending" class="text-2xl font-black text-amber-950 mt-1">0</div><span class="mt-2 inline-flex text-[11px] font-bold text-amber-700">Open pending</span></button>
-            <button type="button" onclick="adminOpenFieldAgentKpi('approved')" class="text-left rounded-2xl border border-emerald-100 bg-emerald-50 hover:bg-white hover:border-emerald-300 p-4 transition"><span class="text-xs font-black text-emerald-700 uppercase">Accepted listings</span><div id="admin-field-agent-approved" class="text-2xl font-black text-emerald-950 mt-1">0</div><span class="mt-2 inline-flex text-[11px] font-bold text-emerald-700">Open accepted</span></button>
-            <button type="button" onclick="adminOpenFieldAgentKpi('rejected')" class="text-left rounded-2xl border border-red-100 bg-red-50 hover:bg-white hover:border-red-300 p-4 transition"><span class="text-xs font-black text-red-700 uppercase">Rejected listings</span><div id="admin-field-agent-rejected" class="text-2xl font-black text-red-950 mt-1">0</div><span class="mt-2 inline-flex text-[11px] font-bold text-red-700">Open rejected</span></button>
-            <button type="button" onclick="adminOpenFieldAgentKpi('payouts')" class="text-left rounded-2xl border border-indigo-100 bg-indigo-50 hover:bg-white hover:border-indigo-300 p-4 transition"><span class="text-xs font-black text-indigo-700 uppercase">Friday pay due</span><div id="admin-field-agent-weekly-pay" class="text-2xl font-black text-indigo-950 mt-1">USh 0</div><span class="mt-2 inline-flex text-[11px] font-bold text-indigo-700">Open payday</span></button>
-          </div>
-          <div id="admin-field-agent-count-explainer" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900 font-semibold mb-5">
-            Total agents counts people. Pending, accepted, rejected, and Friday pay due count the property listings linked to those Field Agents. Use the directory below to open each agent and see the exact properties behind the totals.
-          </div>
-          <div id="admin-field-agent-kpi-panel" class="hidden mb-5"></div>
-          <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4 mb-5">
-            <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
-              <div>
-                <h4 class="text-sm font-black text-blue-950">Regional performance</h4>
-                <p class="text-xs text-blue-800 mt-1">Territory ranking, reach, accepted listings, and Friday pay due across every field agent in the backend feed.</p>
-              </div>
-              <span class="text-[11px] font-bold rounded-full bg-white text-blue-700 border border-blue-100 px-2 py-1">Accepted × payout/listing</span>
-            </div>
-            <div id="admin-field-agent-region-board" class="grid md:grid-cols-2 xl:grid-cols-4 gap-3 text-xs"></div>
-          </div>
-
-          <div class="grid xl:grid-cols-[0.95fr,1.05fr] gap-5">
-            <div id="admin-field-agent-notice-control" class="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-              <form id="admin-field-agent-provision-form" onsubmit="adminProvisionFieldAgent(event)" class="rounded-2xl border border-blue-100 bg-white p-4 space-y-3">
-                <div class="flex items-start justify-between gap-3 flex-wrap">
-                  <div>
-                    <h4 class="text-lg font-black text-blue-950">Create Field Agent ID + PIN</h4>
-                    <p class="text-xs text-gray-500 mt-0.5">Field Agent ID is auto-generated and saved. The PIN is hashed, never shown after save, and sent by email only when an email provider is configured.</p>
-                  </div>
-                  <span class="text-[11px] font-bold rounded-full bg-blue-100 text-blue-700 px-2 py-1">King only</span>
-                </div>
-                <div class="grid sm:grid-cols-2 gap-2">
-                  <input id="admin-fa-first-name" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="First name" required>
-                  <input id="admin-fa-last-name" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Surname" required>
-                  <input id="admin-fa-email" type="email" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Email address" required>
-                  <input id="admin-fa-id-number" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="ID number" required>
-                  <input id="admin-fa-phone" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Phone, e.g. +256701123456" required>
-                  <input id="admin-fa-whatsapp" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="WhatsApp, e.g. +256701123456" required>
-	                  <input id="admin-fa-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="4-digit PIN" required>
-	                  <input id="admin-fa-territory" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Territory, e.g. Kampala">
-	                  <input id="admin-fa-payout-rate" inputmode="numeric" value="5000" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Payout per approved listing">
-	                </div>
-	                <div class="grid sm:grid-cols-2 gap-2 text-xs">
-	                  <label class="rounded-xl border border-blue-100 bg-blue-50 p-3 font-semibold text-blue-950">
-	                    National ID photo / document
-	                    <input id="admin-fa-id-document-file" type="file" accept="image/*,.pdf,.doc,.docx" class="mt-2 block w-full text-xs text-blue-900">
-	                    <span class="block mt-1 text-[11px] text-blue-700">Admin-private. Not shown on the Field Agent dashboard.</span>
-	                  </label>
-	                  <label class="rounded-xl border border-blue-100 bg-blue-50 p-3 font-semibold text-blue-950">
-	                    Signed contract
-	                    <input id="admin-fa-contract-file" type="file" accept=".pdf,.doc,.docx,image/*" class="mt-2 block w-full text-xs text-blue-900">
-	                    <span class="block mt-1 text-[11px] text-blue-700">Visible to this Field Agent from their dashboard.</span>
-	                  </label>
-	                </div>
-	                <div id="admin-fa-next-code" class="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800 font-semibold">Next Field Agent ID is generated automatically on save.</div>
-	                <textarea id="admin-fa-notes" class="w-full border border-blue-100 rounded-xl px-3 py-2 text-sm" rows="3" placeholder="Internal notes or onboarding context"></textarea>
-	                <div class="flex items-center gap-2 flex-wrap">
-                  <button id="admin-fa-provision-btn" type="submit" class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Save Field Agent</button>
-                  <p id="admin-fa-provision-result" class="text-xs text-gray-500">Use full phone/WhatsApp numbers with country code. The agent receives their ID by WhatsApp and their PIN by email when providers are configured.</p>
-                </div>
-              </form>
-            </div>
-
-            <div class="space-y-5">
-              <div id="admin-field-agent-payout-control" class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
-                <h4 class="text-lg font-black text-amber-950">Payout & payment control</h4>
-                <p class="text-xs text-amber-900 mt-1">Default payout is USh 5,000 per approved listing. Friday payout review uses the previous week’s approved listing count and downloadable PDF payout slips.</p>
-              </div>
-              <div id="admin-field-agent-broadcast-control" class="rounded-2xl border border-green-100 bg-green-50 p-4">
-                <h4 class="text-lg font-black text-green-950">Broadcast & dashboard banner</h4>
-                <p class="text-xs text-green-900 mt-1">Send a message to all agents or one territory, and publish a dashboard banner for targeted field instructions.</p>
-                <form id="admin-field-agent-broadcast-form" onsubmit="adminBroadcastFieldAgents(event)" class="mt-3 space-y-2">
-                  <div class="grid sm:grid-cols-2 gap-2">
-                    <input id="admin-fa-broadcast-territory" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Territory, e.g. Kampala (blank = all)">
-                    <select id="admin-fa-broadcast-channel" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white">
-                      <option value="whatsapp">WhatsApp</option>
-                      <option value="email">Email</option>
-                      <option value="both">WhatsApp + email</option>
-                      <option value="banner">Banner only</option>
-                    </select>
-                  </div>
-                  <textarea id="admin-fa-broadcast-message" class="w-full border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" rows="3" placeholder="Message to send to selected field agents"></textarea>
-                  <textarea id="admin-fa-banner-message" class="w-full border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" rows="2" placeholder="Dashboard banner message shown to selected field agents"></textarea>
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <button id="admin-fa-broadcast-btn" type="submit" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Send / publish</button>
-                    <p id="admin-fa-broadcast-result" class="text-xs text-green-900">Broadcasts create email, WhatsApp, notification, and audit logs.</p>
-                  </div>
-                </form>
-              </div>
-              <div id="admin-field-agent-training-control" class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                <h4 class="text-lg font-black text-gray-900">Resources preview</h4>
-                <p class="text-xs text-gray-600 mt-1">Contracts, welcome pack, FAQ, and training documents remain available to preview and download from the Field Agent dashboard.</p>
-                <div class="mt-3 flex flex-wrap gap-2 text-xs font-bold">
-                  <a href="/assets/docs/field-agent/makaug-field-agent-welcome-pack.pptx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-800">Welcome pack</a>
-                  <a href="/assets/docs/field-agent/makaug-field-agent-contract.docx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-800">Contract</a>
-                  <a href="/assets/docs/field-agent/makaug-field-agent-training-deck.pptx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-800">Training deck</a>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
-            <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
-              <div>
-                <h4 class="text-lg font-bold text-gray-800">Field Agent Directory</h4>
-                <p class="text-xs text-gray-500 mt-1">See every backend field agent. The row buttons open the exact accepted, pending, and rejected property records linked to that agent.</p>
-              </div>
-	              <span class="text-[11px] font-bold px-2 py-1 rounded bg-blue-100 text-blue-700">Backend fed</span>
-	            </div>
-	            <div id="admin-field-agent-directory-summary" class="mb-3"></div>
-	            <div id="admin-field-agent-detail-panel" class="hidden mb-4"></div>
-	            <div id="admin-field-agents-table" class="space-y-3"></div>
-	          </div>
-	        </div>
-
-        <div id="admin-advertising-control" data-admin-tab-panel="ads" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
-          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
-            <div>
-              <h3 class="text-xl font-bold text-gray-800">Advertising Inquiries</h3>
-              <p class="text-xs text-gray-500 mt-1">Lead pipeline, package fit, payment status, campaign dates, and revenue tracking.</p>
-            </div>
-            <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Ads</button>
-          </div>
-          <div id="admin-advertising-overview" class="grid sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-5"></div>
-          <div class="grid xl:grid-cols-[0.95fr,1.05fr] gap-5 mb-5">
-            <div class="border border-green-100 bg-green-50 rounded-2xl p-4">
-              <h4 class="text-lg font-bold text-gray-800">Campaign Builder</h4>
-              <p class="text-xs text-gray-500 mt-1">Create a bespoke ad, choose placements, set price, approval stage, and reporting cadence.</p>
-              <div class="grid sm:grid-cols-2 gap-2 mt-3">
-                <input id="admin-ad-builder-advertiser" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Advertiser / brand">
-                <input id="admin-ad-builder-campaign" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Campaign name">
-                <input id="admin-ad-builder-headline" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Ad headline">
-                <input id="admin-ad-builder-cta" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="CTA, e.g. Book viewing">
-                <input id="admin-ad-builder-image" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white sm:col-span-2" placeholder="Creative / image preview URL">
-                <input id="admin-ad-builder-url" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white sm:col-span-2" placeholder="Click-through URL">
-                <input id="admin-ad-builder-quote" type="number" min="0" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Quoted UGX">
-                <select id="admin-ad-builder-report" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white">
-                  <option value="weekly">Weekly reports</option>
-                  <option value="daily">Daily reports</option>
-                  <option value="post_campaign">Post-campaign report only</option>
-                  <option value="dashboard">Paid live dashboard</option>
-                </select>
-                <textarea id="admin-ad-builder-body" rows="3" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white sm:col-span-2" placeholder="Short body copy / offer"></textarea>
-              </div>
-              <div id="admin-ad-builder-placements" class="grid sm:grid-cols-2 gap-2 mt-3 text-xs"></div>
-              <button onclick="adminCreateAdCampaignFromBuilder()" class="mt-3 w-full bg-green-700 hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold">Create Campaign Draft</button>
-            </div>
-            <div class="border border-gray-200 bg-white rounded-2xl p-4">
+          <div class="border border-gray-200 bg-white rounded-2xl p-4 mb-5">
               <h4 class="text-lg font-bold text-gray-800">Placement Control Room</h4>
               <p class="text-xs text-gray-500 mt-1">Every ad slot can be priced, activated, paused, and sold from here.</p>
               <div id="admin-ad-placements-grid" class="grid sm:grid-cols-2 gap-3 mt-3"></div>
             </div>
-          </div>
-          <div class="grid xl:grid-cols-[1fr,0.85fr] gap-5">
-            <div>
-              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
-                <h4 class="text-lg font-bold text-gray-800">New Advertiser Leads</h4>
-                <span class="text-xs text-gray-500">Create a campaign from an inquiry, then mark paid/live.</span>
-              </div>
-              <div id="admin-ad-inquiries-table" class="space-y-3"></div>
-            </div>
-            <div>
-              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
-                <h4 class="text-lg font-bold text-gray-800">Campaign Control</h4>
-                <span class="text-xs text-gray-500">Manual payment reference, live dates, and performance.</span>
-              </div>
-              <div id="admin-ad-campaigns-table" class="space-y-3"></div>
-            </div>
-          </div>
-          <div class="mt-5 border border-gray-200 bg-gray-50 rounded-2xl p-4">
-            <h4 class="text-lg font-bold text-gray-800">Package Menu</h4>
-            <p class="text-xs text-gray-500 mt-1">Default rate card. Live placement prices are now controlled above so pricing changes can be made without code edits.</p>
-            <div id="admin-ad-packages-grid" class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-4"></div>
-          </div>
-          <div class="mt-5 border border-emerald-100 bg-emerald-50 rounded-2xl p-4" data-release-marker="monetization-spine-v1-20260715">
+          <div class="border border-emerald-100 bg-emerald-50 rounded-2xl p-4" data-release-marker="monetization-spine-v1-20260715">
             <div class="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <h4 class="text-lg font-bold text-gray-800">Revenue Products</h4>
@@ -9676,7 +8996,7 @@
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Lead, Email & Notification Control</h3>
-              <p class="text-xs text-gray-500 mt-1">Track CRM leads, failed follow-ups, email logs, WhatsApp logs, and missed operational tasks from one admin view.</p>
+              <p class="text-xs text-gray-500 mt-1">Track CRM leads, follow-up tasks, and message logs from one admin view.</p>
             </div>
             <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Logs</button>
           </div>
@@ -9690,39 +9010,7 @@
             </div>
             <div id="admin-demand-gaps"></div>
           </div>
-          <div class="border border-emerald-200 rounded-2xl p-4 bg-emerald-50 mb-5">
-            <div class="flex items-start justify-between gap-3 flex-wrap">
-              <div>
-                <h4 class="text-lg font-bold text-gray-800">Outlook AI Email Agent</h4>
-                <p class="text-xs text-emerald-800 mt-1">Microsoft Graph mailbox control for inbound email drafts, approval, and send guardrails.</p>
-              </div>
-              <div class="flex flex-wrap gap-2">
-                <button onclick="adminSyncOutlookAgent()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Sync Inbox</button>
-                <button onclick="renderAdminDashboard()" class="border border-emerald-300 text-emerald-800 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Agent</button>
-              </div>
-            </div>
-            <div id="admin-outlook-agent-status" class="grid sm:grid-cols-2 xl:grid-cols-5 gap-3 mt-4"></div>
-            <div class="grid xl:grid-cols-[0.9fr,1.1fr] gap-4 mt-4">
-              <form onsubmit="adminDraftOutlookReply(event)" class="border border-emerald-200 bg-white rounded-2xl p-4">
-                <div class="font-bold text-gray-800 mb-2">Draft a Reply</div>
-                <div class="grid gap-2">
-                  <input id="admin-outlook-from-email" type="email" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Sender email">
-                  <input id="admin-outlook-from-name" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Sender name">
-                  <input id="admin-outlook-subject" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Email subject">
-                  <textarea id="admin-outlook-body" rows="4" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Paste the customer email here"></textarea>
-                  <button class="bg-gray-900 hover:bg-gray-800 text-white px-3 py-2 rounded-lg text-sm font-semibold">Create Draft</button>
-                </div>
-              </form>
-              <div class="border border-emerald-200 bg-white rounded-2xl p-4">
-                <div class="flex items-center justify-between gap-3 mb-2">
-                  <div class="font-bold text-gray-800">Draft Queue</div>
-                  <span class="text-[11px] text-gray-500">Approve, reject, or send only when guardrails allow.</span>
-                </div>
-                <div id="admin-outlook-agent-actions" class="space-y-3"></div>
-              </div>
-            </div>
-          </div>
-          <div class="grid xl:grid-cols-[1.1fr,0.9fr] gap-5">
+          <div class="grid gap-5">
             <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
               <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <div>
@@ -9763,15 +9051,11 @@
               </form>
               <div id="admin-crm-filter-status" class="mb-3 text-xs text-gray-500">Showing the latest leads.</div>
               <div id="admin-crm-leads-table" class="space-y-3"></div>
-            </div>
-            <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
-              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
-                <div>
-                  <h4 class="text-lg font-bold text-gray-800">Follow-up Tasks</h4>
-                  <p class="text-xs text-gray-500 mt-1">Open and overdue lead tasks that need admin action.</p>
-                </div>
+              <div class="mt-5 border-t border-gray-200 pt-4">
+                <h4 class="text-base font-bold text-gray-800">Follow-up tasks</h4>
+                <p class="text-xs text-gray-500 mt-1 mb-3">Open and overdue lead tasks that need admin action.</p>
+                <div id="admin-crm-tasks-table" class="space-y-3"></div>
               </div>
-              <div id="admin-crm-tasks-table" class="space-y-3"></div>
             </div>
           </div>
           <div class="grid xl:grid-cols-3 gap-5 mt-5">
@@ -9811,10 +9095,6 @@
               <h3 class="text-xl font-bold text-gray-800">Motherboard Listing Control</h3>
               <p class="text-xs text-gray-500 mt-1">Set listings Live, Pending, Hidden, Rejected, or Deleted. Hidden/Deleted listings are removed from public pages immediately.</p>
             </div>
-            <div id="admin-april29-cleanup-controls" class="flex flex-col items-start sm:items-end gap-1">
-              <button id="admin-clean-april29-tests-btn" type="button" onclick="adminCleanupApril29TestBatch()" class="border border-red-300 text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl text-xs font-bold">Clean 29 Apr Test Batch</button>
-              <div id="admin-april29-cleanup-status" class="text-[11px] text-gray-500"></div>
-            </div>
           </div>
           <div class="grid md:grid-cols-[1fr,220px] gap-2 mb-3">
             <input id="admin-listings-q" oninput="renderAdminDashboard()" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Search title, district, area, ID...">
@@ -9831,57 +9111,21 @@
           <div id="admin-all-listings-table" class="space-y-3"></div>
         </div>
 
-        <div data-admin-tab-panel="listings" class="admin-tab-panel grid md:grid-cols-3 gap-5">
-          <div class="bg-white border border-rose-100 rounded-2xl p-5 md:col-span-3">
-            <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
-              <div>
-                <h3 class="text-lg font-bold text-gray-800">Reports & Claims Queue <span id="admin-reports-count-badge" class="ml-2 align-middle rounded-full bg-rose-50 border border-rose-100 px-2.5 py-1 text-xs font-black text-rose-700">0</span></h3>
-                <p class="text-xs text-gray-500 mt-1">Action third-party claim, correction, removal, and fraud reports. Removing from this queue hides the linked listing and writes an audit note.</p>
-              </div>
-              <div class="flex gap-2 flex-wrap">
-                <select id="admin-reports-status-filter" onchange="refreshAdminReportsQueue()" class="border border-gray-200 rounded-xl px-3 py-2 text-xs bg-white">
-                  <option value="">All statuses</option>
-                  <option value="open">Open</option>
-                  <option value="in_review">In review</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="dismissed">Dismissed</option>
-                </select>
-                <button type="button" onclick="refreshAdminReportsQueue()" class="border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-xl text-xs font-bold">Refresh</button>
-              </div>
+        <div id="admin-actioned-listings-control" data-admin-tab-panel="listings" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Recently Actioned Listings</h3>
+              <p class="text-xs text-gray-500 mt-1">Once approved, rejected, hidden, or deleted, listings move out of Pending and appear here.</p>
             </div>
-            <div id="admin-reports-queue" class="space-y-3 text-sm text-gray-700">Reports loading...</div>
           </div>
-          <div class="bg-white border border-rose-100 rounded-2xl p-5 md:col-span-3">
-            <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
-              <div>
-                <h3 class="text-lg font-bold text-gray-800">Marketplace business approvals</h3>
-                <p class="text-xs text-gray-500 mt-1">Approve, hide, or remove private property-service registrations with an audit trail.</p>
-              </div>
-              <button type="button" onclick="refreshMarketplaceModerationQueue('admin')" class="border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-xl text-xs font-bold">Refresh</button>
-            </div>
-            <div id="admin-marketplace-queue" class="space-y-3 text-sm text-gray-700">Marketplace registrations loading...</div>
-          </div>
-          <div class="bg-white border border-emerald-100 rounded-2xl p-5 md:col-span-3">
-            <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
-              <div>
-                <h3 class="text-lg font-bold text-gray-800">Marketplace national drip</h3>
-                <p class="text-xs text-gray-500 mt-1">Capped, persistent discovery across all 20 service categories and 146 Uganda districts. Only implemented adapters can be enabled.</p>
-              </div>
-              <button type="button" onclick="adminLoadMarketplaceDrip()" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-xl text-xs font-bold">Load controls</button>
-            </div>
-            <div id="admin-marketplace-drip-panel" class="text-sm text-gray-700">Load the crawler controls to view coverage and run history.</div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h3 class="text-lg font-bold text-gray-800 mb-3">Recent Users</h3>
-            <div id="admin-recent-users" class="space-y-2 text-sm text-gray-700"></div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h3 class="text-lg font-bold text-gray-800 mb-3">Recent Brokers</h3>
-            <div id="admin-recent-agents" class="space-y-2 text-sm text-gray-700"></div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h3 class="text-lg font-bold text-gray-800 mb-3">Recent Reports</h3>
-            <div id="admin-recent-reports" class="space-y-2 text-sm text-gray-700"></div>
+          <div id="admin-actioned-table" class="space-y-3"></div>
+        </div>
+
+        <div id="admin-staff-queue-links" data-admin-tab-panel="listings" class="admin-tab-panel bg-white border border-rose-100 rounded-2xl p-5">
+          <h3 class="text-lg font-bold text-gray-800">Reports and claims</h3>
+          <p class="text-xs text-gray-500 mt-1">Staff work this queue on the staff desk. Open it there.</p>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <a href="/staff-dashboard#staff-reports-panel" onclick="return kingOpenStaffDesk(event, 'reports')" class="border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-xl text-xs font-bold">Open reports &amp; claims</a>
           </div>
         </div>
       </div>
@@ -10127,13 +9371,25 @@
             </div>
             <div class="flex gap-2 flex-wrap">
               <button onclick="renderAdminSetupStatus()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Refresh Status</button>
-              <a href="/admin/launch-control" class="border border-green-200 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Launch Control</a>
+              <a href="/admin" class="border border-green-200 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">King dashboard</a>
               <a href="/admin/docs" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Docs</a>
             </div>
           </div>
         </div>
 
         <div id="admin-setup-summary" class="grid md:grid-cols-3 gap-4"></div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <h3 class="text-lg font-bold text-gray-800 mb-2">Admin API Key (optional)</h3>
+          <p class="text-sm text-gray-500 mb-3">
+            Signed-in admins load live moderation data automatically. Paste <code>ADMIN_API_KEY</code> only as a fallback.
+          </p>
+          <div class="grid sm:grid-cols-[1fr,180px] gap-2">
+            <input id="admin-api-key" type="password" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Paste ADMIN_API_KEY">
+            <button onclick="saveAdminApiKeyAndRefresh()" class="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Save & Refresh</button>
+          </div>
+          <p id="admin-summary-note" class="text-xs text-gray-500 mt-2">Data source: local browser data.</p>
+        </div>
 
         <section class="bg-white border border-gray-200 rounded-2xl p-5">
           <h3 class="text-xl font-bold text-gray-900">Provider Status</h3>
