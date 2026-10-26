@@ -2556,6 +2556,48 @@ router.get('/locations/resolve', async (req, res, next) => {
   }
 });
 
+// The list-property map sends the geocoder's address parts and the pin when
+// the typed text and the most specific part are not catalogue places
+// ("Kira Junior School" -> Jjanda, Kira, Wakiso). Free: no geocoder is called here.
+router.get('/locations/resolve-address', (req, res) => {
+  setPublicPropertiesCacheHeaders(res, true);
+  const registry = require('../utils/locationRegistry');
+  const split = (value) => String(value || '').split('|').map((part) => cleanText(part).slice(0, 80)).filter(Boolean).slice(0, 8);
+  const resolution = typeof registry.resolveCanonicalUgandaLocationFromAddress === 'function'
+    ? registry.resolveCanonicalUgandaLocationFromAddress({
+      specific: split(req.query.specific),
+      broad: split(req.query.broad),
+      lat: req.query.lat,
+      lng: req.query.lng
+    })
+    : { status: 'unmatched', match: null };
+  const data = resolution.status === 'matched' && resolution.match
+    ? {
+      ...publicCanonicalLocationPayload({
+        ...resolution.match,
+        // The cascade, the guard and submit accept one exact catalogue place;
+        // resolved_by tells the page how it was chosen.
+        match: 'exact_alias',
+        confidence: 1,
+        auto_resolvable: true
+      }),
+      resolved_by: resolution.resolved_by,
+      matched_part: resolution.matched_part,
+      distance_km: resolution.distance_km
+    }
+    : null;
+  return res.json({
+    ok: true,
+    data,
+    meta: {
+      canonical: true,
+      status: data ? 'matched' : 'unmatched',
+      resolved_by: data ? resolution.resolved_by : null,
+      district_hint: resolution.district_hint || null
+    }
+  });
+});
+
 router.get('/locations/suggest', async (req, res, next) => {
   try {
     setPublicPropertiesCacheHeaders(res, true);

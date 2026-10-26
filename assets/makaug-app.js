@@ -31143,7 +31143,31 @@ function applyLpCanonicalLocation(location = {}) {
   return true;
 }
 
-async function resolveLpCanonicalLocation(query = "", label = "") {
+// Geocoder address parts + pin -> one catalogue place (see
+// resolveCanonicalUgandaLocationFromAddress). Free: the server only reads the catalogue.
+async function resolveUgandaLocationFromAddressParts(point = null) {
+  const parts = point?.addressParts || {};
+  const specific = Array.isArray(parts.specific) ? parts.specific : [];
+  const broad = Array.isArray(parts.broad) ? parts.broad : [];
+  const lat = Number(point?.lat);
+  const lng = Number(point?.lng);
+  if (!specific.length && !broad.length && !(Number.isFinite(lat) && Number.isFinite(lng))) return null;
+  const params = new URLSearchParams();
+  if (specific.length) params.set("specific", specific.join("|"));
+  if (broad.length) params.set("broad", broad.join("|"));
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    params.set("lat", lat.toFixed(6));
+    params.set("lng", lng.toFixed(6));
+  }
+  try {
+    const response = await apiRequest(`/api/properties/locations/resolve-address?${params.toString()}`, { skipAuth: true });
+    return response?.data?.canonical_location_id ? response.data : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function resolveLpCanonicalLocation(query = "", label = "", point = null) {
   const resolution = await resolveUgandaLocationWithLabelFallback(query, label);
   if (resolution.status === "matched" && applyLpCanonicalLocation(resolution.location)) return resolution.location;
   // "Plot 12 Ntinda Road" / "ntinda kampala": the area name is inside the text and
@@ -31155,6 +31179,10 @@ async function resolveLpCanonicalLocation(query = "", label = "") {
       return exact.location;
     }
   }
+  // The text is a landmark ("Kira Junior School") and its village is not in the
+  // catalogue: use the geocoder's town/district parts and the pin.
+  const fromAddress = point ? await resolveUgandaLocationFromAddressParts(point) : null;
+  if (fromAddress && applyLpCanonicalLocation(fromAddress)) return fromAddress;
   clearLpCanonicalLocationCascade();
   return null;
 }
@@ -37333,13 +37361,31 @@ function setLpHiddenValue(id, value = "") {
   if (el) el.value = value || "";
 }
 
+// Nominatim's usage policy asks for cached answers: one lookup per text per page.
+const lpNominatimSearchCache = new Map();
+
+// Most specific first. "Kira Junior School" -> suburb Jjanda (not a catalogue
+// place), city Kira, state Wakiso: the page must try all of them, not only Jjanda.
+function lpNominatimAddressParts(address = {}) {
+  const pick = (keys) => uniqueTextParts(keys.map((key) => String(address?.[key] || "").trim()).filter(Boolean));
+  return {
+    specific: pick(["neighbourhood", "quarter", "suburb", "village", "hamlet", "residential", "city_district"]),
+    broad: pick(["town", "city", "municipality", "county", "state_district", "state"])
+  };
+}
+
 async function geocodeWithNominatim(query) {
   const q = uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
   try {
     const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(q)}`;
-    const response = await fetch(url, OSM_FETCH_OPTIONS);
-    if (!response.ok) return null;
-    const rows = await response.json();
+    let rows = lpNominatimSearchCache.get(url);
+    if (!rows) {
+      const response = await fetch(url, OSM_FETCH_OPTIONS);
+      if (!response.ok) return null;
+      rows = await response.json();
+      if (lpNominatimSearchCache.size > 50) lpNominatimSearchCache.clear();
+      lpNominatimSearchCache.set(url, rows);
+    }
     const row = Array.isArray(rows) ? rows[0] : null;
     const lat = Number(row?.lat);
     const lng = Number(row?.lon);
@@ -37363,6 +37409,7 @@ async function geocodeWithNominatim(query) {
       ).trim(),
       placeId: row?.place_id ? `osm:${row.place_id}` : "",
       streetName,
+      addressParts: lpNominatimAddressParts(row?.address || {}),
       provider: "nominatim",
       confidence: row?.importance ? Math.min(0.95, Math.max(0.35, Number(row.importance))) : 0.45
     };
@@ -37389,15 +37436,37 @@ async function applyLpAddressPlaceResult(point, query = "") {
   setLpHiddenValue("lp-location-confidence", point.confidence != null ? String(point.confidence) : "0.65");
   setLpResolvedLocationLabel(label);
   setListPinCoords(point.lat, point.lng, true, true);
-  const canonicalLocation = await resolveLpCanonicalLocation(query, point.canonicalQuery || "");
+  const canonicalLocation = await resolveLpCanonicalLocation(query, point.canonicalQuery || "", point);
+  // OSM sometimes answers a catalogue name with a same-name village far away
+  // ("Bweyogerere" -> a village by Entebbe, 28 km off). Keep the catalogue place
+  // and put the pin at its centre instead of leaving the two disagreeing.
+  const placeLat = Number(canonicalLocation?.latitude);
+  const placeLng = Number(canonicalLocation?.longitude);
+  const pinIsFarFromPlace = Boolean(canonicalLocation)
+    && !canonicalLocation.resolved_by
+    && canonicalLocation.latitude !== null && canonicalLocation.longitude !== null
+    && Number.isFinite(placeLat) && Number.isFinite(placeLng)
+    && haversineKm(Number(point.lat), Number(point.lng), placeLat, placeLng) > 10;
+  if (pinIsFarFromPlace) setListPinCoords(placeLat, placeLng, true, true);
   const confirmEl = document.getElementById("lp-location-confirm");
   if (confirmEl) confirmEl.checked = false;
   updateLpLocationConfirmButton();
   updateListPreview();
   renderListReviewSummary();
-  setLpAddressSearchStatus(canonicalLocation
-    ? translateListingLabel("Address and canonical location found. Check the full location cascade and pin.")
-    : translateListingLabel("Location not recognised — pin set but region/district/area could NOT be auto-filled."), canonicalLocation ? "success" : "error");
+  const placeText = canonicalLocation ? [canonicalLocation.name || canonicalLocation.label, canonicalLocation.district].filter(Boolean).join(", ") : "";
+  let statusText = translateListingLabel("Location not recognised — pin set but region/district/area could NOT be auto-filled.");
+  if (canonicalLocation && pinIsFarFromPlace) {
+    statusText = currentLang === "en"
+      ? `Found ${placeText}. The map search pointed somewhere else, so the pin is at the centre of ${canonicalLocation.name || placeText} — move it to the exact spot, then tap "Confirm this location".`
+      : translateListingLabel("Address and canonical location found. Check the full location cascade and pin.");
+  } else if (canonicalLocation && canonicalLocation.resolved_by === "nearest_area") {
+    statusText = currentLang === "en"
+      ? `Pin set. Nearest known area: ${placeText}. Check the region, district and area below and change them if they are wrong.`
+      : translateListingLabel("Address and canonical location found. Check the full location cascade and pin.");
+  } else if (canonicalLocation) {
+    statusText = translateListingLabel("Address and canonical location found. Check the full location cascade and pin.");
+  }
+  setLpAddressSearchStatus(statusText, canonicalLocation ? "success" : "error");
   return Boolean(canonicalLocation);
 }
 

@@ -2,6 +2,7 @@ const { DISTRICTS } = require('./constants');
 const administrativeGazetteer = require('./ugandaLocationGazetteer.generated.json');
 const { CURATED_UGANDA_LOCATION_OVERRIDES } = require('./ugandaLocationOverrides');
 const { kampalaTownFor } = require('./kampalaDivisions');
+const { UGANDA_AREA_CENTROIDS } = require('./ugandaAreaCentroids');
 const {
   freeTextLocationQueryAttempts: sharedFreeTextLocationQueryAttempts,
   locationQueryAttempts: sharedLocationQueryAttempts,
@@ -55,7 +56,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Bukesa', district: 'Kampala', lat: 0.325, lng: 32.567 },
   { name: 'Busega', district: 'Kampala', lat: 0.309, lng: 32.526 },
 
-  { name: 'Wakiso', district: 'Wakiso', level: 'district', lat: 0.4044, lng: 32.4594, aliases: ['Wakiso', 'Wakiso District'] },
+  { name: 'Wakiso', district: 'Wakiso', level: 'district', lat: 0.4044, lng: 32.4594, aliases: ['Wakiso', 'Wakiso District', 'Wakiso Town', 'Wakiso Town Council'] },
   { name: 'Entebbe', district: 'Wakiso', level: 'city', lat: 0.0512, lng: 32.4637, aliases: ['Entebbe', 'Entebbe Town', 'Entebbe Municipality'] },
   { name: 'Kitoro', district: 'Wakiso', lat: 0.055, lng: 32.464 },
   { name: 'Nakiwogo', district: 'Wakiso', lat: 0.061, lng: 32.458 },
@@ -323,6 +324,21 @@ function canonicalTownName(district, town, name = '') {
   return cleanTown;
 }
 
+// Curated overrides win on name, aliases and town, but most carry no centroid,
+// so they hid the centroid the detailed list (or the OSM centroid table) has for
+// the same place. Pin-based lookups need it: "Kira Junior School" geocodes to
+// a village (Jjanda) that is not in the catalogue, and only the nearest known
+// area centroid can name the area (26 Oct 2026).
+const centroidByKey = new Map();
+[...DETAILED_LOCATIONS, ...UGANDA_AREA_CENTROIDS].forEach((entry) => {
+  const district = normalizeDistrict(entry.district) || String(entry.district || '').trim();
+  const lat = Number(entry.lat);
+  const lng = Number(entry.lng);
+  if (!entry.name || !district || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  const key = `${normalizeLocationKey(district)}:${normalizeLocationKey(entry.name)}`;
+  if (!centroidByKey.has(key)) centroidByKey.set(key, { lat, lng });
+});
+
 const registryByKey = new Map();
 sourceLocations.forEach((entry, index) => {
   const name = String(entry.name || '').trim();
@@ -334,8 +350,10 @@ sourceLocations.forEach((entry, index) => {
   if (!isOverride && sourceAliasKeys.some((aliasKey) => sameDistrictOverrideAliases.has(aliasKey))) return;
   const key = `${normalizeLocationKey(district)}:${normalizeLocationKey(name)}`;
   if (registryByKey.has(key)) return;
+  const centroid = Number.isFinite(entry.lat) && Number.isFinite(entry.lng) ? null : centroidByKey.get(key);
   registryByKey.set(key, {
     ...entry,
+    ...(centroid || {}),
     name,
     district,
     town: canonicalTownName(district, String(entry.town || '').trim()
@@ -1099,6 +1117,131 @@ function haversineKm(a = {}, b = {}) {
   return 6371 * (2 * Math.atan2(Math.sqrt(chord), Math.sqrt(1 - chord)));
 }
 
+// Pin-based resolution for the list-property map (26 Oct 2026). A geocoder
+// answer for a landmark ("Kira Junior School") names a village the catalogue
+// does not have ("Jjanda"), then the town ("Kira") and the district ("Wakiso").
+// The page used to try only the most specific part, so the cascade stayed empty.
+// Order: the specific parts, then the nearest known area centroid close to the
+// pin, then the town parts, then a wider nearest centroid, then the district.
+const ADDRESS_PART_SUFFIX = /\s+(?:capital\s+city|city|municipality|municipal\s+council|town\s+council|town|division|district|sub\s*county)$/;
+const ADDRESS_PART_IGNORED = /^(?:uganda|central|eastern|western|northern)(?:\s+region)?$/;
+const NEAR_AREA_KM = 2;
+const WIDE_AREA_KM = 6;
+const PART_MATCH_MAX_KM = 15;
+const POINT_LEVELS = new Set(['area', 'neighborhood', 'parish', 'town', 'city']);
+
+function looseLocationKey(value = '') {
+  return normalizeLocationKey(value).replace(/[^a-z]/g, '').replace(/(.)\1+/g, '$1');
+}
+
+let looseAliasIndex = null;
+function looseAliasEntries(value = '') {
+  if (!looseAliasIndex) {
+    looseAliasIndex = new Map();
+    aliasRows.forEach((row) => {
+      const loose = looseLocationKey(row.alias);
+      if (loose.length < 4) return;
+      if (!looseAliasIndex.has(loose)) looseAliasIndex.set(loose, new Map());
+      looseAliasIndex.get(loose).set(row.entry.key, row.entry);
+    });
+  }
+  return Array.from((looseAliasIndex.get(looseLocationKey(value)) || new Map()).values());
+}
+
+function addressPartVariants(part = '') {
+  const clean = String(part || '').trim();
+  const key = normalizeLocationKey(clean);
+  if (!key || ADDRESS_PART_IGNORED.test(key)) return [];
+  const stripped = key.replace(ADDRESS_PART_SUFFIX, '').trim();
+  return Array.from(new Set([clean, stripped].filter(Boolean)));
+}
+
+function cleanAddressParts(parts = []) {
+  const list = Array.isArray(parts) ? parts : String(parts || '').split('|');
+  return Array.from(new Set(list.map((part) => String(part || '').trim().slice(0, 80)).filter(Boolean))).slice(0, 8);
+}
+
+function districtFromAddressParts(parts = []) {
+  for (const part of parts) {
+    for (const variant of addressPartVariants(part)) {
+      const district = normalizeDistrict(variant);
+      if (district) return district;
+    }
+  }
+  return '';
+}
+
+function matchAddressPart(part, districtHint, point) {
+  for (const variant of addressPartVariants(part)) {
+    let candidates = exactAliasCandidates(variant, districtHint);
+    if (!candidates.length) {
+      candidates = looseAliasEntries(variant).filter((entry) => !districtHint || entry.district === districtHint);
+    }
+    candidates = candidates.filter((entry) => entry.level !== 'district' && entry.level !== 'county' && entry.level !== 'subcounty');
+    if (!candidates.length) continue;
+    if (point) {
+      // A same-name place far from the pin is a different place.
+      const near = candidates
+        .map((entry) => ({ entry, distance: haversineKm(point, entry) }))
+        .filter((row) => row.distance == null || row.distance <= PART_MATCH_MAX_KM)
+        .sort((a, b) => (a.distance ?? PART_MATCH_MAX_KM) - (b.distance ?? PART_MATCH_MAX_KM)
+          || (LOCATION_LEVEL_PRIORITY[b.entry.level] || 0) - (LOCATION_LEVEL_PRIORITY[a.entry.level] || 0));
+      if (near.length) return { entry: near[0].entry, distance: near[0].distance };
+      continue;
+    }
+    const districts = new Set(candidates.map((entry) => entry.district));
+    if (districts.size === 1) return { entry: candidates[0], distance: null };
+  }
+  return null;
+}
+
+function nearestCanonicalArea(point, districtHint = '', maxKm = NEAR_AREA_KM) {
+  if (!point) return null;
+  let best = null;
+  const pool = districtHint ? (registryEntriesByDistrict.get(districtHint) || []) : registry;
+  pool.forEach((entry) => {
+    if (!POINT_LEVELS.has(entry.level)) return;
+    const distance = haversineKm(point, entry);
+    if (distance == null || distance > maxKm) return;
+    if (!best || distance < best.distance) best = { entry, distance };
+  });
+  return best;
+}
+
+function resolveCanonicalUgandaLocationFromAddress({ specific = [], broad = [], lat, lng } = {}) {
+  const specificParts = cleanAddressParts(specific);
+  const broadParts = cleanAddressParts(broad);
+  const point = Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) && String(lat ?? '').trim() !== '' && String(lng ?? '').trim() !== ''
+    ? { lat: Number(lat), lng: Number(lng) }
+    : null;
+  const districtHint = districtFromAddressParts([...broadParts, ...specificParts]);
+  const result = (found, resolvedBy, part = '') => ({
+    status: 'matched',
+    match: { ...found.entry },
+    resolved_by: resolvedBy,
+    matched_part: part || null,
+    distance_km: found.distance == null ? null : Number(found.distance.toFixed(2)),
+    district_hint: districtHint || null
+  });
+  for (const part of specificParts) {
+    const found = matchAddressPart(part, districtHint, point);
+    if (found) return result(found, 'address_part', part);
+  }
+  const near = nearestCanonicalArea(point, districtHint, NEAR_AREA_KM);
+  if (near) return result(near, 'nearest_area');
+  for (const part of broadParts) {
+    const found = matchAddressPart(part, districtHint, point);
+    if (found) return result(found, 'address_part', part);
+  }
+  const wide = nearestCanonicalArea(point, districtHint, WIDE_AREA_KM);
+  if (wide) return result(wide, 'nearest_area');
+  if (districtHint) {
+    const entry = canonicalLocationByKey(`${normalizeLocationKey(districtHint)}:${normalizeLocationKey(districtHint)}`);
+    if (entry) return result({ entry, distance: point ? haversineKm(point, entry) : null }, 'district');
+  }
+  return { status: 'unmatched', match: null, resolved_by: null, matched_part: null, distance_km: null, district_hint: districtHint || null };
+}
+
 // Main-road searches name a corridor, not a district. "Entebbe Road" is the
 // places along that road (Kitende, Nalumunye, …). These aliases are not place
 // aliases and are not district evidence: staff location checks still strip
@@ -1289,6 +1432,7 @@ module.exports = {
   canonicalizeUgandaLocation,
   resolveCanonicalUgandaLocation,
   resolveCanonicalUgandaLocationFromText,
+  resolveCanonicalUgandaLocationFromAddress,
   canonicalUgandaDistrictsMentionedInText,
   canonicalizeLocationRows,
   canonicalLocationOptions,
