@@ -10161,10 +10161,51 @@ router.post('/whatsapp/conversations/:phone/import-forwarded-adverts', async (re
       missing: g.missing, media: g.media.map((m) => ({ id: m.message_id, url: m.url }))
     }));
     if (dryRun) return res.json({ ok: true, data: { dry_run: true, groups: summary, orphans: grouped.orphans } });
-    const agentId = cleanText(req.body?.agent_id);
-    if (!/^[0-9a-f-]{36}$/i.test(agentId)) return res.status(400).json({ ok: false, error: 'agent_id is required' });
-    const agent = (await db.query('SELECT * FROM agents WHERE id = $1', [agentId])).rows[0];
-    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    let agentId = cleanText(req.body?.agent_id);
+    let agent = null;
+    let agentCreated = false;
+    if (/^[0-9a-f-]{36}$/i.test(agentId)) {
+      agent = (await db.query('SELECT * FROM agents WHERE id = $1::uuid', [agentId])).rows[0] || null;
+      if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    } else {
+      // No agent chosen: use the profile already on this number, or open one for the
+      // sender when staff give a name. It starts pending; approval stays a staff call.
+      const byPhone = await db.query(
+        `SELECT * FROM agents
+          WHERE RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
+             OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1
+          ORDER BY (status = 'approved') DESC, updated_at DESC LIMIT 1`,
+        [phone.slice(-9)]
+      );
+      agent = byPhone.rows[0] || null;
+      const wanted = req.body?.create_agent && typeof req.body.create_agent === 'object' ? req.body.create_agent : null;
+      const fullName = cleanText(wanted?.full_name).slice(0, 160);
+      if (!agent && fullName) {
+        const licenceNumber = `WA-FORWARD-${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
+        const inserted = await db.query(
+          `INSERT INTO agents (
+             full_name, company_name, licence_number, registration_status, listing_limit,
+             phone, whatsapp, districts_covered, specializations,
+             privacy_consent_accepted, data_retention_notice_accepted, status,
+             agent_application_channel, verification_reason
+           ) VALUES (
+             $1, $2, $3, 'not_registered', 2147483647, $4, $4, '{}'::text[], '{}'::text[],
+             FALSE, FALSE, 'pending', 'whatsapp_forwarded_adverts', $5
+           ) RETURNING *`,
+          [
+            fullName,
+            cleanText(wanted?.company_name).slice(0, 160) || fullName,
+            licenceNumber,
+            `+${phone}`,
+            '[WHATSAPP_FORWARDED_ADVERTS] Profile opened by staff so adverts this number forwarded on WhatsApp could be imported for review. Identity and permission to publish still need verification before approval.'
+          ]
+        );
+        agent = inserted.rows[0];
+        agentCreated = true;
+      }
+      if (!agent) return res.status(400).json({ ok: false, error: 'agent_id is required (or create_agent.full_name to open a profile for this number)' });
+      agentId = agent.id;
+    }
     const only = Array.isArray(req.body?.only_caption_message_ids) ? new Set(req.body.only_caption_message_ids) : null;
     const results = [];
     for (const g of groups) {
@@ -10176,8 +10217,8 @@ router.post('/whatsapp/conversations/:phone/import-forwarded-adverts', async (re
         results.push({ caption_message_id: g.caption_message_id, caption: g.caption.slice(0, 80), error: error.message });
       }
     }
-    await writeAudit('admin_whatsapp_forwarded_adverts_imported', { phone, agent_id: agentId, created: results.filter((r) => r.property_id).length }, adminActorId(req));
-    return res.json({ ok: true, data: { results } });
+    await writeAudit('admin_whatsapp_forwarded_adverts_imported', { phone, agent_id: agentId, agent_created: agentCreated, created: results.filter((r) => r.property_id).length }, adminActorId(req));
+    return res.json({ ok: true, data: { agent: { id: agentId, full_name: agent.full_name, status: agent.status, created: agentCreated }, results } });
   } catch (error) {
     return next(error);
   }
