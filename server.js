@@ -65,7 +65,6 @@ const inlinePublicFontFaces = require('./services/publicFontFaces');
 const { startXSourceDripScheduler } = require('./services/xSourceDripService');
 const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDripService');
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
-const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
 const { startLeadDeskScheduler } = require('./services/leadDeskService');
 const { startAgentBookingScheduler } = require('./services/agentBookingService');
@@ -2747,8 +2746,8 @@ async function start() {
   if (!IS_SOUTH_AFRICA) startDailySourceMonitorScheduler(db);
   if (ACTIVE_TENANT.publicFeatures?.marketplace !== false) {
     startMarketplaceLifecycleScheduler(db);
-    // The drip's Google source is off unless GOOGLE_PLACES_ALLOWED=true (C18).
-    startMarketplaceDripScheduler(db);
+    // The marketplace national drip no longer arms here (26 Oct 2026); it had
+    // not run since July. Its tables and the scripts that call it stay.
   }
   if (!IS_SOUTH_AFRICA) {
     startLeadDeskScheduler(db);
