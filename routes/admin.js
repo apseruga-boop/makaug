@@ -10058,10 +10058,56 @@ router.post('/agents/:id/temporary-password', async (req, res, next) => {
     if (password.length < 4 || password.length > 64) {
       return res.status(400).json({ ok: false, error: 'Temporary password must be 4 to 64 characters' });
     }
-    const agent = (await db.query('SELECT id, user_id, full_name, phone, whatsapp FROM agents WHERE id = $1', [req.params.id])).rows[0];
+    const agent = (await db.query('SELECT id, user_id, full_name, phone, whatsapp, email, company_name, makaug_agent_number FROM agents WHERE id = $1', [req.params.id])).rows[0];
     if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
-    if (!agent.user_id) return res.status(409).json({ ok: false, error: 'This agent has no login yet' });
     const hash = await bcrypt.hash(password, 12);
+    if (!agent.user_id) {
+      // Agents registered on WhatsApp have no email, so provisionApprovedBrokerAccount
+      // skipped them and they had no way to sign in (Katamba Bonny, 26 Oct 2026:
+      // "How do I log in"). A phone-only broker login is enough: the sign-in form
+      // takes a phone number, and the dashboard links the broker profile by phone.
+      const phone = normalizeCountryPhone(agent.whatsapp || agent.phone) || cleanText(agent.whatsapp || agent.phone);
+      if (!phone) return res.status(409).json({ ok: false, error: 'This agent has no phone number to sign in with' });
+      const clash = (await db.query('SELECT id, role FROM users WHERE phone = $1 ORDER BY created_at ASC LIMIT 1', [phone])).rows[0];
+      const { firstName, lastName } = splitBrokerName(agent.full_name);
+      const profile = {
+        audience: 'agent',
+        account_kind: 'agent',
+        broker_review_status: 'approved',
+        broker_account_status: 'approved',
+        broker_agent_id: agent.id,
+        makaug_agent_number: agent.makaug_agent_number || '',
+        broker_company: agent.company_name || '',
+        agent_company: agent.company_name || '',
+        approved_by_admin: true,
+        broker_phone_verification_required: false,
+        broker_account_provisioned_at: new Date().toISOString(),
+        force_password_change: true,
+        temporary_password_set_at: new Date().toISOString()
+      };
+      let userId;
+      if (clash) {
+        userId = clash.id;
+        await db.query(
+          `UPDATE users SET first_name = $2, last_name = $3, role = 'agent_broker', status = 'active', password_hash = $4,
+                            phone_verified = TRUE, preferred_contact_channel = 'whatsapp',
+                            profile_data = COALESCE(profile_data, '{}'::jsonb) || $5::jsonb, updated_at = NOW()
+            WHERE id = $1`,
+          [userId, firstName, lastName, hash, JSON.stringify(profile)]
+        );
+      } else {
+        userId = (await db.query(
+          `INSERT INTO users (first_name, last_name, phone, email, role, password_hash, phone_verified, status,
+                              marketing_opt_in, weekly_tips_opt_in, preferred_contact_channel, preferred_language, profile_data)
+           VALUES ($1, $2, $3, NULLIF($4, ''), 'agent_broker', $5, TRUE, 'active', TRUE, TRUE, 'whatsapp', 'en', $6::jsonb)
+           RETURNING id`,
+          [firstName, lastName, phone, normalizeEmail(agent.email) || '', hash, JSON.stringify(profile)]
+        )).rows[0].id;
+      }
+      await db.query('UPDATE agents SET user_id = $2, approved_user_id = COALESCE(approved_user_id, $2), updated_at = NOW() WHERE id = $1', [agent.id, userId]);
+      await writeAudit('admin_agent_login_created', { agent_id: agent.id, user_id: userId, phone_only: !agent.email }, adminActorId(req));
+      return res.json({ ok: true, data: { agent_id: agent.id, user: { id: userId, phone, role: 'agent_broker', status: 'active' }, created: true, force_password_change: true } });
+    }
     const updated = await db.query(
       `UPDATE users
           SET password_hash = $2,
