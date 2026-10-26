@@ -5088,7 +5088,13 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
   const hints = extractSellerListingDraftHints(cleanCaption, {});
   let listingType = ownerForwardListingType(cleanCaption, { ...hints, ...naturalDraft });
-  const priceScanCaption = normalizeCaptionPriceNotation(cleanCaption);
+  // "they have monthly revenue of (2.5m ugx) ... At only #180m ugx" (26 Oct
+  // 2026): the parser took the first money figure, so a block of rentals worth
+  // 180M was priced at its monthly income. An amount that follows income /
+  // revenue / earning / making is what the property earns, not what it costs.
+  const priceScanCaption = normalizeCaptionPriceNotation(
+    cleanCaption.replace(/\b(?:monthly|total|net|gross|rental)?\s*(?:income|revenue|earnings?|earning|making|collects?|collecting|returns?)\s*(?:of|is|at|:)?\s*\(?\s*(?:ugx|ush|shs?)?\s*#?\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?\s*(?:ugx|ush|shs?|per month|monthly|\/month|a month)?\s*\)?/gi, ' ')
+  );
   // listingPriceSourceFragment happily returns the first number after a cue word, so
   // "Selling 5 bedroom house in Kololo @600m UGX" yields "5" — the bedroom count — and the
   // listing went live at UGX 5. parseListingPriceDraft already applies the sanity floor and
@@ -5198,6 +5204,15 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     // CBD" says where the property is NOT. It resolved to an area called "From".
     .replace(/\b\d+(?:[.,]\d+)?\s*(?:km|kms|kilomet(?:er|re)s?|miles?|mi|minutes?|mins?|hrs?|hours?)\b(?:\s*\([^)]*\))?\s*(?:away\s+)?(?:drive\s+)?from\s+(?:the\s+)?[A-Za-z][A-Za-z'-]*(?:\s+(?:town|cbd|city|centre|center|road|rd))?/gi, ' ');
   let locationResolution = resolveWhatsappLocation(locationCaption, { allowText: true });
+  // "#Mukono_Kisowera kayunga rd" (26 Oct 2026) resolved to Kayunga district:
+  // the road's name outranked the district written in front of it. When a
+  // place name is followed by road/rd/highway it is a road, so try the caption
+  // without those road phrases first and keep that answer if it resolves.
+  const roadStripped = locationCaption.replace(/\b[A-Za-z][A-Za-z'’-]+\s+(?:ring\s+)?(?:rd|road|highway|hwy)\b\.?/gi, ' ');
+  if (roadStripped !== locationCaption) {
+    const withoutRoads = resolveWhatsappLocation(roadStripped, { allowText: true });
+    if (withoutRoads?.status === 'matched') locationResolution = withoutRoads;
+  }
   if (!locationResolution || locationResolution.status !== 'matched') {
     const beforeLandmark = locationCaption.split(/\b(?:opposite|near)\b/i)[0].trim();
     if (beforeLandmark && beforeLandmark !== locationCaption) {
