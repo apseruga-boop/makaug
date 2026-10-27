@@ -928,17 +928,21 @@ async function downloadVideo(url, outputPath, signal) {
   if (!received) throw new Error('video download returned no bytes');
 }
 
-async function ocrVideoFile(videoPath, { signal, deadline } = {}) {
+function throwIfOcrExpired({ signal, deadline } = {}) {
+  if (signal?.aborted || (deadline && Date.now() > deadline)) {
+    const error = new Error('ocr timed out');
+    error.code = 'OCR_TIMEOUT';
+    throw error;
+  }
+}
+
+async function ocrVideoFileJob(videoPath, { signal, deadline } = {}) {
   const duration = await videoDurationSeconds(videoPath);
   const timestamps = duration > 0 ? sampleTimestamps(duration) : sampleTimestamps(MAX_FRAMES * FRAME_INTERVAL_SECONDS);
   const frames = [];
   const dir = path.dirname(videoPath);
   for (let index = 0; index < timestamps.length; index += 1) {
-    if (signal?.aborted || (deadline && Date.now() > deadline)) {
-      const error = new Error('ocr timed out');
-      error.code = 'OCR_TIMEOUT';
-      throw error;
-    }
+    throwIfOcrExpired({ signal, deadline });
     const framePath = path.join(dir, `frame-${index}.jpg`);
     try {
       await extractFrame(videoPath, framePath, timestamps[index]);
@@ -951,11 +955,7 @@ async function ocrVideoFile(videoPath, { signal, deadline } = {}) {
   const distinct = dedupeFrameHashes(frames);
   const texts = [];
   for (const frame of distinct) {
-    if (signal?.aborted || (deadline && Date.now() > deadline)) {
-      const error = new Error('ocr timed out');
-      error.code = 'OCR_TIMEOUT';
-      throw error;
-    }
+    throwIfOcrExpired({ signal, deadline });
     try {
       texts.push(await recognizeFrame(frame.path));
     } catch (error) {
@@ -970,7 +970,7 @@ async function ocrVideoFile(videoPath, { signal, deadline } = {}) {
   return { text: combineOcrText(texts), frameCount: distinct.length };
 }
 
-async function ocrPropertyVideos(property, { signal, deadline } = {}) {
+async function ocrPropertyVideosJob(property, { signal, deadline } = {}) {
   const urls = ocrableVideoUrls(property);
   if (!urls.length) return { text: '', frameCount: 0, videoCount: 0 };
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'makaug-video-ocr-'));
@@ -978,17 +978,25 @@ async function ocrPropertyVideos(property, { signal, deadline } = {}) {
   let frames = 0;
   try {
     for (let index = 0; index < urls.length; index += 1) {
+      throwIfOcrExpired({ signal, deadline });
       const videoPath = path.join(dir, `video-${index}.mp4`);
       await downloadVideo(urls[index], videoPath, signal);
-      const result = await ocrVideoFile(videoPath, { signal, deadline });
+      const result = await ocrVideoFileJob(videoPath, { signal, deadline });
       if (result.text) texts.push(result.text);
       frames += result.frameCount;
     }
   } finally {
     await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
-    await terminateJsWorker();
   }
   return { text: combineOcrText(texts), frameCount: frames, videoCount: urls.length };
+}
+
+function ocrVideoFile(videoPath, options = {}) {
+  return runExclusive(() => ocrVideoFileJob(videoPath, options), options);
+}
+
+function ocrPropertyVideos(property, options = {}) {
+  return runExclusive(() => ocrPropertyVideosJob(property, options), options);
 }
 
 async function saveAndLoad(propertyId, record) {
@@ -997,9 +1005,8 @@ async function saveAndLoad(propertyId, record) {
   return stored || { ...record, updated_at: new Date().toISOString() };
 }
 
-// One OCR job. Callers go through runExclusive so only one job runs at a time:
-// the finally block below kills every live ffmpeg/tesseract child and the
-// shared tesseract.js worker, which is only safe when no other job is running.
+// Internal calls use the private jobs. Public entrypoints acquire runExclusive
+// once, which also owns cleanup of the shared child processes and OCR worker.
 async function runVideoCaptionOcrJob(propertyId) {
   const started = Date.now();
   const deadline = started + JOB_TIMEOUT_MS();
@@ -1034,7 +1041,7 @@ async function runVideoCaptionOcrJob(propertyId) {
       conflicts: [],
       error: null
     });
-    const read = await ocrPropertyVideos(property, { signal: controller.signal, deadline });
+    const read = await ocrPropertyVideosJob(property, { signal: controller.signal, deadline });
     if (controller.signal.aborted || Date.now() > deadline) {
       return await saveAndLoad(propertyId, {
         status: OCR_PENDING,
@@ -1095,14 +1102,20 @@ async function runVideoCaptionOcrJob(propertyId) {
     }
   } finally {
     clearTimeout(timer);
-    killLiveChildren();
-    await terminateJsWorker();
   }
 }
 
 let jobTail = Promise.resolve();
-function runExclusive(task) {
-  const run = jobTail.then(task, task);
+function runExclusive(task, options = {}) {
+  const run = jobTail.then(async () => {
+    throwIfOcrExpired(options);
+    try {
+      return await task();
+    } finally {
+      killLiveChildren();
+      await terminateJsWorker();
+    }
+  });
   jobTail = run.then(() => {}, () => {});
   return run;
 }

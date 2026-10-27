@@ -25,6 +25,7 @@ const ROOT = path.join(__dirname, '..');
 const ID = '55555555-5555-4555-8555-555555555555';
 const BROKEN_ID = '66666666-6666-4666-8666-666666666666';
 const QUEUED_ID = '77777777-7777-4777-8777-777777777777';
+const PAGE_ID = '88888888-8888-4888-8888-888888888888';
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -104,6 +105,8 @@ test('real video decoding and OCR save caption facts without changing listing ap
         source_caption: 'Land for sale Kira UGX 50 million 2 acres'
       })]);
     }
+    await db.query(`INSERT INTO properties (id, title, extra_fields) VALUES ($1, 'Page link', $2::jsonb)`,
+      [PAGE_ID, JSON.stringify({ video_url: 'https://youtu.be/fixture-page' })]);
 
     const child = await run(process.execPath, ['-e', `
       const service = require('./services/videoCaptionOcrService');
@@ -120,7 +123,12 @@ test('real video decoding and OCR save caption facts without changing listing ap
         const good = await service.runVideoCaptionOcr('${ID}');
         const queued = await service.loadVideoCaptionRecord({ id: '${QUEUED_ID}' });
         const broken = await service.runVideoCaptionOcr('${BROKEN_ID}');
-        console.log('OCR_RESULT:' + JSON.stringify({ good, queued, broken }));
+        const directRead = service.ocrPropertyVideos({ extra_fields: { video_urls: ['${base}/external.mp4'] } }, { deadline: Date.now() + 15000 });
+        const pageCheck = service.runVideoCaptionOcr('${PAGE_ID}');
+        const direct = await directRead;
+        const page = await pageCheck;
+        const file = await service.ocrVideoFile(process.env.VIDEO_OCR_TEST_FILE, { deadline: Date.now() + 15000 });
+        console.log('OCR_RESULT:' + JSON.stringify({ good, queued, broken, direct, page, file }));
       })().catch(error => { console.error(error); process.exitCode = 1; })
         .finally(() => Promise.all([db.pool.end(), db.backgroundPool.end()]));
     `], {
@@ -132,13 +140,14 @@ test('real video decoding and OCR save caption facts without changing listing ap
         DB_SSL: 'false',
         COUNTRY_CODE: 'UG',
         FFMPEG_PATH: ffmpeg,
+        VIDEO_OCR_TEST_FILE: video,
         NODE_EXTRA_CA_CERTS: cert,
         VIDEO_OCR_TIMEOUT_MS: '45000'
       }
     });
     const output = child.stdout.split('\n').find((line) => line.startsWith('OCR_RESULT:'));
     assert.ok(output, `${child.stdout}\n${child.stderr}`);
-    const { good, queued, broken } = JSON.parse(output.slice('OCR_RESULT:'.length));
+    const { good, queued, broken, direct, page, file } = JSON.parse(output.slice('OCR_RESULT:'.length));
     assert.equal(good.status, 'done', JSON.stringify(good));
     assert.equal(good.error, null);
     assert.ok(good.frame_count > 0, 'ffmpeg extracted and deduplicated real frames');
@@ -152,7 +161,10 @@ test('real video decoding and OCR save caption facts without changing listing ap
     assert.match(queued.ocr_text, /LAND FOR SALE/i);
     assert.equal(broken.status, 'ocr pending');
     assert.equal(broken.error, 'no_frames');
-    assert.deepEqual(downloads, ['/queued.mp4', '/caption.mp4', '/broken.mp4'], 'social page links were never fetched');
+    assert.match(direct.text, /LAND FOR SALE/i, 'the exported property reader keeps its worker until it finishes');
+    assert.equal(page.status, 'not_checkable');
+    assert.match(file.text, /LAND FOR SALE/i, 'the exported file reader completes without deadlock and closes its worker');
+    assert.deepEqual(downloads, ['/queued.mp4', '/caption.mp4', '/broken.mp4', '/external.mp4'], 'social page links were never fetched');
 
     const saved = (await db.query('SELECT status, ocr_text, parsed_facts, frame_count FROM property_video_ocr WHERE property_id = $1', [ID])).rows[0];
     assert.equal(saved.status, good.status);

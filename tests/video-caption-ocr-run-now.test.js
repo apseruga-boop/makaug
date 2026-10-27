@@ -189,3 +189,122 @@ test('an on-demand run waits for the queued job instead of running beside it', a
   assert.strictEqual(record.status, service.OCR_PENDING);
   assert.ok(ocrRows.get(queuedId), 'the queued job finished and saved');
 });
+
+function observe(promise) {
+  return promise.then((value) => ({ value }), (error) => ({ error }));
+}
+
+function holdPropertyReader(url) {
+  let started;
+  let release;
+  const startedPromise = new Promise((resolve) => { started = resolve; });
+  const gate = new Promise((resolve) => { release = resolve; });
+  fetchImpl = async (requested) => {
+    if (String(requested) === url) {
+      started();
+      await gate;
+    }
+    return { ok: false, status: 404, body: null, headers: new Map() };
+  };
+  const run = service.ocrPropertyVideos({ extra_fields: { video_url: url } });
+  return {
+    started: startedPromise,
+    release,
+    run,
+    outcome: observe(run)
+  };
+}
+
+test('the exported property reader holds the same lock as a staff run', async () => {
+  reset();
+  const direct = holdPropertyReader('https://media.makaug.com/direct-lock.mp4');
+  await direct.started;
+  const staffId = listing('55555555-5555-4555-8555-555555555555', {
+    video_url: 'https://www.youtube.com/watch?v=staff-lock'
+  });
+  const query = fakeDb.query;
+  const staffQueries = [];
+  const events = [];
+  const settled = () => events.push('direct settled');
+  direct.run.then(settled, settled);
+  fakeDb.query = async (sql, params) => {
+    if (params?.[0] === staffId) {
+      staffQueries.push(String(sql));
+      events.push('staff query');
+    }
+    return query(sql, params);
+  };
+  const staffRun = observe(service.runVideoCaptionOcr(staffId));
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepStrictEqual(staffQueries, [], 'staff has not read or saved anything while the direct reader owns the lock');
+    assert.strictEqual(ocrRows.has(staffId), false);
+    direct.release();
+    assert.match(String((await direct.outcome).error), /download failed \(404\)/);
+    const staff = await staffRun;
+    assert.ifError(staff.error);
+    assert.strictEqual(staff.value.status, service.STATUS_NOT_CHECKABLE);
+    assert.strictEqual(events[0], 'direct settled', 'the direct read settles before staff touches the database');
+    assert.ok(staffQueries.some((sql) => /FROM properties/.test(sql)), 'staff started after the direct reader finished');
+    assert.strictEqual(ocrRows.get(staffId).status, service.STATUS_NOT_CHECKABLE);
+  } finally {
+    direct.release();
+    await Promise.all([direct.outcome, staffRun]);
+    fakeDb.query = query;
+  }
+});
+
+for (const cancellation of ['deadline', 'signal']) {
+  test(`an exported property reader checks its ${cancellation} after waiting for the lock`, async (t) => {
+    reset();
+    const heldUrl = `https://media.makaug.com/held-${cancellation}.mp4`;
+    const direct = holdPropertyReader(heldUrl);
+    await direct.started;
+    let now = Date.now();
+    t.mock.method(Date, 'now', () => now);
+    const controller = new AbortController();
+    const options = cancellation === 'deadline' ? { deadline: now + 1000 } : { signal: controller.signal };
+    const waiting = observe(service.ocrPropertyVideos({
+      extra_fields: { video_url: `https://media.makaug.com/expired-${cancellation}.mp4` }
+    }, options));
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.deepStrictEqual(fetched, [heldUrl], 'the second reader is waiting before cancellation');
+      if (cancellation === 'deadline') now += 1001;
+      else controller.abort();
+      direct.release();
+      assert.match(String((await direct.outcome).error), /download failed \(404\)/);
+      const result = await waiting;
+      assert.strictEqual(result.error?.code, 'OCR_TIMEOUT');
+      assert.deepStrictEqual(fetched, [heldUrl], 'an expired or aborted waiting reader never downloads');
+      assert.deepStrictEqual(spawned, []);
+    } finally {
+      direct.release();
+      await Promise.all([direct.outcome, waiting]);
+    }
+  });
+}
+
+test('the exported file reader waits for the property reader and checks its expired deadline before spawning', async (t) => {
+  reset();
+  const heldUrl = 'https://media.makaug.com/held-file-reader.mp4';
+  const direct = holdPropertyReader(heldUrl);
+  await direct.started;
+  let now = Date.now();
+  t.mock.method(Date, 'now', () => now);
+  const fileRead = observe(service.ocrVideoFile('/missing-file', { deadline: now + 1000 }));
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepStrictEqual(spawned, [], 'the file reader does not start a process while it waits');
+    now += 1001;
+    direct.release();
+    assert.match(String((await direct.outcome).error), /download failed \(404\)/);
+    const result = await fileRead;
+    assert.strictEqual(result.error?.code, 'OCR_TIMEOUT');
+    assert.deepStrictEqual(fetched, [heldUrl]);
+    assert.deepStrictEqual(spawned, [], 'the expired file reader never probes or decodes the file');
+  } finally {
+    direct.release();
+    await Promise.all([direct.outcome, fileRead]);
+  }
+});
