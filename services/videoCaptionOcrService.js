@@ -28,6 +28,11 @@ const logger = require('../config/logger');
 const OCR_PENDING = 'ocr pending';
 const STATUS_PENDING = 'pending';
 const STATUS_DONE = 'done';
+// Final state for a listing whose only videos are YouTube or TikTok page links.
+// Those are web pages, not video files, so ffmpeg has nothing to read.
+const STATUS_NOT_CHECKABLE = 'not_checkable';
+const EXTERNAL_VIDEO_PAGE = 'external_video_page';
+const EXTERNAL_VIDEO_PAGE_HOSTS = ['youtube.com', 'youtu.be', 'youtube-nocookie.com', 'tiktok.com'];
 const FRAME_INTERVAL_SECONDS = 2;
 const MAX_FRAMES = 20;
 const MAX_VIDEOS = 2;
@@ -434,7 +439,7 @@ function captionTextFromProperty(property = {}) {
   return String(extra.source_caption_display || extra.source_caption || extra.caption || '').trim();
 }
 
-function videoUrlsFromProperty(property = {}) {
+function allVideoUrls(property = {}) {
   const extra = listingRecord(property).extra_fields;
   const values = [
     ...(Array.isArray(extra.video_urls) ? extra.video_urls : []),
@@ -442,7 +447,22 @@ function videoUrlsFromProperty(property = {}) {
   ];
   return [...new Set(values.map((value) => String(value || '').trim()).filter((value) => {
     try { return new URL(value).protocol === 'https:'; } catch { return false; }
-  }))].slice(0, MAX_VIDEOS);
+  }))];
+}
+
+function videoUrlsFromProperty(property = {}) {
+  return allVideoUrls(property).slice(0, MAX_VIDEOS);
+}
+
+function isExternalVideoPage(url = '') {
+  let host = '';
+  try { host = new URL(String(url || '')).hostname.toLowerCase(); } catch { return false; }
+  return EXTERNAL_VIDEO_PAGE_HOSTS.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
+// Video files we can download and read. YouTube and TikTok page links are left out.
+function ocrableVideoUrls(property = {}) {
+  return allVideoUrls(property).filter((url) => !isExternalVideoPage(url)).slice(0, MAX_VIDEOS);
 }
 
 function hasVideoFacts(facts = {}) {
@@ -547,11 +567,16 @@ function combineOcrText(parts = []) {
   return lines.join('\n').slice(0, 12000);
 }
 
+const NOT_CHECKABLE_NOTE = "Can't read text from a YouTube or TikTok link. Watch the video to check it.";
+
 function publicOcrView(record = null) {
   if (!record) return null;
+  const status = record.status || STATUS_PENDING;
   return {
-    status: record.status || STATUS_PENDING,
-    text: record.ocr_text || record.text || '',
+    status,
+    // The staff panel shows `text` under "Read from the video". For a page link
+    // there is no text, so say why instead of leaving it blank.
+    text: record.ocr_text || record.text || (status === STATUS_NOT_CHECKABLE ? NOT_CHECKABLE_NOTE : ''),
     facts: videoFactsForRecord(record),
     conflicts: Array.isArray(record.conflicts) ? record.conflicts : [],
     override: record.override || null,
@@ -903,17 +928,21 @@ async function downloadVideo(url, outputPath, signal) {
   if (!received) throw new Error('video download returned no bytes');
 }
 
-async function ocrVideoFile(videoPath, { signal, deadline } = {}) {
+function throwIfOcrExpired({ signal, deadline } = {}) {
+  if (signal?.aborted || (deadline && Date.now() > deadline)) {
+    const error = new Error('ocr timed out');
+    error.code = 'OCR_TIMEOUT';
+    throw error;
+  }
+}
+
+async function ocrVideoFileJob(videoPath, { signal, deadline } = {}) {
   const duration = await videoDurationSeconds(videoPath);
   const timestamps = duration > 0 ? sampleTimestamps(duration) : sampleTimestamps(MAX_FRAMES * FRAME_INTERVAL_SECONDS);
   const frames = [];
   const dir = path.dirname(videoPath);
   for (let index = 0; index < timestamps.length; index += 1) {
-    if (signal?.aborted || (deadline && Date.now() > deadline)) {
-      const error = new Error('ocr timed out');
-      error.code = 'OCR_TIMEOUT';
-      throw error;
-    }
+    throwIfOcrExpired({ signal, deadline });
     const framePath = path.join(dir, `frame-${index}.jpg`);
     try {
       await extractFrame(videoPath, framePath, timestamps[index]);
@@ -926,11 +955,7 @@ async function ocrVideoFile(videoPath, { signal, deadline } = {}) {
   const distinct = dedupeFrameHashes(frames);
   const texts = [];
   for (const frame of distinct) {
-    if (signal?.aborted || (deadline && Date.now() > deadline)) {
-      const error = new Error('ocr timed out');
-      error.code = 'OCR_TIMEOUT';
-      throw error;
-    }
+    throwIfOcrExpired({ signal, deadline });
     try {
       texts.push(await recognizeFrame(frame.path));
     } catch (error) {
@@ -945,28 +970,44 @@ async function ocrVideoFile(videoPath, { signal, deadline } = {}) {
   return { text: combineOcrText(texts), frameCount: distinct.length };
 }
 
-async function ocrPropertyVideos(property, { signal, deadline } = {}) {
-  const urls = videoUrlsFromProperty(property);
+async function ocrPropertyVideosJob(property, { signal, deadline } = {}) {
+  const urls = ocrableVideoUrls(property);
   if (!urls.length) return { text: '', frameCount: 0, videoCount: 0 };
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'makaug-video-ocr-'));
   const texts = [];
   let frames = 0;
   try {
     for (let index = 0; index < urls.length; index += 1) {
+      throwIfOcrExpired({ signal, deadline });
       const videoPath = path.join(dir, `video-${index}.mp4`);
       await downloadVideo(urls[index], videoPath, signal);
-      const result = await ocrVideoFile(videoPath, { signal, deadline });
+      const result = await ocrVideoFileJob(videoPath, { signal, deadline });
       if (result.text) texts.push(result.text);
       frames += result.frameCount;
     }
   } finally {
     await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
-    await terminateJsWorker();
   }
   return { text: combineOcrText(texts), frameCount: frames, videoCount: urls.length };
 }
 
-async function runVideoCaptionOcr(propertyId) {
+function ocrVideoFile(videoPath, options = {}) {
+  return runExclusive(() => ocrVideoFileJob(videoPath, options), options);
+}
+
+function ocrPropertyVideos(property, options = {}) {
+  return runExclusive(() => ocrPropertyVideosJob(property, options), options);
+}
+
+async function saveAndLoad(propertyId, record) {
+  await saveVideoCaptionRecord(propertyId, record);
+  const stored = await loadVideoCaptionRecord({ id: propertyId });
+  return stored || { ...record, updated_at: new Date().toISOString() };
+}
+
+// Internal calls use the private jobs. Public entrypoints acquire runExclusive
+// once, which also owns cleanup of the shared child processes and OCR worker.
+async function runVideoCaptionOcrJob(propertyId) {
   const started = Date.now();
   const deadline = started + JOB_TIMEOUT_MS();
   const controller = new AbortController();
@@ -981,7 +1022,18 @@ async function runVideoCaptionOcr(propertyId) {
       [propertyId]
     );
     const property = result.rows[0];
-    if (!property || !videoUrlsFromProperty(property).length) return;
+    if (!property || !videoUrlsFromProperty(property).length) return null;
+    if (!ocrableVideoUrls(property).length) {
+      return await saveAndLoad(propertyId, {
+        status: STATUS_NOT_CHECKABLE,
+        ocr_text: '',
+        parsed_facts: {},
+        conflicts: [],
+        error: EXTERNAL_VIDEO_PAGE,
+        frame_count: 0,
+        video_count: allVideoUrls(property).length
+      });
+    }
     await saveVideoCaptionRecord(propertyId, {
       status: STATUS_PENDING,
       ocr_text: '',
@@ -989,9 +1041,9 @@ async function runVideoCaptionOcr(propertyId) {
       conflicts: [],
       error: null
     });
-    const read = await ocrPropertyVideos(property, { signal: controller.signal, deadline });
+    const read = await ocrPropertyVideosJob(property, { signal: controller.signal, deadline });
     if (controller.signal.aborted || Date.now() > deadline) {
-      await saveVideoCaptionRecord(propertyId, {
+      return await saveAndLoad(propertyId, {
         status: OCR_PENDING,
         ocr_text: read.text || '',
         parsed_facts: {},
@@ -1000,10 +1052,9 @@ async function runVideoCaptionOcr(propertyId) {
         frame_count: read.frameCount,
         video_count: read.videoCount
       });
-      return;
     }
     if (!read.frameCount) {
-      await saveVideoCaptionRecord(propertyId, {
+      return await saveAndLoad(propertyId, {
         status: OCR_PENDING,
         ocr_text: '',
         parsed_facts: {},
@@ -1012,7 +1063,6 @@ async function runVideoCaptionOcr(propertyId) {
         frame_count: 0,
         video_count: read.videoCount
       });
-      return;
     }
     const facts = parseListingFacts(read.text);
     const captionFacts = parseListingFacts(captionTextFromProperty(property));
@@ -1023,7 +1073,7 @@ async function runVideoCaptionOcr(propertyId) {
         ...conflictFacts(facts, listingFacts, 'listing')
       ])
       : [];
-    await saveVideoCaptionRecord(propertyId, {
+    return await saveAndLoad(propertyId, {
       status: STATUS_DONE,
       ocr_text: read.text,
       parsed_facts: facts,
@@ -1034,25 +1084,53 @@ async function runVideoCaptionOcr(propertyId) {
     });
   } catch (error) {
     const timedOut = error.code === 'OCR_TIMEOUT' || controller.signal.aborted || /timed out/i.test(error.message || '');
+    const pending = {
+      status: OCR_PENDING,
+      ocr_text: '',
+      parsed_facts: {},
+      conflicts: [],
+      error: timedOut ? 'timeout' : String(error.message || error).slice(0, 300)
+    };
     try {
-      await saveVideoCaptionRecord(propertyId, {
-        status: OCR_PENDING,
-        ocr_text: '',
-        parsed_facts: {},
-        conflicts: [],
-        error: timedOut ? 'timeout' : String(error.message || error).slice(0, 300)
-      });
+      return await saveAndLoad(propertyId, pending);
     } catch (saveError) {
       logger.warn('Video caption OCR could not record its pending state', {
         property_id: propertyId,
         error: saveError.message
       });
+      return { ...pending, updated_at: new Date().toISOString() };
     }
   } finally {
     clearTimeout(timer);
-    killLiveChildren();
-    await terminateJsWorker();
   }
+}
+
+let jobTail = Promise.resolve();
+function runExclusive(task, options = {}) {
+  const run = jobTail.then(async () => {
+    throwIfOcrExpired(options);
+    try {
+      return await task();
+    } finally {
+      killLiveChildren();
+      await terminateJsWorker();
+    }
+  });
+  jobTail = run.then(() => {}, () => {});
+  return run;
+}
+
+// On-demand run (staff "Run check now"). Waits for any job the WhatsApp queue
+// is running, then runs this listing, and returns the saved record (or null
+// when the listing has no video).
+function runVideoCaptionOcr(propertyId) {
+  const id = String(propertyId || '').trim();
+  if (queued.has(id)) {
+    queued.delete(id);
+    const index = queue.indexOf(id);
+    if (index >= 0) queue.splice(index, 1);
+  }
+  return runExclusive(() => runVideoCaptionOcrJob(id));
 }
 
 function scheduleVideoCaptionOcr(propertyId) {
@@ -1081,7 +1159,7 @@ async function drainQueue() {
     while (queue.length) {
       const id = queue.shift();
       queued.delete(id);
-      await runVideoCaptionOcr(id);
+      await runExclusive(() => runVideoCaptionOcrJob(id));
     }
   } finally {
     draining = false;
@@ -1103,6 +1181,8 @@ module.exports = {
   OCR_PENDING,
   STATUS_PENDING,
   STATUS_DONE,
+  STATUS_NOT_CHECKABLE,
+  EXTERNAL_VIDEO_PAGE,
   FRAME_INTERVAL_SECONDS,
   MAX_FRAMES,
   MIN_OVERRIDE_REASON,
@@ -1117,6 +1197,8 @@ module.exports = {
   dedupeFrameHashes,
   combineOcrText,
   scheduleVideoCaptionOcr,
+  runVideoCaptionOcr,
+  loadVideoCaptionRecord,
   evaluateVideoCaptionApproval,
   persistVideoCaptionResolution,
   listVideoCaptionConflicts,
@@ -1124,6 +1206,8 @@ module.exports = {
   ocrVideoFile,
   ocrPropertyVideos,
   videoUrlsFromProperty,
+  ocrableVideoUrls,
+  isExternalVideoPage,
   captionTextFromProperty,
   publicOcrView,
   reportId,
