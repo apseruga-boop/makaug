@@ -37000,7 +37000,7 @@ function renderLpPhotoFeedback() {
     if (!lpSelectedPhotos.length) {
       galleryEl.innerHTML = "";
     } else {
-      const options = [`<option value="">${translateListingLabel("Select photo category")}</option>`]
+      const options = [`<option value="">${translateListingLabel("Photo category (optional)")}</option>`]
         .concat(checklist.map((item) => `<option value="${item.key}">${translateListingLabel(item.label)}</option>`))
         .concat([`<option value="${LP_OTHER_PHOTO_SLOT}">${translateListingLabel("Other / custom")}</option>`])
         .join("");
@@ -37016,7 +37016,7 @@ function renderLpPhotoFeedback() {
         const isMain = index === lpMainPhotoIndex;
         return `
           <div class="border border-gray-200 rounded-xl p-3 bg-white">
-            <img src="${src}" alt="${file.name}" class="w-full h-36 object-cover rounded-lg">
+            <img src="${src}" data-lp-thumb-index="${index}" alt="${translateListingLabel("Photo")} ${index + 1}" class="w-full h-36 object-cover rounded-lg bg-gray-100">
             <div class="mt-2 flex items-center justify-between gap-2">
               <div class="text-xs text-gray-500 line-clamp-1">${file.name}</div>
               <div class="flex items-center gap-1">
@@ -37041,6 +37041,7 @@ function renderLpPhotoFeedback() {
         const assigned = lpPhotoAssignments[idx] || "";
         if (assigned) el.value = getLpPhotoAssignmentSelectValue(assigned);
       });
+      hydrateLpGalleryThumbnails(galleryEl);
     }
   }
   if (qualityEl) {
@@ -37052,6 +37053,59 @@ function renderLpPhotoFeedback() {
       qualityEl.innerHTML = `<div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-800 text-sm"><strong>Quality flags:</strong><ul class="list-disc pl-5 mt-1">${lpPhotoQualityIssues.map((x) => `<li>${x}</li>`).join("")}</ul></div>`;
     }
   }
+}
+
+// blob: URLs do not render in some phone browsers (WhatsApp's in-app browser and
+// a few Android WebViews showed Charles a broken image for every photo on
+// 26 Oct 2026), so each card also gets a small real thumbnail drawn from the
+// file bytes. The blob URL stays as the first paint; the data URL replaces it.
+const lpThumbnailCache = new WeakMap();
+async function makeLpThumbnailDataUrl(file, maxEdge = 480) {
+  if (lpThumbnailCache.has(file)) return lpThumbnailCache.get(file);
+  const work = (async () => {
+    let bitmap = null;
+    try {
+      if (typeof createImageBitmap === "function") bitmap = await createImageBitmap(file);
+    } catch (error) { bitmap = null; }
+    let source = bitmap;
+    if (!source) {
+      source = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("decode failed"));
+          img.src = String(reader.result || "");
+        };
+        reader.onerror = () => reject(reader.error || new Error("read failed"));
+        reader.readAsDataURL(file);
+      });
+    }
+    const w = source.width || source.naturalWidth || 0;
+    const h = source.height || source.naturalHeight || 0;
+    if (!w || !h) throw new Error("empty image");
+    const scale = Math.min(1, maxEdge / Math.max(w, h));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(w * scale));
+    canvas.height = Math.max(1, Math.round(h * scale));
+    canvas.getContext("2d").drawImage(source, 0, 0, canvas.width, canvas.height);
+    if (bitmap && typeof bitmap.close === "function") bitmap.close();
+    return canvas.toDataURL("image/jpeg", 0.8);
+  })();
+  lpThumbnailCache.set(file, work);
+  work.catch(() => lpThumbnailCache.delete(file));
+  return work;
+}
+
+function hydrateLpGalleryThumbnails(galleryEl) {
+  if (!galleryEl) return;
+  Array.from(galleryEl.querySelectorAll("img[data-lp-thumb-index]")).forEach((img) => {
+    const file = lpSelectedPhotos[Number(img.dataset.lpThumbIndex)];
+    if (!file) return;
+    makeLpThumbnailDataUrl(file).then((dataUrl) => {
+      if (img.isConnected && dataUrl) img.src = dataUrl;
+    }).catch(() => {});
+  });
 }
 
 function readBlobAsDataUrl(blob) {
@@ -39084,17 +39138,10 @@ function validateListStep2() {
     toast("Choose a main photo before continuing.");
     return false;
   }
-  const checklist = getLpPhotoChecklist(getListType());
-  const unassigned = lpSelectedPhotos
-    .map((file, idx) => ({ idx, name: file.name, slot: lpPhotoAssignments[idx] || "" }))
-    .filter((entry) => !entry.slot);
-  if (unassigned.length) {
-    unassigned.forEach((entry) => markLpPhotoSelectError(entry.idx));
-    toast(`Assign each photo to a category before continuing. Missing: ${unassigned.slice(0, 2).map((x) => x.name).join(", ")}`);
-    return false;
-  }
-  // The checklist is a suggestion now (minimum is 2 photos), not a gate.
-  void checklist;
+  // Photo categories are optional: brokers upload from a phone where the
+  // thumbnails may not render, and asking for a category per photo was the
+  // step that stopped Charles on 26 Oct 2026. Photos without one are stored
+  // as "Photo N" and the moderator can label them.
   return true;
 }
 
