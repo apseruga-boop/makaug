@@ -50,12 +50,10 @@ assert(migration.includes('CREATE TABLE IF NOT EXISTS outlook_email_threads'), '
 assert(migration.includes('CREATE TABLE IF NOT EXISTS outlook_email_actions'), 'Migration must create Outlook action queue');
 assert(migration.includes('outlook_ai_email_agent'), 'Migration must seed/register the Outlook AI agent');
 
-assert(html.includes('Outlook AI Email Agent'), 'King dashboard must show Outlook AI Email Agent controls');
+// King dashboard slim-down (26 Oct 2026): the Outlook agent panel is retired from King; the backend and routes stay.
+assert(!html.includes('admin-outlook-agent-status'), 'retired King Outlook panel should stay removed');
 assert(html.includes('outlook-email-agent-20260515'), 'Frontend cache version must be bumped for Outlook agent rollout');
-assert(html.includes('admin-outlook-agent-status'), 'King dashboard must include Outlook status container');
-assert(html.includes('admin-outlook-agent-actions'), 'King dashboard must include Outlook action queue');
-assert(app.includes('/api/admin/outlook-agent/status'), 'Frontend must fetch Outlook agent status');
-assert(app.includes('/api/admin/outlook-agent/actions'), 'Frontend must fetch Outlook agent actions');
+assert(!app.includes('adminSafeSnapshotRequest("outlook status"'), 'King Leads tab no longer fetches the retired Outlook panel status');
 assert(app.includes('adminDraftOutlookReply'), 'Frontend must support manual Outlook AI draft creation');
 assert(app.includes('adminApproveOutlookDraft'), 'Frontend must support Outlook draft approval');
 assert(app.includes('adminRejectOutlookDraft'), 'Frontend must support Outlook draft rejection');

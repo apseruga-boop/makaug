@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const { requireAdminApiKey } = require('../middleware/auth');
+const { registerAgentManagerRoutes, HAS_ID_DOCUMENT_SQL: AGENT_HAS_ID_DOCUMENT_SQL } = require('./adminAgentManager');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { listingReferenceQuery, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
@@ -5702,6 +5703,7 @@ router.post('/properties/:id/images', async (req, res, next) => {
           AND extra_fields->>'media_validation_status' = 'blocked_no_usable_property_image'`,
       [req.params.id]
     );
+    await require('../services/staffPropertyMediaService').syncListingImageSummary(client, req.params.id);
     await client.query(
       `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
        VALUES ($1,$2,$3,$4,$4,$5,$6,$7::jsonb)`,
@@ -6204,6 +6206,7 @@ router.patch('/properties/:id/images/:imageId', async (req, res, next) => {
         JSON.stringify({ image_id: req.params.imageId, primary: makePrimary, replaced: hasNewImage })
       ]
     );
+    await require('../services/staffPropertyMediaService').syncListingImageSummary(client, req.params.id);
     await client.query('COMMIT');
     await writeAudit(hasNewImage ? 'admin_listing_image_replaced' : 'admin_listing_image_updated', {
       property_id: req.params.id,
@@ -6216,6 +6219,31 @@ router.patch('/properties/:id/images/:imageId', async (req, res, next) => {
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+
+// Rewrites the photo summary the review card reads from every row that is
+// still pending (or the ids given), from property_images as they stand now.
+router.post('/properties/resync-image-summaries', async (req, res, next) => {
+  const client = await db.pool.connect();
+  try {
+    const ids = asArray(req.body?.property_ids).filter((id) => /^[0-9a-f-]{36}$/i.test(String(id)));
+    const rows = ids.length
+      ? ids.map((id) => ({ id }))
+      : (await client.query(`SELECT id FROM properties WHERE status IN ('pending', 'pending_review', 'draft') ORDER BY created_at DESC LIMIT 500`)).rows;
+    const { syncListingImageSummary } = require('../services/staffPropertyMediaService');
+    const results = [];
+    for (const row of rows) {
+      const summary = await syncListingImageSummary(client, row.id);
+      results.push({ id: row.id, ...summary });
+    }
+    await writeAudit('admin_listing_image_summaries_resynced', { count: results.length }, adminActorId(req));
+    return res.json({ ok: true, data: { results } });
+  } catch (error) {
     return next(error);
   } finally {
     client.release();
@@ -6251,7 +6279,7 @@ router.delete('/properties/:id/images/:imageId', async (req, res, next) => {
         [req.params.id]
       );
     }
-    await client.query('UPDATE properties SET updated_at = NOW() WHERE id = $1', [req.params.id]);
+    await require('../services/staffPropertyMediaService').syncListingImageSummary(client, req.params.id);
     await client.query(
       `INSERT INTO property_moderation_events (property_id, actor_id, action, reason, notes, delivery)
        VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
@@ -8913,6 +8941,18 @@ router.get('/agents', async (req, res, next) => {
   }
 });
 
+// King → Agents manager (see routes/adminAgentManager.js).
+registerAgentManagerRoutes(router, {
+  db,
+  writeAudit,
+  adminActorId,
+  cleanText,
+  isValidEmail,
+  normalizePhone: (value) => normalizeCountryPhone(value),
+  actorLabel: (user) => moderationActorLabel(user),
+  onListingsChanged: (reason) => invalidatePublicInventoryMetricsCache(reason)
+});
+
 router.post('/agents/invite', async (req, res, next) => {
   try {
     const body = req.body || {};
@@ -9421,8 +9461,9 @@ router.post('/agents/:id/public-profile-approval', async (req, res, next) => {
     }
 
     const existing = await db.query(
-      `SELECT id, full_name, company_name, phone, whatsapp, identity_document_url, verification_reason, status
-       FROM agents
+      `SELECT id, full_name, company_name, phone, whatsapp, identity_document_url, verification_reason, status,
+              ${AGENT_HAS_ID_DOCUMENT_SQL} AS has_id_document
+       FROM agents a
        WHERE id = $1
        LIMIT 1`,
       [req.params.id]
@@ -9431,7 +9472,7 @@ router.post('/agents/:id/public-profile-approval', async (req, res, next) => {
     if (!agent) {
       return res.status(404).json({ ok: false, error: 'Agent not found' });
     }
-    if (!String(agent.identity_document_url || '').trim()) {
+    if (!agent.has_id_document && !String(agent.identity_document_url || '').trim()) {
       return res.status(409).json({ ok: false, error: 'A private identity document must be stored before the public profile can be approved' });
     }
     if (!normalizeCountryPhone(agent.phone || agent.whatsapp)) {
@@ -9749,9 +9790,32 @@ router.post('/agents/from-listings', async (req, res, next) => {
  */
 // Listing pins that don't match the listing's own area: check (apply=false)
 // or fix (apply=true). Returns counts and the listings involved.
+// mode 'pin_unpinned': live listings with no pin get their area centre
+// (dry run unless apply=true; never from a district-only or blank area).
+// mode 'rollback_auto_pins' with batch: undo one such run.
 router.post('/maintenance/listing-coordinates', async (req, res, next) => {
   try {
     const apply = req.body?.apply === true;
+    const mode = String(req.body?.mode || '').trim();
+    if (mode === 'pin_unpinned' || mode === 'rollback_auto_pins') {
+      const service = require('../services/listingCoordinateRepairService');
+      const batch = String(req.body?.batch || '').trim().slice(0, 80) || null;
+      if (mode === 'rollback_auto_pins' && !batch) {
+        return res.status(400).json({ ok: false, error: 'batch is required to roll back auto-pins' });
+      }
+      const result = mode === 'pin_unpinned'
+        ? await service.pinUnpinnedListings(db, { apply, actor: adminActorId(req), batch })
+        : await service.rollbackAutoPinnedListings(db, { apply, batch });
+      await writeAudit(mode === 'pin_unpinned' ? 'admin_listing_auto_pin' : 'admin_listing_auto_pin_rollback', {
+        apply,
+        batch: result.batch,
+        checked: result.checked ?? null,
+        pinnable: result.pinnable ?? null,
+        applied: result.applied ?? null,
+        reverted: result.reverted ?? null
+      }, adminActorId(req));
+      return res.json({ ok: true, data: { mode, ...result } });
+    }
     const summary = await require('../services/listingCoordinateRepairService').repairListingCoordinates(db, {
       apply,
       actor: adminActorId(req)
@@ -9976,6 +10040,238 @@ router.post('/agents/:id/remove', async (req, res, next) => {
     return next(error);
   } finally {
     client.release();
+  }
+});
+
+/**
+ * Two records for one agent: staff registered "Charles" through Agent 007 at
+ * 15:30 on 26 Oct 2026 (no email, no login) and Charles signed himself up an
+ * hour later (email, ID, login). His listings sat on the first record and his
+ * dashboard was empty. Move every listing, booking and lead link onto the
+ * record that has the login, then retire the duplicate. Nothing is sent.
+ */
+router.post('/agents/:id/merge-into', async (req, res, next) => {
+  const client = await db.getClient();
+  try {
+    const sourceId = String(req.params.id || '');
+    const targetId = String(req.body?.target_id || req.body?.targetId || '');
+    if (!/^[0-9a-f-]{36}$/i.test(sourceId) || !/^[0-9a-f-]{36}$/i.test(targetId) || sourceId === targetId) {
+      return res.status(400).json({ ok: false, error: 'Give a different target_id to merge this agent into' });
+    }
+    await client.query('BEGIN');
+    const rows = (await client.query('SELECT id, full_name, phone, whatsapp, removed_at FROM agents WHERE id = ANY($1::uuid[]) FOR UPDATE', [[sourceId, targetId]])).rows;
+    const source = rows.find((row) => row.id === sourceId);
+    const target = rows.find((row) => row.id === targetId);
+    if (!source || !target) { await client.query('ROLLBACK'); return res.status(404).json({ ok: false, error: 'Agent not found' }); }
+    if (target.removed_at) { await client.query('ROLLBACK'); return res.status(409).json({ ok: false, error: 'The target agent was removed' }); }
+    const moved = (await client.query(
+      `UPDATE properties
+          SET agent_id = $2::uuid,
+              lister_name = COALESCE(NULLIF($3, ''), lister_name),
+              extra_fields = CASE
+                WHEN COALESCE(extra_fields, '{}'::jsonb) ? 'broker_agent_id'
+                  THEN jsonb_set(extra_fields, '{broker_agent_id}', to_jsonb($2::text))
+                ELSE extra_fields END
+                || jsonb_build_object('merged_from_agent_id', $1::text),
+              updated_at = NOW()
+        WHERE agent_id = $1::uuid OR COALESCE(extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text
+        RETURNING id, status`,
+      [sourceId, targetId, cleanText(target.full_name)]
+    )).rows;
+    const reason = `Merged into ${target.full_name} (${targetId}) — duplicate record`;
+    await client.query(
+      `UPDATE agents
+          SET removed_at = NOW(), removed_reason = $2::text, removed_by = $3::text, status = 'suspended',
+              removal_snapshot = $4::jsonb, updated_at = NOW()
+        WHERE id = $1::uuid`,
+      [sourceId, reason, adminActorId(req), JSON.stringify({ merged_into: targetId, listings_moved: moved.map((row) => row.id) })]
+    );
+    await client.query('COMMIT');
+    await writeAudit('admin_agent_merged', { source_agent_id: sourceId, target_agent_id: targetId, listings_moved: moved.length }, adminActorId(req));
+    return res.json({ ok: true, data: { source_id: sourceId, target_id: targetId, listings_moved: moved.length, listings: moved } });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Give an agent's login a temporary password chosen by staff, for agents with
+ * no email to receive one. They are asked to change it after signing in.
+ * Nothing is sent: staff pass the password on themselves.
+ */
+router.post('/agents/:id/temporary-password', async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
+    const password = cleanText(req.body?.password);
+    if (password.length < 4 || password.length > 64) {
+      return res.status(400).json({ ok: false, error: 'Temporary password must be 4 to 64 characters' });
+    }
+    const agent = (await db.query('SELECT id, user_id, full_name, phone, whatsapp, email, company_name, makaug_agent_number FROM agents WHERE id = $1', [req.params.id])).rows[0];
+    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    const hash = await bcrypt.hash(password, 12);
+    if (!agent.user_id) {
+      // Agents registered on WhatsApp have no email, so provisionApprovedBrokerAccount
+      // skipped them and they had no way to sign in (Katamba Bonny, 26 Oct 2026:
+      // "How do I log in"). A phone-only broker login is enough: the sign-in form
+      // takes a phone number, and the dashboard links the broker profile by phone.
+      const phone = normalizeCountryPhone(agent.whatsapp || agent.phone) || cleanText(agent.whatsapp || agent.phone);
+      if (!phone) return res.status(409).json({ ok: false, error: 'This agent has no phone number to sign in with' });
+      const clash = (await db.query('SELECT id, role FROM users WHERE phone = $1 ORDER BY created_at ASC LIMIT 1', [phone])).rows[0];
+      const { firstName, lastName } = splitBrokerName(agent.full_name);
+      const profile = {
+        audience: 'agent',
+        account_kind: 'agent',
+        broker_review_status: 'approved',
+        broker_account_status: 'approved',
+        broker_agent_id: agent.id,
+        makaug_agent_number: agent.makaug_agent_number || '',
+        broker_company: agent.company_name || '',
+        agent_company: agent.company_name || '',
+        approved_by_admin: true,
+        broker_phone_verification_required: false,
+        broker_account_provisioned_at: new Date().toISOString(),
+        force_password_change: true,
+        temporary_password_set_at: new Date().toISOString()
+      };
+      let userId;
+      if (clash) {
+        userId = clash.id;
+        await db.query(
+          `UPDATE users SET first_name = $2, last_name = $3, role = 'agent_broker', status = 'active', password_hash = $4,
+                            phone_verified = TRUE, preferred_contact_channel = 'whatsapp',
+                            profile_data = COALESCE(profile_data, '{}'::jsonb) || $5::jsonb, updated_at = NOW()
+            WHERE id = $1`,
+          [userId, firstName, lastName, hash, JSON.stringify(profile)]
+        );
+      } else {
+        userId = (await db.query(
+          `INSERT INTO users (first_name, last_name, phone, email, role, password_hash, phone_verified, status,
+                              marketing_opt_in, weekly_tips_opt_in, preferred_contact_channel, preferred_language, profile_data)
+           VALUES ($1, $2, $3, NULLIF($4, ''), 'agent_broker', $5, TRUE, 'active', TRUE, TRUE, 'whatsapp', 'en', $6::jsonb)
+           RETURNING id`,
+          [firstName, lastName, phone, normalizeEmail(agent.email) || '', hash, JSON.stringify(profile)]
+        )).rows[0].id;
+      }
+      await db.query('UPDATE agents SET user_id = $2, approved_user_id = COALESCE(approved_user_id, $2), updated_at = NOW() WHERE id = $1', [agent.id, userId]);
+      await writeAudit('admin_agent_login_created', { agent_id: agent.id, user_id: userId, phone_only: !agent.email }, adminActorId(req));
+      return res.json({ ok: true, data: { agent_id: agent.id, user: { id: userId, phone, role: 'agent_broker', status: 'active' }, created: true, force_password_change: true } });
+    }
+    const updated = await db.query(
+      `UPDATE users
+          SET password_hash = $2,
+              role = 'agent_broker',
+              status = 'active',
+              profile_data = COALESCE(profile_data, '{}'::jsonb)
+                || jsonb_build_object('force_password_change', true, 'broker_agent_id', $3::text, 'temporary_password_set_at', NOW()::text),
+              updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, phone, email, role, status`,
+      [agent.user_id, hash, agent.id]
+    );
+    if (!updated.rows.length) return res.status(404).json({ ok: false, error: 'Login account not found' });
+    await writeAudit('admin_agent_temporary_password_set', { agent_id: agent.id, user_id: agent.user_id }, adminActorId(req));
+    return res.json({ ok: true, data: { agent_id: agent.id, user: updated.rows[0], force_password_change: true } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * Import the adverts a broker forwarded into a WhatsApp chat as listings for
+ * staff review, under an approved agent. dry_run returns the groups so the
+ * pairing of captions and photos can be checked first; `groups` lets staff
+ * override that pairing by caption message id. Nothing is sent to anyone.
+ */
+router.post('/whatsapp/conversations/:phone/import-forwarded-adverts', async (req, res, next) => {
+  try {
+    const whatsapp = require('./whatsapp');
+    const phone = String(req.params.phone || '').replace(/\D/g, '');
+    if (phone.length < 9) return res.status(400).json({ ok: false, error: 'Invalid phone' });
+    const dryRun = parseBooleanLike(req.body?.dry_run, false);
+    const since = cleanText(req.body?.since) || null;
+    const until = cleanText(req.body?.until) || null;
+    const grouped = await whatsapp.groupForwardedAdverts(phone, { since, until });
+    let groups = grouped.groups;
+    if (Array.isArray(req.body?.groups) && req.body.groups.length) {
+      const byId = new Map();
+      groups.forEach((g) => { byId.set(g.caption_message_id, g); g.media.forEach((m) => byId.set(m.message_id, m)); });
+      grouped.orphans.forEach((m) => byId.set(m.message_id, m));
+      groups = req.body.groups.map((spec) => {
+        const base = byId.get(spec.caption_message_id);
+        if (!base || !base.caption) return null;
+        const media = (spec.media_message_ids || []).map((id) => byId.get(id)).filter((m) => m && m.url);
+        return { ...base, media };
+      }).filter(Boolean);
+    }
+    const summary = groups.map((g) => ({
+      caption_message_id: g.caption_message_id, caption: g.caption.slice(0, 160), at: g.caption_at,
+      listing_type: g.facts?.listingType, price: g.facts?.price, area: g.facts?.locationPatch?.area, district: g.facts?.locationPatch?.district,
+      missing: g.missing, media: g.media.map((m) => ({ id: m.message_id, url: m.url }))
+    }));
+    if (dryRun) return res.json({ ok: true, data: { dry_run: true, groups: summary, orphans: grouped.orphans } });
+    let agentId = cleanText(req.body?.agent_id);
+    let agent = null;
+    let agentCreated = false;
+    if (/^[0-9a-f-]{36}$/i.test(agentId)) {
+      agent = (await db.query('SELECT * FROM agents WHERE id = $1::uuid', [agentId])).rows[0] || null;
+      if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    } else {
+      // No agent chosen: use the profile already on this number, or open one for the
+      // sender when staff give a name. It starts pending; approval stays a staff call.
+      const byPhone = await db.query(
+        `SELECT * FROM agents
+          WHERE RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
+             OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1
+          ORDER BY (status = 'approved') DESC, updated_at DESC LIMIT 1`,
+        [phone.slice(-9)]
+      );
+      agent = byPhone.rows[0] || null;
+      const wanted = req.body?.create_agent && typeof req.body.create_agent === 'object' ? req.body.create_agent : null;
+      const fullName = cleanText(wanted?.full_name).slice(0, 160);
+      if (!agent && fullName) {
+        const licenceNumber = `WA-FORWARD-${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
+        const inserted = await db.query(
+          `INSERT INTO agents (
+             full_name, company_name, licence_number, registration_status, listing_limit,
+             phone, whatsapp, districts_covered, specializations,
+             privacy_consent_accepted, data_retention_notice_accepted, status,
+             agent_application_channel, verification_reason
+           ) VALUES (
+             $1, $2, $3, 'not_registered', 2147483647, $4, $4, '{}'::text[], '{}'::text[],
+             FALSE, FALSE, 'pending', 'whatsapp_forwarded_adverts', $5
+           ) RETURNING *`,
+          [
+            fullName,
+            cleanText(wanted?.company_name).slice(0, 160) || fullName,
+            licenceNumber,
+            `+${phone}`,
+            '[WHATSAPP_FORWARDED_ADVERTS] Profile opened by staff so adverts this number forwarded on WhatsApp could be imported for review. Identity and permission to publish still need verification before approval.'
+          ]
+        );
+        agent = inserted.rows[0];
+        agentCreated = true;
+      }
+      if (!agent) return res.status(400).json({ ok: false, error: 'agent_id is required (or create_agent.full_name to open a profile for this number)' });
+      agentId = agent.id;
+    }
+    const only = Array.isArray(req.body?.only_caption_message_ids) ? new Set(req.body.only_caption_message_ids) : null;
+    const results = [];
+    for (const g of groups) {
+      if (only && !only.has(g.caption_message_id)) continue;
+      try {
+        const r = await whatsapp.importForwardedAdvert({ phone, agent, group: g, inboundMessageId: `${g.caption_message_id}:forward-import` });
+        results.push({ caption_message_id: g.caption_message_id, caption: g.caption.slice(0, 80), ...r });
+      } catch (error) {
+        results.push({ caption_message_id: g.caption_message_id, caption: g.caption.slice(0, 80), error: error.message });
+      }
+    }
+    await writeAudit('admin_whatsapp_forwarded_adverts_imported', { phone, agent_id: agentId, agent_created: agentCreated, created: results.filter((r) => r.property_id).length }, adminActorId(req));
+    return res.json({ ok: true, data: { agent: { id: agentId, full_name: agent.full_name, status: agent.status, created: agentCreated }, results } });
+  } catch (error) {
+    return next(error);
   }
 });
 
@@ -10456,6 +10752,15 @@ router.patch('/agents/:id/greeting-name', async (req, res, next) => {
   }
 });
 
+// Who did it, in words, for the audit log ("Arthur Seruga", or "admin key").
+async function adminActorDisplayName(req) {
+  if (req.adminAuth?.userId) {
+    const user = (await db.query('SELECT first_name, last_name, email, phone FROM users WHERE id = $1', [req.adminAuth.userId]).catch(() => ({ rows: [] }))).rows[0];
+    if (user) return moderationActorLabel(user);
+  }
+  return req.adminAuth?.type === 'api_key' ? 'admin key' : 'staff';
+}
+
 router.patch('/agents/:id/status', async (req, res, next) => {
   try {
     const status = String(req.body.status || '').trim().toLowerCase();
@@ -10463,6 +10768,31 @@ router.patch('/agents/:id/status', async (req, res, next) => {
 
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ ok: false, error: 'Invalid status value' });
+    }
+
+    // "Approve anyway" (King → Agents): the same approval as below, on purpose
+    // while something is still missing (the ID, usually). Owner accounts only,
+    // with a reason; recorded in the audit log once the approval has gone through.
+    let approvalOverride = null;
+    if (req.body.approval_override && typeof req.body.approval_override === 'object') {
+      if (status !== 'approved') return res.status(400).json({ ok: false, error: 'Approve anyway only approves.' });
+      const auth = req.adminAuth || {};
+      if (!(auth.type === 'api_key' || ['admin', 'super_admin'].includes(String(auth.role || '').toLowerCase()))) {
+        return res.status(403).json({ ok: false, error: 'Only the owner (King) account can approve anyway.' });
+      }
+      const reason = cleanText(req.body.approval_override.reason || '').slice(0, 500);
+      if (reason.length < 3) return res.status(400).json({ ok: false, error: 'Say why you are approving before the details are complete.' });
+      const current = (await db.query(
+        `SELECT status, removed_at, COALESCE(btrim(nin), '') <> '' AS has_nin,
+                ${AGENT_HAS_ID_DOCUMENT_SQL} AS has_id_document,
+                COALESCE(phone, whatsapp, '') <> '' AS has_phone
+           FROM agents a WHERE id = $1`, [req.params.id])).rows[0];
+      if (!current) return res.status(404).json({ ok: false, error: 'Agent not found' });
+      const missing = [];
+      if (!current.has_nin) missing.push('nin');
+      if (!current.has_id_document) missing.push('id_document');
+      if (!current.has_phone) missing.push('phone');
+      approvalOverride = { reason, missing, status_before: current.status };
     }
 
     // From 5 Oct 2026 a new agent is only approved once their first month is paid.
@@ -10591,6 +10921,17 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       agent_id: req.params.id,
       status
     });
+    if (approvalOverride) {
+      const overrideActor = await adminActorDisplayName(req);
+      await writeAudit('admin_agent_approved_anyway', {
+        agent_id: req.params.id,
+        by: overrideActor,
+        reason: approvalOverride.reason,
+        missing: approvalOverride.missing,
+        status_before: approvalOverride.status_before,
+        approved_at: new Date().toISOString()
+      }, adminActorId(req));
+    }
 
     let accountProvisioning = null;
     let welcome = null;

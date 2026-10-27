@@ -46,6 +46,8 @@ const {
   ugandanPhoneFromSourceText,
 } = require('../utils/sourceIntakeIntegrity');
 const { pricePlausibility } = require('../utils/pricePlausibility');
+const { DUPLICATE_CANDIDATES_SQL, classifyDuplicates, duplicateCandidateParams } = require('../utils/duplicateEvidence');
+const { duplicateRef, possibleDuplicateWarning } = require('../utils/crossVideoDuplicate');
 const {
   resolveCanonicalUgandaLocation,
   resolveCanonicalUgandaLocationFromText,
@@ -2365,6 +2367,72 @@ async function existingSocialSearchListingKeys(client) {
     }]));
 }
 
+const NEW_LISTING_PLACEHOLDER_ID = '00000000-0000-0000-0000-000000000000';
+
+// 26 Oct 2026 (Arthur): the same plot posted in two different videos
+// (MK-20261024-67E51F / 400346) went in twice. Before a NEW listing is
+// inserted, look for a live or pending listing from the same phone, channel or
+// lister in the same area with a similar plot, size, price or caption. A match
+// is recorded on the new pending row only (extra_fields.possible_duplicate_of)
+// so staff see "Possible duplicate of <ref>"; existing listings are never
+// changed and nothing is hidden or auto-published. Best effort: a failed
+// lookup never blocks the harvest.
+async function possibleDuplicateOfNewListing(client, listing = {}) {
+  let extra = {};
+  try {
+    extra = typeof listing.extra_fields === 'string' ? JSON.parse(listing.extra_fields) : (listing.extra_fields || {});
+  } catch (_error) {
+    extra = {};
+  }
+  const probe = {
+    ...listing,
+    id: NEW_LISTING_PLACEHOLDER_ID,
+    extra_fields: extra,
+    source_url: listing.source_url || extra.source_url || extra.source_post_url || '',
+  };
+  let savepoint = false;
+  try {
+    await client.query('SAVEPOINT possible_duplicate_check');
+    savepoint = true;
+    const result = await client.query(DUPLICATE_CANDIDATES_SQL, duplicateCandidateParams(probe));
+    await client.query('RELEASE SAVEPOINT possible_duplicate_check');
+    const match = classifyDuplicates(probe, Array.isArray(result?.rows) ? result.rows : [])[0];
+    if (!match) return null;
+    return {
+      id: String(match.id),
+      ref: duplicateRef(match),
+      status: match.status || null,
+      reason: match.duplicate_reason || '',
+      reason_code: match.duplicate_reason_code || '',
+      warning: possibleDuplicateWarning(match),
+      checked_at: new Date().toISOString(),
+    };
+  } catch (error) {
+    if (savepoint) {
+      try { await client.query('ROLLBACK TO SAVEPOINT possible_duplicate_check'); } catch (_rollbackError) { /* best effort */ }
+    }
+    logger.warn?.('Possible-duplicate check skipped for a new found-online listing', { message: error.message });
+    return null;
+  }
+}
+
+// The new row only: extra_fields.possible_duplicate_of plus a moderation note.
+function withPossibleDuplicateOf(listing = {}, possibleDuplicate = null) {
+  if (!possibleDuplicate) return listing;
+  let extra = {};
+  try {
+    extra = typeof listing.extra_fields === 'string' ? JSON.parse(listing.extra_fields) : { ...(listing.extra_fields || {}) };
+  } catch (_error) {
+    return listing;
+  }
+  const warning = `${possibleDuplicate.warning} (${possibleDuplicate.reason}). Compare both before approving.`;
+  return {
+    ...listing,
+    extra_fields: postgresSafeJsonStringify({ ...extra, possible_duplicate_of: possibleDuplicate }),
+    moderation_reason: [warning, listing.moderation_reason].filter(Boolean).join(' '),
+  };
+}
+
 async function insertListing(client, listing, agentId) {
   const ownerPreviewToken = createOwnerEditToken();
   const ownerPreviewTokenHash = hashOwnerEditToken(ownerPreviewToken);
@@ -2933,6 +3001,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   };
 }
 
+const HARVEST_DUPLICATE_CHECK_NO_TIMEOUT_SQL = 'SET statement_timeout = 0';
+const HARVEST_DUPLICATE_CHECK_NO_TIMEOUT_LOCAL_SQL = 'SET LOCAL statement_timeout = 0';
+
 async function existingFoundOnlineSourcePostListings(client, items = []) {
   // king-harvester-duplicate-lookup-20260809: keep each fingerprint lookup in
   // its own indexable branch instead of forcing one broad JSON expression scan.
@@ -3173,7 +3244,10 @@ async function applyFoundOnlinePriceDrop(client, existingRow = {}, item = {}) {
             extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
               'previous_price', $3::text,
               'price_updated_from_repeat_post', true,
-              'price_updated_at', $4
+              -- jsonb_build_object takes "any", so Postgres cannot infer a bare
+              -- parameter's type here; without the cast every repeat-post price
+              -- drop failed with "could not determine data type of parameter $4".
+              'price_updated_at', $4::text
             )
       WHERE id = $1
         AND status IN ('pending','approved')
@@ -3479,10 +3553,20 @@ async function queueFoundOnlineSourcePostListings({
   let previewExisting = new Map();
   if (dryRun && db?.pool) {
     const previewClient = await db.pool.connect();
+    let resetError = null;
     try {
+      // The duplicate check runs 85-243 s on production; the live pool's
+      // 60 s statement limit would cancel it. No transaction here, so the
+      // limit is put back before the connection returns to the pool.
+      await previewClient.query(HARVEST_DUPLICATE_CHECK_NO_TIMEOUT_SQL);
       previewExisting = await existingFoundOnlineSourcePostListings(previewClient, items);
     } finally {
-      previewClient.release();
+      try {
+        await previewClient.query('RESET statement_timeout');
+      } catch (error) {
+        resetError = error;
+      }
+      previewClient.release(resetError || undefined);
     }
   }
 
@@ -3587,6 +3671,9 @@ async function queueFoundOnlineSourcePostListings({
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
+    // Exempt from the live pool's 60 s statement limit until COMMIT/ROLLBACK:
+    // the duplicate check below runs 85-243 s on production.
+    await client.query(HARVEST_DUPLICATE_CHECK_NO_TIMEOUT_LOCAL_SQL);
     const existing = await existingFoundOnlineSourcePostListings(client, items);
     if (shouldCreateSourceProfile()) {
       existingContactCounts = await existingFoundOnlineContactCounts(client, items);
@@ -3630,8 +3717,11 @@ async function queueFoundOnlineSourcePostListings({
         });
       }
       const agentId = createProfile ? agentIdsByKey[profileKey] : null;
-      const listing = buildSocialSearchListing(item, agentId);
+      const builtListing = buildSocialSearchListing(item, agentId);
+      const possibleDuplicate = await possibleDuplicateOfNewListing(client, builtListing);
+      const listing = withPossibleDuplicateOf(builtListing, possibleDuplicate);
       const inserted = await insertListing(client, listing, agentId);
+      if (possibleDuplicate) inserted.possible_duplicate_of = possibleDuplicate;
       inserted.profile_action = createProfile ? 'create_or_update_source_profile' : FOUND_ONLINE_PROFILE_CREATION_POLICY.profile_action;
       inserted.profile_key = createProfile ? profileKey : null;
       inserted.profile_policy = FOUND_ONLINE_PROFILE_CREATION_POLICY.rule;
@@ -4280,8 +4370,11 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
         continue;
       }
       const agentId = shouldCreateProfileForSeedItem(item) ? agentIdsByKey[item.agentKey] : null;
-      const listing = buildSocialSearchListing(item, agentId);
+      const builtListing = buildSocialSearchListing(item, agentId);
+      const possibleDuplicate = await possibleDuplicateOfNewListing(client, builtListing);
+      const listing = withPossibleDuplicateOf(builtListing, possibleDuplicate);
       const inserted = await insertListing(client, listing, agentId);
+      if (possibleDuplicate) inserted.possible_duplicate_of = possibleDuplicate;
       inserted.profile_action = agentId ? 'create_or_update_source_profile' : FOUND_ONLINE_PROFILE_CREATION_POLICY.profile_action;
       inserted.profile_policy = FOUND_ONLINE_PROFILE_CREATION_POLICY.rule;
       created.push(inserted);
@@ -4427,6 +4520,8 @@ function summarizeSocialSearchListings() {
 }
 
 module.exports = {
+  possibleDuplicateOfNewListing,
+  withPossibleDuplicateOf,
   SOCIAL_SEARCH_BATCH_ID,
   SOCIAL_SEARCH_SOURCE,
   DAILY_FOUND_ONLINE_PROPERTY_TARGET,

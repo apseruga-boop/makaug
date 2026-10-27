@@ -82,7 +82,7 @@ for (const param of [
 assert(propertiesRoute.includes('const furnished = cleanText(req.query.furnished || req.query.furnishing)'), 'backend must parse furnishing filters');
 assert(propertiesRoute.includes('const minSize = toNullableFloat'), 'backend must parse size filters');
 assert(propertiesRoute.includes('const priceSortRankSql'), 'backend must rank unpriced/outlier listings last for price sorting');
-assert(propertiesRoute.includes('price_desc: `${priceSortRankSql} ASC, p.price DESC NULLS LAST'), 'backend must sort priced listings high-to-low before unpriced/outliers');
+assert(propertiesRoute.includes('price_desc: `${priceSortRankSql} ASC, ${priceSortValueSql} DESC NULLS LAST'), 'backend must sort priced listings high-to-low before unpriced/outliers');
 assert(propertiesRoute.includes("oldest: 'p.created_at ASC, p.id ASC'"), 'backend must support oldest sort');
 assert(propertiesRoute.includes('legacyCanonicalLocation = canonicalizeUgandaLocation(area, district)'), 'legacy public searches must resolve through the canonical registry');
 assert(propertiesRoute.includes('addCanonicalLocationSearchFilter(filters, values, canonicalLocationScope)'), 'anonymous/public location searches must filter on canonical IDs');

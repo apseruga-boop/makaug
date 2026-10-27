@@ -340,7 +340,7 @@ async function studentDashboardPayload(user) {
       `SELECT sl.*, p.title, p.listing_type, p.district, p.area, p.price, p.price_period,
               p.nearest_university, p.distance_to_uni_km, p.room_type, p.students_welcome,
               img.url AS primary_image_url
-       FROM saved_listings sl
+       FROM (SELECT id, user_id, property_id AS listing_id, list_name, note, status, created_at, updated_at FROM saved_properties WHERE user_id IS NOT NULL) sl
        JOIN properties p ON p.id = sl.listing_id
        LEFT JOIN LATERAL (
          SELECT url FROM property_images WHERE property_id = p.id ORDER BY is_primary DESC, sort_order ASC, created_at ASC LIMIT 1

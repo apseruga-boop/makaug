@@ -1,0 +1,295 @@
+{
+ "source": "OpenStreetMap Nominatim /search?q=<q>, Uganda&addressdetails=1, fetched 26 Oct 2026 (data © OpenStreetMap contributors, ODbL)",
+ "results": [
+  {
+   "q": "Kira Junior School",
+   "display_name": "Kira Junior School, Micheal O Close, Jjanda, Kira, Wakiso, Central Region, Uganda",
+   "lat": "0.4095550",
+   "lon": "32.6557933",
+   "type": [
+    "amenity",
+    "school"
+   ],
+   "address": {
+    "amenity": "Kira Junior School",
+    "road": "Micheal O Close",
+    "suburb": "Jjanda",
+    "city": "Kira",
+    "state": "Wakiso",
+    "ISO3166-2-lvl4": "UG-113",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Kira",
+   "display_name": "Kira, Wakiso, Central Region, Uganda",
+   "lat": "0.4003408",
+   "lon": "32.6391845",
+   "type": [
+    "place",
+    "city"
+   ],
+   "address": {
+    "city": "Kira",
+    "state": "Wakiso",
+    "ISO3166-2-lvl4": "UG-113",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Kira Mulawa",
+   "display_name": "Kira Junior School, Micheal O Close, Jjanda, Kira, Wakiso, Central Region, Uganda",
+   "lat": "0.4095550",
+   "lon": "32.6557933",
+   "type": [
+    "amenity",
+    "school"
+   ],
+   "address": {
+    "amenity": "Kira Junior School",
+    "road": "Micheal O Close",
+    "suburb": "Jjanda",
+    "city": "Kira",
+    "state": "Wakiso",
+    "ISO3166-2-lvl4": "UG-113",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Najjera",
+   "display_name": "Najjera High School, Kira Najjeera Road, Najjeera, Wakiso, Central Region, Uganda",
+   "lat": "0.3810187",
+   "lon": "32.6262580",
+   "type": [
+    "amenity",
+    "school"
+   ],
+   "address": {
+    "amenity": "Najjera High School",
+    "road": "Kira Najjeera Road",
+    "village": "Najjeera",
+    "state": "Wakiso",
+    "ISO3166-2-lvl4": "UG-113",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Namugongo",
+   "display_name": "Namugongo, Kira, Wakiso, Central Region, Uganda",
+   "lat": "0.3907151",
+   "lon": "32.6541992",
+   "type": [
+    "place",
+    "suburb"
+   ],
+   "address": {
+    "suburb": "Namugongo",
+    "city": "Kira",
+    "state": "Wakiso",
+    "ISO3166-2-lvl4": "UG-113",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Kyaliwajjala",
+   "display_name": "Kyaliwajjala, Kira, Wakiso, Central Region, Uganda",
+   "lat": "0.3802059",
+   "lon": "32.6468271",
+   "type": [
+    "place",
+    "suburb"
+   ],
+   "address": {
+    "suburb": "Kyaliwajjala",
+    "city": "Kira",
+    "state": "Wakiso",
+    "ISO3166-2-lvl4": "UG-113",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Bweyogerere",
+   "display_name": "Bweyogerere, Entebbe City, Central Region, Uganda",
+   "lat": "0.1718774",
+   "lon": "32.4011001",
+   "type": [
+    "place",
+    "village"
+   ],
+   "address": {
+    "village": "Bweyogerere",
+    "city": "Entebbe City",
+    "state": "Central Region",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Seeta",
+   "display_name": "Seeta, Bussi, Entebbe City, Central Region, Uganda",
+   "lat": "0.0591588",
+   "lon": "32.3473334",
+   "type": [
+    "boundary",
+    "administrative"
+   ],
+   "address": {
+    "village": "Seeta",
+    "city_district": "Bussi",
+    "city": "Entebbe City",
+    "state": "Central Region",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Ntinda",
+   "display_name": "Ntinda, Nakawa, Kampala Capital City, Kampala, Central Region, Uganda",
+   "lat": "0.3544278",
+   "lon": "32.6136382",
+   "type": [
+    "place",
+    "suburb"
+   ],
+   "address": {
+    "suburb": "Ntinda",
+    "city": "Kampala Capital City",
+    "ISO3166-2-lvl4": "UG-102",
+    "state": "Central Region",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Kansanga",
+   "display_name": "Kansanga, Makindye, Kampala Capital City, Kampala, Central Region, Uganda",
+   "lat": "0.2920011",
+   "lon": "32.6045744",
+   "type": [
+    "place",
+    "suburb"
+   ],
+   "address": {
+    "suburb": "Kansanga",
+    "city": "Kampala Capital City",
+    "ISO3166-2-lvl4": "UG-102",
+    "state": "Central Region",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Muyenga",
+   "display_name": "Muyenga, Bukasa, Makindye, Kampala Capital City, Kampala, Central Region, Uganda",
+   "lat": "0.2991070",
+   "lon": "32.6185707",
+   "type": [
+    "place",
+    "neighbourhood"
+   ],
+   "address": {
+    "neighbourhood": "Muyenga",
+    "suburb": "Bukasa",
+    "city": "Kampala Capital City",
+    "ISO3166-2-lvl4": "UG-102",
+    "state": "Central Region",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Entebbe",
+   "display_name": "Entebbe City, Central Region, Uganda",
+   "lat": "0.0611715",
+   "lon": "32.4698564",
+   "type": [
+    "boundary",
+    "administrative"
+   ],
+   "address": {
+    "city": "Entebbe City",
+    "state": "Central Region",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Gayaza",
+   "display_name": "Gayaza, Wakiso, Central Region, Uganda",
+   "lat": "0.4517860",
+   "lon": "32.6111440",
+   "type": [
+    "place",
+    "town"
+   ],
+   "address": {
+    "town": "Gayaza",
+    "state": "Wakiso",
+    "ISO3166-2-lvl4": "UG-113",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Wakiso town",
+   "display_name": "INFTRA Uganda, Gayaza Road, Kawempe, Kampala Capital City, Kampala, Wakiso, Central Region, Uganda",
+   "lat": "0.3651838",
+   "lon": "32.5758279",
+   "type": [
+    "shop",
+    "seafood"
+   ],
+   "address": {
+    "shop": "INFTRA Uganda",
+    "road": "Gayaza Road",
+    "suburb": "Kawempe",
+    "city": "Kampala Capital City",
+    "ISO3166-2-lvl4": "UG-113",
+    "state": "Wakiso",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Mukono town",
+   "display_name": "Mukono, Central Region, Uganda",
+   "lat": "0.3608480",
+   "lon": "32.7460874",
+   "type": [
+    "place",
+    "town"
+   ],
+   "address": {
+    "town": "Mukono",
+    "state": "Mukono",
+    "ISO3166-2-lvl4": "UG-108",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Namasuba",
+   "display_name": "Namasuba, Nakaseke, Central Region, Uganda",
+   "lat": "0.6894440",
+   "lon": "32.4213890",
+   "type": [
+    "place",
+    "village"
+   ],
+   "address": {
+    "village": "Namasuba",
+    "state": "Nakaseke",
+    "ISO3166-2-lvl4": "UG-116",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  },
+  {
+   "q": "Kikajjo",
+   "display_name": "Kikajjo, Kampala, Central Region, Uganda",
+   "lat": "0.3075398",
+   "lon": "32.5721771",
+   "type": [
+    "place",
+    "village"
+   ],
+   "address": {
+    "village": "Kikajjo",
+    "city": "Kampala",
+    "ISO3166-2-lvl4": "UG-102",
+    "state": "Central Region",
+    "ISO3166-2-lvl3": "UG-C"
+   }
+  }
+ ]
+}

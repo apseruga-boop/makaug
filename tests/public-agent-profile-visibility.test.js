@@ -134,3 +134,13 @@ test('the profile route uses that rule and does not 404 an agent only because th
   assert.match(server, /if \(!meta\) return sendUnknownAgentDirectoryPage\(req, res\)/);
   assert.equal(resolvePublicPathAlias(`/agents/${KASULU_ID}`), '');
 });
+
+test('an unknown agent short link sends people to the agents directory and stays out of search', () => {
+  const start = server.indexOf("app.get('/a/:slug'");
+  const end = server.indexOf('app.get(', start + 10);
+  const route = server.slice(start, end);
+  assert.ok(start > 0, 'the /a/:slug short link route exists');
+  assert.match(route, /if \(!agent\?\.id\) \{[\s\S]*?res\.set\('X-Robots-Tag', 'noindex, follow'\)[\s\S]*?return res\.redirect\(302, '\/brokers'\);/);
+  assert.doesNotMatch(route, /sendUnknownAgentDirectoryPage/);
+  assert.match(route, /return res\.redirect\(301, `\/agents\/\$\{encodeURIComponent\(agent\.id\)\}\$\{qs\}`\)/);
+});

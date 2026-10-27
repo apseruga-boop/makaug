@@ -636,25 +636,31 @@ function getListingMapPoint(property = {}) {
   const rawLat = Number(property?.lat ?? property?.latitude);
   const rawLng = Number(property?.lng ?? property?.longitude);
   if (!Number.isFinite(rawLat) || !Number.isFinite(rawLng)) return fallback;
+  const storedPrecision = String(property?.location_precision || property?.extra_fields?.location_precision || "").trim().toLowerCase();
+  const precision = ["area", "district", "region", "country"].includes(storedPrecision) ? storedPrecision : "gps";
+  const savedPoint = { lat: rawLat, lng: rawLng, exact: precision === "gps", precision };
   if (ACTIVE_LOCATION_COUNTRY.countryCode !== "UG") {
     return isLikelyUgandaCoordinate(rawLat, rawLng)
-      ? { lat: rawLat, lng: rawLng, exact: true, precision: "gps" }
+      ? savedPoint
       : fallback;
   }
-  if (isOnUgandaLand(rawLat, rawLng)) return { lat: rawLat, lng: rawLng, exact: true, precision: "gps" };
+  if (isOnUgandaLand(rawLat, rawLng)) return savedPoint;
   if (isOnUgandaLand(-rawLat, rawLng)) {
     const flipped = { lat: -rawLat, lng: rawLng };
     const anchor = fallback.precision === "country" ? null : fallback;
     const nearAnchor = !anchor || haversineKm(flipped.lat, flipped.lng, anchor.lat, anchor.lng) <= 45;
-    if (nearAnchor) return { ...flipped, exact: true, precision: "gps", adjusted: "flipped_latitude" };
+    if (nearAnchor) return { ...savedPoint, ...flipped, adjusted: "flipped_latitude" };
   }
   return fallback;
 }
 
 // C6 (10 Oct 2026, Marketing): one place for display exchange rates. The
 // server publishes them in /config.js (window.MAKAUG_FX, also GET /api/fx) with
-// an "as of" date; these are only the fallback. UGX stays the stored value;
-// other currencies are shown as an approximate conversion ("≈").
+// an "as of" date. Since 25 Oct 2026 the server fetches them daily
+// (services/fxRateService.js); these are only the fallback when the config is
+// missing. UGX stays the stored value; other currencies are shown as an
+// approximate conversion ("≈"). A listing priced in US dollars is shown in
+// UGX at today's rate.
 const FX_FALLBACK = { base: "UGX", as_of: "2026-10-01", rates: { USD: 3800, GBP: 4900, EUR: 4100 } };
 const CURRENCY_SYMBOLS = { USD: "$", GBP: "£", EUR: "€" };
 const SUPPORTED_DISPLAY_CURRENCIES = ["UGX", "USD", "GBP", "EUR"];
@@ -665,6 +671,15 @@ function publicFx() {
 function fxRateToUgx(cur) {
   const rate = Number(publicFx().rates?.[cur]);
   return Number.isFinite(rate) && rate > 0 ? rate : FX_FALLBACK.rates[cur];
+}
+// A listing's price in UGX today: a dollar-priced listing at today's rate,
+// anything else at its stored UGX price (same rule as the server's search).
+function listingUgxToday(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const currency = String(p?.price_original_currency || extra.price_original_currency || "").toUpperCase();
+  const original = Number(p?.price_original ?? extra.price_original);
+  if (currency === "USD" && Number.isFinite(original) && original > 0) return Math.round(original * fxRateToUgx("USD"));
+  return Number(p?.price) || 0;
 }
 function convertedPriceText(cur, v, p) {
   if (!v) return "Price upon application";
@@ -1499,6 +1514,7 @@ const I18N_UI = {
     navStudents: "Students",
     navCommercial: "Commercial",
     navLand: "Land",
+    navMore: "More",
     navBrokers: "Find Brokers",
     navMortgage: "Mortgage Finder",
     navAI: "Discover AI Chatbot",
@@ -1647,7 +1663,7 @@ const I18N_UI = {
     badgeStudent: "Student",
     badgeCommercial: "Commercial",
     badgeLand: "Land",
-    listingAgent: "Agent listed",
+    listingAgent: "Listed by an agent",
     listingPrivate: "Private listed",
     listingRegistered: "Registered",
     listingNotRegistered: "",
@@ -1666,6 +1682,7 @@ const I18N_UI = {
     navStudents: "Abayizi",
     navCommercial: "Byobusuubuzi",
     navLand: "Ettaka",
+    navMore: "Ebirala",
     navBrokers: "Noonya Broker",
     navMortgage: "Noonya Mortgage",
     navAI: "Noonya AI Chatbot",
@@ -1776,7 +1793,7 @@ const I18N_UI = {
     badgeStudent: "Muyizi",
     badgeCommercial: "Busuubuzi",
     badgeLand: "Ettaka",
-    listingAgent: "Eteekeddwako Broker",
+    listingAgent: "Kiteekeddwako agenti",
     listingPrivate: "Eteekeddwako Nnyiniyo",
     listingRegistered: "Akwatiddwa",
     listingNotRegistered: "",
@@ -1795,6 +1812,7 @@ const I18N_UI = {
     navStudents: "Wanafunzi",
     navCommercial: "Biashara",
     navLand: "Ardhi",
+    navMore: "Zaidi",
     navBrokers: "Tafuta Wakala",
     navMortgage: "Tafuta Rehani",
     navAI: "Gundua AI Chatbot",
@@ -1905,7 +1923,7 @@ const I18N_UI = {
     badgeStudent: "Mwanafunzi",
     badgeCommercial: "Biashara",
     badgeLand: "Ardhi",
-    listingAgent: "Imeorodheshwa na Broker",
+    listingAgent: "Imeorodheshwa na wakala",
     listingPrivate: "Imeorodheshwa na Mmiliki",
     listingRegistered: "Amesajiliwa",
     listingNotRegistered: "",
@@ -1919,6 +1937,7 @@ const I18N_UI = {
     navStudents: "Jo-Yot",
     navCommercial: "Cwercwiny",
     navLand: "Lobo",
+    navMore: "Mukene", // REVIEW: Acholi, confirm with a native speaker
     navBrokers: "Nong Broker",
     navMortgage: "Mortgage",
     navAI: "AI Chatbot",
@@ -1939,7 +1958,7 @@ const I18N_UI = {
     phStudents: "Kabedo pa yunivasiti",
     phCommercial: "Kabedo",
     phLand: "Kabedo",
-    listingAgent: "Broker omako",
+    listingAgent: "Agent aye oketo",
     listingPrivate: "Lac ma pe broker",
     listingRegistered: "Akwannye",
     listingNotRegistered: "",
@@ -1952,6 +1971,7 @@ const I18N_UI = {
     navStudents: "Abanyeshomesa",
     navCommercial: "By'obusuubuzi",
     navLand: "Eitaka",
+    navMore: "Ebindi", // REVIEW: Runyankole, confirm with a native speaker
     navBrokers: "Shanga Broker",
     navMortgage: "Mortgage",
     navAI: "AI Chatbot",
@@ -1972,7 +1992,7 @@ const I18N_UI = {
     phStudents: "Ekitundu kya yunivasite",
     phCommercial: "Ekitundu",
     phLand: "Ekitundu",
-    listingAgent: "Bya broker",
+    listingAgent: "Kiteekirweho agent",
     listingPrivate: "Bya nnyiniyo",
     listingRegistered: "Ari omwandikisi",
     listingNotRegistered: "",
@@ -1985,6 +2005,7 @@ const I18N_UI = {
     navStudents: "Abanyeshuri",
     navCommercial: "By'ubucuruzi",
     navLand: "Itaka",
+    navMore: "Ebindi", // REVIEW: Rukiga, confirm with a native speaker
     navBrokers: "Shaka Broker",
     navMortgage: "Mortgage",
     navAI: "AI Chatbot",
@@ -2005,7 +2026,7 @@ const I18N_UI = {
     phStudents: "Akarere ka kaminuza",
     phCommercial: "Akarere",
     phLand: "Akarere",
-    listingAgent: "Byashyizweho na broker",
+    listingAgent: "Ehirweho agent",
     listingPrivate: "Byashyizweho na nyirabyo",
     listingRegistered: "Yiyandikishije",
     listingNotRegistered: "",
@@ -2018,6 +2039,7 @@ const I18N_UI = {
     navStudents: "Abaisomesa",
     navCommercial: "Bya busubuzi",
     navLand: "Itaka",
+    navMore: "Ebindi", // REVIEW: Lusoga, confirm with a native speaker
     navBrokers: "Noonia Broker",
     navMortgage: "Mortgage",
     navAI: "AI Chatbot",
@@ -2038,7 +2060,7 @@ const I18N_UI = {
     phStudents: "Ekitundu kya yunivasite",
     phCommercial: "Ekitundu",
     phLand: "Ekitundu",
-    listingAgent: "Byateekebwawo na broker",
+    listingAgent: "Kyateekebwawo agent",
     listingPrivate: "Byateekebwawo na nnyini",
     listingRegistered: "Awandiikiddwa",
     listingNotRegistered: "",
@@ -2515,6 +2537,7 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   navStudents: "ተማሪዎች",
   navCommercial: "ንግድ",
   navLand: "መሬት",
+  navMore: "ተጨማሪ",
   navBrokers: "ደላሎችን ፈልግ",
   navMortgage: "የብድር መፈለጊያ",
   navAI: "AI Chatbot ያግኙ",
@@ -2622,7 +2645,7 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   badgeStudent: "ተማሪ",
   badgeCommercial: "ንግድ",
   badgeLand: "መሬት",
-  listingAgent: "በደላል የተዘረዘረ",
+  listingAgent: "በወኪል የተዘረዘረ",
   listingPrivate: "በግል የተዘረዘረ",
   listingRegistered: "የተመዘገበ",
   footerGrowth: "የ makaug የውስጥ ስፖንሰር ቦታዎች እና SEO ማውጫ ለእድገት ተዘጋጅተዋል።",
@@ -2641,6 +2664,7 @@ I18N_UI.ar = Object.assign({}, I18N_UI.en, {
   navStudents: "الطلاب",
   navCommercial: "تجاري",
   navLand: "أرض",
+  navMore: "المزيد",
   navBrokers: "ابحث عن وسيط",
   navMortgage: "حاسبة التمويل",
   navAI: "اكتشف روبوت AI",
@@ -2742,7 +2766,7 @@ I18N_UI.ar = Object.assign({}, I18N_UI.en, {
   badgeStudent: "طلاب",
   badgeCommercial: "تجاري",
   badgeLand: "أرض",
-  listingAgent: "مدرج بواسطة وسيط",
+  listingAgent: "مدرج بواسطة وكيل",
   listingPrivate: "مدرج بواسطة مالك",
   listingRegistered: "مسجل",
   footerGrowth: "تم تفعيل مواضع الرعاية الداخلية وفهرسة SEO لحملات النمو.",
@@ -3962,7 +3986,12 @@ const MARKETPLACE_UI_EN = Object.freeze({
   googleLoading: "Refreshing details from Google...", googleRating: "Google rating", reviewsOnGoogle: "reviews on Google", openNow: "Open now", closedNow: "Closed now", openingHours: "Opening hours", fullAddress: "Full address", plusCode: "Plus code", businessStatus: "Business status", operational: "Operational", temporarilyClosed: "Temporarily closed", googleDetailsUnavailable: "Live Google details are temporarily unavailable.", websiteLabel: "Website", phoneLabel: "International phone", viewOnGoogle: "View on Google Maps",
   contactName: "Contact person name", reviewTitle: "Your business is under review", reviewCopy: "Thanks — most reviews are completed within 24 hours. We will message you when it is live.", acknowledgementWhatsApp: "Acknowledgement sent by WhatsApp.", acknowledgementEmail: "Acknowledgement sent by email.", acknowledgementPending: "Your reference is saved. We will contact you after review.",
   manageProfile: "Manage your business profile", manageSubtitle: "This secure link lets you update your approved listing without a password.", loadingProfile: "Loading your secure profile...", profileViews: "Profile views", servicesOffered: "Services offered", servesRegions: "Other districts served, separated by commas", profilePhotos: "Business photos", profilePhotosHelp: "Upload up to four JPG, PNG or WebP images, 2.5MB each.", saveChanges: "Save changes", changesSaved: "Your business profile has been updated.",
-  privateUpsellTitle: "You're Privately Listed", privateUpsellCopy: "Verified businesses rank first and receive leads first. Verified is coming soon.", joinWaitlist: "Join the Verified waitlist", verifiedComing: "Verified is coming", waitlistTitle: "Get first access to Marketplace Verified", waitlistSubtitle: "Join the waitlist. We will contact you when evidence review and payment open.", businessOrOwnerName: "Business or owner name", waitlistSent: "You're on the Verified waitlist. We will contact you when it opens."
+  privateUpsellTitle: "You're Privately Listed", privateUpsellCopy: "Verified businesses rank first and receive leads first. Verified is coming soon.", joinWaitlist: "Join the Verified waitlist", verifiedComing: "Verified is coming", waitlistTitle: "Get first access to Marketplace Verified", waitlistSubtitle: "Join the waitlist. We will contact you when evidence review and payment open.", businessOrOwnerName: "Business or owner name", waitlistSent: "You're on the Verified waitlist. We will contact you when it opens.",
+  whoPlaceholder: "Who do you need? e.g. surveyor, land lawyer, solar", askAiLink: "Not sure who you need? Describe the job and Ask AI",
+  branchesCount: "{count} branches", panelTitle: "What do you need help with?", groupBusinesses: "{count} businesses",
+  groupBuySellLegal: "Buy, sell & legal", groupBuildDesign: "Build & design", groupPowerWaterSecurity: "Power, water & security", groupManageMoveInsure: "Manage, move & insure",
+  allInGroup: "All {group}", moreCategories: "+{count} more", fewerCategories: "Fewer", clearGroup: "Show all services",
+  listingNote: "Most listings come from Google Maps and are unclaimed. Owner-listed and Verified businesses show first."
 });
 
 const MARKETPLACE_UI_OVERRIDES = Object.freeze({
@@ -4191,6 +4220,71 @@ Object.entries(MARKETPLACE_LIFECYCLE_I18N).forEach(([language, values]) => {
   Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
 });
 
+// Directory redesign strings (25 Oct 2026). Drafts: non-English wording needs a
+// native-speaker check before the next language review.
+const MARKETPLACE_DIRECTORY_I18N = Object.freeze({
+  lg: {
+    whoPlaceholder: "Oyagala ani? okugeza: omupima ettaka, munnamateeka w'ettaka, solar", askAiLink: "Tomanyi gw'oyagala? Nnyonnyola omulimu, Buuza AI",
+    branchesCount: "amatabi {count}", panelTitle: "Oyagala buyambi ki?", groupBusinesses: "bizinesi {count}",
+    groupBuySellLegal: "Okugula, okutunda n'amateeka", groupBuildDesign: "Okuzimba n'okukola dizayini", groupPowerWaterSecurity: "Amasannyalaze, amazzi n'obukuumi", groupManageMoveInsure: "Okuddukanya, okusengula n'yinsuwa",
+    allInGroup: "{group} byonna", moreCategories: "+{count} endala", fewerCategories: "Bitono", clearGroup: "Laga obuweereza bwonna",
+    listingNote: "Bizinesi nnyingi zaggyibwa ku Google Maps era tezinnaba kwewandiisa. Ezawandiisibwa bannannyini n'ezakakasibwa zisooka."
+  },
+  sw: {
+    whoPlaceholder: "Unamhitaji nani? mf. mpima ardhi, wakili wa ardhi, sola", askAiLink: "Huna uhakika? Eleza kazi na Uliza AI",
+    branchesCount: "matawi {count}", panelTitle: "Unahitaji msaada gani?", groupBusinesses: "biashara {count}",
+    groupBuySellLegal: "Kununua, kuuza na sheria", groupBuildDesign: "Ujenzi na usanifu", groupPowerWaterSecurity: "Umeme, maji na ulinzi", groupManageMoveInsure: "Usimamizi, kuhama na bima",
+    allInGroup: "{group} zote", moreCategories: "+{count} zaidi", fewerCategories: "Chache", clearGroup: "Onyesha huduma zote",
+    listingNote: "Biashara nyingi zimetoka Google Maps na bado hazijadaiwa. Zilizoorodheshwa na wamiliki na zilizothibitishwa huonyeshwa kwanza."
+  },
+  ac: {
+    whoPlaceholder: "Imito nga? calo: lapim ngom, lalok me ngom, solar", askAiLink: "Pe ingeyo ngat ma imito? Tit tic ni, Peny AI",
+    branchesCount: "jange {count}", panelTitle: "Imito kony i kom ngo?", groupBusinesses: "biacara {count}",
+    groupBuySellLegal: "Wilo, cato ki cik", groupBuildDesign: "Gero ki dizain", groupPowerWaterSecurity: "Mac, pii ki gwoko", groupManageMoveInsure: "Loyo, kobo ki insurans",
+    allInGroup: "{group} weng", moreCategories: "+{count} mukene", fewerCategories: "Manok", clearGroup: "Nyut tic weng",
+    listingNote: "Biacara mapol oa ki Google Maps dok pe ki dok gi. Ma lutela gi oketo ki ma kiyubo gi nyute mukwongo."
+  },
+  ny: {
+    whoPlaceholder: "Noyenda oha? nk'omupimi w'eitaka, omuramuzi w'eitaka, solar", askAiLink: "Torikumanya? Shoboorora omurimo, Buuza AI",
+    branchesCount: "amatabi {count}", panelTitle: "Noyenda obuyambi ki?", groupBusinesses: "bizinesi {count}",
+    groupBuySellLegal: "Okugura, okuguza n'ebiragiro", groupBuildDesign: "Okwombeka na dizayini", groupPowerWaterSecurity: "Amashanyarazi, amaizi n'oburinzi", groupManageMoveInsure: "Okureeberera, okwimuka na insuwa",
+    allInGroup: "{group} zoona", moreCategories: "+{count} ezindi", fewerCategories: "Bikye", clearGroup: "Yoreka obuheereza bwona",
+    listingNote: "Bizinesi nyingi ziihirwe aha Google Maps kandi tizikabaire nizihandiikwa. Ezahandiikwa ba nyinazo n'ezakakasiibwe nizibanza."
+  },
+  rn: {
+    whoPlaceholder: "Noyenda oha? nk'omupimi w'eitaka, omuramuzi w'eitaka, solar", askAiLink: "Torikumanya? Shoboorora omurimo, Buuza AI",
+    branchesCount: "amatabi {count}", panelTitle: "Noyenda obuyambi ki?", groupBusinesses: "bizinesi {count}",
+    groupBuySellLegal: "Okugura, okuguza n'ebiragiro", groupBuildDesign: "Okwombeka na dizayini", groupPowerWaterSecurity: "Amashanyarazi, amaizi n'oburinzi", groupManageMoveInsure: "Okureeberera, okwimuka na insuwa",
+    allInGroup: "{group} zoona", moreCategories: "+{count} ezindi", fewerCategories: "Bikye", clearGroup: "Yoreka obuheereza bwona",
+    listingNote: "Bizinesi nyingi ziihirwe aha Google Maps kandi tizikabaire nizihandiikwa. Ezahandiikwa ba nyinazo n'ezakakasiibwe nizibanza."
+  },
+  sm: {
+    whoPlaceholder: "Oyagala ani? okugeza: omupima ettaka, munnamateeka w'ettaka, solar", askAiLink: "Tomanyi gw'oyagala? Nnyonnyola omulimu, Buuza AI",
+    branchesCount: "amatabi {count}", panelTitle: "Oyagala buyambi ki?", groupBusinesses: "bizinesi {count}",
+    groupBuySellLegal: "Okugula, okutunda n'amateeka", groupBuildDesign: "Okuzimba n'okukola dizayini", groupPowerWaterSecurity: "Amasannyalaze, amazzi n'obukuumi", groupManageMoveInsure: "Okuddukanya, okusengula n'yinsuwa",
+    allInGroup: "{group} byonna", moreCategories: "+{count} endala", fewerCategories: "Bitono", clearGroup: "Laga obuweereza bwonna",
+    listingNote: "Bizinesi nnyingi zaggyibwa ku Google Maps era tezinnaba kwewandiisa. Ezawandiisibwa bannannyini n'ezakakasibwa zisooka."
+  },
+  am: {
+    whoPlaceholder: "ማንን ይፈልጋሉ? ለምሳሌ ቀያሽ፣ የመሬት ጠበቃ፣ ሶላር", askAiLink: "እርግጠኛ አይደሉም? ስራውን ይግለጹ እና AI ይጠይቁ",
+    branchesCount: "{count} ቅርንጫፎች", panelTitle: "በምን እንርዳዎት?", groupBusinesses: "{count} ንግዶች",
+    groupBuySellLegal: "ግዢ፣ ሽያጭ እና ህግ", groupBuildDesign: "ግንባታ እና ዲዛይን", groupPowerWaterSecurity: "ኃይል፣ ውሃ እና ጥበቃ", groupManageMoveInsure: "አስተዳደር፣ እቃ ማጓጓዝ እና መድን",
+    allInGroup: "ሁሉም {group}", moreCategories: "+{count} ተጨማሪ", fewerCategories: "ያነሰ", clearGroup: "ሁሉንም አገልግሎቶች አሳይ",
+    listingNote: "አብዛኛዎቹ ንግዶች ከGoogle Maps የተገኙ ሲሆኑ ገና ባለቤት አልጠየቃቸውም። በባለቤቶች የተመዘገቡ እና የተረጋገጡ ንግዶች መጀመሪያ ይታያሉ።"
+  },
+  ar: {
+    whoPlaceholder: "من تحتاج؟ مثلا: مساح، محامي أراضٍ، طاقة شمسية", askAiLink: "لست متأكدا؟ صف العمل واسأل الذكاء الاصطناعي",
+    branchesCount: "{count} فروع", panelTitle: "بماذا تحتاج المساعدة؟", groupBusinesses: "{count} نشاطا",
+    groupBuySellLegal: "شراء وبيع وقانون", groupBuildDesign: "بناء وتصميم", groupPowerWaterSecurity: "كهرباء ومياه وأمن", groupManageMoveInsure: "إدارة ونقل وتأمين",
+    allInGroup: "كل {group}", moreCategories: "+{count} أخرى", fewerCategories: "أقل", clearGroup: "عرض كل الخدمات",
+    listingNote: "معظم الأنشطة مصدرها خرائط Google ولم يطالب بها أصحابها بعد. تظهر الأنشطة المسجلة من أصحابها والموثقة أولا."
+  }
+});
+
+Object.entries(MARKETPLACE_DIRECTORY_I18N).forEach(([language, values]) => {
+  Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
+});
+
 const MARKETPLACE_CATEGORY_LABELS = Object.freeze({
   surveyors: { en: "Surveyors", lg: "Abapima ettaka", sw: "Wapima ardhi", ac: "Jo pim ngom", ny: "Abapima eitaka", rn: "Abapima eitaka", sm: "Abapima eitaka", am: "ቀያሾች", ar: "المساحون" },
   brokers: { en: "Brokers & agents", lg: "Aba broker n'abasenza", sw: "Madalali na mawakala", ac: "Jo cat ot", ny: "Ba broker n'abakozi", rn: "Ba broker n'abakozi", sm: "Aba broker", am: "ደላሎች", ar: "الوسطاء والوكلاء" },
@@ -4211,6 +4305,8 @@ const MARKETPLACE_CATEGORY_LABELS = Object.freeze({
   solar: { en: "Solar installers", lg: "Abateeka solar", sw: "Wafungaji solar", ac: "Jo keto solar", ny: "Abateeka solar", rn: "Abateeka solar", sm: "Abateeka solar", am: "የፀሐይ ኃይል ጫኚዎች", ar: "تركيب الطاقة الشمسية" },
   security: { en: "Security services", lg: "Obukuumi", sw: "Huduma za ulinzi", ac: "Tic me gwoko", ny: "Oburinzi", rn: "Oburinzi", sm: "Obukuumi", am: "የደህንነት አገልግሎቶች", ar: "خدمات الأمن" },
   cleaning: { en: "Cleaning services", lg: "Obuyonjo", sw: "Huduma za usafi", ac: "Tic me yweyo", ny: "Obuyonjo", rn: "Obuyonjo", sm: "Obuyonjo", am: "የጽዳት አገልግሎቶች", ar: "خدمات التنظيف" },
+  // loans_microfinance non-English labels need native-speaker review.
+  loans_microfinance: { en: "Loans & microfinance", lg: "Looni ne microfinance", sw: "Mikopo na taasisi ndogo za fedha", ac: "Loan ki microfinance", ny: "Looni na microfinance", rn: "Looni na microfinance", sm: "Looni ne microfinance", am: "ብድር እና ማይክሮፋይናንስ", ar: "القروض والتمويل الأصغر" },
   commercial_services: { en: "Commercial property services", lg: "Obuweereza bw'ebizimbe bya bizinesi", sw: "Huduma za mali za biashara", ac: "Tic me ot pa bici", ny: "Obuheereza bw'emitungo ya bizinesi", rn: "Obuheereza bw'emitungo ya bizinesi", sm: "Obuweereza bwa bizinesi", am: "የንግድ ንብረት አገልግሎቶች", ar: "خدمات العقارات التجارية" }
 });
 
@@ -4235,6 +4331,7 @@ const MARKETPLACE_CATEGORY_PALETTE = Object.freeze({
   borehole_water: { accent: "#0e7490", soft: "#ecfeff" },
   developers: { accent: "#a16207", text: "#92400e", soft: "#fefce8" },
   commercial_services: { accent: "#6b7280", soft: "#f3f4f6" },
+  loans_microfinance: { accent: "#a21caf", soft: "#fdf4ff" },
   other: { accent: "#6b7280", soft: "#f3f4f6" }
 });
 
@@ -4251,6 +4348,9 @@ const marketplaceState = {
   totalPages: 1,
   limit: 20,
   activeCategory: "",
+  activeGroup: "",
+  categoryGroups: [],
+  groupCounts: [],
   categoryCounts: {},
   verifiedPricing: { amount_ugx: 150000, billing_period: "month" },
   profileDetails: {},
@@ -4352,6 +4452,7 @@ function marketplaceRouteFilters() {
   return {
     q: cleanText(params.get("q") || ""),
     category: cleanText(params.get("category") || ""),
+    group: cleanText(params.get("group") || ""),
     district: cleanText(params.get("district") || ""),
     area: cleanText(params.get("area") || ""),
     min_rating: cleanText(params.get("min_rating") || ""),
@@ -4367,6 +4468,7 @@ function syncMarketplaceFilterControls(filters = marketplaceRouteFilters()) {
     if (element) element.value = filters[key] || "";
   });
   marketplaceState.activeCategory = filters.category || "";
+  marketplaceState.activeGroup = filters.group || "";
   marketplaceState.page = filters.page || 1;
   marketplaceApplyCategoryControlTheme();
 }
@@ -4374,7 +4476,7 @@ function syncMarketplaceFilterControls(filters = marketplaceRouteFilters()) {
 function renderMarketplaceLoading() {
   const results = document.getElementById("marketplace-results");
   if (!results) return;
-  results.innerHTML = Array.from({ length: 8 }, () => `<div class="overflow-hidden rounded-2xl border border-gray-200 bg-white"><div class="marketplace-skeleton marketplace-card-photo"></div><div class="space-y-2 p-3"><div class="marketplace-skeleton h-4 w-2/3 rounded"></div><div class="marketplace-skeleton h-3 w-1/2 rounded"></div></div></div>`).join("");
+  results.innerHTML = Array.from({ length: 8 }, () => `<div class="overflow-hidden rounded-2xl border border-gray-200 bg-white"><div class="space-y-2 p-3"><div class="marketplace-skeleton mk-avatar"></div><div class="marketplace-skeleton h-4 w-2/3 rounded"></div><div class="marketplace-skeleton h-3 w-1/2 rounded"></div></div></div>`).join("");
   const count = document.getElementById("marketplace-result-count");
   if (count) count.textContent = marketplaceTr("loading");
 }
@@ -4482,6 +4584,32 @@ async function loadMarketplaceProfileDetails(id) {
   }
 }
 
+const MARKETPLACE_NAME_KEEP_UPPER = /^(LTD|SMC|CCTV|UG|TV|SWICO|NIC|SACCO|SACCOS|NSSF|UAP|URSB|NHCC|NHCCL|UMEME|UEB|AAR|APA|CIC|ICT|FINCA|NWSC|UEDCL|KCCA|HFB|MSC|TFS|PVC|HQ|II|III|IV|\(U\)|U\))$/;
+function marketplaceDisplayName(name = "") {
+  const raw = cleanText(name);
+  const letters = raw.replace(/[^A-Za-z]/g, "");
+  if (letters.length < 4 || letters.replace(/[^A-Z]/g, "").length / letters.length < 0.6) return raw;
+  return raw.split(/\s+/).map((word, index) => {
+    const bare = word.toUpperCase().replace(/[.,:;]/g, "");
+    if (bare === "LTD") return word.replace(/LTD/i, "Ltd");
+    if (MARKETPLACE_NAME_KEEP_UPPER.test(bare)) return word;
+    const lower = word.toLowerCase();
+    if (index > 0 && /^(and|of|the|in|for|at|on|to|by)$/.test(lower)) return lower;
+    return lower.replace(/(^|[-/(.&])([a-z])/g, (_match, lead, letter) => lead + letter.toUpperCase());
+  }).join(" ");
+}
+function marketplaceInitials(name = "") {
+  const words = marketplaceDisplayName(name).replace(/\(.*?\)/g, " ").split(/[\s-]+/)
+    .filter((word) => /^[A-Za-z0-9]/.test(word) && !/^(the|and|of|&|ltd|limited|uganda|smc|co|company|u)$/i.test(word.replace(/[.,']/g, "")));
+  return ((words[0]?.[0] || "") + (words[1]?.[0] || "")).toUpperCase() || "M";
+}
+function marketplaceAvatarHtml(business = {}, photo = "") {
+  return `<span class="mk-avatar" aria-hidden="true">${photo ? `<img src="${adminAttr(photo)}" alt="" loading="lazy">` : adminEscape(marketplaceInitials(business.name))}</span>`;
+}
+function marketplaceWebsiteHost(url = "") {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch (_error) { return ""; }
+}
+
 function renderMarketplaceBusinesses() {
   const results = document.getElementById("marketplace-results");
   const empty = document.getElementById("marketplace-empty");
@@ -4505,21 +4633,25 @@ function renderMarketplaceBusinesses() {
     const stars = rating
       ? `<span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-amber-700"><i class="fas fa-star" aria-hidden="true"></i>${rating.toFixed(1)} <span class="text-amber-700/70">(${Number(business.rating_count || 0)})</span></span>`
       : `<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-gray-600">${adminEscape(marketplaceTr("newBusiness"))}</span>`;
-    return `<article class="marketplace-business-row bg-white border border-gray-200 rounded-2xl" data-tier="${adminAttr(business.tier || "found_online")}" style="${adminAttr(marketplaceCategoryStyle(business.category))}">
-      <div class="marketplace-card-photo">
-        ${photo
-          ? `<img src="${adminAttr(photo)}" alt="" loading="lazy">`
-          : `<div class="marketplace-card-fallback marketplace-category-icon" aria-hidden="true"><i class="fas ${adminAttr(icon)}"></i></div>`}
-        <span class="marketplace-card-badge">${business.tier === "verified" ? `<i class="fas fa-check" aria-hidden="true"></i>` : ""}${adminEscape(marketplaceTr(tierKey))}</span>
-      </div>
-      <div class="min-w-0 p-3">
-        <h3 class="marketplace-business-name font-black leading-snug break-words">${adminEscape(business.name)}</h3>
-        <p class="mt-1 text-sm text-gray-600">${adminEscape(summary)}</p>
-        <div class="marketplace-card-actions mt-3">
-          ${business.phone ? `<a href="${adminAttr(marketplaceContactUrl("phone", business.phone))}" class="marketplace-card-call">${adminEscape(marketplaceTr("call"))}</a>` : ""}
-          ${business.whatsapp || business.phone ? `<a href="${adminAttr(marketplaceContactUrl("whatsapp", business.whatsapp || business.phone))}" target="_blank" rel="noopener" class="marketplace-card-wa">${adminEscape(marketplaceTr("whatsappAction"))}</a>` : ""}
+    return `<article class="marketplace-business-row mk-row bg-white border border-gray-200 rounded-2xl" data-tier="${adminAttr(business.tier || "found_online")}" style="${adminAttr(marketplaceCategoryStyle(business.category))}">
+      <div class="mk-row-main">
+        ${marketplaceAvatarHtml(business, photo)}
+        <div class="min-w-0 flex-1">
+          <h3 class="marketplace-business-name mk-name">${adminEscape(marketplaceDisplayName(business.name))}${business.tier === "verified" ? ` <i class="fas fa-circle-check text-blue-600" title="${adminAttr(marketplaceTr("tierVerified"))}"></i>` : ""}</h3>
+          <p class="mk-meta"><i class="fas ${adminAttr(icon)}" aria-hidden="true"></i> ${adminEscape(summary)}</p>
+          <div class="mk-tags">
+            ${business.tier === "private" ? `<span class="mk-tag mk-tag-owner"><i class="fas fa-user-check" aria-hidden="true"></i>${adminEscape(marketplaceTr("tierPrivate"))}</span>` : ""}
+            ${Number(business.branch_count || 0) > 1 ? `<span class="mk-tag"><i class="fas fa-code-branch" aria-hidden="true"></i>${adminEscape(marketplaceInterpolate(marketplaceTr("branchesCount"), { count: Number(business.branch_count) }))}</span>` : ""}
+            ${business.website && marketplaceWebsiteHost(business.website) ? `<a class="mk-tag mk-tag-link" href="${adminAttr(business.website)}" target="_blank" rel="noopener nofollow"><i class="fas fa-globe" aria-hidden="true"></i>${adminEscape(marketplaceWebsiteHost(business.website))}</a>` : ""}
+          </div>
         </div>
-        <button type="button" onclick="marketplaceToggleProfile('${adminAttr(business.id)}')" class="marketplace-category-label mt-2 text-sm font-black hover:underline">${adminEscape(marketplaceTr("profile"))} <i class="fas fa-chevron-down ml-1 text-[10px]"></i></button>
+        <div class="mk-row-actions">
+          ${business.phone ? `<a href="${adminAttr(marketplaceContactUrl("phone", business.phone))}" class="mk-btn mk-btn-call" aria-label="${adminAttr(marketplaceTr("call"))}"><i class="fas fa-phone" aria-hidden="true"></i><span>${adminEscape(marketplaceTr("call"))}</span></a>` : ""}
+          ${business.whatsapp || business.phone ? `<a href="${adminAttr(marketplaceContactUrl("whatsapp", business.whatsapp || business.phone))}" target="_blank" rel="noopener" class="mk-btn mk-btn-wa"><i class="fab fa-whatsapp" aria-hidden="true"></i><span>${adminEscape(marketplaceTr("whatsappAction"))}</span></a>` : ""}
+        </div>
+      </div>
+      <div class="min-w-0 mk-row-foot">
+        <button type="button" onclick="marketplaceToggleProfile('${adminAttr(business.id)}')" class="marketplace-category-label text-xs font-black hover:underline">${adminEscape(marketplaceTr("profile"))} <i class="fas fa-chevron-down ml-1 text-[10px]"></i></button>
         <div id="marketplace-profile-${adminAttr(business.id)}" class="hidden mt-3 border-t border-gray-100 pt-3 text-xs text-gray-600 space-y-1">
           <div>${stars}</div>
             ${Array.isArray(business.profile_images) && business.profile_images.length ? `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pb-2">${business.profile_images.slice(0, 4).map((url, index) => `<img src="${adminAttr(url)}" alt="${adminAttr(`${business.name} business photo ${index + 1}`)}" loading="lazy" class="h-24 w-full rounded-lg border border-gray-200 object-cover">`).join("")}</div>` : ""}
@@ -4553,12 +4685,79 @@ function renderMarketplaceBusinesses() {
   if (next) next.disabled = marketplaceState.page >= marketplaceState.totalPages;
 }
 
+const MARKETPLACE_GROUP_TITLE_KEYS = Object.freeze({ buy_sell_legal: "groupBuySellLegal", build_design: "groupBuildDesign", power_water_security: "groupPowerWaterSecurity", manage_move_insure: "groupManageMoveInsure" });
+function marketplaceGroupTitle(group = {}) {
+  const key = MARKETPLACE_GROUP_TITLE_KEYS[group.key];
+  return key ? marketplaceTr(key) : (group.label || group.key || "");
+}
+function marketplaceGroupForCategory(category = "") {
+  return (marketplaceState.categoryGroups || []).find((group) => (group.categories || []).includes(category)) || null;
+}
+// Panel groups with live counts. Server counts (stats.by_group) win; category counts are the fallback.
+function marketplacePanelGroups() {
+  const counts = marketplaceState.categoryCounts || {};
+  const serverCounts = Object.fromEntries((marketplaceState.groupCounts || []).map((group) => [group.key, Number(group.count || 0)]));
+  return (marketplaceState.categoryGroups || []).map((group) => {
+    const items = (group.categories || []).map((key) => ({ key, count: Number(counts[key] || 0) })).filter((item) => item.count > 0);
+    const fallback = items.reduce((sum, item) => sum + item.count, 0);
+    return { ...group, items, count: serverCounts[group.key] ?? fallback };
+  });
+}
+function renderMarketplaceGroupPanel() {
+  const tiles = document.getElementById("mkc-groups");
+  if (!tiles) return;
+  const iconByKey = Object.fromEntries((marketplaceState.categories || []).map((item) => [item.key, item.icon]));
+  const activeGroup = marketplaceState.activeGroup;
+  const activeCategory = marketplaceState.activeCategory;
+  tiles.innerHTML = marketplacePanelGroups().map((group) => {
+    const pressed = group.key === activeGroup || (!activeGroup && activeCategory && group.categories?.includes(activeCategory));
+    const links = [...group.items].sort((a, b) => b.count - a.count).slice(0, 5);
+    return `<article class="mkc-tile" data-group="${adminAttr(group.key)}" aria-current="${pressed ? "true" : "false"}">
+      <button type="button" class="mkc-tile-head" onclick="selectMarketplaceGroup('${adminAttr(group.key)}')" aria-pressed="${pressed ? "true" : "false"}">
+        <span class="mkc-tile-icon"><i class="fas ${adminAttr(group.icon || "fa-briefcase")}" aria-hidden="true"></i></span>
+        <span class="min-w-0"><span class="mkc-tile-title">${adminEscape(marketplaceGroupTitle(group))}</span><span class="mkc-tile-count">${adminEscape(marketplaceInterpolate(marketplaceTr("groupBusinesses"), { count: group.count.toLocaleString() }))}</span></span>
+      </button>
+      <div class="mkc-tile-links">${links.map((item) => `<button type="button" onclick="selectMarketplaceCategory('${adminAttr(item.key)}')" style="${adminAttr(marketplaceCategoryStyle(item.key))}" aria-pressed="${item.key === activeCategory ? "true" : "false"}"><i class="fas ${adminAttr(iconByKey[item.key] || "fa-briefcase")}" aria-hidden="true"></i>${adminEscape(marketplaceCategoryLabel(item.key))} <span>${item.count.toLocaleString()}</span></button>`).join("")}</div>
+    </article>`;
+  }).join("");
+}
 function renderMarketplaceCategoryChips() {
+  renderMarketplaceGroupPanel();
   const wrap = document.getElementById("marketplace-category-chips");
   if (!wrap) return;
-  const allCount = Object.values(marketplaceState.categoryCounts || {}).reduce((sum, count) => sum + Number(count || 0), 0);
-  const items = [{ key: "", label: marketplaceTr("allServices"), icon: "fa-border-all", count: allCount }, ...(marketplaceState.categories || []).map((item) => ({ ...item, label: marketplaceCategoryLabel(item.key), count: Number(marketplaceState.categoryCounts?.[item.key] || 0) }))];
-  wrap.innerHTML = items.map((item) => `<button type="button" onclick="selectMarketplaceCategory('${adminAttr(item.key)}')" class="marketplace-category-chip shrink-0 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-black" style="${adminAttr(marketplaceCategoryStyle(item.key || "other"))}" aria-pressed="${item.key === marketplaceState.activeCategory ? "true" : "false"}"><i class="fas ${adminAttr(item.icon || "fa-briefcase")}"></i>${adminEscape(item.label)}<span class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">${item.count}</span></button>`).join("");
+  const counts = marketplaceState.categoryCounts || {};
+  const allCount = Object.values(counts).reduce((sum, count) => sum + Number(count || 0), 0);
+  const activeGroup = (marketplaceState.categoryGroups || []).find((group) => group.key === marketplaceState.activeGroup) || null;
+  const ranked = (marketplaceState.categories || [])
+    .filter((item) => !activeGroup || (activeGroup.categories || []).includes(item.key))
+    .map((item) => ({ ...item, label: marketplaceCategoryLabel(item.key), count: Number(counts[item.key] || 0) }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const showAll = Boolean(marketplaceState.showAllCategories) || Boolean(activeGroup);
+  const active = marketplaceState.activeCategory;
+  const visible = showAll ? ranked : ranked.filter((item, index) => index < 9 || item.key === active);
+  const chip = (item, onclick = `selectMarketplaceCategory('${adminAttr(item.key)}')`) => `<button type="button" onclick="${onclick}" class="marketplace-category-chip mk-chip" style="${adminAttr(marketplaceCategoryStyle(item.key || "other"))}" aria-pressed="${item.pressed ?? (item.key === active) ? "true" : "false"}"><i class="fas ${adminAttr(item.icon || "fa-briefcase")}" aria-hidden="true"></i><span>${adminEscape(item.label)}</span><span class="mk-chip-count">${Number(item.count).toLocaleString()}</span></button>`;
+  const hidden = ranked.length - visible.length;
+  const lead = activeGroup
+    ? chip({ key: "", label: marketplaceInterpolate(marketplaceTr("allInGroup"), { group: marketplaceGroupTitle(activeGroup) }), icon: activeGroup.icon, count: ranked.reduce((sum, item) => sum + item.count, 0), pressed: !active }, `selectMarketplaceGroup('${adminAttr(activeGroup.key)}')`)
+    : chip({ key: "", label: marketplaceTr("allServices"), icon: "fa-border-all", count: allCount });
+  const more = activeGroup
+    ? `<button type="button" class="mk-chip mk-chip-more" onclick="selectMarketplaceGroup('')">${adminEscape(marketplaceTr("clearGroup"))}</button>`
+    : (hidden > 0 || marketplaceState.showAllCategories ? `<button type="button" class="mk-chip mk-chip-more" onclick="marketplaceState.showAllCategories=!marketplaceState.showAllCategories;renderMarketplaceCategoryChips()">${adminEscape(marketplaceState.showAllCategories ? marketplaceTr("fewerCategories") : marketplaceInterpolate(marketplaceTr("moreCategories"), { count: hidden }))}</button>` : "");
+  wrap.innerHTML = [lead, ...visible.map((item) => chip(item))].join("") + more;
+}
+
+function selectMarketplaceGroup(groupKey) {
+  const filters = marketplaceRouteFilters();
+  filters.group = groupKey || "";
+  filters.category = "";
+  filters.page = 1;
+  updateMarketplaceRoute(filters);
+  syncMarketplaceFilterControls(filters);
+  renderMarketplaceLoading();
+  searchMarketplaceBusinesses()
+    .then(() => { if (groupKey) document.getElementById("marketplace-category-chips")?.scrollIntoView({ behavior: "smooth", block: "start" }); })
+    .catch((error) => toast(error.message || "Marketplace search failed."));
 }
 
 async function loadMarketplacePage({ force = false } = {}) {
@@ -4572,6 +4771,8 @@ async function loadMarketplacePage({ force = false } = {}) {
       marketplaceState.districts = configResponse?.data?.districts || [];
       marketplaceState.verifiedPricing = configResponse?.data?.verified_pricing || marketplaceState.verifiedPricing;
       marketplaceState.categoryCounts = statsResponse?.data?.by_category || {};
+      marketplaceState.categoryGroups = configResponse?.data?.category_groups || [];
+      marketplaceState.groupCounts = statsResponse?.data?.by_group || [];
       const total = Number(statsResponse?.data?.total || 0);
       const totalEl = document.getElementById("marketplace-live-total");
       if (totalEl) totalEl.textContent = total.toLocaleString();
@@ -4610,6 +4811,7 @@ async function searchMarketplaceBusinesses() {
   const filters = marketplaceRouteFilters();
   marketplaceState.page = filters.page;
   marketplaceState.activeCategory = filters.category;
+  marketplaceState.activeGroup = filters.group;
   renderMarketplaceCategoryChips();
   const params = new URLSearchParams({ page: String(filters.page), limit: String(marketplaceState.limit) });
   Object.entries(filters).forEach(([key, value]) => {
@@ -4637,6 +4839,7 @@ function submitMarketplaceFilters(event) {
   const filters = {
     q: cleanText(document.getElementById("marketplace-q")?.value || ""),
     category: cleanText(document.getElementById("marketplace-category")?.value || ""),
+    group: marketplaceState.activeGroup || "",
     district: cleanText(document.getElementById("marketplace-district")?.value || ""),
     area: cleanText(document.getElementById("marketplace-area")?.value || ""),
     min_rating: cleanText(document.getElementById("marketplace-rating")?.value || ""),
@@ -4652,6 +4855,9 @@ function submitMarketplaceFilters(event) {
 function selectMarketplaceCategory(category) {
   const filters = marketplaceRouteFilters();
   filters.category = category || "";
+  const group = marketplaceGroupForCategory(filters.category);
+  if (!filters.category) filters.group = "";
+  else if (filters.group && group?.key !== filters.group) filters.group = group?.key || "";
   filters.page = 1;
   updateMarketplaceRoute(filters);
   syncMarketplaceFilterControls(filters);
@@ -4661,7 +4867,7 @@ function selectMarketplaceCategory(category) {
 
 function resetMarketplaceFilters() {
   updateMarketplaceRoute({}, { replace: true });
-  syncMarketplaceFilterControls({ q: "", category: "", district: "", area: "", min_rating: "", tier: "", page: 1 });
+  syncMarketplaceFilterControls({ q: "", category: "", group: "", district: "", area: "", min_rating: "", tier: "", page: 1 });
   renderMarketplaceLoading();
   searchMarketplaceBusinesses().catch((error) => toast(error.message || "Marketplace search failed."));
 }
@@ -5216,7 +5422,7 @@ const HOME_ASSISTANT_I18N = {
 
 const FOOTER_I18N = {
   en: {
-    brandCopy: `Uganda's property search engine. List your first property free for 7 days, then UGX 20,000 per listing per month. Web or WhatsApp, all 146 districts.`,
+    brandCopy: `Uganda's property search engine. List your first property and pay nothing for 7 days, then UGX 20,000 per listing per month. Web or WhatsApp, all 146 districts.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Chat on WhatsApp",
@@ -5251,7 +5457,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. All rights reserved.`
   },
   lg: {
-    brandCopy: "Yingini y'okunoonya ebintu mu Uganda. Teeka ekintu kyo eky'olubereberye ku bwereere okumala ennaku 7, oluvannyuma UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
+    brandCopy: "Yingini y'okunoonya ebintu mu Uganda. Teeka ekintu kyo eky'olubereberye, tosasula kintu okumala ennaku 7, oluvannyuma UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Nyumya ku WhatsApp",
@@ -5285,7 +5491,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   sw: {
-    brandCopy: "Injini ya utafutaji wa mali ya Uganda. Orodhesha mali yako ya kwanza bure kwa siku 7, kisha UGX 20,000 kwa kila tangazo kwa mwezi. Wavuti au WhatsApp, wilaya zote 146.",
+    brandCopy: "Injini ya utafutaji wa mali ya Uganda. Orodhesha mali yako ya kwanza na hulipi chochote kwa siku 7, kisha UGX 20,000 kwa kila tangazo kwa mwezi. Wavuti au WhatsApp, wilaya zote 146.",
     whatsapp: "WhatsApp",
     email: "Barua pepe",
     chatWhatsapp: "Piga gumzo WhatsApp",
@@ -5319,7 +5525,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Haki zote zimehifadhiwa.`
   },
   ac: {
-    brandCopy: "Gin me yeny jami me Uganda. Ket jami ni mukwongo me nono pi nino 7, ka dong UGX 20,000 pi listing acel dwe ki dwe. Intanet onyo WhatsApp, distrik 146 ducu.",
+    brandCopy: "Gin me yeny jami me Uganda. Ket jami ni mukwongo ma pe iculo gin mo pi nino 7, ka dong UGX 20,000 pi listing acel dwe ki dwe. Intanet onyo WhatsApp, distrik 146 ducu.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Lok i WhatsApp",
@@ -5353,7 +5559,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Twero ducu kigwoko.`
   },
   ny: {
-    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Teeka ekintu kyawe eky'okubanza aha busha ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mutimbagano nari WhatsApp, disiturikiti zoona 146.",
+    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Teeka ekintu kyawe eky'okubanza otashashuraine kintu ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mutimbagano nari WhatsApp, disiturikiti zoona 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Gamba kuri WhatsApp",
@@ -5387,7 +5593,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   rn: {
-    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Taho ekintu kyawe eky'okubanza busha ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mukutu nari WhatsApp, omu disiturikiti zoona 146.",
+    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Taho ekintu kyawe eky'okubanza otashashuraine kintu ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mukutu nari WhatsApp, omu disiturikiti zoona 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Ganira kuri WhatsApp",
@@ -5421,7 +5627,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   sm: {
-    brandCopy: "Ekyuma ekinoonia ebintu ekya Uganda. Teka ekintu kyo eky'olubereberye bwereere okumala ennaku 7, olwo UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
+    brandCopy: "Ekyuma ekinoonia ebintu ekya Uganda. Teka ekintu kyo eky'olubereberye, tosasula kintu okumala ennaku 7, olwo UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Yogera ku WhatsApp",
@@ -5455,10 +5661,10 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   am: {
-    brandCopy: "የኡጋንዳ ንብረት መፈለጊያ። የመጀመሪያውን ዝርዝር ለ7 ቀናት ነፃ ይዘምኑ፣ ከዚያ በኋላ በወር በአንድ ዝርዝር UGX 20,000። በድር ወይም በWhatsApp፣ በ146 ወረዳዎች ሁሉ።"
+    brandCopy: "የኡጋንዳ ንብረት መፈለጊያ። የመጀመሪያውን ዝርዝር ያስገቡ፤ ለ7 ቀናት ምንም አይከፍሉም፣ ከዚያ በኋላ በወር በአንድ ዝርዝር UGX 20,000። በድር ወይም በWhatsApp፣ በ146 ወረዳዎች ሁሉ።"
   },
   ar: {
-    brandCopy: "محرك البحث العقاري في أوغندا. أدرج عقارك الأول مجاناً لمدة 7 أيام، ثم UGX 20,000 لكل إعلان في الشهر. عبر الويب أو WhatsApp، في كل المقاطعات الـ 146.",
+    brandCopy: "محرك البحث العقاري في أوغندا. أدرج عقارك الأول ولا تدفع شيئاً لمدة 7 أيام، ثم UGX 20,000 لكل إعلان في الشهر. عبر الويب أو WhatsApp، في كل المقاطعات الـ 146.",
     whatsapp: "WhatsApp",
     email: "البريد الإلكتروني",
     chatWhatsapp: "الدردشة على WhatsApp",
@@ -5608,7 +5814,7 @@ const MORTGAGE_I18N = {
     mortgageStampDutyEstimate: "Mortgage stamp duty estimate",
     valuationEstimate: "Valuation estimate",
     transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, and valuation estimate",
-    bestRateApplied: "Using current best match: {bank} at {rate}%. Edit the rate to test another assumption.",
+    bestRateApplied: "Using the option closest to your inputs: {bank} at {rate}%. Edit the rate to test another assumption.",
     manualRateApplied: "Using your manual calculator rate.",
     grossMonthlyIncomeRequired: "Gross Monthly Income Required",
     loanAmount: "Loan Amount",
@@ -5629,7 +5835,7 @@ const MORTGAGE_I18N = {
     sourceNoteLabel: "Source note",
     publicRecordDisclosure: "Advisory only: rates and fees are pulled from public bank pages and market records, but banks can change terms without notice. Ask a makaug consultant or selected bank to confirm current rates before applying.",
     leadSubmitBank: "Request {bank} Call",
-    resultsTitle: "Best Match & Bank Comparison",
+    resultsTitle: "Closest to your inputs & bank comparison",
     ratesFootnote: "Indicative public rates from bank sources. Confirm current rates with the lender before applying.",
     ratesAsOfLine: "Sources verified {date} · indicative, confirm with the bank.",
     cbrNote: "Bank of Uganda CBR is 12% from 14 Oct 2026; lender rates may rise after that hike.",
@@ -5648,7 +5854,7 @@ const MORTGAGE_I18N = {
     tableMaxLtv: "Max LTV",
     tableMonthly: "Monthly repayment",
     tableAction: "Action",
-    bestMatchBadge: "Best match",
+    bestMatchBadge: "Closest to your inputs",
     refresh: "Refresh",
     whatTitle: "What is a Mortgage?",
     whatBody: "A mortgage is a long-term loan used to buy property. You pay a deposit upfront, and the bank finances the balance. You then repay monthly with interest over an agreed period.",
@@ -7174,6 +7380,22 @@ Object.assign(MORTGAGE_I18N.ar, {
   bestMatchBadge: "أفضل تطابق"
 });
 
+// Neutral wording for the top mortgage result: it is the option closest to the
+// visitor's inputs, not a recommendation. Applied last so it wins over older copy.
+const MORTGAGE_CLOSEST_MATCH_COPY = {
+  lg: { bestMatchBadge: "Ekisemberera by'oyingizza", resultsTitle: "Ekisemberera by'oyingizza & okugeraageranya bbanka", bestRateApplied: "Tukozesa ekisemberera by'oyingizza: {bank} ku {rate}%. Kyusa rate okugezesa ekiteeberezebwa ekirala." },
+  sw: { bestMatchBadge: "Karibu zaidi na taarifa zako", resultsTitle: "Karibu zaidi na taarifa zako & ulinganisho wa benki", bestRateApplied: "Tunatumia chaguo kilicho karibu zaidi na taarifa zako: {bank} kwa {rate}%. Badilisha riba kujaribu makadirio mengine." },
+  ac: { bestMatchBadge: "Cok loyo ki lok ma iketo", resultsTitle: "Cok loyo ki lok ma iketo & poro bengi", bestRateApplied: "Tye ka tic ki ma cok loyo ki lok ma iketo: {bank} ki {rate}%. Lok magoba me temo tam mukene." },
+  ny: { bestMatchBadge: "Ekiri haihi n'ebi wataho", resultsTitle: "Ekiri haihi n'ebi wataho & okugyeragyeranisa banka", bestRateApplied: "Nitukoresa ekiri haihi n'ebi wataho: {bank} aha {rate}%. Hindura interest ogyezeho ekindi." },
+  rn: { bestMatchBadge: "Ekiri haihi n'ebi wataho", resultsTitle: "Ekiri haihi n'ebi wataho & okugyeragyeranisa banka", bestRateApplied: "Nitukoresa ekiri haihi n'ebi wataho: {bank} aha {rate}%. Hindura inyungu kugyezaho ekindi." },
+  sm: { bestMatchBadge: "Ekisemberera by'oteekayo", resultsTitle: "Ekisemberera by'oteekayo & okugeraageranya bbanka", bestRateApplied: "Tukozesa ekisemberera by'oteekayo: {bank} ku {rate}%. Kyusa rate ogezeeko ekiteeberezebwa ekirala." },
+  am: { bestMatchBadge: "ለገቡት መረጃ ቅርብ", resultsTitle: "ለገቡት መረጃ ቅርብ እና የባንክ ንጽጽር", bestRateApplied: "ለገቡት መረጃ ቅርብ የሆነውን አማራጭ እየተጠቀምን ነው፦ {bank} በ {rate}%። ሌላ ግምት ለመሞከር ወለዱን ይቀይሩ።" },
+  ar: { bestMatchBadge: "الأقرب إلى مدخلاتك", resultsTitle: "الأقرب إلى مدخلاتك ومقارنة البنوك", bestRateApplied: "نستخدم الخيار الأقرب إلى مدخلاتك: {bank} عند {rate}%. عدّل الفائدة لاختبار افتراض آخر." }
+};
+Object.entries(MORTGAGE_CLOSEST_MATCH_COPY).forEach(([lang, copy]) => {
+  MORTGAGE_I18N[lang] = Object.assign(MORTGAGE_I18N[lang] || {}, copy);
+});
+
 function mortgageTr(key) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -7908,7 +8130,7 @@ function applyListingWizardLanguageUI() {
   const labelPairs = [
     ["lp-step1-title", "Property Details"],
     ["lp-listing-type-label", "Listing Type *"],
-    ["lp-title-label", "Title *"],
+    ["lp-title-label", "Title (optional)"],
     ["lp-region-label", "Region *"],
     ["lp-district-label", "District *"],
     ["lp-city-label", "Town / City"],
@@ -7965,7 +8187,7 @@ function applyListingWizardLanguageUI() {
     ["list-choice-online-copy", "Open the guided website form."],
     ["list-choice-wa-title", "List through WhatsApp"],
     ["list-choice-wa-copy", "Message 0780 863 394 and let the makaug assistant guide you."],
-    ["list-choice-free-title", "Start with 7 days free."],
+    ["list-choice-free-title", "Pay nothing for your first 7 days."],
     ["list-choice-free-copy", "After that, one private listing costs UGX 20,000 per listing, per month. Every submission stays in staff review until approved."]
   ];
   labelPairs.forEach(([id, text]) => {
@@ -8034,12 +8256,12 @@ function applyListingWizardLanguageUI() {
   setTextById("lp-success-contact", translateListingLabel("We will contact you by WhatsApp or email once this listing is approved."));
   setTextById("lp-success-ref-label", translateListingLabel("Reference:"));
   setTextById("lp-success-support-label", translateListingLabel("Support:"));
-  setTextById("lp-success-account-title", translateListingLabel("Create your free makaug account to:"));
+  setTextById("lp-success-account-title", translateListingLabel("Create your makaug account to:"));
   setTextById("lp-success-benefit-1", translateListingLabel("Track listing views, saves, and enquiries in real time."));
   setTextById("lp-success-benefit-2", translateListingLabel("Edit your listing faster and update photos any time."));
   setTextById("lp-success-benefit-3", translateListingLabel("Receive weekly property tips and market updates."));
   setTextById("lp-success-benefit-4", translateListingLabel("Get priority alerts when buyers or tenants show interest."));
-  setTextById("lp-success-account-btn", translateListingLabel("Create Free Account"));
+  setTextById("lp-success-account-btn", translateListingLabel("Create Account"));
   setTextById("listing-submit-pill", translateListingLabel("Submission Received"));
   setTextById("listing-submit-title", translateListingLabel("Your property has been submitted"));
   setTextById("listing-submit-sub", translateListingLabel("Thank you. Your property listing has been submitted to makaug for review. Our team will check the details and contact you if we need anything else."));
@@ -8047,12 +8269,12 @@ function applyListingWizardLanguageUI() {
   setTextById("listing-submit-ref-label", translateListingLabel("Reference:"));
   setTextById("listing-submit-status-label", translateListingLabel("Status"));
   setTextById("listing-submit-status", translateListingLabel("Pending Review"));
-  setTextById("listing-submit-benefits-title", translateListingLabel("Create your free makaug account to:"));
+  setTextById("listing-submit-benefits-title", translateListingLabel("Create your makaug account to:"));
   setTextById("listing-submit-benefit-1", translateListingLabel("Track listing views, saves, and enquiries in real time."));
   setTextById("listing-submit-benefit-2", translateListingLabel("Edit your listing faster and update photos any time."));
   setTextById("listing-submit-benefit-3", translateListingLabel("Receive weekly property tips and market updates."));
   setTextById("listing-submit-benefit-4", translateListingLabel("Get priority alerts when buyers or tenants show interest."));
-  setTextById("listing-submit-account-btn", translateListingLabel("Create Free Account"));
+  setTextById("listing-submit-account-btn", translateListingLabel("Create Account"));
   setTextById("listing-submit-home-btn", translateListingLabel("Back to Home"));
   setTextById("listing-submit-support-label", translateListingLabel("Support:"));
   setTextById("lp-type-reset-note", translateListingLabel("Changed the property type? Use “Clear & Start Again” if this is a different listing."));
@@ -8847,6 +9069,19 @@ function ensurePublicResultsHeader(category) {
       if (wrapper && wrapper.children.length === 1) wrapper.classList.add("hidden");
     }
   }
+  // "Approximate: $1 = USh N (rates as of D)" under the count when a converted
+  // currency is chosen. refreshDisplayedPrices() keeps it current.
+  let fxNote = document.getElementById(`${key}-results-fx-note`);
+  if (!fxNote) {
+    fxNote = document.createElement("div");
+    fxNote.id = `${key}-results-fx-note`;
+    fxNote.setAttribute("data-fx-note", "1");
+    fxNote.className = "-mt-2 mb-3 text-[11px] text-gray-500";
+    grid.parentElement.insertBefore(fxNote, grid);
+  }
+  fxNote.textContent = fxNoteText();
+  fxNote.classList.toggle("hidden", activeCur === "UGX");
+  ensureSearchAlertButton(key);
   return header;
 }
 
@@ -9135,7 +9370,9 @@ function applyLanguageUI() {
   setTextById("brand-subtitle", tr("brandSubtitle"));
 
   const savedEl = document.getElementById("top-saved-link");
-  if (savedEl) savedEl.innerHTML = `<i class="fas fa-heart text-green-300"></i> ${tr("saved")}`;
+  const savedLabelEl = document.getElementById("top-saved-label");
+  if (savedLabelEl) savedLabelEl.textContent = tr("saved");
+  else if (savedEl) savedEl.innerHTML = `<i class="fas fa-heart text-green-300"></i> ${tr("saved")}`;
   const signEl = document.getElementById("top-signin-link");
   if (signEl) signEl.innerHTML = `<i class="fas fa-user text-green-300"></i> ${tr("signIn")}`;
   const signOutEl = document.getElementById("top-signout-link");
@@ -9157,6 +9394,7 @@ function applyLanguageUI() {
   setTextById("nav-ai", currentLang === "en" ? "AI Chatbot" : tr("navAI"));
   setTextById("nav-marketplace", marketplaceTr("breadcrumbMarketplace"));
   setTextById("nav-about", translateListingLabel("About Us"));
+  setTextById("nav-more-label", tr("navMore"));
   setTextById("mnav-sale", tr("navSale"));
   setTextById("mnav-rent", tr("navRent"));
   setTextById("mnav-short-term", tr("navShortTerm"));
@@ -9464,11 +9702,15 @@ function fmtListingPrice(p = {}, periodOverride = null) {
   // C6: a listing priced in USD shows its exact original when USD is chosen.
   const originalCurrency = String(p?.price_original_currency || extra.price_original_currency || "").toUpperCase();
   const original = Number(p?.price_original ?? extra.price_original);
-  if (activeCur === "USD" && originalCurrency === "USD" && Number.isFinite(original) && original > 0) {
+  const usdOriginal = originalCurrency === "USD" && Number.isFinite(original) && original > 0;
+  if (activeCur === "USD" && usdOriginal) {
     const suffix = localizePricePeriod(period);
     return withUnit(`$${Math.round(original).toLocaleString("en-US")}${suffix ? "/" + suffix : ""}`);
   }
-  return withUnit(fmtP(p?.price || 0, period));
+  // Dollar-priced listing: UGX (and £/€) from today's rate, not the rate
+  // stored when it was imported. The stored price is unchanged.
+  const ugxToday = usdOriginal ? Math.round(original * fxRateToUgx("USD")) : (p?.price || 0);
+  return withUnit(fmtP(ugxToday, period));
 }
 
 // C6: a price that setCurrency() can update in place (cards, detail, similar
@@ -9536,15 +9778,15 @@ function propertyOriginalCurrencyGuide(p = {}) {
   const currency = String(p?.price_original_currency || extra.price_original_currency || "UGX").trim().toUpperCase();
   if (currency !== "USD") return "";
   const original = Number(p?.price_original ?? extra.price_original);
-  const canonicalUgx = Number(p?.price || 0);
-  const rate = Number(p?.price_fx_rate_ugx ?? extra.price_fx_rate_ugx);
-  if (!Number.isFinite(original) || original <= 0 || !Number.isFinite(canonicalUgx) || canonicalUgx <= 0) return "";
+  if (!Number.isFinite(original) || original <= 0) return "";
+  // Today's published rate, not the rate stored at import.
+  const rate = fxRateToUgx("USD");
   const usd = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(original));
-  const ugx = `USh ${formatCompact(Math.round(canonicalUgx))}`;
-  const rateLabel = Number.isFinite(rate) && rate > 0
-    ? ` @ ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(rate)} UGX/USD`
-    : "";
-  return `USD ${usd} · ≈ ${ugx}${rateLabel}`;
+  const ugx = `USh ${formatCompact(Math.round(original * rate))}`;
+  const asOf = publicFx().as_of ? new Date(publicFx().as_of) : null;
+  const asOfText = asOf && !Number.isNaN(asOf.getTime()) ? asOf.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+  const rateLabel = ` @ ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(rate)} UGX/USD`;
+  return `USD ${usd} · ≈ ${ugx}${rateLabel}${asOfText ? ` (rates as of ${asOfText}, approx.)` : ""}`;
 }
 
 function propertyOriginalCurrencyGuideHtml(p = {}, className = "mt-1 text-[11px] font-semibold text-sky-700") {
@@ -9689,6 +9931,7 @@ function setLang(lang, silent = false, rerender = true) {
   if (typeof window.applyOffPlanLanguageUI === "function") window.applyOffPlanLanguageUI();
   if (!silent) toast(`${tr("languageSet")}: ${currentLang.toUpperCase()}`);
   refreshBrokerProfileAbout();
+  if (typeof renderHowToGuides === "function") renderHowToGuides();
 }
 
 window.addEventListener("makaug:site-i18n-ready", () => {
@@ -10389,8 +10632,8 @@ const FINDER_DASHBOARD_I18N = {
     benefitsTitle: "Account Benefits & Contact",
     weeklyTitle: "Weekly property tips",
     weeklyCopy: "Receive market updates, safety tips, and reminders about saved listings.",
-    alertsTitle: "Account activity alerts",
-    alertsCopy: "Receive updates about enquiries, saves, listing progress, and new matching properties.",
+    alertsTitle: "WhatsApp property alerts and offers",
+    alertsCopy: "Send me new property alerts and offers on WhatsApp. Reply STOP anytime.",
     preferredContact: "Preferred Contact",
     communicationLanguage: "Preferred Communication Language",
     languageHelp: "English remains the default. We use this for account updates where available.",
@@ -10577,7 +10820,7 @@ const FINDER_DASHBOARD_I18N = {
     benefitsTitle: "Account benefits ne contact",
     weeklyTitle: "Tips za property buli wiiki",
     weeklyCopy: "Funa market updates, safety tips, ne reminders ku saved listings.",
-    alertsTitle: "Account activity alerts",
+    alertsTitle: "WhatsApp property alerts and offers",
     alertsCopy: "Funa updates ku enquiries, saves, listing progress, ne matching properties empya.",
     preferredContact: "Engeri y'okukukwatako",
     communicationLanguage: "Olulimi lw'empuliziganya",
@@ -10765,7 +11008,7 @@ const FINDER_DASHBOARD_I18N = {
     benefitsTitle: "Account Benefits & Contact",
     weeklyTitle: "Weekly property tips",
     weeklyCopy: "Pokea market updates, safety tips, na reminders kuhusu saved listings.",
-    alertsTitle: "Account activity alerts",
+    alertsTitle: "WhatsApp property alerts and offers",
     alertsCopy: "Pokea updates kuhusu enquiries, saves, listing progress, na matching properties mpya.",
     preferredContact: "Preferred Contact",
     communicationLanguage: "Preferred Communication Language",
@@ -11052,31 +11295,50 @@ function isPropertySaved(propertyId) {
   return Array.from(savedIds).some((value) => String(value) === key);
 }
 
+// Saves work with or without an account (26 Oct 2026). A visitor without an
+// account is known only by the first-party device cookie set by /api/saves.
+// A save shows as "Saved" only after the server has confirmed it.
+const savePendingIds = new Set();
+let savedServerItems = [];
+let savedServerLoaded = false;
+let savedServerUnavailableCount = 0;
+let savedSearchAlerts = [];
+
+function isSignedInForSaves() {
+  return !!(authState?.user && authState?.token);
+}
+
+function isSavePending(propertyId) {
+  return savePendingIds.has(String(propertyId || ""));
+}
+
 function getDetailSaveButtonClasses(propertyId) {
-  const signedIn = !!(authState?.user && authState?.token);
-  const saved = signedIn && isPropertySaved(propertyId);
+  const saved = isPropertySaved(propertyId);
+  if (isSavePending(propertyId)) {
+    return "w-full mt-3 border border-gray-300 bg-gray-50 text-gray-500 py-2.5 rounded-xl font-semibold cursor-wait";
+  }
   return saved
     ? "w-full mt-3 border border-green-700 bg-green-700 text-white py-2.5 rounded-xl font-semibold shadow-sm"
     : "w-full mt-3 border border-gray-300 text-gray-800 hover:bg-gray-50 py-2.5 rounded-xl font-semibold";
 }
 
 function getDetailSaveButtonContent(propertyId) {
-  const signedIn = !!(authState?.user && authState?.token);
-  const saved = signedIn && isPropertySaved(propertyId);
-  if (saved) {
+  const signedIn = isSignedInForSaves();
+  if (isSavePending(propertyId)) {
     return `
       <span class="inline-flex items-center justify-center gap-2">
-        <i class="fas fa-heart"></i>
-        <span>${translatePropertyUi("Saved to Profile")}</span>
+        <i class="fas fa-spinner fa-spin"></i>
+        <span>${translatePropertyUi("Saving…")}</span>
       </span>
     `;
   }
-  if (signedIn) {
+  if (isPropertySaved(propertyId)) {
     return `
       <span class="inline-flex items-center justify-center gap-2">
-        <i class="far fa-heart"></i>
-        <span>${translatePropertyUi("Save Property")}</span>
+        <i class="fas fa-heart"></i>
+        <span>${translatePropertyUi(signedIn ? "Saved to Profile" : "Saved")}</span>
       </span>
+      ${signedIn ? "" : `<span class="block text-[11px] font-medium text-green-100 mt-1">${translatePropertyUi("Saved on this device. Sign in to keep it on any phone.")}</span>`}
     `;
   }
   return `
@@ -11084,37 +11346,70 @@ function getDetailSaveButtonContent(propertyId) {
       <i class="far fa-heart"></i>
       <span>${translatePropertyUi("Save Property")}</span>
     </span>
-    <span class="block text-[11px] font-medium text-gray-500 mt-1">${translatePropertyUi("Sign in or create an account to keep it in your profile.")}</span>
+    ${signedIn ? "" : `<span class="block text-[11px] font-medium text-gray-500 mt-1">${translatePropertyUi("No account needed. Find it under Saved at the top.")}</span>`}
   `;
 }
 
 function getCardSaveButtonClasses(propertyId) {
   const saved = isPropertySaved(propertyId);
+  if (isSavePending(propertyId)) {
+    return "absolute top-2 right-2 min-w-[2.25rem] h-9 rounded-full bg-white/90 text-gray-400 flex items-center justify-center shadow-sm cursor-wait";
+  }
   return saved
     ? "absolute top-2 right-2 min-w-[2.25rem] h-9 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg ring-2 ring-white/80"
     : "absolute top-2 right-2 min-w-[2.25rem] h-9 rounded-full bg-white/90 text-gray-500 flex items-center justify-center shadow-sm";
 }
 
 function getCardSaveButtonIconClasses(propertyId) {
+  if (isSavePending(propertyId)) return "fas fa-spinner fa-spin text-gray-400";
   return isPropertySaved(propertyId) ? "fas fa-heart text-white" : "far fa-heart text-gray-500";
 }
 
 function getCardSaveButtonTitle(propertyId) {
-  if (isPropertySaved(propertyId)) return translatePropertyUi("Saved to Profile");
-  if (authState?.user && authState?.token) return translatePropertyUi("Save Property");
-  return translatePropertyUi("Sign in or create an account to keep it in your profile.");
+  if (isSavePending(propertyId)) return translatePropertyUi("Saving…");
+  if (isPropertySaved(propertyId)) return translatePropertyUi(isSignedInForSaves() ? "Saved to Profile" : "Saved");
+  return translatePropertyUi("Save Property");
 }
 
 function isUuidLike(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 }
 
+// The listing id the server knows (a UUID). Cards from older feeds may carry
+// a display id with the UUID in backend_id.
+function savedServerPropertyId(propertyId) {
+  const key = String(propertyId || "");
+  if (isUuidLike(key)) return key;
+  const property = findPropertyForUi(key);
+  const backendId = String(property?.backend_id || "");
+  return isUuidLike(backendId) ? backendId : "";
+}
+
 async function syncSavedPropertyToServer(propertyId, shouldSave) {
-  if (!authState?.token || !propertyId) return null;
-  if (!isUuidLike(propertyId)) return { ok: true, localOnly: true };
-  return apiRequest(`/api/saved-properties/${encodeURIComponent(propertyId)}`, {
+  const serverId = savedServerPropertyId(propertyId);
+  if (!serverId) throw new Error("This property can't be saved yet.");
+  return apiRequest(`/api/saves/${encodeURIComponent(serverId)}`, {
     method: shouldSave ? "POST" : "DELETE"
   });
+}
+
+function updateSavedNavCount() {
+  const total = savedIds.size;
+  ["nav-saved-count", "top-saved-count"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = total > 99 ? "99+" : String(total);
+    el.classList.toggle("hidden", total === 0);
+  });
+}
+
+function applySavesPayload(data = {}) {
+  const ids = Array.isArray(data?.ids) ? data.ids : [];
+  savedServerItems = Array.isArray(data?.items) ? data.items : [];
+  savedServerUnavailableCount = Number(data?.unavailable_count || 0) || 0;
+  savedServerLoaded = true;
+  setSavedIdsFromArray(ids);
+  updateSavedNavCount();
 }
 
 function refreshSavedUi(propertyId = "") {
@@ -11124,25 +11419,35 @@ function refreshSavedUi(propertyId = "") {
   updateDetailSaveButton(propertyId || activeDetailPropertyId);
 }
 
+// Staff and admin accounts don't keep a home-seeker saved list; skip the sync
+// for them. Signed-out visitors sync by device cookie.
 function canSyncSavedPropertiesForCurrentUser() {
-  if (!authState?.user) return false;
+  if (!authState?.user) return true;
   const mode = derivePortalMode(authState.user, authState.user.portal_mode);
   return ["finder", "student", "agent"].includes(mode);
 }
 
 async function refreshSavedPropertiesFromServer({ silent = true } = {}) {
-  if (!authState?.token) return false;
   if (!canSyncSavedPropertiesForCurrentUser()) return false;
   try {
-    const response = await apiRequest("/api/saved-properties");
-    const ids = Array.isArray(response?.data?.ids) ? response.data.ids : [];
-    setSavedIdsFromArray(ids);
+    const response = await apiRequest("/api/saves");
+    applySavesPayload(response?.data || {});
     refreshSavedUi(activeDetailPropertyId);
     return true;
   } catch (e) {
     if (!silent) toast(`Saved properties refresh failed: ${e.message || "error"}`);
     return false;
   }
+}
+
+async function refreshSavedSearchAlerts() {
+  try {
+    const response = await apiRequest("/api/saves/searches");
+    savedSearchAlerts = Array.isArray(response?.data?.items) ? response.data.items : [];
+  } catch (e) {
+    savedSearchAlerts = [];
+  }
+  return savedSearchAlerts;
 }
 
 function setPendingSavePropertyId(propertyId) {
@@ -11163,20 +11468,11 @@ function popPendingSavePropertyId() {
   }
 }
 
+// A save started before sign-in (older pages) is finished by
+// syncSavedStateAfterAuth once the server confirms it.
 function applyPendingSaveAfterAuth() {
   if (!authState?.user) return "";
-  const id = popPendingSavePropertyId();
-  if (!id) return "";
-  const property = findPropertyForUi(id);
-  if (!property) return "";
-  if (!isPropertySaved(id)) {
-    savedIds.add(String(id));
-    siteMetrics.propertySaves[String(id)] = (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + 1;
-    persistSavedIdsForCurrentUser();
-    saveDashboardState();
-    trackEvent("property_save", { property_id: id, source: "post_auth" });
-  }
-  return id;
+  return popPendingSavePropertyId();
 }
 
 function applySavePropertyLanguageUI() {
@@ -11192,7 +11488,7 @@ function applySavePropertyLanguageUI() {
   setTextById("save-property-next-2", translatePropertyUi("You can review saved homes, compare options, and track your enquiries in one place."));
   setTextById("save-property-next-3", translatePropertyUi("We will also send a welcome email when your account is created."));
   setTextById("save-property-footnote", translatePropertyUi("No property is saved publicly. Saved homes stay inside the signed-in account only."));
-  setTextById("save-property-signup-btn", translateListingLabel("Create Free Account"));
+  setTextById("save-property-signup-btn", translateListingLabel("Create Account"));
   setTextById("save-property-signin-btn", translatePropertyUi("Sign In"));
 }
 
@@ -11214,14 +11510,26 @@ function continueSavePropertyAuth(mode = "signup") {
 
 async function syncSavedStateAfterAuth(pendingSaveId = "") {
   if (!authState?.token) return;
-  if (!pendingSaveId && !canSyncSavedPropertiesForCurrentUser()) return;
+  if (!canSyncSavedPropertiesForCurrentUser()) return;
   try {
-    if (pendingSaveId) {
+    // Move this device's saves and alerts into the account first.
+    const merged = await apiRequest("/api/saves/merge", { method: "POST" });
+    const movedSaves = Number(merged?.data?.merged?.saves || 0) || 0;
+    if (pendingSaveId && savedServerPropertyId(pendingSaveId)) {
       await syncSavedPropertyToServer(pendingSaveId, true);
+      trackEvent("property_save", { property_id: pendingSaveId, source: "post_auth" });
     }
-    await refreshSavedPropertiesFromServer({ silent: true });
+    if (pendingSaveId) {
+      await refreshSavedPropertiesFromServer({ silent: true });
+    } else {
+      applySavesPayload(merged?.data || {});
+      refreshSavedUi(activeDetailPropertyId);
+    }
+    if (pendingSaveId && isPropertySaved(pendingSaveId)) toast("Property saved to your account.");
+    else if (movedSaves > 0) toast(`${movedSaves} saved ${movedSaves === 1 ? "property" : "properties"} from this device moved into your account.`);
   } catch (e) {
     console.warn("Unable to sync saved properties", e);
+    refreshSavedPropertiesFromServer({ silent: true });
   }
 }
 
@@ -11573,7 +11881,7 @@ function collectAuthProfileData() {
     field_agent_availability: get("auth-profile-field-availability"),
     field_agent_reason: get("auth-profile-field-reason"),
     field_agent_application_status: authSignUpAudience === "field_agent" ? "pending_review" : "",
-    preferred_updates: document.getElementById("auth-signup-weekly-tips")?.checked === false ? "essential only" : "weekly tips and WhatsApp updates"
+    preferred_updates: document.getElementById("auth-signup-whatsapp-consent")?.checked === true ? "whatsapp property alerts and offers" : "essential only"
   };
 }
 
@@ -11608,6 +11916,21 @@ function setAuthSignUpAudience(mode) {
     ["auth-signup-audience-finder", "auth-signup-audience-student", "auth-signup-audience-agent", "auth-signup-audience-field", "auth-signup-audience-advertiser"]
   );
   updateAuthSignUpUi();
+  syncPhoneOnlySignupUi();
+}
+
+// Phone-only sign-up (SIGNUP_PHONE_ONLY_ENABLED on the server). Brokers still
+// give an email. Existing email logins are unchanged.
+function isPhoneOnlySignupActive() {
+  return window.MAKAUG_CONFIG?.signupPhoneOnly === true && authSignUpAudience !== "agent";
+}
+
+function syncPhoneOnlySignupUi() {
+  const phoneOnly = isPhoneOnlySignupActive();
+  document.getElementById("auth-signup-email-wrap")?.classList.toggle("hidden", phoneOnly);
+  document.getElementById("auth-signup-otp-channel-wrap")?.classList.toggle("hidden", phoneOnly);
+  document.getElementById("auth-signup-phone-only-note")?.classList.toggle("hidden", !phoneOnly);
+  if (phoneOnly) setAuthSignUpOtpChannel("phone");
 }
 
 	    function openSignedInDashboard(targetUrl = "") {
@@ -12472,7 +12795,7 @@ function buildBrokerDashboardShareText(broker = {}, stats = {}) {
     broker.company || "Independent broker",
     `Areas: ${areas}`,
     `Active listings: ${brokerMetric(stats.active_listings || broker.live_listings || 0)}`,
-    phone ? `Call: ${phone}` : "",
+    phone ? `WhatsApp ${phone}` : "",
     whatsapp ? `WhatsApp: https://wa.me/${whatsapp}` : "",
     url
   ].filter(Boolean).join("\n");
@@ -12574,7 +12897,7 @@ function renderBrokerDashboardListingCard(p) {
         ${isLiveListing
           ? `<button onclick="openBrokerBoostPlanner(${propertyIdArg(p.id)})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Boost</button>`
           : `<button type="button" onclick="toast('This listing can be boosted after makaug approves it.')" class="border border-gray-200 text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold cursor-not-allowed">Boost after approval</button>`}
-        <button onclick="requestBrokerListingRemoval(${propertyIdArg(p.id)})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold">Request removal</button>
+        <button onclick="requestBrokerListingRemoval(${propertyIdArg(p.id)})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold">Remove</button>
       </div>
     </div>`;
 }
@@ -13665,16 +13988,118 @@ async function shareBrokerListing(id) {
   }
 }
 
-function editBrokerListing(id) {
-  const listing = (brokerDashboardCache?.listings || []).find((item) => String(item.id) === String(id));
-  startBrokerOnlineListing();
-  toast(listing ? `Opening broker upload for edits to ${listing.title || "this listing"}. makaug review still applies.` : "Opening broker upload. makaug review still applies.");
+// A small sheet over the dashboard for editing or removing one listing.
+function closeBrokerListingSheet() {
+  document.getElementById("broker-listing-sheet")?.remove();
+}
+
+function openBrokerListingSheet(innerHtml) {
+  closeBrokerListingSheet();
+  const wrap = document.createElement("div");
+  wrap.id = "broker-listing-sheet";
+  wrap.setAttribute("role", "dialog");
+  wrap.setAttribute("aria-modal", "true");
+  wrap.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center;padding:12px;";
+  wrap.innerHTML = `<div style="background:#fff;border-radius:18px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.25);font-family:inherit;">${innerHtml}</div>`;
+  wrap.addEventListener("click", (event) => { if (event.target === wrap) closeBrokerListingSheet(); });
+  document.body.appendChild(wrap);
+}
+
+const BROKER_SHEET_INPUT = "width:100%;box-sizing:border-box;border:1px solid #d1fae5;border-radius:12px;padding:11px 12px;font-size:15px;margin-top:4px;";
+const BROKER_SHEET_LABEL = "display:block;font-size:13px;font-weight:700;color:#334155;margin-top:12px;";
+
+async function editBrokerListing(id) {
+  let row = null;
+  try {
+    const res = await apiRequest(`/api/agents/me/listings/${encodeURIComponent(id)}`);
+    row = res?.data || null;
+  } catch (error) {
+    toast(error?.message || "Could not open this listing.");
+    return;
+  }
+  if (!row) return;
+  const periods = [["once", "Total price (sale)"], ["month", "Per month (rent)"], ["acre", "Per acre"], ["plot", "Per plot"], ["decimal", "Per decimal"], ["night", "Per night"], ["week", "Per week"], ["year", "Per year"]];
+  const period = String(row.price_period || "once").toLowerCase();
+  openBrokerListingSheet(`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <h3 style="font-size:20px;font-weight:900;color:#14532d;margin:0;">Edit listing</h3>
+      <button type="button" onclick="closeBrokerListingSheet()" aria-label="Close" style="border:none;background:#f1f5f9;border-radius:999px;width:36px;height:36px;font-size:18px;cursor:pointer;">✕</button>
+    </div>
+    <p style="font-size:13px;color:#64748b;margin:6px 0 0;">Changes save straight to your listing. makaug can see what was changed.</p>
+    <label style="${BROKER_SHEET_LABEL}">Title</label>
+    <input id="broker-edit-title" style="${BROKER_SHEET_INPUT}" value="${adminAttr(row.title || "")}">
+    <label style="${BROKER_SHEET_LABEL}">Price (UGX, numbers only)</label>
+    <input id="broker-edit-price" inputmode="numeric" style="${BROKER_SHEET_INPUT}" value="${adminAttr(row.price ? String(Math.round(Number(row.price))) : "")}">
+    <label style="${BROKER_SHEET_LABEL}">How the price is charged</label>
+    <select id="broker-edit-period" style="${BROKER_SHEET_INPUT}">${periods.map(([value, label]) => `<option value="${value}"${value === period ? " selected" : ""}>${label}</option>`).join("")}</select>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label style="${BROKER_SHEET_LABEL}">Bedrooms</label><input id="broker-edit-bedrooms" inputmode="numeric" style="${BROKER_SHEET_INPUT}" value="${adminAttr(row.bedrooms ?? "")}"></div>
+      <div><label style="${BROKER_SHEET_LABEL}">Bathrooms</label><input id="broker-edit-bathrooms" inputmode="numeric" style="${BROKER_SHEET_INPUT}" value="${adminAttr(row.bathrooms ?? "")}"></div>
+    </div>
+    <label style="${BROKER_SHEET_LABEL}">Description</label>
+    <textarea id="broker-edit-description" rows="6" style="${BROKER_SHEET_INPUT}">${adminEscape(row.description || "")}</textarea>
+    <p id="broker-edit-error" style="color:#b91c1c;font-size:13px;margin:10px 0 0;"></p>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button type="button" onclick="saveBrokerListingEdit(${propertyIdArg(row.id)})" style="flex:1;background:#166534;color:#fff;border:none;border-radius:12px;padding:13px;font-weight:800;font-size:15px;cursor:pointer;">Save changes</button>
+      <button type="button" onclick="closeBrokerListingSheet()" style="border:1px solid #e2e8f0;background:#fff;border-radius:12px;padding:13px 16px;font-weight:700;cursor:pointer;">Cancel</button>
+    </div>
+    <p style="font-size:12px;color:#64748b;margin:12px 0 0;">To change photos or the location, send them to makaug on WhatsApp and we will update the listing.</p>`);
+}
+
+async function saveBrokerListingEdit(id) {
+  const value = (elementId) => document.getElementById(elementId)?.value ?? "";
+  const errorEl = document.getElementById("broker-edit-error");
+  try {
+    const res = await apiRequest(`/api/agents/me/listings/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: {
+        title: value("broker-edit-title"),
+        price: value("broker-edit-price"),
+        price_period: value("broker-edit-period"),
+        bedrooms: value("broker-edit-bedrooms"),
+        bathrooms: value("broker-edit-bathrooms"),
+        description: value("broker-edit-description")
+      }
+    });
+    const changed = res?.data?.changed || [];
+    closeBrokerListingSheet();
+    toast(changed.length ? "Listing updated." : "Nothing changed.");
+    renderAgentDashboard();
+  } catch (error) {
+    if (errorEl) errorEl.textContent = error?.message || "Could not save. Try again.";
+  }
 }
 
 function requestBrokerListingRemoval(id) {
   const listing = (brokerDashboardCache?.listings || []).find((item) => String(item.id) === String(id));
   const title = listing?.title || "this listing";
-  toast(`Removal request noted for ${title}. makaug admin approval is required before public changes.`);
+  openBrokerListingSheet(`
+    <h3 style="font-size:20px;font-weight:900;color:#7f1d1d;margin:0;">Remove this listing?</h3>
+    <p style="font-size:15px;color:#334155;margin:10px 0 0;"><strong>${adminEscape(title)}</strong> will come off makaug straight away. Use this when the property is sold, let, or no longer yours to market.</p>
+    <label style="${BROKER_SHEET_LABEL}">Why? (optional)</label>
+    <select id="broker-remove-reason" style="${BROKER_SHEET_INPUT}">
+      <option>Sold</option><option>Rented out</option><option>Owner withdrew it</option><option>Listed by mistake</option><option>Other</option>
+    </select>
+    <p id="broker-remove-error" style="color:#b91c1c;font-size:13px;margin:10px 0 0;"></p>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button type="button" onclick="confirmBrokerListingRemoval(${propertyIdArg(id)})" style="flex:1;background:#b91c1c;color:#fff;border:none;border-radius:12px;padding:13px;font-weight:800;font-size:15px;cursor:pointer;">Remove listing</button>
+      <button type="button" onclick="closeBrokerListingSheet()" style="border:1px solid #e2e8f0;background:#fff;border-radius:12px;padding:13px 16px;font-weight:700;cursor:pointer;">Keep it</button>
+    </div>`);
+}
+
+async function confirmBrokerListingRemoval(id) {
+  const errorEl = document.getElementById("broker-remove-error");
+  try {
+    await apiRequest(`/api/agents/me/listings/${encodeURIComponent(id)}/remove`, {
+      method: "POST",
+      body: { reason: document.getElementById("broker-remove-reason")?.value || "" }
+    });
+    closeBrokerListingSheet();
+    toast("Listing removed from makaug.");
+    renderAgentDashboard();
+  } catch (error) {
+    if (errorEl) errorEl.textContent = error?.message || "Could not remove it. Try again.";
+  }
 }
 
 function polishBrokerBioDraft() {
@@ -14512,6 +14937,16 @@ let staffDashboardData = null;
 let staffDashboardRenderSeq = 0;
 let staffDashboardRenderInFlight = false;
 let staffDashboardRenderQueued = false;
+// Side panels start once per dashboard visit (render retries do not refire them).
+let staffDashboardSidePanelsStarted = false;
+// Full renders fire ~10 requests. Two within this gap become one.
+const STAFF_DASHBOARD_MIN_RENDER_GAP_MS = 4000;
+let staffDashboardLastRenderAt = 0;
+function staffDashboardRetryDelayMs(attempt, baseMs = 1500, capMs = 30000) {
+  const n = Math.max(1, Number(attempt) || 1);
+  const delay = Math.min(capMs, baseMs * (2 ** (n - 1)));
+  return Math.round(delay * (0.85 + Math.random() * 0.3));
+}
 let staffDashboardHasLiveData = false;
 let staffDashboardAuthRetryCount = 0;
 let staffDashboardPanelHydrationSeq = 0;
@@ -14605,9 +15040,56 @@ function staffStatCopy(definitions = {}, key = "") {
   return [meaning, action].filter(Boolean).join(" Action: ");
 }
 
+// Last-known stat counts, per staff account (memory and localStorage). A
+// count that timed out shows its last value, marked, instead of "Loading" or
+// a dash.
+const STAFF_STAT_CACHE_PREFIX = "makaug_staff_stats_v1:";
+const staffStatCache = { owner: "", values: {} };
+function staffStatCacheOwner() {
+  const user = authState?.user || {};
+  return String(user.id || user.email || user.phone || "");
+}
+function staffStatCacheValues() {
+  const owner = staffStatCacheOwner();
+  if (staffStatCache.owner !== owner) {
+    staffStatCache.owner = owner;
+    staffStatCache.values = {};
+    try {
+      const stored = owner ? JSON.parse(window.localStorage?.getItem(STAFF_STAT_CACHE_PREFIX + owner) || "{}") : {};
+      if (stored && typeof stored === "object") staffStatCache.values = stored;
+    } catch (error) { /* private mode or bad JSON: memory only */ }
+  }
+  return staffStatCache.values;
+}
+function staffRememberStat(id, value) {
+  const owner = staffStatCacheOwner();
+  if (!owner) return;
+  const values = staffStatCacheValues();
+  values[id] = { value: Number(value), at: Date.now() };
+  try { window.localStorage?.setItem(STAFF_STAT_CACHE_PREFIX + owner, JSON.stringify(values)); } catch (error) { /* quota: memory only */ }
+}
+function staffShowCachedStat(el, id) {
+  const cached = staffStatCacheValues()[id];
+  if (!el || !cached || !Number.isFinite(Number(cached.value))) return false;
+  el.textContent = staffNumber(cached.value);
+  el.dataset.staffStatCached = "1";
+  el.title = `Last known count (${staffKampalaDateTime(new Date(cached.at).toISOString())}). The live count is still loading.`;
+  return true;
+}
+
 function setStaffStat(id, value, definitions = {}, key = "") {
   const el = document.getElementById(id);
-  if (el) el.textContent = staffNumber(value);
+  if (el) {
+    const live = value != null && value !== "" && Number.isFinite(Number(value));
+    if (live) {
+      el.textContent = staffNumber(value);
+      delete el.dataset.staffStatCached;
+      el.removeAttribute("title");
+      staffRememberStat(id, value);
+    } else if (!staffShowCachedStat(el, id)) {
+      el.textContent = staffNumber(value);
+    }
+  }
   const help = document.getElementById(`${id}-help`);
   if (help) {
     help.textContent = staffStatCopy(definitions, key);
@@ -14626,9 +15108,27 @@ function setStaffDashboardLoadingState(message = "Staff dashboard loading...") {
     "staff-stat-whatsapp",
     "staff-stat-duplicates",
     "staff-stat-bank"
-  ].forEach((id) => setTextById(id, "Loading"));
+  ].forEach((id) => {
+    if (!staffShowCachedStat(document.getElementById(id), id)) setTextById(id, "Loading");
+  });
   setTextById("staff-source-intake-status", message);
   setTextById("staff-source-monitor-status", "Monitor cadence loading...");
+}
+
+// King links into a staff desk queue (reports and claims, source intake).
+function kingOpenStaffDesk(event, target) {
+  event?.preventDefault?.();
+  showPage("staff-dashboard");
+  let tries = 0;
+  const jump = () => {
+    tries += 1;
+    const el = document.getElementById(`staff-${target}-panel`);
+    const body = document.getElementById("staff-body");
+    if (el && body && !body.classList.contains("hidden")) staffJumpToDesk(target);
+    else if (tries < 20) window.setTimeout(jump, 250);
+  };
+  window.setTimeout(jump, 120);
+  return false;
 }
 
 function staffJumpToDesk(target) {
@@ -14636,11 +15136,9 @@ function staffJumpToDesk(target) {
     review: "staff-review-panel",
     activity: "staff-activity-panel",
     leads: "staff-leads-panel",
-    advertising: "staff-advertising-panel",
     whatsapp: "staff-whatsapp-panel",
-    bank: "staff-bank-panel",
     source: "staff-source-panel",
-    ai: "staff-ai-panel",
+    reports: "staff-reports-panel",
     training: "staff-training-panel"
   }[String(target || "").toLowerCase()];
   const el = id ? document.getElementById(id) : null;
@@ -14793,6 +15291,15 @@ function staffListingDirectLookup(term = "") {
   return "";
 }
 
+// "Possible duplicate of <ref>" with a link to the other listing. A warning
+// only: staff can still approve after comparing.
+function staffPossibleDuplicateOfHtml(dup) {
+  if (!dup || typeof dup !== "object" || !dup.id) return "";
+  const ref = String(dup.ref || "").trim() || String(dup.id).slice(0, 8);
+  const url = String(dup.review_url || "").trim() || `/staff-dashboard/review/${encodeURIComponent(String(dup.id))}`;
+  return `<div class="mt-2 rounded-xl bg-red-50 border border-red-200 p-2 text-xs text-red-900" data-possible-duplicate-of="${adminAttr(ref)}"><strong>Possible duplicate of <a href="${adminAttr(url)}" target="_blank" rel="noopener" class="underline underline-offset-2">${adminEscape(ref)}</a></strong>${dup.reason ? ` (${adminEscape(dup.reason)})` : ""}. Compare both before approving.</div>`;
+}
+
 function staffReviewQueueCardHtml(item = {}, options = {}) {
   const location = [item.area, item.district].filter(Boolean).join(", ") || "Location needs checking";
   const mkRef = String(item.inquiry_reference || "").trim();
@@ -14826,9 +15333,20 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
   const mediaQualityWarningText = videoRecoveryRequired
     ? "the playable original WhatsApp video is still being recovered. Screenshots and poster captures are evidence only; do not approve this listing until the MP4 and clean key images are attached."
     : "this listing has no approved property photo. Review the quarantined source evidence and attach a clear property image before approval.";
-  const mediaQualityWarning = mediaValidationStatus.startsWith("blocked_") || videoRecoveryRequired || (!imageCount && mediaQualityBlockers.length)
+  // 27 Oct 2026 (MK-…A64E8E): the card said "no approved property photo"
+  // from the intake flag while the review page approved the listing on its
+  // own video (and later on the stills made from it). The card now asks the
+  // same question as the approval gate: a photo, or the listing's own video.
+  const hasCardPhoto = imageCount > 0 || Boolean(primaryImageUrl);
+  const ownVideoUrl = [item.extra_fields?.video_url, item.extra_fields?.tiktok_url, item.extra_fields?.youtube_url]
+    .map((url) => String(url || "").trim())
+    .find((url) => /^https?:\/\//i.test(url) && (/\.mp4(\?|$)/i.test(url) || /youtu|tiktok/i.test(url)));
+  const mediaFlagBlocked = !hasCardPhoto && (mediaValidationStatus.startsWith("blocked_") || mediaQualityBlockers.length > 0);
+  const mediaQualityWarning = videoRecoveryRequired || (mediaFlagBlocked && !ownVideoUrl)
     ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-200 p-2 text-xs text-red-900"><strong>Media blocked:</strong> ${mediaQualityWarningText}</div>`
-    : "";
+    : (mediaFlagBlocked
+      ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-200 p-2 text-xs text-amber-950" data-staff-card-video-only="1"><strong>No photo yet:</strong> this listing can approve on its own video. Make a cover from the video so the card has a picture.</div>`
+      : "");
   return `
     <article class="border border-gray-200 rounded-2xl p-4" data-staff-queue-card="1" data-property-id="${adminAttr(String(item.id || ""))}">
       <div class="flex items-start justify-between gap-3">
@@ -14841,6 +15359,7 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
           ${queueNote}
           ${mediaQualityWarning}
           ${duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800"><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : ""}
+          ${staffPossibleDuplicateOfHtml(item.extra_fields?.possible_duplicate_of)}
           ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
         </div>
         <span class="shrink-0 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-2.5 py-1 text-[11px] font-black" data-staff-queue-status>${adminEscape(item.status || item.moderation_stage || "pending")}</span>
@@ -14851,6 +15370,67 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
         <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-rotate-left mr-1"></i>Keep pending</button>`}
       </div>
     </article>`;
+}
+
+// "Preview & edit" opened the wrong listing (26 Oct 2026, FA7807, the top
+// card) when a panel above the queue (booking escalations, video caption
+// conflicts, broker review) repainted between aiming and clicking. Panels above
+// the queue now keep the queue where it was on screen, a repainting list keeps
+// its height, and a click on a queue card is ignored if the list moved in the
+// last half second or the card under the pointer changed during the click.
+const STAFF_QUEUE_CLICK_GUARD_MS = 500;
+let staffQueueLastLayoutChangeAt = 0;
+let staffQueuePointerDownCardId = null;
+function staffMarkQueueLayoutChange() {
+  staffQueueLastLayoutChangeAt = Date.now();
+}
+function staffQueueClickShouldBeIgnored(now, lastChangeAt, downCardId, clickCardId) {
+  if (now - lastChangeAt < STAFF_QUEUE_CLICK_GUARD_MS) return "moved";
+  if (downCardId !== null && downCardId !== clickCardId) return "changed";
+  return "";
+}
+function staffReplaceHtmlAboveQueue(host, html) {
+  if (!host) return;
+  if (host.innerHTML === html) return;
+  const anchor = document.getElementById("staff-review-panel");
+  const before = anchor ? anchor.getBoundingClientRect().top : null;
+  host.innerHTML = html;
+  if (!anchor || before === null) return;
+  const delta = anchor.getBoundingClientRect().top - before;
+  if (!delta) return;
+  staffMarkQueueLayoutChange();
+  // Keep the queue under the pointer only while it is on screen.
+  if (before < window.innerHeight && typeof window.scrollBy === "function") window.scrollBy(0, delta);
+}
+function staffSetQueueHtml(wrap, html) {
+  if (!wrap || wrap.innerHTML === html) return;
+  const height = wrap.offsetHeight || 0;
+  // Hold the old height for one frame-ish window so the cards below do not jump.
+  if (height) wrap.style.minHeight = `${height}px`;
+  wrap.innerHTML = html;
+  staffMarkQueueLayoutChange();
+  window.clearTimeout(wrap._staffHeightRelease);
+  wrap._staffHeightRelease = window.setTimeout(() => { wrap.style.minHeight = ""; }, 1500);
+}
+if (typeof document !== "undefined" && document.addEventListener) {
+  const queueCardIdAt = (target) => {
+    const card = target && target.closest ? target.closest("[data-staff-queue-card]") : null;
+    return card ? String(card.getAttribute("data-property-id") || "") : null;
+  };
+  document.addEventListener("pointerdown", (event) => {
+    staffQueuePointerDownCardId = queueCardIdAt(event.target);
+  }, true);
+  document.addEventListener("click", (event) => {
+    const button = event.target && event.target.closest ? event.target.closest("[data-staff-queue-card] button") : null;
+    const downCardId = staffQueuePointerDownCardId;
+    staffQueuePointerDownCardId = null;
+    if (!button) return;
+    const why = staffQueueClickShouldBeIgnored(Date.now(), staffQueueLastLayoutChangeAt, event.detail === 0 ? null : downCardId, queueCardIdAt(button));
+    if (!why) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    toast("The list just moved. Check the listing and click again.");
+  }, true);
 }
 
 function staffReviewQueueLoadingHtml(label = "Moderation queue is still loading. Retry the dashboard in a moment.") {
@@ -14974,27 +15554,27 @@ function staffPaintReviewQueue(segment) {
   state.rows = isSearch || isBroker ? rows : staffDedupeRows(state.rows);
   if (!rows.length) {
     if (isSearch && state.loading) {
-      wrap.innerHTML = staffEmpty(`Searching for “${adminEscape(state.term)}”…`);
+      staffSetQueueHtml(wrap, staffEmpty(`Searching for “${adminEscape(state.term)}”…`));
       return;
     }
     if (!isSearch && !isBroker && staffHeaderPendingReviewCount() > 0 && staffReviewQueueState.broker.rows.length) {
-      wrap.innerHTML = staffEmpty("Pending listings in this count are in Broker listings review above.");
+      staffSetQueueHtml(wrap, staffEmpty("Pending listings in this count are in Broker listings review above."));
       return;
     }
-    wrap.innerHTML = isSearch
+    staffSetQueueHtml(wrap, isSearch
       ? staffEmpty(state.statusScope === "any"
         ? `No listing matches “${adminEscape(state.term)}”.`
         : state.statusScope === "pending_and_live"
           ? `No pending or live listing matches “${adminEscape(state.term)}”.`
           : `No pending listing matches “${adminEscape(state.term)}”.`)
-      : staffEmpty(isBroker ? "No broker listings are waiting for review." : "No listings are waiting for staff review.");
+      : staffEmpty(isBroker ? "No broker listings are waiting for review." : "No listings are waiting for staff review."));
     return;
   }
   const scopeNote = !isSearch ? "all pending, brokers included" : state.statusScope === "any" ? "any status" : state.statusScope === "pending_and_live" ? "pending and live" : "all pending, brokers included";
   const heading = isSearch ? `<div class="text-xs font-black text-slate-700" data-staff-search-results>Search results for “${adminEscape(state.term)}” (${scopeNote})</div>` : "";
-  wrap.innerHTML = heading
+  staffSetQueueHtml(wrap, heading
     + rows.map((item) => staffReviewQueueCardHtml(item, { brokerQueue: isBroker })).join("")
-    + staffReviewQueueFooterHtml(segment, rows.length, state.total);
+    + staffReviewQueueFooterHtml(segment, rows.length, state.total));
 }
 
 function staffSetReviewQueue(segment, rows = [], meta = {}) {
@@ -15021,7 +15601,8 @@ function renderStaffReviewQueue(rows = [], meta = {}) {
     guardedMeta.empty_is_authoritative = false;
   }
   if (!rows.length && staffPanelQueueNeedsRetry(rows, guardedMeta)) {
-    if (!searching) wrap.innerHTML = staffReviewQueueLoadingHtml("Listing moderation rows are still catching up.");
+    // Rows already on screen stay; only an empty list shows the placeholder.
+    if (!searching && !staffReviewQueueState.main.rows.length) staffSetQueueHtml(wrap, staffReviewQueueLoadingHtml("Listing moderation rows are still catching up."));
     scheduleStaffDashboardPanelRetry("listing queue");
     return;
   }
@@ -15035,8 +15616,9 @@ function renderStaffBrokerReviewQueue(rows = [], meta = {}) {
   const wrap = document.getElementById("staff-broker-review-queue");
   if (!wrap) return;
   const resolution = staffBrokerQueueResolution(rows, meta, staffDashboardPanelRetryCount);
+  const brokerRowsShown = staffReviewQueueState.broker.rows.length > 0;
   if (resolution === "load_broker_segment") {
-    wrap.innerHTML = staffReviewQueueLoadingHtml("Broker review rows are still catching up.");
+    if (!brokerRowsShown) staffSetQueueHtml(wrap, staffReviewQueueLoadingHtml("Broker review rows are still catching up."));
     staffLoadBrokerReviewSegment();
     return;
   }
@@ -15044,11 +15626,11 @@ function renderStaffBrokerReviewQueue(rows = [], meta = {}) {
     const detail = meta?.timed_out
       ? "The broker review query timed out."
       : (meta?.query_error ? `The broker review query failed (${meta.query_error}).` : "The broker review query did not finish.");
-    wrap.innerHTML = staffReviewQueueErrorHtml("Broker review could not be loaded.", detail);
+    if (!brokerRowsShown) staffSetQueueHtml(wrap, staffReviewQueueErrorHtml("Broker review could not be loaded.", detail));
     return;
   }
   if (resolution === "retry") {
-    wrap.innerHTML = staffReviewQueueLoadingHtml("Broker review rows are still catching up.");
+    if (!brokerRowsShown) staffSetQueueHtml(wrap, staffReviewQueueLoadingHtml("Broker review rows are still catching up."));
     scheduleStaffDashboardPanelRetry("broker queue");
     return;
   }
@@ -16536,9 +17118,16 @@ async function renderStaffDashboard() {
     staffDashboardRenderQueued = true;
     return;
   }
+  const sinceLast = Date.now() - staffDashboardLastRenderAt;
+  if (staffDashboardHasLiveData && sinceLast < STAFF_DASHBOARD_MIN_RENDER_GAP_MS) {
+    scheduleDashboardRefresh("staff_render_queued", STAFF_DASHBOARD_MIN_RENDER_GAP_MS - sinceLast, () => renderStaffDashboard(), { page: "staff-dashboard" });
+    return;
+  }
   staffDashboardRenderInFlight = true;
+  staffDashboardLastRenderAt = Date.now();
   try {
     await renderStaffDashboardOnce();
+    if (currentPage === "staff-dashboard") staffPeopleEnsureLoaded("staff");
   } finally {
     staffDashboardRenderInFlight = false;
     if (staffDashboardRenderQueued) {
@@ -16555,18 +17144,1368 @@ async function loadAgentBookingStaffFlags() {
     const res = await staffApiRequestWithTimeout("/api/agent-bookings/staff-flags", {}, 12000, "Booking escalations");
     const rows = Array.isArray(res?.data) ? res.data : [];
     if (!rows.length) {
-      list.textContent = "No open booking escalations.";
+      staffReplaceHtmlAboveQueue(list, "No open booking escalations.");
       return;
     }
-    list.innerHTML = rows.map((row) => `
+    staffReplaceHtmlAboveQueue(list, rows.map((row) => `
       <article class="border border-gray-200 rounded-xl p-3 mb-2">
         <p class="font-semibold">${adminEscape(row.kind || "escalation")} · ${adminEscape(row.agent_name || row.visitor_name || "")}</p>
         <p>${adminEscape(row.message || "")}</p>
         <button type="button" class="mt-2 border border-gray-300 rounded-lg px-3 py-1 text-xs font-semibold" onclick="resolveAgentBookingFlag('${adminAttr(row.id)}')">Resolve</button>
-      </article>`).join("");
+      </article>`).join(""));
   } catch (error) {
-    list.textContent = "No open booking escalations.";
+    staffReplaceHtmlAboveQueue(list, "No open booking escalations.");
   }
+}
+
+// ---------------------------------------------------------------------------
+// People: the master contact list (Accounts & Outreach). One row per person,
+// matched by WhatsApp/phone number, built from accounts, contacts, leads,
+// WhatsApp profiles and seeker profiles by the server (migration 188).
+// Rendered in the staff dashboard (scope "staff") and the King dashboard
+// (scope "admin"). Personal fields carry data-pii so they can be masked.
+// ---------------------------------------------------------------------------
+const STAFF_PEOPLE_ROLE_LABELS = {
+  home_seeker: "Home-seeker",
+  agent: "Agent",
+  owner_advertiser: "Owner / advertiser",
+  lead: "Lead",
+  whatsapp_contact: "WhatsApp contact",
+  staff: "Staff"
+};
+const STAFF_PEOPLE_SOURCE_LABELS = {
+  users: "Account",
+  contacts: "Contact",
+  leads: "Lead",
+  whatsapp_user_profiles: "WhatsApp",
+  property_seeker_profiles: "Seeker profile"
+};
+const STAFF_PEOPLE_CONSENT = {
+  consented: { label: "Consented", cls: "bg-emerald-100 text-emerald-900" },
+  opted_out: { label: "Opted out", cls: "bg-red-100 text-red-900" },
+  unverified_flag: { label: "Flag only", cls: "bg-amber-100 text-amber-900" },
+  legitimate_interest: { label: "Legitimate interest", cls: "bg-blue-100 text-blue-900" },
+  none: { label: "No consent", cls: "bg-gray-100 text-gray-700" }
+};
+
+function staffPeopleState(scope) {
+  window.__makaugPeople = window.__makaugPeople || {};
+  if (!window.__makaugPeople[scope]) {
+    window.__makaugPeople[scope] = {
+      loadedAt: 0,
+      loading: false,
+      filters: { q: "", role: "", source: "", consent: "", date_field: "last_activity", from: "", to: "", sort: "last_activity", page: 1, limit: 25 },
+      data: null
+    };
+  }
+  return window.__makaugPeople[scope];
+}
+
+function staffPeopleRoot(scope) {
+  return document.querySelector(`[data-people-root="${scope}"]`);
+}
+
+function staffPeopleDate(value, withTime = false) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const opts = withTime
+    ? { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }
+    : { day: "numeric", month: "short", year: "numeric" };
+  return d.toLocaleString("en-GB", opts);
+}
+
+function staffPeopleChip(text, cls = "bg-gray-100 text-gray-700") {
+  return `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${cls}">${adminEscape(text)}</span>`;
+}
+
+function staffPeopleConsentChip(status) {
+  const c = STAFF_PEOPLE_CONSENT[status] || STAFF_PEOPLE_CONSENT.none;
+  return staffPeopleChip(c.label, c.cls);
+}
+
+function staffPeopleRoleChips(roles = []) {
+  return (roles || []).map((r) => staffPeopleChip(STAFF_PEOPLE_ROLE_LABELS[r] || r, "bg-green-50 text-green-900 border border-green-100")).join(" ");
+}
+
+function staffPeopleSourceChips(sources = []) {
+  return (sources || []).map((s) => staffPeopleChip(STAFF_PEOPLE_SOURCE_LABELS[s] || s)).join(" ");
+}
+
+function staffPeopleOptions(map, selected, allLabel) {
+  return `<option value="">${adminEscape(allLabel)}</option>` + Object.entries(map)
+    .map(([value, label]) => `<option value="${adminAttr(value)}"${value === selected ? " selected" : ""}>${adminEscape(typeof label === "string" ? label : label.label)}</option>`)
+    .join("");
+}
+
+function staffPeopleShellHtml(scope) {
+  const f = staffPeopleState(scope).filters;
+  const input = "mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm";
+  return `
+    <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+      <div class="min-w-0">
+        <h3 class="text-xl font-black text-gray-900">People · master contact list</h3>
+        <p class="text-xs text-gray-500 mt-1">One row per person, matched by WhatsApp/phone number across accounts, contacts, leads, WhatsApp and seeker profiles. Updates itself.</p>
+        <p class="text-xs text-gray-600 mt-1" data-people-updated>Last updated: …</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="staffPeopleLoad('${scope}', { force: true })" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh</button>
+        <button type="button" data-people-export onclick="staffPeopleExportCsv('${scope}')" class="hidden bg-gray-900 text-white hover:bg-black px-3 py-1.5 rounded-lg text-xs font-semibold">Export CSV</button>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2 mb-3 text-xs" data-people-counts></div>
+    <form class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 mb-3" onsubmit="staffPeopleApplyFilters(event, '${scope}')" onchange="staffPeopleApplyFilters(event, '${scope}')">
+      <label class="col-span-2 text-xs font-semibold text-gray-700">Search
+        <input name="q" type="search" value="${adminAttr(f.q)}" placeholder="Name, phone or email" autocomplete="off" class="${input}">
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Role
+        <select name="role" class="${input}">${staffPeopleOptions(STAFF_PEOPLE_ROLE_LABELS, f.role, "All roles")}</select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Source
+        <select name="source" class="${input}">${staffPeopleOptions(STAFF_PEOPLE_SOURCE_LABELS, f.source, "All sources")}</select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Consent
+        <select name="consent" class="${input}">${staffPeopleOptions(STAFF_PEOPLE_CONSENT, f.consent, "Any consent")}</select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Date
+        <select name="date_field" class="${input}">
+          <option value="last_activity"${f.date_field === "last_activity" ? " selected" : ""}>Last activity</option>
+          <option value="first_seen"${f.date_field === "first_seen" ? " selected" : ""}>First seen</option>
+        </select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">From
+        <input name="from" type="date" value="${adminAttr(f.from)}" class="${input}">
+      </label>
+      <label class="text-xs font-semibold text-gray-700">To
+        <input name="to" type="date" value="${adminAttr(f.to)}" class="${input}">
+      </label>
+      <label class="text-xs font-semibold text-gray-700 col-span-2 md:col-span-1">Sort
+        <select name="sort" class="${input}">
+          <option value="last_activity"${f.sort === "last_activity" ? " selected" : ""}>Last activity (newest)</option>
+          <option value="oldest_activity"${f.sort === "oldest_activity" ? " selected" : ""}>Last activity (oldest)</option>
+          <option value="first_seen"${f.sort === "first_seen" ? " selected" : ""}>First seen (newest)</option>
+          <option value="name"${f.sort === "name" ? " selected" : ""}>Name A–Z</option>
+        </select>
+      </label>
+    </form>
+    <p class="text-xs text-gray-500 mb-2" data-people-summary></p>
+    <div data-people-list class="text-sm"></div>
+    <div class="flex items-center justify-between gap-2 mt-3" data-people-pager></div>
+    <div data-people-detail="${scope}" class="hidden fixed inset-0 z-[10050] bg-black/40" onclick="if (event.target === this) staffPeopleCloseDetail('${scope}')">
+      <div class="absolute inset-y-0 right-0 w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto" data-people-detail-body></div>
+    </div>`;
+}
+
+function staffPeopleRowsHtml(scope, rows) {
+  if (!rows.length) return `<p class="rounded-xl border border-dashed border-gray-300 p-4 text-gray-500">No people match these filters.</p>`;
+  const table = `
+    <div class="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
+          <tr>
+            <th class="px-3 py-2">Person</th><th class="px-3 py-2">Role</th><th class="px-3 py-2">Sources</th>
+            <th class="px-3 py-2">First seen</th><th class="px-3 py-2">Last activity</th>
+            <th class="px-3 py-2">Saves / alerts</th><th class="px-3 py-2">Consent</th><th class="px-3 py-2">Staff</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${rows.map((p) => `
+            <tr class="hover:bg-green-50/40 cursor-pointer align-top" onclick="staffPeopleOpenDetail('${scope}', '${adminAttr(p.id)}')">
+              <td class="px-3 py-2 min-w-[180px]">
+                <p class="font-bold text-gray-900" data-pii>${adminEscape(p.display_name || "Unnamed")}</p>
+                <p class="text-xs text-gray-600 font-mono" data-pii="phone">${adminEscape(p.phone_e164 || "")}</p>
+                ${p.email ? `<p class="text-xs text-gray-500" data-pii>${adminEscape(p.email)}</p>` : ""}
+              </td>
+              <td class="px-3 py-2"><div class="flex flex-wrap gap-1">${staffPeopleRoleChips(p.roles)}</div></td>
+              <td class="px-3 py-2"><div class="flex flex-wrap gap-1">${staffPeopleSourceChips(p.sources)}</div><p class="text-[11px] text-gray-400 mt-1">${Number(p.source_row_count || 0)} record${Number(p.source_row_count) === 1 ? "" : "s"}</p></td>
+              <td class="px-3 py-2 whitespace-nowrap text-xs">${staffPeopleDate(p.first_seen_at)}</td>
+              <td class="px-3 py-2 whitespace-nowrap text-xs font-semibold">${staffPeopleDate(p.last_activity_at)}</td>
+              <td class="px-3 py-2 text-xs">${Number(p.saves_count || 0)} / ${Number(p.alerts_count || 0)}</td>
+              <td class="px-3 py-2">${staffPeopleConsentChip(p.consent_status)}${p.consent_at ? `<p class="text-[11px] text-gray-400 mt-1">${staffPeopleDate(p.consent_at)}</p>` : ""}</td>
+              <td class="px-3 py-2 text-xs">${adminEscape(p.assigned_staff_name || "—")}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+  const cards = `
+    <div class="md:hidden space-y-2">
+      ${rows.map((p) => `
+        <button type="button" class="w-full text-left rounded-xl border border-gray-200 p-3 hover:border-green-300 active:bg-green-50" onclick="staffPeopleOpenDetail('${scope}', '${adminAttr(p.id)}')">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="font-bold text-gray-900 truncate" data-pii>${adminEscape(p.display_name || "Unnamed")}</p>
+              <p class="text-xs text-gray-600 font-mono" data-pii="phone">${adminEscape(p.phone_e164 || p.email || "")}</p>
+            </div>
+            ${staffPeopleConsentChip(p.consent_status)}
+          </div>
+          <div class="flex flex-wrap gap-1 mt-2">${staffPeopleRoleChips(p.roles)}</div>
+          <div class="flex flex-wrap gap-1 mt-1">${staffPeopleSourceChips(p.sources)}</div>
+          <p class="text-[11px] text-gray-500 mt-2">Last activity ${staffPeopleDate(p.last_activity_at)} · first seen ${staffPeopleDate(p.first_seen_at)} · ${Number(p.saves_count || 0)} saves · ${Number(p.alerts_count || 0)} alerts${p.assigned_staff_name ? ` · ${adminEscape(p.assigned_staff_name)}` : ""}</p>
+        </button>`).join("")}
+    </div>`;
+  return table + cards;
+}
+
+function staffPeopleEnsureLoaded(scope) {
+  const root = staffPeopleRoot(scope);
+  if (!root || !authState?.token) return;
+  const state = staffPeopleState(scope);
+  if (state.loading || (state.loadedAt && Date.now() - state.loadedAt < 5 * 60 * 1000)) return;
+  staffPeopleLoad(scope);
+}
+
+async function staffPeopleLoad(scope, options = {}) {
+  const root = staffPeopleRoot(scope);
+  if (!root) return;
+  if (!root.dataset.peopleReady) {
+    root.innerHTML = staffPeopleShellHtml(scope);
+    root.dataset.peopleReady = "1";
+  }
+  const state = staffPeopleState(scope);
+  const list = root.querySelector("[data-people-list]");
+  if (!authState?.token) {
+    list.innerHTML = `<p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">Sign in with your staff account to see the contact list.</p>`;
+    return;
+  }
+  state.loading = true;
+  if (options.force || !state.data) list.innerHTML = `<p class="text-gray-500">Loading people…</p>`;
+  const params = new URLSearchParams();
+  Object.entries(state.filters).forEach(([key, value]) => { if (value !== "" && value != null) params.set(key, value); });
+  try {
+    const res = await staffApiRequestWithTimeout(`/api/people?${params.toString()}`, {}, 20000, "People list");
+    state.data = res;
+    state.loadedAt = Date.now();
+    staffPeopleRenderData(scope);
+  } catch (error) {
+    const denied = Number(error?.status) === 401 || Number(error?.status) === 403;
+    list.innerHTML = `<p class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">${denied ? "Your account cannot see the contact list." : adminEscape(error?.message || "Could not load people.")}</p>`;
+  } finally {
+    state.loading = false;
+  }
+}
+
+function staffPeopleRenderData(scope) {
+  const root = staffPeopleRoot(scope);
+  const res = staffPeopleState(scope).data;
+  if (!root || !res) return;
+  const meta = res.meta || {};
+  const counts = meta.counts || {};
+  const updated = root.querySelector("[data-people-updated]");
+  if (updated) {
+    updated.textContent = meta.last_reconciled_at
+      ? `Last updated: ${staffPeopleDate(meta.last_reconciled_at, true)}${meta.last_changed_at ? ` · last change ${staffPeopleDate(meta.last_changed_at, true)}` : ""}`
+      : "Last updated: not yet built";
+  }
+  root.querySelector("[data-people-export]")?.classList.toggle("hidden", !res.can_export);
+  const chip = (label, value, cls) => `<span class="rounded-xl px-3 py-1.5 font-bold ${cls}">${adminEscape(label)} <span class="font-black">${Number(value || 0).toLocaleString("en-GB")}</span></span>`;
+  root.querySelector("[data-people-counts]").innerHTML = [
+    chip("People", counts.people, "bg-gray-900 text-white"),
+    chip("Consented", counts.consented, "bg-emerald-100 text-emerald-900"),
+    chip("Flag only", counts.unverified_flag, "bg-amber-100 text-amber-900"),
+    chip("Opted out", counts.opted_out, "bg-red-100 text-red-900"),
+    chip("In 2+ sources", counts.in_several_sources, "bg-blue-50 text-blue-900")
+  ].join("");
+  const rows = Array.isArray(res.rows) ? res.rows : [];
+  const start = rows.length ? (res.page - 1) * res.limit + 1 : 0;
+  root.querySelector("[data-people-summary]").textContent = `${Number(res.total || 0).toLocaleString("en-GB")} ${Number(res.total) === 1 ? "person" : "people"} · showing ${rows.length ? `${start}–${start + rows.length - 1}` : "none"}`;
+  root.querySelector("[data-people-list]").innerHTML = staffPeopleRowsHtml(scope, rows);
+  const pages = Math.max(1, Math.ceil(Number(res.total || 0) / Number(res.limit || 25)));
+  root.querySelector("[data-people-pager]").innerHTML = pages > 1 ? `
+    <button type="button" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40" ${res.page <= 1 ? "disabled" : ""} onclick="staffPeopleGoToPage('${scope}', ${res.page - 1})">Previous</button>
+    <span class="text-xs text-gray-500">Page ${res.page} of ${pages}</span>
+    <button type="button" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40" ${res.page >= pages ? "disabled" : ""} onclick="staffPeopleGoToPage('${scope}', ${res.page + 1})">Next</button>` : "";
+}
+
+function staffPeopleApplyFilters(event, scope) {
+  event?.preventDefault?.();
+  const form = event?.currentTarget || event?.target?.form;
+  if (!form) return;
+  const state = staffPeopleState(scope);
+  const data = new FormData(form);
+  ["q", "role", "source", "consent", "date_field", "from", "to", "sort"].forEach((key) => {
+    state.filters[key] = String(data.get(key) || "").trim();
+  });
+  state.filters.page = 1;
+  staffPeopleLoad(scope);
+}
+
+function staffPeopleGoToPage(scope, page) {
+  const state = staffPeopleState(scope);
+  state.filters.page = Math.max(1, Number(page) || 1);
+  staffPeopleLoad(scope);
+}
+
+// The overlay is moved to <body> when opened so sticky dashboard headers
+// (their own stacking contexts) cannot sit on top of it.
+function staffPeopleDetailOverlay(scope) {
+  const fresh = staffPeopleRoot(scope)?.querySelector("[data-people-detail]");
+  const parked = Array.from(document.querySelectorAll("body > [data-people-detail]")).filter((node) => node.dataset.peopleDetail === scope);
+  if (fresh) {
+    parked.forEach((node) => node.remove());
+    document.body.appendChild(fresh);
+    return fresh;
+  }
+  return parked[0] || null;
+}
+
+function staffPeopleCloseDetail(scope) {
+  staffPeopleDetailOverlay(scope)?.classList.add("hidden");
+}
+
+async function staffPeopleOpenDetail(scope, personId) {
+  const root = staffPeopleRoot(scope);
+  if (!root) return;
+  const overlay = staffPeopleDetailOverlay(scope);
+  const body = overlay?.querySelector("[data-people-detail-body]");
+  if (!overlay || !body) return;
+  overlay.classList.remove("hidden");
+  body.innerHTML = `<div class="p-5 text-gray-500">Loading…</div>`;
+  try {
+    const res = await staffApiRequestWithTimeout(`/api/people/${encodeURIComponent(personId)}`, {}, 20000, "Person");
+    body.innerHTML = staffPeopleDetailHtml(scope, res);
+  } catch (error) {
+    body.innerHTML = `<div class="p-5"><button type="button" class="text-sm font-bold text-gray-700" onclick="staffPeopleCloseDetail('${scope}')">← Back</button><p class="mt-4 text-red-800">${adminEscape(error?.message || "Could not load this person.")}</p></div>`;
+  }
+}
+
+function staffPeopleDetailHtml(scope, res) {
+  const p = res.person || {};
+  const consentDetail = Array.isArray(p.consent_detail) ? p.consent_detail : [];
+  const consentKind = { opt_in: "Opt-in", opt_out: "Opt-out", flag_only: "Flag without record", legit: "Legitimate interest" };
+  const fact = (label, value) => `<div><dt class="text-[11px] uppercase tracking-wide text-gray-400">${adminEscape(label)}</dt><dd class="text-sm font-semibold text-gray-900">${value}</dd></div>`;
+  const links = Array.isArray(res.links) ? res.links : [];
+  const history = Array.isArray(res.history) ? res.history : [];
+  return `
+    <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3 flex items-center justify-between gap-3">
+      <button type="button" class="text-sm font-bold text-gray-700" onclick="staffPeopleCloseDetail('${scope}')">← Back</button>
+      ${staffPeopleConsentChip(p.consent_status)}
+    </div>
+    <div class="p-5 space-y-5">
+      <div>
+        <h4 class="text-xl font-black text-gray-900" data-pii>${adminEscape(p.display_name || "Unnamed")}</h4>
+        <p class="text-sm text-gray-700 font-mono mt-1" data-pii="phone">${adminEscape(p.phone_e164 || "No phone")}</p>
+        <p class="text-sm text-gray-600" data-pii>${adminEscape(p.email || "No email")}</p>
+        <div class="flex flex-wrap gap-1 mt-2">${staffPeopleRoleChips(p.roles)}</div>
+        ${scope === "admin" && (p.roles || []).includes("agent") ? `<button type="button" data-people-manage-agent class="mt-3 rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold" onclick="adminAgentManagerOpenForPerson(${adminAttr(JSON.stringify(String(p.phone_e164 || "")))}, ${adminAttr(JSON.stringify(String(p.display_name || "")))})">Manage agent</button>` : ""}
+      </div>
+      <dl class="grid grid-cols-2 gap-3 rounded-xl bg-gray-50 p-3">
+        ${fact("First seen", staffPeopleDate(p.first_seen_at))}
+        ${fact("Last activity", staffPeopleDate(p.last_activity_at, true))}
+        ${fact("Saves", Number(p.saves_count || 0))}
+        ${fact("Alerts", Number(p.alerts_count || 0))}
+        ${fact("Leads", Number(p.leads_count || 0))}
+        ${fact("Assigned staff", adminEscape(p.assigned_staff_name || "—"))}
+        ${fact("Sources", staffPeopleSourceChips(p.sources))}
+        ${fact("Matched by", p.key_kind === "email" ? "Email (no phone)" : "Phone number")}
+      </dl>
+      <section>
+        <h5 class="font-black text-gray-900 mb-1">Consent</h5>
+        <p class="text-sm text-gray-700">${staffPeopleConsentChip(p.consent_status)} ${p.consent_source ? `<span class="text-xs text-gray-500">via ${adminEscape(p.consent_source)}</span>` : ""} ${p.consent_at ? `<span class="text-xs text-gray-500">· ${staffPeopleDate(p.consent_at, true)}</span>` : ""}</p>
+        ${consentDetail.length ? `<ul class="mt-2 space-y-1 text-xs text-gray-600">${consentDetail.map((c) => `
+          <li class="flex flex-wrap gap-x-2"><span class="font-bold">${adminEscape(consentKind[c.kind] || c.kind)}</span><span>${adminEscape(c.via || c.source || "")}</span><span class="text-gray-400">${c.at ? staffPeopleDate(c.at, true) : "no date"}</span>${Number(c.rows) > 1 ? `<span class="text-gray-400">× ${Number(c.rows)}</span>` : ""}</li>`).join("")}</ul>`
+          : `<p class="text-xs text-gray-500 mt-1">No consent signal on any linked record.</p>`}
+      </section>
+      <section>
+        <h5 class="font-black text-gray-900 mb-2">History</h5>
+        ${history.length ? `<ol class="relative border-l border-gray-200 ml-2 space-y-3">${history.map((h) => `
+          <li class="ml-4">
+            <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full border border-white bg-green-600"></span>
+            <p class="text-[11px] text-gray-400">${staffPeopleDate(h.at, true)}</p>
+            <p class="text-sm font-semibold text-gray-900">${adminEscape(h.label)}</p>
+            ${h.detail ? `<p class="text-xs text-gray-500">${adminEscape(h.detail)}</p>` : ""}
+          </li>`).join("")}</ol>` : `<p class="text-xs text-gray-500">No dated activity.</p>`}
+      </section>
+      <section>
+        <h5 class="font-black text-gray-900 mb-2">Linked records (${links.length})</h5>
+        <div class="space-y-1">${links.map((l) => `
+          <div class="flex items-center justify-between gap-2 rounded-lg border border-gray-100 px-3 py-2 text-xs">
+            <span class="font-bold text-gray-800">${adminEscape(STAFF_PEOPLE_SOURCE_LABELS[l.source_table] || l.source_table)}</span>
+            <span class="text-gray-500">${adminEscape(STAFF_PEOPLE_ROLE_LABELS[l.role] || l.role || "")}</span>
+            <span class="text-gray-400 whitespace-nowrap">${staffPeopleDate(l.last_activity_at)}</span>
+          </div>`).join("")}</div>
+      </section>
+    </div>`;
+}
+
+async function staffPeopleExportCsv(scope) {
+  const state = staffPeopleState(scope);
+  if (!authState?.token) return;
+  const params = new URLSearchParams();
+  Object.entries(state.filters).forEach(([key, value]) => { if (value !== "" && value != null && key !== "page" && key !== "limit") params.set(key, value); });
+  try {
+    const response = await fetch(apiUrl(`/api/people/export.csv?${params.toString()}`), {
+      headers: { Authorization: `Bearer ${authState.token}` },
+      credentials: "same-origin",
+      cache: "no-store"
+    });
+    if (!response.ok) throw new Error(response.status === 403 ? "Only the super admin can export the contact list." : `Export failed (${response.status})`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `makaug-people-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (error) {
+    toast(error?.message || "Export failed.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// King → Agents. One list of every agent; open one to see everything on file,
+// every listing, and to correct details (ID/NIN included), take listings down,
+// mark them sold/let, move them, or remove/restore the agent. Nothing here
+// hard-deletes and the server logs every change with who made it.
+const ADMIN_AGENT_MANAGER_STATE = { rows: [], counts: {}, show: "active", search: "", missingOnly: false, only: "", sort: "joined", loading: false, loadedAt: 0, openId: null, detail: null };
+
+function adminAgentManagerRoot() {
+  return document.getElementById("admin-agent-manager");
+}
+
+function adminAgentManagerChip(text, cls) {
+  return `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold whitespace-nowrap ${cls}">${adminEscape(text)}</span>`;
+}
+
+function adminAgentManagerStatusChip(agent = {}) {
+  if (agent.removed_at) return adminAgentManagerChip("Removed", "bg-gray-200 text-gray-700");
+  const st = String(agent.status || "pending");
+  const map = { approved: ["Live", "bg-green-100 text-green-800"], pending: ["Pending", "bg-amber-100 text-amber-800"], rejected: ["Rejected", "bg-red-100 text-red-800"], suspended: ["Suspended", "bg-yellow-100 text-yellow-800"] };
+  const [label, cls] = map[st] || [st, "bg-gray-100 text-gray-700"];
+  return adminAgentManagerChip(label, cls);
+}
+
+function adminAgentManagerPaymentChip(payment = {}) {
+  const cls = { paid: "bg-emerald-100 text-emerald-800", free: "bg-blue-100 text-blue-800", paid_awaiting: "bg-teal-100 text-teal-800", expired: "bg-orange-100 text-orange-800" }[payment.key] || "bg-gray-100 text-gray-700";
+  return adminAgentManagerChip(payment.label || "Unpaid", cls);
+}
+
+function adminAgentManagerIdChip(agent = {}) {
+  return agent.has_nin || agent.nin
+    ? adminAgentManagerChip("ID on file", "bg-green-50 text-green-800 border border-green-200")
+    : adminAgentManagerChip("ID missing", "bg-red-50 text-red-700 border border-red-200");
+}
+
+// The ID document itself (a photo or PDF), from sign-up or uploaded by staff.
+function adminAgentManagerIdDocChip(agent = {}) {
+  return agent.has_id_document
+    ? `<span data-id-doc-chip="on">${adminAgentManagerChip("ID document: on file", "bg-green-50 text-green-800 border border-green-200")}</span>`
+    : `<span data-id-doc-chip="missing">${adminAgentManagerChip("ID document: missing", "bg-orange-50 text-orange-800 border border-orange-200")}</span>`;
+}
+
+// Approved and live, but the ID (NIN) was never filled in — clears once it is saved.
+function adminAgentManagerIdNeededBadge(agent = {}) {
+  return agent.id_still_needed ? adminAgentManagerChip("Approved – ID still needed", "bg-red-600 text-white") : "";
+}
+
+function adminAgentManagerCanApprove(agent = {}) {
+  return String(agent.status || "") === "pending" && !agent.removed_at;
+}
+
+function adminAgentManagerMissingList(agent = {}) {
+  const missing = [];
+  if (!(agent.has_nin || String(agent.nin || "").trim())) missing.push("ID number (NIN)");
+  if (!agent.has_id_document) missing.push("ID photo");
+  if (!(agent.phone || agent.whatsapp)) missing.push("phone");
+  return missing;
+}
+
+function adminAgentManagerApproveButton(agent = {}, size = "sm") {
+  if (!adminAgentManagerCanApprove(agent)) return "";
+  const cls = size === "lg" ? "px-4 py-2 text-sm" : "px-3 py-1.5 text-xs";
+  return `<button type="button" data-agent-approve-anyway="${adminAttr(agent.id)}" class="rounded-lg bg-amber-500 hover:bg-amber-600 text-gray-950 font-black whitespace-nowrap ${cls}" onclick="event.stopPropagation(); adminAgentManagerApproveAnyway('${adminAttr(agent.id)}')">Approve anyway</button>`;
+}
+
+function adminAgentManagerDay(value) {
+  if (!value) return "— not set";
+  const d = new Date(`${String(value).slice(0, 10)}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? "— not set" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+function adminAgentManagerDaysLeft(t = {}, agent = {}) {
+  if (agent.fee_exempt) return `<span class="text-blue-800 font-semibold">No fee</span>`;
+  if (t.days_left === null || t.days_left === undefined) return `<span class="text-gray-400">— not set</span>`;
+  const n = Number(t.days_left);
+  if (n < 0) return `<span class="inline-flex rounded-full bg-red-600 text-white px-2 py-0.5 text-[11px] font-black whitespace-nowrap" data-days-tone="red">${-n} day${n === -1 ? "" : "s"} overdue</span>`;
+  const text = n === 0 ? "Due today" : `${n} day${n === 1 ? "" : "s"} left`;
+  if (n <= 7) return `<span class="inline-flex rounded-full bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 text-[11px] font-black whitespace-nowrap" data-days-tone="amber">${text}</span>`;
+  return `<span class="text-gray-800 font-semibold whitespace-nowrap" data-days-tone="ok">${text}</span>`;
+}
+
+function adminAgentManagerSortRows(rows, sort) {
+  if (sort !== "due") return rows;
+  const key = (a) => (a.fee_exempt || !a.tracker?.next_due ? "9999-12-31" : a.tracker.next_due);
+  return rows.slice().sort((x, y) => key(x).localeCompare(key(y)) || String(x.full_name || "").localeCompare(String(y.full_name || "")));
+}
+
+function adminAgentManagerLicencePlaceholder(value) {
+  return /^(STAFF-|WA-|AUTO-|PENDING|EMPLOYEE-INTAKE-|DIRECT-)/i.test(String(value || ""));
+}
+
+function adminAgentManagerShellHtml() {
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  const input = "mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm";
+  return `
+    <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+      <div class="min-w-0">
+        <h3 class="text-xl font-black text-gray-900">Agents</h3>
+        <p class="text-xs text-gray-500 mt-1">Every agent on makaug. Open one to see their listings, fill in missing details such as the ID (NIN), take listings down or mark them sold/let, move a listing, or remove the agent. Nothing is deleted, and every change is logged with your name.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="adminAgentManagerOpenAdd()" class="bg-green-700 text-white hover:bg-green-800 px-3 py-1.5 rounded-lg text-xs font-bold">Add agent</button>
+        <button type="button" onclick="adminAgentManagerLoad({ force: true })" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh</button>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2 mb-3 text-xs" data-agent-manager-counts></div>
+    <form class="grid grid-cols-2 md:grid-cols-6 gap-2 mb-3" onsubmit="adminAgentManagerApplyFilters(event)" onchange="adminAgentManagerApplyFilters(event)">
+      <label class="col-span-2 text-xs font-semibold text-gray-700">Search
+        <input name="search" type="search" value="${adminAttr(s.search)}" placeholder="Name, phone, email or agent number" autocomplete="off" class="${input}">
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Show
+        <select name="show" class="${input}">
+          <option value="active"${s.show === "active" ? " selected" : ""}>Current agents</option>
+          <option value="removed"${s.show === "removed" ? " selected" : ""}>Removed agents</option>
+          <option value="all"${s.show === "all" ? " selected" : ""}>Everyone</option>
+        </select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Only
+        <select name="only" class="${input}" data-agent-manager-only>
+          <option value=""${!s.only ? " selected" : ""}>Everyone shown</option>
+          <option value="id_needed"${s.only === "id_needed" ? " selected" : ""}>Approved – ID still needed</option>
+          <option value="id_doc_missing"${s.only === "id_doc_missing" ? " selected" : ""}>ID document missing</option>
+          <option value="pending"${s.only === "pending" ? " selected" : ""}>Pending approval</option>
+          <option value="overdue"${s.only === "overdue" ? " selected" : ""}>Payment overdue</option>
+          <option value="due_soon"${s.only === "due_soon" ? " selected" : ""}>Payment due within 7 days</option>
+        </select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700">Sort by
+        <select name="sort" class="${input}" data-agent-manager-sort>
+          <option value="joined"${s.sort !== "due" ? " selected" : ""}>Newest joined</option>
+          <option value="due"${s.sort === "due" ? " selected" : ""}>Next payment due (soonest first)</option>
+        </select>
+      </label>
+      <label class="text-xs font-semibold text-gray-700 flex items-end gap-2 pb-2">
+        <input name="missing" type="checkbox"${s.missingOnly ? " checked" : ""} class="h-4 w-4"> Missing ID only
+      </label>
+    </form>
+    <p class="text-xs text-gray-500 mb-2" data-agent-manager-summary></p>
+    <div data-agent-manager-list class="text-sm"></div>
+    <div data-agent-manager-detail class="hidden fixed inset-0 z-[10050] bg-black/40" onclick="if (event.target === this) adminAgentManagerClose()">
+      <div class="absolute inset-y-0 right-0 w-full md:w-[760px] bg-white shadow-2xl overflow-y-auto" data-agent-manager-detail-body></div>
+    </div>`;
+}
+
+function adminAgentManagerEnsureLoaded() {
+  const root = adminAgentManagerRoot();
+  if (!root || !authState?.token) return;
+  if (ADMIN_AGENT_MANAGER_STATE.loading || (ADMIN_AGENT_MANAGER_STATE.loadedAt && Date.now() - ADMIN_AGENT_MANAGER_STATE.loadedAt < 60 * 1000)) {
+    if (!root.dataset.agentManagerReady) adminAgentManagerLoad();
+    return;
+  }
+  adminAgentManagerLoad();
+}
+
+async function adminAgentManagerLoad(options = {}) {
+  const root = adminAgentManagerRoot();
+  if (!root) return;
+  if (!root.dataset.agentManagerReady) {
+    root.innerHTML = adminAgentManagerShellHtml();
+    root.dataset.agentManagerReady = "1";
+  }
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  const list = root.querySelector("[data-agent-manager-list]");
+  if (!authState?.token) {
+    list.innerHTML = `<p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">Sign in with your King account to manage agents.</p>`;
+    return;
+  }
+  s.loading = true;
+  if (options.force || !s.rows.length) list.innerHTML = `<p class="text-gray-500">Loading agents…</p>`;
+  const params = new URLSearchParams({ show: s.show });
+  if (s.search) params.set("search", s.search);
+  if (s.only) params.set("only", s.only);
+  try {
+    const seq = (s.requestSeq = (s.requestSeq || 0) + 1);
+    const res = await apiRequest(`/api/admin/agent-manager/agents?${params.toString()}`, { headers: adminAuthHeaders() });
+    if (seq !== s.requestSeq) return; // a newer search replaced this one
+    s.rows = Array.isArray(res?.data) ? res.data : [];
+    s.counts = res?.counts || {};
+    s.loadedAt = Date.now();
+    adminAgentManagerRenderList();
+  } catch (error) {
+    const denied = Number(error?.status) === 401 || Number(error?.status) === 403;
+    list.innerHTML = `<p class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">${denied ? "Your account cannot manage agents." : adminEscape(error?.message || "Could not load agents.")}</p>`;
+  } finally {
+    s.loading = false;
+  }
+}
+
+function adminAgentManagerApplyFilters(event) {
+  event?.preventDefault?.();
+  const form = event?.currentTarget || event?.target?.form;
+  if (!form) return;
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  const data = new FormData(form);
+  const search = String(data.get("search") || "").trim();
+  const show = String(data.get("show") || "active");
+  const missingOnly = data.get("missing") === "on";
+  const only = String(data.get("only") || "");
+  const sort = String(data.get("sort") || "joined");
+  const refetch = search !== s.search || show !== s.show || only !== s.only;
+  Object.assign(s, { search, show, missingOnly, only, sort });
+  if (refetch) adminAgentManagerLoad();
+  else adminAgentManagerRenderList();
+}
+
+function adminAgentManagerShowOnly(only) {
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  s.only = only || "";
+  const select = adminAgentManagerRoot()?.querySelector("[data-agent-manager-only]");
+  if (select) select.value = s.only;
+  adminAgentManagerLoad({ force: true });
+}
+
+function adminAgentManagerSortBy(sort) {
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  s.sort = sort === "due" ? "due" : "joined";
+  const select = adminAgentManagerRoot()?.querySelector("[data-agent-manager-sort]");
+  if (select) select.value = s.sort;
+  adminAgentManagerRenderList();
+}
+
+function adminAgentManagerRenderList() {
+  const root = adminAgentManagerRoot();
+  if (!root) return;
+  const s = ADMIN_AGENT_MANAGER_STATE;
+  const c = s.counts || {};
+  const chip = (label, value, cls) => `<span class="rounded-xl px-3 py-1.5 font-bold ${cls}">${adminEscape(label)} <span class="font-black">${Number(value || 0).toLocaleString("en-GB")}</span></span>`;
+  const idNeeded = Number(c.approved_missing_id || 0);
+  root.querySelector("[data-agent-manager-counts]").innerHTML = [
+    idNeeded ? `<button type="button" data-agent-manager-id-needed class="rounded-xl px-3 py-1.5 font-black bg-red-600 text-white hover:bg-red-700" onclick="adminAgentManagerShowOnly('id_needed')">${idNeeded.toLocaleString("en-GB")} approved agent${idNeeded === 1 ? "" : "s"} still missing ID</button>` : "",
+    chip("Current agents", c.active, "bg-gray-900 text-white"),
+    c.pending ? `<button type="button" class="rounded-xl px-3 py-1.5 font-bold bg-amber-100 text-amber-900" onclick="adminAgentManagerShowOnly('pending')">Pending approval <span class="font-black">${Number(c.pending).toLocaleString("en-GB")}</span></button>` : "",
+    chip("Missing ID", c.missing_id, "bg-red-100 text-red-800"),
+    c.id_document_missing ? `<button type="button" data-agent-manager-id-doc-missing class="rounded-xl px-3 py-1.5 font-bold bg-orange-100 text-orange-900" onclick="adminAgentManagerShowOnly('id_doc_missing')">ID document missing <span class="font-black">${Number(c.id_document_missing).toLocaleString("en-GB")}</span></button>` : "",
+    chip("Payment due date set", c.due_date_set, "bg-emerald-50 text-emerald-800"),
+    chip("Removed", c.removed, "bg-gray-100 text-gray-700")
+  ].filter(Boolean).join("");
+  const rows = adminAgentManagerSortRows(s.missingOnly ? s.rows.filter((a) => !a.has_nin && !a.removed_at) : s.rows, s.sort);
+  root.querySelector("[data-agent-manager-summary]").textContent = `${rows.length} agent${rows.length === 1 ? "" : "s"}${s.search ? ` matching “${s.search}”` : ""}`;
+  const list = root.querySelector("[data-agent-manager-list]");
+  if (!rows.length) {
+    list.innerHTML = `<p class="rounded-xl border border-dashed border-gray-300 p-4 text-gray-500">No agents match.</p>`;
+    return;
+  }
+  const open = (a) => `adminAgentManagerOpen('${adminAttr(a.id)}')`;
+  list.innerHTML = `
+    <div class="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
+      <table class="w-full text-left text-sm" data-agent-manager-table>
+        <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
+          <tr><th class="px-3 py-2">Agent</th><th class="px-3 py-2">Phone</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">ID</th><th class="px-3 py-2">Payment</th><th class="px-3 py-2">Live listings</th><th class="px-3 py-2"><button type="button" class="uppercase tracking-wide font-bold ${s.sort === "due" ? "text-gray-900 underline" : ""}" onclick="event.stopPropagation(); adminAgentManagerSortBy('${s.sort === "due" ? "joined" : "due"}')" data-agent-manager-sort-due>Next payment due${s.sort === "due" ? " ↑" : ""}</button></th><th class="px-3 py-2">Days left</th><th class="px-3 py-2">Joined</th><th class="px-3 py-2"></th></tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${rows.map((a) => `
+            <tr class="hover:bg-green-50/40 cursor-pointer align-top" onclick="${open(a)}">
+              <td class="px-3 py-2 min-w-[180px]">
+                <p class="font-bold text-gray-900" data-pii>${adminEscape(a.full_name || "Unnamed")}</p>
+                <p class="text-xs text-gray-500">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · ${adminEscape(a.makaug_agent_number)}` : ""}</p>
+              </td>
+              <td class="px-3 py-2 text-xs font-mono whitespace-nowrap" data-pii="phone">${adminEscape(a.phone || a.whatsapp || "—")}</td>
+              <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerStatusChip(a)}${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerApproveButton(a)}</div></td>
+              <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerIdChip(a)}${adminAgentManagerIdDocChip(a)}</div></td>
+              <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerPaymentChip(a.payment)}<span class="text-[11px] text-gray-500">${adminEscape(a.tracker?.plan || "")}</span></div></td>
+              <td class="px-3 py-2 text-xs whitespace-nowrap" data-live-listings><strong>${Number(a.live_listings || 0)}</strong> / ${Number(a.total_listings || 0)}</td>
+              <td class="px-3 py-2 text-xs whitespace-nowrap" data-next-due>${a.fee_exempt ? `<span class="text-gray-400">—</span>` : adminEscape(adminAgentManagerDay(a.tracker?.next_due))}</td>
+              <td class="px-3 py-2 text-xs" data-days-left>${adminAgentManagerDaysLeft(a.tracker || {}, a)}</td>
+              <td class="px-3 py-2 text-xs whitespace-nowrap">${staffPeopleDate(a.created_at)}</td>
+              <td class="px-3 py-2"><button type="button" class="rounded-lg bg-gray-900 text-white px-3 py-1.5 text-xs font-bold" onclick="event.stopPropagation(); ${open(a)}">Manage</button></td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div class="md:hidden space-y-2">
+      ${rows.map((a) => `
+        <button type="button" class="w-full text-left rounded-xl border border-gray-200 p-3 active:bg-green-50" onclick="${open(a)}">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="font-bold text-gray-900 truncate" data-pii>${adminEscape(a.full_name || "Unnamed")}</p>
+              <p class="text-xs text-gray-600 font-mono" data-pii="phone">${adminEscape(a.phone || a.whatsapp || "")}</p>
+            </div>
+            ${adminAgentManagerStatusChip(a)}
+          </div>
+          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerIdDocChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
+          <p class="text-[11px] text-gray-500 mt-2">${Number(a.live_listings || 0)} live of ${Number(a.total_listings || 0)} listings · next payment ${a.fee_exempt ? "none (free)" : adminEscape(adminAgentManagerDay(a.tracker?.next_due))} · joined ${staffPeopleDate(a.created_at)}</p>
+          <div class="mt-2">${adminAgentManagerDaysLeft(a.tracker || {}, a)}</div>
+        </button>${adminAgentManagerCanApprove(a) ? `<div class="-mt-1 flex justify-end">${adminAgentManagerApproveButton(a)}</div>` : ""}`).join("")}
+    </div>`;
+}
+
+function adminAgentManagerOverlay() {
+  const fresh = adminAgentManagerRoot()?.querySelector("[data-agent-manager-detail]");
+  const parked = document.querySelector("body > [data-agent-manager-detail]");
+  if (fresh) {
+    if (parked) parked.remove();
+    document.body.appendChild(fresh);
+    return fresh;
+  }
+  return parked;
+}
+
+function adminAgentManagerClose() {
+  adminAgentManagerOverlay()?.classList.add("hidden");
+  ADMIN_AGENT_MANAGER_STATE.openId = null;
+}
+
+async function adminAgentManagerOpen(agentId) {
+  if (!adminAgentManagerRoot()?.dataset.agentManagerReady) await adminAgentManagerLoad();
+  const overlay = adminAgentManagerOverlay();
+  const body = overlay?.querySelector("[data-agent-manager-detail-body]");
+  if (!overlay || !body) return;
+  overlay.classList.remove("hidden");
+  ADMIN_AGENT_MANAGER_STATE.openId = agentId;
+  if (!ADMIN_AGENT_MANAGER_STATE.detail || ADMIN_AGENT_MANAGER_STATE.detail.agent?.id !== agentId) body.innerHTML = `<div class="p-5 text-gray-500">Loading…</div>`;
+  try {
+    const res = await apiRequest(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}`, { headers: adminAuthHeaders() });
+    ADMIN_AGENT_MANAGER_STATE.detail = res?.data || null;
+    body.innerHTML = adminAgentManagerDetailHtml(ADMIN_AGENT_MANAGER_STATE.detail || {});
+  } catch (error) {
+    body.innerHTML = `<div class="p-5"><button type="button" class="text-sm font-bold text-gray-700" onclick="adminAgentManagerClose()">← Back</button><p class="mt-4 text-red-800">${adminEscape(error?.message || "Could not load this agent.")}</p></div>`;
+  }
+}
+
+const ADMIN_AGENT_MANAGER_LISTING_STATUS = {
+  approved: ["Live", "bg-green-100 text-green-800"],
+  pending: ["Pending review", "bg-amber-100 text-amber-800"],
+  hidden: ["Taken down", "bg-yellow-100 text-yellow-800"],
+  archived: ["Archived", "bg-gray-200 text-gray-700"],
+  rejected: ["Rejected", "bg-red-100 text-red-800"],
+  draft: ["Draft", "bg-gray-100 text-gray-700"]
+};
+
+function adminAgentManagerListingChip(l = {}) {
+  if (l.status === "sold") return adminAgentManagerChip(l.availability_status === "let_agreed" ? "Let" : "Sold", "bg-blue-100 text-blue-800");
+  const [label, cls] = ADMIN_AGENT_MANAGER_LISTING_STATUS[l.status] || [l.status || "Unknown", "bg-gray-100 text-gray-700"];
+  return adminAgentManagerChip(label, cls);
+}
+
+function adminAgentManagerListingActions(l, agentId) {
+  const id = adminAttr(l.id);
+  const btn = (action, label, cls) => `<button type="button" data-listing-action="${action}" class="rounded-lg px-2 py-1 text-[11px] font-bold ${cls}" onclick="adminAgentManagerListingState('${id}', '${action}')">${label}</button>`;
+  const parts = [];
+  if (["hidden", "sold", "archived"].includes(l.status)) parts.push(btn("put_back", "Put back", "bg-green-700 text-white"));
+  if (!["hidden", "archived"].includes(l.status)) parts.push(btn("take_down", "Take down", "border border-yellow-300 text-yellow-800 bg-yellow-50"));
+  if (l.status !== "sold") {
+    const rent = /rent|short/.test(String(l.listing_type || ""));
+    parts.push(rent ? btn("mark_let", "Mark let", "border border-blue-200 text-blue-800 bg-blue-50") : btn("mark_sold", "Mark sold", "border border-blue-200 text-blue-800 bg-blue-50"));
+  }
+  const others = (ADMIN_AGENT_MANAGER_STATE.rows || []).filter((a) => a.id !== agentId && !a.removed_at);
+  parts.push(`<span class="inline-flex items-center gap-1"><select data-move-target="${id}" class="rounded-lg border border-gray-200 px-1 py-1 text-[11px] max-w-[130px]"><option value="">Move to…</option>${others.map((a) => `<option value="${adminAttr(a.id)}">${adminEscape(a.full_name)}${a.phone ? ` ·${adminEscape(String(a.phone).slice(-3))}` : ""}</option>`).join("")}</select><button type="button" class="rounded-lg border border-gray-300 px-2 py-1 text-[11px] font-bold" onclick="adminAgentManagerMoveListing('${id}')">Move</button></span>`);
+  return `<div class="flex flex-wrap gap-1">${parts.join("")}</div>`;
+}
+
+function adminAgentManagerDetailHtml(d = {}) {
+  const a = d.agent || {};
+  const listings = Array.isArray(d.listings) ? d.listings : [];
+  const history = Array.isArray(d.history) ? d.history : [];
+  const dupes = Array.isArray(d.same_phone_agents) ? d.same_phone_agents : [];
+  const id = adminAttr(a.id);
+  const input = "mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm";
+  const field = (name, label, value, opts = {}) => `<label class="text-xs font-semibold ${opts.missing ? "text-red-700" : "text-gray-700"} ${opts.wide ? "col-span-2" : ""}">${adminEscape(label)}${opts.missing ? " · missing" : ""}
+      <input name="${name}" type="${opts.type || "text"}" value="${adminAttr(value == null ? "" : String(value))}" ${opts.placeholder ? `placeholder="${adminAttr(opts.placeholder)}"` : ""} class="${input}${opts.missing ? " border-red-300 bg-red-50" : ""}" data-agent-field="${name}"></label>`;
+  const fact = (label, value) => `<div><dt class="text-[11px] uppercase tracking-wide text-gray-400">${adminEscape(label)}</dt><dd class="text-sm font-semibold text-gray-900">${value}</dd></div>`;
+  const date = (v, t) => (v ? staffPeopleDate(v, t) : "—");
+  const dayValue = (v) => (v ? String(v).slice(0, 10) : "");
+  const ninMissing = !String(a.nin || "").trim();
+  const historyLabel = (h) => ({
+    admin_agent_details_updated: "Details changed",
+    admin_agent_added_manually: "Added by hand (staff)",
+    admin_agent_removed: "Agent removed",
+    admin_agent_restored: "Agent restored",
+    admin_agent_listing_take_down: "Listing taken down",
+    admin_agent_listing_mark_sold: "Listing marked sold",
+    admin_agent_listing_mark_let: "Listing marked let",
+    admin_agent_listing_put_back: "Listing put back",
+    admin_agent_listing_moved: "Listing moved to another agent",
+    admin_agent_listing_received: "Listing moved to this agent",
+    admin_agent_approved_anyway: "Approved anyway (details still missing)",
+    admin_agent_status_updated: "Status changed",
+    admin_agent_fee_override: "Fee offer set",
+    admin_agent_id_file_uploaded: "ID document uploaded",
+    admin_agent_id_file_replaced: "ID document replaced (old one kept)",
+    admin_agent_id_file_viewed: "ID document viewed",
+    admin_agent_id_file_downloaded: "ID document downloaded",
+    admin_agent_id_file_deleted: "Old ID document deleted (super admin)",
+    admin_agent_signup_id_viewed: "Sign-up ID viewed",
+    admin_agent_signup_id_downloaded: "Sign-up ID downloaded",
+    admin_agent_identity_viewed: "Sign-up ID viewed",
+    admin_agent_identity_document_attached: "Sign-up ID attached"
+  }[h.action] || String(h.action || "").replace(/^admin_/, "").replace(/_/g, " "));
+  const historyDetail = (h) => {
+    const det = h.details || {};
+    if (det.changes) return Object.entries(det.changes).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v.from ?? "—"} → ${v.to ?? "—"}`).join("; ");
+    if (/^admin_agent_(id_file|signup_id)_/.test(String(h.action || ""))) return [det.label, det.archived ? "older version" : "", det.reason].filter(Boolean).join(" · ");
+    return [det.reason, det.status_from && det.status_to ? `${det.status_from} → ${det.status_to}` : "", det.status && !det.status_to ? `now ${det.status}` : "", Array.isArray(det.missing) && det.missing.length ? `missing: ${det.missing.join(", ").replace(/_/g, " ")}` : "", det.payment_status ? `payment ${det.payment_status}` : ""].filter(Boolean).join(" · ");
+  };
+  return `
+    <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3 flex items-center justify-between gap-3">
+      <button type="button" class="text-sm font-bold text-gray-700" onclick="adminAgentManagerClose()">← Back to agents</button>
+      <div class="flex gap-1">${adminAgentManagerStatusChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
+    </div>
+    <div class="p-5 space-y-5" data-agent-manager-agent="${id}">
+      <div>
+        <h4 class="text-xl font-black text-gray-900" data-pii>${adminEscape(a.full_name || "Unnamed")}</h4>
+        <p class="text-sm text-gray-600">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · Agent No ${adminEscape(a.makaug_agent_number)}` : " · no agent number yet"}</p>
+        <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerIdChip(a)}${adminAgentManagerIdDocChip(a)}${a.agent_application_channel === "staff_added" ? adminAgentManagerChip("Added by staff", "bg-purple-100 text-purple-800") : ""}</div>
+      </div>
+      ${a.id_still_needed ? `<div class="rounded-xl border-2 border-red-600 bg-red-50 p-3 text-sm text-red-900" data-agent-id-needed-banner>
+        <p class="font-black text-red-800">Approved – ID still needed</p>
+        <p class="mt-1">This agent is live but their ID number (NIN) is not on file.${a.approved_anyway ? ` Approved anyway by ${adminEscape(a.approved_anyway.by || "staff")} on ${date(a.approved_anyway.at, true)}: “${adminEscape(a.approved_anyway.reason || "")}”.` : ""} Type the NIN in <strong>ID number (NIN)</strong> below and press <strong>Save changes</strong>; this reminder goes away by itself. Upload a photo of the ID under <strong>ID documents</strong> too, so it is on file.</p>
+      </div>` : ""}
+      ${adminAgentManagerCanApprove(a) ? `<div class="rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-sm text-amber-950" data-agent-approve-panel>
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div class="min-w-0">
+            <p class="font-black">Pending approval</p>
+            <p class="mt-1">${adminAgentManagerMissingList(a).length ? `Still missing: <strong>${adminEscape(adminAgentManagerMissingList(a).join(", "))}</strong>. ` : ""}Until they are approved, WhatsApp messages from this number go to the buyer assistant, not the agent assistant.</p>
+          </div>
+          ${adminAgentManagerApproveButton(a, "lg")}
+        </div>
+      </div>` : ""}
+      ${a.removed_at ? `<div class="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-800">Removed ${date(a.removed_at, true)}${a.removed_reason ? ` — “${adminEscape(a.removed_reason)}”` : ""}. Their profile and listings are off the site. <button type="button" data-agent-restore class="ml-2 rounded-lg bg-green-700 text-white px-3 py-1.5 text-xs font-bold" onclick="adminAgentManagerRestore('${id}')">Restore agent</button></div>` : ""}
+      ${dupes.length ? `<div class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><strong>Same phone number on another agent record:</strong> ${dupes.map((x) => `<button type="button" class="underline font-bold" onclick="adminAgentManagerOpen('${adminAttr(x.id)}')">${adminEscape(x.full_name)}</button> (joined ${date(x.created_at)}, ${Number(x.total_listings || 0)} listings${x.removed_at ? ", removed" : ""})`).join(", ")}. If it is the same person, move the listings to one record and remove the other.</div>` : ""}
+      <form class="rounded-xl border border-gray-200 p-3" onsubmit="adminAgentManagerSaveDetails(event, '${id}')" data-agent-details-form>
+        <h5 class="font-black text-gray-900 mb-2">Details</h5>
+        <div class="grid grid-cols-2 gap-2">
+          ${field("full_name", "Display name (shown on the site and listings)", a.full_name, { wide: true })}
+          ${field("company_name", "Company name (shown on the site)", a.company_name, { wide: true })}
+          ${field("greeting_name", "Greeting name (how WhatsApp says hello)", a.greeting_name)}
+          ${field("experience_years", "Years of experience", a.experience_years, { type: "number" })}
+          ${field("nin", "ID number (NIN)", a.nin, { missing: ninMissing, placeholder: "e.g. CM90012345ABCD" })}
+          ${field("id_expiry_date", "ID expiry", dayValue(a.id_expiry_date), { type: "date" })}
+          ${field("phone", "Phone", a.phone)}
+          ${field("whatsapp", "WhatsApp", a.whatsapp)}
+          ${field("email", "Email", a.email, { type: "email" })}
+          ${field("licence_number", "Licence number", adminAgentManagerLicencePlaceholder(a.licence_number) ? "" : a.licence_number, { placeholder: adminAgentManagerLicencePlaceholder(a.licence_number) ? "None yet (system code " + a.licence_number + ")" : "" })}
+          ${field("districts_covered", "Districts (comma separated)", (a.districts_covered || []).join(", "))}
+          ${field("specializations", "Specialities (comma separated)", (a.specializations || []).join(", "), { wide: true })}
+          <label class="col-span-2 text-xs font-semibold text-gray-700">Bio<textarea name="bio" rows="2" class="${input}">${adminEscape(a.bio || "")}</textarea></label>
+        </div>
+        <div class="mt-3 flex justify-end"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Save changes</button></div>
+      </form>
+      ${adminAgentManagerIdFilesHtml(a, Array.isArray(d.id_files) ? d.id_files : [])}
+      <form class="rounded-xl border border-gray-200 p-3" onsubmit="adminAgentManagerSaveDetails(event, '${id}')" data-agent-payment-form>
+        <h5 class="font-black text-gray-900 mb-1">Plan &amp; payment</h5>
+        <p class="text-xs text-gray-500 mb-2">Now: ${adminAgentManagerPaymentChip(a.payment)}${a.billing_suspended_at ? ` · billing suspended ${date(a.billing_suspended_at)}` : ""}${a.fee_offer_mode ? ` · offer: ${adminEscape(a.fee_offer_mode)}${a.fee_offer_until ? ` until ${date(a.fee_offer_until)}` : ""}` : ""}</p>
+        ${adminAgentManagerTrackerHtml(a, Array.isArray(d.payments) ? d.payments : [])}
+        <div class="grid grid-cols-2 gap-2">
+          ${field("paid_until", "Paid until (last paid day)", dayValue(a.paid_until), { type: "date" })}
+          ${field("plan_started_on", "Plan start (current period)", dayValue(a.plan_started_on), { type: "date" })}
+          ${field("last_payment_on", "Last payment date", dayValue(a.last_payment_on), { type: "date" })}
+          ${field("last_payment_ugx", "Last payment amount (UGX)", a.last_payment_ugx)}
+          ${field("monthly_fee_ugx", "Monthly fee (UGX)", a.monthly_fee_ugx)}
+          ${field("billing_plan", "Billing plan (e.g. agent_monthly)", a.billing_plan || "", { placeholder: a.plan ? `sign-up tier: ${a.plan}` : "not set" })}
+          <label class="text-xs font-semibold text-gray-700 flex items-end gap-2 pb-2"><input type="checkbox" name="fee_exempt" ${a.fee_exempt ? "checked" : ""} class="h-4 w-4"> Free (staff override)</label>
+          ${field("fee_exempt_reason", "Reason for free", a.fee_exempt_reason, { wide: true })}
+        </div>
+        <div class="mt-3 flex justify-end"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Save payment</button></div>
+      </form>
+      <dl class="grid grid-cols-2 md:grid-cols-3 gap-3 rounded-xl bg-gray-50 p-3">
+        ${fact("Signed up", date(a.created_at, true))}
+        ${fact("Approved", date(a.approved_at))}
+        ${fact("Last activity", date(a.last_activity_at, true))}
+        ${fact("Last sign-in", date(a.user_last_login_at, true))}
+        ${fact("ID photo", a.has_id_front_file ? "uploaded by staff" : a.has_signup_id_document ? `from sign-up ${date(a.identity_document_uploaded_at)}` : "missing")}
+        ${fact("Profile photo", a.has_profile_photo ? "uploaded" : "missing")}
+        ${fact("Joined via", adminEscape(String(a.agent_application_channel || "web").replace(/_/g, " ")))}
+        ${fact("Registered by", adminEscape(a.registered_by_name || a.registered_by_phone || "—"))}
+        ${fact("Phone checked", date(a.contact_phone_verified_at))}
+        ${fact("Privacy consent", a.privacy_consent_accepted ? date(a.privacy_consent_at) : "not given")}
+        ${fact("Welcome sent", date(a.welcome_sent_at))}
+        ${fact("Account", adminEscape(a.user_id ? (a.user_email || "linked") : "no login"))}
+      </dl>
+      <section>
+        <h5 class="font-black text-gray-900 mb-2">Listings (${listings.length})</h5>
+        ${listings.length ? `<div class="space-y-2" data-agent-listings>${listings.map((l) => `
+          <div class="rounded-xl border border-gray-200 p-3" data-agent-listing="${adminAttr(l.id)}">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="font-bold text-gray-900 text-sm">${adminEscape(l.title || "Untitled")}</p>
+                <p class="text-[11px] text-gray-500">${adminEscape([l.inquiry_reference, l.listing_type, l.area || l.district].filter(Boolean).join(" · "))}</p>
+              </div>
+              ${adminAgentManagerListingChip(l)}
+            </div>
+            <p class="text-[11px] text-gray-600 mt-1">Posted ${date(l.created_at)}${l.sold_at ? ` · ${l.availability_status === "let_agreed" ? "let" : "sold"} ${date(l.sold_at)}` : ""}${l.status === "hidden" && (l.last_staff_action_at || l.taken_down_at) ? ` · taken down ${date(l.last_staff_action_at || l.taken_down_at)}` : ""}${l.expires_at ? ` · expires ${date(l.expires_at)}` : ""} · ${Number(l.views || 0)} views · ${Number(l.leads || 0)} leads</p>
+            <div class="mt-2">${adminAgentManagerListingActions(l, a.id)}</div>
+          </div>`).join("")}</div>` : `<p class="text-xs text-gray-500">No listings.</p>`}
+      </section>
+      <section>
+        <h5 class="font-black text-gray-900 mb-2">Change history</h5>
+        ${history.length ? `<ol class="space-y-2" data-agent-history>${history.map((h) => `
+          <li class="text-xs"><span class="text-gray-400">${date(h.created_at, true)}</span> · <strong>${adminEscape(historyLabel(h))}</strong> · ${adminEscape(h.details?.by || h.actor_id || "")}${historyDetail(h) ? `<div class="text-gray-500">${adminEscape(historyDetail(h))}</div>` : ""}</li>`).join("")}</ol>` : `<p class="text-xs text-gray-500">No staff changes yet.</p>`}
+      </section>
+      ${a.removed_at ? "" : `<section class="rounded-xl border border-red-200 bg-red-50 p-3" data-agent-remove>
+        <h5 class="font-black text-red-900 mb-1">Remove agent</h5>
+        <p class="text-xs text-red-900 mb-2">Takes their profile and live/pending listings off makaug. Nothing is deleted: “Restore agent” puts everything back as it was.</p>
+        <div class="flex flex-wrap gap-2">
+          <input type="text" data-remove-reason placeholder="Why? e.g. duplicate of another record" class="flex-1 min-w-[200px] rounded-xl border border-red-200 bg-white px-3 py-2 text-sm">
+          <button type="button" class="rounded-lg bg-red-700 text-white px-4 py-2 text-xs font-bold" onclick="adminAgentManagerRemove('${id}')">Remove agent</button>
+        </div>
+      </section>`}
+    </div>`;
+}
+
+// ── ID documents (front, back, other) ──────────────────────────────────────
+// Files live in the database, not in the public media store. They are only
+// fetched with the staff sign-in (never a plain link), shown from a local
+// blob, and every view and download is logged in the agent's history.
+const ADMIN_AGENT_ID_FILE_KINDS = [
+  ["id_front", "ID front"],
+  ["id_back", "ID back"],
+  ["other", "Other document"]
+];
+const ADMIN_AGENT_ID_FILE_ACCEPT = "image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,application/pdf";
+const ADMIN_AGENT_ID_FILE_MAX = 10 * 1024 * 1024;
+// Local previews: picked-but-not-saved files, and what was just uploaded.
+const ADMIN_AGENT_ID_PREVIEWS = { picked: {}, saved: {} };
+
+function adminAgentManagerIdFileSize(bytes) {
+  const n = Number(bytes || 0);
+  return n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
+function adminAgentManagerIdThumb(src, mime, alt) {
+  if (src && /^image\/(jpeg|png|webp|gif)/.test(String(mime || ""))) {
+    return `<img src="${adminAttr(src)}" alt="${adminAttr(alt)}" class="h-28 w-full max-w-[16rem] object-contain rounded-lg border border-gray-200 bg-gray-50" data-id-file-preview>`;
+  }
+  const label = /pdf/.test(String(mime || "")) ? "PDF" : /heic|heif/.test(String(mime || "")) ? "HEIC photo" : "ID";
+  return `<div class="h-28 w-full max-w-[16rem] rounded-lg border border-dashed border-gray-300 bg-white flex flex-col items-center justify-center text-[11px] text-gray-500 text-center px-2"><span class="text-lg">🪪</span>${adminEscape(label)}${src ? "" : `<span class="text-[10px]">press View to open</span>`}</div>`;
+}
+
+function adminAgentManagerIdFileCard(f, agentId) {
+  const fid = adminAttr(f.id);
+  const saved = ADMIN_AGENT_ID_PREVIEWS.saved[f.id];
+  const by = f.uploaded_by_label ? ` by ${adminEscape(f.uploaded_by_label)}` : "";
+  return `<div class="flex flex-col gap-2" data-id-file="${fid}" data-id-file-kind="${adminAttr(f.kind)}">
+      ${adminAgentManagerIdThumb(saved?.src, saved?.mime || f.mime_type, f.label || "ID")}
+      <div class="min-w-0 text-xs">
+        <p class="font-bold text-gray-900">${adminEscape(f.label || "ID document")} <span class="font-normal text-green-700">· on file</span></p>
+        <p class="text-gray-500">Uploaded ${staffPeopleDate(f.uploaded_at, true)}${by} · ${adminEscape(adminAgentManagerIdFileSize(f.byte_size))}${f.metadata_stripped ? " · location data removed" : ""}</p>
+        <div class="flex flex-wrap gap-1 mt-2">
+          <button type="button" data-id-file-view="${fid}" class="rounded-lg bg-gray-900 text-white px-3 py-1.5 text-[11px] font-bold" onclick="adminAgentManagerIdFileView('${fid}')">View</button>
+          <button type="button" data-id-file-download="${fid}" class="rounded-lg border border-gray-300 px-3 py-1.5 text-[11px] font-bold" onclick="adminAgentManagerIdFileDownload('${fid}')">Download</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function adminAgentManagerIdSlotHtml(kind, label, live, agentId) {
+  const id = adminAttr(agentId);
+  const picked = ADMIN_AGENT_ID_PREVIEWS.picked[`${agentId}:${kind}`];
+  const pickLabel = live.length && kind !== "other" ? `Replace ${label}` : `Upload ${label}`;
+  const picker = `<label class="inline-flex items-center rounded-lg border border-green-700 text-green-800 bg-white hover:bg-green-50 px-3 py-1.5 text-[11px] font-bold cursor-pointer" data-id-file-pick="${kind}">
+      ${adminEscape(pickLabel)}
+      <input type="file" class="sr-only" accept="${ADMIN_AGENT_ID_FILE_ACCEPT}" data-id-file-input="${kind}" onchange="adminAgentManagerIdFilePicked(this, '${id}', '${kind}')">
+    </label>`;
+  const pickedHtml = picked ? `<div class="mt-2 rounded-lg border-2 border-amber-300 bg-amber-50 p-2 flex flex-col gap-2" data-id-file-picked="${kind}">
+      ${adminAgentManagerIdThumb(picked.src, picked.mime, `${label} (not saved yet)`)}
+      <div class="text-xs min-w-0">
+        <p class="font-bold text-amber-900">Not saved yet: ${adminEscape(picked.name || label)}</p>
+        <p class="text-amber-900">${adminEscape(adminAgentManagerIdFileSize(picked.size))}${live.length && kind !== "other" ? ". The current one is kept as an older version." : ""}</p>
+        <div class="flex gap-1 mt-2">
+          <button type="button" data-id-file-save="${kind}" class="rounded-lg bg-green-700 text-white px-3 py-1.5 text-[11px] font-black" onclick="adminAgentManagerIdFileSave('${id}', '${kind}')">Save ${adminEscape(label)}</button>
+          <button type="button" class="rounded-lg border border-gray-300 px-3 py-1.5 text-[11px] font-bold" onclick="adminAgentManagerIdFileCancel('${id}', '${kind}')">Cancel</button>
+        </div>
+      </div>
+    </div>` : "";
+  return `<div class="rounded-xl border ${live.length ? "border-gray-200 bg-white" : "border-dashed border-gray-300 bg-gray-50"} p-3" data-id-slot="${kind}">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <p class="text-xs font-black text-gray-900">${adminEscape(label)}${kind === "other" ? ` <span class="font-normal text-gray-500">(optional, e.g. trading licence)</span>` : ""}</p>
+        ${live.length ? "" : `<span class="text-[11px] font-bold ${kind === "other" ? "text-gray-400" : "text-orange-700"}">${kind === "other" ? "none" : "missing"}</span>`}
+      </div>
+      <div class="space-y-2">${live.map((f) => adminAgentManagerIdFileCard(f, agentId)).join("")}</div>
+      <div class="${live.length ? "mt-2" : ""}">${picker}</div>
+      ${pickedHtml}
+    </div>`;
+}
+
+function adminAgentManagerIdFilesHtml(a = {}, files = []) {
+  const live = files.filter((f) => !f.archived_at);
+  const archived = files.filter((f) => f.archived_at);
+  const signup = a.has_signup_id_document ? `<div class="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs" data-id-signup>
+      <p class="font-black text-blue-950">ID from sign-up <span class="font-normal">(sent by the agent, read-only)</span></p>
+      <p class="text-blue-900">${a.identity_document_name ? `${adminEscape(a.identity_document_name)} · ` : ""}${a.identity_document_uploaded_at ? `received ${staffPeopleDate(a.identity_document_uploaded_at, true)}` : "on file"}</p>
+      ${a.signup_id_storage === "link" ? `<p class="mt-2 text-blue-900">Saved as an outside link, so it can't be opened here. Ask the agent for a photo and upload it above.</p>` : `<div class="flex gap-1 mt-2">
+        <button type="button" data-id-signup-view class="rounded-lg bg-blue-900 text-white px-3 py-1.5 text-[11px] font-bold" onclick="adminAgentManagerSignupIdView('${adminAttr(a.id)}')">View</button>
+        <button type="button" class="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-[11px] font-bold" onclick="adminAgentManagerSignupIdDownload('${adminAttr(a.id)}')">Download</button>
+      </div>`}
+    </div>` : "";
+  return `<section class="rounded-xl border border-gray-200 p-3" data-agent-id-files>
+      <div class="flex items-start justify-between gap-2 mb-2 flex-wrap">
+        <div>
+          <h5 class="font-black text-gray-900">ID documents</h5>
+          <p class="text-[11px] text-gray-500">Photo (JPG, PNG, WebP, HEIC) or PDF, up to 10 MB. Private: only staff signed in to King can open these, and every view and download is logged below.</p>
+        </div>
+        ${adminAgentManagerIdDocChip(a)}
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+        ${ADMIN_AGENT_ID_FILE_KINDS.map(([kind, label]) => adminAgentManagerIdSlotHtml(kind, label, live.filter((f) => f.kind === kind), a.id)).join("")}
+      </div>
+      ${signup ? `<div class="mt-2">${signup}</div>` : ""}
+      ${archived.length ? `<details class="mt-2 text-xs" data-id-files-archived><summary class="cursor-pointer font-semibold text-gray-700">Older versions (${archived.length})</summary>
+        <ul class="mt-1 space-y-1">${archived.map((f) => `<li class="flex flex-wrap items-center gap-2" data-id-file-archived="${adminAttr(f.id)}">
+          <span><strong>${adminEscape(f.label || f.kind)}</strong> · uploaded ${staffPeopleDate(f.uploaded_at, true)}${f.uploaded_by_label ? ` by ${adminEscape(f.uploaded_by_label)}` : ""} · replaced ${staffPeopleDate(f.archived_at, true)}</span>
+          <button type="button" class="underline font-bold" onclick="adminAgentManagerIdFileView('${adminAttr(f.id)}')">View</button>
+          <button type="button" class="underline font-bold" onclick="adminAgentManagerIdFileDownload('${adminAttr(f.id)}')">Download</button>
+        </li>`).join("")}</ul>
+      </details>` : ""}
+    </section>`;
+}
+
+function adminAgentManagerIdFilePicked(input, agentId, kind) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const okType = /^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/i.test(file.type) || /\.(heic|heif|pdf|jpe?g|png|webp)$/i.test(file.name || "");
+  if (!okType) { toast("Only JPG, PNG, WebP, HEIC photos or PDF files can be uploaded."); input.value = ""; return; }
+  if (file.size > ADMIN_AGENT_ID_FILE_MAX) { toast("That file is over 10 MB. Send a smaller photo or PDF."); input.value = ""; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    ADMIN_AGENT_ID_PREVIEWS.picked[`${agentId}:${kind}`] = { src: String(reader.result || ""), mime: file.type || "", name: file.name || "", size: file.size };
+    adminAgentManagerIdFilesRerender();
+  };
+  reader.onerror = () => toast("Could not read that file.");
+  reader.readAsDataURL(file);
+}
+
+function adminAgentManagerIdFileCancel(agentId, kind) {
+  delete ADMIN_AGENT_ID_PREVIEWS.picked[`${agentId}:${kind}`];
+  adminAgentManagerIdFilesRerender();
+}
+
+function adminAgentManagerIdFilesRerender() {
+  const d = ADMIN_AGENT_MANAGER_STATE.detail;
+  const section = adminAgentManagerOverlay()?.querySelector("[data-agent-id-files]");
+  if (!d || !section) return;
+  section.outerHTML = adminAgentManagerIdFilesHtml(d.agent || {}, Array.isArray(d.id_files) ? d.id_files : []);
+}
+
+async function adminAgentManagerIdFileSave(agentId, kind) {
+  const key = `${agentId}:${kind}`;
+  const picked = ADMIN_AGENT_ID_PREVIEWS.picked[key];
+  if (!picked) return;
+  const button = adminAgentManagerOverlay()?.querySelector(`[data-id-file-save="${kind}"]`);
+  if (button) { button.disabled = true; button.textContent = "Saving…"; }
+  try {
+    const res = await apiRequest(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}/id-files`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { kind, data_url: picked.src, name: picked.name }
+    });
+    const saved = res?.data?.file;
+    if (saved?.id) ADMIN_AGENT_ID_PREVIEWS.saved[saved.id] = { src: /^image\/(jpeg|png|webp)/.test(picked.mime) ? picked.src : "", mime: picked.mime };
+    delete ADMIN_AGENT_ID_PREVIEWS.picked[key];
+    await adminAgentManagerRefreshOpen(res?.data?.replaced_file_id ? "Replaced. The old one is kept under Older versions." : "Saved. The ID document is on file.");
+  } catch (error) {
+    toast(error?.message || "Could not save the file.");
+    if (button) { button.disabled = false; button.textContent = "Try again"; }
+  }
+}
+
+// Fetch a private file with the staff sign-in, as a blob (never a plain link).
+async function adminAgentManagerIdBlob(path) {
+  const headers = { ...adminAuthHeaders() };
+  if (authState?.token && !headers.Authorization) headers.Authorization = `Bearer ${authState.token}`;
+  const response = await fetch(apiUrl(path), { headers, credentials: "same-origin", cache: "no-store" });
+  if (!response.ok) {
+    let message = response.status === 401 || response.status === 403 ? "Your account cannot open ID documents." : "Could not open the file.";
+    try { message = (await response.json())?.error || message; } catch (e) {}
+    throw new Error(message);
+  }
+  const disposition = String(response.headers.get("content-disposition") || "");
+  const filename = (disposition.match(/filename="([^"]+)"/) || [])[1] || "id-document";
+  return { blob: await response.blob(), filename, mime: String(response.headers.get("content-type") || "") };
+}
+
+function adminAgentManagerIdViewer(title, file, onDownload) {
+  document.querySelector("[data-id-file-viewer]")?.remove();
+  const url = URL.createObjectURL(file.blob);
+  const wrap = document.createElement("div");
+  wrap.setAttribute("data-id-file-viewer", "");
+  wrap.className = "fixed inset-0 z-[10080] bg-black/80 flex flex-col p-3 md:p-6";
+  const isImage = /^image\/(jpeg|png|webp|gif)/.test(file.mime);
+  const isPdf = /pdf/.test(file.mime);
+  const body = isImage
+    ? `<img src="${url}" alt="${adminAttr(title)}" class="max-h-full max-w-full object-contain rounded-lg bg-white" data-id-file-viewer-image>`
+    : isPdf
+      ? `<iframe src="${url}" title="${adminAttr(title)}" class="w-full h-full rounded-lg bg-white"></iframe>`
+      : `<p class="text-white text-sm">This file type cannot be shown here (for example an iPhone HEIC photo). Press Download to open it.</p>`;
+  wrap.innerHTML = `
+    <div class="flex items-center justify-between gap-2 text-white mb-3">
+      <p class="font-black text-sm truncate">${adminEscape(title)} <span class="font-normal text-gray-300">· private, staff only</span></p>
+      <div class="flex gap-2">
+        <button type="button" class="rounded-lg bg-white text-gray-900 px-3 py-1.5 text-xs font-bold" data-id-file-viewer-download>Download</button>
+        <button type="button" class="rounded-lg border border-white/60 px-3 py-1.5 text-xs font-bold" data-id-file-viewer-close>Close</button>
+      </div>
+    </div>
+    <div class="flex-1 min-h-0 flex items-center justify-center">${body}</div>`;
+  const close = () => { wrap.remove(); URL.revokeObjectURL(url); };
+  wrap.querySelector("[data-id-file-viewer-close]").addEventListener("click", close);
+  // Download goes back to the server so it is logged as a download, not a view.
+  wrap.querySelector("[data-id-file-viewer-download]").addEventListener("click", () => (onDownload ? onDownload() : adminAgentManagerIdSave(file)));
+  wrap.addEventListener("click", (event) => { if (event.target === wrap) close(); });
+  document.body.appendChild(wrap);
+}
+
+function adminAgentManagerIdSave(file) {
+  const url = URL.createObjectURL(file.blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function adminAgentManagerIdFileTitle(fileId) {
+  const d = ADMIN_AGENT_MANAGER_STATE.detail || {};
+  const f = (d.id_files || []).find((x) => x.id === fileId) || {};
+  return `${d.agent?.full_name || "Agent"} · ${f.label || "ID document"}${f.archived_at ? " (older version)" : ""}`;
+}
+
+async function adminAgentManagerIdFileView(fileId) {
+  try {
+    adminAgentManagerIdViewer(adminAgentManagerIdFileTitle(fileId), await adminAgentManagerIdBlob(`/api/admin/agent-manager/id-files/${encodeURIComponent(fileId)}`), () => adminAgentManagerIdFileDownload(fileId));
+  } catch (error) { toast(error?.message || "Could not open the file."); }
+}
+
+async function adminAgentManagerIdFileDownload(fileId) {
+  try {
+    adminAgentManagerIdSave(await adminAgentManagerIdBlob(`/api/admin/agent-manager/id-files/${encodeURIComponent(fileId)}?download=1`));
+  } catch (error) { toast(error?.message || "Could not download the file."); }
+}
+
+async function adminAgentManagerSignupIdView(agentId) {
+  const name = ADMIN_AGENT_MANAGER_STATE.detail?.agent?.full_name || "Agent";
+  try {
+    adminAgentManagerIdViewer(`${name} · ID from sign-up`, await adminAgentManagerIdBlob(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}/signup-id`), () => adminAgentManagerSignupIdDownload(agentId));
+  } catch (error) { toast(error?.message || "Could not open the file."); }
+}
+
+async function adminAgentManagerSignupIdDownload(agentId) {
+  try {
+    adminAgentManagerIdSave(await adminAgentManagerIdBlob(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}/signup-id?download=1`));
+  } catch (error) { toast(error?.message || "Could not download the file."); }
+}
+
+function adminAgentManagerTrackerHtml(a = {}, payments = []) {
+  const t = a.tracker || {};
+  const ugx = (n) => (n === null || n === undefined || n === "" ? "" : `UGX ${Number(n).toLocaleString("en-GB")}`);
+  const source = { staff: "typed by staff", ledger: "payment ledger", free_trial: "free trial start" };
+  const box = (label, value, extra = "") => `<div class="rounded-lg bg-white border border-gray-200 p-2 ${extra}"><p class="text-[10px] uppercase tracking-wide text-gray-400">${adminEscape(label)}</p><p class="text-sm font-bold text-gray-900">${value}</p></div>`;
+  const toneCls = t.tone === "red" ? "border-red-500 bg-red-50" : t.tone === "amber" ? "border-amber-400 bg-amber-50" : "";
+  const last = t.last_payment_on || t.last_payment_ugx !== null && t.last_payment_ugx !== undefined
+    ? `${adminEscape(adminAgentManagerDay(t.last_payment_on))}${t.last_payment_ugx !== null && t.last_payment_ugx !== undefined ? ` · ${adminEscape(ugx(t.last_payment_ugx))}` : ""}<span class="block text-[10px] font-normal text-gray-500">${adminEscape(source[t.last_payment_source] || "")}</span>`
+    : `<span class="text-gray-400">— not set</span>`;
+  return `
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3 rounded-xl bg-gray-50 p-2" data-agent-payment-tracker>
+      ${box("Plan", adminEscape(t.plan || "Not set"))}
+      ${box("Status", adminEscape(t.status_label || a.payment?.label || ""))}
+      ${box("Days on current period", t.days_on_period ? `${t.days_on_period} day${t.days_on_period === 1 ? "" : "s"}<span class="block text-[10px] font-normal text-gray-500">since ${adminEscape(adminAgentManagerDay(t.period_start))} (${adminEscape(source[t.period_source] || "")})</span>` : `<span class="text-gray-400">— not set</span>`)}
+      ${box("Next payment due", a.fee_exempt ? "No fee (free)" : adminEscape(adminAgentManagerDay(t.next_due)), toneCls)}
+      ${box(t.overdue ? "Days overdue" : "Days left", adminAgentManagerDaysLeft(t, a), toneCls)}
+      ${box("Last payment", last)}
+    </div>
+    ${payments.length ? `<details class="mb-3 text-xs"><summary class="cursor-pointer font-semibold text-gray-700">Payments recorded (${payments.length})</summary><ul class="mt-1 space-y-1">${payments.map((p) => `<li>${adminEscape(adminAgentManagerDay(p.paid_at ? String(p.paid_at).slice(0, 10) : ""))} · ${adminEscape(ugx(p.amount_ugx))} · ${adminEscape(p.method || "")} ${adminEscape(p.reference || "")} · covers ${adminEscape(adminAgentManagerDay(p.period_start))} – ${adminEscape(adminAgentManagerDay(p.period_end))}</li>`).join("")}</ul></details>` : ""}`;
+}
+
+function adminAgentManagerApproveAnyway(agentId) {
+  const fromDetail = ADMIN_AGENT_MANAGER_STATE.detail?.agent?.id === agentId ? ADMIN_AGENT_MANAGER_STATE.detail.agent : null;
+  const agent = fromDetail || (ADMIN_AGENT_MANAGER_STATE.rows || []).find((a) => a.id === agentId) || { id: agentId };
+  document.querySelector("[data-agent-approve-dialog]")?.remove();
+  const missing = adminAgentManagerMissingList(agent);
+  const wrap = document.createElement("div");
+  wrap.setAttribute("data-agent-approve-dialog", agentId);
+  wrap.className = "fixed inset-0 z-[10070] bg-black/50 flex items-center justify-center p-4";
+  wrap.innerHTML = `
+    <form class="w-full max-w-lg rounded-2xl bg-white shadow-2xl p-5 space-y-3" onsubmit="adminAgentManagerConfirmApproveAnyway(event, '${adminAttr(agentId)}')">
+      <h4 class="text-lg font-black text-gray-900">Approve ${adminEscape(agent.full_name || "this agent")} anyway?</h4>
+      <p class="text-sm text-gray-700">${missing.length ? `Still missing: <strong>${adminEscape(missing.join(", "))}</strong>.` : "Their approval is waiting on a check."} Approving does exactly what a normal approval does:</p>
+      <ul class="text-xs text-gray-700 list-disc pl-5 space-y-0.5">
+        <li>their profile becomes approved, and WhatsApp messages from their number go to the agent assistant (so they can post listings);</li>
+        <li>the welcome pack and the how-to-post film are sent to them on WhatsApp (once);</li>
+        <li>their makaug login is set up, and the usual fee rule applies (new agents start on the free trial).</li>
+      </ul>
+      <p class="text-xs text-red-800 font-semibold">They will show as “Approved – ID still needed” until the ID number is saved.</p>
+      <label class="block text-xs font-semibold text-gray-700">Why are you approving now? (required)
+        <textarea name="reason" rows="2" required minlength="3" data-approve-reason class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. Met in person, ID to follow this week"></textarea>
+      </label>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold" onclick="this.closest('[data-agent-approve-dialog]').remove()">Cancel</button>
+        <button type="submit" data-approve-confirm class="rounded-lg bg-amber-500 hover:bg-amber-600 text-gray-950 px-4 py-2 text-sm font-black">Yes, approve anyway</button>
+      </div>
+    </form>`;
+  wrap.addEventListener("click", (event) => { if (event.target === wrap) wrap.remove(); });
+  document.body.appendChild(wrap);
+  wrap.querySelector("textarea")?.focus();
+}
+
+async function adminAgentManagerConfirmApproveAnyway(event, agentId) {
+  event?.preventDefault?.();
+  const dialog = document.querySelector("[data-agent-approve-dialog]");
+  const reason = String(dialog?.querySelector("[data-approve-reason]")?.value || "").trim();
+  if (reason.length < 3) { toast("Say why you are approving now."); return; }
+  const button = dialog?.querySelector("[data-approve-confirm]");
+  if (button) { button.disabled = true; button.textContent = "Approving…"; }
+  // The normal approval (same endpoint, same welcome pack and fee rules) plus the reason.
+  const ok = await adminSetAgentStatus(agentId, "approved", null, null, { approval_override: { reason } });
+  dialog?.remove();
+  if (ok) {
+    await adminAgentManagerRefreshOpen();
+  }
+}
+
+async function adminAgentManagerRefreshOpen(message) {
+  if (message) toast(message);
+  const openId = ADMIN_AGENT_MANAGER_STATE.openId;
+  await adminAgentManagerLoad();
+  if (openId) await adminAgentManagerOpen(openId);
+}
+
+async function adminAgentManagerSaveDetails(event, agentId) {
+  event?.preventDefault?.();
+  const form = event?.currentTarget;
+  if (!form) return;
+  const data = new FormData(form);
+  const body = {};
+  form.querySelectorAll("input[name], textarea[name]").forEach((el) => {
+    body[el.name] = el.type === "checkbox" ? el.checked : String(data.get(el.name) ?? "");
+  });
+  const button = form.querySelector("button[type=submit]");
+  if (button) button.disabled = true;
+  try {
+    const res = await apiRequest(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}`, { method: "PATCH", headers: adminAuthHeaders(), body });
+    const changed = res?.data?.changed || [];
+    await adminAgentManagerRefreshOpen(changed.length ? `Saved: ${changed.map((k) => k.replace(/_/g, " ")).join(", ")}.` : "Nothing changed.");
+  } catch (error) {
+    toast(`Not saved: ${error?.message || "error"}`);
+    if (button) button.disabled = false;
+  }
+}
+
+async function adminAgentManagerListingState(propertyId, action) {
+  const labels = { take_down: "Take this listing down? It comes off the site but nothing is deleted.", mark_sold: "Mark this listing as sold?", mark_let: "Mark this listing as let?", put_back: "Put this listing back as it was before?" };
+  if (!window.confirm(labels[action] || "Continue?")) return;
+  try {
+    await apiRequest(`/api/admin/agent-manager/listings/${encodeURIComponent(propertyId)}/state`, { method: "POST", headers: adminAuthHeaders(), body: { action } });
+    await adminAgentManagerRefreshOpen({ take_down: "Listing taken down.", mark_sold: "Marked sold.", mark_let: "Marked let.", put_back: "Listing put back." }[action]);
+  } catch (error) {
+    toast(`Not changed: ${error?.message || "error"}`);
+  }
+}
+
+async function adminAgentManagerMoveListing(propertyId) {
+  const select = document.querySelector(`[data-move-target="${CSS.escape(propertyId)}"]`);
+  const target = select?.value;
+  if (!target) { toast("Choose the agent to move it to."); return; }
+  const name = select.options[select.selectedIndex]?.textContent || "that agent";
+  if (!window.confirm(`Move this listing to ${name}?`)) return;
+  try {
+    const res = await apiRequest(`/api/admin/agent-manager/listings/${encodeURIComponent(propertyId)}/move`, { method: "POST", headers: adminAuthHeaders(), body: { agent_id: target } });
+    await adminAgentManagerRefreshOpen(`Moved to ${res?.data?.to_agent_name || name}.`);
+  } catch (error) {
+    toast(`Not moved: ${error?.message || "error"}`);
+  }
+}
+
+async function adminAgentManagerRemove(agentId) {
+  const reason = String(document.querySelector("[data-agent-manager-agent] [data-remove-reason]")?.value || "").trim();
+  if (!reason) { toast("Say why this agent is being removed."); return; }
+  if (!window.confirm("Remove this agent? Their profile and listings come off makaug. You can Restore them later.")) return;
+  try {
+    const res = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/remove`, { method: "POST", headers: adminAuthHeaders(), body: { reason } });
+    await adminAgentManagerRefreshOpen(`Removed ${res?.data?.full_name || "agent"}${res?.data?.listings_hidden ? ` and hid ${res.data.listings_hidden} listing(s)` : ""}.`);
+  } catch (error) {
+    toast(`Remove failed: ${error?.message || "error"}`);
+  }
+}
+
+async function adminAgentManagerRestore(agentId) {
+  if (!window.confirm("Restore this agent and put their listings back as they were?")) return;
+  try {
+    await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/restore`, { method: "POST", headers: adminAuthHeaders() });
+    await adminAgentManagerRefreshOpen("Agent restored.");
+  } catch (error) {
+    toast(`Restore failed: ${error?.message || "error"}`);
+  }
+}
+
+function adminAgentManagerOpenAdd() {
+  const overlay = adminAgentManagerOverlay();
+  const body = overlay?.querySelector("[data-agent-manager-detail-body]");
+  if (!overlay || !body) return;
+  ADMIN_AGENT_MANAGER_STATE.openId = null;
+  const input = "mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm";
+  const f = (name, label, type = "text", extra = "") => `<label class="text-xs font-semibold text-gray-700">${label}<input name="${name}" type="${type}" class="${input}" ${extra}></label>`;
+  body.innerHTML = `
+    <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3"><button type="button" class="text-sm font-bold text-gray-700" onclick="adminAgentManagerClose()">← Back to agents</button></div>
+    <form class="p-5 space-y-3" onsubmit="adminAgentManagerSubmitAdd(event)" data-agent-add-form>
+      <h4 class="text-xl font-black text-gray-900">Add agent</h4>
+      <p class="text-xs text-gray-500">For an agent you are adding by hand. They are marked “Added by staff” with your name, and nothing is sent to them.</p>
+      <div class="grid grid-cols-2 gap-2">
+        ${f("full_name", "Full name *", "text", "required")}
+        ${f("phone", "Phone *", "tel", "required")}
+        ${f("company_name", "Company")}
+        ${f("email", "Email", "email")}
+        ${f("nin", "ID number (NIN)")}
+        ${f("licence_number", "Licence number")}
+        ${f("districts_covered", "Districts (comma separated)")}
+        <label class="text-xs font-semibold text-gray-700">Status<select name="status" class="${input}"><option value="pending">Pending (not public yet)</option><option value="approved">Live now</option></select></label>
+      </div>
+      <fieldset class="rounded-xl border border-gray-200 p-3">
+        <legend class="text-xs font-black text-gray-900 px-1">Payment *</legend>
+        <div class="flex flex-wrap gap-4 text-sm">
+          <label class="flex items-center gap-2"><input type="radio" name="payment_status" value="unpaid" checked> Unpaid</label>
+          <label class="flex items-center gap-2"><input type="radio" name="payment_status" value="paid"> Paid</label>
+          <label class="flex items-center gap-2"><input type="radio" name="payment_status" value="free"> Free (staff override)</label>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          ${f("paid_until", "Paid until (if paid)", "date")}
+          ${f("fee_exempt_reason", "Reason (if free)")}
+        </div>
+      </fieldset>
+      <div class="flex justify-end"><button type="submit" class="rounded-lg bg-green-700 text-white px-4 py-2 text-sm font-bold">Add agent</button></div>
+    </form>`;
+  overlay.classList.remove("hidden");
+}
+
+async function adminAgentManagerSubmitAdd(event) {
+  event?.preventDefault?.();
+  const form = event?.currentTarget;
+  if (!form) return;
+  const data = Object.fromEntries(new FormData(form).entries());
+  try {
+    const res = await apiRequest("/api/admin/agent-manager/agents", { method: "POST", headers: adminAuthHeaders(), body: data });
+    toast(`Added ${res?.data?.full_name || "agent"}.`);
+    await adminAgentManagerLoad({ force: true });
+    if (res?.data?.id) await adminAgentManagerOpen(res.data.id);
+  } catch (error) {
+    toast(`Not added: ${error?.message || "error"}`);
+  }
+}
+
+// From People: jump to the Agents tab with this person's agent record(s).
+async function adminAgentManagerOpenForPerson(phone, name) {
+  const overlay = staffPeopleDetailOverlay("admin");
+  overlay?.classList.add("hidden");
+  const digits = String(phone || "").replace(/\D/g, "").slice(-9);
+  Object.assign(ADMIN_AGENT_MANAGER_STATE, { search: digits || String(name || ""), show: "all", missingOnly: false });
+  setAdminWorkflowTab("agents");
+  const root = adminAgentManagerRoot();
+  if (root) delete root.dataset.agentManagerReady;
+  await adminAgentManagerLoad({ force: true });
+  const rows = ADMIN_AGENT_MANAGER_STATE.rows || [];
+  if (rows.length === 1) await adminAgentManagerOpen(rows[0].id);
+  else if (!rows.length) toast("No agent record matches this person's phone. Use Add agent to create one.");
+  else toast(`${rows.length} agent records use this number — pick the right one.`);
 }
 
 async function resolveAgentBookingFlag(id) {
@@ -16599,6 +18538,14 @@ async function renderStaffDashboardOnce() {
   setTextById("staff-dashboard-name", `${user.first_name || "Staff"} ${user.last_name || ""}`.trim() || "Staff Operations Dashboard");
   setTextById("staff-dashboard-status", `Role: ${mapRoleLabel(user.role)} • ${user.email || user.phone || "staff account"}`);
   if (!staffDashboardHasLiveData) setStaffDashboardLoadingState();
+  // These two do not need the dashboard payload. Started first, they land
+  // before the moderator starts clicking queue cards, not after.
+  if (!staffDashboardSidePanelsStarted) {
+    staffDashboardSidePanelsStarted = true;
+    loadAgentBookingStaffFlags();
+    loadStaffHomeSeekers();
+    adminLoadVideoCaptionConflicts("staff");
+  }
   try {
     const res = await staffApiRequestWithTimeout(
       "/api/staff/dashboard?fast=1",
@@ -16611,9 +18558,9 @@ async function renderStaffDashboardOnce() {
     }
     const data = res?.data || {};
     applyStaffDashboardData(data, user);
-    loadAgentBookingStaffFlags();
+    // The next full render starts the side panels again; failed-render retries do not.
+    staffDashboardSidePanelsStarted = false;
     refreshMarketplaceModerationQueue("staff", { silent: true });
-    adminLoadVideoCaptionConflicts("staff");
     // Always: the fast payload carries counts only, and its lists (leads,
     // WhatsApp, source registry, found-online queue) are empty until the
     // panels arrive. Asking only when it was `partial` left them looking empty.
@@ -16648,7 +18595,7 @@ async function renderStaffDashboardOnce() {
     const retryLimit = signInRequired ? 3 : 8;
     if (transientStaffRequest && staffDashboardAuthRetryCount < retryLimit) {
       staffDashboardAuthRetryCount += 1;
-      scheduleDashboardRefresh("staff_dashboard_retry", Math.min(10000, 1200 * staffDashboardAuthRetryCount), () => renderStaffDashboard(), { page: "staff-dashboard" });
+      scheduleDashboardRefresh("staff_dashboard_retry", staffDashboardRetryDelayMs(staffDashboardAuthRetryCount, 1500, 20000), () => renderStaffDashboard(), { page: "staff-dashboard" });
       return;
     }
     if (signInRequired) {
@@ -17541,6 +19488,16 @@ function staffPreviewRememberTitle(value) {
   staffPreviewTitleDraft = value == null ? "" : String(value);
 }
 
+// The ref is the first thing in the editor header, so a moderator sees which
+// listing opened before editing it (26 Oct 2026: FA7807 opened instead).
+function staffPreviewRefBadgeHtml(preview = {}) {
+  const ref = String(preview.inquiry_reference || "").trim();
+  const id = String(preview.id || "").trim();
+  const label = ref || (id ? `ID ${id.slice(0, 8)}` : "");
+  if (!label) return "";
+  return `<div class="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-300 text-slate-950 px-3 py-1.5 text-lg font-black tracking-wide" data-staff-preview-ref data-no-translate title="${adminAttr(id)}"><i class="fas fa-hashtag text-sm"></i>${adminEscape(label)}</div>`;
+}
+
 function renderStaffListingPreviewModal(preview = {}, options = {}) {
   const nextId = String(preview?.id || "");
   const existing = document.getElementById("staff-listing-preview-modal");
@@ -17575,6 +19532,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
       <div class="bg-slate-900 text-white p-5 flex justify-between gap-4">
         <div>
           <div class="text-xs uppercase tracking-wide text-emerald-200 font-black" data-staff-preview-eyebrow>${staffListingIsLive(preview.status) ? "Live listing" : "Preview before publishing"}</div>
+          ${staffPreviewRefBadgeHtml(preview)}
           <h3 class="text-2xl font-black mt-1">${adminEscape(editorTitle || "Untitled listing")}</h3>
           <p class="text-sm text-slate-300 mt-1" data-staff-preview-status-line>${adminEscape([preview.area, preview.district].filter(Boolean).join(", ") || "Location needs checking")} • ${adminEscape(preview.status || "pending")}</p>
           <p class="text-xs text-emerald-100 mt-1" data-staff-preview-save-state></p>
@@ -17605,9 +19563,11 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
           <section class="rounded-xl border ${duplicates.count ? "border-red-200 bg-red-50" : "border-emerald-100 bg-emerald-50"} p-4">
             <h4 class="font-black ${duplicates.count ? "text-red-900" : "text-emerald-950"}">Duplicate check</h4>
             <p class="text-xs mt-1 ${duplicates.count ? "text-red-800" : "text-emerald-900"}">${duplicates.count ? `${staffNumber(duplicates.count)} possible duplicate(s). Compare before approval.` : "No obvious duplicate rows returned by staff preview."}</p>
+            ${staffPossibleDuplicateOfHtml(duplicates.possible_duplicate_of)}
             <div class="mt-3 space-y-2 max-h-52 overflow-auto">
               ${(duplicates.rows || []).slice(0, 8).map((row) => `<div class="rounded-lg bg-white border border-gray-200 p-2 text-xs">
                 <div class="font-black text-gray-900">${adminEscape(row.title || "Duplicate candidate")}</div>
+                ${row.review_url ? `<a href="${adminAttr(row.review_url)}" target="_blank" rel="noopener" class="font-black text-blue-700 underline underline-offset-2" data-duplicate-link>Open ${adminEscape(row.duplicate_ref || "the other listing")}</a>` : ""}
                 ${row.duplicate_reason ? `<div class="mt-0.5 inline-block rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-black text-red-800" data-duplicate-reason="${adminAttr(row.duplicate_reason_code || "")}">${adminEscape(row.duplicate_reason)}</div>` : ""}
                 <div class="text-gray-500">${adminEscape([row.inquiry_reference, row.area, row.district, row.status].filter(Boolean).join(" • "))}</div>
               </div>`).join("") || ""}
@@ -18012,11 +19972,13 @@ async function saveStaffListingPreview(propertyId, options = {}) {
     const warningOverrides = options.prepareApproval === true
       ? staffBuildReviewWarningOverrides(adminActiveReview)
       : getAdminReviewWarningOverrides(adminActiveReview);
+    const reviewPatch = staffReviewPatch();
+    const noteSent = String(reviewPatch.notes || "").trim();
     const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(targetId)}/review`, {
       method: "PATCH",
       body: {
         listing: staffListingPreviewPatch(),
-        ...staffReviewPatch(),
+        ...reviewPatch,
         warning_overrides: warningOverrides
       }
     });
@@ -18035,19 +19997,50 @@ async function saveStaffListingPreview(propertyId, options = {}) {
       // staff dashboard rewrote the page under the open modal. That locked the
       // tab. The fields just saved are already on screen.
       const state = document.querySelector("#staff-listing-preview-modal [data-staff-preview-save-state]");
-      if (state) state.textContent = "Saved. This editor stays open.";
+      if (state) state.textContent = noteSent ? "Saved. Note saved." : "Saved. This editor stays open.";
+      if (noteSent && options.prepareApproval !== true) staffShowSavedReviewNote(saved);
       staffClearLocationBannerAfterSave(saved);
       const saveError = document.querySelector("#staff-listing-preview-modal [data-staff-save-error]");
       if (saveError) saveError.remove();
       queueStaffDashboardRefreshAfterModeration({ keepPreviewOpen: true });
     }
-    if (!options.silent) toast("Preview changes saved.");
+    if (!options.silent) toast(noteSent ? "Note saved. Preview changes saved." : "Preview changes saved.");
     return saved.id ? saved : null;
   } catch (error) {
     staffShowPreviewSaveError(error);
     toast(`Preview save failed: ${error.message || "request failed"}`);
     throw error;
   }
+}
+
+// 27 Oct 2026: a moderator saved a note and never saw "Note saved"; the
+// success path only said "Saved" and left the typed note in the box, so it
+// looked unsaved. Show the stored notes in the history and empty the box.
+function staffShowSavedReviewNote(saved = {}) {
+  const modal = document.getElementById("staff-listing-preview-modal");
+  if (!modal) return;
+  const history = String(saved?.review?.notes || saved?.moderation_notes || "").trim();
+  const textarea = modal.querySelector("#admin-review-notes");
+  if (history && textarea) {
+    let pre = modal.querySelector("[data-staff-note-history]");
+    if (!pre) {
+      pre = document.createElement("pre");
+      pre.className = "mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-2 text-xs text-gray-700";
+      pre.setAttribute("data-staff-note-history", "");
+      textarea.insertAdjacentElement("beforebegin", pre);
+    }
+    pre.textContent = history;
+    textarea.value = "";
+  }
+  let confirm = modal.querySelector("[data-staff-note-saved]");
+  if (!confirm && textarea) {
+    confirm = document.createElement("p");
+    confirm.setAttribute("data-staff-note-saved", "1");
+    confirm.setAttribute("role", "status");
+    confirm.className = "mt-1 text-xs font-bold text-emerald-800";
+    textarea.insertAdjacentElement("afterend", confirm);
+  }
+  if (confirm) confirm.textContent = "Note saved.";
 }
 
 function staffClearLocationBannerAfterSave(saved = {}) {
@@ -18086,8 +20079,11 @@ function staffShowPreviewSaveError(error = {}) {
   const noteSaved = error?.response?.note_saved === true || error?.note_saved === true;
   const detail = error?.message || "Preview save failed.";
   errorEl.textContent = noteSaved
-    ? `The location was not saved. ${detail} The internal note was saved.`
+    ? `Your other changes were not saved. ${detail} The internal note was saved.`
     : detail;
+  // Note saved: say so where the moderator is looking (the header save line).
+  const saveState = modal.querySelector("[data-staff-preview-save-state]");
+  if (saveState && noteSaved) saveState.textContent = "Note saved. Other changes were not saved.";
   errorEl.hidden = false;
   errorEl.style.display = "block";
   errorEl.style.marginTop = "8px";
@@ -19205,11 +21201,12 @@ function adminCeoDashboardSummary(data = {}) {
 function adminCommandSelectorForTab(tab = "review") {
   const map = {
     review: "#admin-review-queue-control",
-    actioned: "#admin-actioned-listings-control",
     live: "#admin-live-followup-control",
     accounts: "#admin-accounts-control",
-    staff: "#admin-staff-control",
+    agents: "#admin-agents-control",
     "field-agents": "#admin-field-agent-control",
+    staff: "#admin-staff-control",
+    revenue: "#admin-revenue-control",
     ads: "#admin-advertising-control",
     whatsapp: "#admin-whatsapp-control",
     notifications: "#admin-notifications-control",
@@ -19251,9 +21248,9 @@ function adminBuildCommandCentre(remoteSnap, localSnap) {
   const decisions = Array.isArray(command.decisions) && command.decisions.length ? command.decisions : [
     { key: "listing_review", label: "Listings waiting for approval", value: merged.pending_listings, priority: merged.pending_listings ? "high" : "clear", tab: "review", action: "Approve, reject, hide, or request changes." },
     { key: "lead_follow_up", label: "Open CRM leads", value: merged.open_leads, priority: merged.hot_leads || merged.overdue_tasks ? "high" : merged.open_leads ? "medium" : "clear", tab: "notifications", action: "Work hot leads and overdue follow-ups first." },
-    { key: "broker_review", label: "Broker accounts needing review", value: merged.broker_pending, priority: merged.broker_pending ? "high" : "clear", tab: "accounts", action: "Review broker ID, consent, and approval state." },
+    { key: "broker_review", label: "Broker accounts needing review", value: merged.broker_pending, priority: merged.broker_pending ? "high" : "clear", tab: "agents", action: "Review broker ID, consent, and approval state." },
     { key: "whatsapp_handoff", label: "WhatsApp needs human", value: merged.whatsapp_needs_human, priority: merged.whatsapp_needs_human ? "high" : "clear", tab: "whatsapp", action: "Resolve, reply, or hand off conversations." },
-    { key: "advertising_revenue", label: "Advertising pipeline", value: merged.advertising_open_leads, priority: merged.advertising_open_leads ? "medium" : "clear", tab: "ads", action: "Move advertiser interest to campaign and payment." }
+    { key: "advertising_revenue", label: "Advertising pipeline", value: merged.advertising_open_leads, priority: merged.advertising_open_leads ? "medium" : "clear", tab: "revenue", action: "Move advertiser interest to campaign and payment." }
   ];
   return { metrics: merged, decisions };
 }
@@ -19285,10 +21282,7 @@ function renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel = "") {
       ["Live on site", metrics.live_listings, "text-green-700", "live", "admin-live-followup-control"],
       ["Open leads", metrics.open_leads, "text-blue-700", "notifications", "admin-notifications-control"],
       ["WhatsApp handoffs", metrics.whatsapp_needs_human, "text-red-700", "whatsapp", "admin-whatsapp-control"],
-      ["Broker reviews", metrics.broker_pending, "text-amber-700", "accounts", "admin-broker-accounts-table"],
-      ["Ad leads", metrics.advertising_open_leads, "text-emerald-700", "ads", "admin-advertising-control"],
-      ["Revenue paid", adminFormatUgx(metrics.paid_revenue_ugx), "text-gray-900", "ads", "admin-advertising-control"],
-      ["Pipeline quote", adminFormatUgx(metrics.quoted_pipeline_ugx), "text-fuchsia-700", "ads", "admin-advertising-control"]
+      ["Broker reviews", metrics.broker_pending, "text-amber-700", "agents", "admin-broker-accounts-table"]
     ];
     metricsGrid.innerHTML = cards.map(([label, value, tone, tab, selector]) => `
       <button type="button" onclick="adminOpenDecision('${adminAttr(tab)}', '#${adminAttr(selector)}')" class="text-left rounded-2xl border border-gray-200 bg-white hover:border-green-300 hover:bg-green-50 p-4 transition">
@@ -19325,7 +21319,7 @@ function renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel = "") {
       <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
         <div class="text-xs font-black uppercase tracking-wide text-amber-800">Money focus</div>
         <div class="mt-2 text-sm text-amber-950">Open ad leads: <strong>${adminEscape(openAdLeads)}</strong>. Quoted pipeline: <strong>${adminEscape(adminFormatUgx(pipeline))}</strong>. Paid: <strong>${adminEscape(adminFormatUgx(paid))}</strong>.</div>
-        <button type="button" onclick="adminOpenDecision('ads', '#admin-advertising-control')" class="mt-3 rounded-xl bg-amber-700 px-4 py-2 text-xs font-black text-white">Open Advertising Desk</button>
+        <button type="button" onclick="adminOpenDecision('revenue', '#admin-revenue-control')" class="mt-3 rounded-xl bg-amber-700 px-4 py-2 text-xs font-black text-white">Open Revenue</button>
       </div>`;
   }
 
@@ -19352,9 +21346,10 @@ function adminRunCommandSearch() {
   const routes = [
     { terms: ["lead", "crm", "callback", "viewing", "mortgage", "enquiry", "enquiries"], tab: "notifications", selector: "#admin-notifications-control", label: "Leads & Notifications" },
     { terms: ["whatsapp", "chat", "handoff", "conversation", "language"], tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp Inbox" },
-    { terms: ["ad", "advert", "revenue", "payment", "invoice", "boost", "campaign", "monetization", "entitlement", "product"], tab: "ads", selector: "#admin-advertising-control", label: "Advertising Desk" },
-    { terms: ["broker", "agent account", "account", "password", "user", "student"], tab: "accounts", selector: "#admin-accounts-control", label: "Accounts & Outreach" },
+    { terms: ["ad", "advert", "revenue", "payment", "invoice", "boost", "campaign", "monetization", "entitlement", "product"], tab: "revenue", selector: "#admin-revenue-control", label: "Revenue" },
+    { terms: ["agent", "broker", "nin", "remove agent", "delete agent"], tab: "agents", selector: "#admin-agents-control", label: "Agents" },
     { terms: ["field", "payout", "pin", "territory"], tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
+    { terms: ["agent account", "account", "password", "user", "student"], tab: "accounts", selector: "#admin-accounts-control", label: "Accounts & Outreach" },
     { terms: ["listing", "property", "delete", "hide", "approve", "pending", "live"], tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
     { terms: ["review", "queue", "moderate"], tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" }
   ];
@@ -20072,12 +22067,13 @@ function adminOpenDecision(tab = "review", selector = "") {
 function adminDashboardActiveTabNeedsRows(tab = activeAdminWorkflowTab) {
   const normalized = String(tab || "review");
   return {
-    reviewQueue: ["review", "student-sweep", "youtube-sweep"].includes(normalized),
+    reviewQueue: ["review", "youtube-sweep"].includes(normalized),
     liveListings: ["live", "listings"].includes(normalized),
-    actionedListings: ["actioned", "listings"].includes(normalized),
-    accounts: normalized === "accounts",
+    actionedListings: normalized === "listings",
+    accounts: ["accounts", "agents"].includes(normalized),
     fieldAgents: normalized === "field-agents",
-    ads: normalized === "ads",
+    // Ad placements and revenue products now sit on the Revenue tab.
+    ads: normalized === "revenue",
     whatsapp: normalized === "whatsapp",
     notifications: normalized === "notifications",
     staff: normalized === "staff"
@@ -20123,9 +22119,12 @@ function adminVerificationBadge(status) {
 }
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "student-sweep", "youtube-sweep", "revenue", "actioned", "live", "accounts", "staff", "field-agents", "ads", "whatsapp", "agent-reports", "notifications", "listings"];
+  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "agents", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings"];
   const previousTab = activeAdminWorkflowTab;
-  activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
+  // Tabs removed in the Oct 2026 King slim-down open where their content now lives.
+  const moved = { "student-sweep": "review", actioned: "listings", ads: "revenue" };
+  const requested = moved[String(tab)] || String(tab);
+  activeAdminWorkflowTab = allowed.includes(requested) ? requested : "review";
   document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.adminTabPanel !== activeAdminWorkflowTab);
   });
@@ -20140,6 +22139,8 @@ function setAdminWorkflowTab(tab = "review") {
   if (previousTab !== activeAdminWorkflowTab) adminScheduleDashboardRefreshForTab();
   if (activeAdminWorkflowTab === "agent-reports" && previousTab !== "agent-reports") initAdminAgentReportsTab();
   if (activeAdminWorkflowTab === "revenue" && previousTab !== "revenue") loadAdminRevenue();
+  if (activeAdminWorkflowTab === "accounts") staffPeopleEnsureLoaded("admin");
+  if (activeAdminWorkflowTab === "agents") adminAgentManagerEnsureLoaded();
 }
 
 async function fetchAdminPaginatedRows(path, headers, options = {}) {
@@ -20308,8 +22309,8 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     shouldLoadNotifications ? adminSafeSnapshotRequest("demand gaps", () => apiRequest("/api/admin/demand-gaps?days=90&limit=20", { headers }), { data: { totals: {}, gaps: [] } }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("notifications", () => apiRequest("/api/admin/notifications?limit=50", { headers }), { data: [] }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("emails", () => apiRequest("/api/admin/emails?limit=50", { headers }), { data: [] }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("outlook status", () => apiRequest("/api/admin/outlook-agent/status", { headers }), { data: {} }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("outlook actions", () => apiRequest("/api/admin/outlook-agent/actions?limit=50", { headers }), { data: [] }) : null,
+    null, // Outlook agent panel removed from King (Oct 2026)
+    null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("whatsapp logs", () => apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers }), { data: [] }) : null
   ]);
   const authFailure = buildAdminAuthFailureError();
@@ -20562,12 +22563,6 @@ function ensureAdminFoundOnlineControls() {
     sourcePanel.className = "hidden mb-4 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-950";
     table.parentNode.insertBefore(sourcePanel, table);
   }
-  if (!document.getElementById("admin-x-source-drip-panel")) {
-    const dripPanel = document.createElement("div");
-    dripPanel.id = "admin-x-source-drip-panel";
-    dripPanel.className = "hidden mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-950";
-    table.parentNode.insertBefore(dripPanel, table);
-  }
   if (!document.getElementById("admin-harvest-summary")) {
     const harvestPanel = document.createElement("section");
     harvestPanel.id = "admin-harvest-summary";
@@ -20585,16 +22580,12 @@ function ensureAdminFoundOnlineControls() {
     table.parentNode.insertBefore(creatorPanel, table);
   }
   if (
-    document.getElementById("admin-seed-bakaima-listings-btn")
-    && document.getElementById("admin-seed-carnelian-listings-btn")
-    && document.getElementById("admin-seed-social-search-listings-btn")
-    && document.getElementById("admin-sweep-tiktok-posts-btn")
+    document.getElementById("admin-sweep-tiktok-posts-btn")
     && document.getElementById("admin-sweep-student-housing-btn")
     && document.getElementById("admin-import-tiktok-posts-btn")
     && document.getElementById("admin-import-youtube-posts-btn")
     && document.getElementById("admin-sweep-youtube-posts-btn")
     && document.getElementById("admin-sweep-x-posts-btn")
-    && document.getElementById("admin-x-drip-btn")
     && document.getElementById("admin-sweep-all-social-posts-btn")
     && document.getElementById("admin-copy-social-capture-helper-btn")
     && document.getElementById("admin-import-exact-social-links-btn")
@@ -20607,15 +22598,6 @@ function ensureAdminFoundOnlineControls() {
   const actions = document.createElement("div");
   actions.className = "flex items-center gap-2 flex-wrap";
   const missingButtons = [];
-  if (!document.getElementById("admin-seed-bakaima-listings-btn")) {
-    missingButtons.push(`<button id="admin-seed-bakaima-listings-btn" type="button" onclick="adminSeedBakaimaAuthorisedListings()" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-bold">Create Bakaima Listings</button>`);
-  }
-  if (!document.getElementById("admin-seed-carnelian-listings-btn")) {
-    missingButtons.push(`<button id="admin-seed-carnelian-listings-btn" type="button" onclick="adminSeedCarnelianAuthorisedListings()" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">Create Carnelian Listings</button>`);
-  }
-  if (!document.getElementById("admin-seed-social-search-listings-btn")) {
-    missingButtons.push(`<button id="admin-seed-social-search-listings-btn" type="button" onclick="adminSeedSocialSearchAuthorisedListings()" class="border border-sky-200 text-sky-700 hover:bg-sky-50 px-3 py-2 rounded-lg text-xs font-bold">Queue Found-Online Properties</button>`);
-  }
   if (!document.getElementById("admin-sweep-tiktok-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-tiktok-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('tiktok')" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep TikTok Hashtags</button>`);
   }
@@ -20633,9 +22615,6 @@ function ensureAdminFoundOnlineControls() {
   }
   if (!document.getElementById("admin-sweep-x-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-x-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('x')" class="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep X Posts</button>`);
-  }
-  if (!document.getElementById("admin-x-drip-btn")) {
-    missingButtons.push(`<button id="admin-x-drip-btn" type="button" onclick="adminLoadXSourceDrip()" class="border border-slate-900 text-slate-900 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">X Drip Crawler</button>`);
   }
   if (!document.getElementById("admin-sweep-all-social-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-all-social-posts-btn" type="button" onclick="adminSweepAllSocialPosts()" class="border border-gray-900 text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep All Social Sources</button>`);
@@ -22695,7 +24674,6 @@ function renderAdminLiveListingsRows(listings) {
 function renderAdminAllListingsRows(listings) {
   const wrap = document.getElementById("admin-all-listings-table");
   if (!wrap) return;
-  ensureAdminApril29CleanupControls();
   const q = (document.getElementById("admin-listings-q")?.value || "").toLowerCase().trim();
   const statusFilter = (document.getElementById("admin-listings-status")?.value || "").toLowerCase().trim();
   let view = Array.isArray(listings) ? listings : [];
@@ -22788,46 +24766,6 @@ function hydrateAdminListingsForExactIdInBackground(propertyId, headers) {
     .finally(() => {
       adminExactIdHydrationInFlight = null;
     });
-}
-
-function ensureAdminApril29CleanupControls() {
-  const panel = document.getElementById("admin-listings-control");
-  if (!panel || document.getElementById("admin-april29-cleanup-controls")) return;
-  const header = panel.firstElementChild;
-  if (!header) return;
-  const controls = document.createElement("div");
-  controls.id = "admin-april29-cleanup-controls";
-  controls.className = "flex flex-col items-start sm:items-end gap-1";
-  controls.innerHTML = `
-    <button id="admin-clean-april29-tests-btn" type="button" onclick="adminCleanupApril29TestBatch()" class="border border-red-300 text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl text-xs font-bold">Clean 29 Apr Test Batch</button>
-    <div id="admin-april29-cleanup-status" class="text-[11px] text-gray-500"></div>
-  `;
-  header.appendChild(controls);
-}
-
-async function adminCleanupApril29TestBatch() {
-  if (!canUseLiveAdminApi()) {
-    toast("Admin API key is required for launch cleanup.");
-    return;
-  }
-  const ok = window.confirm("Soft-delete test-like listings created on 29 Apr 2026? This does not touch ordinary listings from other dates.");
-  if (!ok) return;
-  const statusEl = document.getElementById("admin-april29-cleanup-status");
-  if (statusEl) statusEl.textContent = "Cleaning test batch...";
-  try {
-    const response = await apiRequest("/api/admin/test-listings/cleanup-april-29", {
-      method: "POST",
-      headers: adminAuthHeaders(),
-      body: {}
-    });
-    const data = response?.data || {};
-    if (statusEl) statusEl.textContent = `Deleted ${Number(data.deleted || 0)} of ${Number(data.matched || 0)} matched test listings.`;
-    toast(`April 29 cleanup done: ${Number(data.deleted || 0)} listing${Number(data.deleted || 0) === 1 ? "" : "s"} deleted.`);
-    await renderAdminDashboard();
-  } catch (e) {
-    if (statusEl) statusEl.textContent = "Cleanup failed. Check admin API access and logs.";
-    toast(`Cleanup failed: ${e.message || "error"}`);
-  }
 }
 
 async function adminCleanupLiveTestListings() {
@@ -24370,7 +26308,6 @@ async function renderAdminDashboard(options = {}) {
   if (sourceEl) sourceEl.textContent = sourceLabel;
   renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel);
   renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel);
-  loadAiCeoStatus({ silent: true });
 
   const adminUsers = remoteSnap?.users || localSnap.users || [];
   const adminAgents = remoteSnap?.agents || localSnap.agents || [];
@@ -29692,7 +31629,31 @@ function applyLpCanonicalLocation(location = {}) {
   return true;
 }
 
-async function resolveLpCanonicalLocation(query = "", label = "") {
+// Geocoder address parts + pin -> one catalogue place (see
+// resolveCanonicalUgandaLocationFromAddress). Free: the server only reads the catalogue.
+async function resolveUgandaLocationFromAddressParts(point = null) {
+  const parts = point?.addressParts || {};
+  const specific = Array.isArray(parts.specific) ? parts.specific : [];
+  const broad = Array.isArray(parts.broad) ? parts.broad : [];
+  const lat = Number(point?.lat);
+  const lng = Number(point?.lng);
+  if (!specific.length && !broad.length && !(Number.isFinite(lat) && Number.isFinite(lng))) return null;
+  const params = new URLSearchParams();
+  if (specific.length) params.set("specific", specific.join("|"));
+  if (broad.length) params.set("broad", broad.join("|"));
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    params.set("lat", lat.toFixed(6));
+    params.set("lng", lng.toFixed(6));
+  }
+  try {
+    const response = await apiRequest(`/api/properties/locations/resolve-address?${params.toString()}`, { skipAuth: true });
+    return response?.data?.canonical_location_id ? response.data : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function resolveLpCanonicalLocation(query = "", label = "", point = null) {
   const resolution = await resolveUgandaLocationWithLabelFallback(query, label);
   if (resolution.status === "matched" && applyLpCanonicalLocation(resolution.location)) return resolution.location;
   // "Plot 12 Ntinda Road" / "ntinda kampala": the area name is inside the text and
@@ -29704,6 +31665,10 @@ async function resolveLpCanonicalLocation(query = "", label = "") {
       return exact.location;
     }
   }
+  // The text is a landmark ("Kira Junior School") and its village is not in the
+  // catalogue: use the geocoder's town/district parts and the pin.
+  const fromAddress = point ? await resolveUgandaLocationFromAddressParts(point) : null;
+  if (fromAddress && applyLpCanonicalLocation(fromAddress)) return fromAddress;
   clearLpCanonicalLocationCascade();
   return null;
 }
@@ -30089,6 +32054,22 @@ async function adminReviewChooseAddressSuggestion(index = 0) {
 }
 
 async function adminReviewFindAddressOrPlace(options = {}) {
+  const found = await adminReviewFindAddressOrPlaceSearch(options);
+  // An approximate pin (district/town centre) moves to the listing's
+  // neighbourhood/town; it is not saved until Use current pin.
+  if (options?.auto !== true && adminReviewPinIsApproximate(reviewMarkerPoint(adminReviewLocationMarker))) {
+    // The typed place when the catalogue knows it, else the listing's own area.
+    const typed = adminReviewLastFindPoint;
+    const place = typed ? adminReviewMovePinToPoint(typed) : await adminReviewMovePinToListingPlace();
+    if (place) adminReviewLocationStatus(`Pin moved to ${place.label || "the listing's area"} — not saved. Press Use current pin to save it.`, "amber");
+  }
+  return found;
+}
+
+let adminReviewLastFindPoint = null;
+
+async function adminReviewFindAddressOrPlaceSearch(options = {}) {
+  adminReviewLastFindPoint = null;
   const input = document.getElementById("admin-review-address-search-edit");
   const query = (input?.value || "").trim();
   if (query.length < 3) {
@@ -30121,6 +32102,10 @@ async function adminReviewFindAddressOrPlace(options = {}) {
   const nominatimHits = await adminReviewNominatimHits(query);
   if (!externalPoint) externalPoint = nominatimHits[0] || await geocodeWithNominatim(query);
   const findChoice = adminReviewChooseFindPoint(registryLocation, externalPoint, ADMIN_REVIEW_FIND_MAX_EXTERNAL_KM, getDistrictCenter(registryLocation?.district || ""));
+  if (findChoice.point && (findChoice.source === "registry" || findChoice.source === "external" || findChoice.source === "external_district_checked")
+    && isLikelyUgandaCoordinate(Number(findChoice.point.lat), Number(findChoice.point.lng))) {
+    adminReviewLastFindPoint = { lat: Number(findChoice.point.lat), lng: Number(findChoice.point.lng), label: registryLocation?.name || findChoice.point.label || query };
+  }
   const suggestions = adminReviewAddressSuggestionList({
     registryLocation,
     googleHits: googleHits.length ? googleHits : (externalPoint && externalPoint.provider === "google" ? [externalPoint] : []),
@@ -30689,9 +32674,13 @@ async function adminLoadVideoCaptionConflicts(which = "staff") {
       <h4 class="text-sm font-black text-gray-900">${title}</h4>
       <div class="mt-2 grid gap-2">${items.length ? items.map(card).join("") : `<p class="text-sm text-gray-500">No video caption conflicts are waiting.</p>`}</div>
     </div>`;
-    host.innerHTML = `<div class="grid gap-4">${section("Live import conflicts", live)}${section("Backfill review list", backfill)}</div>`;
+    const html = `<div class="grid gap-4">${section("Live import conflicts", live)}${section("Backfill review list", backfill)}</div>`;
+    if (which === "staff") staffReplaceHtmlAboveQueue(host, html);
+    else host.innerHTML = html;
   } catch (error) {
-    host.innerHTML = `<p class="text-sm text-gray-500">No video caption conflicts are waiting.</p>`;
+    const html = `<p class="text-sm text-gray-500">No video caption conflicts are waiting.</p>`;
+    if (which === "staff") staffReplaceHtmlAboveQueue(host, html);
+    else host.innerHTML = html;
   }
 }
 
@@ -31180,6 +33169,109 @@ function adminReviewSyncLocationMapFromInputs() {
   }
 }
 
+// "Use current pin" / "Find" on an approximate pin (27 Oct 2026): a Kira or
+// Namugongo listing with no saved lat/lng opened with the marker on the Wakiso
+// district centre (or another district/town-centre fallback), and "Use current
+// pin" saved that centre. When the pin is only such a fallback, both buttons
+// now look up the listing's neighbourhood/town in the makaug catalogue
+// (/api/properties/locations/resolve, then resolve-address), then a
+// district-checked OpenStreetMap search, and move the pin there.
+const ADMIN_REVIEW_APPROXIMATE_PIN_KM = 1.5;
+
+function adminReviewFallbackCentres(draft = {}) {
+  const district = String(draft.district || "").trim();
+  const points = [
+    getDistrictCenter(district),
+    fixedPlaceCentroid("Wakiso", "Wakiso"),
+    getCityPoint(district, draft.city),
+    getHierarchyPointForArea(district, draft.city),
+    getRegionCenter(draft.region || regionForDistrict(district)),
+    MAP_DEFAULT_CENTER
+  ];
+  return points.filter((point) => point && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lng)));
+}
+
+// True when the lat/lng fields are empty and the marker is missing or sits on
+// a district/town-centre fallback rather than on a place.
+function adminReviewPinIsApproximate(markerPoint = null) {
+  const draft = adminReviewLocationDraft();
+  if (adminReviewHasUsableCoordinates(draft.latitude, draft.longitude)) return false;
+  if (!markerPoint || !Number.isFinite(markerPoint.lat) || !Number.isFinite(markerPoint.lng)) return true;
+  return adminReviewFallbackCentres(draft).some((centre) =>
+    haversineKm(markerPoint.lat, markerPoint.lng, Number(centre.lat), Number(centre.lng)) <= ADMIN_REVIEW_APPROXIMATE_PIN_KM);
+}
+
+function adminReviewListingPlaceNames(draft = {}) {
+  const district = String(draft.district || "").trim();
+  return uniqueTextParts([draft.neighborhood, draft.area, draft.city])
+    .filter((name) => name && !adminReviewPlaceEqualsDistrict(name, district));
+}
+
+function adminReviewPlacePointFromLocation(location = null, fallbackName = "") {
+  if (!location || location.latitude == null || location.longitude == null) return null;
+  const level = String(location.level || "").toLowerCase();
+  if (level === "district" || level === "region") return null;
+  const lat = Number(location.latitude);
+  const lng = Number(location.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isLikelyUgandaCoordinate(lat, lng)) return null;
+  return { lat, lng, label: location.name || fallbackName, provider: "makaug_registry" };
+}
+
+async function adminReviewNominatimPlacePoint(name = "", district = "") {
+  const centre = getDistrictCenter(district);
+  if (!centre) return null;
+  const q = uniqueTextParts([name, district, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(q)}`;
+    const response = await fetch(url, OSM_FETCH_OPTIONS);
+    if (!response.ok) return null;
+    const rows = await response.json();
+    const lat = Number(rows?.[0]?.lat);
+    const lng = Number(rows?.[0]?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isLikelyUgandaCoordinate(lat, lng)) return null;
+    // Same district check as Find: a result far from the district is not used.
+    if (haversineKm(lat, lng, Number(centre.lat), Number(centre.lng)) > 60) return null;
+    return { lat, lng, label: name, provider: "nominatim" };
+  } catch (error) {
+    return null;
+  }
+}
+
+// The listing's neighbourhood/town as a map point, or null.
+async function adminReviewLookupListingPlacePoint() {
+  const draft = adminReviewLocationDraft();
+  const district = String(draft.district || "").trim();
+  const names = adminReviewListingPlaceNames(draft);
+  // Most specific name first (neighbourhood, then area, then town): a
+  // neighbourhood found on OSM beats the town's registry point.
+  for (const name of names) {
+    const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([name, district]).join(", "));
+    const registryPoint = adminReviewPlacePointFromLocation(resolution.status === "matched" ? resolution.location : null, name);
+    if (registryPoint) return registryPoint;
+    const fromAddress = await resolveUgandaLocationFromAddressParts({ addressParts: { specific: [name], broad: district ? [district] : [] } });
+    const addressPoint = adminReviewPlacePointFromLocation(fromAddress, name);
+    if (addressPoint) return addressPoint;
+    const osmPoint = await adminReviewNominatimPlacePoint(name, district);
+    if (osmPoint) return osmPoint;
+  }
+  return null;
+}
+
+// Find/Use current pin on an approximate pin: move it to the listing's place.
+// Returns the point, or null when nothing was found (the pin stays put).
+async function adminReviewMovePinToListingPlace() {
+  return adminReviewMovePinToPoint(await adminReviewLookupListingPlacePoint());
+}
+
+function adminReviewMovePinToPoint(point = null) {
+  if (!point) return null;
+  // The fields may have been filled while a lookup ran: keep that pin.
+  const latest = adminReviewLocationDraft();
+  if (adminReviewHasUsableCoordinates(latest.latitude, latest.longitude)) return null;
+  adminReviewMoveLocationPin(point.lat, point.lng, { zoom: MAP_CITY_ZOOM });
+  return point;
+}
+
 // The map marker's position as { lat, lng }, for a Leaflet or a Google marker
 // (read from the marker itself, not from the provider flag), else null.
 function reviewMarkerPoint(marker) {
@@ -31212,6 +33304,26 @@ function isRealReviewPin(point) {
 // Falls back to the geocoded/area pin; never writes 0,0.
 function adminReviewUseMapPin() {
   const fromMarker = reviewMarkerPoint(adminReviewLocationMarker);
+  if (adminReviewPinIsApproximate(isRealReviewPin(fromMarker) ? fromMarker : null)) {
+    return adminReviewUseListingPlacePin(fromMarker);
+  }
+  return adminReviewCopyMapPin(fromMarker);
+}
+
+// The pin is only a district/town-centre fallback: look the place up first,
+// and save the centre (as before) only when the lookup finds nothing.
+async function adminReviewUseListingPlacePin(fromMarker) {
+  adminReviewLocationStatus("Looking up the listing's area for the pin...", "blue");
+  const place = await adminReviewMovePinToListingPlace();
+  if (place) {
+    adminReviewSetLocationInputs(place.lat, place.lng, `Pin moved to ${place.label || "the listing's area"} and saved to fields: drag it to the exact spot if you can`);
+    toast(`Map pin moved to ${place.label || "the listing's area"}. Drag it to the exact spot if you can.`);
+    return place;
+  }
+  return adminReviewCopyMapPin(reviewMarkerPoint(adminReviewLocationMarker) || fromMarker);
+}
+
+function adminReviewCopyMapPin(fromMarker) {
   const fallback = adminReviewLocationPoint(adminActiveReview);
   const point = isRealReviewPin(fromMarker)
     ? fromMarker
@@ -32527,13 +34639,13 @@ async function adminRunFeaturedRotation() {
   }
 }
 
-async function adminSetAgentStatus(agentId, status, payment = null, feeOverride = null) {
+async function adminSetAgentStatus(agentId, status, payment = null, feeOverride = null, extraBody = null) {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or set ADMIN_API_KEY first to moderate broker status.");
-    return;
+    return false;
   }
   try {
-    const body = { status };
+    const body = { ...(extraBody && typeof extraBody === "object" ? extraBody : {}), status };
     if (payment) body.payment = payment;
     if (feeOverride) body.fee_override = feeOverride;
     let response;
@@ -32547,7 +34659,7 @@ async function adminSetAgentStatus(agentId, status, payment = null, feeOverride 
       // Approving a new agent needs their first month recorded first.
       if (status === "approved" && /payment_required|Did they pay/i.test(String(e?.message || ""))) {
         adminOpenAgentPayment(agentId, "approve");
-        return;
+        return false;
       }
       throw e;
     }
@@ -32569,8 +34681,10 @@ async function adminSetAgentStatus(agentId, status, payment = null, feeOverride 
     const emailStatus = provisioning?.email_status ? ` Email: ${provisioning.email_status}.` : "";
     const accessNote = provisioning?.temporary_password_issued ? " Temporary password issued." : "";
     if (status !== "approved") toast(`Broker updated: ${status}.${accessNote}${emailStatus}`);
+    return true;
   } catch (e) {
     toast(`Broker update failed: ${e.message || "error"}`);
+    return false;
   }
 }
 
@@ -34101,8 +36215,9 @@ function loadAuthState() {
   adminApiKey = loadStoredAdminApiKey();
   loadSavedIdsForCurrentUser();
   applyAuthUi();
+  updateSavedNavCount();
+  refreshSavedPropertiesFromServer({ silent: true });
   if (authState?.token) {
-    refreshSavedPropertiesFromServer({ silent: true });
     refreshAuthSession();
   }
 }
@@ -34150,7 +36265,6 @@ function persistAuthState(token, user, options = {}) {
   applyAuthUi();
   if (options.renderDashboard !== false) renderActiveAuthDashboard();
   if (authState?.token) syncSavedStateAfterAuth(pendingSaveId);
-  if (pendingSaveId) toast("Property saved to your account.");
 }
 
 function clearAuthState() {
@@ -34163,6 +36277,7 @@ function clearAuthState() {
   applyAuthUi();
   hydrateAccountForm();
   renderActiveAuthDashboard();
+  updateSavedNavCount();
 }
 
 	    function applyAuthUi() {
@@ -34259,7 +36374,7 @@ function hydrateAccountForm() {
 	      const preferredLanguageEl = document.getElementById("account-preferred-language");
 	      applyAccountLanguageUI();
 	      if (weeklyEl) weeklyEl.checked = user.weekly_tips_opt_in !== false;
-	      if (marketingEl) marketingEl.checked = user.marketing_opt_in !== false;
+	      if (marketingEl) marketingEl.checked = user.marketing_opt_in === true;
 	      if (contactEl) contactEl.value = user.preferred_contact_channel === "email" ? "email" : "whatsapp";
 	      if (preferredLanguageEl) preferredLanguageEl.value = user.preferred_language || currentLang || "en";
 	      setSelectOptions("account-pref-goal", ACCOUNT_FINDER_PREF_OPTIONS.goal, profile.primary_goal || "Rent");
@@ -34337,7 +36452,7 @@ async function submitAccountProfile() {
 	      const phone = normalizePhoneInput(document.getElementById("account-phone")?.value || "");
 	      const email = (document.getElementById("account-email")?.value || "").trim();
 	      const weeklyTipsOptIn = document.getElementById("account-weekly-tips")?.checked !== false;
-	      const marketingOptIn = document.getElementById("account-marketing-opt-in")?.checked !== false;
+	      const marketingOptIn = document.getElementById("account-marketing-opt-in")?.checked === true;
 	      const preferredContactChannel = (document.getElementById("account-contact-channel")?.value || "whatsapp").trim();
 	      const preferredLanguage = (document.getElementById("account-preferred-language")?.value || currentLang || "en").trim();
 	      const profileData = {
@@ -34470,7 +36585,9 @@ async function submitAccountPassword() {
 
 function signOut() {
   trackEvent("auth_sign_out", {});
-  apiRequest("/api/auth/logout", { method: "POST", body: {} }).catch(() => {});
+  apiRequest("/api/auth/logout", { method: "POST", body: {} })
+    .catch(() => {})
+    .finally(() => refreshSavedPropertiesFromServer({ silent: true }));
   clearAuthState();
   showPage("home");
   toast("Signed out");
@@ -34669,17 +36786,21 @@ async function submitAuthSignUp() {
   const role = (document.getElementById("auth-signup-role")?.value || "").trim();
   const password = (document.getElementById("auth-signup-password")?.value || "").trim();
   const confirmPassword = (document.getElementById("auth-signup-confirm-password")?.value || "").trim();
-  const otpChannel = authSignUpOtpChannel === "email" ? "email" : "phone";
+  const otpChannel = isPhoneOnlySignupActive() ? "phone" : (authSignUpOtpChannel === "email" ? "email" : "phone");
   const registrationStatus = "not_registered";
   const areaLicenceNumber = (document.getElementById("auth-signup-agent-licence")?.value || "").trim();
-  const weeklyTipsOptIn = document.getElementById("auth-signup-weekly-tips")?.checked !== false;
+  // Unticked by default; only a tick is a yes (26 Oct 2026).
+  const whatsappConsent = document.getElementById("auth-signup-whatsapp-consent")?.checked === true;
   const preferredLanguage = (document.getElementById("auth-signup-preferred-language")?.value || currentLang || "en").trim();
   const termsAccepted = document.getElementById("auth-signup-terms")?.checked === true;
   const privacyAccepted = document.getElementById("auth-signup-privacy")?.checked === true;
   const profileData = collectAuthProfileData();
 
-  if (!firstName || !lastName || !phone || !email || !password) {
-    toast("Please complete first name, second name/surname, email, phone/WhatsApp, and password.");
+  const phoneOnly = isPhoneOnlySignupActive();
+  if (!firstName || !lastName || !phone || (!phoneOnly && !email) || !password) {
+    toast(phoneOnly
+      ? "Please complete first name, second name/surname, WhatsApp number, and password."
+      : "Please complete first name, second name/surname, email, phone/WhatsApp, and password.");
     return;
   }
   if (password !== confirmPassword) {
@@ -34710,7 +36831,7 @@ async function submitAuthSignUp() {
         first_name: firstName,
         last_name: lastName,
         phone,
-        email,
+        email: phoneOnly ? undefined : email,
         role,
         password,
         confirm_password: confirmPassword,
@@ -34718,8 +36839,8 @@ async function submitAuthSignUp() {
         audience: authSignUpAudience,
         terms_accepted: termsAccepted,
         privacy_accepted: privacyAccepted,
-        weekly_tips_opt_in: weeklyTipsOptIn,
-        marketing_opt_in: weeklyTipsOptIn,
+        weekly_tips_opt_in: false,
+        marketing_opt_in: whatsappConsent,
         preferred_contact_channel: "whatsapp",
         preferred_language: preferredLanguage,
         profile_data: profileData,
@@ -34945,7 +37066,7 @@ function updateLpPhotoRequirements() {
     <ul class="list-disc pl-5 space-y-1">
       ${checklist.map((item) => `<li><strong>${translateListingLabel(item.label)}</strong> - <span class="text-xs text-gray-500">${translateListingLabel(item.hint)}</span></li>`).join("")}
     </ul>
-    <p class="text-xs text-gray-500 mt-2">${translateListingLabel("After upload, assign each photo to what it shows.")}</p>`;
+    <p class="text-xs text-gray-500 mt-2">${translateListingLabel("Labelling what each photo shows is optional.")}</p>`;
   renderLpPhotoFeedback();
 }
 
@@ -35069,7 +37190,7 @@ function renderLpPhotoFeedback() {
     if (!lpSelectedPhotos.length) {
       galleryEl.innerHTML = "";
     } else {
-      const options = [`<option value="">${translateListingLabel("Select photo category")}</option>`]
+      const options = [`<option value="">${translateListingLabel("Photo category (optional)")}</option>`]
         .concat(checklist.map((item) => `<option value="${item.key}">${translateListingLabel(item.label)}</option>`))
         .concat([`<option value="${LP_OTHER_PHOTO_SLOT}">${translateListingLabel("Other / custom")}</option>`])
         .join("");
@@ -35085,7 +37206,7 @@ function renderLpPhotoFeedback() {
         const isMain = index === lpMainPhotoIndex;
         return `
           <div class="border border-gray-200 rounded-xl p-3 bg-white">
-            <img src="${src}" alt="${file.name}" class="w-full h-36 object-cover rounded-lg">
+            <img src="${src}" data-lp-thumb-index="${index}" alt="${translateListingLabel("Photo")} ${index + 1}" class="w-full h-36 object-cover rounded-lg bg-gray-100">
             <div class="mt-2 flex items-center justify-between gap-2">
               <div class="text-xs text-gray-500 line-clamp-1">${file.name}</div>
               <div class="flex items-center gap-1">
@@ -35110,6 +37231,7 @@ function renderLpPhotoFeedback() {
         const assigned = lpPhotoAssignments[idx] || "";
         if (assigned) el.value = getLpPhotoAssignmentSelectValue(assigned);
       });
+      hydrateLpGalleryThumbnails(galleryEl);
     }
   }
   if (qualityEl) {
@@ -35121,6 +37243,39 @@ function renderLpPhotoFeedback() {
       qualityEl.innerHTML = `<div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-800 text-sm"><strong>Quality flags:</strong><ul class="list-disc pl-5 mt-1">${lpPhotoQualityIssues.map((x) => `<li>${x}</li>`).join("")}</ul></div>`;
     }
   }
+}
+
+// blob: URLs do not render in some phone browsers (WhatsApp's in-app browser and
+// a few Android WebViews showed Charles a broken image for every photo on
+// 26 Oct 2026), so each card also gets a small real thumbnail drawn from the
+// file bytes. The blob URL stays as the first paint; the data URL replaces it.
+const lpThumbnailCache = new WeakMap();
+async function makeLpThumbnailDataUrl(file, maxEdge = 480) {
+  if (lpThumbnailCache.has(file)) return lpThumbnailCache.get(file);
+  const work = (async () => {
+    const decoded = await decodeLpImageFile(file);
+    const scale = Math.min(1, maxEdge / Math.max(decoded.width, decoded.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(decoded.width * scale));
+    canvas.height = Math.max(1, Math.round(decoded.height * scale));
+    canvas.getContext("2d").drawImage(decoded.source, 0, 0, canvas.width, canvas.height);
+    decoded.close();
+    return canvas.toDataURL("image/jpeg", 0.8);
+  })();
+  lpThumbnailCache.set(file, work);
+  work.catch(() => lpThumbnailCache.delete(file));
+  return work;
+}
+
+function hydrateLpGalleryThumbnails(galleryEl) {
+  if (!galleryEl) return;
+  Array.from(galleryEl.querySelectorAll("img[data-lp-thumb-index]")).forEach((img) => {
+    const file = lpSelectedPhotos[Number(img.dataset.lpThumbIndex)];
+    if (!file) return;
+    makeLpThumbnailDataUrl(file).then((dataUrl) => {
+      if (img.isConnected && dataUrl) img.src = dataUrl;
+    }).catch(() => {});
+  });
 }
 
 function readBlobAsDataUrl(blob) {
@@ -35141,14 +37296,84 @@ function loadImageElement(url) {
   });
 }
 
+// What the picker says a file is cannot be trusted on phones: Android's file
+// picker and WhatsApp-saved photos often arrive with an empty type, and
+// iPhones hand over HEIC with a .jpg name. Read the first bytes instead.
+async function sniffLpImageKind(file) {
+  try {
+    const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    const ascii = Array.from(head).map((b) => String.fromCharCode(b)).join("");
+    if (head[0] === 0xff && head[1] === 0xd8) return "image/jpeg";
+    if (head[0] === 0x89 && ascii.slice(1, 4) === "PNG") return "image/png";
+    if (ascii.slice(0, 4) === "RIFF" && ascii.slice(8, 12) === "WEBP") return "image/webp";
+    if (ascii.slice(0, 3) === "GIF") return "image/gif";
+    if (ascii.slice(4, 8) === "ftyp") {
+      const brand = ascii.slice(8, 12);
+      if (/^(heic|heix|hevc|hevx|mif1|msf1|heim|heis|avif)$/i.test(brand)) return "heic";
+    }
+  } catch (error) { /* unreadable: fall through to the declared type */ }
+  return "";
+}
+
+function lpFileLooksLikeImage(file) {
+  if (!file) return false;
+  if (String(file.type || "").startsWith("image/")) return true;
+  return !String(file.type || "") && /\.(jpe?g|png|webp|gif|heic|heif|bmp)$/i.test(file.name || "");
+}
+
+// Decode a photo for the canvas. blob: URLs are refused by some in-app
+// browsers (Charles, 26-27 Oct 2026), so try the file bytes first and the
+// blob URL last. Resolves to something drawImage() accepts, or throws.
+async function decodeLpImageFile(file) {
+  const attempts = [];
+  if (typeof createImageBitmap === "function") {
+    attempts.push(async () => {
+      const bitmap = await createImageBitmap(file);
+      return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => { try { bitmap.close(); } catch (e) {} } };
+    });
+  }
+  attempts.push(async () => {
+    const dataUrl = await readBlobAsDataUrl(file);
+    const img = await loadImageElement(dataUrl);
+    return { source: img, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height, close: () => {} };
+  });
+  attempts.push(async () => {
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const img = await loadImageElement(objectUrl);
+      return { source: img, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height, close: () => {} };
+    } finally {
+      try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+    }
+  });
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const decoded = await attempt();
+      if (decoded && decoded.width > 0 && decoded.height > 0) return decoded;
+      decoded?.close?.();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Image could not be decoded");
+}
+
 async function compressPhotoForSubmission(file, options = {}) {
-  if (!file || !(file.type || "").startsWith("image/")) return "";
+  if (!file || !lpFileLooksLikeImage(file)) return "";
+  const kind = await sniffLpImageKind(file);
+  if (kind === "heic") {
+    const err = new Error("HEIC");
+    err.code = "LP_HEIC";
+    throw err;
+  }
   const maxBytes = options.maxBytes || LP_MAX_SUBMITTED_PHOTO_BYTES;
   const maxSideOptions = options.maxSideOptions || [1600, 1400, 1200, 1000, 850];
   const qualityOptions = options.qualityOptions || [0.82, 0.74, 0.66, 0.58, 0.5];
-  const objectUrl = URL.createObjectURL(file);
+  let decoded = null;
   try {
-    const img = await loadImageElement(objectUrl);
+    decoded = await decodeLpImageFile(file);
+    const img = { width: decoded.width, height: decoded.height, source: decoded.source };
     let bestBlob = null;
     for (const maxSide of maxSideOptions) {
       const scale = Math.min(1, maxSide / Math.max(img.width || maxSide, img.height || maxSide));
@@ -35157,7 +37382,7 @@ async function compressPhotoForSubmission(file, options = {}) {
       canvas.height = Math.max(1, Math.round((img.height || maxSide) * scale));
       const ctx = canvas.getContext("2d");
       if (!ctx) continue;
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img.source, 0, 0, canvas.width, canvas.height);
       for (const quality of qualityOptions) {
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
         if (!blob) continue;
@@ -35167,8 +37392,13 @@ async function compressPhotoForSubmission(file, options = {}) {
     }
     if (bestBlob) return readBlobAsDataUrl(bestBlob);
     return readBlobAsDataUrl(file);
+  } catch (error) {
+    // The canvas path failed but the bytes are a real JPEG/PNG/WebP under the
+    // size limit: send them as they are rather than refusing the listing.
+    if (/^image\/(jpeg|png|webp)$/.test(kind) && file.size <= maxBytes) return readBlobAsDataUrl(file);
+    throw error;
   } finally {
-    try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+    decoded?.close?.();
   }
 }
 
@@ -35178,47 +37408,68 @@ async function prepareListingPhotoUploadUrls() {
     return lpPhotoUploadUrls;
   }
   const urls = [];
+  const kept = [];
+  const skipped = [];
   for (const file of lpSelectedPhotos) {
     let dataUrl = "";
+    let heic = false;
     try {
       dataUrl = await compressPhotoForSubmission(file);
     } catch (error) {
       dataUrl = "";
+      heic = error?.code === "LP_HEIC";
     }
-    if (!dataUrl) throw new Error(`${file?.name || "Photo"} could not be prepared. If this is an iPhone HEIC photo, choose JPEG/Most Compatible or take a screenshot and upload that.`);
+    if (!dataUrl) { skipped.push({ file, heic }); continue; }
     urls.push(dataUrl);
+    kept.push(file);
+  }
+  const minPhotos = getLpMinUploadPhotos(getListType());
+  if (skipped.length && urls.length >= minPhotos && urls.length) {
+    // One unreadable photo used to block the whole listing. Drop it, say so,
+    // and carry on with the ones that work.
+    const names = skipped.map((entry) => entry.file?.name || translateListingLabel("Photo")).slice(0, 3).join(", ");
+    const anyHeic = skipped.some((entry) => entry.heic);
+    lpSelectedPhotos = kept;
+    lpPhotoAssignments = {};
+    lpMainPhotoIndex = Math.min(lpMainPhotoIndex, Math.max(0, kept.length - 1));
+    renderLpPhotoFeedback();
+    toast(`${skipped.length === 1 ? translateListingLabel("1 photo could not be read and was left out") : `${skipped.length} ${translateListingLabel("photos could not be read and were left out")}`}: ${names}.${anyHeic ? ` ${translateListingLabel("iPhone HEIC photos: set Camera > Formats > Most Compatible, or send them to us on WhatsApp.")}` : ""}`);
+  } else if (skipped.length) {
+    const anyHeic = skipped.some((entry) => entry.heic);
+    const names = skipped.map((entry) => entry.file?.name || translateListingLabel("Photo")).slice(0, 3).join(", ");
+    throw new Error(anyHeic
+      ? `${names}: ${translateListingLabel("this is an iPhone HEIC photo, which browsers cannot read. Set Camera > Formats > Most Compatible and retake it, or WhatsApp the photos to us and we will attach them.")}`
+      : `${names}: ${translateListingLabel("this photo could not be read on this phone. Remove it and add another, or WhatsApp the photos to us and we will attach them.")}`);
   }
   lpPhotoUploadUrls = urls;
-  lpPhotoUploadSignature = signature;
+  lpPhotoUploadSignature = lpSelectedPhotos.map((file) => `${file.name}:${file.size}:${file.lastModified}`).join("|");
   return urls;
 }
 
 async function evaluateLpPhotoQuality(files) {
   const issues = [];
-  const checks = files.map((file) => new Promise((resolve) => {
-    if (!file || !file.type || !file.type.startsWith("image/")) {
+  const checks = files.map((file) => (async () => {
+    if (!lpFileLooksLikeImage(file)) {
       issues.push(`${file?.name || "File"} is not an image format.`);
-      resolve();
       return;
     }
     if (file.size > 10 * 1024 * 1024) issues.push(`${file.name}: exceeds 10MB.`);
     if (file.size < 60 * 1024) issues.push(`${file.name}: very small file size (possible low quality).`);
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      if (img.width < 900 || img.height < 600) {
-        issues.push(`${file.name}: low resolution (${img.width}x${img.height}).`);
+    const kind = await sniffLpImageKind(file);
+    if (kind === "heic") {
+      issues.push(`${file.name}: iPhone HEIC photo. Set Camera > Formats > Most Compatible, or WhatsApp it to us.`);
+      return;
+    }
+    try {
+      const decoded = await decodeLpImageFile(file);
+      if (decoded.width < 900 || decoded.height < 600) {
+        issues.push(`${file.name}: low resolution (${decoded.width}x${decoded.height}).`);
       }
-      URL.revokeObjectURL(url);
-      resolve();
-    };
-    img.onerror = () => {
+      decoded.close();
+    } catch (error) {
       issues.push(`${file.name}: could not read image dimensions.`);
-      URL.revokeObjectURL(url);
-      resolve();
-    };
-    img.src = url;
-  }));
+    }
+  })());
   await Promise.all(checks);
   lpPhotoQualityIssues = issues.slice(0, 8);
   renderLpPhotoFeedback();
@@ -35871,13 +38122,31 @@ function setLpHiddenValue(id, value = "") {
   if (el) el.value = value || "";
 }
 
+// Nominatim's usage policy asks for cached answers: one lookup per text per page.
+const lpNominatimSearchCache = new Map();
+
+// Most specific first. "Kira Junior School" -> suburb Jjanda (not a catalogue
+// place), city Kira, state Wakiso: the page must try all of them, not only Jjanda.
+function lpNominatimAddressParts(address = {}) {
+  const pick = (keys) => uniqueTextParts(keys.map((key) => String(address?.[key] || "").trim()).filter(Boolean));
+  return {
+    specific: pick(["neighbourhood", "quarter", "suburb", "village", "hamlet", "residential", "city_district"]),
+    broad: pick(["town", "city", "municipality", "county", "state_district", "state"])
+  };
+}
+
 async function geocodeWithNominatim(query) {
   const q = uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
   try {
     const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(q)}`;
-    const response = await fetch(url, OSM_FETCH_OPTIONS);
-    if (!response.ok) return null;
-    const rows = await response.json();
+    let rows = lpNominatimSearchCache.get(url);
+    if (!rows) {
+      const response = await fetch(url, OSM_FETCH_OPTIONS);
+      if (!response.ok) return null;
+      rows = await response.json();
+      if (lpNominatimSearchCache.size > 50) lpNominatimSearchCache.clear();
+      lpNominatimSearchCache.set(url, rows);
+    }
     const row = Array.isArray(rows) ? rows[0] : null;
     const lat = Number(row?.lat);
     const lng = Number(row?.lon);
@@ -35901,6 +38170,7 @@ async function geocodeWithNominatim(query) {
       ).trim(),
       placeId: row?.place_id ? `osm:${row.place_id}` : "",
       streetName,
+      addressParts: lpNominatimAddressParts(row?.address || {}),
       provider: "nominatim",
       confidence: row?.importance ? Math.min(0.95, Math.max(0.35, Number(row.importance))) : 0.45
     };
@@ -35927,15 +38197,37 @@ async function applyLpAddressPlaceResult(point, query = "") {
   setLpHiddenValue("lp-location-confidence", point.confidence != null ? String(point.confidence) : "0.65");
   setLpResolvedLocationLabel(label);
   setListPinCoords(point.lat, point.lng, true, true);
-  const canonicalLocation = await resolveLpCanonicalLocation(query, point.canonicalQuery || "");
+  const canonicalLocation = await resolveLpCanonicalLocation(query, point.canonicalQuery || "", point);
+  // OSM sometimes answers a catalogue name with a same-name village far away
+  // ("Bweyogerere" -> a village by Entebbe, 28 km off). Keep the catalogue place
+  // and put the pin at its centre instead of leaving the two disagreeing.
+  const placeLat = Number(canonicalLocation?.latitude);
+  const placeLng = Number(canonicalLocation?.longitude);
+  const pinIsFarFromPlace = Boolean(canonicalLocation)
+    && !canonicalLocation.resolved_by
+    && canonicalLocation.latitude !== null && canonicalLocation.longitude !== null
+    && Number.isFinite(placeLat) && Number.isFinite(placeLng)
+    && haversineKm(Number(point.lat), Number(point.lng), placeLat, placeLng) > 10;
+  if (pinIsFarFromPlace) setListPinCoords(placeLat, placeLng, true, true);
   const confirmEl = document.getElementById("lp-location-confirm");
   if (confirmEl) confirmEl.checked = false;
   updateLpLocationConfirmButton();
   updateListPreview();
   renderListReviewSummary();
-  setLpAddressSearchStatus(canonicalLocation
-    ? translateListingLabel("Address and canonical location found. Check the full location cascade and pin.")
-    : translateListingLabel("Location not recognised — pin set but region/district/area could NOT be auto-filled."), canonicalLocation ? "success" : "error");
+  const placeText = canonicalLocation ? [canonicalLocation.name || canonicalLocation.label, canonicalLocation.district].filter(Boolean).join(", ") : "";
+  let statusText = translateListingLabel("Location not recognised — pin set but region/district/area could NOT be auto-filled.");
+  if (canonicalLocation && pinIsFarFromPlace) {
+    statusText = currentLang === "en"
+      ? `Found ${placeText}. The map search pointed somewhere else, so the pin is at the centre of ${canonicalLocation.name || placeText} — move it to the exact spot, then tap "Confirm this location".`
+      : translateListingLabel("Address and canonical location found. Check the full location cascade and pin.");
+  } else if (canonicalLocation && canonicalLocation.resolved_by === "nearest_area") {
+    statusText = currentLang === "en"
+      ? `Pin set. Nearest known area: ${placeText}. Check the region, district and area below and change them if they are wrong.`
+      : translateListingLabel("Address and canonical location found. Check the full location cascade and pin.");
+  } else if (canonicalLocation) {
+    statusText = translateListingLabel("Address and canonical location found. Check the full location cascade and pin.");
+  }
+  setLpAddressSearchStatus(statusText, canonicalLocation ? "success" : "error");
   return Boolean(canonicalLocation);
 }
 
@@ -36213,6 +38505,59 @@ async function resolveHierarchyMapAnchor({ region = "", district = "", city = ""
   return fallback;
 }
 
+// Mobile list-property maps must never trap page scroll (Charles, 26 Oct 2026:
+// "I can't scroll down" after Find on map). A dragging Leaflet map sets
+// touch-action:none and scrollWheelZoom eats the wheel, so on a phone every
+// swipe that lands on the 220px map pans the map instead of the form.
+// Touch devices: one finger scrolls the page, pinch zooms, tap drops the pin,
+// and a "Move map" button turns panning on until "Done".
+function isLpCoarsePointerDevice() {
+  try {
+    if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return true;
+    const touch = Number(navigator.maxTouchPoints || 0) > 0 || "ontouchstart" in window;
+    const hover = window.matchMedia && window.matchMedia("(hover: hover)").matches;
+    return Boolean(touch && !hover);
+  } catch (e) {
+    return false;
+  }
+}
+
+function makeListMapScrollFriendly(map) {
+  if (!map || !window.L || typeof map.getContainer !== "function") return map;
+  const el = map.getContainer();
+  if (!el || el.dataset.lpScrollFriendly === "1") return map;
+  el.dataset.lpScrollFriendly = "1";
+  el.classList.add("lp-scroll-friendly-map");
+  if (map.scrollWheelZoom) {
+    map.scrollWheelZoom.disable();
+    map.on("click focus", () => { if (map.scrollWheelZoom) map.scrollWheelZoom.enable(); });
+    map.on("mouseout blur", () => { if (map.scrollWheelZoom) map.scrollWheelZoom.disable(); });
+  }
+  if (!isLpCoarsePointerDevice() || !map.dragging) return map;
+  map.dragging.disable();
+  const Control = L.Control.extend({
+    options: { position: "topright" },
+    onAdd() {
+      const btn = L.DomUtil.create("button", "lp-map-move-btn");
+      btn.type = "button";
+      btn.textContent = "Move map";
+      btn.setAttribute("aria-pressed", "false");
+      L.DomEvent.disableClickPropagation(btn);
+      L.DomEvent.on(btn, "click", (evt) => {
+        L.DomEvent.preventDefault(evt);
+        const active = !el.classList.contains("lp-map-active");
+        el.classList.toggle("lp-map-active", active);
+        if (active) map.dragging.enable(); else map.dragging.disable();
+        btn.textContent = active ? "Done" : "Move map";
+        btn.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      return btn;
+    }
+  });
+  map.addControl(new Control());
+  return map;
+}
+
 function initGoogleListPinMap(el) {
   if (!window.google?.maps || !el) return false;
   el.innerHTML = "";
@@ -36223,7 +38568,8 @@ function initGoogleListPinMap(el) {
     mapTypeControl: true,
     streetViewControl: true,
     fullscreenControl: true,
-    clickableIcons: true
+    clickableIcons: true,
+    gestureHandling: "cooperative"
   });
   lpPinMapProvider = "google";
   lpPinInfoWindow = new google.maps.InfoWindow();
@@ -36253,6 +38599,7 @@ function initLeafletListPinMap() {
     maxZoom: 18
   }).addTo(lpPinMap);
   lpPinMapProvider = "leaflet";
+  makeListMapScrollFriendly(lpPinMap);
   lpPinMap.on("click", (evt) => {
     setListPinCoords(evt.latlng.lat, evt.latlng.lng, false);
   });
@@ -36305,7 +38652,8 @@ function initGoogleListPreviewMap(el) {
     mapTypeControl: true,
     streetViewControl: true,
     fullscreenControl: true,
-    clickableIcons: true
+    clickableIcons: true,
+    gestureHandling: "cooperative"
   });
   lpPreviewMapProvider = "google";
   lpPreviewInfoWindow = new google.maps.InfoWindow();
@@ -36331,6 +38679,7 @@ function initLeafletListPreviewMap() {
     maxZoom: 18
   }).addTo(lpPreviewMap);
   lpPreviewMapProvider = "leaflet";
+  makeListMapScrollFriendly(lpPreviewMap);
   return true;
 }
 
@@ -36932,6 +39281,8 @@ function markLpFieldError(fieldId, message = "") {
   if (!el) return;
   const target = resolveLpErrorTarget(el);
   if (!target) return;
+  const folded = target.closest("details");
+  if (folded && !folded.open) folded.open = true;
   const borderClass = Array.from(target.classList).find((cls) => /^border-(?!\d)/.test(cls));
   if (borderClass && borderClass !== "border-red-400") {
     target.dataset.lpPrevBorderClass = borderClass;
@@ -36965,9 +39316,33 @@ function markLpPhotoSelectError(index) {
   select.classList.add("lp-error-target", "border-red-400", "ring-2", "ring-red-200");
 }
 
+// A title is a sentence we can write ourselves. Brokers kept stalling on it.
+function buildLpAutoTitle() {
+  const type = getListType();
+  const subtypeEl = document.getElementById("lp-subtype");
+  const subtype = subtypeEl && subtypeEl.selectedIndex > 0 ? String(subtypeEl.options[subtypeEl.selectedIndex].textContent || "").trim() : "";
+  const beds = lpVal("lp-beds");
+  const area = lpVal("lp-area") || lpVal("lp-neighborhood") || lpVal("lp-city");
+  const district = lpVal("list-district-sel");
+  const where = area && district && area.toLowerCase() !== district.toLowerCase() ? `${area}, ${district}` : (area || district);
+  const bedPart = /^\d+\+?$/.test(beds) ? `${beds} bedroom ` : "";
+  let what = subtype ? subtype.toLowerCase() : (type === "land" ? "land" : type === "commercial" ? "commercial property" : "house");
+  if (type === "land" && !/land|plot|acre/.test(what)) what = `${what} land`;
+  const deal = type === "rent" || type === "student" ? "for rent" : (type === "land" && lpVal("lp-extra-land_mode") === "rent") ? "for lease" : (type === "commercial" && lpVal("lp-extra-commercial_mode") === "rent") ? "for rent" : "for sale";
+  const parts = [`${bedPart}${what}`.trim(), deal];
+  if (where) parts.push(`in ${where}`);
+  const title = parts.join(" ");
+  return (title.charAt(0).toUpperCase() + title.slice(1)).slice(0, 120);
+}
+
 function validateListStep1() {
   const missing = [];
   clearLpValidationErrors("#lp-step-1");
+  if (!lpVal("lp-title")) {
+    const auto = buildLpAutoTitle();
+    const titleEl = document.getElementById("lp-title");
+    if (auto && titleEl) titleEl.value = auto;
+  }
   if (!lpVal("lp-title")) {
     missing.push("Title");
     markLpFieldError("lp-title", "Title is required.");
@@ -37055,17 +39430,10 @@ function validateListStep2() {
     toast("Choose a main photo before continuing.");
     return false;
   }
-  const checklist = getLpPhotoChecklist(getListType());
-  const unassigned = lpSelectedPhotos
-    .map((file, idx) => ({ idx, name: file.name, slot: lpPhotoAssignments[idx] || "" }))
-    .filter((entry) => !entry.slot);
-  if (unassigned.length) {
-    unassigned.forEach((entry) => markLpPhotoSelectError(entry.idx));
-    toast(`Assign each photo to a category before continuing. Missing: ${unassigned.slice(0, 2).map((x) => x.name).join(", ")}`);
-    return false;
-  }
-  // The checklist is a suggestion now (minimum is 2 photos), not a gate.
-  void checklist;
+  // Photo categories are optional: brokers upload from a phone where the
+  // thumbnails may not render, and asking for a category per photo was the
+  // step that stopped Charles on 26 Oct 2026. Photos without one are stored
+  // as "Photo N" and the moderator can label them.
   return true;
 }
 
@@ -39473,8 +41841,8 @@ function openListPropertyWhatsApp() {
 function handleSavedClick(event) {
   if (!authState?.user) {
     if (event) event.preventDefault();
-    trackEvent("saved_auth_required_clicked", { source_page: window.location.pathname || "/" });
-    openAuthSignIn("finder");
+    trackEvent("saved_opened_signed_out", { source_page: window.location.pathname || "/" });
+    showPage("saved");
     return;
   }
   if (event) event.preventDefault();
@@ -40781,6 +43149,7 @@ function setAccountAccessCreateStep(step = "details") {
   updateAccountAccessRoleFocus();
   applyAccountAccessTheme();
   updateAccountAccessCreateFinalState();
+  syncAccountAccessPhoneOnlyUi();
 }
 
 function showAccountAccessRolePicker() {
@@ -40911,7 +43280,7 @@ function ensureAccountAccessDrawer() {
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="lastName">Second name / surname</span>
                   <input id="account-access-last-name" autocomplete="family-name" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="Second name / surname">
                 </label>
-                <label class="block">
+                <label id="account-access-email-wrap" class="block">
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="email">Email</span>
                   <input id="account-access-email" type="email" autocomplete="email" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="you@email.com">
                 </label>
@@ -40933,6 +43302,11 @@ function ensureAccountAccessDrawer() {
                   </label>
                 </div>
               </div>
+              <p id="account-access-phone-only-note" class="hidden rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-900">We send your code to this number on WhatsApp. No email needed.</p>
+              <label class="flex items-start gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-800">
+                <input id="account-access-whatsapp-consent" type="checkbox" class="mt-0.5 h-4 w-4 accent-green-700" data-consent-wording="signup_whatsapp_2026_10_26">
+                <span>Send me new property alerts and offers on WhatsApp. Reply STOP anytime.</span>
+              </label>
             </div>
             <div id="account-access-create-preferences-step" data-auth-create-step="preferences" class="hidden space-y-3">
               <div class="text-xs font-bold text-gray-600 mb-2" data-auth-text="quickPreferences">Quick preferences</div>
@@ -41089,6 +43463,7 @@ function handleAccountAccessKeydown(event) {
 
 function setAccountAccessRole(role = "finder") {
   accountAccessDrawerAudience = normalizeAuthAudience(role, true);
+  setTimeout(syncAccountAccessPhoneOnlyUi, 0);
   const copy = accountAccessRoleCopy(accountAccessDrawerAudience);
   const theme = accountAccessRoleTheme(accountAccessDrawerAudience);
   setTextById("account-access-role-label", copy.label);
@@ -41339,7 +43714,28 @@ function collectAccountAccessScreeningData() {
 }
 
 function selectedAccountAccessOtpChannel() {
+  if (isAccountAccessPhoneOnly()) return "phone";
   return document.querySelector('input[name="account-access-otp-method"]:checked')?.value === "phone" ? "phone" : "email";
+}
+
+// SIGNUP_PHONE_ONLY_ENABLED: new home-seeker accounts use a phone number only.
+// Brokers keep email. Existing email sign-ins are not affected.
+function isAccountAccessPhoneOnly() {
+  return window.MAKAUG_CONFIG?.signupPhoneOnly === true && accountAccessDrawerAudience !== "agent";
+}
+
+function syncAccountAccessPhoneOnlyUi() {
+  const phoneOnly = isAccountAccessPhoneOnly();
+  document.getElementById("account-access-email-wrap")?.classList.toggle("hidden", phoneOnly);
+  document.getElementById("account-access-otp-method-wrap")?.classList.toggle("hidden", phoneOnly);
+  document.getElementById("account-access-phone-only-note")?.classList.toggle("hidden", !phoneOnly);
+  if (phoneOnly) {
+    const radio = document.querySelector('input[name="account-access-otp-method"][value="phone"]');
+    if (radio) radio.checked = true;
+    if (accountAccessCreateStep === "details" && accountAccessDrawerMode === "create") {
+      setAccountAccessFlowNote("Add your first name, second name and mobile number. We will send a code on WhatsApp.", "info");
+    }
+  }
 }
 
 function maskAccountAccessDestination(value = "", channel = "email") {
@@ -41391,6 +43787,17 @@ function getAccountAccessContactDetails() {
 }
 
 function validateAccountAccessContactDetails({ firstName, lastName, email, phone, otpChannel } = {}) {
+  if (isAccountAccessPhoneOnly()) {
+    if (!firstName || !lastName || !phone) {
+      toast("Add your first name, second name/surname, and mobile number.");
+      return false;
+    }
+    if (!/^\+256\d{9}$/.test(phone || "")) {
+      toast("Enter a valid Uganda mobile number for WhatsApp verification.");
+      return false;
+    }
+    return true;
+  }
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email || "");
   if (!firstName || !lastName || !email || !phone) {
     toast("Add your first name, second name/surname, email address, and mobile number.");
@@ -41423,7 +43830,7 @@ async function submitAccountAccessContactOtp() {
       body: {
         first_name: details.firstName,
         last_name: details.lastName,
-        email: details.email,
+        email: isAccountAccessPhoneOnly() ? undefined : details.email,
         phone: details.phone,
         channel: details.otpChannel,
         preferred_language: details.preferredLanguage,
@@ -41609,12 +44016,16 @@ async function submitAccountAccessCreate() {
   const termsAccepted = document.getElementById("account-access-terms")?.checked === true;
   const privacyAccepted = document.getElementById("account-access-privacy")?.checked === true;
   const otpChannel = details.otpChannel;
+  const phoneOnlySignup = isAccountAccessPhoneOnly();
+  const whatsappConsent = document.getElementById("account-access-whatsapp-consent")?.checked === true;
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  if (!firstName || !lastName || !email || !phone || !password) {
-    toast("Add your first name, second name/surname, email, phone/WhatsApp, and password.");
+  if (!firstName || !lastName || (!email && !phoneOnlySignup) || !phone || !password) {
+    toast(phoneOnlySignup
+      ? "Add your first name, second name/surname, phone/WhatsApp, and password."
+      : "Add your first name, second name/surname, email, phone/WhatsApp, and password.");
     return;
   }
-  if (!emailLooksValid) {
+  if (!phoneOnlySignup && !emailLooksValid) {
     toast("Enter a valid email address.");
     return;
   }
@@ -41676,7 +44087,7 @@ async function submitAccountAccessCreate() {
         first_name: firstName,
         last_name: lastName,
         phone,
-        email,
+        email: phoneOnlySignup ? undefined : email,
         role: roleLabel,
         password,
         confirm_password: confirmPassword,
@@ -41688,6 +44099,8 @@ async function submitAccountAccessCreate() {
         terms_accepted: termsAccepted,
         privacy_accepted: privacyAccepted,
         weekly_tips_opt_in: false,
+        // Unticked by default. Only a tick here is WhatsApp marketing consent.
+        marketing_opt_in: whatsappConsent,
         preferred_language: preferredLanguage,
         preferred_contact_channel: profileData.preferred_contact_channel || "whatsapp",
         profile_data: profileData
@@ -42115,6 +44528,7 @@ function renderHowToVideoCard(video) {
 }
 
 function renderHowToVideoSections() {
+  renderHowToGuides();
   document.querySelectorAll("[data-howto-video-grid]").forEach((container) => {
     const context = container.getAttribute("data-howto-video-grid") || "all";
     const videos = howToVideosForContext(context).filter(isPublishedHowToVideo).slice(0, 6);
@@ -42136,6 +44550,161 @@ function renderHowToVideoSections() {
     </div>
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${videos.map(renderHowToVideoCard).join("")}</div>`;
     trackEvent("howto_video_shown", { source_page: currentPage, context, count: videos.length });
+  });
+}
+
+// Self-hosted how-to videos (home + About). Off unless /config.js sends
+// window.MAKAUG_HOWTO.enabled (HOWTO_VIDEOS_ENABLED on the server).
+function howToGuideEscape(value) {
+  return String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+function howToGuideVideoLang(config, lang) {
+  const code = String(lang || "en").toLowerCase();
+  const available = Array.isArray(config?.videoLanguages) ? config.videoLanguages : ["en"];
+  return available.includes(code) ? code : "en";
+}
+
+function howToGuideMediaUrl(config, videoLang, slug, ext) {
+  const base = String(config?.baseUrl || "").replace(/\/+$/, "");
+  return `${base}/${encodeURIComponent(videoLang)}/${encodeURIComponent(slug)}.${ext}`;
+}
+
+function howToGuidesFor(config, context) {
+  const guides = Array.isArray(config?.guides) ? config.guides.slice() : [];
+  if (context !== "about" || !Array.isArray(config?.aboutOrder)) return guides;
+  const order = config.aboutOrder;
+  return guides.sort((a, b) => {
+    const ia = order.indexOf(a.slug);
+    const ib = order.indexOf(b.slug);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+}
+
+function hideHowToGuideSection(container) {
+  if (!container.classList.contains("hidden") || container.innerHTML) {
+    container.innerHTML = "";
+    container.classList.add("hidden");
+    container.setAttribute("aria-hidden", "true");
+  }
+  delete container.dataset.howtoRendered;
+}
+
+function renderHowToGuides() {
+  const containers = document.querySelectorAll("[data-howto-guides]");
+  if (!containers.length) return;
+  const config = window.MAKAUG_HOWTO;
+  if (!config || config.enabled !== true || !Array.isArray(config.guides) || !config.guides.length) {
+    containers.forEach(hideHowToGuideSection);
+    return;
+  }
+  const lang = String((typeof currentLang !== "undefined" && currentLang) || "en").toLowerCase();
+  const videoLang = howToGuideVideoLang(config, lang);
+  const copy = config.copy?.[lang] || config.copy?.en || {};
+  const isDraft = Array.isArray(config.draftLanguages) && config.draftLanguages.includes(lang);
+  const note = videoLang !== lang ? copy.englishCaptions : (isDraft ? copy.draft : "");
+  containers.forEach((container) => {
+    const context = container.getAttribute("data-howto-guides") || "home";
+    const stamp = `${lang}|${videoLang}|${config.baseUrl}|${config.version || ""}`;
+    if (container.dataset.howtoRendered === stamp) return;
+    const titleId = `${context}-howto-videos-title`;
+    const rowId = `${context}-howto-videos-row`;
+    const cards = howToGuidesFor(config, context).map((guide) => {
+      const title = guide.titles?.[lang] || guide.titles?.en || guide.slug;
+      const poster = howToGuideMediaUrl(config, videoLang, guide.slug, "jpg");
+      const src = howToGuideMediaUrl(config, videoLang, guide.slug, "mp4");
+      const seconds = Number(guide.durationSeconds) || 0;
+      return `<article class="mk-howto-card" data-howto-guide="${howToGuideEscape(guide.slug)}" data-howto-video-lang="${howToGuideEscape(videoLang)}">
+        <div class="mk-howto-media">
+          <video muted playsinline preload="none" disablepictureinpicture controlslist="nodownload noremoteplayback"
+            data-howto-poster="${howToGuideEscape(poster)}" data-howto-src="${howToGuideEscape(src)}"
+            aria-label="${howToGuideEscape(title)}" lang="${howToGuideEscape(videoLang)}"></video>
+          <button type="button" class="mk-howto-play" data-howto-play aria-label="${howToGuideEscape(title)}"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></button>
+        </div>
+        <div class="mk-howto-body">
+          <h3>${howToGuideEscape(title)}</h3>
+          <div class="mk-howto-meta"><span>${seconds ? `${seconds}${howToGuideEscape(copy.seconds || "s")}` : ""}</span>${guide.ctaUrl ? `<span aria-hidden="true">·</span><a href="${howToGuideEscape(guide.ctaUrl)}">makaug.com${guide.ctaUrl === "/" ? "" : howToGuideEscape(guide.ctaUrl)}</a>` : ""}</div>
+        </div>
+      </article>`;
+    }).join("");
+    container.innerHTML = `<div class="mk-howto-wrap">
+      <div class="mk-howto-head">
+        <div>
+          <p class="mk-howto-eyebrow">${howToGuideEscape(copy.eyebrow || "How-to videos")}</p>
+          <h2 id="${titleId}" class="mk-howto-title serif">${howToGuideEscape(copy.title || "See how makaug.com works")}</h2>
+          <p class="mk-howto-sub">${howToGuideEscape(copy.sub || "")}</p>
+          ${note ? `<span class="mk-howto-note" data-howto-note="${videoLang !== lang ? "english" : "draft"}">${howToGuideEscape(note)}</span>` : ""}
+        </div>
+        <div class="mk-howto-nav">
+          <button type="button" data-howto-scroll="-1" aria-controls="${rowId}" aria-label="${howToGuideEscape(copy.prev || "Previous videos")}">‹</button>
+          <button type="button" data-howto-scroll="1" aria-controls="${rowId}" aria-label="${howToGuideEscape(copy.next || "More videos")}">›</button>
+        </div>
+      </div>
+      <div id="${rowId}" class="mk-howto-row" role="list">${cards}</div>
+    </div>`;
+    container.querySelectorAll(".mk-howto-card").forEach((card) => card.setAttribute("role", "listitem"));
+    container.classList.remove("hidden");
+    container.removeAttribute("aria-hidden");
+    container.dataset.howtoRendered = stamp;
+    wireHowToGuideSection(container);
+  });
+}
+
+function loadHowToGuideVideo(video) {
+  if (!video || video.dataset.howtoLoaded === "1") return;
+  video.dataset.howtoLoaded = "1";
+  if (video.dataset.howtoPoster) video.poster = video.dataset.howtoPoster;
+  if (video.dataset.howtoSrc) video.src = video.dataset.howtoSrc;
+}
+
+function wireHowToGuideSection(container) {
+  const videos = Array.from(container.querySelectorAll("video[data-howto-src]"));
+  // Posters (and the file, still preload="none") only attach near the viewport.
+  if (typeof window.IntersectionObserver === "function") {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        loadHowToGuideVideo(entry.target);
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: "300px" });
+    videos.forEach((video) => observer.observe(video));
+  } else {
+    videos.forEach(loadHowToGuideVideo);
+  }
+  videos.forEach((video) => {
+    video.muted = true;
+    // Native controls only appear once the viewer starts a video, so they never cover the poster title.
+    const playButton = video.parentElement?.querySelector("[data-howto-play]");
+    if (playButton) {
+      playButton.addEventListener("click", () => {
+        loadHowToGuideVideo(video);
+        video.controls = true;
+        const started = video.play();
+        if (started && typeof started.catch === "function") started.catch(() => {});
+      });
+    }
+    video.addEventListener("play", () => {
+      loadHowToGuideVideo(video);
+      video.controls = true;
+      if (playButton) playButton.hidden = true;
+      document.querySelectorAll("[data-howto-guides] video").forEach((other) => {
+        if (other !== video && !other.paused) other.pause();
+      });
+      const card = video.closest("[data-howto-guide]");
+      if (typeof trackEvent === "function") {
+        trackEvent("howto_video_played", { video_key: card?.dataset.howtoGuide || "", video_lang: card?.dataset.howtoVideoLang || "", source_page: typeof currentPage !== "undefined" ? currentPage : "" });
+      }
+    });
+  });
+  const row = container.querySelector(".mk-howto-row");
+  container.querySelectorAll("[data-howto-scroll]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!row) return;
+      const step = Number(button.getAttribute("data-howto-scroll")) || 1;
+      const rtl = (document.documentElement.dir || "ltr") === "rtl";
+      row.scrollBy({ left: step * (rtl ? -1 : 1) * Math.max(220, row.clientWidth * 0.8), behavior: "smooth" });
+    });
   });
 }
 
@@ -43734,7 +46303,7 @@ const PAGE_CONTENT = {
     </p>`,
   cookies: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Cookie Policy</h2>
-    <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
+    <p class="text-xs text-gray-500 mb-4">Last updated: 26 October 2026</p>
     <p class="mb-3 text-sm">
       Cookies and similar technologies help makaug.com run securely, remember your preferences, and improve user experience.
     </p>
@@ -43742,6 +46311,11 @@ const PAGE_CONTENT = {
     <p class="mb-3 text-sm">
       Required for account login, session continuity, fraud controls, and core platform functionality.
       Disabling these may prevent the site from working correctly.
+    </p>
+    <p id="cookie-policy-device-line" class="mb-3 text-sm">
+      <strong>Device cookie (mk_did).</strong> When you save a property or a search without an account, we set a random
+      device ID so your saves are still here next time on this phone or computer. It lasts up to 400 days, is not used for
+      advertising, and is moved into your account when you sign in or sign up. Clearing your cookies removes it.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">2. Preference Cookies</h3>
     <p class="mb-3 text-sm">
@@ -44125,7 +46699,7 @@ async function hydrateAdvertisePricingPreview() {
       return;
     }
     const creative = res?.data?.creative_guidelines || {};
-    const fx = Number(res?.data?.ugx_per_usd || 3800);
+    const fx = Number(res?.data?.ugx_per_usd || fxRateToUgx("USD"));
     wrap.innerHTML = `
       <div class="flex flex-wrap items-start justify-between gap-2">
         <div>
@@ -44555,7 +47129,8 @@ function updateLpCanonicalLocationGuardState() {
   const submitBtn = document.getElementById("lp-submit-btn");
   const unresolvedText = translateListingLabel("Location not recognised. Choose an exact Uganda area from the location results or the region, district, town and neighbourhood fields before submitting.");
 
-  if (notice) notice.classList.toggle("hidden", resolved || !lpCanonicalLocationAttempted);
+  const userGaveLocation = Boolean(lpVal("lp-address-search") || lpVal("lp-area") || lpVal("list-district-sel"));
+  if (notice) notice.classList.toggle("hidden", resolved || !lpCanonicalLocationAttempted || !userGaveLocation);
   if (message) message.textContent = unresolvedText;
   if (submitBtn) {
     submitBtn.disabled = !resolved;
@@ -46227,7 +48802,15 @@ function chooseTypeahead(value, item = null) {
 
 function renderTypeahead(inputEl, pool, onPick, options = {}) {
   const query = inputEl.value || "";
-  const matches = (options.preRanked ? pool : rankSuggestions(pool, query)).slice(0, 8);
+  // 26 Oct 2026: Charles, listing a house on his phone, typed into "Find
+  // address or place" and could not scroll the page. The suggestion panel is
+  // position:fixed with its own scrollbar; on a phone it sat over the lower
+  // half of the screen, so every swipe scrolled the eight suggestions instead
+  // of the page, and the panel only ever closed on a page scroll. Fewer
+  // suggestions on a phone, so the panel never needs its own scrollbar, and
+  // a touch anywhere outside it closes it (see the touchstart listener).
+  const limit = window.innerWidth < 640 ? 5 : 8;
+  const matches = (options.preRanked ? pool : rankSuggestions(pool, query)).slice(0, limit);
   if (!matches.length) {
     closeTypeahead();
     return;
@@ -49186,7 +51769,7 @@ async function shareBrokerBusinessCard(id, channel = "native") {
     return;
   }
   const shareUrl = getBrokerShareUrl(broker);
-  const shareText = `Broker Card: ${broker.name}\n${broker.company || ""}\n${broker.phone ? `Call: ${broker.phone}\n` : ""}${broker.whatsapp ? `WhatsApp: https://wa.me/${String(broker.whatsapp).replace(/\D/g, "")}\n` : ""}${shareUrl}`;
+  const shareText = `Broker Card: ${broker.name}\n${broker.company || ""}\n${broker.phone ? `WhatsApp ${broker.phone}\n` : ""}${broker.whatsapp ? `WhatsApp: https://wa.me/${String(broker.whatsapp).replace(/\D/g, "")}\n` : ""}${shareUrl}`;
   try {
     if (channel === "native" && navigator.share) {
       await navigator.share({ title: broker.name, text: shareText, url: shareUrl });
@@ -49506,7 +52089,7 @@ function studentCardFooterText(p = {}) {
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           ${badgeRow}
         </div>
-        <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
+        <button onclick="event.stopPropagation(); toggleSave(${idArg})" data-save-id="${adminAttr(String(p.id))}" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
           <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
         </button>
         <div class="absolute bottom-2 right-2 ${theme.priceBg} text-white px-2 py-1 rounded text-sm font-bold">${listingPriceHtml(p, studentMode ? (p.period || "sem") : p.period)}</div>
@@ -50050,33 +52633,390 @@ function renderBrokers(id, list) {
   if (directory) setBrokerMapMarkers(list);
 }
 
+const savedListingHydrationTried = new Set();
+
+async function hydrateMissingSavedListings(ids = []) {
+  const missing = ids
+    .map((id) => String(id || ""))
+    .filter((id) => id && !findPropertyForUi(id) && !savedListingHydrationTried.has(id))
+    .slice(0, 24);
+  if (!missing.length) return;
+  missing.forEach((id) => savedListingHydrationTried.add(id));
+  const results = await Promise.allSettled(
+    missing.map((id) => apiRequest(`/api/properties/${encodeURIComponent(id)}`, { skipAuth: true }))
+  );
+  let added = 0;
+  results.forEach((result) => {
+    const row = result.status === "fulfilled" ? result.value?.data : null;
+    if (row?.id && upsertPropertyForUi(row)) added += 1;
+  });
+  if (added && currentPage === "saved") renderSaved();
+}
+
+function savedItemFallbackCard(item = {}) {
+  const id = String(item.property_id || "");
+  const place = [item.area, item.district].filter(Boolean).join(", ");
+  const price = Number(item.price) > 0 ? `${adminEscape(item.currency || "UGX")} ${Number(item.price).toLocaleString()}${item.price_period ? ` / ${adminEscape(item.price_period)}` : ""}` : "";
+  return `
+    <a href="/property/${encodeURIComponent(id)}" class="block border border-gray-200 rounded-xl overflow-hidden bg-white hover:shadow-md">
+      ${item.image_url ? `<img src="${adminAttr(item.image_url)}" alt="" loading="lazy" class="w-full h-40 object-cover">` : `<div class="w-full h-40 bg-gray-100"></div>`}
+      <div class="p-3">
+        <p class="font-semibold text-gray-900">${adminEscape(item.title || "Saved property")}</p>
+        <p class="text-xs text-gray-500 mt-0.5">${adminEscape(place)}</p>
+        ${price ? `<p class="text-sm font-bold text-green-800 mt-1">${price}</p>` : ""}
+      </div>
+    </a>`;
+}
+
 function renderSaved() {
   const el = document.getElementById("saved-content");
   if (!el) return;
-  if (!authState?.user) {
-    el.innerHTML = `
-      <div class="text-center py-10">
-        <i class="far fa-user-circle text-4xl text-gray-300 mb-3"></i>
-        <p class="text-gray-700 font-semibold">Create or sign in to your free account to save properties.</p>
-        <p class="text-sm text-gray-500 mt-1">Saved properties then appear in your personal finder dashboard.</p>
-        <div class="mt-5 flex flex-col sm:flex-row justify-center gap-2">
-          <button onclick="openAuthSignUp('finder')" class="bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Create Free Account</button>
-          <button onclick="openAuthSignIn('finder')" class="border border-green-700 text-green-700 px-5 py-2 rounded-lg text-sm font-semibold">Sign In</button>
+  const signedIn = isSignedInForSaves();
+  const ids = Array.from(savedIds);
+  if (!savedServerLoaded && !ids.length) {
+    el.innerHTML = `<div class="text-center py-10 text-gray-500"><i class="fas fa-spinner fa-spin text-2xl mb-2"></i><p>Loading your saved properties…</p></div>`;
+    renderSavedSearchesPanel();
+    return;
+  }
+  const deviceNote = signedIn ? "" : `
+      <div id="saved-device-note" class="mb-5 rounded-xl border border-green-100 bg-green-50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <p class="text-sm font-semibold text-green-900"><i class="fas fa-mobile-screen-button mr-1"></i>Saved on this device</p>
+          <p class="text-xs text-green-800 mt-0.5">No account needed. Create a free account or sign in to keep these on any phone or computer. Your saves move across automatically.</p>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <button onclick="openAuthSignUp('finder')" class="bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Create free account</button>
+          <button onclick="openAuthSignIn('finder')" class="border border-green-700 text-green-700 px-4 py-2 rounded-lg text-sm font-semibold bg-white">Sign in</button>
         </div>
       </div>`;
-    return;
-  }
-  const list = getPublicListings().filter((p) => isPropertySaved(p.id));
-  if (!list.length) {
-    el.innerHTML = `
+  if (!ids.length) {
+    el.innerHTML = `${deviceNote}
       <div class="text-center py-10">
         <i class="far fa-heart text-4xl text-gray-300 mb-3"></i>
-        <p class="text-gray-600 font-medium">No saved properties yet.</p>
-        <button onclick="showPage('sale')" class="mt-4 bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Browse Properties</button>
+        <p class="text-gray-700 font-medium">No saved properties yet.</p>
+        <p class="text-sm text-gray-500 mt-1">Tap the heart on any listing to keep it here${signedIn ? "" : " (no account needed)"}.</p>
+        <button onclick="showPage('rent')" class="mt-4 bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Browse Properties</button>
       </div>`;
+    renderSavedSearchesPanel();
     return;
   }
-  el.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">${list.map(propCard).join("")}</div>`;
+  const itemsById = new Map(savedServerItems.map((item) => [String(item.property_id), item]));
+  const cards = ids.map((id) => {
+    const property = findPropertyForUi(id);
+    if (property) return propCard(property);
+    const item = itemsById.get(String(id));
+    return item ? savedItemFallbackCard(item) : "";
+  }).filter(Boolean);
+  const unavailable = savedServerUnavailableCount > 0
+    ? `<p class="mt-4 text-xs text-gray-500">${savedServerUnavailableCount} saved ${savedServerUnavailableCount === 1 ? "listing is" : "listings are"} no longer on makaug and ${savedServerUnavailableCount === 1 ? "is" : "are"} hidden.</p>`
+    : "";
+  el.innerHTML = `${deviceNote}
+    <p class="text-sm font-semibold text-gray-600 mb-4"><strong>${ids.length}</strong> saved ${ids.length === 1 ? "property" : "properties"}</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">${cards.join("")}</div>${unavailable}`;
+  hydrateMissingSavedListings(ids);
+  renderSavedSearchesPanel();
+}
+
+let savedSearchesPanelLoadedAt = 0;
+
+function renderSavedSearchesPanel() {
+  const el = document.getElementById("saved-searches-content");
+  if (!el) return;
+  const now = Date.now();
+  if (now - savedSearchesPanelLoadedAt > 15000) {
+    savedSearchesPanelLoadedAt = now;
+    refreshSavedSearchAlerts().then(() => renderSavedSearchesPanel());
+  }
+  const rows = savedSearchAlerts;
+  el.innerHTML = `
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <h2 class="text-lg font-black text-gray-900"><i class="far fa-bell text-green-700 mr-1"></i>Saved searches and alerts</h2>
+        <p class="text-sm text-gray-500 mt-0.5">Use "Save this search / alert me" on any results page.</p>
+      </div>
+    </div>
+    ${rows.length ? `<ul class="mt-4 divide-y divide-gray-100">${rows.map((row) => `
+      <li class="py-3 flex items-center justify-between gap-3">
+        <div>
+          <p class="font-semibold text-gray-800">${adminEscape(row.label || "Saved search")}</p>
+          <p class="text-xs text-gray-500">${row.alert_scope === "search_alerts_whatsapp" ? "WhatsApp alerts on (max one a day)" : "Saved search, no WhatsApp alerts"}</p>
+        </div>
+        <button type="button" onclick="deleteSavedSearchAlert('${adminAttr(row.id)}')" class="text-xs font-semibold text-red-600 border border-red-200 rounded-lg px-3 py-1.5">Remove</button>
+      </li>`).join("")}</ul>` : `<p class="mt-4 text-sm text-gray-500">No saved searches yet.</p>`}`;
+}
+
+async function deleteSavedSearchAlert(id) {
+  try {
+    await apiRequest(`/api/saves/searches/${encodeURIComponent(id)}`, { method: "DELETE" });
+    savedSearchAlerts = savedSearchAlerts.filter((row) => String(row.id) !== String(id));
+    renderSavedSearchesPanel();
+    toast("Saved search removed");
+  } catch (e) {
+    toast(`Could not remove it: ${e.message || "error"}`);
+  }
+}
+
+// ---------- "Save this search / alert me" on results pages ----------
+const SEARCH_ALERT_CONSENT_TEXT = "Send me new properties that match this search on WhatsApp. Max one message a day. Reply STOP anytime.";
+
+function currentSearchAlertCriteria(category) {
+  const key = publicPaginationKey(category) || String(category || "");
+  const path = publicCategoryApiPathForPagination(key) || "";
+  let params = new URLSearchParams();
+  try {
+    params = new URL(path || "/", window.location.origin).searchParams;
+  } catch (e) {}
+  const location = params.get("area") || params.get("studentCampus") || params.get("district") || params.get("query") || params.get("locations") || "";
+  const criteria = {
+    category: key === "students" ? "student" : key,
+    location,
+    query: params.get("query") || "",
+    min_price: params.get("min_price") || "",
+    max_price: params.get("max_price") || "",
+    bedrooms: params.get("bedrooms") || "",
+    property_type: params.get("property_type") || ""
+  };
+  const typeLabel = { sale: "For sale", rent: "To rent", student: "Student rooms", land: "Land", commercial: "Commercial" }[criteria.category] || "Properties";
+  const bits = [typeLabel];
+  if (criteria.bedrooms) bits.push(`${criteria.bedrooms}+ bed`);
+  if (criteria.location) bits.push(`in ${criteria.location}`);
+  if (criteria.max_price) bits.push(`up to UGX ${Number(criteria.max_price).toLocaleString()}`);
+  criteria.label = bits.join(" ");
+  return criteria;
+}
+
+function ensureSearchAlertButton(category) {
+  const key = publicPaginationKey(category);
+  if (!["sale", "rent", "students", "commercial", "land"].includes(key)) return;
+  const header = document.getElementById(`${key}-results-header`);
+  if (!header || header.querySelector("[data-search-alert-btn]")) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.setAttribute("data-search-alert-btn", key);
+  btn.setAttribute("data-testid", `search-alert-btn-${key}`);
+  btn.className = "inline-flex items-center justify-center gap-2 rounded-xl border border-green-700 bg-white px-4 h-11 text-sm font-bold text-green-800 hover:bg-green-50";
+  btn.innerHTML = `<i class="far fa-bell"></i><span>Save this search / alert me</span>`;
+  btn.onclick = () => openSearchAlertModal(key);
+  const sort = header.querySelector("[data-public-results-sort]");
+  let actions = header.querySelector("[data-public-results-actions]");
+  if (!actions) {
+    actions = document.createElement("div");
+    actions.setAttribute("data-public-results-actions", "1");
+    actions.className = "flex flex-col gap-2 sm:flex-row sm:items-center";
+    header.appendChild(actions);
+    if (sort) actions.appendChild(sort);
+  }
+  actions.insertBefore(btn, actions.firstChild);
+}
+
+function ensureSearchAlertModal() {
+  let modal = document.getElementById("search-alert-modal");
+  if (modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "search-alert-modal";
+  modal.className = "modal-overlay";
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:520px">
+      <button type="button" onclick="closeModal('search-alert-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50" aria-label="Close">✕</button>
+      <div class="inline-flex items-center gap-2 bg-green-100 text-green-800 text-xs font-bold rounded-full px-3 py-1 mb-3"><i class="far fa-bell"></i><span>Save this search</span></div>
+      <h2 class="text-xl font-black text-gray-900">Tell me about new matches</h2>
+      <p id="search-alert-summary" class="mt-1 text-sm text-gray-600"></p>
+      <label for="search-alert-label" class="mt-4 block text-sm font-medium text-gray-800">Name this search</label>
+      <input id="search-alert-label" class="mt-1 w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm" maxlength="120">
+      <label class="mt-4 flex items-start gap-2 text-sm text-gray-700">
+        <input id="search-alert-whatsapp" type="checkbox" class="mt-1 accent-green-700" onchange="document.getElementById('search-alert-phone-wrap').classList.toggle('hidden', !this.checked)">
+        <span>${SEARCH_ALERT_CONSENT_TEXT}</span>
+      </label>
+      <div id="search-alert-phone-wrap" class="hidden mt-3">
+        <label for="search-alert-phone" class="block text-sm font-medium text-gray-800">WhatsApp number</label>
+        <input id="search-alert-phone" inputmode="tel" class="mt-1 w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm" placeholder="07XX XXX XXX">
+      </div>
+      <p class="mt-3 text-xs text-gray-500">No account needed. We keep this search on this device with a device cookie (see our Cookie Policy). Ticking the box agrees to alerts for this search only, not other offers.</p>
+      <button id="search-alert-submit" type="button" onclick="submitSearchAlert()" class="mt-4 w-full bg-green-800 hover:bg-green-700 text-white py-3 rounded-xl font-semibold">Save search</button>
+    </div>`;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function openSearchAlertModal(category) {
+  const modal = ensureSearchAlertModal();
+  const criteria = currentSearchAlertCriteria(category);
+  modal.dataset.criteria = JSON.stringify(criteria);
+  const summary = document.getElementById("search-alert-summary");
+  if (summary) summary.textContent = criteria.label;
+  const labelInput = document.getElementById("search-alert-label");
+  if (labelInput) labelInput.value = criteria.label;
+  const box = document.getElementById("search-alert-whatsapp");
+  if (box) box.checked = false;
+  document.getElementById("search-alert-phone-wrap")?.classList.add("hidden");
+  const phoneInput = document.getElementById("search-alert-phone");
+  if (phoneInput) phoneInput.value = authState?.user?.phone || "";
+  openModal("search-alert-modal");
+  trackEvent("search_alert_opened", { category: criteria.category });
+}
+
+async function submitSearchAlert() {
+  const modal = document.getElementById("search-alert-modal");
+  if (!modal) return;
+  let criteria = {};
+  try { criteria = JSON.parse(modal.dataset.criteria || "{}"); } catch (e) {}
+  const whatsapp = document.getElementById("search-alert-whatsapp")?.checked === true;
+  const phone = (document.getElementById("search-alert-phone")?.value || "").trim();
+  if (whatsapp && !phone) {
+    toast("Enter your WhatsApp number, or untick the box to just save the search.");
+    return;
+  }
+  const label = (document.getElementById("search-alert-label")?.value || "").trim() || criteria.label;
+  setButtonLoading("search-alert-submit", true);
+  try {
+    await apiRequest("/api/saves/searches", {
+      method: "POST",
+      body: { ...criteria, label, whatsapp_alerts: whatsapp, phone: whatsapp ? phone : undefined }
+    });
+    closeModal("search-alert-modal");
+    savedSearchesPanelLoadedAt = 0;
+    toast(whatsapp ? "Search saved. Alerts for new matches are on." : "Search saved. Find it under Saved.", 3200);
+    trackEvent("search_alert_saved", { category: criteria.category, whatsapp });
+  } catch (e) {
+    toast(`Not saved: ${e.message || "error"}`, 3600);
+  } finally {
+    setButtonLoading("search-alert-submit", false, "Save search");
+  }
+}
+
+// ---------- Staff: new home seekers, saves and alerts ----------
+let staffHomeSeekersData = null;
+
+async function loadStaffHomeSeekers() {
+  const host = ensureStaffHomeSeekersSection();
+  if (!host || !authState?.token) return;
+  try {
+    const res = await staffApiRequestWithTimeout("/api/staff/home-seekers?days=14", {}, 15000, "Home seekers");
+    staffHomeSeekersData = res?.data || null;
+    renderStaffHomeSeekers();
+  } catch (error) {
+    host.querySelector("[data-home-seekers-body]").innerHTML = `<p class="text-sm text-red-600">Could not load home seekers: ${adminEscape(error.message || "error")}</p>`;
+  }
+}
+
+function ensureStaffHomeSeekersSection() {
+  let section = document.getElementById("staff-home-seekers");
+  if (section) return section;
+  const body = document.getElementById("staff-body");
+  if (!body) return null;
+  section = document.createElement("section");
+  section.id = "staff-home-seekers";
+  section.className = "bg-white border border-gray-200 rounded-2xl p-6";
+  section.innerHTML = `
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <h3 class="text-lg font-black text-gray-900">New home seekers <span id="staff-home-seekers-badge" class="hidden ml-1 align-middle rounded-full bg-red-500 px-2 py-0.5 text-xs font-black text-white"></span></h3>
+        <p class="mt-1 text-sm text-gray-500">Sign-ups, saves (with or without an account) and "alert me" searches. WhatsApp alerts are previews only; nothing is sent from here.</p>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <button type="button" onclick="loadStaffHomeSeekers()" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-black text-gray-700">Refresh</button>
+        <button type="button" onclick="runStaffWhatsappDigestPreview()" class="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-black text-emerald-800">Build today's alert previews</button>
+      </div>
+    </div>
+    <div data-home-seekers-body class="mt-4 text-sm text-gray-600">Loading…</div>`;
+  const anchor = document.getElementById("staff-booking-escalations");
+  if (anchor && anchor.parentElement === body) anchor.insertAdjacentElement("afterend", section);
+  else body.insertBefore(section, body.firstChild);
+  return section;
+}
+
+function staffShortDate(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Kampala" });
+}
+
+function renderStaffHomeSeekers() {
+  const section = ensureStaffHomeSeekersSection();
+  if (!section) return;
+  const data = staffHomeSeekersData || {};
+  const c = data.counts || {};
+  const badge = document.getElementById("staff-home-seekers-badge");
+  if (badge) {
+    badge.textContent = `${c.new_24h || 0} new today`;
+    badge.classList.toggle("hidden", !(c.new_24h > 0));
+  }
+  const wa = data.whatsapp_alerts || {};
+  const waCount = (status) => (Array.isArray(wa.counts) ? wa.counts : [])
+    .filter((row) => row.status === status)
+    .reduce((sum, row) => sum + Number(row.count || 0), 0);
+  wa.preview = waCount("preview");
+  wa.pending = waCount("pending");
+  const waRecent = (Array.isArray(wa.recent) ? wa.recent : []).slice(0, 5).map((row) => `
+    <li class="py-2 border-t border-gray-100"><span class="text-xs font-semibold text-gray-700">${adminEscape(row.kind)} · ${adminEscape(row.status)} · ${adminEscape(row.phone || "")} · ${Number(row.listing_count || 0)} listings</span>
+      <pre class="mt-1 whitespace-pre-wrap text-[11px] text-gray-600 bg-gray-50 rounded-lg p-2">${adminEscape(row.message_preview || "")}</pre></li>`).join("");
+  const today = new Date().toISOString().slice(0, 10);
+  const stat = (label, value) => `<div class="rounded-xl border border-gray-200 p-3"><div class="text-2xl font-black text-gray-900">${Number(value || 0)}</div><div class="text-xs text-gray-500">${label}</div></div>`;
+  const signups = (data.signups || []).map((u) => `
+    <tr class="border-t border-gray-100 align-top">
+      <td class="py-2 pr-3"><div class="font-semibold text-gray-900">${adminEscape(u.name)}</div><div class="text-xs text-gray-500">${adminEscape(u.audience)} · ${adminEscape(staffShortDate(u.created_at))}</div></td>
+      <td class="py-2 pr-3 text-xs">${adminEscape(u.phone || "")}${u.email ? `<br>${adminEscape(u.email)}` : ""}<br><span class="text-gray-500">Verified: ${adminEscape(u.verified)}</span></td>
+      <td class="py-2 pr-3 text-xs">${u.saves}</td>
+      <td class="py-2 text-xs">
+        <label class="inline-flex items-center gap-1.5 font-semibold text-gray-800">
+          <input type="checkbox" data-in-person-user="${adminAttr(u.id)}" ${u.marketing_opt_in ? "checked" : ""} class="accent-green-700"> ${u.marketing_opt_in && !["in_person", "staff_in_person"].includes(u.marketing_consent_source) ? "WhatsApp yes (not in person)" : "Agreed in person"}
+        </label>
+        <input type="date" data-in-person-date="${adminAttr(u.id)}" max="${today}" value="${adminAttr((u.marketing_consent_source === "staff_in_person" && u.marketing_consent_at) ? String(u.marketing_consent_at).slice(0, 10) : today)}" class="mt-1 block border border-gray-200 rounded-lg px-2 py-1 text-xs">
+        <button type="button" onclick="saveStaffInPersonConsent('${adminAttr(u.id)}')" class="mt-1 rounded-lg border border-gray-300 px-2 py-1 text-[11px] font-black">Save</button>
+        <div class="mt-1 text-[11px] text-gray-500">${u.marketing_opt_in ? `WhatsApp: yes (${adminEscape(u.marketing_consent_source || "recorded")}${u.marketing_consent_at ? `, ${adminEscape(String(u.marketing_consent_at).slice(0, 10))}` : ""})` : "WhatsApp: no"}</div>
+      </td>
+    </tr>`).join("");
+  const saves = (data.saves || []).slice(0, 20).map((row) => `
+    <li class="py-2 border-t border-gray-100"><span class="font-semibold text-gray-900">${adminEscape(row.title || "Listing")}</span>
+      <span class="text-xs text-gray-500">${adminEscape(row.place || "")}${row.listing_code ? ` · ${adminEscape(row.listing_code)}` : ""}</span><br>
+      <span class="text-xs ${row.kind === "device" ? "text-amber-700" : "text-green-700"}">${adminEscape(row.who)}</span> <span class="text-xs text-gray-400">${adminEscape(staffShortDate(row.created_at))}</span></li>`).join("");
+  const alerts = (data.alerts || []).slice(0, 20).map((row) => `
+    <li class="py-2 border-t border-gray-100"><span class="font-semibold text-gray-900">${adminEscape(row.label || "Search")}</span><br>
+      <span class="text-xs text-gray-500">${adminEscape(row.who)} · ${row.whatsapp ? "WhatsApp alerts" : "saved only"} · ${adminEscape(staffShortDate(row.created_at))}</span></li>`).join("");
+  section.querySelector("[data-home-seekers-body]").innerHTML = `
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+      ${stat("Sign-ups (24h)", c.signups_24h)}
+      ${stat(`Sign-ups (${data.window_days || 14} days)`, c.signups_window)}
+      ${stat("Saves (24h)", c.saves_24h)}
+      ${stat("Saves without account (24h)", c.device_saves_24h)}
+      ${stat("Alert-me searches (24h)", c.alerts_24h)}
+    </div>
+    <p class="mt-3 text-xs text-gray-500">WhatsApp marketing yes: <strong>${Number(c.whatsapp_marketing_yes || 0)}</strong> people. Alert messages waiting: ${Number(wa.preview || 0)} preview, ${Number(wa.pending || 0)} pending (sending is ${wa.enabled ? "ON" : "OFF"}).</p>
+    <h4 class="mt-5 font-black text-gray-900">Sign-ups</h4>
+    ${signups ? `<div class="overflow-x-auto"><table class="mt-2 w-full text-left text-sm"><thead><tr class="text-xs uppercase text-gray-400"><th class="py-1">Who</th><th>Contact</th><th>Saves</th><th>WhatsApp consent</th></tr></thead><tbody>${signups}</tbody></table></div>` : `<p class="mt-2 text-sm text-gray-500">No new home-seeker sign-ups in this window.</p>`}
+    <div class="mt-5 grid md:grid-cols-2 gap-6">
+      <div><h4 class="font-black text-gray-900">Latest saves</h4>${saves ? `<ul class="mt-2 text-sm">${saves}</ul>` : `<p class="mt-2 text-sm text-gray-500">No saves yet.</p>`}</div>
+      <div><h4 class="font-black text-gray-900">Alert-me searches</h4>${alerts ? `<ul class="mt-2 text-sm">${alerts}</ul>` : `<p class="mt-2 text-sm text-gray-500">No alert-me searches yet.</p>`}</div>
+    </div>
+    ${waRecent ? `<h4 class="mt-5 font-black text-gray-900">Latest WhatsApp alert previews (not sent)</h4><ul class="mt-2">${waRecent}</ul>` : ""}`;
+}
+
+async function saveStaffInPersonConsent(userId) {
+  const box = document.querySelector(`[data-in-person-user="${CSS.escape(userId)}"]`);
+  const dateInput = document.querySelector(`[data-in-person-date="${CSS.escape(userId)}"]`);
+  const agreed = box?.checked === true;
+  try {
+    await staffApiRequestWithTimeout(`/api/staff/home-seekers/users/${encodeURIComponent(userId)}/marketing-consent-in-person`, {
+      method: "POST",
+      body: { agreed, agreed_on: dateInput?.value || "" }
+    }, 12000, "In-person consent");
+    toast(agreed ? "Recorded: agreed in person." : "Recorded: WhatsApp marketing is now no.");
+    await loadStaffHomeSeekers();
+  } catch (error) {
+    toast(error?.message || "Could not record it.");
+  }
+}
+
+async function runStaffWhatsappDigestPreview() {
+  try {
+    const res = await staffApiRequestWithTimeout("/api/staff/home-seekers/whatsapp-alerts/run", { method: "POST" }, 30000, "Alert previews");
+    const d = res?.data || {};
+    toast(`Alert previews built: ${Number(d.digests_written || 0)} new. Nothing was sent.`, 3600);
+    await loadStaffHomeSeekers();
+  } catch (error) {
+    toast(error?.message || "Could not build previews.");
+  }
 }
 
 function renderAll() {
@@ -52515,37 +55455,37 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/dashboard": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
   "/king": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
   "/king/dashboard": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
-  "/admin/launch-control": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "Launch Control" },
+  "/admin/launch-control": { page: "admin-setup-status", label: "Owner Setup Status", moved: "Launch Control moved to Owner Setup Status." },
   "/admin/moderation": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
   "/admin/review": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
-  "/admin/student-sweep": { page: "admin-dashboard", tab: "student-sweep", selector: "#admin-student-sweep-control", label: "Student Sweep" },
+  "/admin/student-sweep": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue", moved: "Student Sweep moved into the Review Queue (Student Housing Sweep button)." },
   "/admin/youtube-sweep": { page: "admin-dashboard", tab: "youtube-sweep", selector: "#admin-youtube-sweep-control", label: "YouTube Sweep" },
   "/admin/revenue": { page: "admin-dashboard", tab: "revenue", selector: "#admin-revenue-control", label: "Sales & Revenue" },
-  "/admin/rejected": { page: "admin-dashboard", tab: "actioned", selector: "#admin-actioned-listings-control", label: "Rejected / Actioned" },
-  "/admin/actioned": { page: "admin-dashboard", tab: "actioned", selector: "#admin-actioned-listings-control", label: "Rejected / Actioned" },
+  "/admin/rejected": { page: "admin-dashboard", tab: "listings", selector: "#admin-actioned-listings-control", label: "Recently Actioned (All Listings)" },
+  "/admin/actioned": { page: "admin-dashboard", tab: "listings", selector: "#admin-actioned-listings-control", label: "Recently Actioned (All Listings)" },
   "/admin/live": { page: "admin-dashboard", tab: "live", selector: "#admin-live-followup-control", label: "Live Listings" },
   "/admin/featured": { page: "admin-dashboard", tab: "live", selector: "#admin-featured-properties-control", label: "Featured Control" },
   "/admin/listings": { page: "admin-dashboard", tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
   "/admin/staff": { page: "admin-dashboard", tab: "staff", selector: "#admin-staff-control", label: "Staff Ops" },
   "/admin/moderators": { page: "admin-dashboard", tab: "staff", selector: "#admin-staff-control", label: "Staff Ops" },
-  "/admin/crm": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "CRM Lead Centre" },
+  "/admin/crm": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "CRM Lead Centre" },
   "/admin/leads": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Lead Centre" },
   "/admin/property-needs": { page: "admin-dashboard", tab: "accounts", selector: "#admin-property-requests-table", label: "Property Need Requests" },
   "/admin/property-requests": { page: "admin-dashboard", tab: "accounts", selector: "#admin-property-requests-table", label: "Property Need Requests" },
   "/admin/viewings": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Viewing Bookings" },
   "/admin/callbacks": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Callback Requests" },
-  "/admin/mortgage": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "Mortgage Leads" },
-  "/admin/help": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "Help Requests" },
-  "/admin/careers": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "Career Submissions" },
+  "/admin/mortgage": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Mortgage Leads" },
+  "/admin/help": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Help Requests" },
+  "/admin/careers": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Career Submissions" },
   "/admin/notifications": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Notifications" },
   "/admin/emails": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Email Logs" },
   "/admin/alerts": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Alerts" },
   "/admin/saved-searches": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Saved Alerts" },
   "/admin/whatsapp-inbox": { page: "admin-dashboard", tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp AI Inbox" },
   "/admin/whatsapp": { page: "admin-dashboard", tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp AI Inbox" },
-  "/admin/advertising": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Advertising Desk" },
-  "/admin/revenue": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Revenue" },
-  "/admin/payments": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Payments" },
+  "/admin/advertising": { page: "admin-dashboard", tab: "revenue", selector: "#admin-advertising-control", label: "Ad placements" },
+  "/admin/payments": { page: "admin-dashboard", tab: "revenue", selector: "#admin-advertising-control", label: "Payments" },
+  "/admin/agents": { page: "admin-dashboard", tab: "agents", selector: "#admin-agents-control", label: "Agents" },
   "/admin/field-agents": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
   "/admin/field-agent-control": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
   "/admin/field-agent-performance": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-performance-board", label: "Field Agent Performance" },
@@ -52559,14 +55499,14 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/field-agent-notices": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-notice-control", label: "Field Agent Notice Board" },
   "/admin/accounts": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Accounts" },
   "/admin/users": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Users" },
-  "/admin/contracts": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-training-control", label: "Contracts and field team setup" },
-  "/admin/fraud": { page: "admin-dashboard", tab: "listings", selector: "#admin-recent-reports", label: "Fraud reports" },
+  "/admin/contracts": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
+  "/admin/fraud": { page: "staff-dashboard", staffDesk: "reports", label: "Reports & claims (staff desk)" },
   "/admin/data-protection": { page: "admin-dashboard", tab: "accounts", selector: "#admin-users-table", label: "Data protection" },
   "/admin/providers": { page: "admin-setup-status", label: "Provider Tests" },
-  "/admin/language": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "Language Status" },
-  "/admin/content-i18n": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "Translation Status" },
+  "/admin/language": { page: "admin-setup-status", label: "Language Status", moved: "Language Status moved to Owner Setup Status." },
+  "/admin/content-i18n": { page: "admin-setup-status", label: "Translation Status", moved: "Translation Status moved to Owner Setup Status." },
   "/admin/location": { page: "admin-setup-status", label: "Location and Maps Status" },
-  "/admin/how-to-videos": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "How-to Video Status" },
+  "/admin/how-to-videos": { page: "admin-setup-status", label: "How-to Video Status", moved: "How-to Video Status moved to Owner Setup Status." },
   "/admin/docs": { page: "admin-docs", label: "Admin Docs" },
   "/admin/setup-status": { page: "admin-setup-status", label: "Owner Setup Status" }
 });
@@ -52609,6 +55549,12 @@ async function openAdminControl(control, options = {}) {
   if (target.page === "admin-setup-status") {
     showPage("admin-setup-status", { history: false, source: options.source || "admin_control" });
     renderAdminSetupStatus();
+    if (target.moved && options.toast !== false) toast(target.moved);
+    return true;
+  }
+  if (target.page === "staff-dashboard") {
+    kingOpenStaffDesk(null, target.staffDesk || "review");
+    if (target.label && options.toast !== false) toast(`Opened ${target.label}.`);
     return true;
   }
   if (target.tab) activeAdminWorkflowTab = target.tab;
@@ -52616,7 +55562,8 @@ async function openAdminControl(control, options = {}) {
   if (target.tab) setAdminWorkflowTab(target.tab);
   if (target.fieldAgentKpi) adminOpenFieldAgentKpi(target.fieldAgentKpi);
   scrollAdminControlIntoView(target.selector);
-  if (target.label && options.toast !== false) toast(`Opened ${target.label}.`);
+  if (target.moved && options.toast !== false) toast(target.moved);
+  else if (target.label && options.toast !== false) toast(`Opened ${target.label}.`);
   renderAdminDashboard()
     .then(() => {
       if (target.tab) setAdminWorkflowTab(target.tab);
@@ -56332,7 +59279,7 @@ function publicListingFilterNumber(id) {
 
 function publicSortablePrice(property) {
   const computed = listingComputedTotal(property);
-  const value = computed != null ? computed : Number(property?.price);
+  const value = computed != null ? computed : listingUgxToday(property);
   return Number.isFinite(value) && value > 0 && value <= 100000000000 ? value : null;
 }
 
@@ -56424,8 +59371,8 @@ function filterListings(page, options = {}) {
       const minBedsMatch = !minBeds || (p.beds || 0) >= minBeds;
       const maxBedsMatch = !maxBeds || (p.beds || 0) <= maxBeds;
       const minBathsMatch = !minBaths || Number(p.baths || p.bathrooms || 0) >= minBaths;
-      const minMatch = !min || p.price >= min;
-      const maxMatch = !max || p.price <= max;
+      const minMatch = !min || listingUgxToday(p) >= min;
+      const maxMatch = !max || listingUgxToday(p) <= max;
       const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
       const titleMatch = !titleType || text.includes(titleType);
       const amenityMatch = !amenity || text.includes(amenity);
@@ -56470,8 +59417,8 @@ function filterListings(page, options = {}) {
       const minBedsMatch = !minBeds || (p.beds || 0) >= minBeds;
       const maxBedsMatch = !maxBeds || (p.beds || 0) <= maxBeds;
       const minBathsMatch = !minBaths || Number(p.baths || p.bathrooms || 0) >= minBaths;
-      const minMatch = !min || p.price >= min;
-      const maxMatch = !max || p.price <= max;
+      const minMatch = !min || listingUgxToday(p) >= min;
+      const maxMatch = !max || listingUgxToday(p) <= max;
       const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
       const furnishingMatch = publicListingMatchesFurnishing(text, furnishing);
       const amenityMatch = !amenity || text.includes(amenity);
@@ -56530,7 +59477,7 @@ function filterStudents(options = {}) {
       || (category === "shared" && pType === "shared")
       || (category === "near" && nearCampus);
     const vMatch = !verifiedOnly || !!p.student_verified || !!p.students_welcome;
-    const maxMatch = !max || p.price <= max;
+    const maxMatch = !max || listingUgxToday(p) <= max;
     const distanceMatch = !maxDistance || (typeof p.distance_to_uni_km === "number" && p.distance_to_uni_km <= maxDistance);
     const originMatch = publicListingMatchesOrigin(p, origin);
     return typeMatch && qMatch && dMatch && uMatch && aMatch && cMatch && vMatch && maxMatch && distanceMatch && originMatch;
@@ -57252,13 +60199,13 @@ const LISTING_LABEL_I18N = {
     "Reference:": "Namba y'Okutunuulira:",
     "Status": "Embeera",
     "Support:": "Obuyambi:",
-    "Create your free makaug account to:": "Kola account yo eya makaug ey'obwereere okusobola:",
+    "Create your makaug account to:": "Kola account yo eya makaug okusobola:",
     "Summary reset to auto-generated.": "Summary ezze ku ebyekolebwa yokka.",
     "Track listing views, saves, and enquiries in real time.": "Kulondoola abalabye listing, abagiterekedde n'ababuuzizza mu kiseera kyennyini.",
     "Edit your listing faster and update photos any time.": "Okulongoosa listing yo amangu n'okukyusa bifaananyi buli kiseera.",
     "Receive weekly property tips and market updates.": "Okufuna obukodyo bw'ebintu obwa buli wiiki n'amawulire g'akatale.",
     "Get priority alerts when buyers or tenants show interest.": "Okufuna amagezi ago bukadde nga abagula oba abapangisi balaze obwagazi.",
-    "Create Free Account": "Kola Account ya Bwereere",
+    "Create Account": "Kola Account",
     "Back to Home": "Ddayo Awaka",
     "Submitted online and sent for verification.": "Kiweerezeddwa ku mutimbagano era kitwaliddwa okukakasa.",
     "Submitted in offline mode. We will sync this listing once connection returns.": "Kiweerezeddwa mu offline mode. Tujja ku-sync-a listing eno nga connection ekomyewo.",
@@ -57648,13 +60595,13 @@ const LISTING_LABEL_I18N = {
     "Reference:": "Namba ya Rufaa:",
     "Status": "Hali",
     "Support:": "Msaada:",
-    "Create your free makaug account to:": "Fungua akaunti yako ya bure ya makaug ili:",
+    "Create your makaug account to:": "Fungua akaunti yako ya makaug ili:",
     "Summary reset to auto-generated.": "Muhtasari umerudishwa wa kiotomatiki.",
     "Track listing views, saves, and enquiries in real time.": "Kufuatilia miangalo, hifadhi na maulizo ya tangazo lako kwa wakati halisi.",
     "Edit your listing faster and update photos any time.": "Kuhariri tangazo haraka na kusasisha picha muda wowote.",
     "Receive weekly property tips and market updates.": "Kupokea vidokezo vya mali vya kila wiki na masasisho ya soko.",
     "Get priority alerts when buyers or tenants show interest.": "Kupata arifa za kipaumbele wanunuzi au wapangaji wanapoonyesha nia.",
-    "Create Free Account": "Fungua Akaunti ya Bure",
+    "Create Account": "Fungua Akaunti",
     "Back to Home": "Rudi Nyumbani",
     "Submitted online and sent for verification.": "Imewasilishwa mtandaoni na kutumwa kwa uthibitisho.",
     "Submitted in offline mode. We will sync this listing once connection returns.": "Imewasilishwa kwa hali ya offline. Tutaisawazisha tangazo hili mtandao ukirudi.",
@@ -58805,7 +61752,6 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
       "Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.": "makaug teweereza kubuuza eri lister ono. Kozesa ensibuko eyasooka okukakasa okubeerawo, contact, n'amawulire g'okusasula.",
       "No direct estimate available for this setup. Open Mortgage Finder for more options.": "Tewali mbalirira eri setup eno. Ggulawo Mortgage Finder okulaba eby'okulonda ebirala.",
       "Estimated from {amount} loan": "Kubaliriddwa okuva ku loan ya {amount}",
-      "Best match": "Ekyasinga okukwatagana",
       "once": "omulundi gumu",
       "month": "omwezi",
       "year": "omwaka",
@@ -58837,7 +61783,6 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
       "Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.": "makaug haitumi maswali kwa mtangazaji huyu. Tumia chanzo cha awali kukagua upatikanaji, mawasiliano, na maelekezo ya malipo.",
       "No direct estimate available for this setup. Open Mortgage Finder for more options.": "Hakuna makadirio ya moja kwa moja kwa mpangilio huu. Fungua Mortgage Finder kwa chaguo zaidi.",
       "Estimated from {amount} loan": "Imekadiriwa kutoka mkopo wa {amount}",
-      "Best match": "Inayofaa zaidi",
       "once": "mara moja",
       "month": "mwezi",
       "year": "mwaka",
@@ -58871,7 +61816,6 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
       "Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.": "makaug ጥያቄዎችን ወደዚህ ዝርዝር አቅራቢ አይልክም። መገኘት፣ እውቂያ ዝርዝሮች እና የክፍያ መመሪያዎችን ለመፈተሽ ዋናውን ምንጭ ይጠቀሙ።",
       "No direct estimate available for this setup. Open Mortgage Finder for more options.": "ለዚህ ቅንብር ቀጥተኛ ግምት አይገኝም። ተጨማሪ አማራጮችን ለማየት Mortgage Finder ይክፈቱ።",
       "Estimated from {amount} loan": "ከ {amount} ብድር ተገምቷል",
-      "Best match": "ምርጥ ተዛማጅ",
       "once": "አንድ ጊዜ",
       "month": "ወር",
       "year": "ዓመት",
@@ -59953,6 +62897,8 @@ function setSelectOptions(id, options, fallbackValue, localize = true) {
 }
 
 function renderLpExtraFields(type, preserveExisting = true) {
+  const moreDetails = document.getElementById("lp-more-details");
+  if (moreDetails && (type === "land" || type === "commercial")) moreDetails.open = true;
   const cfg = LP_CONFIG[type] || LP_CONFIG.sale;
   const wrap = document.getElementById("lp-extra-fields");
   if (!wrap) return;
@@ -60283,6 +63229,8 @@ function renderListingDescriptionTranslationPreview() {
   const copyEl = document.getElementById("lp-description-preview-copy");
   const sourceEl = document.getElementById("lp-description-preview-source");
   if (!copyEl) return;
+  const previewWrap = document.getElementById("lp-description-translation-preview");
+  if (previewWrap) previewWrap.classList.toggle("hidden", !String(lpVal("lp-description") || "").trim());
   const original = lpVal("lp-description");
   const lang = document.getElementById("lp-description-preview-language")?.value || "en";
   const names = {
@@ -60787,8 +63735,8 @@ function filterCommercial(options = {}) {
     const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
     const tMatch = !type || canonicalCommercialTypeForProperty(p) === type;
     const transactionMatch = !transactionType || commercialTransactionForProperty(p) === transactionType;
-    const minMatch = !min || p.price >= min;
-    const maxMatch = !max || p.price <= max;
+    const minMatch = !min || listingUgxToday(p) >= min;
+    const maxMatch = !max || listingUgxToday(p) <= max;
     const sizeMatch = !minSize || sizeNum >= minSize;
     const maxSizeMatch = !maxSize || sizeNum <= maxSize;
     const originMatch = publicListingMatchesOrigin(p, origin);
@@ -60835,8 +63783,8 @@ function filterLand(options = {}) {
     const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
     const tMatch = !type || text.includes(type);
     const transactionMatch = !transactionType || commercialTransactionForProperty(p) === transactionType;
-    const minMatch = !min || p.price >= min;
-    const maxMatch = !max || p.price <= max;
+    const minMatch = !min || listingUgxToday(p) >= min;
+    const maxMatch = !max || listingUgxToday(p) <= max;
     const sizeMatch = !minSize || sizeNum >= minSize;
     const maxSizeMatch = !maxSize || sizeNum <= maxSize;
     const titleMatch = !titleType || text.includes(titleType);
@@ -60877,42 +63825,58 @@ function sortProps(page, order) {
   });
 }
 
+function paintSaveButtons(id) {
+  const key = String(id || "");
+  updateDetailSaveButton(key);
+  document.querySelectorAll("[data-save-id]").forEach((btn) => {
+    if (btn.getAttribute("data-save-id") !== key) return;
+    btn.className = getCardSaveButtonClasses(key);
+    btn.title = getCardSaveButtonTitle(key);
+    btn.setAttribute("aria-pressed", isPropertySaved(key) ? "true" : "false");
+    btn.setAttribute("aria-busy", isSavePending(key) ? "true" : "false");
+    const icon = btn.querySelector("i");
+    if (icon) icon.className = getCardSaveButtonIconClasses(key);
+  });
+}
+
 async function toggleSave(id) {
   const key = String(id);
-  if (!authState?.user || !authState?.token) {
-    setPendingSavePropertyId(key);
-    openSavePropertyPrompt(key);
-    trackEvent("property_save_auth_required", { property_id: id });
-    return;
-  }
-  if (!findPropertyForUi(key)) {
+  if (isSavePending(key)) return;
+  const serverId = savedServerPropertyId(key);
+  if (!serverId) {
     toast("This property is not available to save yet.");
     return;
   }
-  const wasSaved = isPropertySaved(key);
-  const existing = Array.from(savedIds).find((value) => String(value) === key);
-  if (wasSaved && existing !== undefined) {
-    savedIds.delete(existing);
-    siteMetrics.propertySaves[String(id)] = Math.max(0, (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) - 1);
-  } else {
-    savedIds.add(key);
-    siteMetrics.propertySaves[String(id)] = (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + 1;
-  }
-  refreshSavedUi(id);
-
+  const wasSaved = isPropertySaved(key) || isPropertySaved(serverId);
+  savePendingIds.add(key);
+  paintSaveButtons(key);
   try {
-    await syncSavedPropertyToServer(key, !wasSaved);
-    toast(wasSaved ? "Removed from saved" : "Property saved to your account");
-    trackEvent(wasSaved ? "property_unsave" : "property_save", { property_id: id });
-  } catch (e) {
-    if (wasSaved) savedIds.add(key);
-    else savedIds.delete(key);
-    siteMetrics.propertySaves[String(id)] = Math.max(
-      0,
-      (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + (wasSaved ? 1 : -1)
-    );
+    const response = await syncSavedPropertyToServer(key, !wasSaved);
+    // "Saved" only once the server says so.
+    if (wasSaved) {
+      savedIds.delete(key);
+      savedIds.delete(serverId);
+      siteMetrics.propertySaves[key] = Math.max(0, (parseInt(siteMetrics.propertySaves[key] || 0, 10) || 0) - 1);
+    } else {
+      savedIds.add(key);
+      siteMetrics.propertySaves[key] = (parseInt(siteMetrics.propertySaves[key] || 0, 10) || 0) + 1;
+    }
+    savePendingIds.delete(key);
+    if (response?.data?.owner === "device" || response?.data?.owner === "user") {
+      savedServerLoaded = true;
+    }
+    updateSavedNavCount();
     refreshSavedUi(id);
-    toast(`Saved property update failed: ${e.message || "error"}`);
+    paintSaveButtons(key);
+    const signedIn = isSignedInForSaves();
+    toast(wasSaved
+      ? "Removed from saved"
+      : (signedIn ? "Property saved to your account" : "Saved on this device. Find it under Saved at the top."), 3200);
+    trackEvent(wasSaved ? "property_unsave" : "property_save", { property_id: id, signed_in: signedIn });
+  } catch (e) {
+    savePendingIds.delete(key);
+    paintSaveButtons(key);
+    toast(`${wasSaved ? "Could not remove it" : "Not saved"}: ${e.message || "network error"}. Please try again.`, 3600);
   }
 }
 
@@ -61909,7 +64873,7 @@ function renderMortgageFinder() {
   const sortControls = `
     <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
       <p class="text-xs text-gray-600">${adminEscape(mortgageTr("comparisonSubtitle"))}</p>
-      <div class="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-white p-1 shadow-sm" aria-label="${adminAttr(mortgageTr("sortBy"))}">
+      <div class="inline-flex max-w-full flex-wrap items-center gap-1 rounded-2xl border border-emerald-100 bg-white p-1 shadow-sm" aria-label="${adminAttr(mortgageTr("sortBy"))}">
         ${sortOptions.map(([key, label]) => `
           <button type="button" data-mortgage-sort-option="${adminAttr(key)}" onclick="setMortgageComparisonSort('${adminAttr(key)}')" aria-pressed="${activeMortgageComparisonSort === key ? "true" : "false"}" class="${activeMortgageComparisonSort === key ? "bg-green-700 text-white" : "text-green-800 hover:bg-green-50"} rounded-full px-3 py-1.5 text-xs font-black">${adminEscape(label)}</button>
         `).join("")}
@@ -62047,7 +65011,7 @@ function renderDetailMortgageWidget(propertyId) {
   const depositInput = document.getElementById("detail-mortgage-deposit");
   const yearsInput = document.getElementById("detail-mortgage-years");
   if (!p || !target || !depositInput || !yearsInput) return;
-  const result = buildMortgageComparison(p.price, depositInput.value, yearsInput.value, mortgagePurposeFromListing(p.type));
+  const result = buildMortgageComparison(listingUgxToday(p), depositInput.value, yearsInput.value, mortgagePurposeFromListing(p.type));
   if (!result.best) {
     target.innerHTML = `<div class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">${translatePropertyUi("No direct estimate available for this setup. Open Mortgage Finder for more options.")}</div>`;
     return;
@@ -62056,7 +65020,7 @@ function renderDetailMortgageWidget(propertyId) {
   target.innerHTML = `
     <div class="text-sm font-semibold text-gray-800 mb-2">${translatePropertyUi("Estimated from {amount} loan", { amount: formatUgxAmount(result.loanAmount) })}</div>
     <div class="bg-green-50 border border-green-100 rounded-lg p-3 mb-2">
-      <div class="text-xs uppercase tracking-wide text-green-700 font-semibold">${translatePropertyUi("Best match")}</div>
+      <div class="text-xs uppercase tracking-wide text-green-700 font-semibold">${mortgageTr("bestMatchBadge")}</div>
       <div class="text-sm font-bold text-gray-900 mt-1">${result.best.provider.name}</div>
       <div class="text-xs text-gray-600 mt-0.5">${result.best.rate.toFixed(2)}% • ${formatUgxAmount(result.best.monthlyRepayment || 0)} / ${mortgageTr("monthWord")}</div>
     </div>
@@ -62836,6 +65800,7 @@ async function openDetail(id, options = {}) {
         </div>
         <div class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
           <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Location")}</h2>
+          ${detailMapPoint.exact ? "" : `<p class="mb-3 text-sm font-semibold text-green-800" data-map-precision="approximate">${translatePropertyUi("Approximate area")}</p>`}
           <div id="map-detail" class="map-h-sm rounded-xl overflow-hidden border border-gray-200"></div>
           ${directionsUrl ? `<a href="${adminAttr(directionsUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordPropertyDirectionsClick(${detailIdArg})" class="mt-3 inline-flex items-center gap-2 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-xl text-sm font-semibold">
             <i class="fas fa-route"></i> ${translatePropertyUi("Open Google Directions")}
@@ -62903,7 +65868,7 @@ async function openDetail(id, options = {}) {
               </div>
             </div>
             <div id="detail-mortgage-result"></div>
-            <button onclick="openMortgageFinderWithPrefill(${p.price}, '${normalizeType(p.type)}')" class="w-full mt-2 border border-green-700 text-green-700 py-2 rounded-lg text-xs font-semibold hover:bg-green-50">
+            <button onclick="openMortgageFinderWithPrefill(${listingUgxToday(p)}, '${normalizeType(p.type)}')" class="w-full mt-2 border border-green-700 text-green-700 py-2 rounded-lg text-xs font-semibold hover:bg-green-50">
               ${translatePropertyUi("Open full Mortgage Finder")}
             </button>
           </div>` : ""}
@@ -63766,10 +66731,11 @@ async function initAgentProfileMap(listings) {
   groups.forEach((items) => {
     const item = items[0];
     const count = items.length;
+    const exact = items.every((entry) => entry.exact);
     const marker = L.marker([item.lat, item.lng], {
       icon: L.divIcon({
         className: "agent-profile-pin",
-        html: `<span class="${item.exact ? "is-exact" : "is-approx"}">${count > 1 ? `<b>${count}</b>` : ""}</span>`,
+        html: `<span class="${exact ? "is-exact" : "is-approx"}">${count > 1 ? `<b>${count}</b>` : ""}</span>`,
         iconSize: [18, 18],
         iconAnchor: [9, 9]
       })
@@ -63779,7 +66745,7 @@ async function initAgentProfileMap(listings) {
       return `<button type="button" class="agent-profile-popup" onclick="openDetail(${adminListingIdArg(entry.listing?.id)})">${adminEscape(title)}</button>`;
     }).join("");
     const more = count > 8 ? `<div>and ${count - 8} more</div>` : "";
-    const note = item.exact ? "" : `<div>Approximate area</div>`;
+    const note = exact ? "" : `<div>Approximate area</div>`;
     marker.bindPopup(`${links}${more}${note}`);
     bounds.push([item.lat, item.lng]);
   });
@@ -64740,6 +67706,7 @@ function renderStaticDetailMapFallback(el, p = {}, point = {}) {
       <div>
         <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full border border-emerald-100 bg-white text-emerald-700 shadow-sm"><i class="fas fa-map-location-dot text-xl"></i></div>
         <div class="text-xs font-black uppercase tracking-wide text-emerald-800">${translatePropertyUi("Location")}</div>
+        ${point?.exact ? "" : `<div class="mt-1 text-xs font-semibold text-emerald-800" data-map-precision="approximate">${translatePropertyUi("Approximate area")}</div>`}
         <div class="mt-1 text-sm font-bold text-slate-700">${adminEscape(location)}</div>
         <div class="mt-1 text-xs text-slate-500">${adminEscape(title)}</div>
       </div>
@@ -65023,6 +67990,13 @@ function initializeMakaugApp({ yieldBetweenStages = false } = {}) {
 
       window.addEventListener("resize", closeHeroSuggestions);
       window.addEventListener("scroll", closeHeroSuggestions, true);
+      document.addEventListener("touchstart", (e) => {
+        const panel = document.getElementById("rm-sugg-panel");
+        if (!panel || !panel.classList.contains("open")) return;
+        const activeInput = typeaheadState.input;
+        if (e.target.closest("#rm-sugg-panel") || (activeInput && e.target === activeInput)) return;
+        closeHeroSuggestions();
+      }, { passive: true });
     }
   ];
   let nextStage = 0;

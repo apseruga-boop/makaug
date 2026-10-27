@@ -8,6 +8,7 @@ const MARKETPLACE_P1_MARKER = 'marketplace-p1-20260719';
 const MARKETPLACE_REPORT_FIXES_MARKER = 'marketplace-report-fixes-20260719';
 const MARKETPLACE_ENRICH_MARKER = 'marketplace-enrich-20260719';
 const MARKETPLACE_REGJOURNEY_MARKER = 'marketplace-regjourney-20260719';
+const MARKETPLACE_DIRECTORY_REDESIGN_MARKER = 'marketplace-directory-redesign-20261025';
 const MARKETPLACE_STATS_TTL_MS = Math.max(15000, Number(process.env.MARKETPLACE_STATS_TTL_MS || 60000));
 const MARKETPLACE_SEARCH_TTL_MS = Math.max(5000, Number(process.env.MARKETPLACE_SEARCH_TTL_MS || 30000));
 const MARKETPLACE_SEARCH_CACHE_MAX = Math.max(25, Number(process.env.MARKETPLACE_SEARCH_CACHE_MAX || 200));
@@ -32,11 +33,32 @@ const MARKETPLACE_CATEGORIES = Object.freeze([
   { key: 'solar', label: 'Solar installers', icon: 'fa-solar-panel', terms: ['solar', 'inverter'] },
   { key: 'security', label: 'Security services', icon: 'fa-user-shield', terms: ['security', 'cctv', 'guard'] },
   { key: 'cleaning', label: 'Cleaning services', icon: 'fa-broom', terms: ['cleaner', 'cleaning'] },
+  { key: 'loans_microfinance', label: 'Loans & microfinance', icon: 'fa-hand-holding-dollar', terms: ['microfinance', 'loan', 'sacco', 'credit'], sourcing: false },
   { key: 'commercial_services', label: 'Commercial property services', icon: 'fa-briefcase', terms: ['commercial property', 'office service', 'industrial service'] }
+]);
+
+// "What do you need help with?" panel. Every category belongs to exactly one group.
+const MARKETPLACE_CATEGORY_GROUPS = Object.freeze([
+  { key: 'buy_sell_legal', label: 'Buy, sell & legal', icon: 'fa-file-signature', categories: Object.freeze(['brokers', 'property_lawyers', 'surveyors', 'valuers', 'mortgage_providers', 'loans_microfinance']) },
+  { key: 'build_design', label: 'Build & design', icon: 'fa-trowel-bricks', categories: Object.freeze(['builders', 'architects', 'developers', 'interior_design', 'painters']) },
+  { key: 'power_water_security', label: 'Power, water & security', icon: 'fa-bolt', categories: Object.freeze(['electricians', 'solar', 'plumbers', 'borehole_water', 'security']) },
+  { key: 'manage_move_insure', label: 'Manage, move & insure', icon: 'fa-key', categories: Object.freeze(['property_managers', 'insurance', 'movers', 'cleaning', 'commercial_services']) }
+].map((group) => Object.freeze(group)));
+
+// Default directory order: after tier and rating, take the best-filled business
+// from each category in this order, then the second of each, and so on. This
+// keeps core property services first instead of whichever category was
+// refreshed last.
+const MARKETPLACE_CORE_ORDER = Object.freeze([
+  'brokers', 'property_lawyers', 'surveyors', 'builders', 'valuers', 'architects', 'developers',
+  'mortgage_providers', 'property_managers', 'electricians', 'solar', 'plumbers', 'interior_design',
+  'insurance', 'borehole_water', 'painters', 'security', 'movers', 'cleaning', 'loans_microfinance',
+  'commercial_services'
 ]);
 
 const DISTRICTS = Object.freeze([...new Set(Object.values(UG_REGION_DISTRICTS).flat())].sort((a, b) => a.localeCompare(b)));
 const CATEGORY_KEYS = new Set(MARKETPLACE_CATEGORIES.map((item) => item.key));
+const GROUP_KEYS = new Set(MARKETPLACE_CATEGORY_GROUPS.map((group) => group.key));
 const COMPETITOR_PORTAL_TOKENS = Object.freeze([
   'property24', 'lamudi', 'realtor.ug', 'realmuloodi', 'jiji', 'jumia house', 'buyrentkenya', 'privateproperty'
 ]);
@@ -58,6 +80,35 @@ function normalizePhone(value = '') {
 function normalizeCategory(value = '') {
   const key = clean(value).toLowerCase().replace(/[\s/&-]+/g, '_').replace(/_+/g, '_');
   return CATEGORY_KEYS.has(key) ? key : '';
+}
+
+function normalizeCategoryGroup(value = '') {
+  const key = clean(value).toLowerCase().replace(/[\s/&,-]+/g, '_').replace(/_+/g, '_');
+  return GROUP_KEYS.has(key) ? key : '';
+}
+
+function categoryGroupByKey(value = '') {
+  const key = normalizeCategoryGroup(value);
+  return MARKETPLACE_CATEGORY_GROUPS.find((group) => group.key === key) || null;
+}
+
+function marketplaceGroupCounts(byCategory = {}) {
+  return MARKETPLACE_CATEGORY_GROUPS.map((group) => {
+    const categories = group.categories.map((key) => ({ key, count: Number(byCategory[key] || 0) }));
+    return {
+      key: group.key,
+      count: categories.reduce((sum, item) => sum + item.count, 0),
+      categories
+    };
+  });
+}
+
+// Prefix search so "survey" finds "Surveyors"; only letters and digits reach to_tsquery.
+function marketplaceTextQuery(value = '') {
+  const tokens = clean(value).toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, ' ').split(' ')
+    .filter((token) => token && !['in', 'near', 'around', 'at', 'the', 'a', 'an', 'and', 'of', 'for', 'i', 'need', 'my'].includes(token))
+    .slice(0, 8);
+  return tokens.map((token) => `${token}:*`).join(' & ');
 }
 
 function categoryByKey(value = '') {
@@ -155,6 +206,7 @@ async function getMarketplaceStats(db, { force = false } = {}) {
     marker: MARKETPLACE_P1_MARKER,
     total: Object.values(counts).reduce((sum, value) => sum + value, 0),
     by_category: counts,
+    by_group: marketplaceGroupCounts(counts),
     cached_at: new Date().toISOString()
   };
   statsCache = { data, expiresAt: Date.now() + MARKETPLACE_STATS_TTL_MS };
@@ -165,6 +217,7 @@ function buildSearchFilters(input = {}) {
   return {
     query: clean(input.query || input.q),
     category: normalizeCategory(input.category),
+    group: normalizeCategoryGroup(input.group),
     district: clean(input.district),
     area: clean(input.area),
     tier: ['verified', 'private', 'found_online'].includes(clean(input.tier).toLowerCase()) ? clean(input.tier).toLowerCase() : '',
@@ -183,6 +236,7 @@ function validateMarketplaceFilters(input = {}) {
   const pageRaw = clean(input.page);
   const limitRaw = clean(input.limit);
   if (category && !normalizeCategory(category)) errors.push('Unknown marketplace service category.');
+  if (clean(input.group) && !normalizeCategoryGroup(input.group)) errors.push('Unknown marketplace service group.');
   if (district && !DISTRICTS.includes(district)) errors.push('Unknown Uganda district.');
   if (tier && !['verified', 'private', 'found_online'].includes(tier)) errors.push('Unknown marketplace listing tier.');
   if (minRatingRaw && (!Number.isFinite(Number(minRatingRaw)) || Number(minRatingRaw) < 0 || Number(minRatingRaw) > 5)) {
@@ -202,24 +256,38 @@ async function searchMarketplace(db, input = {}) {
   if (cached?.expiresAt > Date.now()) return cached.data;
   if (cached) searchCache.delete(cacheKey);
   const where = [`status = 'live'`];
+  let textMatch = 'TRUE';
   const params = [];
   const add = (value) => {
     params.push(value);
     return `$${params.length}`;
   };
   if (filters.query) {
-    const p = add(filters.query);
-    where.push(`to_tsvector('simple', COALESCE(name, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(category, '') || ' ' || COALESCE(district, '') || ' ' || COALESCE(area, '')) @@ plainto_tsquery('simple', ${p})`);
+    const textQuery = marketplaceTextQuery(filters.query);
+    // "Who do you need?" accepts a trade ("surveyor", "land lawyer"): match the category as well as the text.
+    const hint = filters.category ? {} : parseMarketplaceQuery(filters.query);
+    const text = textQuery
+      ? `to_tsvector('simple', COALESCE(name, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(category, '') || ' ' || COALESCE(district, '') || ' ' || COALESCE(area, '')) @@ to_tsquery('simple', ${add(textQuery)})`
+      : 'FALSE';
+    where.push(hint.category ? `(category = ${add(hint.category)} OR ${text})` : `(${text})`);
+    // Businesses whose own text matches rank above ones that only share the hinted category.
+    if (hint.category) textMatch = text;
+    if (hint.category && hint.district && !filters.district) filters.district = hint.district;
   }
   if (filters.category) where.push(`category = ${add(filters.category)}`);
+  if (filters.group) where.push(`category = ANY(${add([...categoryGroupByKey(filters.group).categories])}::text[])`);
   if (filters.district) {
     const p = add(filters.district);
-    where.push(`(district = ${p} OR ${p} = ANY(serves_regions))`);
+    // A grouped business also matches the districts of its folded-in branches (migration 181).
+    where.push(`(district = ${p} OR ${p} = ANY(serves_regions) OR (branch_group_key IS NOT NULL AND EXISTS (
+      SELECT 1 FROM marketplace_businesses branch
+      WHERE branch.branch_group_key = marketplace_businesses.branch_group_key AND branch.status = 'hidden' AND branch.district = ${p})))`);
   }
   if (filters.area) where.push(`LOWER(COALESCE(area, '')) LIKE LOWER(${add(`%${filters.area}%`)})`);
   if (filters.tier) where.push(`tier = ${add(filters.tier)}`);
   if (filters.minRating) where.push(`rating_avg >= ${add(filters.minRating)}`);
   const offset = (filters.page - 1) * filters.limit;
+  const coreOrderParam = add([...MARKETPLACE_CORE_ORDER]);
   const limitParam = add(filters.limit);
   const offsetParam = add(offset);
   const result = await db.query(
@@ -227,20 +295,33 @@ async function searchMarketplace(db, input = {}) {
        SELECT id, name, slug, category, description, district, area, serves_regions,
               phone, whatsapp, email, website, social_links, profile_images, ursb_number, tier,
               rating_avg, rating_count, source_type, source, source_url,
-              first_seen, last_refreshed, updated_at
+              first_seen, last_refreshed, updated_at, branch_group_key,
+              (${textMatch}) AS text_match,
+              ROW_NUMBER() OVER (PARTITION BY category ORDER BY (COALESCE(website, '') <> '') DESC, (COALESCE(area, '') <> '') DESC, name ASC) AS category_rank
        FROM marketplace_businesses
        WHERE ${where.join(' AND ')}
      )
      , counted AS (
        SELECT COUNT(*)::int AS total_count FROM filtered
      ), paged AS (
-       SELECT *
+       SELECT filtered.*, COALESCE(branches.branch_count, 1)::int AS branch_count
        FROM filtered
+       LEFT JOIN LATERAL (
+         -- the live card plus the branches folded into it (status 'hidden', same branch_group_key)
+         SELECT COUNT(*)::int AS branch_count
+         FROM marketplace_businesses branch
+         WHERE filtered.branch_group_key IS NOT NULL
+           AND branch.branch_group_key = filtered.branch_group_key
+           AND branch.status IN ('live', 'hidden')
+       ) branches ON TRUE
        ORDER BY
+         text_match DESC,
          CASE tier WHEN 'verified' THEN 0 WHEN 'private' THEN 1 ELSE 2 END ASC,
          rating_avg DESC,
          rating_count DESC,
-         updated_at DESC,
+         -- interleave categories (core property services first) instead of letting the most recently refreshed category win
+         category_rank ASC,
+         array_position(${coreOrderParam}::text[], category) ASC NULLS LAST,
          name ASC
        LIMIT ${limitParam} OFFSET ${offsetParam}
      )
@@ -251,7 +332,7 @@ async function searchMarketplace(db, input = {}) {
   );
   const data = {
     marker: MARKETPLACE_P1_MARKER,
-    businesses: result.rows.filter((row) => row.id).map(({ total_count: _total, ...row }) => row),
+    businesses: result.rows.filter((row) => row.id).map(({ total_count: _total, category_rank: _rank, branch_group_key: _group, text_match: _match, ...row }) => row),
     total: Number(result.rows[0]?.total_count || 0),
     page: filters.page,
     limit: filters.limit,
@@ -277,18 +358,25 @@ async function recordMarketplaceEvent(db, entry = {}) {
 module.exports = {
   DISTRICTS,
   MARKETPLACE_CATEGORIES,
+  MARKETPLACE_CATEGORY_GROUPS,
+  MARKETPLACE_CORE_ORDER,
+  MARKETPLACE_DIRECTORY_REDESIGN_MARKER,
   MARKETPLACE_ENRICH_MARKER,
   MARKETPLACE_REGJOURNEY_MARKER,
   MARKETPLACE_P1_MARKER,
   MARKETPLACE_REPORT_FIXES_MARKER,
   buildSearchFilters,
   categoryByKey,
+  categoryGroupByKey,
   claimReference,
   clean,
   getMarketplaceStats,
   invalidateMarketplaceStats,
   isCompetitorPortal,
+  marketplaceGroupCounts,
+  marketplaceTextQuery,
   normalizeCategory,
+  normalizeCategoryGroup,
   normalizePhone,
   parseMarketplaceQuery,
   recordMarketplaceEvent,

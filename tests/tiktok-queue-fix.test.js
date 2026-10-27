@@ -13,7 +13,9 @@ function persistenceDb({ existingRows = [] } = {}) {
   const client = {
     async query(sql, params = []) {
       const statement = String(sql || '').trim();
-      if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(statement)) return { rows: [], rowCount: 0 };
+      // The duplicate check lifts the live pool's 60 s limit (SET LOCAL in the import
+      // transaction, SET then RESET for a dry-run preview).
+      if (/^(BEGIN|COMMIT|ROLLBACK|SET( LOCAL)? statement_timeout = 0|RESET statement_timeout)$/.test(statement)) return { rows: [], rowCount: 0 };
       if (statement.startsWith('SELECT pg_advisory_xact_lock')) return { rows: [{}], rowCount: 1 };
       if (statement.includes('FROM properties') && statement.includes("extra_fields->>'source_listing_key'")) {
         return { rows: existingRows, rowCount: existingRows.length };

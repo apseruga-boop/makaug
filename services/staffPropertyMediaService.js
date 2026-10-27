@@ -521,7 +521,56 @@ async function moveOrSwapStaffPropertyVideo({
   }
 }
 
+
+// The review-queue card reads extra_fields.primary_image_url and
+// public_image_count rather than property_images, so every path that adds or
+// removes a listing photo has to rewrite them. On 26 Oct 2026 the admin
+// add/delete routes did not, and Charles's Kyanja listings kept showing the
+// wrongly attached photos staff had already removed.
+async function syncListingImageSummary(client, propertyId) {
+  const images = (await client.query(
+    'SELECT id, url, slot_key, is_primary FROM property_images WHERE property_id = $1 ORDER BY is_primary DESC, sort_order ASC, created_at ASC, id ASC',
+    [propertyId]
+  )).rows;
+  const publicImages = images.filter((image) => !EVIDENCE_SLOTS.has(image.slot_key));
+  const summary = {
+    public_image_count: publicImages.length,
+    image_count: publicImages.length,
+    primary_image_url: publicImages[0]?.url || null
+  };
+  await client.query(
+    `UPDATE properties
+        SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+            updated_at = NOW()
+      WHERE id = $1`,
+    [propertyId, JSON.stringify(summary)]
+  );
+  return summary;
+}
+
+// 27 Oct 2026 (MK-…A64E8E): "Make a cover from the video" attached two stills
+// at 05:15 UTC, but the listing kept public_image_count 0, no primary image and
+// media_validation_status 'blocked_no_usable_property_image', so the queue
+// card still said "no approved property photo". A staff-made video cover now
+// rewrites the summary and clears that intake flag, like a staff upload does.
+async function syncListingImageSummaryAfterVideoCover(client, propertyId) {
+  const summary = await syncListingImageSummary(client, propertyId);
+  if (summary.public_image_count > 0) {
+    await client.query(
+      `UPDATE properties
+          SET extra_fields = extra_fields || '{"media_validation_status":"passed_repair_image_gate"}'::jsonb,
+              updated_at = NOW()
+        WHERE id = $1
+          AND extra_fields->>'media_validation_status' = 'blocked_no_usable_property_image'`,
+      [propertyId]
+    );
+  }
+  return summary;
+}
+
 module.exports = {
+  syncListingImageSummary,
+  syncListingImageSummaryAfterVideoCover,
   changeStaffPropertyImage,
   addStaffPropertyImages,
   removeStaffPropertyVideo,

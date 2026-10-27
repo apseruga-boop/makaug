@@ -20,6 +20,8 @@ const { publicSitemapAgentWhereSql, publicSitemapBasicAgentWhereSql } = require(
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { realHostedPhotoExistsSql } = require('../utils/realListingPhoto');
+const logger = require('../config/logger');
+const { trackWork } = require('../utils/eventLoopLagMonitor');
 
 const PUBLIC_SITE_URL = 'https://makaug.com';
 const PUBLIC_SEO_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -49,8 +51,8 @@ const PUBLIC_PAGE_SEO = Object.freeze({
     description: 'Browse property brokers and agents across Uganda by area, see their live listings and contact them directly.'
   },
   '/list-property': {
-    title: 'List your property in Uganda: 7 days free',
-    description: 'List a house, rental, plot or commercial space on makaug.com. Free for 7 days, then UGX 20,000 a month. Reviewed before it goes live.'
+    title: 'List your property in Uganda: pay nothing for 7 days',
+    description: 'List a house, rental, plot or commercial space on makaug.com. Pay nothing for 7 days, then UGX 20,000 a month. Reviewed before it goes live.'
   },
   '/help': {
     title: 'Help centre: makaug.com questions answered',
@@ -485,11 +487,24 @@ function createPublicSeoSnapshotBuilder(generatedAt = new Date().toISOString()) 
   );
   // 10th percentile of valid prices per location (children included for a
   // city/district); no floor below 5 valid prices.
+  // Same scope as locationValidPrices(), but each district's prices are
+  // bucketed in one pass instead of rescanning every location per district.
+  const locationOptions = canonicalLocationOptions();
   const locationPriceFloors = Object.fromEntries(Object.keys(CATEGORY_SEO).map((category) => {
     const floors = new Map();
-    const scratch = { locationValidPrices: locationValidPricesByCategory };
-    for (const location of canonicalLocationOptions()) {
-      const values = locationValidPrices(scratch, category, location.canonical_key);
+    const direct = locationValidPricesByCategory[category];
+    const districtPrices = new Map();
+    for (const [key, prices] of direct) {
+      const district = canonicalLocationByKey(key)?.district;
+      if (!district) continue;
+      if (!districtPrices.has(district)) districtPrices.set(district, []);
+      const bucket = districtPrices.get(district);
+      for (const price of prices) bucket.push(price);
+    }
+    for (const location of locationOptions) {
+      const values = location.level === 'district'
+        ? (districtPrices.get(location.district) || [])
+        : (direct.get(location.canonical_key) || []);
       const floor = floorFromPrices(values);
       if (floor > 0) floors.set(location.canonical_key, floor);
     }
@@ -539,6 +554,11 @@ async function forEachPublicSeoSnapshotPage(db, onPage) {
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
+      // Sitemap / SEO snapshot: a page has taken up to 31 s; keep it clear of
+      // the live 60 s statement limit. Ends with this transaction.
+      if (typeof db.exemptTransactionFromStatementTimeout === 'function') {
+        await db.exemptTransactionFromStatementTimeout(client);
+      }
       await client.query(`DECLARE makaug_seo_snapshot NO SCROLL CURSOR FOR ${publicSeoInventorySnapshotSql()}`);
       for (let page = 0; page < SEO_SNAPSHOT_MAX_PAGES; page += 1) {
         const result = await client.query(`FETCH ${SEO_SNAPSHOT_PAGE_SIZE} FROM makaug_seo_snapshot`);
@@ -669,11 +689,21 @@ function publicSeoInventorySnapshotSql() {
 }
 
 async function refreshPublicSeoInventorySnapshot(db) {
-  const builder = createPublicSeoSnapshotBuilder();
-  await forEachPublicSeoSnapshotPage(db, (rows) => builder.ingest(rows));
-  const value = builder.finish();
-  snapshotCache = { cachedAt: Date.now(), value };
-  return value;
+  // Named in event_loop_stall lines while it runs (it is started by a request
+  // but outlives it, so it would otherwise show as in_flight=none).
+  const done = trackWork('seo_snapshot_refresh');
+  try {
+    const builder = createPublicSeoSnapshotBuilder();
+    await forEachPublicSeoSnapshotPage(db, (rows) => builder.ingest(rows));
+    const finishStarted = Date.now();
+    const value = builder.finish();
+    const finishMs = Date.now() - finishStarted;
+    if (finishMs >= 500) logger.warn('Public SEO snapshot finish was slow', { finish_ms: finishMs });
+    snapshotCache = { cachedAt: Date.now(), value };
+    return value;
+  } finally {
+    done();
+  }
 }
 
 async function loadPublicSeoInventorySnapshot(db, options = {}) {

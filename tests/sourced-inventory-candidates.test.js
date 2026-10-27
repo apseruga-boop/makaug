@@ -248,20 +248,21 @@ test('sourced candidate approval exemption follows stored provenance and is audi
   assert(propertiesRoute.includes('found_online_approval_used'), 'override should be written to moderation history');
 });
 
-test('admin has a guarded April 29 test-batch cleanup path', () => {
+test('April 29 test-batch cleanup keeps its guarded backend; King no longer shows the one-off button', () => {
   assert(adminRoute.includes("router.post('/test-listings/cleanup-april-29'"), 'admin cleanup endpoint should exist');
   assert(adminRoute.includes("created_at >= TIMESTAMPTZ '2026-04-29 00:00:00+00'"), 'cleanup should be scoped to April 29 only');
   assert(adminRoute.includes('april_29_test_batch_cleanup'), 'cleanup should write audit metadata');
-  assert(frontend.includes('adminCleanupApril29TestBatch'), 'dashboard should expose cleanup action');
-  assert(frontend.includes('/api/admin/test-listings/cleanup-april-29'), 'dashboard should call protected cleanup endpoint');
-  assert(html.includes('admin-clean-april29-tests-btn'), 'all-listings panel should include cleanup control');
+  // King slim-down (26 Oct 2026): Motherboard keeps the search, drops the one-off clean-up button.
+  assert(!frontend.includes('adminCleanupApril29TestBatch'), 'dashboard should not expose the one-off cleanup action');
+  assert(!html.includes('admin-clean-april29-tests-btn'), 'all-listings panel should not include the one-off cleanup control');
 });
 
 test('King review queue exposes found-online intake only', () => {
   assert(!html.includes('admin-seed-sourced-candidates-btn'), 'review queue should not expose generic sourced candidate button');
   assert(!frontend.includes('async function adminSeedSourcedInventoryCandidates'), 'frontend should not implement generic sourced candidate creation');
   assert(html.includes('admin-found-online-status'), 'review queue should expose found-online status output');
-  assert(html.includes('admin-seed-social-search-listings-btn'), 'review queue should expose found-online listing button');
+  // King slim-down (26 Oct 2026) removed the one-off seed buttons from the review queue; the guarded endpoint stays.
+  assert(!html.includes('admin-seed-social-search-listings-btn'), 'review queue should not show the one-off found-online seed button');
   assert(frontend.includes('function ensureAdminFoundOnlineControls'), 'frontend should inject found-online controls when cached HTML is stale');
   assert(frontend.includes('async function adminSeedSocialSearchAuthorisedListings'), 'frontend should implement found-online seed action');
   assert(!frontend.includes('/api/admin/sourced-inventory-candidates/seed'), 'frontend should not call generic sourced candidate seed endpoint');
@@ -319,10 +320,10 @@ test('public property cards standardise badges and found-online labels', () => {
   assert(frontend.includes('translateListingLabel("Found online")'), 'public UI should translate the found-online badge');
   const badgeRowHelper = frontend.slice(frontend.indexOf('function listingBadgeRowHtml'), frontend.indexOf('function brokerRegistrationMeta'));
   assert(badgeRowHelper.indexOf('listingNewBadgeHtml') < badgeRowHelper.indexOf('listingFoundOnlineBadgeHtml'), 'NEW should appear before Found online when both apply');
-  assert(badgeRowHelper.includes('if (!isFoundOnlineListing(p)) badges.push(badgeHtml(listingSourceMeta(p), sizeClass));'), 'Agent listed / Private listed should be reserved for manual non-found-online listings');
+  assert(badgeRowHelper.includes('if (!isFoundOnlineListing(p)) badges.push(badgeHtml(listingSourceMeta(p), sizeClass));'), 'Listed by an agent / Private listed should be reserved for manual non-found-online listings');
   assert(badgeRowHelper.includes('landTitleBadgeForListingHtml'), 'land title badges should be routed through a land-only helper');
   assert(!badgeRowHelper.includes('foundOnlineSourcePlatformBadgeMeta'), 'source platform should not duplicate the media-chip source/play treatment in the badge row');
-  assert(frontend.includes('listingAgent: "Agent listed"'), 'English listed-by copy should say Agent listed');
+  assert(frontend.includes('listingAgent: "Listed by an agent"'), 'English listed-by copy should say Listed by an agent');
   assert(frontend.includes('listingPrivate: "Private listed"'), 'English listed-by copy should say Private listed');
   assert(!badgeRowHelper.includes('Sourced online'), 'public card badge row should not render Sourced online');
   assert(frontend.includes('function shouldShowListingTypeBadge'), 'public UI should hide type badges on category pages and keep them on mixed results');

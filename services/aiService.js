@@ -1,6 +1,7 @@
 const logger = require('../config/logger');
 const db = require('../config/database');
 const { DISTRICTS } = require('../utils/constants');
+const { usdToUgxRate } = require('./fxRateService');
 const {
   getProviderClient,
   getProviderName,
@@ -702,7 +703,8 @@ function parseBudgetHeuristic(text) {
   const best = candidates[0];
   if (best.score < -1) return { maxBudgetUgx: 0, budgetPeriod: null, convertedFromUsd: false };
 
-  const rate = Number(process.env.USD_TO_UGX_RATE || 3800);
+  // Today's rate from services/fxRateService (falls back to USD_TO_UGX_RATE, then 3800).
+  const rate = Number(usdToUgxRate());
   const maxBudgetUgx = best.currency === 'usd' || best.currency === '$'
     ? Math.round(best.amount * (Number.isFinite(rate) && rate > 0 ? rate : 3800))
     : Math.round(best.amount);
@@ -1062,7 +1064,7 @@ Rules:
 - Detect natural queries like "2 bed in Muyenga under $20k per month".
 - For commercial and land searches, preserve the independent transaction axis in transactionType.
 - Detect Uganda language queries such as "Natafuta shamba Mbale", "Noonya enju eya rent e Kampala", and "Funa agent e Wakiso".
-- Convert USD to UGX using rate 1 USD = ${process.env.USD_TO_UGX_RATE || 3800}.
+- Convert USD to UGX using rate 1 USD = ${Math.round(usdToUgxRate())}.
 - Treat Kampala, Wakiso, Mukono, Mbale, Jinja, Mbarara, Gulu, etc. as places, never as property types.
 - Treat English/Luganda/Kiswahili/Acholi/Runyankole/Rukiga/Lusoga/Amharic/Arabic as languages, never as search areas.
 - Never invent impossible numbers.

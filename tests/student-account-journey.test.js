@@ -32,6 +32,10 @@ assert(html.includes("openAuthSignIn('student')"), 'student page should open the
 assert(app.includes('"/student-dashboard": "student"'), 'student route should preserve audience');
 assert(app.includes('showPage("student-dashboard")'), 'student login should render its dashboard');
 assert(app.includes('apiRequest("/api/student/dashboard")'), 'student dashboard should load central data');
-assert(app.includes('/api/saved-properties/${encodeURIComponent(propertyId)}'), 'property cards should persist saved listings');
+// Since 26 Oct 2026 cards save through /api/saves (device cookie or account).
+assert(
+  app.includes('/api/saved-properties/${encodeURIComponent(propertyId)}') || app.includes('`/api/saves/${encodeURIComponent('),
+  'property cards should persist saved listings'
+);
 
 console.log('student-account-journey tests passed');

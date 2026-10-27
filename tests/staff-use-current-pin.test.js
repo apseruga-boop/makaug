@@ -57,6 +57,7 @@ function loadHandler({ marker = null, fallback = null } = {}) {
     adminReviewLocationMarker: marker,
     adminActiveReview: { id: 'aa89974b-1a27-4a9a-9739-c87e8d8e4ba7' },
     adminReviewLocationPoint: () => fallback,
+    adminReviewPinIsApproximate: () => false,
     isLikelyUgandaCoordinate: (lat, lng) => lat >= -1.5 && lat <= 4.3 && lng >= 29.5 && lng <= 35.1,
     adminReviewSetLocationInputs: (lat, lng, message) => calls.set.push({ lat, lng, message }),
     adminReviewLocationStatus: (message) => calls.status.push(message),

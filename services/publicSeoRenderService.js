@@ -13,7 +13,7 @@ const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require
 const { tenantFor } = require('../packages/shared-country-core');
 const { pricePeriodSuffix: sharedPricePeriodSuffix } = require('../config/pricePeriods');
 const { isPriceImplausible } = require('../utils/pricePlausibility');
-const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
+const { publicPropertyTypeLabel } = require('../utils/commercialClassification');
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql, realPhotoRejection, mediaHost } = require('../utils/realListingPhoto');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
@@ -35,6 +35,7 @@ const {
 } = require('./publicListingCopy');
 const { publicOrganizationNode } = require('./publicOrganizationSchema');
 const { shareImagePath, shareCardAlt, propertyShareRevision } = require('./shareCardService');
+const { effectivePriceUgx, effectivePriceUgxSql } = require('./fxRateService');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const ACTIVE_TENANT = tenantFor(ACTIVE_COUNTRY_CODE);
@@ -281,17 +282,19 @@ function facetPredicate(options, values, alias = 'p') {
   if (definition.kind === 'max_price') {
     values.push(Number(definition.value));
     const priceRef = `$${values.length}`;
-    if (!definition.pattern) return `AND ${alias}.price > 0 AND ${alias}.price <= ${priceRef}`;
+    const priceSql = effectivePriceUgxSql(alias);
+    if (!definition.pattern) return `AND ${alias}.price > 0 AND ${priceSql} <= ${priceRef}`;
     values.push(`\\m(?:${definition.pattern})\\M`);
-    return `AND ${alias}.price > 0 AND ${alias}.price <= ${priceRef}
+    return `AND ${alias}.price > 0 AND ${priceSql} <= ${priceRef}
       AND ${regexAnyExpression(facetTextExpressions(alias), `$${values.length}`)}`;
   }
   if (definition.kind === 'min_price') {
     values.push(Number(definition.value));
     const priceRef = `$${values.length}`;
-    if (!definition.pattern) return `AND ${alias}.price >= ${priceRef}`;
+    const priceSql = effectivePriceUgxSql(alias);
+    if (!definition.pattern) return `AND ${priceSql} >= ${priceRef}`;
     values.push(`\\m(?:${definition.pattern})\\M`);
-    return `AND ${alias}.price >= ${priceRef}
+    return `AND ${priceSql} >= ${priceRef}
       AND ${regexAnyExpression(facetTextExpressions(alias), `$${values.length}`)}`;
   }
   if (definition.kind === 'title_type') {
@@ -397,7 +400,10 @@ function normalizeSeoListingRow(row = {}) {
     area: plainText(canonicalDisplay.area),
     district: plainText(canonicalDisplay.district),
     // C17: an implausible price is shown as "Price on application" and the page is noindexed.
-    price: priceImplausible ? 0 : (Number(row.price || 0) || 0),
+    // A dollar-priced listing shows today's shilling equivalent (services/fxRateService).
+    price: priceImplausible ? 0 : (Number(effectivePriceUgx(row) || 0) || 0),
+    price_original: Number(row.price_original) > 0 ? Number(row.price_original) : null,
+    price_original_currency: plainText(row.price_original_currency || ''),
     price_implausible: priceImplausible,
     price_on_application: row.price_on_application === true || priceImplausible,
     price_period: plainText(row.price_period),
@@ -407,7 +413,7 @@ function normalizeSeoListingRow(row = {}) {
     transaction_type: plainText(row.transaction_type),
     bedrooms: Number(row.bedrooms || 0) || 0,
     bathrooms: Number(row.bathrooms || 0) || 0,
-    property_type: humanPropertyTypeLabel(plainText(row.property_type)),
+    property_type: publicPropertyTypeLabel(plainText(row.property_type)),
     // Found online: only a photo staff uploaded with consent, never source media.
     primary_image_url: seoCoverImageUrl(row, foundOnline),
     video_url: plainText(copyExtra.video_url || ''),
@@ -463,7 +469,7 @@ async function loadPublicSeoListings(db, options = {}) {
        LIMIT ${limitRef}
      )\nSELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
-       p.price, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.price, p.price_original, p.price_original_currency, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
        p.extra_fields->>'city' AS city,
        p.extra_fields->>'neighborhood' AS neighborhood,
@@ -490,7 +496,7 @@ async function loadPublicSeoListings(db, options = {}) {
      )
      SELECT
        p.id, p.listing_type, p.title, LEFT(COALESCE(p.description, ''), 600) AS description, p.area, p.district,
-       p.price, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.price, p.price_original, p.price_original_currency, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
        p.extra_fields->>'city' AS city,
        p.extra_fields->>'neighborhood' AS neighborhood,
@@ -524,7 +530,7 @@ async function loadPublicSeoListing(db, propertyId) {
     const result = await db.query(
       `SELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
-       p.price, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.price, p.price_original, p.price_original_currency, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
        p.extra_fields->>'city' AS city,
        p.extra_fields->>'neighborhood' AS neighborhood,
@@ -558,7 +564,7 @@ async function loadSeoListingBypassingPublicFilter(db, propertyId) {
   const result = await db.query(
     `SELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
-       p.price, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
+       p.price, p.price_original, p.price_original_currency, p.price_period, p.price_on_application, p.price_unit, p.land_size_value, p.land_size_unit, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.students_welcome,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
        p.extra_fields->>'city' AS city,
@@ -602,7 +608,10 @@ function pricePeriodSuffix(listing = {}) {
 // C6: the browser's currency switch updates server-rendered prices in place.
 function seoPriceDataAttributes(listing = {}) {
   if (!(Number(listing.price) > 0)) return '';
-  return ` data-price-ugx="${escapeHtml(String(Math.round(Number(listing.price))))}" data-price-period="${escapeHtml(publicListingPricePeriod(listing))}" data-listing-type="${escapeHtml(String(listing.listing_type || ''))}" data-transaction-type="${escapeHtml(publicListingTransaction(listing))}"`;
+  const original = String(listing.price_original_currency || '').toUpperCase() === 'USD' && Number(listing.price_original) > 0
+    ? ` data-price-original="${escapeHtml(String(listing.price_original))}" data-price-original-currency="USD"`
+    : '';
+  return ` data-price-ugx="${escapeHtml(String(Math.round(Number(listing.price))))}"${original} data-price-period="${escapeHtml(publicListingPricePeriod(listing))}" data-listing-type="${escapeHtml(String(listing.listing_type || ''))}" data-transaction-type="${escapeHtml(publicListingTransaction(listing))}"`;
 }
 
 // Full price for cards, detail pages and descriptions: UGX 80,000,000/month.

@@ -21,15 +21,19 @@ const {
   startMarketplaceDrip,
   warmMarketplacePublicCache
 } = require('../services/marketplaceNationalDripService');
-const { DISTRICTS, MARKETPLACE_CATEGORIES } = require('../services/marketplaceService');
+const { DISTRICTS, MARKETPLACE_CATEGORIES, MARKETPLACE_CORE_ORDER } = require('../services/marketplaceService');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('national registry covers every category, district and declared source exactly once', () => {
   const rows = registryRows();
-  const expected = MARKETPLACE_CATEGORIES.length * DISTRICTS.length * SOURCE_DEFINITIONS.length;
-  assert.equal(MARKETPLACE_CATEGORIES.length, 20);
+  // loans_microfinance (sourcing: false) only holds re-filed businesses and is not walked.
+  const sourced = MARKETPLACE_CATEGORIES.filter((category) => category.sourcing !== false);
+  const expected = sourced.length * DISTRICTS.length * SOURCE_DEFINITIONS.length;
+  assert.equal(MARKETPLACE_CATEGORIES.length, 21);
+  assert.equal(sourced.length, 20);
+  assert.equal(rows.some((row) => row.category === 'loans_microfinance'), false);
   assert.equal(DISTRICTS.length, 146);
   assert.equal(rows.length, expected);
   assert.equal(new Set(rows.map((row) => row.source_key)).size, expected);
@@ -149,7 +153,8 @@ test('public Marketplace cache pre-warm hydrates stats and the broad first page'
   assert.equal(result.ok, true);
   assert.equal(statements.length, 2);
   const search = statements.find((entry) => /WITH filtered AS/.test(entry.sql));
-  assert.deepEqual(search.params, [20, 0]);
+  // the default sort passes the core category order ahead of LIMIT and OFFSET
+  assert.deepEqual(search.params, [[...MARKETPLACE_CORE_ORDER], 20, 0]);
 });
 
 test('scheduled run uses a typed interval and re-warms public caches after inserts', () => {
@@ -244,7 +249,8 @@ test('protected admin API exposes registry, config, start, pause, import and run
 test('admin dashboard renders provider truth, coverage, caps, controls and run logs', () => {
   const html = read('index.html');
   const app = read('assets/makaug-app.js');
-  assert.match(html, /id="admin-marketplace-drip-panel"/);
+  // King dashboard slim-down (26 Oct 2026): the drip panel is retired from King; the renderer stays for the API.
+  assert.doesNotMatch(html, /id="admin-marketplace-drip-panel"/);
   assert.match(app, /function marketplaceDripHtml/);
   assert.match(app, /Provider truth/);
   assert.match(app, /Monthly requests/);
@@ -272,10 +278,11 @@ test('public Marketplace publishes the P2 marker and crawlable national links', 
   }
 });
 
-test('server arms the drip scheduler but the scheduler is environment disabled by default', () => {
+test('server no longer arms the drip scheduler, and it stays environment disabled by default', () => {
   const server = read('server.js');
   const service = read('services/marketplaceNationalDripService.js');
-  assert.match(server, /startMarketplaceDripScheduler\(db\)/);
+  // King dashboard slim-down (26 Oct 2026): the national drip timer is not armed.
+  assert.doesNotMatch(server, /startMarketplaceDripScheduler\(db\)/);
   assert.match(service, /MARKETPLACE_DRIP_SCHEDULER_ENABLED !== 'true'/);
   assert.match(service, /monthly_request_cap_reached/);
   assert.match(service, /provider_auth_or_config_error/);

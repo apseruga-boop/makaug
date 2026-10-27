@@ -33,6 +33,7 @@ const valuationRoutes = require('./routes/valuation');
 const tiktokDisplayRoutes = require('./routes/tiktok-display');
 const analyticsRoutes = require('./routes/analytics');
 const savedPropertiesRoutes = require('./routes/saved-properties');
+const savesRoutes = require('./routes/saves');
 const adminRoutes = require('./routes/admin');
 const whatsappRoutes = require('./routes/whatsapp');
 const mortgageRoutes = require('./routes/mortgage');
@@ -62,10 +63,8 @@ const {
 } = require('./services/publicHtmlSanitizer');
 const inlinePublicCoreStylesheets = require('./services/publicCoreStylesheets');
 const inlinePublicFontFaces = require('./services/publicFontFaces');
-const { startXSourceDripScheduler } = require('./services/xSourceDripService');
 const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDripService');
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
-const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
 const { startLeadDeskScheduler } = require('./services/leadDeskService');
 const { startAgentBookingScheduler } = require('./services/agentBookingService');
@@ -450,6 +449,7 @@ if (ACTIVE_TENANT.publicFeatures?.valuation !== false) app.use('/api/valuation',
 app.use('/api/tiktok-display', tiktokDisplayRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/saved-properties', savedPropertiesRoutes);
+app.use('/api/saves', savesRoutes);
 app.use('/api/money-sms', require('./routes/moneySms'));
 app.use('/api/pay', require('./routes/pay').api);
 app.use('/legal', require('./routes/legalDocs'));
@@ -464,7 +464,9 @@ app.use('/api/admin/ai-agents', adminAiAgentsRoutes);
 app.use('/api/property-seeker', propertySeekerRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/field-agent', fieldAgentRoutes);
+app.use('/api/staff/home-seekers', require('./routes/staff-home-seekers'));
 app.use('/api/staff', staffRoutes);
+app.use('/api/people', require('./routes/people'));
 app.use('/api/staff/off-plan', offPlanStaffRoutes);
 app.use('/api/harvest', harvestRoutes);
 app.use('/api/short-term', shortTermRoutes);
@@ -609,6 +611,15 @@ app.get('/api/fx', (_req, res) => {
   return res.json({ ok: true, data: publicDisplayFx() });
 });
 
+const { publicHowToVideosConfig } = require('./config/howToGuides');
+// Local preview only: serve built how-to videos from a folder on disk so the
+// sections can be checked before the files are uploaded. Never in production.
+const HOWTO_LOCAL_PREFIX = '/__howto-local';
+const howToLocalDir = process.env.NODE_ENV !== 'production' && String(process.env.HOWTO_VIDEOS_LOCAL_DIR || '').trim();
+if (howToLocalDir) {
+  app.use(HOWTO_LOCAL_PREFIX, express.static(path.resolve(howToLocalDir), { fallthrough: false, index: false }));
+}
+
 app.get('/config.js', (_req, res) => {
   // Free maps only (Leaflet + OpenStreetMap). C18, 10 Oct 2026: Google Maps is
   // no longer used and no Google key is ever sent to browsers.
@@ -617,6 +628,8 @@ app.get('/config.js', (_req, res) => {
     mapProvider,
     googleMapsApiKey: '',
     apiBase: process.env.PUBLIC_API_BASE || '',
+    // Phone-only sign-up (area B). Off until the WhatsApp code reaches people.
+    signupPhoneOnly: String(process.env.SIGNUP_PHONE_ONLY_ENABLED || '').trim().toLowerCase() === 'true',
     adsenseClient: process.env.GOOGLE_ADSENSE_CLIENT || '',
     adsenseSlots: {
       default: process.env.GOOGLE_ADSENSE_SLOT_DEFAULT || ''
@@ -634,7 +647,9 @@ app.get('/config.js', (_req, res) => {
     `window.MAKAUG_GOOGLE_MAPS_API_KEY = ${JSON.stringify(publicConfig.googleMapsApiKey)};`,
     `window.MAKAUG_API_BASE = window.MAKAUG_API_BASE || ${JSON.stringify(publicConfig.apiBase)};`,
     `window.MAKAUG_ADSENSE_CLIENT = window.MAKAUG_ADSENSE_CLIENT || ${JSON.stringify(publicConfig.adsenseClient)};`,
-    `window.MAKAUG_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || ${JSON.stringify(publicConfig.adsenseSlots)};`
+    `window.MAKAUG_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || ${JSON.stringify(publicConfig.adsenseSlots)};`,
+    `window.MAKAUG_HOWTO = ${JSON.stringify(publicHowToVideosConfig(process.env, { localBaseUrl: howToLocalDir ? HOWTO_LOCAL_PREFIX : '' }))};`,
+    'if (typeof window.renderHowToGuides === "function") window.renderHowToGuides();'
   ].join('\n'));
 });
 
@@ -2251,7 +2266,14 @@ app.get('/a/:slug', async (req, res, next) => {
     } catch (error) {
       logger.warn('Agent short link lookup failed', { message: error.message });
     }
-    if (!agent?.id) return sendUnknownAgentDirectoryPage(req, res);
+    if (!agent?.id) {
+      // An unknown or retired short link goes to the agents directory instead
+      // of a generic 200 page; noindex keeps the dead link out of search.
+      res.set('X-Robots-Tag', 'noindex, follow');
+      res.set('Cache-Control', 'no-store');
+      res.set('X-makaug-Agent-Fallback', 'directory');
+      return res.redirect(302, '/brokers');
+    }
     const queryIndex = String(req.originalUrl || '').indexOf('?');
     const qs = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
     return res.redirect(301, `/agents/${encodeURIComponent(agent.id)}${qs}`);
@@ -2727,7 +2749,9 @@ async function start() {
     throw error;
   }
   if (harvestAutomationEnabled()) {
-    startXSourceDripScheduler(db);
+    // The X source drip no longer arms here (King dashboard slim-down, 26 Oct 2026):
+    // it was paused but still checked every minute. Its tables, routes and
+    // manual one-batch run stay; only the background timer is gone.
     startYouTubeSourceDripScheduler(db);
   } else {
     logger.info('Harvest automation schedulers disabled by rollout flag');
@@ -2735,8 +2759,8 @@ async function start() {
   if (!IS_SOUTH_AFRICA) startDailySourceMonitorScheduler(db);
   if (ACTIVE_TENANT.publicFeatures?.marketplace !== false) {
     startMarketplaceLifecycleScheduler(db);
-    // The drip's Google source is off unless GOOGLE_PLACES_ALLOWED=true (C18).
-    startMarketplaceDripScheduler(db);
+    // The marketplace national drip no longer arms here (26 Oct 2026); it had
+    // not run since July. Its tables and the scripts that call it stay.
   }
   if (!IS_SOUTH_AFRICA) {
     startLeadDeskScheduler(db);
@@ -2753,6 +2777,18 @@ async function start() {
     startGreetingNameCache(db);
     startBillingScheduler(db);
     require('./services/payLinkService').startPayLinkScheduler(db);
+    // Daily USD/GBP/EUR to UGX rates. The last good rate is loaded from
+    // fx_rates at once; the first fetch waits for the deploy to settle.
+    require('./services/fxRateService').startFxRateScheduler(db, {
+      logger,
+      bootDelayMs: staggeredBootDelay('fx_rates')
+    });
+    // The master contact list (people): reconciled when the source tables
+    // change (sign-up, lead, WhatsApp profile) and fully every night.
+    require('./services/peopleService').startPeopleScheduler(db, {
+      countryCode: ACTIVE_COUNTRY_CODE,
+      bootDelayMs: staggeredBootDelay('people_reconcile')
+    });
   }
   if (!IS_SOUTH_AFRICA || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true') {
     startFeaturedRotationScheduler(db);
@@ -2773,6 +2809,8 @@ async function start() {
   schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
   scheduleHomepageSeoWarmup();
   scheduleStartupDataRepairs();
+  // Writes WhatsApp alert digest rows only; never sends (area C, 26 Oct 2026).
+  require('./services/whatsappAlertDigestService').startWhatsappAlertDigestSchedule();
   startMemoryLog();
   if (process.env.NODE_ENV !== 'test' && process.env.EVENT_LOOP_LAG_LOG !== 'off') startEventLoopLagMonitor({ logger });
 }

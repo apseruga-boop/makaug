@@ -154,19 +154,30 @@ function currencyFromToken(token = '') {
   return 'UGX';
 }
 
+function magnitudeNumber(raw = '') {
+  const value = String(raw || '').replace(/[ \t]/g, '');
+  const comma = value.match(/^([0-9]+),([0-9]+)$/);
+  if (comma) return Number(comma[2].length === 3 ? `${comma[1]}${comma[2]}` : `${comma[1]}.${comma[2]}`);
+  return Number(value.replace('\u00b7', '.'));
+}
+
 function parsePrices(text = '') {
   const source = stripPhones(text);
   const found = [];
-  const withMagnitude = /(?:(usd|us\$|\$|ugx|ush|ugshs|shs)\s*)?([0-9]+(?:\.[0-9]+)?)\s*(billion|bn|million|millions|mn|m)\b/gi;
+  // 27 Oct 2026 (MK-…A64E8E): video text read "UGX 1.4 billion" as
+  // "UGX 1,4 billion" / "1. 4 billion", and the reader kept only "4 billion".
+  // A comma, middle dot or spaced point between digits is a decimal point,
+  // except a comma followed by exactly three digits (thousands: 1,400 million).
+  const withMagnitude = /(?:(usd|us\$|\$|ugx|ush|ugshs|shs)\s*)?([0-9]+(?:(?:[ \t]*[.\u00b7][ \t]*|,)[0-9]+)?)\s*(billion|bn|million|millions|mn|m)\b/gi;
   let match = withMagnitude.exec(source);
   while (match) {
-    const amount = roundMoney(Number(match[2]) * magnitudeMultiplier(match[3]));
+    const amount = roundMoney(magnitudeNumber(match[2]) * magnitudeMultiplier(match[3]));
     if (amount && amount >= 1000) {
       found.push({ amount, currency: currencyFromToken(match[1]) || 'UGX' });
     }
     match = withMagnitude.exec(source);
   }
-  const plain = /(?:(usd|us\$|\$|ugx|ush|ugshs|shs)\s+)([0-9][0-9,]*(?:\.[0-9]+)?)\b/gi;
+  const plain = /(?:(usd|us\$|\$|ugx|ush|ugshs|shs)\s+)([0-9][0-9,]*(?:\.[0-9]+)?)\b(?![ \t]*[.,\u00b7]?[ \t]*[0-9]*\s*(?:billion|bn|million|millions|mn|m)\b)/gi;
   match = plain.exec(source);
   while (match) {
     const amount = roundMoney(String(match[2]).replace(/,/g, ''));
@@ -192,6 +203,13 @@ function choosePrice(prices = []) {
       bestCount = count;
     }
   });
+  // 27 Oct 2026 (MK-…A64E8E): OCR of "UGX 1.4 billion" gave "4 billion" once
+  // and "14 billion" once, and the first fragment won. When different amounts
+  // are read equally often the price is unknown, not the first one seen.
+  const tied = [...counts.entries()].some(([key, count]) => (
+    count === bestCount && key !== `${best.currency}:${best.amount}`
+  ));
+  if (tied) return { price: null, currency: null, ambiguous: true };
   return { price: best.amount, currency: best.currency };
 }
 
@@ -451,6 +469,15 @@ function hasVideoFacts(facts = {}) {
   return Boolean(facts?.price || facts?.location?.name || facts?.type || facts?.beds || acresOf(facts));
 }
 
+// Facts from the stored video text, read with today's parser, so a parser fix
+// also corrects records read before it (stored parsed_facts can be stale).
+function videoFactsForRecord(record = null) {
+  if (!record) return {};
+  const text = String(record.ocr_text || record.text || '').trim();
+  if (text) return parseListingFacts(text);
+  return record.parsed_facts || record.facts || {};
+}
+
 function decideVideoCaptionApproval({
   record = null,
   property = {},
@@ -459,7 +486,7 @@ function decideVideoCaptionApproval({
 } = {}) {
   if (!record || record.status !== STATUS_DONE) return { blocked: false, conflicts: [] };
   if (record.override?.reason || record.resolution?.kind) return { blocked: false, conflicts: [] };
-  const videoFacts = record.parsed_facts || record.facts || {};
+  const videoFacts = videoFactsForRecord(record);
   if (!hasVideoFacts(videoFacts)) return { blocked: false, conflicts: [] };
   const captionFacts = parseListingFacts(captionTextFromProperty(property));
   const listingFacts = factsFromListing(property);
@@ -550,7 +577,7 @@ function publicOcrView(record = null) {
     // The staff panel shows `text` under "Read from the video". For a page link
     // there is no text, so say why instead of leaving it blank.
     text: record.ocr_text || record.text || (status === STATUS_NOT_CHECKABLE ? NOT_CHECKABLE_NOTE : ''),
-    facts: record.parsed_facts || record.facts || {},
+    facts: videoFactsForRecord(record),
     conflicts: Array.isArray(record.conflicts) ? record.conflicts : [],
     override: record.override || null,
     resolution: record.resolution || null,
@@ -1151,6 +1178,7 @@ module.exports = {
   dedupeConflicts,
   factsFromListing,
   decideVideoCaptionApproval,
+  videoFactsForRecord,
   sampleTimestamps,
   hammingDistance,
   dedupeFrameHashes,

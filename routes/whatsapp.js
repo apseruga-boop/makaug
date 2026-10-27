@@ -4949,7 +4949,11 @@ function parseEmployeeBedroomDraft(caption = '') {
   // "50" as a bedroom count and a live land listing showed 50 bedrooms. Without
   // any word for a building or a room there is no bedroom count to find.
   if (!/\b(?:house|home|apartments?|flats?|villa|bungalow|mansion|duplex|townhouse|rooms?|bedrooms?|beds?|condo|cottage|storey|storeyed)\b/i.test(clean)) return {};
-  return parseBedroomDraft(clean.replace(/\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\s*(?:ft|fts|feet|m)?\b/gi, ' ')) || {};
+  // "6 units of One Bedroom Apartments On 12 Decimals" became a 12-bedroom
+  // listing (26 Oct 2026): the plot size was read as rooms.
+  return parseBedroomDraft(clean
+    .replace(/\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\s*(?:ft|fts|feet|m)?\b/gi, ' ')
+    .replace(/\b\d+(?:\.\d+)?\s*(?:decimals?|acres?|hectares?|sqm|sq\s*m|square\s+met(?:er|re)s?)\b/gi, ' ')) || {};
 }
 
 // Same floor parseListingPriceDraft applies: below this a "price" is a room count, a plot
@@ -4970,7 +4974,9 @@ function normalizeCaptionPriceNotation(caption = '') {
     .replace(/(?:us\s*)?\$\s*(\d[\d,.]*)/gi, 'USD $1')
     .replace(/\busd\s*(\d[\d,.]*)/gi, 'USD $1')
     // 2000$ · 2000 USD · 2000 us dollars · 2,000 dollars
-    .replace(/(\d[\d,.]*)\s*(?:\$|us\s*\$|usd|u\.s\.d\.|(?:us\s+)?dollars?)(?![a-z])/gi, 'USD $1')
+    // "1M USD" (Charles, 26 Oct 2026) went live as UGX 1,000,000: the M sat
+    // between the number and the currency and the rewrite skipped it.
+    .replace(/(\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?)\s*(?:\$|us\s*\$|usd|u\.s\.d\.|(?:us\s+)?dollars?)(?![a-z])/gi, 'USD $1')
     // 300m UGX · 1,200,000/= · 500,000 shs · shs 500,000
     .replace(/(\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?)\s*(?:ugx|ush|shs?|shillings?|\/=)(?![a-z])/gi, 'UGX $1')
     .replace(/\b(?:ugx|ush|shs|shillings?)\s*(\d[\d,.]*)/gi, 'UGX $1');
@@ -5082,7 +5088,13 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
   const hints = extractSellerListingDraftHints(cleanCaption, {});
   let listingType = ownerForwardListingType(cleanCaption, { ...hints, ...naturalDraft });
-  const priceScanCaption = normalizeCaptionPriceNotation(cleanCaption);
+  // "they have monthly revenue of (2.5m ugx) ... At only #180m ugx" (26 Oct
+  // 2026): the parser took the first money figure, so a block of rentals worth
+  // 180M was priced at its monthly income. An amount that follows income /
+  // revenue / earning / making is what the property earns, not what it costs.
+  const priceScanCaption = normalizeCaptionPriceNotation(
+    cleanCaption.replace(/\b(?:monthly|total|net|gross|rental)?\s*(?:income|revenue|earnings?|earning|making|collects?|collecting|returns?)\s*(?:of|is|at|:)?\s*\(?\s*(?:ugx|ush|shs?)?\s*#?\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?\s*(?:ugx|ush|shs?|per month|monthly|\/month|a month)?\s*\)?/gi, ' ')
+  );
   // listingPriceSourceFragment happily returns the first number after a cue word, so
   // "Selling 5 bedroom house in Kololo @600m UGX" yields "5" — the bedroom count — and the
   // listing went live at UGX 5. parseListingPriceDraft already applies the sanity floor and
@@ -5146,6 +5158,23 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   ) {
     listingType = 'land';
   }
+  // "12 decimals Kyanja ring Road NOW SELLING UGX 200 million" — 26 Oct 2026.
+  // "SELLING" made it a sale before the plot-size rule above could run, so a
+  // bare plot went up as "Property for sale" with no type and no size. A
+  // priced plot measured in decimals, acres or feet, with no building and no
+  // bedrooms, is land however the agent says it is on offer.
+  if (
+    listingType === 'sale'
+    && Number(price) > 0
+    && !Number(bedroomDraft.bedrooms)
+    && !/\b(?:house|home|villa|bungalow|mansion|apartment|flat|townhouse|shop|office|warehouse|hostel|rentals?|units?|building|storey|storied|quarters?)\b/i.test(cleanCaption)
+    && (
+      /\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\b/i.test(cleanCaption)
+      || /\b\d+(?:\.\d+)?\s*(?:decimals?|acres?|hectares?)\b/i.test(cleanCaption)
+    )
+  ) {
+    listingType = 'land';
+  }
   // "NALYA 4 RENTAL UNITS APARTMENT BLOCK OF 3 BEDROOMS EACH MAKING 10MILLION
   // MONTHLY SELLING UGX 1.1BILLION" — 4 Oct 2026. The words "rental" and
   // "monthly" describe what the block earns; "SELLING" describes what is on
@@ -5175,6 +5204,15 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     // CBD" says where the property is NOT. It resolved to an area called "From".
     .replace(/\b\d+(?:[.,]\d+)?\s*(?:km|kms|kilomet(?:er|re)s?|miles?|mi|minutes?|mins?|hrs?|hours?)\b(?:\s*\([^)]*\))?\s*(?:away\s+)?(?:drive\s+)?from\s+(?:the\s+)?[A-Za-z][A-Za-z'-]*(?:\s+(?:town|cbd|city|centre|center|road|rd))?/gi, ' ');
   let locationResolution = resolveWhatsappLocation(locationCaption, { allowText: true });
+  // "#Mukono_Kisowera kayunga rd" (26 Oct 2026) resolved to Kayunga district:
+  // the road's name outranked the district written in front of it. When a
+  // place name is followed by road/rd/highway it is a road, so try the caption
+  // without those road phrases first and keep that answer if it resolves.
+  const roadStripped = locationCaption.replace(/\b[A-Za-z][A-Za-z'’-]+\s+(?:ring\s+)?(?:rd|road|highway|hwy)\b\.?/gi, ' ');
+  if (roadStripped !== locationCaption) {
+    const withoutRoads = resolveWhatsappLocation(roadStripped, { allowText: true });
+    if (withoutRoads?.status === 'matched') locationResolution = withoutRoads;
+  }
   if (!locationResolution || locationResolution.status !== 'matched') {
     const beforeLandmark = locationCaption.split(/\b(?:opposite|near)\b/i)[0].trim();
     if (beforeLandmark && beforeLandmark !== locationCaption) {
@@ -5694,6 +5732,66 @@ function statedAreaWithoutDistrict(caption = '', { allowLeadingToken = true } = 
  * photos of four different properties (a steel factory, a lodge, a block of
  * shops and some houses) to one Seeta listing on 23 Sep 2026.
  */
+/**
+ * When the sender's phone sent this message. The bridge downloads media one by
+ * one (about eleven seconds each), so a burst forwarded in eighteen seconds was
+ * processed over thirteen minutes on 26 Oct 2026 and every timing rule that used
+ * the server clock saw no burst at all. WAHA stamps each event with a ULID
+ * whose first ten characters are the receive time in milliseconds.
+ */
+const EMPLOYEE_ULID_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const EMPLOYEE_SENDER_BURST_WINDOW_MS = 30 * 1000;
+const EMPLOYEE_SENDER_BURST_MIN = 6;
+const EMPLOYEE_ALBUM_GAP_MS = 3000;
+function employeeSenderMs(metadata = {}) {
+  const raw = Number(metadata?.timestamp || metadata?.message_timestamp || metadata?.messageTimestamp || 0);
+  if (raw > 1e12 && raw < 4e12) return raw;
+  if (raw > 1e9 && raw < 4e9) return raw * 1000;
+  const ev = String(metadata?.waha_event_id || '').replace(/^evt_/i, '').toUpperCase();
+  if (ev.length < 10) return 0;
+  let t = 0;
+  for (const ch of ev.slice(0, 10)) {
+    const index = EMPLOYEE_ULID_ALPHABET.indexOf(ch);
+    if (index < 0) return 0;
+    t = t * 32 + index;
+  }
+  return t > 1.6e12 && t < 4e12 ? t : 0;
+}
+
+function noteEmployeeSenderTime(data = {}, senderMs = Date.now()) {
+  const list = (Array.isArray(data.recent_sender_ms) ? data.recent_sender_ms : [])
+    .map(Number)
+    .filter((t) => Number.isFinite(t) && Math.abs(senderMs - t) < EMPLOYEE_SENDER_BURST_WINDOW_MS);
+  list.push(senderMs);
+  data.recent_sender_ms = list.slice(-60);
+  data.current_sender_ms = senderMs;
+  return list.length;
+}
+
+/**
+ * 26 Oct 2026, Ronald for Charles: six descriptions forwarded as plain text,
+ * then seventy photos of nine properties with no captions, all in eighteen
+ * seconds. Each waiting description was handed the next photo, so Kyanja and
+ * Kira houses went up with lakefront land in Entebbe, and one Garuga listing
+ * collected forty-eight photos of seven different houses. In a forwarded burst
+ * a photo with no caption of its own belongs to a property only when it is part
+ * of the album of a photo that carried the caption; otherwise it is held and
+ * nothing is guessed.
+ */
+function employeeShouldHoldUnassignedMedia({ data = {}, ownCaption = false, senderMs = 0, burstSize = 0 } = {}) {
+  if (ownCaption) return false;
+  if (data.whatsapp_agent_self_intake === true) return false;
+  if (Number(burstSize) < EMPLOYEE_SENDER_BURST_MIN) return false;
+  const lastAlbum = Number(data.last_album_sender_ms || 0);
+  const lastText = Number(data.last_text_caption_sender_ms || 0);
+  const inAlbum = lastAlbum > 0 && lastAlbum >= lastText && senderMs - lastAlbum <= EMPLOYEE_ALBUM_GAP_MS;
+  return !inAlbum;
+}
+
+function employeeUnassignedMedia(data = {}) {
+  return Array.isArray(data.employee_unassigned_media) ? data.employee_unassigned_media : [];
+}
+
 function employeeMediaMessageCaption({ cleanBody = '', placeholderBody = false, pendingCaption = '' } = {}) {
   if (!placeholderBody && normalizeInput(cleanBody)) return normalizeInput(cleanBody);
   return normalizeInput(pendingCaption) || '';
@@ -5854,6 +5952,163 @@ function promoteEmployeeQueuedSubmission(data = {}) {
  * stops rather than reaching past it. An item that still needs a detail therefore
  * blocks only itself and the ones behind it, exactly as it does today.
  */
+/**
+ * A property in this batch that is already on makaug. Staff batches used to skip
+ * these in silence ("" reply in multiple mode), so on 26 Oct 2026 Arthur forwarded
+ * Kira Kitukutwe, saw nothing saved and no word about it, and could not tell
+ * whether it had been lost.
+ */
+function noteEmployeeBatchDuplicate(data = {}, caption = '', existing = {}) {
+  if (!existing || !existing.id) return;
+  const list = Array.isArray(data.employee_batch_duplicates) ? data.employee_batch_duplicates : [];
+  const id = String(existing.id);
+  if (list.some((entry) => entry && entry.id === id)) return;
+  list.push({
+    id,
+    ref: id.slice(0, 8).toUpperCase(),
+    status: String(existing.status || ''),
+    label: shortEmployeeLabel(caption || 'Property', 60)
+  });
+  data.employee_batch_duplicates = list.slice(-20);
+}
+
+function employeeBatchDuplicateLines(data = {}) {
+  const list = Array.isArray(data.employee_batch_duplicates) ? data.employee_batch_duplicates : [];
+  return list.map((entry) => `• "${entry.label}" — already ${entry.status === 'approved' ? 'live' : 'in staff review'} (ref ${entry.ref})`);
+}
+
+/**
+ * Captionless videos left over at COMPLETE. Agents forward adverts whose words
+ * are burned into the video itself ("One acre Mutundwe near Victoria primary
+ * school UGX 1.4 billion") with no WhatsApp caption, and the whole batch was
+ * refused for want of one. Read the on-screen text with the same OCR the staff
+ * review uses; if it names a type, a place and a price, save the property for
+ * staff review. Anything unreadable stays pending exactly as before.
+ */
+/**
+ * OCR returns one line per distinct frame, much of it noise from the scenery.
+ * Prefer the shortest single line (or pair of adjacent lines) that names a type,
+ * a place and a price; the price most lines agree on wins.
+ */
+function bestCaptionFromOnScreenText(rawText = '', data = {}) {
+  const lines = String(rawText || '').split(/\n+/).map((line) => line.replace(/\s+/g, ' ').trim()).filter((line) => line.length >= 8);
+  const candidates = [];
+  const consider = (text) => {
+    const clean = normalizeInput(text).slice(0, 300);
+    if (clean.length < 12) return;
+    const facts = employeePropertyFacts(clean, data);
+    if (employeePropertyMissing(facts).length) return;
+    candidates.push({ text: clean, facts });
+  };
+  lines.forEach((line, index) => {
+    consider(line);
+    if (index + 1 < lines.length) consider(`${line} ${lines[index + 1]}`);
+  });
+  if (!candidates.length) consider(lines.join(' '));
+  if (!candidates.length) return null;
+  const votes = new Map();
+  candidates.forEach((entry) => votes.set(Number(entry.facts.price), (votes.get(Number(entry.facts.price)) || 0) + 1));
+  candidates.sort((a, b) => (votes.get(Number(b.facts.price)) - votes.get(Number(a.facts.price))) || (a.text.length - b.text.length));
+  return candidates[0];
+}
+
+async function captionPendingVideosFromOnScreenText({ phone, currentStep, data, inboundMessageId } = {}) {
+  if (process.env.AGENT007_VIDEO_TEXT_CAPTIONS === 'off') return [];
+  if (normalizeInput(data.pending_property_caption || '')) return [];
+  const pending = employeePendingStoredMedia(data);
+  const videos = pending.filter((item) => item.kind === 'video' && /^https:\/\//i.test(item.url)).slice(0, 4);
+  if (!videos.length) return [];
+  let ocr = null;
+  try {
+    ocr = require('../services/videoCaptionOcrService');
+  } catch (error) {
+    logger.warn('Agent 007 on-screen text reader unavailable', { error: error.message });
+    return [];
+  }
+  if (typeof ocr.ocrPropertyVideos !== 'function') return [];
+  const deadline = Date.now() + Math.max(10000, Number(process.env.AGENT007_VIDEO_TEXT_DEADLINE_MS || 75000) || 75000);
+  const consumed = new Set();
+  const saved = [];
+  for (const video of videos) {
+    if (Date.now() > deadline) break;
+    let rawText = '';
+    try {
+      const read = await ocr.ocrPropertyVideos({ extra_fields: { video_urls: [video.url] } }, { deadline });
+      rawText = String(read?.text || '');
+    } catch (error) {
+      logger.warn('Agent 007 could not read on-screen text from a video', { error: error.message || String(error) });
+      continue;
+    }
+    const best = bestCaptionFromOnScreenText(rawText, data);
+    if (!best) continue;
+    const { text, facts } = best;
+    let duplicate = null;
+    try {
+      duplicate = await findEmployeeDuplicateProperty({ caption: text, facts, sessionData: data });
+    } catch (error) {
+      logger.warn('Agent 007 video-text duplicate check failed', { error: error.message });
+      continue;
+    }
+    if (duplicate) {
+      noteEmployeeBatchDuplicate(data, text, duplicate);
+      consumed.add(video.url);
+      continue;
+    }
+    let propertyId = '';
+    try {
+      propertyId = await createEmployeeReviewProperty({
+        phone,
+        inboundMessageId: `${normalizeInput(inboundMessageId) || 'complete'}:video-text:${saved.length + 1}`,
+        caption: text,
+        facts,
+        storedMedia: [video],
+        sessionData: data
+      });
+    } catch (error) {
+      logger.error('Agent 007 could not save a property read from video text', { error: error.message });
+      continue;
+    }
+    if (!propertyId) continue;
+    // OCR misreads digits ("1.4 billion" came back as "14 billion"), so the
+    // moderator is told plainly where these facts came from.
+    await db.query(
+      `UPDATE properties
+          SET moderation_notes = CONCAT_WS(E'\n', NULLIF(moderation_notes, ''), $2::text),
+              extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $3::jsonb
+        WHERE id = $1`,
+      [
+        propertyId,
+        'Caption read from the text written on the video (no WhatsApp caption). Check price, place and type against the video before approving.',
+        JSON.stringify({ caption_source: 'video_on_screen_text', video_on_screen_text: String(rawText).slice(0, 1200) })
+      ]
+    ).catch((error) => logger.warn('Agent 007 could not flag a video-text property', { error: error.message }));
+    consumed.add(video.url);
+    noteEmployeePropertyCreated(data, propertyId, [video], text);
+    data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
+    data.total_media_count = Number(data.total_media_count || 0) + 1;
+    data.properties_shared_count = Number(data.properties_shared_count || 0) + 1;
+    saved.push({ propertyId, label: `"${shortEmployeeLabel(text, 50)}" read as ${facts.listingType} in ${facts.locationPatch?.area || facts.locationPatch?.district || 'Uganda'} at UGX ${Number(facts.price || 0).toLocaleString('en-US')}` });
+  }
+  if (consumed.size) {
+    const left = (Array.isArray(data.pending_property_media) ? data.pending_property_media : [])
+      .filter((item) => !consumed.has(normalizeInput(item?.url)));
+    if (left.length) {
+      data.pending_property_media = left;
+    } else {
+      clearEmployeePendingMedia(data);
+      promoteEmployeeQueuedSubmission(data);
+    }
+    if (phone) {
+      try {
+        await replaceEmployeeSession(phone, currentStep, data);
+      } catch (error) {
+        logger.error('Agent 007 could not persist the session after reading video text', { error: error.message });
+      }
+    }
+  }
+  return saved;
+}
+
 async function flushReadyEmployeeSubmissions({ phone, currentStep, data, inboundMessageId } = {}) {
   const savedIds = [];
   // Bounded, in case a promotion ever fails to consume its own entry.
@@ -5874,6 +6129,7 @@ async function flushReadyEmployeeSubmissions({ phone, currentStep, data, inbound
       break;
     }
     if (duplicate) {
+      noteEmployeeBatchDuplicate(data, caption, duplicate);
       delete data.pending_property_caption;
       clearEmployeePendingMedia(data);
       if (!promoteEmployeeQueuedSubmission(data)) break;
@@ -6254,6 +6510,10 @@ async function prepareEmployeeOrderedBatchReplay({
     total_media_count: previousMedia,
     properties_shared_count: 0,
     properties_duplicate_count: 0,
+    employee_batch_duplicates: [],
+    employee_unassigned_media: [],
+    employee_unassigned_notice_sent: false,
+    recent_sender_ms: [],
     properties_failed_count: 0,
     employee_intake_recovery_previous_properties_shared: previousShared,
     employee_intake_recovery_previous_duplicates: previousDuplicates,
@@ -6528,6 +6788,18 @@ async function applyEmployeePriceDrop(existing, facts) {
   );
 }
 
+/** "12 decimals", "2.5 acres", "1 hectare" → { value, unit } for the listing row. */
+function employeeLandSize(caption = '') {
+  const clean = normalizeInput(withEnglishPropertyTerms(caption));
+  const m = clean.match(/\b(\d+(?:\.\d+)?)\s*(decimals?|acres?|hectares?)\b/i);
+  if (!m) return { value: null, unit: null };
+  const value = Number(m[1]);
+  if (!Number.isFinite(value) || value <= 0 || value > 10000) return { value: null, unit: null };
+  const word = m[2].toLowerCase();
+  const unit = word.startsWith('decimal') ? 'decimals' : word.startsWith('acre') ? 'acres' : 'hectares';
+  return { value, unit };
+}
+
 async function createEmployeeReviewProperty({
   phone,
   inboundMessageId,
@@ -6683,8 +6955,9 @@ async function createEmployeeReviewProperty({
         bedrooms, lister_name, lister_phone, lister_email, lister_type, agent_id,
         id_document_name, id_document_url, extra_fields,
         property_type, latitude, longitude,
-        status, moderation_stage, listed_via, source, inquiry_reference
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'pending','submitted','whatsapp','whatsapp_employee_intake',$25)
+        status, moderation_stage, listed_via, source, inquiry_reference,
+        land_size_value, land_size_unit
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'pending','submitted','whatsapp','whatsapp_employee_intake',$25,$26,$27)
       RETURNING id, inquiry_reference`,
       [
         facts.listingType,
@@ -6714,7 +6987,10 @@ async function createEmployeeReviewProperty({
         Number.isFinite(Number(sessionData.pending_property_pin?.lng)) ? Number(sessionData.pending_property_pin.lng) : null,
         // Every listing gets an MK reference when it is created. 424 Agent 007
         // listings had none, so staff and agents had nothing short to quote.
-        buildListingReference()
+        buildListingReference(),
+        // "12 decimals" in the caption is the plot size; it used to be dropped.
+        employeeLandSize(caption).value,
+        employeeLandSize(caption).unit
       ]
     );
     propertyId = inserted.rows[0].id;
@@ -7366,6 +7642,10 @@ function agentSelfIntakeSessionData(agent) {
     total_media_count: 0,
     properties_shared_count: 0,
     properties_duplicate_count: 0,
+    employee_batch_duplicates: [],
+    employee_unassigned_media: [],
+    employee_unassigned_notice_sent: false,
+    recent_sender_ms: [],
     properties_failed_count: 0,
     property_attempt_message_ids: []
   };
@@ -8608,6 +8888,10 @@ async function handleEmployeeWhatsappIntake({
       total_media_count: 0,
       properties_shared_count: 0,
       properties_duplicate_count: 0,
+    employee_batch_duplicates: [],
+    employee_unassigned_media: [],
+    employee_unassigned_notice_sent: false,
+    recent_sender_ms: [],
       properties_failed_count: 0,
       property_attempt_message_ids: []
     };
@@ -9431,6 +9715,7 @@ async function handleEmployeeWhatsappIntake({
         return { handled: true, nextStep: currentStep, message: agentVoiceNoteReply() };
       }
     }
+    const employeeBurstSize = noteEmployeeSenderTime(data, Number(runtime.senderMs || 0) || Date.now());
     if (isEmployeeIntakeComplete(cleanBody)) {
       // Save anything that is already finished before deciding the batch cannot
       // be closed. Without this, a property needing nothing still counted as an
@@ -9454,9 +9739,54 @@ async function handleEmployeeWhatsappIntake({
           actorId: 'employee_orphan_media'
         }).catch(() => {});
       }
+      // Videos whose words are on the screen, not in a caption.
+      if (!normalizeInput(data.pending_property_caption || '') && employeePendingStoredMedia(data).some((item) => item.kind === 'video')) {
+        queueWhatsappWebBridgeAutoReply({
+          phone,
+          message: '🔎 Some videos came without a caption. I am reading the text written on them — one moment.',
+          nextStep: currentStep,
+          source: 'whatsapp_runtime',
+          actorId: 'employee_video_text'
+        }).catch(() => {});
+        const fromVideoText = await captionPendingVideosFromOnScreenText({ phone, currentStep, data, inboundMessageId });
+        if (fromVideoText.length) {
+          flushedIds.push(...fromVideoText.map((entry) => entry.propertyId));
+          queueWhatsappWebBridgeAutoReply({
+            phone,
+            message: `🎬 Read from the text on the video and saved for staff review: ${fromVideoText.map((entry) => entry.label).join('; ')}. Text on a video is sometimes misread (a 1.4 billion can come out as 4 billion), so staff will check every figure against the video before anything goes live.`,
+            nextStep: currentStep,
+            source: 'whatsapp_runtime',
+            actorId: 'employee_video_text'
+          }).catch(() => {});
+          flushedIds.push(...await flushReadyEmployeeSubmissions({ phone, currentStep, data, inboundMessageId }));
+        }
+      }
       const pendingStoredMedia = employeePendingStoredMedia(data);
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
       const queuedSubmissions = employeePendingSubmissionQueue(data);
+      const duplicateLines = employeeBatchDuplicateLines(data);
+      const unassignedMedia = employeeUnassignedMedia(data);
+      if (unassignedMedia.length) {
+        const waitingCaptions = [
+          ...(pendingCaption && !pendingStoredMedia.length ? [pendingCaption] : []),
+          ...queuedSubmissions.filter((entry) => entry.caption && !entry.media.length).map((entry) => entry.caption)
+        ];
+        const savedNow = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
+        return {
+          handled: true,
+          nextStep: currentStep,
+          batchComplete: false,
+          message: [
+            `I have not closed this batch. ${unassignedMedia.length} photo${unassignedMedia.length === 1 ? '' : 's'}/video${unassignedMedia.length === 1 ? '' : 's'} came on their own, separately from the descriptions, so I cannot tell which property they belong to — and I have not guessed.`,
+            savedNow ? `${savedNow} ${savedNow === 1 ? 'property that arrived with its photos is' : 'properties that arrived with their photos are'} already in staff review.` : '',
+            waitingCaptions.length
+              ? `Descriptions still waiting for their photos:\n${waitingCaptions.slice(0, 15).map((text, index) => `${index + 1}. ${employeeCaptionLabel(text)}`).join('\n')}`
+              : '',
+            duplicateLines.length ? `Already on makaug, so not added again:\n${duplicateLines.join('\n')}` : '',
+            'To fix it: reply *CANCEL*, start a new *Agent 007* batch, and for each property select its photos in WhatsApp and type or paste its description as the caption, then send. One property at a time.'
+          ].filter(Boolean).join('\n\n')
+        };
+      }
       if (pendingStoredMedia.length || pendingCaption || queuedSubmissions.length) {
         const pendingFacts = employeePropertyFacts(pendingCaption, data);
         const pendingMissing = employeePropertyMissing(pendingFacts);
@@ -9487,7 +9817,7 @@ async function handleEmployeeWhatsappIntake({
           // refusal each time, with no exit named in it. The way out existed —
           // CANCEL — but nothing here ever said so, so there was no way to know
           // the batch could be closed at all.
-          message: `I have not completed this batch because ${blocker}.${missingLine}${savedLine}${queuedLine} Send the corrected caption or the missing media; nothing has been merged and nothing is live.\n\nIf you would rather stop here, reply *CANCEL* — anything already in staff review stays there.`
+          message: `I have not completed this batch because ${blocker}.${missingLine}${savedLine}${queuedLine} Send the corrected caption or the missing media; nothing has been merged and nothing is live.${duplicateLines.length ? `\n\nAlready on makaug, so not added again:\n${duplicateLines.join('\n')}` : ''}\n\nIf you would rather stop here, reply *CANCEL* — anything already in staff review stays there.`
         };
       }
       let propertyIds = Array.isArray(data.property_ids) ? data.property_ids : [];
@@ -9865,6 +10195,7 @@ async function handleEmployeeWhatsappIntake({
         data.current_property_id = null;
       }
       data.pending_property_caption = textCaption;
+      data.last_text_caption_sender_ms = Number(data.current_sender_ms || 0) || Date.now();
       await replaceEmployeeSession(phone, currentStep, data);
       const waitingForMedia = employeePendingSubmissionQueue(data).filter((entry) => !entry.media.length).length;
       return {
@@ -9899,6 +10230,32 @@ async function handleEmployeeWhatsappIntake({
       placeholderBody,
       pendingCaption: pendingCaptionBeforeMessage
     });
+    const ownMediaCaption = !placeholderBody && Boolean(normalizeInput(cleanBody));
+    const mediaSenderMs = Number(data.current_sender_ms || 0) || Date.now();
+    if (employeeShouldHoldUnassignedMedia({ data, ownCaption: ownMediaCaption, senderMs: mediaSenderMs, burstSize: employeeBurstSize })) {
+      let held = [];
+      try {
+        held = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider });
+      } catch (error) {
+        logger.error('Agent 007 could not store a held photo', { error: error.message });
+        return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
+      }
+      const pool = employeeUnassignedMedia(data);
+      held.forEach((item) => pool.push({ ...item, sender_ms: mediaSenderMs, inbound_message_id: normalizeInput(inboundMessageId) }));
+      data.employee_unassigned_media = pool.slice(-120);
+      const firstNotice = data.employee_unassigned_notice_sent !== true;
+      data.employee_unassigned_notice_sent = true;
+      await replaceEmployeeSession(phone, currentStep, data);
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: firstNotice
+          ? '⚠️ Photos are arriving on their own, separately from the property descriptions. I am holding them and *not* attaching them to any property, so nothing gets mixed up. When you type COMPLETE I will tell you exactly what to resend.'
+          : ''
+      };
+    }
+    if (ownMediaCaption) data.last_album_sender_ms = mediaSenderMs;
+    else if (Number(data.last_album_sender_ms || 0) >= Number(data.last_text_caption_sender_ms || 0)) data.last_album_sender_ms = mediaSenderMs;
     const facts = employeePropertyFacts(caption, data);
     const missing = employeePropertyMissing(facts);
     const shouldStartProperty = Boolean(caption) && !missing.length;
@@ -10059,6 +10416,7 @@ async function handleEmployeeWhatsappIntake({
           });
         }
         if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
+        noteEmployeeBatchDuplicate(data, caption, existingProperty);
         if (data.whatsapp_agent_self_intake === true && String(existingProperty.status) === 'pending' && candidates.length) {
           const fresh = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider }).catch(() => []);
           const toppedUp = await agentTopUpExistingProperty({ data, existingProperty, storedMedia: fresh, phone, inboundMessageId });
@@ -12623,11 +12981,24 @@ async function buildEmployeeBatchSummary(phone, since) {
     });
   }
 
-  if (!saved.length && !notSaved.length) return '';
+  const heldMedia = employeeUnassignedMedia(data);
+  if (heldMedia.length) {
+    notSaved.push({
+      label: `${heldMedia.length} photo${heldMedia.length === 1 ? '' : 's'}/video${heldMedia.length === 1 ? '' : 's'} sent without a description (held, not guessed)`,
+      needs: 'each property sent as its photos with the description as the caption'
+    });
+  }
+  const duplicateLines = employeeBatchDuplicateLines(data);
+  if (!saved.length && !notSaved.length && !duplicateLines.length) return '';
   const lines = [];
   const everythingReady = notSaved.length > 0
     && notSaved.every((item) => /^nothing more\b/i.test(item.needs));
-  lines.push(employeeBatchSummaryHeadline(saved.length, notSaved.length, everythingReady));
+  lines.push(!saved.length && !notSaved.length
+    ? '📋 *Nothing new in this batch* — every property sent is already on makaug.'
+    : employeeBatchSummaryHeadline(saved.length, notSaved.length, everythingReady));
+  if (duplicateLines.length) {
+    lines.push('', '↩️ *Already on makaug, not added again:*', ...duplicateLines);
+  }
   if (saved.length) {
     lines.push('', '✅ *Saved for staff review:*');
     saved.forEach((row, index) => lines.push(`${index + 1}. ${shortEmployeeLabel(row.title || 'Property', 50)}${row.inquiry_reference ? ` — ref *${row.inquiry_reference}*` : ''}`));
@@ -18228,7 +18599,8 @@ async function processInboundRuntimeUnlocked({
       mediaCount: inboundMediaCount,
       photoCandidates: inboundPhotoCandidates,
       mediaCandidates: inboundMediaCandidates,
-      sharedLocation
+      sharedLocation,
+      senderMs: employeeSenderMs(inboundMetadata)
     },
     inboundMessageId,
     session: sessionForMessage
@@ -19767,6 +20139,92 @@ router.delete('/reset/:phone', async (req, res) => {
 module.exports = router;
 module.exports.startEmployeeBatchSummarySweeper = startEmployeeBatchSummarySweeper;
 module.exports.startEmployeeMediaRetrySweeper = startEmployeeMediaRetrySweeper;
+/**
+ * Forwarded adverts in a customer chat, grouped into properties.
+ *
+ * 26 Oct 2026, 15:28–15:53: a broker who is not yet on makaug forwarded nine
+ * adverts to the public number — each as a caption text and an album of
+ * photos — and the consumer assistant answered each with a search, a land
+ * safety note or a photo count. Nothing was saved. This reads the stored
+ * messages back, pairs each caption with the photos that follow it (photos
+ * that arrive before the first caption belong to it), and returns the groups.
+ * Importing them is the admin's call (see routes/admin.js).
+ */
+// The logged message type is a kind ("image", "video"), not a MIME type. The
+// bridge URL carries the real MIME as a base64 `m` param; fall back to the kind.
+function forwardedAdvertMimeType(payload = {}, mediaUrl = '') {
+  const direct = normalizeInput(payload.mediaType || payload.media_type || (payload.metadata && payload.metadata.mime) || '').toLowerCase();
+  if (direct.includes('/')) return direct.split(';')[0].trim();
+  try {
+    const m = new URL(mediaUrl).searchParams.get('m');
+    if (m) {
+      const decoded = Buffer.from(m.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8').toLowerCase();
+      if (/^[a-z]+\/[a-z0-9.+-]+$/.test(decoded)) return decoded;
+    }
+  } catch (_) { /* not a URL */ }
+  if (direct === 'video') return 'video/mp4';
+  if (/\.(mp4|mov)(\?|$)/i.test(mediaUrl)) return 'video/mp4';
+  if (/\.png(\?|$)/i.test(mediaUrl)) return 'image/png';
+  return 'image/jpeg';
+}
+
+async function groupForwardedAdverts(phone, { since = null, until = null } = {}) {
+  const rows = (await db.query(
+    `SELECT id, wa_message_id, created_at, message_type, payload
+       FROM whatsapp_messages
+      WHERE user_phone = $1 AND direction = 'inbound'
+        AND ($2::timestamptz IS NULL OR created_at >= $2::timestamptz)
+        AND ($3::timestamptz IS NULL OR created_at <= $3::timestamptz)
+      ORDER BY created_at ASC
+      LIMIT 600`,
+    [phone, since, until]
+  )).rows;
+  const groups = [];
+  let orphans = [];
+  let current = null;
+  for (const row of rows) {
+    const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+    const body = normalizeInput(payload.body || payload.effectiveBody || '');
+    const mediaUrl = normalizeInput(payload.mediaUrl || payload.media_url || '');
+    const mediaType = forwardedAdvertMimeType(payload, mediaUrl);
+    const isMedia = /^https:\/\//i.test(mediaUrl);
+    if (body && !isMedia) {
+      const facts = employeePropertyFacts(body, {});
+      const isAdvert = Boolean(facts.listingType && Number(facts.price) > 0) || isReviewableOwnerForwardCaption(body);
+      if (!isAdvert) continue;
+      current = { caption: body, caption_message_id: row.wa_message_id, caption_at: row.created_at, facts, missing: employeePropertyMissing(facts), media: orphans.splice(0) };
+      groups.push(current);
+      continue;
+    }
+    if (isMedia) {
+      const item = { message_id: row.wa_message_id, at: row.created_at, url: mediaUrl, mimeType: mediaType || 'image/jpeg' };
+      if (body && current) current.caption = `${current.caption}\n${body}`;
+      if (current) current.media.push(item); else orphans.push(item);
+    }
+  }
+  return { groups, orphans };
+}
+
+/** Save one grouped advert for staff review under an approved agent. Nothing is sent. */
+async function importForwardedAdvert({ phone, agent, group, inboundMessageId }) {
+  const sessionData = agentSelfIntakeSessionData(agent);
+  const facts = employeePropertyFacts(group.caption, sessionData);
+  const missing = employeePropertyMissing(facts);
+  if (missing.length) return { skipped: 'missing', missing };
+  const duplicate = await findEmployeeDuplicateProperty({ caption: group.caption, facts, sessionData });
+  if (duplicate) return { skipped: 'duplicate', duplicate_id: duplicate.id };
+  const candidates = employeeMediaCandidates({ mediaCandidates: group.media.map((m) => ({ url: m.url, mime_type: m.mimeType })), mediaType: 'image/jpeg' }, '');
+  const storedMedia = candidates.length
+    ? await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: 'web_bridge' })
+    : [];
+  const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption: group.caption, facts, storedMedia, sessionData });
+  return { property_id: propertyId, media_stored: storedMedia.length, listing_type: facts.listingType, price: facts.price, area: facts.locationPatch?.area, district: facts.locationPatch?.district };
+}
+
+module.exports.groupForwardedAdverts = groupForwardedAdverts;
+module.exports.forwardedAdvertMimeType = forwardedAdvertMimeType;
+module.exports.importForwardedAdvert = importForwardedAdvert;
+
 module.exports.__test = {
   extractNaturalSearchFilters,
   applyProximityToFilters,
@@ -19881,6 +20339,15 @@ module.exports.__test = {
   employeePendingStoredMedia,
   employeeVideoEvidenceOnly,
   employeePropertyFacts,
+  noteEmployeeBatchDuplicate,
+  employeeSenderMs,
+  employeeShouldHoldUnassignedMedia,
+  normalizeCaptionPriceNotation,
+  parseEmployeeBedroomDraft,
+  bestCaptionFromOnScreenText,
+  employeeBatchDuplicateLines,
+  captionPendingVideosFromOnScreenText,
+  employeeLandSize,
   websitePrefillSearchText,
   extractNaturalSearchFilters,
   whatsappPropertyTypeFilterSql,

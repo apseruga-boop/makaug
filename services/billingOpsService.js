@@ -744,12 +744,44 @@ function buildTrialDigest(rows = []) {
 }
 
 /** Daily, to the team: who is about to end, and who has not paid. */
-async function runTrialDigest(db) {
+const TRIAL_DIGEST_DAY_KEY = 'trial_digest_last_sent_day';
+
+/**
+ * Claim today's digest in the database. The in-memory day guard in the
+ * scheduler resets on every deploy, and on a busy morning (26 Oct 2026: a
+ * dozen restarts after 09:00) the team got the same digest once per boot.
+ * One row in billing_settings makes the claim survive restarts and, with
+ * the conditional update, only one of two overlapping instances wins it.
+ */
+async function claimTrialDigestDay(db, day = revenue.kampalaDate()) {
+  // Sent today already by a process that predates this marker (or by a
+  // forced run)? The notifications log is the record of truth.
+  const logged = await db.query(
+    `SELECT 1 FROM notifications
+      WHERE type = 'agent_trial_follow_up' AND status = 'sent'
+        AND created_at >= ($1::date::timestamp - INTERVAL '3 hours')
+      LIMIT 1`,
+    [day]
+  ).catch(() => ({ rowCount: 0 }));
+  if (logged.rowCount) return false;
+  const r = await db.query(
+    `INSERT INTO billing_settings (key, value, updated_by, updated_at) VALUES ($1, $2::jsonb, 'scheduler', NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = NOW()
+       WHERE billing_settings.value IS DISTINCT FROM EXCLUDED.value
+     RETURNING key`,
+    [TRIAL_DIGEST_DAY_KEY, JSON.stringify(day)]
+  );
+  settingsCache = { at: 0, value: null };
+  return r.rowCount > 0;
+}
+
+async function runTrialDigest(db, { force = false } = {}) {
   const rows = await listAgentTrials(db);
   const body = buildTrialDigest(rows);
   if (!body) return { sent: false, reason: 'nothing_to_follow_up' };
   const desk = require('./leadDeskService');
   if (typeof desk.sendToTeam !== 'function') return { sent: false, reason: 'no_team_channel' };
+  if (!force && !(await claimTrialDigestDay(db))) return { sent: false, reason: 'already_sent_today' };
   await desk.sendToTeam(db, body, 'agent_trial_follow_up');
   return { sent: true, agents: rows.length };
 }
@@ -797,6 +829,8 @@ module.exports = {
   trialState,
   listAgentTrials,
   buildTrialDigest,
+  claimTrialDigestDay,
+  TRIAL_DIGEST_DAY_KEY,
   formatTrialLine,
   runTrialDigest,
   daysOverdue,

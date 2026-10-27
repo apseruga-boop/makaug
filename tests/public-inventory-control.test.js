@@ -220,8 +220,8 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /const pagination = hasOpportunitySummary[\s\S]*approximatePublicPagination/);
   assert.match(routeSource, /newest: 'p\.created_at DESC, p\.id DESC'/);
   assert(routeSource.includes('const priceSortRankSql'), 'public inventory route should rank unpriced/outlier rows last for price sorting');
-  assert.match(routeSource, /price_asc: `\$\{priceSortRankSql\} ASC, p\.price ASC NULLS LAST, p\.created_at DESC, p\.id DESC`/);
-  assert.match(routeSource, /price_desc: `\$\{priceSortRankSql\} ASC, p\.price DESC NULLS LAST, p\.created_at DESC, p\.id DESC`/);
+  assert.match(routeSource, /price_asc: `\$\{priceSortRankSql\} ASC, \$\{priceSortValueSql\} ASC NULLS LAST, p\.created_at DESC, p\.id DESC`/);
+  assert.match(routeSource, /price_desc: `\$\{priceSortRankSql\} ASC, \$\{priceSortValueSql\} DESC NULLS LAST, p\.created_at DESC, p\.id DESC`/);
   assert.match(routeSource, /\?\s*`\$\{distanceSql\} ASC NULLS LAST, p\.created_at DESC, p\.id DESC`/);
   assert.doesNotMatch(routeSource, /} else \{\s*const countResult = await db\.query/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
@@ -422,7 +422,7 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(appSource, /function listingBadgeRowHtml/);
   assert.match(appSource, /function shouldShowListingTypeBadge/);
   assert.match(appSource, /function landTitleBadgeForListingHtml/);
-  assert.match(appSource, /listingAgent: "Agent listed"/);
+  assert.match(appSource, /listingAgent: "Listed by an agent"/);
   assert.match(appSource, /listingPrivate: "Private listed"/);
   assert.match(functionSource('listingBadgeRowHtml'), /if \(!isFoundOnlineListing\(p\)\) badges\.push\(badgeHtml\(listingSourceMeta\(p\), sizeClass\)\);/);
   assert.doesNotMatch(functionSource('listingBadgeRowHtml'), /foundOnlineSourcePlatformBadgeMeta/);
@@ -717,8 +717,9 @@ test('King dashboard loads core review data before heavy tab-specific panels', (
   const snapshotSource = asyncFunctionSource('fetchRemoteAdminSnapshot');
   const tabSource = functionSource('setAdminWorkflowTab');
   const renderSource = asyncFunctionSource('renderAdminDashboard');
-  assert.match(needsSource, /reviewQueue: \["review", "student-sweep", "youtube-sweep"\]\.includes\(normalized\)/);
-  assert.match(needsSource, /ads: normalized === "ads"/);
+  assert.match(needsSource, /reviewQueue: \["review", "youtube-sweep"\]\.includes\(normalized\)/);
+  // Ad placements moved onto the Revenue tab (King slim-down, 26 Oct 2026).
+  assert.match(needsSource, /ads: normalized === "revenue"/);
   assert.match(needsSource, /whatsapp: normalized === "whatsapp"/);
   assert.match(snapshotSource, /const fieldAgentParams = new URLSearchParams\(\{ limit: "10000", role: "field_agent" \}\)/);
   assert.match(snapshotSource, /shouldLoadFieldAgents \? adminSafeSnapshotRequest\("field agents"/);

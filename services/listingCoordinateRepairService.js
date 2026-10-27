@@ -17,7 +17,9 @@ const {
   canonicalLocationForRow,
   canonicalLocationOptions,
   canonicalizeUgandaLocation,
+  canonicalLocationPinPoint,
   normalizeLocationKey,
+  resolveCanonicalUgandaLocation,
   resolveCanonicalUgandaLocationFromText
 } = require('../utils/ugandaLocationRegistry');
 const { isOnUgandaLand } = require('../utils/ugandaLand');
@@ -324,6 +326,177 @@ async function repairListingCoordinates(db, { apply = false, limit = 20000, stat
   return summary;
 }
 
+const NOT_AN_AREA = new Set(['district', 'region']);
+
+/**
+ * The centre of the listing's own area, for a listing that has no pin.
+ * The area is the stored canonical place when that is an area, town or city;
+ * otherwise the stored area name looked up inside the stored district
+ * ("Kulambiro, Kampala" with no canonical id). A district-only or blank area
+ * gives nothing: a district centre would claim a spot nobody chose.
+ * Area centres include the borrowed OpenStreetMap points (PR #593).
+ */
+function areaCentreForUnpinnedListing({ area = '', district = '', extra_fields = {} } = {}) {
+  const extra = extra_fields && typeof extra_fields === 'object' ? extra_fields : {};
+  const districtKey = normalizeLocationKey(district);
+  let entry = extra.canonical_location_id ? canonicalLocationByKey(extra.canonical_location_id) : null;
+  if (entry && (NOT_AN_AREA.has(entry.level) || (districtKey && normalizeLocationKey(entry.district) !== districtKey))) entry = null;
+  const areaText = String(area || '').trim();
+  if (!entry && areaText) {
+    const resolution = resolveCanonicalUgandaLocation(areaText, district);
+    const match = resolution?.status === 'matched' && resolution.match ? canonicalLocationByKey(resolution.match.key) || resolution.match : null;
+    if (match && !NOT_AN_AREA.has(match.level) && districtKey && normalizeLocationKey(match.district) === districtKey) entry = match;
+  }
+  if (!entry) return null;
+  const centre = canonicalLocationPinPoint(entry);
+  const point = centre ? { lat: Number(centre.lat), lng: Number(centre.lng) } : null;
+  if (!point || !inUganda(point)) return null;
+  return { entry, point };
+}
+
+const AUTO_PIN_NOTE = 'Auto-pinned at the area centre: the lister gave no pin. Approximate, not the exact address.';
+
+/** extra_fields keys an auto-pin writes, with the previous values for undo. */
+function autoPinExtraFields({ entry, point, extra_fields = {}, by = 'system', batch = null, at = new Date().toISOString() } = {}) {
+  const extra = extra_fields && typeof extra_fields === 'object' ? extra_fields : {};
+  return {
+    location_precision: 'area',
+    location_confidence: '0.4',
+    geocoding_provider: 'area_centre_auto_pin',
+    auto_pinned: true,
+    auto_pin_note: AUTO_PIN_NOTE,
+    coords_fix: {
+      action: 'auto_pin',
+      reason: 'missing_pin',
+      at,
+      by,
+      ...(batch ? { batch } : {}),
+      to: `${entry.name}, ${entry.district}`,
+      to_key: entry.key,
+      to_point: point ? { lat: point.lat, lng: point.lng } : null,
+      previous: {
+        latitude: null,
+        longitude: null,
+        location_precision: extra.location_precision ?? null,
+        location_confidence: extra.location_confidence ?? null,
+        geocoding_provider: extra.geocoding_provider ?? null,
+        coords_fix: extra.coords_fix ?? null
+      }
+    }
+  };
+}
+
+/**
+ * Pin for a listing being approved without one, or null. Never pins from a
+ * district-only or blank area.
+ */
+function autoPinForApproval({ area = '', district = '', latitude = null, longitude = null, extra_fields = {}, by = 'approval' } = {}) {
+  const hasPin = latitude != null && longitude != null && latitude !== '' && longitude !== ''
+    && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude));
+  if (hasPin) return null;
+  const found = areaCentreForUnpinnedListing({ area, district, extra_fields });
+  if (!found) return null;
+  return {
+    latitude: found.point.lat,
+    longitude: found.point.lng,
+    extra_fields_patch: autoPinExtraFields({ entry: found.entry, point: found.point, extra_fields, by })
+  };
+}
+
+/**
+ * One-off: give live listings that have no pin their area centre.
+ * apply=false is a dry run. Each change keeps the previous (empty) pin in
+ * extra_fields.coords_fix.previous and a batch id, so
+ * rollbackAutoPinnedListings can undo exactly that batch.
+ */
+async function pinUnpinnedListings(db, { apply = false, limit = 20000, statuses = ['approved'], actor = 'system', batch = null, logger = console } = {}) {
+  const runBatch = batch || `auto_pin_${new Date().toISOString().replace(/[-:]/g, '').slice(0, 13)}`;
+  const rows = [];
+  let afterId = null;
+  while (rows.length < limit) {
+    const page = (await db.query(
+      `SELECT id, source, area, district, status,
+              jsonb_build_object(
+                'canonical_location_id', extra_fields->>'canonical_location_id',
+                'location_precision', extra_fields->>'location_precision',
+                'location_confidence', extra_fields->>'location_confidence',
+                'geocoding_provider', extra_fields->>'geocoding_provider',
+                'coords_fix', extra_fields->'coords_fix'
+              ) AS extra_fields
+         FROM properties
+        WHERE status = ANY($1::text[])
+          AND (latitude IS NULL OR longitude IS NULL)
+          AND ($2::uuid IS NULL OR id > $2::uuid)
+        ORDER BY id
+        LIMIT 500`,
+      [statuses, afterId]
+    )).rows;
+    if (!page.length) break;
+    rows.push(...page);
+    afterId = page[page.length - 1].id;
+    if (page.length < 500) break;
+  }
+  const summary = { apply, batch: runBatch, checked: rows.length, pinnable: 0, applied: 0, skipped: { district_only_or_blank: 0 }, by_source: {}, samples: [] };
+  for (const row of rows.slice(0, limit)) {
+    const found = areaCentreForUnpinnedListing(row);
+    const source = row.source || 'unknown';
+    summary.by_source[source] = summary.by_source[source] || { unpinned: 0, pinnable: 0 };
+    summary.by_source[source].unpinned += 1;
+    if (!found) { summary.skipped.district_only_or_blank += 1; continue; }
+    summary.pinnable += 1;
+    summary.by_source[source].pinnable += 1;
+    const item = { id: row.id, source, area: row.area, district: row.district, to: `${found.entry.name}, ${found.entry.district}`, to_key: found.entry.key, latitude: found.point.lat, longitude: found.point.lng };
+    if (summary.samples.length < 2000) summary.samples.push(item);
+    if (!apply) continue;
+    const patch = autoPinExtraFields({ entry: found.entry, point: found.point, extra_fields: row.extra_fields, by: actor, batch: runBatch });
+    try {
+      const result = await db.query(
+        `UPDATE properties
+            SET latitude = $2, longitude = $3,
+                extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $4::jsonb,
+                updated_at = NOW()
+          WHERE id = $1 AND latitude IS NULL AND longitude IS NULL`,
+        [row.id, found.point.lat, found.point.lng, JSON.stringify(patch)]
+      );
+      summary.applied += result.rowCount || 0;
+    } catch (error) {
+      logger?.warn?.('Auto-pin failed:', row.id, error.message || String(error));
+    }
+  }
+  return summary;
+}
+
+/**
+ * Undo one auto-pin batch. Only rows still carrying that batch and still at
+ * the pin it wrote are reset to no pin; a pin staff moved since is kept.
+ */
+async function rollbackAutoPinnedListings(db, { batch, apply = false } = {}) {
+  if (!batch) throw new Error('batch is required');
+  const where = `COALESCE(extra_fields->'coords_fix'->>'action', '') = 'auto_pin'
+      AND extra_fields->'coords_fix'->>'batch' = $1
+      AND round(latitude::numeric, 6) = round((extra_fields->'coords_fix'->'to_point'->>'lat')::numeric, 6)
+      AND round(longitude::numeric, 6) = round((extra_fields->'coords_fix'->'to_point'->>'lng')::numeric, 6)`;
+  if (!apply) {
+    const count = (await db.query(`SELECT count(*)::int AS n FROM properties WHERE ${where}`, [batch])).rows[0]?.n || 0;
+    return { apply, batch, matching: count, reverted: 0 };
+  }
+  const result = await db.query(
+    `UPDATE properties
+        SET latitude = NULL, longitude = NULL,
+            extra_fields = (COALESCE(extra_fields, '{}'::jsonb)
+                - 'auto_pinned' - 'auto_pin_note' - 'location_precision' - 'location_confidence' - 'geocoding_provider' - 'coords_fix')
+              || jsonb_strip_nulls(jsonb_build_object(
+                'location_precision', extra_fields->'coords_fix'->'previous'->'location_precision',
+                'location_confidence', extra_fields->'coords_fix'->'previous'->'location_confidence',
+                'geocoding_provider', extra_fields->'coords_fix'->'previous'->'geocoding_provider',
+                'coords_fix', extra_fields->'coords_fix'->'previous'->'coords_fix')),
+            updated_at = NOW()
+      WHERE ${where}`,
+    [batch]
+  );
+  return { apply, batch, reverted: result.rowCount || 0 };
+}
+
 /**
  * For a listing being saved: if its pin is clearly not in its own area, put it
  * at the area centre (and say so in extra_fields) before it reaches search.
@@ -333,20 +506,18 @@ function correctedPinForNewListing({ title = '', area = '', district = '', latit
   const lngNum = longitude == null || longitude === '' ? null : Number(longitude);
   const hasPin = latNum != null && lngNum != null && Number.isFinite(latNum) && Number.isFinite(lngNum);
   if (!hasPin) {
-    const canonical = canonicalLocationForRow({ title, area, district, latitude: null, longitude: null, extra_fields });
-    const areaEntry = canonical && !['district', 'region'].includes(canonical.level) ? canonical : null;
-    const point = pointOf(areaEntry);
-    if (!point || !inUganda(point)) return null;
+    const found = areaCentreForUnpinnedListing({ area, district, extra_fields });
+    if (!found) return null;
     return {
-      latitude: point.lat,
-      longitude: point.lng,
+      latitude: found.point.lat,
+      longitude: found.point.lng,
       coords_fix: {
         action: 'repin',
         reason: 'missing_pin',
         at: new Date().toISOString(),
         by: 'submission_check',
         previous: { latitude: null, longitude: null },
-        to: `${areaEntry.name}, ${areaEntry.district}`
+        to: `${found.entry.name}, ${found.entry.district}`
       }
     };
   }
@@ -360,8 +531,13 @@ function correctedPinForNewListing({ title = '', area = '', district = '', latit
 }
 
 module.exports = {
+  AUTO_PIN_NOTE,
+  areaCentreForUnpinnedListing,
+  autoPinForApproval,
   classifyListingLocation,
   correctedPinForNewListing,
+  pinUnpinnedListings,
+  rollbackAutoPinnedListings,
   repairListingCoordinates,
   _km: km
 };

@@ -65,7 +65,8 @@ assert(migration.includes('requires_founder_approval'), 'Migration must add foun
 assert(ownerColumnMigration.includes('requester_phone'), 'Migration must add requester_phone for live AI CEO phone command logging');
 assert(ownerColumnMigration.includes('requester_chat_id'), 'Migration must add requester_chat_id for owner Telegram command logging');
 
-assert(html.includes('Founder-controlled AI CEO'), 'Admin dashboard must show the AI CEO panel');
+// King dashboard slim-down (26 Oct 2026): the King AI CEO panel is retired; the routes and WhatsApp owner commands stay.
+assert(!html.includes('Founder-controlled AI CEO'), 'King dashboard no longer shows the retired AI CEO panel');
 assert(app.includes('askAiCeoCommand'), 'Frontend must allow founder dashboard commands');
 assert(app.includes('runAiCeoMorningReport'), 'Frontend must allow morning report generation');
 assert(app.includes('/api/admin/ai-agents/ceo/command'), 'Frontend must call the CEO command API');

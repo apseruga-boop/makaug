@@ -1,4 +1,4 @@
-const { correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
+const { autoPinForApproval, correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
 const { publicListingPayload, hideImplausiblePrice } = require('../utils/publicListingPayload');
@@ -48,6 +48,7 @@ const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 const { createLead } = require('../services/leadService');
 const { ensurePostVerificationRecords } = require('../services/authFlowService');
 const { prepareMediaUrlForStorage } = require('../services/cloudMediaStorageService');
+const { effectivePriceUgxSql } = require('../services/fxRateService');
 const {
   buildIdentityVerificationExtra,
   listingRequiresIdentityVerification
@@ -128,9 +129,10 @@ const {
   normalizeCommercialTransactionType,
   normalizeCommercialPropertyType,
   commercialMisclassificationWarning,
-  humanPropertyTypeLabel
+  publicPropertyTypeLabel
 } = require('../utils/commercialClassification');
 const { listingPriceQuality, IMPOSSIBLE_PRICE_UGX } = require('../utils/listingPriceQuality');
+
 const { resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { listingReferenceQuery } = require('../utils/listingReferenceSearch');
 const { pricePlausibility } = require('../utils/pricePlausibility');
@@ -1356,6 +1358,7 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
     student_campus: studentContext.nearest_university || null,
     student_universities: studentContext.student_universities || [],
     distance_to_uni_km: studentContext.distance_to_uni_km,
+    location_precision: safeExtra.location_precision,
     resolved_location_label: safeExtra.resolved_location_label || row.resolved_location_label || null
   };
   return {
@@ -1379,7 +1382,7 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
     transaction_type: row.transaction_type || null,
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
-    property_type: humanPropertyTypeLabel(row.property_type) || row.property_type,
+    property_type: publicPropertyTypeLabel(row.property_type),
     room_type: row.room_type || null,
     title_type: row.title_type || null,
     status: row.status,
@@ -1636,6 +1639,7 @@ function publicSourceDateOutOfOrder(firstPostedRaw, firstSeenRaw, addedToMakaugR
 
 function publicExtraFields(extraFields = {}, { createdAt = null, omitTwimg = true } = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
+  const locationPrecision = String(extra.location_precision || '').trim().toLowerCase();
   const rawSourcePost = extra.raw_source_post && typeof extra.raw_source_post === 'object' ? extra.raw_source_post : {};
   const landTitleAvailable = normalizeLandTitleAvailability(
     extra.land_title_available
@@ -1870,6 +1874,7 @@ function publicExtraFields(extraFields = {}, { createdAt = null, omitTwimg = tru
     source_listing_key: extra.source_listing_key || null,
     canonical_location_id: extra.canonical_location_id || null,
     canonical_location_level: extra.canonical_location_level || null,
+    location_precision: ['gps', 'area', 'district', 'region', 'country'].includes(locationPrecision) ? locationPrecision : null,
     location_resolution_status: extra.location_resolution_status || null,
     location_resolution_confidence: toNullableFloat(extra.location_resolution_confidence),
     source_platform: sourcePlatform || null,
@@ -1986,7 +1991,7 @@ function publicPropertyRow(property, images = [], { privileged = false } = {}) {
     found_online_notice: foundOnlinePublic ? foundOnlinePublicNotice(property, safeExtra) : null,
     amenities: filterPublicAmenities(safeProperty.amenities),
     // Public label, not the stored enum ("shop_retail" → "Shop / retail space").
-    property_type: humanPropertyTypeLabel(safeProperty.property_type) || safeProperty.property_type,
+    property_type: publicPropertyTypeLabel(safeProperty.property_type),
     public_copy_reviewed: publicCopyReviewed(property, safeExtra),
     area: canonicalDisplay.area,
     district: canonicalDisplay.district,
@@ -2554,6 +2559,48 @@ router.get('/locations/resolve', async (req, res, next) => {
   }
 });
 
+// The list-property map sends the geocoder's address parts and the pin when
+// the typed text and the most specific part are not catalogue places
+// ("Kira Junior School" -> Jjanda, Kira, Wakiso). Free: no geocoder is called here.
+router.get('/locations/resolve-address', (req, res) => {
+  setPublicPropertiesCacheHeaders(res, true);
+  const registry = require('../utils/locationRegistry');
+  const split = (value) => String(value || '').split('|').map((part) => cleanText(part).slice(0, 80)).filter(Boolean).slice(0, 8);
+  const resolution = typeof registry.resolveCanonicalUgandaLocationFromAddress === 'function'
+    ? registry.resolveCanonicalUgandaLocationFromAddress({
+      specific: split(req.query.specific),
+      broad: split(req.query.broad),
+      lat: req.query.lat,
+      lng: req.query.lng
+    })
+    : { status: 'unmatched', match: null };
+  const data = resolution.status === 'matched' && resolution.match
+    ? {
+      ...publicCanonicalLocationPayload({
+        ...resolution.match,
+        // The cascade, the guard and submit accept one exact catalogue place;
+        // resolved_by tells the page how it was chosen.
+        match: 'exact_alias',
+        confidence: 1,
+        auto_resolvable: true
+      }),
+      resolved_by: resolution.resolved_by,
+      matched_part: resolution.matched_part,
+      distance_km: resolution.distance_km
+    }
+    : null;
+  return res.json({
+    ok: true,
+    data,
+    meta: {
+      canonical: true,
+      status: data ? 'matched' : 'unmatched',
+      resolved_by: data ? resolution.resolved_by : null,
+      district_hint: resolution.district_hint || null
+    }
+  });
+});
+
 router.get('/locations/suggest', async (req, res, next) => {
   try {
     setPublicPropertiesCacheHeaders(res, true);
@@ -2905,8 +2952,11 @@ async function listPropertiesHandler(req, res, next) {
       addFilter(filters, values, `${listingOriginSql('p')} = ?`, listingOrigin);
     }
 
-    if (minPrice != null) addFilter(filters, values, 'p.price >= ?', minPrice);
-    if (maxPrice != null) addFilter(filters, values, 'p.price <= ?', maxPrice);
+    // A dollar-priced listing is filtered at today's rate (services/fxRateService),
+    // not the rate stored when it was imported. Stored prices are unchanged.
+    const effectivePriceSql = effectivePriceUgxSql('p');
+    if (minPrice != null) addFilter(filters, values, `${effectivePriceSql} >= ?`, minPrice);
+    if (maxPrice != null) addFilter(filters, values, `${effectivePriceSql} <= ?`, maxPrice);
     if (minBeds != null) addFilter(filters, values, 'p.bedrooms >= ?', minBeds);
     if (maxBeds != null) addFilter(filters, values, 'p.bedrooms <= ?', maxBeds);
     if (bathrooms != null) addFilter(filters, values, 'p.bathrooms >= ?', bathrooms);
@@ -3138,12 +3188,13 @@ async function listPropertiesHandler(req, res, next) {
 
     const publicPriceSortMaxUgx = 100000000000;
     const priceSortRankSql = `(CASE WHEN p.price IS NOT NULL AND p.price > 0 AND p.price <= ${publicPriceSortMaxUgx} THEN 0 ELSE 1 END)`;
+    const priceSortValueSql = effectivePriceUgxSql('p');
     const sortMap = {
       featured: "p.extra_fields->>'featured_at' DESC NULLS LAST, p.updated_at DESC, p.created_at DESC, p.id DESC",
       newest: 'p.created_at DESC, p.id DESC',
       oldest: 'p.created_at ASC, p.id ASC',
-      price_asc: `${priceSortRankSql} ASC, p.price ASC NULLS LAST, p.created_at DESC, p.id DESC`,
-      price_desc: `${priceSortRankSql} ASC, p.price DESC NULLS LAST, p.created_at DESC, p.id DESC`,
+      price_asc: `${priceSortRankSql} ASC, ${priceSortValueSql} ASC NULLS LAST, p.created_at DESC, p.id DESC`,
+      price_desc: `${priceSortRankSql} ASC, ${priceSortValueSql} DESC NULLS LAST, p.created_at DESC, p.id DESC`,
       // The money pages' server-rendered order (utils/agentFirstRank), so hydration keeps it.
       agent_first: agentFirstOrderSql('p'),
       agent_first_homes: agentFirstOrderSql('p', { homesBeforeLand: true })
@@ -3513,7 +3564,7 @@ async function listPropertiesHandler(req, res, next) {
         };
         if (!adminAccess) {
           responseRow.amenities = filterPublicAmenities(publicRow.amenities);
-          responseRow.property_type = humanPropertyTypeLabel(publicRow.property_type) || publicRow.property_type;
+          responseRow.property_type = publicPropertyTypeLabel(publicRow.property_type);
         }
         if (adminAccess) {
           responseRow.source = rowSource || null;
@@ -5780,6 +5831,34 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       };
     }
     decisionTiming.mark('status_committed');
+
+    // Approved with no map pin: put it at the centre of its own area (never a
+    // district-only or blank area), marked approximate. A pin set since is kept.
+    if (nextStatus === 'approved' && listing?.id && !IS_SOUTH_AFRICA) {
+      try {
+        const autoPin = autoPinForApproval({
+          area: listing.area,
+          district: listing.district,
+          extra_fields: listing.extra_fields || {},
+          by: actorId || 'approval'
+        });
+        if (autoPin) {
+          const pinned = await db.query(
+            `UPDATE properties
+                SET latitude = $2, longitude = $3,
+                    extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $4::jsonb
+              WHERE id = $1 AND latitude IS NULL AND longitude IS NULL
+              RETURNING extra_fields`,
+            [listing.id, autoPin.latitude, autoPin.longitude, JSON.stringify(autoPin.extra_fields_patch)]
+          );
+          if (pinned.rowCount) {
+            listing = { ...listing, latitude: autoPin.latitude, longitude: autoPin.longitude, extra_fields: pinned.rows[0].extra_fields };
+          }
+        }
+      } catch (error) {
+        logger.warn('Auto-pin on approval failed', { property_id: listing.id, message: error.message });
+      }
+    }
     if (nextStatus === 'approved') {
       listing.primary_image_url = await getPrimaryImageUrlForProperty(listing.id);
       if (videoCaptionDecision?.persist) {
@@ -6146,6 +6225,7 @@ module.exports._test = {
   parseCanonicalLocationKeys,
   publicLocationMatchForRow,
   publicPropertyRow,
+  publicPropertyTypeLabel,
   publicPropertiesCacheKey,
   sendPublicPropertySearchUnavailable,
   isTwimgHostedUrl,

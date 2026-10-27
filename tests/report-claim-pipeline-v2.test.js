@@ -16,7 +16,8 @@ const migration = read('db/migrations/078_report_claim_pipeline_v2.sql');
 
 assert(html.includes('report-claim-pipeline-v2-20260718'), 'production shell must expose the report/claim pipeline marker');
 assert(html.includes('report-structured-fields'), 'public report modal must render structured evidence fields');
-assert(html.includes('admin-reports-queue'), 'King dashboard must include a Reports & Claims queue');
+// King dashboard slim-down (26 Oct 2026): King links to the staff Reports & Claims desk instead of a copy of it.
+assert(html.includes("kingOpenStaffDesk(event, 'reports')"), 'King dashboard must link to the staff Reports & Claims queue');
 assert(html.includes('staff-reports-queue'), 'staff dashboard must include a Reports & Claims queue');
 
 assert(migration.includes('request_type TEXT'), 'report_listings must store request type');
