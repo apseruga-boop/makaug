@@ -636,17 +636,20 @@ function getListingMapPoint(property = {}) {
   const rawLat = Number(property?.lat ?? property?.latitude);
   const rawLng = Number(property?.lng ?? property?.longitude);
   if (!Number.isFinite(rawLat) || !Number.isFinite(rawLng)) return fallback;
+  const storedPrecision = String(property?.location_precision || property?.extra_fields?.location_precision || "").trim().toLowerCase();
+  const precision = ["area", "district", "region", "country"].includes(storedPrecision) ? storedPrecision : "gps";
+  const savedPoint = { lat: rawLat, lng: rawLng, exact: precision === "gps", precision };
   if (ACTIVE_LOCATION_COUNTRY.countryCode !== "UG") {
     return isLikelyUgandaCoordinate(rawLat, rawLng)
-      ? { lat: rawLat, lng: rawLng, exact: true, precision: "gps" }
+      ? savedPoint
       : fallback;
   }
-  if (isOnUgandaLand(rawLat, rawLng)) return { lat: rawLat, lng: rawLng, exact: true, precision: "gps" };
+  if (isOnUgandaLand(rawLat, rawLng)) return savedPoint;
   if (isOnUgandaLand(-rawLat, rawLng)) {
     const flipped = { lat: -rawLat, lng: rawLng };
     const anchor = fallback.precision === "country" ? null : fallback;
     const nearAnchor = !anchor || haversineKm(flipped.lat, flipped.lng, anchor.lat, anchor.lng) <= 45;
-    if (nearAnchor) return { ...flipped, exact: true, precision: "gps", adjusted: "flipped_latitude" };
+    if (nearAnchor) return { ...savedPoint, ...flipped, adjusted: "flipped_latitude" };
   }
   return fallback;
 }
@@ -65797,6 +65800,7 @@ async function openDetail(id, options = {}) {
         </div>
         <div class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
           <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Location")}</h2>
+          ${detailMapPoint.exact ? "" : `<p class="mb-3 text-sm font-semibold text-green-800" data-map-precision="approximate">${translatePropertyUi("Approximate area")}</p>`}
           <div id="map-detail" class="map-h-sm rounded-xl overflow-hidden border border-gray-200"></div>
           ${directionsUrl ? `<a href="${adminAttr(directionsUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordPropertyDirectionsClick(${detailIdArg})" class="mt-3 inline-flex items-center gap-2 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-xl text-sm font-semibold">
             <i class="fas fa-route"></i> ${translatePropertyUi("Open Google Directions")}
@@ -66727,10 +66731,11 @@ async function initAgentProfileMap(listings) {
   groups.forEach((items) => {
     const item = items[0];
     const count = items.length;
+    const exact = items.every((entry) => entry.exact);
     const marker = L.marker([item.lat, item.lng], {
       icon: L.divIcon({
         className: "agent-profile-pin",
-        html: `<span class="${item.exact ? "is-exact" : "is-approx"}">${count > 1 ? `<b>${count}</b>` : ""}</span>`,
+        html: `<span class="${exact ? "is-exact" : "is-approx"}">${count > 1 ? `<b>${count}</b>` : ""}</span>`,
         iconSize: [18, 18],
         iconAnchor: [9, 9]
       })
@@ -66740,7 +66745,7 @@ async function initAgentProfileMap(listings) {
       return `<button type="button" class="agent-profile-popup" onclick="openDetail(${adminListingIdArg(entry.listing?.id)})">${adminEscape(title)}</button>`;
     }).join("");
     const more = count > 8 ? `<div>and ${count - 8} more</div>` : "";
-    const note = item.exact ? "" : `<div>Approximate area</div>`;
+    const note = exact ? "" : `<div>Approximate area</div>`;
     marker.bindPopup(`${links}${more}${note}`);
     bounds.push([item.lat, item.lng]);
   });
@@ -67701,6 +67706,7 @@ function renderStaticDetailMapFallback(el, p = {}, point = {}) {
       <div>
         <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full border border-emerald-100 bg-white text-emerald-700 shadow-sm"><i class="fas fa-map-location-dot text-xl"></i></div>
         <div class="text-xs font-black uppercase tracking-wide text-emerald-800">${translatePropertyUi("Location")}</div>
+        ${point?.exact ? "" : `<div class="mt-1 text-xs font-semibold text-emerald-800" data-map-precision="approximate">${translatePropertyUi("Approximate area")}</div>`}
         <div class="mt-1 text-sm font-bold text-slate-700">${adminEscape(location)}</div>
         <div class="mt-1 text-xs text-slate-500">${adminEscape(title)}</div>
       </div>
