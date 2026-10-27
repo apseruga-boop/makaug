@@ -32051,6 +32051,22 @@ async function adminReviewChooseAddressSuggestion(index = 0) {
 }
 
 async function adminReviewFindAddressOrPlace(options = {}) {
+  const found = await adminReviewFindAddressOrPlaceSearch(options);
+  // An approximate pin (district/town centre) moves to the listing's
+  // neighbourhood/town; it is not saved until Use current pin.
+  if (options?.auto !== true && adminReviewPinIsApproximate(reviewMarkerPoint(adminReviewLocationMarker))) {
+    // The typed place when the catalogue knows it, else the listing's own area.
+    const typed = adminReviewLastFindPoint;
+    const place = typed ? adminReviewMovePinToPoint(typed) : await adminReviewMovePinToListingPlace();
+    if (place) adminReviewLocationStatus(`Pin moved to ${place.label || "the listing's area"} — not saved. Press Use current pin to save it.`, "amber");
+  }
+  return found;
+}
+
+let adminReviewLastFindPoint = null;
+
+async function adminReviewFindAddressOrPlaceSearch(options = {}) {
+  adminReviewLastFindPoint = null;
   const input = document.getElementById("admin-review-address-search-edit");
   const query = (input?.value || "").trim();
   if (query.length < 3) {
@@ -32083,6 +32099,10 @@ async function adminReviewFindAddressOrPlace(options = {}) {
   const nominatimHits = await adminReviewNominatimHits(query);
   if (!externalPoint) externalPoint = nominatimHits[0] || await geocodeWithNominatim(query);
   const findChoice = adminReviewChooseFindPoint(registryLocation, externalPoint, ADMIN_REVIEW_FIND_MAX_EXTERNAL_KM, getDistrictCenter(registryLocation?.district || ""));
+  if (findChoice.point && (findChoice.source === "registry" || findChoice.source === "external" || findChoice.source === "external_district_checked")
+    && isLikelyUgandaCoordinate(Number(findChoice.point.lat), Number(findChoice.point.lng))) {
+    adminReviewLastFindPoint = { lat: Number(findChoice.point.lat), lng: Number(findChoice.point.lng), label: registryLocation?.name || findChoice.point.label || query };
+  }
   const suggestions = adminReviewAddressSuggestionList({
     registryLocation,
     googleHits: googleHits.length ? googleHits : (externalPoint && externalPoint.provider === "google" ? [externalPoint] : []),
@@ -33146,6 +33166,109 @@ function adminReviewSyncLocationMapFromInputs() {
   }
 }
 
+// "Use current pin" / "Find" on an approximate pin (27 Oct 2026): a Kira or
+// Namugongo listing with no saved lat/lng opened with the marker on the Wakiso
+// district centre (or another district/town-centre fallback), and "Use current
+// pin" saved that centre. When the pin is only such a fallback, both buttons
+// now look up the listing's neighbourhood/town in the makaug catalogue
+// (/api/properties/locations/resolve, then resolve-address), then a
+// district-checked OpenStreetMap search, and move the pin there.
+const ADMIN_REVIEW_APPROXIMATE_PIN_KM = 1.5;
+
+function adminReviewFallbackCentres(draft = {}) {
+  const district = String(draft.district || "").trim();
+  const points = [
+    getDistrictCenter(district),
+    fixedPlaceCentroid("Wakiso", "Wakiso"),
+    getCityPoint(district, draft.city),
+    getHierarchyPointForArea(district, draft.city),
+    getRegionCenter(draft.region || regionForDistrict(district)),
+    MAP_DEFAULT_CENTER
+  ];
+  return points.filter((point) => point && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lng)));
+}
+
+// True when the lat/lng fields are empty and the marker is missing or sits on
+// a district/town-centre fallback rather than on a place.
+function adminReviewPinIsApproximate(markerPoint = null) {
+  const draft = adminReviewLocationDraft();
+  if (adminReviewHasUsableCoordinates(draft.latitude, draft.longitude)) return false;
+  if (!markerPoint || !Number.isFinite(markerPoint.lat) || !Number.isFinite(markerPoint.lng)) return true;
+  return adminReviewFallbackCentres(draft).some((centre) =>
+    haversineKm(markerPoint.lat, markerPoint.lng, Number(centre.lat), Number(centre.lng)) <= ADMIN_REVIEW_APPROXIMATE_PIN_KM);
+}
+
+function adminReviewListingPlaceNames(draft = {}) {
+  const district = String(draft.district || "").trim();
+  return uniqueTextParts([draft.neighborhood, draft.area, draft.city])
+    .filter((name) => name && !adminReviewPlaceEqualsDistrict(name, district));
+}
+
+function adminReviewPlacePointFromLocation(location = null, fallbackName = "") {
+  if (!location || location.latitude == null || location.longitude == null) return null;
+  const level = String(location.level || "").toLowerCase();
+  if (level === "district" || level === "region") return null;
+  const lat = Number(location.latitude);
+  const lng = Number(location.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isLikelyUgandaCoordinate(lat, lng)) return null;
+  return { lat, lng, label: location.name || fallbackName, provider: "makaug_registry" };
+}
+
+async function adminReviewNominatimPlacePoint(name = "", district = "") {
+  const centre = getDistrictCenter(district);
+  if (!centre) return null;
+  const q = uniqueTextParts([name, district, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(q)}`;
+    const response = await fetch(url, OSM_FETCH_OPTIONS);
+    if (!response.ok) return null;
+    const rows = await response.json();
+    const lat = Number(rows?.[0]?.lat);
+    const lng = Number(rows?.[0]?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isLikelyUgandaCoordinate(lat, lng)) return null;
+    // Same district check as Find: a result far from the district is not used.
+    if (haversineKm(lat, lng, Number(centre.lat), Number(centre.lng)) > 60) return null;
+    return { lat, lng, label: name, provider: "nominatim" };
+  } catch (error) {
+    return null;
+  }
+}
+
+// The listing's neighbourhood/town as a map point, or null.
+async function adminReviewLookupListingPlacePoint() {
+  const draft = adminReviewLocationDraft();
+  const district = String(draft.district || "").trim();
+  const names = adminReviewListingPlaceNames(draft);
+  // Most specific name first (neighbourhood, then area, then town): a
+  // neighbourhood found on OSM beats the town's registry point.
+  for (const name of names) {
+    const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([name, district]).join(", "));
+    const registryPoint = adminReviewPlacePointFromLocation(resolution.status === "matched" ? resolution.location : null, name);
+    if (registryPoint) return registryPoint;
+    const fromAddress = await resolveUgandaLocationFromAddressParts({ addressParts: { specific: [name], broad: district ? [district] : [] } });
+    const addressPoint = adminReviewPlacePointFromLocation(fromAddress, name);
+    if (addressPoint) return addressPoint;
+    const osmPoint = await adminReviewNominatimPlacePoint(name, district);
+    if (osmPoint) return osmPoint;
+  }
+  return null;
+}
+
+// Find/Use current pin on an approximate pin: move it to the listing's place.
+// Returns the point, or null when nothing was found (the pin stays put).
+async function adminReviewMovePinToListingPlace() {
+  return adminReviewMovePinToPoint(await adminReviewLookupListingPlacePoint());
+}
+
+function adminReviewMovePinToPoint(point = null) {
+  if (!point) return null;
+  // The fields may have been filled while a lookup ran: keep that pin.
+  const latest = adminReviewLocationDraft();
+  if (adminReviewHasUsableCoordinates(latest.latitude, latest.longitude)) return null;
+  adminReviewMoveLocationPin(point.lat, point.lng, { zoom: MAP_CITY_ZOOM });
+  return point;
+}
+
 // The map marker's position as { lat, lng }, for a Leaflet or a Google marker
 // (read from the marker itself, not from the provider flag), else null.
 function reviewMarkerPoint(marker) {
@@ -33178,6 +33301,26 @@ function isRealReviewPin(point) {
 // Falls back to the geocoded/area pin; never writes 0,0.
 function adminReviewUseMapPin() {
   const fromMarker = reviewMarkerPoint(adminReviewLocationMarker);
+  if (adminReviewPinIsApproximate(isRealReviewPin(fromMarker) ? fromMarker : null)) {
+    return adminReviewUseListingPlacePin(fromMarker);
+  }
+  return adminReviewCopyMapPin(fromMarker);
+}
+
+// The pin is only a district/town-centre fallback: look the place up first,
+// and save the centre (as before) only when the lookup finds nothing.
+async function adminReviewUseListingPlacePin(fromMarker) {
+  adminReviewLocationStatus("Looking up the listing's area for the pin...", "blue");
+  const place = await adminReviewMovePinToListingPlace();
+  if (place) {
+    adminReviewSetLocationInputs(place.lat, place.lng, `Pin moved to ${place.label || "the listing's area"} and saved to fields: drag it to the exact spot if you can`);
+    toast(`Map pin moved to ${place.label || "the listing's area"}. Drag it to the exact spot if you can.`);
+    return place;
+  }
+  return adminReviewCopyMapPin(reviewMarkerPoint(adminReviewLocationMarker) || fromMarker);
+}
+
+function adminReviewCopyMapPin(fromMarker) {
   const fallback = adminReviewLocationPoint(adminActiveReview);
   const point = isRealReviewPin(fromMarker)
     ? fromMarker
