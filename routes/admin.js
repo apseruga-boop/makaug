@@ -9790,9 +9790,32 @@ router.post('/agents/from-listings', async (req, res, next) => {
  */
 // Listing pins that don't match the listing's own area: check (apply=false)
 // or fix (apply=true). Returns counts and the listings involved.
+// mode 'pin_unpinned': live listings with no pin get their area centre
+// (dry run unless apply=true; never from a district-only or blank area).
+// mode 'rollback_auto_pins' with batch: undo one such run.
 router.post('/maintenance/listing-coordinates', async (req, res, next) => {
   try {
     const apply = req.body?.apply === true;
+    const mode = String(req.body?.mode || '').trim();
+    if (mode === 'pin_unpinned' || mode === 'rollback_auto_pins') {
+      const service = require('../services/listingCoordinateRepairService');
+      const batch = String(req.body?.batch || '').trim().slice(0, 80) || null;
+      if (mode === 'rollback_auto_pins' && !batch) {
+        return res.status(400).json({ ok: false, error: 'batch is required to roll back auto-pins' });
+      }
+      const result = mode === 'pin_unpinned'
+        ? await service.pinUnpinnedListings(db, { apply, actor: adminActorId(req), batch })
+        : await service.rollbackAutoPinnedListings(db, { apply, batch });
+      await writeAudit(mode === 'pin_unpinned' ? 'admin_listing_auto_pin' : 'admin_listing_auto_pin_rollback', {
+        apply,
+        batch: result.batch,
+        checked: result.checked ?? null,
+        pinnable: result.pinnable ?? null,
+        applied: result.applied ?? null,
+        reverted: result.reverted ?? null
+      }, adminActorId(req));
+      return res.json({ ok: true, data: { mode, ...result } });
+    }
     const summary = await require('../services/listingCoordinateRepairService').repairListingCoordinates(db, {
       apply,
       actor: adminActorId(req)
