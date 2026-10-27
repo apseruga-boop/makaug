@@ -38,6 +38,13 @@ test('manager payment validation rejects malformed amount, date and negative val
     assert.throws(() => validatedPayment({ method, amount_ugx: 50000, amount_original: '-15', reference: 'CARD-RECEIPT' }), /positive amount in US dollars/);
   }
   assert.equal(validatedPayment({ method: ' ABSA_USD ', amount_original: '15', reference: 'CARD-RECEIPT' }).method, 'absa_usd');
+  for (const payment of [
+    { amount_original: '10000000000000000', fx_rate_ugx: 3700 },
+    { amount_original: '15000', fx_rate_ugx: 9000 }
+  ]) {
+    assert.throws(() => validatedPayment({ method: 'absa_usd', reference: 'USD-RECEIPT', ...payment }), /must convert.*100,000,000/);
+  }
+  assert.equal(validatedPayment({ method: 'absa_usd', amount_original: '15', fx_rate_ugx: 3700, reference: 'USD-RECEIPT' }).amount_original, '15');
 });
 
 test('date-only payments use the Kampala calendar day while timestamps must already have happened', () => {

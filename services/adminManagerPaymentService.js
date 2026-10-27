@@ -78,7 +78,10 @@ function validatedPayment(body, { now = new Date() } = {}) {
       throw revenue.httpError(400, 'Enter a valid payment date that is not in the future.');
     }
   }
-  revenue.normalizeEntry(payment);
+  const normalized = revenue.normalizeEntry(payment);
+  if (!Number.isSafeInteger(normalized.amount_ugx) || normalized.amount_ugx <= 0 || normalized.amount_ugx > 100000000) {
+    throw revenue.httpError(400, 'The payment must convert to a positive whole amount of UGX, up to 100,000,000.');
+  }
   return payment;
 }
 
