@@ -37063,33 +37063,13 @@ const lpThumbnailCache = new WeakMap();
 async function makeLpThumbnailDataUrl(file, maxEdge = 480) {
   if (lpThumbnailCache.has(file)) return lpThumbnailCache.get(file);
   const work = (async () => {
-    let bitmap = null;
-    try {
-      if (typeof createImageBitmap === "function") bitmap = await createImageBitmap(file);
-    } catch (error) { bitmap = null; }
-    let source = bitmap;
-    if (!source) {
-      source = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const img = new Image();
-          img.onload = () => resolve(img);
-          img.onerror = () => reject(new Error("decode failed"));
-          img.src = String(reader.result || "");
-        };
-        reader.onerror = () => reject(reader.error || new Error("read failed"));
-        reader.readAsDataURL(file);
-      });
-    }
-    const w = source.width || source.naturalWidth || 0;
-    const h = source.height || source.naturalHeight || 0;
-    if (!w || !h) throw new Error("empty image");
-    const scale = Math.min(1, maxEdge / Math.max(w, h));
+    const decoded = await decodeLpImageFile(file);
+    const scale = Math.min(1, maxEdge / Math.max(decoded.width, decoded.height));
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(w * scale));
-    canvas.height = Math.max(1, Math.round(h * scale));
-    canvas.getContext("2d").drawImage(source, 0, 0, canvas.width, canvas.height);
-    if (bitmap && typeof bitmap.close === "function") bitmap.close();
+    canvas.width = Math.max(1, Math.round(decoded.width * scale));
+    canvas.height = Math.max(1, Math.round(decoded.height * scale));
+    canvas.getContext("2d").drawImage(decoded.source, 0, 0, canvas.width, canvas.height);
+    decoded.close();
     return canvas.toDataURL("image/jpeg", 0.8);
   })();
   lpThumbnailCache.set(file, work);
@@ -37126,14 +37106,84 @@ function loadImageElement(url) {
   });
 }
 
+// What the picker says a file is cannot be trusted on phones: Android's file
+// picker and WhatsApp-saved photos often arrive with an empty type, and
+// iPhones hand over HEIC with a .jpg name. Read the first bytes instead.
+async function sniffLpImageKind(file) {
+  try {
+    const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    const ascii = Array.from(head).map((b) => String.fromCharCode(b)).join("");
+    if (head[0] === 0xff && head[1] === 0xd8) return "image/jpeg";
+    if (head[0] === 0x89 && ascii.slice(1, 4) === "PNG") return "image/png";
+    if (ascii.slice(0, 4) === "RIFF" && ascii.slice(8, 12) === "WEBP") return "image/webp";
+    if (ascii.slice(0, 3) === "GIF") return "image/gif";
+    if (ascii.slice(4, 8) === "ftyp") {
+      const brand = ascii.slice(8, 12);
+      if (/^(heic|heix|hevc|hevx|mif1|msf1|heim|heis|avif)$/i.test(brand)) return "heic";
+    }
+  } catch (error) { /* unreadable: fall through to the declared type */ }
+  return "";
+}
+
+function lpFileLooksLikeImage(file) {
+  if (!file) return false;
+  if (String(file.type || "").startsWith("image/")) return true;
+  return !String(file.type || "") && /\.(jpe?g|png|webp|gif|heic|heif|bmp)$/i.test(file.name || "");
+}
+
+// Decode a photo for the canvas. blob: URLs are refused by some in-app
+// browsers (Charles, 26-27 Oct 2026), so try the file bytes first and the
+// blob URL last. Resolves to something drawImage() accepts, or throws.
+async function decodeLpImageFile(file) {
+  const attempts = [];
+  if (typeof createImageBitmap === "function") {
+    attempts.push(async () => {
+      const bitmap = await createImageBitmap(file);
+      return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => { try { bitmap.close(); } catch (e) {} } };
+    });
+  }
+  attempts.push(async () => {
+    const dataUrl = await readBlobAsDataUrl(file);
+    const img = await loadImageElement(dataUrl);
+    return { source: img, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height, close: () => {} };
+  });
+  attempts.push(async () => {
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const img = await loadImageElement(objectUrl);
+      return { source: img, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height, close: () => {} };
+    } finally {
+      try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+    }
+  });
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const decoded = await attempt();
+      if (decoded && decoded.width > 0 && decoded.height > 0) return decoded;
+      decoded?.close?.();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Image could not be decoded");
+}
+
 async function compressPhotoForSubmission(file, options = {}) {
-  if (!file || !(file.type || "").startsWith("image/")) return "";
+  if (!file || !lpFileLooksLikeImage(file)) return "";
+  const kind = await sniffLpImageKind(file);
+  if (kind === "heic") {
+    const err = new Error("HEIC");
+    err.code = "LP_HEIC";
+    throw err;
+  }
   const maxBytes = options.maxBytes || LP_MAX_SUBMITTED_PHOTO_BYTES;
   const maxSideOptions = options.maxSideOptions || [1600, 1400, 1200, 1000, 850];
   const qualityOptions = options.qualityOptions || [0.82, 0.74, 0.66, 0.58, 0.5];
-  const objectUrl = URL.createObjectURL(file);
+  let decoded = null;
   try {
-    const img = await loadImageElement(objectUrl);
+    decoded = await decodeLpImageFile(file);
+    const img = { width: decoded.width, height: decoded.height, source: decoded.source };
     let bestBlob = null;
     for (const maxSide of maxSideOptions) {
       const scale = Math.min(1, maxSide / Math.max(img.width || maxSide, img.height || maxSide));
@@ -37142,7 +37192,7 @@ async function compressPhotoForSubmission(file, options = {}) {
       canvas.height = Math.max(1, Math.round((img.height || maxSide) * scale));
       const ctx = canvas.getContext("2d");
       if (!ctx) continue;
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img.source, 0, 0, canvas.width, canvas.height);
       for (const quality of qualityOptions) {
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
         if (!blob) continue;
@@ -37152,8 +37202,13 @@ async function compressPhotoForSubmission(file, options = {}) {
     }
     if (bestBlob) return readBlobAsDataUrl(bestBlob);
     return readBlobAsDataUrl(file);
+  } catch (error) {
+    // The canvas path failed but the bytes are a real JPEG/PNG/WebP under the
+    // size limit: send them as they are rather than refusing the listing.
+    if (/^image\/(jpeg|png|webp)$/.test(kind) && file.size <= maxBytes) return readBlobAsDataUrl(file);
+    throw error;
   } finally {
-    try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+    decoded?.close?.();
   }
 }
 
@@ -37163,47 +37218,68 @@ async function prepareListingPhotoUploadUrls() {
     return lpPhotoUploadUrls;
   }
   const urls = [];
+  const kept = [];
+  const skipped = [];
   for (const file of lpSelectedPhotos) {
     let dataUrl = "";
+    let heic = false;
     try {
       dataUrl = await compressPhotoForSubmission(file);
     } catch (error) {
       dataUrl = "";
+      heic = error?.code === "LP_HEIC";
     }
-    if (!dataUrl) throw new Error(`${file?.name || "Photo"} could not be prepared. If this is an iPhone HEIC photo, choose JPEG/Most Compatible or take a screenshot and upload that.`);
+    if (!dataUrl) { skipped.push({ file, heic }); continue; }
     urls.push(dataUrl);
+    kept.push(file);
+  }
+  const minPhotos = getLpMinUploadPhotos(getListType());
+  if (skipped.length && urls.length >= minPhotos && urls.length) {
+    // One unreadable photo used to block the whole listing. Drop it, say so,
+    // and carry on with the ones that work.
+    const names = skipped.map((entry) => entry.file?.name || translateListingLabel("Photo")).slice(0, 3).join(", ");
+    const anyHeic = skipped.some((entry) => entry.heic);
+    lpSelectedPhotos = kept;
+    lpPhotoAssignments = {};
+    lpMainPhotoIndex = Math.min(lpMainPhotoIndex, Math.max(0, kept.length - 1));
+    renderLpPhotoFeedback();
+    toast(`${skipped.length === 1 ? translateListingLabel("1 photo could not be read and was left out") : `${skipped.length} ${translateListingLabel("photos could not be read and were left out")}`}: ${names}.${anyHeic ? ` ${translateListingLabel("iPhone HEIC photos: set Camera > Formats > Most Compatible, or send them to us on WhatsApp.")}` : ""}`);
+  } else if (skipped.length) {
+    const anyHeic = skipped.some((entry) => entry.heic);
+    const names = skipped.map((entry) => entry.file?.name || translateListingLabel("Photo")).slice(0, 3).join(", ");
+    throw new Error(anyHeic
+      ? `${names}: ${translateListingLabel("this is an iPhone HEIC photo, which browsers cannot read. Set Camera > Formats > Most Compatible and retake it, or WhatsApp the photos to us and we will attach them.")}`
+      : `${names}: ${translateListingLabel("this photo could not be read on this phone. Remove it and add another, or WhatsApp the photos to us and we will attach them.")}`);
   }
   lpPhotoUploadUrls = urls;
-  lpPhotoUploadSignature = signature;
+  lpPhotoUploadSignature = lpSelectedPhotos.map((file) => `${file.name}:${file.size}:${file.lastModified}`).join("|");
   return urls;
 }
 
 async function evaluateLpPhotoQuality(files) {
   const issues = [];
-  const checks = files.map((file) => new Promise((resolve) => {
-    if (!file || !file.type || !file.type.startsWith("image/")) {
+  const checks = files.map((file) => (async () => {
+    if (!lpFileLooksLikeImage(file)) {
       issues.push(`${file?.name || "File"} is not an image format.`);
-      resolve();
       return;
     }
     if (file.size > 10 * 1024 * 1024) issues.push(`${file.name}: exceeds 10MB.`);
     if (file.size < 60 * 1024) issues.push(`${file.name}: very small file size (possible low quality).`);
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      if (img.width < 900 || img.height < 600) {
-        issues.push(`${file.name}: low resolution (${img.width}x${img.height}).`);
+    const kind = await sniffLpImageKind(file);
+    if (kind === "heic") {
+      issues.push(`${file.name}: iPhone HEIC photo. Set Camera > Formats > Most Compatible, or WhatsApp it to us.`);
+      return;
+    }
+    try {
+      const decoded = await decodeLpImageFile(file);
+      if (decoded.width < 900 || decoded.height < 600) {
+        issues.push(`${file.name}: low resolution (${decoded.width}x${decoded.height}).`);
       }
-      URL.revokeObjectURL(url);
-      resolve();
-    };
-    img.onerror = () => {
+      decoded.close();
+    } catch (error) {
       issues.push(`${file.name}: could not read image dimensions.`);
-      URL.revokeObjectURL(url);
-      resolve();
-    };
-    img.src = url;
-  }));
+    }
+  })());
   await Promise.all(checks);
   lpPhotoQualityIssues = issues.slice(0, 8);
   renderLpPhotoFeedback();
