@@ -8127,7 +8127,7 @@ function applyListingWizardLanguageUI() {
   const labelPairs = [
     ["lp-step1-title", "Property Details"],
     ["lp-listing-type-label", "Listing Type *"],
-    ["lp-title-label", "Title *"],
+    ["lp-title-label", "Title (optional)"],
     ["lp-region-label", "Region *"],
     ["lp-district-label", "District *"],
     ["lp-city-label", "Town / City"],
@@ -39091,6 +39091,8 @@ function markLpFieldError(fieldId, message = "") {
   if (!el) return;
   const target = resolveLpErrorTarget(el);
   if (!target) return;
+  const folded = target.closest("details");
+  if (folded && !folded.open) folded.open = true;
   const borderClass = Array.from(target.classList).find((cls) => /^border-(?!\d)/.test(cls));
   if (borderClass && borderClass !== "border-red-400") {
     target.dataset.lpPrevBorderClass = borderClass;
@@ -39124,9 +39126,33 @@ function markLpPhotoSelectError(index) {
   select.classList.add("lp-error-target", "border-red-400", "ring-2", "ring-red-200");
 }
 
+// A title is a sentence we can write ourselves. Brokers kept stalling on it.
+function buildLpAutoTitle() {
+  const type = getListType();
+  const subtypeEl = document.getElementById("lp-subtype");
+  const subtype = subtypeEl && subtypeEl.selectedIndex > 0 ? String(subtypeEl.options[subtypeEl.selectedIndex].textContent || "").trim() : "";
+  const beds = lpVal("lp-beds");
+  const area = lpVal("lp-area") || lpVal("lp-neighborhood") || lpVal("lp-city");
+  const district = lpVal("list-district-sel");
+  const where = area && district && area.toLowerCase() !== district.toLowerCase() ? `${area}, ${district}` : (area || district);
+  const bedPart = /^\d+\+?$/.test(beds) ? `${beds} bedroom ` : "";
+  let what = subtype ? subtype.toLowerCase() : (type === "land" ? "land" : type === "commercial" ? "commercial property" : "house");
+  if (type === "land" && !/land|plot|acre/.test(what)) what = `${what} land`;
+  const deal = type === "rent" || type === "student" ? "for rent" : (type === "land" && lpVal("lp-extra-land_mode") === "rent") ? "for lease" : (type === "commercial" && lpVal("lp-extra-commercial_mode") === "rent") ? "for rent" : "for sale";
+  const parts = [`${bedPart}${what}`.trim(), deal];
+  if (where) parts.push(`in ${where}`);
+  const title = parts.join(" ");
+  return (title.charAt(0).toUpperCase() + title.slice(1)).slice(0, 120);
+}
+
 function validateListStep1() {
   const missing = [];
   clearLpValidationErrors("#lp-step-1");
+  if (!lpVal("lp-title")) {
+    const auto = buildLpAutoTitle();
+    const titleEl = document.getElementById("lp-title");
+    if (auto && titleEl) titleEl.value = auto;
+  }
   if (!lpVal("lp-title")) {
     missing.push("Title");
     markLpFieldError("lp-title", "Title is required.");
@@ -46913,7 +46939,8 @@ function updateLpCanonicalLocationGuardState() {
   const submitBtn = document.getElementById("lp-submit-btn");
   const unresolvedText = translateListingLabel("Location not recognised. Choose an exact Uganda area from the location results or the region, district, town and neighbourhood fields before submitting.");
 
-  if (notice) notice.classList.toggle("hidden", resolved || !lpCanonicalLocationAttempted);
+  const userGaveLocation = Boolean(lpVal("lp-address-search") || lpVal("lp-area") || lpVal("list-district-sel"));
+  if (notice) notice.classList.toggle("hidden", resolved || !lpCanonicalLocationAttempted || !userGaveLocation);
   if (message) message.textContent = unresolvedText;
   if (submitBtn) {
     submitBtn.disabled = !resolved;
@@ -62680,6 +62707,8 @@ function setSelectOptions(id, options, fallbackValue, localize = true) {
 }
 
 function renderLpExtraFields(type, preserveExisting = true) {
+  const moreDetails = document.getElementById("lp-more-details");
+  if (moreDetails && (type === "land" || type === "commercial")) moreDetails.open = true;
   const cfg = LP_CONFIG[type] || LP_CONFIG.sale;
   const wrap = document.getElementById("lp-extra-fields");
   if (!wrap) return;
@@ -63010,6 +63039,8 @@ function renderListingDescriptionTranslationPreview() {
   const copyEl = document.getElementById("lp-description-preview-copy");
   const sourceEl = document.getElementById("lp-description-preview-source");
   if (!copyEl) return;
+  const previewWrap = document.getElementById("lp-description-translation-preview");
+  if (previewWrap) previewWrap.classList.toggle("hidden", !String(lpVal("lp-description") || "").trim());
   const original = lpVal("lp-description");
   const lang = document.getElementById("lp-description-preview-language")?.value || "en";
   const names = {
