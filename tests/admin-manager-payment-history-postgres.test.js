@@ -36,6 +36,18 @@ test('manager payment validation rejects malformed amount, date and negative val
   assert.throws(() => validatedPayment({ method: 'revolut_card', amount_usd: '-15', reference: 'CARD-RECEIPT' }), /positive amount in US dollars/);
 });
 
+test('date-only payments use the Kampala calendar day while timestamps must already have happened', () => {
+  const body = { amount_ugx: 50000, method: 'cash', note: 'Ronald received cash' };
+  const beforeMidnight = new Date('2026-10-27T20:59:00Z');
+  const afterMidnight = new Date('2026-10-27T21:01:00Z');
+  assert.throws(() => validatedPayment({ ...body, paid_at: '2026-10-28' }, { now: beforeMidnight }), /valid payment date/);
+  assert.equal(validatedPayment({ ...body, paid_at: '2026-10-28' }, { now: afterMidnight }).paid_at, '2026-10-28');
+  assert.throws(() => validatedPayment({ ...body, paid_at: '2026-10-29' }, { now: afterMidnight }), /valid payment date/);
+  assert.throws(() => validatedPayment({ ...body, paid_at: '2026-10-28T00:00:00Z' }, { now: afterMidnight }), /valid payment date/);
+  assert.equal(validatedPayment({ ...body, paid_at: '2026-10-28T00:00:00+03:00' }, { now: afterMidnight }).paid_at,
+    '2026-10-28T00:00:00+03:00', 'valid past timestamp with a Kampala timezone offset');
+});
+
 test('real PostgreSQL and protected HTTP: history, paid direct Public roster and atomic retry-safe payments', {
   skip: PG_BIN ? false : 'Install PostgreSQL or set LFM_PG_BIN for the isolated database test.'
 }, async (t) => {
@@ -238,6 +250,22 @@ test('real PostgreSQL and protected HTTP: history, paid direct Public roster and
       firstEnd.setUTCDate(firstEnd.getUTCDate() + 1);
       assert.equal(renewals[1].period_start, firstEnd.toISOString().slice(0, 10));
       assert.equal((await db.query('SELECT paid_until::text FROM agents WHERE id=$1', [agent.id])).rows[0].paid_until, renewals[1].period_end);
+    });
+
+    await t.test('voided receipt retry cannot report stale success or write replacement money', async () => {
+      const body = { amount_ugx: 50000, method: 'mtn_momo', reference: 'VOID-RECEIPT-001', request_id: crypto.randomUUID() };
+      const paid = await recordManagerPayment(db, { kind: 'agent_subscription', id: agent.id, body, actor });
+      await db.query('UPDATE revenue_entries SET voided_at=now() WHERE id=$1', [paid.entry.id]);
+      const before = await paymentHistory(db, { kind: 'agent_subscription', id: agent.id });
+      await assert.rejects(() => recordManagerPayment(db, { kind: 'agent_subscription', id: agent.id, body, actor }),
+        (error) => error.status === 409 && /was voided/.test(error.message));
+      const after = await paymentHistory(db, { kind: 'agent_subscription', id: agent.id });
+      assert.equal(after.payment_summary.lifetime_paid_ugx, before.payment_summary.lifetime_paid_ugx);
+      assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM revenue_entries WHERE reference=$1', [body.reference])).rows[0].n, 1);
+      const replacement = await recordManagerPayment(db, { kind: 'agent_subscription', id: agent.id, body: { ...body, request_id: crypto.randomUUID() }, actor });
+      assert.notEqual(replacement.entry.id, paid.entry.id);
+      assert.equal((await paymentHistory(db, { kind: 'agent_subscription', id: agent.id })).payment_summary.lifetime_paid_ugx,
+        before.payment_summary.lifetime_paid_ugx + 50000);
     });
   } finally {
     if (pool) await pool.end();

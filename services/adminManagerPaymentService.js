@@ -51,7 +51,7 @@ async function paymentHistory(db, { kind, id, page = 1, limit = 25 }) {
   };
 }
 
-function validatedPayment(body) {
+function validatedPayment(body, { now = new Date() } = {}) {
   const payment = Object.fromEntries(PAYMENT_FIELDS.filter((key) => body[key] !== undefined).map((key) => [key, body[key]]));
   if (!['absa_usd', 'revolut_card'].includes(String(payment.method || ''))) {
     const raw = String(payment.amount_ugx ?? payment.amount ?? '').replace(/[,\s]/g, '');
@@ -67,9 +67,13 @@ function validatedPayment(body) {
   }
   if (payment.paid_at) {
     const date = new Date(payment.paid_at);
-    const day = String(payment.paid_at).slice(0, 10);
-    if (Number.isNaN(date.getTime()) || !/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(String(payment.paid_at))
-      || date.toISOString().slice(0, 10) !== day || date.getTime() > Date.now() + 5 * 60000) {
+    const raw = String(payment.paid_at);
+    const day = raw.slice(0, 10);
+    const calendarDate = new Date(`${day}T00:00:00Z`);
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+    const future = dateOnly ? day > revenue.kampalaDate(now) : date.getTime() > now.getTime() + 5 * 60000;
+    if (Number.isNaN(date.getTime()) || !/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(raw)
+      || Number.isNaN(calendarDate.getTime()) || calendarDate.toISOString().slice(0, 10) !== day || future) {
       throw revenue.httpError(400, 'Enter a valid payment date that is not in the future.');
     }
   }
@@ -87,9 +91,11 @@ async function recordManagerPayment(db, { kind, id, body = {}, actor = 'staff' }
   try {
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`dashboard-payment:${requestId}`]);
-    const previous = (await client.query('SELECT fingerprint, result FROM dashboard_payment_requests WHERE request_id = $1', [requestId])).rows[0];
+    const previous = (await client.query(`SELECT r.fingerprint, r.result, e.voided_at FROM dashboard_payment_requests r
+      JOIN revenue_entries e ON e.id = r.entry_id WHERE r.request_id = $1`, [requestId])).rows[0];
     if (previous) {
       if (previous.fingerprint !== fingerprint) throw revenue.httpError(409, 'This payment request was already used for different details. Reopen the payment form.');
+      if (previous.voided_at) throw revenue.httpError(409, 'This recorded payment was voided. Reopen the payment form to record a replacement.');
       await client.query('COMMIT');
       return { ...previous.result, replayed: true };
     }
