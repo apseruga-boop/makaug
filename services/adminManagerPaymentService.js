@@ -53,6 +53,7 @@ async function paymentHistory(db, { kind, id, page = 1, limit = 25 }) {
 
 function validatedPayment(body, { now = new Date() } = {}) {
   const payment = Object.fromEntries(PAYMENT_FIELDS.filter((key) => body[key] !== undefined).map((key) => [key, body[key]]));
+  payment.method = String(payment.method || '').trim().toLowerCase();
   if (!['absa_usd', 'revolut_card'].includes(String(payment.method || ''))) {
     const raw = String(payment.amount_ugx ?? payment.amount ?? '').replace(/[,\s]/g, '');
     if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw)) || Number(raw) <= 0 || Number(raw) > 100000000) {
@@ -71,7 +72,7 @@ function validatedPayment(body, { now = new Date() } = {}) {
     const day = raw.slice(0, 10);
     const calendarDate = new Date(`${day}T00:00:00Z`);
     const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
-    const future = dateOnly ? day > revenue.kampalaDate(now) : date.getTime() > now.getTime() + 5 * 60000;
+    const future = dateOnly ? day > revenue.kampalaDate(now) : date.getTime() > now.getTime();
     if (Number.isNaN(date.getTime()) || !/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(raw)
       || Number.isNaN(calendarDate.getTime()) || calendarDate.toISOString().slice(0, 10) !== day || future) {
       throw revenue.httpError(400, 'Enter a valid payment date that is not in the future.');

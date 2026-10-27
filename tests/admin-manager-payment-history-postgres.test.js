@@ -34,6 +34,10 @@ test('manager payment validation rejects malformed amount, date and negative val
     assert.throws(() => validatedPayment({ amount_ugx: 50000, method: 'cash', note: 'Ronald received cash', paid_at }), /valid payment date/);
   }
   assert.throws(() => validatedPayment({ method: 'revolut_card', amount_usd: '-15', reference: 'CARD-RECEIPT' }), /positive amount in US dollars/);
+  for (const method of ['ABSA_USD', ' ABSA_USD ', ' REVOLUT_CARD ']) {
+    assert.throws(() => validatedPayment({ method, amount_ugx: 50000, amount_original: '-15', reference: 'CARD-RECEIPT' }), /positive amount in US dollars/);
+  }
+  assert.equal(validatedPayment({ method: ' ABSA_USD ', amount_original: '15', reference: 'CARD-RECEIPT' }).method, 'absa_usd');
 });
 
 test('date-only payments use the Kampala calendar day while timestamps must already have happened', () => {
@@ -44,6 +48,7 @@ test('date-only payments use the Kampala calendar day while timestamps must alre
   assert.equal(validatedPayment({ ...body, paid_at: '2026-10-28' }, { now: afterMidnight }).paid_at, '2026-10-28');
   assert.throws(() => validatedPayment({ ...body, paid_at: '2026-10-29' }, { now: afterMidnight }), /valid payment date/);
   assert.throws(() => validatedPayment({ ...body, paid_at: '2026-10-28T00:00:00Z' }, { now: afterMidnight }), /valid payment date/);
+  assert.throws(() => validatedPayment({ ...body, paid_at: '2026-10-27T21:02:00Z' }, { now: afterMidnight }), /valid payment date/);
   assert.equal(validatedPayment({ ...body, paid_at: '2026-10-28T00:00:00+03:00' }, { now: afterMidnight }).paid_at,
     '2026-10-28T00:00:00+03:00', 'valid past timestamp with a Kampala timezone offset');
 });
