@@ -45,6 +45,11 @@ test('listing titles link only to an API-provided public property path and escap
   }
 });
 
+test('removed listings remain visible without controls that cannot act on a deleted record', () => {
+  const c = context();
+  assert.equal(c.adminAgentManagerListingActions({ id: listingId, status: 'deleted' }, agentId), '');
+});
+
 test('history uses the all-time ledger total, renders receipts and reaches older pages', () => {
   const c = context();
   const html = c.adminManagerPaymentHistoryHtml('agent', agentId, { payment_summary: { lifetime_paid_ugx: 250000, payment_count: 27 }, payment_pagination: { page: 1, pages: 2, total: 27 }, payments: [{ amount_ugx: 50000, paid_at: '2026-10-01', reference: '<TX>', method: 'cash', period_start: '2026-10-01', period_end: '2026-10-31', verified_status: 'recorded' }] });

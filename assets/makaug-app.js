@@ -17894,6 +17894,7 @@ function adminAgentManagerListingChip(l = {}) {
 }
 
 function adminAgentManagerListingActions(l, agentId) {
+  if (l.status === "deleted") return "";
   const id = adminAttr(l.id);
   const btn = (action, label, cls) => `<button type="button" data-listing-action="${action}" class="rounded-lg px-2 py-1 text-[11px] font-bold ${cls}" onclick="adminAgentManagerListingState('${id}', '${action}')">${label}</button>`;
   const parts = [];
