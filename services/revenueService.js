@@ -190,7 +190,7 @@ async function insertEntry(db, entry, actor) {
           WHERE e.account_key = $1 AND LOWER(e.reference) = LOWER($2) AND e.voided_at IS NULL
           LIMIT 1`,
         [entry.account_key, entry.reference]
-      )).rows[0];
+      ).catch(() => ({ rows: [] }))).rows[0];
       throw httpError(409, `Transaction ID ${entry.reference} has already been recorded${prior ? ` (UGX ${Number(prior.amount_ugx).toLocaleString('en-US')}${prior.full_name ? ` for ${prior.full_name}` : ''}, ${new Date(prior.paid_at).toISOString().slice(0, 10)})` : ''}. One receipt can only be used once.`);
     }
     throw error;

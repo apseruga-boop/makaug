@@ -223,13 +223,13 @@ async function takeDownAgentForBilling(db, { agentId, actor = 'admin' }) {
 }
 
 /** Everything back exactly as it was. Called automatically when a payment is recorded. */
-async function reinstateAgentAfterPayment(db, { agentId, actor = 'payment' }) {
-  const agent = await loadAgent(db, agentId);
+async function reinstateAgentAfterPayment(db, { agentId, actor = 'payment', notify = true, transactionClient = null }) {
+  const agent = await loadAgent(transactionClient || db, agentId);
   if (!agent?.billing_suspended_at) return { reinstated: false };
   const snap = agent.billing_snapshot || {};
-  const client = await db.getClient();
+  const client = transactionClient || await db.getClient();
   try {
-    await client.query('BEGIN');
+    if (!transactionClient) await client.query('BEGIN');
     for (const item of Array.isArray(snap.listings) ? snap.listings : []) {
       await client.query(`UPDATE properties SET status = $2, updated_at = NOW() WHERE id = $1 AND status = 'hidden'`, [item.id, item.previous_status]);
     }
@@ -238,14 +238,16 @@ async function reinstateAgentAfterPayment(db, { agentId, actor = 'payment' }) {
               status = $2, updated_at = NOW() WHERE id = $1::uuid`,
       [agentId, ['approved', 'pending'].includes(snap.previous_status) ? snap.previous_status : 'approved']
     );
-    await client.query('COMMIT');
+    if (!transactionClient) await client.query('COMMIT');
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
+    if (!transactionClient) await client.query('ROLLBACK').catch(() => {});
     throw error;
   } finally {
-    client.release();
+    if (!transactionClient) client.release();
   }
-  const notice = await sendAgentBillingMessage(db, { agentId, kind: 'reinstated', actor, force: true }).catch((error) => ({ error: error.message }));
+  const notice = notify
+    ? await sendAgentBillingMessage(db, { agentId, kind: 'reinstated', actor, force: true }).catch((error) => ({ error: error.message }))
+    : null;
   return { reinstated: true, listings_restored: (snap.listings || []).length, notice };
 }
 
