@@ -77,7 +77,9 @@ test('listing correction 176 relabels only the Makerere building', () => {
     .sort();
   assert.deepEqual(makerereMigrations, [
     '169_correct_mislabelled_listings_and_duplicates.sql',
-    '176_correct_makerere_building_listing.sql'
+    '176_correct_makerere_building_listing.sql',
+    // 192 only adds an area-centre pin (it has no pin); it does not relabel.
+    '192_auto_pin_unpinned_listings.sql'
   ]);
   assert.equal(spec.id, MAKERERE);
   assert.equal(spec.lister_name, 'Promise Ahimbisibwe');
