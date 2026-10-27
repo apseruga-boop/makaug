@@ -17558,7 +17558,7 @@ async function staffPeopleExportCsv(scope) {
 // every listing, and to correct details (ID/NIN included), take listings down,
 // mark them sold/let, move them, or remove/restore the agent. Nothing here
 // hard-deletes and the server logs every change with who made it.
-const ADMIN_AGENT_MANAGER_STATE = { rows: [], counts: {}, show: "active", search: "", missingOnly: false, only: "", sort: "joined", loading: false, loadedAt: 0, openId: null, detail: null };
+const ADMIN_AGENT_MANAGER_STATE = { rows: [], counts: {}, show: "active", search: "", missingOnly: false, only: "", sort: "joined", loading: false, loadedAt: 0, openId: null, detail: null, detailRequest: 0 };
 
 function adminAgentManagerRoot() {
   return document.getElementById("admin-agent-manager");
@@ -17852,23 +17852,27 @@ function adminAgentManagerOverlay() {
 }
 
 function adminAgentManagerClose() {
+  ADMIN_AGENT_MANAGER_STATE.detailRequest += 1;
   adminAgentManagerOverlay()?.classList.add("hidden");
   ADMIN_AGENT_MANAGER_STATE.openId = null;
 }
 
-async function adminAgentManagerOpen(agentId) {
+async function adminAgentManagerOpen(agentId, paymentsPage = 1) {
   if (!adminAgentManagerRoot()?.dataset.agentManagerReady) await adminAgentManagerLoad();
   const overlay = adminAgentManagerOverlay();
   const body = overlay?.querySelector("[data-agent-manager-detail-body]");
   if (!overlay || !body) return;
   overlay.classList.remove("hidden");
   ADMIN_AGENT_MANAGER_STATE.openId = agentId;
+  const request = ++ADMIN_AGENT_MANAGER_STATE.detailRequest;
   if (!ADMIN_AGENT_MANAGER_STATE.detail || ADMIN_AGENT_MANAGER_STATE.detail.agent?.id !== agentId) body.innerHTML = `<div class="p-5 text-gray-500">Loading…</div>`;
   try {
-    const res = await apiRequest(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}`, { headers: adminAuthHeaders() });
+    const res = await apiRequest(`/api/admin/agent-manager/agents/${encodeURIComponent(agentId)}?${new URLSearchParams({ payments_page: paymentsPage, payments_limit: 25 })}`, { headers: adminAuthHeaders() });
+    if (ADMIN_AGENT_MANAGER_STATE.openId !== agentId || request !== ADMIN_AGENT_MANAGER_STATE.detailRequest) return;
     ADMIN_AGENT_MANAGER_STATE.detail = res?.data || null;
     body.innerHTML = adminAgentManagerDetailHtml(ADMIN_AGENT_MANAGER_STATE.detail || {});
   } catch (error) {
+    if (ADMIN_AGENT_MANAGER_STATE.openId !== agentId || request !== ADMIN_AGENT_MANAGER_STATE.detailRequest) return;
     body.innerHTML = `<div class="p-5"><button type="button" class="text-sm font-bold text-gray-700" onclick="adminAgentManagerClose()">← Back</button><p class="mt-4 text-red-800">${adminEscape(error?.message || "Could not load this agent.")}</p></div>`;
   }
 }
@@ -17879,7 +17883,8 @@ const ADMIN_AGENT_MANAGER_LISTING_STATUS = {
   hidden: ["Taken down", "bg-yellow-100 text-yellow-800"],
   archived: ["Archived", "bg-gray-200 text-gray-700"],
   rejected: ["Rejected", "bg-red-100 text-red-800"],
-  draft: ["Draft", "bg-gray-100 text-gray-700"]
+  draft: ["Draft", "bg-gray-100 text-gray-700"],
+  deleted: ["Removed", "bg-gray-200 text-gray-700"]
 };
 
 function adminAgentManagerListingChip(l = {}) {
@@ -17889,6 +17894,7 @@ function adminAgentManagerListingChip(l = {}) {
 }
 
 function adminAgentManagerListingActions(l, agentId) {
+  if (l.status === "deleted") return "";
   const id = adminAttr(l.id);
   const btn = (action, label, cls) => `<button type="button" data-listing-action="${action}" class="rounded-lg px-2 py-1 text-[11px] font-bold ${cls}" onclick="adminAgentManagerListingState('${id}', '${action}')">${label}</button>`;
   const parts = [];
@@ -17901,6 +17907,267 @@ function adminAgentManagerListingActions(l, agentId) {
   const others = (ADMIN_AGENT_MANAGER_STATE.rows || []).filter((a) => a.id !== agentId && !a.removed_at);
   parts.push(`<span class="inline-flex items-center gap-1"><select data-move-target="${id}" class="rounded-lg border border-gray-200 px-1 py-1 text-[11px] max-w-[130px]"><option value="">Move to…</option>${others.map((a) => `<option value="${adminAttr(a.id)}">${adminEscape(a.full_name)}${a.phone ? ` ·${adminEscape(String(a.phone).slice(-3))}` : ""}</option>`).join("")}</select><button type="button" class="rounded-lg border border-gray-300 px-2 py-1 text-[11px] font-bold" onclick="adminAgentManagerMoveListing('${id}')">Move</button></span>`);
   return `<div class="flex flex-wrap gap-1">${parts.join("")}</div>`;
+}
+
+function adminManagerMoney(value) {
+  return `UGX ${Number(value || 0).toLocaleString("en-GB")}`;
+}
+
+function adminManagerPublicListingTitle(listing = {}) {
+  const title = adminEscape(listing.title || "Untitled");
+  const url = String(listing.public_url || "");
+  return /^\/property\/[a-zA-Z0-9-]+$/.test(url)
+    ? `<a href="${adminAttr(url)}" target="_blank" rel="noopener" class="font-bold text-green-800 underline" data-manager-live-listing>${title} ↗</a>`
+    : `<span class="font-bold text-gray-900">${title}</span>`;
+}
+
+function adminAgentManagerPhotoHtml(a = {}) {
+  const photo = String(a.profile_photo_url || "");
+  const safe = /^(https?:\/\/|data:image\/(jpeg|png|webp|gif);base64,)/i.test(photo);
+  return `<section class="rounded-xl border border-gray-200 p-3" data-agent-profile-photo>
+    <h5 class="font-black text-gray-900">Public photo / logo</h5>
+    <div class="mt-2 flex flex-wrap items-center gap-3">
+      ${safe ? `<img src="${adminAttr(photo)}" alt="${adminAttr(a.full_name || "Agent")} profile photo" class="h-20 w-20 rounded-xl border border-gray-200 object-contain bg-gray-50" data-agent-profile-photo-preview>` : `<div class="h-20 w-20 rounded-xl bg-gray-100 flex items-center justify-center text-xs text-gray-500">No photo</div>`}
+      <div class="space-y-2"><button type="button" onclick="adminUploadAgentProfilePhoto('${adminAttr(a.id)}', { manager: true })" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold">${safe ? "Replace" : "Upload"} photo / logo</button>
+        <p class="text-xs text-gray-500">Shown with the bio and listings on their public profile.</p>
+        ${a.status === "approved" && !a.removed_at ? `<a href="/agents/${encodeURIComponent(String(a.id || ""))}" target="_blank" rel="noopener" class="inline-block text-xs font-bold text-green-800 underline">Open public profile ↗</a>` : ""}
+      </div>
+    </div>
+  </section>`;
+}
+
+function adminManagerPaymentHistoryHtml(kind, id, detail = {}) {
+  const summary = detail.payment_summary || {};
+  const pagination = detail.payment_pagination || { page: 1, pages: 1, total: (detail.payments || []).length };
+  const payments = Array.isArray(detail.payments) ? detail.payments : [];
+  const page = Math.max(1, Number(pagination.page || 1));
+  const pages = Math.max(1, Number(pagination.pages || 1));
+  const load = kind === "public" ? "adminPublicManagerOpen" : "adminAgentManagerOpen";
+  const date = (value) => adminEscape(adminAgentManagerDay(value ? String(value).slice(0, 10) : ""));
+  return `<section class="rounded-xl border border-gray-200 p-3" data-manager-payment-history>
+    <div class="flex items-center justify-between gap-2 flex-wrap"><h5 class="font-black text-gray-900">Payment history</h5><strong class="text-sm text-green-800" data-manager-lifetime-paid>Total paid: ${adminEscape(adminManagerMoney(summary.lifetime_paid_ugx))}</strong></div>
+    <p class="text-xs text-gray-500 mt-1">${Number(summary.payment_count || pagination.total || 0)} receipt(s) in the payment ledger. Staff corrections to plan dates do not create receipts.</p>
+    ${payments.length ? `<ol class="mt-3 space-y-2">${payments.map((p) => `<li class="rounded-lg bg-gray-50 p-2 text-xs"><div class="flex justify-between gap-2"><strong>${adminEscape(adminManagerMoney(p.amount_ugx))}</strong><span>${date(p.paid_at)}</span></div><p>${adminEscape(p.method || "")} · ${adminEscape(p.reference || "No transaction ID")}${p.verified_status ? ` · ${adminEscape(p.verified_status)}` : ""}</p>${p.period_start || p.period_end ? `<p class="text-gray-600">Covers ${date(p.period_start)} – ${date(p.period_end)}</p>` : ""}${p.note ? `<p class="text-gray-600">${adminEscape(p.note)}</p>` : ""}</li>`).join("")}</ol>` : `<p class="mt-3 text-xs text-gray-500">No payment receipts recorded yet.</p>`}
+    ${pages > 1 ? `<div class="mt-3 flex items-center justify-between gap-2 text-xs"><button type="button" ${page <= 1 ? "disabled" : ""} onclick="${load}('${adminAttr(id)}', ${page - 1})" class="rounded-lg border px-3 py-2 disabled:opacity-40">Newer receipts</button><span>Page ${page} of ${pages}</span><button type="button" ${page >= pages ? "disabled" : ""} onclick="${load}('${adminAttr(id)}', ${page + 1})" class="rounded-lg border px-3 py-2 disabled:opacity-40">Older receipts</button></div>` : ""}
+  </section>`;
+}
+
+function adminManagerPaymentFormHtml(kind, id) {
+  const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+  const input = "mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm";
+  return `<form class="rounded-xl border border-green-200 p-3" data-manager-add-payment onsubmit="adminManagerRecordPayment(event, '${kind}', '${adminAttr(id)}')">
+    <h5 class="font-black text-gray-900">Add payment receipt</h5><p class="mt-1 text-xs text-gray-500">Records new money received and extends the current paid period. The date is the receipt date. Do not re-enter payments already in the ledger. Updates this payment history and Sales &amp; Revenue.</p>
+    <div class="mt-3 grid grid-cols-2 gap-2">
+      <label class="text-xs font-semibold" data-manager-ugx>Amount (UGX)<input name="amount_ugx" type="number" min="1" max="100000000" step="1" required inputmode="numeric" class="${input}"></label>
+      <label class="text-xs font-semibold">Paid on<input name="paid_at" type="date" value="${today}" max="${today}" required class="${input}"></label>
+      <label class="text-xs font-semibold">Method<select name="method" required onchange="adminManagerPaymentCurrencyChanged(this.form)" class="${input}"><option value="">Choose…</option>${Array.from(new Set([...ADMIN_METHOD_KEYS, "revolut_card"])).map((method) => `<option value="${adminAttr(method)}">${adminEscape(ADMIN_METHOD_LABELS[method] || method)}</option>`).join("")}</select></label>
+      <label class="text-xs font-semibold">Transaction ID<input name="reference" maxlength="160" class="${input}"></label>
+      <div class="hidden col-span-2 grid grid-cols-2 gap-2" data-manager-usd>
+        <label class="text-xs font-semibold">Amount (US dollars)<input name="amount_original" type="number" min="0.01" step="0.01" inputmode="decimal" disabled class="${input}"></label>
+        <label class="text-xs font-semibold">UGX per US $1<input name="fx_rate_ugx" type="number" min="1000.01" max="9999.99" step="0.01" inputmode="decimal" disabled class="${input}" placeholder="Enter the rate used"></label>
+        <p class="col-span-2 text-xs text-gray-500">Enter dollars received and the exchange rate used to value this payment in UGX. The converted amount appears in the payment totals.</p>
+      </div>
+      <label class="text-xs font-semibold col-span-2">Note<input name="note" maxlength="1000" class="${input}"></label>
+    </div><p class="hidden mt-2 text-xs text-red-800" role="alert" data-payment-error></p>
+    <div class="mt-3 flex justify-end"><button type="submit" class="rounded-lg bg-green-700 px-4 py-2 text-xs font-bold text-white">Record received payment</button></div>
+  </form>`;
+}
+
+function adminManagerPaymentIsUsd(method) {
+  return ["absa_usd", "revolut_card"].includes(String(method || "").trim().toLowerCase());
+}
+
+function adminManagerPaymentCurrencyChanged(form) {
+  if (!form) return;
+  const usd = adminManagerPaymentIsUsd(form.querySelector("[name=method]")?.value);
+  form.querySelector("[data-manager-ugx]")?.classList.toggle("hidden", usd);
+  form.querySelector("[data-manager-usd]")?.classList.toggle("hidden", !usd);
+  for (const name of ["amount_ugx", "amount_original", "fx_rate_ugx"]) {
+    const input = form.querySelector(`[name=${name}]`);
+    if (!input) continue;
+    const active = name === "amount_ugx" ? !usd : usd;
+    input.disabled = !active;
+    input.required = active;
+  }
+  form.querySelector("[data-payment-error]")?.classList.add("hidden");
+}
+
+async function adminManagerRecordPayment(event, kind, id) {
+  event?.preventDefault?.();
+  const form = event?.currentTarget;
+  if (!form || form.dataset.saving === "true") return;
+  const values = new FormData(form);
+  const body = { method: String(values.get("method") || "").trim().toLowerCase(), reference: String(values.get("reference") || "").trim(), paid_at: String(values.get("paid_at") || ""), note: String(values.get("note") || "").trim() };
+  const errorBox = form.querySelector("[data-payment-error]");
+  let errorMessage = "";
+  if (adminManagerPaymentIsUsd(body.method)) {
+    const dollars = String(values.get("amount_original") || "").trim();
+    const rate = String(values.get("fx_rate_ugx") || "").trim();
+    body.amount_original = Number(dollars);
+    body.fx_rate_ugx = Number(rate);
+    if (!/^\d+(?:\.\d{1,2})?$/.test(dollars) || !Number.isFinite(body.amount_original) || body.amount_original <= 0) {
+      errorMessage = "Enter the positive amount received in US dollars, with at most two decimal places.";
+    } else if (!/^\d+(?:\.\d{1,2})?$/.test(rate) || !Number.isFinite(body.fx_rate_ugx) || body.fx_rate_ugx <= 1000 || body.fx_rate_ugx >= 10000) {
+      errorMessage = "Enter the UGX-per-US-dollar rate used for this receipt, between 1,000 and 10,000.";
+    } else if (!Number.isSafeInteger(Math.round(body.amount_original * body.fx_rate_ugx))) {
+      errorMessage = "This dollar amount is too large to record accurately.";
+    }
+  } else {
+    const amount = String(values.get("amount_ugx") || "").trim();
+    body.amount_ugx = Number(amount);
+    if (!/^\d+$/.test(amount) || !Number.isSafeInteger(body.amount_ugx) || body.amount_ugx <= 0 || body.amount_ugx > 100000000) {
+      errorMessage = "Enter a whole UGX amount up to 100,000,000.";
+    }
+  }
+  if (!body.method || !body.paid_at) errorMessage = "Choose the payment method and receipt date.";
+  if (errorMessage) {
+    if (errorBox) { errorBox.textContent = errorMessage; errorBox.classList.remove("hidden"); }
+    return;
+  }
+  const fingerprint = JSON.stringify(body);
+  if (form.dataset.requestPayload !== fingerprint) {
+    form.dataset.requestPayload = fingerprint;
+    form.dataset.requestId = crypto.randomUUID();
+  }
+  body.request_id = form.dataset.requestId;
+  form.dataset.saving = "true";
+  const button = form.querySelector("button[type=submit]");
+  if (button) button.disabled = true;
+  errorBox?.classList.add("hidden");
+  try {
+    await apiRequest(`/api/admin/agent-manager/${kind === "public" ? "public" : "agents"}/${encodeURIComponent(id)}/payments`, { method: "POST", headers: adminAuthHeaders(), body });
+    if (kind === "public") { await adminPublicManagerLoad(ADMIN_PUBLIC_MANAGER_STATE.page); await adminPublicManagerOpen(id); }
+    else await adminAgentManagerRefreshOpen();
+    adminRevenueData = null;
+    toast("Payment receipt recorded. Sales & Revenue includes it.");
+  } catch (error) {
+    if (errorBox) { errorBox.textContent = error?.message || "Could not record this payment."; errorBox.classList.remove("hidden"); }
+  } finally {
+    form.dataset.saving = "false";
+    if (button) button.disabled = false;
+  }
+}
+
+function adminAgentManagerMessageTemplate(agent = {}, kind = "hello", guide = "") {
+  const name = String(agent.greeting_name || agent.full_name || "there").trim().split(/\s+/)[0];
+  const due = agent.tracker?.next_due;
+  const templates = {
+    hello: `Hi ${name}, Arthur here from MakaUG. How are your listings going? Let me know if you need a hand.`,
+    payment: `Hi ${name}, a quick reminder about your MakaUG payment${due ? ` due ${adminAgentManagerDay(due)}` : ""}. Please send the transaction ID once paid so we can update your record. Thanks, Arthur.`,
+    posting: `Hi ${name}, posting on MakaUG is easy: send the property photos or video, price and location to our listing WhatsApp. Let me know if you need a hand. Arthur.`
+  };
+  return `${templates[kind] || templates.hello}${guide ? `\n\nQuick guide: ${guide}` : ""}`;
+}
+
+function adminAgentManagerWhatsAppHtml(a = {}) {
+  const videos = howToVideosForContext("broker").filter(isPublishedHowToVideo);
+  return `<section class="rounded-xl border border-green-200 p-3" data-agent-personal-whatsapp>
+    <h5 class="font-black text-gray-900">Message from your WhatsApp</h5>
+    <p class="mt-1 text-xs text-gray-500">Choose a short message, edit it, then open your own WhatsApp to review and send.</p>
+    <label class="block mt-2 text-xs font-semibold">Message<select data-agent-message-template onchange="adminAgentManagerUpdateMessage()" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"><option value="hello">Quick hello</option><option value="payment">Payment reminder</option><option value="posting">How easy it is to post</option></select></label>
+    ${videos.length ? `<label class="block mt-2 text-xs font-semibold">Optional how-to video<select data-agent-message-guide onchange="adminAgentManagerUpdateMessage()" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"><option value="">No video</option>${videos.map((video) => `<option value="${adminAttr(video.youtubeUrl || `https://www.youtube.com/watch?v=${encodeURIComponent(video.youtubeVideoId)}`)}">${adminEscape(video.title || "How to post")}</option>`).join("")}</select></label>` : ""}
+    <label class="block mt-2 text-xs font-semibold">Your message<textarea rows="4" data-agent-message-text oninput="adminAgentManagerUpdateMessageLink()" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">${adminEscape(adminAgentManagerMessageTemplate(a))}</textarea></label>
+    ${normalizeWhatsAppRecipient(a.whatsapp || a.phone) ? `<a data-agent-message-link href="${adminAttr(buildWhatsAppUrl(a.whatsapp || a.phone, adminAgentManagerMessageTemplate(a)))}" target="_blank" rel="noopener" class="mt-2 inline-block rounded-lg bg-green-700 px-4 py-2 text-xs font-bold text-white">Open my WhatsApp ↗</a>` : `<p class="mt-2 text-xs text-amber-800">Add a WhatsApp number to this agent's details first.</p>`}
+  </section>`;
+}
+
+function adminAgentManagerUpdateMessage() {
+  const section = document.querySelector("[data-agent-personal-whatsapp]");
+  const agent = ADMIN_AGENT_MANAGER_STATE.detail?.agent || {};
+  const textarea = section?.querySelector("[data-agent-message-text]");
+  if (!textarea) return;
+  textarea.value = adminAgentManagerMessageTemplate(agent, section.querySelector("[data-agent-message-template]")?.value, section.querySelector("[data-agent-message-guide]")?.value);
+  adminAgentManagerUpdateMessageLink();
+}
+
+function adminAgentManagerUpdateMessageLink() {
+  const section = document.querySelector("[data-agent-personal-whatsapp]");
+  const agent = ADMIN_AGENT_MANAGER_STATE.detail?.agent || {};
+  const link = section?.querySelector("[data-agent-message-link]");
+  if (link) link.href = buildWhatsAppUrl(agent.whatsapp || agent.phone, section.querySelector("[data-agent-message-text]")?.value || "");
+}
+
+const ADMIN_PUBLIC_MANAGER_STATE = { page: 1, search: "", request: 0, detailRequest: 0, openId: null, loaded: false };
+
+function adminPublicManagerEnsureLoaded() {
+  if (!ADMIN_PUBLIC_MANAGER_STATE.loaded) adminPublicManagerLoad();
+}
+
+async function adminPublicManagerLoad(page = 1) {
+  const root = document.getElementById("admin-public-manager");
+  if (!root) return;
+  const state = ADMIN_PUBLIC_MANAGER_STATE;
+  state.page = Math.max(1, Number(page || 1));
+  const request = ++state.request;
+  root.innerHTML = `<p class="text-sm text-gray-500">Loading paid public listings…</p>`;
+  try {
+    const response = await apiRequest(`/api/admin/agent-manager/public?${new URLSearchParams({ search: state.search, page: state.page, limit: 25 })}`, { headers: adminAuthHeaders() });
+    if (request !== state.request) return;
+    state.loaded = true;
+    root.innerHTML = adminPublicManagerHtml(response);
+  } catch (error) {
+    if (request !== state.request) return;
+    root.innerHTML = `<p class="text-sm text-red-800">${adminEscape(error?.message || "Could not load public listings.")}</p><button type="button" onclick="adminPublicManagerLoad()" class="mt-2 text-sm underline">Try again</button>`;
+  }
+}
+
+function adminPublicManagerHtml(response = {}) {
+  const state = ADMIN_PUBLIC_MANAGER_STATE;
+  const rows = Array.isArray(response.data) ? response.data : [];
+  const pagination = response.pagination || {};
+  return `<div class="flex items-start justify-between gap-3 flex-wrap"><div><h3 class="text-xl font-black text-gray-900">Public</h3><p class="mt-1 text-xs text-gray-500">People who pay to list directly, outside an agent plan. Each property keeps its own payments.</p></div><button type="button" onclick="adminPublicManagerLoad(${state.page})" class="rounded-lg border px-3 py-2 text-xs font-bold">Refresh</button></div>
+    <form class="mt-3 flex flex-wrap gap-2" onsubmit="adminPublicManagerSearch(event)"><label class="flex-1 min-w-[180px] text-xs font-semibold">Search paid listings<input name="search" type="search" value="${adminAttr(state.search)}" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Name, phone, title or reference"></label><button type="submit" class="self-end rounded-lg bg-gray-900 px-4 py-2 text-xs font-bold text-white">Search</button></form>
+    <div class="mt-4 space-y-2">${rows.length ? rows.map((listing) => `<article class="rounded-xl border border-gray-200 p-3"><div class="flex items-start justify-between gap-2"><div><p>${adminManagerPublicListingTitle(listing)}</p><p class="mt-1 text-xs text-gray-600" data-pii>${adminEscape(listing.lister_name || "Unnamed lister")} · ${adminEscape(listing.lister_phone || "No phone")}</p></div><button type="button" onclick="adminPublicManagerOpen('${adminAttr(listing.id)}')" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold">Manage</button></div><p class="mt-2 text-xs text-gray-600">${adminEscape(listing.status || "")} · Total paid ${adminEscape(adminManagerMoney(listing.lifetime_paid_ugx))} · Last paid ${adminEscape(adminAgentManagerDay(listing.last_payment_on))}${listing.last_payment_ugx != null ? ` · ${adminEscape(adminManagerMoney(listing.last_payment_ugx))}` : ""} · Next due ${adminEscape(adminAgentManagerDay(listing.next_due))}</p></article>`).join("") : `<div class="rounded-xl border border-dashed border-gray-300 p-5 text-sm text-gray-500">${state.search ? "No paid public listings match this search." : "No paid public listings yet. Record the first received payment below when someone pays to list directly."}</div>`}</div>
+    ${Number(pagination.totalPages || pagination.pages || 1) > 1 ? `<div class="mt-3 flex items-center justify-between text-xs"><button type="button" ${state.page <= 1 ? "disabled" : ""} onclick="adminPublicManagerLoad(${state.page - 1})" class="rounded-lg border px-3 py-2 disabled:opacity-40">Previous</button><span>Page ${state.page} of ${Number(pagination.totalPages || pagination.pages)}</span><button type="button" ${state.page >= Number(pagination.totalPages || pagination.pages) ? "disabled" : ""} onclick="adminPublicManagerLoad(${state.page + 1})" class="rounded-lg border px-3 py-2 disabled:opacity-40">Next</button></div>` : ""}
+    <details class="mt-5 rounded-xl border border-gray-200 p-3"><summary class="cursor-pointer text-sm font-bold">Record a public lister's first payment</summary><p class="mt-2 text-xs text-gray-500">Find their existing direct listing, then record the money received.</p><form class="mt-2 flex gap-2" onsubmit="adminPublicManagerFindCandidate(event)"><input name="search" type="search" required minlength="3" placeholder="Listing reference, title, name or phone" class="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm" aria-label="Find direct listing"><button class="rounded-lg border px-3 py-2 text-xs font-bold">Find listing</button></form><div class="mt-2 space-y-2" data-public-candidates></div></details>
+    <div class="mt-5" data-public-manager-detail></div>`;
+}
+
+function adminPublicManagerSearch(event) {
+  event?.preventDefault?.();
+  ADMIN_PUBLIC_MANAGER_STATE.search = String(new FormData(event.currentTarget).get("search") || "").trim();
+  adminPublicManagerLoad(1);
+}
+
+async function adminPublicManagerFindCandidate(event) {
+  event?.preventDefault?.();
+  const form = event.currentTarget;
+  const box = form.parentElement.querySelector("[data-public-candidates]");
+  const search = String(new FormData(form).get("search") || "").trim();
+  if (search.length < 3) return;
+  box.textContent = "Finding direct listings…";
+  const button = form.querySelector("button");
+  if (button) button.disabled = true;
+  try {
+    const response = await apiRequest(`/api/admin/agent-manager/public/candidates?${new URLSearchParams({ search })}`, { headers: adminAuthHeaders() });
+    const rows = Array.isArray(response.data) ? response.data : [];
+    box.innerHTML = rows.length ? rows.map((listing) => `<div class="rounded-lg bg-gray-50 p-2 text-xs"><strong>${adminEscape(listing.title || "Untitled")}</strong><p data-pii>${adminEscape([listing.inquiry_reference, listing.lister_name, listing.lister_phone, listing.status].filter(Boolean).join(" · "))}</p><button type="button" onclick="adminPublicManagerOpen('${adminAttr(listing.id)}')" class="mt-1 font-bold text-green-800 underline">Choose this listing</button></div>`).join("") : `<p class="text-xs text-gray-500">No matching direct listings. Agent and found-online listings are excluded.</p>`;
+  } catch (error) { box.textContent = error?.message || "Could not find listings."; }
+  finally { if (button) button.disabled = false; }
+}
+
+async function adminPublicManagerOpen(id, paymentsPage = 1) {
+  const box = document.querySelector("[data-public-manager-detail]");
+  if (!box) return;
+  const state = ADMIN_PUBLIC_MANAGER_STATE;
+  const request = ++state.detailRequest;
+  state.openId = id;
+  box.innerHTML = `<p class="text-sm text-gray-500">Loading listing payments…</p>`;
+  try {
+    const response = await apiRequest(`/api/admin/agent-manager/public/${encodeURIComponent(id)}?${new URLSearchParams({ payments_page: paymentsPage, payments_limit: 25 })}`, { headers: adminAuthHeaders() });
+    if (request !== state.detailRequest) return;
+    const detail = response.data || {};
+    const listing = detail.listing || {};
+    box.innerHTML = `<section class="rounded-xl border border-gray-300 p-3 space-y-3"><div class="flex justify-between gap-3"><div><h4 class="font-black text-gray-900">${adminManagerPublicListingTitle(listing)}</h4><p class="mt-1 text-xs text-gray-500" data-pii>${adminEscape(listing.lister_name || "Unnamed lister")} · ${adminEscape(listing.lister_phone || "No phone")}</p><p class="mt-1 text-xs text-gray-600">Paid until ${adminEscape(adminAgentManagerDay(listing.paid_until))} · Next payment due ${adminEscape(adminAgentManagerDay(listing.next_due))}</p></div><button type="button" onclick="adminPublicManagerClose()" class="text-sm font-bold">Close</button></div>${adminManagerPaymentHistoryHtml("public", id, detail)}${adminManagerPaymentFormHtml("public", id)}</section>`;
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch (error) { if (request === state.detailRequest) box.innerHTML = `<p class="text-sm text-red-800">${adminEscape(error?.message || "Could not load this listing.")}</p>`; }
+}
+
+function adminPublicManagerClose() {
+  ADMIN_PUBLIC_MANAGER_STATE.detailRequest += 1;
+  ADMIN_PUBLIC_MANAGER_STATE.openId = null;
+  const box = document.querySelector("[data-public-manager-detail]");
+  if (box) box.innerHTML = "";
 }
 
 function adminAgentManagerDetailHtml(d = {}) {
@@ -17991,9 +18258,10 @@ function adminAgentManagerDetailHtml(d = {}) {
         </div>
         <div class="mt-3 flex justify-end"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Save changes</button></div>
       </form>
+      ${adminAgentManagerPhotoHtml(a)}
       ${adminAgentManagerIdFilesHtml(a, Array.isArray(d.id_files) ? d.id_files : [])}
       <form class="rounded-xl border border-gray-200 p-3" onsubmit="adminAgentManagerSaveDetails(event, '${id}')" data-agent-payment-form>
-        <h5 class="font-black text-gray-900 mb-1">Plan &amp; payment</h5>
+        <h5 class="font-black text-gray-900 mb-1">Plan &amp; payment</h5><p class="text-xs text-gray-500 mb-2">Correct plan dates here. Use Add payment receipt below to record money received.</p>
         <p class="text-xs text-gray-500 mb-2">Now: ${adminAgentManagerPaymentChip(a.payment)}${a.billing_suspended_at ? ` · billing suspended ${date(a.billing_suspended_at)}` : ""}${a.fee_offer_mode ? ` · offer: ${adminEscape(a.fee_offer_mode)}${a.fee_offer_until ? ` until ${date(a.fee_offer_until)}` : ""}` : ""}</p>
         ${adminAgentManagerTrackerHtml(a, Array.isArray(d.payments) ? d.payments : [])}
         <div class="grid grid-cols-2 gap-2">
@@ -18008,6 +18276,9 @@ function adminAgentManagerDetailHtml(d = {}) {
         </div>
         <div class="mt-3 flex justify-end"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Save payment</button></div>
       </form>
+      ${adminManagerPaymentHistoryHtml("agent", a.id, d)}
+      ${adminManagerPaymentFormHtml("agent", a.id)}
+      ${adminAgentManagerWhatsAppHtml(a)}
       <dl class="grid grid-cols-2 md:grid-cols-3 gap-3 rounded-xl bg-gray-50 p-3">
         ${fact("Signed up", date(a.created_at, true))}
         ${fact("Approved", date(a.approved_at))}
@@ -18028,13 +18299,14 @@ function adminAgentManagerDetailHtml(d = {}) {
           <div class="rounded-xl border border-gray-200 p-3" data-agent-listing="${adminAttr(l.id)}">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <p class="font-bold text-gray-900 text-sm">${adminEscape(l.title || "Untitled")}</p>
+                <p class="text-sm">${adminManagerPublicListingTitle(l)}</p>
                 <p class="text-[11px] text-gray-500">${adminEscape([l.inquiry_reference, l.listing_type, l.area || l.district].filter(Boolean).join(" · "))}</p>
               </div>
               ${adminAgentManagerListingChip(l)}
             </div>
             <p class="text-[11px] text-gray-600 mt-1">Posted ${date(l.created_at)}${l.sold_at ? ` · ${l.availability_status === "let_agreed" ? "let" : "sold"} ${date(l.sold_at)}` : ""}${l.status === "hidden" && (l.last_staff_action_at || l.taken_down_at) ? ` · taken down ${date(l.last_staff_action_at || l.taken_down_at)}` : ""}${l.expires_at ? ` · expires ${date(l.expires_at)}` : ""} · ${Number(l.views || 0)} views · ${Number(l.leads || 0)} leads</p>
-            <div class="mt-2">${adminAgentManagerListingActions(l, a.id)}</div>
+            ${["rejected", "hidden", "archived", "deleted"].includes(l.status) ? `<p class="mt-1 text-xs text-gray-700" data-agent-moderation-reason>${adminEscape(l.moderation_reason || "No reason was recorded")}${l.moderation_at ? ` · ${date(l.moderation_at, true)}` : ""}</p>` : ""}
+            ${l.status === "deleted" ? "" : `<div class="mt-2">${adminAgentManagerListingActions(l, a.id)}</div>`}
           </div>`).join("")}</div>` : `<p class="text-xs text-gray-500">No listings.</p>`}
       </section>
       <section>
@@ -18314,7 +18586,7 @@ function adminAgentManagerTrackerHtml(a = {}, payments = []) {
       ${box(t.overdue ? "Days overdue" : "Days left", adminAgentManagerDaysLeft(t, a), toneCls)}
       ${box("Last payment", last)}
     </div>
-    ${payments.length ? `<details class="mb-3 text-xs"><summary class="cursor-pointer font-semibold text-gray-700">Payments recorded (${payments.length})</summary><ul class="mt-1 space-y-1">${payments.map((p) => `<li>${adminEscape(adminAgentManagerDay(p.paid_at ? String(p.paid_at).slice(0, 10) : ""))} · ${adminEscape(ugx(p.amount_ugx))} · ${adminEscape(p.method || "")} ${adminEscape(p.reference || "")} · covers ${adminEscape(adminAgentManagerDay(p.period_start))} – ${adminEscape(adminAgentManagerDay(p.period_end))}</li>`).join("")}</ul></details>` : ""}`;
+    `;
 }
 
 function adminAgentManagerApproveAnyway(agentId) {
@@ -18394,8 +18666,10 @@ async function adminAgentManagerSaveDetails(event, agentId) {
 async function adminAgentManagerListingState(propertyId, action) {
   const labels = { take_down: "Take this listing down? It comes off the site but nothing is deleted.", mark_sold: "Mark this listing as sold?", mark_let: "Mark this listing as let?", put_back: "Put this listing back as it was before?" };
   if (!window.confirm(labels[action] || "Continue?")) return;
+  const reason = action === "take_down" ? window.prompt("Why is this listing being taken down?", "") : "";
+  if (action === "take_down" && !String(reason || "").trim()) return;
   try {
-    await apiRequest(`/api/admin/agent-manager/listings/${encodeURIComponent(propertyId)}/state`, { method: "POST", headers: adminAuthHeaders(), body: { action } });
+    await apiRequest(`/api/admin/agent-manager/listings/${encodeURIComponent(propertyId)}/state`, { method: "POST", headers: adminAuthHeaders(), body: { action, reason: String(reason || "").trim() } });
     await adminAgentManagerRefreshOpen({ take_down: "Listing taken down.", mark_sold: "Marked sold.", mark_let: "Marked let.", put_back: "Listing put back." }[action]);
   } catch (error) {
     toast(`Not changed: ${error?.message || "error"}`);
@@ -21204,6 +21478,7 @@ function adminCommandSelectorForTab(tab = "review") {
     live: "#admin-live-followup-control",
     accounts: "#admin-accounts-control",
     agents: "#admin-agents-control",
+    public: "#admin-public-control",
     "field-agents": "#admin-field-agent-control",
     staff: "#admin-staff-control",
     revenue: "#admin-revenue-control",
@@ -22119,7 +22394,7 @@ function adminVerificationBadge(status) {
 }
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "agents", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings"];
+  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "agents", "public", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings"];
   const previousTab = activeAdminWorkflowTab;
   // Tabs removed in the Oct 2026 King slim-down open where their content now lives.
   const moved = { "student-sweep": "review", actioned: "listings", ads: "revenue" };
@@ -22141,6 +22416,7 @@ function setAdminWorkflowTab(tab = "review") {
   if (activeAdminWorkflowTab === "revenue" && previousTab !== "revenue") loadAdminRevenue();
   if (activeAdminWorkflowTab === "accounts") staffPeopleEnsureLoaded("admin");
   if (activeAdminWorkflowTab === "agents") adminAgentManagerEnsureLoaded();
+  if (activeAdminWorkflowTab === "public") adminPublicManagerEnsureLoaded();
 }
 
 async function fetchAdminPaginatedRows(path, headers, options = {}) {
@@ -28686,7 +28962,7 @@ async function adminUploadAgentIdentityDocument(agentId) {
   input.click();
 }
 
-async function adminUploadAgentProfilePhoto(agentId) {
+async function adminUploadAgentProfilePhoto(agentId, options = {}) {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or set ADMIN_API_KEY first to add an agent logo.");
     return;
@@ -28709,7 +28985,8 @@ async function adminUploadAgentProfilePhoto(agentId) {
         body: { profile_photo_url: dataUrl }
       });
       await refreshBrokersFromApi({ silent: true });
-      await renderAdminDashboard();
+      if (options.manager) await adminAgentManagerRefreshOpen();
+      else await renderAdminDashboard();
       toast("Logo saved to the agent profile.");
     } catch (e) {
       toast(`Logo upload failed: ${e.message || "error"}`);
@@ -55486,6 +55763,7 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/advertising": { page: "admin-dashboard", tab: "revenue", selector: "#admin-advertising-control", label: "Ad placements" },
   "/admin/payments": { page: "admin-dashboard", tab: "revenue", selector: "#admin-advertising-control", label: "Payments" },
   "/admin/agents": { page: "admin-dashboard", tab: "agents", selector: "#admin-agents-control", label: "Agents" },
+  "/admin/public": { page: "admin-dashboard", tab: "public", selector: "#admin-public-control", label: "Public" },
   "/admin/field-agents": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
   "/admin/field-agent-control": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
   "/admin/field-agent-performance": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-performance-board", label: "Field Agent Performance" },
