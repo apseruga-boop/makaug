@@ -1358,6 +1358,7 @@ function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, 
     student_campus: studentContext.nearest_university || null,
     student_universities: studentContext.student_universities || [],
     distance_to_uni_km: studentContext.distance_to_uni_km,
+    location_precision: safeExtra.location_precision,
     resolved_location_label: safeExtra.resolved_location_label || row.resolved_location_label || null
   };
   return {
@@ -1638,6 +1639,7 @@ function publicSourceDateOutOfOrder(firstPostedRaw, firstSeenRaw, addedToMakaugR
 
 function publicExtraFields(extraFields = {}, { createdAt = null, omitTwimg = true } = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
+  const locationPrecision = String(extra.location_precision || '').trim().toLowerCase();
   const rawSourcePost = extra.raw_source_post && typeof extra.raw_source_post === 'object' ? extra.raw_source_post : {};
   const landTitleAvailable = normalizeLandTitleAvailability(
     extra.land_title_available
@@ -1872,6 +1874,7 @@ function publicExtraFields(extraFields = {}, { createdAt = null, omitTwimg = tru
     source_listing_key: extra.source_listing_key || null,
     canonical_location_id: extra.canonical_location_id || null,
     canonical_location_level: extra.canonical_location_level || null,
+    location_precision: ['gps', 'area', 'district', 'region', 'country'].includes(locationPrecision) ? locationPrecision : null,
     location_resolution_status: extra.location_resolution_status || null,
     location_resolution_confidence: toNullableFloat(extra.location_resolution_confidence),
     source_platform: sourcePlatform || null,
