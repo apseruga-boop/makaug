@@ -347,6 +347,21 @@ function priceMatchesContact(record = {}, price = null) {
   });
 }
 
+
+// Labels of the staff editor's Listing type select (#admin-review-listing-type-edit).
+const LISTING_TYPE_OPTION_LABELS = Object.freeze({
+  sale: 'For sale',
+  rent: 'To rent',
+  land: 'Land',
+  commercial: 'Commercial',
+  student: 'Student accommodation',
+});
+
+function listingTypeOptionLabel(value) {
+  const key = String(value || '').trim().toLowerCase();
+  return LISTING_TYPE_OPTION_LABELS[key] || key;
+}
+
 function listingDataIntegrityReport(record = {}, options = {}) {
   const category = normalizedListingType(record.listing_type || record.listingType || record.category);
   const classification = deriveListingClassification(record, options);
@@ -429,7 +444,12 @@ function listingDataIntegrityReport(record = {}, options = {}) {
       ...(missingPhysicalType ? {} : { proposed_listing_type: category || classification.listing_type }),
     });
   } else if (classification.confidence === 'strong' && classification.listing_type && category && classification.listing_type !== category) {
-    add('category_conflicts_with_source_evidence', `Source evidence indicates ${classification.listing_type}, not ${category}.`, {
+    // A64E8E: "Source evidence indicates land, not sale" read as nonsense to a
+    // moderator looking at a "Land for sale" title. Name the editor field and
+    // the option labels it shows so the fix is obvious.
+    add('category_conflicts_with_source_evidence', `Listing type is set to "${listingTypeOptionLabel(category)}", but the source evidence shows ${listingTypeOptionLabel(classification.listing_type)}. Change Listing type to "${listingTypeOptionLabel(classification.listing_type)}".`, {
+      field: 'listing_type',
+      current_listing_type: category,
       proposed_listing_type: classification.listing_type,
     });
   }
@@ -541,6 +561,7 @@ module.exports = {
   hasSpecificLocation,
   listingDataIntegrityReport,
   listingEvidenceText,
+  listingTypeOptionLabel,
   moderationReasonWithoutCategoryAmbiguous,
   normalizedListingType,
 };

@@ -32305,12 +32305,19 @@ function approvalBlockerFieldIds(field = "") {
     price: ["admin-review-price-edit", "staff-preview-price"],
     price_period: ["admin-review-price-period-edit", "staff-preview-price-period"],
     transaction_type: ["admin-review-transaction-type-edit"],
+    listing_type: ["admin-review-listing-type-edit", "staff-preview-listing-type"],
     property_type: ["admin-review-commercial-type-edit", "staff-preview-property-type"],
     identity_verification: ["admin-review-id-verified", "staff-preview-id-verified"],
     location_confirmation: ["admin-review-location-reclassification-confirm"],
     canonical_location: ["admin-review-address-search-edit"]
   };
   return map[key] || [];
+}
+
+// Same labels as the Listing type select, so the banner names what staff see.
+function listingTypeOptionLabelForBlocker(value = "") {
+  const key = String(value || "").trim().toLowerCase();
+  return ({ sale: "For sale", rent: "To rent", land: "Land", commercial: "Commercial", student: "Student accommodation" })[key] || key;
 }
 
 function showApprovalBlockerBanner(response = {}, propertyId = "") {
@@ -32330,7 +32337,7 @@ function showApprovalBlockerBanner(response = {}, propertyId = "") {
     .flatMap((issue) => [
       issue?.issue_subject === "property_type" && issue?.form_property_type ? `Form property type: ${issue.form_property_type}` : "",
       issue?.issue_subject === "property_type" && issue?.source_evidence ? `Source evidence: ${issue.source_evidence}` : "",
-      issue?.issue_subject !== "property_type" && issue?.proposed_listing_type ? `Proposed category: ${issue.proposed_listing_type}` : "",
+      issue?.issue_subject !== "property_type" && issue?.proposed_listing_type ? `Set Listing type to: ${listingTypeOptionLabelForBlocker(issue.proposed_listing_type)}` : "",
       issue?.proposed_price_period ? `Proposed period: ${issue.proposed_price_period}` : ""
     ])
     .filter(Boolean);

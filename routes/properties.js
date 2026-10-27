@@ -5370,6 +5370,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           code: 'data_integrity',
           error: 'Listing data integrity issues must be corrected before approval',
           details: dataIntegrity.issues.map((issue) => issue.message),
+          // Highlight the editor field each issue names (e.g. Listing type).
+          missingFields: [...new Set(dataIntegrity.issues.map((issue) => issue.field).filter(Boolean))],
           response: {
             data_integrity: dataIntegrity,
             integrity_override_available: humanApprovalAccess.human_session
