@@ -17955,7 +17955,7 @@ function adminManagerPaymentFormHtml(kind, id) {
   const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
   const input = "mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm";
   return `<form class="rounded-xl border border-green-200 p-3" data-manager-add-payment onsubmit="adminManagerRecordPayment(event, '${kind}', '${adminAttr(id)}')">
-    <h5 class="font-black text-gray-900">Add payment receipt</h5><p class="mt-1 text-xs text-gray-500">Records money already received, updates this payment history and Sales &amp; Revenue.</p>
+    <h5 class="font-black text-gray-900">Add payment receipt</h5><p class="mt-1 text-xs text-gray-500">Records new money received and extends the current paid period. The date is the receipt date. Do not re-enter payments already in the ledger. Updates this payment history and Sales &amp; Revenue.</p>
     <div class="mt-3 grid grid-cols-2 gap-2">
       <label class="text-xs font-semibold">Amount (UGX)<input name="amount_ugx" type="number" min="1" max="100000000" step="1" required inputmode="numeric" class="${input}"></label>
       <label class="text-xs font-semibold">Paid on<input name="paid_at" type="date" value="${today}" max="${today}" required class="${input}"></label>

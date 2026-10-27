@@ -61,6 +61,9 @@ test('received-payment form uses UGX methods and a distinct receipt action', () 
   const html = c.adminManagerPaymentFormHtml('agent', agentId);
   assert.match(html, /name="amount_ugx"[^>]+min="1"/);
   assert.match(html, /Record received payment/);
+  assert.match(html, /extends the current paid period/);
+  assert.match(html, /The date is the receipt date/);
+  assert.match(html, /Do not re-enter payments already in the ledger/);
   assert.match(html, /value="mtn_momo"/);
   assert.doesNotMatch(html, /value="absa_usd"/);
 });
