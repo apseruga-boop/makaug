@@ -1,0 +1,137 @@
+-- Pin approved listings that have no map pin at their area centre.
+-- Approved by Arthur on 27 Oct 2026 at 07:29 UK time.
+--
+-- Payload rows: __EXPECTED_HEADER__. Built by scripts/build-auto-pin-backfill-192.js from a
+-- dry run against production on 27 Oct 2026: 949 approved listings had no pin,
+-- 760 have a known area (canonical centres from #593), 189 give only a
+-- district or a blank area and are left alone. Every point is on Uganda land
+-- and inside the listing's own district. 10 points were spot-checked with
+-- Nominatim.
+--
+-- Each point is the area centre, not the plot, so extra_fields says so:
+-- location_precision 'area', auto_pinned true, auto_pin_note, and coords_fix
+-- with action 'auto_pin' and batch 'auto_pin_20261027' (the same shape the
+-- approval auto-pin writes). Title, area, price and status are not changed.
+-- updated_at is not changed either, so the listings do not jump to
+-- "recently updated".
+--
+-- Guard: the listing is still approved, still has no pin, and has not
+-- been stamped by this batch already. Anything else is skipped.
+-- Idempotent: a second run matches nothing.
+-- Backup: auto_pin_192_backup. Rollback: scripts/rollback-192-auto-pin.sql
+-- (outside db/migrations, so it never runs on deploy), or the admin
+-- maintenance endpoint with mode 'rollback_auto_pins', batch 'auto_pin_20261027'.
+
+SET LOCAL lock_timeout = '8s';
+SET LOCAL statement_timeout = '180s';
+SET LOCAL TIME ZONE 'UTC';
+SET LOCAL client_min_messages = NOTICE;
+
+CREATE TABLE IF NOT EXISTS auto_pin_192_backup (
+  property_id UUID PRIMARY KEY,
+  old_latitude NUMERIC,
+  old_longitude NUMERIC,
+  new_latitude NUMERIC NOT NULL,
+  new_longitude NUMERIC NOT NULL,
+  extra_fields JSONB,
+  updated_at TIMESTAMPTZ,
+  backed_up_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $auto_pin_192$
+DECLARE
+  expected integer := __EXPECTED__;
+  changed integer := 0;
+  trigger_off boolean := FALSE;
+  stamp text := to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+  spec jsonb := $auto_pin_192_payload$__PAYLOAD__$auto_pin_192_payload$;
+BEGIN
+  IF current_setting('app.country_code', true) IS DISTINCT FROM 'UG' THEN
+    RAISE NOTICE 'auto_pin_192 skipped country_not_ug';
+    RETURN;
+  END IF;
+
+  DROP TABLE IF EXISTS auto_pin_192_eligible;
+  CREATE TEMP TABLE auto_pin_192_eligible ON COMMIT DROP AS
+  SELECT
+    p.id,
+    (s.value->>'lat')::numeric AS new_lat,
+    (s.value->>'lng')::numeric AS new_lng,
+    s.value->>'to' AS to_label,
+    s.value->>'to_key' AS to_key,
+    p.extra_fields,
+    p.updated_at
+  FROM jsonb_array_elements(spec) AS s(value)
+  JOIN properties p ON p.id = (s.value->>'id')::uuid
+  WHERE p.status = 'approved'
+    AND p.latitude IS NULL
+    AND p.longitude IS NULL
+    AND COALESCE(p.extra_fields->'coords_fix'->>'batch', '') <> 'auto_pin_20261027';
+
+  INSERT INTO auto_pin_192_backup (
+    property_id, old_latitude, old_longitude, new_latitude, new_longitude, extra_fields, updated_at
+  )
+  SELECT id, NULL, NULL, new_lat, new_lng, extra_fields, updated_at
+  FROM auto_pin_192_eligible
+  ON CONFLICT (property_id) DO NOTHING;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_trigger
+     WHERE tgname = 'trg_properties_updated_at'
+       AND tgrelid = to_regclass('public.properties')
+       AND NOT tgisinternal
+  ) THEN
+    ALTER TABLE properties DISABLE TRIGGER trg_properties_updated_at;
+    trigger_off := TRUE;
+  END IF;
+
+  BEGIN
+    UPDATE properties p
+    SET
+      latitude = e.new_lat,
+      longitude = e.new_lng,
+      extra_fields = COALESCE(p.extra_fields, '{}'::jsonb) || jsonb_build_object(
+        'location_precision', 'area',
+        'location_confidence', '0.4',
+        'geocoding_provider', 'area_centre_auto_pin',
+        'auto_pinned', true,
+        'auto_pin_note', 'Auto-pinned at the area centre: the lister gave no pin. Approximate, not the exact address.',
+        'coords_fix', jsonb_build_object(
+          'action', 'auto_pin',
+          'reason', 'missing_pin',
+          'at', stamp,
+          'by', 'one_off_backfill',
+          'batch', 'auto_pin_20261027',
+          'to', e.to_label,
+          'to_key', e.to_key,
+          'to_point', jsonb_build_object('lat', e.new_lat, 'lng', e.new_lng),
+          'previous', jsonb_build_object(
+            'latitude', NULL,
+            'longitude', NULL,
+            'location_precision', COALESCE(p.extra_fields->'location_precision', 'null'::jsonb),
+            'location_confidence', COALESCE(p.extra_fields->'location_confidence', 'null'::jsonb),
+            'geocoding_provider', COALESCE(p.extra_fields->'geocoding_provider', 'null'::jsonb),
+            'coords_fix', COALESCE(p.extra_fields->'coords_fix', 'null'::jsonb)
+          )
+        )
+      ),
+      updated_at = p.updated_at
+    FROM auto_pin_192_eligible e
+    WHERE p.id = e.id
+      AND p.latitude IS NULL
+      AND p.longitude IS NULL;
+    GET DIAGNOSTICS changed = ROW_COUNT;
+  EXCEPTION WHEN OTHERS THEN
+    IF trigger_off THEN
+      ALTER TABLE properties ENABLE TRIGGER trg_properties_updated_at;
+    END IF;
+    RAISE;
+  END;
+
+  IF trigger_off THEN
+    ALTER TABLE properties ENABLE TRIGGER trg_properties_updated_at;
+  END IF;
+
+  RAISE NOTICE 'auto_pin_192 changed % rows, expected %', changed, expected;
+END
+$auto_pin_192$;
