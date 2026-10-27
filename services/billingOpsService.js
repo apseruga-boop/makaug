@@ -21,6 +21,7 @@ const revenue = require('./revenueService');
 const { publishedPricing } = require('../config/publishedPricing');
 const { agentGreetingName } = require('./agentNameService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
+const { withPaymentTransaction, assertPaymentTransaction, assertOutsidePaymentTransaction } = require('./paymentTransaction');
 
 const SITE = () => String(process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
 let settingsCache = { at: 0, value: null };
@@ -224,29 +225,42 @@ async function takeDownAgentForBilling(db, { agentId, actor = 'admin' }) {
 
 /** Everything back exactly as it was. Called automatically when a payment is recorded. */
 async function reinstateAgentAfterPayment(db, { agentId, actor = 'payment' }) {
-  const agent = await loadAgent(db, agentId);
+  assertOutsidePaymentTransaction(db);
+  const result = await withPaymentTransaction(db, (tx) => reinstateAgentAfterPaymentTx(tx, { agentId, actor }));
+  if (!result.reinstated) return result;
+  const notice = await sendAgentBillingMessage(db, { agentId, kind: 'reinstated', actor, force: true }).catch((error) => ({ error: error.message }));
+  return { ...result, notice };
+}
+
+async function reinstateAgentAfterPaymentTx(tx, { agentId, actor = 'payment' }) {
+  assertPaymentTransaction(tx);
+  const agent = (await tx.query('SELECT * FROM agents WHERE id = $1::uuid FOR UPDATE', [agentId])).rows[0];
+  if (!agent) throw revenue.httpError(404, 'Agent not found');
   if (!agent?.billing_suspended_at) return { reinstated: false };
   const snap = agent.billing_snapshot || {};
-  const client = await db.getClient();
-  try {
-    await client.query('BEGIN');
+  const restore = agent.status === 'suspended' && !agent.removed_at && ['approved', 'pending'].includes(snap.previous_status);
+  let restored = 0;
+  if (restore) {
     for (const item of Array.isArray(snap.listings) ? snap.listings : []) {
-      await client.query(`UPDATE properties SET status = $2, updated_at = NOW() WHERE id = $1 AND status = 'hidden'`, [item.id, item.previous_status]);
+      if (!['approved', 'pending'].includes(item.previous_status)) continue;
+      const result = await tx.query(
+        `UPDATE properties SET status = $2, updated_at = NOW()
+          WHERE id = $1 AND agent_id = $3::uuid AND status = 'hidden' AND updated_at <= $4::timestamptz
+          RETURNING id`,
+        [item.id, item.previous_status, agentId, agent.billing_suspended_at]
+      );
+      restored += result.rows.length;
     }
-    await client.query(
-      `UPDATE agents SET billing_suspended_at = NULL, billing_snapshot = NULL,
-              status = $2, updated_at = NOW() WHERE id = $1::uuid`,
-      [agentId, ['approved', 'pending'].includes(snap.previous_status) ? snap.previous_status : 'approved']
-    );
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw error;
-  } finally {
-    client.release();
   }
-  const notice = await sendAgentBillingMessage(db, { agentId, kind: 'reinstated', actor, force: true }).catch((error) => ({ error: error.message }));
-  return { reinstated: true, listings_restored: (snap.listings || []).length, notice };
+  if (agent.status === 'suspended' && !agent.removed_at && !restore) {
+    throw revenue.httpError(409, 'The billing snapshot needs staff review before this agent can be reinstated.');
+  }
+  await tx.query(
+    `UPDATE agents SET billing_suspended_at = NULL, billing_snapshot = NULL,
+            status = $2, updated_at = NOW() WHERE id = $1::uuid`,
+    [agentId, restore ? snap.previous_status : agent.status]
+  );
+  return { reinstated: restore, listings_restored: restored, moderation_preserved: !restore };
 }
 
 /** Daily: remind agents a few days before their month ends, and on the day. */
@@ -380,6 +394,9 @@ async function confirmClaim(db, { claimId, actor, method, accountKey, amountUgx,
   const claim = (await db.query('SELECT * FROM payment_claims WHERE id = $1::uuid', [claimId])).rows[0];
   if (!claim) throw revenue.httpError(404, 'Claim not found');
   if (claim.status !== 'pending') throw revenue.httpError(409, `This claim is already ${claim.status}`);
+  if (claim.pay_link_id) {
+    return require('./payLinkService').settleConfirmedClaim(db, { claimId, actor, method, accountKey, amountUgx, amountOriginal, fxRate, note });
+  }
   const payment = {
     amount: amountUgx || claim.amount_ugx,
     amount_original: amountOriginal || undefined,
@@ -421,7 +438,6 @@ async function confirmClaim(db, { claimId, actor, method, accountKey, amountUgx,
     `UPDATE payment_claims SET status = 'confirmed', decided_by = $2, decided_at = NOW(), decision_note = $3, entry_id = $4 WHERE id = $1`,
     [claim.id, actor, note || null, result.entry.id]
   );
-  if (claim.pay_link_id) await require('./payLinkService').closeLinkForClaim(db, claim.id, result.entry.id).catch(() => null);
   return { claim_id: claim.id, ...result };
 }
 
@@ -438,9 +454,18 @@ async function rejectClaim(db, { claimId, actor, note }) {
 // --- Private listers --------------------------------------------------------
 
 async function recordListingPayment(db, { propertyId, payment, actor }) {
-  const settings = await getSettings(db);
+  assertOutsidePaymentTransaction(db);
+  revenue.normalizeEntry(payment);
+  const prepared = await revenue.prepareReceipt(payment);
+  return withPaymentTransaction(db, (tx) => recordListingPaymentTx(tx, { propertyId, payment: prepared, actor }));
+}
+
+async function recordListingPaymentTx(tx, { propertyId, payment, actor }) {
+  assertPaymentTransaction(tx);
+  revenue.assertPreparedReceipt(payment);
+  const settings = await getSettings(tx, { fresh: true });
   const fee = Number(settings.lister_fee?.monthly_ugx || publishedPricing().owner_listing.monthly_ugx);
-  const property = (await db.query('SELECT id, title, lister_paid_until, lister_billing_suspended_at, extra_fields FROM properties WHERE id = $1::uuid', [propertyId])).rows[0];
+  const property = (await tx.query('SELECT id, title, lister_paid_until, lister_billing_suspended_at, extra_fields FROM properties WHERE id = $1::uuid FOR UPDATE', [propertyId])).rows[0];
   if (!property) throw revenue.httpError(404, 'Listing not found');
   const entry = revenue.normalizeEntry(payment);
   const months = Math.max(1, Math.floor(entry.amount_ugx / fee));
@@ -449,7 +474,7 @@ async function recordListingPayment(db, { propertyId, payment, actor }) {
   const current = property.lister_paid_until ? revenue.isoDay(property.lister_paid_until) : '';
   const start = current && current >= today ? new Date(Date.parse(`${current}T00:00:00Z`) + 86400000).toISOString().slice(0, 10) : today;
   const end = new Date(Date.parse(`${revenue.addMonths(start, months)}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
-  const row = (await db.query(
+  const row = (await tx.query(
     `INSERT INTO revenue_entries (direction, kind, amount_ugx, account_key, method, reference, paid_at, period_start, period_end,
                                   payer_name, payer_phone, note, receipt_url, recorded_by, property_id,
                                   currency, amount_original, fx_rate_ugx)
@@ -458,14 +483,16 @@ async function recordListingPayment(db, { propertyId, payment, actor }) {
       entry.payer_name, entry.payer_phone, entry.note, entry.receipt_url, actor, propertyId,
       entry.currency || 'UGX', entry.amount_original ?? null, entry.fx_rate_ugx ?? null]
   ).catch((error) => {
-    if (String(error.code) === '23505') throw revenue.httpError(409, `Transaction ID ${entry.reference} has already been recorded. One receipt can only be used once.`);
+    if (String(error.code) === '23505') throw Object.assign(revenue.httpError(409, `Transaction ID ${entry.reference} has already been recorded. One receipt can only be used once.`), { code: error.code, constraint: error.constraint });
     throw error;
   })).rows[0];
-  await db.query(
+  await tx.query(
     `UPDATE properties
         SET lister_paid_until = $2::date,
             status = CASE WHEN lister_billing_suspended_at IS NOT NULL AND status = 'hidden'
-                          THEN COALESCE(NULLIF(extra_fields->>'billing_previous_status', ''), 'approved') ELSE status END,
+                               AND updated_at <= lister_billing_suspended_at
+                               AND extra_fields->>'billing_previous_status' IN ('approved', 'pending')
+                          THEN extra_fields->>'billing_previous_status' ELSE status END,
             lister_billing_suspended_at = NULL,
             updated_at = NOW()
       WHERE id = $1::uuid`,
@@ -824,6 +851,7 @@ module.exports = {
   sendAgentBillingMessage,
   takeDownAgentForBilling,
   reinstateAgentAfterPayment,
+  reinstateAgentAfterPaymentTx,
   runAgentFeeReminders,
   onFreeTrial,
   trialState,
@@ -844,6 +872,7 @@ module.exports = {
   confirmClaim,
   rejectClaim,
   recordListingPayment,
+  recordListingPaymentTx,
   listingStats,
   listerFreeUntil,
   fillTemplate,

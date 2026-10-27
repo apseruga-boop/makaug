@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { EventEmitter } = require('events');
 
 const { writeAdminAudit, mirrorLegacyAudit } = require('./adminSecurityService');
+const { withPaymentTransaction, assertPaymentTransaction, assertOutsidePaymentTransaction } = require('./paymentTransaction');
 
 const MONETIZATION_SPINE_MARKER = 'monetization-spine-v1-20260715';
 const paymentEvents = new EventEmitter();
@@ -156,7 +157,24 @@ async function createHostedPayment(db, {
  * was bought — boost, campaign, invoice.
  */
 async function completeHostedPayment(db, paymentId, { reference = '', method = '' } = {}) {
-  const updated = await db.query(
+  assertOutsidePaymentTransaction(db);
+  const payment = await withPaymentTransaction(db, (tx) => completeHostedPaymentTx(tx, paymentId, { reference, method }));
+  if (payment) paymentEvents.emit('payment.succeeded', payment);
+  return payment;
+}
+
+function fulfillmentError(message, status = 409) {
+  return Object.assign(new Error(message), { status, code: 'payment_fulfillment_error' });
+}
+
+async function completeHostedPaymentTx(tx, paymentId, { reference = '', method = '' } = {}) {
+  assertPaymentTransaction(tx);
+  const existing = (await tx.query('SELECT * FROM payments WHERE id = $1 FOR UPDATE', [paymentId])).rows[0];
+  if (!existing) throw fulfillmentError('Payment not found', 404);
+  if (existing.status === 'paid') return null;
+  const partial = (await tx.query('SELECT id FROM account_entitlements WHERE payment_id = $1 LIMIT 1', [paymentId])).rows[0];
+  if (partial) throw fulfillmentError('The unpaid purchase already has an entitlement and needs staff review');
+  const updated = await tx.query(
     `UPDATE payments
      SET status = 'paid',
          gateway_txn_id = COALESCE(NULLIF($2, ''), gateway_txn_id),
@@ -168,25 +186,32 @@ async function completeHostedPayment(db, paymentId, { reference = '', method = '
     [paymentId, clean(reference), clean(method)]
   );
   const payment = updated.rows[0];
-  if (!payment) return null;
-  await grantEntitlementForPayment(db, payment).catch(() => null);
+  if (!payment) throw fulfillmentError('Payment could not be marked paid');
+  await grantEntitlementForPaymentTx(tx, payment);
   const metadata = payment.metadata || {};
   const campaignId = metadata.campaign_id || metadata.campaignId || null;
-  if (campaignId) await updateCampaignPayment(db, campaignId, 'paid', clean(reference) || payment.checkout_reference).catch(() => null);
+  if (payment.purpose === 'advertising_campaign' && !campaignId) throw fulfillmentError('The advertising payment has no campaign');
+  if (campaignId) {
+    const campaign = await updateCampaignPayment(tx, campaignId, 'paid', clean(reference) || payment.checkout_reference);
+    if (!campaign) throw fulfillmentError('The payment campaign no longer exists', 404);
+  }
   const invoiceId = metadata.invoice_id || metadata.invoiceId || null;
   if (invoiceId) {
-    await db.query(
+    const invoice = await tx.query(
       `UPDATE invoices SET status = 'paid', payment_method = $2, payment_provider = $3, payment_reference = COALESCE(NULLIF($4, ''), payment_reference),
               paid_at = COALESCE(paid_at, NOW()), updated_at = NOW()
-        WHERE id = $1`,
+        WHERE id = $1 RETURNING id, campaign_id`,
       [invoiceId, clean(method) || 'pay_link', PAY_LINK_PROVIDER, clean(reference)]
-    ).catch(() => {});
-    await db.query(
+    );
+    if (!invoice.rows[0]) throw fulfillmentError('The payment invoice no longer exists', 404);
+    if (campaignId && invoice.rows[0].campaign_id && invoice.rows[0].campaign_id !== campaignId) {
+      throw fulfillmentError('The payment invoice belongs to a different campaign');
+    }
+    await tx.query(
       `UPDATE payment_links SET status = 'paid', paid_at = COALESCE(paid_at, NOW()), updated_at = NOW() WHERE invoice_id = $1`,
       [invoiceId]
-    ).catch(() => {});
+    );
   }
-  paymentEvents.emit('payment.succeeded', payment);
   return payment;
 }
 
@@ -236,19 +261,46 @@ function verifyGenericPaymentWebhook({ signature = '', env = process.env } = {})
 }
 
 async function grantEntitlementForPayment(db, payment = {}) {
-  if (!db || !payment?.id || payment.status !== 'paid') return null;
+  assertOutsidePaymentTransaction(db);
+  if (!payment?.id || payment.status !== 'paid') return null;
+  return withPaymentTransaction(db, async (tx) => {
+    const stored = (await tx.query('SELECT * FROM payments WHERE id = $1 FOR UPDATE', [payment.id])).rows[0];
+    if (!stored) throw fulfillmentError('Payment not found', 404);
+    if (stored.status !== 'paid') return null;
+    return grantEntitlementForPaymentTx(tx, stored);
+  });
+}
+
+async function grantEntitlementForPaymentTx(tx, payment) {
+  assertPaymentTransaction(tx);
   const metadata = payment.metadata && typeof payment.metadata === 'object' ? payment.metadata : {};
   const productKey = clean(metadata.product_key || metadata.productKey || (payment.purpose === 'listing_boost' ? 'listing_boost_basic' : ''));
   const accountId = payment.payer_id || metadata.account_id || metadata.accountId || null;
-  if (!productKey || !accountId) return null;
-  const productResult = await db.query(`SELECT * FROM products WHERE key = $1 LIMIT 1`, [productKey]);
+  if (!productKey) return null;
+  if (!accountId) throw fulfillmentError('The entitlement payment has no account');
+  const productResult = await tx.query(`SELECT * FROM products WHERE key = $1 FOR SHARE`, [productKey]);
   const product = productResult.rows[0] || null;
-  if (!product) return null;
+  if (!product) throw fulfillmentError('The payment product no longer exists', 404);
+  const account = (await tx.query('SELECT id FROM users WHERE id = $1 FOR KEY SHARE', [accountId])).rows[0];
+  if (!account) throw fulfillmentError('The payment account no longer exists', 404);
+  const listingId = clean(metadata.listing_id || metadata.listingId);
+  if (payment.purpose === 'listing_boost') {
+    if (!listingId) throw fulfillmentError('The boost payment has no listing');
+    const listing = (await tx.query('SELECT id FROM properties WHERE id = $1 FOR UPDATE', [listingId])).rows[0];
+    if (!listing) throw fulfillmentError('The boosted listing no longer exists', 404);
+  }
+  const prior = (await tx.query('SELECT * FROM account_entitlements WHERE payment_id = $1', [payment.id])).rows;
+  if (prior.length) {
+    if (prior.length !== 1 || prior[0].product_key !== productKey || prior[0].account_id !== accountId) {
+      throw fulfillmentError('The payment has inconsistent entitlement records');
+    }
+    return prior[0];
+  }
   const durationDays = Number(product.metadata?.duration_days || metadata.duration_days || 0) || 0;
   const expiresAt = durationDays > 0
     ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
     : null;
-  const entitlement = await db.query(
+  const entitlement = await tx.query(
     `INSERT INTO account_entitlements (
        account_id, product_key, status, expires_at, quantity, payment_id, metadata
      )
@@ -263,18 +315,19 @@ async function grantEntitlementForPayment(db, payment = {}) {
       JSON.stringify({ payment_reference: payment.checkout_reference, payment_purpose: payment.purpose, ...metadata })
     ]
   );
-  const listingId = clean(metadata.listing_id || metadata.listingId);
   if (payment.purpose === 'listing_boost' && listingId) {
-    await db.query(
+    const boosted = await tx.query(
       `UPDATE properties
        SET boost_tier = COALESCE(NULLIF($2, ''), boost_tier, 'basic'),
            featured_until = COALESCE($3::timestamptz, featured_until, NOW() + INTERVAL '7 days'),
            updated_at = NOW()
-       WHERE id = $1`,
+       WHERE id = $1 RETURNING id`,
       [listingId, clean(product.metadata?.boost_tier || metadata.boost_tier || 'basic'), expiresAt]
-    ).catch(() => {});
+    );
+    if (!boosted.rows[0]) throw fulfillmentError('The boosted listing no longer exists', 404);
   }
-  return entitlement.rows[0] || null;
+  if (!entitlement.rows[0]) throw fulfillmentError('The product entitlement could not be created');
+  return entitlement.rows[0];
 }
 
 async function handleGenericPaymentWebhook(db, {
@@ -499,6 +552,7 @@ async function getPaymentStatus(db, paymentLinkId) {
 
 module.exports = {
   completeHostedPayment,
+  completeHostedPaymentTx,
   PAY_LINK_PROVIDER,
   MONETIZATION_SPINE_MARKER,
   buildCheckoutReference,
