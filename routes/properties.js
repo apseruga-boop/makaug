@@ -1,4 +1,4 @@
-const { correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
+const { autoPinForApproval, correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
 const { publicListingPayload, hideImplausiblePrice } = require('../utils/publicListingPayload');
@@ -5828,6 +5828,34 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       };
     }
     decisionTiming.mark('status_committed');
+
+    // Approved with no map pin: put it at the centre of its own area (never a
+    // district-only or blank area), marked approximate. A pin set since is kept.
+    if (nextStatus === 'approved' && listing?.id && !IS_SOUTH_AFRICA) {
+      try {
+        const autoPin = autoPinForApproval({
+          area: listing.area,
+          district: listing.district,
+          extra_fields: listing.extra_fields || {},
+          by: actorId || 'approval'
+        });
+        if (autoPin) {
+          const pinned = await db.query(
+            `UPDATE properties
+                SET latitude = $2, longitude = $3,
+                    extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $4::jsonb
+              WHERE id = $1 AND latitude IS NULL AND longitude IS NULL
+              RETURNING extra_fields`,
+            [listing.id, autoPin.latitude, autoPin.longitude, JSON.stringify(autoPin.extra_fields_patch)]
+          );
+          if (pinned.rowCount) {
+            listing = { ...listing, latitude: autoPin.latitude, longitude: autoPin.longitude, extra_fields: pinned.rows[0].extra_fields };
+          }
+        }
+      } catch (error) {
+        logger.warn('Auto-pin on approval failed', { property_id: listing.id, message: error.message });
+      }
+    }
     if (nextStatus === 'approved') {
       listing.primary_image_url = await getPrimaryImageUrlForProperty(listing.id);
       if (videoCaptionDecision?.persist) {
