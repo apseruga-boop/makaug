@@ -449,8 +449,11 @@ test('Find: registry first, external geocoders ignored beyond 15 km ("Lubowa" no
   const gayazaPin = { lat: 0.4528, lng: 32.6136 };
   assert.equal(sandbox.adminReviewChooseFindPoint(busiika, gayazaPin, 15, { lat: 0.84, lng: 32.5 }).source, 'external_district_checked');
   assert.equal(sandbox.adminReviewChooseFindPoint(busiika, { lat: 0.3, lng: 32.6 }, 15, { lat: 0.84, lng: 32.5 }).point, null);
-  // The handler resolves the registry before calling any geocoder.
-  const handler = extract('adminReviewFindAddressOrPlace');
+  // The handler resolves the registry before calling any geocoder. (The Find
+  // button's adminReviewFindAddressOrPlace wraps this search body and then moves
+  // an approximate pin; see staff-approximate-pin-lookup-27oct.test.js.)
+  const handler = extract('adminReviewFindAddressOrPlaceSearch');
+  assert.match(extract('adminReviewFindAddressOrPlace'), /await adminReviewFindAddressOrPlaceSearch\(/);
   assert.ok(handler.indexOf('resolveUgandaLocationFromSharedRegistry(query)') < handler.indexOf('geocodeWithGoogle('));
   assert.match(handler, /adminReviewChooseFindPoint\(registryLocation, externalPoint/);
 });
