@@ -17957,14 +17957,38 @@ function adminManagerPaymentFormHtml(kind, id) {
   return `<form class="rounded-xl border border-green-200 p-3" data-manager-add-payment onsubmit="adminManagerRecordPayment(event, '${kind}', '${adminAttr(id)}')">
     <h5 class="font-black text-gray-900">Add payment receipt</h5><p class="mt-1 text-xs text-gray-500">Records new money received and extends the current paid period. The date is the receipt date. Do not re-enter payments already in the ledger. Updates this payment history and Sales &amp; Revenue.</p>
     <div class="mt-3 grid grid-cols-2 gap-2">
-      <label class="text-xs font-semibold">Amount (UGX)<input name="amount_ugx" type="number" min="1" max="100000000" step="1" required inputmode="numeric" class="${input}"></label>
+      <label class="text-xs font-semibold" data-manager-ugx>Amount (UGX)<input name="amount_ugx" type="number" min="1" max="100000000" step="1" required inputmode="numeric" class="${input}"></label>
       <label class="text-xs font-semibold">Paid on<input name="paid_at" type="date" value="${today}" max="${today}" required class="${input}"></label>
-      <label class="text-xs font-semibold">Method<select name="method" required class="${input}"><option value="">Choose…</option>${ADMIN_METHOD_KEYS.filter((method) => method !== "absa_usd").map((method) => `<option value="${adminAttr(method)}">${adminEscape(ADMIN_METHOD_LABELS[method] || method)}</option>`).join("")}</select></label>
+      <label class="text-xs font-semibold">Method<select name="method" required onchange="adminManagerPaymentCurrencyChanged(this.form)" class="${input}"><option value="">Choose…</option>${Array.from(new Set([...ADMIN_METHOD_KEYS, "revolut_card"])).map((method) => `<option value="${adminAttr(method)}">${adminEscape(ADMIN_METHOD_LABELS[method] || method)}</option>`).join("")}</select></label>
       <label class="text-xs font-semibold">Transaction ID<input name="reference" maxlength="160" class="${input}"></label>
+      <div class="hidden col-span-2 grid grid-cols-2 gap-2" data-manager-usd>
+        <label class="text-xs font-semibold">Amount (US dollars)<input name="amount_original" type="number" min="0.01" step="0.01" inputmode="decimal" disabled class="${input}"></label>
+        <label class="text-xs font-semibold">UGX per US $1<input name="fx_rate_ugx" type="number" min="1000.01" max="9999.99" step="0.01" inputmode="decimal" disabled class="${input}" placeholder="Enter the rate used"></label>
+        <p class="col-span-2 text-xs text-gray-500">Enter dollars received and the exchange rate used to value this payment in UGX. The converted amount appears in the payment totals.</p>
+      </div>
       <label class="text-xs font-semibold col-span-2">Note<input name="note" maxlength="1000" class="${input}"></label>
     </div><p class="hidden mt-2 text-xs text-red-800" role="alert" data-payment-error></p>
     <div class="mt-3 flex justify-end"><button type="submit" class="rounded-lg bg-green-700 px-4 py-2 text-xs font-bold text-white">Record received payment</button></div>
   </form>`;
+}
+
+function adminManagerPaymentIsUsd(method) {
+  return ["absa_usd", "revolut_card"].includes(String(method || "").trim().toLowerCase());
+}
+
+function adminManagerPaymentCurrencyChanged(form) {
+  if (!form) return;
+  const usd = adminManagerPaymentIsUsd(form.querySelector("[name=method]")?.value);
+  form.querySelector("[data-manager-ugx]")?.classList.toggle("hidden", usd);
+  form.querySelector("[data-manager-usd]")?.classList.toggle("hidden", !usd);
+  for (const name of ["amount_ugx", "amount_original", "fx_rate_ugx"]) {
+    const input = form.querySelector(`[name=${name}]`);
+    if (!input) continue;
+    const active = name === "amount_ugx" ? !usd : usd;
+    input.disabled = !active;
+    input.required = active;
+  }
+  form.querySelector("[data-payment-error]")?.classList.add("hidden");
 }
 
 async function adminManagerRecordPayment(event, kind, id) {
@@ -17972,10 +17996,31 @@ async function adminManagerRecordPayment(event, kind, id) {
   const form = event?.currentTarget;
   if (!form || form.dataset.saving === "true") return;
   const values = new FormData(form);
-  const body = { amount_ugx: Number(values.get("amount_ugx")), method: String(values.get("method") || ""), reference: String(values.get("reference") || "").trim(), paid_at: String(values.get("paid_at") || ""), note: String(values.get("note") || "").trim() };
+  const body = { method: String(values.get("method") || "").trim().toLowerCase(), reference: String(values.get("reference") || "").trim(), paid_at: String(values.get("paid_at") || ""), note: String(values.get("note") || "").trim() };
   const errorBox = form.querySelector("[data-payment-error]");
-  if (!Number.isSafeInteger(body.amount_ugx) || body.amount_ugx <= 0 || body.amount_ugx > 100000000 || !body.method || !body.paid_at) {
-    if (errorBox) { errorBox.textContent = "Enter a whole UGX amount up to 100,000,000, payment date and method."; errorBox.classList.remove("hidden"); }
+  let errorMessage = "";
+  if (adminManagerPaymentIsUsd(body.method)) {
+    const dollars = String(values.get("amount_original") || "").trim();
+    const rate = String(values.get("fx_rate_ugx") || "").trim();
+    body.amount_original = Number(dollars);
+    body.fx_rate_ugx = Number(rate);
+    if (!/^\d+(?:\.\d{1,2})?$/.test(dollars) || !Number.isFinite(body.amount_original) || body.amount_original <= 0) {
+      errorMessage = "Enter the positive amount received in US dollars, with at most two decimal places.";
+    } else if (!/^\d+(?:\.\d{1,2})?$/.test(rate) || !Number.isFinite(body.fx_rate_ugx) || body.fx_rate_ugx <= 1000 || body.fx_rate_ugx >= 10000) {
+      errorMessage = "Enter the UGX-per-US-dollar rate used for this receipt, between 1,000 and 10,000.";
+    } else if (!Number.isSafeInteger(Math.round(body.amount_original * body.fx_rate_ugx))) {
+      errorMessage = "This dollar amount is too large to record accurately.";
+    }
+  } else {
+    const amount = String(values.get("amount_ugx") || "").trim();
+    body.amount_ugx = Number(amount);
+    if (!/^\d+$/.test(amount) || !Number.isSafeInteger(body.amount_ugx) || body.amount_ugx <= 0 || body.amount_ugx > 100000000) {
+      errorMessage = "Enter a whole UGX amount up to 100,000,000.";
+    }
+  }
+  if (!body.method || !body.paid_at) errorMessage = "Choose the payment method and receipt date.";
+  if (errorMessage) {
+    if (errorBox) { errorBox.textContent = errorMessage; errorBox.classList.remove("hidden"); }
     return;
   }
   const fingerprint = JSON.stringify(body);

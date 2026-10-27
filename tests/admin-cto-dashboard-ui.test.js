@@ -18,7 +18,7 @@ function context(extra = {}) {
     adminEscape: esc, adminAttr: esc, adminAuthHeaders: () => ({ Authorization: 'Bearer fixture' }),
     ADMIN_AGENT_MANAGER_STATE: { detail: null, openId: agentId, rows: [] },
     ADMIN_PUBLIC_MANAGER_STATE: { page: 1, search: '', request: 0, detailRequest: 0, loaded: false },
-    ADMIN_METHOD_KEYS: ['mtn_momo', 'cash', 'absa_usd'], ADMIN_METHOD_LABELS: { mtn_momo: 'MTN MoMo', cash: 'Cash' },
+    ADMIN_METHOD_KEYS: ['mtn_momo', 'cash', 'absa_usd'], ADMIN_METHOD_LABELS: { mtn_momo: 'MTN MoMo', cash: 'Cash', absa_usd: 'Absa USD ($)', revolut_card: 'Card — Revolut ($)' },
     howToVideosForContext: () => [], isPublishedHowToVideo: () => true,
     document: { querySelector: () => null, getElementById: () => null },
     toast() {}, adminRevenueData: {}, ...extra
@@ -56,7 +56,7 @@ test('history uses the all-time ledger total, renders receipts and reaches older
   assert.match(html, /Page 1 of 2/);
 });
 
-test('received-payment form uses UGX methods and a distinct receipt action', () => {
+test('received-payment form provides explicit UGX and USD fields with a distinct receipt action', () => {
   const c = context();
   const html = c.adminManagerPaymentFormHtml('agent', agentId);
   assert.match(html, /name="amount_ugx"[^>]+min="1"/);
@@ -65,7 +65,11 @@ test('received-payment form uses UGX methods and a distinct receipt action', () 
   assert.match(html, /The date is the receipt date/);
   assert.match(html, /Do not re-enter payments already in the ledger/);
   assert.match(html, /value="mtn_momo"/);
-  assert.doesNotMatch(html, /value="absa_usd"/);
+  assert.match(html, /value="absa_usd"/);
+  assert.match(html, /value="revolut_card"/);
+  assert.match(html, /name="amount_original"/);
+  assert.match(html, /name="fx_rate_ugx"/);
+  assert.doesNotMatch(html, /value="3700"/);
 });
 
 test('a payment submit appends to the scoped ledger endpoint, blocks double submission and refreshes the manager', async () => {
@@ -194,4 +198,91 @@ test('agent history pagination keeps the newest requested page when responses fi
   pending[1].resolve({ data: { agent: { id: agentId }, page: 2 } }); await second;
   pending[0].resolve({ data: { agent: { id: agentId }, page: 1 } }); await first;
   assert.equal(body.innerHTML, 'Showing 2');
+});
+
+test('Revolut USD submission sends dollars and explicit exchange rate accepted by the real ledger validator', async () => {
+  const { validatedPayment } = require('../services/adminManagerPaymentService');
+  const calls = [];
+  const c = context({ apiRequest: async (url, options) => { validatedPayment(options.body); calls.push({ url, body: options.body }); }, adminAgentManagerRefreshOpen: async () => {} });
+  const f = form({ method: 'revolut_card', amount_ugx: '50000', amount_original: '15.25', fx_rate_ugx: '3700.50', reference: 'REV-RECEIPT', paid_at: '2026-10-27' });
+  await c.adminManagerRecordPayment(event(f), 'agent', agentId);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].body.method, 'revolut_card');
+  assert.equal(calls[0].body.amount_original, 15.25);
+  assert.equal(calls[0].body.fx_rate_ugx, 3700.5);
+  assert.equal(calls[0].body.amount_ugx, undefined, 'a hidden UGX value cannot become the USD receipt amount');
+  assert.equal(calls[0].body.request_id, 'c1000000-0000-4000-8000-000000000001');
+  assert.equal(JSON.parse(f.dataset.requestPayload).amount_original, 15.25);
+  assert.equal(JSON.parse(f.dataset.requestPayload).fx_rate_ugx, 3700.5);
+});
+
+test('USD receipt rejects negative, zero and over-precision dollar amounts before the API', async () => {
+  let calls = 0;
+  const c = context({ apiRequest: async () => { calls += 1; } });
+  for (const method of ['revolut_card', 'absa_usd']) {
+    for (const dollars of ['-15', '0', '', '1e2', '0.001', '+3', 'NaN', 'Infinity']) {
+      const f = form({ method, amount_original: dollars, fx_rate_ugx: '3700', paid_at: '2026-10-27' });
+      await c.adminManagerRecordPayment(event(f), 'agent', agentId);
+      assert.match(f.error.textContent, /positive amount received in US dollars/);
+    }
+  }
+  assert.equal(calls, 0);
+});
+
+test('USD receipt requires a valid explicit exchange rate instead of silently defaulting', async () => {
+  let calls = 0;
+  const c = context({ apiRequest: async () => { calls += 1; } });
+  for (const rate of ['', '0', '-3700', '1000', '10000', '3700x', '1e3', 'NaN']) {
+    const f = form({ method: 'revolut_card', amount_original: '15', fx_rate_ugx: rate, paid_at: '2026-10-27' });
+    await c.adminManagerRecordPayment(event(f), 'public', listingId);
+    assert.match(f.error.textContent, /rate used for this receipt/);
+  }
+  assert.equal(calls, 0);
+});
+
+test('currency switching changes field visibility and validity without converting or losing amounts', async () => {
+  const elements = {
+    method: { value: 'revolut_card' }, amount_ugx: { value: '50000', required: true, disabled: false },
+    amount_original: { value: '15.25', required: false, disabled: true }, fx_rate_ugx: { value: '3700.50', required: false, disabled: true },
+    ugx: { classList: { toggle(key, value) { this[key] = value; } } }, usd: { classList: { toggle(key, value) { this[key] = value; } } },
+    error: { classList: { add() {} } }
+  };
+  const f = { querySelector(selector) { if (selector === '[data-manager-ugx]') return elements.ugx; if (selector === '[data-manager-usd]') return elements.usd; if (selector === '[data-payment-error]') return elements.error; return elements[selector.match(/name=(\w+)/)?.[1]]; } };
+  const c = context();
+  c.adminManagerPaymentCurrencyChanged(f);
+  assert.equal(elements.ugx.classList.hidden, true);
+  assert.equal(elements.usd.classList.hidden, false);
+  assert.equal(elements.amount_ugx.disabled, true);
+  assert.equal(elements.amount_ugx.required, false);
+  assert.equal(elements.amount_original.disabled, false);
+  assert.equal(elements.amount_original.required, true);
+  assert.equal(elements.fx_rate_ugx.required, true);
+  elements.method.value = 'mtn_momo';
+  c.adminManagerPaymentCurrencyChanged(f);
+  assert.equal(elements.ugx.classList.hidden, false);
+  assert.equal(elements.usd.classList.hidden, true);
+  assert.equal(elements.amount_ugx.disabled, false);
+  assert.equal(elements.amount_ugx.required, true);
+  assert.equal(elements.amount_original.disabled, true);
+  assert.equal(elements.amount_original.required, false);
+  assert.equal(elements.fx_rate_ugx.disabled, true);
+  assert.equal(elements.amount_ugx.value, '50000');
+  assert.equal(elements.amount_original.value, '15.25');
+  assert.equal(elements.fx_rate_ugx.value, '3700.50');
+});
+
+test('UGX receipt ignores preserved disabled USD fields and an edited FX rate generates a new idempotency request', async () => {
+  const bodies = []; let n = 0;
+  const c = context({ crypto: { randomUUID: () => `request-${++n}` }, apiRequest: async (_url, options) => { bodies.push(options.body); throw Error('Connection lost'); } });
+  const f = form({ method: 'mtn_momo', amount_ugx: '50000', amount_original: '15.25', fx_rate_ugx: '3700.50', paid_at: '2026-10-27' });
+  await c.adminManagerRecordPayment(event(f), 'agent', agentId);
+  assert.equal(bodies[0].amount_ugx, 50000);
+  assert.equal(bodies[0].amount_original, undefined);
+  assert.equal(bodies[0].fx_rate_ugx, undefined);
+  f.values.method = 'revolut_card';
+  await c.adminManagerRecordPayment(event(f), 'agent', agentId);
+  await c.adminManagerRecordPayment(event(f), 'agent', agentId);
+  f.values.fx_rate_ugx = '3800';
+  await c.adminManagerRecordPayment(event(f), 'agent', agentId);
+  assert.deepEqual(bodies.map((body) => body.request_id), ['request-1', 'request-2', 'request-2', 'request-3']);
 });
