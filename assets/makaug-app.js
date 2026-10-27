@@ -36876,7 +36876,7 @@ function updateLpPhotoRequirements() {
     <ul class="list-disc pl-5 space-y-1">
       ${checklist.map((item) => `<li><strong>${translateListingLabel(item.label)}</strong> - <span class="text-xs text-gray-500">${translateListingLabel(item.hint)}</span></li>`).join("")}
     </ul>
-    <p class="text-xs text-gray-500 mt-2">${translateListingLabel("After upload, assign each photo to what it shows.")}</p>`;
+    <p class="text-xs text-gray-500 mt-2">${translateListingLabel("Labelling what each photo shows is optional.")}</p>`;
   renderLpPhotoFeedback();
 }
 
