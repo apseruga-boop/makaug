@@ -548,8 +548,29 @@ async function syncListingImageSummary(client, propertyId) {
   return summary;
 }
 
+// 27 Oct 2026 (MK-…A64E8E): "Make a cover from the video" attached two stills
+// at 05:15 UTC, but the listing kept public_image_count 0, no primary image and
+// media_validation_status 'blocked_no_usable_property_image', so the queue
+// card still said "no approved property photo". A staff-made video cover now
+// rewrites the summary and clears that intake flag, like a staff upload does.
+async function syncListingImageSummaryAfterVideoCover(client, propertyId) {
+  const summary = await syncListingImageSummary(client, propertyId);
+  if (summary.public_image_count > 0) {
+    await client.query(
+      `UPDATE properties
+          SET extra_fields = extra_fields || '{"media_validation_status":"passed_repair_image_gate"}'::jsonb,
+              updated_at = NOW()
+        WHERE id = $1
+          AND extra_fields->>'media_validation_status' = 'blocked_no_usable_property_image'`,
+      [propertyId]
+    );
+  }
+  return summary;
+}
+
 module.exports = {
   syncListingImageSummary,
+  syncListingImageSummaryAfterVideoCover,
   changeStaffPropertyImage,
   addStaffPropertyImages,
   removeStaffPropertyVideo,
