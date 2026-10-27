@@ -57,6 +57,7 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute
 .btn{display:block;width:100%;border:0;border-radius:12px;padding:15px 16px;font:inherit;font-weight:800;font-size:16px;cursor:pointer;text-align:center;text-decoration:none}
 .btn-card{background:var(--ink);color:#fff}
 .btn-momo{background:#ffcb05;color:#16241d}
+.btn-pesapal{background:var(--green);color:#fff}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .marks{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .marks span{font-size:11px;font-weight:700;border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--ink)}
@@ -89,17 +90,30 @@ ${body}
 }
 
 function paidView(d) {
-  const how = d.paid_method === 'card' ? 'by card' : (d.paid_method === 'mtn_momo' ? 'by mobile money' : '');
+  const how = d.paid_method === 'card' ? 'by card' : (d.paid_method === 'mtn_momo' ? 'by mobile money' : (d.paid_method === 'pesapal' ? 'through Pesapal' : ''));
   return layout('Paid', `
 <div class="ok"><div class="tick">✓</div><h1>Paid — thank you${d.payer_first_name ? `, ${esc(d.payer_first_name)}` : ''}!</h1>
 <p>${esc(d.amount_ugx_text)} ${esc(how)} for ${esc(d.description)}.</p></div>
-<p class="note" style="text-align:center">You'll also get a confirmation on WhatsApp. Reference ${esc(d.code)}.</p>`);
+<p class="note" style="text-align:center">Reference ${esc(d.code)}. Payment confirmations are sent to the contact on your payment link.</p>
+${d.pesapal_review ? '<div class="warn">This payment needs a team review. Please contact makaug with the reference above before making another payment.</div>' : ''}`);
 }
 
-function openView(d, { error = '', claimed = false, cardCancelled = false } = {}) {
+function openView(d, { error = '', claimed = false, cardCancelled = false, pesapalStatus = '' } = {}) {
   const payTo = d.pay_to || {};
   const momoNumber = prettyNumber(payTo.number);
   const momoName = String(payTo.name || '').trim();
+  const pending = ['reserved', 'sending', 'unknown', 'pending'].includes(d.pesapal_state) || pesapalStatus === 'pending';
+  const review = (!pending && d.pesapal_review) || pesapalStatus === 'review' || pesapalStatus === 'reversed';
+  const pesapalBlock = d.pesapal_available && !pending && !review ? `
+<div class="opt">
+  <h3>MTN MoMo, Airtel Money or card</h3>
+  <p>Pay <strong>${esc(d.amount_ugx_text)}</strong> in Uganda shillings through Pesapal's secure checkout.</p>
+  <div class="marks"><span>MTN MoMo</span><span>Airtel Money</span><span>Visa</span><span>Mastercard</span></div>
+  <form method="post" action="/pay/${esc(d.code)}/pesapal">
+    ${d.pesapal_needs_contact ? '<label for="pesapal-phone">Your mobile number</label><input id="pesapal-phone" name="phone" type="tel" autocomplete="tel" maxlength="20" required placeholder="e.g. +256 7xx xxx xxx">' : ''}
+    <button class="btn btn-pesapal" type="submit">Pay ${esc(d.amount_ugx_text)} with Pesapal</button>
+  </form>
+</div>` : '';
   const cardBlock = d.card_available ? `
 <div class="opt">
   <h3>💳 Card, Apple Pay or Google Pay</h3>
@@ -124,7 +138,7 @@ function openView(d, { error = '', claimed = false, cardCancelled = false } = {}
     <button class="btn btn-momo" type="submit">I have paid</button>
   </form>`}
 </div>` : '';
-  const nothing = !cardBlock && !momoBlock ? '<div class="warn">Payment options are being set up. Please WhatsApp us and we will help you pay.</div>' : '';
+  const nothing = !cardBlock && !momoBlock && !pesapalBlock && !pending && !review ? '<div class="warn">Payment options are being set up. Please WhatsApp us and we will help you pay.</div>' : '';
   return layout('Pay', `
 <section class="due">
   <small>Payment for</small>
@@ -133,8 +147,11 @@ function openView(d, { error = '', claimed = false, cardCancelled = false } = {}
   <div class="ref">Reference ${esc(d.code)}</div>
 </section>
 ${error ? `<div class="err">${esc(error)}</div>` : ''}
+${pending ? `<div class="warn">We're checking your Pesapal payment. Please wait for confirmation before paying again. <a href="/pay/${esc(d.code)}?paid=1">Refresh payment status</a>. If it stays pending, contact makaug with reference ${esc(d.code)}.</div>${d.pesapal_can_resume ? `<form method="post" action="/pay/${esc(d.code)}/pesapal"><button class="btn btn-pesapal" type="submit">Continue your existing Pesapal checkout</button></form>` : ''}` : ''}
+${review ? '<div class="warn">This payment needs a team review. Please contact makaug with the reference above before making another payment.</div>' : ''}
+${pesapalStatus === 'failed' ? '<div class="warn">Pesapal did not complete the payment. You can contact makaug for help.</div>' : ''}
 <h2>Choose how to pay</h2>
-${cardBlock}${momoBlock}${nothing}`);
+${pesapalBlock}${pending || review ? '' : cardBlock + momoBlock}${nothing}`);
 }
 
 function notFoundView() {
@@ -157,10 +174,49 @@ pages.get('/:code', async (req, res, next) => {
       await payLinks.refreshLink(db, d.code).catch(() => null);
       d = await payLinks.pageData(db, req.params.code);
     }
-    if (d.status === 'paid' || d.status === 'settling') return send(res, 200, paidView(d));
-    return send(res, 200, openView(d, { claimed: Boolean(req.query.claimed), cardCancelled: Boolean(req.query.card_cancelled) }));
+    if (d.status === 'paid') return send(res, 200, paidView(d));
+    return send(res, 200, openView(d, { claimed: Boolean(req.query.claimed), cardCancelled: Boolean(req.query.card_cancelled), pesapalStatus: req.query.pesapal }));
   } catch (error) {
     return next(error);
+  }
+});
+
+pages.post('/:code/pesapal', async (req, res) => {
+  try {
+    const result = await payLinks.startPesapalCheckout(db, { code: req.params.code, phone: req.body?.phone });
+    if (result.redirect) return res.redirect(303, result.redirect);
+    if (result.paid) return res.redirect(303, `/pay/${encodeURIComponent(String(req.params.code).toUpperCase())}`);
+    const d = await payLinks.pageData(db, req.params.code);
+    if (!d) return send(res, 404, notFoundView());
+    return send(res, 200, openView(d, result.kind === 'pending'
+      ? { pesapalStatus: 'pending' }
+      : { error: 'Pesapal payment is currently unavailable. Please contact makaug for help.' }));
+  } catch (error) {
+    logger.warn('Pesapal checkout could not start', { code: req.params.code, reason: error.code || 'checkout_failed' });
+    const d = await payLinks.pageData(db, req.params.code).catch(() => null);
+    if (!d) return send(res, 404, notFoundView());
+    return send(res, 200, openView(d, { error: 'Pesapal payment could not start. Please wait a moment and refresh your payment status.' }));
+  }
+});
+
+function pesapalNotification(fields, expectedType) {
+  if (!fields || fields.OrderNotificationType !== expectedType ||
+      typeof fields.OrderTrackingId !== 'string' || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(fields.OrderTrackingId) ||
+      typeof fields.OrderMerchantReference !== 'string' || !/^[A-Za-z0-9_.:-]{1,50}$/.test(fields.OrderMerchantReference)) return null;
+  return { trackingId: fields.OrderTrackingId.toLowerCase(), reference: fields.OrderMerchantReference };
+}
+
+pages.get('/:code/pesapal-return', async (req, res) => {
+  const code = String(req.params.code || '').toUpperCase();
+  const notification = pesapalNotification(req.query, 'CALLBACKURL');
+  if (!notification) return send(res, 400, layout('Payment check', '<div class="warn">This payment return could not be checked. Please open your original makaug payment link.</div>'));
+  try {
+    const result = await payLinks.observePesapalPayment(db, { ...notification, source: 'return', expectedCode: code });
+    const state = result.paid && result.state === 'paid' ? '' : `?pesapal=${encodeURIComponent(result.state || 'pending')}`;
+    return res.redirect(303, `/pay/${encodeURIComponent(code)}${state}`);
+  } catch (error) {
+    logger.warn('Pesapal return check failed', { code, reason: error.code || 'check_failed' });
+    return res.redirect(303, `/pay/${encodeURIComponent(code)}?pesapal=pending`);
   }
 });
 
@@ -221,6 +277,22 @@ api.post('/webhooks/revolut', async (req, res) => {
     logger.error('Revolut webhook failed', { error: error.message });
     // 5xx makes Revolut retry, which is what we want if our database blinked.
     return res.status(500).json({ ok: false });
+  }
+});
+
+// IPN identifiers are untrusted. The service fetches status through the
+// merchant API and matches the stored reference, amount and tracking identity.
+api.post('/webhooks/pesapal', async (req, res) => {
+  const notification = pesapalNotification(req.body, 'IPNCHANGE');
+  if (!notification) return res.status(400).json({ status: 400 });
+  try {
+    await payLinks.observePesapalPayment(db, { ...notification, source: 'ipn' });
+    return res.json({ orderNotificationType: 'IPNCHANGE', orderTrackingId: notification.trackingId,
+      orderMerchantReference: notification.reference, status: 200 });
+  } catch (error) {
+    const status = [400, 404, 409].includes(error.status) ? error.status : 500;
+    logger.warn('Pesapal IPN check failed', { reason: error.code || 'check_failed', status });
+    return res.status(status).json({ status });
   }
 });
 

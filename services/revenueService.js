@@ -21,6 +21,7 @@
 
 const crypto = require('crypto');
 const { publishedPricing } = require('../config/publishedPricing');
+const { withPaymentTransaction, assertPaymentTransaction, assertOutsidePaymentTransaction } = require('./paymentTransaction');
 
 const METHODS = {
   mtn_momo: { label: 'MTN Mobile Money', account: 'mtn_momo' },
@@ -29,6 +30,7 @@ const METHODS = {
   absa_ugx: { label: 'Absa — UGX account', account: 'absa_ugx' },
   absa_usd: { label: 'Absa — USD account', account: 'absa_usd', currency: 'USD' },
   revolut_card: { label: 'Card — Revolut (Whispers Global)', account: 'revolut_whispers', currency: 'USD' },
+  pesapal: { label: 'Pesapal Uganda', account: 'pesapal_ugx' },
   cash: { label: 'Cash', account: 'cash' }
 };
 const OUT_KINDS = new Set(['withdrawal', 'expense', 'transfer_out', 'refund']);
@@ -184,14 +186,7 @@ async function insertEntry(db, entry, actor) {
     return result.rows[0];
   } catch (error) {
     if (String(error.code) === '23505') {
-      const prior = (await db.query(
-        `SELECT e.paid_at, e.amount_ugx, a.full_name
-           FROM revenue_entries e LEFT JOIN agents a ON a.id = e.agent_id
-          WHERE e.account_key = $1 AND LOWER(e.reference) = LOWER($2) AND e.voided_at IS NULL
-          LIMIT 1`,
-        [entry.account_key, entry.reference]
-      )).rows[0];
-      throw httpError(409, `Transaction ID ${entry.reference} has already been recorded${prior ? ` (UGX ${Number(prior.amount_ugx).toLocaleString('en-US')}${prior.full_name ? ` for ${prior.full_name}` : ''}, ${new Date(prior.paid_at).toISOString().slice(0, 10)})` : ''}. One receipt can only be used once.`);
+      throw Object.assign(httpError(409, `Transaction ID ${entry.reference} has already been recorded. One receipt can only be used once.`), { code: error.code, constraint: error.constraint });
     }
     throw error;
   }
@@ -223,9 +218,25 @@ async function matchEntryToSms(db, entry) {
  * UGX 50,000 buys one month; 150,000 buys three.
  */
 async function recordAgentPayment(db, { agent, payment: rawPayment, actor }) {
-  const { feeUgx } = feeConfig();
-  normalizeEntry(rawPayment); // say what is missing before storing any photo
+  assertOutsidePaymentTransaction(db);
+  if (!agent?.id) throw httpError(404, 'Agent not found');
+  normalizeEntry(rawPayment);
   const payment = await prepareReceipt(rawPayment);
+  return withPaymentTransaction(db, (tx) => recordAgentPaymentTx(tx, { agentId: agent.id, payment, actor }));
+}
+
+function assertPreparedReceipt(input = {}) {
+  if (String(input.receipt_url || '').trim().startsWith('data:')) {
+    throw httpError(400, 'Store the payment receipt before starting the payment transaction.');
+  }
+}
+
+async function recordAgentPaymentTx(tx, { agentId, payment, actor }) {
+  assertPaymentTransaction(tx);
+  assertPreparedReceipt(payment);
+  const { feeUgx } = feeConfig();
+  const agent = (await tx.query('SELECT * FROM agents WHERE id = $1::uuid FOR UPDATE', [agentId])).rows[0];
+  if (!agent) throw httpError(404, 'Agent not found');
   const entry = normalizeEntry({
     ...payment,
     payer_name: payment.payer_name || agent.full_name,
@@ -239,25 +250,38 @@ async function recordAgentPayment(db, { agent, payment: rawPayment, actor }) {
   const current = isoDay(agent.paid_until);
   const periodStart = current && current >= today ? addDays(current, 1) : today;
   const periodEnd = addDays(addMonths(periodStart, months), -1);
-  const row = await insertEntry(db, { ...entry, kind: 'agent_subscription', agent_id: agent.id, period_start: periodStart, period_end: periodEnd }, actor);
-  await db.query(
+  const row = await insertEntry(tx, { ...entry, kind: 'agent_subscription', agent_id: agent.id, period_start: periodStart, period_end: periodEnd }, actor);
+  await tx.query(
     `UPDATE agents SET paid_until = $2::date, billing_plan = 'agent_monthly', monthly_fee_ugx = $3, updated_at = NOW() WHERE id = $1`,
     [agent.id, periodEnd, feeUgx]
   );
-  const matched = await matchEntryToSms(db, row);
+  const matched = await matchEntryToSms(tx, row);
   return { entry: matched, months, period_start: periodStart, period_end: periodEnd };
 }
 
 async function recordEntry(db, input, actor) {
+  assertOutsidePaymentTransaction(db);
+  normalizeTypedEntry(input);
+  const payment = await prepareReceipt(input);
+  return withPaymentTransaction(db, (tx) => recordEntryTx(tx, payment, actor));
+}
+
+function normalizeTypedEntry(input) {
   const direction = input.direction === 'out' ? 'out' : 'in';
   const kind = cleanText(input.kind, 40) || (direction === 'out' ? 'expense' : 'other_income');
   if (direction === 'out' && !OUT_KINDS.has(kind)) throw httpError(400, 'Money out must be a withdrawal, expense, transfer out or refund.');
   if (direction === 'in' && !IN_KINDS.has(kind)) throw httpError(400, 'Unknown kind of income.');
-  normalizeEntry(input, { direction, kind });
-  const entry = normalizeEntry(await prepareReceipt(input), { direction, kind });
+  const entry = normalizeEntry(input, { direction, kind });
   if (direction === 'out' && !entry.note) throw httpError(400, 'Say what the money was for, and who took it.');
-  const row = await insertEntry(db, { ...entry, agent_id: input.agent_id || null }, actor);
-  return matchEntryToSms(db, row);
+  return entry;
+}
+
+async function recordEntryTx(tx, input, actor) {
+  assertPaymentTransaction(tx);
+  assertPreparedReceipt(input);
+  const entry = normalizeTypedEntry(input);
+  const row = await insertEntry(tx, { ...entry, agent_id: input.agent_id || null, property_id: input.property_id || null }, actor);
+  return matchEntryToSms(tx, row);
 }
 
 // --- Money SMS --------------------------------------------------------------
@@ -645,7 +669,11 @@ module.exports = {
   agentTrialDays,
   normalizeEntry,
   recordAgentPayment,
+  recordAgentPaymentTx,
   recordEntry,
+  recordEntryTx,
+  prepareReceipt,
+  assertPreparedReceipt,
   parseMoneySms,
   ingestMoneySms,
   expectedBalance,

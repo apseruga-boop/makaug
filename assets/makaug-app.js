@@ -34929,8 +34929,8 @@ function adminShortDate(value) {
 // --- Sales & Revenue ---------------------------------------------------------
 var adminRevenueData = null;
 
-const ADMIN_ACCOUNT_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank: "Bank", absa_ugx: "Absa UGX", absa_usd: "Absa USD", revolut_whispers: "Card (Revolut)", cash: "Cash" };
-const ADMIN_METHOD_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank_transfer: "Other bank", absa_ugx: "Absa UGX", absa_usd: "Absa USD ($)", revolut_card: "Card — Revolut ($)", cash: "Cash" };
+const ADMIN_ACCOUNT_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank: "Bank", absa_ugx: "Absa UGX", absa_usd: "Absa USD", revolut_whispers: "Card (Revolut)", pesapal_ugx: "Pesapal UGX", cash: "Cash" };
+const ADMIN_METHOD_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank_transfer: "Other bank", absa_ugx: "Absa UGX", absa_usd: "Absa USD ($)", revolut_card: "Card — Revolut ($)", pesapal: "Pesapal (UGX)", cash: "Cash" };
 const ADMIN_METHOD_KEYS = ["mtn_momo", "airtel_money", "absa_ugx", "absa_usd", "bank_transfer", "cash"];
 const adminFxFields = () => `<div data-fx class="hidden grid grid-cols-2 gap-2"><label class="block"><span class="font-bold">Amount (US$)</span><input name="amount_original" inputmode="decimal" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label><label class="block"><span class="font-bold">UGX per $1</span><input name="fx_rate_ugx" inputmode="decimal" value="3700" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label></div>`;
 function adminWireFx(form) {
@@ -34945,10 +34945,48 @@ function adminWireFx(form) {
 }
 
 function adminRevenueStatusBadge(entry) {
+  if (entry.payment_review_reason || entry.payment_application === "excess" || entry.payment_application === "review") return `<span class="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">Team review${entry.payment_application === "excess" ? ": extra collection" : ""}</span>`;
   if (entry.voided_at) return `<span class="rounded bg-gray-200 px-2 py-0.5 text-[11px] font-bold text-gray-700">Voided</span>`;
   if (entry.verified_status === "verified") return `<span class="rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">✓ ${entry.verification_source === "sms_match" ? "Matched to SMS" : "Verified"}</span>`;
   if (entry.verified_status === "disputed") return `<span class="rounded bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-800">Disputed</span>`;
   return `<span class="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">Not yet checked</span>`;
+}
+
+function adminPesapalBlock(data) {
+  if (!data) return "";
+  const ready = data.readiness || {};
+  const reasons = { disabled: "New checkout is switched off", environment_not_selected: "Payment environment has not been selected", wrong_tenant: "Available for Uganda only", credentials_missing: "Merchant credentials are pending", notification_missing: "Payment notifications are pending", public_origin_missing: "The public checkout address needs configuring", merchant_profile_invalid: "Merchant profile needs configuring", sandbox_in_production: "Test checkout cannot run on the production site", merchant_not_approved: "Merchant approval is pending" };
+  const status = ready.ready ? `Pesapal checkout on (${ready.environment === "live" ? "live" : "test"})` : "Pesapal checkout off";
+  const explanation = (ready.reasons || []).map((reason) => reasons[reason] || "Configuration needs review").join(". ");
+  const rows = (data.attempts || []).map((row) => {
+    const review = row.review_reason || row.reversed_at || row.application === "unapplied_collection";
+    const state = review ? (row.reversed_at ? "Reversed, review required" : "Team review") : (row.application === "applied" ? "Paid and applied" : (row.creation_state === "unknown" ? "Submission uncertain" : row.creation_state));
+    const action = row.tracking_id
+      ? `<button type="button" onclick="adminCheckPesapalAttempt('${adminAttr(row.id)}')" class="underline font-bold">Check Pesapal</button>`
+      : (["unknown", "sending"].includes(row.creation_state) ? `<button type="button" onclick="adminRecoverPesapalAttempt('${adminAttr(row.id)}')" class="underline font-bold">Recover tracking ID</button>` : "");
+    return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3">${adminEscape(row.code || row.pay_link_code || "")}<div class="text-[11px] text-gray-500">${adminEscape(row.environment)}</div></td><td class="py-2 pr-3 break-all">${adminEscape(row.merchant_reference)}</td><td class="py-2 pr-3 whitespace-nowrap">${adminFormatUgx(row.amount_ugx)}</td><td class="py-2 pr-3 ${review ? "text-amber-700" : ""}">${adminEscape(state || "Pending")}${review ? `<div class="text-[11px]">${adminEscape(row.review_reason || "Check this collection before taking action")}</div>` : ""}</td><td class="py-2 text-xs">${action}</td></tr>`;
+  }).join("");
+  const notices = (data.notices || []).map((row) => `${Number(row.count) || 0} ${adminEscape(row.status)}`).join(" · ");
+  return `<section class="rounded-lg border border-gray-200 bg-gray-50 p-3 my-3"><h5 class="font-black text-sm ${ready.ready ? "text-emerald-700" : "text-amber-700"}">${status}</h5><p class="text-xs mt-1">${adminEscape(explanation || "MTN MoMo, Airtel Money and cards in UGX. Every payment is checked directly with Pesapal.")}</p><p class="text-xs text-gray-500 mt-1">Uncertain submissions need the original tracking ID from the Pesapal portal. Recovery checks the reference and amount before applying a payment.</p>${notices ? `<p class="text-xs mt-1">Payment notices: ${notices}. Queued means accepted by the messaging queue, awaiting delivery.</p>` : ""}${rows ? `<div class="overflow-x-auto mt-2"><table class="w-full text-xs text-left"><thead><tr class="text-gray-500"><th class="pr-3">Link</th><th class="pr-3">Merchant reference</th><th class="pr-3">Amount</th><th class="pr-3">Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="text-xs mt-2">No Pesapal attempts yet.</p>'}</section>`;
+}
+
+async function adminCheckPesapalAttempt(id) {
+  try {
+    const response = await apiRequest(`/api/admin/revenue/pesapal/${encodeURIComponent(id)}/check`, { method: "POST", headers: adminAuthHeaders() });
+    toast(response?.data?.state === "paid" ? "Pesapal payment recorded" : `Pesapal: ${response?.data?.state || "pending"}`);
+    loadAdminRevenue();
+  } catch (error) { toast(error?.message || "Could not check Pesapal."); }
+}
+
+async function adminRecoverPesapalAttempt(id) {
+  const trackingId = window.prompt("Paste the original Order Tracking ID from the Pesapal portal for this merchant reference. Do not create a replacement order.");
+  if (!trackingId) return;
+  if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(trackingId.trim())) { toast("Enter a valid Pesapal tracking ID."); return; }
+  try {
+    const response = await apiRequest(`/api/admin/revenue/pesapal/${encodeURIComponent(id)}/recover`, { method: "POST", headers: adminAuthHeaders(), body: { tracking_id: trackingId.trim() } });
+    toast(`Pesapal recovery: ${response?.data?.state || "pending"}`);
+    loadAdminRevenue();
+  } catch (error) { toast(error?.message || "Could not recover this payment."); }
 }
 
 function adminPayLinksBlock(d) {
@@ -34960,13 +34998,14 @@ function adminPayLinksBlock(d) {
   const rows = (d.pay_links || []).slice(0, 25).map((l) => {
     const who = l.agent_name || l.property_title || l.payer_name || (l.description || "");
     const code = adminAttr(l.code);
-    const paid = l.status === "paid" ? `Paid ${l.paid_method === "card" ? "by card" : "by MoMo"} ${adminEscape(adminShortDate(l.paid_at))}` : (l.status === "open" ? (l.opened_at ? "Opened, not paid" : (l.sent_at ? "Sent" : "Not sent")) : l.status);
+    const paid = l.status === "paid" ? `Paid ${l.paid_method === "card" ? "by card" : (l.paid_method === "pesapal" ? "through Pesapal" : "by MoMo")} ${adminEscape(adminShortDate(l.paid_at))}` : (l.status === "open" ? (l.opened_at ? "Opened, not paid" : (l.sent_at ? "Sent" : "Not sent")) : l.status);
     const actions = l.status === "open" ? `<button type="button" onclick="adminSendPayLink('${code}')" class="underline font-bold">WhatsApp it</button> <button type="button" onclick="adminCopyPayLink('${adminAttr(l.url)}')" class="underline">Copy</button> ${l.provider_order_id ? `<button type="button" onclick="adminCheckPayLink('${code}')" class="underline">Check card</button>` : ""} <button type="button" onclick="adminCancelPayLink('${code}')" class="underline text-red-700">Cancel</button>` : "";
     return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 whitespace-nowrap">${adminEscape(adminShortDate(l.created_at))}</td><td class="py-2 pr-3 font-bold">${adminEscape(who)}<div class="text-[11px] font-normal text-gray-500">${adminEscape(l.code)}${l.sent_to ? ` · to +${adminEscape(l.sent_to)}` : ""}</div></td><td class="py-2 pr-3 whitespace-nowrap">${adminFormatUgx(l.amount_ugx)}<div class="text-[11px] text-gray-500">card ${adminEscape(l.card_text || "")}</div></td><td class="py-2 pr-3 font-bold ${tone[l.status] || ""}">${paid}</td><td class="py-2 text-xs space-x-2 whitespace-nowrap">${actions}</td></tr>`;
   }).join("");
   return `<div class="rounded-xl border border-gray-200 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">💳 Payment links — card or mobile money</h4><button type="button" onclick="adminCreatePayLink({ purpose: 'other' })" class="rounded bg-gray-900 px-3 py-1 text-xs font-bold text-white">New payment link</button></div>
     <p class="text-xs mt-1">${status}</p>
-    <p class="text-xs text-gray-500 mb-2">Reminders now carry a link automatically. Card payments are confirmed by Revolut and recorded + verified on their own; MoMo payments from a link arrive in “I have paid” below for the usual checks.</p>
+    <p class="text-xs text-gray-500 mb-2">Revolut and Pesapal payments are checked with the provider and recorded automatically. Direct MoMo transfers arrive in “I have paid” below for staff checks.</p>
+    ${adminPesapalBlock(d.pesapal)}
     ${adminPayLinkLoopBlock(d)}
     ${rows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Created</th><th class="py-1 pr-3">For</th><th class="py-1 pr-3">Amount</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No links yet.</p>`}</div>`;
 }

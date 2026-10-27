@@ -23,6 +23,10 @@ const { LISTING_FEE_UGX, LISTING_TERM_MONTHS } = require('./shortTermService');
 const billingOps = require('./billingOpsService');
 const revolut = require('./revolutMerchantService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
+const { isDeepStrictEqual } = require('node:util');
+const { withPaymentTransaction, assertPaymentTransaction, assertOutsidePaymentTransaction } = require('./paymentTransaction');
+const pesapal = require('./pesapalClient');
+const paymentNotices = require('./paymentNoticeService');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const PURPOSES = new Set(['listing_fee', 'agent_subscription', 'short_term_fee', 'hosted_payment', 'other']);
@@ -98,6 +102,14 @@ async function loadLink(db, code) {
  * link rather than a new one.
  */
 async function createPayLink(db, input = {}, actor = 'admin') {
+  return withPaymentTransaction(db, async (tx) => {
+    const target = input.property_id || input.agent_id || input.st_listing_id || input.payment_id;
+    if (target) await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`pay-link:${target}`]);
+    return createPayLinkTx(tx, input, actor);
+  });
+}
+
+async function createPayLinkTx(db, input, actor) {
   const purpose = PURPOSES.has(input.purpose)
     ? input.purpose
     : (input.property_id ? 'listing_fee' : (input.agent_id ? 'agent_subscription' : (input.st_listing_id ? 'short_term_fee' : 'other')));
@@ -178,15 +190,17 @@ async function createPayLink(db, input = {}, actor = 'admin') {
   }
   if (!(amountUgx > 0)) throw revenue.httpError(400, 'No amount to charge');
 
-  if (propertyId || agentId || stListingId) {
+  if (propertyId || agentId || stListingId || paymentId) {
     const existing = (await db.query(
       `SELECT * FROM pay_links
         WHERE status = 'open' AND amount_ugx = $3
           AND (($1::uuid IS NOT NULL AND property_id = $1::uuid) OR ($2::uuid IS NOT NULL AND agent_id = $2::uuid)
-               OR ($4::uuid IS NOT NULL AND st_listing_id = $4::uuid))
+               OR ($4::uuid IS NOT NULL AND st_listing_id = $4::uuid)
+               OR ($5::uuid IS NOT NULL AND payment_id = $5::uuid))
+          AND (NOT $6::boolean OR voluntary_payment)
           AND created_at > NOW() - INTERVAL '30 days'
         ORDER BY created_at DESC LIMIT 1`,
-      [propertyId, agentId, amountUgx, stListingId]
+      [propertyId, agentId, amountUgx, stListingId, paymentId, input.allow_exempt === true]
     )).rows[0];
     if (existing) return { link: existing, url: payUrl(existing.code), reused: true };
   }
@@ -209,10 +223,12 @@ async function createPayLink(db, input = {}, actor = 'admin') {
     try {
       const link = (await db.query(
         `INSERT INTO pay_links (code, purpose, property_id, agent_id, st_listing_id, payment_id, description, amount_ugx, card_currency, card_amount_minor, fx_rate_ugx,
-                                payer_name, payer_phone, created_by)
-         VALUES ($1, $2, $3::uuid, $4::uuid, $5::uuid, $6::uuid, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
-        [newCode(), purpose, propertyId, agentId, stListingId, paymentId, description, amountUgx, card.currency, minor, card.rate, payerName, payerPhone, actor]
+                                payer_name, payer_phone, created_by, voluntary_payment)
+         VALUES ($1, $2, $3::uuid, $4::uuid, $5::uuid, $6::uuid, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         ON CONFLICT (code) DO NOTHING RETURNING *`,
+        [newCode(), purpose, propertyId, agentId, stListingId, paymentId, description, amountUgx, card.currency, minor, card.rate, payerName, payerPhone, actor, purpose === 'agent_subscription' && input.allow_exempt === true]
       )).rows[0];
+      if (!link) continue;
       return { link, url: payUrl(link.code), reused: false };
     } catch (error) {
       if (String(error.code) !== '23505') throw error;
@@ -267,6 +283,12 @@ async function pageData(db, code, { track = true } = {}) {
   if (track && !link.opened_at) db.query('UPDATE pay_links SET opened_at = NOW() WHERE id = $1 AND opened_at IS NULL', [link.id]).catch(() => {});
   const settings = await billingOps.getSettings(db);
   const card = cardSettings(settings);
+  const readiness = pesapal.readiness();
+  let pesapalAvailable = readiness.ready;
+  if (pesapalAvailable) {
+    try { await assertPesapalDatabase(db, readiness.environment); } catch { pesapalAvailable = false; }
+  }
+  const attempt = readiness.environment && readiness.countryCode === 'UG' ? await latestPesapalAttempt(db, link.id) : null;
   return {
     code: link.code,
     status: link.status,
@@ -275,6 +297,14 @@ async function pageData(db, code, { track = true } = {}) {
     amount_ugx_text: billingOps.ugx(link.amount_ugx),
     card_text: money(link.card_amount_minor, link.card_currency),
     card_available: card.enabled && revolut.isConfigured(),
+    pesapal_available: pesapalAvailable && link.status === 'open',
+    pesapal_needs_contact: !digits(link.payer_phone),
+    pesapal_state: checkoutState(attempt),
+    pesapal_can_resume: Boolean(pesapalAvailable && link.status === 'open' && attempt &&
+      (attempt.creation_state === 'reserved' || attempt.creation_state === 'tracked' && attempt.redirect_url) &&
+      !attempt.review_reason && !attempt.reversed_at && attempt.provider_status_code !== 2),
+    pesapal_review: Boolean(attempt?.review_reason || attempt?.reversed_at),
+    pesapal_readiness: readiness,
     pay_to: settings.pay_to || {},
     pay_to_ready: Boolean(billingOps.payToLine(settings)),
     paid_method: link.paid_method,
@@ -332,8 +362,15 @@ function cardPaymentFor(link, order) {
 }
 
 /** A short-stay fee is paid: one month at the current tariff runs from today, or is added to time still left. */
-async function markShortTermPaid(db, { stListingId, method, reference, amountUgx, actor }) {
-  if (!stListingId) return null;
+async function markShortTermPaidTx(db, { stListingId, method, reference, amountUgx, actor, entryId }) {
+  assertPaymentTransaction(db);
+  if (!stListingId) throw revenue.httpError(404, 'Short-stay listing not found');
+  const target = (await db.query('SELECT id FROM st_listing WHERE id = $1::uuid FOR UPDATE', [stListingId])).rows[0];
+  if (!target) throw revenue.httpError(404, 'Short-stay listing not found');
+  if (entryId) {
+    const prior = (await db.query('SELECT id FROM st_listing_payment WHERE revenue_entry_id = $1', [entryId])).rows[0];
+    if (prior) throw revenue.httpError(409, 'This short-stay receipt has already been applied');
+  }
   const stMethod = { revolut_card: 'card', mtn_momo: 'mtn_mobile_money', airtel_money: 'airtel_money', bank_transfer: 'bank_transfer', absa_ugx: 'bank_transfer', absa_usd: 'bank_transfer', cash: 'cash' }[method] || 'other';
   const months = LISTING_TERM_MONTHS;
   const updated = (await db.query(
@@ -352,39 +389,47 @@ async function markShortTermPaid(db, { stListingId, method, reference, amountUgx
       RETURNING id, expires_at, listing_term_months`,
     [stListingId, LISTING_FEE_UGX, months]
   )).rows[0];
-  if (!updated) return null;
-  const existing = (await db.query('SELECT id FROM st_listing_payment WHERE listing_id = $1::uuid ORDER BY created_at DESC LIMIT 1', [stListingId])).rows[0];
-  if (existing) {
-    await db.query(
-      `UPDATE st_listing_payment SET status = 'paid', method = $2, provider_reference = $3, amount_ugx = $4, recorded_by = $5,
-              covers_from = CURRENT_DATE, covers_to = $6::date, updated_at = NOW()
-        WHERE id = $1`,
-      [existing.id, stMethod, reference || null, amountUgx, actor || 'payment', updated.expires_at]
-    );
-  } else {
-    await db.query(
-      `INSERT INTO st_listing_payment (listing_id, amount_ugx, method, provider_reference, status, covers_from, covers_to, recorded_by)
-       VALUES ($1::uuid, $2, $3, $4, 'paid', CURRENT_DATE, $5::date, $6)`,
-      [stListingId, amountUgx, stMethod, reference || null, updated.expires_at, actor || 'payment']
-    );
-  }
+  if (!updated) throw revenue.httpError(404, 'Short-stay listing not found');
+  await db.query(
+    `INSERT INTO st_listing_payment (listing_id, amount_ugx, method, provider_reference, status, covers_from, covers_to, recorded_by, revenue_entry_id)
+     VALUES ($1::uuid, $2, $3, $4, 'paid', CURRENT_DATE, $5::date, $6, $7)`,
+    [stListingId, amountUgx, stMethod, reference || null, updated.expires_at, actor || 'payment', entryId || null]
+  );
   return updated;
 }
 
 /** Advertising, boosts…: record the money, then switch on what was bought. */
 async function recordHostedPayment(db, { paymentId, payment, actor }) {
+  assertOutsidePaymentTransaction(db);
+  const prepared = await revenue.prepareReceipt(payment);
+  const result = await withPaymentTransaction(db, (tx) => recordHostedPaymentTx(tx, { paymentId, payment: prepared, actor }));
+  if (result.completed) require('./paymentProviderService').paymentEvents.emit('payment.succeeded', result.completed);
+  return result;
+}
+
+async function recordHostedPaymentTx(db, { paymentId, payment, actor }) {
+  assertPaymentTransaction(db);
   const pay = (await db.query('SELECT id, purpose FROM payments WHERE id = $1::uuid', [paymentId])).rows[0];
   const kind = HOSTED_KINDS[pay?.purpose] || 'other_income';
-  const entry = await revenue.recordEntry(db, { ...payment, direction: 'in', kind, note: [payment.note, pay?.purpose ? `for ${pay.purpose.replace(/_/g, ' ')}` : ''].filter(Boolean).join(' · ') }, actor);
-  const completed = await require('./paymentProviderService').completeHostedPayment(db, paymentId, { reference: payment.reference, method: payment.method });
+  if (!pay) throw revenue.httpError(404, 'Payment not found');
+  const entry = await revenue.recordEntryTx(db, { ...payment, direction: 'in', kind, note: [payment.note, `for ${pay.purpose.replace(/_/g, ' ')}`].join(' · ') }, actor);
+  const completed = await require('./paymentProviderService').completeHostedPaymentTx(db, paymentId, { reference: payment.reference, method: payment.method });
+  if (!completed) throw revenue.httpError(409, 'This purchase was already fulfilled without this payment-link receipt');
   return { entry, completed };
 }
 
 /** Record a short-stay fee in the ledger and mark the listing paid. */
 async function recordShortTermPayment(db, { stListingId, payment, actor }) {
-  const entry = await revenue.recordEntry(db, { ...payment, direction: 'in', kind: 'short_term_fee' }, actor);
+  assertOutsidePaymentTransaction(db);
+  const prepared = await revenue.prepareReceipt(payment);
+  return withPaymentTransaction(db, (tx) => recordShortTermPaymentTx(tx, { stListingId, payment: prepared, actor }));
+}
+
+async function recordShortTermPaymentTx(db, { stListingId, payment, actor }) {
+  assertPaymentTransaction(db);
+  const entry = await revenue.recordEntryTx(db, { ...payment, direction: 'in', kind: 'short_term_fee' }, actor);
   await db.query('UPDATE revenue_entries SET st_listing_id = $2::uuid WHERE id = $1', [entry.id, stListingId]);
-  const listing = await markShortTermPaid(db, { stListingId, method: payment.method, reference: payment.reference, amountUgx: entry.amount_ugx, actor });
+  const listing = await markShortTermPaidTx(db, { stListingId, method: payment.method, reference: payment.reference, amountUgx: entry.amount_ugx, actor, entryId: entry.id });
   return { entry, listing };
 }
 
@@ -429,19 +474,6 @@ async function pendingAgentPaid(db, agent, { how = 'card', amountUgx } = {}) {
   return { pending: true };
 }
 
-/** Everyone who watches the money hears about each card payment, like MoMo ones. */
-async function notifyTeamCardPayment(db, link, recorded, order) {
-  const desk = require('./leadDeskService');
-  if (typeof desk.sendToTeam !== 'function') return;
-  const body = [
-    `💳 *Card payment received* — ${link.payer_name || 'customer'}`,
-    `${billingOps.ugx(link.amount_ugx)} (${money(order.amount || link.card_amount_minor, String(order.currency || link.card_currency).toUpperCase())}) · ${link.description}`,
-    `Revolut order ${order.id} · link ${link.code}`,
-    'Recorded and verified automatically in Sales & Revenue.'
-  ].join('\n');
-  await desk.sendToTeam(db, body, 'card_payment_received');
-}
-
 async function notifyPaid(db, link, recorded) {
   const to = digits(link.payer_phone);
   if (to.length < 9) return null;
@@ -463,69 +495,50 @@ async function notifyPaid(db, link, recorded) {
 }
 
 /**
- * Record a completed Revolut order against its link, exactly once.
- * Claims the link ('settling') so two callbacks cannot record it twice.
+ * Verify a completed Revolut order and accept it through the shared debt lock.
  */
 async function settleFromOrder(db, link, order) {
   if (!revolut.orderIsPaid(order)) {
     await db.query('UPDATE pay_links SET provider_state = $2, updated_at = NOW() WHERE id = $1', [link.id, order.state || null]);
     return { paid: false, state: order.state || null };
   }
-  const claimed = (await db.query(
-    `UPDATE pay_links SET status = 'settling', updated_at = NOW() WHERE id = $1 AND status = 'open' RETURNING *`,
-    [link.id]
-  )).rows[0];
-  if (!claimed) return { paid: true, already: true };
-  try {
-    const payment = cardPaymentFor(claimed, order);
-    let recorded;
-    if (claimed.purpose === 'listing_fee' && claimed.property_id) {
-      recorded = await billingOps.recordListingPayment(db, { propertyId: claimed.property_id, payment, actor: 'revolut' });
-    } else if (claimed.purpose === 'agent_subscription' && claimed.agent_id) {
-      const agent = (await db.query('SELECT * FROM agents WHERE id = $1::uuid', [claimed.agent_id])).rows[0];
-      recorded = await revenue.recordAgentPayment(db, { agent, payment, actor: 'revolut' });
-      if (agent?.billing_suspended_at) recorded.reinstatement = await billingOps.reinstateAgentAfterPayment(db, { agentId: agent.id, actor: 'revolut' });
-      recorded.pendingAgent = await pendingAgentPaid(db, agent, { how: 'card', amountUgx: claimed.amount_ugx });
-    } else if (claimed.purpose === 'short_term_fee' && claimed.st_listing_id) {
-      recorded = await recordShortTermPayment(db, { stListingId: claimed.st_listing_id, payment, actor: 'revolut' });
-    } else if (claimed.purpose === 'hosted_payment' && claimed.payment_id) {
-      recorded = await recordHostedPayment(db, { paymentId: claimed.payment_id, payment, actor: 'revolut' });
-    } else {
-      recorded = { entry: await revenue.recordEntry(db, { ...payment, direction: 'in', kind: 'other_income' }, 'revolut') };
+  const result = await withPaymentTransaction(db, async (tx) => {
+    const current = (await tx.query('SELECT * FROM pay_links WHERE id = $1 FOR UPDATE', [link.id])).rows[0];
+    if (!current) throw revenue.httpError(404, 'Payment link not found');
+    const reference = order.merchant_order_data?.reference || order.merchant_order_ext_ref || order.reference;
+    if (String(order.id) !== current.provider_order_id || reference !== current.code ||
+        !Number.isSafeInteger(Number(order.amount)) || Number(order.amount) !== Number(current.card_amount_minor) ||
+        String(order.currency || '').toUpperCase() !== current.card_currency) {
+      throw paymentError('revolut_facts_mismatch', 409);
     }
-    await db.query(
-      `UPDATE revenue_entries SET verified_status = 'verified', verified_by = 'revolut', verified_at = NOW(), verification_source = 'revolut_order'
-        WHERE id = $1`,
-      [recorded.entry.id]
-    );
-    await db.query(
-      `UPDATE pay_links SET status = 'paid', paid_method = 'card', paid_at = NOW(), entry_id = $2, provider_state = $3, updated_at = NOW() WHERE id = $1`,
-      [claimed.id, recorded.entry.id, order.state]
-    );
-    logger.info('Card payment recorded', { code: claimed.code, order: order.id, entry: recorded.entry.id });
-    notifyTeamCardPayment(db, claimed, recorded, order).catch(() => null);
-    if (!recorded.reinstatement?.reinstated && !recorded.pendingAgent?.pending) await notifyPaid(db, claimed, recorded);
-    return { paid: true, entry_id: recorded.entry.id };
-  } catch (error) {
-    // A duplicate means this order was recorded already: keep the link paid.
-    if (error.status === 409) {
-      await db.query(`UPDATE pay_links SET status = 'paid', paid_method = 'card', paid_at = COALESCE(paid_at, NOW()), updated_at = NOW() WHERE id = $1`, [claimed.id]);
-      return { paid: true, already: true };
-    }
-    await db.query(`UPDATE pay_links SET status = 'open', updated_at = NOW() WHERE id = $1 AND status = 'settling'`, [claimed.id]);
-    logger.error('Recording a card payment failed', { code: claimed.code, order: order.id, error: error.message });
-    throw error;
-  }
+    const recorded = await acceptCollectionTx(tx, current, {
+      provider: 'revolut', payment: cardPaymentFor(current, order), actor: 'revolut',
+      paidMethod: 'card', verification: 'revolut_order'
+    });
+    await tx.query('UPDATE pay_links SET provider_state = $2, updated_at = NOW() WHERE id = $1', [current.id, order.state]);
+    return recorded;
+  });
+  paymentNotices.kickPaymentNotices(db);
+  return result;
 }
 
 /** Ask Revolut how the order behind this link stands, and record it if paid. */
 async function refreshLink(db, code) {
   const link = await loadLink(db, code);
   if (!link) throw revenue.httpError(404, 'Payment link not found');
-  if (link.status === 'paid') return { paid: true };
-  if (!link.provider_order_id) return { paid: false, state: null };
-  const order = await revolut.getOrder(link.provider_order_id);
-  return settleFromOrder(db, link, order);
+  const checks = [];
+  if (link.provider_order_id) checks.push(async () => settleFromOrder(db, link, await revolut.getOrder(link.provider_order_id)));
+  const ready = pesapal.readiness();
+  if (ready.environment && ready.credentialsConfigured && ready.countryCode === 'UG') {
+    const attempt = await latestPesapalAttempt(db, link.id);
+    if (attempt?.tracking_id) checks.push(() => observePesapalPayment(db, { trackingId: attempt.tracking_id, reference: attempt.merchant_reference, source: 'admin' }));
+  }
+  const results = await Promise.allSettled(checks.map((check) => check()));
+  const current = await loadLink(db, link.code);
+  const completed = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+  if (checks.length && !completed.length && current.status !== 'paid') throw results[0].reason;
+  return { paid: current.status === 'paid', state: current.status === 'paid' ? 'paid' : (completed.find((r) => r.state)?.state || null),
+    review: completed.some((r) => r.review), errors: results.filter((r) => r.status === 'rejected').map((r) => safePaymentCode(r.reason)) };
 }
 
 /** Webhook: never trusted on its own — we fetch the order from Revolut. */
@@ -534,9 +547,507 @@ async function handleRevolutEvent(db, event = {}) {
   if (!orderId) return { ignored: 'no_order_id' };
   const link = (await db.query('SELECT * FROM pay_links WHERE provider_order_id = $1', [orderId])).rows[0];
   if (!link) return { ignored: 'unknown_order' };
-  if (link.status === 'paid') return { paid: true, already: true };
   const order = await revolut.getOrder(orderId);
   return settleFromOrder(db, link, order);
+}
+
+const TRACKING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MERCHANT_REFERENCE = /^[A-Za-z0-9_.:-]{1,50}$/;
+let configuredPesapal = null;
+let configuredPesapalKey = '';
+
+function paymentError(code, status = 409) {
+  return Object.assign(new Error(`Payment could not be processed (${code}).`), { code, status });
+}
+
+function safePaymentCode(error) {
+  const code = String(error?.code || 'payment_failed');
+  return /^[A-Za-z0-9_:-]{1,60}$/.test(code) ? code : 'payment_failed';
+}
+
+function pesapalClient() {
+  const env = process.env;
+  if (String(env.COUNTRY_CODE || 'UG').trim().toUpperCase() !== 'UG') throw paymentError('wrong_tenant', 403);
+  const key = JSON.stringify([env.PESAPAL_ENV, env.PESAPAL_CONSUMER_KEY, env.PESAPAL_CONSUMER_SECRET,
+    env.PESAPAL_IPN_ID, env.PESAPAL_MERCHANT_PROFILE, env.NODE_ENV, env.PESAPAL_TEST_BASE_URL]);
+  if (!configuredPesapal || key !== configuredPesapalKey) {
+    configuredPesapal = pesapal.fromEnvironment(env, env.NODE_ENV === 'test' && env.PESAPAL_TEST_BASE_URL
+      ? { testBaseUrl: env.PESAPAL_TEST_BASE_URL } : {});
+    configuredPesapalKey = key;
+  }
+  return configuredPesapal;
+}
+
+async function assertPesapalDatabase(db, environment) {
+  if (environment !== 'sandbox' && !process.env.PESAPAL_TEST_BASE_URL) return;
+  if (process.env.NODE_ENV !== 'test' || !TRACKING_ID.test(process.env.PESAPAL_TEST_SENTINEL || '')) {
+    throw paymentError('sandbox_database_required', 503);
+  }
+  const identity = (await db.query(
+    `SELECT current_database() AS name, current_user AS role, host(inet_server_addr()) AS address,
+            r.rolsuper FROM pg_roles r WHERE r.rolname = current_user`
+  )).rows[0];
+  if (!identity || !/^makaug_pesapal_test(?:_[a-f0-9]+)?$/.test(identity.name) ||
+      !/^(?:pesapal_test|pesapal_app_[a-f0-9]+)$/.test(identity.role) || identity.rolsuper ||
+      !['127.0.0.1', '::1'].includes(identity.address)) {
+    throw paymentError('sandbox_database_required', 503);
+  }
+  const guard = (await db.query('SELECT sentinel::text FROM pesapal_test_guard')).rows;
+  if (guard.length !== 1 || guard[0].sentinel !== process.env.PESAPAL_TEST_SENTINEL) {
+    throw paymentError('sandbox_database_required', 503);
+  }
+}
+
+function purchaseIdentity(link) {
+  return {
+    purpose: link.purpose, amount_ugx: Number(link.amount_ugx),
+    property_id: link.property_id || null, agent_id: link.agent_id || null,
+    st_listing_id: link.st_listing_id || null, payment_id: link.payment_id || null,
+    voluntary_payment: link.voluntary_payment === true
+  };
+}
+
+async function inspectPurchase(tx, link) {
+  assertPaymentTransaction(tx);
+  const snapshot = purchaseIdentity(link);
+  let eligible = true;
+  let reason = null;
+  let target;
+  if (link.purpose === 'agent_subscription') {
+    target = (await tx.query('SELECT * FROM agents WHERE id = $1::uuid FOR UPDATE', [link.agent_id])).rows[0];
+    snapshot.monthly_fee_ugx = revenue.feeConfig().feeUgx;
+    if (!target) reason = 'target_missing';
+    else if (target.removed_at || !['approved', 'pending', 'suspended'].includes(target.status)) reason = 'agent_not_eligible';
+    else if (target.fee_exempt && !link.voluntary_payment) reason = 'agent_fee_exempt';
+  } else if (link.purpose === 'listing_fee') {
+    target = (await tx.query(
+      `SELECT *, ${foundOnlinePropertySql('properties')} AS found_online FROM properties WHERE id = $1::uuid FOR UPDATE`, [link.property_id]
+    )).rows[0];
+    const settings = await billingOps.getSettings(tx, { fresh: true });
+    snapshot.monthly_fee_ugx = Number(settings.lister_fee?.monthly_ugx || 20000);
+    if (!target) reason = 'target_missing';
+    else if (target.agent_id || target.found_online) reason = 'listing_fee_exempt';
+    else if (['rejected', 'deleted', 'removed'].includes(target.status)) reason = 'listing_not_eligible';
+  } else if (link.purpose === 'short_term_fee') {
+    target = (await tx.query('SELECT * FROM st_listing WHERE id = $1::uuid FOR UPDATE', [link.st_listing_id])).rows[0];
+    snapshot.tariff_ugx = LISTING_FEE_UGX;
+    snapshot.term_months = LISTING_TERM_MONTHS;
+    if (!target) reason = 'target_missing';
+    else if (Number(target.listing_fee_ugx) === 0 || target.listing_fee_status === 'waived') reason = 'short_stay_fee_exempt';
+  } else if (link.purpose === 'hosted_payment') {
+    target = (await tx.query('SELECT * FROM payments WHERE id = $1::uuid FOR UPDATE', [link.payment_id])).rows[0];
+    if (!target) reason = 'target_missing';
+    else {
+      snapshot.hosted = { purpose: target.purpose, amount: String(target.amount), currency: target.currency,
+        payer_id: target.payer_id || null, metadata: target.metadata || {} };
+      if (target.currency !== 'UGX' || Number(target.amount) !== Number(link.amount_ugx)) reason = 'hosted_amount_mismatch';
+      else if (target.status === 'paid') reason = 'hosted_already_paid';
+    }
+  } else if (link.purpose !== 'other') reason = 'unsupported_purchase';
+  eligible = !reason;
+  return { snapshot, target, eligible, reason };
+}
+
+async function queueReview(tx, link, { attemptId, entryId, reason, provider = 'Pesapal' }) {
+  const settings = await billingOps.getSettings(tx, { fresh: true });
+  const desk = require('./leadDeskService');
+  const recipients = new Set([...(typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []),
+    ...(Array.isArray(settings.confirmers) ? settings.confirmers.map((c) => c.phone) : [])].map(digits).filter((p) => p.length >= 9 && p.length <= 15));
+  for (const recipient of recipients) {
+    await paymentNotices.enqueueNotice(tx, {
+      eventKey: `payment:${entryId || attemptId || link.id}:review:${reason}:${recipient}`,
+      payLinkId: link.id, attemptId, entryId, kind: 'payment_review', recipient,
+      body: `${provider} payment needs review. Reference ${link.code}. Reason: ${reason}. No additional service was activated.`
+    });
+  }
+}
+
+async function queueCollectionNotices(tx, link, recorded, collection, application, reason) {
+  const entry = recorded.entry;
+  const to = digits(link.payer_phone || collection.payment.payer_phone);
+  const pending = recorded.pendingAgent?.pending === true;
+  const body = application === 'applied'
+    ? [`Payment received. Thank you!`, `${link.description}: ${billingOps.ugx(entry.amount_ugx)}.`,
+      pending ? 'Your payment is recorded. The team still needs to finish your approval checks.' : '',
+      recorded.reinstatement?.moderation_preserved ? 'The team will review your account status separately.' : '',
+      recorded.period_end ? `Paid until ${recorded.period_end}.` : '', `Reference ${link.code}.`].filter(Boolean).join('\n')
+    : `Payment received for reference ${link.code}. The team will review this payment because ${reason}. No additional service was activated.`;
+  if (to.length >= 9 && to.length <= 15) await paymentNotices.enqueueNotice(tx, {
+    eventKey: `payment:${entry.id}:payer:${to}`, payLinkId: link.id, entryId: entry.id,
+    attemptId: collection.attemptId, kind: pending ? 'agent_paid_pending' : 'payment_received', recipient: to, body
+  });
+  const settings = await billingOps.getSettings(tx, { fresh: true });
+  const desk = require('./leadDeskService');
+  const recipients = new Set([...(typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []),
+    ...(Array.isArray(settings.confirmers) ? settings.confirmers.map((c) => c.phone) : [])].map(digits).filter((p) => p.length >= 9 && p.length <= 15));
+  for (const recipient of recipients) await paymentNotices.enqueueNotice(tx, {
+    eventKey: `payment:${entry.id}:team:${recipient}`, payLinkId: link.id, entryId: entry.id,
+    attemptId: collection.attemptId, kind: application === 'applied' ? 'payment_recorded' : 'payment_review', recipient,
+    body: `${collection.provider} payment recorded: ${billingOps.ugx(entry.amount_ugx)} for ${link.description}. Reference ${link.code}. ${application === 'applied' ? (pending ? 'Paid; finish the agent approval checks.' : 'The purchase was applied.') : `Review needed: ${reason}.`}`
+  });
+  if (recorded.completed) await paymentNotices.enqueueNotice(tx, {
+    eventKey: `payment:${entry.id}:event:succeeded`, payLinkId: link.id, entryId: entry.id,
+    attemptId: collection.attemptId, kind: 'payment.succeeded', channel: 'event', recipient: '', body: '', payload: recorded.completed
+  });
+}
+
+async function applyPurchaseTx(tx, link, collection, inspected) {
+  const payment = collection.payment;
+  const actor = collection.actor;
+  if (link.purpose === 'agent_subscription') {
+    const result = await revenue.recordAgentPaymentTx(tx, { agentId: link.agent_id, payment, actor });
+    if (inspected.target.billing_suspended_at) {
+      result.reinstatement = await billingOps.reinstateAgentAfterPaymentTx(tx, { agentId: link.agent_id, actor });
+    }
+    if (inspected.target.status === 'pending' || (result.reinstatement?.reinstated && inspected.target.billing_snapshot?.previous_status === 'pending')) {
+      await tx.query('UPDATE agents SET paid_awaiting_approval_at = NOW() WHERE id = $1::uuid', [link.agent_id]);
+      result.pendingAgent = { pending: true };
+    }
+    return result;
+  }
+  if (link.purpose === 'listing_fee') return billingOps.recordListingPaymentTx(tx, { propertyId: link.property_id, payment, actor });
+  if (link.purpose === 'short_term_fee') return recordShortTermPaymentTx(tx, { stListingId: link.st_listing_id, payment, actor });
+  if (link.purpose === 'hosted_payment') return recordHostedPaymentTx(tx, { paymentId: link.payment_id, payment, actor });
+  return { entry: await revenue.recordEntryTx(tx, { ...payment, direction: 'in', kind: 'other_income' }, actor) };
+}
+
+async function acceptCollectionTx(tx, link, collection) {
+  assertPaymentTransaction(tx);
+  const normalized = revenue.normalizeEntry(collection.payment);
+  const prior = (await tx.query(
+    'SELECT * FROM revenue_entries WHERE account_key = $1 AND LOWER(reference) = LOWER($2) ORDER BY recorded_at LIMIT 1',
+    [normalized.account_key, normalized.reference]
+  )).rows[0];
+  if (prior) {
+    if (prior.pay_link_id !== link.id || !prior.payment_application ||
+        prior.direction !== 'in' || Number(prior.amount_ugx) !== normalized.amount_ugx ||
+        prior.currency !== normalized.currency ||
+        (prior.amount_original == null ? null : Number(prior.amount_original)) !== normalized.amount_original ||
+        (prior.fx_rate_ugx == null ? null : Number(prior.fx_rate_ugx)) !== normalized.fx_rate_ugx ||
+        (collection.attemptId && prior.pesapal_attempt_id !== collection.attemptId) ||
+        (collection.claimId && prior.claim_id !== collection.claimId) ||
+        (prior.payment_application === 'applied' && (link.status !== 'paid' || link.entry_id !== prior.id))) {
+      throw paymentError('receipt_conflict');
+    }
+    return { paid: link.status === 'paid', state: link.status === 'paid' ? 'paid' : 'review', code: link.code,
+      entry_id: prior.id, entry: prior, already: true, review: prior.payment_application !== 'applied', durable_notices: true };
+  }
+  const applied = (await tx.query("SELECT id FROM revenue_entries WHERE pay_link_id = $1 AND payment_application = 'applied'", [link.id])).rows[0];
+  const inspected = await inspectPurchase(tx, link);
+  let reason = link.status === 'paid' || applied ? 'debt_already_paid' : (link.status !== 'open' ? 'debt_closed' : inspected.reason);
+  if (!reason && collection.snapshot && !isDeepStrictEqual(collection.snapshot, inspected.snapshot)) reason = 'purchase_changed';
+  let recorded;
+  const application = reason ? (link.status === 'paid' || applied ? 'excess' : 'review') : 'applied';
+  if (reason) {
+    recorded = { entry: await revenue.recordEntryTx(tx, { ...collection.payment, direction: 'in', kind: 'other_income',
+      note: `${collection.payment.note || ''} Payment review: ${reason}. Link ${link.code}.` }, collection.actor) };
+  } else recorded = await applyPurchaseTx(tx, link, collection, inspected);
+  const entry = (await tx.query(
+    `UPDATE revenue_entries SET pay_link_id = $2, pesapal_attempt_id = $3, payment_application = $4,
+            payment_review_reason = $5, verified_status = 'verified', verified_by = $6, verified_at = NOW(),
+            verification_source = $7, claim_id = COALESCE($8::uuid, claim_id)
+      WHERE id = $1 RETURNING *`,
+    [recorded.entry.id, link.id, collection.attemptId || null, application, reason || null,
+      collection.actor, collection.verification, collection.claimId || null]
+  )).rows[0];
+  if (!entry) throw paymentError('receipt_missing');
+  recorded.entry = entry;
+  if (application === 'applied') {
+    await tx.query(
+      `UPDATE pay_links SET status = 'paid', paid_method = $2, paid_at = NOW(), entry_id = $3, updated_at = NOW() WHERE id = $1`,
+      [link.id, collection.paidMethod, entry.id]
+    );
+  }
+  if (collection.attemptId) await tx.query(
+    `UPDATE pesapal_payment_attempts SET application = $2, ledger_entry_id = $3, recorded_at = NOW(), closed_at = NOW(),
+            review_reason = $4, next_check_at = NOW() + INTERVAL '1 day' WHERE id = $1`,
+    [collection.attemptId, application === 'applied' ? 'applied' : 'unapplied_collection', entry.id, reason]
+  );
+  if (collection.claimId) await tx.query(
+    `UPDATE payment_claims SET status = 'confirmed', decided_by = $2, decided_at = NOW(), decision_note = $3, entry_id = $4
+      WHERE id = $1`, [collection.claimId, collection.actor, collection.decisionNote || null, entry.id]
+  );
+  await queueCollectionNotices(tx, link, recorded, collection, application, reason);
+  return { ...recorded, paid: application === 'applied' || link.status === 'paid', state: application === 'applied' || link.status === 'paid' ? 'paid' : 'review',
+    code: link.code, entry_id: entry.id, review: Boolean(reason), excess: application === 'excess', durable_notices: true };
+}
+
+async function settleConfirmedClaim(db, { claimId, actor, method, accountKey, amountUgx, amountOriginal, fxRate, note }) {
+  const initial = (await db.query('SELECT * FROM payment_claims WHERE id = $1::uuid', [claimId])).rows[0];
+  if (!initial?.pay_link_id) throw revenue.httpError(404, 'Linked payment claim not found');
+  const prepared = await revenue.prepareReceipt({ receipt_url: initial.receipt_url });
+  const result = await withPaymentTransaction(db, async (tx) => {
+    const link = (await tx.query('SELECT * FROM pay_links WHERE id = $1 FOR UPDATE', [initial.pay_link_id])).rows[0];
+    if (!link) throw revenue.httpError(404, 'Payment link not found');
+    const claim = (await tx.query('SELECT * FROM payment_claims WHERE id = $1::uuid FOR UPDATE', [claimId])).rows[0];
+    if (!claim || claim.pay_link_id !== link.id) throw paymentError('claim_changed');
+    if (claim.status === 'confirmed') return { claim_id: claim.id, paid: link.status === 'paid', state: link.status === 'paid' ? 'paid' : 'review',
+      entry_id: claim.entry_id, already: true, durable_notices: true };
+    if (claim.status !== 'pending') throw revenue.httpError(409, `This claim is already ${claim.status}`);
+    if (claim.receipt_url !== initial.receipt_url) throw paymentError('claim_receipt_changed');
+    const recorded = await acceptCollectionTx(tx, link, {
+      provider: 'Mobile Money', actor, paidMethod: method || 'mtn_momo', claimId: claim.id,
+      decisionNote: note, verification: claim.sms_id ? 'sms_match+confirmed' : 'confirmed',
+      payment: { amount: amountUgx || claim.amount_ugx, amount_original: amountOriginal || undefined, fx_rate_ugx: fxRate || undefined,
+        method: method || (claim.sms_id ? 'mtn_momo' : ''), account_key: accountKey || undefined, reference: claim.reference,
+        receipt_url: prepared.receipt_url, payer_name: claim.payer_name, payer_phone: claim.payer_phone,
+        note: [note, `Confirmed payment claim ${claim.id}`].filter(Boolean).join(' · ') }
+    });
+    return { claim_id: claim.id, ...recorded };
+  });
+  paymentNotices.kickPaymentNotices(db);
+  return result;
+}
+
+function checkoutCustomer(link, input, inspected) {
+  const storedPhone = digits(link.payer_phone);
+  const storedEmail = inspected?.target?.payer_email || '';
+  const hasStoredContact = Boolean(storedPhone || storedEmail);
+  const suppliedPhone = hasStoredContact ? '' : String(input.phone || '');
+  const suppliedEmail = hasStoredContact ? '' : String(input.email || '');
+  if (suppliedPhone.length > 40 || suppliedEmail.length > 254) throw paymentError('payment_contact_required', 400);
+  const phone = storedPhone || digits(suppliedPhone);
+  const email = String(storedEmail || suppliedEmail).trim();
+  if ((!phone && !email) || (phone && !/^[0-9]{7,15}$/.test(phone)) ||
+      (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw paymentError('payment_contact_required', 400);
+  const names = String(link.payer_name || '').trim().split(/\s+/).filter(Boolean);
+  return { ...(phone ? { phone } : {}), ...(email ? { email } : {}),
+    ...(names[0] ? { firstName: names[0].slice(0, 80) } : {}),
+    ...(names.length > 1 ? { lastName: names.slice(1).join(' ').slice(0, 80) } : {}) };
+}
+
+function checkoutState(attempt) {
+  if (!attempt) return null;
+  if (attempt.reversed_at) return 'reversed';
+  if (attempt.application === 'applied') return 'paid';
+  if (attempt.application === 'unapplied_collection' || attempt.review_reason && !['creation_unknown'].includes(attempt.review_reason)) return 'review';
+  if (attempt.creation_state === 'rejected' || attempt.provider_status_code === 2) return 'failed';
+  if (attempt.provider_status_code === 0) return 'pending';
+  return attempt.creation_state;
+}
+
+function startResult(link, attempt) {
+  if (link.status === 'paid') return { kind: 'paid', paid: true, already_paid: true, code: link.code, state: 'paid' };
+  const state = checkoutState(attempt);
+  if (attempt?.creation_state === 'tracked' && attempt.redirect_url && !attempt.reversed_at && !attempt.review_reason && attempt.provider_status_code !== 2) {
+    return { kind: 'redirect', url: attempt.redirect_url, redirect: attempt.redirect_url, code: link.code, attemptId: attempt.id, state: 'tracked' };
+  }
+  return { kind: 'pending', pending: true, code: link.code, attemptId: attempt?.id, state: state || 'reserved', review: Boolean(attempt?.review_reason || attempt?.reversed_at) };
+}
+
+async function startPesapalCheckout(db, input = {}) {
+  const ready = pesapal.readiness();
+  if (!ready.ready) return { kind: 'unavailable', state: 'unavailable', reason: ready.reasons[0] || 'unavailable' };
+  await assertPesapalDatabase(db, ready.environment);
+  const client = pesapalClient();
+  const reservation = await withPaymentTransaction(db, async (tx) => {
+    const link = (await tx.query('SELECT * FROM pay_links WHERE code = $1 FOR UPDATE', [String(input.code || '').trim().toUpperCase()])).rows[0];
+    if (!link) throw revenue.httpError(404, 'Payment link not found');
+    if (link.status === 'paid') return { link, attempt: null };
+    if (link.status !== 'open') throw paymentError('debt_closed');
+    const inspected = await inspectPurchase(tx, link);
+    if (!inspected.eligible) throw paymentError(inspected.reason);
+    let attempt = (await tx.query(
+      `SELECT * FROM pesapal_payment_attempts WHERE pay_link_id = $1 AND environment = $2
+        AND closed_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE`, [link.id, ready.environment]
+    )).rows[0];
+    if (attempt) {
+      if (attempt.merchant_profile !== ready.merchantProfile) throw paymentError('merchant_profile_changed');
+      if (!isDeepStrictEqual(attempt.purchase_snapshot.purchase, inspected.snapshot)) throw paymentError('purchase_changed');
+      return { link, attempt };
+    }
+    const customer = checkoutCustomer(link, input, inspected);
+    attempt = (await tx.query(
+      `INSERT INTO pesapal_payment_attempts
+        (pay_link_id, environment, merchant_profile, merchant_reference, amount_ugx, currency, purchase_snapshot)
+       VALUES ($1, $2, $3, $4, $5, 'UGX', $6::jsonb) RETURNING *`,
+      [link.id, ready.environment, ready.merchantProfile, `MK-${crypto.randomUUID()}`, pesapal.parseWholeUgx(link.amount_ugx),
+        JSON.stringify({ purchase: inspected.snapshot, customer, description: String(link.description).slice(0, 100) })]
+    )).rows[0];
+    return { link, attempt };
+  });
+  const { link, attempt } = reservation;
+  if (!attempt || attempt.creation_state !== 'reserved') return startResult(link, attempt);
+  const claimId = crypto.randomUUID();
+  const sending = (await db.query(
+    `UPDATE pesapal_payment_attempts SET creation_state = 'sending', submit_started_at = NOW(), submit_claim_id = $2,
+            last_error_code = NULL WHERE id = $1 AND creation_state = 'reserved' AND tracking_id IS NULL RETURNING *`,
+    [attempt.id, claimId]
+  )).rows[0];
+  if (!sending) {
+    const current = (await db.query('SELECT * FROM pesapal_payment_attempts WHERE id = $1', [attempt.id])).rows[0];
+    return startResult(link, current);
+  }
+  let submitted;
+  try {
+    submitted = await client.submit({ reference: sending.merchant_reference, amountUgx: Number(sending.amount_ugx),
+      description: sending.purchase_snapshot.description || `makaug payment ${link.code}`, customer: sending.purchase_snapshot.customer,
+      callbackUrl: `${ready.publicOrigin}/pay/${encodeURIComponent(link.code)}/pesapal-return`, notificationId: client.notificationId });
+  } catch (error) {
+    const unknown = error.outcome === 'unknown';
+    const rejected = error.outcome === 'rejected';
+    await db.query(
+      `UPDATE pesapal_payment_attempts SET creation_state = $3, last_error_code = $4,
+              review_reason = CASE WHEN $3 = 'unknown' THEN 'creation_unknown' ELSE NULL END,
+              closed_at = CASE WHEN $3 = 'rejected' THEN NOW() ELSE NULL END,
+              submit_started_at = CASE WHEN $3 = 'reserved' THEN NULL ELSE submit_started_at END,
+              next_check_at = NOW() + INTERVAL '1 minute'
+        WHERE id = $1 AND submit_claim_id = $2 AND creation_state = 'sending' AND tracking_id IS NULL`,
+      [attempt.id, claimId, unknown ? 'unknown' : (rejected ? 'rejected' : 'reserved'), safePaymentCode(error)]
+    );
+    const current = (await db.query('SELECT * FROM pesapal_payment_attempts WHERE id = $1', [attempt.id])).rows[0];
+    const currentLink = await loadLink(db, link.code);
+    return startResult(currentLink, current);
+  }
+  return withPaymentTransaction(db, async (tx) => {
+    const currentLink = (await tx.query('SELECT * FROM pay_links WHERE id = $1 FOR UPDATE', [link.id])).rows[0];
+    const current = (await tx.query('SELECT * FROM pesapal_payment_attempts WHERE id = $1 FOR UPDATE', [attempt.id])).rows[0];
+    if (submitted.reference !== current.merchant_reference || current.tracking_id && current.tracking_id !== submitted.trackingId) {
+      throw paymentError('tracking_binding_conflict');
+    }
+    const tracked = (await tx.query(
+      `UPDATE pesapal_payment_attempts SET tracking_id = $2, redirect_url = COALESCE(redirect_url, $3), creation_state = 'tracked',
+              last_error_code = NULL, review_reason = CASE WHEN review_reason = 'creation_unknown' THEN NULL ELSE review_reason END
+        WHERE id = $1 RETURNING *`, [attempt.id, submitted.trackingId, submitted.checkoutUrl]
+    )).rows[0];
+    return startResult(currentLink, tracked);
+  });
+}
+
+async function latestPesapalAttempt(db, linkId) {
+  return (await db.query('SELECT * FROM pesapal_payment_attempts WHERE pay_link_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1', [linkId])).rows[0] || null;
+}
+
+async function observePesapalPayment(db, { trackingId, reference, source = 'ipn', expectedCode = null } = {}) {
+  if (!TRACKING_ID.test(trackingId || '') || !MERCHANT_REFERENCE.test(reference || '') ||
+      !['ipn', 'return', 'recovery', 'reconcile', 'admin'].includes(source)) throw paymentError('invalid_notification', 400);
+  trackingId = trackingId.toLowerCase();
+  const client = pesapalClient();
+  await assertPesapalDatabase(db, client.environment);
+  const initial = (await db.query(
+    `SELECT a.*, l.code FROM pesapal_payment_attempts a JOIN pay_links l ON l.id = a.pay_link_id
+      WHERE a.environment = $1 AND a.merchant_profile = $2 AND a.merchant_reference = $3`,
+    [client.environment, client.merchantProfile, reference]
+  )).rows[0];
+  if (!initial) throw paymentError('unknown_reference', 404);
+  if (expectedCode && String(expectedCode).toUpperCase() !== initial.code) throw paymentError('wrong_callback_code', 400);
+  if (initial.tracking_id && initial.tracking_id !== trackingId) throw paymentError('wrong_tracking_id', 400);
+  if (!initial.tracking_id && !['sending', 'unknown'].includes(initial.creation_state)) throw paymentError('tracking_not_bound', 409);
+  const started = new Date().toISOString();
+  let observed;
+  try {
+    observed = await client.status(trackingId);
+  } catch (error) {
+    await db.query(
+      `UPDATE pesapal_payment_attempts SET last_error_code = $2, next_check_at = NOW() + INTERVAL '1 minute',
+              check_claim_until = NULL WHERE id = $1`, [initial.id, safePaymentCode(error)]
+    );
+    throw error;
+  }
+  if (observed.requestedTrackingId !== trackingId || observed.reference !== initial.merchant_reference ||
+      observed.amountUgx !== Number(initial.amount_ugx) || observed.currency !== initial.currency) {
+    await db.query(`UPDATE pesapal_payment_attempts SET review_reason = 'provider_facts_mismatch', last_error_code = 'provider_facts_mismatch',
+      next_check_at = NOW() + INTERVAL '1 hour', check_claim_until = NULL WHERE id = $1`, [initial.id]);
+    throw paymentError('provider_facts_mismatch');
+  }
+  let result;
+  try {
+    result = await withPaymentTransaction(db, async (tx) => {
+      const link = (await tx.query('SELECT * FROM pay_links WHERE id = $1 FOR UPDATE', [initial.pay_link_id])).rows[0];
+      const attempt = (await tx.query('SELECT * FROM pesapal_payment_attempts WHERE id = $1 FOR UPDATE', [initial.id])).rows[0];
+      if (!link || !attempt || attempt.environment !== client.environment || attempt.merchant_profile !== client.merchantProfile ||
+          attempt.merchant_reference !== observed.reference || attempt.tracking_id && attempt.tracking_id !== trackingId ||
+          Number(attempt.amount_ugx) !== observed.amountUgx || attempt.currency !== observed.currency) throw paymentError('provider_facts_mismatch');
+      await tx.query(
+        `UPDATE pesapal_payment_attempts SET tracking_id = $2, creation_state = 'tracked', provider_status_code = $3,
+                provider_method = $4, provider_confirmation_code = $5, observed_at = NOW(), observation_started_at = $6::timestamptz,
+                check_count = check_count + 1, check_claim_until = NULL, last_error_code = NULL,
+                next_check_at = NOW() + CASE WHEN application = 'not_applied' THEN INTERVAL '5 minutes' ELSE INTERVAL '1 day' END,
+                review_reason = CASE WHEN review_reason = 'creation_unknown' THEN NULL ELSE review_reason END
+          WHERE id = $1`, [attempt.id, trackingId, observed.statusCode, observed.method, observed.confirmationCode, started]
+      );
+      if (observed.statusCode === 3 || attempt.reversed_at) {
+        await tx.query(`UPDATE pesapal_payment_attempts SET reversed_at = COALESCE(reversed_at, NOW()), review_reason = 'reversed',
+          closed_at = COALESCE(closed_at, NOW()), next_check_at = NOW() + INTERVAL '1 day' WHERE id = $1`, [attempt.id]);
+        if (attempt.ledger_entry_id) await tx.query(
+          "UPDATE revenue_entries SET payment_review_reason = 'reversed' WHERE id = $1 AND pesapal_attempt_id = $2",
+          [attempt.ledger_entry_id, attempt.id]
+        );
+        await queueReview(tx, link, { attemptId: attempt.id, entryId: attempt.ledger_entry_id, reason: 'reversed' });
+        return { paid: link.status === 'paid', state: 'reversed', review: true, code: link.code, durable_notices: true };
+      }
+      if (observed.statusCode !== 1) {
+        if (observed.statusCode === 2) await tx.query('UPDATE pesapal_payment_attempts SET closed_at = COALESCE(closed_at, NOW()) WHERE id = $1', [attempt.id]);
+        return { paid: link.status === 'paid', state: observed.statusCode === 2 ? 'failed' : 'pending', code: link.code };
+      }
+      return acceptCollectionTx(tx, link, {
+        provider: 'Pesapal', actor: 'pesapal', paidMethod: 'pesapal', verification: 'pesapal_transaction', attemptId: attempt.id,
+        snapshot: attempt.purchase_snapshot.purchase,
+        payment: { method: 'pesapal', account_key: 'pesapal_ugx', amount_ugx: observed.amountUgx, reference: trackingId,
+          paid_at: observed.paidAt || undefined, payer_name: link.payer_name,
+          payer_phone: link.payer_phone || attempt.purchase_snapshot.customer?.phone,
+          note: `Pesapal ${observed.method || 'payment'}; reference ${link.code}; ${observed.confirmationCode || ''}` }
+      });
+    });
+  } catch (error) {
+    await db.query(`UPDATE pesapal_payment_attempts SET last_error_code = $2,
+      review_reason = CASE WHEN $2 = 'receipt_conflict' THEN 'receipt_conflict'
+                          WHEN $2 = 'payment_fulfillment_error' THEN 'fulfillment_requires_review' ELSE review_reason END,
+      next_check_at = NOW() + INTERVAL '1 minute', check_claim_until = NULL WHERE id = $1`, [initial.id, safePaymentCode(error)]);
+    throw error;
+  }
+  paymentNotices.kickPaymentNotices(db);
+  return result;
+}
+
+async function recoverPesapalAttempt(db, { attemptId, trackingId, actor } = {}) {
+  if (!TRACKING_ID.test(attemptId || '') || !TRACKING_ID.test(trackingId || '') || !actor) throw paymentError('invalid_recovery', 400);
+  const attempt = (await db.query('SELECT * FROM pesapal_payment_attempts WHERE id = $1', [attemptId])).rows[0];
+  if (!attempt) throw paymentError('unknown_attempt', 404);
+  return observePesapalPayment(db, { trackingId, reference: attempt.merchant_reference, source: 'recovery' });
+}
+
+async function reconcilePesapalPayments(db, { limit = 25 } = {}) {
+  const ready = pesapal.readiness();
+  if (!ready.environment || !ready.credentialsConfigured || ready.countryCode !== 'UG') return { checked: 0, skipped: 'not_configured' };
+  const client = pesapalClient();
+  await assertPesapalDatabase(db, client.environment);
+  await db.query(`UPDATE pesapal_payment_attempts SET creation_state = 'unknown', review_reason = 'creation_unknown',
+      last_error_code = 'submission_interrupted' WHERE environment = $1 AND merchant_profile = $2
+      AND creation_state = 'sending' AND tracking_id IS NULL AND submit_started_at < NOW() - INTERVAL '2 minutes'`,
+  [client.environment, client.merchantProfile]);
+  const count = Math.max(1, Math.min(100, Math.trunc(Number(limit) || 25)));
+  const rows = (await db.query(
+    `WITH due AS (
+       SELECT id FROM pesapal_payment_attempts WHERE environment = $1 AND merchant_profile = $2 AND tracking_id IS NOT NULL
+         AND next_check_at <= NOW() AND (check_claim_until IS NULL OR check_claim_until < NOW())
+       ORDER BY next_check_at, id LIMIT $3 FOR UPDATE SKIP LOCKED
+     ) UPDATE pesapal_payment_attempts a SET check_claim_until = NOW() + INTERVAL '90 seconds'
+       FROM due WHERE a.id = due.id RETURNING a.*`, [client.environment, client.merchantProfile, count]
+  )).rows;
+  const results = { checked: rows.length, paid: 0, review: 0, failed: 0 };
+  for (const row of rows) {
+    try {
+      const result = await observePesapalPayment(db, { trackingId: row.tracking_id, reference: row.merchant_reference, source: 'reconcile' });
+      if (result.paid && !result.already) results.paid += 1;
+      if (result.review) results.review += 1;
+    } catch (error) {
+      results.failed += 1;
+      logger.warn('Pesapal reconciliation needs retry', { attemptId: row.id, code: safePaymentCode(error) });
+    }
+  }
+  return results;
+}
+
+async function listPesapalAttempts(db, { limit = 100 } = {}) {
+  return (await db.query(
+    `SELECT a.id, a.pay_link_id, l.code, l.description, a.environment, a.merchant_profile, a.merchant_reference,
+            a.amount_ugx, a.currency, a.creation_state, a.tracking_id, a.provider_status_code, a.provider_method,
+            a.reversed_at, a.review_reason, a.application, a.ledger_entry_id, a.next_check_at, a.check_count,
+            a.last_error_code, a.created_at, a.updated_at FROM pesapal_payment_attempts a
+       JOIN pay_links l ON l.id = a.pay_link_id ORDER BY a.created_at DESC LIMIT $1`,
+    [Math.max(1, Math.min(300, Math.trunc(Number(limit) || 100)))]
+  )).rows.map((row) => ({ ...row, amount_ugx: Number(row.amount_ugx), state: checkoutState(row) }));
 }
 
 /** Mobile money: "I have paid" from the pay page becomes a normal payment claim. */
@@ -591,15 +1102,6 @@ async function createMomoClaim(db, code, { reference, phone, name } = {}) {
     logger.warn('Team alert for a pay-link payment claim failed', { claimId: claim.id, error: error.message });
   }
   return { claim_id: claim.id };
-}
-
-/** When a MoMo claim from a pay link is confirmed, close the link too. */
-async function closeLinkForClaim(db, claimId, entryId) {
-  await db.query(
-    `UPDATE pay_links SET status = 'paid', paid_method = 'mtn_momo', paid_at = NOW(), entry_id = COALESCE(entry_id, $2), updated_at = NOW()
-      WHERE id = (SELECT pay_link_id FROM payment_claims WHERE id = $1::uuid) AND status = 'open'`,
-    [claimId, entryId || null]
-  );
 }
 
 /**
@@ -755,12 +1257,20 @@ async function sweepOpenCardOrders(db) {
 let sweepTimer = null;
 let payLinkRunning = false;
 function startPayLinkScheduler(db) {
-  if (sweepTimer || !process.env.DATABASE_URL || process.env.PAY_LINK_SWEEP_ENABLED === 'false') return;
+  const sweepEnabled = process.env.PAY_LINK_SWEEP_ENABLED !== 'false';
+  const noticesEnabled = process.env.PAYMENT_NOTICE_DISPATCH_ENABLED !== 'false';
+  if (sweepTimer || !process.env.DATABASE_URL || !sweepEnabled && !noticesEnabled) return;
   const tick = async () => {
     if (payLinkRunning) return { skipped: true, reason: 'already_running' };
     payLinkRunning = true;
     try {
-      return await sweepOpenCardOrders(db);
+      const results = await Promise.allSettled([
+        sweepEnabled ? sweepOpenCardOrders(db) : Promise.resolve({ skipped: 'disabled' }),
+        sweepEnabled ? reconcilePesapalPayments(db) : Promise.resolve({ skipped: 'disabled' }),
+        noticesEnabled ? paymentNotices.drainPaymentNotices(db) : Promise.resolve({ skipped: 'disabled' })
+      ]);
+      return Object.fromEntries(results.map((result, index) => [ ['revolut', 'pesapal', 'notices'][index],
+        result.status === 'fulfilled' ? result.value : { error: safePaymentCode(result.reason) }]));
     } catch (error) {
       logger.warn('Pay link sweep failed', { error: error.message });
       return { error: error.message };
@@ -772,7 +1282,7 @@ function startPayLinkScheduler(db) {
   sweepTimer.unref?.();
   setTimeout(() => { observeJob('pay_link', tick).catch(() => {}); }, BOOT_DELAY_MS.pay_link).unref?.();
   setTimeout(() => {
-    ensureRevolutWebhook(db).then((r) => logger.info('Revolut webhook', r)).catch((error) => logger.warn('Revolut webhook setup failed', { error: error.message }));
+    if (sweepEnabled) ensureRevolutWebhook(db).then((r) => logger.info('Revolut webhook', r)).catch((error) => logger.warn('Revolut webhook setup failed', { error: error.message }));
   }, 30_000).unref?.();
 }
 
@@ -792,9 +1302,16 @@ module.exports = {
   refreshLink,
   handleRevolutEvent,
   createMomoClaim,
-  closeLinkForClaim,
   recordShortTermPayment,
+  recordShortTermPaymentTx,
   recordHostedPayment,
+  recordHostedPaymentTx,
+  startPesapalCheckout,
+  observePesapalPayment,
+  recoverPesapalAttempt,
+  reconcilePesapalPayments,
+  listPesapalAttempts,
+  settleConfirmedClaim,
   notifyPaid,
   pendingAgentPaid,
   listPayLinks,

@@ -123,6 +123,7 @@ const { agentGreetingName, setCachedGreetingName } = require('../services/agentN
 const revenue = require('../services/revenueService');
 const billingOps = require('../services/billingOpsService');
 const payLinks = require('../services/payLinkService');
+const pesapal = require('../services/pesapalClient');
 const aiCeo = require('../services/aiCeoControlService');
 const revolutMerchant = require('../services/revolutMerchantService');
 const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
@@ -10315,7 +10316,7 @@ router.get('/revenue/agent-trials', async (req, res, next) => {
 
 router.get('/revenue/summary', async (req, res, next) => {
   try {
-    const [summary, settings, claims, listers, links, awaiting, linkStats] = await Promise.all([
+    const [summary, settings, claims, listers, links, awaiting, linkStats, pesapalAttempts, paymentNotices] = await Promise.all([
       revenue.revenueSummary(db),
       billingOps.getSettings(db, { fresh: true }),
       db.query(
@@ -10332,7 +10333,9 @@ router.get('/revenue/summary', async (req, res, next) => {
       // Who has been asked for money and gone quiet. Three days is the point
       // at which "they have not got round to it" becomes "nobody is chasing".
       payLinks.payLinksAwaitingPayment(db, { afterDays: 3, limit: 50 }).catch(() => []),
-      payLinks.payLinkSendStats(db, { sinceDays: 30 }).catch(() => null)
+      payLinks.payLinkSendStats(db, { sinceDays: 30 }).catch(() => null),
+      payLinks.listPesapalAttempts(db, { limit: 30 }),
+      db.query('SELECT status, count(*)::int AS count FROM payment_notice_retries GROUP BY status')
     ]);
     const { revolut_webhook: revolutWebhook, ...publicSettings } = settings || {};
     return res.json({
@@ -10348,6 +10351,7 @@ router.get('/revenue/summary', async (req, res, next) => {
           configured: revolutMerchant.isConfigured(),
           webhook_ready: Boolean(revolutWebhook?.signing_secret)
         },
+        pesapal: { readiness: pesapal.readiness(), attempts: pesapalAttempts, notices: paymentNotices.rows },
         pay_to_line: billingOps.payToLine(settings),
         claims: claims.rows,
         listers,
@@ -10433,6 +10437,36 @@ router.post('/revenue/card-payments/connect', async (req, res, next) => {
   } catch (error) {
     return next(error);
   }
+});
+
+router.get('/revenue/pesapal', async (req, res, next) => {
+  try {
+    return res.json({ ok: true, data: { readiness: pesapal.readiness(),
+      attempts: await payLinks.listPesapalAttempts(db, { limit: req.query.limit }) } });
+  } catch (error) { return next(error); }
+});
+
+router.post('/revenue/pesapal/:id/check', async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(req.params.id)) return res.status(400).json({ ok: false, error: 'Invalid payment attempt ID' });
+    const row = (await db.query('SELECT tracking_id, merchant_reference FROM pesapal_payment_attempts WHERE id=$1::uuid', [req.params.id])).rows[0];
+    if (!row) return res.status(404).json({ ok: false, error: 'Payment attempt not found' });
+    if (!row.tracking_id) return res.status(409).json({ ok: false, error: 'Find the tracking ID in the Pesapal portal and use Recover tracking ID.' });
+    const result = await payLinks.observePesapalPayment(db, { trackingId: row.tracking_id, reference: row.merchant_reference, source: 'admin' });
+    await writeAudit('pesapal_attempt_checked', { attempt_id: req.params.id, state: result.state }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) { return next(error); }
+});
+
+router.post('/revenue/pesapal/:id/recover', async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(req.params.id) ||
+        typeof req.body?.tracking_id !== 'string' || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(req.body.tracking_id)) return res.status(400).json({ ok: false, error: 'Invalid payment or tracking ID' });
+    const result = await payLinks.recoverPesapalAttempt(db, { attemptId: req.params.id,
+      trackingId: req.body?.tracking_id, actor: adminActorId(req) });
+    await writeAudit('pesapal_attempt_recovered', { attempt_id: req.params.id, state: result.state }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) { return next(error); }
 });
 
 router.get('/revenue/export.csv', async (req, res, next) => {
@@ -10679,21 +10713,23 @@ router.post('/revenue/claims/:id/confirm', async (req, res, next) => {
       fxRate: req.body?.fx_rate_ugx,
       note: cleanText(req.body?.note || '')
     });
-    if (result.entry && !result.reinstatement && result.entry.kind === 'listing_fee' && result.entry.property_id) {
-      await billingOps.sendListerBillingMessage(db, { propertyId: result.entry.property_id, kind: 'reinstated', actor: adminActorId(req) }).catch(() => {});
-    } else if (result.pendingAgent?.pending) {
-      // A new agent who has paid but is not approved yet was already told
-      // "payment received, finishing your checks" — not "live again".
-    } else if (['short_term_fee', 'advertising', 'listing_boost', 'other_income'].includes(result.entry?.kind)) {
-      const link = (await db.query(
-        `SELECT l.* FROM pay_links l JOIN payment_claims c ON c.pay_link_id = l.id WHERE c.id = $1::uuid`, [req.params.id]
-      ).catch(() => ({ rows: [] }))).rows[0];
-      if (link) await payLinks.notifyPaid(db, link, result).catch(() => {});
-    } else if (result.entry?.agent_id && !result.reinstatement?.reinstated) {
-      // Not taken down, just paid: thank them.
-      await billingOps.sendAgentBillingMessage(db, { agentId: result.entry.agent_id, kind: 'reinstated', actor: adminActorId(req), force: true }).catch(() => {});
+    if (!result.durable_notices) {
+      if (result.entry && !result.reinstatement && result.entry.kind === 'listing_fee' && result.entry.property_id) {
+        await billingOps.sendListerBillingMessage(db, { propertyId: result.entry.property_id, kind: 'reinstated', actor: adminActorId(req) }).catch(() => {});
+      } else if (result.pendingAgent?.pending) {
+        // A new agent who has paid but is not approved yet was already told
+        // "payment received, finishing your checks" — not "live again".
+      } else if (['short_term_fee', 'advertising', 'listing_boost', 'other_income'].includes(result.entry?.kind)) {
+        const link = (await db.query(
+          `SELECT l.* FROM pay_links l JOIN payment_claims c ON c.pay_link_id = l.id WHERE c.id = $1::uuid`, [req.params.id]
+        ).catch(() => ({ rows: [] }))).rows[0];
+        if (link) await payLinks.notifyPaid(db, link, result).catch(() => {});
+      } else if (result.entry?.agent_id && !result.reinstatement?.reinstated) {
+        // Not taken down, just paid: thank them.
+        await billingOps.sendAgentBillingMessage(db, { agentId: result.entry.agent_id, kind: 'reinstated', actor: adminActorId(req), force: true }).catch(() => {});
+      }
+      notifyTeamOfPayment({ entry: result.entry, agentName: result.entry?.payer_name || '', actor: adminActorId(req), periodEnd: result.period_end });
     }
-    notifyTeamOfPayment({ entry: result.entry, agentName: result.entry?.payer_name || '', actor: adminActorId(req), periodEnd: result.period_end });
     await writeAudit('payment_claim_confirmed', { claim_id: req.params.id, entry_id: result.entry?.id }, adminActorId(req));
     return res.json({ ok: true, data: result });
   } catch (error) {
