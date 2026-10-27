@@ -32545,7 +32545,7 @@ function adminVideoCaptionOcrPanelHtml(review = {}) {
       <pre class="mt-1 max-h-28 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-800" data-no-translate>${adminEscape(text || (status === "done" ? "" : ""))}</pre>
       ${status === "done" && !text ? `<p class="mt-1 text-xs text-slate-600">No text was read from the video.</p>` : ""}
       <div class="mt-2 text-[11px] font-black uppercase tracking-wide text-slate-500">Video facts</div>
-      <div class="mt-1">${factRows || `<p class="text-xs text-slate-600">${status === "done" || status === "not_checked" ? "No text was read from the video." : "Video text is still being read."}</p>`}</div>
+      <div class="mt-1">${factRows || `<p class="text-xs text-slate-600">${status === "done" || status === "not_checked" || status === "not_checkable" ? "No text was read from the video." : "Video text is still being read."}</p>`}</div>
       ${status === "not_checked" ? `<button type="button" data-staff-ocr-run="1" onclick="staffRunVideoCaptionOcr(${propertyIdArg(propertyId)})" class="mt-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-black text-slate-800">Run check now</button>` : ""}
       ${conflicts.length ? `
         <div class="mt-2 rounded-lg border border-red-300 bg-red-50 p-2" data-video-caption-ocr-block>
