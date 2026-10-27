@@ -17957,7 +17957,7 @@ function adminManagerPaymentFormHtml(kind, id) {
   return `<form class="rounded-xl border border-green-200 p-3" data-manager-add-payment onsubmit="adminManagerRecordPayment(event, '${kind}', '${adminAttr(id)}')">
     <h5 class="font-black text-gray-900">Add payment receipt</h5><p class="mt-1 text-xs text-gray-500">Records money already received, updates this payment history and Sales &amp; Revenue.</p>
     <div class="mt-3 grid grid-cols-2 gap-2">
-      <label class="text-xs font-semibold">Amount (UGX)<input name="amount_ugx" type="number" min="1" step="1" required inputmode="numeric" class="${input}"></label>
+      <label class="text-xs font-semibold">Amount (UGX)<input name="amount_ugx" type="number" min="1" max="100000000" step="1" required inputmode="numeric" class="${input}"></label>
       <label class="text-xs font-semibold">Paid on<input name="paid_at" type="date" value="${today}" max="${today}" required class="${input}"></label>
       <label class="text-xs font-semibold">Method<select name="method" required class="${input}"><option value="">Choose…</option>${ADMIN_METHOD_KEYS.filter((method) => method !== "absa_usd").map((method) => `<option value="${adminAttr(method)}">${adminEscape(ADMIN_METHOD_LABELS[method] || method)}</option>`).join("")}</select></label>
       <label class="text-xs font-semibold">Transaction ID<input name="reference" maxlength="160" class="${input}"></label>
@@ -17974,8 +17974,8 @@ async function adminManagerRecordPayment(event, kind, id) {
   const values = new FormData(form);
   const body = { amount_ugx: Number(values.get("amount_ugx")), method: String(values.get("method") || ""), reference: String(values.get("reference") || "").trim(), paid_at: String(values.get("paid_at") || ""), note: String(values.get("note") || "").trim() };
   const errorBox = form.querySelector("[data-payment-error]");
-  if (!Number.isSafeInteger(body.amount_ugx) || body.amount_ugx <= 0 || !body.method || !body.paid_at) {
-    if (errorBox) { errorBox.textContent = "Enter a whole UGX amount, payment date and method."; errorBox.classList.remove("hidden"); }
+  if (!Number.isSafeInteger(body.amount_ugx) || body.amount_ugx <= 0 || body.amount_ugx > 100000000 || !body.method || !body.paid_at) {
+    if (errorBox) { errorBox.textContent = "Enter a whole UGX amount up to 100,000,000, payment date and method."; errorBox.classList.remove("hidden"); }
     return;
   }
   const fingerprint = JSON.stringify(body);
@@ -18073,7 +18073,7 @@ function adminPublicManagerHtml(response = {}) {
     <form class="mt-3 flex flex-wrap gap-2" onsubmit="adminPublicManagerSearch(event)"><label class="flex-1 min-w-[180px] text-xs font-semibold">Search paid listings<input name="search" type="search" value="${adminAttr(state.search)}" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Name, phone, title or reference"></label><button type="submit" class="self-end rounded-lg bg-gray-900 px-4 py-2 text-xs font-bold text-white">Search</button></form>
     <div class="mt-4 space-y-2">${rows.length ? rows.map((listing) => `<article class="rounded-xl border border-gray-200 p-3"><div class="flex items-start justify-between gap-2"><div><p>${adminManagerPublicListingTitle(listing)}</p><p class="mt-1 text-xs text-gray-600" data-pii>${adminEscape(listing.lister_name || "Unnamed lister")} · ${adminEscape(listing.lister_phone || "No phone")}</p></div><button type="button" onclick="adminPublicManagerOpen('${adminAttr(listing.id)}')" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold">Manage</button></div><p class="mt-2 text-xs text-gray-600">${adminEscape(listing.status || "")} · Total paid ${adminEscape(adminManagerMoney(listing.lifetime_paid_ugx))} · Last paid ${adminEscape(adminAgentManagerDay(listing.last_payment_on))}${listing.last_payment_ugx != null ? ` · ${adminEscape(adminManagerMoney(listing.last_payment_ugx))}` : ""} · Next due ${adminEscape(adminAgentManagerDay(listing.next_due))}</p></article>`).join("") : `<div class="rounded-xl border border-dashed border-gray-300 p-5 text-sm text-gray-500">${state.search ? "No paid public listings match this search." : "No paid public listings yet. Record the first received payment below when someone pays to list directly."}</div>`}</div>
     ${Number(pagination.totalPages || pagination.pages || 1) > 1 ? `<div class="mt-3 flex items-center justify-between text-xs"><button type="button" ${state.page <= 1 ? "disabled" : ""} onclick="adminPublicManagerLoad(${state.page - 1})" class="rounded-lg border px-3 py-2 disabled:opacity-40">Previous</button><span>Page ${state.page} of ${Number(pagination.totalPages || pagination.pages)}</span><button type="button" ${state.page >= Number(pagination.totalPages || pagination.pages) ? "disabled" : ""} onclick="adminPublicManagerLoad(${state.page + 1})" class="rounded-lg border px-3 py-2 disabled:opacity-40">Next</button></div>` : ""}
-    <details class="mt-5 rounded-xl border border-gray-200 p-3"><summary class="cursor-pointer text-sm font-bold">Record a public lister's first payment</summary><p class="mt-2 text-xs text-gray-500">Find their existing direct listing, then record the money received.</p><form class="mt-2 flex gap-2" onsubmit="adminPublicManagerFindCandidate(event)"><input name="search" type="search" required minlength="2" placeholder="Listing reference, title, name or phone" class="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm" aria-label="Find direct listing"><button class="rounded-lg border px-3 py-2 text-xs font-bold">Find listing</button></form><div class="mt-2 space-y-2" data-public-candidates></div></details>
+    <details class="mt-5 rounded-xl border border-gray-200 p-3"><summary class="cursor-pointer text-sm font-bold">Record a public lister's first payment</summary><p class="mt-2 text-xs text-gray-500">Find their existing direct listing, then record the money received.</p><form class="mt-2 flex gap-2" onsubmit="adminPublicManagerFindCandidate(event)"><input name="search" type="search" required minlength="3" placeholder="Listing reference, title, name or phone" class="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm" aria-label="Find direct listing"><button class="rounded-lg border px-3 py-2 text-xs font-bold">Find listing</button></form><div class="mt-2 space-y-2" data-public-candidates></div></details>
     <div class="mt-5" data-public-manager-detail></div>`;
 }
 
@@ -18088,7 +18088,7 @@ async function adminPublicManagerFindCandidate(event) {
   const form = event.currentTarget;
   const box = form.parentElement.querySelector("[data-public-candidates]");
   const search = String(new FormData(form).get("search") || "").trim();
-  if (search.length < 2) return;
+  if (search.length < 3) return;
   box.textContent = "Finding direct listings…";
   const button = form.querySelector("button");
   if (button) button.disabled = true;

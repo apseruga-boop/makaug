@@ -101,7 +101,7 @@ test('retry after a lost response keeps the request ID, while changed payment da
 test('invalid receipt amount never reaches the API', async () => {
   let calls = 0;
   const c = context({ apiRequest: async () => { calls += 1; } });
-  for (const amount of ['0', '-20', '0.5', 'wat', '9007199254740993']) {
+  for (const amount of ['0', '-20', '0.5', 'wat', '9007199254740993', '100000001']) {
     const f = form({ amount_ugx: amount, method: 'cash', paid_at: '2026-10-27' });
     await c.adminManagerRecordPayment(event(f), 'agent', agentId);
     assert.match(f.error.textContent, /whole UGX/);
