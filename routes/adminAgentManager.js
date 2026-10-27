@@ -146,6 +146,18 @@ function idStillNeeded(agent = {}) {
     && !String(agent.nin ?? '').trim() && agent.has_nin !== true;
 }
 
+function listingModerationAt(row) {
+  const valid = (value) => value && !Number.isNaN(new Date(value).getTime()) ? value : null;
+  if (valid(row.moderation_at)) return row.moderation_at;
+  if (row.status === 'rejected' && valid(row.rejected_at)) return row.rejected_at;
+  const actions = { hidden: ['take_down'], archived: ['take_down'], sold: ['mark_sold', 'mark_let'],
+    approved: ['put_back'], pending: ['put_back'], rejected: ['put_back'] };
+  if (actions[row.status]?.includes(row.last_staff_action) && valid(row.last_staff_action_at)) return row.last_staff_action_at;
+  if (['rejected', 'hidden', 'archived', 'deleted', 'sold'].includes(row.status)
+    && row.moderation_stage === row.status && valid(row.reviewed_at)) return row.reviewed_at;
+  return null;
+}
+
 // SQL: a live (not archived) "ID front" uploaded by staff for agent a.
 const LIVE_ID_FRONT_SQL = `EXISTS (SELECT 1 FROM agent_identity_files f
   WHERE f.agent_id = a.id AND f.kind = 'id_front' AND f.archived_at IS NULL)`;
@@ -305,11 +317,18 @@ function registerAgentManagerRoutes(router, deps) {
                 p.extra_fields->>'agent_manager_previous_status' AS previous_status,
                 p.extra_fields->>'agent_manager_last_action' AS last_staff_action,
                 p.extra_fields->>'agent_manager_last_action_at' AS last_staff_action_at,
-                event.reason AS moderation_reason, event.created_at AS moderation_at, event.status_to AS moderation_status,
+                COALESCE(event.reason, NULLIF(btrim(p.moderation_reason), ''),
+                  NULLIF(btrim(p.extra_fields->>'moderation_reason'), ''),
+                  CASE WHEN p.status = 'rejected' THEN NULLIF(btrim(p.extra_fields->>'rejection_reason'), '') END) AS moderation_reason,
+                event.created_at AS moderation_at, COALESCE(event.status_to, p.status) AS moderation_status,
+                p.rejected_at, p.reviewed_at, p.moderation_stage,
                 (SELECT MAX(e.created_at) FROM property_moderation_events e
                   WHERE e.property_id = p.id AND e.status_to IN ('hidden', 'sold', 'archived', 'deleted')) AS taken_down_at
            FROM properties p
-           LEFT JOIN LATERAL (SELECT COALESCE(NULLIF(e.reason, ''), NULLIF(e.notes, '')) AS reason, e.created_at, e.status_to FROM property_moderation_events e
+           LEFT JOIN LATERAL (SELECT CASE WHEN e.action LIKE 'agent_manager_%' AND e.notes LIKE 'By %'
+               THEN COALESCE(NULLIF(btrim(e.reason), ''), NULLIF(btrim(e.notes), ''))
+               ELSE COALESCE(NULLIF(btrim(e.notes), ''), NULLIF(btrim(e.reason), '')) END AS reason,
+               e.created_at, e.status_to FROM property_moderation_events e
              WHERE e.property_id = p.id AND e.status_to = p.status
              ORDER BY e.created_at DESC, e.id DESC LIMIT 1) event ON true
           WHERE p.agent_id = $1
@@ -362,7 +381,7 @@ function registerAgentManagerRoutes(router, deps) {
             last_activity_at: lastActivity
           },
           ...ledger,
-          listings: listings.map((row) => ({ ...row, public_url: publicListingUrl(row), views: viewMap.get(row.id) || 0, leads: leadMap.get(row.id) || 0 })),
+          listings: listings.map((row) => ({ ...row, moderation_at: listingModerationAt(row), public_url: publicListingUrl(row), views: viewMap.get(row.id) || 0, leads: leadMap.get(row.id) || 0 })),
           history: history.rows,
           id_files: idFiles,
           same_phone_agents: duplicates.rows

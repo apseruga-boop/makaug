@@ -103,7 +103,7 @@ test('real PostgreSQL and protected HTTP: history, paid direct Public roster and
     CREATE TABLE billing_settings (key text PRIMARY KEY, value jsonb);
     CREATE TABLE audit_logs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), actor_id text, action text, details jsonb, created_at timestamptz DEFAULT now());
     CREATE TABLE users(id uuid PRIMARY KEY, last_login_at timestamptz, email text, role text);
-    CREATE TABLE property_moderation_events(id uuid DEFAULT gen_random_uuid(), property_id uuid, status_to text,
+    CREATE TABLE property_moderation_events(id uuid DEFAULT gen_random_uuid(), property_id uuid, status_to text, action text,
       reason text, notes text, created_at timestamptz DEFAULT now());
     CREATE TABLE analytics_events(event_name text, payload jsonb);
     CREATE TABLE leads(listing_id uuid);
@@ -122,7 +122,8 @@ test('real PostgreSQL and protected HTTP: history, paid direct Public roster and
       ADD COLUMN registered_by_phone text, ADD COLUMN registered_by_name text, ADD COLUMN pay_link_sent_at timestamptz,
       ADD COLUMN fee_offer_reason text, ADD COLUMN listing_limit integer, ADD COLUMN featured_homepage boolean;
     ALTER TABLE properties ADD COLUMN listing_type text, ADD COLUMN price bigint, ADD COLUMN price_period text,
-      ADD COLUMN approved_at timestamptz, ADD COLUMN sold_at timestamptz, ADD COLUMN expires_at timestamptz;
+      ADD COLUMN approved_at timestamptz, ADD COLUMN sold_at timestamptz, ADD COLUMN expires_at timestamptz,
+      ADD COLUMN moderation_reason text, ADD COLUMN moderation_stage text, ADD COLUMN rejected_at timestamptz, ADD COLUMN reviewed_at timestamptz;
     CREATE TABLE agent_identity_files(id uuid, agent_id uuid, kind text, label text, original_name text, mime_type text,
       byte_size integer, metadata_stripped boolean, uploaded_by text, uploaded_by_label text, uploaded_at timestamptz,
       archived_at timestamptz, archived_by text, archived_reason text, replaced_by uuid);`);
@@ -211,6 +212,38 @@ test('real PostgreSQL and protected HTTP: history, paid direct Public roster and
         assert.equal(listing.moderation_reason, reason);
         assert.ok(listing.moderation_at);
       }
+    });
+
+    await t.test('legacy listing moderation uses stored evidence and human event explanations without inventing dates', async () => {
+      const rejectedAt = '2026-10-20T09:00:00.000Z';
+      const reviewedAt = '2026-10-21T10:00:00.000Z';
+      const orphan = (await db.query(`INSERT INTO properties(title, agent_id, status, moderation_reason, rejected_at)
+        VALUES ('Legacy rejected listing', $1, 'rejected', 'Source owner declined publication', $2) RETURNING id`, [agent.id, rejectedAt])).rows[0];
+      const coded = (await db.query(`INSERT INTO properties(title, agent_id, status) VALUES ('Coded duplicate', $1, 'rejected') RETURNING id`, [agent.id])).rows[0];
+      await db.query(`INSERT INTO property_moderation_events(property_id, status_to, reason, notes)
+        VALUES ($1, 'rejected', 'duplicate_listing', 'Same footage as the retained Mutundwe listing')`, [coded.id]);
+      const storedExtra = (await db.query(`INSERT INTO properties(title, agent_id, status, moderation_stage, reviewed_at, extra_fields)
+        VALUES ('Stored hidden listing', $1, 'hidden', 'hidden', $2, '{"moderation_reason":"Owner requested pause"}') RETURNING id`, [agent.id, reviewedAt])).rows[0];
+      const unknownDate = (await db.query(`INSERT INTO properties(title, agent_id, status, moderation_reason)
+        VALUES ('Hidden without known date', $1, 'hidden', 'Awaiting owner location') RETURNING id`, [agent.id])).rows[0];
+      const manager = (await db.query(`INSERT INTO properties(title, agent_id, status) VALUES ('Staff action', $1, 'hidden') RETURNING id`, [agent.id])).rows[0];
+      await db.query(`INSERT INTO property_moderation_events(property_id, action, status_to, reason, notes)
+        VALUES ($1, 'agent_manager_take_down', 'hidden', 'Phone is no longer available', 'By Arthur')`, [manager.id]);
+      const staffAt = '2026-10-22T11:00:00.000Z';
+      const staff = (await db.query(`INSERT INTO properties(title, agent_id, status, extra_fields)
+        VALUES ('Known staff action date', $1, 'hidden', $2::jsonb) RETURNING id`, [agent.id, JSON.stringify({
+        moderation_reason: 'Taken down until owner confirms', agent_manager_last_action: 'take_down', agent_manager_last_action_at: staffAt
+      })])).rows[0];
+      const rows = (await auth(request(app).get(`/api/admin/agent-manager/agents/${agent.id}`)).expect(200)).body.data.listings;
+      assert.equal(rows.find((r) => r.id === orphan.id).moderation_reason, 'Source owner declined publication');
+      assert.equal(rows.find((r) => r.id === orphan.id).moderation_at, rejectedAt);
+      assert.equal(rows.find((r) => r.id === coded.id).moderation_reason, 'Same footage as the retained Mutundwe listing');
+      assert.equal(rows.find((r) => r.id === storedExtra.id).moderation_reason, 'Owner requested pause');
+      assert.equal(rows.find((r) => r.id === storedExtra.id).moderation_at, reviewedAt);
+      assert.equal(rows.find((r) => r.id === unknownDate.id).moderation_reason, 'Awaiting owner location');
+      assert.equal(rows.find((r) => r.id === unknownDate.id).moderation_at, null);
+      assert.equal(rows.find((r) => r.id === manager.id).moderation_reason, 'Phone is no longer available');
+      assert.equal(rows.find((r) => r.id === staff.id).moderation_at, staffAt);
     });
 
     await t.test('Public payments reject harvested/agent inventory and show only paid direct record', async () => {
