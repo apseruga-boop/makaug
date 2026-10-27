@@ -15330,9 +15330,20 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
   const mediaQualityWarningText = videoRecoveryRequired
     ? "the playable original WhatsApp video is still being recovered. Screenshots and poster captures are evidence only; do not approve this listing until the MP4 and clean key images are attached."
     : "this listing has no approved property photo. Review the quarantined source evidence and attach a clear property image before approval.";
-  const mediaQualityWarning = mediaValidationStatus.startsWith("blocked_") || videoRecoveryRequired || (!imageCount && mediaQualityBlockers.length)
+  // 27 Oct 2026 (MK-…A64E8E): the card said "no approved property photo"
+  // from the intake flag while the review page approved the listing on its
+  // own video (and later on the stills made from it). The card now asks the
+  // same question as the approval gate: a photo, or the listing's own video.
+  const hasCardPhoto = imageCount > 0 || Boolean(primaryImageUrl);
+  const ownVideoUrl = [item.extra_fields?.video_url, item.extra_fields?.tiktok_url, item.extra_fields?.youtube_url]
+    .map((url) => String(url || "").trim())
+    .find((url) => /^https?:\/\//i.test(url) && (/\.mp4(\?|$)/i.test(url) || /youtu|tiktok/i.test(url)));
+  const mediaFlagBlocked = !hasCardPhoto && (mediaValidationStatus.startsWith("blocked_") || mediaQualityBlockers.length > 0);
+  const mediaQualityWarning = videoRecoveryRequired || (mediaFlagBlocked && !ownVideoUrl)
     ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-200 p-2 text-xs text-red-900"><strong>Media blocked:</strong> ${mediaQualityWarningText}</div>`
-    : "";
+    : (mediaFlagBlocked
+      ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-200 p-2 text-xs text-amber-950" data-staff-card-video-only="1"><strong>No photo yet:</strong> this listing can approve on its own video. Make a cover from the video so the card has a picture.</div>`
+      : "");
   return `
     <article class="border border-gray-200 rounded-2xl p-4" data-staff-queue-card="1" data-property-id="${adminAttr(String(item.id || ""))}">
       <div class="flex items-start justify-between gap-3">
@@ -19958,11 +19969,13 @@ async function saveStaffListingPreview(propertyId, options = {}) {
     const warningOverrides = options.prepareApproval === true
       ? staffBuildReviewWarningOverrides(adminActiveReview)
       : getAdminReviewWarningOverrides(adminActiveReview);
+    const reviewPatch = staffReviewPatch();
+    const noteSent = String(reviewPatch.notes || "").trim();
     const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(targetId)}/review`, {
       method: "PATCH",
       body: {
         listing: staffListingPreviewPatch(),
-        ...staffReviewPatch(),
+        ...reviewPatch,
         warning_overrides: warningOverrides
       }
     });
@@ -19981,19 +19994,50 @@ async function saveStaffListingPreview(propertyId, options = {}) {
       // staff dashboard rewrote the page under the open modal. That locked the
       // tab. The fields just saved are already on screen.
       const state = document.querySelector("#staff-listing-preview-modal [data-staff-preview-save-state]");
-      if (state) state.textContent = "Saved. This editor stays open.";
+      if (state) state.textContent = noteSent ? "Saved. Note saved." : "Saved. This editor stays open.";
+      if (noteSent && options.prepareApproval !== true) staffShowSavedReviewNote(saved);
       staffClearLocationBannerAfterSave(saved);
       const saveError = document.querySelector("#staff-listing-preview-modal [data-staff-save-error]");
       if (saveError) saveError.remove();
       queueStaffDashboardRefreshAfterModeration({ keepPreviewOpen: true });
     }
-    if (!options.silent) toast("Preview changes saved.");
+    if (!options.silent) toast(noteSent ? "Note saved. Preview changes saved." : "Preview changes saved.");
     return saved.id ? saved : null;
   } catch (error) {
     staffShowPreviewSaveError(error);
     toast(`Preview save failed: ${error.message || "request failed"}`);
     throw error;
   }
+}
+
+// 27 Oct 2026: a moderator saved a note and never saw "Note saved"; the
+// success path only said "Saved" and left the typed note in the box, so it
+// looked unsaved. Show the stored notes in the history and empty the box.
+function staffShowSavedReviewNote(saved = {}) {
+  const modal = document.getElementById("staff-listing-preview-modal");
+  if (!modal) return;
+  const history = String(saved?.review?.notes || saved?.moderation_notes || "").trim();
+  const textarea = modal.querySelector("#admin-review-notes");
+  if (history && textarea) {
+    let pre = modal.querySelector("[data-staff-note-history]");
+    if (!pre) {
+      pre = document.createElement("pre");
+      pre.className = "mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-2 text-xs text-gray-700";
+      pre.setAttribute("data-staff-note-history", "");
+      textarea.insertAdjacentElement("beforebegin", pre);
+    }
+    pre.textContent = history;
+    textarea.value = "";
+  }
+  let confirm = modal.querySelector("[data-staff-note-saved]");
+  if (!confirm && textarea) {
+    confirm = document.createElement("p");
+    confirm.setAttribute("data-staff-note-saved", "1");
+    confirm.setAttribute("role", "status");
+    confirm.className = "mt-1 text-xs font-bold text-emerald-800";
+    textarea.insertAdjacentElement("afterend", confirm);
+  }
+  if (confirm) confirm.textContent = "Note saved.";
 }
 
 function staffClearLocationBannerAfterSave(saved = {}) {

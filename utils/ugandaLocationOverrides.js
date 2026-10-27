@@ -238,6 +238,16 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     name: 'Kigowa', district: 'Kampala', town: 'Nakawa', level: 'area',
     aliases: ['Kigowa', 'Kigoowa'], source: 'makaug_verified_location_override'
   },
+  {
+    // 27 Oct 2026: two Mukono listings (MK-…3F73F8, MK-…B9466B) could not be
+    // saved because "Kisowera" was not a known place. It is a village in Mpoma
+    // parish, Nama sub-county, Mukono District (OSM schools near 0.4175,
+    // 32.770). Town stays Mukono; Nama is the sub-county the Town dropdown
+    // must also offer. No coordinates yet: map pins are a separate decision.
+    name: 'Kisowera', district: 'Mukono', town: 'Mukono', level: 'area', subcounty: 'Nama',
+    aliases: ['Kisowera'],
+    source: 'makaug_verified_location_override'
+  },
   ...rows(['Kigunga'], 'Mukono', 'Mukono'),
   ...rows(['Mayangayanga'], 'Mukono', 'Mukono'),
 

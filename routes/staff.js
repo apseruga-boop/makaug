@@ -4844,6 +4844,11 @@ router.post('/properties/:id/video-cover', async (req, res, next) => {
     });
     res.set('Cache-Control', 'no-store');
     if (!result.ok) return res.status(result.status || 422).json({ ok: false, error: result.error });
+    // Also when the stills were already there (A64E8E: a second press finds
+    // them), so a listing left with a stale summary is repaired.
+    if (result.preview !== true) {
+      await require('../services/staffPropertyMediaService').syncListingImageSummaryAfterVideoCover(db, req.params.id);
+    }
     const [images, property] = await Promise.all([
       db.query(
         `SELECT id, url, is_primary, sort_order, slot_key, room_label
