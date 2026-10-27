@@ -1,6 +1,8 @@
 'use strict';
 
 const { registerAgentIdFileRoutes, listIdFiles } = require('./adminAgentIdFiles');
+const { registerPublicListerRoutes } = require('./adminPublicListers');
+const { pagination, paymentHistory, recordManagerPayment, publicListingUrl } = require('../services/adminManagerPaymentService');
 
 // King → Agents: one place to see an agent, everything on file about them and
 // every listing they have, and to correct it. Nothing here hard-deletes: a
@@ -163,6 +165,7 @@ function registerAgentManagerRoutes(router, deps) {
   };
   const badId = (res, what = 'agent') => res.status(400).json({ ok: false, error: `Invalid ${what} id` });
   registerAgentIdFileRoutes(router, { db, writeAudit, actorOf, UUID_RE });
+  registerPublicListerRoutes(router, { db, cleanText, adminActorId, onListingsChanged });
 
   // List: who is who, at a glance — what is missing and how many listings.
   router.get('/agent-manager/agents', async (req, res, next) => {
@@ -278,7 +281,7 @@ function registerAgentManagerRoutes(router, deps) {
                      WHEN a.identity_document_url ILIKE 'data:%' THEN 'inline'
                      WHEN COALESCE(a.identity_document_url, '') <> '' THEN 'link' END AS signup_id_storage,
                 ${LIVE_ID_FRONT_SQL} AS has_id_front_file,
-                (COALESCE(a.profile_photo_url, '') <> '') AS has_profile_photo,
+                a.profile_photo_url, (COALESCE(a.profile_photo_url, '') <> '') AS has_profile_photo,
                 a.verification_reason, a.privacy_consent_accepted, a.privacy_consent_at, a.approved_at,
                 a.makaug_agent_number, to_char(a.id_expiry_date, 'YYYY-MM-DD') AS id_expiry_date, a.experience_years, a.contact_phone_verified_at,
                 a.agent_application_channel, a.plan, a.verified_badge, a.greeting_name, a.billing_plan,
@@ -302,16 +305,21 @@ function registerAgentManagerRoutes(router, deps) {
                 p.extra_fields->>'agent_manager_previous_status' AS previous_status,
                 p.extra_fields->>'agent_manager_last_action' AS last_staff_action,
                 p.extra_fields->>'agent_manager_last_action_at' AS last_staff_action_at,
+                event.reason AS moderation_reason, event.created_at AS moderation_at, event.status_to AS moderation_status,
                 (SELECT MAX(e.created_at) FROM property_moderation_events e
                   WHERE e.property_id = p.id AND e.status_to IN ('hidden', 'sold', 'archived', 'deleted')) AS taken_down_at
            FROM properties p
-          WHERE p.agent_id = $1 AND p.status <> 'deleted'
+           LEFT JOIN LATERAL (SELECT COALESCE(NULLIF(e.reason, ''), NULLIF(e.notes, '')) AS reason, e.created_at, e.status_to FROM property_moderation_events e
+             WHERE e.property_id = p.id AND e.status_to = p.status
+             ORDER BY e.created_at DESC, e.id DESC LIMIT 1) event ON true
+          WHERE p.agent_id = $1
           ORDER BY p.created_at DESC
           LIMIT 1000`,
         [agent.id]
       )).rows;
       const ids = listings.map((row) => row.id);
-      const [views, leads, history, duplicates, payments, idFiles] = await Promise.all([
+      const paymentPage = pagination(req.query, 'payments_');
+      const [views, leads, history, duplicates, ledger, idFiles] = await Promise.all([
         ids.length ? db.query(
           `SELECT payload->>'property_id' AS property_id, COUNT(*)::int AS views
              FROM analytics_events
@@ -333,13 +341,7 @@ function registerAgentManagerRoutes(router, deps) {
                OR RIGHT(regexp_replace(COALESCE(a.whatsapp, ''), '\\D', '', 'g'), 9) = $2)
             ORDER BY a.created_at`,
           [agent.id, String(agent.phone || agent.whatsapp || '').replace(/\D/g, '').slice(-9)]),
-        db.query(
-          `SELECT id, amount_ugx, method, reference, paid_at, recorded_by, verified_status,
-                  to_char(period_start, 'YYYY-MM-DD') AS period_start, to_char(period_end, 'YYYY-MM-DD') AS period_end
-             FROM revenue_entries
-            WHERE agent_id = $1 AND kind = 'agent_subscription' AND voided_at IS NULL
-            ORDER BY paid_at DESC NULLS LAST, recorded_at DESC
-            LIMIT 12`, [agent.id]).catch(() => ({ rows: [] })),
+        paymentHistory(db, { kind: 'agent_subscription', id: agent.id, ...paymentPage }),
         listIdFiles(db, agent.id)
       ]);
       const viewMap = new Map(views.rows.map((row) => [row.property_id, row.views]));
@@ -352,19 +354,33 @@ function registerAgentManagerRoutes(router, deps) {
           agent: {
             ...agent,
             payment: paymentState(agent),
-            tracker: paymentTracker(agent, payments.rows[0] || null),
+            tracker: paymentTracker(agent, { paid_at: ledger.payment_summary.last_payment_on,
+              amount_ugx: ledger.payment_summary.last_payment_ugx, period_start: ledger.payment_summary.last_period_start,
+              period_end: ledger.payment_summary.last_period_end }),
             id_still_needed: idStillNeeded(agent),
             approved_anyway: approvedAnyway(history.rows),
             last_activity_at: lastActivity
           },
-          payments: payments.rows,
-          listings: listings.map((row) => ({ ...row, views: viewMap.get(row.id) || 0, leads: leadMap.get(row.id) || 0 })),
+          ...ledger,
+          listings: listings.map((row) => ({ ...row, public_url: publicListingUrl(row), views: viewMap.get(row.id) || 0, leads: leadMap.get(row.id) || 0 })),
           history: history.rows,
           id_files: idFiles,
           same_phone_agents: duplicates.rows
         }
       });
     } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post('/agent-manager/agents/:id/payments', async (req, res, next) => {
+    try {
+      const result = await recordManagerPayment(db, { kind: 'agent_subscription', id: req.params.id,
+        body: req.body || {}, actor: adminActorId(req) });
+      if (!result.replayed) onListingsChanged('agent_manager_payment');
+      return res.json({ ok: true, data: result });
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
       return next(error);
     }
   });
