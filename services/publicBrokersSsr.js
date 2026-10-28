@@ -3,7 +3,8 @@
 // /brokers used to ship an empty "loading" grid, so crawlers saw no agent
 // links at all. Render the first 24 public agents into the HTML.
 
-const { addPublicAgentEligibilityFilters } = require('./publicAgentEligibilityService');
+const { addPublicWebAgentDirectoryFilters } = require('./publicAgentEligibilityService');
+const { approvedAgentListingsCountSql } = require('./agentListingCount');
 const { escapeHtml } = require('./agentBadge');
 
 const BROKER_SSR_LIMIT = 24;
@@ -11,20 +12,14 @@ const BROKER_SSR_LIMIT = 24;
 async function loadBrokerCards(db, limit = BROKER_SSR_LIMIT) {
   const filters = ['a.status = $1'];
   const values = ['approved'];
-  addPublicAgentEligibilityFilters(filters, values, 'a');
+  addPublicWebAgentDirectoryFilters(filters, values, 'a');
   values.push(limit);
   const result = await db.query(
     `SELECT a.id, a.full_name, a.company_name, a.districts_covered,
-            COALESCE(p.active_listings, 0) AS listings_count
+            ${approvedAgentListingsCountSql('a')} AS listings_count
        FROM agents a
-       LEFT JOIN LATERAL (
-         SELECT COUNT(*)::int AS active_listings
-         FROM properties p
-         WHERE p.agent_id = a.id AND p.status = 'approved'
-       ) p ON true
       WHERE ${filters.join(' AND ')}
-        AND COALESCE(p.active_listings, 0) > 0
-      ORDER BY COALESCE(p.active_listings, 0) DESC, a.created_at DESC
+      ORDER BY listings_count DESC, a.created_at DESC
       LIMIT $${values.length}`,
     values
   );

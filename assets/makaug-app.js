@@ -351,7 +351,9 @@ function renderBrokerSocialLinks(broker = {}) {
 }
 
 function getBrokerDirectory() {
-  return remoteBrokersLoaded ? REMOTE_BROKERS : BROKERS;
+  return remoteBrokersLoaded
+    ? REMOTE_BROKERS.filter((broker) => REMOTE_BROKER_DIRECTORY_IDS.has(String(broker.id || "")))
+    : BROKERS;
 }
 
 function findBrokerById(id) {
@@ -413,14 +415,18 @@ async function refreshBrokersFromApi({ silent = true, force = false } = {}) {
     const existingById = new Map(REMOTE_BROKERS.map((broker) => [String(broker.id || ""), broker]));
     const nextBrokers = rows.map(mapRemoteAgentForUi).filter((broker) => broker.id).map((broker) => {
       const existing = existingById.get(String(broker.id || ""));
-      return existing?.remote_profile_loaded ? { ...broker, ...existing, listings: broker.listings || existing.listings } : broker;
+      if (!existing?.remote_profile_loaded) return broker;
+      const merged = { ...existing, ...broker };
+      // Directory values replace eligibility, badges, contacts and counts.
+      // The endpoint omits profile-only details already loaded for this agent.
+      ["remote_listings", "remote_off_plan_projects", "public_summary", "listings_page",
+        "listing_price_min", "listing_price_max", "short_path", "response_time_label",
+        "experience", "experience_years", "makaug_agent_number", "created_at", "languages"].forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(existing, key)) merged[key] = existing[key];
+      });
+      return merged;
     });
-    const nextIds = new Set(nextBrokers.map((broker) => String(broker.id || "")));
-    existingById.forEach((existing, id) => {
-      if (existing?.remote_profile_loaded && id && !nextIds.has(id)) {
-        nextBrokers.push(existing);
-      }
-    });
+    REMOTE_BROKER_DIRECTORY_IDS = new Set(nextBrokers.map((broker) => String(broker.id || "")));
     REMOTE_BROKERS = nextBrokers;
     remoteBrokersLoaded = true;
     populateBrokerFilterOptions();
@@ -1172,6 +1178,7 @@ const publicCategoryPaginationState = {};
 const publicCategoryPageRowsCache = {};
 let remoteBrokersLoaded = false;
 let REMOTE_BROKERS = [];
+let REMOTE_BROKER_DIRECTORY_IDS = new Set();
 let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
 let userActivityStore = {};
 let maps = {};
@@ -17571,9 +17578,16 @@ function adminAgentManagerChip(text, cls) {
 function adminAgentManagerStatusChip(agent = {}) {
   if (agent.removed_at) return adminAgentManagerChip("Removed", "bg-gray-200 text-gray-700");
   const st = String(agent.status || "pending");
-  const map = { approved: ["Live", "bg-green-100 text-green-800"], pending: ["Pending", "bg-amber-100 text-amber-800"], rejected: ["Rejected", "bg-red-100 text-red-800"], suspended: ["Suspended", "bg-yellow-100 text-yellow-800"] };
+  const map = { approved: ["Approved", "bg-green-100 text-green-800"], pending: ["Pending", "bg-amber-100 text-amber-800"], rejected: ["Rejected", "bg-red-100 text-red-800"], suspended: ["Suspended", "bg-yellow-100 text-yellow-800"] };
   const [label, cls] = map[st] || [st, "bg-gray-100 text-gray-700"];
   return adminAgentManagerChip(label, cls);
+}
+
+function adminAgentManagerPublicVisibility(agent = {}) {
+  const count = Number(agent.public_live_listings || 0);
+  return `<span data-agent-public-visibility>${agent.web_directory_visible
+    ? adminAgentManagerChip("On public site", "bg-green-50 text-green-800 border border-green-200")
+    : adminAgentManagerChip("Not on public site", "bg-gray-100 text-gray-700")}<span class="block text-[11px] text-gray-500 mt-1">${adminEscape(agent.web_directory_reason || "Visibility not loaded")} · ${count} public ${count === 1 ? "listing" : "listings"}</span></span>`;
 }
 
 function adminAgentManagerPaymentChip(payment = {}) {
@@ -17594,7 +17608,7 @@ function adminAgentManagerIdDocChip(agent = {}) {
     : `<span data-id-doc-chip="missing">${adminAgentManagerChip("ID document: missing", "bg-orange-50 text-orange-800 border border-orange-200")}</span>`;
 }
 
-// Approved and live, but the ID (NIN) was never filled in — clears once it is saved.
+// Approved, but the ID (NIN) was never filled in — clears once it is saved.
 function adminAgentManagerIdNeededBadge(agent = {}) {
   return agent.id_still_needed ? adminAgentManagerChip("Approved – ID still needed", "bg-red-600 text-white") : "";
 }
@@ -17801,7 +17815,7 @@ function adminAgentManagerRenderList() {
     <div class="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
       <table class="w-full text-left text-sm" data-agent-manager-table>
         <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
-          <tr><th class="px-3 py-2">Agent</th><th class="px-3 py-2">Phone</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">ID</th><th class="px-3 py-2">Payment</th><th class="px-3 py-2">Live listings</th><th class="px-3 py-2"><button type="button" class="uppercase tracking-wide font-bold ${s.sort === "due" ? "text-gray-900 underline" : ""}" onclick="event.stopPropagation(); adminAgentManagerSortBy('${s.sort === "due" ? "joined" : "due"}')" data-agent-manager-sort-due>Next payment due${s.sort === "due" ? " ↑" : ""}</button></th><th class="px-3 py-2">Days left</th><th class="px-3 py-2">Joined</th><th class="px-3 py-2"></th></tr>
+          <tr><th class="px-3 py-2">Agent</th><th class="px-3 py-2">Phone</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">ID</th><th class="px-3 py-2">Payment</th><th class="px-3 py-2">Approved listings</th><th class="px-3 py-2"><button type="button" class="uppercase tracking-wide font-bold ${s.sort === "due" ? "text-gray-900 underline" : ""}" onclick="event.stopPropagation(); adminAgentManagerSortBy('${s.sort === "due" ? "joined" : "due"}')" data-agent-manager-sort-due>Next payment due${s.sort === "due" ? " ↑" : ""}</button></th><th class="px-3 py-2">Days left</th><th class="px-3 py-2">Joined</th><th class="px-3 py-2"></th></tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           ${rows.map((a) => `
@@ -17811,7 +17825,7 @@ function adminAgentManagerRenderList() {
                 <p class="text-xs text-gray-500">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · ${adminEscape(a.makaug_agent_number)}` : ""}</p>
               </td>
               <td class="px-3 py-2 text-xs font-mono whitespace-nowrap" data-pii="phone">${adminEscape(a.phone || a.whatsapp || "—")}</td>
-              <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerStatusChip(a)}${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerApproveButton(a)}</div></td>
+              <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerStatusChip(a)}${adminAgentManagerPublicVisibility(a)}${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerApproveButton(a)}</div></td>
               <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerIdChip(a)}${adminAgentManagerIdDocChip(a)}</div></td>
               <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerPaymentChip(a.payment)}<span class="text-[11px] text-gray-500">${adminEscape(a.tracker?.plan || "")}</span></div></td>
               <td class="px-3 py-2 text-xs whitespace-nowrap" data-live-listings><strong>${Number(a.live_listings || 0)}</strong> / ${Number(a.total_listings || 0)}</td>
@@ -17833,8 +17847,8 @@ function adminAgentManagerRenderList() {
             </div>
             ${adminAgentManagerStatusChip(a)}
           </div>
-          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerIdDocChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
-          <p class="text-[11px] text-gray-500 mt-2">${Number(a.live_listings || 0)} live of ${Number(a.total_listings || 0)} listings · next payment ${a.fee_exempt ? "none (free)" : adminEscape(adminAgentManagerDay(a.tracker?.next_due))} · joined ${staffPeopleDate(a.created_at)}</p>
+          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerPublicVisibility(a)} ${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerIdDocChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
+          <p class="text-[11px] text-gray-500 mt-2">${Number(a.live_listings || 0)} approved of ${Number(a.total_listings || 0)} listings · next payment ${a.fee_exempt ? "none (free)" : adminEscape(adminAgentManagerDay(a.tracker?.next_due))} · joined ${staffPeopleDate(a.created_at)}</p>
           <div class="mt-2">${adminAgentManagerDaysLeft(a.tracker || {}, a)}</div>
         </button>${adminAgentManagerCanApprove(a) ? `<div class="-mt-1 flex justify-end">${adminAgentManagerApproveButton(a)}</div>` : ""}`).join("")}
     </div>`;
@@ -18216,7 +18230,7 @@ function adminAgentManagerDetailHtml(d = {}) {
   return `
     <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3 flex items-center justify-between gap-3">
       <button type="button" class="text-sm font-bold text-gray-700" onclick="adminAgentManagerClose()">← Back to agents</button>
-      <div class="flex gap-1">${adminAgentManagerStatusChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
+      <div class="flex flex-wrap gap-1">${adminAgentManagerStatusChip(a)} ${adminAgentManagerPublicVisibility(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
     </div>
     <div class="p-5 space-y-5" data-agent-manager-agent="${id}">
       <div>
@@ -18226,7 +18240,7 @@ function adminAgentManagerDetailHtml(d = {}) {
       </div>
       ${a.id_still_needed ? `<div class="rounded-xl border-2 border-red-600 bg-red-50 p-3 text-sm text-red-900" data-agent-id-needed-banner>
         <p class="font-black text-red-800">Approved – ID still needed</p>
-        <p class="mt-1">This agent is live but their ID number (NIN) is not on file.${a.approved_anyway ? ` Approved anyway by ${adminEscape(a.approved_anyway.by || "staff")} on ${date(a.approved_anyway.at, true)}: “${adminEscape(a.approved_anyway.reason || "")}”.` : ""} Type the NIN in <strong>ID number (NIN)</strong> below and press <strong>Save changes</strong>; this reminder goes away by itself. Upload a photo of the ID under <strong>ID documents</strong> too, so it is on file.</p>
+        <p class="mt-1">This agent is approved but their ID number (NIN) is not on file.${a.approved_anyway ? ` Approved anyway by ${adminEscape(a.approved_anyway.by || "staff")} on ${date(a.approved_anyway.at, true)}: “${adminEscape(a.approved_anyway.reason || "")}”.` : ""} Type the NIN in <strong>ID number (NIN)</strong> below and press <strong>Save changes</strong>; this reminder goes away by itself. Upload a photo of the ID under <strong>ID documents</strong> too, so it is on file.</p>
       </div>` : ""}
       ${adminAgentManagerCanApprove(a) ? `<div class="rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-sm text-amber-950" data-agent-approve-panel>
         <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -18732,7 +18746,7 @@ function adminAgentManagerOpenAdd() {
         ${f("nin", "ID number (NIN)")}
         ${f("licence_number", "Licence number")}
         ${f("districts_covered", "Districts (comma separated)")}
-        <label class="text-xs font-semibold text-gray-700">Status<select name="status" class="${input}"><option value="pending">Pending (not public yet)</option><option value="approved">Live now</option></select></label>
+        <label class="text-xs font-semibold text-gray-700">Status<select name="status" class="${input}"><option value="pending">Pending (not public yet)</option><option value="approved">Approved (public when listings are live)</option></select></label>
       </div>
       <fieldset class="rounded-xl border border-gray-200 p-3">
         <legend class="text-xs font-black text-gray-900 px-1">Payment *</legend>

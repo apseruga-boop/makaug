@@ -2,6 +2,8 @@
 
 const { registerAgentIdFileRoutes, listIdFiles } = require('./adminAgentIdFiles');
 const { registerPublicListerRoutes } = require('./adminPublicListers');
+const { addPublicWebAgentDirectoryFilters } = require('../services/publicAgentEligibilityService');
+const { approvedAgentListingsCountSql } = require('../services/agentListingCount');
 const { pagination, paymentHistory, recordManagerPayment, publicListingUrl } = require('../services/adminManagerPaymentService');
 
 // King → Agents: one place to see an agent, everything on file about them and
@@ -23,6 +25,22 @@ const LISTING_ACTIONS = Object.freeze({
 });
 const RESTORABLE_STATUSES = new Set(['approved', 'pending', 'draft', 'rejected']);
 const PUBLIC_FIELDS = new Set(['full_name', 'company_name', 'greeting_name', 'bio', 'phone', 'whatsapp', 'email', 'districts_covered', 'specializations', 'experience_years', 'licence_number']);
+
+// These are the same SQL filters and public-media count as GET /api/agents.
+// Keep raw moderation totals separate from the public inventory staff can see.
+function publicDirectoryFields(values) {
+  const filters = [];
+  addPublicWebAgentDirectoryFilters(filters, values, 'a');
+  const count = approvedAgentListingsCountSql('a');
+  const visible = `(${filters.join(' AND ')})`;
+  return `${count} AS public_live_listings,
+          ${visible} AS web_directory_visible,
+          CASE WHEN ${visible} THEN 'Approved agent with live public properties'
+               WHEN a.removed_at IS NOT NULL THEN 'Agent removed'
+               WHEN LOWER(COALESCE(a.status, '')) <> 'approved' THEN 'Agent is not approved'
+               WHEN ${count} < 1 THEN 'No live public properties'
+               ELSE 'Test or imported source profile' END AS web_directory_reason`;
+}
 
 function maskNin(value) {
   const text = String(value || '').trim();
@@ -140,7 +158,7 @@ function approvedAnyway(history = []) {
   return { at: row.created_at, by: details.by || row.actor_id || null, reason: details.reason || '', missing: details.missing || [] };
 }
 
-// Approved and live, but the national ID (NIN) was never filled in.
+// Approved, but the national ID (NIN) was never filled in.
 function idStillNeeded(agent = {}) {
   return String(agent.status || '').toLowerCase() === 'approved' && !agent.removed_at
     && !String(agent.nin ?? '').trim() && agent.has_nin !== true;
@@ -204,6 +222,7 @@ function registerAgentManagerRoutes(router, deps) {
           OR COALESCE(a.makaug_agent_number, '') ILIKE $1 ${phoneClause})`);
       }
       const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+      const directoryFields = publicDirectoryFields(values);
       const result = await db.query(
         `SELECT a.id, a.full_name, a.company_name, a.phone, a.whatsapp, a.email, a.status, a.makaug_agent_number,
                 a.created_at, a.updated_at, a.removed_at, a.removed_reason, a.user_id, a.agent_application_channel,
@@ -225,7 +244,8 @@ function registerAgentManagerRoutes(router, deps) {
                 COALESCE(p.pending, 0)::int AS pending_listings,
                 COALESCE(p.taken_down, 0)::int AS taken_down_listings,
                 COALESCE(p.sold, 0)::int AS sold_listings,
-                p.last_listing_at
+                p.last_listing_at,
+                ${directoryFields}
            FROM agents a
            LEFT JOIN LATERAL (
              SELECT COUNT(*) AS total,
@@ -283,6 +303,8 @@ function registerAgentManagerRoutes(router, deps) {
   router.get('/agent-manager/agents/:id', async (req, res, next) => {
     try {
       if (!UUID_RE.test(String(req.params.id))) return badId(res);
+      const agentValues = [req.params.id];
+      const directoryFields = publicDirectoryFields(agentValues);
       const agentResult = await db.query(
         `SELECT a.id, a.full_name, a.company_name, a.licence_number, a.phone, a.whatsapp, a.email,
                 a.districts_covered, a.specializations, a.nin, a.bio, a.status, a.registration_status,
@@ -303,10 +325,11 @@ function registerAgentManagerRoutes(router, deps) {
                 a.removed_by, a.welcome_sent_at, a.billing_suspended_at, a.paid_awaiting_approval_at,
                 a.registered_by_phone, a.registered_by_name, a.pay_link_sent_at, a.fee_offer_mode,
                 a.fee_offer_reason, to_char(a.fee_offer_until, 'YYYY-MM-DD') AS fee_offer_until, a.listing_limit, a.featured_homepage,
-                u.last_login_at AS user_last_login_at, u.email AS user_email, u.role AS user_role
+                u.last_login_at AS user_last_login_at, u.email AS user_email, u.role AS user_role,
+                ${directoryFields}
            FROM agents a LEFT JOIN users u ON u.id = a.user_id
           WHERE a.id = $1`,
-        [req.params.id]
+        agentValues
       );
       const agent = agentResult.rows[0];
       if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });

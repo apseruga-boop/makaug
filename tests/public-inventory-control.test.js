@@ -266,7 +266,7 @@ test('anonymous public agent APIs suppress QA broker records', () => {
   assert(publicAgentEligibilityServiceSource.includes("COALESCE(${a}.email, '') !~* '(qa-test|makaug\\\\.invalid|dummy|sample)'"));
   assert(publicAgentEligibilityServiceSource.includes("COALESCE(${a}.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'"));
   assert(publicAgentEligibilityServiceSource.includes("COALESCE(${a}.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'"));
-  assert.match(agentsRouteSource, /addPublicAgentEligibilityFilters\(filters, values\)/);
+  assert.match(agentsRouteSource, /addPublicWebAgentDirectoryFilters\(filters, values\)/);
   assert(agentsRouteSource.includes("COALESCE(a.full_name, '') !~* '(training|demo|sample|placeholder)'"));
   assert(agentsRouteSource.includes("COALESCE(a.company_name, '') !~* '(training|demo|sample|placeholder)'"));
   assert(agentsRouteSource.includes("COALESCE(a.verification_reason, '') !~* '(training|demo|sample|placeholder)'"));

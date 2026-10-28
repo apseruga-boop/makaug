@@ -14,8 +14,8 @@ const BLOCKED_BASIC_PROFILE_STATUSES = new Set([
 ]);
 
 // A lister who already has live listings but no public account and no
-// direct-agent marker. The full profile stays hidden (no verified tick, not
-// in the agents directory). The page is built from the listings they already
+// direct-agent marker. The full profile stays hidden and has no verified tick.
+// Approved listers can appear in the web directory. The page uses the listings they already
 // show, and it says so.
 function basicAgentProfileVisible(row = {}) {
   if (!row || typeof row !== 'object') return false;

@@ -123,7 +123,8 @@ test('real PostgreSQL and protected HTTP: history, paid direct Public roster and
       ADD COLUMN fee_offer_reason text, ADD COLUMN listing_limit integer, ADD COLUMN featured_homepage boolean;
     ALTER TABLE properties ADD COLUMN listing_type text, ADD COLUMN price bigint, ADD COLUMN price_period text,
       ADD COLUMN approved_at timestamptz, ADD COLUMN sold_at timestamptz, ADD COLUMN expires_at timestamptz,
-      ADD COLUMN moderation_reason text, ADD COLUMN moderation_stage text, ADD COLUMN rejected_at timestamptz, ADD COLUMN reviewed_at timestamptz;
+      ADD COLUMN moderation_reason text, ADD COLUMN moderation_stage text, ADD COLUMN rejected_at timestamptz, ADD COLUMN reviewed_at timestamptz,
+      ADD COLUMN has_public_media boolean DEFAULT false;
     CREATE TABLE agent_identity_files(id uuid, agent_id uuid, kind text, label text, original_name text, mime_type text,
       byte_size integer, metadata_stripped boolean, uploaded_by text, uploaded_by_label text, uploaded_at timestamptz,
       archived_at timestamptz, archived_by text, archived_reason text, replaced_by uuid);`);
@@ -146,6 +147,25 @@ test('real PostgreSQL and protected HTTP: history, paid direct Public roster and
     app.use('/api/admin', router);
     app.use((error, req, res, next) => res.status(error.status || 500).json({ ok: false, error: error.message }));
     const auth = (req) => req.set('x-test-owner', 'yes');
+
+    await t.test('King distinguishes approval totals from current public-directory eligibility', async () => {
+      let rows = (await auth(request(app).get('/api/admin/agent-manager/agents')).expect(200)).body.data;
+      let row = rows.find((item) => item.id === agent.id);
+      assert.equal(row.status, 'approved'); assert.equal(row.live_listings, 1);
+      assert.equal(row.public_live_listings, 0); assert.equal(row.web_directory_visible, false);
+      assert.equal(row.web_directory_reason, 'No live public properties');
+      await db.query('UPDATE properties SET has_public_media = true WHERE id = $1', [agentProperty.id]);
+      rows = (await auth(request(app).get('/api/admin/agent-manager/agents?search=Charles')).expect(200)).body.data;
+      row = rows.find((item) => item.id === agent.id);
+      assert.equal(row.public_live_listings, 1); assert.equal(row.web_directory_visible, true);
+      let detail = (await auth(request(app).get(`/api/admin/agent-manager/agents/${agent.id}`)).expect(200)).body.data.agent;
+      assert.equal(detail.public_live_listings, 1); assert.equal(detail.web_directory_visible, true);
+      await db.query("UPDATE agents SET status = 'pending' WHERE id = $1", [agent.id]);
+      detail = (await auth(request(app).get(`/api/admin/agent-manager/agents/${agent.id}`)).expect(200)).body.data.agent;
+      assert.equal(detail.public_live_listings, 1); assert.equal(detail.web_directory_visible, false);
+      assert.equal(detail.web_directory_reason, 'Agent is not approved');
+      await db.query("UPDATE agents SET status = 'approved' WHERE id = $1", [agent.id]);
+    });
 
     await t.test('unauthorized Public and agent payment paths reject before any query/write', async () => {
       await request(app).get('/api/admin/agent-manager/public').expect(401);

@@ -516,7 +516,7 @@ test('Carnelian admin path and dashboard action are protected and auditable', ()
 
 test('source-only broker profiles are deferred until the agent self-registers', () => {
   assert.strictEqual(CARNELIAN_CONTACT.tiktok, 'https://www.tiktok.com/@carnelian.propert');
-  assert(agentsRoute.includes('addPublicAgentEligibilityFilters'), 'public agent API should use the centralized eligibility filters');
+  assert(agentsRoute.includes('addPublicWebAgentDirectoryFilters'), 'web agent API uses approval plus current public inventory; imported profiles remain excluded');
   assert(publicAgentEligibilityService.includes('function addPublicAgentSelfRegistrationFilter'), 'public agent eligibility should centralize the self-registration filter');
   assert(publicAgentEligibilityService.includes('${a}.user_id IS NOT NULL'), 'public agent profiles should require a registered/claimed user account');
   assert(publicAgentEligibilityService.includes("COALESCE(${a}.verification_reason, '') NOT ILIKE '%public social source onboarding%'"), 'public agent profiles should hide source-discovery onboarding rows');
