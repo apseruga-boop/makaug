@@ -49,7 +49,7 @@ test('public direct profile is claim-pending, not presented as identity verified
   const app = read('assets/makaug-app.js');
   assert.match(eligibility, /PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS = 1/);
   assert.match(eligibility, /DIRECT_AGENT_PROFILE_MARKER = '\[DIRECT_AGENT_AUTHORISED\]'/);
-  assert.match(agents, /addPublicAgentEligibilityFilters/);
+  assert.match(agents, /addPublicWebAgentDirectoryFilters/);
   assert.match(app, /profile_claim_pending: directAgentAuthorised && !agent\.user_id/);
   assert.match(app, /if \(broker\?\.direct_agent_authorised\) \{[\s\S]*label: translateListingLabel\("makaug agent profile"\)/);
   assert.match(app, /function publicBrokerBio[\s\S]*Identity verification and account claim are pending/);

@@ -30,7 +30,7 @@ assert.match(generatedFilterSql, /a\.user_id IS NOT NULL/);
 assert.match(generatedFilterSql, /public social source onboarding/);
 assert.match(generatedFilterSql, /p\.agent_id = a\.id[\s\S]*p\.status = 'approved'/);
 assert.match(generatedFilterSql, />= 2/);
-assert.match(agentRouteSource, /addPublicAgentEligibilityFilters\(filters, values\)/);
+assert.match(agentRouteSource, /addPublicWebAgentDirectoryFilters\(filters, values\)/);
 assert.match(whatsappRouteSource, /addPublicAgentEligibilityFilters\(filters, values, 'a'\)/);
 
 const agentQuerySource = sourceBetween(
@@ -63,4 +63,4 @@ assert.match(whatsappRouteSource, /WHATSAPP_AGENT_CACHE_MS = 30 \* 1000/);
 assert.match(whatsappRouteSource, /const \[session, conversationControl\] = await Promise\.all/);
 assert.match(whatsappRouteSource, /WhatsApp reply ready in \$\{runtimeLatencyMs\}ms/);
 
-console.log('WhatsApp public-agent parity and fast-reply tests passed');
+console.log('WhatsApp recommendation policy and separate web-directory wiring tests passed');

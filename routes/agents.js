@@ -12,7 +12,7 @@ const { inferProfilePhotoKind } = require('../services/agentProfileImageService'
 const { ensurePostVerificationRecords } = require('../services/authFlowService');
 const {
   DIRECT_AGENT_PROFILE_MARKER,
-  addPublicAgentEligibilityFilters,
+  addPublicWebAgentDirectoryFilters,
   addPublicAgentLaunchTestFilter,
   publicAgentProfileVisible,
   verifiedByMakaugSql
@@ -736,7 +736,7 @@ router.get('/', async (req, res, next) => {
       values.push(status);
       filters.push(`a.status = $${values.length}`);
     }
-    addPublicAgentEligibilityFilters(filters, values);
+    addPublicWebAgentDirectoryFilters(filters, values);
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
@@ -802,13 +802,16 @@ router.get('/', async (req, res, next) => {
       } catch (_) {
         profilePhotoKind = row.profile_photo_kind === 'logo' ? 'logo' : 'portrait';
       }
-      data.push(publicAgentPayload({
+      const payload = publicAgentPayload({
         ...row,
         bio_display: card.text,
         bio_source: card.source,
         bio_parts: card.parts || null,
         profile_photo_kind: profilePhotoKind
-      }));
+      });
+      payload.profile_kind = publicAgentProfileVisible(row) ? 'full' : 'unclaimed';
+      if (payload.profile_kind === 'unclaimed') delete payload.email;
+      data.push(payload);
     }
 
     return res.json({

@@ -75,6 +75,21 @@ function addPublicAgentEligibilityFilters(filters, values, alias = 'a') {
   addPublicAgentInventoryFilter(filters, alias);
 }
 
+// Web discovery follows current approval and the public listing inventory. An
+// account or a private-ID review determines profile kind and badges, not whether
+// an already approved lister with a live property appears in the web directory.
+// The legacy helper above remains the separate WhatsApp recommendation policy.
+function addPublicWebAgentDirectoryFilters(filters, values, alias = 'a') {
+  const a = sqlAlias(alias);
+  addPublicAgentLaunchTestFilter(filters, values, a);
+  filters.push(`LOWER(COALESCE(${a}.status, '')) = 'approved'`);
+  filters.push(`${a}.removed_at IS NULL`);
+  filters.push(`COALESCE(${a}.verification_reason, '') NOT ILIKE '%public social source onboarding%'`);
+  filters.push(`COALESCE(${a}.verification_reason, '') NOT ILIKE '%source profile%'`);
+  filters.push(`COALESCE(${a}.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'`);
+  filters.push(`${approvedAgentListingsCountSql(a)} >= 1`);
+}
+
 const BLOCKED_PUBLIC_AGENT_STATUSES = new Set([
   'rejected',
   'declined',
@@ -246,6 +261,7 @@ module.exports = {
   PUBLIC_AGENT_MIN_LIVE_LISTINGS,
   PUBLIC_AGENT_SUPPRESSED_MARKERS,
   addPublicAgentEligibilityFilters,
+  addPublicWebAgentDirectoryFilters,
   addPublicAgentInventoryFilter,
   addPublicAgentLaunchTestFilter,
   addPublicAgentSelfRegistrationFilter,
