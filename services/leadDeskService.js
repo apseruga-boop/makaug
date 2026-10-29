@@ -951,9 +951,22 @@ function leadLine(l) {
   return `• ${who} — ${what}${budget} (${SOURCE_LABEL[l.source] || l.source})${said ? ` — "${said.slice(0, 90)}"` : ''}`;
 }
 
-async function sendToTeam(db, body, type) {
+/** Who a team message goes to: the alert numbers, plus any extra numbers the caller names, each number once. */
+function teamRecipients(extraRecipients = []) {
+  const seen = new Set();
+  return [...alertRecipients(), ...(Array.isArray(extraRecipients) ? extraRecipients : [])]
+    .map((v) => String(v || '').trim())
+    .filter((v) => {
+      const key = v.replace(/\D+/g, '').slice(-9);
+      if (key.length < 9 || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+async function sendToTeam(db, body, type, { extraRecipients = [] } = {}) {
   const results = [];
-  for (const recipient of alertRecipients()) {
+  for (const recipient of teamRecipients(extraRecipients)) {
     const delivery = await deliverWhatsapp({ to: recipient, body, kind: type, leadId: null, nonce: Date.now() });
     results.push({ to: recipient, status: delivery.status });
   }
@@ -1135,6 +1148,7 @@ module.exports = {
   sendNewLeadAlerts,
   sendOverdueReminders,
   sendToTeam,
+  teamRecipients,
   alertRecipients,
   slaHours,
   internalPhoneKeys,
