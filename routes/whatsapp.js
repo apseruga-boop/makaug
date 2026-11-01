@@ -8809,7 +8809,9 @@ const SOLD_ANNOUNCEMENT_BARE_WORDS = /^\s*(?:gone|taken|sold|rented|let)\s*[!.]*
 const NOT_A_SOLD_ANNOUNCEMENT = /\b(?:for\s*sale|4\s*sale|on\s*sale|un\s*sold|not\s*(?:yet\s*)?sold|to\s*be\s*sold|being\s*sold|will\s*be\s*sold|still\s*available|available\s*now|sold\s*separately|sold\s*as|how\s*(?:do|can|to)\s*i|mark(?:ed)?\s*as\s*sold)\b/i;
 const SOLD_CONFIRM_STEP = 'agent_sold_confirm';
 const SOLD_LINK_STEP = 'agent_sold_link';
-const SOLD_CANDIDATE_LIMIT = 40;
+// Francis has 330 live listings; the one that sold is rarely among the 40
+// most recently touched. Read them all (a few columns) and let the words pick.
+const SOLD_CANDIDATE_LIMIT = 600;
 const SOLD_IMAGE_HASH_LIMIT = 12;
 
 function isSoldAnnouncement(text = '') {
