@@ -3200,7 +3200,7 @@ function existingFoundOnlineRowForItem(existing = new Map(), item = {}) {
       return distance != null && distance <= 16;
     })
     : null;
-  const itemVideoId = sourceVideoIdForItem(item) || videoIdFromText(sourceUrlForItem(item)) || videoIdFromText(item.caption || item.sourceText || '');
+  const itemVideoId = canonicalVideoIdForItem(item) || videoIdFromText(item.caption || item.sourceText || '');
   const matches = [
     ['source_video_duplicate', itemVideoId && existing.get(`video:${itemVideoId}`)],
     ['stable_platform_id_duplicate', harvest.source_platform_id && existing.get(`platform:${harvest.source_platform_id}`)],
@@ -3214,6 +3214,35 @@ function existingFoundOnlineRowForItem(existing = new Map(), item = {}) {
   ];
   const matched = matches.find(([, row]) => row);
   return matched ? { ...matched[1], duplicate_match_type: matched[0] } : null;
+}
+
+// found-online-canonical-video-key-20261101: one key per source post, so the
+// same TikTok/YouTube video is one listing whatever URL form or handle it
+// arrived under. Used for in-batch dedupe and for the cross-run lock.
+function canonicalVideoIdForItem(item = {}) {
+  return String(
+    sourceVideoIdForItem(item)
+    || videoIdFromText(sourceUrlForItem(item))
+    || videoIdFromText(item.videoUrl || item.video_url || '')
+    || ''
+  ).trim();
+}
+
+function canonicalSourceKeyForItem(item = {}) {
+  const videoId = canonicalVideoIdForItem(item);
+  if (videoId) return `video:${videoId}`;
+  return normalizedSourceUrlForItem(item) || String(item.key || '').trim();
+}
+
+// Lock every canonical key up front, sorted, before the duplicate lookup.
+// Two overlapping runs (a resubmitted staff job, 1 Nov 2026) then serialize:
+// the second waits for the first to COMMIT and its lookup sees those rows.
+async function lockFoundOnlineCanonicalKeys(client, items = []) {
+  const keys = [...new Set(items.map(canonicalSourceKeyForItem).filter(Boolean))].sort();
+  for (const key of keys) {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`found-online-source:${key}`]);
+  }
+  return keys;
 }
 
 function registerExistingFoundOnlineItem(existing = new Map(), item = {}, row = {}) {
@@ -3239,6 +3268,8 @@ function registerExistingFoundOnlineItem(existing = new Map(), item = {}, row = 
   if (payload.primary_image_dhash) existing.set(`image:${payload.primary_image_dhash}`, payload);
   if (payload.primary_image_phash) existing.set(`phash:${payload.primary_image_phash}`, payload);
   if (payload.composite_listing_key) existing.set(`composite:${payload.composite_listing_key}`, payload);
+  const videoId = canonicalVideoIdForItem(item);
+  if (videoId) existing.set(`video:${videoId}`, payload);
   if (payload.contact_cluster_key) {
     const candidateKey = `contact-candidates:${payload.contact_cluster_key}`;
     existing.set(candidateKey, [...(existing.get(candidateKey) || []), payload]);
@@ -3687,6 +3718,7 @@ async function queueFoundOnlineSourcePostListings({
     // Exempt from the live pool's 60 s statement limit until COMMIT/ROLLBACK:
     // the duplicate check below runs 85-243 s on production.
     await client.query(HARVEST_DUPLICATE_CHECK_NO_TIMEOUT_LOCAL_SQL);
+    await lockFoundOnlineCanonicalKeys(client, items);
     const existing = await existingFoundOnlineSourcePostListings(client, items);
     if (shouldCreateSourceProfile()) {
       existingContactCounts = await existingFoundOnlineContactCounts(client, items);
@@ -4533,6 +4565,8 @@ function summarizeSocialSearchListings() {
 }
 
 module.exports = {
+  canonicalSourceKeyForItem,
+  lockFoundOnlineCanonicalKeys,
   possibleDuplicateOfNewListing,
   withPossibleDuplicateOf,
   SOCIAL_SEARCH_BATCH_ID,

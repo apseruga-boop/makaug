@@ -309,7 +309,31 @@ function pruneStaffSourceIntakeJobs(now = Date.now()) {
   }
 }
 
-function createStaffSourceIntakeJob({ type = 'exact_social_import', exactInputCount = 0, requestedSourceCount = 0, dryRun = false } = {}) {
+// staff-source-intake-inflight-reuse-20261101: a resubmitted identical import
+// (same links, same mode) returns the job already running instead of starting
+// a second, overlapping one. Two overlapping runs created 34 duplicates on
+// 1 Nov 2026.
+function staffSourceIntakePayloadKey(payload = {}) {
+  const urls = [
+    ...(Array.isArray(payload.urls) ? payload.urls : []),
+    ...(Array.isArray(payload.posts) ? payload.posts.map((post) => post?.url || post?.post_url || post?.postUrl || post?.source_url || JSON.stringify(post || {})) : []),
+  ].map((value) => String(value || '').trim().toLowerCase().replace(/[?#].*$/, '')).filter(Boolean).sort();
+  const text = String(payload.rawText || '').trim();
+  return crypto.createHash('sha1')
+    .update(JSON.stringify({ type: payload.type || 'exact_social_import', dryRun: Boolean(payload.dryRun), urls, text }))
+    .digest('hex');
+}
+
+function findActiveStaffSourceIntakeJob(payloadKey = '') {
+  if (!payloadKey) return null;
+  pruneStaffSourceIntakeJobs();
+  for (const job of staffSourceIntakeJobs.values()) {
+    if (job.payloadKey === payloadKey && (job.status === 'queued' || job.status === 'running')) return job;
+  }
+  return null;
+}
+
+function createStaffSourceIntakeJob({ type = 'exact_social_import', exactInputCount = 0, requestedSourceCount = 0, dryRun = false, payloadKey = '' } = {}) {
   pruneStaffSourceIntakeJobs();
   const id = `staff-source-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const job = {
@@ -322,6 +346,7 @@ function createStaffSourceIntakeJob({ type = 'exact_social_import', exactInputCo
     exactInputCount,
     requestedSourceCount,
     dryRun,
+    payloadKey,
     message: 'Source intake job accepted. You can keep using the dashboard while makaug imports in the background.',
     result: null,
     error: '',
@@ -2443,7 +2468,7 @@ async function buildDashboardPanelsPayload(req) {
   const panelQueryOptions = { timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS };
   // Each with its own statement timeout, so one slow list cannot blank the rest.
   const foundOnlineWhere = `${actionablePendingReviewWhere('p')} AND ${foundOnlineReviewWhere('p')}`;
-  const [leadRows, whatsappRows, whatsappBridge, sourceRegistryRows, foundOnlineRows, foundOnlineCount, pendingCount] = await Promise.all([
+  const [leadRows, whatsappRows, whatsappBridge, sourceRegistryRows, foundOnlineRows, foundOnlineCount, pendingCount, duplicateSummary] = await Promise.all([
     staffPanelLeadRows(staffId, panelLimit, { ...panelQueryOptions, label: 'staff_panel_leads' }),
     staffPanelWhatsappConversationRows(staffId, panelLimit, { ...panelQueryOptions, label: 'staff_panel_whatsapp' }),
     staffPanelWhatsappBridgeStatus({ ...panelQueryOptions, label: 'staff_panel_bridge' }),
@@ -2485,7 +2510,10 @@ async function buildDashboardPanelsPayload(req) {
       [],
       { pending_review: null, broker_pending_review: null },
       { ...panelQueryOptions, label: 'staff_panel_pending_review_count' }
-    )
+    ),
+    // staff-panels-duplicate-risk-20261101: the fast payload ships 0 and the
+    // page never loads the full payload, so the panels must carry the count.
+    staffDuplicateGroupSummary()
   ]);
   const [recentActivity, reviewResult] = await Promise.all([
     safeRows(
@@ -2552,18 +2580,22 @@ async function buildDashboardPanelsPayload(req) {
   const pendingCountOk = pendingCount && !pendingCount._fallback_reason
     && Number.isFinite(Number(pendingCount.pending_review))
     && Number.isFinite(Number(pendingCount.broker_pending_review));
+  const duplicateSummaryOk = duplicateSummary && !duplicateSummary._fallback_reason
+    && Number.isFinite(Number(duplicateSummary.possible_duplicates));
+  const panelSummary = {
+    ...(pendingCountOk ? {
+      listings: {
+        pending_review: Number(pendingCount.pending_review),
+        broker_pending_review: Number(pendingCount.broker_pending_review),
+        count_source: 'review_queue_segment_all',
+      }
+    } : {}),
+    ...(duplicateSummaryOk ? { duplicates: duplicateSummary } : {}),
+  };
   return {
     staff: publicStaffUser(req.userAuth),
     panel_payload: true,
-    ...(pendingCountOk ? {
-      summary: {
-        listings: {
-          pending_review: Number(pendingCount.pending_review),
-          broker_pending_review: Number(pendingCount.broker_pending_review),
-          count_source: 'review_queue_segment_all',
-        }
-      }
-    } : {}),
+    ...(Object.keys(panelSummary).length ? { summary: panelSummary } : {}),
     review_queue: reviewQueue,
     review_queue_meta: {
       ...staffReviewQueueMeta('main', reviewQueue.length, null),
@@ -5395,10 +5427,16 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
       return responseData;
     };
     if (asyncJob) {
+      const payloadKey = staffSourceIntakePayloadKey({ type: 'exact_social_import', ...importPayload });
+      const activeJob = !dryRun ? findActiveStaffSourceIntakeJob(payloadKey) : null;
+      if (activeJob) {
+        return res.status(202).json({ ok: true, data: { ...publicStaffSourceIntakeJob(activeJob), reused_inflight_job: true } });
+      }
       const job = createStaffSourceIntakeJob({
         type: 'exact_social_import',
         exactInputCount,
-        dryRun
+        dryRun,
+        payloadKey
       });
       runStaffSourceIntakeJob(job.id, runImport);
       await logStaffActivity(req, 'staff_social_import_job_accepted', {
