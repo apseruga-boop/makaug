@@ -20226,11 +20226,58 @@ function staffPreviewResponseMatches(requestedId, data = {}) {
 
 let staffPreviewOpenSeq = 0;
 
+// The preview API can take several seconds. Show at once which listing is
+// opening, so a second click does not look like the first one did nothing.
+let staffPreviewOverlaySeq = 0;
+
+function staffPreviewBusyError(error = {}) {
+  const status = Number(error.status || 0);
+  const text = `${error.message || ""} ${error.response?.code || ""} ${error.response?.reason || ""}`;
+  return status === 503 || status === 504 || /pool_timeout|pool timeout|busy|timed out|timeout/i.test(text);
+}
+
+function showStaffPreviewOpening(requested = "") {
+  hideStaffPreviewOpening();
+  if (typeof document === "undefined" || !document.body) return;
+  const overlay = document.createElement("div");
+  overlay.id = "staff-listing-preview-opening";
+  overlay.setAttribute("role", "status");
+  overlay.setAttribute("aria-live", "polite");
+  overlay.className = "fixed inset-x-0 top-4 z-[11001] flex justify-center pointer-events-none";
+  const pill = document.createElement("div");
+  pill.className = "rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow-lg";
+  pill.textContent = `Opening ${staffPreviewOpeningLabel(requested)}…`;
+  overlay.appendChild(pill);
+  document.body.appendChild(overlay);
+}
+
+function staffPreviewOpeningLabel(requested = "") {
+  const id = String(requested || "").trim();
+  return id ? `listing ${id.slice(0, 8)}` : "listing";
+}
+
+function hideStaffPreviewOpening() {
+  if (typeof document === "undefined") return;
+  document.getElementById("staff-listing-preview-opening")?.remove();
+}
+
 async function openStaffListingPreview(propertyId) {
   const requested = String(propertyId || "").trim();
   const seq = ++staffPreviewOpenSeq;
+  const overlaySeq = ++staffPreviewOverlaySeq;
+  showStaffPreviewOpening(requested);
   try {
-    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(requested)}/preview`);
+    const path = `/api/staff/properties/${encodeURIComponent(requested)}/preview`;
+    let response;
+    try {
+      response = await apiRequest(path);
+    } catch (firstError) {
+      // A busy database (pool_timeout, 503) usually clears in a second or two.
+      if (!staffPreviewBusyError(firstError) || seq !== staffPreviewOpenSeq) throw firstError;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (seq !== staffPreviewOpenSeq) return;
+      response = await apiRequest(path);
+    }
     if (seq !== staffPreviewOpenSeq) return;
     const data = response?.data || {};
     if (!staffPreviewResponseMatches(requested, data)) {
@@ -20240,7 +20287,12 @@ async function openStaffListingPreview(propertyId) {
     renderStaffListingPreviewModal(data, { allowSwitch: true });
   } catch (error) {
     if (seq !== staffPreviewOpenSeq) return;
-    toast(`Preview failed: ${error.message || "request failed"}`);
+    toast(staffPreviewBusyError(error)
+      ? "The database is busy, so the listing did not open. Try again in a few seconds."
+      : `Preview failed: ${error.message || "request failed"}`);
+  } finally {
+    // Saves bump staffPreviewOpenSeq too, so the pill has its own counter.
+    if (overlaySeq === staffPreviewOverlaySeq) hideStaffPreviewOpening();
   }
 }
 
@@ -32664,7 +32716,9 @@ function showApprovalBlockerBanner(response = {}, propertyId = "") {
       ${missingFields.length ? `<div class="mt-3 text-xs font-black">Fields needing attention: ${missingFields.map((field) => adminEscape(field.replace(/_/g, " "))).join(", ")}.</div>` : ""}
       ${overrideAvailable ? `<button type="button" onclick="approveActiveHumanOverride()" class="mt-3 w-full rounded-lg bg-red-800 px-3 py-2 text-sm font-black text-white hover:bg-red-700">Approve anyway (human verified)</button>` : ""}
     </div>`;
-  host.scrollIntoView({ behavior: "smooth", block: "center" });
+  // "nearest" keeps the editor where it is when the banner is already on screen,
+  // instead of jumping the whole editor to centre a banner near the bottom.
+  host.scrollIntoView({ behavior: "smooth", block: "nearest" });
   return true;
 }
 
