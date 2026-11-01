@@ -5092,9 +5092,13 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   // 2026): the parser took the first money figure, so a block of rentals worth
   // 180M was priced at its monthly income. An amount that follows income /
   // revenue / earning / making is what the property earns, not what it costs.
-  const priceScanCaption = normalizeCaptionPriceNotation(
-    cleanCaption.replace(/\b(?:monthly|total|net|gross|rental)?\s*(?:income|revenue|earnings?|earning|making|collects?|collecting|returns?)\s*(?:of|is|at|:)?\s*\(?\s*(?:ugx|ush|shs?)?\s*#?\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?\s*(?:ugx|ush|shs?|per month|monthly|\/month|a month)?\s*\)?/gi, ' ')
-  );
+  // "Monthly income 2.5M ... price 180M" must not be priced at 2.5M (Fortune's
+  // Seeta rentals, 26 Oct 2026), so income phrases are set aside before the
+  // price scan — but only when another figure is left to read. An income with
+  // no asking price beside it is still the only number the agent gave.
+  const withoutIncome = cleanCaption.replace(/\b(?:monthly|total|net|gross|rental)?\s*(?:income|revenue|earnings?|earning|making|collects?|collecting|returns?)\s*(?:of|is|at|:)?\s*\(?\s*(?:ugx|ush|shs?)?\s*#?\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?\s*(?:ugx|ush|shs?|per month|monthly|\/month|a month)?\s*\)?/gi, ' ');
+  const stillHasMoneyFigure = /(?:ugx|ush|shs?|usd|\$)\s*\d|\d[\d,.]*\s*(?:m|k|bn|mn|million|billion|ugx|ush|shs?|usd)\b/i.test(withoutIncome);
+  const priceScanCaption = normalizeCaptionPriceNotation(stillHasMoneyFigure ? withoutIncome : cleanCaption);
   // listingPriceSourceFragment happily returns the first number after a cue word, so
   // "Selling 5 bedroom house in Kololo @600m UGX" yields "5" — the bedroom count — and the
   // listing went live at UGX 5. parseListingPriceDraft already applies the sanity floor and
@@ -8695,11 +8699,72 @@ function staffIntakeGreetingReply({ phone = '', session = {}, cleanBody = '' } =
     return `To post a property, reply *Agent 007*.\n\nI will ask who it is for, then you send each advert — the caption with the type, exact location and price, then its photos. Type *COMPLETE* when the batch is done.${lastLine}`;
   }
 
-  return '🟩🟨 *makaug.com* | *Staff intake*\n\n'
-    + 'Reply *Agent 007* to post a property for an agent or an owner.\n'
-    + 'Send each advert as its caption and then its photos, and type *COMPLETE* when the batch is finished.\n\n'
+  return staffMenuReply({ lastLine });
+}
+
+/**
+ * The staff menu. Three hats, one number: Ronald and Arthur post properties,
+ * run billing and test the marketplace from the same WhatsApp, and until
+ * 1 Nov 2026 every "Hello" or "Menu" brought the Agent 007 card back with no
+ * way to be a customer. CUSTOMER switches the number to the customer script
+ * until STAFF (or starting an Agent 007 batch) switches it back.
+ */
+function staffMenuReply({ lastLine = '' } = {}) {
+  return '🟩🟨 *makaug.com* | *Staff menu*\n\n'
+    + '1️⃣ Post properties: reply *Agent 007*, then send each advert as its caption followed by its photos, and type *COMPLETE* when the batch is done.\n'
+    + '2️⃣ Use makaug as a customer (search, brokers, listing): reply *CUSTOMER*. Reply *STAFF* any time to come back here.\n'
+    + '3️⃣ Billing (team numbers): reply *TRIALS*, *STATUS 07…*, *NEW AGENT …* or *PAYMENT HELP*.\n\n'
     + 'Nothing you send here goes live until a moderator approves it.'
     + lastLine;
+}
+
+const STAFF_MENU_WORDS = /^\s*(?:staff|staff menu|staff mode|team|team menu|intake|back to staff|agent 007 menu)\s*[.!]*\s*$/i;
+const CUSTOMER_MODE_WORDS = /^\s*(?:customer|customer mode|customer menu|as (?:a )?customer|test as (?:a )?customer|user mode|client mode|be a customer)\s*[.!]*\s*$/i;
+
+function isStaffCustomerMode(session = {}) {
+  const data = session && session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  return data.staff_customer_mode === true;
+}
+
+/** One of ours: has run intake from this number, is in customer mode, or is the owner. */
+function isStaffIntakeNumber({ phone = '', session = {} } = {}) {
+  const data = session && session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  return Boolean(
+    data.employee_intake_last_completed_at
+    || data.employee_intake_last_subject_name
+    || data.employee_role
+    || data.staff_customer_mode === true
+  ) || isAiCeoOwnerPhone(phone);
+}
+
+/**
+ * STAFF / CUSTOMER from a member of staff. Returns the reply to send, or null
+ * when this message is not a switch (or the sender is not staff).
+ */
+async function staffModeSwitchReply({ phone = '', session = {}, cleanBody = '' } = {}) {
+  const text = normalizeInput(cleanBody);
+  if (!text || !isStaffIntakeNumber({ phone, session })) return null;
+  const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  if (CUSTOMER_MODE_WORDS.test(text)) {
+    await patchSessionData(phone, { staff_customer_mode: true, staff_customer_mode_at: new Date().toISOString(), pending_intent_confirmation: null, idle_resume_prompt: null });
+    const lang = resolveLangCode(session.language || 'en');
+    return {
+      handled: true,
+      nextStep: 'main_menu',
+      message: `${welcomeMessage(lang, data)}\n\n👷 Staff: you are now using makaug as a customer. Reply *STAFF* to go back to the staff menu.`
+    };
+  }
+  if (STAFF_MENU_WORDS.test(text) || (isStaffCustomerMode(session) && isEmployeeIntakeTrigger(text))) {
+    if (isStaffCustomerMode(session)) await patchSessionData(phone, { staff_customer_mode: null, staff_customer_mode_left_at: new Date().toISOString() });
+    if (isEmployeeIntakeTrigger(text)) return null;
+    const lastSubject = normalizeInput(data.employee_intake_last_subject_name || '');
+    const lastCount = Number(data.employee_intake_last_properties_set_up || 0);
+    const lastLine = lastSubject && lastCount > 0
+      ? `\n\nLast batch: ${lastCount} ${lastCount === 1 ? 'property' : 'properties'} for ${lastSubject}, in staff review.`
+      : '';
+    return { handled: true, nextStep: 'main_menu', message: staffMenuReply({ lastLine }) };
+  }
+  return null;
 }
 
 function recentlyClosedEmployeeBatchReply({ phone = '', session = {}, cleanBody = '', mediaUrl = '', runtime = {} } = {}) {
@@ -8754,7 +8819,16 @@ async function handleEmployeeWhatsappIntake({
     currentStep = interruptedStep;
     active = true;
   }
+  if (triggered && isStaffCustomerMode(session)) {
+    // Starting a batch is the other way out of customer mode.
+    await patchSessionData(phone, { staff_customer_mode: null, staff_customer_mode_left_at: new Date().toISOString() });
+  }
   if (!triggered && !active) {
+    // Staff switching hats: STAFF / CUSTOMER. In customer mode nothing below
+    // applies; the message belongs to the customer script.
+    const staffSwitch = await staffModeSwitchReply({ phone, session, cleanBody });
+    if (staffSwitch) return staffSwitch;
+    if (isStaffCustomerMode(session)) return { handled: false };
     // Ronald typed COMPLETE at 06:22:08, and twenty-five of his property
     // messages landed seventeen seconds later. The batch had already closed, so
     // the session was back at the customer menu and the marketplace answered
@@ -16455,6 +16529,71 @@ function contextualPageRouteFromMessage(text = '') {
   return '';
 }
 
+// "Are the brokers legitimate" — a renter in Kireka, 1 Nov 2026, 12:25, right
+// after being shown 24 rentals. The intent classifier heard "broker" and
+// offered to find him one ("Reply YES to continue"); he was asking whether to
+// trust the ones he had just been shown. A trust question gets a trust answer:
+// how brokers and listings are checked, where the verified ones are, and the
+// two rules that keep a buyer safe. Short, because it is WhatsApp.
+const TRUST_STRONG_WORDS = /\b(legit(?:imate)?|scam(?:mers?|ming|s)?|fraud(?:sters?|ulent|s)?|con\s?(?:men|man|artists?)|fake|bogus|trustworthy|bufere|utapeli|matapeli|feki|tapeli)\b/i;
+const TRUST_WEAK_WORDS = /\b(genuine|authentic|verified|vetted|registered|licen[cs]ed|trust(?:ed)?|safe|ddala|kyamazima|kweli|halali|waaminifu|salama)\b/i;
+const TRUST_REAL = /\breal\b(?!\s*estate)/i;
+const TRUST_QUESTION_FORM = /\?|(?:^|[,.;:!]\s*)\s*(?:are|is|r|can|could|how|do|does|did|who|which|what|should|y|why|will|am i|mu|je|ni|ddala)\b|\b(?:can i|should i|do you|how (?:do|can|would) i (?:know|tell|be sure|confirm|verify)|i (?:don'?t|do not|dont) trust|not sure (?:if|whether|about))\b/i;
+const TRUST_SUBJECT_PAYMENT = /\b(?:pay(?:ing|ment|ments)?|deposit|booking fee|viewing fee|commission|money|fees?|momo|mobile money|send (?:him|her|them) (?:money|cash|something))\b/i;
+const TRUST_SUBJECT_BROKERS = /\b(?:brokers?|agents?|dealers?|realtors?|landlords?|wakala|mawakala|ba ?agent|abaguzi|bazimbi)\b/i;
+const TRUST_SUBJECT_LISTING = /\b(?:listings?|propert(?:y|ies)|houses?|homes?|apartments?|flats?|rentals?|plots?|land|photos?|pictures?|adverts?|ads?|offers?)\b/i;
+const TRUST_SUBJECT_PLATFORM = /\b(?:makaug|this (?:site|platform|website|number|service|app|company|bot|page)|the (?:site|platform|website|service|app)|website|platform|company|you|u|your (?:company|site|service|platform))\b/i;
+
+/** '' when it is not a trust question; otherwise what it is about. */
+const TRUST_SELF_DESCRIPTION = /\b(?:i am|i'?m|im|we are|we'?re|as)\s+(?:an?\s+|the\s+)?(?:registered\s+|licen[cs]ed\s+|verified\s+|genuine\s+|real\s+)?(?:agents?|brokers?|dealers?|landlords?|owners?|realtors?)\b/i;
+// "Should I pay a deposit first?" has no trust word in it and is still the question.
+const TRUST_PAY_FIRST = /\b(?:should i|do i (?:have|need) to|must i|can i|is it ok to|is it okay to)\b.{0,30}\b(?:pay|deposit|send (?:him|her|them|the agent|the broker)?\s?(?:money|cash|something))\b|\b(?:pay|deposit|money|cash)\b.{0,30}\b(?:before (?:viewing|seeing|i see|i view)|first|upfront|in advance)\b/i;
+
+function trustQuestionKind(text = '') {
+  const clean = normalizeInput(text);
+  if (!clean || clean.length > 240) return '';
+  if (TRUST_SELF_DESCRIPTION.test(clean)) return '';
+  const strong = TRUST_STRONG_WORDS.test(clean);
+  const weak = TRUST_WEAK_WORDS.test(clean) || TRUST_REAL.test(clean);
+  const asked = TRUST_QUESTION_FORM.test(clean);
+  if (asked && TRUST_PAY_FIRST.test(clean)) return 'payment';
+  if (!strong && !(weak && asked)) return '';
+  if (TRUST_SUBJECT_PAYMENT.test(clean)) return 'payment';
+  if (TRUST_SUBJECT_BROKERS.test(clean)) return 'brokers';
+  if (TRUST_SUBJECT_LISTING.test(clean)) return 'listing';
+  if (TRUST_SUBJECT_PLATFORM.test(clean)) return 'platform';
+  // "Is this a scam": no subject named, but nobody asks that idly.
+  return strong && asked ? 'platform' : '';
+}
+
+function trustQuestionReply(lang, kind = 'brokers') {
+  const code = resolveLangCode(lang);
+  const brokersUrl = `${HOME_URL}/brokers`;
+  const safetyUrl = `${HOME_URL}/safety`;
+  const header = whatsappBrandHeader(code === 'lg' ? 'Obwesige n\'obukuumi' : code === 'sw' ? 'Uaminifu na usalama' : 'Trust & safety');
+  const messages = {
+    brokers: {
+      en: `${header}\nFair question. Every broker on makaug is reviewed by our team before they are listed. Those with the ✅ *Verified by makaug* badge have had their ID and phone checked by us, and every property is approved by a moderator before it goes live.\n\n👔 Verified brokers: ${brokersUrl}\nReply *3* and I will match you with one in your area.\n\nNever pay to book a viewing, and deal only with the broker or owner you have met in person. Anything odd? Reply *report listing*.`,
+      lg: `${header}\nKibuuzo kirungi. Buli broker ku makaug akeberebwa ttiimu yaffe nga tannateekebwa ku mukutu. Abalina akabonero ✅ *Verified by makaug* twakebera ID zaabwe n'ennamba zaabwe, era buli propati ekkirizibwa moderator nga tennafuluma.\n\n👔 Ba broker abakakasiddwa: ${brokersUrl}\nDdamu *3* nkufunire omu mu kitundu kyo.\n\nTosasula kusooka kulaba propati, era kolagana n'omusuubuzi oba nnyinimu gw'olabyeko mu maaso. Waliwo ekitali kituufu? Ddamu *report listing*.`,
+      sw: `${header}\nSwali zuri. Kila wakala kwenye makaug hukaguliwa na timu yetu kabla ya kuorodheshwa. Wenye beji ✅ *Verified by makaug* tumehakiki vitambulisho na simu zao, na kila nyumba huidhinishwa na msimamizi kabla haijaonekana.\n\n👔 Mawakala waliothibitishwa: ${brokersUrl}\nJibu *3* nikutafutie mmoja eneo lako.\n\nUsilipe ili kuona nyumba, na shughulika tu na wakala au mwenye nyumba uliyekutana naye ana kwa ana. Kuna jambo la kutilia shaka? Jibu *report listing*.`
+    },
+    platform: {
+      en: `${header}\nYes. makaug.com is Uganda's property marketplace, run from Kampala, with ${process.env.SUPPORT_PHONE ? `a real team on ${process.env.SUPPORT_PHONE}` : 'a real team behind this number'}. We list properties and brokers; we are never part of your payment and we never ask for money to view a property.\n\nBrokers are reviewed before they are listed (✅ badge = ID and phone checked) and every listing is approved by a moderator.\n\n👔 ${brokersUrl}\n🛡️ Safety guide: ${safetyUrl}`,
+      sw: `${header}\nNdiyo. makaug.com ni soko la nyumba la Uganda, linaloendeshwa kutoka Kampala na timu halisi nyuma ya namba hii. Tunaorodhesha nyumba na mawakala; hatuhusiki na malipo yako na hatuombi pesa ili kuona nyumba.\n\nMawakala hukaguliwa kabla ya kuorodheshwa (beji ✅ = kitambulisho na simu vimehakikiwa) na kila tangazo huidhinishwa na msimamizi.\n\n👔 ${brokersUrl}\n🛡️ Mwongozo wa usalama: ${safetyUrl}`
+    },
+    listing: {
+      en: `${header}\nEvery listing is checked by a moderator before it goes live, and brokers are reviewed before they can post. We do not hold the title or tenancy papers, so before any money changes hands: view the property, meet the owner or broker in person, and check the documents (for land, at the land office or with a lawyer).\n\nNever pay to book a viewing. Anything odd? Reply *report listing*.\n🛡️ Safety guide: ${safetyUrl}`,
+      sw: `${header}\nKila tangazo hukaguliwa na msimamizi kabla ya kuonekana, na mawakala hukaguliwa kabla ya kutangaza. Hatushikilii hati za umiliki au mikataba, hivyo kabla ya kulipa chochote: tembelea nyumba, kutana na mwenye nyumba au wakala ana kwa ana, na kagua nyaraka (kwa ardhi, ofisi ya ardhi au mwanasheria).\n\nUsilipe ili kuona nyumba. Kuna jambo la kutilia shaka? Jibu *report listing*.\n🛡️ Mwongozo wa usalama: ${safetyUrl}`
+    },
+    payment: {
+      en: `${whatsappBrandHeader('Paying safely')}\nmakaug never asks you for money, and no broker should charge you to view a property. Pay only after you have viewed it and met the owner or broker in person, against a written agreement or receipt. For land, check the title at the land office or with a lawyer first.\n\nSomeone asking for a deposit before a viewing? Reply *report listing*.\n🛡️ ${safetyUrl}`,
+      sw: `${whatsappBrandHeader('Kulipa kwa usalama')}\nmakaug haiombi pesa kamwe, na hakuna wakala anayepaswa kukutoza ili kuona nyumba. Lipa tu baada ya kuiona na kukutana na mwenye nyumba au wakala ana kwa ana, kwa mkataba au risiti ya maandishi. Kwa ardhi, hakiki hati ofisi ya ardhi au kwa mwanasheria kwanza.\n\nMtu anaomba amana kabla ya kuona nyumba? Jibu *report listing*.\n🛡️ ${safetyUrl}`
+    }
+  };
+  const group = messages[kind] || messages.brokers;
+  return group[code] || group.en;
+}
+
 function isLandSafetyQuestion(text = '') {
   const clean = normalizeInput(text).toLowerCase();
   if (!clean) return false;
@@ -16738,6 +16877,19 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       idle_resume_prompt: null
     });
     return respond(landSafetyReply(lang), 'main_menu');
+  }
+
+  const trustKind = !explicitListingStart && !isEmployeeIntakeStep(step) && !['verify_otp', 'ask_phone', 'ask_id_number', 'ask_selfie', 'ask_terms'].includes(step)
+    ? trustQuestionKind(cleanBody)
+    : '';
+  if (trustKind) {
+    await patchSessionData(phone, {
+      trust_question_at: new Date().toISOString(),
+      trust_question_kind: trustKind,
+      pending_intent_confirmation: null,
+      idle_resume_prompt: null
+    });
+    return respond(trustQuestionReply(lang, trustKind), 'main_menu');
   }
 
   if (
@@ -20247,6 +20399,12 @@ module.exports.__test = {
   AGENT_PAY_LINK_QUESTION,
   agentMenuReply,
   staffIntakeGreetingReply,
+  staffMenuReply,
+  staffModeSwitchReply,
+  isStaffCustomerMode,
+  isStaffIntakeNumber,
+  trustQuestionKind,
+  trustQuestionReply,
   commercialUseInSearch,
   inferListingTypeFromStartRequest,
   sendAgentPitchVideo,
