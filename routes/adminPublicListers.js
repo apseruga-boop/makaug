@@ -36,7 +36,20 @@ function registerPublicListerRoutes(router, { db, cleanText, adminActorId, onLis
       const result = await db.query(`SELECT ${ROW_COLUMNS}, money.* FROM properties p ${TOTALS_JOIN}
         WHERE ${filters}${searchSql} ORDER BY money.last_payment_on DESC, p.id
         LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, (page - 1) * limit]);
-      return res.json({ ok: true, data: result.rows.map(serializeListing), pagination: pageInfo(page, limit, count.rows[0]?.total) });
+      // Money chips across every paid public listing (not just this page), from the same ledger as Sales & Revenue.
+      const totals = await db.query(`SELECT COALESCE(SUM(money.lifetime_paid_ugx), 0)::bigint AS collected_ugx,
+          COALESCE(SUM(money.last_payment_ugx) FILTER (WHERE p.lister_paid_until IS NOT NULL
+            AND p.lister_paid_until + 1 >= (NOW() AT TIME ZONE 'Africa/Kampala')::date), 0)::bigint AS due_next_cycle_ugx,
+          COALESCE(SUM(money.last_payment_ugx) FILTER (WHERE p.lister_paid_until IS NOT NULL
+            AND p.lister_paid_until + 1 < (NOW() AT TIME ZONE 'Africa/Kampala')::date), 0)::bigint AS overdue_ugx,
+          COUNT(*) FILTER (WHERE p.lister_paid_until IS NOT NULL
+            AND p.lister_paid_until + 1 < (NOW() AT TIME ZONE 'Africa/Kampala')::date)::int AS overdue_listings,
+          COUNT(*)::int AS paid_listings
+        FROM properties p ${TOTALS_JOIN} WHERE ${filters}`);
+      const t = totals.rows[0] || {};
+      const moneyTotals = { collected_ugx: Number(t.collected_ugx || 0), due_next_cycle_ugx: Number(t.due_next_cycle_ugx || 0),
+        overdue_ugx: Number(t.overdue_ugx || 0), overdue_listings: Number(t.overdue_listings || 0), paid_listings: Number(t.paid_listings || 0) };
+      return res.json({ ok: true, data: result.rows.map(serializeListing), pagination: pageInfo(page, limit, count.rows[0]?.total), money_totals: moneyTotals });
     } catch (error) { return next(error); }
   });
 
