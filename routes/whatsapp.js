@@ -15506,6 +15506,34 @@ function listingDraftSavedNote(lang) {
  * given up last of all. What was let go is reported back so the reply can say
  * so rather than quietly showing something else.
  */
+const NEARBY_FALLBACK_MILES = [3, 6, 10];
+
+/** Where a typed place is, from the location registry: { lat, lng, label } or null. */
+function resolveWhatsappAreaPoint(area = '') {
+  const clean = normalizeInput(area);
+  if (!clean) return null;
+  try {
+    const resolved = resolveWhatsappLocation(clean, { allowText: true });
+    const match = resolved && resolved.status === 'matched' ? resolved.match : null;
+    const lat = Number(match?.latitude);
+    const lng = Number(match?.longitude);
+    if (!match || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng, label: normalizeInput(match.area || match.name || clean) || clean, district: normalizeInput(match.district || '') };
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * What the results header may call the place. When the area was given up,
+ * the rows are from the whole country and the header must not name his suburb.
+ */
+function fallbackLocationLabel(fallback = {}, preferredArea = 'any') {
+  if (fallback.relaxed?.near) return '';
+  if (fallback.relaxed?.area) return ACTIVE_COUNTRY_NAME;
+  return fallback.effectiveArea || (preferredArea === 'any' ? 'Any area' : preferredArea);
+}
+
 async function findBroaderPropertyFallback(filters = {}, deps = {}) {
   // The two finders are injectable so the order below can be tested for what it
   // is — an order — without a database standing in the way.
@@ -15531,6 +15559,35 @@ async function findBroaderPropertyFallback(filters = {}, deps = {}) {
       propertyType: null
     }));
   }
+  // 2b. Their type, close to the place. "Mulago" had nothing of its own and
+  // the reply jumped to "4845 matching properties found in Mulago" — every
+  // listing in the country, labelled with his suburb (Ronald, 1 Nov 2026).
+  // Kampala around Mulago has plenty; nearest first, widening until something
+  // is found, beats "anywhere".
+  if (area) {
+    add({ budget: Boolean(budget), extras: true, near: true }, async () => {
+      const point = (deps.resolveAreaPoint || resolveWhatsappAreaPoint)(area);
+      if (!point) return [];
+      const nearFinder = deps.findPropertiesNearWhatsappWithFilters || findPropertiesNearWhatsappWithFilters;
+      const { formatDistance } = require('../services/landmarkService');
+      for (const miles of NEARBY_FALLBACK_MILES) {
+        const near = await nearFinder(
+          searchType,
+          { lat: point.lat, lng: point.lng },
+          { ...filters, searchType, area: null, district: null, maxBudgetUgx: null, bedsMin: null, propertyType: null },
+          miles
+        );
+        if (!near || near.usedNearestFallback || !near.rows?.length) continue;
+        const header = `within ${miles} miles of ${point.label}`;
+        return near.rows.map((row) => ({
+          ...row,
+          distance_label: `${formatDistance(row.distance_km)} from ${point.label}`,
+          proximity_header: header
+        }));
+      }
+      return [];
+    });
+  }
   // 3. Their type, anywhere.
   if (searchType !== 'any') {
     add({ budget: Boolean(budget), extras: true, area: Boolean(area) }, () => byTypeAndArea(searchType, ''));
@@ -15542,7 +15599,15 @@ async function findBroaderPropertyFallback(filters = {}, deps = {}) {
   add({ budget: Boolean(budget), extras: true, area: Boolean(area), type: searchType !== 'any' }, () => byTypeAndArea('any', ''));
 
   for (const attempt of attempts) {
-    const rows = await attempt.run();
+    let rows = [];
+    try {
+      rows = await attempt.run();
+    } catch (error) {
+      // One rung failing (no coordinates, a slow query) must not cost the
+      // customer the rungs below it.
+      logger.warn('Property fallback attempt failed', { relaxed: attempt.relaxed, error: error.message });
+      rows = [];
+    }
     if (rows.length) {
       return {
         rows,
@@ -15641,8 +15706,10 @@ async function formatNoMatchOrFallbackReply({
       'I have saved this request so makaug can follow up when a matching listing appears.',
       fallback.relaxed.type
         ? `Nothing to ${exactLabel.toLowerCase()} there at the moment, so here is what else is live in *${locationLabel}*:`
+        : fallback.relaxed.near
+          ? `Nothing in *${locationLabel}* itself yet, so here is what is live close by, nearest first:`
         : fallback.relaxed.area
-          ? `Here are the closest *${exactLabel}* listings I have anywhere:`
+          ? `Here are the closest *${exactLabel}* listings I have anywhere in ${ACTIVE_COUNTRY_NAME}:`
           : budgetUgx && fallback.relaxed.budget
             ? `Here are the closest *${exactLabel}* listings in *${locationLabel}*, just above your budget:`
             : `Here are the closest *${exactLabel}* listings in *${locationLabel}*:`
@@ -15688,7 +15755,7 @@ async function formatNoMatchOrFallbackReply({
     formatPropertySearchMessage(
       lang,
       fallbackRows,
-      fallback.effectiveArea || (preferredArea === 'any' ? 'Any area' : preferredArea),
+      fallbackLocationLabel(fallback, preferredArea),
       fallback.effectiveSearchType
     )
   ].join('\n');
@@ -20498,6 +20565,8 @@ module.exports.__test = {
   formatAffordabilityAdviceMessage,
   formatPropertySearchMessage,
   findBroaderPropertyFallback,
+  fallbackLocationLabel,
+  resolveWhatsappAreaPoint,
   createNoMatchLead,
   lowestPricedFallbackRow,
   whatsappSearchBusyReply,
