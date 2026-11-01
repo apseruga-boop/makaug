@@ -14977,6 +14977,14 @@ async function queryPublicAgentsForWhatsapp({
              FROM unnest(COALESCE(a.districts_covered, ARRAY[]::text[])) AS district(value)
              WHERE district.value ILIKE ('%' || keyword.value || '%')
            )
+           OR EXISTS (
+             SELECT 1
+             FROM properties lp
+             WHERE lp.agent_id = a.id
+               AND lp.status = 'approved'
+               AND (COALESCE(lp.district, '') ILIKE ('%' || keyword.value || '%')
+                 OR COALESCE(lp.area, '') ILIKE ('%' || keyword.value || '%'))
+           )
       )`;
     }
     if (preferredIds.length) {
@@ -15030,6 +15038,18 @@ function extractAgentSearchKeywords(text, sessionData = {}) {
   const keywords = new Set();
   const parsedArea = parseAreaFromText(clean, sessionData);
   if (parsedArea) keywords.add(parsedArea);
+
+  // "Kireka" (1 Nov 2026) found nobody: the brokers who work Wakiso list the
+  // district, not every suburb in it. Resolve the place to its district and
+  // town so they count.
+  try {
+    const resolved = resolveWhatsappLocation(clean, { allowText: true });
+    const match = resolved && resolved.status === 'matched' ? resolved.match : null;
+    for (const value of [match?.area, match?.district, match?.city, match?.town]) {
+      const name = normalizeInput(value || '');
+      if (name.length >= 3) keywords.add(name);
+    }
+  } catch (error) { /* keyword search still works on the typed text */ }
 
   const lower = clean.toLowerCase();
   DISTRICTS.forEach((district) => {
@@ -20399,6 +20419,7 @@ module.exports.__test = {
   AGENT_PAY_LINK_QUESTION,
   agentMenuReply,
   staffIntakeGreetingReply,
+  extractAgentSearchKeywords,
   staffMenuReply,
   staffModeSwitchReply,
   isStaffCustomerMode,
