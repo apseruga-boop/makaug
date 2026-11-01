@@ -187,6 +187,20 @@ const LAUNCH_DUMMY_LISTING_TITLES = new Set(['sdgsdgd', 'sgsgsgsgs']);
 const PUBLIC_LOCATION_SUGGEST_CACHE_TTL_MS = 60 * 1000;
 const publicLocationSuggestCache = new Map();
 
+
+function resolvedDataIntegrityReview(review = {}, actorId = null) {
+  const issues = Array.isArray(review.issues) ? review.issues : [];
+  return {
+    ...review,
+    ok: true,
+    issues: [],
+    issue_codes: [],
+    resolved_issues: issues,
+    resolved_at: new Date().toISOString(),
+    resolved_by: actorId || null
+  };
+}
+
 function readPositiveIntegerEnv(names, fallback) {
   for (const name of names) {
     const value = Number(process.env[name]);
@@ -5709,6 +5723,12 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           || (Array.isArray(currentExtraFields.data_integrity_issue_codes)
             ? currentExtraFields.data_integrity_issue_codes
             : []),
+        // C95C82/19F6B4 (31 Oct 2026): approval cleared the issue codes but kept
+        // the old data_integrity_review (ok:false, "student listings cannot use
+        // the acre price period"), so the editor kept showing resolved issues.
+        ...(currentExtraFields.data_integrity_review && typeof currentExtraFields.data_integrity_review === 'object'
+          ? { data_integrity_review: resolvedDataIntegrityReview(currentExtraFields.data_integrity_review, actorId) }
+          : {}),
         ...(humanIntegrityOverride ? { human_integrity_override: humanIntegrityOverride } : {}),
         ...(humanApprovalOverride ? { human_approval_override: humanApprovalOverride } : {}),
         ...(videoCaptionDecision?.override ? { video_caption_ocr_override: videoCaptionDecision.override } : {}),
