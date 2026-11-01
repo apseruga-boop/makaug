@@ -5,6 +5,7 @@ const { registerPublicListerRoutes } = require('./adminPublicListers');
 const { addPublicWebAgentDirectoryFilters } = require('../services/publicAgentEligibilityService');
 const { approvedAgentListingsCountSql } = require('../services/agentListingCount');
 const { pagination, paymentHistory, recordManagerPayment, publicListingUrl } = require('../services/adminManagerPaymentService');
+const { feeConfig } = require('../services/revenueService');
 
 // King → Agents: one place to see an agent, everything on file about them and
 // every listing they have, and to correct it. Nothing here hard-deletes: a
@@ -150,6 +151,56 @@ function paymentTracker(agent = {}, ledger = null, now = new Date()) {
   };
 }
 
+/**
+ * Quick money view for one agent, from the same ledger Sales & Revenue reads
+ * (revenue_entries: agent_subscription, money in, not voided) and the same fee
+ * rule (the agent's monthly_fee_ugx, else the published monthly fee).
+ * - paid_to_date_ugx: everything this agent has ever paid the business.
+ * - next_amount_ugx: what the next cycle costs (0 when free / staff override).
+ * - owed_ugx: money that is already late. Overdue agents owe one fee for every
+ *   30 days (or part) since the due date; an approved agent who has never paid
+ *   (no paid-until date, not free) owes one fee, as Sales & Revenue counts them
+ *   overdue too.
+ */
+function agentMoney(agent = {}, tracker = {}, { feeUgx = 0 } = {}) {
+  const paid = Number(agent.paid_to_date_ugx || 0);
+  const count = Number(agent.payment_count || 0);
+  const exempt = Boolean(agent.fee_exempt);
+  const fee = exempt ? 0 : Number(agent.monthly_fee_ugx || feeUgx || 0);
+  const freeTrial = tracker.plan === 'Free trial';
+  const removed = Boolean(agent.removed_at);
+  let owed = 0;
+  let cyclesOwed = 0;
+  if (!exempt && !removed && fee > 0) {
+    if (tracker.overdue) cyclesOwed = Math.max(1, Math.ceil(Number(tracker.days_overdue || 0) / 30));
+    else if (!tracker.paid_until && String(agent.status || '').toLowerCase() === 'approved') cyclesOwed = 1;
+    owed = cyclesOwed * fee;
+  }
+  return {
+    paid_to_date_ugx: paid,
+    payment_count: count,
+    next_amount_ugx: removed ? 0 : fee,
+    next_due: tracker.next_due || null,
+    owed_ugx: owed,
+    cycles_owed: cyclesOwed,
+    free_trial: freeTrial,
+    fee_exempt: exempt
+  };
+}
+
+function agentMoneyTotals(rows = []) {
+  const live = rows.filter((row) => !row.removed_at);
+  const sum = (list, key) => list.reduce((total, row) => total + Number(row.money?.[key] || 0), 0);
+  const dueNext = live.filter((row) => !row.money?.fee_exempt && String(row.status || '').toLowerCase() === 'approved');
+  return {
+    collected_ugx: sum(rows, 'paid_to_date_ugx'),
+    due_next_cycle_ugx: sum(dueNext, 'next_amount_ugx'),
+    overdue_ugx: sum(live, 'owed_ugx'),
+    overdue_agents: live.filter((row) => Number(row.money?.owed_ugx || 0) > 0).length,
+    paying_agents: rows.filter((row) => Number(row.money?.paid_to_date_ugx || 0) > 0).length
+  };
+}
+
 // The latest "Approve anyway" in an agent's audit history (newest first).
 function approvedAnyway(history = []) {
   const row = history.find((entry) => entry.action === 'admin_agent_approved_anyway');
@@ -239,6 +290,8 @@ function registerAgentManagerRoutes(router, deps) {
                 to_char(r.period_start, 'YYYY-MM-DD') AS ledger_period_start,
                 to_char(r.period_end, 'YYYY-MM-DD') AS ledger_period_end,
                 r.paid_at AS ledger_paid_at, r.amount_ugx AS ledger_amount_ugx,
+                COALESCE(m.paid_to_date_ugx, 0)::bigint AS paid_to_date_ugx,
+                COALESCE(m.payment_count, 0)::int AS payment_count,
                 COALESCE(p.total, 0)::int AS total_listings,
                 COALESCE(p.live, 0)::int AS live_listings,
                 COALESCE(p.pending, 0)::int AS pending_listings,
@@ -263,6 +316,11 @@ function registerAgentManagerRoutes(router, deps) {
               ORDER BY paid_at DESC NULLS LAST, recorded_at DESC
               LIMIT 1
            ) r ON true
+           LEFT JOIN LATERAL (
+             SELECT SUM(amount_ugx) AS paid_to_date_ugx, COUNT(*) AS payment_count
+               FROM revenue_entries
+              WHERE agent_id = a.id AND kind = 'agent_subscription' AND direction = 'in' AND voided_at IS NULL
+           ) m ON true
            ${where}
           ORDER BY a.removed_at IS NULL DESC, a.created_at DESC
           LIMIT 500`,
@@ -278,22 +336,42 @@ function registerAgentManagerRoutes(router, deps) {
                 COUNT(*) FILTER (WHERE removed_at IS NULL AND paid_until IS NOT NULL AND fee_exempt IS NOT TRUE)::int AS due_date_set
            FROM agents a`
       );
+      // Business-wide money totals over every agent (not just this filter), so
+      // the chips match Sales & Revenue whatever the search shows.
+      const everyone = await db.query(
+        `SELECT a.id, a.status, a.removed_at, a.fee_exempt, a.monthly_fee_ugx, a.fee_offer_mode, a.fee_offer_at,
+                to_char(a.fee_offer_until, 'YYYY-MM-DD') AS fee_offer_until, a.billing_plan,
+                to_char(a.paid_until, 'YYYY-MM-DD') AS paid_until,
+                COALESCE(m.paid_to_date_ugx, 0)::bigint AS paid_to_date_ugx, COALESCE(m.payment_count, 0)::int AS payment_count
+           FROM agents a
+           LEFT JOIN LATERAL (
+             SELECT SUM(amount_ugx) AS paid_to_date_ugx, COUNT(*) AS payment_count
+               FROM revenue_entries
+              WHERE agent_id = a.id AND kind = 'agent_subscription' AND direction = 'in' AND voided_at IS NULL
+           ) m ON true
+`
+      );
+      const fee = { feeUgx: feeConfig().feeUgx };
       const now = new Date();
+      const moneyTotals = agentMoneyTotals(everyone.rows.map((row) => ({ ...row, money: agentMoney(row, paymentTracker(row, null, now), fee) })));
       let rows = result.rows.map((row) => {
         const ledger = row.ledger_paid_at || row.ledger_period_end
           ? { period_start: row.ledger_period_start, period_end: row.ledger_period_end, paid_at: row.ledger_paid_at, amount_ugx: row.ledger_amount_ugx }
           : null;
         const { ledger_period_start, ledger_period_end, ledger_paid_at, ledger_amount_ugx, ...rest } = row;
+        const tracker = paymentTracker(row, ledger, now);
         return {
           ...rest,
+          paid_to_date_ugx: Number(row.paid_to_date_ugx || 0),
           payment: paymentState(row),
-          tracker: paymentTracker(row, ledger, now),
+          tracker,
+          money: agentMoney(row, tracker, fee),
           id_still_needed: idStillNeeded(row)
         };
       });
       if (only === 'overdue') rows = rows.filter((row) => row.tracker.overdue);
       if (only === 'due_soon') rows = rows.filter((row) => row.tracker.days_left !== null && row.tracker.days_left >= 0 && row.tracker.days_left <= 7);
-      return res.json({ ok: true, data: rows, counts: counts.rows[0] || {} });
+      return res.json({ ok: true, data: rows, counts: counts.rows[0] || {}, money_totals: { ...moneyTotals, fee_ugx: fee.feeUgx } });
     } catch (error) {
       return next(error);
     }
@@ -713,4 +791,4 @@ function registerAgentManagerRoutes(router, deps) {
   });
 }
 
-module.exports = { HAS_ID_DOCUMENT_SQL, LIVE_ID_FRONT_SQL, registerAgentManagerRoutes, paymentState, paymentTracker, idStillNeeded, approvedAnyway, kampalaDay, maskNin, LISTING_ACTIONS };
+module.exports = { agentMoney, agentMoneyTotals, HAS_ID_DOCUMENT_SQL, LIVE_ID_FRONT_SQL, registerAgentManagerRoutes, paymentState, paymentTracker, idStillNeeded, approvedAnyway, kampalaDay, maskNin, LISTING_ACTIONS };

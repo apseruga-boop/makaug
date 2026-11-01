@@ -17647,7 +17647,63 @@ function adminAgentManagerDaysLeft(t = {}, agent = {}) {
   return `<span class="text-gray-800 font-semibold whitespace-nowrap" data-days-tone="ok">${text}</span>`;
 }
 
+// Quick money view: paid to date, next payment, owed. Figures come from the
+// server (same ledger and fee rule as Sales & Revenue); nothing is guessed here.
+function adminAgentMoneyUgx(value) {
+  return `UGX ${Math.round(Number(value || 0)).toLocaleString("en-GB")}`;
+}
+
+// The agents who have paid the business most (top 3 with money on file).
+function adminAgentManagerTopPayers(rows = []) {
+  const ranked = rows.filter((a) => Number(a.money?.paid_to_date_ugx || 0) > 0)
+    .sort((x, y) => Number(y.money.paid_to_date_ugx) - Number(x.money.paid_to_date_ugx)).slice(0, 3);
+  return new Map(ranked.map((a, index) => [a.id, index + 1]));
+}
+
+function adminAgentManagerValueBadge(a, topPayers) {
+  const rank = topPayers?.get(a.id);
+  if (!rank) return "";
+  return `<span class="inline-flex items-center rounded-full bg-amber-400 text-amber-950 px-2 py-0.5 text-[10px] font-black whitespace-nowrap" data-agent-value-badge="${rank}" title="Top ${rank} by money paid to makaug.com">★ Top payer${rank > 1 ? ` #${rank}` : ""}</span>`;
+}
+
+function adminAgentManagerPaidCell(a, topPayers) {
+  const m = a.money || {};
+  const paid = Number(m.paid_to_date_ugx || 0);
+  const note = m.free_trial ? `<span class="text-[11px] font-semibold text-blue-800" data-agent-free-trial>Free trial</span>`
+    : m.fee_exempt ? `<span class="text-[11px] font-semibold text-blue-800">Free (no fee)</span>`
+      : `<span class="text-[11px] text-gray-500">${Number(m.payment_count || 0)} payment${Number(m.payment_count) === 1 ? "" : "s"}</span>`;
+  return `<div class="flex flex-col items-start gap-0.5"><span class="font-black ${paid ? "text-emerald-800" : "text-gray-500"} whitespace-nowrap" data-paid-to-date>${adminAgentMoneyUgx(paid)}</span>${note}${adminAgentManagerValueBadge(a, topPayers)}</div>`;
+}
+
+function adminAgentManagerNextCell(a) {
+  const m = a.money || {};
+  if (a.fee_exempt) return `<span class="text-gray-400">—</span>`;
+  const day = adminEscape(adminAgentManagerDay(a.tracker?.next_due));
+  return `<div class="flex flex-col items-start gap-0.5"><span class="whitespace-nowrap">${day}</span>${Number(m.next_amount_ugx || 0) ? `<span class="font-bold text-gray-900 whitespace-nowrap" data-next-amount>${adminAgentMoneyUgx(m.next_amount_ugx)}</span>` : ""}</div>`;
+}
+
+function adminAgentManagerOwedCell(a) {
+  const owed = Number(a.money?.owed_ugx || 0);
+  if (!owed) return `<span class="text-gray-400" data-owed="0">—</span>`;
+  const cycles = Number(a.money?.cycles_owed || 1);
+  return `<div class="flex flex-col items-start gap-0.5" data-owed="${owed}"><span class="inline-flex rounded-full bg-red-600 text-white px-2 py-0.5 text-[11px] font-black whitespace-nowrap">${adminAgentMoneyUgx(owed)}</span><span class="text-[11px] text-red-800">${a.tracker?.paid_until ? `${cycles} month${cycles === 1 ? "" : "s"} unpaid` : "Never paid"}</span></div>`;
+}
+
+function adminAgentManagerMoneyChipsHtml(t) {
+  if (!t) return "";
+  const chip = (label, value, cls, attr, sub = "") => `<div class="rounded-xl px-3 py-2 ${cls}" ${attr}><p class="text-[10px] font-bold uppercase tracking-wide opacity-80">${label}</p><p class="text-base sm:text-lg font-black leading-tight whitespace-nowrap">${adminAgentMoneyUgx(value)}</p>${sub ? `<p class="text-[11px] opacity-80">${sub}</p>` : ""}</div>`;
+  return [
+    chip("Collected from agents", t.collected_ugx, "bg-emerald-700 text-white", "data-money-collected", `${Number(t.paying_agents || 0).toLocaleString("en-GB")} agent${Number(t.paying_agents) === 1 ? "" : "s"} have paid`),
+    chip("Due next cycle", t.due_next_cycle_ugx, "bg-white border border-gray-200 text-gray-900", "data-money-due-next", t.fee_ugx ? `Standard fee ${adminAgentMoneyUgx(t.fee_ugx)} a month` : ""),
+    chip("Overdue", t.overdue_ugx, Number(t.overdue_ugx) ? "bg-red-50 border border-red-200 text-red-800" : "bg-white border border-gray-200 text-gray-500", "data-money-overdue", `${Number(t.overdue_agents || 0).toLocaleString("en-GB")} agent${Number(t.overdue_agents) === 1 ? "" : "s"} late`)
+  ].join("");
+}
+
 function adminAgentManagerSortRows(rows, sort) {
+  if (sort === "paid") {
+    return rows.slice().sort((x, y) => Number(y.money?.paid_to_date_ugx || 0) - Number(x.money?.paid_to_date_ugx || 0)
+      || String(x.full_name || "").localeCompare(String(y.full_name || "")));
+  }
   if (sort !== "due") return rows;
   const key = (a) => (a.fee_exempt || !a.tracker?.next_due ? "9999-12-31" : a.tracker.next_due);
   return rows.slice().sort((x, y) => key(x).localeCompare(key(y)) || String(x.full_name || "").localeCompare(String(y.full_name || "")));
@@ -17671,6 +17727,7 @@ function adminAgentManagerShellHtml() {
         <button type="button" onclick="adminAgentManagerLoad({ force: true })" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh</button>
       </div>
     </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3" data-agent-manager-money></div>
     <div class="flex flex-wrap gap-2 mb-3 text-xs" data-agent-manager-counts></div>
     <form class="grid grid-cols-2 md:grid-cols-6 gap-2 mb-3" onsubmit="adminAgentManagerApplyFilters(event)" onchange="adminAgentManagerApplyFilters(event)">
       <label class="col-span-2 text-xs font-semibold text-gray-700">Search
@@ -17695,8 +17752,9 @@ function adminAgentManagerShellHtml() {
       </label>
       <label class="text-xs font-semibold text-gray-700">Sort by
         <select name="sort" class="${input}" data-agent-manager-sort>
-          <option value="joined"${s.sort !== "due" ? " selected" : ""}>Newest joined</option>
+          <option value="joined"${s.sort !== "due" && s.sort !== "paid" ? " selected" : ""}>Newest joined</option>
           <option value="due"${s.sort === "due" ? " selected" : ""}>Next payment due (soonest first)</option>
+          <option value="paid"${s.sort === "paid" ? " selected" : ""}>Paid to date (highest first)</option>
         </select>
       </label>
       <label class="text-xs font-semibold text-gray-700 flex items-end gap-2 pb-2">
@@ -17744,6 +17802,7 @@ async function adminAgentManagerLoad(options = {}) {
     if (seq !== s.requestSeq) return; // a newer search replaced this one
     s.rows = Array.isArray(res?.data) ? res.data : [];
     s.counts = res?.counts || {};
+    s.moneyTotals = res?.money_totals || null;
     s.loadedAt = Date.now();
     adminAgentManagerRenderList();
   } catch (error) {
@@ -17781,7 +17840,7 @@ function adminAgentManagerShowOnly(only) {
 
 function adminAgentManagerSortBy(sort) {
   const s = ADMIN_AGENT_MANAGER_STATE;
-  s.sort = sort === "due" ? "due" : "joined";
+  s.sort = ["due", "paid"].includes(sort) ? sort : "joined";
   const select = adminAgentManagerRoot()?.querySelector("[data-agent-manager-sort]");
   if (select) select.value = s.sort;
   adminAgentManagerRenderList();
@@ -17803,6 +17862,9 @@ function adminAgentManagerRenderList() {
     chip("Payment due date set", c.due_date_set, "bg-emerald-50 text-emerald-800"),
     chip("Removed", c.removed, "bg-gray-100 text-gray-700")
   ].filter(Boolean).join("");
+  const moneyBox = root.querySelector("[data-agent-manager-money]");
+  if (moneyBox) moneyBox.innerHTML = adminAgentManagerMoneyChipsHtml(s.moneyTotals);
+  const topPayers = adminAgentManagerTopPayers(s.rows);
   const rows = adminAgentManagerSortRows(s.missingOnly ? s.rows.filter((a) => !a.has_nin && !a.removed_at) : s.rows, s.sort);
   root.querySelector("[data-agent-manager-summary]").textContent = `${rows.length} agent${rows.length === 1 ? "" : "s"}${s.search ? ` matching “${s.search}”` : ""}`;
   const list = root.querySelector("[data-agent-manager-list]");
@@ -17815,7 +17877,7 @@ function adminAgentManagerRenderList() {
     <div class="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
       <table class="w-full text-left text-sm" data-agent-manager-table>
         <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
-          <tr><th class="px-3 py-2">Agent</th><th class="px-3 py-2">Phone</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">ID</th><th class="px-3 py-2">Payment</th><th class="px-3 py-2">Approved listings</th><th class="px-3 py-2"><button type="button" class="uppercase tracking-wide font-bold ${s.sort === "due" ? "text-gray-900 underline" : ""}" onclick="event.stopPropagation(); adminAgentManagerSortBy('${s.sort === "due" ? "joined" : "due"}')" data-agent-manager-sort-due>Next payment due${s.sort === "due" ? " ↑" : ""}</button></th><th class="px-3 py-2">Days left</th><th class="px-3 py-2">Joined</th><th class="px-3 py-2"></th></tr>
+          <tr><th class="px-3 py-2">Agent</th><th class="px-3 py-2">Phone</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">ID</th><th class="px-3 py-2">Payment</th><th class="px-3 py-2">Approved listings</th><th class="px-3 py-2"><button type="button" class="uppercase tracking-wide font-bold ${s.sort === "due" ? "text-gray-900 underline" : ""}" onclick="event.stopPropagation(); adminAgentManagerSortBy('${s.sort === "due" ? "joined" : "due"}')" data-agent-manager-sort-due>Next payment due${s.sort === "due" ? " ↑" : ""}</button></th><th class="px-3 py-2"><button type="button" class="uppercase tracking-wide font-bold ${s.sort === "paid" ? "text-gray-900 underline" : ""}" onclick="event.stopPropagation(); adminAgentManagerSortBy('${s.sort === "paid" ? "joined" : "paid"}')" data-agent-manager-sort-paid>Paid to date${s.sort === "paid" ? " ↓" : ""}</button></th><th class="px-3 py-2">Owed</th><th class="px-3 py-2">Days left</th><th class="px-3 py-2">Joined</th><th class="px-3 py-2"></th></tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           ${rows.map((a) => `
@@ -17829,7 +17891,9 @@ function adminAgentManagerRenderList() {
               <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerIdChip(a)}${adminAgentManagerIdDocChip(a)}</div></td>
               <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerPaymentChip(a.payment)}<span class="text-[11px] text-gray-500">${adminEscape(a.tracker?.plan || "")}</span></div></td>
               <td class="px-3 py-2 text-xs whitespace-nowrap" data-live-listings><strong>${Number(a.live_listings || 0)}</strong> / ${Number(a.total_listings || 0)}</td>
-              <td class="px-3 py-2 text-xs whitespace-nowrap" data-next-due>${a.fee_exempt ? `<span class="text-gray-400">—</span>` : adminEscape(adminAgentManagerDay(a.tracker?.next_due))}</td>
+              <td class="px-3 py-2 text-xs" data-next-due>${adminAgentManagerNextCell(a)}</td>
+              <td class="px-3 py-2 text-xs" data-paid-cell>${adminAgentManagerPaidCell(a, topPayers)}</td>
+              <td class="px-3 py-2 text-xs" data-owed-cell>${adminAgentManagerOwedCell(a)}</td>
               <td class="px-3 py-2 text-xs" data-days-left>${adminAgentManagerDaysLeft(a.tracker || {}, a)}</td>
               <td class="px-3 py-2 text-xs whitespace-nowrap">${staffPeopleDate(a.created_at)}</td>
               <td class="px-3 py-2"><button type="button" class="rounded-lg bg-gray-900 text-white px-3 py-1.5 text-xs font-bold" onclick="event.stopPropagation(); ${open(a)}">Manage</button></td>
@@ -17847,7 +17911,12 @@ function adminAgentManagerRenderList() {
             </div>
             ${adminAgentManagerStatusChip(a)}
           </div>
-          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerPublicVisibility(a)} ${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerIdDocChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
+          <div class="grid grid-cols-3 gap-1 mt-2 rounded-lg bg-gray-50 p-2 text-[11px]" data-agent-money-mobile>
+            <div><p class="text-gray-500">Paid to date</p><p class="font-black ${Number(a.money?.paid_to_date_ugx || 0) ? "text-emerald-800" : "text-gray-500"}">${adminAgentMoneyUgx(a.money?.paid_to_date_ugx)}</p>${a.money?.free_trial ? `<p class="font-semibold text-blue-800">Free trial</p>` : ""}</div>
+            <div><p class="text-gray-500">Next payment</p><p class="font-bold text-gray-900">${a.fee_exempt ? "None (free)" : adminAgentMoneyUgx(a.money?.next_amount_ugx)}</p>${a.fee_exempt ? "" : `<p class="text-gray-500">${adminEscape(adminAgentManagerDay(a.tracker?.next_due))}</p>`}</div>
+            <div><p class="text-gray-500">Owed</p><p class="font-black ${Number(a.money?.owed_ugx || 0) ? "text-red-700" : "text-gray-400"}">${Number(a.money?.owed_ugx || 0) ? adminAgentMoneyUgx(a.money.owed_ugx) : "—"}</p></div>
+          </div>
+          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerValueBadge(a, topPayers)} ${adminAgentManagerPublicVisibility(a)} ${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerIdDocChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
           <p class="text-[11px] text-gray-500 mt-2">${Number(a.live_listings || 0)} approved of ${Number(a.total_listings || 0)} listings · next payment ${a.fee_exempt ? "none (free)" : adminEscape(adminAgentManagerDay(a.tracker?.next_due))} · joined ${staffPeopleDate(a.created_at)}</p>
           <div class="mt-2">${adminAgentManagerDaysLeft(a.tracker || {}, a)}</div>
         </button>${adminAgentManagerCanApprove(a) ? `<div class="-mt-1 flex justify-end">${adminAgentManagerApproveButton(a)}</div>` : ""}`).join("")}
@@ -18130,11 +18199,23 @@ function adminPublicManagerHtml(response = {}) {
   const rows = Array.isArray(response.data) ? response.data : [];
   const pagination = response.pagination || {};
   return `<div class="flex items-start justify-between gap-3 flex-wrap"><div><h3 class="text-xl font-black text-gray-900">Public</h3><p class="mt-1 text-xs text-gray-500">People who pay to list directly, outside an agent plan. Each property keeps its own payments.</p></div><button type="button" onclick="adminPublicManagerLoad(${state.page})" class="rounded-lg border px-3 py-2 text-xs font-bold">Refresh</button></div>
+    ${adminPublicManagerMoneyChipsHtml(response.money_totals)}
     <form class="mt-3 flex flex-wrap gap-2" onsubmit="adminPublicManagerSearch(event)"><label class="flex-1 min-w-[180px] text-xs font-semibold">Search paid listings<input name="search" type="search" value="${adminAttr(state.search)}" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Name, phone, title or reference"></label><button type="submit" class="self-end rounded-lg bg-gray-900 px-4 py-2 text-xs font-bold text-white">Search</button></form>
     <div class="mt-4 space-y-2">${rows.length ? rows.map((listing) => `<article class="rounded-xl border border-gray-200 p-3"><div class="flex items-start justify-between gap-2"><div><p>${adminManagerPublicListingTitle(listing)}</p><p class="mt-1 text-xs text-gray-600" data-pii>${adminEscape(listing.lister_name || "Unnamed lister")} · ${adminEscape(listing.lister_phone || "No phone")}</p></div><button type="button" onclick="adminPublicManagerOpen('${adminAttr(listing.id)}')" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold">Manage</button></div><p class="mt-2 text-xs text-gray-600">${adminEscape(listing.status || "")} · Total paid ${adminEscape(adminManagerMoney(listing.lifetime_paid_ugx))} · Last paid ${adminEscape(adminAgentManagerDay(listing.last_payment_on))}${listing.last_payment_ugx != null ? ` · ${adminEscape(adminManagerMoney(listing.last_payment_ugx))}` : ""} · Next due ${adminEscape(adminAgentManagerDay(listing.next_due))}</p></article>`).join("") : `<div class="rounded-xl border border-dashed border-gray-300 p-5 text-sm text-gray-500">${state.search ? "No paid public listings match this search." : "No paid public listings yet. Record the first received payment below when someone pays to list directly."}</div>`}</div>
     ${Number(pagination.totalPages || pagination.pages || 1) > 1 ? `<div class="mt-3 flex items-center justify-between text-xs"><button type="button" ${state.page <= 1 ? "disabled" : ""} onclick="adminPublicManagerLoad(${state.page - 1})" class="rounded-lg border px-3 py-2 disabled:opacity-40">Previous</button><span>Page ${state.page} of ${Number(pagination.totalPages || pagination.pages)}</span><button type="button" ${state.page >= Number(pagination.totalPages || pagination.pages) ? "disabled" : ""} onclick="adminPublicManagerLoad(${state.page + 1})" class="rounded-lg border px-3 py-2 disabled:opacity-40">Next</button></div>` : ""}
     <details class="mt-5 rounded-xl border border-gray-200 p-3"><summary class="cursor-pointer text-sm font-bold">Record a public lister's first payment</summary><p class="mt-2 text-xs text-gray-500">Find their existing direct listing, then record the money received.</p><form class="mt-2 flex gap-2" onsubmit="adminPublicManagerFindCandidate(event)"><input name="search" type="search" required minlength="3" placeholder="Listing reference, title, name or phone" class="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm" aria-label="Find direct listing"><button class="rounded-lg border px-3 py-2 text-xs font-bold">Find listing</button></form><div class="mt-2 space-y-2" data-public-candidates></div></details>
     <div class="mt-5" data-public-manager-detail></div>`;
+}
+
+function adminPublicManagerMoneyChipsHtml(t) {
+  if (!t) return "";
+  const chip = (label, value, cls, attr, sub) => `<div class="rounded-xl px-3 py-2 ${cls}" ${attr}><p class="text-[10px] font-bold uppercase tracking-wide opacity-80">${label}</p><p class="text-base sm:text-lg font-black leading-tight whitespace-nowrap">${adminAgentMoneyUgx(value)}</p><p class="text-[11px] opacity-80">${sub}</p></div>`;
+  const n = (v) => Number(v || 0).toLocaleString("en-GB");
+  return `<div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2" data-public-money>${[
+    chip("Collected from public listers", t.collected_ugx, "bg-emerald-700 text-white", "data-public-money-collected", `${n(t.paid_listings)} paid listing${Number(t.paid_listings) === 1 ? "" : "s"}`),
+    chip("Due next cycle", t.due_next_cycle_ugx, "bg-white border border-gray-200 text-gray-900", "data-public-money-due-next", "Same as each listing's last payment"),
+    chip("Overdue", t.overdue_ugx, Number(t.overdue_ugx) ? "bg-red-50 border border-red-200 text-red-800" : "bg-white border border-gray-200 text-gray-500", "data-public-money-overdue", `${n(t.overdue_listings)} listing${Number(t.overdue_listings) === 1 ? "" : "s"} late`)
+  ].join("")}</div>`;
 }
 
 function adminPublicManagerSearch(event) {
