@@ -1497,6 +1497,44 @@ router.post('/me/listings/:id/remove', async (req, res, next) => {
   }
 });
 
+// Sold or let: the listing keeps its place on makaug with a SOLD badge for
+// 7 days (buyers like to see what moves), then comes off by itself. Same
+// thing the WhatsApp "SOLD" announcement does (1 Nov 2026).
+router.post('/me/listings/:id/mark-sold', async (req, res, next) => {
+  try {
+    const owned = await loadOwnedBrokerListing(req, res);
+    if (!owned) return undefined;
+    const { user, row } = owned;
+    const status = String(row.status || '').toLowerCase();
+    if (status === 'sold') return res.json({ ok: true, data: { id: row.id, status: 'sold', already: true } });
+    if (!['approved', 'live', 'published'].includes(status)) {
+      return res.status(409).json({ ok: false, error: 'Only a live listing can be marked as sold.' });
+    }
+    const note = cleanText(req.body?.note || req.body?.reason || 'Marked sold by the broker').slice(0, 300);
+    await db.query(
+      `UPDATE properties
+          SET status = 'sold',
+              sold_at = NOW(),
+              moderation_stage = 'sold',
+              availability_status = 'sold',
+              last_confirmed_at = NOW(),
+              extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+                || jsonb_build_object('sold_marked_via', 'broker_dashboard', 'sold_marked_at', NOW()::text, 'sold_marked_note', $2::text, 'sold_public_until', (NOW() + INTERVAL '7 days')::text),
+              updated_at = NOW()
+        WHERE id = $1`,
+      [row.id, note]
+    );
+    await db.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, reason)
+       VALUES ($1, $2, 'broker_listing_marked_sold', $3, 'sold', $4)`,
+      [row.id, user.id, status, note]
+    ).catch(() => {});
+    return res.json({ ok: true, data: { id: row.id, status: 'sold', public_for_days: 7 } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/:id/listings', async (req, res, next) => {
   try {
     if (rejectMalformedAgentId(res, req.params.id)) return undefined;

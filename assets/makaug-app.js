@@ -12904,6 +12904,9 @@ function renderBrokerDashboardListingCard(p) {
         ${isLiveListing
           ? `<button onclick="openBrokerBoostPlanner(${propertyIdArg(p.id)})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Boost</button>`
           : `<button type="button" onclick="toast('This listing can be boosted after makaug approves it.')" class="border border-gray-200 text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold cursor-not-allowed">Boost after approval</button>`}
+        ${isLiveListing
+          ? `<button onclick="requestBrokerListingSold(${propertyIdArg(p.id)})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold">Sold</button>`
+          : ""}
         <button onclick="requestBrokerListingRemoval(${propertyIdArg(p.id)})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold">Remove</button>
       </div>
     </div>`;
@@ -14096,16 +14099,51 @@ function requestBrokerListingRemoval(id) {
 
 async function confirmBrokerListingRemoval(id) {
   const errorEl = document.getElementById("broker-remove-error");
+  const reason = document.getElementById("broker-remove-reason")?.value || "";
   try {
+    // Sold or let is not a removal: it keeps its place with a SOLD badge for
+    // 7 days, then comes off by itself.
+    if (/^(Sold|Rented out)$/i.test(reason)) {
+      await apiRequest(`/api/agents/me/listings/${encodeURIComponent(id)}/mark-sold`, { method: "POST", body: { note: reason } });
+      closeBrokerListingSheet();
+      toast("Marked as sold. It shows with a SOLD badge for 7 days, then comes off makaug.");
+      renderAgentDashboard();
+      return;
+    }
     await apiRequest(`/api/agents/me/listings/${encodeURIComponent(id)}/remove`, {
       method: "POST",
-      body: { reason: document.getElementById("broker-remove-reason")?.value || "" }
+      body: { reason }
     });
     closeBrokerListingSheet();
     toast("Listing removed from makaug.");
     renderAgentDashboard();
   } catch (error) {
     if (errorEl) errorEl.textContent = error?.message || "Could not remove it. Try again.";
+  }
+}
+
+function requestBrokerListingSold(id) {
+  const listing = (brokerDashboardCache?.listings || []).find((item) => String(item.id) === String(id));
+  const title = listing?.title || "this listing";
+  openBrokerListingSheet(`
+    <h3 style="font-size:20px;font-weight:900;color:#1e3a8a;margin:0;">Mark as sold?</h3>
+    <p style="font-size:15px;color:#334155;margin:10px 0 0;"><strong>${adminEscape(title)}</strong> will show on makaug with a <strong>SOLD</strong> badge for 7 days, then come off the site by itself. Buyers see what moves, and your page keeps the credit.</p>
+    <p id="broker-sold-error" style="color:#b91c1c;font-size:13px;margin:10px 0 0;"></p>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button type="button" onclick="confirmBrokerListingSold(${propertyIdArg(id)})" style="flex:1;background:#1d4ed8;color:#fff;border:none;border-radius:12px;padding:13px;font-weight:800;font-size:15px;cursor:pointer;">Yes, mark it sold</button>
+      <button type="button" onclick="closeBrokerListingSheet()" style="border:1px solid #e2e8f0;background:#fff;border-radius:12px;padding:13px 16px;font-weight:700;cursor:pointer;">Not yet</button>
+    </div>`);
+}
+
+async function confirmBrokerListingSold(id) {
+  const errorEl = document.getElementById("broker-sold-error");
+  try {
+    await apiRequest(`/api/agents/me/listings/${encodeURIComponent(id)}/mark-sold`, { method: "POST", body: {} });
+    closeBrokerListingSheet();
+    toast("Marked as sold. It shows with a SOLD badge for 7 days, then comes off makaug.");
+    renderAgentDashboard();
+  } catch (error) {
+    if (errorEl) errorEl.textContent = error?.message || "Could not mark it sold. Try again.";
   }
 }
 
