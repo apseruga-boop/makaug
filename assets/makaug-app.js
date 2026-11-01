@@ -5429,7 +5429,7 @@ const HOME_ASSISTANT_I18N = {
 
 const FOOTER_I18N = {
   en: {
-    brandCopy: `Uganda's property search engine. List your first property and pay nothing for 7 days, then UGX 20,000 per listing per month. Web or WhatsApp, all 146 districts.`,
+    brandCopy: `Uganda's property search engine. List your property on makaug.com today and see the plans when you sign up. Web or WhatsApp, all 146 districts.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Chat on WhatsApp",
@@ -5464,7 +5464,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. All rights reserved.`
   },
   lg: {
-    brandCopy: "Yingini y'okunoonya ebintu mu Uganda. Teeka ekintu kyo eky'olubereberye, tosasula kintu okumala ennaku 7, oluvannyuma UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
+    brandCopy: "Yingini y'okunoonya ebintu mu Uganda. Teeka ekintu kyo ku makaug.com leero, olabe pulani bw'owandiisa. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Nyumya ku WhatsApp",
@@ -5498,7 +5498,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   sw: {
-    brandCopy: "Injini ya utafutaji wa mali ya Uganda. Orodhesha mali yako ya kwanza na hulipi chochote kwa siku 7, kisha UGX 20,000 kwa kila tangazo kwa mwezi. Wavuti au WhatsApp, wilaya zote 146.",
+    brandCopy: "Injini ya utafutaji wa mali ya Uganda. Orodhesha mali yako kwenye makaug.com leo na uone mipango unapojisajili. Wavuti au WhatsApp, wilaya zote 146.",
     whatsapp: "WhatsApp",
     email: "Barua pepe",
     chatWhatsapp: "Piga gumzo WhatsApp",
@@ -5532,7 +5532,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Haki zote zimehifadhiwa.`
   },
   ac: {
-    brandCopy: "Gin me yeny jami me Uganda. Ket jami ni mukwongo ma pe iculo gin mo pi nino 7, ka dong UGX 20,000 pi listing acel dwe ki dwe. Intanet onyo WhatsApp, distrik 146 ducu.",
+    brandCopy: "Gin me yeny jami me Uganda. Ket jami ni i makaug.com tin, ci ineno plan ka icoyo nyingi. Intanet onyo WhatsApp, distrik 146 ducu.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Lok i WhatsApp",
@@ -5566,7 +5566,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Twero ducu kigwoko.`
   },
   ny: {
-    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Teeka ekintu kyawe eky'okubanza otashashuraine kintu ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mutimbagano nari WhatsApp, disiturikiti zoona 146.",
+    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Teeka ekintu kyawe aha makaug.com erizooba, oreebe plan ku orikwehandiikisa. Aha mutimbagano nari WhatsApp, disiturikiti zoona 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Gamba kuri WhatsApp",
@@ -5600,7 +5600,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   rn: {
-    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Taho ekintu kyawe eky'okubanza otashashuraine kintu ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mukutu nari WhatsApp, omu disiturikiti zoona 146.",
+    brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Taho ekintu kyawe aha makaug.com erizooba, oreebe plan ku orikwehandiikisa. Aha mukutu nari WhatsApp, omu disiturikiti zoona 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Ganira kuri WhatsApp",
@@ -5634,7 +5634,7 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   sm: {
-    brandCopy: "Ekyuma ekinoonia ebintu ekya Uganda. Teka ekintu kyo eky'olubereberye, tosasula kintu okumala ennaku 7, olwo UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
+    brandCopy: "Ekyuma ekinoonia ebintu ekya Uganda. Teka ekintu kyo ku makaug.com leero, olabe pulani bw'owandiisa. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Yogera ku WhatsApp",
@@ -5668,10 +5668,10 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   am: {
-    brandCopy: "የኡጋንዳ ንብረት መፈለጊያ። የመጀመሪያውን ዝርዝር ያስገቡ፤ ለ7 ቀናት ምንም አይከፍሉም፣ ከዚያ በኋላ በወር በአንድ ዝርዝር UGX 20,000። በድር ወይም በWhatsApp፣ በ146 ወረዳዎች ሁሉ።"
+    brandCopy: "የኡጋንዳ ንብረት መፈለጊያ። ንብረትዎን ዛሬ በmakaug.com ላይ ያስገቡ፤ ሲመዘገቡ እቅዶቹን ይመልከቱ። በድር ወይም በWhatsApp፣ በ146ቱም ወረዳዎች።"
   },
   ar: {
-    brandCopy: "محرك البحث العقاري في أوغندا. أدرج عقارك الأول ولا تدفع شيئاً لمدة 7 أيام، ثم UGX 20,000 لكل إعلان في الشهر. عبر الويب أو WhatsApp، في كل المقاطعات الـ 146.",
+    brandCopy: "محرك البحث العقاري في أوغندا. أدرج عقارك على makaug.com اليوم واطّلع على الباقات عند التسجيل. عبر الويب أو WhatsApp، في كل المقاطعات الـ 146.",
     whatsapp: "WhatsApp",
     email: "البريد الإلكتروني",
     chatWhatsapp: "الدردشة على WhatsApp",
