@@ -64,6 +64,7 @@ const {
   postgresSafeJsonStringify,
   truncateUnicode,
 } = require('../utils/postgresJson');
+const { captureHarvestDetailsForItems } = require('./harvestCaptureService');
 const logger = require('../config/logger');
 const {
   isXPlatform,
@@ -2446,6 +2447,24 @@ function withPossibleDuplicateOf(listing = {}, possibleDuplicate = null) {
   };
 }
 
+function harvestCaptureExtraFields(item = {}) {
+  const capture = item && item.harvestCapture && typeof item.harvestCapture === 'object' ? item.harvestCapture : null;
+  return capture ? { ...capture } : {};
+}
+
+// The stored harvest frame joins the listing images; it becomes the cover only
+// when the listing has no image of its own.
+function harvestCoverImageRow(url, images = []) {
+  const hasPrimary = images.some((image) => image.is_primary);
+  return {
+    url,
+    is_primary: !hasPrimary,
+    sort_order: hasPrimary ? images.length : 0,
+    slot_key: 'harvest_cover_frame',
+    room_label: 'Video cover frame',
+  };
+}
+
 async function insertListing(client, listing, agentId) {
   const ownerPreviewToken = createOwnerEditToken();
   const ownerPreviewTokenHash = hashOwnerEditToken(ownerPreviewToken);
@@ -2514,6 +2533,11 @@ async function insertListing(client, listing, agentId) {
     }
   }
 
+  const harvestCapture = harvestCaptureExtraFields(sourceItem);
+  if (harvestCapture.harvest_cover_frame_url && !imagesToStore.some((image) => image.url === harvestCapture.harvest_cover_frame_url)) {
+    imagesToStore = [...imagesToStore, harvestCoverImageRow(harvestCapture.harvest_cover_frame_url, imagesToStore)];
+  }
+
   for (const image of imagesToStore) {
     await client.query(
       `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
@@ -2529,6 +2553,7 @@ async function insertListing(client, listing, agentId) {
      WHERE id = $1`,
     [propertyId, postgresSafeJsonStringify({
       ...extraFieldsFor(listing.source_item, agentId, propertyUrl, ownerPreviewUrl),
+      ...harvestCapture,
       ...(xPostPhotoSourceUrls.length ? { x_post_photo_source_urls: xPostPhotoSourceUrls } : {}),
     })]
   );
@@ -3509,6 +3534,8 @@ async function queueFoundOnlineSourcePostListings({
   posts = [],
   dryRun = false,
   createProfilesForRepeatedSourcesOnly = false,
+  captureHarvest = !process.env.NODE_TEST_CONTEXT,
+  captureOptions = {},
 } = {}) {
   const items = (Array.isArray(posts) ? posts : [])
     .map((post, index) => normalizeFoundOnlineSourcePost(post, index))
@@ -3712,6 +3739,19 @@ async function queueFoundOnlineSourcePostListings({
   }
 
   if (!db?.pool) throw new Error('db.pool is required');
+  // Harvest-time capture (full caption, poster bio phone, cover frame) for
+  // TikTok/YouTube posts, before the transaction so no network call holds a
+  // lock. Best-effort: a failure never blocks the import.
+  if (captureHarvest) {
+    try {
+      await captureHarvestDetailsForItems(
+        evaluated.filter(({ intake }) => intake.eligible).map(({ item }) => item),
+        captureOptions
+      );
+    } catch (error) {
+      logger.warn('Harvest capture batch failed', { message: String(error?.message || error).slice(0, 200) });
+    }
+  }
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
