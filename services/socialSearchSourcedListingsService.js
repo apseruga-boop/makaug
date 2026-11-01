@@ -721,13 +721,26 @@ function explicitSourcePriceTextsFromEvidence(text = '') {
   return [...new Set(matches)].filter(Boolean);
 }
 
+// 0C0E8C (31 Oct 2026): "Price: Ugx 65 million ($15,324)" with "$15,324" also
+// in the YouTube title was stored as USD 15,324 x 3,800 = USh 58,231,200. When
+// the source writes a shilling figure, the dollar figure is only a conversion,
+// so explicit UGX amounts are tried before USD ones.
+function canonicalCurrencyFirst(texts = []) {
+  if (IS_SOUTH_AFRICA) return texts;
+  const ugx = /\b(?:UGX|USh|Shs?)\b/i;
+  const usd = /\bUSD\b|US\$|\$/i;
+  const shilling = texts.filter((text) => ugx.test(text));
+  if (!shilling.length) return texts;
+  return [...shilling, ...texts.filter((text) => !ugx.test(text) && !usd.test(text)), ...texts.filter((text) => !ugx.test(text) && usd.test(text))];
+}
+
 function strongestSourcePriceCandidate(raw = {}, sourceText = '') {
   const candidates = [
     raw.price_text,
     raw.price_label,
     raw.asking_price,
     raw.guide_price,
-    ...explicitSourcePriceTextsFromEvidence(sourceText),
+    ...canonicalCurrencyFirst(explicitSourcePriceTextsFromEvidence(sourceText)),
     raw.price
   ].filter((value) => value != null && value !== '');
   for (const candidate of candidates) {
