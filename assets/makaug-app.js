@@ -49269,7 +49269,7 @@ function renderTypeahead(inputEl, pool, onPick, options = {}) {
   panel.innerHTML = matches.map((m, index) => `
     <button type="button" class="rm-sugg-item" data-value="${encodeURIComponent(m.value)}" data-index="${index}">
       <span class="rm-sugg-main">${adminEscape(m.value)}</span>
-      <span class="rm-sugg-meta">${adminEscape(`${m.kind}${Number.isFinite(Number(m.listing_count)) ? ` · ${Number(m.listing_count)} live` : ""}`)}</span>
+      <span class="rm-sugg-meta">${adminEscape(`${m.kind}${Number.isFinite(Number(m.listing_count)) ? (Number(m.listing_count) > 0 ? ` · ${Number(m.listing_count)} live` : ` · ${translateListingLabel("none here yet, nearby shown")}`) : ""}`)}</span>
     </button>
   `).join("");
   positionTypeaheadPanel(inputEl);
