@@ -10315,7 +10315,7 @@ router.get('/revenue/agent-trials', async (req, res, next) => {
 
 router.get('/revenue/summary', async (req, res, next) => {
   try {
-    const [summary, settings, claims, listers, links, awaiting, linkStats] = await Promise.all([
+    const [summary, settings, claims, listers, links, awaiting, linkStats, reconciliation] = await Promise.all([
       revenue.revenueSummary(db),
       billingOps.getSettings(db, { fresh: true }),
       db.query(
@@ -10332,7 +10332,8 @@ router.get('/revenue/summary', async (req, res, next) => {
       // Who has been asked for money and gone quiet. Three days is the point
       // at which "they have not got round to it" becomes "nobody is chasing".
       payLinks.payLinksAwaitingPayment(db, { afterDays: 3, limit: 50 }).catch(() => []),
-      payLinks.payLinkSendStats(db, { sinceDays: 30 }).catch(() => null)
+      payLinks.payLinkSendStats(db, { sinceDays: 30 }).catch(() => null),
+      revenue.moneyReconciliation(db).catch(() => null)
     ]);
     const { revolut_webhook: revolutWebhook, ...publicSettings } = settings || {};
     return res.json({
@@ -10351,6 +10352,7 @@ router.get('/revenue/summary', async (req, res, next) => {
         pay_to_line: billingOps.payToLine(settings),
         claims: claims.rows,
         listers,
+        reconciliation,
         final_after_days: Number(settings.agent_fee?.final_after_days_overdue || 7)
       }
     });

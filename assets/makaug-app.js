@@ -35385,6 +35385,26 @@ async function loadAdminRevenue() {
   }
 }
 
+function adminMoneyReconciledBlock(d) {
+  const r = d && d.reconciliation;
+  if (!r) return "";
+  const labels = { pay_link: "Pay links (card / MoMo)", payment_claim: "WhatsApp payment claims", agent_payment: "Agent payments (dashboard)", public_payer: "Paid Public listings", manual: "Entered by hand" };
+  const rows = (r.sources || []).map((s) => `<tr class="border-t border-gray-100"><td class="py-2 pr-3 font-bold">${adminEscape(labels[s.source] || s.source)}</td><td class="py-2 pr-3">${adminEscape(String(s.count))}</td><td class="py-2 pr-3 text-emerald-700">${adminFormatUgx(s.month_ugx)}</td><td class="py-2 pr-3">${adminFormatUgx(s.amount_ugx)}</td><td class="py-2 ${s.unverified_ugx ? "text-amber-700 font-bold" : "text-gray-500"}">${adminFormatUgx(s.unverified_ugx)}</td></tr>`).join("");
+  const links = r.paid_links_without_entry || [];
+  const claims = r.confirmed_claims_without_entry || [];
+  const gapCount = links.length + claims.length;
+  const gapList = gapCount ? `<ul class="mt-2 space-y-1 text-xs">${links.map((l) => `<li>Pay link <strong>${adminEscape(l.code)}</strong> paid ${adminFormatUgx(l.amount_ugx)} on ${adminEscape(String(l.paid_at || "").slice(0, 10))} but has no ledger entry</li>`).join("")}${claims.map((c) => `<li>Confirmed claim for ${adminFormatUgx(c.amount_ugx)} (${adminEscape(String(c.purpose || "").replace(/_/g, " "))}) on ${adminEscape(String(c.decided_at || "").slice(0, 10))} has no ledger entry</li>`).join("")}</ul>` : "";
+  const status = gapCount
+    ? `<div class="rounded-lg border border-red-300 bg-red-50 p-2 text-xs text-red-800"><strong>${gapCount} payment(s) took money but are missing from the ledger.</strong>${gapList}</div>`
+    : `<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">✓ Every paid link and confirmed claim has a ledger entry.</div>`;
+  const pending = r.pending_claims && r.pending_claims.count ? `<p class="text-xs text-amber-800 mt-2">${adminEscape(String(r.pending_claims.count))} claim(s) waiting for a decision, ${adminFormatUgx(r.pending_claims.amount_ugx)}. They are not counted above.</p>` : "";
+  return `<div id="admin-money-reconciled" class="rounded-xl border border-gray-200 p-3"><h4 class="font-black text-gray-900">Sales &amp; finance in one view</h4>
+    <p class="text-xs text-gray-600 mb-2">All money in, from one ledger, split by where it came from. Totals here match “Money in this month” and the accounts table.</p>
+    <div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Source</th><th class="py-1 pr-3">Payments</th><th class="py-1 pr-3">This month</th><th class="py-1 pr-3">All time</th><th class="py-1">Not yet checked</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="5" class="py-2 text-gray-500">No money recorded yet.</td></tr>`}<tr class="border-t-2 border-gray-300 font-black"><td class="py-2 pr-3">Total</td><td></td><td class="py-2 pr-3 text-emerald-700">${adminFormatUgx(r.ledger_month_ugx)}</td><td class="py-2 pr-3">${adminFormatUgx(r.ledger_total_ugx)}</td><td class="py-2">${adminFormatUgx(r.unverified_ugx)}</td></tr></tbody></table></div>
+    <div class="mt-2">${status}</div>${pending}</div>`;
+}
+
 function renderAdminRevenue() {
   const box = document.getElementById("admin-revenue-body");
   const d = adminRevenueData || {};
@@ -35502,7 +35522,7 @@ function renderAdminRevenue() {
   const entriesTable = `<div><h4 class="font-black text-gray-900 mb-1">Every entry</h4>
     ${entries ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Date</th><th class="py-1 pr-3">Who / what</th><th class="py-1 pr-3">Amount</th><th class="py-1 pr-3">How</th><th class="py-1 pr-3">Recorded by</th><th class="py-1 pr-3">Checked?</th><th></th></tr></thead><tbody>${entries}</tbody></table></div>` : `<p class="text-xs text-gray-500">Nothing recorded yet.</p>`}</div>`;
 
-  box.innerHTML = settingsBlock + adminPayLinksBlock(d) + cards + claimsBlock + smsBlock + accountsTable + reconBlock + billingTable + listerTable + entriesTable;
+  box.innerHTML = settingsBlock + adminPayLinksBlock(d) + cards + adminMoneyReconciledBlock(d) + claimsBlock + smsBlock + accountsTable + reconBlock + billingTable + listerTable + entriesTable;
 }
 
 function adminOpenMoneyEntry(direction = "in", prefill = {}) {

@@ -613,6 +613,71 @@ async function revenueSummary(db) {
   };
 }
 
+// One reconciled money view. Every path that takes money (pay links, WhatsApp
+// payment claims, agent receipts from the dashboard, paid Public listings and
+// manual entries) must end as a revenue_entries row. This groups the ledger by
+// where each row came from and lists anything that took money without one.
+async function moneyReconciliation(db, { monthStart } = {}) {
+  const start = monthStart || `${kampalaDate().slice(0, 7)}-01`;
+  const [bySource, linkGaps, claimGaps, pendingClaims] = await Promise.all([
+    db.query(
+      `SELECT CASE
+                WHEN pl.id IS NOT NULL THEN 'pay_link'
+                WHEN e.claim_id IS NOT NULL THEN 'payment_claim'
+                WHEN dpr.entry_id IS NOT NULL AND e.kind = 'listing_fee' THEN 'public_payer'
+                WHEN dpr.entry_id IS NOT NULL THEN 'agent_payment'
+                ELSE 'manual'
+              END AS source,
+              COUNT(*)::int AS count,
+              COALESCE(SUM(e.amount_ugx), 0)::bigint AS amount_ugx,
+              COALESCE(SUM(e.amount_ugx) FILTER (WHERE e.paid_at >= $1::date), 0)::bigint AS month_ugx,
+              COALESCE(SUM(e.amount_ugx) FILTER (WHERE e.verified_status <> 'verified'), 0)::bigint AS unverified_ugx
+         FROM revenue_entries e
+         LEFT JOIN LATERAL (SELECT id FROM pay_links WHERE entry_id = e.id LIMIT 1) pl ON TRUE
+         LEFT JOIN LATERAL (SELECT entry_id FROM dashboard_payment_requests WHERE entry_id = e.id LIMIT 1) dpr ON TRUE
+        WHERE e.voided_at IS NULL AND e.direction = 'in'
+        GROUP BY 1 ORDER BY 1`,
+      [start]
+    ),
+    db.query(
+      `SELECT l.code, l.purpose, l.amount_ugx, l.paid_at, l.paid_method
+         FROM pay_links l
+        WHERE l.status = 'paid'
+          AND (l.entry_id IS NULL OR NOT EXISTS (SELECT 1 FROM revenue_entries e WHERE e.id = l.entry_id AND e.voided_at IS NULL))
+        ORDER BY l.paid_at DESC NULLS LAST LIMIT 50`
+    ),
+    db.query(
+      `SELECT c.id, c.purpose, c.amount_ugx, c.decided_at
+         FROM payment_claims c
+        WHERE c.status = 'confirmed'
+          AND (c.entry_id IS NULL OR NOT EXISTS (SELECT 1 FROM revenue_entries e WHERE e.id = c.entry_id AND e.voided_at IS NULL))
+        ORDER BY c.decided_at DESC NULLS LAST LIMIT 50`
+    ),
+    db.query(
+      `SELECT COUNT(*)::int AS count, COALESCE(SUM(amount_ugx), 0)::bigint AS amount_ugx
+         FROM payment_claims WHERE status = 'pending'`
+    )
+  ]);
+  const sources = bySource.rows.map((r) => ({
+    ...r,
+    count: Number(r.count),
+    amount_ugx: Number(r.amount_ugx),
+    month_ugx: Number(r.month_ugx),
+    unverified_ugx: Number(r.unverified_ugx)
+  }));
+  const sum = (key) => sources.reduce((total, r) => total + r[key], 0);
+  return {
+    month_start: start,
+    sources,
+    ledger_total_ugx: sum('amount_ugx'),
+    ledger_month_ugx: sum('month_ugx'),
+    unverified_ugx: sum('unverified_ugx'),
+    paid_links_without_entry: linkGaps.rows,
+    confirmed_claims_without_entry: claimGaps.rows,
+    pending_claims: { count: Number(pendingClaims.rows[0]?.count || 0), amount_ugx: Number(pendingClaims.rows[0]?.amount_ugx || 0) }
+  };
+}
+
 function csvCell(value) {
   const s = value == null ? '' : (value instanceof Date ? value.toISOString() : String(value));
   const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
@@ -635,6 +700,7 @@ async function entriesCsv(db) {
 }
 
 module.exports = {
+  moneyReconciliation,
   METHODS,
   isoDay,
   feeConfig,
