@@ -528,9 +528,9 @@ function categoryAmbiguousClearedExtra(existingExtra = {}, listingType = '', { a
 function moderationReasonWithoutCategoryAmbiguous(reason = '') {
   let text = compact(reason).replace(/\bcategory_ambiguous\b/gi, '');
   text = text
-    .replace(/\s*,\s*(?=,|$)/g, '')
+    .replace(/\s*,\s*(?=,|\.|$)/g, '')
     .replace(/:\s*,/g, ':')
-    .replace(/:\s*$/g, '')
+    .replace(/:\s*\.?\s*$/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
   if (/^data integrity review required:?$/i.test(text)) return '';

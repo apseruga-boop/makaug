@@ -736,13 +736,20 @@ function canonicalCurrencyFirst(texts = []) {
 }
 
 function strongestSourcePriceCandidate(raw = {}, sourceText = '') {
+  const evidence = canonicalCurrencyFirst(explicitSourcePriceTextsFromEvidence(sourceText));
+  // 3FD54E / 0C0E8C: the harvester's price_text was the "($17,682)" beside
+  // "Ugx 75 million". A shilling figure in the source text wins over a USD
+  // structured field, so the listing is not stored as a USD original.
+  const shillingInEvidence = !IS_SOUTH_AFRICA && evidence.some((text) => /\b(?:UGX|USh|Shs?)\b/i.test(text));
+  const usdStructured = (value) => typeof value === 'string'
+    && /\bUSD\b|US\$|\$/i.test(value)
+    && !/\b(?:UGX|USh|Shs?)\b/i.test(value);
+  const structured = [raw.price_text, raw.price_label, raw.asking_price, raw.guide_price]
+    .filter((value) => !(shillingInEvidence && usdStructured(value)));
   const candidates = [
-    raw.price_text,
-    raw.price_label,
-    raw.asking_price,
-    raw.guide_price,
-    ...canonicalCurrencyFirst(explicitSourcePriceTextsFromEvidence(sourceText)),
-    raw.price
+    ...structured,
+    ...evidence,
+    shillingInEvidence && usdStructured(raw.price) ? null : raw.price
   ].filter((value) => value != null && value !== '');
   for (const candidate of candidates) {
     const safe = safeSourcePriceCandidate(candidate, sourceText);
@@ -2195,7 +2202,10 @@ function buildSocialSearchListing(item, agentId = null) {
     autoLive.approved = false;
     autoLive.status = 'pending';
     autoLive.moderation_stage = 'source_review';
-    autoLive.reason = `Data integrity review required: ${dataIntegrity.issue_codes.join(', ')}.`;
+    const integrityCodes = (dataIntegrity.issue_codes || []).filter(Boolean);
+    autoLive.reason = integrityCodes.length
+      ? `Data integrity review required: ${integrityCodes.join(', ')}.`
+      : 'Data integrity review required.';
   }
   const manualOlderExactSource = isManualExactSocialIntake(item)
     && sourceDateStatusFor(item) === 'before_2026_source_window';
@@ -4605,6 +4615,7 @@ function summarizeSocialSearchListings() {
 }
 
 module.exports = {
+  strongestSourcePriceCandidate,
   canonicalSourceKeyForItem,
   lockFoundOnlineCanonicalKeys,
   possibleDuplicateOfNewListing,

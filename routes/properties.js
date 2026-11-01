@@ -1,3 +1,5 @@
+const { keepPendingModerationFields } = require('../utils/keepPendingModeration');
+const { moderationActorLabel } = require('../utils/moderationNotes');
 const { autoPinForApproval, correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
@@ -5142,6 +5144,18 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       inquiry_reference: current.inquiry_reference || null,
       status_from: current.status || null
     });
+    // Keep pending: the internal note is added under the stored notes (it used
+    // to replace them, or be dropped), and the hold reason already on the row
+    // is kept when no new reason was typed, instead of "Staff moderation update".
+    if (nextStatus === 'pending') {
+      const held = keepPendingModerationFields(current, {
+        reason: moderationReason,
+        notes: reviewNotes,
+        author: moderationActorLabel(req.userAuth || req.adminAuth || {})
+      });
+      moderationReason = held.reason;
+      reviewNotes = held.notes;
+    }
     if (nextStatus === 'rejected' && isDefaultStatusNoteReason(moderationReason, current)) {
       return res.status(400).json({ ok: false, code: 'reject_reason_not_typed', error: 'Type the reason for rejecting this listing. Its own status note isn\'t a rejection reason.' });
     }

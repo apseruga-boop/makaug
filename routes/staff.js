@@ -20,7 +20,7 @@ const {
   normalizeCommercialPropertyType,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
-const { priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
+const { positiveCanonicalPrice, priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
 const { listingDirectLookup, listingDirectLookupClause, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
 const { computedListingTotal, normalizeLandSizeUnit, normalizePriceUnit } = require('../utils/listingLandPrice');
@@ -2708,6 +2708,22 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     neighborhood: Object.prototype.hasOwnProperty.call(normalized, 'neighborhood') ? cleanText(normalized.neighborhood) : cleanText(currentExtra.neighborhood)
   };
 
+  // B04113: the row was harvested as area "Kampala" (a district). Staff chose
+  // District Wakiso and Town Nansana, and the stale district-level area made
+  // the save fail with "Kampala belongs to Kampala, not Wakiso". A district or
+  // region name left in the area box is not a place; the town chosen in this
+  // save, when it belongs to the chosen district, replaces it.
+  if (base.area && base.district) {
+    const staleAreaNode = canonicalizeUgandaLocation(base.area);
+    const staleIsBroad = Boolean(staleAreaNode && ['district', 'region'].includes(staleAreaNode.level))
+      || DISTRICTS.some((name) => name.toLowerCase() === base.area.toLowerCase());
+    const chosenPlace = base.neighborhood || base.city;
+    const chosenDistrict = chosenPlace ? districtForKnownArea(chosenPlace) : '';
+    if (staleIsBroad && districtForKnownArea(base.area) !== base.district && chosenDistrict === base.district) {
+      normalized.area = chosenPlace;
+      base.area = chosenPlace;
+    }
+  }
   const knownAreaDistrict = districtForKnownArea(base.area) || districtForKnownArea(base.neighborhood) || districtForKnownArea(base.city);
   const callerSuppliedDistrict = Object.prototype.hasOwnProperty.call(normalized, 'district');
   const errors = [];
@@ -2812,7 +2828,15 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
       errors.push('Give the USD amount and the currency together to convert a USD price');
     }
   }
-  if (effectiveCurrency === 'USD' && currencyGivenNow && originalGivenNow) {
+  // On a USD-source row the form still sends the USD amount from its box. A
+  // POA tick (with the UGX price blank) or the POA period must not be turned
+  // back into a price by converting that amount; it used to persist only after
+  // switching the currency to UGX.
+  const poaRequestedNow = String(normalized.price_period || '').trim().toLowerCase() === 'poa'
+    || (Object.prototype.hasOwnProperty.call(normalized, 'price_on_application')
+      && ['true', '1', 'yes', 'on'].includes(String(normalized.price_on_application).trim().toLowerCase())
+      && positiveCanonicalPrice(normalized.price) == null);
+  if (effectiveCurrency === 'USD' && currencyGivenNow && originalGivenNow && !poaRequestedNow) {
     const originalAmount = toNullableFloat(normalized.price_original);
     const fxRate = toNullableFloat(normalized.price_fx_rate_ugx ?? existing.price_fx_rate_ugx) || require('../utils/propertyPriceCurrency').configuredUsdToUgxRate();
     if (originalAmount == null || originalAmount <= 0) errors.push('price_original must be a positive USD amount');
