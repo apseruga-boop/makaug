@@ -449,6 +449,15 @@ function listingDataIntegrityReport(record = {}, options = {}) {
       proposed_price_period: classification.price_period,
     });
   }
+  // C95C82 (31 Oct 2026): a land sale stored price_unit per_acre with
+  // price_period once, so USh 24,000,000/acre printed as a total for 5 acres.
+  // A per-acre unit needs the acre period (or acre_yr for land rent).
+  const priceUnit = compact(record.price_unit || object(record.extra_fields).price_unit).toLowerCase().replace(/[\s-]+/g, '_');
+  if (category === 'land' && ['per_acre', 'acre'].includes(priceUnit) && ['once', 'neg'].includes(canonicalPeriod)) {
+    add('land_price_unit_period_conflict', `The price is per acre, so the price period must be per acre, not ${period}.`, {
+      proposed_price_period: transactionType === 'rent' ? 'acre_yr' : 'acre',
+    });
+  }
   if (category === 'commercial') {
     const effectiveTransaction = effectiveCommercialTransaction;
     if (effectiveTransaction === 'sale' && canonicalPeriod && !allowedPricePeriods('commercial', 'sale').has(canonicalPeriod)) {
