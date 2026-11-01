@@ -32,6 +32,9 @@ const STATUS_DONE = 'done';
 // Those are web pages, not video files, so ffmpeg has nothing to read.
 const STATUS_NOT_CHECKABLE = 'not_checkable';
 const EXTERNAL_VIDEO_PAGE = 'external_video_page';
+// The frames were read but the text is noise (drone footage, grass, walls).
+const STATUS_UNREADABLE = 'unreadable';
+const UNREADABLE_TEXT = 'unreadable_text';
 const EXTERNAL_VIDEO_PAGE_HOSTS = ['youtube.com', 'youtu.be', 'youtube-nocookie.com', 'tiktok.com'];
 const FRAME_INTERVAL_SECONDS = 2;
 const MAX_FRAMES = 20;
@@ -47,6 +50,30 @@ const queue = [];
 const queued = new Set();
 let draining = false;
 const liveChildren = new Set();
+
+// C08F2A / BE17A0 (31 Oct 2026): tesseract on drone and field footage returns
+// pages of noise ("REE SEE SEER", "BEANE ie = ky"), and a stray "3 Bn" in it
+// became a USh 3,000,000,000 price conflict. Text only counts as read from the
+// video when enough of it is real words.
+const OCR_KNOWN_WORDS = new Set((
+  'the and for with sale rent land plot plots acre acres decimal decimals house home houses apartment apartments '
+  + 'bedroom bedrooms bed beds bath bathroom bathrooms room rooms price ugx ush usd shs million billion call whatsapp '
+  + 'contact title titled available location road near located kampala wakiso mukono entebbe gayaza kira ntinda '
+  + 'naalya bweyogerere matugga namugongo kyaliwajjala buloba nansana mpigi jinja tororo mbarara gulu masaka '
+  + 'sold per month year only now our you your this that are from new big good prime estate estates property '
+  + 'properties commercial residential office shop shops hostel student students negotiable square feet size view '
+  + 'buy own invest visit tel phone agent agents ready kitchen parking fenced gated tarmac miles meters metres '
+  + 'free deal offer mailo freehold leasehold kibanja ettaka mbale lira hoima arua fort portal kasese '
+  + 'sitting self contained furnished storey storeyed bungalow villa mansion duplex flat flats'
+).split(' '));
+
+function ocrTextIsReadable(text = '') {
+  const tokens = String(text || '').toLowerCase().match(/[a-z]{2,}/g) || [];
+  if (!tokens.length) return false;
+  const known = tokens.filter((token) => OCR_KNOWN_WORDS.has(token));
+  const distinct = new Set(known);
+  return distinct.size >= 3 && known.length / tokens.length >= 0.2;
+}
 
 function database() {
   return require('../config/database');
@@ -473,7 +500,10 @@ function hasVideoFacts(facts = {}) {
 // also corrects records read before it (stored parsed_facts can be stale).
 function videoFactsForRecord(record = null) {
   if (!record) return {};
+  if (record.status === STATUS_UNREADABLE) return {};
   const text = String(record.ocr_text || record.text || '').trim();
+  // Records stored before the readability check still hold the noise.
+  if (text && !ocrTextIsReadable(text)) return {};
   if (text) return parseListingFacts(text);
   return record.parsed_facts || record.facts || {};
 }
@@ -569,6 +599,21 @@ function combineOcrText(parts = []) {
 
 const NOT_CHECKABLE_NOTE = "Can't read text from a YouTube or TikTok link. Watch the video to check it.";
 
+function recordTextReadable(record = {}) {
+  if (record.status === STATUS_UNREADABLE) return false;
+  const text = String(record.ocr_text || record.text || '').trim();
+  return !text || ocrTextIsReadable(text);
+}
+
+const UNREADABLE_NOTE = "The video was checked, but no clear text could be read from it. Watch the video to check it.";
+
+function publicOcrText(record = {}, status = '') {
+  if (status === STATUS_NOT_CHECKABLE) return record.ocr_text || record.text || NOT_CHECKABLE_NOTE;
+  if (status === STATUS_UNREADABLE) return UNREADABLE_NOTE;
+  const text = record.ocr_text || record.text || '';
+  return text && !ocrTextIsReadable(text) ? UNREADABLE_NOTE : text;
+}
+
 function publicOcrView(record = null) {
   if (!record) return null;
   const status = record.status || STATUS_PENDING;
@@ -576,9 +621,9 @@ function publicOcrView(record = null) {
     status,
     // The staff panel shows `text` under "Read from the video". For a page link
     // there is no text, so say why instead of leaving it blank.
-    text: record.ocr_text || record.text || (status === STATUS_NOT_CHECKABLE ? NOT_CHECKABLE_NOTE : ''),
+    text: publicOcrText(record, status),
     facts: videoFactsForRecord(record),
-    conflicts: Array.isArray(record.conflicts) ? record.conflicts : [],
+    conflicts: Array.isArray(record.conflicts) && recordTextReadable(record) ? record.conflicts : [],
     override: record.override || null,
     resolution: record.resolution || null,
     error: record.error || null,
@@ -808,7 +853,7 @@ async function listVideoCaptionConflicts() {
       db.query(BACKFILL_LIST_SQL)
     ]);
     return {
-      items: live.rows.map(mapLiveConflict),
+      items: live.rows.filter((row) => recordTextReadable({ status: row.ocr_status, ocr_text: row.ocr_text })).map(mapLiveConflict),
       backfill_items: backfill.rows.map(mapBackfillItem)
     };
   } catch (error) {
@@ -1064,6 +1109,17 @@ async function runVideoCaptionOcrJob(propertyId) {
         video_count: read.videoCount
       });
     }
+    if (!ocrTextIsReadable(read.text)) {
+      return await saveAndLoad(propertyId, {
+        status: STATUS_UNREADABLE,
+        ocr_text: '',
+        parsed_facts: {},
+        conflicts: [],
+        error: UNREADABLE_TEXT,
+        frame_count: read.frameCount,
+        video_count: read.videoCount
+      });
+    }
     const facts = parseListingFacts(read.text);
     const captionFacts = parseListingFacts(captionTextFromProperty(property));
     const listingFacts = factsFromListing(property);
@@ -1182,7 +1238,9 @@ module.exports = {
   STATUS_PENDING,
   STATUS_DONE,
   STATUS_NOT_CHECKABLE,
+  STATUS_UNREADABLE,
   EXTERNAL_VIDEO_PAGE,
+  ocrTextIsReadable,
   FRAME_INTERVAL_SECONDS,
   MAX_FRAMES,
   MIN_OVERRIDE_REASON,
