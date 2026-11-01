@@ -61,7 +61,7 @@ const mustTranslate = [
   'Verified stay',
   'Short stay terms',
   "Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month. Web or WhatsApp, all 146 districts.",
-  "Uganda's property search engine. List your first property and pay nothing for 7 days, then UGX 20,000 per listing per month. Web or WhatsApp, all 146 districts.",
+  "Uganda's property search engine. List your property on makaug.com today and see the plans when you sign up. Web or WhatsApp, all 146 districts.",
   'UGX 20,000 / listing / month after 7 free days',
   'UGX 50,000 / month after 14 days free',
   'UGX 20,000 / month for non-agents',
