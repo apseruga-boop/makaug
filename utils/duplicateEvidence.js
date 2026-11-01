@@ -235,7 +235,15 @@ function duplicateGroupsCountSql(pendingWhere) {
   return `WITH pending AS (
        SELECT p.id, p.listing_type, LOWER(COALESCE(p.area, '')) AS area_key, COALESCE(p.bedrooms, 0) AS bedrooms, p.price,
               NULLIF(RIGHT(regexp_replace(COALESCE(p.lister_phone, ''), '\\D', '', 'g'), 9), '') AS phone_key,
-              NULLIF(LOWER(regexp_replace(COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', ''), '[?#].*$', '')), '') AS source_key
+              COALESCE(
+                -- One key per video, whatever URL form or handle it came in under.
+                'video:' || NULLIF(COALESCE(
+                  p.extra_fields->>'tiktok_video_id',
+                  p.extra_fields->>'youtube_video_id',
+                  substring(COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', '') FROM 'tiktok\\.com/(?:@[^/]+/)?video/([0-9]{6,})')
+                ), ''),
+                NULLIF(LOWER(regexp_replace(COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', ''), '[?#].*$', '')), '')
+              ) AS source_key
          FROM properties p
         WHERE ${pendingWhere}
      ),
