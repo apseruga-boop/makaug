@@ -462,6 +462,38 @@ async function youtubeFrameAtTime(property, videoUrl, timestampSeconds, { upload
   }
 }
 
+function harvestCoverFrameFor(extra = {}) {
+  const url = String(extra.harvest_cover_frame_url || '').trim();
+  if (!/^https:\/\//i.test(url)) return null;
+  return { url, source: String(extra.tiktok_url || extra.youtube_url || extra.source_url || extra.harvest_cover_source_url || '') };
+}
+
+async function attachHarvestFrame(db, property, frame, { actorId, liveCover, status, backfill: injected }) {
+  if (running) return { ok: false, status: 409, error: 'A cover is already being made. Try again in a minute.' };
+  running = true;
+  try {
+    const backfill = injected || require('../scripts/backfill-whatsapp-video-stills');
+    const attached = await backfill.attachStills(property.id, [{
+      url: frame.url,
+      sha256: '',
+      sourceVideoUrl: frame.source,
+      sourceVideoIndex: 0,
+      timestampSeconds: 0,
+      sharpness: 0,
+      entropy: 0,
+      bytes: 0
+    }], { keepListingText: true, actorId, setAsCover: true, ...(liveCover ? { coverLiveListing: true } : {}) });
+    if (attached.skipped === 'status_changed') return { ok: false, status: 409, error: 'The listing changed while the cover was being made. Reload and try again.' };
+    if (attached.skipped === 'duplicate_stills') return { ok: true, attached: 0, reused: attached.reused || 0, listingStatus: status, note: 'That frame is already on the listing.' };
+    return { ok: true, attached: attached.attached || 0, reused: attached.reused || 0, listingStatus: status, note: 'Cover made from the frame saved when this video was imported.' };
+  } catch (error) {
+    logger.warn('Harvest frame cover failed', { propertyId: property.id, error: String(error?.message || error).slice(0, 300) });
+    return { ok: false, status: 422, error: coverErrorMessage(error) };
+  } finally {
+    running = false;
+  }
+}
+
 async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', budgetMs = TICK_BUDGET_MS, backfill: injected = null, videoUrl = '', fetchImpl = fetch, uploadBuffer = null, preview = false, stillUrl = '', timestampSeconds = null } = {}) {
   if (running) return { ok: false, status: 409, error: 'A cover is already being made. Try again in a minute.' };
   const busy = siteBusyReason(db);
@@ -481,6 +513,20 @@ async function makeVideoCoverForListing(db, propertyId, { actorId = 'staff', bud
   if (status !== 'pending' && !liveCover) return { ok: false, status: 409, error: 'Covers can only be made for listings still in review.' };
   const { mediaHost, sameVideoUrl } = require('../utils/realListingPhoto');
   const sources = coverSourceUrls(property.extra_fields || {}, { mediaHost: mediaHost() });
+  // Harvest-time frame (TikTok/YouTube page videos): stored when the post was
+  // imported, so a TikTok page video can still get a cover without opening it.
+  const harvestFrame = harvestCoverFrameFor(property.extra_fields || {});
+  const tiktokOnly = harvestFrame && !sources.some((item) => item.kind === 'file' || item.kind === 'youtube');
+  const pickedHarvestFrame = harvestFrame && String(stillUrl || '').trim() === harvestFrame.url;
+  if (pickedHarvestFrame && !preview) return attachHarvestFrame(db, property, harvestFrame, { actorId, liveCover, status, backfill: injected });
+  if (harvestFrame && !String(stillUrl || '').trim() && (timestampSeconds == null || timestampSeconds === '') && (tiktokOnly || (!preview && sources.length === 1 && sources[0].kind === 'youtube' && !String(videoUrl || '').trim()))) {
+    if (preview) {
+      const candidates = [coverCandidateRecord({ url: harvestFrame.url, sourceVideoUrl: harvestFrame.source, timestampSeconds: 0 }, 'Frame saved at import')];
+      await rememberCoverCandidates(db, property.id, candidates);
+      return { ok: true, attached: 0, preview: true, candidates, listingStatus: status };
+    }
+    return attachHarvestFrame(db, property, harvestFrame, { actorId, liveCover, status, backfill: injected });
+  }
   if (!sources.length) {
     return { ok: false, status: 422, error: 'This listing\'s video is a TikTok or Facebook page, not a video file we can open, so a cover can\'t be made from it. Upload a photo instead.' };
   }
@@ -648,6 +694,7 @@ module.exports = {
   coverVideoUrls,
   youtubeVideoId,
   makeVideoCoverForListing,
+  harvestCoverFrameFor,
   selectionQuery,
   siteBusyReason,
   startVideoStillScheduler,
