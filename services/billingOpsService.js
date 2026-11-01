@@ -784,8 +784,22 @@ async function runTrialDigest(db, { force = false } = {}) {
   const desk = require('./leadDeskService');
   if (typeof desk.sendToTeam !== 'function') return { sent: false, reason: 'no_team_channel' };
   if (!force && !(await claimTrialDigestDay(db))) return { sent: false, reason: 'already_sent_today' };
-  await desk.sendToTeam(db, body, 'agent_trial_follow_up');
-  return { sent: true, agents: rows.length };
+  const results = await desk.sendToTeam(db, body, 'agent_trial_follow_up', { extraRecipients: await trialDigestTeamPhones(db) });
+  return { sent: true, agents: rows.length, recipients: results.map((r) => r.to) };
+}
+
+/**
+ * The free-trial follow-ups are chased by the people who confirm payments
+ * (Sales & Revenue › Settings), so they get the digest as well as the lead-desk
+ * alert numbers. Ronald asked for it on 29 Oct 2026; before that only the
+ * alert numbers (Arthur) saw it, though he could already reply TRIALS.
+ */
+async function trialDigestTeamPhones(db) {
+  const settings = await getSettings(db).catch(() => ({}));
+  const confirmers = Array.isArray(settings?.confirmers) ? settings.confirmers : [];
+  return confirmers
+    .map((c) => String((c && typeof c === 'object' ? c.phone : c) || '').trim())
+    .filter((phone) => phone.replace(/\D+/g, '').length >= 9);
 }
 
 let billingTimer = null;
@@ -835,6 +849,7 @@ module.exports = {
   TRIAL_DIGEST_DAY_KEY,
   formatTrialLine,
   runTrialDigest,
+  trialDigestTeamPhones,
   daysOverdue,
   helpContact,
   readReferenceFromText,
