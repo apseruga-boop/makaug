@@ -3216,9 +3216,12 @@ async function listPropertiesHandler(req, res, next) {
 
     const defaultSort = featuredFilterRequested && featuredOnly ? 'featured' : 'newest';
     const sortBy = cleanText(req.query.sort || defaultSort).toLowerCase();
-    const orderBy = hasRadiusSearch
+    // Recently sold listings keep their place on the site for a week, but
+    // behind everything still for sale.
+    const soldLastSql = "(CASE WHEN LOWER(COALESCE(p.status, '')) = 'sold' THEN 1 ELSE 0 END) ASC";
+    const orderBy = `${soldLastSql}, ${hasRadiusSearch
       ? `${distanceSql} ASC NULLS LAST, p.created_at DESC, p.id DESC`
-      : (sortMap[sortBy] || sortMap.newest);
+      : (sortMap[sortBy] || sortMap.newest)}`;
 
     const publicExtraFieldsSql = `(COALESCE(p.extra_fields, '{}'::jsonb)
         - 'raw_source_post'

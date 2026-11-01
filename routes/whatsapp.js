@@ -8793,6 +8793,353 @@ function recentlyClosedEmployeeBatchReply({ phone = '', session = {}, cleanBody 
     + 'Reply *Agent 007* to start a new batch and send these again. Anything from the closed batch is still in staff review.';
 }
 
+
+// ---------------------------------------------------------------------------
+// "SOLD SOLD!!!! Kira Kitukutwe 330 million" — Francis Isabirye, 1 Nov 2026,
+// 13:31, with the photo of the house. Intake took it for a new property and
+// asked him for the caption. It is the opposite of a new property: one of his
+// live listings has gone, and he is telling us the way agents tell everyone.
+//
+// Find which of his listings it is (the words, then the picture), show it, ask
+// him to confirm with 1, mark it sold. It keeps its place on makaug with a
+// SOLD badge for 7 days and then comes off by itself.
+// ---------------------------------------------------------------------------
+const SOLD_ANNOUNCEMENT_WORDS = /\b(?:sold|sold\s*out|off\s*(?:the\s*)?market|no\s*longer\s*available|not\s*available\s*any\s*more|rented\s*out|let\s*out|already\s*(?:sold|rented|let|taken|gone)|(?:is|has|it'?s|are|all)\s+gone|gone\s+already|fully\s*(?:let|booked)|etundiddwa|yatundibwa|yagulibwa|imeuzwa|imeshauzwa|imepangishwa|imechukuliwa)\b/i;
+const SOLD_ANNOUNCEMENT_BARE_WORDS = /^\s*(?:gone|taken|sold|rented|let)\s*[!.]*\s*$/i;
+const NOT_A_SOLD_ANNOUNCEMENT = /\b(?:for\s*sale|4\s*sale|on\s*sale|un\s*sold|not\s*(?:yet\s*)?sold|to\s*be\s*sold|being\s*sold|will\s*be\s*sold|still\s*available|available\s*now|sold\s*separately|sold\s*as|how\s*(?:do|can|to)\s*i|mark(?:ed)?\s*as\s*sold)\b/i;
+const SOLD_CONFIRM_STEP = 'agent_sold_confirm';
+const SOLD_LINK_STEP = 'agent_sold_link';
+const SOLD_CANDIDATE_LIMIT = 40;
+const SOLD_IMAGE_HASH_LIMIT = 12;
+
+function isSoldAnnouncement(text = '') {
+  const clean = normalizeInput(text);
+  if (!clean || clean.length > 400) return false;
+  if (SOLD_ANNOUNCEMENT_BARE_WORDS.test(clean)) return true;
+  if (!SOLD_ANNOUNCEMENT_WORDS.test(clean)) return false;
+  if (NOT_A_SOLD_ANNOUNCEMENT.test(clean)) return false;
+  return true;
+}
+
+/** Live listings this phone could be talking about: the agent's, or a private lister's. */
+async function soldCandidateListings({ phone = '', agent = null } = {}) {
+  const key = agentPhoneKey(phone);
+  const where = agent?.id
+    ? { sql: 'p.agent_id = $1::uuid', value: String(agent.id) }
+    : (key.length === 9
+      ? { sql: "p.agent_id IS NULL AND RIGHT(REGEXP_REPLACE(COALESCE(p.lister_phone, ''), '[^0-9]', '', 'g'), 9) = $1", value: key }
+      : null);
+  if (!where) return [];
+  const result = await db.query(
+    `SELECT p.id, p.title, p.area, p.district, p.price, p.price_period, p.price_on_application, p.listing_type, p.property_type, p.bedrooms,
+            p.inquiry_reference, p.updated_at, p.extra_fields,
+            p.extra_fields->>'primary_image_dhash' AS primary_image_dhash,
+            (SELECT i.url FROM property_images i WHERE i.property_id = p.id
+              ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1) AS primary_image_url
+       FROM properties p
+      WHERE ${where.sql}
+        AND LOWER(COALESCE(p.status, '')) IN ('approved', 'live', 'published')
+      ORDER BY p.updated_at DESC
+      LIMIT ${SOLD_CANDIDATE_LIMIT}`,
+    [where.value]
+  );
+  return result.rows;
+}
+
+function soldTextScore(row = {}, facts = {}) {
+  let score = 0;
+  const area = normalizeInput(facts?.locationPatch?.area || '').toLowerCase();
+  const city = normalizeInput(facts?.locationPatch?.city || '').toLowerCase();
+  const district = normalizeInput(facts?.locationPatch?.district || '').toLowerCase();
+  const haystack = `${row.title || ''} ${row.area || ''} ${row.district || ''} ${row.extra_fields?.city || ''} ${row.extra_fields?.neighborhood || ''} ${row.extra_fields?.resolved_location_label || ''}`.toLowerCase();
+  if (area && haystack.includes(area)) score += 3;
+  else if (city && haystack.includes(city)) score += 2;
+  if (district && normalizeInput(row.district || '').toLowerCase() === district) score += 1;
+  const price = Number(facts?.price || 0);
+  const rowPrice = Number(row.price || 0);
+  if (price > 0 && rowPrice > 0) {
+    const ratio = Math.abs(rowPrice - price) / Math.max(rowPrice, price);
+    if (ratio <= 0.03) score += 3;
+    else if (ratio <= 0.12) score += 1;
+  }
+  const beds = Number(facts?.bedroomDraft?.bedrooms || facts?.naturalDraft?.bedrooms || 0);
+  if (beds > 0 && Number(row.bedrooms || 0) === beds) score += 1;
+  return score;
+}
+
+// node's fetch presents no browser identity; the bridge's media proxy is fine
+// with that, but a wrong Accept sends it the wrong way.
+async function soldImageHash(url = '') {
+  if (!/^https?:\/\//i.test(String(url || ''))) return '';
+  try {
+    const { primaryImagePerceptualHashes } = require('../services/propertyHarvestDedupService');
+    const report = await primaryImagePerceptualHashes(url, { timeoutMs: 3500 });
+    return normalizeInput(report?.dhash || report?.hash || '').toLowerCase();
+  } catch (error) {
+    return '';
+  }
+}
+
+async function rememberListingImageHash(propertyId, dhash) {
+  if (!propertyId || !dhash) return;
+  await db.query(
+    `UPDATE properties SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('primary_image_dhash', $2::text) WHERE id = $1`,
+    [propertyId, dhash]
+  ).catch(() => null);
+}
+
+/**
+ * Which listing is the announcement about? Words first (area, price, bedrooms),
+ * then the picture against each candidate's cover photo. Returns the scored
+ * candidates, best first.
+ */
+async function rankSoldCandidates({ rows = [], text = '', mediaUrl = '', sessionData = {} } = {}) {
+  if (!rows.length) return [];
+  const facts = employeePropertyFacts(normalizeInput(text).replace(SOLD_ANNOUNCEMENT_WORDS, ' '), sessionData);
+  const scored = rows.map((row) => ({ row, score: soldTextScore(row, facts), textScore: 0, imageDistance: null }));
+  scored.forEach((item) => { item.textScore = item.score; });
+  const { hammingDistanceHex } = require('../services/propertyHarvestDedupService');
+  const inboundHash = mediaUrl ? await soldImageHash(mediaUrl) : '';
+  if (inboundHash) {
+    const pool = scored
+      .slice()
+      .sort((a, b) => b.textScore - a.textScore || new Date(b.row.updated_at || 0) - new Date(a.row.updated_at || 0))
+      .slice(0, SOLD_IMAGE_HASH_LIMIT);
+    await Promise.all(pool.map(async (item) => {
+      let hash = normalizeInput(item.row.primary_image_dhash || '').toLowerCase();
+      if (!hash && item.row.primary_image_url) {
+        hash = await soldImageHash(item.row.primary_image_url);
+        if (hash) rememberListingImageHash(item.row.id, hash);
+      }
+      if (!hash) return;
+      const distance = hammingDistanceHex(inboundHash, hash);
+      if (distance === null) return;
+      item.imageDistance = distance;
+      if (distance <= 10) item.score += 6;
+      else if (distance <= 16) item.score += 3;
+    }));
+  }
+  return scored.sort((a, b) => b.score - a.score || new Date(b.row.updated_at || 0) - new Date(a.row.updated_at || 0));
+}
+
+function soldListingLine(row = {}) {
+  const where = [normalizeInput(row.area), normalizeInput(row.district)].filter(Boolean).join(', ');
+  return `*${normalizeInput(row.title) || 'Listing'}*${where ? ` — ${where}` : ''} · ${formatListingPrice(row)}\n🔗 ${HOME_URL}/property/${row.id}`;
+}
+
+function soldCandidateSummary(row = {}) {
+  return {
+    id: String(row.id),
+    title: normalizeInput(row.title).slice(0, 140),
+    area: normalizeInput(row.area).slice(0, 80),
+    district: normalizeInput(row.district).slice(0, 80),
+    price: row.price == null ? null : Number(row.price),
+    price_period: normalizeInput(row.price_period).slice(0, 20),
+    listing_type: normalizeInput(row.listing_type).slice(0, 20),
+    inquiry_reference: normalizeInput(row.inquiry_reference).slice(0, 40)
+  };
+}
+
+function soldAskLinkMessage() {
+  return 'No problem. Send me the makaug link of the property that has gone (or its reference, like MK-20261026-C3960B) and I will mark it sold. Reply *CANCEL* to leave it.';
+}
+
+/**
+ * The announcement itself. Returns the reply to send with the confirm step,
+ * or null when this number has nothing live to mark (then it is not ours to
+ * answer here).
+ */
+async function startSoldAnnouncement({ phone = '', session = {}, cleanBody = '', mediaUrl = '', stampDetected = false } = {}) {
+  const agent = await findApprovedAgentByPhone(phone);
+  const rows = await soldCandidateListings({ phone, agent }).catch((error) => {
+    logger.warn('Sold announcement: could not load listings', { error: error.message });
+    return [];
+  });
+  const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  const first = agent ? agentGreetingName(agent, '') : '';
+  if (!rows.length) {
+    if (!agent) return null;
+    return {
+      handled: true,
+      nextStep: 'main_menu',
+      message: `Congratulations${first ? `, ${first}` : ''}! I cannot see a live listing of yours on makaug to mark as sold, so nothing to change there. Send the makaug link if you think I have missed one.`
+    };
+  }
+  const ranked = await rankSoldCandidates({ rows, text: cleanBody, mediaUrl, sessionData: data });
+  const best = ranked[0];
+  const runnerUp = ranked[1];
+  const single = best && best.score >= 3 && (!runnerUp || best.score - runnerUp.score >= 2);
+  const shortlist = single ? [best] : ranked.filter((item) => item.score >= 2).slice(0, 3);
+  const picks = shortlist.length ? shortlist : ranked.slice(0, 3);
+  const announcement = {
+    announcement: normalizeInput(cleanBody).slice(0, 300),
+    media_url: normalizeInput(mediaUrl).slice(0, 500),
+    stamp_detected: stampDetected === true,
+    asked_at: new Date().toISOString(),
+    single: single && picks.length === 1,
+    candidates: picks.map((item) => soldCandidateSummary(item.row)),
+    scores: picks.map((item) => ({ id: String(item.row.id), score: item.score, image: item.imageDistance }))
+  };
+  await patchSessionData(phone, { agent_sold: announcement, pending_intent_confirmation: null, idle_resume_prompt: null });
+  if (announcement.single) {
+    return {
+      handled: true,
+      nextStep: SOLD_CONFIRM_STEP,
+      message: `🏷️ *Sold? Let me mark it.*\n\n${soldListingLine(best.row)}\n\nReply *1* = Yes, mark it SOLD\nReply *2* = No, it is a different property`
+    };
+  }
+  const lines = picks.map((item, index) => `${index + 1}. ${soldListingLine(item.row)}`);
+  return {
+    handled: true,
+    nextStep: SOLD_CONFIRM_STEP,
+    message: `🏷️ *Which one has gone?* Reply the number:\n\n${lines.join('\n\n')}\n\n*0* = None of these`
+  };
+}
+
+async function markListingSoldFromWhatsapp({ listingId = '', phone = '', agent = null, announcement = {} } = {}) {
+  const updated = await db.query(
+    `UPDATE properties
+        SET status = 'sold',
+            sold_at = NOW(),
+            moderation_stage = 'sold',
+            availability_status = 'sold',
+            last_confirmed_at = NOW(),
+            updated_at = NOW(),
+            extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
+              'sold_marked_via', 'whatsapp',
+              'sold_marked_by_phone', $2::text,
+              'sold_marked_at', NOW()::text,
+              'sold_announcement', $3::text,
+              'sold_public_until', (NOW() + INTERVAL '7 days')::text
+            )
+      WHERE id = $1::uuid
+        AND LOWER(COALESCE(status, '')) IN ('approved', 'live', 'published')
+      RETURNING id, title, area, district, price, price_period, price_on_application, extra_fields, status`,
+    [listingId, String(phone || ''), normalizeInput(announcement?.announcement || '').slice(0, 300)]
+  );
+  const row = updated.rows[0];
+  if (!row) return null;
+  await db.query(
+    `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+     VALUES ($1, $2, 'listing_marked_sold_whatsapp', 'approved', 'sold', $3, $4, $5::jsonb)`,
+    [
+      row.id,
+      agent?.user_id || null,
+      'Marked sold by the lister on WhatsApp',
+      `Announcement: ${normalizeInput(announcement?.announcement || '').slice(0, 200)}`,
+      JSON.stringify({ phone: String(phone || ''), agent_id: agent?.id || null, stamp_detected: announcement?.stamp_detected === true })
+    ]
+  ).catch(() => null);
+  return row;
+}
+
+async function handleSoldConfirmReply({ phone = '', session = {}, cleanBody = '', mediaUrl = '' } = {}) {
+  const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  const pending = data.agent_sold && typeof data.agent_sold === 'object' ? data.agent_sold : null;
+  const candidates = Array.isArray(pending?.candidates) ? pending.candidates : [];
+  const text = normalizeInput(cleanBody);
+  const upper = text.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
+  const leave = async (message) => {
+    await patchSessionData(phone, { agent_sold: null });
+    return { handled: true, nextStep: 'main_menu', message };
+  };
+  if (!pending || !candidates.length) return leave('');
+  // Another SOLD announcement while one is open starts over with the new one.
+  if (text && isSoldAnnouncement(text) && !/^\s*\d\s*$/.test(text)) {
+    await patchSessionData(phone, { agent_sold: null });
+    return null;
+  }
+  if (/^(CANCEL|STOP|MENU|NO THANKS|LEAVE IT)$/.test(upper)) {
+    return leave('Okay, nothing changed. Send *SOLD* with the property link any time to mark one as sold.');
+  }
+  let chosen = null;
+  let declined = false;
+  if (pending.single) {
+    if (/^(1|YES|Y|YEAH|YEP|CONFIRM|CORRECT|OK|OKAY|SURE|TRUE|THAT ONE|YES SOLD)$/.test(upper)) chosen = candidates[0];
+    else if (/^(2|NO|N|NOPE|DIFFERENT|WRONG|NOT THAT ONE)$/.test(upper)) declined = true;
+  } else {
+    const number = /^\d{1,2}$/.test(upper) ? Number(upper) : NaN;
+    if (number === 0 || /^(NONE|NO|NEITHER|NOT THESE)$/.test(upper)) declined = true;
+    else if (Number.isFinite(number) && number >= 1 && number <= candidates.length) chosen = candidates[number - 1];
+  }
+  if (declined) {
+    await patchSessionData(phone, { agent_sold: { ...pending, declined_at: new Date().toISOString() } });
+    return { handled: true, nextStep: SOLD_LINK_STEP, message: soldAskLinkMessage() };
+  }
+  if (!chosen) {
+    if (pending.reprompted) {
+      return leave('Okay, I will leave it. Send *SOLD* with the makaug link of the property any time and I will mark it.');
+    }
+    await patchSessionData(phone, { agent_sold: { ...pending, reprompted: true } });
+    return {
+      handled: true,
+      nextStep: SOLD_CONFIRM_STEP,
+      message: pending.single
+        ? `Reply *1* to mark *${candidates[0].title}* as SOLD, or *2* if it is a different property.`
+        : `Reply the number of the property that has gone (1-${candidates.length}), or *0* if it is none of these.`
+    };
+  }
+  const agent = await findApprovedAgentByPhone(phone);
+  const row = await markListingSoldFromWhatsapp({ listingId: chosen.id, phone, agent, announcement: pending }).catch((error) => {
+    logger.error('Mark sold from WhatsApp failed', { error: error.message, listingId: chosen.id });
+    return null;
+  });
+  await patchSessionData(phone, { agent_sold: null, last_sold_listing_id: chosen.id, last_sold_at: new Date().toISOString() });
+  if (!row) {
+    return { handled: true, nextStep: 'main_menu', message: `I could not mark *${chosen.title}* as sold just now — it may already be off the site. The team has been told and will sort it.` };
+  }
+  const first = agent ? agentGreetingName(agent, '') : '';
+  require('../services/leadDeskService')
+    .sendToTeam(db, `🏷️ *${agent?.full_name || `+${String(phone).replace(/\D/g, '')}`} marked a listing SOLD on WhatsApp*\n${normalizeInput(row.title)} — ${[row.area, row.district].filter(Boolean).join(', ')} · ${formatListingPrice(row)}\n${HOME_URL}/property/${row.id}\nIt shows as SOLD for 7 days, then comes off the site.`, 'listing_marked_sold')
+    .catch(() => null);
+  return {
+    handled: true,
+    nextStep: 'main_menu',
+    message: `✅ *Marked as SOLD* — ${normalizeInput(row.title)}\n🔗 ${HOME_URL}/property/${row.id}\n\nIt stays on makaug with a SOLD badge for 7 days, then comes off the site by itself. Congratulations${first ? `, ${first}` : ''}! 🎉`
+  };
+}
+
+async function handleSoldLinkReply({ phone = '', session = {}, cleanBody = '' } = {}) {
+  const text = normalizeInput(cleanBody);
+  const upper = text.toUpperCase();
+  const leave = async (message) => {
+    await patchSessionData(phone, { agent_sold: null });
+    return { handled: true, nextStep: 'main_menu', message };
+  };
+  if (!text) return leave('');
+  if (/^(CANCEL|STOP|MENU|NO|LEAVE IT)\b/.test(upper)) return leave('Okay, nothing changed.');
+  const idMatch = text.match(/\/property\/([0-9a-f-]{8,36})/i) || text.match(/\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i);
+  const refMatch = text.match(/\b(MK-\d{8}-[A-Z0-9]{6})\b/i) || text.match(/\b([0-9A-F]{8})\b/i);
+  if (!idMatch && !refMatch) {
+    return { handled: true, nextStep: SOLD_LINK_STEP, message: 'Send the makaug link of the property (it starts with makaug.com/property/…) or its reference, and I will mark it sold. Reply *CANCEL* to leave it.' };
+  }
+  const agent = await findApprovedAgentByPhone(phone);
+  const rows = await soldCandidateListings({ phone, agent }).catch(() => []);
+  const wanted = (idMatch?.[1] || '').toLowerCase();
+  const wantedRef = (refMatch?.[1] || '').toUpperCase();
+  const row = rows.find((item) => (wanted && String(item.id).toLowerCase().startsWith(wanted)) || (wantedRef && (String(item.inquiry_reference || '').toUpperCase() === wantedRef || String(item.id).slice(0, 8).toUpperCase() === wantedRef)));
+  if (!row) {
+    require('../services/leadDeskService')
+      .sendToTeam(db, `🏷️ ${agent?.full_name || `+${String(phone).replace(/\D/g, '')}`} wants a listing marked SOLD but I could not match it: "${text.slice(0, 160)}". Please check and mark it in the King.`, 'listing_sold_unmatched')
+      .catch(() => null);
+    return leave('I could not find that one among your live listings. The team has been told and will mark it for you — nothing more to do.');
+  }
+  const announcement = { ...(session.session_data?.agent_sold || {}), single: true, candidates: [soldCandidateSummary(row)], asked_at: new Date().toISOString() };
+  await patchSessionData(phone, { agent_sold: announcement });
+  return {
+    handled: true,
+    nextStep: SOLD_CONFIRM_STEP,
+    message: `🏷️ *Mark this one as sold?*\n\n${soldListingLine(row)}\n\nReply *1* = Yes, mark it SOLD\nReply *2* = No`
+  };
+}
+
+/** Staff mid-batch for somebody else: a stray "sold" is not theirs to act on here. */
+function soldAnnouncementAppliesTo(session = {}, active = false) {
+  const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  if (!active) return true;
+  return data.whatsapp_agent_self_intake === true;
+}
+
 async function handleEmployeeWhatsappIntake({
   phone,
   body = '',
@@ -8808,6 +9155,20 @@ async function handleEmployeeWhatsappIntake({
   // Set when this message is the one that opened an agent's own posting
   // session, so the first reply can greet them rather than starting mid-flow.
   let openedAgentSelfIntake = false;
+  // A SOLD announcement, or the 1/2 that confirms one, comes before intake
+  // can mistake it for a new property.
+  if (currentStep === SOLD_CONFIRM_STEP) {
+    const soldReply = await handleSoldConfirmReply({ phone, session, cleanBody, mediaUrl });
+    if (soldReply) return soldReply;
+    currentStep = 'main_menu';
+  }
+  if (currentStep === SOLD_LINK_STEP) {
+    return handleSoldLinkReply({ phone, session, cleanBody });
+  }
+  if (!triggered && isSoldAnnouncement(cleanBody) && soldAnnouncementAppliesTo(session, active)) {
+    const soldReply = await startSoldAnnouncement({ phone, session, cleanBody, mediaUrl });
+    if (soldReply) return soldReply;
+  }
   const interruptedStep = active ? '' : recoverInterruptedEmployeeIntakeStep(session);
   if (!triggered && !active && interruptedStep) {
     const recoveredData = {
@@ -10540,6 +10901,13 @@ async function handleEmployeeWhatsappIntake({
         inboundMessageId,
         provider: runtime.provider
       });
+      // A picture stamped SOLD with no words: the stamp is the announcement.
+      if (data.whatsapp_agent_self_intake === true && !normalizeInput(cleanBody)
+        && storedMedia.some((item) => item?.mediaValidation?.sold_stamp === true)) {
+        const stamped = storedMedia.find((item) => item?.mediaValidation?.sold_stamp === true);
+        const soldReply = await startSoldAnnouncement({ phone, session, cleanBody: 'SOLD', mediaUrl: stamped?.url || mediaUrl, stampDetected: true });
+        if (soldReply) return soldReply;
+      }
       if (shouldStartProperty) {
         const pendingStoredMedia = employeePendingStoredMedia(data);
         if (continuesPendingProperty && pendingStoredMedia.length) {
@@ -20486,6 +20854,16 @@ module.exports.__test = {
   AGENT_PAY_LINK_QUESTION,
   agentMenuReply,
   staffIntakeGreetingReply,
+  isSoldAnnouncement,
+  soldTextScore,
+  rankSoldCandidates,
+  startSoldAnnouncement,
+  handleSoldConfirmReply,
+  handleSoldLinkReply,
+  markListingSoldFromWhatsapp,
+  soldAnnouncementAppliesTo,
+  SOLD_CONFIRM_STEP,
+  SOLD_LINK_STEP,
   extractAgentSearchKeywords,
   staffMenuReply,
   staffModeSwitchReply,

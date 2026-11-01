@@ -1420,7 +1420,7 @@ async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = 
       messages: [
         {
           role: 'system',
-          content: `You validate photos for a Uganda property listing form. Return JSON only with: is_property_photo (boolean), is_screenshot_or_document (boolean), scene_type (exterior|living_room|bedroom|kitchen|bathroom|other_property|non_property), matches_expected_slot (boolean), confidence (0..1), reason (short string). Reject screenshots, documents, app screens, chats, email screens, memes, people-only photos, products, food, and unrelated images. A real building exterior or interior is a property photo, and so is bare land: a plot, garden, field, boundary markers or the access road. matches_expected_slot is only a hint — any real photo of the property counts. Be conservative about screenshots and unrelated images.`
+          content: `You validate photos for a Uganda property listing form. Return JSON only with: is_property_photo (boolean), is_screenshot_or_document (boolean), scene_type (exterior|living_room|bedroom|kitchen|bathroom|other_property|non_property), matches_expected_slot (boolean), confidence (0..1), reason (short string), overlay_text (short string: any large text stamped or written over the image, such as SOLD, RENTED, FOR SALE, a price; empty if none), sold_stamp (boolean: the image carries a SOLD / RENTED / TAKEN / LET stamp or banner). Reject screenshots, documents, app screens, chats, email screens, memes, people-only photos, products, food, and unrelated images. A real building exterior or interior is a property photo, and so is bare land: a plot, garden, field, boundary markers or the access road. matches_expected_slot is only a hint — any real photo of the property counts. Be conservative about screenshots and unrelated images.`
         },
         {
           role: 'user',
@@ -1452,6 +1452,8 @@ async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = 
       matches_expected_slot: matchesExpectedSlot,
       confidence,
       reason: cleanText(parsed.reason, 160) || (accepted ? 'property_photo' : 'photo_not_accepted'),
+      overlay_text: cleanText(parsed.overlay_text, 120),
+      sold_stamp: parsed.sold_stamp === true || /\b(sold|sold out|rented out)\b/i.test(cleanText(parsed.overlay_text, 120)),
       model
     };
 
