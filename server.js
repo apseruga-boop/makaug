@@ -1490,7 +1490,7 @@ const AGENT_SHARE_PREMIUM_PREVIEW_VERSION = 'preview-v3';
 const AGENT_SHARE_BRAND_PREVIEW_VERSION = 'preview-v4';
 
 const agentPublicProfile = require('./services/agentPublicProfileService');
-const { publicAgentProfileVisible } = require('./services/publicAgentEligibilityService');
+const { agentIdOnFileSql, publicAgentProfileVisible } = require('./services/publicAgentEligibilityService');
 const { basicAgentProfileVisible } = require('./services/agentBasicProfile');
 const { lookupAgentByShortSlug } = require('./services/agentShortLink');
 
@@ -1511,7 +1511,7 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
        a.districts_covered,
        a.verification_reason,
        a.status,
-       (NULLIF(BTRIM(COALESCE(a.identity_document_url, '')), '') IS NOT NULL) AS identity_document_stored,
+       ${agentIdOnFileSql('a')} AS identity_document_stored,
        (
          SELECT COUNT(*)::int
          FROM properties p

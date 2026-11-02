@@ -2,6 +2,7 @@ const { approvedAgentListingsCountSql } = require('./agentListingCount');
 const { basicAgentProfileVisible } = require('./agentBasicProfile');
 const {
   DIRECT_AGENT_PROFILE_MARKER,
+  agentIdOnFileSql,
   publicAgentProfileVisible
 } = require('./publicAgentEligibilityService');
 
@@ -106,7 +107,7 @@ async function loadAgentShortLinkIndex(db) {
         a.bio,
         a.email,
         a.specializations,
-        (NULLIF(BTRIM(COALESCE(a.identity_document_url, '')), '') IS NOT NULL) AS identity_document_stored,
+        ${agentIdOnFileSql('a')} AS identity_document_stored,
         ${approvedAgentListingsCountSql('a')} AS approved_listing_count
       FROM agents a
       WHERE LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')

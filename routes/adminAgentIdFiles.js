@@ -70,6 +70,8 @@ function wantsDownload(req) {
   return ['1', 'true', 'download'].includes(String(req.query.download || req.query.mode || '').toLowerCase());
 }
 
+const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
+
 function registerAgentIdFileRoutes(router, deps) {
   const { db, writeAudit, actorOf, UUID_RE, fetchImpl } = deps;
   const badId = (res, what) => res.status(400).json({ ok: false, error: `Invalid ${what} id` });
@@ -174,6 +176,7 @@ function registerAgentIdFileRoutes(router, deps) {
         metadata_stripped: file.metadata_stripped,
         by: actor.label
       }, actor.id);
+      await grantVerifiedTickIfComplete(db, agent.id, { source: 'id_upload', actorId: actor.id, writeAudit });
       return res.status(201).json({ ok: true, data: { file: saved.inserted, replaced_file_id: saved.previousId } });
     } catch (error) {
       return next(error);

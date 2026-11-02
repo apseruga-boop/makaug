@@ -12,12 +12,14 @@ const { inferProfilePhotoKind } = require('../services/agentProfileImageService'
 const { ensurePostVerificationRecords } = require('../services/authFlowService');
 const {
   DIRECT_AGENT_PROFILE_MARKER,
+  agentIdOnFileSql,
   addPublicWebAgentDirectoryFilters,
   addPublicAgentLaunchTestFilter,
   publicAgentProfileVisible,
   verifiedByMakaugSql
 } = require('../services/publicAgentEligibilityService');
 const { basicAgentProfileVisible } = require('../services/agentBasicProfile');
+const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
 const {
   approvedAgentListingsCountSql,
   approvedListingPriceRange,
@@ -1315,7 +1317,7 @@ async function loadPublicAgentProfileRow(agentId) {
         a.makaug_agent_number,
         a.created_at,
         a.verification_reason,
-        (NULLIF(BTRIM(COALESCE(a.identity_document_url, '')), '') IS NOT NULL) AS identity_document_stored,
+        ${agentIdOnFileSql('a')} AS identity_document_stored,
         ${verifiedByMakaugSql('a')} AS verified_by_makaug,
         ${knownAgentSocialSelect('a')},
         ${approvedAgentListingsCountSql('a')} AS listings_count
@@ -1720,6 +1722,8 @@ router.post('/register', async (req, res, next) => {
         cleanText(body.bio) || null
       ]
     );
+    // New sign-ups are pending, so this is normally a no-op; it keeps the rule in one place.
+    await grantVerifiedTickIfComplete(db, inserted.rows[0]?.id, { source: 'register', actorId: 'agent_self_registration' });
 
     await logNotification(db, {
       recipientPhone: phone,
