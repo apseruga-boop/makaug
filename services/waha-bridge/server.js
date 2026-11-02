@@ -16,6 +16,7 @@
  */
 
 const http = require('http');
+const tenants = require('./tenants');
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -1171,6 +1172,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    if (req.method === 'GET' && url.pathname === '/health/neondaku' && neondakuTenant) {
+      return json(res, 200, await tenants.childHealth(neondakuTenant));
+    }
+
     if (req.method === 'GET' && (url.pathname === '/health' || url.pathname === '/')) {
       const stale = lastInboundAt ? Date.now() - lastInboundAt : null;
       const tokenOk = bridgeTokenConfigured();
@@ -1221,6 +1226,14 @@ const server = http.createServer(async (req, res) => {
       } catch {
         return json(res, 400, { ok: false, error: 'bad_json' });
       }
+      // Neondaku session -> its own child bridge. Every other event takes the
+      // original MakaUG path below, byte-for-byte unchanged.
+      if (tenants.routeFor(evt, neondakuTenant) === 'child') {
+        json(res, 200, { ok: true });
+        tenants.forwardToChild(neondakuTenant, raw, req.headers['x-webhook-hmac'])
+          .catch((err) => log('neondaku forward error:', err.message));
+        return undefined;
+      }
       // Ack fast; never make WhatsApp wait on makaug.
       json(res, 200, { ok: true });
       handleWahaEvent(evt).catch((err) => log('event handling error:', err.message));
@@ -1234,6 +1247,14 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 });
+
+// Optional second WAHA session (Neondaku). Unset NEONDAKU_* -> null -> no-op.
+const neondakuTenant = tenants.neondakuTenantFromEnv();
+let neondakuChild = null;
+if (neondakuTenant) {
+  log(`tenant neondaku: session=${neondakuTenant.session} -> ${neondakuTenant.baseUrl} (child :${neondakuTenant.port})`);
+  neondakuChild = tenants.startChild(neondakuTenant, __filename, log);
+}
 
 server.listen(cfg.port, '0.0.0.0', () => {
   log(`listening on :${cfg.port}`);
@@ -1280,5 +1301,5 @@ setInterval(async () => {
 setInterval(() => { heartbeat().catch(() => {}); }, cfg.heartbeatMs).unref?.();
 heartbeat().catch(() => {});
 
-process.on('SIGTERM', () => { log('SIGTERM; closing'); server.close(() => process.exit(0)); });
+process.on('SIGTERM', () => { log('SIGTERM; closing'); if (neondakuChild) neondakuChild.stop(); server.close(() => process.exit(0)); });
 process.on('unhandledRejection', (err) => log('unhandledRejection:', err?.message || err));

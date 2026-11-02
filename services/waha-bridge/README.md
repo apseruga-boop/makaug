@@ -106,3 +106,10 @@ and no real WhatsApp involved.
 - This is an unofficial transport and remains against WhatsApp's terms. It can
   get the number banned. Inbound-reply-only, which is what makaug does, is the
   single biggest protective factor.
+
+## Second WAHA session (Neondaku)
+Set all three to route the `neondaku` session to Neondaku; leave any unset and the bridge behaves exactly as before:
+- `NEONDAKU_WAHA_SESSION` (e.g. `neondaku`), `NEONDAKU_BASE_URL` (e.g. `https://neondaku.com`), `NEONDAKU_WEB_BRIDGE_TOKEN` (same value as `WHATSAPP_WEB_BRIDGE_TOKEN` on fanadako-web).
+- Optional: `NEONDAKU_CHILD_PORT` (default 10001), `NEONDAKU_BRIDGE_CLIENT_ID`.
+
+The parent spawns a child copy of the bridge for that session (own outbox poll, heartbeat, dedupe) and hands it only events whose `session` matches. MakaUG events never touch the child. Health: `GET /health/neondaku`.
