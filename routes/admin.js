@@ -12842,6 +12842,10 @@ router.get('/whatsapp/outbox-health', async (req, res, next) => {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 60));
     const status = cleanText(req.query.status || '');
     const statuses = status ? [status] : ['pending', 'retry'];
+    // ?to=<digits> looks at one recipient (a stuck one, say); ?order=desc
+    // shows the newest first, which is what a live incident needs.
+    const toDigits = String(req.query.to || '').replace(/\D/g, '').slice(0, 24);
+    const newestFirst = String(req.query.order || '').trim().toLowerCase() === 'desc';
     const rows = await db.query(
       `SELECT id, status, attempts, created_at, next_attempt_at, sent_at, last_error,
               regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g') AS digits,
@@ -12851,15 +12855,17 @@ router.get('/whatsapp/outbox-health', async (req, res, next) => {
               COALESCE(NULLIF(metadata->>'claim_count', ''), '0')::int AS claim_count,
               metadata->>'claimed_at' AS claimed_at,
               COALESCE(metadata->>'retry_suppressed', '') AS retry_suppressed,
+              COALESCE(metadata->>'failure_class', '') AS failure_class,
               (payload->>'media_type') AS media_type,
               LEFT(COALESCE(payload->>'text', ''), 90) AS preview,
               campaign_id
          FROM outbound_message_queue
         WHERE channel = 'whatsapp'
           AND status = ANY($1::text[])
-        ORDER BY created_at ASC
+          AND ($3::text = '' OR regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g') = $3::text)
+        ORDER BY CASE WHEN $4::boolean THEN created_at END DESC, created_at ASC
         LIMIT $2`,
-      [statuses, limit]
+      [statuses, limit, toDigits, newestFirst]
     );
     const mask = (digits) => (digits.length > 6 ? `${digits.slice(0, 5)}***${digits.slice(-3)}` : digits);
     const data = rows.rows.map((row) => ({
@@ -12876,6 +12882,7 @@ router.get('/whatsapp/outbox-health', async (req, res, next) => {
       next_attempt_in_minutes: Math.round((new Date(row.next_attempt_at).getTime() - Date.now()) / 60000),
       claimed_at: row.claimed_at,
       retry_suppressed: row.retry_suppressed,
+      failure_class: row.failure_class,
       last_error: row.last_error ? String(row.last_error).slice(0, 160) : null,
       campaign: Boolean(row.campaign_id),
       preview: row.preview

@@ -72,7 +72,8 @@ const {
   markWhatsappWebBridgeMessageFailed,
   markWhatsappWebBridgeMessageSent,
   queueWhatsappWebBridgeMessage,
-  upsertWhatsappWebBridgeClient
+  upsertWhatsappWebBridgeClient,
+  whatsappChatKind
 } = whatsappWebBridgeService;
 const { isOwnWhatsappMessage } = require('../services/whatsappWebDirectionService');
 const { isWhatsappMissedCallCard } = require('../services/whatsappCallCardDetectionService');
@@ -1890,6 +1891,23 @@ function normalizeBridgeInboundKey(value) {
   const digits = raw.replace(/\D/g, '');
   if (digits.length >= 9) return digits;
   return raw.slice(0, 160);
+}
+
+// Group traffic can run to hundreds of messages an hour. One log line per
+// chat per hour says it is being ignored; the rest is counted, not written.
+const ignoredWhatsappChats = new Map();
+function noteIgnoredWhatsappChat(kind, chatId) {
+  const key = `${kind}:${String(chatId || '').slice(0, 80)}`;
+  const now = Date.now();
+  const seen = ignoredWhatsappChats.get(key) || { count: 0, loggedAt: 0 };
+  seen.count += 1;
+  if (now - seen.loggedAt >= 60 * 60 * 1000) {
+    logger.info('WhatsApp inbound ignored: not a person', { kind, chat_id: key.slice(kind.length + 1), messages_since_last_log: seen.count });
+    seen.count = 0;
+    seen.loggedAt = now;
+  }
+  ignoredWhatsappChats.set(key, seen);
+  if (ignoredWhatsappChats.size > 500) ignoredWhatsappChats.delete(ignoredWhatsappChats.keys().next().value);
 }
 
 function createBridgeDryRunKey(phone, scope = '') {
@@ -20127,6 +20145,22 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   const sharedLocation = parseInboundLocation(req.body.shared_location || req.body.location || req.body);
   const dryRun = ['1', 'true', 'yes'].includes(String(req.body.dry_run || req.body.dryRun || '').trim().toLowerCase());
   const inboundMetadata = req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {};
+  // A WhatsApp group, newsletter or broadcast is not a customer. The number
+  // was added to a group on 1 Nov 2026 and the assistant answered all 604
+  // messages in it as one "guest" — searches, leads, Swahili menus — every
+  // reply queued to the group's id as if it were a phone number and refused
+  // by WhatsApp. Nothing from such a chat is stored, answered or counted.
+  const inboundChatId = normalizeInput(inboundMetadata.chat_id || inboundMetadata.chatId || req.body.chat_id || req.body.phone || req.body.chat_key || '');
+  const inboundChatKind = whatsappChatKind(inboundChatId, phone);
+  if (inboundChatKind) {
+    noteIgnoredWhatsappChat(inboundChatKind, inboundChatId || phone);
+    return res.json({
+      ok: true,
+      ignored: true,
+      ignored_reason: `${inboundChatKind}_chat`,
+      chat_id: (inboundChatId || phone).slice(0, 80)
+    });
+  }
   if (isOwnWhatsappMessage({
     direction: inboundMetadata.message_direction || inboundMetadata.direction,
     senderLabel: inboundMetadata.sender_label || inboundMetadata.sender,
@@ -20673,12 +20707,14 @@ router.post('/web-bridge/outbox/:id/sent', asyncRoute(async (req, res) => {
 router.post('/web-bridge/outbox/:id/failed', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
 
-  const ambiguousBrowserSend = req.body.ambiguous_browser_send === true
-    || String(req.body.ambiguous_browser_send || '').trim().toLowerCase() === 'true';
-  const suppressRetry = ambiguousBrowserSend && (
-    req.body.do_not_retry === true
-    || String(req.body.do_not_retry || '').trim().toLowerCase() === 'true'
-  );
+  const flag = (value) => value === true || String(value || '').trim().toLowerCase() === 'true';
+  const ambiguousBrowserSend = flag(req.body.ambiguous_browser_send);
+  // The browser copilot: the composer cleared but nothing confirmed the send,
+  // so a retry could deliver twice. The WAHA bridge: WhatsApp refused the
+  // recipient outright, so a retry could only fail again.
+  const permanent = flag(req.body.permanent);
+  const suppressRetry = permanent || (ambiguousBrowserSend && flag(req.body.do_not_retry));
+  const retryDelaySeconds = Math.min(3600, Math.max(0, Number(req.body.retry_after_seconds) || 0));
 
   const updated = await markWhatsappWebBridgeMessageFailed(
     req.params.id,
@@ -20689,7 +20725,7 @@ router.post('/web-bridge/outbox/:id/failed', asyncRoute(async (req, res) => {
       ambiguous_browser_send: ambiguousBrowserSend,
       retry_suppressed: suppressRetry
     },
-    { suppressRetry }
+    { suppressRetry, retryDelaySeconds }
   );
 
   if (!updated) {

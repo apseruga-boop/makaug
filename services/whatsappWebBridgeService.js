@@ -28,6 +28,50 @@ function normalizeBridgeRecipient(value) {
   return raw.replace(/\s+/g, ' ').slice(0, 160).trim();
 }
 
+/**
+ * What kind of WhatsApp chat an id names: '' for a person, or 'group',
+ * 'newsletter', 'broadcast'. A group id is 18 digits ("120363423279489703@g.us");
+ * a phone number is at most 15 (E.164). Stripping the suffix does not make a
+ * group a person.
+ *
+ * On 1 Nov 2026 the number was added to a WhatsApp group. Every message in
+ * it reached the assistant as if a customer had typed it, 604 of them in
+ * fourteen hours, and every reply was queued to "120363423279489703" and sent
+ * as a chat: 270 replies, each tried eight times, every one refused by
+ * WhatsApp ("no LID found") until the account was rate-limited.
+ */
+function whatsappChatKind(chatId, phone = '') {
+  const id = String(chatId || '').trim().toLowerCase();
+  if (/@g\.us$/.test(id)) return 'group';
+  if (/@newsletter$/.test(id)) return 'newsletter';
+  if (/@broadcast$/.test(id)) return 'broadcast';
+  const digits = String(phone || id).replace(/@.*$/, '').replace(/\D/g, '');
+  if (digits.length > 15) return 'group';
+  if (/^\d+-\d+$/.test(String(chatId || '').replace(/@.*$/, ''))) return 'group';
+  return '';
+}
+
+/** A recipient the bridge can actually deliver to: a phone number, 9 to 15 digits, nothing else. */
+function isDeliverableWhatsappRecipient(value) {
+  return /^\d{9,15}$/.test(String(value || '').trim());
+}
+
+/**
+ * Read a bridge's failure report. Some failures will never succeed on a retry
+ * — the number is not on WhatsApp, the id is not a person — and some mean
+ * "slow down", not "try again in a second".
+ */
+function classifyBridgeSendError(message = '') {
+  const text = String(message || '');
+  if (/no LID found|not a valid whatsapp|is not on whatsapp|not registered on whatsapp|item-not-found|unroutable recipient|invalid recipient|invalid chat ?id|empty message body|-> 4(?:00|22):/i.test(text)) {
+    return { permanent: true, reason: 'recipient_or_payload_rejected', retryDelaySeconds: null };
+  }
+  if (/rate-overlimit|rate.?limit|too many requests|-> 429:/i.test(text)) {
+    return { permanent: false, reason: 'rate_limited', retryDelaySeconds: 600 };
+  }
+  return { permanent: false, reason: '', retryDelaySeconds: null };
+}
+
 function normalizeReplyBodyForDedupe(value) {
   return String(value || '')
     .replace(/\s+/g, ' ')
@@ -206,6 +250,31 @@ async function queueWhatsappWebBridgeMessage({
   })).trim();
   meta.reply_dedupe_window_seconds = getReplyDedupeWindowSeconds();
 
+  // A group id, a newsletter, a chat key that is not a number: the bridge
+  // would send it as a person and WhatsApp would refuse it, eight times. Keep
+  // the record, never the retries.
+  if (!isDeliverableWhatsappRecipient(userPhone)) {
+    const rejected = await db.query(
+      `INSERT INTO outbound_message_queue (
+        user_phone, payload, status, attempts, next_attempt_at, channel, user_consent_snapshot, campaign_id, metadata, last_error
+      ) VALUES ($1, $2::jsonb, 'failed', 0, NOW(), 'whatsapp', TRUE, $3, $4::jsonb, $5)
+      RETURNING *`,
+      [
+        userPhone.slice(0, 160),
+        JSON.stringify(payload),
+        campaignId || null,
+        JSON.stringify({
+          ...meta,
+          retry_suppressed: true,
+          failure_class: 'invalid_recipient',
+          recipient_kind: whatsappChatKind(userPhone) || 'not_a_phone'
+        }),
+        `invalid_recipient: ${whatsappChatKind(userPhone) || 'not a phone number'} (${userPhone.slice(0, 40)})`
+      ]
+    );
+    return { ...(rejected.rows[0] || {}), rejected: true, rejected_reason: 'invalid_recipient' };
+  }
+
   const existing = await db.query(
     `SELECT *
        FROM outbound_message_queue
@@ -317,6 +386,9 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
         -- and a claim does not count as an attempt. Without this ceiling that
         -- cycle has no end, and every lap may deliver the message again.
         AND COALESCE(NULLIF(q.metadata->>'claim_count', '')::int, 0) < $6::int
+        -- Only a phone number can be delivered to. A group id (18 digits) or a
+        -- chat title is never handed out, however it got into the queue.
+        AND regexp_replace(COALESCE(q.user_phone, ''), '\\D', '', 'g') ~ '^[0-9]{9,15}$'
       ORDER BY q.next_attempt_at ASC, q.created_at ASC
       LIMIT $1
       FOR UPDATE SKIP LOCKED
@@ -359,9 +431,22 @@ async function markWhatsappWebBridgeMessageSent(id, patch = {}) {
 }
 
 async function markWhatsappWebBridgeMessageFailed(id, errorMessage = 'bridge_send_failed', patch = {}, options = {}) {
-  const retryDelay = Math.min(120, Math.max(1, Number(process.env.WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 1)));
-  const metadata = patch && typeof patch === 'object' ? patch : {};
-  const suppressRetry = options?.suppressRetry === true;
+  const baseDelay = Math.min(120, Math.max(1, Number(process.env.WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 1)));
+  // The bridge's own reading of the error comes first (it saw the response);
+  // otherwise read the message. "no LID found" is WhatsApp saying there is no
+  // such user: retrying in a second, eight times, only earns a rate limit.
+  const classified = classifyBridgeSendError(errorMessage);
+  const suppressRetry = options?.suppressRetry === true || options?.permanent === true || classified.permanent;
+  const retryDelay = Math.max(
+    baseDelay,
+    Number(options?.retryDelaySeconds) || 0,
+    classified.retryDelaySeconds || 0
+  );
+  const metadata = {
+    ...(patch && typeof patch === 'object' ? patch : {}),
+    ...(classified.reason ? { failure_class: classified.reason } : {}),
+    ...(suppressRetry ? { retry_suppressed: true } : {})
+  };
   const result = await db.query(
     `UPDATE outbound_message_queue
      SET
@@ -406,14 +491,17 @@ async function getWhatsappWebBridgeStatus() {
 }
 
 module.exports = {
+  classifyBridgeSendError,
   getWhatsappDeliveryMode,
   getWhatsappWebBridgeStatus,
   getWhatsappWebBridgeToken,
+  isDeliverableWhatsappRecipient,
   isWhatsappWebBridgeEnabled,
   markWhatsappWebBridgeMessageFailed,
   markWhatsappWebBridgeMessageSent,
   normalizeBridgeRecipient,
   queueWhatsappWebBridgeMessage,
   claimWhatsappWebBridgeMessages,
-  upsertWhatsappWebBridgeClient
+  upsertWhatsappWebBridgeClient,
+  whatsappChatKind
 };
