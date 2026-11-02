@@ -1176,7 +1176,8 @@ async function ensureTenantSession(tenant) {
   let existing = null;
   try { existing = await waha(`/api/sessions/${encodeURIComponent(name)}`); } catch (e) { if (e.statusCode !== 404) throw e; }
   if (existing && existing.name) {
-    if (['STOPPED', 'FAILED'].includes(existing.status)) await waha(`/api/sessions/${encodeURIComponent(name)}/start`, { method: 'POST' });
+    if (existing.status === 'FAILED') await waha(`/api/sessions/${encodeURIComponent(name)}/restart`, { method: 'POST' });
+    else if (existing.status === 'STOPPED') await waha(`/api/sessions/${encodeURIComponent(name)}/start`, { method: 'POST' });
     const st = await waha(`/api/sessions/${encodeURIComponent(name)}`);
     return { ok: true, created: false, status: st?.status };
   }
