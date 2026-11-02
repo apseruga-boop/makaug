@@ -112,14 +112,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ------------------------------------------------------------ waha calls ---
 
-async function waha(path, { method = 'GET', body, timeoutMs = 45000 } = {}) {
+async function waha(path, { method = 'GET', body, timeoutMs = 45000, base = cfg.wahaUrl, apiKey = cfg.wahaApiKey } = {}) {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
-    const res = await fetch(`${cfg.wahaUrl}${path}`, {
+    const res = await fetch(`${base}${path}`, {
       method,
       headers: {
-        'X-Api-Key': cfg.wahaApiKey,
+        'X-Api-Key': apiKey,
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -1170,23 +1170,44 @@ function tenantAdminAuthorized(req, tenant) {
   return require('crypto').timingSafeEqual(Buffer.from(got), Buffer.from(want));
 }
 
+/** The tenant's WAHA: its own instance when NEONDAKU_WAHA_URL is set, else the shared one. */
+function tenantWaha(tenant) {
+  return tenant.wahaUrl ? { base: tenant.wahaUrl, apiKey: tenant.wahaApiKey } : { base: cfg.wahaUrl, apiKey: cfg.wahaApiKey };
+}
+
+/**
+ * Webhooks for the tenant session. On the shared WAHA: copy the primary
+ * session's. On a dedicated WAHA: same events, pointed at the tenant webhook
+ * path and signed with the tenant HMAC key.
+ */
+async function tenantWebhooks(tenant) {
+  const primary = await waha(`/api/sessions/${encodeURIComponent(cfg.wahaSession)}`);
+  const webhooks = Array.isArray(primary?.config?.webhooks) ? primary.config.webhooks : [];
+  if (!tenant.wahaUrl) return webhooks;
+  if (!cfg.publicUrl) throw new Error('ADAPTER_PUBLIC_URL is required for a dedicated tenant WAHA');
+  const events = webhooks[0]?.events || ['message', 'session.status'];
+  const hook = { url: `${cfg.publicUrl}/waha/webhook/${tenant.name}`, events };
+  if (tenant.hookHmacKey) hook.hmac = { key: tenant.hookHmacKey };
+  return [hook];
+}
+
 /** Create/start the tenant WAHA session with the same webhooks as the primary session. */
 async function ensureTenantSession(tenant) {
   const name = tenant.session;
+  const w = tenantWaha(tenant);
   let existing = null;
-  try { existing = await waha(`/api/sessions/${encodeURIComponent(name)}`); } catch (e) { if (e.statusCode !== 404) throw e; }
+  try { existing = await waha(`/api/sessions/${encodeURIComponent(name)}`, w); } catch (e) { if (e.statusCode !== 404) throw e; }
   if (existing && existing.name) {
-    if (existing.status === 'FAILED') await waha(`/api/sessions/${encodeURIComponent(name)}/restart`, { method: 'POST' });
-    else if (existing.status === 'STOPPED') await waha(`/api/sessions/${encodeURIComponent(name)}/start`, { method: 'POST' });
-    const st = await waha(`/api/sessions/${encodeURIComponent(name)}`);
+    if (existing.status === 'FAILED') await waha(`/api/sessions/${encodeURIComponent(name)}/restart`, { ...w, method: 'POST' });
+    else if (existing.status === 'STOPPED') await waha(`/api/sessions/${encodeURIComponent(name)}/start`, { ...w, method: 'POST' });
+    const st = await waha(`/api/sessions/${encodeURIComponent(name)}`, w);
     return { ok: true, created: false, status: st?.status };
   }
-  const primary = await waha(`/api/sessions/${encodeURIComponent(cfg.wahaSession)}`);
-  const webhooks = primary?.config?.webhooks;
+  const webhooks = await tenantWebhooks(tenant);
   const config = {};
-  if (Array.isArray(webhooks) && webhooks.length) config.webhooks = webhooks;
-  const created = await waha('/api/sessions', { method: 'POST', body: { name, start: true, config } });
-  return { ok: true, created: true, status: created?.status, webhooksCopied: Array.isArray(config.webhooks) ? config.webhooks.length : 0 };
+  if (webhooks.length) config.webhooks = webhooks;
+  const created = await waha('/api/sessions', { ...w, method: 'POST', body: { name, start: true, config } });
+  return { ok: true, created: true, status: created?.status, webhooksCopied: webhooks.length, dedicatedWaha: Boolean(tenant.wahaUrl) };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -1207,15 +1228,16 @@ const server = http.createServer(async (req, res) => {
     if (neondakuTenant && url.pathname.startsWith('/tenants/neondaku/')) {
       if (!tenantAdminAuthorized(req, neondakuTenant)) return json(res, 401, { ok: false, error: 'unauthorized' });
       const session = encodeURIComponent(neondakuTenant.session);
+      const tw = tenantWaha(neondakuTenant);
       if (req.method === 'POST' && url.pathname === '/tenants/neondaku/session') {
         return json(res, 200, await ensureTenantSession(neondakuTenant));
       }
       if (req.method === 'GET' && url.pathname === '/tenants/neondaku/status') {
-        const st = await waha(`/api/sessions/${session}`);
-        return json(res, 200, { ok: true, name: st?.name, status: st?.status, me: st?.me ? { pushName: st.me.pushName || null } : null });
+        const st = await waha(`/api/sessions/${session}`, tw);
+        return json(res, 200, { ok: true, waha: neondakuTenant.wahaUrl ? 'dedicated' : 'shared', name: st?.name, status: st?.status, me: st?.me ? { pushName: st.me.pushName || null } : null });
       }
       if (req.method === 'GET' && url.pathname === '/tenants/neondaku/qr') {
-        const r = await fetch(`${cfg.wahaUrl}/api/${session}/auth/qr?format=image`, { headers: { 'X-Api-Key': cfg.wahaApiKey, Accept: 'image/png' } });
+        const r = await fetch(`${tw.base}/api/${session}/auth/qr?format=image`, { headers: { 'X-Api-Key': tw.apiKey, Accept: 'image/png' } });
         const buf = Buffer.from(await r.arrayBuffer());
         res.writeHead(r.status, { 'Content-Type': r.headers.get('content-type') || 'application/octet-stream', 'Content-Length': buf.length, 'Cache-Control': 'no-store' });
         return res.end(buf);
@@ -1224,8 +1246,14 @@ const server = http.createServer(async (req, res) => {
         const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
         const phoneNumber = String(body.phoneNumber || '').replace(/\D/g, '');
         if (!/^\d{8,15}$/.test(phoneNumber)) return json(res, 400, { ok: false, error: 'bad_phone' });
-        const out = await waha(`/api/${session}/auth/request-code`, { method: 'POST', body: { phoneNumber } });
+        const out = await waha(`/api/${session}/auth/request-code`, { ...tw, method: 'POST', body: { phoneNumber } });
         return json(res, 200, { ok: true, code: out?.code || null });
+      }
+      // Passkey step of WhatsApp's newer linking flow (WAHA >= 2026.7.1). Pass-through.
+      if ((req.method === 'GET' || req.method === 'POST') && url.pathname === '/tenants/neondaku/passkey') {
+        const raw = req.method === 'POST' ? (await readBody(req)).toString('utf8') : '';
+        const out = await waha(`/api/${session}/auth/passkey`, { ...tw, method: req.method, body: raw ? JSON.parse(raw) : undefined });
+        return json(res, 200, { ok: true, passkey: out });
       }
       return json(res, 404, { ok: false, error: 'not_found' });
     }
@@ -1268,6 +1296,22 @@ const server = http.createServer(async (req, res) => {
       return handleMediaProxy(req, res, url);
     }
 
+    // Dedicated tenant WAHA posts here, signed with the tenant's own HMAC key.
+    if (neondakuTenant && neondakuTenant.wahaUrl && req.method === 'POST' && url.pathname === '/waha/webhook/neondaku') {
+      const raw = await readBody(req);
+      if (neondakuTenant.hookHmacKey) {
+        const want = crypto.createHmac('sha512', neondakuTenant.hookHmacKey).update(raw).digest('hex');
+        if (!timingSafeEqualStr(want, String(req.headers['x-webhook-hmac'] || '').trim())) {
+          log('rejected neondaku webhook: bad hmac');
+          return json(res, 401, { ok: false, error: 'bad_hmac' });
+        }
+      }
+      json(res, 200, { ok: true });
+      tenants.forwardToChild(neondakuTenant, raw, req.headers['x-webhook-hmac'])
+        .catch((err) => log('neondaku forward error:', err.message));
+      return undefined;
+    }
+
     if (req.method === 'POST' && url.pathname === '/waha/webhook') {
       const raw = await readBody(req);
       if (!hmacValid(raw, req.headers['x-webhook-hmac'])) {
@@ -1308,6 +1352,12 @@ let neondakuChild = null;
 if (neondakuTenant) {
   log(`tenant neondaku: session=${neondakuTenant.session} -> ${neondakuTenant.baseUrl} (child :${neondakuTenant.port})`);
   neondakuChild = tenants.startChild(neondakuTenant, __filename, log);
+  if (neondakuTenant.wahaUrl) {
+    // Free Render instances sleep after 15 min without inbound HTTP; keep it up.
+    const ping = () => fetch(`${neondakuTenant.wahaUrl}/ping`).catch(() => {});
+    setInterval(ping, 5 * 60 * 1000).unref?.();
+    ping();
+  }
 }
 
 server.listen(cfg.port, '0.0.0.0', () => {

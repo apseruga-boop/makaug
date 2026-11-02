@@ -31,6 +31,10 @@ function neondakuTenantFromEnv(env = process.env) {
     token,
     port: Number(env.NEONDAKU_CHILD_PORT || 10001),
     clientId: String(env.NEONDAKU_BRIDGE_CLIENT_ID || 'neondaku-waha-gows'),
+    // Optional dedicated WAHA for this tenant. Unset -> the shared WAHA_URL.
+    wahaUrl: String(env.NEONDAKU_WAHA_URL || '').trim().replace(/\/+$/, ''),
+    wahaApiKey: String(env.NEONDAKU_WAHA_API_KEY || ''),
+    hookHmacKey: String(env.NEONDAKU_WAHA_HMAC_KEY || ''),
   };
 }
 
@@ -51,6 +55,11 @@ function childEnv(tenant, env = process.env) {
   out.WHATSAPP_WEB_BRIDGE_TOKEN = tenant.token;
   out.BRIDGE_CLIENT_ID = tenant.clientId;
   out.BRIDGE_OPERATOR_NAME = 'WAHA GOWS Bridge (Neondaku)';
+  if (tenant.wahaUrl) {
+    out.WAHA_URL = tenant.wahaUrl;
+    out.WAHA_API_KEY = tenant.wahaApiKey;
+    out.WAHA_HOOK_HMAC_KEY = tenant.hookHmacKey;
+  }
   // Media links must still point at the public parent URL; keep the parent's
   // media secret so the parent's /media proxy can verify the child's links.
   out.ADAPTER_MEDIA_SECRET = env.ADAPTER_MEDIA_SECRET || env.WHATSAPP_WEB_BRIDGE_TOKEN || '';
