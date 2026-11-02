@@ -235,9 +235,26 @@ function isVerifiedByMakaug(row = {}) {
     || Object.prototype.hasOwnProperty.call(row, 'contact_phone_verified_at');
   if (!knowsEvidence) return row.verified_by_makaug === true;
   const idStored = row.identity_document_stored === true
-    || String(row.identity_document_url || '').trim() !== '';
+    || row.verified_by_makaug === true
+    || String(row.identity_document_url || '').trim() !== ''
+    || String(row.nin || '').replace(/[^A-Za-z0-9]/g, '').length >= 10;
   const phoneChecked = row.contact_phone_verified_at != null && String(row.contact_phone_verified_at).trim() !== '';
   return idStored && phoneChecked;
+}
+
+/**
+ * SQL: an ID is on file for agent a — a NIN (10+ letters/digits), a sign-up
+ * identity_document_url, or a live staff-uploaded ID front. Removing all of
+ * them removes the verified tick.
+ */
+function agentIdOnFileSql(alias = 'a') {
+  const a = sqlAlias(alias);
+  return `(
+    length(regexp_replace(COALESCE(${a}.nin, ''), '[^A-Za-z0-9]', '', 'g')) >= 10
+    OR NULLIF(BTRIM(COALESCE(${a}.identity_document_url, '')), '') IS NOT NULL
+    OR EXISTS (SELECT 1 FROM agent_identity_files idf
+               WHERE idf.agent_id = ${a}.id AND idf.kind = 'id_front' AND idf.archived_at IS NULL)
+  )`;
 }
 
 function verifiedByMakaugSql(alias = 'a') {
@@ -247,7 +264,7 @@ function verifiedByMakaugSql(alias = 'a') {
     AND ${a}.removed_at IS NULL
     AND POSITION('${REVIEWED_PRIVATE_ID_PROFILE_MARKER}' IN COALESCE(${a}.verification_reason, '')) > 0
     AND ${a}.contact_phone_verified_at IS NOT NULL
-    AND NULLIF(BTRIM(COALESCE(${a}.identity_document_url, '')), '') IS NOT NULL
+    AND ${agentIdOnFileSql(a)}
     AND COALESCE(${a}.verification_reason, '') NOT ILIKE '%public social source onboarding%'
     AND COALESCE(${a}.verification_reason, '') NOT ILIKE '%source profile%'
     AND COALESCE(${a}.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'
@@ -261,6 +278,7 @@ module.exports = {
   PUBLIC_AGENT_MIN_LIVE_LISTINGS,
   PUBLIC_AGENT_SUPPRESSED_MARKERS,
   addPublicAgentEligibilityFilters,
+  agentIdOnFileSql,
   addPublicWebAgentDirectoryFilters,
   addPublicAgentInventoryFilter,
   addPublicAgentLaunchTestFilter,

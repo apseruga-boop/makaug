@@ -4,7 +4,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const sharp = require('sharp');
 const logger = require('../config/logger');
-const { isVerifiedByMakaug, publicAgentProfileVisible } = require('../services/publicAgentEligibilityService');
+const { agentIdOnFileSql, isVerifiedByMakaug, publicAgentProfileVisible } = require('../services/publicAgentEligibilityService');
 const { agentCardBio, loadAgentSummaryListings } = require('../services/agentPublicProfileService');
 const { loadPublicSeoListing } = require('../services/publicSeoRenderService');
 const {
@@ -183,7 +183,7 @@ async function defaultLoadAgent(db, id) {
     `SELECT
        a.id, a.full_name, a.company_name, a.profile_photo_url, a.status, a.removed_at,
        a.bio, a.email, a.user_id, a.verification_reason, a.contact_phone_verified_at,
-       (NULLIF(BTRIM(COALESCE(a.identity_document_url, '')), '') IS NOT NULL) AS identity_document_stored,
+       ${agentIdOnFileSql('a')} AS identity_document_stored,
        a.licence_number, a.districts_covered, a.specializations,
        (
          SELECT COUNT(*)::int

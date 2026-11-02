@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const { requireAdminApiKey } = require('../middleware/auth');
+const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
 const { registerAgentManagerRoutes, HAS_ID_DOCUMENT_SQL: AGENT_HAS_ID_DOCUMENT_SQL } = require('./adminAgentManager');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
@@ -9903,6 +9904,7 @@ router.patch('/agents/:id/identity-document', async (req, res, next) => {
       agent_id: req.params.id,
       document_name: documentName || null
     }, adminActorId(req));
+    await grantVerifiedTickIfComplete(db, req.params.id, { source: 'id_upload', actorId: adminActorId(req), writeAudit });
 
     // The document itself is deliberately never echoed back.
     return res.json({ ok: true, data: updated.rows[0] });
@@ -10923,6 +10925,9 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       agent_id: req.params.id,
       status
     });
+    if (status === 'approved') {
+      await grantVerifiedTickIfComplete(db, req.params.id, { source: 'approval', actorId: adminActorId(req), writeAudit });
+    }
     if (approvalOverride) {
       const overrideActor = await adminActorDisplayName(req);
       await writeAudit('admin_agent_approved_anyway', {

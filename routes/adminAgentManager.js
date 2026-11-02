@@ -233,6 +233,8 @@ const LIVE_ID_FRONT_SQL = `EXISTS (SELECT 1 FROM agent_identity_files f
 // SQL: an ID document is on file, either from sign-up or uploaded by staff.
 const HAS_ID_DOCUMENT_SQL = `(COALESCE(a.identity_document_url, '') <> '' OR ${LIVE_ID_FRONT_SQL})`;
 
+const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
+
 function registerAgentManagerRoutes(router, deps) {
   const { db, writeAudit, adminActorId, cleanText, isValidEmail, normalizePhone, actorLabel, onListingsChanged } = deps;
   const actorOf = async (req) => {
@@ -620,6 +622,8 @@ function registerAgentManagerRoutes(router, deps) {
         by: actor.label,
         changes: Object.fromEntries(changed.map((key) => [key, { from: auditValue(key, before[key]) ?? null, to: auditValue(key, patch[key]) ?? null }]))
       }, actor.id);
+      const tick = await grantVerifiedTickIfComplete(db, before.id, { source: changed.includes('nin') ? 'nin_edit' : 'staff_manage', actorId: actor.id, writeAudit });
+      if (tick.granted) onListingsChanged('agent_verified_tick');
       // The public agent page and listing cards read the name live; drop the cached copies.
       if (changed.some((key) => PUBLIC_FIELDS.has(key))) onListingsChanged('agent_manager_details');
       return res.json({ ok: true, data: { id: before.id, changed } });
@@ -679,6 +683,7 @@ function registerAgentManagerRoutes(router, deps) {
         agent_id: inserted.id, by: actor.label, payment_status: payment, status,
         paid_until: payment === 'paid' ? patch.paid_until : null, staff_added: true
       }, actor.id);
+      await grantVerifiedTickIfComplete(db, inserted.id, { source: 'staff_manage', actorId: actor.id, writeAudit });
       return res.status(201).json({ ok: true, data: inserted });
     } catch (error) {
       return next(error);
