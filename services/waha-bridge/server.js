@@ -16,6 +16,7 @@
  */
 
 const http = require('http');
+const tenants = require('./tenants');
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -1162,6 +1163,31 @@ async function heartbeat() {
 
 // ------------------------------------------------------------ http server --
 
+function tenantAdminAuthorized(req, tenant) {
+  const got = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const want = String(tenant.token || '');
+  if (!got || !want || got.length !== want.length) return false;
+  return require('crypto').timingSafeEqual(Buffer.from(got), Buffer.from(want));
+}
+
+/** Create/start the tenant WAHA session with the same webhooks as the primary session. */
+async function ensureTenantSession(tenant) {
+  const name = tenant.session;
+  let existing = null;
+  try { existing = await waha(`/api/sessions/${encodeURIComponent(name)}`); } catch (e) { if (e.statusCode !== 404) throw e; }
+  if (existing && existing.name) {
+    if (['STOPPED', 'FAILED'].includes(existing.status)) await waha(`/api/sessions/${encodeURIComponent(name)}/start`, { method: 'POST' });
+    const st = await waha(`/api/sessions/${encodeURIComponent(name)}`);
+    return { ok: true, created: false, status: st?.status };
+  }
+  const primary = await waha(`/api/sessions/${encodeURIComponent(cfg.wahaSession)}`);
+  const webhooks = primary?.config?.webhooks;
+  const config = {};
+  if (Array.isArray(webhooks) && webhooks.length) config.webhooks = webhooks;
+  const created = await waha('/api/sessions', { method: 'POST', body: { name, start: true, config } });
+  return { ok: true, created: true, status: created?.status, webhooksCopied: Array.isArray(config.webhooks) ? config.webhooks.length : 0 };
+}
+
 const server = http.createServer(async (req, res) => {
   let url;
   try {
@@ -1171,6 +1197,38 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    if (req.method === 'GET' && url.pathname === '/health/neondaku' && neondakuTenant) {
+      return json(res, 200, await tenants.childHealth(neondakuTenant));
+    }
+
+    // Neondaku session admin (only exists when NEONDAKU_* is configured).
+    // Auth: Bearer NEONDAKU_WEB_BRIDGE_TOKEN. Never echoes WAHA config/keys.
+    if (neondakuTenant && url.pathname.startsWith('/tenants/neondaku/')) {
+      if (!tenantAdminAuthorized(req, neondakuTenant)) return json(res, 401, { ok: false, error: 'unauthorized' });
+      const session = encodeURIComponent(neondakuTenant.session);
+      if (req.method === 'POST' && url.pathname === '/tenants/neondaku/session') {
+        return json(res, 200, await ensureTenantSession(neondakuTenant));
+      }
+      if (req.method === 'GET' && url.pathname === '/tenants/neondaku/status') {
+        const st = await waha(`/api/sessions/${session}`);
+        return json(res, 200, { ok: true, name: st?.name, status: st?.status, me: st?.me ? { pushName: st.me.pushName || null } : null });
+      }
+      if (req.method === 'GET' && url.pathname === '/tenants/neondaku/qr') {
+        const r = await fetch(`${cfg.wahaUrl}/api/${session}/auth/qr?format=image`, { headers: { 'X-Api-Key': cfg.wahaApiKey, Accept: 'image/png' } });
+        const buf = Buffer.from(await r.arrayBuffer());
+        res.writeHead(r.status, { 'Content-Type': r.headers.get('content-type') || 'application/octet-stream', 'Content-Length': buf.length, 'Cache-Control': 'no-store' });
+        return res.end(buf);
+      }
+      if (req.method === 'POST' && url.pathname === '/tenants/neondaku/pairing-code') {
+        const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+        const phoneNumber = String(body.phoneNumber || '').replace(/\D/g, '');
+        if (!/^\d{8,15}$/.test(phoneNumber)) return json(res, 400, { ok: false, error: 'bad_phone' });
+        const out = await waha(`/api/${session}/auth/request-code`, { method: 'POST', body: { phoneNumber } });
+        return json(res, 200, { ok: true, code: out?.code || null });
+      }
+      return json(res, 404, { ok: false, error: 'not_found' });
+    }
+
     if (req.method === 'GET' && (url.pathname === '/health' || url.pathname === '/')) {
       const stale = lastInboundAt ? Date.now() - lastInboundAt : null;
       const tokenOk = bridgeTokenConfigured();
@@ -1221,6 +1279,14 @@ const server = http.createServer(async (req, res) => {
       } catch {
         return json(res, 400, { ok: false, error: 'bad_json' });
       }
+      // Neondaku session -> its own child bridge. Every other event takes the
+      // original MakaUG path below, byte-for-byte unchanged.
+      if (tenants.routeFor(evt, neondakuTenant) === 'child') {
+        json(res, 200, { ok: true });
+        tenants.forwardToChild(neondakuTenant, raw, req.headers['x-webhook-hmac'])
+          .catch((err) => log('neondaku forward error:', err.message));
+        return undefined;
+      }
       // Ack fast; never make WhatsApp wait on makaug.
       json(res, 200, { ok: true });
       handleWahaEvent(evt).catch((err) => log('event handling error:', err.message));
@@ -1234,6 +1300,14 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 });
+
+// Optional second WAHA session (Neondaku). Unset NEONDAKU_* -> null -> no-op.
+const neondakuTenant = tenants.neondakuTenantFromEnv();
+let neondakuChild = null;
+if (neondakuTenant) {
+  log(`tenant neondaku: session=${neondakuTenant.session} -> ${neondakuTenant.baseUrl} (child :${neondakuTenant.port})`);
+  neondakuChild = tenants.startChild(neondakuTenant, __filename, log);
+}
 
 server.listen(cfg.port, '0.0.0.0', () => {
   log(`listening on :${cfg.port}`);
@@ -1280,5 +1354,5 @@ setInterval(async () => {
 setInterval(() => { heartbeat().catch(() => {}); }, cfg.heartbeatMs).unref?.();
 heartbeat().catch(() => {});
 
-process.on('SIGTERM', () => { log('SIGTERM; closing'); server.close(() => process.exit(0)); });
+process.on('SIGTERM', () => { log('SIGTERM; closing'); if (neondakuChild) neondakuChild.stop(); server.close(() => process.exit(0)); });
 process.on('unhandledRejection', (err) => log('unhandledRejection:', err?.message || err));
