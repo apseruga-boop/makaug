@@ -64,7 +64,7 @@ const {
   postgresSafeJsonStringify,
   truncateUnicode,
 } = require('../utils/postgresJson');
-const { captureHarvestDetailsForItems } = require('./harvestCaptureService');
+const { captureHarvestDetailsForItems, resolveHarvestPhone } = require('./harvestCaptureService');
 const logger = require('../config/logger');
 const {
   isXPlatform,
@@ -2457,6 +2457,24 @@ function withPossibleDuplicateOf(listing = {}, possibleDuplicate = null) {
   };
 }
 
+// The harvest caption/bio is fetched after the source agent is built, so the
+// phone is resolved again here: caption number, then bio, then the existing
+// agent phone. A copy is stored so shared registry agents are never mutated.
+function applyHarvestPhoneToItem(item = {}, agent = sourceAgentForItem(item)) {
+  const capture = item && item.harvestCapture && typeof item.harvestCapture === 'object' ? item.harvestCapture : null;
+  const raw = item.raw_source_post || item.rawSourcePost || {};
+  const captionText = [capture?.harvest_caption_full, item.caption, raw.caption, raw.source_text, item.sourceText].filter(Boolean).join(' \n ');
+  const phone = resolveHarvestPhone({
+    captionText,
+    bioPhone: capture?.poster_bio_phone || '',
+    fallback: agent.phone || item.phone || '',
+  });
+  if (!phone || phone === agent.phone) return agent;
+  const next = { ...agent, phone, phoneAlt: agent.phone && agent.phone !== phone ? agent.phone : (agent.phoneAlt || '') };
+  item.sourceAgent = next;
+  return next;
+}
+
 function harvestCaptureExtraFields(item = {}) {
   const capture = item && item.harvestCapture && typeof item.harvestCapture === 'object' ? item.harvestCapture : null;
   return capture ? { ...capture } : {};
@@ -3762,6 +3780,9 @@ async function queueFoundOnlineSourcePostListings({
       logger.warn('Harvest capture batch failed', { message: String(error?.message || error).slice(0, 200) });
     }
   }
+  for (const entry of evaluated) {
+    if (entry.intake?.eligible) entry.agent = applyHarvestPhoneToItem(entry.item, entry.agent);
+  }
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
@@ -4615,6 +4636,7 @@ function summarizeSocialSearchListings() {
 }
 
 module.exports = {
+  applyHarvestPhoneToItem,
   strongestSourcePriceCandidate,
   canonicalSourceKeyForItem,
   lockFoundOnlineCanonicalKeys,
