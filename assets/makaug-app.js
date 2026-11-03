@@ -16314,6 +16314,60 @@ function renderStaffSourceCoverageItems(items = []) {
     </article>`).join("");
 }
 
+let staffUgandaRotationState = null;
+
+function renderStaffUgandaRotation(data, run = null) {
+  staffUgandaRotationState = data || staffUgandaRotationState;
+  const status = document.getElementById("staff-uganda-rotation-status");
+  const timerButton = document.getElementById("staff-uganda-rotation-timer");
+  const d = staffUgandaRotationState || {};
+  const s = d.settings || {};
+  if (timerButton) timerButton.textContent = `Daily timer: ${s.timer_enabled ? "on" : "off"}`;
+  if (!status) return;
+  const sources = (d.sources || []).map((row) => `${row.platform} ${row.kind}: ${row.harvested}/${row.total}`).join(" · ");
+  const lines = [
+    `Today: ${Number(d.queuedToday || 0)} of ${Number(s.daily_cap || 0)} new pending items · YouTube units ${Number(d.youtubeUnitsToday || 0)} of ${Number(s.youtube_daily_unit_budget || 0)} · review queue ${Number(d.pending_count || 0)} (pauses over ${Number(s.pending_pause_threshold || 0)})`,
+    d.budget?.paused ? `Paused: ${String(d.budget.reason || "").replace(/_/g, " ")}` : "Ready to run.",
+    sources ? `Sources harvested: ${sources}` : ""
+  ];
+  if (run) lines.push(`Last run: ${Number(run.items_queued || 0)} queued from ${(run.sources || []).length} sources, ${Number(run.creators_discovered || 0)} creators found${run.paused ? ` (paused: ${String(run.reason || "").replace(/_/g, " ")})` : ""}.`);
+  status.textContent = lines.filter(Boolean).join("\n");
+  status.style.whiteSpace = "pre-line";
+}
+
+async function staffLoadUgandaRotation() {
+  const status = document.getElementById("staff-uganda-rotation-status");
+  if (status) status.textContent = "Loading rotation…";
+  try {
+    const response = await apiRequest("/api/staff/harvest/uganda-rotation");
+    renderStaffUgandaRotation(response?.data || null);
+  } catch (error) {
+    if (status) status.textContent = `Rotation unavailable: ${error.message || "request failed"}`;
+  }
+}
+
+async function staffRunUgandaRotation() {
+  const status = document.getElementById("staff-uganda-rotation-status");
+  if (status) status.textContent = "Fetching the next Uganda sources…";
+  try {
+    const response = await apiRequest("/api/staff/harvest/uganda-rotation/run", { method: "POST", body: {} });
+    renderStaffUgandaRotation(response?.data?.status || null, response?.data?.run || null);
+    toast(`Rotation queued ${Number(response?.data?.run?.items_queued || 0)} items for review.`);
+  } catch (error) {
+    if (status) status.textContent = `Rotation run failed: ${error.message || "request failed"}`;
+  }
+}
+
+async function staffToggleUgandaRotationTimer() {
+  const enabled = !(staffUgandaRotationState?.settings?.timer_enabled === true);
+  try {
+    const response = await apiRequest("/api/staff/harvest/uganda-rotation/settings", { method: "POST", body: { timer_enabled: enabled } });
+    renderStaffUgandaRotation(response?.data || null);
+  } catch (error) {
+    toast(`Timer change failed: ${error.message || "request failed"}`);
+  }
+}
+
 async function staffLoadSourceCoverage() {
   const status = document.getElementById("staff-source-coverage-status");
   if (status) status.textContent = "Loading exhaustive coverage…";

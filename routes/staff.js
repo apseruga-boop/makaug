@@ -63,6 +63,11 @@ const {
 } = require('../services/suppressedSourceService');
 const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const {
+  getUgandaSourceRotationStatus,
+  runUgandaSourceRotation,
+  updateSettings: updateUgandaSourceRotationSettings,
+} = require('../services/ugandaSourceRotationService');
+const {
   buildListingIdentityDocumentPayload
 } = require('../services/listingIdentityDocumentService');
 const { sendSupportEmail } = require('../services/emailService');
@@ -5717,6 +5722,51 @@ router.post('/harvest/youtube/subscriptions/renew', async (_req, res, next) => {
     for (const row of due.rows) reports.push(await requestYouTubeWebSubSubscription(db, row.external_channel_id));
     return res.status(202).json({ ok: true, data: { requested: reports.length, reports } });
   } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/harvest/uganda-rotation', async (_req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, data: await getUgandaSourceRotationStatus(db) });
+  } catch (error) {
+    if (error?.code === '42P01') return res.status(503).json({ ok: false, error: 'Apply migration 199_uganda_source_rotation.sql first.' });
+    return next(error);
+  }
+});
+
+router.post('/harvest/uganda-rotation/run', async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const run = await runUgandaSourceRotation(db, { trigger: 'staff' });
+    await logStaffActivity(req, 'uganda_source_rotation_run', {
+      targetType: 'harvest',
+      targetId: run.day,
+      metadata: { marker: run.marker, items_queued: run.items_queued, youtube_units: run.youtube_units, paused: run.paused, reason: run.reason, sources: run.sources.length },
+    });
+    clearStaffFastDashboardCache();
+    return res.json({ ok: true, data: { run, status: await getUgandaSourceRotationStatus(db) } });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    if (error?.code === '42P01') return res.status(503).json({ ok: false, error: 'Apply migration 199_uganda_source_rotation.sql first.' });
+    return next(error);
+  }
+});
+
+router.post('/harvest/uganda-rotation/settings', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const input = {};
+    for (const key of ['daily_cap', 'pending_pause_threshold', 'youtube_daily_unit_budget', 'min_reharvest_hours', 'sources_per_run']) {
+      if (body[key] !== undefined) input[key] = body[key];
+    }
+    if (body.timer_enabled !== undefined) input.timer_enabled = body.timer_enabled === true;
+    const settings = await updateUgandaSourceRotationSettings(db, input);
+    await logStaffActivity(req, 'uganda_source_rotation_settings', { targetType: 'harvest', targetId: 'uganda_rotation', metadata: settings });
+    return res.json({ ok: true, data: await getUgandaSourceRotationStatus(db) });
+  } catch (error) {
+    if (error?.code === '42P01') return res.status(503).json({ ok: false, error: 'Apply migration 199_uganda_source_rotation.sql first.' });
     return next(error);
   }
 });

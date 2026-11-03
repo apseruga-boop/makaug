@@ -64,6 +64,7 @@ const {
 const inlinePublicCoreStylesheets = require('./services/publicCoreStylesheets');
 const inlinePublicFontFaces = require('./services/publicFontFaces');
 const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDripService');
+const { startUgandaSourceRotationTimer } = require('./services/ugandaSourceRotationService');
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
 const { startLeadDeskScheduler } = require('./services/leadDeskService');
@@ -2753,6 +2754,9 @@ async function start() {
     // it was paused but still checked every minute. Its tables, routes and
     // manual one-batch run stay; only the background timer is gone.
     startYouTubeSourceDripScheduler(db);
+    // Optional daily Uganda rotation: polls hourly but does nothing unless staff
+    // switch its timer on (uganda_source_rotation_settings.timer_enabled, off by default).
+    startUgandaSourceRotationTimer(db, { logger });
   } else {
     logger.info('Harvest automation schedulers disabled by rollout flag');
   }

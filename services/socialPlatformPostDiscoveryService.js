@@ -5433,6 +5433,7 @@ module.exports = {
   buildYouTubeSearchJobs,
   buildYouTubeSearchJobsAsync,
   fetchYouTubePostsForJobs,
+  fetchYouTubeSearchJob,
   filterYouTubeJobsByMode,
   normalizeYouTubeJobMode,
   buildXSearchJobs,
