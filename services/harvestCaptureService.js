@@ -8,7 +8,7 @@
 
 const crypto = require('crypto');
 const logger = require('../config/logger');
-const { ugandanPhoneFromSourceText } = require('../utils/sourceIntakeIntegrity');
+const { ugandanPhoneFromSourceText, normalizeUgandanSourcePhone } = require('../utils/sourceIntakeIntegrity');
 
 const FETCH_TIMEOUT_MS = 8000;
 const DELAY_BETWEEN_ITEMS_MS = 600;
@@ -60,7 +60,9 @@ function parseTikTokVideoPage(html = '') {
   const pick = (re) => { const m = text.match(re); return m ? decodeJsonString(m[1]) : ''; };
   return {
     caption: pick(/"desc":"((?:[^"\\]|\\.)*)"/),
-    bio: pick(/"signature":"((?:[^"\\]|\\.)*)"/),
+    // The poster's own bio sits in the "author" object; the first
+    // "signature" in the page can belong to another account.
+    bio: pick(/"author":\{[^{}]*?"signature":"((?:[^"\\]|\\.)*)"/) || pick(/"signature":"((?:[^"\\]|\\.)*)"/),
     cover: pick(/"(?:originCover|cover)":"((?:[^"\\]|\\.)*)"/),
     handle: pick(/"uniqueId":"((?:[^"\\]|\\.)*)"/)
   };
@@ -176,15 +178,28 @@ async function captureHarvestDetails(item = {}, { fetchImpl = fetch, apiKey, sto
   const existingCaption = String(item.caption || item.raw_source_post?.caption || '');
   const caption = String(got.caption || '').length >= existingCaption.length ? String(got.caption || '') : existingCaption;
   const phone = ugandanPhoneFromSourceText(got.bio || '') || '';
+  const captionPhone = ugandanPhoneFromSourceText(caption) || ugandanPhoneFromSourceText(existingCaption) || '';
   return {
     harvest_capture_platform: platform,
     harvest_caption_full: caption.slice(0, 5000),
     poster_bio_phone: phone,
+    harvest_caption_phone: captionPhone,
     harvest_cover_frame_url: coverUrl,
     harvest_cover_source_url: got.coverSourceUrl || '',
     harvest_captured_at: new Date().toISOString(),
     ...(got.errors.length ? { harvest_capture_errors: got.errors.slice(0, 8) } : {})
   };
+}
+
+// Phone for a found-online post: a number in the caption wins, then the
+// poster's bio, then whatever the source already carried (e.g. a registry
+// account default). Always +256-normalised or ''.
+function resolveHarvestPhone({ captionText = '', bioText = '', bioPhone = '', fallback = '' } = {}) {
+  return ugandanPhoneFromSourceText(captionText)
+    || normalizeUgandanSourcePhone(bioPhone)
+    || ugandanPhoneFromSourceText(bioText)
+    || normalizeUgandanSourcePhone(fallback)
+    || '';
 }
 
 // Captures for a batch with small delays. Never throws; failures are logged.
@@ -210,6 +225,7 @@ module.exports = {
   captureHarvestDetails,
   captureHarvestDetailsForItems,
   parseTikTokVideoPage,
+  resolveHarvestPhone,
   platformFor,
   COVER_ALLOWED_HOSTS
 };

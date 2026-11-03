@@ -46,7 +46,10 @@ const FOREIGN_INTERNATIONAL_PHONE_PATTERN = IS_SOUTH_AFRICA
   : /\+(?!256)\d{1,3}(?:[\s().-]*\d){7,14}/g;
 const UGANDA_PHONE_CANDIDATE_PATTERN = IS_SOUTH_AFRICA
   ? /(^|[^\d+])((?:\+?27[\s().-]*|0)[6-8](?:[\s().-]*\d){8}|[6-8]\d{8})(?=$|[^\d])/g
-  : /(^|[^\d+])((?:\+?256[\s().-]*|0)7\d{2}[\s().-]*\d{3}[\s().-]*\d{3}|7\d{2}[\s().-]*\d{3}[\s().-]*\d{3})(?=$|[^\d])/g;
+  // +256 / 256 / 0 prefixed numbers accept any spacing, dot, dash or bracket
+  // grouping ("0 772 12 34 56", "+256 (0) 772-123-456"); a bare 7xx number
+  // keeps the strict 3-3-3 shape without dots so prices are not mistaken.
+  : /(^|[^\d+])((?:\+?256[\s().-]*(?:\(?0\)?[\s.-]*)?|0[\s().-]*)7(?:[\s().-]*\d){8}|7\d{2}[\s-]?\d{3}[\s-]?\d{3})(?=$|[^\d])/g;
 const PRICE_CURRENCY_SOURCE = IS_SOUTH_AFRICA ? '(?:zar|r|usd|us\\$|\\$|eur|€|gbp|£)' : '(?:ugx|ush|shs?|usd|us\\$|\\$)';
 // C17: `\\b$` never matched after a space, so "$2,000 Month" lost its currency.
 const SOURCE_PRICE_EVIDENCE_PATTERN = new RegExp(`(?:(?:\\b|(?=[$€£]))${PRICE_CURRENCY_SOURCE}\\s*)?\\d[\\d,.]*(?:\\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)(?![a-z]))?(?:\\s*${PRICE_CURRENCY_SOURCE})?(?:\\s*(?:\\/\\s*(?:month|mo|m²|sqm)|per\\s+(?:month|m²|square\\s+metre)|monthly))?`, 'gi');
@@ -151,6 +154,7 @@ function normalizeUgandanSourcePhone(value = '') {
   if (/^\+(?!256)/.test(raw) || /^00(?!256)/.test(raw)) return '';
   const digits = raw.replace(/\D/g, '');
   if (/^2567\d{8}$/.test(digits)) return `+${digits}`;
+  if (/^25607\d{8}$/.test(digits)) return `+256${digits.slice(4)}`;
   if (/^07\d{8}$/.test(digits)) return `+256${digits.slice(1)}`;
   if (/^7\d{8}$/.test(digits)) return `+256${digits}`;
   return '';
