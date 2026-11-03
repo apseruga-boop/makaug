@@ -20001,7 +20001,7 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
         </div>
         <div class="flex items-center gap-2">
           ${currentPage === "staff-review" ? "" : `<a href="/staff-dashboard/review/${adminAttr(encodeURIComponent(String(preview.id || "")))}" target="_blank" rel="noopener" class="hidden sm:inline-flex items-center rounded-full bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-black text-white">Open on its own page</a>`}
-          <button type="button" onclick="closeStaffListingPreview()" class="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20"><i class="fas fa-xmark"></i></button>
+          <button type="button" onclick="closeStaffListingPreview()" aria-label="Close preview" data-staff-preview-close class="inline-flex items-center gap-2 rounded-full bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-black text-white"><i class="fas fa-xmark" aria-hidden="true"></i><span>Close</span></button>
         </div>
       </div>
       <div class="p-5 grid xl:grid-cols-[1.55fr,0.75fr] gap-5">
@@ -20100,7 +20100,29 @@ function renderStaffListingPreviewModal(preview = {}, options = {}) {
     staffSyncPreviewPhotoActions();
     moderationEnsureIdentityPanel("staff-preview", preview, "staff", document.querySelector("#staff-listing-preview-modal .p-5 > .space-y-4") || document.querySelector("#staff-listing-preview-modal"));
     adminRefreshVideoCaptionApproveGate();
+    staffPreviewBringIntoView(modal);
   }, 120);
+  staffPreviewBringIntoView(modal);
+}
+
+// The Preview & edit window opened scrolled to its bottom (3 Nov 2026): the
+// editor's set-up steps (map, location fields) moved focus to fields low in the
+// window. Open it at its top, focused, with the page behind locked.
+function staffPreviewBringIntoView(modal) {
+  if (!modal || !modal.isConnected) return;
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  if (!modal.hasAttribute("tabindex")) modal.setAttribute("tabindex", "-1");
+  document.body.classList.add("overflow-hidden");
+  modal.scrollTop = 0;
+  if (typeof modal.scrollIntoView === "function") modal.scrollIntoView({ block: "start" });
+  const active = document.activeElement;
+  if (!active || !modal.contains(active) || active === document.body) {
+    try { modal.focus({ preventScroll: true }); } catch (e) {}
+  } else if (active !== modal) {
+    try { active.blur(); modal.focus({ preventScroll: true }); } catch (e) {}
+  }
+  modal.scrollTop = 0;
 }
 
 // Removing the review screen: stop embedded players (a TikTok embed keeps
@@ -20129,6 +20151,7 @@ function releaseReviewModal(modal) {
 
 function closeStaffListingPreview() {
   staffPreviewTitleDraft = null;
+  document.body.classList.remove("overflow-hidden");
   const modal = document.getElementById("staff-listing-preview-modal");
   if (!modal) {
     adminReviewLocationMap = null;
