@@ -20966,6 +20966,12 @@ async function staffModerateListing(propertyId, status) {
   let reason = cleanStatus === "approved"
     ? "Staff approved after moderation review"
     : "Staff moderation update";
+  // Keep pending sends the typed hold reason and internal note from the open
+  // review panel (they were dropped), and confirms what was saved.
+  const keepPending = cleanStatus === "pending";
+  const pendingNote = keepPending ? String(document.getElementById("admin-review-notes")?.value || "").trim() : "";
+  const pendingReason = keepPending ? String(document.getElementById("admin-review-reason")?.value || "").trim() : "";
+  if (keepPending) reason = pendingReason;
   try {
     if (document.getElementById("staff-listing-preview-modal")) setStaffPreviewDecisionBusy(true);
     const decisionSnapshot = ["approved", "rejected"].includes(cleanStatus)
@@ -20978,6 +20984,7 @@ async function staffModerateListing(propertyId, status) {
       body: {
         status: cleanStatus,
         reason,
+        ...(pendingNote ? { review_notes: pendingNote } : {}),
         fast_admin_render: ["approved", "rejected"].includes(cleanStatus),
         manual_notification_only: ["approved", "rejected"].includes(cleanStatus)
       }
@@ -20985,6 +20992,14 @@ async function staffModerateListing(propertyId, status) {
     } catch (requestError) {
       if (decisionSnapshot) staffRestoreDecisionQueueSnapshot(decisionSnapshot);
       throw requestError;
+    }
+    if (keepPending) {
+      toast(pendingNote ? "Kept pending. Your note was saved." : "Kept pending. The hold reason was kept.");
+      if (document.getElementById("staff-listing-preview-modal")) {
+        await staffRefreshOpenPreview(propertyId).catch(() => {});
+      }
+      queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary: false });
+      return;
     }
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, cleanStatus, reason);
     toast(messageOpened ? "WhatsApp message is ready." : (cleanStatus === "approved" ? "Listing approved and sent live." : `Listing updated: ${cleanStatus}.`));
