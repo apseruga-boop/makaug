@@ -56791,6 +56791,9 @@ function mountPublicRouteSkeleton(page) {
   main.id = `page-${targetPage}`;
   main.className = "page active route-fragment-loading";
   main.setAttribute("data-public-route-skeleton", targetPage);
+  // Keep the current page on screen until the real page arrives (no grey placeholder flash).
+  const keepVisible = !!document.querySelector(".page.active:not([data-public-route-skeleton])");
+  if (keepVisible) { main.hidden = true; main.style.display = "none"; }
   main.innerHTML = `
     <section class="bg-green-800 py-12 text-white">
       <div class="max-w-5xl mx-auto px-4">
@@ -56810,13 +56813,13 @@ function mountPublicRouteSkeleton(page) {
       </div>
     </section>
   `;
-  document.querySelectorAll(".page.active").forEach((el) => el.classList.remove("active"));
+  if (!keepVisible) document.querySelectorAll(".page.active").forEach((el) => el.classList.remove("active"));
   const footer = document.querySelector("footer");
   document.body.insertBefore(main, footer || document.body.lastElementChild);
   closeRouteTransientModals(targetPage, currentPage);
   lastPage = currentPage;
   currentPage = targetPage;
-  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  if (!keepVisible) window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   return true;
 }
 
