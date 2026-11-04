@@ -54789,14 +54789,229 @@ const VALUATION_UI_RINGS = Object.freeze({
   }
 });
 
+const VALUATION_UI_LIVE = Object.freeze({
+  en: {
+    liveSubtitle: "Answer three quick questions. Your range updates as you go.",
+    stepWhere: "Step 1 · Where is it?", stepWhat: "Step 2 · What is it?", stepSize: "Step 3 · How big?",
+    liveCardLabel: "Your estimate · updates live",
+    liveCardEmpty: "Choose an area to see the asking-price range.",
+    chartCaption: "Spread of matching asking prices. Gold bars are inside your range.",
+    searchArea: "search area", checkedLabel: "listings checked",
+    askingNotSold: "These are asking prices from live listings, not sold prices. Free, no sign-up.",
+    listingsBehind: "The {count} listings behind this number",
+    mapCaption: "Pins show approximate locations and asking prices.",
+    radiusArea: "Area", radiusKm: "{radius} km",
+    trustListingsTitle: "Real live listings", trustRingsTitle: "1, 3, then 5 km",
+    trustHonestTitle: "Honest ranges", trustAskingTitle: "Asking, not sold",
+    trustAskingBody: "Uganda has no public sold-price register, so this guide uses asking prices. Sale prices are often lower."
+  },
+  lg: {
+    liveSubtitle: "Ddamu ebibuuzo bisatu. Omuwendo gukyuka ng'ogenda.",
+    stepWhere: "Omutendera 1 · Kiri wa?", stepWhat: "Omutendera 2 · Kiki?", stepSize: "Omutendera 3 · Kinene kyenkana wa?",
+    liveCardLabel: "Omuwendo gwo · gukyuka mangu",
+    liveCardEmpty: "Londa ekitundu olabe omuwendo ogusabibwa.",
+    chartCaption: "Emiwendo egisabibwa egifaanagana. Ebikondo bya zaabu biri mu kkomo lyo.",
+    searchArea: "ekitundu", checkedLabel: "ebikebereddwa",
+    askingNotSold: "Gino miwendo egisabibwa ku bifo ebiriwo, si emiwendo egyatundibwako. Bwereere.",
+    listingsBehind: "Ebifo {count} ebiri emabega w'omuwendo guno",
+    mapCaption: "Obubonero bulaga we biri n'emiwendo egisabibwa.",
+    radiusArea: "Ekitundu", radiusKm: "km {radius}",
+    trustListingsTitle: "Ebifo ebiriwo ddala", trustRingsTitle: "km 1, 3, oluvannyuma 5",
+    trustHonestTitle: "Ekkomo ery'amazima", trustAskingTitle: "Egisabibwa, si egyatundibwa",
+    trustAskingBody: "Uganda terina lukalala lwa miwendo egyatundibwa, kale tukozesa egisabibwa. Egy'okutunda giba wansi."
+  },
+  sw: {
+    liveSubtitle: "Jibu maswali matatu. Kiwango kinasasishwa unapoendelea.",
+    stepWhere: "Hatua 1 · Iko wapi?", stepWhat: "Hatua 2 · Ni nini?", stepSize: "Hatua 3 · Ukubwa gani?",
+    liveCardLabel: "Makadirio yako · yanasasishwa moja kwa moja",
+    liveCardEmpty: "Chagua eneo uone kiwango cha bei inayotakiwa.",
+    chartCaption: "Mtawanyiko wa bei zinazotakiwa. Nguzo za dhahabu ziko ndani ya kiwango chako.",
+    searchArea: "eneo la utafutaji", checkedLabel: "matangazo yaliyokaguliwa",
+    askingNotSold: "Hizi ni bei zinazotakiwa kutoka matangazo hai, si bei za mauzo. Bure, bila kujisajili.",
+    listingsBehind: "Matangazo {count} nyuma ya namba hii",
+    mapCaption: "Pini zinaonyesha mahali takriban na bei zinazotakiwa.",
+    radiusArea: "Eneo", radiusKm: "km {radius}",
+    trustListingsTitle: "Matangazo halisi hai", trustRingsTitle: "km 1, 3, kisha 5",
+    trustHonestTitle: "Viwango vya kweli", trustAskingTitle: "Inayotakiwa, si iliyouzwa",
+    trustAskingBody: "Uganda haina rejista ya umma ya bei za mauzo, kwa hivyo tunatumia bei zinazotakiwa. Bei za mauzo mara nyingi ni chini."
+  },
+  ac: {
+    liveSubtitle: "Gam lapeny adek. Wel ni loke ka imedde.",
+    stepWhere: "Tic 1 · Tye kwene?", stepWhat: "Tic 2 · Ngo?", stepSize: "Tic 3 · Dit mene?",
+    liveCardLabel: "Wel ni · loke cut", liveCardEmpty: "Yer kabedo me neno wel ma kipenyo.",
+    chartCaption: "Wel ma kipenyo ma rom. Lyel ma rangi jabu tye i wel ni.",
+    searchArea: "kabedo", checkedLabel: "ma kinyamo",
+    askingNotSold: "Magi gin wel ma kipenyo ki i kabedo ma tye, pe wel ma kicato. Nono.",
+    listingsBehind: "Kabedo {count} ma tye cen pa wel man",
+    mapCaption: "Alama nyuto kabedo ki wel ma kipenyo.",
+    radiusArea: "Kabedo", radiusKm: "km {radius}",
+    trustListingsTitle: "Kabedo ma tye adada", trustRingsTitle: "km 1, 3, ci 5",
+    trustHonestTitle: "Wel me ada", trustAskingTitle: "Ma kipenyo, pe ma kicato",
+    trustAskingBody: "Uganda pe ki buk me wel ma kicato, omiyo wa tiyo ki wel ma kipenyo. Wel me cato pol kare tye piny."
+  },
+  ny: {
+    liveSubtitle: "Garukamu ebibuuzo bisatu. Omuhendo nigukyuka.",
+    stepWhere: "Entambwe 1 · Kiri nkahi?", stepWhat: "Entambwe 2 · Ni kiki?", stepSize: "Entambwe 3 · Ni kihango kingana ki?",
+    liveCardLabel: "Omuhendo gwawe · nigukyuka", liveCardEmpty: "Toorana ekicweka oreebe omuhendo ogurikushabwa.",
+    chartCaption: "Emihendo erikushabwa erikushushana. Ebikondo bya zahabu biri omu kkomo ryawe.",
+    searchArea: "ekicweka", checkedLabel: "ebyakeberwa",
+    askingNotSold: "Egi n'emihendo erikushabwa, ti emihendo eyaguzirweho. Bwerere.",
+    listingsBehind: "Ebiri {count} enyima y'omuhendo ogu",
+    mapCaption: "Obumanyiso nibworeka ahu biri n'emihendo.",
+    radiusArea: "Ekicweka", radiusKm: "km {radius}",
+    trustListingsTitle: "Ebiriho buzima", trustRingsTitle: "km 1, 3, reero 5",
+    trustHonestTitle: "Ekkomo ry'amazima", trustAskingTitle: "Erikushabwa, ti eyaguzirwe",
+    trustAskingBody: "Uganda terimu kitabo ky'emihendo eyaguzirwe, nikyo turikukozesa erikushabwa. Ey'okugura ekira kuba ehansi."
+  },
+  rn: {
+    liveSubtitle: "Garukamu ebibuuzo bisatu. Omuhendo gukyuka.",
+    stepWhere: "Entambwe 1 · Kiri hanu?", stepWhat: "Entambwe 2 · Kiki?", stepSize: "Entambwe 3 · Kikooto kingana ki?",
+    liveCardLabel: "Omuhendo gwawe · gukyuka", liveCardEmpty: "Torana ekicweka oboone omuhendo ogusabwa.",
+    chartCaption: "Emihendo esabwa ehikaine. Ebikondo bya zahabu biri omu kkomo lyawe.",
+    searchArea: "ekicweka", checkedLabel: "ebyakeberwa",
+    askingNotSold: "Egi n'emihendo esabwa, ti emihendo eyaguzirweho. Busa.",
+    listingsBehind: "Ebiri {count} enyuma y'omuhendo guno",
+    mapCaption: "Obuhamiso bwoleka hali n'emihendo.",
+    radiusArea: "Ekicweka", radiusKm: "km {radius}",
+    trustListingsTitle: "Ebiriho mazima", trustRingsTitle: "km 1, 3, kandi 5",
+    trustHonestTitle: "Ekkomo ly'amazima", trustAskingTitle: "Esabwa, ti eyaguzirwe",
+    trustAskingBody: "Uganda tekiina kitabu ky'emihendo eyaguzirwe, nahabweki tukozesa esabwa. Ey'okugura ebaire hansi."
+  },
+  sm: {
+    liveSubtitle: "Ddamu ebibuuzo bisatu. Omuwendo gukyuka.",
+    stepWhere: "Omutendera 1 · Kiri wa?", stepWhat: "Omutendera 2 · Kiki?", stepSize: "Omutendera 3 · Kinene wa?",
+    liveCardLabel: "Omuwendo gwo · gukyuka", liveCardEmpty: "Londa ekitundu olabe omuwendo ogusabibwa.",
+    chartCaption: "Emiwendo egisabibwa egifaanagana. Ebikondo bya zaabu biri mu kkomo lyo.",
+    searchArea: "ekitundu", checkedLabel: "ebikebereddwa",
+    askingNotSold: "Gino miwendo egisabibwa, si egyatundibwako. Bwereere.",
+    listingsBehind: "Ebifo {count} emabega w'omuwendo guno",
+    mapCaption: "Obubonero bulaga we biri n'emiwendo.",
+    radiusArea: "Ekitundu", radiusKm: "km {radius}",
+    trustListingsTitle: "Ebifo ebiriwo ddala", trustRingsTitle: "km 1, 3, oluvannyuma 5",
+    trustHonestTitle: "Ekkomo ery'amazima", trustAskingTitle: "Egisabibwa, si egyatundibwa",
+    trustAskingBody: "Uganda terina lukalala lwa miwendo egyatundibwa, kale tukozesa egisabibwa."
+  },
+  am: {
+    liveSubtitle: "ሶስት ጥያቄዎችን ይመልሱ። ክልሉ በቀጥታ ይዘምናል።",
+    stepWhere: "ደረጃ 1 · የት ነው?", stepWhat: "ደረጃ 2 · ምንድን ነው?", stepSize: "ደረጃ 3 · ምን ያህል ትልቅ?",
+    liveCardLabel: "ግምትዎ · በቀጥታ ይዘምናል", liveCardEmpty: "የተጠየቀ ዋጋ ክልል ለማየት አካባቢ ይምረጡ።",
+    chartCaption: "የተመሳሳይ የተጠየቁ ዋጋዎች ስርጭት። የወርቅ አምዶች በክልልዎ ውስጥ ናቸው።",
+    searchArea: "የፍለጋ አካባቢ", checkedLabel: "የተመረመሩ",
+    askingNotSold: "እነዚህ ከቀጥታ ማስታወቂያዎች የተጠየቁ ዋጋዎች ናቸው፣ የተሸጡ ዋጋዎች አይደሉም። ነፃ።",
+    listingsBehind: "ከዚህ ቁጥር ጀርባ ያሉ {count} ማስታወቂያዎች",
+    mapCaption: "ምልክቶቹ ግምታዊ ቦታ እና የተጠየቀ ዋጋ ያሳያሉ።",
+    radiusArea: "አካባቢ", radiusKm: "{radius} ኪሜ",
+    trustListingsTitle: "እውነተኛ ቀጥታ ማስታወቂያዎች", trustRingsTitle: "1፣ 3፣ ከዚያ 5 ኪሜ",
+    trustHonestTitle: "ታማኝ ክልሎች", trustAskingTitle: "የተጠየቀ እንጂ የተሸጠ አይደለም",
+    trustAskingBody: "ዩጋንዳ የሽያጭ ዋጋ ይፋዊ መዝገብ የላትም፣ ስለዚህ የተጠየቁ ዋጋዎችን እንጠቀማለን።"
+  },
+  ar: {
+    liveSubtitle: "أجب عن ثلاثة أسئلة سريعة. يتحدث النطاق أثناء الإجابة.",
+    stepWhere: "الخطوة 1 · أين يقع؟", stepWhat: "الخطوة 2 · ما نوعه؟", stepSize: "الخطوة 3 · ما حجمه؟",
+    liveCardLabel: "تقديرك · يتحدث مباشرة", liveCardEmpty: "اختر منطقة لرؤية نطاق السعر المطلوب.",
+    chartCaption: "توزيع الأسعار المطلوبة المطابقة. الأعمدة الذهبية داخل نطاقك.",
+    searchArea: "منطقة البحث", checkedLabel: "إعلانات تم فحصها",
+    askingNotSold: "هذه أسعار مطلوبة من إعلانات حية، وليست أسعار بيع فعلية. مجاني ودون تسجيل.",
+    listingsBehind: "الإعلانات الـ {count} وراء هذا الرقم",
+    mapCaption: "الدبابيس تُظهر مواقع تقريبية والأسعار المطلوبة.",
+    radiusArea: "المنطقة", radiusKm: "{radius} كم",
+    trustListingsTitle: "إعلانات حقيقية حية", trustRingsTitle: "1 ثم 3 ثم 5 كم",
+    trustHonestTitle: "نطاقات صادقة", trustAskingTitle: "مطلوب وليس مباعاً",
+    trustAskingBody: "لا يوجد في أوغندا سجل عام لأسعار البيع، لذلك نستخدم الأسعار المطلوبة. أسعار البيع غالباً أقل."
+  }
+});
+
+function formatValuationShortUgx(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  if (n >= 1e9) return `${(n / 1e9).toFixed(n >= 1e10 ? 0 : 1)}B`;
+  if (n >= 1e6) return `${Math.round(n / 1e6)}M`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)}K`;
+  return String(Math.round(n));
+}
+
+let valuationLeafletMap = null;
+let valuationLeafletLayer = null;
+
+function renderValuationLiveExtras(response = {}) {
+  const ok = Boolean(response.sufficient && response.estimate);
+  const empty = document.getElementById("valuation-card-empty");
+  if (empty) empty.classList.add("hidden");
+  const range = document.getElementById("valuation-range");
+  if (range) range.className = ok ? "mt-1 text-3xl md:text-4xl font-black text-white break-words" : "mt-1 text-lg md:text-xl font-black text-amber-200";
+  const radius = document.getElementById("valuation-radius-stat");
+  if (radius) radius.textContent = Number(response.radius_km) > 0 ? valuationTr("radiusKm", { radius: response.radius_km }) : valuationTr("radiusArea");
+  const checked = document.getElementById("valuation-checked-stat");
+  if (checked) checked.textContent = Number(response.raw_comparable_count || response.analysis_comparable_count || response.comparable_count || 0).toLocaleString();
+  const title = document.getElementById("valuation-listings-title");
+  const shown = (response.comparables || []).length;
+  if (title) {
+    title.removeAttribute("data-valuation-i18n");
+    title.textContent = shown ? valuationTr("listingsBehind", { count: shown.toLocaleString() }) : valuationTr("homesLikeYours");
+  }
+  const chartWrap = document.getElementById("valuation-chart-wrap");
+  const chart = document.getElementById("valuation-chart");
+  const dist = response.value_distribution;
+  if (chartWrap && chart) {
+    const bins = Array.isArray(dist?.bins) ? dist.bins : [];
+    const max = Math.max(1, ...bins.map((b) => Number(b) || 0));
+    const showChart = bins.length > 1;
+    chartWrap.classList.toggle("hidden", !showChart);
+    if (showChart) {
+      const lo = Number(dist.min) || 0;
+      const step = ((Number(dist.max) || 0) - lo) / bins.length;
+      chart.innerHTML = bins.map((count, i) => {
+        const b = { count, from: lo + step * i, to: lo + step * (i + 1) };
+        const mid = (b.from + b.to) / 2;
+        const inRange = ok && mid >= Number(response.range_low) && mid <= Number(response.range_high);
+        const h = Math.max(6, Math.round(((Number(b.count) || 0) / max) * 100));
+        return `<span class="flex-1 rounded-t ${inRange ? "bg-amber-400" : "bg-white/25"}" style="height:${h}%" title="${valuationEsc(formatValuationShortUgx(b.from))}–${valuationEsc(formatValuationShortUgx(b.to))}: ${Number(b.count) || 0}"></span>`;
+      }).join("");
+      chart.setAttribute("aria-label", valuationTr("chartCaption"));
+      document.getElementById("valuation-chart-min").textContent = `UGX ${formatValuationShortUgx(dist.min)}`;
+      document.getElementById("valuation-chart-max").textContent = `UGX ${formatValuationShortUgx(dist.max)}`;
+    }
+  }
+  renderValuationMap(response.comparables || []);
+}
+
+function renderValuationMap(rows = []) {
+  const wrap = document.getElementById("valuation-map-wrap");
+  const el = document.getElementById("valuation-map");
+  if (!wrap || !el) return;
+  const pts = rows.filter((r) => Number.isFinite(Number(r.latitude)) && Number.isFinite(Number(r.longitude)) && Number(r.latitude) !== 0);
+  wrap.classList.toggle("hidden", !pts.length);
+  if (!pts.length) return;
+  ensureLeafletApi().then((ready) => {
+    if (!ready || !window.L) { wrap.classList.add("hidden"); return; }
+    const L = window.L;
+    if (!valuationLeafletMap) {
+      valuationLeafletMap = L.map(el, { scrollWheelZoom: false, attributionControl: true });
+      L.tileLayer(OSM_TILE_URL, { maxZoom: 18, attribution: OSM_TILE_ATTRIBUTION }).addTo(valuationLeafletMap);
+    }
+    if (valuationLeafletLayer) valuationLeafletLayer.remove();
+    valuationLeafletLayer = L.layerGroup(pts.map((r) => L.marker([Number(r.latitude), Number(r.longitude)], {
+      icon: L.divIcon({ className: "", html: `<span style="display:inline-block;white-space:nowrap;background:#0f1f18;color:#fff;font:800 11px/1 system-ui;padding:4px 6px;border-radius:999px;border:2px solid #fbbf24">${valuationEsc(formatValuationShortUgx(r.price) || "•")}</span>`, iconSize: null })
+    }))).addTo(valuationLeafletMap);
+    valuationLeafletMap.invalidateSize();
+    const bounds = L.latLngBounds(pts.map((r) => [Number(r.latitude), Number(r.longitude)]));
+    valuationLeafletMap.fitBounds(bounds.pad(0.3), { maxZoom: 15 });
+  });
+}
+
+function valuationEsc(value = "") {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 function valuationTr(key, vars = {}) {
   const pack = {
     ...(VALUATION_UI_SUPPLEMENTS[currentLang] || {}),
     ...(VALUATION_UI_OVERRIDES[currentLang] || {}),
     ...(VALUATION_UI_K17[currentLang] || {}),
-    ...(VALUATION_UI_RINGS[currentLang] || {})
+    ...(VALUATION_UI_RINGS[currentLang] || {}),
+    ...(VALUATION_UI_LIVE[currentLang] || {})
   };
-  let text = pack[key] || VALUATION_UI_EN[key] || key;
+  let text = pack[key] || VALUATION_UI_EN[key] || VALUATION_UI_LIVE.en[key] || key;
   Object.entries(vars).forEach(([name, value]) => {
     text = text.replaceAll(`{${name}}`, String(value ?? ""));
   });
@@ -54817,7 +55032,7 @@ function applyValuationLanguageUI() {
   });
   renderValuationLocationSuggestions(document.getElementById("valuation-location")?.value || "");
   if (lastValuationMatchResponse) renderValuationMatchCounter(lastValuationMatchResponse);
-  if (lastValuationResponse) applyValuationResultLanguage(lastValuationResponse);
+  if (lastValuationResponse) { applyValuationResultLanguage(lastValuationResponse); renderValuationLiveExtras(lastValuationResponse); }
 }
 
 const valuationLocationRowsByCategory = new Map();
@@ -55032,7 +55247,8 @@ async function refreshValuationMatchCount() {
 function scheduleValuationMatchCount({ refineEstimate = true } = {}) {
   window.clearTimeout(valuationMatchTimer);
   valuationMatchTimer = window.setTimeout(refreshValuationMatchCount, 350);
-  if (refineEstimate && lastValuationResponse) {
+  const hasDistrict = Boolean(document.getElementById("valuation-district")?.value);
+  if (refineEstimate && (lastValuationResponse || hasDistrict)) {
     window.clearTimeout(valuationAutoEstimateTimer);
     valuationAutoEstimateTimer = window.setTimeout(() => submitValuationEstimate(null, { auto: true }), 650);
   }
@@ -55265,14 +55481,14 @@ function applyValuationResultLanguage(response = {}) {
   if (range && estimate) {
     if (!response.sufficient || !response.estimate) {
       range.textContent = valuationTr(response.insufficient_reason === "range_too_wide" ? "rangeTooWide" : "insufficient");
-      range.className = "text-xl md:text-2xl font-black text-[#16241d]";
+      range.className = "mt-1 text-lg md:text-xl font-black text-amber-200";
       estimate.textContent = "";
     } else {
       range.textContent = valuationTr("rangeHeadline", {
         low: formatValuationUgx(response.range_low),
         high: formatValuationUgx(response.range_high)
       });
-      range.className = "text-3xl md:text-5xl font-black text-[#15603f]";
+      range.className = "mt-1 text-3xl md:text-4xl font-black text-white break-words";
       estimate.textContent = [
         valuationTr("midpoint", { estimate: formatValuationUgx(response.estimate) }),
         response.asking_to_sale ? valuationTr("askingSaleNote") : ""
@@ -55418,7 +55634,8 @@ function renderValuationEstimate(response = {}, { auto = false } = {}) {
   }
   renderValuationRefinementFeedback(response);
   applyValuationResultLanguage(response);
-  if (!auto) results.scrollIntoView({ behavior: "smooth", block: "start" });
+  renderValuationLiveExtras(response);
+  if (!auto && window.innerWidth < 768) document.getElementById("valuation-live-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function submitValuationEstimate(event, { auto = false } = {}) {

@@ -29,6 +29,21 @@ const CACHE_TTL_MS = Math.max(30_000, Number(process.env.VALUATION_CACHE_TTL_MS 
 const MIN_COMPARABLES = 3;
 const DISTRICT_WIDEN_THRESHOLD = MIN_COMPARABLES;
 const EVIDENCE_LIMIT = 10;
+
+// Ten equal-width price bins across the analysed asking prices, for the result-card chart.
+function buildValueDistribution(values = [], binCount = 10) {
+  const clean = values.filter((value) => Number.isFinite(value) && value > 0);
+  if (!clean.length) return null;
+  const min = Math.min(...clean);
+  const max = Math.max(...clean);
+  const width = (max - min) / binCount;
+  const bins = Array.from({ length: binCount }, () => 0);
+  clean.forEach((value) => {
+    const index = width > 0 ? Math.min(binCount - 1, Math.floor((value - min) / width)) : Math.floor(binCount / 2);
+    bins[index] += 1;
+  });
+  return { min: Math.round(min), max: Math.round(max), bins };
+}
 const MAX_PRICE_UGX = 100_000_000_000;
 const MIN_RECURRING_PRICE_UGX = 30_000;
 const MIN_TOTAL_PRICE_UGX = 1_000_000;
@@ -872,6 +887,9 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
       land_size_unit: row.land_size_unit,
       size_sqm: row.sizeSqm ? Math.round(row.sizeSqm * 10) / 10 : null,
       image_url: stableComparableImageUrl(row),
+      // Rounded to ~110 m so the map shows the neighbourhood, not the exact plot.
+      latitude: Number.isFinite(Number(row.latitude)) && row.latitude !== null ? Math.round(Number(row.latitude) * 1000) / 1000 : null,
+      longitude: Number.isFinite(Number(row.longitude)) && row.longitude !== null ? Math.round(Number(row.longitude) * 1000) / 1000 : null,
       source: row.source || null,
       listed_via: row.listed_via || null,
       status: row.status || null,
@@ -946,6 +964,7 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
     price_basis: valuationPriceBasis(input),
     refinement_feedback: refinementResult.feedback,
     comparables: ranked,
+    value_distribution: buildValueDistribution(analysisValues),
     view_all_url: categoryResultsPath(input),
     methodology: {
       estimator: 'weighted_median',
