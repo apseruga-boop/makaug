@@ -700,7 +700,7 @@ const CURRENCIES = {
 };
 const REVIEW_USD_TO_UGX_GUIDE_RATE = 3800;
 
-const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-10-20";
+const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-11-04";
 const MORTGAGE_MIN_YEARS = 5;
 const MORTGAGE_MAX_YEARS = 30;
 const MAP_DEFAULT_CENTER = { lat: 1.3733, lng: 32.2903 };
@@ -784,10 +784,10 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 10, commercial: 20, land: 20, default: 10 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
-    sourceLabel: "Bank of Uganda bank rates sheet (1 Apr 2026) and Stanbic home loans",
-    sourceUrl: "https://bou.or.ug/uploads/Commercial_Banks_Interest_Rates_and_Bank_Charges_as_at_01_April_2026_25716d34bb.pdf",
-    sourceNote: "Bank of Uganda’s 1 April 2026 rates sheet lists Stanbic personal home loans at 17.5%. Stanbic also advertises 16.5% for pre-approved existing customers. House-purchase loans: from a 10% deposit, up to 25 years, 1.5% fee; land loans up to 80% financing (cap UGX 300m), 1% fee. Confirm the final rate with the bank.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceLabel: "Stanbic rate change (The Cooperator, Oct 2026) and Stanbic home loans",
+    sourceUrl: "https://thecooperator.news/stanbic-bank-uganda-raises-prime-lending-rate-to-21-75-percent/",
+    sourceNote: "Stanbic mortgages are 17.5% until 30 Nov 2026. From 1 Dec 2026 its mortgage reference rate rises to 19%, announced with its prime lending rate rising to 21.75%. House-purchase loans: from a 10% deposit, up to 25 years, 1.5% fee. Confirm the final rate with the bank.",
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "hfb",
@@ -801,21 +801,21 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "Housing Finance mortgage terms and conditions",
     sourceUrl: "https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/",
     sourceNote: "Housing Finance publishes 16% residential and 18% commercial, reviewed after the 14 Oct 2026 Bank of Uganda CBR increase to 12%. It also publishes up to 80% purchase finance in Kampala, up to 20-year residential/commercial terms, a 1.25% facility fee, and a 35% income guide. Confirm the current rate with the bank.",
-    sourceVerifiedAt: "2026-10-20"
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "dfcu",
     name: "dfcu Bank",
-    residentialRate: 16.0,
+    residentialRate: 16.9,
     commercialRate: null,
     landRate: null,
     minDepositPct: { residential: 15, commercial: 40, land: 40, default: 15 },
-    maxYears: { residential: 25, commercial: 20, land: 20, default: 25 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 2.0,
-    sourceLabel: "dfcu home loans",
-    sourceUrl: "https://www.dfcugroup.com/personal-banking/home-loans/",
-    sourceNote: "dfcu publishes 16% UGX home-loan guidance, up to 85% of open-market value, and up to 25 years for UGX loans (10 years in USD). Its tariff guide lists a 2%-3% arrangement fee; this calculator uses 2%.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceLabel: "dfcu home-loan offer (dfcu promotions, Nile Post 2 Nov 2026)",
+    sourceUrl: "https://www.dfcugroup.com/promotions/",
+    sourceNote: "dfcu's current UGX home-loan offer is 16.9%, up to 85% of the property value (15% deposit), for up to 20 years. Its tariff guide lists a 2%-3% arrangement fee; this calculator uses 2%. Confirm the final rate with the bank.",
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "kcb",
@@ -829,7 +829,7 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "KCB mortgage overview",
     sourceUrl: "https://ug.kcbgroup.com/products/mortgage",
     sourceNote: "KCB publishes UGX pricing from 17.5%, up to 20-year purchase/construction/refinance terms, and up to 80% financing for Kampala, Entebbe, and Wakiso. Final pricing and approval remain bank-specific.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "ncba",
@@ -843,7 +843,7 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "NCBA Uganda property loans",
     sourceUrl: "https://ncbagroup.com/ug/property-loans/",
     sourceNote: "NCBA publishes property-loan, construction-finance, land-purchase, and equity-release terms including up to 25-year UGX mortgage tenure, up to 90% financing for eligible Kampala/city properties, and up to 60-month land-purchase terms; public rate requires bank confirmation.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "centenary",
@@ -857,7 +857,7 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "Centenary Bank housing loan pages",
     sourceUrl: "https://www.centenarybank.co.ug/product/cente-mortgage/4/8",
     sourceNote: "Centenary publishes Cente Mortgage amounts from UGX 20m to UGX 300m, up to 10-year tenure, and a minimum 30% borrower contribution. The same page also states maximum LTV of 80%, so the calculator uses the more conservative 30% deposit and requires bank confirmation.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "baroda",
@@ -871,7 +871,7 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "Baroda housing loan and interest rates",
     sourceUrl: "https://www.bankofbaroda.ug/rates-and-charges/interest-rates",
     sourceNote: "Bank of Baroda prices housing loans at 2% below its UGX prime lending rate (20%), i.e. 18%, for up to 15 years. Bank of Uganda's April 2026 sheet lists no arrangement fee. Confirm the current rate with the bank.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "absa",
@@ -882,10 +882,10 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 15, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 2.0,
-    sourceLabel: "Absa Uganda home loans",
-    sourceUrl: "https://www.absa.co.ug/personal/home-loans/",
-    sourceNote: "Absa publishes up to 85% property finance, up to 25-year terms, and a 2% arrangement fee. It does not publish a fixed public rate on the reviewed page, so a current quote is required.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceLabel: "Absa prime rate change (CEO East Africa, Nov 2026) and Absa home loans",
+    sourceUrl: "https://www.ceo.co.ug/absa-stanbic-and-dfcu-raise-lending-rates-as-uganda-shilling-and-inflation-pressures-deepen/",
+    sourceNote: "Absa's prime lending rate is 21.75% from 1 Nov 2026. It does not publish a fixed home-loan rate, so a quote is required. Absa offers up to 85% property finance, up to 25-year terms, and a 2% arrangement fee.",
+    sourceVerifiedAt: "2026-11-04"
   }
 ];
 const AUDITED_MORTGAGE_PROVIDER_BY_ID = Object.fromEntries(DEFAULT_MORTGAGE_PROVIDERS.map((provider) => [provider.id, provider]));
@@ -5846,6 +5846,7 @@ const MORTGAGE_I18N = {
     ratesFootnote: "Indicative public rates from bank sources. Confirm current rates with the lender before applying.",
     ratesAsOfLine: "Sources verified {date} · indicative, confirm with the bank.",
     cbrNote: "Bank of Uganda CBR is 12% from 14 Oct 2026; lender rates may rise after that hike.",
+    staleRateNote: "This rate was last checked more than 30 days ago. Confirm it with the bank.",
     yearsMinNote: "The loan term on this calculator is 5 to 30 years.",
     rateRequired: "Enter an interest rate above 0%. An empty rate uses the best published bank rate.",
     comparisonSubtitle: "Sort dated public-bank assumptions by repayment, rate, term, or deposit strength.",
@@ -26421,6 +26422,95 @@ async function setAdminCrmLeadStatus(leadId, status) {
   return false;
 }
 
+let adminMortgageRateProposalsLoading = false;
+
+async function adminLoadMortgageRateProposals() {
+  const wrap = document.getElementById("admin-mortgage-rate-proposals");
+  if (!wrap || !canUseLiveAdminApi() || adminMortgageRateProposalsLoading) return;
+  adminMortgageRateProposalsLoading = true;
+  try {
+    const response = await apiRequest("/api/mortgage-rates/proposals?status=all", { headers: adminAuthHeaders() });
+    adminRenderMortgageRateProposals(response?.data || {});
+  } catch (error) {
+    wrap.innerHTML = `<p class="text-sm text-red-700">Could not load mortgage rate changes: ${adminEscape(error?.message || "request failed")}</p>`;
+  } finally {
+    adminMortgageRateProposalsLoading = false;
+  }
+}
+
+function adminRenderMortgageRateProposals(data = {}) {
+  const wrap = document.getElementById("admin-mortgage-rate-proposals");
+  if (!wrap) return;
+  const proposals = Array.isArray(data.proposals) ? data.proposals : [];
+  const providers = Array.isArray(data.providers) ? data.providers : [];
+  const pending = proposals.filter((p) => p.status === "pending");
+  const fmt = (v) => (v == null || v === "" ? "quote" : `${Number(v).toFixed(2)}%`);
+  const nums = (list) => (Array.isArray(list) && list.length ? list.map((n) => `${n}%`).join(", ") : "none");
+  const providerRows = providers.map((p) => `
+    <tr class="border-t border-sky-100">
+      <td class="px-2 py-1 font-semibold">${adminEscape(p.name)}</td>
+      <td class="px-2 py-1">${adminEscape(fmt(p.residentialRate ?? p.primeRate))}</td>
+      <td class="px-2 py-1">${adminEscape(p.sourceVerifiedAt || "-")}${p.stale ? ` <span class="ml-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold">stale</span>` : ""}</td>
+      <td class="px-2 py-1"><a class="text-sky-700 underline" target="_blank" rel="noopener noreferrer" href="${adminAttr(p.sourceUrl || "#")}">source</a></td>
+    </tr>`).join("");
+  const proposalRows = proposals.slice(0, 30).map((p) => `
+    <div class="rounded-xl border ${p.status === "pending" ? "border-sky-300 bg-white" : "border-gray-200 bg-gray-50"} p-3 text-xs">
+      <div class="flex flex-wrap items-center gap-2">
+        <strong class="text-gray-900">${adminEscape(p.provider_key)}</strong>
+        <span class="rounded-full bg-gray-100 px-2 py-0.5">${adminEscape(p.rate_field)}</span>
+        <span class="rounded-full ${p.status === "pending" ? "bg-sky-100 text-sky-800" : p.status === "approved" ? "bg-green-100 text-green-800" : "bg-gray-200 text-gray-700"} px-2 py-0.5 font-bold">${adminEscape(p.status)}</span>
+        <span class="text-gray-500">found ${adminEscape(String(p.detected_at || "").slice(0, 10))} (${adminEscape(p.reason || "")})</span>
+      </div>
+      <div class="mt-1 text-gray-700">Published now: <strong>${adminEscape(fmt(p.current_rate))}</strong> &middot; page numbers before: ${adminEscape(nums(p.numbers_before))} &middot; now: <strong>${adminEscape(nums(p.numbers_after))}</strong></div>
+      <div class="mt-1"><a class="text-sky-700 underline" target="_blank" rel="noopener noreferrer" href="${adminAttr(p.source_url)}">${adminEscape(p.source_url)}</a></div>
+      ${p.status === "pending" ? `
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <input id="mrp-rate-${adminAttr(p.id)}" type="number" step="0.05" min="1" max="60" value="${adminAttr(p.proposed_rate ?? "")}" placeholder="Confirmed %" class="w-28 rounded border border-gray-300 px-2 py-1">
+        <input id="mrp-note-${adminAttr(p.id)}" type="text" placeholder="Note shown on the page (optional)" class="flex-1 min-w-[180px] rounded border border-gray-300 px-2 py-1">
+        <button type="button" onclick="adminDecideMortgageRateProposal(${Number(p.id)}, 'approve')" class="rounded bg-green-700 px-3 py-1 font-bold text-white">Approve</button>
+        <button type="button" onclick="adminDecideMortgageRateProposal(${Number(p.id)}, 'reject')" class="rounded border border-gray-300 px-3 py-1 font-bold text-gray-700">Reject</button>
+      </div>` : (p.approved_rate != null ? `<div class="mt-1 text-green-800">Approved at ${adminEscape(fmt(p.approved_rate))} by ${adminEscape(p.reviewed_by || "staff")}</div>` : "")}
+    </div>`).join("");
+  wrap.innerHTML = `
+    <div class="text-xs text-gray-700 mb-2"><strong>${pending.length}</strong> change${pending.length === 1 ? "" : "s"} waiting &middot; ${providers.filter((p) => p.stale).length} stale rate(s)</div>
+    <div class="overflow-x-auto mb-3"><table class="min-w-full text-xs bg-white rounded-xl"><thead><tr class="text-left text-gray-500"><th class="px-2 py-1">Bank</th><th class="px-2 py-1">Rate shown</th><th class="px-2 py-1">Checked</th><th class="px-2 py-1"></th></tr></thead><tbody>${providerRows}</tbody></table></div>
+    <div class="grid gap-2">${proposalRows || `<p class="text-sm text-gray-500">No rate changes found yet.</p>`}</div>`;
+}
+
+async function adminDecideMortgageRateProposal(id, decision) {
+  const rateInput = document.getElementById(`mrp-rate-${id}`);
+  const noteInput = document.getElementById(`mrp-note-${id}`);
+  const body = { note: noteInput?.value || "" };
+  if (decision === "approve") {
+    const rate = Number(rateInput?.value);
+    if (!Number.isFinite(rate) || rate <= 0) { toast("Enter the confirmed rate before approving."); return; }
+    body.approvedRate = rate;
+  }
+  try {
+    await apiRequest(`/api/mortgage-rates/proposals/${encodeURIComponent(id)}/${decision}`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body
+    });
+    toast(decision === "approve" ? "Rate approved. The Mortgage Finder uses it now." : "Change rejected.");
+    adminLoadMortgageRateProposals();
+  } catch (error) {
+    toast(`Could not save: ${error?.message || "request failed"}`);
+  }
+}
+
+async function adminCheckMortgageRatesNow() {
+  toast("Checking bank pages…");
+  try {
+    const response = await apiRequest("/api/mortgage-rates/proposals/check", { method: "POST", headers: adminAuthHeaders() });
+    const r = response?.data || {};
+    toast(`Checked ${r.checked || 0} pages: ${r.proposals || 0} change(s), ${r.failed || 0} could not be read.`);
+    adminLoadMortgageRateProposals();
+  } catch (error) {
+    toast(`Check failed: ${error?.message || "request failed"}`);
+  }
+}
+
 function renderAdminMortgageLeadsRows(leads = []) {
   const wrap = document.getElementById("admin-mortgage-leads-table");
   if (!wrap) return;
@@ -27002,6 +27092,7 @@ async function renderAdminDashboard(options = {}) {
   renderAdminCrmLeadsRows(remoteSnap?.crmLeads || []);
   renderAdminMortgageLeadsRows(remoteSnap?.mortgageLeads || []);
   renderAdminDemandGaps(remoteSnap?.demandGaps || adminDemandGaps);
+  adminLoadMortgageRateProposals();
   renderAdminCrmTasksRows(remoteSnap?.crmTasks || []);
   renderAdminOutlookAgentStatus(remoteSnap?.outlookAgentStatus || {});
   renderAdminOutlookAgentActions(remoteSnap?.outlookAgentActions || [], remoteSnap?.outlookAgentStatus || {});
@@ -64635,7 +64726,10 @@ function hydrateMortgageProvidersFromApi(data, options = {}) {
     sourceUrl: provider.sourceUrl ?? provider.source_url ?? "#",
     logoUrl: provider.logoUrl ?? provider.logo_url ?? "",
     sourceNote: provider.sourceNote ?? provider.source_note ?? "",
-    sourceVerifiedAt: provider.sourceVerifiedAt ?? provider.source_verified_at ?? null
+    sourceVerifiedAt: provider.sourceVerifiedAt ?? provider.source_verified_at ?? null,
+    stale: provider.stale === true,
+    checkedDaysAgo: provider.checkedDaysAgo ?? null,
+    fromApi: true
   }));
 
   MORTGAGE_PROVIDERS = mergeAuditedMortgageProviderList(normalized);
@@ -64732,6 +64826,10 @@ function renderMortgageProviderLogo(provider = {}, options = {}) {
 function mergeAuditedMortgageProvider(provider = {}) {
   const audited = AUDITED_MORTGAGE_PROVIDER_BY_ID[mortgageProviderKey(provider)];
   if (!audited) return provider;
+  // /api/mortgage-rates already applies the audited rates, dated changes
+  // (Stanbic 19% from 1 Dec 2026) and staff-approved changes. Its answer
+  // wins; this coded copy only fills in when the API is unavailable.
+  if (provider.fromApi) return provider;
   return {
     ...provider,
     residentialRate: audited.residentialRate,
@@ -65565,6 +65663,7 @@ function renderMortgageFinder() {
     const maxLtv = mortgageRowMaxLtv(row);
     const isBest = result.best && mortgageProviderKey(result.best.provider) === providerKey;
     const sourceNote = row.provider.sourceNote ? `<div class="mt-2 rounded-lg bg-gray-50 border border-gray-100 p-2 text-[11px] text-gray-600"><strong>${mortgageTr("sourceNoteLabel")}:</strong> ${adminEscape(row.provider.sourceNote)}</div>` : "";
+    const staleNote = row.provider.stale ? `<div class="mt-1 rounded-lg bg-amber-50 border border-amber-200 p-2 text-[11px] text-amber-800">${adminEscape(mortgageTr("staleRateNote"))}</div>` : "";
     return `
       <tr class="align-top border-t border-gray-100 ${isBest ? "bg-emerald-50/70" : "bg-white"}">
         <td class="py-3 pl-3 pr-2">${providerLogo}</td>
@@ -65588,7 +65687,7 @@ function renderMortgageFinder() {
           </div>
         </td>
       </tr>
-      ${sourceNote ? `<tr class="border-t border-gray-50"><td colspan="8" class="px-3 pb-3">${sourceNote}</td></tr>` : ""}`;
+      ${sourceNote || staleNote ? `<tr class="border-t border-gray-50"><td colspan="8" class="px-3 pb-3">${sourceNote}${staleNote}</td></tr>` : ""}`;
   }).join("");
   const mobileCards = sortedProviderRows.map((row) => {
     const status = providerStatusMeta(row.status);
@@ -65599,6 +65698,7 @@ function renderMortgageFinder() {
     const maxLtv = mortgageRowMaxLtv(row);
     const isBest = result.best && mortgageProviderKey(result.best.provider) === providerKey;
     const sourceNote = row.provider.sourceNote ? `<div class="mt-2 rounded-lg bg-gray-50 border border-gray-100 p-2 text-[11px] text-gray-600"><strong>${mortgageTr("sourceNoteLabel")}:</strong> ${adminEscape(row.provider.sourceNote)}</div>` : "";
+    const staleNote = row.provider.stale ? `<div class="mt-1 rounded-lg bg-amber-50 border border-amber-200 p-2 text-[11px] text-amber-800">${adminEscape(mortgageTr("staleRateNote"))}</div>` : "";
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -65619,7 +65719,7 @@ function renderMortgageFinder() {
           <div><span class="text-gray-500">${mortgageTr("monthly")}</span><div class="font-semibold text-gray-800">${monthly}</div></div>
         </div>
         <div class="mt-2 text-xs text-gray-500">${mortgageTr("totalRepayment")}: <strong class="text-gray-700">${repay}</strong> • ${mortgageTr("arrangementFee")}: <strong class="text-gray-700">${formatUgxAmount(row.arrangementFee || 0)}</strong></div>
-        ${sourceNote}
+        ${sourceNote}${staleNote}
         <div class="mt-3 flex flex-wrap gap-2">
           <button type="button" onclick="requestMortgageHelp('${adminAttr(providerKey)}')" class="inline-flex items-center gap-1 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-black text-white hover:bg-green-600">${mortgageTr("setUpBankCall")}</button>
           <a href="${adminAttr(row.provider.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs font-semibold text-green-700 hover:underline">${mortgageTr("viewBankSource")} <i class="fas fa-arrow-up-right-from-square text-[10px]"></i></a>
