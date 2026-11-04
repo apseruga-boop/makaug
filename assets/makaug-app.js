@@ -63067,6 +63067,9 @@ function siteTranslate(text, lang = currentLang || "en") {
   }
 }
 
+const BOOKING_NEW_LABELS_I18N = {"lg": {"Swipe for more days": "Seetula olabe ennaku endala", "Pick a time": "Londa essaawa", "View broker": "Laba omukozi"}, "sw": {"Swipe for more days": "Telezesha kuona siku zaidi", "Pick a time": "Chagua muda", "View broker": "Mwone wakala"}, "ac": {"Swipe for more days": "Ywar me neno nino mapol", "Pick a time": "Yer kare", "View broker": "Nen lacung"}, "ny": {"Swipe for more days": "Seetura oreebe ebiro ebindi", "Pick a time": "Toorana obwire", "View broker": "Reeba omukozi"}, "rn": {"Swipe for more days": "Seetura orole ebiro ebindi", "Pick a time": "Torana obwire", "View broker": "Rora omukozi"}, "sm": {"Swipe for more days": "Seetula olabe enaku endala", "Pick a time": "Londa esaawa", "View broker": "Laba omukozi"}, "am": {"Swipe for more days": "ተጨማሪ ቀናትን ለማየት ያንሸራትቱ", "Pick a time": "ሰዓት ይምረጡ", "View broker": "ደላላውን ይመልከቱ"}, "ar": {"Swipe for more days": "اسحب لرؤية المزيد من الأيام", "Pick a time": "اختر وقتاً", "View broker": "عرض الوسيط"}};
+Object.entries(BOOKING_NEW_LABELS_I18N).forEach(([lang, labels]) => Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels));
+
 function translateListingLabel(text) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -66903,7 +66906,8 @@ function agentBookingPlaceChoice(item, kind) {
 
 function agentBookingPlaceMarkup(places, withChange) {
   if (agentBookingLockedPlace) {
-    return `<input id="agent-booking-place" type="hidden" value="${adminAttr(agentBookingLockedPlace)}">`;
+    return `<input id="agent-booking-place" type="hidden" value="${adminAttr(agentBookingLockedPlace)}">
+    <div class="agent-booking-place-line agent-booking-place-line--locked" id="agent-booking-place-line" hidden></div>`;
   }
   const label = agentBookingPlaceStepLabel();
   const single = (String(places).match(/<option /g) || []).length <= 1;
@@ -66916,8 +66920,8 @@ function agentBookingPlaceMarkup(places, withChange) {
 
 function paintAgentBookingPlaceLine() {
   const line = bookingEl("agent-booking-place-line");
-  if (!line || agentBookingLockedPlace) return;
-  const value = String(bookingEl("agent-booking-place")?.value || "");
+  if (!line) return;
+  const value = String(bookingEl("agent-booking-place")?.value || agentBookingLockedPlace || "");
   const [kind, id] = value.split(":");
   const rows = kind === "stay" ? agentBookingOptions?.stays : agentBookingOptions?.properties;
   const item = (rows || []).find((row) => String(row.id) === String(id || ""));
@@ -68373,7 +68377,7 @@ function setBrokerMapMarkers(list) {
           </div>
         </div>
         <div class="mk-broker-pop-meta">${listingCount} ${adminEscape(translateListingLabel(listingCount === 1 ? "listing" : "listings"))}</div>
-        <a href="${adminAttr(brokerPath)}" class="mk-broker-pop-btn" data-map-broker-link="1" data-broker-id="${adminAttr(broker.id)}" onclick="return openMapBrokerProfile(event, ${brokerIdArg});">View broker</a>
+        <a href="${adminAttr(brokerPath)}" class="mk-broker-pop-btn" data-map-broker-link="1" data-broker-id="${adminAttr(broker.id)}" onclick="return openMapBrokerProfile(event, ${brokerIdArg});">${adminEscape(translateListingLabel("View broker"))}</a>
       </div>
     `, { className: "mk-map-popup", closeButton: false, minWidth: 230, maxWidth: 260 });
 
