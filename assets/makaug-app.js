@@ -68580,6 +68580,18 @@ function addMarkers(mapId, list) {
   });
 }
 
+function mkTrimmedFitPoints(points = []) {
+  const inUg = points.filter((p) => p.lat >= -1.5 && p.lat <= 4.3 && p.lng >= 29.5 && p.lng <= 35.1);
+  const base = inUg.length >= 2 ? inUg : points;
+  if (base.length < 10) return base;
+  const q = (arr, f) => arr[Math.min(arr.length - 1, Math.max(0, Math.floor(f * (arr.length - 1))))];
+  const lats = base.map((p) => p.lat).sort((a, b) => a - b);
+  const lngs = base.map((p) => p.lng).sort((a, b) => a - b);
+  const [la0, la1, ln0, ln1] = [q(lats, 0.03), q(lats, 0.97), q(lngs, 0.03), q(lngs, 0.97)];
+  const kept = base.filter((p) => p.lat >= la0 && p.lat <= la1 && p.lng >= ln0 && p.lng <= ln1);
+  return kept.length >= 2 ? kept : base;
+}
+
 function fitMapToListings(mapId, list) {
   const map = maps[mapId];
   if (!map) return;
@@ -68622,7 +68634,8 @@ function fitMapToListings(mapId, list) {
     map.setView([points[0].lat, points[0].lng], MAP_NEIGHBORHOOD_ZOOM);
     return;
   }
-  const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lng]));
+  if (typeof map.invalidateSize === "function") map.invalidateSize(false);
+  const bounds = L.latLngBounds(mkTrimmedFitPoints(points).map((point) => [point.lat, point.lng]));
   const maxZoom = mapId === "map-home" ? MAP_HOME_MAX_ZOOM : MAP_MULTI_LISTING_MAX_ZOOM;
   map.fitBounds(bounds.pad(mapId === "map-home" ? 0.08 : 0.2), { maxZoom });
   if (mapId === "map-home" && map.getZoom() < MAP_HOME_MIN_ZOOM) {
