@@ -1683,6 +1683,73 @@ function formatVoiceTranscriptEcho(lang, transcript) {
   return tt(lang, 'voiceTranscriptEcho', { transcript: transcriptText });
 }
 
+/**
+ * A message the assistant must not answer with property cards.
+ *
+ * 3 Nov 2026, 18:01 Kampala: a Dutch number sent two Luganda voice notes
+ * warning about land thieves on Hoima Road — three named men, "Kakiri police
+ * and Kakiri court", sticks and pangas. The keyword classifier found the
+ * Acholi word "ot" inside "kooti" and "simuyote", called each note a property
+ * search, and the assistant replied twice with "no listing in *Kuba*" and
+ * three houses in Kira, and filed three leads. Nobody human saw it until the
+ * next morning.
+ *
+ * Two cases, checked on the words themselves rather than on the classifier:
+ *  - needs_person: a strong cue (thieves, grabbing, pangas, threats, fraud,
+ *    forgery, eviction, arrest) in any supported language, or a weak one
+ *    (police, court, lawyer, fake, dispute) with no property request beside
+ *    it. A person takes over; the assistant stops.
+ *  - no_property_request: a voice note of a dozen words or more that the
+ *    regex classifier called a search without a single property word, number
+ *    or place in it. The assistant asks what they need instead of searching.
+ * Flow-owned steps (a listing or search already under way) are left alone.
+ */
+// Spoken Luganda comes through the transcriber bent — "babbiba" for babba
+// (they steal), "kuwatejambya" for kuwata ejjambiya (holding a panga) — so
+// the Luganda cues are matched as stems, not whole words.
+const STRONG_PERSON_CUE_RE = /\b(?:thief|thieves|thieving|wizi|mwizi|wezi|grab|grabs|grabbed|grabber|grabbers|grabbing|land\s*grab\w*|threat|threats|threaten\w*|kill|killed|killing|okutta|beat|beaten|beating|okukuba|panga|pangas|machete|machetes|emiggo|miggu|emiggu|fraud|frauds|fraudster\w*|scam|scams|scammer\w*|conman|conmen|con\s*man|forged|forgery|forging|obulimba|evict|evicted|eviction|okugoba|arrest|arrested|kidnap\w*|harass\w*|violence|violent|attack|attacked)\b|\bbabb\w*|\bokubba\b|\bkulumb\w*|\w*jambi?y\w*|\w*yambiy\w*/i;
+const WEAK_PERSON_CUE_RE = /\b(?:police|poli+si|polisi|poliisi|court|courts|kooti|ekooti|ekkooti|mahakama|lawyer|lawyers|loya|loyiya|wakili|fake|dispute|disputes|wrangle|wrangles|rdc|lc1|lc\s*1)\b/i;
+const PROPERTY_REQUEST_SIGNAL_RE = /(?:\d|\b(?:bedrooms?|beds?|bedsitter|rent|renting|rental|rentals|hire|buy|buying|purchase|sale|selling|sell|house|houses|home|homes|apartment|apartments|flat|flats|room|rooms|hostel|hostels|plot|plots|acre|acres|decimal|decimals|land|office|offices|shop|shops|warehouse|price|budget|million|millions|ugx|ush|shilling|shillings|dollar|dollars|usd|month|monthly|week|weekly|ennyumba|enju|nyumba|ettaka|ttaka|mataka|kiwanja|shamba|ardhi|kodi|pangisa|okupangisa|kupangisha|okugula|kugula|kununua|okutunda|kutunda|kuuza|bbeeyi|ebbeeyi|bei|obukadde|milioni|agent|agents|broker|brokers)\b)/i;
+const ASSISTANT_FREE_STEPS = new Set(['', 'greeting', 'main_menu', 'search_type', 'search_area', 'agent_area', 'choose_language']);
+
+function messageOutsideTheAssistant({ transcript = '', text = '', intent = {}, step = '' } = {}) {
+  const spoken = normalizeInput(transcript);
+  const typed = spoken ? '' : normalizeInput(text);
+  const source = spoken || typed;
+  if (!source) return null;
+  if (!ASSISTANT_FREE_STEPS.has(String(step || '').trim().toLowerCase())) return null;
+  const words = source.split(/\s+/).filter(Boolean).length;
+  const propertyRequest = PROPERTY_REQUEST_SIGNAL_RE.test(source);
+  const strong = source.match(STRONG_PERSON_CUE_RE);
+  // A typed "is this listing fake?" belongs to the report flow; only a voice
+  // note gets the weak-cue reading, because that is where the classifier
+  // has nothing better than keywords to go on. One weak cue beside a property
+  // request is a landmark ("near Kira police station"); two together — fake
+  // police AND a fake court — are a dispute even when land is mentioned.
+  const weakCues = spoken ? [...new Set((source.match(new RegExp(WEAK_PERSON_CUE_RE.source, 'gi')) || []).map((w) => w.toLowerCase()))] : [];
+  const weak = weakCues.length >= 2 || (weakCues.length === 1 && !propertyRequest) ? weakCues : null;
+  if (strong || weak) {
+    return { reason: 'needs_person', cue: String(strong ? strong[0] : weak.join(', ')).toLowerCase(), words };
+  }
+  if (!spoken) return null;
+  const intentName = String(intent?.intent || 'unknown').toLowerCase();
+  if (!['property_search', 'apply_filters', 'search_near_me', 'agent_search', 'unknown'].includes(intentName)) return null;
+  if (!/^heuristic/.test(String(intent?.model || 'heuristic'))) return null;
+  if (words < 12 || propertyRequest) return null;
+  return { reason: 'no_property_request', cue: '', words };
+}
+
+function personWillReplyMessage(lang) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: 'I have heard you. This is not something I can sort out myself, so I have passed it to a person at makaug who will read it and reply to you here. If anyone is in danger, call the police on 999 or 112.',
+    lg: 'Nkuwulidde. Kino sisobola kukigonjoola nzekka, kyenvudde nkiweereza omuntu wa makaug ajja kukisoma n\'akuddamu wano. Bwe wabaawo omuntu ali mu kabi, kubira poliisi ku 999 oba 112.',
+    sw: 'Nimekusikia. Hili siwezi kulitatua mwenyewe, kwa hivyo nimelipeleka kwa mtu wa makaug atakayelisoma na kukujibu hapa. Kama kuna mtu yuko hatarini, piga polisi 999 au 112.',
+    sm: 'Nkuwulidde. Kino sisobola kukigonjoola nzekka, kyenvudde nkiweereza omuntu wa makaug ajja kukisoma n\'akuddamu wano. Bwe wabaawo omuntu ali mu kabi, kubira poliisi ku 999 oba 112.'
+  };
+  return messages[code] || messages.en;
+}
+
 function isNoMatchChallenge(text) {
   const clean = normalizeInput(text).toLowerCase();
   if (!clean) return false;
@@ -14523,6 +14590,34 @@ function notifyMissedCallLeadInBackground(input = {}) {
   });
 }
 
+/**
+ * Arthur and Ronald get a WhatsApp the moment a call to the makaug number is
+ * missed — the email above goes on as before, but nobody reads email on the
+ * road. Ronald loads and checks properties on the ground, so he is on this
+ * whether or not he is on the lead-desk alert list.
+ */
+async function alertTeamMissedCall({ phone, contactName = '', callType = 'voice', callStatus = 'missed', inquiryContext = {}, eventTime = new Date() } = {}) {
+  try {
+    const desk = require('../services/leadDeskService');
+    if (typeof desk.alertTeamMissedCall !== 'function') return { skipped: 'no_desk' };
+    const contact = agentHelpContact();
+    const recent = Array.isArray(inquiryContext.recentMessages) ? inquiryContext.recentMessages : [];
+    return await desk.alertTeamMissedCall(db, {
+      phone,
+      contactName,
+      callType,
+      status: callStatus,
+      at: eventTime,
+      lastMessage: recent[0]?.text || '',
+      likelyInquiry: inquiryContext.likelyInquiry || '',
+      extraRecipients: contact.digits ? [contact.digits] : []
+    });
+  } catch (error) {
+    logger.warn('Missed call team WhatsApp alert failed', { phone, error: error.message || String(error) });
+    return { skipped: 'error' };
+  }
+}
+
 async function markMissedCallLeadResolved({ leadId, phone, resolved = true, note = '' } = {}) {
   if (!leadId) return null;
   try {
@@ -14678,6 +14773,9 @@ async function handleWhatsappCallEvent({
           error: error.message || String(error)
         });
       });
+      if (status !== 'answered') {
+        await alertTeamMissedCall({ phone: cleanPhone, contactName, callType, callStatus: status, inquiryContext });
+      }
     }
     return {
       duplicate,
@@ -14794,6 +14892,9 @@ async function handleWhatsappCallEvent({
       error: error.message || String(error)
     });
   });
+  if (status !== 'answered') {
+    await alertTeamMissedCall({ phone: cleanPhone, contactName, callType, callStatus: status, inquiryContext });
+  }
 
   return {
     duplicate: false,
@@ -19566,6 +19667,43 @@ async function processInboundRuntimeUnlocked({
     };
   }
 
+  const outside = messageOutsideTheAssistant({
+    transcript: transcriptRecord?.text || '',
+    text: transcriptRecord?.text ? '' : effectiveBody,
+    intent: intentResult,
+    step: sessionStep
+  });
+  if (outside) {
+    const transcriptEcho = formatVoiceTranscriptEcho(activeLang, transcriptRecord?.text);
+    if (outside.reason === 'needs_person') {
+      const summary = normalizeInput(transcriptRecord?.text || effectiveBody).slice(0, 400);
+      await safeConversationControl(phone, {
+        status: 'needs_human',
+        priority: 'high',
+        category: 'support',
+        last_summary: summary,
+        metadata: { needs_person_reason: outside.cue, needs_person_at: new Date().toISOString(), needs_person_source: transcriptRecord?.text ? 'voice_note' : 'text' }
+      }, 'whatsapp_needs_person_guard');
+      deferWhatsappWork('needs-a-person alert', () => require('../services/leadDeskService').alertTeamConversationNeedsPerson(db, {
+        phone,
+        contactName,
+        summary,
+        reason: `${transcriptRecord?.text ? 'Voice note' : 'Message'} about ${outside.cue} — not a property request`,
+        language: languageDisplayName(activeLang)
+      }));
+      await updateSession(phone, { current_step: sessionStep, current_intent: 'support' });
+      return {
+        message: [transcriptEcho, personWillReplyMessage(activeLang)].filter(Boolean).join('\n\n'),
+        nextStep: sessionStep
+      };
+    }
+    await updateSession(phone, { current_step: sessionStep, current_intent: 'unknown' });
+    return {
+      message: [transcriptEcho, friendlyUnknownReply(activeLang)].filter(Boolean).join('\n\n'),
+      nextStep: sessionStep
+    };
+  }
+
   let processed;
   try {
     processed = await processMessage(
@@ -19926,7 +20064,14 @@ router.post('/web-bridge/call', asyncRoute(async (req, res) => {
       hasAuthoredMessage: false,
       direction: 'in'
     });
-  if (callDetectorRelease !== WHATSAPP_CALL_EVENT_TRUST_MARKER || (!trustedLiveCallOverlay && !trustedCallLogCard)) {
+  // The WAHA bridge (services/waha-bridge, since Sep 2026) relays WhatsApp's
+  // own call events — call.received / call.rejected — not a screen reading.
+  // It is already authenticated with the bridge token above; the marker and
+  // kind keep the same gate as the browser detectors.
+  const trustedWahaCallEvent = detectionKind === 'waha_call_event'
+    && inboundMetadata.source === 'waha_gows_call'
+    && /^call\.(?:received|rejected|accepted|ended|missed)$/.test(String(inboundMetadata.waha_event || ''));
+  if (callDetectorRelease !== WHATSAPP_CALL_EVENT_TRUST_MARKER || (!trustedLiveCallOverlay && !trustedCallLogCard && !trustedWahaCallEvent)) {
     logger.warn('Ignored untrusted WhatsApp Web call detection', {
       phone_suffix: employeeIntakePhoneSuffix(phone),
       detection_kind: detectionKind || null,
@@ -20915,6 +21060,9 @@ module.exports.__test = {
   markListingSoldFromWhatsapp,
   soldAnnouncementAppliesTo,
   sendAgentPropertySubmittedAlert,
+  messageOutsideTheAssistant,
+  personWillReplyMessage,
+  alertTeamMissedCall,
   SOLD_CONFIRM_STEP,
   SOLD_LINK_STEP,
   extractAgentSearchKeywords,

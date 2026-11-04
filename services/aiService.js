@@ -457,7 +457,10 @@ function heuristicIntent(text) {
   if (/(filter|bedroom|bedrooms|min price|max price|under|above|house|apartment|studio|hostel|office|shop|warehouse|furnished|bathroom|amenit)/.test(t)) {
     return { intent: 'apply_filters', confidence: 0.66, entities: {} };
   }
-  if (/(find|search|looking|rent|buy|sale|house|apartment|property|student|accommodation|hostel|area|nyumba|shamba|kiwanja|ardhi|plot|ttaka|enju|ot|ot me)/.test(t)) {
+  // "ot" (Acholi: house) is two letters: without boundaries it matched inside
+  // "kooti" and "simuyote" and turned a Luganda report of land thieves into a
+  // property search (3 Nov 2026).
+  if (/(find|search|looking|rent|buy|sale|house|apartment|property|student|accommodation|hostel|area|nyumba|shamba|kiwanja|ardhi|plot|ttaka|enju|\bot\b|\bot me\b)/.test(t)) {
     return { intent: 'property_search', confidence: 0.62, entities: {} };
   }
   if (/(mortgage|loan|deposit|repayment|interest|home loan)/.test(t)) {
