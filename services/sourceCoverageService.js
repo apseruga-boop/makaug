@@ -325,6 +325,32 @@ async function getSourceCoverageItem(db, itemId) {
   return result.rows[0];
 }
 
+const MAX_COVERAGE_ITEM_ATTEMPTS = 3;
+
+// Expired half-done reservations go back to the queue; items that already
+// failed MAX_COVERAGE_ITEM_ATTEMPTS times are parked as blocked so they stop
+// cycling through every batch.
+async function releaseExpiredSourceCoverageLeases(client, runId) {
+  const parked = await client.query(
+    `UPDATE source_coverage_items
+     SET status = 'blocked', lease_expires_at = NULL, updated_at = NOW(),
+         failure_reason = COALESCE(failure_reason, 'parked_after_repeated_failures'),
+         last_error = 'parked_after_repeated_failures'
+     WHERE run_id = $1::uuid AND status IN ('processing','retry')
+       AND attempts >= $2
+       AND (status = 'retry' OR lease_expires_at < NOW())`,
+    [runId, MAX_COVERAGE_ITEM_ATTEMPTS]
+  );
+  const released = await client.query(
+    `UPDATE source_coverage_items
+     SET status = 'retry', lease_expires_at = NULL, updated_at = NOW(),
+         last_error = COALESCE(last_error, 'processing_lease_expired')
+     WHERE run_id = $1::uuid AND status = 'processing' AND lease_expires_at < NOW()`,
+    [runId]
+  );
+  return { parked: Number(parked?.rowCount || 0), released: Number(released?.rowCount || 0) };
+}
+
 async function claimSourceCoverageBatch(db, runId, {
   platform = '',
   batchSize = DEFAULT_CLAIM_SIZE,
@@ -337,13 +363,7 @@ async function claimSourceCoverageBatch(db, runId, {
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(
-      `UPDATE source_coverage_items
-       SET status = 'retry', lease_expires_at = NULL, updated_at = NOW(),
-           last_error = COALESCE(last_error, 'processing_lease_expired')
-       WHERE run_id = $1::uuid AND status = 'processing' AND lease_expires_at < NOW()`,
-      [runId]
-    );
+    await releaseExpiredSourceCoverageLeases(client, runId);
     const activeValues = [runId, boundedBatchSize];
     const activePlatformSql = normalizedPlatform ? 'AND platform = $3' : '';
     if (normalizedPlatform) activeValues.push(normalizedPlatform);
@@ -693,6 +713,8 @@ module.exports = {
   listSourceCoverageRuns,
   getSourceCoverageItem,
   claimSourceCoverageBatch,
+  releaseExpiredSourceCoverageLeases,
+  MAX_COVERAGE_ITEM_ATTEMPTS,
   completeSourceCoverageItem,
   refreshSourceCoverageRun,
   requeueFalsePositiveSafetyBlocks,
