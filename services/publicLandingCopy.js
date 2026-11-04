@@ -16,6 +16,14 @@ const {
   snapshotMedian
 } = require('./publicSeoService');
 
+const COMMON_FAQ = [
+  { q: 'Is it free to search?', a: ['Yes. Searching makaug is free and you never pay makaug to contact a lister.'] },
+  { q: 'How do I contact a lister?', a: ['Open the listing and tap Call or WhatsApp to reach the owner or agent directly.'] },
+  { q: 'How do I stay safe?', a: ['Never pay a deposit or fee before you have viewed the property and checked the documents.', 'Read our [safety tips](/safety).'] },
+  { q: 'How do I report a listing?', a: ['Use Report on the listing page, or see [Report a Listing](/report-fraud). Our team reviews every report.'] },
+  { q: 'How do I list my property?', a: ['[List your property](/list-property): the first 7 days are free.', 'See our [Terms](/terms).'] }
+];
+
 function escapeHtml(value = '') {
   return String(value == null ? '' : value)
     .replace(/&/g, '&amp;')
@@ -168,8 +176,9 @@ function forSaleCopy(snapshot) {
       { q: 'Where do the listings come from?', a: ['Public property posts on TikTok, YouTube, X and the web, plus homes listed directly by owners and agents.', 'Each found-online listing shows the original source.'] },
       { q: 'Is makaug an estate agent?', a: ['No. makaug is a property search site.', 'You deal directly with the owner or agent who posted the listing.'] },
       { q: 'Are the listings checked?', a: ['Our team reviews every listing before it goes live and checks for duplicates and warning signs.', "That doesn't prove ownership, so always view the property, use a lawyer and do an official title search before paying."] },
-      { q: 'What is the average price of a house for sale in Uganda?', a: ['The median asking price on makaug is about UGX {median_sale}, from roughly UGX 140M in Nansana to over UGX 2B in Munyonyo.'] },
-      { q: 'Can I search in Luganda or Swahili?', a: ['Yes. The site works in 9 languages, and you can describe what you want in your own words, or WhatsApp **0780 863 394**.'] }
+      { q: 'What is the average price of a house for sale in Uganda?', a: ['The median asking price on makaug is about UGX {median_sale}.', 'Typical asking prices run from about UGX {nansana_med} in Nansana to UGX {munyonyo_med} in Munyonyo.'] },
+      { q: 'Can I search in Luganda or Swahili?', a: ['Yes. The site works in 9 languages, and you can describe what you want in your own words, or WhatsApp **0780 863 394**.'] },
+      ...COMMON_FAQ
     ],
     tokens
   };
@@ -218,7 +227,8 @@ function landCopy(snapshot) {
       { q: 'Where is the cheapest land near Kampala?', a: ['Among areas with many listings, Namayumba, Kakiri and Gayaza have the lowest typical asking prices right now.'] },
       { q: 'How do I know the land title is genuine?', a: ['Ask for a copy of the title, do an official search through a lawyer or the land registry, check the boundaries with a surveyor, and never pay cash to someone rushing you.'] },
       { q: 'Can I buy land in Uganda from abroad?', a: ['Yes. Many diaspora buyers do.', 'Use an independent lawyer in Uganda, ask for a live video viewing, and pay into a traceable account.', 'See [safety tips for diaspora buyers](/safety).'] },
-      { q: 'Does makaug sell the land?', a: ['No. makaug lists land from many sellers in one place; you deal directly with the seller or agent.'] }
+      { q: 'Does makaug sell the land?', a: ['No. makaug lists land from many sellers in one place; you deal directly with the seller or agent.'] },
+      ...COMMON_FAQ
     ],
     tokens
   };
@@ -278,7 +288,8 @@ function kampalaRentCopy(snapshot) {
       // and Tenant Act 2022, three months) is held back until a Ugandan advocate
       // confirms the wording.
       { q: 'Do I pay makaug a fee to rent?', a: ['No. Searching is free and you contact the landlord or agent directly.', 'Agree any agent fee with them in writing.'] },
-      { q: 'Can I find a rental on WhatsApp?', a: ['Yes. WhatsApp **0780 863 394**, share your area and budget, and the makaug assistant sends matching listings in your language.'] }
+      { q: 'Can I find a rental on WhatsApp?', a: ['Yes. WhatsApp **0780 863 394**, share your area and budget, and the makaug assistant sends matching listings in your language.'] },
+      ...COMMON_FAQ
     ],
     tokens
   };

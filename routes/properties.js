@@ -3691,6 +3691,20 @@ function captureListPage(query) {
   });
 }
 
+function mapPinCoverUrl(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const stable = (v) => /^https:\/\//i.test(String(v || '').trim()) && !/(?:tiktokcdn|byteimg|p16-|p19-|p77-|tos-|unsplash|placeholder)/i.test(String(v));
+  const list = [
+    extra.tiktok_thumbnail_cache_url, extra.thumbnail_cache_url, extra.source_thumbnail_cache_url,
+    extra.cached_thumbnail_url, extra.cached_image_url, extra.thumbnail_url, extra.video_thumbnail_url,
+    extra.source_thumbnail_url, extra.youtube_thumbnail_url, extra.oembed_thumbnail_url, extra.cover_image_url
+  ];
+  const hit = list.find(stable);
+  if (hit) return String(hit).trim();
+  const yt = String(extra.youtube_url || extra.video_url || extra.source_url || '').match(/(?:youtu\.be\/|v=|shorts\/)([A-Za-z0-9_-]{11})/);
+  return yt ? `https://img.youtube.com/vi/${yt[1]}/hqdefault.jpg` : null;
+}
+
 function slimMapPin(row = {}) {
   const lat = toNullableFloat(row.latitude ?? row.lat);
   const lng = toNullableFloat(row.longitude ?? row.lng);
@@ -3709,6 +3723,8 @@ function slimMapPin(row = {}) {
     district: row.district || '',
     bedrooms: row.bedrooms ?? null,
     primary_image_url: row.primary_image_url || (Array.isArray(row.images) && row.images[0] ? (row.images[0].url || row.images[0]) : null),
+    cover_url: mapPinCoverUrl(row),
+    source_platform: row.extra_fields?.source_platform || null,
     latitude: lat,
     longitude: lng,
     extra_fields: { location_precision: row.extra_fields?.location_precision || null }

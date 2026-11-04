@@ -794,7 +794,7 @@ function renderSeoListingCard(listing, options = {}) {
     : (videoUrl
       ? `<div class="flex h-full min-h-[12rem] w-full items-center justify-center bg-black text-sm font-semibold text-white" data-video-cover="1">Video</div>`
       : '');
-  return `<article class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card" data-ssr-property-card="${escapeHtml(listing.id)}">
+  return `<article class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card" data-ssr-property-card="${escapeHtml(listing.id)}" data-map-card-id="${escapeHtml(listing.id)}">
     <a href="${escapeHtml(href)}" class="relative block h-48 overflow-hidden bg-[#f0fdf4]" aria-label="View ${escapeHtml(listing.title)}">
       ${media}
     </a>
