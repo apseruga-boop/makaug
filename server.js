@@ -1952,8 +1952,26 @@ app.get(['/', '/index.html', '/property'], (req, res, next) => {
   return res.redirect(301, `/property/${encodeURIComponent(id)}${suffix}`);
 });
 
+// Listings moved to short stay (migration 205) redirect to their new page.
+async function movedShortStaySlugForProperty(rawId) {
+  const match = String(rawId || '').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  if (!match) return null;
+  const result = await db.query(
+    `SELECT slug FROM st_listing
+      WHERE extra_fields->'moved_from_property_ids' ? $1 AND status = 'approved'
+      LIMIT 1`,
+    [match[0].toLowerCase()]
+  );
+  return result.rows[0]?.slug || null;
+}
+
 app.get('/property/:id', async (req, res, next) => {
   try {
+    const movedSlug = await movedShortStaySlugForProperty(req.params.id).catch((error) => {
+      logger.warn('Moved short stay lookup failed', { propertyId: req.params.id, message: error.message });
+      return null;
+    });
+    if (movedSlug) return res.redirect(301, `/short-term/${encodeURIComponent(movedSlug)}`);
     res.set('X-makaug-Public-Sanitized', '1');
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
     let [listing, detailSnapshot] = await Promise.all([
