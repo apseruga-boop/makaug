@@ -203,3 +203,36 @@ html.route-loading body::before { content: ""; position: fixed; top: 0; left: 0;
   #page-short-term .st-info-tile[open] summary { display: block; }
   #page-short-term .st-info-tile[open] .st-info-photo { width: 100%; height: 160px; margin: 0; border-radius: 0; }
 }
+/* Mobile broker map carousel */
+.mk-map-mini--broker { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; background: #fff; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.18); font-size: 13px; color: #374151; min-height: 84px; }
+.mk-map-mini--broker strong { font-size: 15px; color: #111827; }
+.mk-map-mini--broker .mk-broker-pop-loc { color: #166534; font-weight: 700; }
+.mk-map-carousel-item.is-active .mk-map-mini--broker { outline: 2px solid #166534; }
+/* Mobile booking sheet: step-by-step, no sideways scroll */
+.agent-booking-swipe-hint { display: none; }
+@media (max-width: 767px) {
+  body.mk-booking-sheet-open { overflow: hidden; }
+  body .agent-profile-contact.is-open { max-block-size: var(--mk-sheet-max, 88dvh); inset-block-end: var(--mk-sheet-bottom, 0px); overflow-x: hidden; overscroll-behavior: contain; }
+  body .agent-profile-contact .agent-profile-card, body .property-booking-panel { overflow-x: hidden; max-inline-size: 100%; }
+  body .agent-booking-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  body .agent-booking-tabs button { inline-size: auto; block-size: auto; min-block-size: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 6px 2px; border-radius: 12px; font-size: 14px; }
+  body .agent-booking-tabs button span { position: static; inline-size: auto; block-size: auto; overflow: visible; clip: auto; font-size: 11px; line-height: 1.1; }
+  body .agent-booking-step.is-single-place select.agent-booking-place { display: none; }
+  body select.agent-booking-place { max-inline-size: 100%; inline-size: 100%; font-size: 14px; text-overflow: ellipsis; }
+  body .agent-booking-place-line { align-items: flex-start; min-inline-size: 0; }
+  body .agent-booking-place-line img { inline-size: 64px; block-size: 48px; }
+  body .agent-booking-place-line strong, body .agent-booking-place-line em { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  body .agent-booking-place-line strong { font-size: 14px; line-height: 1.3; }
+  body .agent-booking-date-strip { gap: 6px; scroll-snap-type: x proximity; -webkit-mask-image: linear-gradient(90deg, #000 82%, transparent); mask-image: linear-gradient(90deg, #000 82%, transparent); padding-inline-end: 24px; }
+  body .agent-booking-day { inline-size: 48px; min-block-size: 48px; font-size: 11px; scroll-snap-align: start; }
+  body .agent-booking-day strong { font-size: 16px; }
+  body .agent-booking-more { inline-size: 36px; block-size: 48px; }
+  body .agent-booking-swipe-hint { display: block; margin: 4px 0 0; font-size: 12px; color: #166534; font-weight: 600; }
+  body .agent-booking-time-label { margin-block-start: 10px; }
+  body .agent-booking-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  body .agent-booking-slot { min-block-size: 42px; font-size: 13px; inline-size: 100%; }
+  body .agent-booking-who, body .property-booking-panel .agent-booking-who { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  body .agent-booking-who input { inline-size: 100%; min-block-size: 46px; font-size: 16px; }
+  body #agent-profile-submit { position: sticky; inset-block-end: 0; z-index: 2; min-block-size: 50px; font-size: 16px; box-shadow: 0 -8px 16px #fff; }
+}
+.mk-map-mini--broker .mk-map-mini-link { align-self: flex-start; margin-top: 4px; font-weight: 800; color: #166534; text-decoration: underline; }
