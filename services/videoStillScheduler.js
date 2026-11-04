@@ -24,7 +24,12 @@ let running = false;
  * for each, and coverless listings were retried every 30 minutes forever. Staff
  * queries then timed out waiting for a database connection and moderators got
  * 503s. So, now:
- *   - it is OFF unless VIDEO_STILL_AUTO=true;
+ *   - it is ON unless VIDEO_STILL_AUTO=false (4 Nov 2026: it had been off
+ *     since 9 Oct, and in those four weeks every video-only listing reached the
+ *     moderators with no photo. The approval gate wants one, so they rejected
+ *     them — Segawa Frederick Kevin lost two plots that way on 2 Nov. The
+ *     limits below are what the staff "Make a cover" button has run under
+ *     since 10 Oct without trouble, and this job does the same work on a timer);
  *   - a listing that fails is retried after 30 min, then 2 h, then given up on
  *     after VIDEO_STILL_MAX_ATTEMPTS (3) failures, until staff re-pull it;
  *   - a tick looks at no more than VIDEO_STILL_MAX_VIDEOS (2) videos, decodes no
@@ -655,13 +660,17 @@ async function clearVideoStillAttempts(db, propertyId) {
   ).catch(() => {});
 }
 
+/** On by default; VIDEO_STILL_AUTO=false (or 0/off/no) switches it off. */
+function videoStillAutoEnabled(value = process.env.VIDEO_STILL_AUTO) {
+  return !['false', '0', 'off', 'no'].includes(String(value ?? '').trim().toLowerCase());
+}
+
 function startVideoStillScheduler(db) {
   if (timer) return;
-  // Opt-in: off unless VIDEO_STILL_AUTO=true. Said once at boot either way, so
-  // the logs show whether it is running.
-  if (process.env.VIDEO_STILL_AUTO !== 'true' || !process.env.DATABASE_URL) {
+  // Said once at boot either way, so the logs show whether it is running.
+  if (!videoStillAutoEnabled() || !process.env.DATABASE_URL) {
     logger.info('Video still scheduler not armed', {
-      reason: process.env.VIDEO_STILL_AUTO !== 'true' ? 'VIDEO_STILL_AUTO is not "true"' : 'no DATABASE_URL'
+      reason: !videoStillAutoEnabled() ? `VIDEO_STILL_AUTO is "${process.env.VIDEO_STILL_AUTO}"` : 'no DATABASE_URL'
     });
     return;
   }
@@ -698,5 +707,6 @@ module.exports = {
   selectionQuery,
   siteBusyReason,
   startVideoStillScheduler,
-  tickVideoStills
+  tickVideoStills,
+  videoStillAutoEnabled
 };
