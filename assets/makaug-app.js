@@ -67341,6 +67341,11 @@ function focusAgentProfileRequest() {
 function openAgentBookingSheet() {
   const panel = document.querySelector(".agent-profile-contact");
   if (!panel) return;
+  // The fields are rendered at page load; redo them if the language changed since.
+  if (agentBookingOptions && agentBookingRenderedLang !== (currentLang || "en")) {
+    renderAgentBookingFields();
+    paintAgentBookingResponse();
+  }
   const mobile = window.matchMedia("(max-width: 767px)").matches;
   if (mobile) {
     panel.classList.add("is-open");
@@ -67466,7 +67471,9 @@ function selectAgentBookingSlot(button) {
   button.classList.add("is-active");
 }
 
+let agentBookingRenderedLang = "";
 function renderAgentBookingFields() {
+  agentBookingRenderedLang = currentLang || "en";
   const el = bookingEl("agent-booking-fields");
   if (!el) return;
   el.classList.remove("property-booking-skeleton");
