@@ -1,6 +1,15 @@
 <section class="py-12 bg-white">
       <div class="max-w-7xl mx-auto px-4">
-        <h2 id="home-map-title" class="text-3xl font-bold text-gray-800 serif mb-6">Explore on Map</h2>
+        <div class="mk-home-map-head">
+          <h2 id="home-map-title" class="text-3xl font-bold text-gray-800 serif">Explore on Map</h2>
+          <div class="mk-home-map-tabs" role="tablist" aria-label="Map listing type">
+            <button type="button" role="tab" data-home-map-tab="sale" class="is-active" aria-selected="true" onclick="setHomeMapTab('sale')">For sale</button>
+            <button type="button" role="tab" data-home-map-tab="rent" aria-selected="false" onclick="setHomeMapTab('rent')">For rent</button>
+            <button type="button" role="tab" data-home-map-tab="student" aria-selected="false" onclick="setHomeMapTab('student')">Students</button>
+            <button type="button" role="tab" data-home-map-tab="short_term" aria-selected="false" onclick="setHomeMapTab('short_term')">Short stay</button>
+          </div>
+          <span id="home-map-count" class="mk-home-map-count" aria-live="polite"></span>
+        </div>
         <div id="map-home" class="map-h rounded-2xl border border-gray-200 overflow-hidden"></div>
       </div>
     </section>
