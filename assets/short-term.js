@@ -58,6 +58,8 @@
   // speaker before anyone leans on them.
   var ST_I18N = {
   "ac": {
+    "availUnconfirmed": "Pe ki moko ka tye",
+    "checkAvail": "Penj ka tye",
     "adCtaFind": "Yeny kabedo",
     "adHeadline": "Uganda tye ka gamo welo. Ot rwatte oyot.",
     "adSub": "Kampala, Entebbe ki Jinja pong con ma peya tuko ocake.",
@@ -163,6 +165,8 @@
     "extrasFlights": "Ndege"
   },
   "am": {
+    "availUnconfirmed": "መገኘቱ አልተረጋገጠም",
+    "checkAvail": "መገኘቱን ያረጋግጡ",
     "adCtaFind": "ማረፊያ ይፍልጉ",
     "adHeadline": "ዩጋንዳ ታስተናግዳለች። ክፍሎች በፍጥነት ይዮዛሉ።",
     "adSub": "ካምፓላ፣ እንቴቤ እና ጁንጃ ጨዋታው ከመጀመሩ በፊት ይሞላሉ።",
@@ -268,6 +272,8 @@
     "extrasFlights": "በረራዎች"
   },
   "ar": {
+    "availUnconfirmed": "التوفر غير مؤكد",
+    "checkAvail": "تحقق من التوفر",
     "adCtaFind": "ابحث عن إقامة",
     "adHeadline": "أوغندا تستضيف. الغرف تنفد مبكراً.",
     "adSub": "كمبالا وإنتيبي وجينجا تمتلئ قبل انطلاق البطولة بوقت طويل.",
@@ -373,6 +379,8 @@
     "extrasFlights": "رحلات جوية"
   },
   "en": {
+    "availUnconfirmed": "Availability not confirmed",
+    "checkAvail": "Check availability",
     "adCtaFind": "Find a stay",
     "adHeadline": "Uganda hosts. Rooms go early.",
     "adSub": "Kampala, Entebbe and Jinja fill up long before kick-off.",
@@ -478,6 +486,8 @@
     "extrasFlights": "Flights"
   },
   "lg": {
+    "availUnconfirmed": "Tekinnakakasibwa nti weeri",
+    "checkAvail": "Buuza oba weeri",
     "adCtaFind": "Noonya we onoosula",
     "adHeadline": "Uganda y'eyakuŋŋaanyiza. Ebifo biggwaawo mangu.",
     "adSub": "Kampala, Entebbe ne Jinja zijjula nga tekinnatuuka.",
@@ -583,6 +593,8 @@
     "extrasFlights": "Ennyonyi"
   },
   "ny": {
+    "availUnconfirmed": "Tikikakasiibwe ngu kiriho",
+    "checkAvail": "Kaguza ngu kiriho",
     "adCtaFind": "Sherura ekyanya",
     "adHeadline": "Uganda niyo erikwakiira. Ebyanya nibihwaho juba.",
     "adSub": "Kampala, Entebbe na Jinja nibijura obutakaba omuzaano gutandika.",
@@ -688,6 +700,8 @@
     "extrasFlights": "Enyonyi"
   },
   "rn": {
+    "availUnconfirmed": "Tikikakasiziibwe ngu kiroho",
+    "checkAvail": "Buuza ngu kiroho",
     "adCtaFind": "Sherura ahantu",
     "adHeadline": "Uganda niyo erikwakiira. Ahantu nihahwaho juba.",
     "adSub": "Kampala, Entebbe na Jinja nibijura obutakaba omuzaano gutandika.",
@@ -793,6 +807,8 @@
     "extrasFlights": "Indege"
   },
   "sm": {
+    "availUnconfirmed": "Tekikakasiddwa nti kiriwo",
+    "checkAvail": "Buuza oba kiriwo",
     "adCtaFind": "Noonya ekifo",
     "adHeadline": "Uganda y'eyakuŋŋaanyiza. Ebifo biggwaawo mangu.",
     "adSub": "Kampala, Entebbe ni Jinja zijjula nga tekinnatuuka.",
@@ -898,6 +914,8 @@
     "extrasFlights": "Ennyonyi"
   },
   "sw": {
+    "availUnconfirmed": "Upatikanaji haujathibitishwa",
+    "checkAvail": "Angalia upatikanaji",
     "adCtaFind": "Tafuta malazi",
     "adHeadline": "Uganda inakaribisha. Vyumba vinaisha mapema.",
     "adSub": "Kampala, Entebbe na Jinja hujaa muda mrefu kabla ya mechi.",
@@ -1022,6 +1040,44 @@
     var value = table[key];
     if (value === undefined) value = ST_I18N.en[key];
     return value === undefined ? '' : value;
+  }
+
+  // Longer guest guide and safety copy, written in English first. Other
+  // languages keep their existing translated (shorter) text via the fallback
+  // key rather than silently switching to English.
+  var ST_GUIDE_EN = {
+      "sfTitle": "Stay safe: see it before you pay",
+      "sfLead": "Most short-stay scams in Kampala follow the same script. Six checks that stop them.",
+      "sf1T": "See the place, or a live video call, first",
+      "sf1B": "Ask for a live video walk-through or visit in person before you send anything. Photos can be copied from another listing; a live call cannot.",
+      "sf2T": "Check who you are paying",
+      "sf2B": "The mobile money or bank name must match the host or the business you are dealing with. Never pay into an account in a different name, however good the reason sounds.",
+      "sf3T": "Prefer an approved agent or a verified stay",
+      "sf3B": "Listings marked Approved agent or Verified stay have been checked by makaug staff. Listings marked From TikTok or Found online were copied from public posts and have not been checked.",
+      "sf4T": "Get the terms in writing",
+      "sf4B": "Before paying, get the dates, nightly price, deposit, what is included (power backup, water, Wi-Fi, cleaning) and the refund rule in a message you can keep.",
+      "sf5T": "Pay a small part, keep the receipt",
+      "sf5B": "If a deposit is needed, keep it small and pay by mobile money so there is a record. Do not pay the full stay up front to someone you have never met.",
+      "sf6T": "Report anything that looks wrong",
+      "sf6B": "Use the report link on the listing. We review reports and take listings down. If you have lost money, report it to the Uganda Police Force as well.",
+      "g1S": "Most visitors need a visa; apply online before you fly.",
+      "g1M": "Apply on the official portal, visas.immigration.go.ug. A single-entry tourist visa is US$50 and approvals often take a few working days, so do not leave it late.|The East Africa Tourist Visa (US$100) covers Uganda, Kenya and Rwanda for 90 days.|A yellow fever vaccination certificate is required on arrival. Your passport should be valid for at least six months.|Only use the .go.ug site. Look-alike agent sites charge extra.",
+      "g2S": "The official guide to what to see and do across the country.",
+      "g2M": "Gorilla trekking permits in Bwindi and Mgahinga are sold by the Uganda Wildlife Authority and sell out months ahead.|Popular day trips from Kampala: the source of the Nile at Jinja, Entebbe botanical gardens and Lake Victoria islands.",
+      "g3S": "Uganda shillings, mobile money and cash. Cards in bigger places only.",
+      "g3M": "MTN MoMo and Airtel Money are accepted almost everywhere, from boda rides to hotels.|Cards (Visa, Mastercard) work in larger hotels, malls and supermarkets; carry cash elsewhere.|Older US dollar notes (especially pre-2013) are often refused or get a worse rate. Bring newer notes.|Use bank ATMs inside banks or malls, and exchange at licensed forex bureaus.",
+      "g4S": "Ride-hailing apps are the easy way across Kampala; traffic is heavy.",
+      "g4M": "Uber, Bolt and SafeBoda all operate in Kampala, and fares are agreed in the app.|If you take a boda boda, ask for a helmet. Bodas are fast but carry real risk.|The Entebbe Expressway links the airport and Kampala; allow 45 to 90 minutes depending on traffic.|Matatus (minibus taxis) are cheap but have no fixed timetable.",
+      "g5S": "UK-style three-pin sockets, 240V. Power and water cuts happen.",
+      "g5M": "Plugs are Type G (the UK three-pin), at 240V, 50Hz. Bring an adapter if you need one.|Ask the host about a generator or inverter, a water tank and Wi-Fi speed before you book.|A small power bank helps on days with cuts.",
+      "g6S": "Ask whether the nightly price includes local hotel tax.",
+      "g6M": "Local authorities can charge a hotel or tourism levy per room per night, and the amount depends on the area.|Larger hotels may also add government tax and a service charge on top of the room rate.|Ask the host for the full price per night, including all charges, before you pay.",
+      "gNote": "Updated November 2026. Rules change, so check the official sites before you travel. Illustrations: AI-generated."
+  };
+
+  function gt(key, fallbackKey) {
+    if (stLang() === 'en' && ST_GUIDE_EN[key]) return ST_GUIDE_EN[key];
+    return fallbackKey ? t(fallbackKey) : '';
   }
 
   // Re-render when the language changes. <html lang> is set by setLang() on
@@ -1371,11 +1427,23 @@
   }
 
   function priceLabel(listing) {
-    var n = Number(listing.price_per_night || 0);
+    var n = nightlyAmount(listing);
     if (!isFinite(n) || n <= 0) return '';
     if (n >= 1000000) return Math.round(n / 100000) / 10 + 'M';
-    if (n >= 1000) return Math.round(n / 1000) + 'K';
+    if (n >= 1000) return Math.round(n / 1000) + 'k';
     return String(n);
+  }
+
+  // Search rows carry nightly_ugx (and a display string); older rows and
+  // partner hotels may carry price_per_night. The pin used to read only the
+  // last one, which is why every pin said "UGX •".
+  function nightlyAmount(listing) {
+    if (!listing) return 0;
+    var n = Number(listing.nightly_ugx || listing.price_per_night || 0);
+    if ((!isFinite(n) || n <= 0) && listing.nightly_display) {
+      n = Number(String(listing.nightly_display).replace(/[^0-9]/g, '')) || 0;
+    }
+    return n;
   }
 
   function paintMap() {
@@ -1411,6 +1479,7 @@
       }
 
       var points = [];
+      state.markerById = {};
       placed.forEach(function (listing) {
         var point = [Number(listing.latitude), Number(listing.longitude)];
         points.push(point);
@@ -1422,13 +1491,14 @@
           iconSize: [0, 0],
           iconAnchor: [0, 0]
         });
-        var marker = L.marker(point, { title: listing.title || '', icon: icon }).addTo(state.map);
+        var marker = L.marker(point, { title: listing.title || '', icon: icon, riseOnHover: true }).addTo(state.map);
+        marker._stId = listing.id || listing.url || '';
         var photo = listing.primary_image_url || (listing.photos && listing.photos[0] && (listing.photos[0].url || listing.photos[0])) || '';
         marker.bindPopup(
           '<a class="mk-map-card" href="' + esc(listing.url || '#') + '" data-st-link>'
           + (photo && typeof photo === 'string' ? '<img class="mk-map-card-img" src="' + esc(photo) + '" alt="" loading="lazy">' : '')
           + '<div class="mk-map-card-body">'
-          + (label ? '<div class="mk-map-card-price">UGX ' + esc(Number(listing.price_per_night).toLocaleString()) + ' <small>' + esc(t('perNight')) + '</small></div>' : '')
+          + (label ? '<div class="mk-map-card-price">UGX ' + esc(nightlyAmount(listing).toLocaleString()) + ' <small>' + esc(t('perNight')) + '</small></div>' : '')
           + '<div class="mk-map-card-title">' + esc(listing.title || '') + '</div>'
           + '<div class="mk-map-card-loc">' + esc([listing.area, listing.district].filter(Boolean).join(', ')) + '</div>'
           + '<div class="mk-map-card-cta">View stay →</div>'
@@ -1436,6 +1506,9 @@
           { className: 'mk-map-popup', closeButton: false, maxWidth: 260 }
         );
         state.markers.push(marker);
+        if (marker._stId) state.markerById[marker._stId] = marker;
+        marker.on('mouseover', function () { highlightCard(marker._stId, true); });
+        marker.on('mouseout', function () { highlightCard(marker._stId, false); });
       });
 
       if (points.length === 1) state.map.setView(points[0], 14);
@@ -1444,45 +1517,115 @@
     });
   }
 
+  function highlightCard(id, on) {
+    var root = document.getElementById('st-results');
+    if (!root || !id) return;
+    Array.prototype.forEach.call(root.querySelectorAll('[data-st-card-id]'), function (card) {
+      card.classList.toggle('is-map-hover', !!on && card.getAttribute('data-st-card-id') === id);
+    });
+  }
+
+  // Same behaviour as the other map pages: the hovered card's pin lifts and,
+  // when it is off screen or near the edge, the map pans so it sits in the
+  // middle with its neighbours still around it.
+  function highlightPin(id, on) {
+    var map = state.map;
+    var marker = state.markerById && state.markerById[id];
+    (state.markers || []).forEach(function (m) {
+      var el = m.getElement && m.getElement();
+      var tag = el && el.querySelector('.mk-price-tag');
+      if (tag) tag.classList.toggle('is-hovered', !!on && m === marker);
+      if (m.setZIndexOffset) m.setZIndexOffset(on && m === marker ? 1000 : 0);
+    });
+    if (!map || !marker) return;
+    window.clearTimeout(state.centreTimer);
+    if (!on) { try { marker.closePopup(); } catch (e) { /* gone */ } return; }
+    var ll = marker.getLatLng();
+    var inner = null;
+    try { inner = map.getBounds().pad(-0.18); } catch (e) { inner = null; }
+    if (inner && inner.contains(ll)) { marker.openPopup(); return; }
+    state.centreTimer = window.setTimeout(function () {
+      map.once('moveend', function () {
+        var el = marker.getElement && marker.getElement();
+        var tag = el && el.querySelector('.mk-price-tag');
+        if (tag && tag.classList.contains('is-hovered')) marker.openPopup();
+      });
+      map.panTo(ll, { animate: true, duration: 0.45 });
+    }, 120);
+  }
+
+  function wireCardHover() {
+    var root = document.getElementById('st-results');
+    if (!root || root.getAttribute('data-st-hover') === '1') return;
+    root.setAttribute('data-st-hover', '1');
+    root.addEventListener('mouseover', function (event) {
+      var card = event.target.closest && event.target.closest('[data-st-card-id]');
+      if (!card || card === state.hoverCard) return;
+      state.hoverCard = card;
+      highlightPin(card.getAttribute('data-st-card-id'), true);
+    });
+    root.addEventListener('mouseleave', function () {
+      if (state.hoverCard) highlightPin(state.hoverCard.getAttribute('data-st-card-id'), false);
+      state.hoverCard = null;
+    });
+  }
+
   function disclaimerBlock() {
-    var shown = [['d1Lead', 'd1Body'], ['d5Lead', 'd5Body'], ['d6Lead', 'd6Body']];
-    var more = [['d2Lead', 'd2Body'], ['d3Lead', 'd3Body'], ['d4Lead', 'd4Body']];
-    function rule(pair) {
-      return '<div class="st-safety-rule"><b>' + esc(t(pair[0])) + '</b><p>' + esc(t(pair[1])) + '</p></div>';
-    }
+    var tips = [
+      ['fa-eye', 'sf1T', 'sf1B', 'd2Lead', 'd2Body'],
+      ['fa-id-card', 'sf2T', 'sf2B', 'd3Lead', 'd3Body'],
+      ['fa-user-check', 'sf3T', 'sf3B', 'd4Lead', 'd4Body'],
+      ['fa-file-signature', 'sf4T', 'sf4B', 'd5Lead', 'd5Body'],
+      ['fa-mobile-screen', 'sf5T', 'sf5B', 'safetyName', 'safetyView'],
+      ['fa-flag', 'sf6T', 'sf6B', 'd6Lead', 'd6Body']
+    ];
     return ''
-      + '<section class="st-disclaimer st-safety" id="st-disclaimer">'
-      + '<h2><i class="fas fa-triangle-exclamation"></i> ' + esc(t('discTitle')) + '</h2>'
-      + '<div class="st-safety-rules">' + shown.map(rule).join('') + '</div>'
-      + '<details class="st-safety-more"><summary>' + esc(t('safetyMore')) + '</summary>'
-      + '<div class="st-safety-rules">' + more.map(rule).join('') + '</div></details>'
+      + '<section class="st-disclaimer st-safety st-safety-v2" id="st-disclaimer">'
+      + '<div class="st-safety-head"><span class="st-safety-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>'
+      + '<div><h2>' + esc(gt('sfTitle', 'discTitle')) + '</h2><p>' + esc(gt('sfLead', 'd1Lead')) + '</p></div></div>'
+      + '<div class="st-safety-list">'
+      + tips.map(function (tip, i) {
+        return '<details class="st-safety-tip"' + (i === 0 ? ' open' : '') + '><summary>'
+          + '<i class="fas ' + tip[0] + '" aria-hidden="true"></i><span>' + esc(gt(tip[1], tip[3])) + '</span>'
+          + '<i class="fas fa-chevron-down st-safety-chev" aria-hidden="true"></i></summary>'
+          + '<p>' + esc(gt(tip[2], tip[4])) + '</p></details>';
+      }).join('')
+      + '</div>'
+      + '<p class="st-safety-foot">' + esc(t('d1Lead')) + ' ' + esc(t('d1Body')) + '</p>'
       + '</section>';
   }
 
   function guestInfoBlock() {
-    function card(photo, titleKey, bodyKey, href, linkKey) {
-      return '<article class="st-info-card"><img class="st-info-photo" src="' + esc(photo) + '" alt="">'
-        + '<div class="st-info-body"><h3>' + esc(t(titleKey)) + '</h3>'
-        + '<p>' + esc(t(bodyKey)) + '</p>'
+    function card(photo, titleKey, bodyKey, moreKey, href, linkKey, open) {
+      var fallbackKey = titleKey.replace('T', 'B');
+      return '<details class="st-info-card st-info-tile"' + (open ? ' open' : '') + '>'
+        + '<summary><img class="st-info-photo" src="' + esc(photo) + '" alt="" loading="lazy" width="640" height="480">'
+        + '<span class="st-info-sum"><span class="st-info-h">' + esc(t(titleKey)) + '</span>'
+        + '<span class="st-info-teaser">' + esc(gt(bodyKey, fallbackKey)) + '</span></span>'
+        + '<i class="fas fa-chevron-down st-info-chev" aria-hidden="true"></i></summary>'
+        + '<div class="st-info-body"><ul>' + String(gt(moreKey) || '').split('|').filter(Boolean).map(function (line) {
+          return '<li>' + esc(line) + '</li>';
+        }).join('') + '</ul>'
         + (href
           ? '<a href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">'
             + esc(t(linkKey)) + ' <i class="fas fa-arrow-up-right-from-square"></i></a>'
           : '')
-        + '</div></article>';
+        + '</div></details>';
     }
+    var img = '/assets/img/uganda-guide/';
     return ''
       + '<section class="st-worth">'
       + '<h2>' + esc(t('infoTitle')) + '</h2>'
       + '<p class="st-worth-lead">' + esc(t('infoLead')) + '</p>'
       + '<div class="st-info-grid">'
-      + card('/assets/img/worth-knowing/entebbe-airport.jpg', 'i1T', 'i1B', 'https://visas.immigration.go.ug', 'i1L')
-      + card('/assets/img/worth-knowing/murchison-falls.jpg', 'i2T', 'i2B', 'https://utb.go.ug', 'i2L')
-      + card('/assets/img/worth-knowing/shilling.jpg', 'i3T', 'i3B')
-      + card('/assets/img/worth-knowing/boda-boda.jpg', 'i4T', 'i4B')
-      + card('/assets/img/worth-knowing/owen-falls.jpg', 'i5T', 'i5B')
-      + card('/assets/img/worth-knowing/speke-resort.jpg', 'i6T', 'i6B')
+      + card(img + 'visa.jpg', 'i1T', 'g1S', 'g1M', 'https://visas.immigration.go.ug', 'i1L', true)
+      + card(img + 'money.jpg', 'i3T', 'g3S', 'g3M')
+      + card(img + 'transport.jpg', 'i4T', 'g4S', 'g4M')
+      + card(img + 'power.jpg', 'i5T', 'g5S', 'g5M')
+      + card(img + 'tax.jpg', 'i6T', 'g6S', 'g6M')
+      + card(img + 'tourism.jpg', 'i2T', 'g2S', 'g2M', 'https://utb.go.ug', 'i2L')
       + '</div>'
-      + '<p class="st-photo-credit">' + esc(t('photoCredit')) + '</p>'
+      + '<p class="st-worth-note">' + esc(gt('gNote')) + '</p>'
       + '</section>';
   }
 
@@ -1513,7 +1656,6 @@
       // The section's own content comes first, as it does on every other page.
       + '<section class="st-hero">'
       + '<div class="st-wrap">'
-      + hotelSearchBoxHtml()
       + '<h1>' + esc(t('heroTitle')) + '</h1>'
       + '<p class="st-hero-sub">' + esc(t('heroSub')) + '</p>'
       + '<p class="st-hero-sub" data-st-list-fee>' + esc(t('listFee')) + '</p>'
@@ -1561,7 +1703,6 @@
       + '<div class="st-map-shell" id="st-map-shell"' + (state.mapOn ? '' : ' hidden') + '><div id="st-map"></div></div>'
       + '</div>'
 
-      + travelExtrasHtml('short-term')
       + disclaimerBlock()
       + guestInfoBlock()
       + '</div>';
@@ -1573,6 +1714,7 @@
   // hotel's own site rather than a makaug page. A visitor should never be in
   // doubt about which of these makaug stands behind.
   function partnerCardHtml(row) {
+    var datedSearch = !!(stayQuery().check_in || stayQuery().check_out);
     var where = [row.area, row.district].filter(Boolean).join(', ');
     var stars = row.star_rating
       ? '<span class="st-partner-stars">' + new Array(row.star_rating + 1).join('\★') + '</span>'
@@ -1629,6 +1771,7 @@
       + stars
       + score
       + price
+      + (datedSearch ? '<div class="st-avail-row"><span class="st-avail-tag"><i class="far fa-calendar" aria-hidden="true"></i> ' + esc(t('availUnconfirmed')) + '</span></div>' : '')
       + link
       + compareButtonsHtml(row.title, hotelSubId(slug))
       + '</div></article>';
@@ -1692,12 +1835,12 @@
       : '<p class="st-card-score">New listing</p>';
 
     return ''
-      + '<article class="st-card">'
+      + '<article class="st-card" data-st-card-id="' + esc(listing.id || listing.url || '') + '">'
       + '<a class="st-card-media" href="' + esc(listing.url) + '" data-st-link>'
       + (listing.primary_image
         ? '<img src="' + esc(listing.primary_image) + '" alt="' + esc(listing.title) + '" loading="lazy">'
         : '<div class="st-noimg"><i class="fas fa-house"></i></div>')
-      + (listing.is_private_listing ? '<span class="st-badge">Private host</span>' : '<span class="st-badge">Partner</span>')
+      + '<span class="st-badge' + (sourceBadge(listing).approved ? ' is-approved' : '') + '">' + esc(sourceBadge(listing).label) + '</span>'
       + '</a>'
       + '<div class="st-card-body">'
       + '<h3 class="st-card-title"><a href="' + esc(listing.url) + '" data-st-link>' + esc(listing.title) + '</a></h3>'
@@ -1706,7 +1849,71 @@
       + (listing.bedrooms === 1 ? '' : 's') + ' &middot; sleeps ' + listing.max_guests + '</p>'
       + '<p class="st-card-price"><b>' + esc(listing.nightly_display) + '</b> <span>per night</span></p>'
       + score
+      + availabilityRowHtml(listing)
       + '</div></article>';
+  }
+
+  // Where the listing came from, said plainly. "Partner" told a guest
+  // nothing: these rows were imported from public social posts, not supplied
+  // by a partner.
+  function sourcePlatform(listing) {
+    var hay = [listing.source_platform, listing.source_url, listing.primary_image]
+      .concat((listing.images || []).map(function (i) { return i && i.url; })).join(' ').toLowerCase();
+    if (hay.indexOf('tiktok') >= 0) return 'TikTok';
+    if (hay.indexOf('instagram') >= 0) return 'Instagram';
+    if (hay.indexOf('facebook') >= 0 || hay.indexOf('fbcdn') >= 0) return 'Facebook';
+    if (hay.indexOf('airbnb') >= 0) return 'Airbnb';
+    return '';
+  }
+
+  function sourceBadge(listing) {
+    if (listing.source === 'imported') {
+      var platform = sourcePlatform(listing);
+      return { label: platform ? 'From ' + platform : 'Found online', approved: false };
+    }
+    if (listing.host_type === 'agent' && listing.verified) return { label: 'Approved agent', approved: true };
+    if (listing.is_private_listing) return { label: 'Private host', approved: false };
+    return { label: listing.partner_name ? 'From ' + listing.partner_name : 'Listed on makaug', approved: false };
+  }
+
+  function stayQuery() {
+    var form = document.getElementById('st-search-form');
+    var q = qs();
+    function val(name) {
+      var el = form && form.querySelector('[name="' + name + '"]');
+      return String((el && el.value) || q[name] || '').trim();
+    }
+    return { check_in: val('check_in'), check_out: val('check_out'), guests: val('guests') };
+  }
+
+  // Nobody here holds a live calendar for these places, so a date search can
+  // only ever say "not confirmed". The button opens the listing's own request
+  // form with the dates, guests and a ready-written message already filled in.
+  function availabilityRowHtml(listing) {
+    var q = stayQuery();
+    var params = new URLSearchParams();
+    if (q.check_in) params.set('check_in', q.check_in);
+    if (q.check_out) params.set('check_out', q.check_out);
+    if (q.guests) params.set('guests', q.guests);
+    params.set('enquire', '1');
+    var href = (listing.url || '#') + '?' + params.toString();
+    return '<div class="st-avail-row">'
+      + ((q.check_in || q.check_out || listing.source === 'imported')
+        ? '<span class="st-avail-tag"><i class="far fa-calendar" aria-hidden="true"></i> ' + esc(t('availUnconfirmed')) + '</span>'
+        : '')
+      + '<a class="st-avail-btn" href="' + esc(href) + '" data-st-link data-st-contact="check-availability">' + esc(t('checkAvail')) + '</a>'
+      + '</div>';
+  }
+
+  function enquiryPrefill(listing) {
+    var q = qs();
+    var bits = ['Hi' + (listing.host_name ? ' ' + listing.host_name : '') + ', I found "' + (listing.title || 'your place').slice(0, 80) + '" on makaug.com.'];
+    if (q.check_in && q.check_out) bits.push('Is it free from ' + q.check_in + ' to ' + q.check_out + '?');
+    else if (q.check_in) bits.push('Is it free from ' + q.check_in + '?');
+    else bits.push('Is it available, and which dates are free?');
+    if (q.guests) bits.push('We are ' + q.guests + ' guest' + (q.guests === '1' ? '' : 's') + '.');
+    bits.push('Please confirm the nightly price and what is included. Thank you.');
+    return bits.join(' ');
   }
 
   function runSearch() {
@@ -1763,6 +1970,7 @@
       state.partnerShown = 8;
       trackSt('st_search', { q: params.get('q') || params.get('district') || '' });
       renderResults();
+      wireCardHover();
       if (state.mapOn) paintMap();
     }).catch(function (error) {
       if (target) {
@@ -2244,9 +2452,25 @@
       + '</div>'
       + '</aside>'
       + '</div>'
-      + travelExtrasHtml('short-term-listing')
       + disclaimerBlock()
       + '</div>';
+  }
+
+  function openEnquiryFromQuery(listing) {
+    var q = qs();
+    if (q.enquire !== '1') return;
+    var tab = document.querySelector('#st-intent-tabs [data-st-intent="dates"]');
+    if (tab) tab.click();
+    var open = document.getElementById('st-enquire-open');
+    if (open) open.click();
+    var guests = document.getElementById('st-e-guests');
+    if (guests && q.guests) guests.value = q.guests;
+    var msg = document.getElementById('st-e-msg');
+    if (msg && !msg.value) msg.value = enquiryPrefill(listing || {});
+    var form = document.getElementById('st-enquire-form');
+    if (form && form.scrollIntoView) {
+      window.setTimeout(function () { form.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 200);
+    }
   }
 
   function enquiryFormHtml() {
@@ -2444,6 +2668,7 @@
       view.innerHTML = detailViewHtml(payload);
       view.setAttribute('data-st-detail', slug);
       bindDetail(payload);
+      openEnquiryFromQuery(payload.listing);
       document.title = payload.listing.title + ' | Short stay on makaug.com';
       trackSt('st_listing_view', { slug: slug });
     }).catch(function (error) {
@@ -2474,7 +2699,6 @@
           + esc(row.host_phone) + '</a></p>'
         : '')
       + compareButtonsHtml(row.title, hotelSubId(slug))
-      + travelExtrasHtml('short-term-listing')
       + '</div>';
   }
 

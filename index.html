@@ -446,7 +446,7 @@
   </style>
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
   <link rel="stylesheet" href="/assets/short-term.css?v=20261023-short-stay-fee-v26">
-  <link rel="stylesheet" href="/assets/design-refresh-1104.css?v=20261104c">
+  <link rel="stylesheet" href="/assets/design-refresh-1104.css?v=20261104d">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -10750,7 +10750,7 @@
       }
       function loadShortTermNow() {
         if (!window.__makaugShortTerm || window.__makaugShortTerm.enabled !== true) return Promise.resolve(false);
-        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261104-design-refresh", function () {
+        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261104-short-stay-v2", function () {
           return !!(window.makaugShortTerm && typeof window.makaugShortTerm.route === "function");
         });
       }
