@@ -236,3 +236,10 @@ html.route-loading body::before { content: ""; position: fixed; top: 0; left: 0;
   body #agent-profile-submit { position: sticky; inset-block-end: 0; z-index: 2; min-block-size: 50px; font-size: 16px; box-shadow: 0 -8px 16px #fff; }
 }
 .mk-map-mini--broker .mk-map-mini-link { align-self: flex-start; margin-top: 4px; font-weight: 800; color: #166534; text-decoration: underline; }
+
+/* Home map tabs: six tabs scroll sideways on a phone, inside the pill only. */
+@media (max-width: 767px) {
+  .mk-home-map-tabs { display: flex; scrollbar-width: none; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+  .mk-home-map-tabs::-webkit-scrollbar { display: none; }
+  .mk-home-map-tabs button { flex: 0 0 auto; scroll-snap-align: start; }
+}
