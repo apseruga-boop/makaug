@@ -3672,8 +3672,16 @@ function captureListPage(query) {
     const fakeReq = { query, headers: {}, get: () => '', user: null, ip: '' };
     const fakeRes = {
       statusCode: 200,
+      headersSent: false,
+      locals: {},
       set() { return fakeRes; },
       setHeader() { return fakeRes; },
+      removeHeader() { return fakeRes; },
+      getHeader() { return undefined; },
+      header() { return fakeRes; },
+      append() { return fakeRes; },
+      vary() { return fakeRes; },
+      type() { return fakeRes; },
       status(code) { fakeRes.statusCode = code; return fakeRes; },
       json(body) { resolve(fakeRes.statusCode >= 400 ? null : body); return fakeRes; },
       send() { resolve(null); return fakeRes; },
@@ -3707,15 +3715,51 @@ function slimMapPin(row = {}) {
   };
 }
 
+const mapPinInflight = new Map();
+const MAP_PIN_FRESH_MS = 10 * 60 * 1000;
+
+function refreshMapPins(type) {
+  if (mapPinInflight.has(type)) return mapPinInflight.get(type);
+  const job = buildMapPins(type)
+    .then((data) => { if (data.length || !mapPinCache.has(type)) mapPinCache.set(type, { at: Date.now(), data }); return mapPinCache.get(type); })
+    .finally(() => mapPinInflight.delete(type));
+  mapPinInflight.set(type, job);
+  return job;
+}
+
+function sendMapPins(res, type, entry) {
+  res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=600');
+  return res.json({ ok: true, type, count: entry.data.length, data: entry.data });
+}
+
+// Warm the homepage tabs shortly after boot so the first visitor is not the
+// one paying for twelve cold list pages.
+if (process.env.NODE_ENV !== 'test' && !process.env.MAP_PINS_NO_WARM) {
+  const warm = setTimeout(() => {
+    ['sale', 'rent', 'student'].reduce((chain, t) => chain.then(() => refreshMapPins(t).catch(() => null)), Promise.resolve());
+  }, 20000);
+  if (warm.unref) warm.unref();
+}
+
 router.get('/map-pins', async (req, res, next) => {
   try {
     const rawType = cleanText(req.query.listing_type || req.query.type || 'sale').toLowerCase();
     const type = MAP_PIN_TYPES.has(rawType) ? rawType : (rawType === 'students' ? 'student' : 'sale');
     const cached = mapPinCache.get(type);
-    if (cached && Date.now() - cached.at < 10 * 60 * 1000) {
-      res.set('Cache-Control', 'public, max-age=300');
-      return res.json({ ok: true, type, count: cached.data.length, data: cached.data });
+    if (cached && cached.data.length) {
+      // Stale-while-revalidate: always answer from memory, refresh behind.
+      if (Date.now() - cached.at >= MAP_PIN_FRESH_MS) refreshMapPins(type).catch(() => null);
+      return sendMapPins(res, type, cached);
     }
+    const entry = await refreshMapPins(type);
+    return sendMapPins(res, type, entry);
+  } catch (error) {
+    if (sendPublicPropertySearchUnavailable(res, error)) return undefined;
+    return next(error);
+  }
+});
+
+async function buildMapPins(type) {
     const pins = [];
     const seen = new Set();
     for (let page = 1; page <= MAP_PIN_MAX_PAGES; page += 1) {
@@ -3730,14 +3774,8 @@ router.get('/map-pins', async (req, res, next) => {
       });
       if (rows.length < 100) break;
     }
-    mapPinCache.set(type, { at: Date.now(), data: pins });
-    res.set('Cache-Control', 'public, max-age=300');
-    return res.json({ ok: true, type, count: pins.length, data: pins });
-  } catch (error) {
-    if (sendPublicPropertySearchUnavailable(res, error)) return undefined;
-    return next(error);
-  }
-});
+    return pins;
+}
 
 router.get('/search', listPropertiesHandler);
 router.get('/', listPropertiesHandler);

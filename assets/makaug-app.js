@@ -8657,6 +8657,12 @@ function discoverPhotoUrl(value) {
   return url;
 }
 
+function discoverRowPhoto(row = {}) {
+  const real = (typeof firstRealListingPhotoUrl === "function" && firstRealListingPhotoUrl(row)) || row.primary_image_url || "";
+  if (typeof isStockOrPlaceholderPhoto === "function" && isStockOrPlaceholderPhoto(real)) return "";
+  return discoverPhotoUrl(real);
+}
+
 function discoverPriceText(row = {}) {
   if (row.price_on_application === true || !(Number(row.price) > 0)) return "Price upon application";
   const amount = `USh ${formatCompact(Number(row.price))}`;
@@ -8804,22 +8810,26 @@ async function loadDiscoverChip(id) {
       rows = (Array.isArray(response?.data) ? response.data : []).slice(0, 4);
       noteKey = "resultsBrokerEmpty";
     } else if (chip.kind === "short-term") {
-      const params = new URLSearchParams({ q: chip.params.q || "Entebbe", limit: "4" });
+      const params = new URLSearchParams({ q: chip.params.q || "Entebbe", limit: "16" });
       const response = await apiRequest(`/api/short-term/search?${params}`, { skipAuth: true });
-      rows = (Array.isArray(response?.listings) ? response.listings : []).slice(0, 4);
+      const stRows = Array.isArray(response?.listings) ? response.listings : [];
+      const stWithPhoto = stRows.filter((row) => discoverPhotoUrl(row.primary_image_url || row.cover_image || row.image));
+      rows = (stWithPhoto.length ? stWithPhoto : stRows).slice(0, 4);
       noteKey = "resultsShortEmpty";
       noteHref = `/short-term?q=${encodeURIComponent(chip.params.q || "Entebbe")}`;
     } else {
       const params = new URLSearchParams({
         status: "approved",
         public_only: "1",
-        limit: "4",
+        limit: "24",
         card_fields: "1",
         include_summary: "0",
         ...chip.params
       });
       const response = await apiRequest(`/api/properties?${params}`, { skipAuth: true });
-      rows = (Array.isArray(response?.data) ? response.data : []).slice(0, 4);
+      const allRows = Array.isArray(response?.data) ? response.data : [];
+      const withPhoto = allRows.filter((row) => discoverRowPhoto(row));
+      rows = (withPhoto.length ? withPhoto : allRows).slice(0, 4);
       if (!rows.length && response?.ok === false && response?.error) noteKey = "resultsError";
     }
     if (token !== discoverLoadToken) return;
@@ -68647,9 +68657,9 @@ function mapMiniCardHtml(p = {}) {
   const clickAttr = p._shortStayUrl ? "" : ` onclick="return openMapPropertyDetail(event, ${idArg});"`;
   return `
     <a class="mk-map-card" data-map-marker-popup="listing" data-map-property-link="1" data-property-id="${adminAttr(p.id)}" href="${adminAttr(detailPath)}"${clickAttr}>
-      ${photo ? `<img src="${adminAttr(photo)}" alt="" loading="lazy" decoding="async">` : `<span class="mk-map-card-noimg"><i class="fas fa-house"></i></span>`}
+      ${photo ? `<img class="mk-map-card-img" src="${adminAttr(photo)}" alt="" loading="lazy" decoding="async">` : `<span class="mk-map-card-noimg"><i class="fas fa-house"></i></span>`}
       <span class="mk-map-card-body">
-        <strong>${listingPriceHtml(p)}</strong>
+        <strong class="mk-map-card-price">${adminEscape(fmtListingPrice(p))}</strong>
         <span class="mk-map-card-title">${adminEscape(title)}</span>
         ${location ? `<span class="mk-map-card-loc">${adminEscape(location)}</span>` : ""}
         <span class="mk-map-card-go">${adminEscape(translatePropertyUi("View Property"))} &rarr;</span>
@@ -68684,8 +68694,10 @@ function mapPriceTagIcon(label, options = {}) {
 
 function bindPriceTagHover(marker) {
   let closeTimer = null;
+  marker.on("click", () => { clearTimeout(closeTimer); marker._mkPinnedOpen = true; marker.openPopup(); });
+  marker.on("popupclose", () => { marker._mkPinnedOpen = false; });
   marker.on("mouseover", () => { clearTimeout(closeTimer); marker.openPopup(); });
-  marker.on("mouseout", () => { closeTimer = setTimeout(() => { try { marker.closePopup(); } catch (e) {} }, 400); });
+  marker.on("mouseout", () => { if (marker._mkPinnedOpen) return; closeTimer = setTimeout(() => { try { marker.closePopup(); } catch (e) {} }, 400); });
   marker.on("popupopen", (event) => {
     const el = event?.popup?.getElement?.();
     if (!el) return;
@@ -68745,6 +68757,9 @@ function drawPriceTag(mapId, { p, point }) {
   });
   const el = marker.getElement && marker.getElement();
   if (el) { el.setAttribute("data-map-marker", "listing"); el.setAttribute("data-map-listing-id", String(p.id)); }
+  const cardSel = `[data-map-card-id="${String(p.id).replace(/["\\]/g, "")}"]`;
+  marker.on("mouseover", () => document.querySelectorAll(cardSel).forEach((c) => c.classList.add("is-map-hovered")));
+  marker.on("mouseout", () => document.querySelectorAll(cardSel).forEach((c) => c.classList.remove("is-map-hovered")));
   mapTagIndex[mapId]?.set(String(p.id), marker);
   markers[mapId].push(marker);
 }
@@ -68776,6 +68791,16 @@ function highlightMapListing(id, on) {
     const el = marker?.getElement?.();
     if (!el) return;
     el.classList.toggle("is-hovered", !!on);
+    el.querySelector(".mk-price-tag")?.classList.toggle("is-hovered", !!on);
+    try {
+      if (on && mapId !== "map-home") {
+        const map = maps[mapId];
+        const inView = map && map.getBounds && map.getBounds().contains(marker.getLatLng());
+        if (inView && marker.openPopup) marker.openPopup();
+      } else if (!on && marker.isPopupOpen && marker.isPopupOpen() && !marker._mkPinnedOpen) {
+        marker.closePopup();
+      }
+    } catch (e) {}
     if (on && marker.setZIndexOffset) marker.setZIndexOffset(1000);
     else if (marker.setZIndexOffset) marker.setZIndexOffset(0);
   });
@@ -68854,7 +68879,7 @@ async function fetchHomeMapPins(tab) {
   } catch (error) {
     rows = [];
   }
-  homeMapPinCache[tab] = rows;
+  if (rows.length) homeMapPinCache[tab] = rows;
   return rows;
 }
 
@@ -68870,7 +68895,7 @@ async function setHomeMapTab(tab) {
   if (note) note.textContent = translateListingLabel("Loading map…");
   const rows = await fetchHomeMapPins(tab);
   if (homeMapActiveTab !== tab) return;
-  if (note) note.textContent = rows.length ? `${rows.length.toLocaleString("en-US")} ${translateListingLabel("on the map")}` : translateListingLabel("No mapped listings yet");
+  if (note) note.textContent = rows.length ? `${rows.length.toLocaleString("en-US")} ${translateListingLabel("on the map")}` : translateListingLabel("Map is busy — tap the tab to retry");
   if (maps["map-home"]) setMapMarkers("map-home", rows);
 }
 
@@ -69256,3 +69281,52 @@ function startMakaugApp() {
 }
 
 startMakaugApp();
+
+
+// Mobile list/map toggle for listing pages (map column is desktop-only by default).
+function activeListingMapCol() {
+  return [...document.querySelectorAll(".listing-map-col")].find((col) => {
+    const page = col.closest("[id^='page-']");
+    return page && !page.classList.contains("hidden") && page.offsetParent !== null;
+  }) || null;
+}
+
+function syncListingMapToggle() {
+  let btn = document.getElementById("mk-map-toggle");
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.id = "mk-map-toggle";
+    btn.type = "button";
+    btn.className = "mk-map-toggle";
+    btn.setAttribute("data-mk-map-toggle", "1");
+    btn.addEventListener("click", toggleListingMap);
+    document.body.appendChild(btn);
+  }
+  const col = activeListingMapCol();
+  document.body.classList.toggle("mk-has-listing-map", !!col);
+  if (!col && document.body.classList.contains("mk-mobile-map-open")) document.body.classList.remove("mk-mobile-map-open");
+  const open = document.body.classList.contains("mk-mobile-map-open");
+  const label = open ? `<i class="fas fa-list"></i> ${adminEscape(translateListingLabel("List"))}` : `<i class="fas fa-map"></i> ${adminEscape(translateListingLabel("Map"))}`;
+  if (btn.innerHTML !== label) btn.innerHTML = label;
+}
+
+function toggleListingMap() {
+  const col = activeListingMapCol();
+  if (!col) return;
+  document.querySelectorAll(".listing-map-col.mk-map-col-active").forEach((c) => c.classList.remove("mk-map-col-active"));
+  col.classList.add("mk-map-col-active");
+  document.body.classList.toggle("mk-mobile-map-open");
+  syncListingMapToggle();
+  const mapEl = col.querySelector("[id^='map-']");
+  const map = mapEl && maps[mapEl.id];
+  setTimeout(() => {
+    try {
+      if (map?.invalidateSize) map.invalidateSize();
+      if (map && mapLastRows[mapEl.id]) fitMapToListings(mapEl.id, mapLastRows[mapEl.id]);
+    } catch (e) {}
+  }, 60);
+}
+
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  setInterval(() => { try { syncListingMapToggle(); } catch (e) {} }, 800);
+}

@@ -115,3 +115,22 @@
 #page-short-term .st-card:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(16,24,40,.12); }
 #page-short-term .st-map-shell { border-radius: 20px; overflow: hidden; }
 #page-short-term .st-price-pin .mk-price-tag i { font-size: 11px; }
+
+/* 1104b: visible card-hover highlight on the price tag + view card polish */
+.leaflet-marker-icon.mk-price-tag-wrap.is-hovered { filter: none; z-index: 10000 !important; }
+.mk-price-tag-wrap.is-hovered .mk-price-tag { background: #b3134f; color: #fff; transform: translate(-50%, -100%) scale(1.15); box-shadow: 0 4px 14px rgba(179,19,79,.45); }
+.mk-map-popup .leaflet-popup-content { margin: 0; width: 240px !important; }
+.mk-map-popup .leaflet-popup-content-wrapper { padding: 0; overflow: hidden; border-radius: 14px; }
+.mk-map-card-body { display: flex; flex-direction: column; }
+.mk-map-card-go { margin-top: 8px; font-size: 12px; font-weight: 800; color: #b3134f; }
+.mk-map-card-noimg { display: flex; align-items: center; justify-content: center; height: 90px; background: #f3f4f6; color: #9ca3af; font-size: 22px; }
+[data-map-card-id].is-map-hovered { outline: 2px solid #b3134f; outline-offset: 2px; }
+
+/* Mobile list/map toggle (Nyumba KE style) */
+.mk-map-toggle { display: none; }
+@media (max-width: 1023px) {
+  body.mk-has-listing-map .mk-map-toggle { display: inline-flex; position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 1200; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; background: #111827; color: #fff; font-weight: 800; font-size: 14px; border: 0; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
+  body.mk-mobile-map-open .listing-map-col.mk-map-col-active { display: block !important; position: fixed; inset: 0; z-index: 1100; background: #fff; padding: 0; }
+  body.mk-mobile-map-open .listing-map-col.mk-map-col-active .listing-map-shell { position: static; height: 100%; }
+  body.mk-mobile-map-open .listing-map-col.mk-map-col-active .map-h { height: 100vh !important; border-radius: 0; }
+}
