@@ -158,30 +158,100 @@ function validateUgandaLocation({ district, area } = {}) {
   return { ok: true, district: cleanDistrict, area: cleanArea, region: normalized.region || '' };
 }
 
-function parseMarketplaceQuery(message = '') {
-  const text = clean(message);
-  const lower = text.toLowerCase();
-  let category = '';
+// Everyday phrases people type into Ask AI, mapped to the trades that do the
+// job. Checked before the plain category terms, so "design my house" finds
+// architects and interior designers rather than nothing.
+const MARKETPLACE_INTENT_SYNONYMS = Object.freeze([
+  { pattern: /\b(?:design|draw|plan)(?:s|ing|ed)?\s+(?:(?:a|my|our|the|for)\s+)*(?:house|home|building|flat|apartment|bungalow|mansion|plans?)\b|\bhouse\s+(?:plans?|designs?)\b|\bbuilding\s+plans?\b|\bdesigners?\b/, categories: ['architects', 'interior_design'] },
+  { pattern: /\b(?:furnish|decorat)\w*\b|\b(?:decor|furniture|curtains?)\b/, categories: ['interior_design'] },
+  { pattern: /\b(?:build|construct)(?:s|ing)?\s+(?:(?:a|my|our|the)\s+)*(?:house|home|building|fence|wall|perimeter wall|rentals?|apartments?|shop)\b|\b(?:renovat|extend|roofing|roofer|mason|fundi)\w*\b|\bfix (?:my |the )?roof\b/, categories: ['builders'] },
+  { pattern: /\b(?:land\s+title|title\s+deed|transfer\s+(?:of\s+)?(?:land|title)|sale\s+agreement|land\s+dispute|caveat|land\s+search|lease\s+agreement|land\s+fraud)\b/, categories: ['property_lawyers'] },
+  { pattern: /\b(?:open(?:ing)?\s+(?:the\s+)?boundar\w*|mark\s+(?:my\s+)?(?:land|plot)|demarcat\w*|subdivid\w*|mutation|land\s+(?:size|survey)|measure\s+(?:my\s+)?(?:land|plot))\b/, categories: ['surveyors'] },
+  { pattern: /\b(?:value|price|worth)\s+(?:of\s+)?(?:my\s+)?(?:house|home|land|plot|property)\b|\bhow much is my\b/, categories: ['valuers'] },
+  { pattern: /\b(?:sell|rent out|let out|find a tenant|find tenants|list)\s+(?:my\s+)?(?:house|home|land|plot|property|flat|apartment|rentals?)\b|\b(?:find|looking for)\s+(?:a\s+)?(?:house|land|plot|rental)\b/, categories: ['brokers'] },
+  { pattern: /\b(?:lights?|wiring|rewir\w*|sockets?|power\s+(?:cut|problem)|umeme|yaka|short\s+circuit)\b/, categories: ['electricians'] },
+  { pattern: /\b(?:leak\w*|pipes?|taps?|toilet|sink|drain\w*|blocked|septic|water\s+tank|geyser|water\s+heater)\b/, categories: ['plumbers'] },
+  { pattern: /\b(?:paint\w*)\b/, categories: ['painters'] },
+  { pattern: /\b(?:solar|panels?|inverter|batter(?:y|ies)|off.?grid)\b/, categories: ['solar'] },
+  { pattern: /\b(?:borehole|well|drill\w*|water\s+source)\b/, categories: ['borehole_water'] },
+  { pattern: /\b(?:cctv|cameras?|guards?|askari|alarm|electric\s+fence)\b/, categories: ['security'] },
+  { pattern: /\b(?:clean\w*|fumigat\w*|pest\s+control|laundry)\b/, categories: ['cleaning'] },
+  { pattern: /\b(?:move|moving|shift(?:ing)?|relocat\w*|transport\s+(?:my\s+)?(?:things|furniture|goods))\b/, categories: ['movers'] },
+  { pattern: /\b(?:manage\s+(?:my\s+)?(?:property|rentals?|apartments?|tenants?)|collect\s+rent|rent\s+collection|landlord\s+services?)\b/, categories: ['property_managers'] },
+  { pattern: /\b(?:insur\w*|cover\s+(?:my\s+)?(?:house|home|property))\b/, categories: ['insurance'] },
+  { pattern: /\b(?:mortgage|home\s+loan|finance\s+(?:a|my)\s+(?:house|home))\b/, categories: ['mortgage_providers'] },
+  { pattern: /\b(?:loan|sacco|microfinance|borrow)\b/, categories: ['loans_microfinance'] }
+]);
+
+// Short forms and spellings people use for places; the canonical names go
+// through the Uganda location hierarchy (Entebbe -> Wakiso, Ntinda -> Kampala).
+const MARKETPLACE_PLACE_ALIASES = Object.freeze({
+  kla: 'Kampala',
+  "k'la": 'Kampala',
+  ebb: 'Entebbe',
+  ebbs: 'Entebbe',
+  'entebbe airport': 'Entebbe',
+  'entebbe road': 'Entebbe',
+  'kira town': 'Kira',
+  'kira municipality': 'Kira',
+  'mbra': 'Mbarara',
+  'fort': 'Fort Portal',
+  'fortportal': 'Fort Portal',
+  'jinja town': 'Jinja',
+  'mukono town': 'Mukono'
+});
+
+function wordMatch(lower, term) {
+  const escaped = term.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[^a-z])${escaped}(?:s|es)?(?:$|[^a-z])`).test(lower);
+}
+
+function marketplaceCategoriesForText(lower = '') {
+  const found = [];
+  const push = (key) => { if (key && !found.includes(key)) found.push(key); };
+  // Direct trade words first ("surveyor"), then everyday phrases.
   for (const item of MARKETPLACE_CATEGORIES) {
-    if (item.terms.some((term) => lower.includes(term))) {
-      category = item.key;
-      break;
+    if (item.terms.some((term) => wordMatch(lower, term))) push(item.key);
+  }
+  if (!found.length) {
+    for (const synonym of MARKETPLACE_INTENT_SYNONYMS) {
+      if (synonym.pattern.test(lower)) synonym.categories.forEach(push);
     }
   }
-  let district = DISTRICTS.find((item) => lower.includes(item.toLowerCase())) || '';
-  let area = '';
-  if (!district) {
-    const words = text.split(/[,.;]|\b(?:in|near|around|at)\b/i).map(clean).filter(Boolean).reverse();
-    for (const candidate of words) {
+  return found;
+}
+
+function marketplacePlaceForText(text = '') {
+  const lower = text.toLowerCase();
+  const district = DISTRICTS.find((item) => wordMatch(lower, item)) || '';
+  const words = lower.replace(/[^a-z' ]+/g, ' ').split(/\s+/).filter(Boolean);
+  // Longest phrase first, so "entebbe road" wins over "entebbe".
+  for (let size = Math.min(3, words.length); size >= 1; size -= 1) {
+    for (let i = 0; i + size <= words.length; i += 1) {
+      const phrase = words.slice(i, i + size).join(' ');
+      const alias = MARKETPLACE_PLACE_ALIASES[phrase];
+      const candidate = alias || phrase;
+      if (DISTRICTS.some((item) => item.toLowerCase() === candidate.toLowerCase())) {
+        if (!district) return { district: DISTRICTS.find((item) => item.toLowerCase() === candidate.toLowerCase()), area: '' };
+        continue;
+      }
+      if (candidate.length < 3) continue;
       const knownDistrict = districtForKnownArea(candidate);
-      if (knownDistrict) {
-        district = knownDistrict;
-        area = candidate;
-        break;
+      if (knownDistrict && (!district || district === knownDistrict)) {
+        const area = candidate.replace(/\b\w/g, (c) => c.toUpperCase());
+        return { district: knownDistrict, area };
       }
     }
   }
-  return { query: text, category, district, area };
+  return { district, area: '' };
+}
+
+function parseMarketplaceQuery(message = '') {
+  const text = clean(message);
+  const lower = text.toLowerCase();
+  const categories = marketplaceCategoriesForText(lower);
+  const { district, area } = marketplacePlaceForText(text);
+  return { query: text, category: categories[0] || '', categories, district, area };
 }
 
 function invalidateMarketplaceStats() {
@@ -218,6 +288,8 @@ function buildSearchFilters(input = {}) {
     query: clean(input.query || input.q),
     category: normalizeCategory(input.category),
     group: normalizeCategoryGroup(input.group),
+    categories: (Array.isArray(input.categories) ? input.categories : clean(input.categories).split(','))
+      .map(normalizeCategory).filter(Boolean).slice(0, 6),
     district: clean(input.district),
     area: clean(input.area),
     tier: ['verified', 'private', 'found_online'].includes(clean(input.tier).toLowerCase()) ? clean(input.tier).toLowerCase() : '',
@@ -269,12 +341,15 @@ async function searchMarketplace(db, input = {}) {
     const text = textQuery
       ? `to_tsvector('simple', COALESCE(name, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(category, '') || ' ' || COALESCE(district, '') || ' ' || COALESCE(area, '')) @@ to_tsquery('simple', ${add(textQuery)})`
       : 'FALSE';
-    where.push(hint.category ? `(category = ${add(hint.category)} OR ${text})` : `(${text})`);
+    const hintCategories = hint.categories?.length ? hint.categories : (hint.category ? [hint.category] : []);
+    const hintSql = hintCategories.length > 1 ? `category = ANY(${add(hintCategories)}::text[])` : (hintCategories.length ? `category = ${add(hintCategories[0])}` : '');
+    where.push(hintSql ? `(${hintSql} OR ${text})` : `(${text})`);
     // Businesses whose own text matches rank above ones that only share the hinted category.
     if (hint.category) textMatch = text;
     if (hint.category && hint.district && !filters.district) filters.district = hint.district;
   }
   if (filters.category) where.push(`category = ${add(filters.category)}`);
+  else if (filters.categories.length) where.push(`category = ANY(${add(filters.categories)}::text[])`);
   if (filters.group) where.push(`category = ANY(${add([...categoryGroupByKey(filters.group).categories])}::text[])`);
   if (filters.district) {
     const p = add(filters.district);
@@ -356,6 +431,8 @@ async function recordMarketplaceEvent(db, entry = {}) {
 }
 
 module.exports = {
+  MARKETPLACE_INTENT_SYNONYMS,
+  MARKETPLACE_PLACE_ALIASES,
   DISTRICTS,
   MARKETPLACE_CATEGORIES,
   MARKETPLACE_CATEGORY_GROUPS,
