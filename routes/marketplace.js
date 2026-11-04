@@ -277,7 +277,7 @@ router.post('/ask', async (req, res, next) => {
     const message = clean(req.body?.message || req.body?.query);
     if (message.length < 2) return res.status(400).json({ ok: false, error: 'Describe the property service you need.' });
     const parsed = parseMarketplaceQuery(message);
-    const result = await searchMarketplace(db, {
+    const askFilters = {
       query: parsed.category ? '' : parsed.query,
       category: parsed.categories.length > 1 ? '' : parsed.category,
       categories: parsed.categories,
@@ -285,7 +285,16 @@ router.post('/ask', async (req, res, next) => {
       area: parsed.area,
       limit: 6,
       page: 1
-    });
+    };
+    let result = await searchMarketplace(db, askFilters);
+    // Few providers record an area; if the area narrows to nothing, widen to the whole district.
+    if (!result.total && parsed.area && parsed.district) {
+      const widened = await searchMarketplace(db, { ...askFilters, area: '' });
+      if (widened.total) {
+        result = widened;
+        parsed.area = '';
+      }
+    }
     const params = new URLSearchParams();
     if (parsed.categories.length > 1) params.set('categories', parsed.categories.join(','));
     else if (parsed.category) params.set('category', parsed.category);
