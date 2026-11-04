@@ -279,14 +279,16 @@ router.post('/ask', async (req, res, next) => {
     const parsed = parseMarketplaceQuery(message);
     const result = await searchMarketplace(db, {
       query: parsed.category ? '' : parsed.query,
-      category: parsed.category,
+      category: parsed.categories.length > 1 ? '' : parsed.category,
+      categories: parsed.categories,
       district: parsed.district,
       area: parsed.area,
       limit: 6,
       page: 1
     });
     const params = new URLSearchParams();
-    if (parsed.category) params.set('category', parsed.category);
+    if (parsed.categories.length > 1) params.set('categories', parsed.categories.join(','));
+    else if (parsed.category) params.set('category', parsed.category);
     if (parsed.district) params.set('district', parsed.district);
     if (parsed.area) params.set('area', parsed.area);
     if (!parsed.category && parsed.query) params.set('q', parsed.query);
