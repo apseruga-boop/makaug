@@ -20810,7 +20810,7 @@ function openStaffOwnerStatusWhatsApp(statusData = {}, normalizedStatus = "", re
   const message = waPayload.message || fallbackMessage;
   if (!(phone || waPayload.manual_url) || !message) return false;
   openAdminWhatsAppMessageModal({
-    title: status === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp",
+    ...adminDecisionMessagePanelCopy(status, statusData.notification),
     listingLabel: statusData.inquiry_reference || listing.inquiry_reference || listing.title || listing.id || "-",
     phone,
     message,
@@ -28184,7 +28184,21 @@ async function recordListingWhatsappClick(propertyId, message = "", targetPhone 
   }
 }
 
-function openAdminWhatsAppMessageModal({ title = "Send WhatsApp message", listingLabel = "-", phone = "", message = "", manualUrl = "" } = {}) {
+// Since Oct 2026 an approval is messaged by makaug itself, and since 4 Nov a
+// rejection is too. The panel still shows the text, so staff know what the
+// lister read, but nobody should send it a second time by hand.
+function adminDecisionMessagePanelCopy(status, notification) {
+  const autoSent = !!(notification && (notification.deferred || notification.whatsapp?.sent || notification.whatsapp?.deferred));
+  if (!autoSent) {
+    return { title: status === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp", subtitle: "" };
+  }
+  return {
+    title: status === "approved" ? "Listing is live — the lister has been messaged" : "Rejection sent to the lister",
+    subtitle: "makaug has already sent this WhatsApp. Open WhatsApp only if you want to add a personal note."
+  };
+}
+
+function openAdminWhatsAppMessageModal({ title = "Send WhatsApp message", listingLabel = "-", phone = "", message = "", manualUrl = "", subtitle = "" } = {}) {
   const resolvedMessage = String(message || "").trim();
   const resolvedPhone = String(phone || "").trim();
   adminWhatsAppDraft = {
@@ -28198,7 +28212,7 @@ function openAdminWhatsAppMessageModal({ title = "Send WhatsApp message", listin
   const listingEl = document.getElementById("admin-whatsapp-listing");
   const messageEl = document.getElementById("admin-whatsapp-message");
   if (titleEl) titleEl.textContent = title;
-  if (subEl) subEl.textContent = manualUrl ? "Review the personalized message, then open WhatsApp to send it." : "Review or copy the personalized message.";
+  if (subEl) subEl.textContent = subtitle || (manualUrl ? "Review the personalized message, then open WhatsApp to send it." : "Review or copy the personalized message.");
   if (phoneEl) phoneEl.textContent = resolvedPhone || "-";
   if (listingEl) listingEl.textContent = listingLabel || "-";
   if (messageEl) messageEl.value = resolvedMessage;
@@ -35198,7 +35212,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
       ? buildAdminRejectionWhatsAppMessage(listing, moderationReason)
       : buildAdminApprovalWhatsAppMessage(listing);
     openAdminWhatsAppMessageModal({
-      title: normalizedStatus === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp",
+      ...adminDecisionMessagePanelCopy(normalizedStatus, statusResponse?.notification),
       listingLabel: statusResponse?.inquiry_reference || listing.inquiry_reference || listing.title || backendId || "-",
       phone: waPayload.phone || statusResponse?.lister_phone || listing.lister_phone || "",
       message: waPayload.message || fallbackMessage,

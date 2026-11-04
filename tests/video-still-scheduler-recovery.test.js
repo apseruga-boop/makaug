@@ -234,11 +234,17 @@ function armWithFakeTimers(scheduler, env = {}) {
   return timers;
 }
 
-test('the scheduler does not arm unless VIDEO_STILL_AUTO=true', () => {
+// 4 Nov 2026: on by default. Off since 9 Oct, every video-only listing reached
+// the moderators with no photo, and the approval gate made them reject it.
+test('the scheduler arms unless VIDEO_STILL_AUTO switches it off', () => {
   installBackfillStub({ makeAndUploadStills: async () => [], attachStills: async () => ({ attached: 0 }) });
-  for (const value of [undefined, '', 'false', '1', 'yes']) {
+  for (const value of ['false', '0', 'off', 'no', ' FALSE ']) {
     const timers = armWithFakeTimers(freshScheduler(), { VIDEO_STILL_AUTO: value });
     assert.deepStrictEqual(timers, [], `VIDEO_STILL_AUTO=${JSON.stringify(value)} must not arm it`);
+  }
+  for (const value of [undefined, '', 'true', '1', 'yes']) {
+    const timers = armWithFakeTimers(freshScheduler(), { VIDEO_STILL_AUTO: value });
+    assert.ok(timers.some(([kind]) => kind === 'interval'), `VIDEO_STILL_AUTO=${JSON.stringify(value)} must arm it`);
   }
 });
 

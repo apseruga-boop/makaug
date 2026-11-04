@@ -8452,28 +8452,10 @@ async function sendAgentPropertySubmittedAlert({ agent = {}, propertyId = '', fa
   const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : [])
     .some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
   const extraRecipients = contact.digits && !onList ? [contact.digits] : [];
-  if (desk.inQuietHours()) {
-    if (!propertyId) return { skipped: 'quiet_hours' };
-    await db.query(
-      `UPDATE properties
-          SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
-            || jsonb_build_object('team_alert_deferred', jsonb_build_object(
-                 'body', $2::text,
-                 'extra_recipients', $3::jsonb,
-                 'deferred_at', NOW()::text
-               ))
-        WHERE id = $1`,
-      [propertyId, body, JSON.stringify(extraRecipients)]
-    );
-    return { deferred: true, propertyId };
-  }
-  await desk.sendToTeam(db, body, 'agent_property_submitted');
-  if (extraRecipients.length) {
-    await require('../services/leadHandoffService').deliverWhatsapp({
-      to: contact.digits, body, kind: 'agent_property_submitted_contact', leadId: null, nonce: `${propertyId}`
-    });
-  }
-  return { sent: true, propertyId };
+  const outcome = await desk.holdOrSendToTeam(db, {
+    propertyId, body, type: 'agent_property_submitted', kind: 'submitted', extraRecipients
+  });
+  return outcome.deferred ? { deferred: true, propertyId } : { ...outcome, propertyId };
 }
 
 function agentVoiceNoteReply() {

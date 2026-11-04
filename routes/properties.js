@@ -6005,29 +6005,30 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     // already left the queue (MK-20261010-FBF852). The manual message is
     // returned as soon as the status UPDATE commits. Email, WhatsApp, the
     // audit row, saved-search matching and IndexNow run after the response.
-    // A rejection is still left to a person: a refusal deserves wording a
-    // human chose, not a template fired automatically.
-    const leaveToAHuman = manualNotificationOnly && nextStatus === 'rejected';
+    //
+    // A rejection used to be left to a person, on the reasoning that a
+    // refusal deserves wording a human chose. In practice no human ever sent
+    // one: Segawa Frederick Kevin's two plots of 31 Oct 2026 were rejected on
+    // 2 Nov for "No clear photos" and he was never told — from his side the
+    // listings simply vanished. Since 4 Nov a rejection is sent the same way
+    // as an approval, with the moderator's typed reason, and the team is
+    // alerted (leadDeskService.alertTeamListingRejected).
     const manualNotification = buildManualOwnerStatusNotification({
       listing: notificationListing,
       status: nextStatus,
       reason: moderationReason
     });
-    if (leaveToAHuman) {
-      notification = manualNotification;
-    } else {
-      notification = {
-        email: { ...manualNotification.email, sent: false, reason: 'deferred_after_commit', deferred: true },
-        whatsapp: { ...manualNotification.whatsapp, sent: false, reason: 'deferred_after_commit', deferred: true },
-        manual: manualNotification,
-        deferred: true
-      };
-    }
+    notification = {
+      email: { ...manualNotification.email, sent: false, reason: 'deferred_after_commit', deferred: true },
+      whatsapp: { ...manualNotification.whatsapp, sent: false, reason: 'deferred_after_commit', deferred: true },
+      manual: manualNotification,
+      deferred: true
+    };
     decisionTiming.mark('notification_payload');
     decisionTiming.annotate({
       fast_admin_render: fastAdminRender,
       manual_notification_only: manualNotificationOnly,
-      notification_deferred: !leaveToAHuman
+      notification_deferred: true
     });
 
     const writeModerationAuditEvents = async () => {
@@ -6244,41 +6245,58 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         followLast = now;
       };
       try {
-        if (!leaveToAHuman) {
-          try {
-            if (nextStatus === 'approved') {
-              listing.primary_image_url = await getPrimaryImageUrlForProperty(listing.id);
-              markFollow('primary_image');
-            }
-            const sent = await sendOwnerListingStatusNotifications({
-              listing: {
-                ...notificationListing,
-                primary_image_url: listing.primary_image_url || ''
-              },
-              status: nextStatus,
-              reason: moderationReason
-            });
-            notification = manualNotificationOnly ? { ...sent, manual: manualNotification } : sent;
-            if (notification.email?.sent || notification.whatsapp?.sent) {
-              await db.query(
-                'UPDATE properties SET last_moderation_notification_at = NOW() WHERE id = $1',
-                [listing.id]
-              );
-            }
-          } catch (error) {
-            logger.error('Deferred owner listing notification failed', {
-              property_id: listing.id,
-              status: nextStatus,
-              message: error.message
-            });
-            notification = {
-              sent: false,
-              reason: 'notification_failed',
-              error: error.message || 'send_failed',
-              deferred: true
-            };
+        try {
+          if (nextStatus === 'approved') {
+            listing.primary_image_url = await getPrimaryImageUrlForProperty(listing.id);
+            markFollow('primary_image');
           }
-          markFollow('owner_notification');
+          const sent = await sendOwnerListingStatusNotifications({
+            listing: {
+              ...notificationListing,
+              primary_image_url: listing.primary_image_url || ''
+            },
+            status: nextStatus,
+            reason: moderationReason
+          });
+          notification = manualNotificationOnly ? { ...sent, manual: manualNotification } : sent;
+          if (notification.email?.sent || notification.whatsapp?.sent) {
+            await db.query(
+              'UPDATE properties SET last_moderation_notification_at = NOW() WHERE id = $1',
+              [listing.id]
+            );
+          }
+        } catch (error) {
+          logger.error('Deferred owner listing notification failed', {
+            property_id: listing.id,
+            status: nextStatus,
+            message: error.message
+          });
+          notification = {
+            sent: false,
+            reason: 'notification_failed',
+            error: error.message || 'send_failed',
+            deferred: true
+          };
+        }
+        markFollow('owner_notification');
+        if (nextStatus === 'rejected' && current.status !== 'rejected') {
+          // Arthur hears about every rejection a staff member makes. His own
+          // decisions from the admin dashboard need no alert back to him.
+          const rejectedByAdmin = ['admin', 'super_admin'].includes(actorRole) || req.adminAuth?.type === 'api_key';
+          if (!rejectedByAdmin) {
+            try {
+              const desk = require('../services/leadDeskService');
+              await desk.alertTeamListingRejected(db, {
+                listing: { ...current, ...listing },
+                reason: moderationReason,
+                actorLabel: moderationActorLabel(req.userAuth || {}),
+                listerNotified: !!(notification.whatsapp?.sent || notification.email?.sent)
+              });
+            } catch (error) {
+              logger.warn('Rejection alert to the team failed', { property_id: listing.id, message: error.message });
+            }
+            markFollow('team_rejection_alert');
+          }
         }
         await writeModerationAuditEvents();
         markFollow('moderation_audit');

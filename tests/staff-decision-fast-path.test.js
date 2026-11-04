@@ -17,7 +17,10 @@ test('a listing decision responds when the status update commits', () => {
   assert.match(properties, /function createDecisionTiming/);
   assert.match(properties, /Listing decision timing/);
   assert.match(properties, /Listing decision follow-up timing/);
-  assert.match(properties, /const leaveToAHuman = manualNotificationOnly && nextStatus === 'rejected'/);
+  // 4 Nov 2026: nothing is left to a human any more — a rejection is sent
+  // like an approval, after the response.
+  assert.doesNotMatch(properties, /leaveToAHuman/);
+  assert.match(properties, /notification_deferred: true/);
   assert.match(properties, /runPublicInventoryFollowup\(\s*deliverDeferredDecisionWork/);
   assert.match(properties, /return res\.json\(buildStatusResponse\(fastAlertMatching\)\)/);
   const committed = properties.indexOf("decisionTiming.mark('status_committed')");
@@ -161,7 +164,8 @@ test('a slow reject returns the decision while follow-up work is still running',
     assert.equal(res.body.data.inquiry_reference, 'MK-20261010-FBF852');
     assert.equal(res.body.data.lister_notified, false);
     assert.equal(res.body.data.notification.whatsapp.sent, false);
-    assert.equal(res.body.data.notification.whatsapp.reason, 'manual_first_fast_status_update');
+    assert.equal(res.body.data.notification.whatsapp.reason, 'deferred_after_commit');
+    assert.equal(res.body.data.notification.deferred, true, 'the rejection message is sent after the response, like an approval');
     assert.ok(res.body.data.notification.whatsapp.message);
     assert.ok(elapsed < 2000, `response took ${elapsed}ms`);
     await new Promise((resolve) => setTimeout(resolve, 50));
