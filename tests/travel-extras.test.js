@@ -163,9 +163,11 @@ test('the short-term block is empty without extras and sets rel on each link', (
   assert.equal(JSON.stringify(sandbox.calls), JSON.stringify([['affiliate_click', { partner: 'kiwitaxi', placement: 'short-term-listing' }]]));
 });
 
-test('extras are on the short-term pages, not inside compare prices, and not hard-coded', () => {
-  assert.match(client, /travelExtrasHtml\('short-term'\)/);
-  assert.match(client, /travelExtrasHtml\('short-term-listing'\)/);
+test('the "Plan the rest of your trip" extras are off the short-term pages, not inside compare prices, and not hard-coded', () => {
+  // Removed from the short-stay search and listing pages on 4 Nov 2026 at
+  // the owner's request. The helper stays for any other placement.
+  assert.equal(/travelExtrasHtml\('short-term'\)/.test(client), false);
+  assert.equal(/travelExtrasHtml\('short-term-listing'\)/.test(client), false);
   assert.match(client, /rel="sponsored noopener"/);
   assert.match(client, /fireClientGaEvent\('affiliate_click'/);
   assert.equal(client.includes('785967'), false);
