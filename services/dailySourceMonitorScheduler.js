@@ -11,6 +11,8 @@ const RUN_MINUTE = 30;
 const CATCH_UP_MINUTES = 60;
 const LOCK_KEY = 'makaug_daily_source_monitor';
 const RAN_TODAY_ACTION = 'daily_source_monitor_ran';
+const MORTGAGE_WATCH_ACTION = 'mortgage_rate_watch_ran';
+const MORTGAGE_WATCH_TIMEOUT_MS = 3 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 8 * 60 * 1000;
 
 // 24 Oct 2026, about 06:00–06:30 UK: Chrome timed out opening Preview & edit.
@@ -208,6 +210,53 @@ async function runScheduledSourceMonitor(db, options = {}) {
   }
 }
 
+// Weekly mortgage-rate check (Mondays) plus Bank of Uganda MPC dates and the
+// day after. It rides on this 05:30 London tick because the Render workspace
+// has no room for another cron. It only records proposals for staff; it
+// never changes a published rate. One run per London date via audit_logs.
+async function runScheduledMortgageRateWatch(db, options = {}) {
+  const log = options.logger || logger;
+  const now = options.now instanceof Date ? options.now : new Date();
+  const env = options.env || process.env;
+  if (/^(0|false|no|off)$/i.test(String(env.MORTGAGE_RATE_WATCH_ENABLED || '').trim())) {
+    return { ok: true, skipped: true, reason: 'disabled' };
+  }
+  const watch = options.watchService || require('./mortgageRateWatchService');
+  const londonDate = londonParts(now).dateKey;
+  const due = watch.mortgageRateWatchDue(londonDate);
+  if (!due.due && options.force !== true) return { ok: true, skipped: true, reason: due.reason, london_date: londonDate };
+  try {
+    const prior = await db.query(
+      `SELECT id FROM audit_logs WHERE action = $1 AND details->>'london_date' = $2 LIMIT 1`,
+      [MORTGAGE_WATCH_ACTION, londonDate]
+    );
+    if (prior.rows[0] && options.force !== true) return { ok: true, skipped: true, reason: 'already_ran_today', london_date: londonDate };
+    await db.query(
+      `INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, $2, $3::jsonb)`,
+      ['daily_source_monitor_scheduler', MORTGAGE_WATCH_ACTION, JSON.stringify({ london_date: londonDate, reason: due.reason || 'manual' })]
+    );
+    let stop = false;
+    const outcome = await runWithTimeout(
+      () => watch.runMortgageRateWatch(db, { reason: due.reason || 'manual', shouldStop: () => stop, fetchImpl: options.fetchImpl }),
+      MORTGAGE_WATCH_TIMEOUT_MS,
+      () => { stop = true; },
+      { unref: options.unrefTimer !== false }
+    );
+    const report = outcome.report || null;
+    log.info('mortgage rate watch finished', {
+      london_date: londonDate,
+      timed_out: outcome.timed_out === true,
+      checked: report?.checked,
+      failed: report?.failed,
+      proposals: report?.proposals,
+    });
+    return { ok: outcome.ok, skipped: false, london_date: londonDate, reason: due.reason, report };
+  } catch (error) {
+    log.warn('mortgage rate watch failed', { message: error?.message || String(error) });
+    return { ok: false, skipped: false, reason: 'run_failed', message: error?.message || String(error) };
+  }
+}
+
 function clearDailySourceMonitorSchedule() {
   if (timer) clearTimeout(timer);
   timer = null;
@@ -223,6 +272,7 @@ function armDailySourceMonitor(db, options, delayMs) {
       armDailySourceMonitor(db, options, Math.max(1000, next.getTime() - Date.now()));
     };
     const tracked = runBackgroundWork(() => runScheduledSourceMonitor(db, options))
+      .then(() => runBackgroundWork(() => runScheduledMortgageRateWatch(db, options)))
       .catch((error) => {
         (options.logger || logger).error('source monitor scheduler tick failed', { message: error?.message || String(error) });
       })
@@ -255,6 +305,7 @@ function startDailySourceMonitorScheduler(db, options = {}) {
 module.exports = {
   CATCH_UP_MINUTES,
   LOCK_KEY,
+  MORTGAGE_WATCH_ACTION,
   RAN_TODAY_ACTION,
   RUN_HOUR,
   RUN_MINUTE,
@@ -265,6 +316,7 @@ module.exports = {
   londonParts,
   nextSourceMonitorRun,
   registrationLine,
+  runScheduledMortgageRateWatch,
   runScheduledSourceMonitor,
   scheduledFireAt,
   startDailySourceMonitorScheduler,

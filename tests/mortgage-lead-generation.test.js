@@ -209,9 +209,8 @@ assert(mortgageRoutes.includes('} catch (error) {'), 'API should fall back to au
 assert(mortgageRoutes.includes("residentialRate: null"), 'lenders without a published rate should still render as quote required');
 assert(mortgageRoutes.includes('residentialRate: 16') && mortgageRoutes.includes('commercialRate: 18'), 'Housing Finance fallback should publish 16% residential and 18% commercial');
 assert(mortgageRoutes.includes('14 Oct 2026') && mortgageRoutes.includes('CBR increase to 12%'), 'Housing Finance note should cite the 14 Oct 2026 BoU CBR at 12%');
-assert(mortgageRoutes.includes("sourceVerifiedAt: '2026-10-20'"), 'Housing Finance review should be dated after the 14 Oct 2026 CBR hike');
-assert(mortgageRoutes.includes("sourceVerifiedAt: '2026-10-02'"), 'earlier audited mortgage assumptions should keep their verification date');
-assert(app.includes('const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-10-20"'), 'mortgage fallback verification label should use the post-CBR review date');
+assert(mortgageRoutes.includes("sourceVerifiedAt: '2026-11-04'"), 'mortgage rates should carry the 4 Nov 2026 re-check date');
+assert(app.includes('const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-11-04"'), 'mortgage fallback verification label should use the 4 Nov 2026 re-check date');
 assert(!app.includes('until Arthur turns on the feature flag'), 'the public mortgage page must not mention an internal feature flag');
 assert(!app.includes('· prepared'), 'the public mortgage page must not show a prepared Go Pro label');
 assert(app.includes('if (!enabled) return "";'), 'disabled monetization hooks must render nothing');

@@ -20,10 +20,20 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 10, commercial: 20, land: 20, default: 10 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
-    sourceLabel: 'Bank of Uganda bank rates sheet (1 Apr 2026) and Stanbic home loans',
-    sourceUrl: 'https://bou.or.ug/uploads/Commercial_Banks_Interest_Rates_and_Bank_Charges_as_at_01_April_2026_25716d34bb.pdf',
-    sourceNote: 'Bank of Uganda’s 1 April 2026 rates sheet lists Stanbic personal home loans at 17.5%. Stanbic also advertises 16.5% for pre-approved existing customers. House-purchase loans: from a 10% deposit, up to 25 years, 1.5% fee; land loans up to 80% financing (cap UGX 300m), 1% fee. Confirm the final rate with the bank.',
-    sourceVerifiedAt: '2026-10-02'
+    // Dated change: Stanbic moves its mortgage reference rate to 19% on
+    // 1 Dec 2026. applyScheduledMortgageRates switches it on that London date.
+    scheduledRates: [
+      {
+        effectiveFrom: '2026-12-01',
+        residentialRate: 19,
+        commercialRate: 19,
+        sourceNote: 'From 1 Dec 2026 Stanbic prices mortgages off a 19% mortgage reference rate (17.5% until 30 Nov 2026), announced with its prime lending rate rising to 21.75%. House-purchase loans: from a 10% deposit, up to 25 years, 1.5% fee. Confirm the final rate with the bank.'
+      }
+    ],
+    sourceLabel: 'Stanbic rate change (The Cooperator, Oct 2026) and Stanbic home loans',
+    sourceUrl: 'https://thecooperator.news/stanbic-bank-uganda-raises-prime-lending-rate-to-21-75-percent/',
+    sourceNote: 'Stanbic mortgages are 17.5% until 30 Nov 2026. From 1 Dec 2026 its mortgage reference rate rises to 19%, announced with its prime lending rate rising to 21.75%. House-purchase loans: from a 10% deposit, up to 25 years, 1.5% fee. Confirm the final rate with the bank.',
+    sourceVerifiedAt: '2026-11-04'
   },
   {
     key: 'hfb',
@@ -37,21 +47,21 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     sourceLabel: 'Housing Finance mortgage terms and conditions',
     sourceUrl: 'https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/',
     sourceNote: 'Housing Finance publishes 16% residential and 18% commercial, reviewed after the 14 Oct 2026 Bank of Uganda CBR increase to 12%. It also publishes up to 80% purchase finance in Kampala, up to 20-year residential/commercial terms, a 1.25% facility fee, and a 35% income guide. Confirm the current rate with the bank.',
-    sourceVerifiedAt: '2026-10-20'
+    sourceVerifiedAt: '2026-11-04'
   },
   {
     key: 'dfcu',
     name: 'dfcu Bank',
-    residentialRate: 16.0,
+    residentialRate: 16.9,
     commercialRate: null,
     landRate: null,
     minDepositPct: { residential: 15, commercial: 40, land: 40, default: 15 },
-    maxYears: { residential: 25, commercial: 20, land: 20, default: 25 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 2.0,
-    sourceLabel: 'dfcu home loans',
-    sourceUrl: 'https://www.dfcugroup.com/personal-banking/home-loans/',
-    sourceNote: 'dfcu publishes 16% UGX home-loan guidance, up to 85% of open-market value, and up to 25 years for UGX loans (10 years in USD). Its tariff guide lists a 2%-3% arrangement fee; this calculator uses 2%.',
-    sourceVerifiedAt: '2026-10-02'
+    sourceLabel: 'dfcu home-loan offer (dfcu promotions, Nile Post 2 Nov 2026)',
+    sourceUrl: 'https://www.dfcugroup.com/promotions/',
+    sourceNote: 'dfcu’s current UGX home-loan offer is 16.9%, up to 85% of the property value (15% deposit), for up to 20 years. Its tariff guide lists a 2%-3% arrangement fee; this calculator uses 2%. Confirm the final rate with the bank.',
+    sourceVerifiedAt: '2026-11-04'
   },
   {
     key: 'kcb',
@@ -65,7 +75,7 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     sourceLabel: 'KCB mortgage overview',
     sourceUrl: 'https://ug.kcbgroup.com/products/mortgage',
     sourceNote: 'KCB publishes UGX pricing from 17.5%, up to 20-year purchase/construction/refinance terms, and up to 80% financing for Kampala, Entebbe, and Wakiso. Final pricing and approval remain bank-specific.',
-    sourceVerifiedAt: '2026-10-02'
+    sourceVerifiedAt: '2026-11-04'
   },
   {
     key: 'ncba',
@@ -79,7 +89,7 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     sourceLabel: 'NCBA Uganda property loans',
     sourceUrl: 'https://ncbagroup.com/ug/property-loans/',
     sourceNote: 'NCBA publishes property-loan, construction-finance, land-purchase, and equity-release terms: up to 25-year UGX mortgage tenure, up to 90% financing for eligible Kampala/city properties, 70% office-space financing, and up to 60-month land-purchase terms; public rate requires bank confirmation.',
-    sourceVerifiedAt: '2026-10-02'
+    sourceVerifiedAt: '2026-11-04'
   },
   {
     key: 'centenary',
@@ -93,7 +103,7 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     sourceLabel: 'Centenary Bank housing loan pages',
     sourceUrl: 'https://www.centenarybank.co.ug/product/cente-mortgage/4/8',
     sourceNote: 'Centenary publishes Cente Mortgage amounts from UGX 20m to UGX 300m, up to 10-year tenure, and a minimum 30% borrower contribution. The same page also states maximum LTV of 80%, so the calculator uses the more conservative 30% deposit and requires bank confirmation.',
-    sourceVerifiedAt: '2026-10-02'
+    sourceVerifiedAt: '2026-11-04'
   },
   {
     key: 'baroda',
@@ -107,7 +117,7 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     sourceLabel: 'Baroda housing loan and interest rates',
     sourceUrl: 'https://www.bankofbaroda.ug/rates-and-charges/interest-rates',
     sourceNote: 'Bank of Baroda prices housing loans at 2% below its UGX prime lending rate (20%), i.e. 18%, for up to 15 years. Bank of Uganda’s April 2026 sheet lists no arrangement fee. Confirm the current rate with the bank.',
-    sourceVerifiedAt: '2026-10-02'
+    sourceVerifiedAt: '2026-11-04'
   },
   {
     key: 'absa',
@@ -115,13 +125,14 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     residentialRate: null,
     commercialRate: null,
     landRate: null,
+    primeRate: 21.75,
     minDepositPct: { residential: 15, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 2.0,
-    sourceLabel: 'Absa Uganda home loans',
-    sourceUrl: 'https://www.absa.co.ug/personal/home-loans/',
-    sourceNote: 'Absa publishes up to 85% property finance, up to 25-year terms, and a 2% arrangement fee. It does not publish a fixed public rate on the reviewed page, so a current quote is required.',
-    sourceVerifiedAt: '2026-10-02'
+    sourceLabel: 'Absa prime rate change (CEO East Africa, Nov 2026) and Absa home loans',
+    sourceUrl: 'https://www.ceo.co.ug/absa-stanbic-and-dfcu-raise-lending-rates-as-uganda-shilling-and-inflation-pressures-deepen/',
+    sourceNote: 'Absa’s prime lending rate is 21.75% from 1 Nov 2026. It does not publish a fixed home-loan rate, so a quote is required. Absa offers up to 85% property finance, up to 25-year terms, and a 2% arrangement fee.',
+    sourceVerifiedAt: '2026-11-04'
   }
 ];
 
@@ -286,6 +297,8 @@ function withAuditedMortgageData(provider) {
       ...audited.maxYears
     },
     arrangementFeePct: audited.arrangementFeePct ?? provider.arrangementFeePct,
+    primeRate: audited.primeRate ?? provider.primeRate ?? null,
+    scheduledRates: audited.scheduledRates || provider.scheduledRates || [],
     sourceLabel: audited.sourceLabel || provider.sourceLabel,
     sourceUrl: audited.sourceUrl || provider.sourceUrl,
     sourceNote: audited.sourceNote || provider.sourceNote,
@@ -341,6 +354,119 @@ function latestMortgageSourceVerifiedAt(providers = []) {
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
 }
 
+const MORTGAGE_RATE_STALE_AFTER_DAYS = 30;
+const BOU_CENTRAL_BANK_RATE = Object.freeze({
+  rate: 12,
+  effectiveFrom: '2026-10-14',
+  sourceUrl: 'https://bou.or.ug/uploads/MPS_October_2026_cdc1de720f.pdf',
+  sourceVerifiedAt: '2026-11-04'
+});
+
+function londonDateKey(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(now);
+}
+
+// A provider can carry dated rate changes (Stanbic 19% from 1 Dec 2026).
+// The latest change whose London start date has arrived replaces the rates
+// and note; the change history stays visible in rateChanges.
+function applyScheduledMortgageRates(provider, now = new Date()) {
+  const schedule = Array.isArray(provider.scheduledRates) ? provider.scheduledRates : [];
+  const { scheduledRates: _ignored, ...rest } = provider;
+  const out = { ...rest, rateChanges: schedule.map((change) => ({ ...change })) };
+  if (!schedule.length) return out;
+  const today = londonDateKey(now);
+  const due = schedule
+    .filter((change) => change && change.effectiveFrom && change.effectiveFrom <= today)
+    .sort((a, b) => String(b.effectiveFrom).localeCompare(String(a.effectiveFrom)))[0];
+  if (!due) return out;
+  return {
+    ...out,
+    residentialRate: due.residentialRate ?? out.residentialRate,
+    commercialRate: due.commercialRate ?? out.commercialRate,
+    landRate: due.landRate ?? out.landRate,
+    sourceNote: due.sourceNote || out.sourceNote,
+    rateEffectiveFrom: due.effectiveFrom
+  };
+}
+
+function mortgageRateAgeDays(sourceVerifiedAt, now = new Date()) {
+  if (!sourceVerifiedAt) return null;
+  const checked = new Date(`${String(sourceVerifiedAt).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(checked.getTime())) return null;
+  const today = new Date(`${londonDateKey(now)}T00:00:00Z`);
+  return Math.max(0, Math.round((today.getTime() - checked.getTime()) / 86400000));
+}
+
+// A rate whose source was last checked more than 30 days ago is flagged stale
+// so the page and staff can see it needs re-checking.
+function withMortgageRateFreshness(provider, now = new Date()) {
+  const ageDays = mortgageRateAgeDays(provider.sourceVerifiedAt, now);
+  return {
+    ...provider,
+    checkedDaysAgo: ageDays,
+    staleAfterDays: MORTGAGE_RATE_STALE_AFTER_DAYS,
+    stale: ageDays == null ? true : ageDays > MORTGAGE_RATE_STALE_AFTER_DAYS
+  };
+}
+
+// Staff-approved proposals from the weekly rate check (mortgage_rate_proposals)
+// win over the coded rates. Nothing reaches the page without approval.
+function applyApprovedMortgageRateChanges(providers, approved = []) {
+  if (!approved.length) return providers;
+  const byKey = new Map();
+  for (const row of approved) {
+    const key = String(row.provider_key || '').toLowerCase();
+    if (!key) continue;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(row);
+  }
+  return providers.map((provider) => {
+    const rows = byKey.get(provider.key);
+    if (!rows) return provider;
+    let next = { ...provider };
+    // Oldest first, so the newest approval for a field wins.
+    rows.sort((a, b) => new Date(a.reviewed_at) - new Date(b.reviewed_at));
+    for (const row of rows) {
+      const value = toNullableFloat(row.approved_rate);
+      if (value == null) continue;
+      if (row.rate_field === 'commercialRate') next.commercialRate = value;
+      else if (row.rate_field === 'primeRate') next.primeRate = value;
+      else next.residentialRate = value;
+      next.sourceUrl = row.source_url || next.sourceUrl;
+      next.sourceVerifiedAt = String(new Date(row.reviewed_at).toISOString()).slice(0, 10);
+      if (row.staff_note) next.sourceNote = row.staff_note;
+      next.approvedChangeId = row.id;
+    }
+    return next;
+  });
+}
+
+async function readApprovedMortgageRateChanges() {
+  try {
+    const exists = await db.query(`SELECT to_regclass('public.mortgage_rate_proposals') AS table_name`);
+    if (!exists.rows[0]?.table_name) return [];
+    const result = await db.query(
+      `SELECT id, provider_key, rate_field, approved_rate, source_url, staff_note, reviewed_at
+       FROM mortgage_rate_proposals
+       WHERE status = 'approved' AND approved_rate IS NOT NULL
+       ORDER BY reviewed_at ASC
+       LIMIT 200`
+    );
+    return result.rows || [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function finishMortgageProviders(providers, approved = [], now = new Date()) {
+  return applyApprovedMortgageRateChanges(
+    providers.map((provider) => applyScheduledMortgageRates(provider, now)),
+    approved
+  ).map((provider) => withMortgageRateFreshness(provider, now));
+}
+
 async function hasMortgageTable() {
   const exists = await db.query(`SELECT to_regclass('public.mortgage_providers') AS table_name`);
   return Boolean(exists.rows[0]?.table_name);
@@ -368,7 +494,21 @@ function buildMortgageLeadRef() {
   return `MF-${ts}-${rand}`;
 }
 
-async function readMortgageProviders() {
+async function readMortgageProviders(options = {}) {
+  const now = options.now instanceof Date ? options.now : new Date();
+  const base = await readMortgageProvidersBase();
+  const approved = await readApprovedMortgageRateChanges();
+  const providers = finishMortgageProviders(base.providers, approved, now);
+  return {
+    ...base,
+    providers,
+    updatedAt: latestMortgageSourceVerifiedAt(providers),
+    staleCount: providers.filter((provider) => provider.stale).length,
+    centralBankRate: BOU_CENTRAL_BANK_RATE
+  };
+}
+
+async function readMortgageProvidersBase() {
   try {
     if (!(await hasMortgageTable())) {
       const providers = mergeAuditedMortgageProviders(FALLBACK_MORTGAGE_PROVIDERS);
@@ -436,6 +576,9 @@ router.get('/', async (req, res, next) => {
         updatedAt: payload.updatedAt,
         refreshedAt: new Date().toISOString(),
         source: payload.source,
+        staleAfterDays: MORTGAGE_RATE_STALE_AFTER_DAYS,
+        staleCount: payload.staleCount,
+        centralBankRate: payload.centralBankRate,
         providers: payload.providers
       }
     });
@@ -661,6 +804,79 @@ router.post('/enquiry', async (req, res, next) => {
   }
 });
 
+// Staff review of changes found by the weekly mortgage-rate check.
+router.get('/proposals', requireAdminApiKey, async (req, res, next) => {
+  try {
+    const exists = await db.query(`SELECT to_regclass('public.mortgage_rate_proposals') AS table_name`);
+    if (!exists.rows[0]?.table_name) return res.json({ ok: true, data: { proposals: [], snapshots: [] } });
+    const status = ['pending', 'approved', 'rejected', 'all'].includes(String(req.query.status)) ? String(req.query.status) : 'pending';
+    const proposals = await db.query(
+      `SELECT id, provider_key, rate_field, current_rate, proposed_rate, approved_rate, source_url,
+              numbers_before, numbers_after, reason, status, staff_note, reviewed_by, reviewed_at, detected_at
+       FROM mortgage_rate_proposals
+       WHERE ($1 = 'all' OR status = $1)
+       ORDER BY detected_at DESC
+       LIMIT 100`,
+      [status]
+    );
+    const snapshots = await db.query(
+      `SELECT source_url, provider_key, numbers, fetched_at
+       FROM mortgage_rate_source_snapshots
+       ORDER BY provider_key, source_url`
+    );
+    const payload = await readMortgageProviders();
+    return res.json({
+      ok: true,
+      data: {
+        proposals: proposals.rows,
+        snapshots: snapshots.rows,
+        staleAfterDays: MORTGAGE_RATE_STALE_AFTER_DAYS,
+        providers: payload.providers.map((p) => ({
+          key: p.key, name: p.name, residentialRate: p.residentialRate, primeRate: p.primeRate ?? null,
+          sourceUrl: p.sourceUrl, sourceVerifiedAt: p.sourceVerifiedAt, stale: p.stale, checkedDaysAgo: p.checkedDaysAgo
+        }))
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/proposals/check', requireAdminApiKey, async (req, res, next) => {
+  try {
+    const { runMortgageRateWatch } = require('../services/mortgageRateWatchService');
+    const report = await runMortgageRateWatch(db, { reason: 'staff_check' });
+    return res.json({ ok: true, data: report });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/proposals/:id/:decision(approve|reject)', requireAdminApiKey, async (req, res, next) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'Invalid proposal id' });
+    const approve = req.params.decision === 'approve';
+    const body = req.body || {};
+    const rate = toNullableFloat(body.approvedRate ?? body.approved_rate);
+    if (approve && (rate == null || rate < 1 || rate > 60)) {
+      return res.status(400).json({ ok: false, error: 'approvedRate (the confirmed % rate) is required to approve' });
+    }
+    const reviewer = cleanText(req.user?.email || req.user?.id || body.reviewedBy || 'staff').slice(0, 120);
+    const result = await db.query(
+      `UPDATE mortgage_rate_proposals
+       SET status = $2, approved_rate = $3, staff_note = NULLIF($4, ''), reviewed_by = $5, reviewed_at = NOW()
+       WHERE id = $1 AND status = 'pending'
+       RETURNING id, provider_key, rate_field, status, approved_rate, reviewed_at`,
+      [id, approve ? 'approved' : 'rejected', approve ? rate : null, cleanText(body.note || body.staffNote || '').slice(0, 600), reviewer]
+    );
+    if (!result.rows[0]) return res.status(404).json({ ok: false, error: 'Proposal not found or already reviewed' });
+    return res.json({ ok: true, data: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.put('/', requireAdminApiKey, async (req, res, next) => {
   const body = req.body || {};
   const providers = Array.isArray(body.providers) ? body.providers : [];
@@ -793,3 +1009,10 @@ module.exports = router;
 module.exports.ACTIVE_COUNTRY_CODE = ACTIVE_COUNTRY_CODE;
 module.exports.FALLBACK_MORTGAGE_PROVIDERS = FALLBACK_MORTGAGE_PROVIDERS;
 module.exports.readMortgageProviders = readMortgageProviders;
+module.exports.MORTGAGE_RATE_STALE_AFTER_DAYS = MORTGAGE_RATE_STALE_AFTER_DAYS;
+module.exports.BOU_CENTRAL_BANK_RATE = BOU_CENTRAL_BANK_RATE;
+module.exports.applyScheduledMortgageRates = applyScheduledMortgageRates;
+module.exports.withMortgageRateFreshness = withMortgageRateFreshness;
+module.exports.applyApprovedMortgageRateChanges = applyApprovedMortgageRateChanges;
+module.exports.finishMortgageProviders = finishMortgageProviders;
+module.exports.mergeAuditedMortgageProviders = mergeAuditedMortgageProviders;
