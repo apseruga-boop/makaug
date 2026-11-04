@@ -63067,7 +63067,9 @@ function siteTranslate(text, lang = currentLang || "en") {
   }
 }
 
+const HOME_MAP_COUNT_I18N = {"lg": {"commercial properties": "amayumba ag'obusuubuzi", "land plots": "ebibanja"}, "sw": {"commercial properties": "mali za kibiashara", "land plots": "viwanja"}, "ac": {"commercial properties": "ot me biacara", "land plots": "ngom"}, "ny": {"commercial properties": "amaju g'obusuubuzi", "land plots": "ebibanja"}, "rn": {"commercial properties": "amaju g'obusuubuzi", "land plots": "ebibanja"}, "sm": {"commercial properties": "amayumba ag'obusuubuzi", "land plots": "ebibanja"}, "am": {"commercial properties": "የንግድ ንብረቶች", "land plots": "መሬቶች"}, "ar": {"commercial properties": "عقارات تجارية", "land plots": "قطع أراضٍ"}};
 const BOOKING_NEW_LABELS_I18N = {"lg": {"Swipe for more days": "Seetula olabe ennaku endala", "Pick a time": "Londa essaawa", "View broker": "Laba omukozi"}, "sw": {"Swipe for more days": "Telezesha kuona siku zaidi", "Pick a time": "Chagua muda", "View broker": "Mwone wakala"}, "ac": {"Swipe for more days": "Ywar me neno nino mapol", "Pick a time": "Yer kare", "View broker": "Nen lacung"}, "ny": {"Swipe for more days": "Seetura oreebe ebiro ebindi", "Pick a time": "Toorana obwire", "View broker": "Reeba omukozi"}, "rn": {"Swipe for more days": "Seetura orole ebiro ebindi", "Pick a time": "Torana obwire", "View broker": "Rora omukozi"}, "sm": {"Swipe for more days": "Seetula olabe enaku endala", "Pick a time": "Londa esaawa", "View broker": "Laba omukozi"}, "am": {"Swipe for more days": "ተጨማሪ ቀናትን ለማየት ያንሸራትቱ", "Pick a time": "ሰዓት ይምረጡ", "View broker": "ደላላውን ይመልከቱ"}, "ar": {"Swipe for more days": "اسحب لرؤية المزيد من الأيام", "Pick a time": "اختر وقتاً", "View broker": "عرض الوسيط"}};
+Object.entries(HOME_MAP_COUNT_I18N).forEach(([lang, labels]) => Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels));
 Object.entries(BOOKING_NEW_LABELS_I18N).forEach(([lang, labels]) => Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels));
 
 function translateListingLabel(text) {
@@ -68933,7 +68935,7 @@ function wireMapCardHover() {
 }
 
 // Homepage "Explore on map": tabs backed by the lightweight pin endpoint.
-const HOME_MAP_TABS = ["sale", "rent", "student", "short_term"];
+const HOME_MAP_TABS = ["sale", "rent", "student", "short_term", "commercial", "land"];
 const homeMapPinCache = {};
 let homeMapActiveTab = "sale";
 
@@ -68990,12 +68992,15 @@ async function setHomeMapTab(tab) {
     const on = btn.getAttribute("data-home-map-tab") === tab;
     btn.classList.toggle("is-active", on);
     btn.setAttribute("aria-selected", on ? "true" : "false");
+    if (on && btn.parentElement && btn.parentElement.scrollWidth > btn.parentElement.clientWidth) {
+      btn.parentElement.scrollTo({ left: Math.max(0, btn.offsetLeft - 24), behavior: "smooth" });
+    }
   });
   const note = document.getElementById("home-map-count");
   if (note) note.textContent = translateListingLabel("Loading map…");
   const rows = await fetchHomeMapPins(tab);
   if (homeMapActiveTab !== tab) return;
-  if (note) note.textContent = rows.length ? `${rows.length.toLocaleString("en-US")} ${translateListingLabel(({ sale: "homes for sale", rent: "homes for rent", student: "student rooms", short_term: "short stays" })[tab] || "listings")} ${translateListingLabel("on the map")}` : translateListingLabel("Map is busy — tap the tab to retry");
+  if (note) note.textContent = rows.length ? `${rows.length.toLocaleString("en-US")} ${translateListingLabel(({ sale: "homes for sale", rent: "homes for rent", student: "student rooms", short_term: "short stays", commercial: "commercial properties", land: "land plots" })[tab] || "listings")} ${translateListingLabel("on the map")}` : translateListingLabel("Map is busy — tap the tab to retry");
   if (maps["map-home"]) setMapMarkers("map-home", rows);
 }
 
