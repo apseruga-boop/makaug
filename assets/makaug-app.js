@@ -4711,6 +4711,7 @@ function marketplacePanelGroups() {
   });
 }
 function renderMarketplaceGroupPanel() {
+  const MKC_GROUP_ART = { buy_sell_legal: 1, build_design: 1, power_water_security: 1, manage_move_insure: 1 };
   const tiles = document.getElementById("mkc-groups");
   if (!tiles) return;
   const iconByKey = Object.fromEntries((marketplaceState.categories || []).map((item) => [item.key, item.icon]));
@@ -4721,7 +4722,7 @@ function renderMarketplaceGroupPanel() {
     const links = [...group.items].sort((a, b) => b.count - a.count).slice(0, 5);
     return `<article class="mkc-tile" data-group="${adminAttr(group.key)}" aria-current="${pressed ? "true" : "false"}">
       <button type="button" class="mkc-tile-head" onclick="selectMarketplaceGroup('${adminAttr(group.key)}')" aria-pressed="${pressed ? "true" : "false"}">
-        <span class="mkc-tile-icon"><i class="fas ${adminAttr(group.icon || "fa-briefcase")}" aria-hidden="true"></i></span>
+        ${MKC_GROUP_ART[group.key] ? `<span class="mkc-tile-art"><img src="/assets/img/marketplace/${adminAttr(group.key)}.webp" alt="" width="280" height="210" loading="lazy" decoding="async"></span>` : `<span class="mkc-tile-icon"><i class="fas ${adminAttr(group.icon || "fa-briefcase")}" aria-hidden="true"></i></span>`}
         <span class="min-w-0"><span class="mkc-tile-title">${adminEscape(marketplaceGroupTitle(group))}</span><span class="mkc-tile-count">${adminEscape(marketplaceInterpolate(marketplaceTr("groupBusinesses"), { count: group.count.toLocaleString() }))}</span></span>
       </button>
       <div class="mkc-tile-links">${links.map((item) => `<button type="button" onclick="selectMarketplaceCategory('${adminAttr(item.key)}')" style="${adminAttr(marketplaceCategoryStyle(item.key))}" aria-pressed="${item.key === activeCategory ? "true" : "false"}"><i class="fas ${adminAttr(iconByKey[item.key] || "fa-briefcase")}" aria-hidden="true"></i>${adminEscape(marketplaceCategoryLabel(item.key))} <span>${item.count.toLocaleString()}</span></button>`).join("")}</div>
@@ -8579,8 +8580,69 @@ const DISCOVER_CHIPS = [
   { id: "land-mukono", labelKey: "chipLandMukono", kind: "property", params: { listing_type: "land", area: "Mukono" } },
   { id: "near-makerere", labelKey: "chipNearMakerere", kind: "property", params: { listing_type: "rent", area: "Makerere" } },
   { id: "short-stay", labelKey: "chipShortStay", kind: "short-term", params: { q: "Entebbe" } },
-  { id: "broker", labelKey: "chipBroker", kind: "broker", params: { status: "approved" } }
+  { id: "broker", labelKey: "chipBroker", kind: "broker", params: { status: "approved" } },
+  // Extra tappable demo prompts (labels live in AI_DEMO_LABELS so the DISCOVER table stays complete).
+  { id: "rent-kololo", labelKey: "demoRentKololo", kind: "property", params: { listing_type: "rent", area: "Kololo" } },
+  { id: "buy-muyenga", labelKey: "demoBuyMuyenga", kind: "property", params: { listing_type: "sale", area: "Muyenga" } },
+  { id: "land-wakiso", labelKey: "demoLandWakiso", kind: "property", params: { listing_type: "land", district: "Wakiso" } },
+  { id: "rent-bukoto", labelKey: "demoRentBukoto", kind: "property", params: { listing_type: "rent", area: "Bukoto" } },
+  { id: "student-kyambogo", labelKey: "demoStudentKyambogo", kind: "property", params: { student_portal: "1", area: "Kyambogo" } },
+  { id: "commercial-kampala", labelKey: "demoCommercialKampala", kind: "property", params: { listing_type: "commercial", district: "Kampala" } },
+  { id: "buy-entebbe", labelKey: "demoBuyEntebbe", kind: "property", params: { listing_type: "sale", area: "Entebbe" } },
+  { id: "rent-najjera", labelKey: "demoRentNajjera", kind: "property", params: { listing_type: "rent", area: "Najjera" } }
 ];
+const AI_DEMO_LABELS = {
+  demoRentKololo: "Rent in Kololo", demoBuyMuyenga: "Buy in Muyenga", demoLandWakiso: "Land in Wakiso",
+  demoRentBukoto: "Rent in Bukoto", demoStudentKyambogo: "Student room near Kyambogo",
+  demoCommercialKampala: "Shops & offices in Kampala", demoBuyEntebbe: "Buy in Entebbe", demoRentNajjera: "Rent in Najjera"
+};
+function aiDemoLabel(key) { return AI_DEMO_LABELS[key] || aiTr(key); }
+function aiDemoTime() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+function aiDemoGreeting() {
+  const thread = document.getElementById("ai-demo-thread");
+  if (!thread) return;
+  thread.innerHTML = `<div class="chatbot-bubble bot"><span>${adminEscape(aiTr("sub"))}</span><span class="chatbot-time">${aiDemoTime()}</span></div>`;
+  document.querySelectorAll("[data-ai-lang]").forEach((btn) => btn.setAttribute("aria-pressed", btn.getAttribute("data-ai-lang") === (currentLang || "en") ? "true" : "false"));
+}
+function aiDemoSetLang(code) {
+  if (typeof setLang === "function") setLang(code);
+  aiDemoGreeting();
+  loadDiscoverChip(discoverChipId);
+}
+function aiDemoUserBubble(chip) {
+  const thread = document.getElementById("ai-demo-thread");
+  if (!thread) return;
+  if (!thread.children.length) aiDemoGreeting();
+  thread.insertAdjacentHTML("beforeend", `<div class="chatbot-bubble user"><span>${adminEscape(aiDemoLabel(chip.labelKey))}</span><span class="chatbot-time">${aiDemoTime()} ✓✓</span></div><div class="chatbot-bubble bot mk-ai-typing" data-ai-typing="1"><span class="mk-dots"><i></i><i></i><i></i></span></div>`);
+  thread.scrollTop = thread.scrollHeight;
+}
+function aiDemoBotReply(chip, rows, noteKey) {
+  const thread = document.getElementById("ai-demo-thread");
+  if (!thread) return;
+  thread.querySelectorAll("[data-ai-typing]").forEach((el) => el.remove());
+  const cards = (rows || []).slice(0, 3).map((row) => {
+    let href; let photo; let title; let price;
+    if (chip.kind === "broker") {
+      href = getBrokerProfilePath(row); photo = discoverPhotoUrl(row.profile_photo_url);
+      title = row.full_name || row.company_name || ""; price = aiTr("approvedBroker");
+    } else if (chip.kind === "short-term") {
+      href = row.url || "/short-term"; photo = discoverPhotoUrl(row.primary_image_url || row.cover_image || row.image);
+      title = row.title || ""; price = Number(row.price_per_night) > 0 ? `USh ${formatCompact(Number(row.price_per_night))}/night` : "Price upon application";
+    } else {
+      href = getPropertyDetailPath(row);
+      photo = discoverPhotoUrl((typeof firstRealListingPhotoUrl === "function" && firstRealListingPhotoUrl(row)) || row.primary_image_url);
+      title = row.title || [row.area, row.district].filter(Boolean).join(", "); price = discoverPriceText(row);
+    }
+    return `<a class="chatbot-listing-card" href="${adminAttr(href)}" onclick="return navigatePublicRoute(this.href, event)">${photo ? `<img src="${adminAttr(photo)}" alt="" loading="lazy">` : ""}<div class="chatbot-listing-card-body"><div class="font-bold line-clamp-1">${adminEscape(title)}</div><div class="text-green-700 font-semibold">${adminEscape(price)}</div></div></a>`;
+  }).join("");
+  const text = rows && rows.length ? `${aiDemoLabel(chip.labelKey)} ↓` : aiTr(noteKey || "resultsEmpty");
+  thread.insertAdjacentHTML("beforeend", `<div class="chatbot-bubble bot"><span>${adminEscape(text)}</span>${cards}<span class="chatbot-time">${aiDemoTime()}</span></div>`);
+  while (thread.children.length > 9) thread.firstElementChild.remove();
+  thread.scrollTop = thread.scrollHeight;
+}
 let discoverChipId = "rent-ntinda";
 let discoverLoadToken = 0;
 let discoverCache = { id: "", rows: [], noteKey: "", noteHref: "" };
@@ -8717,7 +8779,7 @@ function paintDiscoverChips() {
     btn.classList.toggle("text-gray-800", !on);
     btn.classList.toggle("border-gray-200", !on);
     const key = btn.getAttribute("data-discover-label");
-    if (key) btn.textContent = aiTr(key);
+    if (key) btn.textContent = aiDemoLabel(key);
   });
 }
 
@@ -8731,6 +8793,7 @@ async function loadDiscoverChip(id) {
   const token = ++discoverLoadToken;
   host.innerHTML = "";
   note.textContent = aiTr("resultsLoading");
+  aiDemoUserBubble(chip);
   try {
     let rows = [];
     let noteKey = "resultsEmpty";
@@ -8762,6 +8825,7 @@ async function loadDiscoverChip(id) {
     if (token !== discoverLoadToken) return;
     discoverCache = { id: chip.id, rows, noteKey: rows.length ? "" : noteKey, noteHref: rows.length ? "" : noteHref };
     renderDiscoverResults();
+    aiDemoBotReply(chip, rows, noteKey);
   } catch (error) {
     if (token !== discoverLoadToken) return;
     const missingShortStay = chip.kind === "short-term" && Number(error?.status || 0) === 404;
@@ -8772,6 +8836,7 @@ async function loadDiscoverChip(id) {
       noteHref: missingShortStay ? `/short-term?q=${encodeURIComponent(chip.params.q || "Entebbe")}` : ""
     };
     renderDiscoverResults();
+    aiDemoBotReply(chip, [], discoverCache.noteKey);
   }
 }
 
@@ -51158,11 +51223,57 @@ function socialImportTileMediaHtml(p = {}, idArg = "''") {
     <div class="social-import-tile-media">
       ${coverUrl
         ? `<img src="${adminAttr(coverUrl)}" alt="${adminAttr(`${platform.label} property preview`)}" class="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" onerror="this.classList.add('hidden'); var fallback=this.nextElementSibling; if (fallback) fallback.classList.remove('hidden');"><div class="hidden">${foundOnlineSourceFallbackVisualHtml(platform.label)}</div>`
-        : foundOnlineSourceFallbackVisualHtml(platform.label)}
+        : (/tiktok\.com\/@[^/]+\/video\/\d+/i.test(sourceUrl || "")
+          ? `<div data-tiktok-oembed-thumb="${adminAttr(sourceUrl)}">${foundOnlineSourceFallbackVisualHtml(platform.label)}</div>`
+          : foundOnlineSourceFallbackVisualHtml(platform.label))}
       <span class="social-import-source-chip ${platform.chipClass}" data-platform="${adminAttr(platform.key)}"><i class="${platform.icon}"></i>${adminEscape(platform.label)}</span>
       ${socialImportMediaBadgeHtml(p)}
       ${canPlay ? `<button type="button" data-source-video-play="1" onclick="${playAction}" class="social-import-play-button" aria-label="${adminAttr(`${translateListingLabel("Play")} ${platform.label} ${translateListingLabel("video")}`)}"><span><i class="ti-player-play-filled fas fa-play"></i></span></button>` : ""}
     </div>`;
+}
+
+// Cards with no stored cover: ask TikTok's free public oEmbed for a fresh thumbnail when the card scrolls
+// into view (TikTok CDN covers expire, so we never store them). Falls back to the placeholder on any error.
+const tiktokOembedThumbCache = new Map();
+let tiktokOembedObserver = null;
+function hydrateTikTokOembedThumb(el) {
+  if (!el || el.dataset.tiktokOembedDone === "1") return;
+  el.dataset.tiktokOembedDone = "1";
+  const url = el.getAttribute("data-tiktok-oembed-thumb") || "";
+  if (!url) return;
+  let job = tiktokOembedThumbCache.get(url);
+  if (!job) {
+    job = fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`, { credentials: "omit" })
+      .then((r) => (r.ok ? r.json() : null)).then((d) => (d && /^https:\/\//.test(d.thumbnail_url || "") ? d.thumbnail_url : "")).catch(() => "");
+    tiktokOembedThumbCache.set(url, job);
+  }
+  job.then((thumb) => {
+    if (!thumb || !el.isConnected) return;
+    const img = new Image();
+    img.alt = "TikTok property preview";
+    img.className = "absolute inset-0 h-full w-full object-cover";
+    img.referrerPolicy = "no-referrer";
+    img.decoding = "async";
+    img.onload = () => { el.replaceChildren(img); };
+    img.src = thumb;
+  });
+}
+function scanTikTokOembedThumbs() {
+  const pending = document.querySelectorAll('[data-tiktok-oembed-thumb]:not([data-tiktok-oembed-done="1"])');
+  if (!pending.length) return;
+  if (!("IntersectionObserver" in window)) { pending.forEach(hydrateTikTokOembedThumb); return; }
+  if (!tiktokOembedObserver) {
+    tiktokOembedObserver = new IntersectionObserver((entries) => entries.forEach((entry) => {
+      if (entry.isIntersecting) { tiktokOembedObserver.unobserve(entry.target); hydrateTikTokOembedThumb(entry.target); }
+    }), { rootMargin: "300px 0px" });
+  }
+  pending.forEach((el) => tiktokOembedObserver.observe(el));
+}
+if (typeof window !== "undefined" && typeof MutationObserver !== "undefined" && typeof document !== "undefined") {
+  let tiktokOembedScanQueued = false;
+  const queueScan = () => { if (tiktokOembedScanQueued) return; tiktokOembedScanQueued = true; setTimeout(() => { tiktokOembedScanQueued = false; scanTikTokOembedThumbs(); }, 120); };
+  const startTikTokOembedWatch = () => { if (document.body) { new MutationObserver(queueScan).observe(document.body, { childList: true, subtree: true }); queueScan(); } };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", startTikTokOembedWatch); else startTikTokOembedWatch();
 }
 
 const PUBLIC_CANONICAL_LOCATION_MATCH_BY_PROPERTY_ID = new Map();
@@ -52854,7 +52965,7 @@ function studentCardFooterText(p = {}) {
   });
   if (!cardVideoFirstMedia && !photoSrc) return "";
   return `
-    <div class="group relative bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
+    <div class="group relative bg-white rounded-xl border border-gray-100 overflow-hidden property-card mk-card cursor-pointer" data-map-card-id="${adminAttr(String(p.id))}" onclick="openPropertyCardDetail(event, ${idArg})">
       ${propertyDescriptionHoverHtml(p)}
       <div class="h-48 relative overflow-hidden bg-gray-100">
         ${cardVideoFirstMedia
@@ -53379,7 +53490,7 @@ function brokerCardHtml(b, options = {}) {
   const badge = verified ? "" : renderBrokerRegistrationBadge(b, "text-[11px]");
   const bio = brokerCardBioText(b);
   return `
-    <article class="broker-grid-card bg-white rounded-2xl ${border} shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
+    <article class="broker-grid-card bg-white rounded-2xl ${border} shadow-sm cursor-pointer hover:shadow-md transition-all" data-broker-card-id="${adminAttr(String(b.id))}" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
       ${brokerCardMediaHtml(b, { imageLoading: options.imageLoading })}
       <div class="broker-card-main">
         <div class="broker-card-name-line">
@@ -57649,7 +57760,18 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
   const key = publicPaginationKey(category);
   const state = publicPaginationStateFor(key);
   if (!key || !state) return [];
-  if (shouldPreserveInitialSsrCategoryGrid(key, options)) return [];
+  if (shouldPreserveInitialSsrCategoryGrid(key, options)) {
+    // The server-rendered page is kept, so map exactly the cards it shows.
+    const ssrMapId = publicPaginationMapId(key);
+    const grid = document.getElementById(publicPaginationGridId(key));
+    if (ssrMapId && grid) {
+      const ids = Array.from(grid.querySelectorAll("[data-ssr-property-card]")).map((el) => String(el.getAttribute("data-ssr-property-card")));
+      const byId = new Map((list || []).concat(getPublicListings()).map((p) => [String(p.id), p]));
+      const rows = ids.map((id) => byId.get(id)).filter(Boolean);
+      if (rows.length) setMapMarkers(ssrMapId, rows);
+    }
+    return [];
+  }
   ensurePublicResultsHeader(key);
   if (options.mode) state.mode = options.mode;
   if (options.sourcePath !== undefined) syncPublicCategoryPaginationSource(key, options.sourcePath || "");
@@ -68162,27 +68284,36 @@ function setBrokerMapMarkers(list) {
 
   if (!window.L) return;
 
+  mapTagIndex[mapId] = new Map();
+  wireMapCardHover();
   points.forEach(({ broker, point }) => {
     const brokerIdArg = adminListingIdArg(broker.id);
     const brokerPath = getBrokerProfilePath(broker);
-    const marker = L.marker([point.lat, point.lng]).addTo(map);
+    const marker = L.marker([point.lat, point.lng], { riseOnHover: true, title: broker.name || "" }).addTo(map);
+    const photo = broker.photo || broker.profile_photo_url || "";
+    const isLogo = broker.profile_photo_kind === "logo";
+    const media = photo
+      ? `<img src="${adminAttr(photo)}" alt="" class="${isLogo ? "is-logo" : ""}" loading="lazy" decoding="async" onerror="this.style.display='none'">`
+      : `<span class="mk-broker-initials">${adminEscape(brokerInitials(broker.name || ""))}</span>`;
+    const listingCount = Number(broker.listings) || 0;
 
     marker.bindPopup(`
-      <div data-map-marker-popup="broker" style="min-width:210px">
-        <div style="font-weight:700;color:#111827;margin-bottom:2px">${broker.name}</div>
-        <div style="font-size:12px;color:#6b7280;margin-bottom:8px">${broker.company}</div>
-        <div style="font-size:12px;color:#374151;margin-bottom:8px">📍 ${broker.area}</div>
-        <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;margin-bottom:8px">
-          <span style="font-weight:600;color:#166534">⭐ ${broker.rating}</span>
-          <span style="color:#4b5563">${broker.listings} listings</span>
+      <div class="mk-broker-pop" data-map-marker-popup="broker">
+        <div class="mk-broker-pop-head">
+          ${media}
+          <div class="mk-broker-pop-text">
+            <strong>${adminEscape(broker.name || "Broker")}</strong>
+            ${broker.company ? `<span>${adminEscape(broker.company)}</span>` : ""}
+            ${broker.area ? `<span class="mk-broker-pop-loc"><i class="fas fa-location-dot"></i> ${adminEscape(broker.area)}</span>` : ""}
+          </div>
         </div>
-        <a href="${adminAttr(brokerPath)}" data-map-broker-link="1" data-broker-id="${adminAttr(broker.id)}" onclick="return openMapBrokerProfile(event, ${brokerIdArg});" style="display:block;width:100%;box-sizing:border-box;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;">
-          View Broker
-        </a>
+        <div class="mk-broker-pop-meta">${listingCount} ${adminEscape(translateListingLabel(listingCount === 1 ? "listing" : "listings"))}</div>
+        <a href="${adminAttr(brokerPath)}" class="mk-broker-pop-btn" data-map-broker-link="1" data-broker-id="${adminAttr(broker.id)}" onclick="return openMapBrokerProfile(event, ${brokerIdArg});">View broker</a>
       </div>
-    `);
+    `, { className: "mk-map-popup", closeButton: false, minWidth: 230, maxWidth: 260 });
 
     wireLeafletMarkerClick(marker, "broker");
+    mapTagIndex[mapId].set(String(broker.id), marker);
     markers[mapId].push(marker);
   });
 
@@ -68277,7 +68408,7 @@ async function initMaps() {
     if (!el || !getReadyPublicMapIds().includes(spec.id)) return;
     const initialList = spec.filter();
     if (maps[spec.id] && mapProviders[spec.id] === "leaflet" && mapInstanceMatchesDom(spec.id)) {
-      setMapMarkers(spec.id, initialList);
+      setMapMarkers(spec.id, spec.id === "map-home" ? (homeMapRows() || initialList) : (mapLastRows[spec.id] || initialList));
       resizePublicMap(spec.id, 80);
       return;
     }
@@ -68295,8 +68426,12 @@ async function initMaps() {
     maps[spec.id] = map;
     mapProviders[spec.id] = "leaflet";
     markers[spec.id] = [];
-    addMarkers(spec.id, initialList);
-    fitMapToListings(spec.id, initialList);
+    wireMapCardHover();
+    if (spec.id === "map-home") {
+      setHomeMapTab(homeMapActiveTab);
+    } else {
+      setMapMarkers(spec.id, mapLastRows[spec.id] || initialList);
+    }
     resizePublicMap(spec.id, 80);
   });
 
@@ -68460,21 +68595,294 @@ function fitMapToListings(mapId, list) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Price-tag map markers (Airbnb / Nyumba KE style). Listing maps draw the
+// price in the selected currency as the marker itself; overlapping points are
+// spread out; big sets (home map) are grid-clustered per zoom level; hovering
+// a card lifts its tag; clicking a tag opens a mini card that links through.
+// ---------------------------------------------------------------------------
+const PRICE_TAG_MAP_IDS = new Set(["map-home", "map-sale", "map-rent", "map-students", "map-commercial", "map-land"]);
+const mapLastRows = {};
+const mapTagIndex = {};
+const MAP_CLUSTER_THRESHOLD = 60;
+
+function mapTagPriceText(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  if (p?.price_on_application === true || extra.price_on_application === true) return translateListingLabel("POA");
+  const ugx = listingUgxToday(p);
+  if (!(ugx > 0)) return translateListingLabel("POA");
+  const cur = activeCur || "UGX";
+  const rate = cur === "UGX" ? 1 : fxRateToUgx(cur);
+  const symbol = cur === "UGX" ? "USh " : (CURRENCY_SYMBOLS[cur] || "");
+  const amount = formatCompact(Math.round(ugx / (rate || 1)));
+  const type = normalizeType(p?.type || p?.listing_type || "");
+  const period = String(p?.period || p?.price_period || "").toLowerCase();
+  let suffix = "";
+  if (type === "rent" || type === "student" || /month|mo\b/.test(period)) suffix = "/mo";
+  if (/night/.test(period)) suffix = "/night";
+  if (/sem/.test(period)) suffix = "/sem";
+  return `${symbol}${amount}${suffix}`;
+}
+
+function mapMiniCardHtml(p = {}) {
+  const idArg = propertyIdArg(p.id);
+  const title = getLocalizedPropertyTitle(p) || translatePropertyUi("Property");
+  const location = getPropertyLocationDisplay(p) || [p?.area, p?.district].filter(Boolean).join(", ");
+  const detailPath = p._shortStayUrl || getPropertyDetailPath(p);
+  const photo = isStockOrPlaceholderPhoto(p.img) ? "" : publicImageSrc(p.img || p.primary_image_url || "");
+  const clickAttr = p._shortStayUrl ? "" : ` onclick="return openMapPropertyDetail(event, ${idArg});"`;
+  return `
+    <a class="mk-map-card" data-map-marker-popup="listing" data-map-property-link="1" data-property-id="${adminAttr(p.id)}" href="${adminAttr(detailPath)}"${clickAttr}>
+      ${photo ? `<img src="${adminAttr(photo)}" alt="" loading="lazy" decoding="async">` : `<span class="mk-map-card-noimg"><i class="fas fa-house"></i></span>`}
+      <span class="mk-map-card-body">
+        <strong>${listingPriceHtml(p)}</strong>
+        <span class="mk-map-card-title">${adminEscape(title)}</span>
+        ${location ? `<span class="mk-map-card-loc">${adminEscape(location)}</span>` : ""}
+        <span class="mk-map-card-go">${adminEscape(translatePropertyUi("View Property"))} &rarr;</span>
+      </span>
+    </a>`;
+}
+
+function mapSpreadPoints(items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const key = `${item.point.lat.toFixed(4)},${item.point.lng.toFixed(4)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+  groups.forEach((group) => {
+    if (group.length < 2) return;
+    group.forEach((item, index) => {
+      if (index === 0) return;
+      // Golden-angle spiral, ~80-250 m apart, so every tag stays clickable.
+      const angle = index * 2.399963;
+      const radius = 0.0008 * Math.sqrt(index);
+      item.point = { ...item.point, lat: item.point.lat + radius * Math.sin(angle), lng: item.point.lng + radius * Math.cos(angle) };
+    });
+  });
+  return items;
+}
+
+function mapPriceTagIcon(label, options = {}) {
+  const cls = ["mk-price-tag", options.approx ? "is-approx" : "", options.cluster ? "is-cluster" : ""].filter(Boolean).join(" ");
+  return L.divIcon({ className: "mk-price-tag-wrap", html: `<span class="${cls}">${adminEscape(label)}</span>`, iconSize: null, iconAnchor: [0, 0] });
+}
+
+function bindPriceTagHover(marker) {
+  let closeTimer = null;
+  marker.on("mouseover", () => { clearTimeout(closeTimer); marker.openPopup(); });
+  marker.on("mouseout", () => { closeTimer = setTimeout(() => { try { marker.closePopup(); } catch (e) {} }, 400); });
+  marker.on("popupopen", (event) => {
+    const el = event?.popup?.getElement?.();
+    if (!el) return;
+    el.addEventListener("mouseenter", () => clearTimeout(closeTimer));
+    el.addEventListener("mouseleave", () => { closeTimer = setTimeout(() => { try { marker.closePopup(); } catch (e) {} }, 300); });
+  });
+}
+
+function addPriceTagMarkers(mapId, list) {
+  const map = maps[mapId];
+  if (!map || !window.L) return;
+  mapTagIndex[mapId] = new Map();
+  const items = [];
+  (list || []).forEach((p) => {
+    const point = getListingMapPoint(p);
+    if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng) || point.precision === "country") return;
+    if (!isLikelyUgandaCoordinate(point.lat, point.lng)) return;
+    items.push({ p, point });
+  });
+  const clusterOn = items.length > MAP_CLUSTER_THRESHOLD && map.getZoom() < 15;
+  if (clusterOn) {
+    const cell = 72;
+    const buckets = new Map();
+    items.forEach((item) => {
+      const px = map.project([item.point.lat, item.point.lng], map.getZoom());
+      const key = `${Math.floor(px.x / cell)}:${Math.floor(px.y / cell)}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(item);
+    });
+    buckets.forEach((bucket) => {
+      if (bucket.length === 1) return drawPriceTag(mapId, bucket[0]);
+      const lat = bucket.reduce((s, i) => s + i.point.lat, 0) / bucket.length;
+      const lng = bucket.reduce((s, i) => s + i.point.lng, 0) / bucket.length;
+      const marker = L.marker([lat, lng], { icon: mapPriceTagIcon(`${bucket.length} ${translateListingLabel("homes")}`, { cluster: true }), riseOnHover: true }).addTo(map);
+      marker.on("click", () => {
+        const bounds = L.latLngBounds(bucket.map((i) => [i.point.lat, i.point.lng]));
+        map.fitBounds(bounds.pad(0.3), { maxZoom: Math.min(map.getZoom() + 3, 17) });
+      });
+      markers[mapId].push(marker);
+    });
+    return;
+  }
+  mapSpreadPoints(items).forEach((item) => drawPriceTag(mapId, item));
+}
+
+function drawPriceTag(mapId, { p, point }) {
+  const marker = L.marker([point.lat, point.lng], {
+    icon: mapPriceTagIcon(mapTagPriceText(p), { approx: !point.exact }),
+    riseOnHover: true,
+    title: getLocalizedPropertyTitle(p) || ""
+  }).addTo(maps[mapId]);
+  marker.bindPopup(mapMiniCardHtml(p), { className: "mk-map-popup", closeButton: false, offset: [0, -30], maxWidth: 260, minWidth: 220, autoPanPadding: [24, 24] });
+  bindPriceTagHover(marker);
+  marker.on("add", () => {
+    const el = marker.getElement && marker.getElement();
+    if (el) { el.setAttribute("data-map-marker", "listing"); el.setAttribute("data-map-listing-id", String(p.id)); }
+  });
+  const el = marker.getElement && marker.getElement();
+  if (el) { el.setAttribute("data-map-marker", "listing"); el.setAttribute("data-map-listing-id", String(p.id)); }
+  mapTagIndex[mapId]?.set(String(p.id), marker);
+  markers[mapId].push(marker);
+}
+
+function renderListingMapMarkers(mapId, list) {
+  if (PRICE_TAG_MAP_IDS.has(mapId) && mapProviders[mapId] !== "google" && window.L) {
+    addPriceTagMarkers(mapId, list);
+    wireClusterZoom(mapId);
+    return;
+  }
+  addMarkers(mapId, list);
+}
+
+function wireClusterZoom(mapId) {
+  const map = maps[mapId];
+  if (!map || map._mkClusterWired) return;
+  map._mkClusterWired = true;
+  map.on("zoomend", () => {
+    const rows = mapLastRows[mapId] || [];
+    if (rows.length <= MAP_CLUSTER_THRESHOLD) return;
+    clearMapMarkers(mapId);
+    addPriceTagMarkers(mapId, rows);
+  });
+}
+
+function highlightMapListing(id, on) {
+  Object.keys(mapTagIndex).forEach((mapId) => {
+    const marker = mapTagIndex[mapId]?.get(String(id));
+    const el = marker?.getElement?.();
+    if (!el) return;
+    el.classList.toggle("is-hovered", !!on);
+    if (on && marker.setZIndexOffset) marker.setZIndexOffset(1000);
+    else if (marker.setZIndexOffset) marker.setZIndexOffset(0);
+  });
+}
+
+function highlightBrokerPin(id, on) {
+  const marker = (mapTagIndex["map-brokers"] || new Map()).get(String(id));
+  const el = marker?.getElement?.();
+  if (!el) return;
+  el.classList.toggle("is-hovered", !!on);
+  if (marker.setZIndexOffset) marker.setZIndexOffset(on ? 1000 : 0);
+}
+
+function wireMapCardHover() {
+  if (document._mkMapHoverWired) return;
+  document._mkMapHoverWired = true;
+  const find = (target, sel) => target?.closest?.(sel);
+  document.addEventListener("mouseover", (event) => {
+    const card = find(event.target, "[data-map-card-id]");
+    if (card && !card.contains(event.relatedTarget)) highlightMapListing(card.getAttribute("data-map-card-id"), true);
+    const broker = find(event.target, "[data-broker-card-id]");
+    if (broker && !broker.contains(event.relatedTarget)) highlightBrokerPin(broker.getAttribute("data-broker-card-id"), true);
+  });
+  document.addEventListener("mouseout", (event) => {
+    const card = find(event.target, "[data-map-card-id]");
+    if (card && !card.contains(event.relatedTarget)) highlightMapListing(card.getAttribute("data-map-card-id"), false);
+    const broker = find(event.target, "[data-broker-card-id]");
+    if (broker && !broker.contains(event.relatedTarget)) highlightBrokerPin(broker.getAttribute("data-broker-card-id"), false);
+  });
+}
+
+// Homepage "Explore on map": tabs backed by the lightweight pin endpoint.
+const HOME_MAP_TABS = ["sale", "rent", "student", "short_term"];
+const homeMapPinCache = {};
+let homeMapActiveTab = "sale";
+
+function shortStayPinForMap(row = {}) {
+  const nightly = Number(row.nightly_ugx || row.price_per_night || 0);
+  return {
+    id: row.id || row.reference || row.slug,
+    title: row.title || "",
+    type: "short_term",
+    listing_type: "short_term",
+    price: nightly > 0 ? nightly : 0,
+    period: "night",
+    price_on_application: !(nightly > 0),
+    area: row.area || "",
+    district: row.district || "",
+    img: row.primary_image || "",
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude),
+    lat: Number(row.latitude),
+    lng: Number(row.longitude),
+    _shortStayUrl: row.url || (row.reference ? `/short-term/hotel/${String(row.reference).replace(/^la-|^hb-/, "")}` : "/short-term"),
+    extra_fields: { location_precision: "gps" }
+  };
+}
+
+async function fetchHomeMapPins(tab) {
+  if (homeMapPinCache[tab]) return homeMapPinCache[tab];
+  let rows = [];
+  try {
+    if (tab === "short_term") {
+      const [mapRes, searchRes] = await Promise.all([
+        fetch("/api/short-term/map").then((r) => r.ok ? r.json() : {}).catch(() => ({})),
+        fetch("/api/short-term/search?limit=48").then((r) => r.ok ? r.json() : {}).catch(() => ({}))
+      ]);
+      rows = [...(mapRes.pins || []), ...(searchRes.partner_listings || [])]
+        .filter((r) => Number.isFinite(Number(r.latitude)) && Number.isFinite(Number(r.longitude)))
+        .map(shortStayPinForMap);
+    } else {
+      const res = await fetch(`/api/properties/map-pins?type=${encodeURIComponent(tab)}`);
+      const body = res.ok ? await res.json() : {};
+      rows = (body.data || []).map((p) => mapRemotePropertyForUi(p));
+    }
+  } catch (error) {
+    rows = [];
+  }
+  homeMapPinCache[tab] = rows;
+  return rows;
+}
+
+async function setHomeMapTab(tab) {
+  if (!HOME_MAP_TABS.includes(tab)) tab = "sale";
+  homeMapActiveTab = tab;
+  document.querySelectorAll("[data-home-map-tab]").forEach((btn) => {
+    const on = btn.getAttribute("data-home-map-tab") === tab;
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  const note = document.getElementById("home-map-count");
+  if (note) note.textContent = translateListingLabel("Loading map…");
+  const rows = await fetchHomeMapPins(tab);
+  if (homeMapActiveTab !== tab) return;
+  if (note) note.textContent = rows.length ? `${rows.length.toLocaleString("en-US")} ${translateListingLabel("on the map")}` : translateListingLabel("No mapped listings yet");
+  if (maps["map-home"]) setMapMarkers("map-home", rows);
+}
+
+function homeMapRows() {
+  return homeMapPinCache[homeMapActiveTab] || null;
+}
+
 function setMapMarkers(mapId, list) {
   if (!maps[mapId]) return;
+  mapLastRows[mapId] = list || [];
   clearMapMarkers(mapId);
-  addMarkers(mapId, list || []);
+  renderListingMapMarkers(mapId, list || []);
   fitMapToListings(mapId, list || []);
 }
 
+// Re-draw each map from the rows it last showed (the current results page),
+// not from every listing in memory. Used after a currency change.
 function resetMaps() {
   const publicListings = getPublicListings();
-  setMapMarkers("map-home", publicListings);
-  setMapMarkers("map-sale", publicListings.filter((p) => normalizeType(p.type) === "sale"));
-  setMapMarkers("map-rent", publicListings.filter((p) => normalizeType(p.type) === "rent"));
-  setMapMarkers("map-students", publicListings.filter((p) => isStudentDiscoverable(p)));
-  setMapMarkers("map-commercial", publicListings.filter((p) => normalizeType(p.type) === "commercial"));
-  setMapMarkers("map-land", publicListings.filter((p) => normalizeType(p.type) === "land"));
+  const rowsFor = (mapId, fallback) => mapLastRows[mapId] || fallback();
+  setMapMarkers("map-home", homeMapRows() || rowsFor("map-home", () => publicListings));
+  setMapMarkers("map-sale", rowsFor("map-sale", () => publicListings.filter((p) => normalizeType(p.type) === "sale")));
+  setMapMarkers("map-rent", rowsFor("map-rent", () => publicListings.filter((p) => normalizeType(p.type) === "rent")));
+  setMapMarkers("map-students", rowsFor("map-students", () => publicListings.filter((p) => isStudentDiscoverable(p))));
+  setMapMarkers("map-commercial", rowsFor("map-commercial", () => publicListings.filter((p) => normalizeType(p.type) === "commercial")));
+  setMapMarkers("map-land", rowsFor("map-land", () => publicListings.filter((p) => normalizeType(p.type) === "land")));
   setBrokerMapMarkers(getBrokerDirectory());
 }
 

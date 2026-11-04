@@ -446,6 +446,7 @@
   </style>
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
   <link rel="stylesheet" href="/assets/short-term.css?v=20261023-short-stay-fee-v26">
+  <link rel="stylesheet" href="/assets/design-refresh-1104.css?v=20261104">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -4275,7 +4276,16 @@
 
     <section class="py-12 bg-white">
       <div class="max-w-7xl mx-auto px-4">
-        <h2 id="home-map-title" class="text-3xl font-bold text-gray-800 serif mb-6">Explore on Map</h2>
+        <div class="mk-home-map-head">
+          <h2 id="home-map-title" class="text-3xl font-bold text-gray-800 serif">Explore on Map</h2>
+          <div class="mk-home-map-tabs" role="tablist" aria-label="Map listing type">
+            <button type="button" role="tab" data-home-map-tab="sale" class="is-active" aria-selected="true" onclick="setHomeMapTab('sale')">For sale</button>
+            <button type="button" role="tab" data-home-map-tab="rent" aria-selected="false" onclick="setHomeMapTab('rent')">For rent</button>
+            <button type="button" role="tab" data-home-map-tab="student" aria-selected="false" onclick="setHomeMapTab('student')">Students</button>
+            <button type="button" role="tab" data-home-map-tab="short_term" aria-selected="false" onclick="setHomeMapTab('short_term')">Short stay</button>
+          </div>
+          <span id="home-map-count" class="mk-home-map-count" aria-live="polite"></span>
+        </div>
         <div id="map-home" class="map-h rounded-2xl border border-gray-200 overflow-hidden"></div>
       </div>
     </section>
@@ -6308,22 +6318,57 @@
   </div>
 
   <div id="page-ai-chatbot" class="page">
-    <div class="max-w-7xl mx-auto px-4 py-8">
-      <h1 id="ai-page-title" class="text-3xl md:text-4xl font-black text-gray-950">Find property on WhatsApp</h1>
-      <p id="ai-page-sub" class="mt-2 max-w-2xl text-sm text-gray-600">Search, list or find a broker in 9 languages.</p>
-      <div id="discover-chips" class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Quick searches">
-        <button type="button" data-discover-chip="rent-ntinda" data-discover-label="chipRentNtinda" onclick="loadDiscoverChip('rent-ntinda')" class="discover-chip inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="true">Rent in Ntinda</button>
-        <button type="button" data-discover-chip="buy-kira" data-discover-label="chipBuyKira" onclick="loadDiscoverChip('buy-kira')" class="discover-chip inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Buy in Kira</button>
-        <button type="button" data-discover-chip="land-mukono" data-discover-label="chipLandMukono" onclick="loadDiscoverChip('land-mukono')" class="discover-chip inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Land in Mukono</button>
-        <button type="button" data-discover-chip="near-makerere" data-discover-label="chipNearMakerere" onclick="loadDiscoverChip('near-makerere')" class="discover-chip inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Near Makerere</button>
-        <button type="button" data-discover-chip="short-stay" data-discover-label="chipShortStay" onclick="loadDiscoverChip('short-stay')" class="discover-chip inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Short stay Entebbe</button>
-        <button type="button" data-discover-chip="broker" data-discover-label="chipBroker" onclick="loadDiscoverChip('broker')" class="discover-chip inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Find a broker</button>
+    <section class="mk-ai-hero">
+      <div class="max-w-7xl mx-auto px-4 py-10 md:py-14 mk-ai-hero-grid">
+        <div class="mk-ai-copy">
+          <span class="mk-ai-eyebrow"><i class="fab fa-whatsapp" aria-hidden="true"></i> makaug.com on WhatsApp</span>
+          <h1 id="ai-page-title" class="text-3xl md:text-5xl font-black text-gray-950">Find property on WhatsApp</h1>
+          <p id="ai-page-sub" class="mt-3 max-w-2xl text-base md:text-lg text-gray-600">Search, list or find a broker in 9 languages.</p>
+          <ul class="mk-ai-usps">
+            <li><i class="fas fa-magnifying-glass" aria-hidden="true"></i><span>Search</span></li>
+            <li><i class="fas fa-house-circle-check" aria-hidden="true"></i><span>List</span></li>
+            <li><i class="fas fa-user-tie" aria-hidden="true"></i><span>Broker</span></li>
+            <li><i class="fas fa-language" aria-hidden="true"></i><span>9</span></li>
+          </ul>
+          <div class="mk-ai-langs" role="group" aria-label="Chatbot language"><button type="button" data-ai-lang="en" onclick="aiDemoSetLang('en')" aria-pressed="false">English</button><button type="button" data-ai-lang="lg" onclick="aiDemoSetLang('lg')" aria-pressed="false">Luganda</button><button type="button" data-ai-lang="sw" onclick="aiDemoSetLang('sw')" aria-pressed="false">Kiswahili</button><button type="button" data-ai-lang="ac" onclick="aiDemoSetLang('ac')" aria-pressed="false">Acholi</button><button type="button" data-ai-lang="ny" onclick="aiDemoSetLang('ny')" aria-pressed="false">Runyankole</button><button type="button" data-ai-lang="rn" onclick="aiDemoSetLang('rn')" aria-pressed="false">Rukiga</button><button type="button" data-ai-lang="sm" onclick="aiDemoSetLang('sm')" aria-pressed="false">Lusoga</button><button type="button" data-ai-lang="am" onclick="aiDemoSetLang('am')" aria-pressed="false">አማርኛ</button><button type="button" data-ai-lang="ar" onclick="aiDemoSetLang('ar')" aria-pressed="false">العربية</button></div>
+          <div id="discover-chips" class="mt-4 flex flex-wrap gap-2 mk-ai-prompts" role="group" aria-label="Quick searches">
+        <button type="button" data-discover-chip="rent-ntinda" data-discover-label="chipRentNtinda" onclick="loadDiscoverChip('rent-ntinda')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="true">Rent in Ntinda</button>
+        <button type="button" data-discover-chip="buy-kira" data-discover-label="chipBuyKira" onclick="loadDiscoverChip('buy-kira')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Buy in Kira</button>
+        <button type="button" data-discover-chip="land-mukono" data-discover-label="chipLandMukono" onclick="loadDiscoverChip('land-mukono')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Land in Mukono</button>
+        <button type="button" data-discover-chip="near-makerere" data-discover-label="chipNearMakerere" onclick="loadDiscoverChip('near-makerere')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Near Makerere</button>
+        <button type="button" data-discover-chip="short-stay" data-discover-label="chipShortStay" onclick="loadDiscoverChip('short-stay')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Short stay Entebbe</button>
+        <button type="button" data-discover-chip="broker" data-discover-label="chipBroker" onclick="loadDiscoverChip('broker')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Find a broker</button>
+        <button type="button" data-discover-chip="rent-kololo" data-discover-label="demoRentKololo" onclick="loadDiscoverChip('rent-kololo')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Rent in Kololo</button>
+        <button type="button" data-discover-chip="buy-muyenga" data-discover-label="demoBuyMuyenga" onclick="loadDiscoverChip('buy-muyenga')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Buy in Muyenga</button>
+        <button type="button" data-discover-chip="land-wakiso" data-discover-label="demoLandWakiso" onclick="loadDiscoverChip('land-wakiso')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Land in Wakiso</button>
+        <button type="button" data-discover-chip="rent-bukoto" data-discover-label="demoRentBukoto" onclick="loadDiscoverChip('rent-bukoto')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Rent in Bukoto</button>
+        <button type="button" data-discover-chip="student-kyambogo" data-discover-label="demoStudentKyambogo" onclick="loadDiscoverChip('student-kyambogo')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Student room near Kyambogo</button>
+        <button type="button" data-discover-chip="commercial-kampala" data-discover-label="demoCommercialKampala" onclick="loadDiscoverChip('commercial-kampala')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Shops & offices in Kampala</button>
+        <button type="button" data-discover-chip="buy-entebbe" data-discover-label="demoBuyEntebbe" onclick="loadDiscoverChip('buy-entebbe')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Buy in Entebbe</button>
+        <button type="button" data-discover-chip="rent-najjera" data-discover-label="demoRentNajjera" onclick="loadDiscoverChip('rent-najjera')" class="discover-chip mk-ai-prompt inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-800" aria-pressed="false">Rent in Najjera</button>
+          </div>
+          <a id="ai-cta-btn" href="https://wa.me/256780863394?text=Hello+makaug,+I+want+to+use+the+AI+chatbot" target="_blank" rel="noopener noreferrer" class="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-green-700 px-6 py-3.5 text-base font-black text-white hover:bg-green-600 sm:w-auto mk-ai-cta" data-public-whatsapp-link data-whatsapp-context="ai-chatbot">
+            <i class="fab fa-whatsapp text-xl"></i> Continue on WhatsApp
+          </a>
+        </div>
+        <div class="mk-ai-phone-col">
+          <div class="mk-iphone" aria-label="Live WhatsApp demo">
+            <div class="mk-iphone-island" aria-hidden="true"></div>
+            <div class="chatbot-phone mk-iphone-screen">
+              <div class="chatbot-phone-head">
+                <span class="mk-ai-bot-avatar" aria-hidden="true">mk</span>
+                <span><b>makaug bot</b><br><span class="text-green-200 text-xs">● online</span></span>
+              </div>
+              <div class="chatbot-bubble-wrap" id="ai-demo-thread" aria-live="polite"></div>
+              <div class="mk-iphone-input" aria-hidden="true"><span>Message</span><i class="fas fa-microphone"></i></div>
+            </div>
+          </div>
+        </div>
       </div>
-      <p id="discover-results-note" class="mt-4 text-sm text-gray-600" aria-live="polite"></p>
+    </section>
+    <div class="max-w-7xl mx-auto px-4 py-8">
+      <p id="discover-results-note" class="text-sm text-gray-600" aria-live="polite"></p>
       <div id="discover-results" class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"></div>
-      <a id="ai-cta-btn" href="https://wa.me/256780863394?text=Hello+makaug,+I+want+to+use+the+AI+chatbot" target="_blank" rel="noopener noreferrer" class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-green-800 px-5 py-3 font-semibold text-white hover:bg-green-600 sm:w-auto" data-public-whatsapp-link data-whatsapp-context="ai-chatbot">
-        <i class="fab fa-whatsapp text-lg"></i> Continue on WhatsApp
-      </a>
       <section class="mt-8 rounded-3xl border border-gray-100 bg-white p-5 md:p-6" data-howto-video-grid="ai-chatbot"></section>
     </div>
   </div>
@@ -10705,7 +10750,7 @@
       }
       function loadShortTermNow() {
         if (!window.__makaugShortTerm || window.__makaugShortTerm.enabled !== true) return Promise.resolve(false);
-        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261023-short-stay-fee-v26", function () {
+        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261104-design-refresh", function () {
           return !!(window.makaugShortTerm && typeof window.makaugShortTerm.route === "function");
         });
       }

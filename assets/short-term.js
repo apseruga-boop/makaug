@@ -30,7 +30,7 @@
     bookingOffers: [],
     infoWindow: null,
     markers: [],
-    mapOn: false,
+    mapOn: !(typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 767px)').matches),
     rating: 0,
     wizardStep: 1,
     windows: [{ starts_on: '', ends_on: '' }],
@@ -1014,6 +1014,9 @@
     return ST_I18N[code] ? code : 'en';
   }
 
+  ST_I18N.en.noticeTitle = 'makaug only shows what is available';
+  ST_I18N.en.noticeBody = 'makaug lists places to stay so you can find them. To book, call or message the host directly and agree the dates, price and payment with them yourself. makaug is not part of that agreement and takes no liability for the stay, the payment or the place.';
+
   function t(key) {
     var table = ST_I18N[stLang()] || ST_I18N.en;
     var value = table[key];
@@ -1394,7 +1397,10 @@
       (state.markers || []).forEach(function (m) { m.remove(); });
       state.markers = [];
 
-      var placed = (state.listings || []).filter(function (l) {
+      var partnerPins = (state.partners || []).map(function (row) {
+        return { title: row.title, area: row.area, district: row.district, latitude: row.latitude, longitude: row.longitude, url: '/short-term/hotel/' + partnerSlug(row), _partner: true, primary_image_url: row.primary_image_url || row.image_url || '' };
+      });
+      var placed = (state.listings || []).concat(partnerPins).filter(function (l) {
         return l && isFinite(Number(l.latitude)) && isFinite(Number(l.longitude));
       });
 
@@ -1411,19 +1417,23 @@
         // The price IS the pin. That is the thing people scan a map for.
         var label = priceLabel(listing);
         var icon = L.divIcon({
-          className: 'st-price-pin',
-          html: '<span style="display:inline-block;background:#8a3a12;color:#fff;border:1.5px solid #fff;border-radius:11px;padding:3px 8px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.3)">' + esc(label || '•') + '</span>',
-          iconSize: null,
-          iconAnchor: [22, 11]
+          className: 'st-price-pin mk-price-tag-wrap',
+          html: '<span class="mk-price-tag' + (listing._partner ? ' is-approx' : '') + '">' + (listing._partner ? '<i class="fas fa-hotel" aria-hidden="true"></i>' : 'UGX ' + esc(label || '•')) + '</span>',
+          iconSize: [0, 0],
+          iconAnchor: [0, 0]
         });
         var marker = L.marker(point, { title: listing.title || '', icon: icon }).addTo(state.map);
+        var photo = listing.primary_image_url || (listing.photos && listing.photos[0] && (listing.photos[0].url || listing.photos[0])) || '';
         marker.bindPopup(
-          '<div style="font-family:inherit;max-width:220px">'
-          + '<strong>' + esc(listing.title || '') + '</strong><br>'
-          + esc([listing.area, listing.district].filter(Boolean).join(', '))
-          + (label ? '<br>UGX ' + esc(String(listing.price_per_night)) + ' ' + esc(t('perNight')) : '')
-          + '<br><a href="' + esc(listing.url || '#') + '" data-st-link>' + esc(t('search')) + '</a>'
-          + '</div>'
+          '<a class="mk-map-card" href="' + esc(listing.url || '#') + '" data-st-link>'
+          + (photo && typeof photo === 'string' ? '<img class="mk-map-card-img" src="' + esc(photo) + '" alt="" loading="lazy">' : '')
+          + '<div class="mk-map-card-body">'
+          + (label ? '<div class="mk-map-card-price">UGX ' + esc(Number(listing.price_per_night).toLocaleString()) + ' <small>' + esc(t('perNight')) + '</small></div>' : '')
+          + '<div class="mk-map-card-title">' + esc(listing.title || '') + '</div>'
+          + '<div class="mk-map-card-loc">' + esc([listing.area, listing.district].filter(Boolean).join(', ')) + '</div>'
+          + '<div class="mk-map-card-cta">View stay →</div>'
+          + '</div></a>',
+          { className: 'mk-map-popup', closeButton: false, maxWidth: 260 }
         );
         state.markers.push(marker);
       });
@@ -1520,6 +1530,7 @@
       + '<input class="st-input" id="st-max" name="max_price" type="number" min="0" step="10000" value="' + esc(q.max_price || '') + '" placeholder="UGX"></div>'
       + '<button class="st-search-go" type="submit"><i class="fas fa-search"></i> ' + esc(t('search')) + '</button>'
       + '</form>'
+      + '<div class="st-notice" role="note" id="st-notice"><i class="fas fa-circle-info" aria-hidden="true"></i><div><b>' + esc(t('noticeTitle')) + '</b><p>' + esc(t('noticeBody')) + '</p></div></div>'
       + '</div></section>'
 
       // Then the banner, in the site's own ad format.
@@ -1539,15 +1550,15 @@
       + '<option value="price_desc">' + esc(t('sortHigh')) + '</option>'
       + '<option value="rating">' + esc(t('sortRated')) + '</option>'
       + '</select>'
-      + '<button class="st-btn" id="st-map-toggle" type="button"><i class="fas fa-map-location-dot"></i> ' + esc(t('showMap')) + '</button>'
+      + '<button class="st-btn' + (state.mapOn ? ' is-on' : '') + '" id="st-map-toggle" type="button">' + (state.mapOn ? '<i class="fas fa-list"></i> ' + esc(t('hideMap')) : '<i class="fas fa-map-location-dot"></i> ' + esc(t('showMap'))) + '</button>'
       + '<a class="st-btn st-btn-primary" href="/short-term/list-your-place" data-st-link><i class="fas fa-plus"></i> ' + esc(t('listPlace')) + '</a>'
       + '</div></div>'
 
-      + '<div class="st-split" id="st-split">'
+      + '<div class="st-split' + (state.mapOn ? ' is-map' : '') + '" id="st-split">'
       + '<div id="st-results"><div class="st-grid">'
       + '<div class="st-skeleton"></div><div class="st-skeleton"></div><div class="st-skeleton"></div><div class="st-skeleton"></div>'
       + '</div></div>'
-      + '<div class="st-map-shell" id="st-map-shell" hidden><div id="st-map"></div></div>'
+      + '<div class="st-map-shell" id="st-map-shell"' + (state.mapOn ? '' : ' hidden') + '><div id="st-map"></div></div>'
       + '</div>'
 
       + travelExtrasHtml('short-term')

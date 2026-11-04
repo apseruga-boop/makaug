@@ -3659,6 +3659,86 @@ async function listPropertiesHandler(req, res, next) {
   }
 }
 
+
+// Lightweight map pins for the homepage "Explore on map" tabs. Reuses the
+// public list handler (same visibility rules) page by page, keeps only what a
+// price marker needs, and caches each tab for ten minutes.
+const MAP_PIN_TYPES = new Set(['sale', 'rent', 'student', 'land', 'commercial']);
+const MAP_PIN_MAX_PAGES = 12;
+const mapPinCache = new Map();
+
+function captureListPage(query) {
+  return new Promise((resolve, reject) => {
+    const fakeReq = { query, headers: {}, get: () => '', user: null, ip: '' };
+    const fakeRes = {
+      statusCode: 200,
+      set() { return fakeRes; },
+      setHeader() { return fakeRes; },
+      status(code) { fakeRes.statusCode = code; return fakeRes; },
+      json(body) { resolve(fakeRes.statusCode >= 400 ? null : body); return fakeRes; },
+      send() { resolve(null); return fakeRes; },
+      end() { resolve(null); return fakeRes; }
+    };
+    Promise.resolve(listPropertiesHandler(fakeReq, fakeRes, reject)).catch(reject);
+  });
+}
+
+function slimMapPin(row = {}) {
+  const lat = toNullableFloat(row.latitude ?? row.lat);
+  const lng = toNullableFloat(row.longitude ?? row.lng);
+  if (!isUsablePublicCoordinate(lat, lng)) return null;
+  return {
+    id: row.id,
+    slug: row.slug || row.public_slug || null,
+    title: row.title || '',
+    listing_type: row.listing_type || '',
+    price: row.price ?? null,
+    price_period: row.price_period || row.period || '',
+    price_on_application: row.price_on_application === true,
+    price_original: row.price_original ?? null,
+    price_original_currency: row.price_original_currency || null,
+    area: row.area || '',
+    district: row.district || '',
+    bedrooms: row.bedrooms ?? null,
+    primary_image_url: row.primary_image_url || (Array.isArray(row.images) && row.images[0] ? (row.images[0].url || row.images[0]) : null),
+    latitude: lat,
+    longitude: lng,
+    extra_fields: { location_precision: row.extra_fields?.location_precision || null }
+  };
+}
+
+router.get('/map-pins', async (req, res, next) => {
+  try {
+    const rawType = cleanText(req.query.listing_type || req.query.type || 'sale').toLowerCase();
+    const type = MAP_PIN_TYPES.has(rawType) ? rawType : (rawType === 'students' ? 'student' : 'sale');
+    const cached = mapPinCache.get(type);
+    if (cached && Date.now() - cached.at < 10 * 60 * 1000) {
+      res.set('Cache-Control', 'public, max-age=300');
+      return res.json({ ok: true, type, count: cached.data.length, data: cached.data });
+    }
+    const pins = [];
+    const seen = new Set();
+    for (let page = 1; page <= MAP_PIN_MAX_PAGES; page += 1) {
+      const query = { status: 'approved', public_only: '1', card_fields: '1', include_summary: '0', limit: '100', page: String(page) };
+      if (type === 'student') query.student_portal = '1';
+      else query.listing_type = type;
+      const body = await captureListPage(query);
+      const rows = Array.isArray(body?.data) ? body.data : [];
+      rows.forEach((row) => {
+        const pin = slimMapPin(row);
+        if (pin && !seen.has(String(pin.id))) { seen.add(String(pin.id)); pins.push(pin); }
+      });
+      if (rows.length < 100) break;
+    }
+    mapPinCache.set(type, { at: Date.now(), data: pins });
+    res.set('Cache-Control', 'public, max-age=300');
+    return res.json({ ok: true, type, count: pins.length, data: pins });
+  } catch (error) {
+    if (sendPublicPropertySearchUnavailable(res, error)) return undefined;
+    return next(error);
+  }
+});
+
 router.get('/search', listPropertiesHandler);
 router.get('/', listPropertiesHandler);
 

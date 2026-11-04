@@ -1,0 +1,117 @@
+/* makaug.com design refresh 2026-11-04: price-tag maps, cards, marketplace art, short stay, ai chatbot */
+
+/* ---------- price-tag markers ---------- */
+.mk-price-tag-wrap { background: none !important; border: 0 !important; }
+.mk-price-tag {
+  position: absolute; left: 0; top: 0; transform: translate(-50%, -100%);
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  padding: 5px 10px; border-radius: 999px; background: #111827; color: #fff;
+  font: 800 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: -.01em;
+  box-shadow: 0 2px 6px rgba(0,0,0,.28), 0 0 0 2px #fff; cursor: pointer;
+  transition: transform .15s ease, background .15s ease;
+}
+.mk-price-tag::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 9px; height: 9px; background: inherit; transform: translateX(-50%) rotate(45deg); border-radius: 1px; }
+.mk-price-tag.is-approx { background: #fff; color: #111827; box-shadow: 0 2px 6px rgba(0,0,0,.2), inset 0 0 0 1.5px #111827; }
+.mk-price-tag.is-approx::after { box-shadow: 1.5px 1.5px 0 0 #111827; }
+.mk-price-tag.is-cluster { background: #b3134f; padding: 7px 12px; font-size: 13px; }
+.mk-price-tag.is-hovered, .mk-price-tag:hover { background: #b3134f; color: #fff; transform: translate(-50%, -100%) scale(1.12); z-index: 2; }
+
+/* ---------- mini property card in map popup ---------- */
+.mk-map-popup .leaflet-popup-content-wrapper { padding: 0; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.mk-map-popup .leaflet-popup-content { margin: 0; width: 240px !important; }
+.mk-map-card { display: block; color: #111827 !important; text-decoration: none !important; }
+.mk-map-card-img { display: block; width: 100%; height: 132px; object-fit: cover; background: #f3f4f6; }
+.mk-map-card-body { padding: 10px 12px 12px; }
+.mk-map-card-price { font-weight: 900; font-size: 15px; }
+.mk-map-card-title { font-weight: 700; font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-map-card-loc { font-size: 12px; color: #6b7280; margin-top: 2px; }
+.mk-map-card-cta { margin-top: 8px; font-size: 12px; font-weight: 800; color: #b3134f; }
+
+/* ---------- broker popup card ---------- */
+.mk-broker-pop { width: 230px; padding: 12px; font-family: system-ui, sans-serif; }
+.mk-broker-pop-head { display: flex; gap: 10px; align-items: center; }
+.mk-broker-pop-head img, .mk-broker-initials { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 999px; object-fit: cover; background: #fff1f6; }
+.mk-broker-pop-head img.is-logo { border-radius: 12px; object-fit: contain; background: #fff; border: 1px solid #e5e7eb; }
+.mk-broker-initials { display: grid; place-items: center; font-weight: 900; color: #b3134f; }
+.mk-broker-pop-name { font-weight: 900; font-size: 14px; color: #111827; }
+.mk-broker-pop-meta { font-size: 12px; color: #6b7280; }
+.mk-broker-pop-btn { display: block; margin-top: 10px; text-align: center; padding: 8px 10px; border-radius: 999px; background: #111827; color: #fff !important; font-weight: 800; font-size: 13px; text-decoration: none !important; }
+.mk-broker-pop-btn:hover { background: #b3134f; }
+.leaflet-marker-icon.is-hovered { filter: hue-rotate(140deg) saturate(1.6) drop-shadow(0 0 6px rgba(179,19,79,.6)); }
+
+/* ---------- homepage map tabs ---------- */
+.mk-home-map-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.mk-home-map-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: #f3f4f6; overflow-x: auto; max-width: 100%; }
+.mk-home-map-tabs button { border: 0; background: transparent; padding: 8px 14px; border-radius: 999px; font-weight: 800; font-size: 13px; color: #374151; white-space: nowrap; cursor: pointer; }
+.mk-home-map-tabs button[aria-pressed="true"] { background: #111827; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+#home-map-count { font-size: 13px; color: #6b7280; font-weight: 600; }
+
+/* ---------- Nyumba-style property cards ---------- */
+.property-card.mk-card { border-radius: 18px; border-color: #eef0f3; box-shadow: 0 1px 2px rgba(16,24,40,.04); transition: transform .2s ease, box-shadow .2s ease; }
+.property-card.mk-card:hover, .property-card.mk-card.is-map-hovered { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(16,24,40,.12); }
+.property-card.mk-card > .h-48 { height: 14.5rem; margin: 8px 8px 0; border-radius: 14px; }
+.property-card.mk-card > .h-48 img { transition: transform .5s ease; }
+.property-card.mk-card:hover > .h-48 img { transform: scale(1.05); }
+.property-card.mk-card > .h-48 > .absolute.bottom-2.right-2 { background: rgba(17,24,39,.88) !important; backdrop-filter: blur(4px); border-radius: 999px; padding: 5px 12px; }
+.property-card.mk-card h3 { font-size: 1.02rem; letter-spacing: -.01em; }
+
+/* ---------- marketplace tile art ---------- */
+.mkc-tile-art { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 14px; overflow: hidden; background: #fdf6ec; margin-bottom: 10px; }
+.mkc-tile-art img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s ease; }
+.mkc-tile:hover .mkc-tile-art img { transform: scale(1.04); }
+.mkc-tile-head:has(.mkc-tile-art) { flex-direction: column; align-items: stretch !important; text-align: left; }
+.mkc-tile[aria-current="true"] .mkc-tile-art { box-shadow: 0 0 0 3px #b3134f; }
+@media (max-width: 640px) { .mkc-tile-art { aspect-ratio: 16 / 9; } }
+
+/* ---------- ai chatbot page ---------- */
+.mk-ai-hero { background: radial-gradient(1200px 500px at 85% 10%, #dcfce7 0%, transparent 60%), radial-gradient(800px 400px at 0% 100%, #fff1f6 0%, transparent 60%), #fbfaf7; border-bottom: 1px solid #f0eee8; }
+.mk-ai-hero-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 40px; align-items: center; }
+@media (max-width: 900px) { .mk-ai-hero-grid { grid-template-columns: 1fr; gap: 28px; } }
+.mk-ai-eyebrow { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: #dcfce7; color: #166534; font-weight: 800; font-size: 13px; margin-bottom: 14px; }
+.mk-ai-usps { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; list-style: none; padding: 0; }
+.mk-ai-usps li { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 12px; background: #fff; border: 1px solid #ececec; font-weight: 800; font-size: 13px; color: #111827; }
+.mk-ai-usps i { color: #b3134f; }
+.mk-ai-langs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+.mk-ai-langs button { border: 1px solid #e5e7eb; background: #fff; border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 700; color: #374151; cursor: pointer; }
+.mk-ai-langs button[aria-pressed="true"] { background: #111827; border-color: #111827; color: #fff; }
+.mk-ai-prompts .mk-ai-prompt { transition: transform .12s ease, box-shadow .12s ease; }
+.mk-ai-prompts .mk-ai-prompt:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,.08); }
+.mk-ai-cta { box-shadow: 0 10px 24px rgba(22,101,52,.28); }
+.mk-ai-phone-col { display: flex; justify-content: center; }
+.mk-iphone { position: relative; width: min(340px, 100%); padding: 12px; border-radius: 54px; background: linear-gradient(145deg, #1f2937, #0b0f17); box-shadow: 0 30px 60px rgba(0,0,0,.28), inset 0 0 0 2px #374151; }
+.mk-iphone-island { position: absolute; top: 22px; left: 50%; transform: translateX(-50%); width: 96px; height: 26px; border-radius: 20px; background: #000; z-index: 3; }
+.mk-iphone .chatbot-phone.mk-iphone-screen { width: 100%; border: 0; border-radius: 42px; display: flex; flex-direction: column; height: 640px; box-shadow: none; }
+@media (max-width: 640px) { .mk-iphone .chatbot-phone.mk-iphone-screen { height: 560px; } }
+.mk-iphone .chatbot-phone-head { justify-content: flex-start; padding-top: 52px; background: #075e54; }
+.mk-ai-bot-avatar { width: 34px; height: 34px; border-radius: 999px; background: #b3134f; color: #fff; display: grid; place-items: center; font-weight: 900; font-size: 13px; }
+.mk-iphone .chatbot-bubble-wrap { flex: 1; max-height: none; scroll-behavior: smooth; }
+.mk-iphone .chatbot-listing-card { display: block; color: inherit; text-decoration: none; }
+.mk-iphone-input { margin: 8px 10px 16px; padding: 10px 14px; border-radius: 999px; background: #fff; color: #9ca3af; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.mk-dots { display: inline-flex; gap: 4px; }
+.mk-dots i { width: 6px; height: 6px; border-radius: 999px; background: #9ca3af; animation: mkdot 1s infinite ease-in-out; }
+.mk-dots i:nth-child(2) { animation-delay: .15s; } .mk-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes mkdot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+/* ---------- short stay (nyumba / turebe style) ---------- */
+#page-short-term .st-hero { background: radial-gradient(900px 400px at 90% 0%, #ffe9d6 0%, transparent 60%), #fffaf5; padding: 44px 0 30px; }
+#page-short-term .st-hero h1 { font-size: clamp(28px, 4vw, 46px); font-weight: 900; letter-spacing: -.02em; color: #111827; }
+#page-short-term .st-hero p.st-hero-sub { color: #4b5563; }
+#page-short-term .st-search { background: #fff; border-radius: 999px; padding: 8px 8px 8px 20px; box-shadow: 0 12px 34px rgba(17,24,39,.12); border: 1px solid #f0ece6; gap: 0; align-items: center; }
+#page-short-term .st-search .st-field { border-right: 1px solid #eee; padding: 4px 14px; }
+#page-short-term .st-search .st-field:last-of-type { border-right: 0; }
+#page-short-term .st-search .st-field label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #111827; }
+#page-short-term .st-search .st-input { border: 0 !important; padding: 2px 0 !important; background: transparent; box-shadow: none !important; }
+#page-short-term .st-search-go { border-radius: 999px; background: #111827 !important; color: #fff; padding: 14px 22px; font-weight: 800; }
+@media (max-width: 900px) {
+  #page-short-term .st-search { border-radius: 22px; padding: 12px; }
+  #page-short-term .st-search .st-field { border-right: 0; border-bottom: 1px solid #f1f1f1; padding: 8px 4px; }
+  #page-short-term .st-search-go { width: 100%; margin-top: 8px; }
+}
+#page-short-term .st-notice { display: flex; gap: 12px; margin-top: 18px; padding: 14px 16px; border-radius: 16px; background: #fff7ed; border: 1px solid #fed7aa; color: #7c2d12; font-size: 14px; }
+#page-short-term .st-notice i { margin-top: 3px; color: #c2410c; }
+#page-short-term .st-notice b { display: block; font-weight: 900; }
+#page-short-term .st-notice p { margin: 2px 0 0; line-height: 1.45; }
+#page-short-term .st-card { border-radius: 18px; border: 1px solid #f0eee8; overflow: hidden; transition: transform .2s ease, box-shadow .2s ease; }
+#page-short-term .st-card:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(16,24,40,.12); }
+#page-short-term .st-map-shell { border-radius: 20px; overflow: hidden; }
+#page-short-term .st-price-pin .mk-price-tag i { font-size: 11px; }
