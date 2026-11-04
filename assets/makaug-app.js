@@ -40266,7 +40266,7 @@ function getTikTokEmbedUrl(url) {
     const videoIndex = parts.findIndex((part) => part.toLowerCase() === "video");
     const id = videoIndex >= 0 ? parts[videoIndex + 1] || "" : "";
     if (!/^\d{6,}$/.test(id)) return "";
-    return `https://www.tiktok.com/embed/v2/${id}`;
+    return `https://www.tiktok.com/player/v1/${id}?description=1&music_info=1`;
   } catch (error) {
     return "";
   }
@@ -51239,6 +51239,16 @@ function foundOnlineSourceVisualHtml(p = {}, options = {}) {
   }
   const thumbnailUrl = foundOnlineSourceThumbnailUrl(p, videoUrl);
   const sourceUrl = meta.sourceUrl || videoUrl || meta.sourceContactUrl || "";
+  // Property pages play TikTok videos in place with TikTok's own player, so a
+  // listing never sits on a "source preview" placeholder.
+  const tiktokPlayerUrl = options.detail === true && !compact ? getTikTokEmbedUrl(videoUrl || sourceUrl) : "";
+  if (tiktokPlayerUrl) {
+    return `
+    <div class="relative overflow-hidden border border-blue-100 bg-slate-950" data-tiktok-player="1">
+      <iframe src="${adminAttr(tiktokPlayerUrl)}" title="${adminAttr(translateListingLabel("TikTok property source video"))}" class="mx-auto block h-[36rem] max-h-[80vh] w-full max-w-[22rem] border-0" loading="lazy" allow="encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      ${foundOnlineSourcePlayControlsHtml(sourceUrl, platform)}
+    </div>`;
+  }
   return `
     <div class="${compact ? "h-full min-h-[12rem]" : "min-h-[18rem]"} relative overflow-hidden border border-blue-100 bg-gradient-to-br from-emerald-50 via-white to-blue-50 text-slate-900">
       ${thumbnailUrl ? `
