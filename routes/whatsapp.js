@@ -8419,29 +8419,61 @@ function alertTeamAgentNeedsHelp({ agent = {}, phone = '', said = '' } = {}) {
 
 /** Tell the team a new agent property is waiting, so review happens the same day. */
 function alertTeamAgentPropertySubmitted({ agent = {}, propertyId = '', facts = {}, caption = '' } = {}) {
-  deferWhatsappWork('agent property alert', async () => {
-    const desk = require('../services/leadDeskService');
-    if (typeof desk.sendToTeam !== 'function' || desk.inQuietHours()) return;
-    const agentNumber = String(agent.whatsapp || agent.phone || '').replace(/\D+/g, '');
-    const body = [
-      `🏠 *New property from ${agent.full_name || 'an agent'} — waiting for review*`,
-      ...agentPropertyDetailLines(facts, caption),
-      agentNumber ? `Agent: +${agentNumber}` : '',
-      `Review: ${HOME_URL}/admin (Listings › pending)`,
-      propertyId ? `Ref ${String(propertyId).slice(0, 8).toUpperCase()}` : ''
-    ].filter(Boolean).join('\n');
-    await desk.sendToTeam(db, body, 'agent_property_submitted');
-    // Ronald loads and checks agents' properties on the ground, so he gets
-    // every one of these too, whether or not he is on the alert list.
-    const contact = agentHelpContact();
-    const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : [])
-      .some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
-    if (contact.digits && !onList) {
-      await require('../services/leadHandoffService').deliverWhatsapp({
-        to: contact.digits, body, kind: 'agent_property_submitted_contact', leadId: null, nonce: `${propertyId}`
-      });
-    }
-  });
+  deferWhatsappWork('agent property alert', () => sendAgentPropertySubmittedAlert({ agent, propertyId, facts, caption }));
+}
+
+/**
+ * Tell the team an agent's property has reached review — now, or first thing
+ * in the morning.
+ *
+ * Segawa Frederick Kevin (SFK) sent an acre at Ssisa–Buswa at 02:02 Kampala
+ * on 4 Nov 2026. The assistant saved it and said the team would review it;
+ * this alert was skipped because it was quiet hours, and nothing ever sent it
+ * later. Nobody knew the listing existed until Arthur saw the chat on the
+ * phone. His two listings of 31 Oct arrived at 23:12 and 23:28 Kampala and
+ * went the same way. Quiet hours mean "not at this hour", not "never": the
+ * alert is held on the listing and the lead desk sends the overnight ones in
+ * one message once the desk opens.
+ */
+async function sendAgentPropertySubmittedAlert({ agent = {}, propertyId = '', facts = {}, caption = '' } = {}) {
+  const desk = require('../services/leadDeskService');
+  if (typeof desk.sendToTeam !== 'function') return { skipped: 'no_desk' };
+  const agentNumber = String(agent.whatsapp || agent.phone || '').replace(/\D+/g, '');
+  const body = [
+    `🏠 *New property from ${agent.full_name || 'an agent'} — waiting for review*`,
+    ...agentPropertyDetailLines(facts, caption),
+    agentNumber ? `Agent: +${agentNumber}` : '',
+    `Review: ${HOME_URL}/admin (Listings › pending)`,
+    propertyId ? `Ref ${String(propertyId).slice(0, 8).toUpperCase()}` : ''
+  ].filter(Boolean).join('\n');
+  // Ronald loads and checks agents' properties on the ground, so he gets
+  // every one of these too, whether or not he is on the alert list.
+  const contact = agentHelpContact();
+  const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : [])
+    .some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
+  const extraRecipients = contact.digits && !onList ? [contact.digits] : [];
+  if (desk.inQuietHours()) {
+    if (!propertyId) return { skipped: 'quiet_hours' };
+    await db.query(
+      `UPDATE properties
+          SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+            || jsonb_build_object('team_alert_deferred', jsonb_build_object(
+                 'body', $2::text,
+                 'extra_recipients', $3::jsonb,
+                 'deferred_at', NOW()::text
+               ))
+        WHERE id = $1`,
+      [propertyId, body, JSON.stringify(extraRecipients)]
+    );
+    return { deferred: true, propertyId };
+  }
+  await desk.sendToTeam(db, body, 'agent_property_submitted');
+  if (extraRecipients.length) {
+    await require('../services/leadHandoffService').deliverWhatsapp({
+      to: contact.digits, body, kind: 'agent_property_submitted_contact', leadId: null, nonce: `${propertyId}`
+    });
+  }
+  return { sent: true, propertyId };
 }
 
 function agentVoiceNoteReply() {
@@ -20900,6 +20932,7 @@ module.exports.__test = {
   handleSoldLinkReply,
   markListingSoldFromWhatsapp,
   soldAnnouncementAppliesTo,
+  sendAgentPropertySubmittedAlert,
   SOLD_CONFIRM_STEP,
   SOLD_LINK_STEP,
   extractAgentSearchKeywords,
