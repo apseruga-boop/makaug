@@ -8828,7 +8828,18 @@ async function loadDiscoverChip(id) {
       });
       const response = await apiRequest(`/api/properties?${params}`, { skipAuth: true });
       const allRows = Array.isArray(response?.data) ? response.data : [];
-      const withPhoto = allRows.filter((row) => discoverRowPhoto(row));
+      let withPhoto = allRows.filter((row) => discoverRowPhoto(row));
+      if (withPhoto.length < 4 && chip.params.area) {
+        try {
+          const wider = { ...chip.params };
+          delete wider.area;
+          const more = await apiRequest(`/api/properties?${new URLSearchParams({ status: "approved", public_only: "1", limit: "40", card_fields: "1", include_summary: "0", ...wider })}`, { skipAuth: true });
+          const seen = new Set(withPhoto.map((row) => String(row.id)));
+          (Array.isArray(more?.data) ? more.data : []).forEach((row) => {
+            if (withPhoto.length < 4 && !seen.has(String(row.id)) && discoverRowPhoto(row)) { seen.add(String(row.id)); withPhoto.push(row); }
+          });
+        } catch (_e) { /* keep area results */ }
+      }
       rows = (withPhoto.length ? withPhoto : allRows).slice(0, 4);
       if (!rows.length && response?.ok === false && response?.error) noteKey = "resultsError";
     }
