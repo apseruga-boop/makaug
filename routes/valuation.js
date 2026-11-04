@@ -44,6 +44,16 @@ function buildValueDistribution(values = [], binCount = 10) {
   });
   return { min: Math.round(min), max: Math.round(max), bins };
 }
+function valuationComparableCoords(row = {}) {
+  const pick = (a, b) => {
+    const value = Number.isFinite(Number(a)) && a !== null && Number(a) !== 0 ? Number(a) : Number(b);
+    return Number.isFinite(value) && value !== 0 ? Math.round(value * 1000) / 1000 : null;
+  };
+  return {
+    latitude: pick(row.latitude, row.canonical_location?.lat),
+    longitude: pick(row.longitude, row.canonical_location?.lng)
+  };
+}
 const MAX_PRICE_UGX = 100_000_000_000;
 const MIN_RECURRING_PRICE_UGX = 30_000;
 const MIN_TOTAL_PRICE_UGX = 1_000_000;
@@ -887,9 +897,8 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
       land_size_unit: row.land_size_unit,
       size_sqm: row.sizeSqm ? Math.round(row.sizeSqm * 10) / 10 : null,
       image_url: stableComparableImageUrl(row),
-      // Rounded to ~110 m so the map shows the neighbourhood, not the exact plot.
-      latitude: Number.isFinite(Number(row.latitude)) && row.latitude !== null ? Math.round(Number(row.latitude) * 1000) / 1000 : null,
-      longitude: Number.isFinite(Number(row.longitude)) && row.longitude !== null ? Math.round(Number(row.longitude) * 1000) / 1000 : null,
+      // Rounded to ~110 m. Falls back to the listing's area centroid so the map shows the neighbourhood, not the exact plot.
+      ...valuationComparableCoords(row),
       source: row.source || null,
       listed_via: row.listed_via || null,
       status: row.status || null,

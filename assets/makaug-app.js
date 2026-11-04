@@ -54987,14 +54987,23 @@ function renderValuationMap(rows = []) {
     const L = window.L;
     if (!valuationLeafletMap) {
       valuationLeafletMap = L.map(el, { scrollWheelZoom: false, attributionControl: true });
-      L.tileLayer(OSM_TILE_URL, { maxZoom: 18, attribution: OSM_TILE_ATTRIBUTION }).addTo(valuationLeafletMap);
+      L.tileLayer(OSM_TILE_URL, { attribution: OSM_TILE_ATTRIBUTION, referrerPolicy: OSM_REFERRER_POLICY, maxZoom: 18 }).addTo(valuationLeafletMap);
     }
     if (valuationLeafletLayer) valuationLeafletLayer.remove();
-    valuationLeafletLayer = L.layerGroup(pts.map((r) => L.marker([Number(r.latitude), Number(r.longitude)], {
+    const seen = new Map();
+    const placed = pts.map((r) => {
+      const key = `${r.latitude},${r.longitude}`;
+      const n = seen.get(key) || 0;
+      seen.set(key, n + 1);
+      const angle = n * 2.4;
+      const offset = n ? 0.0025 * Math.sqrt(n) : 0;
+      return { ...r, latitude: Number(r.latitude) + offset * Math.sin(angle), longitude: Number(r.longitude) + offset * Math.cos(angle) };
+    });
+    valuationLeafletLayer = L.layerGroup(placed.map((r) => L.marker([Number(r.latitude), Number(r.longitude)], {
       icon: L.divIcon({ className: "", html: `<span style="display:inline-block;white-space:nowrap;background:#0f1f18;color:#fff;font:800 11px/1 system-ui;padding:4px 6px;border-radius:999px;border:2px solid #fbbf24">${valuationEsc(formatValuationShortUgx(r.price) || "•")}</span>`, iconSize: null })
     }))).addTo(valuationLeafletMap);
     valuationLeafletMap.invalidateSize();
-    const bounds = L.latLngBounds(pts.map((r) => [Number(r.latitude), Number(r.longitude)]));
+    const bounds = L.latLngBounds(placed.map((r) => [Number(r.latitude), Number(r.longitude)]));
     valuationLeafletMap.fitBounds(bounds.pad(0.3), { maxZoom: 15 });
   });
 }
