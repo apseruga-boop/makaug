@@ -136,7 +136,7 @@ test('the morning round-up keeps new properties and rejections apart in its head
     { id: SFK_PLOT.id, created_at: '2026-10-31T20:28:09Z', deferred: { kind: 'rejected', body: '⛔ *Listing rejected by Fisher*\nLand for sale in Ssisa\nReason: No clear photos', extra_recipients: [] } }
   ];
   const originalQuery = db.query;
-  db.query = async (sql) => (/team_alert_deferred'/.test(sql) && /SELECT/i.test(sql) ? { rows: held } : { rows: [] });
+  db.query = async (sql) => (/FROM properties/i.test(sql) && /team_alert_deferred/.test(sql) ? { rows: held } : { rows: [] });
   try {
     await withAlertRecipients('256700000001', () => withQuietHours('off', async () => {
       const sent = [];
@@ -144,10 +144,11 @@ test('the morning round-up keeps new properties and rejections apart in its head
       const result = await desk.sendDeferredPropertyAlerts(db, { send });
       assert.strictEqual(result.sent, 2);
       assert.match(sent[0], /^🌙 \*Overnight while the desk was closed: 1 property from agents waiting for review, 1 listing was rejected\*/);
-      assert.match(sent[0], /1\. \*Segawa Frederick Kevin SFK\*\n🏠 land · for sale/);
-      assert.match(sent[0], /2\. \*Rejected by Fisher\*\nLand for sale in Ssisa\nReason: No clear photos/);
+      // Oldest first: the 31 Oct rejection before the 4 Nov arrival.
+      assert.match(sent[0], /1\. \*Rejected by Fisher\*\nLand for sale in Ssisa\nReason: No clear photos/);
+      assert.match(sent[0], /2\. \*Segawa Frederick Kevin SFK\*\n🏠 land · for sale/);
       const onlyRejected = [];
-      db.query = async (sql) => (/team_alert_deferred'/.test(sql) && /SELECT/i.test(sql) ? { rows: [held[1]] } : { rows: [] });
+      db.query = async (sql) => (/FROM properties/i.test(sql) && /team_alert_deferred/.test(sql) ? { rows: [held[1]] } : { rows: [] });
       await desk.sendDeferredPropertyAlerts(db, { send: async (_db, body) => { onlyRejected.push(body); return [{ to: 'x', status: 'queued' }]; } });
       assert.match(onlyRejected[0], /^🌙 \*Overnight: 1 listing was rejected while the desk was closed\*\n\n\*Rejected by Fisher\*/);
     }));

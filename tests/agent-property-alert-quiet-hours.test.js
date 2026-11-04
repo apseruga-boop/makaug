@@ -85,12 +85,13 @@ test('once the desk opens, the held listings go out in one message and are marke
     assert.strictEqual(sent.length, 1, 'one message for the whole night');
     assert.strictEqual(sent[0].type, 'agent_property_submitted_overnight');
     assert.match(sent[0].body, /^🌙 \*Overnight: 2 properties from agents came in while the desk was closed — waiting for review\*/);
-    assert.match(sent[0].body, /1\. \*Segawa Frederick Kevin SFK\*\n🏠 land · for sale\n📍 Nakawuka, Wakiso/);
-    assert.match(sent[0].body, /2\. \*Segawa Frederick Kevin SFK\*\n🏠 land · for sale\n📍 Ssisa, Wakiso/);
+    // Oldest first: the 31 Oct plot before the 4 Nov acre.
+    assert.match(sent[0].body, /1\. \*Segawa Frederick Kevin SFK\*\n🏠 land · for sale\n📍 Ssisa, Wakiso/);
+    assert.match(sent[0].body, /2\. \*Segawa Frederick Kevin SFK\*\n🏠 land · for sale\n📍 Nakawuka, Wakiso/);
     assert.deepStrictEqual(sent[0].options.extraRecipients, ['256709402189'], 'Ronald is on it, once');
     const mark = calls.find((c) => /team_alert_deferred,sent_at/.test(c.sql));
     assert.ok(mark, 'the listings are marked so they are not announced twice');
-    assert.deepStrictEqual(mark.params[0], held.map((row) => row.id));
+    assert.deepStrictEqual([...mark.params[0]].sort(), held.map((row) => row.id).sort());
   }, { held }));
 });
 

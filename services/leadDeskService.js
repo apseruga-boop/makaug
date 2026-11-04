@@ -1007,27 +1007,45 @@ async function sendNewLeadAlerts(db, { force = false } = {}) {
 }
 
 /**
- * A team message now — or, while the desk is closed, held on the listing
- * (extra_fields.team_alert_deferred) for the morning round-up. Quiet hours
- * mean "not at this hour", never "not at all".
+ * A team message now — or, while the desk is closed, held for the morning
+ * round-up: on the listing (extra_fields.team_alert_deferred) or on the
+ * WhatsApp conversation (whatsapp_conversation_state.metadata) when there is
+ * no listing. Quiet hours mean "not at this hour", never "not at all".
  */
-async function holdOrSendToTeam(db, { propertyId = '', body = '', type = 'team_alert', kind = 'submitted', extraRecipients = [] } = {}) {
+async function holdOrSendToTeam(db, { propertyId = '', conversationPhone = '', body = '', type = 'team_alert', kind = 'submitted', extraRecipients = [] } = {}) {
   if (!text(body)) return { skipped: 'no_body' };
   if (inQuietHours()) {
-    if (!propertyId) return { skipped: 'quiet_hours' };
+    const phone = String(conversationPhone || '').replace(/\D+/g, '');
+    if (!propertyId && !phone) return { skipped: 'quiet_hours' };
+    if (propertyId) {
+      await db.query(
+        `UPDATE properties
+            SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+              || jsonb_build_object('team_alert_deferred', jsonb_build_object(
+                   'body', $2::text,
+                   'extra_recipients', $3::jsonb,
+                   'kind', $4::text,
+                   'deferred_at', NOW()::text
+                 ))
+          WHERE id = $1`,
+        [propertyId, body, JSON.stringify(extraRecipients), kind]
+      );
+      return { deferred: true, propertyId };
+    }
     await db.query(
-      `UPDATE properties
-          SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
-            || jsonb_build_object('team_alert_deferred', jsonb_build_object(
+      `INSERT INTO whatsapp_conversation_state (phone, metadata)
+       VALUES ($1, jsonb_build_object('team_alert_deferred', jsonb_build_object(
                  'body', $2::text,
                  'extra_recipients', $3::jsonb,
                  'kind', $4::text,
                  'deferred_at', NOW()::text
-               ))
-        WHERE id = $1`,
-      [propertyId, body, JSON.stringify(extraRecipients), kind]
+               )))
+       ON CONFLICT (phone) DO UPDATE
+         SET metadata = COALESCE(whatsapp_conversation_state.metadata, '{}'::jsonb) || EXCLUDED.metadata,
+             updated_at = NOW()`,
+      [phone, body, JSON.stringify(extraRecipients), kind]
     );
-    return { deferred: true, propertyId };
+    return { deferred: true, conversationPhone: phone };
   }
   const results = await sendToTeam(db, body, type, { extraRecipients });
   return { sent: true, results };
@@ -1068,19 +1086,83 @@ async function alertTeamListingRejected(db, { listing = {}, reason = '', actorLa
   });
 }
 
-function overnightHeader(submitted, rejected) {
+function kampalaClock(date = new Date()) {
+  try {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Kampala', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
+  } catch (_) {
+    return date.toISOString().slice(11, 16);
+  }
+}
+
+/**
+ * A WhatsApp conversation the assistant should not be handling alone: a
+ * report of fraud, violence or a land dispute, or a voice note it cannot act
+ * on. Arthur hears about it with the gist and a link to reply.
+ *
+ * 3 Nov 2026: a Dutch number sent two Luganda voice notes naming land thieves
+ * on Hoima Road, with fake police and pangas in the story. The assistant
+ * answered with houses for sale in Kira, twice. Nobody human saw it until
+ * Arthur read the chat the next morning.
+ */
+async function alertTeamConversationNeedsPerson(db, { phone = '', contactName = '', summary = '', reason = '', language = '' } = {}) {
+  if (!alertRecipients().length) return { skipped: 'no_recipients' };
+  const digits = String(phone || '').replace(/\D+/g, '');
+  const body = [
+    `🙋 *WhatsApp message that needs a person*`,
+    `${text(contactName, 'Unknown')}${digits ? ` · +${digits}` : ''}${language ? ` · ${language}` : ''}`,
+    reason ? `Why: ${reason}` : '',
+    summary ? `They said: "${String(summary).replace(/\s+/g, ' ').trim().slice(0, 400)}"` : '',
+    'The assistant has stopped replying to them until someone takes over.',
+    digits ? `Reply: https://wa.me/${digits} · ${siteUrl()}/admin (WhatsApp inbox)` : `${siteUrl()}/admin (WhatsApp inbox)`
+  ].filter(Boolean).join('\n');
+  return holdOrSendToTeam(db, { conversationPhone: digits, body, type: 'whatsapp_needs_person', kind: 'needs_person' });
+}
+
+/**
+ * Someone rang the makaug WhatsApp number and nobody picked up. Arthur and
+ * Ronald hear at once — a caller wants a person, so this never waits for the
+ * morning round-up.
+ *
+ * Until 4 Nov 2026 a missed call produced an email and a lead and nothing
+ * else; since the move to WAHA in September not even that, because call
+ * events never reached makaug. Arthur noticed a missed call on the phone that
+ * the system had no record of.
+ */
+async function alertTeamMissedCall(db, { phone = '', contactName = '', callType = 'voice', status = 'missed', at = new Date(), lastMessage = '', likelyInquiry = '', extraRecipients = [] } = {}) {
+  const digits = String(phone || '').replace(/\D+/g, '');
+  const extra = (Array.isArray(extraRecipients) ? extraRecipients : []).map((v) => String(v || '').replace(/\D+/g, '')).filter(Boolean);
+  if (!teamRecipients(extra).length) return { skipped: 'no_recipients' };
+  const when = at instanceof Date ? at : new Date(at || Date.now());
+  const body = [
+    `📞 *Missed WhatsApp ${callType === 'video' ? 'video ' : ''}call*`,
+    `${text(contactName, 'Unknown caller')}${digits ? ` · +${digits}` : ''}`,
+    `${kampalaClock(when)} Kampala · ${status === 'declined' ? 'declined' : 'not answered'} — the assistant cannot take calls`,
+    lastMessage ? `Last thing they wrote: "${String(lastMessage).replace(/\s+/g, ' ').trim().slice(0, 240)}"` : (likelyInquiry ? `Likely about: ${likelyInquiry}` : 'They have not written anything yet.'),
+    digits ? `Call back or reply: https://wa.me/${digits}` : '',
+    `${siteUrl()}/admin (WhatsApp inbox)`
+  ].filter(Boolean).join('\n');
+  const results = await sendToTeam(db, body, 'whatsapp_missed_call_alert', { extraRecipients: extra });
+  return { sent: true, results };
+}
+
+function overnightHeader({ submitted = 0, rejected = 0, other = 0 } = {}) {
   const props = (n) => `${n} ${n === 1 ? 'property' : 'properties'}`;
   const listings = (n) => `${n} ${n === 1 ? 'listing was' : 'listings were'}`;
-  if (submitted && !rejected) return `🌙 *Overnight: ${props(submitted)} from agents came in while the desk was closed — waiting for review*`;
-  if (rejected && !submitted) return `🌙 *Overnight: ${listings(rejected)} rejected while the desk was closed*`;
-  return `🌙 *Overnight while the desk was closed: ${props(submitted)} from agents waiting for review, ${listings(rejected)} rejected*`;
+  const parts = [];
+  if (submitted) parts.push(`${props(submitted)} from agents waiting for review`);
+  if (rejected) parts.push(`${listings(rejected)} rejected`);
+  if (other) parts.push(`${other} ${other === 1 ? 'message needs' : 'messages need'} a person`);
+  if (submitted && !rejected && !other) return `🌙 *Overnight: ${props(submitted)} from agents came in while the desk was closed — waiting for review*`;
+  if (rejected && !submitted && !other) return `🌙 *Overnight: ${listings(rejected)} rejected while the desk was closed*`;
+  return `🌙 *Overnight while the desk was closed: ${parts.join(', ')}*`;
 }
 
 /**
  * The team messages held during quiet hours, in one message once the desk is
- * open: agents' properties that arrived overnight (routes/whatsapp.js) and
- * listings rejected overnight (alertTeamListingRejected). Each is marked sent,
- * so a listing is announced once.
+ * open: agents' properties that arrived overnight (routes/whatsapp.js),
+ * listings rejected overnight (alertTeamListingRejected), and WhatsApp
+ * conversations that need a person. Each is marked sent, so nothing is
+ * announced twice.
  */
 async function sendDeferredPropertyAlerts(db, { force = false, send = sendToTeam } = {}) {
   if (!force && inQuietHours()) return { skipped: 'quiet_hours' };
@@ -1093,15 +1175,28 @@ async function sendDeferredPropertyAlerts(db, { force = false, send = sendToTeam
       ORDER BY created_at ASC
       LIMIT 20`
   );
-  if (!held.rows.length) return { sent: 0 };
-  const rows = held.rows.filter((row) => row.deferred && typeof row.deferred === 'object' && text(row.deferred.body));
+  const heldChats = await db.query(
+    `SELECT phone, updated_at AS created_at, metadata->'team_alert_deferred' AS deferred
+       FROM whatsapp_conversation_state
+      WHERE metadata ? 'team_alert_deferred'
+        AND NOT (metadata->'team_alert_deferred' ? 'sent_at')
+        AND updated_at >= NOW() - INTERVAL '3 days'
+      ORDER BY updated_at ASC
+      LIMIT 20`
+  ).catch(() => ({ rows: [] }));
+  const usable = (row) => row.deferred && typeof row.deferred === 'object' && text(row.deferred.body);
+  const rows = [
+    ...held.rows.filter(usable).map((row) => ({ ...row, source: 'property' })),
+    ...heldChats.rows.filter(usable).map((row) => ({ ...row, source: 'conversation' }))
+  ].sort((a, b) => String(a.deferred.deferred_at || a.created_at || '').localeCompare(String(b.deferred.deferred_at || b.created_at || '')));
   if (!rows.length) return { sent: 0 };
   const extraRecipients = [...new Set(rows.flatMap((row) => (Array.isArray(row.deferred.extra_recipients) ? row.deferred.extra_recipients : [])
     .map((value) => String(value || '').replace(/\D+/g, '')).filter(Boolean)))];
   if (!teamRecipients(extraRecipients).length) return { skipped: 'no_recipients' };
   const count = rows.length;
   const rejected = rows.filter((row) => row.deferred.kind === 'rejected').length;
-  const lines = [overnightHeader(count - rejected, rejected), ''];
+  const other = rows.filter((row) => !['rejected', 'submitted', undefined, null, ''].includes(row.deferred.kind)).length;
+  const lines = [overnightHeader({ submitted: count - rejected - other, rejected, other }), ''];
   rows.forEach((row, index) => {
     const body = String(row.deferred.body).trim()
       .replace(/^🏠 \*New property from /, '*')
@@ -1111,12 +1206,24 @@ async function sendDeferredPropertyAlerts(db, { force = false, send = sendToTeam
   });
   const results = await send(db, lines.join('\n').trim(), 'agent_property_submitted_overnight', { extraRecipients });
   if (results.some((r) => ['queued', 'sent', 'simulated'].includes(r.status))) {
-    await db.query(
-      `UPDATE properties
-          SET extra_fields = jsonb_set(extra_fields, '{team_alert_deferred,sent_at}', to_jsonb(NOW()::text))
-        WHERE id = ANY($1::uuid[])`,
-      [rows.map((row) => row.id)]
-    );
+    const propertyIds = rows.filter((row) => row.source === 'property').map((row) => row.id);
+    const phones = rows.filter((row) => row.source === 'conversation').map((row) => row.phone);
+    if (propertyIds.length) {
+      await db.query(
+        `UPDATE properties
+            SET extra_fields = jsonb_set(extra_fields, '{team_alert_deferred,sent_at}', to_jsonb(NOW()::text))
+          WHERE id = ANY($1::uuid[])`,
+        [propertyIds]
+      );
+    }
+    if (phones.length) {
+      await db.query(
+        `UPDATE whatsapp_conversation_state
+            SET metadata = jsonb_set(metadata, '{team_alert_deferred,sent_at}', to_jsonb(NOW()::text))
+          WHERE phone = ANY($1::text[])`,
+        [phones]
+      );
+    }
   }
   return { sent: count, results };
 }
@@ -1266,6 +1373,8 @@ module.exports = {
   sendDeferredPropertyAlerts,
   holdOrSendToTeam,
   alertTeamListingRejected,
+  alertTeamConversationNeedsPerson,
+  alertTeamMissedCall,
   listingRejectedAlertBody,
   sendToTeam,
   teamRecipients,
