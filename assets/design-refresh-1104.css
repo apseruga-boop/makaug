@@ -143,10 +143,17 @@
   .mk-map-carousel { display: none; }
   body.mk-mobile-map-open .mk-map-col-active .mk-map-carousel { display: flex; position: absolute; left: 0; right: 0; bottom: 18px; z-index: 1000; gap: 12px; padding: 0 9vw; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .mk-map-carousel::-webkit-scrollbar { display: none; }
-  .mk-map-carousel-item { flex: 0 0 82vw; max-width: 340px; scroll-snap-align: center; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,.22); border: 2px solid transparent; }
+  .mk-map-carousel { align-items: flex-end; }
+  .mk-map-carousel-item { flex: 0 0 84vw; max-width: 340px; height: auto; align-self: flex-end; scroll-snap-align: center; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,.22); border: 2px solid transparent; }
   .mk-map-carousel-item.is-active { border-color: #b3134f; }
-  .mk-map-carousel-item .mk-map-card { display: flex; min-height: 104px; }
-  .mk-map-carousel-item .mk-map-card img, .mk-map-carousel-item .mk-map-card-noimg { width: 120px !important; height: auto !important; min-height: 104px; object-fit: cover; flex: 0 0 120px; }
-  .mk-map-carousel-item .mk-map-card-body { padding: 10px 12px; }
+  .mk-map-carousel-item .mk-map-card { display: flex !important; flex-direction: row !important; align-items: stretch; gap: 0; height: 124px; min-height: 0; text-decoration: none; color: inherit; }
+  .mk-map-carousel-item .mk-map-card-img { width: 112px !important; height: 112px !important; min-height: 0 !important; margin: 6px; border-radius: 12px; object-fit: cover; flex: 0 0 112px; }
+  .mk-map-carousel-item .mk-map-card-noimg { width: 112px !important; height: 112px !important; min-height: 0 !important; margin: 6px; border-radius: 12px; flex: 0 0 112px; font-size: 28px; }
+  .mk-map-carousel-item .mk-map-card-noimg small { display: none; }
+  .mk-map-carousel-item .mk-map-card-body { flex: 1 1 auto; min-width: 0; padding: 8px 12px 8px 6px; gap: 2px; justify-content: center; }
+  .mk-map-carousel-item .mk-map-card-price { font-size: 15px; line-height: 1.2; }
+  .mk-map-carousel-item .mk-map-card-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; font-size: 13px; line-height: 1.25; }
+  .mk-map-carousel-item .mk-map-card-loc { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; color: #6b7280; }
+  .mk-map-carousel-item .mk-map-card-go { margin-top: 4px; }
 }
 .mk-no-map-note { position: absolute; left: 10px; bottom: 10px; z-index: 5; font-size: 11px; font-weight: 700; color: #4b5563; background: rgba(255,255,255,.92); padding: 2px 8px; border-radius: 999px; pointer-events: none; }
