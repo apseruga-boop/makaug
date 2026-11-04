@@ -1975,15 +1975,18 @@
       + '<a class="st-btn st-btn-primary" href="/short-term/list-your-place" data-st-link><i class="fas fa-plus"></i> ' + esc(t('listPlace')) + '</a>'
       + '</div></div>'
 
+      // The map column spans the results and the guide below them, so the
+      // sticky map has room to stay on screen while the page scrolls.
       + '<div class="st-split' + (state.mapOn ? ' is-map' : '') + '" id="st-split">'
+      + '<div class="st-main">'
       + '<div id="st-results"><div class="st-grid">'
       + '<div class="st-skeleton"></div><div class="st-skeleton"></div><div class="st-skeleton"></div><div class="st-skeleton"></div>'
       + '</div></div>'
-      + '<div class="st-map-shell" id="st-map-shell"' + (state.mapOn ? '' : ' hidden') + '><div id="st-map"></div></div>'
-      + '</div>'
-
       + disclaimerBlock()
       + guestInfoBlock()
+      + '</div>'
+      + '<div class="st-map-shell" id="st-map-shell"' + (state.mapOn ? '' : ' hidden') + '><div id="st-map"></div></div>'
+      + '</div>'
       + '</div>';
   }
 
