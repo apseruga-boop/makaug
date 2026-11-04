@@ -20,6 +20,32 @@ const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency
 const { pricePeriodSuffix: sharedPricePeriodSuffix } = require('../config/pricePeriods');
 const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
+const { detectPropertyTypeEvidence } = require('../utils/propertyTypeVocabulary');
+
+// Fisher, Nov 2026: rows with a blank property type got generic titles such as
+// "Property for sale in Najjera" although the caption said "House". A blank
+// type falls back to what the listing's own text says (residential only).
+const RESIDENTIAL_TYPE_WORDS = Object.freeze({
+  house: 'House', mansion: 'Mansion', villa: 'Villa', bungalow: 'Bungalow',
+  duplex: 'Duplex', apartment: 'Apartment', room: 'Room',
+});
+function inferredResidentialType(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const text = [row.title, row.description, extra.source_caption, extra.youtube_source_title]
+    .filter((part) => typeof part === 'string' && part.trim()).join(' ');
+  const evidence = detectPropertyTypeEvidence(text);
+  if (evidence.physical_type !== 'residential') return '';
+  return RESIDENTIAL_TYPE_WORDS[evidence.property_type] || '';
+}
+function generalisedListingTitle(row = {}, title = '') {
+  const match = String(title || '').match(/^(\d+[- ]bed(?:room)?\s+)?property(\s+for\s+(?:sale|rent)\b.*)$/i);
+  if (!match || cleanText(row.property_type || '')) return '';
+  const type = inferredResidentialType(row);
+  if (!type) return '';
+  const label = match[1] ? `${match[1]}${type.toLowerCase()}` : type;
+  const out = `${label}${match[2]}`;
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
@@ -247,7 +273,8 @@ function buildThirdPartyPublicTitle(property = {}, extra = {}) {
   const type = thirdPartyTypeLabel(property);
   const beds = Number(property.bedrooms);
   const roomLabel = Number.isFinite(beds) && beds > 0 && type !== 'land' ? `${beds}-bed ` : '';
-  const propertyType = stripTransactionFromPublicPropertyType(humanPropertyTypeLabel(property.property_type || ''));
+  const propertyType = stripTransactionFromPublicPropertyType(humanPropertyTypeLabel(property.property_type || ''))
+    || (type === 'commercial property' || type === 'student accommodation' ? '' : inferredResidentialType(property));
   if (type === 'land') {
     const size = redactThirdPartyPublicText(extra.size_raw || property.land_size || '');
     return `${size ? `${size} ` : ''}Land in ${area}`.trim();
@@ -411,6 +438,7 @@ function factualListingTitle(row = {}) {
   const typeLabel = isLand
     ? (/\bplots?\b/.test(typeKey) && !/\bland\b/.test(typeKey) && !/\b(house|home)\b/.test(typeKey) ? 'Plot' : 'Land')
     : (humanPropertyTypeLabel(row.property_type || '')
+    || (listingType !== 'commercial' && listingType !== 'student' && listingType !== 'students' ? inferredResidentialType(row) : '')
     || (listingType === 'commercial' ? 'Commercial property' : (listingType === 'student' || listingType === 'students') ? 'Student room' : 'Property'));
   const beds = Number(row.bedrooms);
   const bedPrefix = !isLand && Number.isFinite(beds) && beds > 0 ? `${beds}-bed ` : '';
@@ -435,6 +463,8 @@ function cleanListingTitle(row = {}) {
   const hasLetters = /\p{L}/u.test(cleaned);
   const lostTooMuch = original.length > 0 && stripped.length < original.length / 2;
   if (!cleaned || cleaned.length < 12 || !hasLetters || lostTooMuch) return factualListingTitle(row);
+  const specific = generalisedListingTitle(row, cleaned);
+  if (specific) return specific;
   return cleaned.replace(/\p{L}/u, (char) => char.toUpperCase());
 }
 
