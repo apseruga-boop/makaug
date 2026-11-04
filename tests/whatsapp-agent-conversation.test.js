@@ -129,8 +129,10 @@ test('the go-live message is sent by makaug, not left on a staff member’s scre
   const path = require('path');
   const source = fs.readFileSync(path.join(__dirname, '..', 'routes', 'properties.js'), 'utf8');
 
-  assert.match(source, /const leaveToAHuman = manualNotificationOnly && nextStatus === 'rejected';/,
-    'only a rejection is left to a person to word');
+  // 4 Nov 2026: a rejection is sent too. The one left "to a person to word"
+  // was never sent by anyone — Segawa's two plots of 31 Oct went quietly.
+  assert.doesNotMatch(source, /leaveToAHuman/, 'nothing is left to a person to send any more');
+  assert.match(source, /alertTeamListingRejected/, 'and the team hears about a rejection');
   assert.doesNotMatch(source, /if \(manualNotificationOnly && \['approved', 'rejected'\]\.includes\(nextStatus\)\)/,
     'an approval must never take the build-but-do-not-send branch again');
 

@@ -1007,10 +1007,80 @@ async function sendNewLeadAlerts(db, { force = false } = {}) {
 }
 
 /**
- * The agents' properties that arrived during quiet hours, in one message
- * once the desk is open. routes/whatsapp.js holds each one on the listing
- * (extra_fields.team_alert_deferred) instead of dropping it; this sends them
- * and marks them sent, so a listing is announced once.
+ * A team message now — or, while the desk is closed, held on the listing
+ * (extra_fields.team_alert_deferred) for the morning round-up. Quiet hours
+ * mean "not at this hour", never "not at all".
+ */
+async function holdOrSendToTeam(db, { propertyId = '', body = '', type = 'team_alert', kind = 'submitted', extraRecipients = [] } = {}) {
+  if (!text(body)) return { skipped: 'no_body' };
+  if (inQuietHours()) {
+    if (!propertyId) return { skipped: 'quiet_hours' };
+    await db.query(
+      `UPDATE properties
+          SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+            || jsonb_build_object('team_alert_deferred', jsonb_build_object(
+                 'body', $2::text,
+                 'extra_recipients', $3::jsonb,
+                 'kind', $4::text,
+                 'deferred_at', NOW()::text
+               ))
+        WHERE id = $1`,
+      [propertyId, body, JSON.stringify(extraRecipients), kind]
+    );
+    return { deferred: true, propertyId };
+  }
+  const results = await sendToTeam(db, body, type, { extraRecipients });
+  return { sent: true, results };
+}
+
+/**
+ * A moderator has rejected a listing: Arthur hears about it, with the reason
+ * and whether the lister was told.
+ *
+ * Until 4 Nov 2026 a rejection was invisible outside the dashboard. Two of
+ * Segawa Frederick Kevin's video-only plots (31 Oct) were rejected on 2 Nov
+ * for "No clear photos"; nobody on the team knew, and neither did he.
+ */
+function listingRejectedAlertBody({ listing = {}, reason = '', actorLabel = '', listerNotified = false } = {}) {
+  const ref = text(listing.inquiry_reference) || (listing.id ? `Ref ${String(listing.id).slice(0, 8).toUpperCase()}` : '');
+  const place = [text(listing.area), text(listing.district)].filter(Boolean).filter((v, i, arr) => arr.indexOf(v) === i).join(', ');
+  const price = money(listing.price);
+  const phone = String(listing.lister_phone || '').replace(/\D+/g, '');
+  const who = [text(listing.lister_name), phone ? `+${phone}` : ''].filter(Boolean).join(' ');
+  return [
+    `⛔ *Listing rejected by ${text(actorLabel, 'staff')}*`,
+    text(listing.title, 'Untitled listing'),
+    [place ? `📍 ${place}` : '', price].filter(Boolean).join(' · '),
+    who ? `Lister: ${who}${listing.agent_id ? ' (agent)' : ''}` : '',
+    `Reason: ${text(reason, 'none given')}`,
+    listerNotified ? 'The lister has been told by WhatsApp.' : (phone ? 'The lister could not be messaged — tell them yourself.' : 'The lister has no WhatsApp number on file.'),
+    `${ref ? `${ref} · ` : ''}${siteUrl()}/admin (Listings › actioned)`
+  ].filter(Boolean).join('\n');
+}
+
+async function alertTeamListingRejected(db, { listing = {}, reason = '', actorLabel = '', listerNotified = false } = {}) {
+  if (!alertRecipients().length) return { skipped: 'no_recipients' };
+  return holdOrSendToTeam(db, {
+    propertyId: listing.id || '',
+    body: listingRejectedAlertBody({ listing, reason, actorLabel, listerNotified }),
+    type: 'listing_rejected_alert',
+    kind: 'rejected'
+  });
+}
+
+function overnightHeader(submitted, rejected) {
+  const props = (n) => `${n} ${n === 1 ? 'property' : 'properties'}`;
+  const listings = (n) => `${n} ${n === 1 ? 'listing was' : 'listings were'}`;
+  if (submitted && !rejected) return `🌙 *Overnight: ${props(submitted)} from agents came in while the desk was closed — waiting for review*`;
+  if (rejected && !submitted) return `🌙 *Overnight: ${listings(rejected)} rejected while the desk was closed*`;
+  return `🌙 *Overnight while the desk was closed: ${props(submitted)} from agents waiting for review, ${listings(rejected)} rejected*`;
+}
+
+/**
+ * The team messages held during quiet hours, in one message once the desk is
+ * open: agents' properties that arrived overnight (routes/whatsapp.js) and
+ * listings rejected overnight (alertTeamListingRejected). Each is marked sent,
+ * so a listing is announced once.
  */
 async function sendDeferredPropertyAlerts(db, { force = false, send = sendToTeam } = {}) {
   if (!force && inQuietHours()) return { skipped: 'quiet_hours' };
@@ -1030,14 +1100,13 @@ async function sendDeferredPropertyAlerts(db, { force = false, send = sendToTeam
     .map((value) => String(value || '').replace(/\D+/g, '')).filter(Boolean)))];
   if (!teamRecipients(extraRecipients).length) return { skipped: 'no_recipients' };
   const count = rows.length;
-  const lines = [
-    `🌙 *Overnight: ${count} ${count === 1 ? 'property' : 'properties'} from agents came in while the desk was closed — waiting for review*`,
-    ''
-  ];
+  const rejected = rows.filter((row) => row.deferred.kind === 'rejected').length;
+  const lines = [overnightHeader(count - rejected, rejected), ''];
   rows.forEach((row, index) => {
     const body = String(row.deferred.body).trim()
       .replace(/^🏠 \*New property from /, '*')
-      .replace(/ — waiting for review\*/, '*');
+      .replace(/ — waiting for review\*/, '*')
+      .replace(/^⛔ \*Listing rejected by /, '*Rejected by ');
     lines.push(count > 1 ? `${index + 1}. ${body}` : body, '');
   });
   const results = await send(db, lines.join('\n').trim(), 'agent_property_submitted_overnight', { extraRecipients });
@@ -1195,6 +1264,9 @@ module.exports = {
   sendNewLeadAlerts,
   sendOverdueReminders,
   sendDeferredPropertyAlerts,
+  holdOrSendToTeam,
+  alertTeamListingRejected,
+  listingRejectedAlertBody,
   sendToTeam,
   teamRecipients,
   alertRecipients,

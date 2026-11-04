@@ -757,27 +757,46 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
   }
 
   if (String(status || '').toLowerCase() === 'rejected') {
+    // Sent automatically since 4 Nov 2026 (it used to wait for a human who
+    // never sent it). The reason is the one the moderator typed, so it is
+    // written for the lister: say what was wrong and what gets it up.
+    const why = String(reason || '').trim() || 'it did not pass our checks';
+    const location = listingLocationLabel(listing);
+    const price = formatListingPrice(listing);
     return {
-      subject: `[makaug] Listing rejected • ${title}`,
+      subject: `We couldn't approve your listing yet - ${title}`,
       text: [
         `Hello${listing?.lister_name ? ` ${listing.lister_name}` : ''},`,
         '',
-        'Thank you for submitting your makaug listing.',
-        `Listing reference: ${reference}`,
-        `Title: ${title}`,
-        'The listing has been rejected during review.',
-        reason ? `Reason: ${reason}` : 'Reason: It did not pass our current quality checks.',
+        'Thank you for listing with makaug. We looked at your property but could not approve it yet.',
+        `Property: ${title}`,
+        `Reference: ${reference}`,
+        `Why: ${why}`,
         '',
-        `Please resend the correct information or contact ${supportEmail} for help.`,
-        'Thank you for using makaug.'
+        'Fix that and resend the property and we will review it again.',
+        `Questions? Reply to this email or contact ${supportEmail}.`
       ].filter(Boolean).join('\n'),
-      whatsapp: [
-        `makaug: your listing was rejected during review.`,
-        `Ref: ${reference}`,
-        `Title: ${title}`,
-        reason ? `Reason: ${reason}` : 'Reason: It did not pass our current quality checks.',
-        `Contact ${supportEmail} for help.`
-      ].filter(Boolean).join('\n')
+      whatsapp: listing.agent_id
+        // An agent is stocking a shopfront: tell them what was wrong and that
+        // sending it again is all it takes. Same voice as the go-live message.
+        ? [
+          `We couldn't put this one up yet.`,
+          '',
+          `${title}`,
+          [location, price].filter(Boolean).join(' · ') || null,
+          `Ref ${reference}`,
+          '',
+          `Why: ${why}`,
+          '',
+          'Fix that and send the property here again — I will put it up. If you think we have got it wrong, reply here and a person will look at it.'
+        ].filter((line) => line !== null).join('\n')
+        : [
+          `Hi ${listing?.lister_name || 'there'}, we couldn't approve your makaug listing yet.`,
+          `${title} — Ref ${reference}`,
+          `Why: ${why}`,
+          'Please fix that and resend it from this number, or reply here if you have a question.',
+          `Help: ${supportEmail}`
+        ].join('\n')
     };
   }
 
