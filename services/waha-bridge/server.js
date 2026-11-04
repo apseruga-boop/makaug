@@ -669,6 +669,8 @@ async function handleWahaEvent(evt) {
     return { handled: true, kind: 'session.status', status };
   }
 
+  if (event.startsWith('call.')) return handleCallEvent(evt);
+
   if (event !== 'message') return { handled: false, kind: event || 'unknown' };
 
   const p = evt.payload || {};
@@ -1161,6 +1163,166 @@ async function heartbeat() {
   }
 }
 
+// ------------------------------------------------------------------ calls --
+
+/**
+ * WhatsApp calls to the makaug number.
+ *
+ * WAHA (GOWS) reports them as call.received / call.accepted / call.rejected
+ * events. Nothing here can answer a call, so one that is not accepted on the
+ * phone within CALL_MISSED_GRACE_MS is a missed call and makaug is told
+ * (POST /api/whatsapp/web-bridge/call): it logs the call, opens the callback
+ * lead, emails, and WhatsApps Arthur and Ronald. A call the phone rejects is
+ * reported at once, as declined. makaug keeps one record per call id, so a
+ * late call.rejected after the grace period does not report the call twice.
+ *
+ * Until 4 Nov 2026 these events fell through handleWahaEvent as "unknown":
+ * no call since the move to WAHA (Sep 2026) was ever recorded anywhere, and
+ * Arthur saw a missed call on the phone that the system knew nothing about.
+ */
+const CALL_EVENTS = ['call.received', 'call.accepted', 'call.rejected'];
+const CALL_MISSED_GRACE_MS = clampInt(process.env.CALL_MISSED_GRACE_MS, 30000, 0, 120000);
+const pendingCalls = new Map(); // call key -> { timer, at }
+const callStats = { received: 0, missed: 0, answered: 0, declined: 0, reported: 0, report_failed: 0 };
+let lastCallEventAt = 0;
+
+function callKey(p) {
+  return String(p?.id || p?.callId || p?.call_id || `${p?.from || ''}:${p?.timestamp || ''}`);
+}
+
+async function reportCall(p, evt, status) {
+  const from = String(p.from || p.chatId || '');
+  const phone = await senderAddress({ ...p, from });
+  if (!phone || phone.includes('@')) {
+    log('call from an unresolved sender not reported:', from || '(empty)');
+    return { handled: false, kind: 'call_no_sender' };
+  }
+  const callType = p.isVideo === true ? 'video' : 'voice';
+  const ts = Number(p.timestamp || 0);
+  const createdAt = ts > 0 ? new Date(ts > 1e12 ? ts : ts * 1000).toISOString() : new Date().toISOString();
+  const body = {
+    phone,
+    call_id: `waha:${callKey(p)}`,
+    status,
+    call_type: callType,
+    contact_name: String(p.notifyName || p._data?.notifyName || p._data?.Info?.PushName || ''),
+    created_at: createdAt,
+    metadata: {
+      source: 'waha_gows_call',
+      detection_kind: 'waha_call_event',
+      call_detector_release: 'whatsapp-call-card-trust-gate-20260831',
+      waha_event: String(evt.event || ''),
+      waha_event_id: evt.id || null,
+      waha_session: evt.session || cfg.wahaSession,
+      chat_id: from,
+      lid: from.endsWith('@lid') ? from : null,
+      is_video: callType === 'video',
+      grace_ms: CALL_MISSED_GRACE_MS,
+    },
+  };
+  try {
+    await makaug('/api/whatsapp/web-bridge/call', { method: 'POST', body, timeoutMs: 20000 });
+    callStats.reported += 1;
+    log(`call ${status} from ${phone} reported to makaug`);
+    return { handled: true, kind: 'call', status };
+  } catch (err) {
+    callStats.report_failed += 1;
+    log('WARN call NOT reported to makaug:', err.message);
+    return { handled: false, kind: 'call_report_failed' };
+  }
+}
+
+function settlePendingCall(key) {
+  const pending = pendingCalls.get(key);
+  if (!pending) return false;
+  clearTimeout(pending.timer);
+  pendingCalls.delete(key);
+  return true;
+}
+
+async function handleCallEvent(evt) {
+  const event = String(evt.event || '');
+  const p = evt.payload || {};
+  const key = callKey(p);
+  lastCallEventAt = Date.now();
+  if (p.isGroup === true || String(p.from || '').endsWith('@g.us')) return { handled: false, kind: 'group_call' };
+
+  if (event === 'call.received') {
+    if (pendingCalls.has(key)) return { handled: false, kind: 'duplicate_call' };
+    callStats.received += 1;
+    const timer = setTimeout(() => {
+      pendingCalls.delete(key);
+      callStats.missed += 1;
+      reportCall(p, evt, 'missed').catch((err) => log('call report error:', err.message));
+    }, CALL_MISSED_GRACE_MS);
+    timer.unref?.();
+    pendingCalls.set(key, { timer, at: Date.now() });
+    log(`call ringing from ${String(p.from || '')}; reported as missed unless answered within ${CALL_MISSED_GRACE_MS}ms`);
+    return { handled: true, kind: 'call_ringing' };
+  }
+  if (event === 'call.accepted') {
+    settlePendingCall(key);
+    callStats.answered += 1;
+    log(`call ${key} answered on the phone; not a missed call`);
+    return { handled: true, kind: 'call_answered' };
+  }
+  if (event === 'call.rejected') {
+    settlePendingCall(key);
+    callStats.declined += 1;
+    return reportCall(p, evt, 'declined');
+  }
+  return { handled: false, kind: event || 'unknown' };
+}
+
+/**
+ * Whether WAHA will send call events at all. The session webhook lists the
+ * events it delivers; a session created before 4 Nov 2026 lists only
+ * message and session.status. Read on /health so the gap is visible rather
+ * than guessed at. null when the session config cannot be read.
+ */
+const callSubscriptionCache = { at: 0, value: null };
+const CALL_SUBSCRIPTION_CACHE_MS = 5 * 60 * 1000;
+
+async function callEventsSubscribed({ fresh = false } = {}) {
+  if (!fresh && callSubscriptionCache.at && Date.now() - callSubscriptionCache.at < CALL_SUBSCRIPTION_CACHE_MS) {
+    return callSubscriptionCache.value;
+  }
+  let value = null;
+  try {
+    const s = await waha(`/api/sessions/${encodeURIComponent(cfg.wahaSession)}`, { timeoutMs: 8000 });
+    const hooks = Array.isArray(s?.config?.webhooks) ? s.config.webhooks : [];
+    if (hooks.length) {
+      const events = hooks.flatMap((h) => (Array.isArray(h?.events) ? h.events : []));
+      value = events.includes('*') || CALL_EVENTS.every((e) => events.includes(e));
+    }
+  } catch (_) {
+    value = null;
+  }
+  callSubscriptionCache.at = Date.now();
+  callSubscriptionCache.value = value;
+  return value;
+}
+
+/**
+ * Add the call events to the session webhook. WAHA restarts the session when
+ * its config changes, so this is never done on its own: POST /calls/subscribe
+ * with the bridge token, when someone is watching.
+ */
+async function subscribeCallEvents() {
+  const s = await waha(`/api/sessions/${encodeURIComponent(cfg.wahaSession)}`, { timeoutMs: 8000 });
+  const config = s?.config && typeof s.config === 'object' ? s.config : {};
+  const hooks = Array.isArray(config.webhooks) ? config.webhooks : [];
+  if (!hooks.length) throw new Error('the session has no webhook to extend');
+  const webhooks = hooks.map((h) => {
+    const events = Array.isArray(h?.events) ? h.events : [];
+    if (events.includes('*')) return h;
+    return { ...h, events: [...new Set([...events, ...CALL_EVENTS])] };
+  });
+  await waha(`/api/sessions/${encodeURIComponent(cfg.wahaSession)}`, { method: 'PUT', body: { config: { ...config, webhooks } }, timeoutMs: 30000 });
+  callSubscriptionCache.at = 0;
+  return { ok: true, events: webhooks[0].events };
+}
+
 // ------------------------------------------------------------ http server --
 
 function tenantAdminAuthorized(req, tenant) {
@@ -1269,6 +1431,8 @@ const server = http.createServer(async (req, res) => {
       if (lostCount) blockers.push(`${lostCount} inbound message(s) failed to reach makaug and were released for retry — check the log for WARN message NOT delivered`);
       const degraded = degradeReason();
       if (degraded) blockers.push(degraded);
+      const callsSubscribed = await callEventsSubscribed();
+      if (callsSubscribed === false) blockers.push('WAHA session webhook does not include call events — missed calls are not reported. POST /calls/subscribe (bridge token) adds them; WAHA restarts the session.');
 
       return json(res, 200, {
         ok: true,
@@ -1287,6 +1451,7 @@ const server = http.createServer(async (req, res) => {
           last_error: link.lastError,
         },
         ffmpeg: ffmpegVersion,
+        calls: { ...callStats, pending: pendingCalls.size, grace_ms: CALL_MISSED_GRACE_MS, last_event_ms_ago: lastCallEventAt ? Date.now() - lastCallEventAt : null, events_subscribed: callsSubscribed },
         ready_to_reply: tokenOk && linkOk && sessionStatusCache === 'WORKING' && !degraded,
         blockers,
       });
@@ -1294,6 +1459,23 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/media') {
       return handleMediaProxy(req, res, url);
+    }
+
+    // Adds call.received/accepted/rejected to the WAHA session webhook. Never
+    // automatic: WAHA restarts the session to apply it.
+    if (req.method === 'POST' && url.pathname === '/calls/subscribe') {
+      const got = String(req.headers['x-whatsapp-web-bridge-token'] || req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+      if (!bridgeTokenConfigured() || got.length !== cfg.bridgeToken.length
+        || !require('crypto').timingSafeEqual(Buffer.from(got), Buffer.from(cfg.bridgeToken))) {
+        return json(res, 401, { ok: false, error: 'bad_token' });
+      }
+      try {
+        const result = await subscribeCallEvents();
+        log('call events added to the session webhook; WAHA is restarting the session');
+        return json(res, 200, result);
+      } catch (err) {
+        return json(res, 502, { ok: false, error: String(err.message || err).slice(0, 300) });
+      }
     }
 
     // Dedicated tenant WAHA posts here, signed with the tenant's own HMAC key.
