@@ -141,7 +141,8 @@
 /* ---------- results ---------- */
 
 #page-short-term .st-split { display: grid; grid-template-columns: 1fr; gap: 18px; }
-#page-short-term .st-split.is-map { grid-template-columns: minmax(0,1fr) minmax(0,460px); }
+#page-short-term .st-split.is-map { grid-template-columns: minmax(0,1fr) minmax(0,460px); align-items: start; }
+#page-short-term .st-main { min-width: 0; }
 @media (max-width: 1000px) { #page-short-term .st-split.is-map { grid-template-columns: 1fr; } }
 
 #page-short-term .st-grid {
@@ -190,7 +191,7 @@
 }
 #page-short-term #st-map {
   width: 100%; max-width: 100%;
-  height: 560px;
+  height: min(560px, calc(100vh - 110px));
 }
 @media (max-width: 1000px) {
   #page-short-term .st-map-shell { position: static; }
@@ -859,4 +860,12 @@
 @media (max-width: 640px) {
   #page-short-term .st-extras { padding: 14px 12px; }
   #page-short-term .st-extra-grid { grid-template-columns: 1fr; }
+}
+
+/* Below 1000px the split is one column: keep the map right after the results. */
+@media (max-width: 1000px) {
+  #page-short-term .st-main { display: contents; }
+  #page-short-term .st-main > * { order: 3; }
+  #page-short-term .st-main > #st-results { order: 1; }
+  #page-short-term .st-split > .st-map-shell { order: 2; }
 }
