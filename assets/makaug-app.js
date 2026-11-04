@@ -66906,7 +66906,8 @@ function agentBookingPlaceMarkup(places, withChange) {
     return `<input id="agent-booking-place" type="hidden" value="${adminAttr(agentBookingLockedPlace)}">`;
   }
   const label = agentBookingPlaceStepLabel();
-  return `<div class="agent-booking-step">
+  const single = (String(places).match(/<option /g) || []).length <= 1;
+  return `<div class="agent-booking-step${single ? " is-single-place" : ""}">
     <p class="agent-booking-step-label" id="agent-booking-place-label">${adminEscape(label)}</p>
     <select id="agent-booking-place" class="agent-booking-place" aria-labelledby="agent-booking-place-label" onchange="onAgentBookingPlaceChange(this.value, ${withChange ? "true" : "false"})">${places}</select>
     <div class="agent-booking-place-line" id="agent-booking-place-line" hidden></div>
@@ -67337,8 +67338,13 @@ function openAgentBookingSheet() {
   const panel = document.querySelector(".agent-profile-contact");
   if (!panel) return;
   const mobile = window.matchMedia("(max-width: 767px)").matches;
-  if (mobile) panel.classList.add("is-open");
-  else panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  if (mobile) {
+    panel.classList.add("is-open");
+    document.body.classList.add("mk-booking-sheet-open");
+    mkWireBookingViewport(panel);
+    return;
+  }
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   const name = document.getElementById("agent-profile-name");
   if (name) name.focus();
 }
@@ -67346,6 +67352,22 @@ function openAgentBookingSheet() {
 function closeAgentBookingSheet() {
   const panel = document.querySelector(".agent-profile-contact");
   if (panel) panel.classList.remove("is-open");
+  document.body.classList.remove("mk-booking-sheet-open");
+}
+
+// Keep the sheet (and its sticky send button) above the on-screen keyboard.
+function mkWireBookingViewport(panel) {
+  const vv = window.visualViewport;
+  if (!vv || panel._mkVvWired) return;
+  panel._mkVvWired = true;
+  const fit = () => {
+    if (!panel.classList.contains("is-open")) return;
+    panel.style.setProperty("--mk-sheet-max", `${Math.round(vv.height * 0.94)}px`);
+    panel.style.setProperty("--mk-sheet-bottom", `${Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))}px`);
+  };
+  vv.addEventListener("resize", fit);
+  vv.addEventListener("scroll", fit);
+  fit();
 }
 
 function selectAgentBookingDay(button) {
@@ -67462,7 +67484,9 @@ function renderAgentBookingFields() {
           <div id="agent-booking-date-strip" class="agent-booking-date-strip" aria-label="Pick a day">${chips}</div>
           <button type="button" class="agent-booking-more" onclick="scrollAgentBookingDates(1)" aria-label="More dates" title="More dates"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
         </div>
+        <p class="agent-booking-swipe-hint" aria-hidden="true">${adminEscape(translateListingLabel("Swipe for more days"))} <i class="fas fa-arrow-right"></i></p>
         <input id="agent-booking-day" type="hidden" value="">
+        <p class="agent-booking-step-label agent-booking-time-label">${adminEscape(translateListingLabel("Pick a time"))}</p>
         <div id="agent-booking-slots" class="agent-booking-slots"></div>
       </div>`;
     paintAgentBookingPlaceLine();
@@ -68323,6 +68347,7 @@ function setBrokerMapMarkers(list) {
   if (!window.L) return;
 
   mapTagIndex[mapId] = new Map();
+  mkBrokerMapRows = points.map((item) => item.broker);
   wireMapCardHover();
   mapSpreadPoints(points);
   points.forEach(({ broker, point }) => {
@@ -68353,6 +68378,7 @@ function setBrokerMapMarkers(list) {
     `, { className: "mk-map-popup", closeButton: false, minWidth: 230, maxWidth: 260 });
 
     wireLeafletMarkerClick(marker, "broker");
+    marker.on("click", () => { try { if (document.body.classList.contains("mk-mobile-map-open")) focusMapCarouselCard(mapId, broker.id); } catch (e) {} });
     mapTagIndex[mapId].set(String(broker.id), marker);
     markers[mapId].push(marker);
   });
@@ -69463,6 +69489,11 @@ function syncListingMapToGrid() {
 }
 
 // Mobile full-screen map: swipeable card carousel synced with the pins.
+let mkBrokerMapRows = [];
+function mkBrokerMiniCardHtml(b) {
+  const n = Number(b.listings) || 0;
+  return `<div class="mk-map-mini mk-map-mini--broker"><strong>${adminEscape(b.name || "Broker")}</strong>${b.company ? `<span>${adminEscape(b.company)}</span>` : ""}${b.area ? `<span class="mk-broker-pop-loc"><i class="fas fa-location-dot"></i> ${adminEscape(b.area)}</span>` : ""}<span>${n} ${adminEscape(translateListingLabel(n === 1 ? "listing" : "listings"))}</span><a href="${adminAttr(getBrokerProfilePath(b))}" data-mini-broker-link="1" class="mk-map-mini-link" onclick="return openMapBrokerProfile(event, ${adminListingIdArg(b.id)});">${adminEscape(translateListingLabel("View broker"))}</a></div>`;
+}
 function renderMapCarousel(col, mapId) {
   let rail = col.querySelector(".mk-map-carousel");
   if (!rail) {
@@ -69475,12 +69506,27 @@ function renderMapCarousel(col, mapId) {
     }, { passive: true });
     col.appendChild(rail);
   }
-  const rows = (mapLastRows[mapId] || []).slice(0, 40);
+  const isBroker = mapId === "map-brokers";
+  const rows = (isBroker ? mkBrokerMapRows : (mapLastRows[mapId] || [])).slice(0, 40);
   const sig = rows.map((r) => String(r.id)).join(",");
   if (rail._mkSig === sig) return;
   rail._mkSig = sig;
   rail._mkMapId = mapId;
-  rail.innerHTML = rows.map((p) => `<div class="mk-map-carousel-item" data-carousel-id="${adminAttr(String(p.id))}">${mapMiniCardHtml(p)}</div>`).join("");
+  rail._mkActiveId = null;
+  rail.innerHTML = rows.map((p) => `<div class="mk-map-carousel-item" data-carousel-id="${adminAttr(String(p.id))}">${isBroker ? mkBrokerMiniCardHtml(p) : mapMiniCardHtml(p)}</div>`).join("");
+  if (isBroker && !rail._mkTapWired) {
+    rail._mkTapWired = true;
+    rail.addEventListener("click", (event) => {
+      const it = event.target.closest?.(".mk-map-carousel-item");
+      if (!it) return;
+      const id = it.getAttribute("data-carousel-id");
+      if (event.target.closest?.("[data-mini-broker-link]")) return;
+      focusMapCarouselCard(mapId, id);
+      if (rail._mkActiveId === id) highlightBrokerPin(id, true);
+      else mkCarouselActivate(rail, it);
+    });
+  }
+  if (isBroker) setTimeout(() => mkCarouselCentred(rail), 400);
 }
 function mkCarouselCentred(rail) {
   const box = rail.getBoundingClientRect();
@@ -69492,10 +69538,19 @@ function mkCarouselCentred(rail) {
     if (d < bestD) { bestD = d; best = it; }
   });
   if (!best) return;
+  mkCarouselActivate(rail, best);
+}
+function mkCarouselActivate(rail, best) {
   const id = best.getAttribute("data-carousel-id");
   rail.querySelectorAll(".mk-map-carousel-item.is-active").forEach((it) => it !== best && it.classList.remove("is-active"));
   best.classList.add("is-active");
   if (rail._mkActiveId === id) return;
+  if (rail._mkMapId === "map-brokers") {
+    if (rail._mkActiveId) highlightBrokerPin(rail._mkActiveId, false);
+    rail._mkActiveId = id;
+    highlightBrokerPin(id, true);
+    return;
+  }
   if (rail._mkActiveId) mkSetPinActive(rail._mkMapId, rail._mkActiveId, false);
   rail._mkActiveId = id;
   mkSetPinActive(rail._mkMapId, id, true);
@@ -69520,5 +69575,12 @@ function focusMapCarouselCard(mapId, id) {
 }
 
 if (typeof window !== "undefined" && typeof document !== "undefined") {
-  setInterval(() => { try { syncListingMapToggle(); } catch (e) {} try { syncListingMapToGrid(); } catch (e) {} }, 800);
+  setInterval(() => {
+    try { syncListingMapToggle(); } catch (e) {}
+    try { syncListingMapToGrid(); } catch (e) {}
+    try {
+      const col = activeListingMapCol();
+      if (col && document.body.classList.contains("mk-mobile-map-open") && col.querySelector("#map-brokers") && maps["map-brokers"]) renderMapCarousel(col, "map-brokers");
+    } catch (e) {}
+  }, 800);
 }
