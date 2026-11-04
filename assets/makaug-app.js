@@ -15403,14 +15403,14 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
           ${primaryImageUrl ? `<div class="mt-2 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-2"><img src="${adminAttr(primaryImageUrl)}" alt="Primary property photo" class="h-16 w-20 rounded-lg border border-emerald-100 object-cover"><div class="text-xs font-black text-emerald-900">${staffNumber(imageCount)} clear property photo${imageCount === 1 ? "" : "s"} attached</div></div>` : ""}
           ${queueNote}
           ${mediaQualityWarning}
-          ${duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800"><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : ""}
-          ${staffPossibleDuplicateOfHtml(item.extra_fields?.possible_duplicate_of)}
+          ${staffPossibleDuplicateOfHtml(item.extra_fields?.possible_duplicate_of) || (duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800" data-staff-duplicate-warning><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : "")}
           ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
         </div>
         <span class="shrink-0 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-2.5 py-1 text-[11px] font-black" data-staff-queue-status>${adminEscape(item.status || item.moderation_stage || "pending")}</span>
       </div>
       <div class="mt-3 flex flex-wrap gap-2">
         <button type="button" onclick="openStaffListingPreview(${propertyIdArg(item.id)})" class="bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-eye mr-1"></i>Preview & edit</button>
+        ${liveListing && item.id ? `<a href="/property/${encodeURIComponent(String(item.id))}" target="_blank" rel="noopener noreferrer" data-staff-live-property-link class="border border-emerald-200 text-emerald-800 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-up-right-from-square mr-1"></i>View live page</a>` : ""}
         ${liveListing ? "" : `<button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-xmark mr-1"></i>Reject with reason</button>
         <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-rotate-left mr-1"></i>Keep pending</button>`}
       </div>
@@ -15447,13 +15447,24 @@ function staffReplaceHtmlAboveQueue(host, html) {
   // Keep the queue under the pointer only while it is on screen.
   if (before < window.innerHeight && typeof window.scrollBy === "function") window.scrollBy(0, delta);
 }
+function staffQueueCardOrder(wrap) {
+  if (!wrap || !wrap.querySelectorAll) return "";
+  return Array.from(wrap.querySelectorAll("[data-staff-queue-card]"))
+    .map((card) => String(card.getAttribute("data-property-id") || ""))
+    .join(",");
+}
 function staffSetQueueHtml(wrap, html) {
   if (!wrap || wrap.innerHTML === html) return;
   const height = wrap.offsetHeight || 0;
+  const orderBefore = staffQueueCardOrder(wrap);
   // Hold the old height for one frame-ish window so the cards below do not jump.
   if (height) wrap.style.minHeight = `${height}px`;
   wrap.innerHTML = html;
-  staffMarkQueueLayoutChange();
+  // Fisher, Nov 2026: every background repaint (a count, a footer, "Loading…")
+  // armed the click guard, so the first "Preview & edit" click was ignored
+  // even though no card had moved. Only a change in which cards are where
+  // arms it now.
+  if (staffQueueCardOrder(wrap) !== orderBefore) staffMarkQueueLayoutChange();
   window.clearTimeout(wrap._staffHeightRelease);
   wrap._staffHeightRelease = window.setTimeout(() => { wrap.style.minHeight = ""; }, 1500);
 }
@@ -15594,6 +15605,10 @@ function staffPaintReviewQueue(segment) {
   const isSearch = segment === "search";
   const wrap = document.getElementById(isBroker ? "staff-broker-review-queue" : "staff-review-queue");
   if (!wrap) return;
+  // Fisher, Nov 2026: background paging of the pending queue repainted the
+  // shared list over the search results, so the search box looked like it did
+  // not filter. While a search is on screen, only the search paints here.
+  if (segment === "main" && staffReviewQueueState.search.term) return;
   const state = staffReviewQueueState[segment];
   const rows = isSearch || isBroker ? staffDedupeRows(state.rows) : staffDedupeRows(state.rows, staffBrokerQueueIds());
   state.rows = isSearch || isBroker ? rows : staffDedupeRows(state.rows);
@@ -15748,7 +15763,12 @@ async function staffLoadMoreReviewQueue(segment = "main", searchSeq = 0) {
   let openId = "";
   try {
     const nextPage = (state.page || 0) + 1;
-    const res = await apiRequest(staffReviewQueuePageUrl(segment, nextPage, segment === "search" ? state.term : ""));
+    const res = await staffApiRequestWithTimeout(
+      staffReviewQueuePageUrl(segment, nextPage, segment === "search" ? state.term : ""),
+      {},
+      STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
+      "Review queue"
+    );
     if (segment === "search" && searchSeq && searchSeq !== staffReviewQueueSearchSeq) return;
     const rows = Array.isArray(res?.data) ? res.data : [];
     state.rows = staffDedupeRows([...state.rows, ...rows]);
@@ -15777,6 +15797,13 @@ async function staffLoadMoreReviewQueue(segment = "main", searchSeq = 0) {
   if (openId && (!searchSeq || searchSeq === staffReviewQueueSearchSeq)) openStaffListingPreview(openId);
 }
 
+function staffReviewQueueSettleCount(state) {
+  if (!state) return;
+  state.hasMore = false;
+  state.moreHint = false;
+  state.total = state.rows.length;
+}
+
 function staffReviewQueueHasMoreRows(segment) {
   const state = staffReviewQueueState[segment];
   if (!state || !state.rows.length) return false;
@@ -15798,10 +15825,18 @@ async function staffFillReviewQueue(segment) {
       guard += 1;
       const before = state.rows.length;
       await staffLoadMoreReviewQueue(segment);
-      if (state.rows.length <= before) break;
+      if (state.rows.length <= before) {
+        // Fisher, Nov 2026: "Showing 12 of 31" stayed with a Load more that
+        // returned nothing new. Nothing more is reachable: the count is what
+        // is on screen.
+        staffReviewQueueSettleCount(state);
+        break;
+      }
     }
   } finally {
     state.filling = false;
+    state.loading = false;
+    staffPaintReviewQueue(segment === "search" && !state.term ? "main" : segment);
   }
 }
 
@@ -16086,11 +16121,26 @@ async function staffFillFoundOnlineQueue() {
       guard += 1;
       const before = staffFoundOnlineQueueView().rows.length;
       await staffLoadMoreFoundOnline();
-      if (staffFoundOnlineQueueView().rows.length <= before) break;
+      if (staffFoundOnlineQueueView().rows.length <= before) {
+        staffFoundOnlineSettleCount();
+        break;
+      }
     }
   } finally {
     staffFoundOnlineState.filling = false;
+    staffFoundOnlineState.loading = false;
+    renderStaffFoundOnlineQueue();
   }
+}
+
+// A page that adds nothing means every reachable row is on screen: show that
+// count and drop "Load more" instead of "Showing 12 of 31" forever.
+function staffFoundOnlineSettleCount() {
+  const meta = staffFoundOnlineState.data?.queued_found_online_meta;
+  if (!meta) return;
+  const shown = staffFoundOnlineQueueView().rows.length;
+  staffFoundOnlineState.data.queued_found_online_meta = { ...meta, total: shown, has_more: false };
+  staffFoundOnlineState.moreHint = false;
 }
 
 async function staffLoadMoreFoundOnline() {
@@ -19561,8 +19611,19 @@ function focusListingPhotoUpload() {
 
 let staffPhotoChangePending = false;
 
+// Fisher, Nov 2026: 707702's editor showed 164BF1's YouTube video. Media for
+// the editor is only applied when the open modal, the active review and the
+// response are all the same listing.
+function staffPreviewMediaTargetOpen(propertyId, data = {}) {
+  const id = String(propertyId || "");
+  if (!id || String(adminActiveReview?.id || "") !== id) return false;
+  const modal = typeof document !== "undefined" ? document.getElementById("staff-listing-preview-modal") : null;
+  if (modal && String(modal.dataset?.propertyId || "") !== id) return false;
+  return staffPreviewResponseMatches(id, data || {});
+}
+
 function staffRefreshPreviewMedia(propertyId, data = {}) {
-  if (String(adminActiveReview?.id || "") !== String(propertyId)) return;
+  if (!staffPreviewMediaTargetOpen(propertyId, data)) return;
   if (data.images) adminActiveReview.images = data.images;
   if (data.extra_fields) adminActiveReview.extra_fields = data.extra_fields;
   if (data.media_check) adminActiveReview.media_check = data.media_check;
@@ -19639,7 +19700,7 @@ async function staffSubmitVideoMove(event, propertyId, videoUrl) {
       body: { url: videoUrl, target, mode, note, confirm: true }
     }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Move video");
     const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/preview`);
-    if (response?.data && String(adminActiveReview?.id || "") === String(propertyId)) {
+    if (response?.data && staffPreviewMediaTargetOpen(propertyId, response.data)) {
       adminActiveReview = { ...(adminActiveReview || {}), ...response.data, id: propertyId };
       const videos = document.getElementById("staff-preview-video-gallery");
       if (videos) videos.outerHTML = staffPreviewVideosHtml(adminActiveReview);
@@ -20267,6 +20328,23 @@ function ensureStaffModerationActionDelegates() {
 
 ensureStaffModerationActionDelegates();
 
+// Fisher, Nov 2026: the facts reader put a USD amount (4,000 for 713476) in
+// "Canonical price (UGX)". A USD amount goes to the original-amount field and
+// the UGX field gets amount x rate; a UGX listing keeps its UGX amount.
+function adminReviewCanonicalPriceFromFacts(facts = {}, review = {}) {
+  const amount = Number(String(facts?.price ?? "").replace(/[^\d.]/g, ""));
+  if (!Number.isFinite(amount) || amount <= 0) return { ugx: "", originalUsd: "" };
+  const extra = review?.extra_fields && typeof review.extra_fields === "object" ? review.extra_fields : {};
+  const factsCurrency = String(facts?.currency || facts?.price_currency || "").toUpperCase();
+  const sourceCurrency = String(review?.price_original_currency || extra.price_original_currency || "").toUpperCase();
+  const original = Number(review?.price_original ?? extra.price_original);
+  const isUsd = factsCurrency === "USD"
+    || (!factsCurrency && sourceCurrency === "USD" && Number.isFinite(original) && original === amount);
+  if (!isUsd) return { ugx: amount, originalUsd: "" };
+  const rate = Number(review?.price_fx_rate_ugx ?? extra.price_fx_rate_ugx) || 3800;
+  return { ugx: Math.round(amount * rate), originalUsd: amount };
+}
+
 function staffListingPreviewPatch() {
   if (document.getElementById("admin-review-title-edit")) {
     return collectAdminReviewListingPatch();
@@ -20475,6 +20553,7 @@ function hideStaffPreviewOpening() {
   document.getElementById("staff-listing-preview-opening")?.remove();
 }
 
+const STAFF_PREVIEW_OPEN_TIMEOUT_MS = 15000;
 async function openStaffListingPreview(propertyId) {
   const requested = String(propertyId || "").trim();
   const seq = ++staffPreviewOpenSeq;
@@ -20484,13 +20563,13 @@ async function openStaffListingPreview(propertyId) {
     const path = `/api/staff/properties/${encodeURIComponent(requested)}/preview`;
     let response;
     try {
-      response = await apiRequest(path);
+      response = await staffApiRequestWithTimeout(path, {}, STAFF_PREVIEW_OPEN_TIMEOUT_MS, "Listing preview");
     } catch (firstError) {
       // A busy database (pool_timeout, 503) usually clears in a second or two.
       if (!staffPreviewBusyError(firstError) || seq !== staffPreviewOpenSeq) throw firstError;
       await new Promise((resolve) => setTimeout(resolve, 1500));
       if (seq !== staffPreviewOpenSeq) return;
-      response = await apiRequest(path);
+      response = await staffApiRequestWithTimeout(path, {}, STAFF_PREVIEW_OPEN_TIMEOUT_MS, "Listing preview");
     }
     if (seq !== staffPreviewOpenSeq) return;
     const data = response?.data || {};
@@ -33576,7 +33655,9 @@ async function adminApplyExtractedReviewFacts() {
   adminSetReviewEditValue("admin-review-land-transaction-type-edit", adminActiveReview.transaction_type || adminActiveReview.extra_fields?.transaction_type || "sale");
   adminSetReviewEditValue("admin-review-commercial-type-edit", canonicalCommercialTypeForProperty({ ...adminActiveReview, ...facts }));
   adminSetReviewEditValue("admin-review-land-title-available-edit", facts.land_title_available || getLandTitleAvailabilityValue(adminActiveReview) || "");
-  adminSetReviewEditValue("admin-review-price-edit", facts.price || adminActiveReview.price || "");
+  const factsPrice = adminReviewCanonicalPriceFromFacts(facts, adminActiveReview);
+  if (factsPrice.originalUsd) adminSetReviewEditValue("admin-review-price-original-edit", factsPrice.originalUsd);
+  adminSetReviewEditValue("admin-review-price-edit", factsPrice.ugx || adminActiveReview.price || "");
   adminReviewSyncPricePeriods(facts.price_period || adminActiveReview.price_period || "");
   adminSetReviewEditValue("admin-review-bedrooms-edit", facts.bedrooms ?? adminActiveReview.bedrooms ?? "");
   adminSetReviewEditValue("admin-review-bathrooms-edit", facts.bathrooms ?? adminActiveReview.bathrooms ?? "");
