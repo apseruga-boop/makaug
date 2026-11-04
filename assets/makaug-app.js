@@ -68321,10 +68321,12 @@ function setBrokerMapMarkers(list) {
 
   mapTagIndex[mapId] = new Map();
   wireMapCardHover();
+  mapSpreadPoints(points);
   points.forEach(({ broker, point }) => {
     const brokerIdArg = adminListingIdArg(broker.id);
     const brokerPath = getBrokerProfilePath(broker);
-    const marker = L.marker([point.lat, point.lng], { riseOnHover: true, title: broker.name || "" }).addTo(map);
+    const tagLabel = String(broker.name || broker.company || "Broker").trim().split(/\s+/).slice(0, 2).join(" ").slice(0, 18);
+    const marker = L.marker([point.lat, point.lng], { riseOnHover: true, title: broker.name || "", icon: mapPriceTagIcon(tagLabel) }).addTo(map);
     const photo = broker.photo || broker.profile_photo_url || "";
     const isLogo = broker.profile_photo_kind === "logo";
     const media = photo
@@ -68824,8 +68826,22 @@ function highlightMapListing(id, on) {
     try {
       if (on && mapId !== "map-home") {
         const map = maps[mapId];
-        const inView = map && map.getBounds && map.getBounds().contains(marker.getLatLng());
-        if (inView && marker.openPopup) marker.openPopup();
+        if (map && map.getBounds) {
+          const inner = map.getBounds().pad(-0.18);
+          const ll = marker.getLatLng();
+          clearTimeout(map._mkCentreT);
+          if (inner.contains(ll)) {
+            if (marker.openPopup) marker.openPopup();
+          } else {
+            // Pin is off-screen or at the edge: glide it to the centre, keep zoom so neighbours stay visible.
+            map._mkCentreT = setTimeout(() => {
+              try {
+                map.once("moveend", () => { try { if (el.classList.contains("is-hovered") && marker.openPopup) marker.openPopup(); } catch (e) {} });
+                map.panTo(ll, { animate: true, duration: 0.45, easeLinearity: 0.3 });
+              } catch (e) {}
+            }, 120);
+          }
+        }
       } else if (!on && marker.isPopupOpen && marker.isPopupOpen() && !marker._mkPinnedOpen) {
         marker.closePopup();
       }
@@ -68840,7 +68856,22 @@ function highlightBrokerPin(id, on) {
   const el = marker?.getElement?.();
   if (!el) return;
   el.classList.toggle("is-hovered", !!on);
+  el.querySelector(".mk-price-tag")?.classList.toggle("is-hovered", !!on);
   if (marker.setZIndexOffset) marker.setZIndexOffset(on ? 1000 : 0);
+  const map = maps["map-brokers"];
+  if (!map || mapProviders["map-brokers"] !== "leaflet") return;
+  clearTimeout(map._mkCentreT);
+  if (!on) { if (marker.isPopupOpen && marker.isPopupOpen()) marker.closePopup(); return; }
+  map._mkCentreT = setTimeout(() => {
+    try {
+      const ll = marker.getLatLng();
+      const zoom = Math.max(map.getZoom(), 15);
+      const done = () => { try { if (el.classList.contains("is-hovered")) marker.openPopup(); } catch (e) {} };
+      if (map.getZoom() >= zoom && map.getBounds().pad(-0.18).contains(ll)) { done(); return; }
+      map.once("moveend", done);
+      map.flyTo(ll, zoom, { duration: 0.5 });
+    } catch (e) {}
+  }, 120);
 }
 
 function wireMapCardHover() {
