@@ -51343,7 +51343,7 @@ function socialImportListingCardHtml(p = {}, options = {}) {
   const displayTitle = getLocalizedPropertyTitle(p);
   const displayLocation = publicPropertyLocationLabel(p);
   return `
-    <div class="group relative social-import-tile property-card cursor-pointer" data-release-marker="${SOCIAL_IMPORT_TILES_MARKER}" data-social-import-tile="1" onclick="openPropertyCardDetail(event, ${idArg})">
+    <div class="group relative social-import-tile property-card cursor-pointer" data-release-marker="${SOCIAL_IMPORT_TILES_MARKER}" data-social-import-tile="1" data-map-card-id="${adminAttr(String(p.id))}" onclick="openPropertyCardDetail(event, ${idArg})">
       ${propertyDescriptionHoverHtml(p)}
       ${socialImportTileMediaHtml(p, idArg)}
       <div class="social-import-card-body">
@@ -68677,11 +68677,15 @@ function mapMiniCardHtml(p = {}) {
   const title = getLocalizedPropertyTitle(p) || translatePropertyUi("Property");
   const location = getPropertyLocationDisplay(p) || [p?.area, p?.district].filter(Boolean).join(", ");
   const detailPath = p._shortStayUrl || getPropertyDetailPath(p);
-  const photo = isStockOrPlaceholderPhoto(p.img) ? "" : publicImageSrc(p.img || p.primary_image_url || "");
+  const photoRaw = [firstRealListingPhotoUrl(p), p.cover_url, (typeof foundOnlineSourceThumbnailUrl === "function" ? foundOnlineSourceThumbnailUrl(p) : "")]
+    .map((v) => String(v || "").trim()).find((v) => v && !isStockOrPlaceholderPhoto(v)) || "";
+  const photo = photoRaw ? publicImageSrc(photoRaw) : "";
+  const platform = String(p.source_platform || p.extra_fields?.source_platform || "");
+  const noImg = `<span class="mk-map-card-noimg"><i class="${/tiktok/i.test(platform) ? "fab fa-tiktok" : (/youtube/i.test(platform) ? "fab fa-youtube" : "fas fa-house")}"></i><small>${adminEscape(platform ? translatePropertyUi("Photos on the original post") : translatePropertyUi("No photo yet"))}</small></span>`;
   const clickAttr = p._shortStayUrl ? "" : ` onclick="return openMapPropertyDetail(event, ${idArg});"`;
   return `
     <a class="mk-map-card" data-map-marker-popup="listing" data-map-property-link="1" data-property-id="${adminAttr(p.id)}" href="${adminAttr(detailPath)}"${clickAttr}>
-      ${photo ? `<img class="mk-map-card-img" src="${adminAttr(photo)}" alt="" loading="lazy" decoding="async">` : `<span class="mk-map-card-noimg"><i class="fas fa-house"></i></span>`}
+      ${photo ? `<img class="mk-map-card-img" src="${adminAttr(photo)}" alt="" decoding="async" onerror="this.style.display='none'">` : noImg}
       <span class="mk-map-card-body">
         <strong class="mk-map-card-price">${adminEscape(fmtListingPrice(p))}</strong>
         <span class="mk-map-card-title">${adminEscape(title)}</span>
@@ -68784,6 +68788,7 @@ function drawPriceTag(mapId, { p, point }) {
   const cardSel = `[data-map-card-id="${String(p.id).replace(/["\\]/g, "")}"]`;
   marker.on("mouseover", () => document.querySelectorAll(cardSel).forEach((c) => c.classList.add("is-map-hovered")));
   marker.on("mouseout", () => document.querySelectorAll(cardSel).forEach((c) => c.classList.remove("is-map-hovered")));
+  marker.on("click", () => { try { if (document.body.classList.contains("mk-mobile-map-open")) { marker.closePopup && marker.closePopup(); focusMapCarouselCard(mapId, p.id); } } catch (e) {} });
   mapTagIndex[mapId]?.set(String(p.id), marker);
   markers[mapId].push(marker);
 }
@@ -68919,7 +68924,7 @@ async function setHomeMapTab(tab) {
   if (note) note.textContent = translateListingLabel("Loading map…");
   const rows = await fetchHomeMapPins(tab);
   if (homeMapActiveTab !== tab) return;
-  if (note) note.textContent = rows.length ? `${rows.length.toLocaleString("en-US")} ${translateListingLabel("on the map")}` : translateListingLabel("Map is busy — tap the tab to retry");
+  if (note) note.textContent = rows.length ? `${rows.length.toLocaleString("en-US")} ${translateListingLabel(({ sale: "homes for sale", rent: "homes for rent", student: "student rooms", short_term: "short stays" })[tab] || "listings")} ${translateListingLabel("on the map")}` : translateListingLabel("Map is busy — tap the tab to retry");
   if (maps["map-home"]) setMapMarkers("map-home", rows);
 }
 
@@ -69351,6 +69356,135 @@ function toggleListingMap() {
   }, 60);
 }
 
+// Keep the side map in step with the cards on screen (incl. "load more").
+const mkPinLookup = {};
+const mkPinLookupLoading = {};
+function mkMapTypeForMapId(mapId) {
+  const key = String(mapId || "").replace(/^map-/, "");
+  return ({ sale: "sale", rent: "rent", students: "student", student: "student", land: "land", commercial: "commercial" })[key] || "";
+}
+function mkGridForMapId(mapId) {
+  const key = String(mapId || "").replace(/^map-/, "");
+  return document.getElementById(key === "students" ? "student-grid" : `${key}-grid`);
+}
+function mkEnsurePinLookup(type) {
+  if (!type || mkPinLookup[type] || mkPinLookupLoading[type]) return;
+  mkPinLookupLoading[type] = true;
+  fetch(`/api/properties/map-pins?type=${encodeURIComponent(type)}`)
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((body) => {
+      const m = new Map();
+      (body.data || []).forEach((row) => { const ui = mapRemotePropertyForUi(row); if (ui && ui.id != null) m.set(String(ui.id), ui); });
+      mkPinLookup[type] = m;
+    })
+    .catch(() => {})
+    .finally(() => { mkPinLookupLoading[type] = false; });
+}
+function mkHasMapPoint(row) {
+  try { const pt = getListingMapPoint(row); return !!(pt && Number.isFinite(Number(pt.lat)) && Number.isFinite(Number(pt.lng))); } catch (e) { return false; }
+}
+function syncListingMapToGrid() {
+  const col = activeListingMapCol();
+  if (!col) return;
+  const mapEl = col.querySelector("[id^='map-']");
+  const mapId = mapEl && mapEl.id;
+  if (!mapId || !maps[mapId]) return;
+  const grid = mkGridForMapId(mapId);
+  if (!grid) return;
+  const cards = [...grid.querySelectorAll("[data-map-card-id]")];
+  if (!cards.length) return;
+  const type = mkMapTypeForMapId(mapId);
+  const known = new Map();
+  (mapLastRows[mapId] || []).forEach((r) => known.set(String(r.id), r));
+  let memory = null;
+  const rows = [];
+  const seen = new Set();
+  let unresolved = 0;
+  cards.forEach((card) => {
+    const id = String(card.getAttribute("data-map-card-id") || "");
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    let row = known.get(id);
+    if (!row || !mkHasMapPoint(row)) {
+      if (!memory) { memory = new Map(); try { (getPublicListings() || []).forEach((r) => memory.set(String(r.id), r)); } catch (e) {} }
+      const alt = memory.get(id) || mkPinLookup[type]?.get(id);
+      if (alt && mkHasMapPoint(alt)) row = alt;
+    }
+    const ok = !!(row && mkHasMapPoint(row));
+    if (ok) rows.push(row);
+    else if (!mkPinLookup[type]) unresolved += 1;
+    let note = card.querySelector(":scope > .mk-no-map-note");
+    if (!ok && mkPinLookup[type] && !note) {
+      note = document.createElement("span");
+      note.className = "mk-no-map-note";
+      note.textContent = translateListingLabel("No map location");
+      card.appendChild(note);
+    } else if (ok && note) note.remove();
+  });
+  if (unresolved) mkEnsurePinLookup(type);
+  const sig = rows.map((r) => String(r.id)).join(",");
+  const current = (mapLastRows[mapId] || []).map((r) => String(r.id)).join(",");
+  if (sig && sig !== current) setMapMarkers(mapId, rows);
+  if (document.body.classList.contains("mk-mobile-map-open")) renderMapCarousel(col, mapId);
+}
+
+// Mobile full-screen map: swipeable card carousel synced with the pins.
+function renderMapCarousel(col, mapId) {
+  let rail = col.querySelector(".mk-map-carousel");
+  if (!rail) {
+    rail = document.createElement("div");
+    rail.className = "mk-map-carousel";
+    rail.setAttribute("data-mk-map-carousel", "1");
+    rail.addEventListener("scroll", () => {
+      clearTimeout(rail._mkT);
+      rail._mkT = setTimeout(() => mkCarouselCentred(rail), 120);
+    }, { passive: true });
+    col.appendChild(rail);
+  }
+  const rows = (mapLastRows[mapId] || []).slice(0, 40);
+  const sig = rows.map((r) => String(r.id)).join(",");
+  if (rail._mkSig === sig) return;
+  rail._mkSig = sig;
+  rail._mkMapId = mapId;
+  rail.innerHTML = rows.map((p) => `<div class="mk-map-carousel-item" data-carousel-id="${adminAttr(String(p.id))}">${mapMiniCardHtml(p)}</div>`).join("");
+}
+function mkCarouselCentred(rail) {
+  const box = rail.getBoundingClientRect();
+  const mid = box.left + box.width / 2;
+  let best = null; let bestD = Infinity;
+  rail.querySelectorAll(".mk-map-carousel-item").forEach((it) => {
+    const r = it.getBoundingClientRect();
+    const d = Math.abs(r.left + r.width / 2 - mid);
+    if (d < bestD) { bestD = d; best = it; }
+  });
+  if (!best) return;
+  const id = best.getAttribute("data-carousel-id");
+  rail.querySelectorAll(".mk-map-carousel-item.is-active").forEach((it) => it !== best && it.classList.remove("is-active"));
+  best.classList.add("is-active");
+  if (rail._mkActiveId === id) return;
+  if (rail._mkActiveId) mkSetPinActive(rail._mkMapId, rail._mkActiveId, false);
+  rail._mkActiveId = id;
+  mkSetPinActive(rail._mkMapId, id, true);
+  try {
+    const marker = mapTagIndex[rail._mkMapId]?.get(String(id));
+    if (marker && maps[rail._mkMapId]) maps[rail._mkMapId].panTo(marker.getLatLng(), { animate: true });
+  } catch (e) {}
+}
+function mkSetPinActive(mapId, id, on) {
+  const el = mapTagIndex[mapId]?.get(String(id))?.getElement?.();
+  if (!el) return;
+  el.classList.toggle("is-hovered", !!on);
+  el.querySelector(".mk-price-tag")?.classList.toggle("is-hovered", !!on);
+  const m = mapTagIndex[mapId]?.get(String(id));
+  if (m?.setZIndexOffset) m.setZIndexOffset(on ? 1000 : 0);
+}
+function focusMapCarouselCard(mapId, id) {
+  const rail = document.querySelector(`#${mapId}`)?.closest(".listing-map-col")?.querySelector(".mk-map-carousel");
+  const it = rail && [...rail.querySelectorAll(".mk-map-carousel-item")].find((x) => x.getAttribute("data-carousel-id") === String(id));
+  if (!it) return;
+  rail.scrollTo({ left: it.offsetLeft - (rail.clientWidth - it.clientWidth) / 2, behavior: "smooth" });
+}
+
 if (typeof window !== "undefined" && typeof document !== "undefined") {
-  setInterval(() => { try { syncListingMapToggle(); } catch (e) {} }, 800);
+  setInterval(() => { try { syncListingMapToggle(); } catch (e) {} try { syncListingMapToGrid(); } catch (e) {} }, 800);
 }
