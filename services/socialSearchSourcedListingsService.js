@@ -28,6 +28,7 @@ const {
   commercialMisclassificationWarning,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const { detectPropertyTypeEvidence } = require('../utils/propertyTypeVocabulary');
 const { isApartmentBlockText, modestPriceDrop, videoIdFromText } = require('../utils/listingIntakeQuality');
 const { blockedSocialSourceMatch } = require('./socialSourceBlocklistService');
 const {
@@ -1625,11 +1626,68 @@ function listingImageRowsFor(item = {}) {
   }));
 }
 
+// Fisher, Nov 2026: found-online rows were saved with a blank property type
+// and title type, and 0F1D0E (a house for sale) read "commercial property".
+// The caption says what the property is; read it from there.
+const SOURCE_PROPERTY_TYPE_LABELS = Object.freeze({
+  house: 'House',
+  mansion: 'Mansion',
+  villa: 'Villa',
+  bungalow: 'Bungalow',
+  duplex: 'Duplex',
+  apartment: 'Apartment',
+  room: 'Room',
+  hostel: 'Hostel',
+  land: 'Land',
+  'retail shop': 'Retail Shop',
+  office: 'Office',
+  warehouse: 'Warehouse',
+});
+
+function sourceTypeEvidenceText(item = {}) {
+  const raw = item.raw_source_post || item.rawSourcePost || {};
+  return [
+    item.title,
+    item.sourceTitle,
+    item.source_title,
+    item.description,
+    item.caption,
+    item.sourceText,
+    item.source_text,
+    raw.title,
+    raw.caption,
+    raw.description,
+  ].filter((part) => typeof part === 'string' && part.trim()).join(' ');
+}
+
+function inferSourcePropertyType(item = {}) {
+  const evidence = detectPropertyTypeEvidence(sourceTypeEvidenceText(item));
+  if (!evidence.property_type) return null;
+  return { label: SOURCE_PROPERTY_TYPE_LABELS[evidence.property_type] || null, physical_type: evidence.physical_type };
+}
+
+function inferSourceTitleType(item = {}, listingType = '') {
+  if (String(listingType || '').toLowerCase() === 'rent') return null;
+  const transaction = String(item.transactionType || item.transaction_type || '').toLowerCase();
+  if (transaction === 'rent') return null;
+  const text = sourceTypeEvidenceText(item).toLowerCase();
+  if (!text) return null;
+  if (/\bprivate\s+mailo\b/.test(text)) return 'Private Mailo';
+  if (/\bfreehold\b/.test(text)) return 'Freehold';
+  if (/\bleasehold\b/.test(text)) return 'Leasehold';
+  if (/\bmailo\b/.test(text)) return 'Mailo';
+  if (/\b(?:kibanja|bibanja)\b/.test(text)) return 'Kibanja';
+  return null;
+}
+
 function publicDescriptionFor(item = {}) {
   const agent = sourceAgentForItem(item);
+  const inferredType = inferSourcePropertyType(item);
+  const commercialByEvidence = item.listingType === 'commercial'
+    && !(inferredType && inferredType.physical_type === 'residential');
   const listingType = item.listingType === 'land'
     ? 'land listing'
-    : item.listingType === 'commercial'
+    : commercialByEvidence
       ? 'commercial property'
       : item.beds
         ? `${item.beds}-bedroom home`
@@ -2149,7 +2207,7 @@ function buildSocialSearchListing(item, agentId = null) {
       title: item.title,
       description: item.description
     })
-    : item.subtype;
+    : (item.subtype || inferSourcePropertyType(item)?.label || null);
   const classificationWarning = commercialMisclassificationWarning({
     ...item,
     listing_type: listingType
@@ -2228,7 +2286,7 @@ function buildSocialSearchListing(item, agentId = null) {
     bedrooms: item.beds,
     bathrooms: item.baths,
     property_type: propertyType || null,
-    title_type: listingType === 'land' ? null : null,
+    title_type: item.titleType || item.title_type || inferSourceTitleType(item, transactionType === 'rent' ? 'rent' : listingType),
     year_built: null,
     furnishing: null,
     contract_months: null,
@@ -2820,7 +2878,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   if (listingType === 'student' && rawListingType === 'students') listingType = 'students';
   const title = cleanSourceListingTitle(
     raw.title || raw.source_title || raw.caption,
-    `${listingType === 'land' ? 'Land' : 'Property'}${area ? ` in ${area}` : ''}`
+    `${listingType === 'land' ? 'Land' : (inferSourcePropertyType({ ...raw, source_text: sourceText })?.label || 'Property')}${area ? ` in ${area}` : ''}`
   );
   const baseDescription = compactText(raw.description || raw.caption || raw.summary || title);
   const description = compactText([
@@ -2843,7 +2901,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
       title,
       description: `${description} ${sourceText}`
     }) || evidenceClassification.commercial_type
-    : (raw.subtype || raw.property_type || null);
+    : (raw.subtype || raw.property_type || inferSourcePropertyType({ ...raw, title, description, source_text: sourceText })?.label || null);
   const normalizedStudentSource = isStudentSourceListing({
     ...raw,
     listingType,
@@ -4636,6 +4694,8 @@ function summarizeSocialSearchListings() {
 }
 
 module.exports = {
+  inferSourcePropertyType,
+  inferSourceTitleType,
   applyHarvestPhoneToItem,
   strongestSourcePriceCandidate,
   canonicalSourceKeyForItem,

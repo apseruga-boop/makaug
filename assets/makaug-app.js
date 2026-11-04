@@ -700,7 +700,7 @@ const CURRENCIES = {
 };
 const REVIEW_USD_TO_UGX_GUIDE_RATE = 3800;
 
-const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-10-20";
+const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-11-04";
 const MORTGAGE_MIN_YEARS = 5;
 const MORTGAGE_MAX_YEARS = 30;
 const MAP_DEFAULT_CENTER = { lat: 1.3733, lng: 32.2903 };
@@ -784,10 +784,10 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 10, commercial: 20, land: 20, default: 10 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
-    sourceLabel: "Bank of Uganda bank rates sheet (1 Apr 2026) and Stanbic home loans",
-    sourceUrl: "https://bou.or.ug/uploads/Commercial_Banks_Interest_Rates_and_Bank_Charges_as_at_01_April_2026_25716d34bb.pdf",
-    sourceNote: "Bank of Uganda’s 1 April 2026 rates sheet lists Stanbic personal home loans at 17.5%. Stanbic also advertises 16.5% for pre-approved existing customers. House-purchase loans: from a 10% deposit, up to 25 years, 1.5% fee; land loans up to 80% financing (cap UGX 300m), 1% fee. Confirm the final rate with the bank.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceLabel: "Stanbic rate change (The Cooperator, Oct 2026) and Stanbic home loans",
+    sourceUrl: "https://thecooperator.news/stanbic-bank-uganda-raises-prime-lending-rate-to-21-75-percent/",
+    sourceNote: "Stanbic mortgages are 17.5% until 30 Nov 2026. From 1 Dec 2026 its mortgage reference rate rises to 19%, announced with its prime lending rate rising to 21.75%. House-purchase loans: from a 10% deposit, up to 25 years, 1.5% fee. Confirm the final rate with the bank.",
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "hfb",
@@ -801,21 +801,21 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "Housing Finance mortgage terms and conditions",
     sourceUrl: "https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/",
     sourceNote: "Housing Finance publishes 16% residential and 18% commercial, reviewed after the 14 Oct 2026 Bank of Uganda CBR increase to 12%. It also publishes up to 80% purchase finance in Kampala, up to 20-year residential/commercial terms, a 1.25% facility fee, and a 35% income guide. Confirm the current rate with the bank.",
-    sourceVerifiedAt: "2026-10-20"
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "dfcu",
     name: "dfcu Bank",
-    residentialRate: 16.0,
+    residentialRate: 16.9,
     commercialRate: null,
     landRate: null,
     minDepositPct: { residential: 15, commercial: 40, land: 40, default: 15 },
-    maxYears: { residential: 25, commercial: 20, land: 20, default: 25 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 2.0,
-    sourceLabel: "dfcu home loans",
-    sourceUrl: "https://www.dfcugroup.com/personal-banking/home-loans/",
-    sourceNote: "dfcu publishes 16% UGX home-loan guidance, up to 85% of open-market value, and up to 25 years for UGX loans (10 years in USD). Its tariff guide lists a 2%-3% arrangement fee; this calculator uses 2%.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceLabel: "dfcu home-loan offer (dfcu promotions, Nile Post 2 Nov 2026)",
+    sourceUrl: "https://www.dfcugroup.com/promotions/",
+    sourceNote: "dfcu's current UGX home-loan offer is 16.9%, up to 85% of the property value (15% deposit), for up to 20 years. Its tariff guide lists a 2%-3% arrangement fee; this calculator uses 2%. Confirm the final rate with the bank.",
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "kcb",
@@ -829,7 +829,7 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "KCB mortgage overview",
     sourceUrl: "https://ug.kcbgroup.com/products/mortgage",
     sourceNote: "KCB publishes UGX pricing from 17.5%, up to 20-year purchase/construction/refinance terms, and up to 80% financing for Kampala, Entebbe, and Wakiso. Final pricing and approval remain bank-specific.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "ncba",
@@ -843,7 +843,7 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "NCBA Uganda property loans",
     sourceUrl: "https://ncbagroup.com/ug/property-loans/",
     sourceNote: "NCBA publishes property-loan, construction-finance, land-purchase, and equity-release terms including up to 25-year UGX mortgage tenure, up to 90% financing for eligible Kampala/city properties, and up to 60-month land-purchase terms; public rate requires bank confirmation.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "centenary",
@@ -857,7 +857,7 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "Centenary Bank housing loan pages",
     sourceUrl: "https://www.centenarybank.co.ug/product/cente-mortgage/4/8",
     sourceNote: "Centenary publishes Cente Mortgage amounts from UGX 20m to UGX 300m, up to 10-year tenure, and a minimum 30% borrower contribution. The same page also states maximum LTV of 80%, so the calculator uses the more conservative 30% deposit and requires bank confirmation.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "baroda",
@@ -871,7 +871,7 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "Baroda housing loan and interest rates",
     sourceUrl: "https://www.bankofbaroda.ug/rates-and-charges/interest-rates",
     sourceNote: "Bank of Baroda prices housing loans at 2% below its UGX prime lending rate (20%), i.e. 18%, for up to 15 years. Bank of Uganda's April 2026 sheet lists no arrangement fee. Confirm the current rate with the bank.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceVerifiedAt: "2026-11-04"
   },
   {
     id: "absa",
@@ -882,10 +882,10 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 15, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 2.0,
-    sourceLabel: "Absa Uganda home loans",
-    sourceUrl: "https://www.absa.co.ug/personal/home-loans/",
-    sourceNote: "Absa publishes up to 85% property finance, up to 25-year terms, and a 2% arrangement fee. It does not publish a fixed public rate on the reviewed page, so a current quote is required.",
-    sourceVerifiedAt: "2026-10-02"
+    sourceLabel: "Absa prime rate change (CEO East Africa, Nov 2026) and Absa home loans",
+    sourceUrl: "https://www.ceo.co.ug/absa-stanbic-and-dfcu-raise-lending-rates-as-uganda-shilling-and-inflation-pressures-deepen/",
+    sourceNote: "Absa's prime lending rate is 21.75% from 1 Nov 2026. It does not publish a fixed home-loan rate, so a quote is required. Absa offers up to 85% property finance, up to 25-year terms, and a 2% arrangement fee.",
+    sourceVerifiedAt: "2026-11-04"
   }
 ];
 const AUDITED_MORTGAGE_PROVIDER_BY_ID = Object.fromEntries(DEFAULT_MORTGAGE_PROVIDERS.map((provider) => [provider.id, provider]));
@@ -5847,6 +5847,7 @@ const MORTGAGE_I18N = {
     ratesFootnote: "Indicative public rates from bank sources. Confirm current rates with the lender before applying.",
     ratesAsOfLine: "Sources verified {date} · indicative, confirm with the bank.",
     cbrNote: "Bank of Uganda CBR is 12% from 14 Oct 2026; lender rates may rise after that hike.",
+    staleRateNote: "This rate was last checked more than 30 days ago. Confirm it with the bank.",
     yearsMinNote: "The loan term on this calculator is 5 to 30 years.",
     rateRequired: "Enter an interest rate above 0%. An empty rate uses the best published bank rate.",
     comparisonSubtitle: "Sort dated public-bank assumptions by repayment, rate, term, or deposit strength.",
@@ -15468,14 +15469,14 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
           ${primaryImageUrl ? `<div class="mt-2 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-2"><img src="${adminAttr(primaryImageUrl)}" alt="Primary property photo" class="h-16 w-20 rounded-lg border border-emerald-100 object-cover"><div class="text-xs font-black text-emerald-900">${staffNumber(imageCount)} clear property photo${imageCount === 1 ? "" : "s"} attached</div></div>` : ""}
           ${queueNote}
           ${mediaQualityWarning}
-          ${duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800"><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : ""}
-          ${staffPossibleDuplicateOfHtml(item.extra_fields?.possible_duplicate_of)}
+          ${staffPossibleDuplicateOfHtml(item.extra_fields?.possible_duplicate_of) || (duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800" data-staff-duplicate-warning><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : "")}
           ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
         </div>
         <span class="shrink-0 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-2.5 py-1 text-[11px] font-black" data-staff-queue-status>${adminEscape(item.status || item.moderation_stage || "pending")}</span>
       </div>
       <div class="mt-3 flex flex-wrap gap-2">
         <button type="button" onclick="openStaffListingPreview(${propertyIdArg(item.id)})" class="bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-eye mr-1"></i>Preview & edit</button>
+        ${liveListing && item.id ? `<a href="/property/${encodeURIComponent(String(item.id))}" target="_blank" rel="noopener noreferrer" data-staff-live-property-link class="border border-emerald-200 text-emerald-800 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-up-right-from-square mr-1"></i>View live page</a>` : ""}
         ${liveListing ? "" : `<button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-xmark mr-1"></i>Reject with reason</button>
         <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-rotate-left mr-1"></i>Keep pending</button>`}
       </div>
@@ -15512,13 +15513,24 @@ function staffReplaceHtmlAboveQueue(host, html) {
   // Keep the queue under the pointer only while it is on screen.
   if (before < window.innerHeight && typeof window.scrollBy === "function") window.scrollBy(0, delta);
 }
+function staffQueueCardOrder(wrap) {
+  if (!wrap || !wrap.querySelectorAll) return "";
+  return Array.from(wrap.querySelectorAll("[data-staff-queue-card]"))
+    .map((card) => String(card.getAttribute("data-property-id") || ""))
+    .join(",");
+}
 function staffSetQueueHtml(wrap, html) {
   if (!wrap || wrap.innerHTML === html) return;
   const height = wrap.offsetHeight || 0;
+  const orderBefore = staffQueueCardOrder(wrap);
   // Hold the old height for one frame-ish window so the cards below do not jump.
   if (height) wrap.style.minHeight = `${height}px`;
   wrap.innerHTML = html;
-  staffMarkQueueLayoutChange();
+  // Fisher, Nov 2026: every background repaint (a count, a footer, "Loading…")
+  // armed the click guard, so the first "Preview & edit" click was ignored
+  // even though no card had moved. Only a change in which cards are where
+  // arms it now.
+  if (staffQueueCardOrder(wrap) !== orderBefore) staffMarkQueueLayoutChange();
   window.clearTimeout(wrap._staffHeightRelease);
   wrap._staffHeightRelease = window.setTimeout(() => { wrap.style.minHeight = ""; }, 1500);
 }
@@ -15659,6 +15671,10 @@ function staffPaintReviewQueue(segment) {
   const isSearch = segment === "search";
   const wrap = document.getElementById(isBroker ? "staff-broker-review-queue" : "staff-review-queue");
   if (!wrap) return;
+  // Fisher, Nov 2026: background paging of the pending queue repainted the
+  // shared list over the search results, so the search box looked like it did
+  // not filter. While a search is on screen, only the search paints here.
+  if (segment === "main" && staffReviewQueueState.search.term) return;
   const state = staffReviewQueueState[segment];
   const rows = isSearch || isBroker ? staffDedupeRows(state.rows) : staffDedupeRows(state.rows, staffBrokerQueueIds());
   state.rows = isSearch || isBroker ? rows : staffDedupeRows(state.rows);
@@ -15813,7 +15829,12 @@ async function staffLoadMoreReviewQueue(segment = "main", searchSeq = 0) {
   let openId = "";
   try {
     const nextPage = (state.page || 0) + 1;
-    const res = await apiRequest(staffReviewQueuePageUrl(segment, nextPage, segment === "search" ? state.term : ""));
+    const res = await staffApiRequestWithTimeout(
+      staffReviewQueuePageUrl(segment, nextPage, segment === "search" ? state.term : ""),
+      {},
+      STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
+      "Review queue"
+    );
     if (segment === "search" && searchSeq && searchSeq !== staffReviewQueueSearchSeq) return;
     const rows = Array.isArray(res?.data) ? res.data : [];
     state.rows = staffDedupeRows([...state.rows, ...rows]);
@@ -15842,6 +15863,13 @@ async function staffLoadMoreReviewQueue(segment = "main", searchSeq = 0) {
   if (openId && (!searchSeq || searchSeq === staffReviewQueueSearchSeq)) openStaffListingPreview(openId);
 }
 
+function staffReviewQueueSettleCount(state) {
+  if (!state) return;
+  state.hasMore = false;
+  state.moreHint = false;
+  state.total = state.rows.length;
+}
+
 function staffReviewQueueHasMoreRows(segment) {
   const state = staffReviewQueueState[segment];
   if (!state || !state.rows.length) return false;
@@ -15863,10 +15891,18 @@ async function staffFillReviewQueue(segment) {
       guard += 1;
       const before = state.rows.length;
       await staffLoadMoreReviewQueue(segment);
-      if (state.rows.length <= before) break;
+      if (state.rows.length <= before) {
+        // Fisher, Nov 2026: "Showing 12 of 31" stayed with a Load more that
+        // returned nothing new. Nothing more is reachable: the count is what
+        // is on screen.
+        staffReviewQueueSettleCount(state);
+        break;
+      }
     }
   } finally {
     state.filling = false;
+    state.loading = false;
+    staffPaintReviewQueue(segment === "search" && !state.term ? "main" : segment);
   }
 }
 
@@ -16151,11 +16187,26 @@ async function staffFillFoundOnlineQueue() {
       guard += 1;
       const before = staffFoundOnlineQueueView().rows.length;
       await staffLoadMoreFoundOnline();
-      if (staffFoundOnlineQueueView().rows.length <= before) break;
+      if (staffFoundOnlineQueueView().rows.length <= before) {
+        staffFoundOnlineSettleCount();
+        break;
+      }
     }
   } finally {
     staffFoundOnlineState.filling = false;
+    staffFoundOnlineState.loading = false;
+    renderStaffFoundOnlineQueue();
   }
+}
+
+// A page that adds nothing means every reachable row is on screen: show that
+// count and drop "Load more" instead of "Showing 12 of 31" forever.
+function staffFoundOnlineSettleCount() {
+  const meta = staffFoundOnlineState.data?.queued_found_online_meta;
+  if (!meta) return;
+  const shown = staffFoundOnlineQueueView().rows.length;
+  staffFoundOnlineState.data.queued_found_online_meta = { ...meta, total: shown, has_more: false };
+  staffFoundOnlineState.moreHint = false;
 }
 
 async function staffLoadMoreFoundOnline() {
@@ -16374,8 +16425,9 @@ function renderStaffSourceCoverageItems(items = []) {
       <textarea id="staff-source-coverage-links-${adminAttr(item.id)}" class="mt-2 w-full rounded-lg border border-pink-200 bg-white p-2 text-[11px] font-mono" rows="3" placeholder="Paste up to 10 exact /@handle/video/id links found on this source"></textarea>
       <div class="mt-2 flex flex-wrap gap-2">
         <button type="button" onclick="staffCompleteSourceCoverageItem(${adminListingIdArg(item.id)}, false)" class="rounded-lg bg-emerald-700 px-3 py-1.5 text-[11px] font-black text-white">Queue links + checked</button>
-        <button type="button" onclick="staffCompleteSourceCoverageItem(${adminListingIdArg(item.id)}, true)" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-black text-gray-700">Checked — no results</button>
+        <button type="button" onclick="staffCompleteSourceCoverageItem(${adminListingIdArg(item.id)}, true)" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-black text-gray-700">Mark checked: no results</button>
       </div>
+      <div id="staff-source-coverage-result-${adminAttr(item.id)}" class="mt-2 text-[11px] font-bold" role="status" aria-live="polite"></div>
     </article>`).join("");
 }
 
@@ -16433,14 +16485,18 @@ async function staffToggleUgandaRotationTimer() {
   }
 }
 
+const STAFF_SOURCE_COVERAGE_TIMEOUT_MS = 20000;
+
 async function staffLoadSourceCoverage() {
   const status = document.getElementById("staff-source-coverage-status");
   if (status) status.textContent = "Loading exhaustive coverage…";
   try {
-    const response = await apiRequest("/api/staff/source-intake/coverage/runs?limit=1");
+    const response = await staffApiRequestWithTimeout("/api/staff/source-intake/coverage/runs?limit=1", {}, STAFF_SOURCE_COVERAGE_TIMEOUT_MS, "Loading exhaustive coverage");
     renderStaffSourceCoverage(response?.data?.runs?.[0] || null);
   } catch (error) {
-    if (status) status.textContent = `Coverage unavailable: ${error.message || "request failed"}`;
+    if (status) {
+      status.innerHTML = `<span class="font-bold text-red-700">Coverage unavailable: ${adminEscape(error.message || "request failed")}</span> <button type="button" onclick="staffLoadSourceCoverage()" class="ml-2 underline font-bold">Retry</button>`;
+    }
   }
 }
 
@@ -16466,10 +16522,10 @@ async function staffClaimTikTokCoverageBatch() {
   const wrap = document.getElementById("staff-source-coverage-items");
   if (wrap) wrap.textContent = "Claiming the next restart-safe TikTok batch…";
   try {
-    const response = await apiRequest(`/api/staff/source-intake/coverage/runs/${encodeURIComponent(staffSourceCoverageRun.id)}/claim`, {
+    const response = await staffApiRequestWithTimeout(`/api/staff/source-intake/coverage/runs/${encodeURIComponent(staffSourceCoverageRun.id)}/claim`, {
       method: "POST",
       body: { platform: "tiktok", batch_size: 10, lease_minutes: 30 }
-    });
+    }, STAFF_SOURCE_COVERAGE_TIMEOUT_MS, "Claiming the TikTok batch");
     renderStaffSourceCoverageItems(response?.data?.items || []);
   } catch (error) {
     if (wrap) wrap.textContent = `Could not claim the next TikTok batch: ${error.message || "request failed"}`;
@@ -16481,21 +16537,34 @@ async function staffCompleteSourceCoverageItem(itemId = "", checkedEmpty = false
   if (!id) return;
   const rawText = checkedEmpty ? "" : (document.getElementById(`staff-source-coverage-links-${id}`)?.value || "");
   if (!checkedEmpty && !staffSourceImportTikTokUrls(rawText).length) {
-    return toast("Paste at least one exact TikTok /@handle/video/id link, or use Checked — no results.");
+    return toast("Paste at least one exact TikTok /@handle/video/id link, or use Mark checked: no results.");
   }
   const card = document.getElementById(`staff-source-coverage-item-${id}`);
-  if (card) card.style.opacity = "0.55";
+  const result = document.getElementById(`staff-source-coverage-result-${id}`);
+  const buttons = card ? Array.from(card.querySelectorAll("button")) : [];
+  if (card?.dataset.saving === "1") return;
+  if (card) { card.dataset.saving = "1"; card.style.opacity = "0.55"; }
+  buttons.forEach((button) => { button.disabled = true; });
+  if (result) { result.className = "mt-2 text-[11px] font-bold text-gray-600"; result.textContent = "Saving…"; }
   try {
-    const response = await apiRequest(`/api/staff/source-intake/coverage/items/${encodeURIComponent(id)}/complete`, {
+    const response = await staffApiRequestWithTimeout(`/api/staff/source-intake/coverage/items/${encodeURIComponent(id)}/complete`, {
       method: "POST",
       body: { raw_text: rawText, outcome: checkedEmpty ? "checked_empty" : "completed" }
-    });
+    }, STAFF_SOURCE_COVERAGE_TIMEOUT_MS, "Saving this source");
+    if (response?.ok === false) throw new Error(response?.error || "save was not confirmed");
     renderStaffSourceCoverage(response?.data?.run || staffSourceCoverageRun);
-    if (card) card.remove();
-    toast(checkedEmpty ? "Source recorded as checked with no recent results." : "Exact links checked and queued review-only.");
+    const message = response?.data?.already_recorded
+      ? "Saved earlier — already recorded."
+      : (checkedEmpty ? "Saved: checked, no results." : "Saved: links queued for review.");
+    if (result) { result.className = "mt-2 text-[11px] font-bold text-emerald-700"; result.textContent = message; }
+    if (card) window.setTimeout(() => card.remove(), 1500);
+    toast(message);
   } catch (error) {
-    if (card) card.style.opacity = "1";
-    toast(`Could not complete this source: ${error.message || "request failed"}`);
+    if (card) { card.style.opacity = "1"; delete card.dataset.saving; }
+    buttons.forEach((button) => { button.disabled = false; });
+    const message = `Not saved: ${error.message || "request failed"}. This source stays here — try again.`;
+    if (result) { result.className = "mt-2 text-[11px] font-bold text-red-700"; result.textContent = message; }
+    toast(message);
   }
 }
 
@@ -19608,8 +19677,19 @@ function focusListingPhotoUpload() {
 
 let staffPhotoChangePending = false;
 
+// Fisher, Nov 2026: 707702's editor showed 164BF1's YouTube video. Media for
+// the editor is only applied when the open modal, the active review and the
+// response are all the same listing.
+function staffPreviewMediaTargetOpen(propertyId, data = {}) {
+  const id = String(propertyId || "");
+  if (!id || String(adminActiveReview?.id || "") !== id) return false;
+  const modal = typeof document !== "undefined" ? document.getElementById("staff-listing-preview-modal") : null;
+  if (modal && String(modal.dataset?.propertyId || "") !== id) return false;
+  return staffPreviewResponseMatches(id, data || {});
+}
+
 function staffRefreshPreviewMedia(propertyId, data = {}) {
-  if (String(adminActiveReview?.id || "") !== String(propertyId)) return;
+  if (!staffPreviewMediaTargetOpen(propertyId, data)) return;
   if (data.images) adminActiveReview.images = data.images;
   if (data.extra_fields) adminActiveReview.extra_fields = data.extra_fields;
   if (data.media_check) adminActiveReview.media_check = data.media_check;
@@ -19686,7 +19766,7 @@ async function staffSubmitVideoMove(event, propertyId, videoUrl) {
       body: { url: videoUrl, target, mode, note, confirm: true }
     }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Move video");
     const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/preview`);
-    if (response?.data && String(adminActiveReview?.id || "") === String(propertyId)) {
+    if (response?.data && staffPreviewMediaTargetOpen(propertyId, response.data)) {
       adminActiveReview = { ...(adminActiveReview || {}), ...response.data, id: propertyId };
       const videos = document.getElementById("staff-preview-video-gallery");
       if (videos) videos.outerHTML = staffPreviewVideosHtml(adminActiveReview);
@@ -20314,6 +20394,23 @@ function ensureStaffModerationActionDelegates() {
 
 ensureStaffModerationActionDelegates();
 
+// Fisher, Nov 2026: the facts reader put a USD amount (4,000 for 713476) in
+// "Canonical price (UGX)". A USD amount goes to the original-amount field and
+// the UGX field gets amount x rate; a UGX listing keeps its UGX amount.
+function adminReviewCanonicalPriceFromFacts(facts = {}, review = {}) {
+  const amount = Number(String(facts?.price ?? "").replace(/[^\d.]/g, ""));
+  if (!Number.isFinite(amount) || amount <= 0) return { ugx: "", originalUsd: "" };
+  const extra = review?.extra_fields && typeof review.extra_fields === "object" ? review.extra_fields : {};
+  const factsCurrency = String(facts?.currency || facts?.price_currency || "").toUpperCase();
+  const sourceCurrency = String(review?.price_original_currency || extra.price_original_currency || "").toUpperCase();
+  const original = Number(review?.price_original ?? extra.price_original);
+  const isUsd = factsCurrency === "USD"
+    || (!factsCurrency && sourceCurrency === "USD" && Number.isFinite(original) && original === amount);
+  if (!isUsd) return { ugx: amount, originalUsd: "" };
+  const rate = Number(review?.price_fx_rate_ugx ?? extra.price_fx_rate_ugx) || 3800;
+  return { ugx: Math.round(amount * rate), originalUsd: amount };
+}
+
 function staffListingPreviewPatch() {
   if (document.getElementById("admin-review-title-edit")) {
     return collectAdminReviewListingPatch();
@@ -20522,6 +20619,7 @@ function hideStaffPreviewOpening() {
   document.getElementById("staff-listing-preview-opening")?.remove();
 }
 
+const STAFF_PREVIEW_OPEN_TIMEOUT_MS = 15000;
 async function openStaffListingPreview(propertyId) {
   const requested = String(propertyId || "").trim();
   const seq = ++staffPreviewOpenSeq;
@@ -20531,13 +20629,13 @@ async function openStaffListingPreview(propertyId) {
     const path = `/api/staff/properties/${encodeURIComponent(requested)}/preview`;
     let response;
     try {
-      response = await apiRequest(path);
+      response = await staffApiRequestWithTimeout(path, {}, STAFF_PREVIEW_OPEN_TIMEOUT_MS, "Listing preview");
     } catch (firstError) {
       // A busy database (pool_timeout, 503) usually clears in a second or two.
       if (!staffPreviewBusyError(firstError) || seq !== staffPreviewOpenSeq) throw firstError;
       await new Promise((resolve) => setTimeout(resolve, 1500));
       if (seq !== staffPreviewOpenSeq) return;
-      response = await apiRequest(path);
+      response = await staffApiRequestWithTimeout(path, {}, STAFF_PREVIEW_OPEN_TIMEOUT_MS, "Listing preview");
     }
     if (seq !== staffPreviewOpenSeq) return;
     const data = response?.data || {};
@@ -26389,6 +26487,95 @@ async function setAdminCrmLeadStatus(leadId, status) {
   return false;
 }
 
+let adminMortgageRateProposalsLoading = false;
+
+async function adminLoadMortgageRateProposals() {
+  const wrap = document.getElementById("admin-mortgage-rate-proposals");
+  if (!wrap || !canUseLiveAdminApi() || adminMortgageRateProposalsLoading) return;
+  adminMortgageRateProposalsLoading = true;
+  try {
+    const response = await apiRequest("/api/mortgage-rates/proposals?status=all", { headers: adminAuthHeaders() });
+    adminRenderMortgageRateProposals(response?.data || {});
+  } catch (error) {
+    wrap.innerHTML = `<p class="text-sm text-red-700">Could not load mortgage rate changes: ${adminEscape(error?.message || "request failed")}</p>`;
+  } finally {
+    adminMortgageRateProposalsLoading = false;
+  }
+}
+
+function adminRenderMortgageRateProposals(data = {}) {
+  const wrap = document.getElementById("admin-mortgage-rate-proposals");
+  if (!wrap) return;
+  const proposals = Array.isArray(data.proposals) ? data.proposals : [];
+  const providers = Array.isArray(data.providers) ? data.providers : [];
+  const pending = proposals.filter((p) => p.status === "pending");
+  const fmt = (v) => (v == null || v === "" ? "quote" : `${Number(v).toFixed(2)}%`);
+  const nums = (list) => (Array.isArray(list) && list.length ? list.map((n) => `${n}%`).join(", ") : "none");
+  const providerRows = providers.map((p) => `
+    <tr class="border-t border-sky-100">
+      <td class="px-2 py-1 font-semibold">${adminEscape(p.name)}</td>
+      <td class="px-2 py-1">${adminEscape(fmt(p.residentialRate ?? p.primeRate))}</td>
+      <td class="px-2 py-1">${adminEscape(p.sourceVerifiedAt || "-")}${p.stale ? ` <span class="ml-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold">stale</span>` : ""}</td>
+      <td class="px-2 py-1"><a class="text-sky-700 underline" target="_blank" rel="noopener noreferrer" href="${adminAttr(p.sourceUrl || "#")}">source</a></td>
+    </tr>`).join("");
+  const proposalRows = proposals.slice(0, 30).map((p) => `
+    <div class="rounded-xl border ${p.status === "pending" ? "border-sky-300 bg-white" : "border-gray-200 bg-gray-50"} p-3 text-xs">
+      <div class="flex flex-wrap items-center gap-2">
+        <strong class="text-gray-900">${adminEscape(p.provider_key)}</strong>
+        <span class="rounded-full bg-gray-100 px-2 py-0.5">${adminEscape(p.rate_field)}</span>
+        <span class="rounded-full ${p.status === "pending" ? "bg-sky-100 text-sky-800" : p.status === "approved" ? "bg-green-100 text-green-800" : "bg-gray-200 text-gray-700"} px-2 py-0.5 font-bold">${adminEscape(p.status)}</span>
+        <span class="text-gray-500">found ${adminEscape(String(p.detected_at || "").slice(0, 10))} (${adminEscape(p.reason || "")})</span>
+      </div>
+      <div class="mt-1 text-gray-700">Published now: <strong>${adminEscape(fmt(p.current_rate))}</strong> &middot; page numbers before: ${adminEscape(nums(p.numbers_before))} &middot; now: <strong>${adminEscape(nums(p.numbers_after))}</strong></div>
+      <div class="mt-1"><a class="text-sky-700 underline" target="_blank" rel="noopener noreferrer" href="${adminAttr(p.source_url)}">${adminEscape(p.source_url)}</a></div>
+      ${p.status === "pending" ? `
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <input id="mrp-rate-${adminAttr(p.id)}" type="number" step="0.05" min="1" max="60" value="${adminAttr(p.proposed_rate ?? "")}" placeholder="Confirmed %" class="w-28 rounded border border-gray-300 px-2 py-1">
+        <input id="mrp-note-${adminAttr(p.id)}" type="text" placeholder="Note shown on the page (optional)" class="flex-1 min-w-[180px] rounded border border-gray-300 px-2 py-1">
+        <button type="button" onclick="adminDecideMortgageRateProposal(${Number(p.id)}, 'approve')" class="rounded bg-green-700 px-3 py-1 font-bold text-white">Approve</button>
+        <button type="button" onclick="adminDecideMortgageRateProposal(${Number(p.id)}, 'reject')" class="rounded border border-gray-300 px-3 py-1 font-bold text-gray-700">Reject</button>
+      </div>` : (p.approved_rate != null ? `<div class="mt-1 text-green-800">Approved at ${adminEscape(fmt(p.approved_rate))} by ${adminEscape(p.reviewed_by || "staff")}</div>` : "")}
+    </div>`).join("");
+  wrap.innerHTML = `
+    <div class="text-xs text-gray-700 mb-2"><strong>${pending.length}</strong> change${pending.length === 1 ? "" : "s"} waiting &middot; ${providers.filter((p) => p.stale).length} stale rate(s)</div>
+    <div class="overflow-x-auto mb-3"><table class="min-w-full text-xs bg-white rounded-xl"><thead><tr class="text-left text-gray-500"><th class="px-2 py-1">Bank</th><th class="px-2 py-1">Rate shown</th><th class="px-2 py-1">Checked</th><th class="px-2 py-1"></th></tr></thead><tbody>${providerRows}</tbody></table></div>
+    <div class="grid gap-2">${proposalRows || `<p class="text-sm text-gray-500">No rate changes found yet.</p>`}</div>`;
+}
+
+async function adminDecideMortgageRateProposal(id, decision) {
+  const rateInput = document.getElementById(`mrp-rate-${id}`);
+  const noteInput = document.getElementById(`mrp-note-${id}`);
+  const body = { note: noteInput?.value || "" };
+  if (decision === "approve") {
+    const rate = Number(rateInput?.value);
+    if (!Number.isFinite(rate) || rate <= 0) { toast("Enter the confirmed rate before approving."); return; }
+    body.approvedRate = rate;
+  }
+  try {
+    await apiRequest(`/api/mortgage-rates/proposals/${encodeURIComponent(id)}/${decision}`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body
+    });
+    toast(decision === "approve" ? "Rate approved. The Mortgage Finder uses it now." : "Change rejected.");
+    adminLoadMortgageRateProposals();
+  } catch (error) {
+    toast(`Could not save: ${error?.message || "request failed"}`);
+  }
+}
+
+async function adminCheckMortgageRatesNow() {
+  toast("Checking bank pages…");
+  try {
+    const response = await apiRequest("/api/mortgage-rates/proposals/check", { method: "POST", headers: adminAuthHeaders() });
+    const r = response?.data || {};
+    toast(`Checked ${r.checked || 0} pages: ${r.proposals || 0} change(s), ${r.failed || 0} could not be read.`);
+    adminLoadMortgageRateProposals();
+  } catch (error) {
+    toast(`Check failed: ${error?.message || "request failed"}`);
+  }
+}
+
 function renderAdminMortgageLeadsRows(leads = []) {
   const wrap = document.getElementById("admin-mortgage-leads-table");
   if (!wrap) return;
@@ -26970,6 +27157,7 @@ async function renderAdminDashboard(options = {}) {
   renderAdminCrmLeadsRows(remoteSnap?.crmLeads || []);
   renderAdminMortgageLeadsRows(remoteSnap?.mortgageLeads || []);
   renderAdminDemandGaps(remoteSnap?.demandGaps || adminDemandGaps);
+  adminLoadMortgageRateProposals();
   renderAdminCrmTasksRows(remoteSnap?.crmTasks || []);
   renderAdminOutlookAgentStatus(remoteSnap?.outlookAgentStatus || {});
   renderAdminOutlookAgentActions(remoteSnap?.outlookAgentActions || [], remoteSnap?.outlookAgentStatus || {});
@@ -33623,7 +33811,9 @@ async function adminApplyExtractedReviewFacts() {
   adminSetReviewEditValue("admin-review-land-transaction-type-edit", adminActiveReview.transaction_type || adminActiveReview.extra_fields?.transaction_type || "sale");
   adminSetReviewEditValue("admin-review-commercial-type-edit", canonicalCommercialTypeForProperty({ ...adminActiveReview, ...facts }));
   adminSetReviewEditValue("admin-review-land-title-available-edit", facts.land_title_available || getLandTitleAvailabilityValue(adminActiveReview) || "");
-  adminSetReviewEditValue("admin-review-price-edit", facts.price || adminActiveReview.price || "");
+  const factsPrice = adminReviewCanonicalPriceFromFacts(facts, adminActiveReview);
+  if (factsPrice.originalUsd) adminSetReviewEditValue("admin-review-price-original-edit", factsPrice.originalUsd);
+  adminSetReviewEditValue("admin-review-price-edit", factsPrice.ugx || adminActiveReview.price || "");
   adminReviewSyncPricePeriods(facts.price_period || adminActiveReview.price_period || "");
   adminSetReviewEditValue("admin-review-bedrooms-edit", facts.bedrooms ?? adminActiveReview.bedrooms ?? "");
   adminSetReviewEditValue("admin-review-bathrooms-edit", facts.bathrooms ?? adminActiveReview.bathrooms ?? "");
@@ -40141,8 +40331,7 @@ function getTikTokEmbedUrl(url) {
     const videoIndex = parts.findIndex((part) => part.toLowerCase() === "video");
     const id = videoIndex >= 0 ? parts[videoIndex + 1] || "" : "";
     if (!/^\d{6,}$/.test(id)) return "";
-    // Free TikTok player (tiktok.com/player/v1). Legacy https://www.tiktok.com/embed/v2/ URLs are no longer emitted.
-    return `https://www.tiktok.com/player/v1/${id}?music_info=1&description=1&rel=0`;
+    return `https://www.tiktok.com/player/v1/${id}?description=1&music_info=1`;
   } catch (error) {
     return "";
   }
@@ -51161,6 +51350,16 @@ function foundOnlineSourceVisualHtml(p = {}, options = {}) {
   }
   const thumbnailUrl = foundOnlineSourceThumbnailUrl(p, videoUrl);
   const sourceUrl = meta.sourceUrl || videoUrl || meta.sourceContactUrl || "";
+  // Property pages play TikTok videos in place with TikTok's own player, so a
+  // listing never sits on a "source preview" placeholder.
+  const tiktokPlayerUrl = options.detail === true && !compact ? getTikTokEmbedUrl(videoUrl || sourceUrl) : "";
+  if (tiktokPlayerUrl) {
+    return `
+    <div class="relative overflow-hidden border border-blue-100 bg-slate-950" data-tiktok-player="1">
+      <iframe src="${adminAttr(tiktokPlayerUrl)}" title="${adminAttr(translateListingLabel("TikTok property source video"))}" class="mx-auto block h-[36rem] max-h-[80vh] w-full max-w-[22rem] border-0" loading="lazy" allow="encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      ${foundOnlineSourcePlayControlsHtml(sourceUrl, platform)}
+    </div>`;
+  }
   return `
     <div class="${compact ? "h-full min-h-[12rem]" : "min-h-[18rem]"} relative overflow-hidden border border-blue-100 bg-gradient-to-br from-emerald-50 via-white to-blue-50 text-slate-900">
       ${thumbnailUrl ? `
@@ -64659,7 +64858,10 @@ function hydrateMortgageProvidersFromApi(data, options = {}) {
     sourceUrl: provider.sourceUrl ?? provider.source_url ?? "#",
     logoUrl: provider.logoUrl ?? provider.logo_url ?? "",
     sourceNote: provider.sourceNote ?? provider.source_note ?? "",
-    sourceVerifiedAt: provider.sourceVerifiedAt ?? provider.source_verified_at ?? null
+    sourceVerifiedAt: provider.sourceVerifiedAt ?? provider.source_verified_at ?? null,
+    stale: provider.stale === true,
+    checkedDaysAgo: provider.checkedDaysAgo ?? null,
+    fromApi: true
   }));
 
   MORTGAGE_PROVIDERS = mergeAuditedMortgageProviderList(normalized);
@@ -64756,6 +64958,10 @@ function renderMortgageProviderLogo(provider = {}, options = {}) {
 function mergeAuditedMortgageProvider(provider = {}) {
   const audited = AUDITED_MORTGAGE_PROVIDER_BY_ID[mortgageProviderKey(provider)];
   if (!audited) return provider;
+  // /api/mortgage-rates already applies the audited rates, dated changes
+  // (Stanbic 19% from 1 Dec 2026) and staff-approved changes. Its answer
+  // wins; this coded copy only fills in when the API is unavailable.
+  if (provider.fromApi) return provider;
   return {
     ...provider,
     residentialRate: audited.residentialRate,
@@ -65589,6 +65795,7 @@ function renderMortgageFinder() {
     const maxLtv = mortgageRowMaxLtv(row);
     const isBest = result.best && mortgageProviderKey(result.best.provider) === providerKey;
     const sourceNote = row.provider.sourceNote ? `<div class="mt-2 rounded-lg bg-gray-50 border border-gray-100 p-2 text-[11px] text-gray-600"><strong>${mortgageTr("sourceNoteLabel")}:</strong> ${adminEscape(row.provider.sourceNote)}</div>` : "";
+    const staleNote = row.provider.stale ? `<div class="mt-1 rounded-lg bg-amber-50 border border-amber-200 p-2 text-[11px] text-amber-800">${adminEscape(mortgageTr("staleRateNote"))}</div>` : "";
     return `
       <tr class="align-top border-t border-gray-100 ${isBest ? "bg-emerald-50/70" : "bg-white"}">
         <td class="py-3 pl-3 pr-2">${providerLogo}</td>
@@ -65612,7 +65819,7 @@ function renderMortgageFinder() {
           </div>
         </td>
       </tr>
-      ${sourceNote ? `<tr class="border-t border-gray-50"><td colspan="8" class="px-3 pb-3">${sourceNote}</td></tr>` : ""}`;
+      ${sourceNote || staleNote ? `<tr class="border-t border-gray-50"><td colspan="8" class="px-3 pb-3">${sourceNote}${staleNote}</td></tr>` : ""}`;
   }).join("");
   const mobileCards = sortedProviderRows.map((row) => {
     const status = providerStatusMeta(row.status);
@@ -65623,6 +65830,7 @@ function renderMortgageFinder() {
     const maxLtv = mortgageRowMaxLtv(row);
     const isBest = result.best && mortgageProviderKey(result.best.provider) === providerKey;
     const sourceNote = row.provider.sourceNote ? `<div class="mt-2 rounded-lg bg-gray-50 border border-gray-100 p-2 text-[11px] text-gray-600"><strong>${mortgageTr("sourceNoteLabel")}:</strong> ${adminEscape(row.provider.sourceNote)}</div>` : "";
+    const staleNote = row.provider.stale ? `<div class="mt-1 rounded-lg bg-amber-50 border border-amber-200 p-2 text-[11px] text-amber-800">${adminEscape(mortgageTr("staleRateNote"))}</div>` : "";
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -65643,7 +65851,7 @@ function renderMortgageFinder() {
           <div><span class="text-gray-500">${mortgageTr("monthly")}</span><div class="font-semibold text-gray-800">${monthly}</div></div>
         </div>
         <div class="mt-2 text-xs text-gray-500">${mortgageTr("totalRepayment")}: <strong class="text-gray-700">${repay}</strong> • ${mortgageTr("arrangementFee")}: <strong class="text-gray-700">${formatUgxAmount(row.arrangementFee || 0)}</strong></div>
-        ${sourceNote}
+        ${sourceNote}${staleNote}
         <div class="mt-3 flex flex-wrap gap-2">
           <button type="button" onclick="requestMortgageHelp('${adminAttr(providerKey)}')" class="inline-flex items-center gap-1 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-black text-white hover:bg-green-600">${mortgageTr("setUpBankCall")}</button>
           <a href="${adminAttr(row.provider.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs font-semibold text-green-700 hover:underline">${mortgageTr("viewBankSource")} <i class="fas fa-arrow-up-right-from-square text-[10px]"></i></a>

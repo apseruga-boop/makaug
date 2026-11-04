@@ -110,6 +110,12 @@ async function applyMigration(filename, sql) {
       "SELECT set_config('app.country_code', $1, true)",
       [String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase() || 'UG']
     );
+    // A one-off secret a data migration may read (e.g. phone numbers that must
+    // not be committed to this public repo). Transaction-local, never logged.
+    await client.query(
+      "SELECT set_config('app.migration_secret_json', $1, true)",
+      [String(process.env.MIGRATION_SECRET_JSON || '')]
+    );
     await client.query(sql);
     await client.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [filename]);
     await client.query('COMMIT');

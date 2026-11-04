@@ -1006,6 +1006,52 @@ async function sendNewLeadAlerts(db, { force = false } = {}) {
   return { sent: fresh.rows.length, results };
 }
 
+/**
+ * The agents' properties that arrived during quiet hours, in one message
+ * once the desk is open. routes/whatsapp.js holds each one on the listing
+ * (extra_fields.team_alert_deferred) instead of dropping it; this sends them
+ * and marks them sent, so a listing is announced once.
+ */
+async function sendDeferredPropertyAlerts(db, { force = false, send = sendToTeam } = {}) {
+  if (!force && inQuietHours()) return { skipped: 'quiet_hours' };
+  const held = await db.query(
+    `SELECT id, inquiry_reference, created_at, extra_fields->'team_alert_deferred' AS deferred
+       FROM properties
+      WHERE extra_fields ? 'team_alert_deferred'
+        AND NOT (extra_fields->'team_alert_deferred' ? 'sent_at')
+        AND created_at >= NOW() - INTERVAL '3 days'
+      ORDER BY created_at ASC
+      LIMIT 20`
+  );
+  if (!held.rows.length) return { sent: 0 };
+  const rows = held.rows.filter((row) => row.deferred && typeof row.deferred === 'object' && text(row.deferred.body));
+  if (!rows.length) return { sent: 0 };
+  const extraRecipients = [...new Set(rows.flatMap((row) => (Array.isArray(row.deferred.extra_recipients) ? row.deferred.extra_recipients : [])
+    .map((value) => String(value || '').replace(/\D+/g, '')).filter(Boolean)))];
+  if (!teamRecipients(extraRecipients).length) return { skipped: 'no_recipients' };
+  const count = rows.length;
+  const lines = [
+    `🌙 *Overnight: ${count} ${count === 1 ? 'property' : 'properties'} from agents came in while the desk was closed — waiting for review*`,
+    ''
+  ];
+  rows.forEach((row, index) => {
+    const body = String(row.deferred.body).trim()
+      .replace(/^🏠 \*New property from /, '*')
+      .replace(/ — waiting for review\*/, '*');
+    lines.push(count > 1 ? `${index + 1}. ${body}` : body, '');
+  });
+  const results = await send(db, lines.join('\n').trim(), 'agent_property_submitted_overnight', { extraRecipients });
+  if (results.some((r) => ['queued', 'sent', 'simulated'].includes(r.status))) {
+    await db.query(
+      `UPDATE properties
+          SET extra_fields = jsonb_set(extra_fields, '{team_alert_deferred,sent_at}', to_jsonb(NOW()::text))
+        WHERE id = ANY($1::uuid[])`,
+      [rows.map((row) => row.id)]
+    );
+  }
+  return { sent: count, results };
+}
+
 /** One reminder per request that passes the target without going to an agent. */
 async function sendOverdueReminders(db, { force = false } = {}) {
   if (!alertRecipients().length) return { skipped: 'no_recipients' };
@@ -1071,6 +1117,7 @@ async function tickLeadDesk(db) {
     }
     await sendNewLeadAlerts(db).catch((error) => logger.warn('Lead desk new-lead alert failed', { error: error.message }));
     await sendOverdueReminders(db).catch((error) => logger.warn('Lead desk reminder failed', { error: error.message }));
+    await sendDeferredPropertyAlerts(db).catch((error) => logger.warn('Lead desk overnight property alert failed', { error: error.message }));
     const reportHour = Math.max(0, Math.min(23, Number(process.env.LEAD_DESK_REPORT_HOUR || 7)));
     if (kampalaHour() === reportHour) {
       // Claim today's report before sending, so a slow send, a failed log or
@@ -1147,6 +1194,7 @@ module.exports = {
   inQuietHours,
   sendNewLeadAlerts,
   sendOverdueReminders,
+  sendDeferredPropertyAlerts,
   sendToTeam,
   teamRecipients,
   alertRecipients,

@@ -2,7 +2,11 @@ const crypto = require('crypto');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
+const {
+  PUBLIC_LIVE_PROPERTY_STATUSES,
+  SOLD_PUBLIC_WINDOW_DAYS,
+  publicLivePropertyStatusSql
+} = require('../utils/publicInventoryStatus');
 const { publicHasPhotoOrVideoSql } = require('../utils/realListingPhoto');
 const { shortTermEnabled } = require('../utils/shortTermFeatureFlags');
 
@@ -30,6 +34,7 @@ const LAUNCH_SEED_LISTING_MARKERS = [
   'REMOVE AFTER QA'
 ];
 const LAUNCH_DUMMY_LISTING_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
+const LAUNCH_TEST_FLAG_KEYS = ['qa_test_delete', 'soft_launch_test', 'is_test', 'launch_proof', 'non_public_test'];
 const publicInventoryMetricsCache = new Map();
 const publicInventoryMetricsInflight = new Map();
 const loggedInventoryRefreshes = new WeakSet();
@@ -74,32 +79,48 @@ function sqlLiteral(value = '') {
   return String(value).replace(/'/g, "''");
 }
 
+function regexLiteral(value = '') {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function column(alias = 'p', name = '') {
   return alias ? `${alias}.${name}` : name;
 }
 
 function publicLaunchTestListingFastCondition(alias = 'p') {
   const col = (name) => column(alias, name);
-  const markerSql = LAUNCH_SEED_LISTING_MARKERS
-    .map((marker) => {
-      const safe = sqlLiteral(marker);
-      return `(COALESCE(${col('title')}, '') ILIKE '%${safe}%' OR COALESCE(${col('description')}, '') ILIKE '%${safe}%')`;
-    })
+  // Title is short and stored inline, so one ILIKE per marker is cheap.
+  const titleMarkerSql = LAUNCH_SEED_LISTING_MARKERS
+    .map((marker) => `COALESCE(${col('title')}, '') ILIKE '%${sqlLiteral(marker)}%'`)
     .join(' OR ');
+  // Description is often TOASTed. Each ILIKE de-TOASTs it again, so all
+  // markers share one case-insensitive regex (same rows as ILIKE '%marker%').
+  const descriptionMarkerRegex = LAUNCH_SEED_LISTING_MARKERS.map(regexLiteral).join('|');
   const dummySql = LAUNCH_DUMMY_LISTING_TITLES.map((title) => `'${sqlLiteral(title)}'`).join(', ');
+  // extra_fields is a large TOASTed jsonb and every ->> de-TOASTs all of it.
+  // One ?| key check skips the five ->> reads for rows that carry none of
+  // these keys (nearly all of them); the result is unchanged because a
+  // missing key reads as '' below and never matches.
+  const testFlagKeys = LAUNCH_TEST_FLAG_KEYS.map((key) => `'${sqlLiteral(key)}'`).join(', ');
   return `(
-    ${markerSql}
+    ${titleMarkerSql}
+    OR COALESCE(${col('description')}, '') ~* '(${sqlLiteral(descriptionMarkerRegex)})'
     OR LOWER(TRIM(COALESCE(${col('title')}, ''))) IN (${dummySql})
     OR COALESCE(${col('source')}, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
     OR COALESCE(${col('listed_via')}, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
     OR COALESCE(${col('lister_name')}, '') ~* '(qa test delete|qa owner|dummy|sample)'
     OR COALESCE(${col('lister_email')}, '') ~* '(makaug\\.invalid|test@|qa@|dummy|sample)'
     OR COALESCE(${col('inquiry_reference')}, '') ~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'
-    OR COALESCE(${col('extra_fields')}->>'qa_test_delete', '') ~* '^(true|1|yes)$'
-    OR COALESCE(${col('extra_fields')}->>'soft_launch_test', '') ~* '^(true|1|yes)$'
-    OR COALESCE(${col('extra_fields')}->>'is_test', '') ~* '^(true|1|yes)$'
-    OR COALESCE(${col('extra_fields')}->>'launch_proof', '') ~* '^(true|1|yes)$'
-    OR COALESCE(${col('extra_fields')}->>'non_public_test', '') ~* '^(true|1|yes)$'
+    OR (
+      ${col('extra_fields')} ?| ARRAY[${testFlagKeys}]::text[]
+      AND (
+      COALESCE(${col('extra_fields')}->>'qa_test_delete', '') ~* '^(true|1|yes)$'
+      OR COALESCE(${col('extra_fields')}->>'soft_launch_test', '') ~* '^(true|1|yes)$'
+      OR COALESCE(${col('extra_fields')}->>'is_test', '') ~* '^(true|1|yes)$'
+      OR COALESCE(${col('extra_fields')}->>'launch_proof', '') ~* '^(true|1|yes)$'
+      OR COALESCE(${col('extra_fields')}->>'non_public_test', '') ~* '^(true|1|yes)$'
+      )
+    )
   )`;
 }
 
@@ -283,8 +304,41 @@ function logStaleInventoryCount(error) {
   });
 }
 
+// The public status predicate is "live status OR sold in the last 7 days".
+// That OR forces a bitmap scan that re-runs the whole test-listing filter on
+// every live row (de-TOASTing description and extra_fields; 3.5 s and 155k
+// buffers on production, 3 Nov 2026). Splitting the WHERE into its two
+// disjoint halves lets the live half use the partial index from migration
+// 202, whose predicate already proves the filter, so it reads only the four
+// bucket columns. The sold half is tiny and uses idx_properties_sold_at.
+// Same rows: A AND (L OR S) = (A AND L) UNION ALL (A AND S), and L and S
+// never overlap because they require different status values.
+const PUBLIC_STATUS_SQL = publicLivePropertyStatusSql('p');
+const PUBLIC_LIVE_ONLY_STATUS_SQL = `LOWER(COALESCE(p.status, '')) IN (${PUBLIC_LIVE_PROPERTY_STATUSES.map((status) => `'${sqlLiteral(status)}'`).join(', ')})`;
+const PUBLIC_SOLD_ONLY_STATUS_SQL = `(LOWER(COALESCE(p.status, '')) = 'sold' AND p.sold_at >= NOW() - INTERVAL '${SOLD_PUBLIC_WINDOW_DAYS} days')`;
+
+function splitPublicStatusWhere(normalizedWhere = '') {
+  const where = String(normalizedWhere || '');
+  const at = where.indexOf(PUBLIC_STATUS_SQL);
+  if (at < 0 || where.indexOf(PUBLIC_STATUS_SQL, at + PUBLIC_STATUS_SQL.length) >= 0) return null;
+  return [
+    where.replace(PUBLIC_STATUS_SQL, PUBLIC_LIVE_ONLY_STATUS_SQL),
+    where.replace(PUBLIC_STATUS_SQL, PUBLIC_SOLD_ONLY_STATUS_SQL)
+  ];
+}
+
 function inventoryCountSql(normalizedWhere) {
   const bucketSql = publicOpportunityBucketSql('p');
+  const split = splitPublicStatusWhere(normalizedWhere);
+  const rowsSql = split
+    ? split.map((where) => `SELECT ${bucketSql} AS bucket
+      FROM properties p
+      ${where}`).join(`
+      UNION ALL
+      `)
+    : `SELECT ${bucketSql} AS bucket
+      FROM properties p
+      ${normalizedWhere}`;
   return `SELECT
       COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE bucket = 'sale')::int AS sale,
@@ -294,9 +348,7 @@ function inventoryCountSql(normalizedWhere) {
       COUNT(*) FILTER (WHERE bucket = 'land')::int AS land,
       COUNT(*) FILTER (WHERE bucket = 'other')::int AS other
     FROM (
-      SELECT ${bucketSql} AS bucket
-      FROM properties p
-      ${normalizedWhere}
+      ${rowsSql}
     ) public_inventory`;
 }
 
