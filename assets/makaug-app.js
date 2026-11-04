@@ -798,9 +798,9 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 20, commercial: 20, land: 40, default: 20 },
     maxYears: { residential: 20, commercial: 20, land: 5, default: 20 },
     arrangementFeePct: 1.25,
-    sourceLabel: "Housing Finance mortgage terms and conditions",
-    sourceUrl: "https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/",
-    sourceNote: "Housing Finance publishes 16% residential and 18% commercial, reviewed after the 14 Oct 2026 Bank of Uganda CBR increase to 12%. It also publishes up to 80% purchase finance in Kampala, up to 20-year residential/commercial terms, a 1.25% facility fee, and a 35% income guide. Confirm the current rate with the bank.",
+    sourceLabel: "Housing Finance mortgage guide (rates page, checked 4 Nov 2026)",
+    sourceUrl: "https://www.housingfinance.co.ug/everything-need-know-housing-finance-bank-mortgage/",
+    sourceNote: "Housing Finance's mortgage guide states current rates of 16% p.a. for residential and 18% for commercial units and urban plots. The bank's page carries no publication date; makaug checked it on 4 Nov 2026. Its terms page says rates vary with prevailing economic conditions, so confirm whether it has changed since the 14 Oct 2026 Bank of Uganda CBR increase to 12%. It also publishes up to 80% purchase finance in Kampala, up to 20-year residential/commercial terms, a 1.25% facility fee, and a 35% income guide. Confirm the current rate with the bank.",
     sourceVerifiedAt: "2026-11-04"
   },
   {
@@ -65111,7 +65111,21 @@ function setMortgageTab(tab = "repayment") {
 function setMortgageExtraPayment(value = 0) {
   const parsed = Number(value);
   mortgageExtraPaymentAmount = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  const hadFocus = document.activeElement && document.activeElement.id === "mortgage-extra-payment";
   renderMortgageFinder();
+  if (!hadFocus) return;
+  const input = document.getElementById("mortgage-extra-payment");
+  if (!input) return;
+  input.focus();
+  try {
+    input.type = "text";
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  } catch (_) {
+    // Some browsers refuse selection changes; focus alone is enough.
+  } finally {
+    input.type = "number";
+  }
 }
 
 function calculateExtraMortgageImpact(loanAmount, annualRate, years, baselineMonthly, extraMonthly) {
@@ -65125,19 +65139,19 @@ function calculateExtraMortgageImpact(loanAmount, annualRate, years, baselineMon
   }
   let balance = principal;
   let months = 0;
-  let paid = 0;
+  let interestPaid = 0;
   const payment = baselinePayment + extra;
   while (balance > 1 && months < baselineMonths && months < 900) {
     const interest = balance * rate;
     const principalPayment = Math.max(0, payment - interest);
     if (principalPayment <= 0) break;
+    interestPaid += interest;
     balance = Math.max(0, balance - principalPayment);
-    paid += Math.min(payment, balance + principalPayment + interest);
     months += 1;
   }
   if (balance > 1 || !months) return { monthsSaved: 0, interestSaved: 0 };
-  const baselineTotal = baselinePayment * baselineMonths;
-  const interestSaved = Math.max(0, baselineTotal - paid);
+  const baselineInterest = Math.max(0, baselinePayment * baselineMonths - principal);
+  const interestSaved = Math.max(0, baselineInterest - interestPaid);
   return {
     monthsSaved: Math.max(0, baselineMonths - months),
     interestSaved
