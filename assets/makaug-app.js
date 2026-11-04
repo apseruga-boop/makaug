@@ -16309,8 +16309,9 @@ function renderStaffSourceCoverageItems(items = []) {
       <textarea id="staff-source-coverage-links-${adminAttr(item.id)}" class="mt-2 w-full rounded-lg border border-pink-200 bg-white p-2 text-[11px] font-mono" rows="3" placeholder="Paste up to 10 exact /@handle/video/id links found on this source"></textarea>
       <div class="mt-2 flex flex-wrap gap-2">
         <button type="button" onclick="staffCompleteSourceCoverageItem(${adminListingIdArg(item.id)}, false)" class="rounded-lg bg-emerald-700 px-3 py-1.5 text-[11px] font-black text-white">Queue links + checked</button>
-        <button type="button" onclick="staffCompleteSourceCoverageItem(${adminListingIdArg(item.id)}, true)" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-black text-gray-700">Checked — no results</button>
+        <button type="button" onclick="staffCompleteSourceCoverageItem(${adminListingIdArg(item.id)}, true)" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-black text-gray-700">Mark checked: no results</button>
       </div>
+      <div id="staff-source-coverage-result-${adminAttr(item.id)}" class="mt-2 text-[11px] font-bold" role="status" aria-live="polite"></div>
     </article>`).join("");
 }
 
@@ -16368,14 +16369,18 @@ async function staffToggleUgandaRotationTimer() {
   }
 }
 
+const STAFF_SOURCE_COVERAGE_TIMEOUT_MS = 20000;
+
 async function staffLoadSourceCoverage() {
   const status = document.getElementById("staff-source-coverage-status");
   if (status) status.textContent = "Loading exhaustive coverage…";
   try {
-    const response = await apiRequest("/api/staff/source-intake/coverage/runs?limit=1");
+    const response = await staffApiRequestWithTimeout("/api/staff/source-intake/coverage/runs?limit=1", {}, STAFF_SOURCE_COVERAGE_TIMEOUT_MS, "Loading exhaustive coverage");
     renderStaffSourceCoverage(response?.data?.runs?.[0] || null);
   } catch (error) {
-    if (status) status.textContent = `Coverage unavailable: ${error.message || "request failed"}`;
+    if (status) {
+      status.innerHTML = `<span class="font-bold text-red-700">Coverage unavailable: ${adminEscape(error.message || "request failed")}</span> <button type="button" onclick="staffLoadSourceCoverage()" class="ml-2 underline font-bold">Retry</button>`;
+    }
   }
 }
 
@@ -16401,10 +16406,10 @@ async function staffClaimTikTokCoverageBatch() {
   const wrap = document.getElementById("staff-source-coverage-items");
   if (wrap) wrap.textContent = "Claiming the next restart-safe TikTok batch…";
   try {
-    const response = await apiRequest(`/api/staff/source-intake/coverage/runs/${encodeURIComponent(staffSourceCoverageRun.id)}/claim`, {
+    const response = await staffApiRequestWithTimeout(`/api/staff/source-intake/coverage/runs/${encodeURIComponent(staffSourceCoverageRun.id)}/claim`, {
       method: "POST",
       body: { platform: "tiktok", batch_size: 10, lease_minutes: 30 }
-    });
+    }, STAFF_SOURCE_COVERAGE_TIMEOUT_MS, "Claiming the TikTok batch");
     renderStaffSourceCoverageItems(response?.data?.items || []);
   } catch (error) {
     if (wrap) wrap.textContent = `Could not claim the next TikTok batch: ${error.message || "request failed"}`;
@@ -16416,21 +16421,34 @@ async function staffCompleteSourceCoverageItem(itemId = "", checkedEmpty = false
   if (!id) return;
   const rawText = checkedEmpty ? "" : (document.getElementById(`staff-source-coverage-links-${id}`)?.value || "");
   if (!checkedEmpty && !staffSourceImportTikTokUrls(rawText).length) {
-    return toast("Paste at least one exact TikTok /@handle/video/id link, or use Checked — no results.");
+    return toast("Paste at least one exact TikTok /@handle/video/id link, or use Mark checked: no results.");
   }
   const card = document.getElementById(`staff-source-coverage-item-${id}`);
-  if (card) card.style.opacity = "0.55";
+  const result = document.getElementById(`staff-source-coverage-result-${id}`);
+  const buttons = card ? Array.from(card.querySelectorAll("button")) : [];
+  if (card?.dataset.saving === "1") return;
+  if (card) { card.dataset.saving = "1"; card.style.opacity = "0.55"; }
+  buttons.forEach((button) => { button.disabled = true; });
+  if (result) { result.className = "mt-2 text-[11px] font-bold text-gray-600"; result.textContent = "Saving…"; }
   try {
-    const response = await apiRequest(`/api/staff/source-intake/coverage/items/${encodeURIComponent(id)}/complete`, {
+    const response = await staffApiRequestWithTimeout(`/api/staff/source-intake/coverage/items/${encodeURIComponent(id)}/complete`, {
       method: "POST",
       body: { raw_text: rawText, outcome: checkedEmpty ? "checked_empty" : "completed" }
-    });
+    }, STAFF_SOURCE_COVERAGE_TIMEOUT_MS, "Saving this source");
+    if (response?.ok === false) throw new Error(response?.error || "save was not confirmed");
     renderStaffSourceCoverage(response?.data?.run || staffSourceCoverageRun);
-    if (card) card.remove();
-    toast(checkedEmpty ? "Source recorded as checked with no recent results." : "Exact links checked and queued review-only.");
+    const message = response?.data?.already_recorded
+      ? "Saved earlier — already recorded."
+      : (checkedEmpty ? "Saved: checked, no results." : "Saved: links queued for review.");
+    if (result) { result.className = "mt-2 text-[11px] font-bold text-emerald-700"; result.textContent = message; }
+    if (card) window.setTimeout(() => card.remove(), 1500);
+    toast(message);
   } catch (error) {
-    if (card) card.style.opacity = "1";
-    toast(`Could not complete this source: ${error.message || "request failed"}`);
+    if (card) { card.style.opacity = "1"; delete card.dataset.saving; }
+    buttons.forEach((button) => { button.disabled = false; });
+    const message = `Not saved: ${error.message || "request failed"}. This source stays here — try again.`;
+    if (result) { result.className = "mt-2 text-[11px] font-bold text-red-700"; result.textContent = message; }
+    toast(message);
   }
 }
 

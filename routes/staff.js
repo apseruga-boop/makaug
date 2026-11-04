@@ -5643,7 +5643,12 @@ router.post('/source-intake/coverage/items/:itemId/complete', async (req, res, n
     if (item.platform !== 'tiktok') {
       return res.status(400).json({ ok: false, error: 'The assisted completion endpoint accepts TikTok coverage items only.' });
     }
-    if (item.status !== 'processing') {
+    if (['completed', 'checked_empty', 'duplicate_source'].includes(item.status)) {
+      // A repeated click (or a retry after a lost response) must not look like a failure.
+      const run = await getSourceCoverageRun(db, item.run_id).catch(() => null);
+      return res.json({ ok: true, data: { marker: SOURCE_COVERAGE_MARKER, already_recorded: true, item: { id: item.id, status: item.status }, run } });
+    }
+    if (!['processing', 'retry'].includes(item.status)) {
       return res.status(409).json({ ok: false, error: `This coverage item is ${item.status}; claim it before completing it.` });
     }
     const rawText = cleanText(req.body?.raw_text || req.body?.rawText || '');
