@@ -10743,6 +10743,49 @@ router.post('/revenue/sms', async (req, res, next) => {
 });
 
 // The name an agent is greeted by in every WhatsApp message ("Amos", not "Agaba").
+/**
+ * The public profile details staff can fill in for an agent: company, bio,
+ * email, WhatsApp, districts and specialisations. Added 6 Nov 2026 for the
+ * Vanta House developer contact, whose profile had "Independent agent", no
+ * email and no bio after the Agent 007 sign-up. Blank fields are left alone.
+ */
+router.patch('/agents/:id/profile', async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
+    const body = req.body || {};
+    const fullName = cleanText(body.full_name || '').slice(0, 160);
+    const companyName = cleanText(body.company_name || '').slice(0, 160);
+    const bio = cleanText(body.bio || '').slice(0, 1000);
+    const email = normalizeEmail(body.email || '') || '';
+    const whatsapp = body.whatsapp || body.phone ? normalizeUgPhone(body.whatsapp || body.phone) : '';
+    if ((body.whatsapp || body.phone) && !whatsapp) return res.status(400).json({ ok: false, error: 'whatsapp is invalid' });
+    if (body.email && !email) return res.status(400).json({ ok: false, error: 'email is invalid' });
+    const list = (value) => (Array.isArray(value) ? value : String(value || '').split(',')).map((item) => cleanText(item).slice(0, 80)).filter(Boolean).slice(0, 20);
+    const districts = list(body.districts_covered);
+    const specializations = list(body.specializations);
+    const updated = await db.query(
+      `UPDATE agents
+          SET full_name = COALESCE(NULLIF($2::text, ''), full_name),
+              company_name = COALESCE(NULLIF($3::text, ''), company_name),
+              bio = COALESCE(NULLIF($4::text, ''), bio),
+              email = COALESCE(NULLIF($5::text, ''), email),
+              whatsapp = COALESCE(NULLIF($6::text, ''), whatsapp),
+              phone = COALESCE(NULLIF($6::text, ''), phone),
+              districts_covered = CASE WHEN cardinality($7::text[]) > 0 THEN $7::text[] ELSE districts_covered END,
+              specializations = CASE WHEN cardinality($8::text[]) > 0 THEN $8::text[] ELSE specializations END,
+              updated_at = NOW()
+        WHERE id = $1::uuid
+        RETURNING id, full_name, company_name, bio, email, whatsapp, phone, districts_covered, specializations, status`,
+      [req.params.id, fullName, companyName, bio, email, whatsapp, districts, specializations]
+    );
+    if (!updated.rows[0]) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    await writeAudit('admin_agent_profile_updated', { agent_id: req.params.id, fields: Object.keys(body).filter((key) => body[key] != null && body[key] !== '') }, adminActorId(req));
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.patch('/agents/:id/greeting-name', async (req, res, next) => {
   try {
     if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });

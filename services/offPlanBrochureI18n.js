@@ -93,6 +93,12 @@ Object.assign(PACKS.ar, { projectHighlights: 'أبرز مزايا المشروع
 PACKS.rn = { ...PACKS.ny, languageName: 'Rukiga', locationArea: 'Ekicweka n’omwanya' };
 PACKS.sm = { ...PACKS.lg, languageName: 'Lusoga', homesSold: 'Enhumba edhatundibwa', construction: 'Okuzimba okuwedde' };
 
+// Walk-through videos, 360° tours, the construction diary and documents (6 Nov 2026).
+Object.assign(ENGLISH, { walkthroughs: 'Walk through the homes', walkthroughsNote: 'Concept walkthroughs built from the developer\'s floor plans. Finishes and dimensions follow the signed agreement.', walkthroughVideo: 'Walkthrough video', tour360: '360° tour (developer)', constructionDiary: 'Construction diary', latestUpdate: 'Latest update', timeline: 'Timeline', documents: 'Documents', openLink: 'Open', priceByFloor: 'Prices quoted are for floor {base}; each floor above adds {step}%.' });
+Object.assign(PACKS.lg, { walkthroughs: 'Tambula mu maka', walkthroughsNote: 'Ebifaananyi eby\'okutambuliramu bikoleddwa okuva ku pulaani z\'omuzimbi. Ebikozesebwa n\'obunene bigoberera endagaano.', walkthroughVideo: 'Vidiyo ey\'okutambuliramu', tour360: 'Olugendo lwa 360° (omuzimbi)', constructionDiary: 'Ebifa ku kuzimba', latestUpdate: 'Amawulire agasembyeyo', timeline: 'Entegeka y\'ebiseera', documents: 'Ebiwandiiko', openLink: 'Ggulawo', priceByFloor: 'Emiwendo gya mwaliiro {base}; buli mwaliiro waggulu gwongerako {step}%.' });
+Object.assign(PACKS.sw, { walkthroughs: 'Tembea ndani ya nyumba', walkthroughsNote: 'Mionekano ya dhana imejengwa kutoka kwenye michoro ya msanidi. Umaliziaji na vipimo vinafuata mkataba uliosainiwa.', walkthroughVideo: 'Video ya kutembea ndani', tour360: 'Ziara ya 360° (msanidi)', constructionDiary: 'Taarifa za ujenzi', latestUpdate: 'Taarifa ya hivi karibuni', timeline: 'Ratiba', documents: 'Nyaraka', openLink: 'Fungua', priceByFloor: 'Bei zilizotajwa ni za sakafu ya {base}; kila sakafu ya juu huongeza {step}%.' });
+PACKS.sm = { ...PACKS.sm, walkthroughs: PACKS.lg.walkthroughs, walkthroughsNote: PACKS.lg.walkthroughsNote, walkthroughVideo: PACKS.lg.walkthroughVideo, tour360: PACKS.lg.tour360, constructionDiary: PACKS.lg.constructionDiary, latestUpdate: PACKS.lg.latestUpdate, timeline: PACKS.lg.timeline, documents: PACKS.lg.documents, openLink: PACKS.lg.openLink, priceByFloor: PACKS.lg.priceByFloor };
+
 function normalizeBrochureLanguage(value) {
   const code = String(value || 'en').trim().toLowerCase().split('-')[0];
   return SUPPORTED_OFF_PLAN_LANGUAGES.includes(code) ? code : 'en';

@@ -23,7 +23,14 @@ const TOP_LEVEL_KEYS = [
 const EXTRA_KEYS = [
   'area_overview', 'country_name', 'country_slug', 'region', 'market_summary', 'makaug_service_steps',
   'official_buyer_guidance', 'overseas_finance_policy', 'payment_terms_note', 'public_path',
-  'map_precision', 'contact_mode', 'roi_projections', 'reservation_fee_original'
+  'map_precision', 'contact_mode', 'roi_projections', 'reservation_fee_original',
+  // Public copy in other languages, and the "walk through the homes" material
+  // (6 Nov 2026): per-home walkthrough videos and 3D layouts, the developer's
+  // 360° tours, dated construction updates, price-by-floor rule, key facts,
+  // service charges, government charges, documents, investment note.
+  'translations', 'walkthroughs', 'virtual_tours', 'construction_updates', 'construction_timeline',
+  'floor_price_rule', 'key_facts', 'management_fees', 'government_charges', 'documents',
+  'investment_note', 'progress_basis', 'developer_website'
 ];
 
 // Keys that never appear inside public arrays/objects (images, unit types, ...).

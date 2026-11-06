@@ -1000,6 +1000,7 @@ async function sendOwnerListingSubmissionNotifications({ listing = {}, token = '
 }
 
 module.exports = {
+  deliverListingWhatsapp,
   REVIEW_CHECKS,
   REQUIRED_REVIEW_CHECK_KEYS,
   STAFF_SOURCED_OWNER_CHECKLIST_NOTE,
