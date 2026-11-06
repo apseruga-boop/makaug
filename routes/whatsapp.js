@@ -5890,9 +5890,21 @@ function noteEmployeeSenderTime(data = {}, senderMs = Date.now()) {
  * of the album of a photo that carried the caption; otherwise it is held and
  * nothing is guessed.
  */
+/** Descriptions saved but still without a single photo: the pending one and the queue. */
+function employeeWaitingCaptionCount(data = {}) {
+  const pendingWaiting = normalizeInput(data.pending_property_caption || '') && !employeePendingStoredMedia(data).length ? 1 : 0;
+  return pendingWaiting + employeePendingSubmissionQueue(data).filter((entry) => entry.caption && !entry.media.length).length;
+}
+
 function employeeShouldHoldUnassignedMedia({ data = {}, ownCaption = false, senderMs = 0, burstSize = 0 } = {}) {
   if (ownCaption) return false;
   if (data.whatsapp_agent_self_intake === true) return false;
+  // 5 Nov 2026: three descriptions in two seconds, then the photos. The first
+  // six photos slipped in before the burst was big enough to notice, and each
+  // waiting description was handed one — the Sseguku house went up on the
+  // Mutundwe listing. With more than one description waiting, a photo with no
+  // caption of its own is a guess whatever the pace, and is held.
+  if (employeeWaitingCaptionCount(data) > 1) return true;
   if (Number(burstSize) < EMPLOYEE_SENDER_BURST_MIN) return false;
   const lastAlbum = Number(data.last_album_sender_ms || 0);
   const lastText = Number(data.last_text_caption_sender_ms || 0);
@@ -6007,12 +6019,13 @@ function employeePendingSubmissionQueue(data = {}) {
       caption: normalizeInput(entry?.caption),
       inboundMessageId: normalizeInput(entry?.inboundMessageId || entry?.inbound_message_id),
       storedAt: normalizeInput(entry?.storedAt || entry?.stored_at),
+      senderMs: Number(entry?.senderMs || entry?.sender_ms || 0) || 0,
       media: employeePendingStoredMedia({ pending_property_media: entry?.media })
     }))
     .filter((entry) => entry.caption || entry.media.length);
 }
 
-function rememberEmployeeQueuedSubmission(data = {}, { caption = '', storedMedia = [], inboundMessageId = '' } = {}) {
+function rememberEmployeeQueuedSubmission(data = {}, { caption = '', storedMedia = [], inboundMessageId = '', senderMs = 0 } = {}) {
   const queue = employeePendingSubmissionQueue(data);
   const candidateKey = employeePropertyAttemptKey({ inboundMessageId, caption });
   const exists = queue.some((entry) => employeePropertyAttemptKey({
@@ -6024,6 +6037,7 @@ function rememberEmployeeQueuedSubmission(data = {}, { caption = '', storedMedia
       caption: normalizeInput(caption),
       inboundMessageId: normalizeInput(inboundMessageId),
       storedAt: new Date().toISOString(),
+      senderMs: Number(senderMs || 0) || Number(data.current_sender_ms || 0) || Date.now(),
       media: employeePendingStoredMedia({ pending_property_media: storedMedia })
     });
   }
@@ -6038,6 +6052,7 @@ function promoteEmployeeQueuedSubmission(data = {}) {
   else delete data.pending_property_queue;
   if (!next) return null;
   data.pending_property_caption = next.caption;
+  data.pending_caption_sender_ms = Number(next.senderMs || 0) || 0;
   data.pending_property_media = next.media;
   data.pending_property_media_message_id = next.inboundMessageId || null;
   data.pending_property_media_stored_at = next.storedAt || new Date().toISOString();
@@ -6084,9 +6099,17 @@ function noteEmployeeBatchDuplicate(data = {}, caption = '', existing = {}) {
   data.employee_batch_duplicates = list.slice(-20);
 }
 
+function noteEmployeeBatchTopUp(data = {}, existing = {}, count = 0) {
+  if (!existing || !existing.id || !(count > 0)) return;
+  const list = Array.isArray(data.employee_batch_duplicates) ? data.employee_batch_duplicates : [];
+  const entry = list.find((item) => item && item.id === String(existing.id));
+  if (entry) entry.topped_up = Number(entry.topped_up || 0) + count;
+  data.employee_batch_duplicates = list.slice(-20);
+}
+
 function employeeBatchDuplicateLines(data = {}) {
   const list = Array.isArray(data.employee_batch_duplicates) ? data.employee_batch_duplicates : [];
-  return list.map((entry) => `• "${entry.label}" — already ${entry.status === 'approved' ? 'live' : 'in staff review'} (ref ${entry.ref})`);
+  return list.map((entry) => `• "${entry.label}" — already ${entry.status === 'approved' ? 'live' : 'in staff review'} (ref ${entry.ref})${entry.topped_up ? `; ${entry.topped_up} new ${entry.topped_up === 1 ? 'photo' : 'photos/videos'} added to it` : ''}`);
 }
 
 /**
@@ -6242,6 +6265,20 @@ async function flushReadyEmployeeSubmissions({ phone, currentStep, data, inbound
     }
     if (duplicate) {
       noteEmployeeBatchDuplicate(data, caption, duplicate);
+      // The same description sent again with photos — usually because the
+      // first time its photos never arrived. Give the waiting listing the
+      // photos instead of dropping them with the "already with us" note.
+      if (String(duplicate.status) === 'pending' && storedMedia.length) {
+        try {
+          const attachment = await attachEmployeeReviewMedia({ propertyId: duplicate.id, storedMedia, phone, inboundMessageId });
+          if (attachment.attached) {
+            data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
+            noteEmployeeBatchTopUp(data, duplicate, attachment.attached);
+          }
+        } catch (error) {
+          logger.warn('employee batch flush could not add photos to the listing already in review', { error: error.message || String(error) });
+        }
+      }
       delete data.pending_property_caption;
       clearEmployeePendingMedia(data);
       if (!promoteEmployeeQueuedSubmission(data)) break;
@@ -10554,6 +10591,19 @@ async function handleEmployeeWhatsappIntake({
           flushedIds.push(...await flushReadyEmployeeSubmissions({ phone, currentStep, data, inboundMessageId }));
         }
       }
+      // Held photos whose descriptions are each followed by their own run of
+      // photos: pair them by the time the phone sent them, then save.
+      const pairedHeld = await settleHeldMediaBySenderTime({ phone, data, currentStep, inboundMessageId });
+      if (pairedHeld.length) {
+        flushedIds.push(...await flushReadyEmployeeSubmissions({ phone, currentStep, data, inboundMessageId }));
+        queueWhatsappWebBridgeAutoReply({
+          phone,
+          message: `📎 Matched the photos to their descriptions by the order they were sent: ${pairedHeld.map((entry) => `${entry.label} (${entry.count})`).join('; ')}. Staff will check them against each listing before anything goes live.`,
+          nextStep: currentStep,
+          source: 'whatsapp_runtime',
+          actorId: 'employee_held_media_paired'
+        }).catch(() => {});
+      }
       const pendingStoredMedia = employeePendingStoredMedia(data);
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
       const queuedSubmissions = employeePendingSubmissionQueue(data);
@@ -10978,7 +11028,9 @@ async function handleEmployeeWhatsappIntake({
         rememberEmployeeQueuedSubmission(data, {
           caption: pendingCaption,
           storedMedia: pendingStoredMedia,
-          inboundMessageId: normalizeInput(data.pending_property_media_message_id || '')
+          inboundMessageId: normalizeInput(data.pending_property_media_message_id || ''),
+          // The parked description keeps its own send time; current_sender_ms is the new one's.
+          senderMs: Number(data.pending_caption_sender_ms || data.last_text_caption_sender_ms || 0)
         });
         clearEmployeePendingMedia(data);
       }
@@ -10989,6 +11041,7 @@ async function handleEmployeeWhatsappIntake({
       }
       data.pending_property_caption = textCaption;
       data.last_text_caption_sender_ms = Number(data.current_sender_ms || 0) || Date.now();
+      data.pending_caption_sender_ms = data.last_text_caption_sender_ms;
       await replaceEmployeeSession(phone, currentStep, data);
       const waitingForMedia = employeePendingSubmissionQueue(data).filter((entry) => !entry.media.length).length;
       return {
@@ -13653,6 +13706,64 @@ async function settleEmployeeOrphanMedia({ phone, data = {}, currentStep = 'empl
     else clearEmployeePendingMedia(data);
     if (phone) await replaceEmployeeSession(phone, currentStep, data);
   }
+  return placed;
+}
+
+/**
+ * Held photos, paired to the descriptions waiting for them by the time the
+ * phone sent each one.
+ *
+ * 5 Nov 2026: Ronald forwarded three of Brandpro's adverts — three
+ * descriptions, then the photos — so the photos were held, rightly. Told to
+ * send one property at a time, he did: a description, then its photos, three
+ * times over, and COMPLETE. Every one of those photos was held too ("came on
+ * their own, separately from the descriptions"), because a forwarded photo
+ * never carries its caption, and after half an hour the batch closed with 120
+ * photos never placed and three listings wearing the wrong house.
+ *
+ * When each waiting description is followed by its own run of photos — the
+ * layout pairForwardedAlbums reads for forwarded adverts — there is nothing to
+ * guess: the photos go to the description they followed. When the layout is
+ * ambiguous (several descriptions, then all the photos; a run with no
+ * description near it) nothing is placed and the batch is refused as before.
+ */
+async function settleHeldMediaBySenderTime({ phone, data = {}, currentStep = 'employee_property_media', inboundMessageId = '' } = {}) {
+  const held = employeeUnassignedMedia(data);
+  if (!held.length || held.some((item) => !(Number(item.sender_ms) > 0))) return [];
+  const pendingCaption = normalizeInput(data.pending_property_caption || '');
+  const pendingWaiting = pendingCaption && !employeePendingStoredMedia(data).length;
+  const queue = employeePendingSubmissionQueue(data);
+  const captions = [];
+  if (pendingWaiting) captions.push({ caption: pendingCaption, ms: Number(data.pending_caption_sender_ms || data.last_text_caption_sender_ms || 0), media: [], target: 'pending' });
+  queue.forEach((entry, index) => {
+    if (entry.caption && !entry.media.length) captions.push({ caption: entry.caption, ms: Number(entry.senderMs || 0), media: [], target: index });
+  });
+  if (!captions.length || captions.some((entry) => !(entry.ms > 0))) return [];
+  const media = held.map((item) => ({ ...item, ms: Number(item.sender_ms), caption: '' }));
+  const orphans = pairForwardedAlbums(captions, media);
+  if (orphans.length || captions.some((entry) => !entry.media.length)) return [];
+
+  const placed = [];
+  for (const entry of captions) {
+    const items = entry.media.map(({ ms: _ms, caption: _caption, sender_ms: _sent, inbound_message_id: _id, ...item }) => item);
+    if (entry.target === 'pending') {
+      rememberEmployeePendingMedia(data, items, inboundMessageId);
+    } else {
+      queue[entry.target].media = employeePendingStoredMedia({ pending_property_media: items });
+    }
+    placed.push({ label: employeeCaptionLabel(entry.caption), count: items.length });
+  }
+  data.pending_property_queue = queue.map((entry) => ({
+    caption: entry.caption,
+    inboundMessageId: entry.inboundMessageId,
+    storedAt: entry.storedAt,
+    senderMs: entry.senderMs,
+    media: entry.media
+  }));
+  if (!data.pending_property_queue.length) delete data.pending_property_queue;
+  delete data.employee_unassigned_media;
+  delete data.employee_unassigned_notice_sent;
+  if (phone) await replaceEmployeeSession(phone, currentStep, data);
   return placed;
 }
 
@@ -21318,7 +21429,11 @@ async function groupForwardedAdverts(phone, { since = null, until = null } = {})
     const mediaUrl = normalizeInput(payload.mediaUrl || payload.media_url || '');
     const mediaType = forwardedAdvertMimeType(payload, mediaUrl);
     const isMedia = /^https:\/\//i.test(mediaUrl);
-    const ms = new Date(row.created_at).getTime();
+    // When the phone sent it, not when we got round to it: on 26 Oct 2026 the
+    // nine morning adverts were sent in eight minutes and processed over
+    // forty-seven, photo downloads in between, so processing times put a
+    // caption in the same second as the last photo of the advert before it.
+    const ms = employeeSenderMs(payload.metadata) || new Date(row.created_at).getTime();
     if (body && !isMedia) {
       const facts = employeePropertyFacts(body, {});
       const isAdvert = Boolean(facts.listingType && Number(facts.price) > 0) || isReviewableOwnerForwardCaption(body);
@@ -21505,6 +21620,11 @@ module.exports.__test = {
   noteEmployeeBatchDuplicate,
   employeeSenderMs,
   employeeShouldHoldUnassignedMedia,
+  employeeWaitingCaptionCount,
+  settleHeldMediaBySenderTime,
+  rememberEmployeeQueuedSubmission,
+  promoteEmployeeQueuedSubmission,
+  employeePendingSubmissionQueue,
   normalizeCaptionPriceNotation,
   parseEmployeeBedroomDraft,
   bestCaptionFromOnScreenText,

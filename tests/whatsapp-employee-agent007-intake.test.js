@@ -158,6 +158,7 @@ assert.deepEqual(
     caption: 'Royal Palms Butabika villa for sale',
     inboundMessageId: 'kazi-butabika-message',
     storedAt: '',
+    senderMs: 0,
     media: [{
       url: 'https://media.makaug.com/whatsapp/kazi-butabika.mp4',
       sha256: 'kazi-butabika-video',
