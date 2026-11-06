@@ -1518,6 +1518,12 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
          FROM properties p
          WHERE p.agent_id = a.id
            AND p.status = 'approved'
+       ) + (
+         SELECT COUNT(*)::int
+         FROM off_plan_developments d
+         WHERE d.source_agent_id = a.id
+           AND d.status = 'published'
+           AND (d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true'))
        ) AS approved_listing_count
      FROM agents a
      WHERE a.id::text = $1

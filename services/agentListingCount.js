@@ -19,6 +19,16 @@ function approvedAgentListingsCountSql(agentAlias = 'a') {
   return `(SELECT COUNT(*)::int FROM properties p WHERE p.agent_id = ${alias}.id AND p.status = 'approved' AND ${publicHasPhotoOrVideoSql('p')})`;
 }
 
+// Live inventory that is not a property row: a published off-plan project the
+// agent is the source of, visible to the public (verified, or a sourced
+// preview staff approved). A developer whose only live inventory is their
+// project is reachable through their page like any lister with a live
+// listing (John Yan, Vanta House, 6 Nov 2026).
+function publishedOffPlanProjectsCountSql(agentAlias = 'a') {
+  const alias = sqlAlias(agentAlias);
+  return `(SELECT COUNT(*)::int FROM off_plan_developments d WHERE d.source_agent_id = ${alias}.id AND d.status = 'published' AND (d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true')))`;
+}
+
 function parseAgentListingPage(query = {}) {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
   let limit = parseInt(query.limit, 10);
@@ -116,6 +126,7 @@ module.exports = {
   DEFAULT_AGENT_LISTING_PAGE_SIZE,
   MAX_AGENT_LISTING_PAGE_SIZE,
   approvedAgentListingsCountSql,
+  publishedOffPlanProjectsCountSql,
   parseAgentListingPage,
   countApprovedAgentListings,
   listApprovedAgentListingPage,
