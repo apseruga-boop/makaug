@@ -537,8 +537,12 @@ async function setDevelopmentStatus(db, id, status, { actorId = null, actorRole 
       `UPDATE off_plan_developments SET status = $2, published_at = COALESCE(published_at, NOW()), extra_fields = $4::jsonb, updated_by = $3, updated_at = NOW() WHERE id = $1 RETURNING *`,
       [id, requested, actorId, JSON.stringify(nextExtraFields)]
     )
+    // `requested` is one of DEVELOPMENT_STATUSES, so the fragment is fixed
+    // text. Using $2 both as the new status and inside a CASE made Postgres
+    // deduce it as varchar and text at once ("inconsistent types deduced for
+    // parameter $2"), so every change away from published was a 500.
     : await db.query(
-      `UPDATE off_plan_developments SET status = $2, published_at = CASE WHEN $2 = 'published' THEN COALESCE(published_at, NOW()) ELSE published_at END, updated_by = $3, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      `UPDATE off_plan_developments SET status = $2, published_at = ${requested === 'published' ? 'COALESCE(published_at, NOW())' : 'published_at'}, updated_by = $3, updated_at = NOW() WHERE id = $1 RETURNING *`,
       [id, requested, actorId]
     );
   await recordEvent(db, {
