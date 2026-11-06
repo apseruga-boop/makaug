@@ -22,6 +22,7 @@ const { basicAgentProfileVisible } = require('../services/agentBasicProfile');
 const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
 const {
   approvedAgentListingsCountSql,
+  publishedOffPlanProjectsCountSql,
   approvedListingPriceRange,
   listApprovedAgentListingPage
 } = require('../services/agentListingCount');
@@ -1320,13 +1321,14 @@ async function loadPublicAgentProfileRow(agentId) {
         ${agentIdOnFileSql('a')} AS identity_document_stored,
         ${verifiedByMakaugSql('a')} AS verified_by_makaug,
         ${knownAgentSocialSelect('a')},
-        ${approvedAgentListingsCountSql('a')} AS listings_count
+        ${approvedAgentListingsCountSql('a')} AS listings_count,
+        ${publishedOffPlanProjectsCountSql('a')} AS off_plan_projects_count
       FROM agents a
       WHERE a.id = $1
         AND (
           a.user_id IS NOT NULL
           OR COALESCE(a.verification_reason, '') ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
-          OR ${approvedAgentListingsCountSql('a')} >= 1
+          OR ${approvedAgentListingsCountSql('a')} + ${publishedOffPlanProjectsCountSql('a')} >= 1
         )
         AND LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
         AND COALESCE(a.verification_reason, '') NOT ILIKE '%public social source onboarding%'
@@ -1350,9 +1352,11 @@ async function loadPublicAgentProfileRow(agentId) {
 
     if (!agent.rows.length) return null;
     const row = agent.rows[0];
+    // A published off-plan project counts as live inventory for the page,
+    // not in the listings number the page shows.
     const visibilityRow = {
       ...row,
-      approved_listing_count: Number(row.listings_count || 0)
+      approved_listing_count: Number(row.listings_count || 0) + Number(row.off_plan_projects_count || 0)
     };
     const profileKind = publicAgentProfileVisible(visibilityRow)
       ? 'full'

@@ -180,3 +180,20 @@ test('short links are stable, unique, and redirect without entering the sitemap'
   assert.match(seo, /publicSitemapBasicAgentWhereSql\('a'\)/);
   assert.doesNotMatch(sourceBetween(seo, 'function sitemapEntries', 'module.exports'), /\/a\//);
 });
+
+test('a developer whose only live inventory is a published off-plan project has a page', () => {
+  // John Yan (Blackstone Real Estate, Vanta House), 6 Nov 2026: no account,
+  // no reviewed ID, no property listing — but a published project. The page
+  // route and the HTML route count the project as live inventory; the listing
+  // number the page shows still counts property rows only.
+  const { publishedOffPlanProjectsCountSql } = require('../services/agentListingCount');
+  const sql = publishedOffPlanProjectsCountSql('a');
+  assert.match(sql, /FROM off_plan_developments d WHERE d\.source_agent_id = a\.id AND d\.status = 'published'/);
+  assert.match(sql, /public_preview_approved' = 'true'/);
+  const profile = sourceBetween(agentsRoute, 'async function loadPublicAgentProfileRow', "router.post('/register'");
+  assert.match(profile, /OR \$\{approvedAgentListingsCountSql\('a'\)\} \+ \$\{publishedOffPlanProjectsCountSql\('a'\)\} >= 1/);
+  assert.match(profile, /approved_listing_count: Number\(row\.listings_count \|\| 0\) \+ Number\(row\.off_plan_projects_count \|\| 0\)/);
+  const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const meta = server.slice(server.indexOf('async function loadPublicAgentOpenGraphMeta'), server.indexOf('app.get([', server.indexOf('async function loadPublicAgentOpenGraphMeta')));
+  assert.match(meta, /FROM off_plan_developments d[\s\S]*?\) AS approved_listing_count/);
+});
