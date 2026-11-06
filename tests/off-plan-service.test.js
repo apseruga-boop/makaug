@@ -266,6 +266,29 @@ test('explicit sourced-preview publication records approval and preserves the st
   assert.match(update.sql, /extra_fields = \$4::jsonb/);
 });
 
+test('a project can be taken back from published: the status update never reuses $2 in a CASE', async () => {
+  // Vanta House, 6 Nov 2026: "status = $2 ... CASE WHEN $2 = 'published'" made
+  // Postgres deduce $2 as varchar and text at once, so every change away from
+  // published answered 500 ("inconsistent types deduced for parameter $2").
+  const project = { id: 'dev-9', status: 'published', verification_status: 'partially_verified', extra_fields: { public_preview_approved: true }, images: [], unit_types: [], payment_plan: [], floor_plans: [], amenities: [], nearby_places: [], videos: [] };
+  const queries = [];
+  const db = {
+    async query(sql, values) {
+      queries.push({ sql, values });
+      if (/SELECT[\s\S]+off_plan_developments/.test(sql)) return { rows: [project] };
+      if (/UPDATE off_plan_developments SET status/.test(sql)) return { rows: [{ ...project, status: values[1] }] };
+      if (/INSERT INTO off_plan_development_events/.test(sql)) return { rows: [{ id: 'event-3' }] };
+      throw new Error(`Unexpected SQL: ${sql}`);
+    }
+  };
+  const back = await setDevelopmentStatus(db, project.id, 'pending_review', { actorId: 'admin-1', actorRole: 'admin' });
+  assert.equal(back.status, 'pending_review');
+  const update = queries.find(({ sql }) => /UPDATE off_plan_developments SET status/.test(sql));
+  assert.doesNotMatch(update.sql, /CASE WHEN \$2/);
+  assert.match(update.sql, /published_at = published_at/);
+  assert.deepEqual(update.values, ['dev-9', 'pending_review', 'admin-1']);
+});
+
 test('publication gate rejects impossible sales totals and unlabelled media', () => {
   const blockers = publicationBlockers({
     name: 'Verified Project', developer_name: 'Verified Developer Ltd',
