@@ -39,10 +39,12 @@ test('fancy letters, hashtags and "reduced from" prices are read as the broker m
   assert.strictEqual(route.employeePropertyFacts('they have monthly revenue of (2.5m ugx) At only 180m ugx apartments for sale in Seeta', {}).price, 180000000, 'the income rule still holds');
 });
 
-test('albums go to the nearest caption, whichever side of it they arrived on', () => {
-  const t = (minutes, seconds = 0) => Date.UTC(2026, 9, 26, 9, minutes, seconds);
-  const caption = (id, minutes, text) => ({ caption: text, caption_message_id: id, caption_at: new Date(t(minutes)).toISOString(), ms: t(minutes), facts: {}, missing: [], media: [] });
-  const photo = (id, minutes, seconds, cap = '') => ({ message_id: id, at: new Date(t(minutes, seconds)).toISOString(), ms: t(minutes, seconds), url: `https://x/${id}`, mimeType: 'image/jpeg', caption: cap });
+const t = (minutes, seconds = 0, ms = 0) => Date.UTC(2026, 9, 26, 9, minutes, seconds, ms);
+const caption = (id, minutes, text, seconds = 0, ms = 0) => ({ caption: text, caption_message_id: id, caption_at: new Date(t(minutes, seconds, ms)).toISOString(), ms: t(minutes, seconds, ms), facts: {}, missing: [], media: [] });
+const photo = (id, minutes, seconds, cap = '') => ({ message_id: id, at: new Date(t(minutes, seconds)).toISOString(), ms: t(minutes, seconds), url: `https://x/${id}`, mimeType: 'image/jpeg', caption: cap });
+const ids = (list) => list.media.map((m) => m.message_id);
+
+test('albums go to the caption on the side the sender writes it, and a caption never splits an album in two directions', () => {
   const captions = [caption('c-sekiwunga', 39, SEKIWUNGA), caption('c-lutembe', 42, 'Plots for sale at lutembe 23decimals at 220m'), caption('c-kitende', 50, KITENDE)];
   const media = [
     photo('a1', 37, 50), photo('a2', 37, 55), photo('a3', 38, 2), photo('a4', 38, 10), // album before Sekiwunga's caption
@@ -51,16 +53,45 @@ test('albums go to the nearest caption, whichever side of it they arrived on', (
     photo('z1', 0, 0) // forty minutes before anything: nobody's
   ];
   const orphans = route.pairForwardedAlbums(captions, media);
-  assert.deepStrictEqual(captions[0].media.map((m) => m.message_id), ['a1', 'a2', 'a3', 'a4'], 'photos sent just before the caption are its');
-  assert.deepStrictEqual(captions[1].media.map((m) => m.message_id), ['b1', 'b2', 'b3']);
-  assert.deepStrictEqual(captions[2].media.map((m) => m.message_id), ['c1', 'c2']);
+  assert.deepStrictEqual(ids(captions[0]), ['a1', 'a2', 'a3', 'a4'], 'a text-first chat, but the first album has no caption before it: the one after takes it');
+  assert.deepStrictEqual(ids(captions[1]), ['b1', 'b2', 'b3']);
+  assert.deepStrictEqual(ids(captions[2]), ['c1', 'c2']);
   assert.match(captions[2].caption, /with a caption of its own$/);
   assert.deepStrictEqual(orphans.map((m) => m.message_id), ['z1']);
-  // Equidistant: the caption after the album wins.
+  // Equidistant, nothing else to go on: photos first.
   const tie = [caption('before', 10, 'x'), caption('after', 14, 'y')];
   route.pairForwardedAlbums(tie, [photo('m1', 12, 0)]);
-  assert.deepStrictEqual(tie[1].media.map((m) => m.message_id), ['m1']);
+  assert.deepStrictEqual(ids(tie[1]), ['m1']);
   assert.deepStrictEqual(tie[0].media, []);
+});
+
+test('the 26 Oct shape: text, then photos back to back for three plots, then one block that came photos-first', () => {
+  // 09:31:21 Bunamwaya, photos 09:31:23–09:33:07; 09:33:24 Zitwe, photos
+  // 09:33:51–09:36:13; 09:36:13.212 Kansanga, photos 09:36:24–09:36:51. No
+  // gap anywhere reaches 90 s, and Kansanga's caption lands in the same second
+  // as Zitwe's last photo.
+  const captions = [caption('bunamwaya', 31, 'a', 21), caption('zitwe', 33, 'b', 24), caption('kansanga', 36, 'c', 13, 212)];
+  const media = [
+    photo('p1', 31, 23), photo('p2', 32, 10), photo('p3', 33, 7),
+    photo('q1', 33, 51), photo('q2', 35, 0), photo('q3', 36, 13),
+    photo('r1', 36, 24), photo('r2', 36, 51)
+  ];
+  const orphans = route.pairForwardedAlbums(captions, media);
+  assert.deepStrictEqual(ids(captions[0]), ['p1', 'p2', 'p3']);
+  assert.deepStrictEqual(ids(captions[1]), ['q1', 'q2', 'q3'], 'the photo in the same second as the next caption stays with its own advert');
+  assert.deepStrictEqual(ids(captions[2]), ['r1', 'r2']);
+  assert.deepStrictEqual(orphans, []);
+
+  // 10:12:52 Lubowa, photos 10:13:42–10:18:34; then at 12:03 six photos and
+  // the Makerere caption one second after them. Text-first chat, but the
+  // caption before that album is 1.8 hours back: the one after it takes it.
+  const later = [caption('lubowa', 12, 'd', 52), caption('makerere', 3, 'e', 9)];
+  later[1].ms += 2 * 60 * 60 * 1000; later[0].ms += 60 * 60 * 1000; // 10:12:52 and 12:03:09
+  const lubowaPhotos = [photo('l1', 13, 42), photo('l2', 16, 0), photo('l3', 18, 34)].map((p) => ({ ...p, ms: p.ms + 60 * 60 * 1000 }));
+  const makererePhotos = [photo('m1', 3, 3), photo('m2', 3, 8)].map((p) => ({ ...p, ms: p.ms + 2 * 60 * 60 * 1000 }));
+  assert.deepStrictEqual(route.pairForwardedAlbums(later, [...lubowaPhotos, ...makererePhotos]), []);
+  assert.deepStrictEqual(ids(later[0]), ['l1', 'l2', 'l3']);
+  assert.deepStrictEqual(ids(later[1]), ['m1', 'm2']);
 });
 
 function fakeDb(run, { rows = [], agent = null } = {}) {

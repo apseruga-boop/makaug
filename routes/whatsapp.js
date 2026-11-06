@@ -21238,48 +21238,61 @@ const FORWARDED_ALBUM_GAP_MS = 90 * 1000;
 const FORWARDED_ALBUM_CLAIM_MS = 15 * 60 * 1000;
 
 /**
- * Albums go to the nearest caption, not to the one before them.
+ * A caption ends the album in progress; albums go to the side the sender
+ * writes their text on.
  *
  * The first version gave every photo to the caption that preceded it. The
- * same broker's 26 Oct chat has both orders — "album, then the text" (the
- * Sekiwunga plot) and "text, then the album" (the Kitende house) — so six
- * plots' photos went to the advert before them, and when a caption was
- * missed altogether its album was glued to the previous property. Now photos
- * are first grouped into albums by time, and each album goes to the caption
- * closest to it in time; when a caption sits exactly as far from two albums,
- * the one after it wins, since a forward usually arrives photos first.
+ * second grouped photos into albums by time and gave each album to the
+ * nearest caption. Both failed on the same broker's 26 Oct chat: he writes
+ * the text first and sends the photos straight after, advert after advert, so
+ * the photos of three plots ran into one unbroken album (09:31–09:36) that
+ * went whole to the last of the three captions, and a caption typed in the
+ * same second as the last photo of the advert before it "won" that album.
+ *
+ * Now a run of photos never spans a caption; the chat as a whole is read as
+ * "text, then photos" or "photos, then text" — whichever its captions and
+ * albums fit better — and each album goes to the caption on that side, or to
+ * the other side when that side has no caption within FORWARDED_ALBUM_CLAIM_MS
+ * (the Makerere block came photos-first in a text-first chat, 1.8 hours after
+ * the advert before it). An album with no caption within the window on either
+ * side is an orphan.
  */
 function pairForwardedAlbums(captions = [], media = []) {
+  const ordered = [...captions].sort((a, b) => a.ms - b.ms);
   const albums = [];
+  let captionsBefore = 0;
   for (const item of [...media].sort((a, b) => a.ms - b.ms)) {
+    while (captionsBefore < ordered.length && ordered[captionsBefore].ms < item.ms) captionsBefore += 1;
     const last = albums[albums.length - 1];
-    if (last && item.ms - last.end <= FORWARDED_ALBUM_GAP_MS) {
+    if (last && last.captionsBefore === captionsBefore && item.ms - last.end <= FORWARDED_ALBUM_GAP_MS) {
       last.items.push(item);
       last.end = item.ms;
     } else {
-      albums.push({ start: item.ms, end: item.ms, items: [item] });
+      albums.push({ start: item.ms, end: item.ms, items: [item], captionsBefore });
     }
   }
+  for (const album of albums) {
+    album.before = album.captionsBefore > 0 ? ordered[album.captionsBefore - 1] : null;
+    album.after = album.captionsBefore < ordered.length ? ordered[album.captionsBefore] : null;
+    album.toBefore = album.before ? album.start - album.before.ms : Infinity;
+    album.toAfter = album.after ? album.after.ms - album.end : Infinity;
+  }
+  const cost = (key) => albums.reduce((sum, album) => sum + Math.min(album[key], FORWARDED_ALBUM_CLAIM_MS), 0);
+  // A tie reads as photos first: a forwarded advert usually arrives that way.
+  const textFirst = cost('toBefore') < cost('toAfter');
   const orphans = [];
   for (const album of albums) {
-    let best = null;
-    let bestDistance = Infinity;
-    for (const caption of captions) {
-      const distance = caption.ms <= album.start
-        ? album.start - caption.ms
-        : (caption.ms >= album.end ? caption.ms - album.end : 0);
-      if (distance < bestDistance || (distance === bestDistance && best && caption.ms > best.ms)) {
-        best = caption;
-        bestDistance = distance;
-      }
-    }
-    if (best && bestDistance <= FORWARDED_ALBUM_CLAIM_MS) {
-      for (const item of album.items) {
-        best.media.push(item);
-        if (item.caption && !best.caption.includes(item.caption)) best.caption = `${best.caption}\n${item.caption}`;
-      }
-    } else {
+    const sides = textFirst
+      ? [[album.before, album.toBefore], [album.after, album.toAfter]]
+      : [[album.after, album.toAfter], [album.before, album.toBefore]];
+    const [owner] = sides.find(([caption, distance]) => caption && distance <= FORWARDED_ALBUM_CLAIM_MS) || [null];
+    if (!owner) {
       orphans.push(...album.items);
+      continue;
+    }
+    for (const item of album.items) {
+      owner.media.push(item);
+      if (item.caption && !owner.caption.includes(item.caption)) owner.caption = `${owner.caption}\n${item.caption}`;
     }
   }
   for (const caption of captions) caption.media.sort((a, b) => a.ms - b.ms);
