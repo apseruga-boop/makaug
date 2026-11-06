@@ -93,7 +93,14 @@ test('an Off Plan source broker profile remains usable when the general agent AP
   assert.match(app, /broker\.remote_off_plan_projects = offPlanProjects/);
   assert.match(app, /function brokerOffPlanProjectsHtml\(projects = \[\]\)/);
   assert.match(app, /Projects represented by this broker/);
-  assert.match(app, /brokerDisplayPhone\(b\) \? `<a href="tel:/);
+  // The public payload carries only the broker's profile path, never their
+  // ids, so a project is matched to its broker through that path (John Yan,
+  // Vanta House, 6 Nov 2026: his page read "not on makaug" because the
+  // filter compared ids the payload does not expose).
+  assert.match(app, /\.filter\(\(project\) => offPlanProjectSourcedBy\(project, brokerId\)\)/);
+  assert.match(app, /function offPlanProjectSourcedBy\(project = \{\}, brokerId = ''\)/);
+  assert.match(app, /source_agent_public_path/);
+  assert.match(app, /bio: String\(source\.source_agent_bio \|\| ''\)\.trim\(\) \|\| `Project contact for/);
 });
 
 test('brochure, payment, gallery, map, sharing, video and mortgage handoff are visible', () => {
