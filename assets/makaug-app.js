@@ -530,6 +530,19 @@ function scheduleDetailAgentLookup(agentId) {
   }).catch(() => {});
 }
 
+// The public off-plan payload names the project's broker only by their
+// profile path (/agents/<id>); the ids themselves stay private. A project
+// counts for a broker page when that path, or an id a staff payload may
+// carry, is the broker's.
+function offPlanProjectSourcedBy(project = {}, brokerId = '') {
+  const id = String(brokerId || '').trim();
+  if (!id) return false;
+  let pathId = String(project?.source_agent_public_path || '').split('/').filter(Boolean).pop() || '';
+  try { pathId = decodeURIComponent(pathId); } catch (_error) { /* keep the raw segment */ }
+  return [project?.source_agent_profile_id, project?.source_agent_id, pathId]
+    .some((value) => String(value || '').trim() === id);
+}
+
 async function loadRemoteBrokerProfileForUi(id) {
   const brokerId = String(id || "").trim();
   if (!brokerId) return null;
@@ -537,7 +550,7 @@ async function loadRemoteBrokerProfileForUi(id) {
   const offPlanTimeout = offPlanController ? window.setTimeout(() => offPlanController.abort(), 4500) : null;
   const offPlanProjectsPromise = apiRequest('/api/off-plan?limit=60', { skipAuth: true, signal: offPlanController?.signal })
     .then((response) => (Array.isArray(response?.developments) ? response.developments : [])
-      .filter((project) => String(project?.source_agent_profile_id || project?.source_agent_id || '') === brokerId))
+      .filter((project) => offPlanProjectSourcedBy(project, brokerId)))
     .catch(() => [])
     .finally(() => { if (offPlanTimeout) window.clearTimeout(offPlanTimeout); });
   const controller = typeof AbortController === 'function' ? new AbortController() : null;
@@ -564,7 +577,7 @@ async function loadRemoteBrokerProfileForUi(id) {
       status: source.source_agent_status || 'approved',
       districts_covered: districts,
       specializations: ['Off-plan projects'],
-      bio: `Project contact for ${offPlanProjects.map((project) => project.name).filter(Boolean).join(', ')} on makaug.com. Confirm current availability and project facts before making a commitment.`,
+      bio: String(source.source_agent_bio || '').trim() || `Project contact for ${offPlanProjects.map((project) => project.name).filter(Boolean).join(', ')} on makaug.com. Confirm current availability and project facts before making a commitment.`,
       listings: []
     };
   }
