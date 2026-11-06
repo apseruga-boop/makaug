@@ -10205,7 +10205,11 @@ router.post('/whatsapp/conversations/:phone/import-forwarded-adverts', async (re
         const base = byId.get(spec.caption_message_id);
         if (!base || !base.caption) return null;
         const media = (spec.media_message_ids || []).map((id) => byId.get(id)).filter((m) => m && m.url);
-        return { ...base, media };
+        // What staff would answer if the assistant had asked — "Wakiso" for a
+        // plot whose caption names Lutembe and no district. It goes under the
+        // caption the way an agent's own reply does, so the same reading applies.
+        const answer = cleanText(spec.answer || spec.district || '').slice(0, 120);
+        return { ...base, media, ...(answer ? { answer } : {}) };
       }).filter(Boolean);
     }
     const summary = groups.map((g) => ({
