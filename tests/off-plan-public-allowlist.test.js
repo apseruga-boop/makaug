@@ -106,14 +106,17 @@ test('a makaug-managed development: no staff ids, brochure storage, notes or age
   assert.ok(Object.keys(out).length < 45, `${Object.keys(out).length} keys`);
 });
 
-test('an agent-listed development shows only the agent\'s public name, company, photo and profile link', () => {
+test('an agent-listed development shows only the agent\'s public name, company, photo, bio and profile link', () => {
   const out = publicOffPlanPayload(leakyRow({ extra_fields: { contact_mode: 'agent', country_name: 'Kenya' } }));
   assert.deepEqual(forbiddenKeys(out), []);
   assert.equal(out.source_agent_name, 'Karim');
   assert.equal(out.source_agent_company, 'Karim Realty');
   assert.equal(out.source_agent_profile_photo_url, 'https://media.makaug.com/agents/karim.jpg');
   assert.equal(out.source_agent_public_path, '/agents/agent-1');
-  assert.equal(out.source_agent_bio, undefined);
+  assert.equal(out.source_agent_bio, 'Bio');
+  assert.equal(out.source_agent_phone, undefined);
+  assert.equal(out.source_agent_email, undefined);
+  assert.equal(out.source_agent_whatsapp, undefined);
   const unapproved = publicOffPlanPayload(leakyRow({ source_agent_status: 'pending', extra_fields: { contact_mode: 'agent' } }));
   assert.equal(unapproved.source_agent_name, undefined);
 });

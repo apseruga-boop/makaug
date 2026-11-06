@@ -881,7 +881,12 @@
     const sourceId = clean(project.source_agent_public_path || project.source_agent_profile_id || project.source_agent_id);
     if (!sourceId) return '';
     const photo = projectAgentPhoto(project);
-    const bio = offPlanLanguage() === 'en' ? clean(project.source_agent_bio || offPlanText('sourceAgentBio')) : offPlanText('sourceAgentBio');
+    // The translated stock bio describes Kazi Honest; every other agent shows
+    // the bio from their own profile, or nothing.
+    const stockBio = clean(project.source_agent_name).toLowerCase() === 'kazi honest';
+    const bio = stockBio
+      ? (offPlanLanguage() === 'en' ? clean(project.source_agent_bio || offPlanText('sourceAgentBio')) : offPlanText('sourceAgentBio'))
+      : clean(project.source_agent_bio);
     const phone = clean(project.source_agent_whatsapp || project.source_agent_phone);
     const phoneHref = phone.replace(/[^+\d]/g, '');
     return `<section class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('projectContact'))}</p><div class="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div class="flex items-center gap-4">${photo ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(sourceName)}" class="h-20 w-20 rounded-full object-cover border-4 border-green-50">` : `<span class="h-20 w-20 rounded-full bg-green-50 text-green-800 grid place-items-center text-2xl"><i class="fas fa-user"></i></span>`}<div><strong class="block text-lg text-gray-950">${escapeHtml(sourceName)}</strong>${project.source_agent_company ? `<span class="block text-sm text-gray-500">${escapeHtml(project.source_agent_company)}</span>` : ''}<span class="block text-sm text-gray-500">${escapeHtml(offPlanText('linkedProfile'))}</span>${phone ? `<a class="mt-2 inline-flex items-center gap-2 text-sm font-black text-green-800" href="tel:${escapeHtml(phoneHref)}"><i class="fas fa-phone" aria-hidden="true"></i>${escapeHtml(offPlanExperienceText('phoneLabel'))}: ${escapeHtml(phone)}</a>` : ''}</div></div><a href="${escapeHtml(agentProfileHref(sourceId))}" class="rounded-xl bg-green-50 text-green-800 px-4 py-2.5 text-sm font-black text-center">${escapeHtml(offPlanText('viewProfile'))}</a></div>${bio ? `<p class="mt-4 text-sm leading-6 text-gray-600">${escapeHtml(bio)}</p>` : ''}</section>`;
@@ -987,10 +992,12 @@
     if (!walkthroughs.length && !tours.length) return '';
     const cards = walkthroughs.map((item) => {
       const unit = unitForKey(project, item.unit_key);
-      const label = clean(item.label) || localizedUnitLabel(unit) || clean(item.unit_key);
+      const label = offPlanLanguage() === 'en'
+        ? (clean(item.label) || localizedUnitLabel(unit) || clean(item.unit_key))
+        : (localizedUnitLabel(unit) || clean(item.label) || clean(item.unit_key));
       const tour = tours.find((entry) => clean(entry.unit_key) === clean(item.unit_key) && /^https:\/\//i.test(clean(entry.url)));
       const plan = (project.floor_plans || []).find((entry) => clean(entry.unit_key) === clean(item.unit_key));
-      const size = number(unit.size_sqm) != null ? ` · ${number(unit.size_sqm)} m²` : '';
+      const size = number(unit.size_sqm) != null && !/\d\s*(m²|m2|sqm)/i.test(label) ? ` · ${number(unit.size_sqm)} m²` : '';
       const video = clean(item.video_url)
         ? `<div class="off-plan-walk-video"><video controls preload="metadata" playsinline ${clean(item.poster_url) ? `poster="${escapeHtml(item.poster_url)}"` : ''} src="${escapeHtml(item.video_url)}"></video></div>`
         : (clean(item.poster_url) ? `<div class="off-plan-walk-video"><img src="${escapeHtml(item.poster_url)}" alt="${escapeHtml(label)}" loading="lazy"></div>` : '');
