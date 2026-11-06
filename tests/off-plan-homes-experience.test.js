@@ -72,3 +72,15 @@ test('the Vanta House record satisfies the sourced-preview checks and points at 
   const missing = urls.filter((url) => !fs.existsSync(path.join(__dirname, '..', url.replace(/^\//, ''))));
   assert.deepStrictEqual(missing, []);
 });
+
+test('the project contact shows the agent\'s own bio; the stock Kazi Honest bio is hers alone', () => {
+  const card = page.slice(page.indexOf('function agentCardMarkup(project)'), page.indexOf('function calculatorMarkup('));
+  assert.match(card, /const stockBio = clean\(project\.source_agent_name\)\.toLowerCase\(\) === 'kazi honest';/);
+  assert.match(card, /: clean\(project\.source_agent_bio\);/, 'other agents fall back to nothing, never to the stock bio');
+  const out = publicOffPlanPayload({ ...vanta, source_agent_status: 'approved', source_agent_name: 'John Yan', source_agent_bio: 'Founder & CEO', source_agent_phone: '+256709973205', source_agent_email: 'x@example.com' });
+  assert.equal(out.source_agent_bio, 'Founder & CEO');
+  assert.equal(out.source_agent_phone, undefined);
+  assert.equal(out.source_agent_email, undefined);
+  const walk = page.slice(page.indexOf('function homesWalkthroughMarkup(project)'), page.indexOf('function constructionDiaryMarkup('));
+  assert.match(walk, /!\/\\d\\s\*\(m²\|m2\|sqm\)\/i\.test\(label\)/, 'the size is not repeated when the label already carries it');
+});

@@ -63,14 +63,16 @@ function publicOffPlanPayload(development) {
     if (/^price_fx_/.test(key)) out.extra_fields[key] = scrubNested(value);
   }
   // The project contact. A makaug-managed project shows only makaug. Otherwise
-  // the approved agent's public name, company and photo, and a link to their
-  // public profile; never their phone, email, WhatsApp or ids.
+  // the approved agent's public name, company, photo and bio (all of which
+  // their public profile page shows), and a link to that profile; never
+  // their phone, email, WhatsApp or ids.
   const managed = extra.contact_mode === 'makaug_managed';
   const approvedAgent = String(development.source_agent_status || '').toLowerCase() === 'approved';
   if (!managed && approvedAgent && development.source_agent_name) {
     out.source_agent_name = development.source_agent_name;
     if (development.source_agent_company) out.source_agent_company = development.source_agent_company;
     if (development.source_agent_profile_photo_url) out.source_agent_profile_photo_url = development.source_agent_profile_photo_url;
+    if (development.source_agent_bio) out.source_agent_bio = String(development.source_agent_bio).slice(0, 1000);
     const agentId = development.source_agent_profile_id || development.source_agent_id;
     if (agentId) out.source_agent_public_path = `/agents/${encodeURIComponent(String(agentId))}`;
   }
