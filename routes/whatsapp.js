@@ -21338,16 +21338,19 @@ async function groupForwardedAdverts(phone, { since = null, until = null } = {})
 /** Save one grouped advert for staff review under an approved agent. Nothing is sent. */
 async function importForwardedAdvert({ phone, agent, group, inboundMessageId }) {
   const sessionData = agentSelfIntakeSessionData(agent);
-  const facts = employeePropertyFacts(group.caption, sessionData);
+  // Staff's answer to the question the caption leaves open (usually the
+  // district), appended as an agent's reply would be.
+  const caption = group.answer ? `${group.caption}\n${group.answer}` : group.caption;
+  const facts = employeePropertyFacts(caption, sessionData);
   const missing = employeePropertyMissing(facts);
   if (missing.length) return { skipped: 'missing', missing };
-  const duplicate = await findEmployeeDuplicateProperty({ caption: group.caption, facts, sessionData });
+  const duplicate = await findEmployeeDuplicateProperty({ caption, facts, sessionData });
   if (duplicate) return { skipped: 'duplicate', duplicate_id: duplicate.id };
   const candidates = employeeMediaCandidates({ mediaCandidates: group.media.map((m) => ({ url: m.url, mime_type: m.mimeType })), mediaType: 'image/jpeg' }, '');
   const storedMedia = candidates.length
     ? await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: 'web_bridge' })
     : [];
-  const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption: group.caption, facts, storedMedia, sessionData });
+  const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption, facts, storedMedia, sessionData });
   return { property_id: propertyId, media_stored: storedMedia.length, listing_type: facts.listingType, price: facts.price, area: facts.locationPatch?.area, district: facts.locationPatch?.district };
 }
 

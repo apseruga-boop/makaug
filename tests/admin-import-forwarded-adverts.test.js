@@ -34,3 +34,23 @@ test('a logged media kind ("image") becomes a real MIME type before intake', () 
   assert.strictEqual(forwardedAdvertMimeType({ mediaType: 'image/png' }, url), 'image/png');
   assert.strictEqual(forwardedAdvertMimeType({}, 'https://x/y.jpg'), 'image/jpeg');
 });
+
+test('staff can answer the question a caption leaves open, the way the agent would have', () => {
+  // 6 Nov 2026: two of the fourteen 26 Oct adverts named Lutembe and Janyi
+  // with no district, so the import skipped them as "which district Lutembe is
+  // in". The groups override now carries staff's answer, appended under the
+  // caption exactly as an agent's reply is, so the same reading applies.
+  const route = admin.slice(admin.indexOf("router.post('/whatsapp/conversations/:phone/import-forwarded-adverts'"));
+  const block = route.slice(0, route.indexOf("router.post('/agents/:id/restore'"));
+  assert(/spec\.answer \|\| spec\.district/.test(block), 'the override takes an answer');
+  const importer = wa.slice(wa.indexOf('async function importForwardedAdvert'), wa.indexOf('module.exports.groupForwardedAdverts'));
+  assert(/group\.answer \? `\$\{group\.caption\}\\n\$\{group\.answer\}` : group\.caption/.test(importer));
+  assert(/employeePropertyFacts\(caption, sessionData\)/.test(importer) && /createEmployeeReviewProperty\(\{ phone, inboundMessageId, caption, facts/.test(importer));
+  const { employeePropertyFacts, employeePropertyMissing } = require('../routes/whatsapp').__test;
+  const lutembe = 'Plots for sale located at lutembe next to ebony shores with clear lake view all plots are 23decimals at 220m';
+  assert.deepStrictEqual(employeePropertyMissing(employeePropertyFacts(lutembe, {})), ['which district Lutembe is in']);
+  const answered = employeePropertyFacts(`${lutembe}\nWakiso`, {});
+  assert.deepStrictEqual(employeePropertyMissing(answered), []);
+  assert.strictEqual(answered.locationPatch.area, 'Lutembe');
+  assert.strictEqual(answered.locationPatch.district, 'Wakiso');
+});
