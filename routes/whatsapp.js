@@ -131,6 +131,7 @@ const {
   parsePayLinkChoice,
   looksLikePropertyCaption,
   withEnglishPropertyTerms,
+  foldAdvertText,
   isEmployeeIntakeCancel,
   isEmployeeIntakeComplete,
   isEmployeeIntakeStep,
@@ -5152,7 +5153,7 @@ function perUnitPriceFacts(caption = '', unitPrice = 0) {
  */
 const EXPLICIT_DISTRICT = /\b([A-Za-z][A-Za-z'’\- ]{2,30}?)\s+district\b/gi;
 
-function explicitDistrictInCaption(caption = '') {
+function explicitDistrictInCaption(caption = '', { area = '' } = {}) {
   const text = normalizeInput(caption);
   EXPLICIT_DISTRICT.lastIndex = 0;
   let m;
@@ -5161,6 +5162,21 @@ function explicitDistrictInCaption(caption = '') {
     const words = String(m[1]).trim().split(/\s+/);
     const candidate = words[words.length - 1];
     if (!candidate || candidate.length < 3) continue;
+    const resolved = resolveWhatsappLocation(candidate, { allowText: true });
+    if (resolved?.status === 'matched' && resolved.match?.level === 'district') return resolved;
+  }
+  // "LOCATED AT MUKONO NSAMBWE ESTATE" (26 Oct 2026) went in as Gomba: the
+  // registry has a Nsambwe there, and nobody wrote the word "district". A
+  // district named right beside the area — "Mukono Nsambwe", "Nsambwe,
+  // Mukono" — is the agent saying which one, just as surely.
+  const areaName = normalizeInput(area);
+  if (!areaName) return null;
+  const escaped = areaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const beside = new RegExp(`(?:\\b([A-Za-z][A-Za-z'’\\-]{2,})\\s*[,\\-–]?\\s+)?\\b${escaped}\\b(?:\\s*[,\\-–]?\\s+([A-Za-z][A-Za-z'’\\-]{2,}))?`, 'i');
+  const near = text.match(beside);
+  if (!near) return null;
+  for (const candidate of [near[1], near[2]]) {
+    if (!candidate || candidate.length < 4 || /^(?:road|rd|estate|estates|district|near|along|off|opp|opposite|plot|plots|land|house|the|and|with|viewing|view|hill|town|city|trading|centre|center)$/i.test(candidate)) continue;
     const resolved = resolveWhatsappLocation(candidate, { allowText: true });
     if (resolved?.status === 'matched' && resolved.match?.level === 'district') return resolved;
   }
@@ -5181,7 +5197,14 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   // Seeta rentals, 26 Oct 2026), so income phrases are set aside before the
   // price scan — but only when another figure is left to read. An income with
   // no asking price beside it is still the only number the agent gave.
-  const withoutIncome = cleanCaption.replace(/\b(?:monthly|total|net|gross|rental)?\s*(?:income|revenue|earnings?|earning|making|collects?|collecting|returns?)\s*(?:of|is|at|:)?\s*\(?\s*(?:ugx|ush|shs?)?\s*#?\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?\s*(?:ugx|ush|shs?|per month|monthly|\/month|a month)?\s*\)?/gi, ' ');
+  const withoutIncomeOnly = cleanCaption.replace(/\b(?:monthly|total|net|gross|rental)?\s*(?:income|revenue|earnings?|earning|making|collects?|collecting|returns?)\s*(?:of|is|at|:)?\s*\(?\s*(?:ugx|ush|shs?)?\s*#?\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?\s*(?:ugx|ush|shs?|per month|monthly|\/month|a month)?\s*\)?/gi, ' ');
+  // "price reduced from 350m now selling 200m" (Bunamwaya, 26 Oct 2026) was
+  // priced at 350M: the parser took the first figure. A price the caption
+  // says was reduced from / down from / was X, with a "now" or "to" price
+  // after it, is history and leaves the scan.
+  const withoutIncome = withoutIncomeOnly
+    .replace(/\b(?:reduced|down|dropped|cut|slashed|lowered)\s+(?:from|by)\s+(?:ugx|ush|shs?)?\s*#?\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?\b(?:\s*(?:ugx|ush|shs?))?(?=[\s\S]*\b(?:now|to|at)\b)/gi, ' ')
+    .replace(/\b(?:was|were|previously|initially|formerly)\s+(?:ugx|ush|shs?)?\s*#?\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)\b(?=[\s\S]*\b(?:now|to)\b)/gi, ' ');
   const stillHasMoneyFigure = /(?:ugx|ush|shs?|usd|\$)\s*\d|\d[\d,.]*\s*(?:m|k|bn|mn|million|billion|ugx|ush|shs?|usd)\b/i.test(withoutIncome);
   const priceScanCaption = normalizeCaptionPriceNotation(stillHasMoneyFigure ? withoutIncome : cleanCaption);
   // listingPriceSourceFragment happily returns the first number after a cue word, so
@@ -5583,7 +5606,7 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   // under Nakaseke, so two listings the agent had twice labelled Luweero went in
   // as Nakaseke. The area they named is kept — only the district is corrected,
   // and the canonical id goes with it, because it no longer describes this place.
-  const statedDistrict = explicitDistrictInCaption(locationCaption);
+  const statedDistrict = explicitDistrictInCaption(locationCaption, { area: locationPatch.area || locationResolution?.match?.area || '' });
   if (statedDistrict?.match) {
     const named = normalizeInput(statedDistrict.match.district || statedDistrict.match.area || '');
     const inferred = normalizeInput(locationPatch.district || locationResolution?.match?.district || '');
@@ -8746,6 +8769,237 @@ function employeeClosedBatchGraceMs() {
 // twenty-five replies; after the first, the rest are taken quietly.
 const employeeClosedBatchWarned = new Map();
 
+// ---------------------------------------------------------------------------
+// A number nobody knows, forwarding adverts.
+//
+// 26 Oct 2026, 09:31–19:24: "brandpro properties" (+256 773 216580), a broker
+// not yet on makaug, forwarded fourteen adverts to the public number — each a
+// caption and an album of photos, about 180 photos in all. The consumer
+// assistant answered every caption with a property search, a land-safety note
+// or "I can help with that", fifteen times over, and he wrote back "All this
+// messages is for wat" and "Yr sending 1 property 20times". Nothing was saved.
+// Ten days later staff re-keyed three of them by hand.
+//
+// Now the first advert gets one question — list it, or looking to buy? — and
+// the photos in between are taken quietly. "1" opens a pending agent profile
+// for the sender (approval stays a staff call), imports everything forwarded
+// so far, and hands the chat to the agent's own posting session, so the rest
+// of the batch is handled the way any agent's is. The team hears about it.
+// ---------------------------------------------------------------------------
+const FORWARDED_ADVERT_PROMPT_EVERY_MS = 15 * 60 * 1000;
+const FORWARDED_ADVERT_DECLINE_FOR_MS = 24 * 60 * 60 * 1000;
+const FORWARDED_ADVERT_YES = /^(?:1|list(?: it| them)?|yes|yeah|yep|ok(?:ay)?|ye|yee|wangi|ndio|sawa|list my propert(?:y|ies))[\s.!]*$/i;
+const FORWARDED_ADVERT_NO = /^(?:2|no|nope|nedda|hapana|search|buy|rent|looking)[\s.!]*$/i;
+const FORWARDED_ADVERT_FREE_STEPS = new Set(['', 'greeting', 'main_menu', 'search_type', 'search_area', 'choose_language', 'agent_area']);
+
+function forwardedAdvertSummary(facts = {}) {
+  const type = { land: 'Land', sale: 'For sale', rent: 'For rent', commercial: 'Commercial', student: 'Student housing' }[facts.listingType] || 'Property';
+  const place = [facts.locationPatch?.area, facts.locationPatch?.district].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ');
+  const beds = Number(facts.bedroomDraft?.bedrooms) > 0 ? `${facts.bedroomDraft.bedrooms}-bed` : '';
+  const price = Number(facts.price) > 0 ? formatPrice(facts.price, facts.pricePeriod) : '';
+  return [type, beds, place, price].filter(Boolean).join(' · ');
+}
+
+function forwardedAdvertPrompt(lang, summary) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: `📥 That looks like a property you are selling: *${summary}*.\n\nReply *1* to list it on makaug — it goes to our team for review and we message you when it is live. Reply *2* if you are looking to buy or rent instead.\n\nYou can keep sending the photos.`,
+    lg: `📥 Kino kirabika ng'ekintu ky'otunda: *${summary}*.\n\nDdamu *1* okukiteeka ku makaug — kigenda eri ttiimu yaffe okukebera, era tukutegeeza nga kiri ku mukutu. Ddamu *2* bw'oba onoonya okugula oba okupangisa.\n\nOsobola okweyongera okusindika ebifaananyi.`,
+    sw: `📥 Hii inaonekana kama mali unayouza: *${summary}*.\n\nJibu *1* kuiweka kwenye makaug — inaenda kwa timu yetu kukaguliwa na tutakujulisha ikiwa hewani. Jibu *2* kama unatafuta kununua au kupanga.\n\nUnaweza kuendelea kutuma picha.`
+  };
+  return messages[code] || messages.en;
+}
+
+function forwardedAdvertNamePrompt(lang) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: 'Good. What name should go on your listings — yours, or your company\'s?',
+    lg: 'Kirungi. Linnya ki erinaateekebwa ku listings zo — eryo oba erya kkampuni yo?',
+    sw: 'Vizuri. Jina gani liwekwe kwenye matangazo yako — lako, au la kampuni yako?'
+  };
+  return messages[code] || messages.en;
+}
+
+function forwardedAdvertSavedReply(lang, { name = '', saved = [], skipped = 0 } = {}) {
+  const code = resolveLangCode(lang);
+  const lines = saved.map((item, index) => `${index + 1}. ${item}`);
+  const n = saved.length;
+  const messages = {
+    en: [
+      n ? `✅ Saved ${n} ${n === 1 ? 'property' : 'properties'} for our team to review:` : '✅ Noted. Nothing of yours is saved yet — send each property as photos plus a caption with the location and the price.',
+      ...lines,
+      skipped ? `(${skipped} could not be read — a caption with the location and price is what makes a property.)` : '',
+      '',
+      `You now have a makaug agent profile under *${name}* — our team approves it alongside your properties. Send any other property here the same way: photos, then a caption with what it is, where, and the price. We message you the moment each one is live.`
+    ].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n'),
+    lg: [
+      n ? `✅ Nkuumye ${n} ${n === 1 ? 'property' : 'properties'} eri ttiimu yaffe okukebera:` : '✅ Nkiwulidde. Tewannabaawo kintu kyo kikuumiddwa — sindika buli property ng\'ebifaananyi n\'obubaka obulaga awali n\'omuwendo.',
+      ...lines,
+      '',
+      `Kati olina agent profile ku makaug mu linnya *${name}* — ttiimu yaffe egikakasa wamu n'ebintu byo. Sindika ekintu ekirala kyonna wano mu ngeri y'emu: ebifaananyi, olwo obubaka obulaga kye kiri, awali, n'omuwendo. Tukutegeeza nga buli kimu kiri ku mukutu.`
+    ].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n'),
+    sw: [
+      n ? `✅ Nimehifadhi mali ${n} kwa timu yetu kukagua:` : '✅ Nimeelewa. Bado hakuna mali yako iliyohifadhiwa — tuma kila mali kama picha pamoja na maelezo ya mahali na bei.',
+      ...lines,
+      '',
+      `Sasa una wasifu wa wakala kwenye makaug kwa jina *${name}* — timu yetu inauidhinisha pamoja na mali zako. Tuma mali nyingine yoyote hapa vivyo hivyo: picha, kisha maelezo ya ni nini, wapi, na bei. Tutakujulisha kila moja ikiwa hewani.`
+    ].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n')
+  };
+  return messages[code] || messages.en;
+}
+
+/** An agent row for this number in any state — pending profiles count here. */
+async function findAgentByPhoneAnyStatus(phone) {
+  const key = agentPhoneKey(phone);
+  if (!key || key.length < 9) return null;
+  try {
+    const result = await db.query(
+      `SELECT * FROM agents
+        WHERE removed_at IS NULL
+          AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
+            OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1)
+        ORDER BY (status = 'approved') DESC, updated_at DESC
+        LIMIT 1`,
+      [key]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    logger.warn('Agent lookup (any status) failed', { error: error.message || String(error) });
+    return null;
+  }
+}
+
+/** A pending agent profile for a broker who forwarded adverts. Approval is a staff call. */
+async function openPendingAgentForForwarder({ phone, fullName }) {
+  const digits = String(phone || '').replace(/\D+/g, '');
+  const licenceNumber = `WA-FORWARD-${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
+  const inserted = await db.query(
+    `INSERT INTO agents (
+       full_name, company_name, licence_number, registration_status, listing_limit,
+       phone, whatsapp, districts_covered, specializations,
+       privacy_consent_accepted, data_retention_notice_accepted, status,
+       agent_application_channel, verification_reason
+     ) VALUES (
+       $1, $2, $3, 'not_registered', 2147483647, $4, $4, '{}'::text[], '{}'::text[],
+       FALSE, FALSE, 'pending', 'whatsapp_forwarded_adverts', $5
+     ) RETURNING *`,
+    [
+      fullName,
+      fullName,
+      licenceNumber,
+      `+${digits}`,
+      '[WHATSAPP_FORWARDED_ADVERTS] Opened by the assistant when this number forwarded property adverts and said they were selling. Identity and permission to publish still need verification before approval.'
+    ]
+  );
+  return inserted.rows[0];
+}
+
+async function handleUnknownForwardedAdvert({ phone = '', session = {}, cleanBody = '', mediaUrl = '', runtime = {}, currentStep = '' } = {}) {
+  if (!FORWARDED_ADVERT_FREE_STEPS.has(String(currentStep || '').trim().toLowerCase())) return null;
+  if (isAiCeoOwnerPhone(phone) || isStaffIntakeNumber({ phone, session })) return null;
+  const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  const state = data.forwarded_adverts && typeof data.forwarded_adverts === 'object' ? data.forwarded_adverts : null;
+  const lang = resolveLangCode(session.language || runtime.language || 'en');
+  const now = Date.now();
+  const text = normalizeInput(cleanBody);
+  const forwarded = looksLikeForwardedProperty({ cleanBody, mediaUrl, runtime });
+  const facts = text && !mediaUrl ? employeePropertyFacts(text, {}) : null;
+  const isCaption = Boolean(facts && facts.listingType && Number(facts.price) > 0);
+
+  const confirm = async (fullName) => {
+    let agent = await findAgentByPhoneAnyStatus(phone);
+    if (!agent) agent = await openPendingAgentForForwarder({ phone, fullName });
+    const since = state?.since || null;
+    const grouped = await groupForwardedAdverts(phone, { since });
+    const saved = [];
+    let skipped = 0;
+    const propertyIds = [];
+    for (const group of grouped.groups) {
+      try {
+        const result = await importForwardedAdvert({ phone, agent, group, inboundMessageId: `${group.caption_message_id}:forward-import` });
+        if (result?.property_id) {
+          propertyIds.push(result.property_id);
+          saved.push(forwardedAdvertSummary(group.facts));
+        } else if (result?.skipped === 'missing') {
+          skipped += 1;
+        }
+      } catch (error) {
+        skipped += 1;
+        logger.warn('Forwarded advert import failed', { phone_suffix: employeeIntakePhoneSuffix(phone), error: error.message || String(error) });
+      }
+    }
+    // From here the chat is the agent's own posting session: the rest of the
+    // batch, corrections and the "saved" replies are handled like any agent's.
+    await replaceEmployeeSession(phone, 'employee_property_media', {
+      ...agentSelfIntakeSessionData(agent),
+      identity_followup_required: true,
+      agent_profile_pending: agent.status !== 'approved',
+      property_ids: propertyIds,
+      properties_shared_count: propertyIds.length,
+      forwarded_adverts: { ...(state || {}), confirmed_at: new Date().toISOString(), agent_id: agent.id, imported: propertyIds.length }
+    });
+    deferWhatsappWork('new broker alert', () => require('../services/leadDeskService').holdOrSendToTeam(db, {
+      conversationPhone: phone,
+      type: 'forwarded_adverts_new_broker',
+      kind: 'needs_person',
+      body: [
+        `📥 *New broker on WhatsApp: ${agent.full_name}* · +${String(phone).replace(/\D+/g, '')}`,
+        `${propertyIds.length} ${propertyIds.length === 1 ? 'property' : 'properties'} forwarded and saved for review${skipped ? `, ${skipped} could not be read` : ''}.`,
+        agent.status === 'approved' ? 'Agent profile: approved.' : 'Agent profile: *pending* — approve it with the listings, and chase the ID.',
+        `${HOME_URL}/admin (Listings › pending · Agents)`
+      ].join('\n')
+    }));
+    return { handled: true, nextStep: 'employee_property_media', message: forwardedAdvertSavedReply(lang, { name: agent.full_name, saved, skipped }) };
+  };
+
+  // "1" / "2" only mean anything after the question has actually been asked.
+  if (state && !state.confirmed_at && state.prompted_at) {
+    if (state.awaiting_name && text && !forwarded && !FORWARDED_ADVERT_NO.test(text)) {
+      const fullName = text.replace(/\s+/g, ' ').slice(0, 120);
+      return confirm(fullName);
+    }
+    if (FORWARDED_ADVERT_YES.test(text)) {
+      const pushName = normalizeInput(runtime.contactName || '');
+      if (pushName.length >= 3) return confirm(pushName.slice(0, 120));
+      await patchSessionData(phone, { forwarded_adverts: { ...state, awaiting_name: true } });
+      return { handled: true, nextStep: currentStep, message: forwardedAdvertNamePrompt(lang) };
+    }
+    if (FORWARDED_ADVERT_NO.test(text)) {
+      await patchSessionData(phone, { forwarded_adverts: { ...state, declined_at: new Date().toISOString(), awaiting_name: false } });
+      return null;
+    }
+  }
+  if (state?.declined_at && now - new Date(state.declined_at).getTime() < FORWARDED_ADVERT_DECLINE_FOR_MS) return null;
+  if (!forwarded) return null;
+
+  if (isCaption) {
+    const next = {
+      // Albums often arrive before their caption: look back for them.
+      since: state?.since || new Date(now - 10 * 60 * 1000).toISOString(),
+      captions: Number(state?.captions || 0) + 1,
+      media: Number(state?.media || 0),
+      prompted_at: state?.prompted_at || null,
+      awaiting_name: false
+    };
+    const due = !next.prompted_at || now - new Date(next.prompted_at).getTime() > FORWARDED_ADVERT_PROMPT_EVERY_MS;
+    if (due) next.prompted_at = new Date(now).toISOString();
+    await patchSessionData(phone, { forwarded_adverts: next });
+    return { handled: true, nextStep: currentStep, message: due ? forwardedAdvertPrompt(lang, forwardedAdvertSummary(facts)) : '' };
+  }
+  if (mediaUrl && state && !state.declined_at) {
+    // Photos of the adverts, while the question is open: taken quietly.
+    await patchSessionData(phone, { forwarded_adverts: { ...state, media: Number(state.media || 0) + 1 } });
+    return { handled: true, nextStep: currentStep, message: '' };
+  }
+  if (mediaUrl && !state) {
+    // The first photo of a burst gets the ordinary reply, once; the rest of
+    // the album is taken quietly until a caption says what it is.
+    await patchSessionData(phone, { forwarded_adverts: { since: new Date(now - 60 * 1000).toISOString(), captions: 0, media: 1, prompted_at: null, awaiting_name: false } });
+    return null;
+  }
+  return null;
+}
+
 /** Does this message look like a property being forwarded, rather than a chat? */
 function looksLikeForwardedProperty({ cleanBody = '', mediaUrl = '', runtime = {} } = {}) {
   if (mediaUrl || Number(runtime.mediaCount || 0) > 0) return true;
@@ -9398,6 +9652,9 @@ async function handleEmployeeWhatsappIntake({
       if (closedBatchReply !== null) {
         return { handled: true, nextStep: currentStep, message: closedBatchReply };
       }
+      // Not staff, not an agent — but forwarding adverts all the same.
+      const forwardedByStranger = await handleUnknownForwardedAdvert({ phone, session, cleanBody, mediaUrl, runtime, currentStep });
+      if (forwardedByStranger) return forwardedByStranger;
       return { handled: false };
     }
   }
@@ -19181,6 +19438,8 @@ async function processInboundRuntimeUnlocked({
     || inboundMetadata.displayName
     || inboundMetadata.profile_name
     || inboundMetadata.chat_title
+    // WAHA's push name, when the notify name is empty ("brandpro properties").
+    || inboundMetadata.push_name
   );
 
   if (contactName) {
@@ -19342,7 +19601,8 @@ async function processInboundRuntimeUnlocked({
       photoCandidates: inboundPhotoCandidates,
       mediaCandidates: inboundMediaCandidates,
       sharedLocation,
-      senderMs: employeeSenderMs(inboundMetadata)
+      senderMs: employeeSenderMs(inboundMetadata),
+      contactName
     },
     inboundMessageId,
     session: sessionForMessage
@@ -20972,6 +21232,60 @@ function forwardedAdvertMimeType(payload = {}, mediaUrl = '') {
   return 'image/jpeg';
 }
 
+// Photos closer together than this are one album; an album further than
+// FORWARDED_ALBUM_CLAIM_MS from every caption belongs to none of them.
+const FORWARDED_ALBUM_GAP_MS = 90 * 1000;
+const FORWARDED_ALBUM_CLAIM_MS = 15 * 60 * 1000;
+
+/**
+ * Albums go to the nearest caption, not to the one before them.
+ *
+ * The first version gave every photo to the caption that preceded it. The
+ * same broker's 26 Oct chat has both orders — "album, then the text" (the
+ * Sekiwunga plot) and "text, then the album" (the Kitende house) — so six
+ * plots' photos went to the advert before them, and when a caption was
+ * missed altogether its album was glued to the previous property. Now photos
+ * are first grouped into albums by time, and each album goes to the caption
+ * closest to it in time; when a caption sits exactly as far from two albums,
+ * the one after it wins, since a forward usually arrives photos first.
+ */
+function pairForwardedAlbums(captions = [], media = []) {
+  const albums = [];
+  for (const item of [...media].sort((a, b) => a.ms - b.ms)) {
+    const last = albums[albums.length - 1];
+    if (last && item.ms - last.end <= FORWARDED_ALBUM_GAP_MS) {
+      last.items.push(item);
+      last.end = item.ms;
+    } else {
+      albums.push({ start: item.ms, end: item.ms, items: [item] });
+    }
+  }
+  const orphans = [];
+  for (const album of albums) {
+    let best = null;
+    let bestDistance = Infinity;
+    for (const caption of captions) {
+      const distance = caption.ms <= album.start
+        ? album.start - caption.ms
+        : (caption.ms >= album.end ? caption.ms - album.end : 0);
+      if (distance < bestDistance || (distance === bestDistance && best && caption.ms > best.ms)) {
+        best = caption;
+        bestDistance = distance;
+      }
+    }
+    if (best && bestDistance <= FORWARDED_ALBUM_CLAIM_MS) {
+      for (const item of album.items) {
+        best.media.push(item);
+        if (item.caption && !best.caption.includes(item.caption)) best.caption = `${best.caption}\n${item.caption}`;
+      }
+    } else {
+      orphans.push(...album.items);
+    }
+  }
+  for (const caption of captions) caption.media.sort((a, b) => a.ms - b.ms);
+  return orphans;
+}
+
 async function groupForwardedAdverts(phone, { since = null, until = null } = {}) {
   const rows = (await db.query(
     `SELECT id, wa_message_id, created_at, message_type, payload
@@ -20983,30 +21297,29 @@ async function groupForwardedAdverts(phone, { since = null, until = null } = {})
       LIMIT 600`,
     [phone, since, until]
   )).rows;
-  const groups = [];
-  let orphans = [];
-  let current = null;
+  const captions = [];
+  const media = [];
   for (const row of rows) {
     const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
-    const body = normalizeInput(payload.body || payload.effectiveBody || '');
+    const body = normalizeInput(foldAdvertText(payload.body || payload.effectiveBody || ''));
     const mediaUrl = normalizeInput(payload.mediaUrl || payload.media_url || '');
     const mediaType = forwardedAdvertMimeType(payload, mediaUrl);
     const isMedia = /^https:\/\//i.test(mediaUrl);
+    const ms = new Date(row.created_at).getTime();
     if (body && !isMedia) {
       const facts = employeePropertyFacts(body, {});
       const isAdvert = Boolean(facts.listingType && Number(facts.price) > 0) || isReviewableOwnerForwardCaption(body);
       if (!isAdvert) continue;
-      current = { caption: body, caption_message_id: row.wa_message_id, caption_at: row.created_at, facts, missing: employeePropertyMissing(facts), media: orphans.splice(0) };
-      groups.push(current);
+      captions.push({ caption: body, caption_message_id: row.wa_message_id, caption_at: row.created_at, ms, facts, missing: employeePropertyMissing(facts), media: [] });
       continue;
     }
     if (isMedia) {
-      const item = { message_id: row.wa_message_id, at: row.created_at, url: mediaUrl, mimeType: mediaType || 'image/jpeg' };
-      if (body && current) current.caption = `${current.caption}\n${body}`;
-      if (current) current.media.push(item); else orphans.push(item);
+      media.push({ message_id: row.wa_message_id, at: row.created_at, ms, url: mediaUrl, mimeType: mediaType || 'image/jpeg', caption: body });
     }
   }
-  return { groups, orphans };
+  const orphans = pairForwardedAlbums(captions, media);
+  const groups = captions.map(({ ms, ...group }) => ({ ...group, media: group.media.map(({ ms: _ignored, caption: _c, ...item }) => item) }));
+  return { groups, orphans: orphans.map(({ ms: _ignored, caption: _c, ...item }) => item) };
 }
 
 /** Save one grouped advert for staff review under an approved agent. Nothing is sent. */
@@ -21026,6 +21339,7 @@ async function importForwardedAdvert({ phone, agent, group, inboundMessageId }) 
 }
 
 module.exports.groupForwardedAdverts = groupForwardedAdverts;
+module.exports.pairForwardedAlbums = pairForwardedAlbums;
 module.exports.forwardedAdvertMimeType = forwardedAdvertMimeType;
 module.exports.importForwardedAdvert = importForwardedAdvert;
 
@@ -21060,6 +21374,12 @@ module.exports.__test = {
   markListingSoldFromWhatsapp,
   soldAnnouncementAppliesTo,
   sendAgentPropertySubmittedAlert,
+  handleUnknownForwardedAdvert,
+  forwardedAdvertSummary,
+  forwardedAdvertPrompt,
+  findAgentByPhoneAnyStatus,
+  groupForwardedAdverts,
+  pairForwardedAlbums,
   messageOutsideTheAssistant,
   personWillReplyMessage,
   alertTeamMissedCall,

@@ -157,8 +157,32 @@ function localNumber(token = '') {
   return Number.isFinite(n) ? n : null;
 }
 
-function withEnglishPropertyTerms(value = '') {
+/**
+ * Advert text as a parser can read it.
+ *
+ * Brokers decorate adverts with WhatsApp's "fancy" letters — 𝗤𝗨𝗜𝗖𝗞 𝗦𝗔𝗟𝗘,
+ * 𝟮𝟱 𝗗𝗘𝗖𝗜𝗠𝗔𝗟𝗦 — which are Mathematical Alphanumeric Symbols, not letters
+ * and digits, so "𝟮𝟱" is not 25 to a regex. On 26 Oct 2026 two of fourteen
+ * forwarded adverts were lost that way, and their photos were glued to the
+ * advert before them. NFKC folds those code points back to ASCII; only the
+ * fancy ranges are folded, so "m²" and friends are left alone. Hashtags are
+ * words too: "#MUKONO_NSAMBWE ESTATE" is Mukono, not a token the location
+ * resolver has never seen.
+ */
+function foldAdvertText(value = '') {
   let text = String(value || '');
+  if (!text) return text;
+  // Mathematical Alphanumeric Symbols (U+1D400–U+1D7FF), enclosed/fullwidth
+  // letters and digits (U+FF01–U+FF5E), circled numbers (U+2460–U+24FF).
+  text = text.replace(/[\u{1D400}-\u{1D7FF}！-～①-⓿]+/gu, (run) => run.normalize('NFKC'));
+  // Only word-like tags: "#MUKONO_NSAMBWE", "#TITLED". A price written as
+  // "#180m" or "#2.5m" stays as it is for the price scan, which reads it.
+  text = text.replace(/#([A-Za-z]\w*)/g, (_m, tag) => ' ' + tag.replace(/_+/g, ' ') + ' ');
+  return text;
+}
+
+function withEnglishPropertyTerms(value = '') {
+  let text = foldAdvertText(value);
   if (!text) return text;
   const before = text;
   // Money first, while the number words are still words.
@@ -519,6 +543,7 @@ module.exports = {
   parsePitchContact,
   looksLikePropertyCaption,
   withEnglishPropertyTerms,
+  foldAdvertText,
   isEmployeeIntakeCancel,
   isEmployeeIntakeComplete,
   isEmployeeIntakeStep,
