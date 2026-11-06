@@ -10211,7 +10211,7 @@ router.post('/whatsapp/conversations/:phone/import-forwarded-adverts', async (re
     const summary = groups.map((g) => ({
       caption_message_id: g.caption_message_id, caption: g.caption.slice(0, 160), at: g.caption_at,
       listing_type: g.facts?.listingType, price: g.facts?.price, area: g.facts?.locationPatch?.area, district: g.facts?.locationPatch?.district,
-      missing: g.missing, media: g.media.map((m) => ({ id: m.message_id, url: m.url }))
+      missing: g.missing, media: g.media.map((m) => ({ id: m.message_id, url: m.url, at: m.at }))
     }));
     if (dryRun) return res.json({ ok: true, data: { dry_run: true, groups: summary, orphans: grouped.orphans } });
     let agentId = cleanText(req.body?.agent_id);

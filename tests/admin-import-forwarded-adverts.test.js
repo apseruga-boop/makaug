@@ -8,8 +8,12 @@ const wa = fs.readFileSync(path.join(__dirname, '../routes/whatsapp.js'), 'utf8'
 test('forwarded adverts in a customer chat can be grouped and imported for review, sending nothing', () => {
   assert(admin.includes("router.post('/whatsapp/conversations/:phone/import-forwarded-adverts'"));
   assert(wa.includes('module.exports.groupForwardedAdverts = groupForwardedAdverts;'));
-  const block = wa.slice(wa.indexOf('async function groupForwardedAdverts'), wa.indexOf('module.exports.groupForwardedAdverts'));
-  assert(/media: orphans\.splice\(0\)/.test(block), 'photos before the first caption go with it');
+  const block = wa.slice(wa.indexOf('function pairForwardedAlbums'), wa.indexOf('module.exports.groupForwardedAdverts'));
+  // 6 Nov 2026: albums go to the nearest caption in time, on either side of
+  // it — the same chat had "album, then text" and "text, then album".
+  assert(/pairForwardedAlbums\(captions, media\)/.test(block), 'albums are paired by time, not by what came before');
+  assert(/FORWARDED_ALBUM_GAP_MS/.test(block) && /FORWARDED_ALBUM_CLAIM_MS/.test(block));
+  assert(/foldAdvertText\(/.test(block), 'fancy-lettered captions are read');
   assert(!/queueWhatsappWebBridgeAutoReply|deliverWhatsapp/.test(block));
 });
 
