@@ -927,6 +927,247 @@
     return `<div class="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4"><strong class="text-blue-950">${escapeHtml(buyerChecks)}</strong><p class="mt-1 text-sm leading-6 text-blue-900">${escapeHtml(buyerChecksBody)}</p><div class="off-plan-guidance-links mt-3">${links}</div></div>`;
   }
 
+  // ---------------------------------------------------------------------------
+  // Homes you can walk through, a construction diary, prices by floor, key
+  // facts and documents (6 Nov 2026, Vanta House, Naguru). All of it is data
+  // on the project: extra_fields.walkthroughs, virtual_tours,
+  // construction_updates, construction_timeline, floor_price_rule, key_facts,
+  // management_fees, government_charges, documents, investment_note. A project
+  // without the data shows nothing new.
+  // ---------------------------------------------------------------------------
+  const OFF_PLAN_HOMES_I18N = {
+    en: {
+      walkHomes: 'Walk through the homes', walkHomesBody: 'A concept walkthrough built from the developer\'s floor plan for each home type. Finishes, furniture and exact dimensions follow the signed agreement, not this model.', walkAround: 'Walk around it yourself', tour360: 'Developer\'s 360° tour', watchWalkthrough: 'Play walkthrough', floorPlan: 'Floor plan', autoTour: 'Auto tour', resetView: 'Start again', closeViewer: 'Close', walkHint: 'Drag to look around. Walk with the arrows, W A S D, or the buttons below.', loadingViewer: 'Building the home…', viewerUnavailable: 'The 3D viewer needs a browser with WebGL. Play the walkthrough video instead.',
+      constructionDiary: 'Construction diary', diaryBody: 'Progress as reported by the developer, with site photos. Dates and stages are the developer\'s own.', floorsDone: 'Floors built', toppingOut: 'Structural topping-out', handover: 'Handover', timeline: 'Timeline', progressBasis: 'How the percentage is estimated',
+      priceByFloor: 'Price by floor', priceByFloorBody: 'Prices quoted are for floor {base}. Each floor above adds {step}% — pick a floor to see the guide price for every home type.', floor: 'Floor', floorN: 'Floor {n}',
+      keyFacts: 'Key facts', buyingCosts: 'Buying costs and charges', managementFees: 'Service charge (tentative)', perMonth: 'per month', investmentNote: 'Investment note', documents: 'Documents', developerGuide: 'Developer\'s purchase guide (PDF)', makaugBrochure: 'makaug brochure (PDF)', openDocument: 'Open', amenities: 'Amenities and facilities', amenitiesBody: 'As listed by the developer. The final specification is in the sale agreement.'
+    },
+    lg: {
+      walkHomes: 'Tambula mu maka', walkHomesBody: 'Ekifaananyi eky\'okutambuliramu ekikoleddwa okuva ku pulaani y\'omuzimbi ku buli kika ky\'enju. Ebikozesebwa, ebintu n\'obunene obutuufu bigoberera endagaano etereddwako omukono, si kino.', walkAround: 'Tambulamu wekka', tour360: 'Olugendo lwa 360° olw\'omuzimbi', watchWalkthrough: 'Laba vidiyo', floorPlan: 'Pulaani y\'enju', autoTour: 'Olugendo olw\'ensibo', resetView: 'Ddamu okutandika', closeViewer: 'Ggalawo', walkHint: 'Sika okulaba. Tambula n\'obusaale, W A S D, oba ebipya wansi.', loadingViewer: 'Tuzimba enju…', viewerUnavailable: 'Ekyuma kya 3D kyetaaga browser eriko WebGL. Laba vidiyo mu kifo kyakyo.',
+      constructionDiary: 'Ebifa ku kuzimba', diaryBody: 'Enkulaakulana nga bw\'ategeezeddwa omuzimbi, n\'ebifaananyi by\'oku kifo. Ennaku n\'emitendera bya muzimbi.', floorsDone: 'Emyaliiro egizimbiddwa', toppingOut: 'Okumaliriza ensengeka', handover: 'Okuwaayo', timeline: 'Entegeka y\'ebiseera', progressBasis: 'Ebitundu ku kikumi bibalibwa bitya',
+      priceByFloor: 'Omuwendo okusinziira ku mwaliiro', priceByFloorBody: 'Emiwendo egyogeddwako gya mwaliiro {base}. Buli mwaliiro waggulu gwongerako {step}% — londa omwaliiro olabe omuwendo gwa buli kika ky\'enju.', floor: 'Omwaliiro', floorN: 'Omwaliiro {n}',
+      keyFacts: 'Ebikulu', buyingCosts: 'Ensasula n\'emisolo', managementFees: 'Ssente z\'obuweereza (teziinakakasibwa)', perMonth: 'buli mwezi', investmentNote: 'Eky\'okusiga ensimbi', documents: 'Ebiwandiiko', developerGuide: 'Ekiwandiiko ky\'omuzimbi ku kugula (PDF)', makaugBrochure: 'Akatabo ka makaug (PDF)', openDocument: 'Ggulawo', amenities: 'Ebyobuweereza n\'ebikozesebwa', amenitiesBody: 'Nga bwe biwandiikiddwa omuzimbi. Ebituufu biri mu ndagaano y\'okutunda.'
+    },
+    sw: {
+      walkHomes: 'Tembea ndani ya nyumba', walkHomesBody: 'Mwonekano wa dhana uliojengwa kutoka kwenye mchoro wa msanidi kwa kila aina ya nyumba. Umaliziaji, samani na vipimo halisi vinafuata mkataba uliosainiwa, si mfano huu.', walkAround: 'Tembea mwenyewe', tour360: 'Ziara ya 360° ya msanidi', watchWalkthrough: 'Cheza video', floorPlan: 'Mchoro wa sakafu', autoTour: 'Ziara ya moja kwa moja', resetView: 'Anza upya', closeViewer: 'Funga', walkHint: 'Buruta kuangalia. Tembea kwa mishale, W A S D, au vitufe vilivyo chini.', loadingViewer: 'Inajenga nyumba…', viewerUnavailable: 'Kionyeshi cha 3D kinahitaji kivinjari chenye WebGL. Cheza video badala yake.',
+      constructionDiary: 'Taarifa za ujenzi', diaryBody: 'Maendeleo kama yalivyoripotiwa na msanidi, pamoja na picha za eneo. Tarehe na hatua ni za msanidi mwenyewe.', floorsDone: 'Sakafu zilizojengwa', toppingOut: 'Kukamilisha muundo', handover: 'Makabidhiano', timeline: 'Ratiba', progressBasis: 'Asilimia inakadiriwaje',
+      priceByFloor: 'Bei kwa sakafu', priceByFloorBody: 'Bei zilizotajwa ni za sakafu ya {base}. Kila sakafu ya juu huongeza {step}% — chagua sakafu uone bei elekezi ya kila aina ya nyumba.', floor: 'Sakafu', floorN: 'Sakafu ya {n}',
+      keyFacts: 'Mambo muhimu', buyingCosts: 'Gharama za ununuzi na ada', managementFees: 'Ada ya huduma (ya awali)', perMonth: 'kwa mwezi', investmentNote: 'Kumbuka kuhusu uwekezaji', documents: 'Nyaraka', developerGuide: 'Mwongozo wa ununuzi wa msanidi (PDF)', makaugBrochure: 'Brosha ya makaug (PDF)', openDocument: 'Fungua', amenities: 'Huduma na vifaa', amenitiesBody: 'Kama zilivyoorodheshwa na msanidi. Vipimo vya mwisho viko kwenye mkataba wa mauzo.'
+    }
+  };
+
+  function homesText(key, replacements = {}) {
+    const pack = OFF_PLAN_HOMES_I18N[offPlanLanguage()] || OFF_PLAN_HOMES_I18N.en;
+    let value = pack[key] || OFF_PLAN_HOMES_I18N.en[key] || key;
+    Object.entries(replacements).forEach(([name, replacement]) => { value = value.replaceAll(`{${name}}`, String(replacement)); });
+    return value;
+  }
+
+  function localizedItemText(item, field = 'label') {
+    if (!item || typeof item !== 'object') return clean(item);
+    const language = offPlanLanguage();
+    const bag = item[`${field}s`];
+    if (bag && typeof bag === 'object' && clean(bag[language])) return clean(bag[language]);
+    return clean(item[field]);
+  }
+
+  function projectAmenitiesMarkup(project) {
+    const amenities = Array.isArray(project.amenities) ? project.amenities : [];
+    if (!amenities.length || project.country_code !== 'UG') return '';
+    return `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(homesText('amenities'))}</h2><p class="mt-1 text-sm leading-6 text-gray-600">${escapeHtml(homesText('amenitiesBody'))}</p><ul class="off-plan-amenity-grid mt-4">${amenities.map((amenity, index) => `<li><i class="fas fa-circle-check" aria-hidden="true"></i><span>${escapeHtml(amenity && typeof amenity === 'object' && amenity.labels ? localizedItemText(amenity, 'label') : localizedAmenity(amenity, index))}</span></li>`).join('')}</ul></section>`;
+  }
+
+  function unitForKey(project, unitKey) {
+    return (project.unit_types || []).find((unit) => clean(unit.key) === clean(unitKey)) || {};
+  }
+
+  function homesWalkthroughMarkup(project) {
+    const walkthroughs = Array.isArray(project.extra_fields?.walkthroughs) ? project.extra_fields.walkthroughs.filter((item) => clean(item?.video_url) || clean(item?.layout_url)) : [];
+    const tours = Array.isArray(project.extra_fields?.virtual_tours) ? project.extra_fields.virtual_tours : [];
+    if (!walkthroughs.length && !tours.length) return '';
+    const cards = walkthroughs.map((item) => {
+      const unit = unitForKey(project, item.unit_key);
+      const label = clean(item.label) || localizedUnitLabel(unit) || clean(item.unit_key);
+      const tour = tours.find((entry) => clean(entry.unit_key) === clean(item.unit_key) && /^https:\/\//i.test(clean(entry.url)));
+      const plan = (project.floor_plans || []).find((entry) => clean(entry.unit_key) === clean(item.unit_key));
+      const size = number(unit.size_sqm) != null ? ` · ${number(unit.size_sqm)} m²` : '';
+      const video = clean(item.video_url)
+        ? `<div class="off-plan-walk-video"><video controls preload="metadata" playsinline ${clean(item.poster_url) ? `poster="${escapeHtml(item.poster_url)}"` : ''} src="${escapeHtml(item.video_url)}"></video></div>`
+        : (clean(item.poster_url) ? `<div class="off-plan-walk-video"><img src="${escapeHtml(item.poster_url)}" alt="${escapeHtml(label)}" loading="lazy"></div>` : '');
+      const buttons = [
+        clean(item.layout_url) ? `<button type="button" class="off-plan-walk-button is-primary" onclick="openOffPlanWalkaround('${escapeHtml(item.unit_key)}')"><i class="fas fa-person-walking"></i>${escapeHtml(homesText('walkAround'))}</button>` : '',
+        tour ? `<a class="off-plan-walk-button" href="${escapeHtml(tour.url)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-vr-cardboard"></i>${escapeHtml(homesText('tour360'))}</a>` : '',
+        plan ? `<a class="off-plan-walk-button" href="${escapeHtml(plan.url)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-ruler-combined"></i>${escapeHtml(homesText('floorPlan'))}</a>` : ''
+      ].filter(Boolean).join('');
+      return `<article class="off-plan-walk-card"><h3>${escapeHtml(label)}${escapeHtml(size)}</h3>${video}<div class="off-plan-walk-actions">${buttons}</div></article>`;
+    }).join('');
+    const extraTours = tours.filter((entry) => /^https:\/\//i.test(clean(entry.url)) && !walkthroughs.some((item) => clean(item.unit_key) === clean(entry.unit_key)));
+    const tourLinks = extraTours.length ? `<div class="off-plan-walk-actions mt-4">${extraTours.map((entry) => `<a class="off-plan-walk-button" href="${escapeHtml(entry.url)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-vr-cardboard"></i>${escapeHtml(clean(entry.label) || homesText('tour360'))}</a>`).join('')}</div>` : '';
+    return `<section class="off-plan-panel" id="off-plan-walk-section"><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('chooseHome'))}</p><h2 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(homesText('walkHomes'))}</h2><p class="mt-2 text-sm leading-6 text-gray-600">${escapeHtml(homesText('walkHomesBody'))}</p><div class="off-plan-walk-grid mt-5">${cards}</div>${tourLinks}</section>`;
+  }
+
+  function constructionDiaryMarkup(project) {
+    const updates = Array.isArray(project.extra_fields?.construction_updates) ? project.extra_fields.construction_updates : [];
+    const timeline = Array.isArray(project.extra_fields?.construction_timeline) ? project.extra_fields.construction_timeline : [];
+    if (!updates.length && !timeline.length) return '';
+    const latest = updates[0] || {};
+    const floors = number(latest.floors_done) != null && number(latest.floors_total) ? `<div class="off-plan-floor-meter" role="img" aria-label="${escapeHtml(homesText('floorsDone'))}: ${escapeHtml(latest.floors_done)} / ${escapeHtml(latest.floors_total)}"><span class="off-plan-floor-meter-label">${escapeHtml(homesText('floorsDone'))} <strong>${escapeHtml(latest.floors_done)} / ${escapeHtml(latest.floors_total)}</strong></span><div class="off-plan-floor-stack">${Array.from({ length: Number(latest.floors_total) }, (_, index) => `<i class="${index < Number(latest.floors_done) ? 'is-built' : ''}" title="${escapeHtml(homesText('floorN', { n: index + 1 }))}"></i>`).reverse().join('')}</div></div>` : '';
+    const steps = timeline.length ? `<ol class="off-plan-timeline mt-5">${timeline.map((step) => `<li class="is-${escapeHtml(clean(step.status) || 'planned')}"><span class="off-plan-timeline-date">${escapeHtml(formatDate(step.date))}</span><strong>${escapeHtml(localizedItemText(step, 'label'))}</strong>${clean(step.note) ? `<p>${escapeHtml(localizedItemText(step, 'note'))}</p>` : ''}</li>`).join('')}</ol>` : '';
+    const entries = updates.map((update) => {
+      const photos = Array.isArray(update.image_urls) ? update.image_urls.filter((url) => clean(url)) : [];
+      return `<article class="off-plan-diary-entry"><div class="off-plan-diary-head"><span class="off-plan-timeline-date">${escapeHtml(formatDate(update.date))}</span><h3>${escapeHtml(localizedItemText(update, 'title'))}</h3></div>${clean(update.note) ? `<p class="mt-2 text-sm leading-6 text-gray-700">${escapeHtml(localizedItemText(update, 'note'))}</p>` : ''}${photos.length ? `<div class="off-plan-diary-photos mt-3">${photos.map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(url)}" alt="${escapeHtml(localizedItemText(update, 'title'))} ${index + 1}" loading="lazy"></a>`).join('')}</div>` : ''}${clean(update.video_url) ? `<div class="off-plan-diary-video mt-3"><video controls preload="metadata" playsinline src="${escapeHtml(update.video_url)}"></video></div>` : ''}</article>`;
+    }).join('');
+    const basis = clean(project.extra_fields?.progress_basis) ? `<p class="mt-4 text-xs leading-5 text-gray-500"><strong>${escapeHtml(homesText('progressBasis'))}:</strong> ${escapeHtml(localizedProjectField(project, 'progress_basis', project.extra_fields.progress_basis))}</p>` : '';
+    return `<section class="off-plan-panel" id="off-plan-diary-section"><h2 class="text-xl font-black text-gray-950">${escapeHtml(homesText('constructionDiary'))}</h2><p class="mt-1 text-sm leading-6 text-gray-600">${escapeHtml(homesText('diaryBody'))}</p><div class="grid lg:grid-cols-[220px_1fr] gap-6 mt-5">${floors || '<div></div>'}<div>${steps}</div></div><div class="mt-6 space-y-6">${entries}</div>${basis}</section>`;
+  }
+
+  function floorPriceMarkup(project) {
+    const rule = project.extra_fields?.floor_price_rule;
+    const units = (project.unit_types || []).filter((unit) => number(unit.price_original) > 0 || number(unit.price_ugx) > 0);
+    if (!rule || !units.length || !(number(rule.step_percent) > 0)) return '';
+    const base = Math.max(1, Math.round(number(rule.base_floor) || 1));
+    const top = Math.max(base, Math.round(number(rule.top_floor) || base));
+    const options = Array.from({ length: top - base + 1 }, (_, index) => base + index).map((floor) => `<option value="${floor}" ${floor === base ? 'selected' : ''}>${escapeHtml(homesText('floorN', { n: floor }))}</option>`).join('');
+    return `<div class="off-plan-floor-price mt-5"><div class="flex flex-wrap items-end justify-between gap-3"><div><h3 class="font-black text-gray-950">${escapeHtml(homesText('priceByFloor'))}</h3><p class="mt-1 text-sm leading-6 text-gray-600">${escapeHtml(homesText('priceByFloorBody', { base, step: number(rule.step_percent) }))}</p></div><label class="text-xs font-bold text-gray-700">${escapeHtml(homesText('floor'))}<select id="off-plan-floor-picker" class="mt-1 block h-11 min-w-[9rem] rounded-xl border border-gray-300 px-3 text-sm" onchange="renderOffPlanFloorPrices()">${options}</select></label></div><div id="off-plan-floor-prices" class="off-plan-floor-price-grid mt-4"></div>${clean(rule.note) ? `<p class="mt-3 text-xs leading-5 text-gray-500">${escapeHtml(localizedItemText(rule, 'note'))}</p>` : ''}</div>`;
+  }
+
+  function renderOffPlanFloorPrices() {
+    const project = state.activeProject;
+    const target = document.getElementById('off-plan-floor-prices');
+    const picker = document.getElementById('off-plan-floor-picker');
+    if (!project || !target || !picker) return;
+    const rule = project.extra_fields?.floor_price_rule || {};
+    const base = Math.max(1, Math.round(number(rule.base_floor) || 1));
+    const floor = Math.max(base, Math.round(number(picker.value) || base));
+    const factor = 1 + ((floor - base) * (number(rule.step_percent) || 0)) / 100;
+    target.innerHTML = (project.unit_types || []).filter((unit) => number(unit.price_original) > 0 || number(unit.price_ugx) > 0).map((unit) => {
+      const original = number(unit.price_original) > 0 ? Math.round(number(unit.price_original) * factor) : null;
+      const ugx = number(unit.price_ugx) > 0 ? Math.round(number(unit.price_ugx) * factor / 100000) * 100000 : null;
+      const currency = clean(unit.price_original_currency || project.original_currency || 'USD').toUpperCase();
+      return `<div class="off-plan-floor-price-card"><span>${escapeHtml(localizedUnitLabel(unit))}</span><strong>${escapeHtml(original != null ? formatMoney(original, currency) : formatUgx(ugx))}</strong>${original != null && ugx != null ? `<small>${escapeHtml(formatUgx(ugx))}</small>` : ''}</div>`;
+    }).join('');
+  }
+
+  function keyFactsMarkup(project) {
+    const facts = Array.isArray(project.extra_fields?.key_facts) ? project.extra_fields.key_facts.filter((item) => clean(item?.label) && clean(item?.value)) : [];
+    const fees = Array.isArray(project.extra_fields?.management_fees) ? project.extra_fields.management_fees : [];
+    const charges = Array.isArray(project.extra_fields?.government_charges) ? project.extra_fields.government_charges.filter((item) => clean(item?.label) && clean(item?.value)) : [];
+    const investment = clean(project.extra_fields?.investment_note);
+    if (!facts.length && !fees.length && !charges.length && !investment) return '';
+    const factList = facts.length ? `<dl class="off-plan-facts">${facts.map((item) => `<div><dt>${escapeHtml(localizedItemText(item, 'label'))}</dt><dd>${escapeHtml(localizedItemText(item, 'value'))}</dd></div>`).join('')}</dl>` : '';
+    const feeList = fees.length ? `<div class="mt-5"><h3 class="font-black text-gray-950">${escapeHtml(homesText('managementFees'))}</h3><div class="off-plan-floor-price-grid mt-3">${fees.map((fee) => `<div class="off-plan-floor-price-card"><span>${escapeHtml(localizedUnitLabel(unitForKey(project, fee.unit_key)) || clean(fee.label))}</span><strong>${escapeHtml(formatMoney(fee.amount, fee.currency || 'USD'))}</strong><small>${escapeHtml(homesText('perMonth'))}</small></div>`).join('')}</div></div>` : '';
+    const chargeList = charges.length ? `<div class="mt-5"><h3 class="font-black text-gray-950">${escapeHtml(homesText('buyingCosts'))}</h3><dl class="off-plan-facts mt-3">${charges.map((item) => `<div><dt>${escapeHtml(localizedItemText(item, 'label'))}</dt><dd>${escapeHtml(localizedItemText(item, 'value'))}</dd></div>`).join('')}</dl></div>` : '';
+    const investmentBlock = investment ? `<div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4"><strong class="text-amber-950">${escapeHtml(homesText('investmentNote'))}</strong><p class="mt-1 text-sm leading-6 text-amber-900">${escapeHtml(localizedProjectField(project, 'investment_note', investment))}</p></div>` : '';
+    return `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(homesText('keyFacts'))}</h2><div class="mt-4">${factList}</div>${feeList}${chargeList}${investmentBlock}</section>`;
+  }
+
+  function documentsMarkup(project) {
+    const documents = Array.isArray(project.extra_fields?.documents) ? project.extra_fields.documents.filter((item) => clean(item?.url)) : [];
+    if (!documents.length) return '';
+    return `<div class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-gray-500">${escapeHtml(homesText('documents'))}</p><div class="mt-3 space-y-2">${documents.map((item) => `<a class="off-plan-document" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-file-pdf" aria-hidden="true"></i><span>${escapeHtml(item.kind === 'developer_guide' ? homesText('developerGuide') : (localizedItemText(item, 'label') || homesText('openDocument')))}</span><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a>`).join('')}</div></div>`;
+  }
+
+  function hydrateOffPlanExperience(project) {
+    if (document.getElementById('off-plan-floor-picker')) renderOffPlanFloorPrices();
+  }
+
+  // --- the walk-around viewer (three.js + /assets/off-plan-walkthrough.js, loaded on first use) ---
+  const walkaround = { controller: null, layouts: {}, loading: null };
+
+  function loadScriptOnce(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[data-src="${src}"]`)) { resolve(true); return; }
+      const script = document.createElement('script');
+      script.src = src; script.async = true; script.dataset.src = src;
+      script.onload = () => resolve(true);
+      script.onerror = () => reject(new Error(`Could not load ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function ensureWalkaroundRuntime() {
+    if (window.THREE && window.MakaugWalkthrough) return true;
+    if (!walkaround.loading) {
+      walkaround.loading = (async () => {
+        if (!window.THREE) await loadScriptOnce('/assets/vendor/three.min.js?v=r160');
+        if (!window.MakaugWalkthrough) await loadScriptOnce('/assets/off-plan-walkthrough.js?v=20261106-walk-v1');
+        return Boolean(window.THREE && window.MakaugWalkthrough);
+      })().catch((error) => { walkaround.loading = null; throw error; });
+    }
+    return walkaround.loading;
+  }
+
+  async function loadWalkaroundLayout(item) {
+    const url = clean(item.layout_url).split('#')[0];
+    const key = clean(item.layout_key) || clean(item.layout_url).split('#')[1] || clean(item.unit_key);
+    if (!walkaround.layouts[url]) {
+      const response = await fetch(url, { cache: 'force-cache' });
+      if (!response.ok) throw new Error('Layout unavailable');
+      walkaround.layouts[url] = await response.json();
+    }
+    const bundle = walkaround.layouts[url];
+    return bundle?.units?.[key] || bundle?.[key] || null;
+  }
+
+  function walkaroundDialog() {
+    let dialog = document.getElementById('off-plan-walkaround');
+    if (dialog) return dialog;
+    dialog = document.createElement('dialog');
+    dialog.id = 'off-plan-walkaround';
+    dialog.className = 'off-plan-walkaround';
+    dialog.innerHTML = `<div class="off-plan-walkaround-head"><div><p class="text-xs font-black uppercase tracking-wide text-green-300">${escapeHtml(homesText('walkAround'))}</p><h2 id="off-plan-walkaround-title"></h2></div><button type="button" class="off-plan-walkaround-close" onclick="closeOffPlanWalkaround()" aria-label="${escapeHtml(homesText('closeViewer'))}"><i class="fas fa-xmark" aria-hidden="true"></i></button></div><div class="off-plan-walkaround-stage"><div id="off-plan-walkaround-canvas"></div><div id="off-plan-walkaround-status" class="off-plan-walkaround-status">${escapeHtml(homesText('loadingViewer'))}</div><div id="off-plan-walkaround-caption" class="off-plan-walkaround-caption"></div></div><p class="off-plan-walkaround-hint">${escapeHtml(homesText('walkHint'))}</p><div class="off-plan-walkaround-controls"><div class="off-plan-walkaround-pad"><button type="button" data-walk="forward" aria-label="Forward"><i class="fas fa-chevron-up"></i></button><div><button type="button" data-walk="left" aria-label="Turn left"><i class="fas fa-rotate-left"></i></button><button type="button" data-walk="back" aria-label="Back"><i class="fas fa-chevron-down"></i></button><button type="button" data-walk="right" aria-label="Turn right"><i class="fas fa-rotate-right"></i></button></div></div><div class="off-plan-walk-actions"><button type="button" class="off-plan-walk-button is-primary" onclick="offPlanWalkaroundTour()"><i class="fas fa-route"></i>${escapeHtml(homesText('autoTour'))}</button><button type="button" class="off-plan-walk-button" onclick="offPlanWalkaroundReset()"><i class="fas fa-arrows-rotate"></i>${escapeHtml(homesText('resetView'))}</button></div></div>`;
+    document.body.appendChild(dialog);
+    const press = (direction, down) => (event) => { event.preventDefault(); walkaround.controller?.press(direction, down); };
+    dialog.querySelectorAll('[data-walk]').forEach((button) => {
+      const direction = button.dataset.walk;
+      button.addEventListener('pointerdown', press(direction, true));
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach((name) => button.addEventListener(name, press(direction, false)));
+    });
+    dialog.addEventListener('close', () => { walkaround.controller?.dispose(); walkaround.controller = null; });
+    return dialog;
+  }
+
+  async function openOffPlanWalkaround(unitKey) {
+    const project = state.activeProject;
+    const item = (project?.extra_fields?.walkthroughs || []).find((entry) => clean(entry.unit_key) === clean(unitKey));
+    if (!item) return;
+    const dialog = walkaroundDialog();
+    const title = document.getElementById('off-plan-walkaround-title');
+    const status = document.getElementById('off-plan-walkaround-status');
+    const canvasHost = document.getElementById('off-plan-walkaround-canvas');
+    const caption = document.getElementById('off-plan-walkaround-caption');
+    if (title) title.textContent = clean(item.label) || localizedUnitLabel(unitForKey(project, unitKey));
+    if (status) { status.textContent = homesText('loadingViewer'); status.classList.remove('hidden'); }
+    if (caption) caption.textContent = '';
+    walkaround.controller?.dispose();
+    walkaround.controller = null;
+    if (typeof dialog.showModal === 'function' && !dialog.open) dialog.showModal();
+    try {
+      await ensureWalkaroundRuntime();
+      const layout = await loadWalkaroundLayout(item);
+      if (!layout) throw new Error('Layout unavailable');
+      const controller = window.MakaugWalkthrough.mount(canvasHost, layout, {
+        onCaption: (text) => { if (caption) caption.textContent = text || ''; },
+        onTourEnd: () => { if (caption) caption.textContent = ''; }
+      });
+      if (!controller) throw new Error('WebGL unavailable');
+      walkaround.controller = controller;
+      if (status) status.classList.add('hidden');
+      controller.tour();
+      controller.renderer?.domElement?.focus?.();
+    } catch (_error) {
+      if (status) { status.textContent = homesText('viewerUnavailable'); status.classList.remove('hidden'); }
+    }
+  }
+
+  function closeOffPlanWalkaround() {
+    const dialog = document.getElementById('off-plan-walkaround');
+    if (dialog?.open) dialog.close();
+  }
+
+  function offPlanWalkaroundTour() { walkaround.controller?.tour(); }
+  function offPlanWalkaroundReset() { walkaround.controller?.reset(); }
+
   function detailMarkup(project) {
     const units = project.unit_types || [];
     const firstPrice = units.map((unit) => number(unit.price_ugx)).find((value) => value && value > 0) || project.launch_price_ugx || '';
@@ -936,9 +1177,10 @@
     const sourceName = overseas ? 'makaug.com' : (clean(project.source_agent_name || project.source_display_name) || offPlanText('projectTeam'));
     const publicVideoUrl = clean(project.walkthrough_output_video_url || project.videos?.[0]?.url);
     const soldLabel = project.units_sold == null || project.units_total == null ? offPlanText('toConfirm') : `${project.units_sold} / ${project.units_total}`;
-    const description = overseas ? localizedProjectField(project, 'description', project.description) : (project.slug === 'entebbe-victoria-palms' ? offPlanText('previewDescription') : (project.description || offPlanText('toConfirm')));
-    const areaOverview = overseas ? localizedProjectField(project, 'area_overview', project.extra_fields?.area_overview) : (offPlanLanguage() === 'en' && clean(project.extra_fields?.area_overview)
-      ? clean(project.extra_fields.area_overview)
+    const translated = (field) => clean(project.extra_fields?.translations?.[offPlanLanguage()]?.[field]);
+    const description = overseas ? localizedProjectField(project, 'description', project.description) : (project.slug === 'entebbe-victoria-palms' ? offPlanText('previewDescription') : (translated('description') || project.description || offPlanText('toConfirm')));
+    const areaOverview = overseas ? localizedProjectField(project, 'area_overview', project.extra_fields?.area_overview) : ((offPlanLanguage() === 'en' || translated('area_overview')) && clean(project.extra_fields?.area_overview)
+      ? (translated('area_overview') || clean(project.extra_fields.area_overview))
       : `${project.slug === 'entebbe-victoria-palms' ? offPlanDynamicText('areaOverview') : offPlanText('areaOverviewFallback')} ${offPlanExperienceText('areaServices')}`);
     const concierge = overseas ? `<section class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(overseasProjectText(project, 'managedBy'))}</p><h2 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(overseasProjectText(project, 'conciergeTitle'))}</h2><p class="mt-2 text-sm leading-6 text-gray-600">${escapeHtml(overseasProjectText(project, 'conciergeBody'))}</p><div class="off-plan-concierge-steps mt-5">${(overseasProjectText(project, 'steps') || []).map((step, index) => `<div class="off-plan-concierge-step"><span class="text-xs font-black uppercase tracking-wide text-red-600">${String(index + 1).padStart(2, '0')}</span><strong class="block mt-1 text-sm text-gray-950">${escapeHtml(step)}</strong></div>`).join('')}</div><div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4"><strong class="text-amber-950">${escapeHtml(overseasProjectText(project, 'financeTitle'))}</strong><p class="mt-1 text-sm leading-6 text-amber-900">${escapeHtml(overseasProjectText(project, 'financeBody'))}</p></div>${officialBuyerGuidanceMarkup(project)}</section>` : '';
     const floorPlanImages = (project.floor_plans || []).filter((plan) => {
@@ -952,18 +1194,21 @@
           <div><div class="flex flex-wrap gap-2"><span class="off-plan-pill ${fullyVerified ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-900'}"><i class="fas fa-circle-check"></i>${escapeHtml(fullyVerified ? offPlanText('verifiedProject') : offPlanText('sourceDetails'))}</span><span class="off-plan-pill bg-amber-100 text-amber-900">${escapeHtml(localizedProjectType(projectDisplayType(project)))}</span></div><h1 class="mt-3 text-3xl md:text-5xl font-black text-gray-950 leading-tight">${escapeHtml(project.name)}</h1><p class="mt-2 text-gray-500"><i class="fas fa-location-dot mr-1 text-red-600"></i>${escapeHtml(projectLocation(project))}${project.developer_name ? ` · ${escapeHtml(project.developer_name)}` : ''}</p></div>
           <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('expectedCompletion'))}</span><strong class="block mt-1">${escapeHtml(formatDate(project.completion_date))}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('construction'))}</span><strong class="block mt-1">${escapeHtml(number(project.construction_progress) == null ? offPlanText('toConfirm') : offPlanText('percentComplete', { count: project.construction_progress }))}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('homesSold'))}</span><strong class="block mt-1">${escapeHtml(soldLabel)}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('homesRemaining'))}</span><strong class="block mt-1">${escapeHtml(metricValue(project.units_available))}</strong></div></div>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('aboutDevelopment'))}</h2><p class="mt-3 text-sm md:text-base text-gray-700 leading-7 whitespace-pre-line">${escapeHtml(description)}</p></section>
-          ${overseas ? overseasHighlightsMarkup(project) : ''}
+          ${overseas ? overseasHighlightsMarkup(project) : projectAmenitiesMarkup(project)}
           ${agentCardMarkup(project)}
           ${concierge}
-          <section class="off-plan-panel"><div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('chooseHome'))}</p><h2 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(offPlanText('unitTypesPrices'))}</h2></div><span class="text-xs text-gray-500">${escapeHtml(offPlanText('guidePrices').replace(/USD/g, clean(project.original_currency || 'USD').toUpperCase()))}</span></div><div class="mt-4">${unitTable(project)}</div></section>
+          <section class="off-plan-panel"><div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('chooseHome'))}</p><h2 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(offPlanText('unitTypesPrices'))}</h2></div><span class="text-xs text-gray-500">${escapeHtml(offPlanText('guidePrices').replace(/USD/g, clean(project.original_currency || 'USD').toUpperCase()))}</span></div><div class="mt-4">${unitTable(project)}</div>${floorPriceMarkup(project)}</section>
           ${floorPlans}
+          ${homesWalkthroughMarkup(project)}
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('projectProgress'))}</h2><div class="grid sm:grid-cols-2 gap-6 mt-5">${progressMarkup(offPlanText('constructionCompleted'), project.construction_progress)}${progressMarkup(offPlanText('homesSold'), project.sales_progress)}</div></section>
+          ${constructionDiaryMarkup(project)}
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('paymentPlan'))}</h2><div class="mt-4">${paymentPlanMarkup(project)}</div>${firstPrice && project.payment_plan_months ? calculatorMarkup(project, firstPrice) : ''}</section>
+          ${keyFactsMarkup(project)}
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('locationArea'))}</h2><p class="mt-2 text-sm text-gray-600">${escapeHtml(projectLocation(project))}. ${escapeHtml(project.extra_fields?.map_precision === 'area_centroid' ? offPlanText('widerArea') : offPlanText('confirmTravel'))}</p><p class="mt-3 text-sm leading-6 text-gray-700">${escapeHtml(areaOverview)}</p><div class="mt-4">${mapMarkup(project)}</div><div class="mt-6"><h3 class="font-black text-gray-950">${escapeHtml(offPlanExperienceText('familyServices'))}</h3><p class="mt-1 text-xs text-gray-500">${escapeHtml(offPlanText('nearbyLive'))}</p><div id="off-plan-nearby-places" class="mt-4 space-y-5"></div></div></section>
           ${publicVideoUrl ? `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('projectVideo'))}</h2><div class="mt-4 aspect-video rounded-2xl overflow-hidden bg-gray-950"><video controls preload="metadata" class="w-full h-full" src="${escapeHtml(publicVideoUrl)}"></video></div></section>` : ''}
           <section class="off-plan-risk-warning"><strong><i class="fas fa-triangle-exclamation mr-1"></i>${escapeHtml(offPlanText('disclaimerTitle'))}</strong><p class="mt-2">${escapeHtml(offPlanText('disclaimerBody'))}</p></section>
         </main>
-        <aside class="off-plan-sticky-enquiry space-y-4"><div class="off-plan-panel shadow-[0_20px_60px_rgba(18,75,39,.12)]"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('pricesFrom'))}</span><strong class="block text-2xl text-gray-950 mt-1">${escapeHtml(formatMoney(primaryPrice.amount, primaryPrice.currency))}</strong>${overseas && firstPrice ? `<span class="block mt-1 text-xs text-gray-500">${escapeHtml(formatUgx(firstPrice))} · ${escapeHtml(overseasProjectText(project, 'indicativeFx'))}</span>` : ''}<p class="text-xs text-gray-500 mt-2">${escapeHtml(offPlanText('confirmPrice'))}</p><button type="button" onclick="openOffPlanContactModal('${escapeHtml(project.id)}','project_interest')" class="mt-5 w-full rounded-xl bg-green-700 hover:bg-green-600 text-white px-4 py-3 font-black"><i class="fab fa-whatsapp mr-2"></i>${escapeHtml(overseas ? overseasProjectText(project, 'contactMakaug') : offPlanText('enquireThis', { name: sourceName }))}</button><a href="/api/off-plan/${encodeURIComponent(project.slug)}/brochure.pdf?lang=${encodeURIComponent(offPlanLanguage())}${overseas ? `&country=${encodeURIComponent(project.country_code)}` : ''}" class="mt-2 flex items-center justify-center gap-2 w-full rounded-xl border border-green-200 text-green-800 px-4 py-3 font-black" download><i class="fas fa-file-pdf"></i>${escapeHtml(offPlanText('downloadBrochure'))}</a></div><div class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-gray-500">${escapeHtml(offPlanText('shareProject'))}</p><div class="off-plan-share-row mt-3"><button onclick="shareOffPlan('native')" class="off-plan-share-button" aria-label="${escapeHtml(offPlanText('shareProject'))}"><i class="fas fa-share-nodes"></i><span>${escapeHtml(offPlanDynamicText('share'))}</span></button><button onclick="shareOffPlan('whatsapp')" class="off-plan-share-button is-whatsapp" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i><span>WhatsApp</span></button><button onclick="shareOffPlan('x')" class="off-plan-share-button is-x" aria-label="Share on X"><span aria-hidden="true">𝕏</span></button></div></div></aside>
+        <aside class="off-plan-sticky-enquiry space-y-4"><div class="off-plan-panel shadow-[0_20px_60px_rgba(18,75,39,.12)]"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('pricesFrom'))}</span><strong class="block text-2xl text-gray-950 mt-1">${escapeHtml(formatMoney(primaryPrice.amount, primaryPrice.currency))}</strong>${overseas && firstPrice ? `<span class="block mt-1 text-xs text-gray-500">${escapeHtml(formatUgx(firstPrice))} · ${escapeHtml(overseasProjectText(project, 'indicativeFx'))}</span>` : ''}<p class="text-xs text-gray-500 mt-2">${escapeHtml(offPlanText('confirmPrice'))}</p><button type="button" onclick="openOffPlanContactModal('${escapeHtml(project.id)}','project_interest')" class="mt-5 w-full rounded-xl bg-green-700 hover:bg-green-600 text-white px-4 py-3 font-black"><i class="fab fa-whatsapp mr-2"></i>${escapeHtml(overseas ? overseasProjectText(project, 'contactMakaug') : offPlanText('enquireThis', { name: sourceName }))}</button><a href="/api/off-plan/${encodeURIComponent(project.slug)}/brochure.pdf?lang=${encodeURIComponent(offPlanLanguage())}${overseas ? `&country=${encodeURIComponent(project.country_code)}` : ''}" class="mt-2 flex items-center justify-center gap-2 w-full rounded-xl border border-green-200 text-green-800 px-4 py-3 font-black" download><i class="fas fa-file-pdf"></i>${escapeHtml(offPlanText('downloadBrochure'))}</a></div><div class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-gray-500">${escapeHtml(offPlanText('shareProject'))}</p><div class="off-plan-share-row mt-3"><button onclick="shareOffPlan('native')" class="off-plan-share-button" aria-label="${escapeHtml(offPlanText('shareProject'))}"><i class="fas fa-share-nodes"></i><span>${escapeHtml(offPlanDynamicText('share'))}</span></button><button onclick="shareOffPlan('whatsapp')" class="off-plan-share-button is-whatsapp" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i><span>WhatsApp</span></button><button onclick="shareOffPlan('x')" class="off-plan-share-button is-x" aria-label="Share on X"><span aria-hidden="true">𝕏</span></button></div></div>${documentsMarkup(project)}</aside>
       </div>`;
   }
 
@@ -1126,6 +1371,7 @@
 
   function hydrateOffPlanDetail(project) {
     renderOffPlanDetailMap(project);
+    hydrateOffPlanExperience(project);
   }
 
   async function openOffPlanDetail(slug, options = {}) {
@@ -1606,7 +1852,7 @@
     else returnToOffPlanList({ history: false });
   }
 
-  Object.assign(window, { applyOffPlanLanguageUI, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, deleteOffPlanProject, downloadOffPlanBrochure, handleOffPlanListingAiPrompt, initializeOffPlanPage, loadOffPlanManagement, manageOffPlanWalkthrough, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanCustomPaymentBuilder, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, recalculateOffPlanMortgages, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
+  Object.assign(window, { applyOffPlanLanguageUI, closeOffPlanWalkaround, offPlanWalkaroundReset, offPlanWalkaroundTour, openOffPlanWalkaround, renderOffPlanFloorPrices, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, deleteOffPlanProject, downloadOffPlanBrochure, handleOffPlanListingAiPrompt, initializeOffPlanPage, loadOffPlanManagement, manageOffPlanWalkthrough, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanCustomPaymentBuilder, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, recalculateOffPlanMortgages, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
   if (/^\/off-plan(?:\/|$)/i.test(location.pathname)) initializeOffPlanPage();
   if (document.getElementById('page-staff-dashboard')?.classList.contains('active')) loadOffPlanManagement('staff');
   if (document.getElementById('page-admin-dashboard')?.classList.contains('active')) loadOffPlanManagement('admin');

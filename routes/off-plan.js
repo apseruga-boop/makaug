@@ -29,7 +29,7 @@ const {
 } = require('../services/offPlanService');
 const { brochureBuffer } = require('../services/offPlanBrochureService');
 const { normalizeBrochureLanguage } = require('../services/offPlanBrochureI18n');
-const { notifyOffPlanEnquiry } = require('../services/offPlanNotificationService');
+const { notifyOffPlanEnquiry, notifyOffPlanPublished } = require('../services/offPlanNotificationService');
 const { prepareMediaUrlForStorage, storeBuffer } = require('../services/cloudMediaStorageService');
 const { brochureFingerprint, extractBrochureDraft, MAX_BROCHURE_BYTES } = require('../services/offPlanBrochureIntakeService');
 const { readMortgageProviders } = require('./mortgage');
@@ -362,11 +362,26 @@ function mountManagementRoutes(router, authMiddleware, { allowPermanentDelete = 
 
   router.post('/developments/:id/status', asyncRoute(async (req, res) => {
     try {
+      const before = await getManagedDevelopment(db, req.params.id);
       const development = await setDevelopmentStatus(db, req.params.id, req.body?.status, {
         ...actor(req),
         publicationMode: req.body?.publication_mode
       });
       if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
+      // First time live: the developer's contact hears by WhatsApp and email,
+      // the team by WhatsApp. After the response; a failed message never
+      // un-publishes a project.
+      if (development.status === 'published' && before?.status !== 'published' && !booleanValue(req.body?.silent)) {
+        setImmediate(() => {
+          getPublicDevelopment(db, development.slug, development.country_code)
+            .then((publicRow) => notifyOffPlanPublished(publicRow || development, { db }))
+            .then((delivery) => db.query(
+              `UPDATE off_plan_developments SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('published_notification', $2::jsonb) WHERE id = $1`,
+              [development.id, JSON.stringify(delivery)]
+            ))
+            .catch((error) => console.warn('[off-plan] published notification failed:', error.message));
+        });
+      }
       return res.json({ ok: true, development });
     } catch (error) {
       if (error.status === 409) return res.status(409).json({ ok: false, error: error.message, blockers: error.details || [] });

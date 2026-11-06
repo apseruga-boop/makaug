@@ -567,15 +567,90 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   }
 
   const floorPlanPaths = project.floor_plans.map((floorPlan) => ({ ...floorPlan, path: localAssetPath(floorPlan.url) })).filter((floorPlan) => floorPlan.path);
-  if (floorPlanPaths.length) {
+  // Three plans to a page; a project with a typical floor plus a plan per
+  // home type (Vanta House: four) continues on the next page.
+  for (let start = 0; start < Math.min(floorPlanPaths.length, 9); start += 3) {
     addPage(doc, project, copy.floorPlans, copy);
     writeSectionTitle(doc, copy.floorPlans, doc.y, copy.rtl);
-    floorPlanPaths.slice(0, 3).forEach((floorPlan, index) => {
+    floorPlanPaths.slice(start, start + 3).forEach((floorPlan, index) => {
       const yPlan = 124 + index * 205;
       imageCover(doc, floorPlan.path, 44, yPlan, 190, 170);
       doc.fillColor(INK).font('Brochure-Bold').fontSize(11).text(language === 'en' ? cleanText(floorPlan.caption, 240) : copy.floorPlan, 252, yPlan + 44, { width: 297, height: 50, ellipsis: true, align: copy.rtl ? 'right' : 'left' });
       doc.fillColor(MUTED).font('Brochure-Regular').fontSize(8.5).text(copy.floorPlanDisclaimer, 252, yPlan + 104, { width: 297, lineGap: 3, align: copy.rtl ? 'right' : 'left' });
     });
+  }
+
+  // Walk-through videos, 360° tours, the construction diary and the
+  // developer's documents, when the project has them (6 Nov 2026).
+  const extra = project.extra_fields && typeof project.extra_fields === 'object' ? project.extra_fields : {};
+  const walkthroughs = (Array.isArray(extra.walkthroughs) ? extra.walkthroughs : []).filter((item) => cleanText(item?.video_url, 2000));
+  const tours = (Array.isArray(extra.virtual_tours) ? extra.virtual_tours : []).filter((item) => /^https:\/\//i.test(cleanText(item?.url, 2000)));
+  const updates = Array.isArray(extra.construction_updates) ? extra.construction_updates : [];
+  const timeline = Array.isArray(extra.construction_timeline) ? extra.construction_timeline : [];
+  const documents = (Array.isArray(extra.documents) ? extra.documents : []).filter((item) => cleanText(item?.url, 2000));
+  if (walkthroughs.length || tours.length || updates.length || documents.length) {
+    addPage(doc, project, copy.walkthroughs, copy);
+    let yCursor = 112;
+    const absolute = (url) => (/^https?:\/\//i.test(url) ? url : `${publicBaseUrl()}${url.startsWith('/') ? '' : '/'}${url}`);
+    const unitLabel = (unitKey) => {
+      const unit = (project.unit_types || []).find((item) => cleanText(item.key, 80) === cleanText(unitKey, 80)) || {};
+      return cleanText(unit.label || unitKey, 80);
+    };
+    if (walkthroughs.length || tours.length) {
+      writeSectionTitle(doc, copy.walkthroughs, yCursor, copy.rtl);
+      yCursor += 24;
+      doc.fillColor(MUTED).font('Brochure-Regular').fontSize(8.5).text(copy.walkthroughsNote, 44, yCursor, { width: 505, lineGap: 3, align: copy.rtl ? 'right' : 'left' });
+      yCursor += 30;
+      walkthroughs.slice(0, 6).forEach((item) => {
+        const url = absolute(cleanText(item.video_url, 2000));
+        doc.fillColor(INK).font('Brochure-Bold').fontSize(10).text(`${unitLabel(item.unit_key)} — ${copy.walkthroughVideo}`, 44, yCursor, { width: 320, align: copy.rtl ? 'right' : 'left' });
+        doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(9).text(copy.openLink, 380, yCursor, { width: 169, link: url, underline: true, align: 'right' });
+        yCursor += 18;
+      });
+      tours.slice(0, 6).forEach((item) => {
+        doc.fillColor(INK).font('Brochure-Bold').fontSize(10).text(`${unitLabel(item.unit_key) || cleanText(item.label, 80)} — ${copy.tour360}`, 44, yCursor, { width: 320, align: copy.rtl ? 'right' : 'left' });
+        doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(9).text(copy.openLink, 380, yCursor, { width: 169, link: cleanText(item.url, 2000), underline: true, align: 'right' });
+        yCursor += 18;
+      });
+      yCursor += 10;
+    }
+    if (updates.length || timeline.length) {
+      writeSectionTitle(doc, copy.constructionDiary, yCursor, copy.rtl);
+      yCursor += 24;
+      const latest = updates[0];
+      if (latest) {
+        doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(8.5).text(`${copy.latestUpdate} · ${formatDate(latest.date, language, copy)}`, 44, yCursor, { width: 505, align: copy.rtl ? 'right' : 'left' });
+        yCursor += 14;
+        doc.fillColor(INK).font('Brochure-Bold').fontSize(10.5).text(cleanText(latest.title, 200), 44, yCursor, { width: 505, align: copy.rtl ? 'right' : 'left' });
+        yCursor += 16;
+        if (cleanText(latest.note, 1200)) {
+          doc.fillColor(INK).font('Brochure-Regular').fontSize(9).text(cleanText(latest.note, 1200), 44, yCursor, { width: 505, lineGap: 3, align: copy.rtl ? 'right' : 'left' });
+          yCursor = doc.y + 8;
+        }
+        const photoPaths = (Array.isArray(latest.image_urls) ? latest.image_urls : []).map(localAssetPath).filter(Boolean).slice(0, 4);
+        photoPaths.forEach((photoPath, index) => imageCover(doc, photoPath, 44 + index * 127, yCursor, 118, 86));
+        if (photoPaths.length) yCursor += 98;
+      }
+      if (timeline.length) {
+        doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(8.5).text(copy.timeline, 44, yCursor, { width: 505, align: copy.rtl ? 'right' : 'left' });
+        yCursor += 14;
+        timeline.slice(0, 6).forEach((step) => {
+          const marker = cleanText(step.status, 20) === 'done' ? '•' : '–';
+          doc.fillColor(INK).font('Brochure-Regular').fontSize(9).text(`${marker} ${formatDate(step.date, language, copy)} — ${cleanText(step.label, 160)}`, 44, yCursor, { width: 505, align: copy.rtl ? 'right' : 'left' });
+          yCursor += 14;
+        });
+        yCursor += 8;
+      }
+    }
+    if (documents.length && yCursor < 690) {
+      writeSectionTitle(doc, copy.documents, yCursor, copy.rtl);
+      yCursor += 24;
+      documents.slice(0, 4).forEach((item) => {
+        doc.fillColor(INK).font('Brochure-Bold').fontSize(10).text(cleanText(item.label, 120), 44, yCursor, { width: 320, align: copy.rtl ? 'right' : 'left' });
+        doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(9).text(copy.openLink, 380, yCursor, { width: 169, link: absolute(cleanText(item.url, 2000)), underline: true, align: 'right' });
+        yCursor += 18;
+      });
+    }
   }
 
   addPage(doc, project, overseas ? copy.makaugOverseasTeam : agent ? `${copy.contact} - ${cleanText(agent.full_name, 60)}` : copy.contact, copy);

@@ -5037,7 +5037,17 @@ function parseEmployeeBedroomDraft(caption = '') {
   if (!/\b(?:house|home|apartments?|flats?|villa|bungalow|mansion|duplex|townhouse|rooms?|bedrooms?|beds?|condo|cottage|storey|storeyed)\b/i.test(clean)) return {};
   // "6 units of One Bedroom Apartments On 12 Decimals" became a 12-bedroom
   // listing (26 Oct 2026): the plot size was read as rooms.
+  // "has reached the 7th floor … 2.5 floors per month … October 2027 … 1%
+  // for each additional floor" (Vanta House, 6 Nov 2026) was read as a
+  // 7-bedroom home. Floors, years, percentages and decimals are not rooms;
+  // "2BHK" is two bedrooms.
   return parseBedroomDraft(clean
+    .replace(/\b(\d{1,2})\s*bhk\b/gi, '$1 bedroom')
+    .replace(/\b\d{1,2}(?:st|nd|rd|th)?[\s-]*floors?\b/gi, ' ')
+    .replace(/\bfloors?\s*\d{1,2}\b/gi, ' ')
+    .replace(/\b(?:19|20)\d{2}\b/g, ' ')
+    .replace(/\b\d+(?:\.\d+)?\s*%/g, ' ')
+    .replace(/\b\d+\.\d+\b/g, ' ')
     .replace(/\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\s*(?:ft|fts|feet|m)?\b/gi, ' ')
     .replace(/\b\d+(?:\.\d+)?\s*(?:decimals?|acres?|hectares?|sqm|sq\s*m|square\s+met(?:er|re)s?)\b/gi, ' ')) || {};
 }
@@ -5183,12 +5193,38 @@ function explicitDistrictInCaption(caption = '', { area = '' } = {}) {
   return null;
 }
 
+/**
+ * A developer's project caption, not a home for sale or rent: "Vanta House
+ * has reached the 7th floor … deliver the apartments for occupancy in
+ * October 2027 … 1BHK starts from USD 53,800" (6 Nov 2026). The old reading
+ * was a 7-bedroom rental in October. These are sold off plan: the type is
+ * sale, the price is the lowest "starts from" figure, and the listing is
+ * marked so staff move it to the off-plan desk.
+ */
+function employeeCaptionLooksOffPlan(caption = '') {
+  const text = normalizeInput(caption).toLowerCase();
+  if (!text) return false;
+  const projectTalk = /\boff[\s-]?plan\b|\bunder construction\b|\btopping[\s-]?out\b|\bhandover\b|\b(?:expected|estimated)\s+completion\b|\bfor occupancy\b|\bconstruction (?:pace|progress|period)\b|\breached the \d{1,2}(?:st|nd|rd|th) floor\b|\bfloors? per month\b|\bpayment plan\b.*\bmonths\b/i.test(text);
+  const unitMenu = (text.match(/\b\d\s*bhk\b|\b(?:one|two|three|four|\d)[\s-]*bed(?:room)?s?\b[^.\n]{0,40}\b(?:from|starts? from|starting)\b/gi) || []).length >= 2
+    || (text.match(/\bstarts? from\b/gi) || []).length >= 2;
+  return projectTalk && (unitMenu || /\boff[\s-]?plan\b/i.test(text));
+}
+
+/** The project's name: the words before "has reached", "is", "will" or the first sentence end. */
+function offPlanProjectNameFromCaption(caption = '') {
+  const first = normalizeInput(caption).split(/\n/)[0] || '';
+  const match = first.match(/^\s*([A-Z][A-Za-z0-9'’&-]*(?:\s+[A-Z][A-Za-z0-9'’&-]*){0,4})\b(?=\s+(?:has|have|is|are|will|reached|offers?|launch|phase)\b)/);
+  return match ? match[1].trim() : '';
+}
+
 function employeePropertyFacts(caption = '', sessionData = {}) {
   // Luganda/Swahili captions are read through their English equivalents.
-  const cleanCaption = normalizeInput(withEnglishPropertyTerms(caption));
+  const offPlan = employeeCaptionLooksOffPlan(caption);
+  // "2.5 floors per month" is a construction pace, not rent.
+  const cleanCaption = normalizeInput(withEnglishPropertyTerms(caption)).replace(/\b(\d+(?:\.\d+)?)\s*floors?\s+(?:per|a|each|every)\s+month\b/gi, '$1 floors built monthly');
   const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
   const hints = extractSellerListingDraftHints(cleanCaption, {});
-  let listingType = ownerForwardListingType(cleanCaption, { ...hints, ...naturalDraft });
+  let listingType = offPlan ? 'sale' : ownerForwardListingType(cleanCaption, { ...hints, ...naturalDraft });
   // "they have monthly revenue of (2.5m ugx) ... At only #180m ugx" (26 Oct
   // 2026): the parser took the first money figure, so a block of rentals worth
   // 180M was priced at its monthly income. An amount that follows income /
@@ -5308,7 +5344,9 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
       ? 'rent'
       : 'sale';
   }
-  const locationCaption = cleanCaption.replace(
+  // An off-plan project's name ("Vanta House") is not where it is.
+  const offPlanName = offPlan ? offPlanProjectNameFromCaption(caption) : '';
+  const locationCaption = (offPlanName ? cleanCaption.replace(new RegExp(offPlanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ') : cleanCaption).replace(
     /\b(?:private|ready|freehold)?\s*m(?:ailo|olo|ilo)\s+(?:land\s+)?title\b/gi,
     ' '
   )
@@ -5642,11 +5680,13 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     hints,
     listingType,
     price: effectivePrice,
-    pricePeriod: perUnit.pricePeriod || pricePeriodForUnitQuote(cleanCaption) || ownerForwardPricePeriod(listingType, cleanCaption),
+    pricePeriod: offPlan ? 'once' : (perUnit.pricePeriod || pricePeriodForUnitQuote(cleanCaption) || ownerForwardPricePeriod(listingType, cleanCaption)),
     priceMetadata,
     perUnitPrice: perUnit.perUnit ? perUnit : null,
-    bedroomDraft,
-    locationPatch
+    bedroomDraft: offPlan && bedroomDraft.bedroom_options_min != null ? { ...bedroomDraft, bedrooms: bedroomDraft.bedroom_options_min } : bedroomDraft,
+    locationPatch,
+    offPlan,
+    offPlanName
   };
 }
 
@@ -5694,6 +5734,12 @@ function recognisedAreaInDistrict(caption = '', district = '') {
 }
 
 const AREA_CANDIDATE_STOPWORDS = new Set([
+  // "deliver the apartments for occupancy in October 2027" (Vanta House,
+  // 6 Nov 2026) went to review as a property in "October", and staff were
+  // asked which district October is in. Months and construction talk are
+  // never places.
+  'january', 'february', 'march', 'april', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+  'floor', 'floors', 'completion', 'occupancy', 'construction', 'structural', 'topping', 'handover', 'phase', 'phases', 'each', 'every', 'month', 'months', 'year', 'years',
   'for', 'sale', 'sell', 'selling', 'rent', 'rental', 'rentals', 'renting', 'lease', 'to', 'let',
   'in', 'at', 'on', 'of', 'the', 'a', 'an', 'and', 'near', 'opposite', 'off', 'along', 'behind',
   'plot', 'plots', 'land', 'acre', 'acres', 'decimal', 'decimals', 'estate', 'roadside', 'road',
@@ -6994,11 +7040,13 @@ async function createEmployeeReviewProperty({
   sessionData.last_create_media_kept = (Array.isArray(storedMedia) ? storedMedia : []).length;
   const listerName = normalizeInput(agent?.full_name || customer?.fullName || 'WhatsApp customer');
   const listerPhone = normalizeInput(agent?.whatsapp || agent?.phone || customer?.phone || '');
-  const title = ownerForwardListingTitle({
-    listingType: facts.listingType,
-    area: facts.locationPatch.area,
-    bedrooms: facts.bedroomDraft.bedrooms
-  });
+  const title = facts.offPlan
+    ? `Off-plan: ${facts.offPlanName || 'new development'} in ${normalizeInput(facts.locationPatch.area) || 'Uganda'}`
+    : ownerForwardListingTitle({
+      listingType: facts.listingType,
+      area: facts.locationPatch.area,
+      bedrooms: facts.bedroomDraft.bedrooms
+    });
   const imageMedia = storedMedia.filter((item) => item.kind === 'image' && item.publicEligible !== false);
   const evidenceMedia = storedMedia.filter((item) => item.kind === 'image' && item.publicEligible === false);
   const videoMedia = storedMedia.filter((item) => item.kind === 'video');
@@ -13606,9 +13654,99 @@ function scheduleEmployeeBatchSummary(phone) {
  * a captionless photo is held and asked about instead of guessed.
  */
 const EMPLOYEE_BURST_WINDOW_MS = 30000;
+/**
+ * A developer's project caption that came through Agent 007 also opens an
+ * off-plan draft for the off-plan desk, with the same photos and video, so
+ * staff do not have to re-key it from the review listing (Vanta House,
+ * 6 Nov 2026: "on the chat bot I can't sign off plan clients").
+ */
+async function createOffPlanDraftFromIntake({ propertyId = '', caption = '', facts = {}, storedMedia = [], agent = null, phone = '' } = {}) {
+  const offPlanService = require('../services/offPlanService');
+  const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
+  const area = normalizeInput(facts.locationPatch?.area || '');
+  const district = normalizeInput(facts.locationPatch?.district || '');
+  const name = normalizeInput(facts.offPlanName) || `New development${area ? ` in ${area}` : ''}`;
+  const text = normalizeInput(caption);
+  const units = [];
+  const unitRe = /\b(\d)\s*(?:bhk|[\s-]*bed(?:room)?s?)\b[^\n]{0,60}?\b(?:starts?|starting|from|at)\b[\s:]{0,8}((?:usd|us\$|\$|ugx|ush|shs?)?\s*[\d,.]+\s*(?:m|k|bn|mn|million|billion)?\s*(?:usd|ugx|ush|shs?)?)/gi;
+  let match;
+  while ((match = unitRe.exec(text)) !== null && units.length < 6) {
+    const bedrooms = Number(match[1]);
+    const money = propertyPriceMetadata(match[2]);
+    const priceUgx = Number(money?.price || 0);
+    if (!(priceUgx > 0) || units.some((unit) => unit.bedrooms === bedrooms)) continue;
+    units.push({
+      key: `${bedrooms}bhk`,
+      label: `${bedrooms} Bedroom (${bedrooms} BHK)`,
+      bedrooms,
+      property_type: 'Apartment',
+      price_original: Number(money?.price_original || 0) || null,
+      price_original_currency: normalizeInput(money?.price_original_currency || 'UGX').toUpperCase(),
+      price_ugx: priceUgx
+    });
+  }
+  const images = (Array.isArray(storedMedia) ? storedMedia : []).filter((item) => item.kind === 'image' && item.publicEligible !== false && /^https:\/\//i.test(String(item.url || ''))).slice(0, 20)
+    .map((item, index) => ({ url: item.url, caption: `Supplied by the developer on WhatsApp (${index + 1})`, kind: 'construction_photo' }));
+  const videos = (Array.isArray(storedMedia) ? storedMedia : []).filter((item) => item.kind === 'video' && /^https:\/\//i.test(String(item.url || ''))).slice(0, 4)
+    .map((item) => ({ url: item.url, caption: 'Supplied by the developer on WhatsApp', kind: 'construction_update' }));
+  const company = normalizeInput(agent?.company_name || '');
+  const payload = {
+    country_code: 'UG',
+    name,
+    developer_name: company && !/^independent agent$/i.test(company) ? company : null,
+    source_agent_id: /^[0-9a-f-]{36}$/i.test(String(agent?.id || '')) ? agent.id : null,
+    source_display_name: normalizeInput(agent?.full_name || '') || null,
+    status: 'pending_review',
+    verification_status: 'needs_verification',
+    description: text.slice(0, 20000),
+    area: area || null,
+    district: district || null,
+    project_type: /\bapartment|flat|bhk\b/i.test(text) ? 'apartment development' : 'development',
+    original_currency: units[0]?.price_original_currency || 'UGX',
+    launch_price_ugx: units.length ? Math.min(...units.map((unit) => unit.price_ugx)) : (Number(facts.price) > 0 ? Number(facts.price) : null),
+    unit_types: units,
+    images,
+    videos,
+    extra_fields: {
+      contact_mode: 'listing_request',
+      country_name: 'Uganda',
+      country_slug: 'uganda',
+      source: 'whatsapp_employee_intake',
+      source_property_id: propertyId || null,
+      source_phone_suffix: employeeIntakePhoneSuffix(phone),
+      source_caption: text,
+      intake_note: 'Opened automatically from an Agent 007 caption that reads as an off-plan project. Unit prices, completion date, construction progress, payment plan, map pin and amenities need staff verification before publication.'
+    }
+  };
+  try {
+    const development = await offPlanService.writeDevelopment(db, payload, { actorId: null, actorRole: 'whatsapp_employee_intake' });
+    if (propertyId && development?.id) {
+      await db.query(
+        `UPDATE properties SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('off_plan_development_id', $2::text, 'off_plan_project_name', $3::text) WHERE id = $1`,
+        [propertyId, development.id, name]
+      );
+    }
+    return development;
+  } catch (error) {
+    // A second caption for the same project (same slug) is the usual cause: the
+    // draft already exists, so only the review listing is kept.
+    logger.warn('Off-plan draft from Agent 007 not created', { name, error: error.message || String(error) });
+    return null;
+  }
+}
+
 function noteEmployeePropertyCreated(data = {}, propertyId = '', storedMedia = [], caption = '') {
   const now = Date.now();
   if (propertyId) {
+    try {
+      const facts = employeePropertyFacts(caption, data);
+      if (facts.offPlan) {
+        const snapshot = Array.isArray(storedMedia) ? storedMedia.map((item) => ({ ...item })) : [];
+        deferWhatsappWork('off-plan draft', () => createOffPlanDraftFromIntake({ propertyId, caption, facts, storedMedia: snapshot, agent: data.agent || null, phone: data.phone || data.sender_phone || '' }));
+      }
+    } catch (error) {
+      logger.warn('Off-plan draft check failed', { error: error.message || String(error) });
+    }
     const media = Array.isArray(storedMedia) ? storedMedia : [];
     data.property_media_meta = {
       ...(data.property_media_meta && typeof data.property_media_meta === 'object' ? data.property_media_meta : {}),
@@ -21620,6 +21758,9 @@ module.exports.__test = {
   noteEmployeeBatchDuplicate,
   employeeSenderMs,
   employeeShouldHoldUnassignedMedia,
+  employeeCaptionLooksOffPlan,
+  offPlanProjectNameFromCaption,
+  createOffPlanDraftFromIntake,
   employeeWaitingCaptionCount,
   settleHeldMediaBySenderTime,
   rememberEmployeeQueuedSubmission,

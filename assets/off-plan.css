@@ -288,3 +288,65 @@
 .off-plan-floor-plan-grid figure{overflow:hidden;border:1px solid #dce7df;border-radius:16px;background:#fff}
 .off-plan-floor-plan-grid img{width:100%;aspect-ratio:4/3;object-fit:cover}
 .off-plan-floor-plan-grid figcaption{padding:10px 12px;font-size:.75rem;color:#475569}
+/* Homes you can walk through, construction diary, price by floor, key facts, documents (6 Nov 2026) */
+.off-plan-floor-plan-grid img.is-plan{object-fit:contain;background:#faf8f4}
+.off-plan-walk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.off-plan-walk-card{display:grid;gap:12px;border:1px solid #dce7df;border-radius:18px;background:#fff;padding:14px}
+.off-plan-walk-card h3{margin:0;font-size:1rem;font-weight:900;color:#0f1f16}
+.off-plan-walk-video{overflow:hidden;border-radius:14px;background:#0b1410;aspect-ratio:16/9}
+.off-plan-walk-video video,.off-plan-walk-video img{display:block;width:100%;height:100%;object-fit:cover}
+.off-plan-walk-actions{display:flex;flex-wrap:wrap;gap:8px}
+.off-plan-walk-button{display:inline-flex;align-items:center;gap:7px;border:1px solid #bfd9c8;border-radius:10px;background:#fff;padding:9px 12px;font-size:.78rem;font-weight:900;color:#14532d;text-decoration:none;cursor:pointer}
+.off-plan-walk-button.is-primary{background:#15803d;border-color:#15803d;color:#fff}
+.off-plan-walk-button:hover{filter:brightness(.97)}
+.off-plan-floor-meter{display:grid;gap:8px;border:1px solid #dce7df;border-radius:16px;background:#f7fbf8;padding:14px}
+.off-plan-floor-meter-label{font-size:.78rem;font-weight:700;color:#334155}.off-plan-floor-meter-label strong{color:#14532d}
+.off-plan-floor-stack{display:grid;gap:3px}
+.off-plan-floor-stack i{display:block;height:12px;border-radius:3px;background:#e2e8e4;border:1px solid #d1dbd4}
+.off-plan-floor-stack i.is-built{background:#16a34a;border-color:#15803d}
+.off-plan-timeline{list-style:none;margin:0;padding:0;display:grid;gap:10px;position:relative}
+.off-plan-timeline li{position:relative;padding-left:26px;border-left:2px solid #d9eadf;margin-left:8px;padding-bottom:4px}
+.off-plan-timeline li:before{content:"";position:absolute;left:-8px;top:4px;width:14px;height:14px;border-radius:999px;background:#fff;border:3px solid #cbd5d0}
+.off-plan-timeline li.is-done:before{background:#16a34a;border-color:#16a34a}
+.off-plan-timeline li.is-next:before{border-color:#f59e0b;background:#fff7ed}
+.off-plan-timeline li strong{display:block;font-size:.9rem;color:#0f1f16}
+.off-plan-timeline li p{margin:3px 0 0;font-size:.8rem;line-height:1.5;color:#475569}
+.off-plan-timeline-date{display:block;font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#14833b}
+.off-plan-diary-entry{border:1px solid #dce7df;border-radius:16px;background:#fff;padding:14px}
+.off-plan-diary-head h3{margin:4px 0 0;font-size:1rem;font-weight:900;color:#0f1f16}
+.off-plan-diary-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.off-plan-diary-photos img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;background:#e8ede9}
+.off-plan-diary-video{max-width:360px;overflow:hidden;border-radius:14px;background:#0b1410}
+.off-plan-diary-video video{display:block;width:100%;max-height:520px}
+.off-plan-floor-price{border-top:1px solid #e5ece7;padding-top:18px}
+.off-plan-floor-price-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.off-plan-floor-price-card{display:grid;gap:3px;border:1px solid #d9eadf;border-radius:12px;background:#f7fbf8;padding:12px}
+.off-plan-floor-price-card span{font-size:.76rem;font-weight:700;color:#475569}
+.off-plan-floor-price-card strong{font-size:1rem;color:#0f1f16}
+.off-plan-floor-price-card small{font-size:.72rem;color:#5f6b64}
+.off-plan-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:0}
+.off-plan-facts>div{border:1px solid #e5ece7;border-radius:12px;padding:11px 12px;background:#fff}
+.off-plan-facts dt{font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#6b7280}
+.off-plan-facts dd{margin:3px 0 0;font-size:.88rem;font-weight:700;color:#0f1f16;line-height:1.45}
+.off-plan-document{display:flex;align-items:center;gap:10px;border:1px solid #dce7df;border-radius:12px;background:#f7fbf8;padding:10px 12px;font-size:.8rem;font-weight:800;color:#14532d;text-decoration:none}
+.off-plan-document span{flex:1;min-width:0}
+.off-plan-walkaround{width:min(96vw,1100px);max-width:none;border:0;border-radius:20px;padding:0;background:#0b1410;color:#fff;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.off-plan-walkaround::backdrop{background:rgba(5,12,8,.78)}
+.off-plan-walkaround-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 18px 10px}
+.off-plan-walkaround-head h2{margin:2px 0 0;font-size:1.05rem;font-weight:900}
+.off-plan-walkaround-close{border:0;border-radius:999px;width:38px;height:38px;background:rgba(255,255,255,.12);color:#fff;font-size:1.1rem;cursor:pointer}
+.off-plan-walkaround-stage{position:relative;width:100%;aspect-ratio:16/9;max-height:62vh;background:#101c15}
+#off-plan-walkaround-canvas{position:absolute;inset:0}
+#off-plan-walkaround-canvas canvas{outline:none}
+.off-plan-walkaround-status{position:absolute;inset:0;display:grid;place-items:center;padding:20px;text-align:center;font-weight:800;background:rgba(10,20,14,.7)}
+.off-plan-walkaround-caption{position:absolute;left:14px;bottom:14px;max-width:70%;border-radius:10px;background:rgba(8,24,14,.72);padding:8px 12px;font-size:.85rem;font-weight:800;pointer-events:none}
+.off-plan-walkaround-caption:empty{display:none}
+.off-plan-walkaround-hint{margin:0;padding:10px 18px 0;font-size:.76rem;color:#b8cbbf}
+.off-plan-walkaround-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px 18px}
+.off-plan-walkaround-pad{display:grid;justify-items:center;gap:6px}
+.off-plan-walkaround-pad>div{display:flex;gap:6px}
+.off-plan-walkaround-pad button{width:46px;height:42px;border:1px solid rgba(255,255,255,.2);border-radius:10px;background:rgba(255,255,255,.1);color:#fff;font-size:1rem;cursor:pointer;touch-action:none;user-select:none}
+.off-plan-walkaround-pad button:active{background:#15803d}
+.off-plan-walkaround .off-plan-walk-button{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff}
+.off-plan-walkaround .off-plan-walk-button.is-primary{background:#15803d;border-color:#15803d}
+@media (max-width:640px){.off-plan-walkaround{width:100vw;border-radius:0;max-height:100vh;height:100vh}.off-plan-walkaround-stage{aspect-ratio:auto;height:52vh;max-height:none}}

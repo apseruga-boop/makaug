@@ -1,0 +1,788 @@
+{
+ "country_code": "UG",
+ "name": "Vanta House",
+ "slug": "vanta-house",
+ "developer_name": "Blackstone Real Estate Limited",
+ "source_agent_id": "ed1197fd-6f6d-46fe-9b8d-2ca8a1f96c92",
+ "source_display_name": "Blackstone Real Estate Limited — John Yan",
+ "status": "pending_review",
+ "verification_status": "partially_verified",
+ "description": "Vanta House is a boutique development of 100 apartments on Naguru hill, one of Kampala’s most established residential neighbourhoods, by Blackstone Real Estate Limited. The 12-floor building has 10 residential floors over two parking levels and offers 1, 2 and 3 bedroom homes of about 52, 92 and 160 m², delivered fully finished, with an outdoor pool, a gym, a rooftop bar and lounge, landscaped gardens, 24-hour security, CCTV, smart access control, a backup generator and 24-hour water. Prices start from USD 53,800 for a 1 bedroom (first-floor price; each floor above adds 1%), paid in full or 30% on signing with the balance over 20 months during construction. The structure reached the 7th floor in November 2026, at about 2.5 floors a month; structural topping-out is expected by the end of 2026 and handover in October 2027. The land is a 99-year leasehold: Ugandan citizens may apply for conversion to freehold where applicable, and foreign buyers may purchase and register under Ugandan law.",
+ "area": "Naguru",
+ "district": "Kampala",
+ "address": "Plot 3A, Naguru Vale Road, Naguru, Kampala",
+ "latitude": 0.3402,
+ "longitude": 32.6076,
+ "project_type": "apartment development",
+ "completion_date": "2027-10-31",
+ "construction_progress": 30,
+ "units_total": 100,
+ "launch_price_ugx": 221700000,
+ "original_currency": "USD",
+ "payment_plan_months": 20,
+ "unit_types": [
+  {
+   "key": "1bhk",
+   "label": "1 Bedroom (1 BHK) · 52 m²",
+   "bedrooms": 1,
+   "bathrooms": 1,
+   "property_type": "Apartment",
+   "size_sqm": 52,
+   "price_original": 53800,
+   "price_original_currency": "USD",
+   "price_ugx": 221700000,
+   "balcony": "Full-width balcony",
+   "living": "Open living and dining",
+   "management_fee_usd_month": 70,
+   "floor_plan_url": "/assets/off-plan/vanta-house/floor-plan-1bhk.jpg"
+  },
+  {
+   "key": "2bhk",
+   "label": "2 Bedroom (2 BHK) · 92 m²",
+   "bedrooms": 2,
+   "bathrooms": 2,
+   "property_type": "Apartment",
+   "size_sqm": 92,
+   "price_original": 95000,
+   "price_original_currency": "USD",
+   "price_ugx": 391500000,
+   "balcony": "Dual balconies",
+   "living": "Generous social space",
+   "management_fee_usd_month": 115,
+   "floor_plan_url": "/assets/off-plan/vanta-house/floor-plan-2bhk.jpg"
+  },
+  {
+   "key": "3bhk",
+   "label": "3 Bedroom (3 BHK) · 160 m²",
+   "bedrooms": 3,
+   "bathrooms": 3,
+   "property_type": "Apartment",
+   "size_sqm": 160,
+   "price_original": 166000,
+   "price_original_currency": "USD",
+   "price_ugx": 684000000,
+   "balcony": "Multiple balconies",
+   "living": "Expansive entertaining space",
+   "management_fee_usd_month": 180,
+   "floor_plan_url": "/assets/off-plan/vanta-house/floor-plan-3bhk.jpg"
+  }
+ ],
+ "payment_plan": [
+  {
+   "key": "initial",
+   "label": "Initial payment on signing",
+   "kind": "percent",
+   "percent": 30,
+   "due": "On signing the Sale and Purchase Agreement",
+   "verified": true
+  },
+  {
+   "key": "balance",
+   "label": "Balance over 20 months",
+   "kind": "equal_monthly",
+   "months": 20,
+   "due": "Monthly during construction; the schedule may be adjusted by agreement",
+   "verified": true
+  },
+  {
+   "key": "full",
+   "label": "Or pay in full",
+   "kind": "full_payment",
+   "due": "Full price after signing; any discount follows the developer’s sales policy",
+   "verified": true
+  }
+ ],
+ "images": [
+  {
+   "url": "/assets/off-plan/vanta-house/hero-tower-sunset.jpg",
+   "caption": "Vanta House — artist’s impression of the tower at sunset (Blackstone Real Estate)",
+   "kind": "artist_impression"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/courtyard-and-pool.jpg",
+   "caption": "Courtyard, swimming pool and the apartment entrance — artist’s impression",
+   "kind": "artist_impression"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/pool-deck-render.jpg",
+   "caption": "Pool deck — artist’s impression; final facilities may differ",
+   "kind": "artist_impression"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/rooftop-bar-render.jpg",
+   "caption": "Rooftop bar and leisure lounge — artist’s impression",
+   "kind": "artist_impression"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/construction-2026-11-slab-pour-1.jpg",
+   "caption": "Site photo, November 2026: pouring an upper-floor slab",
+   "kind": "construction_photo",
+   "taken_at": "2026-11"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/construction-2026-11-slab-pour-2.jpg",
+   "caption": "Site photo, November 2026: slab works on the upper floors",
+   "kind": "construction_photo",
+   "taken_at": "2026-11"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/construction-2026-11-upper-floor-formwork.jpg",
+   "caption": "Site photo, November 2026: formwork being struck on a completed floor",
+   "kind": "construction_photo",
+   "taken_at": "2026-11"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/construction-2026-11-blockwork-1.jpg",
+   "caption": "Site photo, November 2026: blockwork on the lower floors",
+   "kind": "construction_photo",
+   "taken_at": "2026-11"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/construction-2026-11-blockwork-2.jpg",
+   "caption": "Site photo, November 2026: walling in progress",
+   "kind": "construction_photo",
+   "taken_at": "2026-11"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/construction-2026-11-blockwork-3.jpg",
+   "caption": "Site photo, November 2026: internal walls going up",
+   "kind": "construction_photo",
+   "taken_at": "2026-11"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/construction-2026-11-interior-structure.jpg",
+   "caption": "Site photo, November 2026: the structural frame inside a lower floor",
+   "kind": "construction_photo",
+   "taken_at": "2026-11"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/construction-2026-11-ground-floor.jpg",
+   "caption": "Site photo, November 2026: the ground-level structure",
+   "kind": "construction_photo",
+   "taken_at": "2026-11"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/construction-2026-11-site-from-above.jpg",
+   "caption": "Site photo, November 2026: the site from above",
+   "kind": "construction_photo",
+   "taken_at": "2026-11"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/location-map.jpg",
+   "caption": "Location map supplied by the developer: Plot 3A, Naguru Vale Road",
+   "kind": "location_map"
+  }
+ ],
+ "videos": [
+  {
+   "url": "/assets/off-plan/vanta-house/construction-update-2026-11.mp4",
+   "poster_url": "/assets/off-plan/vanta-house/construction-update-2026-11-poster.jpg",
+   "caption": "Construction update, November 2026 — John Yan, Founder & CEO of Blackstone Real Estate, on site",
+   "kind": "construction_update"
+  }
+ ],
+ "floor_plans": [
+  {
+   "url": "/assets/off-plan/vanta-house/floor-plan-typical-floor.jpg",
+   "caption": "Typical floor plan: where the 1, 2 and 3 BHK homes sit, with the Kololo and Lake Victoria sides marked",
+   "kind": "floor_plan",
+   "unit_key": "typical"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/floor-plan-1bhk.jpg",
+   "caption": "1 Bedroom (1 BHK), about 52 m²: open living and dining, fitted kitchen, bedroom, bathroom and balcony",
+   "kind": "floor_plan",
+   "unit_key": "1bhk"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/floor-plan-2bhk.jpg",
+   "caption": "2 Bedroom (2 BHK), about 92 m²: two bedrooms, two bathrooms, living and dining and two balconies",
+   "kind": "floor_plan",
+   "unit_key": "2bhk"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/floor-plan-3bhk.jpg",
+   "caption": "3 Bedroom (3 BHK), about 160 m²: three bedrooms, three bathrooms, store, living, dining and kitchen and balconies",
+   "kind": "floor_plan",
+   "unit_key": "3bhk"
+  }
+ ],
+ "amenities": [
+  {
+   "label": "Outdoor swimming pool",
+   "labels": {
+    "en": "Outdoor swimming pool",
+    "lg": "Ekidiba ky’okuwuga eky’ebweru",
+    "sw": "Bwawa la kuogelea la nje"
+   }
+  },
+  {
+   "label": "Fully equipped gym",
+   "labels": {
+    "en": "Fully equipped gym",
+    "lg": "Ekifo ky’okukola dduyiro ekijjuvu",
+    "sw": "Gym iliyokamilika"
+   }
+  },
+  {
+   "label": "Rooftop bar and leisure lounge",
+   "labels": {
+    "en": "Rooftop bar and leisure lounge",
+    "lg": "Baala n’ekifo eky’okuwummuliramu ku kasolya",
+    "sw": "Baa na sehemu ya kupumzika juu ya paa"
+   }
+  },
+  {
+   "label": "Landscaped gardens and courtyard",
+   "labels": {
+    "en": "Landscaped gardens and courtyard",
+    "lg": "Ennimiro ezitegekeddwa n’oluggya",
+    "sw": "Bustani zilizopambwa na ua"
+   }
+  },
+  {
+   "label": "24-hour security",
+   "labels": {
+    "en": "24-hour security",
+    "lg": "Obukuumi obw’essaawa 24",
+    "sw": "Ulinzi wa saa 24"
+   }
+  },
+  {
+   "label": "CCTV surveillance",
+   "labels": {
+    "en": "CCTV surveillance",
+    "lg": "Kkamera za CCTV",
+    "sw": "Kamera za CCTV"
+   }
+  },
+  {
+   "label": "Smart access control",
+   "labels": {
+    "en": "Smart access control",
+    "lg": "Enkola y’okuyingira ey’omulembe",
+    "sw": "Mfumo wa kisasa wa kuingia"
+   }
+  },
+  {
+   "label": "Backup generator",
+   "labels": {
+    "en": "Backup generator",
+    "lg": "Jenereta ey’obuyambi",
+    "sw": "Jenereta ya akiba"
+   }
+  },
+  {
+   "label": "24-hour water supply",
+   "labels": {
+    "en": "24-hour water supply",
+    "lg": "Amazzi ag’essaawa 24",
+    "sw": "Maji ya saa 24"
+   }
+  },
+  {
+   "label": "Two parking levels (basement and ground)",
+   "labels": {
+    "en": "Two parking levels (basement and ground)",
+    "lg": "Emitendera ebiri egy’okusimba emmotoka",
+    "sw": "Ngazi mbili za maegesho (chini ya ardhi na ghorofa ya chini)"
+   }
+  },
+  {
+   "label": "Property management for investors",
+   "labels": {
+    "en": "Property management for investors",
+    "lg": "Obuweereza bw’okulabirira ennyumba eri abasiga ensimbi",
+    "sw": "Usimamizi wa mali kwa wawekezaji"
+   }
+  },
+  {
+   "label": "Fully finished delivery",
+   "labels": {
+    "en": "Fully finished delivery",
+    "lg": "Ennyumba ziweebwa nga zimalirizibwa",
+    "sw": "Nyumba zinakabidhiwa zikiwa zimekamilika"
+   }
+  }
+ ],
+ "nearby_places": [
+  {
+   "name": "Naguru Parents School",
+   "category": "school",
+   "lat": 0.34079,
+   "lng": 32.6092,
+   "vicinity": "Naguru",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Naguru · OpenStreetMap"
+  },
+  {
+   "name": "Hill Preparatory School",
+   "category": "school",
+   "lat": 0.34277,
+   "lng": 32.60952,
+   "vicinity": "Naguru",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Naguru · OpenStreetMap"
+  },
+  {
+   "name": "Kampala Parents School",
+   "category": "school",
+   "lat": 0.3418,
+   "lng": 32.59899,
+   "vicinity": "Naguru / Kololo",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Naguru / Kololo · OpenStreetMap"
+  },
+  {
+   "name": "Delhi Public School International",
+   "category": "school",
+   "lat": 0.34257,
+   "lng": 32.59979,
+   "vicinity": "Naguru",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Naguru · OpenStreetMap"
+  },
+  {
+   "name": "Kampala International School (KISU)",
+   "category": "school",
+   "lat": 0.35185,
+   "lng": 32.59232,
+   "vicinity": "Bukoto",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Bukoto · OpenStreetMap"
+  },
+  {
+   "name": "China–Uganda Friendship Hospital (Naguru Hospital)",
+   "category": "hospital",
+   "lat": 0.32944,
+   "lng": 32.60608,
+   "vicinity": "Naguru",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Naguru · OpenStreetMap"
+  },
+  {
+   "name": "Iran–Uganda Hospital",
+   "category": "hospital",
+   "lat": 0.33358,
+   "lng": 32.61271,
+   "vicinity": "Naguru",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Naguru · OpenStreetMap"
+  },
+  {
+   "name": "Kadic Hospital",
+   "category": "hospital",
+   "lat": 0.34952,
+   "lng": 32.6042,
+   "vicinity": "Bukoto",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Bukoto · OpenStreetMap"
+  },
+  {
+   "name": "UMC Victoria Hospital",
+   "category": "hospital",
+   "lat": 0.35028,
+   "lng": 32.6032,
+   "vicinity": "Bukoto",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Bukoto · OpenStreetMap"
+  },
+  {
+   "name": "Makerere University Business School (MUBS)",
+   "category": "university",
+   "lat": 0.32817,
+   "lng": 32.61761,
+   "vicinity": "Nakawa",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Nakawa · OpenStreetMap"
+  },
+  {
+   "name": "ISBAT University",
+   "category": "university",
+   "lat": 0.33442,
+   "lng": 32.6014,
+   "vicinity": "Lugogo bypass",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Lugogo bypass · OpenStreetMap"
+  },
+  {
+   "name": "Kyambogo University",
+   "category": "university",
+   "lat": 0.34998,
+   "lng": 32.63069,
+   "vicinity": "Kyambogo",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Kyambogo · OpenStreetMap"
+  },
+  {
+   "name": "Lugogo Shopping Mall",
+   "category": "shopping_mall",
+   "lat": 0.32665,
+   "lng": 32.60683,
+   "vicinity": "Lugogo",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Lugogo · OpenStreetMap"
+  },
+  {
+   "name": "Capital Shoppers Ntinda",
+   "category": "supermarket",
+   "lat": 0.34928,
+   "lng": 32.61675,
+   "vicinity": "Ntinda",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Ntinda · OpenStreetMap"
+  },
+  {
+   "name": "Acacia Mall",
+   "category": "shopping_mall",
+   "lat": 0.33659,
+   "lng": 32.58773,
+   "vicinity": "Kololo",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Kololo · OpenStreetMap"
+  },
+  {
+   "name": "Ntinda Market",
+   "category": "market",
+   "lat": 0.34412,
+   "lng": 32.61603,
+   "vicinity": "Ntinda",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Ntinda · OpenStreetMap"
+  },
+  {
+   "name": "Nakawa Market",
+   "category": "market",
+   "lat": 0.32943,
+   "lng": 32.61221,
+   "vicinity": "Nakawa",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Nakawa · OpenStreetMap"
+  },
+  {
+   "name": "Kololo Airstrip",
+   "category": "airport",
+   "lat": 0.32607,
+   "lng": 32.5946,
+   "vicinity": "Kololo",
+   "source": "OpenStreetMap contributors (ODbL)",
+   "note": "Kololo · OpenStreetMap"
+  }
+ ],
+ "brochure_settings": {
+  "brand": "makaug.com",
+  "footer_url": "https://makaug.com/off-plan/vanta-house"
+ },
+ "walkthrough_settings": {
+  "status": "rendered",
+  "engine": "makaug_three_js",
+  "layout_url": "/assets/off-plan/vanta-house/walkthrough-layouts.json",
+  "units": [
+   "1bhk",
+   "2bhk",
+   "3bhk"
+  ],
+  "rendered_at": "2026-11-06"
+ },
+ "extra_fields": {
+  "contact_mode": "listing_request",
+  "country_name": "Uganda",
+  "country_slug": "uganda",
+  "region": "East Africa",
+  "source": "developer_whatsapp_2026_11_06_and_blackstonerealestates_com",
+  "source_note": "Captions, 13 site photos and a progress video forwarded by the developer’s founder to the makaug WhatsApp on 6 Nov 2026; unit sizes, prices, payment terms, amenities, floor plans and the purchase guide from blackstonerealestates.com (homepage and purchase guide PDF, read 6 Nov 2026).",
+  "source_documents_verified": true,
+  "price_fx_rate_ugx": 4120.59,
+  "price_fx_as_of": "2026-11-05",
+  "price_fx_source": "makaug /api/fx (fawazahmed0 currency-api)",
+  "developer_website": "https://blackstonerealestates.com/",
+  "developer_contact": {
+   "name": "John Yan",
+   "role": "Founder & CEO",
+   "phone": "+256709973205",
+   "whatsapp": "+256709973205",
+   "sales_phone": "+256741909418",
+   "email": "yandadrc@gmail.com",
+   "website": "https://blackstonerealestates.com/",
+   "registration_no": "80034143600534"
+  },
+  "area_overview": "Naguru is a hillside neighbourhood on the north-east side of Kampala, between Kololo, Ntinda and Nakawa, with Lugogo, Bugolobi and Nakasero a short drive away. Plot 3A sits on Naguru Vale Road, off Naguru Drive. Within about a kilometre are Naguru Parents School, Hill Preparatory School, the China–Uganda Friendship Hospital (Naguru Hospital) and the Ntinda and Nakawa markets; Lugogo Mall, Capital Shoppers Ntinda, MUBS and ISBAT University are within about 1.5 km, and Acacia Mall and the Kololo airstrip about 2.5 km away.",
+  "progress_basis": "The percentage is makaug’s estimate from the developer’s reported stage: the structural frame at floor 7 of 12 in November 2026 (about 58% of the structure), with finishes, services and external works still to follow. The developer’s own milestones are structural topping-out by the end of 2026 and handover in October 2027.",
+  "investment_note": "The developer estimates a rental yield of up to 15% and payback within about 7 years, and offers property management for investors. These are the developer’s estimates, not guarantees; take independent financial and legal advice before you commit.",
+  "floor_price_rule": {
+   "base_floor": 1,
+   "top_floor": 10,
+   "step_percent": 1,
+   "note": "The developer prices unit by unit: the final price depends on the unit, floor, views, orientation, natural light and ventilation, and is set in the Sale and Purchase Agreement. First-floor starting prices are shown; each floor above adds 1%.",
+   "notes": {
+    "lg": "Omuzimbi ateeka omuwendo ku buli nnyumba kinnoomu: omuwendo ogusembayo gusinziira ku nnyumba, omwaliiro, endabika, enjuba n’empewo, era guteekebwa mu ndagaano y’okutunda. Emiwendo gy’omwaliiro ogusooka gye giraga; buli mwaliiro waggulu gwongerako 1%.",
+    "sw": "Msanidi anapanga bei kwa kila nyumba: bei ya mwisho inategemea nyumba, sakafu, mandhari, mwelekeo, mwanga na hewa, na inawekwa kwenye mkataba wa mauzo. Bei za kuanzia za sakafu ya kwanza zinaonyeshwa; kila sakafu ya juu huongeza 1%."
+   }
+  },
+  "management_fees": [
+   {
+    "unit_key": "1bhk",
+    "amount": 70,
+    "currency": "USD",
+    "per": "month"
+   },
+   {
+    "unit_key": "2bhk",
+    "amount": 115,
+    "currency": "USD",
+    "per": "month"
+   },
+   {
+    "unit_key": "3bhk",
+    "amount": 180,
+    "currency": "USD",
+    "per": "month"
+   }
+  ],
+  "key_facts": [
+   {
+    "label": "Developer",
+    "value": "Blackstone Real Estate Limited (Reg. No. 80034143600534), an international boutique developer focused on premium residential development in East and Central Africa",
+    "labels": {
+     "lg": "Omuzimbi",
+     "sw": "Msanidi"
+    }
+   },
+   {
+    "label": "Address",
+    "value": "Plot 3A, Naguru Vale Road, Naguru, Kampala",
+    "labels": {
+     "lg": "Endagiriro",
+     "sw": "Anwani"
+    }
+   },
+   {
+    "label": "Building",
+    "value": "12 floors: 10 residential floors over two parking levels (basement and ground), 100 apartments",
+    "labels": {
+     "lg": "Ekizimbe",
+     "sw": "Jengo"
+    },
+    "values": {
+     "lg": "Emyaliiro 12: emyaliiro 10 egy’amaka ku mitendera ebiri egy’okusimba emmotoka, apartimenti 100",
+     "sw": "Sakafu 12: sakafu 10 za makazi juu ya ngazi mbili za maegesho (chini ya ardhi na ghorofa ya chini), fleti 100"
+    }
+   },
+   {
+    "label": "Ownership",
+    "value": "99-year leasehold. Ugandan citizens may apply for conversion to freehold where applicable; foreign individuals and companies may purchase and register under Ugandan law",
+    "labels": {
+     "lg": "Obwannannyini",
+     "sw": "Umiliki"
+    },
+    "values": {
+     "lg": "Leasehold ya myaka 99. Bannayuganda basobola okusaba okukyusa okudda ku freehold; abagwira n’ebitongole by’ebweru basobola okugula n’okuwandiisa okusinziira ku mateeka ga Uganda",
+     "sw": "Ukodishaji wa miaka 99. Raia wa Uganda wanaweza kuomba kubadilisha kuwa umiliki kamili; wageni na kampuni za kigeni wanaweza kununua na kusajili chini ya sheria za Uganda"
+    }
+   },
+   {
+    "label": "Delivery standard",
+    "value": "Fully finished apartments, excluding movable furniture and appliances (beds, sofas, dining tables, televisions, refrigerators)",
+    "labels": {
+     "lg": "Engeri gye ziweebwamu",
+     "sw": "Kiwango cha ukamilishaji"
+    },
+    "values": {
+     "lg": "Apartimenti ziweebwa nga zimalirizibwa, nga tezitwaliramu ebintu ebitambuzibwa (ebitanda, sofa, emmeeza, TV, firiigi)",
+     "sw": "Fleti zimekamilika kabisa, bila samani na vifaa vinavyohamishika (vitanda, sofa, meza, televisheni, friji)"
+    }
+   },
+   {
+    "label": "Construction period",
+    "value": "About 15 months; expected completion October 2027, subject to the Sale and Purchase Agreement",
+    "labels": {
+     "lg": "Ebbanga ly’okuzimba",
+     "sw": "Muda wa ujenzi"
+    },
+    "values": {
+     "lg": "Emyezi nga 15; esuubirwa okuggwa Okitobba 2027, okusinziira ku ndagaano y’okutunda",
+     "sw": "Takriban miezi 15; inatarajiwa kukamilika Oktoba 2027, kulingana na mkataba wa mauzo"
+    }
+   },
+   {
+    "label": "Payment methods",
+    "value": "Bank transfer, cash or cheque; official receipts are issued",
+    "labels": {
+     "lg": "Engeri z’okusasula",
+     "sw": "Njia za malipo"
+    },
+    "values": {
+     "lg": "Okusindika mu bbanka, ssente enkalu oba cheque; risiiti entongole ziweebwa",
+     "sw": "Uhamisho wa benki, fedha taslimu au hundi; risiti rasmi hutolewa"
+    }
+   },
+   {
+    "label": "Views",
+    "value": "Homes face the Kololo side or the Lake Victoria side of the typical floor; the developer prices each unit by floor, view and orientation",
+    "labels": {
+     "lg": "Endabika",
+     "sw": "Mandhari"
+    },
+    "values": {
+     "lg": "Amaka gatunuulira oludda lwa Kololo oba olwa Nnyanja Victoria; omuzimbi ateeka omuwendo ku buli nnyumba okusinziira ku mwaliiro, endabika n’enjuba",
+     "sw": "Nyumba zinaelekea upande wa Kololo au upande wa Ziwa Victoria; msanidi anapanga bei ya kila nyumba kulingana na sakafu, mandhari na mwelekeo"
+    }
+   }
+  ],
+  "government_charges": [
+   {
+    "label": "Stamp duty",
+    "value": "1.5% of the transaction value (or the government-assessed value), collected by the Uganda Revenue Authority",
+    "labels": {
+     "lg": "Stamp duty",
+     "sw": "Ushuru wa stempu"
+    },
+    "values": {
+     "lg": "1.5% ku muwendo gw’okugula (oba omuwendo gavumenti gw’eteeka), ekuŋŋaanyizibwa URA",
+     "sw": "1.5% ya thamani ya mauzo (au thamani iliyokadiriwa na serikali), inakusanywa na URA"
+    }
+   },
+   {
+    "label": "Property registration fee",
+    "value": "UGX 10,000, paid to the land administration authorities",
+    "labels": {
+     "lg": "Ssente z’okuwandiisa",
+     "sw": "Ada ya usajili"
+    },
+    "values": {
+     "lg": "UGX 10,000, zisasulwa eri ab’ettaka",
+     "sw": "UGX 10,000, inalipwa kwa mamlaka ya ardhi"
+    }
+   }
+  ],
+  "documents": [
+   {
+    "label": "Vanta House purchase guide — Blackstone Real Estate Limited (PDF, English)",
+    "url": "/assets/off-plan/vanta-house/vanta-house-purchase-guide-en.pdf",
+    "kind": "developer_guide"
+   }
+  ],
+  "virtual_tours": [
+   {
+    "unit_key": "1bhk",
+    "label": "1 BHK 360° tour",
+    "url": "https://vr.justeasy.cn/view/17863t47p04688k4-1783421887.html",
+    "provider": "Developer"
+   },
+   {
+    "unit_key": "2bhk",
+    "label": "2 BHK 360° tour",
+    "url": "https://vr.justeasy.cn/view/1c78xy237506a139-1783757246.html",
+    "provider": "Developer"
+   },
+   {
+    "unit_key": "3bhk",
+    "label": "3 BHK 360° tour",
+    "url": "https://vr.justeasy.cn/view/qu17lp8375u85520-1783760602.html",
+    "provider": "Developer"
+   }
+  ],
+  "walkthroughs": [
+   {
+    "unit_key": "1bhk",
+    "label": "1 Bedroom · 52 m²",
+    "video_url": "/assets/off-plan/vanta-house/walkthrough-1bhk.mp4",
+    "poster_url": "/assets/off-plan/vanta-house/walkthrough-1bhk-poster.jpg",
+    "layout_url": "/assets/off-plan/vanta-house/walkthrough-layouts.json",
+    "layout_key": "1bhk",
+    "duration_seconds": 58
+   },
+   {
+    "unit_key": "2bhk",
+    "label": "2 Bedroom · 92 m²",
+    "video_url": "/assets/off-plan/vanta-house/walkthrough-2bhk.mp4",
+    "poster_url": "/assets/off-plan/vanta-house/walkthrough-2bhk-poster.jpg",
+    "layout_url": "/assets/off-plan/vanta-house/walkthrough-layouts.json",
+    "layout_key": "2bhk",
+    "duration_seconds": 79
+   },
+   {
+    "unit_key": "3bhk",
+    "label": "3 Bedroom · 160 m²",
+    "video_url": "/assets/off-plan/vanta-house/walkthrough-3bhk.mp4",
+    "poster_url": "/assets/off-plan/vanta-house/walkthrough-3bhk-poster.jpg",
+    "layout_url": "/assets/off-plan/vanta-house/walkthrough-layouts.json",
+    "layout_key": "3bhk",
+    "duration_seconds": 95
+   }
+  ],
+  "construction_updates": [
+   {
+    "date": "2026-11-06",
+    "title": "Structure at the 7th floor",
+    "note": "The structural frame has reached the 7th floor, at an average pace of 2.5 floors a month, with blockwork already under way on the lower floors. Structural topping-out is planned by the end of 2026 and the apartments are to be delivered for occupancy in October 2027.",
+    "titles": {
+     "lg": "Ensengeka etuuse ku mwaliiro ogw’omusanvu",
+     "sw": "Muundo umefika sakafu ya 7"
+    },
+    "notes": {
+     "lg": "Ensengeka y’ekizimbe etuuse ku mwaliiro ogw’omusanvu, ku sipiidi ya myaliiro 2.5 buli mwezi, ng’okuzimba ebisenge kutandise ku myaliiro egya wansi. Okumaliriza ensengeka kutegekeddwa okuggwa ku nkomerero ya 2026, era apartimenti ziweebwe mu Okitobba 2027.",
+     "sw": "Muundo wa jengo umefika sakafu ya 7, kwa wastani wa sakafu 2.5 kwa mwezi, na ujenzi wa kuta umeanza kwenye sakafu za chini. Kukamilisha muundo kumepangwa kufikia mwisho wa 2026, na fleti zitakabidhiwa Oktoba 2027."
+    },
+    "floors_done": 7,
+    "floors_total": 12,
+    "image_urls": [
+     "/assets/off-plan/vanta-house/construction-2026-11-slab-pour-1.jpg",
+     "/assets/off-plan/vanta-house/construction-2026-11-slab-pour-2.jpg",
+     "/assets/off-plan/vanta-house/construction-2026-11-upper-floor-formwork.jpg",
+     "/assets/off-plan/vanta-house/construction-2026-11-blockwork-1.jpg",
+     "/assets/off-plan/vanta-house/construction-2026-11-blockwork-2.jpg",
+     "/assets/off-plan/vanta-house/construction-2026-11-blockwork-3.jpg",
+     "/assets/off-plan/vanta-house/construction-2026-11-interior-structure.jpg",
+     "/assets/off-plan/vanta-house/construction-2026-11-ground-floor.jpg",
+     "/assets/off-plan/vanta-house/construction-2026-11-site-from-above.jpg"
+    ],
+    "video_url": "/assets/off-plan/vanta-house/construction-update-2026-11.mp4",
+    "reported_by": "Blackstone Real Estate Limited (WhatsApp, 6 Nov 2026)"
+   }
+  ],
+  "construction_timeline": [
+   {
+    "date": "2026-11-06",
+    "label": "Structure at floor 7 of 12",
+    "status": "done",
+    "labels": {
+     "lg": "Ensengeka ku mwaliiro 7 ku 12",
+     "sw": "Muundo kwenye sakafu ya 7 kati ya 12"
+    }
+   },
+   {
+    "date": "2026-12-31",
+    "label": "Structural topping-out (planned)",
+    "status": "next",
+    "labels": {
+     "lg": "Okumaliriza ensengeka (kitegekeddwa)",
+     "sw": "Kukamilisha muundo (kimepangwa)"
+    }
+   },
+   {
+    "date": "2027-10-31",
+    "label": "Handover — apartments ready for occupancy",
+    "status": "planned",
+    "labels": {
+     "lg": "Okuwaayo — apartimenti zeetegefu okubeeramu",
+     "sw": "Makabidhiano — fleti tayari kukaliwa"
+    }
+   }
+  ],
+  "translations": {
+   "lg": {
+    "description": "Vanta House ye pulojekiti ya apartimenti 100 ku lusozi lwa Naguru, ekimu ku bitundu by’amaka ebisinga okumanyibwa mu Kampala, ezimbibwa Blackstone Real Estate Limited. Ekizimbe eky’emyaliiro 12 kirina emyaliiro 10 egy’amaka ku mitendera ebiri egy’okusimba emmotoka, era kirimu amaka ag’ebisenge 1, 2 ne 3 — nga 52, 92 ne 160 m² — agaweebwa nga gamalirizibwa, n’ekidiba ky’okuwuga, gym, baala ku kasolya, ennimiro, obukuumi obw’essaawa 24, CCTV, enkola y’okuyingira ey’omulembe, jenereta n’amazzi ag’essaawa 24. Emiwendo gitandika ku USD 53,800 ku nnyumba y’ekisenge kimu (omuwendo gw’omwaliiro ogusooka; buli mwaliiro waggulu gwongerako 1%), nga osasula yonna oba 30% ng’oteeka omukono n’ebisigadde mu myezi 20 nga kuzimbibwa. Ensengeka yatuuka ku mwaliiro ogw’omusanvu mu Novemba 2026, ku myaliiro nga 2.5 buli mwezi; okumaliriza ensengeka kusuubirwa ku nkomerero ya 2026 n’okuwaayo mu Okitobba 2027. Ettaka liri ku leasehold ya myaka 99: Bannayuganda basobola okusaba okukyusa okudda ku freehold, n’abagwira basobola okugula n’okuwandiisa okusinziira ku mateeka ga Uganda.",
+    "area_overview": "Naguru kitundu kiri ku lusozi mu bukiikakkono obw’ebuvanjuba bwa Kampala, wakati wa Kololo, Ntinda ne Nakawa, nga Lugogo, Bugolobi ne Nakasero biri kumpi. Plot 3A eri ku Naguru Vale Road, okuva ku Naguru Drive. Munda mu kilomita emu waliwo Naguru Parents School, Hill Preparatory School, eddwaliro lya China–Uganda Friendship (Naguru Hospital) n’obutale bwa Ntinda ne Nakawa; Lugogo Mall, Capital Shoppers Ntinda, MUBS ne ISBAT University biri munda mu kilomita 1.5, ate Acacia Mall n’ekisaawe ky’ennyonyi ekya Kololo biri nga kilomita 2.5.",
+    "progress_basis": "Ebitundu ku kikumi kwe kugezaako kwa makaug okusinziira ku mutendera omuzimbi gw’ategeezezza: ensengeka ku mwaliiro 7 ku 12 mu Novemba 2026 (nga 58% y’ensengeka), ng’okumaliriza, ebyobuweereza n’emirimu egy’ebweru bikyaddako. Emitendera gy’omuzimbi gye okumaliriza ensengeka ku nkomerero ya 2026 n’okuwaayo mu Okitobba 2027.",
+    "investment_note": "Omuzimbi agezaako nti ennyumba eyinza okuvaamu amagoba g’obupangisa okutuuka ku 15% ne ssente zikomawo mu myaka nga 7, era awa obuweereza bw’okulabirira ennyumba eri abasiga ensimbi. Bino bye bigezaako by’omuzimbi, si bisuubizo; funa amagezi ag’ensimbi n’ag’amateeka ageetongodde nga tonneewaayo."
+   },
+   "sw": {
+    "description": "Vanta House ni mradi wa kipekee wa fleti 100 kwenye kilima cha Naguru, mojawapo ya maeneo ya makazi yaliyoimarika zaidi Kampala, unaojengwa na Blackstone Real Estate Limited. Jengo la sakafu 12 lina sakafu 10 za makazi juu ya ngazi mbili za maegesho, na linatoa nyumba za vyumba 1, 2 na 3 vya kulala — takriban 52, 92 na 160 m² — zinazokabidhiwa zikiwa zimekamilika, na bwawa la kuogelea la nje, gym, baa na sehemu ya kupumzika juu ya paa, bustani, ulinzi wa saa 24, CCTV, mfumo wa kisasa wa kuingia, jenereta ya akiba na maji ya saa 24. Bei zinaanzia USD 53,800 kwa chumba kimoja (bei ya sakafu ya kwanza; kila sakafu ya juu huongeza 1%), kwa malipo kamili au 30% wakati wa kusaini na salio ndani ya miezi 20 wakati wa ujenzi. Muundo ulifika sakafu ya 7 Novemba 2026, kwa takriban sakafu 2.5 kwa mwezi; kukamilisha muundo kunatarajiwa mwishoni mwa 2026 na makabidhiano Oktoba 2027. Ardhi ni ukodishaji wa miaka 99: raia wa Uganda wanaweza kuomba kubadilisha kuwa umiliki kamili, na wageni wanaweza kununua na kusajili chini ya sheria za Uganda.",
+    "area_overview": "Naguru ni eneo la kilima upande wa kaskazini-mashariki wa Kampala, kati ya Kololo, Ntinda na Nakawa, na Lugogo, Bugolobi na Nakasero ziko umbali mfupi kwa gari. Plot 3A iko kwenye Naguru Vale Road, kutoka Naguru Drive. Ndani ya takriban kilomita moja kuna Naguru Parents School, Hill Preparatory School, Hospitali ya Urafiki ya China–Uganda (Naguru Hospital) na masoko ya Ntinda na Nakawa; Lugogo Mall, Capital Shoppers Ntinda, MUBS na ISBAT University ziko ndani ya kilomita 1.5, na Acacia Mall na uwanja wa ndege wa Kololo takriban kilomita 2.5.",
+    "progress_basis": "Asilimia ni makadirio ya makaug kutokana na hatua iliyoripotiwa na msanidi: muundo kwenye sakafu ya 7 kati ya 12 Novemba 2026 (takriban 58% ya muundo), huku umaliziaji, huduma na kazi za nje zikiwa bado zinafuata. Hatua za msanidi mwenyewe ni kukamilisha muundo mwishoni mwa 2026 na makabidhiano Oktoba 2027.",
+    "investment_note": "Msanidi anakadiria mapato ya kodi hadi 15% na kurejesha gharama ndani ya takriban miaka 7, na anatoa usimamizi wa mali kwa wawekezaji. Haya ni makadirio ya msanidi, si dhamana; pata ushauri huru wa kifedha na kisheria kabla ya kujitolea."
+   }
+  }
+ }
+}
