@@ -94,6 +94,15 @@
  ],
  "images": [
   {
+   "url": "/assets/off-plan/vanta-house/hero-tower-day.jpg",
+   "caption": "Vanta House — artist’s impression of the tower by day, with the entrance, pool and parking (Blackstone Real Estate, 6 Nov 2026)",
+   "kind": "artist_impression",
+   "captions": {
+    "lg": "Vanta House — ekifaananyi ky’ekizimbe emisana, n’omulyango, ekidiba n’aw’okusimba emmotoka (Blackstone Real Estate)",
+    "sw": "Vanta House — mchoro wa jengo mchana, pamoja na lango, bwawa na maegesho (Blackstone Real Estate)"
+   }
+  },
+  {
    "url": "/assets/off-plan/vanta-house/hero-tower-sunset.jpg",
    "caption": "Vanta House — artist’s impression of the tower at sunset (Blackstone Real Estate)",
    "kind": "artist_impression"
@@ -179,6 +188,39 @@
    "poster_url": "/assets/off-plan/vanta-house/construction-update-2026-11-poster.jpg",
    "caption": "Construction update, November 2026 — John Yan, Founder & CEO of Blackstone Real Estate, on site",
    "kind": "construction_update"
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/founder-interview-9-questions.mp4",
+   "poster_url": "/assets/off-plan/vanta-house/founder-interview-9-questions-poster.jpg",
+   "orientation": "portrait",
+   "kind": "developer_interview",
+   "caption": "Nine questions for John Yan, Founder & CEO of Blackstone Real Estate, filmed on the Vanta House site (October 2026): the company, Kampala, long-term value, what investors can expect, and the 1, 2 and 3 bedroom homes",
+   "captions": {
+    "lg": "Ebibuuzo mwenda eri John Yan, Founder & CEO wa Blackstone Real Estate, ebikubiddwa ku kifo kya Vanta House (Okitobba 2026)",
+    "sw": "Maswali tisa kwa John Yan, Mwanzilishi na Mkurugenzi Mkuu wa Blackstone Real Estate, yaliyorekodiwa kwenye eneo la Vanta House (Oktoba 2026)"
+   }
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/founder-why-blackstone.mp4",
+   "poster_url": "/assets/off-plan/vanta-house/founder-why-blackstone-poster.jpg",
+   "orientation": "portrait",
+   "kind": "developer_interview",
+   "caption": "John Yan on why he founded Blackstone Real Estate after a career in banking, and the 100 boutique homes at Vanta House",
+   "captions": {
+    "lg": "John Yan annyonnyola lwaki yatandika Blackstone Real Estate oluvannyuma lw’omulimu mu bbanka, n’amaka 100 aga Vanta House",
+    "sw": "John Yan anaeleza kwa nini alianzisha Blackstone Real Estate baada ya kazi ya benki, na nyumba 100 za Vanta House"
+   }
+  },
+  {
+   "url": "/assets/off-plan/vanta-house/founder-documentary-teaser.mp4",
+   "poster_url": "/assets/off-plan/vanta-house/founder-documentary-teaser-poster.jpg",
+   "orientation": "portrait",
+   "kind": "developer_interview",
+   "caption": "Preparing a documentary about building in Kampala — John Yan, Blackstone Real Estate",
+   "captions": {
+    "lg": "Okutegeka filimu ekwata ku kuzimba mu Kampala — John Yan, Blackstone Real Estate",
+    "sw": "Kuandaa filamu kuhusu ujenzi Kampala — John Yan, Blackstone Real Estate"
+   }
   }
  ],
  "floor_plans": [
@@ -490,7 +532,7 @@
   "country_slug": "uganda",
   "region": "East Africa",
   "source": "developer_whatsapp_2026_11_06_and_blackstonerealestates_com",
-  "source_note": "Captions, 13 site photos and a progress video forwarded by the developer’s founder to the makaug WhatsApp on 6 Nov 2026; unit sizes, prices, payment terms, amenities, floor plans and the purchase guide from blackstonerealestates.com (homepage and purchase guide PDF, read 6 Nov 2026).",
+  "source_note": "Captions, 13 site photos and a progress video forwarded by the developer’s founder to the makaug WhatsApp on 6 Nov 2026; unit sizes, prices, payment terms, amenities, floor plans and the purchase guide from blackstonerealestates.com (homepage and purchase guide PDF, read 6 Nov 2026). On 6 Nov 2026 (20:05) the founder also sent a daytime render, two short founder videos and a nine-question site interview with a sales caption; added 7 Nov 2026.",
   "source_documents_verified": true,
   "price_fx_rate_ugx": 4120.59,
   "price_fx_as_of": "2026-11-05",
@@ -549,6 +591,18 @@
     }
    },
    {
+    "label": "Track record",
+    "value": "Nova Residence, 60 apartments, delivered 2024 — the developer’s previous project, as stated in its October 2026 interview",
+    "labels": {
+     "lg": "Ebyakolebwa edda",
+     "sw": "Rekodi ya kazi"
+    },
+    "values": {
+     "lg": "Nova Residence, apartimenti 60, zaweebwa 2024 — pulojekiti y’omuzimbi eyasooka, nga bwe kyayogerwa mu kwogerako kwa Okitobba 2026",
+     "sw": "Nova Residence, fleti 60, zilikabidhiwa 2024 — mradi uliopita wa msanidi, kama ilivyoelezwa katika mahojiano ya Oktoba 2026"
+    }
+   },
+   {
     "label": "Address",
     "value": "Plot 3A, Naguru Vale Road, Naguru, Kampala",
     "labels": {
@@ -566,6 +620,18 @@
     "values": {
      "lg": "Emyaliiro 12: emyaliiro 10 egy’amaka ku mitendera ebiri egy’okusimba emmotoka, apartimenti 100",
      "sw": "Sakafu 12: sakafu 10 za makazi juu ya ngazi mbili za maegesho (chini ya ardhi na ghorofa ya chini), fleti 100"
+    }
+   },
+   {
+    "label": "Homes",
+    "value": "1, 2 and 3 bedroom apartments of about 52, 92 and 160 m²; the developer also lists 4-bedroom homes — sizes and prices on request (6 Nov 2026)",
+    "labels": {
+     "lg": "Amaka",
+     "sw": "Nyumba"
+    },
+    "values": {
+     "lg": "Apartimenti z’ebisenge 1, 2 ne 3 (nga 52, 92 ne 160 m²); omuzimbi era alaga amaka ag’ebisenge 4 — obunene n’emiwendo bibuuzibwa",
+     "sw": "Fleti za vyumba 1, 2 na 3 (takriban 52, 92 na 160 m²); msanidi pia anataja nyumba za vyumba 4 — ukubwa na bei kwa kuuliza"
     }
    },
    {
@@ -783,6 +849,38 @@
     "progress_basis": "Asilimia ni makadirio ya makaug kutokana na hatua iliyoripotiwa na msanidi: muundo kwenye sakafu ya 7 kati ya 12 Novemba 2026 (takriban 58% ya muundo), huku umaliziaji, huduma na kazi za nje zikiwa bado zinafuata. Hatua za msanidi mwenyewe ni kukamilisha muundo mwishoni mwa 2026 na makabidhiano Oktoba 2027.",
     "investment_note": "Msanidi anakadiria mapato ya kodi hadi 15% na kurejesha gharama ndani ya takriban miaka 7, na anatoa usimamizi wa mali kwa wawekezaji. Haya ni makadirio ya msanidi, si dhamana; pata ushauri huru wa kifedha na kisheria kabla ya kujitolea."
    }
-  }
+  },
+  "project_updates": [
+   {
+    "id": "wa-20261106-2007",
+    "received_at": "2026-11-06T20:07:56.000Z",
+    "status": "handled",
+    "source": "whatsapp_employee_intake",
+    "from": "John Yan",
+    "phone_suffix": "3205",
+    "caption": "Luxury apartments for sale at Vanta House, Naguru Vale, Kampala — starting from USD 53,800. 1, 2, 3 and 4-bedroom apartments available, with flexible payment plans. The project is under construction, with completion and handover expected in October 2027.",
+    "media": [
+     {
+      "url": "/assets/off-plan/vanta-house/hero-tower-day.jpg",
+      "kind": "image"
+     },
+     {
+      "url": "/assets/off-plan/vanta-house/founder-documentary-teaser.mp4",
+      "kind": "video"
+     },
+     {
+      "url": "/assets/off-plan/vanta-house/founder-why-blackstone.mp4",
+      "kind": "video"
+     },
+     {
+      "url": "/assets/off-plan/vanta-house/founder-interview-9-questions.mp4",
+      "kind": "video"
+     }
+    ],
+    "property_id": "1a4bfcc8-31eb-4d9f-a773-1a9a0edee4a9",
+    "handled_at": "2026-11-07T12:20:00.000Z",
+    "handled_note": "Added to the page: the daytime render as the hero image, the three founder videos, and key facts (4-bedroom homes on request; Nova Residence track record). Sent while Agent 007 still read captions as single listings; recorded here by hand."
+   }
+  ]
  }
 }

@@ -114,8 +114,8 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20261106-off-plan-v19/);
-  assert.match(html, /off-plan\.css\?v=20261106-off-plan-v5/);
+  assert.match(html, /off-plan\.js\?v=20261107-off-plan-v20/);
+  assert.match(html, /off-plan\.css\?v=20261107-off-plan-v6/);
   // C18: nearby places come from the project's stored list (no Google Places).
   assert.match(client, /renderStoredNearbyPlaces\(project\)/);
   assert.match(client, /Archive this private project\?/);

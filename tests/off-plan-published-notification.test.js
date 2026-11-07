@@ -51,3 +51,16 @@ test('the status route sends it after the response, once, on the first publish o
   assert.match(service, /process\.env\.AGENT_HELP_CONTACT_PHONE \|\| '256709402189'/, 'Ronald');
   assert.match(service, /deliverListingWhatsapp\(\{ to: contact\.phone/);
 });
+
+test('the live message carries the developer\'s own makaug page beside the project link', () => {
+  const { contactProfileUrl } = require('../services/offPlanNotificationService');
+  const linked = { ...VANTA, source_agent_profile_id: 'ed1197fd-6f6d-46fe-9b8d-2ca8a1f96c92', source_agent_status: 'approved' };
+  assert.strictEqual(contactProfileUrl(linked), 'https://makaug.com/agents/ed1197fd-6f6d-46fe-9b8d-2ca8a1f96c92');
+  assert.strictEqual(contactProfileUrl({ ...linked, source_agent_status: 'pending' }), '', 'no page until the agent is approved');
+  assert.strictEqual(contactProfileUrl(VANTA), '', 'no agent, no link');
+  const body = publishedWhatsappBody(linked, { name: 'John Yan' });
+  assert.match(body, /Your own page on makaug, with the project on it: https:\/\/makaug\.com\/agents\/ed1197fd-6f6d-46fe-9b8d-2ca8a1f96c92/);
+  assert.match(body, /Phillip, makaug\.com$/);
+  assert.match(publishedEmail(linked, { name: 'John Yan' }).text, /https:\/\/makaug\.com\/agents\/ed1197fd-6f6d-46fe-9b8d-2ca8a1f96c92/);
+  assert.doesNotMatch(publishedWhatsappBody(VANTA, { name: 'John Yan' }), /Your own page/);
+});

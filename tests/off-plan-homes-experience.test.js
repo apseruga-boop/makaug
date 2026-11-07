@@ -84,3 +84,26 @@ test('the project contact shows the agent\'s own bio; the stock Kazi Honest bio 
   const walk = page.slice(page.indexOf('function homesWalkthroughMarkup(project)'), page.indexOf('function constructionDiaryMarkup('));
   assert.match(walk, /!\/\\d\\s\*\(m²\|m2\|sqm\)\/i\.test\(label\)/, 'the size is not repeated when the label already carries it');
 });
+
+test('the off-plan desk keeps every project video on save and shows developer updates', () => {
+  const save = page.slice(page.indexOf('async function saveOffPlanProgress'), page.indexOf('function confirmOffPlanAction'));
+  assert.doesNotMatch(save, /body\.videos = videoUrl \? \[\{ url: videoUrl, kind: 'promotion_video' \}\] : \[\];/, 'Save no longer replaces the videos with the one promotion video');
+  assert.match(save, /const others = existingVideos\.filter\(\(video\) => clean\(video\?\.url\) && clean\(video\?\.url\) !== videoUrl && clean\(video\?\.kind\) !== 'promotion_video'\);/);
+  assert.match(save, /body\.videos = \[\.\.\.\(videoUrl \? \[promotion \|\| \{ url: videoUrl, kind: 'promotion_video' \}\] : \[\]\), \.\.\.others\];/);
+  assert.match(page, /data-op-videos="\$\{escapeHtml\(JSON\.stringify\(Array\.isArray\(project\.videos\) \? project\.videos : \[\]\)\)\}"/);
+  assert.match(page, /function developerUpdatesMarkup\(project, role\)/);
+  assert.match(page, /\$\{developerUpdatesMarkup\(project, role\)\}/);
+  assert.match(page, /async function markOffPlanProjectUpdate\(id, role, updateId\)/);
+  assert.match(page, /markOffPlanProjectUpdate, /, 'the desk button can reach it');
+});
+
+test('the project page shows every video, upright when portrait, with its poster and caption', () => {
+  const detail = page.slice(page.indexOf('function detailMarkup(project)'), page.indexOf('const nearbyGroupDefinitions'));
+  assert.match(detail, /const projectVideos = \[/);
+  assert.match(detail, /walkthrough_output_video_url\) \? \[\{ url: project\.walkthrough_output_video_url, kind: 'walkthrough' \}\] : \[\]/, 'an approved render still comes first');
+  assert.match(detail, /projectVideos\.map\(\(video\) => `<figure class="off-plan-video-card\$\{clean\(video\.orientation\) === 'portrait' \? ' is-portrait' : ''\}">/);
+  assert.match(detail, /poster="\$\{escapeHtml\(video\.poster_url\)\}"/);
+  assert.match(detail, /localizedItemText\(video, 'caption'\)/);
+  assert.doesNotMatch(detail, /project\.videos\?\.\[0\]\?\.url/, 'no longer only the first video');
+  assert.ok(css.includes('.off-plan-video-card.is-portrait video { aspect-ratio: 9 / 16;'));
+});

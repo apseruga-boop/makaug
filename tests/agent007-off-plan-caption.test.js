@@ -84,3 +84,101 @@ test('the review listing is titled as an off-plan project and a draft is opened 
     db.query = originalQuery;
   }
 });
+
+const VANTA_SALES = 'Luxury apartments for sale at Vanta House, Naguru Vale, Kampala — starting from USD 53,800. 1, 2, 3 and 4-bedroom apartments available, with flexible payment plans. The project is under construction, with completion and handover expected in October 2027.';
+const KNOWN = { known_projects: [{ id: '7a732f80-0e14-49d0-ac2d-7f972b373763', name: 'Vanta House', slug: 'vanta-house', status: 'published' }], whatsapp_agent_self_intake: true, agent: { id: 'ed1197fd-6f6d-46fe-9b8d-2ca8a1f96c92', full_name: 'John Yan' } };
+
+test('a sales caption with a menu of home sizes is a project, and "at Vanta House" names it', () => {
+  // 6 Nov 2026, an hour after the page went live: this went to review as a
+  // "4-bed property for sale in Naguru".
+  assert.strictEqual(t.employeeCaptionLooksOffPlan(VANTA_SALES), true);
+  assert.strictEqual(t.offPlanProjectNameFromCaption(VANTA_SALES), 'Vanta House');
+  const facts = t.employeePropertyFacts(VANTA_SALES, {});
+  assert.strictEqual(facts.offPlan, true);
+  assert.strictEqual(facts.offPlanName, 'Vanta House');
+  assert.strictEqual(facts.bedroomDraft.bedrooms, 1, 'the smallest home, not the largest');
+  assert.strictEqual(facts.bedroomDraft.bedroom_options_max, 4);
+  assert.strictEqual(facts.locationPatch.district, 'Kampala');
+  assert.strictEqual(facts.knownDevelopment, null);
+  assert.strictEqual(t.employeeCaptionLooksOffPlan('1-3 bedroom apartments available from UGX 250m in Kira, under construction'), true);
+  assert.strictEqual(t.employeeCaptionLooksOffPlan('Spacious 1 and 2 bedroom apartments for rent in Ntinda at 1.2m and 1.8m'), false, 'a rental block is not a project');
+  const lines = t.agentPropertyDetailLines(facts, VANTA_SALES);
+  assert.match(lines[0], /^🏗️ Off-plan project: Vanta House · 1–4 bedroom homes · for sale$/);
+  assert.match(lines[lines.length - 1], /^💰 from /);
+});
+
+test('a caption naming a project the agent already has on makaug is an update for that page', () => {
+  const facts = t.employeePropertyFacts('Vanta House is now at the 8th floor, see the photos', KNOWN);
+  assert.strictEqual(facts.offPlan, true);
+  assert.deepStrictEqual(facts.knownDevelopment, { id: '7a732f80-0e14-49d0-ac2d-7f972b373763', name: 'Vanta House', slug: 'vanta-house', status: 'published' });
+  assert.deepStrictEqual(t.employeePropertyMissing(facts), [], 'an update needs no price or district');
+  assert.strictEqual(t.knownProjectInCaption('Nice 2 bedroom house in Kira at 300m', KNOWN), null);
+  const reply = t.agentSelfIntakeSavedReply({
+    data: KNOWN,
+    facts,
+    storedMedia: [{ kind: 'image' }, { kind: 'video' }, { kind: 'video' }],
+    caption: 'Vanta House is now at the 8th floor, see the photos'
+  });
+  assert.match(reply, /✅ \*Thanks — received for Vanta House\.\*/);
+  assert.match(reply, /1 photo · 2 videos and your note are with the team/);
+  assert.match(reply, /makaug\.com\/off-plan\/vanta-house/);
+  assert.doesNotMatch(reply, /goes live under your name/);
+});
+
+test('the update is recorded on the project for the off-plan desk and the review listing is linked, no second draft', async () => {
+  const originalQuery = db.query;
+  const calls = [];
+  const existingRow = {
+    id: '7a732f80-0e14-49d0-ac2d-7f972b373763', slug: 'vanta-house', name: 'Vanta House', status: 'published', verification_status: 'partially_verified',
+    country_code: 'UG', unit_types: '[]', payment_plan: '[]', images: '[]', videos: '[]', floor_plans: '[]', amenities: '[]', nearby_places: '[]', brochure_settings: '{}', walkthrough_settings: '{}',
+    extra_fields: JSON.stringify({ contact_mode: 'listing_request', project_updates: [{ id: 'older', received_at: '2026-11-01T00:00:00.000Z' }] })
+  };
+  db.query = async (sql, params = []) => {
+    calls.push({ sql: String(sql), params });
+    if (/FROM off_plan_developments d/i.test(sql) && /WHERE d\.id = \$1/i.test(sql)) return { rows: [existingRow] };
+    if (/UPDATE off_plan_developments SET/i.test(sql)) return { rows: [{ ...existingRow, extra_fields: params[1] }] };
+    if (/INSERT INTO off_plan_development_events/i.test(sql)) return { rows: [{ id: 'event-1' }] };
+    return { rows: [] };
+  };
+  try {
+    const facts = t.employeePropertyFacts('Vanta House is now at the 8th floor', KNOWN);
+    const development = await t.createOffPlanDraftFromIntake({
+      propertyId: '1a4bfcc8-31eb-4d9f-a773-1a9a0edee4a9',
+      caption: 'Vanta House is now at the 8th floor',
+      facts,
+      storedMedia: [{ url: 'https://media.makaug.com/new.jpg', kind: 'image', publicEligible: true }, { url: 'https://media.makaug.com/new.mp4', kind: 'video' }, { url: 'data:image/jpeg;base64,xx', kind: 'image' }],
+      agent: KNOWN.agent,
+      phone: '256709973205'
+    });
+    assert.strictEqual(development.id, '7a732f80-0e14-49d0-ac2d-7f972b373763');
+    assert.ok(!calls.some((call) => /INSERT INTO off_plan_developments/i.test(call.sql)), 'no second project is opened');
+    const update = calls.find((call) => /UPDATE off_plan_developments SET/i.test(call.sql));
+    assert.ok(update, 'the project row is updated');
+    const extra = JSON.parse(update.params[1]);
+    assert.strictEqual(extra.contact_mode, 'listing_request', 'the other extra fields are kept');
+    assert.strictEqual(extra.project_updates.length, 2);
+    const entry = extra.project_updates[1];
+    assert.strictEqual(entry.status, 'pending_review');
+    assert.strictEqual(entry.from, 'John Yan');
+    assert.strictEqual(entry.caption, 'Vanta House is now at the 8th floor');
+    assert.deepStrictEqual(entry.media.map((item) => [item.url, item.kind]), [['https://media.makaug.com/new.jpg', 'image'], ['https://media.makaug.com/new.mp4', 'video']], 'only stored media, never a data URL');
+    assert.strictEqual(entry.property_id, '1a4bfcc8-31eb-4d9f-a773-1a9a0edee4a9');
+    const event = calls.find((call) => /INSERT INTO off_plan_development_events/i.test(call.sql) && call.params.includes('developer_update_received'));
+    assert.ok(event, 'the project log records the update');
+    const link = calls.find((call) => /UPDATE properties SET extra_fields/i.test(call.sql));
+    assert.ok(link, 'the review listing points at the project');
+    assert.deepStrictEqual(link.params, ['1a4bfcc8-31eb-4d9f-a773-1a9a0edee4a9', '7a732f80-0e14-49d0-ac2d-7f972b373763', 'Vanta House', entry.id]);
+  } finally {
+    db.query = originalQuery;
+  }
+});
+
+test('photos with no words from a developer are offered to their project first', () => {
+  const notice = t.agentPendingNotice({
+    ...KNOWN,
+    pending_property_media: [{ kind: 'image', mimeType: 'image/jpeg', url: 'https://media.makaug.com/x.jpg', sha256: 'a' }, { kind: 'video', mimeType: 'video/mp4', url: 'https://media.makaug.com/y.mp4', sha256: 'b' }]
+  });
+  assert.match(notice, /Got your 1 photo and 1 video/);
+  assert.match(notice, /for \*Vanta House\*, reply with a line about it/);
+  assert.match(notice, /A different property\? Tell me what it is/);
+});
