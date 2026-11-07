@@ -10,26 +10,31 @@ function code(name) {
   assert.ok(node, name); return source.slice(node.start, node.end);
 }
 
-function mapFixture() {
+function mapFixture({ pathname = "/to-rent", page = "rent", country = "UG" } = {}) {
   const nodes = new Map();
-  const events = {}; const pending = []; const initialized = []; let observer;
-  let active = ['map-rent']; let leafLoads = 0;
+  const events = {}; const pending = []; const initialized = []; const requests = []; const markerRows = []; let observer;
+  let active = [page === 'home' ? 'map-home' : 'map-rent']; let leafLoads = 0;
   const rent = { id: 'map-rent', rendered: true, rect: { width: 400, height: 300, top: 100, bottom: 400, left: 0, right: 400 }, innerHTML: 'map placeholder' };
   const sale = { ...rent, id: 'map-sale' };
-  [rent, sale].forEach((el) => { el.getClientRects = () => el.rendered ? [el.rect] : []; el.getBoundingClientRect = () => el.rect; nodes.set(el.id, el); });
-  const activePage = { id: 'page-rent', querySelector(selector) { return active.some((id) => selector.includes(`#${id}`)) ? nodes.get(active[0]) : null; } };
+  const home = { ...rent, id: 'map-home', rect: { ...rent.rect } };
+  [rent, sale, home].forEach((el) => { el.getClientRects = () => el.rendered ? [el.rect] : []; el.getBoundingClientRect = () => el.rect; nodes.set(el.id, el); });
+  const activePage = { id: `page-${page}`, classList: { contains: () => activePage.id === 'page-home' }, querySelector(selector) { return active.some((id) => selector.includes(`#${id}`)) ? nodes.get(active[0]) : null; } };
   const context = vm.createContext({
-    document: { getElementById(id) { return nodes.get(id); }, querySelector() { return activePage; } },
-    window: { innerHeight: 700, innerWidth: 390, getComputedStyle() { return { visibility: 'visible' }; },
-      addEventListener(type, handler) { events[type] = handler; }, setTimeout(fn) { pending.push(fn); }, requestIdleCallback(fn) { pending.push(fn); } },
-    IntersectionObserver: class { constructor(callback) { this.callback = callback; this.observed = []; observer = this; } observe(el) { this.observed.push(el); } disconnect() { this.observed = []; } },
-    PUBLIC_MAP_IDS: ['map-rent', 'map-sale'], PUBLIC_MAP_SELECTOR: '#map-rent, #map-sale',
-    maps: {}, mapProviders: {}, markers: {},
+    currentPage: page, ACTIVE_LOCATION_COUNTRY: { countryCode: country },
+    document: { getElementById(id) { return id === 'page-home' ? activePage : nodes.get(id); }, querySelector() { return activePage; }, querySelectorAll() { return []; } },
+    window: { location: { pathname }, innerHeight: 700, innerWidth: 390, getComputedStyle(el) { return { visibility: el.visibility || 'visible' }; },
+      addEventListener(type, handler) { events[type] = handler; }, setTimeout(fn, delay) { pending.push(fn); context.delays.push(delay); }, requestIdleCallback(fn) { pending.push(fn); } },
+    delays: [],
+    IntersectionObserver: class { constructor(callback, options) { this.callback = callback; this.options = options; this.observed = []; observer = this; } observe(el) { this.observed.push(el); } disconnect() { this.observed = []; } },
+    PUBLIC_MAP_IDS: ['map-home', 'map-rent', 'map-sale'], PUBLIC_MAP_SELECTOR: '#map-home, #map-rent, #map-sale',
+    maps: {}, mapProviders: {}, markers: {}, mapLastRows: {},
     ensureGoogleMapsApi: async () => false,
     ensureLeafletApi: async () => { leafLoads += 1; return true; },
     getPublicListings() { return []; }, normalizeType(x) { return x; }, isStudentDiscoverable() { return false; },
     mapInstanceMatchesDom() { return true; }, publicMapNeedsInit(id) { return !context.maps[id]; }, clearStaleMapRegistry() {},
-    getBrokerDirectory() { return []; }, setBrokerMapMarkers() {}, setMapMarkers() {}, resizePublicMap() {}, resetMaps() {},
+    getBrokerDirectory() { return []; }, setBrokerMapMarkers() {}, setMapMarkers(id, rows) { markerRows.push([id, rows]); }, resizePublicMap() {}, resetMaps() {},
+    wireMapCardHover() {}, translateListingLabel(text) { return text; }, mapRemotePropertyForUi(row) { return row; },
+    fetch: async (url) => { requests.push(url); return { ok: true, json: async () => ({ data: [{ id: 'home-pin', latitude: 0.32, longitude: 32.58 }] }) }; },
     destroyMapInstance() {}, addMarkers() {}, fitMapToListings() {},
     MAP_DEFAULT_CENTER: { lat: 0, lng: 0 }, MAP_DEFAULT_ZOOM: 7, MAP_BROKER_DEFAULT_ZOOM: 7,
     OSM_TILE_URL: 'tiles', OSM_TILE_ATTRIBUTION: 'OSM', OSM_REFERRER_POLICY: 'strict-origin',
@@ -38,9 +43,10 @@ function mapFixture() {
   });
   vm.runInContext(`let publicMapVisibilityObserver=null, publicMapVisibilityElements=[], publicMapVisibilityListenersInstalled=false;
     let mapsInitScheduled=false, mapsInitStarted=false, mapsInitPromise=null;
-    ${['getActivePublicMapIds','publicMapIsVisible','getReadyPublicMapIds','watchActivePublicMapVisibility','activePublicMapsNeedInit','scheduleMapsInit','initMaps','refreshActivePublicMapsAfterRoute'].map(code).join('\n')}`, context);
+    const HOME_MAP_TABS=['sale','rent','student','short_term','commercial','land'], homeMapPinCache={}; let homeMapActiveTab='sale';
+    ${['normalizeRoutePath','isActiveUgandaHomepage','fetchHomeMapPins','setHomeMapTab','homeMapRows','getActivePublicMapIds','publicMapIsVisible','getReadyPublicMapIds','watchActivePublicMapVisibility','activePublicMapsNeedInit','scheduleMapsInit','initMaps','refreshActivePublicMapsAfterRoute'].map(code).join('\n')}`, context);
   async function flush() { while (pending.length) { pending.shift()(); await new Promise((resolve) => setImmediate(resolve)); } }
-  return { context, rent, sale, events, initialized, pending, flush, setActive(ids) { active = ids; }, get observer() { return observer; }, get leafLoads() { return leafLoads; } };
+  return { context, rent, sale, home, events, initialized, pending, requests, markerRows, flush, setActive(ids) { active = ids; }, get observer() { return observer; }, get leafLoads() { return leafLoads; } };
 }
 
 test('CSS-hidden mobile maps do not request Leaflet; desktop resize initializes only the active visible map', async () => {
@@ -78,6 +84,56 @@ test('fallback scroll visibility works when IntersectionObserver is unavailable'
   vm.runInContext('scheduleMapsInit()', f.context); assert.equal(f.leafLoads, 0);
   f.rent.rect.top = 200; f.rent.rect.bottom = 500; f.events.scroll(); await f.flush();
   assert.deepEqual(f.initialized, ['map-rent']);
+});
+
+test('Uganda homepage loads Leaflet and its real pins endpoint 1500px before the viewport', async () => {
+  const f = mapFixture({ pathname: '/', page: 'home' });
+  f.home.rect.top = 2201; f.home.rect.bottom = 2501;
+  vm.runInContext('scheduleMapsInit()', f.context); await f.flush();
+  assert.equal(f.observer.options.rootMargin, '1500px 0px');
+  assert.equal(f.leafLoads, 0); assert.deepEqual(f.requests, []);
+  f.home.rect.top = 2199; f.home.rect.bottom = 2499;
+  f.observer.callback([{ isIntersecting: true }]); await f.flush();
+  assert.ok(f.home.rect.top > f.context.window.innerHeight, 'map remains below the viewport');
+  assert.equal(f.context.delays[0], 0, 'no extra 2.5-second homepage wait');
+  assert.equal(f.leafLoads, 1); assert.deepEqual(f.initialized, ['map-home']);
+  assert.deepEqual(f.requests, ['/api/properties/map-pins?type=sale']);
+  assert.equal(f.markerRows.at(-1)[0], 'map-home');
+  assert.equal(f.markerRows.at(-1)[1][0].id, 'home-pin');
+  f.observer.callback([{ isIntersecting: true }]); await f.flush();
+  assert.equal(f.leafLoads, 1); assert.equal(f.requests.length, 1, 'no duplicate pins request');
+});
+
+test('hidden homepage maps do not preload and the scroll fallback uses the same early boundary', async () => {
+  const f = mapFixture({ pathname: '/', page: 'home' });
+  f.context.IntersectionObserver = undefined;
+  f.home.rect.top = 2199; f.home.rect.bottom = 2499; f.home.rendered = false;
+  vm.runInContext('scheduleMapsInit()', f.context); await f.flush();
+  assert.equal(f.leafLoads, 0); assert.deepEqual(f.requests, []);
+  f.home.rendered = true; f.home.visibility = 'hidden'; f.events.scroll(); await f.flush();
+  assert.equal(f.leafLoads, 0);
+  f.home.visibility = 'visible'; f.home.rect.top = 2201; f.events.scroll(); await f.flush();
+  assert.equal(f.leafLoads, 0);
+  f.home.rect.top = 2199; f.events.scroll(); await f.flush();
+  assert.equal(f.leafLoads, 1); assert.deepEqual(f.requests, ['/api/properties/map-pins?type=sale']);
+});
+
+test('early homepage loading stays Uganda-only and rechecks route after the Leaflet download', async () => {
+  for (const options of [{ pathname: '/', page: 'home', country: 'ZA' }, { pathname: '/to-rent', page: 'home' }]) {
+    const f = mapFixture(options); f.home.rect.top = 1000; f.home.rect.bottom = 1300;
+    vm.runInContext('scheduleMapsInit()', f.context); await f.flush();
+    assert.equal(f.observer.options.rootMargin, '0px');
+    assert.equal(f.leafLoads, 0); assert.deepEqual(f.requests, []);
+  }
+  const f = mapFixture({ pathname: '/', page: 'home' });
+  f.home.rect.top = 2199; f.home.rect.bottom = 2499;
+  let resolveLeaf;
+  f.context.ensureLeafletApi = () => new Promise((resolve) => { resolveLeaf = resolve; });
+  const promise = vm.runInContext('initMaps()', f.context);
+  await new Promise((resolve) => setImmediate(resolve));
+  f.setActive(['map-sale']); f.sale.rendered = false;
+  resolveLeaf(true); await promise;
+  assert.deepEqual(f.initialized, []); assert.deepEqual(f.requests, []);
 });
 
 function bootstrapFixture(pageId, existingPack = null) {
