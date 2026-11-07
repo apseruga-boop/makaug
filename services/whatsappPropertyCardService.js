@@ -273,6 +273,18 @@ function whatsappSearchTypeLabel(searchType = '') {
   return labels[clean] || labels.any;
 }
 
+function whatsappHomeTypeLine(row = {}, title = '') {
+  const type = cleanText(row.property_type).toLowerCase().replace(/_/g, ' ');
+  const beds = Number(row.bedrooms);
+  const titleLower = cleanText(title).toLowerCase();
+  const typeInTitle = type && titleLower.includes(type);
+  const bedsInTitle = /\b\d+\s*-?\s*(?:bed|bdrm|bedroom)/i.test(titleLower) || /\b(?:single|double) room\b|\bstudio\b|\bbedsitter\b/i.test(titleLower);
+  const parts = [];
+  if (Number.isFinite(beds) && beds > 0 && !bedsInTitle) parts.push(`${beds} bedroom${beds === 1 ? '' : 's'}`);
+  if (type && !typeInTitle && !/^(?:property|properties|other)$/.test(type)) parts.push(type);
+  return parts.join(' · ');
+}
+
 function totalWhatsappSearchMatches(rows = []) {
   const safeRows = Array.isArray(rows) ? rows : [];
   return Math.max(
@@ -319,7 +331,13 @@ function buildWhatsappPropertySearchReply(rows = [], {
   ];
 
   visibleRows.forEach((row, index) => {
-    lines.push(`${index + 1}. 🏡 *${cleanWhatsappPropertyTitle(row)}*`);
+    const title = cleanWhatsappPropertyTitle(row);
+    lines.push(`${index + 1}. 🏡 *${title}*`);
+    // "Property for rent in Bunga" says nothing about what it is. When the
+    // title carries no home type or bedroom count, say it on its own line
+    // (a renter asking for a single room cannot tell a room from a villa).
+    const homeLine = whatsappHomeTypeLine(row, title);
+    if (homeLine) lines.push(`🏷️ ${homeLine.charAt(0).toUpperCase()}${homeLine.slice(1)}`);
     lines.push(`📍 ${[cleanText(row.area), cleanText(row.district)].filter(Boolean).join(', ') || ACTIVE_TENANT.countryName}`);
     if (cleanText(row.distance_label)) lines.push(`📏 ${cleanText(row.distance_label)}`);
     if (cleanText(row.nearest_place_label)) lines.push(`📍 ${cleanText(row.nearest_place_label)}`);
@@ -343,6 +361,7 @@ module.exports = {
   publicMediaUrl,
   servablePropertyImageUrl,
   totalWhatsappSearchMatches,
+  whatsappHomeTypeLine,
   WHATSAPP_PROPERTY_SEARCH_PREVIEW_LIMIT,
   whatsappListingTypeLabel,
   whatsappPropertyImageUrl

@@ -1713,6 +1713,43 @@ const WEAK_PERSON_CUE_RE = /\b(?:police|poli+si|polisi|poliisi|court|courts|koot
 const PROPERTY_REQUEST_SIGNAL_RE = /(?:\d|\b(?:bedrooms?|beds?|bedsitter|rent|renting|rental|rentals|hire|buy|buying|purchase|sale|selling|sell|house|houses|home|homes|apartment|apartments|flat|flats|room|rooms|hostel|hostels|plot|plots|acre|acres|decimal|decimals|land|office|offices|shop|shops|warehouse|price|budget|million|millions|ugx|ush|shilling|shillings|dollar|dollars|usd|month|monthly|week|weekly|ennyumba|enju|nyumba|ettaka|ttaka|mataka|kiwanja|shamba|ardhi|kodi|pangisa|okupangisa|kupangisha|okugula|kugula|kununua|okutunda|kutunda|kuuza|bbeeyi|ebbeeyi|bei|obukadde|milioni|agent|agents|broker|brokers)\b)/i;
 const ASSISTANT_FREE_STEPS = new Set(['', 'greeting', 'main_menu', 'search_type', 'search_area', 'agent_area', 'choose_language']);
 
+// Somebody giving up on the search: "Seems you don't have what I want. Have a
+// great day" (6 Nov 2026) got the menu back, and nobody at makaug heard. A
+// person who leaves unhappy is handed to a person, with their brief.
+const CUSTOMER_GIVING_UP_RE = /\b(?:seems?|looks? like|guess|think|clearly|obviously)?\s*(?:you|u)\s+(?:don'?t|do not|dont|have no|haven'?t got)\s+(?:have\s+)?(?:what|anything|something|the kind|the type|something like|what i)\b|\bnothing (?:for me|suitable|i (?:want|need|like))\b|\bnot (?:what|the kind) i (?:want|need|asked|am looking)\b|\b(?:this is|that is|it'?s|its) (?:not helpful|useless|a waste|no help|not working)\b|\bwaste of (?:my )?time\b|\b(?:thanks|thank you|ok|okay)[,.]? (?:anyway|but no|i'?ll (?:look|try|check) elsewhere|never ?mind|forget it)\b|\bi(?:'ll| will) (?:look|try|check|search) (?:elsewhere|somewhere else|another (?:site|place|platform))\b|\bforget it\b|\bnever ?mind\b|\bnot interested anymore\b|\btoo expensive for me\b|\b(?:all|everything) (?:is|are) (?:too|above|beyond|out of) (?:my )?(?:expensive|budget|range|reach)\b/i;
+
+function customerGivingUp(text = '') {
+  const clean = normalizeInput(text);
+  if (!clean || clean.length > 400) return false;
+  return CUSTOMER_GIVING_UP_RE.test(clean);
+}
+
+function customerGivingUpReply(lang, brief = null) {
+  const code = resolveLangCode(lang);
+  const summary = describeSearchBrief(brief);
+  const messages = {
+    en: [
+      'Sorry — I did not find you what you asked for, and I should have said so plainly.',
+      summary ? `What you are looking for: *${summary}*.` : '',
+      'I have passed it to a person at makaug. They will look for it properly — including homes not yet on the site — and message you here, usually within the day. If anything comes up that fits, you hear first.',
+      'Nothing else is needed from you. Thank you for your patience.'
+    ],
+    lg: [
+      'Nsonyiwa — sikufunidde ky\'onoonya, era nandikigambye butereevu.',
+      summary ? `Ky\'onoonya: *${summary}*.` : '',
+      'Nkiweereza omuntu wa makaug. Ajja kukinoonya bulungi — n\'amaka agatannaba kuteekebwa ku mukutu — n\'akuddamu wano, emirundi mingi mu lunaku lwe lumu.',
+      'Tewali kirala kyetaagisa okuva gy\'oli. Weebale okugumiikiriza.'
+    ],
+    sw: [
+      'Samahani — sikukupatia ulichoomba, na nilipaswa kusema wazi.',
+      summary ? `Unachotafuta: *${summary}*.` : '',
+      'Nimelipeleka kwa mtu wa makaug. Atalitafuta vizuri — pamoja na nyumba ambazo bado hazipo kwenye tovuti — na kukujibu hapa, kwa kawaida ndani ya siku.',
+      'Hakuna kingine kinachohitajika kutoka kwako. Asante kwa uvumilivu wako.'
+    ]
+  };
+  return (messages[code] || messages.en).filter(Boolean).join('\n\n');
+}
+
 function messageOutsideTheAssistant({ transcript = '', text = '', intent = {}, step = '' } = {}) {
   const spoken = normalizeInput(transcript);
   const typed = spoken ? '' : normalizeInput(text);
@@ -9069,7 +9106,7 @@ async function handleUnknownForwardedAdvert({ phone = '', session = {}, cleanBod
   const text = normalizeInput(cleanBody);
   const forwarded = looksLikeForwardedProperty({ cleanBody, mediaUrl, runtime });
   const facts = text && !mediaUrl ? employeePropertyFacts(text, {}) : null;
-  const isCaption = Boolean(facts && facts.listingType && Number(facts.price) > 0);
+  const isCaption = Boolean(facts && facts.listingType && Number(facts.price) > 0 && !looksLikeSearchBrief(text));
 
   const confirm = async (fullName) => {
     let agent = await findAgentByPhoneAnyStatus(phone);
@@ -9166,9 +9203,25 @@ async function handleUnknownForwardedAdvert({ phone = '', session = {}, cleanBod
 }
 
 /** Does this message look like a property being forwarded, rather than a chat? */
+// Somebody describing what they are LOOKING FOR, not what they are selling.
+//
+// 6 Nov 2026, 15:28: a renter came from the To Rent page — "I'm looking for a
+// rental … Single room Between 150k-200k In bunga, Kansanga … 1-3km from
+// soya" — and the forwarded-advert question answered him: "That looks like a
+// property you are selling: For rent · 3-bed · Nanganda, Kalungu · USh
+// 150,000/month. Reply 1 to list it". His later "150k-200k rent At Soya
+// bunga" was then swallowed as another caption. A brief has a type, a place
+// and a price exactly like an advert does; the words around them say which.
+const SEARCH_BRIEF_CUES = /\b(?:i(?:'| a)?m|i am|am|we(?:'re| are)|she is|he is)\s+(?:looking|searching|in need|interested)\b|\blooking for\b|\bsearching for\b|\bin need of\b|\bi (?:need|want|would like|am after|require)\b|\bwe (?:need|want|would like)\b|\b(?:help|assist) me\b|\bplease help\b|\bdo you have\b|\bany (?:house|houses|room|rooms|apartment|apartments|flat|land|plot|plots|shop)s?\b.{0,30}\b(?:available|for rent|for sale|to let)\b|\bbetween\s+(?:ugx|ush|shs?\s*)?\d|\bmy budget\b|\bbudget (?:is|of)\b|\bon the (?:to rent|for sale|to let|buy|rent|land|student|commercial) page\b|\bwithin\s*(?:or\s*)?\d+\s*(?:-|to)?\s*\d*\s*km\b|\b\d+\s*(?:km)?\s*(?:-|–|to)\s*\d+\s*km\s*(?:from|of|away|radius)\b|\b\d+(?:\.\d+)?\s*[km]\s*(?:-|–|to)\s*\d+(?:\.\d+)?\s*[km]\b|\bnear (?:me|my)\b|\bwant to (?:rent|buy|lease)\b|\bto (?:rent|buy|lease) (?:a|an|one|some)\b|\bclient (?:needs|wants|is looking)\b/i;
+
+function looksLikeSearchBrief(text = '') {
+  return SEARCH_BRIEF_CUES.test(normalizeInput(text));
+}
+
 function looksLikeForwardedProperty({ cleanBody = '', mediaUrl = '', runtime = {} } = {}) {
   if (mediaUrl || Number(runtime.mediaCount || 0) > 0) return true;
   if (normalizeInput(cleanBody).length < 25) return false;
+  if (looksLikeSearchBrief(cleanBody)) return false;
   const facts = employeePropertyFacts(cleanBody, {});
   return Boolean(facts.listingType && Number(facts.price) > 0);
 }
@@ -12361,10 +12414,51 @@ function isUgNlisLandVerificationIntent(text = '') {
   return /\bugnlis\b|official land title|title search|land title search|land verification|verify land title|check land title|transaction number|title volume|title folio|block and plot|county block plot/.test(clean);
 }
 
+// "150k-200k", "between 150k and 200k", "1.2m to 1.5m": the renter's range.
+// The top is the budget the search must respect; the bottom is kept so a
+// saved search can carry it. (6 Nov 2026: a single-room brief at 150k-200k
+// was answered with 600k, 1M and 1.2M homes because the range parsed as
+// nothing at all.)
+function parseBudgetRange(lower = '') {
+  const m = /(?:between\s+)?(?:(usd|\$|ugx|ush|shs?)\s*)?(\d[\d,]*(?:\.\d+)?)\s*(k|m|thousand|million)?\s*(?:-|–|—|to|and|up to)\s*(?:(usd|\$|ugx|ush|shs?)\s*)?(\d[\d,]*(?:\.\d+)?)\s*(k|m|thousand|million)\b/i.exec(lower);
+  if (!m) return null;
+  const highSuffix = (m[6] || '').toLowerCase();
+  const low = parseNumberToken(m[2], (m[3] || highSuffix).toLowerCase());
+  const high = parseNumberToken(m[5], highSuffix);
+  if (!low || !high || high < low || low < 1_000) return null;
+  // "1-3km", "50x100", "3-4 bedroom": distances and counts never carry k/m.
+  const after = lower.slice((m.index || 0) + m[0].length, (m.index || 0) + m[0].length + 12);
+  if (/^\s*(?:km|kilomet|miles?|bed|bedroom|acre|decimal|sq)/i.test(after)) return null;
+  const currency = (m[1] || m[4] || '').toLowerCase();
+  return { low, high, currency: currency === '$' ? 'usd' : (currency || ''), raw: m[0] };
+}
+
 function parseBudget(text) {
   const raw = stripLinksAndIdsForNumericParsing(text);
   if (!raw) return null;
   const lower = raw.toLowerCase().replace(/us dollars?/g, 'usd');
+  const range = parseBudgetRange(lower);
+  if (range) {
+    const rangeRate = IS_SOUTH_AFRICA ? Number(process.env.ZAR_PER_USD || 18) : Number(process.env.USD_TO_UGX_RATE || 3800);
+    const foreign = ['usd', 'eur', 'gbp'].includes(range.currency);
+    const toLocal = (amount) => Math.round(foreign ? amount * (Number.isFinite(rangeRate) && rangeRate > 0 ? rangeRate : 1) : amount);
+    let rangePeriod = null;
+    if (/\b(per\s*month|a month|monthly|\/month|pm)\b/i.test(lower)) rangePeriod = 'month';
+    else if (/\b(per\s*week|weekly|\/week)\b/i.test(lower)) rangePeriod = 'week';
+    else if (/\b(per\s*year|yearly|annually|\/year)\b/i.test(lower)) rangePeriod = 'year';
+    else if (/\b(semester|\/sem|per\s*semester)\b/i.test(lower)) rangePeriod = 'semester';
+    return {
+      originalAmount: range.high,
+      currency: range.currency || (IS_SOUTH_AFRICA ? 'zar' : 'ugx'),
+      maxBudgetUgx: toLocal(range.high),
+      minBudgetUgx: toLocal(range.low),
+      period: rangePeriod,
+      convertedFromUsd: range.currency === 'usd',
+      convertedFromForeign: foreign,
+      fxRate: foreign ? rangeRate : null,
+      canonicalCurrency: ACTIVE_CURRENCY
+    };
+  }
   const rx = /(?:(usd|\$|eur|€|gbp|£|zar|r|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*(thousand|thousands|million|millions|billion|billions|bn|k|m|b)?\s*(usd|eur|gbp|zar|ugx|ush|shs)?/gi;
   const candidates = [];
 
@@ -12389,7 +12483,12 @@ function parseBudget(text) {
     if (suffix) score += 1;
     if (amount >= 100_000) score += 1;
     if (amount < 10_000 && !(curA || curB || m[0].includes('$'))) score -= 3;
-    if (/\b(bed|beds|bedroom|bedrooms|bath|bathroom|toilet|room)\b/i.test(context)) score -= 6;
+    // "3 bedroom" / "2 bath" is a count, not money. A single room at 200k is
+    // money: the penalty applies to the number the room word is attached to.
+    const afterNumber = lower.slice((m.index || 0) + m[0].length, (m.index || 0) + m[0].length + 14);
+    const beforeNumber = lower.slice(Math.max(0, (m.index || 0) - 10), m.index || 0);
+    if (/^\s*(?:-|to)?\s*\d*\s*(bed|beds|bedroom|bedrooms|br|bath|baths|bathroom|bathrooms|toilets?|rooms?)\b/i.test(afterNumber)
+      || /\b(bed|beds|bedroom|bedrooms|bath|bathroom|toilet|room|rooms)\s*$/i.test(beforeNumber)) score -= 6;
     if (/\b(acre|acres|sq\s?m|sqm|sqft|hectare|plot|plots)\b/i.test(context)) score -= 3;
     if (/\b(year built|built in|built)\b/i.test(context)) score -= 4;
 
@@ -12575,6 +12674,7 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', 
   // Distances ("10 miles from"), plot sizes (50x100) and acres are not prices.
   const budgetParsed = parseBudget(stripWhatsappNonBudgetNumbers(clean));
   const maxBudgetUgx = Number(e.budget_max || e.budget || budgetParsed?.maxBudgetUgx || 0) || 0;
+  const minBudgetUgx = Number(e.budget_min || budgetParsed?.minBudgetUgx || 0) || 0;
   const budgetPeriod = normalizeInput(e.period || budgetParsed?.period) || null;
   // "house for 300 million" with no rent words is a purchase budget.
   if ((!searchType || searchType === 'any') && !entitySearchType && !budgetPeriod
@@ -12604,6 +12704,7 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', 
     bedsMin,
     propertyType,
     maxBudgetUgx,
+    minBudgetUgx,
     budgetPeriod,
     useSharedLocation,
     convertedFromUsd: Boolean(budgetParsed?.convertedFromUsd),
@@ -12625,6 +12726,7 @@ function mergeNaturalSearchFilters(primary = {}, secondary = {}) {
     bedsMin: Number(p.bedsMin ?? s.bedsMin ?? 0) || 0,
     propertyType: normalizeInput(p.propertyType || s.propertyType) || null,
     maxBudgetUgx: Number(p.maxBudgetUgx ?? s.maxBudgetUgx ?? 0) || 0,
+    minBudgetUgx: Number(p.minBudgetUgx ?? s.minBudgetUgx ?? 0) || 0,
     budgetPeriod: normalizeInput(p.budgetPeriod || s.budgetPeriod) || null,
     useSharedLocation: Boolean(p.useSharedLocation || s.useSharedLocation),
     convertedFromUsd: Boolean(p.convertedFromUsd || s.convertedFromUsd),
@@ -16121,6 +16223,11 @@ function whatsappAgentKeywordScore(row, keywords = [], preferredAgentIds = []) {
     if (name.includes(keyword)) score += 20;
     if (company.includes(keyword)) score += 20;
   });
+  // Homes actually listed in the place they asked for beat a district on a
+  // profile: "Kampala bunga" (6 Nov 2026) returned two Kampala/Wakiso brokers
+  // under the heading "Verified agents (Bunga)" with nothing in Bunga.
+  const inArea = Number(row.area_listings_count || 0);
+  if (inArea > 0) score += 60 + Math.min(40, inArea * 5);
   return score;
 }
 
@@ -16177,6 +16284,11 @@ async function queryPublicAgentsForWhatsapp({
     filters.push(`(${preferredMatch} OR ${keywordMatch})`);
   }
 
+  // Live listings in the place they typed (the first keyword), so an agent
+  // who actually works Bunga outranks one who merely covers Kampala, and
+  // the reply can say which is which.
+  values.push(keywordList[0] || '');
+  const areaParam = values.length;
   values.push(Math.max(safeLimit, 20));
   const result = await db.query(
     `SELECT a.id, a.full_name, a.company_name, a.phone, a.whatsapp, a.districts_covered,
@@ -16185,10 +16297,18 @@ async function queryPublicAgentsForWhatsapp({
               FROM properties p
               WHERE p.agent_id = a.id
                 AND p.status = 'approved'
-            ) AS listings_count
+            ) AS listings_count,
+            (
+              SELECT COUNT(*)::int
+              FROM properties p
+              WHERE p.agent_id = a.id
+                AND p.status = 'approved'
+                AND $${areaParam}::text <> ''
+                AND COALESCE(p.area, '') ILIKE ('%' || $${areaParam}::text || '%')
+            ) AS area_listings_count
        FROM agents a
       WHERE ${filters.join('\n        AND ')}
-      ORDER BY listings_count DESC, a.created_at DESC
+      ORDER BY area_listings_count DESC, listings_count DESC, a.created_at DESC
       LIMIT $${values.length}`,
     values
   );
@@ -16331,6 +16451,39 @@ async function findAgentsForWhatsappKeywords(keywords = [], preferredAgentIds = 
   });
 }
 
+// What the person last asked for, in one object, so a later "you don't have
+// what I want" can be answered with their own brief and handed to a person
+// with it (6 Nov 2026: a renter's single-room-at-200k brief vanished the
+// moment he gave up — the reply was the menu).
+function searchBriefFromFilters(filters = {}, queryText = '') {
+  const f = filters && typeof filters === 'object' ? filters : {};
+  return {
+    query: normalizeInput(queryText).slice(0, 400) || null,
+    search_type: normalizeListingType(f.searchType || 'any'),
+    area: normalizeInput(f.area || f.district || '') || null,
+    max_budget_ugx: Number(f.maxBudgetUgx) > 0 ? Number(f.maxBudgetUgx) : null,
+    min_budget_ugx: Number(f.minBudgetUgx) > 0 ? Number(f.minBudgetUgx) : null,
+    budget_period: normalizeInput(f.budgetPeriod || f.pricePeriod || '') || null,
+    property_type: normalizeInput(f.propertyType || '') || null,
+    beds_min: Number(f.bedsMin) > 0 ? Number(f.bedsMin) : null,
+    at: new Date().toISOString()
+  };
+}
+
+function describeSearchBrief(brief = {}) {
+  if (!brief || typeof brief !== 'object') return '';
+  const type = { rent: 'to rent', sale: 'to buy', land: 'land', student: 'student housing', commercial: 'commercial' }[brief.search_type] || '';
+  const home = brief.property_type || (brief.beds_min ? `${brief.beds_min}+ bedroom` : '');
+  const place = brief.area ? `in ${brief.area}` : '';
+  const maxText = brief.max_budget_ugx ? formatPrice(brief.max_budget_ugx, brief.budget_period || (brief.search_type === 'rent' ? 'mo' : '')) : '';
+  const budget = brief.max_budget_ugx
+    ? (brief.min_budget_ugx
+      ? `${formatPrice(brief.min_budget_ugx, '')}–${maxText.replace(/^[A-Za-z$€£]+\s*/, '')}`
+      : `up to ${maxText}`)
+    : '';
+  return [home, type, place, budget].filter(Boolean).join(' ') || normalizeInput(brief.query || '').slice(0, 160);
+}
+
 function logPropertySearchRequest({
   userPhone,
   searchType = 'any',
@@ -16340,8 +16493,14 @@ function logPropertySearchRequest({
   resultRows = [],
   usedNearestFallback = false,
   outsideUganda = false,
-  fallbackReason = null
+  fallbackReason = null,
+  filters = null
 }) {
+  if (filters && userPhone) {
+    deferWhatsappWork('WhatsApp search brief memory', () => patchSessionData(userPhone, {
+      last_search_brief: { ...searchBriefFromFilters({ ...filters, searchType: filters.searchType || searchType }, queryText), results: Array.isArray(resultRows) ? resultRows.length : 0 }
+    }));
+  }
   deferWhatsappWork('WhatsApp property search analytics', async () => {
   const safeLocation = location && typeof location === 'object'
     ? {
@@ -16781,6 +16940,24 @@ async function findBroaderPropertyFallback(filters = {}, deps = {}) {
   }
   add({ budget: Boolean(budget), extras: true, area: Boolean(area), type: searchType !== 'any' }, () => byTypeAndArea('any', ''));
 
+  // When letting the budget go lands far above it (a single room at 200k
+  // answered with 600k–1.2M homes, 6 Nov 2026), look close by at the budget
+  // first: a room 2 km away at 180k beats a flat next door at three times
+  // the money.
+  const nearbyWithinBudget = async () => {
+    if (!budget || !area) return [];
+    const point = (deps.resolveAreaPoint || resolveWhatsappAreaPoint)(area);
+    if (!point) return [];
+    const nearFinder = deps.findPropertiesNearWhatsappWithFilters || findPropertiesNearWhatsappWithFilters;
+    const { formatDistance } = require('../services/landmarkService');
+    for (const miles of NEARBY_FALLBACK_MILES) {
+      const near = await nearFinder(searchType, { lat: point.lat, lng: point.lng }, { ...filters, searchType, area: null, district: null }, miles);
+      if (!near || near.usedNearestFallback || !near.rows?.length) continue;
+      return near.rows.map((row) => ({ ...row, distance_label: `${formatDistance(row.distance_km)} from ${point.label}`, proximity_header: `within ${miles} miles of ${point.label}` }));
+    }
+    return [];
+  };
+
   for (const attempt of attempts) {
     let rows = [];
     try {
@@ -16790,6 +16967,16 @@ async function findBroaderPropertyFallback(filters = {}, deps = {}) {
       // customer the rungs below it.
       logger.warn('Property fallback attempt failed', { relaxed: attempt.relaxed, error: error.message });
       rows = [];
+    }
+    if (rows.length && attempt.relaxed.budget && !attempt.relaxed.near && !attempt.relaxed.area) {
+      const lowest = lowestPricedFallbackRow(rows);
+      if (lowest && Number(lowest.price) > budget * 2) {
+        let near = [];
+        try { near = await nearbyWithinBudget(); } catch (error) { logger.warn('Nearby-within-budget fallback failed', { error: error.message }); }
+        if (near.length) {
+          return { rows: near, relaxed: { near: true, extras: Boolean(attempt.relaxed.extras) }, effectiveSearchType: searchType, effectiveArea: area };
+        }
+      }
     }
     if (rows.length) {
       return {
@@ -16880,8 +17067,9 @@ async function formatNoMatchOrFallbackReply({
     || filters.budgetPeriod
     || (['rent', 'student'].includes(normalizedSearchType) ? 'mo' : null);
   const budgetClause = budgetUgx ? ` under *${formatPrice(budgetUgx, budgetPeriodForCopy)}*` : '';
+  const cheapestMultiple = cheapest && budgetUgx ? Number(cheapest.price) / budgetUgx : 0;
   const cheapestClause = cheapest
-    ? ` The lowest I have is *${formatListingPrice(cheapest)}*.`
+    ? ` The lowest I have is *${formatListingPrice(cheapest)}*${cheapestMultiple >= 2 ? ` — about ${cheapestMultiple >= 2.75 ? Math.round(cheapestMultiple) : cheapestMultiple.toFixed(1).replace(/\.0$/, '')}× your budget` : ''}.`
     : '';
   const copy = {
     en: [
@@ -17118,16 +17306,31 @@ function cleanAgentDisplayName(value) {
     .trim();
 }
 
+function agentWorksThePlace(row = {}, location = '') {
+  const place = normalizeInput(location).toLowerCase();
+  if (!place) return false;
+  if (Number(row.area_listings_count || 0) > 0) return true;
+  const districts = Array.isArray(row.districts_covered) ? row.districts_covered.map((value) => normalizeInput(value).toLowerCase()) : [];
+  return districts.some((district) => district === place || district.includes(place));
+}
+
 function formatAgentSearchMessage(lang, rows, location) {
   const lines = [];
-  lines.push(`👔 *${t(lang, 'agentHeader')}* (${location})`);
+  const place = normalizeInput(location);
+  const anyInPlace = rows.some((row) => agentWorksThePlace(row, place));
+  // Say what the list is. Two Kampala brokers under "(Bunga)" read as Bunga
+  // brokers; when nobody lists the place, the heading says so.
+  const districtsShown = [...new Set(rows.flatMap((row) => (Array.isArray(row.districts_covered) ? row.districts_covered : [])).map((value) => normalizeInput(value)).filter(Boolean))];
+  lines.push(`👔 *${t(lang, 'agentHeader')}* (${anyInPlace || !place ? place || t(lang, 'typeAny') : `${districtsShown.slice(0, 2).join(', ') || ACTIVE_COUNTRY_NAME} — none lists ${place} itself yet`})`);
   lines.push('');
   rows.forEach((r, idx) => {
     const areas = Array.isArray(r.districts_covered) ? r.districts_covered.join(', ') : '';
     const name = cleanAgentDisplayName(r.full_name) || 'makaug agent';
     const company = cleanAgentDisplayName(r.company_name);
-    lines.push(`${idx + 1}. *${name}*${company ? ` - ${company}` : ''}`);
+    const companyShown = company && company.toLowerCase() !== name.toLowerCase() && !/^independent agent$/i.test(company) ? company : '';
+    lines.push(`${idx + 1}. *${name}*${companyShown ? ` - ${companyShown}` : ''}`);
     if (areas) lines.push(`   ${t(lang, 'areasLabel')}: ${areas}`);
+    if (place && Number(r.area_listings_count || 0) > 0) lines.push(`   🏡 ${r.area_listings_count} ${Number(r.area_listings_count) === 1 ? 'home' : 'homes'} listed in ${place}`);
     lines.push(`   ${t(lang, 'profileLabel')}: ${HOME_URL}/agents/${r.id}`);
     lines.push('');
   });
@@ -18463,6 +18666,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       await logPropertySearchRequest({
         userPhone: phone,
         searchType: naturalFilters.searchType || 'any',
+        filters: naturalFilters,
         queryText: cleanBody,
         location: null,
         resultRows: rows,
@@ -18706,6 +18910,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       await logPropertySearchRequest({
         userPhone: phone,
         searchType: naturalFilters.searchType || 'any',
+        filters: naturalFilters,
         queryText: cleanBody,
         location: null,
         resultRows: rows,
@@ -18825,6 +19030,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       await logPropertySearchRequest({
         userPhone: phone,
         searchType: naturalFilters.searchType || 'any',
+        filters: naturalFilters,
         queryText: cleanBody,
         location: null,
         resultRows: rows,
@@ -18994,6 +19200,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     await logPropertySearchRequest({
       userPhone: phone,
       searchType: naturalFilters.searchType || 'any',
+      filters: naturalFilters,
       queryText: cleanBody,
       location: null,
       resultRows: rows,
@@ -19162,6 +19369,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       await logPropertySearchRequest({
         userPhone: phone,
         searchType: naturalFilters.searchType || 'any',
+        filters: naturalFilters,
         queryText: cleanBody,
         location: null,
         resultRows: rows,
@@ -20348,6 +20556,40 @@ async function processInboundRuntimeUnlocked({
       message: [transcriptEcho, humanHandoffAck(activeLang)].filter(Boolean).join('\n\n'),
       nextStep: sessionStep
     };
+  }
+
+  if (!transcriptRecord?.text && customerGivingUp(effectiveBody) && ASSISTANT_FREE_STEPS.has(String(sessionStep || '').trim().toLowerCase())) {
+    const brief = sessionForMessage?.session_data?.last_search_brief && typeof sessionForMessage.session_data.last_search_brief === 'object'
+      ? sessionForMessage.session_data.last_search_brief
+      : null;
+    const briefText = describeSearchBrief(brief);
+    const theirWords = normalizeInput(effectiveBody).slice(0, 300);
+    await safeConversationControl(phone, {
+      status: 'needs_human',
+      priority: 'high',
+      category: 'property_search',
+      last_summary: `Left unhappy: "${theirWords}"${briefText ? ` — looking for ${briefText}` : ''}`,
+      metadata: { needs_person_reason: 'customer_gave_up', needs_person_at: new Date().toISOString(), search_brief: brief || null }
+    }, 'whatsapp_customer_gave_up');
+    deferWhatsappWork('customer-gave-up alert', () => require('../services/leadDeskService').alertTeamConversationNeedsPerson(db, {
+      phone,
+      contactName,
+      summary: theirWords,
+      reason: `Customer gave up — nothing matched${briefText ? `. Looking for: ${briefText}` : ''}${brief?.results != null ? ` (last search returned ${brief.results})` : ''}`,
+      language: languageDisplayName(activeLang)
+    }));
+    if (brief) {
+      createNoMatchLead({
+        userPhone: phone,
+        searchType: brief.search_type || 'any',
+        preferredArea: brief.area || '',
+        notes: `Customer gave up on WhatsApp: "${theirWords}". Looking for ${briefText}.`,
+        filters: { maxBudgetUgx: brief.max_budget_ugx, bedsMin: brief.beds_min, propertyType: brief.property_type, pricePeriod: brief.budget_period },
+        queryText: brief.query || ''
+      });
+    }
+    await updateSession(phone, { current_step: sessionStep, current_intent: 'support' });
+    return { message: customerGivingUpReply(activeLang, brief), nextStep: sessionStep };
   }
 
   const outside = messageOutsideTheAssistant({
@@ -21788,6 +22030,8 @@ module.exports.importForwardedAdvert = importForwardedAdvert;
 
 module.exports.__test = {
   extractNaturalSearchFilters,
+  parseBudget,
+  parseBudgetRange,
   applyProximityToFilters,
   isNearMeQuery,
   processMessage,
@@ -21800,6 +22044,13 @@ module.exports.__test = {
   releaseInboundMessageClaim,
   logWhatsappMessage,
   looksLikeForwardedProperty,
+  looksLikeSearchBrief,
+  formatAgentSearchMessage,
+  whatsappAgentKeywordScore,
+  customerGivingUp,
+  customerGivingUpReply,
+  describeSearchBrief,
+  searchBriefFromFilters,
   recentlyClosedEmployeeBatchReply,
   agentConversationalAside,
   agentPayLinkAside,
