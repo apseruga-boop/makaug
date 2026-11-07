@@ -68335,8 +68335,9 @@ function publicMapIsVisible(mapId, { inViewport = true } = {}) {
   if (style.visibility === "hidden" || style.visibility === "collapse") return false;
   const rect = el.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return false;
-  return !inViewport || (rect.bottom > 0 && rect.right > 0
-    && rect.top < window.innerHeight && rect.left < window.innerWidth);
+  const preloadMargin = mapId === "map-home" && isActiveUgandaHomepage() ? 1500 : 0;
+  return !inViewport || (rect.bottom > -preloadMargin && rect.right > 0
+    && rect.top < window.innerHeight + preloadMargin && rect.left < window.innerWidth);
 }
 
 function getReadyPublicMapIds() {
@@ -68361,9 +68362,10 @@ function watchActivePublicMapVisibility() {
       && elements.every((el, index) => el === publicMapVisibilityElements[index])) return;
   publicMapVisibilityObserver?.disconnect();
   publicMapVisibilityElements = elements;
+  const preloadHomeMap = elements.some((el) => el.id === "map-home") && isActiveUgandaHomepage();
   publicMapVisibilityObserver = new IntersectionObserver((entries) => {
     if (entries.some((entry) => entry.isIntersecting)) scheduleMapsInit();
-  });
+  }, { rootMargin: preloadHomeMap ? "1500px 0px" : "0px" });
   elements.forEach((el) => publicMapVisibilityObserver.observe(el));
 }
 
@@ -68819,7 +68821,7 @@ function scheduleMapsInit(options = {}) {
   if (mapsInitScheduled) return;
   mapsInitScheduled = true;
   const onHomeOnly = activePage?.id === "page-home";
-  const delay = hasActiveMap && !onHomeOnly ? 300 : 2500;
+  const delay = onHomeOnly && isActiveUgandaHomepage() ? 0 : (hasActiveMap && !onHomeOnly ? 300 : 2500);
   const start = () => {
     mapsInitScheduled = false;
     if (mapsInitPromise || !getReadyPublicMapIds().length) return;

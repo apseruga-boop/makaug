@@ -110,7 +110,7 @@ function mapFixture({ nativeObserver = true, pathname = '/', page = 'home', coun
     scheduleMapsInit: () => { context.watchActivePublicMapVisibility(); scheduled.push([...context.getReadyPublicMapIds()]); }
   });
   if (nativeObserver) context.IntersectionObserver = class {
-    constructor(callback) { this.callback = callback; this.elements = []; observers.push(this); }
+    constructor(callback, options) { this.callback = callback; this.options = options; this.elements = []; observers.push(this); }
     observe(el) { this.elements.push(el.id); }
     disconnect() {}
   };
@@ -125,6 +125,7 @@ test('actual home startup observes maps without synchronous layout reads and rea
   assert.deepEqual(f.reads, []);
   assert.deepEqual(f.scheduled, []);
   assert.deepEqual(f.observers[0].elements, ['map-home']);
+  assert.equal(f.observers[0].options.rootMargin, '1500px 0px');
   f.observers[0].callback([{ isIntersecting: false }]);
   assert.deepEqual(f.scheduled, []);
   f.state.visible = true;
