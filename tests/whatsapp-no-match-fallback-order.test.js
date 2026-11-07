@@ -158,3 +158,31 @@ test('a search with no budget still keeps its type', async () => {
   assert.strictEqual(result.effectiveSearchType, 'rent');
   assert.ok(!result.relaxed.budget, 'there was no budget to stretch');
 });
+
+test('when letting the budget go lands far above it, nearby homes at the budget come first', async () => {
+  // 6 Nov 2026: a single room at 150k-200k in Bunga; Bunga's cheapest rental
+  // is 600k. A room 2 km away at 180k is the useful answer.
+  const calls = [];
+  const finders = {
+    ...bungaFinders(calls),
+    resolveAreaPoint: () => ({ lat: 0.29, lng: 32.6, label: 'Bunga' }),
+    findPropertiesNearWhatsappWithFilters: async (type, point, filters, miles) => {
+      calls.push({ via: 'near', budget: filters.maxBudgetUgx, miles });
+      return Number(filters.maxBudgetUgx) === 200000 && miles === 3
+        ? { rows: [{ id: 'n1', title: 'Single room for rent in Kansanga', listing_type: 'rent', area: 'Kansanga', price: '180000', price_period: 'mo', distance_km: 1.8 }] }
+        : { rows: [] };
+    }
+  };
+  const result = await findBroaderPropertyFallback({ searchType: 'rent', area: 'Bunga', maxBudgetUgx: 200000, propertyType: 'single room' }, finders);
+  assert.strictEqual(calls[0].via, 'filters', 'the budget is still the first thing let go in the area itself');
+  assert.strictEqual(result.rows[0].id, 'n1', 'the room at the budget close by wins over 600k next door');
+  assert.strictEqual(result.relaxed.near, true);
+  assert.ok(!result.relaxed.budget, 'the budget was kept');
+  assert.match(result.rows[0].distance_label, /from Bunga$/);
+
+  // At 500k the lowest in Bunga is 1M, twice the budget: not "far above", so
+  // the same-area rows stand and no nearby query is made.
+  const quiet = [];
+  await findBroaderPropertyFallback(bungaAt500k, { ...bungaFinders(quiet), resolveAreaPoint: () => ({ lat: 0, lng: 0, label: 'Bunga' }), findPropertiesNearWhatsappWithFilters: async () => { quiet.push({ via: 'near' }); return { rows: [] }; } });
+  assert.ok(!quiet.some((call) => call.via === 'near'));
+});
