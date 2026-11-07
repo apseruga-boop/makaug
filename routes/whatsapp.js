@@ -5201,9 +5201,31 @@ function explicitDistrictInCaption(caption = '', { area = '' } = {}) {
  * sale, the price is the lowest "starts from" figure, and the listing is
  * marked so staff move it to the off-plan desk.
  */
-function employeeCaptionLooksOffPlan(caption = '') {
+// The off-plan projects an approved agent is the source of, as kept on their
+// session: [{ id, name, slug, status }]. A caption that names one is about
+// that project's page, whatever else it says.
+function knownProjectInCaption(caption = '', sessionData = {}) {
+  const text = normalizeInput(caption).toLowerCase();
+  if (!text) return null;
+  const projects = Array.isArray(sessionData?.known_projects) ? sessionData.known_projects : [];
+  return projects.find((project) => {
+    const name = normalizeInput(project?.name || '').toLowerCase();
+    return name.length >= 4 && text.includes(name);
+  }) || null;
+}
+
+function employeeCaptionLooksOffPlan(caption = '', sessionData = {}) {
   const text = normalizeInput(caption).toLowerCase();
   if (!text) return false;
+  if (knownProjectInCaption(caption, sessionData)) return true;
+  // "1, 2, 3 and 4-bedroom apartments available ... starting from USD 53,800"
+  // (Vanta House, 6 Nov 2026): a menu of home sizes with one starting price
+  // is a development, not a 4-bedroom house. Likewise "1-3 bedroom apartments
+  // from ...".
+  const bedroomMenu = /\b(?:\d|one|two|three|four|five)\s*(?:,|and|&|-|–|to)\s*(?:\d|one|two|three|four|five)\b[^.\n]{0,40}\bbed(?:room)?s?\b/i.test(text)
+    && /\b(?:apartments?|flats?|homes?|units?|houses?|villas?|townhouses?)\b/i.test(text)
+    && /\b(?:starts? from|starting (?:from|at)|from|available|under construction|handover|completion)\b/i.test(text);
+  if (bedroomMenu) return true;
   const projectTalk = /\boff[\s-]?plan\b|\bunder construction\b|\btopping[\s-]?out\b|\bhandover\b|\b(?:expected|estimated)\s+completion\b|\bfor occupancy\b|\bconstruction (?:pace|progress|period)\b|\breached the \d{1,2}(?:st|nd|rd|th) floor\b|\bfloors? per month\b|\bpayment plan\b.*\bmonths\b/i.test(text);
   const unitMenu = (text.match(/\b\d\s*bhk\b|\b(?:one|two|three|four|\d)[\s-]*bed(?:room)?s?\b[^.\n]{0,40}\b(?:from|starts? from|starting)\b/gi) || []).length >= 2
     || (text.match(/\bstarts? from\b/gi) || []).length >= 2;
@@ -5211,15 +5233,22 @@ function employeeCaptionLooksOffPlan(caption = '') {
 }
 
 /** The project's name: the words before "has reached", "is", "will" or the first sentence end. */
-function offPlanProjectNameFromCaption(caption = '') {
+function offPlanProjectNameFromCaption(caption = '', sessionData = {}) {
+  const known = knownProjectInCaption(caption, sessionData);
+  if (known) return normalizeInput(known.name);
   const first = normalizeInput(caption).split(/\n/)[0] || '';
   const match = first.match(/^\s*([A-Z][A-Za-z0-9'’&-]*(?:\s+[A-Z][A-Za-z0-9'’&-]*){0,4})\b(?=\s+(?:has|have|is|are|will|reached|offers?|launch|phase)\b)/);
-  return match ? match[1].trim() : '';
+  if (match) return match[1].trim();
+  // "Luxury apartments for sale at Vanta House, Naguru Vale, Kampala": the
+  // name is what follows "at", up to the comma or the place that follows it.
+  const at = first.match(/\bat\s+([A-Z][A-Za-z0-9'’&-]*(?:\s+[A-Z][A-Za-z0-9'’&-]*){0,3})(?=\s*(?:[,.;:—–-]|\s+(?:in|on|along|near|off|opposite)\b|$))/);
+  return at ? at[1].trim() : '';
 }
 
 function employeePropertyFacts(caption = '', sessionData = {}) {
   // Luganda/Swahili captions are read through their English equivalents.
-  const offPlan = employeeCaptionLooksOffPlan(caption);
+  const offPlan = employeeCaptionLooksOffPlan(caption, sessionData);
+  const knownDevelopment = offPlan ? knownProjectInCaption(caption, sessionData) : null;
   // "2.5 floors per month" is a construction pace, not rent.
   const cleanCaption = normalizeInput(withEnglishPropertyTerms(caption)).replace(/\b(\d+(?:\.\d+)?)\s*floors?\s+(?:per|a|each|every)\s+month\b/gi, '$1 floors built monthly');
   const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
@@ -5345,7 +5374,7 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
       : 'sale';
   }
   // An off-plan project's name ("Vanta House") is not where it is.
-  const offPlanName = offPlan ? offPlanProjectNameFromCaption(caption) : '';
+  const offPlanName = offPlan ? offPlanProjectNameFromCaption(caption, sessionData) : '';
   const locationCaption = (offPlanName ? cleanCaption.replace(new RegExp(offPlanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ') : cleanCaption).replace(
     /\b(?:private|ready|freehold)?\s*m(?:ailo|olo|ilo)\s+(?:land\s+)?title\b/gi,
     ' '
@@ -5686,7 +5715,10 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     bedroomDraft: offPlan && bedroomDraft.bedroom_options_min != null ? { ...bedroomDraft, bedrooms: bedroomDraft.bedroom_options_min } : bedroomDraft,
     locationPatch,
     offPlan,
-    offPlanName
+    offPlanName,
+    // Set when the caption names a project this agent already has on makaug:
+    // what they sent is an update for that page, not a new listing.
+    knownDevelopment: knownDevelopment ? { id: knownDevelopment.id, name: knownDevelopment.name, slug: knownDevelopment.slug, status: knownDevelopment.status } : null
   };
 }
 
@@ -5984,6 +6016,9 @@ function employeeIncompletePropertyMessage(caption = '', missing = [], data = {}
 
 function employeePropertyMissing(facts = {}) {
   const missing = [];
+  // An update for a project already on makaug (new photos, a construction
+  // note) is complete as sent; the page has the price and the place.
+  if (facts.knownDevelopment?.id) return missing;
   if (!facts.listingType) missing.push('sale/rent/land/commercial/student type');
   if (!facts.price) missing.push('price');
   if (!facts.locationPatch?.area || !facts.locationPatch?.district || !facts.locationPatch?.canonical_location_id) {
@@ -8386,6 +8421,20 @@ function agentMoney(amount, currency = 'UGX') {
 function agentPropertyDetailLines(facts = {}, caption = '') {
   const english = withEnglishPropertyTerms(caption);
   const lines = [];
+  if (facts.offPlan) {
+    // A development, not one home: say so, with the range of homes it offers.
+    const draft = facts.bedroomDraft || {};
+    const low = Number(draft.bedroom_options_min) || Number(draft.bedrooms) || 0;
+    const high = Number(draft.bedroom_options_max) || 0;
+    const homes = low && high && high > low ? `${low}–${high} bedroom homes` : (low ? `${low} bedroom homes` : 'homes');
+    lines.push(`🏗️ Off-plan project${facts.offPlanName ? `: ${facts.offPlanName}` : ''} · ${homes} · for sale`);
+    const place = [normalizeInput(facts.locationPatch?.area || ''), normalizeInput(facts.locationPatch?.district || '')].filter(Boolean).join(', ');
+    if (place) lines.push(`📍 ${place}`);
+    const meta = facts.priceMetadata || {};
+    const shown = agentMoney(meta.price_original || facts.price, meta.price_original_currency || meta.price_currency || 'UGX');
+    if (shown) lines.push(`💰 from ${shown}`);
+    return lines;
+  }
   const bedrooms = facts.listingType === 'land' ? 0 : (Number(facts.bedroomDraft?.bedrooms) || 0);
   const kind = parsePropertyType(english) || (facts.listingType === 'land' ? 'land' : (facts.listingType === 'commercial' ? 'commercial property' : 'property'));
   const deal = facts.listingType === 'rent' || facts.listingType === 'student'
@@ -8428,6 +8477,22 @@ function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], op
 
   const lines = [];
   if (openedAgentSelfIntake) lines.push(agentSelfIntakeOpeningLine(data.agent || {}), '');
+  // More for a project that is already on makaug: it goes to that page, not
+  // up as a listing of its own.
+  if (facts.knownDevelopment?.id) {
+    const project = facts.knownDevelopment;
+    const bits = [];
+    if (photos) bits.push(`${photos} ${photos === 1 ? 'photo' : 'photos'}`);
+    if (videos) bits.push(`${videos} ${videos === 1 ? 'video' : 'videos'}`);
+    lines.push(`✅ *Thanks — received for ${project.name}.*`);
+    lines.push('');
+    if (bits.length) lines.push(`📸 ${bits.join(' · ')}${normalizeInput(caption) ? ' and your note' : ''} ${photos + videos === 1 && !normalizeInput(caption) ? 'is' : 'are'} with the team.`);
+    else lines.push('📝 Your note is with the team.');
+    lines.push(`They will add it to the ${project.name} page${project.status === 'published' && project.slug ? ` (makaug.com/off-plan/${project.slug})` : ''} and tell you once it is updated.`);
+    lines.push('');
+    lines.push('More photos, a price change or a construction update? Send them here the same way.');
+    return lines.join('\n');
+  }
   if (missing.length) {
     lines.push(`📝 I have your property${label}, but I cannot put it up yet.`);
     lines.push('');
@@ -8437,7 +8502,9 @@ function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], op
     lines.push('Just reply with it here — no need to send the photos again.');
     return lines.join('\n');
   }
-  lines.push(`✅ *Saved — your property${what ? ` in ${what}` : ''} is with our team for review.*`);
+  lines.push(facts.offPlan
+    ? `✅ *Saved — ${facts.offPlanName || 'your project'} is with the off-plan desk for review.*`
+    : `✅ *Saved — your property${what ? ` in ${what}` : ''} is with our team for review.*`);
   lines.push('');
   lines.push(...agentPropertyDetailLines(facts, caption || facts.cleanCaption || ''));
   const bits = [];
@@ -8498,6 +8565,19 @@ function agentPendingNotice(data = {}) {
           `📸 I got ${mediaWords(item.media) || 'a photo'} with no description while several properties were coming in, so I cannot tell which property ${item.media.length === 1 ? 'it belongs' : 'they belong'} to.`,
           '',
           'Please send it again *together with that property\'s caption* (what it is, area, price) and I will add it to the right one.'
+        ].join('\n');
+      }
+      // A developer with a project on makaug usually sends more of that
+      // project. Offer that first; a different property still works.
+      const projects = Array.isArray(data.known_projects) ? data.known_projects.filter((project) => project?.name) : [];
+      if (projects.length) {
+        const names = projects.slice(0, 3).map((project) => `*${project.name}*`).join(' or ');
+        return [
+          `📸 Got your ${mediaWords(item.media) || 'photos'} — thank you!`,
+          '',
+          `If ${projects.length === 1 ? 'this is' : 'these are'} for ${names}, reply with a line about it — e.g. _"${projects[0].name}: structure now at the 8th floor"_ — and I will add it to the page.`,
+          '',
+          'A different property? Tell me what it is, rent or sale, the area and district, and the price.'
         ].join('\n');
       }
       return [`📸 Got your ${mediaWords(item.media) || 'photos'} — thank you!`, '', ...askForDetails].join('\n');
@@ -9785,6 +9865,12 @@ async function handleEmployeeWhatsappIntake({
       employee_intake_recovered_at: new Date().toISOString()
     } : {})
   };
+  // An approved agent's own projects on makaug, looked up once per session: a
+  // caption naming one is an update for that page, not a new listing.
+  if (data.whatsapp_agent_self_intake === true && data.agent?.id && !data.known_projects_checked_at) {
+    data.known_projects = await agentKnownProjects(data.agent.id);
+    data.known_projects_checked_at = new Date().toISOString();
+  }
   // An exit that works from any step. COMPLETE only closes a batch that is
   // actually finishable, so when it refused there was no way out at all, and
   // whatever was typed instead got stored as a property caption — "Close the
@@ -13660,9 +13746,97 @@ const EMPLOYEE_BURST_WINDOW_MS = 30000;
  * staff do not have to re-key it from the review listing (Vanta House,
  * 6 Nov 2026: "on the chat bot I can't sign off plan clients").
  */
+// The off-plan projects an approved agent is the source of, kept on their
+// session so a caption that names one is read as an update for that page.
+async function agentKnownProjects(agentId = '') {
+  const id = normalizeInput(agentId);
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return [];
+  try {
+    const result = await db.query(
+      `SELECT id, name, slug, status FROM off_plan_developments
+        WHERE source_agent_id = $1::uuid AND status IN ('published', 'pending_review', 'changes_requested', 'draft')
+        ORDER BY (status = 'published') DESC, updated_at DESC
+        LIMIT 12`,
+      [id]
+    );
+    return result.rows.map((row) => ({ id: row.id, name: row.name, slug: row.slug, status: row.status }));
+  } catch (error) {
+    logger.warn('Known projects lookup failed', { agent_id: id, error: error.message || String(error) });
+    return [];
+  }
+}
+
+// A developer sending more for a project that is already on makaug: the
+// photos, videos and note go onto that project as a pending update for the
+// off-plan desk, the team hears, and the review listing that carried them is
+// linked. The page changes once staff accept the update. (Vanta House, 6 Nov
+// 2026: an hour after the page went live John Yan sent a sales caption and
+// three videos, and Agent 007 opened a "4-bed house for sale" instead.)
+async function recordDeveloperProjectUpdate({ development = {}, propertyId = '', caption = '', storedMedia = [], agent = null, phone = '' } = {}) {
+  const offPlanService = require('../services/offPlanService');
+  const existing = await offPlanService.getManagedDevelopment(db, development.id);
+  if (!existing) return null;
+  const media = (Array.isArray(storedMedia) ? storedMedia : [])
+    .filter((item) => /^https:\/\//i.test(String(item?.url || '')) && ['image', 'video', 'document'].includes(item.kind))
+    .slice(0, 20)
+    .map((item) => ({ url: item.url, kind: item.kind, name: normalizeInput(item.name || '').slice(0, 120), public_eligible: item.publicEligible !== false }));
+  const entry = {
+    id: crypto.randomUUID(),
+    received_at: new Date().toISOString(),
+    status: 'pending_review',
+    source: 'whatsapp_employee_intake',
+    from: normalizeInput(agent?.full_name || '') || 'Developer',
+    phone_suffix: employeeIntakePhoneSuffix(phone),
+    caption: normalizeInput(caption).slice(0, 4000),
+    media,
+    property_id: propertyId || null
+  };
+  const inbox = (Array.isArray(existing.extra_fields?.project_updates) ? existing.extra_fields.project_updates : []).slice(-29);
+  inbox.push(entry);
+  await offPlanService.writeDevelopment(db, { extra_fields: { ...(existing.extra_fields || {}), project_updates: inbox } }, { id: existing.id, actorId: null, actorRole: 'whatsapp_employee_intake' });
+  await offPlanService.recordEvent(db, {
+    developmentId: existing.id,
+    action: 'developer_update_received',
+    actorRole: 'whatsapp_employee_intake',
+    payload: { update_id: entry.id, media: media.length, has_caption: Boolean(entry.caption), property_id: propertyId || null }
+  }).catch(() => null);
+  if (propertyId) {
+    await db.query(
+      `UPDATE properties SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('off_plan_development_id', $2::text, 'off_plan_project_name', $3::text, 'off_plan_update_id', $4::text, 'off_plan_update', true) WHERE id = $1`,
+      [propertyId, existing.id, existing.name, entry.id]
+    ).catch(() => null);
+  }
+  const photos = media.filter((item) => item.kind === 'image').length;
+  const videos = media.filter((item) => item.kind === 'video').length;
+  const counts = [photos ? `${photos} photo${photos === 1 ? '' : 's'}` : '', videos ? `${videos} video${videos === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+  const publicPath = existing.status === 'published' ? `https://makaug.com/off-plan/${encodeURIComponent(existing.slug)}` : '';
+  require('../services/leadDeskService').sendToTeam(
+    db,
+    [
+      `🏗️ *Update for ${existing.name} from ${entry.from}*${counts ? ` — ${counts}` : ''}`,
+      entry.caption ? `"${entry.caption.slice(0, 300)}${entry.caption.length > 300 ? '…' : ''}"` : '',
+      publicPath,
+      media.length ? media.slice(0, 6).map((item) => item.url).join('\n') : '',
+      'Review it on the off-plan desk (project updates); the page changes once it is accepted.'
+    ].filter(Boolean).join('\n'),
+    'off_plan_update_received'
+  ).catch(() => null);
+  return { development: existing, update: entry };
+}
+
 async function createOffPlanDraftFromIntake({ propertyId = '', caption = '', facts = {}, storedMedia = [], agent = null, phone = '' } = {}) {
   const offPlanService = require('../services/offPlanService');
   const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
+  // Already on makaug: an update for that page, not a second project.
+  if (facts.knownDevelopment?.id) {
+    try {
+      const recorded = await recordDeveloperProjectUpdate({ development: facts.knownDevelopment, propertyId, caption, storedMedia, agent, phone });
+      if (recorded) return recorded.development;
+    } catch (error) {
+      logger.warn('Developer project update not recorded', { development_id: facts.knownDevelopment.id, error: error.message || String(error) });
+      return null;
+    }
+  }
   const area = normalizeInput(facts.locationPatch?.area || '');
   const district = normalizeInput(facts.locationPatch?.district || '');
   const name = normalizeInput(facts.offPlanName) || `New development${area ? ` in ${area}` : ''}`;
@@ -21761,6 +21935,10 @@ module.exports.__test = {
   employeeCaptionLooksOffPlan,
   offPlanProjectNameFromCaption,
   createOffPlanDraftFromIntake,
+  knownProjectInCaption,
+  agentKnownProjects,
+  recordDeveloperProjectUpdate,
+  agentPropertyDetailLines,
   employeeWaitingCaptionCount,
   settleHeldMediaBySenderTime,
   rememberEmployeeQueuedSubmission,

@@ -1182,7 +1182,12 @@
     const overseas = project.country_code !== 'UG';
     const fullyVerified = project.verification_status === 'verified';
     const sourceName = overseas ? 'makaug.com' : (clean(project.source_agent_name || project.source_display_name) || offPlanText('projectTeam'));
-    const publicVideoUrl = clean(project.walkthrough_output_video_url || project.videos?.[0]?.url);
+    // Every project video, not only the first: the approved walkthrough render
+    // first, then the developer's own (construction updates, interviews).
+    const projectVideos = [
+      ...(clean(project.walkthrough_output_video_url) ? [{ url: project.walkthrough_output_video_url, kind: 'walkthrough' }] : []),
+      ...(Array.isArray(project.videos) ? project.videos : [])
+    ].filter((video, index, list) => clean(video?.url) && list.findIndex((other) => clean(other?.url) === clean(video.url)) === index);
     const soldLabel = project.units_sold == null || project.units_total == null ? offPlanText('toConfirm') : `${project.units_sold} / ${project.units_total}`;
     const translated = (field) => clean(project.extra_fields?.translations?.[offPlanLanguage()]?.[field]);
     const description = overseas ? localizedProjectField(project, 'description', project.description) : (project.slug === 'entebbe-victoria-palms' ? offPlanText('previewDescription') : (translated('description') || project.description || offPlanText('toConfirm')));
@@ -1212,7 +1217,7 @@
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('paymentPlan'))}</h2><div class="mt-4">${paymentPlanMarkup(project)}</div>${firstPrice && project.payment_plan_months ? calculatorMarkup(project, firstPrice) : ''}</section>
           ${keyFactsMarkup(project)}
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('locationArea'))}</h2><p class="mt-2 text-sm text-gray-600">${escapeHtml(projectLocation(project))}. ${escapeHtml(project.extra_fields?.map_precision === 'area_centroid' ? offPlanText('widerArea') : offPlanText('confirmTravel'))}</p><p class="mt-3 text-sm leading-6 text-gray-700">${escapeHtml(areaOverview)}</p><div class="mt-4">${mapMarkup(project)}</div><div class="mt-6"><h3 class="font-black text-gray-950">${escapeHtml(offPlanExperienceText('familyServices'))}</h3><p class="mt-1 text-xs text-gray-500">${escapeHtml(offPlanText('nearbyLive'))}</p><div id="off-plan-nearby-places" class="mt-4 space-y-5"></div></div></section>
-          ${publicVideoUrl ? `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('projectVideo'))}</h2><div class="mt-4 aspect-video rounded-2xl overflow-hidden bg-gray-950"><video controls preload="metadata" class="w-full h-full" src="${escapeHtml(publicVideoUrl)}"></video></div></section>` : ''}
+          ${projectVideos.length ? `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('projectVideo'))}</h2><div class="off-plan-video-grid mt-4">${projectVideos.map((video) => `<figure class="off-plan-video-card${clean(video.orientation) === 'portrait' ? ' is-portrait' : ''}"><video controls preload="metadata" playsinline ${clean(video.poster_url) ? `poster="${escapeHtml(video.poster_url)}"` : ''} src="${escapeHtml(video.url)}"></video>${localizedItemText(video, 'caption') ? `<figcaption>${escapeHtml(localizedItemText(video, 'caption'))}</figcaption>` : ''}</figure>`).join('')}</div></section>` : ''}
           <section class="off-plan-risk-warning"><strong><i class="fas fa-triangle-exclamation mr-1"></i>${escapeHtml(offPlanText('disclaimerTitle'))}</strong><p class="mt-2">${escapeHtml(offPlanText('disclaimerBody'))}</p></section>
         </main>
         <aside class="off-plan-sticky-enquiry space-y-4"><div class="off-plan-panel shadow-[0_20px_60px_rgba(18,75,39,.12)]"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('pricesFrom'))}</span><strong class="block text-2xl text-gray-950 mt-1">${escapeHtml(formatMoney(primaryPrice.amount, primaryPrice.currency))}</strong>${overseas && firstPrice ? `<span class="block mt-1 text-xs text-gray-500">${escapeHtml(formatUgx(firstPrice))} · ${escapeHtml(overseasProjectText(project, 'indicativeFx'))}</span>` : ''}<p class="text-xs text-gray-500 mt-2">${escapeHtml(offPlanText('confirmPrice'))}</p><button type="button" onclick="openOffPlanContactModal('${escapeHtml(project.id)}','project_interest')" class="mt-5 w-full rounded-xl bg-green-700 hover:bg-green-600 text-white px-4 py-3 font-black"><i class="fab fa-whatsapp mr-2"></i>${escapeHtml(overseas ? overseasProjectText(project, 'contactMakaug') : offPlanText('enquireThis', { name: sourceName }))}</button><a href="/api/off-plan/${encodeURIComponent(project.slug)}/brochure.pdf?lang=${encodeURIComponent(offPlanLanguage())}${overseas ? `&country=${encodeURIComponent(project.country_code)}` : ''}" class="mt-2 flex items-center justify-center gap-2 w-full rounded-xl border border-green-200 text-green-800 px-4 py-3 font-black" download><i class="fas fa-file-pdf"></i>${escapeHtml(offPlanText('downloadBrochure'))}</a></div><div class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-gray-500">${escapeHtml(offPlanText('shareProject'))}</p><div class="off-plan-share-row mt-3"><button onclick="shareOffPlan('native')" class="off-plan-share-button" aria-label="${escapeHtml(offPlanText('shareProject'))}"><i class="fas fa-share-nodes"></i><span>${escapeHtml(offPlanDynamicText('share'))}</span></button><button onclick="shareOffPlan('whatsapp')" class="off-plan-share-button is-whatsapp" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i><span>WhatsApp</span></button><button onclick="shareOffPlan('x')" class="off-plan-share-button is-x" aria-label="Share on X"><span aria-hidden="true">𝕏</span></button></div></div>${documentsMarkup(project)}</aside>
@@ -1530,6 +1535,35 @@
     document.body.style.overflow = '';
   }
 
+  // What a developer sent on WhatsApp for a project already on makaug: photos,
+  // videos and a note, waiting for staff to put them on the page. Accepting
+  // means adding the media to Images / Construction updates and saving; the
+  // entry is then marked handled so the queue stays short.
+  function developerUpdatesMarkup(project, role) {
+    const updates = Array.isArray(project.extra_fields?.project_updates) ? project.extra_fields.project_updates.filter((item) => item && typeof item === 'object') : [];
+    if (!updates.length) return '';
+    const pending = updates.filter((item) => clean(item.status) !== 'handled');
+    const rows = updates.slice().reverse().slice(0, 12).map((item) => {
+      const media = Array.isArray(item.media) ? item.media.filter((entry) => /^https:\/\//i.test(clean(entry?.url))) : [];
+      const when = item.received_at ? new Date(item.received_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+      const handled = clean(item.status) === 'handled';
+      return `<li class="rounded-lg border ${handled ? 'border-gray-200 bg-white text-gray-500' : 'border-amber-200 bg-amber-50'} px-3 py-2"><div class="flex flex-wrap items-center justify-between gap-2"><strong>${escapeHtml(clean(item.from) || 'Developer')}</strong><span>${escapeHtml(when)}${handled ? ' · handled' : ''}</span></div>${clean(item.caption) ? `<p class="mt-1 whitespace-pre-wrap">${escapeHtml(item.caption)}</p>` : ''}${media.length ? `<div class="mt-2 flex flex-wrap gap-2">${media.map((entry, index) => entry.kind === 'image' ? `<a href="${escapeHtml(entry.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(entry.url)}" alt="" class="h-16 w-16 rounded object-cover border"></a>` : `<a href="${escapeHtml(entry.url)}" target="_blank" rel="noopener" class="rounded border px-2 py-1 bg-white font-bold">${escapeHtml(entry.kind === 'video' ? 'Video' : 'File')} ${index + 1}</a>`).join('')}</div>` : ''}${!handled && item.id ? `<button type="button" onclick="markOffPlanProjectUpdate('${escapeHtml(project.id)}','${role}','${escapeHtml(item.id)}')" class="mt-2 rounded-lg border border-green-200 text-green-800 px-3 py-1 font-black">Mark handled</button>` : ''}</li>`;
+    }).join('');
+    return `<div class="mt-3 rounded-xl border border-amber-100 bg-white px-4 py-3 text-xs text-gray-900"><strong>Developer updates${pending.length ? ` · ${pending.length} waiting` : ''}</strong><p class="mt-1 text-gray-600">Sent on WhatsApp for this project. To put one on the page: copy the photo links into Images or the note and photos into a construction update (Extra fields JSON), save, then mark it handled.</p><ul class="mt-2 space-y-2">${rows}</ul></div>`;
+  }
+
+  async function markOffPlanProjectUpdate(id, role, updateId) {
+    try {
+      const base = `/api/${role === 'admin' ? 'admin' : 'staff'}/off-plan/developments/${encodeURIComponent(id)}`;
+      const current = await request(base, { headers: managementHeaders(role) });
+      const project = current.development || {};
+      const updates = (Array.isArray(project.extra_fields?.project_updates) ? project.extra_fields.project_updates : [])
+        .map((item) => (item && item.id === updateId ? { ...item, status: 'handled', handled_at: new Date().toISOString() } : item));
+      await request(base, { method: 'PATCH', headers: managementHeaders(role), body: { extra_fields: { ...(project.extra_fields || {}), project_updates: updates } } });
+      await loadOffPlanManagement(role);
+    } catch (error) { alert(error.message); }
+  }
+
   function managementProjectCard(project, role) {
     const blockers = project.publication_blockers || [];
     const sourcedPreviewBlockers = project.sourced_preview_blockers || [];
@@ -1564,7 +1598,7 @@
           <label class="text-xs font-bold">Discount %<input data-op-edit="discount_percentage" value="${escapeHtml(project.discount_percentage ?? '')}" type="number" min="0" max="100" class="mt-1 w-full rounded-lg border px-3 py-2"></label>
           <label class="text-xs font-bold">Reservation fee UGX<input data-op-edit="reservation_fee_ugx" value="${escapeHtml(project.reservation_fee_ugx ?? '')}" type="number" min="0" class="mt-1 w-full rounded-lg border px-3 py-2"></label>
           <label class="text-xs font-bold">Payment months<input data-op-edit="payment_plan_months" value="${escapeHtml(project.payment_plan_months ?? '')}" type="number" min="1" class="mt-1 w-full rounded-lg border px-3 py-2"></label>
-          <label class="text-xs font-bold">Promotion video URL<input data-op-video value="${escapeHtml(project.videos?.[0]?.url || '')}" type="url" class="mt-1 w-full rounded-lg border px-3 py-2"></label>
+          <label class="text-xs font-bold">Promotion video URL<input data-op-video data-op-videos="${escapeHtml(JSON.stringify(Array.isArray(project.videos) ? project.videos : []))}" value="${escapeHtml(((project.videos || []).find((video) => clean(video?.kind) === 'promotion_video') || project.videos?.[0])?.url || '')}" type="url" class="mt-1 w-full rounded-lg border px-3 py-2"></label>
           <label class="text-xs font-bold">Verification<select data-op-edit="verification_status" class="mt-1 w-full rounded-lg border px-3 py-2"><option value="needs_verification" ${project.verification_status === 'needs_verification' ? 'selected' : ''}>Needs verification</option><option value="partially_verified" ${project.verification_status === 'partially_verified' ? 'selected' : ''}>Partially verified</option><option value="verified" ${project.verification_status === 'verified' ? 'selected' : ''}>Verified by staff</option></select></label>
         </div>
         <label class="block mt-3 text-xs font-bold">Description<textarea data-op-edit="description" rows="4" class="mt-1 w-full rounded-lg border px-3 py-2">${escapeHtml(project.description || '')}</textarea></label>
@@ -1577,6 +1611,7 @@
           <label class="text-xs font-bold">Extra fields and area notes (JSON)<textarea data-op-json="extra_fields" data-op-json-default="object" rows="7" class="mt-1 w-full rounded-lg border px-3 py-2 font-mono text-[11px]">${escapeHtml(JSON.stringify(project.extra_fields || {}, null, 2))}</textarea></label>
         </div>
       </details>
+      ${developerUpdatesMarkup(project, role)}
       <div class="mt-3 rounded-xl border border-purple-100 bg-purple-50 px-4 py-3 text-xs text-purple-950"><strong>Walkthrough:</strong> ${escapeHtml(walkthroughStatus)}${project.walkthrough_error_message ? ` · ${escapeHtml(project.walkthrough_error_message)}` : ''}</div>
       <div class="mt-4 flex flex-col md:flex-row md:items-center justify-between gap-3"><div class="text-xs ${canPublishSourcedPreview || !blockers.length ? 'text-green-800' : 'text-amber-900'}"><strong>${canPublishSourcedPreview ? 'Ready for sourced public preview' : (blockers.length ? `${blockers.length} publication check${blockers.length === 1 ? '' : 's'} remaining` : 'Ready for explicit publication approval')}</strong>${canPublishSourcedPreview ? '<p class="mt-1">Current availability, sales and construction progress remain labelled for buyer verification.</p>' : (blockers.length ? `<details class="mt-1"><summary class="cursor-pointer">View checks</summary><ul class="list-disc pl-5 mt-1">${blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></details>` : '')}</div><div class="flex flex-wrap gap-2"><button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','changes_requested')" class="rounded-lg border border-amber-200 text-amber-800 px-4 py-2 text-xs font-black">Request changes</button>${!blockers.length && project.status !== 'published' ? `<button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','published')" class="rounded-lg bg-green-700 text-white px-4 py-2 text-xs font-black">Publish verified project</button>` : ''}${canPublishSourcedPreview ? `<button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','published','sourced_preview')" class="rounded-lg bg-green-700 text-white px-4 py-2 text-xs font-black">Publish sourced preview</button>` : ''}${project.status !== 'archived' ? `<button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','archived')" class="rounded-lg border border-gray-300 text-gray-700 px-4 py-2 text-xs font-black">Archive</button>` : ''}${deleteControl}<button onclick="saveOffPlanProgress('${escapeHtml(project.id)}','${role}')" class="rounded-lg bg-slate-900 text-white px-4 py-2 text-xs font-black">Save project</button></div></div><p data-op-status-message class="hidden mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800"></p></div></details>`;
   }
@@ -1600,7 +1635,17 @@
     const body = {}; card.querySelectorAll('[data-op-edit]').forEach((input) => { body[input.dataset.opEdit] = input.value === '' ? null : input.value; });
     try { card.querySelectorAll('[data-op-json]').forEach((input) => { body[input.dataset.opJson] = JSON.parse(input.value || (input.dataset.opJsonDefault === 'object' ? '{}' : '[]')); }); }
     catch (_error) { alert('Project JSON fields must contain valid JSON.'); return; }
-    const videoUrl = clean(card.querySelector('[data-op-video]')?.value); body.videos = videoUrl ? [{ url: videoUrl, kind: 'promotion_video' }] : [];
+    // The promotion video is one of the project's videos, not all of them:
+    // construction updates and developer interviews stay (Vanta House, 6 Nov
+    // 2026, would have lost its site video and three interviews on Save).
+    const videoInput = card.querySelector('[data-op-video]');
+    const videoUrl = clean(videoInput?.value);
+    let existingVideos = [];
+    try { existingVideos = JSON.parse(videoInput?.dataset.opVideos || '[]'); } catch (_error) { existingVideos = []; }
+    if (!Array.isArray(existingVideos)) existingVideos = [];
+    const promotion = existingVideos.find((video) => clean(video?.url) === videoUrl);
+    const others = existingVideos.filter((video) => clean(video?.url) && clean(video?.url) !== videoUrl && clean(video?.kind) !== 'promotion_video');
+    body.videos = [...(videoUrl ? [promotion || { url: videoUrl, kind: 'promotion_video' }] : []), ...others];
     try { await request(`/api/${role === 'admin' ? 'admin' : 'staff'}/off-plan/developments/${encodeURIComponent(id)}`, { method: 'PATCH', headers: managementHeaders(role), body }); await loadOffPlanManagement(role); }
     catch (error) { alert(error.message); }
   }
@@ -1859,7 +1904,7 @@
     else returnToOffPlanList({ history: false });
   }
 
-  Object.assign(window, { applyOffPlanLanguageUI, closeOffPlanWalkaround, offPlanWalkaroundReset, offPlanWalkaroundTour, openOffPlanWalkaround, renderOffPlanFloorPrices, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, deleteOffPlanProject, downloadOffPlanBrochure, handleOffPlanListingAiPrompt, initializeOffPlanPage, loadOffPlanManagement, manageOffPlanWalkthrough, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanCustomPaymentBuilder, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, recalculateOffPlanMortgages, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
+  Object.assign(window, { applyOffPlanLanguageUI, closeOffPlanWalkaround, offPlanWalkaroundReset, offPlanWalkaroundTour, openOffPlanWalkaround, renderOffPlanFloorPrices, markOffPlanProjectUpdate, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, deleteOffPlanProject, downloadOffPlanBrochure, handleOffPlanListingAiPrompt, initializeOffPlanPage, loadOffPlanManagement, manageOffPlanWalkthrough, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanCustomPaymentBuilder, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, recalculateOffPlanMortgages, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
   if (/^\/off-plan(?:\/|$)/i.test(location.pathname)) initializeOffPlanPage();
   if (document.getElementById('page-staff-dashboard')?.classList.contains('active')) loadOffPlanManagement('staff');
   if (document.getElementById('page-admin-dashboard')?.classList.contains('active')) loadOffPlanManagement('admin');

@@ -350,3 +350,10 @@
 .off-plan-walkaround .off-plan-walk-button{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff}
 .off-plan-walkaround .off-plan-walk-button.is-primary{background:#15803d;border-color:#15803d}
 @media (max-width:640px){.off-plan-walkaround{width:100vw;border-radius:0;max-height:100vh;height:100vh}.off-plan-walkaround-stage{aspect-ratio:auto;height:52vh;max-height:none}}
+
+/* Project videos: every video the project carries, portrait ones upright. */
+.off-plan-video-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.off-plan-video-card { margin: 0; min-width: 0; }
+.off-plan-video-card video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #0b1220; border-radius: 16px; object-fit: contain; }
+.off-plan-video-card.is-portrait video { aspect-ratio: 9 / 16; max-height: 560px; }
+.off-plan-video-card figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: #4b5563; }

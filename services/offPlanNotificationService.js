@@ -76,6 +76,17 @@ function publicProjectUrl(development = {}) {
   return `${base}/off-plan/${encodeURIComponent(cleanText(development.slug, 180))}${country === 'UG' ? '' : `?country=${country}`}`;
 }
 
+// The developer's own page on makaug, when the project is linked to an
+// approved agent: "There's a page for John" (Arthur, 7 Nov 2026) — the live
+// message carries it beside the project link.
+function contactProfileUrl(development = {}) {
+  const id = cleanText(development.source_agent_profile_id || development.source_agent_id, 80);
+  const approved = !development.source_agent_status || String(development.source_agent_status).toLowerCase() === 'approved';
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !approved) return '';
+  const base = cleanText(process.env.PUBLIC_SITE_URL || process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com', 300).replace(/\/+$/, '');
+  return `${base}/agents/${encodeURIComponent(id)}`;
+}
+
 function projectContact(development = {}) {
   const extra = development.extra_fields && typeof development.extra_fields === 'object' ? development.extra_fields : {};
   const contact = extra.developer_contact && typeof extra.developer_contact === 'object' ? extra.developer_contact : {};
@@ -97,6 +108,7 @@ function publishedWhatsappBody(development = {}, contact = {}) {
     url,
     '',
     `The page has the home types and prices, the payment plan, the floor plans, ${walkthroughs ? `${walkthroughs} walkthrough videos, ` : ''}the construction progress and a brochure buyers can download. Enquiries from the page come to you${development.extra_fields?.contact_mode === 'makaug_managed' ? ' through the makaug team' : ''}.`,
+    ...(contactProfileUrl(development) ? ['', `Your own page on makaug, with the project on it: ${contactProfileUrl(development)}`] : []),
     '',
     'When there is a new construction update, a price change or new photos, send them here and we will update the page.',
     '',
@@ -114,6 +126,7 @@ function publishedEmail(development = {}, contact = {}) {
     url,
     '',
     'On the page: the home types and starting prices, the payment plan and calculator, the floor plans, the walkthrough videos and 3D walk-around, the construction diary, the location and a downloadable brochure in nine languages.',
+    ...(contactProfileUrl(development) ? ['', `Your own page on makaug, with the project on it: ${contactProfileUrl(development)}`] : []),
     '',
     'Send construction updates, price changes or new photos to the makaug WhatsApp and we will keep the page current.',
     '',
@@ -171,6 +184,7 @@ async function notifyOffPlanPublished(development = {}, { db = null, teamExtraRe
 }
 
 module.exports = {
+  contactProfileUrl,
   DEFAULT_OFF_PLAN_NOTIFICATION_EMAILS,
   notificationRecipients,
   notifyOffPlanEnquiry,
