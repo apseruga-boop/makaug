@@ -182,3 +182,76 @@ test('photos with no words from a developer are offered to their project first',
   assert.match(notice, /for \*Vanta House\*, reply with a line about it/);
   assert.match(notice, /A different property\? Tell me what it is/);
 });
+
+test('a developer\'s photos and videos with no words go to their one project when the burst goes quiet', async () => {
+  // 7 Nov 2026, 21:50: John Yan sent two headshots and a promo video with no
+  // caption; he was asked to "reply with a line about it" and nothing happened
+  // for fourteen hours.
+  const originalQuery = db.query;
+  const calls = [];
+  const project = {
+    id: '7a732f80-0e14-49d0-ac2d-7f972b373763', slug: 'vanta-house', name: 'Vanta House', status: 'published', verification_status: 'partially_verified', country_code: 'UG',
+    unit_types: '[]', payment_plan: '[]', images: '[]', videos: '[]', floor_plans: '[]', amenities: '[]', nearby_places: '[]', brochure_settings: '{}', walkthrough_settings: '{}', extra_fields: '{}'
+  };
+  const session = {
+    current_step: 'employee_property_media',
+    session_data: {
+      ...KNOWN,
+      known_projects_checked_at: '2026-11-07T21:50:00.000Z',
+      pending_property_media: [
+        { url: 'https://media.makaug.com/whatsapp-employee-intake/image/john-1.jpg', mimeType: 'image/jpeg', kind: 'image', sha256: 'a', publicEligible: true },
+        { url: 'https://media.makaug.com/whatsapp-employee-intake/image/john-2.jpg', mimeType: 'image/jpeg', kind: 'image', sha256: 'b', publicEligible: true },
+        { url: 'https://media.makaug.com/whatsapp-employee-intake/video/promo.mp4', mimeType: 'video/mp4', kind: 'video', sha256: 'c' }
+      ],
+      pending_property_media_stored_at: '2026-11-07T21:51:00.000Z'
+    }
+  };
+  db.query = async (sql, params = []) => {
+    calls.push({ sql: String(sql), params });
+    if (/SELECT current_step, session_data FROM whatsapp_sessions/i.test(sql)) return { rows: [session] };
+    if (/FROM off_plan_developments d/i.test(sql) && /WHERE d\.id = \$1/i.test(sql)) return { rows: [project] };
+    if (/UPDATE off_plan_developments SET/i.test(sql)) return { rows: [{ ...project, extra_fields: params[1] }] };
+    if (/INSERT INTO off_plan_development_events/i.test(sql)) return { rows: [{ id: 'event-1' }] };
+    return { rows: [] };
+  };
+  try {
+    const text = await t.buildEmployeeBatchSummary('256709973205', new Date('2026-11-07T21:00:00Z'));
+    assert.match(text, /^📸 Got your 2 photos and 1 video — added to \*Vanta House\* for the team to put on the page\./);
+    assert.match(text, /If any of it is for a different property, tell me what it is/);
+    assert.doesNotMatch(text, /reply with a line about it/);
+    const update = calls.find((call) => /UPDATE off_plan_developments SET/i.test(call.sql));
+    assert.ok(update, 'the media are on the project for the desk');
+    const entry = JSON.parse(update.params[1]).project_updates[0];
+    assert.strictEqual(entry.status, 'pending_review');
+    assert.deepStrictEqual(entry.media.map((item) => item.kind), ['image', 'image', 'video']);
+    const sessionWrite = calls.find((call) => /UPDATE whatsapp_sessions/i.test(call.sql) && call.params[1] === 'employee_property_media');
+    assert.ok(sessionWrite, 'the session is written back');
+    const saved = JSON.parse(sessionWrite.params[2]);
+    assert.strictEqual(saved.pending_property_media, undefined, 'the held media leave the chat, so they cannot join the next listing');
+  } finally {
+    db.query = originalQuery;
+  }
+});
+
+test('captionless media stay a question when the developer has several projects, a caption, or is not a developer', () => {
+  const two = { ...KNOWN, known_projects: [...KNOWN.known_projects, { id: 'x', name: 'Nova Residence', slug: 'nova-residence', status: 'published' }] };
+  assert.strictEqual(t.developerSingleProject(two), null);
+  assert.strictEqual(t.developerSingleProject({ ...KNOWN, whatsapp_agent_self_intake: false }), null);
+  assert.strictEqual(t.developerSingleProject(KNOWN).name, 'Vanta House');
+});
+
+test('a file over the intake limit is answered honestly and is not parked for retries', () => {
+  const tooBig = new Error('WhatsApp video exceeds the 25MB intake limit');
+  const message = t.employeeMediaFailureMessage(tooBig);
+  assert.match(message, /^That video is too large for me to take \(over 25 MB\), so it was not added\. Everything else you sent is kept\./);
+  assert.match(message, /shorter clip/);
+  assert.doesNotMatch(message, /could not store (?:that|the) (?:media|picture)/i, 'not the retry trigger: a 29 MB file is 29 MB on every retry');
+  const wrapped = Object.assign(new Error('Employee intake media storage failed'), { cause: tooBig });
+  assert.match(t.employeeMediaFailureMessage(wrapped), /too large/);
+  assert.match(t.employeeMediaFailureMessage(new Error('socket hang up')), /could not store that media permanently/, 'a real storage failure is still retried');
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
+  assert.doesNotMatch(source, /message: 'I could not store that media permanently, so it was not added to review\. Please wait before resending; nothing went live\.' \};/, 'every storage failure goes through the one message builder');
+  const admin = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'routes', 'admin.js'), 'utf8');
+  assert.match(admin, /router\.post\('\/whatsapp\/conversations\/:phone\/clear-held-media'/);
+  assert.match(admin, /- 'pending_property_media' - 'pending_property_media_message_id'/);
+});

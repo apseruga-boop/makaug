@@ -3987,6 +3987,24 @@ function employeeVideoBytesPlayable(bytes, mimeType = '') {
   return bytes.subarray(4, 8).toString('ascii') === 'ftyp';
 }
 
+// A file over the intake limit will be over it on every retry. It used to be
+// parked and retried for two hours, then answered "WhatsApp would not give it
+// to me. Please send that photo or video once more" — a four-minute, 29 MB
+// interview John Yan had already sent once (7 Nov 2026). Say what it is.
+function employeeMediaFailureMessage(error = null) {
+  const text = [error?.message, error?.cause?.message].filter(Boolean).join(' ');
+  const tooLarge = /exceeds the (\d+)MB intake limit/i.exec(text);
+  if (tooLarge) {
+    const isVideo = /\bvideo\b/i.test(text);
+    return [
+      `That ${isVideo ? 'video' : 'file'} is too large for me to take (over ${tooLarge[1]} MB), so it was not added. Everything else you sent is kept.`,
+      '',
+      isVideo ? 'If it matters, send a shorter clip (under 2 minutes) or a link to it.' : 'If it matters, send a smaller copy or a link to it.'
+    ].join('\n');
+  }
+  return 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.';
+}
+
 function employeeMediaCandidates(runtime = {}, mediaUrl = '') {
   const collected = [];
   const append = (candidate = {}, fallbackMime = '') => {
@@ -11271,7 +11289,7 @@ async function handleEmployeeWhatsappIntake({
         held = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider });
       } catch (error) {
         logger.error('Agent 007 could not store a held photo', { error: error.message });
-        return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
+        return { handled: true, nextStep: currentStep, message: employeeMediaFailureMessage(error) };
       }
       const pool = employeeUnassignedMedia(data);
       held.forEach((item) => pool.push({ ...item, sender_ms: mediaSenderMs, inbound_message_id: normalizeInput(inboundMessageId) }));
@@ -11350,7 +11368,7 @@ async function handleEmployeeWhatsappIntake({
         if (!caption) await settleEmployeeOrphanMedia({ phone, data, currentStep, inboundMessageId });
       } catch (error) {
         logger.error('WhatsApp employee pending property-media storage failed:', error);
-        return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
+        return { handled: true, nextStep: currentStep, message: employeeMediaFailureMessage(error) };
       }
       return {
         handled: true,
@@ -11379,7 +11397,7 @@ async function handleEmployeeWhatsappIntake({
         await replaceEmployeeSession(phone, currentStep, data);
       } catch (error) {
         logger.error('WhatsApp employee pending new-property media storage failed:', error);
-        return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
+        return { handled: true, nextStep: currentStep, message: employeeMediaFailureMessage(error) };
       }
       return {
         handled: true,
@@ -11524,7 +11542,7 @@ async function handleEmployeeWhatsappIntake({
         data.properties_failed_count = Number(data.properties_failed_count || 0) + 1;
         await replaceEmployeeSession(phone, currentStep, data);
       }
-      return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
+      return { handled: true, nextStep: currentStep, message: employeeMediaFailureMessage(error) };
     }
 
     if (shouldStartProperty && !recoveredExistingProperty) {
@@ -13926,6 +13944,48 @@ async function recordDeveloperProjectUpdate({ development = {}, propertyId = '',
   return { development: existing, update: entry };
 }
 
+// A developer's photos and videos with no words. With one project on makaug
+// they are that project's: file them for the off-plan desk and say so, instead
+// of asking for a line of text that may never come. (John Yan, 7 Nov 2026,
+// 21:50: two headshots and a new promo video were answered with "If this is
+// for Vanta House, reply with a line about it" and then sat in his chat for
+// fourteen hours until Arthur noticed.)
+function developerSingleProject(data = {}) {
+  if (data.whatsapp_agent_self_intake !== true) return null;
+  const projects = Array.isArray(data.known_projects) ? data.known_projects.filter((project) => project?.id && project?.name) : [];
+  return projects.length === 1 ? projects[0] : null;
+}
+
+async function fileDeveloperMediaToProject({ phone = '', data = {}, persistStep = 'employee_property_media' } = {}) {
+  if (data.whatsapp_agent_self_intake === true && data.agent?.id && !data.known_projects_checked_at) {
+    data.known_projects = await agentKnownProjects(data.agent.id);
+    data.known_projects_checked_at = new Date().toISOString();
+  }
+  const project = developerSingleProject(data);
+  if (!project) return null;
+  if (normalizeInput(data.pending_property_caption || '')) return null;
+  if (data.pending_media_from_burst === true) return null;
+  if (employeePendingSubmissionQueue(data).length) return null;
+  const media = employeePendingStoredMedia(data);
+  if (!media.length) return null;
+  const recorded = await recordDeveloperProjectUpdate({ development: project, propertyId: '', caption: '', storedMedia: media, agent: data.agent || null, phone });
+  if (!recorded) return null;
+  clearEmployeePendingMedia(data);
+  await replaceEmployeeSession(phone, persistStep, data);
+  const photos = media.filter((item) => item.kind === 'image').length;
+  const videos = media.filter((item) => item.kind === 'video').length;
+  const words = [photos ? `${photos} ${photos === 1 ? 'photo' : 'photos'}` : '', videos ? `${videos} ${videos === 1 ? 'video' : 'videos'}` : ''].filter(Boolean).join(' and ');
+  return {
+    project,
+    update: recorded.update,
+    message: [
+      `📸 Got your ${words || 'media'} — added to *${project.name}* for the team to put on the page. They will tell you here once it is up.`,
+      '',
+      'If any of it is for a different property, tell me what it is and I will move it.'
+    ].join('\n')
+  };
+}
+
 async function createOffPlanDraftFromIntake({ propertyId = '', caption = '', facts = {}, storedMedia = [], agent = null, phone = '' } = {}) {
   const offPlanService = require('../services/offPlanService');
   const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
@@ -14261,6 +14321,16 @@ async function buildEmployeeBatchSummary(phone, since) {
     await settleEmployeeOrphanMedia({ phone, data, final: true });
   } catch (error) {
     logger.warn('Agent 007 summary could not settle parked media:', error.message || String(error));
+  }
+  // A developer's captionless media go to their one project, not into a
+  // question about it.
+  if (data.whatsapp_agent_self_intake === true) {
+    try {
+      const filed = await fileDeveloperMediaToProject({ phone, data });
+      if (filed) return filed.message;
+    } catch (error) {
+      logger.warn('Developer media could not be filed to their project:', error.message || String(error));
+    }
   }
 
   const propertyIds = (Array.isArray(data.property_ids) ? data.property_ids : []).map(String);
@@ -22189,6 +22259,9 @@ module.exports.__test = {
   knownProjectInCaption,
   agentKnownProjects,
   recordDeveloperProjectUpdate,
+  developerSingleProject,
+  fileDeveloperMediaToProject,
+  employeeMediaFailureMessage,
   agentPropertyDetailLines,
   employeeWaitingCaptionCount,
   settleHeldMediaBySenderTime,
