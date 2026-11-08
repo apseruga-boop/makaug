@@ -11590,6 +11590,39 @@ router.patch('/whatsapp/conversations/:phone', async (req, res, next) => {
   }
 });
 
+// Photos or videos held in an Agent 007 chat waiting for a caption, once a
+// person has dealt with them by hand. Left in the session they join whatever
+// property that person sends next (John Yan's two headshots, 7 Nov 2026, would
+// have gone onto his next listing). Clears the held media and any retries;
+// the chat, its step and its caption are left alone.
+router.post('/whatsapp/conversations/:phone/clear-held-media', async (req, res, next) => {
+  try {
+    const phone = normalizeConversationPhone(req.params.phone);
+    if (!phone) return res.status(400).json({ ok: false, error: 'Invalid phone' });
+    const before = await db.query(
+      `SELECT current_step,
+              COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(session_data->'pending_property_media') = 'array' THEN session_data->'pending_property_media' END), 0) AS held,
+              COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(session_data->'media_retry_queue') = 'array' THEN session_data->'media_retry_queue' END), 0) AS retries
+         FROM whatsapp_sessions WHERE phone = $1`,
+      [phone]
+    );
+    if (!before.rows[0]) return res.status(404).json({ ok: false, error: 'No WhatsApp session for that number' });
+    await db.query(
+      `UPDATE whatsapp_sessions
+          SET session_data = COALESCE(session_data, '{}'::jsonb)
+                - 'pending_property_media' - 'pending_property_media_message_id'
+                - 'pending_property_media_stored_at' - 'pending_media_from_burst' - 'media_retry_queue'
+        WHERE phone = $1`,
+      [phone]
+    );
+    const cleared = { held_media: Number(before.rows[0].held || 0), retries: Number(before.rows[0].retries || 0), step: before.rows[0].current_step };
+    await writeAudit('admin_whatsapp_held_media_cleared', { phone, ...cleared, reason: String(req.body?.reason || '').slice(0, 300) || null }, adminActorId(req));
+    return res.json({ ok: true, data: cleared });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/whatsapp/conversations/:phone/suggest-reply', async (req, res, next) => {
   try {
     const detail = await loadWhatsappConversationDetail(req.params.phone);

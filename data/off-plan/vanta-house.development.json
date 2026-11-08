@@ -190,6 +190,17 @@
    "kind": "construction_update"
   },
   {
+   "url": "/assets/off-plan/vanta-house/founder-compare-4-things.mp4",
+   "poster_url": "/assets/off-plan/vanta-house/founder-compare-4-things-poster.jpg",
+   "orientation": "portrait",
+   "kind": "developer_promo",
+   "caption": "Before you buy in Kampala, compare four things: location, layout, price and value — John Yan, Founder & CEO of Blackstone Real Estate, at Vanta House (November 2026). Free site visits.",
+   "captions": {
+    "lg": "Nga tonnagula mu Kampala, geraageranya ebintu bina: ekifo, enteekateeka y’ennyumba, omuwendo n’omugaso — John Yan, Founder & CEO wa Blackstone Real Estate, ku Vanta House. Okulambula ekifo kwa bwereere.",
+    "sw": "Kabla ya kununua Kampala, linganisha mambo manne: eneo, mpangilio, bei na thamani — John Yan, Mwanzilishi na Mkurugenzi Mkuu wa Blackstone Real Estate, katika Vanta House. Kutembelea eneo ni bure."
+   }
+  },
+  {
    "url": "/assets/off-plan/vanta-house/founder-interview-9-questions.mp4",
    "poster_url": "/assets/off-plan/vanta-house/founder-interview-9-questions-poster.jpg",
    "orientation": "portrait",
@@ -693,6 +704,18 @@
      "lg": "Amaka gatunuulira oludda lwa Kololo oba olwa Nnyanja Victoria; omuzimbi ateeka omuwendo ku buli nnyumba okusinziira ku mwaliiro, endabika n’enjuba",
      "sw": "Nyumba zinaelekea upande wa Kololo au upande wa Ziwa Victoria; msanidi anapanga bei ya kila nyumba kulingana na sakafu, mandhari na mwelekeo"
     }
+   },
+   {
+    "label": "Site visits",
+    "value": "Free — book a visit to the Vanta House site in Naguru with John Yan on WhatsApp (0709 973 205)",
+    "labels": {
+     "lg": "Okulambula ekifo",
+     "sw": "Kutembelea eneo"
+    },
+    "values": {
+     "lg": "Kwa bwereere — tegeka okulambula ekifo kya Vanta House e Naguru ne John Yan ku WhatsApp (0709 973 205)",
+     "sw": "Bure — panga kutembelea eneo la Vanta House Naguru na John Yan kupitia WhatsApp (0709 973 205)"
+    }
    }
   ],
   "government_charges": [
@@ -880,6 +903,27 @@
     "property_id": "1a4bfcc8-31eb-4d9f-a773-1a9a0edee4a9",
     "handled_at": "2026-11-07T12:20:00.000Z",
     "handled_note": "Added to the page: the daytime render as the hero image, the three founder videos, and key facts (4-bedroom homes on request; Nova Residence track record). Sent while Agent 007 still read captions as single listings; recorded here by hand."
+   },
+   {
+    "id": "wa-20261107-2150",
+    "received_at": "2026-11-07T21:50:51.000Z",
+    "status": "handled",
+    "source": "whatsapp_employee_intake",
+    "from": "John Yan",
+    "phone_suffix": "3205",
+    "caption": "",
+    "media": [
+     {
+      "url": "/assets/agents/john-yan-blackstone.jpg",
+      "kind": "image"
+     },
+     {
+      "url": "/assets/off-plan/vanta-house/founder-compare-4-things.mp4",
+      "kind": "video"
+     }
+    ],
+    "handled_at": "2026-11-08T12:00:00.000Z",
+    "handled_note": "Two headshots (one now his profile photo), the 'compare 4 things' promo (added to the page with the free site-visit offer) and the nine-question interview again (already on the page; 29 MB, over the intake limit)."
    }
   ]
  }
