@@ -1065,13 +1065,19 @@ function listingRejectedAlertBody({ listing = {}, reason = '', actorLabel = '', 
   const price = money(listing.price);
   const phone = String(listing.lister_phone || '').replace(/\D+/g, '');
   const who = [text(listing.lister_name), phone ? `+${phone}` : ''].filter(Boolean).join(' ');
+  const foundOnline = String(listing.source || '').toLowerCase() === 'found_online_property_source_v1'
+    || String(listing.listed_via || '').toLowerCase() === 'found_online';
   return [
     `⛔ *Listing rejected by ${text(actorLabel, 'staff')}*`,
     text(listing.title, 'Untitled listing'),
     [place ? `📍 ${place}` : '', price].filter(Boolean).join(' · '),
     who ? `Lister: ${who}${listing.agent_id ? ' (agent)' : ''}` : '',
     `Reason: ${text(reason, 'none given')}`,
-    listerNotified ? 'The lister has been told by WhatsApp.' : (phone ? 'The lister could not be messaged — tell them yourself.' : 'The lister has no WhatsApp number on file.'),
+    listerNotified
+      ? 'The lister has been told by WhatsApp.'
+      : (foundOnline
+        ? 'Found online — the lister never listed with makaug and is not messaged.'
+        : (phone ? 'The lister could not be messaged — tell them yourself.' : 'The lister has no WhatsApp number on file.')),
     `${ref ? `${ref} · ` : ''}${siteUrl()}/admin (Listings › actioned)`
   ].filter(Boolean).join('\n');
 }

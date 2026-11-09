@@ -97,6 +97,20 @@ test('the status route sends a rejection after the response, like an approval, a
   assert.match(followUp, /desk\.alertTeamListingRejected\(db, \{/);
   assert.match(followUp, /listerNotified: !!\(notification\.whatsapp\?\.sent \|\| notification\.email\?\.sent\)/);
   assert.match(followUp, /rejectedByAdmin = \['admin', 'super_admin'\]\.includes\(actorRole\)/, 'Arthur is not alerted about his own decisions');
+  // 9 Nov 2026: six found-online ads (two weighing-scale adverts among them)
+  // pinged Arthur one by one when a moderator account cleared the queue.
+  assert.match(followUp, /const foundOnlineAd = isFoundOnlineListing\(\{ \.\.\.current, \.\.\.listing \}\);/);
+  assert.match(followUp, /if \(!rejectedByAdmin && !foundOnlineAd\) \{/, 'no team alert for an ad we found online');
+});
+
+test('a found-online ad is never presented as a lister to chase', () => {
+  const scales = { id: 'x', title: 'Digital Personal Weighing Scales In Uganda', area: 'Wandegeya', district: 'Kampala', lister_name: 'mulungi tendo', lister_phone: '+256700225423', source: 'found_online_property_source_v1', listed_via: 'found_online', inquiry_reference: 'MK-20261107-21BB1A' };
+  const body = desk.listingRejectedAlertBody({ listing: scales, reason: 'Not a property listing (weighing scales advert)', actorLabel: 'Moderator 1 Makaug', listerNotified: false });
+  assert.match(body, /Found online — the lister never listed with makaug and is not messaged\./);
+  assert.doesNotMatch(body, /tell them yourself/);
+  const { isFoundOnlineListing } = require('../services/listingModerationService');
+  assert.strictEqual(isFoundOnlineListing(scales), true);
+  assert.strictEqual(isFoundOnlineListing(SFK_PLOT), false, 'an agent\'s own plot still alerts');
 });
 
 test('the team alert names the moderator, the listing, the reason and whether the lister heard', () => {
