@@ -33,7 +33,8 @@ const {
   normalizeReviewChecklist,
   ownerEditTokenExpiry,
   sendOwnerListingStatusNotifications,
-  sendOwnerListingSubmissionNotifications
+  sendOwnerListingSubmissionNotifications,
+  isFoundOnlineListing
 } = require('../services/listingModerationService');
 const {
   evaluateVideoCaptionApproval,
@@ -6337,7 +6338,13 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           // Arthur hears about every rejection a staff member makes. His own
           // decisions from the admin dashboard need no alert back to him.
           const rejectedByAdmin = ['admin', 'super_admin'].includes(actorRole) || req.adminAuth?.type === 'api_key';
-          if (!rejectedByAdmin) {
+          // An ad we found online is ours to keep or drop: its lister never
+          // listed with makaug and is never messaged, so a moderator clearing
+          // junk from that queue is housekeeping, not news. Six weighing-scale
+          // and no-area ads pinged Arthur one by one on 9 Nov 2026 the first
+          // morning a moderator account worked the queue.
+          const foundOnlineAd = isFoundOnlineListing({ ...current, ...listing });
+          if (!rejectedByAdmin && !foundOnlineAd) {
             try {
               const desk = require('../services/leadDeskService');
               await desk.alertTeamListingRejected(db, {
