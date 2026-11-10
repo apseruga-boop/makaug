@@ -2156,7 +2156,7 @@
   }
 
   function sourceBadge(listing) {
-    if (listing.source === 'imported') {
+    if (listing.source === 'imported' || listing.found_online || listing.do_not_message) {
       var platform = sourcePlatform(listing);
       return { label: platform ? badgeText('bFrom', platform) : badgeText('bFound'), approved: false };
     }
@@ -2260,7 +2260,8 @@
       trackSt('st_search', { q: params.get('q') || params.get('district') || '' });
       renderResults();
       wireCardHover();
-      if (state.mapOn) paintMap();
+      if (window.makaugShortTermOptions) syncDesignMap();
+      else if (state.mapOn) paintMap();
     }).catch(function (error) {
       if (target) {
         target.innerHTML = '<div class="st-empty"><i class="fas fa-triangle-exclamation"></i>'
@@ -2270,6 +2271,7 @@
   }
 
   function renderResults() {
+    if (paintDesignResults()) return;
     var count = document.getElementById('st-count');
     var target = document.getElementById('st-results');
     var partners = partnerBlockHtml();
@@ -2462,6 +2464,9 @@
     if (shell && shell.parentNode !== r) r.appendChild(shell);
 
     view.innerHTML = searchViewHtml();
+    if (window.makaugShortTermOptions && typeof window.makaugShortTermOptions.searchHtml === 'function') {
+      view.innerHTML = window.makaugShortTermOptions.searchHtml(optionHelpers());
+    }
 
     var slot = document.getElementById('st-ai-slot');
     if (slot && shell) slot.appendChild(shell);
@@ -2632,6 +2637,9 @@
   }
 
   function detailViewHtml(payload) {
+    if (window.makaugShortTermOptions && typeof window.makaugShortTermOptions.detailHtml === 'function') {
+      return window.makaugShortTermOptions.detailHtml(payload, optionHelpers());
+    }
     var listing = payload.listing;
     var contact = listing.contact || {};
     var q = qs();
@@ -2787,6 +2795,9 @@
     var listing = payload.listing;
 
     function refreshQuote() {
+      if (window.makaugShortTermOptions && window.makaugShortTermOptions.paintStayLinks) {
+        window.makaugShortTermOptions.paintStayLinks(listing);
+      }
       var from = document.getElementById('st-d-in');
       var to = document.getElementById('st-d-out');
       if (!from || !to || !from.value || !to.value) return;
@@ -2953,10 +2964,20 @@
     state.detailInflight = true;
     view.setAttribute('data-st-loaded', slug);
     view.innerHTML = '<div class="st-wrap"><div class="st-skeleton" style="height:340px;margin-top:20px"></div></div>';
-    api('/listings/' + encodeURIComponent(slug)).then(function (payload) {
+    var stay = qs();
+    var stayParams = new URLSearchParams();
+    if (stay.check_in) stayParams.set('check_in', stay.check_in);
+    if (stay.check_out) stayParams.set('check_out', stay.check_out);
+    if (stay.guests) stayParams.set('guests', stay.guests);
+    var detailQuery = stayParams.toString() ? '?' + stayParams.toString() : '';
+    api('/listings/' + encodeURIComponent(slug) + detailQuery).then(function (payload) {
       view.innerHTML = detailViewHtml(payload);
       view.setAttribute('data-st-detail', slug);
       bindDetail(payload);
+      if (window.makaugShortTermOptions && window.makaugShortTermOptions.paintStayLinks) {
+        window.makaugShortTermOptions.paintStayLinks(payload.listing);
+      }
+      syncDesignMap({ listings: [payload.listing] });
       openEnquiryFromQuery(payload.listing);
       document.title = payload.listing.title + ' | Short stay on makaug.com';
       trackSt('st_listing_view', { slug: slug });
@@ -4041,6 +4062,30 @@
     });
   }
 
+  function optionHelpers() {
+    return {
+      esc: esc,
+      t: t,
+      qs: qs,
+      badge: sourceBadge,
+      availabilityRowHtml: availabilityRowHtml,
+      quoteHtml: quoteHtml,
+      availabilityHtml: availabilityHtml,
+      stayDayStrip: stayDayStrip
+    };
+  }
+
+  function syncDesignMap(snapshot) {
+    if (!window.makaugShortTermOptions || typeof window.makaugShortTermOptions.syncMap !== 'function') return;
+    window.makaugShortTermOptions.syncMap(snapshot || state);
+  }
+
+  function paintDesignResults() {
+    if (!window.makaugShortTermOptions || typeof window.makaugShortTermOptions.paintResults !== 'function') return false;
+    window.makaugShortTermOptions.paintResults(state, optionHelpers());
+    return true;
+  }
+
   function route() {
     var r = root();
     if (!r) return;
@@ -4264,7 +4309,8 @@
     if (path.indexOf('/short-term/') === 0) { mountDetail(path.slice(12), true); return; }
     mountSearch();
     renderResults();
-    if (state.mapOn) paintMap();
+    if (window.makaugShortTermOptions) syncDesignMap();
+    else if (state.mapOn) paintMap();
   }
 
   function boot() {

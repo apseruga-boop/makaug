@@ -1,9 +1,10 @@
 'use strict';
 
 // Public short-stay payloads must not leak host email, street address, an
-// exact map pin, partner rate internals, or a phone number before a guest
-// actually sends a date enquiry. "Verified" is a staff check, not the host's
-// own right-to-let tick box.
+// exact map pin, or partner rate internals. A host or agent stay may expose
+// a tel link and WhatsApp digits so the guest can open their own chat.
+// Imported and do-not-message stays never do. "Verified" is a staff check,
+// not the host's own right-to-let tick box.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -31,8 +32,8 @@ function hostRow(overrides = {}) {
     latitude: EXACT_LAT,
     longitude: EXACT_LNG,
     host_name: 'Amina',
-    host_phone: '0780863394',
-    host_whatsapp: '256780863394',
+    host_phone: '0700000000',
+    host_whatsapp: '256700000000',
     host_email: EMAIL,
     host_user_id: '22222222-2222-4222-8222-222222222222',
     right_to_let_declared: true,
@@ -97,9 +98,9 @@ test('a date enquiry returns phone and WhatsApp and still hides email and street
   const listing = service.normalizeShortTermListing(hostRow(), { includeContact: true });
   const blob = JSON.stringify(listing);
 
-  assert.equal(listing.contact.phone, '+256780863394');
-  assert.equal(listing.contact.whatsapp_href, 'https://wa.me/256780863394');
-  assert.equal(listing.contact.tel_href, 'tel:+256780863394');
+  assert.equal(listing.contact.phone, '+256700000000');
+  assert.equal(listing.contact.whatsapp_href, 'https://wa.me/256700000000');
+  assert.equal(listing.contact.tel_href, 'tel:+256700000000');
   assert.equal(Object.hasOwn(listing.contact, 'email'), false);
   assert.equal(blob.includes(EMAIL), false);
   assert.equal(blob.includes(STREET), false);
@@ -188,7 +189,59 @@ test('structured data uses the coarsened pin and has no street or email', () => 
   assert.notEqual(data.geo.latitude, EXACT_LAT);
 });
 
-test('search, map and listing routes stay contact-free; only the enquiry asks for it', () => {
+test('imported and do-not-message stays never expose a lister number', () => {
+  const imported = service.normalizeShortTermListing(hostRow({
+    source: 'imported',
+    extra_fields: {
+      source_url: 'https://www.tiktok.com/@example/video/1',
+      alt_host_phone: '0700000000'
+    }
+  }), { directContact: true });
+  const importedBlob = JSON.stringify(imported);
+  assert.equal(imported.direct_contact, null);
+  assert.equal(imported.found_online, true);
+  assert.equal(imported.source_url, 'https://www.tiktok.com/@example/video/1');
+  assert.equal(importedBlob.includes('700000000'), false);
+  assert.equal(importedBlob.includes('wa.me'), false);
+  assert.equal(importedBlob.includes('tel:'), false);
+
+  const blocked = service.normalizeShortTermListing(hostRow({
+    source: 'direct',
+    extra_fields: { do_not_message: true }
+  }), { directContact: true });
+  assert.equal(blocked.direct_contact, null);
+  assert.equal(JSON.stringify(blocked).includes('700000000'), false);
+
+  const agent = service.normalizeShortTermListing(hostRow({
+    source: 'direct',
+    host_type: 'agent'
+  }), { directContact: true });
+  assert.equal(agent.found_online, false);
+  assert.equal(agent.direct_contact.whatsapp_digits, '256700000000');
+  assert.equal(agent.direct_contact.tel_href, 'tel:+256700000000');
+  assert.equal(Object.hasOwn(agent.direct_contact, 'phone'), false);
+  assert.equal(Object.hasOwn(agent.direct_contact, 'phone_display'), false);
+});
+
+test('the WhatsApp draft names the stay, the page, and the dates the guest picked', () => {
+  const dated = service.buildStayWhatsAppMessage({
+    title: 'Garden flat',
+    reference: 'ST-000003',
+    url: 'https://makaug.com/short-term/garden-flat',
+    checkIn: '2026-12-12',
+    checkOut: '2026-12-15',
+    guests: 2
+  });
+  assert.equal(dated, 'Hi, I saw your stay "Garden flat" (ST-000003) on makaug.com: https://makaug.com/short-term/garden-flat. Is it available from 12 Dec to 15 Dec 2026 (3 nights) for 2 guests?');
+  const open = service.buildStayWhatsAppMessage({
+    title: 'Garden flat',
+    reference: 'ST-000003',
+    url: 'https://makaug.com/short-term/garden-flat'
+  });
+  assert.equal(open, 'Hi, I saw your stay "Garden flat" (ST-000003) on makaug.com: https://makaug.com/short-term/garden-flat. Is it available?');
+});
+
+test('search and map stay contact-free; a stay page may link the lister, an enquiry still can', () => {
   const route = fs.readFileSync(path.join(__dirname, '..', 'routes', 'short-term.js'), 'utf8');
   const searchAt = route.indexOf("router.get('/search'");
   const mapAt = route.indexOf("router.get('/map'");
@@ -207,7 +260,11 @@ test('search, map and listing routes stay contact-free; only the enquiry asks fo
   assert.equal(search.includes('price_basis'), false);
   assert.equal(search.includes('sanitizePublicPartnerListing'), true);
   assert.equal(map.includes('includeContact'), false);
+  assert.equal(map.includes('directContact'), false);
+  assert.equal(search.includes('directContact'), false);
   assert.equal(listing.includes('includeContact'), false);
+  assert.equal(listing.includes('directContact: true'), true);
+  assert.equal(listing.includes('!listing.direct_contact'), true);
   assert.equal(enquiry.includes('includeContact: true'), true);
   assert.equal(enquiry.includes('contact: listing.contact'), true);
   assert.equal(route.includes('liteapiContacts'), false);

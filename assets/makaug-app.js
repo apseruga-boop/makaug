@@ -69086,7 +69086,7 @@ function fitMapToListings(mapId, list) {
 // spread out; big sets (home map) are grid-clustered per zoom level; hovering
 // a card lifts its tag; clicking a tag opens a mini card that links through.
 // ---------------------------------------------------------------------------
-const PRICE_TAG_MAP_IDS = new Set(["map-home", "map-sale", "map-rent", "map-students", "map-commercial", "map-land"]);
+const PRICE_TAG_MAP_IDS = new Set(["map-home", "map-sale", "map-rent", "map-students", "map-commercial", "map-land", "map-short-term"]);
 const mapLastRows = {};
 const mapTagIndex = {};
 const MAP_CLUSTER_THRESHOLD = 60;
@@ -69408,6 +69408,38 @@ function setMapMarkers(mapId, list) {
   renderListingMapMarkers(mapId, list || []);
   fitMapToListings(mapId, list || []);
 }
+
+// Same map the for-sale, to-rent and homepage listing maps use: Leaflet with
+// the shared OSM tiles, price-tag pins, clustering, popups and card hover.
+// Short-stay design options call this instead of building a second map.
+async function mountSharedListingMap(mapId, rows) {
+  const el = document.getElementById(mapId);
+  if (!el) return false;
+  PRICE_TAG_MAP_IDS.add(mapId);
+  if (!(await ensureLeafletApi()) || !window.L) return false;
+  if (!maps[mapId] || !mapInstanceMatchesDom(mapId)) {
+    if (maps[mapId]) destroyMapInstance(mapId);
+    if (el._leaflet_id) {
+      try { el._leaflet_id = null; } catch (e) {}
+    }
+    el.innerHTML = "";
+    const map = L.map(mapId).setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM);
+    L.tileLayer(OSM_TILE_URL, {
+      attribution: OSM_TILE_ATTRIBUTION,
+      referrerPolicy: OSM_REFERRER_POLICY,
+      maxZoom: 18
+    }).addTo(map);
+    maps[mapId] = map;
+    mapProviders[mapId] = "leaflet";
+    markers[mapId] = [];
+    wireMapCardHover();
+  }
+  setMapMarkers(mapId, rows || []);
+  resizePublicMap(mapId, 80);
+  resizePublicMap(mapId, 300);
+  return true;
+}
+window.mountSharedListingMap = mountSharedListingMap;
 
 // Re-draw each map from the rows it last showed (the current results page),
 // not from every listing in memory. Used after a currency change.
