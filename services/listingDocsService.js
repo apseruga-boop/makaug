@@ -10,10 +10,11 @@
 
 const PDFDocument = require('pdfkit');
 const sharp = require('sharp');
+const { momoPayCopy } = require('../config/momoMerchant');
 
-const LISTER_TERMS_VERSION = '2026-11-10-v2';
-const AGENT_GUIDE_VERSION = '2026-11-10-v2';
-const AGENT_TERMS_VERSION = '2026-11-10-v3';
+const LISTER_TERMS_VERSION = '2026-11-10-v3';
+const AGENT_GUIDE_VERSION = '2026-11-10-v3';
+const AGENT_TERMS_VERSION = '2026-11-10-v4';
 
 const INK = '#15213A';
 const ORANGE = '#E8662A';
@@ -149,7 +150,7 @@ async function buildListerTermsPdf(settings = {}) {
     s.freeDays > 0
       ? `Free period: your listing is free for the first ${s.freeDays} days after it goes live.`
       : `Fee: ${ugx(s.listerMonthly)} per listing, per month, from the day the listing goes live. There is no free period.`,
-    `${s.freeDays > 0 ? 'After that: ' : ''}${ugx(s.listerMonthly)} per listing, per month, paid in advance to the makaug number we give you on WhatsApp. Send us the transaction ID after paying so we can match it.`,
+    `${s.freeDays > 0 ? 'After that: ' : ''}${ugx(s.listerMonthly)} per listing, per month, paid in advance. ${momoPayCopy().sentence} Send us the transaction ID after paying so we can match it.`,
     'Short stays (by the night) are separate: ordinary listers pay UGX 20,000 a month from approval, with no free days. There is no free period on a short stay.',
     'Payments are confirmed by a member of the makaug team before they are recorded. Keep your MoMo / bank message as proof.',
     'If a month is not paid, we will remind you. If it is still not paid, the listing is hidden from the website. Nothing is deleted: when you pay, it goes back live exactly as it was.',
@@ -241,7 +242,7 @@ async function buildAgentGuidePdf(settings = {}) {
       ? `After the free days, the makaug agent plan is ${ugx(s.agentMonthly)} per month.`
       : `Pay ${ugx(s.agentMonthly)} per month in advance.`,
     'Short stays you list are included in this plan. There is no separate short-stay fee.',
-    `Pay to ${payLine}, then send the transaction ID (or a screenshot of the payment message) here on WhatsApp. We match it and confirm it — you will get a thank-you message when it is recorded.`,
+    `${momoPayCopy().sentence} If asked for a reason or reference, use the payment reference we send you. Then send the transaction ID (or a screenshot of the payment message) here on WhatsApp. We match it and confirm it — you will get a thank-you message when it is recorded.`,
     'We remind you 3 days before your renewal date and on the day.',
     `If the month is not paid, we send reminders; after ${s.finalAfter} days overdue a final reminder, and then your listings may be paused. Nothing is deleted — as soon as you pay, everything goes back live exactly as it was.`
   ]);
@@ -291,10 +292,10 @@ async function buildAgentTermsPdf(settings = {}) {
     ...(s.agentFreeDays > 0 ? [
       `Your first ${s.agentFreeDays} days on makaug are free, counted from the day your agent account is switched on. We tell you the date it ends.`,
       `After that, the agent plan is ${ugx(s.agentMonthly)} per month, for as long as you want your agent page and listings live.`,
-      'Nothing is charged automatically. We send you a payment link before the free period ends and before each renewal; you pay by Mobile Money (or card where offered).'
+      'Nothing is charged automatically. We send you a payment link before the free period ends and before each renewal; you pay by Mobile Money using the MoMo merchant code shown on the payment page (or card where offered). ' + momoPayCopy().sentence
     ] : [
       `The agent plan is ${ugx(s.agentMonthly)} per month, counted from the day your agent account is switched on, for as long as you want your agent page and listings live. There are no free days.`,
-      'Nothing is charged automatically. We send you a payment link with your welcome pack and before each renewal; you pay by Mobile Money (or card where offered).'
+      'Nothing is charged automatically. We send you a payment link with your welcome pack and before each renewal; you pay by Mobile Money using the MoMo merchant code shown on the payment page (or card where offered). ' + momoPayCopy().sentence
     ]),
     `If a payment is not made, we send reminders, and after ${s.finalAfter} days overdue your listings may be paused. Nothing is deleted: when you pay, everything goes back live exactly as it was.`,
     'You can stop at any time by telling us on WhatsApp (reply HELP). You will not be charged for a period you did not use after you have told us to stop.',

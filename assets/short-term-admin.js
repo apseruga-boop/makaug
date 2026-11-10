@@ -280,14 +280,14 @@
       + '<button type="button" class="st-btn" data-st-staff="claim" data-st-id="' + esc(id) + '">' + (listing && listing.moderation_stage === 'rejected' ? 'Reopen' : 'Claim') + '</button>'
       + askHost
       + '</div>'
-      + '<p class="st-desk-note">Approve puts this stay live now. A non-agent host gets the UGX 20,000 monthly pay link.'
+      + '<p class="st-desk-note">Approve puts this stay live now. A non-agent host gets the UGX 20,000 monthly pay link. Share MoMo Merchant Code 27248497 when asking them to pay by Mobile Money.'
       + (allowsHostMessage(listing) ? '' : ' Found online: nothing here messages the host.')
       + '</p></div>';
   }
 
   function kingActionsHtml(id, listing) {
     var feeNote = allowsHostMessage(listing)
-      ? '<p class="st-desk-note">Approved, awaiting the UGX 20,000 monthly fee for a non-agent host. No free days. Agent-plan short stays are included. A pay link follows. The listing goes live when that fee is paid.</p>'
+      ? '<p class="st-desk-note">Approved, awaiting the UGX 20,000 monthly fee for a non-agent host. No free days. Agent-plan short stays are included. A pay link follows. The listing goes live when that fee is paid. Share MoMo Merchant Code 27248497 when asking them to pay by Mobile Money.</p>'
       : '<p class="st-desk-note">Found online. Approval does not message the host.</p>';
     return '<div class="st-desk-actions">'
       + '<label class="st-desk-confirm"><input type="checkbox" data-st-facts="' + esc(id) + '"> '

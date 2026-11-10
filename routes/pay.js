@@ -13,6 +13,7 @@ const db = require('../config/database');
 const logger = require('../config/logger');
 const payLinks = require('../services/payLinkService');
 const revolut = require('../services/revolutMerchantService');
+const { momoPayCopy } = require('../config/momoMerchant');
 
 const pages = express.Router();
 const api = express.Router();
@@ -63,6 +64,9 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute
 .steps{margin:0 0 12px;padding-left:20px;font-size:14px}
 .steps li{margin-bottom:6px}
 .code{font-family:ui-monospace,Menlo,monospace;font-weight:800;background:var(--green-soft);border-radius:6px;padding:1px 6px}
+.code-xl{font-size:22px;letter-spacing:.04em;padding:4px 10px;display:inline-block}
+.btn-copy{display:inline-block;margin-left:8px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:6px 10px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;vertical-align:middle}
+.btn-copy:focus{outline:2px solid var(--green);outline-offset:1px}
 label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
 input{width:100%;border:1px solid var(--line);border-radius:10px;padding:13px 12px;font:inherit;font-size:16px;margin-bottom:10px;background:#fff;color:var(--ink)}
 input:focus{outline:2px solid var(--green);outline-offset:1px}
@@ -85,7 +89,31 @@ footer a{color:var(--muted)}
 <div class="brand"><a href="/">makaug</a><span>Secure payment</span></div>
 ${body}
 <footer>Questions? WhatsApp makaug on <a href="https://wa.me/256780863394">0780 863394</a></footer>
-</main></body></html>`;
+</main>
+<script>
+document.addEventListener("click", function (event) {
+  var button = event.target.closest("[data-momo-copy]");
+  if (!button) return;
+  var code = button.getAttribute("data-momo-copy") || "";
+  var original = button.textContent;
+  function copied() { button.textContent = "Copied"; setTimeout(function () { button.textContent = original; }, 1600); }
+  function selectCode() {
+    var el = document.getElementById("momo-code");
+    if (!el) return;
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    var selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(copied).catch(selectCode);
+  } else {
+    selectCode();
+  }
+});
+</script>
+</body></html>`;
 }
 
 function paidView(d) {
@@ -109,14 +137,28 @@ function openView(d, { error = '', claimed = false, cardCancelled = false } = {}
   ${cardCancelled ? '<div class="warn">The card payment was not completed. You can try again, or pay by mobile money below.</div>' : ''}
   <p class="note">Processed securely by Revolut. Your card statement will show <strong>WHISPERS GLOBAL</strong>, the company that runs makaug's card payments.</p>
 </div>` : '';
-  const momoBlock = d.pay_to_ready ? `
+  const momo = d.momo || momoPayCopy();
+  const merchantCode = momo.code;
+  const altNumber = momoNumber && momoName
+    ? `<p class="note">You can also send <strong>${esc(d.amount_ugx_text)}</strong> to <strong>${esc(momoNumber)}</strong> (<strong>${esc(momoName)}</strong>).</p>`
+    : '';
+  const momoBlock = merchantCode ? `
 <div class="opt">
   <h3>📱 MTN Mobile Money</h3>
+  <p>Pay by Mobile Money — MoMo Merchant Code:
+    <span class="code code-xl" id="momo-code">${esc(merchantCode)}</span>
+    <button type="button" class="btn-copy" data-momo-copy="${esc(merchantCode)}">Copy merchant code</button>
+  </p>
   <ol class="steps">
-    <li>Send <strong>${esc(d.amount_ugx_text)}</strong> to <strong>${esc(momoNumber)}</strong>${momoName ? ` (<strong>${esc(momoName)}</strong>)` : ''}.</li>
+    <li>Dial <strong>*165*3#</strong> on your MTN phone.</li>
+    <li>Select <strong>Option 1: Merchant Code</strong>.</li>
+    <li>Enter merchant code <span class="code">${esc(merchantCode)}</span>.</li>
+    <li>Enter <strong>${esc(d.amount_ugx_text)}</strong>.</li>
     <li>If asked for a reason or reference, use <span class="code">${esc(d.code)}</span>.</li>
+    <li>Confirm the details, then enter your MoMo PIN.</li>
     <li>Type the transaction ID from your MoMo SMS below.</li>
   </ol>
+  ${altNumber}
   ${claimed ? `<div class="warn">✓ Got it — we're checking your payment against the MoMo message and will confirm on WhatsApp shortly.</div>` : `
   <form method="post" action="/pay/${esc(d.code)}/momo">
     <label for="ref">Transaction ID</label>

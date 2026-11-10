@@ -23,6 +23,7 @@ const { LISTING_FEE_UGX, LISTING_TERM_MONTHS } = require('./shortTermService');
 const billingOps = require('./billingOpsService');
 const revolut = require('./revolutMerchantService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
+const { momoPayCopy } = require('../config/momoMerchant');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const PURPOSES = new Set(['listing_fee', 'agent_subscription', 'short_term_fee', 'hosted_payment', 'other']);
@@ -267,6 +268,7 @@ async function pageData(db, code, { track = true } = {}) {
   if (track && !link.opened_at) db.query('UPDATE pay_links SET opened_at = NOW() WHERE id = $1 AND opened_at IS NULL', [link.id]).catch(() => {});
   const settings = await billingOps.getSettings(db);
   const card = cardSettings(settings);
+  const momo = momoPayCopy();
   return {
     code: link.code,
     status: link.status,
@@ -276,6 +278,8 @@ async function pageData(db, code, { track = true } = {}) {
     card_text: money(link.card_amount_minor, link.card_currency),
     card_available: card.enabled && revolut.isConfigured(),
     pay_to: settings.pay_to || {},
+    momo,
+    momo_merchant_code: momo.code,
     pay_to_ready: Boolean(billingOps.payToLine(settings)),
     paid_method: link.paid_method,
     paid_at: link.paid_at,

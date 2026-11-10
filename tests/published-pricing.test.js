@@ -42,6 +42,12 @@ assert.match(defaults.agent.label, /^UGX 50,000 a month$/);
 assert.match(defaults.owner_listing.label, /^UGX 20,000 per listing, per month$/);
 assert.match(defaults.short_stay.label, /UGX 20,000 a month for non-agents/);
 assert.match(defaults.short_stay.label, /Included in the agent plan/);
+assert.strictEqual(defaults.momo.merchant_code, '27248497');
+assert.match(defaults.momo.label, /MoMo Merchant Code: 27248497/);
+assert.match(defaults.momo.ussd, /\*165\*3#/);
+assert.match(defaults.momo.ussd, /Option 1/);
+assert.match(defaults.momo.sentence, /27248497/);
+assert.strictEqual(require('../config/momoMerchant').momoMerchantCode({ MOMO_MERCHANT_CODE: '99988877' }), '99988877');
 assert.strictEqual(JSON.stringify(defaults).includes('vat'), false);
 assertNoVat('published pricing payload', JSON.stringify(defaults));
 
