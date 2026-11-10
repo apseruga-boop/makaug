@@ -254,19 +254,13 @@
       return '<a class="st-opt-wa" id="st-stay-wa" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i> Request stay</a>'
         + '<a class="st-opt-tel" id="st-stay-call"><i class="fas fa-phone"></i> Call</a>';
     }
-    var source = String(listing.source_url || '');
-    if (/^https:\/\//i.test(source)) {
+    var source = String(listing.source_url || listing.source_post_url || listing.youtube_url || listing.tiktok_url || '');
+    if (/^https:\/\//i.test(source) && !/^https:\/\/media\.makaug\.com\//i.test(source)) {
       return '<p class="st-opt-found">Found online</p>'
-        + '<a class="st-opt-source" href="' + helpers.esc(source) + '" target="_blank" rel="noopener noreferrer">Original post</a>';
+        + '<a class="st-opt-source" href="' + helpers.esc(source) + '" target="_blank" rel="noopener noreferrer">See original post</a>';
     }
     return '<p class="st-opt-found">Found online</p>'
-      + '<div class="agent-booking-tabs" role="tablist" id="st-intent-tabs">'
-      + '<button type="button" class="is-active" data-st-intent="dates">Request these dates</button>'
-      + '<button type="button" data-st-intent="callback">Request a callback</button>'
-      + '<button type="button" data-st-intent="question">Ask a question</button>'
-      + '</div>'
-      + '<button class="st-contact-btn st-contact-form" type="button" id="st-enquire-open"><i class="fas fa-envelope"></i> Request these dates</button>'
-      + '<div id="st-enquire-shell"></div>';
+      + '<p class="st-opt-found-note">No original post is listed for this stay.</p>';
   }
 
   function bookCard(listing, payload, helpers) {
