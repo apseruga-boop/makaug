@@ -116,7 +116,7 @@ test('real PostgreSQL and protected HTTP: history, paid direct Public roster and
       ADD COLUMN privacy_consent_at timestamptz, ADD COLUMN approved_at timestamptz, ADD COLUMN makaug_agent_number text,
       ADD COLUMN id_expiry_date date, ADD COLUMN experience_years integer, ADD COLUMN contact_phone_verified_at timestamptz,
       ADD COLUMN agent_application_channel text, ADD COLUMN plan text, ADD COLUMN verified_badge boolean,
-      ADD COLUMN fee_exempt_reason text, ADD COLUMN removed_reason text, ADD COLUMN plan_started_on date,
+      ADD COLUMN fee_exempt_reason text, ADD COLUMN removed_reason text, ADD COLUMN removal_snapshot jsonb, ADD COLUMN plan_started_on date,
       ADD COLUMN last_payment_on date, ADD COLUMN last_payment_ugx bigint, ADD COLUMN removed_by text,
       ADD COLUMN welcome_sent_at timestamptz, ADD COLUMN paid_awaiting_approval_at timestamptz,
       ADD COLUMN registered_by_phone text, ADD COLUMN registered_by_name text, ADD COLUMN pay_link_sent_at timestamptz,

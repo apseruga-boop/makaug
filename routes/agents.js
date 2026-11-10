@@ -32,7 +32,7 @@ const { canonicalUgPhone, findAgentByNormalisedPhone, duplicatePhoneBody, takenF
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { getAgentFacingReport, getReportById, listAgentReportWeeks, siteUrl } = require('../services/agentWeeklyReportService');
 const { renderReportCardPng, renderAgentShareCardPng, reportCardUrl, verifyCardToken } = require('../services/agentReportCardService');
-const { ensureReportVideo, ensureWelcomeVideo, reportVideoUrl, isVideoRenderingAvailable } = require('../services/agentReportVideoService');
+const { ensureReportVideo, ensureWelcomeVideo, ensureGoodbyeVideo, reportVideoUrl, isVideoRenderingAvailable } = require('../services/agentReportVideoService');
 const { agentProfileUrl, buildWelcomePack, countAgentListings } = require('../services/agentWelcomeService');
 const { publicAgentPayload, publicAgentListingPayload } = require('../utils/publicListingPayload');
 const {
@@ -439,6 +439,32 @@ router.get('/welcome-video/:id.mp4', async (req, res, next) => {
     res.set('Cache-Control', 'private, max-age=600');
     res.set('X-Robots-Tag', 'noindex');
     // Already rendered and kept in storage: send people there, no render here.
+    if (/^https?:\/\//i.test(String(file))) return res.redirect(302, file);
+    return res.sendFile(file, { headers: { 'Content-Type': 'video/mp4' } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// The goodbye film sent to an agent who cancelled. It is made from what was
+// kept at removal (first name and their properties' numbers — no personal
+// details), so it still plays after their details are deleted. A version that
+// starts with "p" is the staff preview, made from today's numbers.
+router.get('/goodbye-video/:id.mp4', async (req, res, next) => {
+  try {
+    const id = cleanText(req.params.id);
+    const version = cleanText(req.query.v || '');
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !version || !verifyCardToken(`${id}:goodbye`, version, cleanText(req.query.t || ''))) {
+      return res.status(404).json({ ok: false, error: 'Not found' });
+    }
+    const goodbye = require('../services/agentGoodbyeService');
+    const row = (await db.query('SELECT removal_snapshot FROM agents WHERE id = $1', [id])).rows[0];
+    if (!row) return res.status(404).json({ ok: false, error: 'Not found' });
+    const kept = row.removal_snapshot?.goodbye;
+    const payload = !/^p/i.test(version) && kept?.agent ? kept : await goodbye.buildGoodbyePayload(id);
+    const file = await ensureGoodbyeVideo(payload, version);
+    res.set('Cache-Control', 'private, max-age=600');
+    res.set('X-Robots-Tag', 'noindex');
     if (/^https?:\/\//i.test(String(file))) return res.redirect(302, file);
     return res.sendFile(file, { headers: { 'Content-Type': 'video/mp4' } });
   } catch (error) {

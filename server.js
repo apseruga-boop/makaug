@@ -2805,6 +2805,12 @@ async function start() {
     startGreetingNameCache(db);
     startBillingScheduler(db);
     require('./services/payLinkService').startPayLinkScheduler(db);
+    // Agents who cancelled: their ID and personal details are deleted 30 days
+    // after removal (name and number kept), unless they are restored first.
+    require('./services/agentGoodbyeService').startFormerAgentDetailScheduler(db, {
+      logger,
+      bootDelayMs: staggeredBootDelay('former_agent_details')
+    });
     // Daily USD/GBP/EUR to UGX rates. The last good rate is loaded from
     // fx_rates at once; the first fetch waits for the deploy to settle.
     require('./services/fxRateService').startFxRateScheduler(db, {

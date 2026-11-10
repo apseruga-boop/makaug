@@ -24,7 +24,9 @@ const BOOT_DELAY_MS = Object.freeze({
   // still-running previous instance.
   startup_data_repairs: 620_000,
   whatsapp_media_retry: 640_000,
-  whatsapp_batch_summary: 680_000
+  whatsapp_batch_summary: 680_000,
+  // Deletes the details of agents who cancelled 30+ days ago; nothing urgent.
+  former_agent_details: 720_000
 });
 
 // Two instances overlap for a few minutes on a Render deploy. A pid offset

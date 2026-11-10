@@ -260,6 +260,7 @@ const agentWeeklyReports = require('../services/agentWeeklyReportService');
 const agentReportCards = require('../services/agentReportCardService');
 const agentReportVideos = require('../services/agentReportVideoService');
 const agentWelcome = require('../services/agentWelcomeService');
+const agentGoodbye = require('../services/agentGoodbyeService');
 
 const { DUPLICATE_CANDIDATES_SQL, classifyDuplicates, duplicateCandidateParams } = require('../utils/duplicateEvidence');
 const router = express.Router();
@@ -10015,39 +10016,203 @@ function sendRevenueError(res, error, next) {
 }
 
 // Remove an agent: off the admin list, their profile and listings off the site.
-// Nothing is deleted; Restore puts everything back exactly as it was.
+// Staff choose why (reason_code), and the rest follows from the reason
+// (services/agentGoodbyeService.js). Listings are hidden, never deleted, and
+// Restore puts them back. "They're leaving" also sets their WhatsApp back to an
+// ordinary number, sends them the goodbye message and film, and has their
+// personal details deleted 30 days later unless they are restored first
+// (Arthur, 10 Nov 2026). The other reasons send nothing and delete nothing.
 router.post('/agents/:id/remove', async (req, res, next) => {
-  const client = await db.getClient();
+  if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
+  const note = cleanText(req.body?.reason || req.body?.note || '').slice(0, 300);
+  // Older callers send only a typed reason: that is "Something else".
+  const reason = agentGoodbye.removalReason(req.body?.reason_code) || (!req.body?.reason_code && note ? agentGoodbye.removalReason('other') : null);
+  if (!reason) return res.status(400).json({ ok: false, error: 'Choose why this agent is being removed' });
+  if (reason.needsNote && !note) return res.status(400).json({ ok: false, error: 'Say why this agent is being removed' });
+  const reasonText = agentGoodbye.removedReasonText(reason, note);
+  const actor = adminActorId(req);
+  let goodbyePayload = null;
   try {
-    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
-    const reason = cleanText(req.body?.reason || '').slice(0, 300);
-    if (!reason) return res.status(400).json({ ok: false, error: 'Say why this agent is being removed' });
+    // Made before anything changes: their first name and their properties' numbers.
+    if (reason.goodbye) goodbyePayload = await agentGoodbye.buildGoodbyePayload(req.params.id);
+  } catch (error) {
+    if (error.status === 404) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    return next(error);
+  }
+  const client = await db.getClient();
+  let agent;
+  let listings = [];
+  let loginClosed = false;
+  let removedAt = null;
+  let personalDeleteAfter = null;
+  try {
     await client.query('BEGIN');
-    const agent = (await client.query('SELECT id, full_name, status, removed_at FROM agents WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
+    agent = (await client.query(
+      `SELECT id, full_name, greeting_name, status, removed_at, phone, whatsapp, user_id, billing_suspended_at, billing_snapshot
+         FROM agents WHERE id = $1 FOR UPDATE`,
+      [req.params.id]
+    )).rows[0];
     if (!agent) { await client.query('ROLLBACK'); return res.status(404).json({ ok: false, error: 'Agent not found' }); }
     if (agent.removed_at) { await client.query('ROLLBACK'); return res.status(409).json({ ok: false, error: 'Already removed' }); }
-    const listings = (await client.query(
+    listings = (await client.query(
       `UPDATE properties p SET status = 'hidden', updated_at = NOW()
-         FROM (SELECT id, status FROM properties WHERE agent_id = $1 AND status IN ('approved', 'pending') FOR UPDATE) old
+         FROM (SELECT id, status FROM properties
+                WHERE (agent_id = $1::uuid OR COALESCE(extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text)
+                  AND status IN ('approved', 'pending') FOR UPDATE) old
         WHERE p.id = old.id
         RETURNING p.id, old.status AS previous_status`,
       [req.params.id]
     )).rows;
-    await client.query(
+    let previousStatus = agent.status;
+    let billingCleared = false;
+    if (reason.goodbye && agent.billing_suspended_at) {
+      // They were paused for an unpaid fee and are now leaving: the removal
+      // takes over the paused listings, so a later payment cannot half-restore
+      // a former agent and Restore brings everything back in one place.
+      const paused = agent.billing_snapshot || {};
+      for (const item of Array.isArray(paused.listings) ? paused.listings : []) {
+        if (item?.id && !listings.some((l) => String(l.id) === String(item.id))) listings.push({ id: item.id, previous_status: item.previous_status });
+      }
+      if (['approved', 'pending'].includes(paused.previous_status)) previousStatus = paused.previous_status;
+      billingCleared = true;
+    }
+    // Their details are kept for 30 days in case they come back, then deleted
+    // by the former-agent check (services/agentGoodbyeService.js).
+    if (reason.deletePersonal) personalDeleteAfter = new Date(Date.now() + agentGoodbye.detailKeepDays() * 86400000).toISOString();
+    if (reason.closeLogin && agent.user_id) {
+      loginClosed = (await client.query(
+        `UPDATE users SET status = 'suspended', updated_at = NOW() WHERE id = $1 AND status = 'active' RETURNING id`,
+        [agent.user_id]
+      )).rows.length > 0;
+    }
+    const snapshot = {
+      previous_status: previousStatus,
+      listings,
+      reason_code: reason.code,
+      login_closed: loginClosed,
+      personal_delete_after: personalDeleteAfter,
+      billing_cleared: billingCleared,
+      whatsapp_reset: Boolean(reason.closeLogin),
+      goodbye: goodbyePayload
+    };
+    removedAt = (await client.query(
       `UPDATE agents
           SET removed_at = NOW(), removed_reason = $2, removed_by = $3, status = 'suspended',
-              removal_snapshot = $4::jsonb, updated_at = NOW()
-        WHERE id = $1`,
-      [req.params.id, reason, adminActorId(req), JSON.stringify({ previous_status: agent.status, listings })]
-    );
+              removal_snapshot = $4::jsonb,
+              billing_suspended_at = CASE WHEN $5::boolean THEN NULL ELSE billing_suspended_at END,
+              billing_snapshot = CASE WHEN $5::boolean THEN NULL ELSE billing_snapshot END,
+              updated_at = NOW()
+        WHERE id = $1
+        RETURNING removed_at`,
+      [req.params.id, reasonText, actor, JSON.stringify(snapshot), billingCleared]
+    )).rows[0]?.removed_at;
     await client.query('COMMIT');
-    await writeAudit('admin_agent_removed', { agent_id: req.params.id, reason, listings_hidden: listings.length }, adminActorId(req));
-    return res.json({ ok: true, data: { id: agent.id, full_name: agent.full_name, listings_hidden: listings.length } });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     return next(error);
   } finally {
     client.release();
+  }
+
+  const result = {
+    id: agent.id,
+    full_name: agent.full_name,
+    reason_code: reason.code,
+    listings_hidden: listings.length,
+    login_closed: loginClosed,
+    personal_delete_after: personalDeleteAfter
+  };
+  await writeAudit('admin_agent_removed', {
+    agent_id: agent.id, reason: reasonText, reason_code: reason.code, listings_hidden: listings.length,
+    login_closed: loginClosed, personal_delete_after: personalDeleteAfter, goodbye: Boolean(reason.goodbye)
+  }, actor);
+  try {
+    if (reason.closeLogin) {
+      const day = new Date().toISOString().slice(0, 10);
+      result.whatsapp = await agentGoodbye.resetFormerAgentWhatsapp({ agent, note: `Former agent: removed ${day} (${reason.label}).` });
+    }
+    if (reason.goodbye) {
+      const version = String(new Date(removedAt || Date.now()).getTime());
+      result.goodbye = await agentGoodbye.queueGoodbye({
+        payload: goodbyePayload,
+        to: agent.whatsapp || agent.phone,
+        version,
+        source: agentReportWhatsappSource(),
+        actorId: actor,
+        baseUrl: agentWeeklyReports.siteUrl(),
+        queue: queueWhatsappWebBridgeMessage,
+        videos: agentReportVideos
+      });
+      if (result.goodbye?.film) delete result.goodbye.film.done;
+      await writeAudit(result.goodbye?.sent ? 'agent_goodbye_sent' : 'agent_goodbye_not_sent', {
+        agent_id: agent.id,
+        to: result.goodbye?.to ? `…${String(result.goodbye.to).slice(-4)}` : '',
+        film: result.goodbye?.film?.status || '',
+        reason: result.goodbye?.sent ? '' : (result.goodbye?.reason || '')
+      }, actor);
+    }
+  } catch (error) {
+    // The removal is done; a failed message is reported, not rolled back.
+    console.warn('[agent-goodbye] after-removal step failed:', error.message);
+    result.after_error = error.message;
+  }
+  return res.json({ ok: true, data: result });
+});
+
+// What King shows before Remove: the reasons, what the chosen one does, and
+// for "They're leaving" the exact goodbye message and a link to the film made
+// from today's numbers. Nothing is changed or sent.
+router.get('/agents/:id/remove-preview', async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
+    const reason = agentGoodbye.removalReason(req.query.reason_code);
+    const reasons = agentGoodbye.REMOVAL_REASONS.map(({ code, label, does, needsNote }) => ({ code, label, does, needs_note: Boolean(needsNote) }));
+    const agent = (await db.query('SELECT id, full_name, phone, whatsapp, removed_at FROM agents WHERE id = $1', [req.params.id])).rows[0];
+    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    const data = { reasons, reason: reason ? reason.code : null, does: agentGoodbye.describeRemoval(reason) };
+    if (reason?.goodbye) {
+      const payload = await agentGoodbye.buildGoodbyePayload(agent.id);
+      const number = String(agent.whatsapp || agent.phone || '').replace(/\D+/g, '');
+      data.goodbye = {
+        to: number ? `…${number.slice(-4)}` : '',
+        message: agentGoodbye.buildGoodbyeMessage(payload),
+        caption: agentGoodbye.buildGoodbyeCaption(payload),
+        stats: payload.stats,
+        film_url: agentReportVideos.isVideoRenderingAvailable()
+          ? agentReportVideos.goodbyeVideoUrl(payload.agent, agentWeeklyReports.siteUrl(), `p${new Date().toISOString().slice(0, 10).replace(/\D/g, '')}`)
+          : ''
+      };
+    }
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Staff test: the goodbye message and film, made from today's numbers, sent to
+// a number of the staff member's choosing (their own). The agent gets nothing.
+router.post('/agents/:id/goodbye-preview', async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
+    const previewTo = String(req.body?.preview_to || '').replace(/\D+/g, '');
+    if (previewTo.length < 9) return res.status(400).json({ ok: false, error: 'Type the number to send the test to' });
+    const payload = await agentGoodbye.buildGoodbyePayload(req.params.id);
+    const sent = await agentGoodbye.queueGoodbye({
+      payload,
+      to: previewTo,
+      preview: true,
+      version: `p${new Date().toISOString().slice(0, 10).replace(/\D/g, '')}`,
+      source: agentReportWhatsappSource(),
+      actorId: adminActorId(req),
+      baseUrl: agentWeeklyReports.siteUrl(),
+      queue: queueWhatsappWebBridgeMessage,
+      videos: agentReportVideos
+    });
+    if (sent?.film) delete sent.film.done;
+    return res.json({ ok: true, data: sent });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
   }
 });
 
@@ -10292,11 +10457,20 @@ router.post('/agents/:id/restore', async (req, res, next) => {
   try {
     if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
     await client.query('BEGIN');
-    const agent = (await client.query('SELECT id, full_name, removed_at, removal_snapshot FROM agents WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
+    const agent = (await client.query('SELECT id, full_name, phone, whatsapp, user_id, removed_at, removal_snapshot FROM agents WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
     if (!agent?.removed_at) { await client.query('ROLLBACK'); return res.status(404).json({ ok: false, error: 'No removed agent with that id' }); }
     const snap = agent.removal_snapshot || {};
     for (const item of Array.isArray(snap.listings) ? snap.listings : []) {
       await client.query(`UPDATE properties SET status = $2, updated_at = NOW() WHERE id = $1 AND status = 'hidden'`, [item.id, item.previous_status]);
+    }
+    // The login closed at removal opens again. Deleted details (ID, NIN,
+    // email, photo) cannot come back: staff ask the agent for them again.
+    let loginReopened = false;
+    if (snap.login_closed && agent.user_id) {
+      loginReopened = (await client.query(
+        `UPDATE users SET status = 'active', updated_at = NOW() WHERE id = $1 AND status = 'suspended' RETURNING id`,
+        [agent.user_id]
+      )).rows.length > 0;
     }
     await client.query(
       `UPDATE agents SET removed_at = NULL, removed_reason = NULL, removed_by = NULL, removal_snapshot = NULL,
@@ -10304,8 +10478,10 @@ router.post('/agents/:id/restore', async (req, res, next) => {
       [req.params.id, ['pending', 'approved', 'rejected', 'suspended'].includes(snap.previous_status) ? snap.previous_status : 'pending']
     );
     await client.query('COMMIT');
-    await writeAudit('admin_agent_restored', { agent_id: req.params.id }, adminActorId(req));
-    return res.json({ ok: true, data: { id: agent.id, full_name: agent.full_name } });
+    if (snap.whatsapp_reset || snap.login_closed) await agentGoodbye.unmarkFormerAgentWhatsapp({ agent }).catch(() => null);
+    const personalDeleted = Array.isArray(snap.personal_deleted) ? snap.personal_deleted : [];
+    await writeAudit('admin_agent_restored', { agent_id: req.params.id, login_reopened: loginReopened, details_to_ask_again: personalDeleted }, adminActorId(req));
+    return res.json({ ok: true, data: { id: agent.id, full_name: agent.full_name, login_reopened: loginReopened, details_to_ask_again: personalDeleted } });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     return next(error);

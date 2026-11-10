@@ -739,6 +739,179 @@ async function ensureWelcomeVideo(payload, version, options = {}) {
   }, options);
 }
 
+// Goodbye film for an agent who cancelled (Arthur, 10 Nov 2026): the same
+// look as the welcome film, made of what their properties did on makaug —
+// properties live, people and the countries they came from, then the overall
+// views with our social media (the site's views x 20: "social media adds x20
+// to the views you can see") — then that the listings are offline, we keep their number, and they
+// can come back on makaug's WhatsApp. A scene with nothing to show is left
+// out, so an agent whose properties never went live gets a short thank-you.
+function buildGoodbyeTimeline(payload = {}) {
+  const agent = payload.agent || {};
+  const s = payload.stats || {};
+  const contact = payload.contact || { name: 'makaug', pretty: '+256 780 863 394' };
+  const firstName = agentGreetingName(agent, 'there');
+  const n = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v)) : 0);
+  const out = (lt, dur) => (dur - lt < 0.25 ? dur - 0.25 : Infinity);
+  const about = (v) => { const x = n(v); if (x < 100) return x; const step = x < 1000 ? 10 : 100; return Math.round(x / step) * step; };
+  const scenes = [];
+
+  scenes.push({ dur: 2.4, title: true, draw: (lt, t, d) => [
+    patternBg(t, 'THANK YOU'), confetti(t),
+    bubble(360, 300, [{ text: 'Thank you,', size: 40, weight: 700 }, { text: clip(firstName, 14), size: 64, weight: 900, fill: K.orange }], { scale: pop(lt, 0.15, out(lt, d), 0.45), pad: 34 }),
+    bubble(360, 470, [{ text: 'for your time on makaug.com', size: 28, weight: 800 }], { scale: pop(lt, 0.6, out(lt, d)), fill: K.yellow, tail: 'right' })
+  ] });
+
+  const live = n(s.properties_live);
+  const top = (Array.isArray(s.top_listings) ? s.top_listings : []).filter((l) => l && l.title).slice(0, 3);
+  if (live) {
+    scenes.push({ dur: top.length ? 3.4 : 2.4, draw: (lt, t, d) => {
+      const e = out(lt, d);
+      const r = [bubble(360, top.length ? 125 : 300, [
+        { text: countUp(live, lt, 0.1, 0.6).toLocaleString('en-GB'), size: 66, weight: 900, fill: K.orange },
+        { text: live === 1 ? 'property went live' : 'properties went live', size: 32, weight: 900 }
+      ], { scale: pop(lt, 0.05, e, 0.42), pad: 30 })];
+      if (!top.length) {
+        r.push(bubble(360, 480, [{ text: 'on makaug.com', size: 28, weight: 800, fill: K.muted }], { scale: pop(lt, 0.45, e), fill: K.peach, tail: 'right' }));
+        return r;
+      }
+      top.forEach((l, i) => {
+        const cy = 310 + i * 135;
+        const sc = pop(lt, 0.45 + i * 0.35, e);
+        r.push(avatar(80, cy, 30, String(i + 1), AVATAR_COLORS[i % AVATAR_COLORS.length], sc));
+        r.push(bubble(395, cy, [
+          { text: clip(l.title, 28), size: 24, weight: 800 },
+          ...(l.area ? [{ text: clip(l.area, 30), size: 22, weight: 700, fill: K.muted }] : [])
+        ], { scale: sc, tail: 'left', minW: 440 }));
+      });
+      return r;
+    } });
+  }
+
+  const visitors = n(s.visitors);
+  if (visitors) {
+    const enquiries = n(s.enquiries);
+    const sub = enquiries ? `${enquiries.toLocaleString('en-GB')} ${enquiries === 1 ? 'enquiry' : 'enquiries'} sent to you` : '';
+    scenes.push({ dur: 2.8, draw: (lt, t, d) => {
+      const e = out(lt, d);
+      const r = [bubble(360, sub ? 280 : 330, [
+        { text: countUp(visitors, lt, 0.15).toLocaleString('en-GB'), size: 84, weight: 900, fill: K.orange },
+        { text: visitors === 1 ? 'person looked' : 'people looked', size: 36, weight: 900 },
+        { text: 'at your properties', size: 30, weight: 800 }
+      ], { scale: pop(lt, 0.05, e, 0.42), pad: 32 })];
+      if (sub) r.push(bubble(360, 500, [{ text: sub, size: 28, weight: 800, fill: K.muted }], { scale: pop(lt, 0.55, e), fill: K.peach, tail: 'right' }));
+      return r;
+    } });
+  }
+
+  const countries = (Array.isArray(s.countries) ? s.countries : []).filter((c) => c && c.name).slice(0, 4);
+  const countryCount = Math.max(n(s.country_count), countries.length);
+  if (countries.length) {
+    scenes.push({ dur: 3.4, draw: (lt, t, d) => {
+      const e = out(lt, d);
+      const r = [globe(360, 410, 240, 0.9 * clamp01(lt / 0.4)),
+        bubble(360, 100, [{ text: `From ${countryCount} ${countryCount === 1 ? 'country' : 'countries'}`, size: 36, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
+      const spots = [[330, 245, 'left', 92], [395, 375, 'right', 640], [330, 505, 'left', 88], [400, 635, 'right', 645]];
+      countries.forEach((c, i) => {
+        const [cx, cy, tail, ax] = spots[i];
+        const sc = pop(lt, 0.4 + i * 0.4, e);
+        r.push(avatar(ax, cy, 32, String(c.code || c.name || '?').slice(0, 2).toUpperCase(), AVATAR_COLORS[i % AVATAR_COLORS.length], sc));
+        r.push(bubble(cx, cy, [
+          { text: clip(SHORT_NAMES[c.name] || c.name, 16), size: 32, weight: 900 },
+          { text: `${n(c.visitors).toLocaleString('en-GB')} ${n(c.visitors) === 1 ? 'visitor' : 'visitors'}`, size: 22, weight: 700, fill: K.muted }
+        ], { scale: sc, tail, minW: 250 }));
+      });
+      return r;
+    } });
+  }
+
+  // Overall views: the site's views x 20 (Arthur: "social media adds x20 to the views you can see").
+  const overall = n(s.overall_views);
+  if (overall) {
+    scenes.push({ dur: 3.0, draw: (lt, t, d) => {
+      const e = out(lt, d);
+      return [
+        bubble(360, 120, [{ text: 'With our social media', size: 36, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach }),
+        bubble(360, 330, [
+          { text: `about ${countUp(about(overall), lt, 0.3).toLocaleString('en-GB')}`, size: 72, weight: 900, fill: K.orange },
+          { text: 'views in total', size: 36, weight: 900 }
+        ], { scale: pop(lt, 0.25, e, 0.42), pad: 32 }),
+        bubble(360, 545, [{ text: 'TikTok · Instagram · X · YouTube', size: 26, weight: 800, fill: K.muted }], { scale: pop(lt, 0.75, e), tail: 'right' })
+      ];
+    } });
+  }
+
+  // An agent with nothing listed is told their profile is closed, not that
+  // listings they never had are offline.
+  const hadListings = live > 0 || n(s.listings_up) > 0;
+  scenes.push({ dur: 2.6, draw: (lt, t, d) => {
+    const e = out(lt, d);
+    return [
+      bubble(360, 300, hadListings
+        ? [{ text: 'Your listings are', size: 42, weight: 900 }, { text: 'offline now', size: 52, weight: 900, fill: K.orange }]
+        : [{ text: 'Your profile is', size: 42, weight: 900 }, { text: 'closed now', size: 52, weight: 900, fill: K.orange }], { scale: pop(lt, 0.08, e, 0.42), pad: 32 }),
+      bubble(360, 480, [{ text: 'we keep your number for when you come back', size: 24, weight: 700, fill: K.muted }], { scale: pop(lt, 0.5, e), fill: K.peach, tail: 'right' })
+    ];
+  } });
+
+  scenes.push({ dur: 3.0, draw: (lt, t, d) => {
+    const e = out(lt, d);
+    return [
+      bubble(360, 150, [{ text: 'The door is', size: 44, weight: 900 }, { text: 'always open', size: 54, weight: 900, fill: K.orange }], { scale: pop(lt, 0.05, e, 0.42), pad: 32 }),
+      avatar(100, 400, 40, 'M', K.green, pop(lt, 0.45, e)),
+      bubble(405, 400, [{ text: 'WhatsApp makaug', size: 30, weight: 900 }, { text: contact.pretty || '', size: 30, weight: 900, fill: K.orange }], { scale: pop(lt, 0.5, e), tail: 'left', minW: 400 }),
+      bubble(360, 580, [{ text: 'or just reply to this chat', size: 26, weight: 700, fill: K.muted }], { scale: pop(lt, 0.85, e), fill: K.peach, tail: 'right' })
+    ];
+  } });
+
+  scenes.push({ dur: 2.4, draw: (lt) => {
+    const sc = pop(lt, 0.05, Infinity, 0.45);
+    return [
+      `<circle cx="360" cy="300" r="${(150 * sc).toFixed(1)}" fill="${K.orange}" stroke="${K.line}" stroke-width="4"/>`,
+      `<g transform="translate(360 300) scale(${sc.toFixed(3)}) translate(-360 -300)">${textEl(360, 320, 'makaug', { size: 56, weight: 900, fill: K.white, anchor: 'middle' })}</g>`,
+      bubble(360, 540, [{ text: `See you again, ${clip(firstName, 14)}`, size: 32, weight: 900 }], { scale: pop(lt, 0.35) })
+    ];
+  } });
+
+  let at = 0;
+  scenes.forEach((sc) => { sc.start = at; at += sc.dur; });
+  return { scenes, duration: at };
+}
+
+function buildGoodbyeScenes(payload) {
+  const { scenes } = buildGoodbyeTimeline(payload);
+  return (t) => {
+    const sc = scenes.find((one) => t < one.start + one.dur) || scenes[scenes.length - 1];
+    const parts = sc.title ? [] : [`<rect width="${SIZE}" height="${SIZE}" fill="${K.cream}"/>`, confetti(t, 90)];
+    return parts.concat(sc.draw(t - sc.start, t, sc.dur)).join('');
+  };
+}
+
+function goodbyeDuration(payload) {
+  return buildGoodbyeTimeline(payload).duration;
+}
+
+// A version starting with "p" is the staff preview, made before the agent is
+// removed; it has its own cache file, so it never stands in for the real one.
+async function ensureGoodbyeVideo(payload, version, options = {}) {
+  const preview = /^p/i.test(String(version || ''));
+  const file = cachePath(payload?.agent?.id || 'agent', version, preview ? 'goodbye-preview-' : 'goodbye-');
+  return locateOrRender(file, {
+    scene: buildGoodbyeScenes(payload),
+    duration: goodbyeDuration(payload),
+    label: `goodbye=${payload?.agent?.id || 'agent'}`
+  }, options);
+}
+
+function goodbyeVideoUrl(agent, baseUrl, version) {
+  const cards = require('./agentReportCardService');
+  const stamp = String(version || '').replace(/[^a-z0-9]/gi, '').slice(0, 24);
+  if (!stamp) return '';
+  const token = cards.cardToken(`${agent.id}:goodbye`, stamp);
+  if (!token) return '';
+  return `${String(baseUrl).replace(/\/+$/, '')}/api/agents/goodbye-video/${encodeURIComponent(agent.id)}.mp4?v=${stamp}&t=${token}`;
+}
+
 function welcomeVideoUrl(agent, baseUrl, version) {
   const cards = require('./agentReportCardService');
   const stamp = String(version || new Date().toISOString().slice(0, 10).replace(/\D/g, ''));
@@ -766,6 +939,11 @@ module.exports = {
     cachePath
   },
   buildWelcomeScenes,
+  buildGoodbyeScenes,
+  buildGoodbyeTimeline,
+  goodbyeDuration,
+  ensureGoodbyeVideo,
+  goodbyeVideoUrl,
   ensureWelcomeVideo,
   welcomeDuration,
   welcomeVideoUrl,
