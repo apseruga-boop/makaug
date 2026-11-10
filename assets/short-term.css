@@ -141,9 +141,23 @@
 /* ---------- results ---------- */
 
 #page-short-term .st-split { display: grid; grid-template-columns: 1fr; gap: 18px; }
-#page-short-term .st-split.is-map { grid-template-columns: minmax(0,1fr) minmax(0,460px); align-items: start; }
+#page-short-term .st-split.is-map { grid-template-columns: 1fr; }
 #page-short-term .st-main { min-width: 0; }
-@media (max-width: 1000px) { #page-short-term .st-split.is-map { grid-template-columns: 1fr; } }
+/* Desktop: results grid on the left, sticky map on the right, like Airbnb.
+   The map box, pins and behaviour stay as they are; only the page layout
+   around the shell changes. Mobile keeps the current stacked order. */
+@media (min-width: 1024px) {
+  #page-short-term .st-wrap:has(> #st-split.is-map) {
+    max-width: none;
+  }
+  #page-short-term .st-split.is-map {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(400px, 42vw);
+    align-items: start;
+    gap: 18px;
+  }
+}
+@media (max-width: 1023px) { #page-short-term .st-split.is-map { grid-template-columns: 1fr; } }
 
 #page-short-term .st-grid {
   display: grid;
@@ -193,7 +207,7 @@
   width: 100%; max-width: 100%;
   height: min(560px, calc(100vh - 110px));
 }
-@media (max-width: 1000px) {
+@media (max-width: 1023px) {
   #page-short-term .st-map-shell { position: static; }
   #page-short-term #st-map { height: 380px; }
 }
@@ -878,8 +892,8 @@
   #page-short-term .st-extra-grid { grid-template-columns: 1fr; }
 }
 
-/* Below 1000px the split is one column: keep the map right after the results. */
-@media (max-width: 1000px) {
+/* Below 1024px the split is one column: keep the map right after the results. */
+@media (max-width: 1023px) {
   #page-short-term .st-main { display: contents; }
   #page-short-term .st-main > * { order: 3; }
   #page-short-term .st-main > #st-results { order: 1; }
