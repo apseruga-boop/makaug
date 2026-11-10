@@ -643,7 +643,9 @@ async function sendGoodbyeNow({ payload, to, version, preview = false, source = 
   if (digits.length < 9) return { sent: false, reason: 'no_whatsapp_number', message: 'not_sent', film: 'not_sent' };
   const agentId = String(payload?.agent?.id || '');
   const dedupeBase = `agent_goodbye:${agentId}:${preview ? `preview:${Date.now()}` : version}`;
-  const url = needFilm && videos && videos.isVideoRenderingAvailable() ? videos.goodbyeVideoUrl(payload.agent, baseUrl, version) : '';
+  // A film made on a staff device is sent even where this server cannot render.
+  const filmHere = Boolean(videos && typeof videos.hasGoodbyeVideo === 'function' && videos.hasGoodbyeVideo(payload, version));
+  const url = needFilm && videos && (filmHere || videos.isVideoRenderingAvailable()) ? videos.goodbyeVideoUrl(payload.agent, baseUrl, version) : '';
   let filmReady = false;
   let filmError = '';
   if (url) {
@@ -707,7 +709,7 @@ async function deliverGoodbye(agentId, { dbc = db, deps = null, actorId = 'syste
   const claimed = (await dbc.query(
     `UPDATE agents
         SET removal_snapshot = removal_snapshot || jsonb_build_object('goodbye_claim_at', NOW())
-      WHERE id = $1 AND removed_at IS NOT NULL AND removal_snapshot ? 'goodbye'
+      WHERE id = $1 AND removed_at IS NOT NULL AND jsonb_typeof(removal_snapshot->'goodbye') = 'object'
         AND (removal_snapshot->>'goodbye_claim_at' IS NULL
           OR (removal_snapshot->>'goodbye_claim_at')::timestamptz < NOW() - INTERVAL '15 minutes')
       RETURNING phone, whatsapp, removed_at, removal_snapshot`,
@@ -767,7 +769,9 @@ async function runPendingGoodbyes(dbc = db, { deps = null, logger = console } = 
     `SELECT id FROM agents
       WHERE removed_at IS NOT NULL
         AND removed_at > NOW() - make_interval(hours => $1::int)
-        AND removal_snapshot ? 'goodbye'
+        AND removal_snapshot->>'reason_code' = 'cancelled'
+        -- Other reasons keep "goodbye": null in the snapshot: nothing is owed.
+        AND jsonb_typeof(removal_snapshot->'goodbye') = 'object'
         AND (removal_snapshot->>'goodbye_message_at' IS NULL
           OR (removal_snapshot->>'goodbye_film_at' IS NULL AND removal_snapshot->>'goodbye_film_gave_up_at' IS NULL))
       ORDER BY removed_at
