@@ -10093,7 +10093,9 @@ router.post('/agents/:id/remove', async (req, res, next) => {
       personal_delete_after: personalDeleteAfter,
       billing_cleared: billingCleared,
       whatsapp_reset: Boolean(reason.closeLogin),
-      goodbye: goodbyePayload
+      goodbye: goodbyePayload,
+      goodbye_version: reason.goodbye ? String(Date.now()) : null,
+      goodbye_to: reason.goodbye ? String(agent.whatsapp || agent.phone || '').replace(/\D+/g, '') : null
     };
     removedAt = (await client.query(
       `UPDATE agents
@@ -10132,24 +10134,15 @@ router.post('/agents/:id/remove', async (req, res, next) => {
       result.whatsapp = await agentGoodbye.resetFormerAgentWhatsapp({ agent, note: `Former agent: removed ${day} (${reason.label}).` });
     }
     if (reason.goodbye) {
-      const version = String(new Date(removedAt || Date.now()).getTime());
-      result.goodbye = await agentGoodbye.queueGoodbye({
-        payload: goodbyePayload,
-        to: agent.whatsapp || agent.phone,
-        version,
-        source: agentReportWhatsappSource(),
-        actorId: actor,
-        baseUrl: agentWeeklyReports.siteUrl(),
-        queue: queueWhatsappWebBridgeMessage,
-        videos: agentReportVideos
+      // In the background: the film is made first so the message can say it
+      // follows; if the server has no room to make it now, the message goes
+      // without that line and the former-agent check sends the film later.
+      const number = String(agent.whatsapp || agent.phone || '').replace(/\D+/g, '');
+      result.goodbye = number.length >= 9 ? { status: 'sending', to: `…${number.slice(-4)}` } : { status: 'no_whatsapp_number' };
+      setImmediate(() => {
+        agentGoodbye.deliverGoodbye(agent.id, { actorId: actor })
+          .catch((error) => console.warn('[agent-goodbye] goodbye not delivered yet:', error.message));
       });
-      if (result.goodbye?.film) delete result.goodbye.film.done;
-      await writeAudit(result.goodbye?.sent ? 'agent_goodbye_sent' : 'agent_goodbye_not_sent', {
-        agent_id: agent.id,
-        to: result.goodbye?.to ? `…${String(result.goodbye.to).slice(-4)}` : '',
-        film: result.goodbye?.film?.status || '',
-        reason: result.goodbye?.sent ? '' : (result.goodbye?.reason || '')
-      }, actor);
     }
   } catch (error) {
     // The removal is done; a failed message is reported, not rolled back.
@@ -10197,19 +10190,22 @@ router.post('/agents/:id/goodbye-preview', async (req, res, next) => {
     const previewTo = String(req.body?.preview_to || '').replace(/\D+/g, '');
     if (previewTo.length < 9) return res.status(400).json({ ok: false, error: 'Type the number to send the test to' });
     const payload = await agentGoodbye.buildGoodbyePayload(req.params.id);
-    const sent = await agentGoodbye.queueGoodbye({
-      payload,
-      to: previewTo,
-      preview: true,
-      version: `p${new Date().toISOString().slice(0, 10).replace(/\D/g, '')}`,
-      source: agentReportWhatsappSource(),
-      actorId: adminActorId(req),
-      baseUrl: agentWeeklyReports.siteUrl(),
-      queue: queueWhatsappWebBridgeMessage,
-      videos: agentReportVideos
+    // Made in the background like the real one: the film first if the server
+    // has room for it, then the message (with or without the film line).
+    setImmediate(() => {
+      agentGoodbye.sendGoodbyeNow({
+        payload,
+        to: previewTo,
+        preview: true,
+        version: `p${new Date().toISOString().slice(0, 10).replace(/\D/g, '')}`,
+        source: agentReportWhatsappSource(),
+        actorId: adminActorId(req),
+        baseUrl: agentWeeklyReports.siteUrl(),
+        queue: queueWhatsappWebBridgeMessage,
+        videos: agentReportVideos
+      }).catch((error) => console.warn('[agent-goodbye] test not sent:', error.message));
     });
-    if (sent?.film) delete sent.film.done;
-    return res.json({ ok: true, data: sent });
+    return res.json({ ok: true, data: { status: 'sending', to: `…${previewTo.slice(-4)}` } });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
     return next(error);

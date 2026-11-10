@@ -261,7 +261,7 @@ async function buildGoodbyePayload(agentId, { dbc = db } = {}) {
  * in the film; the message says the properties are down, sorry to see you go,
  * when their details are deleted, and how to come back. Nothing about fees.
  */
-function buildGoodbyeMessage(payload = {}) {
+function buildGoodbyeMessage(payload = {}, { filmComing = true } = {}) {
   const agent = payload.agent || {};
   const s = payload.stats || {};
   const contact = payload.contact || makaugWhatsapp();
@@ -271,7 +271,7 @@ function buildGoodbyeMessage(payload = {}) {
   return [
     `Hi ${firstName},`,
     '',
-    `${hadListings ? 'Your properties are now off makaug.com and your agent account is closed' : 'Your agent account on makaug.com is closed'}, so you won't get any more agent messages from us. We're sad to see you go, and thank you for ${hadListings ? 'listing with us' : 'joining us'}. Your goodbye film is below.`,
+    `${hadListings ? 'Your properties are now off makaug.com and your agent account is closed' : 'Your agent account on makaug.com is closed'}, so you won't get any more agent messages from us. We're sad to see you go, and thank you for ${hadListings ? 'listing with us' : 'joining us'}.${filmComing ? ' Your goodbye film is below.' : ''}`,
     '',
     `We'll delete your ID and personal details after ${days} days, in case you change your mind before then. We keep your number, so whenever you want to come back, just WhatsApp makaug on ${contact.pretty}.`,
     '',
@@ -464,12 +464,28 @@ async function runFormerAgentDetailDeletion(dbc = db, { now = new Date(), logger
 
 let detailTimer = null;
 
-/** Checks four times a day; the first check waits for the deploy to settle. */
-function startFormerAgentDetailScheduler(dbc = db, { bootDelayMs = 10 * 60 * 1000, intervalMs = 6 * 60 * 60 * 1000, logger = console } = {}) {
+/**
+ * Every 10 minutes: goodbyes still owed (a film waiting for room on the
+ * server), then details due for deletion. The first check waits for the
+ * deploy to settle.
+ */
+function startFormerAgentDetailScheduler(dbc = db, { bootDelayMs = 10 * 60 * 1000, intervalMs = 10 * 60 * 1000, logger = console } = {}) {
   if (detailTimer) return detailTimer;
-  const run = () => runFormerAgentDetailDeletion(dbc, { logger })
-    .then((result) => { if (result.deleted.length) logger.info?.(`[agent-goodbye] personal details deleted for ${result.deleted.length} former agent(s)`); })
-    .catch((error) => logger.warn('[agent-goodbye] detail deletion check failed:', error.message));
+  let running = false;
+  const run = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const sent = await runPendingGoodbyes(dbc, { logger }).catch((error) => { logger.warn('[agent-goodbye] pending goodbyes check failed:', error.message); return []; });
+      if (sent.some((r) => r.film === 'sent' || r.message === 'sent')) logger.info?.(`[agent-goodbye] goodbye parts sent for ${sent.length} former agent(s)`);
+      const result = await runFormerAgentDetailDeletion(dbc, { logger });
+      if (result.deleted.length) logger.info?.(`[agent-goodbye] personal details deleted for ${result.deleted.length} former agent(s)`);
+    } catch (error) {
+      logger.warn('[agent-goodbye] former agent check failed:', error.message);
+    } finally {
+      running = false;
+    }
+  };
   const first = setTimeout(run, bootDelayMs);
   first.unref?.();
   detailTimer = setInterval(run, intervalMs);
@@ -533,45 +549,159 @@ async function resetFormerAgentWhatsapp({ agent = {}, note = '', dbc = db } = {}
 }
 
 /**
- * Queues the goodbye: the message now, the film once it is rendered (so it
- * always arrives after the message). If the film cannot be made, the message
- * still goes. `queue` is queueWhatsappWebBridgeMessage; `videos` the video
- * service (both passed in so the order can be tested).
+ * Sends a goodbye now: the film is made first, so the message only says
+ * "Your goodbye film is below" when the film really follows it. If the film
+ * cannot be made at this moment (the server refuses renders when its memory
+ * is high), the message goes without that line and `film` comes back as
+ * 'waiting'. `queue` is queueWhatsappWebBridgeMessage; `videos` the video
+ * service; `markMessage` / `markFilm` record a part as sent before it is
+ * queued, so a part is never sent twice.
  */
-async function queueGoodbye({ payload, to, version, preview = false, source = 'whatsapp_runtime', actorId = 'admin', baseUrl, queue, videos } = {}) {
+async function sendGoodbyeNow({ payload, to, version, preview = false, source = 'whatsapp_runtime', actorId = 'admin', baseUrl, queue, videos, needMessage = true, needFilm = true, markMessage = async () => {}, markFilm = async () => {} } = {}) {
   const digits = String(to || '').replace(/\D+/g, '');
-  if (digits.length < 9) return { sent: false, reason: 'no_whatsapp_number' };
+  if (digits.length < 9) return { sent: false, reason: 'no_whatsapp_number', message: 'not_sent', film: 'not_sent' };
   const agentId = String(payload?.agent?.id || '');
   const dedupeBase = `agent_goodbye:${agentId}:${preview ? `preview:${Date.now()}` : version}`;
-  const message = await queue({
-    recipient: digits,
-    text: buildGoodbyeMessage(payload),
-    source,
-    actorId,
-    metadata: { message_kind: 'agent_goodbye', agent_id: agentId, preview, part: 'message', reply_dedupe_key: `${dedupeBase}:message` }
-  });
-  const film = { status: 'not_available', url: '' };
-  const url = videos && videos.isVideoRenderingAvailable() ? videos.goodbyeVideoUrl(payload.agent, baseUrl, version) : '';
+  const url = needFilm && videos && videos.isVideoRenderingAvailable() ? videos.goodbyeVideoUrl(payload.agent, baseUrl, version) : '';
+  let filmReady = false;
+  let filmError = '';
   if (url) {
-    film.status = 'rendering';
-    film.url = url;
-    film.done = videos.ensureGoodbyeVideo(payload, version)
-      .then(() => queue({
-        recipient: digits,
-        text: buildGoodbyeCaption(payload),
-        mediaUrl: url,
-        mediaType: 'video',
-        source,
-        actorId,
-        metadata: { message_kind: 'agent_goodbye', agent_id: agentId, preview, part: 'film', reply_dedupe_key: `${dedupeBase}:film` }
-      }))
-      .then((queued) => ({ queued: true, id: queued?.id || null }))
-      .catch((error) => {
-        console.warn('[agent-goodbye] film not sent:', error.message);
-        return { queued: false, error: error.message };
-      });
+    try {
+      await videos.ensureGoodbyeVideo(payload, version);
+      filmReady = true;
+    } catch (error) {
+      filmError = error.code || error.message || 'render_failed';
+      console.warn('[agent-goodbye] film not made yet:', filmError);
+    }
   }
-  return { sent: true, to: digits, message_id: message?.id || null, film };
+  const out = { sent: true, to: digits, message: needMessage ? 'not_sent' : 'already_sent', film: needFilm ? (url ? 'waiting' : 'not_available') : 'already_sent' };
+  if (filmError) out.film_error = filmError;
+  if (needMessage) {
+    await markMessage();
+    const queued = await queue({
+      recipient: digits,
+      text: buildGoodbyeMessage(payload, { filmComing: filmReady }),
+      source,
+      actorId,
+      metadata: { message_kind: 'agent_goodbye', agent_id: agentId, preview, part: 'message', reply_dedupe_key: `${dedupeBase}:message` }
+    });
+    out.message = 'sent';
+    out.message_id = queued?.id || null;
+  }
+  if (filmReady) {
+    await markFilm();
+    const queued = await queue({
+      recipient: digits,
+      text: buildGoodbyeCaption(payload),
+      mediaUrl: url,
+      mediaType: 'video',
+      source,
+      actorId,
+      metadata: { message_kind: 'agent_goodbye', agent_id: agentId, preview, part: 'film', reply_dedupe_key: `${dedupeBase}:film` }
+    });
+    out.film = 'sent';
+    out.film_id = queued?.id || null;
+  }
+  return out;
+}
+
+const FILM_RETRY_HOURS = 48;
+
+function deliveryDeps() {
+  return {
+    queue: require('./whatsappWebBridgeService').queueWhatsappWebBridgeMessage,
+    videos: require('./agentReportVideoService'),
+    source: String(process.env.AGENT_REPORT_WHATSAPP_SOURCE || 'whatsapp_runtime').trim().toLowerCase() || 'whatsapp_runtime',
+    baseUrl: require('./agentWeeklyReportService').siteUrl()
+  };
+}
+
+/**
+ * Delivers the goodbye kept on a removed agent (removal_snapshot.goodbye):
+ * the message once, and the film once, trying again on each former-agent check
+ * while the server has no room to make it, for up to two days. A claim on the
+ * row stops the removal request and the check from sending at the same time.
+ */
+async function deliverGoodbye(agentId, { dbc = db, deps = null, actorId = 'system' } = {}) {
+  const claimed = (await dbc.query(
+    `UPDATE agents
+        SET removal_snapshot = removal_snapshot || jsonb_build_object('goodbye_claim_at', NOW())
+      WHERE id = $1 AND removed_at IS NOT NULL AND removal_snapshot ? 'goodbye'
+        AND (removal_snapshot->>'goodbye_claim_at' IS NULL
+          OR (removal_snapshot->>'goodbye_claim_at')::timestamptz < NOW() - INTERVAL '15 minutes')
+      RETURNING phone, whatsapp, removed_at, removal_snapshot`,
+    [agentId]
+  )).rows[0];
+  if (!claimed) return { skipped: 'busy_or_not_found' };
+  const snap = claimed.removal_snapshot || {};
+  const mark = (fields) => dbc.query(
+    `UPDATE agents SET removal_snapshot = removal_snapshot || $2::jsonb WHERE id = $1`,
+    [agentId, JSON.stringify(fields)]
+  );
+  const needMessage = !snap.goodbye_message_at;
+  const needFilm = !snap.goodbye_film_at && !snap.goodbye_film_gave_up_at;
+  let result = { message: needMessage ? 'not_sent' : 'already_sent', film: needFilm ? 'not_sent' : 'done' };
+  try {
+    if (!needMessage && !needFilm) return result;
+    const d = deps || deliveryDeps();
+    result = await sendGoodbyeNow({
+      payload: snap.goodbye,
+      to: snap.goodbye_to || claimed.whatsapp || claimed.phone,
+      version: String(snap.goodbye_version || new Date(claimed.removed_at || Date.now()).getTime()),
+      source: d.source,
+      actorId,
+      baseUrl: d.baseUrl,
+      queue: d.queue,
+      videos: d.videos,
+      needMessage,
+      needFilm,
+      markMessage: () => mark({ goodbye_message_at: new Date().toISOString() }),
+      markFilm: () => mark({ goodbye_film_at: new Date().toISOString() })
+    });
+    const audit = (action, details = {}) => dbc.query(
+      `INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, $2, $3::jsonb)`,
+      [actorId, action, JSON.stringify({ agent_id: String(agentId), ...details })]
+    ).catch(() => null);
+    if (result.message === 'sent') await audit('agent_goodbye_sent', { to: `…${String(result.to || '').slice(-4)}`, film: result.film });
+    else if (result.film === 'sent') await audit('agent_goodbye_film_sent');
+    if (result.reason === 'no_whatsapp_number') {
+      await audit('agent_goodbye_not_sent', { reason: 'no_whatsapp_number' });
+      await mark({ goodbye_message_at: 'no_whatsapp_number', goodbye_film_gave_up_at: new Date().toISOString() });
+    } else if (needFilm && result.film !== 'sent') {
+      const tries = (Number(snap.goodbye_film_tries) || 0) + 1;
+      const age = Date.now() - new Date(claimed.removed_at || Date.now()).getTime();
+      const giveUp = result.film === 'not_available' || age > FILM_RETRY_HOURS * 3600000;
+      await mark(giveUp ? { goodbye_film_tries: tries, goodbye_film_gave_up_at: new Date().toISOString() } : { goodbye_film_tries: tries });
+      result.film = giveUp ? 'gave_up' : 'waiting';
+    }
+    return result;
+  } finally {
+    await dbc.query(`UPDATE agents SET removal_snapshot = removal_snapshot - 'goodbye_claim_at' WHERE id = $1`, [agentId]).catch(() => null);
+  }
+}
+
+/** Goodbyes still owed: a message not yet sent, or a film still waiting for room on the server. */
+async function runPendingGoodbyes(dbc = db, { deps = null, logger = console } = {}) {
+  const rows = (await dbc.query(
+    `SELECT id FROM agents
+      WHERE removed_at IS NOT NULL
+        AND removed_at > NOW() - make_interval(hours => $1::int)
+        AND removal_snapshot ? 'goodbye'
+        AND (removal_snapshot->>'goodbye_message_at' IS NULL
+          OR (removal_snapshot->>'goodbye_film_at' IS NULL AND removal_snapshot->>'goodbye_film_gave_up_at' IS NULL))
+      ORDER BY removed_at
+      LIMIT 10`,
+    [FILM_RETRY_HOURS + 1]
+  )).rows;
+  const done = [];
+  for (const row of rows) {
+    try {
+      done.push({ id: String(row.id), ...(await deliverGoodbye(row.id, { dbc, deps })) });
+    } catch (error) {
+      logger.warn('[agent-goodbye] goodbye not delivered yet', row.id, error.message);
+    }
+  }
+  return done;
 }
 
 /** On restore: the chat is no longer a former agent's. */
@@ -616,7 +746,9 @@ module.exports = {
   deleteStoredFiles,
   resetFormerAgentWhatsapp,
   unmarkFormerAgentWhatsapp,
-  queueGoodbye,
+  sendGoodbyeNow,
+  deliverGoodbye,
+  runPendingGoodbyes,
   runFormerAgentDetailDeletion,
   startFormerAgentDetailScheduler,
   phoneKeys

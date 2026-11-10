@@ -18591,7 +18591,8 @@ function adminAgentManagerDetailHtml(d = {}) {
     agent_added: "Added by staff (no message sent)",
     admin_agent_removed: "Agent removed",
     admin_agent_restored: "Agent restored",
-    agent_goodbye_sent: "Goodbye message and film sent",
+    agent_goodbye_sent: "Goodbye message sent",
+    agent_goodbye_film_sent: "Goodbye film sent",
     agent_goodbye_not_sent: "Goodbye not sent (no WhatsApp number)",
     admin_agent_listing_take_down: "Listing taken down",
     admin_agent_listing_mark_sold: "Listing marked sold",
@@ -19137,7 +19138,7 @@ async function adminAgentManagerRemoveReasonChanged(agentId) {
           <div class="whitespace-pre-wrap break-words rounded-lg bg-green-50 border border-green-100 p-2 text-[12px] text-gray-900" data-goodbye-message>${adminEscape(g.message || "")}</div>
           <p class="text-[11px] text-gray-500">2. Then their goodbye film, with this caption:</p>
           <div class="whitespace-pre-wrap break-words rounded-lg bg-green-50 border border-green-100 p-2 text-[12px] text-gray-900" data-goodbye-caption>${adminEscape(g.caption || "")}</div>
-          ${g.film_url ? `<a href="${adminAttr(g.film_url)}" target="_blank" rel="noopener" class="inline-block text-xs font-bold text-green-800 underline" data-goodbye-film>▶ Watch their goodbye film (made from today's numbers; the first time takes about a minute)</a>` : `<p class="text-[11px] text-gray-500">Films cannot be made on this server right now, so only the message would go.</p>`}
+          ${g.film_url ? `<a href="${adminAttr(g.film_url)}" target="_blank" rel="noopener" class="inline-block text-xs font-bold text-green-800 underline" data-goodbye-film>▶ Watch their goodbye film (made from today's numbers; the first time takes about a minute, and if the server is busy, try again in a few minutes)</a>` : `<p class="text-[11px] text-gray-500">Films cannot be made on this server right now, so only the message would go.</p>`}
           <div class="flex flex-wrap items-center gap-2 pt-1">
             <input type="tel" data-goodbye-test-to placeholder="Your WhatsApp number" class="min-w-[180px] flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm">
             <button type="button" class="rounded-lg border border-green-700 text-green-800 px-3 py-2 text-xs font-bold" onclick="adminAgentManagerGoodbyeTest('${adminAttr(agentId)}')">Send me a test</button>
@@ -19154,7 +19155,7 @@ async function adminAgentManagerGoodbyeTest(agentId) {
   if (to.length < 9) { toast("Type your WhatsApp number for the test."); return; }
   try {
     await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/goodbye-preview`, { method: "POST", headers: adminAuthHeaders(), body: { preview_to: to } });
-    toast("Test sent to your WhatsApp: the message now, the film in a minute or two.", 4200);
+    toast("Test on its way to your WhatsApp: the film comes with it if the server has room to make it now.", 4200);
   } catch (error) {
     toast(`Test not sent: ${error?.message || "error"}`);
   }
@@ -19176,7 +19177,7 @@ async function adminAgentManagerRemove(agentId) {
     const d = res?.data || {};
     const bits = [`Removed ${d.full_name || name}`];
     if (d.listings_hidden) bits.push(`${d.listings_hidden} listing(s) hidden`);
-    if (code === "cancelled") bits.push(d.goodbye?.sent ? (d.goodbye.film?.status === "rendering" ? "goodbye message sent, film on its way" : "goodbye message sent") : "no WhatsApp number, so no goodbye was sent");
+    if (code === "cancelled") bits.push(d.goodbye?.status === "sending" ? "goodbye on its way (the film follows as soon as the server has room to make it)" : "no WhatsApp number, so no goodbye was sent");
     if (d.personal_delete_after) bits.push(`their ID and personal details will be deleted on ${staffPeopleDate(d.personal_delete_after)}`);
     await adminAgentManagerRefreshOpen(`${bits.join(", ")}.`);
   } catch (error) {
