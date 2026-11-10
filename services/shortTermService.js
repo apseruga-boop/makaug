@@ -989,13 +989,36 @@ async function loadShortTermPublicCount(db, { timeoutMs = 900 } = {}) {
 
 function validateListingSubmission(payload = {}) {
   const errors = [];
-  const title = cleanText(payload.title, 160);
-  const description = cleanMultiline(payload.description, 6000);
+  let title = cleanText(payload.title, 160);
+  let description = cleanMultiline(payload.description, 6000);
   const district = cleanText(payload.district, 120);
   const area = cleanText(payload.area, 120);
   const hostName = cleanText(payload.host_name, 120);
   const hostPhone = normalisePhone(payload.host_phone);
-  const nightly = toBigIntSafe(payload.base_nightly_ugx, 0);
+  const rawNightly = payload.base_nightly_ugx;
+  const nightlyEmpty = rawNightly == null || String(rawNightly).trim() === '';
+  let nightly = toBigIntSafe(rawNightly, 0);
+  const explicitPoa = payload.price_on_application === true || String(payload.price_on_application) === 'true';
+  const priceOnApplication = explicitPoa || nightlyEmpty || nightly <= 0;
+  if (priceOnApplication) nightly = 0;
+
+  const bedroomsGuess = Math.max(0, toInt(payload.bedrooms, 1));
+  const guestsGuess = Math.max(1, toInt(payload.max_guests, 2));
+  if (title.length < 8 && (area || district)) {
+    title = bedroomsGuess === 0
+      ? `Studio short stay in ${area || district}`
+      : `${bedroomsGuess}-bedroom short stay in ${area || district}`;
+  }
+  if (description.length < 40) {
+    const bits = [];
+    if (area || district) bits.push(`A short stay in ${area || district}.`);
+    bits.push(`Sleeps up to ${guestsGuess} guest${guestsGuess === 1 ? '' : 's'}.`);
+    if (bedroomsGuess > 0) bits.push(`${bedroomsGuess} bedroom${bedroomsGuess === 1 ? '' : 's'}.`);
+    const rules = cleanMultiline(payload.house_rules, 4000);
+    if (rules) bits.push(rules);
+    bits.push('Listed by the host on makaug for guests looking for a place by the night.');
+    description = bits.join(' ').trim();
+  }
 
   if (title.length < 8) errors.push('Give the place a title of at least 8 characters.');
   if (description.length < 40) errors.push('Describe the place in at least 40 characters.');
@@ -1004,8 +1027,7 @@ function validateListingSubmission(payload = {}) {
   if (!hostName) errors.push('We need the name guests should ask for.');
   if (!isValidUgandaPhone(hostPhone)) errors.push('A reachable Ugandan phone number is required, for example 0780 863 394.');
   if (!isValidEmail(payload.host_email)) errors.push('That email address does not look right.');
-  if (nightly <= 0) errors.push('Set a nightly price in Uganda Shillings.');
-  if (nightly > 50000000) errors.push('That nightly price looks wrong. Check the figure.');
+  if (!priceOnApplication && nightly > 50000000) errors.push('That nightly price looks wrong. Check the figure.');
 
   // The two declarations that carry the liability. Without them we do not
   // publish, full stop.
@@ -1094,7 +1116,8 @@ function validateListingSubmission(payload = {}) {
       referral_code: normaliseReferralCode(payload.referral_code) || null,
       utb_licence_number: cleanText(payload.utb_licence_number, 80) || null,
       amenities,
-      availability: windows
+      availability: windows,
+      price_on_application: priceOnApplication
     }
   };
 }
@@ -1140,7 +1163,7 @@ async function createShortTermListing(db, payload = {}, context = {}) {
          status, moderation_stage, listing_fee_ugx, listing_fee_status, listing_term_months,
          preferred_payment_method, payout_note, source,
          listed_via, entered_by_staff_id, entered_by_staff_name, referral_code, acquisition_notes,
-         utb_licence_number
+         utb_licence_number, extra_fields
        ) VALUES (
          $1,$2,$3,$4,$5,$6,$7,$8,$9,
          $10,$11,$12,$13,$14,$15,
@@ -1153,7 +1176,7 @@ async function createShortTermListing(db, payload = {}, context = {}) {
          NOW(),$37,
          'pending','submitted',$38,$39,$40,
          $41,$42,'direct',
-         $43,$44,$45,$46,$47,$48
+         $43,$44,$45,$46,$47,$48,$49
        )
        RETURNING id, reference, slug, status, moderation_stage, listed_via`,
       [
@@ -1178,7 +1201,12 @@ async function createShortTermListing(db, payload = {}, context = {}) {
         context.enteredByStaffName || null,
         value.referral_code || normaliseReferralCode(context.referralCode) || null,
         cleanMultiline(context.acquisitionNotes, 2000) || null,
-        value.utb_licence_number
+        value.utb_licence_number,
+        {
+          price_on_application: value.price_on_application === true,
+          right_to_let_declared_at: new Date().toISOString(),
+          listed_from: cleanText(payload.listed_from, 40) || 'website'
+        }
       ]
     );
 
