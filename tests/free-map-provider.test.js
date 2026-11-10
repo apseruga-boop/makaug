@@ -40,3 +40,9 @@ test('the off-plan brochure skips the paid Google static map unless Google is ch
   assert.match(brochure, /if \(String\(process\.env\.GOOGLE_PLACES_ALLOWED \|\| ''\)\.trim\(\)\.toLowerCase\(\) !== 'true'\) return null;/);
   assert.match(brochure, /if \(String\(process\.env\.MAP_PROVIDER \|\| ''\)\.trim\(\)\.toLowerCase\(\) !== 'google'\) return null;/);
 });
+
+test('the homepage preconnects to the exact OSM tile origin once', () => {
+  const html = fs.readFileSync('index.html', 'utf8');
+  const head = html.slice(0, html.indexOf('</head>'));
+  assert.equal((head.match(/<link rel="preconnect" href="https:\/\/tile\.openstreetmap\.org">/g) || []).length, 1);
+});
