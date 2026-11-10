@@ -2550,7 +2550,7 @@ async function sendPublicIndex(req, res, next) {
     if (/^\/about\/?$/i.test(req.path)) {
       html = patchPublicPageSeoMeta(html, {
         title: 'About makaug — Products, pricing & how it works | makaug.com',
-        description: 'Everything makaug offers: listings from UGX 20,000 per listing per month after 7 free days, agent plans from UGX 50,000 a month after 14 days free, short stays included in the agent plan, off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
+        description: 'Everything makaug offers: listings from UGX 20,000 per listing per month, agent plans from UGX 50,000 a month, short stays included in the agent plan, off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
         canonical: absolutePublicUrl('/about'),
         image: absolutePublicUrl('/assets/og-cover.jpg'),
         imageAlt: shareCardAlt('home', requestShareLang(req)),

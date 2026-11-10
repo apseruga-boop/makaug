@@ -21,7 +21,7 @@ const COMMON_FAQ = [
   { q: 'How do I contact a lister?', a: ['Open the listing and tap Call or WhatsApp to reach the owner or agent directly.'] },
   { q: 'How do I stay safe?', a: ['Never pay a deposit or fee before you have viewed the property and checked the documents.', 'Read our [safety tips](/safety).'] },
   { q: 'How do I report a listing?', a: ['Use Report on the listing page, or see [Report a Listing](/report-fraud). Our team reviews every report.'] },
-  { q: 'How do I list my property?', a: ['[List your property](/list-property): the first 7 days are free.', 'See our [Terms](/terms).'] }
+  { q: 'How do I list my property?', a: ['[List your property](/list-property): UGX 20,000 a month from the day it is approved.', 'See our [Terms](/terms).'] }
 ];
 
 function escapeHtml(value = '') {
@@ -169,7 +169,7 @@ function forSaleCopy(snapshot) {
         'These are asking prices from live listings, not valuations; try our [property value calculator](/valuation) or the [mortgage finder](/mortgage).'
       ] },
       { lead: 'Buying from abroad?', sentences: ['Switch prices to £, $ or € at the top of the page, read our [safety guide](/safety) and use an independent lawyer and an official title search before you pay.'] },
-      { lead: 'Selling?', sentences: ['[List your house](/list-property): the first 7 days are free.'] }
+      { lead: 'Selling?', sentences: ['[List your house](/list-property): UGX 20,000 a month from the day it is approved.'] }
     ],
     faq: [
       { q: 'How many houses are for sale in Uganda on makaug?', a: ['Right now **{count}**, updated as new listings are found and approved.', 'New listings arrive every day ({new_7d} across all categories in the last 7 days).'] },
@@ -220,7 +220,7 @@ function landCopy(snapshot) {
         'makaug puts it in one place, keeps a link to the original post, and has a person review every listing before it appears.',
         'You contact the seller directly.'
       ] },
-      { lead: 'Selling land?', sentences: ['[List your plot](/list-property) (7 days free) or WhatsApp **0780 863 394**.'] }
+      { lead: 'Selling land?', sentences: ['[List your plot](/list-property) (UGX 20,000 a month) or WhatsApp **0780 863 394**.'] }
     ],
     faq: [
       { q: 'How much does a plot cost in Uganda?', a: ['On makaug the median asking price is about UGX {median_land}.', 'Plots on the edge of Wakiso start around UGX 10–30M; Kira and Kyanja are typically UGX 120–300M.'] },
@@ -279,7 +279,7 @@ function kampalaRentCopy(snapshot) {
         "View the house in person before paying anything, ask to see the landlord's or agent's authority, get a written tenancy agreement and receipts.",
         'Report anything suspicious from the listing page.'
       ] },
-      { lead: 'Landlords:', sentences: ['tenants search one place. [List your rental](/list-property) (first 7 days free) or WhatsApp **0780 863 394**.'] }
+      { lead: 'Landlords:', sentences: ['tenants search one place. [List your rental](/list-property) (UGX 20,000 a month) or WhatsApp **0780 863 394**.'] }
     ],
     faq: [
       { q: 'How many houses are for rent in Kampala?', a: ['**{count}** right now on makaug, across Kampala district.', 'There are hundreds more in Wakiso (Kira, Najjera, Namugongo).'] },

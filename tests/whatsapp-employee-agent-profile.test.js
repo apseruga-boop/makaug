@@ -161,7 +161,7 @@ test('the Quickway mistake can be corrected without restarting the batch', async
     // payment question on the doorstep: the employee is told, and the batch
     // carries on straight to the property count.
     assert.strictEqual(ready.nextStep, 'employee_property_count');
-    assert.match(ready.message, /gets 14 days free/);
+    assert.match(ready.message, /pays UGX 50,000 a month from the day they are approved/);
     assert.match(ready.message, /UGX 50,000 a month/);
     assert.deepStrictEqual(insertedAgents, [{
       fullName: 'Quickway Auctioneers',

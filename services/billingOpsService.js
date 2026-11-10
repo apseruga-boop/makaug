@@ -18,7 +18,7 @@ const logger = require('../config/logger');
 const { BOOT_DELAY_MS } = require('../utils/schedulerStagger');
 const { observeJob } = require('../utils/memoryLog');
 const revenue = require('./revenueService');
-const { publishedPricing } = require('../config/publishedPricing');
+const { publishedPricing, ownerFreeDaysForListing } = require('../config/publishedPricing');
 const { agentGreetingName } = require('./agentNameService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
@@ -476,7 +476,7 @@ async function recordListingPayment(db, { propertyId, payment, actor }) {
   return { entry: row, months, period_start: start, period_end: end };
 }
 
-// --- Private listers: 7 days free, then a monthly fee -------------------------
+// --- Private listers: pay from approval. Listings live before 10 Nov 2026 keep their 7 free days. ---
 
 async function listingStats(db, propertyId) {
   const r = (await db.query(
@@ -491,9 +491,12 @@ async function listingStats(db, propertyId) {
   return { views: Number(r.views || 0), visitors: Number(r.visitors || 0), whatsapp_clicks: Number(r.whatsapp_clicks || 0), shares: Number(r.shares || 0) };
 }
 
-function listerFreeUntil(property = {}, settings = {}) {
-  const freeDays = Number(settings.lister_fee?.free_days || publishedPricing().owner_listing.free_days);
+function listerFreeUntil(property = {}) {
+  const freeDays = ownerFreeDaysForListing(property);
   const start = new Date(property.reviewed_at || property.created_at || Date.now());
+  if (freeDays <= 0) {
+    return new Date(start.getTime() + 3 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
+  }
   return new Date(start.getTime() + (freeDays - 1) * 86400000 + 3 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
@@ -533,6 +536,9 @@ async function buildListerMessage(db, kind, property, settings, payLink = '') {
     return payLink && !template.includes('{pay_link}') ? `${filled}\n\n${payLinkLine(payLink)}` : filled;
   }
   if (kind === 'reminder') {
+    if (ownerFreeDaysForListing(property) <= 0) {
+      return [`Hi ${name},`, '', `The monthly fee for *${title}* on makaug is due.`, howToPay, '', `See it: ${link}`].filter((l) => l !== '').join('\n');
+    }
     return [`Hi ${name},`, '', `Your free week for *${title}* on makaug has ended${paidUntil ? '' : ` (it ended on ${freeUntil})`}.`, howToPay, '', `See it: ${link}`].filter((l) => l !== '').join('\n');
   }
   if (kind === 'final_reminder') {

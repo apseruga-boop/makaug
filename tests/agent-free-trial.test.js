@@ -27,13 +27,11 @@ const trialAgent = {
   paid_until: '2026-10-23'
 };
 
-test('the trial is 14 days unless the environment says otherwise', () => {
+test('from 10 Nov 2026 there is no automatic free trial', () => {
+  process.env.AGENT_TRIAL_DAYS = '14';
+  assert.strictEqual(revenue.agentTrialDays(), 0);
   delete process.env.AGENT_TRIAL_DAYS;
-  assert.strictEqual(revenue.agentTrialDays(), 14);
-  process.env.AGENT_TRIAL_DAYS = 'nonsense';
-  assert.strictEqual(revenue.agentTrialDays(), 14);
-  delete process.env.AGENT_TRIAL_DAYS;
-  assert.strictEqual(revenue.addDays('2026-10-10', 14 - 1), '2026-10-23', 'free through 23 Oct, first payment 24 Oct');
+  assert.strictEqual(revenue.agentTrialDays(), 0);
 });
 
 test('the welcome message never mentions the trial, the fee or payment; the video does', () => {
@@ -50,7 +48,7 @@ test('the welcome message never mentions the trial, the fee or payment; the vide
 
 test('an agent who is not on a trial gets the welcome exactly as before', () => {
   const body = welcome.buildWelcomeMessage({ agent: { id: 'a2', full_name: 'Old Agent' }, stats: {} });
-  assert.match(body, /Every listing gets its first 7 days free/);
+  assert.match(body, /UGX 20,000 a month from the day it goes live/);
 });
 
 test('the reminder 3 days before names the end date, the fee and Ronald', () => {
@@ -117,17 +115,16 @@ test('team commands: NEW AGENT goes live on the trial, TRIALS lists, plain "tria
   const src = read('services/teamBillingCommandService.js');
   assert.match(src, /mode: 'free_period', days/);
   assert.match(src, /trials\?/);
-  assert.match(team.help(), /14-day free trial/);
+  assert.match(team.help(), /no free trial|pay the monthly fee from approval/);
   assert.match(team.help(), /\*TRIALS\*/);
   const db = { async query() { return { rows: [] }; } };
   assert.strictEqual(await team.handleTeamBillingCommand(db, { phone: '256709402189', body: 'trial run tomorrow?' }), null);
 });
 
-test('approving without a payment now starts the free trial, unless payment is required', () => {
+test('approving without a payment no longer starts an automatic free trial', () => {
   const admin = read('routes/admin.js');
-  assert.match(admin, /feeOverride = \{ mode: 'free_period', days, reason: `New agent \$\{days\}-day free trial` \}/);
-  assert.match(admin, /req\.body\.require_payment !== true/);
-  assert.match(admin, /req\.body\.payment && typeof req\.body\.payment === 'object'/);
+  assert.match(admin, /not put on an automatic free trial/);
+  assert.doesNotMatch(admin, /New agent \$\{days\}-day free trial/);
 });
 
 test('the doorstep intake tells the employee about the trial instead of asking about a pay link', () => {

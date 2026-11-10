@@ -113,7 +113,7 @@ function help() {
     '💳 *Payment commands* (team only)',
     '',
     '*NEW AGENT* Jane Nakato 0772123456',
-    `→ makes them a live agent on a ${revenue.agentTrialDays()}-day free trial, sends their welcome pack, then follows up for payment`,
+    '→ sets them up as pending. They pay the monthly fee from approval. Record it in King, or use Free (staff override).',
     '',
     '*TRIALS*',
     '→ every agent on a free trial: who ends soon, who has not paid',
@@ -175,10 +175,16 @@ async function newAgent(db, rest, actor) {
   }
   if (agent.fee_exempt) return `${agent.full_name} joined before the monthly fee, so they list for free. Approve them with *APPROVE ${pretty(phone)}*.`;
 
-  // New agents go live straight away on a free trial; the money follows.
   const days = revenue.agentTrialDays();
-  const ends = revenue.addDays(revenue.kampalaDate(), days - 1);
-  const result = await approveThroughAdmin(agent, actor, revenue.agentFeeRequired(agent)
+  if (revenue.agentFeeRequired(agent) && days < 1) {
+    return [
+      `${created ? 'Set up' : 'Found'} *${agent.full_name}* (${pretty(phone)}).`,
+      `From 10 Nov 2026 there is no free trial. They pay ${billingOps.ugx(revenue.feeConfig().feeUgx)} a month from approval.`,
+      'Record the payment in King → Agents, or approve there with Free (staff override) and a reason.'
+    ].join('\n');
+  }
+  const ends = revenue.addDays(revenue.kampalaDate(), Math.max(days, 1) - 1);
+  const result = await approveThroughAdmin(agent, actor, revenue.agentFeeRequired(agent) && days >= 1
     ? { mode: 'free_period', days, reason: `New agent ${days}-day free trial — signed up by ${actor}` }
     : null);
   if (!result.ok) {
@@ -271,7 +277,10 @@ async function approve(db, rest, actor) {
   // Not paid yet: approve the usual way — welcome pack first, then the pay link.
   const unpaid = revenue.agentFeeRequired(agent);
   const days = revenue.agentTrialDays();
-  const result = await approveThroughAdmin(agent, actor, unpaid
+  if (unpaid && days < 1) {
+    return `*${agent.full_name}* has not paid. There is no free trial. Record the payment in King → Agents, or approve there with Free (staff override) and a reason.`;
+  }
+  const result = await approveThroughAdmin(agent, actor, unpaid && days >= 1
     ? { mode: 'free_period', days, reason: `New agent ${days}-day free trial — approved on WhatsApp by ${actor}` }
     : null);
   if (!result.ok) return `Couldn't approve ${agent.full_name}: ${result.error}. Please do it in Admin › Agents.`;
@@ -279,7 +288,7 @@ async function approve(db, rest, actor) {
   return [
     `✅ *${agent.full_name}* is approved.`,
     welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.',
-    unpaid ? `On a ${days}-day free trial. I'll remind them before it ends and tell you when they pay (*TRIALS* shows the list).` : ''
+    unpaid && days >= 1 ? `On a ${days}-day free trial. I'll remind them before it ends and tell you when they pay (*TRIALS* shows the list).` : ''
   ].filter(Boolean).join('\n');
 }
 

@@ -10859,13 +10859,13 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       if (!beforeApproval) return res.status(404).json({ ok: false, error: 'Agent not found' });
       if (beforeApproval.removed_at) return res.status(409).json({ ok: false, error: 'This agent was removed. Restore them first.' });
       let feeOverride = req.body.fee_override && typeof req.body.fee_override === 'object' ? req.body.fee_override : null;
-      // From 10 Oct 2026 a new agent with no payment recorded starts on the free
-      // trial (14 days) instead of being refused. Someone who pays up front still
-      // goes the payment route, and `require_payment: true` keeps the old rule.
-      if (!feeOverride && !(req.body.payment && typeof req.body.payment === 'object') && req.body.require_payment !== true
-        && revenue.agentFeeRequired(beforeApproval)) {
-        const days = revenue.agentTrialDays();
-        feeOverride = { mode: 'free_period', days, reason: `New agent ${days}-day free trial` };
+      // From 10 Nov 2026 a new agent is not put on an automatic free trial.
+      // A staff member can still pass fee_override (free period, pay later, or
+      // waive) with a reason. A free_period of 0 days is ignored so an old
+      // caller cannot invent a trial.
+      if (feeOverride && String(feeOverride.mode || '').trim().toLowerCase() === 'free_period') {
+        const offeredDays = Math.round(Number(feeOverride.days));
+        if (!Number.isFinite(offeredDays) || offeredDays < 1) feeOverride = null;
       }
       if (feeOverride && revenue.agentFeeRequired(beforeApproval)) {
         // Approve without a payment, on purpose: an offer, pay later, or waived.
