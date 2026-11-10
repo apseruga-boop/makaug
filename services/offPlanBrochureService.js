@@ -5,6 +5,7 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 const { normalizeDevelopmentRow } = require('./offPlanService');
 const { brochureLanguagePack, interpolate, normalizeBrochureLanguage } = require('./offPlanBrochureI18n');
+const { osmStaticMapBuffer } = require('./osmStaticMap');
 
 const BRAND_GREEN = '#117a3d';
 const BRAND_GOLD = '#e9a321';
@@ -397,7 +398,12 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   const areaOverview = localizedProjectText(project, 'area_overview', language, `${[project.area, project.district].filter(Boolean).join(', ')}. ${copy.areaFallback}`);
   doc.fillColor(INK).font('Brochure-Regular').fontSize(10.5).text(areaOverview, 44, doc.y + 5, { width: 505, lineGap: 4, align: copy.rtl ? 'right' : 'left' });
   const mapTop = Math.min(doc.y + 18, 235);
-  if (options.mapImageBuffer) imageCover(doc, options.mapImageBuffer, 44, mapTop, 505, 235);
+  if (options.mapImageBuffer) {
+    doc.save();
+    doc.roundedRect(44, mapTop, 505, 235, 8).clip();
+    doc.image(options.mapImageBuffer, 44, mapTop, { fit: [505, 235], align: 'center', valign: 'center' });
+    doc.restore();
+  }
   else {
     doc.roundedRect(44, mapTop, 505, 235, 14).fill('#e9f1ec');
     doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(18).text(copy.openMaps, 74, mapTop + 84, { width: 445, align: 'center', link: googleMapsUrl(project) });
@@ -691,10 +697,20 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   return doc;
 }
 
+async function resolveBrochureMap(project, options = {}) {
+  if (options.mapImageBuffer) return options.mapImageBuffer;
+  // Paid Google Static Maps stays off unless both flags are set on purpose.
+  // Otherwise the brochure uses the same OpenStreetMap tiles as the site maps.
+  const google = await googleStaticMapBuffer(project);
+  if (google) return google;
+  // 1010×470 matches the 505×235 pt map box, so the credit bar is not cropped.
+  return osmStaticMapBuffer(project, { width: 1010, height: 470, zoom: 16 });
+}
+
 async function brochureBuffer(project, options = {}) {
   const agentProfile = options.agentProfile || null;
   const [mapImageBuffer, projectImageBuffers, agentListingImageBuffers] = await Promise.all([
-    options.mapImageBuffer || googleStaticMapBuffer(project),
+    resolveBrochureMap(project, options),
     Promise.all((project.images || []).map((image) => safeRemoteImageBuffer(image.url))),
     Promise.all((agentProfile?.listings || []).slice(0, 5).map((listing) => safeRemoteImageBuffer(listing.primary_image_url)))
   ]);
@@ -718,5 +734,6 @@ module.exports = {
   formatMoney,
   googleMapsUrl,
   localAssetPath,
-  projectUrl
+  projectUrl,
+  resolveBrochureMap
 };

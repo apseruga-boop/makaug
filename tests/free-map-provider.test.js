@@ -40,3 +40,12 @@ test('the off-plan brochure skips the paid Google static map unless Google is ch
   assert.match(brochure, /if \(String\(process\.env\.GOOGLE_PLACES_ALLOWED \|\| ''\)\.trim\(\)\.toLowerCase\(\) !== 'true'\) return null;/);
   assert.match(brochure, /if \(String\(process\.env\.MAP_PROVIDER \|\| ''\)\.trim\(\)\.toLowerCase\(\) !== 'google'\) return null;/);
 });
+
+test('the off-plan brochure map is stitched from the site OpenStreetMap tiles', () => {
+  const osm = fs.readFileSync('services/osmStaticMap.js', 'utf8');
+  assert.match(brochure, /osmStaticMapBuffer\(project,/);
+  assert.match(osm, /https:\/\/tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/);
+  assert.match(osm, /OpenStreetMap contributors/);
+  assert.match(osm, /Referer: 'https:\/\/makaug\.com\/'/);
+  assert.doesNotMatch(osm, /googleapis|mapbox|maptiler|thunderforest/i);
+});
