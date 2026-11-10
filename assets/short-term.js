@@ -1748,7 +1748,9 @@
         return { title: row.title, area: row.area, district: row.district, latitude: row.latitude, longitude: row.longitude, url: '/short-term/hotel/' + partnerSlug(row), _partner: true, primary_image_url: row.primary_image_url || row.image_url || '' };
       });
       var placed = (state.listings || []).concat(partnerPins).filter(function (l) {
-        return l && isFinite(Number(l.latitude)) && isFinite(Number(l.longitude));
+        return l && l.latitude != null && l.longitude != null && l.latitude !== '' && l.longitude !== ''
+          && isFinite(Number(l.latitude)) && isFinite(Number(l.longitude))
+          && !(Number(l.latitude) === 0 && Number(l.longitude) === 0);
       });
 
       if (!placed.length) {

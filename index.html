@@ -10792,7 +10792,7 @@
       }
       function loadShortTermNow() {
         if (!window.__makaugShortTerm || window.__makaugShortTerm.enabled !== true) return Promise.resolve(false);
-        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261104-short-stay-v4", function () {
+        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261110-st-pins", function () {
           return !!(window.makaugShortTerm && typeof window.makaugShortTerm.route === "function");
         });
       }
