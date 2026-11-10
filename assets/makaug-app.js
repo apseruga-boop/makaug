@@ -15284,7 +15284,9 @@ function staffJumpToDesk(target) {
     whatsapp: "staff-whatsapp-panel",
     source: "staff-source-panel",
     reports: "staff-reports-panel",
-    training: "staff-training-panel"
+    training: "staff-training-panel",
+    "short-term": "staff-short-term-control",
+    short: "staff-short-term-control"
   }[String(target || "").toLowerCase()];
   const el = id ? document.getElementById(id) : null;
   if (!el) return;

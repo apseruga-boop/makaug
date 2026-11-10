@@ -83,6 +83,174 @@ function staffCanReachApproved() {
   return Object.values(STAFF_ACTIONS).some((action) => action.to === 'approved');
 }
 
+// Found-online short stays are stored with do_not_message. The desk may show
+// and correct them. It must not offer a message, a pay link, or WhatsApp.
+function listingDoNotMessage(row = {}) {
+  if (!row || typeof row !== 'object') return false;
+  const raw = row.do_not_message;
+  if (raw === true || raw === 't' || raw === 'true' || raw === '1' || raw === 'yes') return true;
+  let extra = row.extra_fields;
+  if (typeof extra === 'string') {
+    try { extra = JSON.parse(extra); } catch (_) { extra = null; }
+  }
+  if (!extra || typeof extra !== 'object') return false;
+  const nested = extra.do_not_message;
+  return nested === true || nested === 't' || nested === 'true' || nested === '1' || nested === 'yes';
+}
+
+const FACT_TEXT = Object.freeze({
+  title: { min: 3, max: 180, required: true },
+  description: { min: 0, max: 8000 },
+  district: { min: 1, max: 80, required: true },
+  area: { min: 1, max: 80, required: true },
+  address: { min: 0, max: 200 },
+  property_type: { min: 0, max: 80 },
+  host_name: { min: 1, max: 120, required: true },
+  host_phone: { min: 1, max: 30, required: true },
+  house_rules: { min: 0, max: 4000 }
+});
+
+const FACT_INTS = Object.freeze({
+  bedrooms: { min: 0, max: 30 },
+  beds: { min: 0, max: 40 },
+  bathrooms: { min: 0, max: 30 },
+  max_guests: { min: 1, max: 50 },
+  base_nightly_ugx: { min: 0, max: 500000000 },
+  cleaning_fee_ugx: { min: 0, max: 500000000 },
+  min_nights: { min: 1, max: 90 }
+});
+
+function cleanFactText(value, max) {
+  return String(value == null ? '' : value).replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function cleanFactMultiline(value, max) {
+  return String(value == null ? '' : value).replace(/\r\n/g, '\n').trim().slice(0, max);
+}
+
+/**
+ * Facts a moderator can correct on a short stay before approving or rejecting.
+ * Publishing stays with the King. This does not touch contact actions.
+ */
+function parseListingFacts(body = {}) {
+  const source = body && typeof body === 'object' ? body : {};
+  const errors = [];
+  const value = {};
+
+  for (const [key, rule] of Object.entries(FACT_TEXT)) {
+    if (source[key] === undefined && !rule.required) continue;
+    const text = key === 'description' || key === 'house_rules'
+      ? cleanFactMultiline(source[key], rule.max)
+      : cleanFactText(source[key], rule.max);
+    if (rule.required && text.length < rule.min) errors.push(`${key} is required`);
+    else if (text && text.length < rule.min) errors.push(`${key} is too short`);
+    else value[key] = text || null;
+    if (rule.required) value[key] = text;
+  }
+
+  if (source.place_type !== undefined || source.place_type === undefined) {
+    const place = cleanFactText(source.place_type || 'entire_place', 40);
+    if (!['entire_place', 'private_room', 'shared_room'].includes(place)) {
+      errors.push('place_type must be entire_place, private_room or shared_room');
+    } else {
+      value.place_type = place;
+    }
+  }
+
+  for (const [key, rule] of Object.entries(FACT_INTS)) {
+    if (source[key] === undefined || source[key] === '') {
+      errors.push(`${key} is required`);
+      continue;
+    }
+    const number = Number(source[key]);
+    if (!Number.isFinite(number) || Math.round(number) !== number && String(source[key]).includes('.')) {
+      errors.push(`${key} must be a whole number`);
+      continue;
+    }
+    const whole = Math.round(number);
+    if (whole < rule.min || whole > rule.max) errors.push(`${key} is out of range`);
+    else value[key] = whole;
+  }
+
+  return { ok: errors.length === 0, errors, value };
+}
+
+async function updateListingFacts(db, listingId, body, actor = {}) {
+  const parsed = parseListingFacts(body);
+  if (!parsed.ok) throw moderationError('These facts are not valid.', 400, parsed.errors);
+  const value = parsed.value;
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query(
+      `SELECT id, moderation_stage, moderation_checklist
+       FROM st_listing WHERE id = $1::uuid FOR UPDATE`,
+      [listingId]
+    );
+    if (!current.rows.length) throw moderationError('That listing no longer exists.', 404);
+    const updated = await client.query(
+      `UPDATE st_listing
+       SET title = $2,
+           description = $3,
+           district = $4,
+           area = $5,
+           address = $6,
+           property_type = $7,
+           place_type = $8,
+           bedrooms = $9,
+           beds = $10,
+           bathrooms = $11,
+           max_guests = $12,
+           base_nightly_ugx = $13,
+           cleaning_fee_ugx = $14,
+           min_nights = $15,
+           host_name = $16,
+           host_phone = $17,
+           house_rules = $18
+       WHERE id = $1::uuid
+       RETURNING id, reference, title, description, district, area, address, property_type, place_type,
+                 bedrooms, beds, bathrooms, max_guests, base_nightly_ugx, cleaning_fee_ugx, min_nights,
+                 host_name, host_phone, house_rules, moderation_stage, do_not_message, extra_fields`,
+      [
+        listingId,
+        value.title,
+        value.description || '',
+        value.district,
+        value.area,
+        value.address,
+        value.property_type,
+        value.place_type,
+        value.bedrooms,
+        value.beds,
+        value.bathrooms,
+        value.max_guests,
+        value.base_nightly_ugx,
+        value.cleaning_fee_ugx,
+        value.min_nights,
+        value.host_name,
+        value.host_phone,
+        value.house_rules
+      ]
+    );
+    await recordEvent(client, listingId, {
+      actorId: actor.userId || 'staff',
+      actorRole: actor.role || 'moderator',
+      action: 'staff:edit_facts',
+      stageFrom: current.rows[0].moderation_stage,
+      stageTo: current.rows[0].moderation_stage,
+      checklist: normalizeChecklist(current.rows[0].moderation_checklist),
+      notes: 'Facts corrected on the short stays desk'
+    });
+    await client.query('COMMIT');
+    return updated.rows[0];
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 function moderationError(message, status = 400, details) {
   const error = new Error(message);
   error.status = status;
@@ -418,6 +586,9 @@ module.exports = {
   applyStaffDecision,
   buildAutomatedChecklist,
   canApprove,
+  listingDoNotMessage,
+  parseListingFacts,
+  updateListingFacts,
   loadModerationHistory,
   missingChecks,
   normalizeChecklist,
