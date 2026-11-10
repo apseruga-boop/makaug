@@ -820,6 +820,7 @@ router.get('/staff/queue', requireStaffAccess, async (req, res) => {
               l.listed_via, l.entered_by_staff_name, l.referral_code,
               l.source,
               l.extra_fields->>'found_online_label' AS found_online_label,
+              jsonb_build_object('price_on_application', COALESCE(l.extra_fields->>'price_on_application', '') = 'true') AS extra_fields,
               l.listed_at, l.expires_at, l.created_at,
               COALESCE(m.photo_count, 0)::int AS photo_count,
               cover.url AS cover_url,
