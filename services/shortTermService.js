@@ -478,9 +478,14 @@ function stayBlocksDirectContact(row = {}) {
 
 function publicSourceUrl(row = {}) {
   const extra = extraObject(row);
-  const raw = String(extra.source_url || row.source_url || '').trim();
-  if (!/^https:\/\//i.test(raw)) return null;
-  return raw.slice(0, 500);
+  const candidates = [extra.source_url, extra.source_post_url, extra.youtube_url, extra.tiktok_url, row.source_url];
+  for (const value of candidates) {
+    const raw = String(value || '').trim();
+    if (!/^https:\/\//i.test(raw)) continue;
+    if (/^https:\/\/media\.makaug\.com\//i.test(raw)) continue;
+    return raw.slice(0, 500);
+  }
+  return null;
 }
 
 // Digits and a tel link only. No display string is added for the page to print.

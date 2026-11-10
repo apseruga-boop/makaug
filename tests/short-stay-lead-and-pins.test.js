@@ -196,7 +196,7 @@ test('short-stay pin labels are USh 150k/night, POA, or never a bare currency', 
 
 test('cache-bust versions were bumped with this change', () => {
   assert.match(index, /short-term\.js\?v=20261110-st-lead-guide/);
-  assert.match(index, /short-term-options\.js\?v=20261110-st-lead-guide/);
+  assert.match(index, /short-term-options\.js\?v=20261110-see-original-post/);
   assert.match(index, /short-term-options\.css\?v=20261110-st-lead-guide/);
   assert.match(index, /short-term\.css\?v=20261110-short-stay-host-id/);
 });
