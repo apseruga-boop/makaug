@@ -92,6 +92,50 @@ BEGIN
     UPDATE listing_availability_checkins c SET agent_id = b.agent_id
       FROM migration_212_agent_phone_merge_backup b
      WHERE b.role = 'source' AND c.id = ANY(b.checkin_ids);
+    INSERT INTO listing_availability_checkins
+    SELECT restored.*
+      FROM migration_212_agent_phone_merge_backup b
+      CROSS JOIN LATERAL jsonb_populate_recordset(
+        NULL::listing_availability_checkins,
+        COALESCE(b.dropped_rows->'listing_availability_checkins', '[]'::jsonb)
+      ) AS restored
+     WHERE b.role = 'source';
+  END IF;
+  IF to_regclass('public.agent_weekly_reports') IS NOT NULL THEN
+    INSERT INTO agent_weekly_reports
+    SELECT restored.*
+      FROM migration_212_agent_phone_merge_backup b
+      CROSS JOIN LATERAL jsonb_populate_recordset(
+        NULL::agent_weekly_reports,
+        COALESCE(b.dropped_rows->'agent_weekly_reports', '[]'::jsonb)
+      ) AS restored
+     WHERE b.role = 'source';
+  END IF;
+  IF to_regclass('public.agent_identity_files') IS NOT NULL THEN
+    INSERT INTO agent_identity_files
+    SELECT restored.*
+      FROM migration_212_agent_phone_merge_backup b
+      CROSS JOIN LATERAL jsonb_populate_recordset(
+        NULL::agent_identity_files,
+        COALESCE(b.dropped_rows->'agent_identity_files', '[]'::jsonb)
+      ) AS restored
+     WHERE b.role = 'source';
+  END IF;
+  IF to_regclass('public.agent_viewing_defaults') IS NOT NULL THEN
+    UPDATE agent_viewing_defaults d
+       SET agent_id = b.agent_id
+      FROM migration_212_agent_phone_merge_backup b
+     WHERE b.role = 'source' AND b.viewing_defaults_moved AND d.agent_id = (
+       SELECT agent_id FROM migration_212_agent_phone_merge_backup WHERE role = 'target'
+     );
+    INSERT INTO agent_viewing_defaults
+    SELECT restored.*
+      FROM migration_212_agent_phone_merge_backup b
+      CROSS JOIN LATERAL jsonb_populate_recordset(
+        NULL::agent_viewing_defaults,
+        COALESCE(b.dropped_rows->'agent_viewing_defaults', '[]'::jsonb)
+      ) AS restored
+     WHERE b.role = 'source';
   END IF;
 END $$;
 

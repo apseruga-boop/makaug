@@ -26,6 +26,14 @@
 -- stays on the listing (property_moderation_events.property_id), so it
 -- follows the listing without a second pass. audit_logs is not scanned.
 --
+-- Unique keys that include agent_id, and so can collide when a row is
+-- re-pointed: listing_availability_checkins (agent_id, week_key),
+-- agent_weekly_reports (agent_id, week_start), agent_viewing_defaults
+-- (agent_id) and a live agent_identity_files front or back (agent_id, kind).
+-- The survivor's row is kept. The duplicate's colliding row is stored in
+-- dropped_rows and deleted. Every other re-pointed table has no unique
+-- key on agent_id, so those rows all move.
+--
 -- Rollback: scripts/rollback-212-canonical-agent-phone-and-quick-auctioneers-merge.sql
 
 CREATE OR REPLACE FUNCTION makaug_canonical_ug_phone(value text)
@@ -73,6 +81,10 @@ CREATE TABLE IF NOT EXISTS migration_212_agent_phone_merge_backup (
   prospect_ids UUID[] NOT NULL DEFAULT '{}',
   referral_ids UUID[] NOT NULL DEFAULT '{}',
   checkin_ids UUID[] NOT NULL DEFAULT '{}',
+  viewing_defaults_moved BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Full rows that were not moved because the survivor already holds that
+  -- unique key. Rollback inserts them back onto the old agent.
+  dropped_rows JSONB NOT NULL DEFAULT '{}'::jsonb,
   backed_up_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -130,21 +142,27 @@ BEGIN
   END IF;
 
   IF to_regclass('public.agent_identity_files') IS NOT NULL THEN
+    -- Unique (agent_id, kind) for a live front or back. Keep the survivor's
+    -- file. Back up the duplicate's colliding file and delete it.
+    WITH doomed AS (
+      DELETE FROM agent_identity_files s
+       WHERE s.agent_id = source_id
+         AND s.archived_at IS NULL
+         AND s.kind IN ('id_front', 'id_back')
+         AND EXISTS (
+           SELECT 1 FROM agent_identity_files t
+            WHERE t.agent_id = target_id AND t.archived_at IS NULL AND t.kind = s.kind
+         )
+      RETURNING to_jsonb(s) AS row
+    )
+    UPDATE migration_212_agent_phone_merge_backup
+       SET dropped_rows = dropped_rows || jsonb_build_object(
+             'agent_identity_files',
+             COALESCE((SELECT jsonb_agg(row) FROM doomed), '[]'::jsonb))
+     WHERE agent_number = 'MKA-AG-3822248';
     UPDATE migration_212_agent_phone_merge_backup
        SET identity_file_ids = COALESCE((SELECT array_agg(id) FROM agent_identity_files WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
-    -- One live front and one live back. The survivor already has the ID, so
-    -- a live file on the duplicate is archived before it moves.
-    UPDATE agent_identity_files f
-       SET archived_at = COALESCE(f.archived_at, NOW()),
-           archived_reason = COALESCE(f.archived_reason, 'Archived while merging duplicate agent MKA-AG-3822248')
-     WHERE f.agent_id = source_id
-       AND f.archived_at IS NULL
-       AND f.kind IN ('id_front', 'id_back')
-       AND EXISTS (
-         SELECT 1 FROM agent_identity_files t
-          WHERE t.agent_id = target_id AND t.kind = f.kind AND t.archived_at IS NULL
-       );
     UPDATE agent_identity_files SET agent_id = target_id WHERE agent_id = source_id;
   END IF;
 
@@ -163,12 +181,24 @@ BEGIN
   END IF;
 
   IF to_regclass('public.agent_weekly_reports') IS NOT NULL THEN
+    -- Unique (agent_id, week_start). Keep the survivor's week.
+    WITH doomed AS (
+      DELETE FROM agent_weekly_reports s
+       WHERE s.agent_id = source_id
+         AND EXISTS (
+           SELECT 1 FROM agent_weekly_reports t
+            WHERE t.agent_id = target_id AND t.week_start = s.week_start
+         )
+      RETURNING to_jsonb(s) AS row
+    )
+    UPDATE migration_212_agent_phone_merge_backup
+       SET dropped_rows = dropped_rows || jsonb_build_object(
+             'agent_weekly_reports',
+             COALESCE((SELECT jsonb_agg(row) FROM doomed), '[]'::jsonb))
+     WHERE agent_number = 'MKA-AG-3822248';
     UPDATE migration_212_agent_phone_merge_backup
        SET report_ids = COALESCE((SELECT array_agg(id) FROM agent_weekly_reports WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
-    DELETE FROM agent_weekly_reports s
-     USING agent_weekly_reports t
-     WHERE s.agent_id = source_id AND t.agent_id = target_id AND s.week_start = t.week_start;
     UPDATE agent_weekly_reports SET agent_id = target_id WHERE agent_id = source_id;
   END IF;
 
@@ -201,6 +231,22 @@ BEGIN
   END IF;
 
   IF to_regclass('public.listing_availability_checkins') IS NOT NULL THEN
+    -- Unique (agent_id, week_key). This is what stopped startup: both
+    -- profiles already had a row for the same week. Keep the survivor's.
+    WITH doomed AS (
+      DELETE FROM listing_availability_checkins s
+       WHERE s.agent_id = source_id
+         AND EXISTS (
+           SELECT 1 FROM listing_availability_checkins t
+            WHERE t.agent_id = target_id AND t.week_key = s.week_key
+         )
+      RETURNING to_jsonb(s) AS row
+    )
+    UPDATE migration_212_agent_phone_merge_backup
+       SET dropped_rows = dropped_rows || jsonb_build_object(
+             'listing_availability_checkins',
+             COALESCE((SELECT jsonb_agg(row) FROM doomed), '[]'::jsonb))
+     WHERE agent_number = 'MKA-AG-3822248';
     UPDATE migration_212_agent_phone_merge_backup
        SET checkin_ids = COALESCE((SELECT array_agg(id) FROM listing_availability_checkins WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
@@ -212,10 +258,25 @@ BEGIN
   END IF;
 
   IF to_regclass('public.agent_viewing_defaults') IS NOT NULL THEN
-    UPDATE agent_viewing_defaults SET agent_id = target_id
-     WHERE agent_id = source_id
-       AND NOT EXISTS (SELECT 1 FROM agent_viewing_defaults WHERE agent_id = target_id);
-    DELETE FROM agent_viewing_defaults WHERE agent_id = source_id;
+    -- Primary key is agent_id, so only one row can sit on the survivor.
+    WITH doomed AS (
+      DELETE FROM agent_viewing_defaults s
+       WHERE s.agent_id = source_id
+         AND EXISTS (SELECT 1 FROM agent_viewing_defaults t WHERE t.agent_id = target_id)
+      RETURNING to_jsonb(s) AS row
+    )
+    UPDATE migration_212_agent_phone_merge_backup
+       SET dropped_rows = dropped_rows || jsonb_build_object(
+             'agent_viewing_defaults',
+             COALESCE((SELECT jsonb_agg(row) FROM doomed), '[]'::jsonb))
+     WHERE agent_number = 'MKA-AG-3822248';
+    -- The delete above is its own statement, so this sees whether a source
+    -- row is still there (the survivor had none, so it can be moved).
+    UPDATE migration_212_agent_phone_merge_backup
+       SET viewing_defaults_moved = EXISTS (
+             SELECT 1 FROM agent_viewing_defaults WHERE agent_id = source_id)
+     WHERE agent_number = 'MKA-AG-3822248';
+    UPDATE agent_viewing_defaults SET agent_id = target_id WHERE agent_id = source_id;
   END IF;
 
   -- Keep the longer company, bio and identity. Do not blank a field the
