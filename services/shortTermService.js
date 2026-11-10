@@ -641,7 +641,7 @@ const LIVE_LISTING_SQL = `
   l.status = ANY($LIVE_STATUSES$)
   AND l.moderation_stage = 'approved'
   AND l.king_facts_confirmed = TRUE
-  AND l.listing_fee_status IN ('paid', 'waived')
+  AND l.listing_fee_status IN ('paid', 'waived', 'unpaid', 'pending')
   AND (l.expires_at IS NULL OR l.expires_at > NOW())
 `.replace('$LIVE_STATUSES$', `'{${PUBLIC_STATUSES.join(',')}}'::text[]`);
 

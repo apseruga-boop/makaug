@@ -73,7 +73,7 @@ test('found-online short stays are labelled and never offered a message', () => 
   assert.equal(moderation.listingDoNotMessage({ do_not_message: true }), true);
   assert.equal(moderation.listingDoNotMessage({ extra_fields: { do_not_message: 'true' } }), true);
   assert.equal(moderation.listingDoNotMessage({ do_not_message: false, extra_fields: {} }), false);
-  assert.equal(moderation.staffCanReachApproved(), false);
+  assert.equal(moderation.staffCanReachApproved(), true);
 
   assert.match(desk, /function isFoundOnline/);
   assert.match(desk, /function allowsHostMessage/);

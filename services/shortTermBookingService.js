@@ -1613,7 +1613,7 @@ async function sweepStayReplyLoop(db, now = new Date(), deps = {}) {
         WHERE l.status = 'approved'
           AND l.moderation_stage = 'approved'
           AND l.king_facts_confirmed = TRUE
-          AND l.listing_fee_status IN ('paid', 'waived')
+          AND l.listing_fee_status IN ('paid', 'waived', 'unpaid', 'pending')
           AND NOT EXISTS (
             SELECT 1 FROM st_availability_checkins c
              WHERE c.listing_id = l.id AND c.week_key = $1

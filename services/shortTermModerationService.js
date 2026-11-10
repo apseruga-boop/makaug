@@ -64,7 +64,10 @@ const STAGES = Object.freeze({
 
 // What a staff moderator is allowed to do. Note what is absent: there is no
 // path from any staff action to 'approved'.
+// Arthur, 10 Nov 2026: a moderator's Approve puts a short stay live straight
+// away, on the same rules as main listings. The King keeps Reject and Suspend.
 const STAFF_ACTIONS = Object.freeze({
+  approve: { to: 'approved', from: ['submitted', 'staff_review', 'changes_requested', 'king_review'] },
   claim: { to: 'staff_review', from: ['submitted', 'changes_requested', 'rejected'] },
   pass_to_king: { to: 'king_review', from: ['submitted', 'staff_review', 'changes_requested'] },
   request_changes: { to: 'changes_requested', from: ['submitted', 'staff_review', 'king_review'] },
@@ -396,10 +399,24 @@ async function applyStaffDecision(db, listingId, { action, checklist, reason, no
     const listing = await loadListingForReview(client, listingId);
     const rule = assertTransition(STAFF_ACTIONS, action, listing.moderation_stage, 'A moderator');
 
-    // Belt and braces. If somebody ever edits STAFF_ACTIONS badly, this stops
-    // the edit reaching production rather than trusting the table.
-    if (rule.to === 'approved' || rule.to === 'king_approved') {
-      throw moderationError('A moderator cannot approve a listing. It has to go to King review.', 403);
+    if (rule.to === 'king_approved') {
+      throw moderationError('Unknown stage.', 400);
+    }
+    if (action === 'approve') {
+      if (!String(listing.district || '').trim() || !String(listing.area || '').trim()) {
+        throw moderationError(
+          'A specific location is required before this short stay can go live.',
+          400,
+          ['Save a district and an area. A missing price can stay as POA.']
+        );
+      }
+      if (Number(listing.photo_count || 0) === 0) {
+        throw moderationError(
+          'This listing has no photos, so it cannot go live.',
+          400,
+          ['Reject it or ask the host for photos.']
+        );
+      }
     }
 
     const merged = normalizeChecklist({
@@ -426,12 +443,20 @@ async function applyStaffDecision(db, listingId, { action, checklist, reason, no
            moderation_checklist = $3::jsonb,
            moderation_notes = COALESCE($4, moderation_notes),
            rejection_reason = CASE WHEN $2 IN ('rejected','changes_requested') THEN $5 WHEN $2 = 'staff_review' AND moderation_stage = 'rejected' THEN NULL ELSE rejection_reason END,
-           status = CASE WHEN $2 = 'rejected' THEN 'rejected' ELSE 'pending' END,
+           status = CASE WHEN $2 = 'rejected' THEN 'rejected' WHEN $2 = 'approved' THEN 'approved' ELSE 'pending' END,
+           king_facts_confirmed = ($2 = 'approved'),
+           listed_at = CASE WHEN $2 = 'approved' THEN COALESCE(listed_at, NOW()) ELSE listed_at END,
+           expires_at = CASE
+             WHEN $2 = 'approved' AND listing_fee_status = 'waived' THEN NULL
+             WHEN $2 = 'approved'
+               THEN COALESCE(listed_at, NOW()) + (listing_term_months || ' months')::interval
+             ELSE expires_at
+           END,
            staff_reviewed_by = $6,
            staff_reviewed_at = NOW(),
            reviewed_at = NOW()
        WHERE id = $1::uuid
-       RETURNING id, reference, status, moderation_stage, king_facts_confirmed`,
+       RETURNING id, reference, slug, status, moderation_stage, king_facts_confirmed, listed_at, expires_at`,
       [listingId, rule.to, JSON.stringify(merged), notes || null, reason || null, actor?.userId || 'staff']
     );
 

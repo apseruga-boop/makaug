@@ -826,19 +826,13 @@ test('photo upload fails closed rather than storing an untouched photo', () => {
 // back into one step.
 // ---------------------------------------------------------------------------
 
-test('a staff moderator has no route to an approved listing', () => {
-  assert.strictEqual(moderation.staffCanReachApproved(), false,
-    'STAFF_ACTIONS must not contain any transition to approved');
-
-  const staffTargets = Object.values(moderation.STAFF_ACTIONS).map((a) => a.to);
-  assert.ok(!staffTargets.includes('approved'), `staff can reach: ${staffTargets.join(', ')}`);
-  assert.ok(staffTargets.includes('king_review'), 'staff must be able to hand a listing to the King');
-
-  // And a second guard in the code, in case the table is ever edited badly.
-  assert.ok(
-    /if \(rule\.to === 'approved'[\s\S]{0,120}throw moderationError\([\s\S]{0,120}cannot approve/.test(moderationSource),
-    'applyStaffDecision must refuse an approving transition even if the table allows one'
-  );
+test('a moderator Approve puts a short stay live, with location and photo checks (Arthur, 10 Nov 2026)', () => {
+  assert.strictEqual(moderation.staffCanReachApproved(), true);
+  assert.deepStrictEqual(moderation.STAFF_ACTIONS.approve.from,
+    ['submitted', 'staff_review', 'changes_requested', 'king_review']);
+  assert.ok(/action === 'approve'[\s\S]{0,400}specific location is required/.test(moderationSource));
+  assert.ok(/action === 'approve'[\s\S]{0,900}no photos/.test(moderationSource));
+  assert.ok(moderationSource.includes("WHEN $2 = 'approved' THEN 'approved' ELSE 'pending'"));
 });
 
 test('only King review can approve', () => {
@@ -971,14 +965,16 @@ test('the two review endpoints are behind two different gates', () => {
     'a moderator must not be able to call the King endpoint');
 });
 
-test('exactly one place in the codebase writes king_facts_confirmed', () => {
+test('king_facts_confirmed is only written from the approved stage', () => {
   const serviceSource = read('services', 'shortTermService.js');
 
   // A write is the column appearing inside an UPDATE ... SET. The gate in
   // shortTermService.js mentions the column too, but as a comparison in a
   // WHERE clause, which is the opposite of a write.
   const writes = (moderationSource.match(/king_facts_confirmed\s*=\s*\(/g) || []).length;
-  assert.strictEqual(writes, 1, `expected one write, found ${writes}`);
+  // Two writes since 10 Nov 2026: the King path and a moderator Approve, both
+  // derived from the stage so neither can set it on its own.
+  assert.strictEqual(writes, 2, `expected two writes, found ${writes}`);
   assert.ok(moderationSource.includes("king_facts_confirmed = ($2 = 'approved')"),
     'the confirmation must be derived from the stage, so it cannot be set on its own');
 
@@ -994,8 +990,8 @@ test('exactly one place in the codebase writes king_facts_confirmed', () => {
     moderationSource.indexOf('async function applyStaffDecision'),
     moderationSource.indexOf('async function applyKingDecision')
   );
-  assert.ok(!/king_facts_confirmed\s*=\s*\(/.test(staffBlock),
-    'the staff path must not write the King confirmation');
+  assert.ok(staffBlock.includes("king_facts_confirmed = ($2 = 'approved')"),
+    'a moderator Approve sets the confirmation only from the approved stage');
 });
 
 test('the King cannot publish a listing with no photos', () => {
