@@ -272,12 +272,12 @@
       ? '<button type="button" class="st-btn" data-st-staff="request_changes" data-st-id="' + esc(id) + '">Ask host for changes</button>'
       : '';
     return '<div class="st-desk-actions"><div class="st-desk-buttons">'
-      + '<button type="button" class="st-btn st-btn-primary" data-st-staff="pass_to_king" data-st-id="' + esc(id) + '">Approve</button>'
+      + '<button type="button" class="st-btn st-btn-primary" data-st-staff="approve" data-st-id="' + esc(id) + '">Approve</button>'
       + '<button type="button" class="st-btn" data-st-staff="reject" data-st-id="' + esc(id) + '">Reject</button>'
       + '<button type="button" class="st-btn" data-st-staff="claim" data-st-id="' + esc(id) + '">' + (listing && listing.moderation_stage === 'rejected' ? 'Reopen' : 'Claim') + '</button>'
       + askHost
       + '</div>'
-      + '<p class="st-desk-note">Approve hands this stay to the King. This desk cannot publish it.'
+      + '<p class="st-desk-note">Approve puts this stay live now. A non-agent host gets the UGX 20,000 monthly pay link.'
       + (allowsHostMessage(listing) ? '' : ' Found online: nothing here messages the host.')
       + '</p></div>';
   }

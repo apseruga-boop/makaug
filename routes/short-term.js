@@ -886,7 +886,7 @@ router.post('/staff/listings/:id/decision', requireStaffAccess, async (req, res)
     if (!Object.keys(STAFF_ACTIONS).includes(action)) {
       return res.status(400).json({
         ok: false,
-        error: `A moderator can only: ${Object.keys(STAFF_ACTIONS).join(', ')}. Publishing is the King's call.`
+        error: `A moderator can only: ${Object.keys(STAFF_ACTIONS).join(', ')}.`
       });
     }
     if (action === 'request_changes') {
@@ -908,13 +908,26 @@ router.post('/staff/listings/:id/decision', requireStaffAccess, async (req, res)
       notes: String(req.body?.notes || '').trim().slice(0, 2000) || null,
       actor: { userId: req.staffAuth?.userId, role: req.staffAuth?.role }
     });
+    let payLink = null;
+    if (action === 'approve' && listing?.id) {
+      const hostGate = await db.query(
+        'SELECT do_not_message, extra_fields FROM st_listing WHERE id = $1::uuid',
+        [listing.id]
+      );
+      if (!listingDoNotMessage(hostGate.rows[0])) {
+        payLink = await sendShortTermPayLink(listing.id, 'staff_approval').catch((error) => ({ error: error.message }));
+      }
+    }
     return res.json({
       ok: true,
       marker: SHORT_TERM_MARKER,
       listing,
-      note: action === 'pass_to_king'
-        ? 'Sent for King review. It stays off the public site until the King approves it.'
-        : undefined
+      pay_link: payLink,
+      note: action === 'approve'
+        ? 'Approved. This short stay is live now.'
+        : action === 'pass_to_king'
+          ? 'Sent for King review. It stays off the public site until the King approves it.'
+          : undefined
     });
   } catch (error) {
     return fail(res, error, 'Decision could not be saved');

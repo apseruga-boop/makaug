@@ -1099,7 +1099,7 @@ router.get('/:id/booking-options', async (req, res, next) => {
           WHERE l.status = 'approved'
             AND l.moderation_stage = 'approved'
             AND l.king_facts_confirmed = TRUE
-            AND l.listing_fee_status IN ('paid', 'waived')
+            AND l.listing_fee_status IN ('paid', 'waived', 'unpaid', 'pending')
             AND (
               (a.user_id IS NOT NULL AND l.host_user_id::text = a.user_id::text)
               OR (

@@ -50,7 +50,7 @@ test('protected startup retains ordered admin code and its management modules wi
   f.finishApp();
   assert.deepEqual(f.scripts().map(node => node.src), [
     '/assets/makaug-admin.js?v=fixture-release', '/assets/makaug-app.js?v=fixture-release',
-    '/assets/off-plan.js?v=20261107-off-plan-v20', '/assets/short-term-admin.js?v=20261110-short-stays-reopen'
+    '/assets/off-plan.js?v=20261107-off-plan-v20', '/assets/short-term-admin.js?v=20261110-short-stays-staff-live'
   ]);
   assert.equal(f.scripts()[0].async, false);
   assert.equal(f.scripts()[1].async, false);

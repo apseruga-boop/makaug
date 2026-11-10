@@ -216,6 +216,6 @@ test('the bridge inbound path owns 1, 2 and 3, and sms is not part of the loop',
   assert.match(stayRoute, /HOST_PHOTO_TTL_MS/);
   assert.match(stayRoute, /reference = 'ST-000001'/);
   const live = read('services/shortTermService.js');
-  assert.match(live, /listing_fee_status IN \('paid', 'waived'\)/);
+  assert.match(live, /listing_fee_status IN \('paid', 'waived', 'unpaid', 'pending'\)/);
   assert.match(live, /blocked\.is_available = FALSE/);
 });
