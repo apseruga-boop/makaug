@@ -17873,6 +17873,16 @@ function adminAgentManagerIdNeededBadge(agent = {}) {
   return agent.id_still_needed ? adminAgentManagerChip("Approved – ID still needed", "bg-red-600 text-white") : "";
 }
 
+function adminAgentManagerStaffAddedChip(agent = {}) {
+  if (agent.agent_application_channel !== "staff_added") return "";
+  const name = String(agent.registered_by_name || "").trim();
+  return adminAgentManagerChip(name ? `Added by staff · ${name}` : "Added by staff", "bg-purple-100 text-purple-800");
+}
+
+function adminAgentManagerVerifiedChip(agent = {}) {
+  return agent.verified_by_makaug ? adminAgentManagerChip("Verified", "bg-sky-100 text-sky-900") : "";
+}
+
 function adminAgentManagerCanApprove(agent = {}) {
   return String(agent.status || "") === "pending" && !agent.removed_at;
 }
@@ -18145,6 +18155,7 @@ function adminAgentManagerRenderList() {
               <td class="px-3 py-2 min-w-[180px]">
                 <p class="font-bold text-gray-900" data-pii>${adminEscape(a.full_name || "Unnamed")}</p>
                 <p class="text-xs text-gray-500">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · ${adminEscape(a.makaug_agent_number)}` : ""}</p>
+                <div class="flex flex-wrap gap-1 mt-1">${adminAgentManagerStaffAddedChip(a)}${adminAgentManagerVerifiedChip(a)}</div>
               </td>
               <td class="px-3 py-2 text-xs font-mono whitespace-nowrap" data-pii="phone">${adminEscape(a.phone || a.whatsapp || "—")}</td>
               <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerStatusChip(a)}${adminAgentManagerPublicVisibility(a)}${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerApproveButton(a)}</div></td>
@@ -18176,7 +18187,7 @@ function adminAgentManagerRenderList() {
             <div><p class="text-gray-500">Next payment</p><p class="font-bold text-gray-900">${a.fee_exempt ? "None (free)" : adminAgentMoneyUgx(a.money?.next_amount_ugx)}</p>${a.fee_exempt ? "" : `<p class="text-gray-500">${adminEscape(adminAgentManagerDay(a.tracker?.next_due))}</p>`}</div>
             <div><p class="text-gray-500">Owed</p><p class="font-black ${Number(a.money?.owed_ugx || 0) ? "text-red-700" : "text-gray-400"}">${Number(a.money?.owed_ugx || 0) ? adminAgentMoneyUgx(a.money.owed_ugx) : "—"}</p></div>
           </div>
-          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerValueBadge(a, topPayers)} ${adminAgentManagerPublicVisibility(a)} ${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerIdDocChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
+          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerStaffAddedChip(a)} ${adminAgentManagerVerifiedChip(a)} ${adminAgentManagerValueBadge(a, topPayers)} ${adminAgentManagerPublicVisibility(a)} ${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerIdDocChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
           <p class="text-[11px] text-gray-500 mt-2">${Number(a.live_listings || 0)} approved of ${Number(a.total_listings || 0)} listings · next payment ${a.fee_exempt ? "none (free)" : adminEscape(adminAgentManagerDay(a.tracker?.next_due))} · joined ${staffPeopleDate(a.created_at)}</p>
           <div class="mt-2">${adminAgentManagerDaysLeft(a.tracker || {}, a)}</div>
         </button>${adminAgentManagerCanApprove(a) ? `<div class="-mt-1 flex justify-end">${adminAgentManagerApproveButton(a)}</div>` : ""}`).join("")}
@@ -18541,6 +18552,7 @@ function adminAgentManagerDetailHtml(d = {}) {
   const historyLabel = (h) => ({
     admin_agent_details_updated: "Details changed",
     admin_agent_added_manually: "Added by hand (staff)",
+    agent_added: "Added by staff (no message sent)",
     admin_agent_removed: "Agent removed",
     admin_agent_restored: "Agent restored",
     admin_agent_listing_take_down: "Listing taken down",
@@ -18577,7 +18589,7 @@ function adminAgentManagerDetailHtml(d = {}) {
       <div>
         <h4 class="text-xl font-black text-gray-900" data-pii>${adminEscape(a.full_name || "Unnamed")}</h4>
         <p class="text-sm text-gray-600">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · Agent No ${adminEscape(a.makaug_agent_number)}` : " · no agent number yet"}</p>
-        <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerIdChip(a)}${adminAgentManagerIdDocChip(a)}${a.agent_application_channel === "staff_added" ? adminAgentManagerChip("Added by staff", "bg-purple-100 text-purple-800") : ""}</div>
+        <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerIdChip(a)}${adminAgentManagerIdDocChip(a)}${adminAgentManagerStaffAddedChip(a)}${adminAgentManagerVerifiedChip(a)}</div>
       </div>
       ${a.id_still_needed ? `<div class="rounded-xl border-2 border-red-600 bg-red-50 p-3 text-sm text-red-900" data-agent-id-needed-banner>
         <p class="font-black text-red-800">Approved – ID still needed</p>
@@ -18601,7 +18613,7 @@ function adminAgentManagerDetailHtml(d = {}) {
           ${field("company_name", "Company name (shown on the site)", a.company_name, { wide: true })}
           ${field("greeting_name", "Greeting name (how WhatsApp says hello)", a.greeting_name)}
           ${field("experience_years", "Years of experience", a.experience_years, { type: "number" })}
-          ${field("nin", "ID number (NIN)", a.nin, { missing: ninMissing, placeholder: "e.g. CM90012345ABCD" })}
+          ${field("nin", "ID number (NIN) — add or replace", a.nin, { missing: ninMissing, placeholder: "e.g. CM90012345ABCD" })}
           ${field("id_expiry_date", "ID expiry", dayValue(a.id_expiry_date), { type: "date" })}
           ${field("phone", "Phone", a.phone)}
           ${field("whatsapp", "WhatsApp", a.whatsapp)}
@@ -19067,6 +19079,20 @@ async function adminAgentManagerRestore(agentId) {
   }
 }
 
+function adminAgentManagerReadAddForm(form) {
+  const data = {};
+  form?.querySelectorAll("[name]").forEach((el) => {
+    if (el.type === "radio") {
+      if (el.checked) data[el.name] = el.value;
+    } else if (el.type === "checkbox") {
+      data[el.name] = el.checked ? "true" : "false";
+    } else {
+      data[el.name] = el.value;
+    }
+  });
+  return data;
+}
+
 function adminAgentManagerOpenAdd() {
   const overlay = adminAgentManagerOverlay();
   const body = overlay?.querySelector("[data-agent-manager-detail-body]");
@@ -19076,9 +19102,9 @@ function adminAgentManagerOpenAdd() {
   const f = (name, label, type = "text", extra = "") => `<label class="text-xs font-semibold text-gray-700">${label}<input name="${name}" type="${type}" class="${input}" ${extra}></label>`;
   body.innerHTML = `
     <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3"><button type="button" class="text-sm font-bold text-gray-700" onclick="adminAgentManagerClose()">← Back to agents</button></div>
-    <form class="p-5 space-y-3" onsubmit="adminAgentManagerSubmitAdd(event)" data-agent-add-form>
+    <form class="p-5 space-y-3" data-agent-add-form>
       <h4 class="text-xl font-black text-gray-900">Add agent</h4>
-      <p class="text-xs text-gray-500">For an agent you are adding by hand. They are marked “Added by staff” with your name, and nothing is sent to them.</p>
+      <p class="text-xs text-gray-500">For an agent you are adding by hand. They are marked “Added by staff” with your name. This form does not send them a WhatsApp message.</p>
       <div class="grid grid-cols-2 gap-2">
         ${f("full_name", "Full name *", "text", "required")}
         ${f("phone", "Phone *", "tel", "required")}
@@ -19101,23 +19127,60 @@ function adminAgentManagerOpenAdd() {
           ${f("fee_exempt_reason", "Reason (if free)")}
         </div>
       </fieldset>
-      <div class="flex justify-end"><button type="submit" class="rounded-lg bg-green-700 text-white px-4 py-2 text-sm font-bold">Add agent</button></div>
+      <div class="flex justify-end" data-agent-add-actions><button type="submit" data-agent-add-submit class="rounded-lg bg-green-700 text-white px-4 py-2 text-sm font-bold">Add agent</button></div>
     </form>`;
+  const form = body.querySelector("[data-agent-add-form]");
+  form?.addEventListener("submit", adminAgentManagerSubmitAdd);
   overlay.classList.remove("hidden");
 }
 
 async function adminAgentManagerSubmitAdd(event) {
   event?.preventDefault?.();
-  const form = event?.currentTarget;
-  if (!form) return;
-  const data = Object.fromEntries(new FormData(form).entries());
+  const form = (event?.currentTarget?.matches?.("[data-agent-add-form]") && event.currentTarget)
+    || event?.target?.closest?.("[data-agent-add-form]")
+    || document.querySelector("[data-agent-add-form]");
+  if (!form) {
+    toast("The form did not send. Open Add agent and try again.");
+    return;
+  }
+  const data = adminAgentManagerReadAddForm(form);
+  const button = form.querySelector("[data-agent-add-submit]");
+  if (button?.disabled) return;
+  if (button) { button.disabled = true; button.textContent = "Adding…"; }
+  form.querySelector("[data-agent-add-duplicate]")?.remove();
   try {
     const res = await apiRequest("/api/admin/agent-manager/agents", { method: "POST", headers: adminAuthHeaders(), body: data });
     toast(`Added ${res?.data?.full_name || "agent"}.`);
+    Object.assign(ADMIN_AGENT_MANAGER_STATE, { search: "", show: "active", only: "", missingOnly: false });
+    const filters = adminAgentManagerRoot()?.querySelector("form");
+    if (filters && filters !== form) {
+      const set = (name, value) => { const el = filters.querySelector(`[name="${name}"]`); if (el && "value" in el) el.value = value; };
+      set("search", "");
+      set("show", "active");
+      set("only", "");
+      const missing = filters.querySelector('[name="missing"]');
+      if (missing) missing.checked = false;
+    }
     await adminAgentManagerLoad({ force: true });
     if (res?.data?.id) await adminAgentManagerOpen(res.data.id);
   } catch (error) {
+    const existing = error?.response?.existing_agent_id;
+    if (existing) {
+      const name = error.response.existing_agent_name || "that agent";
+      const note = document.createElement("div");
+      note.setAttribute("data-agent-add-duplicate", "");
+      note.className = "rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950";
+      note.append(document.createTextNode(`${error.message || "This person is already an agent."} `));
+      const link = document.createElement("button");
+      link.type = "button";
+      link.className = "underline font-bold";
+      link.textContent = `Open ${name}`;
+      link.addEventListener("click", () => adminAgentManagerOpen(existing));
+      note.append(link);
+      form.querySelector("[data-agent-add-actions]")?.before(note);
+    }
     toast(`Not added: ${error?.message || "error"}`);
+    if (button) { button.disabled = false; button.textContent = "Add agent"; }
   }
 }
 

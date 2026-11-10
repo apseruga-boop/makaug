@@ -49,6 +49,19 @@ function maskNin(value) {
   return text.length <= 4 ? '••••' : `••••${text.slice(-4)}`;
 }
 
+// Public logs and errors show +256•••123, never the full number.
+function maskPhone(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length < 6) return '';
+  const last3 = digits.slice(-3);
+  const cc = digits.startsWith('256') ? '256' : (digits.startsWith('0') && digits.length >= 10 ? '256' : digits.slice(0, 3));
+  return `+${cc}•••${last3}`;
+}
+
+function redactPhones(text) {
+  return String(text || '').replace(/\+?\d[\d\s().-]{7,}\d/g, (match) => maskPhone(match) || '+•••');
+}
+
 function paymentState(agent = {}, today = new Date()) {
   if (agent.fee_exempt) return { key: 'free', label: 'Free (staff override)' };
   if (agent.paid_until) {
@@ -234,10 +247,22 @@ const LIVE_ID_FRONT_SQL = `EXISTS (SELECT 1 FROM agent_identity_files f
 const HAS_ID_DOCUMENT_SQL = `(COALESCE(a.identity_document_url, '') <> '' OR ${LIVE_ID_FRONT_SQL})`;
 
 const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
+const { verifiedByMakaugSql } = require('../services/publicAgentEligibilityService');
+const { emitAgentAdded } = require('../services/agentAddedHook');
 
 function registerAgentManagerRoutes(router, deps) {
-  const { db, writeAudit, adminActorId, cleanText, isValidEmail, normalizePhone, actorLabel, onListingsChanged } = deps;
+  const { db, writeAudit, adminActorId, cleanText, isValidEmail, normalizePhone, actorLabel, onListingsChanged, loadRequestUser } = deps;
   const actorOf = async (req) => {
+    // Bind the signed-in person even when the request was authorised by the API key.
+    if (!req.adminAuth?.userId && typeof loadRequestUser === 'function') {
+      try {
+        const user = await loadRequestUser(req);
+        if (user?.id && ['admin', 'super_admin'].includes(String(user.role || '').toLowerCase())) {
+          req.adminAuth = { ...(req.adminAuth || {}), type: req.adminAuth?.type || 'bearer', userId: user.id, role: user.role };
+          req.userAuth = req.userAuth || user;
+        }
+      } catch (_) { /* key-only access still stands */ }
+    }
     const id = adminActorId(req);
     let label = '';
     if (req.adminAuth?.userId) {
@@ -249,6 +274,93 @@ function registerAgentManagerRoutes(router, deps) {
   const badId = (res, what = 'agent') => res.status(400).json({ ok: false, error: `Invalid ${what} id` });
   registerAgentIdFileRoutes(router, { db, writeAudit, actorOf, UUID_RE });
   registerPublicListerRoutes(router, { db, cleanText, adminActorId, onListingsChanged });
+
+  function coerceBody(body) {
+    if (typeof body === 'string') {
+      const text = body.trim();
+      if (!text) return {};
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      } catch (_) { /* not JSON */ }
+      return {};
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return {};
+    return body;
+  }
+
+  function phoneKey(value) {
+    return String(value || '').replace(/\D/g, '').slice(-9);
+  }
+
+  function ninKey(value) {
+    return cleanText(value).replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  }
+
+  function duplicateMessage(row) {
+    const name = row.full_name || 'Another agent';
+    if (row.duplicate_field === 'phone') return `${name} already uses this phone number. Open that agent instead.`;
+    if (row.duplicate_field === 'nin') return `${name} already has this ID number. Open that agent instead.`;
+    if (row.duplicate_field === 'email') return `${name} already uses this email. Open that agent instead.`;
+    if (row.duplicate_field === 'licence') return `${name} already has this licence number. Open that agent instead.`;
+    return `${name} already matches these details. Open that agent instead.`;
+  }
+
+  function duplicateResponse(res, row) {
+    return res.status(409).json({
+      ok: false,
+      error: duplicateMessage(row),
+      existing_agent_id: row.id,
+      existing_agent_name: row.full_name || '',
+      duplicate_field: row.duplicate_field
+    });
+  }
+
+  // Phone, NIN, email or licence already on file. The response names the agent
+  // and their id — never the phone number.
+  async function findDuplicate({ phone, nin, email, licence, exceptId } = {}) {
+    const key = phoneKey(phone);
+    const ninNorm = ninKey(nin);
+    const emailNorm = cleanText(email).toLowerCase();
+    const licenceNorm = cleanText(licence);
+    if (key.length < 9 && !ninNorm && !emailNorm && !licenceNorm) return null;
+    const except = UUID_RE.test(String(exceptId || '')) ? exceptId : null;
+    const row = (await db.query(
+      `SELECT id, full_name,
+              CASE
+                WHEN length($1) >= 9 AND (
+                  RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1
+                  OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1
+                ) THEN 'phone'
+                WHEN $2 <> '' AND upper(regexp_replace(COALESCE(nin, ''), '[^A-Za-z0-9]', '', 'g')) = $2 THEN 'nin'
+                WHEN $3 <> '' AND lower(COALESCE(email, '')) = $3 THEN 'email'
+                WHEN $4 <> '' AND lower(COALESCE(licence_number, '')) = lower($4) THEN 'licence'
+                ELSE 'value'
+              END AS duplicate_field
+         FROM agents
+        WHERE ($5::uuid IS NULL OR id <> $5::uuid)
+          AND (
+            (length($1) >= 9 AND (
+              RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1
+              OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1
+            ))
+            OR ($2 <> '' AND upper(regexp_replace(COALESCE(nin, ''), '[^A-Za-z0-9]', '', 'g')) = $2)
+            OR ($3 <> '' AND lower(COALESCE(email, '')) = $3)
+            OR ($4 <> '' AND lower(COALESCE(licence_number, '')) = lower($4))
+          )
+        ORDER BY CASE
+          WHEN length($1) >= 9 AND (
+            RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1
+            OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1
+          ) THEN 0
+          WHEN $2 <> '' AND upper(regexp_replace(COALESCE(nin, ''), '[^A-Za-z0-9]', '', 'g')) = $2 THEN 1
+          ELSE 2
+        END, created_at
+        LIMIT 1`,
+      [key, ninNorm, emailNorm, licenceNorm, except]
+    )).rows[0];
+    return row || null;
+  }
 
   // List: who is who, at a glance — what is missing and how many listings.
   router.get('/agent-manager/agents', async (req, res, next) => {
@@ -279,6 +391,7 @@ function registerAgentManagerRoutes(router, deps) {
       const result = await db.query(
         `SELECT a.id, a.full_name, a.company_name, a.phone, a.whatsapp, a.email, a.status, a.makaug_agent_number,
                 a.created_at, a.updated_at, a.removed_at, a.removed_reason, a.user_id, a.agent_application_channel,
+                a.registered_by_name, ${verifiedByMakaugSql('a')} AS verified_by_makaug,
                 (COALESCE(btrim(a.nin), '') <> '') AS has_nin,
                 ${HAS_ID_DOCUMENT_SQL} AS has_id_document,
                 (COALESCE(a.identity_document_url, '') <> '') AS has_signup_id_document,
@@ -396,7 +509,8 @@ function registerAgentManagerRoutes(router, deps) {
                      WHEN COALESCE(a.identity_document_url, '') <> '' THEN 'link' END AS signup_id_storage,
                 ${LIVE_ID_FRONT_SQL} AS has_id_front_file,
                 a.profile_photo_url, (COALESCE(a.profile_photo_url, '') <> '') AS has_profile_photo,
-                a.verification_reason, a.privacy_consent_accepted, a.privacy_consent_at, a.approved_at,
+                a.verification_reason, ${verifiedByMakaugSql('a')} AS verified_by_makaug,
+                a.privacy_consent_accepted, a.privacy_consent_at, a.approved_at,
                 a.makaug_agent_number, to_char(a.id_expiry_date, 'YYYY-MM-DD') AS id_expiry_date, a.experience_years, a.contact_phone_verified_at,
                 a.agent_application_channel, a.plan, a.verified_badge, a.greeting_name, a.billing_plan,
                 a.monthly_fee_ugx, to_char(a.paid_until, 'YYYY-MM-DD') AS paid_until, a.fee_exempt, a.fee_exempt_reason, a.removed_at, a.removed_reason,
@@ -608,10 +722,26 @@ function registerAgentManagerRoutes(router, deps) {
       if (!before) return res.status(404).json({ ok: false, error: 'Agent not found' });
       const changed = keys.filter((key) => !sameValue(key, before[key], patch[key]));
       if (!changed.length) return res.json({ ok: true, data: { id: before.id, changed: [] } });
+      const clash = await findDuplicate({
+        phone: changed.includes('phone') ? patch.phone : null,
+        nin: changed.includes('nin') ? patch.nin : null,
+        email: changed.includes('email') ? patch.email : null,
+        licence: changed.includes('licence_number') ? patch.licence_number : null,
+        exceptId: before.id
+      });
+      if (clash) return duplicateResponse(res, clash);
       const sets = changed.map((key, i) => `${key} = $${i + 2}${key === 'districts_covered' || key === 'specializations' ? '::text[]' : ''}`);
       try {
         await db.query(`UPDATE agents SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1`, [req.params.id, ...changed.map((key) => patch[key])]);
       } catch (error) {
+        const again = await findDuplicate({
+          phone: changed.includes('phone') ? patch.phone : null,
+          nin: changed.includes('nin') ? patch.nin : null,
+          email: changed.includes('email') ? patch.email : null,
+          licence: changed.includes('licence_number') ? patch.licence_number : null,
+          exceptId: before.id
+        }).catch(() => null);
+        if (again) return duplicateResponse(res, again);
         const message = uniqueViolation(error);
         if (message) return res.status(409).json({ ok: false, error: message });
         throw error;
@@ -628,14 +758,19 @@ function registerAgentManagerRoutes(router, deps) {
       if (changed.some((key) => PUBLIC_FIELDS.has(key))) onListingsChanged('agent_manager_details');
       return res.json({ ok: true, data: { id: before.id, changed } });
     } catch (error) {
+      if (error?.message) error.message = redactPhones(error.message);
       return next(error);
     }
   });
 
   // Add an agent by hand — paid or unpaid — marked as staff-added.
+  // The form posts JSON. An empty body means the fields never bound.
   router.post('/agent-manager/agents', async (req, res, next) => {
     try {
-      const body = req.body || {};
+      const body = coerceBody(req.body);
+      if (!Object.keys(body).length) {
+        return res.status(400).json({ ok: false, error: 'The form did not reach the server. Fill in the name and phone, then try Add agent again.' });
+      }
       const { patch, errors } = readDetails(body, { creating: true });
       if (!patch.full_name) errors.push('Name is required');
       if (!patch.phone) errors.push('Phone is required');
@@ -645,15 +780,9 @@ function registerAgentManagerRoutes(router, deps) {
       const status = String(body.status) === 'approved' ? 'approved' : 'pending';
       if (errors.length) return res.status(400).json({ ok: false, error: errors.join('. ') });
       const actor = await actorOf(req);
-      const digits = String(patch.phone).replace(/\D/g, '').slice(-9);
-      const existing = (await db.query(
-        `SELECT id, full_name FROM agents
-          WHERE RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1
-             OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1 LIMIT 1`, [digits])).rows[0];
-      if (existing) {
-        return res.status(409).json({ ok: false, error: `${existing.full_name} already uses this number. Open that agent instead.`, existing_agent_id: existing.id });
-      }
-      const licence = patch.licence_number || `STAFF-ADDED-${Date.now().toString(36).toUpperCase()}`;
+      const clash = await findDuplicate({ phone: patch.phone, nin: patch.nin, email: patch.email, licence: patch.licence_number });
+      if (clash) return duplicateResponse(res, clash);
+      const licence = patch.licence_number || `STAFF-ADDED-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
       const note = `[STAFF_ADDED] Added by hand by ${actor.label} on ${new Date().toISOString().slice(0, 10)}; payment set to ${payment}${payment === 'free' && patch.fee_exempt_reason ? ` (${patch.fee_exempt_reason})` : ''}.`;
       let inserted;
       try {
@@ -675,6 +804,8 @@ function registerAgentManagerRoutes(router, deps) {
           ]
         )).rows[0];
       } catch (error) {
+        const again = await findDuplicate({ phone: patch.phone, nin: patch.nin, email: patch.email, licence: patch.licence_number || licence }).catch(() => null);
+        if (again) return duplicateResponse(res, again);
         const message = uniqueViolation(error);
         if (message) return res.status(409).json({ ok: false, error: message });
         throw error;
@@ -683,9 +814,33 @@ function registerAgentManagerRoutes(router, deps) {
         agent_id: inserted.id, by: actor.label, payment_status: payment, status,
         paid_until: payment === 'paid' ? patch.paid_until : null, staff_added: true
       }, actor.id);
+      // Durable agent_added event for the WhatsApp team. No phone number, and
+      // this does not send a message. See services/agentAddedHook.js.
+      const added = {
+        agent_id: inserted.id, status, payment_status: payment, added_by_name: actor.label
+      };
+      await writeAudit('agent_added', added, actor.id);
+      await emitAgentAdded(added);
       await grantVerifiedTickIfComplete(db, inserted.id, { source: 'staff_manage', actorId: actor.id, writeAudit });
-      return res.status(201).json({ ok: true, data: inserted });
+      const saved = (await db.query(
+        `SELECT a.id, a.full_name, a.status, a.agent_application_channel, a.registered_by_name,
+                (COALESCE(btrim(a.nin), '') <> '') AS has_nin, a.fee_exempt,
+                to_char(a.paid_until, 'YYYY-MM-DD') AS paid_until, a.removed_at,
+                ${verifiedByMakaugSql('a')} AS verified_by_makaug
+           FROM agents a WHERE a.id = $1`,
+        [inserted.id]
+      )).rows[0] || inserted;
+      return res.status(201).json({
+        ok: true,
+        data: {
+          ...saved,
+          payment: paymentState(saved),
+          id_still_needed: idStillNeeded(saved),
+          welcome: { sent: false, event: 'agent_added' }
+        }
+      });
     } catch (error) {
+      if (error?.message) error.message = redactPhones(error.message);
       return next(error);
     }
   });
@@ -796,4 +951,4 @@ function registerAgentManagerRoutes(router, deps) {
   });
 }
 
-module.exports = { agentMoney, agentMoneyTotals, HAS_ID_DOCUMENT_SQL, LIVE_ID_FRONT_SQL, registerAgentManagerRoutes, paymentState, paymentTracker, idStillNeeded, approvedAnyway, kampalaDay, maskNin, LISTING_ACTIONS };
+module.exports = { agentMoney, agentMoneyTotals, HAS_ID_DOCUMENT_SQL, LIVE_ID_FRONT_SQL, registerAgentManagerRoutes, paymentState, paymentTracker, idStillNeeded, approvedAnyway, kampalaDay, maskNin, maskPhone, LISTING_ACTIONS };
