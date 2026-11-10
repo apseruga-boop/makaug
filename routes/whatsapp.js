@@ -18,6 +18,7 @@ const { handleAgentBookingReply } = require('../services/agentBookingService');
 const logger = require('../config/logger');
 const { normalizeUgPhoneForWhatsApp } = require('../services/whatsappNotificationService');
 const { canonicalUgPhone } = require('../utils/ugPhone');
+const { publishedPricing } = require('../config/publishedPricing');
 const { DISTRICTS } = require('../utils/constants');
 const { searchOrderBySql } = require('../utils/searchRankingSql');
 const {
@@ -227,7 +228,7 @@ const WHATSAPP_MAX_LISTING_PHOTOS = 10;
 // Language Translations
 const T = {
   en: {
-    welcome: "🏠 Welcome to *makaug* - Uganda's property platform!\n\nWhat would you like to do?\n1️⃣ List my property (first 7 days free)\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nReply with a number",
+    welcome: "🏠 Welcome to *makaug* - Uganda's property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nReply with a number",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property\n\nShort stays (by the night): ordinary listers pay UGX 20,000 a month, with no free days. Approved agents include short stays in the UGX 50,000 a month agent plan.',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
@@ -10056,7 +10057,7 @@ async function handleEmployeeWhatsappIntake({
       nextStep: 'main_menu',
       prospectPitched: true,
       message: `✅ *Video sent to ${contact.fullName}* — ${dialable}\n\n`
-        + `They have the joining film: what we do, who sees their listings, how listing works and the 14 days free.\n\n`
+        + `They have the joining film: what we do, who sees their listings, how listing works and the plan (${agentMonthlyFeeLabel()} a month).\n\n`
         + (repeat ? '(They had been sent it before — it has gone again.)\n\n' : '')
         + 'They have been asked to reply *AGENT* if they want to join.\n\n'
         + 'When they say yes, reply *Agent 007* and choose *1* to register them.\n\n'
@@ -10575,9 +10576,10 @@ async function handleEmployeeWhatsappIntake({
     // still with them, because approval happens later and whoever approves will
     // not know what was agreed on the doorstep.
     if (data.employee_role === 'agent' && data.new_agent_created === true && data.agent?.id) {
-      // New agents start on a free trial (10 Oct 2026), so there is no payment
-      // question any more. Record who brought them in, tell the employee, and
-      // carry on. Approval applies the trial by default.
+      // No free trial since 10 Nov 2026 (10 Oct–10 Nov new agents had 14 days):
+      // the employee is told the fee and that the payment link goes with the
+      // welcome pack when a moderator approves them. Record who brought them
+      // in, and carry on.
       await db.query(
         `UPDATE agents
             SET registered_by_phone = COALESCE(NULLIF($2, ''), registered_by_phone), updated_at = NOW()
@@ -17634,8 +17636,11 @@ async function agentJoinRequestReply({ phone, text = '' }) {
 // Short explainer film, sent once (per 30 days) when someone wants to list a
 // property or join as an agent. Goes before the bot's text reply.
 const EXPLAINER_VIDEOS = {
-  lister: { path: '/assets/marketing/makaug-list-your-property-v2.mp4', caption: '🎬 *How listing on makaug works* — under a minute: send photos, confirm it\'s you, agree to the terms, and your property goes live in front of Ugandans at home and abroad (UK, Dubai, Canada, South Africa). First 7 days free.' },
-  agent: { path: '/assets/marketing/makaug-join-as-agent-v3.mp4', caption: '🎬 *makaug for agents* — what you get, who sees your listings (Ugandans at home and abroad) and how to join.' }
+  // v3 / v4 (10 Nov 2026): no free days — the price scenes say UGX 20,000 a
+  // month per property and UGX 50,000 a month for agents. The agent caption
+  // still leaves the fee to the terms they sign.
+  lister: { path: '/assets/marketing/makaug-list-your-property-v3.mp4', caption: '🎬 *How listing on makaug works* — under a minute: send photos, confirm it\'s you, agree to the terms, and your property goes live in front of Ugandans at home and abroad (UK, Dubai, Canada, South Africa). UGX 20,000 a month per property — we send you the payment link, nothing is charged automatically.' },
+  agent: { path: '/assets/marketing/makaug-join-as-agent-v4.mp4', caption: '🎬 *makaug for agents* — what you get, who sees your listings (Ugandans at home and abroad) and how to join.' }
 };
 
 /** The fee, in the words an agent reads — one source, so it cannot drift. */
@@ -19924,7 +19929,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         terms_version: docs.LISTER_TERMS_VERSION,
         terms_accepted_phone: String(phone).replace(/\D/g, ''),
         terms_accepted_text: cleanBody.slice(0, 80),
-        lister_fee_terms: { free_days: Number(settings.lister_fee?.free_days ?? 7), monthly_ugx: Number(settings.lister_fee?.monthly_ugx || 20000) }
+        // What this owner agrees to, kept on the listing. No free days since
+        // 10 Nov 2026: the published price, not the old stored setting.
+        lister_fee_terms: { free_days: publishedPricing().owner_listing.free_days, monthly_ugx: Number(settings.lister_fee?.monthly_ugx || publishedPricing().owner_listing.monthly_ugx) }
       };
       await patchDraft(phone, acceptance);
       const result = await submitWhatsappListingDraft({ phone, lang, draft: { ...draft, ...acceptance } });
@@ -19934,7 +19941,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
       if (!result.propertyId) return respond(result.message, result.nextStep);
       const fee = acceptance.lister_fee_terms;
-      return respond(`${result.message}\n\n✅ Thank you for agreeing to the terms.\n🗓️ Once approved, your property is live *free for ${fee.free_days} days*. After that it is UGX ${fee.monthly_ugx.toLocaleString('en-US')} a month to stay live — we'll message you before then, with how many people have viewed it.`, result.nextStep);
+      const feeLine = fee.free_days > 0
+        ? `🗓️ Once approved, your property is live *free for ${fee.free_days} days*. After that it is UGX ${fee.monthly_ugx.toLocaleString('en-US')} a month to stay live — we'll message you before then, with how many people have viewed it.`
+        : `🗓️ Once our team approves it, your property goes live and I send you the payment link: *UGX ${fee.monthly_ugx.toLocaleString('en-US')} a month* keeps it live. Nothing is charged automatically.`;
+      return respond(`${result.message}\n\n✅ Thank you for agreeing to the terms.\n${feeLine}`, result.nextStep);
     }
     if (isNegativeReply(cleanBody) || /^(no|cancel|stop)\b/.test(answer)) {
       await patchSessionData(phone, { lister_terms_declined_at: new Date().toISOString() });

@@ -43,7 +43,7 @@ test('the digest goes to the lead-desk alert numbers and the payment confirmers,
   const billing = loadBillingWithFakeDesk(sent);
   const db = fakeDb({
     confirmers: [{ name: 'Ronald', phone: '0709402189' }, { name: 'Arthur', phone: '+44 7757 773202' }, { name: 'bad', phone: '12' }],
-    trials: [{ id: 'a1', full_name: 'Kelham properties', phone: '0706945653', whatsapp: '0706945653', status: 'approved', paid_until: null, fee_exempt: false,
+    trials: [{ id: 'a1', full_name: 'Kelham properties', phone: '0706945653', whatsapp: '0706945653', status: 'approved', paid_until: null, fee_exempt: false, fee_offer_mode: 'free_period',
       fee_offer_until: new Date(Date.now() + 86400000).toISOString(), fee_offer_at: new Date(Date.now() - 13 * 86400000).toISOString(), fee_offer_by: 'Ronald', billing_suspended_at: null, billing_reminder_log: [] }]
   });
   const phones = await billing.trialDigestTeamPhones(db);
@@ -52,7 +52,8 @@ test('the digest goes to the lead-desk alert numbers and the payment confirmers,
   assert.equal(result.sent, true, JSON.stringify(result));
   assert.equal(sent.length, 1);
   assert.equal(sent[0].type, 'agent_trial_follow_up');
-  assert.match(sent[0].body, /Free-trial follow-ups/);
+  assert.match(sent[0].body, /New agents — payment follow-ups/);
+  assert.match(sent[0].body, /Trial ending in the next few days/, 'an agent still on a trial from before 10 Nov 2026 is still followed up');
   assert.deepStrictEqual(sent[0].recipients, ['+447757773202', '0709402189'], 'Arthur once (same number in both lists), Ronald added');
   assert.deepStrictEqual(result.recipients, ['+447757773202', '0709402189']);
   const desk = require('../services/leadDeskService');

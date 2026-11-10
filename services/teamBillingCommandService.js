@@ -8,16 +8,18 @@
  * these words is a command, not a customer message:
  *
  *   NEW AGENT Jane Nakato 0772123456   → creates the agent (if new) and takes them
- *                                         live on a 14-day free trial: welcome
- *                                         pack out, reminders and follow-up
- *                                         scheduled (from 10 Oct 2026; before
- *                                         that it sent a pay link first)
+ *                                         live: welcome pack out, then the
+ *                                         UGX 50,000 payment link (no free days
+ *                                         from 10 Nov 2026; from 10 Oct it gave
+ *                                         a 14-day free trial, and before that
+ *                                         it sent a pay link first)
  *   PAY LINK 0772123456                → sends that agent or private lister
  *                                         their pay link
  *   STATUS 0772123456                  → paid? link opened? waiting?
  *   APPROVE 0772123456                 → approves a pending agent once paid
  *                                         (welcome pack goes out as usual)
- *   TRIALS                             → agents on the free trial: ending soon, unpaid
+ *   UNPAID (or TRIALS)                 → new agents who have not paid yet, and
+ *                                         the last free trials: ending soon, unpaid
  *   PAYMENT HELP                       → this list
  *
  * Team numbers are the billing "confirmers" (Sales & Revenue › Settings) plus
@@ -30,7 +32,7 @@ const billingOps = require('./billingOpsService');
 const payLinks = require('./payLinkService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
-const COMMAND = /^\s*(new\s+agent|add\s+agent|pay\s*link|paylink|status|paid\??|approve|trials?|payment\s+help|pay\s+help)\b[\s:,-]*(.*)$/is;
+const COMMAND = /^\s*(new\s+agent|add\s+agent|pay\s*link|paylink|status|paid\??|approve|trials?|unpaid|payment\s+help|pay\s+help)\b[\s:,-]*(.*)$/is;
 
 function digits(value) {
   return String(value || '').replace(/\D+/g, '');
@@ -113,10 +115,10 @@ function help() {
     '💳 *Payment commands* (team only)',
     '',
     '*NEW AGENT* Jane Nakato 0772123456',
-    '→ sets them up as pending. They pay the monthly fee from approval. Record it in King, or use Free (staff override).',
+    `→ makes them a live agent and sends their welcome pack, then the ${billingOps.ugx(revenue.feeConfig().feeUgx)} payment link (no free days)`,
     '',
-    '*TRIALS*',
-    '→ every agent on a free trial: who ends soon, who has not paid',
+    '*UNPAID*',
+    '→ new agents who have not paid yet, and anyone still on an old free trial',
     '',
     '*PAY LINK* 0772123456',
     '→ sends an agent or private lister their pay link again',
@@ -149,11 +151,6 @@ async function approveThroughAdmin(agent, actor, feeOverride) {
   return { ok: true, data: data.data || {} };
 }
 
-function dayLabel(iso) {
-  const d = new Date(`${iso}T00:00:00Z`);
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-}
-
 async function newAgent(db, rest, actor) {
   const phone = findPhoneInText(rest);
   if (!phone) return 'Send it like this: *NEW AGENT* Jane Nakato 0772123456';
@@ -175,38 +172,41 @@ async function newAgent(db, rest, actor) {
   }
   if (agent.fee_exempt) return `${agent.full_name} joined before the monthly fee, so they list for free. Approve them with *APPROVE ${pretty(phone)}*.`;
 
-  const days = revenue.agentTrialDays();
-  if (revenue.agentFeeRequired(agent) && days < 1) {
-    return [
-      `${created ? 'Set up' : 'Found'} *${agent.full_name}* (${pretty(phone)}).`,
-      `From 10 Nov 2026 there is no free trial. They pay ${billingOps.ugx(revenue.feeConfig().feeUgx)} a month from approval.`,
-      'Record the payment in King → Agents, or approve there with Free (staff override) and a reason.'
-    ].join('\n');
-  }
-  const ends = revenue.addDays(revenue.kampalaDate(), Math.max(days, 1) - 1);
-  const result = await approveThroughAdmin(agent, actor, revenue.agentFeeRequired(agent) && days >= 1
-    ? { mode: 'free_period', days, reason: `New agent ${days}-day free trial — signed up by ${actor}` }
-    : null);
+  // New agents go live straight away and pay from the start: no free days
+  // since 10 Nov 2026 (Arthur). The payment link follows the welcome pack, and
+  // UNPAID / the daily digest keep them in front of the team until they pay.
+  const unpaid = revenue.agentFeeRequired(agent);
+  const result = await approveThroughAdmin(agent, actor, unpaid ? newAgentPayLater(actor, 'signed up') : null);
   if (!result.ok) {
     return `${created ? `Set up ${agent.full_name} (${pretty(phone)}) but` : `Couldn't go live for ${agent.full_name}:`} ${result.error}`;
   }
   const welcome = result.data.welcome;
-  const settings = await billingOps.getSettings(db).catch(() => ({}));
-  const remindOn = revenue.addDays(ends, -Math.max(1, Number(settings.agent_fee?.remind_days_before || 3)));
-  return [
-    `✅ *${agent.full_name}* (${pretty(phone)}) is live on a ${days}-day free trial, ending ${dayLabel(ends)}.`,
-    welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.',
-    '',
-    `I'll remind them on ${dayLabel(remindOn)}, WhatsApp you the moment they pay, and list them under *TRIALS* if they are still unpaid after ${dayLabel(ends)}.`
-  ].join('\n');
+  const lines = [
+    `✅ *${agent.full_name}* (${pretty(phone)}) is live.`,
+    welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.'
+  ];
+  if (unpaid) lines.push(payLinkSentLine(result.data), '', "I'll WhatsApp you the moment they pay. Until then they are on *UNPAID*.");
+  return lines.join('\n');
+}
+
+/** The fee override for a new agent approved without a payment: live now, link with the welcome pack. */
+function newAgentPayLater(actor, how) {
+  return { mode: 'pay_later', reason: `New agent ${how} by ${actor} — payment link with the welcome pack (no free days)` };
+}
+
+function payLinkSentLine(data = {}) {
+  const fee = billingOps.ugx(revenue.feeConfig().feeUgx);
+  if (data.fee_link?.sent) return `The ${fee} payment link follows the welcome pack.`;
+  if (data.fee_link?.error) return `Payment link NOT sent: ${data.fee_link.error}. Send it with *PAY LINK*.`;
+  return `The ${fee} payment link was not sent automatically — send it with *PAY LINK*.`;
 }
 
 async function trials(db) {
   const rows = await billingOps.listAgentTrials(db);
-  if (!rows.length) return 'No agents are on a free trial right now.';
-  const order = { overdue: 0, taken_down: 0, ending_soon: 1, on_trial: 2 };
-  const sorted = [...rows].sort((a, b) => (order[a.state] ?? 3) - (order[b.state] ?? 3) || a.ends.localeCompare(b.ends));
-  return ['📋 *Agents on a free trial*', '', ...sorted.slice(0, 30).map(billingOps.formatTrialLine), '',
+  if (!rows.length) return 'Every new agent has paid — nobody to chase, and nobody is on a free trial.';
+  const order = { unpaid: 0, overdue: 0, taken_down: 0, ending_soon: 1, on_trial: 2 };
+  const sorted = [...rows].sort((a, b) => (order[a.state] ?? 3) - (order[b.state] ?? 3) || String(a.ends).localeCompare(String(b.ends)));
+  return ['📋 *New agents not paid yet*', '', ...sorted.slice(0, 30).map(billingOps.formatTrialLine), '',
     'To chase one: *PAY LINK* 0772123456. Paid agents drop off this list.'].join('\n');
 }
 
@@ -276,19 +276,13 @@ async function approve(db, rest, actor) {
   if (agent.status === 'approved') return `${agent.full_name} is already approved.`;
   // Not paid yet: approve the usual way — welcome pack first, then the pay link.
   const unpaid = revenue.agentFeeRequired(agent);
-  const days = revenue.agentTrialDays();
-  if (unpaid && days < 1) {
-    return `*${agent.full_name}* has not paid. There is no free trial. Record the payment in King → Agents, or approve there with Free (staff override) and a reason.`;
-  }
-  const result = await approveThroughAdmin(agent, actor, unpaid && days >= 1
-    ? { mode: 'free_period', days, reason: `New agent ${days}-day free trial — approved on WhatsApp by ${actor}` }
-    : null);
+  const result = await approveThroughAdmin(agent, actor, unpaid ? newAgentPayLater(actor, 'approved on WhatsApp') : null);
   if (!result.ok) return `Couldn't approve ${agent.full_name}: ${result.error}. Please do it in Admin › Agents.`;
   const welcome = result.data.welcome;
   return [
     `✅ *${agent.full_name}* is approved.`,
     welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.',
-    unpaid && days >= 1 ? `On a ${days}-day free trial. I'll remind them before it ends and tell you when they pay (*TRIALS* shows the list).` : ''
+    unpaid ? `${payLinkSentLine(result.data)} I'll tell you when they pay (*UNPAID* shows the list).` : ''
   ].filter(Boolean).join('\n');
 }
 
@@ -302,14 +296,14 @@ async function handleTeamBillingCommand(db, { phone, body = '' } = {}) {
   // "status" and "approve" are ordinary words: only treat them as commands
   // when a phone number follows, so other team conversations are untouched.
   if (/^(status|paid|approve)/.test(word) && !findPhoneInText(rest)) return null;
-  if (/^trial/.test(word) && rest) return null; // only the bare word TRIALS is a command
+  if (/^(trial|unpaid)/.test(word) && rest) return null; // only the bare words TRIALS / UNPAID are commands
   const actor = `whatsapp:${digits(phone)}`;
   try {
     if (word.startsWith('new') || word.startsWith('add')) return await newAgent(db, rest, actor);
     if (word.startsWith('pay link') || word.startsWith('paylink')) return await sendLink(db, rest, actor);
     if (word.startsWith('status') || word.startsWith('paid')) return await status(db, rest);
     if (word === 'approve') return await approve(db, rest, actor);
-    if (word.startsWith('trial')) return await trials(db);
+    if (word.startsWith('trial') || word === 'unpaid') return await trials(db);
     return help();
   } catch (error) {
     logger.warn('Team billing command failed', { word, error: error.message });
@@ -317,4 +311,4 @@ async function handleTeamBillingCommand(db, { phone, body = '' } = {}) {
   }
 }
 
-module.exports = { handleTeamBillingCommand, isTeamPhone, ugPhone, findPhoneInText, help };
+module.exports = { handleTeamBillingCommand, isTeamPhone, ugPhone, findPhoneInText, help, newAgentPayLater, payLinkSentLine };

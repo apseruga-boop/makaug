@@ -13,7 +13,7 @@ const sharp = require('sharp');
 
 const LISTER_TERMS_VERSION = '2026-11-10-v2';
 const AGENT_GUIDE_VERSION = '2026-11-10-v2';
-const AGENT_TERMS_VERSION = '2026-11-10-v2';
+const AGENT_TERMS_VERSION = '2026-11-10-v3';
 
 const INK = '#15213A';
 const ORANGE = '#E8662A';
@@ -274,7 +274,9 @@ async function buildAgentTermsPdf(settings = {}) {
   const boxTop = doc.y + 12;
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(11).text('In short', 76, boxTop);
   doc.font('Helvetica').fontSize(10).fillColor('#222').text(
-    `Your first ${s.agentFreeDays} days are free. After that the agent plan is ${ugx(s.agentMonthly)} per month. makaug advertises your properties; we take no commission and are not part of any deal. Reply AGREE on WhatsApp to accept these terms.`,
+    `${s.agentFreeDays > 0
+      ? `Your first ${s.agentFreeDays} days are free. After that the agent plan is ${ugx(s.agentMonthly)} per month.`
+      : `The agent plan is ${ugx(s.agentMonthly)} per month, from the day your agent account is switched on.`} makaug advertises your properties; we take no commission and are not part of any deal. Reply AGREE on WhatsApp to accept these terms.`,
     76, boxTop + 16, { width: doc.page.width - 152, lineGap: 1.5 }
   );
   doc.x = 60;
@@ -284,11 +286,16 @@ async function buildAgentTermsPdf(settings = {}) {
   section(doc, '1. Who we are');
   para(doc, 'makaug.com is an online property marketplace for Uganda, operated by Makaug Online Real Estate Ltd ("makaug", "we"). These terms are between makaug and you, the agent or broker named in your makaug agent account ("you").');
 
-  section(doc, '2. The free period and the agent plan');
+  section(doc, s.agentFreeDays > 0 ? '2. The free period and the agent plan' : '2. The agent plan');
   bullets(doc, [
-    `Your first ${s.agentFreeDays} days on makaug are free, counted from the day your agent account is switched on. We tell you the date it ends.`,
-    `After that, the agent plan is ${ugx(s.agentMonthly)} per month, for as long as you want your agent page and listings live.`,
-    'Nothing is charged automatically. We send you a payment link before the free period ends and before each renewal; you pay by Mobile Money (or card where offered).',
+    ...(s.agentFreeDays > 0 ? [
+      `Your first ${s.agentFreeDays} days on makaug are free, counted from the day your agent account is switched on. We tell you the date it ends.`,
+      `After that, the agent plan is ${ugx(s.agentMonthly)} per month, for as long as you want your agent page and listings live.`,
+      'Nothing is charged automatically. We send you a payment link before the free period ends and before each renewal; you pay by Mobile Money (or card where offered).'
+    ] : [
+      `The agent plan is ${ugx(s.agentMonthly)} per month, counted from the day your agent account is switched on, for as long as you want your agent page and listings live. There are no free days.`,
+      'Nothing is charged automatically. We send you a payment link with your welcome pack and before each renewal; you pay by Mobile Money (or card where offered).'
+    ]),
     `If a payment is not made, we send reminders, and after ${s.finalAfter} days overdue your listings may be paused. Nothing is deleted: when you pay, everything goes back live exactly as it was.`,
     'You can stop at any time by telling us on WhatsApp (reply HELP). You will not be charged for a period you did not use after you have told us to stop.',
     'We may change the price with at least 30 days\' notice by WhatsApp; the new price applies from your next renewal after that.'

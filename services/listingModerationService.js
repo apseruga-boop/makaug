@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 
+const logger = require('../config/logger');
 const { sendSupportEmail, getSupportEmail, getSupportPhone } = require('./emailService');
 const { isPriceOnApplication } = require('../utils/listingPriceQuality');
 const { normalizeUgPhoneForWhatsApp, sendWhatsAppText } = require('./whatsappNotificationService');
@@ -687,23 +688,73 @@ function statusLabel(status) {
   return 'Updated';
 }
 
-// Private owners who agreed to the listing terms are told when the free week ends.
-function privateListerFeeLines(listing = {}) {
+// The fee, in the message that tells a private owner their listing is live.
+// Since 10 Nov 2026 there are no free days: the fee is due from today, so the
+// message carries the payment link (`listerFee`, worked out by
+// sendOwnerListingStatusNotifications through approvalListerFee). An owner
+// whose listing went live before then is still told when the free week ends.
+function privateListerFeeLines(listing = {}, listerFee = null) {
   const extra = listing?.extra_fields && typeof listing.extra_fields === 'object' ? listing.extra_fields : {};
-  const fee = extra.lister_fee_terms;
-  if (!extra.lister_terms_accepted_at || !fee) return [];
+  const fee = listerFee || (extra.lister_terms_accepted_at ? extra.lister_fee_terms : null);
+  if (!fee) return [];
   const { ownerFreeDaysForListing } = require('../config/publishedPricing');
-  const freeDays = ownerFreeDaysForListing(listing);
+  const freeDays = listerFee ? Number(listerFee.free_days || 0) : ownerFreeDaysForListing(listing);
   const monthly = Number(fee.monthly_ugx || 20000).toLocaleString('en-US');
   if (freeDays <= 0) {
-    return ['', `🗓️ It is UGX ${monthly} a month to stay live, from the day it is approved. We'll message you with how many people have viewed it.`, ''];
+    const lines = ['', `💳 To keep it live it is *UGX ${monthly} a month*.`];
+    if (fee.pay_link) lines.push(`Pay here: ${fee.pay_link}`);
+    if (fee.pay_to) lines.push(`${fee.pay_link ? 'Or pay' : 'Pay'} to ${fee.pay_to} and send me the transaction ID here.`);
+    if (!fee.pay_link && !fee.pay_to) lines.push('I will send you how to pay shortly.');
+    lines.push('Nothing is charged automatically.', '');
+    return lines;
   }
   const until = new Date(Date.now() + 3 * 3600 * 1000 + Math.max(0, freeDays - 1) * 86400000);
   const pretty = until.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   return ['', `🗓️ Free until *${pretty}* (${freeDays} days). After that it is UGX ${monthly} a month to stay live — we'll message you before then with how many people have viewed it.`, ''];
 }
 
-function buildOwnerStatusMessage({ listing = {}, status, reason }) {
+/**
+ * What a private owner is told about the fee when their listing goes live, or
+ * null (an agent's listing, a found-online one, one already paid for, or the
+ * South Africa tenant). With no free days it carries a payment link for the
+ * first month. Never throws: a listing still goes live, and its owner is still
+ * told, if the link cannot be made.
+ */
+async function approvalListerFee(listing = {}) {
+  if (!listing?.id || listing.agent_id || isFoundOnlineListing(listing)) return null;
+  // The listing fee is makaug's (Uganda, UGX); the South Africa tenant has no such fee.
+  if (String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase() === 'ZA') return null;
+  try {
+    const db = require('../config/database');
+    const billing = require('./billingOpsService');
+    const revenue = require('./revenueService');
+    const { ownerFreeDaysForListing } = require('../config/publishedPricing');
+    const settings = await billing.getSettings(db, { fresh: true });
+    const extra = listing.extra_fields && typeof listing.extra_fields === 'object' ? listing.extra_fields : {};
+    const terms = extra.lister_fee_terms && typeof extra.lister_fee_terms === 'object' ? extra.lister_fee_terms : null;
+    const freeDays = ownerFreeDaysForListing(listing);
+    const monthly = Number(terms?.monthly_ugx || settings.lister_fee?.monthly_ugx || 20000);
+    // Live before 10 Nov 2026: the free week, told as before, to owners who
+    // accepted the terms on WhatsApp.
+    if (freeDays > 0) return extra.lister_terms_accepted_at && terms ? { free_days: freeDays, monthly_ugx: monthly } : null;
+    // Paid already (approved again after an edit, or paid before going live): nothing to ask.
+    const paid = (await db.query('SELECT lister_paid_until FROM properties WHERE id = $1::uuid', [listing.id]).catch(() => ({ rows: [] }))).rows[0];
+    if (paid?.lister_paid_until && revenue.isoDay(paid.lister_paid_until) >= revenue.kampalaDate()) return null;
+    let payLink = '';
+    try {
+      const { createPayLink } = require('./payLinkService');
+      payLink = (await createPayLink(db, { purpose: 'listing_fee', property_id: listing.id }, 'listing_approved')).url || '';
+    } catch (error) {
+      logger.warn('Pay link for a newly live private listing failed', { property_id: listing.id, message: error.message });
+    }
+    return { free_days: 0, monthly_ugx: monthly, pay_link: payLink, pay_to: billing.payToLine(settings) };
+  } catch (error) {
+    logger.warn('Listing fee for the live message could not be worked out', { property_id: listing.id, message: error.message });
+    return null;
+  }
+}
+
+function buildOwnerStatusMessage({ listing = {}, status, reason, listerFee = null }) {
   const reference = getListingReference(listing);
   const label = statusLabel(status);
   const title = listing.title || 'Your property listing';
@@ -755,7 +806,7 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
           `Great news ${listing?.lister_name || 'there'} - your listing is *live* on makaug \u{1F389}`,
           `${title} - ${location} - ${price}`,
           `View & share: ${publicUrl}`,
-          ...privateListerFeeLines(listing),
+          ...privateListerFeeLines(listing, listerFee),
           `To remove it, reply REMOVE ${reference} from the WhatsApp number used to submit it.`
         ].join('\n')
     };
@@ -891,7 +942,10 @@ async function sendOwnerListingStatusNotifications({ listing = {}, status, reaso
     const skipped = { sent: false, reason: 'found_online_listing_never_messaged' };
     return { email: { ...skipped }, whatsapp: { ...skipped, phone: listing.lister_phone || null } };
   }
-  const message = buildOwnerStatusMessage({ listing, status, reason });
+  const listerFee = String(status || '').toLowerCase() === 'approved' && listing.lister_phone
+    ? await approvalListerFee(listing)
+    : null;
+  const message = buildOwnerStatusMessage({ listing, status, reason, listerFee });
   const result = {
     email: { sent: false, reason: 'no_lister_email', subject: message.subject, message: message.text },
     whatsapp: { sent: false, reason: 'no_lister_phone', phone: listing.lister_phone || null, message: message.whatsapp }
@@ -1013,6 +1067,8 @@ module.exports = {
   isWhatsappEmployeeIntakeListing,
   buildOwnerSubmissionMessage,
   buildOwnerStatusMessage,
+  approvalListerFee,
+  privateListerFeeLines,
   buildAutomatedListingReview,
   createOwnerEditToken,
   getDirectWhatsAppUrl,
