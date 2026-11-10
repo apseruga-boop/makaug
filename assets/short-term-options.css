@@ -404,12 +404,26 @@
 #page-short-term .st-opt-split .st-opt-mapnote { display: block; }
 
 @media (min-width: 1024px) {
+  /* When the map is on, sit it beside the results like /for-sale — not under the grid. */
+  #page-short-term .st-opt-grid:has(> .listing-map-col.mk-map-col-active),
+  #page-short-term .st-opt-list:has(> .listing-map-col.mk-map-col-active) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(400px, 42vw);
+    align-items: start;
+    gap: 0 8px;
+  }
+  #page-short-term .st-opt-grid:has(> .listing-map-col.mk-map-col-active) .st-opt-wrap,
+  #page-short-term .st-opt-list:has(> .listing-map-col.mk-map-col-active) .st-opt-wrap {
+    max-width: none;
+  }
   body.mk-mobile-map-open #page-short-term .st-opt-grid .listing-map-col.mk-map-col-active,
   body.mk-mobile-map-open #page-short-term .st-opt-list .listing-map-col.mk-map-col-active {
     display: block !important;
-    margin: 12px auto 28px;
-    max-width: 1180px;
-    padding: 0 20px;
+    margin: 0;
+    max-width: none;
+    padding: 12px 16px 24px 0;
+    align-self: stretch;
+    min-width: 0;
   }
 }
 
