@@ -65,7 +65,7 @@ const STAGES = Object.freeze({
 // What a staff moderator is allowed to do. Note what is absent: there is no
 // path from any staff action to 'approved'.
 const STAFF_ACTIONS = Object.freeze({
-  claim: { to: 'staff_review', from: ['submitted', 'changes_requested'] },
+  claim: { to: 'staff_review', from: ['submitted', 'changes_requested', 'rejected'] },
   pass_to_king: { to: 'king_review', from: ['submitted', 'staff_review', 'changes_requested'] },
   request_changes: { to: 'changes_requested', from: ['submitted', 'staff_review', 'king_review'] },
   reject: { to: 'rejected', from: ['submitted', 'staff_review', 'changes_requested'] }
@@ -425,7 +425,7 @@ async function applyStaffDecision(db, listingId, { action, checklist, reason, no
        SET moderation_stage = $2,
            moderation_checklist = $3::jsonb,
            moderation_notes = COALESCE($4, moderation_notes),
-           rejection_reason = CASE WHEN $2 IN ('rejected','changes_requested') THEN $5 ELSE rejection_reason END,
+           rejection_reason = CASE WHEN $2 IN ('rejected','changes_requested') THEN $5 WHEN $2 = 'staff_review' AND moderation_stage = 'rejected' THEN NULL ELSE rejection_reason END,
            status = CASE WHEN $2 = 'rejected' THEN 'rejected' ELSE 'pending' END,
            staff_reviewed_by = $6,
            staff_reviewed_at = NOW(),

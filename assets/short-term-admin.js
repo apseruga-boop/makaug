@@ -274,7 +274,7 @@
     return '<div class="st-desk-actions"><div class="st-desk-buttons">'
       + '<button type="button" class="st-btn st-btn-primary" data-st-staff="pass_to_king" data-st-id="' + esc(id) + '">Approve</button>'
       + '<button type="button" class="st-btn" data-st-staff="reject" data-st-id="' + esc(id) + '">Reject</button>'
-      + '<button type="button" class="st-btn" data-st-staff="claim" data-st-id="' + esc(id) + '">Claim</button>'
+      + '<button type="button" class="st-btn" data-st-staff="claim" data-st-id="' + esc(id) + '">' + (listing && listing.moderation_stage === 'rejected' ? 'Reopen' : 'Claim') + '</button>'
       + askHost
       + '</div>'
       + '<p class="st-desk-note">Approve hands this stay to the King. This desk cannot publish it.'
