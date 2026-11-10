@@ -51,6 +51,11 @@
     if (badge && badge.label) {
       html += '<span class="st-opt-badge' + (badge.approved ? ' is-approved' : '') + '">' + helpers.esc(badge.label) + '</span>';
     }
+    if (listing.id_pending) {
+      html += '<span class="st-opt-badge is-id-pending">ID still pending</span>';
+    } else if (listing.id_checked) {
+      html += '<span class="st-opt-badge is-id-checked">ID checked</span>';
+    }
     return html;
   }
 

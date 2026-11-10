@@ -13,6 +13,8 @@ const read = (...parts) => fs.readFileSync(path.join(__dirname, '..', ...parts),
 const html = read('index.html');
 const app = read('assets/makaug-app.js');
 const admin = read('assets/short-term-admin.js');
+const options = read('assets/short-term-options.js');
+const publicJs = read('assets/short-term.js');
 const route = read('routes/short-term.js');
 
 const TEST_ID_PHOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -70,11 +72,16 @@ test('the short-stay form asks for a government ID photo and number', () => {
   assert.match(html, /id="lp-st-id-number"/);
   assert.match(html, /id="lp-st-id-on-file"/);
   assert.match(html, /never shown publicly/);
+  assert.match(html, /Add your ID now or send it later; your listing will show 'ID pending' until we've checked it/);
+  assert.match(html, /id="lp-st-id-later-panel"/);
+  assert.match(html, /id="lp-st-id-later-form"/);
   assert.match(app, /function handleListPropertyShortStayIdFile/);
-  assert.match(app, /A photo of the front of your government ID is required/);
+  assert.match(app, /function submitListPropertyShortStayLaterId/);
+  assert.match(app, /id_upload_url/);
   assert.match(app, /signedInShortStayAgentHasIdOnFile/);
   assert.match(app, /payload\.id_document_url/);
-  assert.match(route, /requireHostIdentity: true/);
+  assert.equal(route.includes('requireHostIdentity: true'), false);
+  assert.match(route, /listings\/:id\/identity/);
   assert.match(route, /staff\/listings\/:id\/id-document/);
 });
 
@@ -85,10 +92,11 @@ test('the desk shows the ID, the form name to match, and an ID seen step', () =>
   assert.match(admin, /data-st-view-id/);
   assert.match(admin, /\/id-document/);
   assert.match(admin, /Name on the form/);
+  assert.match(admin, /No ID yet/);
   assert.match(moderation.REVIEW_CHECKS.find((item) => item.key === 'identity_checked').label, /ID seen/);
 });
 
-test('a list-property short stay without an ID is rejected', () => {
+test('a list-property short stay without an ID can still be submitted', () => {
   const result = service.validateListingSubmission({
     district: 'Kampala',
     area: 'Kololo',
@@ -98,9 +106,7 @@ test('a list-property short stay without an ID is rejected', () => {
     terms_accepted: true,
     listed_from: 'list-property'
   });
-  assert.equal(result.ok, false);
-  assert.ok(result.errors.some((line) => /photo of the front of your government ID/i.test(line)));
-  assert.ok(result.errors.some((line) => /ID number/i.test(line)));
+  assert.equal(result.ok, true, result.errors && result.errors.join('; '));
 });
 
 test('a PDF is not accepted as the host ID', () => {
@@ -238,6 +244,8 @@ test('the public short-stay payload does not leak the host ID', () => {
   assert.equal(blob.includes('id_document_url'), false);
   assert.equal(blob.includes(TEST_NIN), false);
   assert.equal(blob.includes('identity'), false);
+  assert.equal(listing.id_pending, true);
+  assert.equal(listing.id_checked, false);
 });
 
 test('accepted host ID photos match the owner listing rules', () => {
@@ -245,4 +253,134 @@ test('accepted host ID photos match the owner listing rules', () => {
   assert.equal(identity.isAcceptedHostIdPhoto({ name: 'id.pdf', url: 'data:application/pdf;base64,AAAA', mimeType: 'application/pdf' }), false);
   assert.equal(identity.isValidUgNinNumber(TEST_NIN), true);
   assert.equal(identity.isValidUgNinNumber('12345'), false);
+});
+
+test('createShortTermListing records a pending identity when no ID was uploaded', async () => {
+  const { queries, db } = fakeDb();
+  await service.createShortTermListing(db, {
+    district: 'Kampala',
+    area: 'Kololo',
+    host_name: 'Amina N',
+    host_phone: '0780863394',
+    right_to_let_declared: true,
+    terms_accepted: true,
+    listed_from: 'list-property'
+  });
+  const insert = queries.find((query) => /INSERT INTO st_listing \(/.test(query.sql));
+  assert.ok(insert);
+  const extra = insert.params[insert.params.length - 1];
+  assert.equal(extra.identity.source, 'pending');
+  assert.equal(extra.identity.id_document_url == null, true);
+  assert.equal(extra.identity.host_name_submitted, 'Amina N');
+});
+
+test('a listing without an ID seen tick shows ID still pending, except found-online stays', () => {
+  const pending = service.publicHostIdStatus({
+    source: 'direct',
+    extra_fields: { identity: { source: 'pending' } }
+  });
+  assert.deepEqual(pending, { id_pending: true, id_checked: false });
+
+  const checked = service.publicHostIdStatus({
+    source: 'direct',
+    extra_fields: { identity: { source: 'upload', id_document_url: 's3://private/short-stays/id' } },
+    moderation_checklist: { identity_checked: true }
+  });
+  assert.deepEqual(checked, { id_pending: false, id_checked: true });
+
+  const agent = service.publicHostIdStatus({
+    source: 'direct',
+    extra_fields: { identity: { source: 'agent_on_file' } }
+  });
+  assert.deepEqual(agent, { id_pending: false, id_checked: false });
+
+  const found = service.publicHostIdStatus({
+    source: 'imported',
+    extra_fields: { found_online_label: 'Found on TikTok', do_not_message: true }
+  });
+  assert.deepEqual(found, { id_pending: false, id_checked: false });
+});
+
+test('the desk marks listings with no document as No ID yet', () => {
+  const summary = identity.staffIdentitySummary({
+    host_name: 'Amina N',
+    source: 'direct',
+    extra_fields: { identity: { source: 'pending', host_name_submitted: 'Amina N' } }
+  }, {});
+  assert.equal(summary.no_id_yet, true);
+  assert.equal(summary.pending, true);
+  assert.equal(summary.available, false);
+  assert.equal(summary.applicable, true);
+  assert.equal(Object.hasOwn(summary, 'id_document_url'), false);
+});
+
+test('found-online listings do not use the host ID desk panel', () => {
+  const summary = identity.staffIdentitySummary({
+    host_name: 'Found Host',
+    source: 'imported',
+    extra_fields: { found_online_label: 'Found online', do_not_message: true }
+  }, {});
+  assert.equal(summary.applicable, false);
+  assert.equal(summary.no_id_yet, false);
+  assert.equal(summary.pending, false);
+});
+
+test('King approval is not blocked when ID seen is still outstanding', () => {
+  const checklist = {};
+  moderation.REVIEW_CHECK_KEYS.forEach((key) => { checklist[key] = true; });
+  checklist.identity_checked = false;
+  checklist[moderation.KING_CONFIRMATION_KEY] = true;
+  const verdict = moderation.canApprove(checklist);
+  assert.equal(verdict.ok, true, verdict.reason || 'should approve without ID seen');
+  assert.ok(moderation.missingChecks(checklist).some((item) => item.key === 'identity_checked'));
+});
+
+test('a later ID upload token only works for that listing', () => {
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-for-short-stay-id-pending';
+  const listingId = '33333333-3333-3333-3333-333333333333';
+  const otherId = '44444444-4444-4444-4444-444444444444';
+  const token = identity.createIdentityUploadToken(listingId);
+  assert.match(token, /^\d+\./);
+  assert.doesNotThrow(() => identity.verifyIdentityUploadToken(listingId, token));
+  assert.throws(() => identity.verifyIdentityUploadToken(otherId, token), /not valid|expired/i);
+  assert.equal(identity.identityUploadPath(listingId, token).includes('/list-property?type=short_stay'), true);
+  assert.match(identity.IDENTITY_TOKEN_MARKER, /short-term-host-id/);
+});
+
+test('the later ID upload page and public pending badge are wired up', () => {
+  assert.match(app, /function listPropertyShortStayLaterIdParams/);
+  assert.match(app, /listings\/\$\{encodeURIComponent\(params\.listingId\)}\/identity/);
+  assert.match(html, /Send your government ID/);
+  assert.match(options, /ID still pending/);
+  assert.match(publicJs, /ID still pending/);
+  assert.match(admin, /You can still approve this listing/);
+});
+
+test('attachHostIdentity stores a later upload without exposing the document URL', async () => {
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-for-short-stay-id-pending';
+  const listingId = '33333333-3333-3333-3333-333333333333';
+  const token = identity.createIdentityUploadToken(listingId);
+  const queries = [];
+  const db = {
+    query: async (sql, params) => {
+      queries.push({ sql, params });
+      if (/SELECT id, reference, host_name, extra_fields/.test(sql)) {
+        return { rows: [{
+          id: listingId,
+          reference: 'ST-000091',
+          host_name: 'Amina N',
+          extra_fields: { identity: { source: 'pending' } }
+        }] };
+      }
+      return { rows: [] };
+    }
+  };
+  const saved = await identity.attachHostIdentity(db, listingId, baseListing(), { token });
+  assert.equal(saved.has_id_document, true);
+  assert.equal(saved.reference, 'ST-000091');
+  const update = queries.find((query) => /UPDATE st_listing/.test(query.sql));
+  assert.ok(update);
+  const stored = JSON.parse(update.params[1]);
+  assert.equal(stored.identity.source, 'upload');
+  assert.ok(stored.identity.id_document_url);
 });

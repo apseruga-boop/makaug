@@ -42734,9 +42734,15 @@ function toggleListPropertyShortStay(show) {
   document.getElementById("list-choice-short-stay-note")?.classList.toggle("hidden", !on);
   if (on) {
     setListPropertyFormVisible(false);
-    prefillListPropertyShortStayContact();
-    restoreListPropertyShortStayDraft({ silent: true });
-    refreshListPropertyShortStayIdentity();
+    if (listPropertyShortStayLaterIdParams()) {
+      showListPropertyShortStayLaterId();
+    } else {
+      document.getElementById("lp-st-id-later-panel")?.classList.add("hidden");
+      document.getElementById("lp-short-stay-form")?.classList.remove("hidden");
+      prefillListPropertyShortStayContact();
+      restoreListPropertyShortStayDraft({ silent: true });
+      refreshListPropertyShortStayIdentity();
+    }
   }
 }
 
@@ -42850,6 +42856,142 @@ function handleListPropertyShortStayIdFile(event) {
   }
 }
 
+let lpShortStayLaterIdFile = null;
+
+function listPropertyShortStayLaterIdParams() {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const listingId = String(params.get("stid") || "").trim();
+    const token = String(params.get("t") || "").trim();
+    if (!listingId || !token) return null;
+    return { listingId, token };
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function showListPropertyShortStayLaterId() {
+  const params = listPropertyShortStayLaterIdParams();
+  const panel = document.getElementById("lp-st-id-later-panel");
+  const form = document.getElementById("lp-short-stay-form");
+  if (!params || !panel) return false;
+  if (form) form.classList.add("hidden");
+  panel.classList.remove("hidden");
+  const meta = document.getElementById("lp-st-id-later-meta");
+  const feedback = document.getElementById("lp-st-id-later-feedback");
+  try {
+    const payload = await apiRequest(`/api/short-term/listings/${encodeURIComponent(params.listingId)}/identity?t=${encodeURIComponent(params.token)}`, { skipAuth: true });
+    if (meta) {
+      const bits = [payload.reference, payload.title].filter(Boolean);
+      meta.textContent = bits.length ? bits.join(" — ") : "";
+    }
+    if (payload.has_id_document && feedback) {
+      feedback.innerHTML = `<p class="text-amber-800">We've already received an ID photo for this listing. You can replace it below.</p>`;
+    }
+  } catch (error) {
+    if (feedback) feedback.innerHTML = `<p class="text-red-700">${error?.message || "This ID upload link is not valid or has expired."}</p>`;
+  }
+  return false;
+}
+
+function handleListPropertyShortStayLaterIdFile(event) {
+  const input = event?.target;
+  const file = input?.files && input.files[0];
+  const label = document.getElementById("lp-st-id-later-file-name");
+  const previewEl = document.getElementById("lp-st-id-later-preview");
+  if (!file) {
+    lpShortStayLaterIdFile = null;
+    if (label) {
+      label.className = "text-xs text-gray-500 mt-1";
+      label.textContent = "A clear photo of the front of your National ID, passport or driving permit. PDFs are not accepted. Your ID is used only for verification and is never shown publicly.";
+    }
+    if (previewEl) previewEl.innerHTML = "";
+    return;
+  }
+  lpShortStayLaterIdFile = { name: file.name, size: file.size, type: file.type || "image/*" };
+  if (typeof compressPhotoForSubmission === "function") {
+    lpShortStayLaterIdFile.ready = Promise.resolve(compressPhotoForSubmission(file, { maxSide: 1200, quality: 0.75 })).then((previewUrl) => {
+      if (lpShortStayLaterIdFile && lpShortStayLaterIdFile.name === file.name && lpShortStayLaterIdFile.size === file.size) {
+        lpShortStayLaterIdFile.preview_url = previewUrl;
+      }
+      return previewUrl;
+    }).catch(() => {
+      if (label) {
+        label.className = "text-xs text-red-600 mt-1";
+        label.textContent = "That ID photo could not be prepared. Please take a clearer picture and try again.";
+      }
+      return "";
+    });
+  }
+  if (label) {
+    label.className = "text-xs text-green-700 mt-1";
+    label.textContent = `${lpShortStayLaterIdFile.name} (${Math.round(lpShortStayLaterIdFile.size / 1024)} KB) — ID photo ready. It is never shown publicly.`;
+  }
+  if (previewEl) {
+    previewEl.innerHTML = file ? `<img src="${URL.createObjectURL(file)}" alt="Government ID preview">` : "";
+  }
+}
+
+async function submitListPropertyShortStayLaterId(event) {
+  if (event) event.preventDefault();
+  const params = listPropertyShortStayLaterIdParams();
+  const feedback = document.getElementById("lp-st-id-later-feedback");
+  const submitBtn = document.getElementById("lp-st-id-later-submit");
+  if (!params) {
+    if (feedback) feedback.innerHTML = `<p class="text-red-700">This ID upload link is not valid or has expired.</p>`;
+    return false;
+  }
+  const idKind = (document.getElementById("lp-st-id-later-type")?.value || "national_id").trim();
+  const idNumber = (document.getElementById("lp-st-id-later-number")?.value || "").trim();
+  const errors = [];
+  if (!lpShortStayLaterIdFile?.name) errors.push("A photo of the front of your government ID is required.");
+  if (!idNumber) errors.push("Enter the ID number printed on the document.");
+  else if (idKind === "national_id" && typeof isValidUgNin === "function" && !isValidUgNin(idNumber)) {
+    errors.push("That National ID number does not look right. Use the number printed on the ID.");
+  }
+  if (errors.length) {
+    if (feedback) feedback.innerHTML = `<ul class="text-red-700">${errors.map((line) => `<li>${line}</li>`).join("")}</ul>`;
+    return false;
+  }
+  if (lpShortStayLaterIdFile?.ready) {
+    try { await lpShortStayLaterIdFile.ready; } catch (_) {}
+    if (!lpShortStayLaterIdFile?.preview_url) {
+      if (feedback) feedback.innerHTML = `<ul class="text-red-700"><li>That ID photo could not be prepared. Please take a clearer picture and try again.</li></ul>`;
+      return false;
+    }
+  }
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Sending…";
+  }
+  try {
+    await apiRequest(`/api/short-term/listings/${encodeURIComponent(params.listingId)}/identity`, {
+      method: "POST",
+      skipAuth: true,
+      body: {
+        upload_token: params.token,
+        id_kind: idKind,
+        id_number: idNumber,
+        id_document_name: lpShortStayLaterIdFile?.name || null,
+        id_document_url: lpShortStayLaterIdFile?.preview_url || null,
+        id_document_mime_type: lpShortStayLaterIdFile?.type || null
+      }
+    });
+    if (feedback) {
+      feedback.innerHTML = `<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-green-900"><b>We've got your ID</b><p class="mt-1">Your listing will show <b>ID still pending</b> until a moderator has checked it.</p></div>`;
+    }
+  } catch (error) {
+    const details = Array.isArray(error?.details) && error.details.length ? error.details : [error?.message || "That ID could not be saved"];
+    if (feedback) feedback.innerHTML = `<ul class="text-red-700">${details.map((line) => `<li>${line}</li>`).join("")}</ul>`;
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Send ID";
+    }
+  }
+  return false;
+}
+
 function handleListPropertyShortStayPhotos(event) {
   const files = Array.from(event?.target?.files || []).filter((file) => file.type && file.type.startsWith("image/"));
   if (!files.length) return;
@@ -42931,12 +43073,8 @@ async function submitListPropertyShortStay(event) {
   const idOnFile = signedInShortStayAgentHasIdOnFile();
   const idKind = (document.getElementById("lp-st-id-type")?.value || "national_id").trim();
   const idNumber = (document.getElementById("lp-st-id-number")?.value || "").trim();
-  if (!idOnFile) {
-    if (!lpShortStayIdFile?.name) errors.push("A photo of the front of your government ID is required.");
-    if (!idNumber) errors.push("Enter the ID number printed on the document.");
-    else if (idKind === "national_id" && typeof isValidUgNin === "function" && !isValidUgNin(idNumber)) {
-      errors.push("That National ID number does not look right. Use the number printed on the ID.");
-    }
+  if (!idOnFile && idNumber && idKind === "national_id" && typeof isValidUgNin === "function" && !isValidUgNin(idNumber)) {
+    errors.push("That National ID number does not look right. Use the number printed on the ID.");
   }
   if (errors.length) {
     if (feedback) feedback.innerHTML = `<ul class="text-red-700">${errors.map((line) => `<li>${line}</li>`).join("")}</ul>`;
@@ -42965,12 +43103,15 @@ async function submitListPropertyShortStay(event) {
     terms_accepted: true,
     listed_from: "list-property"
   };
-  if (!idOnFile) {
+  const sentIdNow = Boolean(!idOnFile && (lpShortStayIdFile?.preview_url || idNumber));
+  if (sentIdNow) {
     payload.id_kind = idKind || "national_id";
-    payload.id_number = idNumber;
-    payload.id_document_name = lpShortStayIdFile?.name || null;
-    payload.id_document_url = lpShortStayIdFile?.preview_url || null;
-    payload.id_document_mime_type = lpShortStayIdFile?.type || null;
+    if (idNumber) payload.id_number = idNumber;
+    if (lpShortStayIdFile?.preview_url) {
+      payload.id_document_name = lpShortStayIdFile.name || null;
+      payload.id_document_url = lpShortStayIdFile.preview_url;
+      payload.id_document_mime_type = lpShortStayIdFile.type || null;
+    }
   }
   if (submitBtn) {
     submitBtn.disabled = true;
@@ -42996,7 +43137,23 @@ async function submitListPropertyShortStay(event) {
     const idPreview = document.getElementById("lp-st-id-preview");
     if (idPreview) idPreview.innerHTML = "";
     if (feedback) {
-      feedback.innerHTML = `<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-green-900"><b>Sent to the Short stays review desk</b><p class="mt-1">${created?.next_step || "Moderators will review this stay before it appears on /short-term."}${listing?.reference ? ` Reference: ${listing.reference}.` : ""}</p></div>`;
+      const laterUrl = created?.id_upload_url
+        || (created?.id_upload_token && listing?.id
+          ? `/list-property?type=short_stay&stid=${encodeURIComponent(listing.id)}&t=${encodeURIComponent(created.id_upload_token)}`
+          : "");
+      let idLaterHtml = "";
+      if (idOnFile) {
+        idLaterHtml = `<p class="mt-2">Your government ID is already on file from your agent account.</p>`;
+      } else if (sentIdNow && payload.id_document_url) {
+        idLaterHtml = `<p class="mt-2">We've got your ID. Your listing will show <b>ID still pending</b> until a moderator has checked it.</p>`;
+      } else {
+        idLaterHtml = `<p class="mt-2">Add your ID now or send it later; your listing will show <b>ID still pending</b> until we've checked it.</p>`;
+        if (laterUrl) {
+          idLaterHtml += `<p class="mt-2">Use this private link to send your ID later (it works for 30 days): <a class="underline font-bold break-all" href="${laterUrl}">${laterUrl}</a></p>`;
+          idLaterHtml += `<p class="mt-1 text-xs">Keep this link to yourself. Anyone with it can upload an ID for this listing.</p>`;
+        }
+      }
+      feedback.innerHTML = `<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-green-900"><b>Sent to the Short stays review desk</b><p class="mt-1">${created?.next_step || "Moderators will review this stay before it appears on /short-term."}${listing?.reference ? ` Reference: ${listing.reference}.` : ""}</p>${idLaterHtml}</div>`;
     }
     document.getElementById("lp-short-stay-form")?.reset();
     if (right) right.checked = false;

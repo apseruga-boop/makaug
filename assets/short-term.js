@@ -2216,6 +2216,7 @@
         ? '<img src="' + esc(listing.primary_image) + '" alt="' + esc(listing.title) + '" loading="lazy">'
         : '<div class="st-noimg"><i class="fas fa-house"></i></div>')
       + '<span class="st-badge' + (sourceBadge(listing).approved ? ' is-approved' : '') + '">' + esc(sourceBadge(listing).label) + '</span>'
+      + (listing.id_pending ? '<span class="st-badge st-badge-id-pending">ID still pending</span>' : (listing.id_checked ? '<span class="st-badge st-badge-id-checked">ID checked</span>' : ''))
       + '</a>'
       + '<div class="st-card-body">'
       + '<h3 class="st-card-title"><a href="' + esc(listing.url) + '" data-st-link>' + esc(listing.title) + '</a></h3>'
@@ -2766,6 +2767,7 @@
       + '<div class="st-wrap">'
       + '<p class="st-crumb"><a href="/short-term" data-st-link><i class="fas fa-arrow-left"></i> All short stays</a></p>'
       + '<h1 style="font-size:clamp(1.4rem,3.4vw,2rem);font-weight:900;margin:10px 0 4px">' + esc(listing.title) + '</h1>'
+      + (listing.id_pending ? '<p class="st-badge-id-pending" style="display:inline-block;margin:0 0 10px">ID still pending</p>' : (listing.id_checked ? '<p class="st-badge-id-checked" style="display:inline-block;margin:0 0 10px">ID checked</p>' : ''))
       + '<p style="color:#5b6b63;margin:0 0 14px">' + esc(listing.area) + ', ' + esc(listing.district)
       + (listing.review_count > 0 ? ' &nbsp;&middot;&nbsp; <span style="color:#f59e0b">' + stars(listing.review_average)
         + '</span> ' + listing.review_average.toFixed(1) + ' (' + listing.review_count + ')' : '')
@@ -2833,6 +2835,7 @@
 
       + '<hr style="border:0;border-top:1px solid #dfe8e3;margin:14px 0">'
       + '<p style="font-weight:800;margin:0 0 2px">' + esc(listing.host_name || 'The host') + '</p>'
+      + (listing.id_pending ? '<p class="st-badge-id-pending" style="display:inline-block;margin:0 0 8px">ID still pending</p>' : (listing.id_checked ? '<p class="st-badge-id-checked" style="display:inline-block;margin:0 0 8px">ID checked</p>' : ''))
       + '<p class="st-help" style="margin:0 0 10px">You arrange this stay directly with them. makaug is not involved in the booking or the payment.</p>'
       + (contact.whatsapp_href
         ? '<a class="st-contact-btn st-contact-wa" href="' + esc(contact.whatsapp_href) + '" target="_blank" rel="noopener noreferrer" data-st-contact="whatsapp"><i class="fab fa-whatsapp"></i> WhatsApp the host</a>'

@@ -302,17 +302,25 @@
   }
 
   function identitySkipKeys(identity) {
-    return identity && (identity.required || identity.available) ? { identity_checked: true } : {};
+    return identity && identity.applicable !== false && (identity.required || identity.available || identity.no_id_yet || identity.pending)
+      ? { identity_checked: true } : {};
   }
 
   function identityPanelHtml(id, payload) {
     var identity = (payload && payload.identity) || {};
-    if (!identity.required && !identity.available) return '';
+    if (identity.applicable === false) return '';
+    if (!identity.required && !identity.available && !identity.no_id_yet && !identity.pending) return '';
     var seen = payload.checklist && payload.checklist.identity_checked === true;
-    var html = '<div class="st-desk-id" data-st-id-panel="' + esc(id) + '">';
+    var html = '<div class="st-desk-id' + (identity.no_id_yet ? ' is-missing' : '') + '" data-st-id-panel="' + esc(id) + '">';
     html += '<h5>Host ID</h5>';
+    if (identity.no_id_yet) {
+      html += '<p class="st-desk-no-id">No ID yet</p>';
+      html += '<p class="st-desk-id-hint">The host submitted without an ID. They can send it later with their private link. You can still approve this listing — it will show "ID still pending" until you tick ID seen.</p>';
+    }
     html += '<p class="st-desk-id-name">Name on the form: <b>' + esc(identity.host_name || '') + '</b></p>';
-    html += '<p class="st-desk-id-hint">' + esc(identity.name_match_instruction || 'Check the name on the ID matches the name on the form.') + '</p>';
+    if (!identity.no_id_yet) {
+      html += '<p class="st-desk-id-hint">' + esc(identity.name_match_instruction || 'Check the name on the ID matches the name on the form.') + '</p>';
+    }
     if (identity.id_document_kind_label || identity.id_number) {
       html += '<p class="st-desk-meta">' + esc(identity.id_document_kind_label || 'Government ID');
       if (identity.id_number) html += ' · ' + esc(identity.id_number);

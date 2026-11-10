@@ -345,12 +345,19 @@ function missingChecks(checklist = {}) {
     .map((check) => ({ key: check.key, label: check.label, overrideable: Boolean(check.overrideable) }));
 }
 
+function approvalBlockingChecks(checklist = {}) {
+  // Arthur, 10 Nov 2026: hosts may submit and pay without an ID. The listing
+  // can go live with "ID still pending". Staff still tick ID seen when they
+  // have checked a document, but that tick must not block approval.
+  return missingChecks(checklist).filter((check) => check.key !== 'identity_checked');
+}
+
 function canApprove(checklist = {}) {
   const normalized = normalizeChecklist(checklist);
   if (normalized[KING_CONFIRMATION_KEY] !== true) {
-    return { ok: false, reason: 'king_confirmation_missing', missing: missingChecks(normalized) };
+    return { ok: false, reason: 'king_confirmation_missing', missing: approvalBlockingChecks(normalized) };
   }
-  const missing = missingChecks(normalized);
+  const missing = approvalBlockingChecks(normalized);
   if (missing.length) return { ok: false, reason: 'checks_outstanding', missing };
   return { ok: true, missing: [] };
 }
