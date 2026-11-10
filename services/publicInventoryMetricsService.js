@@ -270,12 +270,22 @@ async function timedQuery(sql, values = [], timeoutMs = PUBLIC_INVENTORY_METRICS
  * and any query error all resolve to "add nothing". The existing count can
  * never break because of short term.
  */
-async function addShortTermToSiteWideSummary(summary, callerWhere = '') {
-  if (callerWhere && String(callerWhere).trim()) return summary;
+function shouldIncludeShortTermInSummary(callerWhere = '', includeShortTerm) {
+  // An explicit false must win. Otherwise include when the caller says this is
+  // the unfiltered site-wide total, or when there is no extra WHERE at all
+  // (staff dashboard, warmup). A filtered count such as "rentals in Kampala"
+  // must not be inflated by every short stay in Uganda.
+  if (includeShortTerm === false) return false;
+  if (includeShortTerm === true) return true;
+  return !(callerWhere && String(callerWhere).trim());
+}
+
+async function addShortTermToSiteWideSummary(summary, callerWhere = '', options = {}) {
+  if (!shouldIncludeShortTermInSummary(callerWhere, options.includeShortTerm)) return summary;
   if (!shortTermEnabled()) return summary;
   try {
     const { loadShortTermPublicCount } = require('./shortTermService');
-    const shortTerm = await loadShortTermPublicCount(db);
+    const shortTerm = await loadShortTermPublicCount(db, { timeoutMs: options.timeoutMs });
     if (!Number.isFinite(shortTerm) || shortTerm <= 0) return summary;
     summary.short_term = shortTerm;
     summary.by_type.short_term = shortTerm;
@@ -352,17 +362,20 @@ function inventoryCountSql(normalizedWhere) {
     ) public_inventory`;
 }
 
-async function executePublicInventoryCount({ key, normalizedWhere, callerWhere, values, timeoutMs, generation }) {
+async function executePublicInventoryCount({ key, normalizedWhere, callerWhere, values, timeoutMs, generation, includeShortTerm }) {
   const sql = inventoryCountSql(normalizedWhere);
   const runQuery = inventoryQueryRunner || timedQuery;
   const result = await runQuery(sql, values, timeoutMs);
   const summary = normalizePublicOpportunitySummary(result.rows[0] || {});
-  await addShortTermToSiteWideSummary(summary, callerWhere);
+  await addShortTermToSiteWideSummary(summary, callerWhere, {
+    includeShortTerm,
+    timeoutMs
+  });
   rememberCachedPublicInventoryMetrics(key, summary, generation);
   return summary;
 }
 
-function beginPublicInventoryCount({ key, normalizedWhere, callerWhere, values, timeoutMs }) {
+function beginPublicInventoryCount({ key, normalizedWhere, callerWhere, values, timeoutMs, includeShortTerm }) {
   const existing = publicInventoryMetricsInflight.get(key);
   if (existing && existing.generation === inventoryCacheGeneration) return existing.promise;
   if (!existing && publicInventoryMetricsInflight.size >= inventoryCacheLimit()) return null;
@@ -374,7 +387,8 @@ function beginPublicInventoryCount({ key, normalizedWhere, callerWhere, values, 
     callerWhere,
     values,
     timeoutMs,
-    generation
+    generation,
+    includeShortTerm
   }).finally(() => {
     const current = publicInventoryMetricsInflight.get(key);
     if (current?.promise === promise) publicInventoryMetricsInflight.delete(key);
@@ -419,7 +433,8 @@ async function loadPublicOpportunitySummary({
   where = '',
   values = [],
   timeoutMs = PUBLIC_INVENTORY_METRICS_TIMEOUT_MS,
-  preferFresh = false
+  preferFresh = false,
+  includeShortTerm
 } = {}) {
   const normalizedWhere = where && String(where).trim() ? where : `WHERE ${publicVisibleInventoryWhere('p')}`;
   const key = publicInventoryCacheKey(normalizedWhere, values);
@@ -434,7 +449,8 @@ async function loadPublicOpportunitySummary({
       normalizedWhere,
       callerWhere: where,
       values,
-      timeoutMs: PUBLIC_INVENTORY_BACKGROUND_REFRESH_TIMEOUT_MS
+      timeoutMs: PUBLIC_INVENTORY_BACKGROUND_REFRESH_TIMEOUT_MS,
+      includeShortTerm
     });
     watchInventoryRefresh(refresh);
     return inventoryResult(cached.summary, { cache: 'stale' });
@@ -445,7 +461,8 @@ async function loadPublicOpportunitySummary({
     normalizedWhere,
     callerWhere: where,
     values,
-    timeoutMs
+    timeoutMs,
+    includeShortTerm
   });
   if (!pending) {
     pending = executePublicInventoryCount({
@@ -454,7 +471,8 @@ async function loadPublicOpportunitySummary({
       callerWhere: where,
       values,
       timeoutMs,
-      generation: inventoryCacheGeneration
+      generation: inventoryCacheGeneration,
+      includeShortTerm
     });
     pending.catch(() => {});
   }
@@ -554,6 +572,7 @@ module.exports = {
   PUBLIC_INVENTORY_METRICS_CACHE_TTL_MS,
   PUBLIC_INVENTORY_METRICS_MARKER,
   addShortTermToSiteWideSummary,
+  shouldIncludeShortTermInSummary,
   invalidatePublicInventoryMetricsCache,
   loadPublicOpportunitySummary,
   normalizePublicOpportunitySummary,

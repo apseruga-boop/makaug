@@ -642,16 +642,36 @@ test('every staff route is behind a real guard, and King review behind the stron
 test('short term stays are folded into the site-wide total only', () => {
   const metrics = read('services', 'publicInventoryMetricsService.js');
   assert.ok(metrics.includes('addShortTermToSiteWideSummary'), 'helper missing');
-  assert.ok(
-    metrics.includes('if (callerWhere && String(callerWhere).trim()) return summary;'),
-    'a filtered count must not be inflated by the site-wide short term figure'
-  );
+  assert.ok(metrics.includes('shouldIncludeShortTermInSummary'), 'site-wide include helper missing');
+  assert.ok(metrics.includes('if (includeShortTerm === false) return false;'), 'an explicit false must win');
   assert.ok(metrics.includes('if (!shortTermEnabled()) return summary;'), 'must respect the flag');
 
-  const { normalizePublicOpportunitySummary } = require('../services/publicInventoryMetricsService');
+  const {
+    normalizePublicOpportunitySummary,
+    shouldIncludeShortTermInSummary
+  } = require('../services/publicInventoryMetricsService');
   const summary = normalizePublicOpportunitySummary({ sale: 10, rent: 5 });
   assert.strictEqual(summary.short_term, 0, 'short term must default to zero');
   assert.strictEqual(summary.total, 15, 'the existing total must be unchanged with the flag off');
+  assert.strictEqual(shouldIncludeShortTermInSummary(''), true, 'empty where is the site-wide total');
+  assert.strictEqual(shouldIncludeShortTermInSummary('WHERE p.listing_type = $1'), false, 'a filtered count must not be inflated');
+  assert.strictEqual(shouldIncludeShortTermInSummary('WHERE p.status = $1', true), true, 'the unfiltered public list may opt in');
+  assert.strictEqual(shouldIncludeShortTermInSummary('', false), false, 'callers can opt out');
+});
+
+test('the unfiltered public list asks for short stays in the site-wide total', () => {
+  const properties = read('routes', 'properties.js');
+  assert.ok(properties.includes('isSiteWidePublicInventoryQuery'), 'site-wide detector missing');
+  assert.ok(properties.includes('includeShortTerm: isSiteWidePublicInventoryQuery('), 'the list summary must opt into short stays');
+  assert.ok(properties.includes('loadShortTermPublicCount(db)'), 'the listing-submitted confirmation must add live short stays');
+
+  const staff = read('routes', 'staff.js');
+  assert.ok(staff.includes('listingSummaryWithShortStays'), 'staff live totals must attach short stays');
+  assert.ok(staff.includes("Includes ${shortTerm.toLocaleString('en-UG')} short stay"), 'staff help text must name the short-stay share');
+
+  const app = read('assets', 'makaug-app.js');
+  assert.ok(app.includes('heroCounterShortStay'), 'the homepage breakdown must label short stays');
+  assert.ok(app.includes('stats.short_term'), 'the hero counter must keep a short-stay bucket');
 });
 
 test('the short term count cannot take the existing count down', () => {

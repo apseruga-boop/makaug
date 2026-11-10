@@ -15,6 +15,7 @@ const {
   loadPublicOpportunitySummary,
   publicVisibleInventoryWhere
 } = require('../services/publicInventoryMetricsService');
+const { loadShortTermPublicCount } = require('../services/shortTermService');
 const {
   normalizeCommercialTransactionType,
   normalizeCommercialPropertyType,
@@ -878,11 +879,15 @@ function boolField(value) {
   return boolLike(text);
 }
 
-function staffMetricDefinitions() {
+function staffMetricDefinitions(listings = {}) {
+  const shortTerm = Number(listings.short_term || 0);
+  const shortTermNote = Number.isFinite(shortTerm) && shortTerm > 0
+    ? ` Includes ${shortTerm.toLocaleString('en-UG')} short stay${shortTerm === 1 ? '' : 's'}.`
+    : ' Includes live short stays once they are published.';
   return {
     total_properties: {
       label: 'Live Properties',
-      meaning: 'Listings currently online for customers. Rejected, deleted, archived, hidden, and test rows are excluded from this staff number.',
+      meaning: `Listings currently online for customers, including short stays.${shortTermNote} Rejected, deleted, archived, hidden, and test rows are excluded from this staff number.`,
       action: 'Click to jump to the moderation queue. Use the public website for customer-facing availability.'
     },
     pending_review: {
@@ -1809,6 +1814,19 @@ async function dashboardPanelsPayload(req) {
   };
 }
 
+
+function listingSummaryWithShortStays(listingSummary, shortTerm, { alreadyIncluded = false } = {}) {
+  const n = Number.isFinite(Number(shortTerm)) ? Math.max(0, Number(shortTerm)) : 0;
+  const baseLive = (listingSummary?.live == null || listingSummary.live === '' || !Number.isFinite(Number(listingSummary.live)))
+    ? null
+    : Number(listingSummary.live);
+  return {
+    ...listingSummary,
+    live: baseLive == null ? baseLive : (alreadyIncluded ? baseLive : baseLive + n),
+    short_term: n
+  };
+}
+
 async function buildStaffFastListingSummary() {
   const [publicInventory, reviewRow, totalRow] = await Promise.all([
     loadPublicOpportunitySummary({ timeoutMs: STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS })
@@ -1849,7 +1867,7 @@ async function buildStaffFastListingSummary() {
     totalRow?._fallback_reason,
     publicInventory?.meta?.fallback_reason
   ].filter(Boolean);
-  return {
+  return listingSummaryWithShortStays({
     database_total: databaseTotal,
     staff_visible_total: databaseTotal,
     pending_review: safeNumberOrNull(reviewRow, 'pending_review'),
@@ -1864,7 +1882,7 @@ async function buildStaffFastListingSummary() {
     // cached 0. The review-queue total is authoritative when this is true.
     _pending_count_ok: !reviewFailed,
     ...(fallbackReasons.length ? { _fallback_reason: [...new Set(fallbackReasons)].join(',') } : {})
-  };
+  }, publicInventory?.summary?.short_term, { alreadyIncluded: true });
 }
 
 async function runStaffDashboardTasks(tasks = [], concurrency = 3) {
@@ -2045,7 +2063,7 @@ async function buildDashboardFastPayload(req) {
       duplicates: { possible_duplicates: 0 },
       bank_leads: widgetRows.bank_leads,
       payments: widgetRows.payments,
-      definitions: staffMetricDefinitions()
+      definitions: staffMetricDefinitions(listingSummary)
     },
     review_queue: [],
     leads: [],
@@ -2217,8 +2235,11 @@ async function dashboardPayload(req) {
   const staffId = actorId(req);
   const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
   const panelLimit = STAFF_DASHBOARD_PANEL_LIMIT;
+  const shortTermCountPromise = loadShortTermPublicCount(db, {
+    timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS
+  }).catch(() => 0);
   const [
-    listingSummary,
+    listingSummaryRaw,
     myModeration,
     leadSummary,
     adSummary,
@@ -2405,6 +2426,11 @@ async function dashboardPayload(req) {
   ]);
 
   // No JS-side filtering here: the lists must match the header count exactly.
+  const listingSummary = listingSummaryWithShortStays(
+    listingSummaryRaw,
+    await shortTermCountPromise,
+    { alreadyIncluded: false }
+  );
   const activeReviewRows = staffModerationPanelRows(reviewRows, queueLimit);
   const activeBrokerReviewRows = staffModerationPanelRows(brokerReviewRows, queueLimit);
   const pendingTotal = safeNumber(listingSummary, 'pending_review');
@@ -2423,7 +2449,7 @@ async function dashboardPayload(req) {
       duplicates: duplicateSummary,
       bank_leads: mortgageSummary,
       payments: paymentSummary,
-      definitions: staffMetricDefinitions()
+      definitions: staffMetricDefinitions(listingSummary)
     },
     review_queue: activeReviewRows,
     review_queue_meta: staffReviewQueueMeta('main', activeReviewRows.length, Math.max(0, pendingTotal - brokerPendingTotal)),
