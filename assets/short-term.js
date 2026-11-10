@@ -85,7 +85,7 @@
     "safetyMore": "Kwano lok ducu me gwoko kwo",
     "infoLead": "Jami abicel ma mite ngeyo.",
     "extrasPartnersNamed": "Nying keken. makaug pe keto logo gi. Kakube yabo kakube pa lawot.",
-    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
+    "photoCredit": "Cal me pwony en cal ma AI aye otiyo.",
     "emptyFilters": "Pe tye gin mo marwate ki magi. Tem yaro nino onyo kabedo.",
     "emptyNone": "Pe tye kabedo me nino manok ma kityeko kete. Ka itye ki kabedo i Uganda ma ipangisa i nino acel acel, kete i makaug.",
     "guests": "Welo",
@@ -194,7 +194,7 @@
     "safetyMore": "ሁሉንም የደህንነት ምክሮች ያንብቡ",
     "infoLead": "ማወቅ የሚገቡ ስድስት ነገሮች።",
     "extrasPartnersNamed": "ስሞች ብቻ። makaug አርማዎቻቸውን አይጠቀምም። አገናኙ የአጋሩን ጣቢያ ይከፍታል።",
-    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
+    "photoCredit": "የመመሪያ ፎቶዎች በአርቴፊሻል ኢንተለጀንስ የተፈጠሩ ሥዕላዊ መግለጫዎች ናቸው።",
     "emptyFilters": "ከእነዚህ ማጣሪያዎች ጋር የሚያይ የለም። ቀኑን ወይም አካባቢውን ያስፋሉ።",
     "emptyNone": "ዘንዱ የታተመ የአጭር ጊዜ ማረፊያ የለም። በዩጋንዳ በአንድ ሌሊት የሚያከሯዩት ቤት ካለዎት፣ በmakaug ይመዘግቡ።",
     "guests": "እንግዶች",
@@ -303,7 +303,7 @@
     "safetyMore": "اقرأ كل نصائح السلامة",
     "infoLead": "ستة أمور تستحق أن تعرفها.",
     "extrasPartnersNamed": "الأسماء فقط. makaug لا تستخدم شعاراتهم. الرابط يفتح موقع الشريك.",
-    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
+    "photoCredit": "صور الدليل رسوم توضيحية مُنشأة بالذكاء الاصطناعي.",
     "emptyFilters": "لا يوجد ما يطابق هذه الفلاتر بعد. جرّب توسيع التواريخ أو المنطقة.",
     "emptyNone": "لم يُنشر أي مكان للإقامة القصيرة بعد. إذا كان لديك مكان في أوغندا تؤجّره بالليلة، أضفه على makaug.",
     "guests": "الضيوف",
@@ -412,7 +412,7 @@
     "safetyMore": "Read all safety tips",
     "infoLead": "Six things worth knowing.",
     "extrasPartnersNamed": "Partner names only. makaug does not use their logos. A link opens the partner site.",
-    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
+    "photoCredit": "Guide photos are AI-generated illustrations.",
     "emptyFilters": "Nothing matches those filters yet. Try widening the dates or the area.",
     "emptyNone": "No short stays are published yet. If you have a place in Uganda that you rent by the night, list it on makaug.",
     "guests": "Guests",
@@ -521,7 +521,7 @@
     "safetyMore": "Soma ebyokwerinda byonna",
     "infoLead": "Ebintu mukaaga ebikulu okumanya.",
     "extrasPartnersNamed": "Amanya gokka. makaug tekozesebwa logo zaabwe. Link egulawo ekibanja ky'omukago.",
-    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
+    "photoCredit": "Ebifaananyi by'okulambika bikoleddwa AI.",
     "emptyFilters": "Tewali kituukagana na filters zino. Gezaako okugaziya ennaku oba ekitundu.",
     "emptyNone": "Tewannabaawo bifo bya kusula bifulumiziddwa. Bw'oba olina ekifo mu Uganda ky'opangisa buli kiro, kiteeke ku makaug.",
     "guests": "Abagenyi",
@@ -630,7 +630,7 @@
     "safetyMore": "Shoma eby'okwerinda byona",
     "infoLead": "Ebintu mukaaga ebikuru okumanya.",
     "extrasPartnersNamed": "Amaziina goka. makaug tekoresa logo zaabo. Link neihura orubaju rw'omunywani.",
-    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
+    "photoCredit": "Ebishushani by'okuyereka bikozirwe AI.",
     "emptyFilters": "Tihariho ekirikuhikaana n'ebi. Gyezaho kwongyera ebiro nari ekicweka.",
     "emptyNone": "Tihariho byanya by'okuraara ebitairwe. Ku oine ekyanya omu Uganda eki orikupangisa buri kiro, kite aha makaug.",
     "guests": "Abashuhuki",
@@ -739,7 +739,7 @@
     "safetyMore": "Shoma eby'okwerinda byona",
     "infoLead": "Ebintu mukaaga ebikuru okumanya.",
     "extrasPartnersNamed": "Amaziina goka. makaug tekoresa logo zaabo. Link neihura orubaju rw'omunywani.",
-    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
+    "photoCredit": "Ebishushani by'okweretsa bikozirwe AI.",
     "emptyFilters": "Tihariho ekirikuhikaana n'ebi. Gyezaho kwongyera ebiro nari ekicweka.",
     "emptyNone": "Tihariho hantu h'okuraara hataairwe. Ku oine ahantu omu Uganda ho orikupangisa buri kiro, hate aha makaug.",
     "guests": "Abagyenyi",
@@ -848,7 +848,7 @@
     "safetyMore": "Soma ebyokwerinda byona",
     "infoLead": "Ebintu mukaaga ebikulu okumanha.",
     "extrasPartnersNamed": "Amanya gonka. makaug tekoresa logo zaabwe. Link egulawo ekibanja ky'omukago.",
-    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
+    "photoCredit": "Ebifaananyi by'okulambika bikoleddwa AI, si bifaananyi bya kamera.",
     "emptyFilters": "Tewali kituukagana n'ebyo. Gezaako okugaziya ennaku oba ekitundu.",
     "emptyNone": "Tewannabaawo bifo bya kusula bifulumiziddwa. Bw'oba olina ekifo mu Uganda ky'opangisa buli kiro, kiteeke ku makaug.",
     "guests": "Abagenyi",
@@ -957,7 +957,7 @@
     "safetyMore": "Soma vidokezo vyote vya usalama",
     "infoLead": "Mambo sita yanayofaa kujua.",
     "extrasPartnersNamed": "Majina pekee. makaug haitumii nembo zao. Kiungo kinafungua tovuti ya mshirika.",
-    "photoCredit": "Photos: Wikimedia Commons — Entebbe airport, public domain, David Konop; Murchison Falls, public domain, Rharnisch; 50 Uganda shilling note, CC BY-SA 4.0, Nabunje Leticia; boda boda, CC BY-SA 4.0, Erinamukuta; Owen Falls Dam, CC BY 4.0, NakigandaJ; Speke Resort Munyonyo, CC0, Samson Ssemakadde.",
+    "photoCredit": "Picha za mwongozo ni michoro iliyotengenezwa na AI.",
     "emptyFilters": "Hakuna kinacholingana na vichujio hivi. Jaribu kupanua tarehe au eneo.",
     "emptyNone": "Hakuna malazi ya muda yaliyochapishwa bado. Kama una mahali Uganda unapopangisha kwa usiku, liweke kwenye makaug.",
     "guests": "Wageni",
@@ -1784,9 +1784,12 @@
         points.push(point);
         // The price IS the pin. That is the thing people scan a map for.
         var label = priceLabel(listing);
+        var pinText = listing._partner
+          ? '<i class="fas fa-hotel" aria-hidden="true"></i>'
+          : (label ? 'USh ' + esc(label) + '/night' : 'POA');
         var icon = L.divIcon({
           className: 'st-price-pin mk-price-tag-wrap',
-          html: '<span class="mk-price-tag' + (listing._partner ? ' is-approx' : '') + '">' + (listing._partner ? '<i class="fas fa-hotel" aria-hidden="true"></i>' : 'UGX ' + esc(label || '•')) + '</span>',
+          html: '<span class="mk-price-tag' + (listing._partner ? ' is-approx' : '') + '">' + pinText + '</span>',
           iconSize: [0, 0],
           iconAnchor: [0, 0]
         });
@@ -1797,7 +1800,7 @@
           '<a class="mk-map-card" href="' + esc(listing.url || '#') + '" data-st-link>'
           + (photo && typeof photo === 'string' ? '<img class="mk-map-card-img" src="' + esc(photo) + '" alt="" loading="lazy">' : '')
           + '<div class="mk-map-card-body">'
-          + (label ? '<div class="mk-map-card-price">UGX ' + esc(nightlyAmount(listing).toLocaleString()) + ' <small>' + esc(t('perNight')) + '</small></div>' : '')
+          + '<div class="mk-map-card-price">' + (label ? 'USh ' + esc(nightlyAmount(listing).toLocaleString()) + ' <small>' + esc(t('perNight')) + '</small>' : 'POA') + '</div>'
           + '<div class="mk-map-card-title">' + esc(listing.title || '') + '</div>'
           + '<div class="mk-map-card-loc">' + esc([listing.area, listing.district].filter(Boolean).join(', ')) + '</div>'
           + '<div class="mk-map-card-cta">View stay →</div>'
@@ -1895,40 +1898,110 @@
   }
 
   function guestInfoBlock() {
-    function card(photo, titleKey, bodyKey, moreKey, href, linkKey, open) {
+    function card(slug, titleKey, bodyKey, moreKey, href, linkKey) {
       var fallbackKey = titleKey.replace('T', 'B');
-      return '<details class="st-info-card st-info-tile"' + (open ? ' open' : '') + '>'
-        + '<summary><img class="st-info-photo" src="' + esc(photo) + '" alt="" loading="lazy" width="640" height="480">'
-        + '<span class="st-info-sum"><span class="st-info-h">' + esc(t(titleKey)) + '</span>'
-        + '<span class="st-info-teaser">' + esc(gt(bodyKey, fallbackKey)) + '</span></span>'
-        + '<i class="fas fa-chevron-down st-info-chev" aria-hidden="true"></i></summary>'
-        + '<div class="st-info-body"><ul>' + String(gt(moreKey) || '').split('|').filter(Boolean).map(function (line) {
+      var img = '/assets/img/uganda-guide/' + slug;
+      return '<article class="st-info-card st-info-tile">'
+        + '<div class="st-info-photo-wrap">'
+        + '<picture>'
+        + '<source type="image/webp" srcset="' + esc(img) + '.webp">'
+        + '<img class="st-info-photo" src="' + esc(img) + '.jpg" alt="" width="1200" height="750" loading="lazy" decoding="async">'
+        + '</picture>'
+        + '<span class="st-info-h">' + esc(t(titleKey)) + '</span>'
+        + '</div>'
+        + '<div class="st-info-body">'
+        + '<p class="st-info-teaser">' + esc(gt(bodyKey, fallbackKey)) + '</p>'
+        + '<ul>' + String(gt(moreKey) || '').split('|').filter(Boolean).map(function (line) {
           return '<li>' + esc(line) + '</li>';
         }).join('') + '</ul>'
         + (href
-          ? '<a href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">'
-            + esc(t(linkKey)) + ' <i class="fas fa-arrow-up-right-from-square"></i></a>'
+          ? '<a class="st-info-btn" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">'
+            + esc(t(linkKey)) + ' <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a>'
           : '')
-        + '</div></details>';
+        + '</div></article>';
     }
-    var img = '/assets/img/uganda-guide/';
     return ''
       + '<section class="st-worth">'
+      + '<div class="st-worth-inner">'
       + '<h2>' + esc(t('infoTitle')) + '</h2>'
       + '<p class="st-worth-lead">' + esc(t('infoLead')) + '</p>'
       + '<div class="st-info-grid">'
-      + card(img + 'visa.jpg', 'i1T', 'g1S', 'g1M', 'https://visas.immigration.go.ug', 'i1L', true)
-      + card(img + 'money.jpg', 'i3T', 'g3S', 'g3M')
-      + card(img + 'transport.jpg', 'i4T', 'g4S', 'g4M')
-      + card(img + 'power.jpg', 'i5T', 'g5S', 'g5M')
-      + card(img + 'tax.jpg', 'i6T', 'g6S', 'g6M')
-      + card(img + 'tourism.jpg', 'i2T', 'g2S', 'g2M', 'https://utb.go.ug', 'i2L')
+      + card('visa', 'i1T', 'g1S', 'g1M', 'https://visas.immigration.go.ug', 'i1L')
+      + card('money', 'i3T', 'g3S', 'g3M')
+      + card('transport', 'i4T', 'g4S', 'g4M')
+      + card('power', 'i5T', 'g5S', 'g5M')
+      + card('tax', 'i6T', 'g6S', 'g6M')
+      + card('tourism', 'i2T', 'g2S', 'g2M', 'https://utb.go.ug', 'i2L')
       + '</div>'
       + '<p class="st-worth-note">' + esc(gt('gNote')) + '</p>'
-      + '</section>';
+      + '<p class="st-photo-credit">' + esc(t('photoCredit')) + '</p>'
+      + '</div></section>';
   }
 
-  // ---------------------------------------------------------------- search view
+  function shortStayLeadFormHtml() {
+    return '<div class="map-assist-card st-lead-card mt-3 rounded-xl border border-purple-100 bg-purple-50 p-4 text-sm">'
+      + '<div class="font-bold text-purple-900">Can\'t find what you\'re looking for?</div>'
+      + '<p class="text-xs text-purple-800 mt-1">Tell makaug what you need and we will follow up with matching homes or agents.</p>'
+      + '<div class="grid gap-2 mt-2">'
+      + '<input data-map-assist-name="short_term" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">'
+      + '<input data-map-assist-phone="short_term" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">'
+      + '<input data-map-assist-email="short_term" type="email" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">'
+      + '<select data-map-assist-whatsapp="short_term" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white">'
+      + '<option value="yes">This phone is on WhatsApp</option>'
+      + '<option value="no">Use phone/email only</option>'
+      + '</select>'
+      + '<select data-map-assist-need="short_term" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white">'
+      + '<option value="">What are you looking for?</option>'
+      + '<option value="Apartment">Apartment</option>'
+      + '<option value="Guest house">Guest house</option>'
+      + '<option value="Cottage">Cottage</option>'
+      + '<option value="Whole house">Whole house</option>'
+      + '<option value="Hotel or serviced apartment">Hotel or serviced apartment</option>'
+      + '</select>'
+      + '<input data-map-assist-location="short_term" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Location, district or street">'
+      + '<div class="st-lead-dates">'
+      + '<label class="st-lead-date"><span>Check-in</span>'
+      + '<input data-map-assist-checkin="short_term" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" type="date"></label>'
+      + '<label class="st-lead-date"><span>Check-out</span>'
+      + '<input data-map-assist-checkout="short_term" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" type="date"></label>'
+      + '<label class="st-lead-date"><span>Guests</span>'
+      + '<input data-map-assist-guests="short_term" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" type="number" min="1" max="30" placeholder="Guests"></label>'
+      + '</div>'
+      + '<input data-map-assist-budget="short_term" type="number" min="0" step="10000" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Budget per night (USh)">'
+      + '<textarea data-map-assist-details="short_term" rows="2" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="What are you looking for?"></textarea>'
+      + '<button type="button" data-map-assist-submit="short_term" class="bg-purple-700 hover:bg-purple-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>'
+      + '</div></div>';
+  }
+
+  function fillShortStayPageExtras() {
+    var lead = document.getElementById('st-lead-slot');
+    if (lead) lead.innerHTML = shortStayLeadFormHtml();
+    var worth = document.getElementById('st-worth-slot');
+    if (worth) worth.innerHTML = guestInfoBlock();
+    var loc = document.querySelector('[data-map-assist-location="short_term"]');
+    var q = document.getElementById('st-q');
+    if (loc && !loc.value && q && q.value) loc.value = q.value;
+    var checkIn = document.querySelector('[data-map-assist-checkin="short_term"]');
+    var checkOut = document.querySelector('[data-map-assist-checkout="short_term"]');
+    var guests = document.querySelector('[data-map-assist-guests="short_term"]');
+    var budget = document.querySelector('[data-map-assist-budget="short_term"]');
+    var inField = document.getElementById('st-in');
+    var outField = document.getElementById('st-out');
+    var guestsField = document.getElementById('st-guests');
+    var maxField = document.getElementById('st-max');
+    if (checkIn && !checkIn.value && inField && inField.value) checkIn.value = inField.value;
+    if (checkOut && !checkOut.value && outField && outField.value) checkOut.value = outField.value;
+    if (guests && !guests.value && guestsField && guestsField.value) guests.value = guestsField.value;
+    if (budget && !budget.value && maxField && maxField.value) budget.value = maxField.value;
+    if (typeof window.applyMapAssistLanguageUI === 'function') window.applyMapAssistLanguageUI();
+    var submit = document.querySelector('[data-map-assist-submit="short_term"]');
+    if (submit && submit.getAttribute('data-bound') !== '1') {
+      submit.setAttribute('data-bound', '1');
+      submit.addEventListener('click', function () {
+        if (typeof window.submitMapAssistRequest === 'function') window.submitMapAssistRequest('short_term');
+      });
+    }
+  }
 
   function hotelSearchBoxHtml() {
     var cfg = travelpayoutsConfig();
@@ -2002,8 +2075,9 @@
       + '<div id="st-results"><div class="st-grid">'
       + '<div class="st-skeleton"></div><div class="st-skeleton"></div><div class="st-skeleton"></div><div class="st-skeleton"></div>'
       + '</div></div>'
+      + '<div id="st-lead-slot"></div>'
       + disclaimerBlock()
-      + guestInfoBlock()
+      + '<div id="st-worth-slot"></div>'
       + '</div>'
       + '<div class="st-map-shell" id="st-map-shell"' + (state.mapOn ? '' : ' hidden') + '><div id="st-map"></div></div>'
       + '</div>'
@@ -2497,6 +2571,7 @@
     if (window.makaugShortTermOptions && typeof window.makaugShortTermOptions.searchHtml === 'function') {
       view.innerHTML = window.makaugShortTermOptions.searchHtml(optionHelpers());
     }
+    fillShortStayPageExtras();
 
     var slot = document.getElementById('st-ai-slot');
     if (slot && shell) slot.appendChild(shell);
