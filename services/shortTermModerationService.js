@@ -327,6 +327,13 @@ async function applyKingDecision(db, listingId, { action, checklist, overrides, 
           verdict.missing.map((check) => check.label)
         );
       }
+      if (!String(listing.district || '').trim() || !String(listing.area || '').trim()) {
+        throw moderationError(
+          'A specific location is required before this short stay can go live.',
+          400,
+          ['Save a district and an area. A missing price can stay as POA.']
+        );
+      }
       if (Number(listing.photo_count || 0) === 0) {
         throw moderationError(
           'This listing has no photos. Send it back rather than publishing it.',

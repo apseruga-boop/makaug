@@ -1149,7 +1149,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(noApiRows.length, 1, 'no-API exact social import should create one import row');
   assert.strictEqual(noApiRows[0].platform, 'TikTok');
   assert.strictEqual(noApiRows[0].area, 'Makerere');
-  assert.strictEqual(noApiRows[0].listing_type, 'students');
+  assert.strictEqual(noApiRows[0].listing_type, 'student');
   assert.strictEqual(noApiRows[0].source_contact_url, 'https://www.tiktok.com/@agentug');
   assert.strictEqual(noApiRows[0].thumbnail_url, 'https://p16-sign.tiktokcdn-us.com/example.jpeg');
   assert.strictEqual(noApiRows[0].tiktok_thumbnail_url, 'https://p16-sign.tiktokcdn-us.com/example.jpeg');
@@ -1212,12 +1212,12 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(youtubeQuickPasteRows.length, 1, 'YouTube Shorts/watch quick paste should create one normalized row');
   assert.strictEqual(youtubeQuickPasteRows[0].source_url, 'https://www.youtube.com/watch?v=abc123XYZ90');
   assert.strictEqual(youtubeQuickPasteRows[0].platform, 'YouTube');
-  assert.strictEqual(youtubeQuickPasteRows[0].listing_type, 'students');
+  assert.strictEqual(youtubeQuickPasteRows[0].listing_type, 'student');
   assert.strictEqual(youtubeQuickPasteRows[0].area, 'Makerere');
   assert.strictEqual(youtubeQuickPasteRows[0].source_contact_url, 'https://www.youtube.com/@studentroomsug');
   assert.strictEqual(youtubeQuickPasteRows[0].first_posted_at, '2026-05-20', 'operator-supplied YouTube posted date should be retained');
   const normalizedYoutubeQuickPaste = normalizeFoundOnlineSourcePost(youtubeQuickPasteRows[0]);
-  assert.strictEqual(normalizedYoutubeQuickPaste.listingType, 'students', 'YouTube student hostel quick paste should stay student inventory');
+  assert.strictEqual(normalizedYoutubeQuickPaste.listingType, 'student', 'YouTube student hostel quick paste should stay student inventory');
 
   const xQuickPasteRows = buildExactSocialPostImportRows({
     rawText: [
@@ -1227,7 +1227,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(xQuickPasteRows.length, 1, 'X/Twitter quick paste should create one normalized row');
   assert.strictEqual(xQuickPasteRows[0].source_url, 'https://x.com/studentroomsug/status/1800000000000000000');
   assert.strictEqual(xQuickPasteRows[0].platform, 'X');
-  assert.strictEqual(xQuickPasteRows[0].listing_type, 'students');
+  assert.strictEqual(xQuickPasteRows[0].listing_type, 'student');
   assert.strictEqual(xQuickPasteRows[0].area, 'Banda');
   assert.strictEqual(xQuickPasteRows[0].district, 'Kampala');
   assert.strictEqual(xQuickPasteRows[0].source_contact_url, 'https://x.com/studentroomsug');
@@ -1240,7 +1240,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
     platform: 'x',
     source_contact_url: 'https://x.com/studentroomsug',
   });
-  assert.strictEqual(normalizedStudentForRent.listingType, 'students', 'student hostel wording should win over rent wording in found-online normalizer');
+  assert.strictEqual(normalizedStudentForRent.listingType, 'student', 'student hostel wording should win over rent wording in found-online normalizer');
 
   const mansionRows = buildExactSocialPostImportRows({
     rawText: [
@@ -1525,7 +1525,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(normalizedYoutube.first_posted_at, '2026-02-12T08:30:00.000Z', 'YouTube imports should carry the first-posted platform date');
   assert.strictEqual(normalizedYoutube.source_page_url, 'https://www.youtube.com/channel/UCexample');
   assert.strictEqual(normalizedYoutube.area, 'Makerere');
-  assert.strictEqual(normalizedYoutube.listing_type, 'students');
+  assert.strictEqual(normalizedYoutube.listing_type, 'student');
   assert.strictEqual(normalizedYoutube.contact_phone, '+256700000000', 'YouTube imports should extract direct public phones from snippet text');
   assert.strictEqual(normalizedYoutube.pre_approved, true, 'trusted phone-backed YouTube sources should carry explicit preapproval');
   assert.strictEqual(normalizedYoutube.permission_status, 'founder_reported_agent_authorised_upload');

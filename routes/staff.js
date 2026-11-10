@@ -7,7 +7,7 @@ const { changeStaffPropertyImage, addStaffPropertyImages, removeStaffPropertyVid
 const { requireStaffAccess } = require('../middleware/auth');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
-const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
+const { DISTRICTS, LISTING_TYPES, listingTypeMatchSql } = require('../utils/constants');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
 const { socialSweepPublishedAfter } = require('../utils/socialSweepWindow');
 const {
@@ -4349,8 +4349,7 @@ router.get('/properties', async (req, res, next) => {
       }
     }
     if (listingType && LISTING_TYPES.includes(listingType)) {
-      values.push(listingType);
-      filters.push(`p.listing_type = $${values.length}`);
+      filters.push(listingTypeMatchSql('p', listingType, values));
     }
     if (search) filters.push(propertyListingSearchClause('p', search, values));
 
@@ -4450,8 +4449,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
       filters.push(propertyListingSearchClause('p', search, values));
     }
     if (listingType && LISTING_TYPES.includes(listingType)) {
-      values.push(listingType);
-      filters.push(`p.listing_type = $${values.length}`);
+      filters.push(listingTypeMatchSql('p', listingType, values));
     }
 
     const where = `WHERE ${filters.join(' AND ')}`;

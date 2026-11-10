@@ -1,5 +1,7 @@
 'use strict';
 
+const { freeCategoryHashtagDescriptors, FREE_CATEGORY_LOOKBACK_DAYS } = require('./freeCategoryHashtagSources');
+
 const PROPERTY_SOURCE_REGISTRY_BATCH_ID = 'property_source_registry_20260520';
 const REGISTRY_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 60000;
@@ -454,7 +456,39 @@ function sourceRecordLabel(item = {}) {
     : 'Discovery feed/search term';
 }
 
+function freeCategoryRegistrySource(item) {
+  return source({
+    key: item.key,
+    name: item.name,
+    platform: item.platform,
+    sourceType: item.sourceType,
+    url: item.url,
+    handle: item.handle,
+    districts: item.districts,
+    listingTypes: item.listingTypes,
+    hashtags: item.hashtags,
+    status: 'active',
+    trustLevel: 'review_needed',
+    consentStatus: 'public_source_review_needed',
+    scrapePolicy: 'public_hashtag_manual_review_only',
+    canContactDirectly: false,
+    notes: 'Free public hashtag page. No paid API. Found-online adverts from this source are never messaged. Look back 2 months.',
+    metadata: {
+      hashtag: `#${item.tag}`,
+      destination_category: item.destination,
+      lookback_days: FREE_CATEGORY_LOOKBACK_DAYS,
+      freshness_window_days: FREE_CATEGORY_LOOKBACK_DAYS,
+      paid_api: false,
+      free_public_source: true,
+      do_not_message: true,
+      found_online_label: 'Found online',
+      target_property_window: 'Public posts from the last 2 months only. No paid APIs.',
+    },
+  });
+}
+
 const BASE_PROPERTY_SOURCE_REGISTRY = [
+  ...freeCategoryHashtagDescriptors().map(freeCategoryRegistrySource),
   source({
     key: 'carnelian-properties-uganda',
     name: 'Carnelian Properties Uganda',

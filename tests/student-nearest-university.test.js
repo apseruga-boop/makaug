@@ -47,6 +47,6 @@ assert(socialSearchService.includes('nearest_university: nearestUniversity || nu
 assert(socialSearchService.includes('student_universities: nearestUniversity ? normalizeUniversityList([nearestUniversity]) : []'), 'found-online listings should persist student_universities');
 assert(sourceContentQuality.includes('self[-\\s]*contained'), 'shared found-online quality rules should recognize self-contained student room vocabulary');
 assert(socialSearchService.includes('STUDENT_NEAR_CAMPUS_RADIUS_KM = 2'), 'found-online ingestion should apply the 2km near-campus student supply rule');
-assert(socialSearchService.includes("const listingType = studentListing ? 'students' : originalListingType"), 'found-online ingestion should route student supply to the student category');
+assert(socialSearchService.includes("const listingType = studentListing ? 'student' : canonicalStudentListingType(originalListingType)"), 'found-online ingestion should store student supply as student');
 
 console.log('Student nearest-university tests passed');

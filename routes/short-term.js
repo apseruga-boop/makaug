@@ -803,6 +803,9 @@ router.get('/staff/queue', requireStaffAccess, async (req, res) => {
               l.staff_reviewed_by, l.staff_reviewed_at,
               l.king_reviewed_by, l.king_reviewed_at,
               l.listed_via, l.entered_by_staff_name, l.referral_code,
+              l.source,
+              l.extra_fields->>'found_online_label' AS found_online_label,
+              COALESCE(l.extra_fields->>'do_not_message', 'false') AS do_not_message,
               l.listed_at, l.expires_at, l.created_at,
               COALESCE(m.photo_count, 0)::int AS photo_count
        FROM st_listing l
