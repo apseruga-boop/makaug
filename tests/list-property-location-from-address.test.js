@@ -115,7 +115,14 @@ test('the endpoint answers unmatched without a geocoder and rejects nothing it c
 });
 
 test('borrowed centroids: every area centroid sits in its district and fills a catalogue place', () => {
-  const centres = { kampala: [0.3476, 32.5825, 15], wakiso: [0.3476, 32.5825, 50], mukono: [0.353, 32.753, 50] };
+  const centres = {
+    kampala: [0.3476, 32.5825, 15],
+    wakiso: [0.3476, 32.5825, 50],
+    mukono: [0.353, 32.753, 50],
+    buikwe: [0.449, 33.177, 50],
+    luwero: [0.8492, 32.4731, 50],
+    mpigi: [0.057, 32.096, 50]
+  };
   for (const item of UGANDA_AREA_CENTROIDS) {
     const centre = centres[String(item.district).toLowerCase()];
     assert.ok(centre, item.district);
