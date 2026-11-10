@@ -147,7 +147,7 @@
       + '<p class="st-desk-ref">' + esc(row.reference || '') + '</p>'
       + '<h4>' + esc(row.title || 'Untitled') + '</h4>'
       + '<p class="st-desk-meta">' + esc(row.area || '') + ', ' + esc(row.district || '')
-      + ' &middot; ' + esc(Number(row.base_nightly_ugx) > 0 ? ugx(row.base_nightly_ugx) + ' per night' : 'POA')
+      + ' &middot; ' + esc(Number(row.base_nightly_ugx) > 0 && !(row.extra_fields && row.extra_fields.price_on_application === true) ? ugx(row.base_nightly_ugx) + ' per night' : 'POA')
       + ' &middot; ' + esc(row.host_name || 'no host name')
       + (isFoundOnline(row) ? '' : (row.host_phone ? ' · ' + esc(row.host_phone) : '')) + '</p>'
       + '<p class="st-desk-flags">'
@@ -249,7 +249,7 @@
       + factField(id, 'area', 'Area', l.area, 'text')
       + factField(id, 'place_type', 'Type of place', l.place_type, 'place')
       + factField(id, 'property_type', 'Property type', l.property_type, 'text')
-      + factField(id, 'base_nightly_ugx', 'Per night (UGX)', l.base_nightly_ugx, 'number')
+      + factField(id, 'base_nightly_ugx', 'Per night (UGX), blank for POA', (l.extra_fields && l.extra_fields.price_on_application === true) ? '' : l.base_nightly_ugx, 'number')
       + factField(id, 'cleaning_fee_ugx', 'Cleaning fee (UGX)', l.cleaning_fee_ugx, 'number')
       + factField(id, 'min_nights', 'Minimum nights', l.min_nights, 'number')
       + factField(id, 'bedrooms', 'Bedrooms', l.bedrooms, 'number')
@@ -424,6 +424,7 @@
             row.area = payload.listing.area;
             row.district = payload.listing.district;
             row.base_nightly_ugx = payload.listing.base_nightly_ugx;
+            if (payload.listing.extra_fields) row.extra_fields = payload.listing.extra_fields;
             row.host_name = payload.listing.host_name;
             row.host_phone = payload.listing.host_phone;
             row.do_not_message = payload.listing.do_not_message === true;
