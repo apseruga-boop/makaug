@@ -13,6 +13,24 @@ function compact(value = '') {
   return String(value ?? '').replace(/\s+/g, ' ').trim();
 }
 
+// Generated found-online copy sometimes repeats a price or period that does
+// not match the structured nightly figure (for example "price on
+// application" next to a saved price, or "/month" on a per-night stay).
+// Strip those phrases so the description cannot contradict the price fields.
+function stripContradictoryPricePeriodText(value = '') {
+  let text = compact(value);
+  if (!text) return '';
+  text = text.replace(
+    /\bthe source did not publish a price,\s*so [^.?!]*price\s+(?:on|upon)\s+application[^.?!]*[.?!]?/gi,
+    ' '
+  );
+  text = text.replace(/\bprice\s+(?:on|upon)\s+application\b/gi, ' ');
+  text = text.replace(/\/month\b/gi, ' ');
+  text = text.replace(/\bper\s+month\b/gi, ' ');
+  text = text.replace(/\bmonthly\b/gi, ' ');
+  return compact(text.replace(/\s+([,.;:!?])/g, '$1'));
+}
+
 function slugify(value = '') {
   return compact(value)
     .toLowerCase()
@@ -44,7 +62,9 @@ function buildFoundOnlineShortStayRecord(item = {}, agent = {}) {
   const implausible = nightly > 0 && plausibility.plausible === false;
   const sourceUrl = compact(item.sourceUrl || item.source_url || item.postUrl || '');
   const title = compact(item.title || item.sourceTitle || 'Short stay found online').slice(0, 160);
-  const description = compact(item.description || item.sourceText || item.caption || title);
+  const description = stripContradictoryPricePeriodText(
+    item.description || item.sourceText || item.caption || title
+  );
   const safeDescription = description.length >= 20
     ? description
     : `${description || title} Found online. Pending short-stay moderation.`.trim();
@@ -205,6 +225,7 @@ async function insertFoundOnlineShortStayListing(client, item = {}, agent = {}) 
 
 module.exports = {
   MESSAGING_POLICY,
+  stripContradictoryPricePeriodText,
   buildFoundOnlineShortStayRecord,
   insertFoundOnlineShortStayListing,
 };
