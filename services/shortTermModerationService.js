@@ -342,7 +342,7 @@ async function loadListingForReview(client, listingId) {
        SELECT COUNT(*)::int AS photo_count FROM st_listing_media WHERE listing_id = l.id
      ) m ON TRUE
      WHERE l.id = $1::uuid
-     FOR UPDATE`,
+     FOR UPDATE OF l`,
     [listingId]
   );
   if (!result.rows.length) throw moderationError('That listing no longer exists.', 404);
