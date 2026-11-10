@@ -2955,6 +2955,18 @@ function scheduleStartupDataRepairs() {
     } catch (error) {
       logger.warn('Plot title restore 216 skipped:', error.message || String(error));
     }
+    // Area-centre auto-pins for approved listings that still have no pin.
+    // Migration 217 only creates the backup table. The listing updates
+    // run here, in batches of 20, after the process is already serving.
+    try {
+      const { runAutoPinMissingAreaCentres217 } = require('./scripts/run-auto-pin-missing-area-centres-217');
+      const autoPin = await runAutoPinMissingAreaCentres217(db, { logger });
+      if (autoPin && !autoPin.skipped && (autoPin.updated || autoPin.stopped_early)) {
+        logger.info('Auto-pin 217 finished a pass', autoPin);
+      }
+    } catch (error) {
+      logger.warn('Auto-pin 217 skipped:', error.message || String(error));
+    }
   }, staggeredBootDelay('startup_data_repairs'));
   timer.unref?.();
 }
