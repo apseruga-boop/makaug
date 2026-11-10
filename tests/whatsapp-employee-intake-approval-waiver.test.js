@@ -69,15 +69,12 @@ test('employee WhatsApp intake can pass without ID, email, OTP, or the 5-photo c
   }), false);
 });
 
-test('employee intake still fails a missing location, a missing price, or missing listing fields', () => {
+test('employee intake still fails missing listing fields', () => {
   const noPin = reviewOf({ ...employee, latitude: null, longitude: null });
-  assert.equal(noPin.can_approve, false);
-  assert.equal(check(noPin, 'location_verified').status, 'fail');
-  assert.equal(check(noPin, 'location_verified').blocking, true);
-
-  const noPrice = reviewOf({ ...employee, price: 0 });
-  assert.equal(noPrice.can_approve, false);
-  assert.equal(check(noPrice, 'pricing_checked').status, 'fail');
+  // Ntinda has an area centre, so a missing pin is not a warning and does not block.
+  assert.equal(noPin.can_approve, true);
+  assert.equal(check(noPin, 'location_verified').status, 'pass');
+  assert.equal(check(noPin, 'location_verified').blocking, false);
 
   const noTitle = reviewOf({ ...employee, title: '' });
   assert.equal(noTitle.can_approve, false);

@@ -34138,6 +34138,7 @@ function adminReviewListingEditPanel(review = {}) {
             <div>
               <div class="text-xs font-black uppercase tracking-wide text-blue-900">Review map pin</div>
               <p class="mt-1 text-xs text-blue-900">The pin follows the town as a guide and is not saved. Latitude and longitude stay empty until you press Use current pin.</p>
+              ${adminReviewMissingMapPinWarning(review) ? `<div class="mt-2 rounded-lg border border-amber-400 bg-amber-100 px-3 py-2 text-sm font-bold text-amber-950" data-admin-review-missing-pin-warning="1">No map pin – add one</div>` : ""}
             </div>
             <div id="admin-review-location-map-status" class="rounded-full bg-white px-2 py-1 text-[11px] font-bold text-blue-900">Loading map...</div>
           </div>
@@ -34258,6 +34259,15 @@ function adminReviewLocationStatus(message, tone = "blue") {
 
 let adminReviewLocationSyncTimer = null;
 let adminReviewLocationResolveSeq = 0;
+
+function adminReviewMissingMapPinWarning(review = {}) {
+  const checks = review?.review?.automated?.checks || review?.review?.checklist_items || [];
+  const item = checks.find((check) => String(check?.key || "") === "location_verified");
+  if (!item) return "";
+  const status = String(item.status || "").toLowerCase();
+  const message = String(item.message || "").trim();
+  return status === "warning" && message === "No map pin – add one" ? message : "";
+}
 
 function adminReviewHasUsableCoordinates(lat, lng) {
   if (lat == null || lng == null) return false;
