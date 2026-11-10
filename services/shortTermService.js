@@ -476,6 +476,24 @@ function stayBlocksDirectContact(row = {}) {
   return flag === true || flag === 'true' || flag === 1 || flag === '1';
 }
 
+// Public "ID still pending" / "ID checked". Found-online stays never show it.
+// An approved agent with an ID on file is not pending. Staff ticking ID seen
+// clears the pending badge; we then optionally show "ID checked".
+function publicHostIdStatus(row = {}) {
+  const extra = extraObject(row);
+  if (stayBlocksDirectContact(row) || extra.found_online_label || extra.found_online === true) {
+    return { id_pending: false, id_checked: false };
+  }
+  if (checklistFlag(row.moderation_checklist, 'identity_checked')) {
+    return { id_pending: false, id_checked: true };
+  }
+  const identity = extra.identity && typeof extra.identity === 'object' ? extra.identity : {};
+  if (identity.source === 'agent_on_file') {
+    return { id_pending: false, id_checked: false };
+  }
+  return { id_pending: true, id_checked: false };
+}
+
 function publicSourceUrl(row = {}) {
   const extra = extraObject(row);
   const candidates = [extra.source_url, extra.source_post_url, extra.youtube_url, extra.tiktok_url, row.source_url];
@@ -648,7 +666,8 @@ function normalizeShortTermListing(row = {}, options = {}) {
     verified: staffVerifiedStay(row),
     source_url: publicSourceUrl(row),
     found_online: stayBlocksDirectContact(row),
-    do_not_message: stayBlocksDirectContact(row)
+    do_not_message: stayBlocksDirectContact(row),
+    ...publicHostIdStatus(row)
   };
 
   if (options.directContact === true) {
@@ -1048,8 +1067,9 @@ function validateListingSubmission(payload = {}, options = {}) {
     errors.push('You must accept the makaug listing terms.');
   }
 
-  const requireHostIdentity = options.requireHostIdentity === true
-    || String(payload.listed_from || '').trim() === 'list-property';
+  // Arthur, 10 Nov 2026: hosts can submit and pay without an ID. We still
+  // ask for it, and we still validate a photo or number if they send one.
+  const requireHostIdentity = options.requireHostIdentity === true;
   const identityResult = validateHostIdentity(payload, {
     required: requireHostIdentity,
     identityOnFile: options.identityOnFile === true
@@ -1142,10 +1162,9 @@ function validateListingSubmission(payload = {}, options = {}) {
 }
 
 async function createShortTermListing(db, payload = {}, context = {}) {
-  const requireHostIdentity = context.requireHostIdentity === true
-    || String(payload.listed_from || '').trim() === 'list-property';
+  const requireHostIdentity = context.requireHostIdentity === true;
   let agentOnFile = null;
-  if (requireHostIdentity && context.hostUserId) {
+  if (context.hostUserId) {
     agentOnFile = await findVerifiedAgentIdentityOnFile(db, { userId: context.hostUserId });
   }
   const validation = validateListingSubmission(payload, {
@@ -1534,6 +1553,7 @@ module.exports = {
   normaliseReferralCode,
   normalisePhone,
   normalizeShortTermListing,
+  publicHostIdStatus,
   parseDate,
   quoteStay,
   recordShortTermLead,

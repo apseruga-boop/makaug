@@ -3,11 +3,18 @@
 // Government ID for short-stay hosts who list on /list-property or via the
 // same public POST /api/short-term/listings endpoint.
 //
+// The ID is asked for and encouraged, but it is not required to submit or
+// pay. Hosts can send it later with a private signed link. Public pages show
+// "ID still pending" until staff tick ID seen (or the host is an approved
+// agent with an ID already on file). Found-online stays never show the badge.
+//
 // Storage and staff viewing reuse the existing private helpers:
 //   - prepareMediaUrlForStorage (same as owner listing National ID photos)
 //   - viewableIdentityUrl (same as agent / broker ID photos)
 // The file is never written to a public URL and never added to the public
 // short-stay payload. Staff get a short-lived signed link.
+
+const crypto = require('crypto');
 
 const { prepareMediaUrlForStorage } = require('./cloudMediaStorageService');
 const { viewableIdentityUrl } = require('./agentIdentityStorageService');
@@ -151,7 +158,7 @@ async function findVerifiedAgentIdentityOnFile(db, { userId } = {}) {
 async function persistHostIdentity(identity = {}, { reference, hostName, agentOnFile } = {}) {
   if (agentOnFile && !identity.hasDocument) {
     return {
-      required: true,
+      required: false,
       source: 'agent_on_file',
       agent_id: String(agentOnFile.id),
       id_document_url: clean(agentOnFile.identity_document_url, 2000) || null,
@@ -163,7 +170,17 @@ async function persistHostIdentity(identity = {}, { reference, hostName, agentOn
       reused_at: new Date().toISOString()
     };
   }
-  if (!identity || !identity.hasDocument) return null;
+  if (!identity || !identity.hasDocument) {
+    return {
+      required: false,
+      pending: true,
+      source: 'pending',
+      id_document_kind: identity && identity.kind ? identity.kind : null,
+      id_number: identity && identity.number ? identity.number : null,
+      host_name_submitted: clean(hostName, 120) || null,
+      recorded_at: new Date().toISOString()
+    };
+  }
 
   const storedUrl = await prepareMediaUrlForStorage(identity.url, {
     keyPrefix: `short-stays/${clean(reference, 40) || 'pending'}/identity`,
@@ -175,7 +192,8 @@ async function persistHostIdentity(identity = {}, { reference, hostName, agentOn
   });
 
   return {
-    required: true,
+    required: false,
+    pending: true,
     source: 'upload',
     id_document_url: storedUrl,
     id_document_name: identity.name || 'government-id-photo',
@@ -194,22 +212,38 @@ function nameMatchInstruction(hostName) {
     : 'Check the name on the ID matches the name on the form.';
 }
 
+function listingIsFoundOnline(row = {}, extra = {}) {
+  const source = String(row.source || '').toLowerCase();
+  if (source === 'imported') return true;
+  const flag = row.do_not_message ?? extra.do_not_message;
+  if (flag === true || flag === 'true' || flag === 1 || flag === '1') return true;
+  if (extra.found_online === true || extra.found_online === 'true') return true;
+  if (clean(extra.found_online_label, 80)) return true;
+  return false;
+}
+
 function staffIdentitySummary(row = {}, checklist = {}) {
   const extra = parseExtraFields(row.extra_fields);
   const identity = extra.identity && typeof extra.identity === 'object' ? extra.identity : {};
   const hostName = clean(row.host_name || identity.host_name_submitted, 120);
   const available = Boolean(identity.id_document_url || identity.source === 'agent_on_file');
+  const foundOnline = listingIsFoundOnline(row, extra);
+  const seen = checklist?.identity_checked === true;
+  const agentOnFile = identity.source === 'agent_on_file';
   return {
-    required: identity.required === true || available,
+    applicable: !foundOnline,
+    required: false,
+    pending: !foundOnline && !seen && !agentOnFile,
     available,
-    source: identity.source || (identity.id_document_url ? 'upload' : ''),
+    no_id_yet: !foundOnline && !available && !agentOnFile,
+    source: identity.source || (identity.id_document_url ? 'upload' : (identity.pending ? 'pending' : '')),
     id_document_name: identity.id_document_name || '',
     id_document_kind: identity.id_document_kind || '',
     id_document_kind_label: HOST_ID_KINDS[identity.id_document_kind] || '',
     id_number: identity.id_number || '',
     host_name: hostName,
     name_match_instruction: nameMatchInstruction(hostName),
-    identity_seen: checklist?.identity_checked === true
+    identity_seen: seen
   };
 }
 
@@ -294,17 +328,134 @@ async function buildStaffIdentityDocumentPayload(db, listingId, { actorId, actor
   return { ...summary, document };
 }
 
+const IDENTITY_TOKEN_MARKER = 'short-term-host-id-v1';
+const IDENTITY_UPLOAD_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function identityError(message, status = 400, details) {
+  const error = new Error(message);
+  error.status = status;
+  if (details) error.details = Array.isArray(details) ? details : [details];
+  return error;
+}
+
+function identityTokenSecret() {
+  const secret = String(process.env.JWT_SECRET || '').trim();
+  if (!secret) {
+    throw identityError('ID uploads are unavailable because the server signing key is not configured.', 503);
+  }
+  return secret;
+}
+
+function signIdentityPayload(listingId, expiresAt) {
+  return crypto
+    .createHmac('sha256', identityTokenSecret())
+    .update(`${IDENTITY_TOKEN_MARKER}:${listingId}:${expiresAt}`)
+    .digest('base64url');
+}
+
+function createIdentityUploadToken(listingId, { ttlMs = IDENTITY_UPLOAD_TOKEN_TTL_MS } = {}) {
+  const expiresAt = Date.now() + Math.max(60000, Number(ttlMs) || IDENTITY_UPLOAD_TOKEN_TTL_MS);
+  return `${expiresAt}.${signIdentityPayload(listingId, expiresAt)}`;
+}
+
+function verifyIdentityUploadToken(listingId, token) {
+  const raw = String(token || '').trim();
+  const [expiresRaw, signature] = raw.split('.');
+  const expiresAt = Number(expiresRaw);
+  if (!listingId || !raw || !Number.isFinite(expiresAt) || expiresAt < Date.now()) {
+    throw identityError('This ID upload link has expired. Ask the Short stays desk for a new one.', 401);
+  }
+  const expected = signIdentityPayload(listingId, expiresAt);
+  const left = Buffer.from(String(signature || ''));
+  const right = Buffer.from(expected);
+  if (left.length !== right.length || !crypto.timingSafeEqual(left, right)) {
+    throw identityError('This ID upload link is not valid.', 401);
+  }
+  return { expiresAt };
+}
+
+function identityUploadPath(listingId, token) {
+  if (!listingId || !token) return null;
+  return `/list-property?type=short_stay&stid=${encodeURIComponent(listingId)}&t=${encodeURIComponent(token)}`;
+}
+
+async function identityUploadContext(db, listingId, token) {
+  verifyIdentityUploadToken(listingId, token);
+  const result = await db.query(
+    `SELECT id, reference, title, area, district, host_name, extra_fields
+       FROM st_listing
+      WHERE id = $1::uuid
+      LIMIT 1`,
+    [listingId]
+  );
+  const row = result.rows[0];
+  if (!row) throw identityError('Listing not found', 404);
+  const extra = parseExtraFields(row.extra_fields);
+  const identity = extra.identity && typeof extra.identity === 'object' ? extra.identity : {};
+  return {
+    ok: true,
+    id: row.id,
+    reference: row.reference || null,
+    title: row.title || null,
+    area: row.area || null,
+    district: row.district || null,
+    host_name: row.host_name || null,
+    has_id_document: Boolean(identity.id_document_url || identity.source === 'agent_on_file')
+  };
+}
+
+async function attachHostIdentity(db, listingId, payload = {}, { token } = {}) {
+  verifyIdentityUploadToken(listingId, token);
+  const validation = validateHostIdentity(payload, { required: true });
+  if (!validation.ok) {
+    throw identityError('That ID could not be saved', 400, validation.errors);
+  }
+  const result = await db.query(
+    `SELECT id, reference, host_name, extra_fields
+       FROM st_listing
+      WHERE id = $1::uuid
+      LIMIT 1`,
+    [listingId]
+  );
+  const row = result.rows[0];
+  if (!row) throw identityError('Listing not found', 404);
+  const stored = await persistHostIdentity(validation.value, {
+    reference: row.reference,
+    hostName: row.host_name
+  });
+  await db.query(
+    `UPDATE st_listing
+        SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+            updated_at = NOW()
+      WHERE id = $1::uuid`,
+    [listingId, JSON.stringify({ identity: stored })]
+  );
+  return {
+    ok: true,
+    reference: row.reference || null,
+    has_id_document: Boolean(stored && stored.id_document_url)
+  };
+}
+
 module.exports = {
   HOST_ID_KINDS,
   HOST_ID_MAX_BYTES,
   HOST_ID_PHOTO_MIMES,
+  IDENTITY_TOKEN_MARKER,
+  IDENTITY_UPLOAD_TOKEN_TTL_MS,
+  attachHostIdentity,
   buildStaffIdentityDocumentPayload,
+  createIdentityUploadToken,
   findVerifiedAgentIdentityOnFile,
+  identityUploadContext,
+  identityUploadPath,
   isAcceptedHostIdPhoto,
   isValidUgNinNumber,
+  listingIsFoundOnline,
   nameMatchInstruction,
   persistHostIdentity,
   readHostIdentity,
   staffIdentitySummary,
-  validateHostIdentity
+  validateHostIdentity,
+  verifyIdentityUploadToken
 };

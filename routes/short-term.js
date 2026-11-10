@@ -67,7 +67,11 @@ const {
   validateListingSubmission
 } = require('../services/shortTermService');
 const {
+  attachHostIdentity,
   buildStaffIdentityDocumentPayload,
+  createIdentityUploadToken,
+  identityUploadContext,
+  identityUploadPath,
   staffIdentitySummary
 } = require('../services/shortTermIdentityService');
 const {
@@ -535,7 +539,6 @@ router.post('/listings', intakeLimiter, async (req, res) => {
       ip: req.clientIp || req.ip,
       hostUserId: req.userAuth?.id || null,
       listedVia: 'website',
-      requireHostIdentity: true,
       referralCode: body.referral_code || req.query?.ref || null
     });
     // Hosts list without an account on purpose - an account requirement is
@@ -551,11 +554,24 @@ router.post('/listings', intakeLimiter, async (req, res) => {
         message: error?.message
       });
     }
+    let idUploadToken = null;
+    try {
+      idUploadToken = createIdentityUploadToken(created.id);
+    } catch (error) {
+      logger.warn('Short term ID upload token could not be issued', {
+        marker: SHORT_TERM_MARKER,
+        message: error?.message
+      });
+    }
+    const idUploadUrl = identityUploadPath(created.id, idUploadToken);
     return res.status(201).json({
       ok: true,
       marker: SHORT_TERM_MARKER,
       listing: created,
       upload_token: uploadToken,
+      id_upload_token: idUploadToken,
+      id_upload_url: idUploadUrl,
+      id_upload_expires_days: 30,
       photos_ready: photoUploadReady(),
       next_step: created.listing_fee_included_in_agent_plan
         ? 'Your place is with our team for review. Short stays are included in your agent plan (UGX 50,000 a month), so there is no separate short-stay fee and no free days. makaug takes no commission on any stay.'
@@ -674,6 +690,50 @@ router.get('/listings/:id/photos', async (req, res) => {
     return res.json({ ok: true, photos, marker: SHORT_TERM_MARKER });
   } catch (error) {
     return fail(res, error, 'Photos are unavailable');
+  }
+});
+
+const identityUploadLimiter = rateLimit({
+  keyGenerator: rateLimitClientKey,
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many ID uploads from this connection. Try again later.' }
+});
+
+router.get('/listings/:id/identity', identityUploadLimiter, async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) {
+      return res.status(400).json({ ok: false, error: 'Unknown listing' });
+    }
+    const token = req.query?.t || req.query?.token || req.query?.upload_token;
+    const payload = await identityUploadContext(db, req.params.id, token);
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ ok: true, marker: SHORT_TERM_MARKER, ...payload });
+  } catch (error) {
+    return fail(res, error, 'This ID upload link is not valid');
+  }
+});
+
+router.post('/listings/:id/identity', identityUploadLimiter, async (req, res) => {
+  try {
+    if (!shortTermIntakeEnabled()) {
+      return res.status(503).json({ ok: false, error: 'Short term listing submissions are not open yet' });
+    }
+    if (!isUuid(req.params.id)) {
+      return res.status(400).json({ ok: false, error: 'Unknown listing' });
+    }
+    const token = req.body?.upload_token || req.body?.t || req.body?.token || req.query?.t;
+    const saved = await attachHostIdentity(db, req.params.id, req.body || {}, { token });
+    return res.status(201).json({
+      ok: true,
+      marker: SHORT_TERM_MARKER,
+      reference: saved.reference,
+      has_id_document: saved.has_id_document === true
+    });
+  } catch (error) {
+    return fail(res, error, 'That ID could not be saved');
   }
 });
 

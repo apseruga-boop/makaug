@@ -445,7 +445,7 @@
     @media (min-width:768px){.mk-howto-card{flex-basis:13.5rem}.mk-howto-nav{display:flex}.mk-howto-title{font-size:2rem}}
   </style>
   <link rel="stylesheet" href="/assets/off-plan.css?v=20261107-off-plan-v6">
-  <link rel="stylesheet" href="/assets/short-term.css?v=20261110-short-stay-host-id">
+  <link rel="stylesheet" href="/assets/short-term.css?v=20261110-short-stay-id-pending">
   <link rel="stylesheet" href="/assets/design-refresh-1104.css?v=20261110-st-lead-guide">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
@@ -5252,7 +5252,7 @@
 
   <div id="page-short-term" class="page" data-short-term-marker="short-term-discovery-v1">
     <link rel="stylesheet" href="/assets/short-term-options.css?v=20261110-st-lead-guide">
-    <script src="/assets/short-term-options.js?v=20261110-see-original-post"></script>
+    <script src="/assets/short-term-options.js?v=20261110-short-stay-id-pending"></script>
     <div id="short-term-ai-shell" class="st-wrap" style="padding-top:18px">
       <div class="ask-ai-search-shell" data-ai-search-shell data-ai-scope="short-term">
         <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -6754,7 +6754,7 @@
             <div id="lp-st-id-wrap" class="md:col-span-2" data-st-host-id-form="1">
               <div id="lp-st-id-on-file" class="hidden lp-st-id-on-file">Your government ID is already on file from your agent account. You do not need to upload it again.</div>
               <div id="lp-st-id-fields" class="lp-st-id">
-                <p class="block text-sm font-semibold text-gray-700 mb-1.5">Government ID <span class="font-normal text-gray-400">Required — National ID, passport or driving permit</span></p>
+                <p class="block text-sm font-semibold text-gray-700 mb-1.5">Government ID <span class="font-normal text-gray-500">Add your ID now or send it later; your listing will show 'ID pending' until we've checked it</span></p>
                 <div class="grid md:grid-cols-2 gap-4">
                   <div>
                     <label for="lp-st-id-type" class="block text-sm font-semibold text-gray-700 mb-1.5">ID type</label>
@@ -6791,6 +6791,35 @@
               </div>
             </div>
           </form>
+          <div id="lp-st-id-later-panel" class="hidden mt-2" data-st-host-id-later="1">
+            <h2 class="text-xl font-extrabold text-gray-900 mb-2">Send your government ID</h2>
+            <p id="lp-st-id-later-intro" class="text-sm text-gray-600 mb-3">Use this private link to add your ID. Your listing will show 'ID pending' until we've checked it. Keep this link to yourself.</p>
+            <p id="lp-st-id-later-meta" class="text-sm font-semibold text-gray-800 mb-4"></p>
+            <form id="lp-st-id-later-form" class="grid md:grid-cols-2 gap-4" onsubmit="return submitListPropertyShortStayLaterId(event)">
+              <div>
+                <label for="lp-st-id-later-type" class="block text-sm font-semibold text-gray-700 mb-1.5">ID type</label>
+                <select id="lp-st-id-later-type" class="w-full border rounded-xl px-4 py-3 text-sm" style="border-color:var(--lp-border)">
+                  <option value="national_id" selected>National ID</option>
+                  <option value="passport">Passport</option>
+                  <option value="driving_permit">Driving permit</option>
+                </select>
+              </div>
+              <div>
+                <label for="lp-st-id-later-number" class="block text-sm font-semibold text-gray-700 mb-1.5">ID number</label>
+                <input id="lp-st-id-later-number" class="w-full border rounded-xl px-4 py-3 text-sm" style="border-color:var(--lp-border)" placeholder="The number printed on the document" autocomplete="off">
+              </div>
+              <div class="md:col-span-2">
+                <label for="lp-st-id-later-file" class="block text-sm font-semibold text-gray-700 mb-1.5">Photo of the front of your ID</label>
+                <input id="lp-st-id-later-file" type="file" accept="image/*" class="w-full border rounded-xl px-4 py-3 text-sm bg-white" style="border-color:var(--lp-border)" onchange="handleListPropertyShortStayLaterIdFile(event)">
+                <p id="lp-st-id-later-file-name" class="text-xs text-gray-500 mt-1">A clear photo of the front of your National ID, passport or driving permit. PDFs are not accepted. Your ID is used only for verification and is never shown publicly.</p>
+                <div id="lp-st-id-later-preview" class="mt-3"></div>
+              </div>
+              <div class="md:col-span-2">
+                <div id="lp-st-id-later-feedback" class="text-sm mb-3"></div>
+                <button id="lp-st-id-later-submit" type="submit" class="text-white rounded-xl px-5 py-3 text-sm font-extrabold" style="background:var(--lp-accent)">Send ID</button>
+              </div>
+            </form>
+          </div>
         </section>
       </div>
 
@@ -10923,7 +10952,7 @@
       }
       function loadShortTermNow() {
         if (!window.__makaugShortTerm || window.__makaugShortTerm.enabled !== true) return Promise.resolve(false);
-        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261110-st-lead-guide", function () {
+        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261110-short-stay-id-pending", function () {
           return !!(window.makaugShortTerm && typeof window.makaugShortTerm.route === "function");
         });
       }
@@ -11004,7 +11033,7 @@
           if (window.__makaugShortTerm && window.__makaugShortTerm.enabled === true
             && (document.getElementById("staff-short-term-queue") || document.getElementById("admin-short-term-king-queue"))) {
             var shortTermDeskScript = document.createElement("script");
-            shortTermDeskScript.src = "/assets/short-term-admin.js?v=20261110-short-stay-host-id";
+            shortTermDeskScript.src = "/assets/short-term-admin.js?v=20261110-short-stay-id-pending";
             document.body.appendChild(shortTermDeskScript);
           }
         };
