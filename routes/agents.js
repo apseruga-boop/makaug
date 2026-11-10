@@ -28,6 +28,7 @@ const {
 } = require('../services/agentListingCount');
 const { shortPathForAgent } = require('../services/agentShortLink');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
+const { canonicalUgPhone, findAgentByNormalisedPhone, duplicatePhoneBody, takenFromDbError } = require('../services/agentPhoneService');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { getAgentFacingReport, getReportById, listAgentReportWeeks, siteUrl } = require('../services/agentWeeklyReportService');
 const { renderReportCardPng, renderAgentShareCardPng, reportCardUrl, verifyCardToken } = require('../services/agentReportCardService');
@@ -1675,6 +1676,11 @@ router.post('/register', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
     }
 
+    const storedPhone = canonicalUgPhone(phone) || phone;
+    const storedWhatsapp = canonicalUgPhone(cleanText(body.whatsapp)) || storedPhone;
+    const existingPhone = await findAgentByNormalisedPhone(db, storedPhone);
+    if (existingPhone) return res.status(409).json(duplicatePhoneBody(existingPhone));
+
     const inserted = await db.query(
       `INSERT INTO agents (
         full_name,
@@ -1709,8 +1715,8 @@ router.post('/register', async (req, res, next) => {
         resolvedLicence,
         registrationStatus,
         listingLimit,
-        phone,
-        cleanText(body.whatsapp) || null,
+        storedPhone,
+        storedWhatsapp,
         email || null,
         districtsCovered,
         specializations,
@@ -1749,6 +1755,8 @@ router.post('/register', async (req, res, next) => {
     return res.status(201).json({ ok: true, data: inserted.rows[0] });
   } catch (error) {
     if (error.code === '23505') {
+      const taken = takenFromDbError(error);
+      if (taken) return res.status(409).json(taken);
       return res.status(409).json({ ok: false, error: 'Licence number or contact already registered' });
     }
     return next(error);

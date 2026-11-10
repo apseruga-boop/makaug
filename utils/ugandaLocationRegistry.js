@@ -56,7 +56,13 @@ const DETAILED_LOCATIONS = [
   { name: 'Bukesa', district: 'Kampala', lat: 0.325, lng: 32.567 },
   { name: 'Busega', district: 'Kampala', lat: 0.309, lng: 32.526 },
 
-  { name: 'Wakiso', district: 'Wakiso', level: 'district', lat: 0.4044, lng: 32.4594, aliases: ['Wakiso', 'Wakiso District', 'Wakiso Town', 'Wakiso Town Council'] },
+  { name: 'Wakiso', district: 'Wakiso', level: 'district', lat: 0.4044, lng: 32.4594, aliases: ['Wakiso', 'Wakiso District'] },
+  // Wakiso Town Council is a real town inside Wakiso District. It used to be
+  // only an alias of the district node, so saving the area "Wakiso Town"
+  // collapsed to the district and was rejected as not specific enough.
+  // The town group name stays "Wakiso" (see CANONICAL_TOWN_NAMES) so the
+  // dropdown does not grow a second "Wakiso Town" town.
+  { name: 'Wakiso Town', district: 'Wakiso', town: 'Wakiso', level: 'town', lat: 0.4044, lng: 32.4594, aliases: ['Wakiso Town', 'Wakiso Town Council'] },
   { name: 'Entebbe', district: 'Wakiso', level: 'city', lat: 0.0512, lng: 32.4637, aliases: ['Entebbe', 'Entebbe Town', 'Entebbe Municipality'] },
   { name: 'Kitoro', district: 'Wakiso', lat: 0.055, lng: 32.464 },
   { name: 'Nakiwogo', district: 'Wakiso', lat: 0.061, lng: 32.458 },
@@ -108,14 +114,19 @@ const DETAILED_LOCATIONS = [
 
   { name: 'Kalagi', district: 'Mukono', lat: 0.531, lng: 32.743, aliases: ['Kalagi', 'Kalagi Town', 'Kalagi Trading Centre', 'Kalagi Trading Center'] },
 
-  { name: 'Mukono', district: 'Mukono', level: 'district', lat: 0.353, lng: 32.753, aliases: ['Mukono', 'Mukono Town'] },
+  { name: 'Mukono', district: 'Mukono', level: 'district', lat: 0.353, lng: 32.753, aliases: ['Mukono', 'Mukono District'] },
+  // Mukono Town is the town, not the district. 0.3533°N, 32.7553°E.
+  { name: 'Mukono Town', district: 'Mukono', town: 'Mukono', level: 'town', lat: 0.3533, lng: 32.7553, aliases: ['Mukono Town', 'Mukono Town Council'] },
   { name: 'Seeta', district: 'Mukono', lat: 0.361, lng: 32.705 },
   { name: 'Goma', district: 'Mukono', lat: 0.383, lng: 32.742 },
   { name: 'Namanve', district: 'Mukono', lat: 0.348, lng: 32.697 },
   { name: 'Bajjo', district: 'Mukono', lat: 0.333, lng: 32.741 },
   { name: 'Katosi', district: 'Mukono', lat: 0.181, lng: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
 
-  { name: 'Jinja', district: 'Jinja', level: 'district', lat: 0.424, lng: 33.204, aliases: ['Jinja', 'Jinja City', 'Jinja Town', 'Jinja Central'] },
+  { name: 'Jinja', district: 'Jinja', level: 'district', lat: 0.424, lng: 33.204, aliases: ['Jinja', 'Jinja Central'] },
+  // Jinja City is the city inside Jinja, not a second copy of the district.
+  // 0.4244°N, 33.2041°E. Town group stays "Jinja Town" with the other Jinja areas.
+  { name: 'Jinja City', district: 'Jinja', town: 'Jinja Town', level: 'city', lat: 0.4244, lng: 33.2041, aliases: ['Jinja City', 'Jinja Town'] },
   { name: 'Masese', district: 'Jinja', lat: 0.45, lng: 33.2333 },
   { name: 'Nalufenya', district: 'Jinja', lat: 0.427, lng: 33.222 },
   { name: 'Bugembe', district: 'Jinja', lat: 0.457, lng: 33.231 },
@@ -148,6 +159,9 @@ const DETAILED_LOCATIONS = [
   { name: 'Pokea', district: 'Arua', lat: 3.028, lng: 30.932 },
 
   { name: 'Luwero', district: 'Luwero', level: 'district', lat: 0.8492, lng: 32.4731, aliases: ['Luwero', 'Luweero', 'Luwero Town', 'Luweero Town'] },
+  // Bugema trading centre, Kalagala, Luweero, beside Bugema University.
+  // Campus point published by the university: 0°34'11.0"N, 32°38'31.0"E.
+  { name: 'Bugema', district: 'Luwero', town: 'Bugema', level: 'town', lat: 0.569722, lng: 32.641944, aliases: ['Bugema', 'Bugema University', 'Bugema Trading Centre', 'Bugema Trading Center'] },
   { name: 'Ndibulungi', district: 'Luwero', aliases: ['Ndibulungi', 'Luwero Ndibulungi', 'Luweero Ndibulungi'] },
 
   { name: 'Fort Portal', district: 'Kabarole', level: 'city', lat: 0.671, lng: 30.254, aliases: ['Fort Portal', 'Fort Portal City', 'Fort Portal Central'] },
@@ -310,7 +324,8 @@ const CANONICAL_TOWN_NAMES = new Map([
   ['wakiso:nansana municipality', 'Nansana'],
   ['wakiso:entebbe municipality', 'Entebbe'],
   // C11: "Wakiso Town" / "Mukono Town" was the generated bucket for places with
-  // no town, a twin of the "Wakiso" / "Mukono" town groups. One name each.
+  // no town, a twin of the "Wakiso" / "Mukono" town groups. One town-group
+  // name each. The towns themselves are separate area entries above.
   ['wakiso:wakiso town', 'Wakiso'],
   ['mukono:mukono town', 'Mukono']
 ]);

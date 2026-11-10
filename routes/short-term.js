@@ -805,12 +805,16 @@ router.get('/staff/queue', requireStaffAccess, async (req, res) => {
               l.staff_reviewed_by, l.staff_reviewed_at,
               l.king_reviewed_by, l.king_reviewed_at,
               l.listed_via, l.entered_by_staff_name, l.referral_code,
+              l.source,
+              l.extra_fields->>'found_online_label' AS found_online_label,
               l.listed_at, l.expires_at, l.created_at,
               COALESCE(m.photo_count, 0)::int AS photo_count,
               cover.url AS cover_url,
               (
                 COALESCE(l.do_not_message, FALSE)
                 OR LOWER(COALESCE(l.extra_fields->>'do_not_message', '')) IN ('true', 't', '1', 'yes')
+                OR COALESCE(l.extra_fields->>'found_online_label', '') <> ''
+                OR l.source = 'imported'
               ) AS do_not_message
        FROM st_listing l
        LEFT JOIN LATERAL (
@@ -1048,6 +1052,8 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
         king_reviewed_by: row.king_reviewed_by,
         king_reviewed_at: row.king_reviewed_at,
         listing_fee_status: row.listing_fee_status,
+        source: row.source,
+        found_online_label: row.extra_fields && row.extra_fields.found_online_label ? row.extra_fields.found_online_label : null,
         do_not_message: doNotMessage,
         // The King should know whether a host filled this in or a colleague
         // typed it. A staff-assisted listing has not had an independent first

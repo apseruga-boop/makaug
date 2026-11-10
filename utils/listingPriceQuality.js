@@ -92,11 +92,15 @@ function hasPriceFigureEvidence(text = '') {
 
 function isPriceOnApplication(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
-  return row.price_on_application === true
+  const explicit = row.price_on_application === true
     || row.priceOnApplication === true
     || extra.price_on_application === true
     || extra.price_upon_application === true
     || normalizePricePeriod(normalizedPeriod(row)) === 'poa';
+  if (explicit) return true;
+  const price = Number(row.price);
+  // No price is Price on application. It is not a missing-price block.
+  return row.price == null || row.price === '' || !Number.isFinite(price) || price <= 0;
 }
 
 function listingPriceQuality(row = {}, options = {}) {

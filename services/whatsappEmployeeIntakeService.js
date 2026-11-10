@@ -320,8 +320,11 @@ function employeeAgentPayLinkPrompt(agentName = '', feeLabel = 'UGX 50,000') {
  * Since 10 Oct 2026 a new agent starts with a free trial, so there is nothing to
  * ask on the doorstep any more. This is the note that replaces the question.
  */
-function employeeAgentTrialNotice(agentName = '', days = 14, feeLabel = 'UGX 50,000') {
+function employeeAgentTrialNotice(agentName = '', days = 0, feeLabel = 'UGX 50,000') {
   const who = String(agentName || '').trim() || 'This agent';
+  if (!(Number(days) >= 1)) {
+    return `\u{1F4B3} *${who}* pays ${feeLabel} a month from the day they are approved. There is no free trial. Record the payment in King, or approve with Free (staff override) and a reason.`;
+  }
   return `\u{1F381} *${who}* gets ${days} days free. They go live on the free trial as soon as a moderator approves them, and pay ${feeLabel} a month after that. I will remind them before it ends and tell you when they pay.`;
 }
 

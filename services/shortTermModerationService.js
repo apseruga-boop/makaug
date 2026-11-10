@@ -87,6 +87,7 @@ function staffCanReachApproved() {
 // and correct them. It must not offer a message, a pay link, or WhatsApp.
 function listingDoNotMessage(row = {}) {
   if (!row || typeof row !== 'object') return false;
+  if (row.source === 'imported' || row.found_online_label) return true;
   const raw = row.do_not_message;
   if (raw === true || raw === 't' || raw === 'true' || raw === '1' || raw === 'yes') return true;
   let extra = row.extra_fields;
@@ -94,19 +95,20 @@ function listingDoNotMessage(row = {}) {
     try { extra = JSON.parse(extra); } catch (_) { extra = null; }
   }
   if (!extra || typeof extra !== 'object') return false;
+  if (extra.found_online_label) return true;
   const nested = extra.do_not_message;
   return nested === true || nested === 't' || nested === 'true' || nested === '1' || nested === 'yes';
 }
 
 const FACT_TEXT = Object.freeze({
-  title: { min: 3, max: 180, required: true },
+  title: { min: 3, max: 300, required: true },
   description: { min: 0, max: 8000 },
   district: { min: 1, max: 80, required: true },
   area: { min: 1, max: 80, required: true },
   address: { min: 0, max: 200 },
   property_type: { min: 0, max: 80 },
   host_name: { min: 1, max: 120, required: true },
-  host_phone: { min: 1, max: 30, required: true },
+  host_phone: { min: 0, max: 30 },
   house_rules: { min: 0, max: 4000 }
 });
 
@@ -228,7 +230,7 @@ async function updateListingFacts(db, listingId, body, actor = {}) {
         value.cleaning_fee_ugx,
         value.min_nights,
         value.host_name,
-        value.host_phone,
+        value.host_phone || '',
         value.house_rules
       ]
     );
@@ -493,6 +495,13 @@ async function applyKingDecision(db, listingId, { action, checklist, overrides, 
           'This listing cannot go live yet.',
           400,
           verdict.missing.map((check) => check.label)
+        );
+      }
+      if (!String(listing.district || '').trim() || !String(listing.area || '').trim()) {
+        throw moderationError(
+          'A specific location is required before this short stay can go live.',
+          400,
+          ['Save a district and an area. A missing price can stay as POA.']
         );
       }
       if (Number(listing.photo_count || 0) === 0) {

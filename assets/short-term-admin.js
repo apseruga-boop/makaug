@@ -32,6 +32,7 @@
   // never offers a message, a pay link, or WhatsApp for them.
   function isFoundOnline(row) {
     if (!row) return false;
+    if (row.source === 'imported' || row.found_online_label) return true;
     var flag = row.do_not_message;
     if (flag === true || flag === 'true' || flag === 't' || flag === '1' || flag === 'yes') return true;
     var extra = row.extra_fields;
@@ -39,6 +40,7 @@
       try { extra = JSON.parse(extra); } catch (e) { extra = null; }
     }
     if (extra && typeof extra === 'object') {
+      if (extra.found_online_label) return true;
       var nested = extra.do_not_message;
       if (nested === true || nested === 'true' || nested === 't' || nested === '1' || nested === 'yes') return true;
     }
@@ -145,9 +147,9 @@
       + '<p class="st-desk-ref">' + esc(row.reference || '') + '</p>'
       + '<h4>' + esc(row.title || 'Untitled') + '</h4>'
       + '<p class="st-desk-meta">' + esc(row.area || '') + ', ' + esc(row.district || '')
-      + ' &middot; ' + esc(ugx(row.base_nightly_ugx)) + ' per night'
+      + ' &middot; ' + esc(Number(row.base_nightly_ugx) > 0 ? ugx(row.base_nightly_ugx) + ' per night' : 'POA')
       + ' &middot; ' + esc(row.host_name || 'no host name')
-      + (row.host_phone ? ' · ' + esc(row.host_phone) : '') + '</p>'
+      + (isFoundOnline(row) ? '' : (row.host_phone ? ' · ' + esc(row.host_phone) : '')) + '</p>'
       + '<p class="st-desk-flags">'
       + foundOnlineBadge(row)
       + (photos
@@ -162,6 +164,9 @@
         ? '<span class="st-desk-ok"><i class="fas fa-file-signature"></i> Right to let declared</span>'
         : '<span class="st-desk-warn"><i class="fas fa-file-signature"></i> No right-to-let declaration</span>')
       + (row.king_facts_confirmed ? '<span class="st-desk-ok"><i class="fas fa-crown"></i> King confirmed</span>' : '')
+      + (row.source === 'imported' || row.found_online_label
+        ? '<span class="st-desk-warn"><i class="fas fa-globe"></i> Found online. Do not message.</span>'
+        : '')
       + (row.listed_via === 'staff_assisted'
         ? '<span class="st-desk-warn"><i class="fas fa-user-pen"></i> Entered by '
           + esc(row.entered_by_staff_name || 'staff') + '</span>'

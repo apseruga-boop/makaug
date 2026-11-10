@@ -2,6 +2,11 @@ const { keepPendingModerationFields } = require('../utils/keepPendingModeration'
 const { moderationActorLabel } = require('../utils/moderationNotes');
 const { autoPinForApproval, correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
+const {
+  approvedSignedUpAgentListingSql,
+  featuredAgentDailyOrderSql,
+  featuredAgentDateKey
+} = require('../utils/featuredAgentSelection');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
 const { publicListingPayload, hideImplausiblePrice } = require('../utils/publicListingPayload');
 const { publicSourceAccountName } = require('../utils/sourceAccountName');
@@ -2958,9 +2963,13 @@ async function listPropertiesHandler(req, res, next) {
       const staleAvailability = publicStaleAvailabilitySql('p');
       if (staleAvailability) filters.push(staleAvailability);
     }
+    const featuredAgentDate = featuredAgentDateKey();
     if (featuredFilterRequested) {
       if (featuredOnly) {
-        filters.push("(COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes'))");
+        // Homepage and /featured share this query. It is a daily shuffle of
+        // live listings from approved signed-up agents, not the stored
+        // featured flag (that flag was being set on found-online imports).
+        filters.push(approvedSignedUpAgentListingSql('p'));
       } else {
         filters.push("(COALESCE(p.extra_fields->>'featured', 'false') NOT IN ('true', '1', 'yes'))");
       }
@@ -3207,7 +3216,7 @@ async function listPropertiesHandler(req, res, next) {
     const priceSortRankSql = `(CASE WHEN p.price IS NOT NULL AND p.price > 0 AND p.price <= ${publicPriceSortMaxUgx} THEN 0 ELSE 1 END)`;
     const priceSortValueSql = effectivePriceUgxSql('p');
     const sortMap = {
-      featured: "p.extra_fields->>'featured_at' DESC NULLS LAST, p.updated_at DESC, p.created_at DESC, p.id DESC",
+      featured: featuredAgentDailyOrderSql('p', featuredAgentDate),
       newest: 'p.created_at DESC, p.id DESC',
       oldest: 'p.created_at ASC, p.id ASC',
       price_asc: `${priceSortRankSql} ASC, ${priceSortValueSql} ASC NULLS LAST, p.created_at DESC, p.id DESC`,
@@ -5924,12 +5933,21 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
            owner_edit_token_hash = CASE WHEN $9::text IS NULL THEN owner_edit_token_hash ELSE $9::text END,
            owner_edit_token_expires_at = CASE WHEN $10::timestamptz IS NULL THEN owner_edit_token_expires_at ELSE $10::timestamptz END,
            updated_at = NOW(),
+           price_on_application = CASE
+             WHEN $2 = 'approved' AND (price IS NULL OR price <= 0) THEN TRUE
+             ELSE price_on_application
+           END,
            extra_fields = (
              CASE
                WHEN $3::text IS NULL OR trim($3::text) = '' THEN COALESCE(extra_fields, '{}'::jsonb)
                ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
              END
            ) || jsonb_build_object('review_warning_overrides', $11::jsonb)
+             || CASE
+               WHEN $2 = 'approved' AND (price IS NULL OR price <= 0)
+                 THEN jsonb_build_object('price_on_application', true, 'price_label', 'POA')
+               ELSE '{}'::jsonb
+             END
              || jsonb_build_object('last_reviewed_by_actor', $6::text)
              || COALESCE($12::jsonb, '{}'::jsonb)
          WHERE id = $1
@@ -5970,6 +5988,10 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
            approved_by = CASE WHEN $2 = 'approved' THEN COALESCE($9::uuid, approved_by) ELSE approved_by END,
            sold_at = CASE WHEN $2 = 'sold' THEN NOW() WHEN $2 = 'approved' THEN NULL ELSE sold_at END,
            updated_at = NOW(),
+           price_on_application = CASE
+             WHEN $2 = 'approved' AND (price IS NULL OR price <= 0) THEN TRUE
+             ELSE price_on_application
+           END,
            extra_fields = COALESCE(extra_fields, '{}'::jsonb)
              || jsonb_build_object(
                'moderation_stage', $3::text,

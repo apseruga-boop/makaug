@@ -317,7 +317,7 @@ function run() {
   assert(socialSearchService.includes('suppressedSourceRowsForItems'), 'source intake should check rejected source URLs before queuing posts');
   assert(socialSearchService.includes("'skipped_suppressed'"), 'source intake should report suppressed URLs as skipped_suppressed');
   assert(socialSearchService.includes('STUDENT_SOURCE_LISTING_PATTERN'), 'source intake should recognize hostel and room vocabulary for student supply');
-  assert(socialSearchService.includes("const listingType = studentListing ? 'students' : originalListingType"), 'student supply should store student-like source posts under the student category');
+  assert(socialSearchService.includes("const listingType = studentListing ? 'student' : canonicalStudentListingType(originalListingType)"), 'student supply should store student-like source posts as student');
   assert(staffRoutes.includes("reason: 'non_uganda_location'"), 'staff bulk review should hold non-Uganda or foreign-token rows');
   assert(staffRoutes.includes("reason: 'not_a_listing'"), 'staff bulk review should hold clickbait/explainer source videos');
   assert(staffRoutes.includes('applyStaffBulkInternalDuplicateGate'), 'staff bulk review should deduplicate approvals inside the same run');

@@ -1,5 +1,7 @@
 'use strict';
 
+const { canonicalUgPhone } = require('../utils/ugPhone');
+
 const ROLE_DASHBOARD_MAP = {
   super_admin: '/admin',
   admin: '/admin',
@@ -168,7 +170,7 @@ async function ensurePostVerificationRecords(db, user = {}) {
   if (audience === 'agent') {
     const fullName = cleanText([user.first_name, user.last_name].filter(Boolean).join(' ')) || 'makaug broker';
     const email = cleanText(user.email || '');
-    const phone = cleanText(user.phone || '');
+    const phone = canonicalUgPhone(cleanText(user.phone || '')) || cleanText(user.phone || '');
     const phoneDigits = normalizePhoneDigits(phone);
     const districtsCovered = parseCsvList(profile.agent_districts || profile.preferred_areas);
     const specializations = parseCsvList(profile.agent_specialities || profile.property_type_interest);
@@ -203,7 +205,10 @@ async function ensurePostVerificationRecords(db, user = {}) {
        FROM agents
        WHERE user_id = $1
           OR ($2::text <> '' AND LOWER(COALESCE(email, '')) = LOWER($2))
-          OR ($3::text <> '' AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $3)
+          OR ($3::text <> '' AND length($3) >= 9 AND (
+              RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = RIGHT($3, 9)
+              OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = RIGHT($3, 9)
+            ))
        ORDER BY user_id = $1 DESC, updated_at DESC
        LIMIT 1`,
       [user.id, email, phoneDigits]

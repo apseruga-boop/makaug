@@ -490,8 +490,12 @@ function normalizeShortTermListing(row = {}, options = {}) {
     bathrooms: toInt(row.bathrooms, 0),
     max_guests: toInt(row.max_guests, 0),
     currency: 'UGX',
-    nightly_ugx: Number(row.base_nightly_ugx || 0),
-    nightly_display: formatUgx(row.base_nightly_ugx),
+    nightly_ugx: Number(row.base_nightly_ugx || 0) > 0 ? Number(row.base_nightly_ugx) : null,
+    nightly_display: Number(row.base_nightly_ugx || 0) > 0 && !(row.extra_fields && row.extra_fields.price_on_application === true)
+      ? formatUgx(row.base_nightly_ugx)
+      : 'POA',
+    price_on_application: !(Number(row.base_nightly_ugx) > 0) || (row.extra_fields && row.extra_fields.price_on_application === true),
+    found_online_label: row.extra_fields && row.extra_fields.found_online_label ? row.extra_fields.found_online_label : null,
     cleaning_fee_ugx: Number(row.cleaning_fee_ugx || 0),
     security_deposit_ugx: Number(row.security_deposit_ugx || 0),
     weekly_discount_pct: toInt(row.weekly_discount_pct, 0),

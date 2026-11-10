@@ -25,9 +25,9 @@ function buildAboutCommercialRateCardPdf() {
     doc.moveDown(1.2);
 
     const productRows = [
-      ['Private listing', 'privateListing', '7 free days, then per listing'],
+      ['Private listing', 'privateListing', 'Per listing, per month, from approval'],
       ['Short stay', 'shortStayListing', 'Non-agents; included in the agent plan'],
-      ['Agent subscription', 'agentSubscription', '14 days free, then monthly. Short stays included'],
+      ['Agent subscription', 'agentSubscription', 'Monthly from approval. Short stays included'],
       ['Off-plan development', 'offPlanDevelopment', 'Dedicated project page'],
       ['Featured listing', 'featuredListing', 'Homepage and category visibility'],
       ['Premium listing', 'premiumListing', 'Prime search position'],
