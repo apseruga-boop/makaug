@@ -73,7 +73,7 @@ test('the editor and the review form keep that order', () => {
 });
 
 test('migration 211 backs up affected rows and the rollback is separate', () => {
-  const sql = fs.readFileSync(path.join(__dirname, '../db/migrations/211_restore_plot_titles_and_category.sql'), 'utf8');
+  const sql = fs.readFileSync(path.join(__dirname, '../scripts/deferred-migrations/211_restore_plot_titles_and_category.sql'), 'utf8');
   const rollback = fs.readFileSync(path.join(__dirname, '../scripts/rollback-211-restore-plot-titles-and-category.sql'), 'utf8');
   assert.match(sql, /CREATE TABLE IF NOT EXISTS plot_title_restore_211_backup/);
   assert.match(sql, /before_row jsonb NOT NULL/);
