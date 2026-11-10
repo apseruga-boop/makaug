@@ -189,6 +189,29 @@ async function defaultLoadAgent(db, id) {
          SELECT COUNT(*)::int
          FROM properties p
          WHERE p.agent_id = a.id AND p.status = 'approved'
+       ) + (
+         SELECT CASE
+           WHEN to_regclass('public.st_listing') IS NULL THEN 0
+           ELSE (
+             SELECT COUNT(*)::int
+             FROM st_listing l
+             WHERE l.status = ANY('{approved}'::text[])
+               AND l.moderation_stage = 'approved'
+               AND l.king_facts_confirmed = TRUE
+               AND l.listing_fee_status IN ('paid', 'waived', 'unpaid', 'pending')
+               AND (l.expires_at IS NULL OR l.expires_at > NOW())
+               AND (
+                 (a.user_id IS NOT NULL AND l.host_user_id::text = a.user_id::text)
+                 OR (
+                   length(regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')) >= 9
+                   AND (
+                     regexp_replace(COALESCE(l.host_phone, ''), '\\D', '', 'g') = regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')
+                     OR regexp_replace(COALESCE(l.host_whatsapp, ''), '\\D', '', 'g') = regexp_replace(COALESCE(a.phone, a.whatsapp, ''), '\\D', '', 'g')
+                   )
+                 )
+               )
+           )
+         END
        ) AS approved_listing_count
      FROM agents a
      WHERE a.id::text = $1

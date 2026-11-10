@@ -1553,6 +1553,7 @@ const I18N_UI = {
     heroCounterStudent: "Student",
     heroCounterCommercial: "Commercial",
     heroCounterLand: "Land",
+    heroCounterShortStay: "Short stays",
     heroCounterOther: "Other",
     heroCounterSocial: "Social-source",
     heroCounterTooltipNote: "Listing types add up to the total shown.",
@@ -2102,6 +2103,7 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Abayizi",
     heroCounterCommercial: "Byobusuubuzi",
     heroCounterLand: "Ettaka",
+    heroCounterShortStay: "Okusula akaseera",
     heroCounterOther: "Ebirala",
     heroCounterSocial: "Okuva ku social",
     heroCounterTooltipNote: "Ebika bya listing bigatta ku muwendo ogulaga waggulu.",
@@ -2141,6 +2143,7 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Wanafunzi",
     heroCounterCommercial: "Biashara",
     heroCounterLand: "Ardhi",
+    heroCounterShortStay: "Malazi ya muda",
     heroCounterOther: "Nyingine",
     heroCounterSocial: "Chanzo cha kijamii",
     heroCounterTooltipNote: "Aina za listings zinajumlisha idadi iliyoonyeshwa.",
@@ -2180,6 +2183,7 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Jo-yot",
     heroCounterCommercial: "Curu",
     heroCounterLand: "Lobo",
+    heroCounterShortStay: "Buto manok",
     heroCounterOther: "Mukene",
     heroCounterSocial: "Kakare me social",
     heroCounterTooltipNote: "Kit listing magi medo romo wel ma onyuto.",
@@ -2273,6 +2277,7 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Abanyeshomesa",
     heroCounterCommercial: "Obusuubuzi",
     heroCounterLand: "Eitaka",
+    heroCounterShortStay: "Okuraara kukye",
     heroCounterOther: "Ebindi",
     heroCounterSocial: "Okuva kuri social",
     heroCounterTooltipNote: "Ebika bya listing nibigaita kumara omubare ogurikworekwa.",
@@ -2366,6 +2371,7 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Abanyeshuri",
     heroCounterCommercial: "Ubucuruzi",
     heroCounterLand: "Ubutaka",
+    heroCounterShortStay: "Okuraara kukye",
     heroCounterOther: "Ibindi",
     heroCounterSocial: "Ku mbuga nkoranyambaga",
     heroCounterTooltipNote: "Ubwoko bwa listing buhuza umubare werekanwe.",
@@ -2459,6 +2465,7 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Abaisomesa",
     heroCounterCommercial: "Obusuubuzi",
     heroCounterLand: "Itaka",
+    heroCounterShortStay: "Okusula akaseera",
     heroCounterOther: "Ebirala",
     heroCounterSocial: "Okuva ku social",
     heroCounterTooltipNote: "Ebika bya listing bigatta ku muwendo ogulaga.",
@@ -2576,6 +2583,7 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   heroCounterStudent: "ተማሪ",
   heroCounterCommercial: "ንግድ",
   heroCounterLand: "መሬት",
+  heroCounterShortStay: "የአጭር ጊዜ",
   heroCounterOther: "ሌላ",
   heroCounterSocial: "ከማህበራዊ ምንጭ",
   heroCounterTooltipNote: "የዝርዝር አይነቶች ከላይ ያለውን ጠቅላላ ቁጥር ያሟላሉ።",
@@ -2703,6 +2711,7 @@ I18N_UI.ar = Object.assign({}, I18N_UI.en, {
   heroCounterStudent: "طلاب",
   heroCounterCommercial: "تجاري",
   heroCounterLand: "أرض",
+  heroCounterShortStay: "إقامة قصيرة",
   heroCounterOther: "أخرى",
   heroCounterSocial: "من مصادر اجتماعية",
   heroCounterTooltipNote: "أنواع الإعلانات تكوّن الرقم الإجمالي المعروض أعلاه.",
@@ -8962,10 +8971,11 @@ function normalizeHeroOpportunityStats(raw = {}) {
     student: numberFrom("student", "students", "student_accommodation", "student_housing"),
     commercial: numberFrom("commercial", "commercial_property"),
     land: numberFrom("land", "plots"),
+    short_term: numberFrom("short_term", "short_stay", "short_stays"),
     other: numberFrom("other"),
     social: numberFrom("social", "found_online")
   };
-  const categoryTotal = stats.sale + stats.rent + stats.student + stats.commercial + stats.land + stats.other;
+  const categoryTotal = stats.sale + stats.rent + stats.student + stats.commercial + stats.land + stats.short_term + stats.other;
   if (!stats.total) stats.total = categoryTotal;
   return stats.total || categoryTotal ? stats : null;
 }
@@ -8989,6 +8999,7 @@ function getHeroPropertyOpportunityStats() {
     student: 0,
     commercial: 0,
     land: 0,
+    short_term: 0,
     other: 0,
     social: 0
   };
@@ -9433,6 +9444,7 @@ function renderHeroPropertyOpportunityCounter() {
     `${tr("heroCounterStudent")}: ${stats.student}`,
     `${tr("heroCounterCommercial")}: ${stats.commercial}`,
     `${tr("heroCounterLand")}: ${stats.land}`,
+    ...(stats.short_term ? [`${tr("heroCounterShortStay")}: ${stats.short_term}`] : []),
     ...(stats.other ? [`${tr("heroCounterOther")}: ${stats.other}`] : [])
   ].join(" · ");
   if (counter) {
@@ -9449,6 +9461,7 @@ function renderHeroPropertyOpportunityCounter() {
         ${heroOpportunityStatRow("heroCounterStudent", stats.student)}
         ${heroOpportunityStatRow("heroCounterCommercial", stats.commercial)}
         ${heroOpportunityStatRow("heroCounterLand", stats.land)}
+        ${stats.short_term ? heroOpportunityStatRow("heroCounterShortStay", stats.short_term) : ""}
         ${stats.other ? heroOpportunityStatRow("heroCounterOther", stats.other) : ""}
       </div>
       <div class="mt-2 text-[11px] text-white/65">${adminEscape(tr("heroCounterTooltipNote"))}</div>`;
@@ -16785,10 +16798,15 @@ function mergeStaffDashboardPanelData(base = {}, panels = {}) {
       ...(base?.summary || {}),
       ...(panels.summary || {}),
       // The panels recount the review queue. Keep the fast payload's live
-      // total, and let that exact pending total replace a cached 0.
+      // total (which includes short stays), and let that exact pending total
+      // replace a cached 0.
       listings: {
         ...(base?.summary?.listings || {}),
         ...(panels.summary?.listings || {}),
+        live: (base?.summary?.listings?.live != null && Number.isFinite(Number(base.summary.listings.live)))
+          ? Number(base.summary.listings.live)
+          : panels.summary?.listings?.live,
+        short_term: base?.summary?.listings?.short_term ?? panels.summary?.listings?.short_term
       },
       // The panels bring the live bridge status; keep the fast payload's
       // WhatsApp counts beside it rather than replacing them.

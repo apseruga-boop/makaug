@@ -131,6 +131,7 @@ const {
   loadPublicOpportunitySummary,
   publicLaunchTestListingFastCondition
 } = require('../services/publicInventoryMetricsService');
+const { loadShortTermPublicCount } = require('../services/shortTermService');
 const {
   COMMERCIAL_TRANSACTION_TYPES,
   COMMERCIAL_PROPERTY_TYPES,
@@ -2780,6 +2781,58 @@ router.get('/suggestions', async (req, res, next) => {
   }
 });
 
+
+// The homepage hero and about-page totals use the unfiltered public list
+// (status=approved&public_only=1 only). Those counts should include live
+// short stays. A typed, area, price or featured filter must not.
+function isSiteWidePublicInventoryQuery({
+  studentPortal,
+  listingType,
+  district,
+  area,
+  referenceLookup,
+  canonicalLocationScope,
+  featuredFilterRequested,
+  listingOrigin,
+  minPrice,
+  maxPrice,
+  minBeds,
+  maxBeds,
+  bathrooms,
+  propertyType,
+  amenities,
+  furnished,
+  minSize,
+  maxSize,
+  maxStudentDistanceKm,
+  studentCampus,
+  landTitleType,
+  landTitleAvailable,
+  transactionType,
+  commercialType,
+  hasRadiusSearch
+} = {}) {
+  return !studentPortal
+    && !listingType
+    && !district
+    && !area
+    && !referenceLookup
+    && !(canonicalLocationScope?.selected && canonicalLocationScope.selected.length)
+    && !featuredFilterRequested
+    && !listingOrigin
+    && minPrice == null && maxPrice == null
+    && minBeds == null && maxBeds == null && bathrooms == null
+    && !propertyType
+    && !(Array.isArray(amenities) && amenities.length)
+    && !furnished
+    && minSize == null && maxSize == null
+    && maxStudentDistanceKm == null
+    && !studentCampus
+    && !landTitleType && !landTitleAvailable
+    && !transactionType && !commercialType
+    && !hasRadiusSearch;
+}
+
 async function listPropertiesHandler(req, res, next) {
   try {
     const { page, limit, offset } = parsePagination(req.query);
@@ -3113,7 +3166,34 @@ async function listPropertiesHandler(req, res, next) {
         const summaryResult = await loadPublicOpportunitySummary({
           where,
           values,
-          timeoutMs: 4000
+          timeoutMs: 4000,
+          includeShortTerm: isSiteWidePublicInventoryQuery({
+            studentPortal,
+            listingType,
+            district,
+            area,
+            referenceLookup,
+            canonicalLocationScope,
+            featuredFilterRequested,
+            listingOrigin,
+            minPrice,
+            maxPrice,
+            minBeds,
+            maxBeds,
+            bathrooms,
+            propertyType,
+            amenities,
+            furnished,
+            minSize,
+            maxSize,
+            maxStudentDistanceKm,
+            studentCampus,
+            landTitleType,
+            landTitleAvailable,
+            transactionType,
+            commercialType,
+            hasRadiusSearch
+          })
         });
         opportunitySummary = summaryResult.summary;
         opportunitySummaryMeta = summaryResult.meta;
@@ -4842,10 +4922,15 @@ router.post('/', async (req, res, next) => {
 
     let liveListingCount = null;
     try {
-      const liveCountResult = await db.query(
-        "SELECT COUNT(*)::int AS total FROM properties WHERE status IN ('approved', 'live', 'published')"
-      );
-      liveListingCount = liveCountResult.rows[0]?.total ?? null;
+      const [liveCountResult, shortTermCount] = await Promise.all([
+        db.query(
+          "SELECT COUNT(*)::int AS total FROM properties WHERE status IN ('approved', 'live', 'published')"
+        ),
+        loadShortTermPublicCount(db).catch(() => 0)
+      ]);
+      const propertiesLive = liveCountResult.rows[0]?.total ?? null;
+      const shortStaysLive = Number.isFinite(Number(shortTermCount)) ? Number(shortTermCount) : 0;
+      liveListingCount = propertiesLive == null ? (shortStaysLive || null) : Number(propertiesLive) + shortStaysLive;
     } catch (error) {
       logger.warn('Unable to load public live listing count for submitted confirmation', { message: error.message });
     }
