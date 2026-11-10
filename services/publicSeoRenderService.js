@@ -17,6 +17,11 @@ const { publicPropertyTypeLabel } = require('../utils/commercialClassification')
 const { isThinFoundOnlineListing } = require('../utils/publicIndexability');
 const { realHostedPhotoExistsSql, realPhotoRejection, mediaHost } = require('../utils/realListingPhoto');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
+const {
+  approvedSignedUpAgentListingSql,
+  featuredAgentDailyOrderSql,
+  featuredAgentDateKey
+} = require('../utils/featuredAgentSelection');
 const { compactUgx } = require('../utils/compactUgx');
 const { computedListingTotal, priceUnitCaption, publicLandSizeLabel, publicPriceWithUnit } = require('../utils/listingLandPrice');
 const { foundOnlinePrimaryImageUrl, consentedStaffPrimaryImageLateralSql } = require('../utils/foundOnlinePublicImages');
@@ -434,17 +439,25 @@ async function loadPublicSeoListings(db, options = {}) {
   // landingRank: the money pages list agent-listed rows first (see utils/agentFirstRank).
   const landingRank = options.landingRank === true;
   const homepage = options.homepage === true && !key && !location && !options.facet && !options.facetSlug && !options.university && !landingRank;
-  const cacheKey = `${key || 'all'}:${location?.canonical_key || 'uganda'}:${facetCacheKey}:${limit}${landingRank ? ':agent_first' : ''}${homepage ? ':homepage' : ''}`;
+  const featuredDateKey = homepage ? featuredAgentDateKey(options.now) : '';
+  const cacheKey = `${key || 'all'}:${location?.canonical_key || 'uganda'}:${facetCacheKey}:${limit}${landingRank ? ':agent_first' : ''}${homepage ? `:homepage:${featuredDateKey}` : ''}`;
   const cached = await loadSeoListingCacheEntry(cacheKey, async () => {
     const values = [];
     const categoryWhere = categoryPredicate(key, 'p');
     const locationWhere = locationPredicate(location, values, 'p');
     const facetWhere = facetPredicate(options, values, 'p');
+    let featuredDateRef = '';
+    if (homepage) {
+      values.push(featuredDateKey);
+      featuredDateRef = `$${values.length}`;
+    }
     values.push(limit);
     const limitRef = `$${values.length}`;
-    const orderBy = landingRank
-      ? agentFirstOrderSql('p', { homesBeforeLand: key === 'sale' })
-      : 'p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC';
+    const orderBy = homepage
+      ? featuredAgentDailyOrderSql('p', featuredDateRef)
+      : landingRank
+        ? agentFirstOrderSql('p', { homesBeforeLand: key === 'sale' })
+        : 'p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC';
     const imageLateral = `LEFT JOIN LATERAL (
        SELECT i.url
        FROM property_images i
@@ -465,6 +478,7 @@ async function loadPublicSeoListings(db, options = {}) {
       ? `WITH homepage_candidates AS MATERIALIZED (
        SELECT p.id FROM properties p
        WHERE ${publicVisibleInventoryWhere('p')}
+         AND ${approvedSignedUpAgentListingSql('p')}
        ORDER BY ${orderBy}
        LIMIT ${limitRef}
      )\nSELECT
@@ -1188,6 +1202,12 @@ function renderHomepageSeoHtml(html, options = {}) {
     eager: index < 2
   })).join('');
   let rendered = cards ? replaceElementInnerHtml(html, 'home-grid', cards) : html;
+  if (!listings.length) {
+    rendered = rendered.replace(
+      '<section id="home-featured" class="py-12">',
+      '<section id="home-featured" class="py-12 hidden" hidden>'
+    );
+  }
   const popularAreas = renderAreaLinks(areaLinks, `Popular property areas in ${ACTIVE_COUNTRY_NAME}`);
   rendered = insertBeforeElement(rendered, 'home-grid', renderPopularSearches() + popularAreas);
   rendered = insertBeforeClosingTag(rendered, 'footer', renderFooterAreaLinks(areaLinks));

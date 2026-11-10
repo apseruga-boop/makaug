@@ -2062,7 +2062,7 @@ app.get(['/', '/index.html'], async (req, res, next) => {
     try {
       [snapshot, listings] = await Promise.all([
         loadPublicSeoInventorySnapshot(db),
-        loadPublicSeoListings(db, { limit: 6, homepage: true })
+        loadPublicSeoListings(db, { limit: 3, homepage: true })
       ]);
     } catch (error) {
       res.locals.publicHtmlDegraded = true; // never share-cache a degraded page
@@ -2890,7 +2890,7 @@ function scheduleHomepageSeoWarmup() {
     try {
       const [seoSnapshot, homepageListings] = await Promise.all([
         loadPublicSeoInventorySnapshot(db),
-        loadPublicSeoListings(db, { limit: 6, homepage: true })
+        loadPublicSeoListings(db, { limit: 3, homepage: true })
       ]);
       logger.info('Public homepage SEO cache warmed after deploy settle', {
         listings: homepageListings.length,

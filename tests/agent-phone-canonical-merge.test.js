@@ -51,11 +51,11 @@ test('local, 256 and +256 forms of one line become the same +256 number', () => 
 });
 
 test('the migration merges only Quick auctioneers and does not embed a phone number', () => {
-  const sql = read('db/migrations/207_canonical_agent_phone_and_quick_auctioneers_merge.sql');
-  const rollback = read('scripts/rollback-207-canonical-agent-phone-and-quick-auctioneers-merge.sql');
+  const sql = read('db/migrations/212_canonical_agent_phone_and_quick_auctioneers_merge.sql');
+  const rollback = read('scripts/rollback-212-canonical-agent-phone-and-quick-auctioneers-merge.sql');
   assert.match(sql, /MKA-AG-3822248/);
   assert.match(sql, /MKA-AG-5282286/);
-  assert.match(sql, /migration_207_agent_phone_merge_backup/);
+  assert.match(sql, /migration_212_agent_phone_merge_backup/);
   assert.match(sql, /agent_number_aliases/);
   assert.match(sql, /agents_block_duplicate_phone/);
   assert.match(sql, /No message was sent/);
@@ -122,8 +122,15 @@ test('Quick auctioneers merges into Quickway and a second phone is refused', {
     await pool.query(`INSERT INTO properties (agent_id, status) VALUES ($1, 'approved')`, [survivor.id]);
     await pool.query(`INSERT INTO revenue_entries (agent_id) VALUES ($1)`, [source.id]);
     await pool.query(`INSERT INTO agent_identity_files (agent_id, kind) VALUES ($1, 'id_front')`, [survivor.id]);
+    const shared = line('222');
+    await pool.query(
+      `INSERT INTO agents (full_name, phone, whatsapp, status, makaug_agent_number)
+       VALUES ('Left as-is', $1, $1, 'approved', 'MKA-AG-0000222'),
+              ('Also left', $2, $2, 'suspended', 'MKA-AG-0000223')`,
+      [shared.e164, shared.local]
+    );
 
-    await pool.query(read('db/migrations/207_canonical_agent_phone_and_quick_auctioneers_merge.sql'));
+    await pool.query(read('db/migrations/212_canonical_agent_phone_and_quick_auctioneers_merge.sql'));
 
     const after = (await pool.query(
       `SELECT makaug_agent_number, full_name, company_name, phone, whatsapp, status, removed_at IS NOT NULL AS removed,
@@ -164,6 +171,27 @@ test('Quick auctioneers merges into Quickway and a second phone is refused', {
       }
     );
 
+    const keptPair = (await pool.query(
+      `UPDATE agents SET phone = $1, whatsapp = $1, updated_at = NOW()
+        WHERE makaug_agent_number = 'MKA-AG-0000223'
+        RETURNING phone`,
+      [shared.local]
+    )).rows[0];
+    assert.equal(keptPair.phone, shared.e164);
+    const stillTwo = (await pool.query(
+      `SELECT COUNT(*)::int AS n FROM agents
+        WHERE RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1`,
+      [shared.key]
+    )).rows[0];
+    assert.equal(stillTwo.n, 2);
+    await assert.rejects(
+      pool.query(
+        `INSERT INTO agents (full_name, phone, status, makaug_agent_number) VALUES ('Third', $1, 'pending', 'MKA-AG-0000224')`,
+        [shared.local]
+      ),
+      (error) => error.code === '23505'
+    );
+
     const other = line('111');
     const created = (await pool.query(
       `INSERT INTO agents (full_name, phone, status) VALUES ('Someone else', $1, 'pending') RETURNING phone`,
@@ -171,7 +199,7 @@ test('Quick auctioneers merges into Quickway and a second phone is refused', {
     )).rows[0];
     assert.equal(created.phone, other.e164);
 
-    await pool.query(read('scripts/rollback-207-canonical-agent-phone-and-quick-auctioneers-merge.sql'));
+    await pool.query(read('scripts/rollback-212-canonical-agent-phone-and-quick-auctioneers-merge.sql'));
     const restoredListings = (await pool.query(`SELECT COUNT(*)::int AS n FROM properties WHERE agent_id = $1`, [source.id])).rows[0];
     const restoredPhone = (await pool.query(`SELECT phone, status FROM agents WHERE id = $1`, [source.id])).rows[0];
     assert.equal(restoredListings.n, 2);

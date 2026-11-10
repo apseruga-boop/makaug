@@ -285,22 +285,33 @@ test('found-online intake uses the shared precedence classifier for future harve
   });
 });
 
-test('POA is explicit and mutually exclusive with a numeric price', () => {
+test('POA is explicit and a missing price does not block publication', () => {
   const validPoa = listingDataIntegrityReport(validRent({
     price: null,
     price_original: null,
     price_on_application: true,
   }));
   assert.equal(validPoa.issue_codes.includes('missing_price_without_poa'), false);
+  assert.equal(validPoa.price_on_application, true);
 
-  const missingPoa = listingDataIntegrityReport(validRent({ price: null, price_original: null }));
-  assert(missingPoa.issue_codes.includes('missing_price_without_poa'));
+  const missingPrice = listingDataIntegrityReport(validRent({ price: null, price_original: null }));
+  assert.equal(missingPrice.issue_codes.includes('missing_price_without_poa'), false);
+  assert.equal(missingPrice.price_on_application, true);
+  assert.equal(missingPrice.issue_codes.includes('missing_specific_canonical_location'), false);
 
   const conflict = listingDataIntegrityReport(validRent({ price_on_application: true }));
   assert(conflict.issue_codes.includes('price_and_poa_conflict'));
+
+  const noLocation = listingDataIntegrityReport(validRent({
+    price: null,
+    price_original: null,
+    area: '',
+    district: '',
+  }), { requireCompleteEvidence: true });
+  assert(noLocation.issue_codes.includes('missing_specific_canonical_location'));
 });
 
-test('nightly and hospitality posts are rejected by intake, never converted to monthly rent', () => {
+test('nightly and hospitality posts go to the short-stay queue, never monthly rent', () => {
   const raw = {
     source_url: 'https://www.tiktok.com/@host/video/7000000000000000116',
     source_platform: 'tiktok',
@@ -316,7 +327,9 @@ test('nightly and hospitality posts are rejected by intake, never converted to m
   const listing = normalizeFoundOnlineSourcePost(raw);
   const intake = sourcePostMeetsLaunchIntakeRule(listing, listing.sourceAgent);
   assert.equal(deriveListingClassification(listing).hospitality, true);
-  assert.equal(intake.eligible, false);
+  assert.equal(intake.short_stay_queue, true);
+  assert.equal(intake.intake_destination, 'st_listing');
+  assert.equal(intake.blocking_reasons.includes('unsupported_hospitality_or_nightly'), false);
   assert(intake.data_integrity.issue_codes.includes('unsupported_hospitality_or_nightly'));
 });
 

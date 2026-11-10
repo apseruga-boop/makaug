@@ -97,8 +97,9 @@
       + '<p class="st-desk-ref">' + esc(row.reference || '') + '</p>'
       + '<h4>' + esc(row.title || 'Untitled') + '</h4>'
       + '<p class="st-desk-meta">' + esc(row.area || '') + ', ' + esc(row.district || '')
-      + ' &middot; ' + esc(ugx(row.base_nightly_ugx)) + ' per night'
-      + ' &middot; ' + esc(row.host_name || 'no host name') + ' ' + esc(row.host_phone || '') + '</p>'
+      + ' &middot; ' + esc(Number(row.base_nightly_ugx) > 0 ? ugx(row.base_nightly_ugx) + ' per night' : 'POA')
+      + ' &middot; ' + esc(row.host_name || 'no host name')
+      + (row.source === 'imported' ? '' : ' ' + esc(row.host_phone || '')) + '</p>'
       + '<p class="st-desk-flags">'
       + (photos
         ? '<span class="st-desk-ok"><i class="fas fa-image"></i> ' + photos + ' photos</span>'
@@ -112,6 +113,9 @@
         ? '<span class="st-desk-ok"><i class="fas fa-file-signature"></i> Right to let declared</span>'
         : '<span class="st-desk-warn"><i class="fas fa-file-signature"></i> No right-to-let declaration</span>')
       + (row.king_facts_confirmed ? '<span class="st-desk-ok"><i class="fas fa-crown"></i> King confirmed</span>' : '')
+      + (row.source === 'imported' || row.found_online_label
+        ? '<span class="st-desk-warn"><i class="fas fa-globe"></i> Found online. Do not message.</span>'
+        : '')
       + (row.listed_via === 'staff_assisted'
         ? '<span class="st-desk-warn"><i class="fas fa-user-pen"></i> Entered by '
           + esc(row.entered_by_staff_name || 'staff') + '</span>'

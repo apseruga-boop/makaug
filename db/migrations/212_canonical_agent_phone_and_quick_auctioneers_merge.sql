@@ -15,10 +15,18 @@
 --      The old agent number resolves to the survivor.
 --   3. Does not merge any other duplicate pair.
 --   4. Does not send a message.
---   5. From then on, a new or edited agent phone is stored as +256… and a
---      second profile with the same line is rejected.
+--   5. From then on, a new insert, or an update that moves a profile onto
+--      someone else's line, is stored as +256… and rejected. Profiles that
+--      already share a line (the other duplicate pairs) are left as they
+--      are: rewriting a phone they already had does not fail.
 --
--- Rollback: scripts/rollback-207-canonical-agent-phone-and-quick-auctioneers-merge.sql
+-- Startup: agents is a few dozen rows. This does not rewrite every phone,
+-- and it does not scan properties. Listings move with WHERE agent_id =
+-- the duplicate, which uses idx_properties_agent_id. Moderation history
+-- stays on the listing (property_moderation_events.property_id), so it
+-- follows the listing without a second pass. audit_logs is not scanned.
+--
+-- Rollback: scripts/rollback-212-canonical-agent-phone-and-quick-auctioneers-merge.sql
 
 CREATE OR REPLACE FUNCTION makaug_canonical_ug_phone(value text)
 RETURNS text
@@ -48,7 +56,7 @@ CREATE TABLE IF NOT EXISTS agent_number_aliases (
 
 CREATE INDEX IF NOT EXISTS agent_number_aliases_agent_idx ON agent_number_aliases (agent_id);
 
-CREATE TABLE IF NOT EXISTS migration_207_agent_phone_merge_backup (
+CREATE TABLE IF NOT EXISTS migration_212_agent_phone_merge_backup (
   agent_number TEXT PRIMARY KEY,
   agent_id UUID NOT NULL,
   role TEXT NOT NULL,
@@ -65,7 +73,6 @@ CREATE TABLE IF NOT EXISTS migration_207_agent_phone_merge_backup (
   prospect_ids UUID[] NOT NULL DEFAULT '{}',
   referral_ids UUID[] NOT NULL DEFAULT '{}',
   checkin_ids UUID[] NOT NULL DEFAULT '{}',
-  audit_ids UUID[] NOT NULL DEFAULT '{}',
   backed_up_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -91,46 +98,39 @@ BEGIN
     RETURN;
   END IF;
 
-  INSERT INTO migration_207_agent_phone_merge_backup (agent_number, agent_id, role, agent)
+  INSERT INTO migration_212_agent_phone_merge_backup (agent_number, agent_id, role, agent)
   VALUES ('MKA-AG-3822248', source_id, 'source', source_row)
   ON CONFLICT (agent_number) DO NOTHING;
-  INSERT INTO migration_207_agent_phone_merge_backup (agent_number, agent_id, role, agent)
+  INSERT INTO migration_212_agent_phone_merge_backup (agent_number, agent_id, role, agent)
   VALUES ('MKA-AG-5282286', target_id, 'target', target_row)
   ON CONFLICT (agent_number) DO NOTHING;
 
   IF to_regclass('public.properties') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
+    UPDATE migration_212_agent_phone_merge_backup
        SET property_ids = COALESCE((SELECT array_agg(id) FROM properties WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
-    UPDATE migration_207_agent_phone_merge_backup
-       SET broker_property_ids = COALESCE((
-         SELECT array_agg(id) FROM properties
-          WHERE COALESCE(extra_fields, '{}'::jsonb)->>'broker_agent_id' = source_id::text
-       ), '{}')
-     WHERE agent_number = 'MKA-AG-3822248';
+    -- Indexed on agent_id. Do not scan every property for a broker id.
     UPDATE properties
        SET agent_id = target_id,
            lister_name = COALESCE(NULLIF(lister_name, ''), (SELECT full_name FROM agents WHERE id = target_id)),
-           extra_fields = COALESCE(extra_fields, '{}'::jsonb)
-             || jsonb_build_object('merged_from_agent_id', source_id::text, 'merged_from_agent_number', 'MKA-AG-3822248'),
+           extra_fields = CASE
+             WHEN COALESCE(extra_fields, '{}'::jsonb)->>'broker_agent_id' = source_id::text
+               THEN jsonb_set(COALESCE(extra_fields, '{}'::jsonb), '{broker_agent_id}', to_jsonb(target_id::text), true)
+             ELSE COALESCE(extra_fields, '{}'::jsonb)
+           END || jsonb_build_object('merged_from_agent_id', source_id::text, 'merged_from_agent_number', 'MKA-AG-3822248'),
            updated_at = NOW()
      WHERE agent_id = source_id;
-    UPDATE properties
-       SET extra_fields = jsonb_set(COALESCE(extra_fields, '{}'::jsonb), '{broker_agent_id}', to_jsonb(target_id::text), true)
-         || jsonb_build_object('merged_from_agent_id', source_id::text, 'merged_from_agent_number', 'MKA-AG-3822248'),
-           updated_at = NOW()
-     WHERE COALESCE(extra_fields, '{}'::jsonb)->>'broker_agent_id' = source_id::text;
   END IF;
 
   IF to_regclass('public.revenue_entries') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
+    UPDATE migration_212_agent_phone_merge_backup
        SET revenue_ids = COALESCE((SELECT array_agg(id) FROM revenue_entries WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
     UPDATE revenue_entries SET agent_id = target_id WHERE agent_id = source_id;
   END IF;
 
   IF to_regclass('public.agent_identity_files') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
+    UPDATE migration_212_agent_phone_merge_backup
        SET identity_file_ids = COALESCE((SELECT array_agg(id) FROM agent_identity_files WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
     -- One live front and one live back. The survivor already has the ID, so
@@ -149,21 +149,21 @@ BEGIN
   END IF;
 
   IF to_regclass('public.leads') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
+    UPDATE migration_212_agent_phone_merge_backup
        SET lead_ids = COALESCE((SELECT array_agg(id) FROM leads WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
     UPDATE leads SET agent_id = target_id WHERE agent_id = source_id;
   END IF;
 
   IF to_regclass('public.agent_booking_requests') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
+    UPDATE migration_212_agent_phone_merge_backup
        SET booking_ids = COALESCE((SELECT array_agg(id) FROM agent_booking_requests WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
     UPDATE agent_booking_requests SET agent_id = target_id WHERE agent_id = source_id;
   END IF;
 
   IF to_regclass('public.agent_weekly_reports') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
+    UPDATE migration_212_agent_phone_merge_backup
        SET report_ids = COALESCE((SELECT array_agg(id) FROM agent_weekly_reports WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
     DELETE FROM agent_weekly_reports s
@@ -173,55 +173,38 @@ BEGIN
   END IF;
 
   IF to_regclass('public.pay_links') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
+    UPDATE migration_212_agent_phone_merge_backup
        SET pay_link_ids = COALESCE((SELECT array_agg(id) FROM pay_links WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
     UPDATE pay_links SET agent_id = target_id WHERE agent_id = source_id;
   END IF;
 
   IF to_regclass('public.payment_claims') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
+    UPDATE migration_212_agent_phone_merge_backup
        SET claim_ids = COALESCE((SELECT array_agg(id) FROM payment_claims WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
     UPDATE payment_claims SET agent_id = target_id WHERE agent_id = source_id;
   END IF;
 
   IF to_regclass('public.agent_prospects') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
+    UPDATE migration_212_agent_phone_merge_backup
        SET prospect_ids = COALESCE((SELECT array_agg(id) FROM agent_prospects WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
     UPDATE agent_prospects SET agent_id = target_id WHERE agent_id = source_id;
   END IF;
 
   IF to_regclass('public.demand_lead_referrals') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
+    UPDATE migration_212_agent_phone_merge_backup
        SET referral_ids = COALESCE((SELECT array_agg(id) FROM demand_lead_referrals WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
     UPDATE demand_lead_referrals SET agent_id = target_id WHERE agent_id = source_id;
   END IF;
 
   IF to_regclass('public.listing_availability_checkins') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
+    UPDATE migration_212_agent_phone_merge_backup
        SET checkin_ids = COALESCE((SELECT array_agg(id) FROM listing_availability_checkins WHERE agent_id = source_id), '{}')
      WHERE agent_number = 'MKA-AG-3822248';
     UPDATE listing_availability_checkins SET agent_id = target_id WHERE agent_id = source_id;
-  END IF;
-
-  IF to_regclass('public.audit_logs') IS NOT NULL THEN
-    UPDATE migration_207_agent_phone_merge_backup
-       SET audit_ids = COALESCE((
-         SELECT array_agg(id) FROM audit_logs
-          WHERE details->>'agent_id' = source_id::text
-             OR details->>'source_agent_id' = source_id::text
-       ), '{}')
-     WHERE agent_number = 'MKA-AG-3822248';
-    UPDATE audit_logs
-       SET details = jsonb_set(details, '{agent_id}', to_jsonb(target_id::text), true)
-         || jsonb_build_object('merged_from_agent_id', source_id::text, 'merged_from_agent_number', 'MKA-AG-3822248')
-     WHERE details->>'agent_id' = source_id::text;
-    UPDATE audit_logs
-       SET details = jsonb_set(details, '{source_agent_id}', to_jsonb(target_id::text), true)
-     WHERE details->>'source_agent_id' = source_id::text;
   END IF;
 
   IF to_regclass('public.off_plan_developments') IS NOT NULL THEN
@@ -265,7 +248,7 @@ BEGIN
          status = 'suspended',
          removed_at = COALESCE(removed_at, NOW()),
          removed_reason = 'Merged into Quickway Auctioneers (MKA-AG-5282286). Same phone, second profile.',
-         removed_by = 'migration_207',
+         removed_by = 'migration_212',
          removal_snapshot = jsonb_build_object('merged_into', target_id::text, 'merged_into_number', 'MKA-AG-5282286'),
          updated_at = NOW()
    WHERE id = source_id;
@@ -281,6 +264,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   key9 text;
+  old_key text;
   existing_id uuid;
   existing_number text;
 BEGIN
@@ -294,10 +278,19 @@ BEGIN
   IF COALESCE(length(key9), 0) < 9 THEN
     RETURN NEW;
   END IF;
+  -- A row that already had this line may be saved again, including the
+  -- existing duplicate pairs. Only a new insert, or an update onto a line
+  -- this row did not already have, is refused.
+  IF TG_OP = 'UPDATE' THEN
+    old_key := RIGHT(regexp_replace(COALESCE(NULLIF(btrim(OLD.phone), ''), OLD.whatsapp, ''), '\D', '', 'g'), 9);
+    IF old_key = key9 THEN
+      RETURN NEW;
+    END IF;
+  END IF;
   SELECT id, makaug_agent_number
     INTO existing_id, existing_number
     FROM agents
-   WHERE (TG_OP = 'INSERT' OR id IS DISTINCT FROM NEW.id)
+   WHERE id IS DISTINCT FROM NEW.id
      AND (
        RIGHT(regexp_replace(COALESCE(phone, ''), '\D', '', 'g'), 9) = key9
        OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\D', '', 'g'), 9) = key9

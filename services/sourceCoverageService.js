@@ -1,6 +1,7 @@
 'use strict';
 
 const { getPropertySourceRegistry, sourceRecordKind } = require('./propertySourceRegistryService');
+const { sourceLookbackStartIso } = require('./freeCategoryHashtagSources');
 const {
   buildYouTubeSearchJobs,
   fetchYouTubePostsForJobs,
@@ -598,7 +599,7 @@ async function processYouTubeCoverageBatch({
     const jobs = buildYouTubeSearchJobs({
       sources: [source],
       limit: 1,
-      publishedAfter,
+      publishedAfter: sourceLookbackStartIso(source, publishedAfter),
       maxPagesPerSource: 1,
       jobMode: 'all',
     });

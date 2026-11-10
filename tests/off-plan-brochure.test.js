@@ -43,15 +43,35 @@ const BROCHURE_OPTIONS = {
   mortgageProviders: [{ name: 'QA Bank', residentialRate: 16.5, minDepositPct: { residential: 20 }, maxYears: { residential: 25 }, arrangementFeePct: 1.5 }]
 };
 
-test('brochure renders an eight-page A4 PDF with map, family services, mortgage and broker sections without pagination overflow', async () => {
+function pageCount(pdf) {
+  return (pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length;
+}
+
+test('brochure renders the editorial PDF and skips pages the project does not have', async () => {
   const pdf = await brochureBuffer(BROCHURE_PROJECT, BROCHURE_OPTIONS);
+  const { PDFParse } = require('pdf-parse');
+  const parser = new PDFParse({ data: pdf });
+  const text = await parser.getText();
+  await parser.destroy();
 
   assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.3');
   assert.ok(pdf.length > 20_000);
-  assert.equal((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length, 8);
+  assert.equal(pageCount(pdf), 6);
+  assert.match(text.text, /Verified QA Project/);
+  assert.match(text.text, /makaug\.com/);
+  assert.match(text.text, /Kazi Honest/);
+  assert.match(text.text, /QA Hospital/);
+  assert.match(text.text, /410,000,000/);
+  assert.doesNotMatch(text.text, /Floor plans/);
+  assert.doesNotMatch(text.text, /To verify|Price on request|static map was unavailable|distance to confirm/i);
+  text.pages.forEach((page) => assert.ok(cleanPage(page.text).length > 40, page.num));
 });
 
-test('brochure generation supports every public site language, including Arabic and Amharic fonts', async () => {
+function cleanPage(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+test('brochure generation still returns a PDF for every public site language', async () => {
   assert.deepEqual(SUPPORTED_OFF_PLAN_LANGUAGES, ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']);
   for (const language of SUPPORTED_OFF_PLAN_LANGUAGES) {
     const copy = brochureLanguagePack(language);
@@ -60,7 +80,7 @@ test('brochure generation supports every public site language, including Arabic 
     const pdf = await brochureBuffer(BROCHURE_PROJECT, { ...BROCHURE_OPTIONS, language });
     assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.3', language);
     assert.ok(pdf.length > 20_000, language);
-    assert.equal((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length, 8, language);
+    assert.equal(pageCount(pdf), 6, language);
   }
   assert.equal(normalizeBrochureLanguage('ar-AE'), 'ar');
   assert.equal(normalizeBrochureLanguage('unsupported'), 'en');
@@ -113,7 +133,8 @@ test('overseas brochure uses the Kenya route, KES source pricing, floor plans an
     const pdf = await brochureBuffer(project, { language });
     assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.3', language);
     assert.ok(pdf.length > 20_000, language);
-    assert.ok((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length >= 9, language);
+    assert.ok(pageCount(pdf) >= 5, language);
+    assert.ok(pageCount(pdf) < 12, language);
   }
 });
 

@@ -29,6 +29,14 @@ const {
   commercialMisclassificationWarning,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const {
+  FOUND_ONLINE_LABEL,
+  canonicalStudentListingType,
+  classifyFreeCategoryImport,
+  outsideFreeSourceLookback,
+} = require('./freeCategoryHashtagSources');
+const { insertFoundOnlineShortStayListing } = require('./foundOnlineShortStayIntake');
+const { plotSaleBeatsStudentWords } = require('../utils/listingCategorySignals');
 const { detectPropertyTypeEvidence } = require('../utils/propertyTypeVocabulary');
 const { isApartmentBlockText, modestPriceDrop, videoIdFromText } = require('../utils/listingIntakeQuality');
 const { blockedSocialSourceMatch } = require('./socialSourceBlocklistService');
@@ -1076,15 +1084,18 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const sourceQualityHardBlocked = sourceQuality.suppressed && !lowSignalOnlySuppressed;
   const positiveGateHardBlocked = positiveListingGate.reason === 'not_a_listing'
     || positiveListingGate.reason === NON_TARGET_LOCATION_REASON;
-  const integrityHardBlockReason = dataIntegrity.issue_codes.find((code) => [
-    'unsupported_hospitality_or_nightly',
-    'not_a_specific_property_listing',
-  ].includes(code)) || '';
+  const freeCategoryRoute = item.free_category_route || classifyFreeCategoryImport(item);
+  const routesToShortStay = freeCategoryRoute.destination === 'st_listing';
+  const integrityHardBlockReason = dataIntegrity.issue_codes.find((code) => {
+    if (code === 'unsupported_hospitality_or_nightly' && routesToShortStay) return false;
+    return code === 'unsupported_hospitality_or_nightly' || code === 'not_a_specific_property_listing';
+  }) || '';
   const integrityHardBlocked = Boolean(integrityHardBlockReason);
   const manualExactSocialIntake = isManualExactSocialIntake(item);
   const specificPropertySignal = hasSpecificPropertySignal(item);
   const pureHashtagJunk = isPureHashtagSourceJunk(item);
-  const dateWindowAllowsQueue = manualExactSocialIntake || dateStatus !== 'before_2026_source_window';
+  const outsideCategoryLookback = outsideFreeSourceLookback(item);
+  const dateWindowAllowsQueue = !outsideCategoryLookback && (manualExactSocialIntake || dateStatus !== 'before_2026_source_window');
   const manualExactPasses = !manualExactSocialIntake || (
     specificPropertySignal
       && hasContact
@@ -1108,7 +1119,8 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     manualExactSocialIntake && !hasContact ? 'missing_public_contact_or_source_route' : '',
     manualExactSocialIntake && !hasImageOrEvidence ? 'missing_source_evidence' : '',
     manualExactSocialIntake && !specificPropertySignal ? 'not_a_specific_property_listing' : '',
-    !dateWindowAllowsQueue ? 'before_2026_automated_source_window' : '',
+    outsideCategoryLookback ? 'outside_free_source_lookback' : '',
+    !outsideCategoryLookback && !dateWindowAllowsQueue ? 'before_2026_automated_source_window' : '',
     sourceQualityHardBlocked ? (sourceQuality.reason || 'non_listing_source_content') : '',
     positiveGateHardBlocked ? (positiveListingGate.reason || 'not_a_listing') : '',
     integrityHardBlocked ? integrityHardBlockReason : '',
@@ -1174,6 +1186,10 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     has_concrete_listing_signal: positiveListingGate.has_listing_signal === true,
     data_integrity: dataIntegrity,
     data_integrity_hard_blocked: integrityHardBlocked,
+    intake_destination: routesToShortStay ? 'st_listing' : 'properties',
+    short_stay_queue: routesToShortStay,
+    found_online_label: routesToShortStay ? FOUND_ONLINE_LABEL : '',
+    do_not_message: routesToShortStay,
     pure_hashtag_source_junk: pureHashtagJunk,
   };
 }
@@ -2178,7 +2194,7 @@ function buildSocialSearchListing(item, agentId = null) {
     ? (campusByCoords?.name || nearestUniversityForSourceItem({ ...item, listingType: originalListingType }))
     : '';
   const studentListing = explicitlyStudent;
-  const listingType = studentListing ? 'students' : originalListingType;
+  const listingType = studentListing ? 'student' : canonicalStudentListingType(originalListingType);
   const pricePeriod = normalizeListingPricePeriod(item.price_period || item.pricePeriod, {
     listingType,
     title: item.title,
@@ -2754,8 +2770,9 @@ function normalizeFoundOnlineListingType(value = '', options = {}) {
   }
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room)\b/.test(raw);
   if (/\b(rental|income|investment)\s+(property|building|block)\s+(?:available\s+)?for sale\b/.test(raw)) return 'sale';
+  if (plotSaleBeatsStudentWords(raw)) return 'land';
   if (raw.includes('commercial') || raw.includes('shop') || raw.includes('office') || raw.includes('warehouse')) return 'commercial';
-  if (STUDENT_SOURCE_LISTING_PATTERN.test(raw)) return 'students';
+  if (STUDENT_SOURCE_LISTING_PATTERN.test(raw)) return 'student';
   const saleAsset = /\b(for sale|on sale|available for sale|selling)\b/.test(raw)
     && /\b(property|building|block|apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|rental income)\b/.test(raw)
     && !/\b(student|hostel|campus|university|college|student accommodation)\b/.test(raw);
@@ -2876,10 +2893,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     source_visual_text: sourceVisualText,
     listing_type: sourceTextListingType,
   });
-  let listingType = (sourceHasExplicitTransaction || sourceHasPropertyCategorySignal)
+  let listingType = canonicalStudentListingType((sourceHasExplicitTransaction || sourceHasPropertyCategorySignal)
     ? (evidenceClassification.listing_type || normalizeFoundOnlineListingType(sourceText, { price: unsafeSourcePrice }))
-    : rawListingType;
-  if (listingType === 'student' && rawListingType === 'students') listingType = 'students';
+    : rawListingType);
   const title = cleanSourceListingTitle(
     raw.title || raw.source_title || raw.caption,
     `${listingType === 'land' ? 'Land' : (inferSourcePropertyType({ ...raw, source_text: sourceText })?.label || 'Property')}${area ? ` in ${area}` : ''}`
@@ -3027,6 +3043,22 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     source_url: sourceUrl,
     bedrooms: raw.bedrooms ?? raw.beds,
   });
+  const freeCategoryRoute = classifyFreeCategoryImport({
+    ...raw,
+    title,
+    description,
+    sourceText,
+    caption: raw.caption,
+    listingType,
+    listing_type: listingType,
+    price: sourcePriceMetadata.price,
+    price_period: pricePeriod,
+    source_key: raw.source_key || raw.sourceKey || raw.source_registry_key || sourceKey,
+    source_registry_key: raw.source_registry_key || raw.sourceRegistryKey || '',
+    hashtags: raw.hashtags,
+    sourcePublishedAt: raw.first_posted_at || raw.published_at || raw.posted_at || null,
+  });
+  if (freeCategoryRoute.listing_type === 'student') listingType = 'student';
   return {
     key: postKey,
     agentKey: sourceKey,
@@ -3094,6 +3126,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     transactionType: transactionType || null,
     transaction_type: transactionType || null,
     listingType,
+    free_category_route: freeCategoryRoute,
+    source_lookback_days: freeCategoryRoute.lookback_days,
+    intake_destination: freeCategoryRoute.destination,
     nearest_university: nearestUniversity || null,
     student_universities: nearestUniversity ? normalizeUniversityList([nearestUniversity]) : [],
     subtype: commercialSubtype || null,
@@ -3741,6 +3776,27 @@ async function queueFoundOnlineSourcePostListings({
         alreadyPresent.push(alreadyPresentFoundOnlineRow(item, agent, existingRow));
         return [];
       }
+      if (intake.short_stay_queue) {
+        return [{
+          key: item.key,
+          title: item.title,
+          area: item.area,
+          district: item.district,
+          price: item.price,
+          price_label: Number(item.price) > 0 ? '' : 'POA',
+          listing_type: 'short_stay',
+          destination: 'st_listing',
+          source: 'imported',
+          status: 'pending',
+          moderation_stage: 'submitted',
+          found_online_label: FOUND_ONLINE_LABEL,
+          do_not_message: true,
+          source_url: sourceUrlForItem(item),
+          auto_live_ready: false,
+          intake,
+          dry_run: true,
+        }];
+      }
       const autoLive = sourcePostAutoLiveStatusFor(item, agent);
       const row = {
         key: item.key,
@@ -3778,8 +3834,10 @@ async function queueFoundOnlineSourcePostListings({
       });
       return [row];
     });
-    const autoLiveRows = dryRunRows.filter((item) => item.auto_live_ready);
-    const reviewRows = dryRunRows.filter((item) => !item.auto_live_ready);
+    const shortStayRows = dryRunRows.filter((item) => item.destination === 'st_listing');
+    const propertyRows = dryRunRows.filter((item) => item.destination !== 'st_listing');
+    const autoLiveRows = propertyRows.filter((item) => item.auto_live_ready);
+    const reviewRows = propertyRows.filter((item) => !item.auto_live_ready);
     const duplicateWarnings = duplicateWarningsForFoundOnlineRows(alreadyPresent);
     const perUrl = foundOnlinePerUrlResults(items, {
       alreadyPresent,
@@ -3800,14 +3858,16 @@ async function queueFoundOnlineSourcePostListings({
       low_signal_source_location_count: lowSignalSourceLocationRecords.length,
       foreign_rejected_count: foreignRejectedRecords.length,
       created_properties: 0,
-      would_create_properties: dryRunRows.length,
+      would_create_properties: propertyRows.length,
+      would_create_short_stay_listings: shortStayRows.length,
+      short_stay_listings: shortStayRows,
       existing_properties: alreadyPresent.length,
       created_auto_live_properties: 0,
       existing_auto_live_properties: 0,
       auto_live_properties: autoLiveRows.length,
       review_queue_properties: reviewRows.length,
       auto_live_listings: autoLiveRows,
-      queued_listings: dryRunRows,
+      queued_listings: propertyRows,
       review_queue_listings: reviewRows,
       already_present_properties: alreadyPresent,
       duplicate_warning_count: duplicateWarnings.length,
@@ -3858,6 +3918,7 @@ async function queueFoundOnlineSourcePostListings({
     }
     const agentIdsByKey = {};
     const created = [];
+    const shortStayCreated = [];
     const alreadyPresent = [];
     const skippedListings = [...sourceReviewRecords];
 
@@ -3885,6 +3946,11 @@ async function queueFoundOnlineSourcePostListings({
           continue;
         }
       }
+      if (intake.short_stay_queue) {
+        const stay = await insertFoundOnlineShortStayListing(client, item, agent);
+        shortStayCreated.push(stay);
+        continue;
+      }
       const createProfile = shouldCreateSourceProfile(item, agent);
       const profileKey = sourceProfileKeyForItem(item, agent);
       if (createProfile && !agentIdsByKey[profileKey]) {
@@ -3911,7 +3977,7 @@ async function queueFoundOnlineSourcePostListings({
     }
 
     const persistence = await verifyCreatedListingRows(client, created);
-    if (evaluated.some(({ intake }) => intake.eligible) && !created.length && !alreadyPresent.length) {
+    if (evaluated.some(({ intake }) => intake.eligible) && !created.length && !shortStayCreated.length && !alreadyPresent.length) {
       const error = new Error('Eligible Found Online rows were evaluated, but none were created or matched as existing.');
       error.code = 'FOUND_ONLINE_QUEUE_EMPTY';
       throw error;
@@ -3965,6 +4031,8 @@ async function queueFoundOnlineSourcePostListings({
       normalized_posts: items.length,
       eligible_to_queue_count: evaluated.filter(({ intake }) => intake.eligible).length,
       created_properties: created.length,
+      created_short_stay_listings: shortStayCreated.filter((item) => !item.already_present).length,
+      short_stay_listings: shortStayCreated,
       existing_properties: alreadyPresent.length,
       created_auto_live_properties: autoLiveCreated.length,
       created_review_queue_properties: reviewCreated.length,

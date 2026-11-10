@@ -118,22 +118,48 @@ SELECT
 -- BEGIN NEW HOMEPAGE
 WITH homepage_candidates AS MATERIALIZED (
        SELECT p.id FROM properties p
-       WHERE (LOWER(COALESCE(p.status, '')) IN ('approved', 'live', 'published') AND NOT (
-    (COALESCE(p.title, '') ILIKE '%SOFT LAUNCH TEST - DELETE%' OR COALESCE(p.description, '') ILIKE '%SOFT LAUNCH TEST - DELETE%') OR (COALESCE(p.title, '') ILIKE '%QA TEST - DELETE%' OR COALESCE(p.description, '') ILIKE '%QA TEST - DELETE%') OR (COALESCE(p.title, '') ILIKE '%MAKAUG TRAINING%' OR COALESCE(p.description, '') ILIKE '%MAKAUG TRAINING%') OR (COALESCE(p.title, '') ILIKE '%REMOVE AFTER QA%' OR COALESCE(p.description, '') ILIKE '%REMOVE AFTER QA%')
+       WHERE ((LOWER(COALESCE(p.status, '')) IN ('approved', 'live', 'published') OR (LOWER(COALESCE(p.status, '')) = 'sold' AND p.sold_at >= NOW() - INTERVAL '7 days')) AND NOT (
+    COALESCE(p.title, '') ILIKE '%SOFT LAUNCH TEST - DELETE%' OR COALESCE(p.title, '') ILIKE '%QA TEST - DELETE%' OR COALESCE(p.title, '') ILIKE '%MAKAUG TRAINING%' OR COALESCE(p.title, '') ILIKE '%REMOVE AFTER QA%'
+    OR COALESCE(p.description, '') ~* '(SOFT LAUNCH TEST - DELETE|QA TEST - DELETE|MAKAUG TRAINING|REMOVE AFTER QA)'
     OR LOWER(TRIM(COALESCE(p.title, ''))) IN ('sdgsdgd', 'sgsgsgsgs')
     OR COALESCE(p.source, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
     OR COALESCE(p.listed_via, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
     OR COALESCE(p.lister_name, '') ~* '(qa test delete|qa owner|dummy|sample)'
     OR COALESCE(p.lister_email, '') ~* '(makaug\.invalid|test@|qa@|dummy|sample)'
     OR COALESCE(p.inquiry_reference, '') ~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'
-    OR COALESCE(p.extra_fields->>'qa_test_delete', '') ~* '^(true|1|yes)$'
-    OR COALESCE(p.extra_fields->>'soft_launch_test', '') ~* '^(true|1|yes)$'
-    OR COALESCE(p.extra_fields->>'is_test', '') ~* '^(true|1|yes)$'
-    OR COALESCE(p.extra_fields->>'launch_proof', '') ~* '^(true|1|yes)$'
-    OR COALESCE(p.extra_fields->>'non_public_test', '') ~* '^(true|1|yes)$'
+    OR (
+      p.extra_fields ?| ARRAY['qa_test_delete', 'soft_launch_test', 'is_test', 'launch_proof', 'non_public_test']::text[]
+      AND (
+      COALESCE(p.extra_fields->>'qa_test_delete', '') ~* '^(true|1|yes)$'
+      OR COALESCE(p.extra_fields->>'soft_launch_test', '') ~* '^(true|1|yes)$'
+      OR COALESCE(p.extra_fields->>'is_test', '') ~* '^(true|1|yes)$'
+      OR COALESCE(p.extra_fields->>'launch_proof', '') ~* '^(true|1|yes)$'
+      OR COALESCE(p.extra_fields->>'non_public_test', '') ~* '^(true|1|yes)$'
+      )
+    )
   ) AND p.has_public_media)
-       ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC
-       LIMIT 6
+         AND (
+    NOT (
+    LOWER(COALESCE(p.source, '')) = 'found_online_property_source_v1'
+    OR LOWER(COALESCE(p.listed_via, '')) = 'found_online'
+    OR LOWER(COALESCE(p.extra_fields->>'source_badge', '')) IN ('found_online', 'found online', 'sourced_online', 'sourced online')
+    OR LOWER(COALESCE(p.extra_fields->>'found_online', 'false')) IN ('true', '1', 'yes')
+    OR LOWER(COALESCE(p.extra_fields->>'found_online_candidate', 'false')) IN ('true', '1', 'yes')
+    OR LOWER(COALESCE(p.extra_fields->>'social_search_candidate', 'false')) IN ('true', '1', 'yes')
+    OR LOWER(COALESCE(p.extra_fields->>'sourced_inventory_candidate', 'false')) IN ('true', '1', 'yes')
+  )
+    AND p.agent_id IS NOT NULL
+    AND EXISTS (
+      SELECT 1
+      FROM agents featured_agent
+      WHERE featured_agent.id = p.agent_id
+        AND lower(featured_agent.status) IN ('approved', 'verified')
+        AND featured_agent.user_id IS NOT NULL
+        AND featured_agent.removed_at IS NULL
+    )
+  )
+       ORDER BY md5($1 || p.id::text) ASC
+       LIMIT $2
      )
 SELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
@@ -183,9 +209,7 @@ SELECT
           ORDER BY si.is_primary DESC, si.sort_order ASC, si.created_at ASC
           LIMIT 1
         ) staff_img ON true
-
-     ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC
-
+     ORDER BY md5($1 || p.id::text) ASC
 -- END NEW HOMEPAGE
 ), old_projection AS (
  SELECT to_jsonb(p)-'seo_total' AS row FROM old_homepage p
