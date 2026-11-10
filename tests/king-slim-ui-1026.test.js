@@ -93,3 +93,13 @@ test('found-online short stays are labelled and never offered a message', () => 
   assert.match(route, /This stay was found online\. Nothing is sent to the host\./);
   assert.match(route, /action === 'approve' && listing\?\.id && !silentHost/);
 });
+
+test('the moderator desk hides host-check boxes and still offers approve and reject', () => {
+  const desk = read('assets', 'short-term-admin.js');
+  const sheet = desk.slice(desk.indexOf('function renderReviewSheet'), desk.indexOf('function openReviewSheet'));
+  const staffActions = desk.slice(desk.indexOf('function staffActionsHtml'), desk.indexOf('function kingActionsHtml'));
+  assert.match(staffActions, />Approve</);
+  assert.match(staffActions, />Reject</);
+  assert.match(sheet, /which === 'king'[\s\S]{0,120}Review checks/);
+  assert.match(sheet, /checkRowsHtml/);
+});
