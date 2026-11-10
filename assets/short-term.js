@@ -1934,7 +1934,6 @@
       + card('tourism', 'i2T', 'g2S', 'g2M', 'https://utb.go.ug', 'i2L')
       + '</div>'
       + '<p class="st-worth-note">' + esc(gt('gNote')) + '</p>'
-      + '<p class="st-photo-credit">' + esc(t('photoCredit')) + '</p>'
       + '</div></section>';
   }
 

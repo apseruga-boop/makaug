@@ -50,7 +50,7 @@ test('the coming-to-Uganda guide is on the live options layout, open, and uses A
   assert.match(client, /esc\(img\) \+ '\.webp/);
   assert.match(client, /esc\(img\) \+ '\.jpg/);
   assert.match(client, /st-info-btn/);
-  assert.match(client, /st-photo-credit/);
+  assert.doesNotMatch(client, /st-photo-credit/); // one AI-photo note (gNote) only
   assert.doesNotMatch(client, /Wikimedia Commons/);
   for (const slug of ['visa', 'money', 'transport', 'power', 'tax', 'tourism']) {
     const webp = path.join(root, 'assets/img/uganda-guide', `${slug}.webp`);
