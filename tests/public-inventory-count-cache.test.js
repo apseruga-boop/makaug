@@ -222,9 +222,11 @@ test('warmup covers site-wide inventory plus homepage, for-sale, to-rent and lan
   assert.deepEqual(sale.values, ['sale']);
   assert.deepEqual(rent.values, ['rent']);
   assert.deepEqual(land.values, ['land']);
-  assert.match(home.where, /property_images/);
+  assert.match(home.where, /has_public_media/);
   assert.doesNotMatch(home.where, /listing_type/);
   assert.equal(sale.timeoutMs, 4000);
+  assert.equal(home.includeShortTerm, true, 'homepage warmup must fold in live short stays');
+  assert.equal(sale.includeShortTerm, undefined);
 
   const results = await metrics.warmPublicInventoryCounts(queries);
   assert.deepEqual(results.map((result) => result.label), ['site-wide', 'homepage', 'for-sale', 'to-rent', 'land']);
@@ -232,3 +234,37 @@ test('warmup covers site-wide inventory plus homepage, for-sale, to-rent and lan
   assert.equal(calls, 5);
   assert.equal(metrics.publicInventoryMetricsCacheSizeForTests(), 5);
 });
+
+test('a cached count that skipped short stays is not reused when the caller asks for them', async () => {
+  let calls = 0;
+  metrics.setPublicInventoryQueryRunnerForTests(async () => {
+    calls += 1;
+    return { rows: [countRow(10, { sale: 10 })] };
+  });
+  const where = 'WHERE p.status = $1';
+  const values = ['approved'];
+  const skipped = await metrics.loadPublicOpportunitySummary({ where, values, timeoutMs: 2000 });
+  assert.equal(skipped.summary.total, 10);
+  assert.equal(skipped.summary.short_term, 0);
+  assert.equal(skipped.meta.cache, 'miss');
+  assert.equal(calls, 1);
+
+  const included = await metrics.loadPublicOpportunitySummary({
+    where,
+    values,
+    timeoutMs: 2000,
+    includeShortTerm: true
+  });
+  assert.notEqual(included.meta.cache, 'hit', 'must not serve the no-short-stay cache entry as the site-wide total');
+  assert.equal(calls, 2, 'the includeShortTerm request must run its own count');
+
+  const again = await metrics.loadPublicOpportunitySummary({
+    where,
+    values,
+    timeoutMs: 2000,
+    includeShortTerm: true
+  });
+  assert.equal(again.meta.cache, 'hit');
+  assert.equal(calls, 2);
+});
+

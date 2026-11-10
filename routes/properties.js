@@ -678,7 +678,7 @@ function publicCategoryOpportunityQuery(listingType = '') {
 function mainPublicOpportunityCountQueries() {
   const timeoutMs = 4000;
   return [
-    { label: 'homepage', timeoutMs, ...publicCategoryOpportunityQuery('') },
+    { label: 'homepage', timeoutMs, includeShortTerm: true, ...publicCategoryOpportunityQuery('') },
     { label: 'for-sale', timeoutMs, ...publicCategoryOpportunityQuery('sale') },
     { label: 'to-rent', timeoutMs, ...publicCategoryOpportunityQuery('rent') },
     { label: 'land', timeoutMs, ...publicCategoryOpportunityQuery('land') }
