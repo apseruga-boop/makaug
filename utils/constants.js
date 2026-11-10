@@ -95,6 +95,20 @@ const UNIVERSITY_ALIASES = Object.freeze({
 });
 
 const LISTING_TYPES = ['sale', 'rent', 'land', 'commercial', 'student', 'students'];
+
+// Moderators filtering Students must see both spellings. Imported hostels
+// used to be stored as 'students' while the public section reads 'student'.
+function listingTypeMatchSql(alias, listingType, values) {
+  const type = String(listingType || '').trim().toLowerCase();
+  if (type === 'student' || type === 'students') {
+    values.push('student', 'students');
+    const second = values.length;
+    const first = second - 1;
+    return `LOWER(COALESCE(${alias}.listing_type, '')) IN ($${first}, $${second})`;
+  }
+  values.push(type);
+  return `LOWER(COALESCE(${alias}.listing_type, '')) = $${values.length}`;
+}
 const PROPERTY_STATUSES = ['draft', 'pending', 'approved', 'rejected', 'hidden', 'deleted', 'archived', 'sold'];
 
 module.exports = {
@@ -102,5 +116,6 @@ module.exports = {
   UNIVERSITIES,
   UNIVERSITY_ALIASES,
   LISTING_TYPES,
-  PROPERTY_STATUSES
+  PROPERTY_STATUSES,
+  listingTypeMatchSql
 };

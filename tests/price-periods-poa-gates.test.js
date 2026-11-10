@@ -95,8 +95,12 @@ test('a POA sale with no price passes both gates', () => {
   assert.equal(listing.price, null);
   assert.deepEqual(listingDataIntegrityReport(listing).issues.filter((issue) => /price|period/.test(issue.code)), []);
   assert.equal(listingPriceQuality(listing).ok, true);
-  // A sale with no price and no POA still fails.
-  assert.ok(listingPriceQuality({ ...listing, price_on_application: false, price_period: 'once' }).reasons.includes('missing_or_placeholder_price'));
+  // A sale with no price is POA and is not blocked. A tiny numeric price is still flagged.
+  const blank = listingPriceQuality({ ...listing, price_on_application: false, price_period: 'once' });
+  assert.equal(blank.ok, true);
+  assert.equal(blank.price_on_application, true);
+  assert.ok(listingPriceQuality({ ...listingFor('sale', 'once'), price: 1000, price_original: 1000, price_on_application: false }).reasons.includes('price_below_plausible_bounds')
+    || listingPriceQuality({ ...listingFor('sale', 'once'), price: 1000, price_original: 1000, price_on_application: false }).reasons.includes('one_off_price_below_1m'));
 });
 
 test('a monthly sale and a one-off rent still fail', () => {
@@ -179,5 +183,6 @@ test('every write path turns the POA period into price_on_application and drops 
   assert.match(properties, /if \(patch\.price_period === 'poa'\) patch\.price_on_application = true;/);
   assert.match(properties, /(?:const|let) priceOnApplication = parseBooleanLike\(body\.price_on_application \|\| body\.priceOnApplication, false\) \|\| submittedPricePeriod === 'poa';/);
   assert.match(read('routes/staff.js'), /if \(normalized\.price_period === 'poa'\) normalized\.price_on_application = true;/);
-  assert.match(read('routes/admin.js'), /if \(\(!property\.price \|\| property\.price <= 0\) && !isPriceOnApplication\(property\)\) blockers\.push\('price'\);/);
+  assert.match(read('routes/admin.js'), /A missing price publishes as POA\. Only a missing location blocks here\./);
+  assert.equal(read('routes/admin.js').includes("blockers.push('price')"), false);
 });

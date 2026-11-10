@@ -5924,12 +5924,21 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
            owner_edit_token_hash = CASE WHEN $9::text IS NULL THEN owner_edit_token_hash ELSE $9::text END,
            owner_edit_token_expires_at = CASE WHEN $10::timestamptz IS NULL THEN owner_edit_token_expires_at ELSE $10::timestamptz END,
            updated_at = NOW(),
+           price_on_application = CASE
+             WHEN $2 = 'approved' AND (price IS NULL OR price <= 0) THEN TRUE
+             ELSE price_on_application
+           END,
            extra_fields = (
              CASE
                WHEN $3::text IS NULL OR trim($3::text) = '' THEN COALESCE(extra_fields, '{}'::jsonb)
                ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
              END
            ) || jsonb_build_object('review_warning_overrides', $11::jsonb)
+             || CASE
+               WHEN $2 = 'approved' AND (price IS NULL OR price <= 0)
+                 THEN jsonb_build_object('price_on_application', true, 'price_label', 'POA')
+               ELSE '{}'::jsonb
+             END
              || jsonb_build_object('last_reviewed_by_actor', $6::text)
              || COALESCE($12::jsonb, '{}'::jsonb)
          WHERE id = $1
@@ -5970,6 +5979,10 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
            approved_by = CASE WHEN $2 = 'approved' THEN COALESCE($9::uuid, approved_by) ELSE approved_by END,
            sold_at = CASE WHEN $2 = 'sold' THEN NOW() WHEN $2 = 'approved' THEN NULL ELSE sold_at END,
            updated_at = NOW(),
+           price_on_application = CASE
+             WHEN $2 = 'approved' AND (price IS NULL OR price <= 0) THEN TRUE
+             ELSE price_on_application
+           END,
            extra_fields = COALESCE(extra_fields, '{}'::jsonb)
              || jsonb_build_object(
                'moderation_stage', $3::text,

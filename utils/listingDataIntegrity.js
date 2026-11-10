@@ -378,10 +378,10 @@ function listingDataIntegrityReport(record = {}, options = {}) {
     add('missing_public_contact_path', 'A phone, email, or exact public source/contact route is required.');
   }
 
-  if ((!Number.isFinite(price) || price <= 0) && !poa) {
-    add('missing_price_without_poa', 'A positive canonical price or explicit Price on application flag is required.');
-  }
-  if (Number.isFinite(price) && price > 0 && poa) {
+  const numericPrice = Number.isFinite(price) && price > 0;
+  // A missing price is POA. It does not block publication. A missing location
+  // still does. A number and an explicit POA flag together stay a conflict.
+  if (numericPrice && poa) {
     add('price_and_poa_conflict', 'A listing cannot carry both a numeric price and Price on application.');
   }
   if (Number.isFinite(price) && price > MAX_CANONICAL_PRICE_UGX) {
@@ -481,7 +481,7 @@ function listingDataIntegrityReport(record = {}, options = {}) {
     marker: 'master-data-integrity-116',
     issues,
     issue_codes: issues.map((issue) => issue.code),
-    price_on_application: poa,
+    price_on_application: poa || !numericPrice,
     canonical_price_currency: storedCurrency,
     original_price_currency: originalCurrency,
     classification,

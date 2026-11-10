@@ -14,7 +14,7 @@ const { listingReferenceQuery, propertyListingSearchClause } = require('../utils
 const { priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
-const { DISTRICTS: UGANDA_DISTRICTS, LISTING_TYPES } = require('../utils/constants');
+const { DISTRICTS: UGANDA_DISTRICTS, LISTING_TYPES, listingTypeMatchSql } = require('../utils/constants');
 const {
   normalizeReviewLocationHierarchy,
   districtForKnownArea,
@@ -173,7 +173,6 @@ const { buildListingReference } = require('../services/listingReferenceService')
 const { hideReportedProperty } = require('../services/reportListingModerationService');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
-const { isPriceOnApplication } = require('../utils/listingPriceQuality');
 const { FAILED_WHATSAPP_SQL, listWhatsappActivity, whatsappActivityFreshness } = require('../services/whatsappActivityService');
 const { normalizeStaffSourcePostDate, staffSourcePostDateExtra } = require('../utils/sourcePostDate');
 const { listingPhotoOrVideoCheck, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
@@ -658,7 +657,7 @@ function addLeadPropertyMatchFilters(values, criteria = {}, relax = {}) {
   if (!relax.searchType && searchType !== 'any') {
     if (searchType === 'student') {
       where += ` AND (
-        p.listing_type = 'student'
+        p.listing_type IN ('student', 'students')
         OR p.students_welcome = TRUE
         OR p.title ILIKE '%student%'
         OR p.title ILIKE '%hostel%'
@@ -2385,7 +2384,7 @@ async function loadAdminPropertiesSummaryFast() {
          COUNT(*) FILTER (WHERE status = 'deleted')::int AS deleted,
          COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL)::int AS private_listed,
          COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL)::int AS agent_listed,
-         COUNT(*) FILTER (WHERE listing_type = 'student' OR students_welcome = TRUE)::int AS student_discoverable
+         COUNT(*) FILTER (WHERE listing_type IN ('student', 'students') OR students_welcome = TRUE)::int AS student_discoverable
        FROM properties p`,
       [],
       {
@@ -4012,8 +4011,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
 
     if (listingType && LISTING_TYPES.includes(listingType)) {
-      values.push(listingType);
-      filters.push(`p.listing_type = $${values.length}`);
+      filters.push(listingTypeMatchSql('p', listingType, values));
     }
     if (search) filters.push(propertyListingSearchClause('p', search, values));
 
@@ -4159,8 +4157,7 @@ router.get('/properties/actioned', async (req, res, next) => {
 
     if (!includeTestLike) filters.push(`NOT ${adminLaunchTestListingFastCondition('p')}`);
     if (listingType && LISTING_TYPES.includes(listingType)) {
-      values.push(listingType);
-      filters.push(`p.listing_type = $${values.length}`);
+      filters.push(listingTypeMatchSql('p', listingType, values));
     }
     if (search) filters.push(propertyListingSearchClause('p', search, values));
 
@@ -6014,8 +6011,8 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
     }
     if (!property.agent_id) blockers.push('agent profile');
     if (!property.district || !property.area) blockers.push('location');
-    // C20: a Price on application listing has no number and is still publishable.
-    if ((!property.price || property.price <= 0) && !isPriceOnApplication(property)) blockers.push('price');
+    // A missing price publishes as POA. Only a missing location blocks here.
+    // Implausible prices stay flagged by listingDataIntegrityReport below.
     if (!property.lister_phone) blockers.push('agent contact');
     if (!photoCheck.ok) blockers.push(`property photo: ${NO_PHOTO_OR_VIDEO_MESSAGE}`);
     if (videoUrls.length < 1) blockers.push('property video');
