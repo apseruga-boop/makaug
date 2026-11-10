@@ -42483,7 +42483,7 @@ function getListChoiceType() {
 }
 
 function listingThemeClass(type = "sale") {
-  return `lp-theme-${["sale", "rent", "land", "commercial", "student"].includes(type) ? type : "sale"}`;
+  return `lp-theme-${["sale", "rent", "land", "commercial", "student", "short_stay"].includes(type) ? type : "sale"}`;
 }
 
 function getListPropertyRouteMode() {
@@ -42497,7 +42497,7 @@ function getListPropertyRouteMode() {
 function getListPropertyRouteType() {
   try {
     const value = new URLSearchParams(window.location.search || "").get("type") || "";
-    return ["sale", "rent", "land", "commercial", "student"].includes(value) ? value : "";
+    return ["sale", "rent", "land", "commercial", "student", "short_stay"].includes(value) ? value : "";
   } catch (_) {
     return "";
   }
@@ -42550,6 +42550,13 @@ function listChoiceMeta(type = getListChoiceType()) {
       onlineCopy: "Open the commercial form for business use, size, terms, address, and verification.",
       whatsappCopy: "Message WhatsApp 0780 863 394 with the commercial property details and let the makaug assistant guide you.",
       modalSub: "Choose List Online or List through WhatsApp for this commercial property."
+    },
+    short_stay: {
+      gateTitle: "List a short stay",
+      gateCopy: "Short stays are reviewed by the Short stays desk, then go live after payment. There is no free trial and no free days.",
+      onlineCopy: "Use the short stay form on this page. Guests book by the night.",
+      whatsappCopy: "Short stays are listed on this page and reviewed by the Short stays desk.",
+      modalSub: "Fill in the short stay form on this page. There is no free trial and no free days."
     }
   };
   return {
@@ -42559,7 +42566,7 @@ function listChoiceMeta(type = getListChoiceType()) {
 }
 
 function applyListPropertyTheme(type = getListChoiceType()) {
-  const themeClasses = ["lp-theme-sale", "lp-theme-rent", "lp-theme-land", "lp-theme-commercial", "lp-theme-student"];
+  const themeClasses = ["lp-theme-sale", "lp-theme-rent", "lp-theme-land", "lp-theme-commercial", "lp-theme-student", "lp-theme-short_stay"];
   ["page-list-property", "lp-wizard-shell", "list-choice-box"].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -42609,15 +42616,200 @@ function syncListChoiceCopy(type = getListChoiceType()) {
   });
 }
 
+
+const LP_SHORT_STAY_DRAFT_KEY = "makaug-lp-short-stay-draft";
+let lpShortStayPhotos = [];
+
+function toggleListPropertyShortStay(show) {
+  const on = show === true;
+  document.getElementById("lp-short-stay-panel")?.classList.toggle("hidden", !on);
+  document.getElementById("lp-choice-path-cards")?.classList.toggle("hidden", on);
+  document.getElementById("list-choice-path-cards")?.classList.toggle("hidden", on);
+  document.getElementById("list-choice-short-stay-note")?.classList.toggle("hidden", !on);
+  if (on) {
+    setListPropertyFormVisible(false);
+    prefillListPropertyShortStayContact();
+    restoreListPropertyShortStayDraft({ silent: true });
+  }
+}
+
+function prefillListPropertyShortStayContact() {
+  const nameEl = document.getElementById("lp-st-host-name");
+  const phoneEl = document.getElementById("lp-st-host-phone");
+  const emailEl = document.getElementById("lp-st-host-email");
+  if (!nameEl && !phoneEl && !emailEl) return;
+  try {
+    const details = typeof brokerListingContactDetails === "function" ? brokerListingContactDetails() : {};
+    const user = authState?.user || {};
+    const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim()
+      || details?.broker?.full_name || details?.name || "";
+    const phone = details?.phone || user.phone || "";
+    const email = details?.email || user.email || "";
+    if (nameEl && !nameEl.value && fullName) nameEl.value = fullName;
+    if (phoneEl && !phoneEl.value && phone) phoneEl.value = phone;
+    if (emailEl && !emailEl.value && email) emailEl.value = email;
+  } catch (_) {}
+}
+
+function renderListPropertyShortStayPhotos() {
+  const slots = document.getElementById("lp-st-photo-slots");
+  if (!slots) return;
+  const labels = ["Add cover photo", "Bedroom", "Living area", "Another room"];
+  slots.innerHTML = labels.map((label, index) => {
+    const photo = lpShortStayPhotos[index];
+    if (photo?.data_url) {
+      return `<button type="button" class="lp-st-photo" onclick="document.getElementById('lp-st-photos')?.click()"><img src="${photo.data_url.replace(/"/g, "&quot;")}" alt=""></button>`;
+    }
+    return `<button type="button" class="lp-st-photo" onclick="document.getElementById('lp-st-photos')?.click()"><span class="text-xl">+</span>${label}</button>`;
+  }).join("");
+}
+
+function handleListPropertyShortStayPhotos(event) {
+  const files = Array.from(event?.target?.files || []).filter((file) => file.type && file.type.startsWith("image/"));
+  if (!files.length) return;
+  Promise.all(files.slice(0, 8).map((file) => new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ name: file.name, data_url: String(reader.result || ""), status: "ready" });
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  }))).then((photos) => {
+    lpShortStayPhotos = photos.filter(Boolean).slice(0, 8);
+    renderListPropertyShortStayPhotos();
+  });
+}
+
+function collectListPropertyShortStayDraft() {
+  return {
+    nightly: document.getElementById("lp-st-nightly")?.value || "",
+    guests: document.getElementById("lp-st-guests")?.value || "",
+    bedrooms: document.getElementById("lp-st-bedrooms")?.value || "1",
+    district: document.getElementById("lp-st-district")?.value || "",
+    area: document.getElementById("lp-st-area")?.value || "",
+    rules: document.getElementById("lp-st-rules")?.value || "",
+    host_name: document.getElementById("lp-st-host-name")?.value || "",
+    host_phone: document.getElementById("lp-st-host-phone")?.value || "",
+    host_email: document.getElementById("lp-st-host-email")?.value || ""
+  };
+}
+
+function saveListPropertyShortStayDraft() {
+  try {
+    localStorage.setItem(LP_SHORT_STAY_DRAFT_KEY, JSON.stringify(collectListPropertyShortStayDraft()));
+    const box = document.getElementById("lp-st-feedback");
+    if (box) box.innerHTML = '<p class="text-green-800">Draft saved on this device.</p>';
+  } catch (_) {}
+}
+
+function restoreListPropertyShortStayDraft({ silent } = {}) {
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem(LP_SHORT_STAY_DRAFT_KEY) || "null"); } catch (_) { draft = null; }
+  if (!draft || typeof draft !== "object") return;
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && value && !el.value) el.value = value;
+  };
+  set("lp-st-nightly", draft.nightly);
+  set("lp-st-guests", draft.guests);
+  if (draft.bedrooms && document.getElementById("lp-st-bedrooms") && !document.getElementById("lp-st-bedrooms").matches(":focus")) {
+    document.getElementById("lp-st-bedrooms").value = draft.bedrooms;
+  }
+  set("lp-st-district", draft.district);
+  set("lp-st-area", draft.area);
+  set("lp-st-rules", draft.rules);
+  set("lp-st-host-name", draft.host_name);
+  set("lp-st-host-phone", draft.host_phone);
+  set("lp-st-host-email", draft.host_email);
+  if (!silent) {
+    const box = document.getElementById("lp-st-feedback");
+    if (box) box.innerHTML = '<p class="text-green-800">Draft restored.</p>';
+  }
+}
+
+async function submitListPropertyShortStay(event) {
+  if (event) event.preventDefault();
+  const feedback = document.getElementById("lp-st-feedback");
+  const submitBtn = document.getElementById("lp-st-submit");
+  const district = (document.getElementById("lp-st-district")?.value || "").trim();
+  const area = (document.getElementById("lp-st-area")?.value || "").trim();
+  const hostName = (document.getElementById("lp-st-host-name")?.value || "").trim();
+  const hostPhone = (document.getElementById("lp-st-host-phone")?.value || "").trim();
+  const hostEmail = (document.getElementById("lp-st-host-email")?.value || "").trim();
+  const nightlyRaw = (document.getElementById("lp-st-nightly")?.value || "").trim();
+  const right = document.getElementById("lp-st-right-to-let");
+  const errors = [];
+  if (!district) errors.push("District is required.");
+  if (!area) errors.push("Area or neighbourhood is required.");
+  if (!hostName) errors.push("We need the name guests should ask for.");
+  if (!hostPhone) errors.push("A reachable Ugandan phone number is required.");
+  if (!right || !right.checked) errors.push("You must confirm you have the right to let this place out.");
+  if (errors.length) {
+    if (feedback) feedback.innerHTML = `<ul class="text-red-700">${errors.map((line) => `<li>${line}</li>`).join("")}</ul>`;
+    return false;
+  }
+  const payload = {
+    district,
+    area,
+    bedrooms: document.getElementById("lp-st-bedrooms")?.value || "1",
+    max_guests: document.getElementById("lp-st-guests")?.value || "2",
+    base_nightly_ugx: nightlyRaw,
+    price_on_application: nightlyRaw === "",
+    house_rules: document.getElementById("lp-st-rules")?.value || "",
+    host_name: hostName,
+    host_phone: hostPhone,
+    host_email: hostEmail,
+    host_type: (typeof isSignedInBrokerListing === "function" && isSignedInBrokerListing()) ? "agent" : "owner",
+    right_to_let_declared: true,
+    terms_accepted: true,
+    listed_from: "list-property"
+  };
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Submitting…";
+  }
+  if (feedback) feedback.innerHTML = "";
+  try {
+    const created = await apiRequest("/api/short-term/listings", { method: "POST", body: payload });
+    const listing = created?.listing || created;
+    const token = created?.upload_token || "";
+    for (const photo of lpShortStayPhotos.filter((item) => item?.data_url)) {
+      try {
+        await apiRequest(`/api/short-term/listings/${listing.id}/photos`, {
+          method: "POST",
+          body: { data_url: photo.data_url, upload_token: token }
+        });
+      } catch (_) {}
+    }
+    try { localStorage.removeItem(LP_SHORT_STAY_DRAFT_KEY); } catch (_) {}
+    lpShortStayPhotos = [];
+    renderListPropertyShortStayPhotos();
+    if (feedback) {
+      feedback.innerHTML = `<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-green-900"><b>Sent to the Short stays review desk</b><p class="mt-1">${created?.next_step || "Moderators will review this stay before it appears on /short-term."}${listing?.reference ? ` Reference: ${listing.reference}.` : ""}</p></div>`;
+    }
+    document.getElementById("lp-short-stay-form")?.reset();
+    if (right) right.checked = false;
+  } catch (error) {
+    const details = Array.isArray(error?.details) && error.details.length ? error.details : [error?.message || "Listing could not be saved"];
+    if (feedback) feedback.innerHTML = `<ul class="text-red-700">${details.map((line) => `<li>${line}</li>`).join("")}</ul>`;
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Submit for review";
+    }
+  }
+  return false;
+}
+
 function setListChoiceType(type) {
-  const selected = ["sale", "rent", "land", "commercial", "student"].includes(type) ? type : "sale";
+  const selected = ["sale", "rent", "land", "commercial", "student", "short_stay"].includes(type) ? type : "sale";
   lpChoiceType = selected;
   applyListPropertyTheme(selected);
   syncListChoiceCopy(selected);
+  toggleListPropertyShortStay(selected === "short_stay");
   const radio = document.querySelector(`input[name='lp-type'][value='${selected}']`);
   if (radio) {
     radio.checked = true;
-    setListType(selected);
+    if (selected === "short_stay") updateListTypeChips(selected);
+    else setListType(selected);
   }
   updateListPropertyWhatsAppLinks();
 }
@@ -42649,6 +42841,7 @@ function maybeOpenListPropertyChoiceModal() {
   const mode = getListPropertyRouteMode();
   const type = getListPropertyRouteType();
   if (type) setListChoiceType(type);
+  if (type === "short_stay") return;
   if (mode === "online") {
     chooseListPropertyOnline({ source: "route_query", skipModalClose: true });
     return;
@@ -64374,6 +64567,12 @@ const LP_MODE_META = {
     icon: "🎓",
     title: "Student accommodation",
     copy: "You are creating student housing. Add campus proximity, room setup, facilities, rules, and availability."
+  },
+  short_stay: {
+    theme: "lp-theme-short_stay",
+    icon: "🛏️",
+    title: "Short stay",
+    copy: "You are listing a short stay. Guests book by the night. Moderators review it on the Short stays desk before it goes live."
   }
 };
 
@@ -64475,6 +64674,17 @@ function setListType(type) {
     if (radio) radio.checked = true;
   }
   const selected = getListType();
+  if (selected === "short_stay") {
+    lpChoiceType = selected;
+    updateListTypeChips(selected);
+    updateListingModeHero(selected);
+    applyListPropertyTheme(selected);
+    syncListChoiceCopy(selected);
+    toggleListPropertyShortStay(true);
+    lpCurrentFormType = selected;
+    return;
+  }
+  toggleListPropertyShortStay(false);
   const cfg = LP_CONFIG[selected] || LP_CONFIG.sale;
   const preserveTypeSpecificValues = previousType === selected;
 

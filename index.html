@@ -3345,6 +3345,18 @@
     .lp-theme-land, #page-list-property.lp-theme-land { --lp-accent: #0f766e; --lp-accent-2: #14b8a6; --lp-soft: #f0fdfa; --lp-border: #99f6e4; --lp-ink: #115e59; }
     .lp-theme-commercial, #page-list-property.lp-theme-commercial { --lp-accent: #9a3412; --lp-accent-2: #ea580c; --lp-soft: #fff7ed; --lp-border: #fed7aa; --lp-ink: #7c2d12; }
     .lp-theme-student, #page-list-property.lp-theme-student { --lp-accent: #6d28d9; --lp-accent-2: #a855f7; --lp-soft: #faf5ff; --lp-border: #e9d5ff; --lp-ink: #581c87; }
+    .lp-theme-short_stay, #page-list-property.lp-theme-short_stay { --lp-accent: #8a3a12; --lp-accent-2: #b3521c; --lp-soft: #fdf5ef; --lp-border: #e8ded6; --lp-ink: #6f2d0d; }
+    #page-list-property.lp-theme-short_stay #lp-page-subtitle { color: #f6e2d5; }
+    #lp-short-stay-panel .lp-st-fee { background: #fffbeb; border: 1px solid #fcd34d; border-left: 5px solid #f59e0b; border-radius: 12px; padding: 14px 16px; margin: 8px 0 22px; }
+    #lp-short-stay-panel .lp-st-fee b { display: block; color: #92400e; margin-bottom: 4px; }
+    #lp-short-stay-panel .lp-st-fee p { margin: 0; color: #78350f; font-size: 14px; line-height: 1.55; }
+    #lp-short-stay-panel .lp-st-photos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    #lp-short-stay-panel .lp-st-photo { aspect-ratio: 4/3; border: 2px dashed #d1d5db; border-radius: 12px; background: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #5b6b62; font-size: 12px; font-weight: 700; text-align: center; padding: 8px; overflow: hidden; position: relative; }
+    #lp-short-stay-panel .lp-st-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #lp-short-stay-panel .lp-st-check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; background: var(--lp-soft); border: 1px solid var(--lp-border); border-radius: 12px; padding: 12px 14px; }
+    #lp-short-stay-panel .lp-st-check input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--lp-accent); }
+    @media (max-width: 800px) { #lp-short-stay-panel .lp-st-photos { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 520px) { #lp-short-stay-panel .lp-st-photos { grid-template-columns: 1fr; } }
     #page-list-property #lp-address-first-card,
     #page-list-property #lp-pin-map,
     #page-list-property .lp-lang-tip {
@@ -6659,11 +6671,12 @@
         <div class="flex flex-wrap gap-2 mb-5" role="list" aria-label="Listing type">
           <button type="button" data-list-choice-type="sale" onclick="setListChoiceType('sale')" class="lp-choice-type-chip active">🏠 For Sale</button>
           <button type="button" data-list-choice-type="rent" onclick="setListChoiceType('rent')" class="lp-choice-type-chip">🔑 For Rent</button>
+          <button type="button" data-list-choice-type="short_stay" onclick="setListChoiceType('short_stay')" class="lp-choice-type-chip">🛏️ Short stay</button>
           <button type="button" data-list-choice-type="student" onclick="setListChoiceType('student')" class="lp-choice-type-chip">🎓 Student Accommodation</button>
           <button type="button" data-list-choice-type="land" onclick="setListChoiceType('land')" class="lp-choice-type-chip">🌿 Land</button>
           <button type="button" data-list-choice-type="commercial" onclick="setListChoiceType('commercial')" class="lp-choice-type-chip">🏢 Commercial</button>
         </div>
-        <div class="grid md:grid-cols-2 gap-4">
+        <div id="lp-choice-path-cards" class="grid md:grid-cols-2 gap-4">
         <button type="button" onclick="chooseListPropertyOnline({ source: 'inline_choice' })" class="lp-choice-card text-left rounded-3xl p-5 focus:outline-none">
           <div class="text-xs font-black uppercase tracking-wide text-green-700">Option 1</div>
           <h2 class="text-xl font-black text-gray-900 mt-1">List online</h2>
@@ -6675,6 +6688,83 @@
           <p id="lp-choice-whatsapp-context" class="text-sm text-white/90 mt-1">Message WhatsApp 0780 863 394 and let the makaug assistant guide you through the listing.</p>
         </a>
         </div>
+
+        <section id="lp-short-stay-panel" class="hidden" data-short-stay-list-form="1">
+          <div class="lp-st-fee">
+            <b>Listing fee — paid straight away</b>
+            <p>Owners pay UGX 20,000 a month. Agents pay UGX 50,000 a month, which includes short stays. There is no free trial and no free days. After you submit, moderators review the stay on the Short stays review desk. Payment is due when the stay is approved.</p>
+          </div>
+          <form id="lp-short-stay-form" class="grid md:grid-cols-2 gap-4" onsubmit="return submitListPropertyShortStay(event)">
+            <div>
+              <label for="lp-st-nightly" class="block text-sm font-semibold text-gray-700 mb-1.5">Per-night price (UGX) <span class="font-normal text-gray-400">Leave blank for price on application</span></label>
+              <input id="lp-st-nightly" type="number" min="0" step="1000" inputmode="numeric" class="w-full border rounded-xl px-4 py-3 text-sm" style="border-color:var(--lp-border)" placeholder="e.g. 150000">
+            </div>
+            <div>
+              <label for="lp-st-guests" class="block text-sm font-semibold text-gray-700 mb-1.5">Max guests</label>
+              <input id="lp-st-guests" type="number" min="1" max="30" class="w-full border rounded-xl px-4 py-3 text-sm" style="border-color:var(--lp-border)" placeholder="e.g. 4">
+            </div>
+            <div>
+              <label for="lp-st-bedrooms" class="block text-sm font-semibold text-gray-700 mb-1.5">Bedrooms</label>
+              <select id="lp-st-bedrooms" class="w-full border rounded-xl px-4 py-3 text-sm" style="border-color:var(--lp-border)">
+                <option value="0">Studio</option>
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5+</option>
+              </select>
+            </div>
+            <div>
+              <label for="lp-st-district" class="block text-sm font-semibold text-gray-700 mb-1.5">District <span class="font-normal text-gray-400">Required</span></label>
+              <input id="lp-st-district" required class="w-full border rounded-xl px-4 py-3 text-sm" style="border-color:var(--lp-border)" placeholder="Kampala">
+            </div>
+            <div class="md:col-span-2">
+              <label for="lp-st-area" class="block text-sm font-semibold text-gray-700 mb-1.5">Area / neighbourhood <span class="font-normal text-gray-400">Required — guests search by area</span></label>
+              <input id="lp-st-area" required class="w-full border rounded-xl px-4 py-3 text-sm" style="border-color:var(--lp-border)" placeholder="e.g. Kyanja, Bunga, Kololo">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Photos <span class="font-normal text-gray-400">No stock photos. Use your own pictures of this place.</span></label>
+              <input id="lp-st-photos" type="file" accept="image/*" multiple class="sr-only" onchange="handleListPropertyShortStayPhotos(event)">
+              <div id="lp-st-photo-slots" class="lp-st-photos">
+                <button type="button" class="lp-st-photo" onclick="document.getElementById('lp-st-photos')?.click()"><span class="text-xl">+</span>Add cover photo</button>
+                <button type="button" class="lp-st-photo" onclick="document.getElementById('lp-st-photos')?.click()"><span class="text-xl">+</span>Bedroom</button>
+                <button type="button" class="lp-st-photo" onclick="document.getElementById('lp-st-photos')?.click()"><span class="text-xl">+</span>Living area</button>
+                <button type="button" class="lp-st-photo" onclick="document.getElementById('lp-st-photos')?.click()"><span class="text-xl">+</span>Another room</button>
+              </div>
+            </div>
+            <div class="md:col-span-2">
+              <label for="lp-st-rules" class="block text-sm font-semibold text-gray-700 mb-1.5">House rules</label>
+              <textarea id="lp-st-rules" class="w-full border rounded-xl px-4 py-3 text-sm" style="border-color:var(--lp-border);min-height:96px" placeholder="Quiet hours, smoking, extra guests, parties, check-in notes..."></textarea>
+            </div>
+            <div>
+              <label for="lp-st-host-name" class="block text-sm font-semibold text-gray-700 mb-1.5">Your name</label>
+              <input id="lp-st-host-name" required class="w-full border rounded-xl px-4 py-3 text-sm" style="border-color:var(--lp-border)" placeholder="The name guests should ask for">
+            </div>
+            <div>
+              <label for="lp-st-host-phone" class="block text-sm font-semibold text-gray-700 mb-1.5">Phone number</label>
+              <input id="lp-st-host-phone" required class="w-full border rounded-xl px-4 py-3 text-sm" style="border-color:var(--lp-border)" placeholder="+256 7XX XXX XXX">
+            </div>
+            <div class="md:col-span-2">
+              <label for="lp-st-host-email" class="block text-sm font-semibold text-gray-700 mb-1.5">Email <span class="font-normal text-gray-400">(optional)</span></label>
+              <input id="lp-st-host-email" type="email" class="w-full border rounded-xl px-4 py-3 text-sm" style="border-color:var(--lp-border)" placeholder="you@email.com">
+            </div>
+            <div class="md:col-span-2">
+              <label class="lp-st-check">
+                <input id="lp-st-right-to-let" type="checkbox" required>
+                <span>I own this place or have the owner's permission to let it for short stays.</span>
+              </label>
+            </div>
+            <div class="md:col-span-2">
+              <p class="text-sm text-gray-500">This listing will go to the moderators' <strong>Short stays review desk</strong>. It will not appear on /short-term until a moderator approves it and the fee is paid.</p>
+              <p class="text-xs text-gray-500 mt-2">By submitting you accept the makaug listing terms.</p>
+              <div id="lp-st-feedback" class="mt-3 text-sm"></div>
+              <div class="flex flex-wrap gap-3 mt-4">
+                <button id="lp-st-submit" type="submit" class="text-white rounded-xl px-5 py-3 text-sm font-extrabold" style="background:var(--lp-accent)">Submit for review</button>
+                <button type="button" onclick="saveListPropertyShortStayDraft()" class="rounded-xl px-5 py-3 text-sm font-bold border" style="border-color:var(--lp-border);color:var(--lp-ink);background:#fff">Save draft</button>
+              </div>
+            </div>
+          </form>
+        </section>
       </div>
 
       <div id="lp-wizard-shell" class="hidden lp-wizard-shell lp-theme-sale bg-white border border-green-100 rounded-2xl p-6 md:p-8">
@@ -6741,6 +6831,10 @@
               <label data-lp-type-chip="rent" class="inline-flex items-center gap-2 border border-green-100 rounded-xl px-4 py-2.5 text-sm text-gray-700 cursor-pointer transition-colors">
                 <input type="radio" name="lp-type" value="rent" class="accent-green-700" onchange="setListType(this.value)">
                 <span>🔑 For Rent</span>
+              </label>
+              <label data-lp-type-chip="short_stay" class="inline-flex items-center gap-2 border border-green-100 rounded-xl px-4 py-2.5 text-sm text-gray-700 cursor-pointer transition-colors">
+                <input type="radio" name="lp-type" value="short_stay" class="accent-green-700" onchange="setListType(this.value)">
+                <span>🛏️ Short stay</span>
               </label>
               <label data-lp-type-chip="land" class="inline-flex items-center gap-2 border border-green-100 rounded-xl px-4 py-2.5 text-sm text-gray-700 cursor-pointer transition-colors">
                 <input type="radio" name="lp-type" value="land" class="accent-green-700" onchange="setListType(this.value)">
@@ -10083,13 +10177,14 @@
         <div class="flex flex-wrap gap-2 mt-4" role="list" aria-label="Listing type">
           <button type="button" data-list-choice-type="sale" onclick="setListChoiceType('sale')" class="lp-choice-type-chip active">🏠 For Sale</button>
           <button type="button" data-list-choice-type="rent" onclick="setListChoiceType('rent')" class="lp-choice-type-chip">🔑 For Rent</button>
+          <button type="button" data-list-choice-type="short_stay" onclick="setListChoiceType('short_stay')" class="lp-choice-type-chip">🛏️ Short stay</button>
           <button type="button" data-list-choice-type="student" onclick="setListChoiceType('student')" class="lp-choice-type-chip">🎓 Student Accommodation</button>
           <button type="button" data-list-choice-type="land" onclick="setListChoiceType('land')" class="lp-choice-type-chip">🌿 Land</button>
           <button type="button" data-list-choice-type="commercial" onclick="setListChoiceType('commercial')" class="lp-choice-type-chip">🏢 Commercial</button>
         </div>
       </div>
 
-      <div class="grid md:grid-cols-2 gap-4">
+      <div id="list-choice-path-cards" class="grid md:grid-cols-2 gap-4">
         <button id="list-choice-online-btn" type="button" onclick="chooseListPropertyOnline({ source: 'modal' })" class="lp-choice-card rounded-2xl p-7 text-center transition-all">
           <div class="text-4xl mb-3">💻</div>
           <h3 id="list-choice-online-title" class="text-base font-bold text-gray-800">List Online</h3>
@@ -10103,6 +10198,10 @@
         </a>
       </div>
 
+      <div id="list-choice-short-stay-note" class="hidden mt-1 rounded-2xl border px-4 py-3 text-sm" style="background:var(--lp-soft);border-color:var(--lp-border);color:var(--lp-ink)">
+        <b>Short stay</b>
+        <p class="mt-1">Use the short stay form on this page. Owners pay UGX 20,000 a month. Agents pay UGX 50,000 a month. There is no free trial and no free days. Submissions go to the Short stays review desk.</p>
+      </div>
       <div class="mt-5 bg-green-50 border border-green-100 rounded-xl px-4 py-3 text-sm text-green-800">
         ✅ <strong id="list-choice-free-title">You pay from the day it is approved.</strong> <span id="list-choice-free-copy">One private listing costs UGX 20,000 per listing, per month. Every submission stays in staff review until approved.</span>
       </div>
@@ -10545,6 +10644,11 @@
       <button onclick="closeModal('broker-reg-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
       <h2 class="text-2xl font-bold text-gray-800 serif">Register as a Broker</h2>
       <p class="text-sm text-gray-500 mt-1 mb-5">Submit your broker profile for review. makaug admin controls public verification after document, AREA, and ownership checks.</p>
+
+      <div id="broker-short-stay-note" class="mb-5 rounded-xl px-4 py-3 text-sm" style="background:#fdf5ef;border:1px solid #e8ded6;border-left:5px solid #8a3a12;color:#6f2d0d">
+        <b>Agents can list short stays</b>
+        <p class="mt-1">Approved agents can list short stays as well as sales and rentals. Short stays are included in the agent plan of UGX 50,000 a month. There is no free trial and no free days. Each short stay still goes to the Short stays review desk before it appears on /short-term.</p>
+      </div>
 
       <div class="space-y-4">
         <div>

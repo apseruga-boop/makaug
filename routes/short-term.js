@@ -518,11 +518,20 @@ router.post('/listings', intakeLimiter, async (req, res) => {
         error: 'Short term listing submissions are not open yet'
       });
     }
-    const created = await createShortTermListing(db, req.body || {}, {
+    const body = { ...(req.body || {}) };
+    // A signed-in broker is linked as the host agent. Everyone else listing
+    // from /list-property is stored as an owner. Phone matching still decides
+    // whether the agent plan covers the fee.
+    if (req.userAuth?.role === 'agent_broker') {
+      body.host_type = 'agent';
+    } else if (String(body.listed_from || '') === 'list-property') {
+      body.host_type = 'owner';
+    }
+    const created = await createShortTermListing(db, body, {
       ip: req.clientIp || req.ip,
       hostUserId: req.userAuth?.id || null,
       listedVia: 'website',
-      referralCode: req.body?.referral_code || req.query?.ref || null
+      referralCode: body.referral_code || req.query?.ref || null
     });
     // Hosts list without an account on purpose - an account requirement is
     // what stops most Ugandan landlords listing at all. This signed, expiring
