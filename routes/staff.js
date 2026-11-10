@@ -3556,9 +3556,10 @@ function staffEditorTitle(property = {}, extra = {}) {
   const stored = cleanText(property.title);
   if (!rowIsFoundOnlineReview(property)) return stored;
   try {
-    const { buildThirdPartyPublicTitle } = require('../services/publicListingCopy');
-    const publicTitle = cleanText(buildThirdPartyPublicTitle(property, extra));
-    return publicTitle || stored;
+    const { tidyCreatorListingTitle, copyReviewState } = require('../services/publicListingCopy');
+    const review = copyReviewState(property, extra);
+    if (review.staffTitle || review.kingTitle) return stored;
+    return cleanText(tidyCreatorListingTitle(property, extra)) || stored;
   } catch (_) {
     return stored;
   }

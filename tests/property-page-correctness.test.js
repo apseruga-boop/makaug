@@ -140,8 +140,9 @@ test('B1: editing a live listing clears the cached API and server-rendered copy'
   const id = await foundOnlineFixture();
   await db.query("UPDATE properties SET status = 'approved', moderation_stage = 'approved' WHERE id = $1", [id]);
   const before = await request(app).get(`/api/properties/${id}`);
-  assert.match(before.body.data.title, /for sale in Kitende/);
-  assert.match((await seo.loadPublicSeoListing(db, id)).title, /for sale in Kitende/);
+  assert.match(before.body.data.title, /3 bedroom house for sale/i);
+  assert.doesNotMatch(before.body.data.title, /0772|#kitende/i);
+  assert.equal((await seo.loadPublicSeoListing(db, id)).title, before.body.data.title);
   const title = 'Kitende 3-bedroom bungalow for sale';
   const edit = await request(app)
     .patch(`/api/staff/properties/${id}/review`)
@@ -152,7 +153,7 @@ test('B1: editing a live listing clears the cached API and server-rendered copy'
   assert.equal((await seo.loadPublicSeoListing(db, id)).title, title);
 });
 
-test('B1: without a staff edit, the API and SSR show the same generated copy (not the raw caption)', async () => {
+test('B1: without a staff edit, the API and SSR show the tidied creator title (not the raw caption)', async () => {
   const id = await foundOnlineFixture();
   await db.query("UPDATE properties SET status = 'approved' WHERE id = $1", [id]);
   const api = await request(app).get(`/api/properties/${id}`);

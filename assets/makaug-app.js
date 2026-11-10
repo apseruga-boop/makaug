@@ -31740,6 +31740,7 @@ function adminReviewPropertyTypeFromText(text = "") {
   if (/villa/.test(lower)) return "Villa";
   if (/house|home/.test(lower)) return "House";
   if (/bungalow/.test(lower)) return "Bungalow";
+  if (adminReviewPlotSaleBeatsStudent(text)) return "Land";
   if (/hostel/.test(lower)) return "Hostel";
   if (/office/.test(lower)) return "Office";
   if (/shop|retail/.test(lower)) return "Retail shop";
@@ -32016,9 +32017,61 @@ function adminReviewOnListingTypeChange() {
   adminReviewSyncStudentAmenitiesFromText();
 }
 
+function adminReviewPlotSaleBeatsStudent(text = "") {
+  const raw = String(text || "");
+  const stripped = raw
+    .replace(/\b(?:suitable|ideal|good|perfect|great)\s+for\s*[:\-]?\s*[^.;|\n]{0,80}/gi, " ")
+    .replace(/\b(?:hostel|student)\s+estate\b/gi, " estate ");
+  const plotSale = /\b(?:plots?|acres?|decimals?)\s+for\s+sale\b|\bland\s+(?:for|on)\s+sale\b|\bfor\s+sale\b[^.\n]{0,20}\bplots?\b|\b\d+\s*[x×]\s*\d+\s*fts?\b/i.test(stripped);
+  if (!plotSale) return false;
+  const dwellingSale = /\b(?:\d+\s*[- ]?bed(?:room)?s?|duplex|bungalow|apartment|flat|house|home)\b/i.test(stripped)
+    && /\bfor\s+sale\b/i.test(stripped)
+    && !/\bplots?\s+for\s+sale\b/i.test(stripped)
+    && !/\b\d+\s*[x×]\s*\d+\s*fts?\b/i.test(stripped);
+  if (dwellingSale) return false;
+  const realStudent = /\b(?:student\s+(?:accommodation|hostel|room)|hostel\s+(?:room|bed|space)|per\s+semester)\b/i.test(stripped);
+  return !realStudent || plotSale;
+}
+
+function adminReviewTitleLooksGenerated(value = "") {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  if (/\((?:TikTok|YouTube|Instagram|Facebook)\s+\d{4}\)$/i.test(text)) return true;
+  return /^(?:student accommodation(?:\s+in|\s+-)|land(?:\s+for\s+(?:sale|rent))?\s+in|plots?\s+for\s+(?:sale|rent)\s+in|property\s+for\s+(?:sale|rent)\s+in|commercial\s+property(?:\s+for\s+(?:sale|rent))?\s+in|\d+-bed\b)/i.test(text);
+}
+
+function adminReviewTidyCreatorTitle(value = "") {
+  let text = String(value || "")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/#[\p{L}\p{N}_-]+/gu, " ")
+    .replace(/\+?\d[\d\s().-]{7,}\d/g, " ")
+    .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, " ")
+    .replace(/[|•]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s,.;:–—-]+|[\s,.;:–—-]+$/g, "")
+    .trim();
+  if (text.length > 180) {
+    const slice = text.slice(0, 181);
+    const lastSpace = slice.lastIndexOf(" ");
+    text = (lastSpace > 40 ? slice.slice(0, lastSpace) : slice.slice(0, 180)).trim();
+  }
+  return text;
+}
+
+function adminReviewCreatorTitle(review = {}) {
+  const extra = adminReviewExtraFields(review);
+  const stored = String(review.title || "").trim();
+  const sources = [extra.youtube_source_title, extra.source_title]
+    .map((value) => String(value || "").trim())
+    .filter((value) => value && !adminReviewTitleLooksGenerated(value));
+  const preferred = adminReviewTitleLooksGenerated(stored) ? (sources[0] || stored) : (stored || sources[0] || "");
+  return adminReviewTidyCreatorTitle(preferred);
+}
+
 function adminReviewListingTypeFromText(text = "", facts = {}, review = {}) {
   const lower = String(text || "").toLowerCase();
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|living room|sitting room)\b/.test(lower);
+  if (adminReviewPlotSaleBeatsStudent(text)) return "land";
   if (/\b(hostel|student accommodation|student room|campus)\b/.test(lower)) return "student";
   if (/\b(office|shop|warehouse|commercial)\b/.test(lower)) return "commercial";
   if (/\b(to rent|for rent|renting|rental|monthly|per month|\/month|month)\b/.test(lower)) return "rent";
@@ -32077,7 +32130,8 @@ function adminExtractReviewFacts(review = {}) {
   if (listingType === "sale") titleParts.push("for Sale");
   if (listingType === "commercial") titleParts.push("for Commercial Use");
   if (facts.area || facts.district) titleParts.push(`in ${facts.area || facts.district}`);
-  facts.title = titleParts.join(" ").replace(/\s+/g, " ").trim();
+  const creatorTitle = adminReviewCreatorTitle(review);
+  facts.title = creatorTitle || titleParts.join(" ").replace(/\s+/g, " ").trim();
   facts.description = adminReviewBuildConciseDescription(review, facts);
   return facts;
 }
@@ -52200,7 +52254,9 @@ function getLocalizedPropertyTitle(property = {}) {
   if (property?.public_copy_reviewed?.title === true && String(property?.title || "").trim() && !publicTitleContradictsType(property, property.title)) {
     return collapseDuplicateTransactionTitle(property.title);
   }
-  if (!isFoundOnlineListing(property)) return collapseDuplicateTransactionTitle(property?.title) || translatePropertyUi("Property");
+  const storedTitle = collapseDuplicateTransactionTitle(String(property?.title || "").trim());
+  if ((currentLang || "en") === "en" && storedTitle && !publicTitleContradictsType(property, storedTitle)) return storedTitle;
+  if (!isFoundOnlineListing(property)) return storedTitle || translatePropertyUi("Property");
   const normalizedType = normalizeType(property?.type || property?.listing_type || property?.category || "");
   const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ") || translateListingLabel("Uganda");
   const beds = Number(property?.beds ?? property?.bedrooms);
