@@ -373,7 +373,42 @@ function isStayAvailable(availability = [], checkIn, checkOut) {
 // door is not recoverable from the public JSON.
 const COARSE_STEP_DEG = 0.0045;
 
+// Centre of the area, from the median pin of live makaug listings there
+// (10 Nov 2026). Used when a short stay has no pin of its own, so it lands in
+// its area instead of at 0,0 in the sea.
+const AREA_CENTRES = Object.freeze({
+  bunga: [0.2728, 32.6227],
+  kisaasi: [0.364, 32.589],
+  kira: [0.3978, 32.6414],
+  kiwatule: [0.372, 32.625],
+  kyanja: [0.384, 32.596],
+  munyonyo: [0.236, 32.623],
+  mutungo: [0.3159, 32.6426],
+  muyenga: [0.2969, 32.615],
+  najjera: [0.396, 32.615],
+  zana: [0.2567, 32.5585]
+});
+
+function hasRealPin(lat, lng) {
+  if (lat == null || lng == null || lat === '' || lng === '') return false;
+  const a = Number(lat);
+  const b = Number(lng);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  if (a === 0 && b === 0) return false;
+  // Uganda's bounding box, with a little slack.
+  return a >= -1.6 && a <= 4.4 && b >= 29.4 && b <= 35.1;
+}
+
+function stayPin(row = {}) {
+  if (hasRealPin(row.latitude, row.longitude)) {
+    return [coarseCoordinate(row.latitude), coarseCoordinate(row.longitude)];
+  }
+  const centre = AREA_CENTRES[String(row.area || '').trim().toLowerCase()];
+  return centre ? [coarseCoordinate(centre[0]), coarseCoordinate(centre[1])] : [null, null];
+}
+
 function coarseCoordinate(value) {
+  if (value == null || value === '') return null;
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
   const snapped = Math.round(n / COARSE_STEP_DEG) * COARSE_STEP_DEG;
@@ -549,8 +584,8 @@ function normalizeShortTermListing(row = {}, options = {}) {
     description: row.description || '',
     district: row.district || '',
     area: row.area || '',
-    latitude: coarseCoordinate(row.latitude),
-    longitude: coarseCoordinate(row.longitude),
+    latitude: stayPin(row)[0],
+    longitude: stayPin(row)[1],
     place_type: row.place_type || 'entire_place',
     place_type_label: PLACE_TYPES[row.place_type] || PLACE_TYPES.entire_place,
     property_type: row.property_type || null,
