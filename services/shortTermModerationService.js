@@ -68,7 +68,7 @@ const STAGES = Object.freeze({
 // away, on the same rules as main listings. The King keeps Reject and Suspend.
 const STAFF_ACTIONS = Object.freeze({
   approve: { to: 'approved', from: ['submitted', 'staff_review', 'changes_requested', 'king_review'] },
-  claim: { to: 'staff_review', from: ['submitted', 'changes_requested', 'rejected'] },
+  claim: { to: 'staff_review', from: ['submitted', 'staff_review', 'changes_requested', 'rejected'] },
   pass_to_king: { to: 'king_review', from: ['submitted', 'staff_review', 'changes_requested'] },
   request_changes: { to: 'changes_requested', from: ['submitted', 'staff_review', 'king_review'] },
   reject: { to: 'rejected', from: ['submitted', 'staff_review', 'changes_requested'] }
@@ -163,8 +163,10 @@ function parseListingFacts(body = {}) {
   }
 
   for (const [key, rule] of Object.entries(FACT_INTS)) {
-    if (source[key] === undefined || source[key] === '') {
-      errors.push(`${key} is required`);
+    // Unknown is allowed (Arthur, 10 Nov 2026): a blank number keeps what the
+    // listing already has instead of blocking the save.
+    if (source[key] === undefined || source[key] === null || String(source[key]).trim() === '') {
+      value[key] = null;
       continue;
     }
     const number = Number(source[key]);
@@ -202,13 +204,13 @@ async function updateListingFacts(db, listingId, body, actor = {}) {
            address = $6,
            property_type = $7,
            place_type = $8,
-           bedrooms = $9,
-           beds = $10,
-           bathrooms = $11,
-           max_guests = $12,
-           base_nightly_ugx = $13,
-           cleaning_fee_ugx = $14,
-           min_nights = $15,
+           bedrooms = COALESCE($9::int, bedrooms),
+           beds = COALESCE($10::int, beds),
+           bathrooms = COALESCE($11::int, bathrooms),
+           max_guests = COALESCE($12::int, max_guests),
+           base_nightly_ugx = COALESCE($13::bigint, base_nightly_ugx),
+           cleaning_fee_ugx = COALESCE($14::bigint, cleaning_fee_ugx),
+           min_nights = COALESCE($15::int, min_nights),
            host_name = $16,
            host_phone = $17,
            house_rules = $18
