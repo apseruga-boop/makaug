@@ -253,10 +253,9 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push('• Your phone number sits on your listing — buyers call you directly');
   lines.push('• Buyers arrive from Google, our Ask AI search and our WhatsApp assistant');
   lines.push('• Video-first listings: a walk-through can sell to someone who is 6,000 km away');
-  // The free trial is told in the welcome video only; the message says nothing
-  // about fees or free periods (Arthur, 10 Oct 2026). Agents who are not on a
-  // trial still read the 7-day line they always did.
-  if (!trialTerms(agent)) lines.push('• Every listing gets its first 7 days free');
+  // From 10 Nov 2026 a private listing is paid from the day it goes live.
+  // Agents already on a recorded free period still hear that in the video only.
+  if (!trialTerms(agent)) lines.push('• A private listing is UGX 20,000 a month from the day it goes live');
   lines.push('• Built for investors too: off plan, buy-to-let and a mortgage finder');
   lines.push('• You get a weekly WhatsApp report: views, visitors, enquiries and the countries watching you');
 

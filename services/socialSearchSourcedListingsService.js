@@ -1,3 +1,4 @@
+const { canonicalUgPhone } = require('../utils/ugPhone');
 const { buildListingReference } = require('./listingReferenceService');
 const { buildSocialSourceTrustReview } = require('./socialSourceTrustService');
 const {
@@ -2362,7 +2363,10 @@ async function upsertSocialAgent(client, agent) {
     `SELECT id
      FROM agents
      WHERE licence_number = $1
-        OR ($2::text IS NOT NULL AND (phone = $2 OR whatsapp = $2))
+        OR ($2::text IS NOT NULL AND length(regexp_replace($2, '\\D', '', 'g')) >= 9 AND (
+          RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($2, '\\D', '', 'g'), 9)
+          OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($2, '\\D', '', 'g'), 9)
+        ))
         OR ($3::text IS NOT NULL AND LOWER(COALESCE(email, '')) = LOWER($3))
      ORDER BY updated_at DESC
      LIMIT 1`,
@@ -2372,8 +2376,8 @@ async function upsertSocialAgent(client, agent) {
     agent.name,
     agent.company,
     agent.licence,
-    agent.phone || null,
-    agent.phone || null,
+    canonicalUgPhone(agent.phone) || agent.phone || null,
+    canonicalUgPhone(agent.phone) || agent.phone || null,
     agent.email || null,
     agent.districts,
     agent.specializations,

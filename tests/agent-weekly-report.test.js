@@ -283,7 +283,7 @@ test('the new-agent welcome pack explains makaug, the audience and the diaspora'
     stats: { live_listings: 4210, agents: 212, views_30d: 38400, visitors_30d: 15200, countries_count: 9, diaspora_countries: [{ code: 'GB', name: 'United Kingdom' }, { code: 'AE', name: 'United Arab Emirates' }] }
   };
   const message = welcome.buildWelcomeMessage(pack);
-  for (const needle of ['Welcome to makaug.com', 'MKA-AG-7654321', 'Uganda’s property market, online', '4,210 live listings', 'United Kingdom', 'no commission', 'first 7 days free', 'makaug.com/list-property']) {
+  for (const needle of ['Welcome to makaug.com', 'MKA-AG-7654321', 'Uganda’s property market, online', '4,210 live listings', 'United Kingdom', 'no commission', 'UGX 20,000 a month from the day it goes live', 'makaug.com/list-property']) {
     assert.ok(message.includes(needle), `missing ${needle}`);
   }
   assert.ok(message.length < 4096);

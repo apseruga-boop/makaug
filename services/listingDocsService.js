@@ -11,9 +11,9 @@
 const PDFDocument = require('pdfkit');
 const sharp = require('sharp');
 
-const LISTER_TERMS_VERSION = '2026-10-23-v1';
-const AGENT_GUIDE_VERSION = '2026-10-23-v1';
-const AGENT_TERMS_VERSION = '2026-10-23-v1';
+const LISTER_TERMS_VERSION = '2026-11-10-v2';
+const AGENT_GUIDE_VERSION = '2026-11-10-v2';
+const AGENT_TERMS_VERSION = '2026-11-10-v2';
 
 const INK = '#15213A';
 const ORANGE = '#E8662A';
@@ -50,11 +50,11 @@ function settingsDefaults(settings = {}) {
   const agent = settings.agent_fee || {};
   const published = require('../config/publishedPricing').publishedPricing();
   return {
-    freeDays: Number(lister.free_days ?? published.owner_listing.free_days),
+    freeDays: published.owner_listing.free_days,
     listerMonthly: Number(lister.monthly_ugx || published.owner_listing.monthly_ugx),
     agentMonthly: Number(agent.monthly_ugx || published.agent.monthly_ugx),
     finalAfter: Number(agent.final_after_days_overdue ?? 7),
-    agentFreeDays: Number(agent.agent_trial_days ?? published.agent.trial_days) || published.agent.trial_days,
+    agentFreeDays: published.agent.trial_days,
     payTo: settings.pay_to || {}
   };
 }
@@ -123,7 +123,7 @@ async function buildListerTermsPdf(settings = {}) {
   const boxTop = doc.y + 12;
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(11).text('In short', 76, boxTop);
   doc.font('Helvetica').fontSize(10).fillColor('#222').text(
-    `Your first ${s.freeDays} days are free. To stay live after that it is ${ugx(s.listerMonthly)} per listing, per month. makaug advertises your property; we are not part of any sale or rent, and you remain responsible for your listing and your deal. Reply AGREE on WhatsApp to accept these terms.`,
+    `${s.freeDays > 0 ? `Your first ${s.freeDays} days are free. To stay live after that it is` : 'It is'} ${ugx(s.listerMonthly)} per listing, per month${s.freeDays > 0 ? '' : ' from the day it goes live'}. makaug advertises your property; we are not part of any sale or rent, and you remain responsible for your listing and your deal. Reply AGREE on WhatsApp to accept these terms.`,
     76, boxTop + 16, { width: doc.page.width - 152, lineGap: 1.5 }
   );
   doc.x = 60;
@@ -146,8 +146,10 @@ async function buildListerTermsPdf(settings = {}) {
 
   section(doc, '4. Fees');
   bullets(doc, [
-    `Free period: your listing is free for the first ${s.freeDays} days after it goes live.`,
-    `After that: ${ugx(s.listerMonthly)} per listing, per month, paid in advance to the makaug number we give you on WhatsApp. Send us the transaction ID after paying so we can match it.`,
+    s.freeDays > 0
+      ? `Free period: your listing is free for the first ${s.freeDays} days after it goes live.`
+      : `Fee: ${ugx(s.listerMonthly)} per listing, per month, from the day the listing goes live. There is no free period.`,
+    `${s.freeDays > 0 ? 'After that: ' : ''}${ugx(s.listerMonthly)} per listing, per month, paid in advance to the makaug number we give you on WhatsApp. Send us the transaction ID after paying so we can match it.`,
     'Short stays (by the night) are separate: ordinary listers pay UGX 20,000 a month from approval, with no free days. There is no free period on a short stay.',
     'Payments are confirmed by a member of the makaug team before they are recorded. Keep your MoMo / bank message as proof.',
     'If a month is not paid, we will remind you. If it is still not paid, the listing is hidden from the website. Nothing is deleted: when you pay, it goes back live exactly as it was.',
@@ -232,8 +234,12 @@ async function buildAgentGuidePdf(settings = {}) {
 
   section(doc, '5. Your subscription');
   bullets(doc, [
-    `New agents start with ${s.agentFreeDays} days free. We tell you the date it ends and remind you before it does, so there are no surprises.`,
-    `After the free days, the makaug agent plan is ${ugx(s.agentMonthly)} per month.`,
+    s.agentFreeDays > 0
+      ? `New agents start with ${s.agentFreeDays} days free. We tell you the date it ends and remind you before it does, so there are no surprises.`
+      : `The makaug agent plan is ${ugx(s.agentMonthly)} per month from the day you are approved. There is no free trial. A staff member can still mark an agent free, with a reason.`,
+    s.agentFreeDays > 0
+      ? `After the free days, the makaug agent plan is ${ugx(s.agentMonthly)} per month.`
+      : `Pay ${ugx(s.agentMonthly)} per month in advance.`,
     'Short stays you list are included in this plan. There is no separate short-stay fee.',
     `Pay to ${payLine}, then send the transaction ID (or a screenshot of the payment message) here on WhatsApp. We match it and confirm it — you will get a thank-you message when it is recorded.`,
     'We remind you 3 days before your renewal date and on the day.',
@@ -342,10 +348,14 @@ async function buildCoverPng(kind, settings = {}) {
   const isAgent = kind === 'agent_guide' || isTerms;
   const title = isTerms ? ['Agent terms', 'for makaug'] : isAgent ? ['Your makaug', 'agent guide'] : ['Terms for listing', 'your property'];
   const lines = isTerms
-    ? [`First ${s.agentFreeDays} days free`, `Then ${ugx(s.agentMonthly)} a month`, 'No commission. Your deal is yours', 'Reply AGREE to accept']
+    ? (s.agentFreeDays > 0
+      ? [`First ${s.agentFreeDays} days free`, `Then ${ugx(s.agentMonthly)} a month`, 'No commission. Your deal is yours', 'Reply AGREE to accept']
+      : [`${ugx(s.agentMonthly)} a month`, 'From the day you are approved', 'No commission. Your deal is yours', 'Reply AGREE to accept'])
     : isAgent
     ? ['Post by sending photos on WhatsApp', 'Enquiries come straight to you', `${ugx(s.agentMonthly)} a month`, 'Help: reply HELP any time']
-    : [`First ${s.freeDays} days free`, `Then ${ugx(s.listerMonthly)} / month per property`, 'Your ID stays private — never shown', 'makaug advertises; your deal is yours'];
+    : (s.freeDays > 0
+      ? [`First ${s.freeDays} days free`, `Then ${ugx(s.listerMonthly)} / month per property`, 'Your ID stays private — never shown', 'makaug advertises; your deal is yours']
+      : [`${ugx(s.listerMonthly)} / month per property`, 'From the day it goes live', 'Your ID stays private — never shown', 'makaug advertises; your deal is yours']);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350">
   <rect width="1080" height="1350" fill="#FBF6EE"/>
   <circle cx="980" cy="120" r="360" fill="#FFE7D3"/>
@@ -391,8 +401,10 @@ function listerTermsMessage(settings = {}, { name = '' } = {}) {
   return [
     `📄 *One last step${name ? `, ${name}` : ''} — our terms*`,
     '',
-    `• Your first *${s.freeDays} days are free*.`,
-    `• After that it is *${ugx(s.listerMonthly)} per listing, per month* to stay live. We'll remind you before the free week ends — nothing is charged automatically.`,
+    s.freeDays > 0 ? `• Your first *${s.freeDays} days are free*.` : `• It is *${ugx(s.listerMonthly)} per listing, per month* from the day it goes live.`,
+    s.freeDays > 0
+      ? `• After that it is *${ugx(s.listerMonthly)} per listing, per month* to stay live. We'll remind you before the free week ends — nothing is charged automatically.`
+      : '• Nothing is charged automatically. We send you how to pay, and the listing stays live once that month is paid.',
     '• A short stay (by the night) is *UGX 20,000 a month*, with *no free days*. Approved agents include short stays in the agent plan.',
     '• Your ID is only for checking — it is *never shown* to anyone.',
     '• makaug advertises your property; the deal itself is between you and the buyer or tenant.',
