@@ -123,8 +123,11 @@
     }).join('') + '</div>';
   }
 
-  function checkRowsHtml(checks, checklist, listingId) {
-    return '<div class="st-desk-checks">' + checks.map(function (check) {
+  function checkRowsHtml(checks, checklist, listingId, skipKeys) {
+    var hidden = skipKeys || {};
+    return '<div class="st-desk-checks">' + checks.filter(function (check) {
+      return !hidden[check.key];
+    }).map(function (check) {
       return '<label class="st-desk-check">'
         + '<input type="checkbox" data-st-check="' + esc(check.key) + '" data-st-listing="' + esc(listingId) + '"'
         + (checklist[check.key] === true ? ' checked' : '') + '>'
@@ -298,6 +301,59 @@
       + '</div></div>';
   }
 
+  function identitySkipKeys(identity) {
+    return identity && (identity.required || identity.available) ? { identity_checked: true } : {};
+  }
+
+  function identityPanelHtml(id, payload) {
+    var identity = (payload && payload.identity) || {};
+    if (!identity.required && !identity.available) return '';
+    var seen = payload.checklist && payload.checklist.identity_checked === true;
+    var html = '<div class="st-desk-id" data-st-id-panel="' + esc(id) + '">';
+    html += '<h5>Host ID</h5>';
+    html += '<p class="st-desk-id-name">Name on the form: <b>' + esc(identity.host_name || '') + '</b></p>';
+    html += '<p class="st-desk-id-hint">' + esc(identity.name_match_instruction || 'Check the name on the ID matches the name on the form.') + '</p>';
+    if (identity.id_document_kind_label || identity.id_number) {
+      html += '<p class="st-desk-meta">' + esc(identity.id_document_kind_label || 'Government ID');
+      if (identity.id_number) html += ' · ' + esc(identity.id_number);
+      html += '</p>';
+    }
+    if (identity.source === 'agent_on_file') {
+      html += '<p class="st-desk-ok">This host is an approved agent. Their ID is already on file.</p>';
+    }
+    html += '<div class="st-desk-buttons">';
+    html += '<button type="button" class="st-btn" data-st-view-id="' + esc(id) + '">View ID / Load document</button>';
+    html += '</div>';
+    html += '<div class="st-desk-id-preview" data-st-id-preview="' + esc(id) + '"></div>';
+    html += '<label class="st-desk-confirm st-desk-id-seen">';
+    html += '<input type="checkbox" data-st-check="identity_checked" data-st-listing="' + esc(id) + '"' + (seen ? ' checked' : '') + '>';
+    html += '<span><b>ID seen</b> — the name on this ID matches <b>' + esc(identity.host_name || 'the form name') + '</b>.</span>';
+    html += '</label></div>';
+    return html;
+  }
+
+  function loadIdentityDocument(id) {
+    var preview = document.querySelector('[data-st-id-preview="' + id + '"]');
+    if (preview) preview.innerHTML = '<p class="st-desk-meta">Loading ID…</p>';
+    api('/staff/listings/' + encodeURIComponent(id) + '/id-document')
+      .then(function (payload) {
+        var doc = (payload && payload.document) || {};
+        if (!preview) return;
+        if (!doc.available || !doc.url) {
+          preview.innerHTML = '<p class="st-desk-warn">' + esc(payload.note || 'No ID document is available to display.') + '</p>';
+          return;
+        }
+        if (/^data:application\/pdf/i.test(doc.url) || /\.pdf(?:$|[?#])/i.test(String(doc.url))) {
+          preview.innerHTML = '<a class="st-btn" href="' + esc(doc.url) + '" target="_blank" rel="noopener">Open ID document</a>';
+          return;
+        }
+        preview.innerHTML = '<img src="' + esc(doc.url) + '" alt="Host government ID" class="st-desk-id-image">';
+      })
+      .catch(function (error) {
+        if (preview) preview.innerHTML = '<p class="st-desk-warn">' + esc(error.message) + '</p>';
+      });
+  }
+
   function renderReviewSheet(id, which, payload) {
     var body = document.querySelector('[data-st-desk-body="' + id + '"]');
     if (!body) return;
@@ -313,9 +369,10 @@
       + '<h5>Photos</h5>'
       + photosHtml(payload.photos)
       + factsFormHtml(id, l).replace('data-st-which=""', 'data-st-which="' + esc(which) + '"')
+      + identityPanelHtml(id, payload)
       + (which === 'king'
         ? '<h5 style="margin-top:14px">Review checks</h5>'
-          + checkRowsHtml(payload.checks || [], payload.checklist || {}, id)
+          + checkRowsHtml(payload.checks || [], payload.checklist || {}, id, identitySkipKeys(payload.identity))
           + (outstanding.length
             ? '<p class="st-desk-warn"><i class="fas fa-list-check"></i> Still outstanding: '
               + outstanding.map(function (c) { return esc(c.label); }).join('; ') + '</p>'
@@ -661,6 +718,11 @@
           payBtn.disabled = false;
           window.alert(err.message || 'Could not send the pay link');
         });
+      return;
+    }
+    var viewIdBtn = e.target.closest('[data-st-view-id]');
+    if (viewIdBtn) {
+      loadIdentityDocument(viewIdBtn.getAttribute('data-st-view-id'));
       return;
     }
     var openBtn = e.target.closest('[data-st-desk-open]');

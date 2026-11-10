@@ -42724,6 +42724,7 @@ function syncListChoiceCopy(type = getListChoiceType()) {
 
 const LP_SHORT_STAY_DRAFT_KEY = "makaug-lp-short-stay-draft";
 let lpShortStayPhotos = [];
+let lpShortStayIdFile = null;
 
 function toggleListPropertyShortStay(show) {
   const on = show === true;
@@ -42735,6 +42736,7 @@ function toggleListPropertyShortStay(show) {
     setListPropertyFormVisible(false);
     prefillListPropertyShortStayContact();
     restoreListPropertyShortStayDraft({ silent: true });
+    refreshListPropertyShortStayIdentity();
   }
 }
 
@@ -42767,6 +42769,85 @@ function renderListPropertyShortStayPhotos() {
     }
     return `<button type="button" class="lp-st-photo" onclick="document.getElementById('lp-st-photos')?.click()"><span class="text-xl">+</span>${label}</button>`;
   }).join("");
+}
+
+function signedInShortStayAgentHasIdOnFile() {
+  if (typeof isSignedInBrokerListing === "function" && !isSignedInBrokerListing()) return false;
+  if (typeof isSignedInBrokerListing === "function" && typeof isBrokerListingFastTrackReady === "function" && isBrokerListingFastTrackReady()) return true;
+  try {
+    const details = typeof brokerListingContactDetails === "function" ? brokerListingContactDetails() : {};
+    const broker = details?.broker || {};
+    return Boolean(
+      broker.identity_document_url
+      || broker.has_id_document
+      || broker.has_signup_id_document
+      || broker.has_id_front_file
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
+function refreshListPropertyShortStayIdentity() {
+  const onFile = signedInShortStayAgentHasIdOnFile();
+  document.getElementById("lp-st-id-on-file")?.classList.toggle("hidden", !onFile);
+  document.getElementById("lp-st-id-fields")?.classList.toggle("hidden", onFile);
+  if (onFile) {
+    lpShortStayIdFile = null;
+    const preview = document.getElementById("lp-st-id-preview");
+    if (preview) preview.innerHTML = "";
+  }
+}
+
+function handleListPropertyShortStayIdFile(event) {
+  const file = event?.target?.files?.[0] || null;
+  const label = document.getElementById("lp-st-id-file-name");
+  const previewEl = document.getElementById("lp-st-id-preview");
+  const inputEl = document.getElementById("lp-st-id-file");
+  const isImage = !!file && String(file.type || "").startsWith("image/");
+  const looksLikePdf = !!file && (/\.pdf$/i.test(file.name || "") || String(file.type || "").toLowerCase().includes("pdf"));
+  if (file && (!isImage || looksLikePdf)) {
+    lpShortStayIdFile = null;
+    if (event?.target) event.target.value = "";
+    if (inputEl) {
+      inputEl.classList.remove("border-green-300");
+      inputEl.classList.add("border-red-300");
+    }
+    if (label) {
+      label.className = "text-xs text-red-600 mt-1";
+      label.textContent = "Please upload a photo of the front of your ID. PDFs are not accepted.";
+    }
+    if (previewEl) previewEl.innerHTML = "";
+    return;
+  }
+  lpShortStayIdFile = file ? { name: file.name, size: file.size, type: file.type || "image/*" } : null;
+  if (file && typeof compressPhotoForSubmission === "function") {
+    lpShortStayIdFile.ready = Promise.resolve(compressPhotoForSubmission(file, { maxSide: 1200, quality: 0.75 })).then((previewUrl) => {
+      if (lpShortStayIdFile && lpShortStayIdFile.name === file.name && lpShortStayIdFile.size === file.size) {
+        lpShortStayIdFile.preview_url = previewUrl;
+      }
+      return previewUrl;
+    }).catch(() => {
+      if (label) {
+        label.className = "text-xs text-red-600 mt-1";
+        label.textContent = "That ID photo could not be prepared. Please take a clearer picture and try again.";
+      }
+      return "";
+    });
+  }
+  if (label) {
+    label.className = lpShortStayIdFile ? "text-xs text-green-700 mt-1" : "text-xs text-gray-500 mt-1";
+    label.textContent = lpShortStayIdFile
+      ? `${lpShortStayIdFile.name} (${Math.round(lpShortStayIdFile.size / 1024)} KB) — ID photo ready. It is never shown publicly.`
+      : "A clear photo of the front of your National ID, passport or driving permit. PDFs are not accepted. Your ID is used only for verification and is never shown publicly.";
+  }
+  if (previewEl) {
+    previewEl.innerHTML = "";
+    if (file) {
+      const url = URL.createObjectURL(file);
+      previewEl.innerHTML = `<img src="${url}" alt="Government ID preview">`;
+    }
+  }
 }
 
 function handleListPropertyShortStayPhotos(event) {
@@ -42847,9 +42928,26 @@ async function submitListPropertyShortStay(event) {
   if (!hostName) errors.push("We need the name guests should ask for.");
   if (!hostPhone) errors.push("A reachable Ugandan phone number is required.");
   if (!right || !right.checked) errors.push("You must confirm you have the right to let this place out.");
+  const idOnFile = signedInShortStayAgentHasIdOnFile();
+  const idKind = (document.getElementById("lp-st-id-type")?.value || "national_id").trim();
+  const idNumber = (document.getElementById("lp-st-id-number")?.value || "").trim();
+  if (!idOnFile) {
+    if (!lpShortStayIdFile?.name) errors.push("A photo of the front of your government ID is required.");
+    if (!idNumber) errors.push("Enter the ID number printed on the document.");
+    else if (idKind === "national_id" && typeof isValidUgNin === "function" && !isValidUgNin(idNumber)) {
+      errors.push("That National ID number does not look right. Use the number printed on the ID.");
+    }
+  }
   if (errors.length) {
     if (feedback) feedback.innerHTML = `<ul class="text-red-700">${errors.map((line) => `<li>${line}</li>`).join("")}</ul>`;
     return false;
+  }
+  if (!idOnFile && lpShortStayIdFile?.ready) {
+    try { await lpShortStayIdFile.ready; } catch (_) {}
+    if (!lpShortStayIdFile?.preview_url) {
+      if (feedback) feedback.innerHTML = `<ul class="text-red-700"><li>That ID photo could not be prepared. Please take a clearer picture and try again.</li></ul>`;
+      return false;
+    }
   }
   const payload = {
     district,
@@ -42867,6 +42965,13 @@ async function submitListPropertyShortStay(event) {
     terms_accepted: true,
     listed_from: "list-property"
   };
+  if (!idOnFile) {
+    payload.id_kind = idKind || "national_id";
+    payload.id_number = idNumber;
+    payload.id_document_name = lpShortStayIdFile?.name || null;
+    payload.id_document_url = lpShortStayIdFile?.preview_url || null;
+    payload.id_document_mime_type = lpShortStayIdFile?.type || null;
+  }
   if (submitBtn) {
     submitBtn.disabled = true;
     submitBtn.textContent = "Submitting…";
@@ -42886,7 +42991,10 @@ async function submitListPropertyShortStay(event) {
     }
     try { localStorage.removeItem(LP_SHORT_STAY_DRAFT_KEY); } catch (_) {}
     lpShortStayPhotos = [];
+    lpShortStayIdFile = null;
     renderListPropertyShortStayPhotos();
+    const idPreview = document.getElementById("lp-st-id-preview");
+    if (idPreview) idPreview.innerHTML = "";
     if (feedback) {
       feedback.innerHTML = `<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-green-900"><b>Sent to the Short stays review desk</b><p class="mt-1">${created?.next_step || "Moderators will review this stay before it appears on /short-term."}${listing?.reference ? ` Reference: ${listing.reference}.` : ""}</p></div>`;
     }

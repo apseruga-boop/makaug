@@ -30,7 +30,7 @@ const REVIEW_CHECKS = Object.freeze([
   { key: 'required_listing_fields', label: 'Title, description, district and area complete' },
   { key: 'contact_details_verified', label: 'Host phone reachable and answered' },
   { key: 'right_to_let_confirmed', label: 'Host confirmed the right to let this place out' },
-  { key: 'identity_checked', label: 'Host identity checked', overrideable: true },
+  { key: 'identity_checked', label: 'ID seen — name on the ID matches the host name', overrideable: true },
   { key: 'photos_present', label: 'Photos uploaded' },
   { key: 'photos_match_property', label: 'Photos are of this property, not stock or stolen' },
   { key: 'location_verified', label: 'Area and map pin are real and correct' },

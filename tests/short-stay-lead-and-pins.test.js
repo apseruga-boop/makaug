@@ -198,5 +198,5 @@ test('cache-bust versions were bumped with this change', () => {
   assert.match(index, /short-term\.js\?v=20261110-st-lead-guide/);
   assert.match(index, /short-term-options\.js\?v=20261110-st-lead-guide/);
   assert.match(index, /short-term-options\.css\?v=20261110-st-lead-guide/);
-  assert.match(index, /short-term\.css\?v=20261110-st-lead-guide/);
+  assert.match(index, /short-term\.css\?v=20261110-short-stay-host-id/);
 });

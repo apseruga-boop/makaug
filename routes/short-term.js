@@ -67,6 +67,10 @@ const {
   validateListingSubmission
 } = require('../services/shortTermService');
 const {
+  buildStaffIdentityDocumentPayload,
+  staffIdentitySummary
+} = require('../services/shortTermIdentityService');
+const {
   MAX_IMAGES_PER_LISTING,
   MAX_UPLOAD_BYTES,
   MAX_EDGE_PX,
@@ -531,6 +535,7 @@ router.post('/listings', intakeLimiter, async (req, res) => {
       ip: req.clientIp || req.ip,
       hostUserId: req.userAuth?.id || null,
       listedVia: 'website',
+      requireHostIdentity: true,
       referralCode: body.referral_code || req.query?.ref || null
     });
     // Hosts list without an account on purpose - an account requirement is
@@ -1099,6 +1104,7 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
         referral_code: row.referral_code,
         acquisition_notes: row.acquisition_notes
       },
+      identity: staffIdentitySummary(row, combined),
       photos,
       checks: REVIEW_CHECKS,
       checklist: combined,
@@ -1108,6 +1114,22 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
     });
   } catch (error) {
     return fail(res, error, 'Review details are unavailable');
+  }
+});
+
+router.get('/staff/listings/:id/id-document', requireStaffAccess, async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) {
+      return res.status(400).json({ ok: false, error: 'Unknown listing' });
+    }
+    const payload = await buildStaffIdentityDocumentPayload(db, req.params.id, {
+      actorId: req.staffAuth?.userId || req.userAuth?.id || null,
+      actorRole: req.staffAuth?.role || req.userAuth?.role || 'staff'
+    });
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, marker: SHORT_TERM_MARKER, ...payload });
+  } catch (error) {
+    return fail(res, error, 'ID document is unavailable');
   }
 });
 
