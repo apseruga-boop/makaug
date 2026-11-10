@@ -674,6 +674,23 @@ test('the unfiltered public list asks for short stays in the site-wide total', (
   assert.ok(app.includes('stats.short_term'), 'the hero counter must keep a short-stay bucket');
 });
 
+test('homepage warmup and the inventory cache cannot drop short stays', () => {
+  const properties = read('routes', 'properties.js');
+  assert.ok(
+    /label:\s*'homepage'[\s\S]{0,80}includeShortTerm:\s*true|includeShortTerm:\s*true[\s\S]{0,80}label:\s*'homepage'/.test(properties)
+    || properties.includes("{ label: 'homepage', timeoutMs, includeShortTerm: true"),
+    'the homepage warmup job must set includeShortTerm'
+  );
+
+  const metrics = read('services', 'publicInventoryMetricsService.js');
+  assert.ok(
+    metrics.includes('includeShortTerm: includeShortTerm === true')
+    || metrics.includes("includeShortTerm: includeShortTerm === true"),
+    'the cache key must include the short-stay flag'
+  );
+  assert.ok(metrics.includes('includeShortTerm: job.includeShortTerm'), 'warmup must forward includeShortTerm');
+});
+
 test('the short term count cannot take the existing count down', () => {
   const src = read('services', 'shortTermService.js');
   assert.ok(src.includes("to_regclass('public.st_listing') IS NULL"), 'must survive a missing table');

@@ -176,8 +176,10 @@ function normalizePublicOpportunitySummary(row = {}) {
   };
 }
 
-function publicInventoryCacheKey(where = '', values = []) {
-  const raw = JSON.stringify({ where, values });
+function publicInventoryCacheKey(where = '', values = [], includeShortTerm = false) {
+  // includeShortTerm is part of the key so a warmup or filtered count that
+  // skipped short stays cannot be served as the site-wide total.
+  const raw = JSON.stringify({ where, values, includeShortTerm: includeShortTerm === true });
   return crypto.createHash('sha1').update(raw).digest('hex');
 }
 
@@ -437,7 +439,8 @@ async function loadPublicOpportunitySummary({
   includeShortTerm
 } = {}) {
   const normalizedWhere = where && String(where).trim() ? where : `WHERE ${publicVisibleInventoryWhere('p')}`;
-  const key = publicInventoryCacheKey(normalizedWhere, values);
+  const includeShortTermInTotal = shouldIncludeShortTermInSummary(where, includeShortTerm);
+  const key = publicInventoryCacheKey(normalizedWhere, values, includeShortTermInTotal);
   const cached = readCachedPublicInventoryMetrics(key);
   if (cached?.cache === 'hit') {
     return inventoryResult(cached.summary, { cache: 'hit' });
@@ -450,7 +453,7 @@ async function loadPublicOpportunitySummary({
       callerWhere: where,
       values,
       timeoutMs: PUBLIC_INVENTORY_BACKGROUND_REFRESH_TIMEOUT_MS,
-      includeShortTerm
+      includeShortTerm: includeShortTermInTotal
     });
     watchInventoryRefresh(refresh);
     return inventoryResult(cached.summary, { cache: 'stale' });
@@ -462,7 +465,7 @@ async function loadPublicOpportunitySummary({
     callerWhere: where,
     values,
     timeoutMs,
-    includeShortTerm
+    includeShortTerm: includeShortTermInTotal
   });
   if (!pending) {
     pending = executePublicInventoryCount({
@@ -472,7 +475,7 @@ async function loadPublicOpportunitySummary({
       values,
       timeoutMs,
       generation: inventoryCacheGeneration,
-      includeShortTerm
+      includeShortTerm: includeShortTermInTotal
     });
     pending.catch(() => {});
   }
@@ -500,7 +503,8 @@ function warmPublicInventoryCounts(queries = []) {
       label: 'site-wide',
       where: '',
       values: [],
-      timeoutMs: PUBLIC_INVENTORY_BACKGROUND_REFRESH_TIMEOUT_MS
+      timeoutMs: PUBLIC_INVENTORY_BACKGROUND_REFRESH_TIMEOUT_MS,
+      includeShortTerm: true
     },
     ...queries
   ];
@@ -512,7 +516,8 @@ function warmPublicInventoryCounts(queries = []) {
           where: job.where || '',
           values: Array.isArray(job.values) ? job.values : [],
           timeoutMs: job.timeoutMs || PUBLIC_INVENTORY_BACKGROUND_REFRESH_TIMEOUT_MS,
-          preferFresh: true
+          preferFresh: true,
+          includeShortTerm: job.includeShortTerm
         });
         logger.info('Public inventory count warmed', {
           label: job.label,
