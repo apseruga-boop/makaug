@@ -128,3 +128,14 @@ test('host listings can store an optional UTB licence and a map pin', () => {
   assert.match(footer, /id="footer-link-short-term"/);
   assert.match(footer, /data-short-term-entry/);
 });
+
+test('on desktop the results grid sits left of a sticky map; mobile stays stacked', () => {
+  const css = read('assets/short-term.css');
+  assert.match(css, /@media \(min-width: 1024px\)/);
+  assert.match(css, /#page-short-term \.st-split\.is-map \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(400px, 42vw\)/);
+  assert.match(css, /#page-short-term \.st-map-shell \{[\s\S]*position: sticky/);
+  assert.match(css, /@media \(max-width: 1023px\) \{[\s\S]*#page-short-term \.st-split\.is-map \{ grid-template-columns: 1fr/);
+  assert.match(css, /@media \(max-width: 1023px\) \{[\s\S]*#page-short-term \.st-map-shell \{ position: static/);
+  const html = read('index.html');
+  assert.match(html, /short-term\.css\?v=20261110-desktop-map-sidebar/);
+});
