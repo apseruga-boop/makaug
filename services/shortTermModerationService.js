@@ -162,6 +162,20 @@ function parseListingFacts(body = {}) {
     }
   }
 
+  // Price: blank, 0 or "POA" shows POA (Arthur, 9 Nov 2026); a real number
+  // shows that number. Not sent at all leaves the price as it is.
+  value.price_mode = null;
+  if (source.base_nightly_ugx !== undefined) {
+    const raw = String(source.base_nightly_ugx == null ? '' : source.base_nightly_ugx).replace(/[,\s]/g, '');
+    if (raw === '' || /^poa$/i.test(raw) || Number(raw) === 0) {
+      value.price_mode = 'poa';
+      source.base_nightly_ugx = '';
+    } else if (Number(raw) > 0) {
+      value.price_mode = 'price';
+      source.base_nightly_ugx = raw;
+    }
+  }
+
   for (const [key, rule] of Object.entries(FACT_INTS)) {
     // Unknown is allowed (Arthur, 10 Nov 2026): a blank number keeps what the
     // listing already has instead of blocking the save.
@@ -213,7 +227,12 @@ async function updateListingFacts(db, listingId, body, actor = {}) {
            min_nights = COALESCE($15::int, min_nights),
            host_name = $16,
            host_phone = $17,
-           house_rules = $18
+           house_rules = $18,
+           extra_fields = CASE
+             WHEN $19::text = 'poa' THEN COALESCE(extra_fields, '{}'::jsonb) || '{"price_on_application": true}'::jsonb
+             WHEN $19::text = 'price' THEN COALESCE(extra_fields, '{}'::jsonb) || '{"price_on_application": false}'::jsonb
+             ELSE extra_fields
+           END
        WHERE id = $1::uuid
        RETURNING id, reference, title, description, district, area, address, property_type, place_type,
                  bedrooms, beds, bathrooms, max_guests, base_nightly_ugx, cleaning_fee_ugx, min_nights,
@@ -236,7 +255,8 @@ async function updateListingFacts(db, listingId, body, actor = {}) {
         value.min_nights,
         value.host_name,
         value.host_phone || '',
-        value.house_rules
+        value.house_rules,
+        value.price_mode
       ]
     );
     await recordEvent(client, listingId, {
