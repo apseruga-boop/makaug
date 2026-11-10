@@ -5,6 +5,7 @@ const { agentGreetingName } = require('./agentNameService');
 const db = require('../config/database');
 const { countryName } = require('./visitorCountryService');
 const { generateMakaugAgentNumber } = require('./authFlowService');
+const { resolveAgentByNumber } = require('./agentPhoneService');
 
 const REPORT_TIMEZONE_OFFSET = '+03:00'; // Africa/Kampala, no DST
 const REPORT_STATUSES = ['draft', 'approved', 'sent'];
@@ -148,14 +149,7 @@ async function fetchAgentById(agentId) {
 async function findAgent({ agentId, agentNumber, query } = {}) {
   if (agentId) return fetchAgentById(agentId);
   const number = String(agentNumber || '').trim();
-  if (number) {
-    const result = await db.query(
-      `SELECT id, makaug_agent_number, full_name, company_name, phone, whatsapp, email, status
-       FROM agents WHERE UPPER(makaug_agent_number) = UPPER($1) LIMIT 1`,
-      [number]
-    );
-    return result.rows[0] || null;
-  }
+  if (number) return resolveAgentByNumber(db, number);
   return null;
 }
 

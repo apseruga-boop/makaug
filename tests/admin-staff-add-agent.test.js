@@ -142,6 +142,9 @@ test('a staff-added agent is saved, listed, ticked and deduped', {
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         agent_id uuid, kind text, archived_at timestamptz
       );
+      CREATE TABLE agent_number_aliases (
+        alias text PRIMARY KEY, agent_id uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
+      );
     `);
     const staffId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
     await db.query(

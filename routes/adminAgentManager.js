@@ -384,7 +384,9 @@ function registerAgentManagerRoutes(router, deps) {
           phoneClause = `OR regexp_replace(COALESCE(a.phone, '') || ' ' || COALESCE(a.whatsapp, ''), '\\D', '', 'g') LIKE $${values.length}`;
         }
         filters.push(`(a.full_name ILIKE $1 OR COALESCE(a.company_name, '') ILIKE $1 OR COALESCE(a.email, '') ILIKE $1
-          OR COALESCE(a.makaug_agent_number, '') ILIKE $1 ${phoneClause})`);
+          OR COALESCE(a.makaug_agent_number, '') ILIKE $1
+          OR EXISTS (SELECT 1 FROM agent_number_aliases al WHERE al.agent_id = a.id AND al.alias ILIKE $1)
+          ${phoneClause})`);
       }
       const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
       const directoryFields = publicDirectoryFields(values);
@@ -806,6 +808,15 @@ function registerAgentManagerRoutes(router, deps) {
       } catch (error) {
         const again = await findDuplicate({ phone: patch.phone, nin: patch.nin, email: patch.email, licence: patch.licence_number || licence }).catch(() => null);
         if (again) return duplicateResponse(res, again);
+        const taken = String(error?.message || '').match(/agent_phone_taken:([^:]*):([0-9a-f-]{36})/i);
+        if (taken) {
+          return res.status(409).json({
+            ok: false,
+            error: `${taken[1] || 'Another agent'} already uses this phone number. Open that agent instead.`,
+            existing_agent_id: taken[2],
+            existing_agent_number: taken[1] || null
+          });
+        }
         const message = uniqueViolation(error);
         if (message) return res.status(409).json({ ok: false, error: message });
         throw error;

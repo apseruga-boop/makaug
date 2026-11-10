@@ -40,12 +40,12 @@ function phoneKey(value) {
   return digits(value).slice(-9);
 }
 
-/** 0772 123456 / +256 772 123456 / 772123456 → 256772123456. */
+/** 0772 123456 / +256 772 123456 / 772123456 → +256772123456. */
 function ugPhone(value) {
   const d = digits(value);
-  if (d.length === 12 && d.startsWith('256')) return d;
-  if (d.length === 10 && d.startsWith('0')) return `256${d.slice(1)}`;
-  if (d.length === 9 && d.startsWith('7')) return `256${d}`;
+  if (d.length === 12 && d.startsWith('256')) return `+${d}`;
+  if (d.length === 10 && d.startsWith('0')) return `+256${d.slice(1)}`;
+  if (d.length === 9 && d.startsWith('7')) return `+256${d}`;
   return d.length >= 9 ? d : '';
 }
 

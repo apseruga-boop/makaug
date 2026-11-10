@@ -8994,7 +8994,12 @@ router.post('/agents/invite', async (req, res, next) => {
       `SELECT *
        FROM agents
        WHERE LOWER(COALESCE(email, '')) = LOWER($1)
-          OR regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = regexp_replace($2, '\\D', '', 'g')
+          OR (
+            length(regexp_replace($2, '\\D', '', 'g')) >= 9 AND (
+              RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($2, '\\D', '', 'g'), 9)
+              OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($2, '\\D', '', 'g'), 9)
+            )
+          )
           OR LOWER(COALESCE(company_name, '')) = LOWER($3)
        ORDER BY user_id IS NOT NULL DESC, updated_at DESC
        LIMIT 1`,
@@ -9163,7 +9168,10 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
     const existingAgent = await client.query(
       `SELECT id, user_id, registration_status, verification_reason
        FROM agents
-       WHERE ($1::text <> '' AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g'))
+       WHERE ($1::text <> '' AND length(regexp_replace($1, '\\D', '', 'g')) >= 9 AND (
+              RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($1, '\\D', '', 'g'), 9)
+              OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($1, '\\D', '', 'g'), 9)
+            ))
           OR ($2::text <> '' AND LOWER(COALESCE(email, '')) = LOWER($2))
           OR LOWER(COALESCE(company_name, '')) = LOWER($3)
        ORDER BY user_id IS NOT NULL DESC, updated_at DESC
@@ -10254,7 +10262,7 @@ router.post('/whatsapp/conversations/:phone/import-forwarded-adverts', async (re
             fullName,
             cleanText(wanted?.company_name).slice(0, 160) || fullName,
             licenceNumber,
-            `+${phone}`,
+            normalizeCountryPhone(phone) || `+${phone}`,
             '[WHATSAPP_FORWARDED_ADVERTS] Profile opened by staff so adverts this number forwarded on WhatsApp could be imported for review. Identity and permission to publish still need verification before approval.'
           ]
         );

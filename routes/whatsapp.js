@@ -17,6 +17,7 @@ const { handleHostStayReply } = require('../services/shortTermBookingService');
 const { handleAgentBookingReply } = require('../services/agentBookingService');
 const logger = require('../config/logger');
 const { normalizeUgPhoneForWhatsApp } = require('../services/whatsappNotificationService');
+const { canonicalUgPhone } = require('../utils/ugPhone');
 const { DISTRICTS } = require('../utils/constants');
 const { searchOrderBySql } = require('../utils/searchRankingSql');
 const {
@@ -4803,15 +4804,20 @@ async function findEmployeeApprovedAgents(query = '') {
 async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}, options = {}) {
   const profilePhotoUrl = normalizeInput(options.profilePhotoUrl || '');
   const phoneDigits = String(details.phone || '').replace(/\D/g, '');
+  const phoneKey = phoneDigits.length >= 9 ? phoneDigits.slice(-9) : '';
+  const storedPhone = canonicalUgPhone(details.phone) || details.phone;
   const existing = await db.query(
     `SELECT id, full_name, company_name, phone, whatsapp, email, status,
-            identity_document_url, profile_photo_url
+            identity_document_url, profile_photo_url, makaug_agent_number
        FROM agents
-      WHERE regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1
-         OR regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $1
+      WHERE $1 <> ''
+        AND (
+          RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1
+          OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1
+        )
       ORDER BY status = 'approved' DESC, updated_at DESC
       LIMIT 1`,
-    [phoneDigits]
+    [phoneKey]
   );
   if (existing.rows[0]) {
     let existingAgent = existing.rows[0];
@@ -4889,12 +4895,12 @@ async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}, o
        $1,$2,$3,'not_registered',2147483647,$4,$4,$5::text[],'{}'::text[],
        $6::text,$7::text,$8::text,NOW(),$9,FALSE,FALSE,'pending',
        NULLIF($10::text, '')
-     ) RETURNING id, full_name, company_name, phone, whatsapp, email, status, profile_photo_url`,
+     ) RETURNING id, full_name, company_name, phone, whatsapp, email, status, profile_photo_url, makaug_agent_number`,
     [
       details.fullName,
       details.company || 'Independent agent',
       licenceNumber,
-      details.phone,
+      storedPhone,
       [details.district],
       identityDocument.url ? (identityDocument.name || 'whatsapp-agent-id') : null,
       identityDocument.url || null,
@@ -6920,16 +6926,16 @@ function employeeIntakeStepMessage(step = '', data = {}) {
 async function noteEmployeeCustomerPhoneAgentMatch(data = {}) {
   if (data.employee_role !== 'customer') return;
   const phoneDigits = String(data.customer_details?.phone || '').replace(/\D/g, '');
-  if (phoneDigits.length < 8) return;
+  if (phoneDigits.length < 9) return;
   try {
     const result = await db.query(
-      `SELECT full_name, status
+      `SELECT full_name, status, makaug_agent_number
          FROM agents
-        WHERE regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1
-           OR regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $1
+        WHERE RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1
+           OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1
         ORDER BY status = 'approved' DESC, updated_at DESC
         LIMIT 1`,
-      [phoneDigits]
+      [phoneDigits.slice(-9)]
     );
     const match = result.rows[0];
     if (match) data.customer_phone_agent_name = normalizeInput(match.full_name);
@@ -10531,8 +10537,25 @@ async function handleEmployeeWhatsappIntake({
         );
         data.agent = ensured.agent;
         data.new_agent_created = ensured.created;
+        if (!ensured.created && ensured.agent?.id) {
+          const number = ensured.agent.makaug_agent_number ? ` (${ensured.agent.makaug_agent_number})` : '';
+          await replaceEmployeeSession(phone, 'employee_property_count', data);
+          return {
+            handled: true,
+            nextStep: 'employee_property_count',
+            message: `${ensured.agent.full_name || 'This agent'}${number} already uses this phone number. Open that agent instead. No second profile was created.\n\n${employeePropertyCountPrompt()}`
+          };
+        }
       } catch (error) {
+        const taken = String(error?.message || '').match(/agent_phone_taken:([^:]*):([0-9a-f-]{36})/i);
         logger.error('WhatsApp employee pending-agent save failed:', error);
+        if (taken) {
+          return {
+            handled: true,
+            nextStep: currentStep,
+            message: `${taken[1] || 'Another agent'} already uses this phone number. Open that agent instead. No second profile was created.`
+          };
+        }
         return { handled: true, nextStep: currentStep, message: 'I could not create the agent profile, so intake has paused. Nothing went live. Please try again shortly.' };
       }
     } else if (data.employee_role === 'agent' && data.agent?.id && data.agent_profile_photo_url) {
@@ -11917,10 +11940,11 @@ async function findBrokerAgentByContact({ phone = '', email = '' } = {}) {
   const emailValue = String(email || '').trim().toLowerCase();
   if (!phoneDigits && !emailValue) return null;
   const result = await db.query(
-    `SELECT id, status, registration_status, full_name, phone, whatsapp, email
+    `SELECT id, status, registration_status, full_name, phone, whatsapp, email, makaug_agent_number
      FROM agents
-     WHERE ($1::text <> '' AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1)
-        OR ($1::text <> '' AND regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $1)
+     WHERE ($1::text <> '' AND length($1) >= 9 AND (
+            RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = RIGHT($1, 9)
+         OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = RIGHT($1, 9)))
         OR ($2::text <> '' AND LOWER(COALESCE(email, '')) = LOWER($2))
      ORDER BY status = 'approved' DESC, updated_at DESC
      LIMIT 1`,
