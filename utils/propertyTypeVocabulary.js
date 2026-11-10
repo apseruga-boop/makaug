@@ -1,6 +1,7 @@
 'use strict';
 
 const { isApartmentBlockText } = require('./listingIntakeQuality');
+const { plotSaleBeatsStudentWords } = require('./listingCategorySignals');
 
 // One Uganda property vocabulary for intake, integrity checks, backlog recovery
 // and moderator suggestions. Category (sale/rent/land/...) is intentionally
@@ -54,6 +55,11 @@ function detectPropertyTypeEvidence(value = '') {
         evidence_excerpt: text.slice(0, 240),
       };
     }
+  }
+  // A plot for sale is land even when an estate name or "suitable for" says hostel.
+  if (plotSaleBeatsStudentWords(text)) {
+    const land = matches.find((item) => item.physical_type === 'land');
+    if (land) return { ...land, matches, evidence_excerpt: text.slice(0, 240) };
   }
   // Student and land are asset-level evidence. Bedrooms/rooms are residential
   // and must beat generic commercial words such as "block" or "income".

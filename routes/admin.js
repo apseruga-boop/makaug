@@ -5,7 +5,7 @@ const crypto = require('crypto');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { requireAdminApiKey } = require('../middleware/auth');
+const { requireAdminApiKey, loadActiveUserFromToken } = require('../middleware/auth');
 const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
 const { registerAgentManagerRoutes, HAS_ID_DOCUMENT_SQL: AGENT_HAS_ID_DOCUMENT_SQL } = require('./adminAgentManager');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
@@ -14,7 +14,7 @@ const { listingReferenceQuery, propertyListingSearchClause } = require('../utils
 const { priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
-const { DISTRICTS: UGANDA_DISTRICTS, LISTING_TYPES } = require('../utils/constants');
+const { DISTRICTS: UGANDA_DISTRICTS, LISTING_TYPES, listingTypeMatchSql } = require('../utils/constants');
 const {
   normalizeReviewLocationHierarchy,
   districtForKnownArea,
@@ -173,7 +173,6 @@ const { buildListingReference } = require('../services/listingReferenceService')
 const { hideReportedProperty } = require('../services/reportListingModerationService');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
-const { isPriceOnApplication } = require('../utils/listingPriceQuality');
 const { FAILED_WHATSAPP_SQL, listWhatsappActivity, whatsappActivityFreshness } = require('../services/whatsappActivityService');
 const { normalizeStaffSourcePostDate, staffSourcePostDateExtra } = require('../utils/sourcePostDate');
 const { listingPhotoOrVideoCheck, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
@@ -658,7 +657,7 @@ function addLeadPropertyMatchFilters(values, criteria = {}, relax = {}) {
   if (!relax.searchType && searchType !== 'any') {
     if (searchType === 'student') {
       where += ` AND (
-        p.listing_type = 'student'
+        p.listing_type IN ('student', 'students')
         OR p.students_welcome = TRUE
         OR p.title ILIKE '%student%'
         OR p.title ILIKE '%hostel%'
@@ -2385,7 +2384,7 @@ async function loadAdminPropertiesSummaryFast() {
          COUNT(*) FILTER (WHERE status = 'deleted')::int AS deleted,
          COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL)::int AS private_listed,
          COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL)::int AS agent_listed,
-         COUNT(*) FILTER (WHERE listing_type = 'student' OR students_welcome = TRUE)::int AS student_discoverable
+         COUNT(*) FILTER (WHERE listing_type IN ('student', 'students') OR students_welcome = TRUE)::int AS student_discoverable
        FROM properties p`,
       [],
       {
@@ -4012,8 +4011,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
 
     if (listingType && LISTING_TYPES.includes(listingType)) {
-      values.push(listingType);
-      filters.push(`p.listing_type = $${values.length}`);
+      filters.push(listingTypeMatchSql('p', listingType, values));
     }
     if (search) filters.push(propertyListingSearchClause('p', search, values));
 
@@ -4159,8 +4157,7 @@ router.get('/properties/actioned', async (req, res, next) => {
 
     if (!includeTestLike) filters.push(`NOT ${adminLaunchTestListingFastCondition('p')}`);
     if (listingType && LISTING_TYPES.includes(listingType)) {
-      values.push(listingType);
-      filters.push(`p.listing_type = $${values.length}`);
+      filters.push(listingTypeMatchSql('p', listingType, values));
     }
     if (search) filters.push(propertyListingSearchClause('p', search, values));
 
@@ -6014,8 +6011,8 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
     }
     if (!property.agent_id) blockers.push('agent profile');
     if (!property.district || !property.area) blockers.push('location');
-    // C20: a Price on application listing has no number and is still publishable.
-    if ((!property.price || property.price <= 0) && !isPriceOnApplication(property)) blockers.push('price');
+    // A missing price publishes as POA. Only a missing location blocks here.
+    // Implausible prices stay flagged by listingDataIntegrityReport below.
     if (!property.lister_phone) blockers.push('agent contact');
     if (!photoCheck.ok) blockers.push(`property photo: ${NO_PHOTO_OR_VIDEO_MESSAGE}`);
     if (videoUrls.length < 1) blockers.push('property video');
@@ -8951,7 +8948,8 @@ registerAgentManagerRoutes(router, {
   isValidEmail,
   normalizePhone: (value) => normalizeCountryPhone(value),
   actorLabel: (user) => moderationActorLabel(user),
-  onListingsChanged: (reason) => invalidatePublicInventoryMetricsCache(reason)
+  onListingsChanged: (reason) => invalidatePublicInventoryMetricsCache(reason),
+  loadRequestUser: loadActiveUserFromToken
 });
 
 router.post('/agents/invite', async (req, res, next) => {
@@ -8993,7 +8991,12 @@ router.post('/agents/invite', async (req, res, next) => {
       `SELECT *
        FROM agents
        WHERE LOWER(COALESCE(email, '')) = LOWER($1)
-          OR regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = regexp_replace($2, '\\D', '', 'g')
+          OR (
+            length(regexp_replace($2, '\\D', '', 'g')) >= 9 AND (
+              RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($2, '\\D', '', 'g'), 9)
+              OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($2, '\\D', '', 'g'), 9)
+            )
+          )
           OR LOWER(COALESCE(company_name, '')) = LOWER($3)
        ORDER BY user_id IS NOT NULL DESC, updated_at DESC
        LIMIT 1`,
@@ -9162,7 +9165,10 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
     const existingAgent = await client.query(
       `SELECT id, user_id, registration_status, verification_reason
        FROM agents
-       WHERE ($1::text <> '' AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g'))
+       WHERE ($1::text <> '' AND length(regexp_replace($1, '\\D', '', 'g')) >= 9 AND (
+              RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($1, '\\D', '', 'g'), 9)
+              OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($1, '\\D', '', 'g'), 9)
+            ))
           OR ($2::text <> '' AND LOWER(COALESCE(email, '')) = LOWER($2))
           OR LOWER(COALESCE(company_name, '')) = LOWER($3)
        ORDER BY user_id IS NOT NULL DESC, updated_at DESC
@@ -10253,7 +10259,7 @@ router.post('/whatsapp/conversations/:phone/import-forwarded-adverts', async (re
             fullName,
             cleanText(wanted?.company_name).slice(0, 160) || fullName,
             licenceNumber,
-            `+${phone}`,
+            normalizeCountryPhone(phone) || `+${phone}`,
             '[WHATSAPP_FORWARDED_ADVERTS] Profile opened by staff so adverts this number forwarded on WhatsApp could be imported for review. Identity and permission to publish still need verification before approval.'
           ]
         );
@@ -10858,13 +10864,13 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       if (!beforeApproval) return res.status(404).json({ ok: false, error: 'Agent not found' });
       if (beforeApproval.removed_at) return res.status(409).json({ ok: false, error: 'This agent was removed. Restore them first.' });
       let feeOverride = req.body.fee_override && typeof req.body.fee_override === 'object' ? req.body.fee_override : null;
-      // From 10 Oct 2026 a new agent with no payment recorded starts on the free
-      // trial (14 days) instead of being refused. Someone who pays up front still
-      // goes the payment route, and `require_payment: true` keeps the old rule.
-      if (!feeOverride && !(req.body.payment && typeof req.body.payment === 'object') && req.body.require_payment !== true
-        && revenue.agentFeeRequired(beforeApproval)) {
-        const days = revenue.agentTrialDays();
-        feeOverride = { mode: 'free_period', days, reason: `New agent ${days}-day free trial` };
+      // From 10 Nov 2026 a new agent is not put on an automatic free trial.
+      // A staff member can still pass fee_override (free period, pay later, or
+      // waive) with a reason. A free_period of 0 days is ignored so an old
+      // caller cannot invent a trial.
+      if (feeOverride && String(feeOverride.mode || '').trim().toLowerCase() === 'free_period') {
+        const offeredDays = Math.round(Number(feeOverride.days));
+        if (!Number.isFinite(offeredDays) || offeredDays < 1) feeOverride = null;
       }
       if (feeOverride && revenue.agentFeeRequired(beforeApproval)) {
         // Approve without a payment, on purpose: an offer, pay later, or waived.

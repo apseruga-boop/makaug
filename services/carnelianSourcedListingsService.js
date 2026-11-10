@@ -297,8 +297,10 @@ async function upsertCarnelianAgent(client) {
     `SELECT id
      FROM agents
      WHERE licence_number = $1
-        OR phone = $2
-        OR whatsapp = $2
+        OR ($2::text <> '' AND length(regexp_replace($2, '\\D', '', 'g')) >= 9 AND (
+          RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($2, '\\D', '', 'g'), 9)
+          OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = RIGHT(regexp_replace($2, '\\D', '', 'g'), 9)
+        ))
         OR LOWER(COALESCE(email, '')) = LOWER($3)
      ORDER BY updated_at DESC
      LIMIT 1`,

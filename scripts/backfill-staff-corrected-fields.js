@@ -33,7 +33,7 @@
 require('dotenv').config();
 
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
-const { buildThirdPartyPublicTitle } = require('../services/publicListingCopy');
+const { factualListingTitle } = require('../services/publicListingCopy');
 
 const COPY_FIELDS = ['title', 'description'];
 const TEMPLATE_MARKER = 'is a third-party property result';
@@ -74,8 +74,9 @@ function storedDiffersFromTemplate(field, row) {
   const text = String(row[field] || '').trim();
   if (!text) return false;
   if (field === 'description') return !text.includes(TEMPLATE_MARKER);
-  // The title the public page would build with no staff correction on file.
-  const generated = buildThirdPartyPublicTitle({ ...row, extra_fields: {} }, {});
+  // The generic template, not the creator's own wording. A staff save that
+  // kept or rewrote that wording still differs from the template.
+  const generated = factualListingTitle({ ...row, extra_fields: {} });
   return text !== String(generated || '').trim();
 }
 

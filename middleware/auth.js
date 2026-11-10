@@ -168,6 +168,17 @@ async function hasAdminAccess(req) {
 
   if (expected && headerKey === expected) {
     req.adminAuth = { type: 'api_key' };
+    // The King dashboard sends the API key and the signed-in session together.
+    // The key authorises the call; the session is who did it. A lookup failure
+    // must not turn a valid key into a 401.
+    try {
+      const user = await loadActiveUserFromToken(req);
+      if (user && ['admin', 'super_admin'].includes(String(user.role || '').toLowerCase())) {
+        req.adminAuth.userId = user.id;
+        req.adminAuth.role = user.role;
+        req.userAuth = user;
+      }
+    } catch (_) { /* key-only access still stands */ }
     return true;
   }
 

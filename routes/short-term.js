@@ -84,9 +84,11 @@ const {
   applyKingDecision,
   applyStaffDecision,
   buildAutomatedChecklist,
+  listingDoNotMessage,
   loadModerationHistory,
   missingChecks,
-  normalizeChecklist
+  normalizeChecklist,
+  updateListingFacts
 } = require('../services/shortTermModerationService');
 
 const router = express.Router();
@@ -816,12 +818,27 @@ router.get('/staff/queue', requireStaffAccess, async (req, res) => {
               l.staff_reviewed_by, l.staff_reviewed_at,
               l.king_reviewed_by, l.king_reviewed_at,
               l.listed_via, l.entered_by_staff_name, l.referral_code,
+              l.source,
+              l.extra_fields->>'found_online_label' AS found_online_label,
               l.listed_at, l.expires_at, l.created_at,
-              COALESCE(m.photo_count, 0)::int AS photo_count
+              COALESCE(m.photo_count, 0)::int AS photo_count,
+              cover.url AS cover_url,
+              (
+                COALESCE(l.do_not_message, FALSE)
+                OR LOWER(COALESCE(l.extra_fields->>'do_not_message', '')) IN ('true', 't', '1', 'yes')
+                OR COALESCE(l.extra_fields->>'found_online_label', '') <> ''
+                OR l.source = 'imported'
+              ) AS do_not_message
        FROM st_listing l
        LEFT JOIN LATERAL (
          SELECT COUNT(*)::int AS photo_count FROM st_listing_media WHERE listing_id = l.id
        ) m ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT url FROM st_listing_media
+         WHERE listing_id = l.id
+         ORDER BY is_primary DESC, sort_order ASC
+         LIMIT 1
+       ) cover ON TRUE
        WHERE l.moderation_stage = $1
           OR ($1 = 'submitted' AND l.reference = 'ST-000001')
        ORDER BY l.created_at DESC
@@ -872,6 +889,18 @@ router.post('/staff/listings/:id/decision', requireStaffAccess, async (req, res)
         error: `A moderator can only: ${Object.keys(STAFF_ACTIONS).join(', ')}. Publishing is the King's call.`
       });
     }
+    if (action === 'request_changes') {
+      const gate = await db.query(
+        'SELECT do_not_message, extra_fields FROM st_listing WHERE id = $1::uuid',
+        [req.params.id]
+      );
+      if (listingDoNotMessage(gate.rows[0])) {
+        return res.status(409).json({
+          ok: false,
+          error: 'This stay was found online. Nothing is sent to the host.'
+        });
+      }
+    }
     const listing = await applyStaffDecision(db, req.params.id, {
       action,
       checklist: req.body?.checklist,
@@ -912,6 +941,11 @@ router.post('/staff/listings/:id/king-decision', requireAdminApiKey, async (req,
         error: `King review can only: ${Object.keys(KING_ACTIONS).join(', ')}.`
       });
     }
+    const gate = await db.query(
+      'SELECT do_not_message, extra_fields FROM st_listing WHERE id = $1::uuid',
+      [req.params.id]
+    );
+    const silentHost = listingDoNotMessage(gate.rows[0]);
     const listing = await applyKingDecision(db, req.params.id, {
       action,
       checklist: req.body?.checklist,
@@ -925,7 +959,7 @@ router.post('/staff/listings/:id/king-decision', requireAdminApiKey, async (req,
       }
     });
     let payLink = null;
-    if (action === 'approve' && listing?.id) {
+    if (action === 'approve' && listing?.id && !silentHost) {
       payLink = await sendShortTermPayLink(listing.id, 'king_approval').catch((error) => ({ error: error.message }));
     }
     return res.json({ ok: true, marker: SHORT_TERM_MARKER, listing, pay_link: payLink });
@@ -940,8 +974,12 @@ router.post('/staff/listings/:id/king-decision', requireAdminApiKey, async (req,
  * the fee is already paid or waived.
  */
 async function sendShortTermPayLink(listingId, actor, to = '') {
-  const row = (await db.query('SELECT listing_fee_status, host_phone FROM st_listing WHERE id = $1::uuid', [listingId])).rows[0];
+  const row = (await db.query(
+    'SELECT listing_fee_status, host_phone, do_not_message, extra_fields FROM st_listing WHERE id = $1::uuid',
+    [listingId]
+  )).rows[0];
   if (!row) return { skipped: 'not_found' };
+  if (listingDoNotMessage(row)) return { skipped: 'do_not_message' };
   if (['paid', 'waived'].includes(String(row.listing_fee_status))) return { skipped: `fee_${row.listing_fee_status}` };
   const payLinks = require('../services/payLinkService');
   const created = await payLinks.createPayLink(db, { purpose: 'short_term_fee', st_listing_id: listingId }, actor);
@@ -955,7 +993,14 @@ router.post('/staff/listings/:id/pay-link', requireStaffAccess, async (req, res)
   try {
     if (!isUuid(req.params.id)) return res.status(400).json({ ok: false, error: 'Unknown listing' });
     const result = await sendShortTermPayLink(req.params.id, req.staffAuth?.userId || 'staff', req.body?.to);
-    if (result.skipped) return res.status(409).json({ ok: false, error: result.skipped === 'not_found' ? 'Listing not found' : `The fee is already ${result.skipped.replace('fee_', '')}` });
+    if (result.skipped) {
+      const error = result.skipped === 'do_not_message'
+        ? 'This stay was found online. Nothing is sent to the host.'
+        : result.skipped === 'not_found'
+          ? 'Listing not found'
+          : `The fee is already ${result.skipped.replace('fee_', '')}`;
+      return res.status(409).json({ ok: false, error });
+    }
     return res.json({ ok: true, ...result });
   } catch (error) {
     return fail(res, error, 'The payment link could not be sent');
@@ -983,6 +1028,8 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
     const automated = buildAutomatedChecklist(row, { photoCount: row.photo_count });
     const saved = normalizeChecklist(row.moderation_checklist);
     const combined = normalizeChecklist({ ...automated, ...saved });
+    const photos = await listListingPhotos(db, req.params.id);
+    const doNotMessage = listingDoNotMessage(row);
 
     res.set('Cache-Control', 'no-store');
     return res.json({
@@ -992,8 +1039,19 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
         id: String(row.id),
         reference: row.reference,
         title: row.title,
+        description: row.description,
         district: row.district,
         area: row.area,
+        address: row.address,
+        place_type: row.place_type,
+        property_type: row.property_type,
+        bedrooms: row.bedrooms,
+        beds: row.beds,
+        bathrooms: row.bathrooms,
+        max_guests: row.max_guests,
+        cleaning_fee_ugx: Number(row.cleaning_fee_ugx || 0),
+        min_nights: row.min_nights,
+        house_rules: row.house_rules,
         host_name: row.host_name,
         host_phone: row.host_phone,
         base_nightly_ugx: Number(row.base_nightly_ugx || 0),
@@ -1007,6 +1065,9 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
         king_reviewed_by: row.king_reviewed_by,
         king_reviewed_at: row.king_reviewed_at,
         listing_fee_status: row.listing_fee_status,
+        source: row.source,
+        found_online_label: row.extra_fields && row.extra_fields.found_online_label ? row.extra_fields.found_online_label : null,
+        do_not_message: doNotMessage,
         // The King should know whether a host filled this in or a colleague
         // typed it. A staff-assisted listing has not had an independent first
         // pair of eyes on it.
@@ -1015,6 +1076,7 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
         referral_code: row.referral_code,
         acquisition_notes: row.acquisition_notes
       },
+      photos,
       checks: REVIEW_CHECKS,
       checklist: combined,
       automated,
@@ -1023,6 +1085,45 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
     });
   } catch (error) {
     return fail(res, error, 'Review details are unavailable');
+  }
+});
+
+router.post('/staff/listings/:id/facts', requireStaffAccess, async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) return res.status(400).json({ ok: false, error: 'Unknown listing' });
+    const updated = await updateListingFacts(db, req.params.id, req.body || {}, {
+      userId: req.staffAuth?.userId,
+      role: req.staffAuth?.role
+    });
+    return res.json({
+      ok: true,
+      marker: SHORT_TERM_MARKER,
+      listing: {
+        id: String(updated.id),
+        reference: updated.reference,
+        title: updated.title,
+        description: updated.description,
+        district: updated.district,
+        area: updated.area,
+        address: updated.address,
+        place_type: updated.place_type,
+        property_type: updated.property_type,
+        bedrooms: updated.bedrooms,
+        beds: updated.beds,
+        bathrooms: updated.bathrooms,
+        max_guests: updated.max_guests,
+        cleaning_fee_ugx: Number(updated.cleaning_fee_ugx || 0),
+        min_nights: updated.min_nights,
+        house_rules: updated.house_rules,
+        host_name: updated.host_name,
+        host_phone: updated.host_phone,
+        base_nightly_ugx: Number(updated.base_nightly_ugx || 0),
+        moderation_stage: updated.moderation_stage,
+        do_not_message: listingDoNotMessage(updated)
+      }
+    });
+  } catch (error) {
+    return fail(res, error, 'Facts could not be saved');
   }
 });
 

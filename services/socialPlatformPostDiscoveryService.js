@@ -25,6 +25,7 @@ const {
   ugandanPhoneFromSourceText,
 } = require('../utils/sourceIntakeIntegrity');
 const { resolveSourceShortUrl } = require('../utils/sourceUrlNormalization');
+const { plotSaleBeatsStudentWords } = require('../utils/listingCategorySignals');
 const { truncateUnicode } = require('../utils/postgresJson');
 const {
   buildHarvestFingerprints,
@@ -32,6 +33,7 @@ const {
 } = require('./propertyHarvestDedupService');
 const { recordHarvestImportResult } = require('./propertyHarvestMonitoringService');
 const { fetchTikTokPublicSourcePosts } = require('./tiktokPublicSweepService');
+const { sourceLookbackStartIso } = require('./freeCategoryHashtagSources');
 const { tiktokSourceSweepEnabled } = require('../utils/harvestFeatureFlags');
 const {
   blockedSocialSourceMatch,
@@ -141,6 +143,8 @@ const YOUTUBE_CATEGORY_QUERY_TERMS = {
   rent: ['rent', 'rental', 'to let', 'apartment for rent', 'house for rent', 'monthly'],
   land: ['land for sale', 'plots for sale', 'plot', 'acres', 'decimals', 'mailo', 'title'],
   students: ['student accommodation', 'hostel', 'student room', 'campus', 'Makerere', 'Kyambogo', 'MUBS', 'UCU'],
+  student: ['student accommodation', 'hostel', 'student room', 'campus', 'Makerere', 'Kyambogo', 'MUBS', 'UCU'],
+  short_stay: ['airbnb', 'short stay', 'per night', 'nightly', 'guest house'],
   commercial: ['commercial property', 'office space', 'shop for rent', 'warehouse', 'showroom', 'factory', 'arcade'],
 };
 
@@ -2329,7 +2333,8 @@ function youtubeCategoryTermsForSource(source = {}) {
     .map((type) => type.toLowerCase());
   const categories = new Set();
   if (listingTypes.length) {
-    if (listingTypes.includes('students')) categories.add('students');
+    if (listingTypes.includes('students') || listingTypes.includes('student')) categories.add('students');
+    if (listingTypes.includes('short_stay') || listingTypes.includes('short-stay')) categories.add('short_stay');
     if (listingTypes.includes('commercial')) categories.add('commercial');
     if (listingTypes.includes('land')) categories.add('land');
     if (listingTypes.includes('rent') || listingTypes.includes('apartments')) categories.add('rent');
@@ -2712,7 +2717,7 @@ function youtubeJobFromStub({ source, sourceIndex, query, queryIndex, searchMeth
     channel_handle: channelLookup?.channel_handle || '',
     endpoint: searchMethod === 'channel_uploads' ? YOUTUBE_PLAYLIST_ITEMS_URL : YOUTUBE_SEARCH_URL,
     channel_lookup_endpoint: searchMethod === 'channel_uploads' ? YOUTUBE_CHANNELS_URL : '',
-    published_after: start,
+    published_after: sourceLookbackStartIso(source, start),
     published_before: cleanText(publishedBefore),
     max_results: DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
     max_pages: pageLimit,
@@ -3874,7 +3879,8 @@ function canonicalSocialLocation(rawArea = '', suppliedDistrict = '', sourceText
 function listingTypeFromText(text = '') {
   const raw = cleanText(text).toLowerCase();
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room|muzigo|mizigo|rental room)\b/.test(raw);
-  if (/\b(hostel|student|campus|makerere|kyambogo|mubs|ucu|university|campus room)\b/.test(raw)) return 'students';
+  if (plotSaleBeatsStudentWords(raw)) return 'land';
+  if (/\b(hostel|student|campus|makerere|kyambogo|mubs|ucu|university|campus room)\b/.test(raw)) return 'student';
   if (/\b(commercial|office|shop|retail|warehouse|factory|showroom|arcade|duuka|madduuka|store)\b/.test(raw)) return 'commercial';
   if (/\b(rent|rental|to let|month|monthly|kupangisa|renti|for rent|ku rentinga|muzigo|mizigo)\b/.test(raw)) return 'rent';
   if (/\b(land|plot|acre|acres|decimal|decimals|mailo|ettaka|kibanja|bibanja|akabanja|plots?)\b/.test(raw) && !hasDwelling) return 'land';

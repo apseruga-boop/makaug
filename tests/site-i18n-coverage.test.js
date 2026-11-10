@@ -61,16 +61,18 @@ const mustTranslate = [
   'Verified stay',
   'Short stay terms',
   "Uganda's property search engine. List your first week free, then keep it live from UGX 20,000 a month. Web or WhatsApp, all 146 districts.",
-  "Uganda's property search engine. List your first property and pay nothing for 7 days, then UGX 20,000 per listing per month. Web or WhatsApp, all 146 districts.",
-  'UGX 20,000 / listing / month after 7 free days',
-  'UGX 50,000 / month after 14 days free',
+  "Uganda's property search engine. List your property for UGX 20,000 per listing per month. Agents pay UGX 50,000 a month. Web or WhatsApp, all 146 districts.",
+  'UGX 20,000 per listing, per month',
+  'UGX 50,000 a month',
   'UGX 20,000 / month for non-agents',
   'Included in the agent plan',
   'Short stays included',
   'After that, one private listing costs UGX 20,000 per listing, per month. Every submission stays in staff review until approved.',
-  'Pay nothing for your first 7 days, then keep one private listing live for UGX 20,000 per listing, per month.',
-  'Agent plan: UGX 50,000 a month after 14 days free.',
-  '14 days free, then UGX 50,000 a month.'
+  'Keep one private listing live for UGX 20,000 per listing, per month from the day it is approved.',
+  'You pay from the day it is approved.',
+  'One private listing costs UGX 20,000 per listing, per month. Every submission stays in staff review until approved.',
+  'Agent plan: UGX 50,000 a month.',
+  'UGX per listing a month'
 ];
 for (const lang of LANGS) {
   for (const key of mustTranslate) {

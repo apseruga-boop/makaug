@@ -1169,6 +1169,7 @@ const adminPhotoDeleteInFlight = new Set();
 let publicListingsApiLoading = false;
 let publicListingsFromApiLoaded = false;
 let publicFeaturedListingsFromApi = [];
+let publicFeaturedRequestSettled = false;
 let publicListingsApiTotal = null;
 let publicListingsApiStats = null;
 let aboutPublicListingsTotal = null;
@@ -3246,7 +3247,7 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.statDistricts": "districts",
   "about.statLanguages": "languages",
   "about.statLiveListings": "live listings",
-  "about.statTrial": "days free to list",
+  "about.statTrial": "UGX per listing a month",
   "about.missionLabel": "Our mission",
   "about.missionTitle": "All Uganda properties in one place",
   "about.missionText": "Our mission is to make genuine property opportunities across Uganda easier to find, understand and act on. We bring information scattered across websites, social platforms, WhatsApp, developers, owners and brokers into one searchable place; organise it clearly in 9 languages; and give buyers, renters and students safer next steps from first search to viewing and decision.",
@@ -3343,7 +3344,7 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.personaStudentsText": "Find student rooms and hostels near a university or campus using area, budget, room type and accommodation filters. Review photos, video, distance information and practical details such as security, water, electricity, Wi-Fi, furnishing, sharing arrangements and payment periods when the provider has supplied them. Students and parents can save options, receive alerts, contact the hostel or owner, arrange a viewing and check the room, route and payment terms before committing.",
   "about.personaStudentsCta": "Find student housing",
   "about.ownersTitle": "Owners and sellers",
-  "about.personaOwnersText": "Create a sale or rental listing on the website or begin through WhatsApp. Add the exact location, price and payment period, property details, photos and video, then provide the identity and contact information needed for review. makaug can help organise the description and present it through the site's language system. Your listing remains under staff review until its evidence is ready, and once approved you can receive enquiries, edit details, remove the property and manage visibility from your account. The first 7 days are free; the published product price applies if you keep a private listing live after that period.",
+  "about.personaOwnersText": "Create a sale or rental listing on the website or begin through WhatsApp. Add the exact location, price and payment period, property details, photos and video, then provide the identity and contact information needed for review. makaug can help organise the description and present it through the site's language system. Your listing remains under staff review until its evidence is ready, and once approved you can receive enquiries, edit details, remove the property and manage visibility from your account. A private listing is UGX 20,000 a month from the day it is approved.",
   "about.personaOwnersCta": "List your property",
   "about.brokersTitle": "Brokers",
   "about.personaBrokersText": "Register your agency or broker account, submit identity and business details for review, and build a profile that buyers and owners can find in the broker directory. Manage multiple listings from one account, organise leads and viewing requests, respond through phone or WhatsApp, and export lead information where available. The agent plan brings listings together under one subscription, while Featured, Premium and Boosted options can be used for stock that needs extra visibility. Published badges and profiles remain subject to makaug's verification and moderation rules.",
@@ -3391,7 +3392,7 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.trustRecordText": "Changes, approvals, and removals are handled through staff review, not hidden shortcuts.",
   "about.whyChooseTitle": "Why people choose makaug",
   "about.chooseFreeTitle": "Free to start",
-  "about.chooseFreeText": "the first 7 days are free; the current listing price applies after the trial",
+  "about.chooseFreeText": "UGX 20,000 per listing a month from the day it is approved",
   "about.chooseWhatsappTitle": "WhatsApp-first",
   "about.chooseWhatsappText": "built for how Uganda actually communicates",
   "about.chooseLanguagesTitle": "9 languages",
@@ -3403,14 +3404,14 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.chooseVerifiedTitle": "Verified listings",
   "about.chooseVerifiedText": "human-reviewed for trust",
   "about.finalTitle": "Ready to start?",
-  "about.finalSub": "List your first property free for 7 days, then UGX 20,000 per listing per month. The agent plan is 14 days free, then UGX 50,000 a month, and short stays are included.",
+  "about.finalSub": "List a property for UGX 20,000 per listing per month from the day it is approved. The agent plan is UGX 50,000 a month, and short stays are included.",
   "about.finalWhatsapp": "WhatsApp sales: 0780 863 394",
   "about.finalEmail": "Email: info@makaug.com",
   "about.finalHow": "How it works",
   "about.finalHelp": "Help centre",
   "about.finalSafety": "Safety tips",
-  "about.privateTrialTemplate": "{price} after 7 free days",
-  "about.agentPriceTemplate": "{price} after 14 days free",
+  "about.privateTrialTemplate": "{price}",
+  "about.agentPriceTemplate": "{price}",
   "about.agentShortStays": "Short stays included",
   "about.productAiDescription": "AI-written description in 9 languages",
   "about.productChecked": "Checked by our team",
@@ -3710,68 +3711,68 @@ Object.assign(CONTENT_I18N.en, ABOUT_PAGE_I18N_EN, ADVERTISING_UI_I18N_EN);
 function applyAboutAdvertiseLocalOverrides() {
 const PRICING_I18N = {
   lg: {
-    "about.privateTrialTemplate": "{price} oluvannyuma lw'ennaku 7 eza bwereere",
-    "about.agentPriceTemplate": "{price} oluvannyuma lw'ennaku 14 eza bwereere",
+    "about.privateTrialTemplate": "{price}",
+    "about.agentPriceTemplate": "{price}",
     "about.agentShortStays": "Short stays zirimu",
     "about.shortStayPriceTemplate": "{price} eri abatali ba agent",
     "about.shortStayAgent": "Kiri mu pulani ya agent",
-    "about.finalSub": "Teeka ekintu kyo eky'olubereberye ku bwereere okumala ennaku 7, oluvannyuma UGX 20,000 buli listing, buli mwezi. Pulani ya agent eri ennaku 14 eza bwereere, oluvannyuma UGX 50,000 buli mwezi, era short stays zirimu."
+    "about.finalSub": "Teeka ekintu ku UGX 20,000 buli listing, buli mwezi, okuva ku lunaku lwe kikkirizibwa. Pulani ya agent eri UGX 50,000 buli mwezi, era short stays zirimu."
   },
   sw: {
-    "about.privateTrialTemplate": "{price} baada ya siku 7 za bure",
-    "about.agentPriceTemplate": "{price} baada ya siku 14 za bure",
+    "about.privateTrialTemplate": "{price}",
+    "about.agentPriceTemplate": "{price}",
     "about.agentShortStays": "Malazi ya muda yamejumuishwa",
     "about.shortStayPriceTemplate": "{price} kwa wasio mawakala",
     "about.shortStayAgent": "Yamo katika mpango wa wakala",
-    "about.finalSub": "Orodhesha mali yako ya kwanza bure kwa siku 7, kisha UGX 20,000 kwa kila tangazo kwa mwezi. Mpango wa wakala ni siku 14 za bure, kisha UGX 50,000 kwa mwezi, na malazi ya muda yamejumuishwa."
+    "about.finalSub": "Orodhesha mali kwa UGX 20,000 kwa kila tangazo kwa mwezi kuanzia siku inapoidhinishwa. Mpango wa wakala ni UGX 50,000 kwa mwezi, na malazi ya muda yamejumuishwa."
   },
   ac: {
-    "about.privateTrialTemplate": "{price} nge nino 7 ma nono otum",
-    "about.agentPriceTemplate": "{price} nge nino 14 ma nono otum",
+    "about.privateTrialTemplate": "{price}",
+    "about.agentPriceTemplate": "{price}",
     "about.agentShortStays": "Short stay tye iye",
     "about.shortStayPriceTemplate": "{price} pi jo ma pe agent",
     "about.shortStayAgent": "Tye i plan pa agent",
-    "about.finalSub": "Ket jami ni mukwongo me nono pi nino 7, ka dong UGX 20,000 pi listing acel dwe ki dwe. Plan pa agent aye nino 14 ma nono, ka dong UGX 50,000 dwe ki dwe, ki short stay tye iye."
+    "about.finalSub": "Ket listing pi UGX 20,000 dwe ki dwe cakke nino ma kiyee. Plan pa agent aye UGX 50,000 dwe ki dwe, ki short stay tye iye."
   },
   ny: {
-    "about.privateTrialTemplate": "{price} ahabwa ebiro 7 bya busha",
-    "about.agentPriceTemplate": "{price} ahabwa ebiro 14 bya busha",
+    "about.privateTrialTemplate": "{price}",
+    "about.agentPriceTemplate": "{price}",
     "about.agentShortStays": "Okusula kw'akanya kurimu",
     "about.shortStayPriceTemplate": "{price} ahabw'abatari agent",
     "about.shortStayAgent": "Niri omu plan ya agent",
-    "about.finalSub": "Teeka ekintu kyawe eky'okubanza aha busha ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Plan ya agent ni ebiro 14 bya busha, bwanyima UGX 50,000 buri kwezi, kandi okusula kw'akanya kurimu."
+    "about.finalSub": "Teeka listing aha UGX 20,000 buri kwezi okuva aha runaku orukirizibwa. Plan ya agent ni UGX 50,000 buri kwezi, kandi okusula kw'akanya kurimu."
   },
   rn: {
-    "about.privateTrialTemplate": "{price} ahabwa ebiro 7 bya busha",
-    "about.agentPriceTemplate": "{price} ahabwa ebiro 14 bya busha",
+    "about.privateTrialTemplate": "{price}",
+    "about.agentPriceTemplate": "{price}",
     "about.agentShortStays": "Okusula kw'akanya gato kurimu",
     "about.shortStayPriceTemplate": "{price} ahabw'abatari agent",
     "about.shortStayAgent": "Birimwo mu plan y'agent",
-    "about.finalSub": "Taho ekintu kyawe eky'okubanza busha ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Plan y'agent ni ebiro 14 bya busha, bwanyima UGX 50,000 buri kwezi, kandi okusula kw'akanya gato kurimu."
+    "about.finalSub": "Taho listing aha UGX 20,000 buri kwezi okuva aha runaku orukirizibwa. Plan y'agent ni UGX 50,000 buri kwezi, kandi okusula kw'akanya gato kurimu."
   },
   sm: {
-    "about.privateTrialTemplate": "{price} oluvanyuma lw'ennaku 7 eza bwereere",
-    "about.agentPriceTemplate": "{price} oluvanyuma lw'ennaku 14 eza bwereere",
+    "about.privateTrialTemplate": "{price}",
+    "about.agentPriceTemplate": "{price}",
     "about.agentShortStays": "Okusula okw'ekiseera ekitono kulimu",
     "about.shortStayPriceTemplate": "{price} eri abatali ba agent",
     "about.shortStayAgent": "Kiri mu pulani ya agent",
-    "about.finalSub": "Teka ekintu kyo eky'olubereberye bwereere okumala ennaku 7, olwo UGX 20,000 buli listing, buli mwezi. Pulani ya agent eri ennaku 14 eza bwereere, olwo UGX 50,000 buli mwezi, era okusula okw'ekiseera ekitono kulimu."
+    "about.finalSub": "Teka listing ku UGX 20,000 buli mwezi okuva ku lunaku lwe kikkirizibwa. Pulani ya agent eri UGX 50,000 buli mwezi, era okusula okw'ekiseera ekitono kulimu."
   },
   am: {
-    "about.privateTrialTemplate": "{price} ከ7 ነፃ ቀናት በኋላ",
-    "about.agentPriceTemplate": "{price} ከ14 ነፃ ቀናት በኋላ",
+    "about.privateTrialTemplate": "{price}",
+    "about.agentPriceTemplate": "{price}",
     "about.agentShortStays": "አጭር ቆይታዎች ተካተዋል",
     "about.shortStayPriceTemplate": "{price} ላልሆኑ ወኪሎች",
     "about.shortStayAgent": "በወኪል እቅድ ውስጥ ይካተታል",
-    "about.finalSub": "የመጀመሪያውን ዝርዝር ለ7 ቀናት ነፃ ይዘምኑ፣ ከዚያ በወር በአንድ ዝርዝር UGX 20,000። የወኪል እቅድ 14 ነፃ ቀናት ነው፣ ከዚያ በወር UGX 50,000፣ አጭር ቆይታዎችም ተካተዋል።"
+    "about.finalSub": "ዝርዝርን ከተፈቀደበት ቀን ጀምሮ በወር በአንድ ዝርዝር UGX 20,000 ይክፈሉ። የወኪል እቅድ በወር UGX 50,000 ነው፣ አጭር ቆይታዎችም ተካተዋል።"
   },
   ar: {
-    "about.privateTrialTemplate": "{price} بعد 7 أيام مجانية",
-    "about.agentPriceTemplate": "{price} بعد 14 يوماً مجانياً",
+    "about.privateTrialTemplate": "{price}",
+    "about.agentPriceTemplate": "{price}",
     "about.agentShortStays": "الإقامات القصيرة مشمولة",
     "about.shortStayPriceTemplate": "{price} لغير الوكلاء",
     "about.shortStayAgent": "مشمول في باقة الوكيل",
-    "about.finalSub": "أدرج عقارك الأول مجاناً لمدة 7 أيام، ثم UGX 20,000 لكل إعلان في الشهر. باقة الوكيل 14 يوماً مجانياً، ثم UGX 50,000 شهرياً، والإقامات القصيرة مشمولة."
+    "about.finalSub": "أدرج عقاراً مقابل UGX 20,000 لكل إعلان في الشهر من يوم الموافقة. باقة الوكيل UGX 50,000 شهرياً، والإقامات القصيرة مشمولة."
   }
 };
 Object.keys(PRICING_I18N).forEach((code) => Object.assign(CONTENT_I18N[code], PRICING_I18N[code]));
@@ -5443,7 +5444,7 @@ const HOME_ASSISTANT_I18N = {
 
 const FOOTER_I18N = {
   en: {
-    brandCopy: `Uganda's property search engine. List your first property and pay nothing for 7 days, then UGX 20,000 per listing per month. Web or WhatsApp, all 146 districts.`,
+    brandCopy: `Uganda's property search engine. List your property for UGX 20,000 per listing per month. Agents pay UGX 50,000 a month. Web or WhatsApp, all 146 districts.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Chat on WhatsApp",
@@ -8209,7 +8210,7 @@ function applyListingWizardLanguageUI() {
     ["list-choice-online-copy", "Open the guided website form."],
     ["list-choice-wa-title", "List through WhatsApp"],
     ["list-choice-wa-copy", "Message 0780 863 394 and let the makaug assistant guide you."],
-    ["list-choice-free-title", "Pay nothing for your first 7 days."],
+    ["list-choice-free-title", "You pay from the day it is approved."],
     ["list-choice-free-copy", "After that, one private listing costs UGX 20,000 per listing, per month. Every submission stays in staff review until approved."]
   ];
   labelPairs.forEach(([id, text]) => {
@@ -9330,8 +9331,8 @@ function aboutCommercialEntry(key) {
 function publishedMarketplacePricing() {
   return window.MAKAUG_PRICING || {
     currency: "UGX",
-    agent: { monthly_ugx: 50000, trial_days: 14, per: "month", includes_short_stays: true },
-    owner_listing: { monthly_ugx: 20000, free_days: 7, per: "listing" },
+    agent: { monthly_ugx: 50000, trial_days: 0, per: "month", includes_short_stays: true, label: "UGX 50,000 a month" },
+    owner_listing: { monthly_ugx: 20000, free_days: 0, per: "listing", label: "UGX 20,000 per listing, per month" },
     short_stay: { monthly_ugx: 20000, free_days: 0, per: "month", applies_to: "non_agent", included_in_agent_plan: true }
   };
 }
@@ -15284,7 +15285,9 @@ function staffJumpToDesk(target) {
     whatsapp: "staff-whatsapp-panel",
     source: "staff-source-panel",
     reports: "staff-reports-panel",
-    training: "staff-training-panel"
+    training: "staff-training-panel",
+    "short-term": "staff-short-term-control",
+    short: "staff-short-term-control"
   }[String(target || "").toLowerCase()];
   const el = id ? document.getElementById(id) : null;
   if (!el) return;
@@ -17873,6 +17876,16 @@ function adminAgentManagerIdNeededBadge(agent = {}) {
   return agent.id_still_needed ? adminAgentManagerChip("Approved – ID still needed", "bg-red-600 text-white") : "";
 }
 
+function adminAgentManagerStaffAddedChip(agent = {}) {
+  if (agent.agent_application_channel !== "staff_added") return "";
+  const name = String(agent.registered_by_name || "").trim();
+  return adminAgentManagerChip(name ? `Added by staff · ${name}` : "Added by staff", "bg-purple-100 text-purple-800");
+}
+
+function adminAgentManagerVerifiedChip(agent = {}) {
+  return agent.verified_by_makaug ? adminAgentManagerChip("Verified", "bg-sky-100 text-sky-900") : "";
+}
+
 function adminAgentManagerCanApprove(agent = {}) {
   return String(agent.status || "") === "pending" && !agent.removed_at;
 }
@@ -18145,6 +18158,7 @@ function adminAgentManagerRenderList() {
               <td class="px-3 py-2 min-w-[180px]">
                 <p class="font-bold text-gray-900" data-pii>${adminEscape(a.full_name || "Unnamed")}</p>
                 <p class="text-xs text-gray-500">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · ${adminEscape(a.makaug_agent_number)}` : ""}</p>
+                <div class="flex flex-wrap gap-1 mt-1">${adminAgentManagerStaffAddedChip(a)}${adminAgentManagerVerifiedChip(a)}</div>
               </td>
               <td class="px-3 py-2 text-xs font-mono whitespace-nowrap" data-pii="phone">${adminEscape(a.phone || a.whatsapp || "—")}</td>
               <td class="px-3 py-2"><div class="flex flex-col items-start gap-1">${adminAgentManagerStatusChip(a)}${adminAgentManagerPublicVisibility(a)}${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerApproveButton(a)}</div></td>
@@ -18176,7 +18190,7 @@ function adminAgentManagerRenderList() {
             <div><p class="text-gray-500">Next payment</p><p class="font-bold text-gray-900">${a.fee_exempt ? "None (free)" : adminAgentMoneyUgx(a.money?.next_amount_ugx)}</p>${a.fee_exempt ? "" : `<p class="text-gray-500">${adminEscape(adminAgentManagerDay(a.tracker?.next_due))}</p>`}</div>
             <div><p class="text-gray-500">Owed</p><p class="font-black ${Number(a.money?.owed_ugx || 0) ? "text-red-700" : "text-gray-400"}">${Number(a.money?.owed_ugx || 0) ? adminAgentMoneyUgx(a.money.owed_ugx) : "—"}</p></div>
           </div>
-          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerValueBadge(a, topPayers)} ${adminAgentManagerPublicVisibility(a)} ${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerIdDocChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
+          <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerStaffAddedChip(a)} ${adminAgentManagerVerifiedChip(a)} ${adminAgentManagerValueBadge(a, topPayers)} ${adminAgentManagerPublicVisibility(a)} ${adminAgentManagerIdNeededBadge(a)} ${adminAgentManagerIdChip(a)} ${adminAgentManagerIdDocChip(a)} ${adminAgentManagerPaymentChip(a.payment)}</div>
           <p class="text-[11px] text-gray-500 mt-2">${Number(a.live_listings || 0)} approved of ${Number(a.total_listings || 0)} listings · next payment ${a.fee_exempt ? "none (free)" : adminEscape(adminAgentManagerDay(a.tracker?.next_due))} · joined ${staffPeopleDate(a.created_at)}</p>
           <div class="mt-2">${adminAgentManagerDaysLeft(a.tracker || {}, a)}</div>
         </button>${adminAgentManagerCanApprove(a) ? `<div class="-mt-1 flex justify-end">${adminAgentManagerApproveButton(a)}</div>` : ""}`).join("")}
@@ -18541,6 +18555,7 @@ function adminAgentManagerDetailHtml(d = {}) {
   const historyLabel = (h) => ({
     admin_agent_details_updated: "Details changed",
     admin_agent_added_manually: "Added by hand (staff)",
+    agent_added: "Added by staff (no message sent)",
     admin_agent_removed: "Agent removed",
     admin_agent_restored: "Agent restored",
     admin_agent_listing_take_down: "Listing taken down",
@@ -18577,7 +18592,7 @@ function adminAgentManagerDetailHtml(d = {}) {
       <div>
         <h4 class="text-xl font-black text-gray-900" data-pii>${adminEscape(a.full_name || "Unnamed")}</h4>
         <p class="text-sm text-gray-600">${adminEscape(a.company_name || "")}${a.makaug_agent_number ? ` · Agent No ${adminEscape(a.makaug_agent_number)}` : " · no agent number yet"}</p>
-        <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerIdChip(a)}${adminAgentManagerIdDocChip(a)}${a.agent_application_channel === "staff_added" ? adminAgentManagerChip("Added by staff", "bg-purple-100 text-purple-800") : ""}</div>
+        <div class="flex flex-wrap gap-1 mt-2">${adminAgentManagerIdNeededBadge(a)}${adminAgentManagerIdChip(a)}${adminAgentManagerIdDocChip(a)}${adminAgentManagerStaffAddedChip(a)}${adminAgentManagerVerifiedChip(a)}</div>
       </div>
       ${a.id_still_needed ? `<div class="rounded-xl border-2 border-red-600 bg-red-50 p-3 text-sm text-red-900" data-agent-id-needed-banner>
         <p class="font-black text-red-800">Approved – ID still needed</p>
@@ -18601,7 +18616,7 @@ function adminAgentManagerDetailHtml(d = {}) {
           ${field("company_name", "Company name (shown on the site)", a.company_name, { wide: true })}
           ${field("greeting_name", "Greeting name (how WhatsApp says hello)", a.greeting_name)}
           ${field("experience_years", "Years of experience", a.experience_years, { type: "number" })}
-          ${field("nin", "ID number (NIN)", a.nin, { missing: ninMissing, placeholder: "e.g. CM90012345ABCD" })}
+          ${field("nin", "ID number (NIN) — add or replace", a.nin, { missing: ninMissing, placeholder: "e.g. CM90012345ABCD" })}
           ${field("id_expiry_date", "ID expiry", dayValue(a.id_expiry_date), { type: "date" })}
           ${field("phone", "Phone", a.phone)}
           ${field("whatsapp", "WhatsApp", a.whatsapp)}
@@ -18959,7 +18974,7 @@ function adminAgentManagerApproveAnyway(agentId) {
       <ul class="text-xs text-gray-700 list-disc pl-5 space-y-0.5">
         <li>their profile becomes approved, and WhatsApp messages from their number go to the agent assistant (so they can post listings);</li>
         <li>the welcome pack and the how-to-post film are sent to them on WhatsApp (once);</li>
-        <li>their makaug login is set up, and the usual fee rule applies (new agents start on the free trial).</li>
+        <li>their makaug login is set up, and they pay the monthly fee from approval unless you record Free (staff override) with a reason.</li>
       </ul>
       <p class="text-xs text-red-800 font-semibold">They will show as “Approved – ID still needed” until the ID number is saved.</p>
       <label class="block text-xs font-semibold text-gray-700">Why are you approving now? (required)
@@ -19067,6 +19082,20 @@ async function adminAgentManagerRestore(agentId) {
   }
 }
 
+function adminAgentManagerReadAddForm(form) {
+  const data = {};
+  form?.querySelectorAll("[name]").forEach((el) => {
+    if (el.type === "radio") {
+      if (el.checked) data[el.name] = el.value;
+    } else if (el.type === "checkbox") {
+      data[el.name] = el.checked ? "true" : "false";
+    } else {
+      data[el.name] = el.value;
+    }
+  });
+  return data;
+}
+
 function adminAgentManagerOpenAdd() {
   const overlay = adminAgentManagerOverlay();
   const body = overlay?.querySelector("[data-agent-manager-detail-body]");
@@ -19076,9 +19105,9 @@ function adminAgentManagerOpenAdd() {
   const f = (name, label, type = "text", extra = "") => `<label class="text-xs font-semibold text-gray-700">${label}<input name="${name}" type="${type}" class="${input}" ${extra}></label>`;
   body.innerHTML = `
     <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3"><button type="button" class="text-sm font-bold text-gray-700" onclick="adminAgentManagerClose()">← Back to agents</button></div>
-    <form class="p-5 space-y-3" onsubmit="adminAgentManagerSubmitAdd(event)" data-agent-add-form>
+    <form class="p-5 space-y-3" data-agent-add-form>
       <h4 class="text-xl font-black text-gray-900">Add agent</h4>
-      <p class="text-xs text-gray-500">For an agent you are adding by hand. They are marked “Added by staff” with your name, and nothing is sent to them.</p>
+      <p class="text-xs text-gray-500">For an agent you are adding by hand. They are marked “Added by staff” with your name. This form does not send them a WhatsApp message.</p>
       <div class="grid grid-cols-2 gap-2">
         ${f("full_name", "Full name *", "text", "required")}
         ${f("phone", "Phone *", "tel", "required")}
@@ -19101,23 +19130,60 @@ function adminAgentManagerOpenAdd() {
           ${f("fee_exempt_reason", "Reason (if free)")}
         </div>
       </fieldset>
-      <div class="flex justify-end"><button type="submit" class="rounded-lg bg-green-700 text-white px-4 py-2 text-sm font-bold">Add agent</button></div>
+      <div class="flex justify-end" data-agent-add-actions><button type="submit" data-agent-add-submit class="rounded-lg bg-green-700 text-white px-4 py-2 text-sm font-bold">Add agent</button></div>
     </form>`;
+  const form = body.querySelector("[data-agent-add-form]");
+  form?.addEventListener("submit", adminAgentManagerSubmitAdd);
   overlay.classList.remove("hidden");
 }
 
 async function adminAgentManagerSubmitAdd(event) {
   event?.preventDefault?.();
-  const form = event?.currentTarget;
-  if (!form) return;
-  const data = Object.fromEntries(new FormData(form).entries());
+  const form = (event?.currentTarget?.matches?.("[data-agent-add-form]") && event.currentTarget)
+    || event?.target?.closest?.("[data-agent-add-form]")
+    || document.querySelector("[data-agent-add-form]");
+  if (!form) {
+    toast("The form did not send. Open Add agent and try again.");
+    return;
+  }
+  const data = adminAgentManagerReadAddForm(form);
+  const button = form.querySelector("[data-agent-add-submit]");
+  if (button?.disabled) return;
+  if (button) { button.disabled = true; button.textContent = "Adding…"; }
+  form.querySelector("[data-agent-add-duplicate]")?.remove();
   try {
     const res = await apiRequest("/api/admin/agent-manager/agents", { method: "POST", headers: adminAuthHeaders(), body: data });
     toast(`Added ${res?.data?.full_name || "agent"}.`);
+    Object.assign(ADMIN_AGENT_MANAGER_STATE, { search: "", show: "active", only: "", missingOnly: false });
+    const filters = adminAgentManagerRoot()?.querySelector("form");
+    if (filters && filters !== form) {
+      const set = (name, value) => { const el = filters.querySelector(`[name="${name}"]`); if (el && "value" in el) el.value = value; };
+      set("search", "");
+      set("show", "active");
+      set("only", "");
+      const missing = filters.querySelector('[name="missing"]');
+      if (missing) missing.checked = false;
+    }
     await adminAgentManagerLoad({ force: true });
     if (res?.data?.id) await adminAgentManagerOpen(res.data.id);
   } catch (error) {
+    const existing = error?.response?.existing_agent_id;
+    if (existing) {
+      const name = error.response.existing_agent_name || "that agent";
+      const note = document.createElement("div");
+      note.setAttribute("data-agent-add-duplicate", "");
+      note.className = "rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950";
+      note.append(document.createTextNode(`${error.message || "This person is already an agent."} `));
+      const link = document.createElement("button");
+      link.type = "button";
+      link.className = "underline font-bold";
+      link.textContent = `Open ${name}`;
+      link.addEventListener("click", () => adminAgentManagerOpen(existing));
+      note.append(link);
+      form.querySelector("[data-agent-add-actions]")?.before(note);
+    }
     toast(`Not added: ${error?.message || "error"}`);
+    if (button) { button.disabled = false; button.textContent = "Add agent"; }
   }
 }
 
@@ -19874,6 +19940,7 @@ const MODERATION_REJECTION_REASON_OPTIONS = [
   { key: "id_document_missing_invalid", label: "ID document missing or invalid", message: "Rejected - a valid National ID document is missing or invalid." },
   { key: "listing_details_unverified", label: "Listing details incorrect / cannot verify", message: "Rejected - the listing details could not be verified." },
   { key: "location_mismatch", label: "Location mismatch", message: "Rejected - the listing location does not match the submitted evidence." },
+  { key: "no_specific_area", label: "No specific area / location too vague", message: "No specific area / location too vague" },
   { key: "duplicate_listing", label: "Duplicate listing", message: "Rejected - this appears to be a duplicate listing." },
   { key: "prohibited_spam", label: "Prohibited / spam content", message: "Rejected - this listing appears to be prohibited or spam content." },
   { key: "other", label: "Other", message: "Rejected - other moderation issue. Please review the notes." }
@@ -21682,12 +21749,11 @@ function getFeaturedListings(listings) {
 }
 
 function getHomepageFeaturedListings(publicListings = []) {
-  const featuredListings = publicFeaturedListingsFromApi.length
-    ? publicFeaturedListingsFromApi
-    : getFeaturedListings(publicListings);
-  return featuredListings.length
-    ? featuredListings
-    : publicListings.slice().sort(sortListingsByNewest);
+  // Server-rendered cards stay until the featured request settles. After that
+  // the list is only the daily agent shuffle, even when it is shorter than
+  // the grid, and it is never padded with found-online imports.
+  void publicListings;
+  return publicFeaturedListingsFromApi.filter((listing) => !isFoundOnlineListing(listing) && !isPublicDemoTrainingListing(listing));
 }
 
 function getKnownUsersForAdmin() {
@@ -31739,6 +31805,7 @@ function adminReviewPropertyTypeFromText(text = "") {
   if (/villa/.test(lower)) return "Villa";
   if (/house|home/.test(lower)) return "House";
   if (/bungalow/.test(lower)) return "Bungalow";
+  if (adminReviewPlotSaleBeatsStudent(text)) return "Land";
   if (/hostel/.test(lower)) return "Hostel";
   if (/office/.test(lower)) return "Office";
   if (/shop|retail/.test(lower)) return "Retail shop";
@@ -32015,9 +32082,61 @@ function adminReviewOnListingTypeChange() {
   adminReviewSyncStudentAmenitiesFromText();
 }
 
+function adminReviewPlotSaleBeatsStudent(text = "") {
+  const raw = String(text || "");
+  const stripped = raw
+    .replace(/\b(?:suitable|ideal|good|perfect|great)\s+for\s*[:\-]?\s*[^.;|\n]{0,80}/gi, " ")
+    .replace(/\b(?:hostel|student)\s+estate\b/gi, " estate ");
+  const plotSale = /\b(?:plots?|acres?|decimals?)\s+for\s+sale\b|\bland\s+(?:for|on)\s+sale\b|\bfor\s+sale\b[^.\n]{0,20}\bplots?\b|\b\d+\s*[x×]\s*\d+\s*fts?\b/i.test(stripped);
+  if (!plotSale) return false;
+  const dwellingSale = /\b(?:\d+\s*[- ]?bed(?:room)?s?|duplex|bungalow|apartment|flat|house|home)\b/i.test(stripped)
+    && /\bfor\s+sale\b/i.test(stripped)
+    && !/\bplots?\s+for\s+sale\b/i.test(stripped)
+    && !/\b\d+\s*[x×]\s*\d+\s*fts?\b/i.test(stripped);
+  if (dwellingSale) return false;
+  const realStudent = /\b(?:student\s+(?:accommodation|hostel|room)|hostel\s+(?:room|bed|space)|per\s+semester)\b/i.test(stripped);
+  return !realStudent || plotSale;
+}
+
+function adminReviewTitleLooksGenerated(value = "") {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  if (/\((?:TikTok|YouTube|Instagram|Facebook)\s+\d{4}\)$/i.test(text)) return true;
+  return /^(?:student accommodation(?:\s+in|\s+-)|land(?:\s+for\s+(?:sale|rent))?\s+in|plots?\s+for\s+(?:sale|rent)\s+in|property\s+for\s+(?:sale|rent)\s+in|commercial\s+property(?:\s+for\s+(?:sale|rent))?\s+in|\d+-bed\b)/i.test(text);
+}
+
+function adminReviewTidyCreatorTitle(value = "") {
+  let text = String(value || "")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/#[\p{L}\p{N}_-]+/gu, " ")
+    .replace(/\+?\d[\d\s().-]{7,}\d/g, " ")
+    .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, " ")
+    .replace(/[|•]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s,.;:–—-]+|[\s,.;:–—-]+$/g, "")
+    .trim();
+  if (text.length > 180) {
+    const slice = text.slice(0, 181);
+    const lastSpace = slice.lastIndexOf(" ");
+    text = (lastSpace > 40 ? slice.slice(0, lastSpace) : slice.slice(0, 180)).trim();
+  }
+  return text;
+}
+
+function adminReviewCreatorTitle(review = {}) {
+  const extra = adminReviewExtraFields(review);
+  const stored = String(review.title || "").trim();
+  const sources = [extra.youtube_source_title, extra.source_title]
+    .map((value) => String(value || "").trim())
+    .filter((value) => value && !adminReviewTitleLooksGenerated(value));
+  const preferred = adminReviewTitleLooksGenerated(stored) ? (sources[0] || stored) : (stored || sources[0] || "");
+  return adminReviewTidyCreatorTitle(preferred);
+}
+
 function adminReviewListingTypeFromText(text = "", facts = {}, review = {}) {
   const lower = String(text || "").toLowerCase();
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|living room|sitting room)\b/.test(lower);
+  if (adminReviewPlotSaleBeatsStudent(text)) return "land";
   if (/\b(hostel|student accommodation|student room|campus)\b/.test(lower)) return "student";
   if (/\b(office|shop|warehouse|commercial)\b/.test(lower)) return "commercial";
   if (/\b(to rent|for rent|renting|rental|monthly|per month|\/month|month)\b/.test(lower)) return "rent";
@@ -32076,7 +32195,8 @@ function adminExtractReviewFacts(review = {}) {
   if (listingType === "sale") titleParts.push("for Sale");
   if (listingType === "commercial") titleParts.push("for Commercial Use");
   if (facts.area || facts.district) titleParts.push(`in ${facts.area || facts.district}`);
-  facts.title = titleParts.join(" ").replace(/\s+/g, " ").trim();
+  const creatorTitle = adminReviewCreatorTitle(review);
+  facts.title = creatorTitle || titleParts.join(" ").replace(/\s+/g, " ").trim();
   facts.description = adminReviewBuildConciseDescription(review, facts);
   return facts;
 }
@@ -35576,7 +35696,7 @@ function adminAgentBillingLine(agent = {}) {
   if (!agent.paid_until) {
     return String(agent.status || "").toLowerCase() === "approved"
       ? `💳 <strong class="text-red-700">No payment recorded</strong>${payBtn}`
-      : `💳 <span class="text-gray-600">${adminFormatUgx(publishedMarketplacePricing().agent.monthly_ugx)} a month after ${adminEscape(String(publishedMarketplacePricing().agent.trial_days))} days free — not paid yet</span>${payBtn}`;
+      : `💳 <span class="text-gray-600">${adminFormatUgx(publishedMarketplacePricing().agent.monthly_ugx)} a month — not paid yet</span>${payBtn}`;
   }
   if (agent.paid_until < today) return `💳 <strong class="text-red-700">Overdue</strong> — paid until ${adminEscape(agent.paid_until)}${payBtn}`;
   return `💳 <strong class="text-emerald-700">Paid</strong> until ${adminEscape(agent.paid_until)}`;
@@ -35671,7 +35791,7 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
   const today = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
   const title = mode === "approve" ? `Did ${adminEscape(agent.name || "they")} pay?` : `Record a payment — ${adminEscape(agent.name || "agent")}`;
   const intro = mode === "approve"
-    ? `New agents get <strong>${publishedMarketplacePricing().agent.trial_days} days free</strong>, then <strong>${adminFormatUgx(publishedMarketplacePricing().agent.monthly_ugx)} a month</strong>. Short stays are included. Nothing is charged automatically.`
+    ? `New agents pay <strong>${adminFormatUgx(publishedMarketplacePricing().agent.monthly_ugx)} a month</strong> from approval. Short stays are included. Nothing is charged automatically. Free (staff override) is still available, with a reason.`
     : `${adminFormatUgx(publishedMarketplacePricing().agent.monthly_ugx)} = one month. Paying more adds whole months.`;
   const wrap = document.createElement("div");
   wrap.id = "admin-payment-modal";
@@ -35707,7 +35827,7 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       <label class="block"><span class="font-bold">Note</span>
         <input name="note" placeholder="For cash: who received it and where it is kept" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
       <p id="admin-payment-error" class="hidden rounded-lg bg-red-50 border border-red-200 p-2 text-red-800" role="alert"></p>
-      ${mode === "approve" ? `<div class="rounded-lg border border-green-300 bg-green-50 p-3 text-xs text-green-950"><strong>Not paid yet?</strong> The published plan is ${publishedMarketplacePricing().agent.trial_days} days free, then ${adminFormatUgx(publishedMarketplacePricing().agent.monthly_ugx)} a month. Short stays are included.
+      ${mode === "approve" ? `<div class="rounded-lg border border-green-300 bg-green-50 p-3 text-xs text-green-950"><strong>Not paid yet?</strong> The published plan is ${adminFormatUgx(publishedMarketplacePricing().agent.monthly_ugx)} a month from approval. Short stays are included. There is no automatic free trial.
         <div class="mt-2"><button type="button" data-approve-standard class="rounded bg-green-700 px-3 py-1.5 font-bold text-white">✅ Approve &amp; send welcome pack + pay link</button></div></div>
       <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700"><strong>Only want to send the link?</strong> Send them a payment link instead — they can pay by card, Apple Pay, Google Pay or MoMo. You'll get a WhatsApp when it's paid, and approving then won't ask for payment again.
         <div class="mt-2"><button type="button" onclick="adminSendAgentPayLink('${adminAttr(agentId)}')" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">💳 Send pay link</button></div></div>
@@ -36045,7 +36165,7 @@ function renderAdminRevenue() {
     ].filter(Boolean).join(" ");
     return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(p.title || "Listing")}<div class="text-[11px] font-normal text-gray-500">${adminEscape(p.lister_name || "")} ${adminEscape(p.lister_phone || "")}</div></td><td class="py-2 pr-3 font-bold ${tone}">${label}</td><td class="py-2 text-xs space-x-2">${btns}</td></tr>`;
   }).join("");
-  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — ${adminEscape(String(d.settings?.lister_fee?.free_days || publishedMarketplacePricing().owner_listing.free_days))} days free, then ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)} per listing, per month</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
+  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)} per listing, per month from approval</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
     ${listerRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Listing</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${listerRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No private listings since ${adminEscape(d.settings?.lister_fee?.start_date || "")}.</p>`}</div>`;
 
   const claims = (d.claims || []);
@@ -36067,7 +36187,7 @@ function renderAdminRevenue() {
 
   const settingsBlock = `<div class="rounded-xl border ${d.pay_to_line ? "border-gray-200" : "border-red-300 bg-red-50"} p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">Settings</h4><button type="button" onclick="adminOpenBillingSettings()" class="rounded border border-gray-300 px-2 py-1 text-xs font-bold">Edit settings</button></div>
     <p class="text-xs mt-1">${d.pay_to_line ? `People are told to pay to: <strong>${adminEscape(d.pay_to_line.replace(/\\*/g, ""))}</strong>` : `<strong class="text-red-800">No pay-to number yet — reminders and payment messages are switched off until you add the number and registered name.</strong>`}</p>
-    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || publishedMarketplacePricing().agent.monthly_ugx)}/month after ${adminEscape(String(d.settings?.agent_fee?.agent_trial_days ?? publishedMarketplacePricing().agent.trial_days))} days free · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)} per listing, per month after ${adminEscape(String(d.settings?.lister_fee?.free_days || publishedMarketplacePricing().owner_listing.free_days))} free days · Short stays ${adminFormatUgx(publishedMarketplacePricing().short_stay.monthly_ugx)}/month for non-agents, included in the agent plan</p></div>`;
+    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || publishedMarketplacePricing().agent.monthly_ugx)} a month · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)} per listing, per month · Short stays ${adminFormatUgx(publishedMarketplacePricing().short_stay.monthly_ugx)}/month for non-agents, included in the agent plan. No automatic free period from 10 Nov 2026. Free (staff override) stays a manual choice.</p></div>`;
 
   const reconBlock = `<div class="rounded-xl border border-gray-200 p-3"><h4 class="font-black text-gray-900">Weekly reconciliation</h4><p class="text-xs text-gray-600 mb-2">Upload a statement (CSV export from Absa, the bank or MoMo). Lines are matched to the entries above; anything on the statement that nobody recorded — and anything recorded that is not on the statement — is listed.</p>
     <div class="flex flex-wrap gap-2 items-center text-xs"><select id="admin-recon-account" class="rounded border border-gray-300 px-2 py-1">${(d.accounts || []).map((a) => `<option value="${adminAttr(a.key)}">${adminEscape(a.name)}</option>`).join("")}</select><input id="admin-recon-file" type="file" accept=".csv,text/csv,text/plain" class="text-xs"><button type="button" onclick="adminUploadStatement()" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">Upload & match</button></div>
@@ -36455,13 +36575,12 @@ function adminOpenBillingSettings() {
         <label class="block"><span class="font-bold">Number</span><input name="pay_number" value="${adminAttr(pay.number || "")}" placeholder="e.g. 0780 000000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
         <label class="block"><span class="font-bold">Registered name (what the payer sees on MoMo)</span><input name="pay_name" value="${adminAttr(pay.name || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label></fieldset>
       <label class="block"><span class="font-bold">Who confirms payments</span> <span class="text-xs text-gray-500">(one per line: name, WhatsApp number)</span><textarea name="confirmers" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">${adminEscape(confirmers)}</textarea></label>
+      <p class="text-xs text-gray-600">From 10 Nov 2026 new agents and new private listings pay from approval. Free (staff override) is still a manual choice, with a reason. Agents and listings already on a free period keep it.</p>
       <div class="grid grid-cols-3 gap-2">
         <label class="block"><span class="font-bold text-xs">Agent fee / month</span><input name="agent_monthly" inputmode="numeric" value="${adminAttr(agentFee.monthly_ugx || publishedMarketplacePricing().agent.monthly_ugx)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
-        <label class="block"><span class="font-bold text-xs">New agent free days</span><input name="agent_trial_days" inputmode="numeric" value="${adminAttr(agentFee.agent_trial_days ?? publishedMarketplacePricing().agent.trial_days)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Remind days before</span><input name="remind_days" inputmode="numeric" value="${adminAttr(agentFee.remind_days_before ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Final reminder after (days overdue)</span><input name="final_days" inputmode="numeric" value="${adminAttr(agentFee.final_after_days_overdue ?? 7)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Owner listing per listing / month</span><input name="lister_monthly" inputmode="numeric" value="${adminAttr(listerFee.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
-        <label class="block"><span class="font-bold text-xs">Owner free days</span><input name="free_days" inputmode="numeric" value="${adminAttr(listerFee.free_days ?? publishedMarketplacePricing().owner_listing.free_days)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
         <label class="block"><span class="font-bold text-xs">Views message on day</span><input name="views_day" inputmode="numeric" value="${adminAttr(listerFee.views_message_day ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
       </div>
       <label class="block"><span class="font-bold">Day-${adminEscape(String(listerFee.views_message_day ?? 3))} “people have seen your property” message</span><textarea name="views_text" rows="9" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-[12px]">${adminEscape(views)}</textarea>
@@ -36477,8 +36596,8 @@ function adminOpenBillingSettings() {
       if (!confirmersList.length) throw new Error("Add at least one person who confirms payments.");
       await put("pay_to", { method: String(data.get("pay_method") || "").trim(), number: String(data.get("pay_number") || "").trim(), name: String(data.get("pay_name") || "").trim() });
       await put("confirmers", confirmersList);
-      await put("agent_fee", { ...agentFee, monthly_ugx: num(data.get("agent_monthly"), publishedMarketplacePricing().agent.monthly_ugx), agent_trial_days: num(data.get("agent_trial_days"), publishedMarketplacePricing().agent.trial_days), remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });
-      await put("lister_fee", { ...listerFee, monthly_ugx: num(data.get("lister_monthly"), publishedMarketplacePricing().owner_listing.monthly_ugx), free_days: num(data.get("free_days"), publishedMarketplacePricing().owner_listing.free_days), views_message_day: num(data.get("views_day"), 3) });
+      await put("agent_fee", { ...agentFee, monthly_ugx: num(data.get("agent_monthly"), publishedMarketplacePricing().agent.monthly_ugx), agent_trial_days: 0, remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });
+      await put("lister_fee", { ...listerFee, monthly_ugx: num(data.get("lister_monthly"), publishedMarketplacePricing().owner_listing.monthly_ugx), free_days: 0, views_message_day: num(data.get("views_day"), 3) });
       await put("lister_views_message", { ...(s.lister_views_message || {}), text: String(data.get("views_text") || "") });
       toast("Settings saved.");
     }
@@ -44197,7 +44316,7 @@ function ensureAccountAccessDrawer() {
                 <p class="mt-1">Add your National ID number and a clear photo. Makaug staff review these details privately; they are never shown publicly.</p>
               </div>
               <div id="account-access-broker-fee-note" class="rounded-2xl border border-amber-200 bg-white p-3 text-xs text-gray-800">
-                <p><strong>Agent plan: UGX 50,000 a month after 14 days free.</strong> Short stays are included. Our team will WhatsApp you to check your details. Nothing is charged automatically.</p>
+                <p><strong>Agent plan: UGX 50,000 a month.</strong> Short stays are included. Our team will WhatsApp you to check your details. Nothing is charged automatically.</p>
               </div>
               <div class="grid sm:grid-cols-2 gap-3">
                 <label class="block">
@@ -45065,7 +45184,7 @@ function showBrokerApplicationReceived({ firstName = "", phone = "" } = {}) {
       <p style="margin:0 0 12px;color:#4b5563;">Your makaug agent account is set up and waiting for our review.</p>
       <ol style="margin:0 0 14px;padding-left:22px;line-height:1.55;list-style:decimal;">
         <li><strong>We WhatsApp you</strong>${phone ? ` on ${esc(phone)}` : ""}, usually the same day, to check your details.</li>
-        <li><strong>14 days free, then UGX 50,000 a month.</strong> Short stays are included. We send a payment link before the free days end. Nothing is charged automatically.</li>
+        <li><strong>UGX 50,000 a month.</strong> Short stays are included. We send a payment link. Nothing is charged automatically.</li>
         <li><strong>You're approved</strong> — you get your welcome pack and the how-to-post guide, and your listings can go live.</li>
       </ol>
       <p style="margin:0 0 16px;font-size:12px;color:#6b7280;">You can already fill in your profile from your dashboard. Questions? WhatsApp us on 0780 863394.</p>
@@ -52199,7 +52318,9 @@ function getLocalizedPropertyTitle(property = {}) {
   if (property?.public_copy_reviewed?.title === true && String(property?.title || "").trim() && !publicTitleContradictsType(property, property.title)) {
     return collapseDuplicateTransactionTitle(property.title);
   }
-  if (!isFoundOnlineListing(property)) return collapseDuplicateTransactionTitle(property?.title) || translatePropertyUi("Property");
+  const storedTitle = collapseDuplicateTransactionTitle(String(property?.title || "").trim());
+  if ((currentLang || "en") === "en" && storedTitle && !publicTitleContradictsType(property, storedTitle)) return storedTitle;
+  if (!isFoundOnlineListing(property)) return storedTitle || translatePropertyUi("Property");
   const normalizedType = normalizeType(property?.type || property?.listing_type || property?.category || "");
   const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ") || translateListingLabel("Uganda");
   const beds = Number(property?.beds ?? property?.bedrooms);
@@ -53110,18 +53231,36 @@ function loadingPropertyGridHtml(count = 3) {
     </div>`).join("");
 }
 
+function syncFeaturedSectionVisibility(id, list) {
+  const home = id === "home-grid" ? document.getElementById("home-featured") : null;
+  const featuredPage = id === "featured-grid" ? document.getElementById("page-featured") : null;
+  const section = home || featuredPage;
+  if (!section) return;
+  const show = list.length > 0;
+  section.classList.toggle("hidden", !show);
+  if (show) section.removeAttribute("hidden");
+  else section.setAttribute("hidden", "");
+}
+
 function renderGrid(id, list, options = {}) {
   const el = document.getElementById(id);
   if (!el) return;
   if (!list.length) {
-    if (id === "home-grid" && !publicListingsFromApiLoaded) {
+    if (id === "home-grid" && !publicListingsFromApiLoaded && !publicFeaturedRequestSettled) {
       if (el.querySelector("[data-ssr-property-card]")) return;
       setHtmlIfChanged(el, loadingPropertyGridHtml(3));
+      return;
+    }
+    if (id === "home-grid" || id === "featured-grid") {
+      if ((id === "featured-grid") && !publicFeaturedRequestSettled) return;
+      setHtmlIfChanged(el, "");
+      syncFeaturedSectionVisibility(id, list);
       return;
     }
     setHtmlIfChanged(el, noResultsCardForGrid(id));
     return;
   }
+  syncFeaturedSectionVisibility(id, list);
   setHtmlIfChanged(el, list.map((p, index) => propCard(p, { ...(options.cardOptions || options), imageLoading: index === 0 ? "eager" : "lazy" })).join(""));
 }
 
@@ -57442,8 +57581,9 @@ function upsertPropertyForUi(property) {
 }
 
 function applyPublicFeaturedRows(featuredRows = []) {
-  const rows = Array.isArray(featuredRows) ? featuredRows.filter((p) => !adminRecordLooksLikeTest(p)) : [];
+  const rows = Array.isArray(featuredRows) ? featuredRows.filter((p) => !adminRecordLooksLikeTest(p) && !isFoundOnlineListing(p)) : [];
   publicFeaturedListingsFromApi = rows.map((p) => upsertPropertyForUi(p)).filter(Boolean);
+  publicFeaturedRequestSettled = true;
   return publicFeaturedListingsFromApi;
 }
 
@@ -58564,7 +58704,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     const featuredRowsPromise = activeCategory ? Promise.resolve([]) : fetchPublicFeaturedListingsFromApi()
       .then((rows) => {
         const featuredListings = applyPublicFeaturedRows(rows);
-        if (featuredListings.length) renderAll();
+        if (featuredListings) renderAll();
         return rows;
       })
       .catch((featuredError) => {

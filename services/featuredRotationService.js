@@ -10,6 +10,10 @@ const {
   resolveCanonicalUgandaLocationFromText,
 } = require('../utils/locationRegistry');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
+const {
+  approvedSignedUpAgentListingSql,
+  featuredAgentDailyRank
+} = require('../utils/featuredAgentSelection');
 
 const FEATURED_ROTATION_MARKER = 'featured-daily-rotation-20260725';
 const FEATURED_CATEGORIES = Object.freeze(['sale', 'rent', 'land', 'commercial', 'student']);
@@ -118,10 +122,14 @@ function featuredCleanliness(row = {}) {
   return { clean: reasons.length === 0, reasons };
 }
 
-function selectFeaturedCandidates(rows = [], perCategory = DEFAULT_PER_CATEGORY) {
+function selectFeaturedCandidates(rows = [], perCategory = DEFAULT_PER_CATEGORY, dateKey = '') {
   const selected = Object.fromEntries(FEATURED_CATEGORIES.map((category) => [category, []]));
   const rejected = Object.fromEntries(FEATURED_CATEGORIES.map((category) => [category, {}]));
   const ordered = [...rows].sort((a, b) => {
+    if (dateKey) {
+      const rank = featuredAgentDailyRank(a.id, dateKey).localeCompare(featuredAgentDailyRank(b.id, dateKey));
+      return rank || String(a.id || '').localeCompare(String(b.id || ''));
+    }
     const dateDelta = new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
     return dateDelta || String(b.id || '').localeCompare(String(a.id || ''));
   });
@@ -156,9 +164,11 @@ function featuredPoolHealth(rows = [], perCategory = DEFAULT_PER_CATEGORY) {
   }
 
   const expectedTotal = FEATURED_CATEGORIES.length * perCategory;
-  const wrongCounts = FEATURED_CATEGORIES.filter((category) => byCategory[category] !== perCategory);
+  // Fewer than two in a category is a short agent pool, not a reason to
+  // refill from found-online imports. More than the cap, or a dirty row, is.
+  const wrongCounts = FEATURED_CATEGORIES.filter((category) => byCategory[category] > perCategory);
   return {
-    healthy: rows.length === expectedTotal && wrongCounts.length === 0 && dirty.length === 0,
+    healthy: rows.length > 0 && rows.length <= expectedTotal && wrongCounts.length === 0 && dirty.length === 0,
     total: rows.length,
     expectedTotal,
     byCategory,
@@ -216,6 +226,7 @@ async function loadFeaturedRotationStatus(db) {
          COUNT(*) FILTER (WHERE listing_type IN ('student', 'students'))::int AS student
        FROM properties
        WHERE ${publicVisibleInventoryWhere('properties')}
+         AND ${approvedSignedUpAgentListingSql('properties')}
          AND COALESCE(extra_fields->>'featured', 'false') IN ('true', '1', 'yes')`
     )
   ]);
@@ -268,6 +279,7 @@ async function runFeaturedRotation(db, options = {}) {
              p.created_at
            FROM properties p
            WHERE ${publicVisibleInventoryWhere('p')}
+             AND ${approvedSignedUpAgentListingSql('p')}
              AND COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')`
         );
         const health = featuredPoolHealth(currentFeatured.rows, perCategory);
@@ -308,6 +320,7 @@ async function runFeaturedRotation(db, options = {}) {
            ) AS category_rank
          FROM properties p
          WHERE ${publicVisibleInventoryWhere('p')}
+           AND ${approvedSignedUpAgentListingSql('p')}
            AND p.listing_type IN ('sale', 'rent', 'land', 'commercial', 'student', 'students')
            AND (p.expires_at IS NULL OR p.expires_at > NOW())
        )
@@ -317,10 +330,23 @@ async function runFeaturedRotation(db, options = {}) {
        ORDER BY created_at DESC, id DESC`,
       [candidateLimit]
     );
-    const selection = selectFeaturedCandidates(candidates.rows, perCategory);
+    const selection = selectFeaturedCandidates(candidates.rows, perCategory, dateKey);
     const selectedIds = selection.selectedRows.map((row) => row.id);
 
-    if (selection.missing.length) {
+    if (!selection.selectedRows.length) {
+      await client.query(
+        `UPDATE properties
+         SET extra_fields = (
+           COALESCE(extra_fields, '{}'::jsonb)
+           || jsonb_build_object(
+             'featured', false,
+             'featured_removed_at', NOW()::text,
+             'featured_removed_by', $1::text
+           )
+         )
+         WHERE COALESCE(extra_fields->>'featured', 'false') IN ('true', '1', 'yes')`,
+        [actorId]
+      );
       await client.query(
         `INSERT INTO featured_rotation_runs (
            rotation_date, status, selected_count, selected_ids, rejection_summary,

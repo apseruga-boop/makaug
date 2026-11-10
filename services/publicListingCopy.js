@@ -6,10 +6,11 @@ const { publicSourceAccountName } = require('../utils/sourceAccountName');
 // server-rendered pages (services/publicSeoRenderService.js), so both show the
 // same title, description, price label, amenities and contact line.
 //
-// Found-online rows get a factual makaug-written title/summary unless a person
-// corrected the text: staff (extra_fields.staff_corrected_fields) or King
-// (king_review_facts_confirmed / king_review_corrected_fields). Staff-corrected
-// fields always win and skip the "looks copied" heuristics.
+// Found-online titles keep the creator's wording, tidied. A generic template
+// is only used when there is no usable creator title. Staff
+// (extra_fields.staff_corrected_fields) or King (king_review_facts_confirmed /
+// king_review_corrected_fields) corrections always win and skip the
+// "looks copied" heuristics.
 
 const { cleanText } = require('../middleware/validation');
 const {
@@ -18,6 +19,7 @@ const {
 } = require('../utils/landTitleAvailability');
 const { normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
 const { pricePeriodSuffix: sharedPricePeriodSuffix } = require('../config/pricePeriods');
+const { plotSaleBeatsStudentWords } = require('../utils/listingCategorySignals');
 const { isPriceImplausible } = require('../utils/pricePlausibility');
 const { humanPropertyTypeLabel } = require('../utils/commercialClassification');
 const { detectPropertyTypeEvidence } = require('../utils/propertyTypeVocabulary');
@@ -269,6 +271,17 @@ function buildThirdPartyPublicTitle(property = {}, extra = {}) {
   ) {
     return reviewedTitle;
   }
+  const creatorTitle = tidyCreatorListingTitle(property, extra);
+  // A stored "student" label must not throw away a plot-sale title. The
+  // category is what was wrong, and the creator's wording stays.
+  const creatorIsPlotSale = plotSaleBeatsStudentWords(creatorTitle);
+  if (
+    creatorTitle
+    && !looksLikeMakaugTemplateTitle(creatorTitle)
+    && (creatorIsPlotSale || !publicListingTitleContradictsFacts(property, creatorTitle))
+  ) {
+    return creatorTitle;
+  }
   const area = publicAreaLabelFor(property, extra);
   const type = thirdPartyTypeLabel(property);
   const beds = Number(property.bedrooms);
@@ -448,9 +461,45 @@ function factualListingTitle(row = {}) {
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
-function cleanListingTitle(row = {}) {
+function looksLikeMakaugTemplateTitle(value = '') {
+  const text = cleanText(value);
+  if (!text) return false;
+  if (/\((?:TikTok|YouTube|Instagram|Facebook)\s+\d{4}\)$/i.test(text)) return true;
+  return /^(?:student accommodation(?:\s+in|\s+-)|land(?:\s+for\s+(?:sale|rent))?\s+in|plots?\s+for\s+(?:sale|rent)\s+in|property\s+for\s+(?:sale|rent)\s+in|commercial\s+property(?:\s+for\s+(?:sale|rent))?\s+in|\d+-bed\b)/i.test(text);
+}
+
+function creatorListingWording(property = {}, extra = {}) {
+  const bag = extra && typeof extra === 'object' ? extra : {};
+  const nested = property.extra_fields && typeof property.extra_fields === 'object' ? property.extra_fields : {};
+  const stored = cleanText(property.title);
+  const sources = [
+    bag.youtube_source_title,
+    nested.youtube_source_title,
+    bag.source_title,
+    nested.source_title,
+    property.source_title,
+  ].map(cleanText).filter(Boolean);
+  const source = sources.find((value) => !looksLikeMakaugTemplateTitle(value));
+  if (looksLikeMakaugTemplateTitle(stored) && source && source.toLowerCase() !== stored.toLowerCase()) return source;
+  if (stored && !looksLikeMakaugTemplateTitle(stored)) return stored;
+  if (source) return source;
+  const caption = cleanText(bag.source_caption || nested.source_caption || property.source_caption || '');
+  const clause = caption.split(/[•|\n]/)[0].trim();
+  if (clause.length >= 8 && !looksLikeMakaugTemplateTitle(clause)) return clause;
+  return stored;
+}
+
+function tidyCreatorListingTitle(property = {}, extra = {}) {
+  const wording = creatorListingWording(property, extra);
+  if (!wording) return '';
+  return cleanListingTitle({ ...property, title: wording }, { templateFallback: false });
+}
+
+function cleanListingTitle(row = {}, options = {}) {
+  const allowTemplate = options.templateFallback !== false;
   const original = String(row.title || '').replace(/\s+/g, ' ').trim();
-  if (publicListingTitleContradictsFacts(row, original)) return factualListingTitle(row);
+  const fallback = () => (allowTemplate ? factualListingTitle(row) : stripTitleNoise(original));
+  if (publicListingTitleContradictsFacts(row, original)) return fallback();
   // Stored enums in titles ("shop_retail in Kampala") read as labels.
   const humanised = original.replace(/\b[a-z]+(?:_[a-z]+)+\b/gi, (word) => humanPropertyTypeLabel(word.toLowerCase()));
   const stripped = stripTitleNoise(cleanPublicListingCopy(humanised))
@@ -462,9 +511,12 @@ function cleanListingTitle(row = {}) {
   const cleaned = cutTitleAtWord(stripped);
   const hasLetters = /\p{L}/u.test(cleaned);
   const lostTooMuch = original.length > 0 && stripped.length < original.length / 2;
-  if (!cleaned || cleaned.length < 12 || !hasLetters || lostTooMuch) return factualListingTitle(row);
-  const specific = generalisedListingTitle(row, cleaned);
-  if (specific) return specific;
+  if (!cleaned || cleaned.length < 12 || !hasLetters || lostTooMuch) return fallback();
+  if (allowTemplate) {
+    const specific = generalisedListingTitle(row, cleaned);
+    if (specific) return specific;
+  }
+  if (!/^\p{L}/u.test(cleaned)) return cleaned;
   return cleaned.replace(/\p{L}/u, (char) => char.toUpperCase());
 }
 
@@ -646,6 +698,9 @@ module.exports = {
   foundOnlinePublicNotice,
   STAFF_INSTRUCTION_PATTERNS,
   stripStaffInstructions,
+  looksLikeMakaugTemplateTitle,
+  creatorListingWording,
+  tidyCreatorListingTitle,
   buildThirdPartyPublicTitle,
   buildThirdPartyPublicSummary,
   isFoundOnlinePublicRow,

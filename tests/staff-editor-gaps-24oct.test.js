@@ -124,7 +124,7 @@ test('the editor loads the saved public title', () => {
   assert.match(app, /titleInput\.value = editorTitle/);
   assert.match(staff, /editor_title: staffEditorTitle\(property, extra\)/);
   assert.match(staff, /function staffEditorTitle/);
-  assert.match(staff, /buildThirdPartyPublicTitle/);
+  assert.match(staff, /tidyCreatorListingTitle/);
 });
 
 test('staff search matches an 8-hex property id prefix and an MK ref', () => {

@@ -49,8 +49,8 @@ function extractHomepageComponents(html) {
   const anchors = [
     ["topbar-nav", "<body class=\"bg-gray-50\">", "<div id=\"page-home\" class=\"page active\">"],
     ["hero-search", "<div id=\"page-home\" class=\"page active\">", "<section id=\"home-ask-ai-feature\""],
-    ["ask-ai", "<section id=\"home-ask-ai-feature\"", "<section class=\"py-12\">"],
-    ["featured", "<section class=\"py-12\">", "<section class=\"py-12 bg-gray-100\">"],
+    ["ask-ai", "<section id=\"home-ask-ai-feature\"", "<section id=\"home-featured\" class=\"py-12\">"],
+    ["featured", "<section id=\"home-featured\" class=\"py-12\">", "<section class=\"py-12 bg-gray-100\">"],
     ["agents", "<section class=\"py-12 bg-gray-100\">", "<section class=\"py-12 bg-white\">"],
     ["map", "<section class=\"py-12 bg-white\">", "<footer class=\"bg-green-900 text-white pt-12 pb-6\">"],
     ["footer", "<footer class=\"bg-green-900 text-white pt-12 pb-6\">", "</footer>"]

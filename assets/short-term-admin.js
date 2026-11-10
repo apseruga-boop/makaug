@@ -19,7 +19,53 @@
   window.__makaugShortTermDeskLoaded = true;
 
   var API = '/api/short-term';
-  var state = { stage: 'submitted', counts: {}, listings: [], open: {} };
+  var desks = {
+    staff: { stage: 'submitted', counts: {}, listings: [], open: {} },
+    king: { stage: 'king_review', counts: {}, listings: [], open: {} }
+  };
+
+  function deskState(which) {
+    return desks[which === 'king' ? 'king' : 'staff'];
+  }
+
+  // Found-online stays are flagged do_not_message. The desk labels them and
+  // never offers a message, a pay link, or WhatsApp for them.
+  function isFoundOnline(row) {
+    if (!row) return false;
+    if (row.source === 'imported' || row.found_online_label) return true;
+    var flag = row.do_not_message;
+    if (flag === true || flag === 'true' || flag === 't' || flag === '1' || flag === 'yes') return true;
+    var extra = row.extra_fields;
+    if (typeof extra === 'string') {
+      try { extra = JSON.parse(extra); } catch (e) { extra = null; }
+    }
+    if (extra && typeof extra === 'object') {
+      if (extra.found_online_label) return true;
+      var nested = extra.do_not_message;
+      if (nested === true || nested === 'true' || nested === 't' || nested === '1' || nested === 'yes') return true;
+    }
+    return false;
+  }
+
+  function allowsHostMessage(row) {
+    return !isFoundOnline(row);
+  }
+
+  function foundOnlineBadge(row) {
+    return isFoundOnline(row) ? '<span class="st-desk-found">Found online</span>' : '';
+  }
+
+  function findListing(id) {
+    var wanted = String(id);
+    var groups = [desks.staff.listings, desks.king.listings];
+    for (var g = 0; g < groups.length; g += 1) {
+      var rows = groups[g] || [];
+      for (var i = 0; i < rows.length; i += 1) {
+        if (String(rows[i].id) === wanted) return rows[i];
+      }
+    }
+    return null;
+  }
 
   function esc(value) {
     return String(value == null ? '' : value)
@@ -93,13 +139,19 @@
     var feeSettled = ['paid', 'waived'].indexOf(String(row.listing_fee_status)) !== -1;
 
     return '<article class="st-desk-row" data-st-row="' + esc(id) + '">'
-      + '<div class="st-desk-head"><div>'
+      + '<div class="st-desk-head">'
+      + (row.cover_url
+        ? '<a class="st-desk-cover" href="' + esc(row.cover_url) + '" target="_blank" rel="noopener"><img src="' + esc(row.cover_url) + '" alt=""></a>'
+        : '')
+      + '<div>'
       + '<p class="st-desk-ref">' + esc(row.reference || '') + '</p>'
       + '<h4>' + esc(row.title || 'Untitled') + '</h4>'
       + '<p class="st-desk-meta">' + esc(row.area || '') + ', ' + esc(row.district || '')
-      + ' &middot; ' + esc(ugx(row.base_nightly_ugx)) + ' per night'
-      + ' &middot; ' + esc(row.host_name || 'no host name') + ' ' + esc(row.host_phone || '') + '</p>'
+      + ' &middot; ' + esc(Number(row.base_nightly_ugx) > 0 ? ugx(row.base_nightly_ugx) + ' per night' : 'POA')
+      + ' &middot; ' + esc(row.host_name || 'no host name')
+      + (isFoundOnline(row) ? '' : (row.host_phone ? ' · ' + esc(row.host_phone) : '')) + '</p>'
       + '<p class="st-desk-flags">'
+      + foundOnlineBadge(row)
       + (photos
         ? '<span class="st-desk-ok"><i class="fas fa-image"></i> ' + photos + ' photos</span>'
         : '<span class="st-desk-warn"><i class="fas fa-triangle-exclamation"></i> No photos</span>')
@@ -112,6 +164,9 @@
         ? '<span class="st-desk-ok"><i class="fas fa-file-signature"></i> Right to let declared</span>'
         : '<span class="st-desk-warn"><i class="fas fa-file-signature"></i> No right-to-let declaration</span>')
       + (row.king_facts_confirmed ? '<span class="st-desk-ok"><i class="fas fa-crown"></i> King confirmed</span>' : '')
+      + (row.source === 'imported' || row.found_online_label
+        ? '<span class="st-desk-warn"><i class="fas fa-globe"></i> Found online. Do not message.</span>'
+        : '')
       + (row.listed_via === 'staff_assisted'
         ? '<span class="st-desk-warn"><i class="fas fa-user-pen"></i> Entered by '
           + esc(row.entered_by_staff_name || 'staff') + '</span>'
@@ -119,29 +174,35 @@
       + (row.referral_code ? '<span class="st-desk-ok"><i class="fas fa-tag"></i> ' + esc(row.referral_code) + '</span>' : '')
       + '</p></div>'
       + '<button type="button" class="st-btn" data-st-desk-open="' + esc(id) + '" data-st-desk-which="' + which + '">'
-      + (state.open[id] ? 'Close' : 'Review') + '</button>'
+      + (deskState(which).open[id] ? 'Close' : 'Open') + '</button>'
       + '</div>'
-      + (state.open[id] ? '<div class="st-desk-body" data-st-desk-body="' + esc(id) + '">Loading the review sheet…</div>' : '')
+      + (deskState(which).open[id] ? '<div class="st-desk-body" data-st-desk-body="' + esc(id) + '">Loading the review sheet…</div>' : '')
       + '</article>';
   }
 
   function renderDesk(which) {
     var host = deskHost(which);
+    var desk = deskState(which);
     if (!host) return;
-    host.innerHTML = stageChipsHtml(state.counts, state.stage, which)
-      + (state.listings.length
-        ? state.listings.map(function (row) { return listingRowHtml(row, which); }).join('')
+    host.innerHTML = stageChipsHtml(desk.counts, desk.stage, which)
+      + (desk.listings.length
+        ? desk.listings.map(function (row) { return listingRowHtml(row, which); }).join('')
         : '<p class="st-desk-empty">Nothing at this stage.</p>');
   }
 
   function loadDesk(which, stage) {
     var host = deskHost(which);
+    var desk = deskState(which);
     if (!host) return Promise.resolve();
-    state.stage = stage || (which === 'king' ? 'king_review' : 'submitted');
+    desk.stage = stage || (which === 'king' ? 'king_review' : 'submitted');
     host.innerHTML = '<p class="st-desk-empty">Loading…</p>';
-    return api('/staff/queue?stage=' + encodeURIComponent(state.stage)).then(function (payload) {
-      state.listings = payload.listings || [];
-      state.counts = payload.counts || {};
+    return api('/staff/queue?stage=' + encodeURIComponent(desk.stage)).then(function (payload) {
+      desk.listings = payload.listings || [];
+      desk.counts = payload.counts || {};
+      if (which !== 'king') {
+        var stat = document.getElementById('staff-stat-short-term');
+        if (stat) stat.textContent = String((payload.counts && payload.counts.submitted) || 0);
+      }
       renderDesk(which);
     }).catch(function (error) {
       host.innerHTML = '<p class="st-desk-empty st-desk-warn">'
@@ -153,50 +214,123 @@
     });
   }
 
+  function photosHtml(photos) {
+    var list = photos || [];
+    if (!list.length) return '<p class="st-desk-warn">No photos on this stay yet.</p>';
+    return '<div class="st-desk-photos">' + list.map(function (photo) {
+      var url = esc(photo.url || '');
+      return '<a href="' + url + '" target="_blank" rel="noopener"><img src="' + url + '" alt="' + esc(photo.caption || 'Short stay photo') + '"></a>';
+    }).join('') + '</div>';
+  }
+
+  function factField(id, key, label, value, kind) {
+    var common = ' data-st-fact="' + esc(key) + '" data-st-listing="' + esc(id) + '"';
+    var control;
+    if (kind === 'area') {
+      control = '<textarea class="st-input" style="min-height:72px"' + common + '>' + esc(value || '') + '</textarea>';
+    } else if (kind === 'place') {
+      control = '<select class="st-input"' + common + '>'
+        + [['entire_place', 'Entire place'], ['private_room', 'Private room'], ['shared_room', 'Shared room']].map(function (opt) {
+          return '<option value="' + opt[0] + '"' + (String(value || '') === opt[0] ? ' selected' : '') + '>' + esc(opt[1]) + '</option>';
+        }).join('') + '</select>';
+    } else {
+      control = '<input class="st-input" type="' + (kind || 'text') + '"' + common + ' value="' + esc(value == null ? '' : value) + '">';
+    }
+    return '<div' + (kind === 'area' ? ' style="grid-column:1/-1"' : '') + '>'
+      + '<label class="st-label">' + esc(label) + '</label>' + control + '</div>';
+  }
+
+  function factsFormHtml(id, listing) {
+    var l = listing || {};
+    return '<h5 style="margin-top:14px">Facts</h5>'
+      + '<div class="st-form-grid">'
+      + factField(id, 'title', 'Title', l.title, 'text')
+      + factField(id, 'district', 'District', l.district, 'text')
+      + factField(id, 'area', 'Area', l.area, 'text')
+      + factField(id, 'place_type', 'Type of place', l.place_type, 'place')
+      + factField(id, 'property_type', 'Property type', l.property_type, 'text')
+      + factField(id, 'base_nightly_ugx', 'Per night (UGX)', l.base_nightly_ugx, 'number')
+      + factField(id, 'cleaning_fee_ugx', 'Cleaning fee (UGX)', l.cleaning_fee_ugx, 'number')
+      + factField(id, 'min_nights', 'Minimum nights', l.min_nights, 'number')
+      + factField(id, 'bedrooms', 'Bedrooms', l.bedrooms, 'number')
+      + factField(id, 'beds', 'Beds', l.beds, 'number')
+      + factField(id, 'bathrooms', 'Bathrooms', l.bathrooms, 'number')
+      + factField(id, 'max_guests', 'Sleeps', l.max_guests, 'number')
+      + factField(id, 'host_name', 'Host name', l.host_name, 'text')
+      + factField(id, 'host_phone', 'Phone', l.host_phone, 'text')
+      + factField(id, 'address', 'Address', l.address, 'text')
+      + factField(id, 'description', 'Description', l.description, 'area')
+      + factField(id, 'house_rules', 'House rules', l.house_rules, 'area')
+      + '</div>'
+      + '<div class="st-desk-buttons">'
+      + '<button type="button" class="st-btn st-btn-primary" data-st-save-facts="' + esc(id) + '" data-st-id="' + esc(id) + '" data-st-which="">Save facts</button>'
+      + '</div>';
+  }
+
+  function staffActionsHtml(id, listing) {
+    var askHost = allowsHostMessage(listing)
+      ? '<button type="button" class="st-btn" data-st-staff="request_changes" data-st-id="' + esc(id) + '">Ask host for changes</button>'
+      : '';
+    return '<div class="st-desk-actions"><div class="st-desk-buttons">'
+      + '<button type="button" class="st-btn st-btn-primary" data-st-staff="pass_to_king" data-st-id="' + esc(id) + '">Approve</button>'
+      + '<button type="button" class="st-btn" data-st-staff="reject" data-st-id="' + esc(id) + '">Reject</button>'
+      + '<button type="button" class="st-btn" data-st-staff="claim" data-st-id="' + esc(id) + '">Claim</button>'
+      + askHost
+      + '</div>'
+      + '<p class="st-desk-note">Approve hands this stay to the King. This desk cannot publish it.'
+      + (allowsHostMessage(listing) ? '' : ' Found online: nothing here messages the host.')
+      + '</p></div>';
+  }
+
+  function kingActionsHtml(id, listing) {
+    var feeNote = allowsHostMessage(listing)
+      ? '<p class="st-desk-note">Approved, awaiting the UGX 20,000 monthly fee for a non-agent host. No free days. Agent-plan short stays are included. A pay link follows. The listing goes live when that fee is paid.</p>'
+      : '<p class="st-desk-note">Found online. Approval does not message the host.</p>';
+    return '<div class="st-desk-actions">'
+      + '<label class="st-desk-confirm"><input type="checkbox" data-st-facts="' + esc(id) + '"> '
+      + '<b>I have checked the facts on this listing myself.</b></label>'
+      + '<div class="st-desk-buttons">'
+      + '<button type="button" class="st-btn st-btn-primary" data-st-king="approve" data-st-id="' + esc(id) + '"><i class="fas fa-crown"></i> Approve</button>'
+      + feeNote
+      + '<button type="button" class="st-btn" data-st-king="send_back" data-st-id="' + esc(id) + '">Send back to staff</button>'
+      + '<button type="button" class="st-btn" data-st-king="reject" data-st-id="' + esc(id) + '">Reject</button>'
+      + '<button type="button" class="st-btn" data-st-king="suspend" data-st-id="' + esc(id) + '">Suspend</button>'
+      + '</div></div>';
+  }
+
   function renderReviewSheet(id, which, payload) {
     var body = document.querySelector('[data-st-desk-body="' + id + '"]');
     if (!body) return;
     var l = payload.listing;
     var outstanding = payload.outstanding || [];
-
-    var actions = which === 'king'
-      ? '<div class="st-desk-actions">'
-        + '<label class="st-desk-confirm"><input type="checkbox" data-st-facts="' + esc(id) + '"> '
-        + '<b>I have checked the facts on this listing myself.</b></label>'
-        + '<div class="st-desk-buttons">'
-        + '<button type="button" class="st-btn st-btn-primary" data-st-king="approve" data-st-id="' + esc(id) + '"><i class="fas fa-crown"></i> Approve</button>'
-        + '<p class="st-desk-note">Approved, awaiting the UGX 20,000 monthly fee for a non-agent host. No free days. Agent-plan short stays are included. A pay link follows. The listing goes live when that fee is paid.</p>'
-        + '<button type="button" class="st-btn" data-st-king="send_back" data-st-id="' + esc(id) + '">Send back to staff</button>'
-        + '<button type="button" class="st-btn" data-st-king="reject" data-st-id="' + esc(id) + '">Reject</button>'
-        + '<button type="button" class="st-btn" data-st-king="suspend" data-st-id="' + esc(id) + '">Suspend</button>'
-        + '</div></div>'
-      : '<div class="st-desk-actions"><div class="st-desk-buttons">'
-        + '<button type="button" class="st-btn st-btn-primary" data-st-staff="pass_to_king" data-st-id="' + esc(id) + '"><i class="fas fa-arrow-right"></i> Send to King review</button>'
-        + '<button type="button" class="st-btn" data-st-staff="claim" data-st-id="' + esc(id) + '">Claim</button>'
-        + '<button type="button" class="st-btn" data-st-staff="request_changes" data-st-id="' + esc(id) + '">Ask host for changes</button>'
-        + '<button type="button" class="st-btn" data-st-staff="reject" data-st-id="' + esc(id) + '">Reject</button>'
-        + '</div>'
-        + '<p class="st-desk-note"><i class="fas fa-circle-info"></i> A moderator cannot publish a short stay. '
-        + 'The most this desk can do is hand it to the King.</p></div>';
+    var canMessage = allowsHostMessage(l);
+    var actions = which === 'king' ? kingActionsHtml(id, l) : staffActionsHtml(id, l);
+    var payLink = canMessage && ['paid', 'waived'].indexOf(String(l.listing_fee_status)) === -1
+      ? '<p class="st-desk-meta"><button type="button" class="st-btn" data-st-paylink="' + esc(id) + '"><i class="fas fa-credit-card"></i> Send host a pay link</button></p>'
+      : '';
 
     body.innerHTML = '<div class="st-desk-sheet"><div>'
-      + '<h5>Review checks</h5>'
+      + '<h5>Photos</h5>'
+      + photosHtml(payload.photos)
+      + factsFormHtml(id, l).replace('data-st-which=""', 'data-st-which="' + esc(which) + '"')
+      + '<h5 style="margin-top:14px">Review checks</h5>'
       + checkRowsHtml(payload.checks || [], payload.checklist || {}, id)
       + (outstanding.length
         ? '<p class="st-desk-warn"><i class="fas fa-list-check"></i> Still outstanding: '
           + outstanding.map(function (c) { return esc(c.label); }).join('; ') + '</p>'
         : '<p class="st-desk-ok"><i class="fas fa-check"></i> Every check is ticked.</p>')
-      + '<label class="st-label" style="margin-top:12px">Reason / note for the host</label>'
+      + '<label class="st-label" style="margin-top:12px">'
+      + (canMessage ? 'Reason / note for the host' : 'Reason (kept on the listing, not sent)')
+      + '</label>'
       + '<textarea class="st-input" data-st-reason="' + esc(id) + '" style="min-height:64px"></textarea>'
       + actions
       + '<div data-st-desk-feedback="' + esc(id) + '"></div>'
       + '</div><div>'
       + '<h5>Where it is</h5>'
+      + foundOnlineBadge(l)
       + '<p class="st-desk-meta"><b>' + esc(l.stage_label || l.moderation_stage) + '</b></p>'
       + '<p class="st-desk-meta">Photos: ' + esc(l.photo_count) + ' &middot; Fee: ' + esc(l.listing_fee_status) + '</p>'
-      + (['paid', 'waived'].indexOf(String(l.listing_fee_status)) === -1
-        ? '<p class="st-desk-meta"><button type="button" class="st-btn" data-st-paylink="' + esc(id) + '"><i class="fas fa-credit-card"></i> Send host a pay link</button></p>'
-        : '')
+      + payLink
       + (l.listed_via === 'staff_assisted'
         ? '<p class="st-desk-warn" style="display:block;margin:6px 0"><i class="fas fa-user-pen"></i> '
           + 'Entered by ' + esc(l.entered_by_staff_name || 'a colleague') + ', not by the host. '
@@ -218,11 +352,16 @@
   }
 
   function openReviewSheet(id, which) {
-    state.open[id] = !state.open[id];
+    var desk = deskState(which);
+    desk.open[id] = !desk.open[id];
     renderDesk(which);
-    if (!state.open[id]) return;
+    if (!desk.open[id]) return;
     api('/staff/listings/' + encodeURIComponent(id) + '/review')
-      .then(function (payload) { renderReviewSheet(id, which, payload); })
+      .then(function (payload) {
+        var row = findListing(id);
+        if (row && payload.listing) row.do_not_message = payload.listing.do_not_message === true;
+        renderReviewSheet(id, which, payload);
+      })
       .catch(function (error) {
         var body = document.querySelector('[data-st-desk-body="' + id + '"]');
         if (body) body.innerHTML = '<p class="st-desk-warn">' + esc(error.message) + '</p>';
@@ -256,12 +395,49 @@
     var path = '/staff/listings/' + encodeURIComponent(id) + '/' + (which === 'king' ? 'king-decision' : 'decision');
 
     return api(path, { method: 'POST', body: body }).then(function (payload) {
-      state.open[id] = false;
+      deskState(which).open[id] = false;
       if (typeof window.toast === 'function') {
         window.toast(payload.note || ('Moved to ' + ((payload.listing && payload.listing.moderation_stage) || 'the next stage')));
       }
-      return loadDesk(which, state.stage);
+      return loadDesk(which, deskState(which).stage);
     }).catch(function (error) { showError(id, error); });
+  }
+
+  function collectFacts(id) {
+    var out = {};
+    Array.prototype.forEach.call(
+      document.querySelectorAll('[data-st-fact][data-st-listing="' + id + '"]'),
+      function (input) { out[input.getAttribute('data-st-fact')] = input.value; }
+    );
+    return out;
+  }
+
+  function saveFacts(id, which) {
+    var btn = document.querySelector('[data-st-save-facts="' + id + '"]');
+    if (btn) btn.disabled = true;
+    return api('/staff/listings/' + encodeURIComponent(id) + '/facts', { method: 'POST', body: collectFacts(id) })
+      .then(function () {
+        var row = findListing(id);
+        return api('/staff/listings/' + encodeURIComponent(id) + '/review').then(function (payload) {
+          if (row && payload.listing) {
+            row.title = payload.listing.title;
+            row.area = payload.listing.area;
+            row.district = payload.listing.district;
+            row.base_nightly_ugx = payload.listing.base_nightly_ugx;
+            row.host_name = payload.listing.host_name;
+            row.host_phone = payload.listing.host_phone;
+            row.do_not_message = payload.listing.do_not_message === true;
+          }
+          renderDesk(which);
+          renderReviewSheet(id, which, payload);
+          var feedback = document.querySelector('[data-st-desk-feedback="' + id + '"]');
+          if (feedback) feedback.innerHTML = '<p class="st-desk-ok">Facts saved.</p>';
+        });
+      })
+      .catch(function (error) {
+        if (btn) btn.disabled = false;
+        showError(id, error);
+      });
   }
 
 
@@ -461,9 +637,15 @@
       loadDesk(chip.getAttribute('data-st-desk-which'), chip.getAttribute('data-st-desk-stage'));
       return;
     }
+    var saveBtn = e.target.closest('[data-st-save-facts]');
+    if (saveBtn) {
+      saveFacts(saveBtn.getAttribute('data-st-id'), saveBtn.getAttribute('data-st-which') || 'staff');
+      return;
+    }
     var payBtn = e.target.closest('[data-st-paylink]');
     if (payBtn) {
       var listingId = payBtn.getAttribute('data-st-paylink');
+      if (!allowsHostMessage(findListing(listingId))) return;
       payBtn.disabled = true;
       api('/staff/listings/' + encodeURIComponent(listingId) + '/pay-link', { method: 'POST', body: {} })
         .then(function (r) {
@@ -485,7 +667,10 @@
     }
     var staffBtn = e.target.closest('[data-st-staff]');
     if (staffBtn) {
-      runAction(staffBtn.getAttribute('data-st-id'), 'staff', staffBtn.getAttribute('data-st-staff'));
+      var staffId = staffBtn.getAttribute('data-st-id');
+      var staffAction = staffBtn.getAttribute('data-st-staff');
+      if (staffAction === 'request_changes' && !allowsHostMessage(findListing(staffId))) return;
+      runAction(staffId, 'staff', staffAction);
       return;
     }
     var kingBtn = e.target.closest('[data-st-king]');
@@ -503,6 +688,9 @@
   window.makaugShortTermDesk = {
     intake: openIntake,
     load: loadDesk,
-    reload: function (which) { return loadDesk(which || 'staff', state.stage); }
+    reload: function (which) { return loadDesk(which || 'staff', deskState(which || 'staff').stage); }
   };
+
+  if (deskHost('staff')) loadDesk('staff', 'submitted');
+  if (deskHost('king')) loadDesk('king', 'king_review');
 })();

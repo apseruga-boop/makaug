@@ -692,10 +692,15 @@ function privateListerFeeLines(listing = {}) {
   const extra = listing?.extra_fields && typeof listing.extra_fields === 'object' ? listing.extra_fields : {};
   const fee = extra.lister_fee_terms;
   if (!extra.lister_terms_accepted_at || !fee) return [];
-  const freeDays = Number(fee.free_days ?? 7);
+  const { ownerFreeDaysForListing } = require('../config/publishedPricing');
+  const freeDays = ownerFreeDaysForListing(listing);
+  const monthly = Number(fee.monthly_ugx || 20000).toLocaleString('en-US');
+  if (freeDays <= 0) {
+    return ['', `🗓️ It is UGX ${monthly} a month to stay live, from the day it is approved. We'll message you with how many people have viewed it.`, ''];
+  }
   const until = new Date(Date.now() + 3 * 3600 * 1000 + Math.max(0, freeDays - 1) * 86400000);
   const pretty = until.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-  return ['', `🗓️ Free until *${pretty}* (${freeDays} days). After that it is UGX ${Number(fee.monthly_ugx || 20000).toLocaleString('en-US')} a month to stay live — we'll message you before then with how many people have viewed it.`, ''];
+  return ['', `🗓️ Free until *${pretty}* (${freeDays} days). After that it is UGX ${monthly} a month to stay live — we'll message you before then with how many people have viewed it.`, ''];
 }
 
 function buildOwnerStatusMessage({ listing = {}, status, reason }) {

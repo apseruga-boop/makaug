@@ -251,13 +251,18 @@ async function fetchTikTokPublicSourcePosts({
       videoCount: pageVideos.length,
     });
     const accepted = [];
+    const sourceLookbackDays = Number(source?.metadata?.lookback_days || source?.lookback_days || 0);
+    const sourceFloorMs = sourceLookbackDays > 0 ? Date.now() - sourceLookbackDays * 86400000 : NaN;
+    const effectiveFloorMs = Number.isFinite(sourceFloorMs)
+      ? (Number.isFinite(floorMs) ? Math.max(floorMs, sourceFloorMs) : sourceFloorMs)
+      : floorMs;
     for (const videoUrl of pageVideos) {
       if (seenVideos.has(videoUrl)) {
         duplicatesSkipped += 1;
         continue;
       }
       const postedAt = videoPostedAtIso(videoUrl);
-      if (postedAt && Number.isFinite(floorMs) && Date.parse(postedAt) < floorMs) {
+      if (postedAt && Number.isFinite(effectiveFloorMs) && Date.parse(postedAt) < effectiveFloorMs) {
         outsideLookback += 1;
         seenVideos.add(videoUrl);
         continue;
