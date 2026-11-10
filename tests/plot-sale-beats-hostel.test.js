@@ -87,3 +87,39 @@ test('migration 211 backs up affected rows and the rollback is separate', () => 
   assert.match(rollback, /updated_at = b\.applied_at/);
   assert.doesNotMatch(rollback, /DELETE FROM properties/);
 });
+
+test('migration 216 only creates the backup table and stays off the boot path', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '../db/migrations/216_restore_plot_titles_and_category.sql'), 'utf8');
+  const runner = fs.readFileSync(path.join(__dirname, '../scripts/run-plot-title-restore-216.js'), 'utf8');
+  const rollback = fs.readFileSync(path.join(__dirname, '../scripts/rollback-216-restore-plot-titles-and-category.sql'), 'utf8');
+  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS plot_title_restore_216_backup/);
+  assert.match(sql, /lock_timeout = '3s'/);
+  assert.match(sql, /statement_timeout = '15s'/);
+  assert.match(sql, /MK-20261109-9F68D2/);
+  assert.doesNotMatch(sql, /UPDATE properties/);
+  assert.doesNotMatch(sql, /DISABLE TRIGGER/);
+  assert.doesNotMatch(sql, /DELETE FROM properties/);
+
+  assert.match(runner, /LIMIT \$1/);
+  assert.match(runner, /SET LOCAL lock_timeout/);
+  assert.match(runner, /SET LOCAL statement_timeout/);
+  assert.match(runner, /plot_title_restore_216_backup/);
+  assert.match(runner, /category_title_restore_216/);
+  assert.match(runner, /staff_corrected_fields/);
+  assert.match(runner, /plots\?\|acres\?\|decimals\?/);
+  assert.match(runner, /MK-20261109-9F68D2/);
+  assert.match(runner, /runBackgroundWork/);
+  assert.doesNotMatch(runner, /ALTER TABLE\s+properties\s+DISABLE TRIGGER/);
+  assert.doesNotMatch(runner, /DELETE FROM properties/);
+
+  assert.match(rollback, /Not run by scripts\/migrate\.js/);
+  assert.match(rollback, /before_row->>'title'/);
+  assert.match(rollback, /updated_at = b\.applied_at/);
+  assert.doesNotMatch(rollback, /DELETE FROM properties/);
+  assert.doesNotMatch(rollback, /ALTER TABLE\s+\w+\s+DISABLE TRIGGER/);
+
+  assert.match(server, /runPlotTitleRestore216/);
+  assert.match(server, /scheduleStartupDataRepairs/);
+});
