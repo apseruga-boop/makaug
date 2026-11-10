@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const seo = require('../services/publicSeoRenderService');
+const { featuredAgentDateKey } = require('../utils/featuredAgentSelection');
 
 const fixtureSql = fs.readFileSync(path.join(__dirname, 'fixtures', 'homepage-seo-query-semantics.sql'), 'utf8');
 const shell = '<html><head></head><body><div id="home-grid"></div><div id="detail-content"></div><footer></footer></body></html>';
@@ -28,7 +29,7 @@ function fixtureQuery(kind) {
 }
 
 function normalized(sql) {
-  return sql.replace(/\$1\b/g, '6').replace(/\s+/g, ' ').trim();
+  return sql.replace(/\s+/g, ' ').trim();
 }
 
 function captureDb(rows = [rawRow]) {
@@ -42,7 +43,7 @@ test('actual homepage query matches the read-only semantics fixture, and other p
   const homeDb = captureDb();
   const home = await seo.loadPublicSeoListings(homeDb, { limit: 6, homepage: true });
   assert.equal(normalized(homeDb.queries[0].sql), normalized(fixtureQuery('NEW')));
-  assert.deepEqual(homeDb.queries[0].values, [6]);
+  assert.deepEqual(homeDb.queries[0].values, [featuredAgentDateKey(), 6]);
   assert.equal(home[0].id, id);
   assert.equal(home[0].title, '2-Bedroom house for rent in Kyanja');
   assert.equal(Object.hasOwn(home[0], 'seo_total'), false, 'no unused total is fabricated');
@@ -97,7 +98,7 @@ test('category and facet callers keep exact totals even if a homepage flag is pa
 });
 
 test('an expired homepage cache still serves its cards immediately while coalescing one refresh', async () => {
-  const homeKey = 'all:uganda:all:6:homepage';
+  const homeKey = `all:uganda:all:6:homepage:${featuredAgentDateKey()}`;
   const cachedRows = [{ id, title: 'Last-known-good home' }];
   seo.__seoListingCache.set(homeKey, { rows: cachedRows }, Date.now() - seo.SEO_LISTING_CACHE_TTL_MS - 1);
   let resolveRefresh;

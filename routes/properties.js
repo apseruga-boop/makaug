@@ -2,6 +2,11 @@ const { keepPendingModerationFields } = require('../utils/keepPendingModeration'
 const { moderationActorLabel } = require('../utils/moderationNotes');
 const { autoPinForApproval, correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
+const {
+  approvedSignedUpAgentListingSql,
+  featuredAgentDailyOrderSql,
+  featuredAgentDateKey
+} = require('../utils/featuredAgentSelection');
 const { agentFirstOrderSql } = require('../utils/agentFirstRank');
 const { publicListingPayload, hideImplausiblePrice } = require('../utils/publicListingPayload');
 const { publicSourceAccountName } = require('../utils/sourceAccountName');
@@ -2958,9 +2963,13 @@ async function listPropertiesHandler(req, res, next) {
       const staleAvailability = publicStaleAvailabilitySql('p');
       if (staleAvailability) filters.push(staleAvailability);
     }
+    const featuredAgentDate = featuredAgentDateKey();
     if (featuredFilterRequested) {
       if (featuredOnly) {
-        filters.push("(COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes'))");
+        // Homepage and /featured share this query. It is a daily shuffle of
+        // live listings from approved signed-up agents, not the stored
+        // featured flag (that flag was being set on found-online imports).
+        filters.push(approvedSignedUpAgentListingSql('p'));
       } else {
         filters.push("(COALESCE(p.extra_fields->>'featured', 'false') NOT IN ('true', '1', 'yes'))");
       }
@@ -3207,7 +3216,7 @@ async function listPropertiesHandler(req, res, next) {
     const priceSortRankSql = `(CASE WHEN p.price IS NOT NULL AND p.price > 0 AND p.price <= ${publicPriceSortMaxUgx} THEN 0 ELSE 1 END)`;
     const priceSortValueSql = effectivePriceUgxSql('p');
     const sortMap = {
-      featured: "p.extra_fields->>'featured_at' DESC NULLS LAST, p.updated_at DESC, p.created_at DESC, p.id DESC",
+      featured: featuredAgentDailyOrderSql('p', featuredAgentDate),
       newest: 'p.created_at DESC, p.id DESC',
       oldest: 'p.created_at ASC, p.id ASC',
       price_asc: `${priceSortRankSql} ASC, ${priceSortValueSql} ASC NULLS LAST, p.created_at DESC, p.id DESC`,

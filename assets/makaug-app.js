@@ -1169,6 +1169,7 @@ const adminPhotoDeleteInFlight = new Set();
 let publicListingsApiLoading = false;
 let publicListingsFromApiLoaded = false;
 let publicFeaturedListingsFromApi = [];
+let publicFeaturedRequestSettled = false;
 let publicListingsApiTotal = null;
 let publicListingsApiStats = null;
 let aboutPublicListingsTotal = null;
@@ -21683,12 +21684,11 @@ function getFeaturedListings(listings) {
 }
 
 function getHomepageFeaturedListings(publicListings = []) {
-  const featuredListings = publicFeaturedListingsFromApi.length
-    ? publicFeaturedListingsFromApi
-    : getFeaturedListings(publicListings);
-  return featuredListings.length
-    ? featuredListings
-    : publicListings.slice().sort(sortListingsByNewest);
+  // Server-rendered cards stay until the featured request settles. After that
+  // the list is only the daily agent shuffle, even when it is shorter than
+  // the grid, and it is never padded with found-online imports.
+  void publicListings;
+  return publicFeaturedListingsFromApi.filter((listing) => !isFoundOnlineListing(listing) && !isPublicDemoTrainingListing(listing));
 }
 
 function getKnownUsersForAdmin() {
@@ -53111,18 +53111,36 @@ function loadingPropertyGridHtml(count = 3) {
     </div>`).join("");
 }
 
+function syncFeaturedSectionVisibility(id, list) {
+  const home = id === "home-grid" ? document.getElementById("home-featured") : null;
+  const featuredPage = id === "featured-grid" ? document.getElementById("page-featured") : null;
+  const section = home || featuredPage;
+  if (!section) return;
+  const show = list.length > 0;
+  section.classList.toggle("hidden", !show);
+  if (show) section.removeAttribute("hidden");
+  else section.setAttribute("hidden", "");
+}
+
 function renderGrid(id, list, options = {}) {
   const el = document.getElementById(id);
   if (!el) return;
   if (!list.length) {
-    if (id === "home-grid" && !publicListingsFromApiLoaded) {
+    if (id === "home-grid" && !publicListingsFromApiLoaded && !publicFeaturedRequestSettled) {
       if (el.querySelector("[data-ssr-property-card]")) return;
       setHtmlIfChanged(el, loadingPropertyGridHtml(3));
+      return;
+    }
+    if (id === "home-grid" || id === "featured-grid") {
+      if ((id === "featured-grid") && !publicFeaturedRequestSettled) return;
+      setHtmlIfChanged(el, "");
+      syncFeaturedSectionVisibility(id, list);
       return;
     }
     setHtmlIfChanged(el, noResultsCardForGrid(id));
     return;
   }
+  syncFeaturedSectionVisibility(id, list);
   setHtmlIfChanged(el, list.map((p, index) => propCard(p, { ...(options.cardOptions || options), imageLoading: index === 0 ? "eager" : "lazy" })).join(""));
 }
 
@@ -57443,8 +57461,9 @@ function upsertPropertyForUi(property) {
 }
 
 function applyPublicFeaturedRows(featuredRows = []) {
-  const rows = Array.isArray(featuredRows) ? featuredRows.filter((p) => !adminRecordLooksLikeTest(p)) : [];
+  const rows = Array.isArray(featuredRows) ? featuredRows.filter((p) => !adminRecordLooksLikeTest(p) && !isFoundOnlineListing(p)) : [];
   publicFeaturedListingsFromApi = rows.map((p) => upsertPropertyForUi(p)).filter(Boolean);
+  publicFeaturedRequestSettled = true;
   return publicFeaturedListingsFromApi;
 }
 
@@ -58565,7 +58584,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     const featuredRowsPromise = activeCategory ? Promise.resolve([]) : fetchPublicFeaturedListingsFromApi()
       .then((rows) => {
         const featuredListings = applyPublicFeaturedRows(rows);
-        if (featuredListings.length) renderAll();
+        if (featuredListings) renderAll();
         return rows;
       })
       .catch((featuredError) => {
