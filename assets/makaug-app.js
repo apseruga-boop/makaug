@@ -18643,7 +18643,7 @@ function adminAgentManagerDetailHtml(d = {}) {
           ${adminAgentManagerApproveButton(a, "lg")}
         </div>
       </div>` : ""}
-      ${a.removed_at ? `<div class="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-800">Removed ${date(a.removed_at, true)}${a.removed_reason ? ` — “${adminEscape(a.removed_reason)}”` : ""}. Their profile and listings are off the site.${a.personal_deleted_at ? ` Their ID and personal details were deleted on ${date(a.personal_deleted_at)}.` : (a.personal_delete_after ? ` Their ID and personal details will be deleted on ${date(a.personal_delete_after)} unless you restore them first.` : "")} <button type="button" data-agent-restore class="ml-2 rounded-lg bg-green-700 text-white px-3 py-1.5 text-xs font-bold" onclick="adminAgentManagerRestore('${id}')">Restore agent</button></div>` : ""}
+      ${a.removed_at ? `<div class="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-800">Removed ${date(a.removed_at, true)}${a.removed_reason ? ` — “${adminEscape(a.removed_reason)}”` : ""}. Their profile and listings are off the site.${a.personal_deleted_at ? ` Their ID and personal details were deleted on ${date(a.personal_deleted_at)}.` : (a.personal_delete_after ? ` Their ID and personal details will be deleted on ${date(a.personal_delete_after)} unless you restore them first.` : "")}${a.removal_reason_code === "cancelled" && a.goodbye_message_at ? (a.goodbye_film_at ? ` Goodbye message and film sent.` : ` Goodbye message sent; <strong>their goodbye film has not gone yet.</strong> <button type="button" data-goodbye-film-send class="ml-1 rounded-lg bg-amber-600 text-white px-3 py-1.5 text-xs font-bold" onclick="adminGoodbyeFilmMakeAndSend('${id}', '${adminAttr(a.full_name || "")}')">Make and send their film now</button>`) : ""} <button type="button" data-agent-restore class="ml-2 rounded-lg bg-green-700 text-white px-3 py-1.5 text-xs font-bold" onclick="adminAgentManagerRestore('${id}')">Restore agent</button></div>` : ""}
       ${dupes.length ? `<div class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><strong>Same phone number on another agent record:</strong> ${dupes.map((x) => `<button type="button" class="underline font-bold" onclick="adminAgentManagerOpen('${adminAttr(x.id)}')">${adminEscape(x.full_name)}</button> (joined ${date(x.created_at)}, ${Number(x.total_listings || 0)} listings${x.removed_at ? ", removed" : ""})`).join(", ")}. If it is the same person, move the listings to one record and remove the other.</div>` : ""}
       <form class="rounded-xl border border-gray-200 p-3" onsubmit="adminAgentManagerSaveDetails(event, '${id}')" data-agent-details-form>
         <h5 class="font-black text-gray-900 mb-2">Details</h5>
@@ -19138,7 +19138,8 @@ async function adminAgentManagerRemoveReasonChanged(agentId) {
           <div class="whitespace-pre-wrap break-words rounded-lg bg-green-50 border border-green-100 p-2 text-[12px] text-gray-900" data-goodbye-message>${adminEscape(g.message || "")}</div>
           <p class="text-[11px] text-gray-500">2. Then their goodbye film, with this caption:</p>
           <div class="whitespace-pre-wrap break-words rounded-lg bg-green-50 border border-green-100 p-2 text-[12px] text-gray-900" data-goodbye-caption>${adminEscape(g.caption || "")}</div>
-          ${g.film_url ? `<a href="${adminAttr(g.film_url)}" target="_blank" rel="noopener" class="inline-block text-xs font-bold text-green-800 underline" data-goodbye-film>▶ Watch their goodbye film (made from today's numbers; the first time takes about a minute, and if the server is busy, try again in a few minutes)</a>` : `<p class="text-[11px] text-gray-500">Films cannot be made on this server right now, so only the message would go.</p>`}
+          ${g.film_url ? `<a href="${adminAttr(g.film_url)}" target="_blank" rel="noopener" class="inline-block text-xs font-bold text-green-800 underline" data-goodbye-film>▶ Watch their goodbye film (made from today's numbers; the first time takes about a minute, and if the server is busy, try again in a few minutes)</a>` : ""}
+          <div><button type="button" class="text-xs font-bold text-green-800 underline" onclick="adminGoodbyeFilmPreviewHere('${adminAttr(agentId)}')">▶ Or make it on this device and watch it here</button><div data-goodbye-film-here></div></div>
           <div class="flex flex-wrap items-center gap-2 pt-1">
             <input type="tel" data-goodbye-test-to placeholder="Your WhatsApp number" class="min-w-[180px] flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm">
             <button type="button" class="rounded-lg border border-green-700 text-green-800 px-3 py-2 text-xs font-bold" onclick="adminAgentManagerGoodbyeTest('${adminAttr(agentId)}')">Send me a test</button>
@@ -19158,6 +19159,125 @@ async function adminAgentManagerGoodbyeTest(agentId) {
     toast("Test on its way to your WhatsApp: the film comes with it if the server has room to make it now.", 4200);
   } catch (error) {
     toast(`Test not sent: ${error?.message || "error"}`);
+  }
+}
+
+// ── Goodbye film made on this device ────────────────────────────────────────
+// The server will not make films while its memory is high (10 Nov 2026: George
+// and Kelham got the goodbye message but no film). King asks the server for
+// the film's frames, makes the MP4 here (WebCodecs H.264 + mp4-muxer, loaded
+// only when needed) and sends it back; the server sends it to the agent once.
+const ADMIN_MP4_MUXER_SRC = "/assets/vendor/mp4-muxer-5.2.2.min.js";
+let adminMp4MuxerLoading = null;
+
+function adminLoadMp4Muxer() {
+  if (window.Mp4Muxer) return Promise.resolve(window.Mp4Muxer);
+  if (!adminMp4MuxerLoading) {
+    adminMp4MuxerLoading = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = ADMIN_MP4_MUXER_SRC;
+      script.async = true;
+      script.onload = () => (window.Mp4Muxer ? resolve(window.Mp4Muxer) : reject(new Error("the video maker did not load")));
+      script.onerror = () => { adminMp4MuxerLoading = null; reject(new Error("the video maker did not load")); };
+      document.head.appendChild(script);
+    });
+  }
+  return adminMp4MuxerLoading;
+}
+
+async function adminGoodbyeFilmCodec(size, fps) {
+  if (typeof window.VideoEncoder !== "function" || typeof window.VideoFrame !== "function") return null;
+  // AVCC output carries the decoder description the MP4 muxer needs.
+  const avcFormat = "avc";
+  for (const codec of ["avc1.42001f", "avc1.4d001f", "avc1.640028"]) {
+    const config = { codec, width: size, height: size, bitrate: 800000, framerate: fps, avc: { format: avcFormat } };
+    try {
+      const support = await window.VideoEncoder.isConfigSupported(config);
+      if (support && support.supported) return config;
+    } catch (_error) { /* try the next profile */ }
+  }
+  return null;
+}
+
+async function adminMakeGoodbyeFilm(agentId, onProgress = () => {}) {
+  const res = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/goodbye-film/frames`, { headers: adminAuthHeaders() });
+  const d = res?.data || {};
+  const size = Number(d.size) || 720;
+  const fps = Number(d.fps) || 15;
+  const runs = Array.isArray(d.runs) ? d.runs : [];
+  if (!runs.length) throw new Error("no frames came back");
+  const config = await adminGoodbyeFilmCodec(size, fps);
+  if (!config) throw new Error("this browser cannot make videos (use Chrome or Safari on a computer)");
+  const { Muxer, ArrayBufferTarget } = await adminLoadMp4Muxer();
+  const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: "avc", width: size, height: size, frameRate: fps }, fastStart: "in-memory" });
+  let failure = null;
+  const encoder = new window.VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (error) => { failure = error; } });
+  encoder.configure(config);
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const total = runs.reduce((sum, run) => sum + (Number(run.n) || 1), 0);
+  let index = 0;
+  for (const run of runs) {
+    const img = new Image();
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(String(run.svg || ""))}`;
+    await img.decode();
+    ctx.fillStyle = "#FBF6EE";
+    ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(img, 0, 0, size, size);
+    for (let k = 0; k < (Number(run.n) || 1); k += 1) {
+      if (failure) throw failure;
+      const frame = new window.VideoFrame(canvas, { timestamp: Math.round((index * 1e6) / fps), duration: Math.round(1e6 / fps) });
+      encoder.encode(frame, { keyFrame: index % (fps * 2) === 0 });
+      frame.close();
+      index += 1;
+      while (encoder.encodeQueueSize > 20) await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    onProgress(index / total);
+  }
+  await encoder.flush();
+  if (failure) throw failure;
+  encoder.close();
+  muxer.finalize();
+  return new Blob([muxer.target.buffer], { type: "video/mp4" });
+}
+
+async function adminGoodbyeFilmMakeAndSend(agentId, name = "") {
+  const who = String(name || "").trim() || "the agent";
+  toast(`Making ${who}'s goodbye film on this device. Keep this page open for about a minute.`, 8000);
+  try {
+    const film = await adminMakeGoodbyeFilm(agentId);
+    const response = await fetch(`/api/admin/agents/${encodeURIComponent(agentId)}/goodbye-film`, {
+      method: "POST",
+      credentials: "include",
+      headers: { ...adminAuthHeaders(), "Content-Type": "video/mp4" },
+      body: film
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok || !json.ok) throw new Error(json.error || `the film did not upload (${response.status})`);
+    const state = json.data?.film;
+    toast(state === "sent" ? `Goodbye film sent to ${who}.` : state === "already_sent" ? `${who}'s goodbye film had already gone.` : (json.data?.note || "Goodbye film saved. It goes within 10 minutes."), 6000);
+    if (ADMIN_AGENT_MANAGER_STATE.openId === agentId) adminAgentManagerRefreshOpen().catch(() => {});
+    return json.data;
+  } catch (error) {
+    toast(`Goodbye film not made: ${error?.message || "error"}. Try again from their page, or the server keeps trying.`, 8000);
+    return null;
+  }
+}
+
+async function adminGoodbyeFilmPreviewHere(agentId) {
+  const box = document.querySelector("[data-agent-manager-agent] [data-goodbye-film-here]");
+  if (!box) return;
+  box.innerHTML = `<p class="text-xs text-gray-600">Making the film on this device…</p>`;
+  try {
+    const film = await adminMakeGoodbyeFilm(agentId, (share) => {
+      const p = box.querySelector("p");
+      if (p) p.textContent = `Making the film on this device… ${Math.round(share * 100)}%`;
+    });
+    box.innerHTML = `<video controls playsinline class="mt-1 w-full rounded-lg border border-gray-200" style="max-width:360px" src="${URL.createObjectURL(film)}"></video>`;
+  } catch (error) {
+    box.innerHTML = `<p class="text-xs text-red-800">Not made: ${adminEscape(error?.message || "error")}</p>`;
   }
 }
 
@@ -19181,6 +19301,8 @@ async function adminAgentManagerRemove(agentId) {
     if (d.personal_delete_after) bits.push(`their ID and personal details will be deleted on ${staffPeopleDate(d.personal_delete_after)}`);
     if (d.team_notified) bits.push("Arthur and Ronald have been told on WhatsApp");
     await adminAgentManagerRefreshOpen(`${bits.join(", ")}.`);
+    // The server often has no room to make the film: make it here and send it.
+    if (code === "cancelled" && d.goodbye?.status === "sending") setTimeout(() => adminGoodbyeFilmMakeAndSend(agentId, d.full_name || name), 4000);
   } catch (error) {
     toast(`Remove failed: ${error?.message || "error"}`);
   }

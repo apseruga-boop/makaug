@@ -10228,6 +10228,74 @@ router.post('/agents/:id/goodbye-preview', async (req, res, next) => {
   }
 });
 
+// The goodbye film, made in the staff member's browser (Arthur, 10 Nov 2026:
+// George and Kelham got the goodbye message but no film, because the server
+// refuses to make films while its memory is high). King asks for the frames,
+// makes the MP4 on the staff device and sends it back here; the server keeps
+// it where the film link looks first and sends it to the agent once.
+async function goodbyeFilmSubject(agentId) {
+  const row = (await db.query('SELECT id, removed_at, removal_snapshot FROM agents WHERE id = $1', [agentId])).rows[0];
+  if (!row) return null;
+  const snap = row.removal_snapshot || {};
+  if (row.removed_at && snap.goodbye && snap.goodbye.agent) {
+    return {
+      removed: true,
+      payload: snap.goodbye,
+      version: String(snap.goodbye_version || new Date(row.removed_at).getTime()),
+      film_sent: Boolean(snap.goodbye_film_at),
+      message_sent: Boolean(snap.goodbye_message_at)
+    };
+  }
+  // Not removed: the staff preview, made from today's numbers.
+  return {
+    removed: false,
+    payload: await agentGoodbye.buildGoodbyePayload(agentId),
+    version: `p${new Date().toISOString().slice(0, 10).replace(/\D/g, '')}`,
+    film_sent: false,
+    message_sent: false
+  };
+}
+
+router.get('/agents/:id/goodbye-film/frames', async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
+    const subject = await goodbyeFilmSubject(req.params.id);
+    if (!subject) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    const frames = agentReportVideos.goodbyeFilmFrames(subject.payload);
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, data: { ...frames, removed: subject.removed, film_sent: subject.film_sent, first_name: subject.payload?.agent?.greeting_name || '' } });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
+router.post('/agents/:id/goodbye-film', express.raw({ type: ['video/mp4', 'application/octet-stream'], limit: '12mb' }), async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
+    const bytes = Buffer.isBuffer(req.body) ? req.body : null;
+    if (!bytes || bytes.length < 20 * 1024 || bytes.slice(4, 8).toString('latin1') !== 'ftyp') {
+      return res.status(400).json({ ok: false, error: 'That is not an MP4 film' });
+    }
+    const subject = await goodbyeFilmSubject(req.params.id);
+    if (!subject) return res.status(404).json({ ok: false, error: 'Agent not found' });
+    if (!subject.removed) return res.status(409).json({ ok: false, error: 'This agent has not been removed, so there is no goodbye to send' });
+    if (subject.film_sent) return res.json({ ok: true, data: { film: 'already_sent' } });
+    await agentReportVideos.saveGoodbyeVideo(subject.payload, subject.version, bytes);
+    // Made by hand, so it goes even if the automatic tries had given up.
+    await db.query(`UPDATE agents SET removal_snapshot = removal_snapshot - 'goodbye_film_gave_up_at' WHERE id = $1`, [req.params.id]);
+    const result = await agentGoodbye.deliverGoodbye(req.params.id, { actorId: adminActorId(req) });
+    if (result.skipped) {
+      // The 10-minute check is sending right now; it will find the film.
+      return res.status(202).json({ ok: true, data: { film: 'saved', note: 'The film is saved and goes with the next check, within 10 minutes.' } });
+    }
+    return res.json({ ok: true, data: { film: result.film, message: result.message } });
+  } catch (error) {
+    if (error.type === 'entity.too.large') return res.status(413).json({ ok: false, error: 'The film is too large' });
+    return next(error);
+  }
+});
+
 /**
  * Two records for one agent: staff registered "Charles" through Agent 007 at
  * 15:30 on 26 Oct 2026 (no email, no login) and Charles signed himself up an

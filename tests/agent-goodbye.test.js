@@ -151,7 +151,7 @@ test('the goodbye film: thank you, properties, people, countries, overall views 
   assert.ok(!/21 views/.test(text), 'listing rows show where, not the site-only views');
   assert.match(text, /Mutungo, Kampala/);
   assert.match(text, /offline now/);
-  assert.match(text, /we keep your number for when you come back/);
+  assert.match(text, /we keep your number/);
   assert.match(text, /always open/);
   assert.match(text, /WhatsApp makaug/);
   assert.match(text, /\+256 780 863 394/);
@@ -335,6 +335,7 @@ function fakeRes() {
     statusCode: 200,
     body: null,
     status(code) { this.statusCode = code; return this; },
+    set() { return this; },
     json(body) { this.body = body; return this; }
   };
 }
@@ -633,4 +634,98 @@ test('King: every removal tells Arthur and Ronald, after it is saved', async (t)
   assert.strictEqual(alerts[0].reason.code, 'duplicate');
   assert.strictEqual(alerts[0].reasonText, 'Duplicate or test record — second record');
   assert.strictEqual(alerts[0].listingsHidden, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Films made on a staff device (10 Nov 2026: George and Kelham got the message
+// but no film, because the server would not render while its memory was high).
+
+test('the film\'s frames come back as SVG runs, repeats folded, the same frames the server would draw', () => {
+  const frames = videos.goodbyeFilmFrames(fullPayload());
+  assert.strictEqual(frames.fps, 15);
+  assert.strictEqual(frames.size, 720);
+  assert.strictEqual(frames.total, Math.round(videos.goodbyeDuration(fullPayload()) * 15));
+  assert.strictEqual(frames.runs.reduce((n, r) => n + r.n, 0), frames.total);
+  assert.ok(frames.runs.length < frames.total, 'repeated frames are sent once');
+  assert.match(frames.runs[0].svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="720" height="720"/);
+  assert.ok(frames.runs.some((r) => /about 1,200/.test(r.svg)));
+});
+
+function fakeMp4(bytes = 40 * 1024) {
+  const buf = Buffer.alloc(bytes);
+  buf.write('ftypisom', 4, 'latin1');
+  return buf;
+}
+
+test('King: a film made on a staff device is kept where the film link looks first and sent to the agent once', async (t) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'goodbye-upload-'));
+  const originalTmp = process.env.TMPDIR;
+  const snapshot = { reason_code: 'cancelled', goodbye: fullPayload(), goodbye_version: '1762790000000', goodbye_to: '256772000001', goodbye_message_at: '2026-11-10T14:04:36Z', goodbye_film_tries: 3 };
+  const state = { snapshot: { ...snapshot } };
+  const originals = { query: db.query, getClient: db.getClient, save: videos.saveGoodbyeVideo, has: videos.hasGoodbyeVideo, ensure: videos.ensureGoodbyeVideo, available: videos.isVideoRenderingAvailable };
+  const saved = [];
+  videos.saveGoodbyeVideo = async (payload, version, bytes) => { saved.push({ version, bytes: bytes.length }); return path.join(tmp, 'film.mp4'); };
+  videos.hasGoodbyeVideo = () => saved.length > 0;
+  videos.ensureGoodbyeVideo = async () => { if (!saved.length) throw Object.assign(new Error('busy'), { code: 'VIDEO_MEMORY_GUARD' }); return path.join(tmp, 'film.mp4'); };
+  videos.isVideoRenderingAvailable = () => false;
+  db.query = async (sql, params = []) => {
+    if (/SELECT id, removed_at, removal_snapshot FROM agents WHERE id = \$1/.test(sql)) return { rows: [{ id: AGENT_ID, removed_at: '2026-11-10T14:04:35Z', removal_snapshot: { ...state.snapshot } }] };
+    if (/jsonb_build_object\('goodbye_claim_at', NOW\(\)\)/.test(sql)) return { rows: [{ phone: '0772000001', whatsapp: '256772000001', removed_at: '2026-11-10T14:04:35Z', removal_snapshot: { ...state.snapshot } }] };
+    if (/SET removal_snapshot = removal_snapshot \|\| \$2::jsonb/.test(sql)) { Object.assign(state.snapshot, JSON.parse(params[1])); return { rows: [] }; }
+    if (/removal_snapshot - 'goodbye_film_gave_up_at'/.test(sql)) { delete state.snapshot.goodbye_film_gave_up_at; return { rows: [] }; }
+    return { rows: [] };
+  };
+  t.after(() => { Object.assign(db, { query: originals.query, getClient: originals.getClient }); videos.saveGoodbyeVideo = originals.save; videos.hasGoodbyeVideo = originals.has; videos.ensureGoodbyeVideo = originals.ensure; videos.isVideoRenderingAvailable = originals.available; if (originalTmp === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = originalTmp; });
+  queued.length = 0;
+
+  const frames = fakeRes();
+  await routeHandler('get', '/agents/:id/goodbye-film/frames')({ params: { id: AGENT_ID } }, frames, (e) => { throw e; });
+  assert.strictEqual(frames.body.data.removed, true);
+  assert.strictEqual(frames.body.data.film_sent, false);
+  assert.ok(frames.body.data.runs.length > 10);
+
+  const notMp4 = fakeRes();
+  await routeHandler('post', '/agents/:id/goodbye-film')({ params: { id: AGENT_ID }, body: Buffer.from('hello'), adminAuth: { userId: 'staff-1' } }, notMp4, (e) => { throw e; });
+  assert.strictEqual(notMp4.statusCode, 400);
+
+  const upload = fakeRes();
+  await routeHandler('post', '/agents/:id/goodbye-film')({ params: { id: AGENT_ID }, body: fakeMp4(), adminAuth: { userId: 'staff-1' } }, upload, (e) => { throw e; });
+  assert.strictEqual(upload.statusCode, 200, JSON.stringify(upload.body));
+  assert.deepStrictEqual(upload.body.data, { film: 'sent', message: 'already_sent' });
+  assert.deepStrictEqual(saved, [{ version: '1762790000000', bytes: 40 * 1024 }], 'kept under the removal\'s own version');
+  assert.deepStrictEqual(queued.map((m) => m.mediaType || 'text'), ['video'], 'only the film: the message had gone');
+  assert.match(queued[0].mediaUrl, /goodbye-video\/e1d9a5f5-ce49-4e9d-a9ca-1cad1c78d3ef\.mp4\?v=1762790000000&t=/);
+  assert.ok(state.snapshot.goodbye_film_at);
+
+  const again = fakeRes();
+  await routeHandler('post', '/agents/:id/goodbye-film')({ params: { id: AGENT_ID }, body: fakeMp4(), adminAuth: { userId: 'staff-1' } }, again, (e) => { throw e; });
+  assert.deepStrictEqual(again.body.data, { film: 'already_sent' });
+  assert.strictEqual(queued.length, 1, 'never twice');
+});
+
+test('King makes the film on the device after Remove, and offers it on the removed agent\'s page', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'assets/makaug-app.js'), 'utf8');
+  assert.match(app, /const ADMIN_MP4_MUXER_SRC = "\/assets\/vendor\/mp4-muxer-5\.2\.2\.min\.js";/);
+  assert.match(app, /if \(code === "cancelled" && d\.goodbye\?\.status === "sending"\) setTimeout\(\(\) => adminGoodbyeFilmMakeAndSend\(agentId/);
+  assert.match(app, /Make and send their film now/);
+  assert.match(app, /avc: \{ format: avcFormat \}/);
+  const muxer = fs.readFileSync(path.join(__dirname, '..', 'assets/vendor/mp4-muxer-5.2.2.min.js'), 'utf8');
+  assert.match(muxer, /^\/\*! mp4-muxer 5\.2\.2 \| MIT License/);
+  assert.match(muxer, /var Mp4Muxer=/);
+});
+
+test('a removal for another reason (goodbye: null in the snapshot) is never picked up as a goodbye owed', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'services/agentGoodbyeService.js'), 'utf8');
+  const fn = (name) => { const start = src.indexOf(`async function ${name}`); return src.slice(start, src.indexOf('\n}\n', start)); };
+  const pending = fn('runPendingGoodbyes');
+  assert.match(pending, /removal_snapshot->>'reason_code' = 'cancelled'/);
+  assert.match(pending, /jsonb_typeof\(removal_snapshot->'goodbye'\) = 'object'/);
+  const claim = fn('deliverGoodbye');
+  assert.match(claim, /jsonb_typeof\(removal_snapshot->'goodbye'\) = 'object'/);
+  assert.ok(!/removal_snapshot \? 'goodbye'/.test(src));
 });

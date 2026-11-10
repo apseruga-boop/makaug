@@ -850,7 +850,7 @@ function buildGoodbyeTimeline(payload = {}) {
       bubble(360, 300, hadListings
         ? [{ text: 'Your listings are', size: 42, weight: 900 }, { text: 'offline now', size: 52, weight: 900, fill: K.orange }]
         : [{ text: 'Your profile is', size: 42, weight: 900 }, { text: 'closed now', size: 52, weight: 900, fill: K.orange }], { scale: pop(lt, 0.08, e, 0.42), pad: 32 }),
-      bubble(360, 480, [{ text: 'we keep your number for when you come back', size: 24, weight: 700, fill: K.muted }], { scale: pop(lt, 0.5, e), fill: K.peach, tail: 'right' })
+      bubble(360, 480, [{ text: 'we keep your number', size: 26, weight: 700, fill: K.muted }], { scale: pop(lt, 0.5, e), fill: K.peach, tail: 'right' })
     ];
   } });
 
@@ -903,6 +903,45 @@ async function ensureGoodbyeVideo(payload, version, options = {}) {
   }, options);
 }
 
+/**
+ * Every frame of a goodbye film as SVG, repeats folded into runs ([{ svg, n }]),
+ * so a staff member's browser can make the film when the server has no room
+ * (its renderer refuses to start while memory is high). Building the SVG is
+ * cheap string work; only the rasterising and encoding are heavy.
+ */
+function goodbyeFilmFrames(payload) {
+  const scene = buildGoodbyeScenes(payload);
+  const total = Math.round(goodbyeDuration(payload) * FPS);
+  const runs = [];
+  for (let i = 0; i < total; i += 1) {
+    const svg = frameSvg(scene, i / FPS);
+    const last = runs[runs.length - 1];
+    if (last && last.svg === svg) last.n += 1;
+    else runs.push({ svg, n: 1 });
+  }
+  return { fps: FPS, size: SIZE, total, runs };
+}
+
+/**
+ * Keeps a goodbye film made elsewhere (a staff member's browser) exactly where
+ * ensureGoodbyeVideo looks first, plus the stored copy, so sending it needs no
+ * render here.
+ */
+/** True when a goodbye film for this version is already here (made on a staff device, or rendered earlier). */
+function hasGoodbyeVideo(payload, version) {
+  return fs.existsSync(cachePath(payload?.agent?.id || 'agent', version, /^p/i.test(String(version || '')) ? 'goodbye-preview-' : 'goodbye-'));
+}
+
+async function saveGoodbyeVideo(payload, version, bytes) {
+  const file = cachePath(payload?.agent?.id || 'agent', version, 'goodbye-');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.upload.mp4`;
+  fs.writeFileSync(tmp, bytes);
+  fs.renameSync(tmp, file);
+  await storeRenderedVideo(file);
+  return file;
+}
+
 function goodbyeVideoUrl(agent, baseUrl, version) {
   const cards = require('./agentReportCardService');
   const stamp = String(version || '').replace(/[^a-z0-9]/gi, '').slice(0, 24);
@@ -941,6 +980,9 @@ module.exports = {
   buildWelcomeScenes,
   buildGoodbyeScenes,
   buildGoodbyeTimeline,
+  goodbyeFilmFrames,
+  hasGoodbyeVideo,
+  saveGoodbyeVideo,
   goodbyeDuration,
   ensureGoodbyeVideo,
   goodbyeVideoUrl,
