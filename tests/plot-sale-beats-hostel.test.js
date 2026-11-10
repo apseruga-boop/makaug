@@ -72,14 +72,14 @@ test('the editor and the review form keep that order', () => {
   assert.doesNotMatch(staff.slice(staff.indexOf('function staffEditorTitle'), staff.indexOf('async function staffPreviewOcr')), /buildThirdPartyPublicTitle/);
 });
 
-test('migration 209 backs up affected rows and the rollback is separate', () => {
-  const sql = fs.readFileSync(path.join(__dirname, '../db/migrations/209_restore_plot_titles_and_category.sql'), 'utf8');
-  const rollback = fs.readFileSync(path.join(__dirname, '../scripts/rollback-209-restore-plot-titles-and-category.sql'), 'utf8');
-  assert.match(sql, /CREATE TABLE IF NOT EXISTS plot_title_restore_209_backup/);
+test('migration 211 backs up affected rows and the rollback is separate', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '../db/migrations/211_restore_plot_titles_and_category.sql'), 'utf8');
+  const rollback = fs.readFileSync(path.join(__dirname, '../scripts/rollback-211-restore-plot-titles-and-category.sql'), 'utf8');
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS plot_title_restore_211_backup/);
   assert.match(sql, /before_row jsonb NOT NULL/);
   assert.match(sql, /staff_corrected_fields/);
   assert.match(sql, /plots\?\|acres\?\|decimals\?/);
-  assert.match(sql, /category_title_restore_209/);
+  assert.match(sql, /category_title_restore_211/);
   assert.doesNotMatch(sql, /DELETE FROM properties/);
   assert.match(sql, /MK-20261109-9F68D2/);
   assert.match(rollback, /Not run by scripts\/migrate\.js/);

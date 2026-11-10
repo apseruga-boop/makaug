@@ -115,9 +115,9 @@ test('staff reject reasons include no specific area, and the vague-location word
 });
 
 test('reject-reason migration backs up the two listings and has a rollback', () => {
-  const sql = read('db/migrations/207_reject_reason_no_specific_area.sql');
-  const rollback = read('scripts/rollback-207-reject-reason-no-specific-area.sql');
-  assert.match(sql, /reject_reason_207_backup/);
+  const sql = read('db/migrations/209_reject_reason_no_specific_area.sql');
+  const rollback = read('scripts/rollback-209-reject-reason-no-specific-area.sql');
+  assert.match(sql, /reject_reason_209_backup/);
   assert.match(sql, /MK-20261109-A9F886/);
   assert.match(sql, /MK-20261110-D126C0/);
   assert.match(sql, /Not a property listing/);
@@ -125,15 +125,15 @@ test('reject-reason migration backs up the two listings and has a rollback', () 
   assert.match(sql, /no_specific_area/);
   assert.match(sql, /property_moderation_events/);
   assert.doesNotMatch(sql, /DELETE FROM properties/i);
-  assert.match(rollback, /reject_reason_207_backup/);
+  assert.match(rollback, /reject_reason_209_backup/);
   assert.match(rollback, /rolled_back_at/);
   assert.doesNotMatch(rollback, /DELETE FROM properties/i);
 });
 
 test('stale found-online migration hides, does not delete, and skips paying agents', () => {
-  const sql = read('db/migrations/208_hide_stale_found_online_listings.sql');
-  const rollback = read('scripts/rollback-208-hide-stale-found-online-listings.sql');
-  assert.match(sql, /stale_source_unpublish_208_backup/);
+  const sql = read('db/migrations/210_hide_stale_found_online_listings.sql');
+  const rollback = read('scripts/rollback-210-hide-stale-found-online-listings.sql');
+  assert.match(sql, /stale_source_unpublish_210_backup/);
   assert.match(sql, /status = 'hidden'/);
   assert.match(sql, /INTERVAL '180 days'/);
   assert.match(sql, /found_online_property_source_v1/);
@@ -143,7 +143,7 @@ test('stale found-online migration hides, does not delete, and skips paying agen
   assert.match(sql, /source_published_at/);
   assert.doesNotMatch(sql, /DELETE FROM properties/i);
   assert.doesNotMatch(sql, /\b(?:FROM|UPDATE|INSERT INTO) st_listing\b/i);
-  assert.match(rollback, /stale_source_unpublish_208_backup/);
+  assert.match(rollback, /stale_source_unpublish_210_backup/);
   assert.match(rollback, /before_status/);
   assert.doesNotMatch(rollback, /DELETE FROM properties/i);
 });

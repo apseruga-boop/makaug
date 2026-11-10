@@ -9,17 +9,26 @@
 -- Short stays live in st_listing and are host listings, so this file does
 -- not read that table.
 --
--- A production read on 10 Nov 2026 matched 473 live listings:
--- sale 261, rent 95, land 108, commercial 8, student 1, short stay 0.
--- Live status total was 5,077 (5,076 with a public photo or video, plus 3
--- public short stays). The migration re-checks the same rule when it runs.
+-- A production read on 10 Nov 2026, after migrations 207 and 208 were
+-- already live, matched 473 listings. Nothing is deleted.
+-- sale 261, rent 95, land 108, commercial 8, student 1.
+-- Examples: MK-20260719-70E467 (sale), MK-20260719-4D68D7 (rent),
+-- MK-20260710-0C6F96 (land), MK-20260710-D0C742 (commercial),
+-- MK-20260607-4DE500 (student).
+-- Live status was 5,070 (5,069 with public media). After this hide:
+-- 4,597 live, 4,596 with public media. All 473 already have public media.
+-- The migration re-checks the same rule when it runs.
 --
--- Backup: stale_source_unpublish_208_backup.
--- Rollback: scripts/rollback-208-hide-stale-found-online-listings.sql.
+-- schema_migrations records the filename. Main already applied
+-- 208_found_online_short_stay_rentals_to_queue.sql, so this file is 210
+-- and runs once. Renaming it does not re-run 208.
+--
+-- Backup: stale_source_unpublish_210_backup.
+-- Rollback: scripts/rollback-210-hide-stale-found-online-listings.sql.
 SET LOCAL lock_timeout = '8s';
 SET LOCAL statement_timeout = '120s';
 
-CREATE TABLE IF NOT EXISTS stale_source_unpublish_208_backup (
+CREATE TABLE IF NOT EXISTS stale_source_unpublish_210_backup (
   property_id uuid PRIMARY KEY,
   inquiry_reference text,
   listing_type text NOT NULL,
@@ -41,11 +50,11 @@ DECLARE
   r record;
 BEGIN
   IF current_setting('app.country_code', true) IS DISTINCT FROM 'UG' THEN
-    RAISE NOTICE 'stale_source_208 skipped country_not_ug';
+    RAISE NOTICE 'stale_source_210 skipped country_not_ug';
     RETURN;
   END IF;
-  IF EXISTS (SELECT 1 FROM stale_source_unpublish_208_backup) THEN
-    RAISE NOTICE 'stale_source_208 skipped already_recorded';
+  IF EXISTS (SELECT 1 FROM stale_source_unpublish_210_backup) THEN
+    RAISE NOTICE 'stale_source_210 skipped already_recorded';
     RETURN;
   END IF;
 
@@ -56,7 +65,7 @@ BEGIN
       AND NOT tgisinternal
   ) INTO v_has_trigger;
 
-  CREATE TEMP TABLE stale_source_208_targets ON COMMIT DROP AS
+  CREATE TEMP TABLE stale_source_210_targets ON COMMIT DROP AS
   SELECT
     p.id,
     p.inquiry_reference,
@@ -121,10 +130,10 @@ BEGIN
   SELECT count(*) INTO v_live_before
   FROM properties
   WHERE lower(coalesce(status, '')) IN ('approved', 'live', 'published');
-  SELECT count(*) INTO v_hide FROM stale_source_208_targets;
+  SELECT count(*) INTO v_hide FROM stale_source_210_targets;
 
   IF v_hide = 0 THEN
-    RAISE NOTICE 'stale_source_208 skipped no_matching_rows live_before %', v_live_before;
+    RAISE NOTICE 'stale_source_210 skipped no_matching_rows live_before %', v_live_before;
     RETURN;
   END IF;
 
@@ -132,11 +141,11 @@ BEGIN
     ALTER TABLE properties DISABLE TRIGGER trg_properties_updated_at;
   END IF;
 
-  INSERT INTO stale_source_unpublish_208_backup (
+  INSERT INTO stale_source_unpublish_210_backup (
     property_id, inquiry_reference, listing_type, before_status, before_row, source_posted_at, applied_at
   )
   SELECT t.id, t.inquiry_reference, t.listing_type, t.before_status, to_jsonb(p), t.posted_at, v_applied
-  FROM stale_source_208_targets t
+  FROM stale_source_210_targets t
   JOIN properties p ON p.id = t.id;
 
   UPDATE properties p
@@ -146,16 +155,16 @@ BEGIN
         'unpublished_from_status', t.before_status,
         'unpublished_reason', v_reason,
         'unpublished_at', to_jsonb(v_applied),
-        'unpublished_by', 'migration_208',
+        'unpublished_by', 'migration_210',
         'unpublished_previous_moderation_reason', to_jsonb(COALESCE(p.moderation_reason, '')),
         'unpublished_previous_moderation_stage', to_jsonb(COALESCE(p.moderation_stage, '')),
-        'stale_source_unpublish_208', jsonb_build_object(
+        'stale_source_unpublish_210', jsonb_build_object(
           'applied_at', v_applied,
           'source_posted_at', t.posted_at
         )
       ),
       updated_at = v_applied
-  FROM stale_source_208_targets t
+  FROM stale_source_210_targets t
   WHERE p.id = t.id
     AND lower(coalesce(p.status, '')) IN ('approved', 'live', 'published');
 
@@ -171,12 +180,12 @@ BEGIN
       'hidden',
       '{}'::jsonb,
       v_reason,
-      'Hidden by migration 208. The listing is not deleted. Publish again restores the previous live status.',
+      'Hidden by migration 210. The listing is not deleted. Publish again restores the previous live status.',
       '{}'::jsonb
-    FROM stale_source_208_targets t
+    FROM stale_source_210_targets t
     RETURNING id, property_id
   )
-  UPDATE stale_source_unpublish_208_backup b
+  UPDATE stale_source_unpublish_210_backup b
   SET event_id = inserted.id
   FROM inserted
   WHERE b.property_id = inserted.property_id;
@@ -187,12 +196,12 @@ BEGIN
 
   FOR r IN
     SELECT listing_type, count(*)::int AS n
-    FROM stale_source_208_targets
+    FROM stale_source_210_targets
     GROUP BY listing_type
     ORDER BY listing_type
   LOOP
-    RAISE NOTICE 'stale_source_208 category % %', r.listing_type, r.n;
+    RAISE NOTICE 'stale_source_210 category % %', r.listing_type, r.n;
   END LOOP;
-  RAISE NOTICE 'stale_source_208 live_before % hide % live_after %', v_live_before, v_hide, v_live_before - v_hide;
+  RAISE NOTICE 'stale_source_210 live_before % hide % live_after %', v_live_before, v_hide, v_live_before - v_hide;
 END;
 $hide$;

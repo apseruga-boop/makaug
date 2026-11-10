@@ -17,12 +17,15 @@
 -- (337 of them approved). The migration counts the same rules again
 -- when it runs.
 --
--- Backup: plot_title_restore_209_backup.
--- Rollback: scripts/rollback-209-restore-plot-titles-and-category.sql.
+-- schema_migrations records the filename. This is 211, after the reject
+-- reason (209) and the 180-day hide (210). It runs once under this name.
+--
+-- Backup: plot_title_restore_211_backup.
+-- Rollback: scripts/rollback-211-restore-plot-titles-and-category.sql.
 SET LOCAL lock_timeout = '8s';
 SET LOCAL statement_timeout = '120s';
 
-CREATE TABLE IF NOT EXISTS plot_title_restore_209_backup (
+CREATE TABLE IF NOT EXISTS plot_title_restore_211_backup (
   property_id uuid PRIMARY KEY,
   inquiry_reference text,
   before_row jsonb NOT NULL,
@@ -41,11 +44,11 @@ DECLARE
   v_rows int;
 BEGIN
   IF current_setting('app.country_code', true) IS DISTINCT FROM 'UG' THEN
-    RAISE NOTICE 'plot_title_209 skipped country_not_ug';
+    RAISE NOTICE 'plot_title_211 skipped country_not_ug';
     RETURN;
   END IF;
-  IF EXISTS (SELECT 1 FROM plot_title_restore_209_backup) THEN
-    RAISE NOTICE 'plot_title_209 skipped already_recorded';
+  IF EXISTS (SELECT 1 FROM plot_title_restore_211_backup) THEN
+    RAISE NOTICE 'plot_title_211 skipped already_recorded';
     RETURN;
   END IF;
 
@@ -56,7 +59,7 @@ BEGIN
       AND NOT tgisinternal
   ) INTO v_has_trigger;
 
-  CREATE TEMP TABLE plot_title_209_targets ON COMMIT DROP AS
+  CREATE TEMP TABLE plot_title_211_targets ON COMMIT DROP AS
   SELECT
     p.id,
     p.inquiry_reference,
@@ -105,7 +108,7 @@ BEGIN
   ) evidence
   WHERE COALESCE(p.status, '') <> 'deleted';
 
-  DELETE FROM plot_title_209_targets
+  DELETE FROM plot_title_211_targets
   WHERE NOT restore_category AND NOT restore_title;
 
   SELECT
@@ -113,10 +116,10 @@ BEGIN
     COUNT(*) FILTER (WHERE restore_title),
     COUNT(*)
   INTO v_category, v_titles, v_rows
-  FROM plot_title_209_targets;
+  FROM plot_title_211_targets;
 
   IF v_rows = 0 THEN
-    RAISE NOTICE 'plot_title_209 skipped no_matches category % titles %', v_category, v_titles;
+    RAISE NOTICE 'plot_title_211 skipped no_matches category % titles %', v_category, v_titles;
     RETURN;
   END IF;
 
@@ -124,11 +127,11 @@ BEGIN
     ALTER TABLE properties DISABLE TRIGGER trg_properties_updated_at;
   END IF;
 
-  INSERT INTO plot_title_restore_209_backup (
+  INSERT INTO plot_title_restore_211_backup (
     property_id, inquiry_reference, before_row, restored_category, restored_title, applied_at
   )
   SELECT id, inquiry_reference, before_row, restore_category, restore_title, v_applied
-  FROM plot_title_209_targets;
+  FROM plot_title_211_targets;
 
   UPDATE properties p
   SET listing_type = CASE WHEN t.restore_category THEN 'land' ELSE p.listing_type END,
@@ -148,15 +151,15 @@ BEGIN
         WHEN t.restore_title THEN left(t.source_title, 180)
         ELSE p.title
       END,
-      extra_fields = COALESCE(p.extra_fields, '{}'::jsonb) || jsonb_build_object('category_title_restore_209', true),
+      extra_fields = COALESCE(p.extra_fields, '{}'::jsonb) || jsonb_build_object('category_title_restore_211', true),
       updated_at = v_applied
-  FROM plot_title_209_targets t
+  FROM plot_title_211_targets t
   WHERE p.id = t.id;
 
   IF v_has_trigger THEN
     ALTER TABLE properties ENABLE TRIGGER trg_properties_updated_at;
   END IF;
 
-  RAISE NOTICE 'plot_title_209 category % titles % rows %', v_category, v_titles, v_rows;
+  RAISE NOTICE 'plot_title_211 category % titles % rows %', v_category, v_titles, v_rows;
 END;
 $restore$;
