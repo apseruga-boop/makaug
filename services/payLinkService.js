@@ -8,9 +8,12 @@
  *   - Card / Apple Pay / Google Pay through Revolut (WHISPERS GLOBAL LTD),
  *     charged in USD at the UGX price. Revolut confirms it, so the payment is
  *     recorded, verified and the listing/agent put live without anyone typing.
- *   - MTN Mobile Money to the usual number, using the link code as the
- *     reference. "I have paid" becomes a payment claim and goes through the
- *     usual three checks (ID read, SMS match, Ronald/Arthur confirm).
+ *   - MTN Mobile Money with the merchant code (27248497, since 10 Nov 2026).
+ *     A merchant payment asks for no reference, so there is none to quote:
+ *     "I have paid" asks for their business name and the number they paid
+ *     from, and the merchant line's SMS is matched to the link by that
+ *     number, the name and the amount (services/paymentMatchService.js).
+ *     Ronald or Arthur still confirm every payment, now in one tap.
  */
 
 const crypto = require('crypto');
@@ -23,7 +26,8 @@ const { LISTING_FEE_UGX, LISTING_TERM_MONTHS } = require('./shortTermService');
 const billingOps = require('./billingOpsService');
 const revolut = require('./revolutMerchantService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
-const { momoPayCopy } = require('../config/momoMerchant');
+const { momoPayCopy, momoMerchantName, momoWhatsappSteps, momoAfterPayingLine } = require('../config/momoMerchant');
+const { momoCardUrl } = require('./momoMerchantCardService');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const PURPOSES = new Set(['listing_fee', 'agent_subscription', 'short_term_fee', 'hosted_payment', 'other']);
@@ -37,11 +41,12 @@ function site() {
 /**
  * Eight characters, including the MK.
  *
- * It was ten, and ten is too many: this code is the Mobile Money reference,
+ * It was ten, and ten is too many: this code was the Mobile Money reference,
  * typed by hand on a phone keypad by somebody paying in a shop, and every
  * extra character is another chance to mistype it and another payment nobody
- * can match. The alphabet already leaves out I, O, 0 and 1, which are the
- * characters people actually get wrong.
+ * can match. (Since the merchant code, 10 Nov 2026, nobody types it at all —
+ * it is only the address of the page.) The alphabet already leaves out I, O, 0
+ * and 1, which are the characters people actually get wrong.
  *
  * Six random characters is 1.07 billion codes. That is the floor, not a round
  * number: the /pay page is reachable by anyone holding the code, so it has to
@@ -222,17 +227,30 @@ async function createPayLink(db, input = {}, actor = 'admin') {
   throw revenue.httpError(500, 'Could not create a payment link');
 }
 
-function payLinkMessage(link) {
+/** Private listers and short-stay hosts are people, not businesses. */
+function isPersonPayer(link = {}) {
+  return ['listing_fee', 'short_term_fee'].includes(link.purpose);
+}
+
+/**
+ * The payment message, with the merchant-code card on top of it.
+ *
+ * Says only what the page will offer: card, Apple Pay and Google Pay appear
+ * there only when Revolut is configured.
+ */
+function payLinkMessage(link, { cardAvailable = false, settings = {} } = {}) {
   const name = String(link.payer_name || '').trim().split(/\s+/)[0] || 'there';
   return [
     `Hi ${name} 👋`,
     '',
-    `Here is your makaug payment link for *${link.description}*:`,
+    `Payment for *${link.description}*`,
     `*${billingOps.ugx(link.amount_ugx)}*`,
     '',
-    payUrl(link.code),
+    momoWhatsappSteps({ amountUgx: link.amount_ugx }),
+    `The name you will see is *${momoMerchantName(settings)}*.`,
+    momoAfterPayingLine({ lister: isPersonPayer(link) }),
     '',
-    'Pay by card, Apple Pay or Google Pay, or by MTN Mobile Money — whichever is easier. You get a confirmation here as soon as it is paid.'
+    `${cardAvailable ? 'Or pay by card, Apple Pay or Google Pay on your payment page' : 'Your payment page'}: ${payUrl(link.code)}`
   ].join('\n');
 }
 
@@ -243,7 +261,11 @@ async function sendPayLink(db, { code, to, actor = 'admin' }) {
   const recipient = digits(to || link.payer_phone);
   if (recipient.length < 9) throw revenue.httpError(400, 'No WhatsApp number to send it to');
   const handoff = require('./leadHandoffService');
-  const delivery = await handoff.deliverWhatsapp({ to: recipient, body: payLinkMessage(link), kind: 'pay_link', leadId: null, nonce: `${link.code}:${Date.now()}` });
+  const settings = await billingOps.getSettings(db).catch(() => ({}));
+  const body = payLinkMessage(link, { cardAvailable: cardSettings(settings).enabled && revolut.isConfigured(), settings });
+  const delivery = await handoff.deliverWhatsappWithImage({
+    to: recipient, body, imageUrl: momoCardUrl({ code: link.code }), kind: 'pay_link', leadId: null, nonce: `${link.code}:${Date.now()}`
+  });
   await db.query('UPDATE pay_links SET sent_to = $2, sent_at = NOW(), sent_status = $3, updated_at = NOW() WHERE id = $1', [link.id, recipient, delivery.status || 'unknown']);
   logger.info('Pay link sent', { code: link.code, to: recipient, status: delivery.status, by: actor });
   return { code: link.code, url: payUrl(link.code), to: recipient, status: delivery.status, reason: delivery.reason || null };
@@ -269,6 +291,9 @@ async function pageData(db, code, { track = true } = {}) {
   const settings = await billingOps.getSettings(db);
   const card = cardSettings(settings);
   const momo = momoPayCopy();
+  // What the "I have paid" form starts with: their business name (or their
+  // name) and the number we know, so most people only press the button.
+  const who = await payerDetails(db, link).catch(() => ({}));
   return {
     code: link.code,
     status: link.status,
@@ -281,10 +306,35 @@ async function pageData(db, code, { track = true } = {}) {
     momo,
     momo_merchant_code: momo.code,
     pay_to_ready: Boolean(billingOps.payToLine(settings)),
+    merchant_name: momoMerchantName(settings),
+    card_image_url: momoCardUrl({ code: link.code }),
+    business_name_hint: who.business_name || '',
+    payer_phone_hint: prettyUgPhone(link.payer_phone || link.sent_to),
+    person_payer: isPersonPayer(link),
+    claim_open: Boolean(link.claim_id),
     paid_method: link.paid_method,
     paid_at: link.paid_at,
     payer_first_name: String(link.payer_name || '').trim().split(/\s+/)[0] || ''
   };
+}
+
+function prettyUgPhone(value) {
+  const d = digits(value);
+  if (d.length < 9) return '';
+  const key = d.slice(-9);
+  return `0${key.slice(0, 3)} ${key.slice(3, 6)} ${key.slice(6)}`;
+}
+
+// A company name worth showing; agents often fill in a description instead.
+const NOT_A_BUSINESS_NAME = /^(?:independent(?:\s+(?:broker|agent))?|self(?:\s+employed)?|freelance(?:r)?|n\/?a|none|nil|-+|individual|private)$/i;
+
+async function payerDetails(db, link = {}) {
+  if (link.agent_id) {
+    const agent = (await db.query('SELECT full_name, company_name FROM agents WHERE id = $1::uuid', [link.agent_id])).rows[0] || {};
+    const company = String(agent.company_name || '').trim();
+    return { business_name: company && !NOT_A_BUSINESS_NAME.test(company) ? company : String(agent.full_name || link.payer_name || '').trim() };
+  }
+  return { business_name: String(link.payer_name || '').trim() };
 }
 
 /** Start (or resume) the Revolut checkout for this link; returns its URL. */
@@ -458,7 +508,7 @@ async function notifyPaid(db, link, recorded) {
     }
     const handoff = require('./leadHandoffService');
     const until = recorded?.listing?.expires_at ? billingOps.prettyDate(new Date(recorded.listing.expires_at).toISOString()) : '';
-    const body = [`✅ *Payment received — thank you!*`, '', `${link.description}: ${billingOps.ugx(link.amount_ugx)}`, until ? `Your short stay is listed until *${until}*.` : '', `Reference ${link.code}`].filter(Boolean).join('\n');
+    const body = [`✅ *Payment received — thank you!*`, '', `${link.description}: ${billingOps.ugx(link.amount_ugx)}`, until ? `Your short stay is listed until *${until}*.` : ''].filter(Boolean).join('\n');
     return await handoff.deliverWhatsapp({ to, body, kind: 'pay_link_paid', leadId: null, nonce: link.code });
   } catch (error) {
     logger.warn('Paid confirmation message failed', { code: link.code, error: error.message });
@@ -543,64 +593,76 @@ async function handleRevolutEvent(db, event = {}) {
   return settleFromOrder(db, link, order);
 }
 
-/** Mobile money: "I have paid" from the pay page becomes a normal payment claim. */
-async function createMomoClaim(db, code, { reference, phone, name } = {}) {
+/**
+ * Mobile money: "I have paid" from the pay page becomes a payment claim.
+ *
+ * Their business name (or their name) and the number they paid from are what
+ * we match the merchant line's SMS on; the transaction ID is welcome but no
+ * longer needed (Arthur, 10 Nov 2026). Pressing it twice fills in the same
+ * claim rather than making a second one.
+ */
+async function createMomoClaim(db, code, { reference, phone, name, businessName } = {}) {
   const link = await loadLink(db, code);
   if (!link) throw revenue.httpError(404, 'Payment link not found');
   if (link.status === 'paid') throw revenue.httpError(409, 'This has already been paid — thank you!');
   const txid = String(reference || '').replace(/\s+/g, '').slice(0, 60);
-  if (txid.length < 5) throw revenue.httpError(400, 'Enter the transaction ID from your MoMo message.');
-  const existing = (await db.query(
-    `SELECT id FROM payment_claims WHERE pay_link_id = $1 AND LOWER(reference) = LOWER($2) LIMIT 1`, [link.id, txid])).rows[0];
-  if (existing) return { claim_id: existing.id, duplicate: true };
-  const claim = (await db.query(
-    `INSERT INTO payment_claims (source, payer_phone, payer_name, agent_id, property_id, st_listing_id, purpose, reference, amount_ugx, method, message, pay_link_id)
-     VALUES ('pay_link', $1, $2, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, 'mtn_momo', $9, $10) RETURNING *`,
-    [digits(phone) || link.payer_phone, String(name || '').trim().slice(0, 120) || link.payer_name, link.agent_id, link.property_id, link.st_listing_id,
-      link.purpose, txid, link.amount_ugx, `Paid by MoMo from pay link ${link.code}`, link.id]
+  const business = String(businessName || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  if (txid && txid.length < 5) throw revenue.httpError(400, 'That transaction ID looks too short. Check your MoMo message, or leave it empty.');
+  if (!business && !txid) throw revenue.httpError(400, 'Enter your business name (or the transaction ID from your MoMo message).');
+  const paidFrom = digits(phone);
+  if (phone && paidFrom.length < 9) throw revenue.httpError(400, 'Enter the phone number you paid from, for example 0772 123 456.');
+  if (txid) {
+    const existing = (await db.query(
+      `SELECT id FROM payment_claims WHERE pay_link_id = $1 AND LOWER(reference) = LOWER($2) LIMIT 1`, [link.id, txid])).rows[0];
+    if (existing) return { claim_id: existing.id, duplicate: true };
+  }
+  const open = (await db.query(
+    `SELECT * FROM payment_claims WHERE pay_link_id = $1 AND status = 'pending' ORDER BY created_at DESC LIMIT 1`, [link.id]
   )).rows[0];
-  await db.query('UPDATE pay_links SET claim_id = $2, updated_at = NOW() WHERE id = $1', [link.id, claim.id]);
+  let claim;
+  if (open) {
+    claim = (await db.query(
+      `UPDATE payment_claims
+          SET business_name = COALESCE(NULLIF($2::text, ''), business_name), paid_from_phone = COALESCE(NULLIF($3::text, ''), paid_from_phone),
+              reference = COALESCE(reference, NULLIF($4::text, ''))
+        WHERE id = $1 RETURNING *`,
+      [open.id, business, paidFrom, txid]
+    )).rows[0] || open;
+  } else {
+    claim = (await db.query(
+      `INSERT INTO payment_claims (source, payer_phone, payer_name, business_name, paid_from_phone, agent_id, property_id, st_listing_id, purpose,
+                                   reference, amount_ugx, method, message, pay_link_id)
+       VALUES ('pay_link', $1, $2, $3, $4, $5::uuid, $6::uuid, $7::uuid, $8, $9, $10, 'mtn_momopay', $11, $12) RETURNING *`,
+      [link.payer_phone || paidFrom || null, String(name || '').trim().slice(0, 120) || link.payer_name || business || null, business || null,
+        paidFrom || link.payer_phone || null, link.agent_id, link.property_id, link.st_listing_id, link.purpose, txid || null, link.amount_ugx,
+        `Paid by MoMo merchant code from pay link ${link.code}`, link.id]
+    )).rows[0];
+    await db.query('UPDATE pay_links SET claim_id = $2, updated_at = NOW() WHERE id = $1', [link.id, claim.id]);
+  }
   const matched = await billingOps.matchClaimToSms(db, claim).catch(() => null);
+  // Pressed again, or after the SMS already raised this claim: the team has heard.
+  const news = !open || (Boolean(matched?.sms_id) && !open.sms_id);
+  if (!news) return { claim_id: claim.id, updated: true, matched: Boolean(matched?.sms_id || open?.sms_id) };
 
-  // Somebody has just told us they paid, and nothing used to say so out loud.
-  // A claim is only money once a human confirms it — matching the wallet SMS
-  // deliberately does not auto-confirm — so a claim nobody is told about sits in
-  // the admin queue until somebody happens to open it. The WhatsApp receipt path
-  // has always alerted the team; this one, the button on the payment page, did
-  // not.
+  // Somebody has just told us they paid. A claim is only money once a human
+  // confirms it (matching the wallet SMS deliberately does not auto-confirm),
+  // so the people who confirm hear now: with a one-tap confirm when the SMS
+  // already shows the money, or a note to look for it when it does not.
   try {
-    const desk = require('./leadDeskService');
-    const handoff = require('./leadHandoffService');
-    const who = [claim.payer_name, claim.payer_phone ? `+${digits(claim.payer_phone)}` : '']
-      .filter(Boolean).join(' ') || 'Someone';
-    const forWhat = link.agent_name ? `${link.agent_name}'s subscription` : (link.description || link.purpose || 'a payment');
-    const body = [
-      '🧾 *Payment claim to check*',
-      `${who} says they have paid ${billingOps.ugx(link.amount_ugx)} for ${forWhat}.`,
-      `Transaction ID: ${txid}`,
-      matched?.sms_id ? 'It matches a wallet SMS we received.' : 'No matching wallet SMS yet.',
-      '',
-      'It is NOT counted until someone confirms it in Admin › Sales & Revenue.'
-    ].join('\n');
-    if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'payment_claim_to_check');
-    const onList = new Set((typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).map((p) => digits(p).slice(-9)));
-    const settings = await billingOps.getSettings(db).catch(() => ({}));
-    for (const confirmer of Array.isArray(settings.confirmers) ? settings.confirmers : []) {
-      const num = digits(confirmer?.phone);
-      if (num.length >= 9 && !onList.has(num.slice(-9))) {
-        await handoff.deliverWhatsapp({ to: num, body, kind: 'payment_claim_confirmer', leadId: null, nonce: `${claim.id}:${num}` }).catch(() => null);
-      }
-    }
+    await require('./paymentMatchService').alertClaim(db, { ...claim, ...(matched || {}) }, { amountUgx: link.amount_ugx });
   } catch (error) {
     logger.warn('Team alert for a pay-link payment claim failed', { claimId: claim.id, error: error.message });
   }
-  return { claim_id: claim.id };
+  return { claim_id: claim.id, updated: Boolean(open), matched: Boolean(matched?.sms_id) };
 }
 
 /** When a MoMo claim from a pay link is confirmed, close the link too. */
 async function closeLinkForClaim(db, claimId, entryId) {
   await db.query(
-    `UPDATE pay_links SET status = 'paid', paid_method = 'mtn_momo', paid_at = NOW(), entry_id = COALESCE(entry_id, $2), updated_at = NOW()
+    `UPDATE pay_links
+        SET status = 'paid',
+            paid_method = COALESCE((SELECT e.method FROM revenue_entries e WHERE e.id = $2::uuid), 'mtn_momo'),
+            paid_at = NOW(), entry_id = COALESCE(entry_id, $2::uuid), updated_at = NOW()
       WHERE id = (SELECT pay_link_id FROM payment_claims WHERE id = $1::uuid) AND status = 'open'`,
     [claimId, entryId || null]
   );
@@ -796,6 +858,7 @@ module.exports = {
   refreshLink,
   handleRevolutEvent,
   createMomoClaim,
+  isPersonPayer,
   closeLinkForClaim,
   recordShortTermPayment,
   recordHostedPayment,

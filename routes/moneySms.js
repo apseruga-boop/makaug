@@ -6,6 +6,10 @@
  * The phone that holds the makaug MoMo SIM forwards its money SMS here with a
  * free Android SMS-forwarder app. The token is MONEY_SMS_WEBHOOK_TOKEN; without
  * it set, the endpoint is closed.
+ *
+ * The merchant-code line (27248497, since 10 Nov 2026) is on its own phone and
+ * forwards with &account=mtn_momopay, so its money and balance land on their
+ * own account.
  */
 
 const crypto = require('crypto');
@@ -40,16 +44,17 @@ router.post('/inbound', express.text({ type: 'text/*', limit: '32kb' }), async (
       raw: { device: payload.device || payload.sim || null }
     });
     if (!result.duplicate && result.parsed?.direction === 'in' && !result.matched && result.parsed.amount_ugx) {
+      // Matched to somebody we are waiting on: Ronald and Arthur get it with a
+      // one-tap confirm (and the payer hears we have it). Matched to nobody:
+      // the team is asked who it is. Either way, nothing counts until confirmed.
       setImmediate(async () => {
         try {
-          const desk = require('../services/leadDeskService');
-          const p = result.parsed;
-          await desk.sendToTeam(db, [
-            `📲 *Money received on ${p.account_key === 'airtel_money' ? 'Airtel Money' : 'MoMo'}* — not recorded yet`,
-            `UGX ${Number(p.amount_ugx).toLocaleString('en-US')}${p.counterparty ? ` from ${p.counterparty}` : ''}`,
-            p.reference ? `Transaction ID: ${p.reference}` : '',
-            'Record who paid it in Admin › Sales & Revenue.'
-          ].filter(Boolean).join('\n'), 'money_sms_unrecorded');
+          await require('../services/paymentMatchService').afterMoneySms(db, {
+            sms: result.sms,
+            claimsMatched: result.claimsMatched,
+            autoClaim: result.autoClaim,
+            matchedEntry: result.matched
+          });
         } catch (_ignored) { /* best effort */ }
       });
     }

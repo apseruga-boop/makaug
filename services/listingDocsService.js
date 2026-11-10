@@ -12,8 +12,8 @@ const PDFDocument = require('pdfkit');
 const sharp = require('sharp');
 const { momoPayCopy } = require('../config/momoMerchant');
 
-const LISTER_TERMS_VERSION = '2026-11-10-v3';
-const AGENT_GUIDE_VERSION = '2026-11-10-v3';
+const LISTER_TERMS_VERSION = '2026-11-11-v4';
+const AGENT_GUIDE_VERSION = '2026-11-11-v4';
 const AGENT_TERMS_VERSION = '2026-11-10-v4';
 
 const INK = '#15213A';
@@ -150,7 +150,7 @@ async function buildListerTermsPdf(settings = {}) {
     s.freeDays > 0
       ? `Free period: your listing is free for the first ${s.freeDays} days after it goes live.`
       : `Fee: ${ugx(s.listerMonthly)} per listing, per month, from the day the listing goes live. There is no free period.`,
-    `${s.freeDays > 0 ? 'After that: ' : ''}${ugx(s.listerMonthly)} per listing, per month, paid in advance. ${momoPayCopy().sentence} Send us the transaction ID after paying so we can match it.`,
+    `${s.freeDays > 0 ? 'After that: ' : ''}${ugx(s.listerMonthly)} per listing, per month, paid in advance. ${momoPayCopy().sentence} No reference is needed: after paying, send us your name (or business name) on WhatsApp and we match it by that and the number you paid from.`,
     'Short stays (by the night) are separate: ordinary listers pay UGX 20,000 a month from approval, with no free days. There is no free period on a short stay.',
     'Payments are confirmed by a member of the makaug team before they are recorded. Keep your MoMo / bank message as proof.',
     'If a month is not paid, we will remind you. If it is still not paid, the listing is hidden from the website. Nothing is deleted: when you pay, it goes back live exactly as it was.',
@@ -242,7 +242,7 @@ async function buildAgentGuidePdf(settings = {}) {
       ? `After the free days, the makaug agent plan is ${ugx(s.agentMonthly)} per month.`
       : `Pay ${ugx(s.agentMonthly)} per month in advance.`,
     'Short stays you list are included in this plan. There is no separate short-stay fee.',
-    `${momoPayCopy().sentence} If asked for a reason or reference, use the payment reference we send you. Then send the transaction ID (or a screenshot of the payment message) here on WhatsApp. We match it and confirm it — you will get a thank-you message when it is recorded.`,
+    `${momoPayCopy().sentence} No reference is needed. Then send your business name here on WhatsApp (and the number you paid from, if it is not this one). We match it to the MoMo payment and confirm it — you will get a thank-you message when it is recorded.`,
     'We remind you 3 days before your renewal date and on the day.',
     `If the month is not paid, we send reminders; after ${s.finalAfter} days overdue a final reminder, and then your listings may be paused. Nothing is deleted — as soon as you pay, everything goes back live exactly as it was.`
   ]);

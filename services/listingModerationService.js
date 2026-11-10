@@ -29,7 +29,7 @@ function whatsappBridge() {
   return require('./whatsappWebBridgeService');
 }
 
-async function deliverListingWhatsapp({ to, body, kind = 'listing_status', listingId = null }) {
+async function deliverListingWhatsapp({ to, body, kind = 'listing_status', listingId = null, imageUrl = '' }) {
   const recipient = normalizeUgPhoneForWhatsApp(to);
   if (!recipient || recipient.length < 9) return { sent: false, reason: 'invalid_phone' };
   try {
@@ -39,6 +39,7 @@ async function deliverListingWhatsapp({ to, body, kind = 'listing_status', listi
       const queued = await bridge.queueWhatsappWebBridgeMessage({
         recipient,
         text: body,
+        ...(imageUrl ? { mediaUrl: imageUrl, mediaType: 'image' } : {}),
         source: 'whatsapp_runtime',
         actorId: 'listing_moderation',
         metadata: {
@@ -53,6 +54,8 @@ async function deliverListingWhatsapp({ to, body, kind = 'listing_status', listi
     // Fall through to the provider rather than losing the message outright.
     return { sent: false, reason: 'bridge_queue_failed', error: error.message || 'queue_failed' };
   }
+  // A picture is only sent on the bridge; its text already went in the message.
+  if (imageUrl) return { sent: false, reason: 'image_needs_bridge' };
   return sendWhatsAppText({ to: recipient, body });
 }
 
@@ -724,9 +727,12 @@ function privateListerFeeLines(listing = {}, listerFee = null) {
   const freeDays = listerFee ? Number(listerFee.free_days || 0) : ownerFreeDaysForListing(listing);
   const monthly = Number(fee.monthly_ugx || 20000).toLocaleString('en-US');
   if (freeDays <= 0) {
+    // MoMo merchant code since 10 Nov 2026: no number to send money to and no
+    // reference — their name (or business name) is how we match it.
+    const { momoWhatsappSteps, momoAfterPayingLine } = require('../config/momoMerchant');
     const lines = ['', `💳 To keep it live it is *UGX ${monthly} a month*.`];
-    if (fee.pay_link) lines.push(`Pay here: ${fee.pay_link}`);
-    if (fee.pay_to) lines.push(`${fee.pay_link ? 'Or pay' : 'Pay'} to ${fee.pay_to} and send me the transaction ID here.`);
+    if (fee.pay_to || fee.pay_link) lines.push(momoWhatsappSteps({ amountUgx: Number(fee.monthly_ugx || 20000) }), momoAfterPayingLine({ lister: true }));
+    if (fee.pay_link) lines.push(`Your payment page: ${fee.pay_link}`);
     if (!fee.pay_link && !fee.pay_to) lines.push('I will send you how to pay shortly.');
     lines.push('Nothing is charged automatically.', '');
     return lines;
@@ -1016,6 +1022,18 @@ async function sendOwnerListingStatusNotifications({ listing = {}, status, reaso
     result.whatsapp.manual_url = manualUrl;
     result.whatsapp.phone = listing.lister_phone;
     result.whatsapp.message = message.whatsapp;
+    // The merchant-code card, right under the "your listing is live" message.
+    if (listerFee?.pay_link && result.whatsapp.sent !== false) {
+      const code = (String(listerFee.pay_link).match(/\/pay\/(MK[A-Z0-9]{4,12})\b/i) || [])[1] || '';
+      const { momoCardUrl } = require('./momoMerchantCardService');
+      result.whatsapp.pay_card = await deliverListingWhatsapp({
+        to: listing.lister_phone,
+        body: `💳 How to pay: MoMo merchant code *${require('../config/momoMerchant').momoMerchantCode()}* — keep this card.`,
+        kind: 'status_approved_pay_card',
+        listingId: listing.id || null,
+        imageUrl: momoCardUrl({ code })
+      }).catch((error) => ({ sent: false, reason: error.message }));
+    }
   }
 
   return result;

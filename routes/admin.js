@@ -9989,25 +9989,10 @@ router.patch('/agents/:id/featured', async (req, res, next) => {
 });
 
 /** Every payment recorded is announced to the team on WhatsApp — nobody records money quietly. */
+// The team's "💰 Payment recorded" note lives with the billing code, so a
+// payment confirmed from WhatsApp says exactly what one confirmed here does.
 function notifyTeamOfPayment({ entry, agentName = '', actor = 'admin', periodEnd = null } = {}) {
-  if (!entry) return;
-  setImmediate(async () => {
-    try {
-      const desk = require('../services/leadDeskService');
-      const method = revenue.METHODS[entry.method]?.label || entry.method;
-      const body = [
-        `${entry.direction === 'out' ? '💸 *Money out recorded*' : '💰 *Payment recorded*'}${agentName ? ` — ${agentName}` : ''}`,
-        `UGX ${Number(entry.amount_ugx).toLocaleString('en-US')} · ${method} → ${entry.account_key}`,
-        entry.reference ? `Transaction ID: ${entry.reference}` : 'No transaction ID (cash)',
-        periodEnd ? `Paid until ${periodEnd}` : '',
-        entry.note ? `Note: ${entry.note}` : '',
-        `Recorded by ${actor} · ${entry.verified_status === 'verified' ? '✅ matched to the MoMo SMS' : '⏳ not yet matched to a statement or SMS'}`
-      ].filter(Boolean).join('\n');
-      if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'revenue_entry_recorded');
-    } catch (error) {
-      console.warn('[revenue] team notice failed:', error.message);
-    }
-  });
+  billingOps.notifyTeamOfPayment(db, { entry, agentName, actor, periodEnd });
 }
 
 function sendRevenueError(res, error, next) {
@@ -10949,21 +10934,8 @@ router.post('/revenue/claims/:id/confirm', async (req, res, next) => {
       fxRate: req.body?.fx_rate_ugx,
       note: cleanText(req.body?.note || '')
     });
-    if (result.entry && !result.reinstatement && result.entry.kind === 'listing_fee' && result.entry.property_id) {
-      await billingOps.sendListerBillingMessage(db, { propertyId: result.entry.property_id, kind: 'reinstated', actor: adminActorId(req) }).catch(() => {});
-    } else if (result.pendingAgent?.pending) {
-      // A new agent who has paid but is not approved yet was already told
-      // "payment received, finishing your checks" — not "live again".
-    } else if (['short_term_fee', 'advertising', 'listing_boost', 'other_income'].includes(result.entry?.kind)) {
-      const link = (await db.query(
-        `SELECT l.* FROM pay_links l JOIN payment_claims c ON c.pay_link_id = l.id WHERE c.id = $1::uuid`, [req.params.id]
-      ).catch(() => ({ rows: [] }))).rows[0];
-      if (link) await payLinks.notifyPaid(db, link, result).catch(() => {});
-    } else if (result.entry?.agent_id && !result.reinstatement?.reinstated) {
-      // Not taken down, just paid: thank them.
-      await billingOps.sendAgentBillingMessage(db, { agentId: result.entry.agent_id, kind: 'reinstated', actor: adminActorId(req), force: true }).catch(() => {});
-    }
-    notifyTeamOfPayment({ entry: result.entry, agentName: result.entry?.payer_name || '', actor: adminActorId(req), periodEnd: result.period_end });
+    // The receipt and the team note: the same as a confirm from WhatsApp.
+    await billingOps.afterClaimConfirmed(db, { claimId: req.params.id, result, actor: adminActorId(req), audit: false });
     await writeAudit('payment_claim_confirmed', { claim_id: req.params.id, entry_id: result.entry?.id }, adminActorId(req));
     return res.json({ ok: true, data: result });
   } catch (error) {
@@ -15636,21 +15608,22 @@ async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force =
 
   // Say only what the payment page will actually offer them. Card, Apple Pay
   // and Google Pay appear only when Revolut is configured; promising them when
-  // it is not sends an agent to a page that offers mobile money alone.
-  const page = await payLinks.pageData(db, link.code, { track: false }).catch(() => null);
-  const methods = [];
-  if (page?.card_available) methods.push('card, Apple Pay or Google Pay');
-  if (page?.pay_to_ready) methods.push('MTN Mobile Money');
-  const methodLine = methods.length
-    ? `You can pay by ${methods.join(', or ')}.`
-    : 'The page will show you how to pay.';
+  // it is not sends an agent to a page that offers mobile money alone. MoMo is
+  // the merchant code (27248497), with the card image on top (10 Nov 2026).
+  const page = await payLinks.pageData(db, link.link?.code || link.code, { track: false }).catch(() => null);
+  const methodLine = [
+    billingOps.momoHowToPay({ amountUgx: feeUgx }),
+    page?.card_available ? 'Or pay by card, Apple Pay or Google Pay on your payment page.' : ''
+  ].filter(Boolean).join('\n');
 
   const firstName = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
   await queueWhatsappWebBridgeMessage({
     recipient: agentPhone,
     text: `✅ *You are approved, ${firstName}* — your makaug agent account is live.\n\n`
-      + `Your subscription is ${feeLabel} a month. You can pay here:\n${url}\n\n`
-      + `${methodLine} Your listings stay live while you are paid up.`,
+      + `Your subscription is ${feeLabel} a month.\n${methodLine}\n\n`
+      + `Your payment page: ${url}\nYour listings stay live while you are paid up.`,
+    mediaUrl: require('../services/momoMerchantCardService').momoCardUrl({ code: link.link?.code || link.code }),
+    mediaType: 'image',
     // The browser worker only claims an allow-listed set of sources; 'admin' is
     // not one of them, so a message queued under it is never sent at all.
     source: agentReportWhatsappSource(),

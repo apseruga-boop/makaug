@@ -8022,10 +8022,11 @@ async function outstandingAgentPayLink(agent = {}) {
  * Yes, tap it — and everything he needs to act, in the order he needs it.
  *
  * It says the amount before the instruction, because the first thing somebody
- * asks about an unexpected bill is how much. It gives the reference, because
- * that is what makes a mobile money payment matchable. And it says listing is
- * not blocked, because an agent who thinks he cannot work until he has paid
- * simply stops working.
+ * asks about an unexpected bill is how much. It gives the merchant code and
+ * asks for their business name, because since 10 Nov 2026 that (and the number
+ * they pay from) is what makes a mobile money payment matchable — there is no
+ * reference to quote. And it says listing is not blocked, because an agent who
+ * thinks he cannot work until he has paid simply stops working.
  */
 function agentPayLinkAnswer({ agent = {}, link = {} } = {}) {
   const first = agentGreetingName(agent, '');
@@ -8038,7 +8039,8 @@ function agentPayLinkAnswer({ agent = {}, link = {} } = {}) {
     `It is your makaug agent subscription: *${amount} a month*.`,
     `${HOME_URL}/pay/${link.code}`,
     '',
-    `The page shows you how to pay. If you pay by Mobile Money, quote *${link.code}* as the reference so we can match it to you.`,
+    require('../config/momoMerchant').momoWhatsappSteps({ amountUgx: link.amount_ugx }),
+    'Then reply here with your *business name* so we can match it to you.',
     '',
     'You do not have to wait for it — keep sending me properties now and I will put them up. I will confirm here the moment the payment lands.'
   ].join('\n');
@@ -10186,13 +10188,13 @@ async function handleEmployeeWhatsappIntake({
       nextStep: 'main_menu',
       payLinkSent: sent.code,
       message: `✅ *Payment link sent* — ${selected.full_name}\n\n`
-        + `Reference: *${sent.code}*\n`
+        + `Link: *${sent.code}*\n`
         + `Amount: ${sent.fee_label} a month\n`
         + `Number: ${sent.recipient}\n`
         + `${sent.url}\n\n`
         + (selected.fee_exempt ? 'They list free because they joined before the fee — this is a voluntary payment and the exemption stays either way.\n\n' : '')
         + (sent.reused ? 'This is the link they were already sent, not a second one, so one payment settles it.\n\n' : '')
-        + 'Quote that reference if they pay by Mobile Money. I will tell you the moment it is paid, and remind you if it goes quiet.'
+        + `They pay with MoMo merchant code ${require('../config/momoMerchant').momoMerchantCode()} and reply with their business name — no reference needed. I will tell you the moment it is paid, and remind you if it goes quiet.`
     };
   }
 
@@ -10254,7 +10256,7 @@ async function handleEmployeeWhatsappIntake({
       nextStep: 'main_menu',
       payLinkSent: sent.code,
       message: `✅ *Payment link sent* — ${contact.fullName}\n\n`
-        + `Reference: *${sent.code}*\n`
+        + `Link: *${sent.code}*\n`
         + `Amount: ${sent.fee_label} a month\n`
         + `Number: ${sent.recipient}\n`
         + `${sent.url}\n\n`
@@ -10264,7 +10266,7 @@ async function handleEmployeeWhatsappIntake({
         + (existingAgent
           ? ''
           : 'When they pay, register them with *Agent 007* → option *1* so the money lands against a profile.\n\n')
-        + 'Quote that reference for Mobile Money. I will tell you the moment it is paid, and remind you if it goes quiet.'
+        + `They pay with MoMo merchant code ${require('../config/momoMerchant').momoMerchantCode()} and reply with their business name — no reference needed. I will tell you the moment it is paid, and remind you if it goes quiet.`
     };
   }
 
@@ -14734,17 +14736,24 @@ const STRONG_PAID_WORDS = /\b(?:paid|i have paid|i've paid|transaction id|trans 
 const pausedAgentAlerted = new Map();
 
 /**
- * A transaction ID (typed or in a pasted MoMo SMS) or a payment screenshot
- * from someone we are waiting on becomes a payment claim. The claim is check 1
- * of 3; the wallet SMS and a person still have to agree before it counts.
+ * A transaction ID (typed or in a pasted MoMo SMS), a payment screenshot, or
+ * "I have paid — Kato Homes" from someone we are waiting on becomes a payment
+ * claim. Merchant payments ask for no reference, so since 10 Nov 2026 their
+ * business name and their number are enough: the merchant line's SMS is
+ * matched to them by that number, the name and the amount. The claim is check
+ * 1 of 3; the wallet SMS and a person still have to agree before it counts.
  */
 async function handlePaymentClaimMessage({ phone, body = '', photoCandidates = [] } = {}) {
   const billing = require('../services/billingOpsService');
   const text = normalizeInput(body);
   const typed = billing.readReferenceFromText(text);
   const imageDataUrl = normalizeInput(photoCandidates?.[0]?.data_url || photoCandidates?.[0]?.dataUrl || '');
-  if (!typed && !imageDataUrl) return null; // most messages: nothing to look up
+  const statement = !typed && !imageDataUrl ? billing.readPaidStatement(text) : null;
+  if (!typed && !imageDataUrl && !statement) return null; // most messages: nothing to look up
   const expecting = await billing.expectingPaymentFrom(db, phone).catch(() => null);
+  // "I have paid" from someone we are not waiting on, with no payment link out
+  // to them, is not ours to treat as a payment.
+  if (statement && !expecting && !(await billing.openLinkForPhone(db, phone).catch(() => null))) return null;
 
   let reading = null;
   let receiptUrl = null;
@@ -14759,14 +14768,15 @@ async function handlePaymentClaimMessage({ phone, body = '', photoCandidates = [
       allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
       maxBytes: 6_000_000
     }).catch(() => null);
-  } else if (!typed || !(expecting || STRONG_PAID_WORDS.test(text) || typed.source === 'sms_text')) {
+  } else if (!statement && (!typed || !(expecting || STRONG_PAID_WORDS.test(text) || typed.source === 'sms_text'))) {
     return null;
   }
 
   const reference = typed?.reference || (reading?.transaction_id && reading.transaction_id.length >= 5 ? reading.transaction_id : null);
   const amount = typed?.amount_ugx || (reading?.currency === 'UGX' && reading?.amount ? Math.round(reading.amount) : null);
-  const { claim, ctx } = await billing.createClaim(db, {
+  const { claim, ctx, news } = await billing.createClaim(db, {
     phone,
+    businessName: statement?.business_name || null,
     reference,
     amountUgx: amount,
     receiptUrl,
@@ -14774,30 +14784,36 @@ async function handlePaymentClaimMessage({ phone, body = '', photoCandidates = [
     aiReading: reading && reading.available ? reading : null
   });
 
-  setImmediate(async () => {
-    try {
-      const desk = require('../services/leadDeskService');
-      const who = ctx.agent?.full_name || ctx.property?.title || `+${String(phone).replace(/\D/g, '')}`;
-      const body = [
-        '🧾 *Payment claim to check*',
-        `From: ${who}`,
-        reference ? `Transaction ID: ${reference}` : 'No transaction ID read — ask them for it',
-        amount ? `Amount: UGX ${Number(amount).toLocaleString('en-US')}` : '',
-        claim.sms_id ? '✅ Matches a MoMo SMS already received' : '⏳ No matching MoMo SMS yet',
-        `Confirm or reject: ${HOME_URL}/admin (Sales & Revenue)`
-      ].filter(Boolean).join('\n');
-      if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'payment_claim_received');
-      const contact = agentHelpContact();
-      const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
-      if (contact.digits && !onList) await require('../services/leadHandoffService').deliverWhatsapp({ to: contact.digits, body, kind: 'payment_claim_contact', leadId: null, nonce: claim.id });
-    } catch (_ignored) { /* best effort */ }
-  });
+  if (news !== false) {
+    setImmediate(async () => {
+      try {
+        await require('../services/paymentMatchService').alertClaim(db, claim);
+      } catch (_ignored) { /* best effort */ }
+    });
+  }
 
+  const first = agentGreetingName(ctx.agent || {}, '');
+  if (claim.sms_id) {
+    return [
+      `🧾 *Thank you${first ? `, ${first}` : ''} — we can see your MoMo payment.*`,
+      '',
+      'Our team is confirming it now, and your receipt follows here shortly. Anything that was paused goes straight back live.'
+    ].join('\n');
+  }
   if (!reference) {
+    if (statement) {
+      return [
+        `🧾 *Thank you${first ? `, ${first}` : ''}* — we are matching your MoMo payment now.`,
+        '',
+        statement.business_name || claim.business_name ? '' : 'If you have not already, reply with your *business name* so we can find it quickly.',
+        'If you paid from a different number, send me that number too.',
+        'As soon as it is confirmed I will send your receipt here.'
+      ].filter(Boolean).join('\n');
+    }
     return [
       '🧾 Thank you — I have your payment receipt.',
       '',
-      'I could not read the *transaction ID* clearly. Please type it here exactly as it appears on the MoMo / Airtel message or bank slip, so our team can match it.'
+      'I could not read the *transaction ID* on it, so we will match it by your number and name instead. If you paid from a different number, send me that number.'
     ].join('\n');
   }
   return [
@@ -14843,8 +14859,8 @@ async function billingPausedAgentReply({ phone, body = '' } = {}) {
     'Your makaug account is *paused* at the moment because the monthly subscription has not been paid. Nothing has been deleted.',
     '',
     `Please call or WhatsApp *${contact.name}* on *${contact.pretty}* — I have also let him know, and someone from our team will reach out to you.`,
-    payLink ? `\n💳 Pay now by card, Apple Pay, Google Pay or MoMo: ${payLink}\nEverything comes back as soon as it is paid.` : '',
-    pay ? `\nAlready paid, or ready to? Pay to ${pay} and send the *transaction ID* here — everything comes back the moment it is confirmed.` : ''
+    pay ? `\n${billing.momoHowToPay({ amountUgx: Number(settings.agent_fee?.monthly_ugx || 0) || null })}\nEverything comes back the moment it is confirmed.` : '',
+    payLink ? `💳 Your payment page: ${payLink}` : ''
   ].filter(Boolean).join('\n');
 }
 
@@ -17727,10 +17743,10 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
 async function payLinkMethodLine(code) {
   const payLinks = require('../services/payLinkService');
   const page = await payLinks.pageData(db, code, { track: false }).catch(() => null);
-  const methods = [];
-  if (page?.card_available) methods.push('card, Apple Pay or Google Pay');
-  if (page?.pay_to_ready) methods.push('MTN Mobile Money');
-  return methods.length ? `You can pay by ${methods.join(', or ')}.` : 'The page will show you how to pay.';
+  const amount = Number(page?.amount_ugx || 0) || null;
+  const lines = [require('../services/billingOpsService').momoHowToPay({ amountUgx: amount })];
+  if (page?.card_available) lines.push('Or pay by card, Apple Pay or Google Pay on the page.');
+  return lines.join('\n');
 }
 
 /**
@@ -17752,10 +17768,10 @@ async function payLinkMethodLine(code) {
  * from an unknown number is a scam, so the joining film goes first and the
  * link follows it in the same minute.
  *
- * The reference code going back to whoever asked — Ronald, or Arthur, or
- * whoever typed Agent 007 — is what makes the loop closable. The code is the
- * MoMo reference, so when the money arrives with "MKABC12345" against it,
- * the person holding the phone already knows which link it was.
+ * The link code going back to whoever asked — Ronald, or Arthur, or whoever
+ * typed Agent 007 — is what makes the loop closable. Since the merchant code
+ * (10 Nov 2026) nobody quotes it: the payer sends their business name, and the
+ * merchant line's SMS is matched to this link by their number and the amount.
  */
 async function sendStaffPayLink({
   name = '',
@@ -17803,8 +17819,11 @@ async function sendStaffPayLink({
   await queueWhatsappWebBridgeMessage({
     recipient,
     text: `💳 *makaug agent subscription — ${firstName}*\n\n`
-      + `${feeLabel} a month. You can pay here:\n${url}\n\n`
-      + `${methodLine}\n\nYour reference is *${created.link.code}* — quote it if you pay by Mobile Money.`,
+      + `${feeLabel} a month.\n${methodLine}\n\n`
+      + `Your payment page: ${url}`,
+    // The merchant-code card on top: a code on a card looks like a business.
+    mediaUrl: require('../services/momoMerchantCardService').momoCardUrl({ code: created.link.code }),
+    mediaType: 'image',
     source: 'whatsapp_runtime',
     actorId: actor,
     metadata: {
@@ -17833,7 +17852,7 @@ async function sendStaffPayLink({
     if (digits.length >= 9) recipients.add(digits);
   }
   const note = `💳 *Payment link sent* — ${normalizeInput(name) || recipient}\n\n`
-    + `Reference: *${created.link.code}*\n`
+    + `Link: *${created.link.code}*\n`
     + `Amount: ${feeLabel} a month\n`
     + `Number: ${recipient}\n`
     + `${agentId ? 'Registered agent' : 'New prospect — joining video sent with it'}\n`

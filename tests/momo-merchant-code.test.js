@@ -46,7 +46,10 @@ test('the pay page shows the merchant code even when no phone number is set', ()
   assert.doesNotMatch(html, /Send <strong>UGX 50,000<\/strong> to/);
 });
 
-test('the pay page keeps a configured phone number as a secondary option', () => {
+// Arthur, 10 Nov 2026: "merchant code only". The old number stays our WhatsApp
+// (the page footer), but nobody is told to send money to it, and no reference
+// is asked for: a merchant payment does not ask for one.
+test('the pay page is merchant code only: no number to send money to, no reference', () => {
   const html = openView({
     code: 'MKTEST1',
     description: 'makaug listing — 1 month',
@@ -55,11 +58,19 @@ test('the pay page keeps a configured phone number as a secondary option', () =>
     card_text: '',
     pay_to: { number: '256780863394', name: 'MAKAUG ONLINE REAL ESTATE LTD' },
     pay_to_ready: true,
-    momo: momoPayCopy({})
+    momo: momoPayCopy({}),
+    person_payer: true,
+    payer_phone_hint: '0772 000 001'
   });
   assert.match(html, /27248497/);
-  assert.match(html, /You can also send/);
-  assert.match(html, /0780 863394/);
+  assert.match(html, /MAKAUG ONLINE REAL ESTATE LTD/);
+  assert.doesNotMatch(html, /You can also send/);
+  assert.doesNotMatch(html, /reason or reference/);
+  assert.doesNotMatch(html, /Reference MKTEST1/);
+  assert.match(html, /name="business_name"/);
+  assert.match(html, /Your name \(or business name\)/);
+  assert.match(html, /value="0772 000 001"/);
+  assert.match(html, /Transaction ID <span class="optional">\(optional\)<\/span>/);
 });
 
 test('public pages and the staff billing view mention the merchant code', () => {
@@ -76,10 +87,17 @@ test('public pages and the staff billing view mention the merchant code', () => 
   assert.match(docs, /momoPayCopy\(\)\.sentence/);
 });
 
-test('WhatsApp sending templates were left for Claude, not rewritten here', () => {
-  const billing = read('services/billingOpsService.js');
-  assert.match(billing, /Pay \$\{ugx\(fee\)\} to \$\{pay\}, then reply here with the \*transaction ID\*/);
-  const payLinks = read('services/payLinkService.js');
-  assert.match(payLinks, /Pay by card, Apple Pay or Google Pay, or by MTN Mobile Money — whichever is easier/);
-  assert.doesNotMatch(payLinks, /function payLinkMessage[\s\S]*27248497/);
+test('WhatsApp payment messages carry the merchant code and ask for the business name', () => {
+  const billing = require('../services/billingOpsService');
+  const { payLinkMessage } = require('../services/payLinkService');
+  assert.strictEqual(billing.payToLine({}), 'MTN MoMo merchant code *27248497* (MAKAUG ONLINE REAL ESTATE LTD)');
+  const reminder = billing.buildAgentBillingMessage('reminder', { agent: { full_name: 'Jane Nakato' }, settings: { agent_fee: { monthly_ugx: 50000 } }, payLink: 'https://makaug.com/pay/MKAB12CD' });
+  assert.match(reminder, /```\*165\*3#```/, 'in monospace, so WhatsApp does not turn *165* bold and eat the stars');
+  assert.match(reminder, /enter \*27248497\*, then \*UGX 50,000\*/);
+  assert.match(reminder, /business name/);
+  assert.doesNotMatch(reminder, /transaction ID|0780|reference/i);
+  const link = payLinkMessage({ payer_name: 'Jane Nakato', description: 'makaug agent subscription — 1 month', amount_ugx: 50000, code: 'MKAB12CD', purpose: 'agent_subscription' });
+  assert.match(link, /27248497/);
+  assert.match(link, /MAKAUG ONLINE REAL ESTATE LTD/);
+  assert.doesNotMatch(link, /card, Apple Pay/, 'card is only offered when the page can take it');
 });

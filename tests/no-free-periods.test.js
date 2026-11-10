@@ -62,8 +62,11 @@ test('"your listing is live" carries the fee and the payment link; an old free w
     listerFee: { free_days: 0, monthly_ugx: 20000, pay_link: 'https://makaug.com/pay/MKABC', pay_to: 'MTN Mobile Money *0780863394* (MAKAUG ONLINE REAL ESTATE LTD)' }
   }).whatsapp;
   assert.match(live, /To keep it live it is \*UGX 20,000 a month\*/);
-  assert.match(live, /Pay here: https:\/\/makaug\.com\/pay\/MKABC/);
-  assert.match(live, /Or pay to MTN Mobile Money \*0780863394\*/);
+  assert.match(live, /Your payment page: https:\/\/makaug\.com\/pay\/MKABC/);
+  // MoMo merchant code since 10 Nov 2026: no number to send money to, no transaction ID to send.
+  assert.match(live, /enter \*27248497\*, then \*UGX 20,000\*/);
+  assert.match(live, /reply here with your name \(or business name\)/);
+  assert.doesNotMatch(live, /0780863394|transaction ID/);
   assert.match(live, /Nothing is charged automatically/);
   assert.ok(!/free/i.test(live));
   const legacy = moderation.buildOwnerStatusMessage({
@@ -99,7 +102,7 @@ test('approving a private listing makes its payment link; old free weeks, paid l
   const now = new Date().toISOString();
   const base = { id: '00000000-0000-4000-8000-000000000009', title: '2 bedroom house', lister_name: 'Mary', lister_phone: '256772000001', created_at: now, reviewed_at: now, extra_fields: {} };
   const fee = await moderation.approvalListerFee(base);
-  assert.deepStrictEqual(fee, { free_days: 0, monthly_ugx: 20000, pay_link: 'https://makaug.com/pay/MKTEST01', pay_to: 'MTN Mobile Money *0780863394* (MAKAUG ONLINE REAL ESTATE LTD)' });
+  assert.deepStrictEqual(fee, { free_days: 0, monthly_ugx: 20000, pay_link: 'https://makaug.com/pay/MKTEST01', pay_to: 'MTN MoMo merchant code *27248497* (MAKAUG ONLINE REAL ESTATE LTD)' });
   assert.strictEqual(created.length, 1);
   const before = { ...base, created_at: '2026-11-08T08:00:00Z', reviewed_at: '2026-11-08T09:00:00Z' };
   assert.strictEqual(await moderation.approvalListerFee(before), null, 'live before 10 Nov without WhatsApp terms: told nothing, as before');

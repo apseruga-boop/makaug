@@ -407,7 +407,9 @@ test('he is told yes, what it is, what it costs, and that he can keep working', 
     assert.match(reply, /^Yes, Migadde — tap it, it is from us/, 'answer the question first, by name');
     assert.match(reply, /UGX 50,000 a month/, 'what it is and what it costs');
     assert.match(reply, /pay\/MKHJTQH5/, 'the link itself, not a description of it');
-    assert.match(reply, /\*MKHJTQH5\* as the reference/, 'what makes a mobile money payment matchable');
+    assert.match(reply, /merchant code|\*27248497\*/i, 'how to pay: the MoMo merchant code');
+    assert.match(reply, /business name/, 'what makes a mobile money payment matchable since 10 Nov 2026');
+    assert.doesNotMatch(reply, /as the reference/, 'merchant payments ask for no reference');
     assert.match(reply, /keep sending me properties now/,
       'an agent who thinks he cannot work until he has paid simply stops working');
     assert.doesNotMatch(reply, /Easiest thing in the world/, 'not the how-to-post answer');

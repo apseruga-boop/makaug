@@ -36121,7 +36121,8 @@ function adminOpenAgentPayment(agentId, mode = "approve") {
       <label class="block"><span class="font-bold">How was it paid?</span>
         <select name="method" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">
           <option value="">Choose…</option>
-          <option value="mtn_momo">MTN Mobile Money</option>
+          <option value="mtn_momopay">MTN MoMo merchant code</option>
+          <option value="mtn_momo">MTN Mobile Money (old number)</option>
           <option value="airtel_money">Airtel Money</option>
           <option value="absa_ugx">Absa — UGX account</option>
           <option value="absa_usd">Absa — USD account</option>
@@ -36224,9 +36225,9 @@ function adminShortDate(value) {
 // --- Sales & Revenue ---------------------------------------------------------
 var adminRevenueData = null;
 
-const ADMIN_ACCOUNT_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank: "Bank", absa_ugx: "Absa UGX", absa_usd: "Absa USD", revolut_whispers: "Card (Revolut)", cash: "Cash" };
-const ADMIN_METHOD_LABELS = { mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank_transfer: "Other bank", absa_ugx: "Absa UGX", absa_usd: "Absa USD ($)", revolut_card: "Card — Revolut ($)", cash: "Cash" };
-const ADMIN_METHOD_KEYS = ["mtn_momo", "airtel_money", "absa_ugx", "absa_usd", "bank_transfer", "cash"];
+const ADMIN_ACCOUNT_LABELS = { mtn_momopay: "MoMo merchant code", mtn_momo: "MTN MoMo", airtel_money: "Airtel Money", bank: "Bank", absa_ugx: "Absa UGX", absa_usd: "Absa USD", revolut_whispers: "Card (Revolut)", cash: "Cash" };
+const ADMIN_METHOD_LABELS = { mtn_momopay: "MoMo merchant code", mtn_momo: "MTN MoMo (old number)", airtel_money: "Airtel Money", bank_transfer: "Other bank", absa_ugx: "Absa UGX", absa_usd: "Absa USD ($)", revolut_card: "Card — Revolut ($)", cash: "Cash" };
+const ADMIN_METHOD_KEYS = ["mtn_momopay", "mtn_momo", "airtel_money", "absa_ugx", "absa_usd", "bank_transfer", "cash"];
 const adminFxFields = () => `<div data-fx class="hidden grid grid-cols-2 gap-2"><label class="block"><span class="font-bold">Amount (US$)</span><input name="amount_original" inputmode="decimal" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label><label class="block"><span class="font-bold">UGX per $1</span><input name="fx_rate_ugx" inputmode="decimal" value="3700" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label></div>`;
 function adminWireFx(form) {
   const sync = () => {
@@ -36261,7 +36262,7 @@ function adminPayLinksBlock(d) {
   }).join("");
   return `<div class="rounded-xl border border-gray-200 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">💳 Payment links — card or mobile money</h4><button type="button" onclick="adminCreatePayLink({ purpose: 'other' })" class="rounded bg-gray-900 px-3 py-1 text-xs font-bold text-white">New payment link</button></div>
     <p class="text-xs mt-1">${status}</p>
-    <p class="text-xs text-gray-500 mb-2">Reminders now carry a link automatically. Card payments are confirmed by Revolut and recorded + verified on their own; MoMo payments from a link arrive in “I have paid” below for the usual checks. Share MoMo Merchant Code <strong class="font-mono">${adminEscape(momoMerchantCode())}</strong> whenever you ask someone to pay by Mobile Money. ${adminEscape(momoPayUssdText())}</p>
+    <p class="text-xs text-gray-500 mb-2">Reminders now carry a link and the merchant-code card automatically. Card payments are confirmed by Revolut and recorded + verified on their own; MoMo payments are matched from the merchant line's SMS and arrive in “I have paid” below for a confirm. Share MoMo Merchant Code <strong class="font-mono">${adminEscape(momoMerchantCode())}</strong> whenever you ask someone to pay by Mobile Money. ${adminEscape(momoPayUssdText())}</p>
     ${adminPayLinkLoopBlock(d)}
     ${rows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Created</th><th class="py-1 pr-3">For</th><th class="py-1 pr-3">Amount</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No links yet.</p>`}</div>`;
 }
@@ -36486,8 +36487,9 @@ function renderAdminRevenue() {
   const claimRows = claims.slice(0, 40).map((c) => {
     const id = adminAttr(c.id);
     const who = c.agent_name || c.property_title || c.payer_name || `+${c.payer_phone || ""}`;
+    const paidAs = [c.business_name ? `paid as ${c.business_name}` : "", c.paid_from_phone ? `from ${c.paid_from_phone}` : ""].filter(Boolean).join(" · ");
     const checks = [
-      c.reference ? `① ID read: <strong>${adminEscape(c.reference)}</strong>${c.ai_reading?.available ? " (AI)" : ""}` : `① <span class="text-red-700">No ID yet</span>`,
+      c.reference ? `① ID: <strong>${adminEscape(c.reference)}</strong>${c.ai_reading?.available ? " (AI)" : ""}${paidAs ? `<br><span class="text-gray-600">${adminEscape(paidAs)}</span>` : ""}` : (paidAs ? `① ${adminEscape(paidAs)}` : `① <span class="text-red-700">Nothing to match on yet</span>`),
       c.sms_id ? `② <span class="text-emerald-700 font-bold">Matches MoMo SMS</span>${c.sms_amount_ugx ? ` (${adminFormatUgx(c.sms_amount_ugx)})` : ""}` : `② <span class="text-amber-700">No SMS match</span>`,
       c.status === "confirmed" ? `③ <span class="text-emerald-700 font-bold">Confirmed by ${adminEscape(c.decided_by || "")}</span>` : (c.status === "rejected" ? `③ <span class="text-red-700">Rejected: ${adminEscape(c.decision_note || "")}</span>` : `③ waiting for you`)
     ].join("<br>");
@@ -36495,7 +36497,7 @@ function renderAdminRevenue() {
     return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3">${adminEscape(adminShortDate(c.created_at))}</td><td class="py-2 pr-3 font-bold">${adminEscape(who)}<div class="text-[11px] font-normal text-gray-500">${adminEscape((c.purpose || "").replace(/_/g, " "))}${c.amount_ugx ? ` · ${adminFormatUgx(c.amount_ugx)}` : ""}</div>${c.receipt_url ? `<a href="${adminAttr(c.receipt_url)}" target="_blank" rel="noopener" class="text-[11px] underline">receipt</a>` : ""}</td><td class="py-2 pr-3 text-[11px] leading-5">${checks}</td><td class="py-2 text-xs whitespace-nowrap">${actions}</td></tr>`;
   }).join("");
   const claimsBlock = `<div class="${pendingClaims.length ? "rounded-xl border border-emerald-300 bg-emerald-50 p-3" : ""}"><h4 class="font-black text-gray-900 mb-1">🧾 “I have paid” — ${pendingClaims.length} waiting to confirm</h4>
-    <p class="text-xs text-gray-600 mb-2">Three checks: ① the transaction ID is read from their message or screenshot, ② the MoMo SMS shows the same ID, ③ you or Ronald confirm. Only then is it recorded and anything paused goes back live.</p>
+    <p class="text-xs text-gray-600 mb-2">Three checks: ① who it is — their business name and the number they paid from (or a transaction ID), ② the merchant line's MoMo SMS shows the money (matched by ID, number or name and amount), ③ you or Ronald confirm — here, or in one tap from the WhatsApp alert. Only then is it recorded and anything paused goes back live.</p>
     ${claimRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><tbody>${claimRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">None yet.</p>`}</div>`;
 
   const settingsBlock = `<div class="rounded-xl border ${d.pay_to_line ? "border-gray-200" : "border-red-300 bg-red-50"} p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">Settings</h4><button type="button" onclick="adminOpenBillingSettings()" class="rounded border border-gray-300 px-2 py-1 text-xs font-bold">Edit settings</button></div>
@@ -36584,7 +36586,7 @@ function adminOpenMoneyEntry(direction = "in", prefill = {}) {
 function adminRecordFromSms(smsId) {
   const m = (adminRevenueData?.unrecorded_sms || []).find((x) => String(x.id) === String(smsId));
   if (!m) return;
-  adminOpenMoneyEntry("in", { amount: m.amount_ugx, method: m.account_key === "airtel_money" ? "airtel_money" : "mtn_momo", reference: m.reference || "", date: String(m.received_at || "").slice(0, 10), note: m.counterparty ? `From ${m.counterparty}` : "" });
+  adminOpenMoneyEntry("in", { amount: m.amount_ugx, method: ["airtel_money", "mtn_momopay"].includes(m.account_key) ? m.account_key : "mtn_momo", reference: m.reference || "", date: String(m.received_at || "").slice(0, 10), note: m.counterparty ? `From ${m.counterparty}` : "" });
 }
 
 async function adminVerifyEntry(entryId) {
@@ -36843,7 +36845,7 @@ function adminConfirmClaim(claimId) {
   const form = adminBillingModal({
     title: `Confirm payment — ${adminEscape(who)}`,
     bodyHtml: `<div class="rounded-lg border border-gray-200 p-2 text-xs space-y-1">
-        <div>① Transaction ID: <strong>${adminEscape(c.reference || "none read")}</strong>${c.receipt_url ? ` · <a href="${adminAttr(c.receipt_url)}" target="_blank" rel="noopener" class="underline">see receipt</a>` : ""}</div>
+        <div>① Transaction ID: <strong>${adminEscape(c.reference || "none given")}</strong>${c.business_name ? ` · paid as <strong>${adminEscape(c.business_name)}</strong>` : ""}${c.paid_from_phone ? ` · from ${adminEscape(c.paid_from_phone)}` : ""}${c.receipt_url ? ` · <a href="${adminAttr(c.receipt_url)}" target="_blank" rel="noopener" class="underline">see receipt</a>` : ""}</div>
         <div>② ${c.sms_id ? `<span class="text-emerald-700 font-bold">Same ID found in the MoMo SMS${c.sms_amount_ugx ? ` — ${adminFormatUgx(c.sms_amount_ugx)}` : ""}</span>` : `<span class="text-amber-800 font-bold">Not found in the MoMo SMS yet — only confirm if you've seen the money yourself (statement, bank app).</span>`}</div>
         ${c.message ? `<div class="text-gray-600">Their message: “${adminEscape(String(c.message).slice(0, 240))}”</div>` : ""}</div>
       <label class="block"><span class="font-bold">Amount received (UGX)</span><input name="amount" inputmode="numeric" value="${adminAttr(amount)}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
@@ -36884,8 +36886,7 @@ function adminOpenBillingSettings() {
   adminBillingModal({
     title: "Billing settings",
     bodyHtml: `<fieldset class="rounded-xl border border-gray-200 p-3 space-y-2"><legend class="px-1 font-black">Where people pay</legend>
-        <label class="block"><span class="font-bold">Method</span><input name="pay_method" value="${adminAttr(pay.method || "MTN Mobile Money")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
-        <label class="block"><span class="font-bold">Number</span><input name="pay_number" value="${adminAttr(pay.number || "")}" placeholder="e.g. 0780 000000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+        <p class="text-xs text-gray-600">Since 10 Nov 2026 people pay with the MoMo merchant code only — no number to send money to, and no reference. The code is set on the server (MOMO_MERCHANT_CODE).</p>
         <label class="block"><span class="font-bold">Registered name (what the payer sees on MoMo)</span><input name="pay_name" value="${adminAttr(pay.name || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
         <p class="text-sm text-amber-950 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Pay by Mobile Money — MoMo Merchant Code: <strong class="font-mono">${adminEscape(momoMerchantCode())}</strong>
           <button type="button" class="ml-2 rounded border border-amber-300 bg-white px-2 py-1 text-xs font-bold" data-momo-copy="${adminAttr(momoMerchantCode())}">Copy merchant code</button><br>
@@ -36900,7 +36901,7 @@ function adminOpenBillingSettings() {
         <label class="block"><span class="font-bold text-xs">Views message on day</span><input name="views_day" inputmode="numeric" value="${adminAttr(listerFee.views_message_day ?? 3)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
       </div>
       <label class="block"><span class="font-bold">Day-${adminEscape(String(listerFee.views_message_day ?? 3))} “people have seen your property” message</span><textarea name="views_text" rows="9" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-[12px]">${adminEscape(views)}</textarea>
-        <span class="text-[11px] text-gray-500">Fills in: {name} {property} {views} {shares_line} {free_until} {monthly_fee} {pay_to} {link}</span></label>`,
+        <span class="text-[11px] text-gray-500">Fills in: {name} {property} {views} {shares_line} {free_until} {monthly_fee} {how_to_pay} {merchant_code} {pay_to} {link}</span></label>`,
     submitLabel: "Save settings",
     onSubmit: async (data) => {
       const put = (key, value) => apiRequest(`/api/admin/revenue/settings/${key}`, { method: "PUT", headers: adminAuthHeaders(), body: { value } });
@@ -36910,7 +36911,7 @@ function adminOpenBillingSettings() {
         return name && phone ? { name, phone: phone.replace(/\D/g, "") } : null;
       }).filter(Boolean);
       if (!confirmersList.length) throw new Error("Add at least one person who confirms payments.");
-      await put("pay_to", { method: String(data.get("pay_method") || "").trim(), number: String(data.get("pay_number") || "").trim(), name: String(data.get("pay_name") || "").trim() });
+      await put("pay_to", { ...pay, name: String(data.get("pay_name") || "").trim() });
       await put("confirmers", confirmersList);
       await put("agent_fee", { ...agentFee, monthly_ugx: num(data.get("agent_monthly"), publishedMarketplacePricing().agent.monthly_ugx), agent_trial_days: 0, remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });
       await put("lister_fee", { ...listerFee, monthly_ugx: num(data.get("lister_monthly"), publishedMarketplacePricing().owner_listing.monthly_ugx), free_days: 0, views_message_day: num(data.get("views_day"), 3) });
