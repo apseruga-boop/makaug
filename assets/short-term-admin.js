@@ -313,12 +313,14 @@
       + '<h5>Photos</h5>'
       + photosHtml(payload.photos)
       + factsFormHtml(id, l).replace('data-st-which=""', 'data-st-which="' + esc(which) + '"')
-      + '<h5 style="margin-top:14px">Review checks</h5>'
-      + checkRowsHtml(payload.checks || [], payload.checklist || {}, id)
-      + (outstanding.length
-        ? '<p class="st-desk-warn"><i class="fas fa-list-check"></i> Still outstanding: '
-          + outstanding.map(function (c) { return esc(c.label); }).join('; ') + '</p>'
-        : '<p class="st-desk-ok"><i class="fas fa-check"></i> Every check is ticked.</p>')
+      + (which === 'king'
+        ? '<h5 style="margin-top:14px">Review checks</h5>'
+          + checkRowsHtml(payload.checks || [], payload.checklist || {}, id)
+          + (outstanding.length
+            ? '<p class="st-desk-warn"><i class="fas fa-list-check"></i> Still outstanding: '
+              + outstanding.map(function (c) { return esc(c.label); }).join('; ') + '</p>'
+            : '<p class="st-desk-ok"><i class="fas fa-check"></i> Every check is ticked.</p>')
+        : '')
       + '<label class="st-label" style="margin-top:12px">'
       + (canMessage ? 'Reason / note for the host' : 'Reason (kept on the listing, not sent)')
       + '</label>'
