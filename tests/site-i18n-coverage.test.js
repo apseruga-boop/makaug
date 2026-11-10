@@ -72,7 +72,14 @@ const mustTranslate = [
   'You pay from the day it is approved.',
   'One private listing costs UGX 20,000 per listing, per month. Every submission stays in staff review until approved.',
   'Agent plan: UGX 50,000 a month.',
-  'UGX per listing a month'
+  'UGX per listing a month',
+  'Pay by Mobile Money',
+  'MoMo Merchant Code:',
+  'Copy merchant code',
+  'Merchant code copied',
+  'MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter the merchant code, enter the amount, confirm, then your PIN.',
+  'Pay by Mobile Money — MoMo Merchant Code: 27248497',
+  'Pay by Mobile Money — MoMo Merchant Code: 27248497 (MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter 27248497, enter the amount, confirm, then your PIN).'
 ];
 for (const lang of LANGS) {
   for (const key of mustTranslate) {

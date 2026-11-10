@@ -3249,6 +3249,21 @@
       --lp-ink: #14532d;
       --lp-on-accent: #ffffff;
     }
+
+    .momo-pay-box {
+      color: #3f2d0c;
+    }
+    .momo-pay-box p,
+    .momo-pay-box span,
+    .momo-pay-box strong {
+      color: #3f2d0c;
+    }
+    .momo-pay-box [data-momo-ussd] {
+      color: #6b3f08;
+    }
+    .momo-pay-copy {
+      color: #3f2d0c;
+    }
     .lp-page-hero {
       background:
         radial-gradient(circle at 86% 0%, color-mix(in srgb, var(--lp-accent-2) 30%, transparent), transparent 34%),
@@ -6618,6 +6633,15 @@
       <div class="max-w-4xl mx-auto px-4">
         <h1 id="lp-page-title" class="text-3xl font-black serif">List Property</h1>
         <p id="lp-page-subtitle" class="text-green-100 text-sm mt-2">Keep one private listing live for UGX 20,000 per listing, per month from the day it is approved.</p>
+        <div class="momo-pay-box mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950" data-momo-pay-box="1">
+          <div class="text-sm font-black" data-content-i18n="about.momoPayTitle">Pay by Mobile Money</div>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <span class="text-sm" data-content-i18n="about.momoPayCodePrefix">MoMo Merchant Code:</span>
+            <strong class="momo-pay-code font-mono text-lg tracking-wide" data-momo-code>27248497</strong>
+            <button type="button" class="momo-pay-copy rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold" data-momo-copy="27248497" data-content-i18n="about.momoPayCopy">Copy merchant code</button>
+          </div>
+          <p class="mt-2 text-sm text-amber-900" data-momo-ussd data-content-i18n="about.momoPayUssd">MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter the merchant code, enter the amount, confirm, then your PIN.</p>
+        </div>
       </div>
     </div>
     <div class="max-w-4xl mx-auto px-4 py-10">
@@ -6696,6 +6720,15 @@
           <div class="lp-st-fee">
             <b>Listing fee — paid straight away</b>
             <p>Owners pay UGX 20,000 a month. Agents pay UGX 50,000 a month, which includes short stays. There is no free trial and no free days. After you submit, moderators review the stay on the Short stays review desk. Payment is due when the stay is approved.</p>
+        <div class="momo-pay-box mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950" data-momo-pay-box="1">
+          <div class="text-sm font-black" data-content-i18n="about.momoPayTitle">Pay by Mobile Money</div>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <span class="text-sm" data-content-i18n="about.momoPayCodePrefix">MoMo Merchant Code:</span>
+            <strong class="momo-pay-code font-mono text-lg tracking-wide" data-momo-code>27248497</strong>
+            <button type="button" class="momo-pay-copy rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold" data-momo-copy="27248497" data-content-i18n="about.momoPayCopy">Copy merchant code</button>
+          </div>
+          <p class="mt-2 text-sm text-amber-900" data-momo-ussd data-content-i18n="about.momoPayUssd">MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter the merchant code, enter the amount, confirm, then your PIN.</p>
+        </div>
           </div>
           <form id="lp-short-stay-form" class="grid md:grid-cols-2 gap-4" onsubmit="return submitListPropertyShortStay(event)">
             <div>
@@ -6828,6 +6861,15 @@
           <h3 id="lp-success-title" class="text-xl font-black text-green-900 mb-1"></h3>
           <p id="lp-success-sub" class="text-sm text-green-800"></p>
           <p id="lp-success-contact" class="text-sm text-green-800 mt-2"></p>
+        <div class="momo-pay-box mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950" data-momo-pay-box="1">
+          <div class="text-sm font-black" data-content-i18n="about.momoPayTitle">Pay by Mobile Money</div>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <span class="text-sm" data-content-i18n="about.momoPayCodePrefix">MoMo Merchant Code:</span>
+            <strong class="momo-pay-code font-mono text-lg tracking-wide" data-momo-code>27248497</strong>
+            <button type="button" class="momo-pay-copy rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold" data-momo-copy="27248497" data-content-i18n="about.momoPayCopy">Copy merchant code</button>
+          </div>
+          <p class="mt-2 text-sm text-amber-900" data-momo-ussd data-content-i18n="about.momoPayUssd">MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter the merchant code, enter the amount, confirm, then your PIN.</p>
+        </div>
           <p id="lp-success-status" class="text-xs text-green-700 mt-2"></p>
           <div class="mt-3 text-sm text-green-900">
             <div><strong id="lp-success-ref-label"></strong> <span id="lp-success-ref"></span></div>
@@ -9843,6 +9885,15 @@
       <section class="about-card rounded-[14px] bg-[#f0f6f2] text-[#16241d] border border-[#dbe8e0] p-6 mb-8">
         <h2 class="text-3xl font-black serif" data-content-i18n="about.finalTitle">Ready to start?</h2>
         <p class="mt-2 text-[#5b6b62] font-semibold" data-content-i18n="about.finalSub">List a property for UGX 20,000 a month, or talk to our sales team about agent plans, developments and advertising.</p>
+                <div class="momo-pay-box mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950" data-momo-pay-box="1">
+          <div class="text-sm font-black" data-content-i18n="about.momoPayTitle">Pay by Mobile Money</div>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <span class="text-sm" data-content-i18n="about.momoPayCodePrefix">MoMo Merchant Code:</span>
+            <strong class="momo-pay-code font-mono text-lg tracking-wide" data-momo-code>27248497</strong>
+            <button type="button" class="momo-pay-copy rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold" data-momo-copy="27248497" data-content-i18n="about.momoPayCopy">Copy merchant code</button>
+          </div>
+          <p class="mt-2 text-sm text-amber-900" data-momo-ussd data-content-i18n="about.momoPayUssd">MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter the merchant code, enter the amount, confirm, then your PIN.</p>
+        </div>
         <div class="about-final-cta-actions flex flex-wrap gap-2 mt-5">
           <a href="/for-sale" class="about-cta about-final-cta-primary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaSearch">Search property</a>
           <a href="/list-property" class="about-cta about-final-cta-primary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaList">List a property</a>
@@ -10004,6 +10055,7 @@
           <p id="footer-brand-copy" class="text-green-200 text-sm mt-3 leading-relaxed">
             Uganda's property search engine. List your property for UGX 20,000 per listing per month. Agents pay UGX 50,000 a month. Web or WhatsApp, all 146 districts.
           </p>
+          <p id="footer-momo-pay" class="text-green-200 text-sm mt-2 leading-relaxed">Pay by Mobile Money — MoMo Merchant Code: 27248497 (MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter 27248497, enter the amount, confirm, then your PIN).</p>
           <div class="mt-4 space-y-2 text-sm text-green-200">
             <a id="footer-whatsapp-label" href="https://wa.me/256780863394" target="_blank" rel="noopener noreferrer" class="block hover:text-white" data-public-whatsapp-link data-whatsapp-context="auto">📲 WhatsApp: 0780863394</a>
             <a id="footer-email-label" href="mailto:info@makaug.com" class="block hover:text-white">📧 Email: info@makaug.com</a>
@@ -10304,6 +10356,15 @@
             <li id="listing-submit-next-1">makaug reviews the listing details, photos, identity, and location.</li>
             <li id="listing-submit-next-2">Admin will contact you if anything needs correction.</li>
             <li id="listing-submit-next-3">Approved listings appear publicly after review.</li>
+        <div class="momo-pay-box mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950" data-momo-pay-box="1">
+          <div class="text-sm font-black" data-content-i18n="about.momoPayTitle">Pay by Mobile Money</div>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <span class="text-sm" data-content-i18n="about.momoPayCodePrefix">MoMo Merchant Code:</span>
+            <strong class="momo-pay-code font-mono text-lg tracking-wide" data-momo-code>27248497</strong>
+            <button type="button" class="momo-pay-copy rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold" data-momo-copy="27248497" data-content-i18n="about.momoPayCopy">Copy merchant code</button>
+          </div>
+          <p class="mt-2 text-sm text-amber-900" data-momo-ussd data-content-i18n="about.momoPayUssd">MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter the merchant code, enter the amount, confirm, then your PIN.</p>
+        </div>
           </ul>
         </div>
       </div>
@@ -10705,6 +10766,16 @@
         <b>Agents can list short stays</b>
         <p class="mt-1">Approved agents can list short stays as well as sales and rentals. Short stays are included in the agent plan of UGX 50,000 a month. There is no free trial and no free days. Each short stay still goes to the Short stays review desk before it appears on /short-term.</p>
       </div>
+        <div class="momo-pay-box mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950" data-momo-pay-box="1">
+          <div class="text-sm font-black" data-content-i18n="about.momoPayTitle">Pay by Mobile Money</div>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <span class="text-sm" data-content-i18n="about.momoPayCodePrefix">MoMo Merchant Code:</span>
+            <strong class="momo-pay-code font-mono text-lg tracking-wide" data-momo-code>27248497</strong>
+            <button type="button" class="momo-pay-copy rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold" data-momo-copy="27248497" data-content-i18n="about.momoPayCopy">Copy merchant code</button>
+          </div>
+          <p class="mt-2 text-sm text-amber-900" data-momo-ussd data-content-i18n="about.momoPayUssd">MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter the merchant code, enter the amount, confirm, then your PIN.</p>
+        </div>
+
 
       <div class="space-y-4">
         <div>

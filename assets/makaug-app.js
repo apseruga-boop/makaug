@@ -3504,7 +3504,12 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.imageReportProduct": "Uganda property market viewed by district",
   "about.imageWebsiteProduct": "Branded property agency website",
   "about.imageProfessionalProduct": "Professionally photographed property listing",
-  "about.imageAdvertisingProduct": "Business reaching active property customers"
+  "about.imageAdvertisingProduct": "Business reaching active property customers",
+  "about.momoPayTitle": "Pay by Mobile Money",
+  "about.momoPayCodePrefix": "MoMo Merchant Code:",
+  "about.momoPayCopy": "Copy merchant code",
+  "about.momoPayCopied": "Merchant code copied",
+  "about.momoPayUssd": "MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter the merchant code, enter the amount, confirm, then your PIN."
 });
 
 const ADVERTISING_UI_I18N_EN = Object.freeze({
@@ -5454,6 +5459,7 @@ const HOME_ASSISTANT_I18N = {
 const FOOTER_I18N = {
   en: {
     brandCopy: `Uganda's property search engine. List your property for UGX 20,000 per listing per month. Agents pay UGX 50,000 a month. Web or WhatsApp, all 146 districts.`,
+    momoPay: "Pay by Mobile Money — MoMo Merchant Code: 27248497 (MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter 27248497, enter the amount, confirm, then your PIN).",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Chat on WhatsApp",
@@ -5489,6 +5495,7 @@ const FOOTER_I18N = {
   },
   lg: {
     brandCopy: "Yingini y'okunoonya ebintu mu Uganda. Teeka ekintu kyo eky'olubereberye, tosasula kintu okumala ennaku 7, oluvannyuma UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
+    momoPay: "Sasula ne Mobile Money — Koodi ya MoMo Merchant: 27248497 (MTN MoMo: kuba *165*3#, londa Option 1 (Merchant Code), yingiza 27248497, yingiza omuwendo, kakasa, oluvannyuma PIN yo).",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Nyumya ku WhatsApp",
@@ -5523,6 +5530,7 @@ const FOOTER_I18N = {
   },
   sw: {
     brandCopy: "Injini ya utafutaji wa mali ya Uganda. Orodhesha mali yako ya kwanza na hulipi chochote kwa siku 7, kisha UGX 20,000 kwa kila tangazo kwa mwezi. Wavuti au WhatsApp, wilaya zote 146.",
+    momoPay: "Lipa kwa Mobile Money — Msimbo wa mfanyabiashara wa MoMo: 27248497 (MTN MoMo: piga *165*3#, chagua Option 1 (Merchant Code), weka 27248497, weka kiasi, thibitisha, kisha PIN yako).",
     whatsapp: "WhatsApp",
     email: "Barua pepe",
     chatWhatsapp: "Piga gumzo WhatsApp",
@@ -5557,6 +5565,7 @@ const FOOTER_I18N = {
   },
   ac: {
     brandCopy: "Gin me yeny jami me Uganda. Ket jami ni mukwongo ma pe iculo gin mo pi nino 7, ka dong UGX 20,000 pi listing acel dwe ki dwe. Intanet onyo WhatsApp, distrik 146 ducu.",
+    momoPay: "Cul ki Mobile Money — Kod pa MoMo Merchant: 27248497 (MTN MoMo: go *165*3#, yer Option 1 (Merchant Code), ket 27248497, ket cente, moki, ka i PIN mamegi).",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Lok i WhatsApp",
@@ -5591,6 +5600,7 @@ const FOOTER_I18N = {
   },
   ny: {
     brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Teeka ekintu kyawe eky'okubanza otashashuraine kintu ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mutimbagano nari WhatsApp, disiturikiti zoona 146.",
+    momoPay: "Ishura na Mobile Money — Kode ya MoMo Merchant: 27248497 (MTN MoMo: kuba *165*3#, chora Option 1 (Merchant Code), taaha 27248497, taaha sente, kakasa, hanyuma PIN yawe).",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Gamba kuri WhatsApp",
@@ -5625,6 +5635,7 @@ const FOOTER_I18N = {
   },
   rn: {
     brandCopy: "Ekyoma ky'okushaka ebintu omuri Uganda. Taho ekintu kyawe eky'okubanza otashashuraine kintu ebiro 7, bwanyima UGX 20,000 buri listing buri kwezi. Aha mukutu nari WhatsApp, omu disiturikiti zoona 146.",
+    momoPay: "Ishura na Mobile Money — Kode ya MoMo Merchant: 27248497 (MTN MoMo: kuba *165*3#, hitamo Option 1 (Merchant Code), taaha 27248497, taaha sente, kakasa, hanyuma PIN yawe).",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Ganira kuri WhatsApp",
@@ -5659,6 +5670,7 @@ const FOOTER_I18N = {
   },
   sm: {
     brandCopy: "Ekyuma ekinoonia ebintu ekya Uganda. Teka ekintu kyo eky'olubereberye, tosasula kintu okumala ennaku 7, olwo UGX 20,000 buli listing, buli mwezi. Ku mukutu oba WhatsApp, disitulikiti zonna 146.",
+    momoPay: "Sasula ne Mobile Money — Koodi ya MoMo Merchant: 27248497 (MTN MoMo: kuba *165*3#, londa Option 1 (Merchant Code), yingiza 27248497, yingiza sente, kakasa, oluvannyuma PIN yo).",
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Yogera ku WhatsApp",
@@ -5692,10 +5704,12 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   am: {
-    brandCopy: "የኡጋንዳ ንብረት መፈለጊያ። የመጀመሪያውን ዝርዝር ያስገቡ፤ ለ7 ቀናት ምንም አይከፍሉም፣ ከዚያ በኋላ በወር በአንድ ዝርዝር UGX 20,000። በድር ወይም በWhatsApp፣ በ146 ወረዳዎች ሁሉ።"
+    brandCopy: "የኡጋንዳ ንብረት መፈለጊያ። የመጀመሪያውን ዝርዝር ያስገቡ፤ ለ7 ቀናት ምንም አይከፍሉም፣ ከዚያ በኋላ በወር በአንድ ዝርዝር UGX 20,000። በድር ወይም በWhatsApp፣ በ146 ወረዳዎች ሁሉ።",
+    momoPay: "በሞባይል ገንዘብ ይክፈሉ — የMoMo ነጋዴ ኮድ፦ 27248497 (MTN MoMo፦ *165*3# ይደውሉ፣ Option 1 (Merchant Code) ይምረጡ፣ 27248497 ያስገቡ፣ መጠኑን ያስገቡ፣ ያረጋግጡ፣ ከዚያ PINዎን ያስገቡ።).",
   },
   ar: {
     brandCopy: "محرك البحث العقاري في أوغندا. أدرج عقارك الأول ولا تدفع شيئاً لمدة 7 أيام، ثم UGX 20,000 لكل إعلان في الشهر. عبر الويب أو WhatsApp، في كل المقاطعات الـ 146.",
+    momoPay: "ادفع عبر الأموال عبر الهاتف — رمز تاجر MoMo: 27248497 (MTN MoMo: اطلب *165*3#، اختر Option 1 (Merchant Code)، أدخل 27248497، أدخل المبلغ، أكّد، ثم أدخل رقمك السري).",
     whatsapp: "WhatsApp",
     email: "البريد الإلكتروني",
     chatWhatsapp: "الدردشة على WhatsApp",
@@ -5762,6 +5776,7 @@ function footerTr(key) {
 function applyFooterLanguageUI() {
   setTextById("footer-brand-title", publicBrand());
   setTextById("footer-brand-copy", footerTr("brandCopy"));
+  setTextById("footer-momo-pay", footerTr("momoPay"));
   setTextById("footer-whatsapp-label", `📲 ${footerTr("whatsapp")}: 0780863394`);
   setTextById("footer-email-label", `📧 ${footerTr("email")}: info@makaug.com`);
   setTextById("footer-chat-whatsapp", `💬 ${footerTr("chatWhatsapp")}`);
@@ -9344,8 +9359,55 @@ function publishedMarketplacePricing() {
     currency: "UGX",
     agent: { monthly_ugx: 50000, trial_days: 0, per: "month", includes_short_stays: true, label: "UGX 50,000 a month" },
     owner_listing: { monthly_ugx: 20000, free_days: 0, per: "listing", label: "UGX 20,000 per listing, per month" },
-    short_stay: { monthly_ugx: 20000, free_days: 0, per: "month", applies_to: "non_agent", included_in_agent_plan: true }
+    short_stay: { monthly_ugx: 20000, free_days: 0, per: "month", applies_to: "non_agent", included_in_agent_plan: true },
+    momo: { merchant_code: "27248497", label: "MoMo Merchant Code: 27248497", ussd: "MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter 27248497, enter the amount, confirm, then your PIN.", sentence: "Pay by Mobile Money — MoMo Merchant Code: 27248497 (MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter 27248497, enter the amount, confirm, then your PIN)." }
   };
+}
+
+function momoMerchantCode() {
+  return String(publishedMarketplacePricing().momo?.merchant_code || "27248497").replace(/\D+/g, "") || "27248497";
+}
+
+function momoPayUssdText(code = momoMerchantCode()) {
+  return publishedMarketplacePricing().momo?.ussd
+    || `MTN MoMo: dial *165*3#, select Option 1 (Merchant Code), enter ${code}, enter the amount, confirm, then your PIN.`;
+}
+
+function fillMomoPayBoxes(root = document) {
+  if (!root || !root.querySelectorAll) return;
+  const code = momoMerchantCode();
+  root.querySelectorAll("[data-momo-pay-box]").forEach((box) => {
+    box.querySelectorAll("[data-momo-code]").forEach((el) => { el.textContent = code; });
+    box.querySelectorAll("[data-momo-copy]").forEach((el) => { el.setAttribute("data-momo-copy", code); });
+  });
+}
+
+if (typeof document !== "undefined" && !window.__makaugMomoCopyBound) {
+  window.__makaugMomoCopyBound = true;
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-momo-copy]");
+    if (!button) return;
+    const code = button.getAttribute("data-momo-copy") || momoMerchantCode();
+    const original = button.textContent;
+    const copied = (typeof contentTr === "function" && contentTr("about.momoPayCopied")) || "Merchant code copied";
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(code);
+      else {
+        const el = button.closest("[data-momo-pay-box]")?.querySelector("[data-momo-code]");
+        if (el) {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
+      button.textContent = copied;
+      setTimeout(() => { button.textContent = original; }, 1600);
+    } catch (_) {
+      button.textContent = original;
+    }
+  });
 }
 
 function aboutCommercialPriceLabel(key, priceOnly = false) {
@@ -9583,6 +9645,7 @@ function applyLanguageUI() {
   setPageHeading("page-account", tr("pageAccount"));
   ensureAboutAdvertiseTranslations(document.querySelector(".page.active")?.id?.replace(/^page-/, "") || currentPage);
   applyContentLanguageUI(document);
+  fillMomoPayBoxes(document);
   updateAboutPageUi();
   applyAdvertisingLanguageUI();
   applyAuthUi();
@@ -36195,7 +36258,7 @@ function adminPayLinksBlock(d) {
   }).join("");
   return `<div class="rounded-xl border border-gray-200 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">💳 Payment links — card or mobile money</h4><button type="button" onclick="adminCreatePayLink({ purpose: 'other' })" class="rounded bg-gray-900 px-3 py-1 text-xs font-bold text-white">New payment link</button></div>
     <p class="text-xs mt-1">${status}</p>
-    <p class="text-xs text-gray-500 mb-2">Reminders now carry a link automatically. Card payments are confirmed by Revolut and recorded + verified on their own; MoMo payments from a link arrive in “I have paid” below for the usual checks.</p>
+    <p class="text-xs text-gray-500 mb-2">Reminders now carry a link automatically. Card payments are confirmed by Revolut and recorded + verified on their own; MoMo payments from a link arrive in “I have paid” below for the usual checks. Share MoMo Merchant Code <strong class="font-mono">${adminEscape(momoMerchantCode())}</strong> whenever you ask someone to pay by Mobile Money. ${adminEscape(momoPayUssdText())}</p>
     ${adminPayLinkLoopBlock(d)}
     ${rows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Created</th><th class="py-1 pr-3">For</th><th class="py-1 pr-3">Amount</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No links yet.</p>`}</div>`;
 }
@@ -36820,7 +36883,10 @@ function adminOpenBillingSettings() {
     bodyHtml: `<fieldset class="rounded-xl border border-gray-200 p-3 space-y-2"><legend class="px-1 font-black">Where people pay</legend>
         <label class="block"><span class="font-bold">Method</span><input name="pay_method" value="${adminAttr(pay.method || "MTN Mobile Money")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
         <label class="block"><span class="font-bold">Number</span><input name="pay_number" value="${adminAttr(pay.number || "")}" placeholder="e.g. 0780 000000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
-        <label class="block"><span class="font-bold">Registered name (what the payer sees on MoMo)</span><input name="pay_name" value="${adminAttr(pay.name || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label></fieldset>
+        <label class="block"><span class="font-bold">Registered name (what the payer sees on MoMo)</span><input name="pay_name" value="${adminAttr(pay.name || "")}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"></label>
+        <p class="text-sm text-amber-950 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Pay by Mobile Money — MoMo Merchant Code: <strong class="font-mono">${adminEscape(momoMerchantCode())}</strong>
+          <button type="button" class="ml-2 rounded border border-amber-300 bg-white px-2 py-1 text-xs font-bold" data-momo-copy="${adminAttr(momoMerchantCode())}">Copy merchant code</button><br>
+          <span class="text-xs">${adminEscape(momoPayUssdText())}</span></p></fieldset>
       <label class="block"><span class="font-bold">Who confirms payments</span> <span class="text-xs text-gray-500">(one per line: name, WhatsApp number)</span><textarea name="confirmers" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">${adminEscape(confirmers)}</textarea></label>
       <p class="text-xs text-gray-600">From 10 Nov 2026 new agents and new private listings pay from approval. Free (staff override) is still a manual choice, with a reason. Agents and listings already on a free period keep it.</p>
       <div class="grid grid-cols-3 gap-2">
@@ -45897,7 +45963,7 @@ function showBrokerApplicationReceived({ firstName = "", phone = "" } = {}) {
       <p style="margin:0 0 12px;color:#4b5563;">Your makaug agent account is set up and waiting for our review.</p>
       <ol style="margin:0 0 14px;padding-left:22px;line-height:1.55;list-style:decimal;">
         <li><strong>We WhatsApp you</strong>${phone ? ` on ${esc(phone)}` : ""}, usually the same day, to check your details.</li>
-        <li><strong>UGX 50,000 a month.</strong> Short stays are included. We send a payment link. Nothing is charged automatically.</li>
+        <li><strong>UGX 50,000 a month.</strong> Short stays are included. We send a payment link. Nothing is charged automatically. Pay by Mobile Money — MoMo Merchant Code: <strong>${esc(momoMerchantCode())}</strong>. ${esc(momoPayUssdText())}</li>
         <li><strong>You're approved</strong> — you get your welcome pack and the how-to-post guide, and your listings can go live.</li>
       </ol>
       <p style="margin:0 0 16px;font-size:12px;color:#6b7280;">You can already fill in your profile from your dashboard. Questions? WhatsApp us on 0780 863394.</p>

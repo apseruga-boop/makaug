@@ -8,6 +8,8 @@
 // is computed from the listing date, not by rewriting stored rows.
 // A staff member can still waive a fee or grant a free period by hand.
 
+const { momoMerchantCode, momoPayCopy } = require('./momoMerchant');
+
 const STRAIGHT_PAY_FROM = '2026-11-10';
 const LEGACY_OWNER_FREE_DAYS = 7;
 
@@ -54,9 +56,16 @@ function publishedPricing(env = process.env) {
   const ownerMonthly = CODE_DEFAULTS.ownerListingMonthlyUgx;
   const ownerFreeDays = CODE_DEFAULTS.ownerFreeDays;
   const shortStayMonthly = CODE_DEFAULTS.shortStayMonthlyUgx;
+  const momo = momoPayCopy(env);
   return {
     currency: CODE_DEFAULTS.currency,
     straight_pay_from: STRAIGHT_PAY_FROM,
+    momo: {
+      merchant_code: momo.code,
+      label: momo.label,
+      ussd: momo.ussd,
+      sentence: momo.sentence
+    },
     agent: {
       monthly_ugx: agentMonthly,
       trial_days: trialDays,
@@ -89,5 +98,7 @@ module.exports = {
   agentTrialDays,
   ownerFreeDaysForListing,
   publishedPricing,
-  ugxLabel
+  ugxLabel,
+  momoMerchantCode,
+  momoPayCopy
 };

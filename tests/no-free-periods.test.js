@@ -129,7 +129,7 @@ test('the agent terms PDF no longer says "Your first 0 days are free"', () => {
   assert.match(src, /The agent plan is \$\{ugx\(s\.agentMonthly\)\} per month, from the day your agent account is switched on\./);
   assert.match(src, /section\(doc, s\.agentFreeDays > 0 \? '2\. The free period and the agent plan' : '2\. The agent plan'\);/);
   assert.match(src, /We send you a payment link with your welcome pack and before each renewal/);
-  assert.match(docs.AGENT_TERMS_VERSION, /^2026-11-10-v3$/);
+  assert.match(docs.AGENT_TERMS_VERSION, /^2026-11-10-v4$/);
 });
 
 test('the WhatsApp films are the new cuts, and their captions and the menu offer no free days', () => {
