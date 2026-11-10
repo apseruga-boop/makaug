@@ -137,10 +137,10 @@ test('on desktop the results grid sits left of a sticky map; mobile stays stacke
   assert.match(css, /@media \(max-width: 1023px\) \{[\s\S]*#page-short-term \.st-split\.is-map \{ grid-template-columns: 1fr/);
   assert.match(css, /@media \(max-width: 1023px\) \{[\s\S]*#page-short-term \.st-map-shell \{ position: static/);
   const html = read('index.html');
-  assert.match(html, /short-term\.css\?v=20261110-desktop-map-sidebar/);
+  assert.match(html, /short-term\.css\?v=20261110-st-lead-guide/);
   const optionsCss = read('assets/short-term-options.css');
   assert.match(optionsCss, /@media \(min-width: 1024px\) \{[\s\S]*\.st-opt-grid:has\(> \.listing-map-col\.mk-map-col-active\)/);
   assert.match(optionsCss, /grid-template-columns: minmax\(0, 1fr\) minmax\(400px, 42vw\)/);
   assert.doesNotMatch(optionsCss, /margin: 12px auto 28px/);
-  assert.match(html, /short-term-options\.css\?v=20261110-st-opt-map-sidebar/);
+  assert.match(html, /short-term-options\.css\?v=20261110-st-lead-guide/);
 });

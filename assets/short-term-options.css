@@ -451,3 +451,155 @@
   #page-short-term .st-opt .st-opt-book { position: static; }
   #page-short-term .st-opt .st-opt-tools { align-items: flex-start; flex-direction: column; }
 }
+
+
+/* ---------- Coming to Uganda guide (full-width, equal cards, no accordion) ---------- */
+#page-short-term .st-worth {
+  margin: 0;
+  padding: 36px 0 48px;
+  background: #f4f1ea;
+  width: 100%;
+}
+#page-short-term .st-worth-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+#page-short-term .st-worth h2 {
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-weight: 900;
+  letter-spacing: -.03em;
+  margin: 0 0 6px;
+  color: #111827;
+}
+#page-short-term .st-worth-lead {
+  margin: 0 0 22px;
+  color: #4b5563;
+  font-size: 1rem;
+  max-width: 46ch;
+}
+#page-short-term .st-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+#page-short-term .st-info-card,
+#page-short-term .st-info-tile {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, .04);
+}
+#page-short-term .st-info-photo-wrap {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: #d6d3cb;
+  overflow: hidden;
+}
+#page-short-term .st-info-photo-wrap picture,
+#page-short-term .st-info-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+#page-short-term .st-info-photo-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(15, 23, 42, .78) 0%, rgba(15, 23, 42, .2) 48%, transparent 70%);
+  pointer-events: none;
+}
+#page-short-term .st-info-photo-wrap .st-info-h {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  z-index: 1;
+  margin: 0;
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: -.02em;
+  line-height: 1.25;
+  text-shadow: 0 1px 2px rgba(0,0,0,.35);
+}
+#page-short-term .st-info-body {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+#page-short-term .st-info-teaser {
+  margin: 0 0 8px;
+  font-size: .9rem;
+  line-height: 1.5;
+  color: #374151;
+}
+#page-short-term .st-info-tile ul,
+#page-short-term .st-info-card ul {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  font-size: .85rem;
+  line-height: 1.55;
+  color: #4b5563;
+  flex: 1;
+}
+#page-short-term .st-info-tile li,
+#page-short-term .st-info-card li { margin: 0 0 5px; }
+#page-short-term .st-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: auto;
+  align-self: flex-start;
+  background: #111827;
+  color: #fff !important;
+  font-weight: 800;
+  font-size: .82rem;
+  text-decoration: none !important;
+  border-radius: 999px;
+  padding: 8px 14px;
+}
+#page-short-term .st-info-btn:hover { background: #0b5130; }
+#page-short-term .st-worth-note,
+#page-short-term .st-photo-credit {
+  margin: 14px 0 0;
+  font-size: .78rem;
+  line-height: 1.5;
+  color: #6b7280;
+}
+#page-short-term .st-photo-credit { margin-top: 6px; }
+#page-short-term .st-lead-card { margin: 20px 0 8px; }
+#page-short-term .st-lead-dates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+#page-short-term .st-lead-date {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+#page-short-term .st-lead-date > span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #6b21a8;
+}
+@media (max-width: 900px) {
+  #page-short-term .st-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  #page-short-term .st-info-grid { grid-template-columns: 1fr; gap: 14px; }
+  #page-short-term .st-lead-dates { grid-template-columns: 1fr; }
+  #page-short-term .st-worth { padding: 28px 0 36px; }
+}

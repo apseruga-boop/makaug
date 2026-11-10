@@ -193,7 +193,9 @@
       + mapButton(helpers)
       + '</div></div>'
       + '<div id="st-results"></div>'
-      + '</div>' + mapColumn() + '</div>';
+      + '<div id="st-lead-slot"></div>'
+      + '</div>' + mapColumn() + '</div>'
+      + '<div id="st-worth-slot"></div>';
   }
 
   function detailHref(listing, helpers) {

@@ -445,8 +445,8 @@
     @media (min-width:768px){.mk-howto-card{flex-basis:13.5rem}.mk-howto-nav{display:flex}.mk-howto-title{font-size:2rem}}
   </style>
   <link rel="stylesheet" href="/assets/off-plan.css?v=20261107-off-plan-v6">
-  <link rel="stylesheet" href="/assets/short-term.css?v=20261110-desktop-map-sidebar">
-  <link rel="stylesheet" href="/assets/design-refresh-1104.css?v=20261104f">
+  <link rel="stylesheet" href="/assets/short-term.css?v=20261110-st-lead-guide">
+  <link rel="stylesheet" href="/assets/design-refresh-1104.css?v=20261110-st-lead-guide">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -5248,8 +5248,8 @@
   </div>
 
   <div id="page-short-term" class="page" data-short-term-marker="short-term-discovery-v1">
-    <link rel="stylesheet" href="/assets/short-term-options.css?v=20261110-st-opt-map-sidebar">
-    <script src="/assets/short-term-options.js?v=20261110-st-options"></script>
+    <link rel="stylesheet" href="/assets/short-term-options.css?v=20261110-st-lead-guide">
+    <script src="/assets/short-term-options.js?v=20261110-st-lead-guide"></script>
     <div id="short-term-ai-shell" class="st-wrap" style="padding-top:18px">
       <div class="ask-ai-search-shell" data-ai-search-shell data-ai-scope="short-term">
         <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -10896,7 +10896,7 @@
       }
       function loadShortTermNow() {
         if (!window.__makaugShortTerm || window.__makaugShortTerm.enabled !== true) return Promise.resolve(false);
-        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261110-st-original-post", function () {
+        return loadPublicSectionScript("short-term", "/assets/short-term.js?v=20261110-st-lead-guide", function () {
           return !!(window.makaugShortTerm && typeof window.makaugShortTerm.route === "function");
         });
       }

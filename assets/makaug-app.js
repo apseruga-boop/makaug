@@ -9601,6 +9601,7 @@ function applyMapAssistLanguageUI() {
     sale: "sale properties",
     rent: "rental properties",
     students: "student accommodation",
+    short_term: "short stays",
     commercial: "commercial property",
     land: "land",
     brokers: "brokers"
@@ -9623,7 +9624,8 @@ function applyMapAssistLanguageUI() {
     setPlaceholder(`[data-map-assist-phone="${kind}"]`, "WhatsApp / phone");
     setPlaceholder(`[data-map-assist-email="${kind}"]`, "Email address");
     setPlaceholder(`[data-map-assist-location="${kind}"]`, kind === "brokers" ? "District or area" : "Location, district or street");
-    setPlaceholder(`[data-map-assist-budget="${kind}"]`, kind === "rent" ? "Monthly budget (USh)" : kind === "students" ? "Budget per semester (USh)" : "Budget (USh)");
+    setPlaceholder(`[data-map-assist-budget="${kind}"]`, kind === "rent" ? "Monthly budget (USh)" : kind === "students" ? "Budget per semester (USh)" : kind === "short_term" ? "Budget per night (USh)" : "Budget (USh)");
+    setPlaceholder(`[data-map-assist-guests="${kind}"]`, "Guests");
     setPlaceholder(`[data-map-assist-details="${kind}"]`, kind === "brokers" ? "What should the broker help with?" : "What are you looking for?");
     const wa = document.querySelector(`[data-map-assist-whatsapp="${kind}"]`);
     if (wa) {
@@ -9637,7 +9639,16 @@ function applyMapAssistLanguageUI() {
     const need = document.querySelector(`[data-map-assist-need="${kind}"]`);
     if (need) {
       const current = need.value || "";
-      const options = [
+      const options = kind === "short_term"
+        ? [
+          ["", "What are you looking for?"],
+          ["Apartment", "Apartment"],
+          ["Guest house", "Guest house"],
+          ["Cottage", "Cottage"],
+          ["Whole house", "Whole house"],
+          ["Hotel or serviced apartment", "Hotel or serviced apartment"]
+        ]
+        : [
         ["", "What are you looking for?"],
         ["For sale", "For sale"],
         ["To rent", "To rent"],
@@ -9649,6 +9660,10 @@ function applyMapAssistLanguageUI() {
       need.innerHTML = options.map(([value, label]) => `<option value="${value}">${translateListingLabel(label)}</option>`).join("");
       need.value = options.some(([value]) => value === current) ? current : "";
     }
+    card?.querySelectorAll(".st-lead-date > span").forEach((span) => {
+      const key = String(span.textContent || "").trim();
+      if (key) span.textContent = translateListingLabel(key);
+    });
   });
 }
 
@@ -41860,6 +41875,9 @@ function toggleLookingWhatsappAlt() {
 	      const locationManual = (document.querySelector(`[data-map-assist-location="${normalized}"]`)?.value || "").trim();
 	      const budget = parseIntSafe(document.querySelector(`[data-map-assist-budget="${normalized}"]`)?.value || "");
 	      const details = (document.querySelector(`[data-map-assist-details="${normalized}"]`)?.value || "").trim();
+	      const checkIn = (document.querySelector(`[data-map-assist-checkin="${normalized}"]`)?.value || "").trim();
+	      const checkOut = (document.querySelector(`[data-map-assist-checkout="${normalized}"]`)?.value || "").trim();
+	      const guests = (document.querySelector(`[data-map-assist-guests="${normalized}"]`)?.value || "").trim();
 	      const listingType = normalized === "students" ? "student" : normalized;
 	      const locationValue = (
 	        locationManual
@@ -41867,12 +41885,17 @@ function toggleLookingWhatsappAlt() {
 	        document.getElementById(`${normalized === "students" ? "student-q" : normalized}-f`)?.value
 	        || document.getElementById(`${normalized}-location-f`)?.value
 	        || document.getElementById(`${normalized}-q-f`)?.value
+	        || (normalized === "short_term" ? (document.getElementById("st-q")?.value || "") : "")
 	        || ""
 	      ).trim();
+	      const budgetLabel = normalized === "short_term" ? "Budget per night" : "Budget";
 	      const requirementParts = [
 	        need ? `Need: ${need}` : "",
 	        locationValue ? `Location: ${locationValue}` : "",
-	        budget ? `Budget: USh ${budget.toLocaleString()}` : "",
+	        checkIn ? `Check-in: ${checkIn}` : "",
+	        checkOut ? `Check-out: ${checkOut}` : "",
+	        guests ? `Guests: ${guests}` : "",
+	        budget ? `${budgetLabel}: USh ${budget.toLocaleString()}` : "",
 	        details ? `Notes: ${details}` : ""
 	      ].filter(Boolean);
 	      if (!name || (!phone && !email) || !requirementParts.length) {
@@ -41900,7 +41923,7 @@ function toggleLookingWhatsappAlt() {
 	          }
 	        });
 	        await trackEvent("map_assist_request_submit", { type: listingType, need, preferred_location: locationValue || "", budget: budget || null });
-	        document.querySelectorAll(`[data-map-assist-name="${normalized}"],[data-map-assist-phone="${normalized}"],[data-map-assist-email="${normalized}"],[data-map-assist-location="${normalized}"],[data-map-assist-budget="${normalized}"],[data-map-assist-details="${normalized}"]`).forEach((el) => { el.value = ""; });
+	        document.querySelectorAll(`[data-map-assist-name="${normalized}"],[data-map-assist-phone="${normalized}"],[data-map-assist-email="${normalized}"],[data-map-assist-location="${normalized}"],[data-map-assist-budget="${normalized}"],[data-map-assist-details="${normalized}"],[data-map-assist-checkin="${normalized}"],[data-map-assist-checkout="${normalized}"],[data-map-assist-guests="${normalized}"]`).forEach((el) => { el.value = ""; });
 	        toast(translateListingLabel("Request saved. makaug will follow up with matching options."));
 	      } catch (error) {
 	        toast(error.message || "Could not submit request.");
@@ -63662,6 +63685,109 @@ const BOOKING_NEW_LABELS_I18N = {"lg": {"Swipe for more days": "Seetula olabe en
 Object.entries(HOME_MAP_COUNT_I18N).forEach(([lang, labels]) => Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels));
 Object.entries(BOOKING_NEW_LABELS_I18N).forEach(([lang, labels]) => Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels));
 
+
+const SHORT_STAY_LEAD_LABELS_I18N = {
+  lg: {
+    "Budget per night (USh)": "Budget ya buli kiro (USh)",
+    "Check-in": "Okuyingira",
+    "Check-out": "Okufuluma",
+    "Guests": "Abagenyi",
+    "Apartment": "Apatmenti",
+    "Guest house": "Ennyumba y'abagenyi",
+    "Cottage": "Akayumba",
+    "Whole house": "Ennyumba yonna",
+    "Hotel or serviced apartment": "Woteeri oba apatmenti erimu emirimu",
+    "short stays": "obusulo obw'okusula okumpi"
+  },
+  sw: {
+    "Budget per night (USh)": "Bajeti ya kila usiku (USh)",
+    "Check-in": "Kuingia",
+    "Check-out": "Kutoka",
+    "Guests": "Wageni",
+    "Apartment": "Ghorofa",
+    "Guest house": "Nyumba ya wageni",
+    "Cottage": "Kottage",
+    "Whole house": "Nyumba nzima",
+    "Hotel or serviced apartment": "Hoteli au ghorofa yenye huduma",
+    "short stays": "malazi ya muda mfupi"
+  },
+  ac: {
+    "Budget per night (USh)": "Cente me dyewor acel (USh)",
+    "Check-in": "Donyo iye",
+    "Check-out": "Kato woko",
+    "Guests": "Welotu",
+    "Apartment": "Ot me bedi",
+    "Guest house": "Ot pa welo",
+    "Cottage": "Ot matidi",
+    "Whole house": "Ot weng",
+    "Hotel or serviced apartment": "Ot welo nyo ot ma kigwoko",
+    "short stays": "kabedo me nino manok"
+  },
+  ny: {
+    "Budget per night (USh)": "Budget y'ekiro kyona (USh)",
+    "Check-in": "Okutaaha",
+    "Check-out": "Okuruga",
+    "Guests": "Abagenyi",
+    "Apartment": "Apatmenti",
+    "Guest house": "Enju y'abagenyi",
+    "Cottage": "Akaju katuto",
+    "Whole house": "Enju yoona",
+    "Hotel or serviced apartment": "Hoteeri nari apatmenti erimu emirimo",
+    "short stays": "okushusha okugufu"
+  },
+  rn: {
+    "Budget per night (USh)": "Budget y'ekiro kyona (USh)",
+    "Check-in": "Okutaaha",
+    "Check-out": "Okuruga",
+    "Guests": "Abagenyi",
+    "Apartment": "Apatmenti",
+    "Guest house": "Enju y'abashyitsi",
+    "Cottage": "Akaju gato",
+    "Whole house": "Enju yoona",
+    "Hotel or serviced apartment": "Hoteeri nari apatmenti erimu emirimo",
+    "short stays": "okushusha okugufu"
+  },
+  sm: {
+    "Budget per night (USh)": "Budget ya buli kiro (USh)",
+    "Check-in": "Okuyingira",
+    "Check-out": "Okufuluma",
+    "Guests": "Abagenyi",
+    "Apartment": "Apatmenti",
+    "Guest house": "Ennyumba y'abagenyi",
+    "Cottage": "Akayumba akatono",
+    "Whole house": "Ennyumba yonna",
+    "Hotel or serviced apartment": "Woteeri oba apatmenti erimu emirimu",
+    "short stays": "obusulo obw'okusula okumpi"
+  },
+  am: {
+    "Budget per night (USh)": "የአንድ ሌሊት በጀት (USh)",
+    "Check-in": "መግቢያ",
+    "Check-out": "መውጫ",
+    "Guests": "እንግዶች",
+    "Apartment": "አፓርታማ",
+    "Guest house": "የእንግዳ ቤት",
+    "Cottage": "ትንሽ ቤት",
+    "Whole house": "ሙሉ ቤት",
+    "Hotel or serviced apartment": "ሆቴል ወይም አገልግሎት ያለው አፓርታማ",
+    "short stays": "አጭር ጊዜ ማረፊያዎች"
+  },
+  ar: {
+    "Budget per night (USh)": "الميزانية لليلة الواحدة (USh)",
+    "Check-in": "تسجيل الوصول",
+    "Check-out": "تسجيل المغادرة",
+    "Guests": "الضيوف",
+    "Apartment": "شقة",
+    "Guest house": "بيت ضيافة",
+    "Cottage": "كوخ",
+    "Whole house": "المنزل بالكامل",
+    "Hotel or serviced apartment": "فندق أو شقة مخدومة",
+    "short stays": "إقامات قصيرة"
+  }
+};
+Object.entries(SHORT_STAY_LEAD_LABELS_I18N).forEach(([lang, labels]) => {
+  Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels);
+});
+
 function translateListingLabel(text) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -69334,7 +69460,11 @@ function mapTagPriceText(p = {}) {
   if (type === "rent" || type === "student" || /month|mo\b/.test(period)) suffix = "/mo";
   if (/night/.test(period)) suffix = "/night";
   if (/sem/.test(period)) suffix = "/sem";
-  return `${symbol}${amount}${suffix}`;
+  // Never show a bare currency ("UGX", "USh") when the amount is missing.
+  if (!amount) return translateListingLabel("POA");
+  const text = `${symbol}${amount}${suffix}`;
+  if (/^(UGX|USh|USH)\s*$/i.test(String(text).replace(/\/.*$/, "").trim())) return translateListingLabel("POA");
+  return text;
 }
 
 function mapMiniCardHtml(p = {}) {
@@ -69560,16 +69690,31 @@ const HOME_MAP_TABS = ["sale", "rent", "student", "short_term", "commercial", "l
 const homeMapPinCache = {};
 let homeMapActiveTab = "sale";
 
+function shortStayNightlyFromRow(row = {}) {
+  const display = String(row?.nightly_display || "").trim();
+  const flagged = row?.price_on_application === true
+    || row?.price_on_application === "true"
+    || /^p\.?o\.?a\.?$/i.test(display);
+  if (flagged) return { amount: 0, poa: true };
+  let n = Number(row?.nightly_ugx || row?.price_per_night || 0);
+  if ((!Number.isFinite(n) || n <= 0) && display) {
+    if (/^(UGX|USH|USh)\s*$/i.test(display)) return { amount: 0, poa: true };
+    n = Number(display.replace(/[^0-9]/g, "")) || 0;
+  }
+  if (!Number.isFinite(n) || n <= 0) return { amount: 0, poa: true };
+  return { amount: n, poa: false };
+}
+
 function shortStayPinForMap(row = {}) {
-  const nightly = Number(row.nightly_ugx || row.price_per_night || 0);
+  const nightly = shortStayNightlyFromRow(row);
   return {
     id: row.id || row.reference || row.slug,
     title: row.title || "",
     type: "short_term",
     listing_type: "short_term",
-    price: nightly > 0 ? nightly : 0,
+    price: nightly.poa ? 0 : nightly.amount,
     period: "night",
-    price_on_application: !(nightly > 0),
+    price_on_application: nightly.poa,
     area: row.area || "",
     district: row.district || "",
     img: row.primary_image || "",
