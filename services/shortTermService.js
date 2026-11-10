@@ -594,7 +594,7 @@ function normalizeShortTermListing(row = {}, options = {}) {
     bathrooms: toInt(row.bathrooms, 0),
     max_guests: toInt(row.max_guests, 0),
     currency: 'UGX',
-    nightly_ugx: Number(row.base_nightly_ugx || 0) > 0 ? Number(row.base_nightly_ugx) : null,
+    nightly_ugx: Number(row.base_nightly_ugx || 0) > 0 && !(row.extra_fields && row.extra_fields.price_on_application === true) ? Number(row.base_nightly_ugx) : null,
     nightly_display: Number(row.base_nightly_ugx || 0) > 0 && !(row.extra_fields && row.extra_fields.price_on_application === true)
       ? formatUgx(row.base_nightly_ugx)
       : 'POA',

@@ -1659,7 +1659,7 @@ test('the section starts on its own route without waiting for the main bundle', 
     } };
   }
   const direct = execute('page-short-term');
-  assert.deepStrictEqual(direct.requests.map(node => node.src), ['/assets/short-term.js?v=20261110-st-pins'],
+  assert.deepStrictEqual(direct.requests.map(node => node.src), ['/assets/short-term.js?v=20261110-st-original-post'],
     'direct section starts before the main bundle is even requested');
   direct.startApp();
   assert.strictEqual(direct.requests.filter(node => node.src.includes('/short-term.js')).length, 1);

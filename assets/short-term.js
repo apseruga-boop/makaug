@@ -60,6 +60,8 @@
   "ac": {
     "availUnconfirmed": "Pe ki moko ka tye",
     "checkAvail": "Penj ka tye",
+    "seeOriginal": "Nen coc mukwongo",
+    "viewStay": "Nen ka bedo",
     "adCtaFind": "Yeny kabedo",
     "adHeadline": "Uganda tye ka gamo welo. Ot rwatte oyot.",
     "adSub": "Kampala, Entebbe ki Jinja pong con ma peya tuko ocake.",
@@ -167,6 +169,8 @@
   "am": {
     "availUnconfirmed": "መገኘቱ አልተረጋገጠም",
     "checkAvail": "መገኘቱን ያረጋግጡ",
+    "seeOriginal": "ዋናውን ልጥፍ ይመልከቱ",
+    "viewStay": "ማረፊያውን ይመልከቱ",
     "adCtaFind": "ማረፊያ ይፍልጉ",
     "adHeadline": "ዩጋንዳ ታስተናግዳለች። ክፍሎች በፍጥነት ይዮዛሉ።",
     "adSub": "ካምፓላ፣ እንቴቤ እና ጁንጃ ጨዋታው ከመጀመሩ በፊት ይሞላሉ።",
@@ -274,6 +278,8 @@
   "ar": {
     "availUnconfirmed": "التوفر غير مؤكد",
     "checkAvail": "تحقق من التوفر",
+    "seeOriginal": "عرض المنشور الأصلي",
+    "viewStay": "عرض مكان الإقامة",
     "adCtaFind": "ابحث عن إقامة",
     "adHeadline": "أوغندا تستضيف. الغرف تنفد مبكراً.",
     "adSub": "كمبالا وإنتيبي وجينجا تمتلئ قبل انطلاق البطولة بوقت طويل.",
@@ -381,6 +387,8 @@
   "en": {
     "availUnconfirmed": "Availability not confirmed",
     "checkAvail": "Check availability",
+    "seeOriginal": "See original post",
+    "viewStay": "View stay",
     "adCtaFind": "Find a stay",
     "adHeadline": "Uganda hosts. Rooms go early.",
     "adSub": "Kampala, Entebbe and Jinja fill up long before kick-off.",
@@ -488,6 +496,8 @@
   "lg": {
     "availUnconfirmed": "Tekinnakakasibwa nti weeri",
     "checkAvail": "Buuza oba weeri",
+    "seeOriginal": "Laba ebyasooka okuteekebwa",
+    "viewStay": "Laba ekifo",
     "adCtaFind": "Noonya we onoosula",
     "adHeadline": "Uganda y'eyakuŋŋaanyiza. Ebifo biggwaawo mangu.",
     "adSub": "Kampala, Entebbe ne Jinja zijjula nga tekinnatuuka.",
@@ -595,6 +605,8 @@
   "ny": {
     "availUnconfirmed": "Tikikakasiibwe ngu kiriho",
     "checkAvail": "Kaguza ngu kiriho",
+    "seeOriginal": "Reeba ebyabanza kuteebwaho",
+    "viewStay": "Reeba ekiikaro",
     "adCtaFind": "Sherura ekyanya",
     "adHeadline": "Uganda niyo erikwakiira. Ebyanya nibihwaho juba.",
     "adSub": "Kampala, Entebbe na Jinja nibijura obutakaba omuzaano gutandika.",
@@ -702,6 +714,8 @@
   "rn": {
     "availUnconfirmed": "Tikikakasiziibwe ngu kiroho",
     "checkAvail": "Buuza ngu kiroho",
+    "seeOriginal": "Rora ebyabandize kuteebwaho",
+    "viewStay": "Rora ekiikaro",
     "adCtaFind": "Sherura ahantu",
     "adHeadline": "Uganda niyo erikwakiira. Ahantu nihahwaho juba.",
     "adSub": "Kampala, Entebbe na Jinja nibijura obutakaba omuzaano gutandika.",
@@ -809,6 +823,8 @@
   "sm": {
     "availUnconfirmed": "Tekikakasiddwa nti kiriwo",
     "checkAvail": "Buuza oba kiriwo",
+    "seeOriginal": "Laba ebyasooka okuteekebwa",
+    "viewStay": "Laba ekifo",
     "adCtaFind": "Noonya ekifo",
     "adHeadline": "Uganda y'eyakuŋŋaanyiza. Ebifo biggwaawo mangu.",
     "adSub": "Kampala, Entebbe ni Jinja zijjula nga tekinnatuuka.",
@@ -916,6 +932,8 @@
   "sw": {
     "availUnconfirmed": "Upatikanaji haujathibitishwa",
     "checkAvail": "Angalia upatikanaji",
+    "seeOriginal": "Tazama chapisho asili",
+    "viewStay": "Tazama makazi",
     "adCtaFind": "Tafuta malazi",
     "adHeadline": "Uganda inakaribisha. Vyumba vinaisha mapema.",
     "adSub": "Kampala, Entebbe na Jinja hujaa muda mrefu kabla ya mechi.",
@@ -2192,8 +2210,18 @@
       + ((q.check_in || q.check_out || listing.source === 'imported')
         ? '<span class="st-avail-tag"><i class="far fa-calendar" aria-hidden="true"></i> ' + esc(t('availUnconfirmed')) + '</span>'
         : '')
-      + '<a class="st-avail-btn" href="' + esc(href) + '" data-st-link data-st-contact="check-availability">' + esc(t('checkAvail')) + '</a>'
+      + (isFoundOnlineStay(listing)
+        ? (listing.source_url
+          ? '<a class="st-avail-btn" href="' + esc(listing.source_url) + '" target="_blank" rel="noopener nofollow" data-st-contact="original-post">' + esc(t('seeOriginal')) + '</a>'
+          : '<a class="st-avail-btn" href="' + esc(listing.url || '#') + '" data-st-link>' + esc(t('viewStay')) + '</a>')
+        : '<a class="st-avail-btn" href="' + esc(href) + '" data-st-link data-st-contact="check-availability">' + esc(t('checkAvail')) + '</a>')
       + '</div>';
+  }
+
+  // Found-online hosts are never contacted (Arthur, 9 Nov 2026), so their
+  // button sends the guest to the original post instead of promising a check.
+  function isFoundOnlineStay(listing) {
+    return Boolean(listing && (listing.source === 'imported' || listing.found_online || listing.do_not_message));
   }
 
   function enquiryPrefill(listing) {
