@@ -6,7 +6,7 @@
  * Ronald meets somebody who might become an agent. Before this, the only way
  * through Agent 007 was "these properties belong to…", and he had no properties
  * — so there was nothing he could choose, and the film that exists for exactly
- * this moment, makaug-join-as-agent-v3.mp4, could only be sent by the bot when
+ * this moment, makaug-join-as-agent-v4.mp4 (v3 until the free trial ended on 10 Nov 2026), could only be sent by the bot when
  * a stranger happened to type the right thing.
  *
  * Now: 3 → "Name | phone" → the film goes out with what we are, how listing
@@ -118,12 +118,13 @@ test('3, then a name and a number, and the film is gone', async () => {
     assert.strictEqual(done.prospectPitched, true);
     assert.match(done.message, /Video sent to Kato Brian/);
     assert.match(done.message, /256772123456/, 'the number it actually went to, in full');
-    assert.match(done.message, /14 days free/, 'Ronald is told what they were told');
+    assert.match(done.message, /the plan \(UGX 50,000 a month\)/, 'Ronald is told what they were told: the plan, no free days');
+    assert.ok(!/days free/.test(done.message), 'no free trial since 10 Nov 2026');
     assert.match(done.message, /Agent 007.*\*1\*/s, 'and what to do when they say yes');
 
     assert.strictEqual(sent.length, 1, 'exactly one message queued');
     const payload = sent.map((p) => JSON.stringify(p)).join(' ');
-    assert.match(payload, /makaug-join-as-agent-v3\.mp4/, 'the joining film, not the welcome pack');
+    assert.match(payload, /makaug-join-as-agent-v4\.mp4/, 'the joining film, not the welcome pack');
     assert.match(payload, /media_type\\?":\\?"video/, 'queued as a video, which is what the bridge now attaches');
     assert.ok(!/UGX 50,000/.test(payload), 'the fee is in the terms they sign, not the pitch'); assert.match(payload, /9 languages/);
     assert.match(payload, /Hello Kato/, 'addressed to them by name');

@@ -104,6 +104,6 @@ test('live copy no longer sells a short stay as UGX 50,000 for 3 months', () => 
   assert.match(read('server.js'), /UGX 20,000 a Month/);
   assert.match(read('services/listingDocsService.js'), /ordinary listers pay UGX 20,000 a month from approval, with no free days/);
   assert.match(read('services/listingDocsService.js'), /Your first \$\{s\.freeDays\} days are free/);
-  assert.match(read('routes/whatsapp.js'), /first 7 days free/);
+  assert.doesNotMatch(read('routes/whatsapp.js'), /first 7 days free/, 'the WhatsApp menu offers no free days since 10 Nov 2026');
   assert.match(read('routes/whatsapp.js'), /ordinary listers pay UGX 20,000 a month, with no free days/);
 });

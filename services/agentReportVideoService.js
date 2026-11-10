@@ -580,7 +580,8 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
   // pulling it in at module load would close the circle.
   const welcome = require('./agentWelcomeService');
   const network = welcome.networkAudience();
-  const onTrial = !!welcome.trialTerms(agent);
+  const trial = welcome.trialTerms(agent);
+  const onTrial = !!trial;
   const firstName = agentGreetingName(agent, 'there');
   const initials = String(agent.full_name || 'M A').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const countries = (Array.isArray(stats.top_countries) ? stats.top_countries : []).slice(0, 4);
@@ -671,8 +672,10 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
     return r;
   } });
 
-  // The free period is told here, in the film, and nowhere in the written message.
-  if (onTrial) statement(2.2, [{ text: 'Your first 14 days', size: 44, weight: 900 }, { text: 'are free', size: 52, weight: 900, fill: K.orange }], { sub: 'post, get found, get buyers', fill: K.yellow });
+  // A free period is told here, in the film, and nowhere in the written
+  // message. New agents have none since 10 Nov 2026, so this scene is only for
+  // a free period staff give by hand; it says that period's own length.
+  if (onTrial) statement(2.2, [{ text: `Your first ${trialLengthDays(agent)} days`, size: 44, weight: 900 }, { text: 'are free', size: 52, weight: 900, fill: K.orange }], { sub: 'post, get found, get buyers', fill: K.yellow });
 
   scenes.push({ dur: 2.2, draw: (lt) => {
     const sc = pop(lt, 0.05, Infinity, 0.45);
@@ -686,6 +689,15 @@ function buildWelcomeTimeline({ agent = {}, stats = {} } = {}) {
   let at = 0;
   scenes.forEach((sc) => { sc.start = at; at += sc.dur; });
   return { scenes, duration: at };
+}
+
+/** Length of an agent's free period in days, counted from the day it was given. */
+function trialLengthDays(agent = {}) {
+  const revenue = require('./revenueService');
+  const until = revenue.isoDay(agent.fee_offer_until);
+  const start = agent.fee_offer_at ? revenue.kampalaDate(new Date(agent.fee_offer_at)) : revenue.kampalaDate();
+  const days = Math.round((Date.parse(`${until}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000) + 1;
+  return Number.isFinite(days) && days >= 1 ? days : 14;
 }
 
 function buildWelcomeScenes(payload) {
@@ -704,13 +716,15 @@ function welcomeDuration(payload) {
 // A version starting with "t" asks for the trial variant of the film whatever
 // the agent's own record says. Used only by the staff preview (so the free
 // period scene can be reviewed before any real agent is on a trial); it has its
-// own cache file, so it never stands in for a real agent's film.
+// own cache file, so it never stands in for a real agent's film. New agents
+// have no free days since 10 Nov 2026, so the preview shows a 14-day period.
 function trialVariant(payload) {
   const revenue = require('./revenueService');
   const today = revenue.kampalaDate();
+  const days = revenue.agentTrialDays() || 14;
   return {
     ...payload,
-    agent: { ...(payload.agent || {}), fee_offer_mode: 'free_period', fee_offer_until: revenue.addDays(today, revenue.agentTrialDays() - 1), fee_offer_at: new Date().toISOString() }
+    agent: { ...(payload.agent || {}), fee_offer_mode: 'free_period', fee_offer_until: revenue.addDays(today, days - 1), fee_offer_at: new Date().toISOString() }
   };
 }
 
@@ -756,6 +770,7 @@ module.exports = {
   welcomeDuration,
   welcomeVideoUrl,
   trialVariant,
+  trialLengthDays,
   videoDuration,
   buildScenes,
   ensureReportVideo,

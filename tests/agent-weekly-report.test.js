@@ -283,10 +283,11 @@ test('the new-agent welcome pack explains makaug, the audience and the diaspora'
     stats: { live_listings: 4210, agents: 212, views_30d: 38400, visitors_30d: 15200, countries_count: 9, diaspora_countries: [{ code: 'GB', name: 'United Kingdom' }, { code: 'AE', name: 'United Arab Emirates' }] }
   };
   const message = welcome.buildWelcomeMessage(pack);
-  for (const needle of ['Welcome to makaug.com', 'MKA-AG-7654321', 'Uganda’s property market, online', '4,210 live listings', 'United Kingdom', 'no commission', 'UGX 20,000 a month from the day it goes live', 'makaug.com/list-property']) {
+  for (const needle of ['Welcome to makaug.com', 'MKA-AG-7654321', 'Uganda’s property market, online', '4,210 live listings', 'United Kingdom', 'no commission', 'makaug.com/list-property']) {
     assert.ok(message.includes(needle), `missing ${needle}`);
   }
   assert.ok(message.length < 4096);
+  assert.ok(!/days free|free week|first 7|UGX 20,000|UGX 50,000/i.test(message), 'the welcome never talks fees: an agent\'s listings are covered by the plan, and the payment link follows on its own');
   assert.match(welcome.buildWelcomeCaption(pack), /30\+ countries/);
   const early = welcome.buildWelcomeMessage({ ...pack, stats: { ...pack.stats, agents: 7, countries_count: 4 } });
   assert.ok(!early.includes('7 agents'), 'a handful of agents is not a selling point');

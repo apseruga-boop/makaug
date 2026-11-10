@@ -164,9 +164,9 @@ function shortDay(iso) {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-// An agent approved with a free period (new agents get 14 days, decided 10 Oct
-// 2026). Null for everyone else, so the welcome for an agent who is not on a
-// trial reads exactly as before.
+// An agent approved with a free period: the 14-day trial new agents had from
+// 10 Oct to 10 Nov 2026, or a free period staff give by hand. Null for everyone
+// else (new agents get no free days since 10 Nov 2026).
 function trialTerms(agent = {}) {
   if (agent.fee_offer_mode !== 'free_period' || !agent.fee_offer_until) return null;
   const revenue = require('./revenueService');
@@ -253,9 +253,10 @@ function buildWelcomeMessage({ agent = {}, stats = {} } = {}) {
   lines.push('• Your phone number sits on your listing — buyers call you directly');
   lines.push('• Buyers arrive from Google, our Ask AI search and our WhatsApp assistant');
   lines.push('• Video-first listings: a walk-through can sell to someone who is 6,000 km away');
-  // From 10 Nov 2026 a private listing is paid from the day it goes live.
-  // Agents already on a recorded free period still hear that in the video only.
-  if (!trialTerms(agent)) lines.push('• A private listing is UGX 20,000 a month from the day it goes live');
+  // The message says nothing about fees or free periods (Arthur, 10 Oct 2026):
+  // the payment link follows the pack on its own, and an agent's listings are
+  // covered by the agent plan, so the old per-listing "first 7 days free" line
+  // has no replacement here (10 Nov 2026).
   lines.push('• Built for investors too: off plan, buy-to-let and a mortgage finder');
   lines.push('• You get a weekly WhatsApp report: views, visitors, enquiries and the countries watching you');
 
