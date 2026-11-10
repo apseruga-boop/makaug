@@ -39,6 +39,7 @@ const { insertFoundOnlineShortStayListing } = require('./foundOnlineShortStayInt
 const { plotSaleBeatsStudentWords } = require('../utils/listingCategorySignals');
 const { detectPropertyTypeEvidence } = require('../utils/propertyTypeVocabulary');
 const { isApartmentBlockText, modestPriceDrop, videoIdFromText } = require('../utils/listingIntakeQuality');
+const { correctedPinForNewListing } = require('./listingCoordinateRepairService');
 const { blockedSocialSourceMatch } = require('./socialSourceBlocklistService');
 const {
   acceptEuropeanDecimalMagnitudes,
@@ -2185,6 +2186,7 @@ function whatsappShareMessage(item, propertyUrl, ownerPreviewUrl = '') {
 }
 
 function buildSocialSearchListing(item, agentId = null) {
+  item = applyCorrectedPinToSourceItem(item);
   const agent = sourceAgentForItem(item);
   const autoLive = sourcePostAutoLiveStatusFor(item, agent);
   const originalListingType = item.listingType || 'sale';
@@ -2335,7 +2337,8 @@ function buildSocialSearchListing(item, agentId = null) {
       ...extraFieldsFor(item, agentId),
       internal_review_tags: internalReviewTagsFor(item, agent),
       price_quality: priceQuality,
-      data_integrity_review: dataIntegrity
+      data_integrity_review: dataIntegrity,
+      ...(item.coords_fix ? { coords_fix: item.coords_fix } : {})
     }),
     lister_name: agent.name || 'Found-online Source Desk',
     lister_phone: agent.phone || null,
@@ -2785,6 +2788,29 @@ function normalizeFoundOnlineListingType(value = '', options = {}) {
   return 'sale';
 }
 
+
+function applyCorrectedPinToSourceItem(item = {}) {
+  const pinFix = correctedPinForNewListing({
+    title: item.title || item.sourceTitle || item.source_title || '',
+    area: item.area || '',
+    district: item.district || '',
+    latitude: item.lat ?? item.latitude,
+    longitude: item.lng ?? item.longitude,
+    extra_fields: {
+      canonical_location_id: item.canonicalLocationId || item.canonical_location_id || null
+    }
+  });
+  if (!pinFix) return item;
+  return {
+    ...item,
+    lat: pinFix.latitude,
+    lng: pinFix.longitude,
+    latitude: pinFix.latitude,
+    longitude: pinFix.longitude,
+    coords_fix: pinFix.coords_fix
+  };
+}
+
 function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   const sourceUrl = sourceUrlForItem(raw)
     || safeUrl(raw.source_url)
@@ -3059,7 +3085,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     sourcePublishedAt: raw.first_posted_at || raw.published_at || raw.posted_at || null,
   });
   if (freeCategoryRoute.listing_type === 'student') listingType = 'student';
-  return {
+  return applyCorrectedPinToSourceItem({
     key: postKey,
     agentKey: sourceKey,
     sourceAgent,
@@ -3136,8 +3162,8 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     baths: numberOrNull(raw.bathrooms ?? raw.baths),
     landSizeValue: numberOrNull(raw.land_size_value ?? raw.landSizeValue),
     landSizeUnit: raw.land_size_unit || raw.landSizeUnit || null,
-    lat: numberOrNull(raw.latitude ?? raw.lat) ?? canonicalLocation?.lat ?? null,
-    lng: numberOrNull(raw.longitude ?? raw.lng) ?? canonicalLocation?.lng ?? null,
+    lat: numberOrNull(raw.latitude ?? raw.lat),
+    lng: numberOrNull(raw.longitude ?? raw.lng),
     imageUrls: asTextArray(raw.image_urls || raw.images || raw.photo_urls || raw.media_urls),
     photoUrls: asTextArray(raw.photo_urls),
     mediaUrls: asTextArray(raw.media_urls),
@@ -3161,7 +3187,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
       composite_listing_key: raw.composite_listing_key || '',
     },
     dataIntegrity,
-  };
+  });
 }
 
 const HARVEST_DUPLICATE_CHECK_NO_TIMEOUT_SQL = 'SET statement_timeout = 0';

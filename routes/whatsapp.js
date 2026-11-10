@@ -8,6 +8,7 @@ const {
   pricePeriodForUnitQuote,
 } = require('../utils/listingIntakeQuality');
 const { agentGreetingName } = require('../services/agentNameService');
+const { correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { scheduleVideoCaptionOcr } = require('../services/videoCaptionOcrService');
 const express = require('express');
 const crypto = require('crypto');
@@ -7238,6 +7239,21 @@ async function createEmployeeReviewProperty({
     } : {})
   };
 
+  const pendingLat = Number.isFinite(Number(sessionData.pending_property_pin?.lat)) ? Number(sessionData.pending_property_pin.lat) : null;
+  const pendingLng = Number.isFinite(Number(sessionData.pending_property_pin?.lng)) ? Number(sessionData.pending_property_pin.lng) : null;
+  const pinFix = correctedPinForNewListing({
+    title,
+    area: facts.locationPatch.area,
+    district: facts.locationPatch.district,
+    latitude: pendingLat,
+    longitude: pendingLng,
+    extra_fields: extraFields
+  });
+  const intakeLatitude = pinFix ? pinFix.latitude : pendingLat;
+  const intakeLongitude = pinFix ? pinFix.longitude : pendingLng;
+  if (pinFix) extraFields.coords_fix = pinFix.coords_fix;
+
+
   const client = await db.getClient();
   let propertyId = '';
   try {
@@ -7277,8 +7293,8 @@ async function createEmployeeReviewProperty({
         JSON.stringify(extraFields),
         // Buyers filter by type; a WhatsApp listing with none never showed under "house".
         parsePropertyType(withEnglishPropertyTerms(caption)) || null,
-        Number.isFinite(Number(sessionData.pending_property_pin?.lat)) ? Number(sessionData.pending_property_pin.lat) : null,
-        Number.isFinite(Number(sessionData.pending_property_pin?.lng)) ? Number(sessionData.pending_property_pin.lng) : null,
+        intakeLatitude,
+        intakeLongitude,
         // Every listing gets an MK reference when it is created. 424 Agent 007
         // listings had none, so staff and agents had nothing short to quote.
         buildListingReference(),

@@ -3,6 +3,8 @@ const crypto = require('crypto');
 const logger = require('../config/logger');
 const { sendSupportEmail, getSupportEmail, getSupportPhone } = require('./emailService');
 const { isPriceOnApplication } = require('../utils/listingPriceQuality');
+const { isPointInUganda } = require('./locationSearchService');
+const { areaCentreForUnpinnedListing } = require('./listingCoordinateRepairService');
 const { normalizeUgPhoneForWhatsApp, sendWhatsAppText } = require('./whatsappNotificationService');
 
 /**
@@ -484,7 +486,20 @@ function buildAutomatedListingReview({
     const sameEmail = row.lister_email && listing.lister_email && String(row.lister_email).toLowerCase() === String(listing.lister_email).toLowerCase();
     return !samePhone && !sameEmail;
   });
-  const hasMapPin = (listing.latitude != null && listing.longitude != null) || !!extra.map_pin_confirmed || !!extra.coordinates;
+  const latNum = listing.latitude == null || listing.latitude === '' ? null : Number(listing.latitude);
+  const lngNum = listing.longitude == null || listing.longitude === '' ? null : Number(listing.longitude);
+  const hasStoredCoords = latNum != null && lngNum != null && Number.isFinite(latNum) && Number.isFinite(lngNum);
+  const hasUsablePin = hasStoredCoords && isPointInUganda(latNum, lngNum);
+  const hasAreaCentre = Boolean(areaCentreForUnpinnedListing({
+    area: listing.area,
+    district: listing.district,
+    extra_fields: extra
+  }));
+  const locationVerified = hasUsablePin
+    ? { status: 'pass', message: 'Location details and coordinates/map confirmation are present.', blocking: false }
+    : (!hasStoredCoords && hasAreaCentre)
+      ? { status: 'pass', message: 'No stored pin yet; the area centre will be used if this listing is approved.', blocking: false }
+      : { status: 'warning', message: 'No map pin – add one', blocking: false };
   const whatsappSenderConfirmed = extra.whatsapp_sender_contact_confirmed === true
     && extra.verification_channel === 'whatsapp_sender';
   const hasContact = whatsappSenderConfirmed
@@ -586,9 +601,17 @@ function buildAutomatedListingReview({
     ),
     checkResult(
       'location_verified',
-      hasMapPin ? 'pass' : 'fail',
-      hasMapPin ? 'Location details and coordinates/map confirmation are present.' : 'Map pin or coordinates are missing.',
-      { latitude: listing.latitude ?? null, longitude: listing.longitude ?? null, map_pin_confirmed: !!extra.map_pin_confirmed }
+      locationVerified.status,
+      locationVerified.message,
+      {
+        latitude: listing.latitude ?? null,
+        longitude: listing.longitude ?? null,
+        map_pin_confirmed: !!extra.map_pin_confirmed,
+        has_usable_pin: hasUsablePin,
+        has_area_centre: hasAreaCentre,
+        has_stored_coords: hasStoredCoords
+      },
+      locationVerified.blocking
     ),
     checkResult(
       'pricing_checked',
