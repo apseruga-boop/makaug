@@ -22128,6 +22128,8 @@ async function importForwardedAdvert({ phone, agent, group, inboundMessageId }) 
 }
 
 module.exports.groupForwardedAdverts = groupForwardedAdverts;
+// King's Remove agent: stop treating the number as an agent at once, not in five minutes.
+module.exports.forgetAgentPhone = (phone) => { try { agentByPhoneCache.delete(agentPhoneKey(phone)); } catch (_e) { /* best effort */ } };
 module.exports.pairForwardedAlbums = pairForwardedAlbums;
 module.exports.forwardedAdvertMimeType = forwardedAdvertMimeType;
 module.exports.importForwardedAdvert = importForwardedAdvert;

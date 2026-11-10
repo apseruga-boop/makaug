@@ -18591,6 +18591,8 @@ function adminAgentManagerDetailHtml(d = {}) {
     agent_added: "Added by staff (no message sent)",
     admin_agent_removed: "Agent removed",
     admin_agent_restored: "Agent restored",
+    agent_goodbye_sent: "Goodbye message and film sent",
+    agent_goodbye_not_sent: "Goodbye not sent (no WhatsApp number)",
     admin_agent_listing_take_down: "Listing taken down",
     admin_agent_listing_mark_sold: "Listing marked sold",
     admin_agent_listing_mark_let: "Listing marked let",
@@ -18640,7 +18642,7 @@ function adminAgentManagerDetailHtml(d = {}) {
           ${adminAgentManagerApproveButton(a, "lg")}
         </div>
       </div>` : ""}
-      ${a.removed_at ? `<div class="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-800">Removed ${date(a.removed_at, true)}${a.removed_reason ? ` — “${adminEscape(a.removed_reason)}”` : ""}. Their profile and listings are off the site. <button type="button" data-agent-restore class="ml-2 rounded-lg bg-green-700 text-white px-3 py-1.5 text-xs font-bold" onclick="adminAgentManagerRestore('${id}')">Restore agent</button></div>` : ""}
+      ${a.removed_at ? `<div class="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-800">Removed ${date(a.removed_at, true)}${a.removed_reason ? ` — “${adminEscape(a.removed_reason)}”` : ""}. Their profile and listings are off the site.${a.personal_deleted_at ? ` Their ID and personal details were deleted on ${date(a.personal_deleted_at)}.` : (a.personal_delete_after ? ` Their ID and personal details will be deleted on ${date(a.personal_delete_after)} unless you restore them first.` : "")} <button type="button" data-agent-restore class="ml-2 rounded-lg bg-green-700 text-white px-3 py-1.5 text-xs font-bold" onclick="adminAgentManagerRestore('${id}')">Restore agent</button></div>` : ""}
       ${dupes.length ? `<div class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><strong>Same phone number on another agent record:</strong> ${dupes.map((x) => `<button type="button" class="underline font-bold" onclick="adminAgentManagerOpen('${adminAttr(x.id)}')">${adminEscape(x.full_name)}</button> (joined ${date(x.created_at)}, ${Number(x.total_listings || 0)} listings${x.removed_at ? ", removed" : ""})`).join(", ")}. If it is the same person, move the listings to one record and remove the other.</div>` : ""}
       <form class="rounded-xl border border-gray-200 p-3" onsubmit="adminAgentManagerSaveDetails(event, '${id}')" data-agent-details-form>
         <h5 class="font-black text-gray-900 mb-2">Details</h5>
@@ -18719,9 +18721,15 @@ function adminAgentManagerDetailHtml(d = {}) {
       </section>
       ${a.removed_at ? "" : `<section class="rounded-xl border border-red-200 bg-red-50 p-3" data-agent-remove>
         <h5 class="font-black text-red-900 mb-1">Remove agent</h5>
-        <p class="text-xs text-red-900 mb-2">Takes their profile and live/pending listings off makaug. Nothing is deleted: “Restore agent” puts everything back as it was.</p>
-        <div class="flex flex-wrap gap-2">
-          <input type="text" data-remove-reason placeholder="Why? e.g. duplicate of another record" class="flex-1 min-w-[200px] rounded-xl border border-red-200 bg-white px-3 py-2 text-sm">
+        <p class="text-xs text-red-900 mb-2">Choose why. What happens depends on the reason. Listings are hidden, never deleted: “Restore agent” puts them back.</p>
+        <div class="space-y-1" data-remove-reasons>${ADMIN_AGENT_REMOVAL_REASONS.map((r) => `
+          <label class="flex items-start gap-2 rounded-lg border border-red-100 bg-white p-2 cursor-pointer">
+            <input type="radio" name="remove_reason_code_${id}" value="${adminAttr(r.code)}" data-remove-reason-code class="mt-1" onchange="adminAgentManagerRemoveReasonChanged('${id}')">
+            <span class="min-w-0"><span class="block text-sm font-bold text-gray-900">${adminEscape(r.label)}</span><span class="block text-[11px] text-gray-600">${adminEscape(r.does)}</span></span>
+          </label>`).join("")}</div>
+        <input type="text" data-remove-reason placeholder="Note (optional), e.g. told Ronald on WhatsApp they are moving to Nairobi" class="mt-2 w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm">
+        <div class="mt-2" data-remove-preview></div>
+        <div class="mt-2 flex flex-wrap gap-2">
           <button type="button" class="rounded-lg bg-red-700 text-white px-4 py-2 text-xs font-bold" onclick="adminAgentManagerRemove('${id}')">Remove agent</button>
         </div>
       </section>`}
@@ -19093,13 +19101,84 @@ async function adminAgentManagerMoveListing(propertyId) {
   }
 }
 
-async function adminAgentManagerRemove(agentId) {
-  const reason = String(document.querySelector("[data-agent-manager-agent] [data-remove-reason]")?.value || "").trim();
-  if (!reason) { toast("Say why this agent is being removed."); return; }
-  if (!window.confirm("Remove this agent? Their profile and listings come off makaug. You can Restore them later.")) return;
+// Why an agent is removed decides what happens (services/agentGoodbyeService.js
+// has the same list; the server checks the code). Only "They're leaving" sends
+// anything: the goodbye message and their goodbye film (Arthur, 10 Nov 2026).
+const ADMIN_AGENT_REMOVAL_REASONS = [
+  { code: "cancelled", label: "They're leaving: cancelled or won't pay", does: "Listings and profile off, login closed, WhatsApp set back to normal. They get the goodbye message and film. ID and personal details deleted after 30 days; name and number kept." },
+  { code: "not_paying", label: "Has not paid yet", does: "Listings and profile off, login closed. Nothing is sent; their details are kept so they can come back when they pay." },
+  { code: "rules", label: "Broke the rules (fake or wrong listings)", does: "Listings and profile off, login closed. Nothing is sent. Their ID is kept, for fraud or police requests." },
+  { code: "duplicate", label: "Duplicate or test record", does: "Profile and listings off. Nothing is sent." },
+  { code: "other", label: "Something else", does: "Profile and listings off. Nothing is sent. Say why in the note." }
+];
+
+function adminAgentManagerRemoveReasonCode() {
+  return String(document.querySelector("[data-agent-manager-agent] [data-remove-reason-code]:checked")?.value || "");
+}
+
+async function adminAgentManagerRemoveReasonChanged(agentId) {
+  const box = document.querySelector("[data-agent-manager-agent] [data-remove-preview]");
+  const code = adminAgentManagerRemoveReasonCode();
+  if (!box || !code) return;
+  box.innerHTML = `<p class="text-xs text-gray-600">Loading what happens…</p>`;
   try {
-    const res = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/remove`, { method: "POST", headers: adminAuthHeaders(), body: { reason } });
-    await adminAgentManagerRefreshOpen(`Removed ${res?.data?.full_name || "agent"}${res?.data?.listings_hidden ? ` and hid ${res.data.listings_hidden} listing(s)` : ""}.`);
+    const res = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/remove-preview?reason_code=${encodeURIComponent(code)}`, { headers: adminAuthHeaders() });
+    if (adminAgentManagerRemoveReasonCode() !== code) return;
+    const d = res?.data || {};
+    const does = Array.isArray(d.does) ? d.does : [];
+    const g = d.goodbye;
+    box.innerHTML = `
+      <div class="rounded-xl border border-red-200 bg-white p-3 space-y-2" data-remove-what-happens>
+        <p class="text-xs font-black text-red-900">What happens when you press Remove</p>
+        <ul class="list-disc pl-4 text-xs text-gray-800 space-y-0.5">${does.map((line) => `<li>${adminEscape(line)}</li>`).join("")}</ul>
+        ${g ? `
+          <p class="text-xs font-black text-gray-900 pt-1">The goodbye on WhatsApp${g.to ? ` (to the number ending ${adminEscape(g.to.replace(/^…/, ""))})` : " (no WhatsApp number on file, so nothing can be sent)"}</p>
+          <p class="text-[11px] text-gray-500">1. This message, straight away:</p>
+          <div class="whitespace-pre-wrap break-words rounded-lg bg-green-50 border border-green-100 p-2 text-[12px] text-gray-900" data-goodbye-message>${adminEscape(g.message || "")}</div>
+          <p class="text-[11px] text-gray-500">2. Then their goodbye film, with this caption:</p>
+          <div class="whitespace-pre-wrap break-words rounded-lg bg-green-50 border border-green-100 p-2 text-[12px] text-gray-900" data-goodbye-caption>${adminEscape(g.caption || "")}</div>
+          ${g.film_url ? `<a href="${adminAttr(g.film_url)}" target="_blank" rel="noopener" class="inline-block text-xs font-bold text-green-800 underline" data-goodbye-film>▶ Watch their goodbye film (made from today's numbers; the first time takes about a minute)</a>` : `<p class="text-[11px] text-gray-500">Films cannot be made on this server right now, so only the message would go.</p>`}
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <input type="tel" data-goodbye-test-to placeholder="Your WhatsApp number" class="min-w-[180px] flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm">
+            <button type="button" class="rounded-lg border border-green-700 text-green-800 px-3 py-2 text-xs font-bold" onclick="adminAgentManagerGoodbyeTest('${adminAttr(agentId)}')">Send me a test</button>
+          </div>
+          <p class="text-[11px] text-gray-500">A test goes only to the number you type. The agent gets nothing until you press Remove.</p>` : ""}
+      </div>`;
+  } catch (error) {
+    box.innerHTML = `<p class="text-xs text-red-800">Could not load the preview: ${adminEscape(error?.message || "error")}</p>`;
+  }
+}
+
+async function adminAgentManagerGoodbyeTest(agentId) {
+  const to = String(document.querySelector("[data-agent-manager-agent] [data-goodbye-test-to]")?.value || "").replace(/\D+/g, "");
+  if (to.length < 9) { toast("Type your WhatsApp number for the test."); return; }
+  try {
+    await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/goodbye-preview`, { method: "POST", headers: adminAuthHeaders(), body: { preview_to: to } });
+    toast("Test sent to your WhatsApp: the message now, the film in a minute or two.", 4200);
+  } catch (error) {
+    toast(`Test not sent: ${error?.message || "error"}`);
+  }
+}
+
+async function adminAgentManagerRemove(agentId) {
+  const code = adminAgentManagerRemoveReasonCode();
+  const reason = ADMIN_AGENT_REMOVAL_REASONS.find((r) => r.code === code);
+  const note = String(document.querySelector("[data-agent-manager-agent] [data-remove-reason]")?.value || "").trim();
+  if (!reason) { toast("Choose why this agent is being removed."); return; }
+  if (code === "other" && !note) { toast("Say why in the note."); return; }
+  const name = String(document.querySelector("[data-agent-manager-agent] h4")?.textContent || "this agent").trim();
+  const question = code === "cancelled"
+    ? `Remove ${name}? They're leaving (cancelled or won't pay).\n\n• Their listings and profile come off makaug\n• Their login is closed\n• They get the goodbye message now and their film after it\n• Their ID and personal details are deleted in 30 days (restore them before then and nothing is lost)`
+    : `Remove ${name}? ${reason.label}.\n\nTheir listings and profile come off makaug. Nothing is sent to them.`;
+  if (!window.confirm(question)) return;
+  try {
+    const res = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/remove`, { method: "POST", headers: adminAuthHeaders(), body: { reason_code: code, reason: note } });
+    const d = res?.data || {};
+    const bits = [`Removed ${d.full_name || name}`];
+    if (d.listings_hidden) bits.push(`${d.listings_hidden} listing(s) hidden`);
+    if (code === "cancelled") bits.push(d.goodbye?.sent ? (d.goodbye.film?.status === "rendering" ? "goodbye message sent, film on its way" : "goodbye message sent") : "no WhatsApp number, so no goodbye was sent");
+    if (d.personal_delete_after) bits.push(`their ID and personal details will be deleted on ${staffPeopleDate(d.personal_delete_after)}`);
+    await adminAgentManagerRefreshOpen(`${bits.join(", ")}.`);
   } catch (error) {
     toast(`Remove failed: ${error?.message || "error"}`);
   }
@@ -19108,8 +19187,9 @@ async function adminAgentManagerRemove(agentId) {
 async function adminAgentManagerRestore(agentId) {
   if (!window.confirm("Restore this agent and put their listings back as they were?")) return;
   try {
-    await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/restore`, { method: "POST", headers: adminAuthHeaders() });
-    await adminAgentManagerRefreshOpen("Agent restored.");
+    const res = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/restore`, { method: "POST", headers: adminAuthHeaders() });
+    const ask = Array.isArray(res?.data?.details_to_ask_again) ? res.data.details_to_ask_again : [];
+    await adminAgentManagerRefreshOpen(ask.length ? `Agent restored. These were deleted when they left, so ask them again: ${ask.join(", ")}.` : "Agent restored.");
   } catch (error) {
     toast(`Restore failed: ${error?.message || "error"}`);
   }
@@ -35776,7 +35856,7 @@ async function adminSendAgentPayLink(agentId) {
 
 async function adminRemoveAgent(agentId) {
   const agent = (adminLastAgentsForUi || []).find((a) => String(a.id) === String(agentId)) || {};
-  const reason = window.prompt(`Remove ${agent.name || "this agent"}?\n\nTheir profile and listings come off makaug. Nothing is deleted — you can Restore them later.\n\nWhy are they being removed?`, "");
+  const reason = window.prompt(`Remove ${agent.name || "this agent"}?\n\nTheir profile and listings come off makaug and nothing is sent to them. You can Restore them later.\n(If they cancelled, use Remove agent on their page under Agents instead: that sends the goodbye message and film.)\n\nWhy are they being removed?`, "");
   if (reason === null) return;
   if (!reason.trim()) { toast("Add a reason to remove an agent."); return; }
   try {

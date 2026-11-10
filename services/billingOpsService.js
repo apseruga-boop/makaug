@@ -230,6 +230,9 @@ async function takeDownAgentForBilling(db, { agentId, actor = 'admin' }) {
 async function reinstateAgentAfterPayment(db, { agentId, actor = 'payment', notify = true, transactionClient = null }) {
   const agent = await loadAgent(transactionClient || db, agentId);
   if (!agent?.billing_suspended_at) return { reinstated: false };
+  // A removed agent is not put back by a payment: staff use Restore in King
+  // first (10 Nov 2026), so nobody ends up live and "removed" at once.
+  if (agent.removed_at) return { reinstated: false, reason: 'removed' };
   const snap = agent.billing_snapshot || {};
   const client = transactionClient || await db.getClient();
   try {
