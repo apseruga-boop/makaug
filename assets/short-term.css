@@ -431,6 +431,22 @@
 .st-desk-ok, .st-desk-warn { font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 3px 9px; }
 .st-desk-ok { background: var(--st-green-soft); color: #15603f; }
 .st-desk-warn { background: #fffbeb; color: #92400e; }
+.st-desk-found {
+  display: inline-flex; align-items: center;
+  background: #dbeafe; color: #1e3a8a;
+  font-size: .72rem; font-weight: 800;
+  border-radius: 999px; padding: 3px 9px;
+}
+.st-desk-cover { flex: none; }
+.st-desk-cover img, .st-desk-photos img {
+  width: 120px; height: 90px; object-fit: cover; border-radius: 10px;
+  background: #f3f4f6; display: block;
+}
+.st-desk-photos { display: flex; gap: 8px; overflow-x: auto; margin: 0 0 12px; }
+.st-desk-photos a { flex: none; }
+@media (max-width: 640px) {
+  .st-desk-cover img, .st-desk-photos img { width: 96px; height: 72px; }
+}
 .st-desk-empty { font-size: .86rem; color: var(--st-muted); padding: 14px 0; }
 
 .st-desk-body { margin-top: 14px; border-top: 1px solid var(--st-line); padding-top: 14px; }

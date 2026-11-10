@@ -8129,6 +8129,22 @@
           </div>
         </div>
 
+        <section id="staff-short-term-control" class="st-scope bg-white border border-emerald-100 rounded-2xl p-5 scroll-mt-28" data-short-term-desk="staff">
+          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <p class="text-xs font-black uppercase tracking-widest text-emerald-700">Short stays</p>
+              <h3 class="mt-1 text-xl font-black text-gray-950">Short stays</h3>
+              <p class="mt-1 text-sm text-gray-500">Open a stay, check the photos, correct the facts, then approve or reject. Approving sends it on for the final gate. Found online stays are labelled, and this desk does not message them.</p>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <button type="button" onclick="window.makaugShortTermDesk &amp;&amp; window.makaugShortTermDesk.intake()" class="rounded-xl border border-emerald-200 text-emerald-800 px-4 py-2 text-sm font-black">Add a place</button>
+              <button type="button" onclick="window.makaugShortTermDesk &amp;&amp; window.makaugShortTermDesk.load('staff','submitted')" class="rounded-xl bg-emerald-700 text-white px-4 py-2 text-sm font-black">Refresh</button>
+            </div>
+          </div>
+          <div id="staff-short-term-intake" class="mt-4"></div>
+          <div id="staff-short-term-queue" class="mt-4"><p class="text-sm text-gray-500">Loading short stays…</p></div>
+        </section>
+
         <section id="staff-video-caption-conflicts" class="bg-white border border-red-100 rounded-2xl p-6">
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <div>
@@ -8190,6 +8206,11 @@
             <div class="text-sm text-gray-500">My Approvals</div>
             <div id="staff-stat-approvals" class="text-3xl font-black text-emerald-700 mt-1">0</div>
             <p id="staff-stat-approvals-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
+          </button>
+          <button type="button" onclick="staffJumpToDesk('short-term')" class="text-left bg-white border border-emerald-100 hover:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200 rounded-2xl p-5 transition" title="Short stays waiting for a moderator.">
+            <div class="text-sm text-gray-500">Short stays</div>
+            <div id="staff-stat-short-term" class="text-3xl font-black text-emerald-800 mt-1">0</div>
+            <p class="mt-2 text-[11px] text-gray-500 line-clamp-3">Submitted short stays. Open the desk for every stage.</p>
           </button>
           <button type="button" onclick="staffJumpToDesk('leads')" class="text-left bg-white border border-gray-200 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200 rounded-2xl p-5 transition" title="Open customer demand and listing-owner leads.">
             <div class="text-sm text-gray-500">Open Leads</div>
@@ -8665,6 +8686,18 @@
             <button type="button" data-admin-tab-button="notifications" onclick="setAdminWorkflowTab('notifications')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Leads & Notifications</button>
             <button type="button" data-admin-tab-button="listings" onclick="setAdminWorkflowTab('listings')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">All Listings</button>
           </div>
+        </div>
+
+        <div id="admin-short-term-king-control" data-admin-tab-panel="review" class="st-scope admin-tab-panel bg-white border border-amber-200 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+            <div>
+              <p class="text-xs font-black uppercase tracking-widest text-amber-700">Short stays</p>
+              <h3 class="text-lg font-bold text-gray-800">Short stays — final gate</h3>
+              <p class="text-xs text-gray-500 mt-1">A short stay reaches the public site only from here. Approving needs the checks, the facts box, and at least one photo. Found online stays are labelled and are not messaged.</p>
+            </div>
+            <button type="button" onclick="window.makaugShortTermDesk &amp;&amp; window.makaugShortTermDesk.load('king','king_review')" class="rounded-xl bg-amber-500 text-white px-4 py-2 text-sm font-black">Refresh</button>
+          </div>
+          <div id="admin-short-term-king-queue"><p class="text-sm text-gray-500">Loading short stays…</p></div>
         </div>
 
         <div id="admin-review-queue-control" data-admin-tab-panel="review" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
@@ -10838,7 +10871,7 @@
           if (window.__makaugShortTerm && window.__makaugShortTerm.enabled === true
             && (document.getElementById("staff-short-term-queue") || document.getElementById("admin-short-term-king-queue"))) {
             var shortTermDeskScript = document.createElement("script");
-            shortTermDeskScript.src = "/assets/short-term-admin.js?v=20261110-short-stay-found-online";
+            shortTermDeskScript.src = "/assets/short-term-admin.js?v=20261110-short-stays-desk-found-online";
             document.body.appendChild(shortTermDeskScript);
           }
         };
