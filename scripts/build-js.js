@@ -61,7 +61,7 @@ const ASYNC_ENTRY_POINTS = new Set([
 ]);
 
 const PUBLIC_TEXT_FILES = () => [
-  'assets/off-plan.js', 'assets/short-term.js', 'assets/makaug-site-i18n.js', 'server.js',
+  'assets/off-plan.js', 'assets/short-term.js', 'assets/short-term-options.js', 'assets/makaug-site-i18n.js', 'server.js',
   ...fs.readdirSync(path.join(ROOT, 'services')).filter((f) => f.endsWith('.js')).map((f) => `services/${f}`),
   ...fs.readdirSync(path.join(ROOT, 'routes')).filter((f) => f.endsWith('.js')).map((f) => `routes/${f}`)
 ];

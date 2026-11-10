@@ -2184,6 +2184,8 @@
     if (q.check_in) params.set('check_in', q.check_in);
     if (q.check_out) params.set('check_out', q.check_out);
     if (q.guests) params.set('guests', q.guests);
+    var pageQuery = qs();
+    if (pageQuery.design) params.set('design', pageQuery.design);
     params.set('enquire', '1');
     var href = (listing.url || '#') + '?' + params.toString();
     return '<div class="st-avail-row">'
@@ -2223,7 +2225,7 @@
     var incoming = new URLSearchParams(window.location.search || '');
     var previousQ = incoming.get('q') || '';
     var newQ = params.get('q') || '';
-    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id', 'gclid', 'fbclid', 'ref'].forEach(function (key) {
+    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id', 'gclid', 'fbclid', 'ref', 'design'].forEach(function (key) {
       if (incoming.get(key)) params.set(key, incoming.get(key));
     });
     if (incoming.get('district')) {
@@ -2260,7 +2262,8 @@
       trackSt('st_search', { q: params.get('q') || params.get('district') || '' });
       renderResults();
       wireCardHover();
-      if (state.mapOn) paintMap();
+      if (designOption()) syncDesignMap();
+      else if (state.mapOn) paintMap();
     }).catch(function (error) {
       if (target) {
         target.innerHTML = '<div class="st-empty"><i class="fas fa-triangle-exclamation"></i>'
@@ -2270,6 +2273,7 @@
   }
 
   function renderResults() {
+    if (paintDesignResults()) return;
     var count = document.getElementById('st-count');
     var target = document.getElementById('st-results');
     var partners = partnerBlockHtml();
@@ -2462,6 +2466,9 @@
     if (shell && shell.parentNode !== r) r.appendChild(shell);
 
     view.innerHTML = searchViewHtml();
+    if (designOption() && window.makaugShortTermOptions && typeof window.makaugShortTermOptions.searchHtml === 'function') {
+      view.innerHTML = window.makaugShortTermOptions.searchHtml(designOption(), optionHelpers());
+    }
 
     var slot = document.getElementById('st-ai-slot');
     if (slot && shell) slot.appendChild(shell);
@@ -2632,6 +2639,9 @@
   }
 
   function detailViewHtml(payload) {
+    if (designOption() && window.makaugShortTermOptions && typeof window.makaugShortTermOptions.detailHtml === 'function') {
+      return window.makaugShortTermOptions.detailHtml(designOption(), payload, optionHelpers());
+    }
     var listing = payload.listing;
     var contact = listing.contact || {};
     var q = qs();
@@ -2953,10 +2963,20 @@
     state.detailInflight = true;
     view.setAttribute('data-st-loaded', slug);
     view.innerHTML = '<div class="st-wrap"><div class="st-skeleton" style="height:340px;margin-top:20px"></div></div>';
-    api('/listings/' + encodeURIComponent(slug)).then(function (payload) {
+    var detailQuery = '';
+    if (designOption()) {
+      var stay = qs();
+      var stayParams = new URLSearchParams();
+      if (stay.check_in) stayParams.set('check_in', stay.check_in);
+      if (stay.check_out) stayParams.set('check_out', stay.check_out);
+      if (stay.guests) stayParams.set('guests', stay.guests);
+      if (stayParams.toString()) detailQuery = '?' + stayParams.toString();
+    }
+    api('/listings/' + encodeURIComponent(slug) + detailQuery).then(function (payload) {
       view.innerHTML = detailViewHtml(payload);
       view.setAttribute('data-st-detail', slug);
       bindDetail(payload);
+      if (designOption()) syncDesignMap({ listings: [payload.listing] });
       openEnquiryFromQuery(payload.listing);
       document.title = payload.listing.title + ' | Short stay on makaug.com';
       trackSt('st_listing_view', { slug: slug });
@@ -4041,9 +4061,52 @@
     });
   }
 
+  function designOption() {
+    var value = String((qs().design || '')).toLowerCase();
+    if (value === 'grid' || value === 'airbnb') return 'grid';
+    if (value === 'split' || value === 'map') return 'split';
+    if (value === 'list' || value === 'compact') return 'list';
+    return '';
+  }
+
+  function optionHelpers() {
+    return {
+      esc: esc,
+      t: t,
+      qs: qs,
+      badge: sourceBadge,
+      availabilityRowHtml: availabilityRowHtml,
+      quoteHtml: quoteHtml,
+      availabilityHtml: availabilityHtml,
+      stayDayStrip: stayDayStrip
+    };
+  }
+
+  function applyDesignMarker() {
+    var page = root();
+    if (!page) return;
+    var design = designOption();
+    if (design) page.setAttribute('data-st-design', design);
+    else page.removeAttribute('data-st-design');
+  }
+
+  function syncDesignMap(snapshot) {
+    applyDesignMarker();
+    if (!window.makaugShortTermOptions || typeof window.makaugShortTermOptions.syncMap !== 'function') return;
+    window.makaugShortTermOptions.syncMap(snapshot || state);
+  }
+
+  function paintDesignResults() {
+    var design = designOption();
+    if (!design || !window.makaugShortTermOptions || typeof window.makaugShortTermOptions.paintResults !== 'function') return false;
+    window.makaugShortTermOptions.paintResults(design, state, optionHelpers());
+    return true;
+  }
+
   function route() {
     var r = root();
     if (!r) return;
+    applyDesignMarker();
     var path = currentPath();
     // The main bundle reveals this page the instant the nav is clicked, which
     // can happen before the address bar says /short-term. If the page is on
@@ -4264,7 +4327,8 @@
     if (path.indexOf('/short-term/') === 0) { mountDetail(path.slice(12), true); return; }
     mountSearch();
     renderResults();
-    if (state.mapOn) paintMap();
+    if (designOption()) syncDesignMap();
+    else if (state.mapOn) paintMap();
   }
 
   function boot() {

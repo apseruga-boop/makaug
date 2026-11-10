@@ -286,7 +286,9 @@ function quoteStay(listing, { checkIn, checkOut, guests } = {}) {
   if (nights <= 0) return null;
 
   const overrides = Array.isArray(listing.rate_overrides) ? listing.rate_overrides : [];
-  const base = Number(listing.base_nightly_ugx || 0);
+  // Public listing objects expose nightly_ugx. base_nightly_ugx is the column
+  // name and is not always still on the object by the time a quote is built.
+  const base = Number(listing.base_nightly_ugx || listing.nightly_ugx || 0);
 
   const breakdown = eachNight(from, to).map((night) => ({
     night,
