@@ -5,6 +5,11 @@ const crypto = require('crypto');
 const logger = require('../config/logger');
 const { parseShortTermSearchText } = require('./shortTermQuery');
 const { shortTermEnabled } = require('../utils/shortTermFeatureFlags');
+const {
+  findVerifiedAgentIdentityOnFile,
+  persistHostIdentity,
+  validateHostIdentity
+} = require('./shortTermIdentityService');
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -987,7 +992,7 @@ async function loadShortTermPublicCount(db, { timeoutMs = 900 } = {}) {
 // Writes
 // ---------------------------------------------------------------------------
 
-function validateListingSubmission(payload = {}) {
+function validateListingSubmission(payload = {}, options = {}) {
   const errors = [];
   let title = cleanText(payload.title, 160);
   let description = cleanMultiline(payload.description, 6000);
@@ -1037,6 +1042,14 @@ function validateListingSubmission(payload = {}) {
   if (payload.terms_accepted !== true && String(payload.terms_accepted) !== 'true') {
     errors.push('You must accept the makaug listing terms.');
   }
+
+  const requireHostIdentity = options.requireHostIdentity === true
+    || String(payload.listed_from || '').trim() === 'list-property';
+  const identityResult = validateHostIdentity(payload, {
+    required: requireHostIdentity,
+    identityOnFile: options.identityOnFile === true
+  });
+  if (!identityResult.ok) errors.push(...identityResult.errors);
 
   const placeType = cleanText(payload.place_type, 30) || 'entire_place';
   if (!PLACE_TYPES[placeType]) errors.push('Choose entire place, private room or shared room.');
@@ -1117,13 +1130,23 @@ function validateListingSubmission(payload = {}) {
       utb_licence_number: cleanText(payload.utb_licence_number, 80) || null,
       amenities,
       availability: windows,
-      price_on_application: priceOnApplication
+      price_on_application: priceOnApplication,
+      host_identity: identityResult.value
     }
   };
 }
 
 async function createShortTermListing(db, payload = {}, context = {}) {
-  const validation = validateListingSubmission(payload);
+  const requireHostIdentity = context.requireHostIdentity === true
+    || String(payload.listed_from || '').trim() === 'list-property';
+  let agentOnFile = null;
+  if (requireHostIdentity && context.hostUserId) {
+    agentOnFile = await findVerifiedAgentIdentityOnFile(db, { userId: context.hostUserId });
+  }
+  const validation = validateListingSubmission(payload, {
+    requireHostIdentity,
+    identityOnFile: Boolean(agentOnFile)
+  });
   if (!validation.ok) {
     const error = new Error('Listing submission is not valid');
     error.status = 400;
@@ -1148,6 +1171,12 @@ async function createShortTermListing(db, payload = {}, context = {}) {
     const paymentNote = includedInAgentPlan
       ? `Short stays are included in the approved agent plan for ${coveringAgent.full_name || 'this agent'}. No separate short-stay fee. The agent plan is UGX 50,000 a month.`
       : SHORT_STAY_FEE_NOTE;
+
+    const storedIdentity = await persistHostIdentity(value.host_identity, {
+      reference,
+      hostName: value.host_name,
+      agentOnFile
+    });
 
     const inserted = await client.query(
       `INSERT INTO st_listing (
@@ -1205,7 +1234,8 @@ async function createShortTermListing(db, payload = {}, context = {}) {
         {
           price_on_application: value.price_on_application === true,
           right_to_let_declared_at: new Date().toISOString(),
-          listed_from: cleanText(payload.listed_from, 40) || 'website'
+          listed_from: cleanText(payload.listed_from, 40) || 'website',
+          ...(storedIdentity ? { identity: storedIdentity } : {})
         }
       ]
     );
@@ -1471,6 +1501,7 @@ module.exports = {
   LISTING_TERM_MONTHS,
   SHORT_STAY_FEE_NOTE,
   findApprovedAgentForHost,
+  findVerifiedAgentIdentityOnFile,
   MAX_SEARCH_LIMIT,
   PAYMENT_METHODS,
   PLACE_TYPES,

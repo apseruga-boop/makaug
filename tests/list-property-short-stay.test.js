@@ -26,6 +26,11 @@ test('list-property offers a Short stay type and the mockup fields', () => {
   assert.match(html, /id="lp-st-rules"/);
   assert.match(html, /I own this place or have the owner's permission to let it for short stays/);
   assert.match(html, /id="lp-st-right-to-let"/);
+  assert.match(html, /id="lp-st-id-file"/);
+  assert.match(html, /id="lp-st-id-type"/);
+  assert.match(html, /id="lp-st-id-number"/);
+  assert.match(html, /data-st-host-id-form="1"/);
+  assert.match(html, /National ID, passport or driving permit/);
   assert.match(html, /Owners pay UGX 20,000 a month/);
   assert.match(html, /Agents pay UGX 50,000 a month/);
   assert.match(html, /no free trial and no free days/i);
@@ -33,7 +38,10 @@ test('list-property offers a Short stay type and the mockup fields', () => {
   assert.match(html, /id="broker-short-stay-note"/);
   assert.match(html, /Agents can list short stays/);
   assert.match(app, /function submitListPropertyShortStay/);
+  assert.match(app, /function handleListPropertyShortStayIdFile/);
   assert.match(app, /listed_from: "list-property"/);
+  assert.match(app, /id_document_url/);
+  assert.match(app, /signedInShortStayAgentHasIdOnFile/);
   assert.match(app, /price_on_application: nightlyRaw === ""/);
   assert.match(app, /"short_stay"/);
   assert.match(route, /agent_broker/);
@@ -78,6 +86,8 @@ test('a priced short stay is not marked POA', () => {
   assert.equal(result.value.base_nightly_ugx, 180000);
 });
 
+const TEST_ID_PHOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
 function fakeDb() {
   const queries = [];
   const client = {
@@ -92,7 +102,16 @@ function fakeDb() {
     },
     release() {}
   };
-  return { queries, db: { getClient: async () => client } };
+  return {
+    queries,
+    db: {
+      getClient: async () => client,
+      query: async (sql, params) => {
+        queries.push({ sql, params });
+        return { rows: [] };
+      }
+    }
+  };
 }
 
 test('list-property submissions land on the desk as pending direct listings with a right-to-let timestamp', async () => {
@@ -108,7 +127,12 @@ test('list-property submissions land on the desk as pending direct listings with
     house_rules: 'No smoking indoors.',
     right_to_let_declared: true,
     terms_accepted: true,
-    listed_from: 'list-property'
+    listed_from: 'list-property',
+    id_kind: 'national_id',
+    id_number: 'CMTESTID000001',
+    id_document_name: 'id-front.png',
+    id_document_url: TEST_ID_PHOTO,
+    id_document_mime_type: 'image/png'
   }, { hostUserId: 'user-1' });
   assert.equal(created.status, 'pending');
   assert.equal(created.moderation_stage, 'submitted');
@@ -121,5 +145,8 @@ test('list-property submissions land on the desk as pending direct listings with
   assert.equal(extra.price_on_application, true);
   assert.ok(extra.right_to_let_declared_at);
   assert.equal(extra.listed_from, 'list-property');
+  assert.equal(extra.identity.source, 'upload');
+  assert.equal(extra.identity.id_document_kind, 'national_id');
+  assert.ok(extra.identity.id_document_url);
   assert.equal(insert.params[29], 'user-1');
 });
