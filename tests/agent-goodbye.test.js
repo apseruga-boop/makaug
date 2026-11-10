@@ -26,6 +26,11 @@ const goodbye = require('../services/agentGoodbyeService');
 const videos = require('../services/agentReportVideoService');
 const adminRouter = require('../routes/admin');
 
+// The removal notice to Arthur and Ronald is tested on its own below; the
+// route tests never send it anywhere.
+const realAlertRemoval = goodbye.alertRemoval;
+goodbye.alertRemoval = async () => [];
+
 const AGENT_ID = 'e1d9a5f5-ce49-4e9d-a9ca-1cad1c78d3ef';
 
 const fullPayload = () => ({
@@ -573,4 +578,59 @@ test('30 days later the details of an agent who cancelled are deleted, name and 
   assert.deepStrictEqual(JSON.parse(marked.params[1]), { personal_deleted: ['NIN', 'email', '1 ID file'], personal_deleted_at: '2026-11-10T12:00:00.000Z' });
   assert.deepStrictEqual(audits, [{ agent_id: 'a-due', deleted: ['NIN', 'email', '1 ID file'] }]);
   assert.strictEqual(calls.filter((c) => /^UPDATE agents SET nin = NULL/.test(c.sql.trim())).length, 1, 'the restored agent was not touched');
+});
+
+
+test('Arthur and Ronald are told about every removal, and only they are', async () => {
+  assert.deepStrictEqual(goodbye.removalAlertRecipients({}), ['+447757773202', '+256709402189']);
+  assert.deepStrictEqual(goodbye.removalAlertRecipients({ AGENT_HELP_CONTACT_PHONE: '+256 709 402 189' }), ['+447757773202', '+256 709 402 189']);
+  assert.deepStrictEqual(goodbye.removalAlertRecipients({ AGENT_REMOVED_ALERT_WHATSAPP: '+447757773202, 0772000001, +256772000001' }), ['+447757773202', '0772000001']);
+
+  const agent = { id: AGENT_ID, full_name: 'George Wanyama', makaug_agent_number: 'MKA-AG-2671940', phone: '0772000001', whatsapp: '256772000001' };
+  const leaving = goodbye.buildRemovalAlert({
+    agent, reason: goodbye.removalReason('cancelled'), reasonText: "They're leaving: cancelled or won't pay — moving to Nairobi", by: 'Ronald Okongo',
+    listingsHidden: 3, loginClosed: true, goodbye: { status: 'sending', to: '…0001' }, personalDeleteAfter: '2026-12-10T12:00:00Z', baseUrl: 'https://makaug.com'
+  });
+  assert.strictEqual(leaving, [
+    '🚪 *Agent removed: George Wanyama*',
+    'Agent No MKA-AG-2671940 · 0772 000 001',
+    "Why: They're leaving: cancelled or won't pay — moving to Nairobi",
+    'By: Ronald Okongo',
+    '• 3 listings taken off makaug, login closed',
+    '• Goodbye message and film on their way to them on WhatsApp',
+    '• Their ID and personal details are deleted on 10 Dec 2026 unless they are restored before then',
+    'To undo: King → Agents → George Wanyama → Restore agent (https://makaug.com/admin)'
+  ].join('\n'));
+  const dupe = goodbye.buildRemovalAlert({ agent, reason: goodbye.removalReason('duplicate'), reasonText: 'Duplicate or test record', listingsHidden: 0 });
+  assert.match(dupe, /• No live listings to take down\n• Nothing was sent to them, and their details are kept/);
+
+  const sent = [];
+  const logged = [];
+  const fakeDb = { async query(sql, params) { if (/INSERT INTO notifications/.test(sql)) logged.push(params); return { rows: [{ id: 'n1' }] }; } };
+  const results = await realAlertRemoval({ agent, reason: goodbye.removalReason('rules'), reasonText: 'Broke the rules (fake or wrong listings)', listingsHidden: 2, loginClosed: true }, {
+    dbc: fakeDb,
+    deliver: async (msg) => { sent.push(msg); return { status: 'queued' }; }
+  });
+  assert.deepStrictEqual(sent.map((m) => m.to), ['+447757773202', '+256709402189'], 'Arthur and Ronald, nobody else');
+  assert.ok(sent.every((m) => m.kind === 'agent_removed' && /Agent removed: George Wanyama/.test(m.body)));
+  assert.deepStrictEqual(results.map((r) => r.status), ['queued', 'queued']);
+  assert.strictEqual(logged.length, 1);
+});
+
+test('King: every removal tells Arthur and Ronald, after it is saved', async (t) => {
+  const stub = stubDatabase({ reasonCode: 'duplicate' });
+  const original = goodbye.alertRemoval;
+  const alerts = [];
+  goodbye.alertRemoval = async (details) => { alerts.push(details); return []; };
+  t.after(() => { stub.restore(); goodbye.alertRemoval = original; });
+  const res = fakeRes();
+  await routeHandler('post', '/agents/:id/remove')({ params: { id: AGENT_ID }, body: { reason_code: 'duplicate', reason: 'second record' }, adminAuth: { userId: 'staff-1' } }, res, (e) => { throw e; });
+  assert.strictEqual(res.statusCode, 200, JSON.stringify(res.body));
+  assert.strictEqual(res.body.data.team_notified, true);
+  await new Promise((r) => setTimeout(r, 30));
+  assert.strictEqual(alerts.length, 1);
+  assert.strictEqual(alerts[0].agent.full_name, 'George Wanyama');
+  assert.strictEqual(alerts[0].reason.code, 'duplicate');
+  assert.strictEqual(alerts[0].reasonText, 'Duplicate or test record — second record');
+  assert.strictEqual(alerts[0].listingsHidden, 1);
 });

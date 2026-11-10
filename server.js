@@ -2943,6 +2943,18 @@ function scheduleStartupDataRepairs() {
     } catch (error) {
       logger.warn('Agent welcome catch-up skipped:', error.message || String(error));
     }
+    // Plot titles / land-as-student restore. Migration 211 did this during
+    // boot and took the site down; 216 only creates the backup table.
+    // Each batch is its own short transaction on the background pool.
+    try {
+      const { runPlotTitleRestore216 } = require('./scripts/run-plot-title-restore-216');
+      const restore = await runPlotTitleRestore216(db, { logger });
+      if (restore && !restore.skipped && (restore.updated || restore.stopped_early)) {
+        logger.info('Plot title restore 216 finished a pass', restore);
+      }
+    } catch (error) {
+      logger.warn('Plot title restore 216 skipped:', error.message || String(error));
+    }
   }, staggeredBootDelay('startup_data_repairs'));
   timer.unref?.();
 }

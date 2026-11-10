@@ -19179,6 +19179,7 @@ async function adminAgentManagerRemove(agentId) {
     if (d.listings_hidden) bits.push(`${d.listings_hidden} listing(s) hidden`);
     if (code === "cancelled") bits.push(d.goodbye?.status === "sending" ? "goodbye on its way (the film follows as soon as the server has room to make it)" : "no WhatsApp number, so no goodbye was sent");
     if (d.personal_delete_after) bits.push(`their ID and personal details will be deleted on ${staffPeopleDate(d.personal_delete_after)}`);
+    if (d.team_notified) bits.push("Arthur and Ronald have been told on WhatsApp");
     await adminAgentManagerRefreshOpen(`${bits.join(", ")}.`);
   } catch (error) {
     toast(`Remove failed: ${error?.message || "error"}`);
