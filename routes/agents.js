@@ -462,7 +462,17 @@ router.get('/goodbye-video/:id.mp4', async (req, res, next) => {
     if (!row) return res.status(404).json({ ok: false, error: 'Not found' });
     const kept = row.removal_snapshot?.goodbye;
     const payload = !/^p/i.test(version) && kept?.agent ? kept : await goodbye.buildGoodbyePayload(id);
-    const file = await ensureGoodbyeVideo(payload, version);
+    let file;
+    try {
+      file = await ensureGoodbyeVideo(payload, version);
+    } catch (error) {
+      // The server refuses to make films while its memory is high.
+      if (error.code === 'VIDEO_MEMORY_GUARD') {
+        res.set('Retry-After', '300');
+        return res.status(503).type('text/plain').send('The server is busy, so the film could not be made just now. Try again in a few minutes.');
+      }
+      throw error;
+    }
     res.set('Cache-Control', 'private, max-age=600');
     res.set('X-Robots-Tag', 'noindex');
     if (/^https?:\/\//i.test(String(file))) return res.redirect(302, file);

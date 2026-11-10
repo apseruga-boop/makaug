@@ -171,36 +171,100 @@ test('the film link is signed, and the preview has its own cache file', () => {
   assert.notStrictEqual(cachePath(AGENT_ID, 'p20261110', 'goodbye-preview-'), cachePath(AGENT_ID, '20261110', 'goodbye-'));
 });
 
-test('the message goes first and the film follows once made; no film still sends the message', async () => {
+test('the film is made first, so the message only says "film below" when the film follows it', async () => {
   const sent = [];
   const queue = async (args) => { sent.push(args); return { id: `m${sent.length}` }; };
-  let release;
   const fakeVideos = {
     isVideoRenderingAvailable: () => true,
     goodbyeVideoUrl: () => 'https://makaug.com/api/agents/goodbye-video/x.mp4?v=1&t=abc',
-    ensureGoodbyeVideo: () => new Promise((resolve) => { release = resolve; })
+    ensureGoodbyeVideo: async () => 'file.mp4'
   };
-  const out = await goodbye.queueGoodbye({ payload: fullPayload(), to: '0772 000 001', version: '1762770000000', queue, videos: fakeVideos, baseUrl: 'https://makaug.com' });
-  assert.strictEqual(out.sent, true);
-  assert.strictEqual(sent.length, 1, 'only the message until the film is made');
-  assert.match(sent[0].text, /^Hi George,/);
-  assert.strictEqual(sent[0].recipient, '0772000001');
-  release('file.mp4');
-  const film = await out.film.done;
-  assert.strictEqual(film.queued, true);
+  const order = [];
+  const out = await goodbye.sendGoodbyeNow({ payload: fullPayload(), to: '0772 000 001', version: '1762770000000', queue, videos: fakeVideos, baseUrl: 'https://makaug.com', markMessage: async () => order.push('mark message'), markFilm: async () => order.push('mark film') });
+  assert.deepStrictEqual([out.message, out.film], ['sent', 'sent']);
   assert.strictEqual(sent.length, 2);
+  assert.match(sent[0].text, /^Hi George,/);
+  assert.match(sent[0].text, /Your goodbye film is below\./);
+  assert.strictEqual(sent[0].recipient, '0772000001');
   assert.strictEqual(sent[1].mediaType, 'video');
   assert.match(sent[1].text, /Thank you, George/);
   assert.notStrictEqual(sent[0].metadata.reply_dedupe_key, sent[1].metadata.reply_dedupe_key);
+  assert.deepStrictEqual(order, ['mark message', 'mark film'], 'each part is recorded before it is queued');
 
+  // The server is too full to make the film: the message goes without the line.
   const sent2 = [];
-  const failing = { ...fakeVideos, ensureGoodbyeVideo: async () => { throw new Error('ffmpeg missing'); } };
-  const out2 = await goodbye.queueGoodbye({ payload: fullPayload(), to: '256772000001', version: '1', queue: async (a) => { sent2.push(a); return { id: 'x' }; }, videos: failing, baseUrl: 'https://makaug.com' });
-  assert.deepStrictEqual(await out2.film.done, { queued: false, error: 'ffmpeg missing' });
-  assert.strictEqual(sent2.length, 1, 'the message still went');
+  const busy = { ...fakeVideos, ensureGoodbyeVideo: async () => { throw Object.assign(new Error('Server memory is high'), { code: 'VIDEO_MEMORY_GUARD' }); } };
+  const out2 = await goodbye.sendGoodbyeNow({ payload: fullPayload(), to: '256772000001', version: '1', queue: async (a) => { sent2.push(a); return { id: 'x' }; }, videos: busy, baseUrl: 'https://makaug.com' });
+  assert.deepStrictEqual([out2.message, out2.film, out2.film_error], ['sent', 'waiting', 'VIDEO_MEMORY_GUARD']);
+  assert.strictEqual(sent2.length, 1);
+  assert.ok(!/film is below/.test(sent2[0].text), 'no promise of a film that is not coming yet');
+  assert.match(sent2[0].text, /thank you for listing with us\.\n/);
 
-  const none = await goodbye.queueGoodbye({ payload: fullPayload(), to: '', version: '1', queue, videos: fakeVideos });
-  assert.deepStrictEqual(none, { sent: false, reason: 'no_whatsapp_number' });
+  // A later try sends only the film.
+  const sent3 = [];
+  const out3 = await goodbye.sendGoodbyeNow({ payload: fullPayload(), to: '256772000001', version: '1', queue: async (a) => { sent3.push(a); return { id: 'y' }; }, videos: fakeVideos, baseUrl: 'https://makaug.com', needMessage: false });
+  assert.deepStrictEqual([out3.message, out3.film], ['already_sent', 'sent']);
+  assert.deepStrictEqual(sent3.map((m) => m.mediaType || 'text'), ['video']);
+
+  const none = await goodbye.sendGoodbyeNow({ payload: fullPayload(), to: '', version: '1', queue, videos: fakeVideos });
+  assert.strictEqual(none.sent, false);
+  assert.strictEqual(none.reason, 'no_whatsapp_number');
+});
+
+function goodbyeDb(snapshot, { removedAt = new Date().toISOString(), busy = false } = {}) {
+  const state = { snapshot: { ...snapshot }, audits: [] };
+  const query = async (sql, params = []) => {
+    if (/jsonb_build_object\('goodbye_claim_at', NOW\(\)\)/.test(sql)) {
+      if (busy) return { rows: [] };
+      state.snapshot.goodbye_claim_at = 'now';
+      return { rows: [{ phone: '0772000001', whatsapp: '256772000001', removed_at: removedAt, removal_snapshot: { ...state.snapshot } }] };
+    }
+    if (/SET removal_snapshot = removal_snapshot \|\| \$2::jsonb/.test(sql)) { Object.assign(state.snapshot, JSON.parse(params[1])); return { rows: [] }; }
+    if (/removal_snapshot - 'goodbye_claim_at'/.test(sql)) { delete state.snapshot.goodbye_claim_at; return { rows: [] }; }
+    if (/INSERT INTO audit_logs/.test(sql)) { state.audits.push(params[1]); return { rows: [] }; }
+    return { rows: [] };
+  };
+  return { state, dbc: { query } };
+}
+
+test('a goodbye owed is delivered once: message now, film when the server has room, tried for up to two days', async () => {
+  const sent = [];
+  let room = false;
+  const deps = {
+    source: 'whatsapp_runtime',
+    baseUrl: 'https://makaug.com',
+    queue: async (a) => { sent.push(a); return { id: `q${sent.length}` }; },
+    videos: {
+      isVideoRenderingAvailable: () => true,
+      goodbyeVideoUrl: () => 'https://makaug.com/api/agents/goodbye-video/x.mp4?v=1&t=abc',
+      ensureGoodbyeVideo: async () => { if (!room) throw Object.assign(new Error('busy'), { code: 'VIDEO_MEMORY_GUARD' }); return 'file.mp4'; }
+    }
+  };
+  const { state, dbc } = goodbyeDb({ reason_code: 'cancelled', goodbye: fullPayload(), goodbye_version: '1762770000000', goodbye_to: '256772000001' });
+  const first = await goodbye.deliverGoodbye(AGENT_ID, { dbc, deps });
+  assert.deepStrictEqual([first.message, first.film], ['sent', 'waiting']);
+  assert.ok(state.snapshot.goodbye_message_at);
+  assert.strictEqual(state.snapshot.goodbye_film_tries, 1);
+  assert.strictEqual(state.snapshot.goodbye_claim_at, undefined, 'the claim is let go');
+  room = true;
+  const second = await goodbye.deliverGoodbye(AGENT_ID, { dbc, deps });
+  assert.deepStrictEqual([second.message, second.film], ['already_sent', 'sent']);
+  assert.ok(state.snapshot.goodbye_film_at);
+  const third = await goodbye.deliverGoodbye(AGENT_ID, { dbc, deps });
+  assert.deepStrictEqual([third.message, third.film], ['already_sent', 'done']);
+  assert.deepStrictEqual(sent.map((m) => m.mediaType || 'text'), ['text', 'video'], 'one message, one film');
+  assert.deepStrictEqual(state.audits, ['agent_goodbye_sent', 'agent_goodbye_film_sent']);
+
+  // Two days on and still no room: stop trying.
+  room = false;
+  const old = goodbyeDb({ reason_code: 'cancelled', goodbye: fullPayload(), goodbye_version: '1', goodbye_to: '256772000001', goodbye_message_at: 'x', goodbye_film_tries: 200 }, { removedAt: new Date(Date.now() - 49 * 3600000).toISOString() });
+  const gaveUp = await goodbye.deliverGoodbye(AGENT_ID, { dbc: old.dbc, deps });
+  assert.strictEqual(gaveUp.film, 'gave_up');
+  assert.ok(old.state.snapshot.goodbye_film_gave_up_at);
+
+  // Someone else is sending it right now: leave it.
+  const busy = goodbyeDb({ goodbye: fullPayload() }, { busy: true });
+  assert.deepStrictEqual(await goodbye.deliverGoodbye(AGENT_ID, { dbc: busy.dbc, deps }), { skipped: 'busy_or_not_found' });
 });
 
 test('personal details: ID, NIN, expiry, email, photo and bio cleared; ID files deleted; login email and sign-up ID gone', async () => {
@@ -273,6 +337,7 @@ function fakeRes() {
 function stubDatabase({ reasonCode }) {
   const log = [];
   const audit = [];
+  const kept = { snapshot: null };
   const agentRow = {
     id: AGENT_ID, full_name: 'George Wanyama', greeting_name: 'George', status: 'approved', removed_at: null,
     phone: '0772000001', whatsapp: '256772000001', user_id: 'u1', billing_suspended_at: null, billing_snapshot: null,
@@ -296,7 +361,11 @@ function stubDatabase({ reasonCode }) {
     if (/DELETE FROM agent_identity_files/.test(sql)) return { rows: [{ id: 'f1' }] };
     if (/SELECT email, profile_data FROM users/.test(sql)) return { rows: [{ email: null, profile_data: {} }] };
     if (/UPDATE users SET status = 'suspended'/.test(sql)) return { rows: [{ id: 'u1' }] };
-    if (/SET removed_at = NOW\(\)/.test(sql)) return { rows: [{ removed_at: '2026-11-10T12:00:00Z' }] };
+    if (/SET removed_at = NOW\(\)/.test(sql)) { kept.snapshot = JSON.parse(params[3]); return { rows: [{ removed_at: new Date().toISOString() }] }; }
+    if (/jsonb_build_object\('goodbye_claim_at', NOW\(\)\)/.test(sql)) {
+      return kept.snapshot ? { rows: [{ phone: agentRow.phone, whatsapp: agentRow.whatsapp, removed_at: new Date().toISOString(), removal_snapshot: { ...kept.snapshot } }] } : { rows: [] };
+    }
+    if (/SET removal_snapshot = removal_snapshot \|\| \$2::jsonb/.test(sql)) { Object.assign(kept.snapshot, JSON.parse(params[1])); return { rows: [] }; }
     if (/SELECT 1 FROM agents/.test(sql)) return { rows: [] };
     if (/FROM agents WHERE id = \$1/.test(sql)) return { rows: [agentRow] };
     return { rows: [] };
@@ -327,8 +396,7 @@ test('King: "They cancelled" hides listings, closes the login, resets WhatsApp, 
   assert.ok(days > 29.9 && days <= 30, `deleted in 30 days, got ${days}`);
   assert.ok(!stub.log.some((c) => /SET nin = NULL|DELETE FROM agent_identity_files|UPDATE users SET email = NULL/.test(c.sql)), 'their details stay for now');
   assert.strictEqual(d.whatsapp.chats_marked, 0);
-  assert.strictEqual(d.goodbye.sent, true);
-  assert.strictEqual(d.goodbye.film.status, 'rendering');
+  assert.deepStrictEqual(d.goodbye, { status: 'sending', to: '…0001' });
   const snapshotSql = stub.log.find((c) => /SET removed_at = NOW\(\)/.test(c.sql));
   assert.strictEqual(snapshotSql.params[1], "They're leaving: cancelled or won't pay — moving to Nairobi");
   const snap = JSON.parse(snapshotSql.params[3]);
@@ -338,13 +406,16 @@ test('King: "They cancelled" hides listings, closes the login, resets WhatsApp, 
   assert.strictEqual(snap.personal_delete_after, d.personal_delete_after);
   assert.strictEqual(snap.goodbye.agent.greeting_name, 'George', 'the film can still be made after the details are gone');
   assert.ok(!JSON.stringify(snap.goodbye).includes('0772000001'), 'the kept goodbye holds no phone number');
+  assert.strictEqual(snap.goodbye_to, '256772000001');
+  assert.match(snap.goodbye_version, /^\d{13}$/);
   // Order: everything committed before anything is sent.
   const commitAt = stub.log.findIndex((c) => c.sql === 'COMMIT');
   const sessionAt = stub.log.findIndex((c) => /UPDATE whatsapp_sessions/.test(c.sql));
   assert.ok(commitAt > 0 && sessionAt > commitAt);
-  await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => setTimeout(r, 60));
   assert.strictEqual(queued.length, 2, 'the message, then the film');
   assert.match(queued[0].text, /^Hi George,/);
+  assert.match(queued[0].text, /Your goodbye film is below\./, 'the film could be made, so the message says so');
   assert.match(queued[0].text, /WhatsApp makaug on \+256 780 863 394/);
   assert.strictEqual(queued[0].recipient, '256772000001');
   assert.strictEqual(queued[1].mediaType, 'video');
