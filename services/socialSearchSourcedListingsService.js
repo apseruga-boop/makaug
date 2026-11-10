@@ -35,6 +35,7 @@ const {
   outsideFreeSourceLookback,
 } = require('./freeCategoryHashtagSources');
 const { insertFoundOnlineShortStayListing } = require('./foundOnlineShortStayIntake');
+const { plotSaleBeatsStudentWords } = require('../utils/listingCategorySignals');
 const { detectPropertyTypeEvidence } = require('../utils/propertyTypeVocabulary');
 const { isApartmentBlockText, modestPriceDrop, videoIdFromText } = require('../utils/listingIntakeQuality');
 const { blockedSocialSourceMatch } = require('./socialSourceBlocklistService');
@@ -2765,6 +2766,7 @@ function normalizeFoundOnlineListingType(value = '', options = {}) {
   }
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room)\b/.test(raw);
   if (/\b(rental|income|investment)\s+(property|building|block)\s+(?:available\s+)?for sale\b/.test(raw)) return 'sale';
+  if (plotSaleBeatsStudentWords(raw)) return 'land';
   if (raw.includes('commercial') || raw.includes('shop') || raw.includes('office') || raw.includes('warehouse')) return 'commercial';
   if (STUDENT_SOURCE_LISTING_PATTERN.test(raw)) return 'student';
   const saleAsset = /\b(for sale|on sale|available for sale|selling)\b/.test(raw)

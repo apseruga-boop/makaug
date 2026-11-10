@@ -17,6 +17,7 @@ const {
 const { allowedPricePeriods, normalizePricePeriod } = require('../config/pricePeriods');
 const { staffConfirmedNumericPrice } = require('./staffPriceChoice');
 const { isApartmentBlockText, pricePeriodForUnitQuote } = require('./listingIntakeQuality');
+const { plotSaleBeatsStudentWords } = require('./listingCategorySignals');
 
 const HOSPITALITY_SHORT_TERM_MESSAGE = 'Nightly and short-stay places go in Short Term stays (/short-term), not the main listings.';
 
@@ -230,8 +231,10 @@ function deriveListingClassification(record = {}, options = {}) {
     transactionIntent = 'rent';
   }
 
+  const plotSaleWins = plotSaleBeatsStudentWords(classificationText);
   let physicalType = '';
-  if ((explicitStudentAccommodation || (currentType === 'student' && hasStudent)) && !evidenceSale) physicalType = 'student';
+  if (plotSaleWins) physicalType = 'land';
+  else if ((explicitStudentAccommodation || (currentType === 'student' && hasStudent)) && !evidenceSale) physicalType = 'student';
   else if (bedroomBathroomEvidence) physicalType = 'residential';
   else if (primaryStrongLand || primaryLand) physicalType = 'land';
   else if (primaryDwelling) physicalType = 'residential';
@@ -241,7 +244,7 @@ function deriveListingClassification(record = {}, options = {}) {
   else if (hasCommercial) physicalType = 'commercial';
   else if (trustedFormPropertyType) physicalType = 'residential';
 
-  if (!hasPrimaryPhysicalEvidence && fallbackPhysicalTypeCount > 1) {
+  if (!plotSaleWins && !hasPrimaryPhysicalEvidence && fallbackPhysicalTypeCount > 1) {
     categoryAmbiguous = true;
     ambiguityReason = 'Fallback source evidence contains multiple physical property types.';
   } else if (!physicalType) {

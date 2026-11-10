@@ -32,7 +32,7 @@ const {
   normalizeReviewLocationHierarchy,
   regionForDistrict
 } = require('../utils/ugandaLocationHierarchy');
-const { canonicalizeUgandaLocation } = require('../utils/locationRegistry');
+const { canonicalizeUgandaLocation, normalizeDistrict } = require('../utils/locationRegistry');
 const { addLeadActivity, CLOSED_LEAD_STATUSES, LEAD_STATUSES, normalizeLeadStatus } = require('../services/leadService');
 const { buildAutomatedListingReview, normalizeReviewChecklist } = require('../services/listingModerationService');
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
@@ -2707,6 +2707,14 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     city: Object.prototype.hasOwnProperty.call(normalized, 'city') ? cleanText(normalized.city) : cleanText(currentExtra.city),
     neighborhood: Object.prototype.hasOwnProperty.call(normalized, 'neighborhood') ? cleanText(normalized.neighborhood) : cleanText(currentExtra.neighborhood)
   };
+  // "Luweero" and "Jinja City" are the same districts as Luwero and Jinja.
+  // Compare and save the canonical district so a town of that name is not
+  // rejected as belonging to a different district.
+  const canonicalDistrictName = normalizeDistrict(base.district);
+  if (canonicalDistrictName) {
+    base.district = canonicalDistrictName;
+    normalized.district = canonicalDistrictName;
+  }
 
   // B04113: the row was harvested as area "Kampala" (a district). Staff chose
   // District Wakiso and Town Nansana, and the stale district-level area made
@@ -3548,9 +3556,10 @@ function staffEditorTitle(property = {}, extra = {}) {
   const stored = cleanText(property.title);
   if (!rowIsFoundOnlineReview(property)) return stored;
   try {
-    const { buildThirdPartyPublicTitle } = require('../services/publicListingCopy');
-    const publicTitle = cleanText(buildThirdPartyPublicTitle(property, extra));
-    return publicTitle || stored;
+    const { tidyCreatorListingTitle, copyReviewState } = require('../services/publicListingCopy');
+    const review = copyReviewState(property, extra);
+    if (review.staffTitle || review.kingTitle) return stored;
+    return cleanText(tidyCreatorListingTitle(property, extra)) || stored;
   } catch (_) {
     return stored;
   }

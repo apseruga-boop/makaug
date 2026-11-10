@@ -25,6 +25,7 @@ const {
   ugandanPhoneFromSourceText,
 } = require('../utils/sourceIntakeIntegrity');
 const { resolveSourceShortUrl } = require('../utils/sourceUrlNormalization');
+const { plotSaleBeatsStudentWords } = require('../utils/listingCategorySignals');
 const { truncateUnicode } = require('../utils/postgresJson');
 const {
   buildHarvestFingerprints,
@@ -3878,6 +3879,7 @@ function canonicalSocialLocation(rawArea = '', suppliedDistrict = '', sourceText
 function listingTypeFromText(text = '') {
   const raw = cleanText(text).toLowerCase();
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room|muzigo|mizigo|rental room)\b/.test(raw);
+  if (plotSaleBeatsStudentWords(raw)) return 'land';
   if (/\b(hostel|student|campus|makerere|kyambogo|mubs|ucu|university|campus room)\b/.test(raw)) return 'student';
   if (/\b(commercial|office|shop|retail|warehouse|factory|showroom|arcade|duuka|madduuka|store)\b/.test(raw)) return 'commercial';
   if (/\b(rent|rental|to let|month|monthly|kupangisa|renti|for rent|ku rentinga|muzigo|mizigo)\b/.test(raw)) return 'rent';

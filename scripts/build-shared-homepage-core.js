@@ -32,11 +32,11 @@ function build() {
     "ask-ai": sliceBetween(
       sanitized,
       '<section id="home-ask-ai-feature"',
-      '<section class="py-12">'
+      '<section id="home-featured"'
     ),
     featured: sliceBetween(
       sanitized,
-      '<section class="py-12">',
+      '<section id="home-featured"',
       '<section class="py-12 bg-gray-100">'
     ),
     agents: sliceBetween(
