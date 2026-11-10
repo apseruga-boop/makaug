@@ -43,7 +43,7 @@ FROM (
       AND evidence.own !~ 'student[[:space:]]+(accommodation|hostel|room)|hostel[[:space:]]+(room|bed|space)|per[[:space:]]+semester'
       AND NOT (
         jsonb_typeof(COALESCE(p.extra_fields->'staff_corrected_fields', '[]'::jsonb)) = 'array'
-        AND p.extra_fields->'staff_corrected_fields' ? 'listing_type'
+        AND COALESCE(p.extra_fields->'staff_corrected_fields', '[]'::jsonb) ? 'listing_type'
       )
     ) AS restore_category,
     (
@@ -52,7 +52,7 @@ FROM (
       AND lower(evidence.source_title) <> lower(btrim(p.title))
       AND NOT (
         jsonb_typeof(COALESCE(p.extra_fields->'staff_corrected_fields', '[]'::jsonb)) = 'array'
-        AND p.extra_fields->'staff_corrected_fields' ? 'title'
+        AND COALESCE(p.extra_fields->'staff_corrected_fields', '[]'::jsonb) ? 'title'
       )
     ) AS restore_title,
     evidence.source_title

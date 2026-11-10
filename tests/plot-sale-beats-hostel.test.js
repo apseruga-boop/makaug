@@ -108,6 +108,9 @@ test('migration 216 only creates the backup table and stays off the boot path', 
   assert.match(runner, /plot_title_restore_216_backup/);
   assert.match(runner, /category_title_restore_216/);
   assert.match(runner, /staff_corrected_fields/);
+  assert.match(runner, /COALESCE\(p\.extra_fields->'staff_corrected_fields', '\[\]'::jsonb\) \? 'listing_type'/);
+  assert.match(runner, /COALESCE\(p\.extra_fields->'staff_corrected_fields', '\[\]'::jsonb\) \? 'title'/);
+  assert.doesNotMatch(runner, /AND p\.extra_fields->'staff_corrected_fields' \?/);
   assert.match(runner, /plots\?\|acres\?\|decimals\?/);
   assert.match(runner, /MK-20261109-9F68D2/);
   assert.match(runner, /runBackgroundWork/);
