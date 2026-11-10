@@ -58,6 +58,11 @@ test('the migration merges only Quick auctioneers and does not embed a phone num
   assert.match(sql, /migration_212_agent_phone_merge_backup/);
   assert.match(sql, /agent_number_aliases/);
   assert.match(sql, /agents_block_duplicate_phone/);
+  assert.match(sql, /dropped_rows/);
+  for (const table of ['listing_availability_checkins', 'agent_weekly_reports', 'agent_viewing_defaults', 'agent_identity_files']) {
+    assert.match(sql, new RegExp(`DELETE FROM ${table}`), `${table} collisions are removed instead of moved`);
+  }
+  assert.match(rollback, /jsonb_populate_recordset/);
   assert.match(sql, /No message was sent/);
   assert.doesNotMatch(sql, /MKA-AG-6967927/);
   assert.doesNotMatch(sql, /MKA-AG-9146513/);
@@ -102,8 +107,26 @@ test('Quick auctioneers merges into Quickway and a second phone is refused', {
       );
       CREATE TABLE revenue_entries (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), agent_id uuid);
       CREATE TABLE agent_identity_files (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(), agent_id uuid, kind text,
-        archived_at timestamptz, archived_reason text
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(), agent_id uuid NOT NULL, kind text NOT NULL,
+        label text, archived_at timestamptz, archived_reason text
+      );
+      CREATE UNIQUE INDEX agent_identity_files_one_live_side
+        ON agent_identity_files (agent_id, kind)
+        WHERE archived_at IS NULL AND kind IN ('id_front', 'id_back');
+      CREATE TABLE listing_availability_checkins (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        agent_id uuid NOT NULL, week_key text NOT NULL, sent_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (agent_id, week_key)
+      );
+      CREATE TABLE agent_weekly_reports (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        agent_id uuid NOT NULL, week_start date NOT NULL, week_end date NOT NULL,
+        metrics jsonb NOT NULL DEFAULT '{}',
+        UNIQUE (agent_id, week_start)
+      );
+      CREATE TABLE agent_viewing_defaults (
+        agent_id uuid PRIMARY KEY,
+        notice_period_hours integer NOT NULL
       );
     `);
     const survivor = (await pool.query(
@@ -121,7 +144,31 @@ test('Quick auctioneers merges into Quickway and a second phone is refused', {
     await pool.query(`INSERT INTO properties (agent_id, status, lister_name) VALUES ($1, 'approved', 'Quick auctioneers'), ($1, 'pending', 'Quick auctioneers')`, [source.id]);
     await pool.query(`INSERT INTO properties (agent_id, status) VALUES ($1, 'approved')`, [survivor.id]);
     await pool.query(`INSERT INTO revenue_entries (agent_id) VALUES ($1)`, [source.id]);
-    await pool.query(`INSERT INTO agent_identity_files (agent_id, kind) VALUES ($1, 'id_front')`, [survivor.id]);
+    await pool.query(
+      `INSERT INTO agent_identity_files (agent_id, kind, label) VALUES
+         ($1, 'id_front', 'survivor-front'),
+         ($2, 'id_front', 'source-front'),
+         ($2, 'id_back', 'source-back')`,
+      [survivor.id, source.id]
+    );
+    await pool.query(
+      `INSERT INTO listing_availability_checkins (agent_id, week_key, sent_at) VALUES
+         ($1, '2026-W45', '2026-01-01'),
+         ($2, '2026-W45', '2026-02-01'),
+         ($2, '2026-W46', '2026-03-01')`,
+      [survivor.id, source.id]
+    );
+    await pool.query(
+      `INSERT INTO agent_weekly_reports (agent_id, week_start, week_end, metrics) VALUES
+         ($1, '2026-11-02', '2026-11-08', '{"who":"survivor"}'),
+         ($2, '2026-11-02', '2026-11-08', '{"who":"source"}'),
+         ($2, '2026-11-09', '2026-11-15', '{"who":"source-only"}')`,
+      [survivor.id, source.id]
+    );
+    await pool.query(
+      `INSERT INTO agent_viewing_defaults (agent_id, notice_period_hours) VALUES ($1, 24), ($2, 48)`,
+      [survivor.id, source.id]
+    );
     const shared = line('222');
     await pool.query(
       `INSERT INTO agents (full_name, phone, whatsapp, status, makaug_agent_number)
@@ -130,7 +177,10 @@ test('Quick auctioneers merges into Quickway and a second phone is refused', {
       [shared.e164, shared.local]
     );
 
+    const started = Date.now();
     await pool.query(read('db/migrations/212_canonical_agent_phone_and_quick_auctioneers_merge.sql'));
+    const migrationMs = Date.now() - started;
+    assert.ok(migrationMs < 1000, `migration took ${migrationMs}ms`);
 
     const after = (await pool.query(
       `SELECT makaug_agent_number, full_name, company_name, phone, whatsapp, status, removed_at IS NOT NULL AS removed,
@@ -154,6 +204,43 @@ test('Quick auctioneers merges into Quickway and a second phone is refused', {
     assert.equal(listings.n, 3);
     const payments = (await pool.query(`SELECT COUNT(*)::int AS n FROM revenue_entries WHERE agent_id = $1`, [survivor.id])).rows[0];
     assert.equal(payments.n, 1);
+    const checkins = (await pool.query(
+      `SELECT week_key, sent_at::date::text AS sent FROM listing_availability_checkins WHERE agent_id = $1 ORDER BY week_key`,
+      [survivor.id]
+    )).rows;
+    assert.deepEqual(checkins.map((row) => row.week_key), ['2026-W45', '2026-W46']);
+    assert.equal((await pool.query(
+      `SELECT to_char(sent_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS sent
+         FROM listing_availability_checkins WHERE agent_id = $1 AND week_key = '2026-W45'`,
+      [survivor.id]
+    )).rows[0].sent, '2026-01-01');
+    assert.equal((await pool.query(`SELECT COUNT(*)::int AS n FROM listing_availability_checkins WHERE agent_id = $1`, [source.id])).rows[0].n, 0);
+    const reports = (await pool.query(
+      `SELECT week_start::text AS week, metrics->>'who' AS who FROM agent_weekly_reports WHERE agent_id = $1 ORDER BY week_start`,
+      [survivor.id]
+    )).rows;
+    assert.deepEqual(reports, [
+      { week: '2026-11-02', who: 'survivor' },
+      { week: '2026-11-09', who: 'source-only' }
+    ]);
+    assert.equal((await pool.query(`SELECT notice_period_hours FROM agent_viewing_defaults WHERE agent_id = $1`, [survivor.id])).rows[0].notice_period_hours, 24);
+    assert.equal((await pool.query(`SELECT COUNT(*)::int AS n FROM agent_viewing_defaults WHERE agent_id = $1`, [source.id])).rows[0].n, 0);
+    const files = (await pool.query(
+      `SELECT kind, label FROM agent_identity_files WHERE agent_id = $1 ORDER BY kind`,
+      [survivor.id]
+    )).rows;
+    assert.deepEqual(files, [
+      { kind: 'id_back', label: 'source-back' },
+      { kind: 'id_front', label: 'survivor-front' }
+    ]);
+    const dropped = (await pool.query(
+      `SELECT dropped_rows FROM migration_212_agent_phone_merge_backup WHERE agent_number = 'MKA-AG-3822248'`
+    )).rows[0].dropped_rows;
+    assert.equal(dropped.listing_availability_checkins[0].week_key, '2026-W45');
+    assert.equal(dropped.listing_availability_checkins[0].sent_at.slice(0, 10), '2026-02-01');
+    assert.equal(dropped.agent_weekly_reports[0].metrics.who, 'source');
+    assert.equal(dropped.agent_viewing_defaults[0].notice_period_hours, 48);
+    assert.equal(dropped.agent_identity_files[0].label, 'source-front');
     const resolved = await resolveAgentByNumber({ query: (sql, params) => pool.query(sql, params) }, 'MKA-AG-3822248');
     assert.equal(resolved.id, survivor.id);
     assert.equal(resolved.makaug_agent_number, 'MKA-AG-5282286');
@@ -207,6 +294,28 @@ test('Quick auctioneers merges into Quickway and a second phone is refused', {
     assert.equal(restoredPhone.status, 'approved');
     const alias = (await pool.query(`SELECT COUNT(*)::int AS n FROM agent_number_aliases WHERE alias = 'MKA-AG-3822248'`)).rows[0];
     assert.equal(alias.n, 0);
+    const sourceCheckins = (await pool.query(
+      `SELECT week_key FROM listing_availability_checkins WHERE agent_id = $1 ORDER BY week_key`,
+      [source.id]
+    )).rows.map((row) => row.week_key);
+    assert.deepEqual(sourceCheckins, ['2026-W45', '2026-W46']);
+    const survivorCheckin = (await pool.query(
+      `SELECT to_char(sent_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS sent
+         FROM listing_availability_checkins WHERE agent_id = $1 AND week_key = '2026-W45'`,
+      [survivor.id]
+    )).rows[0];
+    assert.equal(survivorCheckin.sent, '2026-01-01');
+    assert.equal((await pool.query(`SELECT notice_period_hours FROM agent_viewing_defaults WHERE agent_id = $1`, [source.id])).rows[0].notice_period_hours, 48);
+    assert.equal((await pool.query(`SELECT notice_period_hours FROM agent_viewing_defaults WHERE agent_id = $1`, [survivor.id])).rows[0].notice_period_hours, 24);
+    const sourceFiles = (await pool.query(
+      `SELECT label FROM agent_identity_files WHERE agent_id = $1 ORDER BY label`,
+      [source.id]
+    )).rows.map((row) => row.label);
+    assert.deepEqual(sourceFiles, ['source-back', 'source-front']);
+    assert.equal((await pool.query(
+      `SELECT label FROM agent_identity_files WHERE agent_id = $1 AND kind = 'id_front'`,
+      [survivor.id]
+    )).rows[0].label, 'survivor-front');
   } finally {
     if (pool) await pool.end().catch(() => {});
     stopPg();
