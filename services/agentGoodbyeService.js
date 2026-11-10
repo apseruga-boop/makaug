@@ -494,6 +494,87 @@ function startFormerAgentDetailScheduler(dbc = db, { bootDelayMs = 10 * 60 * 100
 }
 
 // ---------------------------------------------------------------------------
+// The removal notice to Arthur and Ronald
+
+/**
+ * Who hears that an agent was removed (Arthur, 10 Nov 2026: "make sure that
+ * Ronald and I get a notification once someone has been removed"). Exactly
+ * these two numbers, not the whole lead-desk alert list.
+ * AGENT_REMOVED_ALERT_WHATSAPP (comma-separated) replaces them.
+ */
+function removalAlertRecipients(env = process.env) {
+  const configured = String(env.AGENT_REMOVED_ALERT_WHATSAPP || '').split(/[,;\s]+/).filter(Boolean);
+  const list = configured.length ? configured : ['+447757773202', String(env.AGENT_HELP_CONTACT_PHONE || '+256709402189')];
+  const seen = new Set();
+  return list.filter((value) => {
+    const key = String(value).replace(/\D+/g, '').slice(-9);
+    if (key.length < 9 || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function prettyPhone(value) {
+  let d = String(value || '').replace(/\D+/g, '');
+  if (d.length === 10 && d.startsWith('0')) d = `256${d.slice(1)}`;
+  if (d.length < 9) return '';
+  return d.length === 12 && d.startsWith('256') ? `0${d.slice(3, 6)} ${d.slice(6, 9)} ${d.slice(9)}` : `+${d}`;
+}
+
+function kampalaDay(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Kampala' });
+}
+
+/** The WhatsApp Arthur and Ronald get when an agent is removed in King. */
+function buildRemovalAlert({ agent = {}, reason = null, reasonText = '', by = '', listingsHidden = 0, loginClosed = false, goodbye = null, personalDeleteAfter = null, baseUrl = 'https://makaug.com' } = {}) {
+  const name = String(agent.full_name || 'An agent').trim();
+  const phone = prettyPhone(agent.whatsapp || agent.phone);
+  const lines = [`🚪 *Agent removed: ${name}*`];
+  const idLine = [agent.makaug_agent_number ? `Agent No ${agent.makaug_agent_number}` : '', phone].filter(Boolean).join(' · ');
+  if (idLine) lines.push(idLine);
+  lines.push(`Why: ${reasonText || (reason && reason.label) || 'not given'}`);
+  if (by) lines.push(`By: ${by}`);
+  const listings = toInt(listingsHidden);
+  lines.push(`• ${listings ? `${listings} listing${listings === 1 ? '' : 's'} taken off makaug` : 'No live listings to take down'}${loginClosed ? ', login closed' : ''}`);
+  if (reason && reason.goodbye) {
+    lines.push(goodbye && goodbye.status === 'sending'
+      ? '• Goodbye message and film on their way to them on WhatsApp'
+      : '• No WhatsApp number on file, so no goodbye was sent');
+    if (personalDeleteAfter) lines.push(`• Their ID and personal details are deleted on ${kampalaDay(personalDeleteAfter)} unless they are restored before then`);
+  } else {
+    lines.push('• Nothing was sent to them, and their details are kept');
+  }
+  lines.push(`To undo: King → Agents → ${name} → Restore agent (${String(baseUrl).replace(/\/+$/, '')}/admin)`);
+  return lines.join('\n');
+}
+
+/** Sends the removal notice to Arthur and Ronald and logs it with the other notifications. */
+async function alertRemoval(details = {}, { dbc = db, deliver = null, recipients = removalAlertRecipients() } = {}) {
+  const send = deliver || require('./leadHandoffService').deliverWhatsapp;
+  const body = buildRemovalAlert(details);
+  const results = [];
+  for (const to of recipients) {
+    const delivery = await send({ to, body, kind: 'agent_removed', leadId: null, nonce: Date.now() })
+      .catch((error) => ({ status: 'failed', reason: error.message }));
+    results.push({ to, status: delivery.status });
+  }
+  try {
+    const { logNotification } = require('./notificationLogService');
+    await logNotification(dbc, {
+      channel: 'whatsapp',
+      type: 'agent_removed_alert',
+      status: results.some((r) => ['queued', 'sent', 'simulated'].includes(r.status)) ? 'sent' : 'failed',
+      payloadSummary: { agent_id: String(details.agent?.id || ''), results }
+    });
+  } catch (_error) {
+    // The notice matters more than its log line.
+  }
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // WhatsApp
 
 function phoneKeys(agent = {}) {
@@ -746,6 +827,9 @@ module.exports = {
   deleteStoredFiles,
   resetFormerAgentWhatsapp,
   unmarkFormerAgentWhatsapp,
+  removalAlertRecipients,
+  buildRemovalAlert,
+  alertRemoval,
   sendGoodbyeNow,
   deliverGoodbye,
   runPendingGoodbyes,

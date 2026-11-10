@@ -10048,7 +10048,7 @@ router.post('/agents/:id/remove', async (req, res, next) => {
   try {
     await client.query('BEGIN');
     agent = (await client.query(
-      `SELECT id, full_name, greeting_name, status, removed_at, phone, whatsapp, user_id, billing_suspended_at, billing_snapshot
+      `SELECT id, full_name, greeting_name, status, removed_at, phone, whatsapp, user_id, billing_suspended_at, billing_snapshot, makaug_agent_number
          FROM agents WHERE id = $1 FOR UPDATE`,
       [req.params.id]
     )).rows[0];
@@ -10149,6 +10149,22 @@ router.post('/agents/:id/remove', async (req, res, next) => {
     console.warn('[agent-goodbye] after-removal step failed:', error.message);
     result.after_error = error.message;
   }
+  // Arthur and Ronald hear about every removal, whatever the reason.
+  const by = await adminActorDisplayName(req).catch(() => '');
+  setImmediate(() => {
+    agentGoodbye.alertRemoval({
+      agent: { ...agent, makaug_agent_number: goodbyePayload?.agent?.makaug_agent_number || agent.makaug_agent_number },
+      reason,
+      reasonText,
+      by,
+      listingsHidden: listings.length,
+      loginClosed,
+      goodbye: result.goodbye || null,
+      personalDeleteAfter,
+      baseUrl: agentWeeklyReports.siteUrl()
+    }).catch((error) => console.warn('[agent-goodbye] removal notice not sent:', error.message));
+  });
+  result.team_notified = true;
   return res.json({ ok: true, data: result });
 });
 
