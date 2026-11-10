@@ -19874,6 +19874,7 @@ const MODERATION_REJECTION_REASON_OPTIONS = [
   { key: "id_document_missing_invalid", label: "ID document missing or invalid", message: "Rejected - a valid National ID document is missing or invalid." },
   { key: "listing_details_unverified", label: "Listing details incorrect / cannot verify", message: "Rejected - the listing details could not be verified." },
   { key: "location_mismatch", label: "Location mismatch", message: "Rejected - the listing location does not match the submitted evidence." },
+  { key: "no_specific_area", label: "No specific area / location too vague", message: "No specific area / location too vague" },
   { key: "duplicate_listing", label: "Duplicate listing", message: "Rejected - this appears to be a duplicate listing." },
   { key: "prohibited_spam", label: "Prohibited / spam content", message: "Rejected - this listing appears to be prohibited or spam content." },
   { key: "other", label: "Other", message: "Rejected - other moderation issue. Please review the notes." }
