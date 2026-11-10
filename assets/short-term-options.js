@@ -1,15 +1,9 @@
-/* Short-stay design options. Open with ?design=grid, ?design=split or ?design=list.
-   The live page is unchanged when the parameter is absent.
-   Every option that shows a map calls mountSharedListingMap, the same map
-   for-sale, to-rent and the homepage use. */
+/* Short-stay search grid and stay page. The map is mountSharedListingMap,
+   the same map for-sale, to-rent and the homepage use. */
 (function () {
   'use strict';
 
-  var RIBBON = {
-    grid: 'Option A · photo grid',
-    split: 'Option B · map split',
-    list: 'Option C · compact list'
-  };
+  var STAY_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   function photoUrl(listing) {
     var url = '';
@@ -107,79 +101,114 @@
     return '<p class="st-opt-pay">' + helpers.esc(helpers.t('d1Lead')) + ' ' + helpers.esc(helpers.t('paymentDirect')) + '</p>';
   }
 
-  function mapColumn(design) {
-    var hidden = design === 'split' ? ' hidden lg:block' : ' hidden';
-    return '<div class="listing-map-col st-opt-mapcol' + hidden + '">'
+  function mapColumn() {
+    return '<div class="listing-map-col st-opt-mapcol hidden">'
       + '<div class="listing-map-shell">'
       + '<div id="map-short-term" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>'
-      + '</div>'
-      + '<p class="st-opt-mapnote">Nightly price on each pin. Same map as for sale and to rent.</p>'
-      + '</div>';
+      + '</div></div>';
+  }
+
+  function blocksDirectContact(listing) {
+    if (!listing) return true;
+    if (listing.found_online === true || listing.do_not_message === true) return true;
+    if (String(listing.source || '').toLowerCase() === 'imported') return true;
+    var contact = listing.direct_contact;
+    return !(contact && (contact.whatsapp_digits || contact.tel_href));
+  }
+
+  function stayPublicUrl(listing) {
+    var path = String((listing && listing.url) || '/short-term');
+    if (/^https:\/\//i.test(path)) return path;
+    if (path.charAt(0) !== '/') path = '/' + path;
+    return 'https://makaug.com' + path;
+  }
+
+  function prettyStayDate(iso, withYear) {
+    var parts = String(iso || '').slice(0, 10).split('-');
+    if (parts.length !== 3) return '';
+    var month = Number(parts[1]);
+    var day = Number(parts[2]);
+    if (!Number(parts[0]) || month < 1 || month > 12 || day < 1 || day > 31) return '';
+    return day + ' ' + STAY_MONTHS[month - 1] + (withYear === false ? '' : ' ' + parts[0]);
+  }
+
+  function nightCount(from, to) {
+    var start = Date.parse(String(from || '').slice(0, 10) + 'T00:00:00Z');
+    var end = Date.parse(String(to || '').slice(0, 10) + 'T00:00:00Z');
+    if (!isFinite(start) || !isFinite(end)) return 0;
+    return Math.round((end - start) / 86400000);
+  }
+
+  function stayMessage(listing, checkIn, checkOut, guests) {
+    var title = String((listing && listing.title) || 'your stay').replace(/[\r\n"]/g, ' ').replace(/\s+/g, ' ').trim() || 'your stay';
+    var reference = String((listing && listing.reference) || '').trim();
+    var text = 'Hi, I saw your stay "' + title + '"';
+    if (reference) text += ' (' + reference + ')';
+    text += ' on makaug.com: ' + stayPublicUrl(listing) + '.';
+    var from = prettyStayDate(checkIn, false);
+    var to = prettyStayDate(checkOut, true);
+    var nights = from && to ? nightCount(checkIn, checkOut) : 0;
+    var people = Number(guests);
+    if (from && to && nights > 0) {
+      text += ' Is it available from ' + from + ' to ' + to + ' (' + nights + ' night' + (nights === 1 ? '' : 's') + ')';
+      if (people > 0) text += ' for ' + people + ' guest' + (people === 1 ? '' : 's');
+      text += '?';
+    } else {
+      text += ' Is it available?';
+    }
+    return text;
+  }
+
+  function waDigits(listing) {
+    var raw = listing && listing.direct_contact && listing.direct_contact.whatsapp_digits;
+    return String(raw || '').replace(/\D/g, '');
+  }
+
+  function telHref(listing) {
+    var href = String((listing && listing.direct_contact && listing.direct_contact.tel_href) || '');
+    return /^tel:\+\d{8,15}$/.test(href) ? href : '';
+  }
+
+  function stayFields() {
+    return {
+      checkIn: (document.getElementById('st-d-in') || {}).value || '',
+      checkOut: (document.getElementById('st-d-out') || {}).value || '',
+      guests: (document.getElementById('st-d-guests') || {}).value || ''
+    };
   }
 
   function mapButton(helpers) {
     return '<button class="st-opt-mapbtn" id="st-opt-mapbtn" type="button"><i class="fas fa-map"></i> ' + helpers.esc(helpers.t('showMap')) + '</button>';
   }
 
-  function searchHtml(design, helpers) {
-    var ribbon = '<p class="st-opt-ribbon">' + helpers.esc(RIBBON[design] || 'Preview') + '</p>';
-    var ai = '<div id="st-ai-slot"></div>';
-    var results = '<div id="st-results"></div>';
-    var tools = '<div class="st-opt-tools"><div class="st-count" id="st-count">' + helpers.esc(helpers.t('loading')) + '</div><div class="st-opt-tools-end">'
-      + sortSelect(helpers)
-      + (design === 'split' ? '' : mapButton(helpers))
-      + '</div></div>';
-
-    if (design === 'split') {
-      return '<div class="st-opt st-opt-split">'
-        + '<header class="st-opt-band"><div class="st-opt-wrap">' + ribbon
-        + '<h1>Find a short stay</h1>'
-        + '<p>Nightly places on makaug. You agree the dates, and you pay the host.</p>'
-        + '</div></header>'
-        + '<div class="st-opt-filterbar"><div class="st-opt-wrap">' + searchFields(helpers, 'is-bar') + '</div></div>'
-        + ai
-        + '<div class="st-opt-wrap st-opt-splitgrid">'
-        + '<div class="st-opt-main">' + tools + results + payLine(helpers) + '</div>'
-        + mapColumn('split')
-        + '</div></div>';
-    }
-
-    if (design === 'list') {
-      return '<div class="st-opt st-opt-list"><div class="st-opt-wrap">'
-        + ribbon
-        + '<header class="st-opt-listhead"><div><h1>short stays</h1>'
-        + '<p>A compact list of nightly places on makaug.</p></div>'
-        + '<a class="st-opt-listlink" href="/short-term/list-your-place" data-st-link>' + helpers.esc(helpers.t('listPlace')) + '</a>'
-        + '</header>'
-        + searchFields(helpers, 'is-line')
-        + payLine(helpers)
-        + ai + tools + results
-        + '</div>' + mapColumn('list') + '</div>';
-    }
-
+  function searchHtml(helpers) {
     return '<div class="st-opt st-opt-grid"><div class="st-opt-wrap">'
-      + ribbon
       + '<header class="st-opt-intro"><h1>short stays</h1>'
       + '<p>Apartments, cottages and guest houses by the night, with the host’s own photos.</p></header>'
       + searchFields(helpers, 'is-pill')
       + payLine(helpers)
-      + ai + tools + results
-      + '</div>' + mapColumn('grid') + '</div>';
+      + '<div id="st-ai-slot"></div>'
+      + '<div class="st-opt-tools"><div class="st-count" id="st-count">' + helpers.esc(helpers.t('loading')) + '</div><div class="st-opt-tools-end">'
+      + sortSelect(helpers)
+      + mapButton(helpers)
+      + '</div></div>'
+      + '<div id="st-results"></div>'
+      + '</div>' + mapColumn() + '</div>';
   }
 
-  function detailHref(listing, helpers, design) {
+  function detailHref(listing, helpers) {
     var q = helpers.qs();
     var params = new URLSearchParams();
-    params.set('design', design);
     ['check_in', 'check_out', 'guests'].forEach(function (key) {
       if (q[key]) params.set(key, q[key]);
     });
-    return (listing.url || '/short-term') + '?' + params.toString();
+    var search = params.toString();
+    return (listing.url || '/short-term') + (search ? '?' + search : '');
   }
 
-  function cardHtml(design, listing, helpers) {
+  function cardHtml(listing, helpers) {
     var id = listing.id || listing.url || '';
-    var href = detailHref(listing, helpers, design);
+    var href = detailHref(listing, helpers);
     var photo = photoUrl(listing);
     var media = photo
       ? '<img src="' + helpers.esc(photo) + '" alt="' + helpers.esc(listing.title || 'Short stay') + '">'
@@ -193,18 +222,12 @@
       + '<p class="st-opt-price">' + price + '</p>'
       + helpers.availabilityRowHtml(listing);
 
-    if (design === 'list') {
-      return '<article class="st-opt-row" data-map-card-id="' + helpers.esc(id) + '" data-st-card-id="' + helpers.esc(id) + '">'
-        + '<a class="st-opt-rowmedia" href="' + helpers.esc(href) + '" data-st-link>' + media + '</a>'
-        + '<div class="st-opt-rowbody">' + badges(listing, helpers) + body + '</div></article>';
-    }
-
     return '<article class="st-opt-card" data-map-card-id="' + helpers.esc(id) + '" data-st-card-id="' + helpers.esc(id) + '">'
       + '<a class="st-opt-media" href="' + helpers.esc(href) + '" data-st-link>' + media + badges(listing, helpers) + '</a>'
       + '<div class="st-opt-body">' + body + '</div></article>';
   }
 
-  function paintResults(design, state, helpers) {
+  function paintResults(state, helpers) {
     var count = document.getElementById('st-count');
     var target = document.getElementById('st-results');
     var total = state.total || (state.listings || []).length;
@@ -219,21 +242,33 @@
       target.innerHTML = '<div class="st-opt-empty">' + helpers.esc(helpers.t('emptyFilters')) + '</div>';
       return;
     }
-    var cls = design === 'list' ? 'st-opt-rows' : 'st-opt-cards';
-    target.innerHTML = '<div class="' + cls + '">' + listings.map(function (listing) {
-      return cardHtml(design, listing, helpers);
+    target.innerHTML = '<div class="st-opt-cards">' + listings.map(function (listing) {
+      return cardHtml(listing, helpers);
     }).join('') + '</div>';
+  }
+
+  function contactActions(listing, helpers) {
+    if (!blocksDirectContact(listing)) {
+      return '<a class="st-opt-wa" id="st-stay-wa" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i> Request stay</a>'
+        + '<a class="st-opt-tel" id="st-stay-call"><i class="fas fa-phone"></i> Call</a>';
+    }
+    var source = String(listing.source_url || '');
+    if (/^https:\/\//i.test(source)) {
+      return '<p class="st-opt-found">Found online</p>'
+        + '<a class="st-opt-source" href="' + helpers.esc(source) + '" target="_blank" rel="noopener noreferrer">Original post</a>';
+    }
+    return '<p class="st-opt-found">Found online</p>'
+      + '<div class="agent-booking-tabs" role="tablist" id="st-intent-tabs">'
+      + '<button type="button" class="is-active" data-st-intent="dates">Request these dates</button>'
+      + '<button type="button" data-st-intent="callback">Request a callback</button>'
+      + '<button type="button" data-st-intent="question">Ask a question</button>'
+      + '</div>'
+      + '<button class="st-contact-btn st-contact-form" type="button" id="st-enquire-open"><i class="fas fa-envelope"></i> Request these dates</button>'
+      + '<div id="st-enquire-shell"></div>';
   }
 
   function bookCard(listing, payload, helpers) {
     var q = helpers.qs();
-    var contact = listing.contact || {};
-    var wa = contact.whatsapp_href
-      ? '<a class="st-opt-wa" href="' + helpers.esc(contact.whatsapp_href) + '" target="_blank" rel="noopener noreferrer" data-st-contact="whatsapp"><i class="fab fa-whatsapp"></i> WhatsApp the host</a>'
-      : '';
-    var tel = contact.tel_href
-      ? '<a class="st-opt-tel" href="' + helpers.esc(contact.tel_href) + '" data-st-contact="phone"><i class="fas fa-phone"></i> Call ' + helpers.esc(contact.phone_display || 'the host') + '</a>'
-      : '';
     return '<aside class="st-opt-book">'
       + '<p class="st-opt-bookprice">' + helpers.esc(listing.nightly_display || '') + ' <span>' + helpers.esc(helpers.t('perNight')) + '</span></p>'
       + '<p class="st-opt-bookwhere">' + helpers.esc(whereText(listing)) + '</p>'
@@ -242,28 +277,64 @@
       + '<label>Check out<input class="st-input" id="st-d-out" type="date" value="' + helpers.esc(q.check_out || '') + '"></label>'
       + '</div>'
       + helpers.stayDayStrip(listing)
-      + '<label class="st-opt-guestlabel">Guests<input class="st-input" id="st-d-guests" type="number" min="1" max="30" value="' + helpers.esc(q.guests || '2') + '"></label>'
-      + '<label class="st-opt-guestlabel">Email (optional)<input class="st-input" id="st-d-email" type="email"></label>'
+      + '<label class="st-opt-guestlabel">Guests<input class="st-input" id="st-d-guests" type="number" min="1" max="30" value="' + helpers.esc(q.guests || '') + '"></label>'
       + '<div id="st-quote">' + helpers.quoteHtml(payload.quote) + '</div>'
       + '<div id="st-availability">' + helpers.availabilityHtml(payload.availability) + '</div>'
       + '<p class="st-opt-pay">' + helpers.esc(helpers.t('paymentDirect')) + '</p>'
-      + wa + tel
-      + '<div class="agent-booking-tabs" role="tablist" id="st-intent-tabs">'
-      + '<button type="button" class="is-active" data-st-intent="dates">Request these dates</button>'
-      + '<button type="button" data-st-intent="callback">Request a callback</button>'
-      + '<button type="button" data-st-intent="question">Ask a question</button>'
-      + '</div>'
-      + '<button class="st-contact-btn st-contact-form" type="button" id="st-enquire-open"><i class="fas fa-envelope"></i> Request these dates</button>'
-      + '<div id="st-enquire-shell"></div>'
-      + '<label class="st-check"><input type="checkbox" id="st-d-terms"> <span><a href="/short-term/terms?design=' + helpers.esc(helpers.qs().design || '') + '" data-st-link>Short stay terms</a></span></label>'
+      + contactActions(listing, helpers)
       + '</aside>';
   }
 
-  function detailHtml(design, payload, helpers) {
+  function logContactClick(listing, channel) {
+    if (!listing || !listing.id || blocksDirectContact(listing)) return;
+    var fields = stayFields();
+    var message = stayMessage(listing, fields.checkIn, fields.checkOut, fields.guests);
+    try {
+      fetch('/api/short-term/listings/' + encodeURIComponent(listing.id) + '/contact-clicks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel: channel,
+          check_in: fields.checkIn,
+          check_out: fields.checkOut,
+          guests: fields.guests,
+          message: message
+        }),
+        keepalive: true
+      }).catch(function () {});
+    } catch (_error) {}
+  }
+
+  function paintStayLinks(listing) {
+    if (!listing || blocksDirectContact(listing)) return;
+    var fields = stayFields();
+    var wa = document.getElementById('st-stay-wa');
+    var call = document.getElementById('st-stay-call');
+    var digits = waDigits(listing);
+    var message = stayMessage(listing, fields.checkIn, fields.checkOut, fields.guests);
+    var dated = !!(prettyStayDate(fields.checkIn, false) && prettyStayDate(fields.checkOut, true) && nightCount(fields.checkIn, fields.checkOut) > 0);
+    if (wa && digits) {
+      wa.href = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message);
+      wa.innerHTML = '<i class="fab fa-whatsapp"></i> ' + (dated ? 'Request these dates' : 'Request stay');
+      if (wa.getAttribute('data-bound') !== '1') {
+        wa.setAttribute('data-bound', '1');
+        wa.addEventListener('click', function () { logContactClick(listing, 'whatsapp'); });
+      }
+    }
+    var tel = telHref(listing);
+    if (call && tel) {
+      call.href = tel;
+      if (call.getAttribute('data-bound') !== '1') {
+        call.setAttribute('data-bound', '1');
+        call.addEventListener('click', function () { logContactClick(listing, 'phone'); });
+      }
+    }
+  }
+
+  function detailHtml(payload, helpers) {
     var listing = payload.listing || {};
     var q = helpers.qs();
     var back = new URLSearchParams();
-    back.set('design', design);
     ['q', 'check_in', 'check_out', 'guests', 'max_price'].forEach(function (key) {
       if (q[key]) back.set(key, q[key]);
     });
@@ -282,9 +353,9 @@
       return '<div><b>' + helpers.esc(pair[0] == null ? '—' : String(pair[0])) + '</b><span>' + pair[1] + '</span></div>';
     }).join('');
 
-    return '<div class="st-opt st-opt-detail st-opt-detail-' + design + '"><div class="st-opt-wrap">'
-      + '<p class="st-opt-ribbon">' + helpers.esc(RIBBON[design] || 'Preview') + '</p>'
-      + '<p class="st-opt-crumb"><a href="/short-term?' + helpers.esc(back.toString()) + '" data-st-link>All short stays</a></p>'
+    var backSearch = back.toString();
+    return '<div class="st-opt st-opt-detail"><div class="st-opt-wrap">'
+      + '<p class="st-opt-crumb"><a href="/short-term' + (backSearch ? '?' + helpers.esc(backSearch) : '') + '" data-st-link>All short stays</a></p>'
       + '<div class="st-opt-detailtop">'
       + '<div><div class="st-opt-badges">' + badges(listing, helpers) + '</div>'
       + '<h1>' + helpers.esc(listing.title || 'Short stay') + '</h1>'
@@ -358,6 +429,8 @@
     searchHtml: searchHtml,
     paintResults: paintResults,
     detailHtml: detailHtml,
-    syncMap: syncMap
+    syncMap: syncMap,
+    paintStayLinks: paintStayLinks,
+    stayMessage: stayMessage
   };
 })();

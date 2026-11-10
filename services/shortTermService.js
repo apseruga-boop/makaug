@@ -423,6 +423,73 @@ function publicHostContact(row = {}) {
   };
 }
 
+function extraObject(row = {}) {
+  return checklistObject(row.extra_fields);
+}
+
+// Imported and do-not-message stays must not expose a lister number.
+function stayBlocksDirectContact(row = {}) {
+  const source = String(row.source || '').toLowerCase();
+  if (source === 'imported') return true;
+  const extra = extraObject(row);
+  const flag = row.do_not_message ?? extra.do_not_message;
+  return flag === true || flag === 'true' || flag === 1 || flag === '1';
+}
+
+function publicSourceUrl(row = {}) {
+  const extra = extraObject(row);
+  const raw = String(extra.source_url || row.source_url || '').trim();
+  if (!/^https:\/\//i.test(raw)) return null;
+  return raw.slice(0, 500);
+}
+
+// Digits and a tel link only. No display string is added for the page to print.
+function publicDirectContact(row = {}) {
+  if (stayBlocksDirectContact(row)) return null;
+  const contact = publicHostContact(row);
+  const digits = String(contact.whatsapp_href || '').replace(/^https:\/\/wa\.me\//, '');
+  if (!digits && !contact.tel_href) return null;
+  return {
+    whatsapp_digits: digits || null,
+    tel_href: contact.tel_href || null
+  };
+}
+
+const STAY_DATE_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatStayDate(value, withYear = true) {
+  const iso = parseDate(value);
+  if (!iso) return '';
+  const [, month, day] = iso.split('-');
+  const year = withYear ? ` ${iso.slice(0, 4)}` : '';
+  return `${Number(day)} ${STAY_DATE_MONTHS[Number(month) - 1]}${year}`;
+}
+
+function buildStayWhatsAppMessage(input = {}) {
+  const title = String(input.title || 'your stay').replace(/[\r\n"]/g, ' ').replace(/\s+/g, ' ').trim() || 'your stay';
+  const reference = String(input.reference || '').trim();
+  const url = String(input.url || '').trim();
+  let text = `Hi, I saw your stay "${title}"`;
+  if (reference) text += ` (${reference})`;
+  text += ' on makaug.com';
+  if (url) text += `: ${url}`;
+  text += '.';
+  const checkIn = input.checkIn || input.check_in;
+  const checkOut = input.checkOut || input.check_out;
+  const from = formatStayDate(checkIn, false);
+  const to = formatStayDate(checkOut, true);
+  const nights = from && to ? nightsBetween(parseDate(checkIn), parseDate(checkOut)) : 0;
+  const guests = Math.max(0, toInt(input.guests, 0));
+  if (from && to && nights > 0) {
+    text += ` Is it available from ${from} to ${to} (${nights} night${nights === 1 ? '' : 's'})`;
+    if (guests > 0) text += ` for ${guests} guest${guests === 1 ? '' : 's'}`;
+    text += '?';
+  } else {
+    text += ' Is it available?';
+  }
+  return text;
+}
+
 const PARTNER_PRIVATE_KEYS = [
   'price_basis',
   'markup_percent',
@@ -529,8 +596,15 @@ function normalizeShortTermListing(row = {}, options = {}) {
     // score section under it fair, and what tells a guest who they are dealing
     // with before they pick up the phone.
     is_private_listing: (row.source || 'direct') === 'direct',
-    verified: staffVerifiedStay(row)
+    verified: staffVerifiedStay(row),
+    source_url: publicSourceUrl(row),
+    found_online: stayBlocksDirectContact(row),
+    do_not_message: stayBlocksDirectContact(row)
   };
+
+  if (options.directContact === true) {
+    listing.direct_contact = publicDirectContact(row);
+  }
 
   const availability = stayAvailabilityLabel(row);
   listing.availability_status = availability.status || row.availability_status || 'available';
@@ -1207,6 +1281,27 @@ async function recordShortTermLead(db, listingId, payload = {}) {
   };
 }
 
+// A click on WhatsApp or Call. The browser opens the lister's own link.
+// This row only records that the guest left for that channel.
+async function recordStayContactClick(db, listingId, payload = {}) {
+  const channel = payload.channel === 'phone' ? 'phone' : 'whatsapp';
+  const checkIn = parseDate(payload.check_in);
+  const checkOut = parseDate(payload.check_out);
+  const guests = payload.guests ? Math.max(1, toInt(payload.guests, 1)) : null;
+  const message = cleanMultiline(payload.message, 2000) || null;
+  await db.query(
+    `INSERT INTO st_lead (
+       listing_id, guest_name, guest_phone, guest_email, party_size,
+       check_in, check_out, message, channel, consent_share_with_host
+     ) VALUES ($1::uuid,'Guest',NULL,NULL,$2,$3::date,$4::date,$5,$6,TRUE)`,
+    [listingId, guests, checkIn, checkOut, message, channel]
+  );
+  await db.query(
+    'UPDATE st_listing SET enquiry_count = enquiry_count + 1 WHERE id = $1::uuid',
+    [listingId]
+  );
+}
+
 function validateReview(payload = {}) {
   const errors = [];
   const reviewerName = cleanText(payload.reviewer_name, 120);
@@ -1321,6 +1416,11 @@ module.exports = {
   formatUgx,
   getShortTermListing,
   publicHostContact,
+  publicDirectContact,
+  publicSourceUrl,
+  stayBlocksDirectContact,
+  buildStayWhatsAppMessage,
+  recordStayContactClick,
   isStayAvailable,
   isValidUgandaPhone,
   listPublishedReviews,

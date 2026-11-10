@@ -54,6 +54,7 @@ const {
   createShortTermListing,
   formatUgx,
   getShortTermListing,
+  recordStayContactClick,
   isStayAvailable,
   listPublishedReviews,
   loadShortTermPublicCount,
@@ -340,7 +341,7 @@ router.get('/summary', async (_req, res) => {
 
 router.get('/listings/:slug', async (req, res) => {
   try {
-    const listing = await getShortTermListing(db, req.params.slug);
+    const listing = await getShortTermListing(db, req.params.slug, { directContact: true });
     if (!listing) return res.status(404).json({ ok: false, error: 'Listing not found' });
 
     const quote = quoteStay(listing, {
@@ -383,6 +384,18 @@ router.get('/listings/:slug', async (req, res) => {
 // else: no email, no street, no exact pin. makaug does not relay the message,
 // does not follow it up, and never reports back whether the host replied.
 // ---------------------------------------------------------------------------
+
+router.post('/listings/:id/contact-clicks', writeLimiter, async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) return res.status(400).json({ ok: false, error: 'Unknown listing' });
+    const listing = await getShortTermListing(db, req.params.id, { directContact: true });
+    if (!listing || !listing.direct_contact) return res.status(404).json({ ok: false, error: 'Listing not found' });
+    await recordStayContactClick(db, listing.id, req.body || {});
+    return res.json({ ok: true });
+  } catch (error) {
+    return fail(res, error, 'Could not record that');
+  }
+});
 
 router.post('/listings/:id/enquiries', writeLimiter, async (req, res) => {
   try {
