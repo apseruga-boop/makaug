@@ -180,11 +180,11 @@ test('Spectre source facts, makaug.com coordination and Kenya safeguards are wir
   assert.match(client, /roi_projections/);
   assert.match(client, /OFF_PLAN_AMENITY_I18N/);
   assert.match(client, /guidePrices'\)\.replace\(\/USD\/g, clean\(project\.original_currency/);
-  assert.match(brochure, /copy\.overseasFinance/);
-  assert.match(brochure, /copy\.makaugOverseasTeam/);
-  assert.match(brochure, /project\.floor_plans/);
-  assert.match(brochure, /copy\.projectHighlights/);
-  assert.match(brochure, /copy\.projectedReturns/);
+  const editorial = read('services/offPlanBrochureDesigns.js');
+  assert.match(brochure, /editorialBrochureBuffer/);
+  assert.match(editorial, /floor_plans/);
+  assert.match(editorial, /makaug_service_steps/);
+  assert.match(editorial, /mailto:info@makaug\.com/);
 });
 
 test('AMRA is source-attributed in the UAE review queue and Spectre only keeps display-ready floor plans', () => {
@@ -222,7 +222,7 @@ test('the four Karim Kenya source packs are published without inventing missing 
   const migration = read('db/migrations/131_add_karim_kenya_off_plan_projects.sql');
   const service = read('services/offPlanService.js');
   const client = read('assets/off-plan.js');
-  const brochure = read('services/offPlanBrochureService.js');
+  const brochure = read('services/offPlanBrochureDesigns.js');
   for (const slug of ['velar', 'ivy-myst-kileleshwa', 'high-street-lane-migaa', 'gaia-brookside']) {
     assert.match(migration, new RegExp(`'${slug}'`));
   }
@@ -243,7 +243,7 @@ test('the four Karim Kenya source packs are published without inventing missing 
   assert.match(client, /firstPrice && project\.payment_plan_months \? calculatorMarkup/);
   assert.match(brochure, /originalPriceMax/);
   assert.match(brochure, /ugxPriceMax/);
-  assert.match(brochure, /project\.unit_types\.length > 6 \? 2 : 1/);
+  assert.match(brochure, /chunk\(model\.units, 3\)/);
 });
 
 test('Off Plan project details use readable mobile cards and an uncluttered mobile gallery', () => {
@@ -260,11 +260,12 @@ test('Off Plan project details use readable mobile cards and an uncluttered mobi
 test('UAE project guidance and overseas brochure contact details are Dubai-specific', () => {
   const client = read('assets/off-plan.js');
   const brochure = read('services/offPlanBrochureService.js');
+  const editorial = read('services/offPlanBrochureDesigns.js');
   assert.match(client, /Official Dubai buying checks/);
   assert.match(client, /verify the project status through the Dubai Land Department/);
   assert.match(client, /dubaiProject \? 'Official Dubai buying checks' : overseasDetailText\('buyerChecks'\)/);
   assert.match(brochure, /safeRemoteImageBuffer\(image\.url\)/);
-  assert.match(brochure, /mailto:info@makaug\.com/);
+  assert.match(editorial, /mailto:info@makaug\.com/);
 });
 
 test('contact workflow has all channels and exact operations recipients', () => {
