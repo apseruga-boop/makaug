@@ -1,4 +1,10 @@
 const { keepPendingModerationFields } = require('../utils/keepPendingModeration');
+const {
+  evaluatePendingAgentApproval,
+  loadLinkedAgentStatus,
+  pendingAgentOverrideRequest,
+  PENDING_AGENT_OVERRIDE_ACTION
+} = require('../utils/listingApprovalAgentGuard');
 const { moderationActorLabel, moderationNotesForApproval } = require('../utils/moderationNotes');
 const { autoPinForApproval, correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
@@ -5412,6 +5418,23 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       approvalWarnings.push(`Listing facts updated before moderation status change: ${listingPatchResult.changed_fields.join(', ')}`);
     }
     decisionTiming.mark('listing_patch');
+
+    let pendingAgentOverrideUsed = null;
+    if (nextStatus === 'approved') {
+      const pendingAgentOverride = pendingAgentOverrideRequest({
+        body: req.body,
+        adminAuth: req.adminAuth
+      });
+      const linkedAgent = await loadLinkedAgentStatus(db, current.agent_id);
+      const pendingAgentDecision = evaluatePendingAgentApproval({
+        agent: linkedAgent,
+        override: pendingAgentOverride
+      });
+      if (pendingAgentDecision.blocked) {
+        return res.status(pendingAgentDecision.httpStatus).json(pendingAgentDecision.response);
+      }
+      pendingAgentOverrideUsed = pendingAgentDecision.override || null;
+    }
     let videoCaptionDecision = { blocked: false, conflicts: [] };
     if (nextStatus === 'approved') {
       const overrideRequested = parseBooleanLike(
@@ -6222,6 +6245,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           ...(locationReclassificationExtraFields ? { location_reclassification_confirmation: locationReclassificationExtraFields } : {}),
           ...(humanIntegrityOverride ? { human_integrity_override: humanIntegrityOverride } : {}),
           ...(humanApprovalOverride ? { human_approval_override: humanApprovalOverride } : {}),
+          ...(pendingAgentOverrideUsed ? { pending_agent_approval_override: pendingAgentOverrideUsed } : {}),
           ...(videoCaptionDecision?.override ? { video_caption_ocr_override: videoCaptionDecision.override } : {}),
           ...(videoCaptionDecision?.cleared_by_edit ? { video_caption_ocr_resolved_by_edit: true } : {}),
           ...(staffSourcedOwnerChecklistWaived ? { staff_sourced_owner_checklist_note: STAFF_SOURCED_OWNER_CHECKLIST_NOTE } : {}),
@@ -6362,6 +6386,33 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
               moderationReason,
               HUMAN_INTEGRITY_OVERRIDE_NOTE,
               JSON.stringify(humanApprovalOverride)
+            ]
+          );
+        }
+
+        if (pendingAgentOverrideUsed) {
+          await db.query(
+            `INSERT INTO property_moderation_events (
+              property_id,
+              actor_id,
+              action,
+              status_from,
+              status_to,
+              checklist,
+              reason,
+              notes,
+              delivery
+            ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
+            [
+              listing.id,
+              actorId,
+              PENDING_AGENT_OVERRIDE_ACTION,
+              current.status,
+              nextStatus,
+              JSON.stringify(checklist),
+              pendingAgentOverrideUsed.reason,
+              pendingAgentOverrideUsed.reason,
+              JSON.stringify(pendingAgentOverrideUsed)
             ]
           );
         }

@@ -23,6 +23,11 @@ const {
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const { positiveCanonicalPrice, priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
+const {
+  applyStaffBulkPendingAgentGate,
+  evaluatePendingAgentApproval,
+  loadLinkedAgentStatus
+} = require('../utils/listingApprovalAgentGuard');
 const { listingDirectLookup, listingDirectLookupClause, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
 const { computedListingTotal, normalizeLandSizeUnit, normalizePriceUnit } = require('../utils/listingLandPrice');
 const { loadListingMediaSummaries, listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
@@ -3901,6 +3906,8 @@ async function approveStaffBulkFoundOnlineListing(client, req, row = {}) {
   // Checked again inside the transaction; the caller skips a null result.
   const photos = await listingPhotoOrVideoCheck(client, row.id);
   if (!photos.ok) return null;
+  const linkedAgent = await loadLinkedAgentStatus(client, row.agent_id);
+  if (evaluatePendingAgentApproval({ agent: linkedAgent }).blocked) return null;
   const reason = 'Staff QA - found-online source verified';
   const reviewerUserId = toUuidOrNull(actorId(req));
   const checklist = staffBulkApprovalChecklist();
@@ -4669,10 +4676,14 @@ router.post('/properties/bulk-review', async (req, res, next) => {
       loadStaffBulkReviewCandidates({ ids, allPending }),
       loadApprovedDuplicateIndex()
     ]);
-    const decisions = await applyStaffBulkRealPhotoGate(applyStaffBulkInternalDuplicateGate(
-      candidateResult.rows.map((row) => staffBulkModerationDecision(row, approvedIndex)),
-      candidateResult.rows
-    ));
+    const decisions = await applyStaffBulkPendingAgentGate(
+      await applyStaffBulkRealPhotoGate(applyStaffBulkInternalDuplicateGate(
+        candidateResult.rows.map((row) => staffBulkModerationDecision(row, approvedIndex)),
+        candidateResult.rows
+      )),
+      candidateResult.rows,
+      db
+    );
     candidateResult.missing_ids.forEach((id) => {
       decisions.push({ id, title: '', decision: 'hold', reason: 'not_found' });
     });
