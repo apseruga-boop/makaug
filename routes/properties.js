@@ -1,5 +1,5 @@
 const { keepPendingModerationFields } = require('../utils/keepPendingModeration');
-const { moderationActorLabel } = require('../utils/moderationNotes');
+const { moderationActorLabel, moderationNotesForApproval } = require('../utils/moderationNotes');
 const { autoPinForApproval, correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 const {
@@ -6011,6 +6011,13 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           ? 'submitted'
           : nextStatus;
 
+    const eventNotes = reviewNotes;
+    const listingModerationNotes = nextStatus === 'approved'
+      ? moderationNotesForApproval(current.moderation_notes, reviewNotes, {
+        author: moderationActorLabel(req.userAuth || req.adminAuth || {})
+      })
+      : reviewNotes;
+
     let listing;
     try {
       const result = await db.query(
@@ -6057,7 +6064,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           nextStatus,
           moderationReason,
           JSON.stringify(checklist),
-          reviewNotes,
+          listingModerationNotes,
           actorId,
           reviewerUserId,
           moderationStage,
@@ -6106,7 +6113,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           nextStatus,
           moderationStage,
           JSON.stringify(checklist),
-          reviewNotes,
+          listingModerationNotes,
           moderationReason,
           JSON.stringify(warningOverrides),
           moderationExtraFieldsJson,
@@ -6117,7 +6124,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         ...fallbackResult.rows[0],
         moderation_stage: moderationStage,
         moderation_checklist: checklist,
-        moderation_notes: reviewNotes,
+        moderation_notes: listingModerationNotes,
         moderation_reason: moderationReason
       };
     }
@@ -6244,7 +6251,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
             nextStatus,
             JSON.stringify(checklist),
             moderationReason,
-            reviewNotes,
+            eventNotes,
             JSON.stringify(moderationEventDelivery)
           ]
         );

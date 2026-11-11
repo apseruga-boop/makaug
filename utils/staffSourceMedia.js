@@ -149,6 +149,54 @@ function publicSafeStayImages(images = []) {
   });
 }
 
+function asExtra(row = {}) {
+  const extra = row.extra_fields;
+  if (extra && typeof extra === 'object' && !Array.isArray(extra)) return extra;
+  return {};
+}
+
+function isFoundOnlineStay(row = {}) {
+  if (!row) return false;
+  if (row.source === 'imported' || row.found_online_label) return true;
+  const extra = asExtra(row);
+  return Boolean(extra.found_online_label || extra.found_online === true);
+}
+
+// Found-online stays may use a stored/derived YouTube hqdefault or an already
+// rehosted media.makaug.com cover as their one staff and public photo.
+// Direct host/owner/agent stays still need a real uploaded photo.
+function foundOnlineStayCoverUrl(row = {}, media = []) {
+  if (!isFoundOnlineStay(row)) return '';
+  const preview = staffPreviewImage(row, media);
+  if (preview.preview_placeholder || !preview.cover_url) return '';
+  if (preview.cover_kind === 'rehosted' || preview.cover_kind === 'youtube_hqdefault') return preview.cover_url;
+  return '';
+}
+
+function usableShortStayPhotoCount(row = {}, media = []) {
+  const storedCount = Number(row.photo_count);
+  const list = Array.isArray(media) ? media : [];
+  if (!isFoundOnlineStay(row)) {
+    return Number.isFinite(storedCount) ? storedCount : list.length;
+  }
+  const usableStored = list.filter((item) => {
+    const url = typeof item === 'string' ? item : item && item.url;
+    return Boolean(stableStaffImageUrl(url) || (url && isOurMediaHostUrl(url)));
+  }).length;
+  const cover = foundOnlineStayCoverUrl(row, list);
+  const fromStored = Number.isFinite(storedCount) ? storedCount : usableStored;
+  if (cover) return Math.max(fromStored, usableStored, 1);
+  return Math.max(usableStored, 0);
+}
+
+function withFoundOnlinePublicCover(row = {}, images = []) {
+  const list = Array.isArray(images) ? images.filter((item) => item && item.url) : [];
+  if (list.length || !isFoundOnlineStay(row)) return list;
+  const cover = foundOnlineStayCoverUrl(row, list);
+  if (!cover) return list;
+  return [{ url: cover, caption: 'Source cover', is_primary: true }];
+}
+
 module.exports = {
   isOurMediaHostUrl,
   isSignedTikTokCdnUrl,
@@ -159,4 +207,8 @@ module.exports = {
   staffPreviewImage,
   sanitizeStaffPhotos,
   publicSafeStayImages,
+  isFoundOnlineStay,
+  foundOnlineStayCoverUrl,
+  usableShortStayPhotoCount,
+  withFoundOnlinePublicCover,
 };

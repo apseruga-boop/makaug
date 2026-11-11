@@ -69,7 +69,8 @@ const {
 } = require('../services/shortTermService');
 const {
   staffPreviewImage,
-  sanitizeStaffPhotos
+  sanitizeStaffPhotos,
+  usableShortStayPhotoCount
 } = require('../utils/staffSourceMedia');
 const {
   attachHostIdentity,
@@ -947,14 +948,16 @@ router.get('/staff/queue', requireStaffAccess, async (req, res) => {
       stage_label: STAGES[stage],
       listings: result.rows.map((row) => {
         const sourceUrl = publicSourceUrl(row);
-        const preview = staffPreviewImage(row, row.cover_url ? [{ url: row.cover_url }] : []);
+        const media = row.cover_url ? [{ url: row.cover_url }] : [];
+        const preview = staffPreviewImage(row, media);
         return {
           ...row,
           source_url: sourceUrl,
           source_platform: row.source_platform || null,
           cover_url: preview.cover_url,
           cover_kind: preview.cover_kind,
-          preview_placeholder: preview.preview_placeholder === true
+          preview_placeholder: preview.preview_placeholder === true,
+          photo_count: usableShortStayPhotoCount(row, media)
         };
       }),
       counts: counts.rows.reduce((acc, row) => {
@@ -1136,13 +1139,14 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
     if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Listing not found' });
     const row = result.rows[0];
 
-    const automated = buildAutomatedChecklist(row, { photoCount: row.photo_count });
-    const saved = normalizeChecklist(row.moderation_checklist);
-    const combined = normalizeChecklist({ ...automated, ...saved });
     const photos = await listListingPhotos(db, req.params.id);
     const doNotMessage = listingDoNotMessage(row);
     const preview = staffPreviewImage(row, photos);
     const staffPhotos = sanitizeStaffPhotos(photos, row);
+    const photoCount = usableShortStayPhotoCount(row, staffPhotos);
+    const automated = buildAutomatedChecklist(row, { photoCount });
+    const saved = normalizeChecklist(row.moderation_checklist);
+    const combined = normalizeChecklist({ ...automated, ...saved });
 
     res.set('Cache-Control', 'no-store');
     return res.json({
@@ -1168,7 +1172,7 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
         host_name: row.host_name,
         host_phone: row.host_phone,
         base_nightly_ugx: Number(row.base_nightly_ugx || 0),
-        photo_count: row.photo_count,
+        photo_count: photoCount,
         status: row.status,
         moderation_stage: row.moderation_stage,
         stage_label: STAGES[row.moderation_stage] || row.moderation_stage,
