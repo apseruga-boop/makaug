@@ -77,11 +77,104 @@ function moderationNotesForApproval(existing, incoming, { author = 'staff', at =
   return appendModerationNote(prev, addition, { author, at }) || null;
 }
 
+const APPROVAL_NOTE_BOILERPLATE = 'Staff preview completed before approval';
+const DEFAULT_IMPORTER_STAFF_REVIEW_NOTE = 'Confirm the exact property pin and local amenities with the listing agent before approval.';
+
+const SYSTEM_NOTE_LINES = new Set([
+  ...SYSTEM_APPROVAL_PREVIEW_NOTES.map((item) => item.toLowerCase()),
+  'staff approved after previewing listing facts',
+  'listing facts were updated as part of the moderation status action.',
+  'staff/admin confirmed location and overrode non-location checks for this found-online approval.',
+  'bulk staff review approved found-online source; owner notification left manual.',
+  'rejected from staff preview',
+  'human override — verified manually',
+  'staff-sourced: owner checklist waived',
+  DEFAULT_IMPORTER_STAFF_REVIEW_NOTE.toLowerCase(),
+]);
+
+function isImportTemplateModerationNote(value) {
+  const text = String(value == null ? '' : value).trim();
+  if (!text) return false;
+  return /^(FOUND-ONLINE SOURCE POST IMPORT|SOCIAL SEARCH LISTING)\./i.test(text)
+    || /^(CARNELIAN AUTHORISED LISTING|BAKAIMA AUTHORISED LISTING)\./i.test(text);
+}
+
+function stripLeadingSystemNoteLines(value) {
+  const lines = String(value == null ? '' : value).trim().split('\n');
+  while (lines.length) {
+    const line = lines[0].trim();
+    if (!line) {
+      lines.shift();
+      continue;
+    }
+    if (SYSTEM_NOTE_LINES.has(cleanNote(line).toLowerCase())) {
+      lines.shift();
+      continue;
+    }
+    if (/^human override/i.test(line) || /^staff-sourced:/i.test(line)) {
+      lines.shift();
+      continue;
+    }
+    break;
+  }
+  return lines.join('\n').trim();
+}
+
+function isRecoverableStaffModerationNote(value) {
+  const text = String(value == null ? '' : value).trim();
+  if (!text) return false;
+  if (SYSTEM_NOTE_LINES.has(cleanNote(text).toLowerCase())) return false;
+  if (isImportTemplateModerationNote(text)) return false;
+  if (/^human override/i.test(text) && !/\n/.test(text)) return false;
+  if (/^staff-sourced:/i.test(text) && !/\n/.test(text)) return false;
+  const stripped = stripLeadingSystemNoteLines(text);
+  if (!stripped) return false;
+  if (isImportTemplateModerationNote(stripped)) return false;
+  if (SYSTEM_NOTE_LINES.has(cleanNote(stripped).toLowerCase())) return false;
+  return true;
+}
+
+function stripApprovalBoilerplatePrefix(value) {
+  const raw = String(value == null ? '' : value).trim();
+  if (!raw) return '';
+  return raw.replace(/^Staff preview completed before approval\s*/i, '').trim();
+}
+
+// Plan a restore after approval replaced moderation_notes with the staff-preview
+// boilerplate. If the current note starts with that boilerplate and then a
+// real staff note, only the prefix is stripped. Otherwise the most recent
+// recoverable prior note (newest first) is used. Import templates and system
+// lines are not recoverable.
+function planApprovalBoilerplateNoteRestore(currentNotes, priorNotesNewestFirst = []) {
+  const current = String(currentNotes == null ? '' : currentNotes).trim();
+  const remainder = stripApprovalBoilerplatePrefix(current);
+  if (remainder && isRecoverableStaffModerationNote(remainder)) {
+    const restored = stripLeadingSystemNoteLines(remainder) || remainder;
+    if (restored && restored !== current) return { mode: 'strip_prefix', restored_notes: restored };
+    return { mode: 'already_ok', restored_notes: null };
+  }
+  const priors = Array.isArray(priorNotesNewestFirst) ? priorNotesNewestFirst : [];
+  for (const prior of priors) {
+    if (!isRecoverableStaffModerationNote(prior)) continue;
+    const restored = stripLeadingSystemNoteLines(String(prior == null ? '' : prior).trim()) || String(prior).trim();
+    if (!restored) continue;
+    if (restored === current) return { mode: 'already_ok', restored_notes: null };
+    return { mode: 'restore_prior', restored_notes: restored };
+  }
+  return { mode: 'skip_no_recoverable_note', restored_notes: null };
+}
+
 module.exports = {
+  APPROVAL_NOTE_BOILERPLATE,
   appendModerationNote,
   kampalaNoteStamp,
   moderationActorLabel,
   isSystemApprovalPreviewNote,
   stripSystemApprovalPreviewNotes,
-  moderationNotesForApproval
+  moderationNotesForApproval,
+  isImportTemplateModerationNote,
+  isRecoverableStaffModerationNote,
+  stripLeadingSystemNoteLines,
+  stripApprovalBoilerplatePrefix,
+  planApprovalBoilerplateNoteRestore
 };
