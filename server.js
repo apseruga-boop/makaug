@@ -2967,6 +2967,19 @@ function scheduleStartupDataRepairs() {
     } catch (error) {
       logger.warn('Auto-pin 217 skipped:', error.message || String(error));
     }
+    // Restore moderation_notes wiped by the staff-preview approval
+    // boilerplate. Migration 220 only creates the backup table. The
+    // listing updates run here, in batches of 20, after the process
+    // is already serving.
+    try {
+      const { runModerationNotesRestore220 } = require('./scripts/run-moderation-notes-restore-220');
+      const notesRestore = await runModerationNotesRestore220(db, { logger });
+      if (notesRestore && !notesRestore.skipped && (notesRestore.updated || notesRestore.stopped_early)) {
+        logger.info('Moderation notes restore 220 finished a pass', notesRestore);
+      }
+    } catch (error) {
+      logger.warn('Moderation notes restore 220 skipped:', error.message || String(error));
+    }
   }, staggeredBootDelay('startup_data_repairs'));
   timer.unref?.();
 }
