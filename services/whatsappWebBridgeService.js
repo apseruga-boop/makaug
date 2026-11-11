@@ -196,10 +196,17 @@ async function queueWhatsappWebBridgeMessage({
   source = 'system',
   actorId = 'system',
   metadata = {},
-  campaignId = null
+  campaignId = null,
+  // A message can wait for its time: the agents' Morning Brief is queued the day
+  // before and goes at 7:00am. Absent, in the past or not a time: it goes now.
+  sendAt = null
 }) {
   const userPhone = normalizeBridgeRecipient(recipient);
   const body = String(text || '').trim();
+  const sendAtDate = sendAt ? new Date(sendAt) : null;
+  const scheduledAt = sendAtDate && !Number.isNaN(sendAtDate.getTime()) && sendAtDate.getTime() > Date.now()
+    ? sendAtDate.toISOString()
+    : null;
   if (!userPhone) {
     const error = new Error('Invalid recipient');
     error.status = 400;
@@ -291,6 +298,8 @@ async function queueWhatsappWebBridgeMessage({
   if (existing.rows[0]) {
     const existingReply = existing.rows[0];
     const existingStatus = String(existingReply.status || '').trim().toLowerCase();
+    // A message waiting for its time keeps it: queueing it again must not send it early.
+    if (scheduledAt) return { ...existingReply, duplicate_suppressed: true };
     if (['pending', 'retry'].includes(existingStatus)) {
       const refreshed = await db.query(
         `UPDATE outbound_message_queue
@@ -340,7 +349,7 @@ async function queueWhatsappWebBridgeMessage({
       $2::jsonb,
       'pending',
       0,
-      NOW(),
+      COALESCE($5::timestamptz, NOW()),
       'whatsapp',
       TRUE,
       $3,
@@ -351,7 +360,8 @@ async function queueWhatsappWebBridgeMessage({
       userPhone,
       JSON.stringify(payload),
       campaignId || null,
-      JSON.stringify(meta)
+      JSON.stringify(scheduledAt ? { ...meta, scheduled_for: scheduledAt } : meta),
+      scheduledAt
     ]
   );
 

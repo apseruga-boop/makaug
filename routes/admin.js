@@ -125,6 +125,7 @@ const leadDesk = require('../services/leadDeskService');
 const leadReferral = require('../services/leadReferralService');
 const leadHandoff = require('../services/leadHandoffService');
 const agentHowToPost = require('../services/agentHowToPostBroadcastService');
+const agentBrief = require('../services/agentBriefBroadcastService');
 const { agentGreetingName, setCachedGreetingName } = require('../services/agentNameService');
 const revenue = require('../services/revenueService');
 const billingOps = require('../services/billingOpsService');
@@ -15600,6 +15601,97 @@ router.post('/agent-broadcast/how-to-post/send', async (req, res, next) => {
     }, adminActorId(req));
     return res.json({ ok: true, data: { queued: results.filter((r) => r.status === 'queued').length, skipped_already_sent: all.length - targets.length, results } });
   } catch (error) {
+    return next(error);
+  }
+});
+// The agents' brief (Morning Brief): a 30-second news video with a caption.
+// See services/agentBriefBroadcastService.js. The video is made outside the
+// server and hosted on makaug.com; these say who gets it and when.
+// GET: who it goes to, who it skips and why, and where a brief stands.
+router.get('/agent-broadcast/brief', async (req, res, next) => {
+  try {
+    const date = cleanText(req.query?.date);
+    const slot = cleanText(req.query?.slot) || 'morning';
+    const { recipients, skipped } = await agentBrief.listRecipients(db, { excludeKeys: leadHandoff.makaugOwnNumbers() });
+    const status = date ? await agentBrief.briefStatus(db, { date, slot }) : null;
+    const mask = (n) => `${String(n).slice(0, 5)}***${String(n).slice(-2)}`;
+    return res.json({
+      ok: true,
+      data: {
+        recipients: recipients.map((r) => ({ id: r.id, name: r.name, number_masked: mask(r.number) })),
+        skipped: skipped.map((r) => ({ id: r.id, name: r.name, reason: r.reason })),
+        status
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST preview: the brief now, to a few numbers (Arthur and Ronald), before the agents get it.
+router.post('/agent-broadcast/brief/preview', async (req, res, next) => {
+  try {
+    const result = await agentBrief.previewBrief({
+      queue: queueWhatsappWebBridgeMessage,
+      date: cleanText(req.body?.date),
+      slot: cleanText(req.body?.slot) || 'morning',
+      videoUrl: cleanText(req.body?.video_url),
+      caption: String(req.body?.caption || ''),
+      to: req.body?.to,
+      source: agentReportWhatsappSource(),
+      actorId: adminActorId(req)
+    });
+    await writeAudit('agent_brief_preview_sent', { key: result.key, count: result.queued.length }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    if (error.status === 400) return res.status(400).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
+// POST schedule: every approved agent, at send_at (a morning brief: 7:00am Kampala).
+// Needs confirm=SEND_TO_ALL_AGENTS. Sending the same brief again only adds agents who do not have it.
+router.post('/agent-broadcast/brief/schedule', async (req, res, next) => {
+  try {
+    if (cleanText(req.body?.confirm) !== 'SEND_TO_ALL_AGENTS') {
+      return res.status(400).json({ ok: false, error: 'Add confirm: "SEND_TO_ALL_AGENTS" to send the brief to every approved agent' });
+    }
+    const result = await agentBrief.scheduleBrief({
+      db,
+      queue: queueWhatsappWebBridgeMessage,
+      date: cleanText(req.body?.date),
+      slot: cleanText(req.body?.slot) || 'morning',
+      videoUrl: cleanText(req.body?.video_url),
+      caption: String(req.body?.caption || ''),
+      sendAt: cleanText(req.body?.send_at) || null,
+      source: agentReportWhatsappSource(),
+      actorId: adminActorId(req),
+      excludeKeys: leadHandoff.makaugOwnNumbers(),
+      excludeAgentIds: Array.isArray(req.body?.exclude_agent_ids) ? req.body.exclude_agent_ids : []
+    });
+    await writeAudit('agent_brief_scheduled', {
+      key: result.key,
+      send_at: result.send_at,
+      queued: result.queued,
+      already_queued: result.already_queued,
+      failed: result.failed,
+      skipped: result.skipped.length
+    }, adminActorId(req));
+    return res.json({ ok: true, data: { ...result, results: result.results.map((r) => ({ id: r.id, name: r.name, status: r.status, goes_at: r.goes_at || null, error: r.error || null })) } });
+  } catch (error) {
+    if (error.status === 400) return res.status(400).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
+// POST hold: withdraw every message of a brief that has not gone yet.
+router.post('/agent-broadcast/brief/hold', async (req, res, next) => {
+  try {
+    const result = await agentBrief.holdBrief(db, { date: cleanText(req.body?.date), slot: cleanText(req.body?.slot) || 'morning' });
+    await writeAudit('agent_brief_held', result, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    if (error.status === 400) return res.status(400).json({ ok: false, error: error.message });
     return next(error);
   }
 });
