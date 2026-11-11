@@ -17,6 +17,7 @@
 // the staff queue can shortcut it.
 
 const logger = require('../config/logger');
+const { usableShortStayPhotoCount } = require('../utils/staffSourceMedia');
 
 const SHORT_TERM_MODERATION_MARKER = 'short-term-two-gate-review-v1';
 
@@ -439,7 +440,7 @@ async function applyStaffDecision(db, listingId, { action, checklist, reason, no
           ['Save a district and an area. A missing price can stay as POA.']
         );
       }
-      if (Number(listing.photo_count || 0) === 0) {
+      if (usableShortStayPhotoCount(listing) === 0) {
         throw moderationError(
           'This listing has no photos, so it cannot go live.',
           400,
@@ -558,7 +559,7 @@ async function applyKingDecision(db, listingId, { action, checklist, overrides, 
           ['Save a district and an area. A missing price can stay as POA.']
         );
       }
-      if (Number(listing.photo_count || 0) === 0) {
+      if (usableShortStayPhotoCount(listing) === 0) {
         throw moderationError(
           'This listing has no photos. Send it back rather than publishing it.',
           400,

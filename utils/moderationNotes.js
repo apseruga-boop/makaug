@@ -47,8 +47,41 @@ function appendModerationNote(existing, incoming, { author = 'staff', at = new D
   return prev ? `${prev}\n${line}` : line;
 }
 
+const SYSTEM_APPROVAL_PREVIEW_NOTES = [
+  'Staff preview completed before approval',
+  'Identity verified and listing facts checked before approval',
+];
+
+function isSystemApprovalPreviewNote(value) {
+  const text = cleanNote(value);
+  if (!text) return false;
+  return SYSTEM_APPROVAL_PREVIEW_NOTES.some((item) => text.toLowerCase() === item.toLowerCase());
+}
+
+function stripSystemApprovalPreviewNotes(value) {
+  const raw = String(value == null ? '' : value).trim();
+  if (!raw) return '';
+  const kept = raw.split(/\n+/).map((line) => cleanNote(line)).filter((line) => line && !isSystemApprovalPreviewNote(line));
+  return kept.join('\n');
+}
+
+// Approval used to SET moderation_notes to "Staff preview completed before
+// approval" whenever the preview form's notes box was empty, wiping a
+// moderator's evidence note (7C1D37, 11 Nov 2026). Keep the stored note.
+// A real typed note is appended. The preview boilerplate belongs on the
+// moderation event, not as a replacement listing note.
+function moderationNotesForApproval(existing, incoming, { author = 'staff', at = new Date() } = {}) {
+  const prev = String(existing == null ? '' : existing).trim();
+  const addition = stripSystemApprovalPreviewNotes(incoming);
+  if (!addition) return prev || null;
+  return appendModerationNote(prev, addition, { author, at }) || null;
+}
+
 module.exports = {
   appendModerationNote,
   kampalaNoteStamp,
-  moderationActorLabel
+  moderationActorLabel,
+  isSystemApprovalPreviewNote,
+  stripSystemApprovalPreviewNotes,
+  moderationNotesForApproval
 };

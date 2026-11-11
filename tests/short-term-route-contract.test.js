@@ -1033,10 +1033,11 @@ test('king_facts_confirmed is only written from the approved stage', () => {
 
 test('the King cannot publish a listing with no photos', () => {
   assert.ok(
-    /photo_count[\s\S]{0,80}=== 0[\s\S]{0,200}throw moderationError/.test(moderationSource),
-    'approving a listing with zero photos must be refused'
+    /usableShortStayPhotoCount\(listing\) === 0[\s\S]{0,200}throw moderationError/.test(moderationSource),
+    'approving a listing with zero usable photos must be refused'
   );
 });
+
 
 test('every stage change is written to the audit trail', () => {
   assert.ok(moderationSource.includes('async function recordEvent'), 'no event recorder');

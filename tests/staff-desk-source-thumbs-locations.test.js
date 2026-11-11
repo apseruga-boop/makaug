@@ -10,6 +10,9 @@ const {
   sanitizeStaffPhotos,
   publicSafeStayImages,
   youtubePreviewFields,
+  usableShortStayPhotoCount,
+  foundOnlineStayCoverUrl,
+  withFoundOnlinePublicCover,
 } = require('../utils/staffSourceMedia');
 const {
   resolveCanonicalUgandaLocation,
@@ -111,4 +114,51 @@ test('typing Bugema while the district is Wakiso suggests Bugema (Luwero) and do
   assert.ok(bugema);
   assert.equal(bugema.auto_resolvable, false);
   assert.equal(bugema.display_label, 'Bugema (Luwero)');
+});
+
+test('a found-online YouTube cover counts as one photo; a direct stay still needs an uploaded photo', () => {
+  const foundOnline = {
+    source: 'imported',
+    found_online_label: 'Found online',
+    photo_count: 0,
+    extra_fields: {
+      found_online_label: 'Found online',
+      source_url: 'https://www.youtube.com/watch?v=Le8hpzNXytg',
+      source_platform: 'youtube',
+    },
+  };
+  assert.equal(usableShortStayPhotoCount(foundOnline), 1);
+  assert.equal(
+    foundOnlineStayCoverUrl(foundOnline),
+    'https://i.ytimg.com/vi/Le8hpzNXytg/hqdefault.jpg'
+  );
+  const publicImages = withFoundOnlinePublicCover(foundOnline, []);
+  assert.equal(publicImages.length, 1);
+  assert.equal(publicImages[0].url, 'https://i.ytimg.com/vi/Le8hpzNXytg/hqdefault.jpg');
+  assert.equal(publicImages[0].is_primary, true);
+
+  const rehosted = {
+    source: 'imported',
+    photo_count: 0,
+    extra_fields: { found_online_label: 'Found online', source_url: 'https://www.tiktok.com/@host/video/1' },
+  };
+  assert.equal(
+    usableShortStayPhotoCount(rehosted, [{ url: 'https://media.makaug.com/st/covers/abc.jpg' }]),
+    1
+  );
+
+  const tiktokOnly = {
+    source: 'imported',
+    photo_count: 0,
+    extra_fields: { found_online_label: 'Found online', source_url: 'https://www.tiktok.com/@host/video/1' },
+  };
+  assert.equal(usableShortStayPhotoCount(tiktokOnly, [{ url: SIGNED_TIKTOK }]), 0);
+
+  const direct = {
+    source: 'direct',
+    photo_count: 0,
+    extra_fields: { source_url: 'https://www.youtube.com/watch?v=Le8hpzNXytg' },
+  };
+  assert.equal(usableShortStayPhotoCount(direct), 0);
+  assert.equal(withFoundOnlinePublicCover(direct, []).length, 0);
 });
