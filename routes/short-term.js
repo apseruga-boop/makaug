@@ -64,8 +64,13 @@ const {
   sanitizePublicPartnerListing,
   searchShortTermListings,
   submitShortTermReview,
-  validateListingSubmission
+  validateListingSubmission,
+  publicSourceUrl
 } = require('../services/shortTermService');
+const {
+  staffPreviewImage,
+  sanitizeStaffPhotos
+} = require('../utils/staffSourceMedia');
 const {
   attachHostIdentity,
   buildStaffIdentityDocumentPayload,
@@ -894,6 +899,13 @@ router.get('/staff/queue', requireStaffAccess, async (req, res) => {
               l.listed_via, l.entered_by_staff_name, l.referral_code,
               l.source,
               l.extra_fields->>'found_online_label' AS found_online_label,
+              l.extra_fields->>'source_url' AS source_url,
+              l.extra_fields->>'source_post_url' AS source_post_url,
+              l.extra_fields->>'youtube_url' AS youtube_url,
+              l.extra_fields->>'tiktok_url' AS tiktok_url,
+              l.extra_fields->>'source_platform' AS source_platform,
+              l.extra_fields->>'youtube_video_id' AS youtube_video_id,
+              l.extra_fields->>'youtube_hqdefault_url' AS youtube_hqdefault_url,
               jsonb_build_object('price_on_application', COALESCE(l.extra_fields->>'price_on_application', '') = 'true') AS extra_fields,
               l.listed_at, l.expires_at, l.created_at,
               COALESCE(m.photo_count, 0)::int AS photo_count,
@@ -933,7 +945,18 @@ router.get('/staff/queue', requireStaffAccess, async (req, res) => {
       marker: SHORT_TERM_MARKER,
       stage,
       stage_label: STAGES[stage],
-      listings: result.rows,
+      listings: result.rows.map((row) => {
+        const sourceUrl = publicSourceUrl(row);
+        const preview = staffPreviewImage(row, row.cover_url ? [{ url: row.cover_url }] : []);
+        return {
+          ...row,
+          source_url: sourceUrl,
+          source_platform: row.source_platform || null,
+          cover_url: preview.cover_url,
+          cover_kind: preview.cover_kind,
+          preview_placeholder: preview.preview_placeholder === true
+        };
+      }),
       counts: counts.rows.reduce((acc, row) => {
         acc[row.moderation_stage] = row.total;
         return acc;
@@ -1118,6 +1141,8 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
     const combined = normalizeChecklist({ ...automated, ...saved });
     const photos = await listListingPhotos(db, req.params.id);
     const doNotMessage = listingDoNotMessage(row);
+    const preview = staffPreviewImage(row, photos);
+    const staffPhotos = sanitizeStaffPhotos(photos, row);
 
     res.set('Cache-Control', 'no-store');
     return res.json({
@@ -1162,10 +1187,15 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
         listed_via: row.listed_via,
         entered_by_staff_name: row.entered_by_staff_name,
         referral_code: row.referral_code,
-        acquisition_notes: row.acquisition_notes
+        acquisition_notes: row.acquisition_notes,
+        source_url: publicSourceUrl(row),
+        source_platform: (row.extra_fields && row.extra_fields.source_platform) || null,
+        cover_url: preview.cover_url,
+        cover_kind: preview.cover_kind,
+        preview_placeholder: preview.preview_placeholder === true
       },
       identity: staffIdentitySummary(row, combined),
-      photos,
+      photos: staffPhotos,
       checks: REVIEW_CHECKS,
       checklist: combined,
       automated,

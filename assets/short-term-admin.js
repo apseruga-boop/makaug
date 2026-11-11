@@ -136,6 +136,36 @@
     }).join('') + '</div>';
   }
 
+
+  function sourcePostUrl(row) {
+    var value = row && (row.source_url || row.source_post_url || row.youtube_url || row.tiktok_url);
+    value = String(value || '').trim();
+    if (!/^https:\/\//i.test(value)) return '';
+    if (/^https:\/\/media\.makaug\.com\//i.test(value)) return '';
+    return value;
+  }
+
+  function sourcePostLinkHtml(row, className) {
+    var url = sourcePostUrl(row);
+    if (!url) return '';
+    var platform = String((row && row.source_platform) || '').trim();
+    var label = platform ? ('See original ' + platform + ' post') : 'See original post';
+    return '<a class="' + (className || 'st-desk-source') + '" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">'
+      + '<i class="fas fa-arrow-up-right-from-square"></i> ' + esc(label) + '</a>';
+  }
+
+  function coverHtml(row) {
+    if (row && row.cover_url && !row.preview_placeholder) {
+      return '<a class="st-desk-cover" href="' + esc(sourcePostUrl(row) || row.cover_url) + '" target="_blank" rel="noopener noreferrer">'
+        + '<img src="' + esc(row.cover_url) + '" alt=""></a>';
+    }
+    if (sourcePostUrl(row)) {
+      return '<a class="st-desk-cover st-desk-cover-placeholder" href="' + esc(sourcePostUrl(row)) + '" target="_blank" rel="noopener noreferrer">'
+        + '<span>See original post</span></a>';
+    }
+    return '';
+  }
+
   function listingRowHtml(row, which) {
     var id = String(row.id);
     var photos = Number(row.photo_count || 0);
@@ -143,9 +173,7 @@
 
     return '<article class="st-desk-row" data-st-row="' + esc(id) + '">'
       + '<div class="st-desk-head">'
-      + (row.cover_url
-        ? '<a class="st-desk-cover" href="' + esc(row.cover_url) + '" target="_blank" rel="noopener"><img src="' + esc(row.cover_url) + '" alt=""></a>'
-        : '')
+      + coverHtml(row)
       + '<div>'
       + '<p class="st-desk-ref">' + esc(row.reference || '') + '</p>'
       + '<h4>' + esc(row.title || 'Untitled') + '</h4>'
@@ -175,7 +203,9 @@
           + esc(row.entered_by_staff_name || 'staff') + '</span>'
         : '')
       + (row.referral_code ? '<span class="st-desk-ok"><i class="fas fa-tag"></i> ' + esc(row.referral_code) + '</span>' : '')
-      + '</p></div>'
+      + '</p>'
+      + sourcePostLinkHtml(row)
+      + '</div>'
       + '<button type="button" class="st-btn" data-st-desk-open="' + esc(id) + '" data-st-desk-which="' + which + '">'
       + (deskState(which).open[id] ? 'Close' : 'Open') + '</button>'
       + '</div>'
@@ -217,12 +247,15 @@
     });
   }
 
-  function photosHtml(photos) {
-    var list = photos || [];
-    if (!list.length) return '<p class="st-desk-warn">No photos on this stay yet.</p>';
+  function photosHtml(photos, listing) {
+    var list = (photos || []).filter(function (photo) { return photo && photo.url; });
+    if (!list.length) {
+      return '<p class="st-desk-warn">No photos on this stay yet.</p>'
+        + (sourcePostLinkHtml(listing) ? '<p class="st-desk-meta">' + sourcePostLinkHtml(listing) + '</p>' : '');
+    }
     return '<div class="st-desk-photos">' + list.map(function (photo) {
       var url = esc(photo.url || '');
-      return '<a href="' + url + '" target="_blank" rel="noopener"><img src="' + url + '" alt="' + esc(photo.caption || 'Short stay photo') + '"></a>';
+      return '<a href="' + url + '" target="_blank" rel="noopener noreferrer"><img src="' + url + '" alt="' + esc(photo.caption || 'Short stay photo') + '"></a>';
     }).join('') + '</div>';
   }
 
@@ -375,7 +408,7 @@
 
     body.innerHTML = '<div class="st-desk-sheet"><div>'
       + '<h5>Photos</h5>'
-      + photosHtml(payload.photos)
+      + photosHtml(payload.photos, l)
       + factsFormHtml(id, l).replace('data-st-which=""', 'data-st-which="' + esc(which) + '"')
       + identityPanelHtml(id, payload)
       + (which === 'king'
@@ -395,6 +428,7 @@
       + '</div><div>'
       + '<h5>Where it is</h5>'
       + foundOnlineBadge(l)
+      + (sourcePostLinkHtml(l) ? '<p class="st-desk-meta">' + sourcePostLinkHtml(l) + '</p>' : '')
       + '<p class="st-desk-meta"><b>' + esc(l.stage_label || l.moderation_stage) + '</b></p>'
       + '<p class="st-desk-meta">Photos: ' + esc(l.photo_count) + ' &middot; Fee: ' + esc(l.listing_fee_status) + '</p>'
       + payLink

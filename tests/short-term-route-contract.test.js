@@ -1140,6 +1140,10 @@ test('staff intake is behind staff auth and flagged as staff-entered', () => {
 
 test('the King is told when a colleague typed the listing rather than the host', () => {
   assert.ok(routeSource.includes('listed_via: row.listed_via'), 'provenance missing from the review sheet');
+  assert.ok(routeSource.includes('source_url: publicSourceUrl(row)'), 'review sheet must include the source post URL');
+  assert.ok(routeSource.includes("l.extra_fields->>'source_url' AS source_url"), 'queue must include the source post URL');
+  assert.ok(deskSource.includes('See original post'), 'the desk must offer a See original post link');
+
   assert.ok(routeSource.includes('entered_by_staff_name: row.entered_by_staff_name'));
   assert.ok(
     /listed_via === 'staff_assisted'[\s\S]{0,400}not by the host/.test(deskSource),

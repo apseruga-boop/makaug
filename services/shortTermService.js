@@ -15,6 +15,8 @@ const {
 // Constants
 // ---------------------------------------------------------------------------
 
+const { publicSafeStayImages } = require('../utils/staffSourceMedia');
+
 const SHORT_TERM_MARKER = 'short-term-discovery-v1';
 
 // Arthur's rule, decided 20 Oct 2026 and confirmed 23 Oct 2026.
@@ -600,7 +602,7 @@ function stayAvailabilityLabel(row = {}) {
 function normalizeShortTermListing(row = {}, options = {}) {
   if (!row || !row.id) return null;
   const includeContact = options.includeContact === true;
-  const media = Array.isArray(row.media) ? row.media : [];
+  const media = publicSafeStayImages(Array.isArray(row.media) ? row.media : []);
   const primary = media.find((item) => item.is_primary) || media[0] || null;
 
   const listing = {

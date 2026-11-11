@@ -6,6 +6,7 @@
 
 const { pricePlausibility } = require('../utils/pricePlausibility');
 const { FOUND_ONLINE_LABEL } = require('./freeCategoryHashtagSources');
+const { youtubePreviewFields } = require('../utils/staffSourceMedia');
 
 const MESSAGING_POLICY = 'found_online_never_message';
 
@@ -112,6 +113,7 @@ function buildFoundOnlineShortStayRecord(item = {}, agent = {}) {
       source_key: compact(item.agentKey || item.source_key || ''),
       source_listing_key: compact(item.key || ''),
       imported_at: new Date().toISOString(),
+      ...youtubePreviewFields(item, sourceUrl),
     },
     moderation_notes: 'Found online. Pending short-stay moderation. Do not message this source.',
   };
