@@ -21343,6 +21343,8 @@ async function staffApprovePreviewListing(propertyId, options = {}) {
   if (staffPhotoChangePending) return;
   const propertyIdForRequest = String(propertyId || adminActiveReview?.id || "").trim();
   const humanApprovalOverride = options?.humanApprovalOverride === true || options?.integrityOverride === true;
+  const pendingAgentOverride = options?.pendingAgentOverride === true;
+  const pendingAgentOverrideReason = String(options?.pendingAgentOverrideReason || "").trim();
   try {
     if (!propertyIdForRequest) throw new Error("Missing listing id for approval request");
     if (adminVideoCaptionConflictsRemain()) {
@@ -21385,7 +21387,8 @@ async function staffApprovePreviewListing(propertyId, options = {}) {
       ...adminVideoCaptionOverridePayload(),
       fast_admin_render: true,
       manual_notification_only: true,
-      ...(humanApprovalOverride ? { human_approval_override: true, integrity_override: true } : {})
+      ...(humanApprovalOverride ? { human_approval_override: true, integrity_override: true } : {}),
+      ...(pendingAgentOverride ? { pending_agent_override: true, pending_agent_override_reason: pendingAgentOverrideReason } : {})
     };
     staffApprovalDiagnostic("requesting", { propertyId: propertyIdForRequest, foundOnlineApproval, path: statusPath });
     const decisionSnapshot = staffOptimisticallyApplyDecision(propertyIdForRequest, "approved");
@@ -21570,6 +21573,13 @@ async function staffModerateListing(propertyId, status) {
     if (cleanStatus === "approved") staffVerifyApprovedListingInBackground(propertyId);
     queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary: cleanStatus === "approved" });
   } catch (error) {
+    const response = error.response && typeof error.response === "object"
+      ? error.response
+      : { error: error.message || "request failed" };
+    if (showApprovalBlockerBanner(response, propertyId)) {
+      toast("Approval reason is shown in the Decision panel.");
+      return;
+    }
     toast(`Listing moderation failed: ${error.message || "request failed"}`);
   } finally {
     setStaffPreviewDecisionBusy(false);
@@ -33600,7 +33610,9 @@ function showApprovalBlockerBanner(response = {}, propertyId = "") {
     || document.querySelector("#admin-review-panel [data-approval-blocker-host]")
     || document.querySelector("[data-human-integrity-override-host]");
   if (!host) return false;
-  const errorText = String(response?.error || "Approval blocked").trim();
+  const pendingAgentMessage = "This agent isn't approved yet. Approve the agent first, or unlink the listing.";
+  const pendingAgentBlockedEarly = response?.code === "unapproved_agent" || response?.approval_blocker === "unapproved_agent";
+  const errorText = String((pendingAgentBlockedEarly && !(response?.pending_agent_override_required) ? pendingAgentMessage : null) || response?.error || "Approval blocked").trim();
   const details = Array.isArray(response?.details)
     ? response.details.map((item) => String(item || "").trim()).filter(Boolean)
     : (response?.details ? [String(response.details)] : []);
@@ -33618,7 +33630,10 @@ function showApprovalBlockerBanner(response = {}, propertyId = "") {
   const missingFields = Array.isArray(response?.missing_fields)
     ? response.missing_fields.map((item) => String(item || "").trim()).filter(Boolean)
     : [];
-  const overrideAvailable = response?.human_approval_override_available === true;
+  const pendingAgentBlocked = response?.code === "unapproved_agent" || response?.approval_blocker === "unapproved_agent";
+  const pendingAgentOverrideAvailable = pendingAgentBlocked && response?.pending_agent_override_available === true;
+  const pendingAgentMin = Number(response?.pending_agent_override_min_length || 8);
+  const overrideAvailable = !pendingAgentBlocked && response?.human_approval_override_available === true;
   const photoBlocked = response?.code === "no_real_hosted_photo";
   const shownDetails = photoBlocked
     ? details.map((detail) => REAL_PHOTO_BLOCK_REASONS[detail] || detail)
@@ -33650,11 +33665,35 @@ function showApprovalBlockerBanner(response = {}, propertyId = "") {
       ${proposed.length ? `<div class="mt-3 rounded-lg border border-red-200 bg-white p-2 text-xs font-bold">${Array.from(new Set(proposed)).map(adminEscape).join(" · ")}</div>` : ""}
       ${missingFields.length ? `<div class="mt-3 text-xs font-black">Fields needing attention: ${missingFields.map((field) => adminEscape(field.replace(/_/g, " "))).join(", ")}.</div>` : ""}
       ${overrideAvailable ? `<button type="button" onclick="approveActiveHumanOverride()" class="mt-3 w-full rounded-lg bg-red-800 px-3 py-2 text-sm font-black text-white hover:bg-red-700">Approve anyway (human verified)</button>` : ""}
+      ${pendingAgentBlocked ? `<p class="mt-3 text-xs font-semibold text-red-900">Approve the agent first, or unlink this listing from the agent, then try again.</p>` : ""}
+      ${pendingAgentOverrideAvailable ? `<label class="mt-3 block text-xs font-black text-red-950" for="staff-pending-agent-override-reason">Super-admin override reason</label>
+      <textarea id="staff-pending-agent-override-reason" rows="3" minlength="${pendingAgentMin}" class="mt-1 w-full rounded-lg border-2 border-red-300 bg-white p-2 text-sm font-semibold text-red-950" placeholder="Required. Why should this listing go live before the agent is approved?"></textarea>
+      <button type="button" onclick="approvePendingAgentOverride()" class="mt-3 w-full rounded-lg bg-red-800 px-3 py-2 text-sm font-black text-white hover:bg-red-700">Override and approve (super admin)</button>` : ""}
     </div>`;
   // "nearest" keeps the editor where it is when the banner is already on screen,
   // instead of jumping the whole editor to centre a banner near the bottom.
   host.scrollIntoView({ behavior: "smooth", block: "nearest" });
   return true;
+}
+
+
+async function approvePendingAgentOverride() {
+  const reason = String(document.getElementById("staff-pending-agent-override-reason")?.value || "").trim();
+  const minLength = Number(activeHumanApprovalBlocker?.response?.pending_agent_override_min_length || 8);
+  if (reason.length < minLength) {
+    toast(`Type a reason of at least ${minLength} characters to override this and approve the listing.`);
+    document.getElementById("staff-pending-agent-override-reason")?.focus();
+    return;
+  }
+  const propertyId = String(activeHumanApprovalBlocker?.propertyId || adminActiveReview?.id || "").trim();
+  if (!propertyId) {
+    toast("Open the listing preview again, then retry the override.");
+    return;
+  }
+  await staffApprovePreviewListing(propertyId, {
+    pendingAgentOverride: true,
+    pendingAgentOverrideReason: reason
+  });
 }
 
 function dismissApprovalBlockerBanner() {

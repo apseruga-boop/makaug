@@ -9,6 +9,11 @@ const { requireAdminApiKey, loadActiveUserFromToken } = require('../middleware/a
 const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
 const { registerAgentManagerRoutes, HAS_ID_DOCUMENT_SQL: AGENT_HAS_ID_DOCUMENT_SQL } = require('./adminAgentManager');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
+const {
+  evaluatePendingAgentApproval,
+  loadLinkedAgentStatus,
+  pendingAgentOverrideRequest
+} = require('../utils/listingApprovalAgentGuard');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { listingReferenceQuery, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
 const { priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
@@ -6019,6 +6024,21 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
     if (videoUrls.length < 1) blockers.push('property video');
     const dataIntegrity = listingDataIntegrityReport(property);
     if (!dataIntegrity.ok) blockers.push(...dataIntegrity.issue_codes.map((code) => `data integrity: ${code}`));
+
+    const pendingAgentOverride = pendingAgentOverrideRequest({
+      body: req.body,
+      adminAuth: req.adminAuth
+    });
+    const linkedAgent = await loadLinkedAgentStatus(client, property.agent_id);
+    const pendingAgentDecision = evaluatePendingAgentApproval({
+      agent: linkedAgent,
+      override: pendingAgentOverride
+    });
+    if (pendingAgentDecision.blocked) {
+      await client.query('ROLLBACK');
+      return res.status(pendingAgentDecision.httpStatus).json(pendingAgentDecision.response);
+    }
+
     if (blockers.length) {
       await client.query('ROLLBACK');
       return res.status(400).json({
@@ -6080,6 +6100,22 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
         JSON.stringify({ image_count: photoCheck.total, real_photo_count: photoCheck.real_photos, video_count: videoUrls.length })
       ]
     );
+    if (pendingAgentDecision.override) {
+      await client.query(
+        `INSERT INTO property_moderation_events (
+           property_id, actor_id, action, status_from, status_to, checklist, reason, notes, delivery
+         ) VALUES ($1,$2,'pending_agent_approval_override',$3,'approved',$4::jsonb,$5,$6,$7::jsonb)`,
+        [
+          req.params.id,
+          actorId,
+          property.status,
+          JSON.stringify(checklist),
+          pendingAgentDecision.override.reason,
+          pendingAgentDecision.override.reason,
+          JSON.stringify(pendingAgentDecision.override)
+        ]
+      );
+    }
     await client.query('COMMIT');
     invalidatePublicInventoryMetricsCache('admin_direct_agent_listing_published');
     require('../services/indexNowService').notifyListing(updated.rows[0]);
