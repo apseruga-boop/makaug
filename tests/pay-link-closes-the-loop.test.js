@@ -16,6 +16,12 @@
  * not auto-confirm — so a claim nobody is told about waits in the admin queue
  * until somebody happens to open it. The WhatsApp receipt path has always
  * alerted the team. This one, the button on the payment page, did not.
+ *
+ * 10 Nov 2026: payments go to the MoMo merchant code, which asks for no
+ * reference. The button now asks for their business name and the number they
+ * paid from; the transaction ID is optional. The people who confirm (Ronald
+ * and Arthur) hear each claim directly, with a one-tap confirm once the
+ * merchant line's SMS shows the money.
  */
 
 const test = require('node:test');
@@ -52,16 +58,15 @@ function stubbedDb({ link, smsMatch = false }) {
         if (/FROM pay_links/i.test(sql) && /SELECT/i.test(sql)) return { rows: [link] };
         if (/SELECT id FROM payment_claims/i.test(sql)) return { rows: [] };
         if (/INSERT INTO payment_claims/i.test(sql)) {
-          const claim = {
-            id: 'claim-1',
-            payer_phone: params[0],
-            payer_name: params[1],
-            agent_id: params[2],
-            purpose: params[6],
-            reference: params[7],
-            amount_ugx: params[8],
-            status: 'pending'
-          };
+          // Read the columns and VALUES so the stub follows the statement.
+          const cols = sql.match(/INSERT INTO payment_claims \(([^)]+)\)/i)[1].split(',').map((c) => c.trim());
+          const values = sql.match(/VALUES \(([\s\S]+)\) RETURNING/i)[1].split(',').map((v) => v.trim());
+          const claim = { id: 'claim-1', status: 'pending' };
+          cols.forEach((col, i) => {
+            const v = values[i] || '';
+            const n = v.match(/^\$(\d+)/);
+            claim[col] = n ? params[Number(n[1]) - 1] : v.replace(/^'|'$/g, '');
+          });
           claims.push(claim);
           return { rows: [claim] };
         }
@@ -86,7 +91,7 @@ function captureTeamAlerts(run) {
   const direct = [];
   desk.sendToTeam = async (_db, body, kind) => { alerts.push({ body, kind }); return true; };
   desk.alertRecipients = () => [];
-  handoff.deliverWhatsapp = async ({ to, body }) => { direct.push({ to, body }); return true; };
+  handoff.deliverWhatsapp = async ({ to, body, kind }) => { direct.push({ to, body, kind }); return { status: 'queued' }; };
   billingOps.getSettings = async () => ({ confirmers: [{ phone: '+256709402189' }, { phone: '+447757773202' }] });
   return Promise.resolve(run({ alerts, direct }))
     .finally(() => {
@@ -111,9 +116,9 @@ const AGENT_LINK = {
   st_listing_id: null
 };
 
-test('tapping "I have paid" tells the team, and names what is still needed', async () => {
+test('tapping "I have paid" tells Ronald and Arthur, and names what is still needed', async () => {
   const { db, claims } = stubbedDb({ link: AGENT_LINK });
-  await captureTeamAlerts(async ({ alerts, direct }) => {
+  await captureTeamAlerts(async ({ direct }) => {
     const result = await payLinks.createMomoClaim(db, 'MKTESTAGNT', {
       reference: 'MP251005.1234.A56789',
       phone: '256772123456',
@@ -122,47 +127,51 @@ test('tapping "I have paid" tells the team, and names what is still needed', asy
     assert.ok(result.claim_id, 'the claim is still raised');
     assert.strictEqual(claims.length, 1);
 
-    assert.strictEqual(alerts.length, 1, 'the team has to hear about it');
-    assert.strictEqual(alerts[0].kind, 'payment_claim_to_check');
-    assert.match(alerts[0].body, /Payment claim to check/);
-    assert.match(alerts[0].body, /Kato Brian/);
-    assert.match(alerts[0].body, /50,000/, 'how much they say they paid');
-    assert.match(alerts[0].body, /MP251005\.1234\.A56789/, 'the transaction ID to check against');
-    assert.match(alerts[0].body, /NOT counted until someone confirms/i,
-      'a claim is not money, and the message must not let anyone think it is');
-
-    // Ronald and Arthur confirm payments, so they hear even if not on the alert list.
+    // Ronald and Arthur confirm payments, so they hear it, each on their own.
     assert.strictEqual(direct.length, 2, 'both confirmers');
+    assert.deepStrictEqual(direct.map((d) => d.to).sort(), ['256709402189', '447757773202']);
+    for (const alert of direct) {
+      assert.strictEqual(alert.kind, 'payment_claim_to_check');
+      assert.match(alert.body, /Payment claim to check/);
+      assert.match(alert.body, /Kato Brian/);
+      assert.match(alert.body, /50,000/, 'how much they say they paid');
+      assert.match(alert.body, /MP251005\.1234\.A56789/, 'the transaction ID to check against');
+      assert.match(alert.body, /NOT counted until someone confirms/i,
+        'a claim is not money, and the message must not let anyone think it is');
+    }
   });
 });
 
 test('an unmatched claim says so, so nobody assumes the money arrived', async () => {
   const { db } = stubbedDb({ link: AGENT_LINK, smsMatch: false });
-  await captureTeamAlerts(async ({ alerts }) => {
+  await captureTeamAlerts(async ({ direct }) => {
     await payLinks.createMomoClaim(db, 'MKTESTAGNT', { reference: 'MP251005.9999.Z11111' });
-    assert.match(alerts[0].body, /No matching wallet SMS yet/);
+    assert.match(direct[0].body, /No matching wallet SMS yet/);
   });
 });
 
 test('a claim matched to the wallet SMS says that too', async () => {
   const { db } = stubbedDb({ link: AGENT_LINK, smsMatch: true });
-  await captureTeamAlerts(async ({ alerts }) => {
+  await captureTeamAlerts(async ({ direct }) => {
     await payLinks.createMomoClaim(db, 'MKTESTAGNT', { reference: 'MP251005.1234.A56789' });
-    assert.match(alerts[0].body, /matches a wallet SMS/);
+    assert.match(direct[0].body, /matches a wallet SMS/);
   });
 });
 
 test('a failed alert never loses the claim', async () => {
   const { db, claims } = stubbedDb({ link: AGENT_LINK });
-  const desk = require('../services/leadDeskService');
-  const original = desk.sendToTeam;
-  desk.sendToTeam = async () => { throw new Error('bridge down'); };
+  const handoff = require('../services/leadHandoffService');
+  const billingOps = require('../services/billingOpsService');
+  const original = { deliver: handoff.deliverWhatsapp, settings: billingOps.getSettings };
+  handoff.deliverWhatsapp = async () => { throw new Error('bridge down'); };
+  billingOps.getSettings = async () => ({ confirmers: [{ phone: '+256709402189' }] });
   try {
     const result = await payLinks.createMomoClaim(db, 'MKTESTAGNT', { reference: 'MP251005.1234.A56789' });
     assert.ok(result.claim_id, 'the agent has paid; losing the alert must not lose their claim');
     assert.strictEqual(claims.length, 1);
   } finally {
-    desk.sendToTeam = original;
+    handoff.deliverWhatsapp = original.deliver;
+    billingOps.getSettings = original.settings;
   }
 });
 
@@ -172,6 +181,26 @@ test('a transaction ID that is too short is refused before anything is recorded'
     () => payLinks.createMomoClaim(db, 'MKTESTAGNT', { reference: '12' }),
     /transaction ID/i
   );
+  assert.strictEqual(claims.length, 0);
+});
+
+test('no reference needed: their business name and the number they paid from are enough', async () => {
+  const { db, claims } = stubbedDb({ link: AGENT_LINK });
+  await captureTeamAlerts(async ({ direct }) => {
+    const result = await payLinks.createMomoClaim(db, 'MKTESTAGNT', { businessName: 'Kato Homes', phone: '0772 123 456' });
+    assert.ok(result.claim_id);
+    assert.strictEqual(claims[0].business_name, 'Kato Homes');
+    assert.strictEqual(claims[0].paid_from_phone, '0772123456');
+    assert.strictEqual(claims[0].reference, null, 'no transaction ID was given, and none is invented');
+    assert.strictEqual(claims[0].method, 'mtn_momopay');
+    assert.match(direct[0].body, /Kato Brian \(Kato Homes\)/);
+    assert.match(direct[0].body, /Transaction ID: not given — we match it by their number and name/);
+  });
+});
+
+test('with neither a business name nor a transaction ID, nothing is recorded', async () => {
+  const { db, claims } = stubbedDb({ link: AGENT_LINK });
+  await assert.rejects(() => payLinks.createMomoClaim(db, 'MKTESTAGNT', { phone: '0772123456' }), /business name/i);
   assert.strictEqual(claims.length, 0);
 });
 

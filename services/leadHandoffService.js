@@ -177,6 +177,50 @@ async function deliverWhatsapp({ to, body, kind, leadId, nonce = 0 }) {
   }
 }
 
+// WhatsApp cuts a long caption; past this the picture goes first with a
+// short caption, then the message as its own text.
+const IMAGE_CAPTION_MAX = 1000;
+
+/**
+ * A message with a picture on top (the merchant-code card on payment
+ * messages). On the bridge the picture carries the message as its caption, and
+ * if the picture cannot be fetched the bridge still sends the text. Anywhere
+ * else it is the text alone, exactly as deliverWhatsapp sends it.
+ */
+async function deliverWhatsappWithImage({ to, body, imageUrl, caption = '', kind, leadId, nonce = 0 }) {
+  const recipient = normalizeUgPhoneForWhatsApp(to);
+  if (!recipient || recipient.length < 9) return { status: 'skipped', reason: 'invalid_phone' };
+  if (makaugOwnNumbers().includes(phoneKey(recipient))) return { status: 'skipped', reason: 'makaug_own_number' };
+  const mode = getWhatsappDeliveryMode();
+  if (!imageUrl || mode === 'test' || !(mode === 'web_bridge' || isWhatsappWebBridgeEnabled())) {
+    return deliverWhatsapp({ to, body, kind, leadId, nonce });
+  }
+  try {
+    const text = String(body || '').trim();
+    const fits = text.length <= IMAGE_CAPTION_MAX;
+    const queued = await queueWhatsappWebBridgeMessage({
+      recipient,
+      text: fits ? text : (String(caption || '').trim() || 'Pay makaug with MTN MoMo'),
+      mediaUrl: imageUrl,
+      mediaType: 'image',
+      source: handoffWhatsappSource(),
+      actorId: 'lead_handoff',
+      metadata: {
+        message_kind: `lead_handoff_${kind}`,
+        lead_id: leadId || null,
+        part: 'card',
+        reply_dedupe_key: `lead_handoff:${leadId || 'none'}:${kind}:${nonce}:card`
+      }
+    });
+    if (fits) return { status: 'queued', provider: 'whatsapp_web_bridge', id: queued?.id || null, image: true };
+    const rest = await deliverWhatsapp({ to, body, kind, leadId, nonce });
+    return { ...rest, image: true };
+  } catch (error) {
+    logger.warn('WhatsApp card send failed, sending the text alone', { kind, error: error.message });
+    return deliverWhatsapp({ to, body, kind, leadId, nonce });
+  }
+}
+
 async function deliverEmail({ to, subject, body, replyTo }) {
   const recipient = text(to).toLowerCase();
   if (!recipient || !recipient.includes('@')) return { status: 'skipped', reason: 'no_email' };
@@ -454,6 +498,8 @@ module.exports = {
   _resetSendLog: () => sendLog.clear(),
   acknowledgeTeamLead,
   deliverWhatsapp,
+  deliverWhatsappWithImage,
+  handoffWhatsappSource,
   makaugOwnNumbers,
   buildListerMessage,
   buildSeekerMessage,

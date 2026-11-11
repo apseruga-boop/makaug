@@ -24,6 +24,9 @@ const { publishedPricing } = require('../config/publishedPricing');
 
 const METHODS = {
   mtn_momo: { label: 'MTN Mobile Money', account: 'mtn_momo' },
+  // The merchant code (27248497) pays into its own wallet, so it is its own
+  // account: its balance SMS must not be checked against the old line's.
+  mtn_momopay: { label: 'MTN MoMo merchant code', account: 'mtn_momopay' },
   airtel_money: { label: 'Airtel Money', account: 'airtel_money' },
   bank_transfer: { label: 'Bank transfer / deposit (other bank)', account: 'bank' },
   absa_ugx: { label: 'Absa — UGX account', account: 'absa_ugx' },
@@ -282,14 +285,20 @@ function parseMoneySms(body = '', sender = '') {
     : (/\b(?:you have sent|sent|withdr(?:awn|aw)|paid to|payment to|debited|transferred)\b/.test(lower) ? 'out' : 'unknown');
   const amountPart = text.split(/new balance|bal(?:ance)?[:\s]/i)[0];
   const amount = smsAmount(amountPart);
-  const refMatch = text.match(/(?:Financial Transaction Id|Transaction Id|Trans(?:action)?\.?\s*ID|Txn\s*ID|TID|Ref(?:erence)?(?:\s*No)?)[\s:.#]*([A-Z0-9][A-Z0-9.\-]{3,})/i);
+  // The transaction ID, by its label. "Reference" comes last and must hold a
+  // digit: on a merchant payment it can be whatever the payer typed, such as
+  // their business name, and that is not a transaction ID.
+  const refMatch = text.match(/(?:Financial Transaction Id|Transaction Id|Trans(?:action)?\.?\s*ID|Txn\s*ID|TID)[\s:.#]*([A-Z0-9][A-Z0-9.\-]{3,})/i)
+    || text.match(/\bID[\s:.#]+(\d[\d.\-]{5,})/)
+    || text.match(/\bRef(?:erence)?(?:\s*No)?[\s:.#]*((?=[A-Z0-9.\-]*\d)[A-Z0-9][A-Z0-9.\-]{3,})/i);
   const balMatch = text.match(/(?:new balance|bal(?:ance)?)\s*(?:is|:)?\s*(?:UGX|Ush|Shs?)?\s*([\d,]+(?:\.\d+)?)/i);
   let partyMatch = text.match(/\bfrom\s+([A-Za-z][A-Za-z .'-]{2,60}?)(?:\s*\(|,|\s+on\b|\s+\d)/i)
     || text.match(/\bto\s+([A-Za-z][A-Za-z .'-]{2,60}?)(?:\s*\(|,|\s+on\b|\s+\d)/i);
   if (partyMatch && /^(?:your|you|the)\b/i.test(partyMatch[1])) partyMatch = null;
   if (!partyMatch) {
-    // Airtel: "from 256752123456, JOHN DOE."
-    const afterPhone = text.match(/\b(?:256|0)7\d{8}\s*,\s*([A-Za-z][A-Za-z .'-]{2,60}?)\s*[.,]/);
+    // Airtel: "from 256752123456, JOHN DOE." — and merchant receipts written
+    // "from 256772123456 - JOHN DOE".
+    const afterPhone = text.match(/\b(?:256|0)7\d{8}\s*(?:,|-|–)\s*([A-Za-z][A-Za-z .'-]{2,60}?)\s*(?:[.,(]|$|\s+(?:on|at|ref|reference|reason|transaction|tid|id)\b)/i);
     if (afterPhone) partyMatch = afterPhone;
   }
   const phoneMatch = text.match(/\b(?:256|0)7\d{8}\b/);
@@ -364,12 +373,21 @@ async function ingestMoneySms(db, { body, sender = '', receivedAt = null, accoun
   try {
     claimsMatched = await require('./billingOpsService').matchSmsToClaims(db, inserted) || [];
   } catch (_ignored) { /* claims are a second chance, not the main path */ }
+  // Money nobody has claimed yet: whose is it? An open payment link or a
+  // payer on that number becomes a claim with this SMS already attached, for
+  // Ronald or Arthur to confirm in one tap. Never recorded on its own.
+  let autoClaim = null;
+  if (!matched && !claimsMatched.length && inserted.direction === 'in') {
+    try {
+      autoClaim = await require('./paymentMatchService').claimFromSms(db, inserted);
+    } catch (_ignored) { /* the team still hears about the money below */ }
+  }
   let balanceCheck = null;
   if (account && parsed.balance_ugx != null) {
     const exists = (await db.query('SELECT 1 FROM money_accounts WHERE key = $1', [account])).rows[0];
     if (exists) balanceCheck = await recordBalanceCheck(db, { accountKey: account, actual: parsed.balance_ugx, source: 'sms', note: 'Balance line of a forwarded money SMS', actor: 'sms' });
   }
-  return { sms: inserted, parsed, matched, balanceCheck, claimsMatched };
+  return { sms: inserted, parsed, matched, balanceCheck, claimsMatched, autoClaim };
 }
 
 // --- Bank / wallet statements ----------------------------------------------

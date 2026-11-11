@@ -21,6 +21,7 @@ const revenue = require('./revenueService');
 const { publishedPricing, ownerFreeDaysForListing } = require('../config/publishedPricing');
 const { agentGreetingName } = require('./agentNameService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
+const { momoMerchantCode, momoMerchantName, momoWhatsappSteps, momoAfterPayingLine } = require('../config/momoMerchant');
 
 const SITE = () => String(process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
 let settingsCache = { at: 0, value: null };
@@ -44,13 +45,27 @@ async function setSetting(db, key, value, actor = 'admin') {
   settingsCache = { at: 0, value: null };
 }
 
-/** "MTN Mobile Money 0780 863394 (MAKAUG ONLINE REAL ESTATE LTD)", or '' until it is set. */
+/**
+ * Where people pay: "MTN MoMo merchant code *27248497* (MAKAUG ONLINE REAL
+ * ESTATE LTD)". Since 10 Nov 2026 the merchant code is the only way we ask for
+ * Mobile Money (Arthur chose "merchant code only"); 0780 863 394 stays our
+ * WhatsApp, not a number to send money to. Never empty: the code has a
+ * fallback in config/momoMerchant.js, so reminders always know where to send
+ * people.
+ */
 function payToLine(settings = {}) {
-  const p = settings.pay_to || {};
-  const number = String(p.number || '').trim();
-  const name = String(p.name || '').trim();
-  if (!number || !name) return '';
-  return `${String(p.method || 'MTN Mobile Money').trim()} *${number}* (${name})`;
+  return `MTN MoMo merchant code *${momoMerchantCode()}* (${momoMerchantName(settings)})`;
+}
+
+/** The two lines every WhatsApp that asks for money carries. */
+function momoHowToPay({ amountUgx = null, lister = false } = {}) {
+  return [momoWhatsappSteps({ amountUgx }), momoAfterPayingLine({ lister })].join('\n');
+}
+
+/** The merchant-code card for a payment link (its amount and what it is for). */
+function payLinkCardUrl(payLink = '') {
+  const match = String(payLink || '').match(/\/pay\/(MK[A-Z0-9]{4,12})\b/i);
+  return require('./momoMerchantCardService').momoCardUrl({ code: match ? match[1] : '' });
 }
 
 function ugx(n) {
@@ -73,10 +88,10 @@ function helpContact() {
 
 // --- Agent messages ---------------------------------------------------------
 
-const AGENT_MESSAGE_KINDS = ['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down', 'reinstated'];
+const AGENT_MESSAGE_KINDS = ['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down', 'reinstated', 'paid'];
 
 function payLinkLine(payLink) {
-  return payLink ? `💳 Pay by card, Apple Pay, Google Pay or MoMo here: ${payLink}` : '';
+  return payLink ? `💳 Your payment page: ${payLink}` : '';
 }
 
 const PAY_LINK_KINDS = new Set(['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down', 'views']);
@@ -105,6 +120,11 @@ function onFreeTrial(agent = {}) {
   return Boolean(until) && (!paid || paid <= until);
 }
 
+// Blank lines between parts, but never two in a row (a part can be empty).
+function keepOneBlank(line, i, all) {
+  return line !== '' || (i > 0 && all[i - 1] !== '' && i < all.length - 1);
+}
+
 function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '' } = {}) {
   const name = agentGreetingName(agent, 'there');
   const fee = Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || publishedPricing().agent.monthly_ugx);
@@ -112,7 +132,7 @@ function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '
   const due = agent.paid_until ? prettyDate(agent.paid_until) : '';
   const help = helpContact();
   const howToPay = [
-    pay ? `Pay ${ugx(fee)} to ${pay}, then reply here with the *transaction ID* (or a screenshot of the payment).` : '',
+    pay ? momoHowToPay({ amountUgx: fee }) : '',
     payLinkLine(payLink)
   ].filter(Boolean).join('\n');
   if (onFreeTrial(agent) && (kind === 'pre_due' || kind === 'due_today')) {
@@ -127,24 +147,30 @@ function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '
   }
   switch (kind) {
     case 'pre_due':
-      return [`Hi ${name} 👋`, '', (due ? `Your makaug agent subscription renews on *${due}*.` : `Your makaug agent subscription (${ugx(fee)} a month) is due.`), howToPay, '', 'Your profile and listings stay live without a break. Thank you for being with makaug!'].filter((l) => l !== '').join('\n');
+      return [`Hi ${name} 👋`, '', (due ? `Your makaug agent subscription renews on *${due}*.` : `Your makaug agent subscription (${ugx(fee)} a month) is due.`), howToPay, '', 'Your profile and listings stay live without a break. Thank you for being with makaug!'].filter(keepOneBlank).join('\n');
     case 'due_today':
-      return [`Hi ${name} 👋`, '', `Your makaug agent subscription (${ugx(fee)} a month) is due *today*.`, howToPay, '', 'Thank you!'].filter((l) => l !== '').join('\n');
+      return [`Hi ${name} 👋`, '', `Your makaug agent subscription (${ugx(fee)} a month) is due *today*.`, howToPay, '', 'Thank you!'].filter(keepOneBlank).join('\n');
     case 'reminder':
-      return [`Hi ${name},`, '', (due ? `A reminder that your makaug subscription was due on *${due}* and we have not received it yet.` : `A reminder that your makaug subscription (${ugx(fee)} a month) is due and we have not received it yet.`), howToPay, '', `Already paid? Just send the transaction ID here and we will check it. Questions: ${help.name} on ${help.pretty}.`].filter((l) => l !== '').join('\n');
+      return [`Hi ${name},`, '', (due ? `A reminder that your makaug subscription was due on *${due}* and we have not received it yet.` : `A reminder that your makaug subscription (${ugx(fee)} a month) is due and we have not received it yet.`), howToPay, '', `Questions? ${help.name} on ${help.pretty}.`].filter(keepOneBlank).join('\n');
     case 'final_reminder':
-      return [`Hi ${name},`, '', (due ? `*Final reminder* — your makaug subscription was due on *${due}*.` : '*Final reminder* — your makaug subscription has not been paid yet.'), howToPay, '', 'If we do not receive it, your listings will be taken off makaug. Nothing is deleted — the moment you pay, everything comes back exactly as it was.', '', `Need to talk? ${help.name}: ${help.pretty}.`].filter((l) => l !== '').join('\n');
+      return [`Hi ${name},`, '', (due ? `*Final reminder* — your makaug subscription was due on *${due}*.` : '*Final reminder* — your makaug subscription has not been paid yet.'), howToPay, '', 'If we do not receive it, your listings will be taken off makaug. Nothing is deleted — the moment you pay, everything comes back exactly as it was.', '', `Need to talk? ${help.name}: ${help.pretty}.`].filter(keepOneBlank).join('\n');
     case 'taken_down':
-      return [`Hi ${name},`, '', 'Your makaug profile and listings are *paused* because the monthly subscription has not been paid.', '', 'Nothing has been deleted. As soon as you pay, everything goes back live exactly as it was.', howToPay, '', `Please call or WhatsApp *${help.name}* on *${help.pretty}* and we will help you.`].filter((l) => l !== '').join('\n');
+      return [`Hi ${name},`, '', 'Your makaug profile and listings are *paused* because the monthly subscription has not been paid.', '', 'Nothing has been deleted. As soon as you pay, everything goes back live exactly as it was.', howToPay, '', `Please call or WhatsApp *${help.name}* on *${help.pretty}* and we will help you.`].filter(keepOneBlank).join('\n');
     case 'reinstated':
       return [`✅ *Payment received — thank you, ${name}!*`, '', `Your makaug profile and all your listings are live again${agent.paid_until ? `, paid until *${prettyDate(agent.paid_until)}*` : ''}.`, '', 'Send new properties here any time, the same way as before.'].join('\n');
+    case 'paid':
+      // The receipt for an agent who was never paused: "live again" would be odd.
+      return [`✅ *Payment received — thank you, ${name}!*`, '', `Your makaug agent subscription is paid${agent.paid_until ? ` until *${prettyDate(agent.paid_until)}*` : ''}.`, '', 'Keep sending me properties here, the same way as before.'].join('\n');
     default:
       return '';
   }
 }
 
-async function deliver(to, body, kind, nonce) {
+async function deliver(to, body, kind, nonce, imageUrl = '') {
   const handoff = require('./leadHandoffService');
+  if (imageUrl && typeof handoff.deliverWhatsappWithImage === 'function') {
+    return handoff.deliverWhatsappWithImage({ to, body, imageUrl, kind, leadId: null, nonce });
+  }
   return handoff.deliverWhatsapp({ to, body, kind, leadId: null, nonce });
 }
 
@@ -183,7 +209,9 @@ async function sendAgentBillingMessage(db, { agentId, kind, actor = 'admin', for
   const payLink = PAY_LINK_KINDS.has(kind) ? await payLinkFor(db, { purpose: 'agent_subscription', agent_id: agent.id }) : '';
   const body = buildAgentBillingMessage(kind, { agent, settings, payLink });
   const periodKey = `${kind}:${agent.paid_until ? revenue.isoDay(agent.paid_until) : 'none'}`;
-  const delivery = await deliver(to, body, `agent_billing_${kind}`, `${agent.id}:${periodKey}:${force ? Date.now() : ''}`);
+  // Every message that asks for money carries the merchant-code card.
+  const card = PAY_LINK_KINDS.has(kind) ? payLinkCardUrl(payLink) : '';
+  const delivery = await deliver(to, body, `agent_billing_${kind}`, `${agent.id}:${periodKey}:${force ? Date.now() : ''}`, card);
   await db.query(
     `UPDATE agents SET billing_reminder_log = COALESCE(billing_reminder_log, '{}'::jsonb) || jsonb_build_object($2::text, jsonb_build_object('at', NOW()::text, 'by', $3::text, 'status', $4::text))
       WHERE id = $1::uuid`,
@@ -347,57 +375,164 @@ async function expectingPaymentFrom(db, phone) {
   return null;
 }
 
-async function createClaim(db, { phone, payerName = null, reference = null, amountUgx = null, receiptUrl = null, message = '', aiReading = null, source = 'whatsapp' }) {
+/** The open payment link sent to this number, if any (newest first). */
+async function openLinkForPhone(db, phone) {
+  const key = String(phone || '').replace(/\D+/g, '').slice(-9);
+  if (key.length < 9) return null;
+  return (await db.query(
+    `SELECT * FROM pay_links
+      WHERE status = 'open' AND created_at > NOW() - INTERVAL '60 days'
+        AND (RIGHT(REGEXP_REPLACE(COALESCE(payer_phone, ''), '[^0-9]', '', 'g'), 9) = $1
+          OR RIGHT(REGEXP_REPLACE(COALESCE(sent_to, ''), '[^0-9]', '', 'g'), 9) = $1)
+      ORDER BY COALESCE(sent_at, created_at) DESC LIMIT 1`,
+    [key]
+  )).rows[0] || null;
+}
+
+async function createClaim(db, { phone, payerName = null, businessName = null, reference = null, amountUgx = null, receiptUrl = null, message = '', aiReading = null, source = 'whatsapp' }) {
   const ctx = await payerContext(db, phone);
-  const claim = (await db.query(
-    `INSERT INTO payment_claims (source, payer_phone, payer_name, agent_id, property_id, purpose, reference, amount_ugx, receipt_url, message, ai_reading)
-     VALUES ($1,$2,$3,$4::uuid,$5::uuid,$6,$7,$8,$9,$10,$11::jsonb) RETURNING *`,
-    [source, String(phone || '').replace(/\D+/g, '') || null, payerName || ctx.agent?.full_name || null, ctx.agent?.id || null,
-      ctx.property?.id || null, ctx.purpose || 'other', reference, amountUgx, receiptUrl, String(message || '').slice(0, 1000),
-      aiReading ? JSON.stringify(aiReading) : null]
-  )).rows[0];
-  await matchClaimToSms(db, claim);
-  return { claim, ctx };
+  // The payment link this is most likely for: theirs, by agent or listing, or the one sent to this number.
+  const link = (ctx.agent || ctx.property
+    ? (await db.query(
+      `SELECT * FROM pay_links WHERE status = 'open' AND (($1::uuid IS NOT NULL AND agent_id = $1::uuid) OR ($2::uuid IS NOT NULL AND property_id = $2::uuid))
+        ORDER BY COALESCE(sent_at, created_at) DESC LIMIT 1`,
+      [ctx.agent?.id || null, ctx.property?.id || null]
+    ).catch(() => ({ rows: [] }))).rows[0]
+    : null) || await openLinkForPhone(db, phone).catch(() => null);
+  const purpose = ctx.purpose || link?.purpose || 'other';
+  const business = String(businessName || '').replace(/\s+/g, ' ').trim().slice(0, 120) || null;
+  // One claim per payment: "paid", then a screenshot, then the ID is one
+  // claim filled in, not three for the team to untangle.
+  const open = (await db.query(
+    `SELECT * FROM payment_claims
+      WHERE status = 'pending' AND created_at > NOW() - INTERVAL '7 days'
+        AND (($1::uuid IS NOT NULL AND agent_id = $1::uuid) OR ($2::uuid IS NOT NULL AND property_id = $2::uuid)
+             OR ($3::uuid IS NOT NULL AND pay_link_id = $3::uuid))
+      ORDER BY created_at DESC LIMIT 1`,
+    [ctx.agent?.id || null, ctx.property?.id || null, link?.id || null]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  let claim;
+  if (open && (!reference || !open.reference || String(open.reference).toLowerCase() === String(reference).toLowerCase())) {
+    claim = (await db.query(
+      `UPDATE payment_claims
+          SET reference = COALESCE(reference, $2), business_name = COALESCE($3, business_name), receipt_url = COALESCE(receipt_url, $4),
+              amount_ugx = COALESCE(amount_ugx, $5), message = LEFT(COALESCE(message, '') || E'\n' || $6, 1000)
+        WHERE id = $1 RETURNING *`,
+      [open.id, reference, business, receiptUrl, amountUgx, String(message || '').slice(0, 500)]
+    )).rows[0] || open;
+  } else {
+    claim = (await db.query(
+      `INSERT INTO payment_claims (source, payer_phone, payer_name, business_name, paid_from_phone, agent_id, property_id, purpose, reference, amount_ugx,
+                                   receipt_url, message, ai_reading, pay_link_id)
+       VALUES ($1,$2,$3,$4,$2,$5::uuid,$6::uuid,$7,$8,$9,$10,$11,$12::jsonb,$13::uuid) RETURNING *`,
+      [source, String(phone || '').replace(/\D+/g, '') || null, payerName || ctx.agent?.full_name || business || null, business, ctx.agent?.id || null,
+        ctx.property?.id || null, purpose, reference, amountUgx || (link ? Number(link.amount_ugx) : null), receiptUrl, String(message || '').slice(0, 1000),
+        aiReading ? JSON.stringify(aiReading) : null, link?.id || null]
+    )).rows[0];
+    if (link?.id) await db.query('UPDATE pay_links SET claim_id = $2, updated_at = NOW() WHERE id = $1 AND claim_id IS NULL', [link.id, claim.id]).catch(() => null);
+  }
+  const matched = await matchClaimToSms(db, claim);
+  const updated = Boolean(open && claim.id === open.id);
+  // Tell the team about a new claim, or one the SMS has only just matched —
+  // not again for "paid" followed by a screenshot of the same payment.
+  const news = !updated || (Boolean(matched?.sms_id) && !open?.sms_id);
+  return { claim: matched || claim, ctx, link, updated, news };
 }
 
-/** Check 2 of 3: does the wallet's own SMS show this transaction? */
+// "I have paid", "Paid — Kato Homes", "payment done": somebody telling us they
+// paid, with no transaction ID. Merchant payments ask for no reference, so
+// their business name (whatever follows) and their number are what we match on.
+const PAID_STATEMENT = /^\s*(?:(?:hi|hello|hey|mwebale|thanks?|thank\s+you|ok(?:ay)?|sir|boss|good\s+(?:morning|afternoon|evening))[\s,.!]+)*(?:(?:i|we)\s+(?:have\s+|'ve\s+|just\s+|already\s+)*(?:paid|sent\s+(?:the\s+)?(?:money|payment))|paid|payment\s+(?:is\s+)?(?:done|made|sent|complete(?:d)?)|done\s+paying|nsasudde|nimelipa|nimetuma)\b(.*)$/is;
+const NOT_A_PAYMENT = /\b(?:not|haven'?t|havent|didn'?t|didnt|yet|will|going\s+to|how|when|where|can\s+i|should|before|tomorrow|later|soon)\b|\?/i;
+
+function readPaidStatement(text = '') {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean || clean.length > 160) return null;
+  const match = clean.match(PAID_STATEMENT);
+  if (!match || NOT_A_PAYMENT.test(clean)) return null;
+  const rest = String(match[1] || '')
+    .replace(/\b(?:via|with|by|on|using|through|to)\s+(?:mtn\s+)?(?:momo(?:\s*pay)?|mobile\s+money|merchant(?:\s+code)?|the\s+(?:merchant\s+)?code)\b/gi, ' ')
+    .replace(/\b(?:merchant\s+code|code)\s*:?\s*\d+/gi, ' ')
+    .replace(/(?:ugx|ushs?|shs?)\s*[\d,.]+|[\d,.]{4,}\s*(?:ugx|ushs?|shs?)?|\b\d+\s*months?\b/gi, ' ')
+    .replace(/\b(?:business\s+name|my\s+name|name|for|the|subscription|my|is|it|already|now|today|thanks?|thank\s+you|boss|sir|madam|and|from)\b\s*:?/gi, ' ')
+    .replace(/[^A-Za-z0-9&.'\- ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[-.\s]+|[-.\s]+$/g, '');
+  const businessName = /[A-Za-z]{2,}/.test(rest) && rest.length <= 60 ? rest : null;
+  return { business_name: businessName };
+}
+
+/**
+ * Check 2 of 3: does the wallet's own SMS show this payment? By the
+ * transaction ID they typed; failing that, by the number they paid from (or
+ * their makaug number) and the amount, or their name and the exact amount
+ * (services/paymentMatchService.js). The SMS amount is what arrived, so it is
+ * what counts.
+ */
 async function matchClaimToSms(db, claim) {
-  if (!claim?.reference || claim.sms_id) return claim;
-  const sms = (await db.query(
-    `SELECT id, amount_ugx FROM money_sms_inbox WHERE LOWER(reference) = LOWER($1) ORDER BY received_at DESC LIMIT 1`,
-    [claim.reference]
-  )).rows[0];
-  if (!sms) return claim;
-  return (await db.query(
-    `UPDATE payment_claims SET sms_id = $2, sms_matched_at = NOW(), amount_ugx = COALESCE(amount_ugx, $3) WHERE id = $1 RETURNING *`,
-    [claim.id, sms.id, sms.amount_ugx]
-  )).rows[0];
+  if (!claim?.id || claim.sms_id) return claim;
+  if (claim.reference) {
+    const sms = (await db.query(
+      `SELECT id, amount_ugx FROM money_sms_inbox WHERE LOWER(reference) = LOWER($1) ORDER BY received_at DESC LIMIT 1`,
+      [claim.reference]
+    )).rows[0];
+    if (sms) {
+      return (await db.query(
+        `UPDATE payment_claims SET sms_id = $2, sms_matched_at = NOW(), amount_ugx = COALESCE($3, amount_ugx), match_how = 'reference' WHERE id = $1 RETURNING *`,
+        [claim.id, sms.id, sms.amount_ugx]
+      )).rows[0];
+    }
+  }
+  const broad = await require('./paymentMatchService').matchClaimToRecentSms(db, claim).catch((error) => {
+    logger.warn('Claim to SMS matching failed', { claimId: claim.id, error: error.message });
+    return null;
+  });
+  return broad || claim;
 }
 
-/** When a money SMS arrives, see whether someone already said they paid with that ID. */
+/** When a money SMS arrives, see whether someone already said they paid: by ID, else by number or name. */
 async function matchSmsToClaims(db, smsRow) {
-  if (!smsRow?.reference) return null;
-  return (await db.query(
-    `UPDATE payment_claims SET sms_id = $2, sms_matched_at = NOW(), amount_ugx = COALESCE(amount_ugx, $3)
+  if (!smsRow?.id) return [];
+  const byReference = smsRow.reference ? (await db.query(
+    `UPDATE payment_claims SET sms_id = $2, sms_matched_at = NOW(), amount_ugx = COALESCE($3, amount_ugx), match_how = 'reference'
       WHERE LOWER(reference) = LOWER($1) AND sms_id IS NULL AND status = 'pending' RETURNING *`,
     [smsRow.reference, smsRow.id, smsRow.amount_ugx]
-  )).rows;
+  )).rows : [];
+  if (byReference.length) return byReference;
+  const broad = await require('./paymentMatchService').matchSmsToWaitingClaims(db, smsRow).catch((error) => {
+    logger.warn('SMS to claim matching failed', { smsId: smsRow.id, error: error.message });
+    return null;
+  });
+  return broad?.claim ? [broad.claim] : [];
 }
+
+// Where a claim came from, in the ledger note.
+const CLAIM_SOURCE_NOTE = {
+  momo_sms: "Found in the merchant line's MoMo SMS",
+  pay_link: 'Claimed on the payment page',
+  whatsapp: 'Confirmed from a WhatsApp payment claim'
+};
 
 /** Check 3 of 3: Ronald or Arthur confirms. Only now does the money count. */
 async function confirmClaim(db, { claimId, actor, method, accountKey, amountUgx, amountOriginal, fxRate, note }) {
   const claim = (await db.query('SELECT * FROM payment_claims WHERE id = $1::uuid', [claimId])).rows[0];
   if (!claim) throw revenue.httpError(404, 'Claim not found');
   if (claim.status !== 'pending') throw revenue.httpError(409, `This claim is already ${claim.status}`);
+  // The wallet SMS knows which line the money reached and its transaction ID.
+  const sms = claim.sms_id
+    ? (await db.query('SELECT account_key, reference, amount_ugx FROM money_sms_inbox WHERE id = $1', [claim.sms_id]).catch(() => ({ rows: [] }))).rows[0]
+    : null;
+  const smsMethod = sms ? require('./paymentMatchService').methodForAccount(sms.account_key) : '';
   const payment = {
     amount: amountUgx || claim.amount_ugx,
     amount_original: amountOriginal || undefined,
     fx_rate_ugx: fxRate || undefined,
-    method: method || (claim.sms_id ? 'mtn_momo' : ''),
+    method: method || smsMethod || (claim.sms_id ? 'mtn_momo' : ''),
     account_key: accountKey || undefined,
-    reference: claim.reference,
+    reference: claim.reference || sms?.reference || null,
     receipt_url: claim.receipt_url,
-    note: [note, `Confirmed from a WhatsApp payment claim${claim.sms_id ? ' (matched to the wallet SMS)' : ''}`].filter(Boolean).join(' · '),
+    note: [note, `${CLAIM_SOURCE_NOTE[claim.source] || 'Confirmed from a WhatsApp payment claim'}${claim.sms_id && claim.source !== 'momo_sms' ? ' (matched to the wallet SMS)' : ''}`].filter(Boolean).join(' · '),
     payer_phone: claim.payer_phone,
     payer_name: claim.payer_name
   };
@@ -432,6 +567,68 @@ async function confirmClaim(db, { claimId, actor, method, accountKey, amountUgx,
   );
   if (claim.pay_link_id) await require('./payLinkService').closeLinkForClaim(db, claim.id, result.entry.id).catch(() => null);
   return { claim_id: claim.id, ...result };
+}
+
+/** The team's "💰 Payment recorded" note (King and WhatsApp confirms alike). */
+function notifyTeamOfPayment(db, { entry, agentName = '', actor = 'admin', periodEnd = null } = {}) {
+  if (!entry) return;
+  setImmediate(async () => {
+    try {
+      const desk = require('./leadDeskService');
+      const method = revenue.METHODS[entry.method]?.label || entry.method;
+      const body = [
+        `${entry.direction === 'out' ? '💸 *Money out recorded*' : '💰 *Payment recorded*'}${agentName ? ` — ${agentName}` : ''}`,
+        `UGX ${Number(entry.amount_ugx).toLocaleString('en-US')} · ${method} → ${entry.account_key}`,
+        entry.reference ? `Transaction ID: ${entry.reference}` : 'No transaction ID (cash)',
+        periodEnd ? `Paid until ${periodEnd}` : '',
+        entry.note ? `Note: ${entry.note}` : '',
+        `Recorded by ${actor} · ${entry.verified_status === 'verified' ? '✅ matched to the MoMo SMS' : '⏳ not yet matched to a statement or SMS'}`
+      ].filter(Boolean).join('\n');
+      if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'revenue_entry_recorded');
+    } catch (error) {
+      logger.warn('Payment recorded team notice failed', { error: error.message });
+    }
+  });
+}
+
+/**
+ * Everything that follows a confirmed claim, wherever it was confirmed: the
+ * payer's receipt, the team note, and (outside King, which writes its own) the
+ * audit line.
+ */
+async function afterClaimConfirmed(db, { claimId, result = {}, actor = 'admin', audit = false } = {}) {
+  const entry = result.entry || null;
+  let receipt = null;
+  try {
+    if (entry && !result.reinstatement && entry.kind === 'listing_fee' && entry.property_id) {
+      receipt = await sendListerBillingMessage(db, { propertyId: entry.property_id, kind: 'reinstated', actor });
+    } else if (result.pendingAgent?.pending) {
+      // A new agent who has paid but is not approved yet was already told
+      // "payment received, finishing your checks" — not "live again".
+      receipt = { status: 'pending_agent_told' };
+    } else if (['short_term_fee', 'advertising', 'listing_boost', 'other_income'].includes(entry?.kind)) {
+      const link = (await db.query(
+        'SELECT l.* FROM pay_links l JOIN payment_claims c ON c.pay_link_id = l.id WHERE c.id = $1::uuid', [claimId]
+      ).catch(() => ({ rows: [] }))).rows[0];
+      if (link) receipt = await require('./payLinkService').notifyPaid(db, link, result);
+    } else if (entry?.agent_id && !result.reinstatement?.reinstated) {
+      // Not taken down, just paid: thank them.
+      receipt = await sendAgentBillingMessage(db, { agentId: entry.agent_id, kind: 'paid', actor, force: true });
+    } else if (result.reinstatement?.reinstated) {
+      receipt = result.reinstatement.notice || { status: 'reinstated' };
+    }
+  } catch (error) {
+    logger.warn('Payment receipt failed', { claimId, error: error.message });
+  }
+  notifyTeamOfPayment(db, { entry, agentName: entry?.payer_name || '', actor, periodEnd: result.period_end });
+  if (audit) {
+    await db.query(
+      `INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, 'payment_claim_confirmed', $2::jsonb)`,
+      [actor, JSON.stringify({ claim_id: claimId, entry_id: entry?.id || null, via: 'whatsapp' })]
+    ).catch(() => null);
+  }
+  const status = String(receipt?.status || '');
+  return { receipt, receipt_sent: ['sent', 'queued', 'simulated', 'reinstated', 'pending_agent_told'].includes(status) };
 }
 
 async function rejectClaim(db, { claimId, actor, note }) {
@@ -523,7 +720,8 @@ async function buildListerMessage(db, kind, property, settings, payLink = '') {
   const paidUntil = property.lister_paid_until ? prettyDate(property.lister_paid_until) : '';
   const help = helpContact();
   const howToPay = [
-    pay ? `To keep it live for a month it is ${ugx(fee)} — pay to ${pay}, then send me the *transaction ID* (or a screenshot) here.` : '',
+    pay ? `To keep it live for a month it is *${ugx(fee)}*.` : '',
+    pay ? momoHowToPay({ amountUgx: fee, lister: true }) : '',
     payLinkLine(payLink)
   ].filter(Boolean).join('\n');
   if (kind === 'views') {
@@ -537,6 +735,8 @@ async function buildListerMessage(db, kind, property, settings, payLink = '') {
       free_until: freeUntil,
       monthly_fee: Number(fee).toLocaleString('en-US'),
       pay_to: pay || '(payment details to follow)',
+      merchant_code: momoMerchantCode(),
+      how_to_pay: momoHowToPay({ amountUgx: fee, lister: true }),
       link,
       pay_link: payLink
     });
@@ -579,7 +779,8 @@ async function sendListerBillingMessage(db, { propertyId, kind, actor = 'admin',
     ? await payLinkFor(db, { purpose: 'listing_fee', property_id: property.id })
     : '';
   const body = String(textOverride || '').trim() || await buildListerMessage(db, kind, property, settings, payLink);
-  const delivery = await deliver(to, body, `lister_billing_${kind}`, `${property.id}:${kind}:${Date.now()}`);
+  const card = PAY_LINK_KINDS.has(kind) ? payLinkCardUrl(payLink) : '';
+  const delivery = await deliver(to, body, `lister_billing_${kind}`, `${property.id}:${kind}:${Date.now()}`, card);
   await db.query(
     `UPDATE properties SET lister_billing_log = COALESCE(lister_billing_log, '{}'::jsonb) || jsonb_build_object($2::text, jsonb_build_object('at', NOW()::text, 'by', $3::text, 'status', $4::text))
       WHERE id = $1::uuid`,
@@ -899,6 +1100,8 @@ module.exports = {
   getSettings,
   setSetting,
   payToLine,
+  momoHowToPay,
+  payLinkCardUrl,
   buildAgentBillingMessage,
   sendAgentBillingMessage,
   takeDownAgentForBilling,
@@ -917,12 +1120,16 @@ module.exports = {
   daysOverdue,
   helpContact,
   readReferenceFromText,
+  readPaidStatement,
+  openLinkForPhone,
   payerContext,
   expectingPaymentFrom,
   createClaim,
   matchClaimToSms,
   matchSmsToClaims,
   confirmClaim,
+  afterClaimConfirmed,
+  notifyTeamOfPayment,
   rejectClaim,
   recordListingPayment,
   listingStats,

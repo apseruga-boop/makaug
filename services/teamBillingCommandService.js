@@ -20,6 +20,9 @@
  *                                         (welcome pack goes out as usual)
  *   UNPAID (or TRIALS)                 → new agents who have not paid yet, and
  *                                         the last free trials: ending soon, unpaid
+ *   CONFIRM 0772123456                 → records a MoMo payment the merchant
+ *                                         line's SMS has matched (Ronald and
+ *                                         Arthur only; also by transaction ID)
  *   PAYMENT HELP                       → this list
  *
  * Team numbers are the billing "confirmers" (Sales & Revenue › Settings) plus
@@ -32,7 +35,7 @@ const billingOps = require('./billingOpsService');
 const payLinks = require('./payLinkService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
-const COMMAND = /^\s*(new\s+agent|add\s+agent|pay\s*link|paylink|status|paid\??|approve|trials?|unpaid|payment\s+help|pay\s+help)\b[\s:,-]*(.*)$/is;
+const COMMAND = /^\s*(new\s+agent|add\s+agent|pay\s*link|paylink|status|paid\??|approve|confirm|trials?|unpaid|payment\s+help|pay\s+help)\b[\s:,-]*(.*)$/is;
 
 function digits(value) {
   return String(value || '').replace(/\D+/g, '');
@@ -128,6 +131,9 @@ function help() {
     '',
     '*APPROVE* 0772123456',
     '→ approves a pending agent once they have paid (welcome pack goes out)',
+    '',
+    '*CONFIRM* 0772123456',
+    '→ records a MoMo payment once the merchant SMS has matched it (Ronald and Arthur only)',
     '',
     "You'll get a WhatsApp here the moment anyone pays."
   ].join('\n');
@@ -262,7 +268,7 @@ async function status(db, rest) {
   if (link) {
     const seen = link.status === 'paid'
       ? `paid by ${link.paid_method === 'card' ? 'card' : 'MoMo'}`
-      : (link.claim_id ? 'they sent a MoMo transaction ID — waiting for confirmation in Sales & Revenue' : (link.opened_at ? 'opened, not paid' : (link.sent_at ? 'sent, not opened yet' : 'not sent')));
+      : (link.claim_id ? 'they say they have paid — waiting for the MoMo SMS and a confirm' : (link.opened_at ? 'opened, not paid' : (link.sent_at ? 'sent, not opened yet' : 'not sent')));
     lines.push('', `Last pay link: ${seen}`, payLinks.payUrl(link.code));
   }
   return lines.join('\n');
@@ -286,6 +292,54 @@ async function approve(db, rest, actor) {
   ].filter(Boolean).join('\n');
 }
 
+// A transaction ID: letters and digits, at least six digits in it, not a phone number.
+function transactionIdIn(text = '') {
+  const paymentMatch = require('./paymentMatchService');
+  const withoutPhones = String(text).replace(new RegExp(paymentMatch.UG_PHONE.source, 'g'), ' ');
+  return (withoutPhones.match(/\b[A-Z0-9][A-Z0-9.\-]{5,40}\b/gi) || []).find((t) => (t.match(/\d/g) || []).length >= 6) || '';
+}
+
+function ugPhoneIn(text = '') {
+  const paymentMatch = require('./paymentMatchService');
+  const match = String(text).match(paymentMatch.UG_PHONE);
+  return match ? ugPhone(match[0]) : '';
+}
+
+/**
+ * CONFIRM 0772123456 (or CONFIRM <transaction ID>): Ronald or Arthur saying
+ * yes to a payment the merchant line's SMS has matched. The same as the
+ * one-tap link in the alert. Anything without an SMS behind it is confirmed in
+ * King, by someone who has seen the money.
+ */
+async function confirmPayment(db, rest, phone) {
+  const paymentMatch = require('./paymentMatchService');
+  const confirmer = await paymentMatch.confirmerFor(db, phone);
+  if (!confirmer) return 'Only the payment confirmers (Ronald and Arthur) can confirm payments.';
+  const target = ugPhoneIn(rest);
+  const txn = transactionIdIn(rest);
+  const waiting = await paymentMatch.waitingClaimsFor(db, { phone: target, txn });
+  const ready = waiting.filter((c) => c.sms_id);
+  const label = txn ? `transaction ${txn}` : pretty(target);
+  if (!ready.length) {
+    if (waiting.length) {
+      return `There is a payment claim for ${label}, but no MoMo SMS has matched it yet — check the merchant phone. If you have seen the money, confirm it in Admin › Sales & Revenue.`;
+    }
+    return `Nothing is waiting to be confirmed for ${label}.`;
+  }
+  if (ready.length > 1) {
+    return [`${ready.length} payments are waiting for ${label}:`, ...ready.map((c) => `• ${billingOps.ugx(c.sms_amount_ugx || c.amount_ugx)} — transaction ${c.sms_reference || c.reference || '?'} (${paymentMatch.whoAndWhat(c)})`),
+      '', 'Reply *CONFIRM* with the transaction ID of the one you mean.'].join('\n');
+  }
+  try {
+    const done = await paymentMatch.confirmByConfirmer(db, { claimId: ready[0].id, confirmerKey: confirmer.key, via: 'reply' });
+    if (done.already) return `That payment is already ${done.already}.`;
+    return paymentMatch.confirmedLine(done);
+  } catch (error) {
+    if (error.status && error.status < 500) return error.message;
+    throw error;
+  }
+}
+
 /** Returns a reply if this is a team payment command, otherwise null. */
 async function handleTeamBillingCommand(db, { phone, body = '' } = {}) {
   const match = String(body || '').match(COMMAND);
@@ -296,6 +350,9 @@ async function handleTeamBillingCommand(db, { phone, body = '' } = {}) {
   // "status" and "approve" are ordinary words: only treat them as commands
   // when a phone number follows, so other team conversations are untouched.
   if (/^(status|paid|approve)/.test(word) && !findPhoneInText(rest)) return null;
+  // "confirm" is an ordinary word too (it means yes in other flows): only a
+  // command with a phone number or a transaction ID after it.
+  if (word === 'confirm' && !ugPhoneIn(rest) && !transactionIdIn(rest)) return null;
   if (/^(trial|unpaid)/.test(word) && rest) return null; // only the bare words TRIALS / UNPAID are commands
   const actor = `whatsapp:${digits(phone)}`;
   try {
@@ -303,6 +360,7 @@ async function handleTeamBillingCommand(db, { phone, body = '' } = {}) {
     if (word.startsWith('pay link') || word.startsWith('paylink')) return await sendLink(db, rest, actor);
     if (word.startsWith('status') || word.startsWith('paid')) return await status(db, rest);
     if (word === 'approve') return await approve(db, rest, actor);
+    if (word === 'confirm') return await confirmPayment(db, rest, phone);
     if (word.startsWith('trial') || word === 'unpaid') return await trials(db);
     return help();
   } catch (error) {
@@ -311,4 +369,4 @@ async function handleTeamBillingCommand(db, { phone, body = '' } = {}) {
   }
 }
 
-module.exports = { handleTeamBillingCommand, isTeamPhone, ugPhone, findPhoneInText, help, newAgentPayLater, payLinkSentLine };
+module.exports = { handleTeamBillingCommand, isTeamPhone, ugPhone, findPhoneInText, transactionIdIn, ugPhoneIn, help, newAgentPayLater, payLinkSentLine };
