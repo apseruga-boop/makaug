@@ -50,9 +50,10 @@ test('an agent is told to share it, not how to delete it', () => {
   assert.match(text, /3 bedroom house for rent in Kira/);
   assert.match(text, /Kira, Wakiso/, 'where it is');
   assert.match(text, new RegExp(`/property/${AGENT_LISTING.id}`), 'the link they will share');
-  assert.match(text, /Share that link anywhere/);
-  assert.match(text, /your name and number on it/, 'the reason an agent cares');
+  assert.match(text, /Share both on your WhatsApp status/);
+  assert.match(text, /buyers see your name and number/, 'the reason an agent cares');
   assert.match(text, /Got another one\? Send it here/, 'the next property is the point');
+  assert.ok(text.length < 520, 'short: agents are busy (Arthur, 11 Nov 2026)');
 
   assert.doesNotMatch(text, /reply REMOVE/,
     '"here is how to delete it" is the wrong first thought for someone building a shopfront');
@@ -66,24 +67,19 @@ test('a private owner keeps the message they always had', () => {
   assert.doesNotMatch(text, /Got another one/);
 });
 
-test('the agent card goes with it', () => {
-  // Card links are signed, so the test needs the same secret production has.
-  const before = process.env.AGENT_REPORT_CARD_SECRET;
-  process.env.AGENT_REPORT_CARD_SECRET = 'test-card-secret';
-  try {
-    const text = moderation.buildOwnerStatusMessage({ listing: AGENT_LISTING, status: 'approved' }).whatsapp;
-    // Built from the agent id alone, so approving a listing costs no extra query.
-    assert.match(text, /Your agent card/);
-    assert.match(text, new RegExp(`share-card/${AGENT_LISTING.agent_id}`));
-  } finally {
-    if (before === undefined) delete process.env.AGENT_REPORT_CARD_SECRET;
-    else process.env.AGENT_REPORT_CARD_SECRET = before;
-  }
+// Arthur, 11 Nov 2026: most agents never used the agent card. The profile
+// page, where every property they post now sits, replaces it.
+test('the profile page goes with it, not the agent card', () => {
+  const text = moderation.buildOwnerStatusMessage({ listing: AGENT_LISTING, status: 'approved', agentLiveCount: 4 }).whatsapp;
+  assert.match(text, new RegExp(`makaug\\.com/agents/${AGENT_LISTING.agent_id}`), 'their profile page');
+  assert.match(text, /Your profile page is updated with it — 4 properties live/);
+  assert.doesNotMatch(text, /agent card|share-card/);
+  const noCount = moderation.buildOwnerStatusMessage({ listing: AGENT_LISTING, status: 'approved' }).whatsapp;
+  assert.match(noCount, /Your profile page is updated with it:/, 'no count when it could not be counted');
+  assert.doesNotMatch(noCount, /properties live/);
 });
 
-test('an unsigned card link is left out rather than sent broken', () => {
-  // No secret configured: the card URL cannot be signed, so it must be omitted
-  // entirely rather than shipped as a link that 403s in the agent's face.
+test('the profile page link needs no secret, so it always goes', () => {
   const before = process.env.AGENT_REPORT_CARD_SECRET;
   const beforeJwt = process.env.JWT_SECRET;
   const beforeBridge = process.env.WHATSAPP_WEB_BRIDGE_TOKEN;
@@ -92,8 +88,8 @@ test('an unsigned card link is left out rather than sent broken', () => {
   delete process.env.WHATSAPP_WEB_BRIDGE_TOKEN;
   try {
     const text = moderation.buildOwnerStatusMessage({ listing: AGENT_LISTING, status: 'approved' }).whatsapp;
-    assert.doesNotMatch(text, /Your agent card/);
-    assert.match(text, /Your property is live/, 'the rest of the message still goes');
+    assert.match(text, new RegExp(`/agents/${AGENT_LISTING.agent_id}`));
+    assert.match(text, /Your property is live/);
   } finally {
     if (before !== undefined) process.env.AGENT_REPORT_CARD_SECRET = before;
     if (beforeJwt !== undefined) process.env.JWT_SECRET = beforeJwt;
@@ -101,9 +97,9 @@ test('an unsigned card link is left out rather than sent broken', () => {
   }
 });
 
-test('a listing with no agent asks for no card', () => {
+test('a listing with no agent asks for no card and links no profile page', () => {
   const text = moderation.buildOwnerStatusMessage({ listing: OWNER_LISTING, status: 'approved' }).whatsapp;
-  assert.doesNotMatch(text, /agent card|share-card/);
+  assert.doesNotMatch(text, /agent card|share-card|\/agents\//);
 });
 
 test('the message leaves by the road that exists', async () => {

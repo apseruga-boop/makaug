@@ -689,18 +689,36 @@ function getMissingApprovalChecks(checklist = {}) {
 }
 
 /**
- * The agent's own share card, rebuilt from the listing's agent_id.
+ * The agent's profile page, from the listing's agent_id.
  *
- * Only the agent id and today's stamp go into the token, so this needs no
- * database round trip at the moment a moderator clicks approve.
+ * It replaced the agent card link on 11 Nov 2026: Arthur heard that most
+ * agents never used the card, while the profile page is where every property
+ * they post now sits. Needs no database round trip and no signing.
  */
-function agentShareCardLink(listing = {}) {
+function agentProfileLink(listing = {}) {
   if (!listing.agent_id) return '';
   try {
-    const { shareCardUrl } = require('./agentWelcomeService');
-    return shareCardUrl({ id: listing.agent_id }) || '';
+    const { agentProfileUrl } = require('./agentWelcomeService');
+    return agentProfileUrl({ id: listing.agent_id }) || '';
   } catch (_ignored) {
     return '';
+  }
+}
+
+/** How many properties the agent has live, for the "now N live" line. Null if it cannot be counted. */
+async function agentLiveListingCount(agentId) {
+  if (!agentId) return null;
+  try {
+    const db = require('../config/database');
+    const row = (await db.query(
+      `SELECT COUNT(*)::int AS n FROM properties
+        WHERE status = 'approved'
+          AND (agent_id = $1::uuid OR extra_fields->>'broker_agent_id' = $1::text)`,
+      [agentId]
+    )).rows[0];
+    return Number.isFinite(Number(row?.n)) ? Number(row.n) : null;
+  } catch (_ignored) {
+    return null;
   }
 }
 
@@ -783,7 +801,7 @@ async function approvalListerFee(listing = {}) {
   }
 }
 
-function buildOwnerStatusMessage({ listing = {}, status, reason, listerFee = null }) {
+function buildOwnerStatusMessage({ listing = {}, status, reason, listerFee = null, agentLiveCount = null }) {
   const reference = getListingReference(listing);
   const label = statusLabel(status);
   const title = listing.title || 'Your property listing';
@@ -817,20 +835,25 @@ function buildOwnerStatusMessage({ listing = {}, status, reason, listerFee = nul
       whatsapp: listing.agent_id
         // An agent is not an owner who submitted one property and wants a
         // receipt. They are stocking a shopfront, so the message is about
-        // sharing it and about the next one.
+        // sharing it and about the next one. Short, because agents are busy:
+        // the property, their profile page (where it now sits), one line on
+        // sharing, and the next one (Arthur, 11 Nov 2026).
         ? [
           `🎉 *Your property is live on makaug.com*`,
-          '',
           `${title}`,
           `${location} · ${price}`,
-          '',
           `🔗 ${publicUrl}`,
+          ...(agentProfileLink(listing) ? [
+            '',
+            Number(agentLiveCount) > 1
+              ? `👤 Your profile page is updated with it — ${Number(agentLiveCount)} properties live:`
+              : '👤 Your profile page is updated with it:',
+            agentProfileLink(listing)
+          ] : []),
           '',
-          'Share that link anywhere — WhatsApp status, your groups, Facebook. Anyone who opens it sees the property with your name and number on it.',
-          ...(agentShareCardLink(listing) ? ['', `Your agent card, if you want it again:`, agentShareCardLink(listing)] : []),
-          '',
-          'Got another one? Send it here the same way and I will put it up.'
-        ].filter((line) => line !== null).join('\n')
+          'Share both on your WhatsApp status and in your groups — buyers see your name and number.',
+          'Got another one? Send it here.'
+        ].join('\n')
         : [
           `Great news ${listing?.lister_name || 'there'} - your listing is *live* on makaug \u{1F389}`,
           `${title} - ${location} - ${price}`,
@@ -974,7 +997,10 @@ async function sendOwnerListingStatusNotifications({ listing = {}, status, reaso
   const listerFee = String(status || '').toLowerCase() === 'approved' && listing.lister_phone
     ? await approvalListerFee(listing)
     : null;
-  const message = buildOwnerStatusMessage({ listing, status, reason, listerFee });
+  const agentLiveCount = String(status || '').toLowerCase() === 'approved' && listing.agent_id
+    ? await agentLiveListingCount(listing.agent_id)
+    : null;
+  const message = buildOwnerStatusMessage({ listing, status, reason, listerFee, agentLiveCount });
   const result = {
     email: { sent: false, reason: 'no_lister_email', subject: message.subject, message: message.text },
     whatsapp: { sent: false, reason: 'no_lister_phone', phone: listing.lister_phone || null, message: message.whatsapp }
