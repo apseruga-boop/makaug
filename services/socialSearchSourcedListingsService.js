@@ -4168,6 +4168,16 @@ async function existingFoundOnlineSourceRowsForReprocess(client, items = []) {
        lister_name,
        agent_id::text AS agent_id,
        extra_fields,
+       moderation_notes,
+       moderation_reason,
+       reviewed_by::text AS reviewed_by,
+       approved_by::text AS approved_by,
+       EXISTS (
+         SELECT 1
+         FROM property_moderation_events e
+         WHERE e.property_id = properties.id
+           AND e.actor_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+       ) AS has_staff_event,
        extra_fields->>'source_listing_key' AS source_listing_key,
        extra_fields->>'source_post_url' AS source_post_url,
        COALESCE(
@@ -4217,7 +4227,102 @@ async function existingFoundOnlineSourceRowsForReprocess(client, items = []) {
   return existing;
 }
 
+const DEFAULT_IMPORTER_STAFF_REVIEW_NOTE = 'Confirm the exact property pin and local amenities with the listing agent before approval.';
+
+const STAFF_OWNED_EXTRA_FIELD_KEYS = [
+  'staff_corrected_fields',
+  'staff_corrected_at',
+  'staff_corrected_by',
+  'staff_review_notes',
+  'staff_review_public_listing_facts',
+  'staff_location_reviewed_at',
+  'staff_location_reviewed_by',
+  'staff_confirmed_listing_type',
+  'staff_confirmed_listing_type_at',
+  'staff_confirmed_listing_type_by',
+  'staff_area_input_raw',
+  'staff_review_warning_overrides',
+  'staff_review_warning_overrides_at',
+  'staff_review_warning_overrides_by',
+  'staff_status_listing_patch_applied_at',
+  'staff_status_listing_patch_applied_by',
+  'last_reviewed_by_actor',
+];
+
+function isUuidActor(value = '') {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+}
+
+function isImporterTemplateModerationNotes(value = '') {
+  const text = String(value || '').trim();
+  if (!text) return true;
+  return /^(FOUND-ONLINE SOURCE POST IMPORT|SOCIAL SEARCH LISTING)\.[\s\S]*Harvesting is review-only and cannot publish this listing\.[\s\S]*Batch:\s+\S+\.?$/i.test(text);
+}
+
+function isImporterTemplateModerationReason(value = '') {
+  const text = String(value || '').trim();
+  if (!text) return true;
+  return /Pending King review of public found-online source/i.test(text)
+    || /High-confidence harvested listing is ready for human review/i.test(text)
+    || /harvesting never auto-publishes/i.test(text)
+    || /Still pending after YouTube source text enrichment/i.test(text)
+    || /Data integrity review required/i.test(text)
+    || /Price evidence needs staff review/i.test(text);
+}
+
+function staffReviewNotesAreCustom(value) {
+  if (value == null) return false;
+  const texts = Array.isArray(value) ? value : [value];
+  const cleaned = texts.map((item) => String(item || '').trim()).filter(Boolean);
+  if (!cleaned.length) return false;
+  return cleaned.some((item) => item !== DEFAULT_IMPORTER_STAFF_REVIEW_NOTE);
+}
+
+function foundOnlineRowHasStaffEdits(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const corrected = Array.isArray(extra.staff_corrected_fields)
+    ? extra.staff_corrected_fields.filter(Boolean)
+    : [];
+  if (corrected.length) return true;
+  if (extra.staff_corrected_at || extra.staff_corrected_by) return true;
+  if (extra.staff_location_reviewed_at || extra.staff_location_reviewed_by) return true;
+  if (extra.staff_confirmed_listing_type_at || extra.staff_confirmed_listing_type_by) return true;
+  if (staffReviewNotesAreCustom(extra.staff_review_notes)) return true;
+  if (isUuidActor(row.reviewed_by) || isUuidActor(row.approved_by) || isUuidActor(extra.last_reviewed_by_actor)) return true;
+  if (!isImporterTemplateModerationNotes(row.moderation_notes)) return true;
+  if (!isImporterTemplateModerationReason(row.moderation_reason)) return true;
+  if (row.has_staff_event === true || row.has_staff_claim === true) return true;
+  return false;
+}
+
+function preserveStaffOwnedExtraFields(existingExtra = {}, nextExtra = {}) {
+  const preserved = { ...nextExtra };
+  const existing = existingExtra && typeof existingExtra === 'object' ? existingExtra : {};
+  for (const key of STAFF_OWNED_EXTRA_FIELD_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(existing, key)) preserved[key] = existing[key];
+  }
+  return preserved;
+}
+
+function importBatchExtraFields(item = {}, listing = {}, reason = '') {
+  return {
+    source_batch: itemBatchId(item),
+    import_batch_id: itemBatchId(item),
+    import_batch_text: listing.moderation_notes || '',
+    youtube_source_reenrichment_result: reason || 'held_after_backlog_enrichment',
+  };
+}
+
 async function updateExistingFoundOnlineSourcePostListing(client, existingRow = {}, item = {}, agentId = null) {
+  if (foundOnlineRowHasStaffEdits(existingRow)) {
+    return markExistingFoundOnlineSourcePostEnrichedPending(
+      client,
+      existingRow,
+      item,
+      agentId,
+      'Staff already reviewed or edited this pending row; enrichment was merged into extra_fields only.'
+    );
+  }
   const listing = buildSocialSearchListing(item, agentId);
   const autoLive = sourcePostAutoLiveStatusFor(item, sourceAgentForItem(item));
   const propertyUrl = `${publicBaseUrl()}/property/${existingRow.id}`;
@@ -4226,7 +4331,7 @@ async function updateExistingFoundOnlineSourcePostListing(client, existingRow = 
     : {};
   const ownerPreviewUrl = existingExtra.owner_preview_url || '';
   const finalExtraFields = {
-    ...extraFieldsFor(item, agentId, propertyUrl, ownerPreviewUrl),
+    ...preserveStaffOwnedExtraFields(existingExtra, extraFieldsFor(item, agentId, propertyUrl, ownerPreviewUrl)),
     youtube_source_text_enrichment_version: 'youtube-source-text-enrichment-20260707',
     youtube_source_reenriched_at: new Date().toISOString(),
     youtube_source_reenrichment_result: autoLive.approved ? 'auto_live_after_backlog_enrichment' : 'still_pending_after_backlog_enrichment',
@@ -4349,13 +4454,18 @@ async function markExistingFoundOnlineSourcePostEnrichedPending(client, existing
     ? existingRow.extra_fields
     : {};
   const ownerPreviewUrl = existingExtra.owner_preview_url || '';
-  const finalExtraFields = {
+  const listing = buildSocialSearchListing(item, agentId);
+  const finalExtraFields = preserveStaffOwnedExtraFields(existingExtra, {
     ...extraFieldsFor(item, agentId, propertyUrl, ownerPreviewUrl),
     youtube_source_text_enrichment_version: 'youtube-source-text-enrichment-20260707',
     youtube_source_reenriched_at: new Date().toISOString(),
-    youtube_source_reenrichment_result: reason || 'held_after_backlog_enrichment',
+    youtube_source_reenrichment_result: foundOnlineRowHasStaffEdits(existingRow)
+      ? (reason || 'staff_edits_preserved_after_backlog_enrichment')
+      : (reason || 'held_after_backlog_enrichment'),
     reprocessed_existing_source_post: true,
-  };
+    ...importBatchExtraFields(item, listing, reason),
+    staff_edits_preserved: foundOnlineRowHasStaffEdits(existingRow),
+  });
   const updated = await client.query(
     `UPDATE properties
      SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
@@ -4495,6 +4605,24 @@ async function reprocessExistingFoundOnlineSourcePostListings({
         }
         const updatedRow = await markExistingFoundOnlineSourcePostEnrichedPending(client, existingRow, item, existingRow.agent_id || null, reason);
         updated.push(updatedRow);
+        continue;
+      }
+      if (foundOnlineRowHasStaffEdits(existingRow)) {
+        if (dryRun) {
+          skipped.push({
+            ...payload,
+            reason: 'staff_edits_preserved',
+          });
+          continue;
+        }
+        const updatedRow = await markExistingFoundOnlineSourcePostEnrichedPending(
+          client,
+          existingRow,
+          item,
+          existingRow.agent_id || null,
+          'Staff already reviewed or edited this pending row; enrichment was merged into extra_fields only.'
+        );
+        updated.push({ ...updatedRow, staff_edits_preserved: true });
         continue;
       }
       if (dryRun) {
@@ -4814,6 +4942,8 @@ module.exports = {
   seedSocialSearchAuthorisedListings,
   queueFoundOnlineSourcePostListings,
   reprocessExistingFoundOnlineSourcePostListings,
+  foundOnlineRowHasStaffEdits,
+  isImporterTemplateModerationNotes,
   normalizeFoundOnlineSourcePost,
   buildSocialSearchListing,
   summarizeSocialSearchListings,
