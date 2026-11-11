@@ -13,7 +13,7 @@
  * video is served from makaug.com. This file decides who gets a brief and when:
  *   - every approved agent with a WhatsApp number, so new agents are included the
  *     day they are approved;
- *   - not anyone who replied STOP (whatsapp_user_profiles.marketing_opt_in = false);
+ *   - not anyone who replied STOP (whatsapp_user_profiles: opted out, with the time they said it);
  *   - not the agents Arthur said never to message (NEVER_SEND);
  *   - never twice: one message per agent per brief, keyed by date and slot;
  *   - at a set time. The queue's next_attempt_at holds each message until then, so
@@ -100,10 +100,18 @@ function checkCaption(value) {
   return text;
 }
 
-/** Numbers that replied STOP, by their last nine digits. */
+/**
+ * Numbers that replied STOP, by their last nine digits. marketing_opt_in is
+ * FALSE by default for every WhatsApp profile (migration 009), so "false" alone
+ * means "never opted in", not "said stop". Only the STOP keyword sets
+ * marketing_opt_out_at, and START sets marketing_opt_in back to TRUE.
+ */
 async function optedOutKeys(db) {
   const rows = (await db.query(
-    'SELECT phone FROM whatsapp_user_profiles WHERE marketing_opt_in = FALSE'
+    `SELECT phone
+       FROM whatsapp_user_profiles
+      WHERE marketing_opt_in = FALSE
+        AND marketing_opt_out_at IS NOT NULL`
   )).rows;
   return new Set(rows.map((row) => phoneKey(row.phone)).filter((key) => key.length === 9));
 }

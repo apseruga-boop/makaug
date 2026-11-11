@@ -66,6 +66,15 @@ test('recipients: approved agents, never Promise, not anyone who replied STOP, n
   assert.deepStrictEqual(skipped.map((r) => [r.id, r.reason]).sort(), [['a2', 'never_send'], ['a4', 'replied_stop']]);
 });
 
+test('"never opted in" is not "said STOP": only a recorded opt-out leaves an agent out', async () => {
+  const db = fakeDb({ agents: AGENTS, optedOut: ['+256703111004'] });
+  await svc.listRecipients(db, { excludeKeys: ['780863394'] });
+  const q = db.calls.find((c) => /FROM whatsapp_user_profiles/.test(c.sql));
+  // marketing_opt_in defaults to FALSE for every profile, so it must be paired with the STOP time.
+  assert.match(q.sql, /marketing_opt_in = FALSE/);
+  assert.match(q.sql, /marketing_opt_out_at IS NOT NULL/);
+});
+
 test('schedule: one message per agent at 7:00am, 15 seconds apart, never twice', async () => {
   const db = fakeDb({ agents: AGENTS, queuedAgentIds: ['a3'] });
   const sent = [];
