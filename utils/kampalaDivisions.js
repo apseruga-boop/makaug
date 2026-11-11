@@ -45,7 +45,7 @@ const AREAS_BY_DIVISION = {
   ],
   Makindye: [
     'Bukasa', 'Bunga', 'Buziga', 'Ggaba', 'Kabalagala', 'Kansanga', 'Katwe', 'Kibuli',
-    'Kibuye', 'Kisugu', 'Lukuli', 'Luwafu', 'Makindye', 'Munyonyo', 'Muyenga',
+    'Kibuye', 'Kisugu', 'Kizungu', 'Lukuli', 'Luwafu', 'Makindye', 'Makindye Kizungu', 'Munyonyo', 'Muyenga',
     'Namuwongo', 'Nsambya', 'Salaama', 'Wabigalo',
     // C11 (10 Oct 2026): the last gazetteer areas still filed under "Kampala".
     'Gangu'

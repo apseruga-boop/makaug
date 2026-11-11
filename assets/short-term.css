@@ -456,6 +456,19 @@
   width: 120px; height: 90px; object-fit: cover; border-radius: 10px;
   background: #f3f4f6; display: block;
 }
+.st-desk-cover-placeholder {
+  width: 120px; height: 90px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 8px;
+  background: #eff6ff; color: #1d4ed8; font-size: .72rem; font-weight: 800;
+  text-decoration: none;
+}
+.st-desk-source {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 6px 0 0; color: #1d4ed8; font-size: .78rem; font-weight: 800;
+  text-decoration: none;
+}
+.st-desk-source:hover { text-decoration: underline; }
 .st-desk-photos { display: flex; gap: 8px; overflow-x: auto; margin: 0 0 12px; }
 .st-desk-photos a { flex: none; }
 @media (max-width: 640px) {

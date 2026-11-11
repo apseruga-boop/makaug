@@ -32771,21 +32771,23 @@ async function adminReviewOnNeighborhoodChange() {
 async function adminReviewOnAreaInput() {
   const areaEl = document.getElementById("admin-review-area-edit");
   if (areaEl) areaEl.dataset.auto = "0";
-  const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
-    areaEl?.value,
-    document.getElementById("admin-review-district-edit")?.value
-  ]).join(", "));
+  const district = document.getElementById("admin-review-district-edit")?.value || "";
+  const resolution = await resolveUgandaLocationFromSharedRegistry(areaEl?.value || "", district);
   if (resolution.status === "matched") applyAdminReviewCanonicalLocation(resolution.location);
   else adminReviewCanonicalLocationResolution = null;
+  if (resolution.candidates && resolution.candidates.length) adminReviewRenderCanonicalSuggestions(resolution.candidates);
+  else adminReviewClearCanonicalSuggestions();
   adminReviewScheduleLocationSync();
   adminReviewClearStaleUnrecognisedLocation();
 }
 
-async function resolveUgandaLocationFromSharedRegistry(query = "") {
+async function resolveUgandaLocationFromSharedRegistry(query = "", district = "") {
   const cleanQuery = String(query || "").trim();
   if (!cleanQuery) return { status: "unmatched", location: null, candidates: [] };
   try {
-    const response = await apiRequest(`/api/properties/locations/resolve?q=${encodeURIComponent(cleanQuery)}`, { skipAuth: true });
+    const params = new URLSearchParams({ q: cleanQuery });
+    if (String(district || "").trim()) params.set("district", String(district).trim());
+    const response = await apiRequest(`/api/properties/locations/resolve?${params.toString()}`, { skipAuth: true });
     return {
       status: response?.meta?.status || (response?.data ? "matched" : "unmatched"),
       location: response?.data || null,
@@ -33081,8 +33083,9 @@ function adminReviewRenderCanonicalSuggestions(candidates = []) {
     <div class="font-black text-amber-950">Did you mean? Choose the canonical place explicitly.</div>
     <div class="mt-2 grid gap-2 sm:grid-cols-2">
       ${suggestions.map((item, index) => `<button type="button" onclick="adminReviewChooseCanonicalSuggestion(${index})" class="rounded-lg border border-amber-300 bg-white px-3 py-2 text-left hover:bg-amber-50">
-        <strong class="block text-amber-950">${adminEscape(item.name || "Uganda location")}</strong>
-        <span class="block text-[11px] text-amber-800">${adminEscape([item.town, item.district, item.region].filter(Boolean).join(" · "))} · ${adminEscape(item.match === "fuzzy" ? "spelling suggestion" : "found in your phrase")}</span>
+        <strong class="block text-amber-950">${adminEscape(item.label || item.name || "Uganda location")}</strong>
+        ${item.hint ? `<span class="block text-[11px] text-amber-800">${adminEscape(item.hint)}</span>` : ""}
+        <span class="block text-[11px] text-amber-800">${adminEscape([item.town, item.district, item.region].filter(Boolean).join(" · "))} · ${adminEscape(item.match === "cross_district_hint" ? "in another district" : item.match === "fuzzy" ? "spelling suggestion" : "found in your phrase")}</span>
       </button>`).join("")}
     </div>`;
   host.classList.remove("hidden");

@@ -172,6 +172,7 @@ const {
   canonicalLocationRollupCounts,
   canonicalLocationSearchScope,
   canonicalLocationSuggestions,
+  crossDistrictStaffLocationHints,
   resolveCanonicalUgandaLocation,
   normalizeDistrict,
   normalizeLocationKey
@@ -2438,7 +2439,9 @@ function publicCanonicalLocationPayload(item = {}) {
       : item.match === 'exact_alias',
     confidence: Number(item.confidence) || 0,
     latitude: Number.isFinite(item.latitude ?? item.lat) ? Number(item.latitude ?? item.lat) : null,
-    longitude: Number.isFinite(item.longitude ?? item.lng) ? Number(item.longitude ?? item.lng) : null
+    longitude: Number.isFinite(item.longitude ?? item.lng) ? Number(item.longitude ?? item.lng) : null,
+    label: item.display_label || item.label || item.location || item.name,
+    hint: item.hint || ''
   };
 }
 
@@ -2554,9 +2557,17 @@ router.get('/locations/resolve', async (req, res, next) => {
       });
     });
     if (resolution.status === 'unmatched') {
-      candidates = canonicalLocationSuggestions(query, counts, 8)
+      candidates = canonicalLocationSuggestions(query, counts, 8, { district })
         .filter((item) => item.auto_resolvable !== true)
         .map(publicCanonicalLocationPayload);
+    }
+    const hintPayloads = crossDistrictStaffLocationHints(query, district).map(publicCanonicalLocationPayload);
+    if (hintPayloads.length) {
+      const seen = new Set(candidates.map((item) => item.canonical_location_id || item.id));
+      candidates = [
+        ...hintPayloads.filter((item) => !seen.has(item.canonical_location_id || item.id)),
+        ...candidates
+      ];
     }
     const suggestionRequired = resolution.status === 'unmatched' && candidates.length > 0;
     return res.json({
@@ -2628,6 +2639,7 @@ router.get('/locations/suggest', async (req, res, next) => {
   try {
     setPublicPropertiesCacheHeaders(res, true);
     const query = cleanText(req.query.q || req.query.query).slice(0, 120);
+    const district = cleanText(req.query.district).slice(0, 80);
     const rawListingCategory = cleanText(req.query.listing_type || req.query.type || req.query.category);
     const categoryToken = rawListingCategory.toLowerCase().replace(/[\s/.-]+/g, '_');
     const categoryCommercialType = COMMERCIAL_PROPERTY_TYPES.includes(categoryToken) ? categoryToken : '';
@@ -2676,7 +2688,7 @@ router.get('/locations/suggest', async (req, res, next) => {
     }
 
     const counts = await loadPublicLocationSuggestionCounts({ listingType, studentPortal });
-    const suggestions = canonicalLocationSuggestions(query, counts, limit);
+    const suggestions = canonicalLocationSuggestions(query, counts, limit, { district });
     const exactSuggestions = suggestions.filter((item) => item.match === 'exact_alias' && item.auto_resolvable === true);
     const disambiguationSuggestions = suggestions.filter((item) => item.match === 'exact_alias' && item.auto_resolvable !== true);
     const didYouMeanSuggestions = suggestions.filter((item) => item.match !== 'exact_alias');

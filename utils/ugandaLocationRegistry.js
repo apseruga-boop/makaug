@@ -26,6 +26,8 @@ const DETAILED_LOCATIONS = [
   { name: 'Kiwatule', district: 'Kampala', lat: 0.372, lng: 32.625 },
   { name: 'Bugolobi', district: 'Kampala', lat: 0.317, lng: 32.612 },
   { name: 'Makindye', district: 'Kampala', lat: 0.301, lng: 32.586 },
+  // Approximate area pin at Kizungu Secondary School (Makindye, Kampala).
+  { name: 'Kizungu', district: 'Kampala', town: 'Makindye', level: 'neighborhood', lat: 0.276, lng: 32.590, aliases: ['Kizungu', 'Makindye Kizungu', 'Kizungu Makindye'] },
   { name: 'Muyenga', district: 'Kampala', lat: 0.285, lng: 32.594 },
   { name: 'Ggaba', district: 'Kampala', lat: 0.274, lng: 32.619, aliases: ['Ggaba', 'Gaba'] },
   { name: 'Kansanga', district: 'Kampala', lat: 0.289, lng: 32.607 },
@@ -980,7 +982,39 @@ function entryAliasKeys(entry) {
 }
 const SUGGESTION_QUERY_MAX_CHARS = 2000;
 
-function canonicalLocationSuggestions(rawQuery = '', counts = new Map(), limit = 8) {
+function queryLooksLikeBugema(value = '') {
+  return /\bbugema\b/i.test(String(value || ''));
+}
+
+function districtLooksLikeWakisoContext(district = '', query = '') {
+  const blob = `${district} ${query}`.toLowerCase();
+  return /\bwakiso\b/.test(blob) || /\bgayaza\b/.test(blob);
+}
+
+function crossDistrictStaffLocationHints(rawQuery = '', district = '') {
+  if (!queryLooksLikeBugema(rawQuery) || !districtLooksLikeWakisoContext(district, rawQuery)) return [];
+  const entry = canonicalLocationByKey('luwero:bugema');
+  if (!entry) return [];
+  return [{
+    canonical_key: entry.key,
+    location: 'Bugema',
+    display_label: 'Bugema (Luwero)',
+    district: 'Luwero',
+    town: entry.town || 'Bugema',
+    level: entry.level,
+    latitude: Number.isFinite(entry.lat) ? entry.lat : null,
+    longitude: Number.isFinite(entry.lng) ? entry.lng : null,
+    aliases: [...(entry.aliases || [])],
+    listing_count: 0,
+    match: 'cross_district_hint',
+    did_you_mean: true,
+    auto_resolvable: false,
+    confidence: 0.8,
+    hint: 'Bugema is in Luwero, beside Bugema University / the Gayaza road — not in Wakiso.',
+  }];
+}
+
+function canonicalLocationSuggestions(rawQuery = '', counts = new Map(), limit = 8, options = {}) {
   const query = String(rawQuery || '').slice(0, SUGGESTION_QUERY_MAX_CHARS);
   const attempts = locationQueryAttempts(query);
   const freeTextAttempts = freeTextLocationQueryAttempts(query);
@@ -1081,7 +1115,15 @@ function canonicalLocationSuggestions(rawQuery = '', counts = new Map(), limit =
   const exactRanked = exactResolution.status === 'matched'
     ? ranked.filter((entry) => resolutionCandidateKeys.has(entry.canonical_key))
     : ranked;
-  return exactRanked.slice(0, Math.max(1, Math.min(8, Number(limit) || 8)));
+  const hints = crossDistrictStaffLocationHints(rawQuery, options.district || '');
+  const merged = [];
+  const seen = new Set();
+  for (const item of [...hints, ...exactRanked]) {
+    if (!item || seen.has(item.canonical_key)) continue;
+    seen.add(item.canonical_key);
+    merged.push(item);
+  }
+  return merged.slice(0, Math.max(1, Math.min(8, Number(limit) || 8)));
 }
 
 function canonicalLocationSearchScope(keys = [], nearbyKm = 0) {
@@ -1468,6 +1510,7 @@ module.exports = {
   canonicalLocationRollupCounts,
   canonicalLocationSearchScope,
   canonicalLocationSuggestions,
+  crossDistrictStaffLocationHints,
   aliasesForCanonicalLocation,
   aliasesForDistrict,
   normalizeDistrict,
