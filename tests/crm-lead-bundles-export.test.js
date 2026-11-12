@@ -9,10 +9,12 @@ const root = path.join(__dirname, '..');
 const admin = fs.readFileSync(path.join(root, 'routes', 'admin.js'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const leadService = fs.readFileSync(path.join(root, 'services', 'leadService.js'), 'utf8');
 
 for (const token of ['query.category', 'query.location', 'query.date_from', 'query.date_to', 'query.bundle_tag']) {
-  assert(admin.includes(token), `admin lead filters should include ${token}`);
+  assert(leadService.includes(token), `CRM lead filters should include ${token}`);
 }
+assert(admin.includes('buildLeadListFilters'), 'admin leads route should use the shared CRM filters');
 assert(admin.includes("router.get('/leads-export.csv'"), 'protected CRM CSV route should exist');
 assert(admin.includes('Content-Disposition'), 'CRM export should download as a file');
 assert(admin.includes("/^[=+\\-@\\t\\r]/.test(text)"), 'CRM export must neutralize spreadsheet formulas');

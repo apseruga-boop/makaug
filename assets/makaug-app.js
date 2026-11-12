@@ -23430,7 +23430,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     shouldLoadWhatsapp ? adminSafeSnapshotRequest("whatsapp insights", () => apiRequest("/api/admin/whatsapp/insights", { headers }), { data: {} }) : null,
     shouldLoadWhatsapp ? adminSafeSnapshotRequest("whatsapp conversations", () => apiRequest(`/api/admin/whatsapp/conversations?${whatsappParams.toString()}`, { headers }), { data: [], summary: {} }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("crm summary", () => apiRequest("/api/admin/crm/summary", { headers }), { data: {} }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("crm leads", () => apiRequest("/api/admin/leads?limit=50", { headers }), { data: [] }) : null,
+    shouldLoadNotifications ? adminSafeSnapshotRequest("crm leads", () => apiRequest("/api/admin/leads?limit=50&status=open_all", { headers }), { data: [] }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("mortgage leads", () => apiRequest("/api/admin/mortgage-leads?limit=20", { headers }), { data: [] }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("demand gaps", () => apiRequest("/api/admin/demand-gaps?days=90&limit=20", { headers }), { data: { totals: {}, gaps: [] } }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("notifications", () => apiRequest("/api/admin/notifications?limit=50", { headers }), { data: [] }) : null,
@@ -26470,6 +26470,7 @@ function adminCrmLeadFiltersQuery() {
     const value = String(data.get(key) || "").trim();
     if (value) params.set(key, value);
   });
+  if (!params.get("status")) params.set("status", "open_all");
   params.set("limit", "250");
   adminCrmLeadFilterQuery = params.toString();
   return adminCrmLeadFilterQuery;
@@ -26544,69 +26545,182 @@ async function tagAdminCrmLeadBundle(leadId, inputId) {
   return false;
 }
 
+function adminLeadSourceLabel(source) {
+  return ({
+    list_property_whatsapp_ai: "Listed on WhatsApp",
+    list_property_online: "Listed on the website",
+    listing_submission: "Submitted a listing",
+    whatsapp_no_match: "WhatsApp search, no match",
+    whatsapp_missed_call: "Missed WhatsApp call",
+    listing_detail_whatsapp: "WhatsApp from a listing",
+    listing_card_whatsapp: "WhatsApp from a listing",
+    whatsapp: "WhatsApp",
+    web: "Website",
+    website_mortgage_finder: "Mortgage finder",
+    mortgage_bank_callback: "Asked a mortgage bank",
+    property_need: "Told us what they need",
+    property_need_request: "Told us what they need",
+    property_need_unavailable: "Need we could not fill",
+    advertiser: "Advertiser enquiry",
+    marketplace_service_request: "Marketplace request",
+    off_plan_enquiry: "Off-plan enquiry",
+    short_term_enquiry: "Short-stay enquiry",
+    viewing: "Viewing request",
+    callback: "Callback request",
+    enquiry: "Listing enquiry"
+  })[String(source || "").toLowerCase()] || String(source || "Unknown source").replace(/_/g, " ");
+}
+
+function adminLeadHasContact(lead = {}) {
+  const name = String(lead.contact_name || "").trim();
+  const realName = name && !/^unknown contact$/i.test(name) && name !== "-";
+  const phone = String(lead.contact_phone || lead.contact_whatsapp || "").trim();
+  const email = String(lead.contact_email || "").trim();
+  return { name: realName ? name : "", phone, email, hasAny: Boolean(realName || phone || email) };
+}
+
+function adminLeadContactLine(lead = {}) {
+  const { name, phone, email, hasAny } = adminLeadHasContact(lead);
+  if (!hasAny) return "No name or phone yet";
+  const reach = phone || email || "";
+  if (name && reach) return `${name} • ${reach}`;
+  return name || reach;
+}
+
+function adminLeadTitle(lead = {}) {
+  const source = String(lead.source || "").toLowerCase();
+  const type = String(lead.lead_type || "").toLowerCase();
+  const category = String(lead.category || "").replace(/_/g, " ").trim();
+  const location = String(lead.location || "").trim();
+  const place = location ? ` • ${location}` : "";
+  if (source === "whatsapp_no_match") return `WhatsApp search, no match${place}`;
+  if (source === "whatsapp_missed_call") return `Missed WhatsApp call${place}`;
+  if (type === "listing_owner" || source === "list_property_whatsapp_ai" || source === "list_property_online" || source === "listing_submission") {
+    const kind = ({
+      sale: "a sale property",
+      rent: "a rental",
+      land: "land",
+      commercial: "a commercial property",
+      student: "student accommodation",
+      short_stay: "a short stay",
+      "short stay": "a short stay"
+    })[category] || (category && category !== "lead" ? category : "a property");
+    const verb = source === "listing_submission" ? "Submitted" : "Wants to list";
+    return `${verb} ${kind}${place}`;
+  }
+  const heading = category || String(lead.lead_type || "Lead").replace(/_/g, " ");
+  return `${heading}${place}`;
+}
+
+function adminLeadStatusLabel(status) {
+  return ({
+    open: "Open",
+    handed_over: "Handed over",
+    contacted: "Contacted",
+    qualified: "Qualified",
+    won: "Done",
+    lost: "Lost",
+    spam: "Not useful",
+    closed: "Closed"
+  })[String(status || "open")] || String(status || "open").replace(/_/g, " ");
+}
+
+function adminLeadNextStep(lead = {}) {
+  const source = String(lead.source || "").toLowerCase();
+  const status = String(lead.lead_status || "open");
+  const deleted = Boolean(lead.deleted_at);
+  const { phone, hasAny } = adminLeadHasContact(lead);
+  if (deleted) return "This lead is deleted. Restore it if it should be worked again.";
+  if (["won", "closed"].includes(status)) return "Marked done. It stays out of the open list.";
+  if (status === "spam" || status === "lost") return "Marked not useful. It stays out of the open list.";
+  if (source === "list_property_whatsapp_ai" || source === "list_property_online") {
+    return hasAny
+      ? "They started a listing this way. Send to an agent if they need help, or mark done once the listing is in."
+      : "They started a listing but have not given a name or phone yet. Close this if it is junk, or wait for them to finish.";
+  }
+  if (source === "listing_submission") return "A listing was submitted and is waiting for review.";
+  if (phone) return "Contact them or send to an agent, then mark done.";
+  return "Update the status when you have acted on this, or delete it if it is junk.";
+}
+
 function renderAdminCrmLeadsRows(leads = []) {
   const wrap = document.getElementById("admin-crm-leads-table");
   if (!wrap) return;
   const rows = Array.isArray(leads) ? leads : [];
   if (!rows.length) {
-    wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No CRM leads in this snapshot yet. New WhatsApp clicks, saved searches, viewings, callbacks, property needs, advertiser signups, and mortgage requests will appear here.</div>`;
+    wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No open leads in this list. New listing starts, WhatsApp clicks, viewings, callbacks and forms will appear here. Use the filters to find closed or deleted leads.</div>`;
     return;
   }
   wrap.innerHTML = rows.map((lead) => {
     const score = Number(lead.lead_score || 0);
     const hot = score >= 50 || String(lead.priority || "").toLowerCase() === "urgent";
-    const missedCall = String(lead.source || "").toLowerCase() === "whatsapp_missed_call";
-	    const metadata = (() => {
-	      if (lead.metadata && typeof lead.metadata === "object" && !Array.isArray(lead.metadata)) return lead.metadata;
-	      if (typeof lead.metadata === "string") {
-	        try {
-	          const parsed = JSON.parse(lead.metadata);
-	          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-	        } catch (_error) {
-	          return {};
-	        }
-	      }
-	      return {};
-	    })();
-	    const noMatchLead = String(lead.source || "").toLowerCase() === "whatsapp_no_match" || metadata.whatsapp_no_match === true;
-	    const noMatchStatus = String(metadata.match_status || "waiting_for_listing").replace(/_/g, " ");
-	    const originalMessage = String(metadata.original_message || "").trim();
-	    const mortgageProviderName = metadata.preferred_provider_name || metadata.preferred_bank || "";
-	    const mortgageProviderKey = metadata.preferred_provider_key || "";
-	    const bankHandoffStatus = metadata.bank_handoff_status || "";
-	    const isMortgageBankLead = String(lead.source || "").toLowerCase() === "mortgage_bank_callback" || String(metadata.lead_context || "").toLowerCase() === "bank_provider";
-	    const leadIdArg = JSON.stringify(String(lead.id || ""));
-      const bundleTag = String(metadata.bundle_tag || "");
-      const bundleInputId = `admin-lead-bundle-${String(lead.id || "").replace(/[^a-z0-9_-]/gi, "")}`;
-	    return `<div class="border border-gray-200 rounded-xl p-4 bg-white">
+    const metadata = (() => {
+      if (lead.metadata && typeof lead.metadata === "object" && !Array.isArray(lead.metadata)) return lead.metadata;
+      if (typeof lead.metadata === "string") {
+        try {
+          const parsed = JSON.parse(lead.metadata);
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        } catch (_error) {
+          return {};
+        }
+      }
+      return {};
+    })();
+    const noMatchLead = String(lead.source || "").toLowerCase() === "whatsapp_no_match" || metadata.whatsapp_no_match === true;
+    const noMatchStatus = String(metadata.match_status || "waiting_for_listing").replace(/_/g, " ");
+    const originalMessage = String(metadata.original_message || "").trim();
+    const mortgageProviderName = metadata.preferred_provider_name || metadata.preferred_bank || "";
+    const mortgageProviderKey = metadata.preferred_provider_key || "";
+    const bankHandoffStatus = metadata.bank_handoff_status || "";
+    const isMortgageBankLead = String(lead.source || "").toLowerCase() === "mortgage_bank_callback" || String(metadata.lead_context || "").toLowerCase() === "bank_provider";
+    const leadIdArg = JSON.stringify(String(lead.id || ""));
+    const bundleTag = String(metadata.bundle_tag || "");
+    const bundleInputId = `admin-lead-bundle-${String(lead.id || "").replace(/[^a-z0-9_-]/gi, "")}`;
+    const contact = adminLeadHasContact(lead);
+    const deleted = Boolean(lead.deleted_at);
+    const closed = ["won", "lost", "spam", "closed"].includes(String(lead.lead_status || ""));
+    const showScore = score >= 25 || hot;
+    const isMortgageFallback = String(lead.id || "").startsWith("mortgage-enquiry:");
+    const canSend = !isMortgageFallback && !deleted && Boolean(contact.phone);
+    return `<div class="border ${deleted ? "border-gray-200 bg-gray-50" : "border-gray-200 bg-white"} rounded-xl p-4">
       <div class="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <div class="font-bold text-gray-800">${noMatchLead ? "Unavailable WhatsApp property request" : missedCall ? "Missed WhatsApp call" : adminEscape(lead.category || lead.lead_type || "Lead")} ${lead.location ? `• ${adminEscape(lead.location)}` : ""}</div>
-          <div class="text-xs text-gray-500 mt-1">${adminEscape(lead.contact_name || "Unknown contact")} • ${adminEscape(lead.contact_phone || lead.contact_email || "-")}</div>
-	          <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(lead.source || "-")} • Stage: ${adminEscape(lead.lifecycle_stage || "-")} • Status: ${adminEscape(lead.lead_status || "-")}</div>
-	          ${lead.listing_title ? `<div class="text-xs text-gray-600 mt-1">Listing: ${adminEscape(lead.listing_title)}${lead.listing_reference ? ` (${adminEscape(lead.listing_reference)})` : ""}${lead.agent_name ? ` • Agent: ${adminEscape(lead.agent_name)}` : ""}</div>` : ""}
-	          ${lead.handoff_status ? `<div class="mt-1 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold ${adminLeadHandoffTone(lead.handoff_status)}">${adminEscape(adminLeadHandoffLabel(lead.handoff_status))}${Number(lead.repeat_count || 0) ? ` • asked ${Number(lead.repeat_count) + 1}×` : ""}</div>` : ""}
-	          ${isMortgageBankLead ? `<div class="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-green-100 bg-green-50 px-2.5 py-1.5 text-xs font-bold text-green-800">Mortgage bank lead: ${adminEscape(mortgageProviderName || mortgageProviderKey || "Selected lender")} ${bankHandoffStatus ? `• ${adminEscape(String(bankHandoffStatus).replace(/_/g, " "))}` : ""}</div>` : ""}
-	          ${missedCall ? `<div class="text-xs font-bold text-red-700 mt-2">Callback path: WhatsApp bot asked for the need, then escalates here if unresolved.</div>` : ""}
+        <div class="min-w-0">
+          <div class="font-bold text-gray-800">${adminEscape(adminLeadTitle(lead))}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(adminLeadContactLine(lead))}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(adminLeadSourceLabel(lead.source))} • ${adminEscape(adminLeadStatusLabel(lead.lead_status))}${String(lead.lifecycle_stage || "") && String(lead.lifecycle_stage).toLowerCase() !== "new" ? ` • ${adminEscape(String(lead.lifecycle_stage).replace(/_/g, " "))}` : ""}</div>
+          ${lead.listing_title ? `<div class="text-xs text-gray-600 mt-1">Listing: ${adminEscape(lead.listing_title)}${lead.listing_reference ? ` (${adminEscape(lead.listing_reference)})` : ""}${lead.agent_name ? ` • Agent: ${adminEscape(lead.agent_name)}` : ""}</div>` : ""}
+          ${lead.handoff_status ? `<div class="mt-1 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold ${adminLeadHandoffTone(lead.handoff_status)}">${adminEscape(adminLeadHandoffLabel(lead.handoff_status))}${Number(lead.repeat_count || 0) ? ` • asked ${Number(lead.repeat_count) + 1}×` : ""}</div>` : ""}
+          ${isMortgageBankLead ? `<div class="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-green-100 bg-green-50 px-2.5 py-1.5 text-xs font-bold text-green-800">Mortgage bank lead: ${adminEscape(mortgageProviderName || mortgageProviderKey || "Selected lender")} ${bankHandoffStatus ? `• ${adminEscape(String(bankHandoffStatus).replace(/_/g, " "))}` : ""}</div>` : ""}
           ${noMatchLead ? `<div class="text-xs font-bold text-amber-800 mt-2">No exact match trigger captured. Match status: ${adminEscape(noMatchStatus)}. Lead stays open until customer contact or agent assignment.</div>` : ""}
           ${originalMessage ? `<div class="text-xs text-gray-700 mt-2"><span class="font-bold">Original WhatsApp:</span> ${adminEscape(originalMessage).slice(0, 220)}</div>` : ""}
           ${lead.message ? `<div class="text-xs text-gray-700 mt-2">${adminEscape(lead.message).slice(0, 180)}</div>` : ""}
+          <div class="text-xs text-gray-600 mt-2">${adminEscape(adminLeadNextStep(lead))}</div>
         </div>
-        <span class="text-xs font-bold px-2 py-1 rounded-full ${hot ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}">Score ${adminEscape(score)}</span>
+        <div class="flex flex-col items-end gap-1 shrink-0">
+          <span class="text-xs font-bold px-2 py-1 rounded-full ${closed || deleted ? "bg-gray-100 text-gray-600" : "bg-amber-50 text-amber-800"}">${adminEscape(deleted ? "Deleted" : adminLeadStatusLabel(lead.lead_status))}</span>
+          ${showScore ? `<span class="text-xs font-bold px-2 py-1 rounded-full ${hot ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}" title="Higher when the person left a phone, email, budget or asked for a viewing.">Score ${adminEscape(score)}</span>` : ""}
+        </div>
       </div>
-      ${noMatchLead ? `<div class="mt-3 flex gap-2 flex-wrap">
+      ${noMatchLead && !deleted ? `<div class="mt-3 flex gap-2 flex-wrap">
         <button type="button" onclick="adminOpenLeadMatchMessage(${leadIdArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Message Match</button>
         <button type="button" onclick="adminOpenDecision('whatsapp', '#admin-whatsapp-control')" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Inbox</button>
       </div>` : ""}
       <div class="mt-3 flex items-center gap-2 flex-wrap border-t border-gray-100 pt-3">
-        <input id="${adminAttr(bundleInputId)}" value="${adminAttr(bundleTag)}" class="min-w-[180px] flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" placeholder="Bundle tag, e.g. Kampala-rent-Jul">
-        <button type="button" onclick="tagAdminCrmLeadBundle(${leadIdArg}, ${JSON.stringify(bundleInputId).replace(/</g, "\\u003c")})" class="border border-green-300 text-green-800 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">Save bundle</button>
-        ${String(lead.id || "").startsWith("mortgage-enquiry:") ? "" : `<button type="button" onclick='openLeadReferral(${adminLeadReferralArg({ kind: "lead", id: String(lead.id || ""), area: lead.location || "", label: lead.contact_name || "" })})' class="rounded-lg bg-gray-900 hover:bg-gray-700 text-white text-xs font-bold px-3 py-1.5">Send to agent</button>`}
+        ${deleted ? `<button type="button" onclick="restoreAdminCrmLead(${leadIdArg})" class="rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5">Restore</button>` : `
+        ${closed ? "" : `<button type="button" onclick="setAdminCrmLeadStatus(${leadIdArg}, 'closed')" class="rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5">Mark done</button>
+        <button type="button" onclick="setAdminCrmLeadStatus(${leadIdArg}, 'spam')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-xs font-bold px-3 py-1.5">Not useful</button>`}
+        <button type="button" onclick="deleteAdminCrmLead(${leadIdArg})" class="border border-red-200 text-red-700 hover:bg-red-50 rounded-lg text-xs font-bold px-3 py-1.5">Delete</button>
+        ${canSend ? `<button type="button" onclick='openLeadReferral(${adminLeadReferralArg({ kind: "lead", id: String(lead.id || ""), area: lead.location || "", label: contact.name || "" })})' class="rounded-lg bg-gray-900 hover:bg-gray-700 text-white text-xs font-bold px-3 py-1.5">Send to agent</button>` : (!isMortgageFallback && !deleted ? `<span class="text-[11px] text-gray-500">No phone to send to an agent</span>` : "")}
         ${metadata.last_referral && metadata.last_referral.agent_name ? `<span class="text-[11px] text-emerald-700 font-semibold">Sent to ${adminEscape(metadata.last_referral.agent_name)}</span>` : ""}
         <select onchange="setAdminCrmLeadStatus(${leadIdArg}, this.value)" class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-semibold" aria-label="Lead status">
           ${adminLeadStatusOptions().map(([value, label]) => `<option value="${value}" ${String(lead.lead_status || "open") === value ? "selected" : ""}>${label}</option>`).join("")}
-        </select>
+        </select>`}
       </div>
+      ${deleted ? "" : `<div class="mt-2 flex items-center gap-2 flex-wrap">
+        <label class="text-[11px] text-gray-500" for="${adminAttr(bundleInputId)}">Bundle</label>
+        <input id="${adminAttr(bundleInputId)}" value="${adminAttr(bundleTag)}" class="min-w-[160px] flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" placeholder="Optional tag">
+        <button type="button" onclick="tagAdminCrmLeadBundle(${leadIdArg}, ${JSON.stringify(bundleInputId).replace(/</g, "\\u003c")})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Save bundle</button>
+      </div>`}
     </div>`;
   }).join("");
 }
@@ -26617,9 +26731,9 @@ function adminLeadStatusOptions() {
   ["handed_over", "Handed over"],
   ["contacted", "Contacted"],
   ["qualified", "Qualified"],
-  ["won", "Closed — won"],
+  ["won", "Closed — done"],
   ["lost", "Closed — lost"],
-  ["spam", "Spam"],
+  ["spam", "Not useful"],
   ["closed", "Closed"]
   ];
 }
@@ -26630,6 +26744,7 @@ function adminLeadHandoffLabel(status = "") {
     queued: "Queued to lister (WhatsApp)",
     simulated: "Test send",
     contact_shown: "Contact shown — seeker contacts lister",
+    referred_to_agent: "Sent to a makaug agent",
     makaug_team: "For makaug team",
     no_lister_contact: "No lister contact — needs staff",
     failed: "Handoff failed — needs staff",
@@ -26885,14 +27000,42 @@ async function setAdminCrmLeadStatus(leadId, status) {
       body: { lead_status: status, note: `Status set to ${status} in Lead Centre.` }
     });
     toast("Lead status saved.");
-    if (String(leadId).startsWith("mortgage-enquiry:")) {
-      await applyAdminCrmLeadFilters();
-    } else {
-      const lead = (adminCrmLeads || []).find((row) => String(row.id) === String(leadId));
-      if (lead) lead.lead_status = status;
-    }
+    await applyAdminCrmLeadFilters();
   } catch (error) {
     toast(`Could not save status: ${error?.message || "request failed"}`);
+  }
+  return false;
+}
+
+async function deleteAdminCrmLead(leadId) {
+  if (!leadId) return false;
+  if (!window.confirm("Delete this lead? It leaves the open list. You can still find it under the Deleted filter, and you can restore it from there.")) return false;
+  try {
+    await apiRequest(`/api/admin/leads/${encodeURIComponent(leadId)}`, {
+      method: "DELETE",
+      headers: adminAuthHeaders(),
+      body: { note: "Lead deleted in CRM." }
+    });
+    toast("Lead deleted.");
+    await applyAdminCrmLeadFilters();
+  } catch (error) {
+    toast(`Could not delete lead: ${error?.message || "request failed"}`);
+  }
+  return false;
+}
+
+async function restoreAdminCrmLead(leadId) {
+  if (!leadId) return false;
+  try {
+    await apiRequest(`/api/admin/leads/${encodeURIComponent(leadId)}/restore`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { note: "Lead restored in CRM." }
+    });
+    toast("Lead restored.");
+    await applyAdminCrmLeadFilters();
+  } catch (error) {
+    toast(`Could not restore lead: ${error?.message || "request failed"}`);
   }
   return false;
 }
