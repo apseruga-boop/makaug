@@ -16,6 +16,7 @@ const fs = require('fs');
 const db = require('../config/database');
 const { handleHostStayReply } = require('../services/shortTermBookingService');
 const shortStayWhatsapp = require('../services/whatsappShortStayService');
+const agentFilm = require('../services/agentFilmReplyService');
 const { handleAgentBookingReply } = require('../services/agentBookingService');
 const logger = require('../config/logger');
 const { normalizeUgPhoneForWhatsApp } = require('../services/whatsappNotificationService');
@@ -17754,7 +17755,9 @@ async function investmentBriefReply({ phone, lang = 'en', text = '' }) {
 }
 
 // --- "I want to list as an agent" → a person (Ronald) takes it from here ----
-async function agentJoinRequestReply({ phone, text = '' }) {
+// `name` and `film` come from a reply to the agent film (handleAgentFilmReply):
+// who the prospect is and when the film went to them, for the notice.
+async function agentJoinRequestReply({ phone, text = '', name = '', film = null }) {
   const digits = String(phone || '').replace(/\D/g, '');
   const contact = agentHelpContact();
   let existing = null;
@@ -17771,7 +17774,7 @@ async function agentJoinRequestReply({ phone, text = '' }) {
     const recent = await db.query(
       `SELECT 1 FROM audit_logs WHERE action = 'agent_join_requested' AND details->>'phone' = $1 AND created_at > NOW() - INTERVAL '12 hours' LIMIT 1`, [digits]).catch(() => ({ rows: [] }));
     if (recent.rows.length) return;
-    await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'agent_join_requested', $1::jsonb)`, [JSON.stringify({ phone: digits, text: normalizeInput(text).slice(0, 300), existing_status: existing?.status || null })]).catch(() => {});
+    await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'agent_join_requested', $1::jsonb)`, [JSON.stringify({ phone: digits, text: normalizeInput(text).slice(0, 300), existing_status: existing?.status || null, via_agent_film: Boolean(film) })]).catch(() => {});
     const desk = require('../services/leadDeskService');
     let payLine = '';
     if (existing && existing.status === 'pending') {
@@ -17784,33 +17787,192 @@ async function agentJoinRequestReply({ phone, text = '' }) {
         `You'll get a message here when they pay; then reply *APPROVE* +${digits}. (Type *PAYMENT HELP* for all commands.)`
       ].join('\n');
     }
-    const body = [
-      '🧑‍💼 *New agent wants to join makaug*',
-      `+${digits}${existing ? ` (${existing.full_name}, application ${existing.status})` : ''}`,
-      `They said: "${normalizeInput(text).slice(0, 200)}"`,
-      `${contact.name}: please call them today and explain the agent plan (UGX ${fee.toLocaleString('en-US')}/month).`,
+    // Arthur and Ronald always hear (Arthur, 12 Nov 2026), with the questions
+    // the prospect will ask and the answers; the lead-desk list too, as before.
+    const body = agentFilm.agentInterestNotice({
+      digits,
+      name: normalizeInput(name) || existing?.full_name || '',
+      said: text,
+      film,
+      existing,
+      fee,
+      helpName: contact.name,
       payLine
-    ].filter(Boolean).join('\n');
-    if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, 'agent_join_request');
-    const onList = (typeof desk.alertRecipients === 'function' ? desk.alertRecipients() : []).some((to) => String(to).replace(/\D+/g, '').slice(-9) === contact.digits.slice(-9));
-    if (contact.digits && !onList) await require('../services/leadHandoffService').deliverWhatsapp({ to: contact.digits, body, kind: 'agent_join_request_contact', leadId: null, nonce: `${digits}-${Date.now()}` });
+    });
+    const recipients = agentFilm.agentJoinAlertRecipients();
+    if (typeof desk.sendToTeam === 'function') {
+      await desk.sendToTeam(db, body, 'agent_join_request', { extraRecipients: recipients });
+    } else {
+      const handoff = require('../services/leadHandoffService');
+      for (const to of recipients) await handoff.deliverWhatsapp({ to, body, kind: 'agent_join_request', leadId: null, nonce: `${digits}-${Date.now()}` });
+    }
   });
 
+  const first = normalizeInput(name).split(/\s+/)[0] || '';
   if (existing && existing.status === 'pending') {
-    return `${whatsappBrandHeader('Agent sign-up')}\nThanks — your agent application is already with our team. *${contact.name}* will call you to finish setting you up.\n\nNeed us sooner? Call or WhatsApp ${contact.name} on ${contact.pretty}.`;
+    return `${whatsappBrandHeader('Agent sign-up')}\nThanks${first ? ` ${first}` : ''} — your agent application is already with our team. *${contact.name}* will call you to finish setting you up.\n\nNeed us sooner? Call or WhatsApp ${contact.name} on ${contact.pretty}.`;
   }
   return [
     `${whatsappBrandHeader('Join makaug as an agent')}`,
-    `Great to hear from you! 🙌 A member of our team — *${contact.name}* — will reach out to you shortly to get you set up.`,
+    `Great to hear from you${first ? `, ${first}` : ''}! 🙌 *${contact.name}* from our team will call you shortly to get you set up.`,
     '',
     'As a makaug agent you can:',
     '• Post properties just by sending photos here on WhatsApp',
     '• Get your own agent page and buyer/tenant enquiries sent straight to you',
-    `• All for UGX ${fee.toLocaleString('en-US')} a month`,
+    `• All for UGX ${fee.toLocaleString('en-US')} a month, short stays included. No commission.`,
     '',
     `Once you're approved, I'll send you a short guide showing exactly how to post.`,
-    `Want to talk now? Call or WhatsApp ${contact.name} on ${contact.pretty}.`
+    `📞 Want to talk now? Call or WhatsApp ${contact.name} on ${contact.pretty}.`
   ].join('\n');
+}
+
+// --- Replies to the agent film ----------------------------------------------
+// The film Ronald sends (sendAgentPitchVideo) ends "Reply AGENT here if you
+// would like to join and we will set you up". Until 12 Nov 2026 a bare "AGENT"
+// was read as "find me an agent": the bot asked which district they needed an
+// agent in, and nobody at makaug was told. What a reply means now, and who
+// hears, is in services/agentFilmReplyService.js.
+const AGENT_JOIN_OR_FIND_STEP = 'agent_join_or_find';
+const AGENT_FILM_RESTING_STEPS = new Set(['', 'greeting', 'main_menu', 'submitted', 'agent_area', 'missed_call_resolved', 'choose_language']);
+const AGENT_FILM_DAYS = 30;
+// "yes" / "interested" still means the film this long after it.
+const AGENT_FILM_INTERESTED_DAYS = 14;
+// Any other first reply is told to Arthur and Ronald this long after the film.
+const AGENT_FILM_FIRST_REPLY_DAYS = 7;
+
+function staffNameForNumber(value = '') {
+  const tail = String(value || '').replace(/\D/g, '').slice(-9);
+  if (!tail) return '';
+  if (tail === agentHelpContact().digits.slice(-9)) return agentHelpContact().name;
+  if (tail === agentFilm.ARTHUR_WHATSAPP.replace(/\D/g, '').slice(-9)) return 'Arthur';
+  return '';
+}
+
+/** The agent film this number got in the last 30 days, if any: when, from whom, to what name. */
+async function agentFilmSentTo(phone) {
+  const tail = String(phone || '').replace(/\D/g, '').slice(-9);
+  if (tail.length !== 9) return null;
+  const prospects = require('../services/agentProspectService');
+  const prospect = await prospects.findProspectByPhone(phone).catch(() => null);
+  const days = (at) => (Date.now() - new Date(at).getTime()) / 86400000;
+  if (prospect && prospect.pitched_at && days(prospect.pitched_at) <= AGENT_FILM_DAYS) {
+    return {
+      at: prospect.pitched_at,
+      by: normalizeInput(prospect.pitched_by_name) || staffNameForNumber(prospect.pitched_by),
+      name: normalizeInput(prospect.full_name),
+      status: prospect.status,
+      prospect: true,
+      ageDays: days(prospect.pitched_at)
+    };
+  }
+  // The film also goes out from a pay link (sendStaffPayLink) or the bot itself.
+  const row = (await db.query(
+    `SELECT created_at, details
+       FROM audit_logs
+      WHERE action = 'explainer_video_sent'
+        AND created_at > NOW() - ($2::int * INTERVAL '1 day')
+        AND details->>'kind' = 'agent'
+        AND RIGHT(regexp_replace(COALESCE(details->>'phone', ''), '\\D', '', 'g'), 9) = $1
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [tail, AGENT_FILM_DAYS]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  if (!row) return null;
+  return {
+    at: row.created_at,
+    by: staffNameForNumber(row.details?.sent_by),
+    name: normalizeInput(row.details?.name || ''),
+    status: prospect?.status || '',
+    prospect: Boolean(prospect),
+    ageDays: days(row.created_at)
+  };
+}
+
+/** Where the prospect is in agent_prospects: interested or declined, with their reply. */
+async function markAgentProspectReply(phone, status, reply = '') {
+  const tail = String(phone || '').replace(/\D/g, '').slice(-9);
+  if (tail.length !== 9) return;
+  const from = status === 'declined' ? ['pitched', 'interested'] : ['pitched'];
+  await db.query(
+    `UPDATE agent_prospects
+        SET status = CASE WHEN status = ANY($3::text[]) THEN $2 ELSE status END,
+            metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('last_reply_at', NOW()::text, 'last_reply', $4::text),
+            updated_at = NOW()
+      WHERE phone_key = $1`,
+    [tail, status, from, normalizeInput(reply).slice(0, 300)]
+  ).catch((error) => logger.warn('Agent prospect reply not recorded:', error.message || String(error)));
+}
+
+/**
+ * A reply to the agent film. Returns { message, nextStep } when it answers the
+ * message, { resetStep } when the rest of the bot should take it from the
+ * menu, or null to carry on as usual.
+ */
+async function handleAgentFilmReply({ phone, body = '', step = '', lang = 'en', conversationControl = null, contactName = '', hasMedia = false } = {}) {
+  if (hasMedia) return null;
+  const control = conversationControl || {};
+  if (['off', 'copilot'].includes(String(control.ai_mode || '').toLowerCase())
+    || ['needs_human', 'escalated'].includes(String(control.status || '').toLowerCase())) return null;
+  const currentStep = String(step || '');
+
+  if (currentStep === AGENT_JOIN_OR_FIND_STEP) {
+    const choice = agentFilm.parseJoinOrFind(body);
+    if (choice === 'join') return { message: await agentJoinRequestReply({ phone, text: body, name: contactName }), nextStep: 'main_menu' };
+    if (choice === 'find') return { message: t(lang, 'askAgentArea'), nextStep: 'agent_area' };
+    return { resetStep: 'main_menu' };
+  }
+  if (!AGENT_FILM_RESTING_STEPS.has(currentStep)) return null;
+  const answer = agentFilm.agentFilmAnswer(body);
+  if (!answer) return null;
+
+  const film = await agentFilmSentTo(phone);
+  const name = (film && film.name) || contactName;
+  const said = normalizeInput(body).slice(0, 300);
+  if (answer === 'agent') {
+    if (film) {
+      await markAgentProspectReply(phone, 'interested', said);
+      return { message: await agentJoinRequestReply({ phone, text: said, name, film }), nextStep: 'main_menu' };
+    }
+    const agent = (await db.query(
+      `SELECT status FROM agents WHERE removed_at IS NULL
+          AND (RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1 OR RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1)
+        ORDER BY created_at DESC LIMIT 1`,
+      [String(phone || '').replace(/\D/g, '').slice(-9)]
+    ).catch(() => ({ rows: [] }))).rows[0];
+    if (agent?.status === 'approved') return null;
+    if (agent?.status === 'pending') return { message: await agentJoinRequestReply({ phone, text: said, name }), nextStep: 'main_menu' };
+    // Never got the film: they may want to join, or want an agent. Ask.
+    return { message: agentFilm.joinOrFindPrompt(), nextStep: AGENT_JOIN_OR_FIND_STEP };
+  }
+  if (!film) return null;
+  if (answer === 'interested' && film.ageDays <= AGENT_FILM_INTERESTED_DAYS) {
+    await markAgentProspectReply(phone, 'interested', said);
+    return { message: await agentJoinRequestReply({ phone, text: said, name, film }), nextStep: 'main_menu' };
+  }
+  if (answer === 'no') {
+    await markAgentProspectReply(phone, 'declined', said);
+    // STOP is still an opt-out: the rest of the bot records it.
+    if (/^(STOP|UNSUBSCRIBE)\b/i.test(said)) return null;
+    return { message: `No problem${name ? ` ${normalizeInput(name).split(/\s+/)[0]}` : ''}, thank you for letting us know. If you change your mind, reply *AGENT* any time.`, nextStep: 'main_menu' };
+  }
+  if (answer === 'other' && film.status === 'pitched' && film.ageDays <= AGENT_FILM_FIRST_REPLY_DAYS) {
+    // Their first reply: Arthur and Ronald hear, and the bot answers as usual.
+    await markAgentProspectReply(phone, 'pitched', said);
+    deferWhatsappWork('Agent film first reply notice', async () => {
+      const desk = require('../services/leadDeskService');
+      const digits = String(phone || '').replace(/\D/g, '');
+      const recent = await db.query(
+        `SELECT 1 FROM audit_logs WHERE action IN ('agent_join_requested', 'agent_film_reply_notified') AND details->>'phone' = $1 AND created_at > NOW() - INTERVAL '12 hours' LIMIT 1`,
+        [digits]).catch(() => ({ rows: [] }));
+      if (recent.rows.length) return;
+      await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'agent_film_reply_notified', $1::jsonb)`, [JSON.stringify({ phone: digits, text: said })]).catch(() => {});
+      let fee = 50000;
+      try { fee = Number((await require('../services/billingOpsService').getSettings(db)).agent_fee?.monthly_ugx || 50000); } catch (_ignored) { /* default */ }
+      const notice = agentFilm.agentInterestNotice({ digits, name, said, film, fee, helpName: agentHelpContact().name, replyOnly: true });
+      if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, notice, 'agent_film_reply', { extraRecipients: agentFilm.agentJoinAlertRecipients() });
+    });
+  }
+  return null;
 }
 
 // Short explainer film, sent once (per 30 days) when someone wants to list a
@@ -17860,7 +18022,8 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
 
   await db.query(
     `INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, 'explainer_video_sent', $2::jsonb)`,
-    [normalizeInput(sentBy) || 'whatsapp', JSON.stringify({ phone: digits, kind: 'agent', sent_by: String(sentBy || ''), employee_pitch: true })]
+    // The name too, so a reply ("AGENT") can tell Arthur and Ronald who it is.
+    [normalizeInput(sentBy) || 'whatsapp', JSON.stringify({ phone: digits, kind: 'agent', name: normalizeInput(name).slice(0, 120), sent_by: String(sentBy || ''), employee_pitch: true })]
   ).catch(() => null);
 
   const queued = await queueWhatsappWebBridgeMessage({
@@ -20552,6 +20715,44 @@ async function processInboundRuntimeUnlocked({
     sessionStep = shortStay.resetStep;
     sessionForMessage.current_step = shortStay.resetStep;
     if (sessionForMessage.session_data) sessionForMessage.session_data.short_stay = null;
+  }
+
+  // A reply to the agent film ("Reply AGENT here if you would like to join"):
+  // someone who wants to join, not someone looking for an agent. Arthur and
+  // Ronald are told, and the prospect is told Ronald will call.
+  const filmReply = await handleAgentFilmReply({
+    phone,
+    body: effectiveBody,
+    step: sessionStep,
+    lang: sessionLang,
+    conversationControl,
+    contactName,
+    // A voice note counts: it arrives here as its transcript.
+    hasMedia: Boolean(inboundPhotoCandidates.length || (effectiveMediaUrl && !isAudioNote))
+  }).catch((error) => {
+    logger.warn('Agent film reply check failed:', error.message || String(error));
+    return null;
+  });
+  if (filmReply?.message) {
+    await updateSession(phone, { current_step: filmReply.nextStep || 'main_menu' });
+    deferWhatsappWork('WhatsApp agent film reply intent log', () => logIntent({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      detectedIntent: 'agent_registration',
+      confidence: 1,
+      language: sessionLang,
+      currentStep: sessionStep,
+      rawText: effectiveBody,
+      transcript: null,
+      entities: { next_step: filmReply.nextStep || 'main_menu', via: 'agent_film_reply' },
+      modelUsed: 'agent_film_reply'
+    }));
+    return { message: filmReply.message, nextStep: filmReply.nextStep || 'main_menu' };
+  }
+  if (filmReply?.resetStep) {
+    await updateSession(phone, { current_step: filmReply.resetStep });
+    sessionStep = filmReply.resetStep;
+    sessionForMessage.current_step = filmReply.resetStep;
   }
 
   // Payments first: a transaction ID or receipt must never be read as a property.
