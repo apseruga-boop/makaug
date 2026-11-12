@@ -2994,6 +2994,96 @@ async function persistStaffReviewNoteOnly(req, propertyId, existing, reviewPatch
   return true;
 }
 
+function isLocationValidationError(message) {
+  return /area\/neighbourhood|must match a canonical Uganda location|must match the selected district|must be more specific than a district|belongs to .+, not |neighbourhood must belong|city\/town must belong/i.test(String(message || ''));
+}
+
+function isPriceValidationError(message) {
+  return /\bprice\b/i.test(String(message || '')) && !isLocationValidationError(message);
+}
+
+const STAFF_SAFE_COPY_FIELDS = ['title', 'description'];
+const STAFF_SAFE_PRICE_FIELDS = [
+  'price', 'price_currency', 'price_original_currency', 'price_original',
+  'price_fx_rate_ugx', 'price_fx_as_of', 'price_on_application', 'price_period'
+];
+
+// When a location (or other) validation error blocks the full save, still
+// write title, description and price from the same request. The rejected
+// area must not discard those fields (A30066, 12 Nov 2026).
+async function persistStaffReviewSafeFields(req, propertyId, existing, patch = {}, priceChoiceMode = 'unchanged', errors = []) {
+  const canSavePrice = !errors.some(isPriceValidationError);
+  const setParts = [];
+  const values = [propertyId];
+  const changed = [];
+  const add = (column, value, cast = '') => {
+    values.push(value);
+    setParts.push(`${column} = $${values.length}${cast}`);
+    changed.push(column);
+  };
+  const transforms = {
+    title: (value) => cleanText(value),
+    description: (value) => cleanText(value),
+    price: (value) => toNullableInt(value),
+    price_currency: (value) => cleanText(value).toUpperCase(),
+    price_original_currency: (value) => cleanText(value).toUpperCase(),
+    price_original: (value) => toNullableFloat(value),
+    price_fx_rate_ugx: (value) => toNullableFloat(value),
+    price_fx_as_of: (value) => toIsoTimestampOrNull(value),
+    price_on_application: (value) => boolLike(value),
+    price_period: (value) => cleanText(value) || null
+  };
+  for (const key of STAFF_SAFE_COPY_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+    const value = transforms[key](patch[key]);
+    if (!value) continue;
+    add(key, value);
+  }
+  if (canSavePrice) {
+    for (const key of STAFF_SAFE_PRICE_FIELDS) {
+      if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+      add(key, transforms[key](patch[key]));
+    }
+  }
+  const existingExtra = safeJsonObject(existing.extra_fields, {});
+  const extraPatch = {};
+  const correctedCopyFields = STAFF_SAFE_COPY_FIELDS.filter((key) => {
+    if (!Object.prototype.hasOwnProperty.call(patch, key)) return false;
+    const next = cleanText(patch[key]);
+    return Boolean(next) && next !== cleanText(existing[key]);
+  });
+  if (correctedCopyFields.length) {
+    extraPatch.staff_corrected_fields = [...new Set([
+      ...(Array.isArray(existingExtra.staff_corrected_fields) ? existingExtra.staff_corrected_fields : []),
+      ...correctedCopyFields
+    ])];
+    extraPatch.staff_corrected_at = new Date().toISOString();
+    extraPatch.staff_corrected_by = actorId(req);
+  }
+  if (canSavePrice) {
+    const priceExtra = staffPriceExtraPatch({ mode: priceChoiceMode, existing, existingExtra });
+    if (priceExtra) Object.assign(extraPatch, priceExtra);
+  }
+  if (Object.keys(extraPatch).length) {
+    values.push(JSON.stringify(extraPatch));
+    setParts.push(`extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${values.length}::jsonb`);
+    changed.push('extra_fields');
+  }
+  if (!setParts.length) return { fieldsSaved: false, savedFields: [] };
+  await db.query(
+    `UPDATE properties SET ${setParts.join(', ')}, updated_at = NOW() WHERE id = $1`,
+    values
+  );
+  await db.query(
+    `INSERT INTO property_moderation_events (property_id, actor_id, action, delivery)
+     VALUES ($1,$2,'staff_listing_preview_partial_saved',$3::jsonb)`,
+    [propertyId, toUuidOrNull(actorId(req)), JSON.stringify({ changed_fields: changed, validation_errors: errors })]
+  ).catch((error) => {
+    logger.warn('Staff review partial-save event failed', { property_id: propertyId, message: error.message });
+  });
+  return { fieldsSaved: true, savedFields: changed };
+}
+
 async function updateStaffEditableListing(req, propertyId, listingPatch = {}, reviewPatch = {}) {
   const existingResult = await db.query('SELECT * FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
   if (!existingResult.rows.length) {
@@ -3026,7 +3116,17 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   }
   if (errors.length) {
     // A location failure used to throw before the note was written, so the
-    // internal note disappeared with the rejected save.
+    // internal note disappeared with the rejected save. Title, description and
+    // price from the same request must also be kept; only the bad area is refused.
+    let fieldsSaved = false;
+    let savedFields = [];
+    try {
+      const partial = await persistStaffReviewSafeFields(req, propertyId, existing, patch, priceChoiceMode, errors);
+      fieldsSaved = partial.fieldsSaved;
+      savedFields = partial.savedFields || [];
+    } catch (saveError) {
+      logger.warn('Staff review safe fields were not saved with the validation error', { property_id: propertyId, message: saveError.message });
+    }
     const noteSaved = await persistStaffReviewNoteOnly(req, propertyId, existing, reviewPatch).catch((error) => {
       logger.warn('Staff review note was not saved with the location error', { property_id: propertyId, message: error.message });
       return false;
@@ -3035,6 +3135,8 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     error.status = 400;
     error.details = errors;
     error.note_saved = noteSaved;
+    error.fields_saved = fieldsSaved;
+    error.saved_fields = savedFields;
     throw error;
   }
 
@@ -5192,7 +5294,9 @@ router.patch('/properties/:id/review', async (req, res, next) => {
         ok: false,
         error: error.message,
         details: error.details || undefined,
-        note_saved: noteSaved
+        note_saved: noteSaved,
+        fields_saved: error.fields_saved === true,
+        saved_fields: error.saved_fields || undefined
       });
     }
     logger.error('Staff listing preview save failed', { property_id: req.params.id, message: error.message, note_saved: noteSaved });
@@ -6288,4 +6392,4 @@ router.get('/video-caption-conflicts', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports._test = { staffBulkDuplicateMatch, buildApprovedDuplicateIndex, staffPossibleDuplicateOf, normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, loadStaffPropertyPreview, liveEditSnapshot, staffLocationWarnings, staffLocationSoftWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary, stripRoadNamePhrases };
+module.exports._test = { staffBulkDuplicateMatch, buildApprovedDuplicateIndex, staffPossibleDuplicateOf, normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, persistStaffReviewSafeFields, loadStaffPropertyPreview, liveEditSnapshot, staffLocationWarnings, staffLocationSoftWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary, stripRoadNamePhrases };
