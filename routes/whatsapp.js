@@ -15,6 +15,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const db = require('../config/database');
 const { handleHostStayReply } = require('../services/shortTermBookingService');
+const shortStayWhatsapp = require('../services/whatsappShortStayService');
 const { handleAgentBookingReply } = require('../services/agentBookingService');
 const logger = require('../config/logger');
 const { normalizeUgPhoneForWhatsApp } = require('../services/whatsappNotificationService');
@@ -225,13 +226,15 @@ const WHATSAPP_LISTING_PHOTO_FLOW_MARKER = 'whatsapp-web-modern-media-20260804';
 // At least 2 photos for every listing (same as the website); up to 10 on WhatsApp.
 const WHATSAPP_MIN_LISTING_PHOTOS = 2;
 const WHATSAPP_MAX_LISTING_PHOTOS = 10;
+// A WhatsApp photo is well under this; anything bigger is not a phone photo.
+const WHATSAPP_LISTING_PHOTO_FILE_MAX_BYTES = 10 * 1024 * 1024;
 
 // Language Translations
 const T = {
   en: {
     welcome: "🏠 Welcome to *makaug* - Uganda's property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nReply with a number",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
-    askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property\n\nShort stays (by the night): ordinary listers pay UGX 20,000 a month, with no free days. Approved agents include short stays in the UGX 50,000 a month agent plan.',
+    askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property\n6️⃣ Short stays (by the night)\n\nShort stays (by the night): ordinary listers pay UGX 20,000 a month, with no free days. Approved agents include short stays in the UGX 50,000 a month agent plan.',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
     askTitle: '✏️ Give your property a short title (e.g. "3-bedroom house in Ntinda Kampala"):',
     askDistrict: '📍 Which district is the property in? If there is more than one, list them all. (e.g. Kampala, Wakiso, Mukono, Jinja...)',
@@ -312,7 +315,7 @@ const T = {
   lg: {
     welcome: "🏠 Tukusuubiza ku *makaug* - eyitwa wangu ya property mu Uganda!\n\nOyagala kukola ki?\n1️⃣ Okwetayirira eby'ensi byange\n2️⃣ Okunoonyereza ensi\n3️⃣ Okunoonya musomesa\n\nSuula 1, 2 oba 3",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
-    askListingType: "🏠 Kyoyetaagadde okutereka kya ki?\n1️⃣ Enju/Ensi okutunda\n2️⃣ Enju okusasula\n3️⃣ Ttaka\n4️⃣ Eby'okulala by'abayizi\n5️⃣ Ensi ez'ebikolwa\n\nShort stays (okusula okumpi): abatali ba agent basasula UGX 20,000 buli mwezi, tewali nnaku za bwereere. Ba agent abakkirizibwa bafuna short stays mu pulani ya UGX 50,000 buli mwezi.",
+    askListingType: "🏠 Kyoyetaagadde okutereka kya ki?\n1️⃣ Enju/Ensi okutunda\n2️⃣ Enju okusasula\n3️⃣ Ttaka\n4️⃣ Eby'okulala by'abayizi\n5️⃣ Ensi ez'ebikolwa\n6️⃣ Short stays (okusula okumpi)\n\nShort stays (okusula okumpi): abatali ba agent basasula UGX 20,000 buli mwezi, tewali nnaku za bwereere. Ba agent abakkirizibwa bafuna short stays mu pulani ya UGX 50,000 buli mwezi.",
     askOwnership: "✅ Ggwe nnyini ensi ono oba agent?\n1️⃣ Nze nnyini\n2️⃣ Nze agent",
     askTitle: '✏️ Nyumba yoyo ejjiire etya? (e.g. "Enyumba esatu Ntinda Kampala"):',
     askDistrict: '📍 Ensi eno eri mu kitundu ki? (e.g. Kampala, Wakiso, Mukono...)',
@@ -380,7 +383,7 @@ const T = {
   },
   sw: {
     welcome: '🏠 Karibu *makaug* - Jukwaa la bure la mali Uganda!\n\nUnataka kufanya nini?\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta mali\n3️⃣ Pata wakala\n\nJibu 1, 2 au 3',
-    askListingType: '🏠 Unaorodhesha nini?\n1️⃣ Nyumba/Mali ya KUUZA\n2️⃣ Nyumba/Mali ya KUKODISHA\n3️⃣ Ardhi/Kiwanja\n4️⃣ Malazi ya wanafunzi\n5️⃣ Mali ya biashara\n\nMalazi ya muda (kwa usiku): watoa orodha wa kawaida hulipa UGX 20,000 kwa mwezi, bila siku za bure. Mawakala walioidhinishwa wanajumuisha malazi ya muda katika mpango wa UGX 50,000 kwa mwezi.',
+    askListingType: '🏠 Unaorodhesha nini?\n1️⃣ Nyumba/Mali ya KUUZA\n2️⃣ Nyumba/Mali ya KUKODISHA\n3️⃣ Ardhi/Kiwanja\n4️⃣ Malazi ya wanafunzi\n5️⃣ Mali ya biashara\n6️⃣ Malazi ya muda (kwa usiku)\n\nMalazi ya muda (kwa usiku): watoa orodha wa kawaida hulipa UGX 20,000 kwa mwezi, bila siku za bure. Mawakala walioidhinishwa wanajumuisha malazi ya muda katika mpango wa UGX 50,000 kwa mwezi.',
     askTitle: '✏️ Toa kichwa kifupi cha mali yako:',
     askDistrict: '📍 Wilaya ipi? (mf. Kampala, Wakiso, Mukono...)',
     askArea: '🗺️ Mtaa au eneo gani?',
@@ -488,7 +491,7 @@ Object.assign(T.sw, {
 });
 
 Object.assign(T.ac, {
-  askListingType: '🏠 Itye keto ngo?\n1️⃣ Ot/property me acata\n2️⃣ Ot/property me rent\n3️⃣ Ngom/plot\n4️⃣ Kabedo me students\n5️⃣ Property me business\n\nShort stay (bedo me nino manok): jo ma pe agent culo UGX 20,000 dwe ki dwe, peke nino ma nono. Agent ma oyee keto short stay i plan me UGX 50,000 dwe ki dwe.',
+  askListingType: '🏠 Itye keto ngo?\n1️⃣ Ot/property me acata\n2️⃣ Ot/property me rent\n3️⃣ Ngom/plot\n4️⃣ Kabedo me students\n5️⃣ Property me business\n6️⃣ Short stay (bedo me nino manok)\n\nShort stay (bedo me nino manok): jo ma pe agent culo UGX 20,000 dwe ki dwe, peke nino ma nono. Agent ma oyee keto short stay i plan me UGX 50,000 dwe ki dwe.',
   askOwnership: '✅ In aye won property man, onyo agent?\n1️⃣ An won-ne\n2️⃣ An agent',
   askTitle: '✏️ Coo nying property macek:',
   askDistrict: '📍 Property man tye i district mene?',
@@ -545,7 +548,7 @@ Object.assign(T.ac, {
 });
 
 Object.assign(T.ny, {
-  askListingType: '🏠 Niki eki orikuteeka?\n1️⃣ Enju/property kugurisha\n2️⃣ Enju/property kukodisa\n3️⃣ Itaka/plot\n4️⃣ Ebyokutuuramu byaba students\n5️⃣ Commercial property\n\nShort stays (okuraara ahake): abatari agent baherera UGX 20,000 buri kwezi, tihari ebiro bya busha. Agent eyikirizibwe ashyira short stays omu plan ya UGX 50,000 buri kwezi.',
+  askListingType: '🏠 Niki eki orikuteeka?\n1️⃣ Enju/property kugurisha\n2️⃣ Enju/property kukodisa\n3️⃣ Itaka/plot\n4️⃣ Ebyokutuuramu byaba students\n5️⃣ Commercial property\n6️⃣ Short stays (okuraara ahake)\n\nShort stays (okuraara ahake): abatari agent baherera UGX 20,000 buri kwezi, tihari ebiro bya busha. Agent eyikirizibwe ashyira short stays omu plan ya UGX 50,000 buri kwezi.',
   askOwnership: '✅ Niwe nyini property egi, nari ori agent?\n1️⃣ Ndi nyini\n2️⃣ Ndi agent',
   askTitle: '✏️ Ha property yaawe omutwe mugufi:',
   askDistrict: '📍 Property eri mu district ki?',
@@ -579,7 +582,7 @@ Object.assign(T.ny, {
 });
 
 Object.assign(T.rn, {
-  askListingType: '🏠 Uriko ushira ikiho?\n1️⃣ Inzu/property yo kugurisha\n2️⃣ Inzu/property yo gukodesha\n3️⃣ Ubutaka/plot\n4️⃣ Aho abanyeshuri baba\n5️⃣ Commercial property\n\nShort stays (kuguma igihe gito): abatari agent barishura UGX 20,000 buri kwezi, nta minsi y\'ubuntu. Agent yemejwe ashyira short stays mu plan ya UGX 50,000 buri kwezi.',
+  askListingType: '🏠 Uriko ushira ikiho?\n1️⃣ Inzu/property yo kugurisha\n2️⃣ Inzu/property yo gukodesha\n3️⃣ Ubutaka/plot\n4️⃣ Aho abanyeshuri baba\n5️⃣ Commercial property\n6️⃣ Short stays (kuguma igihe gito)\n\nShort stays (kuguma igihe gito): abatari agent barishura UGX 20,000 buri kwezi, nta minsi y\'ubuntu. Agent yemejwe ashyira short stays mu plan ya UGX 50,000 buri kwezi.',
   askOwnership: '✅ Ni wewe nyiri property, canke uri agent?\n1️⃣ Ndi nyiri\n2️⃣ Ndi agent',
   askTitle: '✏️ Andika umutwe mugufi wa property:',
   askDistrict: '📍 Property iri muri district iyihe?',
@@ -613,7 +616,7 @@ Object.assign(T.rn, {
 });
 
 Object.assign(T.sm, {
-  askListingType: "🏠 Oteeka ki?\n1️⃣ Ennyumba/property okutunda\n2️⃣ Ennyumba/property okukodisa\n3️⃣ Ettaka/plot\n4️⃣ Obutuuze bw'abayizi\n5️⃣ Commercial property\n\nShort stays (okusula okumpi): abatali agent basasula UGX 20,000 buli mwezi, tewali nnaku za bwereere. Agent eyakkirizibwa afuna short stays mu pulani ya UGX 50,000 buli mwezi.",
+  askListingType: "🏠 Oteeka ki?\n1️⃣ Ennyumba/property okutunda\n2️⃣ Ennyumba/property okukodisa\n3️⃣ Ettaka/plot\n4️⃣ Obutuuze bw'abayizi\n5️⃣ Commercial property\n6️⃣ Short stays (okusula okumpi)\n\nShort stays (okusula okumpi): abatali agent basasula UGX 20,000 buli mwezi, tewali nnaku za bwereere. Agent eyakkirizibwa afuna short stays mu pulani ya UGX 50,000 buli mwezi.",
   askOwnership: '✅ Ggwe nyini property eno, oba agent?\n1️⃣ Nze nyini\n2️⃣ Nze agent',
   askTitle: '✏️ Wa property yo omutwe omumpi:',
   askDistrict: '📍 Property eri mu district ki?',
@@ -653,7 +656,7 @@ const WHATSAPP_LANGUAGE_MENU = IS_SOUTH_AFRICA
 T.am = Object.assign({}, T.en, {
   welcome: "🏠 ወደ *makaug* እንኳን በደህና መጡ - የኡጋንዳ ነፃ የንብረት መድረክ!\n\nምን ማድረግ ይፈልጋሉ?\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\n1፣ 2 ወይም 3 ብለው ይመልሱ",
   chooseLanguage: WHATSAPP_LANGUAGE_MENU,
-  askListingType: '🏠 ምን እየዘረዘሩ ነው?\n1️⃣ ለሽያጭ ቤት/ንብረት\n2️⃣ ለኪራይ ቤት/ንብረት\n3️⃣ መሬት/ፕሎት\n4️⃣ የተማሪ መኖሪያ\n5️⃣ የንግድ ንብረት\n\nአጭር ጊዜ ማረፊያ (በሌሊት)፦ ተራ አስተዋዋቂዎች በወር UGX 20,000 ይከፍላሉ፣ ነፃ ቀናት የሉም። የተፈቀዱ ወኪሎች አጭር ጊዜ ማረፊያዎችን በወር UGX 50,000 የወኪል ፓኬጅ ውስጥ ያካትታሉ።',
+  askListingType: '🏠 ምን እየዘረዘሩ ነው?\n1️⃣ ለሽያጭ ቤት/ንብረት\n2️⃣ ለኪራይ ቤት/ንብረት\n3️⃣ መሬት/ፕሎት\n4️⃣ የተማሪ መኖሪያ\n5️⃣ የንግድ ንብረት\n6️⃣ አጭር ጊዜ ማረፊያ (በሌሊት)\n\nአጭር ጊዜ ማረፊያ (በሌሊት)፦ ተራ አስተዋዋቂዎች በወር UGX 20,000 ይከፍላሉ፣ ነፃ ቀናት የሉም። የተፈቀዱ ወኪሎች አጭር ጊዜ ማረፊያዎችን በወር UGX 50,000 የወኪል ፓኬጅ ውስጥ ያካትታሉ።',
   askOwnership: '✅ የዚህ ንብረት ባለቤት ነዎት ወይስ በባለቤት ስም የሚዘረዝር ወኪል?\n1️⃣ ባለቤት ነኝ\n2️⃣ ወኪል ነኝ',
   askTitle: '✏️ ለንብረቱ አጭር ርዕስ ይስጡ፣ ለምሳሌ "3-bedroom house in Ntinda Kampala":',
   askDistrict: '📍 ንብረቱ በየትኛው ዲስትሪክት ነው? ለምሳሌ Kampala, Wakiso, Mukono',
@@ -733,7 +736,7 @@ T.am = Object.assign({}, T.en, {
 T.ar = Object.assign({}, T.en, {
   welcome: "🏠 مرحباً بك في *makaug* - منصة العقارات المجانية في أوغندا!\n\nماذا تريد أن تفعل؟\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n\nأرسل 1 أو 2 أو 3",
   chooseLanguage: WHATSAPP_LANGUAGE_MENU,
-  askListingType: '🏠 ماذا تريد أن تدرج؟\n1️⃣ بيت/عقار للبيع\n2️⃣ بيت/عقار للإيجار\n3️⃣ أرض/قطعة\n4️⃣ سكن طلاب\n5️⃣ عقار تجاري\n\nالإقامة القصيرة (بالليلة): المعلنون العاديون يدفعون UGX 20,000 شهرياً بلا أيام مجانية. الوكلاء المعتمدون تشمل إقاماتهم القصيرة في باقة الوكيل البالغة UGX 50,000 شهرياً.',
+  askListingType: '🏠 ماذا تريد أن تدرج؟\n1️⃣ بيت/عقار للبيع\n2️⃣ بيت/عقار للإيجار\n3️⃣ أرض/قطعة\n4️⃣ سكن طلاب\n5️⃣ عقار تجاري\n6️⃣ الإقامة القصيرة (بالليلة)\n\nالإقامة القصيرة (بالليلة): المعلنون العاديون يدفعون UGX 20,000 شهرياً بلا أيام مجانية. الوكلاء المعتمدون تشمل إقاماتهم القصيرة في باقة الوكيل البالغة UGX 50,000 شهرياً.',
   askOwnership: '✅ هل أنت مالك هذا العقار أم وكيل يدرجه نيابة عن المالك؟\n1️⃣ أنا المالك\n2️⃣ أنا وكيل',
   askTitle: '✏️ أعط العقار عنواناً قصيراً، مثل "3-bedroom house in Ntinda Kampala":',
   askDistrict: '📍 في أي district يقع العقار؟ مثال: Kampala, Wakiso, Mukono',
@@ -3226,6 +3229,21 @@ async function validateAndStoreListingPhotos({ phone, lang, draft = {}, runtime 
   for (const candidate of candidates) {
     if (photos.length >= WHATSAPP_MAX_LISTING_PHOTOS) break;
     const expectedSlot = photoRequirementLabel(photos.length, 'en', draft.listing_type);
+    // The runtime writes any photo bigger than 2 KB to a temporary file before
+    // this step sees it (spillInboundMetadata), so a real phone photo arrives
+    // as a file, not as data_url. Read it as a file, or it is never counted
+    // ("I could not verify that image safely", 12 Nov 2026).
+    let fileBytes = 0;
+    let fileSha256 = '';
+    if (!candidate.dataUrl && candidate.mediaFile) {
+      fileBytes = await fs.promises.stat(candidate.mediaFile).then((stat) => stat.size).catch(() => 0);
+      if (!fileBytes || fileBytes > WHATSAPP_LISTING_PHOTO_FILE_MAX_BYTES) {
+        outcomes.push({ status: 'rejected', expectedSlot, validation: { verdict: 'unavailable', reason: fileBytes ? 'photo_too_large' : 'photo_file_missing' } });
+        continue;
+      }
+      fileSha256 = await hashFile(candidate.mediaFile).catch(() => '');
+      if (!candidate.hash) candidate.hash = fileSha256;
+    }
     const isExactDuplicate = candidate.hash && photoHashes.includes(candidate.hash);
     const isVisualDuplicate = candidate.perceptualHash && photoPerceptualHashes.some(
       (existingHash) => perceptualHashDistance(candidate.perceptualHash, existingHash) <= 6
@@ -3235,9 +3253,11 @@ async function validateAndStoreListingPhotos({ phone, lang, draft = {}, runtime 
       continue;
     }
 
+    const previewDataUrl = candidate.dataUrl
+      || (candidate.mediaFile ? await smallJpegDataUrl(candidate.mediaFile).catch(() => '') : '');
     const validation = await withTimeout(
       classifyWhatsappListingPhoto({
-        imageDataUrl: candidate.dataUrl,
+        imageDataUrl: previewDataUrl,
         expectedSlot,
         providerScope: WHATSAPP_PROVIDER_SCOPE
       }),
@@ -3266,12 +3286,26 @@ async function validateAndStoreListingPhotos({ phone, lang, draft = {}, runtime 
     if (candidate.dataUrl) {
       storedUrl = await storeDataUrl(candidate.dataUrl, {
         keyPrefix: 'whatsapp-listings/photos',
-        filename: `${String(phone || 'listing').replace(/\D/g, '').slice(-8) || 'listing'}-${photos.length + 1}.jpg`,
+        // No phone digits in a public object name: the key is random, the label says what it is.
+        filename: `listing-photo-${photos.length + 1}.jpg`,
         label: `WhatsApp listing photo ${photos.length + 1}`,
         allowedMimeTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
         maxBytes: 3_000_000,
         isPrivate: false
       }).catch((error) => {
+        logger.warn('WhatsApp listing photo cloud upload failed:', error.message || String(error));
+        return '';
+      });
+    } else if (candidate.mediaFile && fileSha256) {
+      const mimeType = /^image\/(?:jpeg|jpg|png|webp)$/i.test(candidate.mimeType || '') ? candidate.mimeType.toLowerCase() : 'image/jpeg';
+      const extension = mimeType === 'image/png' ? 'png' : (mimeType === 'image/webp' ? 'webp' : 'jpg');
+      storedUrl = await uploadFileToS3({
+        filePath: candidate.mediaFile,
+        mimeType,
+        key: `whatsapp-listings/photos/${Date.now()}-${crypto.randomUUID()}-listing-photo-${photos.length + 1}.${extension}`,
+        byteLength: fileBytes,
+        sha256: fileSha256
+      }).then((stored) => stored.publicUrl || stored.internalRef).catch((error) => {
         logger.warn('WhatsApp listing photo cloud upload failed:', error.message || String(error));
         return '';
       });
@@ -3301,6 +3335,119 @@ async function validateAndStoreListingPhotos({ phone, lang, draft = {}, runtime 
   }
 
   return { photos, photoHashes, photoPerceptualHashes, photoValidation, outcomes };
+}
+
+/**
+ * The property listing's prompts and photo checks, lent to the short-stay
+ * route (services/whatsappShortStayService.js). Arthur, 12 Nov 2026: the
+ * process "should be the same as when they are listing a property, but it's
+ * just a route for short term".
+ */
+function shortStayListingKit({ phone, lang = 'en', photoCandidates = [], mediaType = '', mediaCount = 0, mediaUrl = '' } = {}) {
+  const code = resolveLangCode(lang);
+  return {
+    t: (key) => t(code, key),
+    contactPrompt: () => whatsappContactConfirmationPrompt(code, phone),
+    photos: {
+      min: WHATSAPP_MIN_LISTING_PHOTOS,
+      max: WHATSAPP_MAX_LISTING_PHOTOS,
+      store: (draft) => validateAndStoreListingPhotos({
+        phone,
+        lang: code,
+        draft,
+        runtime: { photoCandidates, mediaType, mediaCount },
+        mediaUrl
+      }),
+      checklist: (count) => photoChecklistPrompt(code, count, 'short_stay'),
+      accepted: (count) => photoAcceptedPrompt(code, count, 'short_stay'),
+      enough: (count) => photoEnoughPrompt(code, count),
+      duplicate: (count) => photoDuplicatePrompt(code, count, 'short_stay'),
+      rejected: (count, verdict) => photoRejectedPrompt(code, count, verdict, 'short_stay'),
+      complete: (count) => photoCompletePrompt(code, count)
+    }
+  };
+}
+
+/**
+ * A short stay listed on WhatsApp is on the Short stays desk: staff hear about
+ * it the way they hear about a property listed on WhatsApp (a CRM lead, the
+ * in-app notice and the support email). The host's number is only in the lead;
+ * the notice and the email show its last 3 digits.
+ */
+async function notifyStaffOfWhatsappShortStay({
+  listingId,
+  reference,
+  title,
+  area,
+  district,
+  nightly = null,
+  hostType = 'owner',
+  hostName = '',
+  hostPhone = '',
+  photoCount = 0,
+  photosSent = 0,
+  idStatus = 'pending',
+  lang = 'en'
+} = {}) {
+  const location = [area, district].filter(Boolean).join(', ');
+  const phoneTail = String(hostPhone || '').replace(/\D/g, '').slice(-3);
+  const idLabel = { on_file: 'on file (agent)', received: 'received, to check', pending: 'still pending' }[idStatus] || idStatus;
+  const lead = await createLead(db, {
+    listingId: null,
+    contact: {
+      name: hostName || 'WhatsApp short-stay host',
+      phone: hostPhone || null,
+      preferredContactChannel: 'whatsapp',
+      preferredLanguage: resolveLangCode(lang),
+      roleType: hostType === 'agent' ? 'agent' : 'listing_owner',
+      locationInterest: location,
+      categoryInterest: 'short_stay',
+      budgetRange: nightly ? String(nightly) : ''
+    },
+    source: 'whatsapp_short_stay_submission',
+    leadType: 'listing_owner',
+    category: 'short_stay',
+    location,
+    budget: nightly || null,
+    message: `Short stay submitted from WhatsApp for review: ${title || reference}`,
+    activityType: 'listing_submitted',
+    metadata: {
+      st_listing_id: listingId,
+      st_reference: reference,
+      image_count: photoCount,
+      listed_via: 'whatsapp',
+      id_status: idStatus
+    }
+  }).catch((error) => {
+    logger.warn('WhatsApp short stay lead creation failed:', error.message || String(error));
+    return null;
+  });
+  await Promise.allSettled([
+    logNotification(db, {
+      recipientEmail: getSupportEmail(),
+      channel: 'in_app',
+      type: 'short_stay_pending_review',
+      status: 'logged',
+      payloadSummary: { reference, title: title || null, source: 'whatsapp', st_listing_id: listingId, image_count: photoCount, id_status: idStatus },
+      relatedLeadId: lead?.id || null
+    }),
+    sendSupportEmail({
+      to: getSupportEmail(),
+      subject: `New WhatsApp short stay pending review - ${reference}`,
+      text: [
+        'A short stay listed through the makaug WhatsApp assistant is on the Short stays review desk.',
+        `Reference: ${reference}`,
+        `Title: ${title || '-'}`,
+        `Location: ${location || '-'}`,
+        `Price a night: ${nightly ? `UGX ${Number(nightly).toLocaleString('en-US')}` : 'on request (POA)'}`,
+        `Host: ${hostName || '-'} (${hostType}, number ending ${phoneTail || '---'})`,
+        `Photos: ${photoCount}${photosSent && photosSent !== photoCount ? ` of ${photosSent} sent` : ''}`,
+        `National ID: ${idLabel}`,
+        `Desk: ${HOME_URL}/admin`
+      ].join('\n')
+    })
+  ]);
+  return { lead_id: lead?.id || null };
 }
 
 function parseOwnerReviewForward(input = '') {
@@ -8395,6 +8542,7 @@ function agentMenuReply({ agent = {}, greet = true, savedCount = 0 } = {}) {
   lines.push('2️⃣ *Share my listings* — reply *SHARE* for your link and card');
   lines.push('3️⃣ *Check a property* — reply *STATUS* to see where yours are');
   lines.push('4️⃣ *Talk to a person* — reply *HELP*');
+  lines.push('5️⃣ *List a short stay* (by the night) — reply *SHORT STAY*');
   if (savedCount) {
     lines.push('');
     lines.push(`You have ${savedCount} ${savedCount === 1 ? 'property' : 'properties'} with our team right now.`);
@@ -20188,18 +20336,21 @@ async function processInboundRuntimeUnlocked({
   metadata = {}
 }) {
   const runtimeStartedAt = Date.now();
-  logger.info(
-    `WhatsApp message from ${phone}: "${String(body || '').substring(0, 50)}"${
-      mediaUrl ? ' [media]' : ''
-    }${sharedLocation ? ' [location]' : ''} [${provider}]`
-  );
-
   const [session, conversationControl] = await Promise.all([
     getSession(phone),
     getWhatsappConversationControl(phone)
   ]);
+  // After the session, so an ID number typed for a short-stay listing stays out of the server log.
+  const loggedPreview = shortStayWhatsapp.isIdStep(session.current_step)
+    ? shortStayWhatsapp.redactIdNumbers(body)
+    : String(body || '');
+  logger.info(
+    `WhatsApp message from ${phone}: "${loggedPreview.substring(0, 50)}"${
+      mediaUrl ? ' [media]' : ''
+    }${sharedLocation ? ' [location]' : ''} [${provider}]`
+  );
   const sessionLang = session.language || 'en';
-  const sessionStep = session.current_step || 'greeting';
+  let sessionStep = session.current_step || 'greeting';
   const inboundMetadata = metadata && typeof metadata === 'object' ? metadata : {};
   const contactName = cleanDisplayName(
     inboundMetadata.contact_name
@@ -20321,6 +20472,9 @@ async function processInboundRuntimeUnlocked({
     ? 'location'
     : (isAudioNote ? 'voice' : (effectiveMediaUrl ? 'media' : 'text'));
 
+  // A short-stay host typing their ID number: the number goes to the listing's
+  // private identity record, never into the message log (the short-stay brief).
+  const loggedBodyIsIdAnswer = shortStayWhatsapp.isIdStep(sessionStep);
   await logWhatsappMessage({
     userPhone: phone,
     waMessageId: inboundMessageId,
@@ -20328,8 +20482,8 @@ async function processInboundRuntimeUnlocked({
     messageType,
     payload: {
       provider,
-      body,
-      effectiveBody,
+      body: loggedBodyIsIdAnswer ? shortStayWhatsapp.redactIdNumbers(body) : body,
+      effectiveBody: loggedBodyIsIdAnswer ? shortStayWhatsapp.redactIdNumbers(effectiveBody) : effectiveBody,
       mediaUrl: effectiveMediaUrl,
       mediaType: normalizedMediaType,
       sharedLocation,
@@ -20346,6 +20500,59 @@ async function processInboundRuntimeUnlocked({
       return null;
     });
   if (teamBillingReply) return { message: teamBillingReply, nextStep: sessionStep };
+
+  // Short stays on WhatsApp: the same pending listing as /list-property, for the
+  // Short stays review desk. Before payments and agent intake, so an ID photo or
+  // a typed ID number is never read as a receipt, a reference or a property.
+  const shortStay = await shortStayWhatsapp.handleShortStayWhatsapp({
+    phone,
+    body: effectiveBody,
+    step: sessionStep,
+    session: sessionForMessage,
+    contactName,
+    photoCandidates: inboundPhotoCandidates,
+    mediaCandidates: inboundMediaCandidates,
+    mediaUrl: effectiveMediaUrl,
+    mediaType: normalizedMediaType,
+    conversationControl
+  }, {
+    // The property listing's own prompts and photo checks; staff told as for a property.
+    kit: shortStayListingKit({
+      phone,
+      lang: sessionLang,
+      photoCandidates: inboundPhotoCandidates,
+      mediaType: normalizedMediaType,
+      mediaCount: inboundMediaCount,
+      mediaUrl: effectiveMediaUrl
+    }),
+    notifyStaff: (notice) => notifyStaffOfWhatsappShortStay({ ...notice, lang: sessionLang })
+  }).catch((error) => {
+    logger.error('WhatsApp short stay flow failed:', error);
+    return shortStayWhatsapp.isShortStayStep(sessionStep)
+      ? { handled: true, message: 'Sorry, something went wrong on our side. Please send that again in a minute.', nextStep: sessionStep, sensitive: shortStayWhatsapp.isIdStep(sessionStep) }
+      : { handled: false };
+  });
+  if (shortStay.handled) {
+    deferWhatsappWork('WhatsApp short stay intent log', () => logIntent({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      detectedIntent: 'short_stay_listing',
+      confidence: 1,
+      language: sessionLang,
+      currentStep: sessionStep,
+      rawText: shortStay.sensitive ? shortStayWhatsapp.redactIdNumbers(effectiveBody) : effectiveBody,
+      transcript: null,
+      entities: { next_step: shortStay.nextStep || null },
+      modelUsed: 'whatsapp_short_stay_flow'
+    }));
+    return { message: shortStay.message, nextStep: shortStay.nextStep, sensitive: shortStay.sensitive === true };
+  }
+  if (shortStay.resetStep) {
+    // The flow has closed: the rest of the bot reads this message from the menu.
+    sessionStep = shortStay.resetStep;
+    sessionForMessage.current_step = shortStay.resetStep;
+    if (sessionForMessage.session_data) sessionForMessage.session_data.short_stay = null;
+  }
 
   // Payments first: a transaction ID or receipt must never be read as a property.
   const paymentReply = await handlePaymentClaimMessage({
@@ -21660,8 +21867,16 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     });
   }
 
+  // Part-way through listing a short stay, "1", "3", "2 4" or "confirm" can be an
+  // answer to our question. Then the booking checks below are skipped: an agent's
+  // "3" bedrooms must not mark a property let agreed, and a host's "1" (National
+  // ID) must not accept a guest's booking. A reply naming a reference still goes on.
+  const answeringShortStay = await shortStayWhatsapp
+    .isAnsweringShortStay(db, runtimePhone, body)
+    .catch(() => false);
+
   try {
-    const stayReply = await handleHostStayReply(db, { phone, body, dryRun });
+    const stayReply = answeringShortStay ? null : await handleHostStayReply(db, { phone, body, dryRun });
     if (stayReply && stayReply.handled) {
       let queuedReply = null;
       if (stayReply.message && !dryRun) {
@@ -21692,7 +21907,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   }
 
   try {
-    const bookingReply = await handleAgentBookingReply(db, { phone, body, dryRun });
+    const bookingReply = answeringShortStay ? null : await handleAgentBookingReply(db, { phone, body, dryRun });
     if (bookingReply && bookingReply.handled) {
       let queuedReply = null;
       if (bookingReply.message && !dryRun) {
@@ -21722,7 +21937,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     logger.warn('Agent booking reply check failed', { message: error.message || String(error) });
   }
 
-  const { message, nextStep, ownerForward = null, employeeIntake = null } = await processInboundRuntime({
+  const { message, nextStep, ownerForward = null, employeeIntake = null, sensitive = false } = await processInboundRuntime({
     phone: runtimePhone,
     inboundMessageId: runtimeInboundMessageId,
     body,
@@ -21758,7 +21973,9 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     sessionId: runtimePhone,
     externalUserId: phone,
     language: runtimeMetadata.language || runtimeMetadata.detected_language || 'auto',
-    inputText: body || `[${mediaType || (sharedLocation ? 'location' : 'message')}]`,
+    inputText: sensitive
+      ? shortStayWhatsapp.redactIdNumbers(body || '[ID photo]')
+      : (body || `[${mediaType || (sharedLocation ? 'location' : 'message')}]`),
     responseText: message || '',
     entities: {
       phone,
@@ -22170,6 +22387,9 @@ module.exports.forwardedAdvertMimeType = forwardedAdvertMimeType;
 module.exports.importForwardedAdvert = importForwardedAdvert;
 
 module.exports.__test = {
+  processInboundRuntime,
+  validateAndStoreListingPhotos,
+  shortStayListingKit,
   extractNaturalSearchFilters,
   parseBudget,
   parseBudgetRange,

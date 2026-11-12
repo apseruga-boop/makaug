@@ -1,7 +1,8 @@
 'use strict';
 
-// Government ID for short-stay hosts who list on /list-property or via the
-// same public POST /api/short-term/listings endpoint.
+// Government ID for short-stay hosts who list on /list-property, via the same
+// public POST /api/short-term/listings endpoint, or on WhatsApp
+// (services/whatsappShortStayService.js), which calls the same functions.
 //
 // The ID is asked for and encouraged, but it is not required to submit or
 // pay. Hosts can send it later with a private signed link. Public pages show
@@ -132,13 +133,19 @@ function validateHostIdentity(payload = {}, { required = false, identityOnFile =
   return { ok: errors.length === 0, errors, value: identity };
 }
 
-async function findVerifiedAgentIdentityOnFile(db, { userId } = {}) {
+// The approved agent behind a signed-in account (website) or, on WhatsApp, the
+// agent record matched to the sender's number. Either id finds the same agent.
+async function findVerifiedAgentIdentityOnFile(db, { userId, agentId } = {}) {
   const lookup = clean(userId, 80);
-  if (!db || !lookup) return null;
+  const agentLookup = clean(agentId, 80);
+  if (!db || (!lookup && !agentLookup)) return null;
   const result = await db.query(
     `SELECT a.id, a.full_name, a.identity_document_url, a.identity_document_name, a.identity_document_type
        FROM agents a
-      WHERE a.user_id::text = $1::text
+      WHERE (
+          ($1::text <> '' AND a.user_id::text = $1::text)
+          OR ($2::text <> '' AND a.id::text = $2::text)
+        )
         AND a.removed_at IS NULL
         AND LOWER(COALESCE(a.status, '')) = 'approved'
         AND (
@@ -150,7 +157,7 @@ async function findVerifiedAgentIdentityOnFile(db, { userId } = {}) {
         )
       ORDER BY a.updated_at DESC NULLS LAST
       LIMIT 1`,
-    [lookup]
+    [lookup, agentLookup]
   );
   return result.rows[0] || null;
 }
