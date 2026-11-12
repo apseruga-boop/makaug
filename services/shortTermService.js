@@ -1166,8 +1166,13 @@ function validateListingSubmission(payload = {}, options = {}) {
 async function createShortTermListing(db, payload = {}, context = {}) {
   const requireHostIdentity = context.requireHostIdentity === true;
   let agentOnFile = null;
-  if (context.hostUserId) {
-    agentOnFile = await findVerifiedAgentIdentityOnFile(db, { userId: context.hostUserId });
+  // A signed-in agent (website) or the approved agent matched to the sender's
+  // number (WhatsApp). An ID already on file is not asked for again.
+  if (context.hostUserId || context.hostAgentId) {
+    agentOnFile = await findVerifiedAgentIdentityOnFile(db, {
+      userId: context.hostUserId || '',
+      agentId: context.hostAgentId || ''
+    });
   }
   const validation = validateListingSubmission(payload, {
     requireHostIdentity,
