@@ -44,6 +44,11 @@ test('what a reply to one of our messages is', () => {
   for (const [text, kind] of Object.entries(cases)) {
     assert.strictEqual(playbook.replyKind(text), kind, text);
   }
+  // The same evening, after the catch-up message (12 Nov, 20:23 to 20:37).
+  assert.strictEqual(playbook.replyKind("Okay. That's interesting"), 'ack');
+  assert.strictEqual(playbook.replyKind('Its actually 6 acres with a huge warehouse with a transformer In mukono 6km off tarmac Selling 2.3bn ugx With a private mailo land title'), 'correction');
+  assert.strictEqual(playbook.replyKind('Area is Mukono not nkaaseke'), 'correction');
+  assert.strictEqual(playbook.correctionFollowUpReply({ first: 'Benard' }), "Got it, Benard — I've added that to the same fix for the team.");
   // Left to the rest of the bot.
   for (const text of ['Am looking for a single room house in mutungo', '2', 'Kampala bunga', 'I have paid 50000', 'Hello']) {
     assert.strictEqual(playbook.replyKind(text), '', text);
@@ -218,6 +223,10 @@ test('the runtime checks for an auto-reply before the film, and answers replies 
   const handler = source.slice(source.indexOf('async function handleReplyPlaybook'), source.indexOf('async function handleReplyPlaybook') + 2500);
   assert.match(handler, /isStaffIntakeNumber\(\{ phone, session \}\) \|\| staffNameForNumber\(phone\)/);
   assert.match(handler, /'needs_human', 'escalated'/);
+  // While posting, "Area is Mukono not nkaaseke" is a fix passed to the team, not "I did not save that".
+  const correction = source.slice(source.indexOf('async function applyAgentCorrection'), source.indexOf('async function applyAgentCorrection') + 5000);
+  assert.match(correction, /\(\?:not\|instead of\|rather than\)/);
+  assert.match(correction, /correction\|correct\|sorry\|actually\|wrong\|change\|price\|area\|location\|place\|district/);
   // "It's sold" keeps its own flow, which finds the listing and marks it sold.
   const playbookBody = source.slice(source.indexOf('async function handleReplyPlaybook'), source.indexOf('async function handleReplyPlaybook') + 9000);
   assert.ok(playbookBody.indexOf('if (isSoldAnnouncement(said)) return null;') > 0

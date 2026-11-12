@@ -9016,6 +9016,9 @@ async function applyAgentCorrection({ data = {}, cleanBody = '' } = {}) {
     if (next === core) break;
     core = next;
   }
+  // "Area is Mukono not nkaaseke" (12 Nov 2026): the place after "not" is the
+  // wrong one we had, and it stopped the right one resolving.
+  core = core.replace(/[\s,]+(?:but\s+|and\s+)?(?:not|instead of|rather than)\s+[^\d]{1,40}$/i, '').trim() || core;
   const facts = employeePropertyFacts(/^(?:price|bedrooms?)\b/i.test(text) ? text : (core || text), data);
   const looksLikeFix = /^(?:price|area|location|place|district|bedrooms?|rooms?|it'?s|its|it is|sorry|correction|correct|change|actually|not|no[, ]|wrong)\b/i.test(text);
   // A full new caption (rent/sale + price + place) is a new property waiting for photos, not a fix.
@@ -9027,7 +9030,9 @@ async function applyAgentCorrection({ data = {}, cleanBody = '' } = {}) {
     // "Correction Over 50 Plots Of Land For Sale" — a fix we cannot apply field
     // by field. It was being stored as a new caption waiting for photos. Pass it
     // to the team on the property instead, and say so.
-    if (!/^(?:correction|correct|sorry|actually|wrong|change)\b/i.test(text)) return null;
+    // "Area is Mukono not nkaaseke" is a fix too, even when the place will not
+    // resolve: the team gets it, rather than "I did not save that".
+    if (!/^(?:correction|correct|sorry|actually|wrong|change|price|area|location|place|district|bedrooms?|rooms?)\b/i.test(text)) return null;
     const noted = (await db.query(
       `UPDATE properties
           SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
@@ -18311,7 +18316,13 @@ async function handleReplyPlaybook({ phone, body = '', step = '', conversationCo
   if (!message) return null;
   // Never the same answer twice in a row ("Kindly subscribe to my YouTube
   // channel" twice got the same menu twice).
-  if (normalizeInput(message) === normalizeInput(lastSent)) return silent;
+  if (normalizeInput(message) === normalizeInput(lastSent)) {
+    // A second fix straight after the first ("Area is Mukono not nkaaseke")
+    // still gets an answer, just not the same one.
+    const again = kind === 'correction' ? replyPlaybook.correctionFollowUpReply({ first }) : '';
+    if (again && normalizeInput(again) !== normalizeInput(lastSent)) return { message: again, nextStep: currentStep };
+    return silent;
+  }
   return { message, nextStep: currentStep };
 }
 
