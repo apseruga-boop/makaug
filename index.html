@@ -9538,7 +9538,7 @@
           <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
             <div>
               <h2 class="text-xl font-black text-gray-900">Agent weekly reports</h2>
-              <p class="text-sm text-gray-600">Generate each agent's weekly numbers, edit the insights, preview on your own WhatsApp, then approve and send.</p>
+              <p class="text-sm text-gray-600">Generate each agent's weekly numbers, edit the insights, preview the report on screen, then approve and send. You can send more than one approved report at a time, and add social media view numbers by hand.</p>
             </div>
           </div>
           <div class="grid gap-3 md:grid-cols-[1fr_180px_auto] items-end mb-4">
@@ -9568,7 +9568,16 @@
 
           <div class="grid gap-5 xl:grid-cols-[300px_1fr]">
             <div>
-              <div class="flex items-center justify-between mb-2"><div class="text-xs font-bold uppercase tracking-wide text-gray-500">This week's reports</div><button type="button" onclick="loadAdminAgentReports()" class="text-xs font-bold text-green-700">Refresh</button></div>
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div class="text-xs font-bold uppercase tracking-wide text-gray-500">This week's reports</div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span id="admin-agent-report-sendable-count" class="text-xs text-gray-500"></span>
+                  <label class="text-xs text-gray-600"><input id="admin-agent-report-select-all" type="checkbox" class="mr-1 align-middle"> Select ready</label>
+                  <button type="button" onclick="sendAdminAgentReportsBulk()" class="rounded-lg bg-green-700 px-3 py-1.5 text-xs font-bold text-white">Send selected</button>
+                  <button type="button" onclick="loadAdminAgentReports()" class="text-xs font-bold text-green-700">Refresh</button>
+                </div>
+              </div>
+              <div id="admin-agent-report-bulk-progress" class="mb-2 text-xs"></div>
               <div id="admin-agent-report-list" class="space-y-2 text-sm text-gray-600">Open this tab to load reports.</div>
             </div>
             <div id="admin-agent-report-editor" class="min-w-0 text-sm text-gray-600">Pick a report or generate one.</div>

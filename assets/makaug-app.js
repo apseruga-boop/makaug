@@ -13696,6 +13696,14 @@ const AGENT_REPORT_METRICS = [
   ["whatsapp_clicks", "WhatsApp clicks"],
   ["saves", "Saves"]
 ];
+const AGENT_REPORT_SOCIAL_CHANNELS = [
+  ["facebook", "Facebook"],
+  ["instagram", "Instagram"],
+  ["tiktok", "TikTok"],
+  ["youtube", "YouTube"],
+  ["whatsapp_status", "WhatsApp status"]
+];
+const AGENT_REPORT_DATACENTRE_CODES = new Set(["SG", "CN", "NL", "IE", "FI", "SC", "HK", "RU"]);
 
 function agentReportNumber(value) {
   const n = Number(value);
@@ -13735,6 +13743,13 @@ function renderAgentReportBody(report = {}) {
       : `<div class="text-xs font-bold mt-1 ${pct > 0 ? "text-green-700" : pct < 0 ? "text-red-600" : "text-gray-500"}">${pct > 0 ? "▲ +" : pct < 0 ? "▼ " : ""}${pct}% vs last week</div>`;
     return `<div class="rounded-xl border border-gray-200 p-4"><div class="text-xs text-gray-500">${label}</div><div class="text-2xl font-black text-gray-900 mt-1">${agentReportNumber(m[key])}</div>${delta}</div>`;
   }).join("");
+  const social = (report.social_views && typeof report.social_views === "object")
+    ? report.social_views
+    : (report.extras && report.extras.social_views) || {};
+  const socialTiles = AGENT_REPORT_SOCIAL_CHANNELS
+    .filter(([key]) => Number(social[key]) > 0)
+    .map(([key, label]) => `<div class="rounded-xl border border-gray-200 p-4"><div class="text-xs text-gray-500">${label} views</div><div class="text-2xl font-black text-gray-900 mt-1">${agentReportNumber(social[key])}</div><div class="text-xs text-gray-400 mt-1">Entered by staff</div></div>`)
+    .join("");
   const countries = Array.isArray(report.top_countries) ? report.top_countries : [];
   const maxVisitors = Math.max(1, ...countries.map((c) => Number(c.visitors) || 0));
   const totalVisitors = countries.reduce((sum, c) => sum + (Number(c.visitors) || 0), 0);
@@ -13755,6 +13770,7 @@ function renderAgentReportBody(report = {}) {
   const list = (items) => (Array.isArray(items) && items.length ? `<ul class="list-disc pl-5 space-y-1 text-sm text-gray-800">${items.map((s) => `<li>${adminEscape(s)}</li>`).join("")}</ul>` : `<p class="text-sm text-gray-500">Nothing yet.</p>`);
   return `
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 mb-5">${tiles}</div>
+    ${socialTiles ? `<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 mb-5">${socialTiles}</div>` : ""}
     <div class="grid gap-5 lg:grid-cols-2 mb-5">
       <div><h3 class="font-black text-gray-900 mb-2">Top countries viewing your listings</h3><div class="space-y-2">${countryHtml}</div>${countryNote}</div>
       <div><h3 class="font-black text-gray-900 mb-2">Your best-performing properties</h3>${listingHtml}</div>
@@ -13866,9 +13882,19 @@ async function loadAdminAgentReports() {
     const res = await apiRequest(`/api/admin/agent-reports?week_start=${encodeURIComponent(week)}`, { headers: adminAuthHeaders() });
     const rows = Array.isArray(res?.data) ? res.data : [];
     const statusCls = { draft: "bg-amber-100 text-amber-800", approved: "bg-blue-100 text-blue-800", sent: "bg-green-100 text-green-800" };
+    const sendable = rows.filter((r) => r.status === "approved" || r.status === "sent").length;
+    const countEl = document.getElementById("admin-agent-report-sendable-count");
+    if (countEl) countEl.textContent = sendable ? `${sendable} ready to send` : "";
     listEl.innerHTML = rows.length
-      ? rows.map((r) => `<button type="button" onclick="openAdminAgentReport(${adminListingIdArg(r.id)})" class="w-full text-left rounded-xl border ${adminAgentReportCurrent?.id === r.id ? "border-gray-900" : "border-gray-200"} px-3 py-2 hover:bg-gray-50"><div class="flex items-center justify-between gap-2"><b class="text-gray-900">${adminEscape(r.agent?.full_name || "Agent")}</b><span class="rounded-full px-2 py-0.5 text-[11px] font-bold ${statusCls[r.status] || ""}">${adminEscape(r.status)}</span></div><div class="text-xs text-gray-500">${adminEscape(r.agent?.makaug_agent_number || "")} · ${agentReportNumber(r.metrics?.views)} views</div></button>`).join("")
+      ? rows.map((r) => `<div class="flex items-start gap-2"><input type="checkbox" class="admin-agent-report-select mt-3 h-4 w-4 shrink-0" data-id="${adminAttr(r.id)}" data-status="${adminAttr(r.status)}" data-name="${adminAttr(r.agent?.full_name || "Agent")}" ${r.status === "approved" || r.status === "sent" ? "" : "disabled"} aria-label="Select ${adminAttr(r.agent?.full_name || "report")}"><button type="button" onclick="openAdminAgentReport(${adminListingIdArg(r.id)})" class="min-w-0 flex-1 text-left rounded-xl border ${adminAgentReportCurrent?.id === r.id ? "border-gray-900" : "border-gray-200"} px-3 py-2 hover:bg-gray-50"><div class="flex items-center justify-between gap-2"><b class="text-gray-900">${adminEscape(r.agent?.full_name || "Agent")}</b><span class="rounded-full px-2 py-0.5 text-[11px] font-bold ${statusCls[r.status] || ""}">${adminEscape(r.status)}</span></div><div class="text-xs text-gray-500">${adminEscape(r.agent?.makaug_agent_number || "")} · ${agentReportNumber(r.metrics?.views)} views</div></button></div>`).join("")
       : `<p class="text-sm text-gray-500">No reports for this week yet. Pick an agent and generate one.</p>`;
+    const all = document.getElementById("admin-agent-report-select-all");
+    if (all) {
+      all.checked = false;
+      all.onchange = () => {
+        document.querySelectorAll(".admin-agent-report-select:not(:disabled)").forEach((box) => { box.checked = all.checked; });
+      };
+    }
   } catch (error) {
     listEl.textContent = error?.message || "Couldn't load reports.";
   }
@@ -13922,6 +13948,15 @@ function renderAdminAgentReportEditor(data = {}) {
   const p = r.previous_metrics || {};
   const countries = (r.top_countries || []).concat([{ name: "", visitors: "" }]);
   const listings = (r.top_listings || []).concat([{ title: "", area: "", url: "", views: "", enquiries: "" }]);
+  const social = r.social_views || (r.extras && r.extras.social_views) || {};
+  const countryList = Array.isArray(r.top_countries) ? r.top_countries : [];
+  const countryTotal = countryList.reduce((sum, c) => sum + (Number(c.visitors) || 0), 0);
+  const dcVisitors = countryList.filter((c) => AGENT_REPORT_DATACENTRE_CODES.has(String(c.code || "").toUpperCase())).reduce((sum, c) => sum + (Number(c.visitors) || 0), 0);
+  const dcShare = countryTotal ? Math.round(dcVisitors / countryTotal * 100) : 0;
+  const dcNames = countryList.filter((c) => AGENT_REPORT_DATACENTRE_CODES.has(String(c.code || "").toUpperCase())).map((c) => c.name).filter(Boolean).join(", ");
+  const trafficNote = dcShare >= 40
+    ? `<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">${dcShare}% of recorded visitors came from ${adminEscape(dcNames || "countries that often include automated traffic")}. Staff and preview opens, and obvious bots, are now left out of new counts. Older views without those flags are still included, so treat this share with care.</div>`
+    : "";
   let previewTo = "";
   try { previewTo = window.localStorage.getItem("makaug_agent_report_preview_to") || ""; } catch (_) {}
   el.innerHTML = `
@@ -13937,6 +13972,12 @@ function renderAdminAgentReportEditor(data = {}) {
       ${AGENT_REPORT_METRICS.map(([key, label]) => `<label class="text-xs text-gray-600">${label} — this week${adminAgentReportInput(`ar-m-${key}`, m[key] ?? 0, "number")}</label><label class="text-xs text-gray-600">${label} — last week${adminAgentReportInput(`ar-p-${key}`, p[key] ?? 0, "number")}</label><div class="hidden md:block"></div>`).join("")}
       <label class="text-xs text-gray-600">Live listings${adminAgentReportInput("ar-m-active_listings", m.active_listings ?? 0, "number")}</label>
     </div>
+    ${trafficNote}
+    <h4 class="font-black text-gray-900 mb-1">Social media views</h4>
+    <p class="text-xs text-gray-500 mb-2">Type the view numbers from this agent's Facebook, Instagram, TikTok, YouTube or WhatsApp status for this week. They are saved on the report and shown in the caption.</p>
+    <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 mb-4">
+      ${AGENT_REPORT_SOCIAL_CHANNELS.map(([key, label]) => `<label class="text-xs text-gray-600">${label}${adminAgentReportInput(`ar-social-${key}`, social[key] ?? "", "number")}</label>`).join("")}
+    </div>
     <h4 class="font-black text-gray-900 mb-2">Top countries</h4>
     <div class="space-y-2 mb-4">${countries.map((c, i) => `<div class="grid grid-cols-[1fr_120px] gap-2">${adminAgentReportInput(`ar-c-name-${i}`, c.name, "text", "Country")}${adminAgentReportInput(`ar-c-vis-${i}`, c.visitors, "number", "Visitors")}<input type="hidden" id="ar-c-code-${i}" value="${adminAttr(c.code || "")}"></div>`).join("")}</div>
     <h4 class="font-black text-gray-900 mb-2">Best-performing properties</h4>
@@ -13949,15 +13990,21 @@ function renderAdminAgentReportEditor(data = {}) {
       <button type="button" onclick="saveAdminAgentReport()" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold">Save draft</button>
       <button type="button" onclick="saveAdminAgentReport('approved')" class="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white">Save &amp; approve</button>
     </div>
-    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+    <div id="admin-agent-report-onscreen-preview" class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <h4 class="font-black text-gray-900">On-screen preview</h4>
+      <p class="text-xs text-gray-600 mb-3">This is the report the agent receives. You can read it here without sending a WhatsApp. "Send preview" still goes to the number you type.</p>
       <div class="flex flex-wrap items-end gap-2 mb-3">
         <label class="text-xs font-bold text-gray-600">Preview to my WhatsApp<input id="ar-preview-to" value="${adminAttr(previewTo)}" placeholder="e.g. 447700900000" class="mt-1 block rounded-lg border border-gray-300 px-2 py-1.5 text-sm"></label>
         <button type="button" onclick="sendAdminAgentReport(true)" class="rounded-lg border border-green-700 px-3 py-2 text-sm font-bold text-green-800">Send preview</button>
         <button type="button" onclick="sendAdminAgentReport(false)" class="rounded-lg bg-green-700 px-3 py-2 text-sm font-bold text-white">Send to agent</button>
       </div>
-      <div class="grid gap-4 lg:grid-cols-[320px_1fr]">
-        ${videoUrl ? `<video src="${adminAttr(videoUrl)}" controls playsinline preload="none" poster="${adminAttr(cardUrl)}" class="w-full rounded-xl border border-gray-200 shadow-sm"></video>` : cardUrl ? `<a href="${adminAttr(cardUrl)}" target="_blank" rel="noopener" class="block"><img src="${adminAttr(cardUrl)}" alt="Report card the agent receives" class="w-full rounded-xl border border-gray-200 shadow-sm"></a>` : `<div class="rounded-xl border border-dashed border-gray-300 p-4 text-xs text-gray-500">Preview appears after saving.</div>`}
+      <div class="grid gap-4 lg:grid-cols-[320px_1fr] mb-4">
+        ${videoUrl ? `<video src="${adminAttr(videoUrl)}" controls playsinline preload="none" poster="${adminAttr(cardUrl)}" class="w-full rounded-xl border border-gray-200 shadow-sm bg-white"></video>` : cardUrl ? `<a href="${adminAttr(cardUrl)}" target="_blank" rel="noopener" class="block"><img src="${adminAttr(cardUrl)}" alt="Report card the agent receives" class="w-full rounded-xl border border-gray-200 shadow-sm bg-white"></a>` : `<div class="rounded-xl border border-dashed border-gray-300 bg-white p-4 text-xs text-gray-500">The recap card appears here once the report is generated.</div>`}
         <div><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Caption under the ${videoUrl ? "recap video" : "card"}</div><pre class="whitespace-pre-wrap text-xs text-gray-800 max-h-96 overflow-auto">${adminEscape(whatsappText)}</pre></div>
+      </div>
+      <div class="rounded-xl border border-gray-200 bg-white p-4">
+        <div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-3">The same numbers the agent sees</div>
+        ${renderAgentReportBody(r)}
       </div>
     </div>`;
 }
@@ -13979,13 +14026,16 @@ function collectAdminAgentReportEdits() {
     if (title) listings.push({ id: val(`ar-l-id-${i}`), title, area: val(`ar-l-area-${i}`).trim(), url: val(`ar-l-url-${i}`).trim(), views: num(`ar-l-views-${i}`), enquiries: num(`ar-l-enq-${i}`) });
   }
   const lines = (id) => val(id).split("\n").map((s) => s.trim()).filter(Boolean);
+  const social_views = {};
+  AGENT_REPORT_SOCIAL_CHANNELS.forEach(([key]) => { social_views[key] = num(`ar-social-${key}`); });
   return {
     metrics,
     previous_metrics: previous,
     top_countries: countries.sort((a, b) => b.visitors - a.visitors),
     top_listings: listings,
     insights: lines("ar-insights"),
-    next_steps: lines("ar-next")
+    next_steps: lines("ar-next"),
+    social_views
   };
 }
 
@@ -14050,6 +14100,37 @@ async function sendAdminAgentReport(preview = false) {
     openAdminAgentReport(saved.id);
   } catch (error) {
     toast(error?.message || "Couldn't send the report.");
+  }
+}
+
+async function sendAdminAgentReportsBulk() {
+  const boxes = [...document.querySelectorAll(".admin-agent-report-select:checked")];
+  if (!boxes.length) {
+    toast("Select at least one approved report.");
+    return;
+  }
+  const names = boxes.map((box) => box.dataset.name || "an agent");
+  const label = boxes.length === 1 ? names[0] : `${boxes.length} agents`;
+  if (!window.confirm(`Send weekly reports to ${label} on WhatsApp?\n\n${names.join(", ")}`)) return;
+  const progress = document.getElementById("admin-agent-report-bulk-progress");
+  if (progress) progress.innerHTML = `<p class="text-xs text-gray-600">Sending ${boxes.length} report${boxes.length === 1 ? "" : "s"}…</p>`;
+  try {
+    const res = await apiRequest("/api/admin/agent-reports/bulk-send", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { report_ids: boxes.map((box) => box.dataset.id), confirm: true }
+    });
+    const data = res?.data || {};
+    const rows = Array.isArray(data.results) ? data.results : [];
+    if (progress) {
+      progress.innerHTML = `<p class="text-xs font-bold text-gray-800 mb-1">${agentReportNumber(data.sent)} sent · ${agentReportNumber(data.failed)} not sent</p>`
+        + rows.map((row) => `<div class="text-xs ${row.ok ? "text-green-800" : "text-red-700"}">${adminEscape(row.agent_name || row.agent_number || row.id)}${row.ok ? " — sent" : ` — ${row.error || "not sent"}`}</div>`).join("");
+    }
+    loadAdminAgentReports();
+    toast(`${data.sent || 0} report${data.sent === 1 ? "" : "s"} sent.`);
+  } catch (error) {
+    if (progress) progress.innerHTML = `<p class="text-xs text-red-700">${adminEscape(error?.message || "Could not send the reports.")}</p>`;
+    toast(error?.message || "Could not send the reports.");
   }
 }
 
@@ -68020,7 +68101,8 @@ async function openDetail(id, options = {}) {
     source: options.source || "property_detail",
     listing_type: normalizeType(p.type),
     district: p.district,
-    area: p.area
+    area: p.area,
+    viewer_kind: isAdminViewer ? "staff" : isOwnerPreviewViewer ? "owner_preview" : "public"
   });
   const broker = resolvedDetailBroker(p) || brokerFromPropertyAgent(p);
   const similar = getSimilarProperties(p, 8);
