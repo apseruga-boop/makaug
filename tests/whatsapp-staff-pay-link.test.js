@@ -405,7 +405,8 @@ test('a short number is refused by name, not swallowed', async () => {
       whatsapp_employee_intake: true, employee_role: 'pay_link', pay_link_target: 'prospect'
     });
     assert.strictEqual(sent.length, 0);
-    assert.match(refused.message, /does not look complete|nine digits/i);
+    assert.match(refused.message, /did not send it|does not look complete|nine digits/i);
+    assert.match(refused.message, /8 digits. A Ugandan number has 10/);
   }, { agents: [] });
 });
 

@@ -53,8 +53,28 @@ function normalizeProspectPhone(value) {
   return digits;
 }
 
+/**
+ * What is wrong with a number staff typed, or '' when it can be dialled.
+ * 12 Nov 2026: "07044120230" has eleven digits; its last nine looked fine, the
+ * film was "sent" to 2567044120230, and it reached nobody.
+ */
+function prospectPhoneProblem(value) {
+  const digits = digitsOnly(value);
+  if (!digits) return 'There is no phone number in that.';
+  if (digits.startsWith('256')) {
+    return digits.length === 12 ? '' : `That number has ${digits.length} digits. With 256 in front, a Ugandan number has 12, like 256 772 123 456.`;
+  }
+  if (digits.startsWith('0')) {
+    return digits.length === 10 ? '' : `That number has ${digits.length} digits. A Ugandan number has 10, like 0772 123 456.`;
+  }
+  if (digits.length < 9) return `That number has only ${digits.length} digits. A Ugandan number has 10, like 0772 123 456.`;
+  if (digits.length === 9) return '';
+  // Another country's number, with its code: no number has more than 15 digits.
+  return digits.length <= 15 ? '' : `That number has ${digits.length} digits, which is too many for a phone number.`;
+}
+
 function isUsableProspectPhone(value) {
-  return prospectPhoneKey(value).length === 9;
+  return prospectPhoneKey(value).length === 9 && !prospectPhoneProblem(value);
 }
 
 function followUpLabel(row = {}) {
@@ -677,6 +697,7 @@ module.exports = {
   prospectPhoneKey,
   normalizeProspectPhone,
   isUsableProspectPhone,
+  prospectPhoneProblem,
   maskPhoneLast3,
   followUpLabel,
   daysSince,

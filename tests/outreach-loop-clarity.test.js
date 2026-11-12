@@ -12,7 +12,8 @@ const db = require('../config/database');
 const prospects = require('../services/agentProspectService');
 const { isStaffSharedKingTool } = require('../utils/staffSharedKingTools');
 
-const PROSPECT_PHONE = '000000111';
+// A dialable shape: an eleven-digit or nine-digit-with-a-leading-0 number is refused (12 Nov 2026).
+const PROSPECT_PHONE = '700000111';
 
 function baseRow(overrides = {}) {
   return {
